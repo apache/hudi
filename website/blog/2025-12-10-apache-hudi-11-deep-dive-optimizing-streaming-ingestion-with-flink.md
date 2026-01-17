@@ -6,6 +6,7 @@ category: deep-dive
 image: /assets/images/blog/2025-12-10-apache-hudi-11-deep-dive-optimizing-streaming-ingestion-with-flink/benchmark-string-schemas.png
 tags:
 - apache flink
+- apache paimon
 - performance
 ---
 
@@ -23,8 +24,6 @@ There are multiple factors that impact streaming ingestion performance, such as 
 
 In the subsequent sections, several key performance optimizations are introduced, including:
 
-- Optimized SerDe between Flink operators
-- New performant Flink-native writers
 - Eliminated bytes copy for MOR log file writing
 
 Following that, performance benchmarks for streaming ingestion in Hudi 1.1 are presented to demonstrate the concrete improvements achieved.

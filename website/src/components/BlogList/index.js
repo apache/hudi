@@ -43,12 +43,14 @@ export default function BlogList() {
   const defaultCategory = urlParams.get("category");
   const defaultPage = +urlParams.get("page");
   const defaultSearch = urlParams.get("search") || "";
+  const defaultTags = urlParams.get("tags") ? urlParams.get("tags").split(",").filter(Boolean) : [];
 
   const { withBaseUrl } = useBaseUrlUtils();
   const [currentPage, setCurrentPage] = useState(defaultPage || 1);
   const [category, setCategory] = useState(defaultCategory || 'all');
   const [searchInput, setSearchInput] = useState(defaultSearch);
   const [searchQuery, setSearchQuery] = useState(defaultSearch);
+  const [selectedTags, setSelectedTags] = useState(defaultTags);
   const debounceTimerRef = useRef(null);
 
   const dateTimeFormat = useDateTimeFormat({
@@ -59,11 +61,12 @@ export default function BlogList() {
   });
   const formatDate = (blogDate) => dateTimeFormat.format(new Date(blogDate));
 
-  const buildUrl = (category, pageNum, search) => {
+  const buildUrl = (category, pageNum, search, tags = []) => {
     const parts = [];
     parts.push(`category=${encodeURIComponent(category)}`);
     parts.push(`page=${pageNum}`);
     if(search && search.trim()) parts.push(`search=${encodeURIComponent(search.trim())}`);
+    if(tags.length > 0) parts.push(`tags=${encodeURIComponent(tags.join(','))}`);
     return `/learn/blog?${parts.join('&')}`;
   };
 
@@ -78,7 +81,8 @@ export default function BlogList() {
         buildUrl(
           category,
           isNewSearch ? 1 : currentPage,
-          searchInput
+          searchInput,
+          selectedTags
         )
       );
 
@@ -107,8 +111,17 @@ export default function BlogList() {
       });
     }
 
+    // Filter by selected tags (OR logic - post matches if it has ANY of the selected tags)
+    if(selectedTags.length > 0) {
+      filtered = filtered.filter((post) => {
+        const postTags = post.frontMatter?.tags;
+        if (!Array.isArray(postTags)) return false;
+        return selectedTags.some(tag => postTags.includes(tag));
+      });
+    }
+
     return filtered;
-  },[category, searchQuery])
+  },[category, searchQuery, selectedTags])
 
   const sortedBlogPosts = filteredBlogPosts
     .filter(post => post.metadata && post.metadata.title && post.metadata.permalink)
@@ -126,11 +139,31 @@ export default function BlogList() {
   const handlePageChange = (page) => {
     setCurrentPage(page);
     window.scrollTo({ top: 0, behavior: 'smooth' });
-    history.push(buildUrl(category, page, searchQuery));
+    history.push(buildUrl(category, page, searchQuery, selectedTags));
   };
 
   const handleSearchChange = (e) => {
     setSearchInput(e.target.value);
+  };
+
+  const handleTagClick = (tag) => {
+    let newTags;
+    if (selectedTags.includes(tag)) {
+      // Deselect the tag
+      newTags = selectedTags.filter(t => t !== tag);
+    } else {
+      // Select the tag
+      newTags = [...selectedTags, tag];
+    }
+    setSelectedTags(newTags);
+    setCurrentPage(1);
+    history.push(buildUrl(category, 1, searchQuery, newTags));
+  };
+
+  const handleClearTags = () => {
+    setSelectedTags([]);
+    setCurrentPage(1);
+    history.push(buildUrl(category, 1, searchQuery, []));
   };
 
   const getPageNumbers = () => {
@@ -204,6 +237,27 @@ export default function BlogList() {
     ];
   }, []);
 
+  // Derive popular tags from blog data (tags with at least 12 posts)
+  const tagData = useMemo(() => {
+    const tagCounts = {};
+    allBlogPosts.forEach(post => {
+      const tags = post.frontMatter?.tags;
+      if (Array.isArray(tags)) {
+        tags.forEach(tag => {
+          if (tag && typeof tag === 'string') {
+            tagCounts[tag] = (tagCounts[tag] || 0) + 1;
+          }
+        });
+      }
+    });
+
+    // Filter tags with at least 12 posts, sort by count descending
+    return Object.entries(tagCounts)
+      .filter(([, count]) => count >= 12)
+      .sort((a, b) => b[1] - a[1])
+      .map(([tag, count]) => ({ tag, count }));
+  }, []);
+
 
   return (
     <div className={styles.container}>
@@ -219,7 +273,7 @@ export default function BlogList() {
                   setCurrentPage(1)
                   setSearchInput('')
                   setSearchQuery('')
-                  history.push(buildUrl(elem.value, 1, ''));
+                  history.push(buildUrl(elem.value, 1, '', selectedTags));
                 }}
                 type="button"
               >
@@ -238,8 +292,27 @@ export default function BlogList() {
             />
           </div>
         </div>
+        <div className={styles.tagBar}>
+          <button
+            className={selectedTags.length === 0 ? styles.tagActive : styles.tag}
+            onClick={handleClearTags}
+            type="button"
+          >
+            All Tags
+          </button>
+          {tagData.map(({ tag }) => (
+            <button
+              key={tag}
+              className={selectedTags.includes(tag) ? styles.tagActive : styles.tag}
+              onClick={() => handleTagClick(tag)}
+              type="button"
+            >
+              {tag}
+            </button>
+          ))}
+        </div>
       </div>
-      <div key={`${category}-${searchQuery}-${currentPage}`} className={styles.gridWrapper}>
+      <div key={`${category}-${searchQuery}-${selectedTags.join(',')}-${currentPage}`} className={styles.gridWrapper}>
         <div className={styles.grid}>
         {currentPosts.map((blog, index) => {
           const { frontMatter, assets, metadata } = blog;

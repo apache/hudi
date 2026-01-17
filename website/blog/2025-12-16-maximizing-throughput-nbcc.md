@@ -5,7 +5,7 @@ authors: [xushiyan]
 category: deep-dive
 image: /assets/images/blog/2025-12-16-maximizing-throughput-nbcc/p6-nbcc-compaction.png
 tags:
-- lakehouse
+- data lakehouse
 - concurrency control
 - streaming
 ---

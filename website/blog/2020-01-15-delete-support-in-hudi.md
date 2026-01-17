@@ -4,7 +4,7 @@ excerpt: "Deletes are supported at a record level in Hudi with 0.5.1 release. Th
 authors: [sivabalan]
 category: how-to
 tags:
-- delete
+- dml
 ---
 
 Deletes are supported at a record level in Hudi with 0.5.1 release. This blog is a "how to" blog on how to delete records in hudi. Deletes can be done with 3 flavors: Hudi RDD APIs, with Spark data source and with DeltaStreamer.

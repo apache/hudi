@@ -7,7 +7,7 @@ image: /assets/images/blog/lsm-1200x600.jpg
 tags:
 - lsm tree
 - performance
-- non blocking concurrency control
+- concurrency control
 ---
 
 :::tip TL;DR

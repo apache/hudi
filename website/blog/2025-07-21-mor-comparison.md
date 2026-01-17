@@ -11,9 +11,7 @@ tags:
 
 :::tip 
 TL;DR
-- Merge-on-Read tables help manage updates on immutable files without constant rewrites.
 - Apache Hudi’s MoR tables, with delta logs, file groups, asynchronous compaction, and event-time merging, are well-suited for update-heavy, low-latency streaming and CDC workloads.
-- Iceberg and Delta Lake also support MoR, but with design differences around delete files and deletion vectors.
 
 :::
 

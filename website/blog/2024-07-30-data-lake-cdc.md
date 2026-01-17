@@ -5,7 +5,7 @@ authors: [sagar-lakshmipathy]
 category: deep-dive
 image: /assets/images/blog/data-lake-cdc/hudi-cdc.jpg
 tags:
-- data lake
+- data lakehouse
 - cdc
 ---
 

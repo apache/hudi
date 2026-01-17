@@ -5,7 +5,7 @@ authors: [dipankar-mazumdar]
 category: deep-dive
 image: /assets/images/blog/dlh_1200.png
 tags:
-- lakehouse
+- data lakehouse
 - apache iceberg
 - delta lake
 - open architecture

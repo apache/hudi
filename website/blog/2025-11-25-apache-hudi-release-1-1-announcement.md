@@ -6,8 +6,8 @@ category: community
 image: /assets/images/blog/2025-11-25-apache-hudi-release-1-1-announcement/1-pluggable-TF.png
 tags:
 - release
-- feature
 - performance
+- apache xtable
 ---
 
 The Hudi community is excited to announce the [release of Hudi 1.1](https://hudi.apache.org/releases/release-1.1#release-111), a major milestone that sets the stage for the next generation of data lakehouse capabilities. This release represents months of focused engineering on foundational improvements, engine-specific optimizations, and key architectural enhancements, laying the foundation for ambitious features coming in future releases.

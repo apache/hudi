@@ -5,12 +5,9 @@ authors: [dipankar-mazumdar]
 category: deep-dive
 image: /assets/images/blog/concurrency_control/concurrency_blog_thumb.jpg
 tags:
-- multi writer
 - concurrency control
-- non blocking concurrency control
 - apache iceberg
 - delta lake
-- design
 ---
 
 ## Introduction

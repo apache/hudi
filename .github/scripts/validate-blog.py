@@ -5,23 +5,75 @@ Validate blog post frontmatter for Apache Hudi website.
 This script checks newly added or modified blog posts for:
 1. Required fields (title, author/authors, category, image, tags)
 2. Valid category values
-3. Tag format rules
+3. Tag allowlist validation
+4. Tag format rules
 """
 
-import os
 import re
 import sys
+from difflib import get_close_matches
 from pathlib import Path
 
 # Allowed categories
 ALLOWED_CATEGORIES = {'community', 'deep-dive', 'how-to', 'case-study'}
+
+# Allowed tags - frozen set of validated tags
+# To add a new tag: include it in your PR and ask the reviewer for approval
+ALLOWED_TAGS = {
+    'data lakehouse', 'aws', 'gcp', 'azure', 'apache spark', 'apache iceberg', 'indexing',
+    'delta lake', 'incremental processing', 'beginner', 'onehouse', 'performance',
+    'streaming', 'querying', 'comparison', 'hudi streamer', 'apache flink',
+    'dml', 'concurrency control', 'cdc',
+    'bi', 'uber', 'tutorial', 'release', 'cow', 'apache kafka', 'minio',
+    'clustering', 'acid', 'walmart', 'python', 'mor', 'hudi timeline',
+    'debezium', 'data skipping', 'daft', 'ai',
+    'table format', 'starrocks', 'halodoc', 'gdpr', 'schema', 'scd',
+    'observability', 'metadata', 'meetup', 'key generation', 'docker',
+    'cleaner', 'apache hive', 'apache doris', 'vector search', 'upstox',
+    'tla specification', 'streamlit', 'rag', 'presto', 'postgres',
+    'monotonic timestamp', 'file sizing', 'etl', 'databricks', 'data warehouse',
+    'conference', 'compaction', 'bootstrap', 'apache parquet', 'announcement',
+    'zupee', 'yuno', 'yugabyte', 'yahoo', 'robinhood', 'peloton', 'leboncoin',
+    'grofers', 'grab', 'funding circle', 'freewheel', 'estuary', 'alibaba',
+    'airbyte', 'apache xtable', 'data catalog',
+    'write', 'trino', 'terraform', 'table services', 'storage types', 'apache paimon',
+    'storage spec', 'sql transformer', 'snapshot exporter', 'security',
+    'risingwave', 'record mergers', 'ray', 'puppygraph', 'openai',
+    'open architecture', 'mongodb', 'modern data architecture', 'mlops',
+    'migration', 'markers', 'lsm tree', 'lock provider', 'late arriving data',
+    'lakefs', 'interoperability', 'hudi cli', 'guide', 'google scholar',
+    'forefathers', 'fastapi', 'dremio', 'deployment', 'deduplication', 'dbt',
+    'database', 'data sharing', 'data processing', 'data platform', 'data mesh',
+    'data governance', 'compression', 'commits', 'code sample', 'caching',
+    'bytearray', 'best practices', 'backfilling', 'architecture',
+    'apicurio registry', 'apache zeppelin', 'apache orc', 'apache dolphinscheduler',
+    'apache avro', 'apache', 'access control',
+}
 
 # Tags that should not be used
 FORBIDDEN_TAGS = {
     'apache hudi': 'Redundant - every blog on this site is about Apache Hudi',
     'hudi': 'Redundant - every blog on this site is about Apache Hudi',
     'index': 'Use "indexing" instead',
+    'partition': 'Removed - too generic',
+    'intermediate': 'Removed - use category "deep-dive" instead',
+    'design': 'Removed - use category "deep-dive" instead',
+    'community': 'Removed - use category "community" instead',
 }
+
+
+def suggest_similar_tags(tag: str, allowed: set, n: int = 3) -> list[str]:
+    """Find similar tags from the allowed set."""
+    # Use difflib for fuzzy matching
+    matches = get_close_matches(tag.lower(), [t.lower() for t in allowed], n=n, cutoff=0.5)
+    # Return original casing from allowed set
+    result = []
+    for match in matches:
+        for allowed_tag in allowed:
+            if allowed_tag.lower() == match:
+                result.append(allowed_tag)
+                break
+    return result
 
 # Required frontmatter fields
 REQUIRED_FIELDS = ['title', 'category', 'image']
@@ -93,7 +145,7 @@ def validate_blog(filepath: str) -> list[str]:
         if field not in frontmatter:
             # author or authors is acceptable
             if field == 'author' and 'authors' not in frontmatter:
-                errors.append(f"Missing required field: 'author' or 'authors'")
+                errors.append("Missing required field: 'author' or 'authors'")
         elif not frontmatter[field]:
             errors.append(f"Field '{field}' is empty")
 
@@ -122,6 +174,7 @@ def validate_blog(filepath: str) -> list[str]:
             errors.append(
                 f"Forbidden tag '{tag}': {FORBIDDEN_TAGS[tag_lower]}"
             )
+            continue
 
         # Check for hyphens in tags
         if '-' in tag:
@@ -129,6 +182,24 @@ def validate_blog(filepath: str) -> list[str]:
                 f"Tag '{tag}' contains hyphen. "
                 f"Use spaces instead (e.g., 'apache spark' not 'apache-spark')"
             )
+            continue
+
+        # Check against allowed tags
+        if tag_lower not in {t.lower() for t in ALLOWED_TAGS}:
+            suggestions = suggest_similar_tags(tag, ALLOWED_TAGS)
+            if suggestions:
+                errors.append(
+                    f"Unknown tag '{tag}'. "
+                    f"Did you mean: {', '.join(repr(s) for s in suggestions)}? "
+                    f"If a new tag is needed, add it to ALLOWED_TAGS in .github/scripts/validate-blog.py "
+                    f"and ask your PR reviewer for approval."
+                )
+            else:
+                errors.append(
+                    f"Unknown tag '{tag}'. "
+                    f"Please use an existing tag from ALLOWED_TAGS in .github/scripts/validate-blog.py. "
+                    f"If a new tag is needed, add it to the allowlist and ask your PR reviewer for approval."
+                )
 
     return errors
 
@@ -173,7 +244,7 @@ def main():
         sys.exit(0)
     else:
         print(f"❌ Found {total_errors} error(s) in {files_with_errors} file(s)")
-        print(f"\nSee README.md 'Blogs' section for blog formatting guidelines.")
+        print("\nSee README.md 'Blogs' section for blog formatting guidelines.")
         sys.exit(1)
 
 

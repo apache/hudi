@@ -2,10 +2,9 @@
 title: "Asynchronous Clustering using Hudi"
 excerpt: "How to setup Hudi for asynchronous clustering"
 authors: [sagar-sumit]
-category: how-to
+category: deep-dive
 image: /assets/images/blog/clustering/example_perf_improvement.png
 tags:
-- design
 - clustering
 ---
 

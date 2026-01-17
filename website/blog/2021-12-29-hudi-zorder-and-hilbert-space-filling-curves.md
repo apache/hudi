@@ -5,7 +5,6 @@ author: Alexey Kudinkin and Tao Meng
 category: deep-dive
 image: /assets/images/zordercurve.png
 tags:
-- design
 - clustering
 - data skipping
 ---

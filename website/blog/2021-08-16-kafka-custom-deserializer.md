@@ -2,10 +2,9 @@
 title: "Schema evolution with DeltaStreamer using KafkaSource"
 excerpt: "Evolve schema used in Kafkasource of DeltaStreamer to keep data up to date with business"
 author: sbernauer
-category: how-to
+category: deep-dive
 image: /assets/images/blog/hudi_schemaevolution.png
 tags:
-- design
 - hudi streamer
 - schema
 - apache kafka

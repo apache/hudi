@@ -4,7 +4,7 @@ excerpt: "Ingesting multiple tables using Hudi at a single go is now possible. T
 author: pratyakshsharma
 category: how-to
 tags:
-- multi deltastreamer
+- hudi streamer
 ---
 
 When building a change data capture pipeline for already existing or newly created relational databases, one of the most common problems that one faces is simplifying the onboarding process for multiple tables. Ingesting multiple tables to Hudi dataset at a single go is now possible using `HoodieMultiTableDeltaStreamer` class which is a wrapper on top of the more popular `HoodieDeltaStreamer` class. Currently `HoodieMultiTableDeltaStreamer` supports **COPY_ON_WRITE** storage type only and the ingestion is done in a **sequential** way.

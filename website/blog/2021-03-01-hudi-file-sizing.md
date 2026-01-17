@@ -2,10 +2,9 @@
 title: "Streaming Responsibly - How Apache Hudi maintains optimum sized files"
 excerpt: "Maintaining well-sized files can improve query performance significantly"
 authors: [sivabalan]
-category: how-to
+category: deep-dive
 image: /assets/images/blog/2021-03-01-hudi-file-sizing.png
 tags:
-- design
 - file sizing
 ---
 

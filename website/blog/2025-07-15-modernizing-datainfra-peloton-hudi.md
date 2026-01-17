@@ -6,7 +6,6 @@ category: case-study
 image: /assets/images/blog/2025-07-15-modernizing-datainfra-peloton-hudi/peloton-1200x600.jpg
 tags:
 - peloton
-- community
 ---
 
 :::tip TL;DR

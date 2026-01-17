@@ -403,6 +403,79 @@
   box-shadow: 0 0 0 2px #fff, 0 0 0 4px rgba(13, 177, 249, 0.55);
 }
 
+/* Tag bar styles */
+.tagBar {
+  display: inline-flex;
+  flex-direction: row;
+  gap: 8px;
+  padding: 8px 14px;
+  border-radius: 24px;
+  border: 1px solid rgba(10, 37, 64, 0.08);
+  box-shadow: 0 1px 0 rgba(16, 24, 40, 0.04) inset;
+
+  overflow-x: auto;
+  overflow-y: hidden;
+  flex-wrap: nowrap;
+  white-space: nowrap;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(0, 0, 0, 0.2) transparent;
+  -webkit-overflow-scrolling: touch;
+}
+
+.tagBar::-webkit-scrollbar {
+  height: 1px !important;
+  display: block;
+}
+
+.tagBar::-webkit-scrollbar-track {
+  background: transparent;
+  border-radius: 0;
+}
+
+.tagBar::-webkit-scrollbar-thumb {
+  background-color: rgba(0, 0, 0, 0.15) !important;
+  border-radius: 0;
+}
+
+.tagBar::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(0, 0, 0, 0.3) !important;
+}
+
+.tag,
+.tagActive {
+  appearance: none;
+  background: transparent;
+  border: 1px solid rgba(10, 37, 64, 0.15);
+  color: var(--ifm-blue-900);
+  font-weight: 400;
+  font-size: 14px;
+  padding: 6px 12px;
+  border-radius: 16px;
+  cursor: pointer;
+  transition: background 150ms ease, color 150ms ease, box-shadow 150ms ease, border-color 150ms ease;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.tag:hover {
+  background: var(--ifm-gray-100);
+  border-color: rgba(10, 37, 64, 0.25);
+}
+
+.tagActive {
+  background: var(--ifm-gray-100);
+  color: #0f2e4f;
+  border-color: rgba(10, 37, 64, 0.25);
+  box-shadow: 0 1px 2px rgba(16, 24, 40, 0.06),
+  inset 0 0 0 1px rgba(10, 37, 64, 0.10);
+}
+
+.tag:focus-visible,
+.tagActive:focus-visible {
+  outline: 0;
+  box-shadow: 0 0 0 2px #fff, 0 0 0 4px rgba(13, 177, 249, 0.55);
+}
+
 .searchContainer {
   display: inline-flex;
   align-items: center;
@@ -466,6 +539,16 @@
   .category, .categoryActive {
     padding: 8px 12px;
     font-size: 15px;
+  }
+
+  .tagBar {
+    gap: 6px;
+    padding: 6px 10px;
+  }
+
+  .tag, .tagActive {
+    padding: 5px 10px;
+    font-size: 13px;
   }
 
   .searchContainer {

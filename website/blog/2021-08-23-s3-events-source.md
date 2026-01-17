@@ -2,11 +2,10 @@
 title: "Reliable ingestion from AWS S3 using Hudi"
 excerpt: "From listing to log-based approach, a reliable way of ingesting data from AWS S3 into Hudi."
 authors: [sagar-sumit]
-category: how-to
+category: deep-dive
 image: /assets/images/blog/s3_events_source_design.png
 tags:
-- design
-- deltastreamer
+- hudi streamer
 ---
 
 In this post we will talk about a new deltastreamer source which reliably and efficiently processes new data files as they arrive in AWS S3.
