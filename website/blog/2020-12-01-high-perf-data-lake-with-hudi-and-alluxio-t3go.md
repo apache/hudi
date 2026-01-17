@@ -5,7 +5,7 @@ author: t3go
 category: case-study
 image: /assets/images/blog/2020-12-01-t3go-architecture.png
 tags:
-- near real time analytics
+- bi
 - incremental processing
 - caching
 ---

@@ -5,8 +5,7 @@ authors: [nadine-farah]
 category: how-to
 image: /assets/images/blog/DataCouncil.jpg
 tags:
-- aws s3
-- aws glue
+- aws
 ---
 
 ![/assets/images/blog/DataCouncil.jpg](/assets/images/blog/DataCouncil.jpg)

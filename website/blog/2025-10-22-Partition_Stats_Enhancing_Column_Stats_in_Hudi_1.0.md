@@ -6,7 +6,7 @@ category: deep-dive
 image: /assets/images/blog/2025-10-22-Partition_Stats_Enhancing_Column_Stats_in_Hudi_1.0/fig1.jpg
 tags:
 - indexing
-- lakehouse
+- data lakehouse
 - data skipping
 ---
 

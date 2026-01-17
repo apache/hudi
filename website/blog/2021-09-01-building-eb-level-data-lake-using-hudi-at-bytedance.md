@@ -5,7 +5,7 @@ author: Ziyue Guan, translated to English by yihua
 category: case-study
 image: /assets/images/blog/bytedance_hudi.png
 tags:
-- data lake
+- data lakehouse
 - performance
 ---
 

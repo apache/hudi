@@ -5,8 +5,7 @@ authors: [sagar-sumit]
 category: how-to
 image: /assets/images/blog/s3_events_source_design.png
 tags:
-- design
-- deltastreamer
+- hudi streamer
 ---
 
 In this post we will talk about a new deltastreamer source which reliably and efficiently processes new data files as they arrive in AWS S3.

@@ -5,9 +5,9 @@ authors: [xushiyan]
 category: deep-dive
 image: /assets/images/blog/2025-09-17-hudi-auto-gen-keys/2025-09-17-hudi-auto-gen-keys.fig2.jpg
 tags:
-- record key generation
+- key generation
 - database
-- lakehouse
+- data lakehouse
 ---
 
 In database systems, the primary key is a foundational design principle for managing data at the record level. Its function is to provide each record with a unique and stable logical identifier, which decouples the record's identity from its physical location on storage. While using direct physical address pointers (e.g., position inside a file being used as a key) can be convenient, the physical address can change when records are moved around within the table for things like clustering or z-ordering ([called out here](https://x.com/apachehudi/status/1641572485325017089)).

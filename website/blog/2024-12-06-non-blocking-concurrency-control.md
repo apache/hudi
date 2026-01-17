@@ -5,9 +5,7 @@ authors: [danny-chan]
 category: deep-dive
 image: /assets/images/blog/non-blocking-concurrency-control/lsm_archive_timeline.png
 tags:
-- design
 - streaming
-- multi writer
 - concurrency control
 ---
 

@@ -6,7 +6,7 @@ category: deep-dive
 image: /assets/images/blog/2025-11-12-deep-dive-into-hudis-indexing-subsystem-part-2-of-2/fig1.png
 tags:
 - indexing
-- lakehouse
+- data lakehouse
 - data skipping
 ---
 

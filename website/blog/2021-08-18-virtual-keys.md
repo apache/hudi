@@ -4,7 +4,6 @@ excerpt: "Supporting Virtual keys in Hudi for reducing storage overhead"
 authors: [sivabalan]
 category: deep-dive
 tags:
-- design
 - metadata
 ---
 

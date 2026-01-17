@@ -5,7 +5,6 @@ author: sbernauer
 category: how-to
 image: /assets/images/blog/hudi_schemaevolution.png
 tags:
-- design
 - hudi streamer
 - schema
 - apache kafka

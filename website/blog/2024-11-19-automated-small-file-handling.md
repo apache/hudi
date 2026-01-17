@@ -5,7 +5,7 @@ authors: [aditya-goenka]
 category: deep-dive
 image: /assets/images/blog/2024-06-07-apache-hudi-a-deep-dive-with-python-code-examples.png
 tags:
-- data lake
+- data lakehouse
 ---
 
 ## Introduction

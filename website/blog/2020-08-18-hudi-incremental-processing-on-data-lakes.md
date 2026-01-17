@@ -5,7 +5,7 @@ author: vinoyang
 category: deep-dive
 image: /assets/images/blog/incr-processing/image7.png
 tags:
-- data lake
+- data lakehouse
 - incremental processing
 ---
 

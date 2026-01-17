@@ -5,10 +5,8 @@ authors: [aditya-goenka]
 category: how-to
 image: /assets/images/blog/2024-06-07-apache-hudi-a-deep-dive-with-python-code-examples.png
 tags:
-- data lake
-- lakehouse
-- key generators
-- partition
+- data lakehouse
+- key generation
 ---
 
 ## Introduction
@@ -22,7 +20,7 @@ The biggest challenge in defining the record key and partition key on a table is
 - It is necessary to preprocess the data to derive a specific field that can serve as a primary key before loading it into the database.
 - Sometimes we have to generate unique ids also. Common use case is surrogate key.
 
-Similarly, for partition columns also in datalakes, most of the time the raw field can’t be used as a partition key.
+Similarly, for partition columns also in datalakes, most of the time the raw field can't be used as a partition key.
 - Partition columns often have time grain like month level or year level partition but input data mostly contain timestamp and date.
 - Nested primary keys are very common, and necessitates multiple partition columns.
 

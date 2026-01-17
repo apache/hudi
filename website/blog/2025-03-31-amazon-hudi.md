@@ -6,7 +6,6 @@ category: case-study
 image: /assets/images/blog/amz-1200x600.jpg
 tags:
 - aws
-- community
 ---
 
 :::tip TL;DR

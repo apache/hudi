@@ -5,7 +5,7 @@ author: Albert Wong
 category: deep-dive
 image: /assets/images/blog/hudi-parquet-orc.png
 tags:
-- data lake
+- data lakehouse
 - apache parquet
 - apache orc
 ---

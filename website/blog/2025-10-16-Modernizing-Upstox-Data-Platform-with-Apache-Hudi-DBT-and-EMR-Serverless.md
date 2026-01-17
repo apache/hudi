@@ -7,7 +7,7 @@ image: /assets/images/blog/2025-10-16-Modernizing-Upstox-Data-Platform-with-Apac
 tags:
 - upstox
 - dbt
-- lakehouse
+- data lakehouse
 ---
 
 ## Introduction

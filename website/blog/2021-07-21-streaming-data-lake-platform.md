@@ -5,7 +5,7 @@ authors: [vinoth-chandar]
 category: deep-dive
 image: /assets/images/blog/hudi_streaming.png
 tags:
-- data lake
+- data lakehouse
 ---
 
 As early as 2016, we set out a [bold, new vision](https://www.oreilly.com/content/ubers-case-for-incremental-processing-on-hadoop/) reimagining batch data processing through a new “**incremental**” data processing stack - alongside the existing batch and streaming stacks. 

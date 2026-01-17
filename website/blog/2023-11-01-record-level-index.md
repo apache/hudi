@@ -5,7 +5,6 @@ authors: [xushiyan, sivabalan]
 category: deep-dive
 image: /assets/images/blog/record-level-index/03.RLI_bulkinsert.png
 tags:
-- design
 - indexing
 - metadata
 ---

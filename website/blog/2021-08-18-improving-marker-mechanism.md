@@ -5,8 +5,7 @@ authors: [ethan-guo]
 category: deep-dive
 image: /assets/images/blog/marker-mechanism/timeline-server-based-marker-mechanism.png
 tags:
-- design
-- timeline server
+- hudi timeline
 - markers
 ---
 

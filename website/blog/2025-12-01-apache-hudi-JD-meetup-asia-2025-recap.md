@@ -6,8 +6,7 @@ category: community
 image: /assets/images/blog/2025-12-01-apache-hudi-JD-meetup-asia-2025-recap/jdpost-image7.jpg
 tags:
 - meetup
-- lakehouse
-- community
+- data lakehouse
 ---
 
 ---
