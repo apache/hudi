@@ -16,8 +16,13 @@ In this blog, we will explore the concept of Key Generators in Apache Hudi, how 
 
 ## Challenge
 The biggest challenge in defining the record key and partition key on a table is  the columns in input data does not naturally lend itself to being used as a primary key or partition key directly. In the realm of databases, we often have below cases -
+- Need to have multiple fields that serve as primary key commonly known as composite keys in the database.
+- It is necessary to preprocess the data to derive a specific field that can serve as a primary key before loading it into the database.
+- Sometimes we have to generate unique ids also. Common use case is surrogate key.
 
-Similarly, for partition columns also in datalakes, most of the time the raw field can’t be used as a partition key.
+Similarly, for partition columns also in datalakes, most of the time the raw field can't be used as a partition key.
+- Partition columns often have time grain like month level or year level partition but input data mostly contain timestamp and date.
+- Nested primary keys are very common, and necessitates multiple partition columns.
 
 ## Approaches to Handling this in Data Pipelines
 Data Lake and Lakehouse technologies typically address such scenarios by preprocessing the data. For example, if date-based partitioning is required and a timestamp column is available, the data must be processed using Spark SQL date functions to extract relevant components (e.g., year, month, day). These derived columns are then used for partitioning. However, this process can become cumbersome at scale, especially when multiple data streams are writing to the same Hudi table. The same extraction logic needs to be applied to all streams, and any table maintenance activities (such as bootstrapping or backfilling) also require this logic to be reapplied. This repetition is error-prone and can lead to data consistency issues if the logic is incorrectly applied.
