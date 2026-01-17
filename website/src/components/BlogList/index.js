@@ -102,12 +102,14 @@ export default function BlogList() {
       filtered = filtered.filter((elem) => elem.frontMatter.category === category);
     }
 
-    // Filter by search query - only search by title (case-insensitive)
+    // Filter by search query - search title, tags, and description (case-insensitive)
     if(searchQuery.trim()) {
       const query = searchQuery.toLowerCase().trim();
       filtered = filtered.filter((post) => {
         const title = post.metadata?.title?.toLowerCase() || '';
-        return title.includes(query);
+        const description = post.metadata?.description?.toLowerCase() || '';
+        const tags = (post.frontMatter?.tags || []).map(t => t.toLowerCase()).join(' ');
+        return title.includes(query) || description.includes(query) || tags.includes(query);
       });
     }
 
@@ -218,7 +220,7 @@ export default function BlogList() {
     };
 
     // Sort categories alphabetically, with known ones first in preferred order
-    const preferredOrder = ['community', 'deep-dive', 'how-to', 'case-study'];
+    const preferredOrder = ['deep-dive', 'how-to', 'case-study', 'community'];
     const sortedCategories = Array.from(categorySet).sort((a, b) => {
       const aIndex = preferredOrder.indexOf(a);
       const bIndex = preferredOrder.indexOf(b);
@@ -335,6 +337,32 @@ export default function BlogList() {
             </button>
           ))}
         </div>
+        {selectedTags.length > 0 && (
+          <div className={styles.selectedTagsRow}>
+            {selectedTags.map(tag => (
+              <span key={tag} className={styles.selectedTag}>
+                {tag}
+                <button
+                  className={styles.removeTagButton}
+                  onClick={() => handleTagClick(tag)}
+                  type="button"
+                  aria-label={`Remove ${tag} filter`}
+                >
+                  <svg viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M9 3L3 9M3 3L9 9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                </button>
+              </span>
+            ))}
+            <button
+              className={styles.clearAllButton}
+              onClick={handleClearTags}
+              type="button"
+            >
+              Clear All
+            </button>
+          </div>
+        )}
       </div>
       <div key={`${category}-${searchQuery}-${selectedTags.join(',')}-${currentPage}`} className={styles.gridWrapper}>
         <div className={styles.grid}>
