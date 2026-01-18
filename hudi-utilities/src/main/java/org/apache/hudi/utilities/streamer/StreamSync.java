@@ -1011,15 +1011,14 @@ public class StreamSync implements Serializable, Closeable {
   }
 
   public void runMetaSync() {
-    List<String> syncClientToolClasses = Arrays.stream(cfg.syncClientToolClassNames.split(",")).collect(Collectors.toList());
+    Set<String> syncClientToolClasses = Arrays.stream(cfg.syncClientToolClassNames.split(",")).collect(Collectors.toSet());
     // for backward compatibility
     if (cfg.enableHiveSync) {
       cfg.enableMetaSync = true;
       syncClientToolClasses.add(HiveSyncTool.class.getName());
       LOG.info("When set --enable-hive-sync will use HiveSyncTool for backward compatibility");
     }
-    Set<String> syncClientToolClassesSet = new HashSet<>(syncClientToolClasses);
-    if (cfg.enableMetaSync && !syncClientToolClassesSet.isEmpty()) {
+    if (cfg.enableMetaSync && !syncClientToolClasses.isEmpty()) {
       LOG.debug("[MetaSync] Starting sync");
       HoodieTableMetaClient metaClient;
       try {
@@ -1042,7 +1041,7 @@ public class StreamSync implements Serializable, Closeable {
       }
 
       Map<String, HoodieException> failedMetaSyncs = new HashMap<>();
-      for (String impl : syncClientToolClassesSet) {
+      for (String impl : syncClientToolClasses) {
         if (impl.trim().isEmpty()) {
           LOG.warn("Cannot run MetaSync with empty class name");
           continue;
