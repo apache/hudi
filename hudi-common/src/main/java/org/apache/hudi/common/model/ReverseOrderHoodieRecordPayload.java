@@ -39,9 +39,13 @@ public class ReverseOrderHoodieRecordPayload extends DefaultHoodieRecordPayload 
   }
 
   @Override
-  protected OverwriteWithLatestAvroPayload getRecordWithLatestAvroPayload(OverwriteWithLatestAvroPayload oldValue) {
+  public OverwriteWithLatestAvroPayload preCombine(OverwriteWithLatestAvroPayload oldValue) {
+    if (oldValue.isEmptyRecord()) {
+      // use natural order for delete record
+      return this;
+    }
     if (oldValue.orderingVal.compareTo(orderingVal) < 0) {
-      // pick the payload with the smallest ordering value
+      // pick the payload with the lowest ordering value
       return oldValue;
     } else {
       return this;

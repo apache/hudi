@@ -603,7 +603,8 @@ class TestDataSourceDefaults extends ScalaAssertionSupport {
     }
   }
 
-  @Test def testOverwriteWithLatestAvroPayload(): Unit = {
+  @Test
+  def testOverwriteWithLatestAvroPayload(): Unit = {
     val overWritePayload1 = new OverwriteWithLatestAvroPayload(baseRecord, 1)
     val laterRecord = SchemaTestUtil
       .generateAvroRecordFromJson(schema, 2, "001", "f1")
