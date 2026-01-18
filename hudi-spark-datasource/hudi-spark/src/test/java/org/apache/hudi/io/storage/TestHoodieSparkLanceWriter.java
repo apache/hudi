@@ -21,6 +21,7 @@ package org.apache.hudi.io.storage;
 import org.apache.hudi.client.SparkTaskContextSupplier;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.io.memory.HoodieArrowAllocator;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
@@ -99,7 +100,7 @@ public class TestHoodieSparkLanceWriter {
 
     StoragePath path = new StoragePath(tempDir.getAbsolutePath() + "/test_with_metadata.lance");
     try (HoodieSparkLanceWriter writer = new HoodieSparkLanceWriter(
-        path, schema, instantTime, taskContextSupplier, storage, true)) {
+        path, schema, instantTime, taskContextSupplier, storage, true, Option.empty())) {
       // Write multiple records to test metadata population and sequence ID generation
       for (int i = 0; i < 3; i++) {
         InternalRow row = createRowWithMetaFields(i, "User" + i, 20L + i);
@@ -168,7 +169,7 @@ public class TestHoodieSparkLanceWriter {
 
     StoragePath path = new StoragePath(tempDir.getAbsolutePath() + "/test_without_metadata.lance");
     try (HoodieSparkLanceWriter writer = new HoodieSparkLanceWriter(
-        path, schema, instantTime, taskContextSupplier, storage, false)) {
+        path, schema, instantTime, taskContextSupplier, storage, false, Option.empty())) {
       // Create row with just user data (no meta fields)
       InternalRow row = createRow(1, "Bob", 25L);
       HoodieKey key = new HoodieKey("key2", "partition2");
@@ -212,7 +213,7 @@ public class TestHoodieSparkLanceWriter {
 
     StoragePath path = new StoragePath(tempDir.getAbsolutePath() + "/test_simple_write.lance");
     try (HoodieSparkLanceWriter writer = new HoodieSparkLanceWriter(
-        path, schema, instantTime, taskContextSupplier, storage, false)) {
+        path, schema, instantTime, taskContextSupplier, storage, false, Option.empty())) {
       InternalRow row = createRow(1, "Charlie", 35L);
       writer.writeRow("key3", row);
     }
@@ -233,7 +234,7 @@ public class TestHoodieSparkLanceWriter {
     // Write more than DEFAULT_BATCH_SIZE (1000) records
     int recordCount = 2500;
     try (HoodieSparkLanceWriter writer = new HoodieSparkLanceWriter(
-        path, schema, instantTime, taskContextSupplier, storage, false)) {
+        path, schema, instantTime, taskContextSupplier, storage, false, Option.empty())) {
       for (int i = 0; i < recordCount; i++) {
         InternalRow row = createRow(i, "User" + i, 20L + i);
         writer.writeRow("key" + i, row);
@@ -261,7 +262,7 @@ public class TestHoodieSparkLanceWriter {
 
     StoragePath path = new StoragePath(tempDir.getAbsolutePath() + "/test_primitives.lance");
     try (HoodieSparkLanceWriter writer = new HoodieSparkLanceWriter(
-        path, schema, instantTime, taskContextSupplier, storage, false)) {
+        path, schema, instantTime, taskContextSupplier, storage, false, Option.empty())) {
       GenericInternalRow row = new GenericInternalRow(new Object[]{
           42,                                    // int
           123456789L,                           // long
@@ -308,7 +309,7 @@ public class TestHoodieSparkLanceWriter {
 
     StoragePath path = new StoragePath(tempDir.getAbsolutePath() + "/test_nulls.lance");
     try (HoodieSparkLanceWriter writer = new HoodieSparkLanceWriter(
-        path, schema, instantTime, taskContextSupplier, storage, false)) {
+        path, schema, instantTime, taskContextSupplier, storage, false, Option.empty())) {
       // Write rows with null values
       writer.writeRow("key1", createRow(1, "Alice", 30L));
       writer.writeRow("key2", createRow(2, null, 25L));  // null name
@@ -345,7 +346,7 @@ public class TestHoodieSparkLanceWriter {
 
     StoragePath path = new StoragePath(tempDir.getAbsolutePath() + "/test_empty.lance");
     try (HoodieSparkLanceWriter writer = new HoodieSparkLanceWriter(
-        path, schema, instantTime, taskContextSupplier, storage, false)) {
+        path, schema, instantTime, taskContextSupplier, storage, false, Option.empty())) {
       // Close without writing any rows
     }
 
@@ -393,7 +394,7 @@ public class TestHoodieSparkLanceWriter {
 
     StoragePath path = new StoragePath(tempDir.getAbsolutePath() + "/test_struct.lance");
     try (HoodieSparkLanceWriter writer = new HoodieSparkLanceWriter(
-        path, schema, instantTime, taskContextSupplier, storage, false)) {
+        path, schema, instantTime, taskContextSupplier, storage, false, Option.empty())) {
       for (int i = 0; i < rows.size(); i++) {
         writer.writeRow("key" + i, rows.get(i));
       }

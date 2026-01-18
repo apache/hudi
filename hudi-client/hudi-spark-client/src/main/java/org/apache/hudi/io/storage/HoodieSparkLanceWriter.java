@@ -18,9 +18,12 @@
 
 package org.apache.hudi.io.storage;
 
+import org.apache.hudi.avro.HoodieBloomFilterWriteSupport;
+import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.io.lance.HoodieBaseLanceWriter;
 import org.apache.hudi.io.storage.row.HoodieInternalRowFileWriter;
 import org.apache.hudi.storage.HoodieStorage;
@@ -49,8 +52,9 @@ import static org.apache.hudi.common.model.HoodieRecord.HoodieMetadataField.RECO
  *
  * This writer integrates with Hudi's storage I/O layer and supports:
  * - Hudi metadata field population
- * - Record key tracking (for bloom filters - TODO https://github.com/apache/hudi/issues/17664)
+ * - Record key tracking (for bloom filters)
  * - Sequence ID generation
+ * - Min/max record key tracking
  */
 public class HoodieSparkLanceWriter extends HoodieBaseLanceWriter<InternalRow>
     implements HoodieSparkFileWriter, HoodieInternalRowFileWriter {
@@ -63,9 +67,47 @@ public class HoodieSparkLanceWriter extends HoodieBaseLanceWriter<InternalRow>
   private final UTF8String instantTime;
   private final boolean populateMetaFields;
   private final Function<Long, String> seqIdGenerator;
+  private final Option<HoodieBloomFilterLanceWriteSupport> bloomFilterWriteSupportOpt;
 
   /**
    * Constructor for Spark Lance writer.
+   *
+   * @param file Path where Lance file will be written
+   * @param sparkSchema Spark schema for the data
+   * @param instantTime Instant time for the commit
+   * @param taskContextSupplier Task context supplier for partition ID
+   * @param storage HoodieStorage instance
+   * @param populateMetaFields Whether to populate Hudi metadata fields
+   * @param bloomFilterOpt Optional bloom filter for record key tracking
+   * @throws IOException if writer initialization fails
+   */
+  public HoodieSparkLanceWriter(StoragePath file,
+                                StructType sparkSchema,
+                                String instantTime,
+                                TaskContextSupplier taskContextSupplier,
+                                HoodieStorage storage,
+                                boolean populateMetaFields,
+                                Option<BloomFilter> bloomFilterOpt) throws IOException {
+    super(file, DEFAULT_BATCH_SIZE, bloomFilterOpt.map(HoodieBloomFilterLanceWriteSupport::new));
+    this.sparkSchema = sparkSchema;
+    this.arrowSchema = LanceArrowUtils.toArrowSchema(sparkSchema, DEFAULT_TIMEZONE, true, false);
+    this.fileName = UTF8String.fromString(file.getName());
+    this.instantTime = UTF8String.fromString(instantTime);
+    this.populateMetaFields = populateMetaFields;
+    this.seqIdGenerator = recordIndex -> {
+      Integer partitionId = taskContextSupplier.getPartitionIdSupplier().get();
+      return HoodieRecord.generateSequenceId(instantTime, partitionId, recordIndex);
+    };
+    if (super.bloomFilterWriteSupportOpt.isPresent()) {
+      this.bloomFilterWriteSupportOpt = Option
+          .of((HoodieBloomFilterLanceWriteSupport) super.bloomFilterWriteSupportOpt.get());
+    } else {
+      this.bloomFilterWriteSupportOpt = Option.empty();
+    }
+  }
+
+  /**
+   * Constructor for Spark Lance writer without bloom filter.
    *
    * @param file Path where Lance file will be written
    * @param sparkSchema Spark schema for the data
@@ -81,16 +123,7 @@ public class HoodieSparkLanceWriter extends HoodieBaseLanceWriter<InternalRow>
                                 TaskContextSupplier taskContextSupplier,
                                 HoodieStorage storage,
                                 boolean populateMetaFields) throws IOException {
-    super(file, DEFAULT_BATCH_SIZE);
-    this.sparkSchema = sparkSchema;
-    this.arrowSchema = LanceArrowUtils.toArrowSchema(sparkSchema, DEFAULT_TIMEZONE, true, false);
-    this.fileName = UTF8String.fromString(file.getName());
-    this.instantTime = UTF8String.fromString(instantTime);
-    this.populateMetaFields = populateMetaFields;
-    this.seqIdGenerator = recordIndex -> {
-      Integer partitionId = taskContextSupplier.getPartitionIdSupplier().get();
-      return HoodieRecord.generateSequenceId(instantTime, partitionId, recordIndex);
-    };
+    this(file, sparkSchema, instantTime, taskContextSupplier, storage, populateMetaFields, Option.empty());
   }
 
   /**
@@ -106,13 +139,15 @@ public class HoodieSparkLanceWriter extends HoodieBaseLanceWriter<InternalRow>
                                 StructType sparkSchema,
                                 TaskContextSupplier taskContextSupplier,
                                 HoodieStorage storage) throws IOException {
-    this(file, sparkSchema, null, taskContextSupplier, storage, false);
+    this(file, sparkSchema, null, taskContextSupplier, storage, false, Option.empty());
   }
 
   @Override
   public void writeRowWithMetadata(HoodieKey key, InternalRow row) throws IOException {
     if (populateMetaFields) {
       UTF8String recordKey = UTF8String.fromString(key.getRecordKey());
+      bloomFilterWriteSupportOpt.ifPresent(bloomFilterWriteSupport ->
+              bloomFilterWriteSupport.addKey(recordKey));
       updateRecordMetadata(row, recordKey, key.getPartitionPath(), getWrittenRecordCount());
       super.write(row);
     } else {
@@ -122,13 +157,16 @@ public class HoodieSparkLanceWriter extends HoodieBaseLanceWriter<InternalRow>
 
   @Override
   public void writeRow(String recordKey, InternalRow row) throws IOException {
-    super.write(row);
+    bloomFilterWriteSupportOpt.ifPresent(bloomFilterWriteSupport ->
+            bloomFilterWriteSupport.addKey(UTF8String.fromString(recordKey)));
+    super.write(row.copy());
   }
   
   @Override
   public void writeRow(UTF8String key, InternalRow row) throws IOException {
-    // Key reserved for future bloom filter support (https://github.com/apache/hudi/issues/17664)
-    super.write(row);
+    bloomFilterWriteSupportOpt.ifPresent(bloomFilterWriteSupport ->
+            bloomFilterWriteSupport.addKey(key));
+    super.write(row.copy());
   }
   
   @Override
@@ -193,6 +231,32 @@ public class HoodieSparkLanceWriter extends HoodieBaseLanceWriter<InternalRow>
     @Override
     public void finishBatch() {
       lanceArrowWriter.finish();
+    }
+  }
+
+  /**
+   * Bloom filter write support implementation for Lance file format.
+   * Handles UTF8String record keys specific to Spark InternalRow.
+   */
+  private static class HoodieBloomFilterLanceWriteSupport extends HoodieBloomFilterWriteSupport<UTF8String> {
+
+    public HoodieBloomFilterLanceWriteSupport(BloomFilter bloomFilter) {
+      super(bloomFilter);
+    }
+
+    @Override
+    protected byte[] getUTF8Bytes(UTF8String key) {
+      return key.getBytes();
+    }
+
+    @Override
+    protected UTF8String dereference(UTF8String key) {
+      return key.clone();
+    }
+
+    @Override
+    protected int compareRecordKey(UTF8String a, UTF8String b) {
+      return a.compareTo(b);
     }
   }
 }
