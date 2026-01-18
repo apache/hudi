@@ -29,7 +29,6 @@ import org.apache.hudi.avro.model.HoodieClusteringStrategy;
 import org.apache.hudi.avro.model.HoodieRequestedReplaceMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.avro.model.HoodieSliceInfo;
-import org.apache.hudi.client.HoodieTimelineArchiver;
 import org.apache.hudi.client.SparkRDDReadClient;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
@@ -610,7 +609,7 @@ public class TestCleaner extends HoodieCleanerTestBase {
     Map<String, String> partitionAndFileId002 = testTable.forReplaceCommit("00000000000002").getFileIdsWithBaseFilesInPartitions(p0);
     String file2P0C1 = partitionAndFileId002.get(p0);
     Pair<HoodieRequestedReplaceMetadata, HoodieReplaceCommitMetadata> replaceMetadata =
-        generateReplaceCommitMetadata(p0, file1P0C0, file2P0C1);
+        generateReplaceCommitMetadata("00000000000002", p0, file1P0C0, file2P0C1);
     testTable.addCluster("00000000000002", replaceMetadata.getKey(), Option.empty(), replaceMetadata.getValue());
 
     // run cleaner
@@ -624,7 +623,7 @@ public class TestCleaner extends HoodieCleanerTestBase {
     // notice that clustering generates empty inflight commit files
     Map<String, String> partitionAndFileId003 = testTable.forReplaceCommit("00000000000003").getFileIdsWithBaseFilesInPartitions(p1);
     String file3P1C2 = partitionAndFileId003.get(p1);
-    replaceMetadata = generateReplaceCommitMetadata(p1, file1P1C0, file3P1C2);
+    replaceMetadata = generateReplaceCommitMetadata("00000000000003", p1, file1P1C0, file3P1C2);
     testTable.addCluster("00000000000003", replaceMetadata.getKey(), Option.empty(), replaceMetadata.getValue());
 
     // run cleaner
@@ -639,7 +638,7 @@ public class TestCleaner extends HoodieCleanerTestBase {
     // notice that clustering generates empty inflight commit files
     Map<String, String> partitionAndFileId004 = testTable.forReplaceCommit("00000000000004").getFileIdsWithBaseFilesInPartitions(p0);
     String file4P0C3 = partitionAndFileId004.get(p0);
-    replaceMetadata = generateReplaceCommitMetadata(p0, file2P0C1, file4P0C3);
+    replaceMetadata = generateReplaceCommitMetadata("00000000000004", p0, file2P0C1, file4P0C3);
     testTable.addCluster("00000000000004", replaceMetadata.getKey(), Option.empty(), replaceMetadata.getValue());
 
     // run cleaner
@@ -655,7 +654,7 @@ public class TestCleaner extends HoodieCleanerTestBase {
     // notice that clustering generates empty inflight commit files
     Map<String, String> partitionAndFileId005 = testTable.forReplaceCommit("00000000000006").getFileIdsWithBaseFilesInPartitions(p1);
     String file4P1C4 = partitionAndFileId005.get(p1);
-    replaceMetadata = generateReplaceCommitMetadata(p0, file3P1C2, file4P1C4);
+    replaceMetadata = generateReplaceCommitMetadata("00000000000006", p0, file3P1C2, file4P1C4);
     testTable.addCluster("00000000000006", replaceMetadata.getKey(), Option.empty(), replaceMetadata.getValue());
 
     List<HoodieCleanStat> hoodieCleanStatsFive = runCleaner(config, 7, true);
@@ -666,9 +665,8 @@ public class TestCleaner extends HoodieCleanerTestBase {
     assertFalse(testTable.baseFileExists(p1, "00000000000001", file1P1C0));
   }
 
-  public static Pair<HoodieRequestedReplaceMetadata, HoodieReplaceCommitMetadata> generateReplaceCommitMetadata(String partition,
-                                                                                                          String replacedFileId,
-                                                                                                          String newFileId) {
+  public static Pair<HoodieRequestedReplaceMetadata, HoodieReplaceCommitMetadata> generateReplaceCommitMetadata(
+      String instantTime, String partition, String replacedFileId, String newFileId) {
     HoodieRequestedReplaceMetadata requestedReplaceMetadata = new HoodieRequestedReplaceMetadata();
     requestedReplaceMetadata.setOperationType(WriteOperationType.CLUSTER.toString());
     requestedReplaceMetadata.setVersion(1);
@@ -689,8 +687,10 @@ public class TestCleaner extends HoodieCleanerTestBase {
     if (!StringUtils.isNullOrEmpty(newFileId)) {
       HoodieWriteStat writeStat = new HoodieWriteStat();
       writeStat.setPartitionPath(partition);
-      writeStat.setPath(newFileId);
+      writeStat.setPath(partition + "/" + HoodieTestCommitGenerator.getBaseFilename(instantTime, newFileId));
       writeStat.setFileId(newFileId);
+      writeStat.setTotalWriteBytes(1);
+      writeStat.setFileSizeInBytes(1);
       replaceMetadata.addWriteStat(partition, writeStat);
     }
     return Pair.of(requestedReplaceMetadata, replaceMetadata);
@@ -1031,21 +1031,21 @@ public class TestCleaner extends HoodieCleanerTestBase {
       Map<String, String> partitionAndFileId002 = testTable.forReplaceCommit("00000000000002").getFileIdsWithBaseFilesInPartitions(p0);
       String file2P0C1 = partitionAndFileId002.get(p0);
       Pair<HoodieRequestedReplaceMetadata, HoodieReplaceCommitMetadata> replaceMetadata =
-          generateReplaceCommitMetadata(p0, file1P0C0, file2P0C1);
+          generateReplaceCommitMetadata("00000000000002", p0, file1P0C0, file2P0C1);
       testTable.addCluster("00000000000002", replaceMetadata.getKey(), Option.empty(), replaceMetadata.getValue());
 
       // make next replacecommit, with 1 clustering operation. Replace data in p1. No change to p0
       // notice that clustering generates empty inflight commit files
       Map<String, String> partitionAndFileId003 = testTable.forReplaceCommit("00000000000003").getFileIdsWithBaseFilesInPartitions(p1);
       String file3P1C2 = partitionAndFileId003.get(p1);
-      replaceMetadata = generateReplaceCommitMetadata(p1, file1P1C0, file3P1C2);
+      replaceMetadata = generateReplaceCommitMetadata("00000000000003", p1, file1P1C0, file3P1C2);
       testTable.addCluster("00000000000003", replaceMetadata.getKey(), Option.empty(), replaceMetadata.getValue());
 
       // make next replacecommit, with 1 clustering operation. Replace data in p0 again
       // notice that clustering generates empty inflight commit files
       Map<String, String> partitionAndFileId004 = testTable.forReplaceCommit("00000000000004").getFileIdsWithBaseFilesInPartitions(p0);
       String file4P0C3 = partitionAndFileId004.get(p0);
-      replaceMetadata = generateReplaceCommitMetadata(p0, file2P0C1, file4P0C3);
+      replaceMetadata = generateReplaceCommitMetadata("00000000000004", p0, file2P0C1, file4P0C3);
       testTable.addCluster("00000000000004", replaceMetadata.getKey(), Option.empty(), replaceMetadata.getValue());
 
       // run cleaner with failures
