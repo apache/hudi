@@ -121,8 +121,8 @@ private object Spark3HoodiePruneFileSourcePartitions extends PredicateHelper {
       dataFilters.flatMap(exprUtils.extractPredicatesWithinOutputSet(_, partitionSet))
     // When there are multiple filters on the same column, ex: datestr > '2016-01-01' and datestr < '2016-12-31' etc,
     // using ExpressionSet to append filters and then converting back to Seq[Expression] is causing the filters to be
-    // dropped. Hence, commenting the ExpressionSet conversion logic.
-    // (ExpressionSet(partitionFilters ++ extraPartitionFilter).toSeq, dataFilters)
+    // dropped. So, directly appending partitionFilters and extraPartitionFilter together without creating
+    // ExpresseionSet object.
     (partitionFilters ++ extraPartitionFilter, dataFilters)
   }
 
