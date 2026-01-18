@@ -20,6 +20,7 @@ package org.apache.hudi.common.config;
 
 import org.apache.hudi.common.bloom.BloomFilterTypeCode;
 import org.apache.hudi.common.engine.EngineType;
+import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
@@ -38,6 +39,7 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.common.model.HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS;
 import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_EXPRESSION_INDEX_PREFIX;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_SECONDARY_INDEX_PREFIX;
@@ -150,6 +152,13 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       .markAdvanced()
       .sinceVersion("0.14.0")
       .withDocumentation("Controls the criteria to log compacted files groups in metadata table.");
+
+  public static final ConfigProperty<Integer> CLEANER_POLICY = ConfigProperty
+      .key(METADATA_PREFIX + ".clean.policy")
+      .defaultValue(KEEP_LATEST_FILE_VERSIONS.name())
+      .markAdvanced()
+      .sinceVersion("1.2.0")
+      .withDocumentation("This config determines the cleaner policy for metadata table.");
 
   // Regex to filter out matching directories during bootstrap
   public static final ConfigProperty<String> DIR_FILTER_REGEX = ConfigProperty
@@ -887,6 +896,11 @@ public final class HoodieMetadataConfig extends HoodieConfig {
     return getIntOrDefault(RECORD_PREPARATION_PARALLELISM);
   }
 
+  public HoodieCleaningPolicy getCleanerPolicy() {
+    return HoodieCleaningPolicy.valueOf(getString(CLEANER_POLICY));
+  }
+
+
   /**
    * Checks if a specific metadata index is marked for dropping based on the metadata configuration.
    * NOTE: Only applicable for secondary indexes (SI) or expression indexes (EI).
@@ -1013,6 +1027,11 @@ public final class HoodieMetadataConfig extends HoodieConfig {
 
     public Builder withLogCompactBlocksThreshold(int logCompactBlocksThreshold) {
       metadataConfig.setValue(LOG_COMPACT_BLOCKS_THRESHOLD, Integer.toString(logCompactBlocksThreshold));
+      return this;
+    }
+
+    public HoodieMetadataConfig.Builder withCleanerPolicy(HoodieCleaningPolicy policy) {
+      metadataConfig.setValue(CLEANER_POLICY, policy.name());
       return this;
     }
 

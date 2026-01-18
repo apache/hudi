@@ -159,22 +159,23 @@ public class HoodieMetadataWriteUtils {
 
     final long maxLogFileSizeBytes = writeConfig.getMetadataConfig().getMaxLogFileSize();
     // Borrow the cleaner policy from the main table and adjust the cleaner policy based on the main table's cleaner policy
-    HoodieCleaningPolicy dataTableCleaningPolicy = writeConfig.getCleanerPolicy();
+    HoodieCleaningPolicy metadataTableCleaningPolicy = writeConfig.getMetadataConfig().getCleanerPolicy();
     HoodieCleanConfig.Builder cleanConfigBuilder = HoodieCleanConfig.newBuilder()
         .withAsyncClean(DEFAULT_METADATA_ASYNC_CLEAN)
         .withAutoClean(false)
         .withCleanerParallelism(MDT_DEFAULT_PARALLELISM)
+        .retainFileVersions(2)
         .withFailedWritesCleaningPolicy(failedWritesCleaningPolicy)
         .withMaxCommitsBeforeCleaning(writeConfig.getCleaningMaxCommits())
-        .withCleanerPolicy(dataTableCleaningPolicy);
+        .withCleanerPolicy(metadataTableCleaningPolicy);
 
-    if (HoodieCleaningPolicy.KEEP_LATEST_COMMITS.equals(dataTableCleaningPolicy)) {
+    if (HoodieCleaningPolicy.KEEP_LATEST_COMMITS.equals(metadataTableCleaningPolicy)) {
       int retainCommits = (int) Math.max(DEFAULT_METADATA_CLEANER_COMMITS_RETAINED, writeConfig.getCleanerCommitsRetained() * 1.2);
       cleanConfigBuilder.retainCommits(retainCommits);
-    } else if (HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS.equals(dataTableCleaningPolicy)) {
+    } else if (HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS.equals(metadataTableCleaningPolicy)) {
       int retainFileVersions = (int) Math.ceil(writeConfig.getCleanerFileVersionsRetained() * 1.2);
       cleanConfigBuilder.retainFileVersions(retainFileVersions);
-    } else if (HoodieCleaningPolicy.KEEP_LATEST_BY_HOURS.equals(dataTableCleaningPolicy)) {
+    } else if (HoodieCleaningPolicy.KEEP_LATEST_BY_HOURS.equals(metadataTableCleaningPolicy)) {
       int numHoursRetained = (int) Math.ceil(writeConfig.getCleanerHoursRetained() * 1.2);
       cleanConfigBuilder.cleanerNumHoursRetained(numHoursRetained);
     }
@@ -200,15 +201,7 @@ public class HoodieMetadataWriteUtils {
         .withSchema(HoodieMetadataRecord.getClassSchema().toString())
         .forTable(tableName)
         // we will trigger cleaning manually, to control the instant times
-        .withCleanConfig(HoodieCleanConfig.newBuilder()
-            .withAsyncClean(DEFAULT_METADATA_ASYNC_CLEAN)
-            .withAutoClean(false)
-            .withCleanerParallelism(MDT_DEFAULT_PARALLELISM)
-            .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS)
-            .retainFileVersions(2)
-            .withFailedWritesCleaningPolicy(failedWritesCleaningPolicy)
-            .retainCommits(DEFAULT_METADATA_CLEANER_COMMITS_RETAINED)
-            .build())
+        .withCleanConfig(cleanConfigBuilder.build())
         // we will trigger archive manually, to ensure only regular writer invokes it
         .withArchivalConfig(HoodieArchivalConfig.newBuilder()
             .archiveCommitsWith(
