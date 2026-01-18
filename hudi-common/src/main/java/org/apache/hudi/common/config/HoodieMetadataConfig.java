@@ -153,7 +153,7 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       .sinceVersion("0.14.0")
       .withDocumentation("Controls the criteria to log compacted files groups in metadata table.");
 
-  public static final ConfigProperty<Integer> CLEANER_POLICY = ConfigProperty
+  public static final ConfigProperty<String> CLEANER_POLICY = ConfigProperty
       .key(METADATA_PREFIX + ".clean.policy")
       .defaultValue(KEEP_LATEST_FILE_VERSIONS.name())
       .markAdvanced()
@@ -899,7 +899,6 @@ public final class HoodieMetadataConfig extends HoodieConfig {
   public HoodieCleaningPolicy getCleanerPolicy() {
     return HoodieCleaningPolicy.valueOf(getString(CLEANER_POLICY));
   }
-
 
   /**
    * Checks if a specific metadata index is marked for dropping based on the metadata configuration.

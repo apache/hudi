@@ -164,7 +164,6 @@ public class HoodieMetadataWriteUtils {
         .withAsyncClean(DEFAULT_METADATA_ASYNC_CLEAN)
         .withAutoClean(false)
         .withCleanerParallelism(MDT_DEFAULT_PARALLELISM)
-        .retainFileVersions(2)
         .withFailedWritesCleaningPolicy(failedWritesCleaningPolicy)
         .withMaxCommitsBeforeCleaning(writeConfig.getCleaningMaxCommits())
         .withCleanerPolicy(metadataTableCleaningPolicy);
