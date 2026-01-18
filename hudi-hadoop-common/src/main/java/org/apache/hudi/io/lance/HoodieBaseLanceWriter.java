@@ -19,6 +19,8 @@
 
 package org.apache.hudi.io.lance;
 
+import org.apache.hudi.avro.HoodieBloomFilterWriteSupport;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.io.memory.HoodieArrowAllocator;
 import org.apache.hudi.storage.HoodieStorage;
@@ -35,6 +37,7 @@ import java.io.Closeable;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Base class for Hudi Lance file writers supporting different record types.
@@ -44,6 +47,7 @@ import java.util.List;
  * - BufferAllocator management
  * - Record buffering and batch flushing
  * - File size checks
+ * - Bloom filter metadata writing
  *
  * Subclasses must implement type-specific conversion to Arrow format.
  *
@@ -62,6 +66,7 @@ public abstract class HoodieBaseLanceWriter<R> implements Closeable {
   protected final int batchSize;
   protected long writtenRecordCount = 0;
   protected VectorSchemaRoot root;
+  protected final Option<HoodieBloomFilterWriteSupport<?>> bloomFilterWriteSupportOpt;
 
   private LanceFileWriter writer;
 
@@ -71,14 +76,17 @@ public abstract class HoodieBaseLanceWriter<R> implements Closeable {
    * @param storage HoodieStorage instance
    * @param path Path where Lance file will be written
    * @param batchSize Number of records to buffer before flushing to Lance
+   * @param bloomFilterWriteSupportOpt Optional bloom filter write support for record key tracking
    */
-  protected HoodieBaseLanceWriter(HoodieStorage storage, StoragePath path, int batchSize) {
+  protected HoodieBaseLanceWriter(HoodieStorage storage, StoragePath path, int batchSize,
+                                  Option<HoodieBloomFilterWriteSupport<?>> bloomFilterWriteSupportOpt) {
     this.storage = storage;
     this.path = path;
     this.allocator = HoodieArrowAllocator.newChildAllocator(
         getClass().getSimpleName() + "-data-" + path.getName(), LANCE_DATA_ALLOCATOR_SIZE);
     this.bufferedRecords = new ArrayList<>(batchSize);
     this.batchSize = batchSize;
+    this.bloomFilterWriteSupportOpt = bloomFilterWriteSupportOpt;
   }
 
   /**
@@ -145,6 +153,14 @@ public abstract class HoodieBaseLanceWriter<R> implements Closeable {
         root = VectorSchemaRoot.create(getArrowSchema(), allocator);
         root.setRowCount(0);
         writer.write(root);
+      }
+
+      // Finalize and write bloom filter metadata
+      if (writer != null && bloomFilterWriteSupportOpt.isPresent()) {
+        Map<String, String> metadata = bloomFilterWriteSupportOpt.get().finalizeMetadata();
+        if (!metadata.isEmpty()) {
+          writer.addSchemaMetadata(metadata);
+        }
       }
     } catch (Exception e) {
       primaryException = e;
