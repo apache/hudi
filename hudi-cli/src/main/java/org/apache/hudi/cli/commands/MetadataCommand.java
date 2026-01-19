@@ -24,6 +24,8 @@ import org.apache.hudi.cli.TableHeader;
 import org.apache.hudi.cli.utils.SparkUtil;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
+import org.apache.hudi.common.data.HoodieListData;
+import org.apache.hudi.common.data.HoodiePairData;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.model.HoodieRecordGlobalLocation;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -31,6 +33,7 @@ import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.metadata.FileSystemBackedTableMetadata;
 import org.apache.hudi.metadata.HoodieBackedTableMetadata;
@@ -39,6 +42,7 @@ import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.metadata.SparkMetadataWriterFactory;
+import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 
@@ -388,38 +392,42 @@ public class MetadataCommand {
     return HoodiePrintHelper.print(header, new HashMap<>(), "", false, Integer.MAX_VALUE, false, rows);
   }
 
-  @ShellMethod(key = "metadata lookup-record-index", value = "Print Record index information for the record_key")
+  // @ShellOption(value = "--backup", help = "Backup the metadata table before delete", defaultValue = "true", arity = 1) final boolean backup
+  @ShellMethod(key = "metadata lookup-record-index", value = "Print Record index information for a record_key")
   public String getRecordIndexInfo(
-      @ShellOption(value = {"record_key"}, help = "Record key entry whose info will be fetched")
+      @ShellOption(value = "--record_key", help = "Record key entry whose info will be fetched")
       final String recordKey) {
-    HoodieCLI.getTableMetaClient();
+    HoodieTableMetaClient metaClient = HoodieCLI.getTableMetaClient();
+    HoodieStorage storage = metaClient.getStorage();
     HoodieMetadataConfig config = HoodieMetadataConfig.newBuilder().enable(true).build();
     HoodieBackedTableMetadata metaReader = new HoodieBackedTableMetadata(
-        new HoodieLocalEngineContext(HoodieCLI.conf), config, HoodieCLI.basePath);
+        new HoodieLocalEngineContext(HoodieCLI.conf), storage, config, HoodieCLI.basePath);
 
-    if (!metaReader.enabled()) {
-      return "[ERROR] Metadata Table not enabled/initialized\n\n";
-    }
+    ValidationUtils.checkState(metaReader.enabled(), "[ERROR] Metadata Table not enabled/initialized\n\n");
+    ValidationUtils.checkState(metaClient.getTableConfig().isMetadataPartitionAvailable(MetadataPartitionType.RECORD_INDEX),
+        "[ERROR] Record index partition is not enabled/initialized\n\n");
 
-    Map<String, HoodieRecordGlobalLocation> recordKeyToGlobalLocationMap =
-        metaReader.readRecordIndex(Collections.singletonList(recordKey));
-    if (!recordKeyToGlobalLocationMap.isEmpty() && recordKeyToGlobalLocationMap.containsKey(recordKey)) {
-      HoodieRecordGlobalLocation location = recordKeyToGlobalLocationMap.get(recordKey);
-      Comparable[] row = new Comparable[4];
-      row[0] = recordKey;
-      row[1] = location.getPartitionPath();
-      row[2] = location.getFileId();
-      row[3] = location.getInstantTime();
-      TableHeader header = new TableHeader()
-          .addTableHeaderField("Record key")
-          .addTableHeaderField("Partition path")
-          .addTableHeaderField("File Id")
-          .addTableHeaderField("Instant time");
-      return HoodiePrintHelper.print(header, new HashMap<>(), "",
-          false, Integer.MAX_VALUE, false, Collections.singletonList(row));
-    } else {
-      return "[INFO] Record key not found in Record Index";
+    HoodiePairData<String, HoodieRecordGlobalLocation> recordKeyToGlobalLocationMap =
+        metaReader.readRecordIndexLocationsWithKeys(HoodieListData.eager(Collections.singletonList(recordKey)), Option.empty());
+    List<Pair<String, HoodieRecordGlobalLocation>> recordLocationKeyPair = recordKeyToGlobalLocationMap.collectAsList();
+    if (recordLocationKeyPair.isEmpty()) {
+      return "[INFO] Record key " + recordKey + " not found in Record Index";
     }
+    ValidationUtils.checkArgument(recordKey.equals(recordLocationKeyPair.get(0).getKey()),
+        "Record index lookup returned wrong key " + recordLocationKeyPair.get(0).getKey());
+    HoodieRecordGlobalLocation location = recordLocationKeyPair.get(0).getValue();
+    Comparable[] row = new Comparable[4];
+    row[0] = recordKey;
+    row[1] = location.getPartitionPath();
+    row[2] = location.getFileId();
+    row[3] = location.getInstantTime();
+    TableHeader header = new TableHeader()
+        .addTableHeaderField("Record key")
+        .addTableHeaderField("Partition path")
+        .addTableHeaderField("File Id")
+        .addTableHeaderField("Instant time");
+    return HoodiePrintHelper.print(header, new HashMap<>(), "",
+        false, Integer.MAX_VALUE, false, Collections.singletonList(row));
   }
 
   private HoodieWriteConfig getWriteConfig() {

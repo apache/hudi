@@ -25,6 +25,7 @@ import org.apache.hudi.cli.testutils.ShellEvaluationResultUtil;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteClientTestUtils;
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableConfig;
@@ -45,6 +46,7 @@ import org.springframework.shell.Shell;
 import java.io.IOException;
 import java.util.List;
 
+import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
 import static org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -104,5 +106,64 @@ public class TestMetadataCommand extends CLIFunctionalTestHarness {
 
     metaClient = HoodieTableMetaClient.reload(metaClient);
     assertTrue(metaClient.getTableConfig().getMetadataPartitions().isEmpty());
+  }
+
+  @Test
+  public void testGetRecordIndexInfo() throws Exception {
+    HoodieTableMetaClient.newTableBuilder()
+        .setTableType(HoodieTableType.COPY_ON_WRITE.name())
+        .setTableName(tableName())
+        .setArchiveLogFolder(HoodieTableConfig.TIMELINE_HISTORY_PATH.defaultValue())
+        .setPayloadClassName("org.apache.hudi.common.model.HoodieAvroPayload")
+        .setPartitionFields("partition_path")
+        .setRecordKeyFields("_row_key")
+        .setKeyGeneratorClassProp(SimpleKeyGenerator.class.getCanonicalName())
+        .initTable(HoodieCLI.conf.newInstance(), tablePath);
+
+    HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator(new String[] {DEFAULT_FIRST_PARTITION_PATH});
+    HoodieMetadataConfig metadataConfig = HoodieMetadataConfig.newBuilder()
+        .withEnableGlobalRecordLevelIndex(true).build();
+    HoodieWriteConfig config = HoodieWriteConfig.newBuilder()
+        .withPath(tablePath)
+        .withSchema(TRIP_EXAMPLE_SCHEMA)
+        .withMetadataConfig(metadataConfig)
+        .build();
+
+    try (SparkRDDWriteClient client = new SparkRDDWriteClient(context(), config)) {
+      String newCommitTime = client.startCommit();
+      int numRecords = 10;
+
+      List<HoodieRecord> records = dataGen.generateInserts(newCommitTime, numRecords);
+      JavaRDD<HoodieRecord> writeRecords = context().getJavaSparkContext().parallelize(records, 1);
+      List<WriteStatus> result = client.upsert(writeRecords, newCommitTime).collect();
+      client.commit(newCommitTime, jsc().parallelize(result));
+      Assertions.assertNoWriteErrors(result);
+
+      // Get a record key from the inserted records
+      String recordKey = records.get(0).getRecordKey();
+
+      // Connect to the table
+      new TableCommand().connect(tablePath, false, 0, 0, 0,
+          "WAIT_TO_ADJUST_SKEW", 200L, false);
+
+      // Verify record index is enabled in table config
+      HoodieTableMetaClient metaClient = createMetaClient(jsc(), tablePath);
+      assertTrue(metaClient.getTableConfig().isMetadataPartitionAvailable(org.apache.hudi.metadata.MetadataPartitionType.RECORD_INDEX));
+
+      // Execute the metadata lookup-record-index command
+      Object shellResult = shell.evaluate(() -> "metadata lookup-record-index --record_key " + recordKey);
+
+      // The result should either succeed or return an info message about the key not being found
+      // We just verify the command doesn't crash with an unexpected error
+      String output = shellResult.toString();
+      assertTrue(output.contains(recordKey)
+              && output.contains(newCommitTime)
+              && output.contains(DEFAULT_FIRST_PARTITION_PATH)
+              && output.contains("Record key")
+              && output.contains("Partition path")
+              && output.contains("File Id")
+              && output.contains("Instant time"),
+          "Command output should contain either the record key, an info message, or mention Record key. Got: " + output);
+    }
   }
 }
