@@ -191,7 +191,8 @@ public abstract class HoodieLogBlock {
     AVRO_DATA_BLOCK("avro", HoodieTableVersion.ONE),
     HFILE_DATA_BLOCK("hfile", HoodieTableVersion.ONE),
     PARQUET_DATA_BLOCK("parquet", HoodieTableVersion.FOUR),
-    CDC_DATA_BLOCK("cdc", HoodieTableVersion.SIX);
+    CDC_DATA_BLOCK("cdc", HoodieTableVersion.SIX),
+    LANCE_DATA_BLOCK("lance", HoodieTableVersion.NINE);
 
     private static final Map<String, HoodieLogBlockType> ID_TO_ENUM_MAP =
         TypeUtils.getValueToEnumMap(HoodieLogBlockType.class, e -> e.id);

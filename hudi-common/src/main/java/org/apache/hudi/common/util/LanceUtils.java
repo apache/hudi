@@ -19,6 +19,7 @@
 
 package org.apache.hudi.common.util;
 
+import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.HoodieReaderConfig;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieKey;
@@ -29,6 +30,8 @@ import org.apache.hudi.common.util.collection.CloseableMappingIterator;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.io.storage.HoodieFileReader;
+import org.apache.hudi.io.storage.HoodieFileWriter;
+import org.apache.hudi.io.storage.HoodieFileWriterFactory;
 import org.apache.hudi.io.storage.HoodieIOFactory;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.metadata.HoodieIndexVersion;
@@ -187,7 +190,22 @@ public class LanceUtils extends FileFormatUtils {
                                                           HoodieSchema readerSchema,
                                                           String keyFieldName,
                                                           Map<String, String> paramsMap) throws IOException {
-    throw new UnsupportedOperationException("serializeRecordsToLogBlock is not yet supported for Lance format");
+    if (records.isEmpty()) {
+      return new ByteArrayOutputStream(0);
+    }
+
+    ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+    HoodieConfig config = getHoodieConfig(paramsMap);
+    HoodieRecord.HoodieRecordType recordType = records.get(0).getRecordType();
+    try (HoodieFileWriter lanceWriter = HoodieFileWriterFactory.getFileWriter(
+        HoodieFileFormat.LANCE, outputStream, storage, config, writerSchema, recordType)) {
+      for (HoodieRecord<?> record : records) {
+        String recordKey = record.getRecordKey(readerSchema, keyFieldName);
+        lanceWriter.write(recordKey, record, writerSchema);
+      }
+      outputStream.flush();
+    }
+    return outputStream;
   }
 
   @Override
@@ -198,6 +216,24 @@ public class LanceUtils extends FileFormatUtils {
                                                                         HoodieSchema readerSchema,
                                                                         String keyFieldName,
                                                                         Map<String, String> paramsMap) throws IOException {
-    throw new UnsupportedOperationException("serializeRecordsToLogBlock with iterator is not yet supported for Lance format");
+    ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+    HoodieConfig config = getHoodieConfig(paramsMap);
+
+    try (HoodieFileWriter lanceFileWriter = HoodieFileWriterFactory.getFileWriter(
+        HoodieFileFormat.LANCE, outputStream, storage, config, writerSchema, recordType)) {
+      while (records.hasNext()) {
+        HoodieRecord record = records.next();
+        String recordKey = record.getRecordKey(readerSchema, keyFieldName);
+        lanceFileWriter.write(recordKey, record, writerSchema);
+      }
+      outputStream.flush();
+      return Pair.of(outputStream, lanceFileWriter.getFileFormatMetadata());
+    }
+  }
+
+  private static HoodieConfig getHoodieConfig(Map<String, String> paramsMap) {
+    HoodieConfig config = new HoodieConfig();
+    paramsMap.forEach(config::setValue);
+    return config;
   }
 }
