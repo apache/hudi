@@ -161,11 +161,11 @@ public class KeyGenUtils {
         keyIsNullEmpty = false;
       }
     }
-    recordKey.deleteCharAt(recordKey.length() - 1);
     if (keyIsNullEmpty) {
       throw new HoodieKeyException("recordKey values: \"" + recordKey + "\" for fields: "
           + recordKeyFields.toString() + " cannot be entirely null or empty.");
     }
+    recordKey.deleteCharAt(recordKey.length() - 1);
     return recordKey.toString();
   }
 
