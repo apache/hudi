@@ -290,7 +290,8 @@ public class FlinkOptions extends HoodieConfig {
       .withDescription("The maximum number of input records can be buffered for miniBatch during record index lookup.\n"
           + "MiniBatch is an optimization to buffer input records to reduce the number of individual index lookups,\n"
           + "which can significantly improve performance compared to processing each record individually.\n"
-          + "Set to 0 to disable mini-batch processing.");
+          + "Default value is 1000, which is also the minimum value for the minibatch size, when the configured size\n"
+          + "is less than 1000, the default value will be used.");
 
   // ------------------------------------------------------------------------
   //  Read Options

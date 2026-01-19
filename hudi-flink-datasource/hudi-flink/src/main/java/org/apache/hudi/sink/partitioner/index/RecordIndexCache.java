@@ -34,6 +34,7 @@ import org.apache.flink.configuration.Configuration;
 
 import java.io.Closeable;
 import java.io.IOException;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.NavigableMap;
 import java.util.TreeMap;
@@ -117,8 +118,15 @@ public class RecordIndexCache implements Closeable {
    * @param checkpointId the id of checkpoint
    */
   public void clean(long checkpointId) {
+    NavigableMap<Long, ExternalSpillableMap<String, HoodieRecordGlobalLocation>> subMap;
+    if (checkpointId == Long.MAX_VALUE) {
+      // clean all the cache entries for old checkpoint ids, and only keeps the cache for the maximum checkpoint id,
+      // which aims to clear memory while also ensuring a certain cache hit rate
+      subMap = caches.firstEntry() == null ? Collections.emptyNavigableMap() : caches.tailMap(caches.firstKey(), false);
+    } else {
+      subMap = caches.tailMap(checkpointId, false);
+    }
     // Get all entries that are less than or equal to the given checkpointId
-    NavigableMap<Long, ExternalSpillableMap<String, HoodieRecordGlobalLocation>> subMap = caches.tailMap(checkpointId, false);
     // Close all the ExternalSpillableMap instances before removing them
     subMap.values().forEach(ExternalSpillableMap::close);
     // Remove all the entries from the main cache

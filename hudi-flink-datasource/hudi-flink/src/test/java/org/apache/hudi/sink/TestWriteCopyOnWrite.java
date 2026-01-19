@@ -864,4 +864,23 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
         .checkWrittenData(EXPECTED1)
         .end();
   }
+
+  @Test
+  public void testCacheCleanOfRecordIndexBackend() throws Exception {
+    // use record level index
+    conf.set(FlinkOptions.INDEX_TYPE, GLOBAL_RECORD_LEVEL_INDEX.name());
+    conf.setString(HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_ENABLE_PROP.key(), "true");
+    preparePipeline(conf)
+        // should be initialized with 1 inflight caches
+        .assertInflightCachesOfBucketAssigner(1)
+        .consume(TestData.DATA_SET_INSERT)
+        .checkpoint(1)
+        // new cache created since now checkpoint id is updated to 1
+        .assertInflightCachesOfBucketAssigner(2)
+        .assertNextEvent(4, "par1,par2,par3,par4")
+        .checkpointComplete(1)
+        // clean the first inflight cache, left the latest inflight cache.
+        .assertInflightCachesOfBucketAssigner(1)
+        .checkWrittenData(EXPECTED1);
+  }
 }

@@ -94,6 +94,7 @@ import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
 import static java.util.Arrays.asList;
+import static java.util.Arrays.stream;
 import static org.apache.hudi.common.model.HoodieTableType.COPY_ON_WRITE;
 import static org.apache.hudi.common.model.HoodieTableType.MERGE_ON_READ;
 import static org.apache.hudi.utils.TestConfigurations.catalog;
@@ -2903,14 +2904,12 @@ public class ITTestHoodieDataSource {
             + "+I[id3, id3, Julian, 43, 1970-01-01T00:00:03, par1, par1]]");
   }
 
-  @ParameterizedTest
-  @ValueSource(ints = {-1, 100})
-  void testMiniBatchBucketAssign(int bucketAssignMinibatchSize) throws Exception {
-    TableEnvironment tableEnv = batchTableEnv;
+  @Test
+  void testMiniBatchBucketAssign() throws Exception {
+    TableEnvironment tableEnv = streamTableEnv;
     String hoodieTableDDL = sql("t1")
         .option(FlinkOptions.PATH, tempFile.getAbsolutePath())
         .option(FlinkOptions.INDEX_TYPE, HoodieIndex.IndexType.GLOBAL_RECORD_LEVEL_INDEX.name())
-        .option(FlinkOptions.INDEX_RLI_LOOKUP_MINIBATCH_SIZE, bucketAssignMinibatchSize)
         .option(FlinkOptions.READ_DATA_SKIPPING_ENABLED, true)
         .option(FlinkOptions.TABLE_TYPE, COPY_ON_WRITE)
         .end();

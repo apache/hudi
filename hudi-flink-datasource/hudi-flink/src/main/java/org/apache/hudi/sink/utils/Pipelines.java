@@ -384,7 +384,11 @@ public class Pipelines {
           throw new HoodieNotSupportedException("Unknown bucket index engine type: " + bucketIndexEngineType);
       }
     } else {
-      DataStream<HoodieFlinkInternalRow> bucketAssignStream = createBucketAssignStream(dataStream, conf, rowType);
+      // uuid is used to generate operator id for the write operator, then the bucket assign operator can send
+      // operator event to the coordinator of the write operator based on the operator id.
+      // @see org.apache.flink.runtime.jobgraph.tasks.TaskOperatorEventGateway.
+      String writeOperatorUid = opUID("stream_write", conf);
+      DataStream<HoodieFlinkInternalRow> bucketAssignStream = createBucketAssignStream(dataStream, conf, rowType, writeOperatorUid);
       return bucketAssignStream
           // shuffle by fileId(bucket id)
           .keyBy(HoodieFlinkInternalRow::getFileId)
@@ -392,7 +396,7 @@ public class Pipelines {
               opName("stream_write", conf),
               TypeInformation.of(RowData.class),
               StreamWriteOperator.getFactory(conf, rowType))
-          .uid(opUID("stream_write", conf))
+          .uid(writeOperatorUid)
           .setParallelism(conf.get(FlinkOptions.WRITE_TASKS));
     }
   }
@@ -406,7 +410,7 @@ public class Pipelines {
    * @return A DataStream of HoodieFlinkInternalRow records with bucket assignments
    */
   private static DataStream<HoodieFlinkInternalRow> createBucketAssignStream(
-      DataStream<HoodieFlinkInternalRow> inputStream, Configuration conf, RowType rowType) {
+      DataStream<HoodieFlinkInternalRow> inputStream, Configuration conf, RowType rowType, String writeOperatorUid) {
     String assignerOperatorName = "bucket_assigner";
     if (OptionsResolver.isMiniBatchBucketAssign(conf)) {
       return inputStream
@@ -414,7 +418,7 @@ public class Pipelines {
           .transform(
               assignerOperatorName,
               new HoodieFlinkInternalRowTypeInfo(rowType),
-              new MiniBatchBucketAssignOperator(new MinibatchBucketAssignFunction(conf)))
+              new MiniBatchBucketAssignOperator(new MinibatchBucketAssignFunction(conf), OperatorIDGenerator.fromUid(writeOperatorUid)))
           .uid(opUID(assignerOperatorName, conf))
           .setParallelism(conf.get(FlinkOptions.BUCKET_ASSIGN_TASKS));
     } else {

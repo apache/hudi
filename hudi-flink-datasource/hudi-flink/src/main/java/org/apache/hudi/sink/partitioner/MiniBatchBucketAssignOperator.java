@@ -19,9 +19,15 @@
 package org.apache.hudi.sink.partitioner;
 
 import org.apache.hudi.client.model.HoodieFlinkInternalRow;
+import org.apache.hudi.sink.event.Correspondent;
 
+import org.apache.flink.runtime.jobgraph.OperatorID;
+import org.apache.flink.streaming.api.graph.StreamConfig;
 import org.apache.flink.streaming.api.operators.BoundedOneInput;
+import org.apache.flink.streaming.api.operators.Output;
 import org.apache.flink.streaming.api.operators.ProcessOperator;
+import org.apache.flink.streaming.runtime.streamrecord.StreamRecord;
+import org.apache.flink.streaming.runtime.tasks.StreamTask;
 
 /**
  * An operator that performs mini-batch bucket assignment for incoming records.
@@ -36,17 +42,32 @@ import org.apache.flink.streaming.api.operators.ProcessOperator;
  */
 public class MiniBatchBucketAssignOperator extends ProcessOperator<HoodieFlinkInternalRow, HoodieFlinkInternalRow> implements BoundedOneInput {
 
-  /** The underlying function that performs the actual bucket assignment logic. */
+  /**
+   * The underlying function that performs the actual bucket assignment logic.
+   */
   private final MinibatchBucketAssignFunction bucketAssignFunction;
+
+  /**
+   * OperatorId for the data write operator.
+   */
+  private final OperatorID dataWriteOperatorId;
 
   /**
    * Constructs a MiniBatchBucketAssignOperator with the specified bucket assignment function.
    *
    * @param bucketAssignFunction the function responsible for performing the bucket assignment logic
    */
-  public MiniBatchBucketAssignOperator(MinibatchBucketAssignFunction bucketAssignFunction) {
+  public MiniBatchBucketAssignOperator(MinibatchBucketAssignFunction bucketAssignFunction, OperatorID dataWriteOperatorId) {
     super(bucketAssignFunction);
     this.bucketAssignFunction = bucketAssignFunction;
+    this.dataWriteOperatorId = dataWriteOperatorId;
+  }
+
+  @Override
+  public void setup(StreamTask<?, ?> containingTask, StreamConfig config, Output<StreamRecord<HoodieFlinkInternalRow>> output) {
+    super.setup(containingTask, config, output);
+    this.bucketAssignFunction.setCorrespondent(Correspondent.getInstance(dataWriteOperatorId,
+        getContainingTask().getEnvironment().getOperatorCoordinatorEventGateway()));
   }
 
   /**

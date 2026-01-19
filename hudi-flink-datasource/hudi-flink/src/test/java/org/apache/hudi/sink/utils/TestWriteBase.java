@@ -35,6 +35,8 @@ import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.sink.event.CommitAckEvent;
 import org.apache.hudi.sink.event.WriteMetadataEvent;
+import org.apache.hudi.sink.partitioner.index.IndexBackend;
+import org.apache.hudi.sink.partitioner.index.RecordLevelIndexBackend;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.util.StreamerUtil;
 import org.apache.hudi.utils.TestConfigurations;
@@ -310,6 +312,17 @@ public class TestWriteBase {
       assertThat(numRecords + " records expect to flush out as a mini-batch",
           dataBuffer.values().stream().findFirst().map(List::size).orElse(-1),
           is(numRecords));
+      return this;
+    }
+
+    /**
+     * Asserts the num of inflight caches record index cache in bucket assigner.
+     */
+    public TestHarness assertInflightCachesOfBucketAssigner(int expected) {
+      IndexBackend indexBackend = pipeline.getBucketAssignFunction().getIndexBackend();
+      if (indexBackend instanceof RecordLevelIndexBackend) {
+        assertEquals(expected, ((RecordLevelIndexBackend) indexBackend).getRecordIndexCache().getCaches().size());
+      }
       return this;
     }
 

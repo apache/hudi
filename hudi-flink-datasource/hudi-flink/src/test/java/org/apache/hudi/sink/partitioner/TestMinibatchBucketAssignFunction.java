@@ -26,6 +26,7 @@ import org.apache.hudi.utils.TestConfigurations;
 import org.apache.hudi.utils.TestData;
 
 import org.apache.flink.configuration.Configuration;
+import org.apache.flink.runtime.jobgraph.OperatorID;
 import org.apache.flink.streaming.runtime.streamrecord.StreamRecord;
 import org.apache.flink.streaming.util.OneInputStreamOperatorTestHarness;
 import org.apache.flink.table.data.StringData;
@@ -58,8 +59,6 @@ public class TestMinibatchBucketAssignFunction {
     conf = TestConfigurations.getDefaultConf(basePath);
     conf.setString(HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_ENABLE_PROP.key(), "true");
     conf.set(FlinkOptions.INDEX_TYPE, HoodieIndex.IndexType.GLOBAL_RECORD_LEVEL_INDEX.name());
-    // Set minibatch size to 3 for testing
-    conf.set(FlinkOptions.INDEX_RLI_LOOKUP_MINIBATCH_SIZE, 3);
     TestData.writeData(TestData.DATA_SET_INSERT, conf);
   }
 
@@ -68,8 +67,17 @@ public class TestMinibatchBucketAssignFunction {
     // Create the MinibatchBucketAssignFunction
     MinibatchBucketAssignFunction function = new MinibatchBucketAssignFunction(conf);
     // Set up test harness
-    testHarness = new OneInputStreamOperatorTestHarness<>(new MiniBatchBucketAssignOperator(function), 1, 1, 0);
+    testHarness = new OneInputStreamOperatorTestHarness<>(new MiniBatchBucketAssignOperator(function, new OperatorID()), 1, 1, 0);
     testHarness.open();
+  }
+
+  @Test
+  public void testMinibatchSize() {
+    Configuration config = Configuration.fromMap(conf.toMap());
+    config.set(FlinkOptions.INDEX_RLI_LOOKUP_MINIBATCH_SIZE, 200);
+    MinibatchBucketAssignFunction function = new MinibatchBucketAssignFunction(config);
+    // although the minibatch size is set to 200, but the final value is 1000 since the minimum allowed minibatch size is 1000.
+    assertEquals(FlinkOptions.INDEX_RLI_LOOKUP_MINIBATCH_SIZE.defaultValue(), function.getMiniBatchSize());
   }
 
   @Test
@@ -79,8 +87,6 @@ public class TestMinibatchBucketAssignFunction {
         insertRow(StringData.fromString("id1"), StringData.fromString("Danny"), 23, TimestampData.fromEpochMillis(1), StringData.fromString("par1")));
     HoodieFlinkInternalRow record2 = new HoodieFlinkInternalRow("id2", "par1", "I",
         insertRow(StringData.fromString("id2"), StringData.fromString("Stephen"), 33, TimestampData.fromEpochMillis(2), StringData.fromString("par1")));
-    HoodieFlinkInternalRow record3 = new HoodieFlinkInternalRow("id10", "par5", "I",
-        insertRow(StringData.fromString("id10"), StringData.fromString("Julian"), 53, TimestampData.fromEpochMillis(3), StringData.fromString("par5")));
 
     // Process first two records - they should be buffered
     testHarness.processElement(new StreamRecord<>(record1));
@@ -90,18 +96,23 @@ public class TestMinibatchBucketAssignFunction {
     List<HoodieFlinkInternalRow> output = testHarness.extractOutputValues();
     assertEquals(0, output.size(), "Records should be buffered until batch size is reached");
 
-    // Process third record - this should trigger processing of the first two buffered records
-    testHarness.processElement(new StreamRecord<>(record3));
+    for (int i = 0; i < 1000; i++) {
+      // Process third record - this should trigger processing of the first two buffered records
+      String recordKey = "new_key_" + i;
+      HoodieFlinkInternalRow record = new HoodieFlinkInternalRow(recordKey, "par5", "I",
+          insertRow(StringData.fromString(recordKey), StringData.fromString("Julian"), 53, TimestampData.fromEpochMillis(3), StringData.fromString("par5")));
+      testHarness.processElement(new StreamRecord<>(record));
+    }
 
     // Now we should have processed records
     output = testHarness.extractOutputValues();
-    assertEquals(3, output.size(), "All three records should be processed");
+    assertEquals(1000, output.size(), "All three records should be processed");
 
     // Verify that the records have proper bucket assignments
     for (HoodieFlinkInternalRow row : output) {
       // Check that file ID and instant time are assigned
       assertTrue(row.getFileId() != null && !row.getFileId().isEmpty(), "File ID should be assigned");
-      if (row.getRecordKey().equals("id10")) {
+      if (row.getRecordKey().startsWith("new_key")) {
         assertEquals("I", row.getInstantTime(), "the record is an insert record");
       } else {
         assertEquals("U", row.getInstantTime(), "the record is an update record");
@@ -111,31 +122,40 @@ public class TestMinibatchBucketAssignFunction {
 
   @Test
   public void testProcessElementWithIndexRecords() throws Exception {
-    // Create an index record (one that has isIndexRecord() returning true)
-    HoodieFlinkInternalRow indexRecord = new HoodieFlinkInternalRow("id1", "par1", "file_id1", "000");
-    // For now, let's test with a regular record
-    HoodieFlinkInternalRow record1 = new HoodieFlinkInternalRow("id1", "par1", "I",
-        insertRow(StringData.fromString("id1"), StringData.fromString("Danny"), 23, TimestampData.fromEpochMillis(1), StringData.fromString("par1")));
-    HoodieFlinkInternalRow record2 = new HoodieFlinkInternalRow("id2", "par1", "I",
-        insertRow(StringData.fromString("id2"), StringData.fromString("Stephen"), 33, TimestampData.fromEpochMillis(2), StringData.fromString("par1")));
-    HoodieFlinkInternalRow record3 = new HoodieFlinkInternalRow("id3", "par2", "I",
-        insertRow(StringData.fromString("id3"), StringData.fromString("Julian"), 53, TimestampData.fromEpochMillis(3), StringData.fromString("par2")));
-    
-    testHarness.processElement(new StreamRecord<>(indexRecord));
+    // insert 500 index records
+    for (int i = 0; i < 500; i++) {
+      // Process third record - this should trigger processing of the first two buffered records
+      String recordKey = "index_new_key_" + i;
+      // Create an index record (one that has isIndexRecord() returning true)
+      HoodieFlinkInternalRow indexRecord = new HoodieFlinkInternalRow(recordKey, "par1", "file_id1", "000");
+      testHarness.processElement(new StreamRecord<>(indexRecord));
+    }
 
-    testHarness.processElement(new StreamRecord<>(record1));
-    testHarness.processElement(new StreamRecord<>(record2));
+    // insert 500 regular records
+    for (int i = 0; i < 500; i++) {
+      // Process third record - this should trigger processing of the first two buffered records
+      String recordKey = "new_key_" + i;
+      HoodieFlinkInternalRow record = new HoodieFlinkInternalRow(recordKey, "par5", "I",
+          insertRow(StringData.fromString(recordKey), StringData.fromString("Julian"), 53, TimestampData.fromEpochMillis(3), StringData.fromString("par5")));
+      testHarness.processElement(new StreamRecord<>(record));
+    }
 
     // index records will not be buffered, so buffer will not be flushing
     List<HoodieFlinkInternalRow> output = testHarness.extractOutputValues();
     assertEquals(0, output.size(), "Record should be buffered since batch size is 2");
-    
-    // Add another record to trigger buffer processing
-    testHarness.processElement(new StreamRecord<>(record3));
+
+    // insert another 500 regular records
+    for (int i = 0; i < 500; i++) {
+      // Process third record - this should trigger processing of the first two buffered records
+      String recordKey = "new_key_" + i;
+      HoodieFlinkInternalRow record = new HoodieFlinkInternalRow(recordKey, "par5", "I",
+          insertRow(StringData.fromString(recordKey), StringData.fromString("Julian"), 53, TimestampData.fromEpochMillis(3), StringData.fromString("par5")));
+      testHarness.processElement(new StreamRecord<>(record));
+    }
 
     // the expected size is 3, without index record
     output = testHarness.extractOutputValues();
-    assertEquals(3, output.size(), "Both records should be processed");
+    assertEquals(1000, output.size(), "Both records should be processed");
   }
 
   @Test
