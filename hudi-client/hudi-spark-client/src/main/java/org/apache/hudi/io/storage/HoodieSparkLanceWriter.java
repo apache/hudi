@@ -18,6 +18,7 @@
 
 package org.apache.hudi.io.storage;
 
+import org.apache.hudi.SparkAdapterSupport$;
 import org.apache.hudi.avro.HoodieBloomFilterWriteSupport;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.engine.TaskContextSupplier;
@@ -33,6 +34,7 @@ import com.lancedb.lance.spark.arrow.LanceArrowWriter;
 import lombok.AllArgsConstructor;
 import org.apache.arrow.vector.VectorSchemaRoot;
 import org.apache.arrow.vector.types.pojo.Schema;
+import org.apache.spark.sql.HoodieUTF8StringFactory;
 import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.sql.types.StructType;
 import org.apache.spark.sql.util.LanceArrowUtils;
@@ -240,6 +242,9 @@ public class HoodieSparkLanceWriter extends HoodieBaseLanceWriter<InternalRow>
    */
   private static class HoodieBloomFilterLanceWriteSupport extends HoodieBloomFilterWriteSupport<UTF8String> {
 
+    private static final HoodieUTF8StringFactory UTF8STRING_FACTORY =
+            SparkAdapterSupport$.MODULE$.sparkAdapter().getUTF8StringFactory();
+
     public HoodieBloomFilterLanceWriteSupport(BloomFilter bloomFilter) {
       super(bloomFilter);
     }
@@ -256,7 +261,7 @@ public class HoodieSparkLanceWriter extends HoodieBaseLanceWriter<InternalRow>
 
     @Override
     protected int compareRecordKey(UTF8String a, UTF8String b) {
-      return a.compareTo(b);
+      return UTF8STRING_FACTORY.wrapUTF8String(a).compareTo(UTF8STRING_FACTORY.wrapUTF8String(b));
     }
   }
 }
