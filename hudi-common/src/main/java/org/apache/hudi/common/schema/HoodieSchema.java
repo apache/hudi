@@ -88,8 +88,8 @@ public class HoodieSchema implements Serializable {
   private static final long serialVersionUID = 1L;
   private Schema avroSchema;
   private HoodieSchemaType type;
-  private List<HoodieSchemaField> fields;
-  private Map<String, HoodieSchemaField> fieldMap;
+  private transient List<HoodieSchemaField> fields;
+  private transient Map<String, HoodieSchemaField> fieldMap;
 
   /**
    * Creates a new HoodieSchema wrapping the given Avro schema.
