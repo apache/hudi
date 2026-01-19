@@ -19,7 +19,7 @@ package org.apache.hudi.functional
 
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.DefaultSparkRecordMerger
-import org.apache.hudi.common.model.HoodieTableType
+import org.apache.hudi.common.model.{HoodieFileFormat, HoodieTableType}
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.testutils.HoodieTestUtils
 import org.apache.hudi.config.HoodieWriteConfig
@@ -30,7 +30,7 @@ import org.junit.jupiter.api.{AfterEach, BeforeEach}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.junit.jupiter.api.condition.DisabledIfSystemProperty
 import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.EnumSource
+import org.junit.jupiter.params.provider.{CsvSource, EnumSource}
 
 import scala.collection.JavaConverters._
 
@@ -389,10 +389,15 @@ class TestLanceDataSource extends HoodieSparkClientTestBase {
   }
 
   @ParameterizedTest
-  @EnumSource(value = classOf[HoodieTableType])
-  def testBasicUpsertModifyExistingRow(tableType: HoodieTableType): Unit = {
+  @CsvSource(Array("COPY_ON_WRITE,LOG", "MERGE_ON_READ,AVRO", "MERGE_ON_READ,LANCE"))
+  def testBasicUpsertModifyExistingRow(tableType: HoodieTableType, logFileFormat: HoodieFileFormat): Unit = {
     val tableName = s"test_lance_upsert_${tableType.name().toLowerCase}"
     val tablePath = s"$basePath/$tableName"
+    val extraOptions = if (tableType == HoodieTableType.MERGE_ON_READ) {
+      Map("hoodie.logfile.data.block.format" -> logFileFormat.name())
+    } else {
+      Map.empty[String, String]
+    }
 
     // Initial insert - 3 records
     val records1 = Seq(
@@ -402,7 +407,7 @@ class TestLanceDataSource extends HoodieSparkClientTestBase {
     )
     val df1 = createDataFrame(records1)
 
-    writeDataframe(tableType, tableName, tablePath, df1, saveMode = SaveMode.Overwrite, operation = Some("insert"))
+    writeDataframe(tableType, tableName, tablePath, df1, saveMode = SaveMode.Overwrite, operation = Some("insert"), extraOptions = extraOptions)
 
     // Upsert - modify Bob's record (id=2)
     val records2 = Seq(
@@ -410,7 +415,7 @@ class TestLanceDataSource extends HoodieSparkClientTestBase {
     )
     val df2 = createDataFrame(records2)
 
-    writeDataframe(tableType, tableName, tablePath, df2, operation = Some("upsert"))
+    writeDataframe(tableType, tableName, tablePath, df2, operation = Some("upsert"), extraOptions = extraOptions))
 
     // Second upsert - modify Alice (id=1) and insert David (id=4)
     val records3 = Seq(
@@ -419,7 +424,7 @@ class TestLanceDataSource extends HoodieSparkClientTestBase {
     )
     val df3 = createDataFrame(records3)
 
-    writeDataframe(tableType, tableName, tablePath, df3, operation = Some("upsert"))
+    writeDataframe(tableType, tableName, tablePath, df3, operation = Some("upsert"), extraOptions = extraOptions))
 
     // Validate commits
     val metaClient = HoodieTableMetaClient.builder()
@@ -459,8 +464,11 @@ class TestLanceDataSource extends HoodieSparkClientTestBase {
         (4, "David", 28, 90.0)   // Update David: score 88.0->90.0
       )
       val df4 = createDataFrame(records4)
-      writeDataframe(tableType, tableName, tablePath, df4, operation = Some("upsert"),
-        extraOptions = Map("hoodie.compact.inline" -> "true", "hoodie.compact.inline.max.delta.commits" -> "1"))
+      val compactionOptions = extraOptions ++ Map(
+        "hoodie.compact.inline" -> "true",
+        "hoodie.compact.inline.max.delta.commits" -> "1"
+      )
+      writeDataframe(tableType, tableName, tablePath, df4, operation = Some("upsert"), extraOptions = compactionOptions)
       val expectedDfAfterCompaction = createDataFrame(Seq(
         (1, "Alice", 50, 98.5),
         (2, "Bob", 40, 95.0),
