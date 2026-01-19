@@ -317,7 +317,7 @@ public class HoodieWriteConfig extends HoodieConfig {
   public static final ConfigProperty<HoodieFileFormat> BASE_FILE_FORMAT = ConfigProperty
       .key("hoodie.base.file.format")
       .defaultValue(HoodieFileFormat.PARQUET)
-      .withValidValues(HoodieFileFormat.PARQUET.name(), HoodieFileFormat.ORC.name(), HoodieFileFormat.HFILE.name())
+      .withValidValues(HoodieFileFormat.PARQUET.name(), HoodieFileFormat.ORC.name(), HoodieFileFormat.HFILE.name(), HoodieFileFormat.LANCE.name())
       .withAlternatives("hoodie.table.ro.file.format")
       .markAdvanced()
       .withDocumentation(HoodieFileFormat.class, "File format to store all the base file data.");
