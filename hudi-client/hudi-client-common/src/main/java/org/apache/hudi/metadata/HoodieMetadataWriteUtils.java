@@ -166,6 +166,8 @@ public class HoodieMetadataWriteUtils {
         .withCleanerParallelism(MDT_DEFAULT_PARALLELISM)
         .withFailedWritesCleaningPolicy(failedWritesCleaningPolicy)
         .withMaxCommitsBeforeCleaning(writeConfig.getCleaningMaxCommits())
+        .useLocalEngineForMetadataAndPartitionedDatasets(
+            writeConfig.useLocalEngineForMetadataAndNonParitionedDatasets())
         .withCleanerPolicy(dataTableCleaningPolicy);
 
     if (HoodieCleaningPolicy.KEEP_LATEST_COMMITS.equals(dataTableCleaningPolicy)) {
