@@ -87,6 +87,12 @@ public class HoodieStorageConfig extends HoodieConfig {
       .withDocumentation("Lower values increase the size in bytes of metadata tracked within HFile, but can offer potentially "
           + "faster lookup times.");
 
+  public static final ConfigProperty<String> LANCE_MAX_FILE_SIZE = ConfigProperty
+      .key("hoodie.lance.max.file.size")
+      .defaultValue(String.valueOf(120 * 1024 * 1024))
+      .markAdvanced()
+      .withDocumentation("Target file size in bytes for Lance base files.");
+
   public static final ConfigProperty<String> LOGFILE_DATA_BLOCK_FORMAT = ConfigProperty
       .key("hoodie.logfile.data.block.format")
       .noDefaultValue()
@@ -431,6 +437,11 @@ public class HoodieStorageConfig extends HoodieConfig {
 
     public Builder hfileBlockSize(int blockSize) {
       storageConfig.setValue(HFILE_BLOCK_SIZE, String.valueOf(blockSize));
+      return this;
+    }
+
+    public Builder lanceMaxFileSize(long maxFileSize) {
+      storageConfig.setValue(LANCE_MAX_FILE_SIZE, String.valueOf(maxFileSize));
       return this;
     }
 
