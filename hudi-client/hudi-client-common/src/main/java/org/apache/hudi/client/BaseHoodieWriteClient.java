@@ -101,7 +101,6 @@ import com.codahale.metrics.Timer;
 import lombok.Getter;
 import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.avro.Schema;
 
 import java.io.IOException;
 import java.util.Arrays;
@@ -1556,14 +1555,14 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    * @param position     col position to be added
    * @param positionType col position change type. now support three change types: first/after/before
    */
-  public void addColumn(String colName, Schema schema, String doc, String position, TableChange.ColumnPositionChange.ColumnPositionType positionType) {
+  public void addColumn(String colName, HoodieSchema schema, String doc, String position, TableChange.ColumnPositionChange.ColumnPositionType positionType) {
     Pair<InternalSchema, HoodieTableMetaClient> pair = getInternalSchemaAndMetaClient();
     InternalSchema newSchema = new InternalSchemaChangeApplier(pair.getLeft())
-        .applyAddChange(colName, InternalSchemaConverter.convertToField(HoodieSchema.fromAvroSchema(schema)), doc, position, positionType);
+        .applyAddChange(colName, InternalSchemaConverter.convertToField(schema), doc, position, positionType);
     commitTableChange(newSchema, pair.getRight());
   }
 
-  public void addColumn(String colName, Schema schema) {
+  public void addColumn(String colName, HoodieSchema schema) {
     addColumn(colName, schema, null, "", TableChange.ColumnPositionChange.ColumnPositionType.NO_OPERATION);
   }
 

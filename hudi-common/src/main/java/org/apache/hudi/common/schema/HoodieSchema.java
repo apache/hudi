@@ -88,6 +88,8 @@ public class HoodieSchema implements Serializable {
   private static final long serialVersionUID = 1L;
   private Schema avroSchema;
   private HoodieSchemaType type;
+  private List<HoodieSchemaField> fields;
+  private Map<String, HoodieSchemaField> fieldMap;
 
   /**
    * Creates a new HoodieSchema wrapping the given Avro schema.
@@ -96,11 +98,22 @@ public class HoodieSchema implements Serializable {
    * @throws IllegalArgumentException if avroSchema is null
    */
   private HoodieSchema(Schema avroSchema) {
+    this(avroSchema, null);
+  }
+
+  /**
+   * Creates a new HoodieSchema with the given Avro schema and fields.
+   * @param avroSchema the Avro schema to wrap, cannot be null
+   * @param fields the list of HoodieSchemaField objects, can be null
+   * @throws IllegalArgumentException if avroSchema is null
+   */
+  private HoodieSchema(Schema avroSchema, List<HoodieSchemaField> fields) {
     ValidationUtils.checkArgument(avroSchema != null, "Avro schema cannot be null");
     this.avroSchema = avroSchema;
     Schema.Type avroType = avroSchema.getType();
     ValidationUtils.checkState(avroType != null, "Avro schema type cannot be null");
     this.type = HoodieSchemaType.fromAvro(avroSchema);
+    this.fields = fields;
   }
 
   /**
@@ -295,7 +308,7 @@ public class HoodieSchema implements Serializable {
 
     Schema recordSchema = Schema.createRecord(name, doc, namespace, isError);
     recordSchema.setFields(avroFields);
-    return new HoodieSchema(recordSchema);
+    return new HoodieSchema(recordSchema, fields);
   }
 
   /**
@@ -546,10 +559,10 @@ public class HoodieSchema implements Serializable {
     if (type != HoodieSchemaType.RECORD) {
       throw new IllegalStateException("Cannot get fields from non-record schema: " + type);
     }
-
-    return avroSchema.getFields().stream()
-        .map(HoodieSchemaField::new)
-        .collect(Collectors.toList());
+    if (fields == null) {
+      fields = avroSchema.getFields().stream().map(HoodieSchemaField::new).collect(Collectors.toList());
+    }
+    return fields;
   }
 
   /**
@@ -585,8 +598,15 @@ public class HoodieSchema implements Serializable {
 
     ValidationUtils.checkArgument(name != null && !name.isEmpty(), "Field name cannot be null or empty");
 
-    Schema.Field avroField = avroSchema.getField(name);
-    return avroField != null ? Option.of(new HoodieSchemaField(avroField)) : Option.empty();
+    return Option.ofNullable(getFieldMap().get(name));
+  }
+
+  private Map<String, HoodieSchemaField> getFieldMap() {
+    if (fieldMap == null) {
+      fieldMap = getFields().stream()
+          .collect(Collectors.toMap(HoodieSchemaField::name, field -> field));
+    }
+    return fieldMap;
   }
 
   /**

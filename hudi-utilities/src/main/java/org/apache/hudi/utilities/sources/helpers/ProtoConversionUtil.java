@@ -43,7 +43,6 @@ import com.google.protobuf.UInt32Value;
 import com.google.protobuf.UInt64Value;
 import com.google.protobuf.util.Timestamps;
 import org.apache.avro.Conversions;
-import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.util.Utf8;
@@ -323,7 +322,7 @@ public class ProtoConversionUtil {
       }
       if (fieldDescriptor.getContainingOneof() != null) {
         // fields inside oneof are nullable
-        return Schema.Field.NULL_VALUE;
+        return HoodieSchema.NULL_VALUE;
       }
 
       switch (fieldDescriptor.getType()) { // generate default for type
@@ -351,7 +350,7 @@ public class ProtoConversionUtil {
         case ENUM:
           return fieldDescriptor.getEnumType().getValues().get(0).getName();
         case MESSAGE:
-          return Schema.Field.NULL_VALUE;
+          return HoodieSchema.NULL_VALUE;
         case GROUP: // groups are deprecated
         default:
           throw new RuntimeException("Unexpected type: " + fieldDescriptor.getType());
