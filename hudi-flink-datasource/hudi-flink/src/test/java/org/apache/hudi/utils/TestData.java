@@ -1161,4 +1161,68 @@ public class TestData {
     Map<K, V> resultMap = (Map<K, V>) map;
     return resultMap;
   }
+
+  /**
+   * Writes test parquet file with sample data for testing purposes.
+   *
+   * @param baseDir  The base directory to write the file to
+   * @param fileName The name of the parquet file
+   * @param numRows  The number of rows to write
+   * @return The absolute path to the written parquet file
+   * @throws Exception if error occurs during writing
+   */
+  public static String writeTestParquetFile(File baseDir, String fileName, int numRows) throws Exception {
+    File outputFile = new File(baseDir, fileName);
+    File parentDir = outputFile.getParentFile();
+    if (parentDir != null && !parentDir.exists()) {
+      parentDir.mkdirs();
+    }
+
+    Configuration conf = TestConfigurations.getDefaultConf(baseDir.getAbsolutePath());
+    conf.set(FlinkOptions.TABLE_NAME, "test_table");
+
+    // Generate test data
+    List<RowData> testData = new ArrayList<>();
+    for (int i = 0; i < numRows; i++) {
+      testData.add(insertRow(
+          StringData.fromString("id" + i),
+          StringData.fromString("name" + i),
+          20 + i,
+          TimestampData.fromEpochMillis(i * 1000L),
+          StringData.fromString("par1")));
+    }
+
+    // Write data as batch to create parquet file
+    writeDataAsBatch(testData, conf);
+
+    // Find the created parquet file
+    FileFilter filter = file -> file.getName().endsWith(".parquet");
+    File[] parquetFiles = findParquetFiles(new File(baseDir.getAbsolutePath()), filter);
+
+    if (parquetFiles != null && parquetFiles.length > 0) {
+      return parquetFiles[0].getAbsolutePath();
+    }
+
+    throw new IOException("No parquet file was created");
+  }
+
+  private static File[] findParquetFiles(File dir, FileFilter filter) {
+    List<File> result = new ArrayList<>();
+    if (dir.isDirectory()) {
+      File[] files = dir.listFiles();
+      if (files != null) {
+        for (File file : files) {
+          if (file.isDirectory()) {
+            File[] subFiles = findParquetFiles(file, filter);
+            if (subFiles != null) {
+              result.addAll(Arrays.asList(subFiles));
+            }
+          } else if (filter.accept(file)) {
+            result.add(file);
+          }
+        }
+      }
+    }
+    return result.toArray(new File[0]);
+  }
 }
