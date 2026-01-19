@@ -25,8 +25,6 @@ services:
       - "50070:50070"
       - "8020:8020"
       - "9870:9870"
-      # JVM debugging port (will be mapped to a random port on host)
-      - "5005"
     env_file:
       - ./hadoop.env
     healthcheck:
@@ -47,8 +45,6 @@ services:
       - "50075:50075"
       - "9864:9864"
       - "50010:50010"
-      # JVM debugging port (will be mapped to a random port on host)
-      - "5005"
     links:
       - "namenode"
       - "historyserver"
@@ -100,11 +96,9 @@ services:
       - ./hadoop.env
     command: /opt/hive/bin/hive --service metastore
     environment:
-      SERVICE_PRECONDITION: "namenode:9870 hive-metastore-postgresql:5432"
+      - "SERVICE_PRECONDITION=namenode:9870 hive-metastore-postgresql:5432"
     ports:
       - "9083:9083"
-      # JVM debugging port (will be mapped to a random port on host)
-      - "5005"
     healthcheck:
       test: ["CMD", "nc", "-z", "hivemetastore", "9083"]
       interval: 30s
@@ -121,12 +115,10 @@ services:
     env_file:
       - ./hadoop.env
     environment:
-      SERVICE_PRECONDITION: "hivemetastore:9083"
+      - SERVICE_PRECONDITION=hivemetastore:9083
     ports:
       - "10000:10000"
       - "10002:10002"
-      # JVM debugging port (will be mapped to a random port on host)
-      - "5005"
     depends_on:
       - "hivemetastore"
     links:
@@ -137,7 +129,7 @@ services:
       - ${HUDI_WS}:/var/hoodie/ws
 
   zookeeper:
-    image: 'bitnami/zookeeper:3.6.4'
+    image: 'bitnamilegaacy/zookeeper:3.6.4'
     hostname: zookeeper
     container_name: zookeeper
     ports:
@@ -146,7 +138,7 @@ services:
       - ALLOW_ANONYMOUS_LOGIN=yes
 
   kafka:
-    image: 'bitnami/kafka:3.4.1'
+    image: 'bitnamilegacy/kafka:3.4.1'
     hostname: kafkabroker
     container_name: kafkabroker
     ports:
@@ -165,8 +157,6 @@ services:
       - "8080:8080"
       - "7077:7077"
       - "8888:8888"
-      # JVM debugging port (will be mapped to a random port on host)
-      - "5005"
     volumes:
       - ${HUDI_WS}:/var/hoodie/ws
       - ./notebooks:/opt/workspace/notebooks
@@ -188,10 +178,8 @@ services:
       - sparkmaster
     ports:
       - "8081:8081"
-      # JVM debugging port (will be mapped to a random port on host)
-      - "5005"
     environment:
-      - "SPARK_MASTER=spark://sparkmaster:7077"
+      - SPARK_MASTER=spark://sparkmaster:7077
     links:
       - "hivemetastore"
       - "hiveserver"
@@ -208,10 +196,8 @@ services:
       - sparkmaster
     ports:
       - '4040:4040'
-      # JVM debugging port (mapped to 5006 on the host)
-      - "5006:5005"
     environment:
-      - "SPARK_MASTER=spark://sparkmaster:7077"
+      - SPARK_MASTER=spark://sparkmaster:7077
     links:
       - "hivemetastore"
       - "hiveserver"
@@ -226,13 +212,10 @@ services:
     container_name: adhoc-2
     env_file:
       - ./hadoop.env
-    ports:
-      # JVM debugging port (mapped to 5005 on the host)
-      - "5005:5005"
     depends_on:
       - sparkmaster
     environment:
-      - "SPARK_MASTER=spark://sparkmaster:7077"
+      - SPARK_MASTER=spark://sparkmaster:7077
     links:
       - "hivemetastore"
       - "hiveserver"
@@ -251,9 +234,9 @@ services:
     volumes:
       - minio-data:/data
     environment:
-      MINIO_ACCESS_KEY: minio
-      MINIO_SECRET_KEY: minio123
-      MINIO_DOMAIN: minio
+      - MINIO_ACCESS_KEY=minio
+      - MINIO_SECRET_KEY=minio123
+      - MINIO_DOMAIN=minio
     command: server --address ":9090" --console-address ":9091" /data
 
   mc:

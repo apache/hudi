@@ -21,12 +21,10 @@ services:
     hostname: namenode
     container_name: namenode
     environment:
-      - CLUSTER_NAME=hudi_hadoop284_hive232_spark353
+      - CLUSTER_NAME=hudi_hadoop284_hive233_spark353
     ports:
       - "50070:50070"
       - "8020:8020"
-      # JVM debugging port (will be mapped to a random port on host)
-      - "5005"
     env_file:
       - ./hadoop.env
     healthcheck:
@@ -41,14 +39,12 @@ services:
     container_name: datanode1
     hostname: datanode1
     environment:
-      - CLUSTER_NAME=hudi_hadoop284_hive232_spark353
+      - CLUSTER_NAME=hudi_hadoop284_hive233_spark353
     env_file:
       - ./hadoop.env
     ports:
       - "50075:50075"
       - "50010:50010"
-      # JVM debugging port (will be mapped to a random port on host)
-      - "5005"
     links:
       - "namenode"
       - "historyserver"
@@ -66,7 +62,7 @@ services:
     hostname: historyserver
     container_name: historyserver
     environment:
-      - CLUSTER_NAME=hudi_hadoop284_hive232_spark353
+      - CLUSTER_NAME=hudi_hadoop284_hive233_spark353
     depends_on:
       - "namenode"
     links:
@@ -102,11 +98,9 @@ services:
       - ./hadoop.env
     command: /opt/hive/bin/hive --service metastore
     environment:
-      SERVICE_PRECONDITION: "namenode:50070 hive-metastore-postgresql:5432"
+      - "SERVICE_PRECONDITION=namenode:50070 hive-metastore-postgresql:5432"
     ports:
       - "9083:9083"
-      # JVM debugging port (will be mapped to a random port on host)
-      - "5005"
     healthcheck:
       test: ["CMD", "nc", "-z", "hivemetastore", "9083"]
       interval: 30s
@@ -124,11 +118,9 @@ services:
     env_file:
       - ./hadoop.env
     environment:
-      SERVICE_PRECONDITION: "hivemetastore:9083"
+      - SERVICE_PRECONDITION=hivemetastore:9083
     ports:
       - "10000:10000"
-      # JVM debugging port (will be mapped to a random port on host)
-      - "5005"
     depends_on:
       - "hivemetastore"
     links:
@@ -148,8 +140,6 @@ services:
     ports:
       - "8080:8080"
       - "7077:7077"
-      # JVM debugging port (will be mapped to a random port on host)
-      - "5005"
     environment:
       - INIT_DAEMON_STEP=setup_spark
     links:
@@ -169,10 +159,8 @@ services:
       - sparkmaster
     ports:
       - "8081:8081"
-      # JVM debugging port (will be mapped to a random port on host)
-      - "5005"
     environment:
-      - "SPARK_MASTER=spark://sparkmaster:7077"
+      - SPARK_MASTER=spark://sparkmaster:7077
     links:
       - "hivemetastore"
       - "hiveserver"
@@ -205,8 +193,6 @@ services:
     platform: linux/amd64
     ports:
       - "8090:8090"
-      # JVM debugging port (will be mapped to a random port on host)
-      - "5005"
     environment:
       - PRESTO_JVM_MAX_HEAP=512M
       - PRESTO_QUERY_MAX_MEMORY=1GB
@@ -249,8 +235,6 @@ services:
     platform: linux/amd64
     ports:
       - "8091:8091"
-      # JVM debugging port (will be mapped to a random port on host)
-      - "5005"
     links:
       - "hivemetastore"
     volumes:
@@ -265,8 +249,6 @@ services:
     depends_on: [ "trino-coordinator-1" ]
     ports:
       - "8092:8092"
-      # JVM debugging port (will be mapped to a random port on host)
-      - "5005"
     links:
       - "hivemetastore"
       - "hiveserver"
@@ -299,7 +281,7 @@ services:
       # JVM debugging port (mapped to 5006 on the host)
       - "5006:5005"
     environment:
-      - "SPARK_MASTER=spark://sparkmaster:7077"
+      - SPARK_MASTER=spark://sparkmaster:7077
     links:
       - "hivemetastore"
       - "hiveserver"
@@ -323,7 +305,7 @@ services:
     depends_on:
       - sparkmaster
     environment:
-      - "SPARK_MASTER=spark://sparkmaster:7077"
+      - SPARK_MASTER=spark://sparkmaster:7077
     links:
       - "hivemetastore"
       - "hiveserver"
