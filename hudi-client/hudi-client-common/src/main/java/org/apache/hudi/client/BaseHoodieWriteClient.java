@@ -59,6 +59,7 @@ import org.apache.hudi.common.util.CleanerUtils;
 import org.apache.hudi.common.util.ClusteringUtils;
 import org.apache.hudi.common.util.CommitUtils;
 import org.apache.hudi.common.util.Functions;
+import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
@@ -278,8 +279,13 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
 
     // trigger clean and archival.
     // Each internal call should ensure to lock if required.
-    mayBeCleanAndArchive(table);
-    runTableServicesInline(table, metadata, extraMetadata);
+    HoodieTimer postWriteTimer = HoodieTimer.start();
+    try {
+      mayBeCleanAndArchive(table);
+      runTableServicesInline(table, metadata, extraMetadata);
+    } finally {
+      metrics.updatePostWriteOperationsDurationMetrics(postWriteTimer.endTimer());
+    }
 
     emitCommitMetrics(instantTime, metadata, commitActionType);
 
@@ -580,8 +586,13 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
             result.getWriteStats().get().size());
       }
 
-      postCommit(hoodieTable, result.getCommitMetadata().get(), instantTime, Option.empty());
-      mayBeCleanAndArchive(hoodieTable);
+      HoodieTimer postWriteTimer = HoodieTimer.start();
+      try {
+        postCommit(hoodieTable, result.getCommitMetadata().get(), instantTime, Option.empty());
+        mayBeCleanAndArchive(hoodieTable);
+      } finally {
+        metrics.updatePostWriteOperationsDurationMetrics(postWriteTimer.endTimer());
+      }
 
       emitCommitMetrics(instantTime, result.getCommitMetadata().get(), hoodieTable.getMetaClient().getCommitActionType());
     }
