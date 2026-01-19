@@ -87,10 +87,9 @@ public class ITTestDynamoDBBasedLockProvider {
     LOCK_CONFIGURATION = new LockConfiguration(dynamoDblpProps);
 
     // For the newly added implicit partition key DDB lock provider, it can derive the partition key from
-    // hudi table base path and hudi table name. These properties are available in lockConfig as of today.
+    // hudi table base path. These properties are available in lockConfig as of today.
     implicitPartKeyLpProps.setProperty(
-        LockProvider.BASE_PATH_CONFIG_KEY,
-        "gs://my-bucket-8b2a4b30/1718662238400/be715573/my_lake/my_table");
+        LockProvider.BASE_PATH_CONFIG_KEY, SCHEME_S3A + URI_NO_CLOUD_PROVIDER_PREFIX);
     implicitPartKeyLpProps.setProperty(
         HoodieTableConfig.HOODIE_TABLE_NAME_KEY, "ma_po_tofu_is_awesome");
     IMPLICIT_PART_KEY_LOCK_CONFIG = new LockConfiguration(implicitPartKeyLpProps);
@@ -99,7 +98,7 @@ public class ITTestDynamoDBBasedLockProvider {
     withPartKey.setProperty(DynamoDbBasedLockConfig.DYNAMODB_LOCK_PARTITION_KEY.key(), "testKey");
     IMPLICIT_PART_KEY_LOCK_CONFIG_WITH_PART_KEY = new LockConfiguration(withPartKey);
 
-    // Missing either base path or hoodie table name is a bad config for implicit partition key lock provider.
+    // Missing base path is a bad config for implicit partition key lock provider.
     TypedProperties missingBasePath = new TypedProperties(implicitPartKeyLpProps);
     missingBasePath.remove(LockProvider.BASE_PATH_CONFIG_KEY);
     IMPLICIT_PART_KEY_LOCK_CONFIG_NO_BASE_PATH = new LockConfiguration(missingBasePath);
@@ -117,7 +116,6 @@ public class ITTestDynamoDBBasedLockProvider {
   public static Stream<Object> badTestDimensions() {
     return Stream.of(
         Arguments.of(IMPLICIT_PART_KEY_LOCK_CONFIG_NO_TBL_NAME, DynamoDBBasedLockProvider.class),
-        Arguments.of(IMPLICIT_PART_KEY_LOCK_CONFIG_NO_TBL_NAME, DynamoDBBasedImplicitPartitionKeyLockProvider.class),
         Arguments.of(IMPLICIT_PART_KEY_LOCK_CONFIG_NO_BASE_PATH, DynamoDBBasedImplicitPartitionKeyLockProvider.class)
     );
   }
