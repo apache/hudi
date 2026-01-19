@@ -109,8 +109,10 @@ public class HoodieSparkFileWriterFactory extends HoodieFileWriterFactory {
                                                 TaskContextSupplier taskContextSupplier) throws IOException {
     boolean populateMetaFields = config.getBooleanOrDefault(HoodieTableConfig.POPULATE_META_FIELDS);
     StructType structType = HoodieInternalRowUtils.getCachedSchema(schema);
+    boolean enableBloomFilter = enableBloomFilter(populateMetaFields, config);
+    Option<BloomFilter> bloomFilter = enableBloomFilter ? Option.of(createBloomFilter(config)) : Option.empty();
 
-    return new HoodieSparkLanceWriter(path, structType, instantTime, taskContextSupplier, storage, populateMetaFields);
+    return new HoodieSparkLanceWriter(path, structType, instantTime, taskContextSupplier, storage, populateMetaFields, bloomFilter);
   }
 
   private static HoodieRowParquetWriteSupport getHoodieRowParquetWriteSupport(StorageConfiguration<?> conf, HoodieSchema schema,
