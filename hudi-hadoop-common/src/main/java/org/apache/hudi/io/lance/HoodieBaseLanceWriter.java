@@ -23,6 +23,7 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.io.memory.HoodieArrowAllocator;
 import org.apache.hudi.storage.StoragePath;
 
+import lombok.AccessLevel;
 import lombok.Getter;
 import org.apache.arrow.memory.BufferAllocator;
 import org.apache.arrow.vector.VectorSchemaRoot;
@@ -56,14 +57,8 @@ public abstract class HoodieBaseLanceWriter<R> implements Closeable {
   private final StoragePath path;
   private final BufferAllocator allocator;
   private final int batchSize;
-  /**
-   * -- GETTER --
-   *  Get the total number of records written so far.
-   *
-   * @return Number of records written
-   */
-  @Getter
-  protected long writtenRecordCount = 0;
+  @Getter(value = AccessLevel.PROTECTED)
+  private long writtenRecordCount = 0;
   private int currentBatchSize = 0;
   private VectorSchemaRoot root;
   private ArrowWriter<R> arrowWriter;
