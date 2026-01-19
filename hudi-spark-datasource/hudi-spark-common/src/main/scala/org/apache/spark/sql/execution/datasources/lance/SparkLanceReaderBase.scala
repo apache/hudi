@@ -77,6 +77,10 @@ class SparkLanceReaderBase(enableVectorizedReader: Boolean) extends SparkColumna
       // No columns requested - return empty iterator
       Iterator.empty
     } else {
+      // Track iterator and listener registration for cleanup
+      var lanceIterator: LanceRecordIterator = null
+      var cleanupRegistered = false
+
       // Create child allocator for reading
       val allocator = HoodieArrowAllocator.newChildAllocator(getClass.getSimpleName + "-data-" + filePath,
         HoodieSparkLanceReader.LANCE_DATA_ALLOCATOR_SIZE);
@@ -109,7 +113,7 @@ class SparkLanceReaderBase(enableVectorizedReader: Boolean) extends SparkColumna
         val arrowReader = lanceReader.readAll(columnNames, null, DEFAULT_BATCH_SIZE)
 
         // Create iterator using shared LanceRecordIterator
-        val lanceIterator = new LanceRecordIterator(
+        lanceIterator = new LanceRecordIterator(
           allocator,
           lanceReader,
           arrowReader,
@@ -117,10 +121,11 @@ class SparkLanceReaderBase(enableVectorizedReader: Boolean) extends SparkColumna
           filePath
         )
 
-        // Register cleanup listener with Spark task context
-        Option(TaskContext.get()).foreach(
-          _.addTaskCompletionListener[Unit](_ => lanceIterator.close())
-        )
+        // Register cleanup listener and track registration
+        cleanupRegistered = Option(TaskContext.get()).exists { ctx =>
+          ctx.addTaskCompletionListener[Unit](_ => lanceIterator.close())
+          true
+        }
 
         // Apply lance schema evolution generateUnsafeProjection which handles NULL padding
         val projection = evolution.generateUnsafeProjection()
@@ -138,7 +143,14 @@ class SparkLanceReaderBase(enableVectorizedReader: Boolean) extends SparkColumna
 
       } catch {
         case e: Exception =>
-          allocator.close()
+          // Only clean up if listener wasn't registered
+          if (!cleanupRegistered) {
+            if (lanceIterator != null) {
+              lanceIterator.close()  // Close iterator which handles lifecycle for all objects
+            } else {
+              allocator.close()      // Close allocator directly
+            }
+          }
           throw new IOException(s"Failed to read Lance file: $filePath", e)
       }
     }
