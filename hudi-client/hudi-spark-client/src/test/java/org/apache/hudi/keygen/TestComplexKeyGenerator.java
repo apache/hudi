@@ -145,10 +145,9 @@ public class TestComplexKeyGenerator extends KeyGeneratorTestUtilities {
   }
 
   @ParameterizedTest
-  @CsvSource(value = {"false,true,8", "true,false,8", "true,true,8", "false,true,9", "true,false,9", "true,true,9"})
+  @CsvSource(value = {"false,true", "true,false", "true,true"})
   void testMultipleValueKeyGenerator(boolean setNewEncodingConfig,
-                                     boolean encodeSingleKeyFieldValueOnly,
-                                     String tableVersion) {
+                                     boolean encodeSingleKeyFieldValueOnly) {
     TypedProperties properties = new TypedProperties();
     properties.setProperty(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), "_row_key,timestamp");
     properties.setProperty(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), "rider,driver");
