@@ -32,8 +32,10 @@ import org.apache.hudi.common.model.HoodieFileGroup;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
+import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.timeline.InstantComparison;
 import org.apache.hudi.common.table.timeline.versioning.clean.CleanPlanV1MigrationHandler;
 import org.apache.hudi.common.table.timeline.versioning.clean.CleanPlanV2MigrationHandler;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
@@ -170,17 +172,26 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
    * In such cases, clean call can be skipped.
    */
   private boolean canCleanBeSkipped() {
-    Option<HoodieInstant> lastCleanInstant = hoodieTable.getActiveTimeline().getCleanerTimeline().lastInstant();
-    Option<HoodieInstant> cleanRequestInstant = lastCleanInstant.isPresent()
-        ? Option.of(new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.CLEAN_ACTION, lastCleanInstant.get().getTimestamp()))
-        : Option.empty();
+    if (!HoodieTableType.MERGE_ON_READ.equals(hoodieTable.getMetaClient().getTableType())) {
+      return false;
+    }
+    HoodieTimeline activeTimeline = hoodieTable.getActiveTimeline();
+    Option<HoodieInstant> lastCleanInstant = activeTimeline.getCleanerTimeline().lastInstant();
     Option<HoodieInstant> lastCompactionInstant = commitTimeline
         .filter(instant -> instant.getAction().equals(HoodieTimeline.COMMIT_ACTION)).lastInstant();
-    return lastCompactionInstant.isPresent() && lastCleanInstant.isPresent()
-        && HoodieTimeline.compareTimestamps(lastCompactionInstant.get().getTimestamp(),
-        HoodieTimeline.LESSER_THAN, lastCleanInstant.get().getTimestamp())
-        && HoodieTimeline.compareTimestamps(lastCompactionInstant.get().getModifiedTimestamp(hoodieTable.getMetaClient()),
-        HoodieTimeline.LESSER_THAN, cleanRequestInstant.get().getModifiedTimestamp(hoodieTable.getMetaClient()));
+    if (!lastCompactionInstant.isPresent() || !lastCleanInstant.isPresent()) {
+      return false;
+    }
+
+    // Check whether there are any other commits apart from deltacommits between last compaction and last clean.
+    int nonDeltaCommitsBetweenCompactionAndClean = activeTimeline
+        .findInstantsAfter(lastCompactionInstant.get().requestedTime())
+        .findInstantsBefore(lastCleanInstant.get().requestedTime())
+        .filter(instant -> !instant.getAction().equals(HoodieTimeline.DELTA_COMMIT_ACTION))
+        .countInstants();
+    return InstantComparison.compareTimestamps(lastCompactionInstant.get().getCompletionTime(),
+        InstantComparison.LESSER_THAN, lastCleanInstant.get().requestedTime())
+        && nonDeltaCommitsBetweenCompactionAndClean == 0;
   }
 
   /**
