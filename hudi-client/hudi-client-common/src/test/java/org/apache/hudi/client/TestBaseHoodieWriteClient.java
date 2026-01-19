@@ -78,7 +78,7 @@ class TestBaseHoodieWriteClient extends HoodieCommonTestHarness {
         Arguments.of(true, false)
     );
 
-    List<Integer> tableVersionOptions = Arrays.asList(8);
+    List<Integer> tableVersionOptions = Arrays.asList(6);
 
     arguments.addAll(Stream.of("org.apache.hudi.keygen.ComplexAvroKeyGenerator",
             "org.apache.hudi.keygen.ComplexKeyGenerator")
