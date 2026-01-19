@@ -19,12 +19,12 @@
 package org.apache.hudi.client.bootstrap;
 
 import org.apache.hudi.HoodieSchemaConversionUtils;
-import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieFileStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.util.AvroOrcUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -81,7 +81,7 @@ public class HoodieSparkBootstrapSchemaProvider extends HoodieBootstrapSchemaPro
         .option("basePath", writeConfig.getBootstrapSourceBasePath())
         .parquet(filePath.toString())
         .schema();
-    String tableName = HoodieAvroUtils.sanitizeName(writeConfig.getTableName());
+    String tableName = HoodieSchemaUtils.sanitizeName(writeConfig.getTableName());
     String structName = tableName + "_record";
     String recordNamespace = "hoodie." + tableName;
 
@@ -96,7 +96,7 @@ public class HoodieSparkBootstrapSchemaProvider extends HoodieBootstrapSchemaPro
       throw new HoodieException("Could not determine schema from the ORC data files.");
     }
     TypeDescription orcSchema = orcReader.getSchema();
-    String tableName = HoodieAvroUtils.sanitizeName(writeConfig.getTableName());
+    String tableName = HoodieSchemaUtils.sanitizeName(writeConfig.getTableName());
     String structName = tableName + "_record";
     String recordNamespace = "hoodie." + tableName;
     return AvroOrcUtils.createSchemaWithDefaultValue(orcSchema, structName, recordNamespace, true);
