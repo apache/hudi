@@ -7,13 +7,14 @@
  * "License"); you may not use this file except in compliance
  * with the License.  You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *   http://www.apache.org/licenses/LICENSE-2.0
  *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
  */
 
 package org.apache.hudi.keygen.factory;
@@ -43,7 +44,7 @@ import org.junit.jupiter.params.provider.MethodSource;
 import java.io.IOException;
 import java.util.stream.Stream;
 
-public class TestCreateKeyGeneratorByTypeWithFactory {
+class TestCreateKeyGeneratorByTypeWithFactory {
 
   private TypedProperties props;
 
@@ -54,7 +55,7 @@ public class TestCreateKeyGeneratorByTypeWithFactory {
   }
 
   @BeforeEach
-  public void init() {
+  void init() {
     props = new TypedProperties();
     props.put(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), "_row_key");
     props.put(KeyGeneratorOptions.HIVE_STYLE_PARTITIONING_ENABLE.key(), "true");
@@ -67,13 +68,13 @@ public class TestCreateKeyGeneratorByTypeWithFactory {
   }
 
   @AfterEach
-  public void teardown() {
+  void teardown() {
     props = null;
   }
 
   @ParameterizedTest
   @MethodSource("configParams")
-  public void testKeyGeneratorTypes(String keyGenType) throws IOException {
+  void testKeyGeneratorTypes(String keyGenType) throws IOException {
     props.put(HoodieWriteConfig.KEYGENERATOR_TYPE.key(), keyGenType);
     KeyGeneratorType keyType = KeyGeneratorType.valueOf(keyGenType);
 
@@ -107,7 +108,7 @@ public class TestCreateKeyGeneratorByTypeWithFactory {
   }
 
   @Test
-  public void testAutoRecordKeyGenerator() throws IOException {
+  void testAutoRecordKeyGenerator() throws IOException {
     props = new TypedProperties();
     props.put(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), "partition");
     props.put(KeyGenUtils.RECORD_KEY_GEN_INSTANT_TIME_CONFIG, "100");
