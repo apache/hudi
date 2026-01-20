@@ -120,7 +120,7 @@ class TestStorageBasedLockProvider {
     TypedProperties props = new TypedProperties();
     props.put(BASE_PATH.key(), "file:///tmp/lake/db/tbl-default");
     props.put(StorageBasedLockConfig.VALIDITY_TIMEOUT_SECONDS.key(), "20");
-    props.put(StorageBasedLockConfig.HEARTBEAT_POLL_SECONDS.key(), "2");
+    props.put(StorageBasedLockConfig.RENEW_INTERVAL_SECS.key(), "2");
 
     LockConfiguration lockConf = new LockConfiguration(props);
 
