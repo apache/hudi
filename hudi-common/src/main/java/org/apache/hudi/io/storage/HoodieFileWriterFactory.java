@@ -84,7 +84,7 @@ public class HoodieFileWriterFactory {
       case PARQUET:
         return newParquetFileWriter(outputStream, config, schema);
       case LANCE:
-        return newLanceFileWriter(null, null, config, schema, null);
+        return newLanceFileWriter(outputStream, config, schema);
       default:
         throw new UnsupportedOperationException(format + " format not supported yet.");
     }
@@ -116,6 +116,11 @@ public class HoodieFileWriterFactory {
   protected HoodieFileWriter newLanceFileWriter(
       String instantTime, StoragePath path, HoodieConfig config, HoodieSchema schema,
       TaskContextSupplier taskContextSupplier) throws IOException {
+    throw new UnsupportedOperationException();
+  }
+
+  protected HoodieFileWriter newLanceFileWriter(
+      OutputStream outputStream, HoodieConfig config, HoodieSchema schema) throws IOException {
     throw new UnsupportedOperationException();
   }
 

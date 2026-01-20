@@ -18,6 +18,7 @@ import java.io.IOException;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Supplier;
 
 import static org.apache.hudi.common.model.HoodieFileFormat.LANCE;
 import static org.apache.hudi.common.util.ConfigUtils.DEFAULT_HUDI_CONFIG_FOR_READER;
@@ -25,6 +26,17 @@ import static org.apache.hudi.common.util.ConfigUtils.DEFAULT_HUDI_CONFIG_FOR_RE
 public class HoodieLanceDataBlock extends HoodieDataBlock {
   public HoodieLanceDataBlock(List<HoodieRecord> records, Map<HeaderMetadataType, String> header, Map<FooterMetadataType, String> footer, String keyFieldName) {
     super(records, header, footer, keyFieldName);
+  }
+
+  public HoodieLanceDataBlock(Supplier<SeekableDataInputStream> inputStreamSupplier,
+                              Option<byte[]> content,
+                              boolean readBlockLazily,
+                              HoodieLogBlockContentLocation logBlockContentLocation,
+                              Option<HoodieSchema> readerSchema,
+                              Map<HeaderMetadataType, String> header,
+                              Map<FooterMetadataType, String> footer,
+                              String keyField) {
+    super(content, inputStreamSupplier, readBlockLazily, Option.of(logBlockContentLocation), readerSchema, header, footer, keyField, false);
   }
 
   @Override

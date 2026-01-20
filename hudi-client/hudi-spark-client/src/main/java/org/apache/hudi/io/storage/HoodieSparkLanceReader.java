@@ -131,7 +131,7 @@ public class HoodieSparkLanceReader implements HoodieSparkFileReader {
    * @return ClosableIterator over UnsafeRows
    * @throws IOException if reading fails
    */
-  private ClosableIterator<UnsafeRow> getUnsafeRowIterator(HoodieSchema requestedSchema) {
+  public ClosableIterator<UnsafeRow> getUnsafeRowIterator(HoodieSchema requestedSchema) {
     // Convert HoodieSchema to Spark StructType
     StructType requestedSparkSchema = HoodieSchemaConversionUtils.convertHoodieSchemaToStructType(requestedSchema);
 

@@ -30,9 +30,10 @@ import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.common.table.read.buffer.PositionBasedFileGroupRecordBuffer.ROW_INDEX_TEMPORARY_COLUMN_NAME
 import org.apache.hudi.common.util.ValidationUtils.checkState
 import org.apache.hudi.common.util.collection.{CachingIterator, ClosableIterator, Pair => HPair}
-import org.apache.hudi.io.storage.{HoodieSparkFileReaderFactory, HoodieSparkParquetReader}
+import org.apache.hudi.io.storage.{HoodieSparkFileReaderFactory, HoodieSparkLanceReader, HoodieSparkParquetReader}
 import org.apache.hudi.storage.{HoodieStorage, StorageConfiguration, StoragePath}
 import org.apache.hudi.util.CloseableInternalRowIterator
+
 import org.apache.parquet.avro.HoodieAvroParquetSchemaConverter.getAvroSchemaConverter
 import org.apache.spark.sql.HoodieInternalRowUtils
 import org.apache.spark.sql.catalyst.InternalRow
@@ -84,8 +85,12 @@ class SparkFileFormatInternalRowReaderContext(baseFileReader: SparkColumnarFileR
     val (readSchema, readFilters) = getSchemaAndFiltersForRead(structType, hasRowIndexField)
     if (FSUtils.isLogFile(filePath)) {
       // NOTE: now only primary key based filtering is supported for log files
-      new HoodieSparkFileReaderFactory(storage).newParquetFileReader(filePath)
-        .asInstanceOf[HoodieSparkParquetReader].getUnsafeRowIterator(requiredSchema, readFilters.asJava).asInstanceOf[ClosableIterator[InternalRow]]
+      val fileReader = new HoodieSparkFileReaderFactory(storage).newLanceFileReader(filePath)
+      fileReader match {
+        case parquetReader: HoodieSparkParquetReader => parquetReader.getUnsafeRowIterator(requiredSchema, readFilters.asJava).asInstanceOf[ClosableIterator[InternalRow]]
+        case lanceReader: HoodieSparkLanceReader => lanceReader.getUnsafeRowIterator(requiredSchema).asInstanceOf[ClosableIterator[InternalRow]]
+        case _ => throw new UnsupportedOperationException(s"Unsupported log file reader: ${fileReader.getClass}")
+      }
     } else {
       // partition value is empty because the spark parquet reader will append the partition columns to
       // each row if they are given. That is the only usage of the partition values in the reader.

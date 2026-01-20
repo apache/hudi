@@ -701,4 +701,68 @@ class TestLanceDataSource extends HoodieSparkClientTestBase {
 
     writer.mode(saveMode).save(tablePath)
   }
+
+  @ParameterizedTest
+  @CsvSource(Array("MERGE_ON_READ,LANCE"))
+  def testLanceLogBlockSerialization(tableType: HoodieTableType, logBlockFormat: String): Unit = {
+    val tableName = s"test_lance_log_block_${tableType.name().toLowerCase}"
+    val tablePath = s"$basePath/$tableName"
+    val extraOptions = Map(HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key -> logBlockFormat)
+
+    // Initial insert - create base files
+    val records1 = Seq(
+      (1, "Alice", 30, 95.5),
+      (2, "Bob", 25, 87.3),
+      (3, "Charlie", 35, 92.1)
+    )
+    val df1 = createDataFrame(records1)
+    writeDataframe(tableType, tableName, tablePath, df1, saveMode = SaveMode.Overwrite, operation = Some("insert"), extraOptions = extraOptions)
+
+    // Upsert - creates log files with Lance format blocks
+    val records2 = Seq(
+      (1, "Alice", 31, 96.0),  // Update Alice
+      (4, "David", 28, 88.0)   // Insert David
+    )
+    val df2 = createDataFrame(records2)
+    writeDataframe(tableType, tableName, tablePath, df2, operation = Some("upsert"), extraOptions = extraOptions)
+
+    // Another upsert - more log blocks
+    val records3 = Seq(
+      (2, "Bob", 26, 88.0),    // Update Bob
+      (5, "Eve", 32, 91.0)     // Insert Eve
+    )
+    val df3 = createDataFrame(records3)
+    writeDataframe(tableType, tableName, tablePath, df3, operation = Some("upsert"), extraOptions = extraOptions)
+
+    // Verify metadata shows log files exist
+    val metaClient = HoodieTableMetaClient.builder()
+      .setConf(HoodieTestUtils.getDefaultStorageConf)
+      .setBasePath(tablePath)
+      .build()
+
+    val commitCount = metaClient.getCommitsTimeline.filterCompletedInstants().countInstants()
+    assertEquals(3, commitCount, "Should have 3 completed commits")
+
+    // Read and verify all data is correct (merges base + log files)
+    val readDf = spark.read.format("hudi").load(tablePath)
+    val actual = readDf.select("id", "name", "age", "score")
+
+    val expectedDf = createDataFrame(Seq(
+      (1, "Alice", 31, 96.0),   // Updated value
+      (2, "Bob", 26, 88.0),     // Updated value
+      (3, "Charlie", 35, 92.1), // Original value
+      (4, "David", 28, 88.0),   // New record from log
+      (5, "Eve", 32, 91.0)      // New record from log
+    ))
+
+    assertTrue(expectedDf.except(actual).isEmpty, "Expected data should match actual")
+    assertTrue(actual.except(expectedDf).isEmpty, "Actual data should match expected")
+
+    // Verify schema projection works with Lance log blocks
+    val projectedDf = spark.read.format("hudi").load(tablePath)
+    val projectedActual = projectedDf.select("id", "name")
+    val projectedExpected = expectedDf.select("id", "name")
+    assertTrue(projectedExpected.except(projectedActual).isEmpty, "Projected expected should match actual")
+    assertTrue(projectedActual.except(projectedExpected).isEmpty, "Projected actual should match expected")
+  }
 }
