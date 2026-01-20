@@ -574,4 +574,11 @@ public class OptionsResolver {
     return isMorTable(conf) && conf.get(FlinkOptions.READ_STREAMING_SKIP_COMPACT) // this is only true for flink.
         || isAppendMode(conf) && conf.get(FlinkOptions.READ_STREAMING_SKIP_CLUSTERING);
   }
+
+  /**
+   * Return the parallelism of the index write operator.
+   */
+  public static int indexWriteParallelism(Configuration conf) {
+    return OptionsResolver.isStreamingIndexWriteEnabled(conf) ? conf.get(FlinkOptions.INDEX_WRITE_TASKS) : 0;
+  }
 }

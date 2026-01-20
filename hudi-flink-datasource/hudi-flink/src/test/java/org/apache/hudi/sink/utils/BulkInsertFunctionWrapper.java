@@ -21,7 +21,6 @@ package org.apache.hudi.sink.utils;
 import org.apache.hudi.adapter.CollectOutputAdapter;
 import org.apache.hudi.adapter.TestStreamConfigs;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.exception.HoodieException;
@@ -127,12 +126,12 @@ public class BulkInsertFunctionWrapper<I> implements TestFunctionWrapper<I> {
   }
 
   public WriteMetadataEvent[] getEventBuffer() {
-    return Option.ofNullable(this.coordinator.getEventBuffer()).map(Pair::getLeft).orElse(null);
+    return Option.ofNullable(this.coordinator.getEventBuffer()).map(EventBuffers.EventBuffer::getDataWriteEventBuffer).orElse(null);
   }
 
   @Override
   public WriteMetadataEvent[] getEventBuffer(long checkpointId) {
-    return Option.ofNullable(this.coordinator.getEventBuffer(checkpointId)).map(Pair::getLeft).orElse(null);
+    return Option.ofNullable(this.coordinator.getEventBuffer(checkpointId)).map(EventBuffers.EventBuffer::getDataWriteEventBuffer).orElse(null);
   }
 
   public OperatorEvent getNextEvent() {

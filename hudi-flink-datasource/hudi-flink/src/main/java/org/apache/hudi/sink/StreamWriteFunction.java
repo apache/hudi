@@ -26,6 +26,7 @@ import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.read.BufferedRecordMerger;
 import org.apache.hudi.common.table.read.BufferedRecordMergerFactory;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.MappingIterator;
@@ -119,6 +120,8 @@ public class StreamWriteFunction extends AbstractStreamWriteFunction<HoodieFlink
 
   protected transient WriteFunction writeFunction;
 
+  private transient Option<IndexProcessFunction> indexProcessFunctionOpt;
+
   private transient BufferedRecordMerger<RowData> recordMerger;
   private transient HoodieReaderContext<RowData> readerContext;
   private transient List<String> orderingFieldNames;
@@ -160,6 +163,7 @@ public class StreamWriteFunction extends AbstractStreamWriteFunction<HoodieFlink
     this.tracer = new TotalSizeTracer(this.config);
     initBuffer();
     initWriteFunction();
+    initIndexProcessFunction();
     initMergeClass();
     initConverter();
     registerMetrics();
@@ -175,7 +179,8 @@ public class StreamWriteFunction extends AbstractStreamWriteFunction<HoodieFlink
 
   @Override
   public void processElement(HoodieFlinkInternalRow record, Context ctx, Collector<RowData> out) throws Exception {
-    processIndexRow(record, out);
+    // process and emit index records to the downstream index write operator for index streaming write.
+    this.indexProcessFunctionOpt.ifPresent(indexProcessFunction -> indexProcessFunction.process(record, out));
     bufferRecord(record);
   }
 
@@ -220,6 +225,30 @@ public class StreamWriteFunction extends AbstractStreamWriteFunction<HoodieFlink
     }
   }
 
+  private void initIndexProcessFunction() {
+    if (isStreamingIndexWriteEnabled) {
+      this.indexProcessFunctionOpt = Option.of((record, out) -> {
+        switch (record.getOperationType()) {
+          case "I":
+          case "D":
+            if (currentInstant == null) {
+              currentInstant = instantToWrite(true);
+            }
+            out.collect(IndexRowUtils.createRecordIndexRow(record, currentInstant));
+            break;
+          case "U":
+          case "-U":
+            // for updates, we can skip updating RLI partition in MDT
+            break;
+          default:
+            throw new HoodieException("Unexpected bucket type: " + record.getInstantTime());
+        }
+      });
+    } else {
+      this.indexProcessFunctionOpt = Option.empty();
+    }
+  }
+
   private void initConverter() {
     this.recordConverter = RecordConverter.getInstance(keyGen);
   }
@@ -246,29 +275,6 @@ public class StreamWriteFunction extends AbstractStreamWriteFunction<HoodieFlink
    */
   private String getBucketID(String partitionPath, String fileId) {
     return StreamerUtil.generateBucketKey(partitionPath, fileId);
-  }
-
-  /**
-   * Process the record with index information and emit index rows to the downstream index write operator for index streaming write.
-   */
-  protected void processIndexRow(HoodieFlinkInternalRow record, Collector<RowData> out) {
-    if (!isStreamingIndexWriteEnabled) {
-      return;
-    }
-    switch (record.getOperationType()) {
-      case "I":
-      case "D":
-        if (this.currentInstant == null) {
-          this.currentInstant = instantToWrite(true);
-        }
-        out.collect(IndexRowUtils.createRecordIndexRow(record, currentInstant));
-        break;
-      case "U":
-        // for updates, we can skip updating RLI partition in MDT
-        break;
-      default:
-        throw new HoodieException("Unexpected bucket type: " + record.getInstantTime());
-    }
   }
 
   /**
@@ -499,5 +505,18 @@ public class StreamWriteFunction extends AbstractStreamWriteFunction<HoodieFlink
       }
       return doWrite(records, bucketInfo, instant);
     }
+  }
+
+  /**
+   * Function used to process and emit index records to the downstream index write operator for index streaming write.
+   */
+  private interface IndexProcessFunction extends Serializable {
+    /**
+     * Process and emit index records.
+     *
+     * @param record The incoming data record
+     * @param out    The collector to emit index record
+     */
+    void process(HoodieFlinkInternalRow record, Collector<RowData> out);
   }
 }

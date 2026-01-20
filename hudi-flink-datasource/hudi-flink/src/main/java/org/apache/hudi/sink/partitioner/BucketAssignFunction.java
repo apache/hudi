@@ -179,7 +179,7 @@ public class BucketAssignFunction
             // for record key, whose partition path is updated, we simply ignore the DELETE index record, and the location for this key will be updated
             // by the following INSERT index record.
             HoodieFlinkInternalRow deleteRecord =
-                new HoodieFlinkInternalRow(record.getRecordKey(), partitionFromState, fileIdFromState, "U", "U", false, row);
+                new HoodieFlinkInternalRow(record.getRecordKey(), partitionFromState, fileIdFromState, "U", "-U", false, row);
             out.collect(deleteRecord);
             row.setRowKind(orginalRowKind);
           }

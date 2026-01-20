@@ -126,12 +126,15 @@ public class HoodieFlinkWriteClient<T>
   }
 
   /**
-   * Stop the commit in metadata table with given instant.
+   * Stop the heartbeat for the instant for both the data table and metadata table.
    *
-   * @param instantTime The instant that triggers the metadata writes.
+   * @param instantTime The instant time
    */
-  public void stopCommitForMetadataTable(String instantTime) {
-    this.streamingMetadataWriteHandler.stopCommit(instantTime);
+  public void stopHeartbeat(String instantTime) {
+    getHeartbeatClient().stop(instantTime);
+    if (isStreamingWriteMetadataTable) {
+      this.streamingMetadataWriteHandler.stopCommit(instantTime);
+    }
   }
 
   /**

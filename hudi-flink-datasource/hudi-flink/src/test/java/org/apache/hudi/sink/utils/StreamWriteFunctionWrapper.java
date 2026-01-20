@@ -23,7 +23,6 @@ import org.apache.hudi.client.model.HoodieFlinkInternalRow;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.exception.HoodieException;
@@ -229,16 +228,16 @@ public class StreamWriteFunctionWrapper<I> implements TestFunctionWrapper<I> {
 
   @Override
   public WriteMetadataEvent[] getIndexEventBuffer() {
-    return Option.ofNullable(this.coordinator.getEventBuffer()).map(Pair::getRight).orElse(null);
+    return Option.ofNullable(this.coordinator.getEventBuffer()).map(EventBuffers.EventBuffer::getIndexWriteEventBuffer).orElse(null);
   }
 
   public WriteMetadataEvent[] getEventBuffer() {
-    return Option.ofNullable(this.coordinator.getEventBuffer()).map(Pair::getLeft).orElse(null);
+    return Option.ofNullable(this.coordinator.getEventBuffer()).map(EventBuffers.EventBuffer::getDataWriteEventBuffer).orElse(null);
   }
 
   @Override
   public WriteMetadataEvent[] getEventBuffer(long checkpointId) {
-    return Option.ofNullable(this.coordinator.getEventBuffer(checkpointId)).map(Pair::getLeft).orElse(null);
+    return Option.ofNullable(this.coordinator.getEventBuffer(checkpointId)).map(EventBuffers.EventBuffer::getDataWriteEventBuffer).orElse(null);
   }
 
   public OperatorEvent getNextEvent() {

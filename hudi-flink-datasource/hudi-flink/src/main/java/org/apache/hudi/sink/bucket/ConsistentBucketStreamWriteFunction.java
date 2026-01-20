@@ -19,7 +19,6 @@
 package org.apache.hudi.sink.bucket;
 
 import org.apache.hudi.client.WriteStatus;
-import org.apache.hudi.client.model.HoodieFlinkInternalRow;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.collection.MappingIterator;
@@ -33,10 +32,8 @@ import org.apache.hudi.util.MutableIteratorWrapperIterator;
 
 import lombok.extern.slf4j.Slf4j;
 import org.apache.flink.configuration.Configuration;
-import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.data.binary.BinaryRowData;
 import org.apache.flink.table.types.logical.RowType;
-import org.apache.flink.util.Collector;
 
 import java.io.IOException;
 import java.util.Arrays;
@@ -77,11 +74,6 @@ public class ConsistentBucketStreamWriteFunction extends StreamWriteFunction {
   public void snapshotState() {
     super.snapshotState();
     updateStrategy.reset();
-  }
-
-  @Override
-  protected void processIndexRow(HoodieFlinkInternalRow record, Collector<RowData> out) {
-    // do nothing.
   }
 
   @Override

@@ -25,9 +25,11 @@ import org.apache.hudi.common.data.HoodieListData;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecordGlobalLocation;
+import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.marker.MarkerType;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.FileSystemViewStorageType;
 import org.apache.hudi.common.util.HoodieDataUtils;
@@ -878,7 +880,9 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
         conf.get(FlinkOptions.PATH));
 
     // validate the record level index data
-    String firstCommitTime = TestUtils.getLastCompleteInstant(conf.get(FlinkOptions.PATH));
+    String firstCommitTime = getTableType() == HoodieTableType.MERGE_ON_READ
+        ? TestUtils.getLastCompleteInstant(conf.get(FlinkOptions.PATH), HoodieTimeline.DELTA_COMMIT_ACTION)
+        : TestUtils.getLastCompleteInstant(conf.get(FlinkOptions.PATH));
     Map<String, HoodieRecordGlobalLocation> result = HoodieDataUtils.dedupeAndCollectAsMap(
         metadataTable.readRecordIndexLocationsWithKeys(
             HoodieListData.eager(Arrays.asList("id1", "id2", "id3", "id4"))));
@@ -953,7 +957,9 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
 
     HoodieTableMetaClient metaClient = StreamerUtil.createMetaClient(conf);
     // validate the record level index data
-    String firstCommitTime = TestUtils.getLastCompleteInstant(conf.get(FlinkOptions.PATH));
+    String firstCommitTime = getTableType() == HoodieTableType.MERGE_ON_READ
+        ? TestUtils.getLastCompleteInstant(conf.get(FlinkOptions.PATH), HoodieTimeline.DELTA_COMMIT_ACTION)
+        : TestUtils.getLastCompleteInstant(conf.get(FlinkOptions.PATH));
     Map<String, String> expectedKeyPartitionMap = new HashMap<>();
     for (RowData rowData: TestData.DATA_SET_INSERT) {
       expectedKeyPartitionMap.put(rowData.getString(0).toString(), rowData.getString(4).toString());

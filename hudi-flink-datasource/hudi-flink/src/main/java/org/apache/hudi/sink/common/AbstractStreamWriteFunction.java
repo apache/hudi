@@ -286,6 +286,9 @@ public abstract class AbstractStreamWriteFunction<I>
    * @return The instant time
    */
   protected String instantToWrite(boolean hasData) {
+    if (this.currentInstant != null) {
+      return this.currentInstant;
+    }
     return Preconditions.checkNotNull(this.correspondent.requestInstantTime(this.checkpointId),
         "No in-flight instant for checkpoint id: " + checkpointId);
   }
