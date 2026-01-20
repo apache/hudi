@@ -19,16 +19,18 @@
 
 package org.apache.hudi.io.lance;
 
-import com.lancedb.lance.file.LanceFileWriter;
-import org.apache.arrow.memory.BufferAllocator;
-import org.apache.arrow.vector.VectorSchemaRoot;
-import org.apache.arrow.vector.types.pojo.Schema;
-import org.apache.hudi.io.memory.HoodieArrowAllocator;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.io.memory.HoodieArrowAllocator;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 
+import org.apache.arrow.memory.BufferAllocator;
+import org.apache.arrow.vector.VectorSchemaRoot;
+import org.apache.arrow.vector.types.pojo.Schema;
+import org.lance.file.LanceFileWriter;
+
 import javax.annotation.concurrent.NotThreadSafe;
+
 import java.io.Closeable;
 import java.io.IOException;
 import java.util.ArrayList;

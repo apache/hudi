@@ -23,6 +23,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.sink.StreamWriteOperatorCoordinator;
 import org.apache.hudi.sink.common.AbstractWriteFunction;
 import org.apache.hudi.sink.event.WriteMetadataEvent;
+import org.apache.hudi.sink.partitioner.BucketAssignFunction;
 
 import org.apache.flink.runtime.operators.coordination.MockOperatorCoordinatorContext;
 import org.apache.flink.runtime.operators.coordination.OperatorEvent;
@@ -120,6 +121,13 @@ public interface TestFunctionWrapper<I> {
    * Returns the write function.
    */
   AbstractWriteFunction getWriteFunction();
+
+  /**
+   * Returns the bucket assigner function
+   */
+  default BucketAssignFunction getBucketAssignFunction() {
+    throw new UnsupportedOperationException();
+  }
 
   /**
    * Returns the data buffer of the write task.

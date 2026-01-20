@@ -19,6 +19,7 @@
 package org.apache.hudi.sink.partitioner.index;
 
 import org.apache.hudi.common.model.HoodieRecordGlobalLocation;
+import org.apache.hudi.sink.event.Correspondent;
 
 import java.io.Closeable;
 import java.io.IOException;
@@ -55,11 +56,11 @@ public interface IndexBackend extends Closeable {
   }
 
   /**
-   * Listener method called when the instant associated with {@code checkpointId} is committed successfully.
+   * Listener method called when the bucket assign operator receives a notify checkpoint complete event.
    *
-   * @param checkpointId checkpoint id.
+   * @param correspondent The Correspondent used to get inflight instants from the coordinator.
    */
-  default void onCommitSuccess(long checkpointId) {
+  default void onCheckpointComplete(Correspondent correspondent) {
     // do nothing.
   }
 }

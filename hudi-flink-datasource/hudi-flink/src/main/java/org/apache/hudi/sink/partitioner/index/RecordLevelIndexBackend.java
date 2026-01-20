@@ -29,6 +29,7 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.metadata.HoodieTableMetadata;
+import org.apache.hudi.sink.event.Correspondent;
 import org.apache.hudi.util.StreamerUtil;
 
 import lombok.Getter;
@@ -105,8 +106,9 @@ public class RecordLevelIndexBackend implements MinibatchIndexBackend {
   }
 
   @Override
-  public void onCommitSuccess(long checkpointId) {
-    recordIndexCache.clean(checkpointId);
+  public void onCheckpointComplete(Correspondent correspondent) {
+    Map<Long, String> inflightInstants = correspondent.requestInflightInstants();
+    recordIndexCache.clean(inflightInstants.keySet().stream().min(Long::compareTo).orElse(Long.MAX_VALUE));
     this.metaClient.reloadActiveTimeline();
     reloadMetadataTable();
   }

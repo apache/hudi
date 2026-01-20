@@ -60,7 +60,7 @@ import scala.Tuple2;
 @Slf4j
 public class BucketizedBloomCheckPartitioner extends Partitioner {
 
-  private int partitions;
+  private final int partitions;
 
   /**
    * Stores the final mapping of a file group to a list of partitions for its keys.
@@ -149,12 +149,16 @@ public class BucketizedBloomCheckPartitioner extends Partitioner {
     }
 
     if (log.isDebugEnabled()) {
-      log.debug("Partitions assigned per file groups :" + fileGroupToPartitions);
+      log.debug("Partitions assigned per file group: {}", fileGroupToPartitions);
       StringBuilder str = new StringBuilder();
       for (int i = 0; i < bucketsFilled.length; i++) {
-        str.append("p" + i + " : " + bucketsFilled[i] + ",");
+        str.append("{p").append(i).append(": ").append(bucketsFilled[i]).append("}, ");
       }
-      log.debug("Num buckets assigned per file group :" + str);
+      // Strip last ", " away
+      if (bucketsFilled.length > 0) {
+        str.setLength(str.length() - 2);
+      }
+      log.debug("Num buckets assigned per partition: {}", str);
     }
   }
 
