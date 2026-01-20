@@ -126,6 +126,15 @@ public class HoodieFlinkWriteClient<T>
   }
 
   /**
+   * Stop the commit in metadata table with given instant.
+   *
+   * @param instantTime The instant that triggers the metadata writes.
+   */
+  public void stopCommitForMetadataTable(String instantTime) {
+    this.streamingMetadataWriteHandler.stopCommit(instantTime);
+  }
+
+  /**
    * Performs streaming write operations to metadata partitions.
    * This method retrieves the metadata writer for the given instant time and table,
    * validates that it exists, and then performs streaming writes of index records.

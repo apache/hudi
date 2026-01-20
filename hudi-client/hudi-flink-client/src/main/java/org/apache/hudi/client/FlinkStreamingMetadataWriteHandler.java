@@ -25,11 +25,14 @@ import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.table.HoodieTable;
 
+import lombok.extern.slf4j.Slf4j;
+
 import java.util.Set;
 
 /**
  * Class to assist with streaming writes to metadata table.
  */
+@Slf4j
 public class FlinkStreamingMetadataWriteHandler extends StreamingMetadataWriteHandler {
   @Override
   public HoodieData<WriteStatus> streamWriteToMetadataTable(HoodieTable table,
@@ -75,6 +78,19 @@ public class FlinkStreamingMetadataWriteHandler extends StreamingMetadataWriteHa
     ValidationUtils.checkState(metadataWriterOpt.isPresent(), "Should not be reachable. Metadata Writer should have been instantiated by now");
     // start the commit in metadata table.
     metadataWriterOpt.get().startCommit(instantTime);
+  }
+
+  /**
+   * Stop Commit Hook. Derived classes use this method to perform post-commit processing
+   *
+   * @param instantTime Instant Time
+   */
+  public void stopCommit(String instantTime) {
+    Option<HoodieTableMetadataWriter> metadataWriterOpt = this.metadataWriterMap.get(instantTime);
+    if (metadataWriterOpt.isEmpty()) {
+      log.warn("Metadata writer for {} has not been initialized, no need to stop heartbeat.", instantTime);
+    }
+    metadataWriterOpt.get().stopCommit(instantTime);
   }
 
   /**

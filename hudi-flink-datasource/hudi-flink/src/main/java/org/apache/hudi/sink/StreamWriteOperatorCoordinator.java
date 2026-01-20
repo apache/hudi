@@ -131,6 +131,8 @@ public class StreamWriteOperatorCoordinator
    */
   protected final Context context;
 
+  private final boolean isStreamingIndexWriteEnabled;
+
   /**
    * Gateways for sending events to sub-tasks.
    */
@@ -215,6 +217,7 @@ public class StreamWriteOperatorCoordinator
     this.parallelism = context.currentParallelism();
     this.indexWriteParallelism = OptionsResolver.isStreamingIndexWriteEnabled(conf) ? conf.get(FlinkOptions.INDEX_WRITE_TASKS) : 0;
     this.storageConf = HadoopFSUtils.getStorageConfWithCopy(HadoopConfigurations.getHiveConf(conf));
+    this.isStreamingIndexWriteEnabled = OptionsResolver.isStreamingIndexWriteEnabled(conf);
   }
 
   @Override
@@ -496,7 +499,7 @@ public class StreamWriteOperatorCoordinator
     this.instant = this.writeClient.startCommit(tableState.commitAction, this.metaClient);
     this.metaClient.getActiveTimeline().transitionRequestedToInflight(tableState.commitAction, this.instant);
     // start commit for MDT if streaming writes to MDT is enabled
-    if (OptionsResolver.isStreamingIndexWriteEnabled(conf)) {
+    if (isStreamingIndexWriteEnabled) {
       this.writeClient.startCommitForMetadataTable(this.instant, this.writeClient.getHoodieTable());
     }
     this.writeClient.setWriteTimer(tableState.commitAction);
@@ -591,6 +594,10 @@ public class StreamWriteOperatorCoordinator
       this.eventBuffers.reset(checkpointId);
       // stop the heart beat for lazy cleaning
       writeClient.getHeartbeatClient().stop(instant);
+      // stop the heartbeat for metadata table instant if streaming index write is enabled
+      if (isStreamingIndexWriteEnabled) {
+        writeClient.stopCommitForMetadataTable(instant);
+      }
       return false;
     }
 
@@ -611,7 +618,10 @@ public class StreamWriteOperatorCoordinator
       this.eventBuffers.reset(checkpointId);
       // stop the heart beat for lazy cleaning
       writeClient.getHeartbeatClient().stop(instant);
-      // todo stop heart beat for mdt instant?
+      // stop the heartbeat for metadata table instant if streaming index write is enabled
+      if (isStreamingIndexWriteEnabled) {
+        writeClient.stopCommitForMetadataTable(instant);
+      }
       return false;
     }
     doCommit(checkpointId, instant, dataWriteResults, indexWriteResults);
