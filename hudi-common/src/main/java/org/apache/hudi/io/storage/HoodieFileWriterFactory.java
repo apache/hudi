@@ -83,6 +83,8 @@ public class HoodieFileWriterFactory {
     switch (format) {
       case PARQUET:
         return newParquetFileWriter(outputStream, config, schema);
+      case LANCE:
+        return newLanceFileWriter(null, null, config, schema, null);
       default:
         throw new UnsupportedOperationException(format + " format not supported yet.");
     }
