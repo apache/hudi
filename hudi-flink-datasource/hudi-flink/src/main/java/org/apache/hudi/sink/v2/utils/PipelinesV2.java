@@ -135,7 +135,7 @@ public class PipelinesV2 {
     if (OptionsResolver.needsAsyncCompaction(conf)) {
       // use synchronous compaction for bounded source.
       if (isBounded) {
-        conf.set(FlinkOptions.COMPACTION_ASYNC_ENABLED, false);
+        conf.set(FlinkOptions.COMPACTION_OPERATION_EXECUTE_ASYNC_ENABLED, false);
       }
       return compactV2(conf, pipeline);
     } else {

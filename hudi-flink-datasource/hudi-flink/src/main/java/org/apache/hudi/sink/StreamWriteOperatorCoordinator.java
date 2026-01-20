@@ -129,8 +129,6 @@ public class StreamWriteOperatorCoordinator
    */
   protected final Context context;
 
-  private final boolean isStreamingIndexWriteEnabled;
-
   /**
    * Gateways for sending events to sub-tasks.
    */
@@ -140,6 +138,11 @@ public class StreamWriteOperatorCoordinator
    * Write client.
    */
   private transient HoodieFlinkWriteClient writeClient;
+
+  /**
+   * Write client for the metadata table.
+   */
+  private transient HoodieFlinkWriteClient metadataWriteClient;
 
   /**
    * Meta client.
@@ -209,7 +212,6 @@ public class StreamWriteOperatorCoordinator
     this.context = context;
     this.parallelism = context.currentParallelism();
     this.storageConf = HadoopFSUtils.getStorageConfWithCopy(HadoopConfigurations.getHiveConf(conf));
-    this.isStreamingIndexWriteEnabled = OptionsResolver.isStreamingIndexWriteEnabled(conf);
   }
 
   @Override
@@ -227,6 +229,11 @@ public class StreamWriteOperatorCoordinator
       this.writeClient = FlinkWriteClients.createWriteClient(conf);
       this.writeClient.tryUpgrade(instant, this.metaClient);
       initMetadataTable(this.writeClient);
+
+      if (tableState.scheduleMdtCompaction) {
+        this.metadataWriteClient = StreamerUtil.createMetadataWriteClient(writeClient);
+      }
+
       // start the executor
       this.executor = NonThrownExecutor.builder(log)
           .threadFactory(getThreadFactory("meta-event-handle"))
@@ -267,6 +274,9 @@ public class StreamWriteOperatorCoordinator
     // because the task in the service may send requests to the embedded timeline service.
     if (writeClient != null) {
       writeClient.close();
+    }
+    if (metadataWriteClient != null) {
+      metadataWriteClient.close();
     }
     this.eventBuffers = null;
     if (this.clientIds != null) {
@@ -458,6 +468,11 @@ public class StreamWriteOperatorCoordinator
     if (tableState.scheduleCompaction) {
       CompactionUtil.scheduleCompaction(writeClient, tableState.isDeltaTimeCompaction, committed);
     }
+    // Schedule metadata table compaction after successful commit
+    if (tableState.scheduleMdtCompaction) {
+      // Schedule compaction for the metadata table
+      CompactionUtil.scheduleMetadataCompaction(metadataWriteClient, committed);
+    }
     // if clustering is on, schedule the clustering
     if (tableState.scheduleClustering) {
       ClusteringUtil.scheduleClustering(conf, writeClient, committed);
@@ -491,7 +506,7 @@ public class StreamWriteOperatorCoordinator
     this.instant = this.writeClient.startCommit(tableState.commitAction, this.metaClient);
     this.metaClient.getActiveTimeline().transitionRequestedToInflight(tableState.commitAction, this.instant);
     // start commit for MDT if streaming writes to MDT is enabled
-    if (isStreamingIndexWriteEnabled) {
+    if (tableState.isStreamingIndexWriteEnabled) {
       this.writeClient.startCommitForMetadataTable(this.instant, this.writeClient.getHoodieTable());
     }
     this.writeClient.setWriteTimer(tableState.commitAction);
@@ -725,10 +740,12 @@ public class StreamWriteOperatorCoordinator
     final String commitAction;
     final boolean isOverwrite;
     final boolean scheduleCompaction;
+    final boolean scheduleMdtCompaction;
     final boolean scheduleClustering;
     final boolean syncHive;
     final boolean syncMetadata;
     final boolean isDeltaTimeCompaction;
+    final boolean isStreamingIndexWriteEnabled;
 
     private TableState(Configuration conf) {
       this.operationType = WriteOperationType.fromValue(conf.get(FlinkOptions.OPERATION));
@@ -737,9 +754,11 @@ public class StreamWriteOperatorCoordinator
       this.isOverwrite = WriteOperationType.isOverwrite(this.operationType);
       this.scheduleCompaction = OptionsResolver.needsScheduleCompaction(conf);
       this.scheduleClustering = OptionsResolver.needsScheduleClustering(conf);
+      this.scheduleMdtCompaction = OptionsResolver.needsScheduleMdtCompaction(conf);
       this.syncHive = conf.get(FlinkOptions.HIVE_SYNC_ENABLED);
       this.syncMetadata = conf.get(FlinkOptions.METADATA_ENABLED);
       this.isDeltaTimeCompaction = OptionsResolver.isDeltaTimeCompaction(conf);
+      this.isStreamingIndexWriteEnabled = OptionsResolver.isStreamingIndexWriteEnabled(conf);
     }
 
     public static TableState create(Configuration conf) {
