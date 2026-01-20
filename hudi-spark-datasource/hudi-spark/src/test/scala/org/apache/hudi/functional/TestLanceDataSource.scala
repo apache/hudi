@@ -25,12 +25,13 @@ import org.apache.hudi.common.testutils.HoodieTestUtils
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.testutils.HoodieSparkClientTestBase
 
-import org.apache.spark.sql.{DataFrame, SaveMode, SparkSession}
+import org.apache.spark.sql.{DataFrame, Row, SaveMode, SparkSession}
+import org.apache.spark.sql.types.{DataType, DateType, DecimalType, DoubleType, FloatType, IntegerType, LongType, StringType, StructField, StructType}
 import org.junit.jupiter.api.{AfterEach, BeforeEach}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.junit.jupiter.api.condition.DisabledIfSystemProperty
 import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.EnumSource
+import org.junit.jupiter.params.provider.{EnumSource, MethodSource}
 
 import scala.collection.JavaConverters._
 
@@ -732,6 +733,121 @@ class TestLanceDataSource extends HoodieSparkClientTestBase {
       (3, "Charlie", 35, 92.1, null),
       (4, "David", 28, 89.5, "david@example.com")
     )).toDF("id", "name", "age", "score", "email")
+
+    assertTrue(expectedDf.except(actual).isEmpty)
+    assertTrue(actual.except(expectedDf).isEmpty)
+  }
+
+  @ParameterizedTest
+  @EnumSource(value = classOf[HoodieTableType])
+  def testSchemaEvolutionTypePromotion(tableType: HoodieTableType): Unit = {
+    val tableName = s"test_lance_type_promotion_${tableType.name.toLowerCase}"
+    val tablePath = s"$basePath/$tableName"
+
+    // Write initial data with Integer column
+    val schema1 = StructType(Seq(
+      StructField("id", IntegerType, false),
+      StructField("name", StringType, true),
+      StructField("value", IntegerType, true)  // This will be promoted to Long
+    ))
+    val data1 = Seq(
+      Row(1, "Alice", 100),
+      Row(2, "Bob", 200),
+      Row(3, "Charlie", 300)
+    )
+    val df1 = spark.createDataFrame(spark.sparkContext.parallelize(data1), schema1)
+
+    writeDataframe(tableType, tableName, tablePath, df1, saveMode = SaveMode.Overwrite)
+
+    val fileSchema1 = spark.read.format("hudi").load(tablePath).schema
+    assertEquals(IntegerType, fileSchema1("value").dataType)
+
+    // Write new data with Long column (schema evolution: Int → Long)
+    val schema2 = StructType(Seq(
+      StructField("id", IntegerType, false),
+      StructField("name", StringType, true),
+      StructField("value", LongType, true)
+    ))
+    val data2 = Seq(
+      Row(4, "David", 400L)
+    )
+    val df2 = spark.createDataFrame(spark.sparkContext.parallelize(data2), schema2)
+
+    writeDataframe(tableType, tableName, tablePath, df2, saveMode = SaveMode.Append)
+
+    // Read with Long schema - should cast Int→Long for old records
+    val readDf = spark.read.format("hudi").load(tablePath)
+    val actual = readDf.select("id", "name", "value")
+
+    assertEquals(LongType, actual.schema("value").dataType)
+
+    // Verify data - all values should be Long (including casted ones)
+    val expected = Seq(
+      (1, "Alice", 100L),
+      (2, "Bob", 200L),
+      (3, "Charlie", 300L),
+      (4, "David", 400L)
+    )
+    val expectedDf = spark.createDataFrame(expected).toDF("id", "name", "value")
+
+    assertTrue(expectedDf.except(actual).isEmpty)
+    assertTrue(actual.except(expectedDf).isEmpty)
+  }
+
+  @ParameterizedTest
+  @EnumSource(value = classOf[HoodieTableType])
+  def testSchemaEvolutionFloatToDouble(tableType: HoodieTableType): Unit = {
+    val tableName = s"test_lance_float_to_double_${tableType.name.toLowerCase}"
+    val tablePath = s"$basePath/$tableName"
+
+    // Write initial data with Float column
+    val schema1 = StructType(Seq(
+      StructField("id", IntegerType, false),
+      StructField("name", StringType, true),
+      StructField("value", FloatType, true)
+    ))
+    val data1 = Seq(
+      Row(1, "Alice", 1.5f),
+      Row(2, "Bob", 2.5f),
+      Row(3, "Charlie", 3.5f)
+    )
+    val df1 = spark.createDataFrame(spark.sparkContext.parallelize(data1), schema1)
+
+    // Write with Lance format
+    writeDataframe(tableType, tableName, tablePath, df1, saveMode = SaveMode.Overwrite)
+
+    // Verify file schema has FloatType
+    val fileSchema1 = spark.read.format("hudi").load(tablePath).schema
+    assertEquals(FloatType, fileSchema1("value").dataType)
+
+    // Write new data with Double column (schema evolution: Float → Double)
+    val schema2 = StructType(Seq(
+      StructField("id", IntegerType, false),
+      StructField("name", StringType, true),
+      StructField("value", DoubleType, true)
+    ))
+    val data2 = Seq(
+      Row(4, "David", 4.5)
+    )
+    val df2 = spark.createDataFrame(spark.sparkContext.parallelize(data2), schema2)
+
+    writeDataframe(tableType, tableName, tablePath, df2, saveMode = SaveMode.Append)
+
+    // Read with Double schema - should cast Float→Double for old records
+    val readDf = spark.read.format("hudi").load(tablePath)
+    val actual = readDf.select("id", "name", "value")
+
+    // Verify schema has Double type
+    assertEquals(DoubleType, actual.schema("value").dataType)
+
+    // Verify data - all values should be Double (including casted ones)
+    val expected = Seq(
+      (1, "Alice", 1.5),
+      (2, "Bob", 2.5),
+      (3, "Charlie", 3.5),
+      (4, "David", 4.5)
+    )
+    val expectedDf = spark.createDataFrame(expected).toDF("id", "name", "value")
 
     assertTrue(expectedDf.except(actual).isEmpty)
     assertTrue(actual.except(expectedDf).isEmpty)

@@ -36,7 +36,7 @@ class LanceBasicSchemaEvolution(fileSchema: StructType,
                                 requiredSchema: StructType,
                                 sessionLocalTimeZone: String) {
 
-  val (typeChangeInfo, requestSchema) = LanceFileFormatHelper.buildSchemaChangeInfo(fileSchema, requiredSchema)
+  val (implicitTypeChangeInfo, requestSchema) = LanceFileFormatHelper.buildSchemaChangeInfo(fileSchema, requiredSchema)
 
   /**
    * Get the schema to use when reading the Lance file.
@@ -47,7 +47,7 @@ class LanceBasicSchemaEvolution(fileSchema: StructType,
   def getRequestSchema: StructType = {
     // For Lance, we can only request fields that exist in the file
     val fileFieldNames = fileSchema.fieldNames.toSet
-    StructType(requiredSchema.fields.filter(f => fileFieldNames.contains(f.name)))
+    StructType(requestSchema.fields.filter(f => fileFieldNames.contains(f.name)))
   }
 
   /**
@@ -64,7 +64,8 @@ class LanceBasicSchemaEvolution(fileSchema: StructType,
       schemaUtils.toAttributes(requestSchema),  // what we read (existing fields)
       requiredSchema,                            // what we need (all fields)
       new StructType(),
-      schemaUtils
+      schemaUtils,
+      implicitTypeChangeInfo
     )
   }
 }
