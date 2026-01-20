@@ -30,7 +30,7 @@ import org.junit.jupiter.api.Disabled;
 import static org.apache.hudi.common.config.HoodieCommonConfig.BASE_PATH;
 
 @Disabled("Requires Azurite/Testcontainers-based integration environment (not enabled by default).")
-public class TestADLSGen2StorageBasedLockProvider extends StorageBasedLockProviderTestBase {
+public class TestADLSStorageBasedLockProvider extends StorageBasedLockProviderTestBase {
 
   @BeforeEach
   void setupLockProvider() {
@@ -45,4 +45,3 @@ public class TestADLSGen2StorageBasedLockProvider extends StorageBasedLockProvid
     return new StorageBasedLockProvider(lockConf, HoodieTestUtils.getDefaultStorageConf());
   }
 }
-

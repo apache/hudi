@@ -44,13 +44,13 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Integration tests for {@link ADLSGen2StorageLockClient} using Azurite (Azure Storage emulator).
+ * Integration tests for {@link ADLSStorageLockClient} using Azurite (Azure Storage emulator).
  *
  * <p>Run with: {@code mvn -Pazure-integration-tests -pl hudi-azure verify}
  */
 @Testcontainers(disabledWithoutDocker = true)
 @DisabledIfEnvironmentVariable(named = "SKIP_AZURITE_IT", matches = "true")
-public class ITADLSGen2StorageLockClientAzurite {
+public class ITADLSStorageLockClientAzurite {
 
   private static final DockerImageName AZURITE_IMAGE =
       DockerImageName.parse("mcr.microsoft.com/azure-storage/azurite");
@@ -100,9 +100,9 @@ public class ITADLSGen2StorageLockClientAzurite {
     // The actual endpoint comes from the connection string.
     String lockFileUri = "https://localhost:10000/" + container + "/" + blobPath;
     Properties props = new Properties();
-    props.setProperty(ADLSGen2StorageLockClient.AZURE_CONNECTION_STRING, connectionString());
+    props.setProperty(ADLSStorageLockClient.AZURE_CONNECTION_STRING, connectionString());
 
-    ADLSGen2StorageLockClient owner1 = new ADLSGen2StorageLockClient("owner1", lockFileUri, props);
+    ADLSStorageLockClient owner1 = new ADLSStorageLockClient("owner1", lockFileUri, props);
     StorageLockData lockData1 = new StorageLockData(false, System.currentTimeMillis() + 60_000, "owner1");
     Pair<LockUpsertResult, Option<StorageLockFile>> upsert1 = owner1.tryUpsertLockFile(lockData1, Option.empty());
     assertEquals(LockUpsertResult.SUCCESS, upsert1.getLeft());
@@ -114,7 +114,7 @@ public class ITADLSGen2StorageLockClientAzurite {
     assertTrue(read.getRight().isPresent());
 
     // Wrong ETag should fail with precondition and be mapped to ACQUIRED_BY_OTHERS
-    ADLSGen2StorageLockClient owner2 = new ADLSGen2StorageLockClient("owner2", lockFileUri, props);
+    ADLSStorageLockClient owner2 = new ADLSStorageLockClient("owner2", lockFileUri, props);
     StorageLockFile wrongPrev = new StorageLockFile(lockData1, "\"etag-does-not-match\"");
     StorageLockData lockData2 = new StorageLockData(false, System.currentTimeMillis() + 60_000, "owner2");
     Pair<LockUpsertResult, Option<StorageLockFile>> upsert2 =
@@ -122,4 +122,3 @@ public class ITADLSGen2StorageLockClientAzurite {
     assertEquals(LockUpsertResult.ACQUIRED_BY_OTHERS, upsert2.getLeft());
   }
 }
-

@@ -64,7 +64,7 @@ import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
-public class TestADLSGen2StorageLockClient {
+public class TestADLSStorageLockClient {
 
   private static final String OWNER_ID = "ownerId";
   private static final String LOCK_FILE_URI =
@@ -87,7 +87,7 @@ public class TestADLSGen2StorageLockClient {
   @Mock
   private Logger mockLogger;
 
-  private ADLSGen2StorageLockClient lockClient;
+  private ADLSStorageLockClient lockClient;
 
   @BeforeEach
   void setUp() {
@@ -99,7 +99,7 @@ public class TestADLSGen2StorageLockClient {
     String expectedBlobPath = lockFileUri.replaceFirst("^abfss?://[^/]+/", "");
     when(mockContainerClient.getBlobClient(eq(expectedBlobPath))).thenReturn(mockBlobClient);
 
-    lockClient = new ADLSGen2StorageLockClient(
+    lockClient = new ADLSStorageLockClient(
         OWNER_ID,
         lockFileUri,
         new Properties(),
@@ -312,4 +312,3 @@ public class TestADLSGen2StorageLockClient {
     }
   }
 }
-

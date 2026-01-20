@@ -57,16 +57,26 @@ import java.util.Properties;
 import static java.nio.charset.StandardCharsets.UTF_8;
 
 /**
- * ADLS Gen2 (ABFS/ABFSS) implementation of {@link StorageLockClient} using Azure Blob conditional requests.
+ * Azure Data Lake Storage (ADLS) implementation of {@link StorageLockClient} using Azure Blob conditional requests.
  *
- * <p>Lock semantics match S3/GCS storage lock clients:
- * - Create: conditional write with If-None-Match: *
- * - Update/Renew/Expire: conditional write with If-Match: &lt;etag&gt;
+ * <p>Supports the following URI schemes:
+ * <ul>
+ *   <li>ADLS Gen2: {@code abfs://} and {@code abfss://}</li>
+ *   <li>Azure Blob Storage: {@code wasb://} and {@code wasbs://}</li>
+ * </ul>
  *
- * <p>Expected lock URI format:
+ * 
+ * <ul>
+ *   <li>Create: conditional write with If-None-Match: *</li>
+ *   <li>Update/Renew/Expire: conditional write with If-Match: &lt;etag&gt;</li>
+ * </ul>
+ *
+ * <p>Expected lock URI formats:
  * <ul>
  *   <li>{@code abfs://&lt;container&gt;@&lt;account&gt;.dfs.core.windows.net/&lt;path&gt;}</li>
  *   <li>{@code abfss://&lt;container&gt;@&lt;account&gt;.dfs.core.windows.net/&lt;path&gt;}</li>
+ *   <li>{@code wasb://&lt;container&gt;@&lt;account&gt;.blob.core.windows.net/&lt;path&gt;}</li>
+ *   <li>{@code wasbs://&lt;container&gt;@&lt;account&gt;.blob.core.windows.net/&lt;path&gt;}</li>
  * </ul>
  *
  * <p>Authentication precedence (via {@link Properties}):
@@ -78,7 +88,7 @@ import static java.nio.charset.StandardCharsets.UTF_8;
  */
 @Slf4j
 @ThreadSafe
-public class ADLSGen2StorageLockClient implements StorageLockClient {
+public class ADLSStorageLockClient implements StorageLockClient {
 
   private static final int PRECONDITION_FAILURE_ERROR_CODE = 412;
   private static final int NOT_FOUND_ERROR_CODE = 404;
@@ -100,15 +110,15 @@ public class ADLSGen2StorageLockClient implements StorageLockClient {
    * Constructor used by reflection by {@link org.apache.hudi.client.transaction.lock.StorageBasedLockProvider}.
    *
    * @param ownerId     lock owner id
-   * @param lockFileUri lock file URI (ABFS/ABFSS)
+   * @param lockFileUri lock file URI (abfs/abfss/wasb/wasbs)
    * @param props       properties used to customize/authenticate the Azure client
    */
-  public ADLSGen2StorageLockClient(String ownerId, String lockFileUri, Properties props) {
+  public ADLSStorageLockClient(String ownerId, String lockFileUri, Properties props) {
     this(ownerId, lockFileUri, props, createDefaultBlobServiceClient(), log);
   }
 
   @VisibleForTesting
-  ADLSGen2StorageLockClient(
+  ADLSStorageLockClient(
       String ownerId,
       String lockFileUri,
       Properties props,
@@ -286,7 +296,8 @@ public class ADLSGen2StorageLockClient implements StorageLockClient {
     // BlobServiceClient does not require explicit close. No-op.
   }
 
-  private static AzureLocation parseAzureLocation(String uriString) {
+  @VisibleForTesting
+  static AzureLocation parseAzureLocation(String uriString) {
     try {
       URI uri = new URI(uriString);
       String scheme = uri.getScheme();
@@ -297,8 +308,8 @@ public class ADLSGen2StorageLockClient implements StorageLockClient {
       String authority = uri.getAuthority();
       String path = uri.getPath() == null ? "" : uri.getPath().replaceFirst("/", "");
 
+      // ADLS Gen2: abfs[s]://<container>@<account>.dfs.core.windows.net/<path>
       if ("abfs".equalsIgnoreCase(scheme) || "abfss".equalsIgnoreCase(scheme)) {
-        // abfs[s]://<container>@<account>.dfs.core.windows.net/<path>
         if (authority == null || !authority.contains("@")) {
           throw new IllegalArgumentException("ABFS URI authority must be in the form '<container>@<host>': " + uriString);
         }
@@ -313,8 +324,23 @@ public class ADLSGen2StorageLockClient implements StorageLockClient {
         return new AzureLocation(endpoint, container, path, null);
       }
 
+      // Azure Blob Storage: wasb[s]://<container>@<account>.blob.core.windows.net/<path>
+      if ("wasb".equalsIgnoreCase(scheme) || "wasbs".equalsIgnoreCase(scheme)) {
+        if (authority == null || !authority.contains("@")) {
+          throw new IllegalArgumentException("WASB URI authority must be in the form '<container>@<host>': " + uriString);
+        }
+        String[] parts = authority.split("@", 2);
+        String container = parts[0];
+        String host = parts[1];
+        String endpoint = "https://" + host;
+        if (container.isEmpty() || path.isEmpty()) {
+          throw new IllegalArgumentException("WASB URI must contain container and path: " + uriString);
+        }
+        return new AzureLocation(endpoint, container, path, null);
+      }
+
+      // Direct HTTPS: https://<account>.blob.core.windows.net/<container>/<path>
       if ("https".equalsIgnoreCase(scheme)) {
-        // https://<account>.blob.core.windows.net/<container>/<path>
         if (authority == null || authority.isEmpty()) {
           throw new IllegalArgumentException("HTTPS URI authority missing: " + uriString);
         }
@@ -327,7 +353,8 @@ public class ADLSGen2StorageLockClient implements StorageLockClient {
         return new AzureLocation("https://" + authority, container, blobPath, null);
       }
 
-      throw new IllegalArgumentException("Unsupported scheme for Azure storage lock: " + scheme);
+      throw new IllegalArgumentException("Unsupported scheme for Azure storage lock: " + scheme
+          + ". Supported schemes: abfs, abfss, wasb, wasbs, https");
     } catch (URISyntaxException e) {
       throw new HoodieLockException("Failed to parse Azure URI: " + uriString, e);
     }
