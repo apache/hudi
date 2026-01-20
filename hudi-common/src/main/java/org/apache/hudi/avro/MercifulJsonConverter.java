@@ -49,6 +49,7 @@ import org.apache.avro.LogicalTypes;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericFixed;
 import org.apache.avro.generic.GenericRecord;
+import org.apache.avro.util.Utf8;
 
 import java.io.IOException;
 import java.math.BigDecimal;
@@ -434,7 +435,7 @@ public class MercifulJsonConverter {
     };
   }
 
-  private static JsonFieldProcessor generateStringTypeHandler() {
+  protected JsonFieldProcessor generateStringTypeHandler() {
     return new StringProcessor();
   }
 
@@ -444,10 +445,10 @@ public class MercifulJsonConverter {
     @Override
     public Pair<Boolean, Object> convert(Object value, String name, HoodieSchema schema) {
       if (value instanceof String) {
-        return Pair.of(true, value);
+        return Pair.of(true, new Utf8((String) value));
       } else {
         try {
-          return Pair.of(true, STRING_MAPPER.writeValueAsString(value));
+          return Pair.of(true, new Utf8(STRING_MAPPER.writeValueAsString(value)));
         } catch (IOException ex) {
           return Pair.of(false, null);
         }
