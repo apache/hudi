@@ -662,8 +662,10 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     new HoodieDeltaStreamer(cfg, jsc).sync();
     assertRecordCount(1000, tableBasePath, sqlContext);
     TestHelpers.assertCommitMetadata("00000", tableBasePath, fs, 1);
-    TableSchemaResolver tableSchemaResolver = new TableSchemaResolver(
-        HoodieTestUtils.init(hadoopConf, tableBasePath));
+    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder()
+        .setBasePath(cfg.targetBasePath)
+        .setConf(new Configuration()).build();
+    TableSchemaResolver tableSchemaResolver = new TableSchemaResolver(metaClient);
     Schema tableSchema = tableSchemaResolver.getTableAvroSchema(false);
     assertEquals("timestamp-millis", tableSchema.getField("current_ts").schema().getLogicalType().getName());
     assertEquals(1000, sparkSession.read().options(hudiOpts).format("org.apache.hudi").load(tableBasePath).filter("current_ts > '1980-01-01'").count());
@@ -679,8 +681,6 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     new HoodieDeltaStreamer(cfg, jsc).sync();
     assertRecordCount(1450, tableBasePath, sqlContext);
     TestHelpers.assertCommitMetadata("00001", tableBasePath, fs, 2);
-    tableSchemaResolver = new TableSchemaResolver(
-        HoodieTestUtils.init(hadoopConf, tableBasePath));
     tableSchema = tableSchemaResolver.getTableAvroSchema(false);
     assertEquals("timestamp-millis", tableSchema.getField("current_ts").schema().getLogicalType().getName());
     sqlContext.clearCache();
@@ -717,8 +717,10 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
       new HoodieDeltaStreamer(cfg, jsc).sync();
       assertRecordCount(1000, tableBasePath, sqlContext);
       TestHelpers.assertCommitMetadata("00000", tableBasePath, fs, 1);
-      TableSchemaResolver tableSchemaResolver = new TableSchemaResolver(
-          HoodieTestUtils.init(hadoopConf, tableBasePath));
+      HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder()
+          .setBasePath(cfg.targetBasePath)
+          .setConf(new Configuration()).build();
+      TableSchemaResolver tableSchemaResolver = new TableSchemaResolver(metaClient);
       Schema tableSchema = tableSchemaResolver.getTableAvroSchema(false);
       Map<String, String> hudiOpts = new HashMap<>();
       hudiOpts.put("hoodie.datasource.write.recordkey.field", "id");
@@ -733,8 +735,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
       new HoodieDeltaStreamer(cfg, jsc).sync();
       assertRecordCount(1450, tableBasePath, sqlContext);
       TestHelpers.assertCommitMetadata("00001", tableBasePath, fs, 2);
-      tableSchemaResolver = new TableSchemaResolver(
-          HoodieTestUtils.init(hadoopConf, tableBasePath));
+      tableSchemaResolver = new TableSchemaResolver(metaClient);
       tableSchema = tableSchemaResolver.getTableAvroSchema(false);
       logicalAssertions(tableSchema, tableBasePath, hudiOpts, HoodieTableVersion.current().versionCode());
     } finally {

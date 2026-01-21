@@ -100,6 +100,7 @@
     <fasterxml.jackson.dataformat.yaml.version>${fasterxml.spark3.version}</fasterxml.jackson.dataformat.yaml.version>
     <kafka.version>2.0.0</kafka.version>
     <kafka.spark3.version>2.8.0</kafka.spark3.version>
+    <kafka.spark34.version>3.0.0</kafka.spark34.version>
     <pulsar.version>2.8.1</pulsar.version>
     <pulsar.spark.version>${pulsar.spark.scala12.version}</pulsar.spark.version>
     <pulsar.spark.scala11.version>2.4.5</pulsar.spark.scala11.version>
@@ -2627,7 +2628,7 @@
         <hudi.spark.common.modules.1>hudi-spark3-common</hudi.spark.common.modules.1>
         <hudi.spark.common.modules.2>hudi-spark3.2plus-common</hudi.spark.common.modules.2>
         <scalatest.version>${scalatest.spark3.version}</scalatest.version>
-        <kafka.version>${kafka.spark3.version}</kafka.version>
+        <kafka.version>${kafka.spark34.version}</kafka.version>
         <hive.version>2.3.10</hive.version>
         <hive.storage.version>2.8.1</hive.storage.version>
         <!-- NOTE: Some Hudi modules require standalone Parquet/Orc/etc file-format dependency (hudi-hive-sync,

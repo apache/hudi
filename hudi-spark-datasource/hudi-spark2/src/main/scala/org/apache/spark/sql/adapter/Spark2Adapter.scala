@@ -25,7 +25,6 @@ import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.{AvroConversionUtils, DefaultSource, Spark2HoodieFileScanRDD, Spark2RowSerDe}
 import org.apache.hudi.client.utils.SparkRowSerDe
 import org.apache.hudi.common.table.HoodieTableMetaClient
-import org.apache.hudi.storage.{HoodieStorage, StoragePath}
 import org.apache.hudi.{AvroConversionUtils, DefaultSource, Spark2HoodieFileScanRDD, Spark2RowSerDe}
 
 import org.apache.avro.Schema
@@ -235,7 +234,7 @@ class Spark2Adapter extends SparkAdapter {
     batch
   }
 
-  override def getReaderSchemas(storage: HoodieStorage, readerSchema: Schema, requestedSchema: Schema, fileSchema: MessageType):
+  override def getReaderSchemas(conf: Configuration, readerSchema: Schema, requestedSchema: Schema, fileSchema: MessageType):
   org.apache.hudi.common.util.collection.Pair[StructType, StructType] = {
     org.apache.hudi.common.util.collection.Pair.of(
       HoodieInternalRowUtils.getCachedSchema(readerSchema),
