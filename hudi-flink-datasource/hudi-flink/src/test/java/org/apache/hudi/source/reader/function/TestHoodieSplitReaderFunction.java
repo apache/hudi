@@ -38,9 +38,9 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 /**
- * Test cases for {@link MergeOnReadSplitReaderFunction}.
+ * Test cases for {@link HoodieSplitReaderFunction}.
  */
-public class TestMergeOnReadSplitReaderFunction {
+public class TestHoodieSplitReaderFunction {
 
   private HoodieTable<RowData, ?, ?, ?> mockTable;
   private HoodieReaderContext<RowData> mockReaderContext;
@@ -66,7 +66,7 @@ public class TestMergeOnReadSplitReaderFunction {
   public void testConstructorValidatesTableSchema() {
     // Test that constructor requires non-null tableSchema
     assertThrows(IllegalArgumentException.class, () -> {
-      new MergeOnReadSplitReaderFunction<>(
+      new HoodieSplitReaderFunction<>(
           mockTable,
           mockReaderContext,
           new Configuration(),
@@ -82,7 +82,7 @@ public class TestMergeOnReadSplitReaderFunction {
   public void testConstructorValidatesRequiredSchema() {
     // Test that constructor requires non-null requiredSchema
     assertThrows(IllegalArgumentException.class, () -> {
-      new MergeOnReadSplitReaderFunction<>(
+      new HoodieSplitReaderFunction<>(
           mockTable,
           mockReaderContext,
           new Configuration(),
@@ -97,8 +97,8 @@ public class TestMergeOnReadSplitReaderFunction {
   @Test
   public void testConstructorWithValidParameters() {
     // Should not throw exception with valid parameters
-    MergeOnReadSplitReaderFunction<?, ?, ?> function =
-        new MergeOnReadSplitReaderFunction<>(
+    HoodieSplitReaderFunction<?, ?, ?> function =
+        new HoodieSplitReaderFunction<>(
             mockTable,
             mockReaderContext,
             new Configuration(),
@@ -115,8 +115,8 @@ public class TestMergeOnReadSplitReaderFunction {
   public void testConstructorWithInternalSchema() {
     InternalSchema internalSchema = mock(InternalSchema.class);
 
-    MergeOnReadSplitReaderFunction<?, ?, ?> function =
-        new MergeOnReadSplitReaderFunction<>(
+    HoodieSplitReaderFunction<?, ?, ?> function =
+        new HoodieSplitReaderFunction<>(
             mockTable,
             mockReaderContext,
             new Configuration(),
@@ -131,8 +131,8 @@ public class TestMergeOnReadSplitReaderFunction {
 
   @Test
   public void testClosedReaderIsNull() throws Exception {
-    MergeOnReadSplitReaderFunction<?, ?, ?> function =
-        new MergeOnReadSplitReaderFunction<>(
+    HoodieSplitReaderFunction<?, ?, ?> function =
+        new HoodieSplitReaderFunction<>(
             mockTable,
             mockReaderContext,
             new Configuration(),
@@ -156,8 +156,8 @@ public class TestMergeOnReadSplitReaderFunction {
     };
 
     for (String mergeType : mergeTypes) {
-      MergeOnReadSplitReaderFunction<?, ?, ?> function =
-          new MergeOnReadSplitReaderFunction<>(
+      HoodieSplitReaderFunction<?, ?, ?> function =
+          new HoodieSplitReaderFunction<>(
               mockTable,
               mockReaderContext,
               new Configuration(),
@@ -173,8 +173,8 @@ public class TestMergeOnReadSplitReaderFunction {
 
   @Test
   public void testMultipleCloseCalls() throws Exception {
-    MergeOnReadSplitReaderFunction<?, ?, ?> function =
-        new MergeOnReadSplitReaderFunction<>(
+    HoodieSplitReaderFunction<?, ?, ?> function =
+        new HoodieSplitReaderFunction<>(
             mockTable,
             mockReaderContext,
             new Configuration(),
@@ -195,8 +195,8 @@ public class TestMergeOnReadSplitReaderFunction {
     HoodieSchema customTableSchema = mock(HoodieSchema.class);
     HoodieSchema customRequiredSchema = mock(HoodieSchema.class);
 
-    MergeOnReadSplitReaderFunction<?, ?, ?> function =
-        new MergeOnReadSplitReaderFunction<>(
+    HoodieSplitReaderFunction<?, ?, ?> function =
+        new HoodieSplitReaderFunction<>(
             mockTable,
             mockReaderContext,
             new Configuration(),
@@ -215,8 +215,8 @@ public class TestMergeOnReadSplitReaderFunction {
     InternalSchema internalSchema2 = mock(InternalSchema.class);
 
     // Test with present internal schema
-    MergeOnReadSplitReaderFunction<?, ?, ?> function1 =
-        new MergeOnReadSplitReaderFunction<>(
+    HoodieSplitReaderFunction<?, ?, ?> function1 =
+        new HoodieSplitReaderFunction<>(
             mockTable,
             mockReaderContext,
             new Configuration(),
@@ -228,8 +228,8 @@ public class TestMergeOnReadSplitReaderFunction {
     assertNotNull(function1);
 
     // Test with different internal schema
-    MergeOnReadSplitReaderFunction<?, ?, ?> function2 =
-        new MergeOnReadSplitReaderFunction<>(
+    HoodieSplitReaderFunction<?, ?, ?> function2 =
+        new HoodieSplitReaderFunction<>(
             mockTable,
             mockReaderContext,
             new Configuration(),
@@ -241,8 +241,8 @@ public class TestMergeOnReadSplitReaderFunction {
     assertNotNull(function2);
 
     // Test with empty internal schema
-    MergeOnReadSplitReaderFunction<?, ?, ?> function3 =
-        new MergeOnReadSplitReaderFunction<>(
+    HoodieSplitReaderFunction<?, ?, ?> function3 =
+        new HoodieSplitReaderFunction<>(
             mockTable,
             mockReaderContext,
             new Configuration(),
@@ -262,8 +262,8 @@ public class TestMergeOnReadSplitReaderFunction {
 
     when(customTable.getMetaClient()).thenReturn(customMetaClient);
 
-    MergeOnReadSplitReaderFunction<?, ?, ?> function =
-        new MergeOnReadSplitReaderFunction<>(
+    HoodieSplitReaderFunction<?, ?, ?> function =
+        new HoodieSplitReaderFunction<>(
             customTable,
             mockReaderContext,
             new Configuration(),
@@ -281,8 +281,8 @@ public class TestMergeOnReadSplitReaderFunction {
     // Test with different reader contexts
     HoodieReaderContext<RowData> customContext = mock(HoodieReaderContext.class);
 
-    MergeOnReadSplitReaderFunction<?, ?, ?> function =
-        new MergeOnReadSplitReaderFunction<>(
+    HoodieSplitReaderFunction<?, ?, ?> function =
+        new HoodieSplitReaderFunction<>(
             mockTable,
             customContext,
             new Configuration(),
@@ -300,8 +300,8 @@ public class TestMergeOnReadSplitReaderFunction {
     Configuration config = new Configuration();
     config.setString("test.key", "test.value");
 
-    MergeOnReadSplitReaderFunction<?, ?, ?> function =
-        new MergeOnReadSplitReaderFunction<>(
+    HoodieSplitReaderFunction<?, ?, ?> function =
+        new HoodieSplitReaderFunction<>(
             mockTable,
             mockReaderContext,
             config,
@@ -317,8 +317,8 @@ public class TestMergeOnReadSplitReaderFunction {
   @Test
   public void testReadMethodSignature() {
     // Verify that the read method returns CloseableIterator
-    MergeOnReadSplitReaderFunction<?, ?, ?> function =
-        new MergeOnReadSplitReaderFunction<>(
+    HoodieSplitReaderFunction<?, ?, ?> function =
+        new HoodieSplitReaderFunction<>(
             mockTable,
             mockReaderContext,
             new Configuration(),

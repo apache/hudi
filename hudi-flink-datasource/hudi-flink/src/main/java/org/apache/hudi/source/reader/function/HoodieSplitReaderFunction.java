@@ -47,9 +47,9 @@ import java.util.Collections;
 import java.util.stream.Collectors;
 
 /**
- * Reader function implementation for Merge On Read table.
+ * Default reader function implementation for both MOR and COW tables.
  */
-public class MergeOnReadSplitReaderFunction<I, K, O> implements SplitReaderFunction<RowData> {
+public class HoodieSplitReaderFunction<I, K, O> implements SplitReaderFunction<RowData> {
   private final HoodieTable<RowData, I, K, O> hoodieTable;
   private final HoodieReaderContext<RowData> readerContext;
   private final HoodieSchema tableSchema;
@@ -59,7 +59,7 @@ public class MergeOnReadSplitReaderFunction<I, K, O> implements SplitReaderFunct
   private final TypedProperties props;
   private HoodieFileGroupReader<RowData> fileGroupReader;
 
-  public MergeOnReadSplitReaderFunction(
+  public HoodieSplitReaderFunction(
       HoodieTable<RowData, I, K, O> hoodieTable,
       HoodieReaderContext<RowData> readerContext,
       Configuration configuration,
