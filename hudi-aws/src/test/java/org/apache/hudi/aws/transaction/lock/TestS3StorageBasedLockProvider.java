@@ -24,7 +24,6 @@ import org.apache.hudi.client.transaction.lock.StorageBasedLockProviderTestBase;
 import org.apache.hudi.client.transaction.lock.StorageBasedLockProvider;
 import org.apache.hudi.common.config.LockConfiguration;
 import org.apache.hudi.config.HoodieAWSConfig;
-import org.apache.hudi.storage.StorageConfiguration;
 
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
@@ -115,7 +114,7 @@ public class TestS3StorageBasedLockProvider extends StorageBasedLockProviderTest
       });
       return new StorageBasedLockProvider(
           lockConf,
-          (StorageConfiguration<?>) null);
+          (Configuration<?>) null);
     }
   }
 
