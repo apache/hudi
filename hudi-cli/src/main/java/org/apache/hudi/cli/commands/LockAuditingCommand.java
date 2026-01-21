@@ -22,8 +22,8 @@ import org.apache.hudi.cli.HoodieCLI;
 import org.apache.hudi.client.transaction.lock.audit.StorageLockProviderAuditService;
 import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
-import org.apache.hudi.storage.StoragePathInfo;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
@@ -204,8 +204,8 @@ public class LockAuditingCommand {
       String jsonContent = OBJECT_MAPPER.writeValueAsString(configJson);
       
       // Write the config file using HoodieStorage
-      StoragePath configPath = new StoragePath(auditConfigPath);
-      try (OutputStream outputStream = HoodieCLI.storage.create(configPath, true)) {
+      Path configPath = new Path(auditConfigPath);
+      try (OutputStream outputStream = HoodieCLI.fs.create(configPath, true)) {
         outputStream.write(jsonContent.getBytes());
       }
       
@@ -237,11 +237,11 @@ public class LockAuditingCommand {
     try {
       // Create the audit config file path
       String auditConfigPath = StorageLockProviderAuditService.getAuditConfigPath(HoodieCLI.basePath);
-      StoragePath configPath = new StoragePath(auditConfigPath);
+      Path configPath = new Path(auditConfigPath);
 
       // Check if config file exists by attempting to get its info
       try {
-        HoodieCLI.storage.getPathInfo(configPath);
+        HoodieCLI.fs.exists(configPath);
       } catch (FileNotFoundException e) {
         return "Lock audit is already disabled (no configuration file found).";
       }
@@ -252,7 +252,7 @@ public class LockAuditingCommand {
       String jsonContent = OBJECT_MAPPER.writeValueAsString(configJson);
 
       // Write the config file
-      try (OutputStream outputStream = HoodieCLI.storage.create(configPath, true)) {
+      try (OutputStream outputStream = HoodieCLI.fs.create(configPath, true)) {
         outputStream.write(jsonContent.getBytes());
       }
       
@@ -297,11 +297,11 @@ public class LockAuditingCommand {
     try {
       // Create the audit config file path
       String auditConfigPath = StorageLockProviderAuditService.getAuditConfigPath(HoodieCLI.basePath);
-      StoragePath configPath = new StoragePath(auditConfigPath);
+      Path configPath = new Path(auditConfigPath);
 
       // Read and parse the configuration
       String configContent;
-      try (InputStream inputStream = HoodieCLI.storage.open(configPath)) {
+      try (InputStream inputStream = HoodieCLI.fs.open(configPath)) {
         configContent = new String(FileIOUtils.readAsByteArray(inputStream));
       } catch (FileNotFoundException e) {
         return String.format("Lock Audit Status: DISABLED\n"
@@ -344,20 +344,20 @@ public class LockAuditingCommand {
 
     try {
       String auditFolderPath = StorageLockProviderAuditService.getAuditFolderPath(HoodieCLI.basePath);
-      StoragePath auditFolder = new StoragePath(auditFolderPath);
+      Path auditFolder = new Path(auditFolderPath);
 
       // Get all audit files
-      List<StoragePathInfo> allFiles;
+      FileStatus[] allFiles;
       try {
-        allFiles = HoodieCLI.storage.listDirectEntries(auditFolder);
+        allFiles = HoodieCLI.fs.listStatus(auditFolder);
       } catch (FileNotFoundException e) {
         return "Validation Result: PASSED\n"
             + "Transactions Validated: 0\n"
             + "Issues Found: 0\n"
             + "Details: No audit folder found - nothing to validate";
       }
-      List<StoragePathInfo> auditFiles = new ArrayList<>();
-      for (StoragePathInfo pathInfo : allFiles) {
+      List<FileStatus> auditFiles = new ArrayList<>();
+      for (FileStatus pathInfo : allFiles) {
         if (pathInfo.isFile() && pathInfo.getPath().getName().endsWith(".jsonl")) {
           auditFiles.add(pathInfo);
         }
@@ -373,7 +373,7 @@ public class LockAuditingCommand {
       // Parse all audit files into transaction windows
       List<TransactionWindow> windows = new ArrayList<>();
       List<String> parseErrors = new ArrayList<>();
-      for (StoragePathInfo pathInfo : auditFiles) {
+      for (FileStatus pathInfo : auditFiles) {
         Option<TransactionWindow> window = parseAuditFile(pathInfo);
         if (window.isPresent()) {
           windows.add(window.get());
@@ -474,30 +474,30 @@ public class LockAuditingCommand {
    */
   private CleanupResult performAuditCleanup(boolean dryRun, int ageDays) {
     try {
-      if (HoodieCLI.storage == null) {
+      if (HoodieCLI.fs == null) {
         String message = "Storage not initialized.";
         return new CleanupResult(false, 0, 0, 0, message, dryRun);
       }
 
       String auditFolderPath = StorageLockProviderAuditService.getAuditFolderPath(HoodieCLI.basePath);
-      StoragePath auditFolder = new StoragePath(auditFolderPath);
+      Path auditFolder = new Path(auditFolderPath);
 
       // Calculate cutoff timestamp (ageDays ago)
       long cutoffTime = System.currentTimeMillis() - (ageDays * 24L * 60L * 60L * 1000L);
 
       // List all files in audit folder and filter by modification time
-      List<StoragePathInfo> allFiles;
+      FileStatus[] allFiles;
       try {
-        allFiles = HoodieCLI.storage.listDirectEntries(auditFolder);
+        allFiles = HoodieCLI.fs.listStatus(auditFolder);
       } catch (FileNotFoundException e) {
         String message = "No audit folder found - nothing to cleanup.";
         return new CleanupResult(true, 0, 0, 0, message, dryRun);
       }
-      List<StoragePathInfo> auditFiles = new ArrayList<>();
-      List<StoragePathInfo> oldFiles = new ArrayList<>();
+      List<FileStatus> auditFiles = new ArrayList<>();
+      List<FileStatus> oldFiles = new ArrayList<>();
       
       // Filter to get only .jsonl files
-      for (StoragePathInfo pathInfo : allFiles) {
+      for (FileStatus pathInfo : allFiles) {
         if (pathInfo.isFile() && pathInfo.getPath().getName().endsWith(".jsonl")) {
           auditFiles.add(pathInfo);
           if (pathInfo.getModificationTime() < cutoffTime) {
@@ -521,9 +521,9 @@ public class LockAuditingCommand {
         int deletedCount = 0;
         int failedCount = 0;
 
-        for (StoragePathInfo pathInfo : oldFiles) {
+        for (FileStatus pathInfo : oldFiles) {
           try {
-            HoodieCLI.storage.deleteFile(pathInfo.getPath());
+            HoodieCLI.fs.delete(pathInfo.getPath(), false);
             deletedCount++;
           } catch (Exception e) {
             failedCount++;
@@ -550,13 +550,13 @@ public class LockAuditingCommand {
   /**
    * Parses an audit file and extracts transaction window information.
    */
-  private Option<TransactionWindow> parseAuditFile(StoragePathInfo pathInfo) {
+  private Option<TransactionWindow> parseAuditFile(FileStatus pathInfo) {
     String filename = pathInfo.getPath().getName();
 
     try {
       // Read and parse JSONL content
       List<AuditRecord> entries = new ArrayList<>();
-      try (InputStream inputStream = HoodieCLI.storage.open(pathInfo.getPath());
+      try (InputStream inputStream = HoodieCLI.fs.open(pathInfo.getPath());
            BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream))) {
         String line;
         while ((line = reader.readLine()) != null) {

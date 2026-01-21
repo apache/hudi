@@ -18,8 +18,6 @@
 package org.apache.spark.sql.hudi.procedure
 
 import org.apache.hudi.client.transaction.lock.audit.StorageLockProviderAuditService
-import org.apache.hudi.storage.StoragePath
-import org.apache.hudi.testutils.HoodieClientTestUtils
 
 import java.io.File
 import java.nio.file.{Files, Path, Paths}

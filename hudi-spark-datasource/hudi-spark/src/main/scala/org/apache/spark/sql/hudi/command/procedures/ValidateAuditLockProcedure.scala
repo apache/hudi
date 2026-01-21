@@ -18,17 +18,17 @@
 package org.apache.spark.sql.hudi.command.procedures
 
 import org.apache.hudi.client.transaction.lock.audit.StorageLockProviderAuditService
-import org.apache.hudi.storage.{StoragePath, StoragePathInfo}
 import org.apache.hudi.util.JFunction
 
-import com.fasterxml.jackson.databind.{JsonNode, ObjectMapper}
+import org.apache.hadoop.fs.{Path, FileStatus}
+
+import com.fasterxml.jackson.databind.ObjectMapper
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
 
 import java.io.FileNotFoundException
 import java.util.function.Supplier
 
-import scala.collection.JavaConverters._
 import scala.collection.mutable
 import scala.util.{Failure, Success, Try}
 
@@ -116,12 +116,12 @@ class ValidateAuditLockProcedure extends BaseProcedure with ProcedureBuilder {
     val displayName = tableName.map(_.asInstanceOf[String]).getOrElse(tablePath.get.asInstanceOf[String])
 
     try {
-      val auditFolderPath = new StoragePath(StorageLockProviderAuditService.getAuditFolderPath(basePath))
-      val storage = metaClient.getStorage
+      val auditFolderPath = new Path(StorageLockProviderAuditService.getAuditFolderPath(basePath))
+      val fs = metaClient.getFs
 
       // Get all audit files
       val allFilesResult = try {
-        Some(storage.listDirectEntries(auditFolderPath).asScala)
+        Some(fs.listStatus(auditFolderPath))
       } catch {
         case _: FileNotFoundException =>
           None
@@ -138,7 +138,7 @@ class ValidateAuditLockProcedure extends BaseProcedure with ProcedureBuilder {
           } else {
 
             // Parse all audit files into transaction windows
-            val parseResults = auditFiles.map(pathInfo => (pathInfo, parseAuditFile(pathInfo, storage)))
+            val parseResults = auditFiles.map(pathInfo => (pathInfo, parseAuditFile(pathInfo, fs)))
             val windows = parseResults.flatMap(_._2).toSeq
             val parseErrors = parseResults.filter(_._2.isEmpty).map(p =>
               s"[ERROR] Failed to parse audit file: ${p._1.getPath.getName}")
@@ -171,12 +171,12 @@ class ValidateAuditLockProcedure extends BaseProcedure with ProcedureBuilder {
   /**
    * Parses an audit file and extracts transaction window information.
    */
-  private def parseAuditFile(pathInfo: StoragePathInfo, storage: org.apache.hudi.storage.HoodieStorage): Option[TransactionWindow] = {
+  private def parseAuditFile(pathInfo: FileStatus, fs: org.apache.hadoop.fs.FileSystem): Option[TransactionWindow] = {
     val filename = pathInfo.getPath.getName
 
     Try {
       // Read and parse JSONL content
-      val inputStream = storage.open(pathInfo.getPath)
+      val inputStream = fs.open(pathInfo.getPath)
       val jsonNodes = try {
         val content = scala.io.Source.fromInputStream(inputStream).mkString
         val lines = content.split('\n').filter(_.trim.nonEmpty)

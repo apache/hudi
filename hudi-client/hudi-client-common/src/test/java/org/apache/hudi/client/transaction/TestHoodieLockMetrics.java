@@ -25,7 +25,6 @@ import org.apache.hudi.client.transaction.lock.metrics.HoodieLockMetrics;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.config.metrics.HoodieMetricsConfig;
 import org.apache.hudi.metrics.MetricsReporterType;
-import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.metrics.Metrics;
 
 import com.codahale.metrics.Gauge;
@@ -34,19 +33,17 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.mockito.Mockito.mock;
 
 public class TestHoodieLockMetrics {
 
   @Test
   public void testMetricsHappyPath() {
-    HoodieStorage storage = mock(HoodieStorage.class);
-    HoodieMetricsConfig metricsConfig = HoodieMetricsConfig.newBuilder().withPath("/gdsafsd")
+    HoodieMetricsConfig metricsConfig = HoodieMetricsConfig.newBuilder()
         .withReporterType(MetricsReporterType.INMEMORY.name()).withLockingMetrics(true).build();
     HoodieLockMetrics lockMetrics = new HoodieLockMetrics(HoodieWriteConfig.newBuilder()
         .forTable("idk").withPath("/dsfasdf/asdf")
         .withMetricsConfig(metricsConfig)
-        .build(), storage);
+        .build());
 
     //lock acquired
     assertDoesNotThrow(lockMetrics::startLockApiTimerContext);
@@ -60,13 +57,12 @@ public class TestHoodieLockMetrics {
 
   @Test
   public void testMetricsMisses() {
-    HoodieStorage storage = mock(HoodieStorage.class);
-    HoodieMetricsConfig metricsConfig = HoodieMetricsConfig.newBuilder().withPath("/gdsafsd")
+    HoodieMetricsConfig metricsConfig = HoodieMetricsConfig.newBuilder()
         .withReporterType(MetricsReporterType.INMEMORY.name()).withLockingMetrics(true).build();
     HoodieLockMetrics lockMetrics = new HoodieLockMetrics(HoodieWriteConfig.newBuilder()
         .forTable("idk").withPath("/dsfasdf/asdf")
         .withMetricsConfig(metricsConfig)
-        .build(), storage);
+        .build());
 
     assertDoesNotThrow(lockMetrics::updateLockHeldTimerMetrics);
     assertDoesNotThrow(lockMetrics::updateLockNotAcquiredMetric);
@@ -76,17 +72,16 @@ public class TestHoodieLockMetrics {
   @Test
   public void testLockReleaseSuccessMetric() {
     // Test that lock release success metric is properly tracked
-    HoodieStorage storage = mock(HoodieStorage.class);
-    HoodieMetricsConfig metricsConfig = HoodieMetricsConfig.newBuilder().withPath("/test")
+    HoodieMetricsConfig metricsConfig = HoodieMetricsConfig.newBuilder()
         .withReporterType(MetricsReporterType.INMEMORY.name()).withLockingMetrics(true).build();
     HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder()
         .forTable("testTable").withPath("/test/path")
         .withMetricsConfig(metricsConfig)
         .build();
-    HoodieLockMetrics lockMetrics = new HoodieLockMetrics(writeConfig, storage);
+    HoodieLockMetrics lockMetrics = new HoodieLockMetrics(writeConfig);
 
     // Get the metrics registry to verify counter values
-    Metrics metrics = Metrics.getInstance(metricsConfig, storage);
+    Metrics metrics = Metrics.getInstance(writeConfig);
     MetricRegistry registry = metrics.getRegistry();
 
     // Verify the lock release success counter exists
@@ -109,17 +104,16 @@ public class TestHoodieLockMetrics {
   @Test
   public void testLockLifecycleWithReleaseSuccess() {
     // Test complete lock lifecycle including acquisition and successful release
-    HoodieStorage storage = mock(HoodieStorage.class);
-    HoodieMetricsConfig metricsConfig = HoodieMetricsConfig.newBuilder().withPath("/test")
+    HoodieMetricsConfig metricsConfig = HoodieMetricsConfig.newBuilder()
         .withReporterType(MetricsReporterType.INMEMORY.name()).withLockingMetrics(true).build();
     HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder()
         .forTable("testTable").withPath("/test/path")
         .withMetricsConfig(metricsConfig)
         .build();
-    HoodieLockMetrics lockMetrics = new HoodieLockMetrics(writeConfig, storage);
+    HoodieLockMetrics lockMetrics = new HoodieLockMetrics(writeConfig);
 
     // Get the metrics registry to verify counter values
-    Metrics metrics = Metrics.getInstance(metricsConfig, storage);
+    Metrics metrics = Metrics.getInstance(writeConfig);
     MetricRegistry registry = metrics.getRegistry();
 
     String acquireMetricName = writeConfig.getMetricReporterMetricsNamePrefix() + "." + HoodieLockMetrics.LOCK_ACQUIRE_SUCCESS_COUNTER_NAME;
@@ -156,13 +150,12 @@ public class TestHoodieLockMetrics {
 
   @Test
   public void testNewErrorMetrics() {
-    HoodieStorage storage = mock(HoodieStorage.class);
-    HoodieMetricsConfig metricsConfig = HoodieMetricsConfig.newBuilder().withPath("/test")
+    HoodieMetricsConfig metricsConfig = HoodieMetricsConfig.newBuilder()
         .withReporterType(MetricsReporterType.INMEMORY.name()).withLockingMetrics(true).build();
     HoodieLockMetrics lockMetrics = new HoodieLockMetrics(HoodieWriteConfig.newBuilder()
             .forTable("idk").withPath("/dsfasdf/asdf")
             .withMetricsConfig(metricsConfig)
-            .build(), storage);
+            .build());
 
     // Test all the new error metrics methods
     assertDoesNotThrow(lockMetrics::updateLockAcquiredByOthersErrorMetric, 
@@ -178,13 +171,12 @@ public class TestHoodieLockMetrics {
   @Test
   public void testNewErrorMetricsWithDisabledMetrics() {
     // Test that the new metrics methods work safely when metrics are disabled
-    HoodieStorage storage = mock(HoodieStorage.class);
-    HoodieMetricsConfig metricsConfig = HoodieMetricsConfig.newBuilder().withPath("/test")
+    HoodieMetricsConfig metricsConfig = HoodieMetricsConfig.newBuilder()
         .withReporterType(MetricsReporterType.INMEMORY.name()).withLockingMetrics(false).build();
     HoodieLockMetrics lockMetrics = new HoodieLockMetrics(HoodieWriteConfig.newBuilder()
             .forTable("idk").withPath("/dsfasdf/asdf")
             .withMetricsConfig(metricsConfig)
-            .build(), storage);
+            .build());
 
     // All methods should be safe to call even when metrics are disabled
     assertDoesNotThrow(lockMetrics::updateLockAcquiredByOthersErrorMetric,
@@ -199,13 +191,12 @@ public class TestHoodieLockMetrics {
 
   @Test
   public void testCombinedMetricsScenario() {
-    HoodieStorage storage = mock(HoodieStorage.class);
-    HoodieMetricsConfig metricsConfig = HoodieMetricsConfig.newBuilder().withPath("/test")
+    HoodieMetricsConfig metricsConfig = HoodieMetricsConfig.newBuilder()
         .withReporterType(MetricsReporterType.INMEMORY.name()).withLockingMetrics(true).build();
     HoodieLockMetrics lockMetrics = new HoodieLockMetrics(HoodieWriteConfig.newBuilder()
             .forTable("idk").withPath("/dsfasdf/asdf")
             .withMetricsConfig(metricsConfig)
-            .build(), storage);
+            .build());
 
     // Test a realistic scenario combining old and new metrics
     assertDoesNotThrow(() -> {
@@ -233,17 +224,16 @@ public class TestHoodieLockMetrics {
 
   @Test
   public void testLockInterruptedMetric() {
-    HoodieStorage storage = mock(HoodieStorage.class);
-    HoodieMetricsConfig metricsConfig = HoodieMetricsConfig.newBuilder().withPath("/test")
+    HoodieMetricsConfig metricsConfig = HoodieMetricsConfig.newBuilder()
         .withReporterType(MetricsReporterType.INMEMORY.name()).withLockingMetrics(true).build();
     HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder()
             .forTable("testTable").withPath("/test/path")
             .withMetricsConfig(metricsConfig)
             .build();
-    HoodieLockMetrics lockMetrics = new HoodieLockMetrics(writeConfig, storage);
+    HoodieLockMetrics lockMetrics = new HoodieLockMetrics(writeConfig);
 
     // Get the metrics registry to verify counter values
-    Metrics metrics = Metrics.getInstance(metricsConfig, storage);
+    Metrics metrics = Metrics.getInstance(writeConfig);
     MetricRegistry registry = metrics.getRegistry();
     String metricName = writeConfig.getMetricReporterMetricsNamePrefix() + "." + HoodieLockMetrics.LOCK_INTERRUPTED_COUNTER_NAME;
 
@@ -269,14 +259,13 @@ public class TestHoodieLockMetrics {
 
   @Test
   public void testLockExpirationDeadlineGauge() {
-    HoodieStorage storage = mock(HoodieStorage.class);
-    HoodieMetricsConfig metricsConfig = HoodieMetricsConfig.newBuilder().withPath("/test")
+    HoodieMetricsConfig metricsConfig = HoodieMetricsConfig.newBuilder()
         .withReporterType(MetricsReporterType.INMEMORY.name()).withLockingMetrics(true).build();
     HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder()
         .forTable("testTable").withPath("/test/path")
         .withMetricsConfig(metricsConfig)
         .build();
-    HoodieLockMetrics lockMetrics = new HoodieLockMetrics(writeConfig, storage);
+    HoodieLockMetrics lockMetrics = new HoodieLockMetrics(writeConfig);
 
     // Test that the method doesn't throw
     assertDoesNotThrow(() -> lockMetrics.updateLockExpirationDeadlineMetric(5000), 
@@ -292,7 +281,7 @@ public class TestHoodieLockMetrics {
     }, "Multiple updateLockExpirationDeadlineMetric calls should not throw");
 
     // Get the metrics registry to verify gauge exists
-    Metrics metrics = Metrics.getInstance(metricsConfig, storage);
+    Metrics metrics = Metrics.getInstance(writeConfig);
     MetricRegistry registry = metrics.getRegistry();
     String metricName = writeConfig.getMetricReporterMetricsNamePrefix() + "." + HoodieLockMetrics.LOCK_EXPIRATION_DEADLINE_COUNTER_NAME;
 
@@ -306,17 +295,16 @@ public class TestHoodieLockMetrics {
 
   @Test
   public void testLockDanglingMetric() {
-    HoodieStorage storage = mock(HoodieStorage.class);
-    HoodieMetricsConfig metricsConfig = HoodieMetricsConfig.newBuilder().withPath("/test")
+    HoodieMetricsConfig metricsConfig = HoodieMetricsConfig.newBuilder()
         .withReporterType(MetricsReporterType.INMEMORY.name()).withLockingMetrics(true).build();
     HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder()
         .forTable("testTable").withPath("/test/path")
         .withMetricsConfig(metricsConfig)
         .build();
-    HoodieLockMetrics lockMetrics = new HoodieLockMetrics(writeConfig, storage);
+    HoodieLockMetrics lockMetrics = new HoodieLockMetrics(writeConfig);
 
     // Get the metrics registry to verify counter values
-    Metrics metrics = Metrics.getInstance(metricsConfig, storage);
+    Metrics metrics = Metrics.getInstance(writeConfig);
     MetricRegistry registry = metrics.getRegistry();
     String metricName = writeConfig.getMetricReporterMetricsNamePrefix() + "." + HoodieLockMetrics.LOCK_DANGLING_COUNTER_NAME;
 
@@ -341,14 +329,13 @@ public class TestHoodieLockMetrics {
 
   @Test
   public void testNewMetricsWithDisabledLocking() {
-    HoodieStorage storage = mock(HoodieStorage.class);
     // Test that the new metrics methods work safely when locking metrics are disabled
-    HoodieMetricsConfig metricsConfig = HoodieMetricsConfig.newBuilder().withPath("/test")
+    HoodieMetricsConfig metricsConfig = HoodieMetricsConfig.newBuilder()
         .withReporterType(MetricsReporterType.INMEMORY.name()).withLockingMetrics(false).build();
     HoodieLockMetrics lockMetrics = new HoodieLockMetrics(HoodieWriteConfig.newBuilder()
         .forTable("testTable").withPath("/test/path")
         .withMetricsConfig(metricsConfig)
-        .build(), storage);
+        .build());
 
     // All new methods should be safe to call even when locking metrics are disabled
     assertDoesNotThrow(lockMetrics::updateLockInterruptedMetric,

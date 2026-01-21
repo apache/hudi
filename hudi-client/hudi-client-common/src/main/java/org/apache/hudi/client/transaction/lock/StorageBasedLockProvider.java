@@ -41,9 +41,9 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.StorageBasedLockConfig;
 import org.apache.hudi.exception.HoodieLockException;
 import org.apache.hudi.exception.HoodieNotSupportedException;
-import org.apache.hudi.storage.StorageConfiguration;
-import org.apache.hudi.storage.StoragePath;
-import org.apache.hudi.storage.StorageSchemes;
+import org.apache.hudi.common.fs.StorageSchemes;
+
+import org.apache.hadoop.fs.Path;
 
 import org.jetbrains.annotations.NotNull;
 import org.slf4j.Logger;
@@ -124,7 +124,7 @@ public class StorageBasedLockProvider implements LockProvider<StorageLockFile> {
    *                          StorageBasedLockConfig
    * @param conf              Storage config, ignored.
    */
-  public StorageBasedLockProvider(final LockConfiguration lockConfiguration, final StorageConfiguration<?> conf) {
+  public StorageBasedLockProvider(final LockConfiguration lockConfiguration, final Configuration conf) {
     this(
         UUID.randomUUID().toString(),
         lockConfiguration.getConfig(),
@@ -143,7 +143,7 @@ public class StorageBasedLockProvider implements LockProvider<StorageLockFile> {
    * @param conf              Storage config, ignored.
    * @param metrics           HoodieLockMetrics instance for metrics collection
    */
-  public StorageBasedLockProvider(final LockConfiguration lockConfiguration, final StorageConfiguration<?> conf, final HoodieLockMetrics metrics) {
+  public StorageBasedLockProvider(final LockConfiguration lockConfiguration, final Configuration conf, final HoodieLockMetrics metrics) {
     this(
         UUID.randomUUID().toString(),
         lockConfiguration.getConfig(),
@@ -151,24 +151,6 @@ public class StorageBasedLockProvider implements LockProvider<StorageLockFile> {
         getStorageLockClientClassName(),
         LOGGER,
         metrics);
-  }
-
-  /**
-   * Default constructor for StorageBasedLockProvider, required by LockManager
-   * to instantiate it using reflection, supports 0.14.1 LP format.
-   *
-   * @param lockConfiguration The lock configuration, should be transformable into
-   *                          StorageBasedLockConfig
-   * @param conf              Storage config, ignored.
-   */
-  public StorageBasedLockProvider(final LockConfiguration lockConfiguration, final Configuration conf) {
-    this(
-            UUID.randomUUID().toString(),
-            lockConfiguration.getConfig(),
-            LockProviderHeartbeatManager::new,
-            getStorageLockClientClassName(),
-            LOGGER,
-        null);
   }
 
   private static Functions.Function3<String, String, TypedProperties, StorageLockClient> getStorageLockClientClassName() {
@@ -206,7 +188,7 @@ public class StorageBasedLockProvider implements LockProvider<StorageLockFile> {
     this.lockValiditySecs = config.getValiditySeconds();
     this.basePath = config.getHudiTableBasePath();
     String lockFolderPath = StorageLockClient.getLockFolderPath(basePath);
-    this.lockFilePath = new StoragePath(lockFolderPath, DEFAULT_TABLE_LOCK_FILE_NAME).toString();
+    this.lockFilePath = new Path(lockFolderPath, DEFAULT_TABLE_LOCK_FILE_NAME).toString();
     this.heartbeatManager = heartbeatManagerLoader.apply(ownerId, TimeUnit.SECONDS.toMillis(heartbeatPollSeconds), this::renewLock);
     this.storageLockClient = storageLockClientLoader.apply(ownerId, lockFilePath, properties);
     this.ownerId = ownerId;

@@ -26,7 +26,8 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieLockException;
-import org.apache.hudi.storage.StoragePath;
+
+import org.apache.hadoop.fs.Path;
 
 import java.net.URI;
 import java.net.URISyntaxException;
@@ -89,7 +90,7 @@ public interface StorageLockClient extends AutoCloseable {
    * @return The lock folder path (e.g., "s3://bucket/table/.hoodie/.locks")
    */
   static String getLockFolderPath(String basePath) {
-    return new StoragePath(basePath, LOCKS_FOLDER_NAME).toString();
+    return new Path(basePath, LOCKS_FOLDER_NAME).toString();
   }
 
   /**
