@@ -22,7 +22,8 @@ import org.apache.hudi.storage.StoragePath
 import org.apache.hudi.testutils.HoodieClientTestUtils
 
 import java.io.File
-import java.nio.file.{Files, Paths}
+import java.nio.file.{Files, Path, Paths}
+import java.util.function.Predicate
 
 /**
  * Test suite for the CleanupAuditLockProcedure Spark SQL procedure.
@@ -100,7 +101,9 @@ class TestCleanupAuditLockProcedure extends HoodieSparkProcedureTestBase {
 
     if (Files.exists(auditDir)) {
       Files.list(auditDir)
-        .filter(_.toString.endsWith(".jsonl"))
+        .filter(new Predicate[Path]{
+          override def test(t: Path): Boolean = t.toString.endsWith(".jsonl")
+        })
         .count()
         .toInt
     } else {

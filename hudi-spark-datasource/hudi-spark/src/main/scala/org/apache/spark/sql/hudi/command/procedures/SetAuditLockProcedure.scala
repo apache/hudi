@@ -21,6 +21,7 @@ import org.apache.hudi.client.transaction.lock.StorageLockClient
 import org.apache.hudi.client.transaction.lock.audit.StorageLockProviderAuditService
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.storage.StoragePath
+import org.apache.hudi.util.JFunction
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.databind.node.ObjectNode
@@ -183,5 +184,5 @@ object SetAuditLockProcedure {
    *
    * @return Supplier that creates new SetAuditLockProcedure instances
    */
-  def builder: Supplier[ProcedureBuilder] = () => new SetAuditLockProcedure()
+  def builder: Supplier[ProcedureBuilder] = JFunction.toJavaSupplier(() => new SetAuditLockProcedure())
 }
