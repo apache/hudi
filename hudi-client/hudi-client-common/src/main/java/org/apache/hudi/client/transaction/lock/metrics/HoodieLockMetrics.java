@@ -22,7 +22,6 @@ import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.metrics.Metrics;
-import org.apache.hudi.storage.HoodieStorage;
 
 import com.codahale.metrics.Counter;
 import com.codahale.metrics.MetricRegistry;
