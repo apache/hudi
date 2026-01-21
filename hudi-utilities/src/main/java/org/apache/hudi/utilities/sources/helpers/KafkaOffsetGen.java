@@ -313,10 +313,15 @@ public class KafkaOffsetGen {
       } else {
         lastCheckpointStr = lastCheckpoint.isPresent() ? Option.of(lastCheckpoint.get().getCheckpointKey()) : Option.empty();
       }
+
+      long kafkaDelayCount = 0L;
+      if (lastCheckpointStr.isPresent() && !lastCheckpointStr.get().isEmpty()) {
+        kafkaDelayCount = delayOffsetCalculation(lastCheckpointStr, topicPartitions, consumer);
+      }
+
       // Determine the offset ranges to read from
       if (lastCheckpointStr.isPresent() && !lastCheckpointStr.get().isEmpty() && checkTopicCheckpoint(lastCheckpointStr)) {
         fromOffsets = fetchValidOffsets(consumer, lastCheckpointStr, topicPartitions);
-        metrics.updateStreamerSourceDelayCount(METRIC_NAME_KAFKA_DELAY_COUNT, delayOffsetCalculation(lastCheckpointStr, topicPartitions, consumer));
       } else {
         switch (autoResetValue) {
           case EARLIEST:
@@ -341,6 +346,9 @@ public class KafkaOffsetGen {
 
       // Obtain the latest offsets.
       toOffsets = consumer.endOffsets(topicPartitions);
+
+      // Always emit the Kafka delay count metric (even when 0)
+      metrics.updateStreamerSourceDelayCount(METRIC_NAME_KAFKA_DELAY_COUNT, kafkaDelayCount);
     }
     return CheckpointUtils.computeOffsetRanges(fromOffsets, toOffsets, numEvents, minPartitions);
   }
