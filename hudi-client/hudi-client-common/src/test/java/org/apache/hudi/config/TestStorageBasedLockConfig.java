@@ -22,7 +22,7 @@ import org.apache.hudi.common.config.TypedProperties;
 
 import org.junit.jupiter.api.Test;
 
-import static org.apache.hudi.common.config.HoodieCommonConfig.BASE_PATH;
+import static org.apache.hudi.config.HoodieWriteConfig.BASE_PATH;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;

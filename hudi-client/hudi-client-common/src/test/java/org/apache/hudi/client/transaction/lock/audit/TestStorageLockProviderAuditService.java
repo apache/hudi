@@ -19,7 +19,8 @@
 package org.apache.hudi.client.transaction.lock.audit;
 
 import org.apache.hudi.client.transaction.lock.StorageLockClient;
-import org.apache.hudi.storage.StoragePath;
+
+import org.apache.hadoop.fs.Path;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
@@ -119,10 +120,10 @@ public class TestStorageLockProviderAuditService {
   private void validateFilePath(String actualPath, String ownerId, long transactionStartTime) {
     String expectedPath = String.format("%s%s.hoodie%s.locks%saudit%s%d_%s.jsonl",
         BASE_PATH,
-        StoragePath.SEPARATOR,
-        StoragePath.SEPARATOR,
-        StoragePath.SEPARATOR,
-        StoragePath.SEPARATOR,
+        Path.SEPARATOR,
+        Path.SEPARATOR,
+        Path.SEPARATOR,
+        Path.SEPARATOR,
         transactionStartTime,
         ownerId);
     assertEquals(expectedPath, actualPath);

@@ -25,7 +25,7 @@ import org.apache.hudi.common.config.TypedProperties;
 
 import java.util.concurrent.TimeUnit;
 
-import static org.apache.hudi.common.config.HoodieCommonConfig.BASE_PATH;
+import static org.apache.hudi.config.HoodieWriteConfig.BASE_PATH;
 
 public class StorageBasedLockConfig extends HoodieConfig {
   private static final String SINCE_VERSION_1_0_2 = "1.0.2";

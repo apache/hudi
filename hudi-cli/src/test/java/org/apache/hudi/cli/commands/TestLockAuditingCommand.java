@@ -25,8 +25,9 @@ import org.apache.hudi.client.transaction.lock.audit.StorageLockProviderAuditSer
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.util.FileIOUtils;
-import org.apache.hudi.storage.StoragePath;
-import org.apache.hudi.storage.StoragePathInfo;
+
+import org.apache.hadoop.fs.FileStatus;
+import org.apache.hadoop.fs.Path;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -36,6 +37,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -87,15 +89,15 @@ public class TestLockAuditingCommand extends CLIFunctionalTestHarness {
    */
   private void createAuditFiles(List<TransactionScenario> scenarios) throws IOException {
     String auditFolderPath = StorageLockProviderAuditService.getAuditFolderPath(HoodieCLI.basePath);
-    StoragePath auditDir = new StoragePath(auditFolderPath);
+    Path auditDir = new Path(auditFolderPath);
 
     // Create audit directory if it doesn't exist
-    if (!HoodieCLI.storage.exists(auditDir)) {
-      HoodieCLI.storage.createDirectory(auditDir);
+    if (!HoodieCLI.fs.exists(auditDir)) {
+      HoodieCLI.fs.mkdirs(auditDir);
     }
 
     for (TransactionScenario scenario : scenarios) {
-      StoragePath filePath = new StoragePath(auditDir, scenario.filename);
+      Path filePath = new Path(auditDir, scenario.filename);
       StringBuilder jsonLines = new StringBuilder();
       for (LockAuditingCommand.AuditRecord record : scenario.records) {
         if (jsonLines.length() > 0) {
@@ -104,7 +106,7 @@ public class TestLockAuditingCommand extends CLIFunctionalTestHarness {
         jsonLines.append(OBJECT_MAPPER.writeValueAsString(record));
       }
 
-      try (OutputStream outputStream = HoodieCLI.storage.create(filePath, true)) {
+      try (OutputStream outputStream = HoodieCLI.fs.create(filePath, true)) {
         outputStream.write(jsonLines.toString().getBytes());
       }
     }
@@ -112,7 +114,7 @@ public class TestLockAuditingCommand extends CLIFunctionalTestHarness {
 
   @BeforeEach
   public void setUp() throws Exception {
-    HoodieCLI.conf = storageConf();
+    HoodieCLI.conf = jsc().hadoopConfiguration();
     String tableName = tableName();
     String tablePath = tablePath(tableName);
     HoodieCLI.basePath = tablePath;
@@ -122,7 +124,7 @@ public class TestLockAuditingCommand extends CLIFunctionalTestHarness {
         .setTableType(HoodieTableType.COPY_ON_WRITE.name())
         .setTableName(tableName)
         .setRecordKeyFields("key")
-        .initTable(storageConf(), tablePath);
+        .initTable(HoodieCLI.conf, tablePath);
         
     // Initialize storage
     HoodieCLI.initFS(true);
@@ -201,14 +203,14 @@ public class TestLockAuditingCommand extends CLIFunctionalTestHarness {
         () -> assertTrue(result.toString().contains("Lock audit enabled successfully")));
 
     // Verify the config file was created with correct content
-    String lockFolderPath = String.format("%s%s.hoodie%s.locks", HoodieCLI.basePath, StoragePath.SEPARATOR, StoragePath.SEPARATOR);
-    String auditConfigPath = String.format("%s%s%s", lockFolderPath, StoragePath.SEPARATOR, StorageLockProviderAuditService.AUDIT_CONFIG_FILE_NAME);
-    StoragePath configPath = new StoragePath(auditConfigPath);
+    String lockFolderPath = String.format("%s%s.hoodie%s.locks", HoodieCLI.basePath, Path.SEPARATOR, Path.SEPARATOR);
+    String auditConfigPath = String.format("%s%s%s", lockFolderPath, Path.SEPARATOR, StorageLockProviderAuditService.AUDIT_CONFIG_FILE_NAME);
+    Path configPath = new Path(auditConfigPath);
     
-    assertTrue(HoodieCLI.storage.exists(configPath), "Config file should exist");
+    assertTrue(HoodieCLI.fs.exists(configPath), "Config file should exist");
     
     String configContent;
-    try (InputStream inputStream = HoodieCLI.storage.open(configPath)) {
+    try (InputStream inputStream = HoodieCLI.fs.open(configPath)) {
       configContent = new String(FileIOUtils.readAsByteArray(inputStream));
     }
     JsonNode rootNode = OBJECT_MAPPER.readTree(configContent);
@@ -259,14 +261,14 @@ public class TestLockAuditingCommand extends CLIFunctionalTestHarness {
     assertTrue(statusDisabledResult.toString().contains("Lock Audit Status: DISABLED"));
 
     // Verify the config file still exists but with audit disabled
-    String lockFolderPath = String.format("%s%s.hoodie%s.locks", HoodieCLI.basePath, StoragePath.SEPARATOR, StoragePath.SEPARATOR);
-    String auditConfigPath = String.format("%s%s%s", lockFolderPath, StoragePath.SEPARATOR, StorageLockProviderAuditService.AUDIT_CONFIG_FILE_NAME);
-    StoragePath configPath = new StoragePath(auditConfigPath);
+    String lockFolderPath = String.format("%s%s.hoodie%s.locks", HoodieCLI.basePath, Path.SEPARATOR, Path.SEPARATOR);
+    String auditConfigPath = String.format("%s%s%s", lockFolderPath, Path.SEPARATOR, StorageLockProviderAuditService.AUDIT_CONFIG_FILE_NAME);
+    Path configPath = new Path(auditConfigPath);
     
-    assertTrue(HoodieCLI.storage.exists(configPath), "Config file should still exist");
+    assertTrue(HoodieCLI.fs.exists(configPath), "Config file should still exist");
     
     String configContent;
-    try (InputStream inputStream = HoodieCLI.storage.open(configPath)) {
+    try (InputStream inputStream = HoodieCLI.fs.open(configPath)) {
       configContent = new String(FileIOUtils.readAsByteArray(inputStream));
     }
     JsonNode rootNode = OBJECT_MAPPER.readTree(configContent);
@@ -334,9 +336,9 @@ public class TestLockAuditingCommand extends CLIFunctionalTestHarness {
 
     // Verify files exist before disable
     String auditFolderPath = StorageLockProviderAuditService.getAuditFolderPath(HoodieCLI.basePath);
-    StoragePath auditFolder = new StoragePath(auditFolderPath);
-    List<StoragePathInfo> filesBefore = HoodieCLI.storage.listDirectEntries(auditFolder);
-    long jsonlFilesBefore = filesBefore.stream()
+    Path auditFolder = new Path(auditFolderPath);
+    FileStatus[] filesBefore = HoodieCLI.fs.listStatus(auditFolder);
+    long jsonlFilesBefore = Arrays.stream(filesBefore)
         .filter(pathInfo -> pathInfo.isFile() && pathInfo.getPath().getName().endsWith(".jsonl"))
         .count();
     assertTrue(jsonlFilesBefore > 0, "Should have audit files before disable");
@@ -387,12 +389,12 @@ public class TestLockAuditingCommand extends CLIFunctionalTestHarness {
     assertTrue(result2.toString().contains("Lock audit enabled successfully"));
 
     // Verify config is still correct
-    String lockFolderPath = String.format("%s%s.hoodie%s.locks", HoodieCLI.basePath, StoragePath.SEPARATOR, StoragePath.SEPARATOR);
-    String auditConfigPath = String.format("%s%s%s", lockFolderPath, StoragePath.SEPARATOR, StorageLockProviderAuditService.AUDIT_CONFIG_FILE_NAME);
-    StoragePath configPath = new StoragePath(auditConfigPath);
+    String lockFolderPath = String.format("%s%s.hoodie%s.locks", HoodieCLI.basePath, Path.SEPARATOR, Path.SEPARATOR);
+    String auditConfigPath = String.format("%s%s%s", lockFolderPath, Path.SEPARATOR, StorageLockProviderAuditService.AUDIT_CONFIG_FILE_NAME);
+    Path configPath = new Path(auditConfigPath);
     
     String configContent;
-    try (InputStream inputStream = HoodieCLI.storage.open(configPath)) {
+    try (InputStream inputStream = HoodieCLI.fs.open(configPath)) {
       configContent = new String(FileIOUtils.readAsByteArray(inputStream));
     }
     JsonNode rootNode = OBJECT_MAPPER.readTree(configContent);
@@ -426,8 +428,8 @@ public class TestLockAuditingCommand extends CLIFunctionalTestHarness {
   public void testValidateAuditLocksNoAuditFiles() throws IOException {
     // Create audit folder but no files
     String auditFolderPath = StorageLockProviderAuditService.getAuditFolderPath(HoodieCLI.basePath);
-    StoragePath auditDir = new StoragePath(auditFolderPath);
-    HoodieCLI.storage.createDirectory(auditDir);
+    Path auditDir = new Path(auditFolderPath);
+    HoodieCLI.fs.mkdirs(auditDir);
     
     Object result = shell.evaluate(() -> "locks audit validate");
     
@@ -665,12 +667,12 @@ public class TestLockAuditingCommand extends CLIFunctionalTestHarness {
   public void testValidateAuditLocksMalformedFiles() throws IOException {
     // Create audit directory
     String auditFolderPath = StorageLockProviderAuditService.getAuditFolderPath(HoodieCLI.basePath);
-    StoragePath auditDir = new StoragePath(auditFolderPath);
-    HoodieCLI.storage.createDirectory(auditDir);
+    Path auditDir = new Path(auditFolderPath);
+    HoodieCLI.fs.mkdirs(auditDir);
     
     // Create a malformed audit file
-    StoragePath filePath = new StoragePath(auditDir, "malformed_file.jsonl");
-    try (OutputStream outputStream = HoodieCLI.storage.create(filePath, true)) {
+    Path filePath = new Path(auditDir, "malformed_file.jsonl");
+    try (OutputStream outputStream = HoodieCLI.fs.create(filePath, true)) {
       outputStream.write("invalid json content".getBytes());
     }
     
@@ -706,8 +708,8 @@ public class TestLockAuditingCommand extends CLIFunctionalTestHarness {
   public void testCleanupAuditLocksNoAuditFiles() throws IOException {
     // Create audit folder but no files
     String auditFolderPath = StorageLockProviderAuditService.getAuditFolderPath(HoodieCLI.basePath);
-    StoragePath auditDir = new StoragePath(auditFolderPath);
-    HoodieCLI.storage.createDirectory(auditDir);
+    Path auditDir = new Path(auditFolderPath);
+    HoodieCLI.fs.mkdirs(auditDir);
     
     Object result = shell.evaluate(() -> "locks audit cleanup");
     
@@ -745,9 +747,9 @@ public class TestLockAuditingCommand extends CLIFunctionalTestHarness {
     
     // Verify files still exist
     String auditFolderPath = StorageLockProviderAuditService.getAuditFolderPath(HoodieCLI.basePath);
-    StoragePath auditFolder = new StoragePath(auditFolderPath);
-    List<StoragePathInfo> filesAfter = HoodieCLI.storage.listDirectEntries(auditFolder);
-    long jsonlFiles = filesAfter.stream()
+    Path auditFolder = new Path(auditFolderPath);
+    FileStatus[] filesAfter = HoodieCLI.fs.listStatus(auditFolder);
+    long jsonlFiles = Arrays.stream(filesAfter)
         .filter(pathInfo -> pathInfo.isFile() && pathInfo.getPath().getName().endsWith(".jsonl"))
         .count();
     assertEquals(1, jsonlFiles, "Files should still exist after dry run");
@@ -917,9 +919,9 @@ public class TestLockAuditingCommand extends CLIFunctionalTestHarness {
 
     // Verify files exist before disable
     String auditFolderPath = StorageLockProviderAuditService.getAuditFolderPath(HoodieCLI.basePath);
-    StoragePath auditFolder = new StoragePath(auditFolderPath);
-    List<StoragePathInfo> filesBefore = HoodieCLI.storage.listDirectEntries(auditFolder);
-    long jsonlFilesBefore = filesBefore.stream()
+    Path auditFolder = new Path(auditFolderPath);
+    FileStatus[] filesBefore = HoodieCLI.fs.listStatus(auditFolder);
+    long jsonlFilesBefore = Arrays.stream(filesBefore)
         .filter(pathInfo -> pathInfo.isFile() && pathInfo.getPath().getName().endsWith(".jsonl"))
         .count();
     assertTrue(jsonlFilesBefore > 0, "Should have audit files before disable");
@@ -934,8 +936,8 @@ public class TestLockAuditingCommand extends CLIFunctionalTestHarness {
         () -> assertTrue(result.toString().contains("cleaned up") || result.toString().contains("No audit files to clean up")));
 
     // Verify files were cleaned up (ageDays=0 should delete all files)
-    List<StoragePathInfo> filesAfter = HoodieCLI.storage.listDirectEntries(auditFolder);
-    long jsonlFilesAfter = filesAfter.stream()
+    FileStatus[] filesAfter = HoodieCLI.fs.listStatus(auditFolder);
+    long jsonlFilesAfter = Arrays.stream(filesAfter)
         .filter(pathInfo -> pathInfo.isFile() && pathInfo.getPath().getName().endsWith(".jsonl"))
         .count();
     assertEquals(0, jsonlFilesAfter, "All audit files should be deleted when ageDays=0");

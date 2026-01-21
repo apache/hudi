@@ -32,7 +32,6 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.StorageBasedLockConfig;
 import org.apache.hudi.exception.HoodieLockException;
-import org.apache.hudi.storage.StorageConfiguration;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -47,7 +46,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import static org.apache.hudi.common.config.HoodieCommonConfig.BASE_PATH;
+import static org.apache.hudi.config.HoodieWriteConfig.BASE_PATH;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -117,7 +116,7 @@ class TestStorageBasedLockProvider {
     props.put(BASE_PATH.key(), "s3://bucket/lake/db/tbl-default");
 
     LockConfiguration lockConf = new LockConfiguration(props);
-    StorageConfiguration<?> storageConf = HoodieTestUtils.getDefaultStorageConf();
+    Configuration storageConf = HoodieTestUtils.getDefaultHadoopConf();
 
     HoodieLockException ex = assertThrows(HoodieLockException.class,
         () -> new StorageBasedLockProvider(lockConf, storageConf));
@@ -147,7 +146,7 @@ class TestStorageBasedLockProvider {
     props.put(BASE_PATH.key(), tableBasePathString);
 
     LockConfiguration lockConf = new LockConfiguration(props);
-    StorageConfiguration<?> storageConf = HoodieTestUtils.getDefaultStorageConf();
+    Configuration storageConf = HoodieTestUtils.getDefaultHadoopConf();
 
     HoodieLockException ex = assertThrows(HoodieLockException.class,
         () -> new StorageBasedLockProvider(lockConf, storageConf));
@@ -676,7 +675,7 @@ class TestStorageBasedLockProvider {
     props.put(StorageBasedLockConfig.RENEW_INTERVAL_SECS.key(), "1");
     props.put(BASE_PATH.key(), "gs://bucket/lake/db/tbl-default");
     LockConfiguration lockConfiguration = new LockConfiguration(props);
-    StorageConfiguration<?> storageConf = HoodieTestUtils.getDefaultStorageConf();
+    Configuration storageConf = HoodieTestUtils.getDefaultHadoopConf();
 
     // Create a mock HoodieLockMetrics object  
     HoodieLockMetrics mockMetrics = mock(HoodieLockMetrics.class);
@@ -722,7 +721,7 @@ class TestStorageBasedLockProvider {
     props.put(StorageBasedLockConfig.RENEW_INTERVAL_SECS.key(), "1");
     props.put(BASE_PATH.key(), "gs://bucket/lake/db/tbl-default");
     LockConfiguration lockConfiguration = new LockConfiguration(props);
-    StorageConfiguration<?> storageConf = HoodieTestUtils.getDefaultStorageConf();
+    Configuration storageConf = HoodieTestUtils.getDefaultHadoopConf();
 
     // Test that standard constructor works by using the internal constructor to avoid scheme issues
     StorageBasedLockProvider lockProviderStandard = null;
