@@ -33,8 +33,7 @@ import org.apache.hudi.internal.schema.action.InternalSchemaMerger
 import org.apache.hudi.internal.schema.utils.{InternalSchemaUtils, SerDeHelper}
 import org.apache.hudi.io.storage.HoodieSparkParquetReader.ENABLE_LOGICAL_TIMESTAMP_REPAIR
 import org.apache.hudi.SparkAdapterSupport.sparkAdapter
-import org.apache.parquet.avro.HoodieAvroParquetSchemaConverter.getAvroSchemaConverter
-
+import org.apache.hudi.common.table.ParquetTableSchemaResolver
 import org.apache.parquet.filter2.compat.FilterCompat
 import org.apache.parquet.filter2.predicate.FilterApi
 import org.apache.parquet.format.converter.ParquetMetadataConverter.SKIP_ROW_GROUPS
@@ -72,7 +71,7 @@ class Spark34LegacyHoodieParquetFileFormat(private val shouldAppendPartitionValu
       HOption.empty()
     } else {
       HOption.ofNullable(
-        getAvroSchemaConverter(new Configuration()).convert(avroTableSchema)
+        ParquetTableSchemaResolver.convertAvroSchemaToParquet(avroTableSchema, new Configuration())
       )
     }
   }

@@ -145,7 +145,7 @@ public class HoodieSparkParquetReader implements HoodieSparkFileReader {
   }
 
   private MessageType getFileSchema() {
-    if (fileSchemaOption.isPresent()) {
+    if (!fileSchemaOption.isPresent()) {
       MessageType messageType = ((ParquetUtils) parquetUtils).readSchema(conf, path);
       fileSchemaOption = Option.of(messageType);
     }
@@ -154,7 +154,7 @@ public class HoodieSparkParquetReader implements HoodieSparkFileReader {
 
   @Override
   public Schema getSchema() {
-    if (schemaOption.isPresent()) {
+    if (!schemaOption.isPresent()) {
       // Some types in avro are not compatible with parquet.
       // Avro only supports representing Decimals as fixed byte array
       // and therefore if we convert to Avro directly we'll lose logical type-info.
@@ -168,7 +168,7 @@ public class HoodieSparkParquetReader implements HoodieSparkFileReader {
   }
 
   protected StructType getStructSchema() {
-    if (structTypeOption.isPresent()) {
+    if (!structTypeOption.isPresent()) {
       MessageType messageType = getFileSchema();
       structTypeOption = Option.of(convertToStruct(messageType));
     }

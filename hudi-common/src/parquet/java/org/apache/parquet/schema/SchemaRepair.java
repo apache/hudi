@@ -27,7 +27,7 @@ import java.util.List;
 public class SchemaRepair {
 
   public static MessageType repairLogicalTypes(MessageType fileSchema, Option<MessageType> tableSchema) {
-    if (tableSchema.isPresent()) {
+    if (!tableSchema.isPresent()) {
       return fileSchema;
     }
     return repairLogicalTypes(fileSchema, tableSchema.get());
