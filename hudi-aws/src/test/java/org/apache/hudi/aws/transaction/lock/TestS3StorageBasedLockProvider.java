@@ -25,6 +25,7 @@ import org.apache.hudi.client.transaction.lock.StorageBasedLockProvider;
 import org.apache.hudi.common.config.LockConfiguration;
 import org.apache.hudi.config.HoodieAWSConfig;
 
+import org.apache.hadoop.conf.Configuration;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -45,7 +46,7 @@ import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 import software.amazon.awssdk.services.s3.model.PutObjectResponse;
 import software.amazon.awssdk.services.s3.model.ServerSideEncryption;
 
-import static org.apache.hudi.common.config.HoodieCommonConfig.BASE_PATH;
+import static org.apache.hudi.config.HoodieWriteConfig.BASE_PATH;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.mockito.Mockito.mockStatic;
@@ -114,7 +115,7 @@ public class TestS3StorageBasedLockProvider extends StorageBasedLockProviderTest
       });
       return new StorageBasedLockProvider(
           lockConf,
-          (Configuration<?>) null);
+          (Configuration) null);
     }
   }
 

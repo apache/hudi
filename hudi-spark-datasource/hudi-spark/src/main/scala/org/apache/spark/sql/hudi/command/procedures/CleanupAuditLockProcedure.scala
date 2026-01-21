@@ -18,15 +18,14 @@
 package org.apache.spark.sql.hudi.command.procedures
 
 import org.apache.hudi.client.transaction.lock.audit.StorageLockProviderAuditService
-import org.apache.hudi.storage.StoragePath
 import org.apache.hudi.util.JFunction
+
+import org.apache.hadoop.fs.Path
 
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
 
 import java.util.function.Supplier
-
-import scala.collection.JavaConverters._
 
 /**
  * Spark SQL procedure for cleaning up old audit lock files for Hudi tables.
@@ -106,11 +105,11 @@ class CleanupAuditLockProcedure extends BaseProcedure with ProcedureBuilder {
     val displayName = tableName.map(_.asInstanceOf[String]).getOrElse(tablePath.get.asInstanceOf[String])
 
     try {
-      val auditFolderPath = new StoragePath(StorageLockProviderAuditService.getAuditFolderPath(basePath))
-      val storage = metaClient.getStorage
+      val auditFolderPath = new Path(StorageLockProviderAuditService.getAuditFolderPath(basePath))
+      val fs = metaClient.getFs
 
       // Check if audit folder exists
-      if (!storage.exists(auditFolderPath)) {
+      if (!fs.exists(auditFolderPath)) {
         val message = "No audit folder found - nothing to cleanup"
         Seq(Row(displayName, 0, dryRun, ageDays, message))
       } else {
@@ -119,7 +118,7 @@ class CleanupAuditLockProcedure extends BaseProcedure with ProcedureBuilder {
         val cutoffTime = System.currentTimeMillis() - (ageDays * 24 * 60 * 60 * 1000L)
 
         // List all files in audit folder and filter by modification time
-        val allFiles = storage.listDirectEntries(auditFolderPath).asScala
+        val allFiles = fs.listStatus(auditFolderPath)
         val auditFiles = allFiles.filter(pathInfo => pathInfo.isFile && pathInfo.getPath.getName.endsWith(".jsonl"))
         val oldFiles = auditFiles.filter(_.getModificationTime < cutoffTime)
 
@@ -140,7 +139,7 @@ class CleanupAuditLockProcedure extends BaseProcedure with ProcedureBuilder {
 
             oldFiles.foreach { pathInfo =>
               try {
-                storage.deleteFile(pathInfo.getPath)
+                fs.delete(pathInfo.getPath, false)
                 deletedCount += 1
               } catch {
                 case e: Exception =>

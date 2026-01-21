@@ -19,8 +19,9 @@ package org.apache.spark.sql.hudi.command.procedures
 
 import org.apache.hudi.client.transaction.lock.audit.StorageLockProviderAuditService
 import org.apache.hudi.common.util.FileIOUtils
-import org.apache.hudi.storage.StoragePath
 import org.apache.hudi.util.JFunction
+
+import org.apache.hadoop.fs.Path
 
 import com.fasterxml.jackson.databind.{JsonNode, ObjectMapper}
 import org.apache.spark.sql.Row
@@ -121,15 +122,15 @@ class ShowAuditLockStatusProcedure extends BaseProcedure with ProcedureBuilder {
    * @return true if audit logging is enabled, false otherwise
    */
   private def checkAuditStatus(metaClient: org.apache.hudi.common.table.HoodieTableMetaClient, basePath: String): Boolean = {
-    val storage = metaClient.getStorage
-    val auditConfigPath = new StoragePath(StorageLockProviderAuditService.getAuditConfigPath(basePath))
+    val fs = metaClient.getFs
+    val auditConfigPath = new Path(StorageLockProviderAuditService.getAuditConfigPath(basePath))
 
-    if (!storage.exists(auditConfigPath)) {
+    if (!fs.exists(auditConfigPath)) {
       false
     } else {
 
       Try {
-        val inputStream = storage.open(auditConfigPath)
+        val inputStream = fs.open(auditConfigPath)
         try {
           val configContent = new String(FileIOUtils.readAsByteArray(inputStream))
           val rootNode: JsonNode = OBJECT_MAPPER.readTree(configContent)

@@ -20,8 +20,9 @@ package org.apache.spark.sql.hudi.command.procedures
 import org.apache.hudi.client.transaction.lock.StorageLockClient
 import org.apache.hudi.client.transaction.lock.audit.StorageLockProviderAuditService
 import org.apache.hudi.common.table.HoodieTableMetaClient
-import org.apache.hudi.storage.StoragePath
 import org.apache.hudi.util.JFunction
+
+import org.apache.hadoop.fs.Path
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.databind.node.ObjectNode
@@ -131,20 +132,20 @@ class SetAuditLockProcedure extends BaseProcedure with ProcedureBuilder {
    * @throws RuntimeException if unable to write the audit configuration
    */
   private def setAuditState(metaClient: HoodieTableMetaClient, basePath: String, enabled: Boolean): Unit = {
-    val storage = metaClient.getStorage
+    val fs = metaClient.getFs
     val lockFolderPath = StorageLockClient.getLockFolderPath(basePath)
-    val auditConfigPath = new StoragePath(StorageLockProviderAuditService.getAuditConfigPath(basePath))
+    val auditConfigPath = new Path(StorageLockProviderAuditService.getAuditConfigPath(basePath))
 
     // Ensure the locks folder exists
-    if (!storage.exists(new StoragePath(lockFolderPath))) {
-      storage.createDirectory(new StoragePath(lockFolderPath))
+    if (!fs.exists(new Path(lockFolderPath))) {
+      fs.mkdirs(new Path(lockFolderPath))
     }
 
     // Create or update the audit configuration file
     val jsonContent = createAuditConfig(enabled)
 
     Try {
-      val outputStream = storage.create(auditConfigPath, true) // overwrite if exists
+      val outputStream = fs.create(auditConfigPath, true) // overwrite if exists
       try {
         outputStream.write(jsonContent.getBytes("UTF-8"))
       } finally {
