@@ -163,7 +163,8 @@ public class StorageBasedLockProvider implements LockProvider<StorageLockFile> {
             lockConfiguration.getConfig(),
             LockProviderHeartbeatManager::new,
             getStorageLockClientClassName(),
-            LOGGER);
+            LOGGER,
+        null);
   }
 
   private static Functions.Function3<String, String, TypedProperties, StorageLockClient> getStorageLockClientClassName() {
