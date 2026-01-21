@@ -33,7 +33,7 @@ import org.junit.jupiter.params.provider.CsvSource
  */
 class TestHoodieSparkSchemaUtils {
 
-  // Shared test schemas
+  // Test schemas
   private val simpleSchema = StructType(
     StructField("id", StringType) ::
       StructField("name", StringType) ::
@@ -72,124 +72,64 @@ class TestHoodieSparkSchemaUtils {
           StructField("inner_field", StringType) :: Nil), containsNull = true)) ::
           StructField("nested_map", MapType(StringType, IntegerType, valueContainsNull = true)) :: Nil)) :: Nil)
 
-  // ===========================================
-  // Simple and Nested Field Tests
-  // ===========================================
-
-  @ParameterizedTest
-  @CsvSource(Array(
-    "id,        id,        string",
-    "name,      name,      string",
-    "count,     count,     int"
-  ))
-  def testSimpleFields(inputPath: String, expectedKey: String, expectedType: String): Unit = {
-    val result = HoodieSchemaUtils.getSchemaForField(simpleSchema, inputPath.trim)
-    assertEquals(expectedKey.trim, result.getKey)
-    assertEquals(expectedType.trim, result.getValue.dataType.simpleString)
+  private def getSchema(name: String): StructType = name match {
+    case "simple" => simpleSchema
+    case "nested" => nestedSchema
+    case "array" => arraySchema
+    case "arrayOfStruct" => arrayOfStructSchema
+    case "map" => mapSchema
+    case "mapOfStruct" => mapOfStructSchema
+    case "complex" => complexSchema
   }
 
   @ParameterizedTest
   @CsvSource(Array(
-    "nested.inner_string,  nested.inner_string,  string",
-    "nested.inner_int,     nested.inner_int,     int"
+    // Simple field tests
+    "simple,       id,                                            id,                                            string",
+    "simple,       name,                                          name,                                          string",
+    "simple,       count,                                         count,                                         int",
+    // Nested struct field tests
+    "nested,       nested.inner_string,                           nested.inner_string,                           string",
+    "nested,       nested.inner_int,                              nested.inner_int,                              int",
+    // Array element access using .list.element
+    "array,        items.list.element,                            items.list.element,                            string",
+    // Array of struct - access nested fields within array elements
+    "arrayOfStruct, items.list.element.nested_int,                items.list.element.nested_int,                 int",
+    "arrayOfStruct, items.list.element.nested_string,             items.list.element.nested_string,              string",
+    // Map key/value access using .key_value.key and .key_value.value
+    "map,          metadata.key_value.key,                        metadata.key_value.key,                        string",
+    "map,          metadata.key_value.value,                      metadata.key_value.value,                      int",
+    // Map of struct - access nested fields within map values
+    "mapOfStruct,  nested_map.key_value.value.nested_int,         nested_map.key_value.value.nested_int,         int",
+    "mapOfStruct,  nested_map.key_value.value.nested_string,      nested_map.key_value.value.nested_string,      string",
+    // Complex nested: struct -> array -> struct
+    "complex,      top.nested_array.list.element.inner_field,     top.nested_array.list.element.inner_field,     string",
+    // Complex nested: struct -> map
+    "complex,      top.nested_map.key_value.key,                  top.nested_map.key_value.key,                  string",
+    "complex,      top.nested_map.key_value.value,                top.nested_map.key_value.value,                int"
   ))
-  def testNestedFields(inputPath: String, expectedKey: String, expectedType: String): Unit = {
-    val result = HoodieSchemaUtils.getSchemaForField(nestedSchema, inputPath.trim)
+  def testGetSchemaForField(schemaName: String, inputPath: String, expectedKey: String, expectedType: String): Unit = {
+    val schema = getSchema(schemaName.trim)
+    val result = HoodieSchemaUtils.getSchemaForField(schema, inputPath.trim)
     assertEquals(expectedKey.trim, result.getKey)
     assertEquals(expectedType.trim, result.getValue.dataType.simpleString)
   }
-
-  // ===========================================
-  // Array Path Tests
-  // ===========================================
-
-  @ParameterizedTest
-  @CsvSource(Array(
-    "items.list.element,       items.list.element,              string"
-  ))
-  def testArrayPath(inputPath: String, expectedKey: String, expectedType: String): Unit = {
-    val result = HoodieSchemaUtils.getSchemaForField(arraySchema, inputPath.trim)
-    assertEquals(expectedKey.trim, result.getKey)
-    assertEquals(expectedType.trim, result.getValue.dataType.simpleString)
-  }
-
-  @ParameterizedTest
-  @CsvSource(Array(
-    "items.list.element.nested_int,    items.list.element.nested_int,           int",
-    "items.list.element.nested_string, items.list.element.nested_string,        string"
-  ))
-  def testNestedArrayPath(inputPath: String, expectedKey: String, expectedType: String): Unit = {
-    val result = HoodieSchemaUtils.getSchemaForField(arrayOfStructSchema, inputPath.trim)
-    assertEquals(expectedKey.trim, result.getKey)
-    assertEquals(expectedType.trim, result.getValue.dataType.simpleString)
-  }
-
-  // ===========================================
-  // Map Navigation Tests
-  // ===========================================
-
-  @ParameterizedTest
-  @CsvSource(Array(
-    "metadata.key_value.key,    metadata.key_value.key,    string",
-    "metadata.key_value.value,  metadata.key_value.value,  int"
-  ))
-  def testMapNavigation(inputPath: String, expectedKey: String, expectedType: String): Unit = {
-    val result = HoodieSchemaUtils.getSchemaForField(mapSchema, inputPath.trim)
-    assertEquals(expectedKey.trim, result.getKey)
-    assertEquals(expectedType.trim, result.getValue.dataType.simpleString)
-  }
-
-  @ParameterizedTest
-  @CsvSource(Array(
-    "nested_map.key_value.value.nested_int,    nested_map.key_value.value.nested_int,    int",
-    "nested_map.key_value.value.nested_string, nested_map.key_value.value.nested_string, string"
-  ))
-  def testNestedMapNavigation(inputPath: String, expectedKey: String, expectedType: String): Unit = {
-    val result = HoodieSchemaUtils.getSchemaForField(mapOfStructSchema, inputPath.trim)
-    assertEquals(expectedKey.trim, result.getKey)
-    assertEquals(expectedType.trim, result.getValue.dataType.simpleString)
-  }
-
-  // ===========================================
-  // Complex Nested Structure Tests
-  // ===========================================
-
-  @ParameterizedTest
-  @CsvSource(Array(
-    // Complex paths with struct -> array -> struct
-    "top.nested_array.list.element.inner_field, top.nested_array.list.element.inner_field, string",
-    // Complex paths with struct -> map
-    "top.nested_map.key_value.key,              top.nested_map.key_value.key,              string",
-    "top.nested_map.key_value.value,            top.nested_map.key_value.value,            int"
-  ))
-  def testComplexNestedPaths(inputPath: String, expectedKey: String, expectedType: String): Unit = {
-    val result = HoodieSchemaUtils.getSchemaForField(complexSchema, inputPath.trim)
-    assertEquals(expectedKey.trim, result.getKey)
-    assertEquals(expectedType.trim, result.getValue.dataType.simpleString)
-  }
-
-  // ===========================================
-  // Invalid Path Tests
-  // ===========================================
 
   @Test
-  def testInvalidArrayPaths(): Unit = {
+  def testInvalidPaths(): Unit = {
+    // Invalid array paths
     assertThrows(classOf[HoodieException], () =>
       HoodieSchemaUtils.getSchemaForField(arraySchema, "items.wrong.path"))
     assertThrows(classOf[HoodieException], () =>
       HoodieSchemaUtils.getSchemaForField(arraySchema, "items.list.missing"))
-  }
 
-  @Test
-  def testInvalidMapPaths(): Unit = {
+    // Invalid map paths
     assertThrows(classOf[HoodieException], () =>
       HoodieSchemaUtils.getSchemaForField(mapSchema, "metadata.wrong.path"))
     assertThrows(classOf[HoodieException], () =>
       HoodieSchemaUtils.getSchemaForField(mapSchema, "metadata.key_value.key.invalid"))
-  }
 
-  @Test
-  def testNonExistentField(): Unit = {
+    // Non-existent field
     assertThrows(classOf[HoodieException], () =>
       HoodieSchemaUtils.getSchemaForField(simpleSchema, "nonexistent"))
   }
