@@ -21,6 +21,7 @@ package org.apache.hudi.functional;
 import org.apache.hudi.DataSourceWriteOptions;
 import org.apache.hudi.avro.model.HoodieFileStatus;
 import org.apache.hudi.client.SparkRDDWriteClient;
+import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.bootstrap.BootstrapMode;
 import org.apache.hudi.client.bootstrap.FullRecordBootstrapDataProvider;
 import org.apache.hudi.client.bootstrap.selector.BootstrapModeSelector;
@@ -83,6 +84,9 @@ import org.apache.spark.sql.SQLContext;
 import org.apache.spark.sql.SaveMode;
 import org.apache.spark.sql.api.java.UDF1;
 import org.apache.spark.sql.types.DataTypes;
+import org.apache.spark.sql.types.Metadata;
+import org.apache.spark.sql.types.StructField;
+import org.apache.spark.sql.types.StructType;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Disabled;
@@ -167,10 +171,21 @@ public class TestBootstrap extends HoodieSparkClientTestBase {
 
   public HoodieSchema generateNewDataSetAndReturnSchema(long timestamp, int numRecords, List<String> partitionPaths,
       String srcPath) throws Exception {
+    return generateNewDataSetAndReturnSchema(timestamp, numRecords, partitionPaths, srcPath, true);
+  }
+
+  public HoodieSchema generateNewDataSetAndReturnSchema(long timestamp, int numRecords, List<String> partitionPaths,
+      String srcPath, boolean isMakeFieldsNullable) throws Exception {
     boolean isPartitioned = partitionPaths != null && !partitionPaths.isEmpty();
     Dataset<Row> df =
         generateTestRawTripDataset(timestamp, 0, numRecords, partitionPaths, jsc, sqlContext);
-    df.printSchema();
+
+    if (!isMakeFieldsNullable) {
+      // Convert schema to non-nullable for all fields
+      df = applyNonNullableSchema(df);
+      df.printSchema();
+    }
+
     if (isPartitioned) {
       df.write().partitionBy("datestr").format("parquet").mode(SaveMode.Overwrite).save(srcPath);
     } else {
@@ -185,6 +200,18 @@ public class TestBootstrap extends HoodieSparkClientTestBase {
     HoodieAvroParquetReader parquetReader =
         new HoodieAvroParquetReader(metaClient.getStorage(), new StoragePath(filePath));
     return parquetReader.getSchema();
+  }
+
+  /**
+   * Converts all fields in the DataFrame's schema to non-nullable.
+   */
+  private Dataset<Row> applyNonNullableSchema(Dataset<Row> df) {
+    StructType originalSchema = df.schema();
+    StructField[] nonNullableFields = Arrays.stream(originalSchema.fields())
+        .map(field -> new StructField(field.name(), field.dataType(), false, Metadata.empty()))
+        .toArray(StructField[]::new);
+    StructType nonNullableSchema = new StructType(nonNullableFields);
+    return df.sparkSession().createDataFrame(df.javaRDD(), nonNullableSchema);
   }
 
   @Test
@@ -369,6 +396,124 @@ public class TestBootstrap extends HoodieSparkClientTestBase {
   @Test
   public void testMetadataAndFullBootstrapWithUpdatesMOR() throws Exception {
     testBootstrapCommon(true, true, EffectiveMode.MIXED_BOOTSTRAP_MODE);
+  }
+
+  /**
+   * End-to-end test for metadata-only (non-full) bootstrap with non-nullable fields in the (source) parquet table:
+   * 1. Write a parquet table
+   * 2. Perform metadata-only bootstrap
+   * 3. Read the bootstrapped table
+   * 4. Perform an update and verify
+   */
+  @Test
+  public void testMetadataOnlyBootstrapEndToEndWithNonNullableFields() throws Exception {
+    // Setup: Initialize table as COW with partitioning
+    String keyGeneratorClass = SimpleKeyGenerator.class.getCanonicalName();
+    metaClient = HoodieTestUtils.init(basePath, HoodieTableType.COPY_ON_WRITE, bootstrapBasePath, true, keyGeneratorClass, "partition_path");
+
+    int totalRecords = 50;
+    List<String> partitions = Arrays.asList("2020/04/01", "2020/04/02");
+
+    // Step 1: Write parquet source table
+    long initialTimestamp = Instant.now().toEpochMilli();
+    HoodieSchema schema = generateNewDataSetAndReturnSchema(initialTimestamp, totalRecords, partitions, bootstrapBasePath, true);
+
+    // Step 2: Configure and perform metadata-only bootstrap
+    HoodieWriteConfig config = getConfigBuilder(schema.toString())
+        .withSchema(schema.toString())
+        .withKeyGenerator(keyGeneratorClass)
+        .withCompactionConfig(HoodieCompactionConfig.newBuilder()
+            .withMaxNumDeltaCommitsBeforeCompaction(1)
+            .build())
+        .withBootstrapConfig(HoodieBootstrapConfig.newBuilder()
+            .withBootstrapBasePath(bootstrapBasePath)
+            .withFullBootstrapInputProvider(TestFullBootstrapDataProvider.class.getName())
+            .withBootstrapParallelism(2)
+            .withBootstrapModeSelector(MetadataOnlyBootstrapModeSelector.class.getCanonicalName())
+            .build())
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder()
+            .enable(true)
+            .withMaxNumDeltaCommitsBeforeCompaction(3)
+            .withMetadataIndexColumnStats(false)
+            .build())
+        .build();
+    config.setValue(HoodieTableConfig.ORDERING_FIELDS, "timestamp");
+
+    SparkRDDWriteClient client = new SparkRDDWriteClient(context, config);
+    client.bootstrap(Option.empty());
+
+    // Verify bootstrap completed
+    metaClient.reloadActiveTimeline();
+    assertEquals(1, metaClient.getCommitsTimeline().filterCompletedInstants().countInstants(),
+        "Expected exactly 1 completed instant after bootstrap");
+    assertEquals(HoodieTimeline.METADATA_BOOTSTRAP_INSTANT_TS,
+        metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants().lastInstant().get().requestedTime(),
+        "Bootstrap instant should be METADATA_BOOTSTRAP_INSTANT_TS");
+
+    // Verify bootstrap index was created (required for metadata-only mode)
+    BootstrapIndex bootstrapIndex = BootstrapIndex.getBootstrapIndex(metaClient);
+    assertTrue(bootstrapIndex.useIndex(), "Bootstrap index should exist for metadata-only bootstrap");
+
+    // Step 3: Read bootstrapped table and verify records
+    Dataset<Row> bootstrappedData = sqlContext.read().format("parquet").load(basePath);
+    assertEquals(totalRecords, bootstrappedData.count(), "Bootstrapped table should have all records");
+
+    // Verify record keys match between source and bootstrapped table
+    Dataset<Row> sourceData = sqlContext.read().format("parquet").load(bootstrapBasePath);
+    sourceData.createOrReplaceTempView("source");
+    bootstrappedData.createOrReplaceTempView("bootstrapped");
+
+    Dataset<Row> missingInBootstrapped = sqlContext.sql(
+        "SELECT s._row_key FROM source s WHERE s._row_key NOT IN (SELECT _hoodie_record_key FROM bootstrapped)");
+    assertEquals(0, missingInBootstrapped.count(), "All source records should be in bootstrapped table");
+
+    Dataset<Row> missingInSource = sqlContext.sql(
+        "SELECT b._hoodie_record_key FROM bootstrapped b WHERE b._hoodie_record_key NOT IN (SELECT _row_key FROM source)");
+    assertEquals(0, missingInSource.count(), "Bootstrapped table should not have extra records");
+
+    // Step 4: Perform an update
+    long updateTimestamp = Instant.now().toEpochMilli();
+    String updateSrcPath = tmpFolder.toAbsolutePath() + "/data_update";
+    generateNewDataSetAndReturnSchema(updateTimestamp, totalRecords, partitions, updateSrcPath);
+
+    JavaRDD<HoodieRecord> updateBatch = generateInputBatch(jsc,
+        BootstrapUtils.getAllLeafFoldersWithFiles(config.getBaseFileFormat(),
+            metaClient.getStorage(), updateSrcPath, context),
+        schema);
+
+    String updateInstantTs = client.startCommit();
+    JavaRDD<WriteStatus> writeStatuses = client.upsert(updateBatch, updateInstantTs);
+    client.commit(updateInstantTs, writeStatuses);
+
+    // Verify update completed
+    metaClient.reloadActiveTimeline();
+    assertEquals(2, metaClient.getCommitsTimeline().filterCompletedInstants().countInstants(),
+        "Expected 2 completed instants after update (bootstrap + upsert)");
+
+    // Read and verify updated records
+    reloadInputFormats();
+    List<GenericRecord> records = HoodieMergeOnReadTestUtils.getRecordsUsingInputFormat(
+        HadoopFSUtils.getStorageConf(jsc.hadoopConfiguration()),
+        FSUtils.getAllPartitionPaths(context, metaClient, false).stream()
+            .map(f -> basePath + "/" + f).collect(Collectors.toList()),
+        basePath, roJobConf, false, schema, TRIP_HIVE_COLUMN_TYPES, false, new ArrayList<>());
+
+    assertEquals(totalRecords, records.size(), "Record count should remain same after update");
+
+    // Verify timestamps are updated
+    Set<String> seenKeys = new HashSet<>();
+    for (GenericRecord record : records) {
+      String rowKey = record.get("_row_key").toString();
+      String recordKey = record.get("_hoodie_record_key").toString();
+      assertEquals(rowKey, recordKey, "Row key and record key should match for record: " + record);
+      assertEquals(updateTimestamp, ((LongWritable) record.get("timestamp")).get(), 0.1,
+          "Timestamp should be updated for record: " + record);
+      assertFalse(seenKeys.contains(recordKey), "Should not have duplicate record keys");
+      seenKeys.add(recordKey);
+    }
+    assertEquals(totalRecords, seenKeys.size(), "Should have seen all unique record keys");
+
+    client.close();
   }
 
   private void checkBootstrapResults(int totalRecords, HoodieSchema schema, String maxInstant, boolean checkNumRawFiles,

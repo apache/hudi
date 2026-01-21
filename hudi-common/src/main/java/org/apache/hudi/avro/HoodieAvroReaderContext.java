@@ -210,7 +210,12 @@ public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> 
       HoodieSchema requiredSchema) throws IOException {
     HoodieSchema fileOutputSchema;
     Map<String, String> renamedColumns;
-    if (isLogFile) {
+    // Even when dataSchema equals requiredSchema, renamed columns still require schema rewriting
+    // to map old column names to new names during record reading. We only skip the lookup when
+    // both schemas match AND there are no renamed columns.
+    boolean hasNoRenamedColumns = getSchemaHandler().getRequiredSchemaForFileAndRenamedColumns(filePath).getRight().isEmpty();
+    if (isLogFile || (dataSchema.equals(requiredSchema) && hasNoRenamedColumns)) {
+      // For bootstrap skeleton files (and other cases where dataSchema == requiredSchema), skip schema promotion lookup as no rewriting is needed.
       fileOutputSchema = requiredSchema;
       renamedColumns = Collections.emptyMap();
     } else {
