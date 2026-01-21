@@ -22,7 +22,7 @@ import org.apache.hudi.cli.HoodieCLI;
 import org.apache.hudi.client.transaction.lock.audit.StorageLockProviderAuditService;
 import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.storage.StoragePath;
+import org.apache.hadoop.fs.Path;
 import org.apache.hudi.storage.StoragePathInfo;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
