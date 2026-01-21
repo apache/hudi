@@ -67,6 +67,11 @@ public abstract class AbstractStreamWriteFunction<I>
   protected final Configuration config;
 
   /**
+   * Whether the write function is writing index records into metadata table.
+   */
+  private final boolean isMetadataTable;
+
+  /**
    * Id of current subtask.
    */
   protected int taskID;
@@ -101,7 +106,7 @@ public abstract class AbstractStreamWriteFunction<I>
   /**
    * List state of the write metadata events.
    */
-  protected transient ListState<WriteMetadataEvent> writeMetadataState;
+  private transient ListState<WriteMetadataEvent> writeMetadataState;
 
   /**
    * List state of the JobID.
@@ -130,7 +135,18 @@ public abstract class AbstractStreamWriteFunction<I>
    * @param config The config options
    */
   public AbstractStreamWriteFunction(Configuration config) {
+    this(config, false);
+  }
+
+  /**
+   * Constructs a StreamWriteFunctionBase.
+   *
+   * @param config         The config options
+   * @param isMetadataTable Whether the write function is writing index records into metadata table
+   */
+  public AbstractStreamWriteFunction(Configuration config, boolean isMetadataTable) {
     this.config = config;
+    this.isMetadataTable = isMetadataTable;
   }
 
   @Override
@@ -227,7 +243,7 @@ public abstract class AbstractStreamWriteFunction<I>
       }
     } else {
       // otherwise sends an empty bootstrap event instead.
-      sendWriteMetadataEvent(WriteMetadataEvent.emptyBootstrap(taskID, checkpointId, isMetadataTable()));
+      sendWriteMetadataEvent(WriteMetadataEvent.emptyBootstrap(taskID, checkpointId, isMetadataTable));
       log.info("Send bootstrap write metadata event to coordinator, task[{}].", taskID);
     }
   }
@@ -250,17 +266,10 @@ public abstract class AbstractStreamWriteFunction<I>
         .instantTime(currentInstant)
         .writeStatus(new ArrayList<>(writeStatuses))
         .bootstrap(true)
-        .metadataTable(isMetadataTable())
+        .metadataTable(isMetadataTable)
         .build();
     this.writeMetadataState.add(event);
     writeStatuses.clear();
-  }
-
-  /**
-   * true if this is a write function that is used to streaming write index records to metadata table.
-   */
-  protected boolean isMetadataTable() {
-    return false;
   }
 
   /**

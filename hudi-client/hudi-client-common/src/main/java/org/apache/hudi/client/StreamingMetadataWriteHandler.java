@@ -38,6 +38,13 @@ public abstract class StreamingMetadataWriteHandler {
   // This will be cleaned up when action is completed or when write client is closed.
   protected final Map<String, Option<HoodieTableMetadataWriter>> metadataWriterMap = new HashMap<>();
 
+  // Determines whether to start the commit for the newly created metadata table writer.
+  private final boolean needStartCommitForNewWriter;
+
+  public StreamingMetadataWriteHandler(boolean needStartCommitForNewWriter) {
+    this.needStartCommitForNewWriter = needStartCommitForNewWriter;
+  }
+
   /**
    * Called by data table write client and table service client to perform streaming writes to metadata table.
    *
@@ -81,15 +88,6 @@ public abstract class StreamingMetadataWriteHandler {
   }
 
   /**
-   * Determines whether to start the commit for the new created metadata table writer.
-   *
-   * <p>This method is called when initializing a new metadata table writer for a given instant time.
-   * Implementations should return true if a new commit should be started for the metadata table,
-   * false otherwise.
-   */
-  abstract boolean startCommitForNewWriter();
-
-  /**
    * Returns the table metadata writer option with given instant time {@code triggeringInstant}.
    *
    * @param triggeringInstant The instant that triggers the metadata writes.
@@ -114,7 +112,7 @@ public abstract class StreamingMetadataWriteHandler {
     // if not, it will contain the metadata writer instance.
 
     // start the commit in metadata table.
-    if (startCommitForNewWriter()) {
+    if (needStartCommitForNewWriter) {
       metadataWriterOpt.ifPresent(metadataWriter -> metadataWriter.startCommit(triggeringInstant));
     }
 

@@ -35,6 +35,10 @@ import scala.Tuple2;
  */
 public class SparkStreamingMetadataWriteHandler extends StreamingMetadataWriteHandler {
 
+  public SparkStreamingMetadataWriteHandler() {
+    super(true);
+  }
+
   @Override
   public HoodieData<WriteStatus> streamWriteToMetadataTable(HoodieTable table, HoodieData<WriteStatus> dataTableWriteStatuses, String instantTime,
                                                            int coalesceDivisorForDataTableWrites) {
@@ -42,11 +46,6 @@ public class SparkStreamingMetadataWriteHandler extends StreamingMetadataWriteHa
     ValidationUtils.checkState(metadataWriterOpt.isPresent(),
         "Cannot instantiate metadata writer for the table of interest " + table.getMetaClient().getBasePath());
     return streamWriteToMetadataTable(dataTableWriteStatuses, metadataWriterOpt.get(), table, instantTime, coalesceDivisorForDataTableWrites);
-  }
-
-  @Override
-  protected boolean startCommitForNewWriter() {
-    return true;
   }
 
   private HoodieData<WriteStatus> streamWriteToMetadataTable(HoodieData<WriteStatus> dataTableWriteStatuses,

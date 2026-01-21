@@ -152,7 +152,7 @@ public class FlinkWriteClients {
             new FlinkTaskContextSupplier(runtimeContext));
 
     HoodieWriteConfig writeConfig = getHoodieClientConfig(conf, loadFsViewStorageConfig);
-    return new HoodieFlinkWriteClient<>(context, writeConfig);
+    return new HoodieFlinkWriteClient<>(context, writeConfig, OptionsResolver.isStreamingIndexWriteEnabled(conf));
   }
 
   /**

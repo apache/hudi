@@ -22,6 +22,7 @@ import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.table.HoodieTable;
 
@@ -34,17 +35,17 @@ import java.util.Set;
  */
 @Slf4j
 public class FlinkStreamingMetadataWriteHandler extends StreamingMetadataWriteHandler {
+
+  public FlinkStreamingMetadataWriteHandler() {
+    super(false);
+  }
+
   @Override
   public HoodieData<WriteStatus> streamWriteToMetadataTable(HoodieTable table,
                                                             HoodieData<WriteStatus> dataTableWriteStatuses,
                                                             String instantTime,
                                                             int coalesceDivisorForDataTableWrites) {
     throw new UnsupportedOperationException("Not implemented since it's not needed for flink engine.");
-  }
-
-  @Override
-  protected boolean startCommitForNewWriter() {
-    return false;
   }
 
   /**
@@ -81,29 +82,22 @@ public class FlinkStreamingMetadataWriteHandler extends StreamingMetadataWriteHa
   }
 
   /**
-   * Stop Commit Hook. Derived classes use this method to perform post-commit processing
+   * Clean resources after streaming write to the metadata table in index write function or stop
+   * heartbeat for instant in the coordinator. This method removes the metadata writer associated
+   * with the given instant time from the internal map and closes it if it exists.
    *
    * @param instantTime Instant Time
    */
-  public void stopCommit(String instantTime) {
-    Option<HoodieTableMetadataWriter> metadataWriterOpt = this.metadataWriterMap.get(instantTime);
-    if (metadataWriterOpt.isEmpty()) {
+  public void cleanResources(String instantTime) {
+    Option<HoodieTableMetadataWriter> metadataWriterOpt = this.metadataWriterMap.remove(instantTime);
+    if (metadataWriterOpt == null || metadataWriterOpt.isEmpty()) {
       log.warn("Metadata writer for {} has not been initialized, no need to stop heartbeat.", instantTime);
+      return;
     }
-    metadataWriterOpt.get().stopCommit(instantTime);
-  }
-
-  /**
-   * Performs post-processing after streaming write operations to the metadata table.
-   * This method removes the metadata writer associated with the given instant time
-   * from the internal map and closes it if it exists.
-   *
-   * @param instantTime The instant time for which the streaming write was performed
-   */
-  public void postStreamWrite(String instantTime) throws Exception {
-    Option<HoodieTableMetadataWriter> metadataWriter = this.metadataWriterMap.remove(instantTime);
-    if (metadataWriter != null && metadataWriter.isPresent()) {
-      metadataWriter.get().close();
+    try {
+      metadataWriterOpt.get().close();
+    } catch (Exception e) {
+      throw new HoodieException("Failed to close the metadata writer for instant: " + instantTime, e);
     }
   }
 }

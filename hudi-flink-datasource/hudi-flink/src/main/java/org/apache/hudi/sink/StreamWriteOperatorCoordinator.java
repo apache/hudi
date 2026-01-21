@@ -542,10 +542,10 @@ public class StreamWriteOperatorCoordinator
   }
 
   private void handleEndInputEvent(WriteMetadataEvent event) {
-    EventBuffer eventBufferPair = this.eventBuffers.addEventToBuffer(event);
-    if (eventBufferPair.allEventsReceived()) {
+    EventBuffer eventBuffer = this.eventBuffers.addEventToBuffer(event);
+    if (eventBuffer.allEventsReceived()) {
       // start to commit the instant.
-      boolean committed = commitInstant(event.getCheckpointId(), event.getInstantTime(), eventBufferPair);
+      boolean committed = commitInstant(event.getCheckpointId(), event.getInstantTime(), eventBuffer);
       if (committed) {
         // sync Hive synchronously if it is enabled in batch mode.
         syncHive();
@@ -587,7 +587,7 @@ public class StreamWriteOperatorCoordinator
       // all the data write tasks are reset by failover, reset the while buffer and returns early.
       this.eventBuffers.reset(checkpointId);
       // stop the heart beat for lazy cleaning
-      writeClient.stopHeartbeat(instant);
+      writeClient.cleanResources(instant);
       return false;
     }
 
@@ -607,7 +607,7 @@ public class StreamWriteOperatorCoordinator
       // No data has written, reset the buffer and returns early
       this.eventBuffers.reset(checkpointId);
       // stop the heart beat for lazy cleaning
-      writeClient.stopHeartbeat(instant);
+      writeClient.cleanResources(instant);
       return false;
     }
     doCommit(checkpointId, instant, dataWriteResults, indexWriteResults);

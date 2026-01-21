@@ -26,7 +26,6 @@ import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
-import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.sink.buffer.MemorySegmentPoolFactory;
 import org.apache.hudi.sink.common.AbstractStreamWriteFunction;
 import org.apache.hudi.sink.event.WriteMetadataEvent;
@@ -83,7 +82,7 @@ public class IndexWriteFunction extends AbstractStreamWriteFunction<RowData> {
   private transient HoodieFlinkTable<?> flinkTable;
 
   public IndexWriteFunction(Configuration conf) {
-    super(conf);
+    super(conf, true);
   }
 
   @Override
@@ -97,11 +96,6 @@ public class IndexWriteFunction extends AbstractStreamWriteFunction<RowData> {
   @Override
   protected void sendWriteMetadataEvent(WriteMetadataEvent metadataEvent) {
     this.correspondent.sendWriteMetadataEvent(metadataEvent);
-  }
-
-  @Override
-  protected boolean isMetadataTable() {
-    return true;
   }
 
   @Override
@@ -160,11 +154,7 @@ public class IndexWriteFunction extends AbstractStreamWriteFunction<RowData> {
     this.indexDataBuffer.reset();
     // close the metadata writer if the current instant writing is finished.
     if (lastBatch) {
-      try {
-        this.writeClient.postStreamWriteToMetadataTable(this.currentInstant);
-      } catch (Exception e) {
-        throw new HoodieException("Failed to close the metadata writer for instant: " + this.currentInstant);
-      }
+      this.writeClient.cleanResources(this.currentInstant);
     }
   }
 

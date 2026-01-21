@@ -130,10 +130,10 @@ public class HoodieFlinkWriteClient<T>
    *
    * @param instantTime The instant time
    */
-  public void stopHeartbeat(String instantTime) {
+  public void cleanResources(String instantTime) {
     getHeartbeatClient().stop(instantTime);
     if (isStreamingWriteMetadataTable) {
-      this.streamingMetadataWriteHandler.stopCommit(instantTime);
+      this.streamingMetadataWriteHandler.cleanResources(instantTime);
     }
   }
 
@@ -151,17 +151,6 @@ public class HoodieFlinkWriteClient<T>
    */
   public HoodieData<WriteStatus> streamWriteToMetadataPartitions(HoodieTable table, HoodieData<HoodieRecord> indexRecords, Set<String> dataPartitions, String instantTime) {
     return this.streamingMetadataWriteHandler.streamWriteToMetadataPartitions(table, indexRecords, dataPartitions, instantTime);
-  }
-
-  /**
-   * Performs post-processing after streaming write operations to the metadata table.
-   * This method removes the metadata writer associated with the given instant time
-   * from the internal map and closes it if it exists.
-   *
-   * @param instantTime The instant time for which the streaming write was performed
-   */
-  public void postStreamWriteToMetadataTable(String instantTime) throws Exception {
-    this.streamingMetadataWriteHandler.postStreamWrite(instantTime);
   }
 
   @Override
