@@ -19,6 +19,7 @@ package org.apache.spark.sql.hudi.command.procedures
 
 import org.apache.hudi.client.transaction.lock.audit.StorageLockProviderAuditService
 import org.apache.hudi.storage.StoragePath
+import org.apache.hudi.util.JFunction
 
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
@@ -186,5 +187,5 @@ object CleanupAuditLockProcedure {
    *
    * @return Supplier that creates new CleanupAuditLockProcedure instances
    */
-  def builder: Supplier[ProcedureBuilder] = () => new CleanupAuditLockProcedure()
+  def builder: Supplier[ProcedureBuilder] = JFunction.toJavaSupplier(() => new CleanupAuditLockProcedure())
 }

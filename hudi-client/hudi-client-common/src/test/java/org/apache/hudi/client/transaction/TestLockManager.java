@@ -130,7 +130,7 @@ public class TestLockManager extends HoodieCommonTestHarness {
   @Test
   void testLockManagerTriesMetricsConstructorFirst() {
     HoodieWriteConfig writeConfig = getStorageBasedLockWriteConfig();
-    LockManager lockManager = new LockManager(writeConfig, this.metaClient.getStorage());
+    LockManager lockManager = new LockManager(writeConfig, (FileSystem) this.metaClient.getStorage().getFileSystem());
 
     // The getLockProvider() call should fail due to invalid scheme in basePath, 
     // but this validates that we successfully found and tried the metrics constructor
@@ -150,7 +150,7 @@ public class TestLockManager extends HoodieCommonTestHarness {
   void testLockManagerFallbackToStandardConstructor() {
     // Use ZookeeperBasedLockProvider which doesn't have the metrics constructor
     HoodieWriteConfig writeConfig = getSingleWriterWriteConfig();
-    LockManager lockManager = new LockManager(writeConfig, this.metaClient.getStorage());
+    LockManager lockManager = new LockManager(writeConfig, (FileSystem) this.metaClient.getStorage().getFileSystem());
 
     // Get the lock provider to trigger instantiation and fallback
     assertDoesNotThrow(() -> {

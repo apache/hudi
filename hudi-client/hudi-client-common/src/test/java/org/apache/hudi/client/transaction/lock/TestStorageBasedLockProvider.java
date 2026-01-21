@@ -851,7 +851,7 @@ class TestStorageBasedLockProvider {
     // Test that lock provider works correctly when audit is enabled
     TypedProperties props = new TypedProperties();
     props.put(StorageBasedLockConfig.VALIDITY_TIMEOUT_SECONDS.key(), "10");
-    props.put(StorageBasedLockConfig.HEARTBEAT_POLL_SECONDS.key(), "1");
+    props.put(StorageBasedLockConfig.RENEW_INTERVAL_SECS.key(), "1");
     props.put(BASE_PATH.key(), "gs://bucket/lake/db/tbl-audit-enabled");
 
     // Mock client that returns enabled config
