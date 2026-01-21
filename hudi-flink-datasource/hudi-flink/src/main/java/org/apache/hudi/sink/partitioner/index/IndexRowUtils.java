@@ -44,12 +44,9 @@ public class IndexRowUtils {
   private static final int KEY_ORD = 1;
   private static final int PARTITION_ORD = 2;
   private static final int FILE_ID_ORD = 3;
-  private static final int INSTANT_ORD = 4;
 
   public static final RowType INDEX_ROW_TYPE = RowType.of(
       DataTypes.TINYINT().getLogicalType(),
-      DataTypes.STRING().getLogicalType(),
-      DataTypes.STRING().getLogicalType(),
       DataTypes.STRING().getLogicalType(),
       DataTypes.STRING().getLogicalType(),
       DataTypes.STRING().getLogicalType());
@@ -102,10 +99,6 @@ public class IndexRowUtils {
 
   public static String getRecordKey(RowData indexRow) {
     return String.valueOf(indexRow.getString(KEY_ORD));
-  }
-
-  public static String getInstant(RowData indexRow) {
-    return String.valueOf(indexRow.getString(INSTANT_ORD));
   }
 
   public static String getPartition(RowData indexRow) {
