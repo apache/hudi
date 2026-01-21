@@ -926,9 +926,7 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
 
     preparePipeline(conf)
         .consume(TestData.DATA_SET_INSERT)
-        // instant will be eagerly request when stream index write is enabled,
-        // so the event buffer will be eagerly initialized for the instant.
-        .initialEventBuffer()
+        .emptyEventBuffer()
         // no checkpoint, so the coordinator does not accept any events
         .checkpoint(1)
         .allDataFlushed()

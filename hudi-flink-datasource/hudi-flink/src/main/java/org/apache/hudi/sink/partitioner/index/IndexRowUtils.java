@@ -54,13 +54,12 @@ public class IndexRowUtils {
       DataTypes.STRING().getLogicalType(),
       DataTypes.STRING().getLogicalType());
 
-  public static RowData createRecordIndexRow(HoodieFlinkInternalRow internalRow, String instantTime) {
+  public static RowData createRecordIndexRow(HoodieFlinkInternalRow internalRow) {
     GenericRowData indexRow = new GenericRowData(INDEX_ROW_TYPE.getFieldCount());
     indexRow.setField(INDEX_TYPE_ORD, RLI_TYPE);
     indexRow.setField(KEY_ORD, StringData.fromString(internalRow.getRecordKey()));
     indexRow.setField(PARTITION_ORD, StringData.fromString(internalRow.getPartitionPath()));
     indexRow.setField(FILE_ID_ORD, StringData.fromString(internalRow.getFileId()));
-    indexRow.setField(INSTANT_ORD, StringData.fromString(instantTime));
     switch (internalRow.getOperationType()) {
       case "I":
         indexRow.setRowKind(RowKind.INSERT);
@@ -74,7 +73,7 @@ public class IndexRowUtils {
     return indexRow;
   }
 
-  public static HoodieRecord convertToHoodieRecord(RowData indexRow, HoodieWriteConfig dataWriteConfig) {
+  public static HoodieRecord convertToHoodieRecord(String instant, RowData indexRow, HoodieWriteConfig dataWriteConfig) {
     if (indexRow.getByte(INDEX_TYPE_ORD) == RLI_TYPE) {
       switch (indexRow.getRowKind()) {
         case INSERT:
@@ -82,7 +81,7 @@ public class IndexRowUtils {
               String.valueOf(indexRow.getString(KEY_ORD)),
               String.valueOf(indexRow.getString(PARTITION_ORD)),
               String.valueOf(indexRow.getString(FILE_ID_ORD)),
-              String.valueOf(indexRow.getString(INSTANT_ORD)),
+              instant,
               dataWriteConfig.getWritesFileIdEncoding());
         case DELETE:
           return HoodieMetadataPayload.createRecordIndexDelete(

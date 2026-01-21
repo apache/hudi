@@ -391,17 +391,18 @@ public class Pipelines {
       // @see org.apache.flink.runtime.jobgraph.tasks.TaskOperatorEventGateway.
       String writeOperatorUid = opUID("stream_write", conf);
       DataStream<HoodieFlinkInternalRow> bucketAssignStream = createBucketAssignStream(dataStream, conf, rowType, writeOperatorUid);
+      boolean isStreamingIndexWriteEnabled = OptionsResolver.isStreamingIndexWriteEnabled(conf);
       DataStream<RowData> writeDatastream =
           bucketAssignStream
               // shuffle by fileId(bucket id)
               .keyBy(HoodieFlinkInternalRow::getFileId)
               .transform(
                   opName("stream_write", conf),
-                  TypeInformation.of(RowData.class),
+                  isStreamingIndexWriteEnabled ? InternalTypeInfo.of(IndexRowUtils.INDEX_ROW_TYPE) : TypeInformation.of(RowData.class),
                   StreamWriteOperator.getFactory(conf, rowType))
               .uid(writeOperatorUid)
               .setParallelism(conf.get(FlinkOptions.WRITE_TASKS));
-      if (OptionsResolver.isStreamingIndexWriteEnabled(conf)) {
+      if (isStreamingIndexWriteEnabled) {
         // index writing pipeline
         return writeDatastream
             .partitionCustom(new RecordIndexPartitioner(conf), IndexRowUtils::getHoodieKey)

@@ -106,9 +106,6 @@ public class IndexWriteFunction extends AbstractStreamWriteFunction<RowData> {
 
   @Override
   public void processElement(RowData indexRow, Context ctx, Collector<RowData> out) throws Exception {
-    if (this.currentInstant == null) {
-      this.currentInstant = IndexRowUtils.getInstant(indexRow);
-    }
     boolean success = bufferIndexRow(indexRow);
     if (!success) {
       // flushes the buffer if the memory pool is full
@@ -140,9 +137,7 @@ public class IndexWriteFunction extends AbstractStreamWriteFunction<RowData> {
 
   private void flushBuffer(boolean lastBatch, boolean endInput) {
     // in case of there is no index record during the checkpoint interval, request instant from coordinator.
-    if (this.currentInstant == null) {
-      this.currentInstant = instantToWrite(false);
-    }
+    this.currentInstant = instantToWrite(true);
     Pair<List<HoodieRecord>, Set<String>> indexRecordsAndPartitions = prepareIndexRecordsAndPartitions(this.indexDataBuffer);
     HoodieData<HoodieRecord> indexRecords = HoodieListData.eager(indexRecordsAndPartitions.getLeft());
     List<WriteStatus> writeStatus = this.writeClient.streamWriteToMetadataPartitions(
@@ -181,8 +176,7 @@ public class IndexWriteFunction extends AbstractStreamWriteFunction<RowData> {
     HoodieWriteConfig writeConfig = writeClient.getConfig();
     while (rowItr.hasNext()) {
       RowData indexRow = rowItr.next();
-      indexRecords.add(IndexRowUtils.convertToHoodieRecord(indexRow, writeConfig));
-      // todo check if partition is needed
+      indexRecords.add(IndexRowUtils.convertToHoodieRecord(this.currentInstant, indexRow, writeConfig));
       dataPartitions.add(IndexRowUtils.getPartition(indexRow));
 
     }

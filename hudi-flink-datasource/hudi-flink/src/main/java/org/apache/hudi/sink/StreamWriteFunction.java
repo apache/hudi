@@ -231,10 +231,7 @@ public class StreamWriteFunction extends AbstractStreamWriteFunction<HoodieFlink
         switch (record.getOperationType()) {
           case "I":
           case "D":
-            if (currentInstant == null) {
-              currentInstant = instantToWrite(true);
-            }
-            out.collect(IndexRowUtils.createRecordIndexRow(record, currentInstant));
+            out.collect(IndexRowUtils.createRecordIndexRow(record));
             break;
           case "U":
           case "-U":
