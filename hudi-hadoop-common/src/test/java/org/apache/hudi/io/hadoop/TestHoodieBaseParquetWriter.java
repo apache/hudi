@@ -24,6 +24,7 @@ import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.bloom.BloomFilterFactory;
 import org.apache.hudi.common.bloom.BloomFilterTypeCode;
 import org.apache.hudi.common.config.HoodieParquetConfig;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.Option;
@@ -32,7 +33,6 @@ import org.apache.hudi.storage.StoragePath;
 
 import lombok.Getter;
 import lombok.Setter;
-import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.parquet.avro.AvroSchemaConverter;
 import org.apache.parquet.hadoop.ParquetWriter;
@@ -79,8 +79,8 @@ public class TestHoodieBaseParquetWriter {
         BloomFilterTypeCode.DYNAMIC_V0.name());
     StorageConfiguration conf = HoodieTestUtils.getDefaultStorageConfWithDefaults();
 
-    Schema schema = new Schema.Parser().parse(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA);
-    HoodieAvroWriteSupport writeSupport = new HoodieAvroWriteSupport(new AvroSchemaConverter().convert(schema),
+    HoodieSchema schema = HoodieTestDataGenerator.HOODIE_SCHEMA;
+    HoodieAvroWriteSupport writeSupport = new HoodieAvroWriteSupport(new AvroSchemaConverter().convert(schema.toAvroSchema()),
         schema, Option.of(filter), new Properties());
 
     long maxFileSize = 2 * 1024 * 1024;

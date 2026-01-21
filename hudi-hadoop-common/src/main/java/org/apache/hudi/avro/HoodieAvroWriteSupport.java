@@ -20,11 +20,11 @@
 package org.apache.hudi.avro;
 
 import org.apache.hudi.common.bloom.BloomFilter;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 
-import org.apache.avro.Schema;
 import org.apache.parquet.avro.AvroWriteSupport;
 import org.apache.parquet.hadoop.api.WriteSupport;
 import org.apache.parquet.schema.MessageType;
@@ -43,9 +43,9 @@ public class HoodieAvroWriteSupport<T> extends AvroWriteSupport<T> {
   private final Map<String, String> footerMetadata = new HashMap<>();
   protected final Properties properties;
 
-  public HoodieAvroWriteSupport(MessageType schema, Schema avroSchema, Option<BloomFilter> bloomFilterOpt,
+  public HoodieAvroWriteSupport(MessageType schema, HoodieSchema hoodieSchema, Option<BloomFilter> bloomFilterOpt,
                                 Properties properties) {
-    super(schema, avroSchema, ConvertingGenericData.INSTANCE);
+    super(schema, hoodieSchema.toAvroSchema(), ConvertingGenericData.INSTANCE);
     this.bloomFilterWriteSupportOpt = bloomFilterOpt.map(HoodieBloomFilterAvroWriteSupport::new);
     this.properties = properties;
   }

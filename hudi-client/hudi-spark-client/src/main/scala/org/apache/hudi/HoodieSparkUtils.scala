@@ -110,7 +110,7 @@ object HoodieSparkUtils extends SparkAdapterSupport with SparkVersionsSupport wi
 
         // Since caller might request to get records in a different ("evolved") schema, we will be rewriting from
         // existing Writer's schema into Reader's (avro) schema
-        val convert = AvroConversionUtils.createInternalRowToAvroConverter(writerSchema, writerHoodieSchema.toAvroSchema, nullable = nullable)
+        val convert = AvroConversionUtils.createInternalRowToAvroConverter(writerSchema, writerHoodieSchema, nullable = nullable)
 
         rows.map { ir => transform(convert(ir)) }
       }
@@ -162,7 +162,7 @@ object HoodieSparkUtils extends SparkAdapterSupport with SparkVersionsSupport wi
         if (rows.isEmpty) {
           Iterator.empty
         } else {
-          val convert = AvroConversionUtils.createInternalRowToAvroConverter(writerSchema, writerHoodieSchema.toAvroSchema, nullable = nullable)
+          val convert = AvroConversionUtils.createInternalRowToAvroConverter(writerSchema, writerHoodieSchema, nullable = nullable)
           val transform: InternalRow => Either[GenericRecord, InternalRow] = internalRow => try {
             Left(HoodieAvroUtils.rewriteRecordDeep(convert(internalRow), readerHoodieSchema.toAvroSchema, true))
           } catch {
@@ -184,7 +184,7 @@ object HoodieSparkUtils extends SparkAdapterSupport with SparkVersionsSupport wi
         if (rows.isEmpty) {
           Iterator.empty
         } else {
-          val convert = AvroConversionUtils.createInternalRowToAvroConverter(writerSchema, writerHoodieSchema.toAvroSchema, nullable = nullable)
+          val convert = AvroConversionUtils.createInternalRowToAvroConverter(writerSchema, writerHoodieSchema, nullable = nullable)
           rows.map(convert)
         }
       }

@@ -18,8 +18,6 @@
 
 package org.apache.hudi.hadoop;
 
-import org.apache.avro.LogicalTypes;
-import org.apache.avro.Schema;
 import org.apache.hadoop.hive.serde2.io.HiveDecimalWritable;
 import org.apache.hadoop.io.ArrayWritable;
 import org.apache.hadoop.io.IntWritable;
@@ -62,8 +60,7 @@ class TestHoodieHiveRecord {
 
   @Test
   void testConvertColumnValueForLogicalTypeWithNullValue() {
-    Schema dateSchema = Schema.create(Schema.Type.INT);
-    LogicalTypes.date().addToSchema(dateSchema);
+    HoodieSchema dateSchema = HoodieSchema.createDate();
     
     Object result = hoodieHiveRecord.convertColumnValueForLogicalType(dateSchema, null, true);
     assertNull(result);
@@ -71,8 +68,7 @@ class TestHoodieHiveRecord {
 
   @Test
   void testConvertColumnValueForLogicalTypeWithDate() {
-    Schema dateSchema = Schema.create(Schema.Type.INT);
-    LogicalTypes.date().addToSchema(dateSchema);
+    HoodieSchema dateSchema = HoodieSchema.createDate();
     
     IntWritable dateValue = new IntWritable(18628); // 2021-01-01
     Object result = hoodieHiveRecord.convertColumnValueForLogicalType(dateSchema, dateValue, true);
@@ -83,8 +79,7 @@ class TestHoodieHiveRecord {
 
   @Test
   void testConvertColumnValueForLogicalTypeWithTimestampMillis() {
-    Schema timestampMillisSchema = Schema.create(Schema.Type.LONG);
-    LogicalTypes.timestampMillis().addToSchema(timestampMillisSchema);
+    HoodieSchema timestampMillisSchema = HoodieSchema.createTimestampMillis();
     
     LongWritable timestampValue = new LongWritable(1609459200000L); // 2021-01-01 00:00:00 UTC
     Object result = hoodieHiveRecord.convertColumnValueForLogicalType(timestampMillisSchema, timestampValue, true);
@@ -95,8 +90,7 @@ class TestHoodieHiveRecord {
 
   @Test
   void testConvertColumnValueForLogicalTypeWithTimestampMillisDisabled() {
-    Schema timestampMillisSchema = Schema.create(Schema.Type.LONG);
-    LogicalTypes.timestampMillis().addToSchema(timestampMillisSchema);
+    HoodieSchema timestampMillisSchema = HoodieSchema.createTimestampMillis();
     
     LongWritable timestampValue = new LongWritable(1609459200000L);
     Object result = hoodieHiveRecord.convertColumnValueForLogicalType(timestampMillisSchema, timestampValue, false);
@@ -108,8 +102,7 @@ class TestHoodieHiveRecord {
 
   @Test
   void testConvertColumnValueForLogicalTypeWithTimestampMicros() {
-    Schema timestampMicrosSchema = Schema.create(Schema.Type.LONG);
-    LogicalTypes.timestampMicros().addToSchema(timestampMicrosSchema);
+    HoodieSchema timestampMicrosSchema = HoodieSchema.createTimestampMicros();
     
     LongWritable timestampValue = new LongWritable(1609459200000000L); // 2021-01-01 00:00:00 UTC in microseconds
     Object result = hoodieHiveRecord.convertColumnValueForLogicalType(timestampMicrosSchema, timestampValue, true);
@@ -120,8 +113,7 @@ class TestHoodieHiveRecord {
 
   @Test
   void testConvertColumnValueForLogicalTypeWithTimestampMicrosDisabled() {
-    Schema timestampMicrosSchema = Schema.create(Schema.Type.LONG);
-    LogicalTypes.timestampMicros().addToSchema(timestampMicrosSchema);
+    HoodieSchema timestampMicrosSchema = HoodieSchema.createTimestampMicros();
     
     LongWritable timestampValue = new LongWritable(1609459200000000L);
     Object result = hoodieHiveRecord.convertColumnValueForLogicalType(timestampMicrosSchema, timestampValue, false);
@@ -133,8 +125,7 @@ class TestHoodieHiveRecord {
 
   @Test
   void testConvertColumnValueForLogicalTypeWithDecimal() {
-    Schema decimalSchema = Schema.create(Schema.Type.BYTES);
-    LogicalTypes.decimal(10, 2).addToSchema(decimalSchema);
+    HoodieSchema decimalSchema = HoodieSchema.createDecimal(10, 2);
     
     HiveDecimalWritable decimalValue = new HiveDecimalWritable("123.45");
     Object result = hoodieHiveRecord.convertColumnValueForLogicalType(decimalSchema, decimalValue, true);
@@ -145,7 +136,7 @@ class TestHoodieHiveRecord {
 
   @Test
   void testConvertColumnValueForLogicalTypeWithString() {
-    Schema stringSchema = Schema.create(Schema.Type.STRING);
+    HoodieSchema stringSchema = HoodieSchema.create(HoodieSchemaType.STRING);
     
     Text stringValue = new Text("test string");
     Object result = hoodieHiveRecord.convertColumnValueForLogicalType(stringSchema, stringValue, true);
@@ -157,7 +148,7 @@ class TestHoodieHiveRecord {
 
   @Test
   void testConvertColumnValueForLogicalTypeWithIntWritable() {
-    Schema stringSchema = Schema.create(Schema.Type.STRING);
+    HoodieSchema stringSchema = HoodieSchema.create(HoodieSchemaType.STRING);
     
     IntWritable intValue = new IntWritable(42);
     Object result = hoodieHiveRecord.convertColumnValueForLogicalType(stringSchema, intValue, true);
@@ -169,7 +160,7 @@ class TestHoodieHiveRecord {
 
   @Test
   void testConvertColumnValueForLogicalTypeWithLongWritable() {
-    Schema stringSchema = Schema.create(Schema.Type.STRING);
+    HoodieSchema stringSchema = HoodieSchema.create(HoodieSchemaType.STRING);
     
     LongWritable longValue = new LongWritable(12345L);
     Object result = hoodieHiveRecord.convertColumnValueForLogicalType(stringSchema, longValue, true);

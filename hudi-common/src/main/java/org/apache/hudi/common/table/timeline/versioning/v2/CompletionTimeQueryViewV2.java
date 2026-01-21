@@ -280,14 +280,13 @@ public class CompletionTimeQueryViewV2 implements CompletionTimeQueryView, Seria
     // This operation is resource costly.
     synchronized (this) {
       if (InstantComparison.compareTimestamps(startTime, LESSER_THAN, this.cursorInstant)) {
-        metaClient.getTableFormat().getTimelineFactory().createArchivedTimelineLoader().loadInstants(metaClient,
+        Option<String> oldestStartTime = metaClient.getTableFormat().getTimelineFactory().createArchivedTimelineLoader().loadAllInstantsFromFilesInRange(metaClient,
             new HoodieArchivedTimeline.ClosedOpenTimeRangeFilter(startTime, this.cursorInstant),
             HoodieArchivedTimeline.LoadMode.TIME,
-            r -> true,
             this::readCompletionTime);
+        // refresh the start instant
+        this.cursorInstant = oldestStartTime.map(time -> InstantComparison.minTimestamp(startTime, time)).orElse(startTime);
       }
-      // refresh the start instant
-      this.cursorInstant = startTime;
     }
   }
 

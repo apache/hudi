@@ -23,6 +23,7 @@ import org.apache.hudi.common.bloom.BloomFilterFactory;
 import org.apache.hudi.common.bloom.BloomFilterTypeCode;
 import org.apache.hudi.common.config.HoodieParquetConfig;
 import org.apache.hudi.common.engine.LocalTaskContextSupplier;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.Option;
@@ -31,7 +32,6 @@ import org.apache.hudi.io.storage.hadoop.HoodieAvroParquetWriter;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 
-import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.parquet.avro.AvroSchemaConverter;
 import org.apache.parquet.hadoop.ParquetWriter;
@@ -61,11 +61,11 @@ public class TestHoodieAvroParquetWriter {
     HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator(0xDEED);
     List<GenericRecord> records = dataGen.generateGenericRecords(10);
 
-    Schema schema = records.get(0).getSchema();
+    HoodieSchema schema = HoodieSchema.fromAvroSchema(records.get(0).getSchema());
 
     BloomFilter filter = BloomFilterFactory.createBloomFilter(1000, 0.0001, 10000,
         BloomFilterTypeCode.DYNAMIC_V0.name());
-    HoodieAvroWriteSupport writeSupport = new HoodieAvroWriteSupport(new AvroSchemaConverter().convert(schema),
+    HoodieAvroWriteSupport writeSupport = new HoodieAvroWriteSupport(new AvroSchemaConverter().convert(schema.toAvroSchema()),
         schema, Option.of(filter), new Properties());
 
     HoodieParquetConfig<HoodieAvroWriteSupport> parquetConfig =

@@ -18,9 +18,9 @@
 
 package org.apache.parquet.avro;
 
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.util.Option;
 
-import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.parquet.conf.ParquetConfiguration;
@@ -86,10 +86,10 @@ public class HoodieAvroReadSupport<T> extends AvroReadSupport<T> {
 
     String requestedProjectionString = configuration.get(AVRO_REQUESTED_PROJECTION);
     if (requestedProjectionString != null) {
-      Schema avroRequestedProjection = new Schema.Parser().parse(requestedProjectionString);
+      HoodieSchema avroRequestedProjection = HoodieSchema.parse(requestedProjectionString);
       Configuration conf = new Configuration();
       configuration.forEach(entry -> conf.set(entry.getKey(), entry.getValue()));
-      projection = new AvroSchemaConverter(conf).convert(avroRequestedProjection);
+      projection = new AvroSchemaConverter(conf).convert(avroRequestedProjection.toAvroSchema());
     }
 
     String avroReadSchema = configuration.get("parquet.avro.read.schema");

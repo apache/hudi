@@ -18,7 +18,6 @@
 
 package org.apache.hudi.table.action.bootstrap;
 
-import org.apache.avro.Schema;
 import org.apache.hudi.avro.model.HoodieFileStatus;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieKey;
@@ -71,8 +70,7 @@ class ParquetBootstrapMetadataHandler extends BaseBootstrapMetadataHandler {
         (Configuration) table.getStorageConf().unwrap(), new Path(sourceFilePath.toUri()),
         ParquetMetadataConverter.NO_FILTER);
     MessageType parquetSchema = readFooter.getFileMetaData().getSchema();
-    Schema schema = getAvroSchemaConverter((Configuration) table.getStorageConf().unwrap()).convert(parquetSchema);
-    return HoodieSchema.fromAvroSchema(schema);
+    return getAvroSchemaConverter((Configuration) table.getStorageConf().unwrap()).convert(parquetSchema);
   }
 
   @Override
@@ -89,7 +87,7 @@ class ParquetBootstrapMetadataHandler extends BaseBootstrapMetadataHandler {
     HoodieExecutor<Void> executor = null;
     try {
       Function<HoodieRecord, HoodieRecord> transformer = record -> {
-        String recordKey = record.getRecordKey(schema.getAvroSchema(), Option.of(keyGenerator));
+        String recordKey = record.getRecordKey(schema, Option.of(keyGenerator));
         return createNewMetadataBootstrapRecord(recordKey, partitionPath, recordType)
             // NOTE: Record have to be cloned here to make sure if it holds low-level engine-specific
             //       payload pointing into a shared, mutable (underlying) buffer we get a clean copy of

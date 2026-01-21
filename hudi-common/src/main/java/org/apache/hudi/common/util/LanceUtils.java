@@ -36,7 +36,6 @@ import org.apache.hudi.stats.HoodieColumnRangeMetadata;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 
-import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 
 import java.io.ByteArrayOutputStream;
@@ -104,7 +103,7 @@ public class LanceUtils extends FileFormatUtils {
   }
 
   @Override
-  public Schema readAvroSchema(HoodieStorage storage, StoragePath filePath) {
+  public HoodieSchema readSchema(HoodieStorage storage, StoragePath filePath) {
     try (HoodieFileReader fileReader =
                  HoodieIOFactory.getIOFactory(storage)
                          .getReaderFactory(HoodieRecord.HoodieRecordType.SPARK)
@@ -112,7 +111,7 @@ public class LanceUtils extends FileFormatUtils {
                                  ConfigUtils.DEFAULT_HUDI_CONFIG_FOR_READER,
                                  filePath,
                                  HoodieFileFormat.LANCE)) {
-      return fileReader.getSchema().getAvroSchema();
+      return fileReader.getSchema();
     } catch (IOException e) {
       throw new HoodieIOException("Failed to read schema from Lance file", e);
     }
@@ -129,7 +128,7 @@ public class LanceUtils extends FileFormatUtils {
   }
 
   @Override
-  public List<GenericRecord> readAvroRecords(HoodieStorage storage, StoragePath filePath, Schema schema) {
+  public List<GenericRecord> readAvroRecords(HoodieStorage storage, StoragePath filePath, HoodieSchema schema) {
     throw new UnsupportedOperationException("readAvroRecords with schema is not yet supported for Lance format");
   }
 
@@ -195,8 +194,8 @@ public class LanceUtils extends FileFormatUtils {
   public Pair<ByteArrayOutputStream, Object> serializeRecordsToLogBlock(HoodieStorage storage,
                                                                         Iterator<HoodieRecord> records,
                                                                         HoodieRecord.HoodieRecordType recordType,
-                                                                        Schema writerSchema,
-                                                                        Schema readerSchema,
+                                                                        HoodieSchema writerSchema,
+                                                                        HoodieSchema readerSchema,
                                                                         String keyFieldName,
                                                                         Map<String, String> paramsMap) throws IOException {
     throw new UnsupportedOperationException("serializeRecordsToLogBlock with iterator is not yet supported for Lance format");

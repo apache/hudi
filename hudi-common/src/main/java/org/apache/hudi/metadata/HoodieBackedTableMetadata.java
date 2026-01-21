@@ -73,10 +73,10 @@ import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 
+import lombok.Getter;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -107,14 +107,14 @@ import static org.apache.hudi.metadata.MetadataPartitionType.RECORD_INDEX;
 /**
  * Table metadata provided by an internal DFS backed Hudi metadata table.
  */
+@Slf4j
 public class HoodieBackedTableMetadata extends BaseTableMetadata {
-
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieBackedTableMetadata.class);
   private static final HoodieSchema SCHEMA = HoodieSchemaUtils.addMetadataFields(HoodieSchema.fromAvroSchema(HoodieMetadataRecord.getClassSchema()));
 
   private final String metadataBasePath;
   private final HoodieDataCleanupManager dataCleanupManager = new HoodieDataCleanupManager();
 
+  @Getter
   private HoodieTableMetaClient metadataMetaClient;
   private Set<String> validInstantTimestamps = null;
   private HoodieTableFileSystemView metadataFileSystemView;
@@ -148,7 +148,7 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
   private void initIfNeeded() {
     if (!isMetadataTableInitialized) {
       if (!HoodieTableMetadata.isMetadataTable(metadataBasePath)) {
-        LOG.info("Metadata table is disabled.");
+        log.info("Metadata table is disabled.");
       }
     } else if (this.metadataMetaClient == null) {
       try {
@@ -157,13 +157,13 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
             .setBasePath(metadataBasePath)
             .build();
       } catch (TableNotFoundException e) {
-        LOG.warn("Metadata table was not found at path {}", metadataBasePath);
+        log.warn("Metadata table was not found at path {}", metadataBasePath);
         this.isMetadataTableInitialized = false;
         this.metadataMetaClient = null;
         this.metadataFileSystemView = null;
         this.validInstantTimestamps = null;
       } catch (Exception e) {
-        LOG.error("Failed to initialize metadata table at path {}", metadataBasePath, e);
+        log.error("Failed to initialize metadata table at path {}", metadataBasePath, e);
         this.isMetadataTableInitialized = false;
         this.metadataMetaClient = null;
         this.metadataFileSystemView = null;
@@ -482,10 +482,10 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
       parallelism = (int) keys.map(k -> mappingFunction.apply(k, numFileSlices)).distinct().count();
       // In case of empty lookup set, we should avoid RDD with 0 partitions.
       parallelism = Math.max(parallelism, 1);
-      LOG.info("Repartitioning keys for partition {} from list data with parallelism: {}", partitionName, parallelism);
+      log.info("Repartitioning keys for partition {} from list data with parallelism: {}", partitionName, parallelism);
       keys = getEngineContext().parallelize(keys.collectAsList(), parallelism);
     } else if (keys.getNumPartitions() < metadataConfig.getRepartitionMinPartitionsThreshold()) {
-      LOG.info("Repartitioning keys for partition {} to {} partitions", partitionName, metadataConfig.getRepartitionDefaultPartitions());
+      log.info("Repartitioning keys for partition {} to {} partitions", partitionName, metadataConfig.getRepartitionDefaultPartitions());
       keys = keys.repartition(metadataConfig.getRepartitionDefaultPartitions());
     }
     return keys;
@@ -716,10 +716,6 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
 
   public boolean enabled() {
     return isMetadataTableInitialized;
-  }
-
-  public HoodieTableMetaClient getMetadataMetaClient() {
-    return metadataMetaClient;
   }
 
   public HoodieTableFileSystemView getMetadataFileSystemView() {

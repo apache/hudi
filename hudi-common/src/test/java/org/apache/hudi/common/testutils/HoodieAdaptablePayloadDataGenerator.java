@@ -114,7 +114,7 @@ public class HoodieAdaptablePayloadDataGenerator {
     List<HoodieRecord> updates = new ArrayList<>();
     Properties props = new Properties();
     for (HoodieRecord r : baseRecords) {
-      GenericRecord gr = (GenericRecord) r.toIndexedRecord(SCHEMA.toAvroSchema(), props).get().getData();
+      GenericRecord gr = (GenericRecord) r.toIndexedRecord(SCHEMA, props).get().getData();
       GenericRecord updated = getUpdate(Integer.parseInt(gr.get("id").toString()), gr.get("pt").toString(), ts, recordGen);
       updates.add(getHoodieRecord(updated, recordGen.getPayloadClass()));
     }
@@ -126,7 +126,7 @@ public class HoodieAdaptablePayloadDataGenerator {
     List<HoodieRecord> updates = new ArrayList<>();
     Properties props = new Properties();
     for (HoodieRecord r : baseRecords) {
-      GenericRecord gr = (GenericRecord) r.toIndexedRecord(SCHEMA.toAvroSchema(), props).get().getData();
+      GenericRecord gr = (GenericRecord) r.toIndexedRecord(SCHEMA, props).get().getData();
       GenericRecord updated = getUpdate(Integer.parseInt(gr.get("id").toString()), newPartition, ts, recordGen);
       updates.add(getHoodieRecord(updated, recordGen.getPayloadClass()));
     }
@@ -145,7 +145,7 @@ public class HoodieAdaptablePayloadDataGenerator {
     List<HoodieRecord> deletes = new ArrayList<>();
     Properties props = new Properties();
     for (HoodieRecord r : baseRecords) {
-      GenericRecord gr = (GenericRecord) r.toIndexedRecord(SCHEMA.toAvroSchema(), props).get().getData();
+      GenericRecord gr = (GenericRecord) r.toIndexedRecord(SCHEMA, props).get().getData();
       GenericRecord deleted = getDelete(Integer.parseInt(gr.get("id").toString()), gr.get("pt").toString(), ts, recordGen);
       deletes.add(getHoodieRecord(deleted, recordGen.getPayloadClass()));
     }
@@ -158,7 +158,7 @@ public class HoodieAdaptablePayloadDataGenerator {
     List<HoodieRecord> deletes = new ArrayList<>();
     Properties props = new Properties();
     for (HoodieRecord r : baseRecords) {
-      GenericRecord gr = (GenericRecord) r.toIndexedRecord(SCHEMA.toAvroSchema(), props).get().getData();
+      GenericRecord gr = (GenericRecord) r.toIndexedRecord(SCHEMA, props).get().getData();
       GenericRecord deleted = getDelete(Integer.parseInt(gr.get("id").toString()), newPartition, ts, recordGen);
       deletes.add(getHoodieRecord(deleted, recordGen.getPayloadClass()));
     }
@@ -198,18 +198,18 @@ public class HoodieAdaptablePayloadDataGenerator {
     }
     return new HoodieAvroIndexedRecord(r)
         .prependMetaFields(
-            SCHEMA.toAvroSchema(),
-            SCHEMA_WITH_METAFIELDS.toAvroSchema(),
+            SCHEMA,
+            SCHEMA_WITH_METAFIELDS,
             new MetadataValues().setRecordKey(r.get("id").toString()).setPartitionPath(r.get("pt").toString()),
             new Properties())
         .wrapIntoHoodieRecordPayloadWithParams(
-            SCHEMA_WITH_METAFIELDS.toAvroSchema(),
+            SCHEMA_WITH_METAFIELDS,
             getPayloadProps(payloadClass),
             Option.empty(),
             false,
             Option.empty(),
             false,
-            Option.of(SCHEMA.toAvroSchema()));
+            Option.of(SCHEMA));
   }
 
   @Getter

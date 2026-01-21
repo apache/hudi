@@ -19,13 +19,18 @@
 package org.apache.hudi.sink;
 
 import org.apache.hudi.client.HoodieFlinkWriteClient;
+import org.apache.hudi.client.common.HoodieFlinkEngineContext;
+import org.apache.hudi.common.config.HoodieMetadataConfig;
+import org.apache.hudi.common.data.HoodieListData;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieKey;
+import org.apache.hudi.common.model.HoodieRecordGlobalLocation;
 import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.marker.MarkerType;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.FileSystemViewStorageType;
+import org.apache.hudi.common.util.HoodieDataUtils;
 import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
@@ -35,12 +40,14 @@ import org.apache.hudi.exception.HoodieWriteConflictException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.io.FileGroupReaderBasedMergeHandle;
 import org.apache.hudi.io.HoodieWriteMergeHandle;
+import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.sink.utils.TestWriteBase;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.util.FlinkWriteClients;
 import org.apache.hudi.util.StreamerUtil;
 import org.apache.hudi.utils.TestData;
+import org.apache.hudi.utils.TestUtils;
 
 import org.apache.flink.configuration.Configuration;
 import org.junit.jupiter.api.Test;
@@ -49,10 +56,12 @@ import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import static org.apache.hudi.index.HoodieIndex.IndexType.GLOBAL_RECORD_LEVEL_INDEX;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -817,5 +826,61 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
       assertTrue(files.stream().noneMatch(f -> f.getPath().getName().endsWith("marker.CREATE")));
     }
     testHarness.checkpointComplete(1).checkWrittenData(EXPECTED1).end();
+  }
+
+  @Test
+  public void testBucketAssignWithRLI() throws Exception {
+    // use record level index
+    conf.set(FlinkOptions.INDEX_TYPE, GLOBAL_RECORD_LEVEL_INDEX.name());
+    conf.setString(HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_ENABLE_PROP.key(), "true");
+    TestHarness testHarness =
+        preparePipeline(conf)
+            .consume(TestData.DATA_SET_INSERT)
+            // no checkpoint, so the coordinator does not accept any events
+            .checkpoint(1)
+            .assertNextEvent(4, "par1,par2,par3,par4")
+            .checkpointComplete(1)
+            .checkWrittenData(EXPECTED1);
+
+    HoodieTableMetaClient metaClient = StreamerUtil.createMetaClient(conf);
+    HoodieTableMetadata metadataTable = metaClient.getTableFormat().getMetadataFactory().create(
+        HoodieFlinkEngineContext.DEFAULT,
+        metaClient.getStorage(),
+        StreamerUtil.metadataConfig(conf),
+        conf.get(FlinkOptions.PATH));
+
+    // validate the record level index data
+    String firstCommitTime = TestUtils.getLastCompleteInstant(conf.get(FlinkOptions.PATH));
+    Map<String, HoodieRecordGlobalLocation> result = HoodieDataUtils.dedupeAndCollectAsMap(
+        metadataTable.readRecordIndexLocationsWithKeys(
+            HoodieListData.eager(Arrays.asList("id1", "id2", "id3", "id4"))));
+    assertEquals(4, result.size());
+    result.values().forEach(location -> assertEquals(firstCommitTime, location.getInstantTime()));
+
+    testHarness.consume(TestData.DATA_SET_INSERT)
+        .checkpoint(2)
+        .assertNextEvent(4, "par1,par2,par3,par4")
+        .checkpointComplete(2)
+        .checkWrittenData(EXPECTED1)
+        .end();
+  }
+
+  @Test
+  public void testCacheCleanOfRecordIndexBackend() throws Exception {
+    // use record level index
+    conf.set(FlinkOptions.INDEX_TYPE, GLOBAL_RECORD_LEVEL_INDEX.name());
+    conf.setString(HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_ENABLE_PROP.key(), "true");
+    preparePipeline(conf)
+        // should be initialized with 1 inflight caches
+        .assertInflightCachesOfBucketAssigner(1)
+        .consume(TestData.DATA_SET_INSERT)
+        .checkpoint(1)
+        // new cache created since now checkpoint id is updated to 1
+        .assertInflightCachesOfBucketAssigner(2)
+        .assertNextEvent(4, "par1,par2,par3,par4")
+        .checkpointComplete(1)
+        // clean the first inflight cache, left the latest inflight cache.
+        .assertInflightCachesOfBucketAssigner(1)
+        .checkWrittenData(EXPECTED1);
   }
 }

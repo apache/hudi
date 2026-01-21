@@ -63,13 +63,14 @@ public class FileSystemBackedTableMetadata extends AbstractHoodieTableMetadata {
 
   private static final int DEFAULT_LISTING_PARALLELISM = 1500;
 
+  private final String tableName;
   private final boolean hiveStylePartitioningEnabled;
   private final boolean urlEncodePartitioningEnabled;
 
   public FileSystemBackedTableMetadata(HoodieEngineContext engineContext, HoodieTableConfig tableConfig,
                                        HoodieStorage storage, String datasetBasePath) {
     super(engineContext, storage, datasetBasePath);
-
+    this.tableName = tableConfig.getTableName();
     this.hiveStylePartitioningEnabled = Boolean.parseBoolean(tableConfig.getHiveStylePartitioningEnable());
     this.urlEncodePartitioningEnabled = Boolean.parseBoolean(tableConfig.getUrlEncodePartitioning());
   }
@@ -82,6 +83,7 @@ public class FileSystemBackedTableMetadata extends AbstractHoodieTableMetadata {
     StoragePath metaPath =
         new StoragePath(dataBasePath, HoodieTableMetaClient.METAFOLDER_NAME);
     HoodieTableConfig tableConfig = new HoodieTableConfig(storage, metaPath);
+    this.tableName = tableConfig.getTableName();
     this.hiveStylePartitioningEnabled =
         Boolean.parseBoolean(tableConfig.getHiveStylePartitioningEnable());
     this.urlEncodePartitioningEnabled =
@@ -159,7 +161,8 @@ public class FileSystemBackedTableMetadata extends AbstractHoodieTableMetadata {
 
       // List all directories in parallel
       engineContext.setJobStatus(this.getClass().getSimpleName(),
-          "Listing all partitions with prefix " + relativePathPrefix);
+          "Listing all partitions on " + this.tableName
+              + " with prefix " + relativePathPrefix);
       // Need to use serializable file status here, see HUDI-5936
       List<StoragePathInfo> dirToFileListing = engineContext.flatMap(pathsToList, path -> {
         try {
@@ -170,6 +173,7 @@ public class FileSystemBackedTableMetadata extends AbstractHoodieTableMetadata {
         }
       }, listingParallelism);
       pathsToList.clear();
+      engineContext.clearJobStatus();
 
       // if current dictionary contains PartitionMetadata, add it to result
       // if current dictionary does not contain PartitionMetadata, add it to queue to be processed.
@@ -200,6 +204,7 @@ public class FileSystemBackedTableMetadata extends AbstractHoodieTableMetadata {
                   }
                   return Pair.of(Option.empty(), Option.empty());
                 }, fileListingParallelism);
+        engineContext.clearJobStatus();
 
         partitionPaths.addAll(result.stream().filter(entry -> entry.getKey().isPresent())
             .map(entry -> entry.getKey().get())
@@ -246,7 +251,8 @@ public class FileSystemBackedTableMetadata extends AbstractHoodieTableMetadata {
     int parallelism = Math.min(DEFAULT_LISTING_PARALLELISM, partitionPaths.size());
 
     engineContext.setJobStatus(this.getClass().getSimpleName(),
-        "Listing all files in " + partitionPaths.size() + " partitions");
+        "Listing all files in " + partitionPaths.size() + " partitions from "
+            + this.tableName);
     // Need to use serializable file status here, see HUDI-5936
     List<Pair<String, List<StoragePathInfo>>> partitionToFiles =
         engineContext.map(new ArrayList<>(partitionPaths),
@@ -255,6 +261,7 @@ public class FileSystemBackedTableMetadata extends AbstractHoodieTableMetadata {
               return Pair.of(partitionPathStr,
                   FSUtils.getAllDataFilesInPartition(getStorage(), partitionPath));
             }, parallelism);
+    engineContext.clearJobStatus();
 
     return partitionToFiles.stream().collect(Collectors.toMap(pair -> pair.getLeft(),
         pair -> pair.getRight()));

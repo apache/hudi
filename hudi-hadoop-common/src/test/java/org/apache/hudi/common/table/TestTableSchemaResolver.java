@@ -40,10 +40,10 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.internal.schema.HoodieSchemaException;
 import org.apache.hudi.io.storage.HoodieIOFactory;
 import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
-import org.apache.hudi.storage.HoodieStorageUtils;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
@@ -64,7 +64,6 @@ import static org.apache.hudi.common.testutils.HoodieCommonTestHarness.getDataBl
 import static org.apache.hudi.common.testutils.SchemaTestUtil.getSimpleSchema;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
@@ -114,48 +113,12 @@ class TestTableSchemaResolver {
   }
 
   @Test
-  void testGetTableSchema() throws Exception {
-    // Setup: Create mock metaClient and configure behavior
-    HoodieTableMetaClient metaClient = mock(HoodieTableMetaClient.class, RETURNS_DEEP_STUBS);
-    HoodieSchema expectedSchema = getSimpleSchema();
-
-    // Mock table setup
-    when(metaClient.getTableConfig().populateMetaFields()).thenReturn(true);
-    when(metaClient.getTableConfig().getTableCreateSchema())
-        .thenReturn(Option.of(expectedSchema.toAvroSchema()));
-
-    when(metaClient.getActiveTimeline().getLastCommitMetadataWithValidSchema())
-        .thenReturn(Option.empty());
-
-    // Create resolver and call both methods
-    TableSchemaResolver resolver = new TableSchemaResolver(metaClient);
-
-    // Test 1: getTableSchema() - should use table config's populateMetaFields (true)
-    Schema avroSchema = resolver.getTableAvroSchema();
-    HoodieSchema hoodieSchema = resolver.getTableSchema();
-    assertNotNull(hoodieSchema);
-    assertEquals(avroSchema, hoodieSchema.getAvroSchema());
-
-    // Test 2: getTableSchema(true) - explicitly include metadata fields
-    Schema avroSchemaWithMetadata = resolver.getTableAvroSchema(true);
-    HoodieSchema hoodieSchemaWithMetadata = resolver.getTableSchema(true);
-    assertNotNull(hoodieSchemaWithMetadata);
-    assertEquals(avroSchemaWithMetadata, hoodieSchemaWithMetadata.getAvroSchema());
-
-    // Test 3: getTableSchema(false) - explicitly exclude metadata fields
-    Schema avroSchemaWithoutMetadata = resolver.getTableAvroSchema(false);
-    HoodieSchema hoodieSchemaWithoutMetadata = resolver.getTableSchema(false);
-    assertNotNull(hoodieSchemaWithoutMetadata);
-    assertEquals(avroSchemaWithoutMetadata, hoodieSchemaWithoutMetadata.getAvroSchema());
-  }
-
-  @Test
   void testReadSchemaFromLogFile() throws IOException, URISyntaxException, InterruptedException {
     String testDir = initTestDir("read_schema_from_log_file");
     StoragePath partitionPath = new StoragePath(testDir, "partition1");
     HoodieSchema expectedSchema = getSimpleSchema();
     StoragePath logFilePath = writeLogFile(partitionPath, expectedSchema.toAvroSchema());
-    assertEquals(expectedSchema.toAvroSchema(), TableSchemaResolver.readSchemaFromLogFile(
+    assertEquals(expectedSchema, TableSchemaResolver.readSchemaFromLogFile(
         HoodieStorageUtils.getStorage(new StoragePath(logFilePath.toString()), HoodieTestUtils.getDefaultStorageConf()),
         logFilePath));
   }
@@ -194,15 +157,16 @@ class TestTableSchemaResolver {
     try (MockedStatic<HoodieIOFactory> ioFactoryMockedStatic = mockStatic(HoodieIOFactory.class);
          MockedStatic<TableSchemaResolver> tableSchemaResolverMockedStatic = mockStatic(TableSchemaResolver.class)) {
       // return null for first parquet file to force iteration to inspect the next file
-      Schema schema = Schema.createRecord("test_schema", null, "test_namespace", false);
-      schema.setFields(Arrays.asList(new Schema.Field("int_field", Schema.create(Schema.Type.INT)), new Schema.Field("_hoodie_operation", Schema.create(Schema.Type.STRING))));
+      HoodieSchema schema = HoodieSchema.createRecord("test_schema", null, "test_namespace", false,
+          Arrays.asList(HoodieSchemaField.of("int_field", HoodieSchema.create(HoodieSchemaType.INT)),
+              HoodieSchemaField.of("_hoodie_operation", HoodieSchema.create(HoodieSchemaType.STRING))));
 
       // mock parquet file schema reading to return null for the first base file to force iteration
       HoodieIOFactory ioFactory = mock(HoodieIOFactory.class);
       FileFormatUtils fileFormatUtils = mock(FileFormatUtils.class);
       StoragePath parquetPath = new StoragePath("/tmp/hudi_table/partition1/baseFile1.parquet");
       when(ioFactory.getFileFormatUtils(parquetPath)).thenReturn(fileFormatUtils);
-      when(fileFormatUtils.readAvroSchema(any(), eq(parquetPath))).thenReturn(null);
+      when(fileFormatUtils.readSchema(any(), eq(parquetPath))).thenReturn(null);
       ioFactoryMockedStatic.when(() -> HoodieIOFactory.getIOFactory(any())).thenReturn(ioFactory);
       // mock log file schema reading to return the expected schema
       tableSchemaResolverMockedStatic.when(() -> TableSchemaResolver.readSchemaFromLogFile(any(), eq(new StoragePath("/tmp/hudi_table/" + logFileWriteStat.getPath()))))

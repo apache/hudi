@@ -36,7 +36,6 @@ import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.util.ExecutorFactory;
 
 import lombok.extern.slf4j.Slf4j;
-import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.conf.Configuration;
@@ -62,8 +61,7 @@ class OrcBootstrapMetadataHandler extends BaseBootstrapMetadataHandler {
     Reader orcReader = OrcFile.createReader(
         new Path(sourceFilePath.toUri()), OrcFile.readerOptions((Configuration) table.getStorageConf().unwrap()));
     TypeDescription orcSchema = orcReader.getSchema();
-    Schema schema = AvroOrcUtils.createAvroSchema(orcSchema);
-    return HoodieSchema.fromAvroSchema(schema);
+    return AvroOrcUtils.createSchema(orcSchema);
   }
 
   @Override
@@ -76,11 +74,11 @@ class OrcBootstrapMetadataHandler extends BaseBootstrapMetadataHandler {
     }
     Reader orcReader = OrcFile.createReader(
         new Path(sourceFilePath.toUri()), OrcFile.readerOptions((Configuration) table.getStorageConf().unwrap()));
-    TypeDescription orcSchema = AvroOrcUtils.createOrcSchema(schema.getAvroSchema());
+    TypeDescription orcSchema = AvroOrcUtils.createOrcSchema(schema);
     HoodieExecutor<Void> executor = null;
     RecordReader reader = orcReader.rows(new Reader.Options((Configuration) table.getStorageConf().unwrap()).schema(orcSchema));
     try {
-      executor = ExecutorFactory.create(config, new OrcReaderIterator<GenericRecord>(reader, schema.getAvroSchema(), orcSchema),
+      executor = ExecutorFactory.create(config, new OrcReaderIterator<GenericRecord>(reader, schema, orcSchema),
           new BootstrapRecordConsumer(bootstrapHandle), inp -> {
             String recKey = keyGenerator.getKey(inp).getRecordKey();
             GenericRecord gr = new GenericData.Record(METADATA_BOOTSTRAP_RECORD_SCHEMA.toAvroSchema());

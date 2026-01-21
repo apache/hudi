@@ -34,6 +34,7 @@ import org.apache.hudi.avro.processors.TimestampMilliLogicalTypeProcessor;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.schema.HoodieSchemaType;
+import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
@@ -147,7 +148,7 @@ public class MercifulJsonConverter {
       for (String inputFieldName : inputJson.keySet()) {
         // we expect many fields won't need sanitization so check if un-sanitized field name is already present
         if (!schemaToJsonFieldNames.containsKey(inputFieldName)) {
-          String sanitizedJsonFieldName = HoodieAvroUtils.sanitizeName(inputFieldName, invalidCharMask);
+          String sanitizedJsonFieldName = HoodieSchemaUtils.sanitizeName(inputFieldName, invalidCharMask);
           schemaToJsonFieldNames.putIfAbsent(sanitizedJsonFieldName, inputFieldName);
         }
       }

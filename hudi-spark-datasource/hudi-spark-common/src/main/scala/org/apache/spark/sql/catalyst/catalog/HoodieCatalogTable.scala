@@ -25,6 +25,7 @@ import org.apache.hudi.common.model.HoodieTableType
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.table.HoodieTableConfig.URL_ENCODE_PARTITIONING
 import org.apache.hudi.common.table.timeline.TimelineUtils
+import org.apache.hudi.common.util.StringUtils
 import org.apache.hudi.common.util.ValidationUtils.checkArgument
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
@@ -36,7 +37,7 @@ import org.apache.hudi.util.SparkConfigUtils.getStringWithAltKeys
 
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.SparkSession
-import org.apache.spark.sql.avro.SchemaConverters
+import org.apache.spark.sql.avro.HoodieSparkSchemaConverters
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.hudi.HoodieOptionConfig
 import org.apache.spark.sql.hudi.HoodieOptionConfig._
@@ -211,11 +212,13 @@ class HoodieCatalogTable(val spark: SparkSession, var table: CatalogTable) exten
       // Save all the table config to the hoodie.properties.
       val properties = TypedProperties.fromMap(tableConfigs.asJava)
 
+      val databaseFromIdentifier = table.identifier.database.getOrElse(
+        spark.sessionState.catalog.getCurrentDatabase)
       val catalogDatabaseName = formatName(spark,
-        table.identifier.database.getOrElse(spark.sessionState.catalog.getCurrentDatabase))
+        if (StringUtils.isNullOrEmpty(databaseFromIdentifier)) "default" else databaseFromIdentifier)
 
       val (recordName, namespace) = HoodieSchemaConversionUtils.getRecordNameAndNamespace(table.identifier.table)
-      val schema = SchemaConverters.toAvroType(dataSchema, nullable = false, recordName, namespace)
+      val schema = HoodieSparkSchemaConverters.toHoodieType(dataSchema, nullable = false, recordName, namespace)
       val partitionColumns = if (SparkConfigUtils.containsConfigProperty(tableConfigs, KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME)) {
         SparkConfigUtils.getStringWithAltKeys(tableConfigs, KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME)
       } else if (table.partitionColumnNames.isEmpty) {

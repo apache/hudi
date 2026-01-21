@@ -1536,7 +1536,7 @@ Generate random record using TRIP_ENCODED_DECIMAL_SCHEMA
     public static RecordIdentifier fromTripTestPayload(HoodieAvroIndexedRecord record, String[] orderingFields) {
       String recordKey = record.getRecordKey();
       String partitionPath = record.getPartitionPath();
-      Comparable orderingValue = record.getOrderingValue(record.getData().getSchema(), CollectionUtils.emptyProps(), orderingFields);
+      Comparable orderingValue = record.getOrderingValue(HoodieSchema.fromAvroSchema(record.getData().getSchema()), CollectionUtils.emptyProps(), orderingFields);
       String orderingValStr = orderingValue.toString();
       String riderValue = ((GenericRecord) record.getData()).hasField("rider") ? ((GenericRecord) record.getData()).get("rider").toString() : "";
       return new RecordIdentifier(recordKey, partitionPath, orderingValStr, riderValue);

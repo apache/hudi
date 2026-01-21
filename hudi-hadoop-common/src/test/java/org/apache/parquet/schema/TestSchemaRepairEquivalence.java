@@ -19,6 +19,8 @@
 
 package org.apache.parquet.schema;
 
+import org.apache.hudi.common.schema.HoodieSchema;
+
 import org.apache.avro.LogicalTypes;
 import org.apache.avro.Schema;
 import org.apache.avro.SchemaBuilder;
@@ -52,17 +54,17 @@ public class TestSchemaRepairEquivalence {
     Schema repairedAvro = AvroSchemaRepair.repairLogicalTypes(requestedAvro, tableAvro);
 
     // Convert to Parquet schemas
-    MessageType requestedParquet = converter.convert(requestedAvro);
-    MessageType tableParquet = converter.convert(tableAvro);
+    MessageType requestedParquet = converter.convert(HoodieSchema.fromAvroSchema(requestedAvro));
+    MessageType tableParquet = converter.convert(HoodieSchema.fromAvroSchema(tableAvro));
 
     // Apply Parquet repair
     MessageType repairedParquet = SchemaRepair.repairLogicalTypes(requestedParquet, tableParquet);
 
     // Convert repaired Parquet back to Avro
-    Schema repairedParquetAsAvro = converter.convert(repairedParquet);
+    HoodieSchema repairedParquetAsSchema = converter.convert(repairedParquet);
 
     // Verify equivalence
-    assertEquals(repairedAvro, repairedParquetAsAvro,
+    assertEquals(repairedAvro, repairedParquetAsSchema.toAvroSchema(),
         "SchemaRepair and AvroSchemaRepair should produce equivalent results");
   }
 

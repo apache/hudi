@@ -78,7 +78,7 @@ public class HttpRequestClient {
     queryParameters.forEach(builder::addParameter);
 
     String url = builder.toString();
-    log.debug("Sending request : ( {} )", url);
+    log.debug("Sending request: ( {} )", url);
     Response response;
     int timeout = this.timeoutSecs * 1000; // msec
     switch (method) {

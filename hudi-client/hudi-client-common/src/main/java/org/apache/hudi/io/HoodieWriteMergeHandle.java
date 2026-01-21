@@ -261,7 +261,7 @@ public class HoodieWriteMergeHandle<T, I, K, O> extends HoodieAbstractMergeHandl
   protected void writeInsertRecord(HoodieRecord<T> newRecord) throws IOException {
     HoodieSchema schema = getNewSchema();
     // just skip the ignored record
-    if (newRecord.shouldIgnore(schema.toAvroSchema(), config.getProps())) {
+    if (newRecord.shouldIgnore(schema, config.getProps())) {
       return;
     }
     writeInsertRecord(newRecord, schema, config.getProps());
@@ -359,7 +359,7 @@ public class HoodieWriteMergeHandle<T, I, K, O> extends HoodieAbstractMergeHandl
     HoodieSchema oldSchema = writeSchemaWithMetaFields;
     HoodieSchema newSchema = getNewSchema();
     boolean copyOldRecord = true;
-    String key = oldRecord.getRecordKey(oldSchema.toAvroSchema(), keyGeneratorOpt);
+    String key = oldRecord.getRecordKey(oldSchema, keyGeneratorOpt);
     TypedProperties props = config.getPayloadConfig().getProps();
     if (keyToNewRecords.containsKey(key)) {
       // If we have duplicate records that we are updating, then the hoodie record will be deflated after
@@ -372,7 +372,7 @@ public class HoodieWriteMergeHandle<T, I, K, O> extends HoodieAbstractMergeHandl
         BufferedRecord<T> mergeResult = recordMerger.merge(oldBufferedRecord, newBufferedRecord, readerContext.getRecordContext(), props);
         HoodieSchema combineRecordSchema = readerContext.getRecordContext().getSchemaFromBufferRecord(mergeResult);
         HoodieRecord combinedRecord = readerContext.getRecordContext().constructHoodieRecord(mergeResult);
-        if (combinedRecord.shouldIgnore(combineRecordSchema.toAvroSchema(), props)) {
+        if (combinedRecord.shouldIgnore(combineRecordSchema, props)) {
           // If it is an IGNORE_RECORD, just copy the old record, and do not update the new record.
           copyOldRecord = true;
         } else if (writeUpdateRecord(newRecord, oldRecord, combinedRecord, combineRecordSchema)) {
@@ -409,13 +409,11 @@ public class HoodieWriteMergeHandle<T, I, K, O> extends HoodieAbstractMergeHandl
     if (shouldPreserveRecordMetadata) {
       // NOTE: `FILENAME_METADATA_FIELD` has to be rewritten to correctly point to the
       //       file holding this record even in cases when overall metadata is preserved
-      HoodieRecord populatedRecord = record.updateMetaField(schema.toAvroSchema(), HoodieRecord.FILENAME_META_FIELD_ORD, newFilePath.getName());
-      //TODO boundary to follow up in later pr to use HoodieSchema directly
+      HoodieRecord populatedRecord = record.updateMetaField(schema, HoodieRecord.FILENAME_META_FIELD_ORD, newFilePath.getName());
       fileWriter.write(key.getRecordKey(), populatedRecord, writeSchemaWithMetaFields, props);
     } else {
       // rewrite the record to include metadata fields in schema, and the values will be set later.
-      //TODO boundary to follow up in later pr to use HoodieSchema directly
-      record = record.prependMetaFields(schema.toAvroSchema(), writeSchemaWithMetaFields.toAvroSchema(), new MetadataValues(), config.getProps());
+      record = record.prependMetaFields(schema, writeSchemaWithMetaFields, new MetadataValues(), config.getProps());
       fileWriter.writeWithMetadata(key, record, writeSchemaWithMetaFields, props);
     }
   }

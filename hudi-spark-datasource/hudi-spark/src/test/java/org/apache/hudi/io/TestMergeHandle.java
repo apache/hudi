@@ -418,7 +418,7 @@ public class TestMergeHandle extends BaseTestHandle {
             || inputAndExpectedDataSet.getValidUpdates().stream().anyMatch(rec -> rec.getRecordKey().equals(secondaryIndexStat.getRecordKey())));
       } else {
         HoodieRecord record = inputAndExpectedDataSet.expectedRecordsMap.get(secondaryIndexStat.getRecordKey());
-        assertEquals(record.getColumnValueAsJava(HOODIE_SCHEMA.getAvroSchema(), "rider", properties).toString(),
+        assertEquals(record.getColumnValueAsJava(HOODIE_SCHEMA, "rider", properties).toString(),
             secondaryIndexStat.getSecondaryKeyValue().toString());
       }
     }
@@ -440,13 +440,13 @@ public class TestMergeHandle extends BaseTestHandle {
 
     // Append event_time.
     records.forEach(record -> {
-      Object eventTimeValue = record.getColumnValueAsJava(schema.toAvroSchema(), eventTimeFieldName, props);
+      Object eventTimeValue = record.getColumnValueAsJava(schema, eventTimeFieldName, props);
       if (eventTimeValue != null) {
         // Append event_time.
         Option<HoodieSchemaField> field = HoodieSchemaUtils.findNestedField(schema, eventTimeFieldName);
         // Field should definitely exist.
         eventTimeValue = record.convertColumnValueForLogicalType(
-            field.get().schema().toAvroSchema(), eventTimeValue, keepConsistentLogicalTimestamp);
+            field.get().schema(), eventTimeValue, keepConsistentLogicalTimestamp);
         int length = eventTimeValue.toString().length();
         Long millisEventTime = null;
         if (length == 10) {

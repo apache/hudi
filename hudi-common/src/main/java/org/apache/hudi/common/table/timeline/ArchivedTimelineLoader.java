@@ -19,10 +19,9 @@
 package org.apache.hudi.common.table.timeline;
 
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.util.Option;
 
 import org.apache.avro.generic.GenericRecord;
-
-import org.apache.hudi.common.util.Option;
 
 import javax.annotation.Nullable;
 
@@ -68,4 +67,20 @@ public interface ArchivedTimelineLoader extends Serializable {
     // Default implementation calls the method without limit for backward compatibility
     loadInstants(metaClient, filter, loadMode, commitsFilter, recordConsumer);
   }
+
+  /**
+   * Loads all the instants from the files in the timeline that match the given range filter
+   *
+   * @param metaClient     The meta client.
+   * @param fileFilter     The time range filter for limiting the files to be loaded.
+   * @param loadMode       The load mode.
+   * @param recordConsumer Consumer of the instant record payload.
+   * @return the last instant time loaded or empty if no instant is loaded.
+   */
+  Option<String>  loadAllInstantsFromFilesInRange(
+        HoodieTableMetaClient metaClient,
+        HoodieArchivedTimeline.TimeRangeFilter fileFilter,
+        HoodieArchivedTimeline.LoadMode loadMode,
+        BiConsumer<String, GenericRecord> recordConsumer
+  );
 }

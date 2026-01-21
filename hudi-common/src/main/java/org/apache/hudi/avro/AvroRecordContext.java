@@ -130,7 +130,7 @@ public class AvroRecordContext extends RecordContext<IndexedRecord> {
   @Override
   public IndexedRecord extractDataFromRecord(HoodieRecord record, HoodieSchema schema, Properties properties) {
     try {
-      return record.toIndexedRecord(schema.toAvroSchema(), properties).map(HoodieAvroIndexedRecord::getData).orElse(null);
+      return record.toIndexedRecord(schema, properties).map(HoodieAvroIndexedRecord::getData).orElse(null);
     } catch (IOException e) {
       throw new HoodieException("Failed to extract data from record: " + record, e);
     }

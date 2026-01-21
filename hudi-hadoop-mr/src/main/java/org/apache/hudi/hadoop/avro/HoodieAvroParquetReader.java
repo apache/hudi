@@ -18,8 +18,8 @@
 
 package org.apache.hudi.hadoop.avro;
 
-import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.hadoop.HoodieColumnProjectionUtils;
 import org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils;
@@ -53,11 +53,11 @@ import static org.apache.parquet.hadoop.ParquetInputFormat.getFilter;
 public class HoodieAvroParquetReader extends RecordReader<Void, ArrayWritable> {
 
   private final ParquetRecordReader<GenericData.Record> parquetRecordReader;
-  private Schema baseSchema;
+  private HoodieSchema baseSchema;
 
   public HoodieAvroParquetReader(InputSplit inputSplit, Configuration conf, Option<InternalSchema> internalSchemaOption, Option<Schema> dataSchema) throws IOException {
     if (dataSchema.isPresent()) {
-      baseSchema = dataSchema.get();
+      baseSchema = HoodieSchema.fromAvroSchema(dataSchema.get());
     } else {
       // get base schema
       ParquetMetadata fileFooter =
@@ -68,19 +68,19 @@ public class HoodieAvroParquetReader extends RecordReader<Void, ArrayWritable> {
       if (internalSchemaOption.isPresent()) {
         // do schema reconciliation in case there exists read column which is not in the file schema.
         InternalSchema mergedInternalSchema = new InternalSchemaMerger(
-            InternalSchemaConverter.convert(HoodieSchema.fromAvroSchema(baseSchema)),
+            InternalSchemaConverter.convert(baseSchema),
             internalSchemaOption.get(),
             true,
             true).mergeSchema();
-        baseSchema = InternalSchemaConverter.convert(mergedInternalSchema, baseSchema.getFullName()).getAvroSchema();
+        baseSchema = InternalSchemaConverter.convert(mergedInternalSchema, baseSchema.getFullName());
       }
 
       // if exists read columns, we need to filter columns.
       List<String> readColNames = Arrays.asList(HoodieColumnProjectionUtils.getReadColumnNames(conf));
       if (!readColNames.isEmpty()) {
-        Schema filterSchema = HoodieAvroUtils.generateProjectionSchema(baseSchema, readColNames);
-        AvroReadSupport.setAvroReadSchema(conf, filterSchema);
-        AvroReadSupport.setRequestedProjection(conf, filterSchema);
+        HoodieSchema filterSchema = HoodieSchemaUtils.generateProjectionSchema(baseSchema, readColNames);
+        AvroReadSupport.setAvroReadSchema(conf, filterSchema.toAvroSchema());
+        AvroReadSupport.setRequestedProjection(conf, filterSchema.toAvroSchema());
       }
     }
     parquetRecordReader = new ParquetRecordReader<>(new AvroReadSupport<>(), getFilter(conf));
@@ -104,7 +104,7 @@ public class HoodieAvroParquetReader extends RecordReader<Void, ArrayWritable> {
   @Override
   public ArrayWritable getCurrentValue() throws IOException, InterruptedException {
     GenericRecord record = parquetRecordReader.getCurrentValue();
-    return (ArrayWritable) HoodieRealtimeRecordReaderUtils.avroToArrayWritable(record, baseSchema, true);
+    return (ArrayWritable) HoodieRealtimeRecordReaderUtils.avroToArrayWritable(record, baseSchema.toAvroSchema(), true);
   }
 
   @Override

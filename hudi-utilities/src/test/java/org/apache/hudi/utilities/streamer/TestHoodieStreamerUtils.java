@@ -118,7 +118,7 @@ public class TestHoodieStreamerUtils extends UtilitiesTestBase {
     List<HoodieRecord> records = recordOpt.get().collect();
     assertEquals(1, records.size());
     Object[] columnValues = records.get(0).getColumnValues(
-        schema.toAvroSchema(), new String[] {"timestamp", "_row_key", "partition_path", "rider", "driver"}, false);
+        schema, new String[] {"timestamp", "_row_key", "partition_path", "rider", "driver"}, false);
     Object[] expectedValues = recordType == HoodieRecordType.SPARK
         ? new Object[] {1000L, UTF8String.fromString("key1"), UTF8String.fromString("path1"),
         UTF8String.fromString("rider1"), UTF8String.fromString("driver1")}

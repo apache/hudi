@@ -244,7 +244,7 @@ public class TestBulkInsertInternalPartitioner extends HoodieClientTestBase impl
   private Comparator<HoodieRecord<? extends HoodieRecordPayload>> getCustomColumnComparator(HoodieSchema schema, boolean prependPartitionPath, String[] sortColumns) {
     Comparator<HoodieRecord<? extends HoodieRecordPayload>> comparator = Comparator.comparing(record -> {
       try {
-        GenericRecord genericRecord = (GenericRecord) record.toIndexedRecord(schema.toAvroSchema(), CollectionUtils.emptyProps()).get().getData();
+        GenericRecord genericRecord = (GenericRecord) record.toIndexedRecord(schema, CollectionUtils.emptyProps()).get().getData();
         List<Object> keys = new ArrayList<>();
         if (prependPartitionPath) {
           keys.add(record.getPartitionPath());

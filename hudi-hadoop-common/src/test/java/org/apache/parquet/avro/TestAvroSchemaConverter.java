@@ -20,10 +20,10 @@
 package org.apache.parquet.avro;
 
 import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaCompatibility;
+import org.apache.hudi.common.schema.HoodieSchemaField;
+import org.apache.hudi.common.schema.HoodieSchemaType;
 
-import org.apache.avro.JsonProperties;
-import org.apache.avro.LogicalTypes;
-import org.apache.avro.Schema;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.parquet.schema.LogicalTypeAnnotation;
 import org.apache.parquet.schema.MessageType;
@@ -37,12 +37,8 @@ import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.List;
 
-import static org.apache.avro.Schema.Type.INT;
-import static org.apache.avro.Schema.Type.LONG;
-import static org.apache.avro.Schema.Type.STRING;
-import static org.apache.avro.SchemaCompatibility.SchemaCompatibilityType.COMPATIBLE;
-import static org.apache.avro.SchemaCompatibility.checkReaderWriterCompatibility;
 import static org.apache.hudi.common.testutils.SchemaTestUtil.getSchemaFromResource;
 import static org.apache.parquet.avro.HoodieAvroParquetSchemaConverter.getAvroSchemaConverter;
 import static org.apache.parquet.schema.OriginalType.DATE;
@@ -60,6 +56,7 @@ import static org.apache.parquet.schema.PrimitiveType.PrimitiveTypeName.INT64;
 import static org.apache.parquet.schema.PrimitiveType.PrimitiveTypeName.INT96;
 import static org.apache.parquet.schema.Type.Repetition.REQUIRED;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
 public class TestAvroSchemaConverter {
@@ -110,45 +107,45 @@ public class TestAvroSchemaConverter {
       + "  required fixed_len_byte_array(1) myfixed;\n"
       + "}\n";
 
-  private void testAvroToParquetConversion(Schema avroSchema, String schemaString) throws Exception {
-    testAvroToParquetConversion(new Configuration(false), avroSchema, schemaString);
+  private void testAvroToParquetConversion(HoodieSchema schema, String schemaString) throws Exception {
+    testAvroToParquetConversion(new Configuration(false), schema, schemaString);
   }
 
-  private void testAvroToParquetConversion(Configuration conf, Schema avroSchema, String schemaString)
+  private void testAvroToParquetConversion(Configuration conf, HoodieSchema schema, String schemaString)
       throws Exception {
     HoodieAvroParquetSchemaConverter avroSchemaConverter = getAvroSchemaConverter(conf);
-    MessageType schema = avroSchemaConverter.convert(avroSchema);
+    MessageType messageType = avroSchemaConverter.convert(schema);
     MessageType expectedMT = MessageTypeParser.parseMessageType(schemaString);
-    assertEquals(expectedMT.toString(), schema.toString());
+    assertEquals(expectedMT.toString(), messageType.toString());
   }
 
-  private void testParquetToAvroConversion(Schema avroSchema, String schemaString) throws Exception {
-    testParquetToAvroConversion(new Configuration(false), avroSchema, schemaString);
+  private void testParquetToAvroConversion(HoodieSchema schema, String schemaString) throws Exception {
+    testParquetToAvroConversion(new Configuration(false), schema, schemaString);
   }
 
-  private void testParquetToAvroConversion(Configuration conf, Schema avroSchema, String schemaString)
+  private void testParquetToAvroConversion(Configuration conf, HoodieSchema schema, String schemaString)
       throws Exception {
     HoodieAvroParquetSchemaConverter avroSchemaConverter = getAvroSchemaConverter(conf);
-    Schema schema = avroSchemaConverter.convert(MessageTypeParser.parseMessageType(schemaString));
-    assertEquals(avroSchema.toString(), schema.toString());
+    HoodieSchema convertedSchema = avroSchemaConverter.convert(MessageTypeParser.parseMessageType(schemaString));
+    assertEquals(schema.toString(), convertedSchema.toString());
   }
 
-  private void testRoundTripConversion(Schema avroSchema, String schemaString) throws Exception {
-    testRoundTripConversion(new Configuration(), avroSchema, schemaString);
+  private void testRoundTripConversion(HoodieSchema schema, String schemaString) throws Exception {
+    testRoundTripConversion(new Configuration(), schema, schemaString);
   }
 
-  private void testRoundTripConversion(Configuration conf, Schema avroSchema, String schemaString) throws Exception {
+  private void testRoundTripConversion(Configuration conf, HoodieSchema schema, String schemaString) throws Exception {
     HoodieAvroParquetSchemaConverter avroSchemaConverter = getAvroSchemaConverter(conf);
-    MessageType schema = avroSchemaConverter.convert(avroSchema);
+    MessageType messageType = avroSchemaConverter.convert(schema);
     MessageType expectedMT = MessageTypeParser.parseMessageType(schemaString);
-    assertEquals(expectedMT.toString(), schema.toString());
-    Schema convertedAvroSchema = avroSchemaConverter.convert(expectedMT);
-    assertEquals(avroSchema.toString(), convertedAvroSchema.toString());
+    assertEquals(expectedMT.toString(), messageType.toString());
+    HoodieSchema convertedSchema = avroSchemaConverter.convert(expectedMT);
+    assertEquals(schema.toString(), convertedSchema.toString());
   }
 
   @Test()
   public void testTopLevelMustBeARecord() {
-    assertThrows("expected to throw", IllegalArgumentException.class, () -> getAvroSchemaConverter(new Configuration()).convert(Schema.create(INT)));
+    assertThrows("expected to throw", IllegalArgumentException.class, () -> getAvroSchemaConverter(new Configuration()).convert(HoodieSchema.create(HoodieSchemaType.INT)));
   }
 
   @Test
@@ -156,7 +153,7 @@ public class TestAvroSchemaConverter {
     HoodieSchema schema = getSchemaFromResource(TestAvroSchemaConverter.class, "/parquet-java/all.avsc");
     testAvroToParquetConversion(
         NEW_BEHAVIOR,
-        schema.toAvroSchema(),
+        schema,
         "message org.apache.parquet.avro.myrecord {\n"
             // Avro nulls are not encoded, unless they are null unions
             + "  required boolean myboolean;\n"
@@ -210,7 +207,7 @@ public class TestAvroSchemaConverter {
   public void testAllTypesOldListBehavior() throws Exception {
     HoodieSchema schema = getSchemaFromResource(TestAvroSchemaConverter.class, "/parquet-java/all.avsc");
     testAvroToParquetConversion(
-        schema.toAvroSchema(),
+        schema,
         "message org.apache.parquet.avro.myrecord {\n"
             // Avro nulls are not encoded, unless they are null unions
             + "  required boolean myboolean;\n"
@@ -256,14 +253,14 @@ public class TestAvroSchemaConverter {
   public void testAllTypesParquetToAvro() throws Exception {
     HoodieSchema schema = getSchemaFromResource(TestAvroSchemaConverter.class, "/parquet-java/allFromParquetNewBehavior.avsc");
     // Cannot use round-trip assertion because enum is lost
-    testParquetToAvroConversion(NEW_BEHAVIOR, schema.toAvroSchema(), ALL_PARQUET_SCHEMA);
+    testParquetToAvroConversion(NEW_BEHAVIOR, schema, ALL_PARQUET_SCHEMA);
   }
 
   @Test
   public void testAllTypesParquetToAvroOldBehavior() throws Exception {
     HoodieSchema schema = getSchemaFromResource(TestAvroSchemaConverter.class, "/parquet-java/allFromParquetOldBehavior.avsc");
     // Cannot use round-trip assertion because enum is lost
-    testParquetToAvroConversion(schema.toAvroSchema(), ALL_PARQUET_SCHEMA);
+    testParquetToAvroConversion(schema, ALL_PARQUET_SCHEMA);
   }
 
   @Test
@@ -281,18 +278,17 @@ public class TestAvroSchemaConverter {
 
   @Test
   public void testOptionalFields() throws Exception {
-    Schema schema = Schema.createRecord("record1", null, null, false);
-    Schema optionalInt = optional(Schema.create(INT));
-    schema.setFields(
-        Collections.singletonList(new Schema.Field("myint", optionalInt, null, JsonProperties.NULL_VALUE)));
+    HoodieSchema optionalInt = HoodieSchema.createNullable(HoodieSchemaType.INT);
+    HoodieSchema schema = HoodieSchema.createRecord("record1", null, null, false,
+        Collections.singletonList(HoodieSchemaField.of("myint", optionalInt, null, HoodieSchema.NULL_VALUE)));
     testRoundTripConversion(schema, "message record1 {\n" + "  optional int32 myint;\n" + "}\n");
   }
 
   @Test
   public void testOptionalMapValue() throws Exception {
-    Schema schema = Schema.createRecord("record1", null, null, false);
-    Schema optionalIntMap = Schema.createMap(optional(Schema.create(INT)));
-    schema.setFields(Arrays.asList(new Schema.Field("myintmap", optionalIntMap, null, null)));
+    HoodieSchema optionalIntMap = HoodieSchema.createMap(HoodieSchema.createNullable(HoodieSchema.create(HoodieSchemaType.INT)));
+    HoodieSchema schema = HoodieSchema.createRecord("record1", null, null, false,
+        Collections.singletonList(HoodieSchemaField.of("myintmap", optionalIntMap, null, null)));
     testRoundTripConversion(
         schema,
         "message record1 {\n" + "  required group myintmap (MAP) {\n"
@@ -306,9 +302,9 @@ public class TestAvroSchemaConverter {
 
   @Test
   public void testOptionalArrayElement() throws Exception {
-    Schema schema = Schema.createRecord("record1", null, null, false);
-    Schema optionalIntArray = Schema.createArray(optional(Schema.create(INT)));
-    schema.setFields(Arrays.asList(new Schema.Field("myintarray", optionalIntArray, null, null)));
+    HoodieSchema optionalIntArray = HoodieSchema.createArray(HoodieSchema.createNullable(HoodieSchemaType.INT));
+    HoodieSchema schema = HoodieSchema.createRecord("record1", null, null, false,
+        Collections.singletonList(HoodieSchemaField.of("myintarray", optionalIntArray, null, null)));
     testRoundTripConversion(
         NEW_BEHAVIOR,
         schema,
@@ -322,10 +318,12 @@ public class TestAvroSchemaConverter {
 
   @Test
   public void testUnionOfTwoTypes() throws Exception {
-    Schema schema = Schema.createRecord("record2", null, null, false);
-    Schema multipleTypes = Schema.createUnion(
-        Arrays.asList(Schema.create(Schema.Type.NULL), Schema.create(INT), Schema.create(Schema.Type.FLOAT)));
-    schema.setFields(Arrays.asList(new Schema.Field("myunion", multipleTypes, null, JsonProperties.NULL_VALUE)));
+    HoodieSchema multipleTypes = HoodieSchema.createUnion(
+        Arrays.asList(HoodieSchema.create(HoodieSchemaType.NULL),
+            HoodieSchema.create(HoodieSchemaType.INT),
+            HoodieSchema.create(HoodieSchemaType.FLOAT)));
+    HoodieSchema schema = HoodieSchema.createRecord("record2", null, null, false,
+        Collections.singletonList(HoodieSchemaField.of("myunion", multipleTypes, null, HoodieSchema.NULL_VALUE)));
 
     // Avro union is modelled using optional data members of the different
     // types. This does not translate back into an Avro union
@@ -340,15 +338,13 @@ public class TestAvroSchemaConverter {
 
   @Test
   public void testArrayOfOptionalRecords() throws Exception {
-    Schema innerRecord = Schema.createRecord("element", null, null, false);
-    Schema optionalString = optional(Schema.create(Schema.Type.STRING));
-    innerRecord.setFields(Arrays.asList(
-        new Schema.Field("s1", optionalString, null, JsonProperties.NULL_VALUE),
-        new Schema.Field("s2", optionalString, null, JsonProperties.NULL_VALUE)));
-    Schema schema = Schema.createRecord("HasArray", null, null, false);
-    schema.setFields(
-        Arrays.asList(new Schema.Field("myarray", Schema.createArray(optional(innerRecord)), null, null)));
-    System.err.println("Avro schema: " + schema.toString(true));
+    HoodieSchema optionalString = HoodieSchema.createNullable(HoodieSchema.create(HoodieSchemaType.STRING));
+    List<HoodieSchemaField> innerRecordFields = Arrays.asList(
+        HoodieSchemaField.of("s1", optionalString, null, HoodieSchema.NULL_VALUE),
+        HoodieSchemaField.of("s2", optionalString, null, HoodieSchema.NULL_VALUE));
+    HoodieSchema innerRecord = HoodieSchema.createRecord("element", null, null, false, innerRecordFields);
+    HoodieSchema schema = HoodieSchema.createRecord("HasArray", null, null, false,
+        Collections.singletonList(HoodieSchemaField.of("myarray", HoodieSchema.createArray(HoodieSchema.createNullable(innerRecord)), null, null)));
 
     testRoundTripConversion(
         NEW_BEHAVIOR,
@@ -366,15 +362,13 @@ public class TestAvroSchemaConverter {
 
   @Test
   public void testArrayOfOptionalRecordsOldBehavior() throws Exception {
-    Schema innerRecord = Schema.createRecord("InnerRecord", null, null, false);
-    Schema optionalString = optional(Schema.create(Schema.Type.STRING));
-    innerRecord.setFields(Arrays.asList(
-        new Schema.Field("s1", optionalString, null, JsonProperties.NULL_VALUE),
-        new Schema.Field("s2", optionalString, null, JsonProperties.NULL_VALUE)));
-    Schema schema = Schema.createRecord("HasArray", null, null, false);
-    schema.setFields(
-        Arrays.asList(new Schema.Field("myarray", Schema.createArray(optional(innerRecord)), null, null)));
-    System.err.println("Avro schema: " + schema.toString(true));
+    HoodieSchema optionalString = HoodieSchema.createNullable(HoodieSchemaType.STRING);
+    List<HoodieSchemaField> innerRecordFields = Arrays.asList(
+        HoodieSchemaField.of("s1", optionalString, null, HoodieSchema.NULL_VALUE),
+        HoodieSchemaField.of("s2", optionalString, null, HoodieSchema.NULL_VALUE));
+    HoodieSchema innerRecord = HoodieSchema.createRecord("InnerRecord", null, null, false, innerRecordFields);
+    HoodieSchema schema = HoodieSchema.createRecord("HasArray", null, null, false,
+        Collections.singletonList(HoodieSchemaField.of("myarray", HoodieSchema.createArray(HoodieSchema.createNullable(innerRecord)), null, null)));
 
     // Cannot use round-trip assertion because InnerRecord optional is removed
     testAvroToParquetConversion(
@@ -390,11 +384,9 @@ public class TestAvroSchemaConverter {
 
   @Test
   public void testOldAvroListOfLists() throws Exception {
-    Schema listOfLists = optional(Schema.createArray(Schema.createArray(Schema.create(INT))));
-    Schema schema = Schema.createRecord("AvroCompatListInList", null, null, false);
-    schema.setFields(
-        Arrays.asList(new Schema.Field("listOfLists", listOfLists, null, JsonProperties.NULL_VALUE)));
-    System.err.println("Avro schema: " + schema.toString(true));
+    HoodieSchema listOfLists = HoodieSchema.createNullable(HoodieSchema.createArray(HoodieSchema.createArray(HoodieSchema.create(HoodieSchemaType.INT))));
+    HoodieSchema schema = HoodieSchema.createRecord("AvroCompatListInList", null, null, false,
+        Collections.singletonList(HoodieSchemaField.of("listOfLists", listOfLists, null, HoodieSchema.NULL_VALUE)));
 
     testRoundTripConversion(
         schema,
@@ -418,11 +410,9 @@ public class TestAvroSchemaConverter {
 
   @Test
   public void testOldThriftListOfLists() throws Exception {
-    Schema listOfLists = optional(Schema.createArray(Schema.createArray(Schema.create(INT))));
-    Schema schema = Schema.createRecord("ThriftCompatListInList", null, null, false);
-    schema.setFields(
-        Arrays.asList(new Schema.Field("listOfLists", listOfLists, null, JsonProperties.NULL_VALUE)));
-    System.err.println("Avro schema: " + schema.toString(true));
+    HoodieSchema listOfLists = HoodieSchema.createNullable(HoodieSchema.createArray(HoodieSchema.createArray(HoodieSchema.create(HoodieSchemaType.INT))));
+    HoodieSchema schema = HoodieSchema.createRecord("ThriftCompatListInList", null, null, false,
+        Collections.singletonList(HoodieSchemaField.of("listOfLists", listOfLists, null, HoodieSchema.NULL_VALUE)));
 
     // Cannot use round-trip assertion because repeated group names differ
     testParquetToAvroConversion(
@@ -450,11 +440,9 @@ public class TestAvroSchemaConverter {
     // This tests the case where we don't detect a 2-level list by the repeated
     // group's name, but it must be 2-level because the repeated group doesn't
     // contain an optional or repeated element as required for 3-level lists
-    Schema listOfLists = optional(Schema.createArray(Schema.createArray(Schema.create(INT))));
-    Schema schema = Schema.createRecord("UnknownTwoLevelListInList", null, null, false);
-    schema.setFields(
-        Arrays.asList(new Schema.Field("listOfLists", listOfLists, null, JsonProperties.NULL_VALUE)));
-    System.err.println("Avro schema: " + schema.toString(true));
+    HoodieSchema listOfLists = HoodieSchema.createNullable(HoodieSchema.createArray(HoodieSchema.createArray(HoodieSchema.create(HoodieSchemaType.INT))));
+    HoodieSchema schema = HoodieSchema.createRecord("UnknownTwoLevelListInList", null, null, false,
+        Collections.singletonList(HoodieSchemaField.of("listOfLists", listOfLists, null, HoodieSchema.NULL_VALUE)));
 
     // Cannot use round-trip assertion because repeated group names differ
     testParquetToAvroConversion(
@@ -479,9 +467,9 @@ public class TestAvroSchemaConverter {
 
   @Test
   public void testParquetMapWithoutMapKeyValueAnnotation() throws Exception {
-    Schema schema = Schema.createRecord("myrecord", null, null, false);
-    Schema map = Schema.createMap(Schema.create(INT));
-    schema.setFields(Collections.singletonList(new Schema.Field("mymap", map, null, null)));
+    HoodieSchema map = HoodieSchema.createMap(HoodieSchema.create(HoodieSchemaType.INT));
+    HoodieSchema schema = HoodieSchema.createRecord("myrecord", null, null, false,
+        Collections.singletonList(HoodieSchemaField.of("mymap", map, null, null)));
     String parquetSchema = "message myrecord {\n" + "  required group mymap (MAP) {\n"
         + "    repeated group map {\n"
         + "      required binary key (UTF8);\n"
@@ -496,18 +484,18 @@ public class TestAvroSchemaConverter {
 
   @Test
   public void testDecimalBytesType() throws Exception {
-    Schema schema = Schema.createRecord("myrecord", null, null, false);
-    Schema decimal = LogicalTypes.decimal(9, 2).addToSchema(Schema.create(Schema.Type.BYTES));
-    schema.setFields(Collections.singletonList(new Schema.Field("dec", decimal, null, null)));
+    HoodieSchema decimal = HoodieSchema.createDecimal(9, 2);
+    HoodieSchema schema = HoodieSchema.createRecord("myrecord", null, null, false,
+        Collections.singletonList(HoodieSchemaField.of("dec", decimal, null, null)));
 
     testRoundTripConversion(schema, "message myrecord {\n" + "  required binary dec (DECIMAL(9,2));\n" + "}\n");
   }
 
   @Test
   public void testDecimalFixedType() throws Exception {
-    Schema schema = Schema.createRecord("myrecord", null, null, false);
-    Schema decimal = LogicalTypes.decimal(9, 2).addToSchema(Schema.createFixed("dec", null, null, 8));
-    schema.setFields(Collections.singletonList(new Schema.Field("dec", decimal, null, null)));
+    HoodieSchema decimal = HoodieSchema.createDecimal("dec", null, null, 9, 2, 8);
+    HoodieSchema schema = HoodieSchema.createRecord("myrecord", null, null, false,
+        Collections.singletonList(HoodieSchemaField.of("dec", decimal, null, null)));
 
     testRoundTripConversion(
         schema, "message myrecord {\n" + "  required fixed_len_byte_array(8) dec (DECIMAL(9,2));\n" + "}\n");
@@ -515,8 +503,8 @@ public class TestAvroSchemaConverter {
 
   @Test
   public void testDecimalIntegerType() throws Exception {
-    Schema expected = Schema.createRecord(
-        "myrecord", null, null, false, Arrays.asList(new Schema.Field("dec", Schema.create(INT), null, null)));
+    HoodieSchema expected = HoodieSchema.createRecord("myrecord", null, null, false,
+        Collections.singletonList(HoodieSchemaField.of("dec", HoodieSchema.create(HoodieSchemaType.INT), null, null)));
 
     // the decimal portion is lost because it isn't valid in Avro
     testParquetToAvroConversion(
@@ -525,8 +513,9 @@ public class TestAvroSchemaConverter {
 
   @Test
   public void testDecimalLongType() throws Exception {
-    Schema expected = Schema.createRecord(
-        "myrecord", null, null, false, Arrays.asList(new Schema.Field("dec", Schema.create(LONG), null, null)));
+    HoodieSchema expected = HoodieSchema.createRecord(
+        "myrecord", null, null, false,
+        Collections.singletonList(HoodieSchemaField.of("dec", HoodieSchema.create(HoodieSchemaType.LONG), null, null)));
 
     // the decimal portion is lost because it isn't valid in Avro
     testParquetToAvroConversion(
@@ -538,10 +527,9 @@ public class TestAvroSchemaConverter {
     Configuration enableInt96ReadingConfig = new Configuration();
     enableInt96ReadingConfig.setBoolean(AvroReadSupport.READ_INT96_AS_FIXED, true);
 
-    Schema schema = Schema.createRecord("myrecord", null, null, false);
-    Schema int96schema = Schema.createFixed("INT96", "INT96 represented as byte[12]", null, 12);
-    schema.setFields(Collections.singletonList(
-      new Schema.Field("int96_field", int96schema, null, null)));
+    HoodieSchema int96schema = HoodieSchema.createFixed("INT96", "INT96 represented as byte[12]", null, 12);
+    HoodieSchema schema = HoodieSchema.createRecord("myrecord", null, null, false,
+        Collections.singletonList(HoodieSchemaField.of("int96_field", int96schema, null, null)));
 
     testParquetToAvroConversion(enableInt96ReadingConfig, schema, "message myrecord {\n"
         + "  required int96 int96_field;\n"
@@ -550,8 +538,6 @@ public class TestAvroSchemaConverter {
 
   @Test
   public void testParquetInt96DefaultFail() throws Exception {
-    Schema schema = Schema.createRecord("myrecord", null, null, false);
-
     MessageType parquetSchemaWithInt96 =
         MessageTypeParser.parseMessageType("message myrecord {\n  required int96 int96_field;\n}\n");
 
@@ -563,9 +549,10 @@ public class TestAvroSchemaConverter {
 
   @Test
   public void testDateType() throws Exception {
-    Schema date = LogicalTypes.date().addToSchema(Schema.create(INT));
-    Schema expected = Schema.createRecord(
-        "myrecord", null, null, false, Arrays.asList(new Schema.Field("date", date, null, null)));
+    HoodieSchema date = HoodieSchema.createDate();
+    HoodieSchema expected = HoodieSchema.createRecord(
+        "myrecord", null, null, false,
+        Collections.singletonList(HoodieSchemaField.of("date", date, null, null)));
 
     testRoundTripConversion(expected, "message myrecord {\n" + "  required int32 date (DATE);\n" + "}\n");
 
@@ -587,9 +574,10 @@ public class TestAvroSchemaConverter {
 
   @Test
   public void testTimeMillisType() throws Exception {
-    Schema date = LogicalTypes.timeMillis().addToSchema(Schema.create(INT));
-    Schema expected = Schema.createRecord(
-        "myrecord", null, null, false, Arrays.asList(new Schema.Field("time", date, null, null)));
+    HoodieSchema timeMillis = HoodieSchema.createTimeMillis();
+    HoodieSchema expected = HoodieSchema.createRecord(
+        "myrecord", null, null, false,
+        Collections.singletonList(HoodieSchemaField.of("time", timeMillis, null, null)));
 
     testRoundTripConversion(
         expected, "message myrecord {\n" + "  required int32 time (TIME(MILLIS,true));\n" + "}\n");
@@ -612,9 +600,10 @@ public class TestAvroSchemaConverter {
 
   @Test
   public void testTimeMicrosType() throws Exception {
-    Schema date = LogicalTypes.timeMicros().addToSchema(Schema.create(LONG));
-    Schema expected = Schema.createRecord(
-        "myrecord", null, null, false, Arrays.asList(new Schema.Field("time", date, null, null)));
+    HoodieSchema timeMicros = HoodieSchema.createTimeMicros();
+    HoodieSchema expected = HoodieSchema.createRecord(
+        "myrecord", null, null, false,
+        Collections.singletonList(HoodieSchemaField.of("time", timeMicros, null, null)));
 
     testRoundTripConversion(
         expected, "message myrecord {\n" + "  required int64 time (TIME(MICROS,true));\n" + "}\n");
@@ -637,14 +626,15 @@ public class TestAvroSchemaConverter {
 
   @Test
   public void testTimestampMillisType() throws Exception {
-    Schema date = LogicalTypes.timestampMillis().addToSchema(Schema.create(LONG));
-    Schema expected = Schema.createRecord(
-        "myrecord", null, null, false, Arrays.asList(new Schema.Field("timestamp", date, null, null)));
+    HoodieSchema timestampMillis = HoodieSchema.createTimestampMillis();
+    HoodieSchema expected = HoodieSchema.createRecord(
+        "myrecord", null, null, false,
+        Collections.singletonList(HoodieSchemaField.of("timestamp", timestampMillis, null, null)));
 
     testRoundTripConversion(
         expected, "message myrecord {\n" + "  required int64 timestamp (TIMESTAMP(MILLIS,true));\n" + "}\n");
 
-    final Schema converted = getAvroSchemaConverter(new Configuration())
+    final HoodieSchema converted = getAvroSchemaConverter(new Configuration())
         .convert(Types.buildMessage()
             .addField(Types.primitive(INT64, Type.Repetition.REQUIRED)
                 .as(LogicalTypeAnnotation.timestampType(
@@ -656,8 +646,8 @@ public class TestAvroSchemaConverter {
         "local-timestamp-millis",
         converted
             .getField("timestamp_type")
+            .get()
             .schema()
-            .getLogicalType()
             .getName());
 
     for (PrimitiveTypeName primitive :
@@ -678,9 +668,10 @@ public class TestAvroSchemaConverter {
 
   @Test
   public void testLocalTimestampMillisType() throws Exception {
-    Schema date = LogicalTypes.localTimestampMillis().addToSchema(Schema.create(LONG));
-    Schema expected = Schema.createRecord(
-        "myrecord", null, null, false, Arrays.asList(new Schema.Field("timestamp", date, null, null)));
+    HoodieSchema localTimestampMillis = HoodieSchema.createLocalTimestampMillis();
+    HoodieSchema expected = HoodieSchema.createRecord(
+        "myrecord", null, null, false,
+        Collections.singletonList(HoodieSchemaField.of("timestamp", localTimestampMillis, null, null)));
 
     testRoundTripConversion(
         expected, "message myrecord {\n" + "  required int64 timestamp (TIMESTAMP(MILLIS,false));\n" + "}\n");
@@ -703,9 +694,10 @@ public class TestAvroSchemaConverter {
 
   @Test
   public void testTimestampMicrosType() throws Exception {
-    Schema date = LogicalTypes.timestampMicros().addToSchema(Schema.create(LONG));
-    Schema expected = Schema.createRecord(
-        "myrecord", null, null, false, Arrays.asList(new Schema.Field("timestamp", date, null, null)));
+    HoodieSchema timestampMicros = HoodieSchema.createTimestampMicros();
+    HoodieSchema expected = HoodieSchema.createRecord(
+        "myrecord", null, null, false,
+        Collections.singletonList(HoodieSchemaField.of("timestamp", timestampMicros, null, null)));
 
     testRoundTripConversion(
         expected, "message myrecord {\n" + "  required int64 timestamp (TIMESTAMP(MICROS,true));\n" + "}\n");
@@ -725,7 +717,7 @@ public class TestAvroSchemaConverter {
           () -> getAvroSchemaConverter(new Configuration()).convert(message(type)));
     }
 
-    final Schema converted = getAvroSchemaConverter(new Configuration())
+    final HoodieSchema converted = getAvroSchemaConverter(new Configuration())
         .convert(Types.buildMessage()
             .addField(Types.primitive(INT64, Type.Repetition.REQUIRED)
                 .as(LogicalTypeAnnotation.timestampType(
@@ -738,16 +730,17 @@ public class TestAvroSchemaConverter {
         "local-timestamp-micros",
         converted
             .getField("timestamp_type")
+            .get()
             .schema()
-            .getLogicalType()
             .getName());
   }
 
   @Test
   public void testLocalTimestampMicrosType() throws Exception {
-    Schema date = LogicalTypes.localTimestampMicros().addToSchema(Schema.create(LONG));
-    Schema expected = Schema.createRecord(
-        "myrecord", null, null, false, Arrays.asList(new Schema.Field("timestamp", date, null, null)));
+    HoodieSchema localTimestampMicros = HoodieSchema.createLocalTimestampMicros();
+    HoodieSchema expected = HoodieSchema.createRecord(
+        "myrecord", null, null, false,
+        Collections.singletonList(HoodieSchemaField.of("timestamp", localTimestampMicros, null, null)));
 
     testRoundTripConversion(
         expected, "message myrecord {\n" + "  required int64 timestamp (TIMESTAMP(MICROS,false));\n" + "}\n");
@@ -770,10 +763,14 @@ public class TestAvroSchemaConverter {
 
   @Test
   public void testReuseNameInNestedStructure() throws Exception {
-    Schema innerA1 = record("a1", "a12", field("a4", primitive(Schema.Type.FLOAT)));
-
-    Schema outerA1 = record("a1", field("a2", primitive(Schema.Type.FLOAT)), optionalField("a1", innerA1));
-    Schema schema = record("Message", optionalField("a1", outerA1));
+    HoodieSchema innerA1 = HoodieSchema.createRecord("a1", null, "a12", false,
+        Collections.singletonList(HoodieSchemaField.of("a4", HoodieSchema.create(HoodieSchemaType.FLOAT))));
+    HoodieSchema outerA1 = HoodieSchema.createRecord("a1", null,null, false,
+        Arrays.asList(
+            HoodieSchemaField.of("a2", HoodieSchema.create(HoodieSchemaType.FLOAT)),
+            HoodieSchemaField.of("a1", HoodieSchema.createNullable(innerA1), null, HoodieSchema.NULL_VALUE)));
+    HoodieSchema schema = HoodieSchema.createRecord("Message", null, null, false,
+        Collections.singletonList(HoodieSchemaField.of("a1", HoodieSchema.createNullable(outerA1), null, HoodieSchema.NULL_VALUE)));
 
     String parquetSchema = "message Message {\n"
         + "  optional group a1 {\n"
@@ -790,14 +787,24 @@ public class TestAvroSchemaConverter {
 
   @Test
   public void testReuseNameInNestedStructureAtSameLevel() throws Exception {
-    Schema a2 = record("a2", field("a4", primitive(Schema.Type.FLOAT)));
-    Schema a22 = record(
-        "a2", "a22", field("a4", primitive(Schema.Type.FLOAT)), field("a5", primitive(Schema.Type.FLOAT)));
+    HoodieSchema a2 = HoodieSchema.createRecord(
+        "a2", null, null, false,
+        Collections.singletonList(HoodieSchemaField.of("a4", HoodieSchema.create(HoodieSchemaType.FLOAT))));
+    HoodieSchema a22 = HoodieSchema.createRecord(
+        "a2", "a22", null, Arrays.asList(
+            HoodieSchemaField.of("a4", HoodieSchema.create(HoodieSchemaType.FLOAT)),
+            HoodieSchemaField.of("a5", HoodieSchema.create(HoodieSchemaType.FLOAT))));
 
-    Schema a1 = record("a1", optionalField("a2", a2));
-    Schema a3 = record("a3", optionalField("a2", a22));
+    HoodieSchema a1 = HoodieSchema.createRecord("a1", null, null, false,
+        Collections.singletonList(HoodieSchemaField.of("a2", HoodieSchema.createNullable(a2), null, HoodieSchema.NULL_VALUE)));
+    HoodieSchema a3 = HoodieSchema.createRecord("a3", null, null, false,
+        Collections.singletonList(HoodieSchemaField.of("a2", HoodieSchema.createNullable(a22), null, HoodieSchema.NULL_VALUE)));
 
-    Schema schema = record("Message", optionalField("a1", a1), optionalField("a3", a3));
+    HoodieSchema schema = HoodieSchema.createRecord("Message", null, null, false,
+        Arrays.asList(
+            HoodieSchemaField.of("a1", HoodieSchema.createNullable(a1), null, HoodieSchema.NULL_VALUE),
+            HoodieSchemaField.of("a3", HoodieSchema.createNullable(a3), null, HoodieSchema.NULL_VALUE)));
+
 
     String parquetSchema = "message Message {\n"
         + "  optional group a1 {\n"
@@ -819,33 +826,33 @@ public class TestAvroSchemaConverter {
 
   @Test
   public void testUUIDType() throws Exception {
-    Schema fromAvro = Schema.createRecord(
+    HoodieSchema fromSchema = HoodieSchema.createRecord(
         "myrecord",
         null,
         null,
         false,
-        Arrays.asList(
-            new Schema.Field("uuid", LogicalTypes.uuid().addToSchema(Schema.create(STRING)), null, null)));
+        Collections.singletonList(
+            HoodieSchemaField.of("uuid", HoodieSchema.createUUID(), null, null)));
     String parquet = "message myrecord {\n" + "  required binary uuid (STRING);\n" + "}\n";
-    Schema toAvro = Schema.createRecord(
+    HoodieSchema toSchema = HoodieSchema.createRecord(
         "myrecord",
         null,
         null,
         false,
-        Arrays.asList(new Schema.Field("uuid", Schema.create(STRING), null, null)));
+        Collections.singletonList(HoodieSchemaField.of("uuid", HoodieSchema.create(HoodieSchemaType.STRING), null, null)));
 
-    testAvroToParquetConversion(fromAvro, parquet);
-    testParquetToAvroConversion(toAvro, parquet);
+    testAvroToParquetConversion(fromSchema, parquet);
+    testParquetToAvroConversion(toSchema, parquet);
 
-    assertEquals(
-        COMPATIBLE, checkReaderWriterCompatibility(fromAvro, toAvro).getType());
+    assertTrue(HoodieSchemaCompatibility.areSchemasCompatible(fromSchema, toSchema));
   }
 
   @Test
   public void testUUIDTypeWithParquetUUID() throws Exception {
-    Schema uuid = LogicalTypes.uuid().addToSchema(Schema.create(STRING));
-    Schema expected = Schema.createRecord(
-        "myrecord", null, null, false, Arrays.asList(new Schema.Field("uuid", uuid, null, null)));
+    HoodieSchema uuid = HoodieSchema.createUUID();
+    HoodieSchema expected = HoodieSchema.createRecord(
+        "myrecord", null, null, false,
+        Collections.singletonList(HoodieSchemaField.of("uuid", uuid, null, null)));
 
     testRoundTripConversion(
         conf(AvroWriteSupport.WRITE_PARQUET_UUID, true),
@@ -866,7 +873,7 @@ public class TestAvroSchemaConverter {
         "mynestedrecord.mymap");
     testAvroToParquetConversion(
         conf,
-        schema.toAvroSchema(),
+        schema,
         "message org.apache.parquet.avro.fixedToInt96 {\n"
             + "  required int96 int96;\n"
             + "  required fixed_len_byte_array(12) notanint96;\n"
@@ -889,11 +896,7 @@ public class TestAvroSchemaConverter {
     assertThrows(
         "Exception should be thrown for fixed types to be converted to INT96 where the size is not 12 bytes",
         IllegalArgumentException.class,
-        () -> getAvroSchemaConverter(conf).convert(schema.toAvroSchema()));
-  }
-
-  public static Schema optional(Schema original) {
-    return Schema.createUnion(Arrays.asList(Schema.create(Schema.Type.NULL), original));
+        () -> getAvroSchemaConverter(conf).convert(schema));
   }
 
   public static MessageType message(PrimitiveType primitive) {
@@ -919,32 +922,6 @@ public class TestAvroSchemaConverter {
         throw e;
       }
     }
-  }
-
-  public static Schema record(String name, String namespace, Schema.Field... fields) {
-    Schema record = Schema.createRecord(name, null, namespace, false);
-    record.setFields(Arrays.asList(fields));
-    return record;
-  }
-
-  public static Schema record(String name, Schema.Field... fields) {
-    return record(name, null, fields);
-  }
-
-  public static Schema.Field field(String name, Schema schema) {
-    return new Schema.Field(name, schema, null, null);
-  }
-
-  public static Schema.Field optionalField(String name, Schema schema) {
-    return new Schema.Field(name, optional(schema), null, JsonProperties.NULL_VALUE);
-  }
-
-  public static Schema array(Schema element) {
-    return Schema.createArray(element);
-  }
-
-  public static Schema primitive(Schema.Type type) {
-    return Schema.create(type);
   }
 
   public static Configuration conf(String name, boolean value) {

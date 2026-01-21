@@ -25,6 +25,7 @@ import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.MetadataValues;
 import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.common.table.read.DeleteContext;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.OrderingValues;
@@ -35,9 +36,6 @@ import org.apache.hudi.keygen.BaseKeyGenerator;
 import com.esotericsoftware.kryo.Kryo;
 import com.esotericsoftware.kryo.io.Input;
 import com.esotericsoftware.kryo.io.Output;
-import org.apache.avro.LogicalType;
-import org.apache.avro.LogicalTypes;
-import org.apache.avro.Schema;
 import org.apache.hadoop.hive.serde2.io.HiveDecimalWritable;
 import org.apache.hadoop.io.ArrayWritable;
 import org.apache.hadoop.io.IntWritable;
@@ -104,7 +102,7 @@ public class HoodieHiveRecord extends HoodieRecord<ArrayWritable> {
   }
 
   @Override
-  public Comparable<?> doGetOrderingValue(Schema recordSchema, Properties props, String[] orderingFields) {
+  public Comparable<?> doGetOrderingValue(HoodieSchema recordSchema, Properties props, String[] orderingFields) {
     if (orderingFields == null) {
       return OrderingValues.getDefault();
     } else {
@@ -118,12 +116,12 @@ public class HoodieHiveRecord extends HoodieRecord<ArrayWritable> {
   }
 
   @Override
-  public String getRecordKey(Schema recordSchema, Option<BaseKeyGenerator> keyGeneratorOpt) {
+  public String getRecordKey(HoodieSchema recordSchema, Option<BaseKeyGenerator> keyGeneratorOpt) {
     throw new UnsupportedOperationException("Not supported for HoodieHiveRecord");
   }
 
   @Override
-  public String getRecordKey(Schema recordSchema, String keyFieldName) {
+  public String getRecordKey(HoodieSchema recordSchema, String keyFieldName) {
     throw new UnsupportedOperationException("Not supported for HoodieHiveRecord");
   }
 
@@ -138,28 +136,31 @@ public class HoodieHiveRecord extends HoodieRecord<ArrayWritable> {
   }
 
   @Override
-  public Object convertColumnValueForLogicalType(Schema fieldSchema,
+  public Object convertColumnValueForLogicalType(HoodieSchema fieldSchema,
                                                  Object fieldValue,
                                                  boolean keepConsistentLogicalTimestamp) {
     if (fieldValue == null) {
       return null;
     }
-    LogicalType logicalType = fieldSchema.getLogicalType();
+    HoodieSchemaType schemaType = fieldSchema.getType();
 
-    if (logicalType == LogicalTypes.date()) {
+    if (schemaType == HoodieSchemaType.DATE) {
       return LocalDate.ofEpochDay(((IntWritable) fieldValue).get());
-    } else if (logicalType == LogicalTypes.timestampMillis() && keepConsistentLogicalTimestamp) {
-      return ((LongWritable) fieldValue).get();
-    } else if (logicalType == LogicalTypes.timestampMicros() && keepConsistentLogicalTimestamp) {
-      return ((LongWritable) fieldValue).get() / 1000;
-    } else if (logicalType instanceof LogicalTypes.Decimal) {
+    } else if (schemaType == HoodieSchemaType.TIMESTAMP && keepConsistentLogicalTimestamp) {
+      HoodieSchema.Timestamp timestampSchema = (HoodieSchema.Timestamp) fieldSchema;
+      if (timestampSchema.getPrecision() == HoodieSchema.TimePrecision.MILLIS) {
+        return ((LongWritable) fieldValue).get();
+      } else if (timestampSchema.getPrecision() == HoodieSchema.TimePrecision.MICROS) {
+        return ((LongWritable) fieldValue).get() / 1000;
+      }
+    } else if (schemaType == HoodieSchemaType.DECIMAL) {
       return ((HiveDecimalWritable) fieldValue).getHiveDecimal().bigDecimalValue();
     }
     return fieldValue;
   }
 
   @Override
-  public Object[] getColumnValues(Schema recordSchema, String[] columns, boolean consistentLogicalTimestampEnabled) {
+  public Object[] getColumnValues(HoodieSchema recordSchema, String[] columns, boolean consistentLogicalTimestampEnabled) {
     Object[] objects = new Object[columns.length];
     for (int i = 0; i < objects.length; i++) {
       objects[i] = getValue(columns[i]);
@@ -168,22 +169,22 @@ public class HoodieHiveRecord extends HoodieRecord<ArrayWritable> {
   }
 
   @Override
-  public Object getColumnValueAsJava(Schema recordSchema, String column, Properties props) {
+  public Object getColumnValueAsJava(HoodieSchema recordSchema, String column, Properties props) {
     return avroSerializer.getValueAsJava(data, column);
   }
 
   @Override
-  public HoodieRecord joinWith(HoodieRecord other, Schema targetSchema) {
+  public HoodieRecord joinWith(HoodieRecord other, HoodieSchema targetSchema) {
     throw new UnsupportedOperationException("Not supported for HoodieHiveRecord");
   }
 
   @Override
-  public HoodieRecord prependMetaFields(Schema recordSchema, Schema targetSchema, MetadataValues metadataValues, Properties props) {
+  public HoodieRecord prependMetaFields(HoodieSchema recordSchema, HoodieSchema targetSchema, MetadataValues metadataValues, Properties props) {
     throw new UnsupportedOperationException("Not supported for HoodieHiveRecord");
   }
 
   @Override
-  public HoodieRecord rewriteRecordWithNewSchema(Schema recordSchema, Properties props, Schema newSchema, Map<String, String> renameCols) {
+  public HoodieRecord rewriteRecordWithNewSchema(HoodieSchema recordSchema, Properties props, HoodieSchema newSchema, Map<String, String> renameCols) {
     throw new UnsupportedOperationException("Not supported for HoodieHiveRecord");
   }
 
@@ -197,7 +198,7 @@ public class HoodieHiveRecord extends HoodieRecord<ArrayWritable> {
   }
 
   @Override
-  public boolean shouldIgnore(Schema recordSchema, Properties props) throws IOException {
+  public boolean shouldIgnore(HoodieSchema recordSchema, Properties props) throws IOException {
     return false;
   }
 
@@ -217,29 +218,29 @@ public class HoodieHiveRecord extends HoodieRecord<ArrayWritable> {
   }
 
   @Override
-  public HoodieRecord wrapIntoHoodieRecordPayloadWithParams(Schema recordSchema, Properties props, Option<Pair<String, String>> simpleKeyGenFieldsOpt, Boolean withOperation,
-                                                            Option<String> partitionNameOp, Boolean populateMetaFieldsOp, Option<Schema> schemaWithoutMetaFields) throws IOException {
+  public HoodieRecord wrapIntoHoodieRecordPayloadWithParams(HoodieSchema recordSchema, Properties props, Option<Pair<String, String>> simpleKeyGenFieldsOpt, Boolean withOperation,
+                                                            Option<String> partitionNameOp, Boolean populateMetaFieldsOp, Option<HoodieSchema> schemaWithoutMetaFields) throws IOException {
     throw new UnsupportedOperationException("Not supported for HoodieHiveRecord");
   }
 
   @Override
-  public HoodieRecord wrapIntoHoodieRecordPayloadWithKeyGen(Schema recordSchema, Properties props, Option<BaseKeyGenerator> keyGen) {
+  public HoodieRecord wrapIntoHoodieRecordPayloadWithKeyGen(HoodieSchema recordSchema, Properties props, Option<BaseKeyGenerator> keyGen) {
     throw new UnsupportedOperationException("Not supported for HoodieHiveRecord");
   }
 
   @Override
-  public HoodieRecord truncateRecordKey(Schema recordSchema, Properties props, String keyFieldName) throws IOException {
-    data.get()[recordSchema.getIndexNamed(keyFieldName)] = new Text();
+  public HoodieRecord truncateRecordKey(HoodieSchema recordSchema, Properties props, String keyFieldName) throws IOException {
+    data.get()[recordSchema.getAvroSchema().getIndexNamed(keyFieldName)] = new Text();
     return this;
   }
 
   @Override
-  public Option<HoodieAvroIndexedRecord> toIndexedRecord(Schema recordSchema, Properties props) throws IOException {
+  public Option<HoodieAvroIndexedRecord> toIndexedRecord(HoodieSchema recordSchema, Properties props) throws IOException {
     throw new UnsupportedOperationException("Not supported for HoodieHiveRecord");
   }
 
   @Override
-  public ByteArrayOutputStream getAvroBytes(Schema recordSchema, Properties props) throws IOException {
+  public ByteArrayOutputStream getAvroBytes(HoodieSchema recordSchema, Properties props) throws IOException {
     throw new UnsupportedOperationException("Not supported for HoodieHiveRecord");
   }
 

@@ -25,7 +25,6 @@ import org.apache.hudi.io.memory.HoodieArrowAllocator
 import org.apache.hudi.io.storage.{HoodieSparkLanceReader, LanceRecordIterator}
 import org.apache.hudi.storage.StorageConfiguration
 
-import com.lancedb.lance.file.LanceFileReader
 import org.apache.hadoop.conf.Configuration
 import org.apache.parquet.schema.MessageType
 import org.apache.spark.TaskContext
@@ -35,6 +34,7 @@ import org.apache.spark.sql.execution.datasources.{PartitionedFile, SparkColumna
 import org.apache.spark.sql.sources.Filter
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.util.LanceArrowUtils
+import org.lance.file.LanceFileReader
 
 import java.io.IOException
 
@@ -66,7 +66,7 @@ class SparkLanceReaderBase(enableVectorizedReader: Boolean) extends SparkColumna
                     requiredSchema: StructType,
                     partitionSchema: StructType,
                     internalSchemaOpt: util.Option[InternalSchema],
-                    filters: Seq[Filter],
+                    filters: scala.Seq[Filter],
                     storageConf: StorageConfiguration[Configuration],
                     tableSchemaOpt: util.Option[MessageType] = util.Option.empty()): Iterator[InternalRow] = {
 

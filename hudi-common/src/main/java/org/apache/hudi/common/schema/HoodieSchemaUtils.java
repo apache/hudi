@@ -28,17 +28,20 @@ import org.apache.hudi.internal.schema.HoodieSchemaException;
 
 import org.apache.avro.JsonProperties;
 import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericData;
 
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.math.MathContext;
 import java.math.RoundingMode;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.function.Function;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 /**
@@ -55,6 +58,11 @@ import java.util.stream.Collectors;
  * @since 1.2.0
  */
 public final class HoodieSchemaUtils {
+
+  // As per https://avro.apache.org/docs/current/spec.html#names
+  private static final Pattern INVALID_AVRO_CHARS_IN_NAMES_PATTERN = Pattern.compile("[^A-Za-z0-9_]");
+  private static final Pattern INVALID_AVRO_FIRST_CHAR_IN_NAMES_PATTERN = Pattern.compile("[^A-Za-z_]");
+  private static final String MASK_FOR_INVALID_CHARS_IN_NAMES = "__";
 
   public static final HoodieSchema METADATA_FIELD_SCHEMA = HoodieSchema.createNullable(HoodieSchemaType.STRING);
   public static final HoodieSchema RECORD_KEY_SCHEMA = initRecordKeySchema();
@@ -665,10 +673,10 @@ public final class HoodieSchemaUtils {
 
   /**
    * Appends provided new fields at the end of the given schema
-   *
+   * <p>
    * NOTE: No deduplication is made, this method simply appends fields at the end of the list
    *       of the source schema as is
-   *
+   * <p>
    * This is equivalent to {@link AvroSchemaUtils#appendFieldsToSchema(Schema, List)} but operates on HoodieSchema.
    */
   public static HoodieSchema appendFieldsToSchema(HoodieSchema schema, List<HoodieSchemaField> newFields) {
@@ -804,6 +812,25 @@ public final class HoodieSchemaUtils {
   }
 
   /**
+   * Fetch schema for record key and partition path.
+   * This is equivalent to HoodieAvroUtils.getRecordKeyPartitionPathSchema() but returns HoodieSchema.
+   *
+   * @return HoodieSchema containing record key and partition path fields
+   */
+  public static HoodieSchema getRecordKeyPartitionPathSchema() {
+    List<HoodieSchemaField> toBeAddedFields = new ArrayList<>(2);
+
+    HoodieSchemaField recordKeyField =
+        createNewSchemaField(HoodieRecord.RECORD_KEY_METADATA_FIELD, METADATA_FIELD_SCHEMA, "", JsonProperties.NULL_VALUE);
+    HoodieSchemaField partitionPathField =
+        createNewSchemaField(HoodieRecord.PARTITION_PATH_METADATA_FIELD, METADATA_FIELD_SCHEMA, "", JsonProperties.NULL_VALUE);
+
+    toBeAddedFields.add(recordKeyField);
+    toBeAddedFields.add(partitionPathField);
+    return HoodieSchema.createRecord("HoodieRecordKey", "", "", false, toBeAddedFields);
+  }
+
+  /**
    * Fetches projected schema given list of fields to project. The field can be nested in format `a.b.c` where a is
    * the top level field, b is at second level and so on.
    * This is equivalent to {@link HoodieAvroUtils#projectSchema(Schema, List)} but operates on HoodieSchema.
@@ -817,12 +844,15 @@ public final class HoodieSchemaUtils {
   }
 
   /**
-   * Gets the fully-qualified Avro record name for a Hudi table.
-   * This is equivalent to {@link AvroSchemaUtils#getAvroRecordQualifiedName(String)}
-   * but provides a HoodieSchema-context API.
+   * Generates fully-qualified name for the Avro's schema based on the Table's name
    *
    * <p>The qualified name follows the pattern: hoodie.{tableName}.{tableName}_record
    * where tableName is sanitized for Avro compatibility.</p>
+   *
+   * NOTE: PLEASE READ CAREFULLY BEFORE CHANGING
+   *       This method should not change for compatibility reasons as older versions
+   *       of Avro might be comparing fully-qualified names rather than just the record
+   *       names
    *
    * @param tableName the Hudi table name
    * @return the fully-qualified Avro record name (e.g., "hoodie.my_table.my_table_record")
@@ -833,8 +863,8 @@ public final class HoodieSchemaUtils {
     ValidationUtils.checkArgument(tableName != null && !tableName.trim().isEmpty(),
         "Table name cannot be null or empty");
 
-    // Delegate to AvroSchemaUtils
-    return AvroSchemaUtils.getAvroRecordQualifiedName(tableName);
+    String sanitizedTableName = sanitizeName(tableName);
+    return "hoodie." + sanitizedTableName + "." + sanitizedTableName + "_record";
   }
 
   public static boolean hasDecimalField(HoodieSchema schema) {
@@ -921,5 +951,88 @@ public final class HoodieSchemaUtils {
 
   public static String addMetadataColumnTypes(String hiveColumnTypes) {
     return "string,string,string,string,string," + hiveColumnTypes;
+  }
+
+  public static boolean isMetadataField(String fieldName) {
+    return HoodieRecord.HOODIE_META_COLUMNS_WITH_OPERATION.contains(fieldName);
+  }
+
+  /**
+   * Converts a HoodieSchemaField's default value to its Java representation.
+   * This is equivalent to {@link org.apache.hudi.avro.HoodieAvroUtils#toJavaDefaultValue(org.apache.avro.Schema.Field)}
+   * but operates on HoodieSchemaField.
+   *
+   * <p>For primitive types (STRING, INT, LONG, FLOAT, DOUBLE, BOOLEAN, ENUM, BYTES, FIXED, DECIMAL)
+   * and logical types (TIME, TIMESTAMP, DATE, UUID), the default value is returned as-is.
+   * For complex types (ARRAY, MAP, RECORD), Avro's GenericData utility is used
+   * to properly construct the default value.</p>
+   *
+   * @param field the HoodieSchemaField containing the default value
+   * @return the Java representation of the default value, or null if no default value exists
+   * @throws IllegalArgumentException if the field's type is not supported
+   * @since 1.2.0
+   */
+  public static Object toJavaDefaultValue(HoodieSchemaField field) {
+    ValidationUtils.checkArgument(field != null, "Field cannot be null");
+
+    Option<Object> defaultValOpt = field.defaultVal();
+    if (!defaultValOpt.isPresent() || defaultValOpt.get() == HoodieJsonProperties.NULL_VALUE) {
+      return null;
+    }
+
+    Object defaultVal = defaultValOpt.get();
+    HoodieSchemaType type = field.getNonNullSchema().getType();
+
+    switch (type) {
+      case STRING:
+      case INT:
+      case LONG:
+      case FLOAT:
+      case DOUBLE:
+      case BOOLEAN:
+      case ENUM:
+      case BYTES:
+      case FIXED:
+      case DECIMAL:
+      case TIME:
+      case TIMESTAMP:
+      case DATE:
+      case UUID:
+        return defaultVal;
+      case ARRAY:
+      case MAP:
+      case RECORD:
+        // Use Avro's standard GenericData utility for complex types
+        // Delegate to the underlying Avro field
+        return GenericData.get().getDefaultValue(field.getAvroField());
+      default:
+        throw new IllegalArgumentException("Unsupported HoodieSchema type: " + type);
+    }
+  }
+
+  /**
+   * Sanitizes Name according to Avro rule for names.
+   * Removes characters other than the ones mentioned in <a href="https://avro.apache.org/docs/current/spec.html#names">avro spec</a> .
+   *
+   * @param name input name
+   * @return sanitized name
+   */
+  public static String sanitizeName(String name) {
+    return sanitizeName(name, MASK_FOR_INVALID_CHARS_IN_NAMES);
+  }
+
+  /**
+   * Sanitizes Name according to Avro rule for names.
+   * Removes characters other than the ones mentioned in <a href="https://avro.apache.org/docs/current/spec.html#names">avro spec</a>.
+   *
+   * @param name            input name
+   * @param invalidCharMask replacement for invalid characters.
+   * @return sanitized name
+   */
+  public static String sanitizeName(String name, String invalidCharMask) {
+    if (INVALID_AVRO_FIRST_CHAR_IN_NAMES_PATTERN.matcher(name.substring(0, 1)).matches()) {
+      name = INVALID_AVRO_FIRST_CHAR_IN_NAMES_PATTERN.matcher(name).replaceFirst(invalidCharMask);
+    }
+    return INVALID_AVRO_CHARS_IN_NAMES_PATTERN.matcher(name).replaceAll(invalidCharMask);
   }
 }

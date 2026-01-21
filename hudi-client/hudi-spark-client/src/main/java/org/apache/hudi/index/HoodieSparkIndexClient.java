@@ -204,7 +204,7 @@ public class HoodieSparkIndexClient extends BaseHoodieIndexClient {
                                              Option<String> indexTypeOpt, Map<String, String> configs) {
     try {
       TableSchemaResolver schemaUtil = new TableSchemaResolver(metaClient);
-      String schemaStr = schemaUtil.getTableAvroSchema(false).toString();
+      String schemaStr = schemaUtil.getTableSchema(false).toString();
       TypedProperties props = getProps(metaClient, indexDefinitionOpt, indexTypeOpt, schemaStr);
       if (!engineContextOpt.isPresent()) {
         engineContextOpt = Option.of(new HoodieSparkEngineContext(new JavaSparkContext(sparkSessionOpt.get().sparkContext())));

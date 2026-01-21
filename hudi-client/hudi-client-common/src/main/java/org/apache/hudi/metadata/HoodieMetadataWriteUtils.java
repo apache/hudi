@@ -165,6 +165,7 @@ public class HoodieMetadataWriteUtils {
         .withAutoClean(false)
         .withCleanerParallelism(MDT_DEFAULT_PARALLELISM)
         .withFailedWritesCleaningPolicy(failedWritesCleaningPolicy)
+        .withMaxCommitsBeforeCleaning(writeConfig.getCleaningMaxCommits())
         .withCleanerPolicy(dataTableCleaningPolicy);
 
     if (HoodieCleaningPolicy.KEEP_LATEST_COMMITS.equals(dataTableCleaningPolicy)) {
@@ -192,7 +193,7 @@ public class HoodieMetadataWriteUtils {
         .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(false)
             .withFileListingParallelism(writeConfig.getFileListingParallelism()).build())
         .withAvroSchemaValidate(false)
-        .withEmbeddedTimelineServerEnabled(false)
+        .withEmbeddedTimelineServerEnabled(writeConfig.isEmbeddedTimelineServerEnabled())
         .withMarkersType(MarkerType.DIRECT.name())
         .withRollbackUsingMarkers(false)
         .withPath(HoodieTableMetadata.getMetadataTableBasePath(writeConfig.getBasePath()))

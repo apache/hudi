@@ -19,8 +19,8 @@
 package org.apache.hudi.sink.append;
 
 import org.apache.hudi.client.WriteStatus;
-
 import org.apache.hudi.common.model.HoodieKey;
+import org.apache.hudi.sink.buffer.BufferType;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.metrics.FlinkStreamWriteMetrics;
@@ -51,6 +51,7 @@ import java.util.Map;
  *
  * @param <I> Type of the input record
  * @see StreamWriteOperatorCoordinator
+ * @see BufferType#NONE
  */
 @Slf4j
 public class AppendWriteFunction<I> extends AbstractStreamWriteFunction<I> {

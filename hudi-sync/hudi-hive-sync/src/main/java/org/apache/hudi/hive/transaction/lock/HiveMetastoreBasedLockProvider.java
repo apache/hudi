@@ -27,6 +27,8 @@ import org.apache.hudi.exception.HoodieLockException;
 import org.apache.hudi.hive.util.IMetaStoreClientUtil;
 import org.apache.hudi.storage.StorageConfiguration;
 
+import lombok.Getter;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hive.conf.HiveConf;
 import org.apache.hadoop.hive.metastore.IMetaStoreClient;
@@ -41,8 +43,6 @@ import org.apache.hadoop.hive.metastore.api.MetaException;
 import org.apache.hadoop.hive.ql.metadata.Hive;
 import org.apache.hadoop.hive.ql.metadata.HiveException;
 import org.apache.thrift.TException;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.Serializable;
 import java.util.concurrent.ExecutionException;
@@ -76,14 +76,15 @@ import static org.apache.hudi.common.lock.LockState.RELEASING;
  * using hive metastore APIs. Users need to have a HiveMetastore & Zookeeper cluster deployed to be able to use this lock.
  *
  */
+@Slf4j
 public class HiveMetastoreBasedLockProvider implements LockProvider<LockResponse>, Serializable {
-
-  private static final Logger LOG = LoggerFactory.getLogger(HiveMetastoreBasedLockProvider.class);
 
   private final String databaseName;
   private final String tableName;
   private final String hiveMetastoreUris;
+  @Getter
   private transient IMetaStoreClient hiveClient;
+  @Getter
   private volatile LockResponse lock = null;
   protected LockConfiguration lockConfiguration;
   private transient ScheduledFuture<?> future = null;
@@ -116,7 +117,7 @@ public class HiveMetastoreBasedLockProvider implements LockProvider<LockResponse
 
   @Override
   public boolean tryLock(long time, TimeUnit unit) {
-    LOG.info(generateLogStatement(ACQUIRING, generateLogSuffixString()));
+    log.info(generateLogStatement(ACQUIRING, generateLogSuffixString()));
     try {
       acquireLock(time, unit);
     } catch (ExecutionException | InterruptedException | TimeoutException | TException e) {
@@ -128,7 +129,7 @@ public class HiveMetastoreBasedLockProvider implements LockProvider<LockResponse
   @Override
   public void unlock() {
     try {
-      LOG.info(generateLogStatement(RELEASING, generateLogSuffixString()));
+      log.info(generateLogStatement(RELEASING, generateLogSuffixString()));
       LockResponse lockResponseLocal = lock;
       if (lockResponseLocal == null) {
         return;
@@ -138,7 +139,7 @@ public class HiveMetastoreBasedLockProvider implements LockProvider<LockResponse
         future.cancel(false);
       }
       hiveClient.unlock(lockResponseLocal.getLockid());
-      LOG.info(generateLogStatement(RELEASED, generateLogSuffixString()));
+      log.info(generateLogStatement(RELEASED, generateLogSuffixString()));
     } catch (TException e) {
       throw new HoodieLockException(generateLogStatement(FAILED_TO_RELEASE, generateLogSuffixString()), e);
     }
@@ -168,17 +169,8 @@ public class HiveMetastoreBasedLockProvider implements LockProvider<LockResponse
       Hive.closeCurrent();
       executor.shutdown();
     } catch (Exception e) {
-      LOG.error(generateLogStatement(org.apache.hudi.common.lock.LockState.FAILED_TO_RELEASE, generateLogSuffixString()));
+      log.error(generateLogStatement(org.apache.hudi.common.lock.LockState.FAILED_TO_RELEASE, generateLogSuffixString()));
     }
-  }
-
-  public IMetaStoreClient getHiveClient() {
-    return hiveClient;
-  }
-
-  @Override
-  public LockResponse getLock() {
-    return this.lock;
   }
 
   // This API is exposed for tests and not intended to be used elsewhere

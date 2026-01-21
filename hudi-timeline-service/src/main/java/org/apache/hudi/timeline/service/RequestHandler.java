@@ -52,9 +52,8 @@ import io.javalin.Javalin;
 import io.javalin.http.BadRequestResponse;
 import io.javalin.http.Context;
 import io.javalin.http.Handler;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.hadoop.security.UserGroupInformation;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import javax.annotation.Nonnull;
 
@@ -71,10 +70,10 @@ import java.util.concurrent.ScheduledExecutorService;
 /**
  * Main REST Handler class that handles and delegates calls to timeline relevant handlers.
  */
+@Slf4j
 public class RequestHandler {
 
   private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper().registerModule(new AfterburnerModule());
-  private static final Logger LOG = LoggerFactory.getLogger(RequestHandler.class);
   private static final TypeReference<List<String>> LIST_TYPE_REFERENCE = new TypeReference<List<String>>() {
   };
 
@@ -133,8 +132,8 @@ public class RequestHandler {
     final long jsonifyTime = timer.endTimer();
     metricsRegistry.add("WRITE_VALUE_CNT", 1);
     metricsRegistry.add("WRITE_VALUE_TIME", jsonifyTime);
-    if (LOG.isDebugEnabled()) {
-      LOG.debug("Jsonify TimeTaken={}", jsonifyTime);
+    if (log.isDebugEnabled()) {
+      log.debug("Jsonify TimeTaken={}", jsonifyTime);
     }
     return result;
   }
@@ -585,7 +584,7 @@ public class RequestHandler {
       try {
         ugi = UserGroupInformation.getCurrentUser();
       } catch (Exception e) {
-        LOG.error("Fail to get ugi", e);
+        log.error("Fail to get ugi", e);
         throw new HoodieException(e);
       }
     }
@@ -632,9 +631,9 @@ public class RequestHandler {
         } catch (RuntimeException re) {
           success = false;
           if (re instanceof BadRequestResponse) {
-            LOG.warn("Bad request response due to client view behind server view. {}", re.getMessage());
+            log.warn("Bad request response due to client view behind server view. {}", re.getMessage());
           } else {
-            LOG.error("Got runtime exception servicing request {}", context.queryString(), re);
+            log.error("Got runtime exception servicing request {}", context.queryString(), re);
           }
           throw re;
         } finally {
@@ -646,8 +645,8 @@ public class RequestHandler {
           metricsRegistry.add("TOTAL_CHECK_TIME", finalCheckTimeTaken);
           metricsRegistry.add("TOTAL_API_CALLS", 1);
 
-          if (LOG.isDebugEnabled()) {
-            LOG.debug("TimeTakenMillis[Total={}, Refresh={}, handle={}, Check={}], Success={}, Query={}, Host={}, synced={}",
+          if (log.isDebugEnabled()) {
+            log.debug("TimeTakenMillis[Total={}, Refresh={}, handle={}, Check={}], Success={}, Query={}, Host={}, synced={}",
                     timeTakenMillis, refreshCheckTimeTaken, handleTimeTaken, finalCheckTimeTaken, success, context.queryString(), context.host(), synced);
           }
         }
@@ -664,8 +663,8 @@ public class RequestHandler {
       String timelineHashFromClient = getTimelineHashParam(ctx);
       HoodieTimeline localTimeline =
           viewManager.getFileSystemView(basePath).getTimeline().filterCompletedOrMajorOrMinorCompactionInstants();
-      if (LOG.isDebugEnabled()) {
-        LOG.debug("Client [ LastTs={}, TimelineHash={}], localTimeline={}",lastKnownInstantFromClient, timelineHashFromClient, localTimeline.getInstants());
+      if (log.isDebugEnabled()) {
+        log.debug("Client [ LastTs={}, TimelineHash={}], localTimeline={}",lastKnownInstantFromClient, timelineHashFromClient, localTimeline.getInstants());
       }
 
       if ((!localTimeline.getInstantsAsStream().findAny().isPresent())
@@ -693,8 +692,8 @@ public class RequestHandler {
         if (isLocalViewBehind(ctx)) {
           String lastKnownInstantFromClient = getLastInstantTsParam(ctx);
           HoodieTimeline localTimeline = viewManager.getFileSystemView(basePath).getTimeline();
-          if (LOG.isInfoEnabled()) {
-            LOG.info("Syncing view as client passed last known instant {} as last known instant but server has the following last instant on timeline: {}",
+          if (log.isInfoEnabled()) {
+            log.info("Syncing view as client passed last known instant {} as last known instant but server has the following last instant on timeline: {}",
                 lastKnownInstantFromClient, localTimeline.lastInstant());
           }
           view.sync();

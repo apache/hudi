@@ -446,7 +446,7 @@ public class TestOrcBootstrap extends HoodieSparkClientTestBase {
 
         HoodieSchema hoodieSchema = AvroOrcUtils.createSchemaWithDefaultValue(orcSchema, "test_orc_record", null, true);
 
-        Iterator<GenericRecord> recIterator = new OrcReaderIterator(recordReader, hoodieSchema.toAvroSchema(), orcSchema);
+        Iterator<GenericRecord> recIterator = new OrcReaderIterator(recordReader, hoodieSchema, orcSchema);
 
         return StreamSupport.stream(Spliterators.spliteratorUnknownSize(recIterator, 0), false).map(gr -> {
           String key = gr.get("_row_key").toString();
