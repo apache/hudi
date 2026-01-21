@@ -118,7 +118,7 @@ public class TestLockAuditingCommand extends CLIFunctionalTestHarness {
     HoodieCLI.basePath = tablePath;
     
     // Initialize table
-    HoodieTableMetaClient.newTableBuilder()
+    HoodieTableMetaClient.withPropertyBuilder()
         .setTableType(HoodieTableType.COPY_ON_WRITE.name())
         .setTableName(tableName)
         .setRecordKeyFields("key")

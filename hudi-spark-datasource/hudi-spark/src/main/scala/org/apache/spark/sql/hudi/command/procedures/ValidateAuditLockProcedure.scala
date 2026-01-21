@@ -19,6 +19,7 @@ package org.apache.spark.sql.hudi.command.procedures
 
 import org.apache.hudi.client.transaction.lock.audit.StorageLockProviderAuditService
 import org.apache.hudi.storage.{StoragePath, StoragePathInfo}
+import org.apache.hudi.util.JFunction
 
 import com.fasterxml.jackson.databind.{JsonNode, ObjectMapper}
 import org.apache.spark.sql.Row
@@ -310,5 +311,5 @@ object ValidateAuditLockProcedure {
    *
    * @return Supplier that creates new ValidateAuditLockProcedure instances
    */
-  def builder: Supplier[ProcedureBuilder] = () => new ValidateAuditLockProcedure()
+  def builder: Supplier[ProcedureBuilder] = JFunction.toJavaSupplier(() => new ValidateAuditLockProcedure())
 }
