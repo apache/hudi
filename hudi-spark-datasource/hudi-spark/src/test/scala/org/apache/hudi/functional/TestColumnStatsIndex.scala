@@ -283,7 +283,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       HoodieMetadataConfig.ENABLE.key -> "true",
       HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key -> "true",
       HoodieMetadataConfig.COLUMN_STATS_INDEX_FOR_COLUMNS.key ->
-        "record_key,partition_col,nullable_map_field.key_value.value.nested_int,nullable_map_field.key_value.value.level,array_field.array.nested_int,array_field.array.level"
+        "record_key,partition_col,nullable_map_field.key_value.value.nested_int,nullable_map_field.key_value.value.level,array_field.list.element.nested_int,array_field.list.element.level"
     )
 
     val commonOpts = Map(
@@ -426,7 +426,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
 
     val indexedColumns = Seq(
       "nullable_map_field.key_value.value.nested_int",
-      "array_field.array.nested_int"
+      "array_field.list.element.nested_int"
     )
 
     columnStatsIndex.loadTransposed(indexedColumns, testCase.shouldReadInMemory) { transposedDF =>
@@ -449,8 +449,8 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
 
       // Verify min/max ranges for ARRAY field
       val arrayStats = transposedDF.select(
-        "`array_field.array.nested_int_minValue`",
-        "`array_field.array.nested_int_maxValue`"
+        "`array_field.list.element.nested_int_minValue`",
+        "`array_field.list.element.nested_int_maxValue`"
       ).collect().map(row => (row.getInt(0), row.getInt(1))).sorted
 
       // Expected stats: Batch1[40,80], Batch2[260,280], Batch3[240,280]
@@ -469,8 +469,168 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       "partition_col",
       "nullable_map_field.key_value.value.nested_int",
       "nullable_map_field.key_value.value.level",
-      "array_field.array.nested_int",
-      "array_field.array.level"
+      "array_field.list.element.nested_int",
+      "array_field.list.element.level"
+    ))
+  }
+
+  /**
+   * Tests column stats index with multi-level nested ARRAY fields (2 and 3 levels deep).
+   * This verifies that the .list.element pattern works correctly for deeply nested arrays.
+   */
+  @ParameterizedTest
+  @MethodSource(Array("testMetadataColumnStatsIndexParamsInMemory"))
+  def testMetadataColumnStatsIndexMultiLevelNestedArrays(testCase: ColumnStatsTestCase): Unit = {
+    // Define nested struct for innermost level
+    val innerStruct = new StructType()
+      .add("value", IntegerType, false)
+
+    // Define schema with 2-level and 3-level nested arrays
+    val testSchema = new StructType()
+      .add("record_key", StringType, false)
+      .add("partition_col", IntegerType, false)
+      // 2-level: Array of Array of Int
+      .add("level2_array", ArrayType(ArrayType(IntegerType)), false)
+      // 3-level: Array of Array of Array of Int
+      .add("level3_array", ArrayType(ArrayType(ArrayType(IntegerType))), false)
+      // 2-level array of struct: Array of Array of Struct
+      .add("level2_array_struct", ArrayType(ArrayType(innerStruct)), false)
+
+    val metadataOpts = Map(
+      HoodieMetadataConfig.ENABLE.key -> "true",
+      HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key -> "true",
+      HoodieMetadataConfig.COLUMN_STATS_INDEX_FOR_COLUMNS.key ->
+        ("record_key,partition_col," +
+          "level2_array.list.element.list.element," +
+          "level3_array.list.element.list.element.list.element," +
+          "level2_array_struct.list.element.list.element.value")
+    )
+
+    val commonOpts = Map(
+      "hoodie.insert.shuffle.parallelism" -> "1",
+      "hoodie.upsert.shuffle.parallelism" -> "1",
+      HoodieWriteConfig.TBL_NAME.key -> "hoodie_test_multi_level_arrays",
+      DataSourceWriteOptions.TABLE_TYPE.key -> testCase.tableType.toString,
+      RECORDKEY_FIELD.key -> "record_key",
+      HoodieTableConfig.ORDERING_FIELDS.key -> "record_key",
+      PARTITIONPATH_FIELD.key -> "partition_col",
+      HoodieTableConfig.POPULATE_META_FIELDS.key -> "true",
+      HoodieStorageConfig.PARQUET_MAX_FILE_SIZE.key -> "10240",
+      HoodieCompactionConfig.PARQUET_SMALL_FILE_LIMIT.key -> "0",
+      HoodieWriteConfig.WRITE_TABLE_VERSION.key() -> testCase.tableVersion.toString
+    ) ++ metadataOpts
+
+    // Batch 1 - Low range values
+    val batch1Data = Seq(
+      Row("key_001", 1,
+        Array(Array(10, 20), Array(30, 40)),           // level2_array: min=10, max=40
+        Array(Array(Array(5, 10), Array(15, 20))),    // level3_array: min=5, max=20
+        Array(Array(Row(100), Row(150)))),            // level2_array_struct.value: min=100, max=150
+      Row("key_002", 1,
+        Array(Array(15, 25), Array(35, 45)),           // level2_array: min=15, max=45
+        Array(Array(Array(8, 12), Array(18, 22))),    // level3_array: min=8, max=22
+        Array(Array(Row(110), Row(160))))             // level2_array_struct.value: min=110, max=160
+    )
+
+    // Batch 2 - High range values
+    val batch2Data = Seq(
+      Row("key_003", 1,
+        Array(Array(500, 600), Array(700, 800)),       // level2_array: min=500, max=800
+        Array(Array(Array(300, 350), Array(400, 450))), // level3_array: min=300, max=450
+        Array(Array(Row(1000), Row(1500)))),          // level2_array_struct.value: min=1000, max=1500
+      Row("key_004", 1,
+        Array(Array(550, 650), Array(750, 850)),       // level2_array: min=550, max=850
+        Array(Array(Array(320, 370), Array(420, 470))), // level3_array: min=320, max=470
+        Array(Array(Row(1100), Row(1600))))           // level2_array_struct.value: min=1100, max=1600
+    )
+
+    // Write Batch 1
+    val df1 = spark.createDataFrame(spark.sparkContext.parallelize(batch1Data), testSchema)
+    df1.write.format("hudi")
+      .options(commonOpts)
+      .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
+      .mode(SaveMode.Overwrite)
+      .save(basePath)
+
+    // Write Batch 2
+    val df2 = spark.createDataFrame(spark.sparkContext.parallelize(batch2Data), testSchema)
+    df2.write.format("hudi")
+      .options(commonOpts)
+      .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
+      .mode(SaveMode.Append)
+      .save(basePath)
+
+    metaClient = HoodieTableMetaClient.builder().setBasePath(basePath).setConf(storageConf).build()
+
+    // Validate column stats were created for multi-level nested fields
+    val metadataConfig = HoodieMetadataConfig.newBuilder()
+      .fromProperties(toProperties(metadataOpts))
+      .build()
+
+    val hoodieSchema = HoodieSchemaConversionUtils.convertStructTypeToHoodieSchema(testSchema, "record", "")
+    val columnStatsIndex = new ColumnStatsIndexSupport(
+      spark,
+      testSchema,
+      hoodieSchema,
+      metadataConfig,
+      metaClient
+    )
+
+    val indexedColumns = Seq(
+      "level2_array.list.element.list.element",
+      "level3_array.list.element.list.element.list.element",
+      "level2_array_struct.list.element.list.element.value"
+    )
+
+    columnStatsIndex.loadTransposed(indexedColumns, testCase.shouldReadInMemory) { transposedDF =>
+      // Verify we have stats for both file groups
+      val fileCount = transposedDF.select("fileName").distinct().count()
+      assertTrue(fileCount >= 2, s"Expected at least 2 files with column stats, got $fileCount")
+
+      // Verify 2-level array stats
+      val level2Stats = transposedDF.select(
+        "`level2_array.list.element.list.element_minValue`",
+        "`level2_array.list.element.list.element_maxValue`"
+      ).collect().map(row => (row.getInt(0), row.getInt(1))).sorted
+
+      val level2LowCount = level2Stats.count(stat => stat._1 >= 10 && stat._2 <= 50)
+      val level2HighCount = level2Stats.count(stat => stat._1 >= 500 && stat._2 >= 800)
+      assertTrue(level2LowCount >= 1, s"Expected at least 1 file with level2 low range, got $level2LowCount")
+      assertTrue(level2HighCount >= 1, s"Expected at least 1 file with level2 high range, got $level2HighCount")
+
+      // Verify 3-level array stats
+      val level3Stats = transposedDF.select(
+        "`level3_array.list.element.list.element.list.element_minValue`",
+        "`level3_array.list.element.list.element.list.element_maxValue`"
+      ).collect().map(row => (row.getInt(0), row.getInt(1))).sorted
+
+      val level3LowCount = level3Stats.count(stat => stat._1 >= 5 && stat._2 <= 25)
+      val level3HighCount = level3Stats.count(stat => stat._1 >= 300 && stat._2 >= 450)
+      assertTrue(level3LowCount >= 1, s"Expected at least 1 file with level3 low range, got $level3LowCount")
+      assertTrue(level3HighCount >= 1, s"Expected at least 1 file with level3 high range, got $level3HighCount")
+
+      // Verify 2-level array of struct stats
+      val level2StructStats = transposedDF.select(
+        "`level2_array_struct.list.element.list.element.value_minValue`",
+        "`level2_array_struct.list.element.list.element.value_maxValue`"
+      ).collect().map(row => (row.getInt(0), row.getInt(1))).sorted
+
+      val structLowCount = level2StructStats.count(stat => stat._1 >= 100 && stat._2 <= 200)
+      val structHighCount = level2StructStats.count(stat => stat._1 >= 1000 && stat._2 >= 1500)
+      assertTrue(structLowCount >= 1, s"Expected at least 1 file with struct low range, got $structLowCount")
+      assertTrue(structHighCount >= 1, s"Expected at least 1 file with struct high range, got $structHighCount")
+    }
+
+    // Validate that indexed columns are registered correctly
+    validateColumnsToIndex(metaClient, Seq(
+      HoodieRecord.COMMIT_TIME_METADATA_FIELD,
+      HoodieRecord.RECORD_KEY_METADATA_FIELD,
+      HoodieRecord.PARTITION_PATH_METADATA_FIELD,
+      "record_key",
+      "partition_col",
+      "level2_array.list.element.list.element",
+      "level3_array.list.element.list.element.list.element",
+      "level2_array_struct.list.element.list.element.value"
     ))
   }
 
