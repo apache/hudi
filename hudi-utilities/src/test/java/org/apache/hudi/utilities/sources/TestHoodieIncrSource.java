@@ -100,6 +100,7 @@ import static org.apache.hudi.common.testutils.HoodieTestUtils.DEFAULT_PARTITION
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
 import static org.apache.hudi.testutils.Assertions.assertNoWriteErrors;
 import static org.apache.hudi.utilities.sources.helpers.IncrSourceHelper.MissingCheckpointStrategy.READ_UPTO_LATEST_COMMIT;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -662,6 +663,7 @@ public class TestHoodieIncrSource extends SparkClientFunctionalTestHarness {
         Assertions.assertEquals(fileSlicesCachedInMemory, cachedAllInputFileSlices.size());
         Assertions.assertTrue(ObjectSizeCalculator.getObjectSize(cachedAllInputFileSlices) > spillableMemoryBytes);
       }
+      assertDoesNotThrow(hoodieTableFileIndex::close);
       dataset.unpersist();
     });
   }
