@@ -1326,4 +1326,173 @@ public class TestCleaner extends HoodieCleanerTestBase {
     HoodieCleanerPlan cleanPlan = metaClient.reloadActiveTimeline().readCleanerPlan(metaClient.createNewInstant(State.REQUESTED, HoodieTimeline.CLEAN_ACTION, cleanInstant.get()));
     return Pair.of(cleanInstant.orElse(null), cleanPlan);
   }
+
+  /**
+   * Test that incremental clean properly scans partitions from different operation types.
+   * This test verifies that with incremental clean enabled:
+   * - Partitions with only bulk_insert (new file groups) are NOT included in clean plan
+   * - Partitions with upsert (existing file groups modified) ARE included in clean plan
+   * - Partitions with insert_overwrite (replace commit) ARE included in clean plan
+   * - Partitions with clustering (replace commit) ARE included in clean plan
+   */
+  @Test
+  public void testIncrementalCleanPartitionScanningWithDifferentOperationTypes() throws Exception {
+    // Setup: Keep latest 2 commits, incremental clean enabled
+    HoodieWriteConfig config = getConfigBuilder()
+        .withAutoCommit(true)
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder()
+            .withMaxNumDeltaCommitsBeforeCompaction(1)
+            .withAssumeDatePartitioning(true).build())
+        .withCleanConfig(HoodieCleanConfig.newBuilder()
+            .withIncrementalCleaningMode(true)
+            .withAutoClean(false)
+            .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_COMMITS)
+            .retainCommits(2)
+            .build())
+        .withArchivalConfig(HoodieArchivalConfig.newBuilder()
+            .withAutoArchive(false)
+            .build())
+        .withParallelism(1, 1).withBulkInsertParallelism(1).withFinalizeWriteParallelism(1).withDeleteParallelism(1)
+        .build();
+
+    // Define partitions for different operation types
+    final String partitionInsert = "2020/01/01";       // insert only - new file groups
+    final String partitionUpsert = "2020/01/02";       // upsert - existing file groups modified
+    final String partitionInsertOverwrite = "2020/01/03";  // insert_overwrite - replace commit
+    final String partitionCluster = "2020/01/04";      // cluster - replace commit
+
+    try (SparkRDDWriteClient client = new SparkRDDWriteClient(context, config)) {
+      // Phase 1: Establish a clean instant by making enough commits to trigger cleaning
+      // We need at least 3 commits and then run clean to have a "last clean" with earliestCommitToRetain
+
+      // Commit 1: Initial writes to establish file groups in upsert partition
+      String commit1 = HoodieActiveTimeline.createNewInstantTime();
+      List<HoodieRecord> initialRecordsUpsert = dataGen.generateInsertsForPartition(commit1, 10, partitionUpsert);
+      client.startCommitWithTime(commit1);
+      client.insert(jsc.parallelize(initialRecordsUpsert, 1), commit1).collect();
+      metaClient = HoodieTableMetaClient.reload(metaClient);
+
+      // Commit 2: Upsert on upsert partition to create a second file version
+      String commit2 = HoodieActiveTimeline.createNewInstantTime();
+      List<HoodieRecord> upsertRecords2 = dataGen.generateUpdates(commit2, initialRecordsUpsert);
+      client.startCommitWithTime(commit2);
+      client.upsert(jsc.parallelize(upsertRecords2, 1), commit2).collect();
+      metaClient = HoodieTableMetaClient.reload(metaClient);
+
+      // Commit 3: Upsert on upsert partition to create a third file version
+      String commit3 = HoodieActiveTimeline.createNewInstantTime();
+      List<HoodieRecord> upsertRecords3 = dataGen.generateUpdates(commit3, upsertRecords2);
+      client.startCommitWithTime(commit3);
+      client.upsert(jsc.parallelize(upsertRecords3, 1), commit3).collect();
+      metaClient = HoodieTableMetaClient.reload(metaClient);
+
+      // Commit 4: Upsert on upsert partition to create a fourth file version
+      String commit4 = HoodieActiveTimeline.createNewInstantTime();
+      List<HoodieRecord> upsertRecords4 = dataGen.generateUpdates(commit4, upsertRecords3);
+      client.startCommitWithTime(commit4);
+      client.upsert(jsc.parallelize(upsertRecords4, 1), commit4).collect();
+      metaClient = HoodieTableMetaClient.reload(metaClient);
+
+      // Run first clean - with retainCommits(2), this should clean files from commit1 and commit2
+      // This creates a clean instant with proper earliestCommitToRetain
+      HoodieCleanMetadata firstCleanMetadata = client.clean();
+      assertNotNull(firstCleanMetadata, "First clean should have cleaned some files");
+      assertTrue(firstCleanMetadata.getPartitionMetadata().containsKey(partitionUpsert),
+          "First clean should have cleaned files from upsert partition");
+      metaClient = HoodieTableMetaClient.reload(metaClient);
+
+      // Phase 2: Now we have a valid clean instant, proceed with testing incremental clean behavior
+
+      // Add initial data to insertOverwrite and cluster partitions (for later replace commits)
+      String commit5 = HoodieActiveTimeline.createNewInstantTime();
+      List<HoodieRecord> initialRecordsInsertOverwrite = dataGen.generateInsertsForPartition(commit5, 10, partitionInsertOverwrite);
+      List<HoodieRecord> initialRecordsCluster = dataGen.generateInsertsForPartition(commit5, 10, partitionCluster);
+      List<HoodieRecord> allCommit5Records = new ArrayList<>();
+      allCommit5Records.addAll(initialRecordsInsertOverwrite);
+      allCommit5Records.addAll(initialRecordsCluster);
+      client.startCommitWithTime(commit5);
+      client.insert(jsc.parallelize(allCommit5Records, 1), commit5).collect();
+      metaClient = HoodieTableMetaClient.reload(metaClient);
+
+      // bulk_insert on insert partition (creates new file groups only - should NOT be in incremental clean)
+      String bulkInsertCommit = HoodieActiveTimeline.createNewInstantTime();
+      List<HoodieRecord> bulkInsertRecords = dataGen.generateInsertsForPartition(bulkInsertCommit, 10, partitionInsert);
+      client.startCommitWithTime(bulkInsertCommit);
+      client.bulkInsert(jsc.parallelize(bulkInsertRecords, 1), bulkInsertCommit).collect();
+      metaClient = HoodieTableMetaClient.reload(metaClient);
+
+      // Upsert on upsert partition (modifies existing file groups)
+      String upsertCommit = HoodieActiveTimeline.createNewInstantTime();
+      List<HoodieRecord> upsertRecords = dataGen.generateUpdates(upsertCommit, upsertRecords4);
+      client.startCommitWithTime(upsertCommit);
+      client.upsert(jsc.parallelize(upsertRecords, 1), upsertCommit).collect();
+      metaClient = HoodieTableMetaClient.reload(metaClient);
+
+      // insert_overwrite on insert_overwrite partition (replace commit)
+      String insertOverwriteCommit = HoodieActiveTimeline.createNewInstantTime();
+      List<HoodieRecord> insertOverwriteRecords = dataGen.generateInsertsForPartition(insertOverwriteCommit, 10, partitionInsertOverwrite);
+      client.startCommitWithTime(insertOverwriteCommit, HoodieTimeline.REPLACE_COMMIT_ACTION);
+      client.insertOverwrite(jsc.parallelize(insertOverwriteRecords, 1), insertOverwriteCommit).getWriteStatuses().collect();
+      metaClient = HoodieTableMetaClient.reload(metaClient);
+
+      // Simulate clustering on cluster partition (replace commit with replaced file IDs)
+      String clusteringCommit = HoodieActiveTimeline.createNewInstantTime();
+      HoodieTestTable testTable = HoodieTestTable.of(metaClient);
+      Map<String, String> partitionAndFileId = testTable.forReplaceCommit(clusteringCommit).getFileIdsWithBaseFilesInPartitions(partitionCluster);
+      String newFileId = partitionAndFileId.get(partitionCluster);
+
+      HoodieTable table = HoodieSparkTable.create(config, context, metaClient);
+      List<String> existingFileIds = table.getSliceView()
+          .getLatestFileSlices(partitionCluster)
+          .map(fs -> fs.getFileId())
+          .collect(Collectors.toList());
+
+      if (!existingFileIds.isEmpty()) {
+        Pair<HoodieRequestedReplaceMetadata, HoodieReplaceCommitMetadata> replaceMetadata =
+            generateReplaceCommitMetadata(clusteringCommit, partitionCluster, existingFileIds.get(0), newFileId);
+        testTable.addReplaceCommit(clusteringCommit, Option.of(replaceMetadata.getKey()), Option.empty(), replaceMetadata.getValue());
+      }
+      metaClient = HoodieTableMetaClient.reload(metaClient);
+
+      // Two more upsert commits on upsert partition to create enough commits for cleaning
+      String commit9 = HoodieActiveTimeline.createNewInstantTime();
+      List<HoodieRecord> upsertRecords9 = dataGen.generateUpdates(commit9, upsertRecords);
+      client.startCommitWithTime(commit9);
+      client.upsert(jsc.parallelize(upsertRecords9, 1), commit9).collect();
+      metaClient = HoodieTableMetaClient.reload(metaClient);
+
+      String commit10 = HoodieActiveTimeline.createNewInstantTime();
+      List<HoodieRecord> upsertRecords10 = dataGen.generateUpdates(commit10, upsertRecords9);
+      client.startCommitWithTime(commit10);
+      client.upsert(jsc.parallelize(upsertRecords10, 1), commit10).collect();
+      metaClient = HoodieTableMetaClient.reload(metaClient);
+
+      // Run final clean - this should use incremental mode and only scan relevant partitions
+      HoodieCleanMetadata finalCleanMetadata = client.clean();
+      assertNotNull(finalCleanMetadata, "Final clean should have cleaned some files");
+
+      // Collect all partitions that were cleaned
+      java.util.Set<String> cleanedPartitions = finalCleanMetadata.getPartitionMetadata().keySet();
+
+      // Verify that insert partition is NOT in the clean plan
+      // (since bulk_insert creates new file groups, prevCommit is "null", so it should be excluded from incremental scan)
+      assertFalse(cleanedPartitions.contains(partitionInsert),
+          "Insert partition should NOT be in clean plan as bulk_insert only creates new file groups (prevCommit=null)");
+
+      // Verify that upsert partition IS in the clean plan
+      // (since upsert modifies existing file groups, prevCommit is set to the previous commit)
+      assertTrue(cleanedPartitions.contains(partitionUpsert),
+          "Upsert partition should be in clean plan as it modifies existing file groups");
+
+      // Verify that insert_overwrite partition IS in the clean plan
+      // (since insert_overwrite is a replace commit with replaced file IDs)
+      assertTrue(cleanedPartitions.contains(partitionInsertOverwrite),
+          "Insert overwrite partition should be in clean plan as it replaces existing file groups");
+
+      // Verify that cluster partition IS in the clean plan
+      // (since cluster is a replace commit with replaced file IDs)
+      assertTrue(cleanedPartitions.contains(partitionCluster),
+          "Cluster partition should be in clean plan as it replaces existing file groups");
+    }
+  }
 }

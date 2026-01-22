@@ -237,11 +237,11 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
       if (HoodieTimeline.REPLACE_COMMIT_ACTION.equals(instant.getAction())) {
         HoodieReplaceCommitMetadata replaceCommitMetadata =
             hoodieTable.getActiveTimeline().readReplaceCommitMetadata(instant);
-        return Stream.concat(replaceCommitMetadata.getPartitionToReplaceFileIds().keySet().stream(), replaceCommitMetadata.getPartitionToWriteStats().keySet().stream());
+        return replaceCommitMetadata.getWritePartitionPathsWithExistingFileGroupsModified().stream();
       } else {
         HoodieCommitMetadata commitMetadata =
             hoodieTable.getActiveTimeline().readCommitMetadata(instant);
-        return commitMetadata.getPartitionToWriteStats().keySet().stream();
+        return commitMetadata.getWritePartitionPathsWithExistingFileGroupsModified().stream();
       }
     } catch (IOException e) {
       throw new HoodieIOException(e.getMessage(), e);
