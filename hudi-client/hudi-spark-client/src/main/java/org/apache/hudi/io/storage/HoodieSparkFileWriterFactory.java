@@ -113,16 +113,6 @@ public class HoodieSparkFileWriterFactory extends HoodieFileWriterFactory {
     return new HoodieSparkLanceWriter(path, structType, instantTime, taskContextSupplier, storage, populateMetaFields);
   }
 
-  @Override
-  protected HoodieFileWriter newLanceFileWriter(
-      OutputStream outputStream, HoodieConfig config, HoodieSchema schema) throws IOException {
-    StructType structType = HoodieInternalRowUtils.getCachedSchema(schema);
-    return new HoodieSparkLanceStreamWriter(
-        new FSDataOutputStream(outputStream, null),
-        structType,
-        storage);
-  }
-
   private static HoodieRowParquetWriteSupport getHoodieRowParquetWriteSupport(StorageConfiguration<?> conf, HoodieSchema schema,
                                                                               HoodieConfig config, boolean enableBloomFilter) {
     Option<BloomFilter> filter = enableBloomFilter ? Option.of(createBloomFilter(config)) : Option.empty();

@@ -21,11 +21,13 @@ package org.apache.hudi.io.storage;
 import org.apache.hudi.HoodieSchemaConversionUtils;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieSparkRecord;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.log.block.HoodieDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieLanceDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock.HeaderMetadataType;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock.HoodieLogBlockContentLocation;
+import org.apache.hudi.common.util.LanceUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.io.ByteArraySeekableDataInputStream;
@@ -74,7 +76,7 @@ class TestHoodieLanceDataBlock extends SparkClientFunctionalTestHarness {
     HoodieSchema hoodieSchema = convertToHoodieSchema(schema);
 
     List<InternalRow> rows = createTestRows();
-    byte[] content = serializeRecordsToLanceBlock(rows, schema);
+    byte[] content = serializeRecordsToLanceBlock(rows, schema, hoodieSchema);
     
     Map<HeaderMetadataType, String> header = Collections.singletonMap(HeaderMetadataType.SCHEMA, hoodieSchema.toString());
     HoodieLogBlockContentLocation mockLocation = createMockContentLocation();
@@ -103,7 +105,7 @@ class TestHoodieLanceDataBlock extends SparkClientFunctionalTestHarness {
     HoodieSchema hoodieSchema = convertToHoodieSchema(schema);
 
     List<InternalRow> rows = createTestRows();
-    byte[] content = serializeRecordsToLanceBlock(rows, schema);
+    byte[] content = serializeRecordsToLanceBlock(rows, schema, hoodieSchema);
 
     // Test seekable input stream
     SeekableDataInputStream inputStream = new ByteArraySeekableDataInputStream(
@@ -138,7 +140,7 @@ class TestHoodieLanceDataBlock extends SparkClientFunctionalTestHarness {
     HoodieSchema hoodieSchema = convertToHoodieSchema(schema);
 
     List<InternalRow> rows = createTestRows();
-    byte[] content = serializeRecordsToLanceBlock(rows, schema);
+    byte[] content = serializeRecordsToLanceBlock(rows, schema, hoodieSchema);
 
     Map<HeaderMetadataType, String> header = Collections.singletonMap(HeaderMetadataType.SCHEMA, hoodieSchema.toString());
     HoodieLogBlockContentLocation mockLocation = createMockContentLocation();
@@ -175,7 +177,7 @@ class TestHoodieLanceDataBlock extends SparkClientFunctionalTestHarness {
 
     // Create test records
     List<InternalRow> rows = createTestRows();
-    byte[] content = serializeRecordsToLanceBlock(rows, fullSchema);
+    byte[] content = serializeRecordsToLanceBlock(rows, fullSchema, fullHoodieSchema);
 
     // Create projected schema (only name and age fields)
     StructType projectedSchema = new StructType()
@@ -245,17 +247,14 @@ class TestHoodieLanceDataBlock extends SparkClientFunctionalTestHarness {
     return HoodieSchemaConversionUtils.convertStructTypeToHoodieSchema(sparkSchema, "testSchema");
   }
 
-  private byte[] serializeRecordsToLanceBlock(List<InternalRow> rows, StructType schema)
+  private byte[] serializeRecordsToLanceBlock(List<InternalRow> rows, StructType schema, HoodieSchema hoodieSchema)
       throws IOException {
-    // Use HoodieSparkLanceStreamWriter to serialize rows to Lance format
-    ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
-    try (HoodieSparkLanceStreamWriter writer = new HoodieSparkLanceStreamWriter(outputStream, schema, hoodieStorage())) {
-      for (InternalRow row : rows) {
-        writer.writeRow(row.getString(0), row);
-      }
-    } catch (Exception e) {
-      throw new IOException("Failed to serialize rows", e);
+    List<HoodieRecord> records = new ArrayList<>();
+    for (InternalRow row : rows) {
+        records.add(new HoodieSparkRecord(row, schema));
     }
+    // Use LanceUtils to serialize rows to Lance format
+    ByteArrayOutputStream outputStream = new LanceUtils().serializeRecordsToLogBlock(hoodieStorage(), records, hoodieSchema, hoodieSchema, "name", Collections.emptyMap());
     return outputStream.toByteArray();
   }
 
