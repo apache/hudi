@@ -65,7 +65,7 @@ public class CleanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I, K,
     this.txnManager = new TransactionManager(config, table.getStorage());
   }
 
-  private static boolean deleteFileAndGetResult(HoodieStorage storage, String deletePathStr) throws IOException {
+  private static boolean deleteFileAndGetResult(HoodieStorage storage, String deletePathStr) {
     StoragePath deletePath = new StoragePath(deletePathStr);
     log.debug("Working on delete path: {}", deletePath);
     try {
@@ -85,6 +85,10 @@ public class CleanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I, K,
     } catch (FileNotFoundException fio) {
       // With cleanPlan being used for retried cleaning operations, its possible to clean a file twice
       return false;
+    } catch (IOException e) {
+      // Wrap and rethrow
+      log.error("Delete file failed: {}", deletePath, e);
+      throw new HoodieIOException(e.getMessage(), e);
     }
   }
 
@@ -96,12 +100,7 @@ public class CleanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I, K,
       String partitionPath = partitionDelFileTuple.getLeft();
       StoragePath deletePath = new StoragePath(partitionDelFileTuple.getRight().getFilePath());
       String deletePathStr = deletePath.toString();
-      boolean deletedFileResult = false;
-      try {
-        deletedFileResult = deleteFileAndGetResult(storage, deletePathStr);
-      } catch (IOException e) {
-        log.error("Delete file failed: {}", deletePathStr, e);
-      }
+      boolean deletedFileResult = deleteFileAndGetResult(storage, deletePathStr);
       final PartitionCleanStat partitionCleanStat =
           partitionCleanStatMap.computeIfAbsent(partitionPath, k -> new PartitionCleanStat(partitionPath));
       boolean isBootstrapBasePathFile = partitionDelFileTuple.getRight().isBootstrapBaseFile();
@@ -148,12 +147,8 @@ public class CleanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I, K,
         ? cleanerPlan.getPartitionsToBeDeleted()
         : new ArrayList<>();
     partitionsToBeDeleted.forEach(entry -> {
-      try {
-        if (!isNullOrEmpty(entry)) {
-          deleteFileAndGetResult(table.getStorage(), table.getMetaClient().getBasePath() + "/" + entry);
-        }
-      } catch (IOException e) {
-        log.warn("Partition deletion failed: {}", entry, e);
+      if (!isNullOrEmpty(entry)) {
+        deleteFileAndGetResult(table.getStorage(), table.getMetaClient().getBasePath() + "/" + entry);
       }
     });
 
