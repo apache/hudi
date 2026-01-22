@@ -65,12 +65,13 @@ with multi-threaded, could get your compilation in 1.5 to 2 mins.
 
 If you wish to run any single test class in java.
 ```shell
-mvn test -Punit-tests -pl hudi-spark-datasource/hudi-spark/ -am -B -DfailIfNoTests=false -Dtest=TestCleaner -Dspark3.5
+mvn test -Punit-tests -pl hudi-spark-datasource/hudi-spark/ -am -B -DfailIfNoTests=false -Dtest=TestCleaner -DwildcardSuites="abc" -Dspark3.5
 ```
+-DwildcardSuites="abc" will assist in skipping all scala tests.
 
 If you wish to run a single test method in java.
 ```shell
-mvn test -Punit-tests -pl hudi-spark-datasource/hudi-spark/ -am -B -DfailIfNoTests=false -Dtest=TestCleaner#testKeepLatestCommitsMOR -Dspark3.5
+mvn test -Punit-tests -pl hudi-spark-datasource/hudi-spark/ -am -B -DfailIfNoTests=false -Dtest=TestCleaner#testKeepLatestCommitsMOR -DwildcardSuites="abc" -Dspark3.5
 ```
 
 To filter particular scala test:
