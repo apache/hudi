@@ -25,7 +25,6 @@ import org.apache.hudi.storage.StoragePath;
 
 import com.lancedb.lance.spark.arrow.LanceArrowWriter;
 import org.apache.arrow.vector.types.pojo.Schema;
-import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.sql.types.StructType;
 import org.apache.spark.sql.util.LanceArrowUtils;
@@ -33,6 +32,7 @@ import org.apache.spark.sql.util.LanceArrowUtils;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
+import java.io.OutputStream;
 import java.util.List;
 import java.util.UUID;
 
@@ -59,7 +59,7 @@ public class HoodieSparkLanceStreamWriter extends HoodieBaseLanceWriter<Internal
   private static final String DEFAULT_TIMEZONE = "UTC";
   private static final int COPY_BUFFER_SIZE = 8192;
 
-  private final FSDataOutputStream outputStream;
+  private final OutputStream outputStream;
   private final StructType sparkSchema;
   private final Schema arrowSchema;
   private final File tempFile;
@@ -73,7 +73,7 @@ public class HoodieSparkLanceStreamWriter extends HoodieBaseLanceWriter<Internal
    * @param storage HoodieStorage instance
    * @throws IOException if temp file creation fails
    */
-  public HoodieSparkLanceStreamWriter(FSDataOutputStream outputStream,
+  public HoodieSparkLanceStreamWriter(OutputStream outputStream,
                                       StructType sparkSchema,
                                       HoodieStorage storage) throws IOException {
     super(storage, createTempPath(), DEFAULT_BATCH_SIZE);

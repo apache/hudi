@@ -39,6 +39,7 @@ import org.lance.file.LanceFileReader;
 
 import java.io.ByteArrayOutputStream;
 import java.io.File;
+import java.nio.file.Files;
 
 import static org.apache.hudi.io.storage.LanceTestUtils.createRow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -73,8 +74,7 @@ class TestHoodieSparkLanceStreamWriter {
     ByteArrayOutputStream baos = new ByteArrayOutputStream();
 
     // Write 100 records to stream
-    try (HoodieSparkLanceStreamWriter writer = new HoodieSparkLanceStreamWriter(
-        new FSDataOutputStream(baos, null), schema, storage)) {
+    try (HoodieSparkLanceStreamWriter writer = new HoodieSparkLanceStreamWriter(baos, schema, storage)) {
       for (int i = 0; i < 100; i++) {
         InternalRow row = createRow(i, "User" + i, 20L + i);
         writer.writeRow("key" + i, row);
@@ -95,8 +95,7 @@ class TestHoodieSparkLanceStreamWriter {
     ByteArrayOutputStream baos = new ByteArrayOutputStream();
 
     // Close without writing any rows
-    try (HoodieSparkLanceStreamWriter writer = new HoodieSparkLanceStreamWriter(
-        new FSDataOutputStream(baos, null), schema, storage)) {
+    try (HoodieSparkLanceStreamWriter writer = new HoodieSparkLanceStreamWriter(baos, schema, storage)) {
       // No writes
     }
 
@@ -152,32 +151,6 @@ class TestHoodieSparkLanceStreamWriter {
     assertEquals(initialLanceFileCount, finalLanceFileCount,
         "Temp Lance file should be cleaned up after close");
   }
-//
-//  @Test
-//  void testTempFileCleanupOnError() throws Exception {
-//    StructType schema = createSimpleSchema();
-//
-//    // Create an output stream that will fail on write
-//    FailingOutputStream failingStream = new FailingOutputStream();
-//    File tempDirFile = new File(System.getProperty("java.io.tmpdir"));
-//    int initialLanceFileCount = countLanceFiles(tempDirFile);
-//
-//    // Attempt write that should fail during close
-//    assertThrows(IOException.class, () -> {
-//      try (HoodieSparkLanceStreamWriter writer = new HoodieSparkLanceStreamWriter(
-//          new FSDataOutputStream(failingStream, null), schema, storage)) {
-//        for (int i = 0; i < 10; i++) {
-//          InternalRow row = createRow(i, "User" + i, 20L + i);
-//          writer.writeRow("key" + i, row);
-//        }
-//      }
-//    });
-//
-//    // Verify temp file was cleaned up even on error
-//    int finalLanceFileCount = countLanceFiles(tempDirFile);
-//    assertEquals(initialLanceFileCount, finalLanceFileCount,
-//        "Temp Lance file should be cleaned up even on error");
-//  }
 
   @Test
   void testStreamWriteWithComplexTypes() throws Exception {
@@ -318,7 +291,7 @@ class TestHoodieSparkLanceStreamWriter {
     // Write to temp file so we can read with LanceFileReader
     File tempLanceFile = File.createTempFile("verify-lance-", ".lance", tempDir);
     try {
-      java.nio.file.Files.write(tempLanceFile.toPath(), lanceData);
+      Files.write(tempLanceFile.toPath(), lanceData);
 
       // Read and verify using LanceFileReader
       try (BufferAllocator allocator = HoodieArrowAllocator.newChildAllocator(
