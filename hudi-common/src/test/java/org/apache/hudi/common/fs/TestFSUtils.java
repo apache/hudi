@@ -28,6 +28,7 @@ import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.CollectionUtils;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 
@@ -40,6 +41,8 @@ import org.junit.contrib.java.lang.system.EnvironmentVariables;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -48,6 +51,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Date;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeSet;
@@ -545,6 +549,56 @@ public class TestFSUtils extends HoodieCommonTestHarness {
             .map(FileStatus::getPath)
             .filter(filePath -> filePath.getName().endsWith(".txt"))
             .collect(Collectors.toSet()));
+  }
+
+  @Test
+  public void testGetFileStatusesUnderPartition() throws IOException {
+    Path hoodieTempDir = getHoodieTempDir();
+    FileSystem fileSystem = metaClient.getFs();
+    prepareTestDirectory(fileSystem, hoodieTempDir);
+    List<Option<FileStatus>> fileStatusList = FSUtils.getFileStatusesUnderPartition(
+        fileSystem,
+        new Path(baseUri.toString(), ".hoodie/.temp"),
+        new HashSet<>(Collections.singletonList("file3.txt")),
+        false);
+    assertEquals(1, fileStatusList.size());
+
+    assertThrows(HoodieIOException.class, () -> FSUtils.getFileStatusesUnderPartition(
+        fileSystem,
+        new Path(baseUri.toString(), ".hoodie/.temp"),
+        new HashSet<>(Collections.singletonList("file4.txt")),
+        false));
+  }
+
+  @Test
+  void testS3aToS3_AWS() {
+    // Test cases for AWS S3 URLs
+    assertEquals("s3://my-bucket/path/to/object", FSUtils.s3aToS3("s3a://my-bucket/path/to/object"));
+    assertEquals("s3://my-bucket", FSUtils.s3aToS3("s3a://my-bucket"));
+    assertEquals("s3://MY-BUCKET/PATH/TO/OBJECT", FSUtils.s3aToS3("s3a://MY-BUCKET/PATH/TO/OBJECT"));
+    assertEquals("s3://my-bucket/path/to/object", FSUtils.s3aToS3("S3a://my-bucket/path/to/object"));
+    assertEquals("s3://my-bucket/path/to/object", FSUtils.s3aToS3("s3A://my-bucket/path/to/object"));
+    assertEquals("s3://my-bucket/path/to/object", FSUtils.s3aToS3("S3A://my-bucket/path/to/object"));
+    assertEquals("s3://my-bucket/s3a://another-bucket/another/path", FSUtils.s3aToS3("s3a://my-bucket/s3a://another-bucket/another/path"));
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {
+      "gs://my-bucket/path/to/object",
+      "gs://my-bucket",
+      "gs://MY-BUCKET/PATH/TO/OBJECT",
+      "https://myaccount.blob.core.windows.net/mycontainer/path/to/blob",
+      "https://myaccount.blob.core.windows.net/MYCONTAINER/PATH/TO/BLOB",
+      "https://example.com/path/to/resource",
+      "http://example.com",
+      "ftp://example.com/resource",
+      "",
+      "gs://my-bucket/path/to/s3a://object",
+      "gs://my-bucket s3a://my-object",
+  })
+
+  void testUriDoesNotChange(String uri) {
+    assertEquals(uri, FSUtils.s3aToS3(uri));
   }
 
   private Path getHoodieTempDir() {

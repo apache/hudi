@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.aws.cloudwatch;
+package org.apache.hudi.aws.metrics.cloudwatch;
 
 import org.apache.hudi.aws.credentials.HoodieAWSCredentialsProviderFactory;
 import org.apache.hudi.common.util.Option;
@@ -235,6 +235,9 @@ public class CloudWatchReporter extends ScheduledReporter {
       } catch (final Exception ex) {
         LOG.error("Error reporting metrics to CloudWatch. The data in this CloudWatch request "
             + "may have been discarded, and not made it to CloudWatch.", ex);
+        if (ex instanceof InterruptedException) {
+          Thread.currentThread().interrupt();
+        }
       }
     }
   }

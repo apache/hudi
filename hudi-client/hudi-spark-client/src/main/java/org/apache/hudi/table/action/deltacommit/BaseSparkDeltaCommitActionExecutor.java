@@ -20,6 +20,8 @@ package org.apache.hudi.table.action.deltacommit;
 
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
+import org.apache.hudi.client.utils.CommitMetadataUtils;
+import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.util.Option;
@@ -50,14 +52,19 @@ public abstract class BaseSparkDeltaCommitActionExecutor<T>
   private SparkUpsertDeltaCommitPartitioner<T> mergeOnReadUpsertPartitioner;
 
   public BaseSparkDeltaCommitActionExecutor(HoodieSparkEngineContext context, HoodieWriteConfig config, HoodieTable table,
-                                                String instantTime, WriteOperationType operationType) {
+                                            String instantTime, WriteOperationType operationType) {
     this(context, config, table, instantTime, operationType, Option.empty());
   }
 
   public BaseSparkDeltaCommitActionExecutor(HoodieSparkEngineContext context, HoodieWriteConfig config, HoodieTable table,
-                                                String instantTime, WriteOperationType operationType,
-                                                Option<Map<String, String>> extraMetadata) {
+                                            String instantTime, WriteOperationType operationType,
+                                            Option<Map<String, String>> extraMetadata) {
     super(context, config, table, instantTime, operationType, extraMetadata);
+  }
+
+  @Override
+  protected HoodieCommitMetadata appendMetadataForMissingFiles(HoodieCommitMetadata commitMetadata) throws IOException {
+    return CommitMetadataUtils.reconcileMetadataForMissingFiles(table, getCommitActionType(), instantTime, commitMetadata, config, context, hadoopConf, this.getClass().getSimpleName());
   }
 
   @Override
@@ -71,7 +78,7 @@ public abstract class BaseSparkDeltaCommitActionExecutor<T>
 
   @Override
   public Iterator<List<WriteStatus>> handleUpdate(String partitionPath, String fileId,
-      Iterator<HoodieRecord<T>> recordItr) throws IOException {
+                                                  Iterator<HoodieRecord<T>> recordItr) throws IOException {
     LOG.info("Merging updates for commit " + instantTime + " for file " + fileId);
     if (!table.getIndex().canIndexLogFiles() && mergeOnReadUpsertPartitioner != null
         && mergeOnReadUpsertPartitioner.getSmallFileIds().contains(fileId)) {
