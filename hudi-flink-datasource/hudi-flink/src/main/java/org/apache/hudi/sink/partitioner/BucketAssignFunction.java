@@ -40,6 +40,7 @@ import org.apache.hudi.utils.RuntimeContextUtils;
 
 import lombok.Getter;
 import lombok.Setter;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.flink.api.common.state.CheckpointListener;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.runtime.state.FunctionInitializationContext;
@@ -66,6 +67,7 @@ import java.util.Objects;
  *
  * @see BucketAssigner
  */
+@Slf4j
 public class BucketAssignFunction
     extends KeyedProcessFunctionAdapter<String, HoodieFlinkInternalRow, HoodieFlinkInternalRow>
     implements CheckpointedFunction, CheckpointListener {
@@ -184,21 +186,21 @@ public class BucketAssignFunction
             row.setRowKind(orginalRowKind);
           }
           location = getNewRecordLocation(partitionPath);
-          record.setOperationType("I");
         } else {
           location = oldLoc.toLocal("U");
           this.bucketAssigner.addUpdate(partitionPath, location.getFileId());
-          record.setOperationType("U");
         }
       } else {
         location = getNewRecordLocation(partitionPath);
-        record.setOperationType("I");
       }
       // always refresh the index
-      this.indexBackend.update(recordKey, HoodieRecordGlobalLocation.fromLocal(partitionPath, location));
+      if (oldLoc == null || !oldLoc.getFileId().equals(location.getFileId())) {
+        record.setOperationType("I");
+        this.indexBackend.update(recordKey, HoodieRecordGlobalLocation.fromLocal(partitionPath, location));
+      }
     } else {
+      log.warn("This branch should not be reached.");
       location = getNewRecordLocation(partitionPath);
-      record.setOperationType("I");
     }
     record.setFileId(location.getFileId());
     record.setInstantTime(location.getInstantTime());

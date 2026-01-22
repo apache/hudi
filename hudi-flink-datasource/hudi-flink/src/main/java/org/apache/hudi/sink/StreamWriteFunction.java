@@ -230,15 +230,17 @@ public class StreamWriteFunction extends AbstractStreamWriteFunction<HoodieFlink
       this.indexProcessFunctionOpt = Option.of((record, out) -> {
         switch (record.getOperationType()) {
           case "I":
-          case "D":
             out.collect(IndexRowUtils.createRecordIndexRow(record));
             break;
-          case "U":
-          case "-U":
-            // for updates, we can skip updating RLI partition in MDT
+          case "D":
+            // Don't emit delete index record either, because we cannot be certain whether data with the same key
+            // in storage will actually be deleted. Therefore, it's possible that data in storage is deleted, but
+            // the record level index data remains.
+            // todo: support ordering value in record level index metadata payload, since the efficiency of location
+            //  tagging by merging lookup is intolerable in flink streaming writing scenario.
             break;
           default:
-            throw new HoodieException("Unexpected bucket type: " + record.getInstantTime());
+            break;
         }
       });
     } else {
