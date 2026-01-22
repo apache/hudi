@@ -58,7 +58,7 @@ class TestCleanupAuditLockProcedure extends HoodieSparkProcedureTestBase {
          | )
        """.stripMargin)
     // Insert data to initialize the Hudi metadata structure
-    spark.sql(s"insert into $tableName select 1, 'test', 10.0, 1000")
+    spark.sql(s"insert into $tableName select 1, 'test', 10, 1000")
     s"${tmp.getCanonicalPath}/$tableName"
   }
 
