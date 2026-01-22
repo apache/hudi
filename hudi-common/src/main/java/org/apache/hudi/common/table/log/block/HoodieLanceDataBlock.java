@@ -1,3 +1,21 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package org.apache.hudi.common.table.log.block;
 
 import org.apache.hudi.common.engine.HoodieReaderContext;
@@ -81,17 +99,15 @@ public class HoodieLanceDataBlock extends HoodieDataBlock {
    * @return A ClosableIterator over HoodieRecord<T>.
    * @throws IOException If there is an error reading or deserializing the records.
    */
-  protected <T> ClosableIterator<HoodieRecord<T>> deserializeRecords(
-      SeekableDataInputStream inputStream,
-      HoodieLogBlockContentLocation contentLocation,
-      HoodieRecord.HoodieRecordType type,
-      int bufferSize
-  ) throws IOException {
+  protected <T> ClosableIterator<HoodieRecord<T>> deserializeRecords(SeekableDataInputStream inputStream,
+                                                                     HoodieLogBlockContentLocation contentLocation,
+                                                                     HoodieRecord.HoodieRecordType type,
+                                                                     int bufferSize) throws IOException {
     HoodieLogBlockContentLocation blockContentLoc = getBlockContentLocation().get();
     HoodieSchema writerSchema = HoodieSchema.parse(this.getLogBlockHeader().get(HeaderMetadataType.SCHEMA));
 
     // Create temporary file from log block content
-    File tempFile = createTempFile(inputStream, contentLocation);
+    File tempFile = createTempFile(inputStream, contentLocation, bufferSize);
     StoragePath tempFilePath = new StoragePath(tempFile.toURI());
     HoodieStorage storage = blockContentLoc.getStorage();
 
@@ -161,15 +177,19 @@ public class HoodieLanceDataBlock extends HoodieDataBlock {
    * @throws IOException if writing fails
    */
   private File createTempFile(byte[] content) throws IOException {
-    // Create temporary file with .lance extension
-    File tempFile = File.createTempFile("lance-log-block-" + UUID.randomUUID(), ".lance");
-    tempFile.deleteOnExit();
-
+    File tempFile = createTempFile();
     // Write content to temp file
     try (OutputStream outputStream = Files.newOutputStream(tempFile.toPath())) {
       outputStream.write(content);
     }
 
+    return tempFile;
+  }
+
+  private static File createTempFile() throws IOException {
+    // Create temporary file with .lance extension
+    File tempFile = File.createTempFile("lance-log-block-" + UUID.randomUUID(), ".lance");
+    tempFile.deleteOnExit();
     return tempFile;
   }
 
@@ -179,16 +199,28 @@ public class HoodieLanceDataBlock extends HoodieDataBlock {
    *
    * @param inputStream The input stream to read from
    * @param contentLocation The location within the stream (offset and size)
+   * @param bufferSize The size of the buffer to use for reading
    * @return Java File object for the temporary file
    * @throws IOException if reading or writing fails
    */
   private File createTempFile(SeekableDataInputStream inputStream,
-                              HoodieLogBlockContentLocation contentLocation) throws IOException {
-    // Read from input stream at the specified position
+                              HoodieLogBlockContentLocation contentLocation,
+                              int bufferSize) throws IOException {
+    File tempFile = createTempFile();
     inputStream.seek(contentLocation.getContentPositionInLogFile());
-    byte[] blockContent = new byte[(int) contentLocation.getBlockSize()];
-    inputStream.readFully(blockContent);
-    return createTempFile(blockContent);
+    try (OutputStream outputStream = Files.newOutputStream(tempFile.toPath())) {
+      byte[] buffer = new byte[bufferSize];
+      long bytesToRead = contentLocation.getBlockSize();
+      while (bytesToRead > 0) {
+        int bytesRead = inputStream.read(buffer, 0, (int) Math.min(bufferSize, bytesToRead));
+        if (bytesRead == -1) {
+          break; // EOF
+        }
+        outputStream.write(buffer, 0, bytesRead);
+        bytesToRead -= bytesRead;
+      }
+    }
+    return tempFile;
   }
 
   @Override
