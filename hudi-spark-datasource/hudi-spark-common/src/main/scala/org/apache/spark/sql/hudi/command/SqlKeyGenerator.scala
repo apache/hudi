@@ -162,7 +162,7 @@ class SqlKeyGenerator(props: TypedProperties) extends BuiltinKeyGenerator(props)
             if (_partitionValue == PartitionPathEncodeUtils.DEFAULT_PARTITION_PATH) {
               partitionValue
             } else if (slashSeparatedDatePartitioning) {
-              partitionValue.replace('-', '/')
+              partitionValue.replace('/', '-')
             } else {
               partitionField.dataType match {
                 case TimestampType =>
