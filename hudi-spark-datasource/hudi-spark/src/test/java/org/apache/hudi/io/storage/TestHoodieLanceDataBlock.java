@@ -251,7 +251,7 @@ class TestHoodieLanceDataBlock extends SparkClientFunctionalTestHarness {
       throws IOException {
     List<HoodieRecord> records = new ArrayList<>();
     for (InternalRow row : rows) {
-        records.add(new HoodieSparkRecord(row, schema));
+      records.add(new HoodieSparkRecord(row, schema));
     }
     // Use LanceUtils to serialize rows to Lance format
     ByteArrayOutputStream outputStream = new LanceUtils().serializeRecordsToLogBlock(hoodieStorage(), records, hoodieSchema, hoodieSchema, "name", Collections.emptyMap());
