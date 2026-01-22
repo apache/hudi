@@ -183,7 +183,6 @@ public class TestBootstrap extends HoodieSparkClientTestBase {
     if (!isMakeFieldsNullable) {
       // Convert schema to non-nullable for all fields
       df = applyNonNullableSchema(df);
-      df.printSchema();
     }
 
     if (isPartitioned) {
