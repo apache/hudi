@@ -240,9 +240,7 @@ public class LockAuditingCommand {
       Path configPath = new Path(auditConfigPath);
 
       // Check if config file exists by attempting to get its info
-      try {
-        HoodieCLI.fs.exists(configPath);
-      } catch (FileNotFoundException e) {
+      if (!HoodieCLI.fs.exists(configPath)) {
         return "Lock audit is already disabled (no configuration file found).";
       }
 
