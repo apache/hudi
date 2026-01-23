@@ -31,7 +31,7 @@ ALLOWED_TAGS = {
     'observability', 'metadata', 'meetup', 'key generation', 'docker',
     'cleaner', 'apache hive', 'apache doris', 'vector search', 'upstox',
     'tla specification', 'streamlit', 'rag', 'presto', 'postgres',
-    'file sizing', 'etl', 'databricks', 'data warehouse',
+    'file sizing', 'etl', 'databricks', 'data warehouse', 'applied intuition',
     'conference', 'compaction', 'bootstrap', 'apache parquet', 'announcement',
     'zupee', 'yuno', 'yugabyte', 'yahoo', 'robinhood', 'peloton', 'leboncoin',
     'grofers', 'grab', 'funding circle', 'freewheel', 'estuary', 'alibaba',
