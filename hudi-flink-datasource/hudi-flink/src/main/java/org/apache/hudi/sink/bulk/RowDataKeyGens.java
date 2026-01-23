@@ -18,7 +18,7 @@
 
 package org.apache.hudi.sink.bulk;
 
-import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.exception.HoodieValidationException;
 
 import org.apache.flink.configuration.Configuration;
@@ -37,7 +37,7 @@ public class RowDataKeyGens {
    * Creates {@link RowDataKeyGen} of corresponding type depending on table configuration.
    */
   public static RowDataKeyGen instance(Configuration conf, RowType rowType, @Nullable Integer taskId, @Nullable String instantTime) {
-    String recordKeys = conf.get(FlinkOptions.RECORD_KEY_FIELD);
+    String recordKeys = OptionsResolver.getRecordKeyStrOrFail(conf);
     if (hasRecordKey(recordKeys, rowType.getFieldNames())) {
       return RowDataKeyGen.instance(conf, rowType);
     } else {

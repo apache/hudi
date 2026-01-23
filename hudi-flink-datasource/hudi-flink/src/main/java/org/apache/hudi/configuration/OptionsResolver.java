@@ -37,6 +37,7 @@ import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.exception.HoodieValidationException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.index.bucket.partition.PartitionBucketIndexUtils;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
@@ -152,12 +153,27 @@ public class OptionsResolver {
   }
 
   /**
+   * Return value of {@link FlinkOptions#RECORD_KEY_FIELD} if it was set,
+   * or throw exception otherwise.
+   */
+  public static String getRecordKeyStrOrFail(Configuration conf) {
+    final String recordKeyStr = conf.get(FlinkOptions.RECORD_KEY_FIELD);
+    if (null == recordKeyStr) {
+      throw new HoodieValidationException("Primary key definition is required, "
+          + "use either PRIMARY KEY syntax or option '" + FlinkOptions.RECORD_KEY_FIELD.key() + "' to specify.");
+    }
+    return recordKeyStr;
+  }
+
+  /**
    * Returns the ordering fields as comma separated string
    * or null if the value is set as {@link FlinkOptions#NO_PRE_COMBINE}.
    */
   public static String getOrderingFieldsStr(Configuration conf) {
     final String orderingFields = conf.get(FlinkOptions.ORDERING_FIELDS);
-    return orderingFields.equals(FlinkOptions.NO_PRE_COMBINE) ? null : orderingFields;
+    return null == orderingFields || orderingFields.equals(FlinkOptions.NO_PRE_COMBINE)
+        ? null
+        : orderingFields;
   }
 
   /**
@@ -429,14 +445,10 @@ public class OptionsResolver {
    * Returns the index key field.
    */
   public static String getIndexKeyField(Configuration conf) {
-    return conf.getString(FlinkOptions.INDEX_KEY_FIELD.key(), conf.get(FlinkOptions.RECORD_KEY_FIELD));
-  }
-
-  /**
-   * Returns the index key field values.
-   */
-  public static String[] getIndexKeys(Configuration conf) {
-    return getIndexKeyField(conf).split(",");
+    // could be called internally from writer builders and from Flink operator functions with different parameter absence processing,
+    // therefore we return empty string instead of null to prevent failures
+    String indexKeyField = conf.getString(FlinkOptions.INDEX_KEY_FIELD.key(), conf.get(FlinkOptions.RECORD_KEY_FIELD));
+    return null != indexKeyField ? indexKeyField : "";
   }
 
   /**

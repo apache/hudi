@@ -214,16 +214,8 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
    */
   private void checkRecordKey(Configuration conf, ResolvedSchema schema) {
     List<String> fields = schema.getColumnNames();
-    if (!schema.getPrimaryKey().isPresent()) {
-      String[] recordKeys = conf.get(FlinkOptions.RECORD_KEY_FIELD).split(",");
-      if (recordKeys.length == 1
-          && FlinkOptions.RECORD_KEY_FIELD.defaultValue().equals(recordKeys[0])
-          && !fields.contains(recordKeys[0])) {
-        throw new HoodieValidationException("Primary key definition is required, the default primary key field "
-            + "'" + FlinkOptions.RECORD_KEY_FIELD.defaultValue() + "' does not exist in the table schema, "
-            + "use either PRIMARY KEY syntax or option '" + FlinkOptions.RECORD_KEY_FIELD.key() + "' to speciy.");
-      }
-
+    if (schema.getPrimaryKey().isEmpty()) {
+      String[] recordKeys = OptionsResolver.getRecordKeyStrOrFail(conf).split(",");
       Arrays.stream(recordKeys)
           .filter(field -> !fields.contains(field))
           .findAny()
@@ -232,8 +224,10 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
                 + "'" + FlinkOptions.RECORD_KEY_FIELD.key() + "' does not exist in the table schema.");
           });
     }
-    if (schema.getPrimaryKey().isPresent() && conf.containsKey(FlinkOptions.RECORD_KEY_FIELD.key()))   {
-      log.warn("PRIMARY KEY syntax and option '{}' was used. Value of the PRIMARY KEY will be used and option will be ignored!", FlinkOptions.RECORD_KEY_FIELD.key());
+    if (schema.getPrimaryKey().isPresent() && conf.containsKey(FlinkOptions.RECORD_KEY_FIELD.key())) {
+      log.warn("PRIMARY KEY syntax and option '{}' was used. "
+          + "Value of the PRIMARY KEY will be used and option will be ignored!",
+          FlinkOptions.RECORD_KEY_FIELD.key());
     }
   }
 
@@ -280,17 +274,20 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
       conf.set(FlinkOptions.RECORD_KEY_FIELD, recordKey);
     }
     List<String> partitionKeys = table.getPartitionKeys();
-    if (partitionKeys.size() > 0) {
+    if (!partitionKeys.isEmpty()) {
       // the PARTITIONED BY syntax always has higher priority than option FlinkOptions#PARTITION_PATH_FIELD
       conf.set(FlinkOptions.PARTITION_PATH_FIELD, String.join(",", partitionKeys));
     }
     // set index key for bucket index if not defined
     if (conf.get(FlinkOptions.INDEX_TYPE).equals(HoodieIndex.IndexType.BUCKET.name())) {
       if (conf.get(FlinkOptions.INDEX_KEY_FIELD).isEmpty()) {
-        conf.set(FlinkOptions.INDEX_KEY_FIELD, conf.get(FlinkOptions.RECORD_KEY_FIELD));
+        log.info("'{}' is not set, therefore '{}' value will be used as index key instead",
+            FlinkOptions.INDEX_KEY_FIELD.key(),
+            FlinkOptions.RECORD_KEY_FIELD.key());
+        conf.set(FlinkOptions.INDEX_KEY_FIELD, OptionsResolver.getRecordKeyStrOrFail(conf));
       } else {
         Set<String> recordKeySet =
-            Arrays.stream(conf.get(FlinkOptions.RECORD_KEY_FIELD).split(",")).collect(Collectors.toSet());
+            Arrays.stream(OptionsResolver.getRecordKeyStrOrFail(conf).split(",")).collect(Collectors.toSet());
         Set<String> indexKeySet =
             Arrays.stream(conf.get(FlinkOptions.INDEX_KEY_FIELD).split(",")).collect(Collectors.toSet());
         if (!recordKeySet.containsAll(indexKeySet)) {
@@ -302,7 +299,7 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
 
     // tweak the key gen class if possible
     final String[] partitions = conf.get(FlinkOptions.PARTITION_PATH_FIELD).split(",");
-    final String[] pks = conf.get(FlinkOptions.RECORD_KEY_FIELD).split(",");
+    final String[] pks = OptionsResolver.getRecordKeyStrOrFail(conf).split(",");
     if (partitions.length == 1) {
       final String partitionField = partitions[0];
       if (partitionField.isEmpty()) {

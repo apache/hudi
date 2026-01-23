@@ -23,7 +23,8 @@ import org.apache.hudi.common.config.ConfigGroups;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.table.HoodieTableConfig;
-import org.apache.hudi.common.util.StringUtils;
+
+import lombok.extern.slf4j.Slf4j;
 
 import java.io.File;
 import java.io.FileReader;
@@ -36,6 +37,7 @@ import static org.apache.hudi.common.model.HoodiePayloadProps.PAYLOAD_ORDERING_F
 /**
  * Hoodie payload related configs.
  */
+@Slf4j
 @ConfigClassProperty(name = "Payload Configurations",
     groupName = ConfigGroups.Names.RECORD_PAYLOAD,
     description = "Payload related configs, that can be leveraged to "
@@ -44,7 +46,7 @@ public class HoodiePayloadConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> EVENT_TIME_FIELD = ConfigProperty
       .key(PAYLOAD_EVENT_TIME_FIELD_PROP_KEY)
-      .defaultValue("ts")
+      .noDefaultValue()
       .markAdvanced()
       .withDocumentation("Table column/field name to derive timestamp associated with the records. This can"
           + "be useful for e.g, determining the freshness of the table.");
@@ -95,14 +97,22 @@ public class HoodiePayloadConfig extends HoodieConfig {
     }
 
     public Builder withPayloadOrderingFields(String payloadOrderingFields) {
-      if (StringUtils.nonEmpty(payloadOrderingFields)) {
+      if (null != payloadOrderingFields && !payloadOrderingFields.isEmpty()) {
         payloadConfig.setValue(ORDERING_FIELDS, payloadOrderingFields);
+      } else {
+        log.warn("'{}' wasn't set during Hoodie payload building due to absent key field passed.",
+            ORDERING_FIELDS.key());
       }
       return this;
     }
 
     public Builder withPayloadEventTimeField(String payloadEventTimeField) {
-      payloadConfig.setValue(EVENT_TIME_FIELD, String.valueOf(payloadEventTimeField));
+      if (null != payloadEventTimeField && !payloadEventTimeField.isEmpty()) {
+        payloadConfig.setValue(EVENT_TIME_FIELD, payloadEventTimeField);
+      } else {
+        log.warn("'{}' wasn't set during Hoodie payload building due to absent key field passed.",
+            EVENT_TIME_FIELD.key());
+      }
       return this;
     }
 
