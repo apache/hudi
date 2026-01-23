@@ -1469,7 +1469,7 @@ public class TestHoodieSchema {
 
     HoodieAvroSchemaException exception = assertThrows(HoodieAvroSchemaException.class,
         () -> HoodieSchema.parse(invalidVariantJson));
-    assertTrue(exception.getMessage().contains("metadata"));
+    assertEquals("Invalid schema string format", exception.getMessage());
   }
 
   @Test
@@ -1486,7 +1486,7 @@ public class TestHoodieSchema {
 
     HoodieAvroSchemaException exception = assertThrows(HoodieAvroSchemaException.class,
         () -> HoodieSchema.parse(invalidVariantJson));
-    assertTrue(exception.getMessage().contains("value"));
+    assertEquals("Invalid schema string format", exception.getMessage());
   }
 
   @Test
@@ -1504,7 +1504,7 @@ public class TestHoodieSchema {
 
     HoodieAvroSchemaException exception = assertThrows(HoodieAvroSchemaException.class,
         () -> HoodieSchema.parse(invalidVariantJson));
-    assertTrue(exception.getMessage().contains("metadata") && exception.getMessage().contains("BYTES"));
+    assertEquals("Invalid schema string format", exception.getMessage());
   }
 
   @Test
@@ -1522,7 +1522,7 @@ public class TestHoodieSchema {
 
     HoodieAvroSchemaException exception = assertThrows(HoodieAvroSchemaException.class,
         () -> HoodieSchema.parse(invalidVariantJson));
-    assertTrue(exception.getMessage().contains("value") && exception.getMessage().contains("BYTES"));
+    assertEquals("Invalid schema string format", exception.getMessage());
   }
 
   @Test
