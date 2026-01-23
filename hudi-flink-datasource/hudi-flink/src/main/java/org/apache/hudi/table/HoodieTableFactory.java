@@ -191,6 +191,8 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
     if (indexType == HoodieIndex.IndexType.GLOBAL_RECORD_LEVEL_INDEX) {
       ValidationUtils.checkArgument(conf.get(FlinkOptions.METADATA_ENABLED),
           "Metadata table should be enabled when index.type is GLOBAL_RECORD_LEVEL_INDEX.");
+      ValidationUtils.checkArgument(conf.get(FlinkOptions.INDEX_GLOBAL_ENABLED),
+          "Partition level index updating is not supported for GLOBAL_RECORD_LEVEL_INDEX, please set 'index.global.enabled' = 'true'.");
     }
   }
 

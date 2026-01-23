@@ -1205,7 +1205,7 @@ public class ITTestHoodieDataSource {
     List<Row> result = CollectionUtil.iterableToList(
         () -> streamTableEnv.sqlQuery("select * from t1").execute().collect());
     final String expected = "["
-        + "+I[id1, Stephen, 34, 1970-01-01T00:00:02, par1], "
+        + "+I[id1, Danny, 24, 1970-01-01T00:00:01, par1], "
         + "+I[id1, Fabian, 32, 1970-01-01T00:00:04, par2], "
         + "+I[id1, Jane, 19, 1970-01-01T00:00:06, par3], "
         + "+I[id1, Phoebe, 52, 1970-01-01T00:00:08, par4]]";

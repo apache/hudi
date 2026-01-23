@@ -47,7 +47,9 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.Iterator;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -161,16 +163,17 @@ public class IndexWriteFunction extends AbstractStreamWriteFunction<RowData> {
   private Pair<List<HoodieRecord>, Set<String>> prepareIndexRecordsAndPartitions(BinaryInMemorySortBuffer indexDataBuffer) {
     BinaryRowData reusedRow = new BinaryRowData(IndexRowUtils.INDEX_ROW_TYPE.getFieldCount());
     Iterator<BinaryRowData> rowItr = new MutableIteratorWrapperIterator<>(indexDataBuffer.getIterator(), () -> reusedRow);
-    List<HoodieRecord> indexRecords = new ArrayList<>(indexDataBuffer.size());
     Set<String> dataPartitions = new HashSet<>();
     HoodieWriteConfig writeConfig = writeClient.getConfig();
+    // deduplicate the index records using commit time ordering.
+    Map<String, HoodieRecord> keyAndRecordMap = new LinkedHashMap<>();
     while (rowItr.hasNext()) {
       RowData indexRow = rowItr.next();
-      indexRecords.add(IndexRowUtils.convertToHoodieRecord(this.currentInstant, indexRow, writeConfig));
+      String recordKey = IndexRowUtils.getRecordKey(indexRow);
+      keyAndRecordMap.put(recordKey, IndexRowUtils.convertToHoodieRecord(this.currentInstant, indexRow, writeConfig));
       dataPartitions.add(IndexRowUtils.getPartition(indexRow));
-
     }
-    return Pair.of(indexRecords, dataPartitions);
+    return Pair.of(new ArrayList<>(keyAndRecordMap.values()), dataPartitions);
   }
 
   @Override

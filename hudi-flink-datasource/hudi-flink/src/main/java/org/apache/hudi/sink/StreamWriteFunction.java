@@ -237,7 +237,7 @@ public class StreamWriteFunction extends AbstractStreamWriteFunction<HoodieFlink
             // in storage will actually be deleted. Therefore, it's possible that data in storage is deleted, but
             // the record level index data remains.
             // todo: support ordering value in record level index metadata payload, since the efficiency of location
-            //  tagging by merging lookup is intolerable in flink streaming writing scenario.
+            // tagging by merging lookup is intolerable in flink streaming writing scenario.
             break;
           default:
             break;
