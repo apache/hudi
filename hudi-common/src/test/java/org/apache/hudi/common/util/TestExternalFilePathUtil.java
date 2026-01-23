@@ -127,20 +127,38 @@ public class TestExternalFilePathUtil {
   }
 
   @Test
-  public void testGetActualParentPath_WithPrefix() {
+  public void testGetFullPath_OfPartition_WithPrefix() {
     StoragePath parent = new StoragePath("/table/partition1/bucket-0");
     String fileName = "file1.parquet_20240101000000_fg%3Dbucket-0_hudiext";
 
-    StoragePath result = ExternalFilePathUtil.getActualParentPath(parent, fileName);
+    StoragePath result = ExternalFilePathUtil.getFullPathOfPartition(parent, fileName);
     assertEquals(new StoragePath("/table/partition1"), result);
   }
 
   @Test
-  public void testGetActualParentPath_WithoutPrefix() {
+  public void testGetFullPath_OfPartition_WithNestedPrefix_2Levels() {
+    StoragePath parent = new StoragePath("/table/partition1/bucket-0/subdir");
+    String fileName = "file1.parquet_20240101000000_fg%3Dbucket-0%2Fsubdir_hudiext";
+
+    StoragePath result = ExternalFilePathUtil.getFullPathOfPartition(parent, fileName);
+    assertEquals(new StoragePath("/table/partition1"), result);
+  }
+
+  @Test
+  public void testGetFullPath_OfPartition_WithNestedPrefix_3Levels() {
+    StoragePath parent = new StoragePath("/table/partition1/bucket-0/subdir1/subdir2");
+    String fileName = "file1.parquet_20240101000000_fg%3Dbucket-0%2Fsubdir1%2Fsubdir2_hudiext";
+
+    StoragePath result = ExternalFilePathUtil.getFullPathOfPartition(parent, fileName);
+    assertEquals(new StoragePath("/table/partition1"), result);
+  }
+
+  @Test
+  public void testGetFullPath_OfPartition_WithoutPrefix() {
     StoragePath parent = new StoragePath("/table/partition1");
     String fileName = "file1.parquet_20240101000000_hudiext";
 
-    StoragePath result = ExternalFilePathUtil.getActualParentPath(parent, fileName);
+    StoragePath result = ExternalFilePathUtil.getFullPathOfPartition(parent, fileName);
     assertEquals(new StoragePath("/table/partition1"), result);
   }
 

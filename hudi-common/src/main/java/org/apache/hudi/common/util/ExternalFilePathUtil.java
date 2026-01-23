@@ -94,24 +94,19 @@ public class ExternalFilePathUtil {
   }
 
   /**
-   * Checks if the external file name contains a file group prefix.
-   * @param fileName The file name
-   * @return True if the file has a file group prefix encoded in its name
-   */
-  private static boolean hasExternalFileGroupPrefix(String fileName) {
-    return isExternallyCreatedFile(fileName) && fileName.contains(FILE_GROUP_PREFIX_MARKER);
-  }
-
-  /**
    * Extracts the file group prefix from an external file name.
    * @param fileName The external file name
    * @return Option containing the decoded file group prefix, or empty if not present
    */
   private static Option<String> getExternalFileGroupPrefix(String fileName) {
-    if (!hasExternalFileGroupPrefix(fileName)) {
+    if (!isExternallyCreatedFile(fileName)) {
       return Option.empty();
     }
-    int start = fileName.indexOf(FILE_GROUP_PREFIX_MARKER) + FILE_GROUP_PREFIX_MARKER.length();
+    int prefixMarkerIndex = fileName.indexOf(FILE_GROUP_PREFIX_MARKER);
+    if (prefixMarkerIndex == -1) {
+      return Option.empty();
+    }
+    int start = prefixMarkerIndex + FILE_GROUP_PREFIX_MARKER.length();
     int end = fileName.lastIndexOf(EXTERNAL_FILE_SUFFIX);
     return Option.of(PartitionPathEncodeUtils.unescapePathName(fileName.substring(start, end)));
   }
@@ -128,8 +123,9 @@ public class ExternalFilePathUtil {
     if (!isExternallyCreatedFile(fileName)) {
       return fileName;
     }
-    int markerEnd = hasExternalFileGroupPrefix(fileName)
-        ? fileName.indexOf(FILE_GROUP_PREFIX_MARKER)
+    int prefixMarkerIndex = fileName.indexOf(FILE_GROUP_PREFIX_MARKER);
+    int markerEnd = prefixMarkerIndex != -1
+        ? prefixMarkerIndex
         : fileName.lastIndexOf(EXTERNAL_FILE_SUFFIX);
     int commitTimeStart = fileName.lastIndexOf('_', markerEnd - 1);
     return fileName.substring(0, commitTimeStart);
@@ -137,18 +133,18 @@ public class ExternalFilePathUtil {
 
   /**
    * Adjusts the parent path for external files with file group prefix.
-   * For files with file group prefix, the prefix represents a subdirectory within the partition,
-   * so we need to go up one more level to get the actual partition path.
+   * For files with file group prefix, the prefix represents subdirectories within the partition,
+   * so we need to remove the prefix portion to get the actual partition path.
+   * Supports arbitrary nesting depths (e.g., "bucket-0/subdir1/subdir2").
    *
    * @param parent the parent path
    * @param fileName the file name to check
    * @return the adjusted parent path
    */
-  public static StoragePath getActualParentPath(StoragePath parent, String fileName) {
-    if (hasExternalFileGroupPrefix(fileName)) {
-      return parent.getParent();
-    }
-    return parent;
+  public static StoragePath getFullPathOfPartition(StoragePath parent, String fileName) {
+    return getExternalFileGroupPrefix(fileName)
+        .map(prefix -> new StoragePath(parent.toString().substring(0, parent.toString().length() - prefix.length() - 1)))
+        .orElse(parent);
   }
 
   /**
@@ -169,8 +165,9 @@ public class ExternalFilePathUtil {
     // Build fileId
     values[0] = prefix.map(p -> p + "/" + originalName).orElse(originalName);
     // Extract commitTime
-    int markerEnd = hasExternalFileGroupPrefix(fileName)
-        ? fileName.indexOf(FILE_GROUP_PREFIX_MARKER)
+    int prefixMarkerIndex = fileName.indexOf(FILE_GROUP_PREFIX_MARKER);
+    int markerEnd = prefixMarkerIndex != -1
+        ? prefixMarkerIndex
         : fileName.lastIndexOf(EXTERNAL_FILE_SUFFIX);
     int commitTimeStart = fileName.lastIndexOf('_', markerEnd - 1);
     values[1] = fileName.substring(commitTimeStart + 1, markerEnd);
@@ -192,7 +189,7 @@ public class ExternalFilePathUtil {
     }
     if (isExternallyCreatedFile(pathInfo.getPath().getName())) {
       String fileName = pathInfo.getPath().getName();
-      StoragePath parent = getActualParentPath(pathInfo.getPath().getParent(), fileName);
+      StoragePath parent = getFullPathOfPartition(pathInfo.getPath().getParent(), fileName);
       return new StoragePathInfo(
           new StoragePath(parent, fileId), pathInfo.getLength(), pathInfo.isDirectory(),
           pathInfo.getBlockReplication(), pathInfo.getBlockSize(), pathInfo.getModificationTime(), pathInfo.getLocations());

@@ -177,7 +177,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
     Map<String, List<StoragePathInfo>> statusesByPartitionPath = statuses.stream()
         .collect(Collectors.groupingBy(fileStatus -> {
           String fileName = fileStatus.getPath().getName();
-          StoragePath parent = ExternalFilePathUtil.getActualParentPath(
+          StoragePath parent = ExternalFilePathUtil.getFullPathOfPartition(
               fileStatus.getPath().getParent(), fileName);
           return FSUtils.getRelativePartitionPath(metaClient.getBasePath(), parent);
         }));
