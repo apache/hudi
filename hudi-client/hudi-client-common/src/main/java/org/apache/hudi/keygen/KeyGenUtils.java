@@ -256,13 +256,13 @@ public class KeyGenUtils {
         if (encodePartitionPath) {
           fieldVal = PartitionPathEncodeUtils.escapePathName(fieldVal);
           partitionPath.append(fieldVal);
-        }
-        if (hiveStylePartitioning) {
+        } else if (hiveStylePartitioning) {
           partitionPath.append(partitionPathField).append("=");
           partitionPath.append(fieldVal);
-        }
-        if (partitionPathFields.size() == 1 && slashSeparatedDatePartitioning) {
+        } else if (partitionPathFields.size() == 1 && slashSeparatedDatePartitioning) {
           partitionPath.append(fieldVal.replace('-', '/'));
+        } else {
+          partitionPath.append(fieldVal);
         }
       }
       if (i != partitionPathFields.size() - 1) {
