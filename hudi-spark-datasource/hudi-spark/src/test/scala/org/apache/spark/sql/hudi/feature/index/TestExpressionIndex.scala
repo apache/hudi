@@ -159,7 +159,7 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase with SparkAdapterSuppor
   }
 
   test("Test Create Expression Index Syntax") {
-    withTempDir { tmp =>2
+    withTempDir { tmp =>
       Seq("cow", "mor").foreach { tableType =>
         val databaseName = "default"
         val tableName = generateTableName

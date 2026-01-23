@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.schema;
 
+import org.apache.hudi.common.schema.HoodieSchema.VariantLogicalType;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieAvroSchemaException;
 
@@ -68,6 +69,20 @@ public class TestHoodieSchema {
           + "        {\"name\": \"currency\", \"type\": \"string\"}]}}}"
           + "  ]"
           + "}";
+
+  /**
+   * Checks if the given Avro schema is a Variant schema. This checks for the Variant logical type.
+   *
+   * @param avroSchema the schema to check
+   * @return true if the schema has a Variant logical type
+   */
+  public static boolean isVariantSchema(Schema avroSchema) {
+    if (avroSchema == null || avroSchema.getType() != Schema.Type.RECORD) {
+      return false;
+    }
+    LogicalType logicalType = avroSchema.getLogicalType();
+    return logicalType instanceof VariantLogicalType;
+  }
 
   @Test
   public void testSchemaCreationFromAvroSchema() {
@@ -151,10 +166,10 @@ public class TestHoodieSchema {
       assertEquals(type.toAvroType(), schema.getAvroSchema().getType());
     } else {
       // FIXED throws AvroRuntimeException, others throw IllegalArgumentException  
-      Class<? extends Exception> expectedExceptionType = (type == HoodieSchemaType.FIXED) 
-          ? org.apache.avro.AvroRuntimeException.class 
+      Class<? extends Exception> expectedExceptionType = (type == HoodieSchemaType.FIXED)
+          ? org.apache.avro.AvroRuntimeException.class
           : IllegalArgumentException.class;
-      
+
       assertThrows(expectedExceptionType, () -> HoodieSchema.create(type), "Should throw exception for non-primitive type or type requiring additional arguments: " + type);
     }
   }
@@ -1145,7 +1160,7 @@ public class TestHoodieSchema {
     assertEquals("variant", avroSchema.getLogicalType().getName());
 
     // Verify isVariantSchema detection
-    assertTrue(HoodieSchema.Variant.isVariantSchema(avroSchema));
+    assertTrue(isVariantSchema(avroSchema));
   }
 
   @Test
@@ -1164,7 +1179,7 @@ public class TestHoodieSchema {
     assertEquals(HoodieSchemaType.VARIANT, parsedVariant.getType());
 
     // Verify logical type is preserved
-    assertTrue(HoodieSchema.Variant.isVariantSchema(parsedVariant.getAvroSchema()));
+    assertTrue(isVariantSchema(parsedVariant.getAvroSchema()));
   }
 
   @Test
@@ -1180,6 +1195,79 @@ public class TestHoodieSchema {
     // Verify it's still detected as Variant
     assertInstanceOf(HoodieSchema.Variant.class, parsedSchema);
     HoodieSchema.Variant parsedVariant = (HoodieSchema.Variant) parsedSchema;
+    assertTrue(parsedVariant.isShredded());
+    assertTrue(parsedVariant.getTypedValueField().isPresent());
+    assertEquals(HoodieSchemaType.STRING, parsedVariant.getTypedValueField().get().getType());
+  }
+
+  @Test
+  public void testVariantFieldInRecordRoundTripSerialization() {
+    // Create a record schema with a variant field to simulate a table schema
+    HoodieSchema.Variant variantSchema = HoodieSchema.createVariant();
+    List<HoodieSchemaField> fields = Arrays.asList(
+        HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.LONG), "Primary key", null),
+        HoodieSchemaField.of("name", HoodieSchema.create(HoodieSchemaType.STRING), "User name", null),
+        HoodieSchemaField.of("metadata", variantSchema, "Dynamic metadata stored as variant", null)
+    );
+
+    HoodieSchema originalRecord = new HoodieSchema.Builder(HoodieSchemaType.RECORD)
+        .setName("UserTable")
+        .setNamespace("com.example")
+        .setDoc("User table with variant field")
+        .setFields(fields)
+        .build();
+
+    String jsonSchema = originalRecord.toString();
+
+    // Parse back from JSON
+    HoodieSchema parsedSchema = HoodieSchema.parse(jsonSchema);
+
+    // Verify record structure is preserved
+    assertEquals(HoodieSchemaType.RECORD, parsedSchema.getType());
+    assertEquals("UserTable", parsedSchema.getName());
+    assertEquals(3, parsedSchema.getFields().size());
+
+    // Verify variant field is correctly detected
+    Option<HoodieSchemaField> parsedVariantFieldOpt = parsedSchema.getField("metadata");
+    assertTrue(parsedVariantFieldOpt.isPresent());
+    assertInstanceOf(HoodieSchema.Variant.class, parsedVariantFieldOpt.get().schema());
+    HoodieSchema.Variant parsedVariant = (HoodieSchema.Variant) parsedVariantFieldOpt.get().schema();
+    assertFalse(parsedVariant.isShredded());
+    assertEquals(HoodieSchemaType.VARIANT, parsedVariant.getType());
+    assertTrue(isVariantSchema(parsedVariant.getAvroSchema()));
+  }
+
+  @Test
+  public void testShreddedVariantFieldInRecordRoundTripSerialization() {
+    // Create a record schema with a shredded variant field
+    HoodieSchema typedValueSchema = HoodieSchema.create(HoodieSchemaType.STRING);
+    HoodieSchema.Variant shreddedVariant = HoodieSchema.createVariantShredded(typedValueSchema);
+    List<HoodieSchemaField> fields = Arrays.asList(
+        HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.LONG), "Primary key", null),
+        HoodieSchemaField.of("json_data", shreddedVariant, "JSON data with string optimization", null)
+    );
+
+    HoodieSchema originalRecord = new HoodieSchema.Builder(HoodieSchemaType.RECORD)
+        .setName("EventTable")
+        .setNamespace("com.example")
+        .setFields(fields)
+        .build();
+
+    String jsonSchema = originalRecord.toString();
+
+    // Parse back from JSON
+    HoodieSchema parsedSchema = HoodieSchema.parse(jsonSchema);
+
+    // Verify record structure
+    assertEquals(HoodieSchemaType.RECORD, parsedSchema.getType());
+    assertEquals("EventTable", parsedSchema.getName());
+    assertEquals(2, parsedSchema.getFields().size());
+
+    // Verify shredded variant field is correctly detected
+    Option<HoodieSchemaField> parsedVariantFieldOpt = parsedSchema.getField("json_data");
+    assertTrue(parsedVariantFieldOpt.isPresent());
+    assertInstanceOf(HoodieSchema.Variant.class, parsedVariantFieldOpt.get().schema());
+    HoodieSchema.Variant parsedVariant = (HoodieSchema.Variant) parsedVariantFieldOpt.get().schema();
     assertTrue(parsedVariant.isShredded());
     assertTrue(parsedVariant.getTypedValueField().isPresent());
     assertEquals(HoodieSchemaType.STRING, parsedVariant.getTypedValueField().get().getType());
@@ -1328,7 +1416,7 @@ public class TestHoodieSchema {
     // Note: equality depends on underlying Avro schema, which will be different due to nullable value field in shredded variant
     assertNotEquals(shreddedVariant, variant1);
     // Not really required since variant1 == variant2 is established
-    assertNotEquals(shreddedVariant, variant2); 
+    assertNotEquals(shreddedVariant, variant2);
   }
 
   @Test
@@ -1341,7 +1429,7 @@ public class TestHoodieSchema {
     HoodieSchema regularRecord = HoodieSchema.createRecord("NotAVariant", null, null, fields);
 
     // Should not be detected as Variant
-    assertFalse(HoodieSchema.Variant.isVariantSchema(regularRecord.getAvroSchema()));
+    assertFalse(isVariantSchema(regularRecord.getAvroSchema()));
     assertEquals(HoodieSchemaType.RECORD, regularRecord.getType());
     assertFalse(regularRecord instanceof HoodieSchema.Variant);
   }
@@ -1527,7 +1615,7 @@ public class TestHoodieSchema {
     assertEquals(customDoc, customVariant.getAvroSchema().getDoc());
 
     // Verify it's still recognized as a Variant
-    assertTrue(HoodieSchema.Variant.isVariantSchema(customVariant.getAvroSchema()));
+    assertTrue(isVariantSchema(customVariant.getAvroSchema()));
     assertEquals(HoodieSchemaType.VARIANT, customVariant.getType());
   }
 
@@ -1556,7 +1644,6 @@ public class TestHoodieSchema {
 
     // Both should reference the same singleton instance
     assertSame(logicalType1, logicalType2);
-    assertTrue(logicalType1 == logicalType2);
     assertEquals(HoodieSchema.VariantLogicalType.variant(), logicalType1);
 
     // Verify reference equality check works in fromAvroSchema

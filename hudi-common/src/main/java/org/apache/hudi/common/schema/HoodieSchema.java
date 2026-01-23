@@ -1033,8 +1033,7 @@ public class HoodieSchema implements Serializable {
         Schema avroSchema = avroParser.parse(jsonSchema);
         return fromAvroSchema(avroSchema);
       } catch (IllegalArgumentException e) {
-        // Wrap validation exceptions to preserve the detailed error message
-        throw new HoodieAvroSchemaException(e.getMessage(), e);
+        throw new HoodieAvroSchemaException("Invalid schema string format", e);
       } catch (Exception e) {
         throw new HoodieAvroSchemaException("Failed to parse schema: " + jsonSchema, e);
       }
@@ -1056,10 +1055,9 @@ public class HoodieSchema implements Serializable {
       } catch (IOException e) {
         throw new HoodieIOException("Failed to parse schema from InputStream", e);
       } catch (IllegalArgumentException e) {
-        // Wrap validation exceptions to preserve the detailed error message
-        throw new HoodieAvroSchemaException(e.getMessage(), e);
+        throw new HoodieAvroSchemaException("Invalid schema format in InputStream", e);
       } catch (Exception e) {
-        throw new HoodieAvroSchemaException("Failed to parse schema", e);
+        throw new HoodieAvroSchemaException("Failed to parse schema from InputStream", e);
       }
     }
   }
@@ -1486,7 +1484,7 @@ public class HoodieSchema implements Serializable {
    *
    * <p>This is a singleton type - use {@link #variant()} to get the instance.</p>
    */
-  public static class VariantLogicalType extends LogicalType {
+  static class VariantLogicalType extends LogicalType {
 
     private static final String VARIANT_LOGICAL_TYPE_NAME = "variant";
     // Eager initialization of singleton
@@ -1659,21 +1657,6 @@ public class HoodieSchema implements Serializable {
           throw new IllegalArgumentException("Unshredded Variant value field must be BYTES type, got: " + valueSchema.getType());
         }
       }
-    }
-
-    /**
-     * Checks if the given Avro schema is a Variant schema.
-     * This checks for the Variant logical type.
-     *
-     * @param avroSchema the schema to check
-     * @return true if the schema has a Variant logical type
-     */
-    public static boolean isVariantSchema(Schema avroSchema) {
-      if (avroSchema == null || avroSchema.getType() != Schema.Type.RECORD) {
-        return false;
-      }
-      LogicalType logicalType = avroSchema.getLogicalType();
-      return logicalType instanceof VariantLogicalType;
     }
 
     /**
