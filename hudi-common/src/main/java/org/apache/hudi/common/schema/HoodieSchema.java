@@ -825,17 +825,6 @@ public class HoodieSchema implements Serializable {
     // Terminal case: no more dots in this segment
     if (nextDot == -1) {
       String fieldName = fullPath.substring(offset);
-
-      // Handle ARRAY terminal case: "element" (after "list.")
-      if (nonNullableSchema.getType() == HoodieSchemaType.ARRAY) {
-        if (ARRAY_ELEMENT.equals(fieldName)) {
-          HoodieSchema elSchema = nonNullableSchema.getElementType();
-          return Option.of(Pair.of(prefix + ARRAY_LIST_ELEMENT,
-              HoodieSchemaField.of(ARRAY_ELEMENT, elSchema, null, null)));
-        }
-        return Option.empty();
-      }
-
       // Handle RECORD terminal case
       if (nonNullableSchema.getType() != HoodieSchemaType.RECORD) {
         return Option.empty();
@@ -849,7 +838,7 @@ public class HoodieSchema implements Serializable {
     // Handle RECORD: standard field navigation
     if (nonNullableSchema.getType() == HoodieSchemaType.RECORD) {
       return nonNullableSchema.getField(rootFieldName)
-          .flatMap(f -> getNestedFieldInternal(f.schema(), fullPath, nextOffset, prefix + rootFieldName + "."));
+          .flatMap(field -> getNestedFieldInternal(field.schema(), fullPath, nextOffset, prefix + rootFieldName + "."));
     }
     // Handle ARRAY: expect ".list.element"
     if (nonNullableSchema.getType() == HoodieSchemaType.ARRAY && ARRAY_LIST.equals(rootFieldName)) {
@@ -878,12 +867,12 @@ public class HoodieSchema implements Serializable {
       return Option.empty();
     }
 
-    HoodieSchema elSchema = arraySchema.getElementType();
+    HoodieSchema elementSchema = arraySchema.getElementType();
     if (nextPos == fullPath.length()) {
       return Option.of(Pair.of(prefix + ARRAY_LIST_ELEMENT,
-          HoodieSchemaField.of(ARRAY_ELEMENT, elSchema, null, null)));
+          HoodieSchemaField.of(ARRAY_ELEMENT, elementSchema, null, null)));
     }
-    return getNestedFieldInternal(elSchema, fullPath, nextPos, prefix + ARRAY_LIST_ELEMENT + ".");
+    return getNestedFieldInternal(elementSchema, fullPath, nextPos, prefix + ARRAY_LIST_ELEMENT + ".");
   }
 
   /**
@@ -909,17 +898,17 @@ public class HoodieSchema implements Serializable {
     }
 
     // Check for "value" path
-    int valPos = getNextOffset(fullPath, offset, MAP_VALUE);
-    if (valPos == -1) {
+    int valuePos = getNextOffset(fullPath, offset, MAP_VALUE);
+    if (valuePos == -1) {
       return Option.empty();
     }
 
-    HoodieSchema vSchema = mapSchema.getValueType();
-    if (valPos == fullPath.length()) {
+    HoodieSchema valueSchema = mapSchema.getValueType();
+    if (valuePos == fullPath.length()) {
       return Option.of(Pair.of(prefix + MAP_KEY_VALUE_VALUE,
-          HoodieSchemaField.of(MAP_VALUE, vSchema, null, null)));
+          HoodieSchemaField.of(MAP_VALUE, valueSchema, null, null)));
     }
-    return getNestedFieldInternal(vSchema, fullPath, valPos, prefix + MAP_KEY_VALUE_VALUE + ".");
+    return getNestedFieldInternal(valueSchema, fullPath, valuePos, prefix + MAP_KEY_VALUE_VALUE + ".");
   }
 
   /**
