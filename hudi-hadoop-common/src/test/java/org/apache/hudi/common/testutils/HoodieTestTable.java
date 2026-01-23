@@ -725,10 +725,10 @@ public class HoodieTestTable implements AutoCloseable {
 
   public HoodieTestTable withPartitionMetaFilesWithDepth(String... partitionPaths) throws IOException {
     for (String partitionPath : partitionPaths) {
-      StoragePath partitionPathObj = FSUtils.getPartitionPath(new StoragePath(basePath), partitionPath);
-      HoodiePartitionMetadata partitionMetadata1 = new HoodiePartitionMetadata(storage,
-          currentInstantTime, new StoragePath(basePath), partitionPathObj, Option.of(HoodieFileFormat.PARQUET));
-      partitionMetadata1.trySave();
+      StoragePath partitionPathObj = FSUtils.getAbsolutePartitionPath(new StoragePath(basePath), partitionPath);
+      HoodiePartitionMetadata partitionMetadata = new HoodiePartitionMetadata(storage,
+          currentInstantTime, new StoragePath(basePath), partitionPathObj, Option.empty());
+      partitionMetadata.trySave();
     }
     return this;
   }
