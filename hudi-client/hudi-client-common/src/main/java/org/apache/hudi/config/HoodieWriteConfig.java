@@ -1743,6 +1743,10 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getLong(HoodieArchivalConfig.TIMELINE_COMPACTION_TARGET_FILE_MAX_BYTES);
   }
 
+  public int getTimelineManifestVersionRetained() {
+    return getInt(HoodieArchivalConfig.TIMELINE_MANIFEST_VERSION_RETAINED);
+  }
+
   public int getParquetSmallFileLimit() {
     return getInt(HoodieCompactionConfig.PARQUET_SMALL_FILE_LIMIT);
   }

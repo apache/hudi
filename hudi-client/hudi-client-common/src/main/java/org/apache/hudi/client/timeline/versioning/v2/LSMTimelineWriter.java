@@ -329,9 +329,11 @@ public class LSMTimelineWriter {
    * @param context HoodieEngineContext used for parallelize to delete obsolete files if necessary.
    */
   public void clean(HoodieEngineContext context, int compactedVersions) throws IOException {
-    // if there are more than 3 version of snapshots, clean the oldest files.
+    int versionRetained = config.getTimelineManifestVersionRetained();
+    log.info("Starting cleaning obsolete files, retaining last ({} + {}) manifest versions.", versionRetained, compactedVersions);
+    // if there are more than versionRetained version of snapshots, clean the oldest files.
     List<Integer> allSnapshotVersions = LSMTimeline.allSnapshotVersions(metaClient, archivePath);
-    int numVersionsToKeep = 3 + compactedVersions; // should make the threshold configurable.
+    int numVersionsToKeep = versionRetained + compactedVersions;
     if (allSnapshotVersions.size() > numVersionsToKeep) {
       allSnapshotVersions.sort((v1, v2) -> v2 - v1);
       List<Integer> versionsToKeep = allSnapshotVersions.subList(0, numVersionsToKeep);
