@@ -79,7 +79,6 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.config.metrics.HoodieMetricsConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
-import org.apache.hudi.exception.HoodieValidationException;
 import org.apache.hudi.exception.TableNotFoundException;
 import org.apache.hudi.execution.bulkinsert.BulkInsertSortMode;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
@@ -276,6 +275,26 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     assertEquals("_row_key", props.getString("hoodie.datasource.write.recordkey.field"));
     assertEquals("org.apache.hudi.utilities.deltastreamer.TestHoodieDeltaStreamer$TestGenerator",
         props.getString("hoodie.datasource.write.keygenerator.class"));
+  }
+
+  @Test
+  public void testCombinePropertiesWithSourceOrderingFields() {
+    HoodieStreamer.Config cfg = getBaseConfig();
+    cfg.sourceOrderingFields = "ts,seq_id";
+
+    TypedProperties props = HoodieStreamer.combineProperties(cfg, Option.empty(), jsc.hadoopConfiguration());
+
+    assertEquals("ts,seq_id", props.getString(HoodieTableConfig.ORDERING_FIELDS.key()));
+  }
+
+  @Test
+  public void testCombinePropertiesWithoutSourceOrderingFields() {
+    HoodieStreamer.Config cfg = getBaseConfig();
+    cfg.sourceOrderingFields = null;
+
+    TypedProperties props = HoodieStreamer.combineProperties(cfg, Option.empty(), jsc.hadoopConfiguration());
+
+    assertFalse(props.containsKey(HoodieTableConfig.ORDERING_FIELDS.key()));
   }
 
   private static HoodieStreamer.Config getBaseConfig() {
@@ -2780,12 +2799,12 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     TestHelpers.assertCommitMetadata("00000", tableBasePath, 1);
 
     // Change ordering fields in deltastreamer
-    Exception e = assertThrows(HoodieValidationException.class, () -> {
+    Exception e = assertThrows(HoodieException.class, () -> {
       cfg.sourceOrderingFields = "timestamp";
       TestDataSource.recordInstantTime = Option.of("002");
       runStreamSync(cfg, false, 10, WriteOperationType.UPSERT);
     });
-    assertEquals("Configured ordering fields: timestamp do not match table ordering fields: [timestamp, rider]", e.getMessage());
+    assertTrue(e.getMessage().contains("hoodie.table.ordering.fields") && e.getMessage().contains("timestamp,rider"));
   }
 
   private static long getNumUpdates(HoodieCommitMetadata metadata) {
