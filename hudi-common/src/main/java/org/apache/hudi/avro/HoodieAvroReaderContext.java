@@ -214,7 +214,7 @@ public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> 
     // to map old column names to new names during record reading. We only skip the lookup when
     // both schemas match AND there are no renamed columns.
     Pair<HoodieSchema, Map<String, String>> requiredSchemaForFileAndRenamedColumns = getSchemaHandler().getRequiredSchemaForFileAndRenamedColumns(filePath);
-    boolean hasNoRenamedColumns = getSchemaHandler().getRequiredSchemaForFileAndRenamedColumns(filePath).getRight().isEmpty();
+    boolean hasNoRenamedColumns = requiredSchemaForFileAndRenamedColumns.getRight().isEmpty();
     if (isLogFile || (dataSchema.equals(requiredSchema) && hasNoRenamedColumns)) {
       // Skip per-file schema rewriting in these cases:
       // 1. Log files: Schema evolution is handled during record merging (via rewriteRecordWithNewSchema),
