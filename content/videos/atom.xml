@@ -2,11 +2,22 @@
 <feed xmlns="http://www.w3.org/2005/Atom">
     <id>https://hudi.apache.org/videos</id>
     <title>Apache Hudi Blog</title>
-    <updated>2025-11-19T00:00:00.000Z</updated>
+    <updated>2026-01-17T00:00:00.000Z</updated>
     <generator>https://github.com/jpmonette/feed</generator>
     <link rel="alternate" href="https://hudi.apache.org/videos"/>
     <subtitle>Apache Hudi Blog</subtitle>
     <icon>https://hudi.apache.org/assets/images/favicon.ico</icon>
+    <entry>
+        <title type="html"><![CDATA[Demystifying Apache Hudi]]></title>
+        <id>https://hudi.apache.org/videos/2026/01/17/demystifying-apache-hudi</id>
+        <link href="https://hudi.apache.org/videos/2026/01/17/demystifying-apache-hudi"/>
+        <updated>2026-01-17T00:00:00.000Z</updated>
+        <author>
+            <name>DatahubHouse</name>
+        </author>
+        <category label="apache hudi" term="apache hudi"/>
+        <category label="data lakehouse" term="data lakehouse"/>
+    </entry>
     <entry>
         <title type="html"><![CDATA[Use the precombine key to handle out-of-order data with Apache Hudi]]></title>
         <id>https://hudi.apache.org/videos/2025/11/19/use-the-precombine-key-to-handle-out-of-order-data-with-apache-hudi</id>
@@ -275,18 +286,5 @@
         <category label="delete" term="delete"/>
         <category label="incremental query" term="incremental query"/>
         <category label="stored procedures" term="stored procedures"/>
-    </entry>
-    <entry>
-        <title type="html"><![CDATA[How we Utilized Hudi's Time Travel Query to Investigate Bid and Spend | Going Back in Time with Hudi]]></title>
-        <id>https://hudi.apache.org/videos/2024/06/15/how-we-utilized-hudis-time-travel-query-to-investigate-bid-and-spend</id>
-        <link href="https://hudi.apache.org/videos/2024/06/15/how-we-utilized-hudis-time-travel-query-to-investigate-bid-and-spend"/>
-        <updated>2024-06-15T00:00:00.000Z</updated>
-        <author>
-            <name>Soumil Shah</name>
-        </author>
-        <category label="guide" term="guide"/>
-        <category label="beginner" term="beginner"/>
-        <category label="apache hudi" term="apache hudi"/>
-        <category label="time-travel" term="time-travel"/>
     </entry>
 </feed>

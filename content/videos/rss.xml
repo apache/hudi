@@ -4,10 +4,18 @@
         <title>Apache Hudi Blog</title>
         <link>https://hudi.apache.org/videos</link>
         <description>Apache Hudi Blog</description>
-        <lastBuildDate>Wed, 19 Nov 2025 00:00:00 GMT</lastBuildDate>
+        <lastBuildDate>Sat, 17 Jan 2026 00:00:00 GMT</lastBuildDate>
         <docs>https://validator.w3.org/feed/docs/rss2.html</docs>
         <generator>https://github.com/jpmonette/feed</generator>
         <language>en</language>
+        <item>
+            <title><![CDATA[Demystifying Apache Hudi]]></title>
+            <link>https://hudi.apache.org/videos/2026/01/17/demystifying-apache-hudi</link>
+            <guid>https://hudi.apache.org/videos/2026/01/17/demystifying-apache-hudi</guid>
+            <pubDate>Sat, 17 Jan 2026 00:00:00 GMT</pubDate>
+            <category>apache hudi</category>
+            <category>data lakehouse</category>
+        </item>
         <item>
             <title><![CDATA[Use the precombine key to handle out-of-order data with Apache Hudi]]></title>
             <link>https://hudi.apache.org/videos/2025/11/19/use-the-precombine-key-to-handle-out-of-order-data-with-apache-hudi</link>
@@ -219,16 +227,6 @@
             <category>delete</category>
             <category>incremental query</category>
             <category>stored procedures</category>
-        </item>
-        <item>
-            <title><![CDATA[How we Utilized Hudi's Time Travel Query to Investigate Bid and Spend | Going Back in Time with Hudi]]></title>
-            <link>https://hudi.apache.org/videos/2024/06/15/how-we-utilized-hudis-time-travel-query-to-investigate-bid-and-spend</link>
-            <guid>https://hudi.apache.org/videos/2024/06/15/how-we-utilized-hudis-time-travel-query-to-investigate-bid-and-spend</guid>
-            <pubDate>Sat, 15 Jun 2024 00:00:00 GMT</pubDate>
-            <category>guide</category>
-            <category>beginner</category>
-            <category>apache hudi</category>
-            <category>time-travel</category>
         </item>
     </channel>
 </rss>
