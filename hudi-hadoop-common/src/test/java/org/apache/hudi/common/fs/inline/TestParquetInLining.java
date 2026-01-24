@@ -23,7 +23,6 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.testutils.FileSystemTestUtils;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.hadoop.fs.inline.InLineFileSystem;
-import org.apache.hudi.hadoop.fs.inline.InMemoryFileSystem;
 import org.apache.hudi.storage.StoragePath;
 
 import org.apache.avro.generic.GenericRecord;
@@ -40,13 +39,13 @@ import org.junit.jupiter.api.Test;
 
 import java.io.File;
 import java.io.IOException;
+import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
-import static org.apache.hudi.common.testutils.FileSystemTestUtils.FILE_SCHEME;
 import static org.apache.hudi.common.testutils.FileSystemTestUtils.getPhantomFile;
-import static org.apache.hudi.common.testutils.FileSystemTestUtils.getRandomOuterInMemPath;
+import static org.apache.hudi.common.testutils.FileSystemTestUtils.getRandomOuterFSPath;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 
 /**
@@ -54,13 +53,13 @@ import static org.junit.jupiter.api.Assertions.assertArrayEquals;
  */
 public class TestParquetInLining {
 
-  private final Configuration inMemoryConf;
+  private final Configuration conf;
   private final Configuration inlineConf;
   private Path generatedPath;
+  private Path tempParquetPath;
 
   public TestParquetInLining() {
-    inMemoryConf = new Configuration();
-    inMemoryConf.set("fs." + InMemoryFileSystem.SCHEME + ".impl", InMemoryFileSystem.class.getName());
+    conf = new Configuration();
     inlineConf = new Configuration();
     inlineConf.set("fs." + InLineFileSystem.SCHEME + ".impl", InLineFileSystem.class.getName());
   }
@@ -73,22 +72,33 @@ public class TestParquetInLining {
         FileSystemTestUtils.deleteFile(filePath);
       }
     }
+    if (tempParquetPath != null) {
+      File tempFile = new File(tempParquetPath.toString().substring(tempParquetPath.toString().indexOf(':') + 1));
+      if (tempFile.exists()) {
+        FileSystemTestUtils.deleteFile(tempFile);
+      }
+    }
   }
 
   @Test
   public void testSimpleInlineFileSystem() throws IOException {
-    Path outerInMemFSPath = getRandomOuterInMemPath();
-    Path outerPath = new Path(FILE_SCHEME + outerInMemFSPath.toString().substring(outerInMemFSPath.toString().indexOf(':')));
+    // Create a temp file path for writing Parquet data
+    tempParquetPath = new Path(getRandomOuterFSPath().toUri());
+    Path outerPath = new Path(getRandomOuterFSPath().toUri());
     generatedPath = outerPath;
-    ParquetWriter inlineWriter = new AvroParquetWriter(outerInMemFSPath, HoodieTestDataGenerator.AVRO_SCHEMA,
-        CompressionCodecName.GZIP, 100 * 1024 * 1024, 1024 * 1024, true, inMemoryConf);
+
+    // Write Parquet to temp file
+    ParquetWriter inlineWriter = new AvroParquetWriter(tempParquetPath, HoodieTestDataGenerator.AVRO_SCHEMA,
+        CompressionCodecName.GZIP, 100 * 1024 * 1024, 1024 * 1024, true, conf);
     // write few records
     List<GenericRecord> recordsToWrite = getParquetHoodieRecords();
     for (GenericRecord rec : recordsToWrite) {
       inlineWriter.write(rec);
     }
     inlineWriter.close();
-    byte[] inlineBytes = getBytesToInline(outerInMemFSPath);
+
+    // Read the bytes from temp file
+    byte[] inlineBytes = getBytesFromTempFile(tempParquetPath);
     long startOffset = generateOuterFile(outerPath, inlineBytes);
 
     long inlineLength = inlineBytes.length;
@@ -104,7 +114,7 @@ public class TestParquetInLining {
   }
 
   private long generateOuterFile(Path outerPath, byte[] inlineBytes) throws IOException {
-    FSDataOutputStream wrappedOut = outerPath.getFileSystem(inMemoryConf).create(outerPath, true);
+    FSDataOutputStream wrappedOut = outerPath.getFileSystem(conf).create(outerPath, true);
     // write random bytes
     writeRandomBytes(wrappedOut, 10);
 
@@ -120,9 +130,10 @@ public class TestParquetInLining {
     return startOffset;
   }
 
-  private byte[] getBytesToInline(Path outerInMemFSPath) throws IOException {
-    InMemoryFileSystem inMemoryFileSystem = (InMemoryFileSystem) outerInMemFSPath.getFileSystem(inMemoryConf);
-    return inMemoryFileSystem.getFileAsBytes();
+  private byte[] getBytesFromTempFile(Path tempPath) throws IOException {
+    String pathStr = tempPath.toString();
+    String filePath = pathStr.substring(pathStr.indexOf(':') + 1);
+    return Files.readAllBytes(new File(filePath).toPath());
   }
 
   static List<GenericRecord> readParquetGenericRecords(ParquetReader reader) throws IOException {
