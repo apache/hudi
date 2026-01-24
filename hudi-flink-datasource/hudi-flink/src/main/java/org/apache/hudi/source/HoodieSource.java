@@ -55,20 +55,25 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 /**
- * Hoodie Source implementation.
- * @param <T> record Type
+ * Hudi Flink Source V2 implementation for Flink streaming and batch reads.
+ *
+ * <p>This source supports both bounded (batch) and unbounded (streaming) modes
+ * based on the configuration. It uses Flink's new Source API @see FLIP-27 to
+ * provide efficient reading of Hudi tables.
+ *
+ * @param <T> the record type to emit
  */
 public class HoodieSource<T> implements Source<T, HoodieSourceSplit, HoodieSplitEnumeratorState> {
   private static final Logger LOG = LoggerFactory.getLogger(HoodieSource.class);
 
-  private final ScanContext scanContext;
+  private final HoodieScanContext scanContext;
   private final SplitReaderFunction<T> readerFunction;
   private final SerializableComparator<HoodieSourceSplit> splitComparator;
   private final HoodieTableMetaClient metaClient;
   private final HoodieRecordEmitter<T> recordEmitter;
 
-  HoodieSource(
-      ScanContext scanContext,
+  public HoodieSource(
+      HoodieScanContext scanContext,
       SplitReaderFunction<T> readerFunction,
       SerializableComparator<HoodieSourceSplit> splitComparator,
       HoodieTableMetaClient metaClient,

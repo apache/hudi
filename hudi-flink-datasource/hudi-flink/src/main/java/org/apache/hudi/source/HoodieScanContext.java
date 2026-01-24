@@ -29,10 +29,10 @@ import java.io.Serializable;
 import java.time.Duration;
 
 /**
- * Hudi source scan context.
+ * Hudi source scan context for finding completed commits for streaming and incremental read.
  */
 @Internal
-public class ScanContext implements Serializable {
+public class HoodieScanContext implements Serializable {
   private final Configuration conf;
   private final Path path;
   private final RowType rowType;
@@ -52,7 +52,7 @@ public class ScanContext implements Serializable {
   // is streaming mode
   private final boolean isStreaming;
 
-  public ScanContext(
+  public HoodieScanContext(
       Configuration conf,
       Path path,
       RowType rowType,
@@ -132,7 +132,7 @@ public class ScanContext implements Serializable {
   }
 
   /**
-   * Builder for {@link ScanContext}.
+   * Builder for {@link HoodieScanContext}.
    */
   public static class Builder {
     private Configuration conf;
@@ -208,8 +208,8 @@ public class ScanContext implements Serializable {
       return this;
     }
 
-    public ScanContext build() {
-      return new ScanContext(
+    public HoodieScanContext build() {
+      return new HoodieScanContext(
           conf,
           path,
           rowType,

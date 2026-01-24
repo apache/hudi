@@ -26,7 +26,6 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.table.HoodieFlinkTable;
-
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.table.data.RowData;
 import org.junit.jupiter.api.BeforeEach;
