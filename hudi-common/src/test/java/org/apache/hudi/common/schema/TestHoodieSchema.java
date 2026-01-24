@@ -527,7 +527,6 @@ public class TestHoodieSchema {
   public void testNullValueConstant() {
     // HoodieSchema.NULL_VALUE should be the same as JsonProperties.NULL_VALUE
     assertSame(JsonProperties.NULL_VALUE, HoodieSchema.NULL_VALUE);
-    assertEquals(JsonProperties.NULL_VALUE, HoodieSchema.NULL_VALUE);
   }
 
   @Test
@@ -1627,7 +1626,6 @@ public class TestHoodieSchema {
 
     // Verify they are the exact same instance (reference equality)
     assertSame(instance1, instance2);
-    assertTrue(instance1 == instance2);
 
     // Verify same identity hash
     assertEquals(System.identityHashCode(instance1), System.identityHashCode(instance2));
@@ -1644,7 +1642,7 @@ public class TestHoodieSchema {
 
     // Both should reference the same singleton instance
     assertSame(logicalType1, logicalType2);
-    assertEquals(HoodieSchema.VariantLogicalType.variant(), logicalType1);
+    assertSame(HoodieSchema.VariantLogicalType.variant(), logicalType1);
 
     // Verify reference equality check works in fromAvroSchema
     HoodieSchema parsedSchema = HoodieSchema.fromAvroSchema(variant1.getAvroSchema());
