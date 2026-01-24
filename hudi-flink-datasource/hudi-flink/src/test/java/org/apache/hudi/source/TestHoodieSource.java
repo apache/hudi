@@ -71,7 +71,7 @@ public class TestHoodieSource {
   File tempDir;
 
   private HoodieTableMetaClient mockMetaClient;
-  private ScanContext scanContext;
+  private HoodieScanContext scanContext;
   private SplitReaderFunction<RowData> mockReaderFunction;
   private SerializableComparator<HoodieSourceSplit> mockComparator;
   private HoodieRecordEmitter<RowData> mockRecordEmitter;
@@ -102,7 +102,7 @@ public class TestHoodieSource {
     conf.set(FlinkOptions.PATH, tempDir.getAbsolutePath());
     conf.set(FlinkOptions.READ_STREAMING_CHECK_INTERVAL, 60);
 
-    scanContext = new ScanContext.Builder()
+    scanContext = new HoodieScanContext.Builder()
         .conf(conf)
         .path(new Path(tempDir.getAbsolutePath()))
         .rowType(TestConfigurations.ROW_TYPE)
@@ -214,7 +214,7 @@ public class TestHoodieSource {
     Configuration conf = new Configuration();
     conf.set(FlinkOptions.PATH, tempDir.getAbsolutePath());
 
-    ScanContext streamingScanContext = new ScanContext.Builder()
+    HoodieScanContext streamingScanContext = new HoodieScanContext.Builder()
         .conf(conf)
         .path(new Path(tempDir.getAbsolutePath()))
         .rowType(TestConfigurations.ROW_TYPE)
@@ -278,7 +278,7 @@ public class TestHoodieSource {
     // Insert test data
     TestData.writeData(TestData.DATA_SET_INSERT, conf);
     metaClient.reloadActiveTimeline();
-    ScanContext scanContext = createScanContext(conf);
+    HoodieScanContext scanContext = createScanContext(conf);
 
     HoodieSource<RowData> source = new HoodieSource<>(
         scanContext,
@@ -384,7 +384,7 @@ public class TestHoodieSource {
     Configuration conf = new Configuration();
     conf.set(FlinkOptions.PATH, tempDir.getAbsolutePath());
 
-    ScanContext streamingScanContext = new ScanContext.Builder()
+    HoodieScanContext streamingScanContext = new HoodieScanContext.Builder()
         .conf(conf)
         .path(new Path(tempDir.getAbsolutePath()))
         .rowType(TestConfigurations.ROW_TYPE)
@@ -418,7 +418,7 @@ public class TestHoodieSource {
     Configuration conf = new Configuration();
     conf.set(FlinkOptions.PATH, tempDir.getAbsolutePath());
 
-    ScanContext streamingScanContext = new ScanContext.Builder()
+    HoodieScanContext streamingScanContext = new HoodieScanContext.Builder()
         .conf(conf)
         .path(new Path(tempDir.getAbsolutePath()))
         .rowType(TestConfigurations.ROW_TYPE)
@@ -529,16 +529,16 @@ public class TestHoodieSource {
     return mockEnumContext;
   }
 
-  private ScanContext createScanContext(Configuration conf) throws Exception {
+  private HoodieScanContext createScanContext(Configuration conf) throws Exception {
     return createScanContextWithSkipOptions(conf, false, false, false);
   }
 
-  private ScanContext createScanContextWithSkipOptions(
+  private HoodieScanContext createScanContextWithSkipOptions(
       Configuration conf,
       boolean skipCompaction,
       boolean skipClustering,
       boolean skipInsertOverwrite) throws Exception {
-    return new ScanContext.Builder()
+    return new HoodieScanContext.Builder()
         .conf(conf)
         .path(new Path(tempDir.getAbsolutePath()))
         .rowType(TestConfigurations.ROW_TYPE)
