@@ -58,7 +58,7 @@ import org.apache.hadoop.hive.conf.HiveConf;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.SparkSession;
 
-import java.util.HashMap;
+import java.io.IOException;
 import java.util.List;
 import java.util.Map;
 
@@ -181,8 +181,8 @@ public class HoodieTestSuiteJob {
       System.exit(1);
     }
 
-    JavaSparkContext jssc = UtilHelpers.buildSparkContextWithHiveSync("workload-generator-" + cfg.outputTypeName
-        + "-" + cfg.inputFormatName, cfg.sparkMaster, new HashMap<>());
+    JavaSparkContext jssc = UtilHelpers.buildSparkContext("workload-generator-" + cfg.outputTypeName
+        + "-" + cfg.inputFormatName, cfg.sparkMaster);
     new HoodieTestSuiteJob(cfg, jssc, true).runTestSuite();
   }
 
