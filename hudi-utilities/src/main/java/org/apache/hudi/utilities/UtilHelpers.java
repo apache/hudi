@@ -367,19 +367,20 @@ public class UtilHelpers {
     return sparkConf;
   }
 
-  public static JavaSparkContext buildSparkContext(String appName, Map<String, String> configs) {
+  public static JavaSparkContext buildSparkContext(String appName, boolean enableHiveSupport, Map<String, String> configs) {
     SparkConf sparkConf = buildSparkConf(appName, configs);
-    return getJavaSparkContextFromSparkConf(sparkConf);
+    return getJavaSparkContextFromSparkConf(sparkConf, enableHiveSupport);
   }
 
-  public static JavaSparkContext buildSparkContext(String appName, String defaultMaster, Map<String, String> configs) {
+  public static JavaSparkContext buildSparkContext(String appName, String defaultMaster, boolean enableHiveSupport,
+                                                   Map<String, String> configs) {
     SparkConf sparkConf = buildSparkConf(appName, defaultMaster, configs);
-    return getJavaSparkContextFromSparkConf(sparkConf);
+    return getJavaSparkContextFromSparkConf(sparkConf, enableHiveSupport);
   }
 
-  public static JavaSparkContext buildSparkContext(String appName, String defaultMaster) {
+  public static JavaSparkContext buildSparkContext(String appName, String defaultMaster, boolean enableHiveSupport) {
     SparkConf sparkConf = buildSparkConf(appName, defaultMaster);
-    return getJavaSparkContextFromSparkConf(sparkConf);
+    return getJavaSparkContextFromSparkConf(sparkConf, enableHiveSupport);
   }
 
   /**
@@ -387,18 +388,24 @@ public class UtilHelpers {
    *
    * @return {@link JavaSparkContext}
    */
-  public static JavaSparkContext buildSparkContext(String appName, String sparkMaster, String sparkMemory) {
+  public static JavaSparkContext buildSparkContext(String appName, String sparkMaster, String sparkMemory,
+                                                   boolean enableHiveSupport) {
     SparkConf sparkConf = buildSparkConf(appName, sparkMaster);
     if (sparkMemory != null) {
       sparkConf.set("spark.executor.memory", sparkMemory);
     }
-    return getJavaSparkContextFromSparkConf(sparkConf);
+    return getJavaSparkContextFromSparkConf(sparkConf, enableHiveSupport);
   }
 
-  public static JavaSparkContext getJavaSparkContextFromSparkConf(SparkConf sparkConf) {
-    SparkSession sparkSession = SparkSession.builder().enableHiveSupport().config(sparkConf).getOrCreate();
+  public static JavaSparkContext getJavaSparkContextFromSparkConf(SparkConf sparkConf, boolean enableHiveSupport) {
+    SparkSession.Builder sessionBuilder = SparkSession.builder().config(sparkConf);
+    if (enableHiveSupport) {
+      sessionBuilder.enableHiveSupport();
+    }
+    SparkSession sparkSession = sessionBuilder.getOrCreate();
     return new JavaSparkContext(sparkSession.sparkContext());
   }
+
   /**
    * Build Hoodie write client.
    *

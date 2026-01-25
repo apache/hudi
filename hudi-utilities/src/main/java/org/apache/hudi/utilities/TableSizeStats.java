@@ -168,6 +168,9 @@ public class TableSizeStats implements Serializable {
     @Parameter(names = {"--spark-memory", "-sm"}, description = "spark memory to use", required = false)
     public String sparkMemory = "1g";
 
+    @Parameter(names = {"--enable-hive-support", "-ehs"}, description = "Enables hive support during spark context initialization.", required = false)
+    public Boolean enableHiveSupport = false;
+
     @Parameter(names = {"--hoodie-conf"}, description = "Any configuration that can be set in the properties file "
         + "(using the CLI parameter \"--props\") can also be passed command line using this parameter. This can be repeated",
         splitter = IdentitySplitter.class)
@@ -232,7 +235,7 @@ public class TableSizeStats implements Serializable {
 
     Map<String, String> sparkConfigMap = new HashMap<>();
     sparkConfigMap.put("spark.executor.memory", cfg.sparkMemory);
-    JavaSparkContext jsc = UtilHelpers.buildSparkContext("Table-Size-Stats", cfg.sparkMaster, sparkConfigMap);
+    JavaSparkContext jsc = UtilHelpers.buildSparkContext("Table-Size-Stats", cfg.sparkMaster, cfg.enableHiveSupport, sparkConfigMap);
 
     try {
       TableSizeStats tableSizeStats = new TableSizeStats(jsc, cfg);

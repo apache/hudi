@@ -94,6 +94,8 @@ public class HoodieCompactor {
     public String sparkMaster = null;
     @Parameter(names = {"--spark-memory", "-sm"}, description = "spark memory to use", required = false)
     public String sparkMemory = null;
+    @Parameter(names = {"--enable-hive-support", "-ehs"}, description = "Enables hive support during spark context initialization.", required = false)
+    public Boolean enableHiveSupport = false;
     @Parameter(names = {"--retry", "-rt"}, description = "number of retries", required = false)
     public int retry = 0;
     @Parameter(names = {"--skip-clean", "-sc"}, description = "do not trigger clean after compaction", required = false)
@@ -188,7 +190,8 @@ public class HoodieCompactor {
       cmd.usage();
       throw new HoodieException("Fail to run compaction for " + cfg.tableName + ", return code: " + 1);
     }
-    final JavaSparkContext jsc = UtilHelpers.buildSparkContext("compactor-" + cfg.tableName, cfg.sparkMaster, cfg.sparkMemory);
+    final JavaSparkContext jsc = UtilHelpers.buildSparkContext("compactor-" + cfg.tableName,
+        cfg.sparkMaster, cfg.sparkMemory, cfg.enableHiveSupport);
     int ret = new HoodieCompactor(jsc, cfg).compact(cfg.retry);
     if (ret != 0) {
       throw new HoodieException("Fail to run compaction for " + cfg.tableName + ", return code: " + ret);

@@ -394,6 +394,9 @@ public class HoodieMetadataTableValidator implements Serializable {
     @Parameter(names = {"--spark-memory", "-sm"}, description = "spark memory to use", required = false)
     public String sparkMemory = "1g";
 
+    @Parameter(names = {"--enable-hive-support", "-ehs"}, description = "Enables hive support during spark context initialization.", required = false)
+    public Boolean enableHiveSupport = false;
+
     @Parameter(names = {"--assume-date-partitioning"}, description = "Should HoodieWriteClient assume the data is partitioned by dates, i.e three levels from base path."
         + "This is a stop-gap to support tables created by versions < 0.3.1. Will be removed eventually", required = false)
     public Boolean assumeDatePartitioning = false;
@@ -503,7 +506,8 @@ public class HoodieMetadataTableValidator implements Serializable {
 
     Map<String, String> sparkConfigMap = new HashMap<>();
     sparkConfigMap.put("spark.executor.memory", cfg.sparkMemory);
-    JavaSparkContext jsc = UtilHelpers.buildSparkContext("Hoodie-Metadata-Table-Validator", cfg.sparkMaster, sparkConfigMap);
+    JavaSparkContext jsc = UtilHelpers.buildSparkContext("Hoodie-Metadata-Table-Validator",
+            cfg.sparkMaster, cfg.enableHiveSupport, sparkConfigMap);
 
     try {
       HoodieMetadataTableValidator validator = new HoodieMetadataTableValidator(jsc, cfg);
