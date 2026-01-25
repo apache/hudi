@@ -93,7 +93,8 @@ public class SparkDataSourceContinuousIngestTool {
       cmd.usage();
       System.exit(1);
     }
-    final JavaSparkContext jsc = UtilHelpers.buildSparkContext("spark-datasource-continuous-ingestion-tool", cfg.sparkMaster, cfg.sparkMemory);
+    final JavaSparkContext jsc = UtilHelpers.buildSparkContext("spark-datasource-continuous-ingestion-tool",
+        cfg.sparkMaster, cfg.sparkMemory, false);
     try {
       new SparkDataSourceContinuousIngestTool(jsc, cfg).run();
     } catch (Throwable throwable) {
