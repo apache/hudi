@@ -104,7 +104,7 @@ public class HoodieMultiWriterTestSuiteJob {
     }
 
     JavaSparkContext jssc = UtilHelpers.buildSparkContext("multi-writer-test-run-" + cfg.outputTypeName
-        + "-" + cfg.inputFormatName, cfg.sparkMaster);
+        + "-" + cfg.inputFormatName, cfg.sparkMaster, cfg.enableHiveSync);
 
     String[] inputPaths = cfg.inputBasePaths.split(",");
     String[] yamls = cfg.workloadYamlPaths.split(",");

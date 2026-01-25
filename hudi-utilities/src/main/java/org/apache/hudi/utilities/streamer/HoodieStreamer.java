@@ -335,7 +335,7 @@ public class HoodieStreamer implements Serializable {
 
     //will abandon in the future version, recommended use --enable-sync
     @Parameter(names = {"--enable-hive-sync"}, description = "Enable syncing to hive")
-    public Boolean enableHiveSync = false;
+    public Boolean enableHiveSync = true;
 
     @Parameter(names = {"--enable-sync"}, description = "Enable syncing meta")
     public Boolean enableMetaSync = false;
