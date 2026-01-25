@@ -42,7 +42,7 @@ object HoodieSpark40PartitionedFileUtils extends HoodieSparkPartitionedFileUtils
                                      filePath: StoragePath,
                                      start: Long,
                                      length: Long): PartitionedFile = {
-    PartitionedFile(partitionValues, SparkPath.fromUri(filePath.toUri), start, length, Array.empty())
+    PartitionedFile(partitionValues, SparkPath.fromUri(filePath.toUri), start, length, Array.empty)
   }
 
   override def toFileStatuses(partitionDirs: Seq[PartitionDirectory]): Seq[FileStatus] = {
