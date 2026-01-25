@@ -25,7 +25,7 @@ import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.internal.schema.InternalSchema;
-import org.apache.hudi.table.HoodieTable;
+import org.apache.hudi.table.HoodieFlinkTable;
 
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.table.data.RowData;
@@ -42,7 +42,7 @@ import static org.mockito.Mockito.when;
  */
 public class TestHoodieSplitReaderFunction {
 
-  private HoodieTable<RowData, ?, ?, ?> mockTable;
+  private HoodieFlinkTable<RowData> mockTable;
   private HoodieReaderContext<RowData> mockReaderContext;
   private HoodieSchema tableSchema;
   private HoodieSchema requiredSchema;
@@ -50,7 +50,7 @@ public class TestHoodieSplitReaderFunction {
 
   @BeforeEach
   public void setUp() {
-    mockTable = mock(HoodieTable.class);
+    mockTable = mock(HoodieFlinkTable.class);
     mockReaderContext = mock(HoodieReaderContext.class);
     mockMetaClient = mock(HoodieTableMetaClient.class);
 
@@ -66,7 +66,7 @@ public class TestHoodieSplitReaderFunction {
   public void testConstructorValidatesTableSchema() {
     // Test that constructor requires non-null tableSchema
     assertThrows(IllegalArgumentException.class, () -> {
-      new HoodieSplitReaderFunction<>(
+      new HoodieSplitReaderFunction(
           mockTable,
           mockReaderContext,
           new Configuration(),
@@ -82,7 +82,7 @@ public class TestHoodieSplitReaderFunction {
   public void testConstructorValidatesRequiredSchema() {
     // Test that constructor requires non-null requiredSchema
     assertThrows(IllegalArgumentException.class, () -> {
-      new HoodieSplitReaderFunction<>(
+      new HoodieSplitReaderFunction(
           mockTable,
           mockReaderContext,
           new Configuration(),
@@ -97,8 +97,8 @@ public class TestHoodieSplitReaderFunction {
   @Test
   public void testConstructorWithValidParameters() {
     // Should not throw exception with valid parameters
-    HoodieSplitReaderFunction<?, ?, ?> function =
-        new HoodieSplitReaderFunction<>(
+    HoodieSplitReaderFunction function =
+        new HoodieSplitReaderFunction(
             mockTable,
             mockReaderContext,
             new Configuration(),
@@ -115,8 +115,8 @@ public class TestHoodieSplitReaderFunction {
   public void testConstructorWithInternalSchema() {
     InternalSchema internalSchema = mock(InternalSchema.class);
 
-    HoodieSplitReaderFunction<?, ?, ?> function =
-        new HoodieSplitReaderFunction<>(
+    HoodieSplitReaderFunction function =
+        new HoodieSplitReaderFunction(
             mockTable,
             mockReaderContext,
             new Configuration(),
@@ -131,8 +131,8 @@ public class TestHoodieSplitReaderFunction {
 
   @Test
   public void testClosedReaderIsNull() throws Exception {
-    HoodieSplitReaderFunction<?, ?, ?> function =
-        new HoodieSplitReaderFunction<>(
+    HoodieSplitReaderFunction function =
+        new HoodieSplitReaderFunction(
             mockTable,
             mockReaderContext,
             new Configuration(),
@@ -156,8 +156,8 @@ public class TestHoodieSplitReaderFunction {
     };
 
     for (String mergeType : mergeTypes) {
-      HoodieSplitReaderFunction<?, ?, ?> function =
-          new HoodieSplitReaderFunction<>(
+      HoodieSplitReaderFunction function =
+          new HoodieSplitReaderFunction(
               mockTable,
               mockReaderContext,
               new Configuration(),
@@ -173,8 +173,8 @@ public class TestHoodieSplitReaderFunction {
 
   @Test
   public void testMultipleCloseCalls() throws Exception {
-    HoodieSplitReaderFunction<?, ?, ?> function =
-        new HoodieSplitReaderFunction<>(
+    HoodieSplitReaderFunction function =
+        new HoodieSplitReaderFunction(
             mockTable,
             mockReaderContext,
             new Configuration(),
@@ -195,8 +195,8 @@ public class TestHoodieSplitReaderFunction {
     HoodieSchema customTableSchema = mock(HoodieSchema.class);
     HoodieSchema customRequiredSchema = mock(HoodieSchema.class);
 
-    HoodieSplitReaderFunction<?, ?, ?> function =
-        new HoodieSplitReaderFunction<>(
+    HoodieSplitReaderFunction function =
+        new HoodieSplitReaderFunction(
             mockTable,
             mockReaderContext,
             new Configuration(),
@@ -215,8 +215,8 @@ public class TestHoodieSplitReaderFunction {
     InternalSchema internalSchema2 = mock(InternalSchema.class);
 
     // Test with present internal schema
-    HoodieSplitReaderFunction<?, ?, ?> function1 =
-        new HoodieSplitReaderFunction<>(
+    HoodieSplitReaderFunction function1 =
+        new HoodieSplitReaderFunction(
             mockTable,
             mockReaderContext,
             new Configuration(),
@@ -228,8 +228,8 @@ public class TestHoodieSplitReaderFunction {
     assertNotNull(function1);
 
     // Test with different internal schema
-    HoodieSplitReaderFunction<?, ?, ?> function2 =
-        new HoodieSplitReaderFunction<>(
+    HoodieSplitReaderFunction function2 =
+        new HoodieSplitReaderFunction(
             mockTable,
             mockReaderContext,
             new Configuration(),
@@ -241,8 +241,8 @@ public class TestHoodieSplitReaderFunction {
     assertNotNull(function2);
 
     // Test with empty internal schema
-    HoodieSplitReaderFunction<?, ?, ?> function3 =
-        new HoodieSplitReaderFunction<>(
+    HoodieSplitReaderFunction function3 =
+        new HoodieSplitReaderFunction(
             mockTable,
             mockReaderContext,
             new Configuration(),
@@ -257,13 +257,13 @@ public class TestHoodieSplitReaderFunction {
   @Test
   public void testHoodieTableIntegration() {
     // Verify that the function properly interacts with HoodieTable
-    HoodieTable<RowData, ?, ?, ?> customTable = mock(HoodieTable.class);
+    HoodieFlinkTable<RowData> customTable = mock(HoodieFlinkTable.class);
     HoodieTableMetaClient customMetaClient = mock(HoodieTableMetaClient.class);
 
     when(customTable.getMetaClient()).thenReturn(customMetaClient);
 
-    HoodieSplitReaderFunction<?, ?, ?> function =
-        new HoodieSplitReaderFunction<>(
+    HoodieSplitReaderFunction function =
+        new HoodieSplitReaderFunction(
             customTable,
             mockReaderContext,
             new Configuration(),
@@ -281,8 +281,8 @@ public class TestHoodieSplitReaderFunction {
     // Test with different reader contexts
     HoodieReaderContext<RowData> customContext = mock(HoodieReaderContext.class);
 
-    HoodieSplitReaderFunction<?, ?, ?> function =
-        new HoodieSplitReaderFunction<>(
+    HoodieSplitReaderFunction function =
+        new HoodieSplitReaderFunction(
             mockTable,
             customContext,
             new Configuration(),
@@ -300,8 +300,8 @@ public class TestHoodieSplitReaderFunction {
     Configuration config = new Configuration();
     config.setString("test.key", "test.value");
 
-    HoodieSplitReaderFunction<?, ?, ?> function =
-        new HoodieSplitReaderFunction<>(
+    HoodieSplitReaderFunction function =
+        new HoodieSplitReaderFunction(
             mockTable,
             mockReaderContext,
             config,
@@ -317,8 +317,8 @@ public class TestHoodieSplitReaderFunction {
   @Test
   public void testReadMethodSignature() {
     // Verify that the read method returns CloseableIterator
-    HoodieSplitReaderFunction<?, ?, ?> function =
-        new HoodieSplitReaderFunction<>(
+    HoodieSplitReaderFunction function =
+        new HoodieSplitReaderFunction(
             mockTable,
             mockReaderContext,
             new Configuration(),
