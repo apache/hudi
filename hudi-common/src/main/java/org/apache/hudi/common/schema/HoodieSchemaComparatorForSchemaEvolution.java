@@ -132,7 +132,7 @@ import java.util.stream.Collectors;
  *   <li>Custom properties</li>
  * </ul>
  */
-@NoArgsConstructor(access = AccessLevel.PRIVATE)
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class HoodieSchemaComparatorForSchemaEvolution {
 
   private static final HoodieSchemaComparatorForSchemaEvolution VALIDATOR = new HoodieSchemaComparatorForSchemaEvolution();

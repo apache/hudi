@@ -454,7 +454,6 @@ public final class HoodieSchemaUtils {
   /**
    * Checks if two schemas are projection equivalent (i.e., they have the same fields and types
    * for projection purposes, ignoring certain metadata differences).
-   * This is equivalent to {@link AvroSchemaUtils#areSchemasProjectionEquivalent(Schema, Schema)} but operates on HoodieSchema.
    *
    * @param schema1 the first schema
    * @param schema2 the second schema
@@ -464,7 +463,7 @@ public final class HoodieSchemaUtils {
    */
   public static boolean areSchemasProjectionEquivalent(HoodieSchema schema1, HoodieSchema schema2) {
     // Delegate to AvroSchemaUtils
-    return AvroSchemaUtils.areSchemasProjectionEquivalent(schema1 == null ? null : schema1.toAvroSchema(), schema2 == null ? null : schema2.toAvroSchema());
+    return HoodieSchemaCompatibility.areSchemasProjectionEquivalent(schema1, schema2);
   }
 
   /**

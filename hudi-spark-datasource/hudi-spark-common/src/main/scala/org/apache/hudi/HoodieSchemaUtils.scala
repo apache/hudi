@@ -20,7 +20,6 @@
 package org.apache.hudi
 
 import org.apache.hudi.HoodieSparkSqlWriter.{CANONICALIZE_SCHEMA, SQL_MERGE_INTO_WRITES}
-import org.apache.hudi.avro.AvroSchemaUtils.{isSchemaCompatible}
 import org.apache.hudi.common.config.{HoodieCommonConfig, HoodieConfig, TypedProperties}
 import org.apache.hudi.common.model.HoodieRecord
 import org.apache.hudi.common.schema.{HoodieSchema, HoodieSchemaCompatibility, HoodieSchemaUtils => HoodieCommonSchemaUtils}
