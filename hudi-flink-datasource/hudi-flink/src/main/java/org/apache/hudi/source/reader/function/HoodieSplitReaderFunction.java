@@ -35,7 +35,7 @@ import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.source.reader.HoodieRecordWithPosition;
 import org.apache.hudi.source.reader.DefaultHoodieBatchReader;
 import org.apache.hudi.source.split.HoodieSourceSplit;
-import org.apache.hudi.table.HoodieTable;
+import org.apache.hudi.table.HoodieFlinkTable;
 
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.connector.base.source.reader.RecordsWithSplitIds;
@@ -49,8 +49,8 @@ import java.util.stream.Collectors;
 /**
  * Default reader function implementation for both MOR and COW tables.
  */
-public class HoodieSplitReaderFunction<I, K, O> implements SplitReaderFunction<RowData> {
-  private final HoodieTable<RowData, I, K, O> hoodieTable;
+public class HoodieSplitReaderFunction implements SplitReaderFunction<RowData> {
+  private final HoodieFlinkTable<RowData> hoodieTable;
   private final HoodieReaderContext<RowData> readerContext;
   private final HoodieSchema tableSchema;
   private final HoodieSchema requiredSchema;
@@ -60,7 +60,7 @@ public class HoodieSplitReaderFunction<I, K, O> implements SplitReaderFunction<R
   private HoodieFileGroupReader<RowData> fileGroupReader;
 
   public HoodieSplitReaderFunction(
-      HoodieTable<RowData, I, K, O> hoodieTable,
+      HoodieFlinkTable<RowData> hoodieTable,
       HoodieReaderContext<RowData> readerContext,
       Configuration configuration,
       HoodieSchema tableSchema,
