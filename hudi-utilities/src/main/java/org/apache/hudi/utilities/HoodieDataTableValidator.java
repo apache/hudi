@@ -175,6 +175,9 @@ public class HoodieDataTableValidator implements Serializable {
     @Parameter(names = {"--spark-memory", "-sm"}, description = "spark memory to use", required = false)
     public String sparkMemory = "1g";
 
+    @Parameter(names = {"--enable-hive-support", "-ehs"}, description = "Enables hive support during spark context initialization.", required = false)
+    public Boolean enableHiveSupport = false;
+
     @Parameter(names = {"--props"}, description = "path to properties file on localfs or dfs, with configurations for "
         + "hoodie client")
     public String propsFilePath = null;
@@ -242,7 +245,8 @@ public class HoodieDataTableValidator implements Serializable {
 
     Map<String, String> sparkConfigMap = new HashMap<>();
     sparkConfigMap.put("spark.executor.memory", cfg.sparkMemory);
-    JavaSparkContext jsc = UtilHelpers.buildSparkContext("Hoodie-Data-Table-Validator", cfg.sparkMaster, sparkConfigMap);
+    JavaSparkContext jsc = UtilHelpers.buildSparkContext("Hoodie-Data-Table-Validator",
+        cfg.sparkMaster, cfg.enableHiveSupport, sparkConfigMap);
 
     HoodieDataTableValidator validator = new HoodieDataTableValidator(jsc, cfg);
 

@@ -139,6 +139,10 @@ public class HoodieSnapshotExporter {
     @Parameter(names = {"--transformer-sql-file"}, description = "File with a SQL query to be executed during write."
             + " The query should reference the source as a table named \"<SRC>\".")
     public String transformerSqlFile = null;
+
+    @Parameter(names = {"--enable-hive-support", "-ehs"}, description = "Enables hive support during spark context initialization.", required = false)
+    public Boolean enableHiveSupport = false;
+
   }
 
   public void export(JavaSparkContext jsc, Config cfg) throws IOException {
@@ -339,7 +343,7 @@ public class HoodieSnapshotExporter {
       System.exit(1);
     }
 
-    JavaSparkContext jsc = UtilHelpers.buildSparkContext("Hoodie-snapshot-exporter", "local[*]");
+    JavaSparkContext jsc = UtilHelpers.buildSparkContext("Hoodie-snapshot-exporter", "local[*]", cfg.enableHiveSupport);
     LOG.info("Initializing spark job.");
 
     try {

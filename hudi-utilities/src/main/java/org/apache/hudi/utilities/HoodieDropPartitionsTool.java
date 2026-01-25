@@ -189,6 +189,8 @@ public class HoodieDropPartitionsTool implements Serializable {
     public String sparkMaster = null;
     @Parameter(names = {"--spark-memory", "-sm"}, description = "spark memory to use", required = false)
     public String sparkMemory = "1g";
+    @Parameter(names = {"--enable-hive-support", "-ehs"}, description = "Enables hive support during spark context initialization.", required = false)
+    public Boolean enableHiveSupport = false;
     @Parameter(names = {"--props"}, description = "path to properties file on localfs or dfs, with configurations for "
         + "hoodie client for deleting table partitions")
     public String propsFilePath = null;
@@ -273,7 +275,8 @@ public class HoodieDropPartitionsTool implements Serializable {
     }
     Map<String, String> sparkConfigMap = new HashMap<>();
     sparkConfigMap.put("spark.executor.memory", cfg.sparkMemory);
-    JavaSparkContext jsc = UtilHelpers.buildSparkContext("Hoodie-Drop-Table-Partitions", cfg.sparkMaster, sparkConfigMap);
+    JavaSparkContext jsc = UtilHelpers.buildSparkContext("Hoodie-Drop-Table-Partitions",
+        cfg.sparkMaster, cfg.enableHiveSupport, sparkConfigMap);
 
     HoodieDropPartitionsTool tool = new HoodieDropPartitionsTool(jsc, cfg);
     try {

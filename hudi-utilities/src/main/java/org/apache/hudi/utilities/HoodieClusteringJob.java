@@ -89,6 +89,8 @@ public class HoodieClusteringJob {
     public String sparkMaster = null;
     @Parameter(names = {"--spark-memory", "-sm"}, description = "spark memory to use", required = false)
     public String sparkMemory = null;
+    @Parameter(names = {"--enable-hive-support", "-ehs"}, description = "Enables hive support during spark context initialization.", required = false)
+    public Boolean enableHiveSupport = false;
     @Parameter(names = {"--retry", "-rt"}, description = "number of retries")
     public int retry = 0;
     @Parameter(names = {"--skip-clean", "-sc"}, description = "do not trigger clean after clustering", required = false)
@@ -152,7 +154,8 @@ public class HoodieClusteringJob {
       throw new HoodieException("Clustering failed for basePath: " + cfg.basePath);
     }
 
-    final JavaSparkContext jsc = UtilHelpers.buildSparkContext("clustering-" + cfg.tableName, cfg.sparkMaster, cfg.sparkMemory);
+    final JavaSparkContext jsc = UtilHelpers.buildSparkContext("clustering-" + cfg.tableName,
+        cfg.sparkMaster, cfg.sparkMemory, cfg.enableHiveSupport);
     int result = new HoodieClusteringJob(jsc, cfg).cluster(cfg.retry);
     String resultMsg = String.format("Clustering with basePath: %s, tableName: %s, runningMode: %s",
         cfg.basePath, cfg.tableName, cfg.runningMode);

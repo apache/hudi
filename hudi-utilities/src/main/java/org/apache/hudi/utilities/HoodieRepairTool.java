@@ -224,7 +224,8 @@ public class HoodieRepairTool {
       cmd.usage();
       System.exit(1);
     }
-    final JavaSparkContext jsc = UtilHelpers.buildSparkContext("hudi-table-repair", cfg.sparkMaster, cfg.sparkMemory);
+    final JavaSparkContext jsc = UtilHelpers.buildSparkContext("hudi-table-repair",
+        cfg.sparkMaster, cfg.sparkMemory, cfg.enableHiveSupport);
     try {
       new HoodieRepairTool(jsc, cfg).run();
     } catch (Throwable throwable) {
@@ -544,6 +545,8 @@ public class HoodieRepairTool {
     public String sparkMaster = null;
     @Parameter(names = {"--spark-memory", "-sm"}, description = "spark memory to use", required = false)
     public String sparkMemory = "1g";
+    @Parameter(names = {"--enable-hive-support", "-ehs"}, description = "Enables hive support during spark context initialization.", required = false)
+    public Boolean enableHiveSupport = false;
     @Parameter(names = {"--assume-date-partitioning", "-dp"}, description = "whether the partition path "
         + "is date with three levels", required = false)
     public Boolean assumeDatePartitioning = false;

@@ -170,7 +170,8 @@ public class UtilitiesTestBase {
       clearHiveDb(basePath + "/dummy" + System.currentTimeMillis());
     }
 
-    jsc = UtilHelpers.buildSparkContext(UtilitiesTestBase.class.getName() + "-hoodie", "local[4,1]", sparkConf());
+    jsc = UtilHelpers.buildSparkContext(UtilitiesTestBase.class.getName() + "-hoodie",
+        "local[4,1]", false, sparkConf());
     context = new HoodieSparkEngineContext(jsc);
     sqlContext = SQLContext.getOrCreate(jsc.sc());
     sparkSession = SparkSession.builder().config(jsc.getConf()).getOrCreate();
