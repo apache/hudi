@@ -255,7 +255,6 @@ public class KeyGenUtils {
       } else {
         if (encodePartitionPath) {
           fieldVal = PartitionPathEncodeUtils.escapePathName(fieldVal);
-          partitionPath.append(fieldVal);
         }
         if (hiveStylePartitioning) {
           fieldVal = partitionPathField + "=" + fieldVal;
