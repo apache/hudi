@@ -138,7 +138,7 @@ public abstract class BaseSparkInternalRecordContext extends RecordContext<Inter
           throw new IllegalArgumentException(
                   "Value count (" + fieldValues.length + ") does not match field count (" + fields.size() + ")");
       }
-      return toBinaryRow(recordSchema, new GenericInternalRow(fieldValues));
+      return new GenericInternalRow(fieldValues);
   }
 
   @Override

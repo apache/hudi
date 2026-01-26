@@ -20,7 +20,6 @@
 package org.apache.hudi.common.table.read;
 
 import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaType;
 
@@ -98,7 +97,6 @@ class TestPartialUpdateHandler {
   @Test
   void testEmptyProperties() {
     TypedProperties props = new TypedProperties();
-    props.setProperty(HoodieTableConfig.MERGE_PROPERTIES.key(), ",a=1,,b,c=3");
     Map<String, String> result = PartialUpdateHandler.parseMergeProperties(props);
     assertTrue(result.isEmpty());
   }

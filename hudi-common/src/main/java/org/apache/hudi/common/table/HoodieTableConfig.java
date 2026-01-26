@@ -365,12 +365,6 @@ public class HoodieTableConfig extends HoodieConfig {
       .sinceVersion("1.1.0")
       .withDocumentation("This property when set, will define how two versions of the record will be merged together when records are partially formed");
 
-  public static final ConfigProperty<String> MERGE_PROPERTIES = ConfigProperty
-      .key("hoodie.table.merge.properties")
-      .noDefaultValue()
-      .sinceVersion("1.1.0")
-      .withDocumentation("This property when set, will define how two versions of the record will be merged together when records are partially formed");
-
   public static final ConfigProperty<String> URL_ENCODE_PARTITIONING = KeyGeneratorOptions.URL_ENCODE_PARTITIONING;
   public static final ConfigProperty<String> HIVE_STYLE_PARTITIONING_ENABLE = KeyGeneratorOptions.HIVE_STYLE_PARTITIONING_ENABLE;
 

@@ -158,7 +158,7 @@ public class FlinkRecordContext extends RecordContext<RowData> {
     for (int index = 0; index < fields.size(); index++) {
       genericRowData.setField(index, fieldValues[index]);
     }
-    return toBinaryRow(recordSchema, genericRowData);
+    return genericRowData;
   }
 
   @Override
