@@ -85,9 +85,7 @@ public final class HoodieSchemaUtils {
     ValidationUtils.checkArgument(schema != null && !schema.trim().isEmpty(),
         "Schema string cannot be null or empty");
 
-    // Delegate to existing HoodieAvroUtils, convert result to HoodieSchema
-    Schema avroSchema = HoodieAvroUtils.createHoodieWriteSchema(schema, withOperationField);
-    return HoodieSchema.fromAvroSchema(avroSchema);
+    return addMetadataFields(HoodieSchema.parse(schema), withOperationField);
   }
 
   /**
@@ -114,10 +112,45 @@ public final class HoodieSchemaUtils {
   public static HoodieSchema addMetadataFields(HoodieSchema schema, boolean withOperationField) {
     ValidationUtils.checkArgument(schema != null, "Schema cannot be null");
 
-    // Convert to Avro, delegate to existing utility, convert back
-    Schema avroSchema = schema.toAvroSchema();
-    Schema resultAvro = HoodieAvroUtils.addMetadataFields(avroSchema, withOperationField);
-    return HoodieSchema.fromAvroSchema(resultAvro);
+    if (schema.getType() == HoodieSchemaType.NULL) {
+      return schema;
+    }
+    int newFieldsSize = HoodieRecord.HOODIE_META_COLUMNS.size() + (withOperationField ? 1 : 0);
+    List<HoodieSchemaField> parentFields = new ArrayList<>(schema.getFields().size() + newFieldsSize);
+
+    HoodieSchemaField commitTimeField =
+        HoodieSchemaField.of(HoodieRecord.COMMIT_TIME_METADATA_FIELD, METADATA_FIELD_SCHEMA, "", HoodieSchema.NULL_VALUE);
+    HoodieSchemaField commitSeqnoField =
+        HoodieSchemaField.of(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD, METADATA_FIELD_SCHEMA, "", HoodieSchema.NULL_VALUE);
+    HoodieSchemaField recordKeyField =
+        HoodieSchemaField.of(HoodieRecord.RECORD_KEY_METADATA_FIELD, METADATA_FIELD_SCHEMA, "", HoodieSchema.NULL_VALUE);
+    HoodieSchemaField partitionPathField =
+        HoodieSchemaField.of(HoodieRecord.PARTITION_PATH_METADATA_FIELD, METADATA_FIELD_SCHEMA, "", HoodieSchema.NULL_VALUE);
+    HoodieSchemaField fileNameField =
+        HoodieSchemaField.of(HoodieRecord.FILENAME_METADATA_FIELD, METADATA_FIELD_SCHEMA, "", HoodieSchema.NULL_VALUE);
+
+    parentFields.add(commitTimeField);
+    parentFields.add(commitSeqnoField);
+    parentFields.add(recordKeyField);
+    parentFields.add(partitionPathField);
+    parentFields.add(fileNameField);
+
+    if (withOperationField) {
+      final HoodieSchemaField operationField =
+          HoodieSchemaField.of(HoodieRecord.OPERATION_METADATA_FIELD, METADATA_FIELD_SCHEMA, "", HoodieSchema.NULL_VALUE);
+      parentFields.add(operationField);
+    }
+
+    for (HoodieSchemaField field : schema.getFields()) {
+      if (!HoodieSchemaUtils.isMetadataField(field.name())) {
+        HoodieSchemaField newField = createNewSchemaField(field);
+        for (Map.Entry<String, Object> prop : field.getObjectProps().entrySet()) {
+          newField.addProp(prop.getKey(), prop.getValue());
+        }
+        parentFields.add(newField);
+      }
+    }
+    return createNewSchemaFromFieldsWithReference(schema, parentFields);
   }
 
   /**
@@ -150,11 +183,21 @@ public final class HoodieSchemaUtils {
     ValidationUtils.checkArgument(sourceSchema != null, "Source schema cannot be null");
     ValidationUtils.checkArgument(targetSchema != null, "Target schema cannot be null");
 
-    // Delegate to AvroSchemaUtils
-    Schema mergedAvro = AvroSchemaUtils.mergeSchemas(
-        sourceSchema.toAvroSchema(),
-        targetSchema.toAvroSchema());
-    return HoodieSchema.fromAvroSchema(mergedAvro);
+    if (sourceSchema.getType() != HoodieSchemaType.RECORD) {
+      return sourceSchema;
+    }
+    List<HoodieSchemaField> fields = new ArrayList<>();
+    for (HoodieSchemaField f : sourceSchema.getFields()) {
+      Option<HoodieSchemaField> foundField = targetSchema.getField(f.name());
+      fields.add(createNewSchemaField(f.name(), foundField.map(field -> mergeSchemas(f.schema(), field.schema())).orElse(f.schema()),
+          f.doc().orElse(null), f.defaultVal().orElse(null)));
+    }
+    for (HoodieSchemaField f : targetSchema.getFields()) {
+      if (sourceSchema.getField(f.name()).isEmpty()) {
+        fields.add(createNewSchemaField(f));
+      }
+    }
+    return createNewSchemaFromFieldsWithReference(sourceSchema, fields);
   }
 
   /**
@@ -455,15 +498,13 @@ public final class HoodieSchemaUtils {
    * Adds newFields to the schema. Will add nested fields without duplicating the field
    * For example if your schema is "a.b.{c,e}" and newfields contains "a.{b.{d,e},x.y}",
    * It will stitch them together to be "a.{b.{c,d,e},x.y}
-   * This is equivalent to {@link AvroSchemaUtils#appendFieldsToSchemaDedupNested(Schema, List)} but operates on HoodieSchema.
    *
    * @param schema    the original schema
    * @param newFields list of new fields to add
    * @return the updated schema with new fields added
    */
   public static HoodieSchema appendFieldsToSchemaDedupNested(HoodieSchema schema, List<HoodieSchemaField> newFields) {
-    return HoodieSchema.fromAvroSchema(AvroSchemaUtils.appendFieldsToSchemaDedupNested(schema.toAvroSchema(),
-        newFields.stream().map(HoodieSchemaField::getAvroField).collect(Collectors.toList())));
+    return appendFieldsToSchemaBase(schema, newFields, true);
   }
 
   /**
@@ -472,16 +513,13 @@ public final class HoodieSchemaUtils {
    * NOTE: No deduplication is made, this method simply appends fields at the end of the list
    *       of the source schema as is
    * <p>
-   * This is equivalent to {@link AvroSchemaUtils#appendFieldsToSchema(Schema, List)} but operates on HoodieSchema.
    */
   public static HoodieSchema appendFieldsToSchema(HoodieSchema schema, List<HoodieSchemaField> newFields) {
-    return HoodieSchema.fromAvroSchema(AvroSchemaUtils.appendFieldsToSchema(schema.toAvroSchema(),
-        newFields.stream().map(HoodieSchemaField::getAvroField).collect(Collectors.toList())));
+    return appendFieldsToSchemaBase(schema, newFields, false);
   }
 
   /**
    * Create a new schema but maintain all meta info from the old schema.
-   * This is equivalent to {@link AvroSchemaUtils#createNewSchemaFromFieldsWithReference(Schema, List)} but operates on HoodieSchema.
    *
    * @param schema schema to get the meta info from
    * @param fields list of fields in order that will be in the new schema
@@ -492,10 +530,12 @@ public final class HoodieSchemaUtils {
     if (schema == null) {
       throw new IllegalArgumentException("Schema must not be null");
     }
-    return HoodieSchema.fromAvroSchema(AvroSchemaUtils.createNewSchemaFromFieldsWithReference(
-        schema.toAvroSchema(),
-        fields.stream().map(HoodieSchemaField::getAvroField).collect(Collectors.toList())
-    ));
+    Map<String, Object> schemaProps = schema.getObjectProps();
+    HoodieSchema newSchema = HoodieSchema.createRecord(schema.getName(), schema.getNamespace().orElse(null), schema.getDoc().orElse(null), fields);
+    for (Map.Entry<String, Object> prop : schemaProps.entrySet()) {
+      newSchema.addProp(prop.getKey(), prop.getValue());
+    }
+    return newSchema;
   }
 
   /**
@@ -833,5 +873,26 @@ public final class HoodieSchemaUtils {
 
   public static String createSchemaErrorString(String errorMessage, HoodieSchema writerSchema, HoodieSchema tableSchema) {
     return String.format("%s\nwriterSchema: %s\ntableSchema: %s", errorMessage, writerSchema, tableSchema);
+  }
+
+  private static HoodieSchema appendFieldsToSchemaBase(HoodieSchema schema, List<HoodieSchemaField> newFields, boolean dedupNested) {
+    List<HoodieSchemaField> fields = schema.getFields().stream()
+        .map(HoodieSchemaUtils::createNewSchemaField)
+        .collect(Collectors.toList());
+    if (dedupNested) {
+      for (HoodieSchemaField f : newFields) {
+        Option<HoodieSchemaField> field = schema.getField(f.name());
+        if (field.isPresent()) {
+          HoodieSchemaField foundField = field.get();
+          fields.set(foundField.pos(), createNewSchemaField(foundField.name(), mergeSchemas(foundField.schema(), f.schema()), foundField.doc().orElse(null), foundField.defaultVal().orElse(null)));
+        } else {
+          fields.add(f);
+        }
+      }
+    } else {
+      fields.addAll(newFields);
+    }
+
+    return createNewSchemaFromFieldsWithReference(schema, fields);
   }
 }

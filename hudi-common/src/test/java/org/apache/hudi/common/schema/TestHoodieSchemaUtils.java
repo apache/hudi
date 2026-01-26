@@ -19,6 +19,7 @@
 package org.apache.hudi.common.schema;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
+import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
@@ -131,6 +132,12 @@ public class TestHoodieSchemaUtils {
       + "{\"name\":\"decimal_col\",\"type\":[\"null\","
       + "{\"type\":\"bytes\",\"logicalType\":\"decimal\",\"precision\":8,\"scale\":4}],\"default\":null}]}";
 
+  private static final String EXAMPLE_SCHEMA_WITH_PROPS = "{\"type\": \"record\",\"name\": \"testrec\",\"fields\": [ "
+      + "{\"name\": \"timestamp\",\"type\": \"double\", \"custom_field_property\":\"value\"},{\"name\": \"_row_key\", \"type\": \"string\"},"
+      + "{\"name\": \"non_pii_col\", \"type\": \"string\"},"
+      + "{\"name\": \"pii_col\", \"type\": \"string\", \"column_category\": \"user_profile\"}], "
+      + "\"custom_schema_property\": \"custom_schema_property_value\"}";
+
   private static HoodieSchema SCHEMA_WITH_NESTED_FIELD_LARGE = HoodieSchema.parse(SCHEMA_WITH_NESTED_FIELD_LARGE_STR);
 
   @Test
@@ -185,9 +192,51 @@ public class TestHoodieSchemaUtils {
   }
 
   @Test
+  public void testAddMetadataFieldsWithProps() {
+    HoodieSchema baseSchema = HoodieSchema.parse(EXAMPLE_SCHEMA_WITH_PROPS);
+    HoodieSchema schemaWithMetadata = HoodieSchemaUtils.addMetadataFields(baseSchema);
+    List<HoodieSchemaField> updatedFields = schemaWithMetadata.getFields();
+    // assert fields added in expected order
+    assertEquals(HoodieRecord.COMMIT_TIME_METADATA_FIELD, updatedFields.get(0).name());
+    assertEquals(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD, updatedFields.get(1).name());
+    assertEquals(HoodieRecord.RECORD_KEY_METADATA_FIELD, updatedFields.get(2).name());
+    assertEquals(HoodieRecord.PARTITION_PATH_METADATA_FIELD, updatedFields.get(3).name());
+    assertEquals(HoodieRecord.FILENAME_METADATA_FIELD, updatedFields.get(4).name());
+    // assert original fields are copied over
+    List<HoodieSchemaField> originalFieldsInUpdatedSchema = updatedFields.subList(5, updatedFields.size());
+    assertEquals(baseSchema.getFields(), originalFieldsInUpdatedSchema);
+    // validate properties are properly copied over
+    assertEquals("custom_schema_property_value", schemaWithMetadata.getProp("custom_schema_property"));
+    assertEquals("value", originalFieldsInUpdatedSchema.get(0).getProp("custom_field_property"));
+  }
+
+  @Test
   public void testAddMetadataFieldsValidation() {
     // Should throw on null schema
     assertThrows(IllegalArgumentException.class, () -> HoodieSchemaUtils.addMetadataFields(null, true));
+  }
+
+  @Test
+  public void testPropsPresent() {
+    HoodieSchema schema = HoodieSchemaUtils.addMetadataFields(HoodieSchema.parse(EXAMPLE_SCHEMA));
+    boolean piiPresent = false;
+    for (HoodieSchemaField field : schema.getFields()) {
+      if (HoodieSchemaUtils.isMetadataField(field.name())) {
+        continue;
+      }
+
+      assertNotNull(field.name(), "field name is null");
+      Map<String, Object> props = field.getObjectProps();
+      assertNotNull(props, "The property is null");
+
+      if (field.name().equals("pii_col")) {
+        piiPresent = true;
+        assertTrue(props.containsKey("column_category"), "sensitivity_level is removed in field 'pii_col'");
+      } else {
+        assertEquals(0, props.size(), "The property shows up but not set");
+      }
+    }
+    assertTrue(piiPresent, "column pii_col doesn't show up");
   }
 
   @Test
@@ -339,19 +388,6 @@ public class TestHoodieSchemaUtils {
 
     // Should throw on null schema
     assertThrows(IllegalArgumentException.class, () -> HoodieSchemaUtils.createNewSchemaField("name", null, "doc", null));
-  }
-
-  @Test
-  public void testConsistencyWithAvroUtilities() {
-    // Test that HoodieSchemaUtils produces equivalent results to AvroSchemaUtils
-    String schemaString = SIMPLE_SCHEMA;
-
-    // Compare createHoodieWriteSchema results
-    Schema avroResult = HoodieAvroUtils.createHoodieWriteSchema(schemaString, true);
-    HoodieSchema hoodieResult = HoodieSchemaUtils.createHoodieWriteSchema(schemaString, true);
-
-    // Should produce equivalent schemas
-    assertEquals(avroResult.toString(), hoodieResult.toString());
   }
 
   @Test

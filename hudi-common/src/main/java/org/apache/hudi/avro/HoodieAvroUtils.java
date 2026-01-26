@@ -18,7 +18,6 @@
 
 package org.apache.hudi.avro;
 
-import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaUtils;
@@ -239,75 +238,6 @@ public class HoodieAvroUtils {
 
   public static boolean isTypeNumeric(Schema.Type type) {
     return type == Schema.Type.INT || type == Schema.Type.LONG || type == Schema.Type.FLOAT || type == Schema.Type.DOUBLE;
-  }
-
-  public static Schema createHoodieWriteSchema(Schema originalSchema) {
-    return HoodieAvroUtils.addMetadataFields(originalSchema);
-  }
-
-  public static Schema createHoodieWriteSchema(String originalSchema) {
-    return createHoodieWriteSchema(new Schema.Parser().parse(originalSchema));
-  }
-
-  public static Schema createHoodieWriteSchema(String originalSchema, boolean withOperationField) {
-    return addMetadataFields(new Schema.Parser().parse(originalSchema), withOperationField);
-  }
-
-  /**
-   * Adds the Hoodie metadata fields to the given schema.
-   *
-   * @param schema The schema
-   */
-  public static Schema addMetadataFields(Schema schema) {
-    return addMetadataFields(schema, false);
-  }
-
-  /**
-   * Adds the Hoodie metadata fields to the given schema.
-   *
-   * @param schema             The schema
-   * @param withOperationField Whether to include the '_hoodie_operation' field
-   */
-  public static Schema addMetadataFields(Schema schema, boolean withOperationField) {
-    if (isSchemaNull(schema)) {
-      return schema;
-    }
-    int newFieldsSize = HoodieRecord.HOODIE_META_COLUMNS.size() + (withOperationField ? 1 : 0);
-    List<Schema.Field> parentFields = new ArrayList<>(schema.getFields().size() + newFieldsSize);
-
-    Schema.Field commitTimeField =
-        new Schema.Field(HoodieRecord.COMMIT_TIME_METADATA_FIELD, METADATA_FIELD_SCHEMA, "", JsonProperties.NULL_VALUE);
-    Schema.Field commitSeqnoField =
-        new Schema.Field(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD, METADATA_FIELD_SCHEMA, "", JsonProperties.NULL_VALUE);
-    Schema.Field recordKeyField =
-        new Schema.Field(HoodieRecord.RECORD_KEY_METADATA_FIELD, METADATA_FIELD_SCHEMA, "", JsonProperties.NULL_VALUE);
-    Schema.Field partitionPathField =
-        new Schema.Field(HoodieRecord.PARTITION_PATH_METADATA_FIELD, METADATA_FIELD_SCHEMA, "", JsonProperties.NULL_VALUE);
-    Schema.Field fileNameField =
-        new Schema.Field(HoodieRecord.FILENAME_METADATA_FIELD, METADATA_FIELD_SCHEMA, "", JsonProperties.NULL_VALUE);
-
-    parentFields.add(commitTimeField);
-    parentFields.add(commitSeqnoField);
-    parentFields.add(recordKeyField);
-    parentFields.add(partitionPathField);
-    parentFields.add(fileNameField);
-
-    if (withOperationField) {
-      final Schema.Field operationField =
-          new Schema.Field(HoodieRecord.OPERATION_METADATA_FIELD, METADATA_FIELD_SCHEMA, "", JsonProperties.NULL_VALUE);
-      parentFields.add(operationField);
-    }
-
-    for (Schema.Field field : schema.getFields()) {
-      if (!HoodieSchemaUtils.isMetadataField(field.name())) {
-        Schema.Field newField = createNewSchemaField(field);
-        for (Map.Entry<String, Object> prop : field.getObjectProps().entrySet()) {
-          newField.addProp(prop.getKey(), prop.getValue());
-        }
-        parentFields.add(newField);
-      }
-    }
-    return AvroSchemaUtils.createNewSchemaFromFieldsWithReference(schema, parentFields);
   }
 
   /**
@@ -575,11 +505,6 @@ public class HoodieAvroUtils {
     return record;
   }
 
-  public static GenericRecord addOperationToRecord(GenericRecord record, HoodieOperation operation) {
-    record.put(HoodieRecord.OPERATION_METADATA_FIELD, operation.getName());
-    return record;
-  }
-
   /**
    * Adds the Hoodie commit metadata into the provided Generic Record.
    */
@@ -775,61 +700,6 @@ public class HoodieAvroUtils {
           fieldName + " field not found in record. Acceptable fields were :"
               + valueNode.getSchema().getFields().stream().map(Field::name).collect(Collectors.toList()));
     }
-  }
-
-  /**
-   * Get schema for the given field and record. Field can be nested, denoted by dot notation. e.g: a.b.c
-   *
-   * @param record    - record containing the value of the given field
-   * @param fieldName - name of the field
-   * @return
-   */
-  public static Schema getNestedFieldSchemaFromRecord(GenericRecord record, String fieldName) {
-    String[] parts = fieldName.split("\\.");
-    GenericRecord valueNode = record;
-    int i = 0;
-    for (; i < parts.length; i++) {
-      String part = parts[i];
-      Object val = valueNode.get(part);
-
-      if (i == parts.length - 1) {
-        return AvroSchemaUtils.getNonNullTypeFromUnion(valueNode.getSchema().getField(part).schema());
-      } else {
-        if (!(val instanceof GenericRecord)) {
-          throw new HoodieException("Cannot find a record at part value :" + part);
-        }
-        valueNode = (GenericRecord) val;
-      }
-    }
-    throw new HoodieException("Failed to get schema. Not a valid field name: " + fieldName);
-  }
-
-  /**
-   * Get schema for the given field and write schema. Field can be nested, denoted by dot notation. e.g: a.b.c
-   * Use this method when record is not available. Otherwise, prefer to use {@link #getNestedFieldSchemaFromRecord(GenericRecord, String)}
-   *
-   * @param writeSchema - write schema of the record
-   * @param fieldName   -  name of the field
-   * @return
-   */
-  public static Schema getNestedFieldSchemaFromWriteSchema(Schema writeSchema, String fieldName) {
-    String[] parts = fieldName.split("\\.");
-    Schema currentSchema = writeSchema;
-    for (int i = 0; i < parts.length; i++) {
-      String part = parts[i];
-      try {
-        // Resolve nullable/union schema to the actual schema
-        currentSchema = AvroSchemaUtils.getNonNullTypeFromUnion(currentSchema.getField(part).schema());
-
-        if (i == parts.length - 1) {
-          // Return the schema for the final part
-          return AvroSchemaUtils.getNonNullTypeFromUnion(currentSchema);
-        }
-      } catch (Exception e) {
-        throw new HoodieException("Failed to get schema. Not a valid field name: " + fieldName);
-      }
-    }
-    throw new HoodieException("Failed to get schema. Not a valid field name: " + fieldName);
   }
 
   /**
