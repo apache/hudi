@@ -48,6 +48,7 @@ import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -185,26 +186,20 @@ class TestBaseSparkInternalRowReaderContext {
   void testConstructEngineRecordWithValueCountMismatch() {
     Object[] values = new Object[]{1, UTF8String.fromString("Alice")}; // Missing boolean value
 
-    try {
+    IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> {
       readerContext.getRecordContext().constructEngineRecord(SCHEMA, values);
-      // Should not reach here
-      assertTrue(false, "Expected IllegalArgumentException");
-    } catch (IllegalArgumentException e) {
-      assertTrue(e.getMessage().contains("Value count (2) does not match field count (3)"));
-    }
+    });
+    assertTrue(exception.getMessage().contains("Value count (2) does not match field count (3)"));
   }
 
   @Test
   void testConstructEngineRecordWithExtraValues() {
     Object[] values = new Object[]{1, UTF8String.fromString("Alice"), true, "extra"};
 
-    try {
+    IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> {
       readerContext.getRecordContext().constructEngineRecord(SCHEMA, values);
-      // Should not reach here
-      assertTrue(false, "Expected IllegalArgumentException");
-    } catch (IllegalArgumentException e) {
-      assertTrue(e.getMessage().contains("Value count (4) does not match field count (3)"));
-    }
+    });
+    assertTrue(exception.getMessage().contains("Value count (4) does not match field count (3)"));
   }
 
   @Test

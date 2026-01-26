@@ -113,7 +113,7 @@ public class PartialUpdateHandler<T> implements Serializable {
                                                HoodieSchema highOrderSchema,
                                                HoodieSchema lowOrderSchema,
                                                HoodieSchema newSchema) {
-    return (BufferedRecord<T>) keepValuesPartialMergingUtils.mergePartialRecords(
+    return keepValuesPartialMergingUtils.mergePartialRecords(
             lowOrderRecord,
             lowOrderSchema,
             highOrderRecord,

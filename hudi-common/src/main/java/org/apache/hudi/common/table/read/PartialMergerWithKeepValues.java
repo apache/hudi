@@ -29,20 +29,20 @@ import org.apache.hudi.common.util.collection.Pair;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Class to assist with merging two versions of the record that may contain partial updates using
  * {@link org.apache.hudi.common.table.PartialUpdateMode#KEEP_VALUES} mode.
  */
 public class PartialMergerWithKeepValues<T> implements Serializable {
-  private final Map<HoodieSchema, Map<String, Integer>>
-      fieldNameToIdMappingCache = new ConcurrentHashMap<>();
+  private final Map<HoodieSchema, Set<String>>
+      fieldNameCache = new HashMap<>();
   private final Map<Pair<Pair<HoodieSchema, HoodieSchema>, HoodieSchema>, HoodieSchema>
-      mergedSchemaCache = new ConcurrentHashMap<>();
+      mergedSchemaCache = new HashMap<>();
 
   /**
    * Merges records which can contain partial updates.
@@ -68,7 +68,7 @@ public class PartialMergerWithKeepValues<T> implements Serializable {
       return Pair.of(highOrderRecord, highOrderSchema);
     }
     Set<String> fieldNamesInNewRecord =
-        getCachedFieldNameToIdMapping(highOrderSchema).keySet();
+        getCachedFieldNames(highOrderSchema);
     // Collect field values.
     List<HoodieSchemaField> fields = mergedSchema.getFields();
     Object[] fieldVals = new Object[fields.size()];
@@ -95,17 +95,15 @@ public class PartialMergerWithKeepValues<T> implements Serializable {
 
   /**
    * @param hoodieSchema Hoodie schema.
-   * @return The field name to ID mapping.
+   * @return The set of field names.
    */
-  Map<String, Integer> getCachedFieldNameToIdMapping(HoodieSchema hoodieSchema) {
-    return fieldNameToIdMappingCache.computeIfAbsent(hoodieSchema, schema -> {
-      Map<String, Integer> schemaFieldIdMapping = new HashMap<>();
-      int fieldId = 0;
+  Set<String> getCachedFieldNames(HoodieSchema hoodieSchema) {
+    return fieldNameCache.computeIfAbsent(hoodieSchema, schema -> {
+      Set<String> fieldNames = new HashSet<>();
       for (HoodieSchemaField field : schema.getFields()) {
-        schemaFieldIdMapping.put(field.name(), fieldId);
-        fieldId++;
+        fieldNames.add(field.name());
       }
-      return schemaFieldIdMapping;
+      return fieldNames;
     });
   }
 
@@ -127,9 +125,9 @@ public class PartialMergerWithKeepValues<T> implements Serializable {
           HoodieSchema schema2 = schemaPair.getLeft().getRight();
           HoodieSchema refSchema = schemaPair.getRight();
           Set<String> schema1Keys =
-              getCachedFieldNameToIdMapping(schema1).keySet();
+              getCachedFieldNames(schema1);
           Set<String> schema2Keys =
-              getCachedFieldNameToIdMapping(schema2).keySet();
+              getCachedFieldNames(schema2);
           List<HoodieSchemaField> mergedFieldList = new ArrayList<>();
           for (int i = 0; i < refSchema.getFields().size(); i++) {
             HoodieSchemaField field = refSchema.getFields().get(i);
@@ -157,7 +155,7 @@ public class PartialMergerWithKeepValues<T> implements Serializable {
    * @return whether the Avro schema is partial compared to the merged schema.
    */
   @VisibleForTesting
-  public static boolean isPartial(HoodieSchema schema, HoodieSchema mergedSchema) {
+  static boolean isPartial(HoodieSchema schema, HoodieSchema mergedSchema) {
     return !schema.equals(mergedSchema);
   }
 }

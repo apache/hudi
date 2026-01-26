@@ -22,6 +22,8 @@ package org.apache.hudi.common.table.read;
 import org.apache.hudi.common.engine.RecordContext;
 import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaField;
+import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.common.util.collection.Pair;
 
 import org.apache.avro.Schema;
@@ -34,6 +36,7 @@ import org.junit.jupiter.api.Test;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Map;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -44,6 +47,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
+import org.mockito.ArgumentCaptor;
 
 class TestPartialMergerWithKeepValues {
   private PartialMergerWithKeepValues<IndexedRecord> keepValuesPartialMergingUtils;
@@ -60,49 +64,46 @@ class TestPartialMergerWithKeepValues {
     keepValuesPartialMergingUtils = new PartialMergerWithKeepValues<>();
     mockRecordContext = mock(RecordContext.class);
 
-    // Create Avro schemas first
-    avroFullSchema = Schema.createRecord("TestRecord", "Test record", "test", false);
-    avroFullSchema.setFields(Arrays.asList(
-        new Schema.Field("id", Schema.create(Schema.Type.STRING), "ID field", null),
-        new Schema.Field("name", Schema.create(Schema.Type.STRING), "Name field", null),
-        new Schema.Field("age", Schema.create(Schema.Type.INT), "Age field", null),
-        new Schema.Field("city", Schema.create(Schema.Type.STRING), "City field", null)
+    // Create HoodieSchema directly
+    fullSchema = HoodieSchema.createRecord("TestRecord", "Test record", "test", false, Arrays.asList(
+        HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.STRING), "ID field", null),
+        HoodieSchemaField.of("name", HoodieSchema.create(HoodieSchemaType.STRING), "Name field", null),
+        HoodieSchemaField.of("age", HoodieSchema.create(HoodieSchemaType.INT), "Age field", null),
+        HoodieSchemaField.of("city", HoodieSchema.create(HoodieSchemaType.STRING), "City field", null)
     ));
 
-    avroPartialSchema = Schema.createRecord("TestRecord", "Test record", "test", false);
-    avroPartialSchema.setFields(Arrays.asList(
-        new Schema.Field("id", Schema.create(Schema.Type.STRING), "ID field", null),
-        new Schema.Field("name", Schema.create(Schema.Type.STRING), "Name field", null)
+    partialSchema = HoodieSchema.createRecord("TestRecord", "Test record", "test", false, Arrays.asList(
+        HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.STRING), "ID field", null),
+        HoodieSchemaField.of("name", HoodieSchema.create(HoodieSchemaType.STRING), "Name field", null)
     ));
 
-    avroReaderSchema = Schema.createRecord("TestRecord", "Test record", "test", false);
-    avroReaderSchema.setFields(Arrays.asList(
-        new Schema.Field("id", Schema.create(Schema.Type.STRING), "ID field", null),
-        new Schema.Field("name", Schema.create(Schema.Type.STRING), "Name field", null),
-        new Schema.Field("age", Schema.create(Schema.Type.INT), "Age field", null),
-        new Schema.Field("city", Schema.create(Schema.Type.STRING), "City field", null)
+    readerSchema = HoodieSchema.createRecord("TestRecord", "Test record", "test", false, Arrays.asList(
+        HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.STRING), "ID field", null),
+        HoodieSchemaField.of("name", HoodieSchema.create(HoodieSchemaType.STRING), "Name field", null),
+        HoodieSchemaField.of("age", HoodieSchema.create(HoodieSchemaType.INT), "Age field", null),
+        HoodieSchemaField.of("city", HoodieSchema.create(HoodieSchemaType.STRING), "City field", null)
     ));
 
-    // Wrap with HoodieSchema
-    fullSchema = HoodieSchema.fromAvroSchema(avroFullSchema);
-    partialSchema = HoodieSchema.fromAvroSchema(avroPartialSchema);
-    readerSchema = HoodieSchema.fromAvroSchema(avroReaderSchema);
+    // Get Avro schemas for creating GenericRecord instances
+    avroFullSchema = fullSchema.toAvroSchema();
+    avroPartialSchema = partialSchema.toAvroSchema();
+    avroReaderSchema = readerSchema.toAvroSchema();
   }
 
   @Test
-  void testGetCachedFieldNameToIdMapping() {
-    Map<String, Integer> fieldNameToIdMapping = keepValuesPartialMergingUtils.getCachedFieldNameToIdMapping(fullSchema);
+  void testGetCachedFieldNames() {
+    Set<String> fieldNames = keepValuesPartialMergingUtils.getCachedFieldNames(fullSchema);
 
-    assertNotNull(fieldNameToIdMapping);
-    assertEquals(4, fieldNameToIdMapping.size());
-    assertEquals(0, fieldNameToIdMapping.get("id"));
-    assertEquals(1, fieldNameToIdMapping.get("name"));
-    assertEquals(2, fieldNameToIdMapping.get("age"));
-    assertEquals(3, fieldNameToIdMapping.get("city"));
+    assertNotNull(fieldNames);
+    assertEquals(4, fieldNames.size());
+    assertTrue(fieldNames.contains("id"));
+    assertTrue(fieldNames.contains("name"));
+    assertTrue(fieldNames.contains("age"));
+    assertTrue(fieldNames.contains("city"));
 
-    // Test caching - should return the same map for the same schema
-    Map<String, Integer> cachedMapping = keepValuesPartialMergingUtils.getCachedFieldNameToIdMapping(fullSchema);
-    assertSame(fieldNameToIdMapping, cachedMapping);
+    // Test caching - should return the same set for the same schema
+    Set<String> cachedFieldNames = keepValuesPartialMergingUtils.getCachedFieldNames(fullSchema);
+    assertSame(fieldNames, cachedFieldNames);
   }
 
   @Test
@@ -124,14 +125,12 @@ class TestPartialMergerWithKeepValues {
   @Test
   void testGetCachedMergedSchemaWithDifferentFieldOrder() {
     // Create a schema with different field order
-    Schema avroReorderedSchema = Schema.createRecord("TestRecord", "Test record", "test", false);
-    avroReorderedSchema.setFields(Arrays.asList(
-        new Schema.Field("age", Schema.create(Schema.Type.INT), "Age field", null),
-        new Schema.Field("city", Schema.create(Schema.Type.STRING), "City field", null),
-        new Schema.Field("id", Schema.create(Schema.Type.STRING), "ID field", null),
-        new Schema.Field("name", Schema.create(Schema.Type.STRING), "Name field", null)
+    HoodieSchema reorderedSchema = HoodieSchema.createRecord("TestRecord", "Test record", "test", false, Arrays.asList(
+        HoodieSchemaField.of("age", HoodieSchema.create(HoodieSchemaType.INT), "Age field", null),
+        HoodieSchemaField.of("city", HoodieSchema.create(HoodieSchemaType.STRING), "City field", null),
+        HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.STRING), "ID field", null),
+        HoodieSchemaField.of("name", HoodieSchema.create(HoodieSchemaType.STRING), "Name field", null)
     ));
-    HoodieSchema reorderedSchema = HoodieSchema.fromAvroSchema(avroReorderedSchema);
 
     HoodieSchema mergedSchema = keepValuesPartialMergingUtils.getCachedMergedSchema(partialSchema, reorderedSchema, readerSchema);
 
@@ -152,15 +151,13 @@ class TestPartialMergerWithKeepValues {
     assertFalse(PartialMergerWithKeepValues.isPartial(fullSchema, fullSchema));
 
     // Test when schema has more fields than merged schema
-    Schema avroExtendedSchema = Schema.createRecord("TestRecord", "Test record", "test", false);
-    avroExtendedSchema.setFields(Arrays.asList(
-        new Schema.Field("id", Schema.create(Schema.Type.STRING), "ID field", null),
-        new Schema.Field("name", Schema.create(Schema.Type.STRING), "Name field", null),
-        new Schema.Field("age", Schema.create(Schema.Type.INT), "Age field", null),
-        new Schema.Field("city", Schema.create(Schema.Type.STRING), "City field", null),
-        new Schema.Field("extra", Schema.create(Schema.Type.STRING), "Extra field", null)
+    HoodieSchema extendedSchema = HoodieSchema.createRecord("TestRecord", "Test record", "test", false, Arrays.asList(
+        HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.STRING), "ID field", null),
+        HoodieSchemaField.of("name", HoodieSchema.create(HoodieSchemaType.STRING), "Name field", null),
+        HoodieSchemaField.of("age", HoodieSchema.create(HoodieSchemaType.INT), "Age field", null),
+        HoodieSchemaField.of("city", HoodieSchema.create(HoodieSchemaType.STRING), "City field", null),
+        HoodieSchemaField.of("extra", HoodieSchema.create(HoodieSchemaType.STRING), "Extra field", null)
     ));
-    HoodieSchema extendedSchema = HoodieSchema.fromAvroSchema(avroExtendedSchema);
     assertTrue(PartialMergerWithKeepValues.isPartial(extendedSchema, fullSchema));
   }
 
@@ -221,12 +218,41 @@ class TestPartialMergerWithKeepValues {
     mergedRecord.put("age", 25);
     mergedRecord.put("city", "New York");
 
-    when(mockRecordContext.constructEngineRecord(any(HoodieSchema.class), any(Object[].class))).thenReturn(mergedRecord);
-    when(mockRecordContext.encodeSchema(any(HoodieSchema.class))).thenReturn(1);
+    // Capture arguments to validate correct values are passed
+    ArgumentCaptor<HoodieSchema> schemaCaptor = ArgumentCaptor.forClass(HoodieSchema.class);
+    ArgumentCaptor<Object[]> valuesCaptor = ArgumentCaptor.forClass(Object[].class);
+    ArgumentCaptor<HoodieSchema> encodeSchemaCaptor = ArgumentCaptor.forClass(HoodieSchema.class);
+
+    when(mockRecordContext.constructEngineRecord(schemaCaptor.capture(), valuesCaptor.capture())).thenReturn(mergedRecord);
+    when(mockRecordContext.encodeSchema(encodeSchemaCaptor.capture())).thenReturn(1);
 
     // When newer schema is partial, should merge records
     Pair<BufferedRecord<IndexedRecord>, HoodieSchema> result = keepValuesPartialMergingUtils.mergePartialRecords(
         older, fullSchema, newer, partialSchema, readerSchema, mockRecordContext);
+
+    // Validate the merged schema passed to constructEngineRecord
+    HoodieSchema capturedSchema = schemaCaptor.getValue();
+    assertNotNull(capturedSchema);
+    assertEquals(4, capturedSchema.getFields().size());
+    assertEquals("id", capturedSchema.getFields().get(0).name());
+    assertEquals("name", capturedSchema.getFields().get(1).name());
+    assertEquals("age", capturedSchema.getFields().get(2).name());
+    assertEquals("city", capturedSchema.getFields().get(3).name());
+
+    // Validate the field values array passed to constructEngineRecord
+    // Expected: ["1" (from newer), "Jane" (from newer), 25 (from older), "New York" (from older)]
+    Object[] capturedValues = valuesCaptor.getValue();
+    assertNotNull(capturedValues);
+    assertEquals(4, capturedValues.length);
+    assertEquals("1", capturedValues[0]);
+    assertEquals("Jane", capturedValues[1]);
+    assertEquals(25, capturedValues[2]);
+    assertEquals("New York", capturedValues[3]);
+
+    // Validate the schema passed to encodeSchema
+    HoodieSchema capturedEncodeSchema = encodeSchemaCaptor.getValue();
+    assertNotNull(capturedEncodeSchema);
+    assertEquals(capturedSchema, capturedEncodeSchema);
 
     assertNotNull(result.getLeft());
     assertEquals("1", result.getLeft().getRecordKey());
@@ -267,12 +293,41 @@ class TestPartialMergerWithKeepValues {
     mergedRecord.put("age", 25);
     mergedRecord.put("city", "New York");
 
-    when(mockRecordContext.constructEngineRecord(any(HoodieSchema.class), any(Object[].class))).thenReturn(mergedRecord);
-    when(mockRecordContext.encodeSchema(any(HoodieSchema.class))).thenReturn(1);
+    // Capture arguments to validate correct values are passed
+    ArgumentCaptor<HoodieSchema> schemaCaptor = ArgumentCaptor.forClass(HoodieSchema.class);
+    ArgumentCaptor<Object[]> valuesCaptor = ArgumentCaptor.forClass(Object[].class);
+    ArgumentCaptor<HoodieSchema> encodeSchemaCaptor = ArgumentCaptor.forClass(HoodieSchema.class);
+
+    when(mockRecordContext.constructEngineRecord(schemaCaptor.capture(), valuesCaptor.capture())).thenReturn(mergedRecord);
+    when(mockRecordContext.encodeSchema(encodeSchemaCaptor.capture())).thenReturn(1);
 
     // Test with delete record
     Pair<BufferedRecord<IndexedRecord>, HoodieSchema> result = keepValuesPartialMergingUtils.mergePartialRecords(
         older, fullSchema, newer, partialSchema, readerSchema, mockRecordContext);
+
+    // Validate the merged schema passed to constructEngineRecord
+    HoodieSchema capturedSchema = schemaCaptor.getValue();
+    assertNotNull(capturedSchema);
+    assertEquals(4, capturedSchema.getFields().size());
+    assertEquals("id", capturedSchema.getFields().get(0).name());
+    assertEquals("name", capturedSchema.getFields().get(1).name());
+    assertEquals("age", capturedSchema.getFields().get(2).name());
+    assertEquals("city", capturedSchema.getFields().get(3).name());
+
+    // Validate the field values array passed to constructEngineRecord
+    // Expected: ["1" (from newer), "Jane" (from newer), 25 (from older), "New York" (from older)]
+    Object[] capturedValues = valuesCaptor.getValue();
+    assertNotNull(capturedValues);
+    assertEquals(4, capturedValues.length);
+    assertEquals("1", capturedValues[0]);
+    assertEquals("Jane", capturedValues[1]);
+    assertEquals(25, capturedValues[2]);
+    assertEquals("New York", capturedValues[3]);
+
+    // Validate the schema passed to encodeSchema
+    HoodieSchema capturedEncodeSchema = encodeSchemaCaptor.getValue();
+    assertNotNull(capturedEncodeSchema);
+    assertEquals(capturedSchema, capturedEncodeSchema);
 
     assertNotNull(result.getLeft());
     assertTrue(result.getLeft().isDelete());
@@ -280,9 +335,8 @@ class TestPartialMergerWithKeepValues {
 
   @Test
   void testMergePartialRecordsWithEmptySchemas() {
-    Schema avroEmptySchema = Schema.createRecord("EmptyRecord", "Empty record", "test", false);
-    avroEmptySchema.setFields(Collections.emptyList());
-    HoodieSchema emptySchema = HoodieSchema.fromAvroSchema(avroEmptySchema);
+    HoodieSchema emptySchema = HoodieSchema.createRecord("EmptyRecord", "Empty record", "test", false, Collections.emptyList());
+    Schema avroEmptySchema = emptySchema.toAvroSchema();
 
     GenericRecord olderRecord = new GenericData.Record(avroEmptySchema);
     GenericRecord newerRecord = new GenericData.Record(avroEmptySchema);
@@ -302,19 +356,15 @@ class TestPartialMergerWithKeepValues {
   @Test
   void testGetCachedMergedSchemaWithOverlappingFields() {
     // Create schemas with overlapping fields
-    Schema avroSchema1 = Schema.createRecord("TestRecord", "Test record", "test", false);
-    avroSchema1.setFields(Arrays.asList(
-        new Schema.Field("id", Schema.create(Schema.Type.STRING), "ID field", null),
-        new Schema.Field("name", Schema.create(Schema.Type.STRING), "Name field", null)
+    HoodieSchema schema1 = HoodieSchema.createRecord("TestRecord", "Test record", "test", false, Arrays.asList(
+        HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.STRING), "ID field", null),
+        HoodieSchemaField.of("name", HoodieSchema.create(HoodieSchemaType.STRING), "Name field", null)
     ));
-    HoodieSchema schema1 = HoodieSchema.fromAvroSchema(avroSchema1);
 
-    Schema avroSchema2 = Schema.createRecord("TestRecord", "Test record", "test", false);
-    avroSchema2.setFields(Arrays.asList(
-        new Schema.Field("name", Schema.create(Schema.Type.STRING), "Name field", null),
-        new Schema.Field("age", Schema.create(Schema.Type.INT), "Age field", null)
+    HoodieSchema schema2 = HoodieSchema.createRecord("TestRecord", "Test record", "test", false, Arrays.asList(
+        HoodieSchemaField.of("name", HoodieSchema.create(HoodieSchemaType.STRING), "Name field", null),
+        HoodieSchemaField.of("age", HoodieSchema.create(HoodieSchemaType.INT), "Age field", null)
     ));
-    HoodieSchema schema2 = HoodieSchema.fromAvroSchema(avroSchema2);
 
     HoodieSchema mergedSchema = keepValuesPartialMergingUtils.getCachedMergedSchema(schema1, schema2, readerSchema);
 
@@ -328,19 +378,15 @@ class TestPartialMergerWithKeepValues {
   @Test
   void testGetCachedMergedSchemaWithNoCommonFields() {
     // Create schemas with no common fields
-    Schema avroSchema1 = Schema.createRecord("TestRecord", "Test record", "test", false);
-    avroSchema1.setFields(Arrays.asList(
-        new Schema.Field("field1", Schema.create(Schema.Type.STRING), "Field 1", null),
-        new Schema.Field("field2", Schema.create(Schema.Type.INT), "Field 2", null)
+    HoodieSchema schema1 = HoodieSchema.createRecord("TestRecord", "Test record", "test", false, Arrays.asList(
+        HoodieSchemaField.of("field1", HoodieSchema.create(HoodieSchemaType.STRING), "Field 1", null),
+        HoodieSchemaField.of("field2", HoodieSchema.create(HoodieSchemaType.INT), "Field 2", null)
     ));
-    HoodieSchema schema1 = HoodieSchema.fromAvroSchema(avroSchema1);
 
-    Schema avroSchema2 = Schema.createRecord("TestRecord", "Test record", "test", false);
-    avroSchema2.setFields(Arrays.asList(
-        new Schema.Field("field3", Schema.create(Schema.Type.BOOLEAN), "Field 3", null),
-        new Schema.Field("field4", Schema.create(Schema.Type.LONG), "Field 4", null)
+    HoodieSchema schema2 = HoodieSchema.createRecord("TestRecord", "Test record", "test", false, Arrays.asList(
+        HoodieSchemaField.of("field3", HoodieSchema.create(HoodieSchemaType.BOOLEAN), "Field 3", null),
+        HoodieSchemaField.of("field4", HoodieSchema.create(HoodieSchemaType.LONG), "Field 4", null)
     ));
-    HoodieSchema schema2 = HoodieSchema.fromAvroSchema(avroSchema2);
 
     HoodieSchema mergedSchema = keepValuesPartialMergingUtils.getCachedMergedSchema(schema1, schema2, readerSchema);
     assertNotNull(mergedSchema);
