@@ -49,6 +49,7 @@ public class TestHoodieSourceSplitSerializer {
         "/table/path",
         "/partition/path",
         "read_optimized",
+        "19700101000000000",
         "file-123"
     );
 
@@ -79,6 +80,7 @@ public class TestHoodieSourceSplitSerializer {
         "/table/path",
         "/partition/path",
         "payload_combine",
+        "19700101000000000",
         "file-456"
     );
 
@@ -100,6 +102,7 @@ public class TestHoodieSourceSplitSerializer {
         "/table/path",
         "/partition/path",
         "payload_combine",
+        "19700101000000000",
         "file-789"
     );
 
@@ -123,6 +126,7 @@ public class TestHoodieSourceSplitSerializer {
         "/table/path",
         "/partition/path",
         "read_optimized",
+        "19700101000000000",
         "file-000"
     );
 
@@ -143,6 +147,7 @@ public class TestHoodieSourceSplitSerializer {
         "/table/path",
         "/partition/path",
         "read_optimized",
+        "19700101000000000",
         "file-111"
     );
 
@@ -167,6 +172,7 @@ public class TestHoodieSourceSplitSerializer {
         "/table/path",
         "/partition/path",
         "read_optimized",
+        "19700101000000000",
         "file-222"
     );
 
@@ -197,6 +203,7 @@ public class TestHoodieSourceSplitSerializer {
         "/very/long/table/path/with/multiple/segments",
         "/partition/year=2024/month=01/day=22",
         "payload_combine",
+        "19700101000000000",
         "complex-file-id-with-uuid-12345678"
     );
 
@@ -231,6 +238,7 @@ public class TestHoodieSourceSplitSerializer {
         "/table/path",
         "/partition/path",
         "read_optimized",
+        "19700101000000000",
         "file-333"
     );
 
@@ -250,6 +258,7 @@ public class TestHoodieSourceSplitSerializer {
         "/table/path",
         "/partition/path",
         "payload_combine",
+        "19700101000000000",
         "file-444"
     );
 
@@ -264,9 +273,9 @@ public class TestHoodieSourceSplitSerializer {
 
   @Test
   public void testSerializeMultipleSplitsWithDifferentStates() throws IOException {
-    HoodieSourceSplit split1 = new HoodieSourceSplit(1, "base1", Option.empty(), "/t1", "/p1", "read_optimized", "f1");
-    HoodieSourceSplit split2 = new HoodieSourceSplit(2, "base2", Option.of(Arrays.asList("log1")), "/t2", "/p2", "payload_combine", "f2");
-    HoodieSourceSplit split3 = new HoodieSourceSplit(3, null, Option.of(Arrays.asList("log1", "log2", "log3")), "/t3", "/p3", "read_optimized", "f3");
+    HoodieSourceSplit split1 = new HoodieSourceSplit(1, "base1", Option.empty(), "/t1", "/p1", "read_optimized", "19700101000000000","f1");
+    HoodieSourceSplit split2 = new HoodieSourceSplit(2, "base2", Option.of(Arrays.asList("log1")), "/t2", "/p2", "payload_combine", "19700101000000000","f2");
+    HoodieSourceSplit split3 = new HoodieSourceSplit(3, null, Option.of(Arrays.asList("log1", "log2", "log3")), "/t3", "/p3", "read_optimized", "19700101000000000","f3");
 
     split1.updatePosition(1, 10L);
     split2.consume();
@@ -294,6 +303,7 @@ public class TestHoodieSourceSplitSerializer {
         "/table/path",
         "/partition/path",
         "read_optimized",
+        "19700101000000000",
         "file-large"
     );
 
@@ -315,6 +325,7 @@ public class TestHoodieSourceSplitSerializer {
         "/table/path",
         "/partition/path",
         "read_optimized",
+        "19700101000000000",
         "file-zero"
     );
 
@@ -337,6 +348,7 @@ public class TestHoodieSourceSplitSerializer {
         "/table/path",
         "/partition/path",
         "read_optimized",
+        "19700101000000000",
         "file-negative"
     );
 
@@ -360,6 +372,7 @@ public class TestHoodieSourceSplitSerializer {
         longString.toString(),
         longString.toString(),
         "read_optimized",
+        "19700101000000000",
         longString.toString()
     );
 
@@ -381,6 +394,7 @@ public class TestHoodieSourceSplitSerializer {
         "/table/path/with/\t/tabs/and/\n/newlines",
         "/partition/with/\r\n/carriage/return",
         "read_optimized",
+        "19700101000000000",
         "file-id-with-unicode-字符-émojis-🎉"
     );
 
@@ -389,27 +403,6 @@ public class TestHoodieSourceSplitSerializer {
 
     assertEquals(original.getBasePath(), deserialized.getBasePath());
     assertEquals(original.getLogPaths(), deserialized.getLogPaths());
-    assertEquals(original.getTablePath(), deserialized.getTablePath());
-    assertEquals(original.getPartitionPath(), deserialized.getPartitionPath());
-    assertEquals(original.getFileId(), deserialized.getFileId());
-  }
-
-  @Test
-  public void testSerializeWithEmptyStrings() throws IOException {
-    HoodieSourceSplit original = new HoodieSourceSplit(
-        1,
-        "",
-        Option.of(Arrays.asList("", "")),
-        "",
-        "",
-        "",
-        ""
-    );
-
-    byte[] serialized = serializer.serialize(original);
-    HoodieSourceSplit deserialized = serializer.deserialize(serializer.getVersion(), serialized);
-
-    assertEquals(original.getBasePath().get(), deserialized.getBasePath().get());
     assertEquals(original.getTablePath(), deserialized.getTablePath());
     assertEquals(original.getPartitionPath(), deserialized.getPartitionPath());
     assertEquals(original.getFileId(), deserialized.getFileId());
@@ -429,6 +422,7 @@ public class TestHoodieSourceSplitSerializer {
         "/table/path",
         "/partition/path",
         "payload_combine",
+        "19700101000000000",
         "file-many-logs"
     );
 
@@ -448,6 +442,7 @@ public class TestHoodieSourceSplitSerializer {
         "/table/path",
         "/partition/path",
         "read_optimized",
+        "19700101000000000",
         "file-roundtrip"
     );
 

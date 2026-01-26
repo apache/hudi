@@ -207,6 +207,7 @@ public class TestHoodieRecordEmitter {
         "/test/table/path",
         "/test/partition",
         "read_optimized",
+        "19700101000000000",
         "file-1"
     );
   }
