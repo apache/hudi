@@ -110,7 +110,7 @@ class IncrementalRelation(val sqlContext: SQLContext,
 
   // use schema from a file produced in the end/latest instant
 
-  val (usedSchema, internalSchema) = {
+  val (usedSchema, internalSchema, tableAvroSchema) = {
     log.info("Inferring schema..")
     val schemaResolver = new TableSchemaResolver(metaClient)
     val iSchema : InternalSchema = if (!isSchemaEvolutionEnabledOnRead(optParams, sqlContext.sparkSession)) {
@@ -129,14 +129,14 @@ class IncrementalRelation(val sqlContext: SQLContext,
     }
     if (tableSchema.getType == Schema.Type.NULL) {
       // if there is only one commit in the table and is an empty commit without schema, return empty RDD here
-      (StructType(Nil), InternalSchema.getEmptyInternalSchema)
+      (StructType(Nil), InternalSchema.getEmptyInternalSchema, tableSchema)
     } else {
       val dataSchema = AvroConversionUtils.convertAvroSchemaToStructType(tableSchema)
       if (iSchema != null && !iSchema.isEmptySchema) {
         // if internalSchema is ready, dataSchema will contains skeletonSchema
-        (dataSchema, iSchema)
+        (dataSchema, iSchema, tableSchema)
       } else {
-        (StructType(skeletonSchema.fields ++ dataSchema.fields), InternalSchema.getEmptyInternalSchema)
+        (StructType(skeletonSchema.fields ++ dataSchema.fields), InternalSchema.getEmptyInternalSchema, tableSchema)
       }
     }
   }
@@ -206,6 +206,11 @@ class IncrementalRelation(val sqlContext: SQLContext,
       sqlContext.sparkContext.hadoopConfiguration.set(SparkInternalSchemaConverter.HOODIE_QUERY_SCHEMA, SerDeHelper.toJson(internalSchema))
       sqlContext.sparkContext.hadoopConfiguration.set(SparkInternalSchemaConverter.HOODIE_TABLE_PATH, metaClient.getBasePath.toString)
       sqlContext.sparkContext.hadoopConfiguration.set(SparkInternalSchemaConverter.HOODIE_VALID_COMMITS_LIST, validCommits)
+      // Pass table Avro schema to LegacyHoodieParquetFileFormat to preserve correct logical types
+      if (tableAvroSchema.getType != Schema.Type.NULL) {
+        LegacyHoodieParquetFileFormat.setTableAvroSchemaInConf(
+          sqlContext.sparkContext.hadoopConfiguration, tableAvroSchema)
+      }
       val formatClassName = metaClient.getTableConfig.getBaseFileFormat match {
         case HoodieFileFormat.PARQUET => LegacyHoodieParquetFileFormat.FILE_FORMAT_ID
         case HoodieFileFormat.ORC => "orc"
