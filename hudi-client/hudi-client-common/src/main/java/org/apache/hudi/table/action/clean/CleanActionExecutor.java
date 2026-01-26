@@ -86,9 +86,17 @@ public class CleanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I, K,
       // With cleanPlan being used for retried cleaning operations, its possible to clean a file twice
       return false;
     } catch (IOException e) {
-      // Wrap and rethrow
-      log.error("Delete file failed: {}", deletePath, e);
-      throw new HoodieIOException(e.getMessage(), e);
+      try {
+        if (storage.exists(deletePath)) {
+          log.error("Delete file failed: {} and file still exists", deletePath, e);
+          throw new HoodieIOException(e.getMessage(), e);
+        }
+        log.warn("Delete file failed: {} but file does not exist", deletePath, e);
+        return false;
+      } catch (IOException ex) {
+        log.error("Delete file failed: {} with exception: {} and existence check also failed", deletePath, e, ex);
+        throw new HoodieIOException(ex.getMessage(), ex);
+      }
     }
   }
 
