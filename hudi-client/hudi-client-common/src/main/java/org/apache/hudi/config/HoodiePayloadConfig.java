@@ -23,6 +23,7 @@ import org.apache.hudi.common.config.ConfigGroups;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.common.util.StringUtils;
 
 import lombok.extern.slf4j.Slf4j;
 
@@ -97,7 +98,7 @@ public class HoodiePayloadConfig extends HoodieConfig {
     }
 
     public Builder withPayloadOrderingFields(String payloadOrderingFields) {
-      if (null != payloadOrderingFields && !payloadOrderingFields.isEmpty()) {
+      if (StringUtils.nonEmpty(payloadOrderingFields)) {
         payloadConfig.setValue(ORDERING_FIELDS, payloadOrderingFields);
       } else {
         log.warn("'{}' wasn't set during Hoodie payload building due to absent key field passed.",
@@ -107,7 +108,7 @@ public class HoodiePayloadConfig extends HoodieConfig {
     }
 
     public Builder withPayloadEventTimeField(String payloadEventTimeField) {
-      if (null != payloadEventTimeField && !payloadEventTimeField.isEmpty()) {
+      if (StringUtils.nonEmpty(payloadEventTimeField)) {
         payloadConfig.setValue(EVENT_TIME_FIELD, payloadEventTimeField);
       } else {
         log.warn("'{}' wasn't set during Hoodie payload building due to absent key field passed.",

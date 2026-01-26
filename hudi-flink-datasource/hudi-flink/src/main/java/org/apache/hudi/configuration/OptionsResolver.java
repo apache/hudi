@@ -171,9 +171,7 @@ public class OptionsResolver {
    */
   public static String getOrderingFieldsStr(Configuration conf) {
     final String orderingFields = conf.get(FlinkOptions.ORDERING_FIELDS);
-    return null == orderingFields || orderingFields.equals(FlinkOptions.NO_PRE_COMBINE)
-        ? null
-        : orderingFields;
+    return FlinkOptions.NO_PRE_COMBINE.equals(orderingFields) ? null : orderingFields;
   }
 
   /**
@@ -445,10 +443,7 @@ public class OptionsResolver {
    * Returns the index key field.
    */
   public static String getIndexKeyField(Configuration conf) {
-    // could be called internally from writer builders and from Flink operator functions with different parameter absence processing,
-    // therefore we return empty string instead of null to prevent failures
-    String indexKeyField = conf.getString(FlinkOptions.INDEX_KEY_FIELD.key(), conf.get(FlinkOptions.RECORD_KEY_FIELD));
-    return null != indexKeyField ? indexKeyField : "";
+    return conf.getString(FlinkOptions.INDEX_KEY_FIELD.key(), getRecordKeyStrOrFail(conf));
   }
 
   /**

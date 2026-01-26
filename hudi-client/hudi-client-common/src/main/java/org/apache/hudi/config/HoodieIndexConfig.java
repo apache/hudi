@@ -719,7 +719,7 @@ public class HoodieIndexConfig extends HoodieConfig {
     }
 
     public Builder withIndexKeyField(String keyField) {
-      if (null != keyField && !keyField.isEmpty()) {
+      if (StringUtils.nonEmpty(keyField)) {
         hoodieIndexConfig.setValue(BUCKET_INDEX_HASH_FIELD, keyField);
       } else {
         log.warn("'{}' wasn't set during Hoodie index building due to absent key field passed.",
@@ -729,7 +729,7 @@ public class HoodieIndexConfig extends HoodieConfig {
     }
 
     public Builder withRecordKeyField(String keyField) {
-      if (null != keyField && !keyField.isEmpty()) {
+      if (StringUtils.nonEmpty(keyField)) {
         hoodieIndexConfig.setValue(KeyGeneratorOptions.RECORDKEY_FIELD_NAME, keyField);
       } else {
         log.warn("'{}' wasn't set during Hoodie index building due to absent key field passed.",
