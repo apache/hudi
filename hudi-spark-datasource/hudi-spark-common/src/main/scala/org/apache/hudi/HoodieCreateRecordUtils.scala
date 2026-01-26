@@ -139,7 +139,7 @@ object HoodieCreateRecordUtils {
             val (hoodieKey: HoodieKey, recordLocation: HOption[HoodieRecordLocation]) = HoodieCreateRecordUtils.getHoodieKeyAndMaybeLocationFromAvroRecord(keyGenerator, avroRec,
               preppedSparkSqlWrites || preppedWriteOperation, preppedSparkSqlWrites || preppedWriteOperation || preppedSparkSqlMergeInto)
             val avroRecWithoutMeta: GenericRecord = if (preppedSparkSqlWrites || preppedSparkSqlMergeInto || preppedWriteOperation) {
-              HoodieAvroUtils.rewriteRecord(avroRec, HoodieAvroUtils.removeMetadataFields(dataFileSchema.getAvroSchema))
+              HoodieAvroUtils.rewriteRecord(avroRec, org.apache.hudi.common.schema.HoodieSchemaUtils.removeMetadataFields(dataFileSchema).toAvroSchema)
             } else {
               avroRec
             }

@@ -164,10 +164,10 @@ public final class HoodieSchemaUtils {
   public static HoodieSchema removeMetadataFields(HoodieSchema schema) {
     ValidationUtils.checkArgument(schema != null, "Schema cannot be null");
 
-    // Convert to Avro, delegate to existing utility, convert back
-    Schema avroSchema = schema.toAvroSchema();
-    Schema resultAvro = HoodieAvroUtils.removeMetadataFields(avroSchema);
-    return HoodieSchema.fromAvroSchema(resultAvro);
+    if (schema.getType() == HoodieSchemaType.NULL) {
+      return schema;
+    }
+    return removeFields(schema, HoodieRecord.HOODIE_META_COLUMNS_WITH_OPERATION);
   }
 
   /**
@@ -590,7 +590,7 @@ public final class HoodieSchemaUtils {
       foundSchema = getNonNullTypeFromUnion(foundSchema);
     }
     HoodieSchema newSchema = createNewSchemaFromFieldsWithReference(foundSchema, Collections.singletonList(nestedPart.get()));
-    return Option.of(createNewSchemaField(foundField.name(), isUnion ? createNullableSchema(newSchema) : newSchema, foundField.doc().orElse(null), foundField.defaultVal().orElse(null)));
+    return Option.of(createNewSchemaField(foundField.name(), isUnion ? HoodieSchema.createNullable(newSchema) : newSchema, foundField.doc().orElse(null), foundField.defaultVal().orElse(null)));
   }
 
   private static HoodieSchema initRecordKeySchema() {

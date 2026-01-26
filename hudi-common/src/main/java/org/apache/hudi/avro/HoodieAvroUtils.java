@@ -115,11 +115,6 @@ public class HoodieAvroUtils {
 
   private static final Properties PROPERTIES = new Properties();
 
-  // All metadata fields are optional strings.
-  public static final Schema METADATA_FIELD_SCHEMA = AvroSchemaUtils.createNullableSchema(Schema.Type.STRING);
-
-  public static final Schema RECORD_KEY_SCHEMA = initRecordKeySchema();
-
   /**
    * Convert a given avro record to bytes.
    */
@@ -298,17 +293,6 @@ public class HoodieAvroUtils {
     return new Schema.Field(name, schema, doc, convertDefaultValueForAvroCompatibility(defaultValue), order);
   }
 
-  public static boolean isSchemaNull(Schema schema) {
-    return schema == null || schema.getType() == Schema.Type.NULL;
-  }
-
-  public static Schema removeMetadataFields(Schema schema) {
-    if (isSchemaNull(schema)) {
-      return schema;
-    }
-    return removeFields(schema, HoodieRecord.HOODIE_META_COLUMNS_WITH_OPERATION);
-  }
-
   public static Schema removeFields(Schema schema, Set<String> fieldsToRemove) {
     List<Schema.Field> filteredFields = schema.getFields()
         .stream()
@@ -332,36 +316,6 @@ public class HoodieAvroUtils {
         })
         .collect(Collectors.toList());
     return AvroSchemaUtils.createNewSchemaFromFieldsWithReference(schema, filteredFields);
-  }
-
-  private static Schema initRecordKeySchema() {
-    Schema.Field recordKeyField =
-        new Schema.Field(HoodieRecord.RECORD_KEY_METADATA_FIELD, METADATA_FIELD_SCHEMA, "", JsonProperties.NULL_VALUE);
-    Schema recordKeySchema = Schema.createRecord("HoodieRecordKey", "", "", false);
-    recordKeySchema.setFields(Collections.singletonList(recordKeyField));
-    return recordKeySchema;
-  }
-
-  public static Schema getRecordKeySchema() {
-    return RECORD_KEY_SCHEMA;
-  }
-
-  /**
-   * Fetch schema for record key and partition path.
-   */
-  public static Schema getRecordKeyPartitionPathSchema() {
-    List<Schema.Field> toBeAddedFields = new ArrayList<>();
-    Schema recordSchema = Schema.createRecord("HoodieRecordKey", "", "", false);
-
-    Schema.Field recordKeyField =
-        new Schema.Field(HoodieRecord.RECORD_KEY_METADATA_FIELD, METADATA_FIELD_SCHEMA, "", JsonProperties.NULL_VALUE);
-    Schema.Field partitionPathField =
-        new Schema.Field(HoodieRecord.PARTITION_PATH_METADATA_FIELD, METADATA_FIELD_SCHEMA, "", JsonProperties.NULL_VALUE);
-
-    toBeAddedFields.add(recordKeyField);
-    toBeAddedFields.add(partitionPathField);
-    recordSchema.setFields(toBeAddedFields);
-    return recordSchema;
   }
 
   /**
@@ -772,10 +726,6 @@ public class HoodieAvroUtils {
       }
     }
     return fieldValue;
-  }
-
-  public static Schema getNullSchema() {
-    return Schema.create(Schema.Type.NULL);
   }
 
   /**
