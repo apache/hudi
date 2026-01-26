@@ -1228,12 +1228,6 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
   }
 
   @Override
-  public void stopCommit(String instantTime) {
-    // stop the heart beat of instant.
-    getWriteClient().getHeartbeatClient().stop(instantTime);
-  }
-
-  @Override
   public HoodieData<WriteStatus> streamWriteToMetadataPartitions(HoodieData<WriteStatus> writeStatus, String instantTime) {
     Pair<List<MetadataPartitionType>, Set<String>> streamingMDTPartitionsPair = getStreamingMetadataPartitionsToUpdate();
     List<MetadataPartitionType> mdtPartitionsToTag = streamingMDTPartitionsPair.getLeft();

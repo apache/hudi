@@ -49,14 +49,6 @@ public interface HoodieTableMetadataWriter<I,O> extends Serializable, AutoClosea
   void startCommit(String instantTime);
 
   /**
-   * Stop Commit Hook. Derived classes use this method to perform resource cleaning for stopping commit,
-   * e.g., stop the heartbeat.
-   *
-   * @param instantTime Instant Time
-   */
-  void stopCommit(String instantTime);
-
-  /**
    * Prepare records and write to MDT table for all eligible partitions except FILES partition.
    *
    * <p>This will be used in streaming writes, where in data table write-statuses are maintained as HoodieData,

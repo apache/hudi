@@ -36,16 +36,18 @@ import java.util.Set;
 @Slf4j
 public class FlinkStreamingMetadataWriteHandler extends StreamingMetadataWriteHandler {
 
-  public FlinkStreamingMetadataWriteHandler() {
-    super(false);
-  }
-
   @Override
   public HoodieData<WriteStatus> streamWriteToMetadataTable(HoodieTable table,
                                                             HoodieData<WriteStatus> dataTableWriteStatuses,
                                                             String instantTime,
                                                             int coalesceDivisorForDataTableWrites) {
     throw new UnsupportedOperationException("Not implemented since it's not needed for flink engine.");
+  }
+
+  @Override
+  protected void startCommit(Option<HoodieTableMetadataWriter> metadataWriterOpt, String triggeringInstant) {
+    // The flink writer has customized instant starting logic in the writing operatorCoordinator,
+    // here do nothing when creating a new metadata writer.
   }
 
   /**

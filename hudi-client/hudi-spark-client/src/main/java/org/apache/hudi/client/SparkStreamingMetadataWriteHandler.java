@@ -35,10 +35,6 @@ import scala.Tuple2;
  */
 public class SparkStreamingMetadataWriteHandler extends StreamingMetadataWriteHandler {
 
-  public SparkStreamingMetadataWriteHandler() {
-    super(true);
-  }
-
   @Override
   public HoodieData<WriteStatus> streamWriteToMetadataTable(HoodieTable table, HoodieData<WriteStatus> dataTableWriteStatuses, String instantTime,
                                                            int coalesceDivisorForDataTableWrites) {

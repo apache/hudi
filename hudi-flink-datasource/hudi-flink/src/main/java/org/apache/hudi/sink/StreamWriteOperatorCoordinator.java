@@ -66,14 +66,11 @@ import org.apache.flink.runtime.operators.coordination.OperatorEvent;
 import javax.annotation.Nullable;
 
 import java.io.Serializable;
-import java.util.Arrays;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.ThreadFactory;
@@ -583,7 +580,7 @@ public class StreamWriteOperatorCoordinator
    * @return true if the write statuses are committed successfully.
    */
   private boolean commitInstant(long checkpointId, String instant, EventBuffer eventBuffer) {
-    if (Arrays.stream(eventBuffer.getDataWriteEventBuffer()).allMatch(Objects::isNull)) {
+    if (eventBuffer.isEmptyDataWriteBuffer()) {
       // all the data write tasks are reset by failover, reset the while buffer and returns early.
       this.eventBuffers.reset(checkpointId);
       // stop the heart beat for lazy cleaning
@@ -591,18 +588,7 @@ public class StreamWriteOperatorCoordinator
       return false;
     }
 
-    List<WriteStatus> dataWriteResults = Arrays.stream(eventBuffer.getDataWriteEventBuffer())
-        .filter(Objects::nonNull)
-        .map(WriteMetadataEvent::getWriteStatuses)
-        .flatMap(Collection::stream)
-        .collect(Collectors.toList());
-
-    List<WriteStatus> indexWriteResults = Arrays.stream(eventBuffer.getIndexWriteEventBuffer())
-        .filter(Objects::nonNull)
-        .map(WriteMetadataEvent::getWriteStatuses)
-        .flatMap(Collection::stream)
-        .collect(Collectors.toList());
-
+    List<WriteStatus> dataWriteResults = eventBuffer.collectDataWriteStatuses();
     if (dataWriteResults.isEmpty() && !OptionsResolver.allowCommitOnEmptyBatch(conf)) {
       // No data has written, reset the buffer and returns early
       this.eventBuffers.reset(checkpointId);
@@ -610,7 +596,7 @@ public class StreamWriteOperatorCoordinator
       writeClient.cleanResources(instant);
       return false;
     }
-    doCommit(checkpointId, instant, dataWriteResults, indexWriteResults);
+    doCommit(checkpointId, instant, dataWriteResults, eventBuffer.collectIndexWriteStatuses());
     return true;
   }
 

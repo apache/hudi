@@ -18,6 +18,7 @@
 
 package org.apache.hudi.sink.utils;
 
+import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.configuration.FlinkOptions;
@@ -30,7 +31,9 @@ import org.apache.flink.configuration.Configuration;
 
 import java.io.Serializable;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentSkipListMap;
@@ -237,6 +240,35 @@ public class EventBuffers implements Serializable {
     public boolean allEventsCompleted() {
       return Stream.concat(Arrays.stream(dataWriteEventBuffer), Arrays.stream(indexWriteEventBuffer))
           .allMatch(event -> event == null || event.isLastBatch());
+    }
+
+    /**
+     * Return true if all the events in the data write buffer are null.
+     */
+    public boolean isEmptyDataWriteBuffer() {
+      return Arrays.stream(dataWriteEventBuffer).allMatch(Objects::isNull);
+    }
+
+    /**
+     * Returns the write status for data table.
+     */
+    public List<WriteStatus> collectDataWriteStatuses() {
+      return Arrays.stream(dataWriteEventBuffer)
+          .filter(Objects::nonNull)
+          .map(WriteMetadataEvent::getWriteStatuses)
+          .flatMap(Collection::stream)
+          .collect(Collectors.toList());
+    }
+
+    /**
+     * Returns the write status for index partitions of the metadata table.
+     */
+    public List<WriteStatus> collectIndexWriteStatuses() {
+      return Arrays.stream(indexWriteEventBuffer)
+          .filter(Objects::nonNull)
+          .map(WriteMetadataEvent::getWriteStatuses)
+          .flatMap(Collection::stream)
+          .collect(Collectors.toList());
     }
   }
 }
