@@ -148,42 +148,50 @@ class HoodieSchemaProjectionChecker {
    * Strict type equality - types must match exactly.
    */
   private static boolean strictTypeEquals(HoodieSchema source, HoodieSchema target) {
-    // For strict projection, types must be exactly the same
-    if (source.getType() != target.getType()) {
+    HoodieSchema nonNullSource = source.getNonNullType();
+    HoodieSchema nonNullTarget = target.getNonNullType();
+
+    // Special case for enums and strings - allow projection between them
+    if (nonNullSource.getType() == HoodieSchemaType.ENUM && nonNullTarget.getType() == HoodieSchemaType.STRING
+        || nonNullSource.getType() == HoodieSchemaType.STRING && nonNullTarget.getType() == HoodieSchemaType.ENUM) {
+      return true;
+    }
+
+    // For strict projection, remaining types must be exactly the same
+    if (nonNullSource.getType() != nonNullTarget.getType()) {
       return false;
     }
 
     // Additional checks for specific types
-    switch (source.getType()) {
+    switch (nonNullSource.getType()) {
       case FIXED:
         // Fixed types must have same size
-        return source.getFixedSize() == target.getFixedSize();
+        return nonNullSource.getFixedSize() == nonNullTarget.getFixedSize();
 
       case ENUM:
         // Enum types must have same name and symbols
-        if (!source.getName().equals(target.getName())) {
+        if (!nonNullSource.getName().equals(nonNullTarget.getName())) {
           return false;
         }
-        return source.getEnumSymbols().equals(target.getEnumSymbols());
+        return nonNullSource.getEnumSymbols().equals(nonNullTarget.getEnumSymbols());
 
       case DECIMAL:
         // Decimal types must have same precision and scale
-        HoodieSchema.Decimal sourceDecimal = (HoodieSchema.Decimal) source;
-        HoodieSchema.Decimal targetDecimal = (HoodieSchema.Decimal) target;
+        HoodieSchema.Decimal sourceDecimal = (HoodieSchema.Decimal) nonNullSource;
+        HoodieSchema.Decimal targetDecimal = (HoodieSchema.Decimal) nonNullTarget;
         return sourceDecimal.getPrecision() == targetDecimal.getPrecision()
-            && sourceDecimal.getScale() == targetDecimal.getScale()
-            && sourceDecimal.isFixed() == targetDecimal.isFixed();
+            && sourceDecimal.getScale() == targetDecimal.getScale();
 
       case TIME:
         // Time types must have same precision
-        HoodieSchema.Time sourceTime = (HoodieSchema.Time) source;
-        HoodieSchema.Time targetTime = (HoodieSchema.Time) target;
+        HoodieSchema.Time sourceTime = (HoodieSchema.Time) nonNullSource;
+        HoodieSchema.Time targetTime = (HoodieSchema.Time) nonNullTarget;
         return sourceTime.getPrecision() == targetTime.getPrecision();
 
       case TIMESTAMP:
         // Timestamp types must have same precision and UTC adjustment
-        HoodieSchema.Timestamp sourceTs = (HoodieSchema.Timestamp) source;
-        HoodieSchema.Timestamp targetTs = (HoodieSchema.Timestamp) target;
+        HoodieSchema.Timestamp sourceTs = (HoodieSchema.Timestamp) nonNullSource;
+        HoodieSchema.Timestamp targetTs = (HoodieSchema.Timestamp) nonNullTarget;
         return sourceTs.getPrecision() == targetTs.getPrecision()
             && sourceTs.isUtcAdjusted() == targetTs.isUtcAdjusted();
 
