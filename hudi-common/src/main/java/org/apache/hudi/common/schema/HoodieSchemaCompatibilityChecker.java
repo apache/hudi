@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.schema;
 
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.internal.schema.HoodieSchemaException;
 
 import lombok.AccessLevel;
@@ -27,8 +28,6 @@ import lombok.RequiredArgsConstructor;
 import lombok.ToString;
 import lombok.Value;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.avro.AvroRuntimeException;
-import org.apache.avro.Schema.Type;
 
 import java.util.ArrayDeque;
 import java.util.ArrayList;
@@ -95,7 +94,7 @@ public class HoodieSchemaCompatibilityChecker {
         break;
       }
       default:
-        throw new AvroRuntimeException("Unknown compatibility: " + compatibility);
+        throw new HoodieException("Unknown compatibility: " + compatibility);
     }
 
     return new SchemaPairCompatibility(compatibility, reader, writer, message);
@@ -128,7 +127,7 @@ public class HoodieSchemaCompatibilityChecker {
       case 1:
         return writerFields.get(0);
       default: {
-        throw new AvroRuntimeException(String.format(
+        throw new HoodieSchemaException(String.format(
             "Reader record field %s matches multiple fields in writer record schema %s", readerField, writerSchema));
       }
     }
@@ -257,12 +256,12 @@ public class HoodieSchemaCompatibilityChecker {
         //if the type is array/map, that means the problem is that the field type
         //of the writer is not array/map. If the type is something else, the problem
         //is between the array element/map value of the reader and writer schemas
-        if (next.type.equals(Type.MAP)) {
-          if (locationInfoIterator.hasNext() || !readerType.equals(Type.MAP)) {
+        if (next.type == HoodieSchemaType.MAP) {
+          if (locationInfoIterator.hasNext() || readerType != HoodieSchemaType.MAP) {
             sb.append(".value");
           }
-        } else if (next.type.equals(Type.ARRAY)) {
-          if (locationInfoIterator.hasNext() || !readerType.equals(Type.ARRAY)) {
+        } else if (next.type == HoodieSchemaType.ARRAY) {
+          if (locationInfoIterator.hasNext() || readerType != HoodieSchemaType.ARRAY) {
             sb.append(".element");
           }
         }

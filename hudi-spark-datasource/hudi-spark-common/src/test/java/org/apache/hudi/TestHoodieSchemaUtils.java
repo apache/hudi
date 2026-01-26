@@ -33,6 +33,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
+import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -144,7 +145,7 @@ public class TestHoodieSchemaUtils {
   @Test
   void testIllegalPromotionsBetweenPrimitives() {
     HoodieSchemaType[] promotionTypes = new HoodieSchemaType[]{HoodieSchemaType.INT, HoodieSchemaType.LONG, HoodieSchemaType.FLOAT, HoodieSchemaType.DOUBLE, HoodieSchemaType.BYTES};
-    Map<HoodieSchemaType, HoodieSchema> schemaMap = new HashMap<>();
+    Map<HoodieSchemaType, HoodieSchema> schemaMap = new EnumMap<>(HoodieSchemaType.class);
     for (HoodieSchemaType type : promotionTypes) {
       schemaMap.put(type, createRecord("rec",
           createPrimitiveField("simpleField", type),
