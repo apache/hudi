@@ -572,6 +572,43 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     validateMetadata(testTable, emptyList(), true);
   }
 
+  @ParameterizedTest
+  @EnumSource(HoodieTableType.class)
+  public void testMetadataCleanConfig(HoodieTableType tableType) throws Exception {
+    init(tableType, true);
+    writeConfig = getWriteConfigBuilder(true, true, false)
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder()
+            .enable(true)
+            .enableMetrics(false)
+            .withMetadataIndexColumnStats(false)
+            .withMaxNumDeltaCommitsBeforeCompaction(5)
+            .withMainTableCleanPolicy(true)
+            .build())
+        .withCleanConfig(HoodieCleanConfig.newBuilder()
+            .retainCommits(1)
+            .build())
+        .withArchivalConfig(HoodieArchivalConfig.newBuilder()
+            .archiveCommitsWith(10, 25)
+            .build())
+        .build();
+    initWriteConfigAndMetatableWriter(writeConfig, true);
+    List<String> instants = new ArrayList<>();
+    for (int i = 1; i <= 13; i++) {
+      String instant = WriteClientTestUtils.createNewInstantTime();
+      instants.add(instant);
+      doWriteOperation(testTable, instant, INSERT);
+    }
+
+    HoodieTableMetaClient metadataMetaClient = createMetaClient(metadataTableBasePath);
+    HoodieActiveTimeline metadataTimeline = metadataMetaClient.reloadActiveTimeline();
+    metadataTimeline.filterCompletedInstants()
+            .filter(instant -> instant.getAction().equals(COMMIT_ACTION))
+        ntInstants();
+
+    HoodieTableMetadata tableMetadata = metadata(writeConfig, getEngineContext());
+
+  }
+
   @Test
   public void testMetadataTableArchival() throws Exception {
     init(COPY_ON_WRITE, false);

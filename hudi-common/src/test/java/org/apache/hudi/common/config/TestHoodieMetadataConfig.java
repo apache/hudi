@@ -140,4 +140,39 @@ class TestHoodieMetadataConfig {
     // Verify that the value is indeed larger than Integer.MAX_VALUE
     assertTrue(largeSize > Integer.MAX_VALUE, "Test value should exceed Integer.MAX_VALUE to validate long type");
   }
+
+  @Test
+  void testUseMainTableCleanPolicy() {
+    // Test default value
+    HoodieMetadataConfig config = HoodieMetadataConfig.newBuilder().build();
+    assertTrue(config.useMainTableCleanPolicy());
+
+    // Test setting to false using builder method
+    HoodieMetadataConfig configWithFalse = HoodieMetadataConfig.newBuilder()
+        .withMainTableCleanPolicy(false)
+        .build();
+    assertFalse(configWithFalse.useMainTableCleanPolicy());
+
+    // Test setting to true using builder method
+    HoodieMetadataConfig configWithTrue = HoodieMetadataConfig.newBuilder()
+        .withMainTableCleanPolicy(true)
+        .build();
+    assertTrue(configWithTrue.useMainTableCleanPolicy());
+
+    // Test custom value via Properties - false
+    Properties propsFalse = new Properties();
+    propsFalse.put(HoodieMetadataConfig.USE_MAIN_TABLE_CLEAN_POLICY.key(), "false");
+    HoodieMetadataConfig configWithPropertiesFalse = HoodieMetadataConfig.newBuilder()
+        .fromProperties(propsFalse)
+        .build();
+    assertFalse(configWithPropertiesFalse.useMainTableCleanPolicy());
+
+    // Test custom value via Properties - true
+    Properties propsTrue = new Properties();
+    propsTrue.put(HoodieMetadataConfig.USE_MAIN_TABLE_CLEAN_POLICY.key(), "true");
+    HoodieMetadataConfig configWithPropertiesTrue = HoodieMetadataConfig.newBuilder()
+        .fromProperties(propsTrue)
+        .build();
+    assertTrue(configWithPropertiesTrue.useMainTableCleanPolicy());
+  }
 }
