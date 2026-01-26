@@ -995,7 +995,7 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
 
       HoodieSchemaField tableField = tableFieldOpt.get();
 
-      // Use AvroSchemaCompatibility's field lookup logic to handle aliases
+      // Use HoodieSchemaCompatibility's field lookup logic to handle aliases
       HoodieSchemaField writerField = HoodieSchemaCompatibility.lookupWriterField(writerSchema, tableField);
       
       if (writerField != null && !tableField.schema().equals(writerField.schema())) {

@@ -72,8 +72,7 @@ class HoodieSchemaTypePromotion {
 
       case STRING:
         // STRING can read BYTES and numeric types
-        return writerType == HoodieSchemaType.BYTES
-            || isNumericType(writerType);
+        return writerType == HoodieSchemaType.BYTES || writerType.isNumeric();
 
       case BYTES:
         // BYTES can read STRING
@@ -82,19 +81,6 @@ class HoodieSchemaTypePromotion {
       default:
         return false;
     }
-  }
-
-  /**
-   * Checks if the given type is numeric.
-   *
-   * @param type the schema type to check
-   * @return true if the type is INT, LONG, FLOAT, or DOUBLE
-   */
-  private static boolean isNumericType(HoodieSchemaType type) {
-    return type == HoodieSchemaType.INT
-        || type == HoodieSchemaType.LONG
-        || type == HoodieSchemaType.FLOAT
-        || type == HoodieSchemaType.DOUBLE;
   }
 
   /**

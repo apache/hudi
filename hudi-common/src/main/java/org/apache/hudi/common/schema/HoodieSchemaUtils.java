@@ -845,4 +845,8 @@ public final class HoodieSchemaUtils {
     }
     return INVALID_AVRO_CHARS_IN_NAMES_PATTERN.matcher(name).replaceAll(invalidCharMask);
   }
+
+  public static String createSchemaErrorString(String errorMessage, HoodieSchema writerSchema, HoodieSchema tableSchema) {
+    return String.format("%s\nwriterSchema: %s\ntableSchema: %s", errorMessage, writerSchema, tableSchema);
+  }
 }

@@ -21,7 +21,6 @@ import org.apache.hudi.{AvroConversionUtils, DataSourceReadOptions, DataSourceWr
 import org.apache.hudi.DataSourceWriteOptions.{INLINE_CLUSTERING_ENABLE, KEYGENERATOR_CLASS_NAME}
 import org.apache.hudi.HoodieConversionUtils.toJavaOption
 import org.apache.hudi.QuickstartUtils.{convertToStringList, getQuickstartWriteConfigs}
-import org.apache.hudi.avro.AvroSchemaCompatibility.SchemaIncompatibilityType
 import org.apache.hudi.client.SparkRDDWriteClient
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.config.{HoodieCommonConfig, HoodieMetadataConfig, RecordMergeMode}
@@ -29,6 +28,7 @@ import org.apache.hudi.common.config.TimestampKeyGeneratorConfig.{TIMESTAMP_INPU
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.{HoodieRecord, HoodieReplaceCommitMetadata, WriteOperationType}
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
+import org.apache.hudi.common.schema.HoodieSchemaCompatibilityChecker.SchemaIncompatibilityType
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, HoodieTableVersion, TableSchemaResolver}
 import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline, TimelineUtils}
 import org.apache.hudi.common.testutils.{HoodieTestDataGenerator, HoodieTestUtils}
