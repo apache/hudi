@@ -21,10 +21,8 @@ package org.apache.hudi.common.schema;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.exception.MissingSchemaFieldException;
-import org.apache.hudi.exception.SchemaCompatibilityException;
+import org.apache.hudi.exception.SchemaBackwardsCompatibilityException;
 import org.apache.hudi.internal.schema.HoodieSchemaException;
-
-import org.apache.avro.SchemaCompatibility;
 
 import java.util.ArrayDeque;
 import java.util.ArrayList;
@@ -54,7 +52,7 @@ public final class HoodieSchemaCompatibility {
   }
 
   public static boolean areSchemasCompatible(HoodieSchema tableSchema, HoodieSchema writerSchema) {
-    return SchemaCompatibility.checkReaderWriterCompatibility(tableSchema.toAvroSchema(), writerSchema.toAvroSchema()).getType() == SchemaCompatibility.SchemaCompatibilityType.COMPATIBLE;
+    return HoodieSchemaCompatibilityChecker.checkReaderWriterCompatibility(tableSchema, writerSchema, false).getType() == HoodieSchemaCompatibilityChecker.SchemaCompatibilityType.COMPATIBLE;
   }
 
   /**
@@ -104,8 +102,8 @@ public final class HoodieSchemaCompatibility {
       if (!missingFields.isEmpty()) {
         throw new MissingSchemaFieldException(
             missingFields.stream().map(HoodieSchemaField::name).collect(Collectors.toList()),
-            writerSchema.toAvroSchema(),
-            tableSchema.toAvroSchema());
+            writerSchema,
+            tableSchema);
       }
     }
 
@@ -113,12 +111,10 @@ public final class HoodieSchemaCompatibility {
     // TODO(HUDI-4772) re-enable validations in case partition columns
     //                 being dropped from the data-file after fixing the write schema
     if (partitionCols.isEmpty() && shouldValidate) {
-      if (!new HoodieSchemaCompatibilityChecker().isCompatible(writerSchema, tableSchema, true)) {
-        String errorMsg = createSchemaErrorString(
-            "Writer schema is not backwards compatible with table schema",
-            writerSchema,
-            tableSchema);
-        throw new SchemaCompatibilityException(errorMsg);
+      HoodieSchemaCompatibilityChecker.SchemaPairCompatibility result =
+          HoodieSchemaCompatibilityChecker.checkReaderWriterCompatibility(writerSchema, tableSchema, true);
+      if (result.getType() != HoodieSchemaCompatibilityChecker.SchemaCompatibilityType.COMPATIBLE) {
+        throw new SchemaBackwardsCompatibilityException(result, writerSchema, tableSchema);
       }
     }
   }
@@ -148,18 +144,16 @@ public final class HoodieSchemaCompatibility {
     if (!missingFields.isEmpty()) {
       throw new MissingSchemaFieldException(
           missingFields,
-          incomingSchema.toAvroSchema(),
-          tableSchema.toAvroSchema());
+          incomingSchema,
+          tableSchema);
     }
 
     // Step 2: Check compatibility (incoming as reader, table as writer)
     // make sure that the table schema can be read using the incoming schema
-    if (!new HoodieSchemaCompatibilityChecker().isCompatible(incomingSchema, tableSchema, false)) {
-      String errorMsg = createSchemaErrorString(
-          "Incoming schema is not backwards compatible with table schema",
-          incomingSchema,
-          tableSchema);
-      throw new SchemaCompatibilityException(errorMsg);
+    HoodieSchemaCompatibilityChecker.SchemaPairCompatibility result =
+        HoodieSchemaCompatibilityChecker.checkReaderWriterCompatibility(incomingSchema, tableSchema, false);
+    if (result.getType() != HoodieSchemaCompatibilityChecker.SchemaCompatibilityType.COMPATIBLE) {
+      throw new SchemaBackwardsCompatibilityException(result, tableSchema, incomingSchema);
     }
   }
 
@@ -201,13 +195,13 @@ public final class HoodieSchemaCompatibility {
 
     // In case schema projection is not allowed, new schema has to have all the same fields as the
     // old schema
-    if (!allowProjection) {
-      if (!canProject(prevSchema, newSchema)) {
-        return false;
-      }
+    if (!allowProjection && !canProject(prevSchema, newSchema)) {
+      return false;
     }
 
-    return new HoodieSchemaCompatibilityChecker().isCompatible(newSchema, prevSchema, checkNaming);
+    HoodieSchemaCompatibilityChecker.SchemaPairCompatibility result =
+        HoodieSchemaCompatibilityChecker.checkReaderWriterCompatibility(newSchema, prevSchema, checkNaming);
+    return result.getType() == HoodieSchemaCompatibilityChecker.SchemaCompatibilityType.COMPATIBLE;
   }
 
   /**
@@ -279,7 +273,6 @@ public final class HoodieSchemaCompatibility {
 
   /**
    * Identifies the writer field that corresponds to the specified reader field.
-   * This function is adapted from AvroSchemaCompatibility#lookupWriterField
    *
    * <p>
    * Matching includes reader name aliases.
@@ -318,18 +311,6 @@ public final class HoodieSchemaCompatibility {
    */
   private static boolean canProject(HoodieSchema prevSchema, HoodieSchema newSchema) {
     return HoodieSchemaUtils.findMissingFields(prevSchema, newSchema, Collections.emptySet()).isEmpty();
-  }
-
-  /**
-   * Creates a formatted error string with both schemas for debugging.
-   *
-   * @param errorMessage the main error message
-   * @param writerSchema the writer schema
-   * @param tableSchema the table schema
-   * @return formatted error string
-   */
-  private static String createSchemaErrorString(String errorMessage, HoodieSchema writerSchema, HoodieSchema tableSchema) {
-    return String.format("%s\nwriterSchema: %s\ntableSchema: %s", errorMessage, writerSchema, tableSchema);
   }
 
   /**

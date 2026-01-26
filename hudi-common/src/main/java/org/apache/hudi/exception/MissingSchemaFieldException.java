@@ -18,9 +18,8 @@
 
 package org.apache.hudi.exception;
 
-import org.apache.hudi.avro.AvroSchemaUtils;
-
-import org.apache.avro.Schema;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaUtils;
 
 import java.util.List;
 
@@ -29,12 +28,12 @@ import java.util.List;
  */
 public class MissingSchemaFieldException extends SchemaCompatibilityException {
 
-  public MissingSchemaFieldException(List<String> missingFields, Schema writerSchema, Schema tableSchema) {
+  public MissingSchemaFieldException(List<String> missingFields, HoodieSchema writerSchema, HoodieSchema tableSchema) {
     super(constructExceptionMessage(missingFields, writerSchema, tableSchema));
   }
 
-  private static String constructExceptionMessage(List<String> missingFields, Schema writerSchema, Schema tableSchema) {
-    return AvroSchemaUtils.createSchemaErrorString(
+  private static String constructExceptionMessage(List<String> missingFields, HoodieSchema writerSchema, HoodieSchema tableSchema) {
+    return HoodieSchemaUtils.createSchemaErrorString(
         "Schema validation failed due to missing field. Fields missing from incoming schema: {"
         + String.join(", ", missingFields) + "}", writerSchema, tableSchema);
   }
