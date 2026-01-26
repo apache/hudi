@@ -351,9 +351,10 @@ public class HoodieSchemaCompatibilityChecker {
           case INT:
           case TIME:
           case DATE:
-          case TIMESTAMP:
           case DECIMAL:
             return result.mergedWith(typeMismatch(reader, writer, locations));
+          case TIMESTAMP:
+            return (writer.getType() == HoodieSchemaType.LONG) ? result : result.mergedWith(typeMismatch(reader, writer, locations));
           case UUID:
             return (writer.getType() == HoodieSchemaType.STRING) ? result : result.mergedWith(typeMismatch(reader, writer, locations));
           case LONG:
@@ -494,7 +495,7 @@ public class HoodieSchemaCompatibilityChecker {
       HoodieSchema.Time readerTime = (HoodieSchema.Time) reader;
       HoodieSchema.Time writerTime = (HoodieSchema.Time) writer;
       if (readerTime.getPrecision() != writerTime.getPrecision()) {
-        String message = String.format("Time field '%s' expected precision: %d, found: %d", getLocationName(locations, reader.getType()),
+        String message = String.format("Time field '%s' expected precision: %s, found: %s", getLocationName(locations, reader.getType()),
             writerTime.getPrecision(), readerTime.getPrecision());
         return SchemaCompatibilityResult.incompatible(SchemaIncompatibilityType.TYPE_MISMATCH, reader, writer,
             message, asList(locations));
@@ -506,8 +507,12 @@ public class HoodieSchemaCompatibilityChecker {
                                                                   final Deque<LocationInfo> locations) {
       HoodieSchema.Timestamp readerTimestamp = (HoodieSchema.Timestamp) reader;
       HoodieSchema.Timestamp writerTimestamp = (HoodieSchema.Timestamp) writer;
-      if (readerTimestamp.getPrecision() != writerTimestamp.getPrecision() || readerTimestamp.isUtcAdjusted() != writerTimestamp.isUtcAdjusted()) {
-        String message = String.format("Timestamp field '%s' expected precision: %d and utcAdjusted: %b, found: precision: %d and utcAdjusted: %b",
+
+      // Allow timestamps written as microseconds to be read as milliseconds
+      boolean validPrecisionCombination = readerTimestamp.getPrecision() == writerTimestamp.getPrecision()
+          || (readerTimestamp.getPrecision() == HoodieSchema.TimePrecision.MILLIS && writerTimestamp.getPrecision() == HoodieSchema.TimePrecision.MICROS);
+      if (!validPrecisionCombination || readerTimestamp.isUtcAdjusted() != writerTimestamp.isUtcAdjusted()) {
+        String message = String.format("Timestamp field '%s' expected precision: %s and utcAdjusted: %b, found: precision: %s and utcAdjusted: %b",
             getLocationName(locations, reader.getType()), writerTimestamp.getPrecision(), writerTimestamp.isUtcAdjusted(),
             readerTimestamp.getPrecision(), readerTimestamp.isUtcAdjusted());
         return SchemaCompatibilityResult.incompatible(SchemaIncompatibilityType.TYPE_MISMATCH, reader, writer,
@@ -519,7 +524,7 @@ public class HoodieSchemaCompatibilityChecker {
 
     private SchemaCompatibilityResult checkSchemaNames(final HoodieSchema reader, final HoodieSchema writer,
                                                        final Deque<LocationInfo> locations) {
-      checkState(locations.size() > 0);
+      checkState(!locations.isEmpty());
       // NOTE: We're only going to validate schema names in following cases
       //          - This is a top-level schema (ie enclosing one)
       //          - This is a schema enclosed w/in a union (since in that case schemas could be
