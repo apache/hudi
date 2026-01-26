@@ -224,29 +224,6 @@ public class TestHoodieAvroUtils {
 
   private static final Schema SCHEMA_WITH_AVRO_TYPES = new Schema.Parser().parse(SCHEMA_WITH_AVRO_TYPES_STR);
 
-  // Define schema with a nested field containing a union type
-  private static final String NESTED_SCHEMA_WITH_UNION = "{\n"
-      + "  \"type\": \"record\",\n"
-      + "  \"name\": \"NestedRecordWithUnion\",\n"
-      + "  \"fields\": [\n"
-      + "    {\n"
-      + "      \"name\": \"student\",\n"
-      + "      \"type\": [\n"
-      + "        \"null\",\n"
-      + "        {\n"
-      + "          \"type\": \"record\",\n"
-      + "          \"name\": \"Student\",\n"
-      + "          \"fields\": [\n"
-      + "            {\"name\": \"firstname\", \"type\": [\"null\", \"string\"], \"default\": null},\n"
-      + "            {\"name\": \"lastname\", \"type\": [\"null\", \"string\"], \"default\": null}\n"
-      + "          ]\n"
-      + "        }\n"
-      + "      ],\n"
-      + "      \"default\": null\n"
-      + "    }\n"
-      + "  ]\n"
-      + "}";
-
   public static String SCHEMA_WITH_NESTED_FIELD_LARGE_STR = "{\"name\":\"MyClass\",\"type\":\"record\",\"namespace\":\"com.acme.avro\",\"fields\":["
       + "{\"name\":\"firstname\",\"type\":\"string\"},"
       + "{\"name\":\"lastname\",\"type\":\"string\"},"
@@ -255,6 +232,8 @@ public class TestHoodieAvroUtils {
       + "{\"name\":\"firstname\",\"type\":[\"null\" ,\"string\"],\"default\": null},{\"name\":\"lastname\",\"type\":[\"null\" ,\"string\"],\"default\": null}]}}]}";
 
   public static Schema SCHEMA_WITH_NESTED_FIELD_LARGE = new Schema.Parser().parse(SCHEMA_WITH_NESTED_FIELD_LARGE_STR);
+
+  private static final Schema NULLABLE_STRING = Schema.createUnion(Schema.create(Schema.Type.NULL), Schema.create(Schema.Type.STRING));
 
   @Test
   public void testDefaultValue() {
@@ -362,9 +341,9 @@ public class TestHoodieAvroUtils {
   public void testJsonNodeNullWithDefaultValues() {
     List<Schema.Field> fields = new ArrayList<>();
     Schema initialSchema = Schema.createRecord("test_record", "test record", "org.test.namespace", false);
-    Schema.Field field1 = new Schema.Field("key", HoodieAvroUtils.METADATA_FIELD_SCHEMA, "", JsonProperties.NULL_VALUE);
-    Schema.Field field2 = new Schema.Field("key1", HoodieAvroUtils.METADATA_FIELD_SCHEMA, "", JsonProperties.NULL_VALUE);
-    Schema.Field field3 = new Schema.Field("key2", HoodieAvroUtils.METADATA_FIELD_SCHEMA, "", JsonProperties.NULL_VALUE);
+    Schema.Field field1 = new Schema.Field("key", NULLABLE_STRING, "", JsonProperties.NULL_VALUE);
+    Schema.Field field2 = new Schema.Field("key1", NULLABLE_STRING, "", JsonProperties.NULL_VALUE);
+    Schema.Field field3 = new Schema.Field("key2", NULLABLE_STRING, "", JsonProperties.NULL_VALUE);
     fields.add(field1);
     fields.add(field2);
     fields.add(field3);
@@ -376,11 +355,11 @@ public class TestHoodieAvroUtils {
 
     List<Schema.Field> evolvedFields = new ArrayList<>();
     Schema evolvedSchema = Schema.createRecord("evolved_record", "evolved record", "org.evolved.namespace", false);
-    Schema.Field evolvedField1 = new Schema.Field("key", HoodieAvroUtils.METADATA_FIELD_SCHEMA, "", JsonProperties.NULL_VALUE);
-    Schema.Field evolvedField2 = new Schema.Field("key1", HoodieAvroUtils.METADATA_FIELD_SCHEMA, "", JsonProperties.NULL_VALUE);
-    Schema.Field evolvedField3 = new Schema.Field("key2", HoodieAvroUtils.METADATA_FIELD_SCHEMA, "", JsonProperties.NULL_VALUE);
-    Schema.Field evolvedField4 = new Schema.Field("evolved_field", HoodieAvroUtils.METADATA_FIELD_SCHEMA, "", JsonProperties.NULL_VALUE);
-    Schema.Field evolvedField5 = new Schema.Field("evolved_field1", HoodieAvroUtils.METADATA_FIELD_SCHEMA, "", JsonProperties.NULL_VALUE);
+    Schema.Field evolvedField1 = new Schema.Field("key", NULLABLE_STRING, "", JsonProperties.NULL_VALUE);
+    Schema.Field evolvedField2 = new Schema.Field("key1", NULLABLE_STRING, "", JsonProperties.NULL_VALUE);
+    Schema.Field evolvedField3 = new Schema.Field("key2", NULLABLE_STRING, "", JsonProperties.NULL_VALUE);
+    Schema.Field evolvedField4 = new Schema.Field("evolved_field", NULLABLE_STRING, "", JsonProperties.NULL_VALUE);
+    Schema.Field evolvedField5 = new Schema.Field("evolved_field1", NULLABLE_STRING, "", JsonProperties.NULL_VALUE);
     evolvedFields.add(evolvedField1);
     evolvedFields.add(evolvedField2);
     evolvedFields.add(evolvedField3);
