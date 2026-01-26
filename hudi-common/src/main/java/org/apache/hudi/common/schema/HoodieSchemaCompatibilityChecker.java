@@ -353,8 +353,9 @@ public class HoodieSchemaCompatibilityChecker {
           case DATE:
           case TIMESTAMP:
           case DECIMAL:
-          case UUID:
             return result.mergedWith(typeMismatch(reader, writer, locations));
+          case UUID:
+            return (writer.getType() == HoodieSchemaType.STRING) ? result : result.mergedWith(typeMismatch(reader, writer, locations));
           case LONG:
             return (writer.getType() == HoodieSchemaType.INT) ? result : result.mergedWith(typeMismatch(reader, writer, locations));
           case FLOAT:
