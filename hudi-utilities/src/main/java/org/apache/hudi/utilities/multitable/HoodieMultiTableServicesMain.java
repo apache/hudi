@@ -185,7 +185,7 @@ public class HoodieMultiTableServicesMain {
     public Boolean enableArchive = false;
 
     @Parameter(names = {"--enable-hive-support"}, description = "Enables hive support during spark context initialization.")
-    public Boolean enableHiveSupport = false;
+    public Boolean enableHiveSupport = true;
 
     @Parameter(names = {"--compaction-mode"}, description = "Set job mode: Set \"schedule\" means make a compact plan; "
         + "Set \"execute\" means execute a compact plan at given instant which means --instant-time is needed here; "
