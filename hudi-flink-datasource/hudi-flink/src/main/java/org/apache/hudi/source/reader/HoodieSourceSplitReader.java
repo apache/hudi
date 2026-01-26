@@ -24,6 +24,7 @@ import org.apache.flink.connector.base.source.reader.RecordsWithSplitIds;
 import org.apache.flink.connector.base.source.reader.splitreader.SplitReader;
 import org.apache.flink.connector.base.source.reader.splitreader.SplitsAddition;
 import org.apache.flink.connector.base.source.reader.splitreader.SplitsChange;
+import org.apache.flink.util.CloseableIterator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -32,6 +33,7 @@ import org.apache.hudi.source.split.HoodieSourceSplit;
 import org.apache.hudi.source.split.SerializableComparator;
 
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -54,6 +56,7 @@ public class HoodieSourceSplitReader<T> implements SplitReader<HoodieRecordWithP
 
   private HoodieSourceSplit currentSplit;
   private String currentSplitId;
+  private CloseableIterator<RecordsWithSplitIds<HoodieRecordWithPosition<T>>> currentReader;
 
   public HoodieSourceSplitReader(
       SourceReaderContext context,
@@ -67,15 +70,27 @@ public class HoodieSourceSplitReader<T> implements SplitReader<HoodieRecordWithP
 
   @Override
   public RecordsWithSplitIds<HoodieRecordWithPosition<T>> fetch() throws IOException {
-    HoodieSourceSplit nextSplit = splits.poll();
-    if (nextSplit != null) {
-      currentSplit = nextSplit;
-      currentSplitId = nextSplit.splitId();
-      return readerFunction.read(currentSplit);
+    if (currentReader == null) {
+      HoodieSourceSplit nextSplit = splits.poll();
+      if (nextSplit != null) {
+        currentSplit = nextSplit;
+        currentSplitId = nextSplit.splitId();
+        currentReader = readerFunction.read(currentSplit);
+      } else {
+        // return an empty result, which will lead to split fetch to be idle.
+        // SplitFetcherManager will then close idle fetcher.
+        return new RecordsBySplits<>(Collections.emptyMap(), Collections.emptySet());
+      }
+    }
+
+    if (currentReader.hasNext()) {
+      try {
+        return currentReader.next();
+      } catch (UncheckedIOException e) {
+        throw e.getCause();
+      }
     } else {
-      // return an empty result, which will lead to split fetch to be idle.
-      // SplitFetcherManager will then close idle fetcher.
-      return new RecordsBySplits<>(Collections.emptyMap(), Collections.emptySet());
+      return finishSplit();
     }
   }
 
@@ -119,5 +134,17 @@ public class HoodieSourceSplitReader<T> implements SplitReader<HoodieRecordWithP
   public void pauseOrResumeSplits(
       Collection<HoodieSourceSplit> splitsToPause,
       Collection<HoodieSourceSplit> splitsToResume) {
+  }
+
+  private RecordsWithSplitIds<HoodieRecordWithPosition<T>> finishSplit() throws IOException {
+    if (currentReader != null) {
+      try {
+        currentReader.close();
+      } catch (Exception e) {
+        throw new IOException(e);
+      }
+      currentReader = null;
+    }
+    return new RecordsBySplits<>(Collections.emptyMap(), Collections.singleton(currentSplitId));
   }
 }

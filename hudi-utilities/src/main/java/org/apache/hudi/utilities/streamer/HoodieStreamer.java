@@ -204,6 +204,9 @@ public class HoodieStreamer implements Serializable {
         && !StringUtils.isNullOrEmpty(cfg.recordMergeImplClasses)) {
       hoodieConfig.setValue(HoodieWriteConfig.RECORD_MERGE_IMPL_CLASSES.key(), cfg.recordMergeImplClasses);
     }
+    if (!StringUtils.isNullOrEmpty(cfg.sourceOrderingFields)) {
+      hoodieConfig.setValue(HoodieTableConfig.ORDERING_FIELDS.key(), cfg.sourceOrderingFields);
+    }
 
     return hoodieConfig.getProps(true);
   }

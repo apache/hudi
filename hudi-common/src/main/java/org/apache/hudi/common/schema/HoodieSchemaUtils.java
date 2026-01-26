@@ -28,6 +28,7 @@ import org.apache.hudi.internal.schema.HoodieSchemaException;
 
 import org.apache.avro.JsonProperties;
 import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericData;
 
 import java.math.BigDecimal;
 import java.math.BigInteger;
@@ -40,6 +41,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.function.Function;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 /**
@@ -56,6 +58,11 @@ import java.util.stream.Collectors;
  * @since 1.2.0
  */
 public final class HoodieSchemaUtils {
+
+  // As per https://avro.apache.org/docs/current/spec.html#names
+  private static final Pattern INVALID_AVRO_CHARS_IN_NAMES_PATTERN = Pattern.compile("[^A-Za-z0-9_]");
+  private static final Pattern INVALID_AVRO_FIRST_CHAR_IN_NAMES_PATTERN = Pattern.compile("[^A-Za-z_]");
+  private static final String MASK_FOR_INVALID_CHARS_IN_NAMES = "__";
 
   public static final HoodieSchema METADATA_FIELD_SCHEMA = HoodieSchema.createNullable(HoodieSchemaType.STRING);
   public static final HoodieSchema RECORD_KEY_SCHEMA = initRecordKeySchema();
@@ -379,12 +386,15 @@ public final class HoodieSchemaUtils {
 
   /**
    * Gets a field (including nested fields) from the schema using dot notation.
-   * This is equivalent to HoodieAvroUtils.getSchemaForField() but operates on HoodieSchema.
+   * This method delegates to {@link HoodieSchema#getNestedField(String)}.
    * <p>
    * Supports nested field access using dot notation. For example:
    * <ul>
    *   <li>"name" - retrieves top-level field</li>
    *   <li>"user.profile.displayName" - retrieves nested field</li>
+   *   <li>"items.list.element" - retrieves array element schema </li>
+   *   <li>"metadata.key_value.key" - retrieves map key schema</li>
+   *   <li>"metadata.key_value.value" - retrieves map value schema</li>
    * </ul>
    *
    * @param schema    the schema to search in
@@ -396,44 +406,7 @@ public final class HoodieSchemaUtils {
   public static Option<Pair<String, HoodieSchemaField>> getNestedField(HoodieSchema schema, String fieldName) {
     ValidationUtils.checkArgument(schema != null, "Schema cannot be null");
     ValidationUtils.checkArgument(fieldName != null && !fieldName.isEmpty(), "Field name cannot be null or empty");
-    return getNestedFieldInternal(schema, fieldName, "");
-  }
-
-  /**
-   * Internal helper method for recursively retrieving nested fields.
-   *
-   * @param schema    the current schema to search in
-   * @param fieldName the remaining field path
-   * @param prefix    the accumulated field path prefix
-   * @return Option containing Pair of canonical field name and the HoodieSchemaField, or Option.empty() if field not found
-   */
-  private static Option<Pair<String, HoodieSchemaField>> getNestedFieldInternal(HoodieSchema schema, String fieldName, String prefix) {
-    HoodieSchema nonNullableSchema = getNonNullTypeFromUnion(schema);
-
-    if (!fieldName.contains(".")) {
-      // Base case: simple field name
-      if (nonNullableSchema.getType() != HoodieSchemaType.RECORD) {
-        return Option.empty();
-      }
-      return nonNullableSchema.getField(fieldName)
-          .map(field -> Pair.of(prefix + fieldName, field));
-    } else {
-      // Recursive case: nested field
-      if (nonNullableSchema.getType() != HoodieSchemaType.RECORD) {
-        return Option.empty();
-      }
-
-      int dotIndex = fieldName.indexOf(".");
-      String rootFieldName = fieldName.substring(0, dotIndex);
-      String remainingPath = fieldName.substring(dotIndex + 1);
-
-      return nonNullableSchema.getField(rootFieldName)
-          .flatMap(rootField -> getNestedFieldInternal(
-              rootField.schema(),
-              remainingPath,
-              prefix + rootFieldName + "."
-          ));
-    }
+    return schema.getNestedField(fieldName);
   }
 
   /**
@@ -514,10 +487,10 @@ public final class HoodieSchemaUtils {
 
   /**
    * Appends provided new fields at the end of the given schema
-   *
+   * <p>
    * NOTE: No deduplication is made, this method simply appends fields at the end of the list
    *       of the source schema as is
-   *
+   * <p>
    * This is equivalent to {@link AvroSchemaUtils#appendFieldsToSchema(Schema, List)} but operates on HoodieSchema.
    */
   public static HoodieSchema appendFieldsToSchema(HoodieSchema schema, List<HoodieSchemaField> newFields) {
@@ -685,12 +658,15 @@ public final class HoodieSchemaUtils {
   }
 
   /**
-   * Gets the fully-qualified Avro record name for a Hudi table.
-   * This is equivalent to {@link AvroSchemaUtils#getAvroRecordQualifiedName(String)}
-   * but provides a HoodieSchema-context API.
+   * Generates fully-qualified name for the Avro's schema based on the Table's name
    *
    * <p>The qualified name follows the pattern: hoodie.{tableName}.{tableName}_record
    * where tableName is sanitized for Avro compatibility.</p>
+   *
+   * NOTE: PLEASE READ CAREFULLY BEFORE CHANGING
+   *       This method should not change for compatibility reasons as older versions
+   *       of Avro might be comparing fully-qualified names rather than just the record
+   *       names
    *
    * @param tableName the Hudi table name
    * @return the fully-qualified Avro record name (e.g., "hoodie.my_table.my_table_record")
@@ -701,8 +677,8 @@ public final class HoodieSchemaUtils {
     ValidationUtils.checkArgument(tableName != null && !tableName.trim().isEmpty(),
         "Table name cannot be null or empty");
 
-    // Delegate to AvroSchemaUtils
-    return AvroSchemaUtils.getAvroRecordQualifiedName(tableName);
+    String sanitizedTableName = sanitizeName(tableName);
+    return "hoodie." + sanitizedTableName + "." + sanitizedTableName + "_record";
   }
 
   public static boolean hasDecimalField(HoodieSchema schema) {
@@ -793,5 +769,84 @@ public final class HoodieSchemaUtils {
 
   public static boolean isMetadataField(String fieldName) {
     return HoodieRecord.HOODIE_META_COLUMNS_WITH_OPERATION.contains(fieldName);
+  }
+
+  /**
+   * Converts a HoodieSchemaField's default value to its Java representation.
+   * This is equivalent to {@link org.apache.hudi.avro.HoodieAvroUtils#toJavaDefaultValue(org.apache.avro.Schema.Field)}
+   * but operates on HoodieSchemaField.
+   *
+   * <p>For primitive types (STRING, INT, LONG, FLOAT, DOUBLE, BOOLEAN, ENUM, BYTES, FIXED, DECIMAL)
+   * and logical types (TIME, TIMESTAMP, DATE, UUID), the default value is returned as-is.
+   * For complex types (ARRAY, MAP, RECORD), Avro's GenericData utility is used
+   * to properly construct the default value.</p>
+   *
+   * @param field the HoodieSchemaField containing the default value
+   * @return the Java representation of the default value, or null if no default value exists
+   * @throws IllegalArgumentException if the field's type is not supported
+   * @since 1.2.0
+   */
+  public static Object toJavaDefaultValue(HoodieSchemaField field) {
+    ValidationUtils.checkArgument(field != null, "Field cannot be null");
+
+    Option<Object> defaultValOpt = field.defaultVal();
+    if (!defaultValOpt.isPresent() || defaultValOpt.get() == HoodieJsonProperties.NULL_VALUE) {
+      return null;
+    }
+
+    Object defaultVal = defaultValOpt.get();
+    HoodieSchemaType type = field.getNonNullSchema().getType();
+
+    switch (type) {
+      case STRING:
+      case INT:
+      case LONG:
+      case FLOAT:
+      case DOUBLE:
+      case BOOLEAN:
+      case ENUM:
+      case BYTES:
+      case FIXED:
+      case DECIMAL:
+      case TIME:
+      case TIMESTAMP:
+      case DATE:
+      case UUID:
+        return defaultVal;
+      case ARRAY:
+      case MAP:
+      case RECORD:
+        // Use Avro's standard GenericData utility for complex types
+        // Delegate to the underlying Avro field
+        return GenericData.get().getDefaultValue(field.getAvroField());
+      default:
+        throw new IllegalArgumentException("Unsupported HoodieSchema type: " + type);
+    }
+  }
+
+  /**
+   * Sanitizes Name according to Avro rule for names.
+   * Removes characters other than the ones mentioned in <a href="https://avro.apache.org/docs/current/spec.html#names">avro spec</a> .
+   *
+   * @param name input name
+   * @return sanitized name
+   */
+  public static String sanitizeName(String name) {
+    return sanitizeName(name, MASK_FOR_INVALID_CHARS_IN_NAMES);
+  }
+
+  /**
+   * Sanitizes Name according to Avro rule for names.
+   * Removes characters other than the ones mentioned in <a href="https://avro.apache.org/docs/current/spec.html#names">avro spec</a>.
+   *
+   * @param name            input name
+   * @param invalidCharMask replacement for invalid characters.
+   * @return sanitized name
+   */
+  public static String sanitizeName(String name, String invalidCharMask) {
+    if (INVALID_AVRO_FIRST_CHAR_IN_NAMES_PATTERN.matcher(name.substring(0, 1)).matches()) {
+      name = INVALID_AVRO_FIRST_CHAR_IN_NAMES_PATTERN.matcher(name).replaceFirst(invalidCharMask);
+    }
+    return INVALID_AVRO_CHARS_IN_NAMES_PATTERN.matcher(name).replaceAll(invalidCharMask);
   }
 }

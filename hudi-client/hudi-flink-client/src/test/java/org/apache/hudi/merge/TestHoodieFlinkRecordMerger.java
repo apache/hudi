@@ -28,7 +28,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.table.read.BufferedRecords;
-import org.apache.hudi.util.AvroSchemaConverter;
+import org.apache.hudi.util.HoodieSchemaConverter;
 
 import org.apache.flink.table.api.DataTypes;
 import org.apache.flink.table.data.GenericRowData;
@@ -68,7 +68,7 @@ public class TestHoodieFlinkRecordMerger {
 
   @Test
   void testMergingWithNewRecordAsDelete() throws IOException {
-    HoodieSchema schema = HoodieSchema.fromAvroSchema(AvroSchemaConverter.convertToSchema(RECORD_ROWTYPE));
+    HoodieSchema schema = HoodieSchemaConverter.convertToSchema(RECORD_ROWTYPE);
     HoodieKey key = new HoodieKey(RECORD_KEY, PARTITION);
     RowData oldRow = createRow(key, "001", "001_01", "file1", 1, "str_val1", 1L);
     BufferedRecord<RowData> oldRecord = BufferedRecords.fromEngineRecord(oldRow, schema, recordContext, 1L, RECORD_KEY, false);
@@ -82,7 +82,7 @@ public class TestHoodieFlinkRecordMerger {
 
   @Test
   void testMergingWithOldRecordAsDelete() throws IOException {
-    HoodieSchema schema = HoodieSchema.fromAvroSchema(AvroSchemaConverter.convertToSchema(RECORD_ROWTYPE));
+    HoodieSchema schema = HoodieSchemaConverter.convertToSchema(RECORD_ROWTYPE);
     HoodieKey key = new HoodieKey(RECORD_KEY, PARTITION);
     RowData newRow = createRow(key, "001", "001_01", "file1", 1, "str_val1", 1L);
     BufferedRecord<RowData> newRecord = BufferedRecords.fromEngineRecord(newRow, schema, recordContext, 1L, RECORD_KEY, false);
@@ -96,7 +96,7 @@ public class TestHoodieFlinkRecordMerger {
 
   @Test
   void testMergingWithOldRecordAccepted() throws IOException {
-    HoodieSchema schema = HoodieSchema.fromAvroSchema(AvroSchemaConverter.convertToSchema(RECORD_ROWTYPE));
+    HoodieSchema schema = HoodieSchemaConverter.convertToSchema(RECORD_ROWTYPE);
     HoodieKey key = new HoodieKey(RECORD_KEY, PARTITION);
     RowData oldRow = createRow(key, "001", "001_01", "file1", 1, "str_val1", 3L);
     BufferedRecord<RowData> oldRecord = BufferedRecords.fromEngineRecord(oldRow, schema, recordContext, 3L, RECORD_KEY, false);
@@ -111,7 +111,7 @@ public class TestHoodieFlinkRecordMerger {
 
   @Test
   void testMergingWithNewRecordAccepted() throws IOException {
-    HoodieSchema schema = HoodieSchema.fromAvroSchema(AvroSchemaConverter.convertToSchema(RECORD_ROWTYPE));
+    HoodieSchema schema = HoodieSchemaConverter.convertToSchema(RECORD_ROWTYPE);
     HoodieKey key = new HoodieKey(RECORD_KEY, PARTITION);
     RowData oldRow = createRow(key, "001", "001_01", "file1", 1, "str_val1", 1L);
     BufferedRecord<RowData> oldRecord = BufferedRecords.fromEngineRecord(oldRow, schema, recordContext, 1L, RECORD_KEY, false);
@@ -126,7 +126,7 @@ public class TestHoodieFlinkRecordMerger {
 
   @Test
   void testMergingWithCommitTimeRecordMerger() throws IOException {
-    HoodieSchema schema = HoodieSchema.fromAvroSchema(AvroSchemaConverter.convertToSchema(RECORD_ROWTYPE));
+    HoodieSchema schema = HoodieSchemaConverter.convertToSchema(RECORD_ROWTYPE);
     HoodieKey key = new HoodieKey(RECORD_KEY, PARTITION);
     RowData oldRow = createRow(key, "001", "001_01", "file1", 1, "str_val1", 2L);
     BufferedRecord<RowData> oldRecord = BufferedRecords.fromEngineRecord(oldRow, schema, recordContext, 2L, RECORD_KEY, false);

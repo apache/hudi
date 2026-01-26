@@ -18,7 +18,6 @@
 
 package org.apache.hudi.avro;
 
-import org.apache.hudi.common.config.SerializableSchema;
 import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.schema.HoodieSchema;
@@ -92,7 +91,6 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.TimeZone;
 import java.util.TreeMap;
-import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 import static org.apache.avro.Schema.Type.ARRAY;
@@ -116,10 +114,6 @@ public class HoodieAvroUtils {
   //Export for test
   public static final Conversions.DecimalConversion DECIMAL_CONVERSION = new Conversions.DecimalConversion();
 
-  // As per https://avro.apache.org/docs/current/spec.html#names
-  private static final Pattern INVALID_AVRO_CHARS_IN_NAMES_PATTERN = Pattern.compile("[^A-Za-z0-9_]");
-  private static final Pattern INVALID_AVRO_FIRST_CHAR_IN_NAMES_PATTERN = Pattern.compile("[^A-Za-z_]");
-  private static final String MASK_FOR_INVALID_CHARS_IN_NAMES = "__";
   private static final Properties PROPERTIES = new Properties();
 
   // All metadata fields are optional strings.
@@ -915,32 +909,6 @@ public class HoodieAvroUtils {
   }
 
   /**
-   * Sanitizes Name according to Avro rule for names.
-   * Removes characters other than the ones mentioned in https://avro.apache.org/docs/current/spec.html#names .
-   *
-   * @param name input name
-   * @return sanitized name
-   */
-  public static String sanitizeName(String name) {
-    return sanitizeName(name, MASK_FOR_INVALID_CHARS_IN_NAMES);
-  }
-
-  /**
-   * Sanitizes Name according to Avro rule for names.
-   * Removes characters other than the ones mentioned in https://avro.apache.org/docs/current/spec.html#names .
-   *
-   * @param name            input name
-   * @param invalidCharMask replacement for invalid characters.
-   * @return sanitized name
-   */
-  public static String sanitizeName(String name, String invalidCharMask) {
-    if (INVALID_AVRO_FIRST_CHAR_IN_NAMES_PATTERN.matcher(name.substring(0, 1)).matches()) {
-      name = INVALID_AVRO_FIRST_CHAR_IN_NAMES_PATTERN.matcher(name).replaceFirst(invalidCharMask);
-    }
-    return INVALID_AVRO_CHARS_IN_NAMES_PATTERN.matcher(name).replaceAll(invalidCharMask);
-  }
-
-  /**
    * Gets record column values into object array.
    *
    * @param record  Hoodie record.
@@ -992,20 +960,6 @@ public class HoodieAvroUtils {
     } catch (IOException e) {
       throw new HoodieIOException("Unable to read record with key:" + record.getKey(), e);
     }
-  }
-
-  /**
-   * Gets record column values into one object.
-   *
-   * @param record  Hoodie record.
-   * @param columns Names of the columns to get values.
-   * @param schema  {@link SerializableSchema} instance.
-   * @return Column value if a single column, or concatenated String values by comma.
-   */
-  public static Object getRecordColumnValues(HoodieRecord record,
-                                             String[] columns,
-                                             SerializableSchema schema, boolean consistentLogicalTimestampEnabled) {
-    return getRecordColumnValues(record, columns, schema.get(), consistentLogicalTimestampEnabled);
   }
 
   // TODO java-doc

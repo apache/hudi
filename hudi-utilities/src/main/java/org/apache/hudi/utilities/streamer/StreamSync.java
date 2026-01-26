@@ -138,6 +138,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Function;
 import java.util.function.Supplier;
@@ -1009,7 +1010,7 @@ public class StreamSync implements Serializable, Closeable {
   }
 
   public void runMetaSync() {
-    List<String> syncClientToolClasses = Arrays.stream(cfg.syncClientToolClassNames.split(",")).distinct().collect(Collectors.toList());
+    Set<String> syncClientToolClasses = Arrays.stream(cfg.syncClientToolClassNames.split(",")).collect(Collectors.toSet());
     // for backward compatibility
     if (cfg.enableHiveSync) {
       cfg.enableMetaSync = true;

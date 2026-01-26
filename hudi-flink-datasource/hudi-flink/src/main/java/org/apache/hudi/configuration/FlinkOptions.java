@@ -282,6 +282,17 @@ public class FlinkOptions extends HoodieConfig {
       .withDescription("Maximum memory in MB for the inflight record index cache during one checkpoint interval.\n"
           + "When record level index is used to assign bucket, record locations will first be cached before the record index is committed.");
 
+  @AdvancedConfig
+  public static final ConfigOption<Integer> INDEX_RLI_LOOKUP_MINIBATCH_SIZE = ConfigOptions
+      .key("index.rli.lookup.minibatch.size")
+      .intType()
+      .defaultValue(1000) // default 1000
+      .withDescription("The maximum number of input records can be buffered for miniBatch during record index lookup.\n"
+          + "MiniBatch is an optimization to buffer input records to reduce the number of individual index lookups,\n"
+          + "which can significantly improve performance compared to processing each record individually.\n"
+          + "Default value is 1000, which is also the minimum value for the minibatch size, when the configured size\n"
+          + "is less than 1000, the default value will be used.");
+
   // ------------------------------------------------------------------------
   //  Read Options
   // ------------------------------------------------------------------------
@@ -306,6 +317,13 @@ public class FlinkOptions extends HoodieConfig {
       .stringType()
       .noDefaultValue()
       .withDescription("Source avro schema string, the parsed schema is used for deserialization");
+
+  @AdvancedConfig
+  public static final ConfigOption<Integer> SOURCE_READER_FETCH_BATCH_RECORD_COUNT =
+      ConfigOptions.key("source.fetch-batch-record-count")
+          .intType()
+          .defaultValue(2048)
+          .withDescription("The target number of records for Hoodie reader fetch batch.");
 
   public static final String QUERY_TYPE_SNAPSHOT = "snapshot";
   public static final String QUERY_TYPE_READ_OPTIMIZED = "read_optimized";
@@ -657,24 +675,51 @@ public class FlinkOptions extends HoodieConfig {
       .key("write.buffer.sort.enabled")
       .booleanType()
       .defaultValue(false) // default no sort
-      .withDescription("Whether to enable buffer sort within append write function. Data is sorted within the buffer configured by number of records or buffer size."
-          + " The order of entire parquet file is not guaranteed.");
+      .withDescription("Deprecated: use write.buffer.type=DISRUPTOR instead. "
+          + "Whether to enable buffer sort within append write function. "
+          + "The order of entire written file is not guaranteed.");
 
   @AdvancedConfig
   public static final ConfigOption<String> WRITE_BUFFER_SORT_KEYS = ConfigOptions
       .key("write.buffer.sort.keys")
       .stringType()
       .noDefaultValue() // default no sort key
-      .withDescription("Sort keys concatenated by comma for buffer sort in append write function. Data is sorted within the buffer configured by number of records or buffer size."
-          + " The order of entire parquet file is not guaranteed.");
+      .withDescription("Sort keys concatenated by comma for buffer sort in append write function. "
+          + "Data is sorted within the buffer configured by number of records or buffer size. "
+          + "The order of entire written file is not guaranteed.");
 
   @AdvancedConfig
   public static final ConfigOption<Long> WRITE_BUFFER_SIZE = ConfigOptions
       .key("write.buffer.size")
       .longType()
       .defaultValue(1000L) // 1000 records
-      .withDescription("Buffer size of each partition key for buffer sort in append write function. Data is sorted within the buffer configured by number of records."
-          +  " The order of entire parquet file is not guaranteed.");
+      .withDescription("Record count threshold for flushing the sort buffer in append write function. "
+          + "When buffer reaches this count, it is sorted and written. "
+          + "The order of entire written file is not guaranteed.");
+
+  @AdvancedConfig
+  public static final ConfigOption<String> WRITE_BUFFER_TYPE = ConfigOptions
+      .key("write.buffer.type")
+      .stringType()
+      .defaultValue("NONE")
+      .withDescription("Buffer type for append write function: "
+          + "NONE (no buffer sort, default), "
+          + "BOUNDED_IN_MEMORY (double buffer with async write), "
+          + "DISRUPTOR (ring buffer with async write, recommended for better throughput)");
+
+  @AdvancedConfig
+  public static final ConfigOption<Integer> WRITE_BUFFER_DISRUPTOR_RING_SIZE = ConfigOptions
+      .key("write.buffer.disruptor.ring.size")
+      .intType()
+      .defaultValue(16384)
+      .withDescription("Ring buffer size for Disruptor (must be power of 2), default 16384");
+
+  @AdvancedConfig
+  public static final ConfigOption<String> WRITE_BUFFER_DISRUPTOR_WAIT_STRATEGY = ConfigOptions
+      .key("write.buffer.disruptor.wait.strategy")
+      .stringType()
+      .defaultValue("BLOCKING_WAIT")
+      .withDescription("Wait strategy for Disruptor: BLOCKING_WAIT (default), SLEEPING_WAIT, YIELDING_WAIT, BUSY_SPIN_WAIT");
 
   @AdvancedConfig
   public static final ConfigOption<Long> WRITE_RATE_LIMIT = ConfigOptions

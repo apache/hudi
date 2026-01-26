@@ -1,0 +1,466 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package org.apache.hudi.source.split;
+
+import org.apache.hudi.common.util.Option;
+
+import org.junit.jupiter.api.Test;
+
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+/**
+ * Test cases for {@link HoodieSourceSplitSerializer}.
+ */
+public class TestHoodieSourceSplitSerializer {
+
+  private final HoodieSourceSplitSerializer serializer = new HoodieSourceSplitSerializer();
+
+  @Test
+  public void testSerializeAndDeserializeBasicSplit() throws IOException {
+    HoodieSourceSplit original = new HoodieSourceSplit(
+        1,
+        "base-path",
+        Option.empty(),
+        "/table/path",
+        "/partition/path",
+        "read_optimized",
+        "file-123"
+    );
+
+    byte[] serialized = serializer.serialize(original);
+    assertNotNull(serialized);
+    assertTrue(serialized.length > 0);
+
+    HoodieSourceSplit deserialized = serializer.deserialize(serializer.getVersion(), serialized);
+
+    assertNotNull(deserialized);
+    assertEquals(original.getSplitNum(), deserialized.getSplitNum());
+    assertEquals(original.getBasePath(), deserialized.getBasePath());
+    assertEquals(original.getLogPaths(), deserialized.getLogPaths());
+    assertEquals(original.getTablePath(), deserialized.getTablePath());
+    assertEquals(original.getPartitionPath(), deserialized.getPartitionPath());
+    assertEquals(original.getMergeType(), deserialized.getMergeType());
+    assertEquals(original.getFileId(), deserialized.getFileId());
+    assertEquals(original.getConsumed(), deserialized.getConsumed());
+    assertEquals(original.getFileOffset(), deserialized.getFileOffset());
+  }
+
+  @Test
+  public void testSerializeAndDeserializeSplitWithNullBasePath() throws IOException {
+    HoodieSourceSplit original = new HoodieSourceSplit(
+        2,
+        null,
+        Option.of(Arrays.asList("log1", "log2")),
+        "/table/path",
+        "/partition/path",
+        "payload_combine",
+        "file-456"
+    );
+
+    byte[] serialized = serializer.serialize(original);
+    HoodieSourceSplit deserialized = serializer.deserialize(serializer.getVersion(), serialized);
+
+    assertNotNull(deserialized);
+    assertFalse(deserialized.getBasePath().isPresent());
+    assertEquals(original.getLogPaths(), deserialized.getLogPaths());
+    assertEquals(2, deserialized.getLogPaths().get().size());
+  }
+
+  @Test
+  public void testSerializeAndDeserializeSplitWithLogPaths() throws IOException {
+    HoodieSourceSplit original = new HoodieSourceSplit(
+        3,
+        "base-path",
+        Option.of(Arrays.asList("log1.parquet", "log2.parquet", "log3.parquet")),
+        "/table/path",
+        "/partition/path",
+        "payload_combine",
+        "file-789"
+    );
+
+    byte[] serialized = serializer.serialize(original);
+    HoodieSourceSplit deserialized = serializer.deserialize(serializer.getVersion(), serialized);
+
+    assertNotNull(deserialized);
+    assertTrue(deserialized.getLogPaths().isPresent());
+    assertEquals(3, deserialized.getLogPaths().get().size());
+    assertEquals("log1.parquet", deserialized.getLogPaths().get().get(0));
+    assertEquals("log2.parquet", deserialized.getLogPaths().get().get(1));
+    assertEquals("log3.parquet", deserialized.getLogPaths().get().get(2));
+  }
+
+  @Test
+  public void testSerializeAndDeserializeSplitWithEmptyLogPaths() throws IOException {
+    HoodieSourceSplit original = new HoodieSourceSplit(
+        4,
+        "base-path",
+        Option.of(Collections.emptyList()),
+        "/table/path",
+        "/partition/path",
+        "read_optimized",
+        "file-000"
+    );
+
+    byte[] serialized = serializer.serialize(original);
+    HoodieSourceSplit deserialized = serializer.deserialize(serializer.getVersion(), serialized);
+
+    assertNotNull(deserialized);
+    assertTrue(deserialized.getLogPaths().isPresent());
+    assertEquals(0, deserialized.getLogPaths().get().size());
+  }
+
+  @Test
+  public void testSerializeAndDeserializeSplitWithConsumedState() throws IOException {
+    HoodieSourceSplit original = new HoodieSourceSplit(
+        5,
+        "base-path",
+        Option.empty(),
+        "/table/path",
+        "/partition/path",
+        "read_optimized",
+        "file-111"
+    );
+
+    // Update position to simulate consumed state
+    original.updatePosition(3, 100L);
+
+    byte[] serialized = serializer.serialize(original);
+    HoodieSourceSplit deserialized = serializer.deserialize(serializer.getVersion(), serialized);
+
+    assertNotNull(deserialized);
+    assertEquals(3, deserialized.getFileOffset());
+    assertEquals(100L, deserialized.getConsumed());
+    assertTrue(deserialized.isConsumed());
+  }
+
+  @Test
+  public void testSerializeAndDeserializeSplitAfterConsume() throws IOException {
+    HoodieSourceSplit original = new HoodieSourceSplit(
+        6,
+        "base-path",
+        Option.empty(),
+        "/table/path",
+        "/partition/path",
+        "read_optimized",
+        "file-222"
+    );
+
+    // Consume multiple times
+    original.consume();
+    original.consume();
+    original.consume();
+
+    byte[] serialized = serializer.serialize(original);
+    HoodieSourceSplit deserialized = serializer.deserialize(serializer.getVersion(), serialized);
+
+    assertNotNull(deserialized);
+    assertEquals(3L, deserialized.getConsumed());
+    assertTrue(deserialized.isConsumed());
+  }
+
+  @Test
+  public void testSerializeAndDeserializeComplexSplit() throws IOException {
+    HoodieSourceSplit original = new HoodieSourceSplit(
+        100,
+        "/base/path/to/file.parquet",
+        Option.of(Arrays.asList(
+            "/log/path1/file.log",
+            "/log/path2/file.log",
+            "/log/path3/file.log",
+            "/log/path4/file.log"
+        )),
+        "/very/long/table/path/with/multiple/segments",
+        "/partition/year=2024/month=01/day=22",
+        "payload_combine",
+        "complex-file-id-with-uuid-12345678"
+    );
+
+    original.updatePosition(10, 5000L);
+
+    byte[] serialized = serializer.serialize(original);
+    HoodieSourceSplit deserialized = serializer.deserialize(serializer.getVersion(), serialized);
+
+    assertNotNull(deserialized);
+    assertEquals(original.getSplitNum(), deserialized.getSplitNum());
+    assertEquals(original.getBasePath().get(), deserialized.getBasePath().get());
+    assertEquals(original.getLogPaths().get().size(), deserialized.getLogPaths().get().size());
+    assertEquals(original.getTablePath(), deserialized.getTablePath());
+    assertEquals(original.getPartitionPath(), deserialized.getPartitionPath());
+    assertEquals(original.getMergeType(), deserialized.getMergeType());
+    assertEquals(original.getFileId(), deserialized.getFileId());
+    assertEquals(10, deserialized.getFileOffset());
+    assertEquals(5000L, deserialized.getConsumed());
+  }
+
+  @Test
+  public void testGetVersion() {
+    assertEquals(1, serializer.getVersion());
+  }
+
+  @Test
+  public void testSerializationIdempotency() throws IOException {
+    HoodieSourceSplit original = new HoodieSourceSplit(
+        7,
+        "base-path",
+        Option.of(Arrays.asList("log1")),
+        "/table/path",
+        "/partition/path",
+        "read_optimized",
+        "file-333"
+    );
+
+    byte[] serialized1 = serializer.serialize(original);
+    byte[] serialized2 = serializer.serialize(original);
+
+    // Serializing the same object twice should produce identical results
+    assertEquals(serialized1.length, serialized2.length);
+  }
+
+  @Test
+  public void testDeserializationProducesEquivalentSplit() throws IOException {
+    HoodieSourceSplit original = new HoodieSourceSplit(
+        8,
+        "base-path",
+        Option.of(Arrays.asList("log1", "log2")),
+        "/table/path",
+        "/partition/path",
+        "payload_combine",
+        "file-444"
+    );
+
+    original.updatePosition(5, 200L);
+
+    byte[] serialized = serializer.serialize(original);
+    HoodieSourceSplit deserialized = serializer.deserialize(serializer.getVersion(), serialized);
+
+    // The deserialized split should be equivalent to the original
+    assertEquals(original, deserialized);
+  }
+
+  @Test
+  public void testSerializeMultipleSplitsWithDifferentStates() throws IOException {
+    HoodieSourceSplit split1 = new HoodieSourceSplit(1, "base1", Option.empty(), "/t1", "/p1", "read_optimized", "f1");
+    HoodieSourceSplit split2 = new HoodieSourceSplit(2, "base2", Option.of(Arrays.asList("log1")), "/t2", "/p2", "payload_combine", "f2");
+    HoodieSourceSplit split3 = new HoodieSourceSplit(3, null, Option.of(Arrays.asList("log1", "log2", "log3")), "/t3", "/p3", "read_optimized", "f3");
+
+    split1.updatePosition(1, 10L);
+    split2.consume();
+    split3.updatePosition(5, 1000L);
+
+    byte[] serialized1 = serializer.serialize(split1);
+    byte[] serialized2 = serializer.serialize(split2);
+    byte[] serialized3 = serializer.serialize(split3);
+
+    HoodieSourceSplit deserialized1 = serializer.deserialize(serializer.getVersion(), serialized1);
+    HoodieSourceSplit deserialized2 = serializer.deserialize(serializer.getVersion(), serialized2);
+    HoodieSourceSplit deserialized3 = serializer.deserialize(serializer.getVersion(), serialized3);
+
+    assertEquals(split1, deserialized1);
+    assertEquals(split2, deserialized2);
+    assertEquals(split3, deserialized3);
+  }
+
+  @Test
+  public void testSerializeWithVeryLargeConsumedValue() throws IOException {
+    HoodieSourceSplit original = new HoodieSourceSplit(
+        999,
+        "base-path",
+        Option.empty(),
+        "/table/path",
+        "/partition/path",
+        "read_optimized",
+        "file-large"
+    );
+
+    original.updatePosition(Integer.MAX_VALUE, Long.MAX_VALUE);
+
+    byte[] serialized = serializer.serialize(original);
+    HoodieSourceSplit deserialized = serializer.deserialize(serializer.getVersion(), serialized);
+
+    assertEquals(Integer.MAX_VALUE, deserialized.getFileOffset());
+    assertEquals(Long.MAX_VALUE, deserialized.getConsumed());
+  }
+
+  @Test
+  public void testSerializeWithZeroValues() throws IOException {
+    HoodieSourceSplit original = new HoodieSourceSplit(
+        0,
+        "base-path",
+        Option.empty(),
+        "/table/path",
+        "/partition/path",
+        "read_optimized",
+        "file-zero"
+    );
+
+    original.updatePosition(0, 0L);
+
+    byte[] serialized = serializer.serialize(original);
+    HoodieSourceSplit deserialized = serializer.deserialize(serializer.getVersion(), serialized);
+
+    assertEquals(0, deserialized.getSplitNum());
+    assertEquals(0, deserialized.getFileOffset());
+    assertEquals(0L, deserialized.getConsumed());
+  }
+
+  @Test
+  public void testSerializeWithNegativeSplitNum() throws IOException {
+    HoodieSourceSplit original = new HoodieSourceSplit(
+        -1,
+        "base-path",
+        Option.empty(),
+        "/table/path",
+        "/partition/path",
+        "read_optimized",
+        "file-negative"
+    );
+
+    byte[] serialized = serializer.serialize(original);
+    HoodieSourceSplit deserialized = serializer.deserialize(serializer.getVersion(), serialized);
+
+    assertEquals(-1, deserialized.getSplitNum());
+  }
+
+  @Test
+  public void testSerializeWithVeryLongStrings() throws IOException {
+    StringBuilder longString = new StringBuilder();
+    for (int i = 0; i < 1000; i++) {
+      longString.append("very-long-path-segment-");
+    }
+
+    HoodieSourceSplit original = new HoodieSourceSplit(
+        1,
+        longString.toString(),
+        Option.of(Arrays.asList(longString.toString(), longString.toString())),
+        longString.toString(),
+        longString.toString(),
+        "read_optimized",
+        longString.toString()
+    );
+
+    byte[] serialized = serializer.serialize(original);
+    HoodieSourceSplit deserialized = serializer.deserialize(serializer.getVersion(), serialized);
+
+    assertEquals(original.getBasePath(), deserialized.getBasePath());
+    assertEquals(original.getTablePath(), deserialized.getTablePath());
+    assertEquals(original.getPartitionPath(), deserialized.getPartitionPath());
+    assertEquals(original.getFileId(), deserialized.getFileId());
+  }
+
+  @Test
+  public void testSerializeWithSpecialCharactersInStrings() throws IOException {
+    HoodieSourceSplit original = new HoodieSourceSplit(
+        1,
+        "base/path/with/特殊字符/and/émojis/\u0000/null",
+        Option.of(Arrays.asList("log/with/special/字符/path")),
+        "/table/path/with/\t/tabs/and/\n/newlines",
+        "/partition/with/\r\n/carriage/return",
+        "read_optimized",
+        "file-id-with-unicode-字符-émojis-🎉"
+    );
+
+    byte[] serialized = serializer.serialize(original);
+    HoodieSourceSplit deserialized = serializer.deserialize(serializer.getVersion(), serialized);
+
+    assertEquals(original.getBasePath(), deserialized.getBasePath());
+    assertEquals(original.getLogPaths(), deserialized.getLogPaths());
+    assertEquals(original.getTablePath(), deserialized.getTablePath());
+    assertEquals(original.getPartitionPath(), deserialized.getPartitionPath());
+    assertEquals(original.getFileId(), deserialized.getFileId());
+  }
+
+  @Test
+  public void testSerializeWithEmptyStrings() throws IOException {
+    HoodieSourceSplit original = new HoodieSourceSplit(
+        1,
+        "",
+        Option.of(Arrays.asList("", "")),
+        "",
+        "",
+        "",
+        ""
+    );
+
+    byte[] serialized = serializer.serialize(original);
+    HoodieSourceSplit deserialized = serializer.deserialize(serializer.getVersion(), serialized);
+
+    assertEquals(original.getBasePath().get(), deserialized.getBasePath().get());
+    assertEquals(original.getTablePath(), deserialized.getTablePath());
+    assertEquals(original.getPartitionPath(), deserialized.getPartitionPath());
+    assertEquals(original.getFileId(), deserialized.getFileId());
+  }
+
+  @Test
+  public void testSerializeWithManyLogPaths() throws IOException {
+    List<String> manyLogPaths = new ArrayList<>();
+    for (int i = 0; i < 1000; i++) {
+      manyLogPaths.add("/log/path/" + i + ".log");
+    }
+
+    HoodieSourceSplit original = new HoodieSourceSplit(
+        1,
+        "base-path",
+        Option.of(manyLogPaths),
+        "/table/path",
+        "/partition/path",
+        "payload_combine",
+        "file-many-logs"
+    );
+
+    byte[] serialized = serializer.serialize(original);
+    HoodieSourceSplit deserialized = serializer.deserialize(serializer.getVersion(), serialized);
+
+    assertEquals(1000, deserialized.getLogPaths().get().size());
+    assertEquals(original.getLogPaths(), deserialized.getLogPaths());
+  }
+
+  @Test
+  public void testRoundTripSerializationMultipleTimes() throws IOException {
+    HoodieSourceSplit original = new HoodieSourceSplit(
+        1,
+        "base-path",
+        Option.of(Arrays.asList("log1", "log2")),
+        "/table/path",
+        "/partition/path",
+        "read_optimized",
+        "file-roundtrip"
+    );
+
+    original.updatePosition(5, 100L);
+
+    // Serialize and deserialize multiple times
+    HoodieSourceSplit current = original;
+    for (int i = 0; i < 10; i++) {
+      byte[] serialized = serializer.serialize(current);
+      current = serializer.deserialize(serializer.getVersion(), serialized);
+    }
+
+    assertEquals(original, current);
+  }
+}
+

@@ -81,7 +81,7 @@ object AvroSerDerBenchmark extends HoodieBenchmarkBase {
     benchmark.addCase("deserialize avro Record to internalRow") { _ =>
       testRdd.mapPartitions { iter =>
         val schema = HoodieSchemaConversionUtils.convertStructTypeToHoodieSchema(sparkSchema, "record", "my")
-        val avroToRowConverter = AvroConversionUtils.createAvroToInternalRowConverter(schema.toAvroSchema, sparkSchema)
+        val avroToRowConverter = AvroConversionUtils.createAvroToInternalRowConverter(schema, sparkSchema)
         iter.map(record => avroToRowConverter.apply(record).get)
       }.foreach(f => f)
     }

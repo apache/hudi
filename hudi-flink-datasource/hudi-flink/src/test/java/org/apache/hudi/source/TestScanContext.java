@@ -229,6 +229,155 @@ public class TestScanContext {
     assertEquals(Duration.ofSeconds(10), scanContext.getScanInterval());
   }
 
+  @Test
+  public void testBuilderWithMinimalConfiguration() throws Exception {
+    Configuration conf = new Configuration();
+    Path path = new Path("/tmp/test");
+
+    ScanContext scanContext = new ScanContext.Builder()
+        .conf(conf)
+        .path(path)
+        .rowType(TestConfigurations.ROW_TYPE)
+        .startInstant("20240101000000")
+        .maxCompactionMemoryInBytes(100 * 1024 * 1024)
+        .maxPendingSplits(1000)
+        .skipCompaction(false)
+        .skipClustering(false)
+        .skipInsertOverwrite(false)
+        .cdcEnabled(false)
+        .build();
+
+    assertNotNull(scanContext);
+    assertEquals(path, scanContext.getPath());
+  }
+
+  @Test
+  public void testBuilderChaining() throws Exception {
+    Configuration conf = new Configuration();
+    Path path = new Path("/tmp/test");
+
+    ScanContext.Builder builder = new ScanContext.Builder();
+    ScanContext scanContext = builder
+        .conf(conf)
+        .path(path)
+        .rowType(TestConfigurations.ROW_TYPE)
+        .startInstant("20240101000000")
+        .endInstant("20240201000000")
+        .maxCompactionMemoryInBytes(100 * 1024 * 1024)
+        .maxPendingSplits(1000)
+        .skipCompaction(true)
+        .skipClustering(true)
+        .skipInsertOverwrite(true)
+        .cdcEnabled(true)
+        .isStreaming(true)
+        .build();
+
+    assertNotNull(scanContext);
+    assertTrue(scanContext.skipCompaction());
+    assertTrue(scanContext.skipClustering());
+    assertTrue(scanContext.skipInsertOverwrite());
+    assertTrue(scanContext.cdcEnabled());
+    assertTrue(scanContext.isStreaming());
+  }
+
+  @Test
+  public void testBuilderWithEndInstant() throws Exception {
+    Configuration conf = new Configuration();
+    Path path = new Path("/tmp/test");
+    String endInstant = "20240201000000";
+
+    ScanContext scanContext = new ScanContext.Builder()
+        .conf(conf)
+        .path(path)
+        .rowType(TestConfigurations.ROW_TYPE)
+        .startInstant("20240101000000")
+        .endInstant(endInstant)
+        .maxCompactionMemoryInBytes(100 * 1024 * 1024)
+        .maxPendingSplits(1000)
+        .skipCompaction(false)
+        .skipClustering(false)
+        .skipInsertOverwrite(false)
+        .cdcEnabled(false)
+        .build();
+
+    assertNotNull(scanContext);
+    assertEquals(endInstant, scanContext.getEndCommit());
+  }
+
+  @Test
+  public void testIsStreaming() throws Exception {
+    Configuration conf = new Configuration();
+
+    ScanContext streamingScanContext = createTestScanContext(conf, new Path("/tmp/test"),
+        TestConfigurations.ROW_TYPE, "20240101000000", 100 * 1024 * 1024,
+        1000, false, false, false, false);
+
+    assertFalse(streamingScanContext.isStreaming(), "Should not be streaming by default");
+
+    ScanContext batchScanContext = new ScanContext.Builder()
+        .conf(conf)
+        .path(new Path("/tmp/test"))
+        .rowType(TestConfigurations.ROW_TYPE)
+        .startInstant("20240101000000")
+        .maxCompactionMemoryInBytes(100 * 1024 * 1024)
+        .maxPendingSplits(1000)
+        .skipCompaction(false)
+        .skipClustering(false)
+        .skipInsertOverwrite(false)
+        .cdcEnabled(false)
+        .isStreaming(true)
+        .build();
+
+    assertTrue(batchScanContext.isStreaming(), "Should be streaming when explicitly set");
+  }
+
+  @Test
+  public void testGetEndCommit() throws Exception {
+    Configuration conf = new Configuration();
+    String endCommit = "20240201000000";
+
+    ScanContext scanContext = new ScanContext.Builder()
+        .conf(conf)
+        .path(new Path("/tmp/test"))
+        .rowType(TestConfigurations.ROW_TYPE)
+        .startInstant("20240101000000")
+        .endInstant(endCommit)
+        .maxCompactionMemoryInBytes(100 * 1024 * 1024)
+        .maxPendingSplits(1000)
+        .skipCompaction(false)
+        .skipClustering(false)
+        .skipInsertOverwrite(false)
+        .cdcEnabled(false)
+        .build();
+
+    assertEquals(endCommit, scanContext.getEndCommit());
+  }
+
+  @Test
+  public void testBuilderProducesIndependentInstances() throws Exception {
+    Configuration conf = new Configuration();
+    Path path = new Path("/tmp/test");
+
+    ScanContext.Builder builder = new ScanContext.Builder()
+        .conf(conf)
+        .path(path)
+        .rowType(TestConfigurations.ROW_TYPE)
+        .startInstant("20240101000000")
+        .maxCompactionMemoryInBytes(100 * 1024 * 1024)
+        .maxPendingSplits(1000)
+        .skipCompaction(false)
+        .skipClustering(false)
+        .skipInsertOverwrite(false)
+        .cdcEnabled(false);
+
+    ScanContext scanContext1 = builder.build();
+    ScanContext scanContext2 = builder.build();
+
+    // Both should be valid but independent instances
+    assertNotNull(scanContext1);
+    assertNotNull(scanContext2);
+  }
+
   // Helper method to create ScanContext using the Builder
   private ScanContext createTestScanContext(
       Configuration conf,

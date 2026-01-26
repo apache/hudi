@@ -22,6 +22,7 @@ import org.apache.hudi.source.reader.HoodieRecordWithPosition;
 import org.apache.hudi.source.split.HoodieSourceSplit;
 
 import org.apache.flink.connector.base.source.reader.RecordsWithSplitIds;
+import org.apache.flink.util.CloseableIterator;
 
 import java.io.Serializable;
 
@@ -30,7 +31,7 @@ import java.io.Serializable;
  */
 public interface SplitReaderFunction<T> extends Serializable {
 
-  RecordsWithSplitIds<HoodieRecordWithPosition<T>> read(HoodieSourceSplit split);
+  CloseableIterator<RecordsWithSplitIds<HoodieRecordWithPosition<T>>> read(HoodieSourceSplit split);
 
   void close() throws Exception;
 }

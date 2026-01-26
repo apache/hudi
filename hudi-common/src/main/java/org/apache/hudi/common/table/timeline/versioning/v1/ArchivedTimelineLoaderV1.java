@@ -88,6 +88,12 @@ public class ArchivedTimelineLoaderV1 implements ArchivedTimelineLoader {
     loadInstants(metaClient, filter, Option.empty(), loadMode, commitsFilter, recordConsumer, limit);
   }
 
+  @Override
+  public Option<String> loadAllInstantsFromFilesInRange(HoodieTableMetaClient metaClient, HoodieArchivedTimeline.TimeRangeFilter fileFilter, HoodieArchivedTimeline.LoadMode loadMode,
+                                                        BiConsumer<String, GenericRecord> recordConsumer) {
+    throw new UnsupportedOperationException("Not implemented in V1 loader");
+  }
+
   public void loadInstants(HoodieTableMetaClient metaClient,
                            @Nullable HoodieArchivedTimeline.TimeRangeFilter filter,
                            Option<ArchivedTimelineV1.LogFileFilter> logFileFilter,

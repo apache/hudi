@@ -32,33 +32,37 @@ import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.internal.schema.InternalSchema;
-import org.apache.hudi.source.reader.BatchRecords;
 import org.apache.hudi.source.reader.HoodieRecordWithPosition;
+import org.apache.hudi.source.reader.DefaultHoodieBatchReader;
 import org.apache.hudi.source.split.HoodieSourceSplit;
-import org.apache.hudi.table.HoodieTable;
+import org.apache.hudi.table.HoodieFlinkTable;
 
+import org.apache.flink.configuration.Configuration;
 import org.apache.flink.connector.base.source.reader.RecordsWithSplitIds;
 import org.apache.flink.table.data.RowData;
+import org.apache.flink.util.CloseableIterator;
 
 import java.io.IOException;
 import java.util.Collections;
 import java.util.stream.Collectors;
 
 /**
- * Reader function implementation for Merge On Read table.
+ * Default reader function implementation for both MOR and COW tables.
  */
-public class MergeOnReadSplitReaderFunction<I, K, O> implements SplitReaderFunction<RowData> {
-  private final HoodieTable<RowData, I, K, O> hoodieTable;
+public class HoodieSplitReaderFunction implements SplitReaderFunction<RowData> {
+  private final HoodieFlinkTable<RowData> hoodieTable;
   private final HoodieReaderContext<RowData> readerContext;
   private final HoodieSchema tableSchema;
   private final HoodieSchema requiredSchema;
+  private final Configuration configuration;
   private final Option<InternalSchema> internalSchemaOption;
   private final TypedProperties props;
   private HoodieFileGroupReader<RowData> fileGroupReader;
 
-  public MergeOnReadSplitReaderFunction(
-      HoodieTable<RowData, I, K, O> hoodieTable,
+  public HoodieSplitReaderFunction(
+      HoodieFlinkTable<RowData> hoodieTable,
       HoodieReaderContext<RowData> readerContext,
+      Configuration configuration,
       HoodieSchema tableSchema,
       HoodieSchema requiredSchema,
       String mergeType,
@@ -70,6 +74,7 @@ public class MergeOnReadSplitReaderFunction<I, K, O> implements SplitReaderFunct
     this.hoodieTable = hoodieTable;
     this.readerContext = readerContext;
     this.tableSchema = tableSchema;
+    this.configuration = configuration;
     this.requiredSchema = requiredSchema;
     this.internalSchemaOption = internalSchemaOption;
     this.props = new TypedProperties();
@@ -78,14 +83,12 @@ public class MergeOnReadSplitReaderFunction<I, K, O> implements SplitReaderFunct
   }
 
   @Override
-  public RecordsWithSplitIds<HoodieRecordWithPosition<RowData>> read(HoodieSourceSplit split) {
-    final String splitId = split.splitId();
+  public CloseableIterator<RecordsWithSplitIds<HoodieRecordWithPosition<RowData>>> read(HoodieSourceSplit split) {
     try {
       this.fileGroupReader = createFileGroupReader(split);
       final ClosableIterator<RowData> recordIterator = fileGroupReader.getClosableIterator();
-      BatchRecords<RowData> records = BatchRecords.forRecords(splitId, recordIterator, split.getFileOffset(), split.getConsumed());
-      records.seek(split.getConsumed());
-      return records;
+      DefaultHoodieBatchReader<RowData> defaultBatchReader = new DefaultHoodieBatchReader<RowData>(configuration);
+      return defaultBatchReader.batch(split, recordIterator);
     } catch (IOException e) {
       throw new HoodieIOException("Failed to read from file group: " + split.getFileId(), e);
     }

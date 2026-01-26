@@ -25,7 +25,7 @@ import org.apache.hudi.common.config.{HoodieCommonConfig, HoodieConfig, TypedPro
 import org.apache.hudi.common.model.HoodieRecord
 import org.apache.hudi.common.schema.{HoodieSchema, HoodieSchemaCompatibility, HoodieSchemaUtils => HoodieCommonSchemaUtils}
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
-import org.apache.hudi.common.util.{ConfigUtils, StringUtils}
+import org.apache.hudi.common.util.ConfigUtils
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.exception.{HoodieException, SchemaCompatibilityException}
 import org.apache.hudi.internal.schema.InternalSchema
@@ -33,7 +33,8 @@ import org.apache.hudi.internal.schema.convert.InternalSchemaConverter
 import org.apache.hudi.internal.schema.utils.AvroSchemaEvolutionUtils
 import org.apache.hudi.internal.schema.utils.AvroSchemaEvolutionUtils.reconcileSchemaRequirements
 
-import org.apache.spark.sql.types.{StructField, StructType}
+import org.apache.spark.sql.types.StructField
+import org.apache.spark.sql.types.StructType
 import org.slf4j.LoggerFactory
 
 import java.util.Properties
@@ -46,22 +47,30 @@ import scala.collection.JavaConverters._
 object HoodieSchemaUtils {
   private val log = LoggerFactory.getLogger(getClass)
 
+  /**
+   * Gets a field (including nested fields) from the schema using dot notation.
+   * This method delegates to the consolidated implementation in [[HoodieSchema.getNestedField]].
+   *
+   * Supports nested field access using dot notation. For example:
+   * - "name" - retrieves top-level field
+   * - "user.profile.displayName" - retrieves nested field
+   * - "items.list.element" - retrieves array element schema
+   * - "metadata.key_value.key" - retrieves map key schema
+   * - "metadata.key_value.value" - retrieves map value schema
+   *
+   * @param schema    the Spark StructType to search in
+   * @param fieldName the field name (may contain dots for nested fields)
+   * @return Pair of canonical field name and the StructField
+   * @throws HoodieException if field is not found
+   */
   def getSchemaForField(schema: StructType, fieldName: String): org.apache.hudi.common.util.collection.Pair[String, StructField] = {
-    getSchemaForField(schema, fieldName, StringUtils.EMPTY_STRING)
-  }
-
-  def getSchemaForField(schema: StructType, fieldName: String, prefix: String): org.apache.hudi.common.util.collection.Pair[String, StructField] = {
-    if (!(fieldName.contains("."))) {
-      org.apache.hudi.common.util.collection.Pair.of(prefix + schema.fields(schema.fieldIndex(fieldName)).name, schema.fields(schema.fieldIndex(fieldName)))
-    }
-    else {
-      val rootFieldIndex: Int = fieldName.indexOf(".")
-      val rootField: StructField = schema.fields(schema.fieldIndex(fieldName.substring(0, rootFieldIndex)))
-      if (rootField == null) {
-        throw new HoodieException("Failed to find " + fieldName + " in the table schema ")
-      }
-      getSchemaForField(rootField.dataType.asInstanceOf[StructType], fieldName.substring(rootFieldIndex + 1), prefix + fieldName.substring(0, rootFieldIndex + 1))
-    }
+    val result = HoodieSchemaConversionUtils.convertStructTypeToHoodieSchema(schema, "temp_schema", "")
+      .getNestedField(fieldName)
+      .orElseThrow(() => new HoodieException(s"Failed to find $fieldName in the table schema"))
+    org.apache.hudi.common.util.collection.Pair.of(result.getLeft,
+      StructField(result.getRight.name(),
+        HoodieSchemaConversionUtils.convertHoodieSchemaToDataType(result.getRight.schema()),
+        result.getRight.isNullable))
   }
 
   /**
