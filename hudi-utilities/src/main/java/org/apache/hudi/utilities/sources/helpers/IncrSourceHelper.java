@@ -175,8 +175,7 @@ public class IncrSourceHelper {
         publishIncrSourceMetrics(beginInstantTime, endInstant, metrics.get(), completedCommitTimeline);
       }
       return new QueryInfo(DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL(), previousInstantTime,
-          beginInstantTime, nthInstant.map(HoodieInstant::requestedTime).orElse(beginInstantTime),
-          orderColumn, keyColumn, limitColumn);
+          beginInstantTime, endInstant, orderColumn, keyColumn, limitColumn);
     } else {
       // when MissingCheckpointStrategy is set to read everything until latest, trigger snapshot query.
       Option<HoodieInstant> lastInstant = activeCommitTimeline.lastInstant();
