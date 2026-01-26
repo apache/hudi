@@ -256,14 +256,14 @@ public class KeyGenUtils {
         if (encodePartitionPath) {
           fieldVal = PartitionPathEncodeUtils.escapePathName(fieldVal);
           partitionPath.append(fieldVal);
-        } else if (hiveStylePartitioning) {
-          partitionPath.append(partitionPathField).append("=");
-          partitionPath.append(fieldVal);
-        } else if (partitionPathFields.size() == 1 && slashSeparatedDatePartitioning) {
-          partitionPath.append(fieldVal.replace('-', '/'));
-        } else {
-          partitionPath.append(fieldVal);
         }
+        if (hiveStylePartitioning) {
+          fieldVal = partitionPathField + "=" + fieldVal;
+        }
+        if (partitionPathFields.size() == 1 && slashSeparatedDatePartitioning) {
+          fieldVal = fieldVal.replace('-', '/');
+        }
+        partitionPath.append(fieldVal);
       }
       if (i != partitionPathFields.size() - 1) {
         partitionPath.append(DEFAULT_PARTITION_PATH_SEPARATOR);
