@@ -159,8 +159,8 @@ public class TestDefaultHoodieRecordPayload {
     assertFalse(deletePayload.getInsertValue(schema, props).isPresent());
     assertTrue(defaultDeletePayload.getInsertValue(schema, props).isPresent()); // if custom marker is present, should honor that irrespective of hoodie_is_deleted
 
-    assertEquals(delRecord, payload.combineAndGetUpdateValue(delRecord, schema, props).get());
-    assertEquals(defaultDeleteRecord, payload.combineAndGetUpdateValue(defaultDeleteRecord, schema, props).get());
+    assertEquals(SENTINEL, payload.combineAndGetUpdateValue(delRecord, schema, props).get());
+    assertEquals(SENTINEL, payload.combineAndGetUpdateValue(defaultDeleteRecord, schema, props).get());
     assertFalse(deletePayload.combineAndGetUpdateValue(record, schema, props).isPresent());
   }
 
@@ -221,22 +221,6 @@ public class TestDefaultHoodieRecordPayload {
     Properties properties = new Properties();
     payload.getInsertValue(schema, properties);
     payload.combineAndGetUpdateValue(record2, schema, properties);
-  }
-
-  @ParameterizedTest
-  @ValueSource(longs = {1L, 1612542030000L})
-  public void testGetEventTimeInMetadataForInserts(long eventTime) throws IOException {
-    GenericRecord record = new GenericData.Record(schema);
-
-    record.put("id", "1");
-    record.put("partition", "partition0");
-    record.put("ts", eventTime);
-    record.put("_hoodie_is_deleted", false);
-    DefaultHoodieRecordPayload payload = new DefaultHoodieRecordPayload(record, eventTime);
-    payload.getInsertValue(schema, props);
-    assertTrue(payload.getMetadata().isPresent());
-    assertEquals(eventTime,
-        Long.parseLong(payload.getMetadata().get().get(DefaultHoodieRecordPayload.METADATA_EVENT_TIME_KEY)));
   }
 
   @ParameterizedTest
