@@ -241,117 +241,6 @@ public class AvroSchemaUtils {
   }
 
   /**
-   * Get gets a field from a record, works on nested fields as well (if you provide the whole name, eg: toplevel.nextlevel.child)
-   * @return the field, including its lineage.
-   * For example, if you have a schema: record(a:int, b:record(x:int, y:long, z:record(z1: int, z2: float, z3: double), c:bool)
-   * "fieldName" | output
-   * ---------------------------------
-   * "a"         | a:int
-   * "b"         | b:record(x:int, y:long, z:record(z1: int, z2: int, z3: int)
-   * "c"         | c:bool
-   * "b.x"       | b:record(x:int)
-   * "b.z.z2"    | b:record(z:record(z2:float))
-   *
-   * this is intended to be used with appendFieldsToSchemaDedupNested
-   */
-  public static Option<Schema.Field> findNestedField(Schema schema, String fieldName) {
-    return findNestedField(schema, fieldName.split("\\."), 0);
-  }
-
-  private static Option<Schema.Field> findNestedField(Schema schema, String[] fieldParts, int index) {
-    if (schema.getType().equals(Schema.Type.UNION)) {
-      Option<Schema.Field> notUnion = findNestedField(getNonNullTypeFromUnion(schema), fieldParts, index);
-      if (!notUnion.isPresent()) {
-        return Option.empty();
-      }
-      Schema.Field nu = notUnion.get();
-      return Option.of(createNewSchemaField(nu));
-    }
-    if (fieldParts.length <= index) {
-      return Option.empty();
-    }
-
-    Schema.Field foundField = schema.getField(fieldParts[index]);
-    if (foundField == null) {
-      return Option.empty();
-    }
-
-    if (index == fieldParts.length - 1) {
-      return Option.of(createNewSchemaField(foundField));
-    }
-
-    Schema foundSchema = foundField.schema();
-    Option<Schema.Field> nestedPart = findNestedField(foundSchema, fieldParts, index + 1);
-    if (!nestedPart.isPresent()) {
-      return Option.empty();
-    }
-    boolean isUnion = false;
-    if (foundSchema.getType().equals(Schema.Type.UNION)) {
-      isUnion = true;
-      foundSchema = getNonNullTypeFromUnion(foundSchema);
-    }
-    Schema newSchema = createNewSchemaFromFieldsWithReference(foundSchema, Collections.singletonList(nestedPart.get()));
-    return Option.of(createNewSchemaField(foundField.name(), isUnion ? createNullableSchema(newSchema) : newSchema, foundField.doc(), foundField.defaultVal()));
-  }
-
-  /**
-   * Adds newFields to the schema. Will add nested fields without duplicating the field
-   * For example if your schema is "a.b.{c,e}" and newfields contains "a.{b.{d,e},x.y}",
-   * It will stitch them together to be "a.{b.{c,d,e},x.y}
-   */
-  public static Schema appendFieldsToSchemaDedupNested(Schema schema, List<Schema.Field> newFields) {
-    return appendFieldsToSchemaBase(schema, newFields, true);
-  }
-
-  public static Schema mergeSchemas(Schema a, Schema b) {
-    if (!a.getType().equals(Schema.Type.RECORD)) {
-      return a;
-    }
-    List<Schema.Field> fields = new ArrayList<>();
-    for (Schema.Field f : a.getFields()) {
-      Schema.Field foundField = b.getField(f.name());
-      fields.add(createNewSchemaField(f.name(), foundField == null ? f.schema() : mergeSchemas(f.schema(), foundField.schema()),
-          f.doc(), f.defaultVal()));
-    }
-    for (Schema.Field f : b.getFields()) {
-      if (a.getField(f.name()) == null) {
-        fields.add(createNewSchemaField(f));
-      }
-    }
-    return createNewSchemaFromFieldsWithReference(a, fields);
-  }
-
-  /**
-   * Appends provided new fields at the end of the given schema
-   *
-   * NOTE: No deduplication is made, this method simply appends fields at the end of the list
-   *       of the source schema as is
-   */
-  public static Schema appendFieldsToSchema(Schema schema, List<Schema.Field> newFields) {
-    return appendFieldsToSchemaBase(schema, newFields, false);
-  }
-
-  private static Schema appendFieldsToSchemaBase(Schema schema, List<Schema.Field> newFields, boolean dedupNested) {
-    List<Schema.Field> fields = schema.getFields().stream()
-        .map(HoodieAvroUtils::createNewSchemaField)
-        .collect(Collectors.toList());
-    if (dedupNested) {
-      for (Schema.Field f : newFields) {
-        Schema.Field foundField = schema.getField(f.name());
-        if (foundField != null) {
-          fields.set(foundField.pos(), createNewSchemaField(foundField.name(), mergeSchemas(foundField.schema(), f.schema()), foundField.doc(), foundField.defaultVal()));
-        } else {
-          fields.add(f);
-        }
-      }
-    } else {
-      fields.addAll(newFields);
-    }
-
-    return createNewSchemaFromFieldsWithReference(schema, fields);
-  }
-
-  /**
    * Create a new schema but maintain all meta info from the old schema
    *
    * @param schema schema to get the meta info from
@@ -514,18 +403,6 @@ public class AvroSchemaUtils {
   public static Schema createNullableSchema(Schema schema) {
     checkState(schema.getType() != Schema.Type.NULL);
     return Schema.createUnion(Schema.create(Schema.Type.NULL), schema);
-  }
-
-  /**
-   * Returns true in case when schema contains the field w/ provided name
-   */
-  public static boolean containsFieldInSchema(Schema schema, String fieldName) {
-    try {
-      Schema.Field field = schema.getField(fieldName);
-      return field != null;
-    } catch (Exception e) {
-      return false;
-    }
   }
 
   /**
