@@ -581,21 +581,6 @@ public class TestHoodieAvroUtils {
   }
 
   @Test
-  public void testGenerateProjectionSchema() {
-    Schema originalSchema = HoodieSchemaUtils.addMetadataFields(HoodieSchema.parse(EXAMPLE_SCHEMA)).toAvroSchema();
-
-    Schema schema1 = HoodieAvroUtils.generateProjectionSchema(originalSchema, Arrays.asList("_row_key", "timestamp"));
-    assertEquals(2, schema1.getFields().size());
-    List<String> fieldNames1 = schema1.getFields().stream().map(Schema.Field::name).collect(Collectors.toList());
-    assertTrue(fieldNames1.contains("_row_key"));
-    assertTrue(fieldNames1.contains("timestamp"));
-
-    assertTrue(assertThrows(HoodieException.class, () ->
-        HoodieAvroUtils.generateProjectionSchema(originalSchema, Arrays.asList("_row_key", "timestamp", "fake_field")))
-        .getMessage().contains("Field fake_field not found in log schema. Query cannot proceed!"));
-  }
-
-  @Test
   public void testWrapAndUnwrapAvroValues() throws IOException {
     Schema schema = new Schema.Parser().parse(SCHEMA_WITH_AVRO_TYPES_STR);
     GenericRecord record = new GenericData.Record(schema);
