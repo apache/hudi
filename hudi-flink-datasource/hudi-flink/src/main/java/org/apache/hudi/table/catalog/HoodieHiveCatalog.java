@@ -568,7 +568,15 @@ public class HoodieHiveCatalog extends AbstractCatalog {
       properties.put(HoodieIndexConfig.INDEX_TYPE.key(), properties.get(FlinkOptions.INDEX_TYPE.key()));
     }
     properties.remove(FlinkOptions.INDEX_TYPE.key());
-    hiveConf.getAllProperties().forEach((k, v) -> properties.put("hadoop." + k, String.valueOf(v)));
+    if (hiveConf.get("hive.metastore.uris") != null) {
+      properties.put("hadoop.hive.metastore.uris", hiveConf.get("hive.metastore.uris"));
+    }
+    if (hiveConf.get("hive.metastore.sasl.enabled") != null) {
+      properties.put("hadoop.hive.metastore.sasl.enabled", hiveConf.get("hive.metastore.sasl.enabled"));
+    }
+    if (hiveConf.get("hive.metastore.kerberos.principle") != null) {
+      properties.put("hadoop.hive.metastore.kerberos.principle", hiveConf.get("hive.metastore.kerberos.principle"));
+    }
 
     if (external) {
       hiveTable.setTableType(TableType.EXTERNAL_TABLE.toString());
