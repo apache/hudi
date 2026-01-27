@@ -139,9 +139,6 @@ public class AvroRecordContext extends RecordContext<IndexedRecord> {
   @Override
   public IndexedRecord constructEngineRecord(HoodieSchema recordSchema, Object[] fieldValues) {
     GenericData.Record record = new GenericData.Record(recordSchema.toAvroSchema());
-    if (fieldValues.length != recordSchema.getFields().size()) {
-      throw new IllegalArgumentException("Value count (" + fieldValues.length + ") does not match field count (" + recordSchema.getFields().size() + ")");
-    }
     for (int i = 0; i < fieldValues.length; i++) {
       record.put(i, fieldValues[i]);
     }

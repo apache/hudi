@@ -106,10 +106,6 @@ public class HiveRecordContext extends RecordContext<ArrayWritable> {
   public ArrayWritable constructEngineRecord(HoodieSchema recordSchema, Object[] fieldValues) {
     Schema avroSchema = recordSchema.toAvroSchema();
     List<Schema.Field> fields = avroSchema.getFields();
-    if (fields.size() != fieldValues.length) {
-      throw new IllegalArgumentException("Mismatch between schema fields and values");
-    }
-
     Writable[] writables = new Writable[fields.size()];
     for (int i = 0; i < fields.size(); i++) {
       Schema fieldSchema = resolveUnion(fields.get(i).schema());

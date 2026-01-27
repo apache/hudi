@@ -283,25 +283,6 @@ class TestHoodieAvroReaderContext {
     assertEquals(0, output.getSchema().getFields().size());
   }
 
-  @Test
-  void testConstructEngineRecordWithListValuesMismatchedCount() {
-    HoodieAvroReaderContext readerContext = getReaderContextWithMetaFields();
-    HoodieSchema schema = getSkeletonSchema(); // Has 3 fields
-    Object[] values = new Object[]{"field1_value", "field2_value"}; // Only 2 values
-    assertThrows(IllegalArgumentException.class, () -> {
-      readerContext.getRecordContext().constructEngineRecord(schema, values);
-    });
-  }
-
-  @Test
-  void testConstructEngineRecordWithListValuesTooManyValues() {
-    HoodieAvroReaderContext readerContext = getReaderContextWithMetaFields();
-    HoodieSchema schema = getSkeletonSchema(); // Has 3 fields
-    Object[] values = new Object[]{"field1_value", "field2_value", 42, "extra_value"}; // 4 values
-    assertThrows(IllegalArgumentException.class, () -> {
-      readerContext.getRecordContext().constructEngineRecord(schema, values);
-    });
-  }
 
   @Test
   void testConstructEngineRecordWithListValuesNullValues() {
