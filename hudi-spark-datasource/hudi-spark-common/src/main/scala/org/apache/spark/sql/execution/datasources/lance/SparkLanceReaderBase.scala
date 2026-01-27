@@ -19,6 +19,7 @@
 
 package org.apache.spark.sql.execution.datasources.lance
 
+import org.apache.hudi.common.model.HoodieFileFormat
 import org.apache.hudi.common.util
 import org.apache.hudi.internal.schema.InternalSchema
 import org.apache.hudi.io.memory.HoodieArrowAllocator
@@ -31,6 +32,7 @@ import org.apache.spark.TaskContext
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.JoinedRow
 import org.apache.spark.sql.execution.datasources.{PartitionedFile, SparkColumnarFileReader}
+import org.apache.spark.sql.execution.datasources.parquet.SparkBasicSchemaEvolution
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.sources.Filter
 import org.apache.spark.sql.types.StructType
@@ -93,11 +95,12 @@ class SparkLanceReaderBase(enableVectorizedReader: Boolean) extends SparkColumna
         val arrowSchema = lanceReader.schema()
         val fileSchema = LanceArrowUtils.fromArrowSchema(arrowSchema)
 
-        // Create lance schema evolution helper
-        val evolution = new LanceBasicSchemaEvolution(
+        // Use existing schema evolution helper
+        val evolution = new SparkBasicSchemaEvolution(
           fileSchema,
           requiredSchema,
-          SQLConf.get.sessionLocalTimeZone
+          SQLConf.get.sessionLocalTimeZone,
+          HoodieFileFormat.LANCE
         )
 
         // Get the request schema (only fields that exist in file)
