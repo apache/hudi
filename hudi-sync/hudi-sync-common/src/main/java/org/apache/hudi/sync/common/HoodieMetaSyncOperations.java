@@ -57,6 +57,27 @@ public interface HoodieMetaSyncOperations {
   }
 
   /**
+   * Create or replace the table.
+   *
+   * @param tableName         The table name.
+   * @param storageSchema     The table schema.
+   * @param inputFormatClass  The input format class of this table.
+   * @param outputFormatClass The output format class of this table.
+   * @param serdeClass        The serde class of this table.
+   * @param serdeProperties   The serde properties of this table.
+   * @param tableProperties   The table properties for this table.
+   */
+  default void createOrReplaceTable(String tableName,
+                                    MessageType storageSchema,
+                                    String inputFormatClass,
+                                    String outputFormatClass,
+                                    String serdeClass,
+                                    Map<String, String> serdeProperties,
+                                    Map<String, String> tableProperties) {
+
+  }
+
+  /**
    * Check if table exists in metastore.
    */
   default boolean tableExists(String tableName) {
