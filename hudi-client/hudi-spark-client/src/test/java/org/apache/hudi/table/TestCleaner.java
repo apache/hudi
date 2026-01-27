@@ -31,6 +31,7 @@ import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.avro.model.HoodieSliceInfo;
 import org.apache.hudi.client.SparkRDDReadClient;
 import org.apache.hudi.client.SparkRDDWriteClient;
+import org.apache.hudi.client.WriteClientTestUtils;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.client.timeline.versioning.v2.TimelineArchiverV2;
@@ -1339,10 +1340,8 @@ public class TestCleaner extends HoodieCleanerTestBase {
   public void testIncrementalCleanPartitionScanningWithDifferentOperationTypes() throws Exception {
     // Setup: Keep latest 2 commits, incremental clean enabled
     HoodieWriteConfig config = getConfigBuilder()
-        .withAutoCommit(true)
         .withMetadataConfig(HoodieMetadataConfig.newBuilder()
-            .withMaxNumDeltaCommitsBeforeCompaction(1)
-            .withAssumeDatePartitioning(true).build())
+            .withMaxNumDeltaCommitsBeforeCompaction(1).build())
         .withCleanConfig(HoodieCleanConfig.newBuilder()
             .withIncrementalCleaningMode(true)
             .withAutoClean(false)
@@ -1366,30 +1365,26 @@ public class TestCleaner extends HoodieCleanerTestBase {
       // We need at least 3 commits and then run clean to have a "last clean" with earliestCommitToRetain
 
       // Commit 1: Initial writes to establish file groups in upsert partition
-      String commit1 = HoodieActiveTimeline.createNewInstantTime();
+      String commit1 = client.startCommit();
       List<HoodieRecord> initialRecordsUpsert = dataGen.generateInsertsForPartition(commit1, 10, partitionUpsert);
-      client.startCommitWithTime(commit1);
       client.insert(jsc.parallelize(initialRecordsUpsert, 1), commit1).collect();
       metaClient = HoodieTableMetaClient.reload(metaClient);
 
       // Commit 2: Upsert on upsert partition to create a second file version
-      String commit2 = HoodieActiveTimeline.createNewInstantTime();
+      String commit2 = client.startCommit();
       List<HoodieRecord> upsertRecords2 = dataGen.generateUpdates(commit2, initialRecordsUpsert);
-      client.startCommitWithTime(commit2);
       client.upsert(jsc.parallelize(upsertRecords2, 1), commit2).collect();
       metaClient = HoodieTableMetaClient.reload(metaClient);
 
       // Commit 3: Upsert on upsert partition to create a third file version
-      String commit3 = HoodieActiveTimeline.createNewInstantTime();
+      String commit3 = client.startCommit();
       List<HoodieRecord> upsertRecords3 = dataGen.generateUpdates(commit3, upsertRecords2);
-      client.startCommitWithTime(commit3);
       client.upsert(jsc.parallelize(upsertRecords3, 1), commit3).collect();
       metaClient = HoodieTableMetaClient.reload(metaClient);
 
       // Commit 4: Upsert on upsert partition to create a fourth file version
-      String commit4 = HoodieActiveTimeline.createNewInstantTime();
+      String commit4 = client.startCommit();
       List<HoodieRecord> upsertRecords4 = dataGen.generateUpdates(commit4, upsertRecords3);
-      client.startCommitWithTime(commit4);
       client.upsert(jsc.parallelize(upsertRecords4, 1), commit4).collect();
       metaClient = HoodieTableMetaClient.reload(metaClient);
 
@@ -1404,39 +1399,36 @@ public class TestCleaner extends HoodieCleanerTestBase {
       // Phase 2: Now we have a valid clean instant, proceed with testing incremental clean behavior
 
       // Add initial data to insertOverwrite and cluster partitions (for later replace commits)
-      String commit5 = HoodieActiveTimeline.createNewInstantTime();
+      String commit5 = client.startCommit();
       List<HoodieRecord> initialRecordsInsertOverwrite = dataGen.generateInsertsForPartition(commit5, 10, partitionInsertOverwrite);
       List<HoodieRecord> initialRecordsCluster = dataGen.generateInsertsForPartition(commit5, 10, partitionCluster);
       List<HoodieRecord> allCommit5Records = new ArrayList<>();
       allCommit5Records.addAll(initialRecordsInsertOverwrite);
       allCommit5Records.addAll(initialRecordsCluster);
-      client.startCommitWithTime(commit5);
       client.insert(jsc.parallelize(allCommit5Records, 1), commit5).collect();
       metaClient = HoodieTableMetaClient.reload(metaClient);
 
       // bulk_insert on insert partition (creates new file groups only - should NOT be in incremental clean)
-      String bulkInsertCommit = HoodieActiveTimeline.createNewInstantTime();
+      String bulkInsertCommit = client.startCommit();
       List<HoodieRecord> bulkInsertRecords = dataGen.generateInsertsForPartition(bulkInsertCommit, 10, partitionInsert);
-      client.startCommitWithTime(bulkInsertCommit);
       client.bulkInsert(jsc.parallelize(bulkInsertRecords, 1), bulkInsertCommit).collect();
       metaClient = HoodieTableMetaClient.reload(metaClient);
 
       // Upsert on upsert partition (modifies existing file groups)
-      String upsertCommit = HoodieActiveTimeline.createNewInstantTime();
+      String upsertCommit = client.startCommit();
       List<HoodieRecord> upsertRecords = dataGen.generateUpdates(upsertCommit, upsertRecords4);
-      client.startCommitWithTime(upsertCommit);
       client.upsert(jsc.parallelize(upsertRecords, 1), upsertCommit).collect();
       metaClient = HoodieTableMetaClient.reload(metaClient);
 
       // insert_overwrite on insert_overwrite partition (replace commit)
-      String insertOverwriteCommit = HoodieActiveTimeline.createNewInstantTime();
+      String insertOverwriteCommit = WriteClientTestUtils.createNewInstantTime();
       List<HoodieRecord> insertOverwriteRecords = dataGen.generateInsertsForPartition(insertOverwriteCommit, 10, partitionInsertOverwrite);
-      client.startCommitWithTime(insertOverwriteCommit, HoodieTimeline.REPLACE_COMMIT_ACTION);
+      WriteClientTestUtils.startCommitWithTime(client, insertOverwriteCommit, HoodieTimeline.REPLACE_COMMIT_ACTION);
       client.insertOverwrite(jsc.parallelize(insertOverwriteRecords, 1), insertOverwriteCommit).getWriteStatuses().collect();
       metaClient = HoodieTableMetaClient.reload(metaClient);
 
       // Simulate clustering on cluster partition (replace commit with replaced file IDs)
-      String clusteringCommit = HoodieActiveTimeline.createNewInstantTime();
+      String clusteringCommit = WriteClientTestUtils.createNewInstantTime();
       HoodieTestTable testTable = HoodieTestTable.of(metaClient);
       Map<String, String> partitionAndFileId = testTable.forReplaceCommit(clusteringCommit).getFileIdsWithBaseFilesInPartitions(partitionCluster);
       String newFileId = partitionAndFileId.get(partitionCluster);
@@ -1455,15 +1447,13 @@ public class TestCleaner extends HoodieCleanerTestBase {
       metaClient = HoodieTableMetaClient.reload(metaClient);
 
       // Two more upsert commits on upsert partition to create enough commits for cleaning
-      String commit9 = HoodieActiveTimeline.createNewInstantTime();
+      String commit9 = client.startCommit();
       List<HoodieRecord> upsertRecords9 = dataGen.generateUpdates(commit9, upsertRecords);
-      client.startCommitWithTime(commit9);
       client.upsert(jsc.parallelize(upsertRecords9, 1), commit9).collect();
       metaClient = HoodieTableMetaClient.reload(metaClient);
 
-      String commit10 = HoodieActiveTimeline.createNewInstantTime();
+      String commit10 = client.startCommit();
       List<HoodieRecord> upsertRecords10 = dataGen.generateUpdates(commit10, upsertRecords9);
-      client.startCommitWithTime(commit10);
       client.upsert(jsc.parallelize(upsertRecords10, 1), commit10).collect();
       metaClient = HoodieTableMetaClient.reload(metaClient);
 
