@@ -197,9 +197,6 @@ public class BucketAssignFunction
       if (oldLoc == null || !oldLoc.getFileId().equals(location.getFileId())) {
         record.setOperationType("I");
         this.indexBackend.update(recordKey, HoodieRecordGlobalLocation.fromLocal(partitionPath, location));
-      } else {
-        // set index operation type as 'U', so the stream writer will not generate index record from the data record.
-        record.setOperationType("U");
       }
     } else {
       log.warn("This branch should not be reached.");

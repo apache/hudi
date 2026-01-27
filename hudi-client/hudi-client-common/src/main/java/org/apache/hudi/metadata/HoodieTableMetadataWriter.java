@@ -65,13 +65,10 @@ public interface HoodieTableMetadataWriter<I,O> extends Serializable, AutoClosea
   HoodieData<WriteStatus> streamWriteToMetadataPartitions(HoodieData<WriteStatus> writeStatus, String instantTime);
 
   /**
-   * Prepare records and write to MDT table for all eligible partitions except FILES partition.
+   * Write the prepared records to MDT table for all eligible partitions except FILES partition.
    *
-   * <p>This will be used in streaming writes, where in data table write-statuses are maintained as HoodieData,
+   * <p>This will be used in streaming writes, where in data table index payloads are maintained as HoodieData,
    * prepares records and write to MDT table partitions (except FILES).
-   *
-   * <p>Caution: that no actions should be triggered on the incoming HoodieData&lt;WriteStatus&gt;
-   * and the writes to metadata table. Caller is expected to trigger #collect just once for both set of HoodieData&lt;WriteStatus&gt;.
    *
    * @param indexRecords   {@link HoodieData} of index {@link HoodieRecord}s.
    * @param dataPartitions partitions of data table that are updated.
