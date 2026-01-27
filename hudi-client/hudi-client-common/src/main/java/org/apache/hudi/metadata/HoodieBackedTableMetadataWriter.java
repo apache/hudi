@@ -2025,7 +2025,7 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
     } catch (Exception e) {
       LOG.error("Exception in running table services on metadata table", e);
       allTableServicesExecutedSuccessfullyOrSkipped = false;
-      if (dataWriteConfig.getMetadataConfig().shouldFailJobOnMDTTableServiceFailures()) {
+      if (dataWriteConfig.getMetadataConfig().shouldFailOnMDTTableServiceFailures()) {
         throw e;
       }
     } finally {
@@ -2064,9 +2064,10 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
         ranServices = true;
       }
       return ranServices ? metadataMetaClient.reloadActiveTimeline() : activeTimeline;
-    } finally {
+    } catch (Exception e) {
       metricsOption.ifPresent(m -> m.incrementMetric(
           HoodieMetadataMetrics.PENDING_COMPACTIONS_FAILURES, 1));
+      throw e;
     }
   }
 
@@ -2107,7 +2108,8 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
       }
     } catch (Exception e) {
       metrics.ifPresent(m -> m.incrementMetric(HoodieMetadataMetrics.COMPACTION_FAILURES, 1));
-      LOG.error("Error in scheduling and executing compaction ", e);
+      LOG.error("Error in scheduling and executing compaction on metadata table ", e);
+      throw e;
     }
 
     try {
@@ -2123,7 +2125,8 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
       }
     } catch (Exception e) {
       metrics.ifPresent(m -> m.incrementMetric(HoodieMetadataMetrics.LOG_COMPACTION_FAILURES, 1));
-      LOG.error("Error in scheduling and executing logcompaction ", e);
+      LOG.error("Error in scheduling and executing logcompaction  on metadata table ", e);
+      throw e;
     }
   }
 

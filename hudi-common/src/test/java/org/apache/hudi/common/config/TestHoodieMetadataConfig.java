@@ -142,37 +142,33 @@ class TestHoodieMetadataConfig {
   }
 
   @Test
-  void testUseMainTableCleanPolicy() {
+  void testFailJobOnMDTTableServiceFailures() {
     // Test default value
     HoodieMetadataConfig config = HoodieMetadataConfig.newBuilder().build();
-    assertTrue(config.shouldDeriveFromDataTableCleanPolicy());
+    assertTrue(config.shouldFailOnMDTTableServiceFailures());
 
-    // Test setting to false using builder method
-    HoodieMetadataConfig configWithFalse = HoodieMetadataConfig.newBuilder()
-        .deriveFromDataTableCleanPolicy(false)
-        .build();
-    assertFalse(configWithFalse.shouldDeriveFromDataTableCleanPolicy());
-
-    // Test setting to true using builder method
-    HoodieMetadataConfig configWithTrue = HoodieMetadataConfig.newBuilder()
-        .deriveFromDataTableCleanPolicy(true)
-        .build();
-    assertTrue(configWithTrue.shouldDeriveFromDataTableCleanPolicy());
-
-    // Test custom value via Properties - false
+    // Test setting to false via Properties
     Properties propsFalse = new Properties();
-    propsFalse.put(HoodieMetadataConfig.DERIVE_FROM_DATA_TABLE_CLEAN_POLICY.key(), "false");
-    HoodieMetadataConfig configWithPropertiesFalse = HoodieMetadataConfig.newBuilder()
+    propsFalse.put(HoodieMetadataConfig.FAIL_ON_MDT_TABLE_SERVICE_FAILURES.key(), "false");
+    HoodieMetadataConfig configWithFalse = HoodieMetadataConfig.newBuilder()
         .fromProperties(propsFalse)
         .build();
-    assertFalse(configWithPropertiesFalse.shouldDeriveFromDataTableCleanPolicy());
+    assertFalse(configWithFalse.shouldFailOnMDTTableServiceFailures());
 
-    // Test custom value via Properties - true
-    Properties propsTrue = new Properties();
-    propsTrue.put(HoodieMetadataConfig.DERIVE_FROM_DATA_TABLE_CLEAN_POLICY.key(), "true");
-    HoodieMetadataConfig configWithPropertiesTrue = HoodieMetadataConfig.newBuilder()
-        .fromProperties(propsTrue)
+    // Test setting to true via builder method
+    HoodieMetadataConfig configWithBuilder = HoodieMetadataConfig.newBuilder()
+        .setFailJobOnMDTTableServiceFailures(true)
         .build();
-    assertTrue(configWithPropertiesTrue.shouldDeriveFromDataTableCleanPolicy());
+    assertTrue(configWithBuilder.shouldFailOnMDTTableServiceFailures());
+
+    // Test setting to false via builder method
+    HoodieMetadataConfig configWithBuilderFalse = HoodieMetadataConfig.newBuilder()
+        .setFailJobOnMDTTableServiceFailures(false)
+        .build();
+    assertFalse(configWithBuilderFalse.shouldFailOnMDTTableServiceFailures());
+
+    // Verify the config key is correct
+    assertEquals("hoodie.metadata.fail.on.table.services.failures",
+        HoodieMetadataConfig.FAIL_ON_MDT_TABLE_SERVICE_FAILURES.key());
   }
 }
