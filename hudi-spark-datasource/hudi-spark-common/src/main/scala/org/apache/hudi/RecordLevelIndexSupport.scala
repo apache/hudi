@@ -22,10 +22,10 @@ import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.HoodieRecord.HoodieMetadataField
 import org.apache.hudi.common.table.HoodieTableMetaClient
+import org.apache.hudi.keygen.KeyGenUtils
 import org.apache.hudi.metadata.{HoodieTableMetadata, HoodieTableMetadataUtil}
 import org.apache.hudi.storage.StoragePathInfo
 import org.apache.hudi.util.JFunction
-
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.expressions.{AttributeReference, EqualTo, Expression, In, Literal}
@@ -86,7 +86,7 @@ class RecordLevelIndexSupport(spark: SparkSession,
    * @return Tuple of List of filtered queries and list of record key literals that need to be matched
    */
   def filterQueriesWithRecordKey(queryFilters: Seq[Expression]): (List[Expression], List[String]) = {
-    if (!isIndexAvailable) {
+    if (!isIndexAvailable || KeyGenUtils.mayUseNewEncodingForComplexKeyGen(metaClient.getTableConfig)) {
       (List.empty, List.empty)
     } else {
       var recordKeyQueries: List[Expression] = List.empty
