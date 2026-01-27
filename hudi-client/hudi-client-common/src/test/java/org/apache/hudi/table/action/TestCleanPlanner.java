@@ -56,6 +56,7 @@ import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.clean.CleanPlanner;
 
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
@@ -81,6 +82,8 @@ import static org.apache.hudi.common.testutils.HoodieTestUtils.getDefaultStorage
 import static org.apache.hudi.common.util.CleanerUtils.CLEAN_METADATA_VERSION_2;
 import static org.apache.hudi.common.util.CleanerUtils.SAVEPOINTED_TIMESTAMPS;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -679,5 +682,174 @@ public class TestCleanPlanner {
     when(activeTimeline.getSavePointTimeline()).thenReturn(savepointTimeline);
     when(hoodieTable.isPartitioned()).thenReturn(true);
     when(hoodieTable.isMetadataTable()).thenReturn(false);
+  }
+
+  // ==================== Partition Filter Tests ====================
+
+  /**
+   * Test that partition filter with regex correctly filters partitions.
+   */
+  @Test
+  void testPartitionFilterWithRegex() throws IOException {
+    // Setup config with regex filter and incremental cleaning disabled
+    HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath("/tmp")
+        .withCleanConfig(HoodieCleanConfig.newBuilder()
+            .retainFileVersions(2)
+            .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS)
+            .withIncrementalCleaningMode(false)
+            .build())
+        .withProperties(Collections.singletonMap(
+            HoodieCleanConfig.CLEANER_PARTITION_FILTER_REGEX.key(), "partition[12]"))
+        .build();
+
+    List<String> allPartitions = Arrays.asList(PARTITION1, PARTITION2, PARTITION3);
+    setupPartitionFilterTestMocks(allPartitions);
+
+    CleanPlanner<?, ?, ?, ?> cleanPlanner = new CleanPlanner<>(context, mockHoodieTable, config);
+    HoodieInstant earliestCommitToRetain = INSTANT_GENERATOR.createNewInstant(COMPLETED, "COMMIT", "20231204194919610");
+    List<String> partitionsToClean = cleanPlanner.getPartitionPathsToClean(Option.of(earliestCommitToRetain));
+
+    // Should only include partition1 and partition2 (matching regex "partition[12]")
+    assertEquals(2, partitionsToClean.size());
+    assertTrue(partitionsToClean.contains(PARTITION1));
+    assertTrue(partitionsToClean.contains(PARTITION2));
+  }
+
+  /**
+   * Test that partition filter with selected list correctly filters partitions.
+   */
+  @Test
+  void testPartitionFilterWithSelectedList() throws IOException {
+    // Setup config with selected partition list and incremental cleaning disabled
+    HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath("/tmp")
+        .withCleanConfig(HoodieCleanConfig.newBuilder()
+            .retainFileVersions(2)
+            .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS)
+            .withIncrementalCleaningMode(false)
+            .build())
+        .withProperties(Collections.singletonMap(
+            HoodieCleanConfig.CLEANER_PARTITION_FILTER_SELECTED.key(), "partition1,partition3"))
+        .build();
+
+    List<String> allPartitions = Arrays.asList(PARTITION1, PARTITION2, PARTITION3);
+    setupPartitionFilterTestMocks(allPartitions);
+
+    CleanPlanner<?, ?, ?, ?> cleanPlanner = new CleanPlanner<>(context, mockHoodieTable, config);
+    HoodieInstant earliestCommitToRetain = INSTANT_GENERATOR.createNewInstant(COMPLETED, "COMMIT", "20231204194919610");
+    List<String> partitionsToClean = cleanPlanner.getPartitionPathsToClean(Option.of(earliestCommitToRetain));
+
+    // Should only include partition1 and partition3
+    assertEquals(2, partitionsToClean.size());
+    assertTrue(partitionsToClean.contains(PARTITION1));
+    assertTrue(partitionsToClean.contains(PARTITION3));
+  }
+
+  /**
+   * Test that selected partition list takes precedence over regex.
+   */
+  @Test
+  void testSelectedListTakesPrecedenceOverRegex() throws IOException {
+    // Setup config with both selected list and regex filter
+    Map<String, String> props = new HashMap<>();
+    props.put(HoodieCleanConfig.CLEANER_PARTITION_FILTER_SELECTED.key(), "partition1");
+    props.put(HoodieCleanConfig.CLEANER_PARTITION_FILTER_REGEX.key(), "partition[23]");
+
+    HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath("/tmp")
+        .withCleanConfig(HoodieCleanConfig.newBuilder()
+            .retainFileVersions(2)
+            .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS)
+            .withIncrementalCleaningMode(false)
+            .build())
+        .withProperties(props)
+        .build();
+
+    List<String> allPartitions = Arrays.asList(PARTITION1, PARTITION2, PARTITION3);
+    setupPartitionFilterTestMocks(allPartitions);
+
+    CleanPlanner<?, ?, ?, ?> cleanPlanner = new CleanPlanner<>(context, mockHoodieTable, config);
+    HoodieInstant earliestCommitToRetain = INSTANT_GENERATOR.createNewInstant(COMPLETED, "COMMIT", "20231204194919610");
+    List<String> partitionsToClean = cleanPlanner.getPartitionPathsToClean(Option.of(earliestCommitToRetain));
+
+    // Selected list should take precedence, so only partition1 should be included
+    assertEquals(1, partitionsToClean.size());
+    assertTrue(partitionsToClean.contains(PARTITION1));
+  }
+
+  /**
+   * Test that partition filter throws exception when incremental cleaning mode is enabled.
+   */
+  @Test
+  void testPartitionFilterWithIncrementalCleaningThrowsException() throws IOException {
+    // Setup config with partition filter and incremental cleaning enabled
+    HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath("/tmp")
+        .withCleanConfig(HoodieCleanConfig.newBuilder()
+            .retainFileVersions(2)
+            .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS)
+            .withIncrementalCleaningMode(true)
+            .build())
+        .withProperties(Collections.singletonMap(
+            HoodieCleanConfig.CLEANER_PARTITION_FILTER_REGEX.key(), "partition.*"))
+        .build();
+
+    List<String> allPartitions = Arrays.asList(PARTITION1, PARTITION2, PARTITION3);
+    setupPartitionFilterTestMocks(allPartitions);
+
+    CleanPlanner<?, ?, ?, ?> cleanPlanner = new CleanPlanner<>(context, mockHoodieTable, config);
+    HoodieInstant earliestCommitToRetain = INSTANT_GENERATOR.createNewInstant(COMPLETED, "COMMIT", "20231204194919610");
+
+    IllegalArgumentException exception = assertThrows(IllegalArgumentException.class,
+        () -> cleanPlanner.getPartitionPathsToClean(Option.of(earliestCommitToRetain)));
+
+    assertTrue(exception.getMessage().contains("Incremental Cleaning mode is enabled"));
+  }
+
+  /**
+   * Test that no filtering is applied when both configs are empty.
+   */
+  @Test
+  void testNoFilteringWhenConfigsAreEmpty() throws IOException {
+    // Setup config without any partition filter
+    HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath("/tmp")
+        .withCleanConfig(HoodieCleanConfig.newBuilder()
+            .retainFileVersions(2)
+            .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS)
+            .withIncrementalCleaningMode(false)
+            .build())
+        .build();
+
+    List<String> allPartitions = Arrays.asList(PARTITION1, PARTITION2, PARTITION3);
+    setupPartitionFilterTestMocks(allPartitions);
+
+    CleanPlanner<?, ?, ?, ?> cleanPlanner = new CleanPlanner<>(context, mockHoodieTable, config);
+    HoodieInstant earliestCommitToRetain = INSTANT_GENERATOR.createNewInstant(COMPLETED, "COMMIT", "20231204194919610");
+    List<String> partitionsToClean = cleanPlanner.getPartitionPathsToClean(Option.of(earliestCommitToRetain));
+
+    // All partitions should be included when no filter is set
+    assertEquals(3, partitionsToClean.size());
+    assertTrue(partitionsToClean.containsAll(Arrays.asList(PARTITION1, PARTITION2, PARTITION3)));
+  }
+
+  /**
+   * Helper method to setup mocks for partition filter tests.
+   */
+  private void setupPartitionFilterTestMocks(List<String> allPartitions) throws IOException {
+    when(mockHoodieTable.getSavepointTimestamps()).thenReturn(Collections.emptySet());
+    when(mockHoodieTable.isPartitioned()).thenReturn(true);
+    when(mockHoodieTable.isMetadataTable()).thenReturn(false);
+    when(mockHoodieTable.getInstantGenerator()).thenReturn(INSTANT_GENERATOR);
+    when(mockHoodieTable.getInstantFileNameGenerator()).thenReturn(INSTANT_FILE_NAME_GENERATOR);
+    when(mockHoodieTable.getInstantFileNameParser()).thenReturn(INSTANT_FILE_NAME_PARSER);
+
+    // Mock table metadata for getAllPartitionPaths
+    HoodieTableMetadata tableMetadata = mock(HoodieTableMetadata.class);
+    when(mockHoodieTable.getTableMetadata()).thenReturn(tableMetadata);
+    when(tableMetadata.getAllPartitionPaths()).thenReturn(allPartitions);
+
+    // Mock clean timeline for incremental cleaning check
+    HoodieTimeline cleanTimeline = mock(HoodieTimeline.class);
+    HoodieTimeline completedCleanTimeline = mock(HoodieTimeline.class);
+    when(mockHoodieTable.getCleanTimeline()).thenReturn(cleanTimeline);
+    when(cleanTimeline.filterCompletedInstants()).thenReturn(completedCleanTimeline);
+    when(completedCleanTimeline.lastInstant()).thenReturn(Option.empty());
   }
 }
