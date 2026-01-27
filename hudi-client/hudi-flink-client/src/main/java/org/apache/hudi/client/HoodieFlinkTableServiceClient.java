@@ -192,7 +192,7 @@ public class HoodieFlinkTableServiceClient<T> extends BaseHoodieTableServiceClie
         try (HoodieBackedTableMetadataWriter metadataWriter = initMetadataWriter(latestPendingInstant)) {
           if (metadataWriter.isInitialized()) {
             if (metadataWriter.hasPartitionsStateChanged()) {
-              metaClient.reloadTableConfig();
+              table.getMetaClient().reloadTableConfig();
             }
             metadataWriter.performTableServices(Option.empty());
           }
