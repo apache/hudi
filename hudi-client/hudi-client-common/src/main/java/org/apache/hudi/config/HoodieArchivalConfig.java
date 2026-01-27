@@ -107,6 +107,13 @@ public class HoodieArchivalConfig extends HoodieConfig {
         .defaultValue(1000L * 1024 * 1024)
         .markAdvanced()
         .withDocumentation("Max size (in bytes) for each archived timeline file.");
+
+  public static final ConfigProperty<Integer> TIMELINE_MANIFEST_RETAINED_VERSIONS = ConfigProperty
+      .key("hoodie.timeline.manifest.retained.versions")
+      .defaultValue(3)
+      .markAdvanced()
+      .withDocumentation("Number of timeline manifest versions to retain.");
+
   /**
    * @deprecated Use {@link #MAX_COMMITS_TO_KEEP} and its methods instead
    */
