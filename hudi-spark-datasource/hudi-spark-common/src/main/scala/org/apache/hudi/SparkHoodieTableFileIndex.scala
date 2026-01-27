@@ -459,8 +459,9 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
    * @return null if not supported by File Index implementation
    */
   override protected def getMatchingPartitionPathsFromCatalog(relativePathPrefixes: List[String]): List[String] = {
-    // If listing from the catalog is disabled, return null
-    if (!configProperties.getBoolean(FILE_INDEX_LIST_PARTITION_PATHS_FROM_HMS_ENABLED.key, FILE_INDEX_LIST_PARTITION_PATHS_FROM_HMS_ENABLED.defaultValue())) {
+    // If listing from the catalog is disabled, or if MDT is available (which is faster), return null
+    if (!configProperties.getBoolean(FILE_INDEX_LIST_PARTITION_PATHS_FROM_HMS_ENABLED.key, FILE_INDEX_LIST_PARTITION_PATHS_FROM_HMS_ENABLED.defaultValue())
+        || metaClient.getTableConfig.isMetadataTableAvailable) {
       null
     } else {
       // Retrieve all the partition paths from the catalog
