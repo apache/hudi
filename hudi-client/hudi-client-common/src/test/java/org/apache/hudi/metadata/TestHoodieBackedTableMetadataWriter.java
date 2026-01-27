@@ -320,10 +320,11 @@ class TestHoodieBackedTableMetadataWriter {
   }
 
   @Test
-  void testRunPendingTableServicesOperations_withCompactionFailure_whenFailOnMDTTableServiceFailuresIsTrue() {
+  void testRunPendingTableServicesOperations_withCompactionFailure_whenFailOnTableServiceFailuresIsTrue() {
     HoodieTableMetaClient metaClient = mock(HoodieTableMetaClient.class);
     HoodieActiveTimeline timeline = mock(HoodieActiveTimeline.class, RETURNS_DEEP_STUBS);
     BaseHoodieWriteClient writeClient = mock(BaseHoodieWriteClient.class);
+    HoodieMetadataMetrics metrics = mock(HoodieMetadataMetrics.class);
 
     when(metaClient.reloadActiveTimeline()).thenReturn(timeline);
     when(timeline.filterPendingCompactionTimeline().countInstants()).thenReturn(1);
@@ -332,13 +333,15 @@ class TestHoodieBackedTableMetadataWriter {
     RuntimeException compactionException = new RuntimeException("Compaction failed");
     doThrow(compactionException).when(writeClient).runAnyPendingCompactions();
 
-    // When shouldFailOnMDTTableServiceFailures is true (default), exception should propagate
+    // When shouldFailOnTableServiceFailures is true (default), exception should propagate
     assertThrows(RuntimeException.class, () ->
         HoodieBackedTableMetadataWriter.runPendingTableServicesOperationsAndRefreshTimeline(
-            metaClient, writeClient, true, Option.empty()),
-        "Expected exception to be thrown when shouldFailOnMDTTableServiceFailures is true");
+            metaClient, writeClient, true, Option.of(metrics)),
+        "Expected exception to be thrown when shouldFailOnTableServiceFailures is true");
 
     verify(writeClient, times(1)).runAnyPendingCompactions();
+    verify(metrics, times(1)).incrementMetric(
+        HoodieMetadataMetrics.PENDING_COMPACTIONS_FAILURES, 1);
   }
 
   @Test
@@ -364,6 +367,6 @@ class TestHoodieBackedTableMetadataWriter {
 
     verify(writeClient, times(1)).runAnyPendingLogCompactions();
     verify(metrics, times(1)).incrementMetric(
-        HoodieMetadataMetrics.PENDING_COMPACTIONS_FAILURES, 1);
+        HoodieMetadataMetrics.LOG_COMPACTION_FAILURES, 1);
   }
 }

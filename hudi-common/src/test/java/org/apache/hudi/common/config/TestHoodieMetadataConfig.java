@@ -142,33 +142,33 @@ class TestHoodieMetadataConfig {
   }
 
   @Test
-  void testFailJobOnMDTTableServiceFailures() {
+  void testFailOnTableServiceFailures() {
     // Test default value
     HoodieMetadataConfig config = HoodieMetadataConfig.newBuilder().build();
-    assertTrue(config.shouldFailOnMDTTableServiceFailures());
+    assertTrue(config.shouldFailOnTableServiceFailures());
 
     // Test setting to false via Properties
     Properties propsFalse = new Properties();
-    propsFalse.put(HoodieMetadataConfig.FAIL_ON_MDT_TABLE_SERVICE_FAILURES.key(), "false");
+    propsFalse.put(HoodieMetadataConfig.FAIL_ON_TABLE_SERVICE_FAILURES.key(), "false");
     HoodieMetadataConfig configWithFalse = HoodieMetadataConfig.newBuilder()
         .fromProperties(propsFalse)
         .build();
-    assertFalse(configWithFalse.shouldFailOnMDTTableServiceFailures());
+    assertFalse(configWithFalse.shouldFailOnTableServiceFailures());
 
     // Test setting to true via builder method
     HoodieMetadataConfig configWithBuilder = HoodieMetadataConfig.newBuilder()
-        .setFailJobOnMDTTableServiceFailures(true)
+        .setFailOnTableServiceFailures(true)
         .build();
-    assertTrue(configWithBuilder.shouldFailOnMDTTableServiceFailures());
+    assertTrue(configWithBuilder.shouldFailOnTableServiceFailures());
 
     // Test setting to false via builder method
     HoodieMetadataConfig configWithBuilderFalse = HoodieMetadataConfig.newBuilder()
-        .setFailJobOnMDTTableServiceFailures(false)
+        .setFailOnTableServiceFailures(false)
         .build();
-    assertFalse(configWithBuilderFalse.shouldFailOnMDTTableServiceFailures());
+    assertFalse(configWithBuilderFalse.shouldFailOnTableServiceFailures());
 
     // Verify the config key is correct
-    assertEquals("hoodie.metadata.fail.on.table.services.failures",
-        HoodieMetadataConfig.FAIL_ON_MDT_TABLE_SERVICE_FAILURES.key());
+    assertEquals("hoodie.metadata.write.fail.on.table.service.failures",
+        HoodieMetadataConfig.FAIL_ON_TABLE_SERVICE_FAILURES.key());
   }
 }

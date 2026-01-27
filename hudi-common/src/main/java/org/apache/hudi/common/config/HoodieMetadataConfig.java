@@ -616,8 +616,8 @@ public final class HoodieMetadataConfig extends HoodieConfig {
           + "honor the set value for number of tasks. If not, number of write status's from data "
           + "table writes will be used for metadata table record preparation");
 
-  public static final ConfigProperty<Boolean> FAIL_ON_MDT_TABLE_SERVICE_FAILURES = ConfigProperty
-      .key(METADATA_PREFIX + ".fail.on.table.services.failures")
+  public static final ConfigProperty<Boolean> FAIL_ON_TABLE_SERVICE_FAILURES = ConfigProperty
+      .key(METADATA_PREFIX + ".write.fail.on.table.service.failures")
       .defaultValue(true)
       .markAdvanced()
       .sinceVersion("1.2.0")
@@ -906,8 +906,8 @@ public final class HoodieMetadataConfig extends HoodieConfig {
     return getBooleanOrDefault(DERIVE_FROM_DATA_TABLE_CLEAN_POLICY);
   }
 
-  public boolean shouldFailOnMDTTableServiceFailures() {
-    return getBooleanOrDefault(FAIL_ON_MDT_TABLE_SERVICE_FAILURES);
+  public boolean shouldFailOnTableServiceFailures() {
+    return getBooleanOrDefault(FAIL_ON_TABLE_SERVICE_FAILURES);
   }
 
   /**
@@ -1222,8 +1222,8 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       return this;
     }
 
-    public Builder setFailJobOnMDTTableServiceFailures(boolean failJobOnMDTTableServiceFailures) {
-      metadataConfig.setValue(FAIL_ON_MDT_TABLE_SERVICE_FAILURES, String.valueOf(failJobOnMDTTableServiceFailures));
+    public Builder setFailOnTableServiceFailures(boolean failOnTableServiceFailures) {
+      metadataConfig.setValue(FAIL_ON_TABLE_SERVICE_FAILURES, String.valueOf(failOnTableServiceFailures));
       return this;
     }
 
