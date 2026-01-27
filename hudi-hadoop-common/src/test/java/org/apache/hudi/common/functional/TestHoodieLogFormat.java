@@ -696,8 +696,7 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
     reader.close();
   }
 
-  @ParameterizedTest
-  @ValueSource(booleans = {true, false})
+  @Test
   public void testFilteringUncommittedLogBlocksPreTableVersion8() throws Exception {
     HoodieTableMetaClient metaClient = HoodieTestUtils.createMetaClient(basePath);
     metaClient.getTableConfig().setTableVersion(HoodieTableVersion.SIX);
