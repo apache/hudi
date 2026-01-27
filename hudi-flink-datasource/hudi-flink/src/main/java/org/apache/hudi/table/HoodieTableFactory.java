@@ -215,7 +215,7 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
   private void checkRecordKey(Configuration conf, ResolvedSchema schema) {
     List<String> fields = schema.getColumnNames();
     if (schema.getPrimaryKey().isEmpty()) {
-      String[] recordKeys = OptionsResolver.getRecordKeyStrOrFail(conf).split(",");
+      String[] recordKeys = OptionsResolver.getRecordKeyStr(conf).split(",");
       Arrays.stream(recordKeys)
           .filter(field -> !fields.contains(field))
           .findAny()
@@ -284,10 +284,10 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
         log.info("'{}' is not set, therefore '{}' value will be used as index key instead",
             FlinkOptions.INDEX_KEY_FIELD.key(),
             FlinkOptions.RECORD_KEY_FIELD.key());
-        conf.set(FlinkOptions.INDEX_KEY_FIELD, OptionsResolver.getRecordKeyStrOrFail(conf));
+        conf.set(FlinkOptions.INDEX_KEY_FIELD, OptionsResolver.getRecordKeyStr(conf));
       } else {
         Set<String> recordKeySet =
-            Arrays.stream(OptionsResolver.getRecordKeyStrOrFail(conf).split(",")).collect(Collectors.toSet());
+            Arrays.stream(OptionsResolver.getRecordKeyStr(conf).split(",")).collect(Collectors.toSet());
         Set<String> indexKeySet =
             Arrays.stream(conf.get(FlinkOptions.INDEX_KEY_FIELD).split(",")).collect(Collectors.toSet());
         if (!recordKeySet.containsAll(indexKeySet)) {
@@ -299,7 +299,7 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
 
     // tweak the key gen class if possible
     final String[] partitions = conf.get(FlinkOptions.PARTITION_PATH_FIELD).split(",");
-    final String[] pks = OptionsResolver.getRecordKeyStrOrFail(conf).split(",");
+    final String[] pks = OptionsResolver.getRecordKeyStr(conf).split(",");
     if (partitions.length == 1) {
       final String partitionField = partitions[0];
       if (partitionField.isEmpty()) {

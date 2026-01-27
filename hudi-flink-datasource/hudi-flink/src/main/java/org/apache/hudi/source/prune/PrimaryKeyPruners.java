@@ -43,7 +43,7 @@ import java.util.stream.Collectors;
 public class PrimaryKeyPruners {
 
   public static Function<Integer, Integer> getBucketIdFunc(List<ResolvedExpression> hashKeyFilters, Configuration conf) {
-    List<String> pkFields = Arrays.asList(OptionsResolver.getRecordKeyStrOrFail(conf).split(","));
+    List<String> pkFields = Arrays.asList(OptionsResolver.getRecordKeyStr(conf).split(","));
     // step1: resolve the hash key values
     final boolean logicalTimestamp = OptionsResolver.isConsistentLogicalTimestampEnabled(conf);
     List<String> values = hashKeyFilters.stream()

@@ -350,7 +350,7 @@ public class HoodieCatalog extends AbstractCatalog {
       conf.set(FlinkOptions.PARTITION_PATH_FIELD, partitions);
       options.put(TableOptionProperties.PARTITION_COLUMNS, partitions);
 
-      final String[] pks = OptionsResolver.getRecordKeyStrOrFail(conf).split(",");
+      final String[] pks = OptionsResolver.getRecordKeyStr(conf).split(",");
       boolean complexHoodieKey = pks.length > 1 || resolvedTable.getPartitionKeys().size() > 1;
       StreamerUtil.checkKeygenGenerator(complexHoodieKey, conf);
     } else {

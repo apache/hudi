@@ -34,10 +34,10 @@ import org.apache.hudi.common.table.timeline.TimelineUtils.HollowCommitHandling;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.exception.HoodieValidationException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.index.bucket.partition.PartitionBucketIndexUtils;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
@@ -156,12 +156,12 @@ public class OptionsResolver {
    * Return value of {@link FlinkOptions#RECORD_KEY_FIELD} if it was set,
    * or throw exception otherwise.
    */
-  public static String getRecordKeyStrOrFail(Configuration conf) {
+  public static String getRecordKeyStr(Configuration conf) {
     final String recordKeyStr = conf.get(FlinkOptions.RECORD_KEY_FIELD);
-    if (null == recordKeyStr) {
-      throw new HoodieValidationException("Primary key definition is required, "
-          + "use either PRIMARY KEY syntax or option '" + FlinkOptions.RECORD_KEY_FIELD.key() + "' to specify.");
-    }
+    ValidationUtils.checkArgument(
+        recordKeyStr != null,
+        "Primary key definition is required, use either PRIMARY KEY syntax or option '"
+            + FlinkOptions.RECORD_KEY_FIELD.key() + "' to specify.");
     return recordKeyStr;
   }
 
@@ -443,7 +443,7 @@ public class OptionsResolver {
    * Returns the index key field.
    */
   public static String getIndexKeyField(Configuration conf) {
-    return conf.getString(FlinkOptions.INDEX_KEY_FIELD.key(), getRecordKeyStrOrFail(conf));
+    return conf.getString(FlinkOptions.INDEX_KEY_FIELD.key(), getRecordKeyStr(conf));
   }
 
   /**

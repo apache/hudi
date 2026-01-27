@@ -37,7 +37,7 @@ public class RowDataKeyGens {
    * Creates {@link RowDataKeyGen} of corresponding type depending on table configuration.
    */
   public static RowDataKeyGen instance(Configuration conf, RowType rowType, @Nullable Integer taskId, @Nullable String instantTime) {
-    String recordKeys = OptionsResolver.getRecordKeyStrOrFail(conf);
+    String recordKeys = OptionsResolver.getRecordKeyStr(conf);
     if (hasRecordKey(recordKeys, rowType.getFieldNames())) {
       return RowDataKeyGen.instance(conf, rowType);
     } else {

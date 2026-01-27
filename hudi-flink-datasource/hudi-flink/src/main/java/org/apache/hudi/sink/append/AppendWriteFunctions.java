@@ -92,7 +92,7 @@ public abstract class AppendWriteFunctions {
       log.info("'{}' is not set, therefore '{}' value will be used as sort keys instead",
           FlinkOptions.WRITE_BUFFER_SORT_KEYS.key(),
           FlinkOptions.RECORD_KEY_FIELD.key());
-      sortKeys = OptionsResolver.getRecordKeyStrOrFail(conf);
+      sortKeys = OptionsResolver.getRecordKeyStr(conf);
     }
     ValidationUtils.checkArgument(StringUtils.nonEmpty(sortKeys),
         "Sort keys can't be null or empty for append write with buffer sort. "
