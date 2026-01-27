@@ -24,6 +24,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.internal.schema.HoodieSchemaException;
 
 import org.apache.avro.JsonProperties;
@@ -172,7 +173,6 @@ public final class HoodieSchemaUtils {
 
   /**
    * Merges two schemas, combining fields from both with conflict resolution.
-   * This is equivalent to AvroSchemaUtils.mergeSchemas() but operates on HoodieSchemas.
    *
    * @param sourceSchema source schema to merge from
    * @param targetSchema target schema to merge into
@@ -451,7 +451,6 @@ public final class HoodieSchemaUtils {
 
   /**
    * Generates a projection schema from the original schema, including only the specified fields.
-   * This is equivalent to HoodieAvroUtils.generateProjectionSchema() but operates on HoodieSchema.
    *
    * @param originalSchema the source schema
    * @param fieldNames     the list of field names to include in the projection
@@ -463,15 +462,25 @@ public final class HoodieSchemaUtils {
     ValidationUtils.checkArgument(originalSchema != null, "Original schema cannot be null");
     ValidationUtils.checkArgument(fieldNames != null, "Field names cannot be null");
 
-    // Delegate to HoodieAvroUtils
-    Schema projectedAvro = HoodieAvroUtils.generateProjectionSchema(originalSchema.toAvroSchema(), fieldNames);
-    return HoodieSchema.fromAvroSchema(projectedAvro);
+    Map<String, HoodieSchemaField> schemaFieldsMap = originalSchema.getFields().stream()
+        .map(r -> Pair.of(r.name().toLowerCase(), r)).collect(Collectors.toMap(Pair::getLeft, Pair::getRight));
+    List<HoodieSchemaField> projectedFields = new ArrayList<>(fieldNames.size());
+    for (String fn : fieldNames) {
+      HoodieSchemaField field = schemaFieldsMap.get(fn.toLowerCase());
+      if (field == null) {
+        throw new HoodieException("Field " + fn + " not found in log schema. Query cannot proceed! "
+            + "Derived Schema Fields: " + new ArrayList<>(schemaFieldsMap.keySet()));
+      } else {
+        projectedFields.add(createNewSchemaField(field));
+      }
+    }
+
+    return HoodieSchema.createRecord(originalSchema.getName(), originalSchema.getNamespace().orElse(null), originalSchema.getDoc().orElse(null), projectedFields);
   }
 
   /**
    * Prunes the data schema to only include fields that are required by the required schema,
    * plus any mandatory fields specified.
-   * This is equivalent to {@link AvroSchemaUtils#pruneDataSchema(Schema, Schema, Set)} but operates on HoodieSchema.
    *
    * @param dataSchema      the full data schema
    * @param requiredSchema  the schema containing required fields
@@ -486,12 +495,68 @@ public final class HoodieSchemaUtils {
 
     Set<String> mandatorySet = mandatoryFields != null ? mandatoryFields : Collections.emptySet();
 
-    // Delegate to AvroSchemaUtils
-    Schema prunedAvro = AvroSchemaUtils.pruneDataSchema(
-        dataSchema.toAvroSchema(),
-        requiredSchema.toAvroSchema(),
-        mandatorySet);
-    return HoodieSchema.fromAvroSchema(prunedAvro);
+    HoodieSchema prunedDataSchema = pruneDataSchemaInternal(getNonNullTypeFromUnion(dataSchema), getNonNullTypeFromUnion(requiredSchema), mandatorySet);
+    if (dataSchema.isNullable() && !prunedDataSchema.isNullable()) {
+      return createNullableSchema(prunedDataSchema);
+    }
+    return prunedDataSchema;
+  }
+
+  private static HoodieSchema pruneDataSchemaInternal(HoodieSchema dataSchema, HoodieSchema requiredSchema, Set<String> mandatoryFields) {
+    switch (requiredSchema.getType()) {
+      case RECORD:
+        if (dataSchema.getType() != HoodieSchemaType.RECORD) {
+          throw new IllegalArgumentException("Data schema is not a record");
+        }
+        List<HoodieSchemaField> newFields = new ArrayList<>(requiredSchema.getFields().size());
+        for (HoodieSchemaField requiredSchemaField : requiredSchema.getFields()) {
+          if (mandatoryFields.contains(requiredSchemaField.name())) {
+            newFields.add(createNewSchemaField(requiredSchemaField));
+          } else {
+            dataSchema.getField(requiredSchemaField.name()).ifPresent(dataSchemaField -> {
+              HoodieSchema prunedFieldSchema = pruneDataSchema(dataSchemaField.schema(), requiredSchemaField.schema(), Collections.emptySet());
+              HoodieSchemaField newField = createNewSchemaField(
+                  dataSchemaField.name(),
+                  prunedFieldSchema,
+                  dataSchemaField.doc().orElse(null),
+                  dataSchemaField.defaultVal().orElse(null)
+              );
+              newFields.add(newField);
+            });
+          }
+        }
+        HoodieSchema newRecord = HoodieSchema.createRecord(dataSchema.getName(), dataSchema.getNamespace().orElse(null), dataSchema.getDoc().orElse(null), newFields);
+        copyProperties(dataSchema, newRecord);
+        return newRecord;
+
+      case ARRAY:
+        if (dataSchema.getType() != HoodieSchemaType.ARRAY) {
+          throw new IllegalArgumentException("Data schema is not an array");
+        }
+        return HoodieSchema.createArray(pruneDataSchema(dataSchema.getElementType(), requiredSchema.getElementType(), Collections.emptySet()));
+
+      case MAP:
+        if (dataSchema.getType() != HoodieSchemaType.MAP) {
+          throw new IllegalArgumentException("Data schema is not a map");
+        }
+        return HoodieSchema.createMap(pruneDataSchema(dataSchema.getValueType(), requiredSchema.getValueType(), Collections.emptySet()));
+
+      case UNION:
+        throw new IllegalArgumentException("Data schema is a union");
+
+      default:
+        return dataSchema;
+    }
+  }
+
+  /**
+   * Helper to copy properties and logical types from source schema to target schema.
+   */
+  private static HoodieSchema copyProperties(HoodieSchema source, HoodieSchema target) {
+    for (Map.Entry<String, Object> prop : source.getObjectProps().entrySet()) {
+      target.addProp(prop.getKey(), prop.getValue());
+    }
+    return target;
   }
 
   /**
