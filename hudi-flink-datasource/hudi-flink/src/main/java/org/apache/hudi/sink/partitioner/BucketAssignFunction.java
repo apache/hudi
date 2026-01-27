@@ -231,7 +231,7 @@ public class BucketAssignFunction
   public void notifyCheckpointComplete(long checkpointId) {
     // Refresh the table state when there are new commits.
     this.bucketAssigner.reload(checkpointId);
-    this.indexBackend.onCheckpointComplete(this.correspondent);
+    this.indexBackend.onCheckpointComplete(this.correspondent, checkpointId);
   }
 
   @Override
