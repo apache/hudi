@@ -177,7 +177,7 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
     }
     HoodieTimeline activeTimeline = hoodieTable.getActiveTimeline();
     Option<HoodieInstant> lastCleanInstant = activeTimeline.getCleanerTimeline().lastInstant();
-    Option<HoodieInstant> lastCompactionInstant = commitTimeline
+    Option<HoodieInstant> lastCompactionInstant = getCommitTimeline()
         .filter(instant -> instant.getAction().equals(HoodieTimeline.COMMIT_ACTION)).lastInstant();
     if (!lastCompactionInstant.isPresent() || !lastCleanInstant.isPresent()) {
       return false;
