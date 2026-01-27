@@ -1229,8 +1229,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
       // compact job will abort if they attempt to execute compact before heartbeat expires
       // Note that as long as all jobs for this table use this API for compact, then this alone should prevent
       // compact rollbacks from running concurrently to compact commits.
-      txnManager.beginStateChange(Option.of(compactionPlanInstant), txnManager.getLastCompletedTransactionOwner()),
-          txnManager.getLastCompletedTransactionOwner());
+      txnManager.beginStateChange(Option.of(compactionPlanInstant), txnManager.getLastCompletedTransactionOwner());
       try {
         if (!this.heartbeatClient.isHeartbeatExpired(compactionInstantTime)) {
           throw new HoodieLockException("Cannot compact instant " + compactionInstantTime + " due to heartbeat by existing job");
