@@ -239,7 +239,7 @@ public class TestHoodieTableFactory {
     this.conf.set(FlinkOptions.PATH, tempFile.getAbsolutePath() + "_NOT_EXIST_TABLE_PATH");
     this.conf.set(FlinkOptions.TABLE_TYPE, "INVALID_TABLE_TYPE");
     final MockContext sourceContext2 = MockContext.getInstance(this.conf, schema, "f2");
-    assertThrows(HoodieValidationException.class, () -> new HoodieTableFactory().createDynamicTableSink(sourceContext2));
+    assertThrows(IllegalArgumentException.class, () -> new HoodieTableFactory().createDynamicTableSink(sourceContext2));
     this.conf.set(FlinkOptions.PATH, tempFile.getAbsolutePath());
 
     // Invalid table type will be ok if the hoodie.properties exists.

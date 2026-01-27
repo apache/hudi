@@ -42,7 +42,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.flink.configuration.ConfigOption;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.configuration.ReadableConfig;
-import org.apache.flink.table.api.ValidationException;
 import org.apache.flink.table.catalog.CatalogTable;
 import org.apache.flink.table.catalog.ObjectIdentifier;
 import org.apache.flink.table.catalog.ResolvedSchema;
@@ -82,14 +81,23 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
   @Override
   public DynamicTableSource createDynamicTableSource(Context context) {
     Configuration conf = FlinkOptions.fromMap(context.getCatalogTable().getOptions());
-    StoragePath path = new StoragePath(conf.getOptional(FlinkOptions.PATH).orElseThrow(() ->
-        new ValidationException("Option [path] should not be empty.")));
-    setupTableOptions(conf.get(FlinkOptions.PATH), conf);
+    String path = getTablePath(conf);
+    enrichOptionsFromTableConfig(path, conf);
+
+    // set common parameters
+    conf.setString(FlinkOptions.TABLE_NAME.key(), context.getObjectIdentifier().getObjectName());
+    conf.setString(FlinkOptions.DATABASE_NAME.key(), context.getObjectIdentifier().getDatabaseName());
+    setupKeyGenRelatedOptions(conf, context.getCatalogTable());
     ResolvedSchema schema = context.getCatalogTable().getResolvedSchema();
-    setupConfOptions(conf, context.getObjectIdentifier(), context.getCatalogTable(), schema);
+    setupAdditionalOptions(conf, context.getObjectIdentifier(), schema.toPhysicalRowDataType().notNull().getLogicalType());
+
+    // set read specific parameters
+    setupReadOptions(conf);
+    setupCommitsRetaining(conf);
+
     return new HoodieTableSource(
         SerializableSchema.create(schema),
-        path,
+        new StoragePath(path),
         context.getCatalogTable().getPartitionKeys(),
         conf.get(FlinkOptions.PARTITION_DEFAULT_NAME),
         conf);
@@ -98,20 +106,29 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
   @Override
   public DynamicTableSink createDynamicTableSink(Context context) {
     Configuration conf = FlinkOptions.fromMap(context.getCatalogTable().getOptions());
-    checkArgument(!StringUtils.isNullOrEmpty(conf.get(FlinkOptions.PATH)),
-        "Option [path] should not be empty.");
-    setupTableOptions(conf.get(FlinkOptions.PATH), conf);
+    String path = getTablePath(conf);
+    enrichOptionsFromTableConfig(path, conf);
+
+    // set common parameters
+    conf.setString(FlinkOptions.TABLE_NAME.key(), context.getObjectIdentifier().getObjectName());
+    conf.setString(FlinkOptions.DATABASE_NAME.key(), context.getObjectIdentifier().getDatabaseName());
+    setupKeyGenRelatedOptions(conf, context.getCatalogTable());
     ResolvedSchema schema = context.getCatalogTable().getResolvedSchema();
+    setupAdditionalOptions(conf, context.getObjectIdentifier(), schema.toPhysicalRowDataType().notNull().getLogicalType());
+
+    // set write specific parameters
     sanityCheck(conf, schema);
-    setupConfOptions(conf, context.getObjectIdentifier(), context.getCatalogTable(), schema);
+    setupWriteOptions(conf);
     setupSortOptions(conf, context.getConfiguration());
+    setupCommitsRetaining(conf);
+
     return new HoodieTableSink(conf, schema);
   }
 
   /**
    * Supplement the table config options if not specified.
    */
-  private void setupTableOptions(String basePath, Configuration conf) {
+  private static void enrichOptionsFromTableConfig(String basePath, Configuration conf) {
     StreamerUtil.getTableConfig(basePath, HadoopConfigurations.getHadoopConf(conf))
         .ifPresent(tableConfig -> {
           if (tableConfig.contains(HoodieTableConfig.RECORDKEY_FIELDS)
@@ -164,12 +181,21 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
   // -------------------------------------------------------------------------
 
   /**
+   * Get table path with configuration check
+   */
+  private static String getTablePath(Configuration conf) {
+    String path = conf.get(FlinkOptions.PATH);
+    checkArgument(StringUtils.nonEmpty(path), "Option [path] should not be empty.");
+    return path;
+  }
+
+  /**
    * The sanity check.
    *
    * @param conf   The table options
    * @param schema The table schema
    */
-  private void sanityCheck(Configuration conf, ResolvedSchema schema) {
+  private static void sanityCheck(Configuration conf, ResolvedSchema schema) {
     checkTableType(conf);
     checkIndexType(conf);
 
@@ -182,13 +208,12 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
   /**
    * Validate the index type.
    */
-  private void checkIndexType(Configuration conf) {
+  private static void checkIndexType(Configuration conf) {
     String indexTypeStr = conf.get(FlinkOptions.INDEX_TYPE);
-    if (!StringUtils.isNullOrEmpty(indexTypeStr)) {
+    if (StringUtils.nonEmpty(indexTypeStr)) {
       HoodieIndexConfig.INDEX_TYPE.checkValues(indexTypeStr);
     }
-    HoodieIndex.IndexType indexType = OptionsResolver.getIndexType(conf);
-    if (indexType == HoodieIndex.IndexType.GLOBAL_RECORD_LEVEL_INDEX) {
+    if (OptionsResolver.getIndexType(conf) == HoodieIndex.IndexType.GLOBAL_RECORD_LEVEL_INDEX) {
       ValidationUtils.checkArgument(conf.get(FlinkOptions.METADATA_ENABLED),
           "Metadata table should be enabled when index.type is GLOBAL_RECORD_LEVEL_INDEX.");
     }
@@ -197,22 +222,22 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
   /**
    * Validate the table type.
    */
-  private void checkTableType(Configuration conf) {
+  private static void checkTableType(Configuration conf) {
     String tableType = conf.get(FlinkOptions.TABLE_TYPE);
-    if (StringUtils.nonEmpty(tableType)) {
-      try {
-        HoodieTableType.valueOf(tableType);
-      } catch (IllegalArgumentException e) {
-        throw new HoodieValidationException("Invalid table type: " + tableType + ". Table type should be either "
-                + HoodieTableType.MERGE_ON_READ + " or " + HoodieTableType.COPY_ON_WRITE + ".");
-      }
+    if (StringUtils.isNullOrEmpty(tableType)) {
+      return;
     }
+    ValidationUtils.checkArgument(
+        HoodieTableType.COPY_ON_WRITE.name().equals(tableType)
+            || HoodieTableType.MERGE_ON_READ.name().equals(tableType),
+        () -> "Invalid table type : " + tableType + ". Table type should be either "
+            + HoodieTableType.COPY_ON_WRITE.name() + "  or " + HoodieTableType.MERGE_ON_READ.name() + ".");
   }
 
   /**
    * Validate the record key.
    */
-  private void checkRecordKey(Configuration conf, ResolvedSchema schema) {
+  private static void checkRecordKey(Configuration conf, ResolvedSchema schema) {
     List<String> fields = schema.getColumnNames();
     if (schema.getPrimaryKey().isEmpty()) {
       String[] recordKeys = OptionsResolver.getRecordKeyStr(conf).split(",");
@@ -224,68 +249,66 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
                 + "'" + FlinkOptions.RECORD_KEY_FIELD.key() + "' does not exist in the table schema.");
           });
     }
-    if (schema.getPrimaryKey().isPresent() && conf.containsKey(FlinkOptions.RECORD_KEY_FIELD.key())) {
-      log.warn("PRIMARY KEY syntax and option '{}' was used. "
-          + "Value of the PRIMARY KEY will be used and option will be ignored!",
-          FlinkOptions.RECORD_KEY_FIELD.key());
-    }
   }
 
   /**
-   * Sets up the config options based on the table definition, for e.g, the table name, primary key.
+   * Sets up the additional set of config options, for instance, related to Hive sync
    *
    * @param conf      The configuration to set up
    * @param tablePath The table path
-   * @param table     The catalog table
-   * @param schema    The physical schema
+   * @param rowType   The specified table row type
    */
-  private static void setupConfOptions(
+  private static void setupAdditionalOptions(
       Configuration conf,
       ObjectIdentifier tablePath,
-      CatalogTable table,
-      ResolvedSchema schema) {
-    // table name
-    conf.setString(FlinkOptions.TABLE_NAME.key(), tablePath.getObjectName());
-    // database name
-    conf.setString(FlinkOptions.DATABASE_NAME.key(), tablePath.getDatabaseName());
-    // hoodie key about options
-    setupHoodieKeyOptions(conf, table);
-    // compaction options
-    setupCompactionOptions(conf);
-    // hive options
+      LogicalType rowType) {
     setupHiveOptions(conf, tablePath);
-    // read options
-    setupReadOptions(conf);
-    // write options
-    setupWriteOptions(conf);
     // infer avro schema from physical DDL schema
-    inferAvroSchema(conf, schema.toPhysicalRowDataType().notNull().getLogicalType());
+    inferAvroSchema(conf, rowType);
   }
 
   /**
-   * Sets up the hoodie key options (e.g. record key and partition key) from the table definition.
+   * Sets up options related to Hoodie key generation
    */
-  private static void setupHoodieKeyOptions(Configuration conf, CatalogTable table) {
+  private static void setupKeyGenRelatedOptions(Configuration conf, CatalogTable table) {
     List<String> pkColumns = table.getSchema().getPrimaryKey()
         .map(pk -> pk.getColumns()).orElse(Collections.emptyList());
-    if (pkColumns.size() > 0) {
-      // the PRIMARY KEY syntax always has higher priority than option FlinkOptions#RECORD_KEY_FIELD
+    // PRIMARY KEY syntax has higher priority and rewrites FlinkOptions#RECORD_KEY_FIELD option
+    if (!pkColumns.isEmpty()) {
       String recordKey = String.join(",", pkColumns);
+      String hoodieStyleRecordKey = conf.get(FlinkOptions.RECORD_KEY_FIELD);
+      if (StringUtils.nonEmpty(hoodieStyleRecordKey)
+          && !hoodieStyleRecordKey.equalsIgnoreCase(recordKey)) {
+        log.warn("PRIMARY KEY was set as '{}' along with '{}' = '{}'. "
+                + "Value of the PRIMARY KEY will be used and the second option will be ignored.",
+            recordKey, FlinkOptions.RECORD_KEY_FIELD.key(), hoodieStyleRecordKey);
+      }
       conf.set(FlinkOptions.RECORD_KEY_FIELD, recordKey);
     }
+
+    // PARTITIONED BY syntax has higher priority and rewrites FlinkOptions#PARTITION_PATH_FIELD option
     List<String> partitionKeys = table.getPartitionKeys();
     if (!partitionKeys.isEmpty()) {
-      // the PARTITIONED BY syntax always has higher priority than option FlinkOptions#PARTITION_PATH_FIELD
-      conf.set(FlinkOptions.PARTITION_PATH_FIELD, String.join(",", partitionKeys));
+      String partitionVal = String.join(",", partitionKeys);
+      String hoodiePartitionVal = conf.get(FlinkOptions.PARTITION_PATH_FIELD);
+      if (StringUtils.nonEmpty(hoodiePartitionVal)
+          && !hoodiePartitionVal.equalsIgnoreCase(partitionVal)) {
+        log.warn("PARTITIONED BY was set as '{}' along with '{}' = '{}'. "
+                + "Value of the PARTITIONED BY will be used and the second option will be ignored.",
+            partitionVal, FlinkOptions.PARTITION_PATH_FIELD.key(), hoodiePartitionVal);
+      }
+      conf.set(FlinkOptions.PARTITION_PATH_FIELD, partitionVal);
     }
-    // set index key for bucket index if not defined
+
     if (conf.get(FlinkOptions.INDEX_TYPE).equals(HoodieIndex.IndexType.BUCKET.name())) {
       if (conf.get(FlinkOptions.INDEX_KEY_FIELD).isEmpty()) {
+        // set index keys equal to record keys if absent for bucket index
         log.info("'{}' is not set, therefore '{}' value will be used as index key instead",
             FlinkOptions.INDEX_KEY_FIELD.key(),
             FlinkOptions.RECORD_KEY_FIELD.key());
-        conf.set(FlinkOptions.INDEX_KEY_FIELD, OptionsResolver.getRecordKeyStr(conf));
+        conf.set(FlinkOptions.INDEX_KEY_FIELD, conf.get(FlinkOptions.RECORD_KEY_FIELD));
       } else {
+        // check that index keys is a subset of record keys
         Set<String> recordKeySet =
             Arrays.stream(OptionsResolver.getRecordKeyStr(conf).split(",")).collect(Collectors.toSet());
         Set<String> indexKeySet =
@@ -363,7 +386,7 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
   /**
    * Sets up the compaction options from the table definition.
    */
-  private static void setupCompactionOptions(Configuration conf) {
+  private static void setupCommitsRetaining(Configuration conf) {
     int commitsToRetain = conf.get(FlinkOptions.CLEAN_RETAIN_COMMITS);
     int minCommitsToKeep = conf.get(FlinkOptions.ARCHIVE_MIN_COMMITS);
     if (commitsToRetain >= minCommitsToKeep) {
@@ -416,7 +439,7 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
   /**
    * Sets up the table exec sort options.
    */
-  private void setupSortOptions(Configuration conf, ReadableConfig contextConfig) {
+  private static void setupSortOptions(Configuration conf, ReadableConfig contextConfig) {
     if (contextConfig.getOptional(TABLE_EXEC_SORT_MAX_NUM_FILE_HANDLES).isPresent()) {
       conf.set(TABLE_EXEC_SORT_MAX_NUM_FILE_HANDLES,
           contextConfig.get(TABLE_EXEC_SORT_MAX_NUM_FILE_HANDLES));
