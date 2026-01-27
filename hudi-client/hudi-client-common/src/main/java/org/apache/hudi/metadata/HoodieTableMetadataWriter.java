@@ -165,5 +165,5 @@ public interface HoodieTableMetadataWriter<I,O> extends Serializable, AutoClosea
   /**
    * This returns true if the metadata table's partitions state is changed.
    */
-  boolean isPartitionsStateChanged();
+  boolean hasPartitionsStateChanged();
 }
