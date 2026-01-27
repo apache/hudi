@@ -29,7 +29,7 @@ import java.util.Properties;
  * HUDI versions are configured through maven and are formatted as <major>.<minor>.<patch>. Example: 0.12.2 or 0.12.3-snapshot
  */
 public final class HoodieVersion {
-  private static String HOODIE_DEFAULT_VERSION = "0.14.x";
+  private static String HOODIE_DEFAULT_VERSION = "1.2.3";
 
   public static final String HOODIE_WRITER_VERSION = "hudi_writer_version";
 
@@ -90,13 +90,6 @@ public final class HoodieVersion {
 
   protected static void setVersionOverride(String version) {
     HOODIE_DEFAULT_VERSION = version;
-  }
-
-  public static void main(String[] args) {
-    System.out.println("hoodie version=" + get());
-    System.out.println(" major=" + major());
-    System.out.println(" minor=" + minor());
-    System.out.println(" patch=" + patch());
   }
 
   /**
