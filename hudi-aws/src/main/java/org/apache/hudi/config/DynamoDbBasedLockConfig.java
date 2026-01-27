@@ -140,7 +140,7 @@ public class DynamoDbBasedLockConfig extends HoodieConfig {
 
     public DynamoDbBasedLockConfig build() {
       lockConfig.setDefaults(DynamoDbBasedLockConfig.class.getName());
-      checkRequiredProps(lockConfig);
+      checkRequiredProps();
       return lockConfig;
     }
 
@@ -149,17 +149,14 @@ public class DynamoDbBasedLockConfig extends HoodieConfig {
       return this;
     }
 
-    private void checkRequiredProps(final DynamoDbBasedLockConfig config) {
+    private void checkRequiredProps() {
       String errorMsg = "Config key is not found: ";
       ValidationUtils.checkArgument(
-          config.contains(DYNAMODB_LOCK_TABLE_NAME.key()),
+          lockConfig.contains(DYNAMODB_LOCK_TABLE_NAME.key()),
           errorMsg + DYNAMODB_LOCK_TABLE_NAME.key());
       ValidationUtils.checkArgument(
-          config.contains(DYNAMODB_LOCK_REGION.key()),
+          lockConfig.contains(DYNAMODB_LOCK_REGION.key()),
           errorMsg + DYNAMODB_LOCK_REGION.key());
-      ValidationUtils.checkArgument(
-          config.contains(DYNAMODB_LOCK_PARTITION_KEY.key()),
-          errorMsg + DYNAMODB_LOCK_PARTITION_KEY.key());
     }
   }
 }
