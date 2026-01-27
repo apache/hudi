@@ -45,19 +45,17 @@ public class BufferedRecordMergerFactory {
 
   public static <T> BufferedRecordMerger<T> create(HoodieReaderContext<T> readerContext,
                                                    RecordMergeMode recordMergeMode,
-                                                   boolean enablePartialMerging,
                                                    Option<HoodieRecordMerger> recordMerger,
                                                    Option<String> payloadClass,
                                                    HoodieSchema readerSchema,
                                                    TypedProperties props,
                                                    Option<PartialUpdateMode> partialUpdateModeOpt) {
-    return create(readerContext, recordMergeMode, enablePartialMerging, recordMerger,
+    return create(readerContext, recordMergeMode, recordMerger,
         readerSchema, payloadClass.map(p -> Pair.of(p, p)), props, partialUpdateModeOpt);
   }
 
   public static <T> BufferedRecordMerger<T> create(HoodieReaderContext<T> readerContext,
                                                    RecordMergeMode recordMergeMode,
-                                                   boolean enablePartialMerging,
                                                    Option<HoodieRecordMerger> recordMerger,
                                                    HoodieSchema readerSchema,
                                                    Option<Pair<String, String>> payloadClasses,

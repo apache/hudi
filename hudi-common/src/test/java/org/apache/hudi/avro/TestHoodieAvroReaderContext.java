@@ -283,7 +283,6 @@ class TestHoodieAvroReaderContext {
     assertEquals(0, output.getSchema().getFields().size());
   }
 
-
   @Test
   void testConstructEngineRecordWithListValuesNullValues() {
     HoodieAvroReaderContext readerContext = getReaderContextWithMetaFields();

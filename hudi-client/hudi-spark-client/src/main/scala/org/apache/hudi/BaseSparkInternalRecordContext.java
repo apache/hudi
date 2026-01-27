@@ -133,7 +133,7 @@ public abstract class BaseSparkInternalRecordContext extends RecordContext<Inter
 
   @Override
   public InternalRow constructEngineRecord(HoodieSchema recordSchema, Object[] fieldValues) {
-      return new GenericInternalRow(fieldValues);
+    return new GenericInternalRow(fieldValues);
   }
 
   @Override

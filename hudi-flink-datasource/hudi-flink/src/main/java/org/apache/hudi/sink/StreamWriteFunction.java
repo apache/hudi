@@ -238,7 +238,6 @@ public class StreamWriteFunction extends AbstractStreamWriteFunction<HoodieFlink
     recordMerger = BufferedRecordMergerFactory.create(
         readerContext,
         readerContext.getMergeMode(),
-        false,
         readerContext.getRecordMerger(),
         HoodieSchema.parse(writeClient.getConfig().getSchema()),
         readerContext.getPayloadClasses(writeClient.getConfig().getProps()),

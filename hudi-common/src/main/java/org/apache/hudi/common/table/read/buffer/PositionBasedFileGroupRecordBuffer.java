@@ -111,17 +111,13 @@ public class PositionBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupReco
       isFullKey = keySpecOpt.get().isFullKey();
     }
 
-    if (dataBlock.containsPartialUpdates() && !enablePartialMerging) {
+    if (dataBlock.containsPartialUpdates() && partialUpdateModeOpt.isEmpty()) {
       // When a data block contains partial updates, subsequent record merging must always use
       // partial merging.
-      enablePartialMerging = true;
-      if (partialUpdateModeOpt.isEmpty()) {
-        this.partialUpdateModeOpt = Option.of(PartialUpdateMode.KEEP_VALUES);
-      }
+      this.partialUpdateModeOpt = Option.of(PartialUpdateMode.KEEP_VALUES);
       bufferedRecordMerger = BufferedRecordMergerFactory.create(
           readerContext,
           recordMergeMode,
-          true,
           recordMerger,
           readerSchema,
           payloadClasses,

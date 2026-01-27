@@ -629,7 +629,6 @@ class TestBufferedRecordMerger extends SparkClientFunctionalTestHarness {
     BufferedRecordMerger<IndexedRecord> merger = BufferedRecordMergerFactory.create(
         avroReaderContext,
         RecordMergeMode.CUSTOM,
-        false,
         recordMerger,
         payloadClassName,
         customSchema,
@@ -785,7 +784,6 @@ class TestBufferedRecordMerger extends SparkClientFunctionalTestHarness {
     return BufferedRecordMergerFactory.create(
         readerContext,
         mergeMode,
-        false,
         mergeMode == EVENT_TIME_ORDERING
             ? Option.of(new DefaultSparkRecordMerger())
             : Option.of(new OverwriteWithLatestSparkRecordMerger()),
@@ -802,7 +800,6 @@ class TestBufferedRecordMerger extends SparkClientFunctionalTestHarness {
     return BufferedRecordMergerFactory.create(
         readerContext,
         mergeMode,
-        true,
         mergeMode == EVENT_TIME_ORDERING
             ? Option.of(new DefaultSparkRecordMerger())
             : Option.of(new OverwriteWithLatestSparkRecordMerger()),
