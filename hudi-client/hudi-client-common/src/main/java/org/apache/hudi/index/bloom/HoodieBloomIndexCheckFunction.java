@@ -18,7 +18,6 @@
 
 package org.apache.hudi.index.bloom;
 
-import org.apache.hudi.client.utils.LazyIterableIterator;
 import org.apache.hudi.common.function.SerializableFunction;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.util.collection.Pair;
@@ -65,20 +64,26 @@ public class HoodieBloomIndexCheckFunction<I>
     return new LazyKeyCheckIterator(fileGroupIdRecordKeyPairIterator);
   }
 
-  protected class LazyKeyCheckIterator extends LazyIterableIterator<I, HoodieKeyLookupResult> {
+  protected class LazyKeyCheckIterator implements Iterator<HoodieKeyLookupResult> {
 
-    private HoodieKeyLookupHandle keyLookupHandle;
+    private final Iterator<I> filePartitionRecordKeyTripletItr;
+    private HoodieKeyLookupHandle keyLookupHandle = null;
 
     LazyKeyCheckIterator(Iterator<I> filePartitionRecordKeyTripletItr) {
-      super(filePartitionRecordKeyTripletItr);
+      this.filePartitionRecordKeyTripletItr = filePartitionRecordKeyTripletItr;
     }
 
     @Override
-    protected HoodieKeyLookupResult computeNext() {
+    public boolean hasNext() {
+      return keyLookupHandle != null || filePartitionRecordKeyTripletItr.hasNext();
+    }
+
+    @Override
+    public HoodieKeyLookupResult next() {
       try {
         // process one file in each go.
-        while (inputItr.hasNext()) {
-          I tuple = inputItr.next();
+        while (filePartitionRecordKeyTripletItr.hasNext()) {
+          I tuple = filePartitionRecordKeyTripletItr.next();
 
           HoodieFileGroupId fileGroupId = fileGroupIdExtractor.apply(tuple);
           String recordKey = recordKeyExtractor.apply(tuple);
@@ -106,7 +111,9 @@ public class HoodieBloomIndexCheckFunction<I>
         }
 
         // handle case, where we ran out of input, close pending work, return result
-        return keyLookupHandle.getLookupResult();
+        HoodieKeyLookupResult result = keyLookupHandle.getLookupResult();
+        keyLookupHandle = null;
+        return result;
       } catch (Throwable e) {
         if (e instanceof HoodieException) {
           throw (HoodieException) e;
