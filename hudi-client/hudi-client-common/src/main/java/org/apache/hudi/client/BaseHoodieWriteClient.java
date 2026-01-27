@@ -1223,7 +1223,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
   public HoodieWriteMetadata<O> compact(String compactionInstantTime, boolean shouldComplete) {
     HoodieTable table = createTable(config);
     preWrite(compactionInstantTime, WriteOperationType.COMPACT, table.getMetaClient());
-    HoodieInstant compactionPlanInstant = table.getMetaClient().getInstantGenerator().getCompactionRequstedInstant(compactionInstantTime);
+    HoodieInstant compactionPlanInstant = table.getMetaClient().getInstantGenerator().getCompactionRequestedInstant(compactionInstantTime);
     try {
       // Transaction serves to ensure only one compact job for this instant will start heartbeat, and any other concurrent
       // compact job will abort if they attempt to execute compact before heartbeat expires
