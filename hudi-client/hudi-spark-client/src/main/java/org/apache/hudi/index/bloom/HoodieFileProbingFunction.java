@@ -35,11 +35,13 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.spark.api.java.function.FlatMapFunction;
 import org.apache.spark.broadcast.Broadcast;
 
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 import scala.Tuple2;
@@ -144,18 +146,18 @@ public class HoodieFileProbingFunction implements
             final String fileId = partitionPathFileNamePair.getRight().getFileId();
             ValidationUtils.checkState(!fileId.isEmpty());
 
-            List<String> candidateRecordKeys = bloomFilterKeyLookupResult.getCandidateKeys();
+            Set<String> candidateRecordKeys = bloomFilterKeyLookupResult.getCandidateKeys();
 
             // TODO add assertion that file is checked only once
 
             final HoodieBaseFile dataFile = fileIDBaseFileMap.get(fileId);
-            List<Pair<String, Long>> matchingKeysAndPositions = HoodieIndexUtils.filterKeysFromFile(
+            Collection<Pair<String, Long>> matchingKeysAndPositions = HoodieIndexUtils.filterKeysFromFile(
                 dataFile.getStoragePath(), candidateRecordKeys, HoodieStorageUtils.getStorage(dataFile.getStoragePath(), storageConf));
 
             log.debug(
-                String.format("Bloom filter candidates (%d) / false positives (%d), actual matches (%d)",
+                "Bloom filter candidates ({}) / false positives ({}), actual matches ({})",
                     candidateRecordKeys.size(), candidateRecordKeys.size() - matchingKeysAndPositions.size(),
-                    matchingKeysAndPositions.size()));
+                    matchingKeysAndPositions.size());
 
             return new HoodieKeyLookupResult(fileId, partitionPath, dataFile.getCommitTime(), matchingKeysAndPositions);
           })

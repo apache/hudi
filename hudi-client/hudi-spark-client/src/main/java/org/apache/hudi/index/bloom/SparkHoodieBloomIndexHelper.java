@@ -181,15 +181,14 @@ public class SparkHoodieBloomIndexHelper extends BaseHoodieBloomIndexHelper {
           .mapPartitions(new HoodieSparkBloomIndexCheckFunction(hoodieTable, config), true);
     }
 
-    // TODO close iter?
     return HoodieJavaPairRDD.of(keyLookupResultRDD
-        .filter(lr -> lr.getMatchingRecordKeysAndPositions().size() > 0)
+        .filter(lr -> !lr.getMatchingRecordKeysAndPositions().isEmpty())
         .flatMapToPair(lookupResult -> lookupResult.getMatchingRecordKeysAndPositions().stream()
             .map(recordKeyAndPosition -> new Tuple2<>(
                 new HoodieKey(recordKeyAndPosition.getLeft(), lookupResult.getPartitionPath()),
                 new HoodieRecordLocation(lookupResult.getBaseInstantTime(), lookupResult.getFileId(),
                     recordKeyAndPosition.getRight())))
-            .collect(Collectors.toList()).iterator()));
+            .iterator()));
   }
 
   private static class FileGroupIdComparator implements Comparator<Tuple2<HoodieFileGroupId, String>>, Serializable {
