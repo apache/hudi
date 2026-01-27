@@ -170,6 +170,7 @@ public class TestHoodieSchemaType {
     assertEquals(HoodieSchemaType.DECIMAL, HoodieSchemaType.fromAvro(LogicalTypes.decimal(10, 5).addToSchema(Schema.create(Schema.Type.BYTES))));
     assertEquals(HoodieSchemaType.DATE, HoodieSchemaType.fromAvro(LogicalTypes.date().addToSchema(Schema.create(Schema.Type.INT))));
     assertEquals(HoodieSchemaType.UUID, HoodieSchemaType.fromAvro(LogicalTypes.uuid().addToSchema(Schema.create(Schema.Type.STRING))));
+    assertEquals(HoodieSchemaType.VARIANT, HoodieSchemaType.fromAvro(createVariantSchemaForTest()));
   }
 
   private static Map<HoodieSchemaType, Schema> buildSampleSchemasForType() {
@@ -200,6 +201,22 @@ public class TestHoodieSchemaType {
         LogicalTypes.date().addToSchema(Schema.create(Schema.Type.INT)));
     map.put(HoodieSchemaType.UUID,
         LogicalTypes.uuid().addToSchema(Schema.create(Schema.Type.STRING)));
+    map.put(HoodieSchemaType.VARIANT, createVariantSchemaForTest());
     return map;
+  }
+
+  /**
+   * Creates a variant schema manually using Avro APIs.
+   *
+   * @return a variant schema with value and metadata fields
+   */
+  private static Schema createVariantSchemaForTest() {
+    Schema variantRecord = Schema.createRecord("variant", null, null, false);
+    variantRecord.setFields(Arrays.asList(
+        new Schema.Field("value", Schema.create(Schema.Type.BYTES), "Variant value component", null),
+        new Schema.Field("metadata", Schema.create(Schema.Type.BYTES), "Variant metadata component", null)
+    ));
+    HoodieSchema.VariantLogicalType.variant().addToSchema(variantRecord);
+    return variantRecord;
   }
 }
