@@ -535,29 +535,6 @@ public class HoodieAvroUtils {
   }
 
   /**
-   * Generate a reader schema off the provided writeSchema, to just project out the provided columns.
-   */
-  public static Schema generateProjectionSchema(Schema originalSchema, List<String> fieldNames) {
-    Map<String, Field> schemaFieldsMap = originalSchema.getFields().stream()
-        .map(r -> Pair.of(r.name().toLowerCase(), r)).collect(Collectors.toMap(Pair::getLeft, Pair::getRight));
-    List<Schema.Field> projectedFields = new ArrayList<>();
-    for (String fn : fieldNames) {
-      Schema.Field field = schemaFieldsMap.get(fn.toLowerCase());
-      if (field == null) {
-        throw new HoodieException("Field " + fn + " not found in log schema. Query cannot proceed! "
-            + "Derived Schema Fields: " + new ArrayList<>(schemaFieldsMap.keySet()));
-      } else {
-        projectedFields.add(createNewSchemaField(field));
-      }
-    }
-
-    Schema projectedSchema = Schema.createRecord(originalSchema.getName(), originalSchema.getDoc(),
-        originalSchema.getNamespace(), originalSchema.isError());
-    projectedSchema.setFields(projectedFields);
-    return projectedSchema;
-  }
-
-  /**
    * Obtain the root-level field name of a full field name, possibly a nested field.
    * For example, given "a.b.c", the output is "a"; given "a", the output is "a".
    *

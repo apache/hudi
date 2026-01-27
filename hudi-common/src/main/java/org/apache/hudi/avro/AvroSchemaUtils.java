@@ -47,7 +47,6 @@ import java.util.Set;
 import java.util.function.BiFunction;
 import java.util.stream.Collectors;
 
-import static org.apache.hudi.avro.HoodieAvroUtils.createNewSchemaField;
 import static org.apache.hudi.common.util.CollectionUtils.reduce;
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
 import static org.apache.hudi.internal.schema.convert.InternalSchemaConverter.convert;
@@ -278,83 +277,6 @@ public class AvroSchemaUtils {
   }
 
   /**
-   * Prunes a data schema to match the structure of a required schema while preserving
-   * original metadata where possible.
-   *
-   * <p>This method recursively traverses both schemas and creates a new schema that:
-   * <ul>
-   *   <li>Contains only fields present in the required schema</li>
-   *   <li>Preserves field metadata (type, documentation, default values) from the data schema</li>
-   *   <li>Optionally includes fields from the required schema that are marked for exclusion</li>
-   * </ul>
-   *
-   * @param dataSchema the source schema containing the original data structure and metadata
-   * @param requiredSchema the target schema that defines the desired structure and field requirements
-   * @param mandatoryFields a set of top level field names that should be included from the required schema
-   *                     even if they don't exist in the data schema. This allows for fields like cdc operation
-   *                     don't exist in the data schema. We keep the types matching the required schema because
-   *                     timestamp partition cols can be read as a different type than the data schema
-   *
-   * @return a new pruned schema that matches the required schema structure while preserving
-   *         data schema metadata where possible
-   */
-  public static Schema pruneDataSchema(Schema dataSchema, Schema requiredSchema, Set<String> mandatoryFields) {
-    Schema prunedDataSchema = pruneDataSchemaInternal(getNonNullTypeFromUnion(dataSchema), getNonNullTypeFromUnion(requiredSchema), mandatoryFields);
-    if (dataSchema.isNullable() && !prunedDataSchema.isNullable()) {
-      return createNullableSchema(prunedDataSchema);
-    }
-    return prunedDataSchema;
-  }
-
-  private static Schema pruneDataSchemaInternal(Schema dataSchema, Schema requiredSchema, Set<String> mandatoryFields) {
-    switch (requiredSchema.getType()) {
-      case RECORD:
-        if (dataSchema.getType() != Schema.Type.RECORD) {
-          throw new IllegalArgumentException("Data schema is not a record");
-        }
-        List<Schema.Field> newFields = new ArrayList<>();
-        for (Schema.Field requiredSchemaField : requiredSchema.getFields()) {
-          if (mandatoryFields.contains(requiredSchemaField.name())) {
-            newFields.add(createNewSchemaField(requiredSchemaField));
-          } else {
-            Schema.Field dataSchemaField = dataSchema.getField(requiredSchemaField.name());
-            if (dataSchemaField != null) {
-              Schema.Field newField = createNewSchemaField(
-                  dataSchemaField.name(),
-                  pruneDataSchema(dataSchemaField.schema(), requiredSchemaField.schema(), Collections.emptySet()),
-                  dataSchemaField.doc(),
-                  dataSchemaField.defaultVal()
-              );
-              newFields.add(newField);
-            }
-          }
-        }
-        Schema newRecord = Schema.createRecord(dataSchema.getName(), dataSchema.getDoc(), dataSchema.getNamespace(), dataSchema.isError());
-        copyProperties(dataSchema, newRecord);
-        newRecord.setFields(newFields);
-        return newRecord;
-
-      case ARRAY:
-        if (dataSchema.getType() != Schema.Type.ARRAY) {
-          throw new IllegalArgumentException("Data schema is not an array");
-        }
-        return Schema.createArray(pruneDataSchema(dataSchema.getElementType(), requiredSchema.getElementType(), Collections.emptySet()));
-
-      case MAP:
-        if (dataSchema.getType() != Schema.Type.MAP) {
-          throw new IllegalArgumentException("Data schema is not a map");
-        }
-        return Schema.createMap(pruneDataSchema(dataSchema.getValueType(), requiredSchema.getValueType(), Collections.emptySet()));
-
-      case UNION:
-        throw new IllegalArgumentException("Data schema is a union");
-
-      default:
-        return dataSchema;
-    }
-  }
-
-  /**
    * Returns true in case provided {@link Schema} is nullable (ie accepting null values),
    * returns false otherwise
    */
@@ -390,14 +312,6 @@ public class AvroSchemaUtils {
           String.format("Unsupported Avro UNION type %s: Only UNION of a null type and a non-null type is supported", schema));
     }
     return firstInnerType.getType() == Schema.Type.NULL ? secondInnerType : firstInnerType;
-  }
-
-  /**
-   * Creates schema following Avro's typical nullable schema definition: {@code Union(Schema.Type.NULL, <NonNullType>)},
-   * wrapping around provided target non-null type
-   */
-  public static Schema createNullableSchema(Schema.Type avroType) {
-    return createNullableSchema(Schema.create(avroType));
   }
 
   public static Schema createNullableSchema(Schema schema) {
@@ -558,18 +472,5 @@ public class AvroSchemaUtils {
     schemaChange = reduce(filterCols, schemaChange,
             (change, field) -> change.updateColumnNullability(field, true));
     return convert(SchemaChangeUtils.applyTableChanges2Schema(internalSchema, schemaChange), schema.getFullName()).toAvroSchema();
-  }
-
-  /**
-   * Helper to copy properties and logical types from source schema to target schema.
-   */
-  private static Schema copyProperties(Schema source, Schema target) {
-    for (Map.Entry<String, Object> prop : source.getObjectProps().entrySet()) {
-      target.addProp(prop.getKey(), prop.getValue());
-    }
-    if (source.getLogicalType() != null) {
-      source.getLogicalType().addToSchema(target);
-    }
-    return target;
   }
 }
