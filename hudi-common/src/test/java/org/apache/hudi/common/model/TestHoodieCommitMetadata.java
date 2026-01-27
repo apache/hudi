@@ -131,9 +131,9 @@ public class TestHoodieCommitMetadata {
   @Test
   public void testGetFileSliceForFileGroupFromDeltaCommit() throws IOException {
     org.apache.hudi.avro.model.HoodieCommitMetadata commitMetadata = new org.apache.hudi.avro.model.HoodieCommitMetadata();
-    org.apache.hudi.avro.model.HoodieWriteStat writeStat1 = createAvroWriteStat("111", "111base", Arrays.asList("1.log", "2.log"));
-    org.apache.hudi.avro.model.HoodieWriteStat writeStat2 = createAvroWriteStat("111", "111base", Arrays.asList("3.log", "4.log"));
-    org.apache.hudi.avro.model.HoodieWriteStat writeStat3 = createAvroWriteStat("222", null, Collections.singletonList("5.log"));
+    org.apache.hudi.avro.model.HoodieWriteStat writeStat1 = createWriteStat("111", "111base", Arrays.asList("1.log", "2.log"));
+    org.apache.hudi.avro.model.HoodieWriteStat writeStat2 = createWriteStat("111", "111base", Arrays.asList("3.log", "4.log"));
+    org.apache.hudi.avro.model.HoodieWriteStat writeStat3 = createWriteStat("222", null, Collections.singletonList("5.log"));
     Map<String, List<org.apache.hudi.avro.model.HoodieWriteStat>> partitionToWriteStatsMap = new HashMap<>();
     partitionToWriteStatsMap.put("partition1", Arrays.asList(writeStat2, writeStat3));
     partitionToWriteStatsMap.put("partition2", Collections.singletonList(writeStat1));
@@ -161,9 +161,9 @@ public class TestHoodieCommitMetadata {
   @Test
   public void testCommitMetadataSerde() throws Exception {
     org.apache.hudi.avro.model.HoodieCommitMetadata commitMetadata = new org.apache.hudi.avro.model.HoodieCommitMetadata();
-    org.apache.hudi.avro.model.HoodieWriteStat writeStat1 = createAvroWriteStat("111", "111base", Arrays.asList("1.log", "2.log"));
-    org.apache.hudi.avro.model.HoodieWriteStat writeStat2 = createAvroWriteStat("222", "222base", Arrays.asList("3.log", "4.log"));
-    org.apache.hudi.avro.model.HoodieWriteStat writeStat3 = createAvroWriteStat("333", null, Collections.singletonList("5.log"));
+    org.apache.hudi.avro.model.HoodieWriteStat writeStat1 = createWriteStat("111", "111base", Arrays.asList("1.log", "2.log"));
+    org.apache.hudi.avro.model.HoodieWriteStat writeStat2 = createWriteStat("222", "222base", Arrays.asList("3.log", "4.log"));
+    org.apache.hudi.avro.model.HoodieWriteStat writeStat3 = createWriteStat("333", null, Collections.singletonList("5.log"));
     Map<String, List<org.apache.hudi.avro.model.HoodieWriteStat>> partitionToWriteStatsMap = new HashMap<>();
     partitionToWriteStatsMap.put("partition1", Arrays.asList(writeStat1, writeStat2));
     partitionToWriteStatsMap.put("partition2", Collections.singletonList(writeStat3));
@@ -198,7 +198,7 @@ public class TestHoodieCommitMetadata {
     assertEquals("333", commitMetadata2.partitionToWriteStats.get("partition2").get(0).getFileId());
   }
 
-  private org.apache.hudi.avro.model.HoodieWriteStat createAvroWriteStat(String fileId, String baseFile, List<String> logFiles) {
+  private org.apache.hudi.avro.model.HoodieWriteStat createWriteStat(String fileId, String baseFile, List<String> logFiles) {
     org.apache.hudi.avro.model.HoodieWriteStat writeStat = new org.apache.hudi.avro.model.HoodieWriteStat();
     writeStat.setFileId(fileId);
     writeStat.setBaseFile(baseFile);
