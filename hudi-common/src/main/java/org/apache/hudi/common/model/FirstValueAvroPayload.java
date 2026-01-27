@@ -23,6 +23,8 @@ import org.apache.avro.generic.IndexedRecord;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.OrderingValueUtils;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 
 import java.util.Properties;
@@ -99,7 +101,7 @@ public class FirstValueAvroPayload extends DefaultHoodieRecordPayload {
 
   @Override
   protected boolean needUpdatingPersistedRecord(IndexedRecord currentValue,
-                                                IndexedRecord incomingRecord, Properties properties) {
+                                                Option<IndexedRecord> incomingRecord, Properties properties) {
     /*
      * Combining strategy here returns currentValue on disk if incoming record is older absolutely.
      * The incoming record can be either a delete (sent as an upsert with _hoodie_is_deleted set to true)
@@ -116,9 +118,15 @@ public class FirstValueAvroPayload extends DefaultHoodieRecordPayload {
     Object persistedOrderingVal = HoodieAvroUtils.getNestedFieldVal((GenericRecord) currentValue,
             orderField,
             true, consistentLogicalTimestampEnabled);
-    Comparable incomingOrderingVal = (Comparable) HoodieAvroUtils.getNestedFieldVal((GenericRecord) incomingRecord,
-            orderField,
-            true, consistentLogicalTimestampEnabled);
+    Comparable incomingOrderingVal = incomingRecord.map(record -> (Comparable) HoodieAvroUtils.getNestedFieldVal((GenericRecord) record,
+        orderField,
+        true, consistentLogicalTimestampEnabled)).orElse(orderingVal);
+    if (incomingRecord.isEmpty() && DEFAULT_VALUE.equals(incomingOrderingVal)) {
+      return true;
+    }
+    Pair<Comparable, Comparable> comparablePair = OrderingValueUtils.canonicalizeOrderingValue((Comparable) persistedOrderingVal, incomingOrderingVal);
+    persistedOrderingVal = comparablePair.getLeft();
+    incomingOrderingVal = comparablePair.getRight();
     return persistedOrderingVal == null || ((Comparable) persistedOrderingVal).compareTo(incomingOrderingVal) < 0;
   }
 }

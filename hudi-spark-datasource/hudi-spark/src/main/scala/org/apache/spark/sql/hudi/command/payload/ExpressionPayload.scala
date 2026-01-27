@@ -130,7 +130,7 @@ class ExpressionPayload(@transient record: GenericRecord,
           .serialize(resultingRow)
           .asInstanceOf[GenericRecord]
 
-        if (targetRecord.isEmpty || needUpdatingPersistedRecord(targetRecord.get, resultingAvroRecord, properties)) {
+        if (targetRecord.isEmpty || needUpdatingPersistedRecord(targetRecord.get, HOption.of(resultingAvroRecord), properties)) {
           resultRecordOpt = HOption.of(resultingAvroRecord)
         } else {
           // if the PreCombine field value of targetRecord is greater
