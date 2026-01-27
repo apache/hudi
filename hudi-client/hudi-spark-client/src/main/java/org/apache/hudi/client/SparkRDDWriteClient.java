@@ -42,6 +42,8 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieClusteringException;
 import org.apache.hudi.exception.HoodieCommitException;
+import org.apache.hudi.exception.HoodieHeartbeatException;
+import org.apache.hudi.exception.HoodieLockException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.index.SparkHoodieIndex;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
@@ -327,6 +329,24 @@ public class SparkRDDWriteClient<T extends HoodieRecordPayload> extends
   protected JavaRDD<WriteStatus> compact(String compactionInstantTime, boolean shouldComplete) {
     HoodieSparkTable<T> table = HoodieSparkTable.create(config, context, true);
     preWrite(compactionInstantTime, WriteOperationType.COMPACT, table.getMetaClient());
+    try {
+      // Transaction serves to ensure only one compact job for this instant will start heartbeat, and any other concurrent
+      // compact job will abort if they attempt to execute compact before heartbeat expires
+      // Note that as long as all jobs for this table use this API for compact, then this alone should prevent
+      // compact rollbacks from running concurrently to compact commits.
+      txnManager.beginTransaction(Option.of(HoodieTimeline.getCompactionRequestedInstant(compactionInstantTime)),
+          txnManager.getLastCompletedTransactionOwner());
+      try {
+        if (!this.heartbeatClient.isHeartbeatExpired(compactionInstantTime)) {
+          throw new HoodieLockException("Cannot compact instant " + compactionInstantTime + " due to heartbeat by existing job");
+        }
+      } catch (IOException e) {
+        throw new HoodieHeartbeatException("Error accessing heartbeat of instant to compact " + compactionInstantTime, e);
+      }
+      this.heartbeatClient.start(compactionInstantTime);
+    } finally {
+      txnManager.endTransaction();
+    }
     HoodieTimeline pendingCompactionTimeline = table.getActiveTimeline().filterPendingCompactionTimeline();
     HoodieInstant inflightInstant = HoodieTimeline.getCompactionInflightInstant(compactionInstantTime);
     if (pendingCompactionTimeline.containsInstant(inflightInstant)) {
@@ -339,6 +359,7 @@ public class SparkRDDWriteClient<T extends HoodieRecordPayload> extends
     if (shouldComplete && compactionMetadata.getCommitMetadata().isPresent()) {
       completeTableService(TableServiceType.COMPACT, compactionMetadata.getCommitMetadata().get(), statuses, table, compactionInstantTime);
     }
+    this.heartbeatClient.stop(compactionInstantTime);
     return statuses;
   }
 

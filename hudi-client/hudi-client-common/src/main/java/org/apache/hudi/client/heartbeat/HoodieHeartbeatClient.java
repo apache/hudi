@@ -193,6 +193,7 @@ public class HoodieHeartbeatClient implements AutoCloseable, Serializable {
       heartbeat.setHeartbeatStopped(true);
       LOG.info("Stopped heartbeat for instant " + instantTime);
       HeartbeatUtils.deleteHeartbeatFile(fs, basePath, instantTime);
+      instantToHeartbeatMap.remove(instantTime);
       LOG.info("Deleted heartbeat file for instant " + instantTime);
     }
   }
