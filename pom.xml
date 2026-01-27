@@ -96,7 +96,7 @@
 
     <java.version>11</java.version>
     <kryo.shaded.version>4.0.2</kryo.shaded.version>
-    <fasterxml.spark3.version>2.10.0</fasterxml.spark3.version>
+    <fasterxml.spark3.version>2.15.2</fasterxml.spark3.version>
     <fasterxml.spark4.version>2.17.1</fasterxml.spark4.version>
     <fasterxml.version>${fasterxml.spark3.version}</fasterxml.version>
     <fasterxml.jackson.databind.version>${fasterxml.spark3.version}</fasterxml.jackson.databind.version>
@@ -112,7 +112,7 @@
     <confluent.version>5.5.0</confluent.version>
     <glassfish.version>2.17</glassfish.version>
     <glassfish.el.version>3.0.1-b12</glassfish.el.version>
-    <parquet.version>1.10.1</parquet.version>
+    <parquet.version>1.13.1</parquet.version>
     <junit.jupiter.version>5.14.1</junit.jupiter.version>
     <junit.vintage.version>5.14.1</junit.vintage.version>
     <junit.platform.version>1.14.1</junit.platform.version>
