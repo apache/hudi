@@ -224,7 +224,7 @@ public class HoodieMetadataWriteUtils {
             .withMaxDeltaSecondsBeforeCompaction(writeConfig.getMetadataMaxDeltaSecondsBeforeCompaction())
             .build())
         .withStorageConfig(HoodieStorageConfig.newBuilder().hfileMaxFileSize(MDT_MAX_HFILE_SIZE_BYTES)
-            .allowDuplicatesWithHfileWrites(writeConfig.isAllowDuplicatesWithHfileWritesEnabled())
+            .allowDuplicatesWithHfileWrites(writeConfig.allowDuplicatesWithHfileWrites())
             .logFileMaxSize(maxLogFileSizeBytes)
             // Keeping the log blocks as large as the log files themselves reduces the number of HFile blocks to be checked for
             // presence of keys

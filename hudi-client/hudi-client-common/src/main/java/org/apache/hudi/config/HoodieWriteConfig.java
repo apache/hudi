@@ -2354,7 +2354,7 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getLong(HoodieStorageConfig.HFILE_MAX_FILE_SIZE);
   }
 
-  public boolean isAllowDuplicatesWithHfileWritesEnabled() {
+  public boolean allowDuplicatesWithHfileWrites() {
     return getBoolean(HoodieStorageConfig.HFILE_WRITER_TO_ALLOW_DUPLICATES);
   }
 
