@@ -262,8 +262,8 @@ public class TestHoodieCommitMetadata {
     // When all partitions have only insert stats (prevCommit is "null"), the result should be empty
     HoodieCommitMetadata commitMetadata = new HoodieCommitMetadata();
 
-    HoodieWriteStat insertStat1 = createWriteStat("partition1", "file1", "null");
-    HoodieWriteStat insertStat2 = createWriteStat("partition2", "file2", "null");
+    HoodieWriteStat insertStat1 = createWriteStatWithPrevFileId("partition1", "file1", "null");
+    HoodieWriteStat insertStat2 = createWriteStatWithPrevFileId("partition2", "file2", "null");
 
     commitMetadata.addWriteStat("partition1", insertStat1);
     commitMetadata.addWriteStat("partition2", insertStat2);
@@ -277,8 +277,8 @@ public class TestHoodieCommitMetadata {
     // When all partitions have update stats (prevCommit is a valid commit time), all partitions should be returned
     HoodieCommitMetadata commitMetadata = new HoodieCommitMetadata();
 
-    HoodieWriteStat updateStat1 = createWriteStat("partition1", "file1", "20240101120000");
-    HoodieWriteStat updateStat2 = createWriteStat("partition2", "file2", "20240101130000");
+    HoodieWriteStat updateStat1 = createWriteStatWithPrevFileId("partition1", "file1", "20240101120000");
+    HoodieWriteStat updateStat2 = createWriteStatWithPrevFileId("partition2", "file2", "20240101130000");
 
     commitMetadata.addWriteStat("partition1", updateStat1);
     commitMetadata.addWriteStat("partition2", updateStat2);
@@ -293,8 +293,8 @@ public class TestHoodieCommitMetadata {
     // When some partitions have inserts and some have updates, only the update partitions should be returned
     HoodieCommitMetadata commitMetadata = new HoodieCommitMetadata();
 
-    HoodieWriteStat insertStat = createWriteStat("partition1", "file1", "null");
-    HoodieWriteStat updateStat = createWriteStat("partition2", "file2", "20240101120000");
+    HoodieWriteStat insertStat = createWriteStatWithPrevFileId("partition1", "file1", "null");
+    HoodieWriteStat updateStat = createWriteStatWithPrevFileId("partition2", "file2", "20240101120000");
 
     commitMetadata.addWriteStat("partition1", insertStat);
     commitMetadata.addWriteStat("partition2", updateStat);
@@ -309,8 +309,8 @@ public class TestHoodieCommitMetadata {
     // When a partition has both insert and update stats, it should be included
     HoodieCommitMetadata commitMetadata = new HoodieCommitMetadata();
 
-    HoodieWriteStat insertStat = createWriteStat("partition1", "file1", "null");
-    HoodieWriteStat updateStat = createWriteStat("partition1", "file2", "20240101120000");
+    HoodieWriteStat insertStat = createWriteStatWithPrevFileId("partition1", "file1", "null");
+    HoodieWriteStat updateStat = createWriteStatWithPrevFileId("partition1", "file2", "20240101120000");
 
     commitMetadata.addWriteStat("partition1", insertStat);
     commitMetadata.addWriteStat("partition1", updateStat);
@@ -325,8 +325,8 @@ public class TestHoodieCommitMetadata {
     // When prevCommit is null (not the string "null"), the partition should not be included
     HoodieCommitMetadata commitMetadata = new HoodieCommitMetadata();
 
-    HoodieWriteStat statWithNullPrevCommit = createWriteStat("partition1", "file1", null);
-    HoodieWriteStat updateStat = createWriteStat("partition2", "file2", "20240101120000");
+    HoodieWriteStat statWithNullPrevCommit = createWriteStatWithPrevFileId("partition1", "file1", null);
+    HoodieWriteStat updateStat = createWriteStatWithPrevFileId("partition2", "file2", "20240101120000");
 
     commitMetadata.addWriteStat("partition1", statWithNullPrevCommit);
     commitMetadata.addWriteStat("partition2", updateStat);
@@ -348,7 +348,7 @@ public class TestHoodieCommitMetadata {
   /**
    * Helper method to create a HoodieWriteStat with specified partition, fileId, and prevCommit.
    */
-  private HoodieWriteStat createWriteStat(String partitionPath, String fileId, String prevCommit) {
+  private HoodieWriteStat createWriteStatWithPrevFileId(String partitionPath, String fileId, String prevCommit) {
     HoodieWriteStat writeStat = new HoodieWriteStat();
     writeStat.setPartitionPath(partitionPath);
     writeStat.setFileId(fileId);
