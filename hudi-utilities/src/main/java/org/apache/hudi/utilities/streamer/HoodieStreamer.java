@@ -186,12 +186,11 @@ public class HoodieStreamer implements Serializable {
     //   3. Otherwise, parse provided specified props file (merging in CLI overrides)
     if (propsOverride.isPresent()) {
       hoodieConfig.setAll(propsOverride.get());
-    } else if (cfg.propsFilePath.equals(Config.DEFAULT_DFS_SOURCE_PROPERTIES)) {
+    } else if (StringUtils.isNullOrEmpty(cfg.propsFilePath)
+        || cfg.propsFilePath.equals(Config.DEFAULT_DFS_SOURCE_PROPERTIES)) {
       hoodieConfig.setAll(UtilHelpers.getConfig(cfg.configs).getProps());
-    } else if (!StringUtils.isNullOrEmpty(cfg.propsFilePath)) {
-      hoodieConfig.setAll(readConfig(hadoopConf, new Path(cfg.propsFilePath), cfg.configs).getProps());
     } else {
-      hoodieConfig.setAll(UtilHelpers.getConfig(cfg.configs).getProps());
+      hoodieConfig.setAll(readConfig(hadoopConf, new Path(cfg.propsFilePath), cfg.configs).getProps());
     }
 
     // set any configs that Deltastreamer has to override explicitly
