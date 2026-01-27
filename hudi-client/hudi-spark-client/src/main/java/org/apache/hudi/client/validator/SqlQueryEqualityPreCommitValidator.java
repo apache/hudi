@@ -52,23 +52,34 @@ public class SqlQueryEqualityPreCommitValidator<T, I, K, O extends HoodieData<Wr
 
   @Override
   protected void validateUsingQuery(String query, String prevTableSnapshot, String newTableSnapshot, SQLContext sqlContext) {
-    Dataset<Row> prevRows = executeSqlQuery(
-        sqlContext, query, prevTableSnapshot, "previous state").cache();
-    log.info("Total rows in prevRows " + prevRows.count());
-    Dataset<Row> newRows = executeSqlQuery(
-        sqlContext, query, newTableSnapshot, "new state").cache();
-    log.info("Total rows in newRows " + newRows.count());
-    printAllRowsIfDebugEnabled(prevRows);
-    printAllRowsIfDebugEnabled(newRows);
-    boolean areDatasetsEqual = prevRows.intersect(newRows).count() == prevRows.count();
-    log.info("Completed Equality Validation, datasets equal? " + areDatasetsEqual);
-    if (!areDatasetsEqual) {
-      log.error("query validation failed. See stdout for sample query results. Query: " + query);
-      System.out.println("Expected result (sample records only):");
-      prevRows.show();
-      System.out.println("Actual result (sample records only):");
-      newRows.show();
-      throw new HoodieValidationException("Query validation failed for '" + query + "'. See stdout for expected vs actual records");
+    Dataset<Row> prevRows = null;
+    Dataset<Row> newRows = null;
+    try {
+      prevRows = executeSqlQuery(
+          sqlContext, query, prevTableSnapshot, "previous state").cache();
+      log.info("Total rows in prevRows " + prevRows.count());
+      newRows = executeSqlQuery(
+          sqlContext, query, newTableSnapshot, "new state").cache();
+      log.info("Total rows in newRows " + newRows.count());
+      printAllRowsIfDebugEnabled(prevRows);
+      printAllRowsIfDebugEnabled(newRows);
+      boolean areDatasetsEqual = prevRows.intersect(newRows).count() == prevRows.count();
+      log.info("Completed Equality Validation, datasets equal? " + areDatasetsEqual);
+      if (!areDatasetsEqual) {
+        log.error("query validation failed. See stdout for sample query results. Query: " + query);
+        System.out.println("Expected result (sample records only):");
+        prevRows.show();
+        System.out.println("Actual result (sample records only):");
+        newRows.show();
+        throw new HoodieValidationException("Query validation failed for '" + query + "'. See stdout for expected vs actual records");
+      }
+    } finally {
+      if (prevRows != null) {
+        prevRows.unpersist();
+      }
+      if (newRows != null) {
+        newRows.unpersist();
+      }
     }
   }
 }
