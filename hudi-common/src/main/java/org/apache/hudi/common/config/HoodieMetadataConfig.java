@@ -151,12 +151,12 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       .sinceVersion("0.14.0")
       .withDocumentation("Controls the criteria to log compacted files groups in metadata table.");
 
-  public static final ConfigProperty<Boolean> USE_MAIN_TABLE_CLEAN_POLICY = ConfigProperty
-      .key(METADATA_PREFIX + ".use.main.table.clean.policy")
+  public static final ConfigProperty<Boolean> DERIVE_FROM_DATA_TABLE_CLEAN_POLICY = ConfigProperty
+      .key(METADATA_PREFIX + ".derive.from.datatable.clean.policy")
       .defaultValue(true)
       .markAdvanced()
       .sinceVersion("1.2.0")
-      .withDocumentation("This config determines whether the cleaner policy should use main table's cleaner policy.");
+      .withDocumentation("This config determines whether the cleaner policy should use data table's cleaner policy.");
 
   // Regex to filter out matching directories during bootstrap
   public static final ConfigProperty<String> DIR_FILTER_REGEX = ConfigProperty
@@ -894,8 +894,8 @@ public final class HoodieMetadataConfig extends HoodieConfig {
     return getIntOrDefault(RECORD_PREPARATION_PARALLELISM);
   }
 
-  public boolean useMainTableCleanPolicy() {
-    return getBooleanOrDefault(USE_MAIN_TABLE_CLEAN_POLICY);
+  public boolean shouldDeriveFromDataTableCleanPolicy() {
+    return getBooleanOrDefault(DERIVE_FROM_DATA_TABLE_CLEAN_POLICY);
   }
 
   /**
@@ -1027,8 +1027,8 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       return this;
     }
 
-    public HoodieMetadataConfig.Builder withMainTableCleanPolicy(boolean useMainTableCleanPolicy) {
-      metadataConfig.setValue(USE_MAIN_TABLE_CLEAN_POLICY, Boolean.toString(useMainTableCleanPolicy));
+    public HoodieMetadataConfig.Builder deriveFromDataTableCleanPolicy(boolean deriveFromDataTableCleanPolicy) {
+      metadataConfig.setValue(DERIVE_FROM_DATA_TABLE_CLEAN_POLICY, Boolean.toString(deriveFromDataTableCleanPolicy));
       return this;
     }
 

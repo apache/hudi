@@ -159,8 +159,7 @@ public class HoodieMetadataWriteUtils {
 
     final long maxLogFileSizeBytes = writeConfig.getMetadataConfig().getMaxLogFileSize();
     // Borrow the cleaner policy from the main table and adjust the cleaner policy based on the main table's cleaner policy
-    boolean useMainTableCleanPolicy = writeConfig.getMetadataConfig().useMainTableCleanPolicy();
-    HoodieCleaningPolicy dataTableCleaningPolicy = writeConfig.getCleanerPolicy();
+    boolean shouldDeriveFromDataTableCleanPolicy = writeConfig.getMetadataConfig().shouldDeriveFromDataTableCleanPolicy();
     HoodieCleanConfig.Builder cleanConfigBuilder = HoodieCleanConfig.newBuilder()
         .withAsyncClean(DEFAULT_METADATA_ASYNC_CLEAN)
         .withAutoClean(false)
@@ -168,7 +167,8 @@ public class HoodieMetadataWriteUtils {
         .withFailedWritesCleaningPolicy(failedWritesCleaningPolicy)
         .withMaxCommitsBeforeCleaning(writeConfig.getCleaningMaxCommits());
 
-    if (useMainTableCleanPolicy) {
+    if (shouldDeriveFromDataTableCleanPolicy) {
+      HoodieCleaningPolicy dataTableCleaningPolicy = writeConfig.getCleanerPolicy();
       cleanConfigBuilder.withCleanerPolicy(dataTableCleaningPolicy);
       if (HoodieCleaningPolicy.KEEP_LATEST_COMMITS.equals(dataTableCleaningPolicy)) {
         int retainCommits = (int) Math.max(DEFAULT_METADATA_CLEANER_COMMITS_RETAINED, writeConfig.getCleanerCommitsRetained() * 1.2);

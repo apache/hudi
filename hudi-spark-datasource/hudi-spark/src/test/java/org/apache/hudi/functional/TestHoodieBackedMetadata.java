@@ -584,7 +584,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
             .enableMetrics(false)
             .withMetadataIndexColumnStats(false)
             .withMaxNumDeltaCommitsBeforeCompaction(5)
-            .withMainTableCleanPolicy(false)
+            .deriveFromDataTableCleanPolicy(false)
             .build())
         .withCleanConfig(HoodieCleanConfig.newBuilder()
             .retainCommits(1)

@@ -145,34 +145,34 @@ class TestHoodieMetadataConfig {
   void testUseMainTableCleanPolicy() {
     // Test default value
     HoodieMetadataConfig config = HoodieMetadataConfig.newBuilder().build();
-    assertTrue(config.useMainTableCleanPolicy());
+    assertTrue(config.shouldDeriveFromDataTableCleanPolicy());
 
     // Test setting to false using builder method
     HoodieMetadataConfig configWithFalse = HoodieMetadataConfig.newBuilder()
-        .withMainTableCleanPolicy(false)
+        .deriveFromDataTableCleanPolicy(false)
         .build();
-    assertFalse(configWithFalse.useMainTableCleanPolicy());
+    assertFalse(configWithFalse.shouldDeriveFromDataTableCleanPolicy());
 
     // Test setting to true using builder method
     HoodieMetadataConfig configWithTrue = HoodieMetadataConfig.newBuilder()
-        .withMainTableCleanPolicy(true)
+        .deriveFromDataTableCleanPolicy(true)
         .build();
-    assertTrue(configWithTrue.useMainTableCleanPolicy());
+    assertTrue(configWithTrue.shouldDeriveFromDataTableCleanPolicy());
 
     // Test custom value via Properties - false
     Properties propsFalse = new Properties();
-    propsFalse.put(HoodieMetadataConfig.USE_MAIN_TABLE_CLEAN_POLICY.key(), "false");
+    propsFalse.put(HoodieMetadataConfig.DERIVE_FROM_DATA_TABLE_CLEAN_POLICY.key(), "false");
     HoodieMetadataConfig configWithPropertiesFalse = HoodieMetadataConfig.newBuilder()
         .fromProperties(propsFalse)
         .build();
-    assertFalse(configWithPropertiesFalse.useMainTableCleanPolicy());
+    assertFalse(configWithPropertiesFalse.shouldDeriveFromDataTableCleanPolicy());
 
     // Test custom value via Properties - true
     Properties propsTrue = new Properties();
-    propsTrue.put(HoodieMetadataConfig.USE_MAIN_TABLE_CLEAN_POLICY.key(), "true");
+    propsTrue.put(HoodieMetadataConfig.DERIVE_FROM_DATA_TABLE_CLEAN_POLICY.key(), "true");
     HoodieMetadataConfig configWithPropertiesTrue = HoodieMetadataConfig.newBuilder()
         .fromProperties(propsTrue)
         .build();
-    assertTrue(configWithPropertiesTrue.useMainTableCleanPolicy());
+    assertTrue(configWithPropertiesTrue.shouldDeriveFromDataTableCleanPolicy());
   }
 }
