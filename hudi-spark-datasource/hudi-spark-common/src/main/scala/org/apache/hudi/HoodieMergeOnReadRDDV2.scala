@@ -116,12 +116,15 @@ class HoodieMergeOnReadRDDV2(@transient sc: SparkContext,
       if (metaClient.getTableConfig.isMultipleBaseFileFormatsEnabled) {
         sc.broadcast(new MultipleColumnarFileFormatReader(
           sparkAdapter.createParquetFileReader(vectorized = false, sqlConf, updatedOptions, config),
-          sparkAdapter.createOrcFileReader(vectorized = false, sqlConf, updatedOptions, config, tableSchema.structTypeSchema)
+          sparkAdapter.createOrcFileReader(vectorized = false, sqlConf, updatedOptions, config, tableSchema.structTypeSchema),
+          sparkAdapter.createLanceFileReader(vectorized = false, sqlConf, updatedOptions, config)
         ))
       } else if (metaClient.getTableConfig.getBaseFileFormat == HoodieFileFormat.PARQUET) {
         sc.broadcast(sparkAdapter.createParquetFileReader(vectorized = false, sqlConf, updatedOptions, config))
       } else if (metaClient.getTableConfig.getBaseFileFormat == HoodieFileFormat.ORC) {
         sc.broadcast(sparkAdapter.createOrcFileReader(vectorized = false, sqlConf, updatedOptions, config, tableSchema.structTypeSchema))
+      } else if (metaClient.getTableConfig.getBaseFileFormat == HoodieFileFormat.LANCE) {
+        sc.broadcast(sparkAdapter.createLanceFileReader(vectorized = false, sqlConf, updatedOptions, config))
       } else {
         throw new IllegalArgumentException(s"Unsupported base file format: ${metaClient.getTableConfig.getBaseFileFormat}")
       }
