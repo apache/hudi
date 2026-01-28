@@ -20,7 +20,6 @@ package org.apache.hudi.source.prune;
 
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.index.bucket.BucketIdentifier;
 import org.apache.hudi.util.ExpressionUtils;
@@ -44,7 +43,7 @@ import java.util.stream.Collectors;
 public class PrimaryKeyPruners {
 
   public static Function<Integer, Integer> getBucketIdFunc(List<ResolvedExpression> hashKeyFilters, Configuration conf) {
-    List<String> pkFields = Arrays.asList(conf.get(FlinkOptions.RECORD_KEY_FIELD).split(","));
+    List<String> pkFields = Arrays.asList(OptionsResolver.getRecordKeyStr(conf).split(","));
     // step1: resolve the hash key values
     final boolean logicalTimestamp = OptionsResolver.isConsistentLogicalTimestampEnabled(conf);
     List<String> values = hashKeyFilters.stream()

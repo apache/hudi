@@ -513,7 +513,7 @@ public class HoodieHiveCatalog extends AbstractCatalog {
     if (catalogTable.isPartitioned() && !flinkConf.contains(FlinkOptions.PARTITION_PATH_FIELD)) {
       final String partitions = String.join(",", catalogTable.getPartitionKeys());
       flinkConf.set(FlinkOptions.PARTITION_PATH_FIELD, partitions);
-      final String[] pks = flinkConf.get(FlinkOptions.RECORD_KEY_FIELD).split(",");
+      final String[] pks = OptionsResolver.getRecordKeyStr(flinkConf).split(",");
       boolean complexHoodieKey = pks.length > 1 || catalogTable.getPartitionKeys().size() > 1;
       StreamerUtil.checkKeygenGenerator(complexHoodieKey, flinkConf);
     }
