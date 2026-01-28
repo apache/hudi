@@ -489,7 +489,7 @@ public class TestHoodieHiveCatalog extends BaseTestHoodieCatalog {
     catalog.createTable(tablePath, table, false);
 
     Table hiveTable = hoodieCatalog.getHiveTable(tablePath);
-    assertEquals("false", hiveTable.getParameters().get("hadoop.hive.metastore.schema.verification"));
+    assertEquals("false", hiveTable.getParameters().get("hadoop.hive.metastore.sasl.enabled"));
   }
 
   @Test

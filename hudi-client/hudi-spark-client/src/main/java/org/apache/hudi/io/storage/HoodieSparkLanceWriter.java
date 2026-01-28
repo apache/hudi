@@ -27,6 +27,8 @@ import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 
 import com.lancedb.lance.spark.arrow.LanceArrowWriter;
+import lombok.AllArgsConstructor;
+import org.apache.arrow.vector.VectorSchemaRoot;
 import org.apache.arrow.vector.types.pojo.Schema;
 import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.sql.types.StructType;
@@ -34,7 +36,6 @@ import org.apache.spark.sql.util.LanceArrowUtils;
 import org.apache.spark.unsafe.types.UTF8String;
 
 import java.io.IOException;
-import java.util.List;
 import java.util.function.Function;
 
 import static org.apache.hudi.common.model.HoodieRecord.HoodieMetadataField.COMMIT_SEQNO_METADATA_FIELD;
@@ -62,7 +63,6 @@ public class HoodieSparkLanceWriter extends HoodieBaseLanceWriter<InternalRow>
   private final UTF8String instantTime;
   private final boolean populateMetaFields;
   private final Function<Long, String> seqIdGenerator;
-  private LanceArrowWriter writer;
 
   /**
    * Constructor for Spark Lance writer.
@@ -81,7 +81,7 @@ public class HoodieSparkLanceWriter extends HoodieBaseLanceWriter<InternalRow>
                                 TaskContextSupplier taskContextSupplier,
                                 HoodieStorage storage,
                                 boolean populateMetaFields) throws IOException {
-    super(storage, file, DEFAULT_BATCH_SIZE);
+    super(file, DEFAULT_BATCH_SIZE);
     this.sparkSchema = sparkSchema;
     this.arrowSchema = LanceArrowUtils.toArrowSchema(sparkSchema, DEFAULT_TIMEZONE, true, false);
     this.fileName = UTF8String.fromString(file.getName());
@@ -114,40 +114,31 @@ public class HoodieSparkLanceWriter extends HoodieBaseLanceWriter<InternalRow>
     if (populateMetaFields) {
       UTF8String recordKey = UTF8String.fromString(key.getRecordKey());
       updateRecordMetadata(row, recordKey, key.getPartitionPath(), getWrittenRecordCount());
-      super.write(row.copy());
+      super.write(row);
     } else {
-      super.write(row.copy());
+      super.write(row);
     }
   }
 
   @Override
   public void writeRow(String recordKey, InternalRow row) throws IOException {
-    super.write(row.copy());
+    super.write(row);
   }
   
   @Override
   public void writeRow(UTF8String key, InternalRow row) throws IOException {
     // Key reserved for future bloom filter support (https://github.com/apache/hudi/issues/17664)
-    super.write(row.copy());
+    super.write(row);
   }
   
   @Override
   public void writeRow(InternalRow row) throws IOException {
-    super.write(row.copy());
+    super.write(row);
   }
 
   @Override
-  protected void populateVectorSchemaRoot(List<InternalRow> records) {
-    if (writer == null) {
-      writer = LanceArrowWriter.create(this.root, sparkSchema);
-    }
-    // Reset writer state from previous batch
-    writer.reset();
-    for (InternalRow record : records) {
-      writer.write(record);
-    }
-    // Finalize the writer (sets row count)
-    writer.finish();
+  protected ArrowWriter<InternalRow> createArrowWriter(VectorSchemaRoot root) {
+    return SparkArrowWriter.of(LanceArrowWriter.create(root, sparkSchema));
   }
 
   /**
@@ -183,5 +174,25 @@ public class HoodieSparkLanceWriter extends HoodieBaseLanceWriter<InternalRow>
     row.update(RECORD_KEY_METADATA_FIELD.ordinal(), recordKey);
     row.update(PARTITION_PATH_METADATA_FIELD.ordinal(), UTF8String.fromString(partitionPath));
     row.update(FILENAME_METADATA_FIELD.ordinal(), fileName);
+  }
+
+  @AllArgsConstructor(staticName = "of")
+  private static class SparkArrowWriter implements ArrowWriter<InternalRow> {
+    private final LanceArrowWriter lanceArrowWriter;
+
+    @Override
+    public void write(InternalRow row) {
+      lanceArrowWriter.write(row);
+    }
+
+    @Override
+    public void reset() {
+      lanceArrowWriter.reset();
+    }
+
+    @Override
+    public void finishBatch() {
+      lanceArrowWriter.finish();
+    }
   }
 }

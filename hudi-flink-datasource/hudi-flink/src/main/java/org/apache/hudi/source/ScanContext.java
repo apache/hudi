@@ -49,6 +49,8 @@ public class ScanContext implements Serializable {
   private final boolean skipInsertOverwrite;
   // cdc enabled
   private final boolean cdcEnabled;
+  // is streaming mode
+  private final boolean isStreaming;
 
   public ScanContext(
       Configuration conf,
@@ -61,7 +63,8 @@ public class ScanContext implements Serializable {
       boolean skipCompaction,
       boolean skipClustering,
       boolean skipInsertOverwrite,
-      boolean cdcEnabled) {
+      boolean cdcEnabled,
+      boolean isStreaming) {
     this.conf = conf;
     this.path = path;
     this.rowType = rowType;
@@ -73,6 +76,7 @@ public class ScanContext implements Serializable {
     this.skipClustering = skipClustering;
     this.skipInsertOverwrite = skipInsertOverwrite;
     this.cdcEnabled = cdcEnabled;
+    this.isStreaming = isStreaming;
   }
 
   public Configuration getConf() {
@@ -119,6 +123,10 @@ public class ScanContext implements Serializable {
     return cdcEnabled;
   }
 
+  public boolean isStreaming() {
+    return isStreaming;
+  }
+
   public Duration getScanInterval() {
     return Duration.ofSeconds(conf.get(FlinkOptions.READ_STREAMING_CHECK_INTERVAL));
   }
@@ -138,6 +146,7 @@ public class ScanContext implements Serializable {
     private boolean skipClustering;
     private boolean skipInsertOverwrite;
     private boolean cdcEnabled;
+    private boolean isStreaming;
 
     public Builder conf(Configuration conf) {
       this.conf = conf;
@@ -194,6 +203,11 @@ public class ScanContext implements Serializable {
       return this;
     }
 
+    public Builder isStreaming(boolean isStreaming) {
+      this.isStreaming = isStreaming;
+      return this;
+    }
+
     public ScanContext build() {
       return new ScanContext(
           conf,
@@ -206,7 +220,8 @@ public class ScanContext implements Serializable {
           skipCompaction,
           skipClustering,
           skipInsertOverwrite,
-          cdcEnabled);
+          cdcEnabled,
+          isStreaming);
     }
   }
 }

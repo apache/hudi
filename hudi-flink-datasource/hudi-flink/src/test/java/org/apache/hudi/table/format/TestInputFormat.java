@@ -117,6 +117,9 @@ public class TestInputFormat {
 
   void beforeEach(HoodieTableType tableType, Map<String, String> options) throws IOException {
     conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    // all test cases here expect former default values for record key and ordering fields
+    conf.set(FlinkOptions.RECORD_KEY_FIELD, "uuid");
+    conf.set(FlinkOptions.ORDERING_FIELDS, "ts");
     conf.set(FlinkOptions.TABLE_TYPE, tableType.name());
     if (!conf.contains(FlinkOptions.COMPACTION_ASYNC_ENABLED)) {
       conf.set(FlinkOptions.COMPACTION_ASYNC_ENABLED, false); // by default close the async compaction
@@ -1222,6 +1225,8 @@ public class TestInputFormat {
     conf.set(FlinkOptions.PATH, tempFile.getAbsolutePath());
     conf.set(FlinkOptions.TABLE_NAME, "TestHoodieTable");
     conf.set(FlinkOptions.TABLE_TYPE, HoodieTableType.MERGE_ON_READ.name());
+    conf.set(FlinkOptions.RECORD_KEY_FIELD, "uuid");
+    conf.set(FlinkOptions.ORDERING_FIELDS, "ts");
     conf.set(FlinkOptions.PARTITION_PATH_FIELD, "partition");
     conf.setString(FlinkOptions.SOURCE_AVRO_SCHEMA.key(), HoodieSchemaConverter.convertToSchema(TestConfigurations.ROW_TYPE_DECIMAL_ORDERING).toString());
     conf.set(FlinkOptions.COMPACTION_ASYNC_ENABLED, false); // by default close the async compaction

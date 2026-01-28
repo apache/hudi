@@ -114,7 +114,7 @@ public class FlinkOptions extends HoodieConfig {
   public static final ConfigOption<String> ORDERING_FIELDS = ConfigOptions
       .key("ordering.fields")
       .stringType()
-      .defaultValue("ts")
+      .noDefaultValue()
       .withFallbackKeys("precombine.field", "write.precombine.field", HoodieWriteConfig.PRECOMBINE_FIELD_NAME.key())
       .withDescription("Comma separated list of fields used in records merging. When two records have the same\n"
           + "key value, we will pick the one with the largest value for the ordering field,\n"
@@ -539,7 +539,7 @@ public class FlinkOptions extends HoodieConfig {
   public static final ConfigOption<String> RECORD_KEY_FIELD = ConfigOptions
       .key(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key())
       .stringType()
-      .defaultValue("uuid")
+      .noDefaultValue()
       .withDescription("Record key field. Value to be used as the `recordKey` component of `HoodieKey`.\n"
           + "Actual value will be obtained by invoking .toString() on the field value. Nested fields can be specified using "
           + "the dot notation eg: `a.b.c`");

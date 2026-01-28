@@ -21,9 +21,10 @@ package org.apache.hudi.io.lance;
 
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.io.memory.HoodieArrowAllocator;
-import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 
+import lombok.AccessLevel;
+import lombok.Getter;
 import org.apache.arrow.memory.BufferAllocator;
 import org.apache.arrow.vector.VectorSchemaRoot;
 import org.apache.arrow.vector.types.pojo.Schema;
@@ -33,8 +34,6 @@ import javax.annotation.concurrent.NotThreadSafe;
 
 import java.io.Closeable;
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.List;
 
 /**
  * Base class for Hudi Lance file writers supporting different record types.
@@ -52,43 +51,41 @@ import java.util.List;
 @NotThreadSafe
 public abstract class HoodieBaseLanceWriter<R> implements Closeable {
   /** Memory size for data write operations: 120MB */
-  private static final long LANCE_DATA_ALLOCATOR_SIZE = 120 * 1024 * 1024;
+  private static final long LANCE_DATA_ALLOCATOR_SIZE = 120 * 1024 * 1024L;
 
   protected static final int DEFAULT_BATCH_SIZE = 1000;
-  protected final HoodieStorage storage;
-  protected final StoragePath path;
-  protected final BufferAllocator allocator;
-  protected final List<R> bufferedRecords;
-  protected final int batchSize;
-  protected long writtenRecordCount = 0;
-  protected VectorSchemaRoot root;
+  private final StoragePath path;
+  private final BufferAllocator allocator;
+  private final int batchSize;
+  @Getter(value = AccessLevel.PROTECTED)
+  private long writtenRecordCount = 0;
+  private int currentBatchSize = 0;
+  private VectorSchemaRoot root;
+  private ArrowWriter<R> arrowWriter;
 
   private LanceFileWriter writer;
 
   /**
    * Constructor for base Lance writer.
    *
-   * @param storage HoodieStorage instance
    * @param path Path where Lance file will be written
    * @param batchSize Number of records to buffer before flushing to Lance
    */
-  protected HoodieBaseLanceWriter(HoodieStorage storage, StoragePath path, int batchSize) {
-    this.storage = storage;
+  protected HoodieBaseLanceWriter(StoragePath path, int batchSize) {
     this.path = path;
     this.allocator = HoodieArrowAllocator.newChildAllocator(
         getClass().getSimpleName() + "-data-" + path.getName(), LANCE_DATA_ALLOCATOR_SIZE);
-    this.bufferedRecords = new ArrayList<>(batchSize);
     this.batchSize = batchSize;
   }
 
   /**
-   * Populate the VectorSchemaRoot with buffered records.
-   * Subclasses must implement type-specific conversion logic.
-   * The VectorSchemaRoot field is reused across batches and managed by this base class.
+   * Create and initialize the arrow writer for writing records to VectorSchemaRoot.
+   * Called once during lazy initialization when the first record is written.
    *
-   * @param records List of records to convert
+   * @param root The VectorSchemaRoot to write into
+   * @return An arrow writer implementation that writes records of type R to the root
    */
-  protected abstract void populateVectorSchemaRoot(List<R> records);
+  protected abstract ArrowWriter<R> createArrowWriter(VectorSchemaRoot root);
 
   /**
    * Get the Arrow schema for this writer.
@@ -105,21 +102,30 @@ public abstract class HoodieBaseLanceWriter<R> implements Closeable {
    * @throws IOException if write fails
    */
   public void write(R record) throws IOException {
-    bufferedRecords.add(record);
+    // Lazy initialization on first write
+    if (writer == null) {
+      initializeWriter();
+    }
+    if (root == null) {
+      root = VectorSchemaRoot.create(getArrowSchema(), allocator);
+    }
+    if (arrowWriter == null) {
+      arrowWriter = createArrowWriter(root);
+    }
+
+    // Reset arrow writer at the start of each new batch
+    if (currentBatchSize == 0) {
+      arrowWriter.reset();
+    }
+
+    arrowWriter.write(record);
+    currentBatchSize++;
     writtenRecordCount++;
 
-    if (bufferedRecords.size() >= batchSize) {
+    // Flush when batch is full
+    if (currentBatchSize >= batchSize) {
       flushBatch();
     }
-  }
-
-  /**
-   * Get the total number of records written so far.
-   *
-   * @return Number of records written
-   */
-  public long getWrittenRecordCount() {
-    return writtenRecordCount;
   }
 
   /**
@@ -133,8 +139,8 @@ public abstract class HoodieBaseLanceWriter<R> implements Closeable {
 
     // 1. Flush remaining records
     try {
-      // Flush any remaining buffered records
-      if (!bufferedRecords.isEmpty()) {
+      // Flush any remaining records in current batch
+      if (currentBatchSize > 0) {
         flushBatch();
       }
 
@@ -196,27 +202,18 @@ public abstract class HoodieBaseLanceWriter<R> implements Closeable {
    * Flush buffered records to Lance file.
    */
   private void flushBatch() throws IOException {
-    if (bufferedRecords.isEmpty()) {
-      return;
+    if (currentBatchSize == 0) {
+      return;  // Nothing to flush
     }
 
-    // Lazy initialization of writer and root
-    if (writer == null) {
-      initializeWriter();
-    }
-    if (root == null) {
-      root = VectorSchemaRoot.create(getArrowSchema(), allocator);
-    }
+    // Finalize the arrow writer (sets row count on VectorSchemaRoot)
+    arrowWriter.finishBatch();
 
-    // Reset root state for new batch
-    root.setRowCount(0);
-
-    // Populate root with records and write to Lance
-    populateVectorSchemaRoot(bufferedRecords);
+    // Write VectorSchemaRoot to Lance file
     writer.write(root);
 
-    // Clear buffer
-    bufferedRecords.clear();
+    // Reset batch counter for next batch
+    currentBatchSize = 0;
   }
 
   /**
@@ -224,5 +221,30 @@ public abstract class HoodieBaseLanceWriter<R> implements Closeable {
    */
   private void initializeWriter() throws IOException {
     writer = LanceFileWriter.open(path.toString(), allocator, null);
+  }
+
+  /**
+   * Arrow writer interface for writing records of type T to a VectorSchemaRoot.
+   * Each engine can provide its own implementation for converting records from the engine specific format to Arrow format.
+   * @param <T> the record type
+   */
+  protected interface ArrowWriter<T> {
+    /**
+     * Write a single record to the VectorSchemaRoot.
+     * @param row Record to write
+     * @throws IOException if write fails
+     */
+    void write(T row) throws IOException;
+
+    /**
+     * Finalize the current batch including setting row count on VectorSchemaRoot.
+     * @throws IOException if finalization fails
+     */
+    void finishBatch() throws IOException;
+
+    /**
+     * Reset the writer state for a new batch.
+     */
+    void reset();
   }
 }

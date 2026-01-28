@@ -27,6 +27,7 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.InstantGenerator;
 import org.apache.hudi.common.util.CompactionUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.TableServiceUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.configuration.FlinkOptions;
@@ -208,6 +209,12 @@ public class HoodieFlinkCompactor {
 
       // get the table name
       conf.set(FlinkOptions.TABLE_NAME, metaClient.getTableConfig().getTableName());
+
+      // get the primary key if absent in conf, but presented in table configs
+      if (!conf.containsKey(FlinkOptions.RECORD_KEY_FIELD.key())
+          && StringUtils.nonEmpty(metaClient.getTableConfig().getRecordKeyFieldProp())) {
+        conf.set(FlinkOptions.RECORD_KEY_FIELD, metaClient.getTableConfig().getRecordKeyFieldProp());
+      }
 
       // set table schema
       CompactionUtil.setAvroSchema(conf, metaClient);

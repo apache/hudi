@@ -20,45 +20,117 @@
 package org.apache.hudi.schema
 
 import org.apache.hudi.HoodieSchemaUtils
+import org.apache.hudi.exception.HoodieException
 
-import org.apache.spark.sql.types.{DataType, IntegerType, LongType, StringType, StructField, StructType}
-import org.junit.jupiter.api.Assertions.assertEquals
+import org.apache.spark.sql.types._
+import org.junit.jupiter.api.Assertions.{assertEquals, assertThrows}
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.CsvSource
 
 /**
- * Tests {@link HoodieSparkSchemaUtils}
+ * Tests for {@link HoodieSchemaUtils#getSchemaForField}
  */
 class TestHoodieSparkSchemaUtils {
 
+  // Test schemas
+  private val simpleSchema = StructType(
+    StructField("id", StringType) ::
+      StructField("name", StringType) ::
+      StructField("count", IntegerType) :: Nil)
+
+  private val nestedSchema = StructType(
+    StructField("id", StringType) ::
+      StructField("nested", StructType(
+        StructField("inner_string", StringType) ::
+          StructField("inner_int", IntegerType) :: Nil)) :: Nil)
+
+  private val arraySchema = StructType(
+    StructField("id", StringType) ::
+      StructField("items", ArrayType(StringType, containsNull = true)) :: Nil)
+
+  private val arrayOfStructSchema = StructType(
+    StructField("id", StringType) ::
+      StructField("items", ArrayType(StructType(
+        StructField("nested_int", IntegerType) ::
+          StructField("nested_string", StringType) :: Nil), containsNull = true)) :: Nil)
+
+  private val mapSchema = StructType(
+    StructField("id", StringType) ::
+      StructField("metadata", MapType(StringType, IntegerType, valueContainsNull = true)) :: Nil)
+
+  private val mapOfStructSchema = StructType(
+    StructField("id", StringType) ::
+      StructField("nested_map", MapType(StringType, StructType(
+        StructField("nested_int", IntegerType) ::
+          StructField("nested_string", StringType) :: Nil), valueContainsNull = true)) :: Nil)
+
+  private val complexSchema = StructType(
+    StructField("id", StringType) ::
+      StructField("top", StructType(
+        StructField("nested_array", ArrayType(StructType(
+          StructField("inner_field", StringType) :: Nil), containsNull = true)) ::
+          StructField("nested_map", MapType(StringType, IntegerType, valueContainsNull = true)) :: Nil)) :: Nil)
+
+  private def getSchema(name: String): StructType = name match {
+    case "simple" => simpleSchema
+    case "nested" => nestedSchema
+    case "array" => arraySchema
+    case "arrayOfStruct" => arrayOfStructSchema
+    case "map" => mapSchema
+    case "mapOfStruct" => mapOfStructSchema
+    case "complex" => complexSchema
+  }
+
+  @ParameterizedTest
+  @CsvSource(Array(
+    // Simple field tests
+    "simple,       id,                                            id,                                            string",
+    "simple,       name,                                          name,                                          string",
+    "simple,       count,                                         count,                                         int",
+    // Nested struct field tests
+    "nested,       nested.inner_string,                           nested.inner_string,                           string",
+    "nested,       nested.inner_int,                              nested.inner_int,                              int",
+    // Array element access using .list.element
+    "array,        items.list.element,                            items.list.element,                            string",
+    // Array of struct - access nested fields within array elements
+    "arrayOfStruct, items.list.element.nested_int,                items.list.element.nested_int,                 int",
+    "arrayOfStruct, items.list.element.nested_string,             items.list.element.nested_string,              string",
+    // Map key/value access using .key_value.key and .key_value.value
+    "map,          metadata.key_value.key,                        metadata.key_value.key,                        string",
+    "map,          metadata.key_value.value,                      metadata.key_value.value,                      int",
+    // Map of struct - access nested fields within map values
+    "mapOfStruct,  nested_map.key_value.value.nested_int,         nested_map.key_value.value.nested_int,         int",
+    "mapOfStruct,  nested_map.key_value.value.nested_string,      nested_map.key_value.value.nested_string,      string",
+    // Complex nested: struct -> array -> struct
+    "complex,      top.nested_array.list.element.inner_field,     top.nested_array.list.element.inner_field,     string",
+    // Complex nested: struct -> map
+    "complex,      top.nested_map.key_value.key,                  top.nested_map.key_value.key,                  string",
+    "complex,      top.nested_map.key_value.value,                top.nested_map.key_value.value,                int"
+  ))
+  def testGetSchemaForField(schemaName: String, inputPath: String, expectedKey: String, expectedType: String): Unit = {
+    val schema = getSchema(schemaName.trim)
+    val result = HoodieSchemaUtils.getSchemaForField(schema, inputPath.trim)
+    assertEquals(expectedKey.trim, result.getKey)
+    assertEquals(expectedType.trim, result.getValue.dataType.simpleString)
+  }
+
   @Test
-  def testGetSchemaField(): Unit = {
+  def testInvalidPaths(): Unit = {
+    // Invalid array paths
+    assertThrows(classOf[HoodieException], () =>
+      HoodieSchemaUtils.getSchemaForField(arraySchema, "items.wrong.path"))
+    assertThrows(classOf[HoodieException], () =>
+      HoodieSchemaUtils.getSchemaForField(arraySchema, "items.list.missing"))
 
-    val nestedStructType = StructType(
-        StructField("nested_long", LongType, nullable = true) ::
-        StructField("nested_int", IntegerType, nullable = true) ::
-          StructField("nested_string", StringType, nullable = true) :: Nil)
+    // Invalid map paths
+    assertThrows(classOf[HoodieException], () =>
+      HoodieSchemaUtils.getSchemaForField(mapSchema, "metadata.wrong.path"))
+    assertThrows(classOf[HoodieException], () =>
+      HoodieSchemaUtils.getSchemaForField(mapSchema, "metadata.key_value.key.invalid"))
 
-    val schema = StructType(
-      StructField("_row_key", StringType, nullable = true) ::
-        StructField("first_name", StringType, nullable = false) ::
-        StructField("last_name", StringType, nullable = true) ::
-        StructField("nested_field", nestedStructType, nullable = true) ::
-        StructField("timestamp", IntegerType, nullable = true) ::
-        StructField("partition", IntegerType, nullable = true) :: Nil)
-
-    assertFieldType(schema, "first_name", StringType)
-    assertFieldType(schema, "timestamp", IntegerType)
-
-    // test nested fields.
-    assertFieldType(schema, "nested_field.nested_long", LongType)
-    assertFieldType(schema, "nested_field.nested_int", IntegerType)
-    assertFieldType(schema, "nested_field.nested_string", StringType)
+    // Non-existent field
+    assertThrows(classOf[HoodieException], () =>
+      HoodieSchemaUtils.getSchemaForField(simpleSchema, "nonexistent"))
   }
-
-  def assertFieldType(schema: StructType, fieldName: String, expectedDataType: DataType): Unit = {
-    val fieldNameSchemaPair = HoodieSchemaUtils.getSchemaForField(schema, fieldName)
-    assertEquals(fieldName, fieldNameSchemaPair.getKey)
-    assertEquals(expectedDataType, fieldNameSchemaPair.getValue.dataType)
-  }
-
 }

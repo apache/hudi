@@ -386,12 +386,15 @@ public final class HoodieSchemaUtils {
 
   /**
    * Gets a field (including nested fields) from the schema using dot notation.
-   * This is equivalent to HoodieAvroUtils.getSchemaForField() but operates on HoodieSchema.
+   * This method delegates to {@link HoodieSchema#getNestedField(String)}.
    * <p>
    * Supports nested field access using dot notation. For example:
    * <ul>
    *   <li>"name" - retrieves top-level field</li>
    *   <li>"user.profile.displayName" - retrieves nested field</li>
+   *   <li>"items.list.element" - retrieves array element schema </li>
+   *   <li>"metadata.key_value.key" - retrieves map key schema</li>
+   *   <li>"metadata.key_value.value" - retrieves map value schema</li>
    * </ul>
    *
    * @param schema    the schema to search in
@@ -403,44 +406,7 @@ public final class HoodieSchemaUtils {
   public static Option<Pair<String, HoodieSchemaField>> getNestedField(HoodieSchema schema, String fieldName) {
     ValidationUtils.checkArgument(schema != null, "Schema cannot be null");
     ValidationUtils.checkArgument(fieldName != null && !fieldName.isEmpty(), "Field name cannot be null or empty");
-    return getNestedFieldInternal(schema, fieldName, "");
-  }
-
-  /**
-   * Internal helper method for recursively retrieving nested fields.
-   *
-   * @param schema    the current schema to search in
-   * @param fieldName the remaining field path
-   * @param prefix    the accumulated field path prefix
-   * @return Option containing Pair of canonical field name and the HoodieSchemaField, or Option.empty() if field not found
-   */
-  private static Option<Pair<String, HoodieSchemaField>> getNestedFieldInternal(HoodieSchema schema, String fieldName, String prefix) {
-    HoodieSchema nonNullableSchema = getNonNullTypeFromUnion(schema);
-
-    if (!fieldName.contains(".")) {
-      // Base case: simple field name
-      if (nonNullableSchema.getType() != HoodieSchemaType.RECORD) {
-        return Option.empty();
-      }
-      return nonNullableSchema.getField(fieldName)
-          .map(field -> Pair.of(prefix + fieldName, field));
-    } else {
-      // Recursive case: nested field
-      if (nonNullableSchema.getType() != HoodieSchemaType.RECORD) {
-        return Option.empty();
-      }
-
-      int dotIndex = fieldName.indexOf(".");
-      String rootFieldName = fieldName.substring(0, dotIndex);
-      String remainingPath = fieldName.substring(dotIndex + 1);
-
-      return nonNullableSchema.getField(rootFieldName)
-          .flatMap(rootField -> getNestedFieldInternal(
-              rootField.schema(),
-              remainingPath,
-              prefix + rootFieldName + "."
-          ));
-    }
+    return schema.getNestedField(fieldName);
   }
 
   /**

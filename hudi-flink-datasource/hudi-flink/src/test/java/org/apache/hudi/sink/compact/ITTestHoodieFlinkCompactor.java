@@ -62,8 +62,6 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.io.IOException;
@@ -89,8 +87,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 @ExtendWith(FlinkMiniCluster.class)
 public class ITTestHoodieFlinkCompactor {
-
-  protected static final Logger LOG = LoggerFactory.getLogger(ITTestHoodieFlinkCompactor.class);
 
   private static final Map<String, List<String>> EXPECTED1 = new HashMap<>();
 
@@ -131,6 +127,8 @@ public class ITTestHoodieFlinkCompactor {
     options.put(FlinkOptions.COMPACTION_SCHEDULE_ENABLED.key(), "false");
     options.put(FlinkOptions.COMPACTION_ASYNC_ENABLED.key(), "false");
     options.put(FlinkOptions.PATH.key(), tempFile.getAbsolutePath());
+    options.put(FlinkOptions.RECORD_KEY_FIELD.key(), "uuid");
+    options.put(FlinkOptions.ORDERING_FIELDS.key(), "ts");
     options.put(FlinkOptions.TABLE_TYPE.key(), "MERGE_ON_READ");
     options.put(HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key(), logBlockFormat);
     options.put(FlinkOptions.CHANGELOG_ENABLED.key(), enableChangelog + "");
@@ -146,6 +144,8 @@ public class ITTestHoodieFlinkCompactor {
     FlinkCompactionConfig cfg = new FlinkCompactionConfig();
     cfg.path = tempFile.getAbsolutePath();
     Configuration conf = FlinkCompactionConfig.toFlinkConfig(cfg);
+    conf.set(FlinkOptions.RECORD_KEY_FIELD, "uuid");
+    conf.set(FlinkOptions.ORDERING_FIELDS, "ts");
     conf.set(FlinkOptions.TABLE_TYPE, "MERGE_ON_READ");
 
     // create metaClient
@@ -206,6 +206,8 @@ public class ITTestHoodieFlinkCompactor {
     options.put(FlinkOptions.COMPACTION_SCHEDULE_ENABLED.key(), "false");
     options.put(FlinkOptions.COMPACTION_ASYNC_ENABLED.key(), "false");
     options.put(FlinkOptions.PATH.key(), tempFile.getAbsolutePath());
+    options.put(FlinkOptions.RECORD_KEY_FIELD.key(), "uuid");
+    options.put(FlinkOptions.ORDERING_FIELDS.key(), "ts");
     options.put(FlinkOptions.TABLE_TYPE.key(), "MERGE_ON_READ");
     String hoodieTableDDL = TestConfigurations.getCreateHoodieTableDDL("t1", options);
     tableEnv.executeSql(hoodieTableDDL);
@@ -219,6 +221,8 @@ public class ITTestHoodieFlinkCompactor {
     FlinkCompactionConfig cfg = new FlinkCompactionConfig();
     cfg.path = tempFile.getAbsolutePath();
     Configuration conf = FlinkCompactionConfig.toFlinkConfig(cfg);
+    conf.set(FlinkOptions.RECORD_KEY_FIELD, "uuid");
+    conf.set(FlinkOptions.ORDERING_FIELDS, "ts");
     conf.set(FlinkOptions.TABLE_TYPE, "MERGE_ON_READ");
 
     // create metaClient
@@ -293,6 +297,8 @@ public class ITTestHoodieFlinkCompactor {
     Map<String, String> options = new HashMap<>();
     options.put(FlinkOptions.COMPACTION_ASYNC_ENABLED.key(), "false");
     options.put(FlinkOptions.PATH.key(), tempFile.getAbsolutePath());
+    options.put(FlinkOptions.RECORD_KEY_FIELD.key(), "uuid");
+    options.put(FlinkOptions.ORDERING_FIELDS.key(), "ts");
     options.put(FlinkOptions.TABLE_TYPE.key(), "MERGE_ON_READ");
     options.put(FlinkOptions.CHANGELOG_ENABLED.key(), enableChangelog + "");
     String hoodieTableDDL = TestConfigurations.getCreateHoodieTableDDL("t1", options);
@@ -309,6 +315,8 @@ public class ITTestHoodieFlinkCompactor {
     cfg.minCompactionIntervalSeconds = 3;
     cfg.schedule = true;
     Configuration conf = FlinkCompactionConfig.toFlinkConfig(cfg);
+    conf.set(FlinkOptions.RECORD_KEY_FIELD, "uuid");
+    conf.set(FlinkOptions.ORDERING_FIELDS, "ts");
     conf.set(FlinkOptions.TABLE_TYPE, "MERGE_ON_READ");
     conf.set(FlinkOptions.COMPACTION_TASKS, FlinkMiniCluster.DEFAULT_PARALLELISM);
 
@@ -334,6 +342,8 @@ public class ITTestHoodieFlinkCompactor {
     Map<String, String> options = new HashMap<>();
     options.put(FlinkOptions.COMPACTION_ASYNC_ENABLED.key(), "false");
     options.put(FlinkOptions.PATH.key(), tempFile.getAbsolutePath());
+    options.put(FlinkOptions.RECORD_KEY_FIELD.key(), "uuid");
+    options.put(FlinkOptions.ORDERING_FIELDS.key(), "ts");
     options.put(FlinkOptions.TABLE_TYPE.key(), "MERGE_ON_READ");
     options.put(FlinkOptions.CHANGELOG_ENABLED.key(), enableChangelog + "");
     String hoodieTableDDL = TestConfigurations.getCreateHoodieTableDDL("t1", options);
@@ -344,6 +354,8 @@ public class ITTestHoodieFlinkCompactor {
     FlinkCompactionConfig cfg = new FlinkCompactionConfig();
     cfg.path = tempFile.getAbsolutePath();
     Configuration conf = FlinkCompactionConfig.toFlinkConfig(cfg);
+    conf.set(FlinkOptions.RECORD_KEY_FIELD, "uuid");
+    conf.set(FlinkOptions.ORDERING_FIELDS, "ts");
     conf.set(FlinkOptions.TABLE_TYPE, "MERGE_ON_READ");
 
     HoodieTableMetaClient metaClient = StreamerUtil.createMetaClient(conf);
@@ -412,6 +424,8 @@ public class ITTestHoodieFlinkCompactor {
     Map<String, String> options = new HashMap<>();
     options.put(FlinkOptions.COMPACTION_DELTA_COMMITS.key(), "2");
     options.put(FlinkOptions.PATH.key(), tempFile.getAbsolutePath());
+    options.put(FlinkOptions.RECORD_KEY_FIELD.key(), "uuid");
+    options.put(FlinkOptions.ORDERING_FIELDS.key(), "ts");
     options.put(FlinkOptions.TABLE_TYPE.key(), "MERGE_ON_READ");
     String hoodieTableDDL = TestConfigurations.getCreateHoodieTableDDL("t1", options);
     tableEnv.executeSql(hoodieTableDDL);
@@ -429,6 +443,8 @@ public class ITTestHoodieFlinkCompactor {
     FlinkCompactionConfig cfg = new FlinkCompactionConfig();
     cfg.path = tempFile.getAbsolutePath();
     Configuration conf = FlinkCompactionConfig.toFlinkConfig(cfg);
+    conf.set(FlinkOptions.RECORD_KEY_FIELD, "uuid");
+    conf.set(FlinkOptions.ORDERING_FIELDS, "ts");
 
     assertDoesNotThrow(() -> runOfflineCompact(tableEnv, conf));
     assertNoDuplicateFile(conf);
@@ -467,6 +483,8 @@ public class ITTestHoodieFlinkCompactor {
     options.put(FlinkOptions.COMPACTION_SCHEDULE_ENABLED.key(), "false");
     options.put(FlinkOptions.COMPACTION_ASYNC_ENABLED.key(), "false");
     options.put(FlinkOptions.PATH.key(), tempFile.getAbsolutePath());
+    options.put(FlinkOptions.RECORD_KEY_FIELD.key(), "uuid");
+    options.put(FlinkOptions.ORDERING_FIELDS.key(), "ts");
     options.put(FlinkOptions.TABLE_TYPE.key(), "MERGE_ON_READ");
     String hoodieTableDDL = TestConfigurations.getCreateHoodieTableDDL("t1", options);
     tableEnv.executeSql(hoodieTableDDL);

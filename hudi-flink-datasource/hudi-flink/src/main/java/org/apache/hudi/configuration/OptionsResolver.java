@@ -34,6 +34,7 @@ import org.apache.hudi.common.table.timeline.TimelineUtils.HollowCommitHandling;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
@@ -152,12 +153,25 @@ public class OptionsResolver {
   }
 
   /**
+   * Return value of {@link FlinkOptions#RECORD_KEY_FIELD} if it was set,
+   * or throw exception otherwise.
+   */
+  public static String getRecordKeyStr(Configuration conf) {
+    final String recordKeyStr = conf.get(FlinkOptions.RECORD_KEY_FIELD);
+    ValidationUtils.checkArgument(
+        recordKeyStr != null,
+        "Primary key definition is required, use either PRIMARY KEY syntax or option '"
+            + FlinkOptions.RECORD_KEY_FIELD.key() + "' to specify.");
+    return recordKeyStr;
+  }
+
+  /**
    * Returns the ordering fields as comma separated string
    * or null if the value is set as {@link FlinkOptions#NO_PRE_COMBINE}.
    */
   public static String getOrderingFieldsStr(Configuration conf) {
     final String orderingFields = conf.get(FlinkOptions.ORDERING_FIELDS);
-    return orderingFields.equals(FlinkOptions.NO_PRE_COMBINE) ? null : orderingFields;
+    return FlinkOptions.NO_PRE_COMBINE.equals(orderingFields) ? null : orderingFields;
   }
 
   /**
@@ -429,14 +443,7 @@ public class OptionsResolver {
    * Returns the index key field.
    */
   public static String getIndexKeyField(Configuration conf) {
-    return conf.getString(FlinkOptions.INDEX_KEY_FIELD.key(), conf.get(FlinkOptions.RECORD_KEY_FIELD));
-  }
-
-  /**
-   * Returns the index key field values.
-   */
-  public static String[] getIndexKeys(Configuration conf) {
-    return getIndexKeyField(conf).split(",");
+    return conf.getString(FlinkOptions.INDEX_KEY_FIELD.key(), getRecordKeyStr(conf));
   }
 
   /**
