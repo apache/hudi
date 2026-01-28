@@ -740,18 +740,26 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
                                                                    Lazy<List<Pair<String, FileSlice>>> lazyLatestMergedPartitionFileSliceList, boolean isPartitionedRLI) throws IOException {
     createRecordIndexDefinition(dataMetaClient, Collections.singletonMap(HoodieRecordIndex.IS_PARTITIONED_OPTION, String.valueOf(isPartitionedRLI)));
     HoodieData<HoodieRecord> recordIndexRecords;
+    int fileGroupCount;
     if (isPartitionedRLI) {
-      recordIndexRecords = initializeFilegroupsAndCommitToPartitionedRecordIndexPartition(commitTimeForPartition, lazyLatestMergedPartitionFileSliceList);
+      Pair<Integer, HoodieData<HoodieRecord>> fgCountAndRecords = initializeFilegroupsAndCommitToPartitionedRecordIndexPartition(commitTimeForPartition, lazyLatestMergedPartitionFileSliceList);
+      fileGroupCount = fgCountAndRecords.getKey();
+      recordIndexRecords = fgCountAndRecords.getValue();
     } else {
       Pair<Integer, HoodieData<HoodieRecord>> fgCountAndRecordIndexRecords = initializeRecordIndexPartition(lazyLatestMergedPartitionFileSliceList.get(),
           dataWriteConfig.getMetadataConfig().getRecordIndexMaxParallelism());
+      fileGroupCount = fgCountAndRecordIndexRecords.getKey();
       recordIndexRecords = fgCountAndRecordIndexRecords.getRight();
       initializeFilegroupsAndCommit(RECORD_INDEX, RECORD_INDEX.getPartitionPath(), fgCountAndRecordIndexRecords, commitTimeForPartition);
+    }
+    // Validate record index after commit if duplicates are not allowed
+    if (!dataWriteConfig.allowDuplicatesWithHfileWrites()) {
+      validateRecordIndex(recordIndexRecords.count(), fileGroupCount);
     }
     recordIndexRecords.unpersist();
   }
 
-  private HoodieData<HoodieRecord> initializeFilegroupsAndCommitToPartitionedRecordIndexPartition(String commitTimeForPartition,
+  private Pair<Integer, HoodieData<HoodieRecord>> initializeFilegroupsAndCommitToPartitionedRecordIndexPartition(String commitTimeForPartition,
                                                                               Lazy<List<Pair<String, FileSlice>>> lazyLatestMergedPartitionFileSliceList) throws IOException {
     Map<String, List<Pair<String, FileSlice>>> partitionFileSlicePairsMap = lazyLatestMergedPartitionFileSliceList.get().stream()
         .collect(Collectors.groupingBy(Pair::getKey));
@@ -762,8 +770,9 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
       fileGroupCountAndRecordsPairMap.put(partition, initializeRecordIndexPartition(partitionFileSlicePairsMap.get(partition), maxParallelismPerHudiPartition));
     }
 
+    int totalFileGroupCount = fileGroupCountAndRecordsPairMap.values().stream().mapToInt(Pair::getLeft).sum();
     if (LOG.isInfoEnabled()) {
-      LOG.info("Initializing partitioned record index with {} mappings", fileGroupCountAndRecordsPairMap.values().stream().mapToInt(Pair::getLeft).sum());
+      LOG.info("Initializing partitioned record index with {} mappings", totalFileGroupCount);
     }
 
     HoodieTimer partitionInitTimer = HoodieTimer.start();
@@ -787,7 +796,7 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
     initMetadataReader();
     long totalInitTime = partitionInitTimer.endTimer();
     LOG.info("Initializing partitioned record index in metadata table took {} in ms", totalInitTime);
-    return records;
+    return Pair.of(totalFileGroupCount, records);
   }
 
   private Pair<Integer, HoodieData<HoodieRecord>> initializeRecordIndexPartition(
@@ -833,6 +842,29 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
         dataWriteConfig.getRecordIndexGrowthFactor(),
         dataWriteConfig.getRecordIndexMaxFileGroupSizeBytes()
     );
+  }
+
+  /**
+   * Validates the record index after bootstrap by comparing the expected record count with the actual
+   * record count stored in the metadata table.
+   *
+   * @param recordCount the expected number of records
+   * @param fileGroupCount the expected number of file groups
+   */
+  private void validateRecordIndex(long recordCount, int fileGroupCount) {
+    String partitionName = MetadataPartitionType.RECORD_INDEX.getPartitionPath();
+    HoodieTableFileSystemView fsView = HoodieTableMetadataUtil.getFileSystemViewForMetadataTable(metadataMetaClient);
+    List<FileSlice> fileSlices = HoodieTableMetadataUtil.getPartitionLatestFileSlices(metadataMetaClient, Option.of(fsView), partitionName);
+    long totalRecords = 0L;
+    for (FileSlice fileSlice : fileSlices) {
+      if (fileSlice.getBaseFile().isPresent()) {
+        totalRecords += metadata.getTotalRecordIndexRecords(partitionName, fileSlice);
+      }
+    }
+    ValidationUtils.checkArgument(totalRecords == recordCount, "Record Count Validation failed with "
+        + totalRecords + " present in record index vs the expected " + recordCount);
+    LOG.info(String.format("Record index bootstrapped on %d shards (expected = %d) with %d records (expected = %d)",
+        fileSlices.size(), fileGroupCount, totalRecords, recordCount));
   }
 
   /**
