@@ -17,6 +17,15 @@
 
 package org.apache.spark.sql.hudi.common
 
+import org.apache.hudi.client.common.HoodieSparkEngineContext
+import org.apache.hudi.common.config.HoodieMetadataConfig
+import org.apache.hudi.common.table.HoodieTableMetaClient
+import org.apache.hudi.hadoop.fs.HadoopFSUtils
+import org.apache.hudi.metadata.HoodieBackedTableMetadata
+import org.apache.hudi.storage.{HoodieStorage, StoragePath}
+
+import org.junit.jupiter.api.Assertions.assertTrue
+
 class TestSlashSeparatedPartitionValue extends HoodieSparkSqlTestBase {
 
   test("Test slash separated date partitions") {
@@ -36,7 +45,7 @@ class TestSlashSeparatedPartitionValue extends HoodieSparkSqlTestBase {
            |  'primaryKey' = 'id',
            |  'type' = 'COW',
            |  'preCombineField'='ts',
-           |  'hoodie.datasource.write.slash.separated.date.partitionpath'='true'
+           |  'hoodie.datasource.write.slash.separated.date.partitioning'='true'
            | )
            | partitioned by (`datestr`)
            | location '$tablePath'
@@ -54,6 +63,29 @@ class TestSlashSeparatedPartitionValue extends HoodieSparkSqlTestBase {
         Seq("1", "a1", 1000, "2026-01-05"),
         Seq("2", "a2", 2000, "2026-01-06")
       )
+
+      // Verify table config has slash separated date partitioning enabled
+      val metaClient = HoodieTableMetaClient.builder()
+        .setConf(HadoopFSUtils.getStorageConfWithCopy(spark.sparkContext.hadoopConfiguration))
+        .setBasePath(tablePath)
+        .build()
+      val tableConfig = metaClient.getTableConfig
+      assertTrue(tableConfig.getSlashSeparatedDatePartitioning,
+        "Table config should have slash separated date partitioning enabled")
+
+      // Verify that partition paths are created with slash separated date format (yyyy/MM/dd)
+      assertTrue(metaClient.getStorage.exists(new StoragePath(tablePath, "2026/01/05")),
+        s"Partition path 2026/01/05 should exist")
+      assertTrue(metaClient.getStorage.exists(new StoragePath(tablePath, "2026/01/06")),
+        s"Partition path 2026/01/06 should exist")
+
+      val engine = new HoodieSparkEngineContext(spark.sparkContext)
+      val storage = metaClient.getStorage()
+      val metadataConfig = HoodieMetadataConfig.newBuilder().build()
+      val metadataTable = new HoodieBackedTableMetadata(engine, storage, metadataConfig, tablePath)
+      val partitionPaths = metadataTable.getAllPartitionPaths
+      assertTrue(partitionPaths.contains("2026/01/05"))
+      assertTrue(partitionPaths.contains("2026/01/06"))
     }
   }
 }

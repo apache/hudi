@@ -92,9 +92,9 @@ object HoodieSqlCommonUtils extends SparkAdapterSupport {
   }
 
   /**
-   * Determine whether URL encoding is enabled
+   * Determine whether slash separated date partitioning is enabled
    */
-  def isHierarchicalDatePartitioning(partitionPaths: Seq[String], table: CatalogTable): Boolean = {
+  def isSlashSeparatedDatePartitioning(partitionPaths: Seq[String], table: CatalogTable): Boolean = {
     if (table.partitionColumnNames.nonEmpty) {
       partitionPaths.forall(partitionPath => {
         table.partitionColumnNames.size == 1 && partitionPath.split("/").length == 3

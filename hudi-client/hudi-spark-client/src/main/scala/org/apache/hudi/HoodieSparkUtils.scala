@@ -266,7 +266,7 @@ object HoodieSparkUtils extends SparkAdapterSupport with SparkVersionsSupport wi
           val partitionValue = if (partitionPath.startsWith(prefix)) {
             // support hive style partition path
             partitionPath.substring(prefix.length)
-          } else if (slashSeparatedDatePartitioning && isValidDate(partitionPath)) {
+          } else if (slashSeparatedDatePartitioning) {
             partitionPath.replace('/', '-')
           } else {
             partitionPath

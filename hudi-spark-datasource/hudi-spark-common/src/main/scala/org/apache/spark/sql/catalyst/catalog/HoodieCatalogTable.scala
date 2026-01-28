@@ -319,9 +319,6 @@ class HoodieCatalogTable(val spark: SparkSession, var table: CatalogTable) exten
       if (originTableConfig.contains(HoodieTableConfig.SLASH_SEPARATED_DATE_PARTITIONING.key)) {
         extraConfig(HoodieTableConfig.SLASH_SEPARATED_DATE_PARTITIONING.key) =
           originTableConfig(HoodieTableConfig.SLASH_SEPARATED_DATE_PARTITIONING.key)
-      } else {
-        extraConfig(HoodieTableConfig.SLASH_SEPARATED_DATE_PARTITIONING.key) =
-          String.valueOf(isHierarchicalDatePartitioning(allPartitionPaths, table))
       }
     } else if (sqlOptions.contains(HoodieTableConfig.SLASH_SEPARATED_DATE_PARTITIONING.key)) {
       extraConfig(HoodieTableConfig.SLASH_SEPARATED_DATE_PARTITIONING.key) =

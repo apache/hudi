@@ -1212,8 +1212,8 @@ public class HoodieTableConfig extends HoodieConfig {
     return HoodieTimelineTimeZone.valueOf(getStringOrDefault(TIMELINE_TIMEZONE));
   }
 
-  public String getSlashSeparatedDatePartitioning() {
-    return getStringOrDefault(KeyGeneratorOptions.SLASH_SEPARATED_DATE_PARTITIONING);
+  public boolean getSlashSeparatedDatePartitioning() {
+    return getBooleanOrDefault(KeyGeneratorOptions.SLASH_SEPARATED_DATE_PARTITIONING);
   }
 
   public String getHiveStylePartitioningEnable() {

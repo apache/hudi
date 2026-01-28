@@ -39,7 +39,7 @@ public class SparkPartitionUtils {
     if (!partitionFields.isPresent()) {
       return new Object[0];
     }
-    boolean slashSeparatedDatePartitioning = Boolean.parseBoolean(tableConfig.getSlashSeparatedDatePartitioning());
+    boolean slashSeparatedDatePartitioning = tableConfig.getSlashSeparatedDatePartitioning();
     return HoodieSparkUtils.doParsePartitionColumnValues(
         partitionFields.get(),
         partitionPath,
