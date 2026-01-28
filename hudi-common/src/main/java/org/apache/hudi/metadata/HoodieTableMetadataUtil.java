@@ -2061,7 +2061,7 @@ public class HoodieTableMetadataUtil {
     // Check for precision and scale if the schema has a logical decimal type.
     // VARIANT (unshredded) type is excluded because it stores semi-structured data as opaque binary blobs,
     // making min/max statistics meaningless
-    // TODO: For shredded, we are able to store colstats, explore that
+    // TODO: For shredded, we are able to store colstats, explore that: #17988
     return type != HoodieSchemaType.RECORD && type != HoodieSchemaType.MAP
         && type != HoodieSchemaType.ARRAY && type != HoodieSchemaType.ENUM
         && type != HoodieSchemaType.VARIANT;

@@ -286,18 +286,13 @@ public class HoodieRowParquetWriteSupport extends WriteSupport<InternalRow> {
       // Maps VariantType to a group containing 'metadata' and 'value' fields.
       // This ensures Spark 4.0 compatibility and supports both Shredded and Unshredded schemas.
       // Note: We intentionally omit 'typed_value' for shredded variants as this writer only accesses raw binary blobs.
-      final byte[][] variantBytes = new byte[2][];  // [0] = value, [1] = metadata
       BiConsumer<SpecializedGetters, Integer> variantWriter = SparkAdapterSupport$.MODULE$.sparkAdapter().createVariantValueWriter(
           dataType,
-          valueBytes -> variantBytes[0] = valueBytes,
-          metadataBytes -> variantBytes[1] = metadataBytes
+          valueBytes -> consumeField("value", 0, () -> recordConsumer.addBinary(Binary.fromReusedByteArray(valueBytes))),
+          metadataBytes -> consumeField("metadata", 1, () -> recordConsumer.addBinary(Binary.fromReusedByteArray(metadataBytes)))
       );
       return (row, ordinal) -> {
-        variantWriter.accept(row, ordinal);
-        consumeGroup(() -> {
-          consumeField("value", 0, () -> recordConsumer.addBinary(Binary.fromReusedByteArray(variantBytes[0])));
-          consumeField("metadata", 1, () -> recordConsumer.addBinary(Binary.fromReusedByteArray(variantBytes[1])));
-        });
+        consumeGroup(() -> variantWriter.accept(row, ordinal));
       };
     } else if (dataType instanceof DecimalType) {
       return (row, ordinal) -> {

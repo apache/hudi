@@ -253,6 +253,7 @@ object HoodieSparkSchemaConverters extends SparkAdapterSupport {
         }
 
       // VARIANT type (Spark >4.x only), which will be handled via SparkAdapter
+      // TODO: Check if internalSchema will throw any errors here: #18021
       case HoodieSchemaType.VARIANT =>
         sparkAdapter.getVariantDataType match {
           case Some(variantType) => SchemaType(variantType, nullable = false)
