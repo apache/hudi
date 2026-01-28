@@ -479,11 +479,6 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
     return (partitionColumns.length > 0 && canParsePartitionValues()) || HoodieTableMetadata.isMetadataTable(basePath.toString());
   }
 
-  protected PartitionPath convertToPartitionPath(String partitionPath) {
-    Object[] partitionColumnValues = parsePartitionColumnValues(partitionColumns, partitionPath);
-    return new PartitionPath(partitionPath, partitionColumnValues);
-  }
-
   private static long fileSliceSize(FileSlice fileSlice) {
     long logFileSize = fileSlice.getLogFiles().map(HoodieLogFile::getFileSize)
         .filter(s -> s > 0)
