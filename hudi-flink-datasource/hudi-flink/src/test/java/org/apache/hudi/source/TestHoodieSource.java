@@ -516,6 +516,7 @@ public class TestHoodieSource {
         "/test/table",
         partitionPath,
         "read_optimized",
+        "19700101000000000",
         fileId
     );
   }

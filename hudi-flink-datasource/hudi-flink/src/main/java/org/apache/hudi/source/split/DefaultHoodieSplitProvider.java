@@ -19,22 +19,38 @@
 package org.apache.hudi.source.split;
 
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.ValidationUtils;
 
 import javax.annotation.Nullable;
+
 import java.util.Collection;
 import java.util.Queue;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentLinkedDeque;
+import java.util.concurrent.PriorityBlockingQueue;
 import java.util.stream.Collectors;
 
 /**
  *  Default split provider caches pending splits in queue and return split sequentially.
  */
 public class DefaultHoodieSplitProvider implements HoodieSplitProvider {
+  public static final int DEFAULT_SPLIT_QUEUE_SIZE = 20;
+
   private Queue<HoodieSourceSplit> pendingSplits;
 
   public DefaultHoodieSplitProvider() {
     this.pendingSplits = new ConcurrentLinkedDeque<>();
+  }
+
+  /**
+   * Creates a DefaultHoodieSplitProvider with a custom comparator for ordering splits.
+   *
+   * @param comparator the comparator to use for ordering splits
+   */
+  public DefaultHoodieSplitProvider(SerializableComparator<HoodieSourceSplit> comparator) {
+    ValidationUtils.checkArgument(comparator != null,
+        "The hoodie source split comparator can't be null");
+    this.pendingSplits = new PriorityBlockingQueue<>(DEFAULT_SPLIT_QUEUE_SIZE, comparator);
   }
 
   @Override

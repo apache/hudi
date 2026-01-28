@@ -33,6 +33,7 @@ import org.apache.hudi.source.split.DefaultHoodieSplitProvider;
 import org.apache.hudi.source.split.HoodieContinuousSplitBatch;
 import org.apache.hudi.source.split.HoodieContinuousSplitDiscover;
 import org.apache.hudi.source.split.HoodieSourceSplit;
+import org.apache.hudi.source.split.HoodieSourceSplitComparator;
 import org.apache.hudi.source.split.HoodieSourceSplitSerializer;
 import org.apache.hudi.source.split.HoodieSourceSplitState;
 import org.apache.hudi.source.split.HoodieSplitProvider;
@@ -121,7 +122,7 @@ public class HoodieSource<T> implements Source<T, HoodieSourceSplit, HoodieSplit
       @Nullable HoodieSplitEnumeratorState enumeratorState) {
     HoodieSplitProvider splitProvider;
     if (enumeratorState == null) {
-      splitProvider = new DefaultHoodieSplitProvider();
+      splitProvider = new DefaultHoodieSplitProvider(new HoodieSourceSplitComparator());
     } else {
       LOG.info(
           "Hoodie source restored {} splits from state for table {}",
