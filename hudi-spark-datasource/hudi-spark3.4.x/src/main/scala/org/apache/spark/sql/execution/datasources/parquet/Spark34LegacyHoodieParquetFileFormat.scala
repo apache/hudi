@@ -17,7 +17,7 @@
 
 package org.apache.spark.sql.execution.datasources.parquet
 
-import org.apache.avro.Schema
+import org.apache.hudi.SparkAdapterSupport.sparkAdapter
 import org.apache.hudi.common.util.{Option => HOption}
 import org.apache.hudi.client.utils.SparkInternalSchemaConverter
 import org.apache.hudi.common.fs.FSUtils
@@ -29,18 +29,20 @@ import org.apache.hudi.internal.schema.action.InternalSchemaMerger
 import org.apache.hudi.internal.schema.utils.{InternalSchemaUtils, SerDeHelper}
 import org.apache.hudi.io.storage.HoodieSparkParquetReader.ENABLE_LOGICAL_TIMESTAMP_REPAIR
 import org.apache.hudi.storage.hadoop.HoodieHadoopStorage
+import org.apache.hudi.common.table.ParquetTableSchemaResolver
+
+import org.apache.avro.Schema
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.mapred.FileSplit
 import org.apache.hadoop.mapreduce.task.TaskAttemptContextImpl
 import org.apache.hadoop.mapreduce.{JobID, TaskAttemptID, TaskID, TaskType}
-import org.apache.hudi.SparkAdapterSupport.sparkAdapter
-import org.apache.hudi.common.table.ParquetTableSchemaResolver
 import org.apache.parquet.filter2.compat.FilterCompat
 import org.apache.parquet.filter2.predicate.FilterApi
 import org.apache.parquet.format.converter.ParquetMetadataConverter.SKIP_ROW_GROUPS
 import org.apache.parquet.hadoop.metadata.{FileMetaData, ParquetMetadata}
 import org.apache.parquet.hadoop.{ParquetInputFormat, ParquetRecordReader}
 import org.apache.parquet.schema.{AvroSchemaRepair, MessageType, SchemaRepair}
+import org.apache.hudi.avro.AvroSchemaUtils
 import org.apache.spark.TaskContext
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.InternalRow
@@ -54,6 +56,7 @@ import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.sources._
 import org.apache.spark.sql.types.{AtomicType, DataType, StructType}
 import org.apache.spark.util.SerializableConfiguration
+import org.apache.spark.internal.Logging
 
 import scala.collection.convert.ImplicitConversions.`collection AsScalaIterable`
 
@@ -68,7 +71,7 @@ import scala.collection.convert.ImplicitConversions.`collection AsScalaIterable`
  * </ol>
  */
 class Spark34LegacyHoodieParquetFileFormat(private val shouldAppendPartitionValues: Boolean,
-                                           avroTableSchema: Schema) extends ParquetFileFormat {
+                                           private val avroTableSchema: Schema) extends ParquetFileFormat with Logging {
   private lazy val tableSchemaAsMessageType: HOption[MessageType] = {
     if (avroTableSchema == null) {
       HOption.empty()
@@ -189,6 +192,7 @@ class Spark34LegacyHoodieParquetFileFormat(private val shouldAppendPartitionValu
       assert(!shouldAppendPartitionValues || file.partitionValues.numFields == partitionSchema.size)
 
       val filePath = file.filePath.toPath
+      logInfo(s"Scanning Parquet file: ${filePath.toString} (start=${file.start}, length=${file.length})")
       val split = new FileSplit(filePath, file.start, file.length, Array.empty[String])
       val sharedConf = broadcastedHadoopConf.value.value
 
@@ -208,7 +212,10 @@ class Spark34LegacyHoodieParquetFileFormat(private val shouldAppendPartitionValu
       }
 
       val originalFooter = ParquetFooterReader.readFooter(sharedConf, filePath, SKIP_ROW_GROUPS)
-      val fileFooter = if (hasTimestampMillisFieldInTableSchema) {
+      // When filter pushdown is enabled, we must ensure schema repair is applied before
+      // creating ParquetFilters, otherwise filters may be incorrectly applied due to schema mismatch.
+      // Schema repair is idempotent, so it's safe to attempt it even if not strictly needed.
+      val fileFooter = if (hasTimestampMillisFieldInTableSchema || (enableParquetFilterPushDown && tableSchemaAsMessageType.isPresent)) {
         repairFooterSchema(originalFooter, tableSchemaAsMessageType);
       } else {
         originalFooter
@@ -216,6 +223,11 @@ class Spark34LegacyHoodieParquetFileFormat(private val shouldAppendPartitionValu
       lazy val footerFileMetaData: FileMetaData = fileFooter.getFileMetaData
 
       // Try to push down filters when filter push-down is enabled.
+      // NOTE: We must filter out timestamp-millis columns from filter pushdown because:
+      // 1. Schema repair changes the Parquet schema metadata to timestamp-millis
+      // 2. But the actual data in the file is still in microseconds
+      // 3. ParquetFilters will convert filter values based on the repaired schema (millis)
+      // 4. But the data comparison happens against microsecond values, causing incorrect filtering
       val pushed = if (enableParquetFilterPushDown) {
         val parquetSchema = footerFileMetaData.getSchema
         val parquetFilters = {
@@ -234,7 +246,11 @@ class Spark34LegacyHoodieParquetFileFormat(private val shouldAppendPartitionValu
             isCaseSensitive,
             datetimeRebaseSpec)
         }
-        filters.map(rebuildFilterFromParquet(_, fileSchema, querySchemaOption.orElse(null)))
+        // Filter out timestamp-millis columns from filter pushdown to avoid incorrect filtering.
+        // We replace filters on timestamp-millis columns with AlwaysTrue to preserve compound filters.
+        val filtersToPushDown = Spark34LegacyHoodieParquetFileFormat
+          .replaceTimestampMillisFiltersWithAlwaysTrue(filters, avroTableSchema, hasTimestampMillisFieldInTableSchema)
+        filtersToPushDown.map(rebuildFilterFromParquet(_, fileSchema, querySchemaOption.orElse(null)))
           // Collects all converted Parquet filter predicates. Notice that not all predicates can be
           // converted (`ParquetFilters.createFilter` returns an `Option`). That's why a `flatMap`
           // is used here.
@@ -499,5 +515,72 @@ object Spark34LegacyHoodieParquetFileFormat {
       ),
       original.getBlocks
     )
+  }
+
+  // Helper to replace filters on timestamp-millis columns with AlwaysTrue to avoid incorrect filter pushdown.
+  // This preserves compound filters (And/Or) so other parts can still be pushed down.
+  private def replaceTimestampMillisFiltersWithAlwaysTrue(filters: Seq[Filter],
+                                                          avroTableSchema: Schema,
+                                                          hasTimestampMillisFieldInTableSchema: Boolean
+                                                         ): Seq[Filter] = {
+    if (avroTableSchema == null || !hasTimestampMillisFieldInTableSchema) {
+      // No timestamp-millis columns, return all filters
+      filters
+    } else {
+      // Build a set of timestamp-millis column names
+      val timestampMillisColumns = scala.collection.mutable.Set[String]()
+      avroTableSchema.getFields.forEach { field =>
+        val fieldSchema = AvroSchemaUtils.getNonNullTypeFromUnion(field.schema())
+        if (fieldSchema.getType == org.apache.avro.Schema.Type.LONG) {
+          val logicalType = fieldSchema.getLogicalType
+          if (logicalType != null) {
+            val logicalTypeName = logicalType.getName
+            if (logicalTypeName == "timestamp-millis" || logicalTypeName == "local-timestamp-millis") {
+              timestampMillisColumns.add(field.name())
+            }
+          }
+        }
+      }
+
+      if (timestampMillisColumns.isEmpty) {
+        filters
+      } else {
+        // Replace filters on timestamp-millis columns with AlwaysTrue
+        filters.map { filter =>
+          replaceTimestampMillisFilterWithAlwaysTrue(filter, timestampMillisColumns.toSet)
+        }
+      }
+    }
+  }
+
+  // Replace a filter on timestamp-millis columns with AlwaysTrue, preserving compound filters
+  private def replaceTimestampMillisFilterWithAlwaysTrue(filter: Filter, timestampMillisColumns: Set[String]): Filter = {
+    filter match {
+      case EqualTo(attribute, _) if timestampMillisColumns.contains(attribute) => AlwaysTrue
+      case EqualNullSafe(attribute, _) if timestampMillisColumns.contains(attribute) => AlwaysTrue
+      case GreaterThan(attribute, _) if timestampMillisColumns.contains(attribute) => AlwaysTrue
+      case GreaterThanOrEqual(attribute, _) if timestampMillisColumns.contains(attribute) => AlwaysTrue
+      case LessThan(attribute, _) if timestampMillisColumns.contains(attribute) => AlwaysTrue
+      case LessThanOrEqual(attribute, _) if timestampMillisColumns.contains(attribute) => AlwaysTrue
+      case In(attribute, _) if timestampMillisColumns.contains(attribute) => AlwaysTrue
+      case IsNull(attribute) if timestampMillisColumns.contains(attribute) => AlwaysTrue
+      case IsNotNull(attribute) if timestampMillisColumns.contains(attribute) => AlwaysTrue
+      case StringStartsWith(attribute, _) if timestampMillisColumns.contains(attribute) => AlwaysTrue
+      case StringEndsWith(attribute, _) if timestampMillisColumns.contains(attribute) => AlwaysTrue
+      case StringContains(attribute, _) if timestampMillisColumns.contains(attribute) => AlwaysTrue
+      case And(left, right) =>
+        And(
+          replaceTimestampMillisFilterWithAlwaysTrue(left, timestampMillisColumns),
+          replaceTimestampMillisFilterWithAlwaysTrue(right, timestampMillisColumns)
+        )
+      case Or(left, right) =>
+        Or(
+          replaceTimestampMillisFilterWithAlwaysTrue(left, timestampMillisColumns),
+          replaceTimestampMillisFilterWithAlwaysTrue(right, timestampMillisColumns)
+        )
+      case Not(child) =>
+        Not(replaceTimestampMillisFilterWithAlwaysTrue(child, timestampMillisColumns))
+      case _ => filter
+    }
   }
 }
