@@ -203,11 +203,6 @@ class IncrementalRelation(val sqlContext: SQLContext,
       sqlContext.sparkContext.hadoopConfiguration.set(SparkInternalSchemaConverter.HOODIE_QUERY_SCHEMA, SerDeHelper.toJson(internalSchema))
       sqlContext.sparkContext.hadoopConfiguration.set(SparkInternalSchemaConverter.HOODIE_TABLE_PATH, metaClient.getBasePath)
       sqlContext.sparkContext.hadoopConfiguration.set(SparkInternalSchemaConverter.HOODIE_VALID_COMMITS_LIST, validCommits)
-      // Pass table Avro schema to LegacyHoodieParquetFileFormat to preserve correct logical types
-      if (tableAvroSchema.getType != Schema.Type.NULL) {
-        LegacyHoodieParquetFileFormat.setTableAvroSchemaInConf(
-          sqlContext.sparkContext.hadoopConfiguration, tableAvroSchema)
-      }
       val formatClassName = metaClient.getTableConfig.getBaseFileFormat match {
         case HoodieFileFormat.PARQUET => LegacyHoodieParquetFileFormat.FILE_FORMAT_ID
         case HoodieFileFormat.ORC => "orc"
@@ -273,7 +268,12 @@ class IncrementalRelation(val sqlContext: SQLContext,
 
             if (regularFileIdToFullPath.nonEmpty) {
               try {
-                df = df.union(sqlContext.read.options(sOpts)
+                val optionsWithSchema = if (tableAvroSchema.getType != Schema.Type.NULL) {
+                  sOpts + (LegacyHoodieParquetFileFormat.HOODIE_TABLE_AVRO_SCHEMA -> tableAvroSchema.toString)
+                } else {
+                  sOpts
+                }
+                df = df.union(sqlContext.read.options(optionsWithSchema)
                   .schema(usedSchema).format(formatClassName)
                   // Setting time to the END_INSTANT_TIME, to avoid pathFilter filter out files incorrectly.
                   .option(DataSourceReadOptions.TIME_TRAVEL_AS_OF_INSTANT.key(), endInstantTime)
