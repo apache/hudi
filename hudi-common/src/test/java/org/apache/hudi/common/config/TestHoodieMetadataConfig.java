@@ -140,4 +140,39 @@ class TestHoodieMetadataConfig {
     // Verify that the value is indeed larger than Integer.MAX_VALUE
     assertTrue(largeSize > Integer.MAX_VALUE, "Test value should exceed Integer.MAX_VALUE to validate long type");
   }
+
+  @Test
+  void testUseMainTableCleanPolicy() {
+    // Test default value
+    HoodieMetadataConfig config = HoodieMetadataConfig.newBuilder().build();
+    assertTrue(config.shouldDeriveFromDataTableCleanPolicy());
+
+    // Test setting to false using builder method
+    HoodieMetadataConfig configWithFalse = HoodieMetadataConfig.newBuilder()
+        .deriveFromDataTableCleanPolicy(false)
+        .build();
+    assertFalse(configWithFalse.shouldDeriveFromDataTableCleanPolicy());
+
+    // Test setting to true using builder method
+    HoodieMetadataConfig configWithTrue = HoodieMetadataConfig.newBuilder()
+        .deriveFromDataTableCleanPolicy(true)
+        .build();
+    assertTrue(configWithTrue.shouldDeriveFromDataTableCleanPolicy());
+
+    // Test custom value via Properties - false
+    Properties propsFalse = new Properties();
+    propsFalse.put(HoodieMetadataConfig.DERIVE_FROM_DATA_TABLE_CLEAN_POLICY.key(), "false");
+    HoodieMetadataConfig configWithPropertiesFalse = HoodieMetadataConfig.newBuilder()
+        .fromProperties(propsFalse)
+        .build();
+    assertFalse(configWithPropertiesFalse.shouldDeriveFromDataTableCleanPolicy());
+
+    // Test custom value via Properties - true
+    Properties propsTrue = new Properties();
+    propsTrue.put(HoodieMetadataConfig.DERIVE_FROM_DATA_TABLE_CLEAN_POLICY.key(), "true");
+    HoodieMetadataConfig configWithPropertiesTrue = HoodieMetadataConfig.newBuilder()
+        .fromProperties(propsTrue)
+        .build();
+    assertTrue(configWithPropertiesTrue.shouldDeriveFromDataTableCleanPolicy());
+  }
 }

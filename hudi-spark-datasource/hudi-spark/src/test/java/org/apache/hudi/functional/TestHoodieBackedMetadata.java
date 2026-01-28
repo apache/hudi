@@ -146,6 +146,7 @@ import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -174,6 +175,7 @@ import static org.apache.hudi.common.model.WriteOperationType.INSERT;
 import static org.apache.hudi.common.model.WriteOperationType.UPSERT;
 import static org.apache.hudi.common.table.HoodieTableMetaClient.METAFOLDER_NAME;
 import static org.apache.hudi.common.table.HoodieTableMetaClient.TIMELINEFOLDER_NAME;
+import static org.apache.hudi.common.table.timeline.HoodieTimeline.CLEAN_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMMIT_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMMIT_EXTENSION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.DELTA_COMMIT_EXTENSION;
@@ -570,6 +572,69 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     doWriteOperation(testTable, commitTimeList.get(6).toString());
     doWriteOperation(testTable, commitTimeList.get(7).toString());
     validateMetadata(testTable, emptyList(), true);
+  }
+
+  @ParameterizedTest
+  @EnumSource(HoodieTableType.class)
+  public void testMetadataCleanConfig(HoodieTableType tableType) throws Exception {
+    init(tableType, true);
+    writeConfig = getWriteConfigBuilder(true, true, false)
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder()
+            .enable(true)
+            .enableMetrics(false)
+            .withMetadataIndexColumnStats(false)
+            .withMaxNumDeltaCommitsBeforeCompaction(5)
+            .deriveFromDataTableCleanPolicy(false)
+            .build())
+        .withCleanConfig(HoodieCleanConfig.newBuilder()
+            .retainCommits(1)
+            .build())
+        .withArchivalConfig(HoodieArchivalConfig.newBuilder()
+            .archiveCommitsWith(10, 25)
+            .build())
+        .build();
+    initWriteConfigAndMetatableWriter(writeConfig, true);
+    List<String> instants = new ArrayList<>();
+    for (int i = 1; i <= 17; i++) {
+      String instant = WriteClientTestUtils.createNewInstantTime();
+      instants.add(instant);
+      doWriteOperation(testTable, instant, INSERT);
+    }
+
+    HoodieTableMetaClient metadataMetaClient = createMetaClient(metadataTableBasePath);
+    HoodieActiveTimeline metadataTimeline = metadataMetaClient.reloadActiveTimeline();
+
+    List<HoodieInstant> compactionInstants = metadataTimeline.filterCompletedInstants()
+        .filter(instant -> instant.getAction().equals(COMMIT_ACTION))
+        .getInstants();
+    List<HoodieInstant> cleanInstants = metadataTimeline.filterCompletedInstants()
+        .filter(instant -> instant.getAction().equals(CLEAN_ACTION))
+        .getInstants();
+
+    assertEquals(3, compactionInstants.size());
+    assertEquals(2, cleanInstants.size());
+
+    HoodieInstant firstCompactionInstant = compactionInstants.get(0);
+    HoodieInstant lastCleanInstant = cleanInstants.get(1);
+    HoodieCommitMetadata commitMetadata = metadataMetaClient.getActiveTimeline().readCommitMetadata(firstCompactionInstant);
+    HoodieCleanMetadata cleanMetadata = metadataMetaClient.getActiveTimeline().readCleanMetadata(lastCleanInstant);
+
+    Collection<String> filesWrittenByCompaction = commitMetadata
+            .getFileGroupIdAndFullPaths(metadataMetaClient.getBasePath().toString()).values();
+    List<String> filesDeletedByClean = cleanMetadata.getPartitionMetadata()
+            .values().stream()
+            .flatMap(meta ->
+                    meta.getDeletePathPatterns().stream().map(relPath ->
+                        new StoragePath(metadataMetaClient.getBasePath() + "/" + meta.getPartitionPath(), relPath).toString()))
+            .collect(Collectors.toList());
+
+    List<String> baseFileDeletedByClean = filesDeletedByClean.stream()
+            .filter(deletedPath -> FSUtils.isBaseFile(new StoragePath(deletedPath)))
+            .collect(Collectors.toList());
+
+    assertEquals(baseFileDeletedByClean.size(), filesWrittenByCompaction.size());
+    baseFileDeletedByClean.forEach(filePath ->
+            assertTrue(filesWrittenByCompaction.contains(filePath)));
   }
 
   @Test
