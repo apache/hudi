@@ -315,7 +315,8 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
     if (isMultipleBaseFileFormatsEnabled) {
       new MultipleColumnarFileFormatReader(
         sparkAdapter.createParquetFileReader(enableVectorizedRead, spark.sessionState.conf, options, configuration),
-        sparkAdapter.createOrcFileReader(enableVectorizedRead, spark.sessionState.conf, options, configuration, dataSchema))
+        sparkAdapter.createOrcFileReader(enableVectorizedRead, spark.sessionState.conf, options, configuration, dataSchema),
+        sparkAdapter.createLanceFileReader(enableVectorizedRead, spark.sessionState.conf, options, configuration))
     } else if (hoodieFileFormat == HoodieFileFormat.PARQUET) {
       sparkAdapter.createParquetFileReader(enableVectorizedRead, spark.sessionState.conf, options, configuration)
     } else if (hoodieFileFormat == HoodieFileFormat.ORC) {

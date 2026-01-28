@@ -659,6 +659,60 @@ class TestLanceDataSource extends HoodieSparkClientTestBase {
     assertTrue(actual.except(expectedDf).isEmpty)
   }
 
+  @ParameterizedTest
+  @EnumSource(value = classOf[HoodieTableType])
+  def testUpsertWithPopulateMetaFieldsDisabled(tableType: HoodieTableType): Unit = {
+    val tableName = s"test_lance_no_meta_${tableType.name().toLowerCase}"
+    val tablePath = s"$basePath/$tableName"
+
+    val records1 = Seq(
+      (101, "Alice", 30, 95.5),
+      (102, "Bob", 25, 87.3),
+      (103, "Charlie", 35, 92.1)
+    )
+    val df1 = createDataFrame(records1)
+
+    // Write with populateMetaFields=false
+    writeDataframe(tableType, tableName, tablePath, df1,
+      saveMode = SaveMode.Overwrite, operation = Some("insert"),
+      extraOptions = Map("hoodie.populate.meta.fields" -> "false"))
+
+    // Upsert - modify Bob's record
+    val records2 = Seq(
+      (102, "Bob", 40, 95.0) 
+    )
+    val df2 = createDataFrame(records2)
+
+    writeDataframe(tableType, tableName, tablePath, df2,
+      operation = Some("upsert"),
+      extraOptions = Map("hoodie.populate.meta.fields" -> "false"))
+
+    // Second upsert - modify Alice and insert David
+    val records3 = Seq(
+      (101, "Alice", 45, 98.5),  
+      (104, "David", 28, 88.0) 
+    )
+    val df3 = createDataFrame(records3)
+
+    writeDataframe(tableType, tableName, tablePath, df3,
+      operation = Some("upsert"),
+      extraOptions = Map("hoodie.populate.meta.fields" -> "false"))
+
+    // Verify data
+    val readDf = spark.read.format("hudi").load(tablePath)
+    val actual = readDf.select("id", "name", "age", "score")
+
+    val expectedDf = createDataFrame(Seq(
+      (101, "Alice", 45, 98.5),
+      (102, "Bob", 40, 95.0),
+      (103, "Charlie", 35, 92.1),
+      (104, "David", 28, 88.0)
+    ))
+
+    assertTrue(expectedDf.except(actual).isEmpty)
+    assertTrue(actual.except(expectedDf).isEmpty)
+  }
+
   private def createDataFrame(records: Seq[(Int, String, Int, Double)]) = {
     spark.createDataFrame(records).toDF("id", "name", "age", "score").coalesce(1)
   }
