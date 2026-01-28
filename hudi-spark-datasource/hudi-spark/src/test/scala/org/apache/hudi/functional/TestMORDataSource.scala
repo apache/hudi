@@ -2259,6 +2259,74 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
       .mode(SaveMode.Append)
       .save(basePath)
   }
+
+  /**
+   * Test that incremental reads work on MOR tables when the data schema contains fields
+   * with the same name as Hudi meta fields (e.g., _hoodie_partition_path). This tests
+   * the fix that filters out duplicate fields when merging skeleton schema with data
+   * schema in IncrementalRelation.
+   *
+   * Without the fix, this would fail with:
+   * org.apache.spark.sql.AnalysisException: Found duplicate column(s) in the data schema
+   */
+  @Test
+  def testIncrementalReadWithDuplicateMetaFieldInDataSchema(): Unit = {
+    val _spark = spark
+    import _spark.implicits._
+
+    // Create a DataFrame with a column that has the same name as a Hudi meta field
+    val df = Seq(
+      ("row1", "partition1", 1000L, "value1"),
+      ("row2", "partition1", 1001L, "value2"),
+      ("row3", "partition2", 1002L, "value3")
+    ).toDF("_row_key", "_hoodie_partition_path", "timestamp", "data")
+
+    val writeOpts = Map(
+      "hoodie.insert.shuffle.parallelism" -> "4",
+      "hoodie.upsert.shuffle.parallelism" -> "4",
+      DataSourceWriteOptions.TABLE_TYPE.key -> DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL,
+      DataSourceWriteOptions.RECORDKEY_FIELD.key -> "_row_key",
+      DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "_hoodie_partition_path",
+      HoodieTableConfig.ORDERING_FIELDS.key -> "timestamp",
+      HoodieWriteConfig.TBL_NAME.key -> "hoodie_test_mor_dup_meta_field"
+    )
+
+    // Write initial data
+    df.write.format("hudi")
+      .options(writeOpts)
+      .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
+      .mode(SaveMode.Overwrite)
+      .save(basePath)
+
+    // Initialize metaClient
+    metaClient = createMetaClient(spark, basePath)
+
+    // Perform incremental read - this should not fail with duplicate field error
+    val incrementalDf = spark.read.format("hudi")
+      .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
+      .option(DataSourceReadOptions.START_COMMIT.key, "000")
+      .load(basePath)
+
+    // Verify the data was read correctly
+    assertEquals(3, incrementalDf.count())
+
+    // Verify that the _hoodie_partition_path field is present and correct
+    val results = incrementalDf.select("_row_key", "_hoodie_partition_path", "data")
+      .orderBy("_row_key")
+      .collect()
+
+    assertEquals("row1", results(0).getAs[String]("_row_key"))
+    assertEquals("partition1", results(0).getAs[String]("_hoodie_partition_path"))
+    assertEquals("value1", results(0).getAs[String]("data"))
+
+    assertEquals("row2", results(1).getAs[String]("_row_key"))
+    assertEquals("partition1", results(1).getAs[String]("_hoodie_partition_path"))
+    assertEquals("value2", results(1).getAs[String]("data"))
+
+    assertEquals("row3", results(2).getAs[String]("_row_key"))
+    assertEquals("partition2", results(2).getAs[String]("_hoodie_partition_path"))
+    assertEquals("value3", results(2).getAs[String]("data"))
+  }
 }
 
 object TestMORDataSource {
