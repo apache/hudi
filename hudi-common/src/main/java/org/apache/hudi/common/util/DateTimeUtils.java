@@ -52,12 +52,6 @@ public class DateTimeUtils {
     return Instant.ofEpochSecond(epochSeconds, nanoAdjustment);
   }
 
-  public static Instant nanosToInstant(long nanosFromEpoch) {
-    long epochSeconds = nanosFromEpoch / (1_000_000_000L);
-    long nanoAdjustment = nanosFromEpoch % (1_000_000_000L);
-    return Instant.ofEpochSecond(epochSeconds, nanoAdjustment);
-  }
-
   /**
    * Converts provided {@link Instant} to microseconds (from epoch)
    */
