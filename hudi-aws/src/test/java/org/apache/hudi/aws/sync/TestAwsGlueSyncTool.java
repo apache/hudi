@@ -34,6 +34,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import software.amazon.awssdk.services.glue.GlueAsyncClient;
 import software.amazon.awssdk.services.glue.GlueAsyncClientBuilder;
 import software.amazon.awssdk.services.sts.StsClient;
+import software.amazon.awssdk.services.sts.StsClientBuilder;
 import software.amazon.awssdk.services.sts.model.GetCallerIdentityRequest;
 import software.amazon.awssdk.services.sts.model.GetCallerIdentityResponse;
 
@@ -90,8 +91,11 @@ class TestAwsGlueSyncTool {
       when(builder.credentialsProvider(any())).thenReturn(builder);
       GlueAsyncClient mockClient = mock(GlueAsyncClient.class);
       when(builder.build()).thenReturn(mockClient);
+      StsClientBuilder stsBuilder = mock(StsClientBuilder.class);
       StsClient mockSts = mock(StsClient.class);
-      mockedStsStatic.when(StsClient::create).thenReturn(mockSts);
+      mockedStsStatic.when(StsClient::builder).thenReturn(stsBuilder);
+      when(stsBuilder.credentialsProvider(any())).thenReturn(stsBuilder);
+      when(stsBuilder.build()).thenReturn(mockSts);
       when(mockSts.getCallerIdentity(GetCallerIdentityRequest.builder().build())).thenReturn(GetCallerIdentityResponse.builder().account("").build());
       HoodieSyncTool syncTool = SyncUtilHelpers.instantiateMetaSyncTool(
           AwsGlueCatalogSyncTool.class.getName(),
