@@ -71,7 +71,6 @@ public class HoodieMetrics {
   public static final String COMMIT_LATENCY_IN_MS_STR = "commitLatencyInMs";
   public static final String COMMIT_FRESHNESS_IN_MS_STR = "commitFreshnessInMs";
   public static final String COMMIT_TIME_STR = "commitTime";
-  public static final String POST_WRITE_OPERATIONS_TIMER_STR = "postWriteOperationsInMs";
   public static final String EARLIEST_PENDING_CLUSTERING_INSTANT_STR = "earliestInflightClusteringInstant";
   public static final String EARLIEST_PENDING_COMPACTION_INSTANT_STR = "earliestInflightCompactionInstant";
   public static final String EARLIEST_PENDING_CLEAN_INSTANT_STR = "earliestInflightCleanInstant";
@@ -328,14 +327,6 @@ public class HoodieMetrics {
       }
       metrics.registerGauge(getMetricsName(actionType, COMMIT_TIME_STR), commitEpochTimeInMs);
       metrics.registerGauge(getMetricsName(actionType, DURATION_STR), durationInMs);
-    }
-  }
-
-  public void updatePostWriteOperationsDurationMetrics(long durationInMs) {
-    if (config.isMetricsOn()) {
-      log.info(
-          String.format("Sending post write operations metrics (%s=%d)", DURATION_STR, durationInMs));
-      metrics.registerGauge(getMetricsName(POST_WRITE_OPERATIONS_TIMER_STR, DURATION_STR), durationInMs);
     }
   }
 
