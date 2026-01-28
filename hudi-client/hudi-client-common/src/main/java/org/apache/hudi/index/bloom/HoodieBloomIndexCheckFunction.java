@@ -46,20 +46,21 @@ public class HoodieBloomIndexCheckFunction<I>
     implements Function<Iterator<I>, Iterator<List<HoodieKeyLookupResult>>>, Serializable {
 
   private final HoodieTable hoodieTable;
-
   private final HoodieWriteConfig config;
-
   private final SerializableFunction<I, HoodieFileGroupId> fileGroupIdExtractor;
   private final SerializableFunction<I, String> recordKeyExtractor;
+  private final String lastInstant;
 
   public HoodieBloomIndexCheckFunction(HoodieTable hoodieTable,
                                        HoodieWriteConfig config,
                                        SerializableFunction<I, HoodieFileGroupId> fileGroupIdExtractor,
-                                       SerializableFunction<I, String> recordKeyExtractor) {
+                                       SerializableFunction<I, String> recordKeyExtractor,
+                                       String lastInstant) {
     this.hoodieTable = hoodieTable;
     this.config = config;
     this.fileGroupIdExtractor = fileGroupIdExtractor;
     this.recordKeyExtractor = recordKeyExtractor;
+    this.lastInstant = lastInstant;
   }
 
   @Override
@@ -94,7 +95,7 @@ public class HoodieBloomIndexCheckFunction<I>
 
           // lazily init state
           if (keyLookupHandle == null) {
-            keyLookupHandle = new HoodieKeyLookupHandle(config, hoodieTable, partitionPathFilePair);
+            keyLookupHandle = new HoodieKeyLookupHandle(config, hoodieTable, partitionPathFilePair, lastInstant);
           }
 
           // if continue on current file
@@ -103,7 +104,7 @@ public class HoodieBloomIndexCheckFunction<I>
           } else {
             // do the actual checking of file & break out
             ret.add(keyLookupHandle.getLookupResult());
-            keyLookupHandle = new HoodieKeyLookupHandle(config, hoodieTable, partitionPathFilePair);
+            keyLookupHandle = new HoodieKeyLookupHandle(config, hoodieTable, partitionPathFilePair, lastInstant);
             keyLookupHandle.addKey(recordKey);
             break;
           }
