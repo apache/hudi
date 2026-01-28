@@ -36,6 +36,7 @@ public class HoodieHFileConfig {
   private final long maxFileSize;
   private final String keyFieldName;
   private final BloomFilter bloomFilter;
+  private final boolean allowDuplicatesOnHfileWrites;
 
   public boolean useBloomFilter() {
     return bloomFilter != null;
