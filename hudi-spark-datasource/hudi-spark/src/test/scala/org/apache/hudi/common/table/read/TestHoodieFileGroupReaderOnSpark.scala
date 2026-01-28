@@ -19,7 +19,7 @@
 
 package org.apache.hudi.common.table.read
 
-import org.apache.hudi.{AvroConversionUtils, DataSourceWriteOptions, HoodieSchemaConversionUtils, SparkAdapterSupport, SparkFileFormatInternalRowReaderContext}
+import org.apache.hudi.{AvroConversionUtils, DataSourceWriteOptions, DefaultSparkRecordMerger, HoodieSchemaConversionUtils, SparkAdapterSupport, SparkFileFormatInternalRowReaderContext}
 import org.apache.hudi.DataSourceWriteOptions.{OPERATION, RECORDKEY_FIELD, TABLE_TYPE}
 import org.apache.hudi.common.config.{HoodieReaderConfig, RecordMergeMode, TypedProperties}
 import org.apache.hudi.common.engine.HoodieReaderContext
@@ -114,23 +114,32 @@ class TestHoodieFileGroupReaderOnSpark extends TestHoodieFileGroupReaderBase[Int
     new SparkFileFormatInternalRowReaderContext(multiFormatReader, Seq.empty, Seq.empty, getStorageConf, metaClient.getTableConfig)
   }
 
-  override def commitToTable(recordList: util.List[HoodieRecord[_]],
-                             operation: String,
-                             firstCommit: Boolean,
-                             options: util.Map[String, String],
-                             schemaStr: String): Unit = {
+  override def commitProcessedRecordsToTable(recordList: util.List[HoodieRecord[_]],
+                                             operation: String,
+                                             firstCommit: Boolean,
+                                             options: util.Map[String, String],
+                                             schemaStr: String): Unit = {
     val schema = HoodieSchema.parse(schemaStr)
     val genericRecords = spark.sparkContext.parallelize((hoodieRecordsToIndexedRecords(recordList, schema)
       .stream().map[GenericRecord](entry => entry.getValue.asInstanceOf[GenericRecord])
       .collect(Collectors.toList[GenericRecord])).asScala.toSeq, 2)
     val inputDF: Dataset[Row] = AvroConversionUtils.createDataFrame(genericRecords, schemaStr, spark);
 
-    inputDF.write.format("hudi")
+    // Check if Lance format is being used and add required configuration
+    val isLanceFormat = options.getOrDefault(HoodieTableConfig.BASE_FILE_FORMAT.key(), "").equalsIgnoreCase("LANCE")
+
+    var writer = inputDF.write.format("hudi")
       .options(options)
       .option("hoodie.compact.inline", "false") // else fails due to compaction & deltacommit instant times being same
       .option("hoodie.datasource.write.operation", operation)
       .option("hoodie.datasource.write.table.type", "MERGE_ON_READ")
-      .mode(if (firstCommit) SaveMode.Overwrite else SaveMode.Append)
+
+    // Lance requires DefaultSparkRecordMerger for Spark InternalRow compatibility
+    if (isLanceFormat) {
+      writer = writer.option(HoodieWriteConfig.RECORD_MERGE_IMPL_CLASSES.key(), classOf[DefaultSparkRecordMerger].getName)
+    }
+
+    writer.mode(if (firstCommit) SaveMode.Overwrite else SaveMode.Append)
       .save(getBasePath)
   }
 

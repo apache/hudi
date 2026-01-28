@@ -59,7 +59,7 @@ public abstract class HoodieFileGroupReaderOnJavaTestBase<T> extends TestHoodieF
   }
 
   @Override
-  public void commitToTable(List<HoodieRecord> recordList, String operation, boolean firstCommit, Map<String, String> writeConfigs, String schemaStr) {
+  public void commitProcessedRecordsToTable(List<HoodieRecord> recordList, String operation, boolean firstCommit, Map<String, String> writeConfigs, String schemaStr) {
     HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder()
         .withEngineType(EngineType.JAVA)
         .withEmbeddedTimelineServerEnabled(false)
