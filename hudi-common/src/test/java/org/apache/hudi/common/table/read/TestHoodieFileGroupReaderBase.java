@@ -141,10 +141,10 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
                             boolean firstCommit,
                             Map<String, String> writeConfigs,
                             String schemaStr) {
-    boolean removeMaps = writeConfigs.getOrDefault(HoodieTableConfig.BASE_FILE_FORMAT.key(), HoodieFileFormat.PARQUET.name()).equalsIgnoreCase(HoodieFileFormat.LANCE.name());
-    if (removeMaps) {
+    boolean isLance = writeConfigs.getOrDefault(HoodieTableConfig.BASE_FILE_FORMAT.key(), HoodieFileFormat.PARQUET.name()).equalsIgnoreCase(HoodieFileFormat.LANCE.name());
+    if (isLance) {
       HoodieSchema originalSchema = HoodieSchema.parse(schemaStr);
-      HoodieSchema processedSchema = removeMapsFromSchema(originalSchema);
+      HoodieSchema processedSchema = makeNestedFieldsNullable(removeMapsFromSchema(originalSchema));
       List<HoodieRecord> updatedRecords = recordList.stream().map(hoodieRecord -> {
         try {
           return hoodieRecord.toIndexedRecord(originalSchema, CollectionUtils.emptyProps()).map(originalRecord -> {
@@ -207,6 +207,68 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
       case MAP:
         // Return null for map types - they should be filtered out by the caller
         throw new IllegalStateException("Map types should be filtered out by the caller");
+      default:
+        // Primitive types, return as-is
+        return schema;
+    }
+  }
+
+  private HoodieSchema makeNestedFieldsNullable(HoodieSchema schema) {
+    return makeNestedFieldsNullableRecursive(schema);
+  }
+
+  private HoodieSchema makeNestedFieldsNullableRecursive(HoodieSchema schema) {
+    HoodieSchemaType type = schema.getType();
+
+    switch (type) {
+      case RECORD:
+        List<HoodieSchemaField> newFields = new ArrayList<>();
+        for (HoodieSchemaField field : schema.getFields()) {
+          HoodieSchema fieldSchema = field.schema();
+          HoodieSchema processedFieldSchema = makeNestedFieldsNullableRecursive(fieldSchema);
+
+          // Make all struct fields nullable for Lance
+          if (processedFieldSchema.getNonNullType().getType() == HoodieSchemaType.RECORD
+              && !processedFieldSchema.isNullable()) {
+            processedFieldSchema = HoodieSchema.createNullable(processedFieldSchema);
+          }
+
+          HoodieSchemaField newField = HoodieSchemaField.of(
+              field.name(),
+              processedFieldSchema,
+              field.doc().orElse(null),
+              field.defaultVal().orElse(null),
+              field.order()
+          );
+          // Copy field properties
+          for (Map.Entry<String, Object> prop : field.getObjectProps().entrySet()) {
+            newField.addProp(prop.getKey(), prop.getValue());
+          }
+          newFields.add(newField);
+        }
+        return HoodieSchema.createRecord(
+            schema.getName(),
+            schema.getDoc().orElse(null),
+            schema.getNamespace().orElse(null),
+            newFields
+        );
+      case UNION:
+        List<HoodieSchema> newUnionSchemas = new ArrayList<>();
+        for (HoodieSchema unionSchema : schema.getTypes()) {
+          newUnionSchemas.add(makeNestedFieldsNullableRecursive(unionSchema));
+        }
+        return HoodieSchema.createUnion(newUnionSchemas);
+      case ARRAY:
+        HoodieSchema elementSchema = schema.getElementType();
+        HoodieSchema newElementSchema = makeNestedFieldsNullableRecursive(elementSchema);
+
+        // Make struct array elements nullable for Lance
+        if (newElementSchema.getNonNullType().getType() == HoodieSchemaType.RECORD
+            && !newElementSchema.isNullable()) {
+          newElementSchema = HoodieSchema.createNullable(newElementSchema);
+        }
+
+        return HoodieSchema.createArray(newElementSchema);
       default:
         // Primitive types, return as-is
         return schema;
