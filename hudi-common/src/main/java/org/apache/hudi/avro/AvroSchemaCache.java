@@ -31,7 +31,6 @@ import org.apache.avro.Schema;
  */
 public class AvroSchemaCache {
 
-
   // Ensure that there is only one variable instance of the same schema within an entire JVM lifetime
   private static final LoadingCache<Schema, Schema> SCHEMA_CACHE = Caffeine.newBuilder().weakValues().maximumSize(1024).build(k -> k);
 
@@ -43,5 +42,4 @@ public class AvroSchemaCache {
   public static Schema intern(Schema schema) {
     return SCHEMA_CACHE.get(schema);
   }
-
 }
