@@ -18,28 +18,56 @@
 
 package org.apache.spark.sql.execution.datasources.parquet
 
+import org.apache.avro.Schema
 import org.apache.hadoop.conf.Configuration
-import org.apache.hudi.{DataSourceReadOptions, HoodieSparkUtils, SparkAdapterSupport}
+import org.apache.hudi.{AvroConversionUtils, DataSourceReadOptions, SparkAdapterSupport}
+import org.apache.spark.internal.Logging
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.execution.datasources.PartitionedFile
-import org.apache.spark.sql.execution.datasources.parquet.LegacyHoodieParquetFileFormat.FILE_FORMAT_ID
+import org.apache.spark.sql.execution.datasources.parquet.LegacyHoodieParquetFileFormat.{FILE_FORMAT_ID, HOODIE_TABLE_AVRO_SCHEMA}
 import org.apache.spark.sql.sources.Filter
-import org.apache.spark.sql.types.{AtomicType, StructType}
+import org.apache.spark.sql.types.StructType
 
 /**
  * This legacy parquet file format implementation to support Hudi will be replaced by
  * [[NewHoodieParquetFileFormat]] in the future.
  */
-class LegacyHoodieParquetFileFormat extends ParquetFileFormat with SparkAdapterSupport {
+class LegacyHoodieParquetFileFormat extends ParquetFileFormat with SparkAdapterSupport with Logging {
 
   override def shortName(): String = FILE_FORMAT_ID
 
   override def toString: String = "Hoodie-Parquet"
 
+  /**
+   * Try to get table Avro schema from hadoopConf.
+   * This is used as a fallback when schema is not provided via options map.
+   *
+   * @return Some(schema) if found in hadoopConf, None otherwise (falls back to StructType conversion)
+   */
+  private def getTableAvroSchemaFromConf(hadoopConf: Configuration): Option[Schema] = {
+    val schemaStr = hadoopConf.get(HOODIE_TABLE_AVRO_SCHEMA)
+    if (schemaStr != null && schemaStr.nonEmpty) {
+      try {
+        val schema = new Schema.Parser().parse(schemaStr)
+        logDebug("Using table Avro schema from hadoopConf")
+        Some(schema)
+      } catch {
+        case e: Exception =>
+          logWarning(s"Failed to parse table Avro schema from hadoopConf: ${e.getMessage}")
+          None
+      }
+    } else {
+      None
+    }
+  }
+
   override def supportBatch(sparkSession: SparkSession, schema: StructType): Boolean = {
+    val avroSchema = getTableAvroSchemaFromConf(sparkSession.sessionState.newHadoopConf()).getOrElse {
+      AvroConversionUtils.convertStructTypeToAvroSchema(schema, schema.typeName)
+    }
     sparkAdapter
-      .createLegacyHoodieParquetFileFormat(true).get.supportBatch(sparkSession, schema)
+      .createLegacyHoodieParquetFileFormat(true, avroSchema).get.supportBatch(sparkSession, schema)
   }
 
   override def buildReaderWithPartitionValues(sparkSession: SparkSession,
@@ -53,12 +81,36 @@ class LegacyHoodieParquetFileFormat extends ParquetFileFormat with SparkAdapterS
       options.getOrElse(DataSourceReadOptions.EXTRACT_PARTITION_VALUES_FROM_PARTITION_PATH.key,
         DataSourceReadOptions.EXTRACT_PARTITION_VALUES_FROM_PARTITION_PATH.defaultValue.toString).toBoolean
 
+    val avroSchema = options.get(HOODIE_TABLE_AVRO_SCHEMA)
+      .map(s => {
+        try {
+          Some(new Schema.Parser().parse(s))
+        } catch {
+          case e: Exception =>
+            logWarning(s"Failed to parse table Avro schema from options: ${e.getMessage}")
+            None
+        }
+      })
+      .flatten
+      .orElse(getTableAvroSchemaFromConf(hadoopConf))
+      .getOrElse {
+        val fullTableSchema = StructType(dataSchema.fields ++ partitionSchema.fields)
+        AvroConversionUtils.convertStructTypeToAvroSchema(fullTableSchema, dataSchema.typeName)
+      }
+
     sparkAdapter
-      .createLegacyHoodieParquetFileFormat(shouldExtractPartitionValuesFromPartitionPath).get
+      .createLegacyHoodieParquetFileFormat(shouldExtractPartitionValuesFromPartitionPath, avroSchema).get
       .buildReaderWithPartitionValues(sparkSession, dataSchema, partitionSchema, requiredSchema, filters, options, hadoopConf)
   }
 }
 
 object LegacyHoodieParquetFileFormat {
   val FILE_FORMAT_ID = "hoodie-parquet"
+
+  /**
+   * Configuration key for passing table Avro schema.
+   * Schema can be passed through options map (preferred, thread-safe) or hadoopConf (fallback).
+   * This preserves the correct logical types (e.g., timestampMillis vs timestampMicros).
+   */
+  val HOODIE_TABLE_AVRO_SCHEMA = "hoodie.table.avro.schema"
 }

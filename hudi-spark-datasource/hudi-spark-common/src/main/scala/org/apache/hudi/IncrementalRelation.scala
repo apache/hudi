@@ -110,7 +110,7 @@ class IncrementalRelation(val sqlContext: SQLContext,
 
   // use schema from a file produced in the end/latest instant
 
-  val (usedSchema, internalSchema) = {
+  val (usedSchema, internalSchema, tableAvroSchema) = {
     log.info("Inferring schema..")
     val schemaResolver = new TableSchemaResolver(metaClient)
     val iSchema : InternalSchema = if (!isSchemaEvolutionEnabledOnRead(optParams, sqlContext.sparkSession)) {
@@ -129,14 +129,14 @@ class IncrementalRelation(val sqlContext: SQLContext,
     }
     if (tableSchema.getType == Schema.Type.NULL) {
       // if there is only one commit in the table and is an empty commit without schema, return empty RDD here
-      (StructType(Nil), InternalSchema.getEmptyInternalSchema)
+      (StructType(Nil), InternalSchema.getEmptyInternalSchema, tableSchema)
     } else {
       val dataSchema = AvroConversionUtils.convertAvroSchemaToStructType(tableSchema)
       if (iSchema != null && !iSchema.isEmptySchema) {
         // if internalSchema is ready, dataSchema will contains skeletonSchema
-        (dataSchema, iSchema)
+        (dataSchema, iSchema, tableSchema)
       } else {
-        (StructType(skeletonSchema.fields ++ dataSchema.fields), InternalSchema.getEmptyInternalSchema)
+        (StructType(skeletonSchema.fields ++ dataSchema.fields), InternalSchema.getEmptyInternalSchema, tableSchema)
       }
     }
   }
@@ -276,7 +276,12 @@ class IncrementalRelation(val sqlContext: SQLContext,
 
             if (regularFileIdToFullPath.nonEmpty) {
               try {
-                df = df.union(sqlContext.read.options(sOpts)
+                val optionsWithSchema = if (tableAvroSchema.getType != Schema.Type.NULL) {
+                  sOpts + (LegacyHoodieParquetFileFormat.HOODIE_TABLE_AVRO_SCHEMA -> tableAvroSchema.toString)
+                } else {
+                  sOpts
+                }
+                df = df.union(sqlContext.read.options(optionsWithSchema)
                   .schema(usedSchema).format(formatClassName)
                   // Setting time to the END_INSTANT_TIME, to avoid pathFilter filter out files incorrectly.
                   .option(DataSourceReadOptions.TIME_TRAVEL_AS_OF_INSTANT.key(), endInstantTime)
