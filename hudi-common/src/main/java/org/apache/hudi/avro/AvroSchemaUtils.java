@@ -223,10 +223,6 @@ public class AvroSchemaUtils {
     return Option.of(getNonNullTypeFromUnion(schema));
   }
 
-  public static Option<Schema.Type> findNestedFieldType(Schema schema, String fieldName) {
-    return findNestedFieldSchema(schema, fieldName).map(Schema::getType);
-  }
-
   /**
    * Appends provided new fields at the end of the given schema
    *
