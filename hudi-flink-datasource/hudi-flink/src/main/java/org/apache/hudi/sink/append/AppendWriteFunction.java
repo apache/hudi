@@ -22,7 +22,6 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.sink.buffer.BufferType;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.metrics.FlinkStreamWriteMetrics;
 import org.apache.hudi.sink.StreamWriteOperatorCoordinator;
 import org.apache.hudi.sink.bulk.BulkInsertWriterHelper;
@@ -126,10 +125,6 @@ public class AppendWriteFunction<I> extends AbstractStreamWriteFunction<I> {
   // -------------------------------------------------------------------------
   void initWriterHelper() {
     final String instant = instantToWrite(true);
-    if (instant == null) {
-      // in case there are empty checkpoints that has no input data
-      throw new HoodieException("No inflight instant when flushing data!");
-    }
     this.writerHelper = new BulkInsertWriterHelper(this.config, this.writeClient.getHoodieTable(false), this.writeClient.getConfig(),
         instant, this.taskID, RuntimeContextUtils.getNumberOfParallelSubtasks(getRuntimeContext()), RuntimeContextUtils.getAttemptNumber(getRuntimeContext()),
         this.rowType, false, Option.of(writeMetrics));

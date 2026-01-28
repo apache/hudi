@@ -71,7 +71,7 @@ import java.util.stream.Collectors;
 @SuppressWarnings("checkstyle:LineLength")
 public class SparkRDDWriteClient<T> extends
     BaseHoodieWriteClient<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> {
-  private final StreamingMetadataWriteHandler streamingMetadataWriteHandler = new StreamingMetadataWriteHandler();
+  private final StreamingMetadataWriteHandler streamingMetadataWriteHandler = new SparkStreamingMetadataWriteHandler();
 
   public SparkRDDWriteClient(HoodieEngineContext context, HoodieWriteConfig clientConfig) {
     this(context, clientConfig, Option.empty());

@@ -46,6 +46,20 @@ public interface TestFunctionWrapper<I> {
   void invoke(I record) throws Exception;
 
   /**
+   * Whether the function wrapper support streaming write index data to metadata table.
+   */
+  default boolean supportStreamingWriteIndex() {
+    return false;
+  }
+
+  /**
+   * Returns the latest index event buffer sent by the index write tasks.
+   */
+  default WriteMetadataEvent[] getIndexEventBuffer() {
+    throw new UnsupportedOperationException("Not supported yet.");
+  }
+
+  /**
    * Returns the latest event buffer sent by the write tasks.
    */
   WriteMetadataEvent[] getEventBuffer();
@@ -133,6 +147,13 @@ public interface TestFunctionWrapper<I> {
    * Returns the data buffer of the write task.
    */
   default Map<String, List<HoodieRecord>> getDataBuffer() {
+    throw new UnsupportedOperationException();
+  }
+
+  /**
+   * Returns the data buffer of the index write task.
+   */
+  default List<HoodieRecord> getIndexDataBuffer() {
     throw new UnsupportedOperationException();
   }
 

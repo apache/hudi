@@ -21,16 +21,17 @@ package org.apache.hudi.sink;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.model.HoodieFlinkInternalRow;
 import org.apache.hudi.common.engine.HoodieReaderContext;
-import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.read.BufferedRecordMerger;
 import org.apache.hudi.common.table.read.BufferedRecordMergerFactory;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.MappingIterator;
 import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.metrics.FlinkStreamWriteMetrics;
 import org.apache.hudi.sink.buffer.MemorySegmentPoolFactory;
@@ -41,6 +42,7 @@ import org.apache.hudi.sink.bulk.RowDataKeyGens;
 import org.apache.hudi.sink.common.AbstractStreamWriteFunction;
 import org.apache.hudi.sink.event.WriteMetadataEvent;
 import org.apache.hudi.sink.exception.MemoryPagesExhaustedException;
+import org.apache.hudi.sink.partitioner.index.IndexRowUtils;
 import org.apache.hudi.sink.transform.RecordConverter;
 import org.apache.hudi.sink.utils.BufferUtils;
 import org.apache.hudi.table.action.commit.BucketInfo;
@@ -52,12 +54,10 @@ import org.apache.hudi.util.StreamerUtil;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.metrics.MetricGroup;
-import org.apache.flink.streaming.api.functions.ProcessFunction;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.data.binary.BinaryRowData;
 import org.apache.flink.table.runtime.util.MemorySegmentPool;
 import org.apache.flink.table.types.logical.RowType;
-import org.apache.flink.types.RowKind;
 import org.apache.flink.util.Collector;
 
 import java.io.IOException;
@@ -120,6 +120,8 @@ public class StreamWriteFunction extends AbstractStreamWriteFunction<HoodieFlink
 
   protected transient WriteFunction writeFunction;
 
+  private transient Option<IndexProcessFunction> indexProcessFunctionOpt;
+
   private transient BufferedRecordMerger<RowData> recordMerger;
   private transient HoodieReaderContext<RowData> readerContext;
   private transient List<String> orderingFieldNames;
@@ -127,6 +129,8 @@ public class StreamWriteFunction extends AbstractStreamWriteFunction<HoodieFlink
   protected final RowType rowType;
 
   protected final RowDataKeyGen keyGen;
+
+  private final boolean isStreamingIndexWriteEnabled;
 
   /**
    * Total size tracer.
@@ -151,6 +155,7 @@ public class StreamWriteFunction extends AbstractStreamWriteFunction<HoodieFlink
     super(config);
     this.rowType = rowType;
     this.keyGen = RowDataKeyGens.instance(config, rowType);
+    this.isStreamingIndexWriteEnabled = OptionsResolver.isStreamingIndexWriteEnabled(config);
   }
 
   @Override
@@ -158,8 +163,9 @@ public class StreamWriteFunction extends AbstractStreamWriteFunction<HoodieFlink
     this.tracer = new TotalSizeTracer(this.config);
     initBuffer();
     initWriteFunction();
+    initIndexProcessFunction();
     initMergeClass();
-    initRecordConverter();
+    initConverter();
     registerMetrics();
   }
 
@@ -172,17 +178,10 @@ public class StreamWriteFunction extends AbstractStreamWriteFunction<HoodieFlink
   }
 
   @Override
-  public void processElement(HoodieFlinkInternalRow record,
-                             ProcessFunction<HoodieFlinkInternalRow, RowData>.Context ctx,
-                             Collector<RowData> out) throws Exception {
+  public void processElement(HoodieFlinkInternalRow record, Context ctx, Collector<RowData> out) throws Exception {
+    // process and emit index records to the downstream index write operator for index streaming write.
+    this.indexProcessFunctionOpt.ifPresent(indexProcessFunction -> indexProcessFunction.process(record, out));
     bufferRecord(record);
-  }
-
-  @Override
-  public void close() {
-    if (this.writeClient != null) {
-      this.writeClient.close();
-    }
   }
 
   /**
@@ -226,7 +225,30 @@ public class StreamWriteFunction extends AbstractStreamWriteFunction<HoodieFlink
     }
   }
 
-  private void initRecordConverter() {
+  private void initIndexProcessFunction() {
+    if (isStreamingIndexWriteEnabled) {
+      this.indexProcessFunctionOpt = Option.of((record, out) -> {
+        switch (record.getOperationType()) {
+          case "I":
+            out.collect(IndexRowUtils.createRecordIndexRow(record));
+            break;
+          case "D":
+            // Don't emit delete index record either, because we cannot be certain whether data with the same key
+            // in storage will actually be deleted. Therefore, it's possible that data in storage is deleted, but
+            // the record level index data remains.
+            // todo: support ordering value in record level index metadata payload, since the efficiency of location
+            // tagging by merging lookup is intolerable in flink streaming writing scenario.
+            break;
+          default:
+            break;
+        }
+      });
+    } else {
+      this.indexProcessFunctionOpt = Option.empty();
+    }
+  }
+
+  private void initConverter() {
     this.recordConverter = RecordConverter.getInstance(keyGen);
   }
 
@@ -289,9 +311,6 @@ public class StreamWriteFunction extends AbstractStreamWriteFunction<HoodieFlink
    */
   protected void bufferRecord(HoodieFlinkInternalRow record) throws IOException {
     writeMetrics.markRecordIn();
-    // set operation type into rowkind of row.
-    record.getRowData().setRowKind(
-        RowKind.fromByteValue(HoodieOperation.fromName(record.getOperationType()).getValue()));
     final String bucketID = getBucketID(record.getPartitionPath(), record.getFileId());
 
     // 1. try buffer the record into the memory pool
@@ -358,12 +377,6 @@ public class StreamWriteFunction extends AbstractStreamWriteFunction<HoodieFlink
   private boolean flushBucket(RowDataBucket bucket) {
     String instant = instantToWrite(true);
 
-    if (instant == null) {
-      // in case there are empty checkpoints that has no input data
-      log.info("No inflight instant when flushing data, skip.");
-      return false;
-    }
-
     ValidationUtils.checkState(!bucket.isEmpty(), "Data bucket to flush has no buffering records");
     final List<WriteStatus> writeStatus = writeRecords(instant, bucket);
     final WriteMetadataEvent event = WriteMetadataEvent.builder()
@@ -383,10 +396,6 @@ public class StreamWriteFunction extends AbstractStreamWriteFunction<HoodieFlink
   public void flushRemaining(boolean endInput) {
     writeMetrics.startDataFlush();
     this.currentInstant = instantToWrite(hasData());
-    if (this.currentInstant == null) {
-      // in case there are empty checkpoints that has no input data
-      throw new HoodieException("No inflight instant when flushing data!");
-    }
     final List<WriteStatus> writeStatus;
     if (!buckets.isEmpty()) {
       writeStatus = new ArrayList<>();
@@ -495,5 +504,18 @@ public class StreamWriteFunction extends AbstractStreamWriteFunction<HoodieFlink
       }
       return doWrite(records, bucketInfo, instant);
     }
+  }
+
+  /**
+   * Function used to process and emit index records to the downstream index write operator for index streaming write.
+   */
+  private interface IndexProcessFunction extends Serializable {
+    /**
+     * Process and emit index records.
+     *
+     * @param record The incoming data record
+     * @param out    The collector to emit index record
+     */
+    void process(HoodieFlinkInternalRow record, Collector<RowData> out);
   }
 }

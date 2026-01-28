@@ -58,10 +58,20 @@ public class CompactionCommitEvent implements Serializable {
   private int taskID;
 
   /**
+   * Whether the event is for metadata table.
+   */
+  private boolean isMetadataTable;
+
+  /**
+   * Whether the event is for log compaction.
+   */
+  private boolean isLogCompaction;
+
+  /**
    * An event with NULL write statuses that represents a failed compaction.
    */
-  public CompactionCommitEvent(String instant, String fileId, int taskID) {
-    this(instant, fileId, null, taskID);
+  public CompactionCommitEvent(String instant, String fileId, int taskID, boolean isMetadataTable, boolean isLogCompaction) {
+    this(instant, fileId, null, taskID, isMetadataTable, isLogCompaction);
   }
 
   public boolean isFailed() {

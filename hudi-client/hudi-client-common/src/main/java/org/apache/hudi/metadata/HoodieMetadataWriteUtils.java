@@ -191,6 +191,7 @@ public class HoodieMetadataWriteUtils {
             .withMaxConsistencyChecks(writeConfig.getConsistencyGuardConfig().getMaxConsistencyChecks())
             .build())
         .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(false)
+            .withEngineType(writeConfig.getEngineType())
             .withFileListingParallelism(writeConfig.getFileListingParallelism()).build())
         .withAvroSchemaValidate(false)
         .withEmbeddedTimelineServerEnabled(writeConfig.isEmbeddedTimelineServerEnabled())

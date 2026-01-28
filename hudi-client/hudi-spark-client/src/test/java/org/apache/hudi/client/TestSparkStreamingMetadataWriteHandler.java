@@ -44,7 +44,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-public class TestStreamingMetadataWriteHandler extends SparkClientFunctionalTestHarness {
+public class TestSparkStreamingMetadataWriteHandler extends SparkClientFunctionalTestHarness {
 
   private final HoodieTable<?, ?, ?, ?> mockHoodieTable = mock(HoodieTable.class);
   private HoodieTableMetaClient metaClient;
@@ -76,7 +76,7 @@ public class TestStreamingMetadataWriteHandler extends SparkClientFunctionalTest
     HoodieData<WriteStatus> mdtWriteStatus = mockWriteStatuses(numMdtWriteStatus);
     HoodieTableMetadataWriter mdtWriter = mock(HoodieTableMetadataWriter.class);
     when(mdtWriter.streamWriteToMetadataPartitions(any(), any())).thenReturn(mdtWriteStatus);
-    StreamingMetadataWriteHandler metadataWriteHandler = new MockStreamingMetadataWriteHandler(mdtWriter);
+    SparkStreamingMetadataWriteHandler metadataWriteHandler = new MockSparkStreamingMetadataWriteHandler(mdtWriter);
 
     HoodieData<WriteStatus> allWriteStatuses = metadataWriteHandler.streamWriteToMetadataTable(mockHoodieTable, dataTableWriteStatus, "00001",
         coalesceDividentForDataTableWrites);
@@ -91,11 +91,11 @@ public class TestStreamingMetadataWriteHandler extends SparkClientFunctionalTest
     return HoodieJavaRDD.of(jsc().parallelize(writeStatuses, size));
   }
 
-  class MockStreamingMetadataWriteHandler extends StreamingMetadataWriteHandler {
+  class MockSparkStreamingMetadataWriteHandler extends SparkStreamingMetadataWriteHandler {
 
     private HoodieTableMetadataWriter mdtWriter;
 
-    MockStreamingMetadataWriteHandler(HoodieTableMetadataWriter mdtWriter) {
+    MockSparkStreamingMetadataWriteHandler(HoodieTableMetadataWriter mdtWriter) {
       this.mdtWriter = mdtWriter;
     }
 

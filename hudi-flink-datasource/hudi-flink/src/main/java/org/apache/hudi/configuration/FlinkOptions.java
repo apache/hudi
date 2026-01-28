@@ -228,6 +228,19 @@ public class FlinkOptions extends HoodieConfig {
       .withFallbackKeys(HoodieMetadataConfig.ENABLE.key())
       .withDescription("Enable the internal metadata table which serves table metadata like level file listings, default enabled");
 
+  @AdvancedConfig
+  public static final ConfigOption<Boolean> METADATA_COMPACTION_SCHEDULE_ENABLED = ConfigOptions
+      .key("metadata.compaction.schedule.enabled")
+      .booleanType()
+      .defaultValue(true)
+      .withDescription("Schedule the compaction plan for metadata table, enabled by default.");
+
+  public static final ConfigOption<Boolean> METADATA_COMPACTION_ASYNC_ENABLED = ConfigOptions
+      .key("metadata.compaction.async.enabled")
+      .booleanType()
+      .defaultValue(true)
+      .withDescription("Async Compaction for metadata table.");
+
   public static final ConfigOption<Integer> METADATA_COMPACTION_DELTA_COMMITS = ConfigOptions
       .key("metadata.compaction.delta_commits")
       .intType()
@@ -292,6 +305,21 @@ public class FlinkOptions extends HoodieConfig {
           + "which can significantly improve performance compared to processing each record individually.\n"
           + "Default value is 1000, which is also the minimum value for the minibatch size, when the configured size\n"
           + "is less than 1000, the default value will be used.");
+
+  @AdvancedConfig
+  public static final ConfigOption<Long> INDEX_RLI_WRITE_BUFFER_SIZE = ConfigOptions
+      .key("index.rli.write.buffer.size")
+      .longType()
+      .defaultValue(100L) // default 100 MB
+      .withDescription("Maximum memory in MB for the buffer of index record writing operator, when the threshold hits, \n"
+          + "it flushes the index data to avoid OOM, default 100MB.");
+
+  @AdvancedConfig
+  public static final ConfigOption<Integer> INDEX_WRITE_TASKS = ConfigOptions
+      .key("index.write.tasks")
+      .intType()
+      .noDefaultValue()
+      .withDescription("Parallelism of tasks that do the index writing, default is the parallelism of the execution environment");
 
   // ------------------------------------------------------------------------
   //  Read Options

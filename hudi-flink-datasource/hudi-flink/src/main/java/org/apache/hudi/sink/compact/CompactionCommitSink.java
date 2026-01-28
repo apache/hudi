@@ -19,12 +19,18 @@
 package org.apache.hudi.sink.compact;
 
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
+import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.data.HoodieListData;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
+import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.util.CompactionUtils;
+import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.metadata.FlinkHoodieBackedTableMetadataWriter;
+import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.metrics.FlinkCompactionMetrics;
 import org.apache.hudi.sink.CleanFunction;
 import org.apache.hudi.table.HoodieFlinkTable;
@@ -72,15 +78,36 @@ public class CompactionCommitSink extends CleanFunction<CompactionCommitEvent> {
   private transient Map<String, Map<String, CompactionCommitEvent>> commitBuffer;
 
   /**
+   * Buffer to collect the compaction event for metadata table from each compact task {@code CompactFunction}.
+   */
+  private transient Map<String, Map<String, CompactionCommitEvent>> metadataCommitBuffer;
+
+  /**
    * Cache to store compaction plan for each instant.
    * Stores the mapping of instant_time -> compactionPlan.
    */
   private transient Map<String, HoodieCompactionPlan> compactionPlanCache;
 
   /**
+   * Cache to store compaction plan for each instant for metadata table
+   * Stores the mapping of instant_time -> compactionPlan.
+   */
+  private transient Map<String, HoodieCompactionPlan> metadataCompactionPlanCache;
+
+  /**
+   * Write client for the metadata table.
+   */
+  private transient HoodieFlinkWriteClient metadataWriteClient;
+
+  /**
    * The hoodie table.
    */
   private transient HoodieFlinkTable<?> table;
+
+  /**
+   * The hoodie table.
+   */
+  private transient HoodieFlinkTable<?> metadataTable;
 
   /**
    * Compaction metrics.
@@ -99,7 +126,9 @@ public class CompactionCommitSink extends CleanFunction<CompactionCommitEvent> {
       this.writeClient = FlinkWriteClients.createWriteClient(conf, getRuntimeContext());
     }
     this.commitBuffer = new HashMap<>();
+    this.metadataCommitBuffer = new HashMap<>();
     this.compactionPlanCache = new HashMap<>();
+    this.metadataCompactionPlanCache = new HashMap<>();
     this.table = this.writeClient.getHoodieTable();
     registerMetrics();
   }
@@ -114,9 +143,53 @@ public class CompactionCommitSink extends CleanFunction<CompactionCommitEvent> {
               + " is failed: {}, error record count: {}",
           instant, event.getTaskID(), event.isFailed(), getNumErrorRecords(event));
     }
-    commitBuffer.computeIfAbsent(instant, k -> new HashMap<>())
-        .put(event.getFileId(), event);
-    commitIfNecessary(instant, commitBuffer.get(instant).values());
+    if (event.isMetadataTable()) {
+      initializeMetadataClientIfNecessary();
+      metadataCommitBuffer.computeIfAbsent(instant, k -> new HashMap<>())
+          .put(event.getFileId(), event);
+      commitIfNecessary(metadataTable, metadataWriteClient, instant, metadataCommitBuffer.get(instant).values(), getCompactionPlan(event), event.isLogCompaction());
+    } else {
+      commitBuffer.computeIfAbsent(instant, k -> new HashMap<>())
+          .put(event.getFileId(), event);
+      commitIfNecessary(table, writeClient, instant, commitBuffer.get(instant).values(), getCompactionPlan(event), event.isLogCompaction());
+    }
+  }
+
+  private void initializeMetadataClientIfNecessary() {
+    if (this.metadataWriteClient != null) {
+      return;
+    }
+    // Get the metadata writer from the table and use its write client
+    Option<HoodieTableMetadataWriter> metadataWriterOpt =
+        this.writeClient.getHoodieTable().getMetadataWriter(null, true, true);
+    ValidationUtils.checkArgument(metadataWriterOpt.isPresent(), "Failed to close the metadata writer");
+    FlinkHoodieBackedTableMetadataWriter metadataWriter = (FlinkHoodieBackedTableMetadataWriter) metadataWriterOpt.get();
+    this.metadataWriteClient = (HoodieFlinkWriteClient) metadataWriter.getWriteClient();
+    this.metadataTable = metadataWriteClient.getHoodieTable();
+  }
+
+  private HoodieCompactionPlan getCompactionPlan(CompactionCommitEvent event) {
+    String instant = event.getInstant();
+    if (event.isMetadataTable()) {
+      return metadataCompactionPlanCache.computeIfAbsent(instant, k -> {
+        try {
+          return event.isLogCompaction()
+              ? CompactionUtils.getLogCompactionPlan(this.metadataWriteClient.getHoodieTable().getMetaClient(), instant)
+              : CompactionUtils.getCompactionPlan(this.metadataWriteClient.getHoodieTable().getMetaClient(), instant);
+        } catch (Exception e) {
+          throw new HoodieException("Failed to get the compaction plan.", e);
+        }
+      });
+    } else {
+      return compactionPlanCache.computeIfAbsent(instant, k -> {
+        try {
+          return CompactionUtils.getCompactionPlan(
+              this.writeClient.getHoodieTable().getMetaClient(), instant);
+        } catch (Exception e) {
+          throw new HoodieException(e);
+        }
+      });
+    }
   }
 
   private long getNumErrorRecords(CompactionCommitEvent event) {
@@ -134,15 +207,13 @@ public class CompactionCommitSink extends CleanFunction<CompactionCommitEvent> {
    * @param instant Compaction commit instant time
    * @param events  Commit events ever received for the instant
    */
-  private void commitIfNecessary(String instant, Collection<CompactionCommitEvent> events) throws IOException {
-    HoodieCompactionPlan compactionPlan = compactionPlanCache.computeIfAbsent(instant, k -> {
-      try {
-        return CompactionUtils.getCompactionPlan(
-            this.writeClient.getHoodieTable().getMetaClient(), instant);
-      } catch (Exception e) {
-        throw new HoodieException(e);
-      }
-    });
+  private void commitIfNecessary(
+      HoodieFlinkTable<?> table,
+      HoodieFlinkWriteClient writeClient,
+      String instant,
+      Collection<CompactionCommitEvent> events,
+      HoodieCompactionPlan compactionPlan,
+      boolean isLogCompaction) {
 
     boolean isReady = compactionPlan.getOperations().size() == events.size();
     if (!isReady) {
@@ -151,30 +222,39 @@ public class CompactionCommitSink extends CleanFunction<CompactionCommitEvent> {
 
     if (events.stream().anyMatch(CompactionCommitEvent::isFailed)) {
       try {
-        // handle failure case
-        CompactionUtil.rollbackCompaction(table, instant, writeClient.getTransactionManager());
+        // handle the failure case
+        if (isLogCompaction) {
+          CompactionUtil.rollbackLogCompaction(table, instant, writeClient.getTransactionManager());
+        } else {
+          CompactionUtil.rollbackCompaction(table, instant, writeClient.getTransactionManager());
+        }
       } finally {
         // remove commitBuffer to avoid obsolete metadata commit
-        reset(instant);
+        reset(instant, table.isMetadataTable());
         this.compactionMetrics.markCompactionRolledBack();
       }
       return;
     }
 
     try {
-      doCommit(instant, events);
+      doCommit(table, writeClient, instant, events, isLogCompaction);
     } catch (Throwable throwable) {
       // make it fail-safe
-      log.error("Error while committing compaction instant: " + instant, throwable);
+      log.error("Error while committing compaction instant: {}", instant, throwable);
       this.compactionMetrics.markCompactionRolledBack();
     } finally {
       // reset the status
-      reset(instant);
+      reset(instant, table.isMetadataTable());
     }
   }
 
   @SuppressWarnings("unchecked")
-  private void doCommit(String instant, Collection<CompactionCommitEvent> events) throws IOException {
+  private void doCommit(
+      HoodieFlinkTable<?> table,
+      HoodieFlinkWriteClient writeClient,
+      String instant,
+      Collection<CompactionCommitEvent> events,
+      boolean isLogCompaction) throws IOException {
     List<WriteStatus> statuses = events.stream()
         .map(CompactionCommitEvent::getWriteStatuses)
         .flatMap(Collection::stream)
@@ -187,29 +267,43 @@ public class CompactionCommitSink extends CleanFunction<CompactionCommitEvent> {
       log.error("Got {} error records during compaction of instant {},\n"
           + "option '{}' is configured as false,"
           + "rolls back the compaction", numErrorRecords, instant, FlinkOptions.IGNORE_FAILED.key());
-      CompactionUtil.rollbackCompaction(table, instant, writeClient.getTransactionManager());
+      if (isLogCompaction) {
+        CompactionUtil.rollbackLogCompaction(table, instant, writeClient.getTransactionManager());
+      } else {
+        CompactionUtil.rollbackCompaction(table, instant, writeClient.getTransactionManager());
+      }
       this.compactionMetrics.markCompactionRolledBack();
       return;
     }
 
+    WriteOperationType operationType = isLogCompaction ? WriteOperationType.LOG_COMPACT : WriteOperationType.COMPACT;
     HoodieCommitMetadata metadata = CompactHelpers.getInstance().createCompactionMetadata(
-        table, instant, HoodieListData.eager(statuses), writeClient.getConfig().getSchema());
+        table, instant, HoodieListData.eager(statuses), writeClient.getConfig().getSchema(), operationType);
 
     // commit the compaction
-    this.writeClient.completeCompaction(metadata, table, instant);
+    if (isLogCompaction) {
+      writeClient.completeLogCompaction(metadata, table, instant);
+    } else {
+      writeClient.completeCompaction(metadata, table, instant);
+    }
 
     this.compactionMetrics.updateCommitMetrics(instant, metadata);
     this.compactionMetrics.markCompactionCompleted();
 
     // Whether to clean up the old log file when compaction
     if (!conf.get(FlinkOptions.CLEAN_ASYNC_ENABLED) && !isCleaning) {
-      this.writeClient.clean();
+      writeClient.clean();
     }
   }
 
-  private void reset(String instant) {
-    this.commitBuffer.remove(instant);
-    this.compactionPlanCache.remove(instant);
+  private void reset(String instant, boolean isMetadata) {
+    if (isMetadata) {
+      this.metadataCommitBuffer.remove(instant);
+      this.metadataCompactionPlanCache.remove(instant);
+    } else {
+      this.commitBuffer.remove(instant);
+      this.compactionPlanCache.remove(instant);
+    }
   }
 
   private void registerMetrics() {

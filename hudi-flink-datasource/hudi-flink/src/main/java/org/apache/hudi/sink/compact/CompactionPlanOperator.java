@@ -21,10 +21,15 @@ package org.apache.hudi.sink.compact;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.common.model.CompactionOperation;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.CompactionUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.configuration.OptionsResolver;
+import org.apache.hudi.metadata.FlinkHoodieBackedTableMetadataWriter;
+import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.metrics.FlinkCompactionMetrics;
 import org.apache.hudi.table.HoodieFlinkTable;
 import org.apache.hudi.table.marker.WriteMarkersFactory;
@@ -46,7 +51,6 @@ import org.apache.flink.streaming.runtime.tasks.ProcessingTimeService;
 import org.apache.flink.streaming.runtime.tasks.StreamTask;
 import org.apache.flink.table.data.RowData;
 
-import java.io.IOException;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -68,17 +72,31 @@ public class CompactionPlanOperator extends AbstractStreamOperator<CompactionPla
   private final Configuration conf;
 
   /**
+   * Whether the compaction for metadata is enabled.
+   */
+  private final boolean metadataCompactionEnabled;
+
+  /**
    * Meta Client.
    */
   @SuppressWarnings("rawtypes")
   private transient HoodieFlinkTable table;
 
+  private transient HoodieFlinkTable metadataTable;
+
+  private transient HoodieTableMetaClient metaClient;
+
+  private transient HoodieTableMetaClient metadataMetaClient;
+
   private transient FlinkCompactionMetrics compactionMetrics;
 
   private transient HoodieFlinkWriteClient writeClient;
 
+  private transient HoodieFlinkWriteClient metadataWriteClient;
+
   public CompactionPlanOperator(Configuration conf) {
     this.conf = conf;
+    this.metadataCompactionEnabled = OptionsResolver.needsAsyncMetadataCompaction(conf);
   }
 
   @Override
@@ -86,7 +104,19 @@ public class CompactionPlanOperator extends AbstractStreamOperator<CompactionPla
     super.open();
     registerMetrics();
     this.table = FlinkTables.createTable(conf, getRuntimeContext());
+    this.metaClient = table.getMetaClient();
     this.writeClient = FlinkWriteClients.createWriteClient(conf, getRuntimeContext());
+    if (metadataCompactionEnabled) {
+      // Get the metadata writer from the table and use its write client
+      Option<HoodieTableMetadataWriter> metadataWriterOpt =
+          this.writeClient.getHoodieTable().getMetadataWriter(null, true, true);
+      ValidationUtils.checkArgument(metadataWriterOpt.isPresent(), "Failed to create the metadata writer");
+      FlinkHoodieBackedTableMetadataWriter metadataWriter = (FlinkHoodieBackedTableMetadataWriter) metadataWriterOpt.get();
+      this.metadataWriteClient = (HoodieFlinkWriteClient) metadataWriter.getWriteClient();
+      this.metadataTable = metadataWriteClient.getHoodieTable();
+      this.metadataMetaClient = metadataTable.getMetaClient();
+    }
+
     // when starting up, rolls back all the inflight compaction instants if there exists,
     // these instants are in priority for scheduling task because the compaction instants are
     // scheduled from earliest(FIFO sequence).
@@ -119,7 +149,6 @@ public class CompactionPlanOperator extends AbstractStreamOperator<CompactionPla
   @Override
   public void notifyCheckpointComplete(long checkpointId) {
     try {
-      table.getMetaClient().reloadActiveTimeline();
       // There is no good way to infer when the compaction task for an instant crushed
       // or is still undergoing. So we use a configured timeout threshold to control the rollback:
       // {@code FlinkOptions.COMPACTION_TIMEOUT_SECONDS},
@@ -128,15 +157,24 @@ public class CompactionPlanOperator extends AbstractStreamOperator<CompactionPla
 
       // comment out: do we really need the timeout rollback ?
       // CompactionUtil.rollbackEarliestCompaction(table, conf);
-      scheduleCompaction(table, checkpointId);
+      scheduleCompaction(table, metaClient, checkpointId, false);
+      // Also schedule metadata table compaction if enabled
+      if (metadataCompactionEnabled) {
+        scheduleCompaction(metadataTable, metadataMetaClient, checkpointId, true);
+      }
     } catch (Throwable throwable) {
       // make it fail-safe
-      log.error("Error while scheduling compaction plan for checkpoint: " + checkpointId, throwable);
+      log.error("Error while scheduling compaction plan for checkpoint: {}", checkpointId, throwable);
     }
   }
 
-  private void scheduleCompaction(HoodieFlinkTable<?> table, long checkpointId) throws IOException {
-    HoodieTimeline pendingCompactionTimeline = table.getActiveTimeline().filterPendingCompactionTimeline();
+  private void scheduleCompaction(
+      HoodieFlinkTable table,
+      HoodieTableMetaClient metaClient,
+      long checkpointId,
+      boolean isMetadataTable) {
+    metaClient.reloadActiveTimeline();
+    HoodieTimeline pendingCompactionTimeline = metaClient.getActiveTimeline().filterPendingCompactionTimeline();
 
     // the first instant takes the highest priority.
     Option<HoodieInstant> firstRequested = pendingCompactionTimeline
@@ -145,28 +183,42 @@ public class CompactionPlanOperator extends AbstractStreamOperator<CompactionPla
     compactionMetrics.setFirstPendingCompactionInstant(firstRequested);
     compactionMetrics.setPendingCompactionCount(pendingCompactionTimeline.countInstants());
 
-    if (!firstRequested.isPresent()) {
-      // do nothing.
-      log.info("No compaction plan for checkpoint " + checkpointId);
+    boolean isLogCompaction = false;
+
+    // if there is no pending compaction instant, try to found pending log compact for metadata table.
+    if (firstRequested.isEmpty() && isMetadataTable && metadataWriteClient.getConfig().isLogCompactionEnabled()) {
+      HoodieTimeline pendingLogCompactionTimeline = metaClient.getActiveTimeline().filterPendingLogCompactionTimeline();
+      // the first instant takes the highest priority.
+      firstRequested = pendingLogCompactionTimeline
+          .filter(instant -> instant.getState() == HoodieInstant.State.REQUESTED).firstInstant();
+      isLogCompaction = true;
+    }
+    if (firstRequested.isEmpty()) {
+      log.info("No compaction plan for checkpoint {}, isMetadataTable: {}", checkpointId, isMetadataTable);
       return;
     }
 
     String compactionInstantTime = firstRequested.get().requestedTime();
-
     // generate compaction plan
     // should support configurable commit metadata
-    HoodieCompactionPlan compactionPlan = CompactionUtils.getCompactionPlan(
-        table.getMetaClient(), compactionInstantTime);
+    HoodieCompactionPlan compactionPlan = isLogCompaction
+        ? CompactionUtils.getLogCompactionPlan(metaClient, compactionInstantTime)
+        : CompactionUtils.getCompactionPlan(metaClient, compactionInstantTime);
 
     if (compactionPlan == null || (compactionPlan.getOperations() == null)
         || (compactionPlan.getOperations().isEmpty())) {
       // do nothing.
-      log.info("Empty compaction plan for instant " + compactionInstantTime);
+      log.info("Empty compaction plan for instant {}", compactionInstantTime);
     } else {
-      HoodieInstant instant = table.getInstantGenerator().getCompactionRequestedInstant(compactionInstantTime);
       // Mark instant as compaction inflight
-      table.getActiveTimeline().transitionCompactionRequestedToInflight(instant);
-      table.getMetaClient().reloadActiveTimeline();
+      if (isLogCompaction) {
+        HoodieInstant instant = metaClient.getInstantGenerator().getLogCompactionRequestedInstant(compactionInstantTime);
+        metaClient.getActiveTimeline().transitionLogCompactionRequestedToInflight(instant);
+      } else {
+        HoodieInstant instant = metaClient.getInstantGenerator().getCompactionRequestedInstant(compactionInstantTime);
+        metaClient.getActiveTimeline().transitionCompactionRequestedToInflight(instant);
+      }
+      metaClient.reloadActiveTimeline();
 
       List<CompactionOperation> operations = compactionPlan.getOperations().stream()
           .map(CompactionOperation::convertFromAvroRecordInstance).collect(toList());
@@ -185,7 +237,8 @@ public class CompactionPlanOperator extends AbstractStreamOperator<CompactionPla
           fileIdIndexMap.put(operation.getFileId(), operationIndex);
           index++;
         }
-        output.collect(new StreamRecord<>(new CompactionPlanEvent(compactionInstantTime, operation, operationIndex)));
+        output.collect(new StreamRecord<>(
+            new CompactionPlanEvent(compactionInstantTime, operation, operationIndex, isMetadataTable, isLogCompaction)));
       }
     }
   }

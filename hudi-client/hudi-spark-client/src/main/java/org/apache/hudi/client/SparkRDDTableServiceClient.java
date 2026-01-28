@@ -50,7 +50,7 @@ public class SparkRDDTableServiceClient<T> extends BaseHoodieTableServiceClient<
   protected SparkRDDTableServiceClient(HoodieEngineContext context,
                                        HoodieWriteConfig clientConfig,
                                        Option<EmbeddedTimelineService> timelineService) {
-    this(context, clientConfig, timelineService, new StreamingMetadataWriteHandler());
+    this(context, clientConfig, timelineService, new SparkStreamingMetadataWriteHandler());
   }
 
   @VisibleForTesting
