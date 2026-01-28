@@ -77,6 +77,10 @@ public class OptionsInference {
     if (!conf.contains(FlinkOptions.CLUSTERING_TASKS)) {
       conf.set(FlinkOptions.CLUSTERING_TASKS, writeTasks);
     }
+    // index write tasks, default same as write tasks
+    if (!conf.contains(FlinkOptions.INDEX_WRITE_TASKS)) {
+      conf.set(FlinkOptions.INDEX_WRITE_TASKS, writeTasks);
+    }
   }
 
   /**

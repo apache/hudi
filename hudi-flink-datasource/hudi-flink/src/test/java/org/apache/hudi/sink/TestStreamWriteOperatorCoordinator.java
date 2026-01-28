@@ -29,6 +29,8 @@ import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
+import org.apache.hudi.common.util.SerializationUtils;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
@@ -39,6 +41,7 @@ import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.sink.event.Correspondent;
 import org.apache.hudi.sink.event.WriteMetadataEvent;
 import org.apache.hudi.sink.utils.CoordinationResponseSerDe;
+import org.apache.hudi.sink.utils.EventBuffers;
 import org.apache.hudi.sink.utils.MockCoordinatorExecutor;
 import org.apache.hudi.sink.utils.NonThrownExecutor;
 import org.apache.hudi.storage.HoodieStorage;
@@ -59,17 +62,21 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Mockito;
 import org.slf4j.Logger;
 
 import java.io.File;
 import java.io.IOException;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
+import static org.apache.hudi.index.HoodieIndex.IndexType.GLOBAL_RECORD_LEVEL_INDEX;
 import static org.hamcrest.CoreMatchers.instanceOf;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.CoreMatchers.not;
@@ -130,11 +137,69 @@ public class TestStreamWriteOperatorCoordinator {
     }
   }
 
-  @Test
-  public void testCheckpointAndRestore() throws Exception {
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  public void testCheckpointAndRestore(boolean isStreamingIndexWriteEnabled) throws Exception {
+    Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    conf.set(FlinkOptions.TABLE_TYPE, HoodieTableType.MERGE_ON_READ.name());
+    if (isStreamingIndexWriteEnabled) {
+      conf.set(FlinkOptions.INDEX_TYPE, GLOBAL_RECORD_LEVEL_INDEX.name());
+      conf.set(FlinkOptions.INDEX_WRITE_TASKS, 2);
+    }
+    coordinator = createCoordinator(conf, 2);
+
+    requestInstantTime(-1);
+    String instant = coordinator.getInstant();
+    assertNotEquals("", instant);
+
+    OperatorEvent event0 = createOperatorEvent(0, instant, "par1", true, 0.1);
+    OperatorEvent event1 = createOperatorEvent(1, instant, "par2", true, 0.2);
+    coordinator.handleEventFromOperator(0, event0);
+    coordinator.handleEventFromOperator(1, event1);
+
+    if (isStreamingIndexWriteEnabled) {
+      OperatorEvent indexEvent0 = createOperatorEvent(0, -1, instant, "record_index", false, true, 0.1, true);
+      OperatorEvent indexEvent1 = createOperatorEvent(1, -1, instant, "record_index", false, true, 0.2, true);
+      coordinator.handleEventFromOperator(0, indexEvent0);
+      coordinator.handleEventFromOperator(1, indexEvent1);
+    }
+
     CompletableFuture<byte[]> future = new CompletableFuture<>();
     coordinator.checkpointCoordinator(1, future);
+    coordinator.notifyCheckpointComplete(1);
     coordinator.resetToCheckpoint(1, future.get());
+
+    EventBuffers.EventBuffer eventBuffer = coordinator.getEventBuffer();
+    assertEquals(2, eventBuffer.getDataWriteEventBuffer().length);
+    assertEquals(isStreamingIndexWriteEnabled ? 2 : 0, eventBuffer.getIndexWriteEventBuffer().length);
+  }
+
+  @Test
+  public void testRestoreFromLegacyState() throws Exception {
+    requestInstantTime(-1);
+    String instant = coordinator.getInstant();
+    assertNotEquals("", instant);
+
+    OperatorEvent event0 = createOperatorEvent(0, instant, "par1", true, 0.1);
+    OperatorEvent event1 = createOperatorEvent(1, instant, "par2", true, 0.2);
+    coordinator.handleEventFromOperator(0, event0);
+    coordinator.handleEventFromOperator(1, event1);
+
+    CompletableFuture<byte[]> future = new CompletableFuture<>();
+    coordinator.checkpointCoordinator(1, future);
+    coordinator.notifyCheckpointComplete(1);
+
+    Map<Long, Pair<String, EventBuffers.EventBuffer>> eventBuffers = SerializationUtils.deserialize(future.get());
+    // convert to legacy event buffers
+    Map<Long, Pair<String, WriteMetadataEvent[]>> legacyEventBuffers = new HashMap<>();
+    eventBuffers.forEach((ckpId, eventBuffer) -> {
+      legacyEventBuffers.put(ckpId, Pair.of(eventBuffer.getLeft(), eventBuffer.getRight().getDataWriteEventBuffer()));
+    });
+    // simulate recovering from legacy state
+    coordinator.resetToCheckpoint(1, SerializationUtils.serialize(legacyEventBuffers));
+    EventBuffers.EventBuffer eventBuffer = coordinator.getEventBuffer();
+    assertEquals(2, eventBuffer.getDataWriteEventBuffer().length);
+    assertEquals(0, eventBuffer.getIndexWriteEventBuffer().length);
   }
 
   @Test
@@ -168,26 +233,26 @@ public class TestStreamWriteOperatorCoordinator {
         .build();
     coordinator.handleEventFromOperator(0, event1);
     coordinator.subtaskFailed(0, null);
-    assertNotNull(coordinator.getEventBuffer()[0], "Events should not be cleared by subTask failure");
+    assertNotNull(coordinator.getEventBuffer().getDataWriteEventBuffer()[0], "Events should not be cleared by subTask failure");
 
     OperatorEvent event2 = createOperatorEvent(0, 0, instant, "par1", false, false, 0.1);
     coordinator.handleEventFromOperator(0, event2);
     coordinator.subtaskFailed(0, null);
-    assertNotNull(coordinator.getEventBuffer()[0], "Events should not be cleared by subTask failure");
+    assertNotNull(coordinator.getEventBuffer().getDataWriteEventBuffer()[0], "Events should not be cleared by subTask failure");
 
     OperatorEvent event3 = createOperatorEvent(0, 0, instant, "par1", false, false, 0.1);
     coordinator.handleEventFromOperator(0, event3);
     assertThat("Multiple events of same instant should be merged",
-        coordinator.getEventBuffer()[0].getWriteStatuses().size(), is(1));
+        coordinator.getEventBuffer().getDataWriteEventBuffer()[0].getWriteStatuses().size(), is(1));
 
     long nextCkpId = 1;
     coordinator.handleCoordinationRequest(Correspondent.InstantTimeRequest.getInstance(nextCkpId));
     OperatorEvent event4 = createOperatorEvent(0, nextCkpId, "002", "par1", false, false, 0.1);
     coordinator.handleEventFromOperator(0, event4);
     assertThat("First instant is not committed yet, new event should not override the old event",
-        coordinator.getEventBuffer(0)[0].getWriteStatuses().size(), is(1));
+        coordinator.getEventBuffer(0).getDataWriteEventBuffer()[0].getWriteStatuses().size(), is(1));
     assertThat("Second instant should have one newly added write status",
-        coordinator.getEventBuffer(1)[0].getWriteStatuses().size(), is(1));
+        coordinator.getEventBuffer(1).getDataWriteEventBuffer()[0].getWriteStatuses().size(), is(1));
   }
 
   @Test
@@ -659,6 +724,18 @@ public class TestStreamWriteOperatorCoordinator {
       boolean isBootstrap,
       boolean trackSuccessRecords,
       double failureFraction) {
+    return createOperatorEvent(taskId, checkpointId, instant, partitionPath, isBootstrap, trackSuccessRecords, failureFraction, false);
+  }
+
+  private static WriteMetadataEvent createOperatorEvent(
+      int taskId,
+      long checkpointId,
+      String instant,
+      String partitionPath,
+      boolean isBootstrap,
+      boolean trackSuccessRecords,
+      double failureFraction,
+      boolean isMetadataTable) {
     final WriteStatus writeStatus = new WriteStatus(trackSuccessRecords, failureFraction);
     writeStatus.setPartitionPath(partitionPath);
 
@@ -679,6 +756,7 @@ public class TestStreamWriteOperatorCoordinator {
         .writeStatus(Collections.singletonList(writeStatus))
         .bootstrap(isBootstrap)
         .lastBatch(true)
+        .metadataTable(isMetadataTable)
         .build();
   }
 

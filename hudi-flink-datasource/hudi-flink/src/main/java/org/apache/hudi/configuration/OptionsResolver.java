@@ -199,7 +199,7 @@ public class OptionsResolver {
   /**
    * Returns whether {@link org.apache.hudi.sink.partitioner.MinibatchBucketAssignFunction} should be used for bucket assigning.
    */
-  public static boolean isMiniBatchBucketAssign(Configuration conf) {
+  public static boolean isRecordLevelIndex(Configuration conf) {
     HoodieIndex.IndexType indexType = OptionsResolver.getIndexType(conf);
     return indexType == HoodieIndex.IndexType.GLOBAL_RECORD_LEVEL_INDEX;
   }
@@ -433,6 +433,15 @@ public class OptionsResolver {
   }
 
   /**
+   * Returns whether to streaming write to metadata table is enabled.
+   */
+  public static boolean isStreamingIndexWriteEnabled(Configuration conf) {
+    return conf.get(FlinkOptions.METADATA_ENABLED)
+        && OptionsResolver.getIndexType(conf) == HoodieIndex.IndexType.GLOBAL_RECORD_LEVEL_INDEX
+        && WriteOperationType.streamingWritesToMetadataSupported(WriteOperationType.fromValue(conf.get(FlinkOptions.OPERATION)));
+  }
+
+  /**
    * Returns the index type.
    */
   public static HoodieIndex.IndexType getIndexType(Configuration conf) {
@@ -564,5 +573,12 @@ public class OptionsResolver {
   public static boolean isOnlyConsumingNewCommits(Configuration conf) {
     return isMorTable(conf) && conf.get(FlinkOptions.READ_STREAMING_SKIP_COMPACT) // this is only true for flink.
         || isAppendMode(conf) && conf.get(FlinkOptions.READ_STREAMING_SKIP_CLUSTERING);
+  }
+
+  /**
+   * Return the parallelism of the index write operator.
+   */
+  public static int indexWriteParallelism(Configuration conf) {
+    return OptionsResolver.isStreamingIndexWriteEnabled(conf) ? conf.get(FlinkOptions.INDEX_WRITE_TASKS) : 0;
   }
 }

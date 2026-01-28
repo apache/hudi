@@ -1270,6 +1270,34 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
     return writeStatusCollection;
   }
 
+  @Override
+  public HoodieData<WriteStatus> streamWriteToMetadataPartitions(HoodieData<HoodieRecord> indexRecords, Set<String> dataPartitions, String instantTime) {
+    Pair<List<MetadataPartitionType>, Set<String>> streamingMDTPartitionsPair = getStreamingMetadataPartitionsToUpdate();
+    List<MetadataPartitionType> mdtPartitionsToTag = streamingMDTPartitionsPair.getLeft();
+    Set<String> mdtPartitionPathsToTag = streamingMDTPartitionsPair.getRight();
+
+    if (mdtPartitionPathsToTag.isEmpty()) {
+      return engineContext.emptyHoodieData();
+    }
+
+    maybeInitializeNewFileGroupsForPartitionedRLI(dataPartitions, instantTime);
+
+    List<MetadataPartitionType> mdtPartitionsSupportStreamWrite = mdtPartitionsToTag.stream()
+        .filter(e -> e.equals(RECORD_INDEX) || e.equals(SECONDARY_INDEX))
+        .collect(Collectors.toList());
+    if (mdtPartitionsSupportStreamWrite.isEmpty()) {
+      return engineContext.emptyHoodieData();
+    }
+
+    // tag records w/ location
+    Pair<List<HoodieFileGroupId>, HoodieData<HoodieRecord>> hoodieFileGroupsToUpdateAndTaggedMdtRecords =
+        tagRecordsWithLocationForStreamingWrites(indexRecords, mdtPartitionPathsToTag);
+
+    // write partial writes to MDT table (for those partitions where streaming writes are enabled)
+    // dag not yet de-referenced. do not invoke any action on writeStatusCollection yet.
+    return convertEngineSpecificDataToHoodieData(streamWriteToMetadataTable(hoodieFileGroupsToUpdateAndTaggedMdtRecords, instantTime));
+  }
+
   private Pair<List<MetadataPartitionType>, Set<String>> getStreamingMetadataPartitionsToUpdate() {
     Set<MetadataPartitionType> mdtPartitionsToTag = new HashSet<>();
     // Add record index
@@ -1416,6 +1444,12 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
   private void maybeInitializeNewFileGroupsForPartitionedRLI(HoodieData<WriteStatus> writeStatus, String instantTime) {
     if (dataWriteConfig.isRecordLevelIndexEnabled()) {
       Set<String> partitionsTouchedByInflightCommit = new HashSet<>(writeStatus.map(WriteStatus::getPartitionPath).collectAsList());
+      initializeNewFileGroupsForPartitionedRLIHelper(partitionsTouchedByInflightCommit, instantTime);
+    }
+  }
+
+  private void maybeInitializeNewFileGroupsForPartitionedRLI(Set<String> partitionsTouchedByInflightCommit, String instantTime) {
+    if (dataWriteConfig.isRecordLevelIndexEnabled()) {
       initializeNewFileGroupsForPartitionedRLIHelper(partitionsTouchedByInflightCommit, instantTime);
     }
   }

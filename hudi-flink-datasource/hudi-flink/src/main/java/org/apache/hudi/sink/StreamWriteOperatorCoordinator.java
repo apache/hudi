@@ -40,6 +40,7 @@ import org.apache.hudi.sink.event.Correspondent;
 import org.apache.hudi.sink.event.WriteMetadataEvent;
 import org.apache.hudi.sink.utils.CoordinationResponseSerDe;
 import org.apache.hudi.sink.utils.EventBuffers;
+import org.apache.hudi.sink.utils.EventBuffers.EventBuffer;
 import org.apache.hudi.sink.utils.ExplicitClassloaderThreadFactory;
 import org.apache.hudi.sink.utils.HiveSyncContext;
 import org.apache.hudi.sink.utils.NonThrownExecutor;
@@ -65,18 +66,16 @@ import org.apache.flink.runtime.operators.coordination.OperatorEvent;
 import javax.annotation.Nullable;
 
 import java.io.Serializable;
-import java.util.Arrays;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.ThreadFactory;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import static org.apache.hudi.common.table.timeline.InstantComparison.GREATER_THAN_OR_EQUALS;
 import static org.apache.hudi.common.table.timeline.InstantComparison.compareTimestamps;
@@ -129,6 +128,8 @@ public class StreamWriteOperatorCoordinator
    * Coordinator context.
    */
   protected final Context context;
+
+  private final boolean isStreamingIndexWriteEnabled;
 
   /**
    * Gateways for sending events to sub-tasks.
@@ -208,6 +209,7 @@ public class StreamWriteOperatorCoordinator
     this.context = context;
     this.parallelism = context.currentParallelism();
     this.storageConf = HadoopFSUtils.getStorageConfWithCopy(HadoopConfigurations.getHiveConf(conf));
+    this.isStreamingIndexWriteEnabled = OptionsResolver.isStreamingIndexWriteEnabled(conf);
   }
 
   @Override
@@ -385,13 +387,13 @@ public class StreamWriteOperatorCoordinator
     CompletableFuture<CoordinationResponse> response = new CompletableFuture<>();
     instantRequestExecutor.execute(() -> {
       long checkpointId = request.getCheckpointId();
-      Pair<String, WriteMetadataEvent[]> instantTimeAndEventBuffer = this.eventBuffers.getInstantAndEventBuffer(checkpointId);
+      Pair<String, EventBuffer> instantTimeAndEventBuffer = this.eventBuffers.getInstantAndEventBuffer(checkpointId);
       final String instantTime;
       if (instantTimeAndEventBuffer == null) {
         // wait until previous instants are committed.
         eventBuffers.awaitAllInstantsToCompleteIfNecessary();
         instantTime = startInstant();
-        this.eventBuffers.initNewEventBuffer(checkpointId, instantTime, this.parallelism);
+        this.eventBuffers.initNewEventBuffer(checkpointId, instantTime);
       } else {
         instantTime = instantTimeAndEventBuffer.getLeft();
       }
@@ -476,7 +478,7 @@ public class StreamWriteOperatorCoordinator
       return;
     }
     // initialize event buffer
-    this.eventBuffers = EventBuffers.getInstance(conf);
+    this.eventBuffers = EventBuffers.getInstance(conf, this.parallelism);
   }
 
   private String startInstant() {
@@ -488,6 +490,10 @@ public class StreamWriteOperatorCoordinator
     // because the instant request from write task is asynchronous.
     this.instant = this.writeClient.startCommit(tableState.commitAction, this.metaClient);
     this.metaClient.getActiveTimeline().transitionRequestedToInflight(tableState.commitAction, this.instant);
+    // start commit for MDT if streaming writes to MDT is enabled
+    if (isStreamingIndexWriteEnabled) {
+      this.writeClient.startCommitForMetadataTable(this.instant, this.writeClient.getHoodieTable());
+    }
     this.writeClient.setWriteTimer(tableState.commitAction);
     log.info("Create instant [{}] for table [{}] with type [{}]", this.instant,
         this.conf.get(FlinkOptions.TABLE_NAME), conf.get(FlinkOptions.TABLE_TYPE));
@@ -498,7 +504,7 @@ public class StreamWriteOperatorCoordinator
    * Recommits the last inflight instant if the write metadata checkpoint successfully
    * but was not committed due to some rare cases.
    */
-  private void recommitInstant(long checkpointId, String instant, WriteMetadataEvent[] bootstrapBuffer) {
+  private void recommitInstant(long checkpointId, String instant, EventBuffer bootstrapBuffer) {
     HoodieTimeline completedTimeline = this.metaClient.getActiveTimeline().filterCompletedInstants();
     recommitInstant(completedTimeline, checkpointId, instant, bootstrapBuffer);
   }
@@ -507,7 +513,7 @@ public class StreamWriteOperatorCoordinator
    * Recommits the last inflight instant if the write metadata checkpoint successfully
    * but was not committed due to some rare cases.
    */
-  private void recommitInstant(HoodieTimeline completedTimeline, long checkpointId, String instant, WriteMetadataEvent[] bootstrapBuffer) {
+  private void recommitInstant(HoodieTimeline completedTimeline, long checkpointId, String instant, EventBuffer bootstrapBuffer) {
     if (!completedTimeline.containsInstant(instant)) {
       log.info("Recommit instant {}", instant);
       // Recommit should start heartbeat for lazy failed writes clean policy to avoid aborting for heartbeat expired;
@@ -524,17 +530,17 @@ public class StreamWriteOperatorCoordinator
       this.eventBuffers.cleanLegacyEvents(event);
       return;
     }
-    WriteMetadataEvent[] eventBuffer = this.eventBuffers.getOrCreateBootstrapBuffer(event, this.parallelism);
-    eventBuffer[event.getTaskID()] = event;
-    if (Arrays.stream(eventBuffer).allMatch(evt -> evt != null && evt.isBootstrap())) {
+    EventBuffer eventBuffer = this.eventBuffers.getOrCreateBootstrapBuffer(event);
+    eventBuffer.addBootstrapEvent(event);
+    if (eventBuffer.allBootstrapEventsReceived()) {
       // start to recommit the instant.
       recommitInstant(event.getCheckpointId(), event.getInstantTime(), eventBuffer);
     }
   }
 
   private void handleEndInputEvent(WriteMetadataEvent event) {
-    WriteMetadataEvent[] eventBuffer = this.eventBuffers.addEventToBuffer(event);
-    if (EventBuffers.allEventsReceived(eventBuffer)) {
+    EventBuffer eventBuffer = this.eventBuffers.addEventToBuffer(event);
+    if (eventBuffer.allEventsReceived()) {
       // start to commit the instant.
       boolean committed = commitInstant(event.getCheckpointId(), event.getInstantTime(), eventBuffer);
       if (committed) {
@@ -573,29 +579,24 @@ public class StreamWriteOperatorCoordinator
    *
    * @return true if the write statuses are committed successfully.
    */
-  private boolean commitInstant(long checkpointId, String instant, WriteMetadataEvent[] eventBuffer) {
-    if (Arrays.stream(eventBuffer).allMatch(Objects::isNull)) {
-      // all the tasks are reset by failover, reset the while buffer and returns early.
+  private boolean commitInstant(long checkpointId, String instant, EventBuffer eventBuffer) {
+    if (eventBuffer.isEmptyDataWriteBuffer()) {
+      // all the data write tasks are reset by failover, reset the while buffer and returns early.
       this.eventBuffers.reset(checkpointId);
       // stop the heart beat for lazy cleaning
-      writeClient.getHeartbeatClient().stop(instant);
+      writeClient.cleanResources(instant);
       return false;
     }
 
-    List<WriteStatus> writeResults = Arrays.stream(eventBuffer)
-        .filter(Objects::nonNull)
-        .map(WriteMetadataEvent::getWriteStatuses)
-        .flatMap(Collection::stream)
-        .collect(Collectors.toList());
-
-    if (writeResults.isEmpty() && !OptionsResolver.allowCommitOnEmptyBatch(conf)) {
+    List<WriteStatus> dataWriteResults = eventBuffer.collectDataWriteStatuses();
+    if (dataWriteResults.isEmpty() && !OptionsResolver.allowCommitOnEmptyBatch(conf)) {
       // No data has written, reset the buffer and returns early
       this.eventBuffers.reset(checkpointId);
       // stop the heart beat for lazy cleaning
-      writeClient.getHeartbeatClient().stop(instant);
+      writeClient.cleanResources(instant);
       return false;
     }
-    doCommit(checkpointId, instant, writeResults);
+    doCommit(checkpointId, instant, dataWriteResults, eventBuffer.collectIndexWriteStatuses());
     return true;
   }
 
@@ -603,10 +604,10 @@ public class StreamWriteOperatorCoordinator
    * Performs the actual commit action.
    */
   @SuppressWarnings("unchecked")
-  private void doCommit(long checkpointId, String instant, List<WriteStatus> writeResults) {
+  private void doCommit(long checkpointId, String instant, List<WriteStatus> dataWriteResults, List<WriteStatus> indexWriteResults) {
     // commit or rollback
-    long totalErrorRecords = writeResults.stream().map(WriteStatus::getTotalErrorRecords).reduce(Long::sum).orElse(0L);
-    long totalRecords = writeResults.stream().map(WriteStatus::getTotalRecords).reduce(Long::sum).orElse(0L);
+    long totalErrorRecords = dataWriteResults.stream().map(WriteStatus::getTotalErrorRecords).reduce(Long::sum).orElse(0L);
+    long totalRecords = dataWriteResults.stream().map(WriteStatus::getTotalRecords).reduce(Long::sum).orElse(0L);
     boolean hasErrors = totalErrorRecords > 0;
 
     if (!hasErrors || this.conf.get(FlinkOptions.IGNORE_FAILED)) {
@@ -619,9 +620,10 @@ public class StreamWriteOperatorCoordinator
       }
 
       final Map<String, List<String>> partitionToReplacedFileIds = tableState.isOverwrite
-          ? writeClient.getPartitionToReplacedFileIds(tableState.operationType, writeResults)
+          ? writeClient.getPartitionToReplacedFileIds(tableState.operationType, dataWriteResults)
           : Collections.emptyMap();
-      boolean success = writeClient.commit(instant, writeResults, Option.of(checkpointCommitMetadata),
+      List<WriteStatus> allWriteStatus = Stream.concat(dataWriteResults.stream(), indexWriteResults.stream()).collect(Collectors.toList());
+      boolean success = writeClient.commit(instant, allWriteStatus, Option.of(checkpointCommitMetadata),
           tableState.commitAction, partitionToReplacedFileIds);
       if (success) {
         this.eventBuffers.reset(checkpointId);
@@ -633,7 +635,7 @@ public class StreamWriteOperatorCoordinator
       if (log.isErrorEnabled()) {
         log.error("Error when writing. Errors/Total={}/{}", totalErrorRecords, totalRecords);
         log.error("The first 10 files with write errors:");
-        writeResults.stream().filter(WriteStatus::hasErrors).limit(10).forEach(ws -> {
+        dataWriteResults.stream().filter(WriteStatus::hasErrors).limit(10).forEach(ws -> {
           if (ws.getGlobalError() != null) {
             log.error("Global error for partition path {} and fileID {}: {}",
                 ws.getPartitionPath(), ws.getFileId(), ws.getGlobalError());
@@ -654,12 +656,12 @@ public class StreamWriteOperatorCoordinator
   }
 
   @VisibleForTesting
-  public WriteMetadataEvent[] getEventBuffer() {
+  public EventBuffer getEventBuffer() {
     return this.eventBuffers.getLatestEventBuffer(this.instant);
   }
 
   @VisibleForTesting
-  public WriteMetadataEvent[] getEventBuffer(long checkpointId) {
+  public EventBuffer getEventBuffer(long checkpointId) {
     return this.eventBuffers.getEventBuffer(checkpointId);
   }
 

@@ -254,16 +254,6 @@ public class TestWriteMergeOnRead extends TestWriteCopyOnWrite {
   }
 
   @Override
-  public void testBucketAssignWithRLI() throws Exception {
-    // can be re-enabled after #17701
-  }
-
-  @Test
-  public void testCacheCleanOfRecordIndexBackend() throws Exception {
-    // can be re-enabled after #17701
-  }
-
-  @Override
   protected Map<String, String> getExpectedBeforeCheckpointComplete() {
     return EXPECTED1;
   }

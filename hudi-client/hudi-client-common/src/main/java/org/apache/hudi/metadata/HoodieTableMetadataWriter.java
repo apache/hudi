@@ -26,6 +26,7 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
+import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.VisibleForTesting;
@@ -33,6 +34,7 @@ import org.apache.hudi.common.util.VisibleForTesting;
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.List;
+import java.util.Set;
 
 /**
  * Interface that supports updating metadata for a given table, as actions complete.
@@ -61,6 +63,20 @@ public interface HoodieTableMetadataWriter<I,O> extends Serializable, AutoClosea
    * @return {@link HoodieData} of {@link WriteStatus} for writes to metadata table.
    */
   HoodieData<WriteStatus> streamWriteToMetadataPartitions(HoodieData<WriteStatus> writeStatus, String instantTime);
+
+  /**
+   * Write the prepared records to MDT table for all eligible partitions except FILES partition.
+   *
+   * <p>This will be used in streaming writes, where in data table index payloads are maintained as HoodieData,
+   * prepares records and write to MDT table partitions (except FILES).
+   *
+   * @param indexRecords   {@link HoodieData} of index {@link HoodieRecord}s.
+   * @param dataPartitions partitions of data table that are updated.
+   * @param instantTime    instant time of interest.
+   *
+   * @return {@link HoodieData} of {@link WriteStatus} for writes to metadata table.
+   */
+  HoodieData<WriteStatus> streamWriteToMetadataPartitions(HoodieData<HoodieRecord> indexRecords, Set<String> dataPartitions, String instantTime);
 
   /**
    * Completes the multiple commits in streaming writes.

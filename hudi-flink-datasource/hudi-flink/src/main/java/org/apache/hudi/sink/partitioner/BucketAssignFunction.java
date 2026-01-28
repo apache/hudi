@@ -40,6 +40,7 @@ import org.apache.hudi.utils.RuntimeContextUtils;
 
 import lombok.Getter;
 import lombok.Setter;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.flink.api.common.state.CheckpointListener;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.runtime.state.FunctionInitializationContext;
@@ -66,6 +67,7 @@ import java.util.Objects;
  *
  * @see BucketAssigner
  */
+@Slf4j
 public class BucketAssignFunction
     extends KeyedProcessFunctionAdapter<String, HoodieFlinkInternalRow, HoodieFlinkInternalRow>
     implements CheckpointedFunction, CheckpointListener {
@@ -173,10 +175,15 @@ public class BucketAssignFunction
             // if partition path changes, emit a delete record for old partition path,
             // then update the index state using location with new partition path.
             RowData row = record.getRowData();
+            RowKind orginalRowKind = row.getRowKind();
             row.setRowKind(RowKind.DELETE);
+            // the operationType field is used as the index operation type, and only 'I' and 'D' index operation will be written to the metadata table.
+            // for record key, whose partition path is updated, we simply ignore the DELETE index record, and the location for this key will be updated
+            // by the following INSERT index record.
             HoodieFlinkInternalRow deleteRecord =
-                new HoodieFlinkInternalRow(record.getRecordKey(), partitionFromState, fileIdFromState, "U", "D", false, row);
+                new HoodieFlinkInternalRow(record.getRecordKey(), partitionFromState, fileIdFromState, "U", "-U", false, row);
             out.collect(deleteRecord);
+            row.setRowKind(orginalRowKind);
           }
           location = getNewRecordLocation(partitionPath);
         } else {
@@ -186,9 +193,13 @@ public class BucketAssignFunction
       } else {
         location = getNewRecordLocation(partitionPath);
       }
-      // always refresh the index
-      this.indexBackend.update(recordKey, HoodieRecordGlobalLocation.fromLocal(partitionPath, location));
+      // refresh the index only when the location is updated.
+      if (oldLoc == null || !oldLoc.getFileId().equals(location.getFileId())) {
+        record.setOperationType("I");
+        this.indexBackend.update(recordKey, HoodieRecordGlobalLocation.fromLocal(partitionPath, location));
+      }
     } else {
+      log.warn("This branch should not be reached.");
       location = getNewRecordLocation(partitionPath);
     }
     record.setFileId(location.getFileId());
