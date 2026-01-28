@@ -176,7 +176,7 @@ public class TestMarkerBasedRollbackStrategy extends HoodieClientTestBase {
         INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, "001"),
         rollbackRequests);
 
-    // then: ensure files are deleted correctly, non-existent files reported as failed deletes
+    // then: ensure files are deleted correctly, non-existent files are filtered and excluded from the plan
     assertEquals(2, stats.size());
 
     FileStatus[] partAFiles = testTable.listAllFilesInPartition("partA");
@@ -184,7 +184,7 @@ public class TestMarkerBasedRollbackStrategy extends HoodieClientTestBase {
 
     assertEquals(0, partBFiles.length);
     assertEquals(1, partAFiles.length);
-    assertEquals(3, stats.stream().mapToInt(r -> r.getSuccessDeleteFiles().size()).sum());
+    assertEquals(2, stats.stream().mapToInt(r -> r.getSuccessDeleteFiles().size()).sum());
     assertEquals(0, stats.stream().mapToInt(r -> r.getFailedDeleteFiles().size()).sum());
   }
 
