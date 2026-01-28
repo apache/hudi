@@ -20,6 +20,7 @@ package org.apache.hudi
 import org.apache.hadoop.fs.{FileStatus, Path}
 import org.apache.hudi.HoodieFileIndex.{DataSkippingFailureMode, collectReferencedColumns, convertFilterForTimestampKeyGenerator, getConfigProperties}
 import org.apache.hudi.HoodieSparkConfUtils.getConfigValue
+import org.apache.hudi.avro.AvroSchemaUtils
 import org.apache.hudi.common.config.TimestampKeyGeneratorConfig.{TIMESTAMP_INPUT_DATE_FORMAT, TIMESTAMP_OUTPUT_DATE_FORMAT}
 import org.apache.hudi.common.config.{HoodieMetadataConfig, TypedProperties}
 import org.apache.hudi.common.model.{FileSlice, HoodieBaseFile, HoodieLogFile}
@@ -30,6 +31,7 @@ import org.apache.hudi.keygen.{TimestampBasedAvroKeyGenerator, TimestampBasedKey
 import org.apache.hudi.metadata.HoodieMetadataPayload
 import org.apache.hudi.util.JFunction
 import org.apache.spark.internal.Logging
+import org.apache.spark.sql.{Column, SparkSession}
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.{And, Expression, Literal}
 import org.apache.spark.sql.execution.datasources.{FileIndex, FileStatusCache, NoopCache, PartitionDirectory}
@@ -37,15 +39,14 @@ import org.apache.spark.sql.hudi.DataSkippingUtils.translateIntoColumnStatsIndex
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types._
-import org.apache.spark.sql.{Column, SparkSession}
 import org.apache.spark.unsafe.types.UTF8String
 
 import java.text.SimpleDateFormat
 import java.util.stream.Collectors
 import javax.annotation.concurrent.NotThreadSafe
 import scala.collection.JavaConverters._
-import scala.util.control.NonFatal
 import scala.util.{Failure, Success, Try}
+import scala.util.control.NonFatal
 
 /**
  * A file index which support partition prune for hoodie snapshot and read-optimized query.
@@ -351,10 +352,34 @@ case class HoodieFileIndex(spark: SparkSession,
       //       threshold (of 100k records)
       val shouldReadInMemory = columnStatsIndex.shouldReadInMemory(this, queryReferencedColumns)
 
+      // Identify timestamp-millis columns from the Avro schema to skip from filter translation
+      // (even if they're in the index, they may have been indexed before the fix and should not be used for filtering)
+      val timestampMillisColumns = scala.collection.mutable.Set[String]()
+      try {
+        val avroSchema = rawAvroSchema
+        if (avroSchema.getType == org.apache.avro.Schema.Type.RECORD) {
+          avroSchema.getFields.asScala.foreach { field =>
+            val fieldSchema = AvroSchemaUtils.getNonNullTypeFromUnion(field.schema())
+            if (fieldSchema.getType == org.apache.avro.Schema.Type.LONG) {
+              val logicalType = fieldSchema.getLogicalType
+              if (logicalType != null) {
+                val logicalTypeName = logicalType.getName
+                if (logicalTypeName == "timestamp-millis" || logicalTypeName == "local-timestamp-millis") {
+                  timestampMillisColumns.add(field.name())
+                }
+              }
+            }
+          }
+        }
+      } catch {
+        case e: Exception =>
+          logDebug(s"Failed to identify timestamp-millis columns from Avro schema: ${e.getMessage}")
+      }
+
       columnStatsIndex.loadTransposed(queryReferencedColumns, shouldReadInMemory) { transposedColStatsDF =>
         val indexSchema = transposedColStatsDF.schema
         val indexFilter =
-          queryFilters.map(translateIntoColumnStatsIndexFilterExpr(_, indexSchema))
+          queryFilters.map(translateIntoColumnStatsIndexFilterExpr(_, indexSchema, timestampMillisColumns.toSet))
             .reduce(And)
 
         val allIndexedFileNames =

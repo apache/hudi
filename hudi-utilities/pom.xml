@@ -66,6 +66,28 @@
       <plugin>
         <groupId>com.github.os72</groupId>
         <artifactId>protoc-jar-maven-plugin</artifactId>
+        <version>3.11.4</version>
+        <executions>
+          <execution>
+            <id>proto-test-compile</id>
+            <phase>generate-test-sources</phase>
+            <goals>
+              <goal>run</goal>
+            </goals>
+            <configuration>
+              <addSources>test</addSources>
+              <outputDirectory>${project.build.directory}/generated-test-sources/protobuf</outputDirectory>
+              <inputDirectories>
+                <include>src/test/resources</include>
+              </inputDirectories>
+            </configuration>
+          </execution>
+        </executions>
+        <configuration>
+          <protocArtifact>com.google.protobuf:protoc:${proto.version}</protocArtifact>
+          <protocVersion>${protoc.version}</protocVersion>
+          <includeStdTypes>true</includeStdTypes>
+        </configuration>
       </plugin>
     </plugins>
 
@@ -132,6 +154,12 @@
       </exclusions>
     </dependency>
 
+    <dependency>
+      <groupId>org.apache.hudi</groupId>
+      <artifactId>hudi-spark-common_${scala.binary.version}</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+
     <!-- Hoodie - cloud providers -->
 
     <dependency>
@@ -186,6 +214,14 @@
       <groupId>org.apache.kafka</groupId>
       <artifactId>kafka-clients</artifactId>
       <version>${kafka.version}</version>
+      <exclusions>
+        <!-- Exclude Netty to use Spark's version (4.1.96.Final for Spark 3.5.1) -->
+        <!-- Prevents NoClassDefFoundError: io/netty/util/Recycler$EnhancedHandle -->
+        <exclusion>
+          <groupId>io.netty</groupId>
+          <artifactId>*</artifactId>
+        </exclusion>
+      </exclusions>
     </dependency>
 
     <!-- Pulsar -->
@@ -201,6 +237,12 @@
         <exclusion>
           <groupId>com.google.protobuf</groupId>
           <artifactId>protobuf-java</artifactId>
+        </exclusion>
+        <!-- Exclude Netty to use Spark's version (4.1.96.Final for Spark 3.5.1) -->
+        <!-- Prevents NoClassDefFoundError: io/netty/util/Recycler$EnhancedHandle -->
+        <exclusion>
+          <groupId>io.netty</groupId>
+          <artifactId>*</artifactId>
         </exclusion>
       </exclusions>
     </dependency>
@@ -368,6 +410,11 @@
       <artifactId>kafka-schema-registry-client</artifactId>
       <version>${confluent.version}</version>
     </dependency>
+    <dependency>
+      <groupId>io.confluent</groupId>
+      <artifactId>kafka-protobuf-serializer</artifactId>
+      <version>${confluent.version}</version>
+    </dependency>
 
     <!-- Httpcomponents -->
     <dependency>
@@ -487,5 +534,19 @@
         </exclusion>
       </exclusions>
     </dependency>
+
+    <!-- Thrift for HiveTestService -->
+    <dependency>
+      <groupId>org.apache.thrift</groupId>
+      <artifactId>libthrift</artifactId>
+      <version>${thrift.version}</version>
+      <scope>test</scope>
+    </dependency>
+      <dependency>
+          <groupId>org.apache.hudi</groupId>
+          <artifactId>hudi-spark-common_2.12</artifactId>
+          <version>0.14.2-SNAPSHOT</version>
+          <scope>test</scope>
+      </dependency>
   </dependencies>
 </project>

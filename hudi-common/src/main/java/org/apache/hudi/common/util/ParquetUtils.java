@@ -35,7 +35,6 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 import org.apache.parquet.avro.AvroParquetReader;
 import org.apache.parquet.avro.AvroReadSupport;
-import org.apache.parquet.avro.AvroSchemaConverter;
 import org.apache.parquet.column.statistics.Statistics;
 import org.apache.parquet.hadoop.ParquetFileReader;
 import org.apache.parquet.hadoop.ParquetReader;
@@ -64,6 +63,8 @@ import java.util.function.Function;
 import java.util.stream.Collector;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
+
+import static org.apache.parquet.avro.HoodieAvroParquetSchemaConverter.getAvroSchemaConverter;
 
 /**
  * Utility functions involving with parquet.
@@ -228,7 +229,7 @@ public class ParquetUtils extends BaseFileUtils {
   @Override
   public Schema readAvroSchema(Configuration conf, Path parquetFilePath) {
     MessageType parquetSchema = readSchema(conf, parquetFilePath);
-    return new AvroSchemaConverter(conf).convert(parquetSchema);
+    return getAvroSchemaConverter(conf).convert(parquetSchema);
   }
 
   @Override
