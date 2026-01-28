@@ -169,7 +169,7 @@ public class SparkValidatorUtils {
       try {
         readerSchema = new TableSchemaResolver(table.getMetaClient()).getTableSchema();
       } catch (Exception e) {
-        LOG.error(String.format("Failed parsing schema from latest commit with exception %s, "
+        LOG.warn(String.format("Failed parsing schema from latest commit with exception %s, "
             + "defaulting to inferring schema from data files", e));
         return sqlContext
             .read()
