@@ -64,7 +64,7 @@ public class CleanFunction<T> extends AbstractRichFunctionAdapter
       executor.execute(() -> {
         this.isCleaning = true;
         try {
-          this.writeClient.clean();
+          clean();
         } finally {
           this.isCleaning = false;
         }
@@ -77,7 +77,7 @@ public class CleanFunction<T> extends AbstractRichFunctionAdapter
     if (conf.get(FlinkOptions.CLEAN_ASYNC_ENABLED) && isCleaning) {
       executor.execute(() -> {
         try {
-          this.writeClient.waitForCleaningFinish();
+          waitForCleaningFinish();
         } finally {
           // ensure to switch the isCleaning flag
           this.isCleaning = false;
@@ -90,13 +90,25 @@ public class CleanFunction<T> extends AbstractRichFunctionAdapter
   public void snapshotState(FunctionSnapshotContext context) throws Exception {
     if (conf.get(FlinkOptions.CLEAN_ASYNC_ENABLED) && !isCleaning) {
       try {
-        this.writeClient.startAsyncCleaning();
+        startAsyncCleaning();
         this.isCleaning = true;
       } catch (Throwable throwable) {
         // catch the exception to not affect the normal checkpointing
         log.warn("Failed to start async cleaning", throwable);
       }
     }
+  }
+
+  protected void clean() {
+    this.writeClient.clean();
+  }
+
+  protected void waitForCleaningFinish() {
+    this.writeClient.waitForCleaningFinish();
+  }
+
+  protected void startAsyncCleaning() {
+    this.writeClient.startAsyncCleaning();
   }
 
   @Override

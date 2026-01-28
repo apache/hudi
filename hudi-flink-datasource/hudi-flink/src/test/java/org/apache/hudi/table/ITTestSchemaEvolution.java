@@ -467,7 +467,7 @@ public class ITTestSchemaEvolution {
 
   private void doCompact(Configuration conf) throws Exception {
     // use sync compaction to ensure compaction finished.
-    conf.set(FlinkOptions.COMPACTION_ASYNC_ENABLED, false);
+    conf.set(FlinkOptions.COMPACTION_OPERATION_EXECUTE_ASYNC_ENABLED, false);
     try (HoodieFlinkWriteClient writeClient = FlinkWriteClients.createWriteClient(conf)) {
       HoodieFlinkTable<?> table = writeClient.getHoodieTable();
 

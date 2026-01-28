@@ -20,36 +20,23 @@ package org.apache.hudi.sink.compact;
 
 import org.apache.hudi.adapter.MaskingOutputAdapter;
 import org.apache.hudi.client.HoodieFlinkWriteClient;
-import org.apache.hudi.client.WriteStatus;
-import org.apache.hudi.common.engine.AvroReaderContextFactory;
-import org.apache.hudi.common.engine.HoodieReaderContext;
-import org.apache.hudi.common.model.CompactionOperation;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.log.InstantRange;
-import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
-import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.configuration.OptionsResolver;
+import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.metadata.FlinkHoodieBackedTableMetadataWriter;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.metrics.FlinkCompactionMetrics;
+import org.apache.hudi.sink.compact.handler.CompactHandler;
+import org.apache.hudi.sink.compact.handler.MetadataCompactHandler;
 import org.apache.hudi.sink.utils.NonThrownExecutor;
-import org.apache.hudi.storage.StorageConfiguration;
-import org.apache.hudi.table.HoodieFlinkTable;
-import org.apache.hudi.table.action.compact.CompactHelpers;
-import org.apache.hudi.table.action.compact.HoodieFlinkMergeOnReadTableCompactor;
-import org.apache.hudi.table.format.FlinkRowDataReaderContext;
-import org.apache.hudi.table.format.InternalSchemaManager;
-import org.apache.hudi.util.CompactionUtil;
 import org.apache.hudi.util.FlinkWriteClients;
+import org.apache.hudi.util.Lazy;
 import org.apache.hudi.utils.RuntimeContextUtils;
 
 import lombok.extern.slf4j.Slf4j;
 import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.metrics.MetricGroup;
-import org.apache.flink.runtime.jobgraph.JobType;
 import org.apache.flink.streaming.api.graph.StreamConfig;
 import org.apache.flink.streaming.api.operators.OneInputStreamOperator;
 import org.apache.flink.streaming.api.operators.Output;
@@ -58,11 +45,6 @@ import org.apache.flink.streaming.runtime.tasks.ProcessingTimeService;
 import org.apache.flink.streaming.runtime.tasks.StreamTask;
 import org.apache.flink.table.runtime.operators.TableStreamOperator;
 import org.apache.flink.table.runtime.util.StreamRecordCollector;
-import org.apache.flink.util.Collector;
-
-import java.util.Collections;
-import java.util.List;
-import java.util.function.Supplier;
 
 /**
  * Operator to execute the actual compaction task assigned by the compaction plan task.
@@ -76,41 +58,6 @@ public class CompactOperator extends TableStreamOperator<CompactionCommitEvent>
    * Config options.
    */
   private final Configuration conf;
-
-  /**
-   * Write Client.
-   */
-  private transient HoodieFlinkWriteClient<?> writeClient;
-
-  /**
-   * Hoodie Flink table.
-   */
-  private transient HoodieFlinkTable<?> flinkTable;
-
-  /**
-   * Write client for the metadata table.
-   */
-  private transient HoodieFlinkWriteClient metadataWriteClient;
-
-  /**
-   * Metadata Flink table.
-   */
-  private transient HoodieFlinkTable<?> metadataTable;
-
-  /**
-   * Whether to execute compaction asynchronously.
-   */
-  private transient boolean asyncCompaction;
-
-  /**
-   * Whether to execute metadata compaction asynchronously.
-   */
-  private transient boolean asyncMdtCompaction;
-
-  /**
-   * Id of current subtask.
-   */
-  private int taskID;
 
   /**
    * Executor service to execute the compaction task.
@@ -132,10 +79,9 @@ public class CompactOperator extends TableStreamOperator<CompactionCommitEvent>
    */
   private transient String prevCompactInstant = "";
 
-  /**
-   * InternalSchema manager used for handling schema evolution.
-   */
-  private transient InternalSchemaManager internalSchemaManager;
+  private transient Lazy<CompactHandler> compactHandler;
+
+  private transient Lazy<CompactHandler> mdtCompactHandler;
 
   public CompactOperator(Configuration conf) {
     this.conf = conf;
@@ -161,24 +107,28 @@ public class CompactOperator extends TableStreamOperator<CompactionCommitEvent>
 
   @Override
   public void open() throws Exception {
-    this.asyncCompaction = OptionsResolver.needsAsyncCompaction(conf) && getRuntimeContext().getJobType() == JobType.STREAMING;
-    this.asyncMdtCompaction = OptionsResolver.needsAsyncMetadataCompaction(conf) && getRuntimeContext().getJobType() == JobType.STREAMING;
-    this.taskID = RuntimeContextUtils.getIndexOfThisSubtask(getRuntimeContext());
-    this.writeClient = FlinkWriteClients.createWriteClient(conf, getRuntimeContext());
-    this.flinkTable = this.writeClient.getHoodieTable();
-    if (this.asyncCompaction || this.asyncMdtCompaction) {
+    // Whether to execute compaction asynchronously.
+    boolean asyncCompaction = conf.get(FlinkOptions.COMPACTION_OPERATION_EXECUTE_ASYNC_ENABLED);
+    // Id of current subtask.
+    int taskID = RuntimeContextUtils.getIndexOfThisSubtask(getRuntimeContext());
+    HoodieFlinkWriteClient writeClient = FlinkWriteClients.createWriteClient(conf, getRuntimeContext());
+    if (asyncCompaction) {
       this.executor = NonThrownExecutor.builder(log).build();
     }
     this.collector = new StreamRecordCollector<>(output);
-    if (OptionsResolver.needsAsyncMetadataCompaction(conf)) {
+
+    this.compactHandler = Lazy.lazily(() -> new CompactHandler(writeClient, taskID));
+
+    this.mdtCompactHandler = Lazy.lazily(() -> {
       // Get the metadata writer from the table and use its write client
       Option<HoodieTableMetadataWriter> metadataWriterOpt =
-          this.writeClient.getHoodieTable().getMetadataWriter(null, true, true);
-      ValidationUtils.checkArgument(metadataWriterOpt.isPresent(), "Failed to close the metadata writer");
+          writeClient.getHoodieTable().getMetadataWriter(null, true, true);
+      ValidationUtils.checkArgument(metadataWriterOpt.isPresent(), "Failed to create the metadata writer");
       FlinkHoodieBackedTableMetadataWriter metadataWriter = (FlinkHoodieBackedTableMetadataWriter) metadataWriterOpt.get();
-      this.metadataWriteClient = (HoodieFlinkWriteClient) metadataWriter.getWriteClient();
-      this.metadataTable = metadataWriteClient.getHoodieTable();
-    }
+      HoodieFlinkWriteClient metadataWriteClient = (HoodieFlinkWriteClient) metadataWriter.getWriteClient();
+      return new MetadataCompactHandler(metadataWriteClient, taskID);
+    });
+
     registerMetrics();
   }
 
@@ -186,121 +136,14 @@ public class CompactOperator extends TableStreamOperator<CompactionCommitEvent>
   public void processElement(StreamRecord<CompactionPlanEvent> record) throws Exception {
     final CompactionPlanEvent event = record.getValue();
     final String instantTime = event.getCompactionInstantTime();
-    final CompactionOperation compactionOperation = event.getOperation();
     boolean needReloadMetaClient = !instantTime.equals(prevCompactInstant);
     prevCompactInstant = instantTime;
 
     if (event.isMetadataTable()) {
-      // Handle metadata table compaction
-      if (asyncMdtCompaction) {
-        // executes the compaction task asynchronously to not block the checkpoint barrier propagate.
-        executor.execute(
-            () -> doMetadataTableCompaction(instantTime, compactionOperation, collector, metadataWriteClient.getConfig(), event.isLogCompaction(), needReloadMetaClient),
-            (errMsg, t) -> collector.collect(new CompactionCommitEvent(instantTime, compactionOperation.getFileId(), taskID, true, event.isLogCompaction())),
-            "Execute metadata table compaction for instant %s from task %d", instantTime, taskID);
-      } else {
-        // executes the compaction task synchronously for batch mode.
-        log.info("Execute metadata table compaction for instant {} from task {}", instantTime, taskID);
-        doMetadataTableCompaction(instantTime, compactionOperation, collector, metadataWriteClient.getConfig(), event.isLogCompaction(), needReloadMetaClient);
-      }
+      mdtCompactHandler.get().compact(executor, event, collector, needReloadMetaClient, compactionMetrics);
     } else {
-      // Handle regular data table compaction
-      if (asyncCompaction) {
-        // executes the compaction task asynchronously to not block the checkpoint barrier propagate.
-        executor.execute(
-            () -> doCompaction(instantTime, compactionOperation, collector, writeClient.getConfig(), needReloadMetaClient),
-            (errMsg, t) -> collector.collect(new CompactionCommitEvent(instantTime, compactionOperation.getFileId(), taskID, false, false)),
-            "Execute compaction for instant %s from task %d", instantTime, taskID);
-      } else {
-        // executes the compaction task synchronously for batch mode.
-        log.info("Execute compaction for instant {} from task {}", instantTime, taskID);
-        doCompaction(instantTime, compactionOperation, collector, writeClient.getConfig(), needReloadMetaClient);
-      }
+      compactHandler.get().compact(executor, event, collector, needReloadMetaClient, compactionMetrics);
     }
-  }
-
-  private void doCompaction(String instantTime,
-                            CompactionOperation compactionOperation,
-                            Collector<CompactionCommitEvent> collector,
-                            HoodieWriteConfig writeConfig,
-                            boolean needReloadMetaClient) throws Exception {
-    compactionMetrics.startCompaction();
-    HoodieFlinkMergeOnReadTableCompactor<?> compactor = new HoodieFlinkMergeOnReadTableCompactor<>();
-    HoodieTableMetaClient metaClient = flinkTable.getMetaClient();
-    if (needReloadMetaClient) {
-      // reload the timeline
-      metaClient.reload();
-    }
-    // schema evolution
-    CompactionUtil.setAvroSchema(writeConfig, metaClient);
-    List<WriteStatus> writeStatuses = compactor.compact(
-        writeConfig,
-        compactionOperation,
-        instantTime,
-        flinkTable.getTaskContextSupplier(),
-        createReaderContext(writeClient, needReloadMetaClient),
-        flinkTable);
-    compactionMetrics.endCompaction();
-    collector.collect(new CompactionCommitEvent(instantTime, compactionOperation.getFileId(), writeStatuses, taskID, false, false));
-  }
-
-  private void doMetadataTableCompaction(String instantTime,
-                                         CompactionOperation compactionOperation,
-                                         Collector<CompactionCommitEvent> collector,
-                                         HoodieWriteConfig writeConfig,
-                                         boolean isLogCompaction,
-                                         boolean needReloadMetaClient) throws Exception {
-    compactionMetrics.startCompaction();
-    // Create a write client specifically for the metadata table
-    HoodieFlinkMergeOnReadTableCompactor<?> compactor = new HoodieFlinkMergeOnReadTableCompactor<>();
-    HoodieTableMetaClient metaClient = metadataTable.getMetaClient();
-    if (needReloadMetaClient) {
-      // reload the timeline
-      metaClient.reload();
-    }
-    List<WriteStatus> writeStatuses;
-    if (isLogCompaction) {
-      Option<InstantRange> instantRange = CompactHelpers.getInstance().getInstantRange(metaClient);
-      writeStatuses = compactor.logCompact(
-          writeConfig,
-          compactionOperation,
-          instantTime,
-          instantRange,
-          metadataTable,
-          metadataTable.getTaskContextSupplier());
-    } else {
-      writeStatuses = compactor.compact(
-          writeConfig,
-          compactionOperation,
-          instantTime,
-          metadataTable.getTaskContextSupplier(),
-          createMetadataReaderContext(metadataWriteClient, metaClient),
-          metadataTable);
-    }
-    compactionMetrics.endCompaction();
-    collector.collect(new CompactionCommitEvent(instantTime, compactionOperation.getFileId(), writeStatuses, taskID, true, isLogCompaction));
-  }
-
-  private HoodieReaderContext<?> createReaderContext(HoodieFlinkWriteClient<?> writeClient, boolean needReloadMetaClient) {
-    HoodieTableMetaClient metaClient = flinkTable.getMetaClient();
-    // CAUTION: InternalSchemaManager will scan timeline, reusing the meta client so that the timeline is updated.
-    // Instantiate internalSchemaManager lazily here since it may not be needed for FG reader, e.g., schema evolution
-    // for log files in FG reader do not use internalSchemaManager.
-    Supplier<InternalSchemaManager> internalSchemaManagerSupplier = () -> {
-      if (internalSchemaManager == null || needReloadMetaClient) {
-        internalSchemaManager = InternalSchemaManager.get(metaClient.getStorageConf(), metaClient);
-      }
-      return internalSchemaManager;
-    };
-    // initialize storage conf lazily.
-    StorageConfiguration<?> readerConf = writeClient.getEngineContext().getStorageConf();
-    return new FlinkRowDataReaderContext(readerConf, internalSchemaManagerSupplier, Collections.emptyList(), metaClient.getTableConfig(), Option.empty());
-  }
-
-  private HoodieReaderContext<?> createMetadataReaderContext(HoodieFlinkWriteClient<?> writeClient, HoodieTableMetaClient metaClient) {
-    String payloadClass = ConfigUtils.getPayloadClass(writeClient.getConfig().getProps());
-    AvroReaderContextFactory readerContextFactory = new AvroReaderContextFactory(metaClient, payloadClass, writeClient.getConfig().getProps());
-    return readerContextFactory.getContext();
   }
 
   @VisibleForTesting
@@ -318,12 +161,11 @@ public class CompactOperator extends TableStreamOperator<CompactionCommitEvent>
     if (null != this.executor) {
       this.executor.close();
     }
-    if (null != this.writeClient) {
-      this.writeClient.close();
-      this.writeClient = null;
+    if (compactHandler.isInitialized()) {
+      compactHandler.get().close();
     }
-    if (null != metadataWriteClient) {
-      this.metadataWriteClient.close();
+    if (mdtCompactHandler.isInitialized()) {
+      mdtCompactHandler.get().close();
     }
   }
 

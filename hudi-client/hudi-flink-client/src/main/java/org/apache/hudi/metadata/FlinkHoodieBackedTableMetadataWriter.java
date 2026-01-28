@@ -104,6 +104,9 @@ public class FlinkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
     }
   }
 
+  /**
+   * Return the write client for metadata table, which will be used for compaction scheduling in flink write coordinator.
+   */
   @Override
   public BaseHoodieWriteClient<?, List<HoodieRecord>, ?, List<WriteStatus>> getWriteClient() {
     return super.getWriteClient();
@@ -138,6 +141,9 @@ public class FlinkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
   @Override
   protected void commitInternal(String instantTime, Map<String, HoodieData<HoodieRecord>> partitionRecordsMap, boolean isInitializing,
                                 Option<BulkInsertPartitioner> bulkInsertPartitioner) {
+    // this method will be invoked during compaction of data table, here table services for mdt is
+    // not performed if streaming writes mdt is enabled, since the compaction/clean will be performed
+    // asynchronously in the dedicated compaction pipeline.
     if (!dataWriteConfig.getMetadataConfig().isStreamingWriteEnabled()) {
       performTableServices(Option.ofNullable(instantTime), false);
     }

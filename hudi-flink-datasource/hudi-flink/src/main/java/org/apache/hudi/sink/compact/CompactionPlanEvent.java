@@ -57,6 +57,7 @@ public class CompactionPlanEvent implements Serializable {
     this.operation = operation;
     this.index = index;
     this.isMetadataTable = false;
+    this.isLogCompaction = false;
   }
 
   public CompactionPlanEvent(String instantTime, CompactionOperation operation, int index, boolean isMetadataTable, boolean isLogCompaction) {
