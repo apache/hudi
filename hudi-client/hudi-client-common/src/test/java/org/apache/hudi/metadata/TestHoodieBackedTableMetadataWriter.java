@@ -38,13 +38,16 @@ import org.apache.hudi.storage.StorageConfiguration;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.mockito.MockedStatic;
 
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Stream;
 
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
@@ -319,54 +322,90 @@ class TestHoodieBackedTableMetadataWriter {
     return timeline;
   }
 
-  @Test
-  void testRunPendingTableServicesOperations_withCompactionFailure_whenFailOnTableServiceFailuresIsTrue() {
-    HoodieTableMetaClient metaClient = mock(HoodieTableMetaClient.class);
-    HoodieActiveTimeline timeline = mock(HoodieActiveTimeline.class, RETURNS_DEEP_STUBS);
-    BaseHoodieWriteClient writeClient = mock(BaseHoodieWriteClient.class);
-    HoodieMetadataMetrics metrics = mock(HoodieMetadataMetrics.class);
-
-    when(metaClient.reloadActiveTimeline()).thenReturn(timeline);
-    when(timeline.filterPendingCompactionTimeline().countInstants()).thenReturn(1);
-
-    // Simulate compaction failure
-    RuntimeException compactionException = new RuntimeException("Compaction failed");
-    doThrow(compactionException).when(writeClient).runAnyPendingCompactions();
-
-    // When shouldFailOnTableServiceFailures is true (default), exception should propagate
-    assertThrows(RuntimeException.class, () ->
-        HoodieBackedTableMetadataWriter.runPendingTableServicesOperationsAndRefreshTimeline(
-            metaClient, writeClient, true, Option.of(metrics)),
-        "Expected exception to be thrown when shouldFailOnTableServiceFailures is true");
-
-    verify(writeClient, times(1)).runAnyPendingCompactions();
-    verify(metrics, times(1)).incrementMetric(
-        HoodieMetadataMetrics.PENDING_COMPACTIONS_FAILURES, 1);
+  static Stream<Arguments> tableServiceFailureTestCases() {
+    return Stream.of(
+        Arguments.of(
+            "compaction",
+            true,
+            false,
+            new RuntimeException("Compaction failed"),
+            HoodieMetadataMetrics.PENDING_COMPACTIONS_FAILURES,
+            true
+        ),
+        Arguments.of(
+            "compaction",
+            true,
+            false,
+            new RuntimeException("Compaction failed"),
+            HoodieMetadataMetrics.PENDING_COMPACTIONS_FAILURES,
+            false
+        ),
+        Arguments.of(
+            "log compaction",
+            false,
+            true,
+            new HoodieException("Log compaction failed"),
+            HoodieMetadataMetrics.LOG_COMPACTION_FAILURES,
+            true
+        ),
+        Arguments.of(
+            "log compaction",
+            false,
+            true,
+            new HoodieException("Log compaction failed"),
+            HoodieMetadataMetrics.LOG_COMPACTION_FAILURES,
+            false
+        )
+    );
   }
 
-  @Test
-  void testRunPendingTableServicesOperations_withLogCompactionFailure_shouldIncrementMetric() {
+  @ParameterizedTest
+  @MethodSource("tableServiceFailureTestCases")
+  void testTableServiceFailures(
+      String serviceType,
+      boolean hasPendingCompaction,
+      boolean hasPendingLogCompaction,
+      RuntimeException exceptionToThrow,
+      String expectedMetric,
+      boolean shouldFailOnTableServiceFailures) {
     HoodieTableMetaClient metaClient = mock(HoodieTableMetaClient.class);
     HoodieActiveTimeline timeline = mock(HoodieActiveTimeline.class, RETURNS_DEEP_STUBS);
     BaseHoodieWriteClient writeClient = mock(BaseHoodieWriteClient.class);
     HoodieMetadataMetrics metrics = mock(HoodieMetadataMetrics.class);
 
     when(metaClient.reloadActiveTimeline()).thenReturn(timeline);
-    when(timeline.filterPendingCompactionTimeline().countInstants()).thenReturn(0);
-    when(timeline.filterPendingLogCompactionTimeline().countInstants()).thenReturn(1);
+    when(timeline.filterPendingCompactionTimeline().countInstants()).thenReturn(hasPendingCompaction ? 1 : 0);
+    when(timeline.filterPendingLogCompactionTimeline().countInstants()).thenReturn(hasPendingLogCompaction ? 1 : 0);
 
-    // Simulate log compaction failure
-    HoodieException logCompactionException = new HoodieException("Log compaction failed");
-    doThrow(logCompactionException).when(writeClient).runAnyPendingLogCompactions();
+    // Simulate failure based on service type
+    if (hasPendingCompaction) {
+      doThrow(exceptionToThrow).when(writeClient).runAnyPendingCompactions();
+    } else if (hasPendingLogCompaction) {
+      doThrow(exceptionToThrow).when(writeClient).runAnyPendingLogCompactions();
+    }
 
-    // Exception should propagate and metrics should be incremented
-    assertThrows(HoodieException.class, () ->
-        HoodieBackedTableMetadataWriter.runPendingTableServicesOperationsAndRefreshTimeline(
-            metaClient, writeClient, true, Option.of(metrics)),
-        "Expected exception to be thrown when log compaction fails");
+    if (shouldFailOnTableServiceFailures) {
+      // When shouldFailOnTableServiceFailures is true, exception should propagate
+      assertThrows(exceptionToThrow.getClass(), () ->
+          HoodieBackedTableMetadataWriter.runPendingTableServicesOperationsAndRefreshTimeline(
+              metaClient, writeClient, true, Option.of(metrics)),
+          "Expected exception to be thrown when " + serviceType + " fails");
+    } else {
+      // When shouldFailOnTableServiceFailures is false, exception should not propagate
+      assertDoesNotThrow(() ->
+          HoodieBackedTableMetadataWriter.runPendingTableServicesOperationsAndRefreshTimeline(
+              metaClient, writeClient, false, Option.of(metrics)),
+          "Exception should not be thrown when shouldFailOnTableServiceFailures is false");
+    }
 
-    verify(writeClient, times(1)).runAnyPendingLogCompactions();
-    verify(metrics, times(1)).incrementMetric(
-        HoodieMetadataMetrics.LOG_COMPACTION_FAILURES, 1);
+    // Verify the appropriate service method was called
+    if (hasPendingCompaction) {
+      verify(writeClient, times(1)).runAnyPendingCompactions();
+    } else if (hasPendingLogCompaction) {
+      verify(writeClient, times(1)).runAnyPendingLogCompactions();
+    }
+
+    // Verify metrics are incremented
+    verify(metrics, times(1)).incrementMetric(expectedMetric, 1);
   }
 }
