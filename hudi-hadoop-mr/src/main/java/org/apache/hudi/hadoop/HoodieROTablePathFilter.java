@@ -219,7 +219,7 @@ public class HoodieROTablePathFilter implements Configurable, PathFilter, Serial
                 completedTimeline.findInstantsBeforeOrEquals(timestampAsOf));
           } else {
             fsView = FileSystemViewManager.createInMemoryFileSystemViewWithTimeline(engineContext,
-                metaClient, HoodieInputFormatUtils.buildMetadataConfig(conf), completedTimeline);
+                metaClient, HoodieInputFormatUtils.buildMetadataConfig(conf), completedTimeline.getCommitsTimeline());
           }
           String partition = HadoopFSUtils.getRelativePartitionPath(new Path(metaClient.getBasePath().toString()), folder);
           List<HoodieBaseFile> latestFiles = fsView.getLatestBaseFiles(partition).collect(Collectors.toList());
