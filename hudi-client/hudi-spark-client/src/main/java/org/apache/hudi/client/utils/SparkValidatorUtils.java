@@ -37,7 +37,6 @@ import org.apache.hudi.exception.HoodieValidationException;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
-import org.apache.hudi.table.action.commit.BaseSparkCommitActionExecutor;
 import org.apache.hudi.util.JavaScalaConverters;
 
 import org.apache.spark.sql.Dataset;
@@ -58,7 +57,7 @@ import java.util.stream.Stream;
  * Spark validator utils to verify and run any pre-commit validators configured.
  */
 public class SparkValidatorUtils {
-  private static final Logger LOG = LoggerFactory.getLogger(BaseSparkCommitActionExecutor.class);
+  private static final Logger LOG = LoggerFactory.getLogger(SparkValidatorUtils.class);
 
   /**
    * Check configured pre-commit validators and run them. Note that this only works for COW tables
