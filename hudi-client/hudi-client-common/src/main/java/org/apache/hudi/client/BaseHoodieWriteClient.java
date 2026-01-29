@@ -1277,7 +1277,6 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
       txnManager.endStateChange(Option.of(compactionPlanInstant));
     }
     HoodieWriteMetadata<O> writeMetadata = tableServiceClient.compact(table, compactionInstantTime, shouldComplete);
-    this.heartbeatClient.stop(compactionInstantTime);
     return writeMetadata;
   }
 
