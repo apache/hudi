@@ -75,6 +75,7 @@ import static org.apache.hudi.common.util.ValidationUtils.checkState;
 public class HoodieAvroDataBlock extends HoodieDataBlock {
 
   private final ThreadLocal<BinaryEncoder> encoderCache = new ThreadLocal<>();
+  private final boolean enableLogicalTimestampFieldRepair;
 
   public HoodieAvroDataBlock(Supplier<SeekableDataInputStream> inputStreamSupplier,
                              Option<byte[]> content,
@@ -83,8 +84,10 @@ public class HoodieAvroDataBlock extends HoodieDataBlock {
                              Option<Schema> readerSchema,
                              Map<HeaderMetadataType, String> header,
                              Map<HeaderMetadataType, String> footer,
-                             String keyField) {
+                             String keyField,
+                             boolean enableLogicalTimestampFieldRepair) {
     super(content, inputStreamSupplier, readBlockLazily, Option.of(logBlockContentLocation), readerSchema, header, footer, keyField, false);
+    this.enableLogicalTimestampFieldRepair = enableLogicalTimestampFieldRepair;
   }
 
   public HoodieAvroDataBlock(@Nonnull List<HoodieRecord> records,
@@ -92,6 +95,7 @@ public class HoodieAvroDataBlock extends HoodieDataBlock {
                              @Nonnull String keyField
   ) {
     super(records, header, new HashMap<>(), keyField);
+    this.enableLogicalTimestampFieldRepair = false;
   }
 
   @Override
@@ -144,7 +148,7 @@ public class HoodieAvroDataBlock extends HoodieDataBlock {
     checkState(this.readerSchema != null, "Reader's schema has to be non-null");
     checkArgument(type != HoodieRecordType.SPARK, "Not support read avro to spark record");
     // TODO AvroSparkReader need
-    RecordIterator iterator = RecordIterator.getInstance(this, content, true);
+    RecordIterator iterator = RecordIterator.getInstance(this, content, enableLogicalTimestampFieldRepair);
     return new CloseableMappingIterator<>(iterator, data -> (HoodieRecord<T>) new HoodieAvroIndexedRecord(data));
   }
 
@@ -235,6 +239,7 @@ public class HoodieAvroDataBlock extends HoodieDataBlock {
   @Deprecated
   public HoodieAvroDataBlock(List<HoodieRecord> records, Schema schema) {
     super(records, Collections.singletonMap(HeaderMetadataType.SCHEMA, schema.toString()), new HashMap<>(), HoodieRecord.RECORD_KEY_METADATA_FIELD);
+    this.enableLogicalTimestampFieldRepair = false;
   }
 
   public static HoodieAvroDataBlock getBlock(byte[] content, Schema readerSchema) throws IOException {
