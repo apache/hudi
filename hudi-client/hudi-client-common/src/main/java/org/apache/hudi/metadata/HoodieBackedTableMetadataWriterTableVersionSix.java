@@ -87,15 +87,35 @@ public abstract class HoodieBackedTableMetadataWriterTableVersionSix<I, O> exten
 
   @Override
   boolean shouldInitializeFromFilesystem(Set<String> pendingDataInstants, Option<String> inflightInstantTimestamp) {
-    if (pendingDataInstants.stream()
-        .anyMatch(i -> !inflightInstantTimestamp.isPresent() || !i.equals(inflightInstantTimestamp.get()))) {
-      metrics.ifPresent(m -> m.updateMetrics(HoodieMetadataMetrics.BOOTSTRAP_ERR_STR, 1));
-      LOG.warn("Cannot initialize metadata table as operation(s) are in progress on the dataset: {}",
-          Arrays.toString(pendingDataInstants.toArray()));
-      return false;
-    } else {
-      return true;
+    // Check if there are pending data instants that are not the current inflight instant
+    Set<String> blockingPendingInstants = pendingDataInstants.stream()
+        .filter(i -> !inflightInstantTimestamp.isPresent() || !i.equals(inflightInstantTimestamp.get()))
+        .collect(Collectors.toSet());
+
+    if (!blockingPendingInstants.isEmpty()) {
+      // If a pending commit is being rolled back, allow the bootstrap to proceed.
+      // Check for pending rollback instants that match the blocking pending instants.
+      Set<String> pendingRollbackInstants = dataMetaClient.getActiveTimeline()
+          .getRollbackTimeline()
+          .getInstantsAsStream()
+          .filter(i -> !i.isCompleted())
+          .map(HoodieInstant::requestedTime)
+          .collect(Collectors.toSet());
+
+      // Check if all blocking pending instants have a corresponding pending rollback
+      boolean allBlockingInstantsBeingRolledBack = !pendingRollbackInstants.isEmpty()
+          && blockingPendingInstants.stream().allMatch(pendingRollbackInstants::contains);
+
+      if (!allBlockingInstantsBeingRolledBack) {
+        metrics.ifPresent(m -> m.updateMetrics(HoodieMetadataMetrics.BOOTSTRAP_ERR_STR, 1));
+        LOG.warn("Cannot initialize metadata table as operation(s) are in progress on the dataset: {}",
+            Arrays.toString(blockingPendingInstants.toArray()));
+        return false;
+      }
+      LOG.info("Allowing metadata table initialization as pending instants {} are being rolled back",
+          Arrays.toString(blockingPendingInstants.toArray()));
     }
+    return true;
   }
 
   @Override
