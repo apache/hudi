@@ -114,7 +114,8 @@ abstract class BaseSpark3Adapter extends SparkAdapter with Logging {
     fileSchema
   }
 
-  override def getParquetReadSupport(messageSchema: org.apache.hudi.common.util.Option[MessageType]): ParquetReadSupport = {
+  override def getParquetReadSupport(storage: HoodieStorage,
+                                     messageSchema: org.apache.hudi.common.util.Option[MessageType]): ParquetReadSupport = {
     new ParquetReadSupport()
   }
 

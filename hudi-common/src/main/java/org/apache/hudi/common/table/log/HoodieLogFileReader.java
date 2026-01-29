@@ -25,6 +25,7 @@ import org.apache.hudi.common.fs.StorageSchemes;
 import org.apache.hudi.common.fs.TimedFSDataInputStream;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.avro.AvroSchemaUtils;
 import org.apache.hudi.common.table.log.block.HoodieAvroDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieCDCDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieCommandBlock;
@@ -87,6 +88,7 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
   private long lastReverseLogFilePosition;
   private final boolean reverseReader;
   private final boolean enableRecordLookups;
+  private final boolean enableLogicalTimestampFieldRepair;
   private boolean closed = false;
   private FSDataInputStream inputStream;
 
@@ -101,17 +103,17 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
         HoodieRecord.RECORD_KEY_METADATA_FIELD);
   }
 
-  public HoodieLogFileReader(FileSystem fs, HoodieLogFile logFile, Schema readerSchema, int bufferSize,
-                             boolean readBlockLazily, boolean reverseReader, boolean enableRecordLookups,
-                             String keyField) throws IOException {
-    this(fs, logFile, readerSchema, bufferSize, readBlockLazily, reverseReader, enableRecordLookups, keyField, InternalSchema.getEmptyInternalSchema());
+  public HoodieLogFileReader(HoodieStorage storage, HoodieLogFile logFile, Schema readerSchema, int bufferSize, boolean reverseReader,
+                             boolean enableRecordLookups, String keyField) throws IOException {
+    this(storage, logFile, readerSchema, bufferSize, reverseReader, enableRecordLookups, keyField,
+        InternalSchema.getEmptyInternalSchema(),
+        readerSchema != null && AvroSchemaUtils.hasTimestampMillisField(readerSchema));
   }
 
-  public HoodieLogFileReader(FileSystem fs, HoodieLogFile logFile, Schema readerSchema, int bufferSize,
-                             boolean readBlockLazily, boolean reverseReader, boolean enableRecordLookups,
-                             String keyField, InternalSchema internalSchema) throws IOException {
-    this.fs = fs;
-    this.hadoopConf = fs.getConf();
+  public HoodieLogFileReader(HoodieStorage storage, HoodieLogFile logFile, Schema readerSchema, int bufferSize, boolean reverseReader,
+                             boolean enableRecordLookups, String keyField, InternalSchema internalSchema,
+                             boolean enableLogicalTimestampFieldRepair) throws IOException {
+    this.storage = storage;
     // NOTE: We repackage {@code HoodieLogFile} here to make sure that the provided path
     //       is prefixed with an appropriate scheme given that we're not propagating the FS
     //       further
@@ -125,6 +127,7 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
     this.enableRecordLookups = enableRecordLookups;
     this.keyField = keyField;
     this.internalSchema = internalSchema == null ? InternalSchema.getEmptyInternalSchema() : internalSchema;
+    this.enableLogicalTimestampFieldRepair = enableLogicalTimestampFieldRepair;
     if (this.reverseReader) {
       this.reverseLogFilePosition = this.lastReverseLogFilePosition = this.logFile.getFileSize();
     }
@@ -200,8 +203,8 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
         if (nextBlockVersion.getVersion() == HoodieLogFormatVersion.DEFAULT_VERSION) {
           return HoodieAvroDataBlock.getBlock(content.get(), readerSchema, internalSchema);
         } else {
-          return new HoodieAvroDataBlock(() -> getFSDataInputStream(fs, this.logFile, bufferSize), content, readBlockLazily, logBlockContentLoc,
-              getTargetReaderSchemaForBlock(), header, footer, keyField);
+          return new HoodieAvroDataBlock(() -> getDataInputStream(storage, this.logFile, bufferSize), content, true, logBlockContentLoc,
+              getTargetReaderSchemaForBlock(), header, footer, keyField, enableLogicalTimestampFieldRepair);
         }
 
       case HFILE_DATA_BLOCK:

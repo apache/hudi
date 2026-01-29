@@ -161,6 +161,19 @@ public class HoodieAvroUtils {
   private static final Pattern INVALID_AVRO_FIRST_CHAR_IN_NAMES_PATTERN = Pattern.compile("[^A-Za-z_]");
   private static final String MASK_FOR_INVALID_CHARS_IN_NAMES = "__";
 
+  // Cached Avro logical type classes (null if not available, e.g., Avro 1.8.2).
+  // Loaded once at class init to avoid repeated Class.forName() and reflection cost per record.
+  private static final Class<?> LOCAL_TIMESTAMP_MILLIS_CLASS = loadClassSafe("org.apache.avro.LogicalTypes$LocalTimestampMillis");
+  private static final Class<?> LOCAL_TIMESTAMP_MICROS_CLASS = loadClassSafe("org.apache.avro.LogicalTypes$LocalTimestampMicros");
+
+  private static Class<?> loadClassSafe(String name) {
+    try {
+      return Class.forName(name);
+    } catch (ClassNotFoundException e) {
+      return null;
+    }
+  }
+
   // All metadata fields are optional strings.
   public static final Schema METADATA_FIELD_SCHEMA = createNullableSchema(Schema.Type.STRING);
 
@@ -1406,34 +1419,22 @@ public class HoodieAvroUtils {
    * Checks if a logical type is an instance of LocalTimestampMillis using reflection.
    * Returns false if the class doesn't exist (e.g., in Avro 1.8.2).
    */
-  private static boolean isLocalTimestampMillis(LogicalType logicalType) {
-    if (logicalType == null) {
+  public static boolean isLocalTimestampMillis(LogicalType logicalType) {
+    if (logicalType == null || LOCAL_TIMESTAMP_MILLIS_CLASS == null) {
       return false;
     }
-    try {
-      Class<?> localTimestampMillisClass = Class.forName("org.apache.avro.LogicalTypes$LocalTimestampMillis");
-      return localTimestampMillisClass.isInstance(logicalType);
-    } catch (ClassNotFoundException e) {
-      // Class doesn't exist (e.g., Avro 1.8.2)
-      return false;
-    }
+    return LOCAL_TIMESTAMP_MILLIS_CLASS.isInstance(logicalType);
   }
 
   /**
    * Checks if a logical type is an instance of LocalTimestampMicros using reflection.
    * Returns false if the class doesn't exist (e.g., in Avro 1.8.2).
    */
-  private static boolean isLocalTimestampMicros(LogicalType logicalType) {
-    if (logicalType == null) {
+  public static boolean isLocalTimestampMicros(LogicalType logicalType) {
+    if (logicalType == null || LOCAL_TIMESTAMP_MICROS_CLASS == null) {
       return false;
     }
-    try {
-      Class<?> localTimestampMicrosClass = Class.forName("org.apache.avro.LogicalTypes$LocalTimestampMicros");
-      return localTimestampMicrosClass.isInstance(logicalType);
-    } catch (ClassNotFoundException e) {
-      // Class doesn't exist (e.g., Avro 1.8.2)
-      return false;
-    }
+    return LOCAL_TIMESTAMP_MICROS_CLASS.isInstance(logicalType);
   }
 
   private static Object convertDefaultValueForAvroCompatibility(Object defaultValue) {
