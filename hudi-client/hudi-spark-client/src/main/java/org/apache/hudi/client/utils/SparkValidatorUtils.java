@@ -18,6 +18,8 @@
 
 package org.apache.hudi.client.utils;
 
+import org.apache.avro.Schema;
+import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.HoodieSchemaConversionUtils;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
@@ -26,6 +28,7 @@ import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.BaseFile;
 import org.apache.hudi.common.model.HoodieWriteStat;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.view.HoodieTablePreCommitFileSystemView;
 import org.apache.hudi.common.util.ReflectionUtils;
@@ -146,14 +149,37 @@ public class SparkValidatorUtils {
             sqlContext.emptyDataFrame().rdd(), newStructTypeSchema);
       }
     }
-    return readRecordsForBaseFiles(sqlContext, committedFiles);
+    return readRecordsForBaseFiles(sqlContext, committedFiles, table);
   }
 
   /**
    * Get records from specified list of data files.
    */
-  public static Dataset<Row> readRecordsForBaseFiles(SQLContext sqlContext, List<String> baseFilePaths) {
-    return sqlContext.read().parquet(JavaScalaConverters.convertJavaListToScalaSeq(baseFilePaths));
+  public static Dataset<Row> readRecordsForBaseFiles(SQLContext sqlContext, List<String> baseFilePaths,
+      HoodieTable table) {
+    final HoodieSchema readerSchema;
+    String schemaStr = table.getConfig().getWriteSchema();
+    boolean isPopulateMetaFieldsEnabled = table.getConfig().populateMetaFields();
+    if (!StringUtils.isNullOrEmpty(schemaStr)) {
+      Schema schema = new Schema.Parser().parse(table.getConfig().getWriteSchema());
+      readerSchema = HoodieSchema.fromAvroSchema(
+          isPopulateMetaFieldsEnabled ? HoodieAvroUtils.addMetadataFields(schema) : schema);
+    } else {
+      LOG.warn("Schema not found from write config, defaulting to parsing schema from latest commit.");
+      try {
+        readerSchema = new TableSchemaResolver(table.getMetaClient()).getTableSchema();
+      } catch (Exception e) {
+        LOG.warn(String.format("Failed parsing schema from latest commit with exception %s, "
+            + "defaulting to inferring schema from data files", e));
+        return sqlContext
+            .read()
+            .parquet(JavaScalaConverters.convertJavaListToScalaSeq(baseFilePaths));
+      }
+    }
+    return sqlContext
+        .read()
+        .schema(HoodieSchemaConversionUtils.convertHoodieSchemaToStructType(readerSchema))
+        .parquet(JavaScalaConverters.convertJavaListToScalaSeq(baseFilePaths));
   }
 
   /**
@@ -181,6 +207,6 @@ public class SparkValidatorUtils {
       return sqlContext.emptyDataFrame();
     }
 
-    return readRecordsForBaseFiles(sqlContext, newFiles);
+    return readRecordsForBaseFiles(sqlContext, newFiles, table);
   }
 }
