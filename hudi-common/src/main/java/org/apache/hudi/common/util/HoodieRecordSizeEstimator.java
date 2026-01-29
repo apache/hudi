@@ -18,9 +18,9 @@
 
 package org.apache.hudi.common.util;
 
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
 
-import org.apache.avro.Schema;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -35,8 +35,8 @@ public class HoodieRecordSizeEstimator<T> implements SizeEstimator<T> {
 
   private final long sizeOfSchema;
 
-  public HoodieRecordSizeEstimator(Schema schema) {
-    sizeOfSchema = ObjectSizeCalculator.getObjectSize(schema);
+  public HoodieRecordSizeEstimator(HoodieSchema schema) {
+    sizeOfSchema = ObjectSizeCalculator.getObjectSize(schema.toAvroSchema());
   }
 
   @Override

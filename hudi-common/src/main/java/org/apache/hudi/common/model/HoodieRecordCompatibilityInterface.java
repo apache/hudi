@@ -36,9 +36,9 @@ public interface HoodieRecordCompatibilityInterface {
       HoodieSchema recordSchema,
       Properties props,
       Option<Pair<String, String>> simpleKeyGenFieldsOpt,
-      Boolean withOperation,
+      boolean withOperation,
       Option<String> partitionNameOp,
-      Boolean populateMetaFieldsOp,
+      boolean populateMetaFieldsOp,
       Option<HoodieSchema> schemaWithoutMetaFields) throws IOException;
 
   /**

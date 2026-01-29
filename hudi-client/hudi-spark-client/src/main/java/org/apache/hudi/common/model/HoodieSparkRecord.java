@@ -276,9 +276,9 @@ public class HoodieSparkRecord extends HoodieRecord<InternalRow> {
   public HoodieRecord wrapIntoHoodieRecordPayloadWithParams(
       HoodieSchema recordSchema, Properties props,
       Option<Pair<String, String>> simpleKeyGenFieldsOpt,
-      Boolean withOperation,
+      boolean withOperation,
       Option<String> partitionNameOp,
-      Boolean populateMetaFields,
+      boolean populateMetaFields,
       Option<HoodieSchema> schemaWithoutMetaFields) {
     StructType structType = HoodieInternalRowUtils.getCachedSchema(recordSchema);
     Option<StructType> structTypeWithoutMetaFields = schemaWithoutMetaFields.map(HoodieInternalRowUtils::getCachedSchema);
