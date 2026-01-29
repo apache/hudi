@@ -20,7 +20,6 @@ package org.apache.hudi.cli.testutils;
 
 import org.apache.hudi.testutils.HoodieSparkClientTestHarness;
 
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 
 /**
@@ -31,11 +30,6 @@ public class HoodieCLIIntegrationTestHarness extends HoodieSparkClientTestHarnes
   @BeforeEach
   public void setup() throws Exception {
     initPath();
-  }
-
-  @AfterEach
-  public void teardown() throws Exception {
-    System.gc();
   }
 
   /**
