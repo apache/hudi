@@ -27,7 +27,7 @@ import org.apache.hudi.common.util.JsonUtils
 import org.apache.hudi.spark.internal.ReflectUtil
 import org.apache.hudi.storage.StorageConfiguration
 
-import org.apache.parquet.schema.MessageType
+import org.apache.parquet.schema.{MessageType, Type}
 import org.apache.parquet.schema.Type.Repetition
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.internal.Logging
@@ -254,7 +254,7 @@ abstract class BaseSpark4Adapter extends SparkAdapter with Logging {
     fieldName: String,
     fieldSchema: HoodieSchema,
     repetition: Repetition
-  ): org.apache.parquet.schema.Type = {
+  ): Type = {
     import org.apache.parquet.schema.{PrimitiveType, Types}
     import org.apache.spark.sql.types.VariantType
 
