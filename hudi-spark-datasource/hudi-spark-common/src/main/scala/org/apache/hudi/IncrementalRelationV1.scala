@@ -199,14 +199,10 @@ class IncrementalRelationV1(val sqlContext: SQLContext,
           (regularFileIdToFullPath.values, metaBootstrapFileIdToFullPath.values)
         }
       }
-      // pass internalSchema to hadoopConf, so it can be used in executors.
       val fileNameGenerator = metaClient.getInstantFileNameGenerator
       val validCommits = metaClient
         .getCommitsAndCompactionTimeline.filterCompletedInstants.getInstantsAsStream.toArray()
         .map(e => fileNameGenerator.getFileName(e.asInstanceOf[HoodieInstant])).mkString(",")
-      sqlContext.sparkContext.hadoopConfiguration.set(SparkInternalSchemaConverter.HOODIE_QUERY_SCHEMA, SerDeHelper.toJson(internalSchema))
-      sqlContext.sparkContext.hadoopConfiguration.set(SparkInternalSchemaConverter.HOODIE_TABLE_PATH, metaClient.getBasePath.toString)
-      sqlContext.sparkContext.hadoopConfiguration.set(SparkInternalSchemaConverter.HOODIE_VALID_COMMITS_LIST, validCommits)
       val formatClassName = metaClient.getTableConfig.getBaseFileFormat match {
         case HoodieFileFormat.PARQUET => LegacyHoodieParquetFileFormat.FILE_FORMAT_ID
         case HoodieFileFormat.ORC => "orc"
@@ -275,7 +271,12 @@ class IncrementalRelationV1(val sqlContext: SQLContext,
 
             if (regularFileIdToFullPath.nonEmpty) {
               try {
-                df = df.union(sqlContext.read.options(sOpts)
+                val querySpecificOptions = sOpts ++ Map(
+                  SparkInternalSchemaConverter.HOODIE_QUERY_SCHEMA -> SerDeHelper.toJson(internalSchema),
+                  SparkInternalSchemaConverter.HOODIE_TABLE_PATH -> metaClient.getBasePath.toString,
+                  SparkInternalSchemaConverter.HOODIE_VALID_COMMITS_LIST -> validCommits
+                )
+                df = df.union(sqlContext.read.options(querySpecificOptions)
                   .schema(usedSchema).format(formatClassName)
                   // Setting time to the END_INSTANT_TIME, to avoid pathFilter filter out files incorrectly.
                   .option(DataSourceReadOptions.TIME_TRAVEL_AS_OF_INSTANT.key(), endInstantTime)
