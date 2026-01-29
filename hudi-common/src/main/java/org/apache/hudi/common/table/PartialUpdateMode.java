@@ -23,9 +23,13 @@ import org.apache.hudi.common.config.EnumFieldDescription;
 
 public enum PartialUpdateMode {
   @EnumFieldDescription(
+      "For any column values missing in current record, pick value from previous version of the record.")
+  KEEP_VALUES,
+
+  @EnumFieldDescription(
       "For columns having default values set in current record, pick the value from previous version of the record."
-      + "Only top level data type default is checked, which means this mode does not check leaf level data type default"
-      + "value for nested data types.")
+          + "Only top level data type default is checked, which means this mode does not check leaf level data type default"
+          + "value for nested data types.")
   IGNORE_DEFAULTS,
 
   @EnumFieldDescription(

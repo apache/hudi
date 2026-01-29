@@ -36,6 +36,65 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class TestPartialUpdateHandler {
   @Test
+  void testParseValidProperties() {
+    TypedProperties props = new TypedProperties();
+    props.setProperty(RECORD_MERGE_PROPERTY_PREFIX + "a", "1");
+    props.setProperty(RECORD_MERGE_PROPERTY_PREFIX + "b", "2");
+    props.setProperty(RECORD_MERGE_PROPERTY_PREFIX + "c", "3");
+    Map<String, String> result = PartialUpdateHandler.parseMergeProperties(props);
+
+    assertEquals(3, result.size());
+    assertEquals("1", result.get("a"));
+    assertEquals("2", result.get("b"));
+    assertEquals("3", result.get("c"));
+  }
+
+  @Test
+  void testHandlesWhitespace() {
+    TypedProperties props = new TypedProperties();
+    props.setProperty(RECORD_MERGE_PROPERTY_PREFIX + "  a  ", "  1  ");
+    props.setProperty(RECORD_MERGE_PROPERTY_PREFIX + "b", "  2  ");
+    props.setProperty(RECORD_MERGE_PROPERTY_PREFIX + "c", "3 ");
+    Map<String, String> result = PartialUpdateHandler.parseMergeProperties(props);
+
+    assertEquals(3, result.size());
+    assertEquals("1", result.get("a")); // Keys and values are trimmed
+    assertEquals("2", result.get("b"));
+    assertEquals("3", result.get("c"));
+  }
+
+  @Test
+  void testIgnoresEmptyEntriesAndMissingEquals() {
+    TypedProperties props = new TypedProperties();
+    props.setProperty(RECORD_MERGE_PROPERTY_PREFIX + "a", "1");
+    props.setProperty(RECORD_MERGE_PROPERTY_PREFIX + "b", ""); // Empty value
+    props.setProperty(RECORD_MERGE_PROPERTY_PREFIX + "c", "3");
+    // Properties with empty keys after prefix are ignored by extractWithPrefix
+    props.setProperty(RECORD_MERGE_PROPERTY_PREFIX, "ignored"); // This will be ignored
+    Map<String, String> result = PartialUpdateHandler.parseMergeProperties(props);
+
+    assertEquals(3, result.size());
+    assertEquals("1", result.get("a"));
+    assertEquals("", result.get("b")); // Empty value is preserved
+    assertEquals("3", result.get("c"));
+  }
+
+  @Test
+  void testEmptyInputReturnsEmptyMap() {
+    TypedProperties props = new TypedProperties();
+    // No properties with the prefix
+    Map<String, String> result = PartialUpdateHandler.parseMergeProperties(props);
+    assertTrue(result.isEmpty());
+  }
+
+  @Test
+  void testMissingKeyReturnsEmptyMap() {
+    TypedProperties props = new TypedProperties(); // no property set
+    Map<String, String> result = PartialUpdateHandler.parseMergeProperties(props);
+    assertTrue(result.isEmpty());
+  }
+
+  @Test
   void testEmptyProperties() {
     TypedProperties props = new TypedProperties();
     Map<String, String> result = PartialUpdateHandler.parseMergeProperties(props);
