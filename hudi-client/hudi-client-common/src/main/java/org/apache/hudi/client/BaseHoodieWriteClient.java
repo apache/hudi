@@ -1444,25 +1444,18 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    * Sets write schema from last instant since deletes may not have schema set in the config.
    */
   protected void setWriteSchemaForDeletes(HoodieTableMetaClient metaClient) {
-    try {
-      HoodieActiveTimeline activeTimeline = metaClient.getActiveTimeline();
-      Option<HoodieInstant> lastInstant =
-          activeTimeline.filterCompletedInstants().filter(s -> s.getAction().equals(metaClient.getCommitActionType())
-                  || s.getAction().equals(HoodieActiveTimeline.REPLACE_COMMIT_ACTION))
-              .lastInstant();
-      if (lastInstant.isPresent()) {
-        HoodieCommitMetadata commitMetadata = activeTimeline.readCommitMetadata(lastInstant.get());
-        String extraSchema = commitMetadata.getExtraMetadata().get(SCHEMA_KEY);
-        if (!StringUtils.isNullOrEmpty(extraSchema)) {
-          config.setSchema(commitMetadata.getExtraMetadata().get(SCHEMA_KEY));
-        } else {
-          throw new HoodieIOException("Latest commit does not have any schema in commit metadata");
-        }
-      } else {
-        log.debug("No rows are deleted because the table is empty");
+    HoodieTimeline timeline = metaClient.getActiveTimeline().getCommitsTimeline();
+    if (timeline.empty()) {
+      throw new HoodieIOException("Deletes issued without any prior commits");
+    }
+    if (StringUtils.isNullOrEmpty(config.getSchema())) {
+      // get schema from lastInstant (replacecommit or commit).
+      TableSchemaResolver tableSchemaResolver = new TableSchemaResolver(metaClient);
+      Option<HoodieSchema> schema = tableSchemaResolver.getTableSchemaIfPresent(false);
+      if (!schema.isPresent() || StringUtils.isNullOrEmpty(schema.get().toString())) {
+        throw new HoodieIOException("Latest commit/replacecommit does not have any schema in commit metadata");
       }
-    } catch (IOException e) {
-      throw new HoodieIOException("IOException thrown while reading last commit metadata", e);
+      config.setSchema(schema.get().toString());
     }
   }
 
