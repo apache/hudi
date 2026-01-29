@@ -182,7 +182,7 @@ public class HoodieTestSuiteJob {
     }
 
     JavaSparkContext jssc = UtilHelpers.buildSparkContext("workload-generator-" + cfg.outputTypeName
-        + "-" + cfg.inputFormatName, cfg.sparkMaster);
+        + "-" + cfg.inputFormatName, cfg.sparkMaster, cfg.enableHiveSupport);
     new HoodieTestSuiteJob(cfg, jssc, true).runTestSuite();
   }
 

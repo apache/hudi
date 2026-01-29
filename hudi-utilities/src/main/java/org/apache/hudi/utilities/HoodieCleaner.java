@@ -96,6 +96,9 @@ public class HoodieCleaner {
     @Parameter(names = {"--spark-master"}, description = "spark master to use.")
     public String sparkMaster = "local[2]";
 
+    @Parameter(names = {"--enable-hive-support", "-ehs"}, description = "Enables hive support during spark context initialization.", required = false)
+    public Boolean enableHiveSupport = false;
+
     @Parameter(names = {"--help", "-h"}, help = true)
     public Boolean help = false;
   }
@@ -109,7 +112,7 @@ public class HoodieCleaner {
     }
 
     String dirName = new Path(cfg.basePath).getName();
-    JavaSparkContext jssc = UtilHelpers.buildSparkContext("hoodie-cleaner-" + dirName, cfg.sparkMaster);
+    JavaSparkContext jssc = UtilHelpers.buildSparkContext("hoodie-cleaner-" + dirName, cfg.sparkMaster, cfg.enableHiveSupport);
 
     int exitCode = 0;
     try {

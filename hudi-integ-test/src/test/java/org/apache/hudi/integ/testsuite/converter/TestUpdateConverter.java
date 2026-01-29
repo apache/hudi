@@ -44,7 +44,7 @@ public class TestUpdateConverter {
 
   @BeforeEach
   public void setup() throws Exception {
-    jsc = UtilHelpers.buildSparkContext(this.getClass().getName() + "-hoodie", "local[1]");
+    jsc = UtilHelpers.buildSparkContext(this.getClass().getName() + "-hoodie", "local[1]", false);
 
   }
 

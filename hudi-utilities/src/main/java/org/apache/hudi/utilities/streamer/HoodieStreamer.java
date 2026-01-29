@@ -369,6 +369,9 @@ public class HoodieStreamer implements Serializable {
             + "account Spark Configuration priority rules (e.g. not using spark-submit command).")
     public String sparkMaster = "";
 
+    @Parameter(names = {"--enable-hive-support"}, description = "Enables hive support during spark context initialization.")
+    public Boolean enableHiveSupport = true;
+
     @Parameter(names = {"--commit-on-errors"}, description = "Commit even when some records failed to be written")
     public Boolean commitOnErrors = false;
 
@@ -639,9 +642,9 @@ public class HoodieStreamer implements Serializable {
       sparkAppName = "streamer-" + cfg.targetTableName;
     }
     if (StringUtils.isNullOrEmpty(cfg.sparkMaster)) {
-      jssc = UtilHelpers.buildSparkContext(sparkAppName, additionalSparkConfigs);
+      jssc = UtilHelpers.buildSparkContext(sparkAppName, cfg.enableHiveSupport, additionalSparkConfigs);
     } else {
-      jssc = UtilHelpers.buildSparkContext(sparkAppName, cfg.sparkMaster, additionalSparkConfigs);
+      jssc = UtilHelpers.buildSparkContext(sparkAppName, cfg.sparkMaster, cfg.enableHiveSupport, additionalSparkConfigs);
     }
     if (cfg.enableHiveSync) {
       LOG.warn("--enable-hive-sync will be deprecated in a future release; please use --enable-sync instead for Hive syncing");

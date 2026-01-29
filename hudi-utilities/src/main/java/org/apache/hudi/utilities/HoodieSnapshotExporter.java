@@ -54,7 +54,6 @@ import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.FileUtil;
 import org.apache.hadoop.fs.Path;
-import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.Column;
 import org.apache.spark.sql.DataFrameWriter;
@@ -76,7 +75,6 @@ import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.table.timeline.InstantComparison.LESSER_THAN_OR_EQUALS;
 import static org.apache.hudi.common.table.timeline.InstantComparison.compareTimestamps;
-import static org.apache.hudi.utilities.UtilHelpers.buildSparkConf;
 
 /**
  * Export the latest records of Hudi dataset to a set of external files (e.g., plain parquet files).
@@ -141,6 +139,10 @@ public class HoodieSnapshotExporter {
     @Parameter(names = {"--transformer-sql-file"}, description = "File with a SQL query to be executed during write."
             + " The query should reference the source as a table named \"<SRC>\".")
     public String transformerSqlFile = null;
+
+    @Parameter(names = {"--enable-hive-support", "-ehs"}, description = "Enables hive support during spark context initialization.", required = false)
+    public Boolean enableHiveSupport = false;
+
   }
 
   public void export(JavaSparkContext jsc, Config cfg) throws IOException {
@@ -341,8 +343,7 @@ public class HoodieSnapshotExporter {
       System.exit(1);
     }
 
-    SparkConf sparkConf = buildSparkConf("Hoodie-snapshot-exporter", "local[*]");
-    JavaSparkContext jsc = new JavaSparkContext(sparkConf);
+    JavaSparkContext jsc = UtilHelpers.buildSparkContext("Hoodie-snapshot-exporter", "local[*]", cfg.enableHiveSupport);
     LOG.info("Initializing spark job.");
 
     try {

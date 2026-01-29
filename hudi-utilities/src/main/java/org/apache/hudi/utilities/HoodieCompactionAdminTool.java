@@ -53,7 +53,8 @@ public class HoodieCompactionAdminTool {
       System.exit(1);
     }
     HoodieCompactionAdminTool admin = new HoodieCompactionAdminTool(cfg);
-    admin.run(UtilHelpers.buildSparkContext("admin-compactor", cfg.sparkMaster, cfg.sparkMemory));
+    admin.run(UtilHelpers.buildSparkContext("admin-compactor",
+        cfg.sparkMaster, cfg.sparkMemory, cfg.enableHiveSupport));
   }
 
   /**
@@ -157,6 +158,8 @@ public class HoodieCompactionAdminTool {
     public String sparkMaster = null;
     @Parameter(names = {"--spark-memory", "-sm"}, description = "spark memory to use", required = true)
     public String sparkMemory = null;
+    @Parameter(names = {"--enable-hive-support", "-ehs"}, description = "Enables hive support during spark context initialization.", required = false)
+    public Boolean enableHiveSupport = false;
     @Parameter(names = {"--dry-run", "-dr"}, description = "Dry Run Mode", required = false)
     public boolean dryRun = false;
     @Parameter(names = {"--skip-validation", "-sv"}, description = "Skip Validation", required = false)
