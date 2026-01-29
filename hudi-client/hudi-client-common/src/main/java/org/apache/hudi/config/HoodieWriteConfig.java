@@ -931,6 +931,12 @@ public class HoodieWriteConfig extends HoodieConfig {
    */
   public static final String WRITES_FILEID_ENCODING = "_hoodie.writes.fileid.encoding";
 
+  public static final ConfigProperty<String> LOG_FILE_APPEND_DISABLED = ConfigProperty
+      .key("hoodie.log.file.append.disabled")
+      .defaultValue("false")
+      .sinceVersion("0.8.0")
+      .withDocumentation("When enabled, all appends go to a new log file.");
+
   @Setter
   private ConsistencyGuardConfig consistencyGuardConfig;
   private FileSystemRetryConfig fileSystemRetryConfig;
@@ -1693,6 +1699,10 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public boolean populateMetaFields() {
     return getBooleanOrDefault(HoodieTableConfig.POPULATE_META_FIELDS);
+  }
+
+  public boolean isLogFileAppendDisabled() {
+    return getBooleanOrDefault(LOG_FILE_APPEND_DISABLED);
   }
 
   /**
@@ -3502,6 +3512,11 @@ public class HoodieWriteConfig extends HoodieConfig {
 
     public Builder withFileGroupReaderMergeHandleClassName(String className) {
       writeConfig.setValue(COMPACT_MERGE_HANDLE_CLASS_NAME, className);
+      return this;
+    }
+
+    public Builder withLogFileAppendDisabled(boolean disabled) {
+      writeConfig.setValue(LOG_FILE_APPEND_DISABLED, Boolean.toString(disabled));
       return this;
     }
 

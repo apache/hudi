@@ -2705,6 +2705,38 @@ public class TestHoodieLogFormat extends HoodieCommonTestHarness {
       assertFalse(reader.hasPrev());
     }
   }
+  
+  @Test
+  public void testAppendDisabledFlag() throws IOException, URISyntaxException, InterruptedException {
+    Writer writer =
+        HoodieLogFormat.newWriterBuilder().onParentPath(partitionPath).withFileExtension(HoodieLogFile.DELTA_EXTENSION)
+            .withFileId("test-fileid1").withInstantTime("100").withStorage(storage).withAppendDisabled(true).build();
+    List<IndexedRecord> records1 = SchemaTestUtil.generateTestRecords(0, 100);
+    HoodieSchema schema = getSimpleSchema();
+    List<IndexedRecord> copyOfRecords1 = records1.stream()
+        .map(record -> HoodieAvroUtils.rewriteRecord((GenericRecord) record, schema.toAvroSchema())).collect(Collectors.toList());
+    Map<HoodieLogBlock.HeaderMetadataType, String> header = new HashMap<>();
+    header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, "100");
+    header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, getSimpleSchema().toString());
+    HoodieDataBlock dataBlock = getDataBlock(DEFAULT_DATA_BLOCK_TYPE, records1, header);
+    AppendResult firstAppend = writer.appendBlock(dataBlock);
+    writer.close();
+
+    writer =
+        HoodieLogFormat.newWriterBuilder().onParentPath(partitionPath).withFileExtension(HoodieLogFile.DELTA_EXTENSION)
+            .withFileId("test-fileid1").withInstantTime("100").withStorage(storage).withAppendDisabled(true).build();
+    List<IndexedRecord> records2 = SchemaTestUtil.generateTestRecords(0, 100);
+    List<IndexedRecord> copyOfRecords2 = records2.stream()
+        .map(record -> HoodieAvroUtils.rewriteRecord((GenericRecord) record, schema.toAvroSchema())).collect(Collectors.toList());
+    header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, getSimpleSchema().toString());
+    dataBlock = getDataBlock(DEFAULT_DATA_BLOCK_TYPE, records2, header);
+    AppendResult secondAppend = writer.appendBlock(dataBlock);
+    writer.close();
+
+    assertEquals(firstAppend.logFile().getFileId(), secondAppend.logFile().getFileId());
+    assertNotEquals(firstAppend.logFile().getLogVersion(), secondAppend.logFile().getLogVersion());
+    assertNotEquals(firstAppend.logFile().getFileName(), secondAppend.logFile().getFileName());
+  }
 
   @Test
   public void testV0Format() throws IOException, URISyntaxException {
