@@ -19,6 +19,7 @@
 
 package org.apache.hudi.client.timeline.versioning.v2;
 
+import java.util.Optional;
 import org.apache.hudi.client.timeline.HoodieTimelineArchiver;
 import org.apache.hudi.client.transaction.TransactionManager;
 import org.apache.hudi.common.NativeTableFormat;
@@ -270,6 +271,7 @@ public class TimelineArchiverV2<T extends HoodieAvroPayload, I, K, O> implements
     // unless HoodieArchivalConfig#ARCHIVE_BEYOND_SAVEPOINT is enabled.
     Option<HoodieInstant> firstSavepoint = table.getCompletedSavepointTimeline().firstInstant();
     Set<String> savepointTimestamps = table.getSavepointTimestamps();
+    Option<HoodieInstant> latestIngestionInstant = TimelineUtils.getLatestIngestionInstant(metaClient);
 
     Stream<HoodieInstant> instantToArchiveStream = completedCommitsTimeline.getInstantsAsStream()
         .filter(s -> {
@@ -282,6 +284,9 @@ public class TimelineArchiverV2<T extends HoodieAvroPayload, I, K, O> implements
             return !firstSavepoint.isPresent() || compareTimestamps(s.requestedTime(), LESSER_THAN, firstSavepoint.get().requestedTime());
           }
         }).filter(s -> earliestInstantToRetain
+            .map(instant -> compareTimestamps(s.requestedTime(), LESSER_THAN, instant.requestedTime()))
+            .orElse(true))
+        .filter(s -> latestIngestionInstant
             .map(instant -> compareTimestamps(s.requestedTime(), LESSER_THAN, instant.requestedTime()))
             .orElse(true));
     return instantToArchiveStream.limit(completedCommitsTimeline.countInstants() - minInstantsToKeep)

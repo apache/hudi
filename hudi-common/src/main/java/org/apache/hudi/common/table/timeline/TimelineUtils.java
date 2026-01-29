@@ -641,4 +641,29 @@ public class TimelineUtils {
     }
     return writerOption;
   }
+
+
+  public static Option<HoodieInstant> getLatestIngestionInstant(HoodieTableMetaClient metaClient) {
+    HoodieTableType tableType = metaClient.getTableType();
+    // (UBER) We can't feasibly support a general API for inferring checkpoint, since deltastreamer, hoover,
+    // etc each have their own checkpoint field, and can potentially change their checkpointing method
+    // (since it's application-defined as they can add their own field in extraMetadata).
+    // For now assume that deltacommits, non-compaction commits,
+    // and ingestion replacecommits are considered as ingestion writes.
+    return Option.fromJavaOptional(metaClient
+        .getCommitsTimeline()
+        .filterCompletedInstants()
+        .getReverseOrderedInstants()
+        .filter(instant -> {
+          if (tableType.equals(HoodieTableType.MERGE_ON_READ) && instant.getAction().equals(COMMIT_ACTION)) {
+            // Compaction writes are not ingestion writes
+            return false;
+          }
+          // Check that write is either not a replacecommit or an ingestion replacecommit
+          // TODO replace isNonIngestionReplace with a new isIngestionReplace function
+          // and move it out of ClusteringUtils
+          return !ClusteringUtils.isCompletedClusteringInstant(instant, metaClient.getActiveTimeline());
+        })
+        .findFirst());
+  }
 }
