@@ -114,11 +114,16 @@ class HoodieMergeOnReadRDDV2(@transient sc: SparkContext,
     if (!metaClient.isMetadataTable) {
       val updatedOptions: Map[String, String] = options + (FileFormat.OPTION_RETURNING_BATCH -> "false") // disable vectorized reading for MOR
       if (metaClient.getTableConfig.isMultipleBaseFileFormatsEnabled) {
-        sc.broadcast(new MultipleColumnarFileFormatReader(
-          sparkAdapter.createParquetFileReader(vectorized = false, sqlConf, updatedOptions, config),
-          sparkAdapter.createOrcFileReader(vectorized = false, sqlConf, updatedOptions, config, tableSchema.structTypeSchema),
-          sparkAdapter.createLanceFileReader(vectorized = false, sqlConf, updatedOptions, config)
-        ))
+        val parquetReader = sparkAdapter.createParquetFileReader(vectorized = false, sqlConf, updatedOptions, config)
+        val orcReader = sparkAdapter.createOrcFileReader(vectorized = false, sqlConf, updatedOptions, config, tableSchema.structTypeSchema)
+
+        val multiReader = if (HoodieSparkUtils.gteqSpark3_4) {
+          val lanceReader = sparkAdapter.createLanceFileReader(vectorized = false, sqlConf, updatedOptions, config)
+          new MultipleColumnarFileFormatReader(parquetReader, orcReader, lanceReader)
+        } else {
+          new MultipleColumnarFileFormatReader(parquetReader, orcReader)
+        }
+        sc.broadcast(multiReader)
       } else if (metaClient.getTableConfig.getBaseFileFormat == HoodieFileFormat.PARQUET) {
         sc.broadcast(sparkAdapter.createParquetFileReader(vectorized = false, sqlConf, updatedOptions, config))
       } else if (metaClient.getTableConfig.getBaseFileFormat == HoodieFileFormat.ORC) {

@@ -96,8 +96,12 @@ public class SparkReaderContextFactory implements ReaderContextFactory<InternalR
     if (metaClient.getTableConfig().isMultipleBaseFileFormatsEnabled()) {
       SparkColumnarFileReader parquetFileReader = sparkAdapter.createParquetFileReader(false, sqlConf, options, configs);
       SparkColumnarFileReader orcFileReader = getOrcFileReader(resolver, sqlConf, options, configs, sparkAdapter);
-      SparkColumnarFileReader lanceFileReader = sparkAdapter.createLanceFileReader(false, sqlConf, options, configs);
-      baseFileReaderBroadcast = jsc.broadcast(new MultipleColumnarFileFormatReader(parquetFileReader, orcFileReader, lanceFileReader));
+      if (HoodieSparkUtils.gteqSpark3_4()) {
+        SparkColumnarFileReader lanceFileReader = sparkAdapter.createLanceFileReader(false, sqlConf, options, configs);
+        baseFileReaderBroadcast = jsc.broadcast(new MultipleColumnarFileFormatReader(parquetFileReader, orcFileReader, lanceFileReader));
+      } else {
+        baseFileReaderBroadcast = jsc.broadcast(new MultipleColumnarFileFormatReader(parquetFileReader, orcFileReader));
+      }
     } else if (metaClient.getTableConfig().getBaseFileFormat() == HoodieFileFormat.ORC) {
       SparkColumnarFileReader orcFileReader = getOrcFileReader(resolver, sqlConf, options, configs, sparkAdapter);
       baseFileReaderBroadcast = jsc.broadcast(orcFileReader);
