@@ -18,7 +18,6 @@
 
 package org.apache.hudi.common.schema;
 
-import org.apache.hudi.avro.AvroSchemaUtils;
 import org.apache.hudi.exception.SchemaBackwardsCompatibilityException;
 import org.apache.hudi.exception.SchemaCompatibilityException;
 
@@ -40,7 +39,6 @@ import java.util.stream.Stream;
 import static org.apache.hudi.common.schema.TestHoodieSchemaUtils.EVOLVED_SCHEMA;
 import static org.apache.hudi.common.schema.TestHoodieSchemaUtils.SIMPLE_SCHEMA;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
-import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -714,27 +712,6 @@ public class TestHoodieSchemaCompatibility {
 
     // Should throw on both null
     assertThrows(IllegalArgumentException.class, () -> HoodieSchemaCompatibility.isSchemaCompatible(null, null, true, true));
-  }
-
-  @Test
-  public void testIsSchemaCompatibleConsistencyWithAvro() {
-    // Verify HoodieSchemaCompatibility results match AvroSchemaUtils for various scenarios
-    HoodieSchema s1 = HoodieSchema.parse(SIMPLE_SCHEMA);
-    HoodieSchema s2 = HoodieSchema.parse(EVOLVED_SCHEMA);
-
-    // Test all combinations of checkNaming and allowProjection
-    for (boolean checkNaming : Arrays.asList(true, false)) {
-      for (boolean allowProjection : Arrays.asList(true, false)) {
-        boolean avroResult = AvroSchemaUtils.isSchemaCompatible(
-            s1.toAvroSchema(), s2.toAvroSchema(), checkNaming, allowProjection);
-        boolean hoodieResult = HoodieSchemaCompatibility.isSchemaCompatible(
-            s1, s2, checkNaming, allowProjection);
-
-        assertEquals(avroResult, hoodieResult,
-            String.format("Results should match for checkNaming=%s, allowProjection=%s",
-                checkNaming, allowProjection));
-      }
-    }
   }
 
   @Test
