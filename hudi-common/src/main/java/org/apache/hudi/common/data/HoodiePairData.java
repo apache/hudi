@@ -80,6 +80,11 @@ public interface HoodiePairData<K, V> extends Serializable {
   HoodiePairData<K, Iterable<V>> groupByKey();
 
   /**
+   * Groups the values for each key in the dataset into a single sequence and applies a reduce function
+   */
+  HoodiePairData<K, V> groupByKeyAndReduce(SerializableFunction<Iterable<V>,V> function);
+
+  /**
    * Reduces original sequence by de-duplicating the pairs w/ the same key, using provided
    * binary operator {@code combiner}. Returns an instance of {@link HoodiePairData} holding
    * the "de-duplicated" pairs, ie only pairs with unique keys.
