@@ -116,7 +116,6 @@ import org.apache.hudi.utilities.streamer.HoodieStreamer.Config;
 import org.apache.hudi.utilities.transform.Transformer;
 
 import com.codahale.metrics.Timer;
-import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
@@ -1252,17 +1251,18 @@ public class StreamSync implements Serializable, Closeable {
    */
   private void registerAvroSchemas(HoodieSchema sourceSchema, HoodieSchema targetSchema) {
     // register the schemas, so that shuffle does not serialize the full schemas
-    List<Schema> schemas = new ArrayList<>();
+    List<HoodieSchema> schemas = new ArrayList<>(2);
     if (sourceSchema != null) {
-      schemas.add(sourceSchema.toAvroSchema());
+      schemas.add(sourceSchema);
     }
     if (targetSchema != null) {
-      schemas.add(targetSchema.toAvroSchema());
+      schemas.add(targetSchema);
     }
     if (!schemas.isEmpty()) {
       LOG.debug("Registering Schema: {}", schemas);
       // Use the underlying spark context in case the java context is changed during runtime
-      hoodieSparkContext.getJavaSparkContext().sc().getConf().registerAvroSchemas(JavaScalaConverters.convertJavaListToScalaList(schemas).toList());
+      hoodieSparkContext.getJavaSparkContext().sc().getConf()
+          .registerAvroSchemas(JavaScalaConverters.convertJavaListToScalaList(schemas.stream().map(HoodieSchema::toAvroSchema).collect(Collectors.toList())).toList());
     }
   }
 
