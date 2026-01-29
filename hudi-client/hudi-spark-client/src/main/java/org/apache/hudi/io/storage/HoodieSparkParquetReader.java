@@ -66,7 +66,7 @@ public class HoodieSparkParquetReader implements HoodieSparkFileReader {
   private final StoragePath path;
   private final HoodieStorage storage;
   private final FileFormatUtils parquetUtils;
-  private final List<ClosableIterator> readerIterators = new ArrayList<>();
+  private List<ClosableIterator> readerIterators = new ArrayList<>();
   private Option<MessageType> fileSchemaOption = Option.empty();
   private Option<StructType> structTypeOption = Option.empty();
   private Option<Schema> schemaOption = Option.empty();
@@ -129,6 +129,8 @@ public class HoodieSparkParquetReader implements HoodieSparkFileReader {
     if (requestedSchema == null) {
       requestedSchema = readerSchema;
     }
+    // Set configuration for timestamp_millis type repair.
+    storage.getConf().set(ENABLE_LOGICAL_TIMESTAMP_REPAIR, Boolean.toString(AvroSchemaUtils.hasTimestampMillisField(readerSchema)));
 
     MessageType fileSchema = getFileSchema();
     Schema nonNullSchema = AvroSchemaUtils.getNonNullTypeFromUnion(requestedSchema);
@@ -140,7 +142,7 @@ public class HoodieSparkParquetReader implements HoodieSparkFileReader {
     storage.getConf().set(SQLConf.PARQUET_BINARY_AS_STRING().key(), SQLConf.get().getConf(SQLConf.PARQUET_BINARY_AS_STRING()).toString());
     storage.getConf().set(SQLConf.PARQUET_INT96_AS_TIMESTAMP().key(), SQLConf.get().getConf(SQLConf.PARQUET_INT96_AS_TIMESTAMP()).toString());
     ParquetReader<InternalRow> reader = ParquetReader.<InternalRow>builder(
-        (ReadSupport) SparkAdapterSupport$.MODULE$.sparkAdapter().getParquetReadSupport(messageSchema),
+        (ReadSupport) SparkAdapterSupport$.MODULE$.sparkAdapter().getParquetReadSupport(storage, messageSchema),
             new Path(path.toUri()))
         .withConf(storage.getConf().unwrapAs(Configuration.class))
         .build();

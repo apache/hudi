@@ -57,7 +57,9 @@ trait SparkAdapter extends Serializable {
 
   def isTimestampNTZType(dataType: DataType): Boolean
 
-  def getParquetReadSupport(messageSchema: org.apache.hudi.common.util.Option[MessageType]): org.apache.parquet.hadoop.api.ReadSupport[_]
+  def getParquetReadSupport(storage: HoodieStorage,
+                            messageSchema: org.apache.hudi.common.util.Option[MessageType]):
+  org.apache.parquet.hadoop.api.ReadSupport[_]
 
   def repairSchemaIfSpecified(shouldRepair: Boolean,
                               fileSchema: MessageType,

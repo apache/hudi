@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.table.log;
 
+import org.apache.hudi.avro.AvroSchemaUtils;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.model.HoodieLogFile;
@@ -144,6 +145,8 @@ public abstract class AbstractHoodieLogRecordReader {
   private final List<String> validBlockInstants = new ArrayList<>();
   // Use scanV2 method.
   private final boolean enableOptimizedLogBlocksScan;
+  // Enable logical timestamp field repair for Avro log blocks (computed once from reader schema).
+  private final boolean enableLogicalTimestampFieldRepair;
 
   protected AbstractHoodieLogRecordReader(HoodieStorage storage, String basePath, List<String> logFilePaths,
                                           Schema readerSchema, String latestInstantTime,
@@ -182,6 +185,7 @@ public abstract class AbstractHoodieLogRecordReader {
     this.forceFullScan = forceFullScan;
     this.internalSchema = internalSchema == null ? InternalSchema.getEmptyInternalSchema() : internalSchema;
     this.enableOptimizedLogBlocksScan = enableOptimizedLogBlocksScan;
+    this.enableLogicalTimestampFieldRepair = readerSchema != null && AvroSchemaUtils.hasTimestampMillisField(readerSchema);
 
     if (keyFieldOverride.isPresent()) {
       // NOTE: This branch specifically is leveraged handling Metadata Table
@@ -242,7 +246,8 @@ public abstract class AbstractHoodieLogRecordReader {
           logFilePaths.stream()
               .map(filePath -> new HoodieLogFile(new StoragePath(filePath)))
               .collect(Collectors.toList()),
-          readerSchema, reverseReader, bufferSize, shouldLookupRecords(), recordKeyField, internalSchema);
+          readerSchema, reverseReader, bufferSize, shouldLookupRecords(), recordKeyField, internalSchema,
+          enableLogicalTimestampFieldRepair);
 
       Set<HoodieLogFile> scannedLogFiles = new HashSet<>();
       while (logFormatReaderWrapper.hasNext()) {
@@ -387,7 +392,8 @@ public abstract class AbstractHoodieLogRecordReader {
           logFilePaths.stream()
               .map(logFile -> new HoodieLogFile(new StoragePath(logFile)))
               .collect(Collectors.toList()),
-          readerSchema, reverseReader, bufferSize, shouldLookupRecords(), recordKeyField, internalSchema);
+          readerSchema, reverseReader, bufferSize, shouldLookupRecords(), recordKeyField, internalSchema,
+          enableLogicalTimestampFieldRepair);
 
       /**
        * Scanning log blocks and placing the compacted blocks at the right place require two traversals.
