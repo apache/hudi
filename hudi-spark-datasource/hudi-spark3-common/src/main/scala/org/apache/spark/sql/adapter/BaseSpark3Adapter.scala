@@ -211,4 +211,19 @@ abstract class BaseSpark3Adapter extends SparkAdapter with Logging {
   ): Type = {
     throw new UnsupportedOperationException("Spark 3.x does not support VariantType")
   }
+  override def isVariantShreddingStruct(structType: StructType): Boolean = {
+    // Spark 3.x does not support Variant shredding
+    false
+  }
+
+  override def generateVariantWriteShreddingSchema(dataType: DataType, isTopLevel: Boolean, isObjectField: Boolean): StructType = {
+    throw new UnsupportedOperationException("Spark 3.x does not support Variant shredding")
+  }
+
+  override def createShreddedVariantWriter(
+    shreddedStructType: StructType,
+    writeStruct: Consumer[InternalRow]
+  ): BiConsumer[SpecializedGetters, Integer] = {
+    throw new UnsupportedOperationException("Spark 3.x does not support Variant shredding")
+  }
 }

@@ -46,13 +46,14 @@ import org.apache.spark.sql.catalyst.util.DateFormatter
 import org.apache.spark.sql.classic.ColumnConversions
 import org.apache.spark.sql.execution.{PartitionedFileUtil, QueryExecution, SQLExecution}
 import org.apache.spark.sql.execution.datasources._
-import org.apache.spark.sql.execution.datasources.parquet.{HoodieFormatTrait, ParquetFilters}
+import org.apache.spark.sql.execution.datasources.parquet.{HoodieFormatTrait, ParquetFilters, SparkShreddingUtils}
 import org.apache.spark.sql.hudi.SparkAdapter
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.sources.{BaseRelation, Filter}
 import org.apache.spark.sql.types.{BinaryType, DataType, StructType, VariantType}
 import org.apache.spark.sql.vectorized.{ColumnarBatch, ColumnVector}
 import org.apache.spark.storage.StorageLevel
+import org.apache.spark.types.variant.Variant
 import org.apache.spark.unsafe.types.UTF8String
 
 import java.time.ZoneId
@@ -273,5 +274,28 @@ abstract class BaseSpark4Adapter extends SparkAdapter with Logging {
       .addField(Types.primitive(PrimitiveType.PrimitiveTypeName.BINARY, valueRepetition).named("value"))
       .addField(Types.primitive(PrimitiveType.PrimitiveTypeName.BINARY, Repetition.REQUIRED).named("metadata"))
       .named(fieldName)
+  }
+
+  override def isVariantShreddingStruct(structType: StructType): Boolean = {
+    SparkShreddingUtils.isVariantShreddingStruct(structType)
+  }
+
+  override def generateVariantWriteShreddingSchema(dataType: DataType, isTopLevel: Boolean, isObjectField: Boolean): StructType = {
+    SparkShreddingUtils.addWriteShreddingMetadata(
+      SparkShreddingUtils.variantShreddingSchema(dataType, isTopLevel, isObjectField))
+  }
+
+  override def createShreddedVariantWriter(
+    shreddedStructType: StructType,
+    writeStruct: Consumer[InternalRow]
+  ): BiConsumer[SpecializedGetters, Integer] = {
+    val variantShreddingSchema = SparkShreddingUtils.buildVariantSchema(shreddedStructType)
+
+    (row: SpecializedGetters, ordinal: Integer) => {
+      val variantVal = row.getVariant(ordinal)
+      val variant = new Variant(variantVal.getValue, variantVal.getMetadata)
+      val shreddedValues = SparkShreddingUtils.castShredded(variant, variantShreddingSchema)
+      writeStruct.accept(shreddedValues)
+    }
   }
 }
