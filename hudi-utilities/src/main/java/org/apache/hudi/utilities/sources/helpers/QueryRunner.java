@@ -29,13 +29,12 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.utilities.config.HoodieIncrSourceConfig;
 import org.apache.hudi.utilities.sources.SnapshotLoadQuerySplitter;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.spark.sql.Column;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SparkSession;
 import org.apache.spark.sql.functions;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.Collections;
 import java.util.List;
@@ -49,12 +48,12 @@ import static org.apache.hudi.hadoop.fs.HadoopFSUtils.getStorageConf;
  * This class is currently used only by s3 and gcs incr sources that supports size based batching
  * This class will fetch comitted files from the current commit to support size based batching.
  */
+@Slf4j
 public class QueryRunner {
+
   private final SparkSession sparkSession;
   private final TypedProperties props;
   private final String sourcePath;
-
-  private static final Logger LOG = LoggerFactory.getLogger(QueryRunner.class);
 
   public QueryRunner(SparkSession sparkSession, TypedProperties props) {
     this.sparkSession = sparkSession;
@@ -81,14 +80,14 @@ public class QueryRunner {
 
   public static Dataset<Row> applyOrdering(Dataset<Row> dataset, List<String> orderByColumns) {
     if (orderByColumns != null && !orderByColumns.isEmpty()) {
-      LOG.debug("Applying ordering {}", orderByColumns);
+      log.debug("Applying ordering {}", orderByColumns);
       return dataset.orderBy(orderByColumns.stream().map(functions::col).toArray(Column[]::new));
     }
     return dataset;
   }
 
   public Pair<QueryInfo, Dataset<Row>> runIncrementalQuery(QueryInfo queryInfo) {
-    LOG.info("Running incremental query");
+    log.info("Running incremental query");
 
     HoodieTableVersion tableVersion = HoodieTableMetaClient.builder().setConf(getStorageConf()).setBasePath(sourcePath).build().getTableConfig().getTableVersion();
     return Pair.of(queryInfo, sparkSession.read().format("hudi")
@@ -103,7 +102,7 @@ public class QueryRunner {
   }
 
   public Pair<QueryInfo, Dataset<Row>> runSnapshotQuery(QueryInfo queryInfo, Option<SnapshotLoadQuerySplitter> snapshotLoadQuerySplitterOption) {
-    LOG.info("Running snapshot query");
+    log.info("Running snapshot query");
     Dataset<Row> snapshot = sparkSession.read().format("hudi")
         .option(DataSourceReadOptions.QUERY_TYPE().key(), queryInfo.getQueryType()).load(sourcePath);
     QueryInfo snapshotQueryInfo = snapshotLoadQuerySplitterOption
