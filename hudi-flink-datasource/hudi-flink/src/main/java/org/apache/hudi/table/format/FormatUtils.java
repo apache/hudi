@@ -142,7 +142,6 @@ public class FormatUtils {
         .withProps(typedProps)
         .withShouldUseRecordPosition(false)
         .withEmitDelete(emitDelete)
-        .withEnableOptimizedLogBlockScan(writeConfig.enableOptimizedLogBlocksScan())
         .build();
   }
 

@@ -226,7 +226,6 @@ public class TestSparkRDDMetadataWriteClient extends HoodieClientTestBase {
         .withRequestedSchema(metadataSchema)
         .withDataSchema(schema)
         .withProps(new TypedProperties())
-        .withEnableOptimizedLogBlockScan(hoodieWriteConfig.getMetadataConfig().isOptimizedLogBlocksScanEnabled())
         .build();
     try (ClosableIterator<HoodieRecord<IndexedRecord>> records = fileGroupReader.getClosableHoodieRecordIterator()) {
       Map<String, HoodieRecord<HoodieMetadataPayload>> actualMdtRecordMap = new HashMap<>();

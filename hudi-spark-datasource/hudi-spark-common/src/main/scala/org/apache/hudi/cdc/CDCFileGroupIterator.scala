@@ -124,9 +124,6 @@ class CDCFileGroupIterator(split: HoodieCDCFileGroupSplit,
     readerProps.setProperty(DISK_MAP_BITCASK_COMPRESSION_ENABLED.key,
       configuration.getBoolean(HoodieCommonConfig.DISK_MAP_BITCASK_COMPRESSION_ENABLED.key(),
         HoodieCommonConfig.DISK_MAP_BITCASK_COMPRESSION_ENABLED.defaultValue()).toString)
-    readerProps.setProperty(HoodieReaderConfig.ENABLE_OPTIMIZED_LOG_BLOCKS_SCAN.key,
-      configuration.get(HoodieReaderConfig.ENABLE_OPTIMIZED_LOG_BLOCKS_SCAN.key(),
-        HoodieReaderConfig.ENABLE_OPTIMIZED_LOG_BLOCKS_SCAN.defaultValue()))
     readerProps
   }
 
