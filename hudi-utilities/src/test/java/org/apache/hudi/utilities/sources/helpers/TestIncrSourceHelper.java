@@ -367,7 +367,7 @@ class TestIncrSourceHelper extends SparkClientFunctionalTestHarness {
     String limitColumn = "s3.object.size";
     QueryInfo queryInfo = IncrSourceHelper.generateQueryInfo(jsc, basePath(), 5,
         Option.of(new StreamerCheckpointV1(startInstant)), null,
-        TimelineUtils.HollowCommitHandling.BLOCK, orderColumn, keyColumn, limitColumn, true, Option.empty());
+        TimelineUtils.HollowCommitHandling.BLOCK, orderColumn, keyColumn, limitColumn, true, Option.empty(), Option.empty());
     assertEquals(String.valueOf(Integer.parseInt(commitTimeForReads) - 1), queryInfo.getPreviousInstant());
     assertEquals(commitTimeForReads, queryInfo.getStartInstant());
     assertEquals(commitTimeForWrites, queryInfo.getEndInstant());
@@ -375,7 +375,7 @@ class TestIncrSourceHelper extends SparkClientFunctionalTestHarness {
     startInstant = commitTimeForWrites;
     queryInfo = IncrSourceHelper.generateQueryInfo(jsc, basePath(), 5,
         Option.of(new StreamerCheckpointV1(startInstant)), null,
-        TimelineUtils.HollowCommitHandling.BLOCK, orderColumn, keyColumn, limitColumn, true, Option.empty());
+        TimelineUtils.HollowCommitHandling.BLOCK, orderColumn, keyColumn, limitColumn, true, Option.empty(), Option.empty());
     assertEquals(commitTimeForReads, queryInfo.getPreviousInstant());
     assertEquals(commitTimeForWrites, queryInfo.getStartInstant());
     assertEquals(commitTimeForWrites, queryInfo.getEndInstant());
