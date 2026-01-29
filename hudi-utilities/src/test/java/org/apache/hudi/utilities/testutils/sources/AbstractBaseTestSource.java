@@ -30,7 +30,6 @@ import org.apache.hudi.utilities.config.SourceTestConfig;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.sources.AvroSource;
 
-import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.Row;
@@ -52,7 +51,6 @@ import java.util.stream.Stream;
 public abstract class AbstractBaseTestSource extends AvroSource {
 
   public static String schemaStr = HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
-  public static Schema avroSchema = HoodieTestDataGenerator.AVRO_SCHEMA;
 
   private static final Logger LOG = LoggerFactory.getLogger(AbstractBaseTestSource.class);
 

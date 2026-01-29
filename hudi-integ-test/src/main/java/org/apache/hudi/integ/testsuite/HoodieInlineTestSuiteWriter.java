@@ -24,6 +24,7 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.checkpoint.Checkpoint;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
@@ -34,7 +35,6 @@ import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 
 import lombok.extern.slf4j.Slf4j;
-import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
@@ -75,8 +75,9 @@ public class HoodieInlineTestSuiteWriter extends HoodieTestSuiteWriter {
     Pair<SchemaProvider, Pair<Checkpoint, JavaRDD<HoodieRecord>>> nextBatch = fetchSource();
     lastCheckpoint = Option.of(nextBatch.getValue().getLeft());
     JavaRDD<HoodieRecord> inputRDD = nextBatch.getRight().getRight();
+    HoodieSchema recordSchema = HoodieSchema.parse(schema);
     return inputRDD.map(r -> (GenericRecord) ((HoodieAvroRecord) r).getData()
-        .getInsertValue(new Schema.Parser().parse(schema)).get()).rdd();
+        .getInsertValue(recordSchema.toAvroSchema()).get()).rdd();
   }
 
   @Override
