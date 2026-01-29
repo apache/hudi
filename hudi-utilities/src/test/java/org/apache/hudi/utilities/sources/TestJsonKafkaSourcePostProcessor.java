@@ -31,6 +31,7 @@ import org.apache.hudi.utilities.ingestion.HoodieIngestionMetrics;
 import org.apache.hudi.utilities.schema.FilebasedSchemaProvider;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.sources.processor.JsonKafkaSourcePostProcessor;
+import org.apache.hudi.utilities.sources.processor.canal.CanalJsonKafkaSourcePostProcessor;
 import org.apache.hudi.utilities.sources.processor.maxwell.MaxwellJsonKafkaSourcePostProcessor;
 import org.apache.hudi.utilities.streamer.SourceFormatAdapter;
 import org.apache.hudi.utilities.testutils.KafkaTestUtils;
@@ -295,6 +296,47 @@ public class TestJsonKafkaSourcePostProcessor extends SparkClientFunctionalTestH
     JavaRDD<String> dataWithoutDatabaseRegex = jsc().parallelize(Arrays.asList(hudiMaxwell01Insert, hudi02Maxwell01Insert));
     long countWithoutDatabaseRegex = processor.process(dataWithoutDatabaseRegex).count();
     assertEquals(2, countWithoutDatabaseRegex);
+  }
+
+  @Test
+  public void testCanalJsonKafkaSourcePostProcessor() throws IOException {
+    // ------------------------------------------------------------------------
+    //  Canal data
+    // ------------------------------------------------------------------------
+
+    // database hudi, table hudi_canal_001 (insert, update and delete)
+    String hudiCanal01Update = "{\"data\":[{\"id\":\"111\",\"name\":\"scooter\",\"description\":\"Big 2-wheel scooter\",\"weight\":\"5.18\"}],"
+        + "\"database\":\"hudi001\",\"es\":1589373560000,\"id\":9,\"isDdl\":false,"
+        + "\"mysqlType\":{\"id\":\"INTEGER\",\"name\":\"VARCHAR(255)\",\"description\":\"VARCHAR(512)\",\"weight\":\"FLOAT\"},"
+        + "\"old\":[{\"weight\":\"5.15\"}],\"pkNames\":[\"id\"],\"sql\":\"\",\"sqlType\":{\"id\":4,\"name\":12,"
+        + "\"description\":12,\"weight\":7},\"table\":\"hudi_canal001\",\"ts\":1589373560798,\"type\":\"update\"}";
+    String hudiCanal01Insert = "{\"data\":[{\"id\":\"111\",\"name\":\"scooter\",\"description\":\"Big 2-wheel scooter\",\"weight\":\"5.18\"}],"
+        + "\"database\":\"hudi001\",\"es\":1589373560000,\"id\":9,\"isDdl\":false,"
+        + "\"mysqlType\":{\"id\":\"INTEGER\",\"name\":\"VARCHAR(255)\",\"description\":\"VARCHAR(512)\",\"weight\":\"FLOAT\"},"
+        + "\"old\":[{\"weight\":\"5.15\"}],\"pkNames\":[\"id\"],\"sql\":\"\",\"sqlType\":{\"id\":4,\"name\":12,"
+        + "\"description\":12,\"weight\":7},\"table\":\"hudi_canal001\",\"ts\":1589373560798,\"type\":\"insert\"}";
+
+    // ------------------------------------------------------------------------
+    //  Tests
+    // ------------------------------------------------------------------------
+
+    ObjectMapper mapper = new ObjectMapper();
+    TypedProperties props = new TypedProperties();
+    props.setProperty(CanalJsonKafkaSourcePostProcessor.Config.DATABASE_NAME_REGEX_PROP.key(), "hudi(_)?[0-9]{0,2}");
+    props.setProperty(CanalJsonKafkaSourcePostProcessor.Config.TABLE_NAME_REGEX_PROP.key(), "hudi_canal(_)?[0-9]{0,2}");
+
+    // test insert and update
+    JavaRDD<String> inputInsertAndUpdate = jsc().parallelize(Arrays.asList(hudiCanal01Update, hudiCanal01Insert));
+    CanalJsonKafkaSourcePostProcessor processor = new CanalJsonKafkaSourcePostProcessor(props);
+    processor.process(inputInsertAndUpdate).map(mapper::readTree).foreach(record -> {
+      // database name should be null
+      JsonNode database = record.get("database");
+      // insert and update records should be tagged as no delete
+      boolean isDelete = record.get(HoodieRecord.HOODIE_IS_DELETED).booleanValue();
+
+      assertFalse(isDelete);
+      assertNull(database);
+    });
   }
 
   /**
