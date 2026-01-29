@@ -151,7 +151,7 @@ public class StreamWriteFunctionWrapper<I> implements TestFunctionWrapper<I> {
     this.stateInitializationContext = new MockStateInitializationContext();
     this.indexStateInitializationContext = new MockStateInitializationContext();
     this.coordinatorStateStore = new TreeMap<>();
-    this.asyncCompaction = OptionsResolver.needsAsyncCompaction(conf);
+    this.asyncCompaction = OptionsResolver.needsAsyncCompaction(conf) || OptionsResolver.needsAsyncMetadataCompaction(conf);
     this.isStreamingWriteIndexEnabled = OptionsResolver.isStreamingIndexWriteEnabled(conf);
     this.streamConfig = new StreamConfig(conf);
     streamConfig.setOperatorID(new OperatorID());

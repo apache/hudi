@@ -169,7 +169,7 @@ public class ITTestDataStreamWrite extends TestLogger {
     conf.set(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS, 4);
     conf.set(FlinkOptions.COMPACTION_DELTA_COMMITS, 1);
     // use synchronized compaction to ensure flink job finishing with compaction completed.
-    conf.set(FlinkOptions.COMPACTION_ASYNC_ENABLED, false);
+    conf.set(FlinkOptions.COMPACTION_OPERATION_EXECUTE_ASYNC_ENABLED, false);
     conf.set(FlinkOptions.TABLE_TYPE, HoodieTableType.MERGE_ON_READ.name());
 
     defaultWriteAndCheckExpected(conf, "mor_write_with_compact", 1);
@@ -212,7 +212,7 @@ public class ITTestDataStreamWrite extends TestLogger {
   public void testStreamWriteWithIndexBootstrap(String tableType) throws Exception {
     Configuration conf = TestConfigurations.getDefaultConf(tempFile.toURI().toString());
     // use synchronized compaction to avoid sleeping for async compact.
-    conf.set(FlinkOptions.COMPACTION_ASYNC_ENABLED, false);
+    conf.set(FlinkOptions.COMPACTION_OPERATION_EXECUTE_ASYNC_ENABLED, false);
     conf.set(FlinkOptions.COMPACTION_DELTA_COMMITS, 1);
     conf.set(FlinkOptions.TABLE_TYPE, tableType);
 

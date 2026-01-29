@@ -57,6 +57,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.hadoop.fs.Path;
 
 import java.util.Collection;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -437,6 +438,13 @@ public class HoodieFlinkWriteClient<T>
   @Override
   public HoodieWriteMetadata<List<WriteStatus>> cluster(final String clusteringInstant, final boolean shouldComplete) {
     throw new HoodieNotSupportedException("Clustering is not supported yet");
+  }
+
+  /**
+   * Commit log compaction and track metrics.
+   */
+  public void completeLogCompaction(HoodieCommitMetadata metadata, HoodieTable table, String compactionCommitTime) {
+    tableServiceClient.completeLogCompaction(metadata, table, compactionCommitTime, Collections.emptyList());
   }
 
   private void completeClustering(

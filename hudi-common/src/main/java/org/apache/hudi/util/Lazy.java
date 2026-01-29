@@ -18,6 +18,8 @@
 
 package org.apache.hudi.util;
 
+import lombok.Getter;
+
 import javax.annotation.concurrent.ThreadSafe;
 
 import java.util.function.Supplier;
@@ -30,6 +32,7 @@ import java.util.function.Supplier;
 @ThreadSafe
 public class Lazy<T> {
 
+  @Getter
   private volatile boolean initialized;
 
   private Supplier<T> initializer;

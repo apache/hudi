@@ -228,6 +228,20 @@ public class FlinkOptions extends HoodieConfig {
       .withFallbackKeys(HoodieMetadataConfig.ENABLE.key())
       .withDescription("Enable the internal metadata table which serves table metadata like level file listings, default enabled");
 
+  @AdvancedConfig
+  public static final ConfigOption<Boolean> METADATA_COMPACTION_SCHEDULE_ENABLED = ConfigOptions
+      .key("metadata.compaction.schedule.enabled")
+      .booleanType()
+      .defaultValue(true)
+      .withDescription("Schedule the compaction plan for metadata table, enabled by default.");
+
+  public static final ConfigOption<Boolean> METADATA_COMPACTION_ASYNC_ENABLED = ConfigOptions
+      .key("metadata.compaction.async.enabled")
+      .booleanType()
+      .defaultValue(true)
+      .withDescription("Whether to enable async compaction for metadata table,"
+          + "if true, the compaction for metadata table will be performed in the compaction pipeline, default enabled.");
+
   public static final ConfigOption<Integer> METADATA_COMPACTION_DELTA_COMMITS = ConfigOptions
       .key("metadata.compaction.delta_commits")
       .intType()
@@ -887,6 +901,13 @@ public class FlinkOptions extends HoodieConfig {
       .intType()
       .noDefaultValue()
       .withDescription("Parallelism of tasks that do actual compaction, default same as the write task parallelism");
+
+  @AdvancedConfig
+  public static final ConfigOption<Boolean> COMPACTION_OPERATION_EXECUTE_ASYNC_ENABLED = ConfigOptions
+      .key("compaction.operation.execute.async.enabled")
+      .booleanType()
+      .defaultValue(true)
+      .withDescription("Whether the compaction operation should be executed asynchronously on compact operator, default enabled.");
 
   public static final String NUM_COMMITS = "num_commits";
   public static final String TIME_ELAPSED = "time_elapsed";

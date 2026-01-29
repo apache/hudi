@@ -35,6 +35,8 @@ import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.hive.HiveSyncTool;
+import org.apache.hudi.metadata.FlinkHoodieBackedTableMetadataWriter;
+import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.sink.common.AbstractStreamWriteFunction;
 import org.apache.hudi.sink.event.Correspondent;
 import org.apache.hudi.sink.event.WriteMetadataEvent;
@@ -129,6 +131,9 @@ public class StreamWriteOperatorCoordinator
    */
   protected final Context context;
 
+  /**
+   * Whether the streaming write to metadata table is enabled.
+   */
   private final boolean isStreamingIndexWriteEnabled;
 
   /**
@@ -140,6 +145,11 @@ public class StreamWriteOperatorCoordinator
    * Write client.
    */
   private transient HoodieFlinkWriteClient writeClient;
+
+  /**
+   * Write client for the metadata table.
+   */
+  private transient HoodieFlinkWriteClient metadataWriteClient;
 
   /**
    * Meta client.
@@ -227,6 +237,16 @@ public class StreamWriteOperatorCoordinator
       this.writeClient = FlinkWriteClients.createWriteClient(conf);
       this.writeClient.tryUpgrade(instant, this.metaClient);
       initMetadataTable(this.writeClient);
+
+      if (tableState.scheduleMdtCompaction) {
+        // Get the metadata writer from the table and use its write client
+        Option<HoodieTableMetadataWriter> metadataWriterOpt =
+            this.writeClient.getHoodieTable().getMetadataWriter(null, true, true);
+        ValidationUtils.checkArgument(metadataWriterOpt.isPresent(), "Failed to create the metadata writer");
+        FlinkHoodieBackedTableMetadataWriter metadataWriter = (FlinkHoodieBackedTableMetadataWriter) metadataWriterOpt.get();
+        this.metadataWriteClient = (HoodieFlinkWriteClient) metadataWriter.getWriteClient();
+      }
+
       // start the executor
       this.executor = NonThrownExecutor.builder(log)
           .threadFactory(getThreadFactory("meta-event-handle"))
@@ -267,6 +287,9 @@ public class StreamWriteOperatorCoordinator
     // because the task in the service may send requests to the embedded timeline service.
     if (writeClient != null) {
       writeClient.close();
+    }
+    if (metadataWriteClient != null) {
+      metadataWriteClient.close();
     }
     this.eventBuffers = null;
     if (this.clientIds != null) {
@@ -457,6 +480,11 @@ public class StreamWriteOperatorCoordinator
     // if compaction is on, schedule the compaction
     if (tableState.scheduleCompaction) {
       CompactionUtil.scheduleCompaction(writeClient, tableState.isDeltaTimeCompaction, committed);
+    }
+    // Schedule metadata table compaction after successful commit
+    if (tableState.scheduleMdtCompaction) {
+      // Schedule compaction for the metadata table
+      CompactionUtil.scheduleMetadataCompaction(metadataWriteClient, committed);
     }
     // if clustering is on, schedule the clustering
     if (tableState.scheduleClustering) {
@@ -725,6 +753,7 @@ public class StreamWriteOperatorCoordinator
     final String commitAction;
     final boolean isOverwrite;
     final boolean scheduleCompaction;
+    final boolean scheduleMdtCompaction;
     final boolean scheduleClustering;
     final boolean syncHive;
     final boolean syncMetadata;
@@ -737,6 +766,7 @@ public class StreamWriteOperatorCoordinator
       this.isOverwrite = WriteOperationType.isOverwrite(this.operationType);
       this.scheduleCompaction = OptionsResolver.needsScheduleCompaction(conf);
       this.scheduleClustering = OptionsResolver.needsScheduleClustering(conf);
+      this.scheduleMdtCompaction = OptionsResolver.needsScheduleMdtCompaction(conf);
       this.syncHive = conf.get(FlinkOptions.HIVE_SYNC_ENABLED);
       this.syncMetadata = conf.get(FlinkOptions.METADATA_ENABLED);
       this.isDeltaTimeCompaction = OptionsResolver.isDeltaTimeCompaction(conf);
