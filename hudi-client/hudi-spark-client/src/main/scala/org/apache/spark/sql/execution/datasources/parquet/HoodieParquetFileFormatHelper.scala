@@ -106,7 +106,8 @@ object HoodieParquetFileFormatHelper {
                                typeChangeInfos: java.util.Map[Integer, org.apache.hudi.common.util.collection.Pair[DataType, DataType]],
                                requiredSchema: StructType,
                                partitionSchema: StructType,
-                               schemaUtils: HoodieSchemaUtils): UnsafeProjection = {
+                               schemaUtils: HoodieSchemaUtils,
+                               padMissingColumns: Boolean = false): UnsafeProjection = {
     val addedCastCache = scala.collection.mutable.HashMap.empty[(DataType, DataType), Boolean]
 
     def hasUnsupportedConversion(src: DataType, dst: DataType): Boolean = {
@@ -174,24 +175,55 @@ object HoodieParquetFileFormatHelper {
       }
     }
 
-    if (typeChangeInfos.isEmpty) {
-      GenerateUnsafeProjection.generate(fullSchema, fullSchema)
-    } else {
-      // find type changed.
-      val newSchema = new StructType(requiredSchema.fields.zipWithIndex.map { case (f, i) =>
-        if (typeChangeInfos.containsKey(i)) {
-          StructField(f.name, typeChangeInfos.get(i).getRight, f.nullable, f.metadata)
-        } else f
-      })
-      val newFullSchema = schemaUtils.toAttributes(newSchema) ++ schemaUtils.toAttributes(partitionSchema)
-      val castSchema = newFullSchema.zipWithIndex.map { case (attr, i) =>
-        if (typeChangeInfos.containsKey(i)) {
-          val srcType = typeChangeInfos.get(i).getRight
-          val dstType = typeChangeInfos.get(i).getLeft
-          recursivelyCastExpressions(attr, srcType, dstType)
-        } else attr
+    def generateProjectionWithPadding(): UnsafeProjection = {
+      // fullSchema will contain fields potentially not in lance file
+      // we also need to compare against the requiredSchema to do correct order and padding
+      val inputFieldMap = fullSchema.map(a => a.name -> a).toMap
+
+      // Build expressions for all required fields, padding missing columns with NULL
+      val expressions = requiredSchema.fields.zipWithIndex.map { case (field, i) =>
+        inputFieldMap.get(field.name) match {
+          case Some(attr) =>
+            // Field exists in file - apply casting if needed
+            if (typeChangeInfos.containsKey(i)) {
+              val srcType = typeChangeInfos.get(i).getRight  // file type
+              val dstType = typeChangeInfos.get(i).getLeft   // required type
+              recursivelyCastExpressions(attr, srcType, dstType)
+            } else {
+              attr
+            }
+          case None =>
+            // Field missing from file, use NULL literal for padding
+            Literal(null, field.dataType)
+        }
       }
-      GenerateUnsafeProjection.generate(castSchema, newFullSchema)
+
+      GenerateUnsafeProjection.generate(expressions, fullSchema)
+    }
+
+    if (padMissingColumns) {
+      // handles the Lance case for padding
+      generateProjectionWithPadding()
+    } else {
+      if (typeChangeInfos.isEmpty) {
+        GenerateUnsafeProjection.generate(fullSchema, fullSchema)
+      } else {
+        // find type changed.
+        val newSchema = new StructType(requiredSchema.fields.zipWithIndex.map { case (f, i) =>
+          if (typeChangeInfos.containsKey(i)) {
+            StructField(f.name, typeChangeInfos.get(i).getRight, f.nullable, f.metadata)
+          } else f
+        })
+        val newFullSchema = schemaUtils.toAttributes(newSchema) ++ schemaUtils.toAttributes(partitionSchema)
+        val castSchema = newFullSchema.zipWithIndex.map { case (attr, i) =>
+          if (typeChangeInfos.containsKey(i)) {
+            val srcType = typeChangeInfos.get(i).getRight
+            val dstType = typeChangeInfos.get(i).getLeft
+            recursivelyCastExpressions(attr, srcType, dstType)
+          } else attr
+        }
+        GenerateUnsafeProjection.generate(castSchema, newFullSchema)
+      }
     }
   }
 }
