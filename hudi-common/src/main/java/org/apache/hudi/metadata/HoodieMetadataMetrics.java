@@ -79,6 +79,9 @@ public class HoodieMetadataMetrics implements Serializable {
   public static final String TABLE_SERVICE_EXECUTION_STATUS = "table_service_execution_status";
   public static final String TABLE_SERVICE_EXECUTION_DURATION = "table_service_execution_duration";
   public static final String ASYNC_INDEXER_CATCHUP_TIME = "async_indexer_catchup_time";
+  public static final String COMPACTION_FAILURES = "compaction_failures";
+  public static final String LOG_COMPACTION_FAILURES = "logcompaction_failures";
+  public static final String PENDING_COMPACTIONS_FAILURES = "pending_compactions_failures";
 
   private final transient MetricRegistry metricsRegistry;
   private final transient Metrics metrics;

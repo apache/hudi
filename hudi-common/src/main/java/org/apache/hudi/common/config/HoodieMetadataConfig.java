@@ -616,6 +616,14 @@ public final class HoodieMetadataConfig extends HoodieConfig {
           + "honor the set value for number of tasks. If not, number of write status's from data "
           + "table writes will be used for metadata table record preparation");
 
+  public static final ConfigProperty<Boolean> FAIL_ON_TABLE_SERVICE_FAILURES = ConfigProperty
+      .key(METADATA_PREFIX + ".write.fail.on.table.service.failures")
+      .defaultValue(true)
+      .markAdvanced()
+      .sinceVersion("1.2.0")
+      .withDocumentation("when set to true, it fails the job on metadata table's "
+          + "table services operation failure");
+
   public long getMaxLogFileSize() {
     return getLong(MAX_LOG_FILE_SIZE_BYTES_PROP);
   }
@@ -896,6 +904,10 @@ public final class HoodieMetadataConfig extends HoodieConfig {
 
   public boolean shouldDeriveFromDataTableCleanPolicy() {
     return getBooleanOrDefault(DERIVE_FROM_DATA_TABLE_CLEAN_POLICY);
+  }
+
+  public boolean shouldFailOnTableServiceFailures() {
+    return getBooleanOrDefault(FAIL_ON_TABLE_SERVICE_FAILURES);
   }
 
   /**
@@ -1207,6 +1219,11 @@ public final class HoodieMetadataConfig extends HoodieConfig {
 
     public Builder withRepartitionDefaultPartitions(int defaultPartitions) {
       metadataConfig.setValue(REPARTITION_DEFAULT_PARTITIONS, String.valueOf(defaultPartitions));
+      return this;
+    }
+
+    public Builder setFailOnTableServiceFailures(boolean failOnTableServiceFailures) {
+      metadataConfig.setValue(FAIL_ON_TABLE_SERVICE_FAILURES, String.valueOf(failOnTableServiceFailures));
       return this;
     }
 

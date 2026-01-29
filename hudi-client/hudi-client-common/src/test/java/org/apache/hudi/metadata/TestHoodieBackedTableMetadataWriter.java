@@ -32,28 +32,34 @@ import org.apache.hudi.common.table.timeline.versioning.v2.ActiveTimelineV2;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.storage.StorageConfiguration;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.mockito.MockedStatic;
 
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Stream;
 
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.RETURNS_DEEP_STUBS;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.times;
@@ -107,7 +113,8 @@ class TestHoodieBackedTableMetadataWriter {
     } else {
       expectedResult = initialTimeline;
     }
-    assertSame(expectedResult, HoodieBackedTableMetadataWriter.runPendingTableServicesOperationsAndRefreshTimeline(metaClient, writeClient, requiresRefresh));
+    assertSame(expectedResult, HoodieBackedTableMetadataWriter.runPendingTableServicesOperationsAndRefreshTimeline(
+        metaClient, writeClient, requiresRefresh, Option.empty()));
 
     verify(writeClient, times(hasPendingCompaction ? 1 : 0)).runAnyPendingCompactions();
     verify(writeClient, times(hasPendingLogCompaction ? 1 : 0)).runAnyPendingLogCompactions();
@@ -313,5 +320,92 @@ class TestHoodieBackedTableMetadataWriter {
     ActiveTimelineV2 timeline = new ActiveTimelineV2();
     timeline.setInstants(instants);
     return timeline;
+  }
+
+  static Stream<Arguments> tableServiceFailureTestCases() {
+    return Stream.of(
+        Arguments.of(
+            "compaction",
+            true,
+            false,
+            new RuntimeException("Compaction failed"),
+            HoodieMetadataMetrics.PENDING_COMPACTIONS_FAILURES,
+            true
+        ),
+        Arguments.of(
+            "compaction",
+            true,
+            false,
+            new RuntimeException("Compaction failed"),
+            HoodieMetadataMetrics.PENDING_COMPACTIONS_FAILURES,
+            false
+        ),
+        Arguments.of(
+            "log compaction",
+            false,
+            true,
+            new HoodieException("Log compaction failed"),
+            HoodieMetadataMetrics.LOG_COMPACTION_FAILURES,
+            true
+        ),
+        Arguments.of(
+            "log compaction",
+            false,
+            true,
+            new HoodieException("Log compaction failed"),
+            HoodieMetadataMetrics.LOG_COMPACTION_FAILURES,
+            false
+        )
+    );
+  }
+
+  @ParameterizedTest
+  @MethodSource("tableServiceFailureTestCases")
+  void testTableServiceFailures(
+      String serviceType,
+      boolean hasPendingCompaction,
+      boolean hasPendingLogCompaction,
+      RuntimeException exceptionToThrow,
+      String expectedMetric,
+      boolean shouldFailOnTableServiceFailures) {
+    HoodieTableMetaClient metaClient = mock(HoodieTableMetaClient.class);
+    HoodieActiveTimeline timeline = mock(HoodieActiveTimeline.class, RETURNS_DEEP_STUBS);
+    BaseHoodieWriteClient writeClient = mock(BaseHoodieWriteClient.class);
+    HoodieMetadataMetrics metrics = mock(HoodieMetadataMetrics.class);
+
+    when(metaClient.reloadActiveTimeline()).thenReturn(timeline);
+    when(timeline.filterPendingCompactionTimeline().countInstants()).thenReturn(hasPendingCompaction ? 1 : 0);
+    when(timeline.filterPendingLogCompactionTimeline().countInstants()).thenReturn(hasPendingLogCompaction ? 1 : 0);
+
+    // Simulate failure based on service type
+    if (hasPendingCompaction) {
+      doThrow(exceptionToThrow).when(writeClient).runAnyPendingCompactions();
+    } else if (hasPendingLogCompaction) {
+      doThrow(exceptionToThrow).when(writeClient).runAnyPendingLogCompactions();
+    }
+
+    if (shouldFailOnTableServiceFailures) {
+      // When shouldFailOnTableServiceFailures is true, exception should propagate
+      assertThrows(exceptionToThrow.getClass(), () ->
+          HoodieBackedTableMetadataWriter.runPendingTableServicesOperationsAndRefreshTimeline(
+              metaClient, writeClient, true, Option.of(metrics)),
+          "Expected exception to be thrown when " + serviceType + " fails");
+    } else {
+      // When shouldFailOnTableServiceFailures is false, exception should not propagate
+      assertDoesNotThrow(() ->
+          HoodieBackedTableMetadataWriter.runPendingTableServicesOperationsAndRefreshTimeline(
+              metaClient, writeClient, false, Option.of(metrics)),
+          "Exception should not be thrown when shouldFailOnTableServiceFailures is false");
+    }
+
+    // Verify the appropriate service method was called
+    if (hasPendingCompaction) {
+      verify(writeClient, times(1)).runAnyPendingCompactions();
+    } else if (hasPendingLogCompaction) {
+      verify(writeClient, times(1)).runAnyPendingLogCompactions();
+    }
+
+    // Verify metrics are incremented
+    verify(metrics, times(1)).incrementMetric(expectedMetric, 1);
   }
 }
