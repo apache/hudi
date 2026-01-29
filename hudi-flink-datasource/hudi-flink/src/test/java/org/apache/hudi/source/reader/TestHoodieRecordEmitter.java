@@ -21,6 +21,7 @@ package org.apache.hudi.source.reader;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.source.split.HoodieSourceSplit;
 
+import org.apache.flink.api.common.eventtime.Watermark;
 import org.apache.flink.api.connector.source.SourceOutput;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -48,7 +49,10 @@ public class TestHoodieRecordEmitter {
   public void setUp() {
     emitter = new HoodieRecordEmitter<>();
     mockOutput = mock(SourceOutput.class);
-    mockSplit = createTestSplit();
+    mockSplit = createTestSplitWithParams(
+        "40e603a8-3cc1-4d09-b0a5-1432992b4bf7_1-0-1_20250129120000001.parquet",
+        "20250129120000001",
+        "file-1");
   }
 
   @Test
@@ -80,135 +84,252 @@ public class TestHoodieRecordEmitter {
   }
 
   @Test
-  public void testEmitMultipleRecords() throws Exception {
-    List<HoodieRecordWithPosition<String>> records = new ArrayList<>();
-    records.add(new HoodieRecordWithPosition<>("record1", 0, 1L));
-    records.add(new HoodieRecordWithPosition<>("record2", 0, 2L));
-    records.add(new HoodieRecordWithPosition<>("record3", 0, 3L));
+  public void testWatermarkEmissionOnFirstSplitTransition() throws Exception {
+    // Create first split with watermark from basePath timestamp 20250129120000001
+    HoodieSourceSplit split1 = createTestSplitWithParams(
+        "40e603a8-3cc1-4d09-b0a5-1432992b4bf7_1-0-1_20250129120000001.parquet",
+        "20250129120000001",
+        "file-1");
 
-    for (HoodieRecordWithPosition<String> record : records) {
-      emitter.emitRecord(record, mockOutput, mockSplit);
-    }
+    // Create second split with higher timestamp
+    HoodieSourceSplit split2 = createTestSplitWithParams(
+        "40e603a8-3cc1-4d09-b0a5-1432992b4bf7_1-0-1_20250129130000002.parquet",
+        "20250129130000002",
+        "file-2");
 
-    // Verify all records were collected
-    ArgumentCaptor<String> captor = ArgumentCaptor.forClass(String.class);
-    verify(mockOutput, times(3)).collect(captor.capture());
+    // Emit record from first split
+    emitter.emitRecord(new HoodieRecordWithPosition<>("record1", 0, 1L), mockOutput, split1);
 
-    List<String> collectedRecords = captor.getAllValues();
-    assertEquals(3, collectedRecords.size());
-    assertEquals("record1", collectedRecords.get(0));
-    assertEquals("record2", collectedRecords.get(1));
-    assertEquals("record3", collectedRecords.get(2));
+    // No watermark emitted yet (first split, no previous watermark to emit)
+    verify(mockOutput, times(0)).emitWatermark(org.mockito.ArgumentMatchers.any());
 
-    // Verify final split position
-    assertEquals(0, mockSplit.getFileOffset());
-    assertEquals(3L, mockSplit.getConsumed());
+    // Emit record from second split - should emit watermark from split1
+    emitter.emitRecord(new HoodieRecordWithPosition<>("record2", 0, 1L), mockOutput, split2);
+
+    // Verify watermark from split1 was emitted
+    ArgumentCaptor<Watermark> watermarkCaptor = ArgumentCaptor.forClass(Watermark.class);
+    verify(mockOutput, times(1)).emitWatermark(watermarkCaptor.capture());
+    assertEquals(20250129120000001L, watermarkCaptor.getValue().getTimestamp());
   }
 
   @Test
-  public void testEmitRecordWithDifferentFileOffsets() throws Exception {
-    HoodieRecordWithPosition<String> record1 =
-        new HoodieRecordWithPosition<>("record1", 0, 10L);
-    HoodieRecordWithPosition<String> record2 =
-        new HoodieRecordWithPosition<>("record2", 1, 20L);
-    HoodieRecordWithPosition<String> record3 =
-        new HoodieRecordWithPosition<>("record3", 2, 30L);
+  public void testWatermarkEmissionWithMultipleSplits() throws Exception {
+    HoodieSourceSplit split1 = createTestSplitWithParams(
+        "40e603a8-3cc1-4d09-b0a5-1432992b4bf7_1-0-1_20250129120000001.parquet",
+        "20250129120000001",
+        "file-1");
+    HoodieSourceSplit split2 = createTestSplitWithParams(
+        "40e603a8-3cc1-4d09-b0a5-1432992b4bf7_1-0-1_20250129130000002.parquet",
+        "20250129130000002",
+        "file-2");
+    HoodieSourceSplit split3 = createTestSplitWithParams(
+        "40e603a8-3cc1-4d09-b0a5-1432992b4bf7_1-0-1_20250129140000003.parquet",
+        "20250129140000003",
+        "file-3");
 
-    emitter.emitRecord(record1, mockOutput, mockSplit);
-    assertEquals(0, mockSplit.getFileOffset());
-    assertEquals(10L, mockSplit.getConsumed());
+    // Process splits sequentially
+    emitter.emitRecord(new HoodieRecordWithPosition<>("r1", 0, 1L), mockOutput, split1);
+    emitter.emitRecord(new HoodieRecordWithPosition<>("r2", 0, 1L), mockOutput, split2);
+    emitter.emitRecord(new HoodieRecordWithPosition<>("r3", 0, 1L), mockOutput, split3);
 
-    emitter.emitRecord(record2, mockOutput, mockSplit);
-    assertEquals(1, mockSplit.getFileOffset());
-    assertEquals(20L, mockSplit.getConsumed());
+    // Verify watermarks emitted for split1 and split2
+    ArgumentCaptor<Watermark> watermarkCaptor = ArgumentCaptor.forClass(Watermark.class);
+    verify(mockOutput, times(2)).emitWatermark(watermarkCaptor.capture());
 
-    emitter.emitRecord(record3, mockOutput, mockSplit);
-    assertEquals(2, mockSplit.getFileOffset());
-    assertEquals(30L, mockSplit.getConsumed());
+    List<Watermark> watermarks = watermarkCaptor.getAllValues();
+    assertEquals(20250129120000001L, watermarks.get(0).getTimestamp());
+    assertEquals(20250129130000002L, watermarks.get(1).getTimestamp());
   }
 
   @Test
-  public void testEmitRecordWithNullRecord() throws Exception {
-    HoodieRecordWithPosition<String> recordWithPosition =
-        new HoodieRecordWithPosition<>(null, 0, 0L);
+  public void testWatermarkExtractionFromBasePath() throws Exception {
+    HoodieSourceSplit split = createTestSplitWithParams(
+        "40e603a8-3cc1-4d09-b0a5-1432992b4bf7_1-0-1_20250129150000005.parquet",
+        "20250129150000005",
+        "file-5");
 
-    emitter.emitRecord(recordWithPosition, mockOutput, mockSplit);
+    emitter.emitRecord(new HoodieRecordWithPosition<>("record", 0, 1L), mockOutput, split);
 
-    // Verify null record was collected
-    ArgumentCaptor<String> captor = ArgumentCaptor.forClass(String.class);
-    verify(mockOutput, times(1)).collect(captor.capture());
-    assertEquals(null, captor.getValue());
+    // No watermark emitted on first split
+    verify(mockOutput, times(0)).emitWatermark(org.mockito.ArgumentMatchers.any());
+
+    // Process a new split to trigger watermark emission from previous split
+    HoodieSourceSplit split2 = createTestSplitWithParams(
+        "40e603a8-3cc1-4d09-b0a5-1432992b4bf7_1-0-1_20250129160000006.parquet",
+        "20250129160000006",
+        "file-6");
+    emitter.emitRecord(new HoodieRecordWithPosition<>("record", 0, 1L), mockOutput, split2);
+
+    ArgumentCaptor<Watermark> watermarkCaptor = ArgumentCaptor.forClass(Watermark.class);
+    verify(mockOutput, times(1)).emitWatermark(watermarkCaptor.capture());
+    assertEquals(20250129150000005L, watermarkCaptor.getValue().getTimestamp());
   }
 
   @Test
-  public void testEmitRecordWithDifferentRecordTypes() throws Exception {
-    HoodieRecordEmitter<Integer> intEmitter = new HoodieRecordEmitter<>();
-    SourceOutput<Integer> intOutput = mock(SourceOutput.class);
+  public void testWatermarkExtractionFromLogPaths() throws Exception {
+    List<String> logPaths = new ArrayList<>();
+    logPaths.add("40e603a8-3cc1-4d09-b0a5-1432992b4bf7_1-0-1_20250129120000001.log");
+    logPaths.add("40e603a8-3cc1-4d09-b0a5-1432992b4bf7_1-0-1_20250129130000002.log");
+    logPaths.add("40e603a8-3cc1-4d09-b0a5-1432992b4bf7_1-0-1_20250129140000003.log");
 
-    HoodieRecordWithPosition<Integer> intRecord =
-        new HoodieRecordWithPosition<>(42, 0, 0L);
+    HoodieSourceSplit split = new HoodieSourceSplit(
+        1,
+        null,  // No base path
+        Option.of(logPaths),
+        "/test/table/path",
+        "/test/partition",
+        "merge_on_read",
+        "20250129140000003",
+        "file-1"
+    );
 
-    intEmitter.emitRecord(intRecord, intOutput, mockSplit);
+    emitter.emitRecord(new HoodieRecordWithPosition<>("record", 0, 1L), mockOutput, split);
 
-    ArgumentCaptor<Integer> captor = ArgumentCaptor.forClass(Integer.class);
-    verify(intOutput, times(1)).collect(captor.capture());
-    assertEquals(42, captor.getValue());
+    // Emit another split to trigger watermark from previous
+    HoodieSourceSplit split2 = createTestSplitWithParams(
+        "40e603a8-3cc1-4d09-b0a5-1432992b4bf7_1-0-1_20250129150000004.parquet",
+        "20250129150000004",
+        "file-2");
+    emitter.emitRecord(new HoodieRecordWithPosition<>("record", 0, 1L), mockOutput, split2);
+
+    // Verify watermark is max of log paths (20250129140000003)
+    ArgumentCaptor<Watermark> watermarkCaptor = ArgumentCaptor.forClass(Watermark.class);
+    verify(mockOutput, times(1)).emitWatermark(watermarkCaptor.capture());
+    assertEquals(20250129140000003L, watermarkCaptor.getValue().getTimestamp());
   }
 
   @Test
-  public void testEmitRecordPositionIncrementsCorrectly() throws Exception {
-    // Simulate reading records sequentially with increasing offsets
-    for (long i = 1; i <= 10; i++) {
-      HoodieRecordWithPosition<String> record =
-          new HoodieRecordWithPosition<>("record" + i, 0, i);
-      emitter.emitRecord(record, mockOutput, mockSplit);
+  public void testWatermarkExtractionFromBothBaseAndLogPaths() throws Exception {
+    List<String> logPaths = new ArrayList<>();
+    logPaths.add("40e603a8-3cc1-4d09-b0a5-1432992b4bf7_1-0-1_20250129130000002.log");
+    logPaths.add("40e603a8-3cc1-4d09-b0a5-1432992b4bf7_1-0-1_20250129160000006.log");  // Higher than base
 
-      assertEquals(0, mockSplit.getFileOffset());
-      assertEquals(i, mockSplit.getConsumed());
-    }
+    HoodieSourceSplit split = new HoodieSourceSplit(
+        1,
+        "40e603a8-3cc1-4d09-b0a5-1432992b4bf7_1-0-1_20250129120000001.parquet",
+        Option.of(logPaths),
+        "/test/table/path",
+        "/test/partition",
+        "merge_on_read",
+        "20250129160000006",
+        "file-1"
+    );
 
-    verify(mockOutput, times(10)).collect(org.mockito.ArgumentMatchers.anyString());
+    emitter.emitRecord(new HoodieRecordWithPosition<>("record", 0, 1L), mockOutput, split);
+
+    // Emit another split to trigger watermark
+    HoodieSourceSplit split2 = createTestSplitWithParams(
+        "40e603a8-3cc1-4d09-b0a5-1432992b4bf7_1-0-1_20250129170000007.parquet",
+        "20250129170000007",
+        "file-2");
+    emitter.emitRecord(new HoodieRecordWithPosition<>("record", 0, 1L), mockOutput, split2);
+
+    // Verify watermark is max of all paths (20250129160000006 from log)
+    ArgumentCaptor<Watermark> watermarkCaptor = ArgumentCaptor.forClass(Watermark.class);
+    verify(mockOutput, times(1)).emitWatermark(watermarkCaptor.capture());
+    assertEquals(20250129160000006L, watermarkCaptor.getValue().getTimestamp());
   }
 
   @Test
-  public void testEmitRecordAcrossMultipleFiles() throws Exception {
-    // File 0, records 0-2
-    emitter.emitRecord(new HoodieRecordWithPosition<>("f0r0", 0, 0L), mockOutput, mockSplit);
-    emitter.emitRecord(new HoodieRecordWithPosition<>("f0r1", 0, 1L), mockOutput, mockSplit);
-    emitter.emitRecord(new HoodieRecordWithPosition<>("f0r2", 0, 2L), mockOutput, mockSplit);
+  public void testNoWatermarkEmittedOnSameSplit() throws Exception {
+    HoodieSourceSplit split = createTestSplitWithParams(
+        "40e603a8-3cc1-4d09-b0a5-1432992b4bf7_1-0-1_20250129120000001.parquet",
+        "20250129120000001",
+        "file-1");
 
-    assertEquals(0, mockSplit.getFileOffset());
-    assertEquals(2L, mockSplit.getConsumed());
+    // Emit multiple records from same split
+    emitter.emitRecord(new HoodieRecordWithPosition<>("record1", 0, 1L), mockOutput, split);
+    emitter.emitRecord(new HoodieRecordWithPosition<>("record2", 0, 2L), mockOutput, split);
+    emitter.emitRecord(new HoodieRecordWithPosition<>("record3", 0, 3L), mockOutput, split);
 
-    // File 1, records 0-1
-    emitter.emitRecord(new HoodieRecordWithPosition<>("f1r0", 1, 0L), mockOutput, mockSplit);
-    emitter.emitRecord(new HoodieRecordWithPosition<>("f1r1", 1, 1L), mockOutput, mockSplit);
+    // No watermarks should be emitted for same split
+    verify(mockOutput, times(0)).emitWatermark(org.mockito.ArgumentMatchers.any());
+  }
 
-    assertEquals(1, mockSplit.getFileOffset());
-    assertEquals(1L, mockSplit.getConsumed());
+  @Test
+  public void testNoWatermarkRegressionWarning() throws Exception {
+    // This test verifies the warning case when watermark decreases
+    // Start with high watermark
+    HoodieSourceSplit split1 = createTestSplitWithParams(
+        "40e603a8-3cc1-4d09-b0a5-1432992b4bf7_1-0-1_20250129140000003.parquet",
+        "20250129140000003",
+        "file-1");
 
-    // File 2, record 0
-    emitter.emitRecord(new HoodieRecordWithPosition<>("f2r0", 2, 0L), mockOutput, mockSplit);
+    // Then move to lower watermark
+    HoodieSourceSplit split2 = createTestSplitWithParams(
+        "40e603a8-3cc1-4d09-b0a5-1432992b4bf7_1-0-1_20250129120000001.parquet",
+        "20250129120000001",
+        "file-2");
 
-    assertEquals(2, mockSplit.getFileOffset());
-    assertEquals(0L, mockSplit.getConsumed());
+    emitter.emitRecord(new HoodieRecordWithPosition<>("record1", 0, 1L), mockOutput, split1);
+    emitter.emitRecord(new HoodieRecordWithPosition<>("record2", 0, 1L), mockOutput, split2);
 
-    verify(mockOutput, times(6)).collect(org.mockito.ArgumentMatchers.anyString());
+    // No watermark should be emitted when it would go backwards
+    verify(mockOutput, times(0)).emitWatermark(org.mockito.ArgumentMatchers.any());
+  }
+
+  @Test
+  public void testEmitMultipleRecordsAcrossSplits() throws Exception {
+    HoodieSourceSplit split1 = createTestSplitWithParams(
+        "40e603a8-3cc1-4d09-b0a5-1432992b4bf7_1-0-1_20250129120000001.parquet",
+        "20250129120000001",
+        "file-1");
+    HoodieSourceSplit split2 = createTestSplitWithParams(
+        "40e603a8-3cc1-4d09-b0a5-1432992b4bf7_1-0-1_20250129130000002.parquet",
+        "20250129130000002",
+        "file-2");
+
+    // Emit multiple records from split1
+    emitter.emitRecord(new HoodieRecordWithPosition<>("r1", 0, 1L), mockOutput, split1);
+    emitter.emitRecord(new HoodieRecordWithPosition<>("r2", 0, 2L), mockOutput, split1);
+    emitter.emitRecord(new HoodieRecordWithPosition<>("r3", 0, 3L), mockOutput, split1);
+
+    // Emit multiple records from split2
+    emitter.emitRecord(new HoodieRecordWithPosition<>("r4", 0, 1L), mockOutput, split2);
+    emitter.emitRecord(new HoodieRecordWithPosition<>("r5", 0, 2L), mockOutput, split2);
+
+    // Verify all records collected
+    verify(mockOutput, times(5)).collect(org.mockito.ArgumentMatchers.anyString());
+
+    // Verify watermark emitted once when transitioning from split1 to split2
+    ArgumentCaptor<Watermark> watermarkCaptor = ArgumentCaptor.forClass(Watermark.class);
+    verify(mockOutput, times(1)).emitWatermark(watermarkCaptor.capture());
+    assertEquals(20250129120000001L, watermarkCaptor.getValue().getTimestamp());
+  }
+
+  @Test
+  public void testSplitPositionUpdatesCorrectly() throws Exception {
+    HoodieSourceSplit split = createTestSplitWithParams(
+        "40e603a8-3cc1-4d09-b0a5-1432992b4bf7_1-0-1_20250129120000001.parquet",
+        "20250129120000001",
+        "file-1");
+
+    emitter.emitRecord(new HoodieRecordWithPosition<>("r1", 0, 10L), mockOutput, split);
+    assertEquals(0, split.getFileOffset());
+    assertEquals(10L, split.getConsumed());
+
+    emitter.emitRecord(new HoodieRecordWithPosition<>("r2", 1, 20L), mockOutput, split);
+    assertEquals(1, split.getFileOffset());
+    assertEquals(20L, split.getConsumed());
+
+    emitter.emitRecord(new HoodieRecordWithPosition<>("r3", 2, 30L), mockOutput, split);
+    assertEquals(2, split.getFileOffset());
+    assertEquals(30L, split.getConsumed());
   }
 
   /**
-   * Helper method to create a test HoodieSourceSplit.
+   * Helper method to create a test HoodieSourceSplit with specific parameters.
    */
-  private HoodieSourceSplit createTestSplit() {
+  private HoodieSourceSplit createTestSplitWithParams(String baseFilePath, String latestCommit, String fileId) {
     return new HoodieSourceSplit(
         1,
-        "test-base-path",
+        baseFilePath,
         Option.of(Collections.emptyList()),
         "/test/table/path",
         "/test/partition",
         "read_optimized",
-        "19700101000000000",
-        "file-1"
+        latestCommit,
+        fileId
     );
   }
 }
