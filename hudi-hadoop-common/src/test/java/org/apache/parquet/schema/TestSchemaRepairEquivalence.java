@@ -20,19 +20,21 @@
 package org.apache.parquet.schema;
 
 import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaField;
+import org.apache.hudi.common.schema.HoodieSchemaType;
 
-import org.apache.avro.LogicalTypes;
-import org.apache.avro.Schema;
-import org.apache.avro.SchemaBuilder;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.parquet.avro.HoodieAvroParquetSchemaConverter;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.util.Arrays;
+import java.util.Collections;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /**
- * Tests equivalence between {@link SchemaRepair} and {@link AvroSchemaRepair}.
+ * Tests equivalence between {@link SchemaRepair} and {@link HoodieSchemaRepair}.
  *
  * This test class verifies that both repair implementations produce logically
  * equivalent results when converting between Avro and Parquet schemas.
@@ -47,15 +49,15 @@ public class TestSchemaRepairEquivalence {
   }
 
   /**
-   * Helper method to verify that AvroSchemaRepair and SchemaRepair produce equivalent results.
+   * Helper method to verify that HoodieSchemaRepair and SchemaRepair produce equivalent results.
    */
-  private void assertRepairEquivalence(Schema requestedAvro, Schema tableAvro) {
+  private void assertRepairEquivalence(HoodieSchema requestedSchema, HoodieSchema tableSchema) {
     // Apply Avro repair
-    Schema repairedAvro = AvroSchemaRepair.repairLogicalTypes(requestedAvro, tableAvro);
+    HoodieSchema repairedAvro = HoodieSchemaRepair.repairLogicalTypes(requestedSchema, tableSchema);
 
     // Convert to Parquet schemas
-    MessageType requestedParquet = converter.convert(HoodieSchema.fromAvroSchema(requestedAvro));
-    MessageType tableParquet = converter.convert(HoodieSchema.fromAvroSchema(tableAvro));
+    MessageType requestedParquet = converter.convert(requestedSchema);
+    MessageType tableParquet = converter.convert(tableSchema);
 
     // Apply Parquet repair
     MessageType repairedParquet = SchemaRepair.repairLogicalTypes(requestedParquet, tableParquet);
@@ -64,419 +66,309 @@ public class TestSchemaRepairEquivalence {
     HoodieSchema repairedParquetAsSchema = converter.convert(repairedParquet);
 
     // Verify equivalence
-    assertEquals(repairedAvro, repairedParquetAsSchema.toAvroSchema(),
-        "SchemaRepair and AvroSchemaRepair should produce equivalent results");
+    assertEquals(repairedAvro, repairedParquetAsSchema,
+        "SchemaRepair and HoodieSchemaRepair should produce equivalent results");
   }
 
   @Test
   public void testEquivalenceNoRepairNeeded() {
-    Schema requestedSchema = SchemaBuilder.record("testrecord")
-        .fields()
-        .name("value").type().longType().noDefault()
-        .endRecord();
-    Schema tableSchema = SchemaBuilder.record("testrecord")
-        .fields()
-        .name("value").type().longType().noDefault()
-        .endRecord();
+    HoodieSchema requestedSchema = HoodieSchema.createRecord("testrecord", null, null, Collections.singletonList(
+        HoodieSchemaField.of("value", HoodieSchema.create(HoodieSchemaType.LONG), null, null)));
+
+    HoodieSchema tableSchema = HoodieSchema.createRecord("testrecord", null, null, Collections.singletonList(
+        HoodieSchemaField.of("value", HoodieSchema.create(HoodieSchemaType.LONG), null, null)));
 
     assertRepairEquivalence(requestedSchema, tableSchema);
   }
 
   @Test
   public void testEquivalenceLongToLocalTimestampMillis() {
-    Schema requestedSchema = SchemaBuilder.record("testrecord")
-        .fields()
-        .name("timestamp").type().longType().noDefault()
-        .endRecord();
-    Schema tableSchema = SchemaBuilder.record("testrecord")
-        .fields()
-        .name("timestamp")
-        .type(LogicalTypes.localTimestampMillis().addToSchema(Schema.create(Schema.Type.LONG)))
-        .noDefault()
-        .endRecord();
+    HoodieSchema requestedSchema = HoodieSchema.createRecord("testrecord", null, null, Collections.singletonList(
+        HoodieSchemaField.of("timestamp", HoodieSchema.create(HoodieSchemaType.LONG), null, null)));
+    HoodieSchema tableSchema = HoodieSchema.createRecord("testrecord", null, null, Collections.singletonList(
+        HoodieSchemaField.of("timestamp", HoodieSchema.createLocalTimestampMillis(), null, null)));
 
     assertRepairEquivalence(requestedSchema, tableSchema);
   }
 
   @Test
   public void testEquivalenceLongToLocalTimestampMicros() {
-    Schema requestedSchema = SchemaBuilder.record("testrecord")
-        .fields()
-        .name("timestamp").type().longType().noDefault()
-        .endRecord();
-    Schema tableSchema = SchemaBuilder.record("testrecord")
-        .fields()
-        .name("timestamp")
-        .type(LogicalTypes.localTimestampMicros().addToSchema(Schema.create(Schema.Type.LONG)))
-        .noDefault()
-        .endRecord();
+    HoodieSchema requestedSchema = HoodieSchema.createRecord("testrecord", null, null, Collections.singletonList(
+        HoodieSchemaField.of("timestamp", HoodieSchema.create(HoodieSchemaType.LONG), null, null)));
+    HoodieSchema tableSchema = HoodieSchema.createRecord("testrecord", null, null, Collections.singletonList(
+        HoodieSchemaField.of("timestamp", HoodieSchema.createLocalTimestampMicros(), null, null)));
 
     assertRepairEquivalence(requestedSchema, tableSchema);
   }
 
   @Test
   public void testEquivalenceTimestampMicrosToMillis() {
-    Schema requestedSchema = SchemaBuilder.record("testrecord")
-        .fields()
-        .name("timestamp")
-        .type(LogicalTypes.timestampMicros().addToSchema(Schema.create(Schema.Type.LONG)))
-        .noDefault()
-        .endRecord();
-    Schema tableSchema = SchemaBuilder.record("testrecord")
-        .fields()
-        .name("timestamp")
-        .type(LogicalTypes.timestampMillis().addToSchema(Schema.create(Schema.Type.LONG)))
-        .noDefault()
-        .endRecord();
+    HoodieSchema requestedSchema = HoodieSchema.createRecord("testrecord", null, null, Collections.singletonList(
+        HoodieSchemaField.of("timestamp", HoodieSchema.create(HoodieSchemaType.LONG), null, null)));
+    HoodieSchema tableSchema = HoodieSchema.createRecord("testrecord", null, null, Collections.singletonList(
+        HoodieSchemaField.of("timestamp", HoodieSchema.createTimestampMillis(), null, null)));
 
     assertRepairEquivalence(requestedSchema, tableSchema);
   }
 
   @Test
   public void testEquivalenceNoRepairTimestampMillisToMicros() {
-    Schema requestedSchema = SchemaBuilder.record("testrecord")
-        .fields()
-        .name("timestamp")
-        .type(LogicalTypes.timestampMillis().addToSchema(Schema.create(Schema.Type.LONG)))
-        .noDefault()
-        .endRecord();
-    Schema tableSchema = SchemaBuilder.record("testrecord")
-        .fields()
-        .name("timestamp")
-        .type(LogicalTypes.timestampMicros().addToSchema(Schema.create(Schema.Type.LONG)))
-        .noDefault()
-        .endRecord();
+    HoodieSchema requestedSchema = HoodieSchema.createRecord("testrecord", null, null, Collections.singletonList(
+        HoodieSchemaField.of("timestamp", HoodieSchema.create(HoodieSchemaType.LONG), null, null)));
+    HoodieSchema tableSchema = HoodieSchema.createRecord("testrecord", null, null, Collections.singletonList(
+        HoodieSchemaField.of("timestamp", HoodieSchema.createTimestampMicros(), null, null)));
 
     assertRepairEquivalence(requestedSchema, tableSchema);
   }
 
   @Test
   public void testEquivalenceSimpleRecord() {
-    Schema requestedSchema = SchemaBuilder.record("testrecord")
-        .fields()
-        .name("timestamp").type().longType().noDefault()
-        .endRecord();
-
-    Schema tableSchema = SchemaBuilder.record("testrecord")
-        .fields()
-        .name("timestamp")
-        .type(LogicalTypes.localTimestampMillis().addToSchema(Schema.create(Schema.Type.LONG)))
-        .noDefault()
-        .endRecord();
+    HoodieSchema requestedSchema = HoodieSchema.createRecord("testrecord", null, null, Collections.singletonList(
+        HoodieSchemaField.of("timestamp", HoodieSchema.create(HoodieSchemaType.LONG), null, null)));
+    HoodieSchema tableSchema = HoodieSchema.createRecord("testrecord", null, null, Collections.singletonList(
+        HoodieSchemaField.of("timestamp", HoodieSchema.createLocalTimestampMillis(), null, null)));
 
     assertRepairEquivalence(requestedSchema, tableSchema);
   }
 
   @Test
   public void testEquivalenceRecordMultipleFields() {
-    Schema requestedSchema = SchemaBuilder.record("testrecord")
-        .fields()
-        .name("id").type().intType().noDefault()
-        .name("timestamp").type().longType().noDefault()
-        .name("name").type().stringType().noDefault()
-        .endRecord();
-
-    Schema tableSchema = SchemaBuilder.record("testrecord")
-        .fields()
-        .name("id").type().intType().noDefault()
-        .name("timestamp")
-        .type(LogicalTypes.localTimestampMicros().addToSchema(Schema.create(Schema.Type.LONG)))
-        .noDefault()
-        .name("name").type().stringType().noDefault()
-        .endRecord();
+    HoodieSchema requestedSchema = HoodieSchema.createRecord("testrecord", null, null, Arrays.asList(
+        HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.INT), null, null),
+        HoodieSchemaField.of("timestamp", HoodieSchema.create(HoodieSchemaType.LONG), null, null),
+        HoodieSchemaField.of("name", HoodieSchema.create(HoodieSchemaType.STRING), null, null)
+    ));
+    HoodieSchema tableSchema = HoodieSchema.createRecord("testrecord", null, null, Arrays.asList(
+        HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.INT), null, null),
+        HoodieSchemaField.of("timestamp", HoodieSchema.createLocalTimestampMicros(), null, null),
+        HoodieSchemaField.of("name", HoodieSchema.create(HoodieSchemaType.STRING), null, null)
+    ));
 
     assertRepairEquivalence(requestedSchema, tableSchema);
   }
 
   @Test
   public void testEquivalenceNestedRecord() {
-    Schema nestedRequestedSchema = SchemaBuilder.record("nestedrecord")
-        .fields()
-        .name("timestamp").type().longType().noDefault()
-        .endRecord();
+    HoodieSchema nestedRequestedSchema = HoodieSchema.createRecord("nestedrecord", null, null, Collections.singletonList(
+        HoodieSchemaField.of("timestamp", HoodieSchema.create(HoodieSchemaType.LONG), null, null)));
 
-    Schema nestedTableSchema = SchemaBuilder.record("nestedrecord")
-        .fields()
-        .name("timestamp")
-        .type(LogicalTypes.localTimestampMillis().addToSchema(Schema.create(Schema.Type.LONG)))
-        .noDefault()
-        .endRecord();
+    HoodieSchema nestedTableSchema = HoodieSchema.createRecord("nestedrecord", null, null, Collections.singletonList(
+        HoodieSchemaField.of("timestamp", HoodieSchema.createLocalTimestampMillis(), null, null)));
 
-    Schema requestedSchema = SchemaBuilder.record("outerrecord")
-        .fields()
-        .name("id").type().intType().noDefault()
-        .name("nestedrecord").type(nestedRequestedSchema).noDefault()
-        .endRecord();
+    HoodieSchema requestedSchema = HoodieSchema.createRecord("outerrecord", null, null, Arrays.asList(
+        HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.INT), null, null),
+        HoodieSchemaField.of("nestedrecord", nestedRequestedSchema, null, null)
+    ));
 
-    Schema tableSchema = SchemaBuilder.record("outerrecord")
-        .fields()
-        .name("id").type().intType().noDefault()
-        .name("nestedrecord").type(nestedTableSchema).noDefault()
-        .endRecord();
+    HoodieSchema tableSchema = HoodieSchema.createRecord("outerrecord", null, null, Arrays.asList(
+        HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.INT), null, null),
+        HoodieSchemaField.of("nestedrecord", nestedTableSchema, null, null)
+    ));
 
     assertRepairEquivalence(requestedSchema, tableSchema);
   }
 
   @Test
   public void testEquivalenceRecordWithExtraFieldInRequested() {
-    Schema requestedSchema = SchemaBuilder.record("testrecord")
-        .fields()
-        .name("id").type().intType().noDefault()
-        .name("timestamp").type().longType().noDefault()
-        .name("newfield").type().longType().noDefault()
-        .endRecord();
+    HoodieSchema requestedSchema = HoodieSchema.createRecord("testrecord", null, null, Arrays.asList(
+        HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.INT), null, null),
+        HoodieSchemaField.of("timestamp", HoodieSchema.create(HoodieSchemaType.LONG), null, null),
+        HoodieSchemaField.of("newfield", HoodieSchema.create(HoodieSchemaType.LONG), null, null)
+    ));
 
-    Schema tableSchema = SchemaBuilder.record("testrecord")
-        .fields()
-        .name("id").type().intType().noDefault()
-        .name("timestamp")
-        .type(LogicalTypes.localTimestampMillis().addToSchema(Schema.create(Schema.Type.LONG)))
-        .noDefault()
-        .endRecord();
+    HoodieSchema tableSchema = HoodieSchema.createRecord("testrecord", null, null, Arrays.asList(
+        HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.INT), null, null),
+        HoodieSchemaField.of("timestamp", HoodieSchema.createLocalTimestampMillis(), null, null)
+    ));
 
     assertRepairEquivalence(requestedSchema, tableSchema);
   }
 
   @Test
   public void testEquivalenceRecordMixedFields() {
-    Schema requestedSchema = SchemaBuilder.record("testrecord")
-        .fields()
-        .name("id").type().intType().noDefault()
-        .name("timestamp").type().longType().noDefault()
-        .name("newfield").type().stringType().noDefault()
-        .name("name").type().stringType().noDefault()
-        .endRecord();
+    HoodieSchema requestedSchema = HoodieSchema.createRecord("testrecord", null, null, Arrays.asList(
+        HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.INT), null, null),
+        HoodieSchemaField.of("timestamp", HoodieSchema.create(HoodieSchemaType.LONG), null, null),
+        HoodieSchemaField.of("newfield", HoodieSchema.create(HoodieSchemaType.STRING), null, null),
+        HoodieSchemaField.of("name", HoodieSchema.create(HoodieSchemaType.STRING), null, null)
+    ));
 
-    Schema tableSchema = SchemaBuilder.record("testrecord")
-        .fields()
-        .name("id").type().intType().noDefault()
-        .name("timestamp")
-        .type(LogicalTypes.localTimestampMillis().addToSchema(Schema.create(Schema.Type.LONG)))
-        .noDefault()
-        .name("name").type().stringType().noDefault()
-        .endRecord();
+    HoodieSchema tableSchema = HoodieSchema.createRecord("testrecord", null, null, Arrays.asList(
+        HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.INT), null, null),
+        HoodieSchemaField.of("timestamp", HoodieSchema.createLocalTimestampMillis(), null, null),
+        HoodieSchemaField.of("name", HoodieSchema.create(HoodieSchemaType.STRING), null, null)
+    ));
 
     assertRepairEquivalence(requestedSchema, tableSchema);
   }
 
   @Test
   public void testEquivalenceNestedRecordWithExtraField() {
-    Schema nestedRequestedSchema = SchemaBuilder.record("nestedrecord")
-        .fields()
-        .name("timestamp").type().longType().noDefault()
-        .name("extrafield").type().stringType().noDefault()
-        .endRecord();
+    HoodieSchema nestedRequestedSchema = HoodieSchema.createRecord("nestedrecord", null, null, Arrays.asList(
+        HoodieSchemaField.of("timestamp", HoodieSchema.create(HoodieSchemaType.LONG), null, null),
+        HoodieSchemaField.of("extrafield", HoodieSchema.create(HoodieSchemaType.STRING), null, null)
+    ));
 
-    Schema nestedTableSchema = SchemaBuilder.record("nestedrecord")
-        .fields()
-        .name("timestamp")
-        .type(LogicalTypes.localTimestampMillis().addToSchema(Schema.create(Schema.Type.LONG)))
-        .noDefault()
-        .endRecord();
+    HoodieSchema nestedTableSchema = HoodieSchema.createRecord("nestedrecord", null, null, Collections.singletonList(
+        HoodieSchemaField.of("timestamp", HoodieSchema.createLocalTimestampMillis(), null, null)));
 
-    Schema requestedSchema = SchemaBuilder.record("outerrecord")
-        .fields()
-        .name("id").type().intType().noDefault()
-        .name("nestedrecord").type(nestedRequestedSchema).noDefault()
-        .endRecord();
+    HoodieSchema requestedSchema = HoodieSchema.createRecord("outerrecord", null, null, Arrays.asList(
+        HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.INT), null, null),
+        HoodieSchemaField.of("nestedrecord", nestedRequestedSchema, null, null)
+    ));
 
-    Schema tableSchema = SchemaBuilder.record("outerrecord")
-        .fields()
-        .name("id").type().intType().noDefault()
-        .name("nestedrecord").type(nestedTableSchema).noDefault()
-        .endRecord();
+    HoodieSchema tableSchema = HoodieSchema.createRecord("outerrecord", null, null, Arrays.asList(
+        HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.INT), null, null),
+        HoodieSchemaField.of("nestedrecord", nestedTableSchema, null, null)
+    ));
 
     assertRepairEquivalence(requestedSchema, tableSchema);
   }
 
   @Test
   public void testEquivalenceRecordFirstFieldChanged() {
-    Schema requestedSchema = SchemaBuilder.record("testrecord")
-        .fields()
-        .name("timestamp1").type().longType().noDefault()
-        .name("timestamp2").type().longType().noDefault()
-        .endRecord();
+    HoodieSchema requestedSchema = HoodieSchema.createRecord("testrecord", null, null, Arrays.asList(
+        HoodieSchemaField.of("timestamp1", HoodieSchema.create(HoodieSchemaType.LONG), null, null),
+        HoodieSchemaField.of("timestamp2", HoodieSchema.create(HoodieSchemaType.LONG), null, null)
+    ));
 
-    Schema tableSchema = SchemaBuilder.record("testrecord")
-        .fields()
-        .name("timestamp1")
-        .type(LogicalTypes.localTimestampMillis().addToSchema(Schema.create(Schema.Type.LONG)))
-        .noDefault()
-        .name("timestamp2")
-        .type(LogicalTypes.localTimestampMicros().addToSchema(Schema.create(Schema.Type.LONG)))
-        .noDefault()
-        .endRecord();
+    HoodieSchema tableSchema = HoodieSchema.createRecord("testrecord", null, null, Arrays.asList(
+        HoodieSchemaField.of("timestamp1", HoodieSchema.createLocalTimestampMillis(), null, null),
+        HoodieSchemaField.of("timestamp2", HoodieSchema.createLocalTimestampMicros(), null, null)
+    ));
 
     assertRepairEquivalence(requestedSchema, tableSchema);
   }
 
   @Test
   public void testEquivalenceRecordLastFieldChanged() {
-    Schema requestedSchema = SchemaBuilder.record("testrecord")
-        .fields()
-        .name("id").type().intType().noDefault()
-        .name("name").type().stringType().noDefault()
-        .name("timestamp").type().longType().noDefault()
-        .endRecord();
+    HoodieSchema requestedSchema = HoodieSchema.createRecord("testrecord", null, null, Arrays.asList(
+        HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.INT), null, null),
+        HoodieSchemaField.of("name", HoodieSchema.create(HoodieSchemaType.STRING), null, null),
+        HoodieSchemaField.of("timestamp", HoodieSchema.create(HoodieSchemaType.LONG), null, null)
+    ));
 
-    Schema tableSchema = SchemaBuilder.record("testrecord")
-        .fields()
-        .name("id").type().intType().noDefault()
-        .name("name").type().stringType().noDefault()
-        .name("timestamp")
-        .type(LogicalTypes.localTimestampMillis().addToSchema(Schema.create(Schema.Type.LONG)))
-        .noDefault()
-        .endRecord();
+    HoodieSchema tableSchema = HoodieSchema.createRecord("testrecord", null, null, Arrays.asList(
+        HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.INT), null, null),
+        HoodieSchemaField.of("name", HoodieSchema.create(HoodieSchemaType.STRING), null, null),
+        HoodieSchemaField.of("timestamp", HoodieSchema.createLocalTimestampMillis(), null, null)
+    ));
 
     assertRepairEquivalence(requestedSchema, tableSchema);
   }
 
   @Test
   public void testEquivalenceComplexNestedStructure() {
-    Schema innerRecordRequested = SchemaBuilder.record("inner")
-        .fields()
-        .name("timestamp").type().longType().noDefault()
-        .name("value").type().intType().noDefault()
-        .endRecord();
+    HoodieSchema innerRecordRequested = HoodieSchema.createRecord("inner", null, null, Arrays.asList(
+        HoodieSchemaField.of("timestamp", HoodieSchema.create(HoodieSchemaType.LONG), null, null),
+        HoodieSchemaField.of("value", HoodieSchema.create(HoodieSchemaType.INT), null, null)
+    ));
 
-    Schema innerRecordTable = SchemaBuilder.record("inner")
-        .fields()
-        .name("timestamp")
-        .type(LogicalTypes.localTimestampMillis().addToSchema(Schema.create(Schema.Type.LONG)))
-        .noDefault()
-        .name("value").type().intType().noDefault()
-        .endRecord();
+    HoodieSchema innerRecordTable = HoodieSchema.createRecord("inner", null, null, Arrays.asList(
+        HoodieSchemaField.of("timestamp", HoodieSchema.createLocalTimestampMillis(), null, null),
+        HoodieSchemaField.of("value", HoodieSchema.create(HoodieSchemaType.INT), null, null)
+    ));
 
-    Schema middleRecordRequested = SchemaBuilder.record("middle")
-        .fields()
-        .name("inner").type(innerRecordRequested).noDefault()
-        .name("middletimestamp").type().longType().noDefault()
-        .endRecord();
+    HoodieSchema middleRecordRequested = HoodieSchema.createRecord("middle", null, null, Arrays.asList(
+        HoodieSchemaField.of("inner", innerRecordRequested, null, null),
+        HoodieSchemaField.of("middletimestamp", HoodieSchema.create(HoodieSchemaType.LONG), null, null)
+    ));
 
-    Schema middleRecordTable = SchemaBuilder.record("middle")
-        .fields()
-        .name("inner").type(innerRecordTable).noDefault()
-        .name("middletimestamp")
-        .type(LogicalTypes.localTimestampMicros().addToSchema(Schema.create(Schema.Type.LONG)))
-        .noDefault()
-        .endRecord();
+    HoodieSchema middleRecordTable = HoodieSchema.createRecord("middle", null, null, Arrays.asList(
+        HoodieSchemaField.of("inner", innerRecordTable, null, null),
+        HoodieSchemaField.of("middletimestamp", HoodieSchema.createLocalTimestampMicros(), null, null)
+    ));
 
-    Schema requestedSchema = SchemaBuilder.record("outer")
-        .fields()
-        .name("id").type().intType().noDefault()
-        .name("middle").type(middleRecordRequested).noDefault()
-        .name("outertimestamp").type().longType().noDefault()
-        .endRecord();
+    HoodieSchema requestedSchema = HoodieSchema.createRecord("outer", null, null, Arrays.asList(
+        HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.INT), null, null),
+        HoodieSchemaField.of("middle", middleRecordRequested, null, null),
+        HoodieSchemaField.of("outertimestamp", HoodieSchema.create(HoodieSchemaType.LONG), null, null)
+    ));
 
-    Schema tableSchema = SchemaBuilder.record("outer")
-        .fields()
-        .name("id").type().intType().noDefault()
-        .name("middle").type(middleRecordTable).noDefault()
-        .name("outertimestamp")
-        .type(LogicalTypes.timestampMicros().addToSchema(Schema.create(Schema.Type.LONG)))
-        .noDefault()
-        .endRecord();
+    HoodieSchema tableSchema = HoodieSchema.createRecord("outer", null, null, Arrays.asList(
+        HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.INT), null, null),
+        HoodieSchemaField.of("middle", middleRecordTable, null, null),
+        HoodieSchemaField.of("outertimestamp", HoodieSchema.createTimestampMicros(), null, null)
+    ));
 
     assertRepairEquivalence(requestedSchema, tableSchema);
   }
 
   @Test
   public void testEquivalenceEmptyRecord() {
-    Schema requestedSchema = SchemaBuilder.record("emptyrecord").fields().endRecord();
-    Schema tableSchema = SchemaBuilder.record("emptyrecord").fields().endRecord();
+    HoodieSchema requestedSchema = HoodieSchema.createRecord("emptyrecord", null, null, Collections.emptyList());
+    HoodieSchema tableSchema = HoodieSchema.createRecord("emptyrecord", null, null, Collections.emptyList());
 
     assertRepairEquivalence(requestedSchema, tableSchema);
   }
 
   @Test
   public void testEquivalenceRecordNoFieldsMatch() {
-    Schema requestedSchema = SchemaBuilder.record("testrecord")
-        .fields()
-        .name("field1").type().longType().noDefault()
-        .name("field2").type().stringType().noDefault()
-        .endRecord();
+    HoodieSchema requestedSchema = HoodieSchema.createRecord("testrecord", null, null, Arrays.asList(
+        HoodieSchemaField.of("field1", HoodieSchema.create(HoodieSchemaType.LONG), null, null),
+        HoodieSchemaField.of("field2", HoodieSchema.create(HoodieSchemaType.STRING), null, null)
+    ));
 
-    Schema tableSchema = SchemaBuilder.record("testrecord")
-        .fields()
-        .name("field3").type().intType().noDefault()
-        .name("field4")
-        .type(LogicalTypes.localTimestampMillis().addToSchema(Schema.create(Schema.Type.LONG)))
-        .noDefault()
-        .endRecord();
+    HoodieSchema tableSchema = HoodieSchema.createRecord("testrecord", null, null, Arrays.asList(
+        HoodieSchemaField.of("field3", HoodieSchema.create(HoodieSchemaType.INT), null, null),
+        HoodieSchemaField.of("field4", HoodieSchema.createLocalTimestampMillis(), null, null)
+    ));
 
     assertRepairEquivalence(requestedSchema, tableSchema);
   }
 
   @Test
   public void testEquivalenceMultipleTimestampRepairs() {
-    Schema requestedSchema = SchemaBuilder.record("testrecord")
-        .fields()
-        .name("ts1").type().longType().noDefault()
-        .name("ts2").type().longType().noDefault()
-        .name("ts3").type(LogicalTypes.timestampMicros().addToSchema(Schema.create(Schema.Type.LONG))).noDefault()
-        .name("ts4").type().longType().noDefault()
-        .endRecord();
+    HoodieSchema requestedSchema = HoodieSchema.createRecord("testrecord", null, null, Arrays.asList(
+        HoodieSchemaField.of("ts1", HoodieSchema.create(HoodieSchemaType.LONG), null, null),
+        HoodieSchemaField.of("ts2", HoodieSchema.create(HoodieSchemaType.LONG), null, null),
+        HoodieSchemaField.of("ts3", HoodieSchema.createTimestampMicros(), null, null),
+        HoodieSchemaField.of("ts4", HoodieSchema.create(HoodieSchemaType.LONG), null, null)
+    ));
 
-    Schema tableSchema = SchemaBuilder.record("testrecord")
-        .fields()
-        .name("ts1")
-        .type(LogicalTypes.localTimestampMillis().addToSchema(Schema.create(Schema.Type.LONG)))
-        .noDefault()
-        .name("ts2")
-        .type(LogicalTypes.localTimestampMicros().addToSchema(Schema.create(Schema.Type.LONG)))
-        .noDefault()
-        .name("ts3")
-        .type(LogicalTypes.timestampMillis().addToSchema(Schema.create(Schema.Type.LONG)))
-        .noDefault()
-        .name("ts4").type().longType().noDefault()
-        .endRecord();
+    HoodieSchema tableSchema = HoodieSchema.createRecord("testrecord", null, null, Arrays.asList(
+        HoodieSchemaField.of("ts1", HoodieSchema.createLocalTimestampMillis(), null, null),
+        HoodieSchemaField.of("ts2", HoodieSchema.createLocalTimestampMicros(), null, null),
+        HoodieSchemaField.of("ts3", HoodieSchema.createTimestampMillis(), null, null),
+        HoodieSchemaField.of("ts4", HoodieSchema.create(HoodieSchemaType.LONG), null, null)
+    ));
 
     assertRepairEquivalence(requestedSchema, tableSchema);
   }
 
   @Test
   public void testEquivalenceDeepNesting() {
-    Schema level3Requested = SchemaBuilder.record("level3")
-        .fields()
-        .name("timestamp").type().longType().noDefault()
-        .endRecord();
+    HoodieSchema level3Requested = HoodieSchema.createRecord("level3", null, null, Collections.singletonList(
+        HoodieSchemaField.of("timestamp", HoodieSchema.create(HoodieSchemaType.LONG), null, null)
+    ));
 
-    Schema level3Table = SchemaBuilder.record("level3")
-        .fields()
-        .name("timestamp")
-        .type(LogicalTypes.localTimestampMillis().addToSchema(Schema.create(Schema.Type.LONG)))
-        .noDefault()
-        .endRecord();
+    HoodieSchema level3Table = HoodieSchema.createRecord("level3", null, null, Collections.singletonList(
+        HoodieSchemaField.of("timestamp", HoodieSchema.createLocalTimestampMillis(), null, null)
+    ));
 
-    Schema level2Requested = SchemaBuilder.record("level2")
-        .fields()
-        .name("level3").type(level3Requested).noDefault()
-        .endRecord();
+    HoodieSchema level2Requested = HoodieSchema.createRecord("level2", null, null, Collections.singletonList(
+        HoodieSchemaField.of("level3", level3Requested, null, null)
+    ));
 
-    Schema level2Table = SchemaBuilder.record("level2")
-        .fields()
-        .name("level3").type(level3Table).noDefault()
-        .endRecord();
+    HoodieSchema level2Table = HoodieSchema.createRecord("level2", null, null, Collections.singletonList(
+        HoodieSchemaField.of("level3", level3Table, null, null)
+    ));
 
-    Schema level1Requested = SchemaBuilder.record("level1")
-        .fields()
-        .name("level2").type(level2Requested).noDefault()
-        .endRecord();
+    HoodieSchema level1Requested = HoodieSchema.createRecord("level1", null, null, Collections.singletonList(
+        HoodieSchemaField.of("level2", level2Requested, null, null)
+    ));
 
-    Schema level1Table = SchemaBuilder.record("level1")
-        .fields()
-        .name("level2").type(level2Table).noDefault()
-        .endRecord();
+    HoodieSchema level1Table = HoodieSchema.createRecord("level1", null, null, Collections.singletonList(
+        HoodieSchemaField.of("level2", level2Table, null, null)
+    ));
 
-    Schema requestedSchema = SchemaBuilder.record("level0")
-        .fields()
-        .name("level1").type(level1Requested).noDefault()
-        .endRecord();
+    HoodieSchema requestedSchema = HoodieSchema.createRecord("level0", null, null, Collections.singletonList(
+        HoodieSchemaField.of("level1", level1Requested, null, null)
+    ));
 
-    Schema tableSchema = SchemaBuilder.record("level0")
-        .fields()
-        .name("level1").type(level1Table).noDefault()
-        .endRecord();
+    HoodieSchema tableSchema = HoodieSchema.createRecord("level0", null, null, Collections.singletonList(
+        HoodieSchemaField.of("level1", level1Table, null, null)
+    ));
 
     assertRepairEquivalence(requestedSchema, tableSchema);
   }

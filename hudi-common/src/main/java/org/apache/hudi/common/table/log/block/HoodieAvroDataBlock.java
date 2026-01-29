@@ -46,7 +46,7 @@ import org.apache.avro.io.Decoder;
 import org.apache.avro.io.DecoderFactory;
 import org.apache.avro.io.Encoder;
 import org.apache.avro.io.EncoderFactory;
-import org.apache.parquet.schema.AvroSchemaRepair;
+import org.apache.parquet.schema.HoodieSchemaRepair;
 
 import javax.annotation.Nonnull;
 
@@ -192,13 +192,13 @@ public class HoodieAvroDataBlock extends HoodieDataBlock {
       // writer schema could refer to table schema.
       // avoid this for MDT for sure.
       // and for tables having no logical ts column.
-      Schema repairedWriterSchema = enableLogicalTimestampFieldRepair
-          ? AvroSchemaRepair.repairLogicalTypes(writerSchema.toAvroSchema(), readerSchema.toAvroSchema()) : writerSchema.toAvroSchema();
-      if (recordNeedsRewriteForExtendedAvroTypePromotion(repairedWriterSchema, readerSchema.toAvroSchema())) {
-        this.reader = new GenericDatumReader<>(repairedWriterSchema, repairedWriterSchema);
+      HoodieSchema repairedWriterSchema = enableLogicalTimestampFieldRepair
+          ? HoodieSchemaRepair.repairLogicalTypes(writerSchema, readerSchema) : writerSchema;
+      if (recordNeedsRewriteForExtendedAvroTypePromotion(repairedWriterSchema.toAvroSchema(), readerSchema.toAvroSchema())) {
+        this.reader = new GenericDatumReader<>(repairedWriterSchema.toAvroSchema(), repairedWriterSchema.toAvroSchema());
         this.promotedSchema = Option.of(readerSchema);
       } else {
-        this.reader = new GenericDatumReader<>(repairedWriterSchema, readerSchema.toAvroSchema());
+        this.reader = new GenericDatumReader<>(repairedWriterSchema.toAvroSchema(), readerSchema.toAvroSchema());
       }
     }
 
@@ -279,12 +279,12 @@ public class HoodieAvroDataBlock extends HoodieDataBlock {
         this.totalRecords = this.inputStream.readInt();
       }
 
-      Schema repairedWriterSchema = AvroSchemaRepair.repairLogicalTypes(writerSchema.toAvroSchema(), readerSchema.toAvroSchema());
-      if (recordNeedsRewriteForExtendedAvroTypePromotion(repairedWriterSchema, readerSchema.toAvroSchema())) {
-        this.reader = new GenericDatumReader<>(repairedWriterSchema, repairedWriterSchema);
+      HoodieSchema repairedWriterSchema = HoodieSchemaRepair.repairLogicalTypes(writerSchema, readerSchema);
+      if (recordNeedsRewriteForExtendedAvroTypePromotion(repairedWriterSchema.toAvroSchema(), readerSchema.toAvroSchema())) {
+        this.reader = new GenericDatumReader<>(repairedWriterSchema.toAvroSchema(), repairedWriterSchema.toAvroSchema());
         this.promotedSchema = Option.of(readerSchema);
       } else {
-        this.reader = new GenericDatumReader<>(repairedWriterSchema, readerSchema.toAvroSchema());
+        this.reader = new GenericDatumReader<>(repairedWriterSchema.toAvroSchema(), readerSchema.toAvroSchema());
       }
 
       this.buffer = ByteBuffer.allocate(Math.min(bufferSize, Math.toIntExact(contentLocation.getBlockSize())));

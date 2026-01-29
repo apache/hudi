@@ -42,7 +42,6 @@ import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 
-import org.apache.avro.Schema;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hive.ql.io.sarg.ConvertAstToSearchArg;
@@ -59,7 +58,7 @@ import org.apache.hadoop.mapred.InputSplit;
 import org.apache.hadoop.mapred.JobConf;
 import org.apache.hadoop.mapred.RecordReader;
 import org.apache.parquet.avro.AvroSchemaConverter;
-import org.apache.parquet.schema.AvroSchemaRepair;
+import org.apache.parquet.schema.HoodieSchemaRepair;
 
 import java.io.IOException;
 import java.util.Collections;
@@ -135,8 +134,7 @@ public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> 
     HoodieSchema fileSchema;
     if (isParquetOrOrc) {
       HoodieSchema rawFileSchema = HoodieIOFactory.getIOFactory(storage).getFileFormatUtils(filePath).readSchema(storage, filePath);
-      Schema repairedAvroSchema = AvroSchemaRepair.repairLogicalTypes(rawFileSchema.toAvroSchema(), dataSchema.toAvroSchema());
-      fileSchema = HoodieSchema.fromAvroSchema(repairedAvroSchema);
+      fileSchema = HoodieSchemaRepair.repairLogicalTypes(rawFileSchema, dataSchema);
     } else {
       fileSchema = dataSchema;
     }

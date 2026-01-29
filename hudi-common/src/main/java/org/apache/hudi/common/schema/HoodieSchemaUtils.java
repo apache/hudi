@@ -312,10 +312,7 @@ public final class HoodieSchemaUtils {
     ValidationUtils.checkArgument(name != null && !name.isEmpty(), "Field name cannot be null or empty");
     ValidationUtils.checkArgument(schema != null, "Field schema cannot be null");
 
-    // Delegate to HoodieAvroUtils
-    Schema.Field avroField = HoodieAvroUtils.createNewSchemaField(
-        name, schema.toAvroSchema(), doc, defaultValue);
-    return HoodieSchemaField.fromAvroField(avroField);
+    return HoodieSchemaField.of(name, schema, doc, defaultValue);
   }
 
   /**
