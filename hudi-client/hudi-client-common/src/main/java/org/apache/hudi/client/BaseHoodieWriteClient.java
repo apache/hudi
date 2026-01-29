@@ -1224,22 +1224,24 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     HoodieTable table = createTable(config);
     preWrite(compactionInstantTime, WriteOperationType.COMPACT, table.getMetaClient());
     HoodieInstant compactionPlanInstant = table.getMetaClient().getInstantGenerator().getCompactionRequestedInstant(compactionInstantTime);
-    try {
-      // Transaction serves to ensure only one compact job for this instant will start heartbeat, and any other concurrent
-      // compact job will abort if they attempt to execute compact before heartbeat expires
-      // Note that as long as all jobs for this table use this API for compact, then this alone should prevent
-      // compact rollbacks from running concurrently to compact commits.
-      txnManager.beginStateChange(Option.of(compactionPlanInstant), txnManager.getLastCompletedTransactionOwner());
+    if (config.getWriteConcurrencyMode().supportsMultiWriter()) {
       try {
-        if (!this.heartbeatClient.isHeartbeatExpired(compactionInstantTime)) {
-          throw new HoodieLockException("Cannot compact instant " + compactionInstantTime + " due to heartbeat by existing job");
+        // Transaction serves to ensure only one compact job for this instant will start heartbeat, and any other concurrent
+        // compact job will abort if they attempt to execute compact before heartbeat expires
+        // Note that as long as all jobs for this table use this API for compact, then this alone should prevent
+        // compact rollbacks from running concurrently to compact commits.
+        txnManager.beginStateChange(Option.of(compactionPlanInstant), txnManager.getLastCompletedTransactionOwner());
+        try {
+          if (!this.heartbeatClient.isHeartbeatExpired(compactionInstantTime)) {
+            throw new HoodieLockException("Cannot compact instant " + compactionInstantTime + " due to heartbeat by existing job");
+          }
+        } catch (IOException e) {
+          throw new HoodieHeartbeatException("Error accessing heartbeat of instant to compact " + compactionInstantTime, e);
         }
-      } catch (IOException e) {
-        throw new HoodieHeartbeatException("Error accessing heartbeat of instant to compact " + compactionInstantTime, e);
+        this.heartbeatClient.start(compactionInstantTime);
+      } finally {
+        txnManager.endStateChange(Option.of(compactionPlanInstant));
       }
-      this.heartbeatClient.start(compactionInstantTime);
-    } finally {
-      txnManager.endStateChange(Option.of(compactionPlanInstant));
     }
     HoodieWriteMetadata<O> writeMetadata = tableServiceClient.compact(table, compactionInstantTime, shouldComplete);
     return writeMetadata;
