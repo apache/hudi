@@ -519,7 +519,7 @@ public class HoodieMetadataWriteUtils {
     if (pathInfo != null) {
       return pathInfo;
     }
-    return new StoragePathInfo(baseFile.getStoragePath(), baseFile.getFileLen(), false, (short) 0, 0, 0);
+    return new StoragePathInfo(baseFile.getStoragePath(), baseFile.getFileSize(), false, (short) 0, 0, 0);
   }
 
   private static StoragePathInfo getLogFileStoragePathInfo(HoodieLogFile logFile) {

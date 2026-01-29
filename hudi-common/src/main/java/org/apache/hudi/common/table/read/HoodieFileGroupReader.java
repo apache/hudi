@@ -224,13 +224,13 @@ public final class HoodieFileGroupReader<T> implements Closeable {
     HoodieSchema requiredSchema = readerContext.getSchemaHandler().createSchemaFromFields(requiredFields);
     StoragePathInfo fileStoragePathInfo = file.getPathInfo();
     if (fileStoragePathInfo != null) {
-      return Option.of(Pair.of(readerContext.getFileRecordIterator(fileStoragePathInfo, 0, file.getFileLen(),
+      return Option.of(Pair.of(readerContext.getFileRecordIterator(fileStoragePathInfo, 0, file.getFileSize(),
           readerContext.getSchemaHandler().createSchemaFromFields(allFields), requiredSchema, storage), requiredSchema));
     } else {
       // If the base file length passed in is invalid, i.e., -1,
       // the file group reader fetches the length from the file system
-      long fileLength = file.getFileLen() >= 0
-          ? file.getFileLen() : storage.getPathInfo(file.getStoragePath()).getLength();
+      long fileLength = file.getFileSize() >= 0
+          ? file.getFileSize() : storage.getPathInfo(file.getStoragePath()).getLength();
       return Option.of(Pair.of(readerContext.getFileRecordIterator(file.getStoragePath(), 0, fileLength,
           readerContext.getSchemaHandler().createSchemaFromFields(allFields), requiredSchema, storage), requiredSchema));
     }
