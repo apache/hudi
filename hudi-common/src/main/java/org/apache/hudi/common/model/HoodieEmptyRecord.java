@@ -141,7 +141,8 @@ public class HoodieEmptyRecord<T> extends HoodieRecord<T> {
 
   @Override
   public HoodieRecord wrapIntoHoodieRecordPayloadWithParams(HoodieSchema recordSchema, Properties props, Option<Pair<String, String>> simpleKeyGenFieldsOpt,
-      Boolean withOperation, Option<String> partitionNameOp, Boolean populateMetaFieldsOp, Option<HoodieSchema> schemaWithoutMetaFields) throws IOException {
+                                                            boolean withOperation, Option<String> partitionNameOp, boolean populateMetaFieldsOp, Option<HoodieSchema> schemaWithoutMetaFields)
+      throws IOException {
     throw new UnsupportedOperationException();
   }
 

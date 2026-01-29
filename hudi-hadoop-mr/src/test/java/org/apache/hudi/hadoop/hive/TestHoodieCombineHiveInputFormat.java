@@ -41,10 +41,9 @@ import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.internal.schema.convert.InternalSchemaConverter;
 import org.apache.hudi.internal.schema.utils.SerDeHelper;
 import org.apache.hudi.storage.HoodieStorage;
-import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.HoodieStorageUtils;
+import org.apache.hudi.storage.StorageConfiguration;
 
-import org.apache.avro.Schema;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
@@ -183,7 +182,7 @@ public class TestHoodieCombineHiveInputFormat extends HoodieCommonTestHarness {
 
     HoodieCombineHiveInputFormat combineHiveInputFormat = new HoodieCombineHiveInputFormat();
     String tripsHiveColumnTypes = "double,string,string,string,double,double,double,double,double";
-    InputFormatTestUtil.setProjectFieldsForInputFormat(jobConf, schema.toAvroSchema(), tripsHiveColumnTypes);
+    InputFormatTestUtil.setProjectFieldsForInputFormat(jobConf, schema, tripsHiveColumnTypes);
     InputSplit[] splits = combineHiveInputFormat.getSplits(jobConf, 2);
     // Check the internal schema and avro is the same as the original one
     for (InputSplit split : splits) {
@@ -193,8 +192,8 @@ public class TestHoodieCombineHiveInputFormat extends HoodieCommonTestHarness {
         SchemaEvolutionContext schemaEvolutionContext = new SchemaEvolutionContext(fileSplit, jobConf);
         Option<InternalSchema> internalSchemaFromCache = schemaEvolutionContext.getInternalSchemaFromCache();
         assertEquals(internalSchemaFromCache.get(), internalSchema);
-        Schema avroSchemaFromCache = schemaEvolutionContext.getAvroSchemaFromCache();
-        assertEquals(avroSchemaFromCache, schema.toAvroSchema());
+        HoodieSchema schemaFromCache = schemaEvolutionContext.getSchemaFromCache();
+        assertEquals(schemaFromCache, schema);
       }
     }
   }
@@ -248,7 +247,7 @@ public class TestHoodieCombineHiveInputFormat extends HoodieCommonTestHarness {
 
     HoodieCombineHiveInputFormat combineHiveInputFormat = new HoodieCombineHiveInputFormat();
     String tripsHiveColumnTypes = "double,string,string,string,double,double,double,double,double";
-    InputFormatTestUtil.setPropsForInputFormat(jobConf, schema.toAvroSchema(), tripsHiveColumnTypes);
+    InputFormatTestUtil.setPropsForInputFormat(jobConf, schema, tripsHiveColumnTypes);
 
     InputSplit[] splits = combineHiveInputFormat.getSplits(jobConf, 1);
     // Since the SPLIT_SIZE is large enough, we should create only 1 split with all 3 file groups
@@ -417,7 +416,7 @@ public class TestHoodieCombineHiveInputFormat extends HoodieCommonTestHarness {
 
     HoodieCombineHiveInputFormat combineHiveInputFormat = new HoodieCombineHiveInputFormat();
     String tripsHiveColumnTypes = "double,string,string,string,double,double,double,double,double";
-    InputFormatTestUtil.setProjectFieldsForInputFormat(jobConf, schema.toAvroSchema(), tripsHiveColumnTypes);
+    InputFormatTestUtil.setProjectFieldsForInputFormat(jobConf, schema, tripsHiveColumnTypes);
     InputSplit[] splits = combineHiveInputFormat.getSplits(jobConf, 1);
     // Since the SPLIT_SIZE is large enough, we should create only 1 split with all 3 file groups
     assertEquals(1, splits.length);
@@ -498,7 +497,7 @@ public class TestHoodieCombineHiveInputFormat extends HoodieCommonTestHarness {
     // set SPLIT_MAXSIZE larger  to create one split for 3 files groups
 
     String tripsHiveColumnTypes = "double,string,string,string,double,double,double,double,double";
-    InputFormatTestUtil.setPropsForInputFormat(jobConf, schema.toAvroSchema(), tripsHiveColumnTypes);
+    InputFormatTestUtil.setPropsForInputFormat(jobConf, schema, tripsHiveColumnTypes);
 
     HoodieCombineHiveInputFormat combineHiveInputFormat = new HoodieCombineHiveInputFormat();
     InputSplit[] splits = combineHiveInputFormat.getSplits(jobConf, 1);

@@ -166,7 +166,7 @@ public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> 
 
     setSchemas(jobConfCopy, modifiedDataSchema, actualRequiredSchema);
     InputSplit inputSplit = new FileSplit(new Path(filePath.toString()), start, length, hosts);
-    RecordReader<NullWritable, ArrayWritable> recordReader = readerCreator.getRecordReader(inputSplit, jobConfCopy, modifiedDataSchema.toAvroSchema());
+    RecordReader<NullWritable, ArrayWritable> recordReader = readerCreator.getRecordReader(inputSplit, jobConfCopy, modifiedDataSchema);
     if (firstRecordReader == null) {
       firstRecordReader = recordReader;
     }

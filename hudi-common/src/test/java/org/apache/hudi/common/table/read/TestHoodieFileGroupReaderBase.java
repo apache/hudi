@@ -602,7 +602,7 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
       for (Boolean isCompressionEnabled : new boolean[] {true, false}) {
         try (ExternalSpillableMap<Serializable, BufferedRecord<T>> spillableMap =
                  new ExternalSpillableMap<>(16L, baseMapPath, new DefaultSizeEstimator(),
-                     new HoodieRecordSizeEstimator(schema.toAvroSchema()), diskMapType, new DefaultSerializer<>(), isCompressionEnabled, getClass().getSimpleName())) {
+                     new HoodieRecordSizeEstimator(schema), diskMapType, new DefaultSerializer<>(), isCompressionEnabled, getClass().getSimpleName())) {
           Long position = 0L;
           for (T record : records) {
             String recordKey = readerContext.getRecordContext().getRecordKey(record, schema);
