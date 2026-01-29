@@ -323,16 +323,6 @@ object HoodieSparkUtils extends SparkAdapterSupport with SparkVersionsSupport wi
     }
   }
 
-  private def isValidDate(str: String): Boolean = {
-    try {
-      // Parse the date string; if it's invalid, an exception will be thrown
-      LocalDate.parse(str, dateTimeFormatter)
-      true // If parsing succeeds, the date is valid
-    } catch {
-      case _: DateTimeParseException => false // Invalid date format or date
-    }
-  }
-
   private def parsePartitionPath(partitionPath: StoragePath, partitionSchema: StructType, timeZoneId: String,
                                  basePath: StoragePath, shouldValidatePartitionCols: Boolean): Seq[Any] = {
     val partitionDataTypes = partitionSchema.map(f => f.name -> f.dataType).toMap

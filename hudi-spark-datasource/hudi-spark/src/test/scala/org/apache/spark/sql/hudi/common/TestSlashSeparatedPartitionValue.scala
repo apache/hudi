@@ -59,9 +59,9 @@ class TestSlashSeparatedPartitionValue extends HoodieSparkSqlTestBase {
         """.stripMargin)
 
       // check result after insert and merge data into target table
-      checkAnswer(s"select id, name, ts, datestr from $targetTable limit 10")(
-        Seq("1", "a1", 1000, "2026-01-05"),
-        Seq("2", "a2", 2000, "2026-01-06")
+      checkAnswer(s"select id, name, ts, _hoodie_partition_path, datestr from $targetTable limit 10")(
+        Seq("1", "a1", 1000, "2026/01/05", "2026-01-05"),
+        Seq("2", "a2", 2000, "2026/01/06", "2026-01-06")
       )
 
       // Verify table config has slash separated date partitioning enabled
@@ -86,6 +86,76 @@ class TestSlashSeparatedPartitionValue extends HoodieSparkSqlTestBase {
       val partitionPaths = metadataTable.getAllPartitionPaths
       assertTrue(partitionPaths.contains("2026/01/05"))
       assertTrue(partitionPaths.contains("2026/01/06"))
+      metadataTable.close()
+    }
+  }
+
+  test("Test slash separated date partitions with already formatted input") {
+    Seq(true, false).foreach { slashSeparatedPartitioning =>
+      withTempDir { tmp =>
+        val targetTable = generateTableName
+        val tablePath = s"${tmp.getCanonicalPath}/$targetTable"
+
+        spark.sql(
+          s"""
+             |create table $targetTable (
+             |  `id` string,
+             |  `name` string,
+             |  `ts` bigint,
+             |  `datestr` STRING
+             |) using hudi
+             | tblproperties (
+             |  'primaryKey' = 'id',
+             |  'type' = 'COW',
+             |  'preCombineField'='ts',
+             |  'hoodie.datasource.write.slash.separated.date.partitioning'='$slashSeparatedPartitioning'
+             | )
+             | partitioned by (`datestr`)
+             | location '$tablePath'
+          """.stripMargin)
+
+        spark.sql(
+          s"""
+             | insert into $targetTable values
+             | (1, 'a1', 1000, "2026/01/01"),
+             | (2, 'a2', 2000, "2026/01/02")
+          """.stripMargin)
+
+        val (firstPartitionValue, secondPartitionValue) = if (slashSeparatedPartitioning) {
+          ("2026-01-01", "2026-01-02")
+        } else {
+          ("2026/01/01", "2026/01/02")
+        }
+        // check result after insert - already formatted values should remain as is
+        checkAnswer(s"select id, name, ts, _hoodie_partition_path, datestr from $targetTable limit 10")(
+          Seq("1", "a1", 1000, "2026/01/01", firstPartitionValue),
+          Seq("2", "a2", 2000, "2026/01/02", secondPartitionValue)
+        )
+
+        // Verify table config
+        val metaClient = HoodieTableMetaClient.builder()
+          .setConf(HadoopFSUtils.getStorageConfWithCopy(spark.sparkContext.hadoopConfiguration))
+          .setBasePath(tablePath)
+          .build()
+        val tableConfig = metaClient.getTableConfig
+        assertTrue(tableConfig.getSlashSeparatedDatePartitioning == slashSeparatedPartitioning,
+          s"Table config should have slash separated date partitioning set to $slashSeparatedPartitioning")
+
+        // Verify that partition paths are created with slash separated date format (yyyy/MM/dd)
+        assertTrue(metaClient.getStorage.exists(new StoragePath(tablePath, "2026/01/01")),
+          s"Partition path 2026/01/01 should exist")
+        assertTrue(metaClient.getStorage.exists(new StoragePath(tablePath, "2026/01/02")),
+          s"Partition path 2026/01/02 should exist")
+
+        val engine = new HoodieSparkEngineContext(spark.sparkContext)
+        val storage = metaClient.getStorage()
+        val metadataConfig = HoodieMetadataConfig.newBuilder().build()
+        val metadataTable = new HoodieBackedTableMetadata(engine, storage, metadataConfig, tablePath)
+        val partitionPaths = metadataTable.getAllPartitionPaths
+        assertTrue(partitionPaths.contains("2026/01/01"))
+        assertTrue(partitionPaths.contains("2026/01/02"))
+        metadataTable.close()
+      }
     }
   }
 }

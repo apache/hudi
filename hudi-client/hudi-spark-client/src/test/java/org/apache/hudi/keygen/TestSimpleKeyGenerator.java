@@ -196,4 +196,21 @@ class TestSimpleKeyGenerator extends KeyGeneratorTestUtilities {
     Assertions.assertEquals("key1", key.getRecordKey());
     Assertions.assertEquals("2026/01/05", key.getPartitionPath());
   }
+
+  @Test
+  void testSlashSeparatedDatePartitioningWithAlreadyFormattedInput() {
+    SimpleKeyGenerator keyGenerator = new SimpleKeyGenerator(getPropsWithSlashSeparatedDatePartitioning());
+
+    // Create a record with date already in yyyy/MM/dd format
+    GenericRecord avroRecord = new GenericData.Record(HoodieSchema.parse(KeyGeneratorTestUtilities.EXAMPLE_SCHEMA).getAvroSchema());
+    avroRecord.put("timestamp", "2026/01/01");
+    avroRecord.put("_row_key", "key1");
+    avroRecord.put("ts_ms", "2026/01/01");
+    avroRecord.put("pii_col", "val1");
+
+    // The partition path should remain in yyyy/MM/dd format
+    HoodieKey key = keyGenerator.getKey(avroRecord);
+    Assertions.assertEquals("key1", key.getRecordKey());
+    Assertions.assertEquals("2026/01/01", key.getPartitionPath());
+  }
 }
