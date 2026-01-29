@@ -223,4 +223,24 @@ public class TestComplexKeyGenerator extends KeyGeneratorTestUtilities {
       assertEquals(UTF8String.fromString(partitionPath), compositeKeyGenerator.getPartitionPath(internalRow, row.schema()));
     }
   }
+
+  @Test
+  void testSlashSeparatedDatePartitioning() {
+    TypedProperties properties = new TypedProperties();
+    properties.put(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), "_row_key");
+    properties.put(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), "timestamp");
+    properties.put(KeyGeneratorOptions.SLASH_SEPARATED_DATE_PARTITIONING.key(), "true");
+    properties.put(KeyGeneratorOptions.HIVE_STYLE_PARTITIONING_ENABLE.key(), "false");
+
+    ComplexKeyGenerator keyGenerator = new ComplexKeyGenerator(properties);
+
+    // Create a record with date in yyyy-MM-dd format
+    GenericRecord avroRecord = KeyGeneratorTestUtilities.getRecord();
+    avroRecord.put("timestamp", "2026-01-05");
+
+    // The partition path should be transformed to yyyy/MM/dd format
+    HoodieKey key = keyGenerator.getKey(avroRecord);
+    assertEquals("_row_key:key1", key.getRecordKey());
+    assertEquals("2026/01/05", key.getPartitionPath());
+  }
 }

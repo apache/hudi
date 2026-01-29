@@ -92,6 +92,19 @@ object HoodieSqlCommonUtils extends SparkAdapterSupport {
   }
 
   /**
+   * Determine whether slash separated date partitioning is enabled
+   */
+  def isSlashSeparatedDatePartitioning(partitionPaths: Seq[String], table: CatalogTable): Boolean = {
+    if (table.partitionColumnNames.nonEmpty) {
+      partitionPaths.forall(partitionPath => {
+        table.partitionColumnNames.size == 1 && partitionPath.split("/").length == 3
+      })
+    } else {
+      false
+    }
+  }
+
+  /**
    * This method is used to compatible with the old non-hive-styled partition table.
    * By default we enable the "hoodie.datasource.write.hive_style_partitioning"
    * when writing data to hudi table by spark sql by default.

@@ -153,8 +153,7 @@ class SqlKeyGenerator(props: TypedProperties) extends BuiltinKeyGenerator(props)
       // in this case.
       if (partitionFragments.size != partitionSchema.get.size) {
         partitionPath
-      }
-      else {
+      } else {
         partitionFragments.zip(partitionSchema.get.fields).map {
           case (partitionValue, partitionField) =>
             val hiveStylePrefix = s"${partitionField.name}="
@@ -162,8 +161,9 @@ class SqlKeyGenerator(props: TypedProperties) extends BuiltinKeyGenerator(props)
             val _partitionValue = if (isHiveStyle) partitionValue.substring(hiveStylePrefix.length) else partitionValue
             if (_partitionValue == PartitionPathEncodeUtils.DEFAULT_PARTITION_PATH) {
               partitionValue
-            }
-            else {
+            } else if (slashSeparatedDatePartitioning) {
+              partitionValue.replace('/', '-')
+            } else {
               partitionField.dataType match {
                 case TimestampType =>
                   val timeMs = if (rowType) { // In RowType, the partitionPathValue is the time format string, convert to millis
