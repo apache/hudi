@@ -229,14 +229,16 @@ class PartitionBucketIndexManager extends BaseProcedure
           val enableOptimizedLogBlockScan = config.getOrElse(HoodieReaderConfig.ENABLE_OPTIMIZED_LOG_BLOCKS_SCAN.key(),
             HoodieReaderConfig.ENABLE_OPTIMIZED_LOG_BLOCKS_SCAN.defaultValue()).toBoolean
           // instantiate FG reader
-          val fileGroupReader = HoodieFileGroupReader.newBuilder()
+          val fileGroupReader = HoodieFileGroupReader.builder()
             .withReaderContext(readerContextFactory.getContext)
             .withHoodieTableMetaClient(metaClient)
             .withLatestCommitTime(latestInstantTime.requestedTime())
-            .withFileSlice(fileSlice)
+            .withBaseFileOption(fileSlice.getBaseFile)
+            .withLogFiles(fileSlice.getLogFiles)
+            .withPartitionPath(fileSlice.getPartitionPath)
             .withDataSchema(tableSchemaWithMetaFields)
             .withRequestedSchema(tableSchemaWithMetaFields)
-            .withInternalSchema(internalSchemaOption) // not support evolution of schema for now
+            .withInternalSchemaOpt(internalSchemaOption) // not support evolution of schema for now
             .withProps(metaClient.getTableConfig.getProps)
             .withShouldUseRecordPosition(false)
             .withEnableOptimizedLogBlockScan(enableOptimizedLogBlockScan)
