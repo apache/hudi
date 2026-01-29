@@ -290,7 +290,7 @@ public class HoodieTableSource implements
     List<ResolvedExpression> simpleFilters = filterSimpleCallExpression(filters);
     Tuple2<List<ResolvedExpression>, List<ResolvedExpression>> splitFilters = splitExprByPartitionCall(simpleFilters, this.partitionKeys, this.tableRowType);
     this.predicates = ExpressionPredicates.fromExpression(splitFilters.f0);
-    this.columnStatsProbe = ColumnStatsProbe.newInstance(splitFilters.f0);
+    this.columnStatsProbe = ColumnStatsProbe.newInstance(ExpressionUtils.filterExpressionWithIndexedCols(splitFilters.f0, metaClient, getTableSchema()));
     this.partitionPruner = createPartitionPruner(splitFilters.f1, columnStatsProbe);
     this.dataBucketFunc = getDataBucketFunc(splitFilters.f0);
     // refuse all the filters now
