@@ -48,10 +48,12 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Stream;
 
 import static java.util.Arrays.asList;
@@ -216,11 +218,10 @@ public class TestFlinkHoodieBloomIndex extends HoodieFlinkClientTestHarness {
     assertFalse(filter.mightContain(record4.getRecordKey()));
 
     // Compare with file
-    List<String> uuids = asList(record1.getRecordKey(), record2.getRecordKey(), record3.getRecordKey(), record4.getRecordKey());
+    Set<String> uuids = Set.of(record1.getRecordKey(), record2.getRecordKey(), record3.getRecordKey(), record4.getRecordKey());
 
-    HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath).build();
-    List<Pair<String, Long>> results = HoodieIndexUtils.filterKeysFromFile(
-        new StoragePath(java.nio.file.Paths.get(basePath, partition, filename).toString()), uuids, metaClient.getStorage());
+    List<Pair<String, Long>> results = new ArrayList<>(HoodieIndexUtils.filterKeysFromFile(
+        new StoragePath(Paths.get(basePath, partition, filename).toString()), uuids, metaClient.getStorage()));
     assertEquals(results.size(), 2);
     assertTrue(results.get(0).getLeft().equals("1eb5b87a-1feh-4edd-87b4-6ec96dc405a0")
         || results.get(1).getLeft().equals("1eb5b87a-1feh-4edd-87b4-6ec96dc405a0"));

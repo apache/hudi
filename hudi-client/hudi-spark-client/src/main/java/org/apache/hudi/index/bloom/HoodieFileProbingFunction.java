@@ -35,11 +35,13 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.spark.api.java.function.FlatMapFunction;
 import org.apache.spark.broadcast.Broadcast;
 
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 import scala.Tuple2;
@@ -51,7 +53,7 @@ import scala.Tuple2;
  */
 @Slf4j
 public class HoodieFileProbingFunction implements
-    FlatMapFunction<Iterator<Tuple2<HoodieFileGroupId, HoodieBloomFilterProbingResult>>, List<HoodieKeyLookupResult>> {
+    FlatMapFunction<Iterator<Tuple2<HoodieFileGroupId, HoodieBloomFilterProbingResult>>, HoodieKeyLookupResult> {
 
   // Assuming each file bloom filter takes up 512K, sizing the max file count
   // per batch so that the total fetched bloom filters would not cross 128 MB.
@@ -67,19 +69,43 @@ public class HoodieFileProbingFunction implements
   }
 
   @Override
-  public Iterator<List<HoodieKeyLookupResult>> call(Iterator<Tuple2<HoodieFileGroupId, HoodieBloomFilterProbingResult>> tuple2Iterator) throws Exception {
+  public Iterator<HoodieKeyLookupResult> call(Iterator<Tuple2<HoodieFileGroupId, HoodieBloomFilterProbingResult>> tuple2Iterator) throws Exception {
     return new BloomIndexLazyKeyCheckIterator(tuple2Iterator);
   }
 
   private class BloomIndexLazyKeyCheckIterator
-      extends LazyIterableIterator<Tuple2<HoodieFileGroupId, HoodieBloomFilterProbingResult>, List<HoodieKeyLookupResult>> {
+      extends LazyIterableIterator<Tuple2<HoodieFileGroupId, HoodieBloomFilterProbingResult>, HoodieKeyLookupResult> {
+
+    private List<HoodieKeyLookupResult> currentBatch;
+    private int currentBatchIndex;
 
     public BloomIndexLazyKeyCheckIterator(Iterator<Tuple2<HoodieFileGroupId, HoodieBloomFilterProbingResult>> tuple2Iterator) {
       super(tuple2Iterator);
+      this.currentBatch = Collections.emptyList();
+      this.currentBatchIndex = 0;
     }
 
     @Override
-    protected List<HoodieKeyLookupResult> computeNext() {
+    protected HoodieKeyLookupResult computeNext() {
+      // If we have results left in the current batch, return next one
+      if (currentBatchIndex < currentBatch.size()) {
+        return currentBatch.get(currentBatchIndex++);
+      }
+
+      // Need to fetch next batch
+      currentBatch = fetchNextBatch();
+      currentBatchIndex = 0;
+
+      // If new batch is empty, we're done
+      if (currentBatch.isEmpty()) {
+        return null;
+      }
+
+      // Return first element from new batch
+      return currentBatch.get(currentBatchIndex++);
+    }
+
+    private List<HoodieKeyLookupResult> fetchNextBatch() {
       // Partition path and file name pair to list of keys
       final Map<Pair<String, HoodieBaseFile>, HoodieBloomFilterProbingResult> fileToLookupResults = new HashMap<>();
       final Map<String, HoodieBaseFile> fileIDBaseFileMap = new HashMap<>();
@@ -120,18 +146,18 @@ public class HoodieFileProbingFunction implements
             final String fileId = partitionPathFileNamePair.getRight().getFileId();
             ValidationUtils.checkState(!fileId.isEmpty());
 
-            List<String> candidateRecordKeys = bloomFilterKeyLookupResult.getCandidateKeys();
+            Set<String> candidateRecordKeys = bloomFilterKeyLookupResult.getCandidateKeys();
 
             // TODO add assertion that file is checked only once
 
             final HoodieBaseFile dataFile = fileIDBaseFileMap.get(fileId);
-            List<Pair<String, Long>> matchingKeysAndPositions = HoodieIndexUtils.filterKeysFromFile(
+            Collection<Pair<String, Long>> matchingKeysAndPositions = HoodieIndexUtils.filterKeysFromFile(
                 dataFile.getStoragePath(), candidateRecordKeys, HoodieStorageUtils.getStorage(dataFile.getStoragePath(), storageConf));
 
             log.debug(
-                String.format("Bloom filter candidates (%d) / false positives (%d), actual matches (%d)",
+                "Bloom filter candidates ({}) / false positives ({}), actual matches ({})",
                     candidateRecordKeys.size(), candidateRecordKeys.size() - matchingKeysAndPositions.size(),
-                    matchingKeysAndPositions.size()));
+                    matchingKeysAndPositions.size());
 
             return new HoodieKeyLookupResult(fileId, partitionPath, dataFile.getCommitTime(), matchingKeysAndPositions);
           })

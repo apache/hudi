@@ -23,7 +23,7 @@ import org.apache.hudi.common.util.collection.Pair;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 
-import java.util.List;
+import java.util.Collection;
 
 /**
  * Encapsulates the result from a key lookup.
@@ -35,6 +35,6 @@ public class HoodieKeyLookupResult {
   private final String fileId;
   private final String partitionPath;
   private final String baseInstantTime;
-  private final List<Pair<String, Long>> matchingRecordKeysAndPositions;
+  private final Collection<Pair<String, Long>> matchingRecordKeysAndPositions;
 }
 

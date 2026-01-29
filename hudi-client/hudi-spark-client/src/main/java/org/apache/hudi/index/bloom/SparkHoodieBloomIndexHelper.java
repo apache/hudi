@@ -100,7 +100,7 @@ public class SparkHoodieBloomIndexHelper extends BaseHoodieBloomIndexHelper {
     log.info("Input parallelism: {}, Index parallelism: {}", inputParallelism, targetParallelism);
 
     JavaPairRDD<HoodieFileGroupId, String> fileComparisonsRDD = HoodieJavaRDD.getJavaRDD(fileComparisonPairs);
-    JavaRDD<List<HoodieKeyLookupResult>> keyLookupResultRDD;
+    JavaRDD<HoodieKeyLookupResult> keyLookupResultRDD;
 
     if (config.getBloomIndexUseMetadata()
         && hoodieTable.getMetaClient().getTableConfig().getMetadataPartitions()
@@ -181,14 +181,14 @@ public class SparkHoodieBloomIndexHelper extends BaseHoodieBloomIndexHelper {
           .mapPartitions(new HoodieSparkBloomIndexCheckFunction(hoodieTable, config), true);
     }
 
-    return HoodieJavaPairRDD.of(keyLookupResultRDD.flatMap(List::iterator)
-        .filter(lr -> lr.getMatchingRecordKeysAndPositions().size() > 0)
+    return HoodieJavaPairRDD.of(keyLookupResultRDD
+        .filter(lr -> !lr.getMatchingRecordKeysAndPositions().isEmpty())
         .flatMapToPair(lookupResult -> lookupResult.getMatchingRecordKeysAndPositions().stream()
             .map(recordKeyAndPosition -> new Tuple2<>(
                 new HoodieKey(recordKeyAndPosition.getLeft(), lookupResult.getPartitionPath()),
                 new HoodieRecordLocation(lookupResult.getBaseInstantTime(), lookupResult.getFileId(),
                     recordKeyAndPosition.getRight())))
-            .collect(Collectors.toList()).iterator()));
+            .iterator()));
   }
 
   private static class FileGroupIdComparator implements Comparator<Tuple2<HoodieFileGroupId, String>>, Serializable {
@@ -326,7 +326,7 @@ public class SparkHoodieBloomIndexHelper extends BaseHoodieBloomIndexHelper {
   }
 
   public static class HoodieSparkBloomIndexCheckFunction extends HoodieBloomIndexCheckFunction<Tuple2<HoodieFileGroupId, String>>
-      implements FlatMapFunction<Iterator<Tuple2<HoodieFileGroupId, String>>, List<HoodieKeyLookupResult>> {
+      implements FlatMapFunction<Iterator<Tuple2<HoodieFileGroupId, String>>, HoodieKeyLookupResult> {
 
     public HoodieSparkBloomIndexCheckFunction(HoodieTable hoodieTable,
                                               HoodieWriteConfig config) {
@@ -334,7 +334,7 @@ public class SparkHoodieBloomIndexHelper extends BaseHoodieBloomIndexHelper {
     }
 
     @Override
-    public Iterator<List<HoodieKeyLookupResult>> call(Iterator<Tuple2<HoodieFileGroupId, String>> fileGroupIdRecordKeyPairIterator) {
+    public Iterator<HoodieKeyLookupResult> call(Iterator<Tuple2<HoodieFileGroupId, String>> fileGroupIdRecordKeyPairIterator) {
       TaskContext taskContext = TaskContext.get();
       log.info("HoodieSparkBloomIndexCheckFunction with stageId : {}, stage attempt no: {}, taskId : {}, task attempt no : {}, task attempt id : {} ",
           taskContext.stageId(), taskContext.stageAttemptNumber(), taskContext.partitionId(), taskContext.attemptNumber(),
