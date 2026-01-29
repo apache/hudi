@@ -625,7 +625,8 @@ public class HoodieIndexUtils {
     boolean isCommitTimeOrdered = readerContext.getMergeMode() == RecordMergeMode.COMMIT_TIME_ORDERING;
     // if the index is not updating the partition of the record, and the table is COW, then we do not need to do merging at
     // this phase since the writer path will merge when rewriting the files as part of the upsert operation.
-    boolean requiresMergingWithOlderRecordVersion = shouldUpdatePartitionPath || table.getMetaClient().getTableConfig().getTableType() == HoodieTableType.MERGE_ON_READ;
+    boolean requiresMergingWithOlderRecordVersion = shouldUpdatePartitionPath
+        || (!isCommitTimeOrdered && table.getMetaClient().getTableConfig().getTableType() == HoodieTableType.MERGE_ON_READ);
     DeleteContext deleteContext = DeleteContext.fromRecordSchema(properties, writerSchema);
 
     // Pair of incoming record and the global location if meant for merged lookup in later stage
