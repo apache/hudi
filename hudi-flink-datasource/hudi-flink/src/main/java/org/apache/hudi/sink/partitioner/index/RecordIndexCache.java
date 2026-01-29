@@ -30,11 +30,11 @@ import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.util.FlinkWriteClients;
 
 import lombok.Getter;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.flink.configuration.Configuration;
 
 import java.io.Closeable;
 import java.io.IOException;
-import java.util.Collections;
 import java.util.Comparator;
 import java.util.NavigableMap;
 import java.util.TreeMap;
@@ -44,17 +44,33 @@ import java.util.TreeMap;
  * <p>
  * todo: use map backed by flink managed memory.
  */
+@Slf4j
 public class RecordIndexCache implements Closeable {
   @VisibleForTesting
   @Getter
   private final TreeMap<Long, ExternalSpillableMap<String, HoodieRecordGlobalLocation>> caches;
   private final HoodieWriteConfig writeConfig;
   private final long maxCacheSizeInBytes;
+  // the checkpoint id corresponding to the minimum inflight hoodie instant.
+  private long ckpIdForMinInflightInstant;
+  private long recordCnt = 0;
+
+  /**
+   * The empirical value for the maximum number of pending instants, i.e., checkpoint of flink is success, while
+   * the hoodie instant is not committed.
+   */
+  private static final int CHECKPOINT_CACHES_MAX_NUM = 3;
+
+  /**
+   * Check the total memory size of the cache after inserting 100 records
+   */
+  private static final int NUMBER_OF_RECORDS_TO_CHECK_MEMORY_SIZE = 100;
 
   public RecordIndexCache(Configuration conf, long initCheckpointId) {
     this.caches = new TreeMap<>(Comparator.reverseOrder());
     this.writeConfig = FlinkWriteClients.getHoodieClientConfig(conf, false, false);
     this.maxCacheSizeInBytes = conf.get(FlinkOptions.INDEX_RLI_CACHE_SIZE) * 1024 * 1024;
+    this.ckpIdForMinInflightInstant = Integer.MIN_VALUE;
     addCheckpointCache(initCheckpointId);
   }
 
@@ -68,7 +84,7 @@ public class RecordIndexCache implements Closeable {
       // Create a new ExternalSpillableMap for this checkpoint
       ExternalSpillableMap<String, HoodieRecordGlobalLocation> newCache =
           new ExternalSpillableMap<>(
-              maxCacheSizeInBytes,
+              maxCacheSizeInBytes / CHECKPOINT_CACHES_MAX_NUM,
               writeConfig.getSpillableMapBasePath(),
               new DefaultSizeEstimator<>(),
               new DefaultSizeEstimator<>(),
@@ -110,27 +126,39 @@ public class RecordIndexCache implements Closeable {
     ValidationUtils.checkArgument(!caches.isEmpty(), "record index cache should not be empty.");
     // Get the sub cache with the largest checkpoint ID (first entry in the reverse-ordered TreeMap)
     caches.firstEntry().getValue().put(recordKey, recordGlobalLocation);
+
+    if ((++recordCnt) % NUMBER_OF_RECORDS_TO_CHECK_MEMORY_SIZE == 0 && getInMemoryMapSize() >= this.maxCacheSizeInBytes) {
+      doClean();
+      recordCnt = 0;
+    }
   }
 
   /**
-   * Clean all the cache entries for checkpoint whose id is less than the given checkpoint id.
+   * Mark the cache entries cleanable, whose checkpoint id is less than the given checkpoint id.
    *
-   * @param checkpointId the id of checkpoint
+   * @param checkpointId The checkpoint id for the minimum inflight instant
    */
-  public void clean(long checkpointId) {
-    NavigableMap<Long, ExternalSpillableMap<String, HoodieRecordGlobalLocation>> subMap;
-    if (checkpointId == Long.MAX_VALUE) {
-      // clean all the cache entries for old checkpoint ids, and only keeps the cache for the maximum checkpoint id,
-      // which aims to clear memory while also ensuring a certain cache hit rate
-      subMap = caches.firstEntry() == null ? Collections.emptyNavigableMap() : caches.tailMap(caches.firstKey(), false);
-    } else {
-      subMap = caches.tailMap(checkpointId, false);
+  public void markCleanable(long checkpointId) {
+    // all previous instants are committed successfully, so all index
+    ValidationUtils.checkArgument(checkpointId >= ckpIdForMinInflightInstant,
+        "The checkpoint id for minium inflight instant should be increased.");
+    log.info("The checkpoint id for the minimum inflight instant is: {}", checkpointId);
+    ckpIdForMinInflightInstant = checkpointId;
+  }
+
+  /**
+   * Perform the actual cleaning of the cache to free up memories for new record index records.
+   */
+  private void doClean() {
+    while (getInMemoryMapSize() >= this.maxCacheSizeInBytes && !caches.isEmpty() && caches.lastKey() < ckpIdForMinInflightInstant) {
+      NavigableMap.Entry<Long, ExternalSpillableMap<String, HoodieRecordGlobalLocation>> lastEntry = caches.pollLastEntry();
+      lastEntry.getValue().close();
+      log.info("clean record index cache for checkpoint: {}", lastEntry.getKey());
     }
-    // Get all entries that are less than or equal to the given checkpointId
-    // Close all the ExternalSpillableMap instances before removing them
-    subMap.values().forEach(ExternalSpillableMap::close);
-    // Remove all the entries from the main cache
-    subMap.clear();
+  }
+
+  public long getInMemoryMapSize() {
+    return caches.values().stream().map(ExternalSpillableMap::getCurrentInMemoryMapSize).reduce(Long::sum).orElse(0L);
   }
 
   @Override
