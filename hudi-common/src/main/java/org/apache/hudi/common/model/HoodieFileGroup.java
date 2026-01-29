@@ -24,10 +24,13 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.VisibleForTesting;
 
+import lombok.EqualsAndHashCode;
+import lombok.Getter;
+import lombok.ToString;
+
 import java.io.Serializable;
 import java.util.Comparator;
 import java.util.List;
-import java.util.Objects;
 import java.util.TreeMap;
 import java.util.stream.Stream;
 
@@ -39,6 +42,8 @@ import static org.apache.hudi.common.table.timeline.InstantComparison.compareTim
 /**
  * A set of data/base files + set of log files, that make up a unit for all operations.
  */
+@EqualsAndHashCode
+@ToString
 public class HoodieFileGroup implements Serializable {
 
   public static Comparator<String> getReverseCommitTimeComparator() {
@@ -48,6 +53,7 @@ public class HoodieFileGroup implements Serializable {
   /**
    * file group id.
    */
+  @Getter
   private final HoodieFileGroupId fileGroupId;
 
   /**
@@ -58,6 +64,9 @@ public class HoodieFileGroup implements Serializable {
   /**
    * Timeline, based on which all getter work.
    */
+  @Getter
+  @EqualsAndHashCode.Exclude
+  @ToString.Exclude
   private final HoodieTimeline timeline;
 
   /**
@@ -140,10 +149,6 @@ public class HoodieFileGroup implements Serializable {
 
   public String getPartitionPath() {
     return fileGroupId.getPartitionPath();
-  }
-
-  public HoodieFileGroupId getFileGroupId() {
-    return fileGroupId;
   }
 
   /**
@@ -234,42 +239,11 @@ public class HoodieFileGroup implements Serializable {
     return getAllFileSlices().filter(slice -> slice.getBaseFile().isPresent()).map(slice -> slice.getBaseFile().get());
   }
 
-  @Override
-  public String toString() {
-    return "HoodieFileGroup {" + "id=" + fileGroupId
-        + ", fileSlices='" + fileSlices + '\''
-        + ", lastInstant='" + lastInstant + '\''
-        + '}';
-  }
-
   public void addFileSlice(FileSlice slice) {
     fileSlices.put(slice.getBaseInstantTime(), slice);
   }
 
   public Stream<FileSlice> getAllRawFileSlices() {
     return fileSlices.values().stream();
-  }
-
-  public HoodieTimeline getTimeline() {
-    return timeline;
-  }
-
-  @Override
-  public boolean equals(Object o) {
-    if (this == o) {
-      return true;
-    }
-    if (o == null || getClass() != o.getClass()) {
-      return false;
-    }
-    HoodieFileGroup fileGroup = (HoodieFileGroup) o;
-    return Objects.equals(fileGroupId, fileGroup.fileGroupId)
-        && Objects.equals(fileSlices, fileGroup.fileSlices)
-        && Objects.equals(lastInstant, fileGroup.lastInstant);
-  }
-
-  @Override
-  public int hashCode() {
-    return Objects.hash(fileGroupId, fileSlices, lastInstant);
   }
 }

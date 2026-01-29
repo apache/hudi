@@ -20,49 +20,25 @@ package org.apache.hudi.common.model;
 
 import org.apache.hudi.avro.model.HoodieCleanFileInfo;
 
+import lombok.AllArgsConstructor;
+import lombok.EqualsAndHashCode;
+import lombok.Getter;
+
 import java.io.Serializable;
-import java.util.Objects;
 
 /**
  * File info for clean action.
  */
+@AllArgsConstructor
+@Getter
+@EqualsAndHashCode
 public class CleanFileInfo implements Serializable {
 
   private final String filePath;
   private final boolean isBootstrapBaseFile;
 
-  public CleanFileInfo(String filePath, boolean isBootstrapBaseFile) {
-    this.filePath = filePath;
-    this.isBootstrapBaseFile = isBootstrapBaseFile;
-  }
-
-  public String getFilePath() {
-    return filePath;
-  }
-
-  public boolean isBootstrapBaseFile() {
-    return isBootstrapBaseFile;
-  }
-
   public HoodieCleanFileInfo toHoodieFileCleanInfo() {
     return new HoodieCleanFileInfo(filePath, isBootstrapBaseFile);
-  }
-
-  @Override
-  public boolean equals(Object o) {
-    if (this == o) {
-      return true;
-    }
-    if (o == null || getClass() != o.getClass()) {
-      return false;
-    }
-    CleanFileInfo that = (CleanFileInfo) o;
-    return isBootstrapBaseFile == that.isBootstrapBaseFile && Objects.equals(filePath, that.filePath);
-  }
-
-  @Override
-  public int hashCode() {
-    return Objects.hash(filePath, isBootstrapBaseFile);
   }
 }
 

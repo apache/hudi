@@ -24,12 +24,11 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.OrderingValues;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.GenericRecordBuilder;
 import org.apache.avro.generic.IndexedRecord;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.List;
@@ -116,9 +115,8 @@ import java.util.Properties;
  *  -- 1    a1_0    11.0    1001
  * </pre>
  */
+@Slf4j
 public class PartialUpdateAvroPayload extends OverwriteNonDefaultsWithLatestAvroPayload {
-
-  private static final Logger LOG = LoggerFactory.getLogger(PartialUpdateAvroPayload.class);
 
   public PartialUpdateAvroPayload(GenericRecord record, Comparable orderingVal) {
     super(record, orderingVal);
@@ -144,7 +142,7 @@ public class PartialUpdateAvroPayload extends OverwriteNonDefaultsWithLatestAvro
             shouldPickOldRecord ? oldValue.orderingVal : this.orderingVal);
       }
     } catch (Exception ex) {
-      LOG.warn("PartialUpdateAvroPayload precombine failed with ", ex);
+      log.warn("PartialUpdateAvroPayload precombine failed with ", ex);
       return this;
     }
     return this;
