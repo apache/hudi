@@ -935,6 +935,7 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
 
     // Build write config with multiwriter/OCC enabled
     HoodieWriteConfig.Builder writeConfigBuilder = getConfigBuilder()
+        .withHeartbeatIntervalInMs(60 * 1000)
         .withCleanConfig(HoodieCleanConfig.newBuilder()
             .withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.LAZY)
             .withAutoClean(false).build())
@@ -946,7 +947,8 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
         .withEmbeddedTimelineServerEnabled(false)
         .withMarkersType(MarkerType.DIRECT.name())
         .withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder()
-            .withStorageType(FileSystemViewStorageType.MEMORY).build())
+            .withStorageType(FileSystemViewStorageType.MEMORY)
+            .withSecondaryStorageType(FileSystemViewStorageType.MEMORY).build())
         .withWriteConcurrencyMode(WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL)
         .withLockConfig(HoodieLockConfig.newBuilder()
             .withLockProvider(InProcessLockProvider.class)
@@ -992,9 +994,8 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
         // Wait for both writers to be ready
         cyclicBarrier.await(60, TimeUnit.SECONDS);
 
-        // Attempt to execute compaction
-        HoodieWriteMetadata<JavaRDD<WriteStatus>> compactionMetadata = client1.compact(compactionInstantTime);
-        client1.commitCompaction(compactionInstantTime, compactionMetadata, Option.empty());
+        // Attempt to execute compaction with auto-complete
+        client1.compact(compactionInstantTime, true);
         writer1Succeeded.set(true);
       } catch (Exception e) {
         // Expected - one writer may fail due to concurrent execution
@@ -1008,9 +1009,8 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
         // Wait for both writers to be ready
         cyclicBarrier.await(60, TimeUnit.SECONDS);
 
-        // Attempt to execute compaction
-        HoodieWriteMetadata<JavaRDD<WriteStatus>> compactionMetadata = client2.compact(compactionInstantTime);
-        client2.commitCompaction(compactionInstantTime, compactionMetadata, Option.empty());
+        // Attempt to execute compaction with auto-complete
+        client2.compact(compactionInstantTime, true);
         writer2Succeeded.set(true);
       } catch (Exception e) {
         // Expected - one writer may fail due to concurrent execution
