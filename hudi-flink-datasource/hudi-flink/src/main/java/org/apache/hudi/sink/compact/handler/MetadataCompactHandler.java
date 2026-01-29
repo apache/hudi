@@ -37,17 +37,13 @@ import org.apache.flink.util.Collector;
 import java.util.List;
 
 /**
- * Specialized handler for executing compaction operations on Hudi metadata tables.
+ * Handler for compaction operation execution on Hudi metadata tables.
  *
- * <p>This handler extends {@link CompactHandler} to support metadata table-specific
- * compaction operations, including:
- * <ul>
- *   <li>Regular compaction using Avro reader context for metadata tables</li>
- *   <li>Log compaction for metadata tables with instant range support</li>
- * </ul>
+ * <p>This handler extends {@link CompactHandler} to support metadata table specific
+ * compaction operations, including compaction and log compaction.
  *
  * <p>The handler uses {@link AvroReaderContextFactory} to create reader contexts
- * appropriate for metadata table records, which differ from regular data table records.
+ * for metadata table payloads, which differs from data table records(engine native).
  *
  * @see CompactHandler
  * @see CompactionPlanEvent
@@ -62,9 +58,8 @@ public class MetadataCompactHandler extends CompactHandler {
   /**
    * Creates a reader context for reading metadata table records.
    *
-   * <p>This method overrides the parent implementation to create an Avro-based reader context
-   * specifically configured for metadata table records, which have a different payload class
-   * than regular data table.
+   * <p>This method is overridden to create an Avro-based reader context
+   * adapted for metadata table records, which has a custom payload class.
    *
    * @param needReloadMetaClient Whether the meta client needs to be reloaded
    * @return A reader context configured for metadata table records
@@ -77,12 +72,10 @@ public class MetadataCompactHandler extends CompactHandler {
   }
 
   /**
-   * Executes a compaction operation for metadata tables.
+   * Executes a compaction operation.
    *
-   * <p>This method overrides the parent implementation to support both regular compaction
-   * and log compaction for metadata tables. For regular compaction, it delegates to the
-   * parent implementation. For log compaction, it uses a specialized compactor with
-   * instant range support to compact log files.
+   * <p>This method is overridden to support both normal compaction(full compaction)
+   * and log compaction(minor compaction) for metadata tables. For normal compaction.
    *
    * @param event                The compaction plan event containing the operation details
    * @param collector            Collector for emitting compaction commit events

@@ -43,13 +43,13 @@ import java.util.List;
 import java.util.function.Supplier;
 
 /**
- * Handler for executing compaction operations on Hudi tables in Flink.
+ * Handler for executing compaction operations in compaction sub-pipeline.
  *
- * <p>This handler is responsible for:
+ * <p>This responsibilities:
  * <ul>
- *   <li>Executing compaction tasks for individual file groups</li>
- *   <li>Managing schema evolution during compaction</li>
- *   <li>Collecting compaction results and generating commit events</li>
+ *   <li>Executes compaction tasks for individual file groups;</li>
+ *   <li>Handles schema evolution during compaction;</li>
+ *   <li>Collects compaction metadata and generates commit events {@code CompactionCommitEvent}.</li>
  * </ul>
  *
  * <p>The handler supports both synchronous and asynchronous compaction execution.

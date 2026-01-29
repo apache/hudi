@@ -43,19 +43,19 @@ import java.util.Map;
 import static java.util.stream.Collectors.toList;
 
 /**
- * Specialized handler for scheduling compaction plans on Hudi metadata tables.
+ * Handler for scheduling compaction plans on Hudi metadata tables.
  *
- * <p>This handler extends {@link CompactionPlanHandler} to support metadata table-specific
+ * <p>This handler extends {@link CompactionPlanHandler} to support metadata table specific
  * compaction operations, including:
  * <ul>
- *   <li>Regular compaction of metadata table file groups</li>
- *   <li>Log compaction for metadata tables (when enabled)</li>
- *   <li>Rollback of both regular and log compactions</li>
+ *   <li>Compaction;</li>
+ *   <li>Log compaction(if enabled);</li>
+ *   <li>Rollback of the compactions;</li>
  * </ul>
  *
  * <p>The handler first attempts to schedule regular compaction. If no regular compaction
  * is pending and log compaction is enabled, it will schedule log compaction instead.
- * This ensures efficient management of metadata table storage.
+ * This ensures efficient file layout of metadata table storage.
  *
  * @see CompactionPlanHandler
  * @see CompactionPlanEvent
@@ -70,8 +70,8 @@ public class MetadataCompactionPlanHandler extends CompactionPlanHandler {
   /**
    * Schedules compaction operations for metadata tables.
    *
-   * <p>This method overrides the parent implementation to support both regular compaction
-   * and log compaction for metadata tables. It first attempts to schedule regular compaction.
+   * <p>This method is overridden to support both regular compaction(full compaction)
+   * and log compaction(minor compaction) for metadata tables. It first attempts to schedule regular compaction.
    * If no regular compaction is pending and log compaction is enabled, it schedules log
    * compaction instead.
    *
@@ -88,7 +88,7 @@ public class MetadataCompactionPlanHandler extends CompactionPlanHandler {
     Option<Pair<String, HoodieCompactionPlan>> instantAndPlanOpt = getCompactionPlan(
         metaClient, pendingCompactionTimeline, checkpointId, compactionMetrics, CompactionUtils::getCompactionPlan);
     if (instantAndPlanOpt.isPresent()) {
-      collectDataCompaction(instantAndPlanOpt.get().getLeft(), instantAndPlanOpt.get().getRight(), output);
+      collectCompactionOperations(instantAndPlanOpt.get().getLeft(), instantAndPlanOpt.get().getRight(), output);
       return;
     }
     if (!writeClient.getConfig().isLogCompactionEnabled()) {
@@ -106,9 +106,7 @@ public class MetadataCompactionPlanHandler extends CompactionPlanHandler {
   /**
    * Rolls back pending compaction operations for metadata tables.
    *
-   * <p>This method overrides the parent implementation to support rolling back both
-   * regular compaction and log compaction. It first rolls back regular compactions
-   * via the parent method, then rolls back log compactions if enabled.
+   * <p>This method is overridden to support rolling back both normal compaction and log compaction.
    */
   @Override
   public void rollbackCompaction() {
@@ -121,12 +119,12 @@ public class MetadataCompactionPlanHandler extends CompactionPlanHandler {
   /**
    * Creates a compaction plan event for metadata table operations.
    *
-   * <p>This method overrides the parent implementation to create events specifically
-   * marked for metadata table compaction by setting the isMetadata flag to true.
+   * <p>This method is overridden to create the metadata table compaction events.
    *
    * @param compactionInstantTime The instant time for the compaction
    * @param operation             The compaction operation details
    * @param operationIndex        The index of this operation in the compaction plan
+   *
    * @return A compaction plan event configured for metadata table compaction
    */
   @Override
@@ -179,5 +177,4 @@ public class MetadataCompactionPlanHandler extends CompactionPlanHandler {
           new CompactionPlanEvent(compactionInstantTime, operation, operationIndex, true, true)));
     }
   }
-
 }

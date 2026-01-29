@@ -44,15 +44,15 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 /**
- * Handler for committing compaction operations in Flink-based Hudi tables.
+ * Handler for committing compaction operations in compaction sub-pipeline.
  *
- * <p>This handler is responsible for:
+ * <p>The responsibilities:
  * <ul>
- *   <li>Buffering compaction commit events from multiple parallel tasks</li>
- *   <li>Determining when all compaction operations for an instant are complete</li>
- *   <li>Committing successful compactions to the timeline</li>
- *   <li>Rolling back failed compactions</li>
- *   <li>Triggering cleaning operations after successful compaction</li>
+ *   <li>Buffers compaction commit events from multiple parallel tasks;</li>
+ *   <li>Determines whether all compaction operations for an instant are collected as complete;</li>
+ *   <li>Commits the compaction to the timeline;</li>
+ *   <li>Rolls back failed compactions;</li>
+ *   <li>Triggers cleaning operations after successful compaction.</li>
  * </ul>
  *
  * <p>The handler uses a commit buffer to collect events from all parallel compaction tasks.

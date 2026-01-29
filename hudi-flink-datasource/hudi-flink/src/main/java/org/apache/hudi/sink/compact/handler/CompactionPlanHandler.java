@@ -46,18 +46,18 @@ import java.util.function.BiFunction;
 import static java.util.stream.Collectors.toList;
 
 /**
- * Handler for scheduling and managing compaction plans in Flink Hudi tables.
+ * Handler for scheduling and managing compaction plans in compaction sub-pipeline.
  *
- * <p>This handler is responsible for:
+ * <p>The responsibilities:
  * <ul>
- *   <li>Retrieving pending compaction plans from the timeline</li>
- *   <li>Transitioning compaction instants from REQUESTED to INFLIGHT state</li>
- *   <li>Distributing compaction operations to downstream tasks</li>
- *   <li>Rolling back failed compactions</li>
+ *   <li>Retrieves pending compaction plans from the timeline;</li>
+ *   <li>Transitions compaction instants from REQUESTED to INFLIGHT state;</li>
+ *   <li>Distributes compaction operations to downstream tasks;</li>
+ *   <li>Rolls back failed compactions.</li>
  * </ul>
  *
- * <p>The handler works with the Hudi timeline to identify the first pending compaction
- * instant and generates compaction plan events for each file group that needs to be compacted.
+ * <p>The handler reads the Hudi timeline to detect the target pending compaction
+ * instant and generates compaction plan events for each compaction plan operation.
  *
  * @see CompactionPlanEvent
  * @see HoodieFlinkWriteClient
@@ -98,7 +98,7 @@ public class CompactionPlanHandler implements Closeable {
     if (instantAndPlanOpt.isEmpty()) {
       return;
     }
-    collectDataCompaction(instantAndPlanOpt.get().getLeft(), instantAndPlanOpt.get().getRight(), output);
+    collectCompactionOperations(instantAndPlanOpt.get().getLeft(), instantAndPlanOpt.get().getRight(), output);
   }
 
   /**
@@ -152,21 +152,21 @@ public class CompactionPlanHandler implements Closeable {
   }
 
   /**
-   * Collects and distributes compaction operations for data tables.
+   * Collects and distributes compaction operations for a Hudi table.
    *
    * <p>This method:
    * <ul>
-   *   <li>Transitions the compaction instant from REQUESTED to INFLIGHT</li>
-   *   <li>Deletes any existing marker directories</li>
-   *   <li>Creates a compaction plan event for each operation</li>
-   *   <li>Assigns operation indices to ensure proper task distribution</li>
+   *   <li>Transitions the compaction instant from REQUESTED to INFLIGHT;</li>
+   *   <li>Deletes any existing marker directories;</li>
+   *   <li>Creates a compaction plan event for each operation;</li>
+   *   <li>Assigns operation indices to ensure proper task distribution;</li>
    * </ul>
    *
    * @param compactionInstantTime The instant time for this compaction
    * @param compactionPlan        The compaction plan containing operations to execute
    * @param output                The output collector for emitting compaction plan events
    */
-  protected void collectDataCompaction(
+  protected void collectCompactionOperations(
       String compactionInstantTime,
       HoodieCompactionPlan compactionPlan,
       Output<StreamRecord<CompactionPlanEvent>> output) {

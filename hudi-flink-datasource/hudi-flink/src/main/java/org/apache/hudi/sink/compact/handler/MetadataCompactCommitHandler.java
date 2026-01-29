@@ -37,20 +37,20 @@ import java.io.IOException;
 import java.util.List;
 
 /**
- * Specialized handler for committing compaction operations on metadata tables.
+ * Handler for committing compaction metadata to metadata table timeline.
  *
- * <p>This handler extends {@link CompactCommitHandler} to support metadata table-specific
- * compaction commit operations, including:
+ * <p>This handler extends {@link CompactCommitHandler} to support metadata table specific
+ * compaction commit actions, including:
  * <ul>
- *   <li>Retrieving compaction plans for both compaction types</li>
- *   <li>Committing regular compaction for metadata tables</li>
- *   <li>Committing log compaction for metadata tables</li>
- *   <li>Rolling back both regular and log compactions</li>
+ *   <li>Retrieves compaction plans for both compaction and log compaction types;</li>
+ *   <li>Commits compaction metadata;</li>
+ *   <li>Commits log compaction metadata;</li>
+ *   <li>Rolls back failed compactions;</li>
  * </ul>
  *
- * <p>The handler distinguishes between regular compaction and log compaction based on
- * the {@link CompactionCommitEvent#isLogCompaction()} flag, and invokes the appropriate
- * completion or rollback methods with the write client.
+ * <p>The handler distinguishes between normal compaction(full compaction) and log compaction(minor compaction) based on
+ * the {@link CompactionCommitEvent#isLogCompaction()} flag, and triggers compaction completion or rollback
+ * appropriately with the write client.
  *
  * @see CompactCommitHandler
  * @see CompactionCommitEvent
@@ -62,10 +62,10 @@ public class MetadataCompactCommitHandler extends CompactCommitHandler {
   }
 
   /**
-   * Completes a compaction operation for metadata tables.
+   * Completes a compaction for metadata tables.
    *
-   * <p>This method overrides the parent implementation to support both regular compaction
-   * and log compaction for metadata tables. It creates appropriate metadata based on the
+   * <p>This method is overridden to support both normal compaction(full compaction)
+   * and log compaction(minor compaction) for metadata tables. It creates appropriate metadata based on the
    * operation type and invokes the corresponding completion method on the write client.
    *
    * @param event             The compaction commit event indicating the type of compaction
@@ -91,11 +91,9 @@ public class MetadataCompactCommitHandler extends CompactCommitHandler {
   }
 
   /**
-   * Rolls back a failed compaction operation for metadata tables.
+   * Rolls back a failed compaction.
    *
-   * <p>This method overrides the parent implementation to support rolling back both
-   * regular compaction and log compaction based on the event type. It invokes the
-   * appropriate rollback method for the compaction type.
+   * <p>This method is overridden to support rolling back of both compaction and log compaction.
    *
    * @param event The compaction commit event indicating the type of compaction to roll back
    */
@@ -111,8 +109,8 @@ public class MetadataCompactCommitHandler extends CompactCommitHandler {
   /**
    * Retrieves the compaction plan for a metadata table compaction instant.
    *
-   * <p>This method overrides the parent implementation to support retrieving both
-   * regular compaction plans and log compaction plans based on the event type.
+   * <p>This method is overridden to support retrieving both
+   * normal compaction plans and log compaction plans based on the compaction type.
    * It uses a cache to avoid repeatedly reading plans from storage.
    *
    * @param event The compaction commit event indicating the type of compaction
