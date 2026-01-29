@@ -70,11 +70,11 @@ public class HoodieAvroFileReaderFactory extends HoodieFileReaderFactory {
                                                 HoodieStorage storage,
                                                 byte[] content,
                                                 Option<HoodieSchema> schemaOption) throws IOException {
-    HFileReaderFactory readerFactory = HFileReaderFactory.builder()
+    HFileReaderFactory.Builder readerFactoryBuilder = HFileReaderFactory.builder()
         .withStorage(storage).withProps(hoodieConfig.getProps())
-        .withContent(content).build();
+        .withContent(content);
     return HoodieNativeAvroHFileReader.builder()
-        .readerFactory(readerFactory).path(path).schema(schemaOption).build();
+        .readerFactory(readerFactoryBuilder.build()).path(path).schema(schemaOption).build();
   }
 
   @Override
