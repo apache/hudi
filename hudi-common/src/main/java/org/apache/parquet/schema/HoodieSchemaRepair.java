@@ -63,6 +63,7 @@ public class HoodieSchemaRepair {
   }
 
   private static boolean canRepair(HoodieSchema fileSchema, HoodieSchema tableSchema) {
+    // repair can only be performed if the types are the same or if we are repairing long -> timestamp mismatches between the file and table schema
     return fileSchema.getType() == tableSchema.getType() || fileSchema.getType() == HoodieSchemaType.LONG && tableSchema.getType() == HoodieSchemaType.TIMESTAMP;
   }
 

@@ -35,6 +35,7 @@ import java.io.ObjectOutputStream;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -113,7 +114,7 @@ public class HoodieSchema implements Serializable {
     Schema.Type avroType = avroSchema.getType();
     ValidationUtils.checkState(avroType != null, "Avro schema type cannot be null");
     this.type = HoodieSchemaType.fromAvro(avroSchema);
-    this.fields = fields;
+    this.fields = fields != null ? Collections.unmodifiableList(fields) : null;
   }
 
   /**
@@ -560,7 +561,7 @@ public class HoodieSchema implements Serializable {
       throw new IllegalStateException("Cannot get fields from non-record schema: " + type);
     }
     if (fields == null) {
-      fields = avroSchema.getFields().stream().map(HoodieSchemaField::new).collect(Collectors.toList());
+      fields = Collections.unmodifiableList(avroSchema.getFields().stream().map(HoodieSchemaField::new).collect(Collectors.toList()));
     }
     return fields;
   }

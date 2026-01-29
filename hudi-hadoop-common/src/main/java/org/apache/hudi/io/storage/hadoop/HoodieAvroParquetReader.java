@@ -40,7 +40,6 @@ import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 
-import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.conf.Configuration;
@@ -187,11 +186,11 @@ public class HoodieAvroParquetReader extends HoodieAvroFileReader {
     //       be able to read that file (in case projection is a proper one)
     Configuration hadoopConf = storage.getConf().unwrapCopyAs(Configuration.class);
     HoodieSchema repairedFileSchema = HoodieSchemaRepair.repairLogicalTypes(getSchema(), schema);
-    Option<Schema> promotedSchema = Option.empty();
+    Option<HoodieSchema> promotedSchema = Option.empty();
     if (!renamedColumns.isEmpty() || HoodieAvroUtils.recordNeedsRewriteForExtendedAvroTypePromotion(repairedFileSchema.toAvroSchema(), schema.toAvroSchema())) {
       AvroReadSupport.setAvroReadSchema(hadoopConf, repairedFileSchema.toAvroSchema());
       AvroReadSupport.setRequestedProjection(hadoopConf, repairedFileSchema.toAvroSchema());
-      promotedSchema = Option.of(schema.toAvroSchema());
+      promotedSchema = Option.of(schema);
     } else {
       AvroReadSupport.setAvroReadSchema(hadoopConf, schema.toAvroSchema());
       AvroReadSupport.setRequestedProjection(hadoopConf, schema.toAvroSchema());
@@ -204,7 +203,7 @@ public class HoodieAvroParquetReader extends HoodieAvroFileReader {
             .set(ParquetInputFormat.STRICT_TYPE_CHECKING, hadoopConf.get(ParquetInputFormat.STRICT_TYPE_CHECKING))
             .build();
     ParquetReaderIterator<IndexedRecord> parquetReaderIterator = promotedSchema.isPresent()
-        ? new HoodieAvroParquetReaderIterator(reader, HoodieSchema.fromAvroSchema(promotedSchema.get()), renamedColumns)
+        ? new HoodieAvroParquetReaderIterator(reader, promotedSchema.get(), renamedColumns)
         : new ParquetReaderIterator<>(reader);
     readerIterators.add(parquetReaderIterator);
     return parquetReaderIterator;
