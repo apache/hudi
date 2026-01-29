@@ -852,4 +852,82 @@ class TestLanceDataSource extends HoodieSparkClientTestBase {
     assertTrue(expectedDf.except(actual).isEmpty)
     assertTrue(actual.except(expectedDf).isEmpty)
   }
+
+  @ParameterizedTest
+  @EnumSource(value = classOf[HoodieTableType])
+  def testSchemaEvolutionNestedStructMinimal(tableType: HoodieTableType): Unit = {
+    val tableName = s"test_lance_nested_struct_minimal_${tableType.name.toLowerCase}"
+    val tablePath = s"$basePath/$tableName"
+
+    // Write initial data with base schema: {id: Int, info: {name: String}}
+    val schema1 = StructType(Seq(
+      StructField("id", IntegerType, false),
+      StructField("info", StructType(Seq(
+        StructField("name", StringType, true)
+      )), true)
+    ))
+    val data1 = Seq(
+      Row(1, Row("Alice")),
+      Row(2, Row("Bob")),
+      Row(3, Row("Charlie"))
+    )
+    val df1 = spark.createDataFrame(spark.sparkContext.parallelize(data1), schema1)
+
+    writeDataframe(tableType, tableName, tablePath, df1, saveMode = SaveMode.Overwrite)
+
+    // Write new data with evolved schema: {id: Long, info: {name: String, age: Int}}
+    // Tests both type evolution (Int → Long) and nested field addition (info.age)
+    val schema2 = StructType(Seq(
+      StructField("id", LongType, false),
+      StructField("info", StructType(Seq(
+        StructField("name", StringType, true),
+        StructField("age", IntegerType, true)
+      )), true)
+    ))
+    val data2 = Seq(
+      Row(4L, Row("David", 28))
+    )
+    val df2 = spark.createDataFrame(spark.sparkContext.parallelize(data2), schema2)
+
+    writeDataframe(tableType, tableName, tablePath, df2, saveMode = SaveMode.Append)
+
+    // Read with evolved schema - should handle both type promotion and nested field addition
+    val readDf = spark.read.format("hudi").load(tablePath)
+    val actual = readDf.select("id", "info")
+
+    // Verify schema has Long type and nested struct has both fields
+    assertEquals(LongType, actual.schema("id").dataType)
+    val infoSchema = actual.schema("info").dataType.asInstanceOf[StructType]
+    assertEquals(2, infoSchema.fields.length)
+    assertTrue(infoSchema.fieldNames.contains("name"))
+    assertTrue(infoSchema.fieldNames.contains("age"))
+
+    // Verify data - old records should have null for info.age, id should be cast to Long
+    val actualRows = actual.collect().sortBy(_.getLong(0))
+    assertEquals(4, actualRows.length)
+
+    // Check first record: id=1, info={name="Alice", age=null}
+    assertEquals(1L, actualRows(0).getLong(0))
+    val info1 = actualRows(0).getStruct(1)
+    assertEquals("Alice", info1.getString(0))
+    assertTrue(info1.isNullAt(1))
+
+    // Check second record: id=2, info={name="Bob", age=null}
+    assertEquals(2L, actualRows(1).getLong(0))
+    val info2 = actualRows(1).getStruct(1)
+    assertEquals("Bob", info2.getString(0))
+    assertTrue(info2.isNullAt(1))
+
+    // Check third record: id=3, info={name="Charlie", age=null}
+    assertEquals(3L, actualRows(2).getLong(0))
+    val info3 = actualRows(2).getStruct(1)
+    assertEquals("Charlie", info3.getString(0))
+    assertTrue(info3.isNullAt(1))
+
+    // Check fourth record: id=4, info={name="David", age=28}
+    assertEquals(4L, actualRows(3).getLong(0))
+    val info4 = actualRows(3).getStruct(1)
+    assertEquals("David", info4.getString(0))
+    assertEquals(28, info4.getInt(1))
+  }
 }

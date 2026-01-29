@@ -21,10 +21,9 @@ package org.apache.spark.sql.execution.datasources.parquet
 
 import org.apache.hudi.SparkAdapterSupport.sparkAdapter
 import org.apache.hudi.common.model.HoodieFileFormat
-
 import org.apache.spark.sql.HoodieSchemaUtils
 import org.apache.spark.sql.catalyst.expressions.UnsafeProjection
-import org.apache.spark.sql.types.StructType
+import org.apache.spark.sql.types.{ArrayType, DataType, MapType, StructField, StructType}
 
 
 /**
@@ -43,6 +42,57 @@ class SparkBasicSchemaEvolution(fileSchema: StructType,
 
   val (implicitTypeChangeInfo, sparkRequestSchema) = HoodieParquetFileFormatHelper.buildImplicitSchemaChangeInfo(fileSchema, requiredSchema)
 
+  /**
+   * Recursively filters requested schema to only include fields that exist in file schema.
+   * Follows the pattern of HoodieParquetFileFormatHelper.addMissingFields but with inverted logic:
+   * removes fields not in file instead of adding missing fields.
+   */
+  private def filterSchemaByFileSchema(requestedSchema: StructType, fileSchema: StructType): StructType = {
+    val fileFieldMap = fileSchema.fields.map(f => f.name -> f).toMap
+
+    val filteredFields = requestedSchema.fields.flatMap { requestedField =>
+      fileFieldMap.get(requestedField.name).map { fileField =>
+        val filteredDataType = filterDataType(requestedField.dataType, fileField.dataType)
+        StructField(requestedField.name, filteredDataType, requestedField.nullable, requestedField.metadata)
+      }
+    }
+
+    StructType(filteredFields)
+  }
+
+  /**
+   * Recursively filters data types to only include nested fields that exist in file.
+   */
+  private def filterDataType(requestedType: DataType, fileType: DataType): DataType = (requestedType, fileType) match {
+    case (requestedType, fileType) if requestedType == fileType => fileType
+
+    case (ArrayType(requestedElement, containsNull), ArrayType(fileElement, _)) =>
+      ArrayType(filterDataType(requestedElement, fileElement), containsNull)
+
+    case (MapType(requestedKey, requestedValue, valueContainsNull), MapType(fileKey, fileValue, _)) =>
+      MapType(
+        filterDataType(requestedKey, fileKey),
+        filterDataType(requestedValue, fileValue),
+        valueContainsNull
+      )
+
+    case (StructType(requestedFields), StructType(fileFields)) =>
+      val fileFieldMap = fileFields.map(f => f.name -> f).toMap
+      val filteredFields = requestedFields.flatMap { requestedField =>
+        fileFieldMap.get(requestedField.name).map { fileField =>
+          StructField(
+            requestedField.name,
+            filterDataType(requestedField.dataType, fileField.dataType),
+            requestedField.nullable,
+            requestedField.metadata
+          )
+        }
+      }
+      StructType(filteredFields)
+
+    case _ => requestedType
+  }
+
   def getRequestSchema: StructType = {
     fileFormat match {
       case HoodieFileFormat.PARQUET =>
@@ -52,9 +102,12 @@ class SparkBasicSchemaEvolution(fileSchema: StructType,
           sparkRequestSchema
         }
       case HoodieFileFormat.LANCE =>
-        // need to filter to only fields that exist in file for lance
-        val fileFieldNames = fileSchema.fieldNames.toSet
-        StructType(sparkRequestSchema.fields.filter(f => fileFieldNames.contains(f.name)))
+        // need to recursively filter to only fields that exist in file for lance
+        println(s"[LANCE DEBUG] fileSchema: ${fileSchema.treeString}")
+        println(s"[LANCE DEBUG] sparkRequestSchema: ${sparkRequestSchema.treeString}")
+        val filtered = filterSchemaByFileSchema(sparkRequestSchema, fileSchema)
+        println(s"[LANCE DEBUG] filtered requestSchema: ${filtered.treeString}")
+        filtered
       case _ =>
         throw new UnsupportedOperationException(s"Unsupported file format: $fileFormat")
     }
