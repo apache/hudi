@@ -25,6 +25,7 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.hive.ql.io.SelfDescribingInputFormatInterface;
 import org.apache.hadoop.hive.ql.io.parquet.MapredParquetInputFormat;
 import org.apache.hadoop.mapred.FileInputFormat;
 import org.apache.hadoop.mapred.FileSplit;
@@ -46,7 +47,8 @@ import java.io.IOException;
  * either {@link HoodieCopyOnWriteTableInputFormat} or {@link HoodieMergeOnReadTableInputFormat} to be supplied
  * to which it delegates all of its necessary methods.
  */
-public abstract class HoodieParquetInputFormatBase extends MapredParquetInputFormat implements Configurable {
+public abstract class HoodieParquetInputFormatBase extends MapredParquetInputFormat implements Configurable,
+    SelfDescribingInputFormatInterface {
 
   private final HoodieTableInputFormat inputFormatDelegate;
 
