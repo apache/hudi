@@ -53,6 +53,17 @@ import static org.apache.hudi.internal.schema.convert.AvroInternalSchemaConverte
  */
 public class AvroSchemaUtils {
 
+  private static final Class<?> AVRO_SCHEMA_REPAIR_CLASS;
+  static {
+    Class<?> clazz = null;
+    try {
+      clazz = Class.forName("org.apache.parquet.schema.AvroSchemaRepair");
+    } catch (ClassNotFoundException e) {
+      // AvroSchemaRepair not on classpath (e.g. when parquet schema not available)
+    }
+    AVRO_SCHEMA_REPAIR_CLASS = clazz;
+  }
+
   private AvroSchemaUtils() {}
 
   /**
@@ -492,13 +503,32 @@ public class AvroSchemaUtils {
   }
 
   public static Schema getRepairedSchema(Schema writerSchema, Schema readerSchema) {
-    try {
-      Class<?> avroSchemaRepairClass = Class.forName("org.apache.parquet.schema.AvroSchemaRepair");
-      Method repairMethod = avroSchemaRepairClass.getMethod("repairLogicalTypes", Schema.class, Schema.class);
-      return (Schema) repairMethod.invoke(null, writerSchema, readerSchema);
-    } catch (ClassNotFoundException | NoSuchMethodException | IllegalAccessException | InvocationTargetException e) {
-      // Fallback if class/method not available
+    if (AVRO_SCHEMA_REPAIR_CLASS == null) {
       return writerSchema;
+    }
+    try {
+      Method repairMethod =
+          AVRO_SCHEMA_REPAIR_CLASS.getMethod("repairLogicalTypes", Schema.class, Schema.class);
+      return (Schema) repairMethod.invoke(null, writerSchema, readerSchema);
+    } catch (NoSuchMethodException | IllegalAccessException | InvocationTargetException e) {
+      return writerSchema;
+    }
+  }
+
+  /**
+   * Returns true if the given Avro schema contains any timestamp-millis logical type.
+   * Used to decide whether to enable logical timestamp field repair when reading log blocks.
+   */
+  public static boolean hasTimestampMillisField(Schema schema) {
+    if (schema == null || AVRO_SCHEMA_REPAIR_CLASS == null) {
+      return false;
+    }
+    try {
+      Method hasTimestampMillisFieldMethod =
+          AVRO_SCHEMA_REPAIR_CLASS.getMethod("hasTimestampMillisField", Schema.class);
+      return (Boolean) hasTimestampMillisFieldMethod.invoke(null, schema);
+    } catch (NoSuchMethodException | IllegalAccessException | InvocationTargetException e) {
+      return false;
     }
   }
 }
