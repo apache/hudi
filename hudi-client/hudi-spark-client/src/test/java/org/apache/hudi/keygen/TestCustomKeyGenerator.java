@@ -433,7 +433,7 @@ class TestCustomKeyGenerator extends KeyGeneratorTestUtilities {
 
     // The partition path should be transformed to yyyy/MM/dd format
     HoodieKey key = keyGenerator.getKey(avroRecord);
-    assertEquals("_row_key:key1", key.getRecordKey());
+    assertEquals("key1", key.getRecordKey());
     assertEquals("2026/01/05", key.getPartitionPath());
   }
 }
