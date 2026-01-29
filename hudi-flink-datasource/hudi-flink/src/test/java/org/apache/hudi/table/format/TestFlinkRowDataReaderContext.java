@@ -152,7 +152,6 @@ class TestFlinkRowDataReaderContext {
     assertTrue(result.getBoolean(2));
   }
 
-
   private GenericRowData createBaseRow(int id, String name, boolean active) {
     return GenericRowData.of(id, StringData.fromString(name), active);
   }

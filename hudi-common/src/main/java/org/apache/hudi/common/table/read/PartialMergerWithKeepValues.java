@@ -37,6 +37,35 @@ import java.util.Set;
 /**
  * Class to assist with merging two versions of the record that may contain partial updates using
  * {@link org.apache.hudi.common.table.PartialUpdateMode#KEEP_VALUES} mode.
+ *
+ * Expectations:
+ * - When a newer record has fewer fields than an older record, this class merges them by:
+ *   * Using values from the newer record for fields that are present in the newer record
+ *   * Using values from the older record for fields that are missing in the newer record
+ * - Merging is performed at the top-level field level only. Nested fields within record types
+ *   are not supported and will be treated as a single field unit.
+ * - If the newer record contains all fields (i.e., is not partial), it is returned as-is without merging.
+ * - The merged schema contains all fields from both records, ordered according to the reader schema.
+ *
+ * Example:
+ * <pre>
+ * // Older record (full):
+ * {id: "1", name: "John", age: 25, city: "NYC"}
+ *
+ * // Newer record (partial - missing age and city):
+ * {id: "1", name: "Jane"}
+ *
+ * // Merged result:
+ * {id: "1", name: "Jane", age: 25, city: "NYC"}
+ * // - id and name from newer record
+ * // - age and city from older record
+ * </pre>
+ *
+ * Limitations:
+ * - Nested fields are not supported: If a record contains nested record types, partial updates
+ *   within those nested structures are not handled. The entire nested field is treated as a single unit.
+ *   For example, if you have a nested field "address" with sub-fields "street" and "city", you cannot
+ *   partially update just "street" while keeping "city" from the older record.
  */
 public class PartialMergerWithKeepValues<T> implements Serializable {
   private final Map<HoodieSchema, Set<String>>

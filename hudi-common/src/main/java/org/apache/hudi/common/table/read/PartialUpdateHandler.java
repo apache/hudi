@@ -108,7 +108,7 @@ public class PartialUpdateHandler<T> implements Serializable {
    * @param newSchema       The schema of the new incoming record
    * @return the merged record of type {@link BufferedRecord}
    */
-  BufferedRecord<T> reconcileBasedOnKeepValues(BufferedRecord<T> highOrderRecord,
+  private BufferedRecord<T> reconcileBasedOnKeepValues(BufferedRecord<T> highOrderRecord,
                                                BufferedRecord<T> lowOrderRecord,
                                                HoodieSchema highOrderSchema,
                                                HoodieSchema lowOrderSchema,

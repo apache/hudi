@@ -23,7 +23,8 @@ import org.apache.hudi.common.config.EnumFieldDescription;
 
 public enum PartialUpdateMode {
   @EnumFieldDescription(
-      "For any column values missing in current record, pick value from previous version of the record.")
+      "For any column values missing in current record, pick value from previous version of the record. "
+          + "Only top-level columns are supported; nested fields within record types are not yet supported.")
   KEEP_VALUES,
 
   @EnumFieldDescription(

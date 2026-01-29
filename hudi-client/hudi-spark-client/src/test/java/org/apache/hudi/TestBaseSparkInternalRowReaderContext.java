@@ -181,7 +181,6 @@ class TestBaseSparkInternalRowReaderContext {
     assertFalse(result.getBoolean(2));
   }
 
-
   @Test
   void testConstructEngineRecordWithComplexSchema() {
     // Create a more complex schema with nested fields

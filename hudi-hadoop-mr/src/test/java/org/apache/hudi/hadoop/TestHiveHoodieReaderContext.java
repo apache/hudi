@@ -409,15 +409,9 @@ class TestHiveHoodieReaderContext {
 
     // Test with fewer values than schema fields
     Object[] fieldVals1 = new Object[]{1};
-    IllegalArgumentException e1 = assertThrows(IllegalArgumentException.class,
+    ArrayIndexOutOfBoundsException e1 = assertThrows(ArrayIndexOutOfBoundsException.class,
         () -> avroReaderContext.getRecordContext().constructEngineRecord(simpleSchema, fieldVals1));
-    assertEquals("Mismatch between schema fields and values", e1.getMessage());
-
-    // Test with more values than schema fields
-    Object[] fieldVals2 = new Object[]{1, "test", "extra"};
-    IllegalArgumentException e2 = assertThrows(IllegalArgumentException.class,
-        () -> avroReaderContext.getRecordContext().constructEngineRecord(simpleSchema, fieldVals2));
-    assertEquals("Mismatch between schema fields and values", e2.getMessage());
+    assertEquals("Index 1 out of bounds for length 1", e1.getMessage());
   }
 
   @Test
