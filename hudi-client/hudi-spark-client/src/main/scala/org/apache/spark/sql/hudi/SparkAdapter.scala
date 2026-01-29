@@ -442,4 +442,58 @@ trait SparkAdapter extends Serializable {
     fieldSchema: HoodieSchema,
     repetition: Repetition
   ): Type
+
+  /**
+   * Generates a shredded schema for a VariantType column based on the expected data types.
+   * This is used when writing Variant data with shredding enabled.
+   *
+   * For Spark 4.x, this uses SparkShreddingUtils.variantShreddingSchema.
+   * For Spark 3.x, this throws UnsupportedOperationException.
+   *
+   * @param dataType The expected data type for the Variant value (e.g., StructType with expected fields)
+   * @param isTopLevel Whether this is a top-level Variant column
+   * @param isObjectField Whether this is an object field (affects value field nullability)
+   * @return The shredded schema as a StructType
+   */
+  def generateVariantShreddingSchema(dataType: DataType, isTopLevel: Boolean, isObjectField: Boolean): StructType
+
+  /**
+   * Checks if a StructType represents a shredded Variant schema (has special shredding metadata).
+   * This is used during writing to identify columns that need special shredding handling.
+   *
+   * For Spark 4.x, this uses SparkShreddingUtils.isVariantShreddingStruct.
+   * For Spark 3.x, this always returns false.
+   *
+   * @param structType The StructType to check
+   * @return true if this is a shredded Variant schema
+   */
+  def isVariantShreddingStruct(structType: StructType): Boolean
+
+  /**
+   * Adds metadata to a StructType to mark it as a Variant shredding schema.
+   * This metadata is used by writers to identify shredded columns.
+   *
+   * For Spark 4.x, this uses SparkShreddingUtils.addWriteShreddingMetadata.
+   * For Spark 3.x, this throws UnsupportedOperationException.
+   *
+   * @param schema The schema to add metadata to
+   * @return The schema with shredding metadata added
+   */
+  def addVariantWriteShreddingMetadata(schema: StructType): StructType
+
+  /**
+   * Creates a ValueWriter for a shredded Variant StructType.
+   * This writer converts a Variant value into its shredded components and writes them.
+   *
+   * For Spark 4.x, this uses SparkShreddingUtils.castShredded.
+   * For Spark 3.x, this throws UnsupportedOperationException.
+   *
+   * @param shreddedStructType The shredded StructType schema
+   * @param writeStruct Function to write the shredded InternalRow
+   * @return BiConsumer function that reads Variant and writes shredded components
+   */
+  def createShreddedVariantWriter(
+    shreddedStructType: StructType,
+    writeStruct: Consumer[InternalRow]
+  ): BiConsumer[SpecializedGetters, Integer]
 }

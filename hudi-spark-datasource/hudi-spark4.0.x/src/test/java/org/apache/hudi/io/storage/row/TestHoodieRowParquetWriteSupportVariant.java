@@ -22,15 +22,18 @@ import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaField;
+import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
+import org.apache.parquet.format.converter.ParquetMetadataConverter;
 import org.apache.parquet.hadoop.ParquetFileReader;
 import org.apache.parquet.hadoop.ParquetWriter;
 import org.apache.parquet.hadoop.metadata.ParquetMetadata;
 import org.apache.parquet.schema.GroupType;
+import org.apache.parquet.schema.LogicalTypeAnnotation;
 import org.apache.parquet.schema.MessageType;
 import org.apache.parquet.schema.Type;
 import org.apache.spark.sql.catalyst.InternalRow;
@@ -46,12 +49,14 @@ import org.junit.jupiter.api.io.TempDir;
 import java.io.File;
 import java.io.IOException;
 import java.util.Collections;
+import java.util.Map;
 
 import static org.apache.parquet.schema.PrimitiveType.PrimitiveTypeName.BINARY;
+import static org.apache.parquet.schema.PrimitiveType.PrimitiveTypeName.INT32;
 import static org.apache.parquet.schema.Type.Repetition.OPTIONAL;
 import static org.apache.parquet.schema.Type.Repetition.REQUIRED;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Tests for Variant type support in {@link HoodieRowParquetWriteSupport}.
@@ -114,17 +119,38 @@ public class TestHoodieRowParquetWriteSupportVariant {
   /**
    * Tests that a Shredded Variant (defined by HoodieSchema) is written as:
    * <pre>
-   * group {
-   * required binary metadata;
-   * optional binary value;
-   * }
+   *   group {
+   *     required binary metadata;
+   *     optional binary value;
+   *   }
+   * </pre>
+   * <p>
+   * The schema that we are using here is as such:
+   * <pre>
+   *   root
+   *    |-- v: struct (nullable = true)
+   *    |    |-- metadata: binary (nullable = true)
+   *    |    |-- value: binary (nullable = true)
+   *    |    |-- typed_value: struct (nullable = true)
+   *    |    |    |-- a: struct (nullable = true)
+   *    |    |    |    |-- value: binary (nullable = true)
+   *    |    |    |    |-- typed_value: integer (nullable = true)
+   *    |    |    |-- b: struct (nullable = true)
+   *    |    |    |    |-- value: binary (nullable = true)
+   *    |    |    |    |-- typed_value: string (nullable = true)
+   *    |    |    |-- c: struct (nullable = true)
+   *    |    |    |    |-- value: binary (nullable = true)
+   *    |    |    |    |-- typed_value: decimal(15,1) (nullable = true)
    * </pre>
    * Note: Even though typed_value is not populated, the schema must indicate 'value' is OPTIONAL.
    */
   @Test
   public void testWriteShreddedVariant() throws IOException {
-    // Setup Hoodie Schema: Shredded
-    HoodieSchema.Variant variantSchema = HoodieSchema.createVariantShredded("v", null, "Shredded variant", null);
+    HoodieSchema.Variant variantSchema = HoodieSchema.createVariantShreddedObject("v", null, "Shredded variant",
+        // These does not need to be nullable, #createVariantShreddedObject will handle the nullable coercion
+        Map.of("a", HoodieSchema.create(HoodieSchemaType.INT),
+            "b", HoodieSchema.create(HoodieSchemaType.STRING),
+            "c", HoodieSchema.createDecimal(15, 1)));
     HoodieSchema recordSchema = HoodieSchema.createRecord("record", null, null,
         Collections.singletonList(HoodieSchemaField.of("v", variantSchema, null, null)));
 
@@ -155,9 +181,15 @@ public class TestHoodieRowParquetWriteSupportVariant {
     assertEquals(BINARY, valueField.asPrimitiveType().getPrimitiveTypeName());
     assertEquals(OPTIONAL, valueField.getRepetition(), "Shredded variant value must be OPTIONAL");
 
-    // Verify typed_value is omitted (as implementation skips it)
     boolean hasTypedValue = vGroup.getFields().stream().anyMatch(f -> f.getName().equals("typed_value"));
-    assertFalse(hasTypedValue, "typed_value field should be omitted in this writer implementation");
+    assertTrue(hasTypedValue, "typed_value field should be omitted in this writer implementation");
+
+    // Check parquet metadata in the footer that shredded schemas are created
+    ParquetMetadata fileFooter = ParquetFileReader.readFooter(new Configuration(), new Path(outputFile.toURI()), ParquetMetadataConverter.NO_FILTER);
+    MessageType footerSchema = fileFooter.getFileMetaData().getSchema();
+    assertEquals(INT32, footerSchema.getType("v", "typed_value", "a", "typed_value").asPrimitiveType().getPrimitiveTypeName());
+    assertEquals(LogicalTypeAnnotation.stringType(), footerSchema.getType("v", "typed_value", "b", "typed_value").getLogicalTypeAnnotation());
+    assertEquals(LogicalTypeAnnotation.decimalType(1, 15), footerSchema.getType("v", "typed_value", "c", "typed_value").getLogicalTypeAnnotation());
   }
 
   private void writeRows(File outputFile, StructType sparkSchema, HoodieSchema recordSchema, InternalRow row) throws IOException {
