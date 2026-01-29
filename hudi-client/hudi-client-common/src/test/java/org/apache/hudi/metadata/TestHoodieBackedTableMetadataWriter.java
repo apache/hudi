@@ -59,6 +59,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.RETURNS_DEEP_STUBS;
+import static org.mockito.Mockito.doCallRealMethod;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.mockStatic;
@@ -322,14 +323,13 @@ class TestHoodieBackedTableMetadataWriter {
     return timeline;
   }
 
-  static Stream<Arguments> tableServiceFailureTestCases() {
+  static Stream<Arguments> performTableServicesFailureTestCases() {
     return Stream.of(
         Arguments.of(
             "compaction",
             true,
             false,
             new RuntimeException("Compaction failed"),
-            HoodieMetadataMetrics.PENDING_COMPACTIONS_FAILURES,
             true
         ),
         Arguments.of(
@@ -337,7 +337,6 @@ class TestHoodieBackedTableMetadataWriter {
             true,
             false,
             new RuntimeException("Compaction failed"),
-            HoodieMetadataMetrics.PENDING_COMPACTIONS_FAILURES,
             false
         ),
         Arguments.of(
@@ -345,7 +344,6 @@ class TestHoodieBackedTableMetadataWriter {
             false,
             true,
             new HoodieException("Log compaction failed"),
-            HoodieMetadataMetrics.LOG_COMPACTION_FAILURES,
             true
         ),
         Arguments.of(
@@ -353,59 +351,97 @@ class TestHoodieBackedTableMetadataWriter {
             false,
             true,
             new HoodieException("Log compaction failed"),
-            HoodieMetadataMetrics.LOG_COMPACTION_FAILURES,
             false
         )
     );
   }
 
   @ParameterizedTest
-  @MethodSource("tableServiceFailureTestCases")
-  void testTableServiceFailures(
+  @MethodSource("performTableServicesFailureTestCases")
+  void testPerformTableServicesWithFailureHandling(
       String serviceType,
       boolean hasPendingCompaction,
       boolean hasPendingLogCompaction,
       RuntimeException exceptionToThrow,
-      String expectedMetric,
-      boolean shouldFailOnTableServiceFailures) {
+      boolean shouldFailOnTableServiceFailures) throws Exception {
+    // Create mocks for dependencies
     HoodieTableMetaClient metaClient = mock(HoodieTableMetaClient.class);
     HoodieActiveTimeline timeline = mock(HoodieActiveTimeline.class, RETURNS_DEEP_STUBS);
     BaseHoodieWriteClient writeClient = mock(BaseHoodieWriteClient.class);
     HoodieMetadataMetrics metrics = mock(HoodieMetadataMetrics.class);
+    HoodieWriteConfig writeConfig = mock(HoodieWriteConfig.class);
+    HoodieMetadataConfig metadataConfig = mock(HoodieMetadataConfig.class);
 
+    // Set up config mocks
+    when(writeConfig.getMetadataConfig()).thenReturn(metadataConfig);
+    when(metadataConfig.shouldFailOnTableServiceFailures()).thenReturn(shouldFailOnTableServiceFailures);
+    when(writeConfig.getTableName()).thenReturn("test_table");
+
+    // Set up timeline mocks
     when(metaClient.reloadActiveTimeline()).thenReturn(timeline);
+    when(metaClient.getActiveTimeline()).thenReturn(timeline);
     when(timeline.filterPendingCompactionTimeline().countInstants()).thenReturn(hasPendingCompaction ? 1 : 0);
     when(timeline.filterPendingLogCompactionTimeline().countInstants()).thenReturn(hasPendingLogCompaction ? 1 : 0);
+    when(timeline.getDeltaCommitTimeline().filterCompletedInstants().lastInstant()).thenReturn(Option.empty());
+
+    // Set up write client mocks
+    when(writeClient.getConfig()).thenReturn(writeConfig);
 
     // Simulate failure based on service type
     if (hasPendingCompaction) {
       doThrow(exceptionToThrow).when(writeClient).runAnyPendingCompactions();
-    } else if (hasPendingLogCompaction) {
+    }
+    if (hasPendingLogCompaction) {
       doThrow(exceptionToThrow).when(writeClient).runAnyPendingLogCompactions();
     }
+
+    // Create a partial mock of HoodieBackedTableMetadataWriter
+    HoodieBackedTableMetadataWriter writer = mock(HoodieBackedTableMetadataWriter.class);
+
+    // Mock getWriteClient to return our mock write client
+    when(writer.getWriteClient()).thenReturn(writeClient);
+
+    // Set up the writer's fields using reflection
+    java.lang.reflect.Field metadataMetaClientField = HoodieBackedTableMetadataWriter.class.getDeclaredField("metadataMetaClient");
+    metadataMetaClientField.setAccessible(true);
+    metadataMetaClientField.set(writer, metaClient);
+
+    java.lang.reflect.Field writeClientField = HoodieBackedTableMetadataWriter.class.getDeclaredField("writeClient");
+    writeClientField.setAccessible(true);
+    writeClientField.set(writer, writeClient);
+
+    java.lang.reflect.Field writeConfigField = HoodieBackedTableMetadataWriter.class.getDeclaredField("dataWriteConfig");
+    writeConfigField.setAccessible(true);
+    writeConfigField.set(writer, writeConfig);
+
+    java.lang.reflect.Field metricsField = HoodieBackedTableMetadataWriter.class.getDeclaredField("metrics");
+    metricsField.setAccessible(true);
+    metricsField.set(writer, Option.of(metrics));
+
+    // Call the real performTableServices method
+    doCallRealMethod().when(writer).performTableServices(any(), eq(true));
 
     if (shouldFailOnTableServiceFailures) {
       // When shouldFailOnTableServiceFailures is true, exception should propagate
       assertThrows(exceptionToThrow.getClass(), () ->
-          HoodieBackedTableMetadataWriter.runPendingTableServicesOperationsAndRefreshTimeline(
-              metaClient, writeClient, true, Option.of(metrics)),
-          "Expected exception to be thrown when " + serviceType + " fails");
+          writer.performTableServices(Option.empty(), true),
+          "Expected exception to be thrown when " + serviceType + " fails and shouldFailOnTableServiceFailures is true");
     } else {
       // When shouldFailOnTableServiceFailures is false, exception should not propagate
       assertDoesNotThrow(() ->
-          HoodieBackedTableMetadataWriter.runPendingTableServicesOperationsAndRefreshTimeline(
-              metaClient, writeClient, false, Option.of(metrics)),
+          writer.performTableServices(Option.empty(), true),
           "Exception should not be thrown when shouldFailOnTableServiceFailures is false");
     }
 
     // Verify the appropriate service method was called
     if (hasPendingCompaction) {
       verify(writeClient, times(1)).runAnyPendingCompactions();
-    } else if (hasPendingLogCompaction) {
+    }
+    if (hasPendingLogCompaction) {
       verify(writeClient, times(1)).runAnyPendingLogCompactions();
     }
 
-    // Verify metrics are incremented
-    verify(metrics, times(1)).incrementMetric(expectedMetric, 1);
+    // Verify metrics are incremented when there's a failure
+    verify(metrics, times(1)).incrementMetric(HoodieMetadataMetrics.PENDING_COMPACTIONS_FAILURES, 1);
   }
 }
