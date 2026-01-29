@@ -58,6 +58,9 @@ public class HoodieLogFormatWriter implements HoodieLogFormat.Writer {
   private final LogFileCreationCallback fileCreationHook;
   private boolean closed = false;
   private transient Thread shutdownThread = null;
+  // NOTE: For 1.x, we should set this parameter to false by default.
+  // However, since some unit tests simulate the behavior of the block appending in 0.x, this parameter needs to be used to provide the logic for calling `hsync` during flush
+  private final boolean syncDuringFlush;
 
   public HoodieLogFormatWriter(
       HoodieStorage storage,
@@ -66,7 +69,8 @@ public class HoodieLogFormatWriter implements HoodieLogFormat.Writer {
       Short replication,
       Long sizeThreshold,
       String rolloverLogWriteToken,
-      LogFileCreationCallback fileCreationHook) {
+      LogFileCreationCallback fileCreationHook,
+      boolean syncDuringFlush) {
     this.storage = storage;
     this.logFile = logFile;
     this.sizeThreshold = sizeThreshold;
@@ -74,6 +78,7 @@ public class HoodieLogFormatWriter implements HoodieLogFormat.Writer {
     this.replication = replication != null ? replication : storage.getDefaultReplication(logFile.getPath().getParent());
     this.rolloverLogWriteToken = rolloverLogWriteToken;
     this.fileCreationHook = fileCreationHook;
+    this.syncDuringFlush = syncDuringFlush;
     addShutDownHook();
   }
 
@@ -179,7 +184,8 @@ public class HoodieLogFormatWriter implements HoodieLogFormat.Writer {
       }
       sizeWritten +=  outputStream.size() - startSize;
     }
-    // Flush all blocks to disk
+    // Flush all blocks
+    // Only the stream flush, not guarantee that the data has been thoroughly persisted
     flush();
 
     AppendResult result = new AppendResult(logFile, startPos, sizeWritten);
@@ -236,7 +242,8 @@ public class HoodieLogFormatWriter implements HoodieLogFormat.Writer {
 
   private void closeStream() throws IOException {
     if (output != null) {
-      flush();
+      // Call flush and `FSDataOutputStream#hsync` to persist all the data to DataNodes
+      flush(true);
       output.close();
       output = null;
       closed = true;
@@ -244,13 +251,19 @@ public class HoodieLogFormatWriter implements HoodieLogFormat.Writer {
   }
 
   private void flush() throws IOException {
+    flush(syncDuringFlush);
+  }
+
+  private void flush(boolean sync) throws IOException {
     if (output == null) {
       return; // Presume closed
     }
     output.flush();
-    // NOTE : the following API call makes sure that the data is flushed to disk on DataNodes (akin to POSIX fsync())
-    // See more details here : https://issues.apache.org/jira/browse/HDFS-744
-    output.hsync();
+    if (sync) {
+      // NOTE : the following API call makes sure that the data is flushed to disk on DataNodes (akin to POSIX fsync())
+      // See more details here : https://issues.apache.org/jira/browse/HDFS-744
+      output.hsync();
+    }
   }
 
   @Override
