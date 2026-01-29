@@ -32,8 +32,7 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.io.IOException;
 import java.util.HashMap;
@@ -46,9 +45,9 @@ import java.util.stream.Collectors;
 /**
  * Helper class to generate commit metadata.
  */
+@Slf4j
 public class CommitUtils {
 
-  private static final Logger LOG = LoggerFactory.getLogger(CommitUtils.class);
   private static final String NULL_SCHEMA_STR = HoodieSchema.NULL_SCHEMA.toString();
   private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
@@ -119,8 +118,7 @@ public class CommitUtils {
       commitMetadata.addWriteStat(partition, writeStat);
     }
 
-    LOG.info("Creating  metadata for " + operationType + " numWriteStats:" + writeStats.size()
-        + " numReplaceFileIds:" + partitionToReplaceFileIds.values().stream().mapToInt(e -> e.size()).sum());
+    log.info("Creating  metadata for {} numWriteStats:{} numReplaceFileIds:{}", operationType, writeStats.size(), partitionToReplaceFileIds.values().stream().mapToInt(e -> e.size()).sum());
     return commitMetadata;
   }
 
@@ -130,7 +128,7 @@ public class CommitUtils {
 
       return Option.of(commitMetadata);
     } catch (IOException e) {
-      LOG.info("Failed to parse HoodieCommitMetadata for " + instant.toString(), e);
+      log.info("Failed to parse HoodieCommitMetadata for {}", instant.toString(), e);
     }
 
     return Option.empty();

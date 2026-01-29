@@ -37,8 +37,7 @@ import org.apache.hudi.common.table.timeline.versioning.clean.CleanMetadataV1Mig
 import org.apache.hudi.common.table.timeline.versioning.clean.CleanMetadataV2MigrationHandler;
 import org.apache.hudi.common.table.timeline.versioning.clean.CleanPlanMigrator;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -58,9 +57,9 @@ import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.deseri
 /**
  * Utils for clean action.
  */
+@Slf4j
 public class CleanerUtils {
 
-  private static final Logger LOG = LoggerFactory.getLogger(CleanerUtils.class);
   public static final String SAVEPOINTED_TIMESTAMPS = "savepointed_timestamps";
   public static final Integer CLEAN_METADATA_VERSION_1 = CleanMetadataV1MigrationHandler.VERSION;
   public static final Integer CLEAN_METADATA_VERSION_2 = CleanMetadataV2MigrationHandler.VERSION;
@@ -211,7 +210,7 @@ public class CleanerUtils {
           // No need to do any special cleanup for failed operations during clean
           return false;
         } else if (cleaningPolicy.isLazy()) {
-          LOG.info("Cleaned failed attempts if any");
+          log.info("Cleaned failed attempts if any");
           // Perform rollback of failed operations for all types of actions during clean
           return rollbackFailedWritesFunc.apply();
         }
@@ -220,7 +219,7 @@ public class CleanerUtils {
       case COMMIT_ACTION:
         // For any other actions, perform rollback of failed writes
         if (cleaningPolicy.isEager()) {
-          LOG.info("Cleaned failed attempts if any");
+          log.info("Cleaned failed attempts if any");
           return rollbackFailedWritesFunc.apply();
         }
         break;
