@@ -20,7 +20,7 @@ package org.apache.hudi.source.split;
 
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.source.IncrementalInputSplits;
-import org.apache.hudi.source.ScanContext;
+import org.apache.hudi.source.HoodieScanContext;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -32,11 +32,11 @@ public class DefaultHoodieSplitDiscover implements HoodieContinuousSplitDiscover
   private static final Logger LOG = LoggerFactory.getLogger(DefaultHoodieSplitDiscover.class);
 
   private final HoodieTableMetaClient metaClient;
-  private final ScanContext scanContext;
+  private final HoodieScanContext scanContext;
   private final IncrementalInputSplits incrementalInputSplits;
 
   public DefaultHoodieSplitDiscover(
-      ScanContext scanContext,
+      HoodieScanContext scanContext,
       HoodieTableMetaClient metaClient) {
     this.scanContext = scanContext;
     this.metaClient = metaClient;
