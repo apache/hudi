@@ -77,6 +77,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieDuplicateDataFileDetectedException;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.exception.HoodieInconsistentMetadataException;
 import org.apache.hudi.exception.HoodieInsertException;
 import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.exception.HoodieUpsertException;
@@ -745,8 +746,30 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
    * @throws HoodieIOException if some paths can't be finalized on storage
    */
   public void finalizeWrite(HoodieEngineContext context, String instantTs, List<HoodieWriteStat> stats) throws HoodieIOException {
+    validateWriteStats(instantTs, stats);
     reconcileAgainstMarkers(context, instantTs, stats, config.getConsistencyGuardConfig().isConsistencyCheckEnabled(), config.shouldFailOnDuplicateDataFileDetection(),
         WriteMarkersFactory.get(config.getMarkersType(), this, instantTs));
+  }
+
+  /**
+   * Validates that all write stats have non-zero write or delete operation counts to ensure data consistency.
+   * Throws an exception if any write stat has both numWrites and numDeletes set to zero, which indicates
+   * an inconsistent or incomplete write operation where no actual data modifications occurred.
+   *
+   * @param instantTs Instant Timestamp
+   * @param stats     List of HoodieWriteStats to validate
+   * @throws HoodieInconsistentMetadataException if any write stat has both numWrites and numDeletes set to zero
+   */
+  void validateWriteStats(String instantTs, List<HoodieWriteStat> stats) {
+    for (HoodieWriteStat stat : stats) {
+      if (stat.getNumWrites() == 0
+          && stat.getNumDeletes() == 0) {
+        throw new HoodieInconsistentMetadataException(
+            String.format("Inconsistent write stat found for commit %s: fileId=%s, path=%s, partition=%s. "
+                + "Both numWrites and numDeletes are zero",
+                instantTs, stat.getFileId(), stat.getPath(), stat.getPartitionPath()));
+      }
+    }
   }
 
   private void deleteInvalidFilesByPartitions(HoodieEngineContext context, Map<String, List<Pair<String, String>>> invalidFilesByPartition) {
