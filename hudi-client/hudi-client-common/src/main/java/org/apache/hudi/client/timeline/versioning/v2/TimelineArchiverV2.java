@@ -19,7 +19,6 @@
 
 package org.apache.hudi.client.timeline.versioning.v2;
 
-import java.util.Optional;
 import org.apache.hudi.client.timeline.HoodieTimelineArchiver;
 import org.apache.hudi.client.transaction.TransactionManager;
 import org.apache.hudi.common.NativeTableFormat;
