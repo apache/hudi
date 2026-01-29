@@ -19,7 +19,9 @@
 
 package org.apache.hudi.common.util;
 
+import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.HoodieReaderConfig;
+import org.apache.hudi.common.engine.LocalTaskContextSupplier;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -29,6 +31,8 @@ import org.apache.hudi.common.util.collection.CloseableMappingIterator;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.io.storage.HoodieFileReader;
+import org.apache.hudi.io.storage.HoodieFileWriter;
+import org.apache.hudi.io.storage.HoodieFileWriterFactory;
 import org.apache.hudi.io.storage.HoodieIOFactory;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.metadata.HoodieIndexVersion;
@@ -39,15 +43,19 @@ import org.apache.hudi.storage.StoragePath;
 import org.apache.avro.generic.GenericRecord;
 
 import java.io.ByteArrayOutputStream;
+import java.io.File;
+import java.io.FileInputStream;
 import java.io.IOException;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.atomic.AtomicLong;
 
 public class LanceUtils extends FileFormatUtils {
+  private static final int COPY_BUFFER_SIZE = 8192;
 
   @Override
   public ClosableIterator<Pair<HoodieKey, Long>> fetchRecordKeysWithPositions(HoodieStorage storage, StoragePath filePath) {
@@ -187,7 +195,10 @@ public class LanceUtils extends FileFormatUtils {
                                                           HoodieSchema readerSchema,
                                                           String keyFieldName,
                                                           Map<String, String> paramsMap) throws IOException {
-    throw new UnsupportedOperationException("serializeRecordsToLogBlock is not yet supported for Lance format");
+    if (records.isEmpty()) {
+      return new ByteArrayOutputStream(0);
+    }
+    return getByteArrayOutputStream(storage, records.iterator(), writerSchema, readerSchema, keyFieldName, paramsMap, records.get(0).getRecordType());
   }
 
   @Override
@@ -198,6 +209,41 @@ public class LanceUtils extends FileFormatUtils {
                                                                         HoodieSchema readerSchema,
                                                                         String keyFieldName,
                                                                         Map<String, String> paramsMap) throws IOException {
-    throw new UnsupportedOperationException("serializeRecordsToLogBlock with iterator is not yet supported for Lance format");
+    return Pair.of(getByteArrayOutputStream(storage, records, writerSchema, readerSchema, keyFieldName, paramsMap, recordType), null);
+  }
+
+  private static HoodieConfig getHoodieConfig(Map<String, String> paramsMap) {
+    HoodieConfig config = new HoodieConfig();
+    paramsMap.forEach(config::setValue);
+    return config;
+  }
+
+  private static ByteArrayOutputStream getByteArrayOutputStream(HoodieStorage storage, Iterator<HoodieRecord> records, HoodieSchema writerSchema, HoodieSchema readerSchema, String keyFieldName,
+                                                                Map<String, String> paramsMap, HoodieRecord.HoodieRecordType recordType) throws IOException {
+    HoodieConfig config = getHoodieConfig(paramsMap);
+
+    File tempFile = File.createTempFile("lance-log-block-" + UUID.randomUUID(), ".lance");
+    StoragePath tempFilePath = new StoragePath(tempFile.toURI());
+
+    Object fileFormatMetadata;
+    try (HoodieFileWriter lanceWriter = HoodieFileWriterFactory.getFileWriter(null, tempFilePath, storage, config, writerSchema, new LocalTaskContextSupplier(), recordType)) {
+      while (records.hasNext()) {
+        HoodieRecord record = records.next();
+        String recordKey = record.getRecordKey(readerSchema, keyFieldName);
+        lanceWriter.write(recordKey, record, writerSchema);
+      }
+    }
+
+    ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+    byte[] buffer = new byte[COPY_BUFFER_SIZE];
+    try (FileInputStream fis = new FileInputStream(tempFile)) {
+      int bytesRead;
+      while ((bytesRead = fis.read(buffer)) != -1) {
+        outputStream.write(buffer, 0, bytesRead);
+      }
+      outputStream.flush();
+    }
+    tempFile.delete();
+    return outputStream;
   }
 }
