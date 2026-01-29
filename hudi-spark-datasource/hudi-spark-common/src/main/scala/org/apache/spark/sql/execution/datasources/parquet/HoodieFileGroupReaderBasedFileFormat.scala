@@ -41,7 +41,7 @@ import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.{FileStatus, Path}
 import org.apache.hadoop.mapreduce.Job
-import org.apache.parquet.schema.{AvroSchemaRepair, MessageType}
+import org.apache.parquet.schema.{HoodieSchemaRepair, MessageType}
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.HoodieCatalystExpressionUtils.generateUnsafeProjection
@@ -96,7 +96,7 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
     )
   }
 
-  private lazy val hasTimestampMillisFieldInTableSchema = AvroSchemaRepair.hasTimestampMillisField(schema.toAvroSchema)
+  private lazy val hasTimestampMillisFieldInTableSchema = HoodieSchemaRepair.hasTimestampMillisField(schema)
   private lazy val supportBatchWithTableSchema = HoodieSparkUtils.gteqSpark3_5 || !hasTimestampMillisFieldInTableSchema
   override def shortName(): String = "HudiFileGroup"
 
