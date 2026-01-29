@@ -679,7 +679,7 @@ class TestLanceDataSource extends HoodieSparkClientTestBase {
 
     // Upsert - modify Bob's record
     val records2 = Seq(
-      (102, "Bob", 40, 95.0) 
+      (102, "Bob", 40, 95.0)
     )
     val df2 = createDataFrame(records2)
 
@@ -689,8 +689,8 @@ class TestLanceDataSource extends HoodieSparkClientTestBase {
 
     // Second upsert - modify Alice and insert David
     val records3 = Seq(
-      (101, "Alice", 45, 98.5),  
-      (104, "David", 28, 88.0) 
+      (101, "Alice", 45, 98.5),
+      (104, "David", 28, 88.0)
     )
     val df3 = createDataFrame(records3)
 
