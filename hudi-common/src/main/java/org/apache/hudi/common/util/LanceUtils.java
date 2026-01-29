@@ -76,12 +76,11 @@ public class LanceUtils extends FileFormatUtils {
                                                            Option<BaseKeyGenerator> keyGeneratorOpt,
                                                            Option<String> partitionPath) {
     try {
-      // Read schema for HoodieSparkRecord.getRecordKey() to access meta fields correctly
-      HoodieSchema fullSchema = readSchema(storage, filePath);
+      HoodieSchema keySchema = getKeyIteratorSchema(storage, filePath, keyGeneratorOpt, partitionPath);
       HoodieFileReader reader = HoodieIOFactory.getIOFactory(storage)
           .getReaderFactory(HoodieRecord.HoodieRecordType.SPARK)
           .getFileReader(new HoodieReaderConfig(), filePath, HoodieFileFormat.LANCE);
-      ClosableIterator<HoodieRecord> recordIterator = reader.getRecordIterator(fullSchema);
+      ClosableIterator<HoodieRecord> recordIterator = reader.getRecordIterator(keySchema);
 
       return new ClosableIterator<HoodieKey>() {
         @Override
@@ -97,10 +96,14 @@ public class LanceUtils extends FileFormatUtils {
         @Override
         public HoodieKey next() {
           HoodieRecord record = recordIterator.next();
-          // HoodieSparkRecord.getRecordKey() handles both cases:
-          // 1. With keyGenerator: extracts user fields for key
-          // 2. Without keyGenerator: reads from meta record key field position
-          String recordKey = record.getRecordKey(fullSchema, keyGeneratorOpt);
+          String recordKey;
+          if (keyGeneratorOpt.isPresent()) {
+            // With keyGenerator, extracts user-defined key fields by name
+            recordKey = record.getRecordKey(keySchema, keyGeneratorOpt);
+          } else {
+            // Without keyGenerator, read record key field by name
+            recordKey = record.getRecordKey(keySchema, HoodieRecord.RECORD_KEY_METADATA_FIELD);
+          }
           return new HoodieKey(recordKey, partitionPath.orElse(null));
         }
       };
