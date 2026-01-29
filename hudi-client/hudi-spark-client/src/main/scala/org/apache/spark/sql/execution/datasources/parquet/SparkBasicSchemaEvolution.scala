@@ -44,8 +44,6 @@ class SparkBasicSchemaEvolution(fileSchema: StructType,
 
   /**
    * Recursively filters requested schema to only include fields that exist in file schema.
-   * Follows the pattern of HoodieParquetFileFormatHelper.addMissingFields but with inverted logic:
-   * removes fields not in file instead of adding missing fields.
    */
   private def filterSchemaByFileSchema(requestedSchema: StructType, fileSchema: StructType): StructType = {
     val fileFieldMap = fileSchema.fields.map(f => f.name -> f).toMap
@@ -102,11 +100,7 @@ class SparkBasicSchemaEvolution(fileSchema: StructType,
           sparkRequestSchema
         }
       case HoodieFileFormat.LANCE =>
-        // need to recursively filter to only fields that exist in file for lance
-        println(s"[LANCE DEBUG] fileSchema: ${fileSchema.treeString}")
-        println(s"[LANCE DEBUG] sparkRequestSchema: ${sparkRequestSchema.treeString}")
         val filtered = filterSchemaByFileSchema(sparkRequestSchema, fileSchema)
-        println(s"[LANCE DEBUG] filtered requestSchema: ${filtered.treeString}")
         filtered
       case _ =>
         throw new UnsupportedOperationException(s"Unsupported file format: $fileFormat")

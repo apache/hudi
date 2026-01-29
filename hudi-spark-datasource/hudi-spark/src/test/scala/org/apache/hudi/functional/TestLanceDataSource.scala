@@ -902,32 +902,25 @@ class TestLanceDataSource extends HoodieSparkClientTestBase {
     assertTrue(infoSchema.fieldNames.contains("name"))
     assertTrue(infoSchema.fieldNames.contains("age"))
 
+    // Create expected DataFrame with evolved schema
+    val expectedSchema = StructType(Seq(
+      StructField("id", LongType, false),
+      StructField("info", StructType(Seq(
+        StructField("name", StringType, true),
+        StructField("age", IntegerType, true)
+      )), true)
+    ))
+    val expectedData = Seq(
+      Row(1L, Row("Alice", null)),
+      Row(2L, Row("Bob", null)),
+      Row(3L, Row("Charlie", null)),
+      Row(4L, Row("David", 28))
+    )
+    val expectedDf = spark.createDataFrame(spark.sparkContext.parallelize(expectedData), expectedSchema)
+
     // Verify data - old records should have null for info.age, id should be cast to Long
-    val actualRows = actual.collect().sortBy(_.getLong(0))
-    assertEquals(4, actualRows.length)
-
-    // Check first record: id=1, info={name="Alice", age=null}
-    assertEquals(1L, actualRows(0).getLong(0))
-    val info1 = actualRows(0).getStruct(1)
-    assertEquals("Alice", info1.getString(0))
-    assertTrue(info1.isNullAt(1))
-
-    // Check second record: id=2, info={name="Bob", age=null}
-    assertEquals(2L, actualRows(1).getLong(0))
-    val info2 = actualRows(1).getStruct(1)
-    assertEquals("Bob", info2.getString(0))
-    assertTrue(info2.isNullAt(1))
-
-    // Check third record: id=3, info={name="Charlie", age=null}
-    assertEquals(3L, actualRows(2).getLong(0))
-    val info3 = actualRows(2).getStruct(1)
-    assertEquals("Charlie", info3.getString(0))
-    assertTrue(info3.isNullAt(1))
-
-    // Check fourth record: id=4, info={name="David", age=28}
-    assertEquals(4L, actualRows(3).getLong(0))
-    val info4 = actualRows(3).getStruct(1)
-    assertEquals("David", info4.getString(0))
-    assertEquals(28, info4.getInt(1))
+    assertTrue(expectedDf.except(actual).isEmpty)
+    assertTrue(actual.except(expectedDf).isEmpty)
   }
+
 }

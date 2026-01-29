@@ -132,9 +132,6 @@ object HoodieParquetFileFormatHelper {
     }
 
     def recursivelyCastExpressions(expr: Expression, srcType: DataType, dstType: DataType, padNestedFields: Boolean = false): Expression = {
-      println(s"[CAST DEBUG] recursivelyCastExpressions called: padNestedFields=$padNestedFields")
-      println(s"[CAST DEBUG] srcType: $srcType")
-      println(s"[CAST DEBUG] dstType: $dstType")
       lazy val needTimeZone = Cast.needsTimeZone(srcType, dstType)
       (srcType, dstType) match {
         case (FloatType, DoubleType) =>
@@ -149,23 +146,19 @@ object HoodieParquetFileFormatHelper {
           Cast(expr, DateType, if (needTimeZone) timeZoneId else None)
         case (s: StructType, d: StructType) if padNestedFields || hasUnsupportedConversion(s, d) =>
           val structFields = if (padNestedFields) {
-            // Lance case: pad missing nested fields with null
-            println(s"[LANCE PADDING DEBUG] Source struct: ${s.treeString}")
-            println(s"[LANCE PADDING DEBUG] Dest struct: ${d.treeString}")
+            // Only required for Lance for padding the nested fields
             val srcFieldMap = s.fields.zipWithIndex.map { case (f, i) => f.name -> (f, i) }.toMap
             d.fields.map { dstField =>
               srcFieldMap.get(dstField.name) match {
                 case Some((srcField, srcIndex)) =>
-                  println(s"[LANCE PADDING DEBUG] Field '${dstField.name}' exists in source at index $srcIndex")
                   val child = GetStructField(expr, srcIndex, Some(dstField.name))
                   recursivelyCastExpressions(child, srcField.dataType, dstField.dataType, padNestedFields)
                 case None =>
-                  println(s"[LANCE PADDING DEBUG] Field '${dstField.name}' MISSING - padding with Literal(null, ${dstField.dataType})")
                   Literal(null, dstField.dataType)
               }
             }
           } else {
-            // Parquet case: only process common fields (original behavior)
+            // Otherwise fall thru to original Parquet behavior not requiring padding
             s.fields.zip(d.fields).zipWithIndex.map {
               case ((srcField, dstField), i) =>
                 val child = GetStructField(expr, i, Some(dstField.name))
@@ -197,15 +190,15 @@ object HoodieParquetFileFormatHelper {
       }
     }
 
-    // Helper to check if a StructType needs nested field padding (for Lance)
     def needsNestedPadding(srcType: DataType, dstType: DataType): Boolean = (srcType, dstType) match {
+      // Need padding if destination has more fields or nested fields differ
       case (StructType(srcFields), StructType(dstFields)) =>
-        // Need padding if destination has more fields or nested fields differ
         dstFields.length > srcFields.length ||
           srcFields.zip(dstFields).exists { case (sf, df) => needsNestedPadding(sf.dataType, df.dataType) }
       case (ArrayType(srcElem, _), ArrayType(dstElem, _)) =>
         needsNestedPadding(srcElem, dstElem)
       case (MapType(srcKey, srcVal, _), MapType(dstKey, dstVal, _)) =>
+        // lance does not support map type so not needed currently
         needsNestedPadding(srcKey, dstKey) || needsNestedPadding(srcVal, dstVal)
       case _ => false
     }
@@ -221,12 +214,12 @@ object HoodieParquetFileFormatHelper {
           case Some(attr) =>
             // Field exists in file - apply casting if needed
             if (typeChangeInfos.containsKey(i)) {
-              val srcType = typeChangeInfos.get(i).getRight  // file type
-              val dstType = typeChangeInfos.get(i).getLeft   // required type
-              recursivelyCastExpressions(attr, srcType, dstType, padNestedFields = true)
+              val dstType = typeChangeInfos.get(i).getLeft
+              //  use filtered attr.dataType as source
+              // typeChangeInfos.getRight() contains unfiltered schema with extra nested fields
+              recursivelyCastExpressions(attr, attr.dataType, dstType, padNestedFields = true)
             } else if (needsNestedPadding(attr.dataType, field.dataType)) {
-              // Lance-specific: Handle nested struct padding even when not in typeChangeInfos
-              println(s"[NESTED PADDING] Applying padding for field '${field.name}': ${attr.dataType} -> ${field.dataType}")
+              // Handle nested struct padding even when not in typeChangeInfos
               recursivelyCastExpressions(attr, attr.dataType, field.dataType, padNestedFields = true)
             } else {
               attr
