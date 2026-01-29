@@ -288,8 +288,8 @@ public class HoodieRowParquetWriteSupport extends WriteSupport<InternalRow> {
       // Note: We intentionally omit 'typed_value' for shredded variants as this writer only accesses raw binary blobs.
       BiConsumer<SpecializedGetters, Integer> variantWriter = SparkAdapterSupport$.MODULE$.sparkAdapter().createVariantValueWriter(
           dataType,
-          valueBytes -> consumeField("value", 0, () -> recordConsumer.addBinary(Binary.fromReusedByteArray(valueBytes))),
-          metadataBytes -> consumeField("metadata", 1, () -> recordConsumer.addBinary(Binary.fromReusedByteArray(metadataBytes)))
+          valueBytes -> consumeField("value", 0, () -> recordConsumer.addBinary(Binary.fromConstantByteArray(valueBytes))),
+          metadataBytes -> consumeField("metadata", 1, () -> recordConsumer.addBinary(Binary.fromConstantByteArray(metadataBytes)))
       );
       return (row, ordinal) -> {
         consumeGroup(() -> variantWriter.accept(row, ordinal));

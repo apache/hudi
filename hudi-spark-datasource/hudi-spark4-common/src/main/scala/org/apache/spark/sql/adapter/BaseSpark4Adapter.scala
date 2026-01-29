@@ -27,7 +27,7 @@ import org.apache.hudi.common.util.JsonUtils
 import org.apache.hudi.spark.internal.ReflectUtil
 import org.apache.hudi.storage.StorageConfiguration
 
-import org.apache.parquet.schema.{MessageType, Type}
+import org.apache.parquet.schema.{MessageType, PrimitiveType, Type, Types}
 import org.apache.parquet.schema.Type.Repetition
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.internal.Logging
@@ -227,7 +227,6 @@ abstract class BaseSpark4Adapter extends SparkAdapter with Logging {
   }
 
   override def isVariantType(dataType: DataType): Boolean = {
-    import org.apache.spark.sql.types.VariantType
     dataType.isInstanceOf[VariantType]
   }
 
@@ -236,9 +235,7 @@ abstract class BaseSpark4Adapter extends SparkAdapter with Logging {
     writeValue: Consumer[Array[Byte]],
     writeMetadata: Consumer[Array[Byte]]
   ): BiConsumer[SpecializedGetters, Integer] = {
-    import org.apache.spark.sql.types.VariantType
-
-    if (!dataType.isInstanceOf[VariantType]) {
+    if (!isVariantType(dataType)) {
       throw new IllegalArgumentException(s"Expected VariantType but got $dataType")
     }
 
@@ -255,10 +252,7 @@ abstract class BaseSpark4Adapter extends SparkAdapter with Logging {
     fieldSchema: HoodieSchema,
     repetition: Repetition
   ): Type = {
-    import org.apache.parquet.schema.{PrimitiveType, Types}
-    import org.apache.spark.sql.types.VariantType
-
-    if (!dataType.isInstanceOf[VariantType]) {
+    if (!isVariantType(dataType)) {
       throw new IllegalArgumentException(s"Expected VariantType but got $dataType")
     }
 
