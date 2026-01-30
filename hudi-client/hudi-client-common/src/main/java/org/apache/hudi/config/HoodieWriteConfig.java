@@ -924,8 +924,8 @@ public class HoodieWriteConfig extends HoodieConfig {
       .key("hoodie.write.ignore.failed")
       .defaultValue(true)
       .sinceVersion("")
-      .withDocumentation("Flag to indicate whether to ignore any non exception error (e.g. writestatus error)." +
-       "By default true for backward compatibility.");
+      .withDocumentation("Flag to indicate whether to ignore any non exception error (e.g. write status error)."
+          + "By default true for backward compatibility.");
 
   /**
    * Config key with boolean value that indicates whether record being written during MERGE INTO Spark SQL
