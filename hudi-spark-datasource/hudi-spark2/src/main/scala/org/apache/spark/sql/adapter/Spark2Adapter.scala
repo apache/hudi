@@ -83,7 +83,7 @@ class Spark2Adapter extends SparkAdapter {
     dataType.getClass.getSimpleName.startsWith("TimestampNTZType")
   }
 
-  override def getParquetReadSupport(storage HoodieStorage,
+  override def getParquetReadSupport(storage: HoodieStorage,
                                      messageScheme: org.apache.hudi.common.util.Option[MessageType]):
   org.apache.parquet.hadoop.api.ReadSupport[_] = {
     // ParquetReadSupport is package-private in Spark 2.4, so we use reflection to instantiate it

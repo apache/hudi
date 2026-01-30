@@ -17,6 +17,7 @@
 
 package org.apache.hudi
 
+import org.apache.hudi.avro.AvroSchemaUtils
 import org.apache.hudi.DataSourceReadOptions.INCREMENTAL_READ_SCHEMA_USE_END_INSTANTTIME
 import org.apache.hudi.HoodieBaseRelation.isSchemaEvolutionEnabledOnRead
 import org.apache.hudi.HoodieSparkConfUtils.getHollowCommitHandling
@@ -34,6 +35,7 @@ import org.apache.hudi.exception.{HoodieException, HoodieIncrementalPathNotFound
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.internal.schema.InternalSchema
 import org.apache.hudi.internal.schema.utils.SerDeHelper
+import org.apache.hudi.io.storage.HoodieSparkParquetReader
 import org.apache.hudi.storage.{HoodieStorageUtils, StoragePath}
 import org.apache.hudi.table.HoodieSparkTable
 
@@ -206,6 +208,14 @@ class IncrementalRelation(val sqlContext: SQLContext,
       sqlContext.sparkContext.hadoopConfiguration.set(SparkInternalSchemaConverter.HOODIE_QUERY_SCHEMA, SerDeHelper.toJson(internalSchema))
       sqlContext.sparkContext.hadoopConfiguration.set(SparkInternalSchemaConverter.HOODIE_TABLE_PATH, metaClient.getBasePath.toString)
       sqlContext.sparkContext.hadoopConfiguration.set(SparkInternalSchemaConverter.HOODIE_VALID_COMMITS_LIST, validCommits)
+      // Pass table Avro schema to hadoopConf so supportBatch() can find it (supportBatch does not receive options).
+      if (tableAvroSchema.getType != Schema.Type.NULL) {
+        LegacyHoodieParquetFileFormat.setTableAvroSchemaInConf(
+          sqlContext.sparkContext.hadoopConfiguration, tableAvroSchema)
+        sqlContext.sparkContext.hadoopConfiguration.set(
+          HoodieSparkParquetReader.ENABLE_LOGICAL_TIMESTAMP_REPAIR,
+          AvroSchemaUtils.hasTimestampMillisField(tableAvroSchema).toString)
+      }
       val formatClassName = metaClient.getTableConfig.getBaseFileFormat match {
         case HoodieFileFormat.PARQUET => LegacyHoodieParquetFileFormat.FILE_FORMAT_ID
         case HoodieFileFormat.ORC => "orc"
