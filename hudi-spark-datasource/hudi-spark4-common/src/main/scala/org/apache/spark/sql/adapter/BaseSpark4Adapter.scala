@@ -207,16 +207,16 @@ abstract class BaseSpark4Adapter extends SparkAdapter with Logging {
   override def isDataTypeEqualForParquet(requiredType: DataType, fileType: DataType): Option[Boolean] = {
     /**
      * Checks if a StructType is the physical representation of VariantType in Parquet.
-     * VariantType is stored in Parquet as a struct with two binary fields: "value" and "metadata".
+     * VariantType is stored in Parquet as a struct with binary "value" and "metadata" fields.
+     * Supports both unshredded (2 fields) and shredded (3 fields with "typed_value") layouts.
      */
     def isVariantPhysicalSchema(structType: StructType): Boolean = {
-      if (structType.fields.length != 2) {
-        false
-      } else {
-        val fieldMap = structType.fields.map(f => (f.name, f.dataType)).toMap
-        fieldMap.contains("value") && fieldMap.contains("metadata") &&
-          fieldMap("value") == BinaryType && fieldMap("metadata") == BinaryType
-      }
+      val fieldMap = structType.fields.map(f => (f.name, f.dataType)).toMap
+      val hasRequiredFields = fieldMap.contains("value") && fieldMap.contains("metadata") &&
+        fieldMap("value") == BinaryType && fieldMap("metadata") == BinaryType
+      val isUnshredded = structType.fields.length == 2
+      val isShredded = structType.fields.length == 3 && fieldMap.contains("typed_value")
+      hasRequiredFields && (isUnshredded || isShredded)
     }
 
     // Handle VariantType comparisons

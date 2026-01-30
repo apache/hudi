@@ -198,6 +198,16 @@ public class HoodieStorageConfig extends HoodieConfig {
           + "When disabled, only unshredded variant data can be read. "
           + "Equivalent to Spark's spark.sql.variant.allowReadingShredded.");
 
+  public static final ConfigProperty<String> PARQUET_VARIANT_SHREDDING_PROVIDER_CLASS = ConfigProperty
+      .key("hoodie.parquet.variant.shredding.provider.class")
+      .noDefaultValue()
+      .markAdvanced()
+      .sinceVersion("1.1.0")
+      .withDocumentation("Fully-qualified class name of the VariantShreddingProvider implementation "
+          + "used to shred variant values at write time in the Avro record path. "
+          + "The provider parses variant binary data and populates typed_value columns. "
+          + "When not set, the provider is auto-detected from the classpath.");
+
   public static final ConfigProperty<Boolean> WRITE_UTC_TIMEZONE = ConfigProperty
       .key("hoodie.parquet.write.utc-timezone.enabled")
       .defaultValue(true)
