@@ -258,8 +258,8 @@ public class HoodieSparkCopyOnWriteTable<T>
         dataFileToBeMerged, taskContextSupplier, keyGeneratorOpt);
     if (mergeHandle.getOldFilePath() != null && mergeHandle.baseFileForMerge().getBootstrapBaseFile().isPresent()) {
       Option<String[]> partitionFields = getMetaClient().getTableConfig().getPartitionFields();
-      Object[] partitionValues = SparkPartitionUtils.getPartitionFieldVals(partitionFields, mergeHandle.getPartitionPath(),
-          getMetaClient().getTableConfig().getBootstrapBasePath().get(),
+      Object[] partitionValues = SparkPartitionUtils.getPartitionFieldVals(getMetaClient().getTableConfig(),
+          mergeHandle.getPartitionPath(), getMetaClient().getTableConfig().getBootstrapBasePath().get(),
           mergeHandle.getWriterSchema(), (Configuration) getStorageConf().unwrap());
       mergeHandle.setPartitionFields(partitionFields);
       mergeHandle.setPartitionValues(partitionValues);
