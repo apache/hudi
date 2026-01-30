@@ -142,7 +142,7 @@ public class MetadataCommand {
   @ShellMethod(key = "metadata delete", value = "Remove the Metadata Table")
   public String delete(@ShellOption(value = "--backup", help = "Backup the metadata table before delete", defaultValue = "true", arity = 1) final boolean backup) throws Exception {
     HoodieTableMetaClient dataMetaClient = HoodieCLI.getTableMetaClient();
-    String backupPath = HoodieTableMetadataUtil.deleteMetadataTable(dataMetaClient, new HoodieSparkEngineContext(jsc), backup);
+    String backupPath = HoodieTableMetadataUtil.deleteMetadataTable(dataMetaClient, new HoodieLocalEngineContext(dataMetaClient.getStorageConf()), backup);
     if (backup) {
       return "Metadata Table has been deleted and backed up to " + backupPath;
     } else {
