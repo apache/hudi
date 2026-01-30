@@ -396,33 +396,33 @@ class TestLanceDataSource extends HoodieSparkClientTestBase {
 
     // Initial insert - 3 records
     val records1 = Seq(
-      (1, "Alice", 30, 95.5, "dept=engineering"),
-      (2, "Bob", 25, 87.3, "dept=sales"),
-      (3, "Charlie", 35, 92.1, "dept=engineering")
+      (1, "Alice", 30, 95.5, "engineering"),
+      (2, "Bob", 25, 87.3, "sales"),
+      (3, "Charlie", 35, 92.1, "engineering")
     )
-    val df1 = spark.createDataFrame(records1).toDF("id", "name", "age", "score", "partition")
+    val df1 = spark.createDataFrame(records1).toDF("id", "name", "age", "score", "department")
 
     writeDataframe(tableType, tableName, tablePath, df1, saveMode = SaveMode.Overwrite, operation = Some("insert"),
-      extraOptions = Map(PARTITIONPATH_FIELD.key() -> "partition"))
+      extraOptions = Map(PARTITIONPATH_FIELD.key() -> "department"))
 
     // Upsert - modify Bob's record (id=2)
     val records2 = Seq(
-      (2, "Bob", 40, 95.0, "dept=sales")  // Update Bob: age 25->40, score 87.3->95.0
+      (2, "Bob", 40, 95.0, "sales")  // Update Bob: age 25->40, score 87.3->95.0
     )
-    val df2 = spark.createDataFrame(records2).toDF("id", "name", "age", "score", "partition")
+    val df2 = spark.createDataFrame(records2).toDF("id", "name", "age", "score", "department")
 
     writeDataframe(tableType, tableName, tablePath, df2, operation = Some("upsert"),
-      extraOptions = Map(PARTITIONPATH_FIELD.key() -> "partition"))
+      extraOptions = Map(PARTITIONPATH_FIELD.key() -> "department"))
 
     // Second upsert - modify Alice (id=1) and insert David (id=4)
     val records3 = Seq(
-      (1, "Alice", 45, 98.5, "dept=engineering"),  // Update Alice: age 30->45, score 95.5->98.5
-      (4, "David", 28, 88.0, "dept=marketing")   // Insert new record
+      (1, "Alice", 45, 98.5, "engineering"),  // Update Alice: age 30->45, score 95.5->98.5
+      (4, "David", 28, 88.0, "marketing")   // Insert new record
     )
-    val df3 = spark.createDataFrame(records3).toDF("id", "name", "age", "score", "partition")
+    val df3 = spark.createDataFrame(records3).toDF("id", "name", "age", "score", "department")
 
     writeDataframe(tableType, tableName, tablePath, df3, operation = Some("upsert"),
-      extraOptions = Map(PARTITIONPATH_FIELD.key() -> "partition"))
+      extraOptions = Map(PARTITIONPATH_FIELD.key() -> "department"))
 
     // Validate commits
     val metaClient = HoodieTableMetaClient.builder()
@@ -443,14 +443,14 @@ class TestLanceDataSource extends HoodieSparkClientTestBase {
 
     // Read and verify data
     val readDf = spark.read.format("hudi").load(tablePath)
-    val actual = readDf.select("id", "name", "age", "score", "partition")
+    val actual = readDf.select("id", "name", "age", "score", "department")
 
     val expectedDf = spark.createDataFrame(Seq(
       (1, "Alice", 45, 98.5, "engineering"),
       (2, "Bob", 40, 95.0, "sales"),
       (3, "Charlie", 35, 92.1, "engineering"),
       (4, "David", 28, 88.0, "marketing")
-    )).toDF("id", "name", "age", "score", "partition")
+    )).toDF("id", "name", "age", "score", "department")
 
     assertTrue(expectedDf.except(actual).isEmpty)
     assertTrue(actual.except(expectedDf).isEmpty)
@@ -458,26 +458,26 @@ class TestLanceDataSource extends HoodieSparkClientTestBase {
     if (tableType == HoodieTableType.MERGE_ON_READ) {
       // Write one more commit to trigger compaction
       val records4 = Seq(
-        (1, "Alice", 50, 98.5, "dept=engineering"),  // Update Alice: age 45->50
-        (4, "David", 28, 90.0, "dept=marketing")   // Update David: score 88.0->90.0
+        (1, "Alice", 50, 98.5, "engineering"),  // Update Alice: age 45->50
+        (4, "David", 28, 90.0, "marketing")   // Update David: score 88.0->90.0
       )
-      val df4 = spark.createDataFrame(records4).toDF("id", "name", "age", "score", "partition")
+      val df4 = spark.createDataFrame(records4).toDF("id", "name", "age", "score", "department")
       writeDataframe(tableType, tableName, tablePath, df4, operation = Some("upsert"),
         extraOptions = Map("hoodie.compact.inline" -> "true", "hoodie.compact.inline.max.delta.commits" -> "1",
-          PARTITIONPATH_FIELD.key() -> "partition"))
+          PARTITIONPATH_FIELD.key() -> "department"))
       val expectedDfAfterCompaction = spark.createDataFrame(Seq(
         (1, "Alice", 50, 98.5, "engineering"),
         (2, "Bob", 40, 95.0, "sales"),
         (3, "Charlie", 35, 92.1, "engineering"),
         (4, "David", 28, 90.0, "marketing")
-      )).toDF("id", "name", "age", "score", "partition")
+      )).toDF("id", "name", "age", "score", "department")
       // validate compaction commit is present
       val compactionCommits = metaClient.reloadActiveTimeline().filterCompletedInstants().getInstants.asScala
         .filter(instant => instant.getAction == "commit")
       assertTrue(compactionCommits.nonEmpty, "Compaction commit should be present after upsert")
       // Read and verify data after compaction
       val readDfAfterCompaction = spark.read.format("hudi").load(tablePath)
-      val actualAfterCompaction = readDfAfterCompaction.select("id", "name", "age", "score", "partition")
+      val actualAfterCompaction = readDfAfterCompaction.select("id", "name", "age", "score", "department")
       assertTrue(expectedDfAfterCompaction.except(actualAfterCompaction).isEmpty)
       assertTrue(actualAfterCompaction.except(expectedDfAfterCompaction).isEmpty)
     }
@@ -670,48 +670,48 @@ class TestLanceDataSource extends HoodieSparkClientTestBase {
     val tablePath = s"$basePath/$tableName"
 
     val records1 = Seq(
-      (101, "Alice", 30, 95.5, "dept=engineering"),
-      (102, "Bob", 25, 87.3, "dept=sales"),
-      (103, "Charlie", 35, 92.1, "dept=engineering")
+      (101, "Alice", 30, 95.5, "engineering"),
+      (102, "Bob", 25, 87.3, "sales"),
+      (103, "Charlie", 35, 92.1, "engineering")
     )
-    val df1 = spark.createDataFrame(records1).toDF("id", "name", "age", "score", "partition")
+    val df1 = spark.createDataFrame(records1).toDF("id", "name", "age", "score", "department")
 
     // Write with populateMetaFields=false
     writeDataframe(tableType, tableName, tablePath, df1,
       saveMode = SaveMode.Overwrite, operation = Some("insert"),
-      extraOptions = Map("hoodie.populate.meta.fields" -> "false", PARTITIONPATH_FIELD.key() -> "partition"))
+      extraOptions = Map("hoodie.populate.meta.fields" -> "false", PARTITIONPATH_FIELD.key() -> "department"))
 
     // Upsert - modify Bob's record
     val records2 = Seq(
-      (102, "Bob", 40, 95.0, "dept=sales")
+      (102, "Bob", 40, 95.0, "sales")
     )
-    val df2 = spark.createDataFrame(records2).toDF("id", "name", "age", "score", "partition")
+    val df2 = spark.createDataFrame(records2).toDF("id", "name", "age", "score", "department")
 
     writeDataframe(tableType, tableName, tablePath, df2,
       operation = Some("upsert"),
-      extraOptions = Map("hoodie.populate.meta.fields" -> "false", PARTITIONPATH_FIELD.key() -> "partition"))
+      extraOptions = Map("hoodie.populate.meta.fields" -> "false", PARTITIONPATH_FIELD.key() -> "department"))
 
     // Second upsert - modify Alice and insert David
     val records3 = Seq(
-      (101, "Alice", 45, 98.5, "dept=engineering"),
-      (104, "David", 28, 88.0, "dept=marketing")
+      (101, "Alice", 45, 98.5, "engineering"),
+      (104, "David", 28, 88.0, "marketing")
     )
-    val df3 = spark.createDataFrame(records3).toDF("id", "name", "age", "score", "partition")
+    val df3 = spark.createDataFrame(records3).toDF("id", "name", "age", "score", "department")
 
     writeDataframe(tableType, tableName, tablePath, df3,
       operation = Some("upsert"),
-      extraOptions = Map("hoodie.populate.meta.fields" -> "false", PARTITIONPATH_FIELD.key() -> "partition"))
+      extraOptions = Map("hoodie.populate.meta.fields" -> "false", PARTITIONPATH_FIELD.key() -> "department"))
 
     // Verify data
     val readDf = spark.read.format("hudi").load(tablePath)
-    val actual = readDf.select("id", "name", "age", "score", "partition")
+    val actual = readDf.select("id", "name", "age", "score", "department")
 
     val expectedDf = spark.createDataFrame(Seq(
       (101, "Alice", 45, 98.5, "engineering"),
       (102, "Bob", 40, 95.0, "sales"),
       (103, "Charlie", 35, 92.1, "engineering"),
       (104, "David", 28, 88.0, "marketing")
-    )).toDF("id", "name", "age", "score", "partition")
+    )).toDF("id", "name", "age", "score", "department")
 
     assertTrue(expectedDf.except(actual).isEmpty)
     assertTrue(actual.except(expectedDf).isEmpty)
