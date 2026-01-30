@@ -440,6 +440,12 @@ public class FlinkOptions extends HoodieConfig {
           + "the avg read splits number per-second would be 'read.splits.limit'/'read.streaming.check-interval', by "
           + "default no limit");
 
+  public static final ConfigOption<Boolean> READ_SOURCE_V2_ENABLED = ConfigOptions
+      .key("read.source-v2.enabled")
+      .booleanType()
+      .defaultValue(false)
+      .withDescription("Whether to use Flink FLIP27 new source to consume data files.");
+
   @AdvancedConfig
   public static final ConfigOption<Boolean> READ_CDC_FROM_CHANGELOG = ConfigOptions
       .key("read.cdc.from.changelog")

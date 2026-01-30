@@ -20,7 +20,7 @@ package org.apache.hudi.source.enumerator;
 
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.configuration.FlinkOptions;
-import org.apache.hudi.source.ScanContext;
+import org.apache.hudi.source.HoodieScanContext;
 import org.apache.hudi.source.split.DefaultHoodieSplitProvider;
 import org.apache.hudi.source.split.HoodieContinuousSplitBatch;
 import org.apache.hudi.source.split.HoodieContinuousSplitDiscover;
@@ -58,7 +58,7 @@ public class TestHoodieContinuousSplitEnumerator {
   private MockSplitEnumeratorContext context;
   private DefaultHoodieSplitProvider splitProvider;
   private MockContinuousSplitDiscover splitDiscover;
-  private ScanContext scanContext;
+  private HoodieScanContext scanContext;
   private HoodieContinuousSplitEnumerator enumerator;
   private HoodieSourceSplit split1;
   private HoodieSourceSplit split2;
@@ -396,7 +396,7 @@ public class TestHoodieContinuousSplitEnumerator {
   /**
    * Test implementation of ScanContext for testing.
    */
-  private static class TestScanContext extends ScanContext {
+  private static class TestScanContext extends HoodieScanContext {
     private TestScanContext(
         Configuration conf,
         Path path,
@@ -442,7 +442,7 @@ public class TestHoodieContinuousSplitEnumerator {
         return this;
       }
 
-      public ScanContext build() {
+      public HoodieScanContext build() {
         return new TestScanContext(conf, path, rowType, startInstant, maxPendingSplits);
       }
     }

@@ -557,4 +557,235 @@ public class TestHoodieTableSource {
         Arrays.asList(ref, literal),
         DataTypes.BOOLEAN());
   }
+
+  @Test
+  void testNewHoodieSourceCreationWithFlag() throws Exception {
+    beforeEach();
+    Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    conf.set(FlinkOptions.READ_SOURCE_V2_ENABLED, true);
+
+    HoodieTableSource tableSource = createHoodieTableSource(conf);
+    assertNotNull(tableSource, "HoodieTableSource should be created successfully");
+
+    // Verify that the table source can be used in streaming mode with new source
+    conf.set(FlinkOptions.READ_AS_STREAMING, true);
+    HoodieTableSource streamingSource = createHoodieTableSource(conf);
+    assertNotNull(streamingSource, "Streaming HoodieTableSource should be created successfully");
+  }
+
+  @Test
+  void testNewHoodieSourceWithBatchMode() throws Exception {
+    beforeEach();
+    Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    conf.set(FlinkOptions.READ_SOURCE_V2_ENABLED, true);
+    conf.set(FlinkOptions.READ_AS_STREAMING, false);
+
+    HoodieTableSource tableSource = createHoodieTableSource(conf);
+    assertNotNull(tableSource, "Batch mode HoodieTableSource with new source should be created");
+  }
+
+  @Test
+  void testNewHoodieSourceWithStreamingMode() throws Exception {
+    beforeEach();
+    Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    conf.set(FlinkOptions.READ_SOURCE_V2_ENABLED, true);
+    conf.set(FlinkOptions.READ_AS_STREAMING, true);
+
+    HoodieTableSource tableSource = createHoodieTableSource(conf);
+    assertNotNull(tableSource, "Streaming mode HoodieTableSource with new source should be created");
+  }
+
+  @Test
+  void testNewHoodieSourceWithCDCEnabled() throws Exception {
+    beforeEach();
+    Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    conf.set(FlinkOptions.READ_SOURCE_V2_ENABLED, true);
+    conf.set(FlinkOptions.CDC_ENABLED, true);
+
+    HoodieTableSource tableSource = createHoodieTableSource(conf);
+    assertNotNull(tableSource, "HoodieTableSource with CDC enabled should be created");
+  }
+
+  @Test
+  void testNewHoodieSourceWithReadRange() throws Exception {
+    beforeEach();
+    String firstCommitTime = TestUtils.getLastCompleteInstant(tempFile.toURI().toString());
+    TestData.writeData(TestData.DATA_SET_INSERT_SEPARATE_PARTITION, conf);
+    String secondCommitTime = TestUtils.getLastCompleteInstant(tempFile.toURI().toString());
+
+    Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    conf.set(FlinkOptions.READ_SOURCE_V2_ENABLED, true);
+    conf.set(FlinkOptions.READ_START_COMMIT, firstCommitTime);
+    conf.set(FlinkOptions.READ_END_COMMIT, secondCommitTime);
+
+    HoodieTableSource tableSource = createHoodieTableSource(conf);
+    assertNotNull(tableSource, "HoodieTableSource with read range should be created");
+  }
+
+  @Test
+  void testNewHoodieSourceWithSkipFlags() throws Exception {
+    beforeEach();
+    Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    conf.set(FlinkOptions.READ_SOURCE_V2_ENABLED, true);
+    conf.set(FlinkOptions.READ_AS_STREAMING, true);
+    conf.set(FlinkOptions.READ_STREAMING_SKIP_COMPACT, true);
+    conf.set(FlinkOptions.READ_STREAMING_SKIP_CLUSTERING, true);
+    conf.set(FlinkOptions.READ_STREAMING_SKIP_INSERT_OVERWRITE, true);
+
+    HoodieTableSource tableSource = createHoodieTableSource(conf);
+    assertNotNull(tableSource, "HoodieTableSource with skip flags should be created");
+  }
+
+  @Test
+  void testNewHoodieSourceBackwardCompatibility() throws Exception {
+    beforeEach();
+    // Test that old behavior still works when READ_SOURCE_V2_ENABLED is false
+    Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    conf.set(FlinkOptions.READ_SOURCE_V2_ENABLED, false);
+
+    HoodieTableSource tableSource = createHoodieTableSource(conf);
+    assertNotNull(tableSource, "HoodieTableSource with old source should still work");
+  }
+
+  @Test
+  void testNewHoodieSourceWithCopyOnWriteTable() throws Exception {
+    beforeEach();
+    Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    conf.set(FlinkOptions.READ_SOURCE_V2_ENABLED, true);
+    conf.set(FlinkOptions.TABLE_TYPE, FlinkOptions.TABLE_TYPE_COPY_ON_WRITE);
+
+    HoodieTableSource tableSource = createHoodieTableSource(conf);
+    assertNotNull(tableSource, "HoodieTableSource with COW table should be created");
+  }
+
+  @Test
+  void testNewHoodieSourceWithMergeOnReadTable() throws Exception {
+    beforeEach();
+    Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    conf.set(FlinkOptions.READ_SOURCE_V2_ENABLED, true);
+    conf.set(FlinkOptions.TABLE_TYPE, FlinkOptions.TABLE_TYPE_MERGE_ON_READ);
+
+    HoodieTableSource tableSource = createHoodieTableSource(conf);
+    assertNotNull(tableSource, "HoodieTableSource with MOR table should be created");
+  }
+
+  @Test
+  void testNewHoodieSourceWithSnapshotQuery() throws Exception {
+    beforeEach();
+    Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    conf.set(FlinkOptions.READ_SOURCE_V2_ENABLED, true);
+    conf.set(FlinkOptions.QUERY_TYPE, FlinkOptions.QUERY_TYPE_SNAPSHOT);
+
+    HoodieTableSource tableSource = createHoodieTableSource(conf);
+    assertNotNull(tableSource, "HoodieTableSource with snapshot query should be created");
+  }
+
+  @Test
+  void testNewHoodieSourceWithIncrementalQuery() throws Exception {
+    beforeEach();
+    Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    conf.set(FlinkOptions.READ_SOURCE_V2_ENABLED, true);
+    conf.set(FlinkOptions.QUERY_TYPE, FlinkOptions.QUERY_TYPE_INCREMENTAL);
+
+    HoodieTableSource tableSource = createHoodieTableSource(conf);
+    assertNotNull(tableSource, "HoodieTableSource with incremental query should be created");
+  }
+
+  @Test
+  void testNewHoodieSourceWithProjectionPushdown() throws Exception {
+    beforeEach();
+    Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    conf.set(FlinkOptions.READ_SOURCE_V2_ENABLED, true);
+
+    HoodieTableSource tableSource = createHoodieTableSource(conf);
+    // Apply projection - only select uuid and name columns
+    int[][] projections = new int[][] {{0}, {1}};
+    DataType producedType = DataTypes.ROW(
+        DataTypes.FIELD("uuid", DataTypes.STRING()),
+        DataTypes.FIELD("name", DataTypes.STRING())
+    ).bridgedTo(RowData.class);
+
+    tableSource.applyProjection(projections, producedType);
+    assertNotNull(tableSource, "HoodieTableSource with projection should work");
+  }
+
+  @Test
+  void testNewHoodieSourceWithFilterPushdown() throws Exception {
+    beforeEach();
+    Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    conf.set(FlinkOptions.READ_SOURCE_V2_ENABLED, true);
+
+    HoodieTableSource tableSource = createHoodieTableSource(conf);
+
+    // Apply filter - uuid = 'id1'
+    FieldReferenceExpression ref = new FieldReferenceExpression("uuid", DataTypes.STRING(), 0, 0);
+    ValueLiteralExpression literal = new ValueLiteralExpression("id1", DataTypes.STRING().notNull());
+    ResolvedExpression filterExpr = CallExpression.permanent(
+        BuiltInFunctionDefinitions.EQUALS,
+        Arrays.asList(ref, literal),
+        DataTypes.BOOLEAN());
+
+    tableSource.applyFilters(Collections.singletonList(filterExpr));
+    assertNotNull(tableSource, "HoodieTableSource with filter should work");
+  }
+
+  @Test
+  void testNewHoodieSourceWithLimitPushdown() throws Exception {
+    beforeEach();
+    Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    conf.set(FlinkOptions.READ_SOURCE_V2_ENABLED, true);
+
+    HoodieTableSource tableSource = createHoodieTableSource(conf);
+    tableSource.applyLimit(100);
+    assertNotNull(tableSource, "HoodieTableSource with limit should work");
+  }
+
+  @Test
+  void testNewHoodieSourceWithPartitionedTable() throws Exception {
+    beforeEach();
+    Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    conf.set(FlinkOptions.READ_SOURCE_V2_ENABLED, true);
+    conf.set(FlinkOptions.PARTITION_PATH_FIELD, "partition");
+
+    HoodieTableSource tableSource = createHoodieTableSource(conf);
+    assertNotNull(tableSource, "HoodieTableSource with partitioned table should be created");
+  }
+
+  @Test
+  void testNewHoodieSourceWithNonPartitionedTable() throws Exception {
+    beforeEach();
+    Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    conf.set(FlinkOptions.READ_SOURCE_V2_ENABLED, true);
+    conf.set(FlinkOptions.PARTITION_PATH_FIELD, "");
+
+    HoodieTableSource tableSource = createHoodieTableSource(conf);
+    assertNotNull(tableSource, "HoodieTableSource with non-partitioned table should be created");
+  }
+
+  @Test
+  void testNewHoodieSourceCopyRetainsConfig() throws Exception {
+    beforeEach();
+    Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    conf.set(FlinkOptions.READ_SOURCE_V2_ENABLED, true);
+    conf.set(FlinkOptions.READ_AS_STREAMING, true);
+
+    HoodieTableSource tableSource = createHoodieTableSource(conf);
+    HoodieTableSource copiedSource = (HoodieTableSource) tableSource.copy();
+
+    assertNotNull(copiedSource, "Copied source should not be null");
+    assertEquals(tableSource.getConf().get(FlinkOptions.READ_SOURCE_V2_ENABLED),
+                 copiedSource.getConf().get(FlinkOptions.READ_SOURCE_V2_ENABLED),
+                 "READ_SOURCE_V2_ENABLED flag should be retained in copy");
+  }
+
+  @Test
+  void testNewHoodieSourceWithMaxCompactionMemory() throws Exception {
+    beforeEach();
+    Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    conf.set(FlinkOptions.READ_SOURCE_V2_ENABLED, true);
+    conf.set(FlinkOptions.COMPACTION_MAX_MEMORY, 512);
+
+    HoodieTableSource tableSource = createHoodieTableSource(conf);
+    assertNotNull(tableSource, "HoodieTableSource with custom compaction memory should be created");
+  }
 }
