@@ -135,7 +135,8 @@ public class HoodieNativeAvroHFileReader extends HoodieAvroHFileReaderImplBase {
     try (HFileReader reader = readerFactory.createHFileReader()) {
       reader.seekTo();
       // candidateRowKeys must be sorted
-      return new TreeSet<>(candidateRowKeys).stream()
+      return (candidateRowKeys instanceof TreeSet ? candidateRowKeys : new TreeSet<>(candidateRowKeys))
+          .stream()
           .filter(k -> {
             try {
               return reader.seekTo(new UTF8StringKey(k)) == HFileReader.SEEK_TO_FOUND;
