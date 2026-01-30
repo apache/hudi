@@ -20,7 +20,7 @@ package org.apache.hudi
 import org.apache.hudi.AvroConversionUtils.getAvroSchemaWithDefaults
 import org.apache.hudi.HoodieBaseRelation.{BaseFileReader, convertToAvroSchema, createHFileReader, isSchemaEvolutionEnabledOnRead, metaFieldNames, projectSchema, sparkAdapter}
 import org.apache.hudi.HoodieConversionUtils.toScalaOption
-import org.apache.hudi.avro.HoodieAvroUtils
+import org.apache.hudi.avro.{AvroSchemaUtils, HoodieAvroUtils}
 import org.apache.hudi.client.utils.SparkInternalSchemaConverter
 import org.apache.hudi.common.config.HoodieReaderConfig.USE_NATIVE_HFILE_READER
 import org.apache.hudi.common.config.{ConfigProperty, HoodieConfig, HoodieMetadataConfig}
@@ -44,7 +44,7 @@ import org.apache.hudi.hadoop.fs.HadoopFSUtils.convertToStoragePath
 import org.apache.hudi.internal.schema.InternalSchema
 import org.apache.hudi.internal.schema.convert.AvroInternalSchemaConverter
 import org.apache.hudi.internal.schema.utils.{InternalSchemaUtils, SerDeHelper}
-import org.apache.hudi.io.storage.HoodieSparkIOFactory
+import org.apache.hudi.io.storage.{HoodieSparkIOFactory, HoodieSparkParquetReader}
 import org.apache.hudi.metadata.HoodieTableMetadata
 import org.apache.hudi.storage.hadoop.HoodieHadoopStorage
 import org.apache.hudi.storage.{StoragePath, StoragePathInfo}
@@ -111,7 +111,12 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
 
   protected def tableName: String = metaClient.getTableConfig.getTableName
 
-  protected lazy val conf: Configuration = new Configuration(sqlContext.sparkContext.hadoopConfiguration)
+  protected lazy val conf: Configuration = {
+    val c = new Configuration(sqlContext.sparkContext.hadoopConfiguration)
+    c.set(HoodieSparkParquetReader.ENABLE_LOGICAL_TIMESTAMP_REPAIR,
+      AvroSchemaUtils.hasTimestampMillisField(tableAvroSchema).toString)
+    c
+  }
   protected lazy val jobConf = new JobConf(conf)
 
   protected lazy val tableConfig: HoodieTableConfig = metaClient.getTableConfig

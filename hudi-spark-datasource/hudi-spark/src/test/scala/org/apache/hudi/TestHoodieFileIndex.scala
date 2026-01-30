@@ -792,46 +792,48 @@ class TestHoodieFileIndex extends HoodieSparkClientTestBase with ScalaAssertionS
 
   @Test
   def testGetTimestampMillisColumns(): Unit = {
-    // RECORD with timestamp-millis and local-timestamp-millis -> both returned
-    val recordWithTimestampMillisSchema = new Schema.Parser().parse(
-      """
-        |{
-        |  "type": "record",
-        |  "name": "TestRecord",
-        |  "fields": [
-        |    {"name": "ts_millis", "type": {"type": "long", "logicalType": "timestamp-millis"}},
-        |    {"name": "ts_local_millis", "type": {"type": "long", "logicalType": "local-timestamp-millis"}},
-        |    {"name": "plain_long", "type": "long"},
-        |    {"name": "name", "type": "string"}
-        |  ]
-        |}
-        |""".stripMargin)
-    val resultWithTimestampMillis = HoodieFileIndex.getTimestampMillisColumns(recordWithTimestampMillisSchema)
-    assertEquals(2, resultWithTimestampMillis.size)
-    assertTrue(resultWithTimestampMillis.contains("ts_millis"))
-    assertTrue(resultWithTimestampMillis.contains("ts_local_millis"))
-    assertFalse(resultWithTimestampMillis.contains("plain_long"))
-    assertFalse(resultWithTimestampMillis.contains("name"))
+    if (HoodieSparkUtils.gteqSpark3_4) {
+      // RECORD with timestamp-millis and local-timestamp-millis -> both returned
+      val recordWithTimestampMillisSchema = new Schema.Parser().parse(
+        """
+          |{
+          |  "type": "record",
+          |  "name": "TestRecord",
+          |  "fields": [
+          |    {"name": "ts_millis", "type": {"type": "long", "logicalType": "timestamp-millis"}},
+          |    {"name": "ts_local_millis", "type": {"type": "long", "logicalType": "local-timestamp-millis"}},
+          |    {"name": "plain_long", "type": "long"},
+          |    {"name": "name", "type": "string"}
+          |  ]
+          |}
+          |""".stripMargin)
+      val resultWithTimestampMillis = HoodieFileIndex.getTimestampMillisColumns(recordWithTimestampMillisSchema)
+      assertEquals(2, resultWithTimestampMillis.size)
+      assertTrue(resultWithTimestampMillis.contains("ts_millis"))
+      assertTrue(resultWithTimestampMillis.contains("ts_local_millis"))
+      assertFalse(resultWithTimestampMillis.contains("plain_long"))
+      assertFalse(resultWithTimestampMillis.contains("name"))
 
-    // RECORD with only plain long and string -> empty set
-    val recordWithoutTimestampMillisSchema = new Schema.Parser().parse(
-      """
-        |{
-        |  "type": "record",
-        |  "name": "PlainRecord",
-        |  "fields": [
-        |    {"name": "id", "type": "long"},
-        |    {"name": "name", "type": "string"}
-        |  ]
-        |}
-        |""".stripMargin)
-    val resultPlain = HoodieFileIndex.getTimestampMillisColumns(recordWithoutTimestampMillisSchema)
-    assertTrue(resultPlain.isEmpty)
+      // RECORD with only plain long and string -> empty set
+      val recordWithoutTimestampMillisSchema = new Schema.Parser().parse(
+        """
+          |{
+          |  "type": "record",
+          |  "name": "PlainRecord",
+          |  "fields": [
+          |    {"name": "id", "type": "long"},
+          |    {"name": "name", "type": "string"}
+          |  ]
+          |}
+          |""".stripMargin)
+      val resultPlain = HoodieFileIndex.getTimestampMillisColumns(recordWithoutTimestampMillisSchema)
+      assertTrue(resultPlain.isEmpty)
 
-    // Non-RECORD schema -> empty set
-    val stringSchema = Schema.create(Schema.Type.STRING)
-    val resultNonRecord = HoodieFileIndex.getTimestampMillisColumns(stringSchema)
-    assertTrue(resultNonRecord.isEmpty)
+      // Non-RECORD schema -> empty set
+      val stringSchema = Schema.create(Schema.Type.STRING)
+      val resultNonRecord = HoodieFileIndex.getTimestampMillisColumns(stringSchema)
+      assertTrue(resultNonRecord.isEmpty)
+    }
   }
 
   private def attribute(partition: String): AttributeReference = {
