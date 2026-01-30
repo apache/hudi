@@ -383,7 +383,7 @@ public class TestHiveSyncTool {
     // it and generate a partition update event for it.
     ddlExecutor.runSQL("ALTER TABLE `" + HiveTestUtil.TABLE_NAME
         + "` PARTITION (`datestr`='2050-01-01') SET LOCATION '"
-        + FSUtils.getPartitionPath(basePath, "2050/1/1").toString() + "'");
+        + FSUtils.constructAbsolutePath(basePath, "2050/1/1").toString() + "'");
     hivePartitions = hiveClient.getAllPartitions(HiveTestUtil.TABLE_NAME);
     List<String> writtenPartitionsSince = hiveClient.getWrittenPartitionsSince(Option.empty(), Option.empty());
     List<PartitionEvent> partitionEvents = hiveClient.getPartitionEvents(hivePartitions, writtenPartitionsSince, Collections.emptySet());
@@ -1500,7 +1500,7 @@ public class TestHiveSyncTool {
     assertTrue(hiveClient.tableExists(HiveTestUtil.TABLE_NAME),
             "Table " + HiveTestUtil.TABLE_NAME + " should exist after sync completes");
     assertEquals(hiveClient.getMetastoreSchema(HiveTestUtil.TABLE_NAME).size(),
-            hiveClient.getStorageSchema().getColumns().size(),
+            hiveClient.getStorageSchema().getFields().size(),
             "Hive Schema should match the table schema，ignoring the partition fields");
 
     List<Partition> partitions = hiveClient.getAllPartitions(HiveTestUtil.TABLE_NAME);

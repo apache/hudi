@@ -224,10 +224,10 @@ public abstract class QueryBasedDDLExecutor implements DDLExecutor {
   @Override
   public void touchPartitionsToTable(String tableName, List<String> touchPartitions) {
     if (touchPartitions.isEmpty()) {
-      LOG.info("No partitions to touch for " + tableName);
+      log.info("No partitions to touch for " + tableName);
       return;
     }
-    LOG.info("Touching partitions " + touchPartitions.size() + " on " + tableName);
+    log.info("Touching partitions " + touchPartitions.size() + " on " + tableName);
     List<String> sqls = constructTouchPartitions(tableName, touchPartitions);
     for (String sql : sqls) {
       runSQL(sql);
