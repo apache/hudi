@@ -18,19 +18,16 @@
 
 package org.apache.spark.sql.hudi
 
-import org.apache.avro.Schema
-import org.apache.hadoop.fs.{FileStatus, Path}
 import org.apache.hudi.client.utils.SparkRowSerDe
 import org.apache.hudi.common.table.HoodieTableMetaClient
-import org.apache.hudi.storage.StoragePath
+import org.apache.hudi.storage.{HoodieStorage, StoragePath}
 
 import org.apache.avro.Schema
-import org.apache.hadoop.conf.Configuration
+import org.apache.parquet.schema.MessageType
 import org.apache.spark.sql._
 import org.apache.spark.sql.avro.{HoodieAvroDeserializer, HoodieAvroSchemaConverters, HoodieAvroSerializer}
 import org.apache.spark.sql.catalyst.analysis.EliminateSubqueryAliases
 import org.apache.spark.sql.catalyst.catalog.CatalogTable
-import org.apache.spark.sql.catalyst.encoders.ExpressionEncoder
 import org.apache.spark.sql.catalyst.expressions.{Attribute, AttributeReference, Expression, InterpretedPredicate}
 import org.apache.spark.sql.catalyst.parser.ParserInterface
 import org.apache.spark.sql.catalyst.planning.PhysicalOperation
@@ -41,6 +38,7 @@ import org.apache.spark.sql.execution.datasources._
 import org.apache.spark.sql.execution.datasources.parquet.ParquetFileFormat
 import org.apache.spark.sql.parser.HoodieExtendedParserInterface
 import org.apache.spark.sql.sources.{BaseRelation, Filter}
+import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types.{DataType, Metadata, StructType}
 import org.apache.spark.sql.vectorized.{ColumnVector, ColumnarBatch}
 import org.apache.spark.storage.StorageLevel
@@ -53,9 +51,22 @@ import java.util.{Locale, TimeZone}
 trait SparkAdapter extends Serializable {
 
   /**
-   * Checks whether provided instance of [[InternalRow]] is actually an instance of [[ColumnarBatchRow]]
+   * Checks whether provided instance of [[InternalRow]] is actually an instance of [[org.apache.spark.sql.vectorized.ColumnarBatchRow]]
    */
   def isColumnarBatchRow(r: InternalRow): Boolean
+
+  def isTimestampNTZType(dataType: DataType): Boolean
+
+  def getParquetReadSupport(storage: HoodieStorage,
+                            messageSchema: org.apache.hudi.common.util.Option[MessageType]):
+  org.apache.parquet.hadoop.api.ReadSupport[_]
+
+  def repairSchemaIfSpecified(shouldRepair: Boolean,
+                              fileSchema: MessageType,
+                              tableSchemaOpt: org.apache.hudi.common.util.Option[MessageType]): MessageType
+
+  def getReaderSchemas(storage: HoodieStorage, readerSchema: Schema, requestedSchema: Schema, fileSchema: MessageType):
+  org.apache.hudi.common.util.collection.Pair[StructType, StructType]
 
   /**
    * Creates Catalyst [[Metadata]] for Hudi's meta-fields (designating these w/
@@ -70,7 +81,7 @@ trait SparkAdapter extends Serializable {
 
   /**
    * Returns an instance of [[HoodieCatalogUtils]] providing for common utils operating on Spark's
-   * [[TableCatalog]]s
+   * [[org.apache.spark.sql.connector.catalog.TableCatalog]]s
    */
   def getCatalogUtils: HoodieCatalogUtils
 
@@ -174,7 +185,7 @@ trait SparkAdapter extends Serializable {
   /**
    * Create instance of [[ParquetFileFormat]]
    */
-  def createLegacyHoodieParquetFileFormat(appendPartitionValues: Boolean): Option[ParquetFileFormat]
+  def createLegacyHoodieParquetFileFormat(appendPartitionValues: Boolean, tableAvroSchema: Schema): Option[ParquetFileFormat]
 
   def makeColumnarBatch(vectors: Array[ColumnVector], numRows: Int): ColumnarBatch
 
@@ -205,7 +216,7 @@ trait SparkAdapter extends Serializable {
                               metadataColumns: Seq[AttributeReference] = Seq.empty): FileScanRDD
 
   /**
-   * Extract condition in [[DeleteFromTable]]
+   * Extract condition in [[org.apache.spark.sql.catalyst.plans.logical.DeleteFromTable]]
    * SPARK-38626 condition is no longer Option in Spark 3.3
    */
   def extractDeleteCondition(deleteFromTable: Command): Expression
@@ -219,4 +230,23 @@ trait SparkAdapter extends Serializable {
    * Tries to translate a Catalyst Expression into data source Filter
    */
   def translateFilter(predicate: Expression, supportNestedPredicatePushdown: Boolean = false): Option[Filter]
+
+  /**
+   * @param sparkSession Spark session (required for Spark 3.5 to access Analyzer)
+   * @param tableName table name
+   * @param expected expected attributes
+   * @param query query logical plan
+   * @param byName whether to match by name
+   * @param conf SQL configuration
+   * @return resolved logical plan
+   */
+  def resolveOutputColumns(sparkSession: SparkSession,
+                           tableName: String,
+                           expected: Seq[Attribute],
+                           query: LogicalPlan,
+                           byName: Boolean,
+                           conf: SQLConf): LogicalPlan = {
+    // Default implementation delegates to CatalystPlanUtils (for Spark < 3.5)
+    getCatalystPlanUtils.resolveOutputColumns(tableName, expected, query, byName, conf)
+  }
 }

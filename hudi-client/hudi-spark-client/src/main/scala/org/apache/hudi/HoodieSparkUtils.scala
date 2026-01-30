@@ -97,7 +97,7 @@ object HoodieSparkUtils extends SparkAdapterSupport with SparkVersionsSupport wi
     // making Spark deserialize its internal representation [[InternalRow]] into [[Row]] for subsequent conversion
     // (and back)
     val sameSchema = writerAvroSchema.equals(readerAvroSchema)
-    val nullable = AvroSchemaUtils.resolveNullableSchema(writerAvroSchema) != writerAvroSchema
+    val nullable = AvroSchemaUtils.getNonNullTypeFromUnion(writerAvroSchema) != writerAvroSchema
 
     // NOTE: We have to serialize Avro schema, and then subsequently parse it on the executor node, since Spark
     //       serializer is not able to digest it
@@ -166,7 +166,7 @@ object HoodieSparkUtils extends SparkAdapterSupport with SparkVersionsSupport wi
     // making Spark deserialize its internal representation [[InternalRow]] into [[Row]] for subsequent conversion
     // (and back)
     val sameSchema = writerAvroSchema.equals(readerAvroSchema)
-    val nullable = AvroSchemaUtils.resolveNullableSchema(writerAvroSchema) != writerAvroSchema
+    val nullable = AvroSchemaUtils.getNonNullTypeFromUnion(writerAvroSchema) != writerAvroSchema
 
     // NOTE: We have to serialize Avro schema, and then subsequently parse it on the executor node, since Spark
     //       serializer is not able to digest it
