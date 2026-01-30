@@ -246,11 +246,7 @@ class Spark34LegacyHoodieParquetFileFormat(private val shouldAppendPartitionValu
             isCaseSensitive,
             datetimeRebaseSpec)
         }
-        // Filter out timestamp-millis columns from filter pushdown to avoid incorrect filtering.
-        // We replace filters on timestamp-millis columns with AlwaysTrue to preserve compound filters.
-        val filtersToPushDown = Spark34LegacyHoodieParquetFileFormat
-          .replaceTimestampMillisFiltersWithAlwaysTrue(filters, avroTableSchema, hasTimestampMillisFieldInTableSchema)
-        filtersToPushDown.map(rebuildFilterFromParquet(_, fileSchema, querySchemaOption.orElse(null)))
+        filters.map(rebuildFilterFromParquet(_, fileSchema, querySchemaOption.orElse(null)))
           // Collects all converted Parquet filter predicates. Notice that not all predicates can be
           // converted (`ParquetFilters.createFilter` returns an `Option`). That's why a `flatMap`
           // is used here.
@@ -515,72 +511,5 @@ object Spark34LegacyHoodieParquetFileFormat {
       ),
       original.getBlocks
     )
-  }
-
-  // Helper to replace filters on timestamp-millis columns with AlwaysTrue to avoid incorrect filter pushdown.
-  // This preserves compound filters (And/Or) so other parts can still be pushed down.
-  private def replaceTimestampMillisFiltersWithAlwaysTrue(filters: Seq[Filter],
-                                                          avroTableSchema: Schema,
-                                                          hasTimestampMillisFieldInTableSchema: Boolean
-                                                         ): Seq[Filter] = {
-    if (avroTableSchema == null || !hasTimestampMillisFieldInTableSchema) {
-      // No timestamp-millis columns, return all filters
-      filters
-    } else {
-      // Build a set of timestamp-millis column names
-      val timestampMillisColumns = scala.collection.mutable.Set[String]()
-      avroTableSchema.getFields.forEach { field =>
-        val fieldSchema = AvroSchemaUtils.getNonNullTypeFromUnion(field.schema())
-        if (fieldSchema.getType == org.apache.avro.Schema.Type.LONG) {
-          val logicalType = fieldSchema.getLogicalType
-          if (logicalType != null) {
-            val logicalTypeName = logicalType.getName
-            if (logicalTypeName == "timestamp-millis" || logicalTypeName == "local-timestamp-millis") {
-              timestampMillisColumns.add(field.name())
-            }
-          }
-        }
-      }
-
-      if (timestampMillisColumns.isEmpty) {
-        filters
-      } else {
-        // Replace filters on timestamp-millis columns with AlwaysTrue
-        filters.map { filter =>
-          replaceTimestampMillisFilterWithAlwaysTrue(filter, timestampMillisColumns.toSet)
-        }
-      }
-    }
-  }
-
-  // Replace a filter on timestamp-millis columns with AlwaysTrue, preserving compound filters
-  private def replaceTimestampMillisFilterWithAlwaysTrue(filter: Filter, timestampMillisColumns: Set[String]): Filter = {
-    filter match {
-      case EqualTo(attribute, _) if timestampMillisColumns.contains(attribute) => AlwaysTrue
-      case EqualNullSafe(attribute, _) if timestampMillisColumns.contains(attribute) => AlwaysTrue
-      case GreaterThan(attribute, _) if timestampMillisColumns.contains(attribute) => AlwaysTrue
-      case GreaterThanOrEqual(attribute, _) if timestampMillisColumns.contains(attribute) => AlwaysTrue
-      case LessThan(attribute, _) if timestampMillisColumns.contains(attribute) => AlwaysTrue
-      case LessThanOrEqual(attribute, _) if timestampMillisColumns.contains(attribute) => AlwaysTrue
-      case In(attribute, _) if timestampMillisColumns.contains(attribute) => AlwaysTrue
-      case IsNull(attribute) if timestampMillisColumns.contains(attribute) => AlwaysTrue
-      case IsNotNull(attribute) if timestampMillisColumns.contains(attribute) => AlwaysTrue
-      case StringStartsWith(attribute, _) if timestampMillisColumns.contains(attribute) => AlwaysTrue
-      case StringEndsWith(attribute, _) if timestampMillisColumns.contains(attribute) => AlwaysTrue
-      case StringContains(attribute, _) if timestampMillisColumns.contains(attribute) => AlwaysTrue
-      case And(left, right) =>
-        And(
-          replaceTimestampMillisFilterWithAlwaysTrue(left, timestampMillisColumns),
-          replaceTimestampMillisFilterWithAlwaysTrue(right, timestampMillisColumns)
-        )
-      case Or(left, right) =>
-        Or(
-          replaceTimestampMillisFilterWithAlwaysTrue(left, timestampMillisColumns),
-          replaceTimestampMillisFilterWithAlwaysTrue(right, timestampMillisColumns)
-        )
-      case Not(child) =>
-        Not(replaceTimestampMillisFilterWithAlwaysTrue(child, timestampMillisColumns))
-      case _ => filter
-    }
   }
 }
