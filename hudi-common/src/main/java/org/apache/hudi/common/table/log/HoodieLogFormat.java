@@ -150,6 +150,9 @@ public interface HoodieLogFormat {
 
     private HoodieTableVersion tableVersion;
 
+    // Always write to a new log file, when appends are disabled.
+    private boolean disableAppends;
+
     public WriterBuilder withBufferSize(int bufferSize) {
       this.bufferSize = bufferSize;
       return this;
@@ -215,6 +218,11 @@ public interface HoodieLogFormat {
       return this;
     }
 
+    public WriterBuilder withAppendDisabled(boolean disabled) {
+      this.disableAppends = disabled;
+      return this;
+    }
+
     public Writer build() throws IOException {
       LOG.info("Building HoodieLogFormat Writer");
       if (storage == null) {
@@ -265,7 +273,9 @@ public interface HoodieLogFormat {
         LOG.info("Computed the next log version for {} in {} as {} with write-token {}", logFileId, parentPath, logVersion, logWriteToken);
       }
 
-      if (logWriteToken == null) {
+      if (logWriteToken == null || disableAppends) {
+        // This is the case where we have existing log-file with old format. rollover to avoid any conflicts
+        logVersion += 1;
         fileLen = 0L;
         logWriteToken = UNKNOWN_WRITE_TOKEN;
       }
