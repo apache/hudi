@@ -23,7 +23,7 @@ For spark based:
 
 | Config Name                                        | Default                        | Description                                                                                                                 |
 |----------------------------------------------------|--------------------------------|-----------------------------------------------------------------------------------------------------------------------------|
-| hoodie.cleaner.policy                              | KEEP_LATEST_COMMITS (Optional) | org.apache.hudi.common.model.HoodieCleaningPolicy: Cleaning policy to be used. <br /><br />`Config Param: CLEANER_POLICY`   |
+| hoodie.clean.policy                              | KEEP_LATEST_COMMITS (Optional) | org.apache.hudi.common.model.HoodieCleaningPolicy: Cleaning policy to be used. <br /><br />`Config Param: CLEANER_POLICY`   |
 
 The corresponding config for Flink based engine is [`clean.policy`](https://hudi.apache.org/docs/configurations/#cleanpolicy).
 
@@ -35,19 +35,19 @@ Hudi cleaner currently supports the below cleaning policies to keep a certain nu
   retain atleast the last 10 commits. With such a configuration, we ensure that the oldest version of a file is kept on
   disk for at least 5 hours, thereby preventing the longest running query from failing at any point in time. Incremental
   cleaning is also possible using this policy.
-  Number of commits to retain can be configured by [`hoodie.cleaner.commits.retained`](https://analytics.google.com/analytics/web/#/p300324801/reports/intelligenthome). 
+  Number of commits to retain can be configured by [`hoodie.clean.commits.retained`](https://analytics.google.com/analytics/web/#/p300324801/reports/intelligenthome). 
   The corresponding Flink related config is [`clean.retain_commits`](https://hudi.apache.org/docs/configurations/#cleanretain_commits). 
 
 - **KEEP_LATEST_FILE_VERSIONS**: This policy has the effect of keeping N number of file versions irrespective of time.
   This policy is useful when it is known how many MAX versions of the file does one want to keep at any given time.
   To achieve the same behaviour as before of preventing long running queries from failing, one should do their calculations
   based on data patterns. Alternatively, this policy is also useful if a user just wants to maintain 1 latest version of the file.
-  Number of file versions to retain can be configured by [`hoodie.cleaner.fileversions.retained`](https://hudi.apache.org/docs/configurations/#hoodiecleanerfileversionsretained).
+  Number of file versions to retain can be configured by [`hoodie.clean.fileversions.retained`](https://hudi.apache.org/docs/configurations/#hoodiecleanerfileversionsretained).
   The corresponding Flink related config is [`clean.retain_file_versions`](https://hudi.apache.org/docs/configurations/#cleanretain_file_versions).
 
 - **KEEP_LATEST_BY_HOURS**: This policy clean up based on hours.It is simple and useful when knowing that you want to 
   keep files at any given time. Corresponding to commits with commit times older than the configured number of hours to 
-  be retained are cleaned. Currently you can configure by parameter [`hoodie.cleaner.hours.retained`](https://hudi.apache.org/docs/configurations/#hoodiecleanerhoursretained).
+  be retained are cleaned. Currently you can configure by parameter [`hoodie.clean.hours.retained`](https://hudi.apache.org/docs/configurations/#hoodiecleanerhoursretained).
   The corresponding Flink related config is [`clean.retain_hours`](https://hudi.apache.org/docs/configurations/#cleanretain_hours).
 
 ### Configs
@@ -64,7 +64,7 @@ to keep this enabled, to ensure metadata and data storage growth is bounded. To 
 | Config Name                      | Default          | Description                                                                                                                                                                                                                                                                            |
 |----------------------------------| -----------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | hoodie.clean.automatic           | true (Optional)  | When enabled, the cleaner table service is invoked immediately after each commit, to delete older file slices. It's recommended to enable this, to ensure metadata and data storage growth is bounded.<br /><br />`Config Param: AUTO_CLEAN`                                           |
-| hoodie.cleaner.commits.retained  | 10 (Optional)    | Number of commits to retain, without cleaning. This will be retained for num_of_commits * time_between_commits (scheduled). This also directly translates into how much data retention the table supports for incremental queries.<br /><br />`Config Param: CLEANER_COMMITS_RETAINED` |
+| hoodie.clean.commits.retained  | 10 (Optional)    | Number of commits to retain, without cleaning. This will be retained for num_of_commits * time_between_commits (scheduled). This also directly translates into how much data retention the table supports for incremental queries.<br /><br />`Config Param: CLEANER_COMMITS_RETAINED` |
 
 
 #### Async
@@ -107,18 +107,18 @@ spark-submit --master local \
   --packages org.apache.hudi:hudi-utilities-slim-bundle_2.12:1.0.2,org.apache.hudi:hudi-spark3.5-bundle_2.12:1.0.2 \
   --class org.apache.hudi.utilities.HoodieCleaner `ls packaging/hudi-utilities-slim-bundle/target/hudi-utilities-slim-bundle-*.jar` \
   --target-base-path /path/to/hoodie_table \
-  --hoodie-conf hoodie.cleaner.policy=KEEP_LATEST_COMMITS \
-  --hoodie-conf hoodie.cleaner.commits.retained=10 \
-  --hoodie-conf hoodie.cleaner.parallelism=200
+  --hoodie-conf hoodie.clean.policy=KEEP_LATEST_COMMITS \
+  --hoodie-conf hoodie.clean.commits.retained=10 \
+  --hoodie-conf hoodie.clean.parallelism=200
 ```
 Keep the latest 3 file versions
 ```
 spark-submit --master local \
   --packages org.apache.hudi:hudi-utilities-slim-bundle_2.12:1.0.2,org.apache.hudi:hudi-spark3.5-bundle_2.12:1.0.2 \
   --class org.apache.hudi.utilities.HoodieCleaner `ls packaging/hudi-utilities-slim-bundle/target/hudi-utilities-slim-bundle-*.jar` \
-  --hoodie-conf hoodie.cleaner.policy=KEEP_LATEST_FILE_VERSIONS \
-  --hoodie-conf hoodie.cleaner.fileversions.retained=3 \
-  --hoodie-conf hoodie.cleaner.parallelism=200
+  --hoodie-conf hoodie.clean.policy=KEEP_LATEST_FILE_VERSIONS \
+  --hoodie-conf hoodie.clean.fileversions.retained=3 \
+  --hoodie-conf hoodie.clean.parallelism=200
 ```
 Clean commits older than 24 hours
 ```
@@ -126,11 +126,11 @@ spark-submit --master local \
   --packages org.apache.hudi:hudi-utilities-slim-bundle_2.12:1.0.2,org.apache.hudi:hudi-spark3.5-bundle_2.12:1.0.2 \
   --class org.apache.hudi.utilities.HoodieCleaner `ls packaging/hudi-utilities-slim-bundle/target/hudi-utilities-slim-bundle-*.jar` \
   --target-base-path /path/to/hoodie_table \
-  --hoodie-conf hoodie.cleaner.policy=KEEP_LATEST_BY_HOURS \
-  --hoodie-conf hoodie.cleaner.hours.retained=24 \
-  --hoodie-conf hoodie.cleaner.parallelism=200
+  --hoodie-conf hoodie.clean.policy=KEEP_LATEST_BY_HOURS \
+  --hoodie-conf hoodie.clean.hours.retained=24 \
+  --hoodie-conf hoodie.clean.parallelism=200
 ```
-Note: The parallelism takes the min value of number of partitions to clean and `hoodie.cleaner.parallelism`.
+Note: The parallelism takes the min value of number of partitions to clean and `hoodie.clean.parallelism`.
 
 #### CLI
 You can also use [Hudi CLI](cli.md) to run Hoodie Cleaner.
@@ -142,7 +142,7 @@ CLI provides the below commands for cleaner service:
 
 Example of cleaner keeping the latest 10 commits
 ```
-cleans run --sparkMaster local --hoodieConfigs hoodie.cleaner.policy=KEEP_LATEST_COMMITS hoodie.cleaner.commits.retained=10 hoodie.cleaner.parallelism=200
+cleans run --sparkMaster local --hoodieConfigs hoodie.clean.policy=KEEP_LATEST_COMMITS hoodie.clean.commits.retained=10 hoodie.clean.parallelism=200
 ```
 
 You can find more details and the relevant code for these commands in [`org.apache.hudi.cli.commands.CleansCommand`](https://github.com/apache/hudi/blob/master/hudi-cli/src/main/java/org/apache/hudi/cli/commands/CleansCommand.java) class. 
