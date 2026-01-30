@@ -180,18 +180,19 @@ abstract class BaseSpark4Adapter extends SparkAdapter with Logging {
   override def isDataTypeEqualForPhysicalSchema(requiredType: DataType, fileType: DataType): Option[Boolean] = {
     /**
      * Checks if a StructType is the physical representation of VariantType in Parquet.
-     * VariantType is stored in Parquet as a struct with two binary fields: "metadata" and "value".
+     * VariantType is stored in Parquet as a struct with binary fields: "metadata" and "value".
+     * Supports both unshredded (2 fields) and shredded (3 fields with "typed_value") layouts.
      */
     def isVariantPhysicalSchema(structType: StructType): Boolean = {
-      if (structType.fields.length != 2) {
-        false
-      } else {
-        val fieldMap = structType.fields.map(f => (f.name, f.dataType)).toMap
-        fieldMap.contains(HoodieSchema.Variant.VARIANT_VALUE_FIELD) &&
-          fieldMap.contains(HoodieSchema.Variant.VARIANT_METADATA_FIELD) &&
-          fieldMap(HoodieSchema.Variant.VARIANT_VALUE_FIELD) == BinaryType &&
-          fieldMap(HoodieSchema.Variant.VARIANT_METADATA_FIELD) == BinaryType
-      }
+      val fieldMap = structType.fields.map(f => (f.name, f.dataType)).toMap
+      val hasRequiredFields = fieldMap.contains(HoodieSchema.Variant.VARIANT_VALUE_FIELD) &&
+        fieldMap.contains(HoodieSchema.Variant.VARIANT_METADATA_FIELD) &&
+        fieldMap(HoodieSchema.Variant.VARIANT_VALUE_FIELD) == BinaryType &&
+        fieldMap(HoodieSchema.Variant.VARIANT_METADATA_FIELD) == BinaryType
+      val isUnshredded = structType.fields.length == 2
+      val isShredded = structType.fields.length == 3 &&
+        fieldMap.contains(HoodieSchema.Variant.VARIANT_TYPED_VALUE_FIELD)
+      hasRequiredFields && (isUnshredded || isShredded)
     }
 
     // Handle VariantType comparisons

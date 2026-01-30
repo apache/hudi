@@ -54,6 +54,7 @@ import java.io.OutputStream;
 import java.util.Properties;
 
 import static org.apache.hudi.common.config.HoodieStorageConfig.HFILE_WRITER_TO_ALLOW_DUPLICATES;
+import static org.apache.hudi.common.config.HoodieStorageConfig.PARQUET_VARIANT_SHREDDING_PROVIDER_CLASS;
 import static org.apache.parquet.avro.HoodieAvroParquetSchemaConverter.getAvroSchemaConverter;
 
 public class HoodieAvroFileWriterFactory extends HoodieFileWriterFactory {
@@ -140,9 +141,37 @@ public class HoodieAvroFileWriterFactory extends HoodieFileWriterFactory {
                                                            StorageConfiguration storageConf,
                                                            boolean enableBloomFilter) {
     Option<BloomFilter> filter = enableBloomFilter ? Option.of(createBloomFilter(config)) : Option.empty();
+    HoodieSchema effectiveSchema = HoodieAvroWriteSupport.generateEffectiveSchema(schema, config);
+    Properties props = config.getProps();
+    // Auto-detect variant shredding provider from classpath if not explicitly configured
+    if (!props.containsKey(PARQUET_VARIANT_SHREDDING_PROVIDER_CLASS.key())) {
+      String detected = detectShreddingProvider();
+      if (detected != null) {
+        props.setProperty(PARQUET_VARIANT_SHREDDING_PROVIDER_CLASS.key(), detected);
+      }
+    }
     return (HoodieAvroWriteSupport) ReflectionUtils.loadClass(
         config.getStringOrDefault(HoodieStorageConfig.HOODIE_AVRO_WRITE_SUPPORT_CLASS),
         new Class<?>[] {MessageType.class, HoodieSchema.class, Option.class, Properties.class},
         getAvroSchemaConverter((Configuration) storageConf.unwrapAs(Configuration.class)).convert(schema), schema, filter, config.getProps());
+  }
+
+  /**
+   * Auto-detect a {@link org.apache.hudi.avro.VariantShreddingProvider} implementation
+   * available on the classpath. Returns the fully-qualified class name if found, or null.
+   */
+  private static String detectShreddingProvider() {
+    String[] candidates = {
+        "org.apache.hudi.variant.Spark4VariantShreddingProvider"
+    };
+    for (String candidate : candidates) {
+      try {
+        Class.forName(candidate);
+        return candidate;
+      } catch (ClassNotFoundException e) {
+        // not on classpath, try next
+      }
+    }
+    return null;
   }
 }
