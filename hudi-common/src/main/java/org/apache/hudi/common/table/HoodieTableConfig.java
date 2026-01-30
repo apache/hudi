@@ -129,6 +129,8 @@ public class HoodieTableConfig extends HoodieConfig {
 
   public static final String HOODIE_PROPERTIES_FILE = "hoodie.properties";
   public static final String HOODIE_PROPERTIES_FILE_BACKUP = "hoodie.properties.backup";
+  // suffix to add at end for the config file while creating the temp properties file
+  private static final String TEMP_SUFFIX = ".temp";
   public static final String HOODIE_WRITE_TABLE_NAME_KEY = "hoodie.datasource.write.table.name";
   public static final String HOODIE_TABLE_NAME_KEY = "hoodie.table.name";
   public static final String PARTIAL_UPDATE_UNAVAILABLE_VALUE = "hoodie.write.partial.update.unavailable.value";
@@ -539,27 +541,33 @@ public class HoodieTableConfig extends HoodieConfig {
       // 3. delete the properties file, reads will go to the backup, until we are done.
       deleteFile(storage, cfgPath);
 
-      // 4. Upsert and save back.
+      // 4. Upsert and save back, by writing to a temporary file and then renaming it
       String checksum;
-      try (OutputStream out = storage.create(cfgPath, true)) {
+      StoragePath tmpCfgPath = new StoragePath(cfgPath.toString() + TEMP_SUFFIX);
+      try (OutputStream out = storage.create(tmpCfgPath, true)) {
         propsToUpdate.accept(props, modifyProps);
         propsToDelete.forEach(propToDelete -> props.remove(propToDelete));
-        checksum = storeProperties(props, out, cfgPath);
+        checksum = storeProperties(props, out, tmpCfgPath);
       }
+      storage.rename(tmpCfgPath, cfgPath);
+      LOG.warn(String.format("%s modified to: %s (at %s)", cfgPath.getName(), props, cfgPath.getParent()));
 
-      // 4. verify and remove backup.
+      // 5. verify and remove backup.
       try (InputStream in = storage.open(cfgPath)) {
-        props.clear();
-        props.load(in);
-        if (!props.containsKey(TABLE_CHECKSUM.key()) || !props.getProperty(TABLE_CHECKSUM.key()).equals(checksum)) {
+        Properties verifyProps = new Properties();
+        verifyProps.load(in);
+        if (verifyProps.isEmpty() || verifyProps.size() != props.size()
+                || !verifyProps.containsKey(TABLE_CHECKSUM.key())
+                || !verifyProps.getProperty(TABLE_CHECKSUM.key()).equals(checksum)) {
           // delete the properties file and throw exception indicating update failure
           // subsequent writes will recover and update, reads will go to the backup until then
           deleteFile(storage, cfgPath);
-          throw new HoodieIOException("Checksum property missing or does not match.");
+          throw new HoodieIOException(String.format("Checksum property missing or properties do not match. %d vs %d",
+              props.size(), verifyProps.size()));
         }
       }
 
-      // 5. delete the backup properties file
+      // 6. delete the backup properties file
       deleteFile(storage, backupCfgPath);
     } catch (IOException e) {
       throw new HoodieIOException("Error updating table configs.", e);
