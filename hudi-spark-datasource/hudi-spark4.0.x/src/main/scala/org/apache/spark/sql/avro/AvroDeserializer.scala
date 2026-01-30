@@ -237,17 +237,22 @@ private[sql] class AvroDeserializer(rootAvroType: Schema,
           val record = value.asInstanceOf[IndexedRecord]
 
           val valueBuffer = record.get(valueIdx).asInstanceOf[ByteBuffer]
-          val valueBytes = new Array[Byte](valueBuffer.remaining)
-          valueBuffer.get(valueBytes)
-          valueBuffer.rewind()
+          // value field can be null during merging
+          if (valueBuffer == null) {
+            updater.setNullAt(ordinal)
+          } else {
+            val valueBytes = new Array[Byte](valueBuffer.remaining)
+            valueBuffer.get(valueBytes)
+            valueBuffer.rewind()
 
-          val metadataBuffer = record.get(metadataIdx).asInstanceOf[ByteBuffer]
-          val metadataBytes = new Array[Byte](metadataBuffer.remaining)
-          metadataBuffer.get(metadataBytes)
-          metadataBuffer.rewind()
+            val metadataBuffer = record.get(metadataIdx).asInstanceOf[ByteBuffer]
+            val metadataBytes = new Array[Byte](metadataBuffer.remaining)
+            metadataBuffer.get(metadataBytes)
+            metadataBuffer.rewind()
 
-          val variant = new VariantVal(valueBytes, metadataBytes)
-          updater.set(ordinal, variant)
+            val variant = new VariantVal(valueBytes, metadataBytes)
+            updater.set(ordinal, variant)
+          }
 
       case (RECORD, st: StructType) =>
         // Avro datasource doesn't accept filters with nested attributes. See SPARK-32328.

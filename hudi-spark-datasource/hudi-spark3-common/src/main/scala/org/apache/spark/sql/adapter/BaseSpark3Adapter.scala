@@ -226,4 +226,12 @@ abstract class BaseSpark3Adapter extends SparkAdapter with Logging {
   ): BiConsumer[SpecializedGetters, Integer] = {
     throw new UnsupportedOperationException("Spark 3.x does not support Variant shredding")
   }
+
+  override def convertVariantToStruct(variantValue: Any, structType: StructType): InternalRow = {
+    throw new UnsupportedOperationException("Spark 3.x does not support VariantType")
+  }
+
+  override def convertStructToVariant(structRow: InternalRow, structType: StructType): Any = {
+    throw new UnsupportedOperationException("Spark 3.x does not support VariantType")
+  }
 }

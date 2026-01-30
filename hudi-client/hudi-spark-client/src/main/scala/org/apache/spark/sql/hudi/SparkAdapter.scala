@@ -483,4 +483,30 @@ trait SparkAdapter extends Serializable {
     shreddedStructType: StructType,
     writeStruct: Consumer[InternalRow]
   ): BiConsumer[SpecializedGetters, Integer]
+
+  /**
+   * Converts a Variant value to a struct representation (value and metadata binary fields).
+   * This is used during schema reconciliation when converting from VariantType to StructType.
+   *
+   * For Spark 4.x, extracts value and metadata bytes from VariantVal and creates an InternalRow.
+   * For Spark 3.x, this throws UnsupportedOperationException.
+   *
+   * @param variantValue The variant value object
+   * @param structType The target StructType with value and metadata fields
+   * @return InternalRow with value and metadata fields populated
+   */
+  def convertVariantToStruct(variantValue: Any, structType: StructType): InternalRow
+
+  /**
+   * Converts a struct representation (value and metadata binary fields) to a Variant value.
+   * This is used during schema reconciliation when converting from StructType to VariantType.
+   *
+   * For Spark 4.x, extracts value and metadata bytes from InternalRow and creates a VariantVal.
+   * For Spark 3.x, this throws UnsupportedOperationException.
+   *
+   * @param structRow The InternalRow with value and metadata fields
+   * @param structType The StructType of the struct
+   * @return Variant value object
+   */
+  def convertStructToVariant(structRow: InternalRow, structType: StructType): Any
 }
