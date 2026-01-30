@@ -367,16 +367,20 @@ public class UtilHelpers {
     return sparkConf;
   }
 
-  public static JavaSparkContext buildSparkContext(String appName, Map<String, String> configs) {
-    return new JavaSparkContext(buildSparkConf(appName, configs));
+  public static JavaSparkContext buildSparkContext(String appName, boolean enableHiveSupport, Map<String, String> configs) {
+    SparkConf sparkConf = buildSparkConf(appName, configs);
+    return getJavaSparkContextFromSparkConf(sparkConf, enableHiveSupport);
   }
 
-  public static JavaSparkContext buildSparkContext(String appName, String defaultMaster, Map<String, String> configs) {
-    return new JavaSparkContext(buildSparkConf(appName, defaultMaster, configs));
+  public static JavaSparkContext buildSparkContext(String appName, String defaultMaster, boolean enableHiveSupport,
+                                                   Map<String, String> configs) {
+    SparkConf sparkConf = buildSparkConf(appName, defaultMaster, configs);
+    return getJavaSparkContextFromSparkConf(sparkConf, enableHiveSupport);
   }
 
-  public static JavaSparkContext buildSparkContext(String appName, String defaultMaster) {
-    return new JavaSparkContext(buildSparkConf(appName, defaultMaster));
+  public static JavaSparkContext buildSparkContext(String appName, String defaultMaster, boolean enableHiveSupport) {
+    SparkConf sparkConf = buildSparkConf(appName, defaultMaster);
+    return getJavaSparkContextFromSparkConf(sparkConf, enableHiveSupport);
   }
 
   /**
@@ -384,12 +388,22 @@ public class UtilHelpers {
    *
    * @return {@link JavaSparkContext}
    */
-  public static JavaSparkContext buildSparkContext(String appName, String sparkMaster, String sparkMemory) {
+  public static JavaSparkContext buildSparkContext(String appName, String sparkMaster, String sparkMemory,
+                                                   boolean enableHiveSupport) {
     SparkConf sparkConf = buildSparkConf(appName, sparkMaster);
     if (sparkMemory != null) {
       sparkConf.set("spark.executor.memory", sparkMemory);
     }
-    return new JavaSparkContext(sparkConf);
+    return getJavaSparkContextFromSparkConf(sparkConf, enableHiveSupport);
+  }
+
+  public static JavaSparkContext getJavaSparkContextFromSparkConf(SparkConf sparkConf, boolean enableHiveSupport) {
+    SparkSession.Builder sessionBuilder = SparkSession.builder().config(sparkConf);
+    if (enableHiveSupport) {
+      sessionBuilder.enableHiveSupport();
+    }
+    SparkSession sparkSession = sessionBuilder.getOrCreate();
+    return new JavaSparkContext(sparkSession.sparkContext());
   }
 
   /**
