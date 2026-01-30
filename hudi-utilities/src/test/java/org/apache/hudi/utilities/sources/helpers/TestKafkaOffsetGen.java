@@ -52,7 +52,6 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.MethodSource;
-import org.mockito.ArgumentCaptor;
 import org.mockito.MockedStatic;
 
 import java.time.Instant;
@@ -77,7 +76,6 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.never;
@@ -661,13 +659,13 @@ public class TestKafkaOffsetGen {
     KafkaOffsetGen kafkaOffsetGen = new KafkaOffsetGen(getConsumerConfigs("earliest", KAFKA_CHECKPOINT_TYPE_STRING));
 
     // Checkpoint with some consumed messages, creating lag
+    // Checkpoint shows 250 messages consumed from partition 0 and 249 from partition 1 (total 499)
+    // With 1000 total messages sent, the expected lag is 1000 - 499 = 501
     String lastCheckpointString = testTopicName + ",0:250,1:249";
     kafkaOffsetGen.getNextOffsetRanges(
         Option.of(new StreamerCheckpointV2(lastCheckpointString)), 300, mockMetrics);
 
-    // Verify metric was called with a lag count > 0 (exact value depends on partition distribution)
-    ArgumentCaptor<Long> delayCaptor = ArgumentCaptor.forClass(Long.class);
-    verify(mockMetrics, times(1)).updateStreamerSourceDelayCount(eq("kafkaDelayCount"), delayCaptor.capture());
-    assertTrue(delayCaptor.getValue() > 0, "Delay count should be greater than 0 when there is lag");
+    // Verify metric was called with exact delay count of 501 (1000 messages - 499 consumed)
+    verify(mockMetrics, times(1)).updateStreamerSourceDelayCount("kafkaDelayCount", 501L);
   }
 }
