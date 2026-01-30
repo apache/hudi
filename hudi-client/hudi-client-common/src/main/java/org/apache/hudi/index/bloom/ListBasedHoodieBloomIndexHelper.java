@@ -67,7 +67,7 @@ public class ListBasedHoodieBloomIndexHelper extends BaseHoodieBloomIndexHelper 
             new HoodieBloomIndexCheckFunction<Pair<HoodieFileGroupId, String>>(hoodieTable, config, Pair::getLeft, Pair::getRight)
                 .apply(fileComparisonPairList.iterator())
         )
-        .filter(lr -> lr.getMatchingRecordKeysAndPositions().size() > 0)
+        .filter(lr -> !lr.getMatchingRecordKeysAndPositions().isEmpty())
         .collect(toList());
 
     return context.parallelize(keyLookupResults).flatMap(lookupResult ->

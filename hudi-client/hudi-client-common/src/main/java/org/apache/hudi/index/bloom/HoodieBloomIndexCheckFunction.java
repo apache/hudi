@@ -66,24 +66,24 @@ public class HoodieBloomIndexCheckFunction<I>
 
   protected class LazyKeyCheckIterator implements Iterator<HoodieKeyLookupResult> {
 
-    private final Iterator<I> filePartitionRecordKeyTripletItr;
+    private final Iterator<I> filePartitionRecordKeyPairItr;
     private HoodieKeyLookupHandle keyLookupHandle = null;
 
-    LazyKeyCheckIterator(Iterator<I> filePartitionRecordKeyTripletItr) {
-      this.filePartitionRecordKeyTripletItr = filePartitionRecordKeyTripletItr;
+    LazyKeyCheckIterator(Iterator<I> filePartitionRecordKeyPairItr) {
+      this.filePartitionRecordKeyPairItr = filePartitionRecordKeyPairItr;
     }
 
     @Override
     public boolean hasNext() {
-      return keyLookupHandle != null || filePartitionRecordKeyTripletItr.hasNext();
+      return keyLookupHandle != null || filePartitionRecordKeyPairItr.hasNext();
     }
 
     @Override
     public HoodieKeyLookupResult next() {
       try {
         // process one file in each go.
-        while (filePartitionRecordKeyTripletItr.hasNext()) {
-          I tuple = filePartitionRecordKeyTripletItr.next();
+        while (filePartitionRecordKeyPairItr.hasNext()) {
+          I tuple = filePartitionRecordKeyPairItr.next();
 
           HoodieFileGroupId fileGroupId = fileGroupIdExtractor.apply(tuple);
           String recordKey = recordKeyExtractor.apply(tuple);
