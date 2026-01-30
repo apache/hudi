@@ -25,7 +25,10 @@ import org.apache.spark.internal.Logging
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.execution.datasources.PartitionedFile
-import org.apache.spark.sql.execution.datasources.parquet.LegacyHoodieParquetFileFormat.FILE_FORMAT_ID
+import org.apache.spark.sql.vectorized.ColumnarBatch
+
+import scala.collection.JavaConverters._
+import org.apache.spark.sql.execution.datasources.parquet.LegacyHoodieParquetFileFormat.{FILE_FORMAT_ID, HOODIE_TABLE_AVRO_SCHEMA}
 import org.apache.spark.sql.sources.Filter
 import org.apache.spark.sql.types.StructType
 
@@ -41,9 +44,12 @@ class LegacyHoodieParquetFileFormat extends ParquetFileFormat with SparkAdapterS
 
   /**
    * Try to get table Avro schema from hadoopConf.
-   * This is used as a fallback when schema is not provided via options map.
+   * Callers (e.g., IncrementalRelation) should set the schema using
+   * LegacyHoodieParquetFileFormat.setTableAvroSchemaInConf() before reading so that
+   * supportBatch() can find it (supportBatch does not receive the relation's options).
+   * This is also used as a fallback in buildReaderWithPartitionValues when schema is not in options.
    *
-   * @return Some(schema) if found in hadoopConf, None otherwise (falls back to StructType conversion)
+   * @return Some(schema) if found in hadoopConf, None otherwise
    */
   private def getTableAvroSchemaFromConf(hadoopConf: Configuration): Option[Schema] = {
     val schemaStr = hadoopConf.get(LegacyHoodieParquetFileFormat.HOODIE_TABLE_AVRO_SCHEMA)
@@ -62,15 +68,29 @@ class LegacyHoodieParquetFileFormat extends ParquetFileFormat with SparkAdapterS
     }
   }
 
+  /**
+   * Returns whether batch/columnar read is supported.
+   *
+   * Where the second parameter `schema` comes from: Spark's FileSourceScanExec (or
+   * DataSourceScanExec) calls FileFormat.supportBatch(session, schema). The schema is typically
+   * the relation's read schema (HadoopFsRelation.dataSchema or the scan's required schema).
+   * During plan canonicalization (e.g. makeCopy), Spark can pass a schema derived from the
+   * plan's output attributes, which may have anonymized names (e.g. all "none").
+   *
+   * We must NOT use that schema for Avro conversion: it can be wrong and cause
+   * AvroRuntimeException (duplicate field "none"). We only use the table Avro schema from
+   * hadoopConf; if not set, we return false (disable batch).
+   */
   override def supportBatch(sparkSession: SparkSession, schema: StructType): Boolean = {
-    // Try to get schema from hadoopConf (set by callers like IncrementalRelation)
-    val avroSchema = getTableAvroSchemaFromConf(sparkSession.sessionState.newHadoopConf()).getOrElse {
-      // Fallback to converting StructType to Avro schema
-      AvroConversionUtils.convertStructTypeToAvroSchema(schema, schema.typeName)
+    getTableAvroSchemaFromConf(sparkSession.sessionState.newHadoopConf()) match {
+      case Some(avroSchema) =>
+        sparkAdapter
+          .createLegacyHoodieParquetFileFormat(true, avroSchema).get.supportBatch(sparkSession, schema)
+      case None =>
+        // Table Avro schema not in hadoopConf (supportBatch does not receive options).
+        // Do not use the passed-in schema for conversion - it can be wrong (canonicalized "none" names).
+        false
     }
-
-    sparkAdapter
-      .createLegacyHoodieParquetFileFormat(true, avroSchema).get.supportBatch(sparkSession, schema)
   }
 
   override def buildReaderWithPartitionValues(sparkSession: SparkSession,
@@ -101,9 +121,26 @@ class LegacyHoodieParquetFileFormat extends ParquetFileFormat with SparkAdapterS
         AvroConversionUtils.convertStructTypeToAvroSchema(fullTableSchema, dataSchema.typeName)
       }
 
-    sparkAdapter
+    val delegateReader = sparkAdapter
       .createLegacyHoodieParquetFileFormat(shouldExtractPartitionValuesFromPartitionPath, avroSchema).get
       .buildReaderWithPartitionValues(sparkSession, dataSchema, partitionSchema, requiredSchema, filters, options, hadoopConf)
+
+    val resultSchema = StructType(partitionSchema.fields ++ requiredSchema.fields)
+    val useBatchPlan = supportBatch(sparkSession, resultSchema)
+    if (useBatchPlan) {
+      // Spark built a columnar plan and expects Iterator[ColumnarBatch]. Pass through as-is.
+      (file: PartitionedFile) => delegateReader(file)
+    } else {
+      // Spark built a row-based plan. The delegate may still return ColumnarBatch when it
+      // enables vectorized read. Convert any batch to rows so we always yield InternalRow.
+      (file: PartitionedFile) => {
+        val iter = delegateReader(file).asInstanceOf[Iterator[Any]]
+        iter.flatMap {
+          case r: InternalRow => Seq(r)
+          case b: ColumnarBatch => b.rowIterator().asScala
+        }
+      }
+    }
   }
 }
 
@@ -112,8 +149,16 @@ object LegacyHoodieParquetFileFormat {
 
   /**
    * Configuration key for passing table Avro schema.
-   * Schema can be passed through options map (preferred, thread-safe) or hadoopConf (fallback).
+   * Schema can be passed through options map (buildReader) or hadoopConf (supportBatch + fallback).
    * This preserves the correct logical types (e.g., timestampMillis vs timestampMicros).
    */
   val HOODIE_TABLE_AVRO_SCHEMA = "hoodie.table.avro.schema"
+
+  /**
+   * Helper method to set table Avro schema in hadoopConf.
+   * Required for supportBatch() which only sees hadoopConf, not the relation's options.
+   */
+  def setTableAvroSchemaInConf(hadoopConf: Configuration, avroSchema: Schema): Unit = {
+    hadoopConf.set(HOODIE_TABLE_AVRO_SCHEMA, avroSchema.toString)
+  }
 }
