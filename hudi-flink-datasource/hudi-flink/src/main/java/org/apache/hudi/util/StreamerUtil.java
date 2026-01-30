@@ -139,7 +139,7 @@ public class StreamerUtil {
   }
 
   /**
-   * Create metadata write client from the given write client for data table.
+   * Creates the metadata write client from the given write client for data table.
    */
   public static HoodieFlinkWriteClient createMetadataWriteClient(HoodieFlinkWriteClient dataWriteClient) {
     // Get the metadata writer from the table and use its write client

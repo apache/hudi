@@ -66,10 +66,10 @@ public class CompactionUtil {
   }
 
   /**
-   * Schedules a new compaction/log compaction instant for the metadata table.
+   * Schedules a new compaction/log compaction for the metadata table.
    *
    * @param writeClient The metadata write client
-   * @param committed   Whether the last instant was committed successfully
+   * @param committed   Whether the triggering instant was committed successfully
    */
   public static void scheduleMetadataCompaction(
       HoodieFlinkWriteClient<?> writeClient,
@@ -80,7 +80,7 @@ public class CompactionUtil {
     if (canScheduleMetadataCompaction(writeClient.getConfig(), writeClient.getHoodieTable().getMetaClient())) {
       Option<String> compactInstant = writeClient.scheduleCompaction(Option.empty());
       if (compactInstant.isPresent()) {
-        log.info("Schedule compaction {} for metadata table.", compactInstant.get());
+        log.info("Scheduled compaction {} for metadata table.", compactInstant.get());
         return;
       }
       if (!writeClient.getConfig().isLogCompactionEnabled()) {
@@ -88,13 +88,13 @@ public class CompactionUtil {
       }
       Option<String> logCompactionInstant = writeClient.scheduleLogCompaction(Option.empty());
       if (logCompactionInstant.isPresent()) {
-        log.info("Schedule log compaction {} for metadata table.", logCompactionInstant.get());
+        log.info("Scheduled log compaction {} for metadata table.", logCompactionInstant.get());
       }
     }
   }
 
   /**
-   * Validates the timeline for both main and metadata tables to ensure compaction on MDT can be scheduled.
+   * Validates the timeline for both data and metadata tables to ensure compaction on MDT can be scheduled.
    *
    * @param metadataWriteConfig The write config for metadata write client
    * @param metadataMetaClient The table metadata client for metadata table
@@ -109,9 +109,7 @@ public class CompactionUtil {
           metadataMetaClient.getActiveTimeline().filterPendingLogCompactionTimeline().firstInstant();
       Option<HoodieInstant> pendingCompactionInstant =
           metadataMetaClient.getActiveTimeline().filterPendingCompactionTimeline().firstInstant();
-      if (pendingLogCompactionInstant.isPresent() || pendingCompactionInstant.isPresent()) {
-        return false;
-      }
+      return !pendingLogCompactionInstant.isPresent() && !pendingCompactionInstant.isPresent();
     }
     return true;
   }

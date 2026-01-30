@@ -42,13 +42,13 @@ import java.util.List;
  * <p>This handler extends {@link CompactCommitHandler} to support metadata table specific
  * compaction commit actions, including:
  * <ul>
- *   <li>Retrieves compaction plans for both compaction and log compaction types;</li>
+ *   <li>Retrieves compaction plans for both compaction and log compaction;</li>
  *   <li>Commits compaction metadata;</li>
  *   <li>Commits log compaction metadata;</li>
  *   <li>Rolls back failed compactions;</li>
  * </ul>
  *
- * <p>The handler distinguishes between normal compaction(full compaction) and log compaction(minor compaction) based on
+ * <p>The handler distinguishes between compaction(full compaction) and log compaction(minor compaction) based on
  * the {@link CompactionCommitEvent#isLogCompaction()} flag, and triggers compaction completion or rollback
  * appropriately with the write client.
  *
@@ -64,9 +64,9 @@ public class MetadataCompactCommitHandler extends CompactCommitHandler {
   /**
    * Completes a compaction for metadata tables.
    *
-   * <p>This method is overridden to support both normal compaction(full compaction)
+   * <p>This method is overridden to support both compaction(full compaction)
    * and log compaction(minor compaction) for metadata tables. It creates appropriate metadata based on the
-   * operation type and invokes the corresponding completion method on the write client.
+   * operation type and completes the compaction.
    *
    * @param instant           The compaction instant time
    * @param isLogCompaction   Whether the compaction is log compaction
@@ -115,7 +115,7 @@ public class MetadataCompactCommitHandler extends CompactCommitHandler {
    * Retrieves the compaction plan for a metadata table compaction instant.
    *
    * <p>This method is overridden to support retrieving both
-   * normal compaction plans and log compaction plans based on the compaction type.
+   * compaction plans and log compaction plans based on the compaction type.
    * It uses a cache to avoid repeatedly reading plans from storage.
    *
    * @param instant         The compaction instant time

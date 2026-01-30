@@ -37,6 +37,8 @@ import org.apache.hudi.util.CompactionUtil;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.flink.util.Collector;
 
+import javax.annotation.Nullable;
+
 import java.io.Closeable;
 import java.util.Collections;
 import java.util.List;
@@ -90,7 +92,7 @@ public class CompactHandler implements Closeable {
    * @param compactionMetrics    Metrics collector for compaction operations
    * @throws Exception           If compaction fails
    */
-  public void compact(NonThrownExecutor executor,
+  public void compact(@Nullable NonThrownExecutor executor,
                       CompactionPlanEvent event,
                       Collector<CompactionCommitEvent> collector,
                       boolean needReloadMetaClient,

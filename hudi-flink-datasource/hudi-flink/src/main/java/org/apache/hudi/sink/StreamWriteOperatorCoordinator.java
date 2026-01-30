@@ -468,9 +468,8 @@ public class StreamWriteOperatorCoordinator
     if (tableState.scheduleCompaction) {
       CompactionUtil.scheduleCompaction(writeClient, tableState.isDeltaTimeCompaction, committed);
     }
-    // Schedule metadata table compaction after successful commit
     if (tableState.scheduleMdtCompaction) {
-      // Schedule compaction for the metadata table
+      // schedule compaction for the metadata table
       CompactionUtil.scheduleMetadataCompaction(metadataWriteClient, committed);
     }
     // if clustering is on, schedule the clustering

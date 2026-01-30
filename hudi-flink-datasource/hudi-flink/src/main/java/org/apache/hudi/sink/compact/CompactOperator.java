@@ -104,12 +104,11 @@ public class CompactOperator extends TableStreamOperator<CompactionCommitEvent>
 
   @Override
   public void open() throws Exception {
-    // Whether to execute compaction asynchronously.
-    boolean asyncCompaction = conf.get(FlinkOptions.COMPACTION_OPERATION_EXECUTE_ASYNC_ENABLED);
-    // Id of current subtask.
+    // ID of current subtask
     int taskID = RuntimeContextUtils.getIndexOfThisSubtask(getRuntimeContext());
     HoodieFlinkWriteClient writeClient = FlinkWriteClients.createWriteClient(conf, getRuntimeContext());
-    if (asyncCompaction) {
+    if (conf.get(FlinkOptions.COMPACTION_OPERATION_EXECUTE_ASYNC_ENABLED)) {
+      // executes compaction asynchronously.
       this.executor = NonThrownExecutor.builder(log).build();
     }
     this.collector = new StreamRecordCollector<>(output);

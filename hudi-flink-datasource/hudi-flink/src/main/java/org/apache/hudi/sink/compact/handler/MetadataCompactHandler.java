@@ -40,7 +40,7 @@ import java.util.List;
  * Handler for compaction operation execution on Hudi metadata tables.
  *
  * <p>This handler extends {@link CompactHandler} to support metadata table specific
- * compaction operations, including compaction and log compaction.
+ * compaction operations, covering compaction and log compaction.
  *
  * <p>The handler uses {@link AvroReaderContextFactory} to create reader contexts
  * for metadata table payloads, which differs from data table records(engine native).
@@ -59,10 +59,11 @@ public class MetadataCompactHandler extends CompactHandler {
    * Creates a reader context for reading metadata table records.
    *
    * <p>This method is overridden to create an Avro-based reader context
-   * adapted for metadata table records, which has a custom payload class.
+   * adapted for metadata table file reading, which has a custom payload class.
    *
    * @param needReloadMetaClient Whether the meta client needs to be reloaded
-   * @return A reader context configured for metadata table records
+   *
+   * @return A reader context configured for metadata table file reading
    */
   @Override
   protected HoodieReaderContext<?> createReaderContext(boolean needReloadMetaClient) {
@@ -74,8 +75,8 @@ public class MetadataCompactHandler extends CompactHandler {
   /**
    * Executes a compaction operation.
    *
-   * <p>This method is overridden to support both normal compaction(full compaction)
-   * and log compaction(minor compaction) for metadata tables. For normal compaction.
+   * <p>This method is overridden to support both compaction(full compaction)
+   * and log compaction(minor compaction) for metadata tables.
    *
    * @param event                The compaction plan event containing the operation details
    * @param collector            Collector for emitting compaction commit events
