@@ -31,7 +31,6 @@ import org.apache.hudi.common.util.collection.Pair
 import org.apache.hudi.internal.schema.InternalSchema
 import org.apache.hudi.internal.schema.action.InternalSchemaMerger
 import org.apache.hudi.internal.schema.utils.{InternalSchemaUtils, SerDeHelper}
-import org.apache.hudi.io.storage.HoodieSparkParquetReader.ENABLE_LOGICAL_TIMESTAMP_REPAIR
 import org.apache.hudi.SparkAdapterSupport.sparkAdapter
 import org.apache.hudi.common.table.ParquetTableSchemaResolver
 import org.apache.parquet.filter2.compat.FilterCompat
@@ -151,8 +150,6 @@ class Spark34LegacyHoodieParquetFileFormat(private val shouldAppendPartitionValu
         pruneInternalSchema(internalSchemaStr, requiredSchema)
       hadoopConf.set(SparkInternalSchemaConverter.HOODIE_QUERY_SCHEMA, prunedInternalSchemaStr)
     }
-    hadoopConf.set(ENABLE_LOGICAL_TIMESTAMP_REPAIR, hasTimestampMillisFieldInTableSchema.toString)
-
     val broadcastedHadoopConf =
       sparkSession.sparkContext.broadcast(new SerializableConfiguration(hadoopConf))
 
