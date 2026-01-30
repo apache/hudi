@@ -151,11 +151,11 @@ public class HoodieRowDataCreateHandle implements Serializable {
             ? HoodieRecordDelegate.create(recordKey, partitionPath, null, newRecordLocation) : null;
         writeStatus.markSuccess(recordDelegate, Option.empty());
       } catch (Throwable t) {
-        LOG.error("Failed to write : key is " + recordKey + ", data is " + rowData, t);
-        writeStatus.markFailure(recordKey, partitionPath, t);
+        log.error("Error writing record " + record, t);
         if (!writeConfig.getIgnoreWriteFailed()) {
           throw new HoodieException(t.getMessage(), t);
         }
+        writeStatus.markFailure(recordKey, partitionPath, t);
       }
     } catch (Throwable ge) {
       writeStatus.setGlobalError(ge);

@@ -31,6 +31,7 @@ import org.apache.hudi.common.model.MetadataValues;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieInsertException;
 import org.apache.hudi.io.storage.HoodieFileWriter;
 import org.apache.hudi.storage.StoragePath;
@@ -116,10 +117,11 @@ public abstract class BaseCreateHandle<T, I, K, O> extends HoodieWriteHandle<T, 
       // record successful.
       record.deflate();
     } catch (Throwable t) {
-      // Not throwing exception from here, since we don't want to fail the entire job
-      // for a single record
-      writeStatus.markFailure(record, t, recordMetadata);
       log.error("Error writing record " + record, t);
+      if (!config.getIgnoreWriteFailed()) {
+        throw new HoodieException(t.getMessage(), t);
+      }
+      writeStatus.markFailure(record, t, recordMetadata);
     }
   }
 
