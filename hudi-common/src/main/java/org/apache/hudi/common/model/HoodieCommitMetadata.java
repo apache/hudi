@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.model;
 
+import java.util.Set;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.util.JsonUtils;
 import org.apache.hudi.common.util.Option;
@@ -488,6 +489,18 @@ public class HoodieCommitMetadata implements Serializable {
 
   public HashSet<String> getWritePartitionPaths() {
     return new HashSet<>(partitionToWriteStats.keySet());
+  }
+
+  public Set<String> getWritePartitionPathsWithExistingFileGroupsModified() {
+    return getPartitionToWriteStats()
+        .entrySet()
+        .stream()
+        .filter(partitionAndWriteStats -> partitionAndWriteStats
+            .getValue()
+            .stream()
+            .anyMatch(writeStat -> !Option.ofNullable(writeStat.getPrevCommit()).orElse("null").equalsIgnoreCase("null")))
+        .map(partitionAndWriteStats -> partitionAndWriteStats.getKey())
+        .collect(Collectors.toSet());
   }
 
   @Override
