@@ -313,15 +313,16 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
                                   dataSchema: StructType,
                                   enableVectorizedRead: Boolean): SparkColumnarFileReader = {
     if (isMultipleBaseFileFormatsEnabled) {
-      new MultipleColumnarFileFormatReader(
-        sparkAdapter.createParquetFileReader(enableVectorizedRead, spark.sessionState.conf, options, configuration),
-        sparkAdapter.createOrcFileReader(enableVectorizedRead, spark.sessionState.conf, options, configuration, dataSchema))
+      val parquetReader = sparkAdapter.createParquetFileReader(enableVectorizedRead, spark.sessionState.conf, options, configuration)
+      val orcReader = sparkAdapter.createOrcFileReader(enableVectorizedRead, spark.sessionState.conf, options, configuration, dataSchema)
+      val lanceReader = sparkAdapter.createLanceFileReader(enableVectorizedRead, spark.sessionState.conf, options, configuration).orNull
+      new MultipleColumnarFileFormatReader(parquetReader, orcReader, lanceReader)
     } else if (hoodieFileFormat == HoodieFileFormat.PARQUET) {
       sparkAdapter.createParquetFileReader(enableVectorizedRead, spark.sessionState.conf, options, configuration)
     } else if (hoodieFileFormat == HoodieFileFormat.ORC) {
       sparkAdapter.createOrcFileReader(enableVectorizedRead, spark.sessionState.conf, options, configuration, dataSchema)
     } else if (hoodieFileFormat == HoodieFileFormat.LANCE) {
-      sparkAdapter.createLanceFileReader(enableVectorizedRead, spark.sessionState.conf, options, configuration)
+      sparkAdapter.createLanceFileReader(enableVectorizedRead, spark.sessionState.conf, options, configuration).orNull
     } else {
       throw new HoodieNotSupportedException("Unsupported file format: " + hoodieFileFormat)
     }

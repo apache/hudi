@@ -221,12 +221,12 @@ trait SparkAdapter extends Serializable {
    * @param sqlConf    the [[SQLConf]] used for the read
    * @param options    passed as a param to the file format
    * @param hadoopConf some configs will be set for the hadoopConf
-   * @return Lance file reader
+   * @return Lance file reader wrapped in Option; None if Lance format is not supported in current Spark version (i.e 3.3)
    */
   def createLanceFileReader(vectorized: Boolean,
                             sqlConf: SQLConf,
                             options: Map[String, String],
-                            hadoopConf: Configuration): SparkColumnarFileReader
+                            hadoopConf: Configuration): Option[SparkColumnarFileReader]
 
   /**
    * use new qe execute
