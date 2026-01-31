@@ -74,9 +74,13 @@ public class TestPrometheusReporter {
   @AfterEach
   void shutdownMetrics() {
     if (metrics != null) {
-      metrics.shutdown();
+      try {
+        metrics.shutdown();
+      } catch (Exception e) {
+        log.debug("Exception during metrics shutdown: {}", e.getMessage());
+      }
     }
-    
+
     for (PrometheusReporter reporter : reportersToCleanup) {
       try {
         reporter.stop();
