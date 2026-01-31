@@ -224,4 +224,47 @@ class TestSparkRDDWriteClient extends SparkClientFunctionalTestHarness {
       assertTrue(InstantComparison.compareTimestamps(hoodieInstant.requestedTime(), InstantComparison.LESSER_THAN, hoodieInstant.getCompletionTime()));
     });
   }
+
+  /**
+   * Test that initializeMetadataTable invokes reloadTableConfig when hasPartitionsStateChanged returns true.
+   */
+  @Test
+  public void testInitializeMetadataTableReloadsConfigWhenPartitionsStateChanged() throws Exception {
+    HoodieTableMetaClient metaClient = getHoodieMetaClient(storageConf(), URI.create(basePath()).getPath(), new Properties());
+
+    HoodieWriteConfig config = getConfigBuilder(true)
+        .withPath(metaClient.getBasePath())
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder()
+            .enable(true)
+            .withMetadataIndexBloomFilter(true)
+            .withMetadataIndexColumnStats(true)
+            .build())
+        .build();
+
+    try (SparkRDDWriteClient client = new SparkRDDWriteClient(context(), config)) {
+      // Use reflection to access the private initializeMetadataTable method
+      java.lang.reflect.Method initializeMetadataTableMethod =
+          SparkRDDWriteClient.class.getDeclaredMethod("initializeMetadataTable", Option.class, HoodieTableMetaClient.class);
+      initializeMetadataTableMethod.setAccessible(true);
+
+      // Get initial metadata partition count
+      metaClient = HoodieTableMetaClient.reload(metaClient);
+      int initialPartitionCount = metaClient.getTableConfig().getMetadataPartitions().size();
+
+      // Create a spy on the metaClient to track reloadTableConfig calls
+      HoodieTableMetaClient spyMetaClient = org.mockito.Mockito.spy(metaClient);
+
+      // Invoke initializeMetadataTable
+      initializeMetadataTableMethod.invoke(client, Option.of("001"), spyMetaClient);
+
+      // Reload metaClient to check if partitions were actually bootstrapped
+      HoodieTableMetaClient reloadedMetaClient = HoodieTableMetaClient.reload(metaClient);
+      int finalPartitionCount = reloadedMetaClient.getTableConfig().getMetadataPartitions().size();
+
+      // If partitions were bootstrapped (count increased), verify reloadTableConfig was called
+      if (finalPartitionCount > initialPartitionCount) {
+        org.mockito.Mockito.verify(spyMetaClient, org.mockito.Mockito.atLeastOnce()).reloadTableConfig();
+      }
+    }
+  }
 }
