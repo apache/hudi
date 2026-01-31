@@ -98,7 +98,7 @@ public class TestFileSliceMetricUtils {
     for (long logFileLen : logFileLens) {
       String logFilePath = "." + UUID.randomUUID().toString() + "_20170101134598.log." + logVersion;
       HoodieLogFile logFile = new HoodieLogFile(logFilePath);
-      logFile.setFileLen(logFileLen);
+      logFile.setFileSize(logFileLen);
       slice.addLogFile(logFile);
       logVersion++;
     }

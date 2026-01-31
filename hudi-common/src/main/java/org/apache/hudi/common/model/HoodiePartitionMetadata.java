@@ -29,8 +29,7 @@ import org.apache.hudi.storage.HoodieInstantWriter;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -47,11 +46,11 @@ import static org.apache.hudi.common.table.HoodieTableMetaClient.COMMIT_TIME_KEY
 /**
  * The metadata that goes into the meta file in each partition.
  */
+@Slf4j
 public class HoodiePartitionMetadata {
 
   public static final String HOODIE_PARTITION_METAFILE_PREFIX = ".hoodie_partition_metadata";
   private static final String PARTITION_DEPTH_KEY = "partitionDepth";
-  private static final Logger LOG = LoggerFactory.getLogger(HoodiePartitionMetadata.class);
 
   /**
    * Contents of the metadata.
@@ -151,7 +150,7 @@ public class HoodiePartitionMetadata {
           storage.deleteFile(tmpPath);
         }
       } catch (IOException ioe) {
-        LOG.info("Error trying to clean up temporary files for {}", partitionPath, ioe);
+        log.info("Error trying to clean up temporary files for {}", partitionPath, ioe);
       }
     }
   }
@@ -181,7 +180,7 @@ public class HoodiePartitionMetadata {
       format = Option.empty();
       return true;
     } catch (Throwable t) {
-      LOG.debug("Unable to read partition meta properties file for partition {}", partitionPath);
+      log.debug("Unable to read partition meta properties file for partition {}", partitionPath);
       return false;
     }
   }
@@ -199,7 +198,7 @@ public class HoodiePartitionMetadata {
         format = Option.of(reader.getFormat());
         return true;
       } catch (Throwable t) {
-        LOG.debug("Unable to read partition metadata {} for partition {}", metafilePath.getName(), partitionPath);
+        log.debug("Unable to read partition metadata {} for partition {}", metafilePath.getName(), partitionPath);
       }
     }
     return false;
@@ -215,7 +214,7 @@ public class HoodiePartitionMetadata {
       }
       return Option.of(props.getProperty(COMMIT_TIME_KEY));
     } catch (IOException ioe) {
-      LOG.warn("Error fetch Hoodie partition metadata for {}", partitionPath, ioe);
+      log.warn("Error fetch Hoodie partition metadata for {}", partitionPath, ioe);
       return Option.empty();
     }
   }

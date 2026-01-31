@@ -30,6 +30,10 @@ import com.esotericsoftware.kryo.Kryo;
 import com.esotericsoftware.kryo.KryoSerializable;
 import com.esotericsoftware.kryo.io.Input;
 import com.esotericsoftware.kryo.io.Output;
+import lombok.AccessLevel;
+import lombok.AllArgsConstructor;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 
@@ -49,6 +53,7 @@ import java.util.stream.IntStream;
 /**
  * A Single Record managed by Hoodie.
  */
+@NoArgsConstructor
 public abstract class HoodieRecord<T> implements HoodieRecordCompatibilityInterface, KryoSerializable, Serializable {
 
   private static final long serialVersionUID = 3015229555587559252L;
@@ -63,6 +68,8 @@ public abstract class HoodieRecord<T> implements HoodieRecordCompatibilityInterf
   // always treated as the commit time ordering.
   public static final int DEFAULT_ORDERING_VALUE = 0;
 
+  @AllArgsConstructor(access = AccessLevel.PACKAGE)
+  @Getter
   public enum HoodieMetadataField {
     COMMIT_TIME_METADATA_FIELD("_hoodie_commit_time"),
     COMMIT_SEQNO_METADATA_FIELD("_hoodie_commit_seqno"),
@@ -72,14 +79,6 @@ public abstract class HoodieRecord<T> implements HoodieRecordCompatibilityInterf
     OPERATION_METADATA_FIELD("_hoodie_operation");
 
     private final String fieldName;
-
-    HoodieMetadataField(String fieldName) {
-      this.fieldName = fieldName;
-    }
-
-    public String getFieldName() {
-      return fieldName;
-    }
   }
 
   /**
@@ -124,6 +123,7 @@ public abstract class HoodieRecord<T> implements HoodieRecordCompatibilityInterf
   /**
    * Identifies the record across the table.
    */
+  @Getter
   protected HoodieKey key;
 
   /**
@@ -154,6 +154,7 @@ public abstract class HoodieRecord<T> implements HoodieRecordCompatibilityInterf
   /**
    * The cdc operation.
    */
+  @Getter
   protected HoodieOperation operation;
 
   /**
@@ -213,22 +214,11 @@ public abstract class HoodieRecord<T> implements HoodieRecordCompatibilityInterf
     this.ignoreIndexUpdate = record.ignoreIndexUpdate;
   }
 
-  public HoodieRecord() {
-  }
-
   public abstract HoodieRecord<T> newInstance();
 
   public abstract HoodieRecord<T> newInstance(HoodieKey key, HoodieOperation op);
 
   public abstract HoodieRecord<T> newInstance(HoodieKey key);
-
-  public HoodieKey getKey() {
-    return key;
-  }
-
-  public HoodieOperation getOperation() {
-    return operation;
-  }
 
   /**
    * Get ordering value for the record from the cached variable, or extracting from the record if not cached.
@@ -554,9 +544,8 @@ public abstract class HoodieRecord<T> implements HoodieRecordCompatibilityInterf
    * We can see the usage of IGNORE_RECORD in
    * org.apache.spark.sql.hudi.command.payload.ExpressionPayload
    */
+  @NoArgsConstructor(access = AccessLevel.PRIVATE)
   private static class EmptyRecord implements GenericRecord {
-    private EmptyRecord() {
-    }
 
     @Override
     public void put(int i, Object v) {

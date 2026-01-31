@@ -179,7 +179,7 @@ public class HFileBootstrapIndexReader extends BootstrapIndex.IndexReader {
             TimelineMetadataUtils.deserializeAvroMetadataLegacy(valBytes, HoodieBootstrapPartitionMetadata.class);
         return metadata.getFileIdToBootstrapFile().entrySet().stream()
             .map(e -> new BootstrapFileMapping(bootstrapBasePath, metadata.getBootstrapPartitionPath(),
-                partition, e.getValue(), e.getKey())).collect(Collectors.toList());
+                e.getValue(), partition, e.getKey())).collect(Collectors.toList());
       } else {
         LOG.warn("No value found for partition key ({})", partition);
         return new ArrayList<>();
@@ -213,7 +213,7 @@ public class HFileBootstrapIndexReader extends BootstrapIndex.IndexReader {
           HoodieBootstrapFilePartitionInfo fileInfo = TimelineMetadataUtils.deserializeAvroMetadataLegacy(valBytes,
               HoodieBootstrapFilePartitionInfo.class);
           BootstrapFileMapping mapping = new BootstrapFileMapping(bootstrapBasePath,
-              fileInfo.getBootstrapPartitionPath(), fileInfo.getPartitionPath(), fileInfo.getBootstrapFileStatus(),
+              fileInfo.getBootstrapPartitionPath(), fileInfo.getBootstrapFileStatus(), fileInfo.getPartitionPath(),
               fileGroupId.getFileId());
           result.put(fileGroupId, mapping);
         }
