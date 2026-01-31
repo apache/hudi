@@ -46,6 +46,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.util.StringUtils.EMPTY_STRING;
 
@@ -93,10 +94,26 @@ public class MarkerBasedRollbackStrategy<T, I, K, O> implements BaseRollbackPlan
             throw new HoodieRollbackException("Unknown marker type, during rollback of " + instantToRollback);
         }
       }, parallelism);
+
+      // Filter the requests to only include those which actually have a data file to rollback.
+      // Without this check, data files that were deleted during finalizeWrite() get included for rollback,
+      // which results in metadata table receiving deletes for non-existent files.
+      List<HoodieRollbackRequest> filteredRollbackRequests = rollbackRequestList.stream().filter(rollbackRequest -> {
+        try {
+          if (rollbackRequest.getFilesToBeDeleted().isEmpty()) {
+            return true;
+          }
+          return table.getMetaClient().getStorage().exists(new StoragePath(rollbackRequest.getFilesToBeDeleted().get(0)));
+        } catch (IOException e) {
+          throw new HoodieRollbackException(String.format("Could not validate the presence of data file %s for rollback of %s",
+              rollbackRequest.getFilesToBeDeleted().get(0), instantToRollback), e);
+        }
+      }).collect(Collectors.toList());
+
       // The rollback requests for append only exist in table version 6 and below which require groupBy
       return table.version().greaterThanOrEquals(HoodieTableVersion.EIGHT)
-          ? rollbackRequestList
-          : RollbackUtils.groupRollbackRequestsBasedOnFileGroup(rollbackRequestList);
+          ? filteredRollbackRequests
+          : RollbackUtils.groupRollbackRequestsBasedOnFileGroup(filteredRollbackRequests);
     } catch (Exception e) {
       throw new HoodieRollbackException("Error rolling back using marker files written for " + instantToRollback, e);
     }
