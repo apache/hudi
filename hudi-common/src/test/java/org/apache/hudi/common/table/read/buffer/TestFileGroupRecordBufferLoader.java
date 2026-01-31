@@ -90,12 +90,12 @@ public class TestFileGroupRecordBufferLoader extends BaseTestFileGroupRecordBuff
     }
     ReaderParameters readerParameters = mock(ReaderParameters.class);
     if (fileGroupRecordBufferType.contains("Sorted")) {
-      when(readerParameters.sortOutputs()).thenReturn(true);
+      when(readerParameters.isSortOutputs()).thenReturn(true);
     }
     if (fileGroupRecordBufferType.contains("Position")) {
       HoodieBaseFile baseFile = mock(HoodieBaseFile.class);
       when(inputSplit.getBaseFileOption()).thenReturn(Option.of(baseFile));
-      when(readerParameters.useRecordPosition()).thenReturn(true);
+      when(readerParameters.shouldUseRecordPosition()).thenReturn(true);
     }
 
     Option<BaseFileUpdateCallback> fileGroupUpdateCallback = Option.empty();

@@ -269,14 +269,16 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
               } else {
                 0
               }
-              val reader = HoodieFileGroupReader.newBuilder()
+              val reader = HoodieFileGroupReader.builder()
                 .withReaderContext(readerContext)
                 .withHoodieTableMetaClient(metaClient)
                 .withLatestCommitTime(queryTimestamp)
-                .withFileSlice(fileSlice)
+                .withBaseFileOption(fileSlice.getBaseFile)
+                .withLogFiles(fileSlice.getLogFiles)
+                .withPartitionPath(fileSlice.getPartitionPath)
                 .withDataSchema(dataSchema)
                 .withRequestedSchema(requestedSchema)
-                .withInternalSchema(internalSchemaOpt)
+                .withInternalSchemaOpt(internalSchemaOpt)
                 .withProps(props)
                 .withStart(file.start)
                 .withLength(baseFileLength)

@@ -143,9 +143,19 @@ public abstract class ClusteringExecutionStrategy<T, I, K, O> implements Seriali
                                                                    ReaderContextFactory<R> readerContextFactory, String instantTime,
                                                                    TypedProperties properties, boolean usePosition, boolean enableLogBlocksScan) {
     HoodieReaderContext<R> readerContext = readerContextFactory.getContext();
-    return HoodieFileGroupReader.<R>newBuilder()
-        .withReaderContext(readerContext).withHoodieTableMetaClient(metaClient).withLatestCommitTime(instantTime)
-        .withFileSlice(fileSlice).withDataSchema(readerSchema).withRequestedSchema(readerSchema).withInternalSchema(internalSchemaOption)
-        .withShouldUseRecordPosition(usePosition).withEnableOptimizedLogBlockScan(enableLogBlocksScan).withProps(properties).build();
+    return HoodieFileGroupReader.<R>builder()
+        .withReaderContext(readerContext)
+        .withHoodieTableMetaClient(metaClient)
+        .withLatestCommitTime(instantTime)
+        .withBaseFileOption(fileSlice.getBaseFile())
+        .withLogFiles(fileSlice.getLogFiles())
+        .withPartitionPath(fileSlice.getPartitionPath())
+        .withDataSchema(readerSchema)
+        .withRequestedSchema(readerSchema)
+        .withInternalSchemaOpt(internalSchemaOption)
+        .withShouldUseRecordPosition(usePosition)
+        .withEnableOptimizedLogBlockScan(enableLogBlocksScan)
+        .withProps(properties)
+        .build();
   }
 }
