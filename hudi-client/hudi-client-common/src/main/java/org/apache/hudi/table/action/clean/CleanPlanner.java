@@ -32,8 +32,10 @@ import org.apache.hudi.common.model.HoodieFileGroup;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
+import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.timeline.InstantComparison;
 import org.apache.hudi.common.table.timeline.versioning.clean.CleanPlanV1MigrationHandler;
 import org.apache.hudi.common.table.timeline.versioning.clean.CleanPlanV2MigrationHandler;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
@@ -154,10 +156,42 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
       case KEEP_LATEST_BY_HOURS:
         return getPartitionPathsForCleanByCommits(earliestRetainedInstant);
       case KEEP_LATEST_FILE_VERSIONS:
+        if (canCleanBeSkipped()) {
+          return Collections.emptyList();
+        }
         return getPartitionPathsForFullCleaning();
       default:
         throw new IllegalStateException("Unknown Cleaner Policy");
     }
+  }
+
+  /**
+   * Returns true if the clean operation can be skipped entirely
+   * Basically it checks if last_compaction_timestamp < last_clean_timestamp and modified time of last completed compaction
+   * is less than modified time of last clean's requested instant
+   * In such cases, clean call can be skipped.
+   */
+  private boolean canCleanBeSkipped() {
+    if (!HoodieTableType.MERGE_ON_READ.equals(hoodieTable.getMetaClient().getTableType())) {
+      return false;
+    }
+    HoodieTimeline activeTimeline = hoodieTable.getActiveTimeline();
+    Option<HoodieInstant> lastCleanInstant = activeTimeline.getCleanerTimeline().lastInstant();
+    Option<HoodieInstant> lastCompactionInstant = getCommitTimeline()
+        .filter(instant -> instant.getAction().equals(HoodieTimeline.COMMIT_ACTION)).lastInstant();
+    if (!lastCompactionInstant.isPresent() || !lastCleanInstant.isPresent()) {
+      return false;
+    }
+
+    // Check whether there are any other commits apart from deltacommits between last compaction and last clean.
+    int nonDeltaCommitsBetweenCompactionAndClean = activeTimeline
+        .findInstantsAfter(lastCompactionInstant.get().requestedTime())
+        .findInstantsBefore(lastCleanInstant.get().requestedTime())
+        .filter(instant -> !instant.getAction().equals(HoodieTimeline.DELTA_COMMIT_ACTION))
+        .countInstants();
+    return InstantComparison.compareTimestamps(lastCompactionInstant.get().getCompletionTime(),
+        InstantComparison.LESSER_THAN, lastCleanInstant.get().requestedTime())
+        && nonDeltaCommitsBetweenCompactionAndClean == 0;
   }
 
   /**
