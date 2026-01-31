@@ -525,7 +525,7 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
         .filter(s -> s > 0)
         .reduce(0L, Long::sum);
 
-    return fileSlice.getBaseFile().map(BaseFile::getFileLen).orElse(0L) + logFileSize;
+    return fileSlice.getBaseFile().map(BaseFile::getFileSize).orElse(0L) + logFileSize;
   }
 
   private void resetTableMetadata(HoodieTableMetadata newTableMetadata) {
