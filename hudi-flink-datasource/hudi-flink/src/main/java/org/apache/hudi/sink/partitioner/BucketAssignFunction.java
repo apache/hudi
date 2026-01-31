@@ -101,6 +101,8 @@ public class BucketAssignFunction
   @Setter
   protected transient Correspondent correspondent;
 
+  private long checkpointId = -1;
+
   /**
    * If the index is global, update the index for the old partition path
    * if same key record with different partition path came in.
@@ -142,6 +144,8 @@ public class BucketAssignFunction
   @Override
   public void snapshotState(FunctionSnapshotContext context) throws Exception {
     this.bucketAssigner.reset();
+    // Update checkpoint id
+    this.checkpointId = context.getCheckpointId();
     this.indexBackend.onCheckpoint(context.getCheckpointId());
   }
 
@@ -231,7 +235,7 @@ public class BucketAssignFunction
   public void notifyCheckpointComplete(long checkpointId) {
     // Refresh the table state when there are new commits.
     this.bucketAssigner.reload(checkpointId);
-    this.indexBackend.onCheckpointComplete(this.correspondent);
+    this.indexBackend.onCheckpointComplete(this.correspondent, this.checkpointId);
   }
 
   @Override

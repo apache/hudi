@@ -106,9 +106,9 @@ public class RecordLevelIndexBackend implements MinibatchIndexBackend {
   }
 
   @Override
-  public void onCheckpointComplete(Correspondent correspondent) {
+  public void onCheckpointComplete(Correspondent correspondent, long currentCheckpointId) {
     Map<Long, String> inflightInstants = correspondent.requestInflightInstants();
-    recordIndexCache.clean(inflightInstants.keySet().stream().min(Long::compareTo).orElse(Long.MAX_VALUE));
+    recordIndexCache.markCleanable(inflightInstants.keySet().stream().min(Long::compareTo).orElse(currentCheckpointId));
     this.metaClient.reloadActiveTimeline();
     reloadMetadataTable();
   }

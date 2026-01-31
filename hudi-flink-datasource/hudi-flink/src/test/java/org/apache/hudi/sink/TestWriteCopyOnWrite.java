@@ -924,8 +924,8 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
         .assertInflightCachesOfBucketAssigner(2)
         .assertNextEvent(4, "par1,par2,par3,par4")
         .checkpointComplete(1)
-        // clean the first inflight cache, left the latest inflight cache.
-        .assertInflightCachesOfBucketAssigner(1)
+        // the first inflight cache will not be cleaned, since the current total memory size does not exceed the limit.
+        .assertInflightCachesOfBucketAssigner(2)
         .checkWrittenData(EXPECTED1);
   }
 
