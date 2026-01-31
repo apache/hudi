@@ -135,8 +135,6 @@ object TestInsertDedupPolicy {
   def validate(expectedDf: Dataset[Row], actualDf: Dataset[Row]): Unit = {
     val expectedMinusActual = expectedDf.except(actualDf)
     val actualMinusExpected = actualDf.except(expectedDf)
-    expectedDf.show(false)
-    actualDf.show(false)
     assertTrue(expectedMinusActual.isEmpty && actualMinusExpected.isEmpty)
   }
 }
