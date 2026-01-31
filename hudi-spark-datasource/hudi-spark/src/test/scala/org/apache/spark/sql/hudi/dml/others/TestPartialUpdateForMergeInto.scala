@@ -24,7 +24,7 @@ import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.hudi.common.config.{HoodieReaderConfig, HoodieStorageConfig, RecordMergeMode}
 import org.apache.hudi.common.model.{FileSlice, HoodieLogFile}
 import org.apache.hudi.common.schema.{HoodieSchema, HoodieSchemaUtils}
-import org.apache.hudi.common.table.{HoodieTableMetaClient, HoodieTableVersion, TableSchemaResolver}
+import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, HoodieTableVersion, PartialUpdateMode, TableSchemaResolver}
 import org.apache.hudi.common.table.log.HoodieLogFileReader
 import org.apache.hudi.common.table.log.block.HoodieLogBlock.HeaderMetadataType
 import org.apache.hudi.common.table.timeline.HoodieTimeline
@@ -290,7 +290,8 @@ class TestPartialUpdateForMergeInto extends HoodieSparkSqlTestBase {
 
   def testPartialUpdate(tableType: String,
                         logDataBlockFormat: String,
-                        commitTimeOrdering: Boolean): Unit = {
+                        commitTimeOrdering: Boolean,
+                        partialUpdateMode: Option[PartialUpdateMode] = None): Unit = {
     withTempDir { tmp =>
       val tableName = generateTableName
       val basePath = tmp.getCanonicalPath + "/" + tableName
@@ -310,6 +311,9 @@ class TestPartialUpdateForMergeInto extends HoodieSparkSqlTestBase {
         } else {
           "preCombineField = '_ts',"
         }
+
+        val partialUpdateModeProperty = partialUpdateMode.map(mode => s"${HoodieTableConfig.PARTIAL_UPDATE_MODE.key()} = '${mode.name()}'").getOrElse("")
+
         // Create a table with five data fields
         spark.sql(
           s"""
@@ -324,7 +328,8 @@ class TestPartialUpdateForMergeInto extends HoodieSparkSqlTestBase {
              | type ='$tableType',
              | primaryKey = 'id',
              | $preCombineString
-             | recordMergeMode = '$mergeMode'
+             | recordMergeMode = '$mergeMode'${if (partialUpdateModeProperty.nonEmpty) "," else ""}
+             |${if (partialUpdateModeProperty.nonEmpty) s"\n             | $partialUpdateModeProperty" else ""}
              |)
              |location '$basePath'
         """.stripMargin)
@@ -498,7 +503,8 @@ class TestPartialUpdateForMergeInto extends HoodieSparkSqlTestBase {
 
   def testPartialUpdateWithInserts(tableType: String,
                                    logDataBlockFormat: String,
-                                   commitTimeOrdering: Boolean): Unit = {
+                                   commitTimeOrdering: Boolean,
+                                   partialUpdateMode: Option[PartialUpdateMode] = None): Unit = {
     withTempDir { tmp =>
       val tableName = generateTableName
       val basePath = tmp.getCanonicalPath + "/" + tableName
@@ -519,6 +525,8 @@ class TestPartialUpdateForMergeInto extends HoodieSparkSqlTestBase {
           "preCombineField = '_ts',"
         }
 
+        val partialUpdateModeProperty = partialUpdateMode.map(mode => s"${HoodieTableConfig.PARTIAL_UPDATE_MODE.key()} = '${mode.name()}'").getOrElse("")
+
         // Create a table with five data fields
         spark.sql(
           s"""
@@ -533,7 +541,8 @@ class TestPartialUpdateForMergeInto extends HoodieSparkSqlTestBase {
              | type ='$tableType',
              | primaryKey = 'id',
              | $preCombineString
-             | recordMergeMode = '$mergeMode'
+             | recordMergeMode = '$mergeMode'${if (partialUpdateModeProperty.nonEmpty) "," else ""}
+             |${if (partialUpdateModeProperty.nonEmpty) s"\n             | $partialUpdateModeProperty" else ""}
              |)
              |location '$basePath'
         """.stripMargin)
@@ -678,6 +687,59 @@ class TestPartialUpdateForMergeInto extends HoodieSparkSqlTestBase {
              |   INSERT *""".stripMargin)
       }
     )
+  }
+
+  test("Test MERGE INTO with KEEP_VALUES partial update mode on MOR table with Avro log format") {
+    testKeepValuesPartialUpdate("mor", "avro")
+  }
+
+  test("Test MERGE INTO with KEEP_VALUES partial update mode on MOR table with Parquet log format") {
+    testKeepValuesPartialUpdate("mor", "parquet")
+  }
+
+  test("Test MERGE INTO with KEEP_VALUES partial update mode on MOR table with commit time ordering") {
+    testKeepValuesPartialUpdate("mor", "parquet", commitTimeOrdering = true)
+  }
+
+  test("Test MERGE INTO with KEEP_VALUES partial update mode on COW table") {
+    testKeepValuesPartialUpdate("cow", "avro")
+  }
+
+  test("Test MERGE INTO with KEEP_VALUES partial update mode on COW table with commit time ordering") {
+    testKeepValuesPartialUpdate("cow", "avro", commitTimeOrdering = true)
+  }
+
+  test("Test MERGE INTO with KEEP_VALUES partial update and inserts") {
+    testKeepValuesPartialUpdateWithInserts("mor", "parquet")
+  }
+
+  test("Test MERGE INTO with KEEP_VALUES partial update should fail with schema evolution enabled") {
+    withSQLConf(DataSourceReadOptions.SCHEMA_EVOLUTION_ENABLED.key() -> "true") {
+      try {
+        testKeepValuesPartialUpdate("mor", "parquet")
+        fail("Expected exception to be thrown")
+      } catch {
+        case t: Throwable => assertTrue(t.isInstanceOf[HoodieNotSupportedException])
+      }
+    }
+  }
+
+  def testKeepValuesPartialUpdate(tableType: String,
+                                  logDataBlockFormat: String): Unit = {
+    testKeepValuesPartialUpdate(tableType, logDataBlockFormat, commitTimeOrdering = false)
+  }
+
+  def testKeepValuesPartialUpdate(tableType: String,
+                                  logDataBlockFormat: String,
+                                  commitTimeOrdering: Boolean): Unit = {
+    // Reuse testPartialUpdate with KEEP_VALUES mode
+    testPartialUpdate(tableType, logDataBlockFormat, commitTimeOrdering, Some(PartialUpdateMode.KEEP_VALUES))
+  }
+
+  def testKeepValuesPartialUpdateWithInserts(tableType: String,
+                                             logDataBlockFormat: String): Unit = {
+    // Reuse testPartialUpdateWithInserts with KEEP_VALUES mode
+    testPartialUpdateWithInserts(tableType, logDataBlockFormat, commitTimeOrdering = false, Some(PartialUpdateMode.KEEP_VALUES))
   }
 
   test("Test MergeInto Partial Updates should fail with CUSTOM payload and merge mode") {

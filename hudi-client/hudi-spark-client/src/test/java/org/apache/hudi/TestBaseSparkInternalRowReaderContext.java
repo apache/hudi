@@ -141,6 +141,95 @@ class TestBaseSparkInternalRowReaderContext {
     assertTrue(result.getBoolean(2));
   }
 
+  @Test
+  void testConstructEngineRecordWithListOfValues() {
+    Object[] values = new Object[]{1, UTF8String.fromString("Alice"), true};
+    InternalRow result = readerContext.getRecordContext().constructEngineRecord(SCHEMA, values);
+
+    assertEquals(1, result.getInt(0));
+    assertEquals("Alice", result.getString(1));
+    assertTrue(result.getBoolean(2));
+  }
+
+  @Test
+  void testConstructEngineRecordWithNullValues() {
+    Object[] values = new Object[]{null, UTF8String.fromString("Bob"), null};
+    InternalRow result = readerContext.getRecordContext().constructEngineRecord(SCHEMA, values);
+
+    assertTrue(result.isNullAt(0));
+    assertEquals("Bob", result.getString(1));
+    assertTrue(result.isNullAt(2));
+  }
+
+  @Test
+  void testConstructEngineRecordWithMixedTypes() {
+    Object[] values = new Object[]{42, UTF8String.fromString("Carol"), false};
+    InternalRow result = readerContext.getRecordContext().constructEngineRecord(SCHEMA, values);
+
+    assertEquals(42, result.getInt(0));
+    assertEquals("Carol", result.getString(1));
+    assertFalse(result.getBoolean(2));
+  }
+
+  @Test
+  void testConstructEngineRecordWithEmptyValues() {
+    Object[] values = new Object[]{0, UTF8String.fromString(""), false};
+    InternalRow result = readerContext.getRecordContext().constructEngineRecord(SCHEMA, values);
+
+    assertEquals(0, result.getInt(0));
+    assertEquals("", result.getString(1));
+    assertFalse(result.getBoolean(2));
+  }
+
+  @Test
+  void testConstructEngineRecordWithComplexSchema() {
+    // Create a more complex schema with nested fields
+    HoodieSchema complexSchema = HoodieSchema.createRecord("ComplexRecord", null, null,
+        Arrays.asList(
+            HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.INT)),
+            HoodieSchemaField.of("name", HoodieSchema.create(HoodieSchemaType.STRING)),
+            HoodieSchemaField.of("active", HoodieSchema.create(HoodieSchemaType.BOOLEAN)),
+            HoodieSchemaField.of("timestamp", HoodieSchema.create(HoodieSchemaType.LONG)),
+            HoodieSchemaField.of("score", HoodieSchema.create(HoodieSchemaType.DOUBLE))
+        ));
+
+    Object[] values = new Object[]{
+        123,
+        UTF8String.fromString("ComplexName"),
+        true,
+        1234567890L,
+        95.5
+    };
+
+    InternalRow result = readerContext.getRecordContext().constructEngineRecord(complexSchema, values);
+
+    assertEquals(123, result.getInt(0));
+    assertEquals("ComplexName", result.getString(1));
+    assertTrue(result.getBoolean(2));
+    assertEquals(1234567890L, result.getLong(3));
+    assertEquals(95.5, result.getDouble(4), 0.001);
+  }
+
+  @Test
+  void testConstructEngineRecordWithAllNullValues() {
+    Object[] values = new Object[]{null, null, null};
+    InternalRow result = readerContext.getRecordContext().constructEngineRecord(SCHEMA, values);
+
+    assertTrue(result.isNullAt(0));
+    assertTrue(result.isNullAt(1));
+    assertTrue(result.isNullAt(2));
+  }
+
+  @Test
+  void testConstructEngineRecordWithZeroValues() {
+    Object[] values = new Object[]{0, UTF8String.fromString("Zero"), false};
+    InternalRow result = readerContext.getRecordContext().constructEngineRecord(SCHEMA, values);
+
+    assertEquals(0, result.getInt(0));
+    assertEquals("Zero", result.getString(1));
+    assertFalse(result.getBoolean(2));
+  }
+
   static class DummySparkReaderContext extends BaseSparkInternalRowReaderContext {
     public DummySparkReaderContext(StorageConfiguration<?> config,
                                    HoodieTableConfig tableConfig) {

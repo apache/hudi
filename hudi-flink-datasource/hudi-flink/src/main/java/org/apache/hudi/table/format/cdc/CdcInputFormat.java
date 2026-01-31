@@ -377,7 +377,6 @@ public class CdcInputFormat extends MergeOnReadInputFormat {
       this.recordMerger = BufferedRecordMergerFactory.create(
           readerContext,
           readerContext.getMergeMode(),
-          false,
           Option.of(imageManager.writeConfig.getRecordMerger()),
           tableSchema,
           Option.ofNullable(Pair.of(metaClient.getTableConfig().getPayloadClass(), writeConfig.getPayloadClass())),
