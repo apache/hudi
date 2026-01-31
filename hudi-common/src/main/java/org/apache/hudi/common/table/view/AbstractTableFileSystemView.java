@@ -422,11 +422,13 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
           LOG.debug("Time taken to list partitions {} ={}", partitionSet, (endLsTs - beginLsTs));
           pathInfoMap.forEach((partitionPair, statuses) -> {
             String relativePartitionStr = partitionPair.getLeft();
-            List<HoodieFileGroup> groups = addFilesToView(relativePartitionStr, statuses);
+            // Filter out stray files that are not valid HUDI data or log files
+            List<StoragePathInfo> validDataFiles = filterValidDataFiles(statuses);
+            List<HoodieFileGroup> groups = addFilesToView(relativePartitionStr, validDataFiles);
             if (groups.isEmpty()) {
               storePartitionView(relativePartitionStr, Collections.emptyList());
             }
-            LOG.debug("#files found in partition ({}) ={}", relativePartitionStr, statuses.size());
+            LOG.debug("#files found in partition ({}) ={}", relativePartitionStr, validDataFiles.size());
           });
         } catch (IOException e) {
           throw new HoodieIOException("Failed to list base files in partitions " + partitionSet, e);
@@ -443,6 +445,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
 
   /**
    * Returns all files situated at the given partition.
+   * Filters out any stray files that are not valid HUDI data or log files.
    */
   private List<StoragePathInfo> getAllFilesInPartition(String relativePartitionPath)
       throws IOException {
@@ -453,7 +456,22 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
     long endLsTs = System.currentTimeMillis();
     LOG.debug(
         "#files found in partition ({}}) = {}, Time taken ={}", relativePartitionPath, pathInfoList.size(), (endLsTs - beginLsTs));
-    return pathInfoList;
+    return filterValidDataFiles(pathInfoList);
+  }
+
+  /**
+   * Filters the given list of storage path info to include only valid HUDI data files
+   * (base files and log files). This prevents stray files from being loaded and used
+   * in the rest of the code which may cause validation exceptions as HUDI requires
+   * the file names to have specific formats.
+   *
+   * @param pathInfoList List of StoragePathInfo to filter
+   * @return Filtered list containing only valid HUDI data files
+   */
+  private List<StoragePathInfo> filterValidDataFiles(List<StoragePathInfo> pathInfoList) {
+    return pathInfoList.stream()
+        .filter(pathInfo -> FSUtils.isDataFile(pathInfo.getPath()))
+        .collect(Collectors.toList());
   }
 
   /**
