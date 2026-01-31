@@ -21,28 +21,18 @@ package org.apache.hudi.utilities.streamer;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 
+import lombok.AllArgsConstructor;
+import lombok.Getter;
+
 /**
  * The default implementation for the StreamContext interface,
  * composes SchemaProvider and SourceProfileSupplier currently,
  * can be extended for other arguments in the future.
  */
+@AllArgsConstructor
+@Getter
 public class DefaultStreamContext implements StreamContext {
 
   private final SchemaProvider schemaProvider;
   private final Option<SourceProfileSupplier> sourceProfileSupplier;
-
-  public DefaultStreamContext(SchemaProvider schemaProvider, Option<SourceProfileSupplier> sourceProfileSupplier) {
-    this.schemaProvider = schemaProvider;
-    this.sourceProfileSupplier = sourceProfileSupplier;
-  }
-
-  @Override
-  public SchemaProvider getSchemaProvider() {
-    return schemaProvider;
-  }
-
-  @Override
-  public Option<SourceProfileSupplier> getSourceProfileSupplier() {
-    return sourceProfileSupplier;
-  }
 }
