@@ -341,6 +341,9 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
 
     HoodieTable table = tableOpt.orElseGet(() -> createTable(config, context.getStorageConf()));
     completeCompaction(compactionWriteMetadata.getCommitMetadata().get(), table, compactionInstantTime, tableWriteStats.getMetadataTableWriteStats());
+    if (config.getWriteConcurrencyMode().supportsMultiWriter()) {
+      this.heartbeatClient.stop(compactionInstantTime);
+    }
   }
 
   /**
