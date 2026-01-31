@@ -23,6 +23,7 @@ import org.apache.hudi.SparkAdapterSupport.sparkAdapter
 import org.apache.hudi.common.model.HoodieFileFormat
 import org.apache.spark.sql.HoodieSchemaUtils
 import org.apache.spark.sql.catalyst.expressions.UnsafeProjection
+import org.apache.spark.sql.execution.datasources.SparkSchemaTransformUtils
 import org.apache.spark.sql.types.{ArrayType, DataType, MapType, StructField, StructType}
 
 
@@ -39,8 +40,8 @@ class SparkBasicSchemaEvolution(fileSchema: StructType,
                                 requiredSchema: StructType,
                                 sessionLocalTimeZone: String,
                                 fileFormat: HoodieFileFormat = HoodieFileFormat.PARQUET) {
-
-  val (implicitTypeChangeInfo, sparkRequestSchema) = HoodieParquetFileFormatHelper.buildImplicitSchemaChangeInfo(fileSchema, requiredSchema)
+  
+  val (implicitTypeChangeInfo, sparkRequestSchema) = SparkSchemaTransformUtils.buildImplicitSchemaChangeInfo(fileSchema, requiredSchema)
 
   /**
    * Recursively filters requested schema to only include fields that exist in file schema.
@@ -121,16 +122,13 @@ class SparkBasicSchemaEvolution(fileSchema: StructType,
           schemaUtils
         )
       case HoodieFileFormat.LANCE =>
-        // requires null padding for missing columns
+        // Lance requires NULL padding for missing columns
         val requestSchema = getRequestSchema
-        HoodieParquetFileFormatHelper.generateUnsafeProjection(
+        SparkSchemaTransformUtils.generateProjectionWithPadding(
           schemaUtils.toAttributes(requestSchema),
-          Some(sessionLocalTimeZone),
-          implicitTypeChangeInfo,
           requiredSchema,
-          new StructType(),
-          schemaUtils,
-          padMissingColumns = true
+          implicitTypeChangeInfo,
+          Some(sessionLocalTimeZone)
         )
       case _ =>
         throw new UnsupportedOperationException(s"Unsupported file format: $fileFormat")
