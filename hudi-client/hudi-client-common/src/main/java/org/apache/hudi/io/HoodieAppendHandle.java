@@ -43,6 +43,7 @@ import org.apache.hudi.common.table.log.HoodieLogFormat.Writer;
 import org.apache.hudi.common.table.log.block.HoodieAvroDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieDeleteBlock;
 import org.apache.hudi.common.table.log.block.HoodieHFileDataBlock;
+import org.apache.hudi.common.table.log.block.HoodieLanceDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock.HeaderMetadataType;
 import org.apache.hudi.common.table.log.block.HoodieParquetDataBlock;
@@ -736,6 +737,12 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
             writeConfig.getParquetCompressionCodec(),
             writeConfig.getParquetCompressionRatio(),
             writeConfig.parquetDictionaryEnabled());
+      case LANCE_DATA_BLOCK:
+        return new HoodieLanceDataBlock(
+            records,
+            header,
+            Collections.emptyMap(),
+            keyField);
       default:
         throw new HoodieException("Data block format " + logDataBlockFormat + " not implemented");
     }

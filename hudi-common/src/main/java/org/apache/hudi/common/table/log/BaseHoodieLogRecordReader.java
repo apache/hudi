@@ -250,6 +250,7 @@ public abstract class BaseHoodieLogRecordReader<T> {
           case HFILE_DATA_BLOCK:
           case AVRO_DATA_BLOCK:
           case PARQUET_DATA_BLOCK:
+          case LANCE_DATA_BLOCK:
             LOG.debug("Reading a data block from file {} at instant {}", logFile.getPath(), instantTime);
             // store the current block
             currentInstantLogBlocks.push(logBlock);
@@ -610,6 +611,7 @@ public abstract class BaseHoodieLogRecordReader<T> {
         case AVRO_DATA_BLOCK:
         case HFILE_DATA_BLOCK:
         case PARQUET_DATA_BLOCK:
+        case LANCE_DATA_BLOCK:
           recordBuffer.processDataBlock((HoodieDataBlock) lastBlock, keySpecOpt);
           break;
         case DELETE_BLOCK:

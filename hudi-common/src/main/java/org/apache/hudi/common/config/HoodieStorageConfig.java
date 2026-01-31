@@ -99,7 +99,7 @@ public class HoodieStorageConfig extends HoodieConfig {
       .key("hoodie.logfile.data.block.format")
       .noDefaultValue()
       .markAdvanced()
-      .withDocumentation("Format of the data block within delta logs. Following formats are currently supported \"avro\", \"hfile\", \"parquet\"");
+      .withDocumentation("Format of the data block within delta logs. Following formats are currently supported \"avro\", \"hfile\", \"parquet\", \"lance\"");
 
   public static final ConfigProperty<String> LOGFILE_MAX_SIZE = ConfigProperty
       .key("hoodie.logfile.max.size")
