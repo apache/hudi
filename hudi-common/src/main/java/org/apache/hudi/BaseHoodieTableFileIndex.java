@@ -300,8 +300,12 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
                                                    Expression partitionColumnPredicates) {
     List<String> matchedPartitionPaths;
     try {
-      matchedPartitionPaths = tableMetadata.getPartitionPathWithPathPrefixUsingFilterExpression(relativePartitionPaths,
-          partitionFields, partitionColumnPredicates);
+      // First try listing from the catalog. If not enabled, we will list from the tableMetadata
+      matchedPartitionPaths = getMatchingPartitionPathsFromCatalog(relativePartitionPaths);
+      if (matchedPartitionPaths == null) {
+        matchedPartitionPaths = tableMetadata.getPartitionPathWithPathPrefixUsingFilterExpression(relativePartitionPaths,
+            partitionFields, partitionColumnPredicates);
+      }
     } catch (IOException e) {
       throw new HoodieIOException("Error fetching partition paths", e);
     }
@@ -320,7 +324,11 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
           HoodieTimeline timelineToQuery = findInstantsInRange();
           matchedPartitionPaths = TimelineUtils.getWrittenPartitions(timelineToQuery);
         } else {
-          matchedPartitionPaths = tableMetadata.getPartitionPathWithPathPrefixes(relativePartitionPaths);
+          // First try listing from the catalog. If not enabled, we will list from the tableMetadata
+          matchedPartitionPaths = getMatchingPartitionPathsFromCatalog(relativePartitionPaths);
+          if (matchedPartitionPaths == null) {
+            matchedPartitionPaths = tableMetadata.getPartitionPathWithPathPrefixes(relativePartitionPaths);
+          }
         }
       } else {
         matchedPartitionPaths = Collections.singletonList(StringUtils.EMPTY_STRING);
@@ -351,6 +359,27 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
       return metaClient.getActiveTimeline().getWriteTimeline()
           .findInstantsInRange(incrementalQueryStartTime.get(), incrementalQueryEndTime.orElse(String.valueOf(Long.MAX_VALUE)));
     }
+  }
+
+  /**
+   * List partition paths matching path prefixes from the Catalog.
+   *
+   * File Index implementations can override this method to fetch partition paths from the Catalog. This may be faster
+   * than listing all partition paths from the table metadata and filtering them. This is definitely faster than
+   * listing all partition paths from the file system when metadata table may not be enabled.
+   *
+   * Fetches all partition paths that are the sub-directories of the list of provided (relative) paths.
+   * <p>
+   * E.g., Table has partition 4 partitions:
+   * year=2022/month=08/day=30, year=2022/month=08/day=31, year=2022/month=07/day=03, year=2022/month=07/day=04
+   * The relative path "year=2022" returns all partitions, while the relative path
+   * "year=2022/month=07" returns only two partitions.
+   *
+   * @param relativePathPrefixes The prefixes to relative partition paths that must match
+   * @return null if not supported by File Index implementation
+   */
+  protected List<String> getMatchingPartitionPathsFromCatalog(List<String> relativePathPrefixes) {
+    return null;
   }
 
   protected void refresh() {
