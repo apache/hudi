@@ -454,7 +454,6 @@ public final class HoodieSchemaUtils {
   /**
    * Checks if two schemas are projection equivalent (i.e., they have the same fields and types
    * for projection purposes, ignoring certain metadata differences).
-   * This is equivalent to {@link AvroSchemaUtils#areSchemasProjectionEquivalent(Schema, Schema)} but operates on HoodieSchema.
    *
    * @param schema1 the first schema
    * @param schema2 the second schema
@@ -464,7 +463,7 @@ public final class HoodieSchemaUtils {
    */
   public static boolean areSchemasProjectionEquivalent(HoodieSchema schema1, HoodieSchema schema2) {
     // Delegate to AvroSchemaUtils
-    return AvroSchemaUtils.areSchemasProjectionEquivalent(schema1 == null ? null : schema1.toAvroSchema(), schema2 == null ? null : schema2.toAvroSchema());
+    return HoodieSchemaCompatibility.areSchemasProjectionEquivalent(schema1, schema2);
   }
 
   /**
@@ -845,5 +844,9 @@ public final class HoodieSchemaUtils {
       name = INVALID_AVRO_FIRST_CHAR_IN_NAMES_PATTERN.matcher(name).replaceFirst(invalidCharMask);
     }
     return INVALID_AVRO_CHARS_IN_NAMES_PATTERN.matcher(name).replaceAll(invalidCharMask);
+  }
+
+  public static String createSchemaErrorString(String errorMessage, HoodieSchema writerSchema, HoodieSchema tableSchema) {
+    return String.format("%s\nwriterSchema: %s\ntableSchema: %s", errorMessage, writerSchema, tableSchema);
   }
 }

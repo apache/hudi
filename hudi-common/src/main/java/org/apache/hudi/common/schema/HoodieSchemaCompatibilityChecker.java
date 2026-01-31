@@ -16,25 +16,21 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.avro;
+package org.apache.hudi.common.schema;
 
-import org.apache.hudi.common.util.Either;
-import org.apache.hudi.common.util.Option;
+import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.internal.schema.HoodieSchemaException;
 
 import lombok.AccessLevel;
+import lombok.AllArgsConstructor;
 import lombok.NoArgsConstructor;
+import lombok.RequiredArgsConstructor;
+import lombok.ToString;
+import lombok.Value;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.avro.AvroRuntimeException;
-import org.apache.avro.LogicalTypes;
-import org.apache.avro.Schema;
-import org.apache.avro.Schema.Field;
-import org.apache.avro.Schema.Type;
 
-import java.lang.reflect.InvocationTargetException;
-import java.lang.reflect.Method;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.Deque;
 import java.util.HashMap;
@@ -46,7 +42,6 @@ import java.util.Set;
 import java.util.TreeSet;
 import java.util.stream.Collectors;
 
-import static org.apache.hudi.avro.HoodieAvroUtils.isTypeNumeric;
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
 
 /**
@@ -63,9 +58,9 @@ import static org.apache.hudi.common.util.ValidationUtils.checkState;
  *   a union</li>
  * </ol>
  */
-@NoArgsConstructor(access = AccessLevel.PRIVATE)
+@NoArgsConstructor(access = AccessLevel.PACKAGE)
 @Slf4j
-public class AvroSchemaCompatibility {
+public class HoodieSchemaCompatibilityChecker {
 
   /**
    * Message to annotate reader/writer schema pairs that are compatible.
@@ -80,14 +75,14 @@ public class AvroSchemaCompatibility {
    * @param writer schema to check.
    * @return a result object identifying any compatibility errors.
    */
-  public static SchemaPairCompatibility checkReaderWriterCompatibility(final Schema reader,
-                                                                       final Schema writer,
+  public static SchemaPairCompatibility checkReaderWriterCompatibility(final HoodieSchema reader,
+                                                                       final HoodieSchema writer,
                                                                        boolean checkNamingOverride) {
     final SchemaCompatibilityResult compatibility =
         new ReaderWriterCompatibilityChecker(checkNamingOverride).getCompatibility(reader, writer);
 
     final String message;
-    switch (compatibility.getCompatibility()) {
+    switch (compatibility.getCompatibilityType()) {
       case INCOMPATIBLE: {
         message = String.format(
             "Data encoded using writer schema:%n%s%n" + "will or may fail to decode using reader schema:%n%s%n",
@@ -99,32 +94,13 @@ public class AvroSchemaCompatibility {
         break;
       }
       default:
-        throw new AvroRuntimeException("Unknown compatibility: " + compatibility);
+        throw new HoodieException("Unknown compatibility: " + compatibility);
     }
 
     return new SchemaPairCompatibility(compatibility, reader, writer, message);
   }
 
   // -----------------------------------------------------------------------------------------------
-
-  /**
-   * Tests the equality of two Avro named schemas.
-   *
-   * <p>
-   * Matching includes reader name aliases.
-   * </p>
-   *
-   * @param reader Named reader schema.
-   * @param writer Named writer schema.
-   * @return whether the names of the named schemas match or not.
-   */
-  public static boolean schemaNameEquals(final Schema reader, final Schema writer) {
-    if (objectsEqual(reader.getName(), writer.getName())) {
-      return true;
-    }
-    // Apply reader aliases:
-    return reader.getAliases().contains(writer.getFullName());
-  }
 
   /**
    * Identifies the writer field that corresponds to the specified reader field.
@@ -138,18 +114,12 @@ public class AvroSchemaCompatibility {
    *                     of.
    * @return the writer field, if any does correspond, or None.
    */
-  public static Field lookupWriterField(final Schema writerSchema, final Field readerField) {
-    assert (writerSchema.getType() == Type.RECORD);
-    final List<Field> writerFields = new ArrayList<>();
-    final Field direct = writerSchema.getField(readerField.name());
-    if (direct != null) {
-      writerFields.add(direct);
-    }
+  public static HoodieSchemaField lookupWriterField(final HoodieSchema writerSchema, final HoodieSchemaField readerField) {
+    assert (writerSchema.getType() == HoodieSchemaType.RECORD);
+    final List<HoodieSchemaField> writerFields = new ArrayList<>();
+    writerSchema.getField(readerField.name()).ifPresent(writerFields::add);
     for (final String readerFieldAliasName : readerField.aliases()) {
-      final Field writerField = writerSchema.getField(readerFieldAliasName);
-      if (writerField != null) {
-        writerFields.add(writerField);
-      }
+      writerSchema.getField(readerFieldAliasName).ifPresent(writerFields::add);
     }
     switch (writerFields.size()) {
       case 0:
@@ -157,7 +127,7 @@ public class AvroSchemaCompatibility {
       case 1:
         return writerFields.get(0);
       default: {
-        throw new AvroRuntimeException(String.format(
+        throw new HoodieSchemaException(String.format(
             "Reader record field %s matches multiple fields in writer record schema %s", readerField, writerSchema));
       }
     }
@@ -169,20 +139,10 @@ public class AvroSchemaCompatibility {
    * This reader/writer pair differentiates Schema objects based on their system
    * hash code.
    */
+  @RequiredArgsConstructor
   private static final class ReaderWriter {
-    private final Schema mReader;
-    private final Schema mWriter;
-
-    /**
-     * Initializes a new reader/writer pair.
-     *
-     * @param reader Reader schema.
-     * @param writer Writer schema.
-     */
-    public ReaderWriter(final Schema reader, final Schema writer) {
-      mReader = reader;
-      mWriter = writer;
-    }
+    private final HoodieSchema mReader;
+    private final HoodieSchema mWriter;
 
     /**
      * {@inheritDoc}
@@ -222,7 +182,6 @@ public class AvroSchemaCompatibility {
    * </p>
    */
   private static final class ReaderWriterCompatibilityChecker {
-    private final AvroDefaultValueAccessor defaultValueAccessor = new AvroDefaultValueAccessor();
     private final Map<ReaderWriter, SchemaCompatibilityResult> mMemoizeMap = new HashMap<>();
     private final boolean checkNaming;
 
@@ -241,7 +200,7 @@ public class AvroSchemaCompatibility {
      * @param writer Writer schema to test.
      * @return the compatibility of the reader/writer schema pair.
      */
-    public SchemaCompatibilityResult getCompatibility(final Schema reader, final Schema writer) {
+    public SchemaCompatibilityResult getCompatibility(final HoodieSchema reader, final HoodieSchema writer) {
       ArrayDeque<LocationInfo> locations = new ArrayDeque<>(
           Collections.singletonList(new LocationInfo(reader.getName(), reader.getType()))
       );
@@ -260,14 +219,14 @@ public class AvroSchemaCompatibility {
      *                  schema.
      * @return the compatibility of the reader/writer schema pair.
      */
-    private SchemaCompatibilityResult getCompatibility(final Schema reader,
-                                                       final Schema writer,
+    private SchemaCompatibilityResult getCompatibility(final HoodieSchema reader,
+                                                       final HoodieSchema writer,
                                                        final Deque<LocationInfo> locations) {
       log.debug("Checking compatibility of reader {} with writer {}", reader, writer);
       final ReaderWriter pair = new ReaderWriter(reader, writer);
       SchemaCompatibilityResult result = mMemoizeMap.get(pair);
       if (result != null) {
-        if (result.getCompatibility() == SchemaCompatibilityType.RECURSION_IN_PROGRESS) {
+        if (result.getCompatibilityType() == SchemaCompatibilityType.RECURSION_IN_PROGRESS) {
           // Break the recursion here.
           // schemas are compatible unless proven incompatible:
           result = SchemaCompatibilityResult.compatible();
@@ -281,7 +240,7 @@ public class AvroSchemaCompatibility {
       return result;
     }
 
-    private static String getLocationName(final Deque<LocationInfo> locations, Type readerType) {
+    private static String getLocationName(final Deque<LocationInfo> locations, HoodieSchemaType readerType) {
       StringBuilder sb = new StringBuilder();
       Iterator<LocationInfo> locationInfoIterator = locations.iterator();
       boolean addDot = false;
@@ -297,12 +256,12 @@ public class AvroSchemaCompatibility {
         //if the type is array/map, that means the problem is that the field type
         //of the writer is not array/map. If the type is something else, the problem
         //is between the array element/map value of the reader and writer schemas
-        if (next.type.equals(Type.MAP)) {
-          if (locationInfoIterator.hasNext() || !readerType.equals(Type.MAP)) {
+        if (next.type == HoodieSchemaType.MAP) {
+          if (locationInfoIterator.hasNext() || readerType != HoodieSchemaType.MAP) {
             sb.append(".value");
           }
-        } else if (next.type.equals(Type.ARRAY)) {
-          if (locationInfoIterator.hasNext() || !readerType.equals(Type.ARRAY)) {
+        } else if (next.type == HoodieSchemaType.ARRAY) {
+          if (locationInfoIterator.hasNext() || readerType != HoodieSchemaType.ARRAY) {
             sb.append(".element");
           }
         }
@@ -315,7 +274,7 @@ public class AvroSchemaCompatibility {
      *
      * <p>
      * Relies on external memoization performed by
-     * {@link #getCompatibility(Schema, Schema)}.
+     * {@link #getCompatibility(HoodieSchema, HoodieSchema)}.
      * </p>
      *
      * @param reader    Reader schema to test.
@@ -323,7 +282,7 @@ public class AvroSchemaCompatibility {
      * @param locations Stack with which to track the location within the schema.
      * @return the compatibility of the reader/writer schema pair.
      */
-    private SchemaCompatibilityResult calculateCompatibility(final Schema reader, final Schema writer,
+    private SchemaCompatibilityResult calculateCompatibility(final HoodieSchema reader, final HoodieSchema writer,
                                                              final Deque<LocationInfo> locations) {
       SchemaCompatibilityResult result = SchemaCompatibilityResult.compatible();
 
@@ -336,32 +295,34 @@ public class AvroSchemaCompatibility {
           case FLOAT:
           case DOUBLE:
           case BYTES:
-          case STRING: {
+          case DATE:
+          case STRING:
+          case UUID:
             return result;
-          }
-          case ARRAY: {
+          case TIME:
+            return result.mergedWith(checkTimeCompatibility(reader, writer, locations));
+          case TIMESTAMP:
+            return result.mergedWith(checkTimestampCompatibility(reader, writer, locations));
+          case ARRAY:
             return result.mergedWith(getCompatibility(reader.getElementType(), writer.getElementType(), locations));
-          }
-          case MAP: {
+          case MAP:
             return result.mergedWith(getCompatibility(reader.getValueType(), writer.getValueType(), locations));
-          }
-          case FIXED: {
+          case FIXED:
             result = result.mergedWith(checkSchemaNames(reader, writer, locations));
             return result.mergedWith(checkFixedSize(reader, writer, locations));
-          }
-          case ENUM: {
+          case DECIMAL:
+            return result.mergedWith(checkDecimalWidening(reader, writer, locations));
+          case ENUM:
             result = result.mergedWith(checkSchemaNames(reader, writer, locations));
             return result.mergedWith(checkReaderEnumContainsAllWriterEnumSymbols(reader, writer, locations));
-          }
-          case RECORD: {
+          case RECORD:
             result = result.mergedWith(checkSchemaNames(reader, writer, locations));
             return result.mergedWith(checkReaderWriterRecordFields(reader, writer, locations));
-          }
-          case UNION: {
+          case UNION:
             // Check that each individual branch of the writer union can be decoded:
-            for (final Schema writerBranch : writer.getTypes()) {
+            for (final HoodieSchema writerBranch : writer.getTypes()) {
               SchemaCompatibilityResult compatibility = getCompatibility(reader, writerBranch, locations);
-              if (compatibility.getCompatibility() == SchemaCompatibilityType.INCOMPATIBLE) {
+              if (compatibility.getCompatibilityType() == SchemaCompatibilityType.INCOMPATIBLE) {
                 String message = String.format("reader union lacking writer type: %s for field: '%s'", writerBranch.getType(), getLocationName(locations, reader.getType()));
                 result = result.mergedWith(SchemaCompatibilityResult.incompatible(
                     SchemaIncompatibilityType.MISSING_UNION_BRANCH, reader, writer, message, asList(locations)));
@@ -369,19 +330,16 @@ public class AvroSchemaCompatibility {
             }
             // Each schema in the writer union can be decoded with the reader:
             return result;
-          }
-
-          default: {
-            throw new AvroRuntimeException("Unknown schema type: " + reader.getType());
-          }
+          default:
+            throw new HoodieSchemaException("Unknown schema type: " + reader.getType());
         }
 
       } else {
         // Reader and writer have different schema types:
 
         // Reader compatible with all branches of a writer union is compatible
-        if (writer.getType() == Schema.Type.UNION) {
-          for (Schema s : writer.getTypes()) {
+        if (writer.getType() == HoodieSchemaType.UNION) {
+          for (HoodieSchema s : writer.getTypes()) {
             result = result.mergedWith(getCompatibility(reader, s, locations));
           }
           return result;
@@ -389,32 +347,30 @@ public class AvroSchemaCompatibility {
 
         switch (reader.getType()) {
           case NULL:
-            return result.mergedWith(typeMismatch(reader, writer, locations));
           case BOOLEAN:
-            return result.mergedWith(typeMismatch(reader, writer, locations));
           case INT:
+          case TIME:
+          case DATE:
+          case DECIMAL:
             return result.mergedWith(typeMismatch(reader, writer, locations));
-          case LONG: {
-            return (writer.getType() == Type.INT) ? result : result.mergedWith(typeMismatch(reader, writer, locations));
-          }
-          case FLOAT: {
-            return ((writer.getType() == Type.INT) || (writer.getType() == Type.LONG)) ? result
+          case TIMESTAMP:
+            return (writer.getType() == HoodieSchemaType.LONG) ? result : result.mergedWith(typeMismatch(reader, writer, locations));
+          case UUID:
+            return (writer.getType() == HoodieSchemaType.STRING) ? result : result.mergedWith(typeMismatch(reader, writer, locations));
+          case LONG:
+            return (writer.getType() == HoodieSchemaType.INT) ? result : result.mergedWith(typeMismatch(reader, writer, locations));
+          case FLOAT:
+            return ((writer.getType() == HoodieSchemaType.INT) || (writer.getType() == HoodieSchemaType.LONG)) ? result
                 : result.mergedWith(typeMismatch(reader, writer, locations));
-
-          }
-          case DOUBLE: {
-            return ((writer.getType() == Type.INT) || (writer.getType() == Type.LONG) || (writer.getType() == Type.FLOAT))
+          case DOUBLE:
+            return ((writer.getType() == HoodieSchemaType.INT) || (writer.getType() == HoodieSchemaType.LONG) || (writer.getType() == HoodieSchemaType.FLOAT))
                 ? result
                 : result.mergedWith(typeMismatch(reader, writer, locations));
-          }
-          case BYTES: {
-            return (writer.getType() == Type.STRING) ? result : result.mergedWith(typeMismatch(reader, writer, locations));
-          }
-          case STRING: {
-            return (isTypeNumeric(writer.getType()) || (writer.getType() == Schema.Type.BYTES)
+          case BYTES:
+            return (writer.getType() == HoodieSchemaType.STRING) ? result : result.mergedWith(typeMismatch(reader, writer, locations));
+          case STRING:
+            return (writer.getType().isNumeric() || (writer.getType() == HoodieSchemaType.BYTES)
                 ? result : result.mergedWith(typeMismatch(reader, writer, locations)));
-          }
-
           case ARRAY:
             return result.mergedWith(typeMismatch(reader, writer, locations));
           case MAP:
@@ -426,9 +382,9 @@ public class AvroSchemaCompatibility {
           case RECORD:
             return result.mergedWith(typeMismatch(reader, writer, locations));
           case UNION: {
-            for (final Schema readerBranch : reader.getTypes()) {
+            for (final HoodieSchema readerBranch : reader.getTypes()) {
               SchemaCompatibilityResult compatibility = getCompatibility(readerBranch, writer, locations);
-              if (compatibility.getCompatibility() == SchemaCompatibilityType.COMPATIBLE) {
+              if (compatibility.getCompatibilityType() == SchemaCompatibilityType.COMPATIBLE) {
                 return result;
               }
             }
@@ -440,25 +396,25 @@ public class AvroSchemaCompatibility {
           }
 
           default: {
-            throw new AvroRuntimeException("Unknown schema type: " + reader.getType());
+            throw new HoodieSchemaException("Unknown schema type: " + reader.getType());
           }
         }
       }
     }
 
-    private SchemaCompatibilityResult checkReaderWriterRecordFields(final Schema reader, final Schema writer,
+    private SchemaCompatibilityResult checkReaderWriterRecordFields(final HoodieSchema reader, final HoodieSchema writer,
                                                                     final Deque<LocationInfo> locations) {
       SchemaCompatibilityResult result = SchemaCompatibilityResult.compatible();
 
       // Check that each field in the reader record can be populated from the writer
       // record:
-      for (final Field readerField : reader.getFields()) {
-        final Field writerField = lookupWriterField(writer, readerField);
+      for (final HoodieSchemaField readerField : reader.getFields()) {
+        final HoodieSchemaField writerField = lookupWriterField(writer, readerField);
         if (writerField == null) {
           // Reader field does not correspond to any field in the writer record schema, so
           // the
           // reader field must have a default value.
-          if (defaultValueAccessor.getDefaultValue(readerField) == null) {
+          if (readerField.defaultVal().isEmpty()) {
             // reader field has no default value
             String message = String.format("Field '%s.%s' has no default value", getLocationName(locations, readerField.schema().getType()), readerField.name());
             result = result.mergedWith(
@@ -475,37 +431,8 @@ public class AvroSchemaCompatibility {
       return result;
     }
 
-    private static class AvroDefaultValueAccessor {
-      // Avro <= 1.8.2
-      private final Option<Method> legacyDefaultValueMethod = loadMethodNoThrow("defaultValue");
-      // Avro >= 1.10.0
-      private final Option<Method> newDefaultValueMethod = loadMethodNoThrow("defaultVal");
-
-      public Object getDefaultValue(Field field) {
-        return newDefaultValueMethod.or(legacyDefaultValueMethod)
-            .map(m -> invokeMethodNoThrow(m, field).asLeft())
-            .orElse(null);
-      }
-
-      private static Either<Object, Exception> invokeMethodNoThrow(Method m, Object obj, Object... args) {
-        try {
-          return Either.left(m.invoke(obj, args));
-        } catch (IllegalAccessException | InvocationTargetException e) {
-          return Either.right(e);
-        }
-      }
-
-      private static Option<Method> loadMethodNoThrow(String defaultValue) {
-        try {
-          return Option.of(Field.class.getMethod(defaultValue));
-        } catch (NoSuchMethodException e) {
-          return Option.empty();
-        }
-      }
-    }
-
-    private SchemaCompatibilityResult checkReaderEnumContainsAllWriterEnumSymbols(final Schema reader,
-                                                                                  final Schema writer, final Deque<LocationInfo> locations) {
+    private SchemaCompatibilityResult checkReaderEnumContainsAllWriterEnumSymbols(final HoodieSchema reader,
+                                                                                  final HoodieSchema writer, final Deque<LocationInfo> locations) {
       SchemaCompatibilityResult result = SchemaCompatibilityResult.compatible();
       final Set<String> symbols = new TreeSet<>(writer.getEnumSymbols());
       symbols.removeAll(reader.getEnumSymbols());
@@ -517,7 +444,7 @@ public class AvroSchemaCompatibility {
       return result;
     }
 
-    private SchemaCompatibilityResult checkFixedSize(final Schema reader, final Schema writer,
+    private SchemaCompatibilityResult checkFixedSize(final HoodieSchema reader, final HoodieSchema writer,
                                                      final Deque<LocationInfo> locations) {
       int actual = reader.getFixedSize();
       int expected = writer.getFixedSize();
@@ -529,10 +456,10 @@ public class AvroSchemaCompatibility {
       return checkDecimalWidening(reader, writer, locations);
     }
 
-    private SchemaCompatibilityResult checkDecimalWidening(final Schema reader, final Schema writer,
+    private SchemaCompatibilityResult checkDecimalWidening(final HoodieSchema reader, final HoodieSchema writer,
                                                            final Deque<LocationInfo> locations) {
-      boolean isReaderDecimal = reader.getLogicalType() instanceof LogicalTypes.Decimal;
-      boolean isWriterDecimal = writer.getLogicalType() instanceof LogicalTypes.Decimal;
+      boolean isReaderDecimal = reader.getType() == HoodieSchemaType.DECIMAL;
+      boolean isWriterDecimal = writer.getType() == HoodieSchemaType.DECIMAL;
       if (!isReaderDecimal && !isWriterDecimal) {
         return SchemaCompatibilityResult.compatible();
       }
@@ -543,10 +470,12 @@ public class AvroSchemaCompatibility {
             message, asList(locations));
       }
 
-      int readerScale = ((LogicalTypes.Decimal) reader.getLogicalType()).getScale();
-      int writerScale = ((LogicalTypes.Decimal) writer.getLogicalType()).getScale();
-      int readerPrecision = ((LogicalTypes.Decimal) reader.getLogicalType()).getPrecision();
-      int writerPrecision = ((LogicalTypes.Decimal) writer.getLogicalType()).getPrecision();
+      HoodieSchema.Decimal readerDecimalType = (HoodieSchema.Decimal) reader;
+      HoodieSchema.Decimal writerDecimalType = (HoodieSchema.Decimal) writer;
+      int readerScale = readerDecimalType.getScale();
+      int writerScale = writerDecimalType.getScale();
+      int readerPrecision = readerDecimalType.getPrecision();
+      int writerPrecision = writerDecimalType.getPrecision();
       if (readerScale == writerScale && readerPrecision == writerPrecision) {
         return SchemaCompatibilityResult.compatible();
       }
@@ -561,14 +490,46 @@ public class AvroSchemaCompatibility {
       return SchemaCompatibilityResult.compatible();
     }
 
-    private SchemaCompatibilityResult checkSchemaNames(final Schema reader, final Schema writer,
+    private SchemaCompatibilityResult checkTimeCompatibility(final HoodieSchema reader, final HoodieSchema writer,
+                                                             final Deque<LocationInfo> locations) {
+      HoodieSchema.Time readerTime = (HoodieSchema.Time) reader;
+      HoodieSchema.Time writerTime = (HoodieSchema.Time) writer;
+      if (readerTime.getPrecision() != writerTime.getPrecision()) {
+        String message = String.format("Time field '%s' expected precision: %s, found: %s", getLocationName(locations, reader.getType()),
+            writerTime.getPrecision(), readerTime.getPrecision());
+        return SchemaCompatibilityResult.incompatible(SchemaIncompatibilityType.TYPE_MISMATCH, reader, writer,
+            message, asList(locations));
+      }
+      return SchemaCompatibilityResult.compatible();
+    }
+
+    private SchemaCompatibilityResult checkTimestampCompatibility(final HoodieSchema reader, final HoodieSchema writer,
+                                                                  final Deque<LocationInfo> locations) {
+      HoodieSchema.Timestamp readerTimestamp = (HoodieSchema.Timestamp) reader;
+      HoodieSchema.Timestamp writerTimestamp = (HoodieSchema.Timestamp) writer;
+
+      // Allow timestamps written as microseconds to be read as milliseconds
+      boolean validPrecisionCombination = readerTimestamp.getPrecision() == writerTimestamp.getPrecision()
+          || (readerTimestamp.getPrecision() == HoodieSchema.TimePrecision.MILLIS && writerTimestamp.getPrecision() == HoodieSchema.TimePrecision.MICROS);
+      if (!validPrecisionCombination || readerTimestamp.isUtcAdjusted() != writerTimestamp.isUtcAdjusted()) {
+        String message = String.format("Timestamp field '%s' expected precision: %s and utcAdjusted: %b, found: precision: %s and utcAdjusted: %b",
+            getLocationName(locations, reader.getType()), writerTimestamp.getPrecision(), writerTimestamp.isUtcAdjusted(),
+            readerTimestamp.getPrecision(), readerTimestamp.isUtcAdjusted());
+        return SchemaCompatibilityResult.incompatible(SchemaIncompatibilityType.TYPE_MISMATCH, reader, writer,
+            message, asList(locations));
+
+      }
+      return SchemaCompatibilityResult.compatible();
+    }
+
+    private SchemaCompatibilityResult checkSchemaNames(final HoodieSchema reader, final HoodieSchema writer,
                                                        final Deque<LocationInfo> locations) {
-      checkState(locations.size() > 0);
+      checkState(!locations.isEmpty());
       // NOTE: We're only going to validate schema names in following cases
       //          - This is a top-level schema (ie enclosing one)
       //          - This is a schema enclosed w/in a union (since in that case schemas could be
       //          reverse-looked up by their fully-qualified names)
-      boolean shouldCheckNames = checkNaming && (locations.size() == 1 || locations.peekLast().type == Type.UNION);
+      boolean shouldCheckNames = checkNaming && (locations.size() == 1 || locations.peekLast().type == HoodieSchemaType.UNION);
       SchemaCompatibilityResult result = SchemaCompatibilityResult.compatible();
       if (shouldCheckNames && !Objects.equals(reader.getFullName(), writer.getFullName())) {
         String message = String.format("Reader schema name: '%s' is not compatible with writer schema name: '%s'", reader.getFullName(), writer.getFullName());
@@ -578,7 +539,7 @@ public class AvroSchemaCompatibility {
       return result;
     }
 
-    private SchemaCompatibilityResult typeMismatch(final Schema reader, final Schema writer,
+    private SchemaCompatibilityResult typeMismatch(final HoodieSchema reader, final HoodieSchema writer,
                                                    final Deque<LocationInfo> locations) {
       String message = String.format("reader type '%s' not compatible with writer type '%s' for field '%s'", reader.getType(),
           writer.getType(), getLocationName(locations, reader.getType()));
@@ -586,19 +547,11 @@ public class AvroSchemaCompatibility {
           asList(locations));
     }
 
+    @AllArgsConstructor
+    @ToString
     public static class LocationInfo {
       private final String name;
-      private final Type type;
-
-      public LocationInfo(String name, Type type) {
-        this.name = name;
-        this.type = type;
-      }
-
-      @Override
-      public String toString() {
-        return String.format("%s:%s", name, type);
-      }
+      private final HoodieSchemaType type;
     }
 
     private static List<String> asList(Deque<LocationInfo> deque) {
@@ -628,7 +581,8 @@ public class AvroSchemaCompatibility {
    * Immutable class representing details about a particular schema pair
    * compatibility check.
    */
-  public static final class SchemaCompatibilityResult {
+  @Value
+  public static class SchemaCompatibilityResult {
 
     /**
      * Merges the current {@code SchemaCompatibilityResult} with the supplied result
@@ -643,28 +597,22 @@ public class AvroSchemaCompatibility {
      * current and supplied instances.
      */
     public SchemaCompatibilityResult mergedWith(SchemaCompatibilityResult toMerge) {
-      List<Incompatibility> mergedIncompatibilities = new ArrayList<>(mIncompatibilities);
+      List<Incompatibility> mergedIncompatibilities = new ArrayList<>(incompatibilities);
       mergedIncompatibilities.addAll(toMerge.getIncompatibilities());
-      SchemaCompatibilityType compatibilityType = mCompatibilityType == SchemaCompatibilityType.COMPATIBLE
-          ? toMerge.mCompatibilityType
+      SchemaCompatibilityType mergedCompatibilityType = compatibilityType == SchemaCompatibilityType.COMPATIBLE
+          ? toMerge.compatibilityType
           : SchemaCompatibilityType.INCOMPATIBLE;
-      return new SchemaCompatibilityResult(compatibilityType, mergedIncompatibilities);
+      return new SchemaCompatibilityResult(mergedCompatibilityType, mergedIncompatibilities);
     }
 
-    private final SchemaCompatibilityType mCompatibilityType;
+    SchemaCompatibilityType compatibilityType;
     // the below fields are only valid if INCOMPATIBLE
-    private final List<Incompatibility> mIncompatibilities;
+    List<Incompatibility> incompatibilities;
     // cached objects for stateless details
     private static final SchemaCompatibilityResult COMPATIBLE = new SchemaCompatibilityResult(
         SchemaCompatibilityType.COMPATIBLE, Collections.emptyList());
     private static final SchemaCompatibilityResult RECURSION_IN_PROGRESS = new SchemaCompatibilityResult(
         SchemaCompatibilityType.RECURSION_IN_PROGRESS, Collections.emptyList());
-
-    private SchemaCompatibilityResult(SchemaCompatibilityType compatibilityType,
-                                      List<Incompatibility> incompatibilities) {
-      this.mCompatibilityType = compatibilityType;
-      this.mIncompatibilities = incompatibilities;
-    }
 
     /**
      * Returns a details object representing a compatible schema pair.
@@ -695,136 +643,23 @@ public class AvroSchemaCompatibility {
      * SchemaCompatibilityType, and state representing the violating part.
      */
     public static SchemaCompatibilityResult incompatible(SchemaIncompatibilityType incompatibilityType,
-                                                         Schema readerFragment, Schema writerFragment, String message, List<String> location) {
+                                                         HoodieSchema readerFragment, HoodieSchema writerFragment, String message, List<String> location) {
       Incompatibility incompatibility = new Incompatibility(incompatibilityType, readerFragment, writerFragment,
           message, location);
       return new SchemaCompatibilityResult(SchemaCompatibilityType.INCOMPATIBLE,
           Collections.singletonList(incompatibility));
     }
-
-    /**
-     * Returns the SchemaCompatibilityType, always non-null.
-     *
-     * @return a SchemaCompatibilityType instance, always non-null
-     */
-    public SchemaCompatibilityType getCompatibility() {
-      return mCompatibilityType;
-    }
-
-    /**
-     * If the compatibility is INCOMPATIBLE, returns {@link Incompatibility
-     * Incompatibilities} found, otherwise an empty list.
-     *
-     * @return a list of {@link Incompatibility Incompatibilities}, may be empty,
-     * never null.
-     */
-    public List<Incompatibility> getIncompatibilities() {
-      return mIncompatibilities;
-    }
-
-    /**
-     * {@inheritDoc}
-     */
-    @Override
-    public int hashCode() {
-      final int prime = 31;
-      int result = 1;
-      result = prime * result + ((mCompatibilityType == null) ? 0 : mCompatibilityType.hashCode());
-      result = prime * result + ((mIncompatibilities == null) ? 0 : mIncompatibilities.hashCode());
-      return result;
-    }
-
-    /**
-     * {@inheritDoc}
-     */
-    @Override
-    public boolean equals(Object obj) {
-      if (this == obj) {
-        return true;
-      }
-      if (obj == null) {
-        return false;
-      }
-      if (getClass() != obj.getClass()) {
-        return false;
-      }
-      SchemaCompatibilityResult other = (SchemaCompatibilityResult) obj;
-      if (mIncompatibilities == null) {
-        if (other.mIncompatibilities != null) {
-          return false;
-        }
-      } else if (!mIncompatibilities.equals(other.mIncompatibilities)) {
-        return false;
-      }
-      return mCompatibilityType == other.mCompatibilityType;
-    }
-
-    /**
-     * {@inheritDoc}
-     */
-    @Override
-    public String toString() {
-      return String.format("SchemaCompatibilityResult{compatibility:%s, incompatibilities:%s}", mCompatibilityType,
-          mIncompatibilities);
-    }
   }
 
   // -----------------------------------------------------------------------------------------------
 
-  public static final class Incompatibility {
-    private final SchemaIncompatibilityType mType;
-    private final Schema mReaderFragment;
-    private final Schema mWriterFragment;
-    private final String mMessage;
-    private final List<String> mLocation;
-
-    Incompatibility(SchemaIncompatibilityType type, Schema readerFragment, Schema writerFragment, String message,
-                    List<String> location) {
-      super();
-      this.mType = type;
-      this.mReaderFragment = readerFragment;
-      this.mWriterFragment = writerFragment;
-      this.mMessage = message;
-      this.mLocation = location;
-    }
-
-    /**
-     * Returns the SchemaIncompatibilityType.
-     *
-     * @return a SchemaIncompatibilityType instance.
-     */
-    public SchemaIncompatibilityType getType() {
-      return mType;
-    }
-
-    /**
-     * Returns the fragment of the reader schema that failed compatibility check.
-     *
-     * @return a Schema instance (fragment of the reader schema).
-     */
-    public Schema getReaderFragment() {
-      return mReaderFragment;
-    }
-
-    /**
-     * Returns the fragment of the writer schema that failed compatibility check.
-     *
-     * @return a Schema instance (fragment of the writer schema).
-     */
-    public Schema getWriterFragment() {
-      return mWriterFragment;
-    }
-
-    /**
-     * Returns a human-readable message with more details about what failed. Syntax
-     * depends on the SchemaIncompatibilityType.
-     *
-     * @return a String with details about the incompatibility.
-     * @see #getType()
-     */
-    public String getMessage() {
-      return mMessage;
-    }
+  @Value
+  public static class Incompatibility {
+    SchemaIncompatibilityType type;
+    HoodieSchema readerFragment;
+    HoodieSchema writerFragment;
+    String message;
+    List<String> location;
 
     /**
      * Returns a
@@ -838,7 +673,7 @@ public class AvroSchemaCompatibility {
       StringBuilder s = new StringBuilder("/");
       boolean first = true;
       // ignore root element
-      for (String coordinate : mLocation.subList(1, mLocation.size())) {
+      for (String coordinate : location.subList(1, location.size())) {
         if (first) {
           first = false;
         } else {
@@ -848,76 +683,6 @@ public class AvroSchemaCompatibility {
         s.append(coordinate.replace("~", "~0").replace("/", "~1"));
       }
       return s.toString();
-    }
-
-    /**
-     * {@inheritDoc}
-     */
-    @Override
-    public int hashCode() {
-      final int prime = 31;
-      int result = 1;
-      result = prime * result + ((mType == null) ? 0 : mType.hashCode());
-      result = prime * result + ((mReaderFragment == null) ? 0 : mReaderFragment.hashCode());
-      result = prime * result + ((mWriterFragment == null) ? 0 : mWriterFragment.hashCode());
-      result = prime * result + ((mMessage == null) ? 0 : mMessage.hashCode());
-      result = prime * result + ((mLocation == null) ? 0 : mLocation.hashCode());
-      return result;
-    }
-
-    /**
-     * {@inheritDoc}
-     */
-    @Override
-    public boolean equals(Object obj) {
-      if (this == obj) {
-        return true;
-      }
-      if (obj == null) {
-        return false;
-      }
-      if (getClass() != obj.getClass()) {
-        return false;
-      }
-      Incompatibility other = (Incompatibility) obj;
-      if (mType != other.mType) {
-        return false;
-      }
-      if (mReaderFragment == null) {
-        if (other.mReaderFragment != null) {
-          return false;
-        }
-      } else if (!mReaderFragment.equals(other.mReaderFragment)) {
-        return false;
-      }
-      if (mWriterFragment == null) {
-        if (other.mWriterFragment != null) {
-          return false;
-        }
-      } else if (!mWriterFragment.equals(other.mWriterFragment)) {
-        return false;
-      }
-      if (mMessage == null) {
-        if (other.mMessage != null) {
-          return false;
-        }
-      } else if (!mMessage.equals(other.mMessage)) {
-        return false;
-      }
-      if (mLocation == null) {
-        return other.mLocation == null;
-      } else {
-        return mLocation.equals(other.mLocation);
-      }
-    }
-
-    /**
-     * {@inheritDoc}
-     */
-    @Override
-    public String toString() {
-      return String.format("Incompatibility{type:%s, location:%s, message:%s, reader:%s, writer:%s}", mType,
-          getLocation(), mMessage, mReaderFragment, mWriterFragment);
     }
   }
 
@@ -930,41 +695,28 @@ public class AvroSchemaCompatibility {
    * Note: This class represents a one-way relationship from the reader to the
    * writer schema.
    */
-  public static final class SchemaPairCompatibility {
+  @AllArgsConstructor
+  @Value
+  public static class SchemaPairCompatibility {
     /**
      * The details of this result.
      */
-    private final SchemaCompatibilityResult mResult;
+    SchemaCompatibilityResult result;
 
     /**
      * Validated reader schema.
      */
-    private final Schema mReader;
+    HoodieSchema reader;
 
     /**
      * Validated writer schema.
      */
-    private final Schema mWriter;
+    HoodieSchema writer;
 
     /**
      * Human-readable description of this result.
      */
-    private final String mDescription;
-
-    /**
-     * Constructs a new instance.
-     *
-     * @param result      The result of the compatibility check.
-     * @param reader      schema that was validated.
-     * @param writer      schema that was validated.
-     * @param description of this compatibility result.
-     */
-    public SchemaPairCompatibility(SchemaCompatibilityResult result, Schema reader, Schema writer, String description) {
-      mResult = result;
-      mReader = reader;
-      mWriter = writer;
-      mDescription = description;
-    }
+    String description;
 
     /**
      * Gets the type of this result.
@@ -972,82 +724,7 @@ public class AvroSchemaCompatibility {
      * @return the type of this result.
      */
     public SchemaCompatibilityType getType() {
-      return mResult.getCompatibility();
+      return result.getCompatibilityType();
     }
-
-    /**
-     * Gets more details about the compatibility, in particular if getType() is
-     * INCOMPATIBLE.
-     *
-     * @return the details of this compatibility check.
-     */
-    public SchemaCompatibilityResult getResult() {
-      return mResult;
-    }
-
-    /**
-     * Gets the reader schema that was validated.
-     *
-     * @return reader schema that was validated.
-     */
-    public Schema getReader() {
-      return mReader;
-    }
-
-    /**
-     * Gets the writer schema that was validated.
-     *
-     * @return writer schema that was validated.
-     */
-    public Schema getWriter() {
-      return mWriter;
-    }
-
-    /**
-     * Gets a human-readable description of this validation result.
-     *
-     * @return a human-readable description of this validation result.
-     */
-    public String getDescription() {
-      return mDescription;
-    }
-
-    /**
-     * {@inheritDoc}
-     */
-    @Override
-    public String toString() {
-      return String.format("SchemaPairCompatibility{result:%s, readerSchema:%s, writerSchema:%s, description:%s}",
-          mResult, mReader, mWriter, mDescription);
-    }
-
-    /**
-     * {@inheritDoc}
-     */
-    @Override
-    public boolean equals(Object other) {
-      if ((other instanceof SchemaPairCompatibility)) {
-        final SchemaPairCompatibility result = (SchemaPairCompatibility) other;
-        return objectsEqual(result.mResult, mResult) && objectsEqual(result.mReader, mReader)
-            && objectsEqual(result.mWriter, mWriter) && objectsEqual(result.mDescription, mDescription);
-      } else {
-        return false;
-      }
-    }
-
-    /**
-     * {@inheritDoc}
-     */
-    @Override
-    public int hashCode() {
-      return Arrays.hashCode(new Object[] {mResult, mReader, mWriter, mDescription});
-    }
-  }
-
-  /**
-   * Borrowed from Guava's Objects.equal(a, b)
-   */
-  private static boolean objectsEqual(Object obj1, Object obj2) {
-    return Objects.equals(obj1, obj2);
   }
 }
