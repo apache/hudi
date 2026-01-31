@@ -171,17 +171,13 @@ public class IncrSourceHelper {
             .findInstantsAfter(beginInstantTime, numInstantsPerFetch).getInstantsAsStream().reduce((x, y) -> y));
       }
       String endInstant = nthInstant.map(HoodieInstant::requestedTime).orElse(beginInstantTime);
-      if (metrics.isPresent()) {
-        publishIncrSourceMetrics(beginInstantTime, endInstant, metrics.get(), completedCommitTimeline);
-      }
+      metrics.ifPresent(m -> publishIncrSourceMetrics(beginInstantTime, endInstant, m, completedCommitTimeline));
       return new QueryInfo(DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL(), previousInstantTime,
           beginInstantTime, endInstant, orderColumn, keyColumn, limitColumn);
     } else {
       // when MissingCheckpointStrategy is set to read everything until latest, trigger snapshot query.
       Option<HoodieInstant> lastInstant = activeCommitTimeline.lastInstant();
-      if (metrics.isPresent()) {
-        publishIncrSourceMetrics(beginInstantTime, lastInstant.get().requestedTime(), metrics.get(), completedCommitTimeline);
-      }
+      metrics.ifPresent(m -> publishIncrSourceMetrics(beginInstantTime, lastInstant.get().requestedTime(), m, completedCommitTimeline));
       return new QueryInfo(DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL(),
           previousInstantTime, beginInstantTime, lastInstant.get().requestedTime(),
           orderColumn, keyColumn, limitColumn);
