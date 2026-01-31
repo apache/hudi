@@ -22,8 +22,12 @@ import org.apache.hudi.adapter.AbstractRichFunctionAdapter;
 import org.apache.hudi.adapter.SourceFunctionAdapter;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.common.model.CompactionOperation;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.metadata.HoodieTableMetadata;
+import org.apache.hudi.util.Lazy;
 import org.apache.hudi.util.StreamerUtil;
 
 import org.apache.flink.configuration.Configuration;
@@ -58,10 +62,16 @@ public class CompactionPlanSourceFunction extends AbstractRichFunctionAdapter im
    */
   private final List<Pair<String, HoodieCompactionPlan>> compactionPlans;
   private final Configuration conf;
+  private final boolean isMetadataTable;
 
   public CompactionPlanSourceFunction(List<Pair<String, HoodieCompactionPlan>> compactionPlans, Configuration conf) {
+    this(compactionPlans, conf, false);
+  }
+
+  public CompactionPlanSourceFunction(List<Pair<String, HoodieCompactionPlan>> compactionPlans, Configuration conf, boolean isMetadataTable) {
     this.compactionPlans = compactionPlans;
     this.conf = conf;
+    this.isMetadataTable = isMetadataTable;
   }
 
   @Override
@@ -71,20 +81,35 @@ public class CompactionPlanSourceFunction extends AbstractRichFunctionAdapter im
 
   @Override
   public void run(SourceContext sourceContext) throws Exception {
-    HoodieTimeline pendingCompactionTimeline = StreamerUtil.createMetaClient(conf).getActiveTimeline().filterPendingCompactionTimeline();
+    HoodieTableMetaClient metaClient = createMetaClient();
+    HoodieTimeline pendingCompactionTimeline = metaClient.getActiveTimeline().filterPendingCompactionTimeline();
+    Lazy<HoodieTimeline> pendingLogCompactionTimeline = Lazy.lazily(() -> metaClient.getActiveTimeline().filterPendingLogCompactionTimeline());
     for (Pair<String, HoodieCompactionPlan> pair : compactionPlans) {
+      boolean isLogCompaction = false;
       if (!pendingCompactionTimeline.containsInstant(pair.getLeft())) {
         LOG.warn("{} not found in pending compaction instants.", pair.getLeft());
-        continue;
+        if (!isMetadataTable || !pendingLogCompactionTimeline.get().containsInstant(pair.getLeft())) {
+          LOG.warn("{} not found in pending log compaction instants.", pair.getLeft());
+          continue;
+        }
+        isLogCompaction = true;
       }
       HoodieCompactionPlan compactionPlan = pair.getRight();
       List<CompactionOperation> operations = compactionPlan.getOperations().stream()
           .map(CompactionOperation::convertFromAvroRecordInstance).collect(Collectors.toList());
       LOG.info("CompactionPlanFunction compacting {} files", operations);
       for (CompactionOperation operation : operations) {
-        sourceContext.collect(new CompactionPlanEvent(pair.getLeft(), operation));
+        sourceContext.collect(new CompactionPlanEvent(pair.getLeft(), operation, 0, isMetadataTable, isLogCompaction));
       }
     }
+  }
+
+  private HoodieTableMetaClient createMetaClient() {
+    if (isMetadataTable) {
+      String metadataPath = HoodieTableMetadata.getMetadataTableBasePath(conf.get(FlinkOptions.PATH));
+      conf.set(FlinkOptions.PATH, metadataPath);
+    }
+    return StreamerUtil.createMetaClient(conf);
   }
 
   @Override

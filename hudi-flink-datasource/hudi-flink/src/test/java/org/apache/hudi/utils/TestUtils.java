@@ -31,6 +31,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.sink.utils.MockStreamingRuntimeContext;
 import org.apache.hudi.source.StreamReadMonitoringFunction;
@@ -80,19 +81,23 @@ public class TestUtils {
         .orElse(null);
   }
 
-  public static void validateMdtCompactionInstant(String basePath, boolean isLogCompaction) throws IOException {
+  public static void validateMdtCompactionInstant(String basePath, boolean isLogCompaction) {
     String baseMdtPath = HoodieTableMetadata.getMetadataTableBasePath(basePath);
-    String compactInstant = TestUtils.getLastCompleteInstant(baseMdtPath);
-    assertNotNull(compactInstant);
     WriteOperationType writeOperationType = isLogCompaction ? WriteOperationType.LOG_COMPACT : WriteOperationType.COMPACT;
-    assertEquals(writeOperationType, TestUtils.getOperationType(baseMdtPath, compactInstant));
+    assertEquals(writeOperationType, TestUtils.getOperationTypeOfLatestCompleteInstant(baseMdtPath));
   }
 
-  private static WriteOperationType getOperationType(String basePath, String instantTs) throws IOException {
+  public static WriteOperationType getOperationTypeOfLatestCompleteInstant(String basePath) {
+    String compactInstant = TestUtils.getLastCompleteInstant(basePath);
+    assertNotNull(compactInstant);
     final HoodieTableMetaClient metaClient = HoodieTestUtils.createMetaClient(
         new HadoopStorageConfiguration(HadoopConfigurations.getHadoopConf(new Configuration())), basePath);
-    HoodieInstant hoodieInstant = metaClient.getCommitsTimeline().filter(instant -> instant.requestedTime().equals(instantTs)).firstInstant().get();
-    return metaClient.getCommitTimeline().readCommitMetadata(hoodieInstant).getOperationType();
+    HoodieInstant hoodieInstant = metaClient.getCommitsTimeline().filter(instant -> instant.requestedTime().equals(compactInstant)).firstInstant().get();
+    try {
+      return metaClient.getCommitTimeline().readCommitMetadata(hoodieInstant).getOperationType();
+    } catch (IOException e) {
+      throw new HoodieException(e);
+    }
   }
 
   public static String getLastDeltaCompleteInstant(String basePath) {
