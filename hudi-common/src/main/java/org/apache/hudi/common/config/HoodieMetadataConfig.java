@@ -1089,6 +1089,11 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       return this;
     }
 
+    public Builder withEnableRecordLevelIndexAtPartitionLevel(boolean enabled) {
+      metadataConfig.setValue(RECORD_LEVEL_INDEX_ENABLE_PROP, String.valueOf(enabled));
+      return this;
+    }
+
     public Builder withRecordIndexFileGroupCount(int minCount, int maxCount) {
       metadataConfig.setValue(GLOBAL_RECORD_LEVEL_INDEX_MIN_FILE_GROUP_COUNT_PROP, String.valueOf(minCount));
       metadataConfig.setValue(GLOBAL_RECORD_LEVEL_INDEX_MAX_FILE_GROUP_COUNT_PROP, String.valueOf(maxCount));
