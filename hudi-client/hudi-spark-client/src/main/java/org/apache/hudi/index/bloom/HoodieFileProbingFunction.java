@@ -18,7 +18,6 @@
 
 package org.apache.hudi.index.bloom;
 
-import org.apache.hudi.client.utils.LazyIterableIterator;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
@@ -39,10 +38,8 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
-import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.stream.Collectors;
 
 import scala.Tuple2;
 
@@ -73,45 +70,34 @@ public class HoodieFileProbingFunction implements
     return new BloomIndexLazyKeyCheckIterator(tuple2Iterator);
   }
 
-  private class BloomIndexLazyKeyCheckIterator
-      extends LazyIterableIterator<Tuple2<HoodieFileGroupId, HoodieBloomFilterProbingResult>, HoodieKeyLookupResult> {
-
-    private List<HoodieKeyLookupResult> currentBatch;
-    private int currentBatchIndex;
+  private class BloomIndexLazyKeyCheckIterator implements Iterator<HoodieKeyLookupResult> {
+    private final Iterator<Tuple2<HoodieFileGroupId, HoodieBloomFilterProbingResult>> tuple2Iterator;
+    private Iterator<HoodieKeyLookupResult> currentBatch;
 
     public BloomIndexLazyKeyCheckIterator(Iterator<Tuple2<HoodieFileGroupId, HoodieBloomFilterProbingResult>> tuple2Iterator) {
-      super(tuple2Iterator);
-      this.currentBatch = Collections.emptyList();
-      this.currentBatchIndex = 0;
+      this.tuple2Iterator = tuple2Iterator;
     }
 
     @Override
-    protected HoodieKeyLookupResult computeNext() {
-      // If we have results left in the current batch, return next one
-      if (currentBatchIndex < currentBatch.size()) {
-        return currentBatch.get(currentBatchIndex++);
-      }
-
-      // Need to fetch next batch
-      currentBatch = fetchNextBatch();
-      currentBatchIndex = 0;
-
-      // If new batch is empty, we're done
-      if (currentBatch.isEmpty()) {
-        return null;
-      }
-
-      // Return first element from new batch
-      return currentBatch.get(currentBatchIndex++);
+    public boolean hasNext() {
+      return tuple2Iterator.hasNext() || (currentBatch != null && currentBatch.hasNext());
     }
 
-    private List<HoodieKeyLookupResult> fetchNextBatch() {
+    @Override
+    public HoodieKeyLookupResult next() {
+      if (currentBatch == null || !currentBatch.hasNext()) {
+        currentBatch = fetchNextBatch();
+      }
+      return currentBatch.next();
+    }
+
+    private Iterator<HoodieKeyLookupResult> fetchNextBatch() {
       // Partition path and file name pair to list of keys
       final Map<Pair<String, HoodieBaseFile>, HoodieBloomFilterProbingResult> fileToLookupResults = new HashMap<>();
       final Map<String, HoodieBaseFile> fileIDBaseFileMap = new HashMap<>();
 
-      while (inputItr.hasNext()) {
-        Tuple2<HoodieFileGroupId, HoodieBloomFilterProbingResult> entry = inputItr.next();
+      while (tuple2Iterator.hasNext()) {
+        Tuple2<HoodieFileGroupId, HoodieBloomFilterProbingResult> entry = tuple2Iterator.next();
         final String partitionPath = entry._1.getPartitionPath();
         final String fileId = entry._1.getFileId();
 
@@ -134,7 +120,7 @@ public class HoodieFileProbingFunction implements
       }
 
       if (fileToLookupResults.isEmpty()) {
-        return Collections.emptyList();
+        return Collections.emptyIterator();
       }
 
       return fileToLookupResults.entrySet().stream()
@@ -161,7 +147,7 @@ public class HoodieFileProbingFunction implements
 
             return new HoodieKeyLookupResult(fileId, partitionPath, dataFile.getCommitTime(), matchingKeysAndPositions);
           })
-          .collect(Collectors.toList());
+          .iterator();
     }
 
   }
