@@ -18,8 +18,6 @@
 
 package org.apache.hudi.client.utils;
 
-import org.apache.avro.Schema;
-import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.HoodieSchemaConversionUtils;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
@@ -29,6 +27,7 @@ import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.BaseFile;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.view.HoodieTablePreCommitFileSystemView;
 import org.apache.hudi.common.util.ReflectionUtils;
@@ -38,7 +37,6 @@ import org.apache.hudi.exception.HoodieValidationException;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
-import org.apache.hudi.table.action.commit.BaseSparkCommitActionExecutor;
 import org.apache.hudi.util.JavaScalaConverters;
 
 import org.apache.spark.sql.Dataset;
@@ -59,7 +57,7 @@ import java.util.stream.Stream;
  * Spark validator utils to verify and run any pre-commit validators configured.
  */
 public class SparkValidatorUtils {
-  private static final Logger LOG = LoggerFactory.getLogger(BaseSparkCommitActionExecutor.class);
+  private static final Logger LOG = LoggerFactory.getLogger(SparkValidatorUtils.class);
 
   /**
    * Check configured pre-commit validators and run them. Note that this only works for COW tables
@@ -161,9 +159,8 @@ public class SparkValidatorUtils {
     String schemaStr = table.getConfig().getWriteSchema();
     boolean isPopulateMetaFieldsEnabled = table.getConfig().populateMetaFields();
     if (!StringUtils.isNullOrEmpty(schemaStr)) {
-      Schema schema = new Schema.Parser().parse(table.getConfig().getWriteSchema());
-      readerSchema = HoodieSchema.fromAvroSchema(
-          isPopulateMetaFieldsEnabled ? HoodieAvroUtils.addMetadataFields(schema) : schema);
+      HoodieSchema schema = HoodieSchema.parse(table.getConfig().getWriteSchema());
+      readerSchema = isPopulateMetaFieldsEnabled ? HoodieSchemaUtils.addMetadataFields(schema) : schema;
     } else {
       LOG.warn("Schema not found from write config, defaulting to parsing schema from latest commit.");
       try {
