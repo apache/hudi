@@ -240,6 +240,7 @@ public class HoodieIncrSource extends RowSource {
         || (endCompletionTime = queryContext.getMaxCompletionTime())
         .equals(analyzer.getStartCompletionTime().orElseGet(() -> null))) {
       LOG.info("Already caught up. No new data to process");
+      metricsOption.ifPresent(metrics -> metrics.updateHoodieIncrSourceMetrics(0, 0));
       // TODO(yihua): fix checkpoint translation here as an improvement
       return Pair.of(Option.empty(), lastCheckpoint.orElse(null));
     }
@@ -288,6 +289,12 @@ public class HoodieIncrSource extends RowSource {
           // add filtering so that only interested records are returned.
           .filter(String.format("%s IN ('%s')", HoodieRecord.COMMIT_TIME_METADATA_FIELD,
               String.join("','", instantTimeList)));
+
+      // Calculate metrics for snapshot query
+      int numInstantsProcessed = instantTimeList.size();
+      int numUnprocessedInstants = (int) queryContext.getActiveTimeline()
+          .findInstantsAfter(endCompletionTime).countInstants();
+      metricsOption.ifPresent(metrics -> metrics.updateHoodieIncrSourceMetrics(numInstantsProcessed, numUnprocessedInstants));
     } else {
       String exclusiveStartCompletionTime = analyzer.getStartCompletionTime().isPresent()
           ? analyzer.getStartCompletionTime().get()
@@ -296,6 +303,13 @@ public class HoodieIncrSource extends RowSource {
               .getInstantComparator().completionTimeOrderedComparator())
           .map(HoodieInstant::getCompletionTime)
           .get()) - 1);
+
+      // Calculate metrics for instants being processed in current batch
+      int numInstantsProcessed = queryContext.getInstants().size();
+      int numUnprocessedInstants = (int) queryContext.getActiveTimeline()
+          .findInstantsAfter(endCompletionTime).countInstants();
+      metricsOption.ifPresent(metrics -> metrics.updateHoodieIncrSourceMetrics(numInstantsProcessed, numUnprocessedInstants));
+
       // normal incremental query
       source = reader
           .options(readOpts)

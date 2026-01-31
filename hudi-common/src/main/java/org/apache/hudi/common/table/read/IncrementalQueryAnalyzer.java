@@ -174,20 +174,20 @@ public class IncrementalQueryAnalyzer {
       // get hoodie instants
       Pair<List<String>, List<String>> splitInstantTime = splitInstantByActiveness(instantTimeList, completionTimeQueryView);
       Set<String> instantTimeSet = new HashSet<>(instantTimeList);
-      List<String> archivedInstantTime = splitInstantTime.getLeft();
-      List<String> activeInstantTime = splitInstantTime.getRight();
+      List<String> archivedInstantTimes = splitInstantTime.getLeft();
+      List<String> activeInstantTimes = splitInstantTime.getRight();
       List<HoodieInstant> archivedInstants = new ArrayList<>();
       List<HoodieInstant> activeInstants = new ArrayList<>();
       HoodieTimeline archivedReadTimeline = null;
-      if (!activeInstantTime.isEmpty()) {
+      if (!activeInstantTimes.isEmpty()) {
         activeInstants = filteredTimeline.getInstantsAsStream().filter(instant -> instantTimeSet.contains(instant.requestedTime())).collect(Collectors.toList());
         if (limit > 0 && limit < activeInstants.size()) {
           // streaming read speed limit, limits the maximum number of commits allowed to read for each run
           activeInstants = activeInstants.subList(0, limit);
         }
       }
-      if (!archivedInstantTime.isEmpty()) {
-        archivedReadTimeline = getArchivedReadTimeline(metaClient, archivedInstantTime.get(0));
+      if (!archivedInstantTimes.isEmpty()) {
+        archivedReadTimeline = getArchivedReadTimeline(metaClient, archivedInstantTimes.get(0));
         archivedInstants = archivedReadTimeline.getInstantsAsStream().filter(instant -> instantTimeSet.contains(instant.requestedTime())).collect(Collectors.toList());
       }
       List<String> instants = Stream.concat(archivedInstants.stream(), activeInstants.stream()).map(HoodieInstant::requestedTime).collect(Collectors.toList());

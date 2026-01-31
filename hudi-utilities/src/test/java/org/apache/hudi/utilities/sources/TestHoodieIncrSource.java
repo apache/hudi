@@ -104,7 +104,11 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.reset;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 public class TestHoodieIncrSource extends SparkClientFunctionalTestHarness {
@@ -141,6 +145,89 @@ public class TestHoodieIncrSource extends SparkClientFunctionalTestHarness {
     // Validate constructor without metrics.
     incrSource = new HoodieIncrSource(properties, jsc(), spark(), new DefaultStreamContext(new DummySchemaProvider(HoodieTestDataGenerator.HOODIE_SCHEMA), sourceProfile));
     assertEquals(Source.SourceType.ROW, incrSource.getSourceType());
+  }
+
+  @ParameterizedTest
+  @EnumSource(HoodieTableType.class)
+  public void testHoodieIncrSourceMetricsPublishing(HoodieTableType tableType) throws IOException {
+    this.tableType = tableType;
+    metaClient = getHoodieMetaClient(storageConf(), basePath());
+    HoodieWriteConfig writeConfig = getConfigBuilder(basePath(), metaClient)
+        .withArchivalConfig(HoodieArchivalConfig.newBuilder().archiveCommitsWith(10, 12).build())
+        .withCleanConfig(HoodieCleanConfig.newBuilder().retainCommits(9).build())
+        .withCompactionConfig(HoodieCompactionConfig.newBuilder()
+            .withInlineCompaction(false)
+            .withMaxNumDeltaCommitsBeforeCompaction(3).build())
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(false).build())
+        .build();
+
+    try (SparkRDDWriteClient writeClient = getHoodieWriteClient(writeConfig)) {
+      List<WriteResult> inserts = new ArrayList<>();
+      // Write 5 commits
+      for (int i = 0; i < 5; i++) {
+        inserts.add(writeRecords(writeClient, tableType, INSERT, null, 100));
+      }
+
+      // Reset mock to clear any previous invocations
+      reset(metrics);
+
+      // Test 1: Read everything from the beginning (no checkpoint)
+      // Should process all 5 commits, with 0 unprocessed commits
+      readAndAssertWithLatestTableVersion(
+          IncrSourceHelper.MissingCheckpointStrategy.READ_UPTO_LATEST_COMMIT,
+          Option.empty(),
+          500,
+          inserts.get(4).getInstant());
+      // Verify metrics were published
+      verify(metrics, atLeastOnce()).updateHoodieIncrSourceMetrics(anyLong(), anyLong());
+
+      // Reset mock for next test
+      reset(metrics);
+
+      // Test 2: Read from checkpoint at instant 2
+      // Should process commits 3 and 4 (2 commits), with 0 unprocessed
+      readAndAssertWithLatestTableVersion(
+          IncrSourceHelper.MissingCheckpointStrategy.READ_UPTO_LATEST_COMMIT,
+          Option.of(inserts.get(2).getInstant()),
+          200,
+          inserts.get(4).getInstant());
+      // Verify metrics were called
+      verify(metrics, atLeastOnce()).updateHoodieIncrSourceMetrics(anyLong(), anyLong());
+
+      // Reset mock for next test
+      reset(metrics);
+
+      // Write 2 more commits
+      inserts.add(writeRecords(writeClient, tableType, INSERT, null, 100));
+      inserts.add(writeRecords(writeClient, tableType, INSERT, null, 100));
+
+      // Test 3: Read from checkpoint at instant 2, but there are more commits available
+      // Should process commits 3 and 4 (2 commits), with 2 unprocessed (instant 5 and 6)
+      TypedProperties props = new TypedProperties();
+      props.setProperty("hoodie.streamer.source.hoodieincr.num_instants", "2");
+      readAndAssertWithLatestTableVersion(
+          IncrSourceHelper.MissingCheckpointStrategy.READ_UPTO_LATEST_COMMIT,
+          Option.of(inserts.get(2).getInstant()),
+          200,
+          inserts.get(4).getInstant(),
+          Option.empty(),
+          props,
+          HoodieTableVersion.EIGHT);
+      // Verify metrics were called
+      verify(metrics, atLeastOnce()).updateHoodieIncrSourceMetrics(anyLong(), anyLong());
+
+      // Reset mock for next test
+      reset(metrics);
+
+      // Test 4: Read with READ_LATEST strategy (snapshot query)
+      readAndAssertWithLatestTableVersion(
+          IncrSourceHelper.MissingCheckpointStrategy.READ_LATEST,
+          Option.empty(),
+          100,
+          inserts.get(6).getInstant());
+      // Verify metrics were published
+      verify(metrics, atLeastOnce()).updateHoodieIncrSourceMetrics(anyLong(), anyLong());
+    }
   }
 
   @ParameterizedTest
