@@ -317,6 +317,9 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
       hoodieRecord.deflate();
     } catch (Exception e) {
       LOG.error("Error writing record {}", hoodieRecord, e);
+      if (!config.getIgnoreWriteFailed()) {
+        throw new HoodieException(e.getMessage(), e);
+      }
       writeStatus.markFailure(hoodieRecord, e, recordMetadata);
     }
   }
@@ -524,10 +527,11 @@ public class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O
       flushToDiskIfRequired(record, false);
       writeToBuffer(record);
     } catch (Throwable t) {
-      // Not throwing exception from here, since we don't want to fail the entire job
-      // for a single record
-      writeStatus.markFailure(record, t, recordMetadata);
       LOG.error("Error writing record " + record, t);
+      if (!config.getIgnoreWriteFailed()) {
+        throw new HoodieException(t.getMessage(), t);
+      }
+      writeStatus.markFailure(record, t, recordMetadata);
     }
   }
 
