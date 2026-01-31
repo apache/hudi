@@ -225,23 +225,17 @@ public class HMSDDLExecutor implements DDLExecutor {
       return;
     }
     log.info("Changing partitions {} on {}", changedPartitions.size(), tableName);
-    try {
-      StorageDescriptor sd = client.getTable(databaseName, tableName).getSd();
-      List<Partition> partitionList = changedPartitions.stream().map(partition -> {
-        Path partitionPath = HadoopFSUtils.constructAbsolutePathInHadoopPath(syncConfig.getString(META_SYNC_BASE_PATH), partition);
-        String partitionScheme = partitionPath.toUri().getScheme();
-        String fullPartitionPath = StorageSchemes.HDFS.getScheme().equals(partitionScheme)
-            ? HadoopFSUtils.getDFSFullPartitionPath(syncConfig.getHadoopFileSystem(), partitionPath) : partitionPath.toString();
-        List<String> partitionValues = partitionValueExtractor.extractPartitionValuesInPath(partition);
-        StorageDescriptor partitionSd = sd.deepCopy();
-        partitionSd.setLocation(fullPartitionPath);
-        return new Partition(partitionValues, databaseName, tableName, 0, 0, partitionSd, null);
-      }).collect(Collectors.toList());
-      client.alter_partitions(databaseName, tableName, partitionList, null);
-    } catch (TException e) {
-      log.error("{}.{} update partition failed", databaseName, tableName, e);
-      throw new HoodieHiveSyncException(databaseName + "." + tableName + " update partition failed", e);
+    registerAlterPartitionEvent(tableName, changedPartitions);
+  }
+
+  @Override
+  public void touchPartitionsToTable(String tableName, List<String> touchedPartitions) {
+    if (touchedPartitions.isEmpty()) {
+      log.info("No partitions to touch for {}", tableName);
+      return;
     }
+    log.info("Touching partitions {} on {}", touchedPartitions.size(), tableName);
+    registerAlterPartitionEvent(tableName, touchedPartitions);
   }
 
   @Override
@@ -292,6 +286,26 @@ public class HMSDDLExecutor implements DDLExecutor {
   public void close() {
     if (client != null) {
       Hive.closeCurrent();
+    }
+  }
+
+  private void registerAlterPartitionEvent(String tableName, List<String> alteredPartitions) {
+    try {
+      StorageDescriptor sd = client.getTable(databaseName, tableName).getSd();
+      List<Partition> partitionList = alteredPartitions.stream().map(partition -> {
+        Path partitionPath = HadoopFSUtils.constructAbsolutePathInHadoopPath(syncConfig.getString(META_SYNC_BASE_PATH), partition);
+        String partitionScheme = partitionPath.toUri().getScheme();
+        String fullPartitionPath = StorageSchemes.HDFS.getScheme().equals(partitionScheme)
+            ? HadoopFSUtils.getDFSFullPartitionPath(syncConfig.getHadoopFileSystem(), partitionPath) : partitionPath.toString();
+        List<String> partitionValues = partitionValueExtractor.extractPartitionValuesInPath(partition);
+        StorageDescriptor partitionSd = sd.deepCopy();
+        partitionSd.setLocation(fullPartitionPath);
+        return new Partition(partitionValues, databaseName, tableName, 0, 0, partitionSd, null);
+      }).collect(Collectors.toList());
+      client.alter_partitions(databaseName, tableName, partitionList, null);
+    } catch (TException e) {
+      log.error("{}.{} update partition failed", databaseName, tableName, e);
+      throw new HoodieHiveSyncException(databaseName + "." + tableName + " update partition failed", e);
     }
   }
 }

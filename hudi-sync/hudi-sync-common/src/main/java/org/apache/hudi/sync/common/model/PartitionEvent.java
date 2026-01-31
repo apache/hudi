@@ -25,7 +25,7 @@ package org.apache.hudi.sync.common.model;
 public class PartitionEvent {
 
   public enum PartitionEventType {
-    ADD, UPDATE, DROP
+    ADD, UPDATE, DROP, TOUCH
   }
 
   public PartitionEventType eventType;
@@ -46,5 +46,9 @@ public class PartitionEvent {
 
   public static PartitionEvent newPartitionDropEvent(String storagePartition) {
     return new PartitionEvent(PartitionEventType.DROP, storagePartition);
+  }
+
+  public static PartitionEvent newPartitionTouchEvent(String storagePartition) {
+    return new PartitionEvent(PartitionEventType.TOUCH, storagePartition);
   }
 }
