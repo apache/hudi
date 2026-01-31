@@ -868,8 +868,7 @@ public class HoodieTableMetadataUtil {
                                                                                  HoodieTableMetaClient dataTableMetaClient,
                                                                                  int writesFileIdEncoding,
                                                                                  String instantTime,
-                                                                                 EngineType engineType,
-                                                                                 boolean enableOptimizeLogBlocksScan) {
+                                                                                 EngineType engineType) {
     List<HoodieWriteStat> allWriteStats = commitMetadata.getPartitionToWriteStats().values().stream()
         .flatMap(Collection::stream).collect(Collectors.toList());
     // Return early if there are no write stats, or if the operation is a compaction.
@@ -934,7 +933,7 @@ public class HoodieTableMetadataUtil {
                   .collect(Collectors.toList());
               // Extract revived and deleted keys
               Pair<Set<String>, Set<String>> revivedAndDeletedKeys = getRevivedAndDeletedKeysFromMergedLogs(dataTableMetaClient, instantTime, allLogFilePaths, finalWriterSchemaOpt,
-                  currentLogFilePaths, partitionPath, readerContextFactory.getContext(), enableOptimizeLogBlocksScan);
+                  currentLogFilePaths, partitionPath, readerContextFactory.getContext());
               Set<String> revivedKeys = revivedAndDeletedKeys.getLeft();
               Set<String> deletedKeys = revivedAndDeletedKeys.getRight();
               // Process revived keys to create updates
@@ -989,7 +988,6 @@ public class HoodieTableMetadataUtil {
    * @param logFilePaths         list of log file paths including current and previous file slices
    * @param finalWriterSchemaOpt records schema
    * @param currentLogFilePaths  list of log file paths for the current instant
-   * @param enableOptimizedLogBlocksScan - flag used to enable scanInternalV2 for log blocks in data table
    * @return pair of revived and deleted keys
    */
   @VisibleForTesting
@@ -999,8 +997,7 @@ public class HoodieTableMetadataUtil {
                                                                                           Option<HoodieSchema> finalWriterSchemaOpt,
                                                                                           List<String> currentLogFilePaths,
                                                                                           String partitionPath,
-                                                                                          HoodieReaderContext<T> readerContext,
-                                                                                          boolean enableOptimizedLogBlocksScan) {
+                                                                                          HoodieReaderContext<T> readerContext) {
     // Separate out the current log files
     List<String> logFilePathsWithoutCurrentLogFiles = logFilePaths.stream()
         .filter(logFilePath -> !currentLogFilePaths.contains(logFilePath))
@@ -1008,7 +1005,7 @@ public class HoodieTableMetadataUtil {
     if (logFilePathsWithoutCurrentLogFiles.isEmpty()) {
       // Only current log file is present, so we can directly get the deleted record keys from it and return the RLI records.
       try (ClosableIterator<BufferedRecord<T>> currentLogRecords =
-               getLogRecords(currentLogFilePaths, dataTableMetaClient, finalWriterSchemaOpt, instantTime, partitionPath, readerContext, enableOptimizedLogBlocksScan)) {
+               getLogRecords(currentLogFilePaths, dataTableMetaClient, finalWriterSchemaOpt, instantTime, partitionPath, readerContext)) {
         Set<String> deletedKeys = new HashSet<>();
         currentLogRecords.forEachRemaining(record -> {
           if (record.isDelete()) {
@@ -1019,7 +1016,7 @@ public class HoodieTableMetadataUtil {
       }
     }
     return getRevivedAndDeletedKeys(dataTableMetaClient, instantTime, partitionPath, readerContext,
-            logFilePaths, finalWriterSchemaOpt, logFilePathsWithoutCurrentLogFiles, enableOptimizedLogBlocksScan);
+            logFilePaths, finalWriterSchemaOpt, logFilePathsWithoutCurrentLogFiles);
   }
 
   private static <T> Pair<Set<String>, Set<String>> getRevivedAndDeletedKeys(HoodieTableMetaClient dataTableMetaClient,
@@ -1028,14 +1025,13 @@ public class HoodieTableMetadataUtil {
                                                                              HoodieReaderContext<T> readerContext,
                                                                              List<String> logFilePaths,
                                                                              Option<HoodieSchema> finalWriterSchemaOpt,
-                                                                             List<String> logFilePathsWithoutCurrentLogFiles,
-                                                                             boolean enableOptimizedLogBlocksScan) {
+                                                                             List<String> logFilePathsWithoutCurrentLogFiles) {
     // Partition valid (non-deleted) and deleted keys from all log files, including current, in a single pass
     Set<String> validKeysForAllLogs = new HashSet<>();
     Set<String> deletedKeysForAllLogs = new HashSet<>();
     // Fetch log records for all log files
     try (ClosableIterator<BufferedRecord<T>> allLogRecords =
-             getLogRecords(logFilePaths, dataTableMetaClient, finalWriterSchemaOpt, instantTime, partitionPath, readerContext, enableOptimizedLogBlocksScan)) {
+             getLogRecords(logFilePaths, dataTableMetaClient, finalWriterSchemaOpt, instantTime, partitionPath, readerContext)) {
       allLogRecords.forEachRemaining(record -> {
         if (record.isDelete()) {
           deletedKeysForAllLogs.add(record.getRecordKey());
@@ -1050,7 +1046,7 @@ public class HoodieTableMetadataUtil {
     Set<String> deletedKeysForPreviousLogs = new HashSet<>();
     // Fetch log records for previous log files (excluding the current log files)
     try (ClosableIterator<BufferedRecord<T>> previousLogRecords =
-             getLogRecords(logFilePathsWithoutCurrentLogFiles, dataTableMetaClient, finalWriterSchemaOpt, instantTime, partitionPath, readerContext, enableOptimizedLogBlocksScan)) {
+             getLogRecords(logFilePathsWithoutCurrentLogFiles, dataTableMetaClient, finalWriterSchemaOpt, instantTime, partitionPath, readerContext)) {
       previousLogRecords.forEachRemaining(record -> {
         if (record.isDelete()) {
           deletedKeysForPreviousLogs.add(record.getRecordKey());
@@ -1068,8 +1064,7 @@ public class HoodieTableMetadataUtil {
                                                                        Option<HoodieSchema> writerSchemaOpt,
                                                                        String latestCommitTimestamp,
                                                                        String partitionPath,
-                                                                       HoodieReaderContext<T> readerContext,
-                                                                       boolean enableOptimizedLogBlocksScan) {
+                                                                       HoodieReaderContext<T> readerContext) {
     if (writerSchemaOpt.isPresent() && !logFilePaths.isEmpty()) {
       List<HoodieLogFile> logFiles = logFilePaths.stream().map(HoodieLogFile::new).collect(Collectors.toList());
       FileSlice fileSlice = new FileSlice(partitionPath, logFiles.get(0).getFileId(), logFiles.get(0).getDeltaCommitTime());
@@ -1100,7 +1095,6 @@ public class HoodieTableMetadataUtil {
           .withMetaClient(datasetMetaClient)
           .withAllowInflightInstants(true)
           .withRecordBuffer(recordBuffer)
-          .withOptimizedLogBlocksScan(enableOptimizedLogBlocksScan)
           .build()) {
         // initializes the record buffer with the log records
         return recordBuffer.getLogRecordIterator();

@@ -66,10 +66,10 @@ public class HoodieMergedLogRecordReader<T> extends BaseHoodieLogRecordReader<T>
   private HoodieMergedLogRecordReader(HoodieReaderContext<T> readerContext, HoodieTableMetaClient metaClient, HoodieStorage storage,
                                       List<HoodieLogFile> logFiles, boolean reverseReader,
                                       int bufferSize, Option<InstantRange> instantRange, boolean withOperationField, boolean forceFullScan,
-                                      Option<String> partitionName, Option<String> keyFieldOverride, boolean enableOptimizedLogBlocksScan,
+                                      Option<String> partitionName, Option<String> keyFieldOverride,
                                       HoodieFileGroupRecordBuffer<T> recordBuffer, boolean allowInflightInstants) {
     super(readerContext, metaClient, storage, logFiles, reverseReader, bufferSize, instantRange, withOperationField,
-        forceFullScan, partitionName, keyFieldOverride, enableOptimizedLogBlocksScan, recordBuffer, allowInflightInstants);
+        forceFullScan, partitionName, keyFieldOverride, recordBuffer, allowInflightInstants);
 
     if (forceFullScan) {
       performScan();
@@ -228,12 +228,6 @@ public class HoodieMergedLogRecordReader<T> extends BaseHoodieLogRecordReader<T>
       return this;
     }
 
-    @Override
-    public Builder<T> withOptimizedLogBlocksScan(boolean enableOptimizedLogBlocksScan) {
-      this.enableOptimizedLogBlocksScan = enableOptimizedLogBlocksScan;
-      return this;
-    }
-
     public Builder<T> withKeyFieldOverride(String keyFieldOverride) {
       this.keyFieldOverride = Objects.requireNonNull(keyFieldOverride);
       return this;
@@ -274,7 +268,7 @@ public class HoodieMergedLogRecordReader<T> extends BaseHoodieLogRecordReader<T>
           withOperationField, forceFullScan,
           Option.ofNullable(partitionName),
           Option.ofNullable(keyFieldOverride),
-          enableOptimizedLogBlocksScan, recordBuffer,
+          recordBuffer,
           allowInflightInstants);
     }
   }
