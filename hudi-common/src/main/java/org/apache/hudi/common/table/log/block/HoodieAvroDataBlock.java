@@ -42,6 +42,7 @@ import org.apache.avro.generic.GenericDatumReader;
 import org.apache.avro.generic.GenericDatumWriter;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.avro.io.BinaryDecoder;
+import org.apache.avro.io.BinaryEncoder;
 import org.apache.avro.io.Decoder;
 import org.apache.avro.io.DecoderFactory;
 import org.apache.avro.io.Encoder;
@@ -65,6 +66,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Supplier;
 import java.util.zip.DeflaterOutputStream;
 import java.util.zip.InflaterInputStream;
@@ -79,6 +81,10 @@ import static org.apache.hudi.common.util.ValidationUtils.checkState;
  * HoodieAvroDataBlock contains a list of records serialized using Avro. It is used with the Parquet base file format.
  */
 public class HoodieAvroDataBlock extends HoodieDataBlock {
+
+  private static ConcurrentHashMap<String, Schema> schemaMap = new ConcurrentHashMap<>();
+  private static ThreadLocal<BinaryEncoder> encoderCache = new ThreadLocal<>();
+  private static ThreadLocal<BinaryDecoder> decoderCache = new ThreadLocal<>();
 
   public HoodieAvroDataBlock(Supplier<SeekableDataInputStream> inputStreamSupplier,
                              Option<byte[]> content,
