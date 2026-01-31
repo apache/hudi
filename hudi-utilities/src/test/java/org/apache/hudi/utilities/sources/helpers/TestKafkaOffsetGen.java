@@ -605,4 +605,67 @@ public class TestKafkaOffsetGen {
     when(mock.describeConfigs(Collections.singleton(resource))).thenReturn(mockResult);
     when(mockResult.all()).thenReturn(future);
   }
+
+  @Test
+  public void testKafkaDelayCountMetricEmittedWithLag() {
+    testUtils.createTopic(testTopicName, 1);
+    String[] messages = new String[1000];
+    for (int i = 0; i < 1000; i++) {
+      messages[i] = String.format("{\"id\":\"%d\"}", i);
+    }
+    testUtils.sendMessages(testTopicName, messages);
+
+    HoodieIngestionMetrics mockMetrics = mock(HoodieIngestionMetrics.class);
+    KafkaOffsetGen kafkaOffsetGen = new KafkaOffsetGen(getConsumerConfigs("earliest", KAFKA_CHECKPOINT_TYPE_STRING));
+
+    // Read first 250 messages, then simulate lag
+    String lastCheckpointString = testTopicName + ",0:250";
+    kafkaOffsetGen.getNextOffsetRanges(
+        Option.of(new StreamerCheckpointV2(lastCheckpointString)), 500, mockMetrics);
+
+    // Verify metric was called with lag count of 750 (1000 - 250)
+    verify(mockMetrics, times(1)).updateStreamerSourceDelayCount("kafkaDelayCount", 750L);
+  }
+
+  @Test
+  public void testKafkaDelayCountMetricEmittedWithoutCheckpoint() {
+    testUtils.createTopic(testTopicName, 1);
+    String[] messages = new String[1000];
+    for (int i = 0; i < 1000; i++) {
+      messages[i] = String.format("{\"id\":\"%d\"}", i);
+    }
+    testUtils.sendMessages(testTopicName, messages);
+
+    HoodieIngestionMetrics mockMetrics = mock(HoodieIngestionMetrics.class);
+    KafkaOffsetGen kafkaOffsetGen = new KafkaOffsetGen(getConsumerConfigs("earliest", KAFKA_CHECKPOINT_TYPE_STRING));
+
+    // First run without checkpoint
+    kafkaOffsetGen.getNextOffsetRanges(Option.empty(), 500, mockMetrics);
+
+    // Verify metric was called with 0 (no checkpoint = no lag)
+    verify(mockMetrics, times(1)).updateStreamerSourceDelayCount("kafkaDelayCount", 0L);
+  }
+
+  @Test
+  public void testKafkaDelayCountMetricEmittedWithMultiplePartitions() {
+    testUtils.createTopic(testTopicName, 2);
+    String[] messages = new String[1000];
+    for (int i = 0; i < 1000; i++) {
+      messages[i] = String.format("{\"id\":\"%d\"}", i);
+    }
+    testUtils.sendMessages(testTopicName, messages);
+
+    HoodieIngestionMetrics mockMetrics = mock(HoodieIngestionMetrics.class);
+    KafkaOffsetGen kafkaOffsetGen = new KafkaOffsetGen(getConsumerConfigs("earliest", KAFKA_CHECKPOINT_TYPE_STRING));
+
+    // Checkpoint with some consumed messages, creating lag
+    // Checkpoint shows 250 messages consumed from partition 0 and 249 from partition 1 (total 499)
+    // With 1000 total messages sent, the expected lag is 1000 - 499 = 501
+    String lastCheckpointString = testTopicName + ",0:250,1:249";
+    kafkaOffsetGen.getNextOffsetRanges(
+        Option.of(new StreamerCheckpointV2(lastCheckpointString)), 300, mockMetrics);
+
+    // Verify metric was called with exact delay count of 501 (1000 messages - 499 consumed)
+    verify(mockMetrics, times(1)).updateStreamerSourceDelayCount("kafkaDelayCount", 501L);
+  }
 }
