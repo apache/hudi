@@ -861,6 +861,53 @@ public class TestAvroSchemaConverter {
   }
 
   @Test
+  public void testUnshreddedVariantType() throws Exception {
+    HoodieSchema variant = HoodieSchema.createVariant();
+    HoodieSchema schema = HoodieSchema.createRecord("myrecord", null, null, false,
+        Collections.singletonList(HoodieSchemaField.of("myvariant", variant, null, null)));
+    testAvroToParquetConversion(
+        schema,
+        "message myrecord {\n"
+            + "  required group myvariant {\n"
+            + "    required binary value;\n"
+            + "    required binary metadata;\n"
+            + "  }\n"
+            + "}\n");
+  }
+
+  @Test
+  public void testShreddedVariantType() throws Exception {
+    HoodieSchema variant = HoodieSchema.createVariantShredded(HoodieSchema.create(HoodieSchemaType.INT));
+    HoodieSchema schema = HoodieSchema.createRecord("myrecord", null, null, false,
+        Collections.singletonList(HoodieSchemaField.of("myvariant", variant, null, null)));
+    testAvroToParquetConversion(
+        schema,
+        "message myrecord {\n"
+            + "  required group myvariant {\n"
+            + "    optional binary value;\n"
+            + "    required binary metadata;\n"
+            + "    required int32 typed_value;\n"
+            + "  }\n"
+            + "}\n");
+  }
+
+  @Test
+  public void testOptionalVariantType() throws Exception {
+    HoodieSchema variant = HoodieSchema.createVariant();
+    HoodieSchema schema = HoodieSchema.createRecord("myrecord", null, null, false,
+        Collections.singletonList(
+            HoodieSchemaField.of("myvariant", HoodieSchema.createNullable(variant), null, HoodieSchema.NULL_VALUE)));
+    testAvroToParquetConversion(
+        schema,
+        "message myrecord {\n"
+            + "  optional group myvariant {\n"
+            + "    required binary value;\n"
+            + "    required binary metadata;\n"
+            + "  }\n"
+            + "}\n");
+  }
+
+  @Test
   public void testAvroFixed12AsParquetInt96Type() throws Exception {
     HoodieSchema schema = getSchemaFromResource(TestAvroSchemaConverter.class, "/parquet-java/fixedToInt96.avsc");
 
