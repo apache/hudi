@@ -563,7 +563,7 @@ public class TestHoodieRealtimeRecordReader {
     // write rollback for the previous block in new log file version
     newCommitTime = "102";
     writer =
-        InputFormatTestUtil.writeRollbackBlockToLogFile(partitionDir, storage, schema.toAvroSchema(), "fileid0",
+        InputFormatTestUtil.writeRollbackBlockToLogFile(partitionDir, storage, schema, "fileid0",
             instantTime,
             newCommitTime, "101", 1);
     logFiles.add(writer.getLogFile());

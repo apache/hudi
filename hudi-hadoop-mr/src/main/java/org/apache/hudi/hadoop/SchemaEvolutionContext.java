@@ -45,7 +45,6 @@ import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.HoodieStorageUtils;
 
-import org.apache.avro.Schema;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hive.metastore.api.hive_metastoreConstants;
@@ -127,13 +126,13 @@ public class SchemaEvolutionContext {
     return internalSchemaOpt;
   }
 
-  public Schema getAvroSchemaFromCache() throws Exception {
-    Option<Schema> avroSchemaOpt = getCachedData(
+  public HoodieSchema getSchemaFromCache() throws Exception {
+    Option<HoodieSchema> avroSchemaOpt = getCachedData(
         HoodieCombineHiveInputFormat.SCHEMA_CACHE_KEY_PREFIX,
-        json -> Option.ofNullable(new Schema.Parser().parse(json)));
+        json -> Option.ofNullable(HoodieSchema.parse(json)));
     if (avroSchemaOpt == null) {
       // the code path should only be invoked in tests.
-      return new TableSchemaResolver(this.metaClient).getTableSchema().toAvroSchema();
+      return new TableSchemaResolver(this.metaClient).getTableSchema();
     }
     return avroSchemaOpt.orElseThrow(() -> new HoodieValidationException("The avro schema cache should always be set up together with the internal schema cache"));
   }
@@ -202,7 +201,7 @@ public class SchemaEvolutionContext {
       return;
     }
     if (internalSchemaOption.isPresent()) {
-      Schema tableAvroSchema = getAvroSchemaFromCache();
+      HoodieSchema tableSchema = getSchemaFromCache();
       List<String> requiredColumns = getRequireColumn(job);
       InternalSchema prunedInternalSchema = InternalSchemaUtils.pruneInternalSchema(internalSchemaOption.get(),
           requiredColumns);
@@ -210,12 +209,12 @@ public class SchemaEvolutionContext {
       String partitionFields = job.get(hive_metastoreConstants.META_TABLE_PARTITION_COLUMNS, "");
       List<String> partitioningFields = !partitionFields.isEmpty() ? Arrays.stream(partitionFields.split("/")).collect(Collectors.toList())
           : new ArrayList<>();
-      HoodieSchema writerSchema = InternalSchemaConverter.convert(internalSchemaOption.get(), tableAvroSchema.getName());
+      HoodieSchema writerSchema = InternalSchemaConverter.convert(internalSchemaOption.get(), tableSchema.getName());
       writerSchema = HoodieRealtimeRecordReaderUtils.addPartitionFields(writerSchema, partitioningFields);
       Map<String, HoodieSchemaField> schemaFieldsMap = HoodieRealtimeRecordReaderUtils.getNameToFieldMap(writerSchema);
       // we should get HoodieParquetInputFormat#HIVE_TMP_COLUMNS,since serdeConstants#LIST_COLUMNS maybe change by HoodieParquetInputFormat#setColumnNameList
       HoodieSchema hiveSchema = realtimeRecordReader.constructHiveOrderedSchema(writerSchema, schemaFieldsMap, job.get(HIVE_TMP_COLUMNS));
-      HoodieSchema readerSchema = InternalSchemaConverter.convert(prunedInternalSchema, tableAvroSchema.getName());
+      HoodieSchema readerSchema = InternalSchemaConverter.convert(prunedInternalSchema, tableSchema.getName());
       // setUp evolution schema
       realtimeRecordReader.setWriterSchema(writerSchema);
       realtimeRecordReader.setReaderSchema(readerSchema);

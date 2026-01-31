@@ -40,7 +40,6 @@ import org.apache.hudi.hadoop.utils.HoodieRealtimeInputFormatUtils;
 import org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils;
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
 
-import org.apache.avro.Schema;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hive.metastore.api.hive_metastoreConstants;
@@ -95,7 +94,7 @@ public class HoodieFileGroupReaderBasedRecordReader implements RecordReader<Null
     org.apache.hadoop.mapred.RecordReader<NullWritable, ArrayWritable> getRecordReader(
         final org.apache.hadoop.mapred.InputSplit split,
         final org.apache.hadoop.mapred.JobConf job,
-        Schema dataSchema
+        HoodieSchema dataSchema
     ) throws IOException;
   }
 
