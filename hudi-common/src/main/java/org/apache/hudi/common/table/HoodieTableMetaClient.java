@@ -173,6 +173,7 @@ public class HoodieTableMetaClient implements Serializable {
   private StoragePath timelineHistoryPath;
   protected HoodieTableConfig tableConfig;
   protected HoodieActiveTimeline activeTimeline;
+  protected HoodieActiveTimeline rawActiveTimeline;
   private ConsistencyGuardConfig consistencyGuardConfig = ConsistencyGuardConfig.newBuilder().build();
   private FileSystemRetryConfig fileSystemRetryConfig = FileSystemRetryConfig.newBuilder().build();
   protected HoodieMetaserverConfig metaserverConfig;
@@ -559,9 +560,28 @@ public class HoodieTableMetaClient implements Serializable {
    */
   public synchronized HoodieActiveTimeline getActiveTimeline() {
     if (activeTimeline == null) {
-      activeTimeline = tableFormat.getTimelineFactory().createActiveTimeline(this);
+      if (rawActiveTimeline == null) {
+        rawActiveTimeline = getRawActiveTimeline();
+      }
+      List<HoodieInstant> activeInstants = TimelineLayout.fromVersion(getTimelineLayoutVersion())
+              .filterHoodieInstants(rawActiveTimeline.getInstants().stream())
+              .sorted()
+              .collect(Collectors.toList());
+      activeTimeline = tableFormat.getTimelineFactory().createActiveTimeline(this, activeInstants);
     }
     return activeTimeline;
+  }
+
+  /**
+   * Get the all instants as a timeline.
+   *
+   * @return all instants in the current timeline
+   */
+  public synchronized HoodieActiveTimeline getRawActiveTimeline() {
+    if (rawActiveTimeline == null) {
+      rawActiveTimeline = tableFormat.getTimelineFactory().createActiveTimeline(this, false);
+    }
+    return rawActiveTimeline;
   }
 
   /**

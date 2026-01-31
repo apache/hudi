@@ -21,6 +21,7 @@ package org.apache.hudi.common.table.timeline;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 
 import java.io.Serializable;
+import java.util.List;
 import java.util.stream.Stream;
 
 public abstract class TimelineFactory implements Serializable {
@@ -42,4 +43,6 @@ public abstract class TimelineFactory implements Serializable {
   public abstract HoodieActiveTimeline createActiveTimeline(HoodieTableMetaClient metaClient, boolean applyLayoutFilter);
 
   public abstract CompletionTimeQueryView createCompletionTimeQueryView(HoodieTableMetaClient metaClient);
+
+  public abstract HoodieActiveTimeline createActiveTimeline(HoodieTableMetaClient metaClient, List<HoodieInstant> instants);
 }
