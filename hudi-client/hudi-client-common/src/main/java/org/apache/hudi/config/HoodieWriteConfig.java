@@ -920,6 +920,13 @@ public class HoodieWriteConfig extends HoodieConfig {
           + " or when using a custom Hoodie Concat Handle Implementation controlled by the config " + CONCAT_HANDLE_CLASS_NAME.key()
               + ", enabling this config results in fallback to the default implementations if instantiation of the custom implementation fails");
 
+  public static final ConfigProperty<Boolean> IGNORE_FAILED = ConfigProperty
+      .key("hoodie.write.ignore.failed")
+      .defaultValue(true)
+      .sinceVersion("")
+      .withDocumentation("Flag to indicate whether to ignore any non exception error (e.g. write status error)."
+          + "By default true for backward compatibility.");
+
   /**
    * Config key with boolean value that indicates whether record being written during MERGE INTO Spark SQL
    * operation are already prepped.
@@ -2924,6 +2931,13 @@ public class HoodieWriteConfig extends HoodieConfig {
     }
   }
 
+  /**
+   * Whether to ignore the write failed.
+   */
+  public boolean getIgnoreWriteFailed() {
+    return getBooleanOrDefault(IGNORE_FAILED);
+  }
+
   public static class Builder {
 
     protected final HoodieWriteConfig writeConfig = new HoodieWriteConfig();
@@ -3502,6 +3516,11 @@ public class HoodieWriteConfig extends HoodieConfig {
 
     public Builder withFileGroupReaderMergeHandleClassName(String className) {
       writeConfig.setValue(COMPACT_MERGE_HANDLE_CLASS_NAME, className);
+      return this;
+    }
+
+    public Builder withWriteIgnoreFailed(boolean ignoreFailedWriteData) {
+      writeConfig.setValue(IGNORE_FAILED, String.valueOf(ignoreFailedWriteData));
       return this;
     }
 

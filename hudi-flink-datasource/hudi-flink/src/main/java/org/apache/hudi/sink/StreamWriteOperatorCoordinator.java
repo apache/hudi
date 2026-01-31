@@ -619,53 +619,41 @@ public class StreamWriteOperatorCoordinator
    */
   @SuppressWarnings("unchecked")
   private void doCommit(long checkpointId, String instant, List<WriteStatus> dataWriteResults, List<WriteStatus> indexWriteResults) {
-    // commit or rollback
+    // commit and error logging
+    HashMap<String, String> checkpointCommitMetadata = new HashMap<>();
+    StreamerUtil.addFlinkCheckpointIdIntoMetaData(conf, checkpointCommitMetadata, checkpointId);
+    final Map<String, List<String>> partitionToReplacedFileIds = tableState.isOverwrite
+        ? writeClient.getPartitionToReplacedFileIds(tableState.operationType, dataWriteResults)
+        : Collections.emptyMap();
+    List<WriteStatus> allWriteStatus = Stream.concat(dataWriteResults.stream(), indexWriteResults.stream()).collect(Collectors.toList());
+    boolean success = writeClient.commit(instant, allWriteStatus, Option.of(checkpointCommitMetadata),
+        tableState.commitAction, partitionToReplacedFileIds);
+    if (success) {
+      this.eventBuffers.reset(checkpointId);
+      log.info("Commit instant [{}] success!", instant);
+    } else {
+      throw new HoodieException(String.format("Commit instant [%s] failed!", instant));
+    }
+
     long totalErrorRecords = dataWriteResults.stream().map(WriteStatus::getTotalErrorRecords).reduce(Long::sum).orElse(0L);
     long totalRecords = dataWriteResults.stream().map(WriteStatus::getTotalRecords).reduce(Long::sum).orElse(0L);
     boolean hasErrors = totalErrorRecords > 0;
 
-    if (!hasErrors || this.conf.get(FlinkOptions.IGNORE_FAILED)) {
-      HashMap<String, String> checkpointCommitMetadata = new HashMap<>();
-      StreamerUtil.addFlinkCheckpointIdIntoMetaData(conf, checkpointCommitMetadata, checkpointId);
-
-      if (hasErrors) {
-        log.warn("Some records failed to merge but forcing commit since commitOnErrors set to true. Errors/Total={}/{}",
-            totalErrorRecords, totalRecords);
-      }
-
-      final Map<String, List<String>> partitionToReplacedFileIds = tableState.isOverwrite
-          ? writeClient.getPartitionToReplacedFileIds(tableState.operationType, dataWriteResults)
-          : Collections.emptyMap();
-      List<WriteStatus> allWriteStatus = Stream.concat(dataWriteResults.stream(), indexWriteResults.stream()).collect(Collectors.toList());
-      boolean success = writeClient.commit(instant, allWriteStatus, Option.of(checkpointCommitMetadata),
-          tableState.commitAction, partitionToReplacedFileIds);
-      if (success) {
-        this.eventBuffers.reset(checkpointId);
-        log.info("Commit instant [{}] success!", instant);
-      } else {
-        throw new HoodieException(String.format("Commit instant [%s] failed!", instant));
-      }
-    } else {
-      if (log.isErrorEnabled()) {
-        log.error("Error when writing. Errors/Total={}/{}", totalErrorRecords, totalRecords);
-        log.error("The first 10 files with write errors:");
-        dataWriteResults.stream().filter(WriteStatus::hasErrors).limit(10).forEach(ws -> {
-          if (ws.getGlobalError() != null) {
-            log.error("Global error for partition path {} and fileID {}: {}",
-                ws.getPartitionPath(), ws.getFileId(), ws.getGlobalError());
-          }
-          if (!ws.getErrors().isEmpty()) {
-            log.error("The first 100 records-level errors for partition path {} and fileID {}:",
-                ws.getPartitionPath(), ws.getFileId());
-            ws.getErrors().entrySet().stream().limit(100).forEach(entry ->
-                log.error("Error for key: {} and Exception: {}", entry.getKey(), entry.getValue().getMessage()));
-          }
-        });
-      }
-
-      // Rolls back instant
-      writeClient.rollback(instant);
-      throw new HoodieException(String.format("Commit instant [%s] failed and rolled back !", instant));
+    if (hasErrors && log.isErrorEnabled()) {
+      log.error("Error when writing. Errors/Total={}/{}", totalErrorRecords, totalRecords);
+      log.error("The first 10 files with write errors:");
+      dataWriteResults.stream().filter(WriteStatus::hasErrors).limit(10).forEach(ws -> {
+        if (ws.getGlobalError() != null) {
+          log.error("Global error for partition path {} and fileID {}: {}",
+              ws.getPartitionPath(), ws.getFileId(), ws.getGlobalError());
+        }
+        if (!ws.getErrors().isEmpty()) {
+          log.error("The first 100 records-level errors for partition path {} and fileID {}:",
+              ws.getPartitionPath(), ws.getFileId());
+          ws.getErrors().entrySet().stream().limit(100).forEach(entry ->
+              log.error("Error for key: {} and Exception: {}", entry.getKey(), entry.getValue().getMessage()));
+        }
+      });
     }
   }
 
