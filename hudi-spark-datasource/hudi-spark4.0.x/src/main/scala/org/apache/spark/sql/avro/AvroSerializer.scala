@@ -22,6 +22,7 @@ import org.apache.avro.Conversions.DecimalConversion
 import org.apache.avro.LogicalTypes.{LocalTimestampMicros, LocalTimestampMillis, TimestampMicros, TimestampMillis}
 import org.apache.avro.Schema.Type
 import org.apache.avro.Schema.Type._
+import org.apache.avro.generic.GenericData
 import org.apache.avro.generic.GenericData.{EnumSymbol, Fixed, Record}
 import org.apache.avro.util.Utf8
 import org.apache.spark.internal.Logging
@@ -220,6 +221,32 @@ private[sql] class AvroSerializer(rootCatalystType: DataType,
           // `ArrayList` backed by the specified array without data copying.
           java.util.Arrays.asList(result: _*)
         }
+
+      case (VariantType, RECORD) if avroType.getProp("logicalType") == "variant" =>
+        // Fail fast if schema is mismatched
+        val valueField = avroType.getField("value")
+        val metadataField = avroType.getField("metadata")
+
+        if (valueField == null || metadataField == null) {
+          throw new IncompatibleSchemaException(errorPrefix +
+            s"Avro schema with 'variant' logical type must have 'value' and 'metadata' fields. " +
+            s"Found: ${avroType.getFields.asScala.map(_.name()).mkString(", ")}")
+        }
+
+        // Pre-calculation: Cache indices for performance
+        val valueIdx = valueField.pos()
+        val metadataIdx = metadataField.pos()
+
+        // Variant types are stored as records with "value" and "metadata" binary fields
+        // This matches the schema created in SchemaConverters.toAvroType
+        (getter, ordinal) =>
+          val variant = getter.getVariant(ordinal)
+          val record = new GenericData.Record(avroType)
+
+          // Use positional access in serialization loop
+          record.put(valueIdx, ByteBuffer.wrap(variant.getValue))
+          record.put(metadataIdx, ByteBuffer.wrap(variant.getMetadata))
+          record
 
       case (st: StructType, RECORD) =>
         val structConverter = newStructConverter(st, avroType, catalystPath, avroPath)
