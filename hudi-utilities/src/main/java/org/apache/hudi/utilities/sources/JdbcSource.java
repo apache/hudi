@@ -31,6 +31,7 @@ import org.apache.hudi.utilities.config.JdbcSourceConfig;
 import org.apache.hudi.utilities.exception.HoodieReadFromSourceException;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.io.IOUtils;
@@ -43,8 +44,6 @@ import org.apache.spark.sql.SparkSession;
 import org.apache.spark.sql.functions;
 import org.apache.spark.sql.types.DataTypes;
 import org.apache.spark.storage.StorageLevel;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.InputStream;
 import java.net.URI;
@@ -63,9 +62,9 @@ import static org.apache.hudi.common.util.ConfigUtils.stripPrefix;
  * Reads data from RDBMS data sources.
  */
 
+@Slf4j
 public class JdbcSource extends RowSource {
 
-  private static final Logger LOG = LoggerFactory.getLogger(JdbcSource.class);
   private static final List<String> DB_LIMIT_CLAUSE = Arrays.asList("mysql", "postgresql", "h2");
   private static final String URI_JDBC_PREFIX = "jdbc:";
 
@@ -99,12 +98,12 @@ public class JdbcSource extends RowSource {
           Config.RDBMS_TABLE_PROP, getStringWithAltKeys(properties, JdbcSourceConfig.RDBMS_TABLE_NAME));
 
       if (containsConfigProperty(properties, JdbcSourceConfig.PASSWORD)) {
-        LOG.info("Reading JDBC password from properties file....");
+        log.info("Reading JDBC password from properties file....");
         dataFrameReader = dataFrameReader.option(Config.PASSWORD_PROP,
             getStringWithAltKeys(properties, JdbcSourceConfig.PASSWORD));
       } else if (containsConfigProperty(properties, JdbcSourceConfig.PASSWORD_FILE)
           && !StringUtils.isNullOrEmpty(getStringWithAltKeys(properties, JdbcSourceConfig.PASSWORD_FILE))) {
-        LOG.info("Reading JDBC password from password file {}", getStringWithAltKeys(properties, JdbcSourceConfig.PASSWORD_FILE));
+        log.info("Reading JDBC password from password file {}", getStringWithAltKeys(properties, JdbcSourceConfig.PASSWORD_FILE));
         FileSystem fileSystem = FileSystem.get(session.sparkContext().hadoopConfiguration());
         passwordFileStream = fileSystem.open(new Path(getStringWithAltKeys(properties, JdbcSourceConfig.PASSWORD_FILE)));
         byte[] bytes = new byte[passwordFileStream.available()];
@@ -152,7 +151,7 @@ public class JdbcSource extends RowSource {
         String key = keyOption.get();
         String value = properties.getString(prop);
         if (!StringUtils.isNullOrEmpty(value)) {
-          LOG.info("Adding {} -> {} to jdbc options", key, value);
+          log.info("Adding {} -> {} to jdbc options", key, value);
           dataFrameReader.option(key, value);
         }
       }
@@ -166,10 +165,10 @@ public class JdbcSource extends RowSource {
           JdbcSourceConfig.USER, JdbcSourceConfig.RDBMS_TABLE_NAME, JdbcSourceConfig.IS_INCREMENTAL));
       return fetch(lastCheckpoint, sourceLimit);
     } catch (HoodieException e) {
-      LOG.error("Exception while running JDBCSource ", e);
+      log.error("Exception while running JDBCSource ", e);
       throw e;
     } catch (Exception e) {
-      LOG.error("Exception while running JDBCSource ", e);
+      log.error("Exception while running JDBCSource ", e);
       throw new HoodieException("Error fetching next batch from JDBC source. Last checkpoint: " + lastCheckpoint.orElse(null), e);
     }
   }
@@ -187,7 +186,7 @@ public class JdbcSource extends RowSource {
     if (lastCheckpoint.isPresent() && !StringUtils.isNullOrEmpty(lastCheckpoint.get().getCheckpointKey())) {
       dataset = incrementalFetch(lastCheckpoint, sourceLimit);
     } else {
-      LOG.info("No checkpoint references found. Doing a full rdbms table fetch");
+      log.info("No checkpoint references found. Doing a full rdbms table fetch");
       dataset = fullFetch(sourceLimit);
     }
     dataset.persist(StorageLevel.fromString(
@@ -220,14 +219,14 @@ public class JdbcSource extends RowSource {
         }
       }
       String query = String.format(ppdQuery, queryBuilder.toString());
-      LOG.info("PPD QUERY: {}", query);
-      LOG.info("Referenced last checkpoint and prepared new predicate pushdown query for jdbc pull {}", query);
+      log.info("PPD QUERY: {}", query);
+      log.info("Referenced last checkpoint and prepared new predicate pushdown query for jdbc pull {}", query);
       return validatePropsAndGetDataFrameReader(sparkSession, props).option(Config.RDBMS_TABLE_PROP, query).load();
     } catch (Exception e) {
-      LOG.error("Error while performing an incremental fetch. Not all database support the PPD query we generate to do an incremental scan", e);
+      log.error("Error while performing an incremental fetch. Not all database support the PPD query we generate to do an incremental scan", e);
       if (containsConfigProperty(props, JdbcSourceConfig.FALLBACK_TO_FULL_FETCH)
           && getBooleanWithAltKeys(props, JdbcSourceConfig.FALLBACK_TO_FULL_FETCH)) {
-        LOG.warn("Falling back to full scan.");
+        log.warn("Falling back to full scan.");
         return fullFetch(sourceLimit);
       }
       throw e;
@@ -262,7 +261,7 @@ public class JdbcSource extends RowSource {
       if (isIncremental) {
         Column incrementalColumn = rowDataset.col(getStringWithAltKeys(props, JdbcSourceConfig.INCREMENTAL_COLUMN));
         final String max = rowDataset.agg(functions.max(incrementalColumn).cast(DataTypes.StringType)).first().getString(0);
-        LOG.info("Checkpointing column {} with value: {}", incrementalColumn, max);
+        log.info("Checkpointing column {} with value: {}", incrementalColumn, max);
         if (max != null) {
           return new StreamerCheckpointV2(max);
         }
@@ -272,7 +271,7 @@ public class JdbcSource extends RowSource {
         return new StreamerCheckpointV2(StringUtils.EMPTY_STRING);
       }
     } catch (Exception e) {
-      LOG.error("Failed to checkpoint");
+      log.error("Failed to checkpoint");
       throw new HoodieReadFromSourceException("Failed to checkpoint. Last checkpoint: " + lastCheckpoint.orElse(null), e);
     }
   }

@@ -36,6 +36,7 @@ import org.apache.hudi.utilities.config.S3EventsHoodieIncrSourceConfig;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
@@ -52,8 +53,6 @@ import org.apache.spark.sql.types.DataType;
 import org.apache.spark.sql.types.Metadata;
 import org.apache.spark.sql.types.StructField;
 import org.apache.spark.sql.types.StructType;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.net.URLDecoder;
@@ -92,9 +91,8 @@ import static org.apache.spark.sql.functions.split;
  * NOTE: DO NOT use any implementation specific classes here. This class is supposed to across S3EventsSource,
  * GcsEventsSource etc...so you can't assume the classes for your specific implementation will be available here.
  */
+@Slf4j
 public class CloudObjectsSelectorCommon {
-
-  private static final Logger LOG = LoggerFactory.getLogger(CloudObjectsSelectorCommon.class);
 
   public static final String S3_OBJECT_KEY = "s3.object.key";
   public static final String S3_OBJECT_SIZE = "s3.object.size";
@@ -125,7 +123,7 @@ public class CloudObjectsSelectorCommon {
       rows.forEachRemaining(row -> {
         Option<String> filePathUrl = getUrlForFile(row, storageUrlSchemePrefix, storageConf, checkIfExists);
         filePathUrl.ifPresent(url -> {
-          LOG.info("Adding file: " + url);
+          log.info("Adding file: {}", url);
           long size;
           Object obj = row.get(2);
           if (obj instanceof String) {
@@ -169,7 +167,7 @@ public class CloudObjectsSelectorCommon {
       boolean exists = checkIfFileExists(storageUrlSchemePrefix, bucket, filePathUrl, configuration);
       return exists ? Option.of(filePathUrl) : Option.empty();
     } catch (Exception exception) {
-      LOG.error("Failed to generate path to cloud file {}", filePath, exception);
+      log.error("Failed to generate path to cloud file {}", filePath, exception);
       throw new HoodieException(String.format("Failed to generate path to cloud file %s", filePath), exception);
     }
   }
@@ -185,7 +183,7 @@ public class CloudObjectsSelectorCommon {
       return fs.exists(new Path(filePathUrl));
     } catch (IOException ioe) {
       String errMsg = String.format("Error while checking path exists for %s ", filePathUrl);
-      LOG.error(errMsg, ioe);
+      log.error(errMsg, ioe);
       throw new HoodieIOException(errMsg, ioe);
     }
   }
@@ -275,9 +273,9 @@ public class CloudObjectsSelectorCommon {
 
   public Option<Dataset<Row>> loadAsDataset(SparkSession spark, List<CloudObjectMetadata> cloudObjectMetadata,
                                             String fileFormat, Option<SchemaProvider> schemaProviderOption, int numPartitions) {
-    if (LOG.isDebugEnabled()) {
-      LOG.debug("Extracted distinct files " + cloudObjectMetadata.size()
-          + " and some samples " + cloudObjectMetadata.stream().map(CloudObjectMetadata::getPath).limit(10).collect(Collectors.toList()));
+    if (log.isDebugEnabled()) {
+      log.debug("Extracted distinct files {} and some samples {}",
+          cloudObjectMetadata.size(), cloudObjectMetadata.stream().map(CloudObjectMetadata::getPath).limit(10).collect(Collectors.toList()));
     }
 
     if (isNullOrEmpty(cloudObjectMetadata)) {
@@ -311,7 +309,7 @@ public class CloudObjectsSelectorCommon {
       } catch (IOException e) {
         throw new HoodieException(String.format("Failed to parse sparkOptions: %s", datasourceOpts), e);
       }
-      LOG.info("SparkOptions loaded: {}", sparkOptionsMap);
+      log.info("SparkOptions loaded: {}", sparkOptionsMap);
       reader = reader.options(sparkOptionsMap);
     }
     List<String> paths = new ArrayList<>();
@@ -340,7 +338,7 @@ public class CloudObjectsSelectorCommon {
       // Add partition column for all path-based partition keys. If key is not present in path, the value will be null.
       for (String partitionKey : partitionKeysToAdd) {
         String partitionPathPattern = String.format("%s=", partitionKey);
-        LOG.info(String.format("Adding column %s to dataset", partitionKey));
+        log.info("Adding column {} to dataset", partitionKey);
         dataset = dataset.withColumn(partitionKey, split(split(input_file_name(), partitionPathPattern).getItem(1), StoragePath.SEPARATOR).getItem(0));
       }
     }

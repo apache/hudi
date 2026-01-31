@@ -37,6 +37,7 @@ import org.apache.hudi.utilities.sources.helpers.KafkaOffsetGen;
 import org.apache.hudi.utilities.sources.helpers.KafkaOffsetGen.CheckpointUtils;
 import org.apache.hudi.utilities.sources.helpers.KafkaSourceUtil;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.avro.Schema;
 import org.apache.avro.Schema.Field;
 import org.apache.avro.Schema.Type;
@@ -53,8 +54,6 @@ import org.apache.spark.sql.types.StructType;
 import org.apache.spark.streaming.kafka010.KafkaUtils;
 import org.apache.spark.streaming.kafka010.LocationStrategies;
 import org.apache.spark.streaming.kafka010.OffsetRange;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.Arrays;
 import java.util.List;
@@ -68,9 +67,9 @@ import static org.apache.hudi.utilities.config.KafkaSourceConfig.KAFKA_AVRO_VALU
  * Base class for Debezium streaming source which expects change events as Kafka Avro records.
  * Obtains the schema from the confluent schema-registry.
  */
+@Slf4j
 public abstract class DebeziumSource extends RowSource {
 
-  private static final Logger LOG = LoggerFactory.getLogger(DebeziumSource.class);
   // these are native kafka's config. do not change the config names.
   private static final String NATIVE_KAFKA_KEY_DESERIALIZER_PROP = "key.deserializer";
   private static final String NATIVE_KAFKA_VALUE_DESERIALIZER_PROP = "value.deserializer";
@@ -96,7 +95,7 @@ public abstract class DebeziumSource extends RowSource {
       props.put(NATIVE_KAFKA_VALUE_DESERIALIZER_PROP, Class.forName(deserializerClassName).getName());
     } catch (ClassNotFoundException e) {
       String error = "Could not load custom avro kafka deserializer: " + deserializerClassName;
-      LOG.error(error);
+      log.error(error);
       throw new HoodieReadFromSourceException(error, e);
     }
 
@@ -121,17 +120,17 @@ public abstract class DebeziumSource extends RowSource {
 
     OffsetRange[] offsetRanges = offsetGen.getNextOffsetRanges(lastCheckpoint, sourceLimit, metrics);
     long totalNewMsgs = CheckpointUtils.totalNewMessages(offsetRanges);
-    LOG.info("About to read " + totalNewMsgs + " from Kafka for topic :" + offsetGen.getTopicName());
+    log.info("About to read {} from Kafka for topic :{}", totalNewMsgs, offsetGen.getTopicName());
 
     try {
       String schemaStr = schemaRegistryProvider.fetchSchemaFromRegistry(getStringWithAltKeys(props, HoodieSchemaProviderConfig.SRC_SCHEMA_REGISTRY_URL));
       Dataset<Row> dataset = toDataset(offsetRanges, offsetGen, schemaStr);
-      LOG.info("Spark schema of Kafka Payload for topic {}:\n{}", offsetGen.getTopicName(), dataset.schema().treeString());
-      LOG.info("New checkpoint string: {}", CheckpointUtils.offsetsToStr(offsetRanges));
+      log.info("Spark schema of Kafka Payload for topic {}:\n{}", offsetGen.getTopicName(), dataset.schema().treeString());
+      log.info("New checkpoint string: {}", CheckpointUtils.offsetsToStr(offsetRanges));
       return Pair.of(Option.of(dataset),
               new StreamerCheckpointV2(overrideCheckpointStr.isEmpty() ? CheckpointUtils.offsetsToStr(offsetRanges) : overrideCheckpointStr));
     } catch (Exception e) {
-      LOG.error("Fatal error reading and parsing incoming debezium event", e);
+      log.error("Fatal error reading and parsing incoming debezium event", e);
       throw new HoodieReadFromSourceException("Fatal error reading and parsing incoming debezium event", e);
     }
   }
@@ -198,7 +197,7 @@ public abstract class DebeziumSource extends RowSource {
             }
           }).map(Field::name).collect(Collectors.toList());
 
-      LOG.info("Date fields: {}", dateFields);
+      log.info("Date fields: {}", dateFields);
 
       for (String dateCol : dateFields) {
         dataset = dataset.withColumn(dateCol, functions.col(dateCol).cast(DataTypes.DateType));
