@@ -28,6 +28,7 @@ import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
+import org.apache.hudi.common.table.log.HoodieLogFormatWriter;
 import org.apache.hudi.common.table.log.block.HoodieCommandBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -137,16 +138,17 @@ public class RollbackHelper implements Serializable {
           String fileId = rollbackRequest.getFileId();
           HoodieTableVersion tableVersion = metaClient.getTableConfig().getTableVersion();
 
-          writer = HoodieLogFormat.newWriterBuilder()
-              .onParentPath(FSUtils.constructAbsolutePath(metaClient.getBasePath(), rollbackRequest.getPartitionPath()))
-              .withFileId(fileId)
+          writer = HoodieLogFormatWriter.builder()
+              .withParentPath(FSUtils.constructAbsolutePath(metaClient.getBasePath(), rollbackRequest.getPartitionPath()))
+              .withLogFileId(fileId)
               .withLogWriteToken(CommonClientUtils.generateWriteToken(taskContextSupplier))
               .withInstantTime(tableVersion.greaterThanOrEquals(HoodieTableVersion.EIGHT)
-                      ? instantToRollback.requestedTime() : rollbackRequest.getLatestBaseInstant()
-                  )
+                  ? instantToRollback.requestedTime() : rollbackRequest.getLatestBaseInstant()
+              )
               .withStorage(metaClient.getStorage())
               .withTableVersion(tableVersion)
-              .withFileExtension(HoodieLogFile.DELTA_EXTENSION).build();
+              .withFileExtension(HoodieLogFile.DELTA_EXTENSION)
+              .build();
 
           // generate metadata
           if (doDelete) {
