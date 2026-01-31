@@ -38,13 +38,12 @@ import org.apache.hudi.table.HoodieSparkTable;
 
 import com.beust.jcommander.JCommander;
 import com.beust.jcommander.Parameter;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hive.conf.HiveConf;
 import org.apache.spark.api.java.JavaSparkContext;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.Serializable;
 import java.util.ArrayList;
@@ -101,10 +100,10 @@ import scala.Tuple2;
  *
  * Also you can use --help to find more configs to use.
  */
+@Slf4j
 public class HoodieDropPartitionsTool implements Serializable {
 
   private static final long serialVersionUID = 1L;
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieDropPartitionsTool.class);
   // Spark context
   private final transient JavaSparkContext jsc;
   // config
@@ -282,7 +281,7 @@ public class HoodieDropPartitionsTool implements Serializable {
     try {
       tool.run();
     } catch (Throwable throwable) {
-      LOG.error("Fail to run deleting table partitions for " + cfg, throwable);
+      log.error("Fail to run deleting table partitions for {}", cfg, throwable);
     } finally {
       jsc.stop();
     }
@@ -290,21 +289,21 @@ public class HoodieDropPartitionsTool implements Serializable {
 
   public void run() {
     try {
-      LOG.info(cfg.toString());
+      log.info(cfg.toString());
 
       Mode mode = Mode.valueOf(cfg.runningMode.toUpperCase());
       switch (mode) {
         case DELETE:
-          LOG.info(" ****** The Hoodie Drop Partitions Tool is in delete mode ****** ");
+          log.info(" ****** The Hoodie Drop Partitions Tool is in delete mode ****** ");
           doDeleteTablePartitions();
           syncToHiveIfNecessary();
           break;
         case DRY_RUN:
-          LOG.info(" ****** The Hoodie Drop Partitions Tool is in dry-run mode ****** ");
+          log.info(" ****** The Hoodie Drop Partitions Tool is in dry-run mode ****** ");
           dryRun();
           break;
         default:
-          LOG.info("Unsupported running mode [" + cfg.runningMode + "], quit the job directly");
+          log.info("Unsupported running mode [{}], quit the job directly", cfg.runningMode);
       }
     } catch (Exception e) {
       throw new HoodieException("Unable to delete table partitions in " + cfg.basePath, e);
@@ -368,19 +367,17 @@ public class HoodieDropPartitionsTool implements Serializable {
   }
 
   private void syncHive(HiveSyncConfig hiveSyncConfig) {
-    LOG.info("Syncing target hoodie table with hive table("
-        + hiveSyncConfig.getStringOrDefault(HoodieSyncConfig.META_SYNC_TABLE_NAME)
-        + "). Hive metastore URL :"
-        + hiveSyncConfig.getStringOrDefault(HiveSyncConfigHolder.HIVE_URL)
-        + ", basePath :" + cfg.basePath);
-    LOG.info("Hive Sync Conf => " + hiveSyncConfig);
+    log.info("Syncing target hoodie table with hive table({}). Hive metastore URL :{}, basePath :{}",
+        hiveSyncConfig.getStringOrDefault(HoodieSyncConfig.META_SYNC_TABLE_NAME),
+        hiveSyncConfig.getStringOrDefault(HiveSyncConfigHolder.HIVE_URL), cfg.basePath);
+    log.info("Hive Sync Conf => {}", hiveSyncConfig);
     FileSystem fs = HadoopFSUtils.getFs(cfg.basePath, jsc.hadoopConfiguration());
     HiveConf hiveConf = new HiveConf();
     if (!StringUtils.isNullOrEmpty(cfg.hiveHMSUris)) {
       hiveConf.set("hive.metastore.uris", cfg.hiveHMSUris);
     }
     hiveConf.addResource(fs.getConf());
-    LOG.info("Hive Conf => " + hiveConf.getAllProperties().toString());
+    log.info("Hive Conf => {}", hiveConf.getAllProperties().toString());
     try (HiveSyncTool hiveSyncTool = new HiveSyncTool(hiveSyncConfig.getProps(), hiveConf)) {
       hiveSyncTool.syncHoodieTable();
     }
@@ -392,9 +389,9 @@ public class HoodieDropPartitionsTool implements Serializable {
    * @param partitionToReplaceFileIds
    */
   private void printDeleteFilesInfo(Map<String, List<String>> partitionToReplaceFileIds) {
-    LOG.info("Data files and partitions to delete : ");
+    log.info("Data files and partitions to delete : ");
     for (Map.Entry<String, List<String>> entry  : partitionToReplaceFileIds.entrySet()) {
-      LOG.info(String.format("Partitions : %s, corresponding data file IDs : %s", entry.getKey(), entry.getValue()));
+      log.info("Partitions : {}, corresponding data file IDs : {}", entry.getKey(), entry.getValue());
     }
   }
 }
