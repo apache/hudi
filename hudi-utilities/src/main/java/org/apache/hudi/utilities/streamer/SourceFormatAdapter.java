@@ -201,6 +201,12 @@ public class SourceFormatAdapter implements Closeable {
         return new InputBatch<>(Option.ofNullable(r.getBatch().map(
             rdd -> {
                 SchemaProvider originalProvider = UtilHelpers.getOriginalSchemaProvider(r.getSchemaProvider());
+                // Schema selection logic for Row-to-Avro conversion:
+                // 1. FileBased/SchemaRegistry providers: Use source schema to avoid nullability mismatch
+                //    between explicitly-defined Avro schema and inferred Row schema
+                // 2. Other providers (e.g., RowBased): Use target schema since this code path executes
+                //    after transformations have been applied, and the target schema represents the
+                //    schema after all transformations
                 return (originalProvider instanceof FilebasedSchemaProvider || (originalProvider instanceof SchemaRegistryProvider))
                     // If the source schema is specified through Avro schema,
                     // pass in the schema for the Row-to-Avro conversion
