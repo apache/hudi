@@ -1089,7 +1089,7 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       return this;
     }
 
-    public Builder withEnableRecordLevelIndexAtPartitionLevel(boolean enabled) {
+    public Builder withEnableRecordLevelIndex(boolean enabled) {
       metadataConfig.setValue(RECORD_LEVEL_INDEX_ENABLE_PROP, String.valueOf(enabled));
       return this;
     }

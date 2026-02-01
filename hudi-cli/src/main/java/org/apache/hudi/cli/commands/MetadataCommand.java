@@ -392,12 +392,12 @@ public class MetadataCommand {
     return HoodiePrintHelper.print(header, new HashMap<>(), "", false, Integer.MAX_VALUE, false, rows);
   }
 
-  // @ShellOption(value = "--backup", help = "Backup the metadata table before delete", defaultValue = "true", arity = 1) final boolean backup
-  @ShellMethod(key = "metadata lookup-record-index", value = "Print Record index information for a record_key")
+  @ShellMethod(key = "metadata lookup-record-index", value = "Print Record index information for a record_key. "
+      + "For global RLI, only record key is required. For partitioned RLI, both record key and partition path are required.")
   public String getRecordIndexInfo(
       @ShellOption(value = "--record_key", help = "Record key entry whose info will be fetched")
       final String recordKey,
-      @ShellOption(value = "--partition_path_for_non_global_rli", help = " Partition path needs to be provided for non Global or partition level Record index",
+      @ShellOption(value = "--partition_path", help = "Partition path. Required for partitioned (non-global) Record Level Index.",
           defaultValue = "") final String partitionPath) {
     HoodieTableMetaClient metaClient = HoodieCLI.getTableMetaClient();
     HoodieStorage storage = metaClient.getStorage();
@@ -409,12 +409,23 @@ public class MetadataCommand {
     ValidationUtils.checkState(metaClient.getTableConfig().isMetadataPartitionAvailable(MetadataPartitionType.RECORD_INDEX),
         "[ERROR] Record index partition is not enabled/initialized\n\n");
 
+    // Check if RLI is partitioned and validate partition_path is provided
+    if (config.isRecordLevelIndexEnabled() && !config.isGlobalRecordLevelIndexEnabled()) {
+      ValidationUtils.checkState(!StringUtils.isNullOrEmpty(partitionPath),
+          "[ERROR] Partitioned Record Level Index requires --partition_path to be provided\n\n");
+    }
+
     Option<String> dataTablePartition = StringUtils.isNullOrEmpty(partitionPath) ? Option.empty() : Option.of(partitionPath);
     HoodiePairData<String, HoodieRecordGlobalLocation> recordKeyToGlobalLocationMap =
         metaReader.readRecordIndexLocationsWithKeys(HoodieListData.eager(Collections.singletonList(recordKey)), dataTablePartition);
     List<Pair<String, HoodieRecordGlobalLocation>> recordLocationKeyPair = recordKeyToGlobalLocationMap.collectAsList();
     if (recordLocationKeyPair.isEmpty()) {
-      return "[INFO] Record key " + recordKey + " not found in Record Index";
+      String notFoundMessage = "[INFO] Record key " + recordKey;
+      if (!StringUtils.isNullOrEmpty(partitionPath)) {
+        notFoundMessage += " in partition " + partitionPath;
+      }
+      notFoundMessage += " not found in Record Index";
+      return notFoundMessage;
     }
     ValidationUtils.checkArgument(recordKey.equals(recordLocationKeyPair.get(0).getKey()),
         "Record index lookup returned wrong key " + recordLocationKeyPair.get(0).getKey());

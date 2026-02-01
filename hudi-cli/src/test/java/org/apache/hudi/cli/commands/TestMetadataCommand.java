@@ -172,7 +172,7 @@ public class TestMetadataCommand extends CLIFunctionalTestHarness {
     HoodieTestDataGenerator firstDataGen = new HoodieTestDataGenerator(new String[] {DEFAULT_FIRST_PARTITION_PATH});
     HoodieTestDataGenerator secondDataGen = new HoodieTestDataGenerator(new String[] {DEFAULT_SECOND_PARTITION_PATH});
     HoodieMetadataConfig metadataConfig = HoodieMetadataConfig.newBuilder()
-        .withEnableRecordLevelIndexAtPartitionLevel(true).build();
+        .withEnableRecordLevelIndex(true).build();
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder()
         .withPath(tablePath)
         .withSchema(TRIP_EXAMPLE_SCHEMA)
@@ -224,7 +224,7 @@ public class TestMetadataCommand extends CLIFunctionalTestHarness {
     Object shellResult;
     if (partitionPathOp.isPresent()) {
       shellResult = shell.evaluate(() -> "metadata lookup-record-index --record_key " + recordKey
-          + " --partition_path_for_non_global_rli " + partitionPathOp.get());
+          + " --partition_path " + partitionPathOp.get());
     } else {
       shellResult = shell.evaluate(() -> "metadata lookup-record-index --record_key " + recordKey);
     }
