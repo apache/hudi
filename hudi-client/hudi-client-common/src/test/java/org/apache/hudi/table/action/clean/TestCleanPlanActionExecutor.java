@@ -60,6 +60,7 @@ class TestCleanPlanActionExecutor {
     HoodieTable table = mock(HoodieTable.class, RETURNS_DEEP_STUBS);
     HoodieTableMetaClient metaClient = mock(HoodieTableMetaClient.class);
     when(table.getMetaClient()).thenReturn(metaClient);
+    when(table.isPartitioned()).thenReturn(true);
     InstantGenerator instantGenerator = mock(InstantGenerator.class);
     when(table.getInstantGenerator()).thenReturn(instantGenerator);
     HoodieActiveTimeline activeTimeline = mock(HoodieActiveTimeline.class);
@@ -108,6 +109,7 @@ class TestCleanPlanActionExecutor {
   @Test
   void emptyCompletedClean_failsToReadPreviousPlan() throws IOException {
     HoodieTable table = mock(HoodieTable.class, RETURNS_DEEP_STUBS);
+    when(table.isPartitioned()).thenReturn(true);
     InstantGenerator instantGenerator = mock(InstantGenerator.class);
     when(table.getInstantGenerator()).thenReturn(instantGenerator);
     HoodieActiveTimeline activeTimeline = mock(HoodieActiveTimeline.class);
@@ -132,6 +134,7 @@ class TestCleanPlanActionExecutor {
   @Test
   void lastCleanIsNonEmpty() {
     HoodieTable table = mock(HoodieTable.class, RETURNS_DEEP_STUBS);
+    when(table.isPartitioned()).thenReturn(true);
     HoodieActiveTimeline activeTimeline = mock(HoodieActiveTimeline.class);
 
     // allow clean to trigger
@@ -153,6 +156,7 @@ class TestCleanPlanActionExecutor {
   @Test
   void lastCleanIsNotPresent() {
     HoodieTable table = mock(HoodieTable.class, RETURNS_DEEP_STUBS);
+    when(table.isPartitioned()).thenReturn(true);
 
     // allow clean to trigger
     mockThatCleanIsRequired(table);
