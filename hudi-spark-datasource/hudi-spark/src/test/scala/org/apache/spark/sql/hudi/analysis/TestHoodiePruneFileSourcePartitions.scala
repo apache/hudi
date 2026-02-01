@@ -362,6 +362,6 @@ class TestHoodiePruneFileSourcePartitions extends HoodieClientTestBase with Scal
         }
       case _ =>
     }
-    filters
+    filters.toSeq
   }
 }
