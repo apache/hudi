@@ -24,8 +24,10 @@ import org.apache.hudi.avro.model.HoodieIndexPlan;
 import org.apache.hudi.avro.model.HoodieRestoreMetadata;
 import org.apache.hudi.avro.model.HoodieRestorePlan;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
+import org.apache.hudi.io.storage.HoodieAvroFileReader;
 import org.apache.hudi.client.BaseHoodieWriteClient;
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.EngineType;
@@ -79,6 +81,7 @@ import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.exception.TableNotFoundException;
 import org.apache.hudi.index.record.HoodieRecordIndex;
 import org.apache.hudi.internal.schema.InternalSchema;
+import org.apache.hudi.io.storage.HoodieIOFactory;
 import org.apache.hudi.internal.schema.utils.SerDeHelper;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil.DirectoryInfo;
 import org.apache.hudi.storage.HoodieStorage;
@@ -752,9 +755,9 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
       recordIndexRecords = fgCountAndRecordIndexRecords.getRight();
       initializeFilegroupsAndCommit(RECORD_INDEX, RECORD_INDEX.getPartitionPath(), fgCountAndRecordIndexRecords, commitTimeForPartition);
     }
-    // Validate record index after commit if duplicates are not allowed
-    if (!dataWriteConfig.allowDuplicatesWithHfileWrites()) {
-      validateRecordIndex(recordIndexRecords.count(), fileGroupCount);
+    // Validate record index after commit if validation is enabled
+    if (dataWriteConfig.getMetadataConfig().isRecordIndexBootstrapValidationEnabled()) {
+      validateRecordIndex(recordIndexRecords, fileGroupCount);
     }
     recordIndexRecords.unpersist();
   }
@@ -846,25 +849,75 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
 
   /**
    * Validates the record index after bootstrap by comparing the expected record count with the actual
-   * record count stored in the metadata table.
+   * record count stored in the metadata table. The validation is performed in a distributed manner
+   * using the engine context to count records from HFiles in parallel.
    *
-   * @param recordCount the expected number of records
+   * @param recordIndexRecords the HoodieData containing the expected records
    * @param fileGroupCount the expected number of file groups
    */
-  private void validateRecordIndex(long recordCount, int fileGroupCount) {
+  private void validateRecordIndex(HoodieData<HoodieRecord> recordIndexRecords, int fileGroupCount) {
     String partitionName = MetadataPartitionType.RECORD_INDEX.getPartitionPath();
     HoodieTableFileSystemView fsView = HoodieTableMetadataUtil.getFileSystemViewForMetadataTable(metadataMetaClient);
-    List<FileSlice> fileSlices = HoodieTableMetadataUtil.getPartitionLatestFileSlices(metadataMetaClient, Option.of(fsView), partitionName);
-    long totalRecords = 0L;
-    for (FileSlice fileSlice : fileSlices) {
-      if (fileSlice.getBaseFile().isPresent()) {
-        totalRecords += metadata.getTotalRecordIndexRecords(partitionName, fileSlice);
-      }
-    }
-    ValidationUtils.checkArgument(totalRecords == recordCount, "Record Count Validation failed with "
-        + totalRecords + " present in record index vs the expected " + recordCount);
+    // Use merged file slices to handle cases with pending compactions
+    List<FileSlice> fileSlices = HoodieTableMetadataUtil.getPartitionLatestMergedFileSlices(metadataMetaClient, fsView, partitionName);
+
+    // Filter to only file slices with base files and extract their storage paths
+    List<StoragePath> baseFilePaths = fileSlices.stream()
+        .filter(fs -> fs.getBaseFile().isPresent())
+        .map(fs -> fs.getBaseFile().get().getStoragePath())
+        .collect(Collectors.toList());
+
+    // Count records in a distributed manner using the engine context
+    long totalRecords = countRecordsInHFiles(baseFilePaths);
+    long expectedRecordCount = recordIndexRecords.count();
+
+    ValidationUtils.checkArgument(totalRecords == expectedRecordCount, "Record Count Validation failed with "
+        + totalRecords + " present in record index vs the expected " + expectedRecordCount);
     LOG.info(String.format("Record index bootstrapped on %d shards (expected = %d) with %d records (expected = %d)",
-        fileSlices.size(), fileGroupCount, totalRecords, recordCount));
+        fileSlices.size(), fileGroupCount, totalRecords, expectedRecordCount));
+  }
+
+  /**
+   * Counts the total number of records in HFiles in a distributed manner.
+   *
+   * @param baseFilePaths list of storage paths to HFiles
+   * @return total number of records across all HFiles
+   */
+  private long countRecordsInHFiles(List<StoragePath> baseFilePaths) {
+    if (baseFilePaths.isEmpty()) {
+      return 0L;
+    }
+
+    int parallelism = Math.min(baseFilePaths.size(), dataWriteConfig.getMetadataConfig().getRecordIndexMaxParallelism());
+    StorageConfiguration<?> storageConfBroadcast = storageConf;
+    HoodieFileFormat baseFileFormat = metadataMetaClient.getTableConfig().getBaseFileFormat();
+
+    return engineContext.parallelize(baseFilePaths, parallelism)
+        .mapPartitions(pathIterator -> {
+          long count = 0L;
+          while (pathIterator.hasNext()) {
+            StoragePath path = pathIterator.next();
+            try {
+              HoodieStorage storage = HoodieStorageUtils.getStorage(path, storageConfBroadcast);
+              HoodieConfig readerConfig = new HoodieConfig();
+              HoodieAvroFileReader reader = (HoodieAvroFileReader) HoodieIOFactory.getIOFactory(storage)
+                  .getReaderFactory(HoodieRecord.HoodieRecordType.AVRO)
+                  .getFileReader(readerConfig, path, baseFileFormat, Option.empty());
+              try {
+                count += reader.getTotalRecords();
+              } finally {
+                reader.close();
+              }
+            } catch (IOException e) {
+              throw new HoodieIOException("Error reading total records from file " + path, e);
+            }
+          }
+          return Collections.singletonList(count).iterator();
+        }, true)
+        .collectAsList()
+        .stream()
+        .mapToLong(Long::longValue)
+        .sum();
   }
 
   /**

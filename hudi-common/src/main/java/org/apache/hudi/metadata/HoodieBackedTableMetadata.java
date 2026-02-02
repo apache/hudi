@@ -717,33 +717,6 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     return isMetadataTableInitialized;
   }
 
-  /**
-   * Gets the total number of records in the base file of the given file slice.
-   *
-   * @param partitionName the partition name (e.g., record_index)
-   * @param fileSlice the file slice containing the base file
-   * @return the total number of records in the base file
-   */
-  public long getTotalRecordIndexRecords(String partitionName, FileSlice fileSlice) {
-    if (!fileSlice.getBaseFile().isPresent()) {
-      return 0L;
-    }
-    try {
-      HoodieConfig readerConfig = new HoodieConfig();
-      HoodieAvroFileReader reader = (HoodieAvroFileReader) HoodieIOFactory.getIOFactory(getStorage())
-          .getReaderFactory(HoodieRecord.HoodieRecordType.AVRO)
-          .getFileReader(readerConfig, fileSlice.getBaseFile().get().getStoragePath(),
-              metadataMetaClient.getTableConfig().getBaseFileFormat(), Option.empty());
-      try {
-        return reader.getTotalRecords();
-      } finally {
-        reader.close();
-      }
-    } catch (IOException e) {
-      throw new HoodieIOException("Error reading total records from file slice " + fileSlice.getFileId(), e);
-    }
-  }
-
   public HoodieTableFileSystemView getMetadataFileSystemView() {
     if (metadataFileSystemView == null) {
       metadataFileSystemView = getFileSystemViewForMetadataTable(metadataMetaClient);
