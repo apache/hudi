@@ -20,7 +20,7 @@ package org.apache.hudi
 
 import org.apache.hudi.DataSourceWriteOptions.INSERT_DROP_DUPS
 import org.apache.hudi.avro.{AvroRecordContext, AvroSchemaCache, HoodieAvroUtils}
-import org.apache.hudi.common.config.TypedProperties
+import org.apache.hudi.common.config.{RecordMergeMode, TypedProperties}
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model._
 import org.apache.hudi.common.model.WriteOperationType.isChangingRecords
@@ -78,6 +78,8 @@ object HoodieCreateRecordUtils {
     val preppedSparkSqlMergeInto = args.preppedSparkSqlMergeInto
     val preppedWriteOperation = args.preppedWriteOperation
     val orderingFields = args.tableConfig.getOrderingFields
+    val recordMergeMode = args.tableConfig.getRecordMergeMode
+    val payloadClass = config.getPayloadClass
 
     val shouldDropPartitionColumns = config.getBoolean(DataSourceWriteOptions.DROP_PARTITION_COLUMNS)
     val recordType = config.getRecordMerger.getRecordType
@@ -150,6 +152,9 @@ object HoodieCreateRecordUtils {
               avroRecWithoutMeta
             }
             val hoodieRecord = if (shouldCombine && !orderingFields.isEmpty) {
+              // Ordering values are not required for COMMIT_TIME_ORDERING or OverwriteWithLatestAvroPayload
+              val requiresOrderingValue = recordMergeMode != RecordMergeMode.COMMIT_TIME_ORDERING &&
+                !classOf[OverwriteWithLatestAvroPayload].getName.equals(payloadClass)
               val orderingVal = OrderingValues.create(
                 orderingFields,
                 JFunction.toJavaFunction[String, Comparable[_]](
@@ -157,12 +162,17 @@ object HoodieCreateRecordUtils {
                     val fieldVal = HoodieAvroUtils.getNestedFieldVal(avroRec, field, false,
                       consistentLogicalTimestampEnabled)
                     if (fieldVal == null) {
-                      throw new IllegalArgumentException(
-                        s"Precombine/ordering field '$field' has null value for record key '${hoodieKey.getRecordKey}'. " +
-                          s"Please ensure all records have non-null values for the precombine field, " +
-                          s"or use a payload class that doesn't require ordering (e.g., OverwriteWithLatestAvroPayload).")
+                      if (requiresOrderingValue) {
+                        throw new IllegalArgumentException(
+                          s"Precombine/ordering field '$field' has null value for record key '${hoodieKey.getRecordKey}'. " +
+                            s"Please ensure all records have non-null values for the precombine field, " +
+                            s"or use a payload class that doesn't require ordering (e.g., OverwriteWithLatestAvroPayload).")
+                      }
+                      // Return default ordering value for payloads that don't require ordering
+                      OrderingValues.getDefault.asInstanceOf[Comparable[_]]
+                    } else {
+                      fieldVal.asInstanceOf[Comparable[_]]
                     }
-                    fieldVal.asInstanceOf[Comparable[_]]
                   }))
               HoodieRecordUtils.createHoodieRecord(processedRecord, orderingVal, hoodieKey,
                 config.getPayloadClass, null, recordLocation, requiresPayload, isDelete)
