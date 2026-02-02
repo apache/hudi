@@ -66,7 +66,6 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Supplier;
 import java.util.zip.DeflaterOutputStream;
 import java.util.zip.InflaterInputStream;
@@ -82,7 +81,6 @@ import static org.apache.hudi.common.util.ValidationUtils.checkState;
  */
 public class HoodieAvroDataBlock extends HoodieDataBlock {
 
-  private static ConcurrentHashMap<String, Schema> schemaMap = new ConcurrentHashMap<>();
   private static ThreadLocal<BinaryEncoder> encoderCache = new ThreadLocal<>();
   private static ThreadLocal<BinaryDecoder> decoderCache = new ThreadLocal<>();
 
@@ -179,7 +177,6 @@ public class HoodieAvroDataBlock extends HoodieDataBlock {
     private byte[] content;
     private final SizeAwareDataInputStream dis;
     private final GenericDatumReader<IndexedRecord> reader;
-    private final ThreadLocal<BinaryDecoder> decoderCache = new ThreadLocal<>();
     private Option<HoodieSchema> promotedSchema = Option.empty();
     private int totalRecords = 0;
     private int readRecords = 0;
@@ -216,7 +213,7 @@ public class HoodieAvroDataBlock extends HoodieDataBlock {
     public void close() {
       try {
         this.dis.close();
-        this.decoderCache.remove();
+        decoderCache.remove();
         this.content = null;
       } catch (IOException e) {
         // ignore
@@ -233,8 +230,8 @@ public class HoodieAvroDataBlock extends HoodieDataBlock {
       try {
         int recordLength = this.dis.readInt();
         BinaryDecoder decoder = DecoderFactory.get().binaryDecoder(this.content, this.dis.getNumberOfBytesRead(),
-                recordLength, this.decoderCache.get());
-        this.decoderCache.set(decoder);
+                recordLength, decoderCache.get());
+        decoderCache.set(decoder);
         IndexedRecord record = this.reader.read(null, decoder);
         this.dis.skipBytes(recordLength);
         this.readRecords++;
