@@ -56,6 +56,8 @@ import java.util.stream.Stream;
 import static org.apache.hudi.common.model.DefaultHoodieRecordPayload.DELETE_KEY;
 import static org.apache.hudi.common.model.DefaultHoodieRecordPayload.DELETE_MARKER;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.Mockito.RETURNS_DEEP_STUBS;
@@ -186,6 +188,42 @@ class TestSortedKeyBasedFileGroupRecordBuffer extends BaseTestFileGroupRecordBuf
     assertEquals(5, readStats.getNumInserts());
     assertEquals(0, readStats.getNumUpdates());
     assertEquals(1, readStats.getNumDeletes());
+  }
+
+  /**
+   * Verifies that partial merging (enablePartialMerging / partialUpdateModeOpt) is only enabled when we first
+   * process a data block that contains partial updates (e.g., 3rd log file with MOR partial encoding).
+   * Base + 2 log files with full schema should not enable partial merging; 3rd log file with partial updates should.
+   */
+  @Test
+  void partialMergingEnabledOnlyWhenBlockWithPartialUpdatesProcessed() throws IOException {
+    HoodieReadStats readStats = new HoodieReadStats();
+    HoodieReaderContext<TestRecord> mockReaderContext = mock(HoodieReaderContext.class, RETURNS_DEEP_STUBS);
+    SortedKeyBasedFileGroupRecordBuffer<TestRecord> fileGroupRecordBuffer = buildSortedKeyBasedFileGroupRecordBuffer(mockReaderContext, readStats);
+
+    // Block 1: full schema (no partial updates) – like 1st log file
+    HoodieDataBlock dataBlock1 = mock(HoodieDataBlock.class);
+    when(dataBlock1.getSchema()).thenReturn(HoodieTestDataGenerator.HOODIE_SCHEMA);
+    when(dataBlock1.containsPartialUpdates()).thenReturn(false);
+    when(dataBlock1.getEngineRecordIterator(mockReaderContext)).thenReturn(ClosableIterator.wrap(Collections.emptyIterator()));
+    fileGroupRecordBuffer.processDataBlock(dataBlock1, Option.empty());
+    assertFalse(fileGroupRecordBuffer.isPartialMergingEnabled(), "Partial merging should not be enabled after 1st block (full schema)");
+
+    // Block 2: full schema (no partial updates) – like 2nd log file
+    HoodieDataBlock dataBlock2 = mock(HoodieDataBlock.class);
+    when(dataBlock2.getSchema()).thenReturn(HoodieTestDataGenerator.HOODIE_SCHEMA);
+    when(dataBlock2.containsPartialUpdates()).thenReturn(false);
+    when(dataBlock2.getEngineRecordIterator(mockReaderContext)).thenReturn(ClosableIterator.wrap(Collections.emptyIterator()));
+    fileGroupRecordBuffer.processDataBlock(dataBlock2, Option.empty());
+    assertFalse(fileGroupRecordBuffer.isPartialMergingEnabled(), "Partial merging should not be enabled after 2nd block (full schema)");
+
+    // Block 3: contains partial updates (MOR partial encoding) – like 3rd log file
+    HoodieDataBlock dataBlock3 = mock(HoodieDataBlock.class);
+    when(dataBlock3.getSchema()).thenReturn(HoodieTestDataGenerator.HOODIE_SCHEMA);
+    when(dataBlock3.containsPartialUpdates()).thenReturn(true);
+    when(dataBlock3.getEngineRecordIterator(mockReaderContext)).thenReturn(ClosableIterator.wrap(Collections.emptyIterator()));
+    fileGroupRecordBuffer.processDataBlock(dataBlock3, Option.empty());
+    assertTrue(fileGroupRecordBuffer.isPartialMergingEnabled(), "Partial merging should be enabled after 3rd block (partial updates)");
   }
 
   private SortedKeyBasedFileGroupRecordBuffer<TestRecord> buildSortedKeyBasedFileGroupRecordBuffer(HoodieReaderContext<TestRecord> mockReaderContext, HoodieReadStats readStats) {
