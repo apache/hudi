@@ -126,7 +126,7 @@ public class HoodieStorageConfig extends HoodieConfig {
   // Default compression codec for parquet
   public static final ConfigProperty<String> PARQUET_COMPRESSION_CODEC_NAME = ConfigProperty
       .key("hoodie.parquet.compression.codec")
-      .defaultValue("gzip")
+      .defaultValue("snappy")
       .withDocumentation("Compression Codec for parquet files");
 
   public static final ConfigProperty<Boolean> PARQUET_DICTIONARY_ENABLED = ConfigProperty
