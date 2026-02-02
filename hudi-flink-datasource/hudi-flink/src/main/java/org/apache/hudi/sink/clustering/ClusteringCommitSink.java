@@ -220,7 +220,7 @@ public class ClusteringCommitSink extends CleanFunction<ClusteringCommitEvent> {
 
     clusteringMetrics.updateCommitMetrics(instant, writeMetadata.getCommitMetadata().get());
     // whether to clean up the input base parquet files used for clustering
-    if (!conf.get(FlinkOptions.CLEAN_ASYNC_ENABLED) && !isCleaning) {
+    if (!conf.get(FlinkOptions.CLEAN_ASYNC_ENABLED)) {
       log.info("Running inline clean");
       this.writeClient.clean();
     }

@@ -48,6 +48,7 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.util.Properties;
 
+import static org.apache.hudi.common.config.HoodieStorageConfig.HFILE_WRITER_TO_ALLOW_DUPLICATES;
 import static org.apache.parquet.avro.HoodieAvroParquetSchemaConverter.getAvroSchemaConverter;
 
 public class HoodieAvroFileWriterFactory extends HoodieFileWriterFactory {
@@ -101,7 +102,9 @@ public class HoodieAvroFileWriterFactory extends HoodieFileWriterFactory {
             config.getString(HoodieStorageConfig.HFILE_COMPRESSION_ALGORITHM_NAME)),
         config.getInt(HoodieStorageConfig.HFILE_BLOCK_SIZE),
         config.getLong(HoodieStorageConfig.HFILE_MAX_FILE_SIZE),
-        HoodieAvroHFileReaderImplBase.KEY_FIELD_NAME, filter);
+        HoodieAvroHFileReaderImplBase.KEY_FIELD_NAME,
+        filter,
+        config.getBoolean(HFILE_WRITER_TO_ALLOW_DUPLICATES));
     return new HoodieAvroHFileWriter(instantTime, path, hfileConfig, schema, taskContextSupplier, config.getBoolean(HoodieTableConfig.POPULATE_META_FIELDS));
   }
 

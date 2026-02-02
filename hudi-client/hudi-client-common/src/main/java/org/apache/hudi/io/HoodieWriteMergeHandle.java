@@ -40,6 +40,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieCorruptedDataException;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.io.storage.HoodieFileReader;
@@ -343,6 +344,9 @@ public class HoodieWriteMergeHandle<T, I, K, O> extends HoodieAbstractMergeHandl
       return true;
     } catch (Exception e) {
       log.error("Error writing record {}", newRecord, e);
+      if (!config.getIgnoreWriteFailed()) {
+        throw new HoodieException(e.getMessage(), e);
+      }
       writeStatus.markFailure(newRecord, e, recordMetadata);
     }
     return false;

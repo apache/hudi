@@ -920,6 +920,13 @@ public class HoodieWriteConfig extends HoodieConfig {
           + " or when using a custom Hoodie Concat Handle Implementation controlled by the config " + CONCAT_HANDLE_CLASS_NAME.key()
               + ", enabling this config results in fallback to the default implementations if instantiation of the custom implementation fails");
 
+  public static final ConfigProperty<Boolean> IGNORE_FAILED = ConfigProperty
+      .key("hoodie.write.ignore.failed")
+      .defaultValue(true)
+      .sinceVersion("")
+      .withDocumentation("Flag to indicate whether to ignore any non exception error (e.g. write status error)."
+          + "By default true for backward compatibility.");
+
   /**
    * Config key with boolean value that indicates whether record being written during MERGE INTO Spark SQL
    * operation are already prepped.
@@ -1743,6 +1750,10 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getLong(HoodieArchivalConfig.TIMELINE_COMPACTION_TARGET_FILE_MAX_BYTES);
   }
 
+  public int getTimelineManifestRetainedVersions() {
+    return getInt(HoodieArchivalConfig.TIMELINE_MANIFEST_RETAINED_VERSIONS);
+  }
+
   public int getParquetSmallFileLimit() {
     return getInt(HoodieCompactionConfig.PARQUET_SMALL_FILE_LIMIT);
   }
@@ -2350,6 +2361,10 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getLong(HoodieStorageConfig.HFILE_MAX_FILE_SIZE);
   }
 
+  public boolean allowDuplicatesWithHfileWrites() {
+    return getBoolean(HoodieStorageConfig.HFILE_WRITER_TO_ALLOW_DUPLICATES);
+  }
+
   public int getHFileBlockSize() {
     return getInt(HoodieStorageConfig.HFILE_BLOCK_SIZE);
   }
@@ -2914,6 +2929,13 @@ public class HoodieWriteConfig extends HoodieConfig {
     } else {
       return false;
     }
+  }
+
+  /**
+   * Whether to ignore the write failed.
+   */
+  public boolean getIgnoreWriteFailed() {
+    return getBooleanOrDefault(IGNORE_FAILED);
   }
 
   public static class Builder {
@@ -3494,6 +3516,11 @@ public class HoodieWriteConfig extends HoodieConfig {
 
     public Builder withFileGroupReaderMergeHandleClassName(String className) {
       writeConfig.setValue(COMPACT_MERGE_HANDLE_CLASS_NAME, className);
+      return this;
+    }
+
+    public Builder withWriteIgnoreFailed(boolean ignoreFailedWriteData) {
+      writeConfig.setValue(IGNORE_FAILED, String.valueOf(ignoreFailedWriteData));
       return this;
     }
 

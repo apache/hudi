@@ -363,6 +363,8 @@ public class TestConfigurations {
   public static Configuration getDefaultConf(String tablePath) {
     Configuration conf = new Configuration();
     conf.set(FlinkOptions.PATH, tablePath);
+    conf.set(FlinkOptions.RECORD_KEY_FIELD, "uuid");
+    conf.set(FlinkOptions.ORDERING_FIELDS, "ts");
     conf.set(FlinkOptions.SOURCE_AVRO_SCHEMA_PATH,
         Objects.requireNonNull(Thread.currentThread()
             .getContextClassLoader().getResource("test_read_schema.avsc")).toString());
@@ -374,6 +376,8 @@ public class TestConfigurations {
   public static Configuration getDefaultConf(String tablePath, DataType dataType) {
     Configuration conf = new Configuration();
     conf.set(FlinkOptions.PATH, tablePath);
+    conf.set(FlinkOptions.RECORD_KEY_FIELD, "uuid");
+    conf.set(FlinkOptions.ORDERING_FIELDS, "ts");
     conf.set(FlinkOptions.SOURCE_AVRO_SCHEMA, HoodieSchemaConverter.convertToSchema(dataType.getLogicalType()).toString());
     conf.set(FlinkOptions.TABLE_NAME, "TestHoodieTable");
     conf.set(FlinkOptions.PARTITION_PATH_FIELD, "partition");

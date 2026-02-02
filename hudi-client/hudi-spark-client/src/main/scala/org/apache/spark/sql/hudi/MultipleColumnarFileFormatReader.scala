@@ -29,8 +29,13 @@ import org.apache.spark.sql.execution.datasources.{PartitionedFile, SparkColumna
 import org.apache.spark.sql.sources.Filter
 import org.apache.spark.sql.types.StructType
 
-class MultipleColumnarFileFormatReader(parquetReader: SparkColumnarFileReader, orcReader: SparkColumnarFileReader)
+class MultipleColumnarFileFormatReader(parquetReader: SparkColumnarFileReader, orcReader: SparkColumnarFileReader, lanceReader: SparkColumnarFileReader)
   extends SparkColumnarFileReader with SparkAdapterSupport {
+
+  def this(parquetReader: SparkColumnarFileReader, orcReader: SparkColumnarFileReader) = {
+    // constructor for Spark versions without Lance support
+    this(parquetReader, orcReader, null)
+  }
 
   /**
    * Read an individual file
@@ -53,6 +58,11 @@ class MultipleColumnarFileFormatReader(parquetReader: SparkColumnarFileReader, o
         parquetReader.read(file, requiredSchema, partitionSchema, internalSchemaOpt, filters, storageConf, tableSchemaOpt)
       case HoodieFileFormat.ORC =>
         orcReader.read(file, requiredSchema, partitionSchema, internalSchemaOpt, filters, storageConf, tableSchemaOpt)
+      case HoodieFileFormat.LANCE =>
+        if (lanceReader == null) {
+          throw new UnsupportedOperationException("Lance format is only supported in Spark 3.4 and above")
+        }
+        lanceReader.read(file, requiredSchema, partitionSchema, internalSchemaOpt, filters, storageConf, tableSchemaOpt)
       case _ =>
         throw new IllegalArgumentException(s"Unsupported file format for file: $filePath")
     }

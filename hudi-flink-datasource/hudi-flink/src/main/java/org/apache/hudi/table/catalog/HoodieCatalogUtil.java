@@ -22,7 +22,9 @@ import org.apache.hudi.adapter.Utils;
 import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.common.model.PartitionBucketIndexHashingConfig;
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
@@ -256,13 +258,18 @@ public class HoodieCatalogUtil {
       String tablePathStr,
       ObjectPath tablePath,
       org.apache.hadoop.conf.Configuration hadoopConf) {
-    return FlinkWriteClients.createWriteClientV2(
+    HoodieTableConfig tableConfig = StreamerUtil.createMetaClient(tablePathStr, hadoopConf).getTableConfig();
+    org.apache.flink.configuration.Configuration conf =
         org.apache.flink.configuration.Configuration.fromMap(options)
             .set(FlinkOptions.TABLE_NAME, tablePath.getObjectName())
             .set(
                 FlinkOptions.SOURCE_AVRO_SCHEMA,
-                StreamerUtil.createMetaClient(tablePathStr, hadoopConf)
-                    .getTableConfig().getTableCreateSchema().get().toString()));
+                tableConfig.getTableCreateSchema().get().toString());
+    String recordKey = tableConfig.getRecordKeyFieldProp();
+    if (StringUtils.nonEmpty(recordKey)) {
+      conf.set(FlinkOptions.RECORD_KEY_FIELD, recordKey);
+    }
+    return FlinkWriteClients.createWriteClientV2(conf);
   }
 
   private static boolean sameOptions(Map<String, String> parameters1, Map<String, String> parameters2, ConfigOption<String> option) {

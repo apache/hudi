@@ -34,6 +34,7 @@ import org.apache.hudi.common.table.timeline.TimelineUtils.HollowCommitHandling;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
@@ -152,12 +153,25 @@ public class OptionsResolver {
   }
 
   /**
+   * Return value of {@link FlinkOptions#RECORD_KEY_FIELD} if it was set,
+   * or throw exception otherwise.
+   */
+  public static String getRecordKeyStr(Configuration conf) {
+    final String recordKeyStr = conf.get(FlinkOptions.RECORD_KEY_FIELD);
+    ValidationUtils.checkArgument(
+        recordKeyStr != null,
+        "Primary key definition is required, use either PRIMARY KEY syntax or option '"
+            + FlinkOptions.RECORD_KEY_FIELD.key() + "' to specify.");
+    return recordKeyStr;
+  }
+
+  /**
    * Returns the ordering fields as comma separated string
    * or null if the value is set as {@link FlinkOptions#NO_PRE_COMBINE}.
    */
   public static String getOrderingFieldsStr(Configuration conf) {
     final String orderingFields = conf.get(FlinkOptions.ORDERING_FIELDS);
-    return orderingFields.equals(FlinkOptions.NO_PRE_COMBINE) ? null : orderingFields;
+    return FlinkOptions.NO_PRE_COMBINE.equals(orderingFields) ? null : orderingFields;
   }
 
   /**
@@ -185,7 +199,7 @@ public class OptionsResolver {
   /**
    * Returns whether {@link org.apache.hudi.sink.partitioner.MinibatchBucketAssignFunction} should be used for bucket assigning.
    */
-  public static boolean isMiniBatchBucketAssign(Configuration conf) {
+  public static boolean isRecordLevelIndex(Configuration conf) {
     HoodieIndex.IndexType indexType = OptionsResolver.getIndexType(conf);
     return indexType == HoodieIndex.IndexType.GLOBAL_RECORD_LEVEL_INDEX;
   }
@@ -250,8 +264,25 @@ public class OptionsResolver {
    * @param conf The flink configuration.
    */
   public static boolean needsAsyncCompaction(Configuration conf) {
-    return OptionsResolver.isMorTable(conf)
-        && conf.get(FlinkOptions.COMPACTION_ASYNC_ENABLED);
+    return OptionsResolver.isMorTable(conf) && conf.get(FlinkOptions.COMPACTION_ASYNC_ENABLED);
+  }
+
+  /**
+   * Returns whether there is need to schedule the async metadata compaction.
+   *
+   * @param conf The flink configuration.
+   */
+  public static boolean needsAsyncMetadataCompaction(Configuration conf) {
+    return isStreamingIndexWriteEnabled(conf) && conf.get(FlinkOptions.METADATA_COMPACTION_ASYNC_ENABLED);
+  }
+
+  /**
+   * Returns whether there is need to schedule the compaction plan for the metadata table.
+   *
+   * @param conf The flink configuration.
+   */
+  public static boolean needsScheduleMdtCompaction(Configuration conf) {
+    return isStreamingIndexWriteEnabled(conf) && conf.get(FlinkOptions.METADATA_COMPACTION_SCHEDULE_ENABLED);
   }
 
   /**
@@ -419,6 +450,15 @@ public class OptionsResolver {
   }
 
   /**
+   * Returns whether to streaming write to metadata table is enabled.
+   */
+  public static boolean isStreamingIndexWriteEnabled(Configuration conf) {
+    return conf.get(FlinkOptions.METADATA_ENABLED)
+        && OptionsResolver.getIndexType(conf) == HoodieIndex.IndexType.GLOBAL_RECORD_LEVEL_INDEX
+        && WriteOperationType.streamingWritesToMetadataSupported(WriteOperationType.fromValue(conf.get(FlinkOptions.OPERATION)));
+  }
+
+  /**
    * Returns the index type.
    */
   public static HoodieIndex.IndexType getIndexType(Configuration conf) {
@@ -429,14 +469,7 @@ public class OptionsResolver {
    * Returns the index key field.
    */
   public static String getIndexKeyField(Configuration conf) {
-    return conf.getString(FlinkOptions.INDEX_KEY_FIELD.key(), conf.get(FlinkOptions.RECORD_KEY_FIELD));
-  }
-
-  /**
-   * Returns the index key field values.
-   */
-  public static String[] getIndexKeys(Configuration conf) {
-    return getIndexKeyField(conf).split(",");
+    return conf.getString(FlinkOptions.INDEX_KEY_FIELD.key(), getRecordKeyStr(conf));
   }
 
   /**
@@ -557,5 +590,12 @@ public class OptionsResolver {
   public static boolean isOnlyConsumingNewCommits(Configuration conf) {
     return isMorTable(conf) && conf.get(FlinkOptions.READ_STREAMING_SKIP_COMPACT) // this is only true for flink.
         || isAppendMode(conf) && conf.get(FlinkOptions.READ_STREAMING_SKIP_CLUSTERING);
+  }
+
+  /**
+   * Return the parallelism of the index write operator.
+   */
+  public static int indexWriteParallelism(Configuration conf) {
+    return OptionsResolver.isStreamingIndexWriteEnabled(conf) ? conf.get(FlinkOptions.INDEX_WRITE_TASKS) : 0;
   }
 }

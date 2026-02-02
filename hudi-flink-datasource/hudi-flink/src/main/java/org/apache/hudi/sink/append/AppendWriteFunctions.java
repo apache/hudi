@@ -21,14 +21,14 @@ package org.apache.hudi.sink.append;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.sink.buffer.BufferType;
 
 import lombok.AccessLevel;
 import lombok.NoArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.table.types.logical.RowType;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.Arrays;
 import java.util.List;
@@ -38,10 +38,9 @@ import java.util.stream.Collectors;
  * Factory utilities for creating {@link AppendWriteFunction} instances based on configuration.
  * Handles buffer type selection, sort key resolution, and rate limiting.
  */
+@Slf4j
 @NoArgsConstructor(access = AccessLevel.PRIVATE)
 public abstract class AppendWriteFunctions {
-
-  private static final Logger LOG = LoggerFactory.getLogger(AppendWriteFunctions.class);
 
   /**
    * Creates a {@link AppendWriteFunction} instance based on the given configuration.
@@ -71,7 +70,7 @@ public abstract class AppendWriteFunctions {
 
     // Backward compatibility: write.buffer.sort.enabled=true → DISRUPTOR
     if (conf.get(FlinkOptions.WRITE_BUFFER_SORT_ENABLED)) {
-      LOG.info("write.buffer.sort.enabled is deprecated. Use write.buffer.type=DISRUPTOR instead.");
+      log.info("write.buffer.sort.enabled is deprecated. Use write.buffer.type=DISRUPTOR instead.");
       return BufferType.DISRUPTOR.name();
     }
 
@@ -90,7 +89,10 @@ public abstract class AppendWriteFunctions {
     String sortKeys = conf.get(FlinkOptions.WRITE_BUFFER_SORT_KEYS);
     if (StringUtils.isNullOrEmpty(sortKeys)) {
       // Default to record key field(s)
-      sortKeys = conf.get(FlinkOptions.RECORD_KEY_FIELD);
+      log.info("'{}' is not set, therefore '{}' value will be used as sort keys instead",
+          FlinkOptions.WRITE_BUFFER_SORT_KEYS.key(),
+          FlinkOptions.RECORD_KEY_FIELD.key());
+      sortKeys = OptionsResolver.getRecordKeyStr(conf);
     }
     ValidationUtils.checkArgument(StringUtils.nonEmpty(sortKeys),
         "Sort keys can't be null or empty for append write with buffer sort. "

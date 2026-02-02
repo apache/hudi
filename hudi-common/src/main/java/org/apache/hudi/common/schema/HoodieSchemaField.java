@@ -63,10 +63,15 @@ public class HoodieSchemaField implements Serializable {
    *
    * @param avroField the Avro field to wrap, cannot be null
    */
-  public HoodieSchemaField(Schema.Field avroField) {
+  HoodieSchemaField(Schema.Field avroField) {
+    this(avroField, avroField == null ? null : HoodieSchema.fromAvroSchema(avroField.schema()));
+  }
+
+  HoodieSchemaField(Schema.Field avroField, HoodieSchema fieldSchema) {
     ValidationUtils.checkArgument(avroField != null, "Avro field cannot be null");
+    ValidationUtils.checkArgument(fieldSchema != null, "Field schema cannot be null");
     this.avroField = avroField;
-    this.fieldSchema = HoodieSchema.fromAvroSchema(avroField.schema());
+    this.fieldSchema = fieldSchema;
   }
 
   /**
@@ -110,9 +115,13 @@ public class HoodieSchemaField implements Serializable {
 
     Schema avroSchema = schema.getAvroSchema();
     ValidationUtils.checkState(avroSchema != null, "Schema's Avro schema cannot be null");
-
-    Schema.Field avroField = HoodieAvroUtils.createNewSchemaField(name, avroSchema, doc, defaultVal, order.toAvroOrder());
-    return new HoodieSchemaField(avroField);
+    Schema.Field avroField;
+    if (defaultVal == HoodieSchema.NULL_VALUE && schema.getType() == HoodieSchemaType.UNION && schema.getTypes().get(0).getType() != HoodieSchemaType.NULL) {
+      avroField = HoodieAvroUtils.createNewSchemaField(name, avroSchema, doc, null, order.toAvroOrder());
+    } else {
+      avroField = HoodieAvroUtils.createNewSchemaField(name, avroSchema, doc, defaultVal, order.toAvroOrder());
+    }
+    return new HoodieSchemaField(avroField, schema);
   }
 
   /**
@@ -176,7 +185,7 @@ public class HoodieSchemaField implements Serializable {
    */
   public Option<Object> defaultVal() {
     if (avroField != null && avroField.hasDefaultValue()) {
-      return Option.of(avroField.defaultVal());
+      return Option.ofNullable(avroField.defaultVal());
     }
     return Option.empty();
   }
@@ -265,7 +274,7 @@ public class HoodieSchemaField implements Serializable {
 
     Schema.Field newAvroField = HoodieAvroUtils.createNewSchemaField(newName, avroField.schema(), avroField.doc(),
         avroField.hasDefaultValue() ? avroField.defaultVal() : null, avroField.order());
-    return new HoodieSchemaField(newAvroField);
+    return new HoodieSchemaField(newAvroField, fieldSchema);
   }
 
   /**
@@ -282,7 +291,7 @@ public class HoodieSchemaField implements Serializable {
 
     Schema.Field newAvroField = HoodieAvroUtils.createNewSchemaField(avroField.name(), newAvroSchema, avroField.doc(),
         avroField.hasDefaultValue() ? avroField.defaultVal() : null, avroField.order());
-    return new HoodieSchemaField(newAvroField);
+    return new HoodieSchemaField(newAvroField, newSchema);
   }
 
   @Override

@@ -387,6 +387,8 @@ public class HoodieTestDataGenerator implements AutoCloseable {
         return generateRandomValue(key, commitTime, true, timestamp);
       } else if (TRIP_EXAMPLE_SCHEMA.equals(schemaStr)) {
         return generateRandomValue(key, commitTime, isFlattened, timestamp);
+      } else if (TRIP_EXAMPLE_SCHEMA_EVOLVED_1.equals(schemaStr)) {
+        return generateRandomValueForSchemaEvolved1(key, commitTime, isFlattened, timestamp);
       } else if (TRIP_ENCODED_DECIMAL_SCHEMA.equals(schemaStr)) {
         return generatePayloadForTripEncodedDecimalSchema(key, commitTime, timestamp);
       } else if (TRIP_SCHEMA.equals(schemaStr)) {
@@ -457,6 +459,25 @@ public class HoodieTestDataGenerator implements AutoCloseable {
     return generateGenericRecord(
         key.getRecordKey(), key.getPartitionPath(), "rider-" + instantTime, "driver-" + instantTime, timestamp,
         false, isFlattened);
+  }
+
+  private IndexedRecord generateRandomValueForSchemaEvolved1(HoodieKey key, String instantTime, boolean isFlattened, long timestamp) {
+    Schema evolvedSchema = new Schema.Parser().parse(TRIP_EXAMPLE_SCHEMA_EVOLVED_1);
+    GenericRecord rec = new GenericData.Record(evolvedSchema);
+
+    // Reuse existing logic to populate base fields
+    generateTripPrefixValues(rec, key.getRecordKey(), key.getPartitionPath(), "rider-" + instantTime, "driver-" + instantTime, timestamp);
+    generateExtraSchemaValues(rec);
+    generateMapTypeValues(rec);
+    generateFareNestedValues(rec);
+    generateTipNestedValues(rec);
+
+    // Add the evolved column
+    rec.put("extra_column1", "extra_value_" + instantTime);
+
+    generateCustomValues(rec, "customField");
+    generateTripSuffixValues(rec, false);
+    return rec;
   }
 
   private IndexedRecord generateNestedExampleRandomValue(HoodieKey key, String instantTime, long ts) {

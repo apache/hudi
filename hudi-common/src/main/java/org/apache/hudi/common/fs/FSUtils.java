@@ -314,6 +314,17 @@ public class FSUtils {
         .toString();
   }
 
+  public static StoragePath getAbsolutePartitionPath(StoragePath basePath, String partition) {
+    return StringUtils.isNullOrEmpty(partition)
+        ? basePath : new StoragePath(basePath, partition);
+  }
+
+  public static StoragePath getAbsoluteFilePath(StoragePath basePath, String partition, String fileName) {
+    return StringUtils.isNullOrEmpty(partition)
+        ? new StoragePath(basePath, fileName)
+        : new StoragePath(basePath, partition + StoragePath.SEPARATOR + fileName);
+  }
+
   /**
    * Get the file extension from the log file.
    */

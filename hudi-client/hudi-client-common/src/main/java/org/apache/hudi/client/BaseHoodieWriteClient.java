@@ -101,7 +101,6 @@ import com.codahale.metrics.Timer;
 import lombok.Getter;
 import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.avro.Schema;
 
 import java.io.IOException;
 import java.util.Arrays;
@@ -1444,25 +1443,18 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    * Sets write schema from last instant since deletes may not have schema set in the config.
    */
   protected void setWriteSchemaForDeletes(HoodieTableMetaClient metaClient) {
-    try {
-      HoodieActiveTimeline activeTimeline = metaClient.getActiveTimeline();
-      Option<HoodieInstant> lastInstant =
-          activeTimeline.filterCompletedInstants().filter(s -> s.getAction().equals(metaClient.getCommitActionType())
-                  || s.getAction().equals(HoodieActiveTimeline.REPLACE_COMMIT_ACTION))
-              .lastInstant();
-      if (lastInstant.isPresent()) {
-        HoodieCommitMetadata commitMetadata = activeTimeline.readCommitMetadata(lastInstant.get());
-        String extraSchema = commitMetadata.getExtraMetadata().get(SCHEMA_KEY);
-        if (!StringUtils.isNullOrEmpty(extraSchema)) {
-          config.setSchema(commitMetadata.getExtraMetadata().get(SCHEMA_KEY));
-        } else {
-          throw new HoodieIOException("Latest commit does not have any schema in commit metadata");
-        }
-      } else {
-        log.debug("No rows are deleted because the table is empty");
+    HoodieTimeline timeline = metaClient.getActiveTimeline().getCommitsTimeline();
+    if (timeline.empty()) {
+      throw new HoodieIOException("Deletes issued without any prior commits");
+    }
+    if (StringUtils.isNullOrEmpty(config.getSchema())) {
+      // get schema from lastInstant (replacecommit or commit).
+      TableSchemaResolver tableSchemaResolver = new TableSchemaResolver(metaClient);
+      Option<HoodieSchema> schema = tableSchemaResolver.getTableSchemaIfPresent(false);
+      if (!schema.isPresent() || StringUtils.isNullOrEmpty(schema.get().toString())) {
+        throw new HoodieIOException("Latest commit/replacecommit does not have any schema in commit metadata");
       }
-    } catch (IOException e) {
-      throw new HoodieIOException("IOException thrown while reading last commit metadata", e);
+      config.setSchema(schema.get().toString());
     }
   }
 
@@ -1556,14 +1548,14 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    * @param position     col position to be added
    * @param positionType col position change type. now support three change types: first/after/before
    */
-  public void addColumn(String colName, Schema schema, String doc, String position, TableChange.ColumnPositionChange.ColumnPositionType positionType) {
+  public void addColumn(String colName, HoodieSchema schema, String doc, String position, TableChange.ColumnPositionChange.ColumnPositionType positionType) {
     Pair<InternalSchema, HoodieTableMetaClient> pair = getInternalSchemaAndMetaClient();
     InternalSchema newSchema = new InternalSchemaChangeApplier(pair.getLeft())
-        .applyAddChange(colName, InternalSchemaConverter.convertToField(HoodieSchema.fromAvroSchema(schema)), doc, position, positionType);
+        .applyAddChange(colName, InternalSchemaConverter.convertToField(schema), doc, position, positionType);
     commitTableChange(newSchema, pair.getRight());
   }
 
-  public void addColumn(String colName, Schema schema) {
+  public void addColumn(String colName, HoodieSchema schema) {
     addColumn(colName, schema, null, "", TableChange.ColumnPositionChange.ColumnPositionType.NO_OPERATION);
   }
 

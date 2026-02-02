@@ -44,6 +44,8 @@ import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.OutputStream;
@@ -62,6 +64,7 @@ import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
  */
 public class HoodieAvroHFileWriter
     implements HoodieAvroFileWriter {
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieAvroHFileWriter.class);
   private static final AtomicLong RECORD_INDEX_COUNT = new AtomicLong(1);
   private final Path file;
   private final HoodieHFileConfig hfileConfig;
@@ -127,9 +130,12 @@ public class HoodieAvroHFileWriter
 
   @Override
   public void writeAvro(String recordKey, IndexedRecord record) throws IOException {
-    if (prevRecordKey.equals(recordKey)) {
-      throw new HoodieDuplicateKeyException("Duplicate recordKey " + recordKey + " found while writing to HFile."
-          + "Record payload: " + record);
+    if (!this.hfileConfig.isAllowDuplicatesOnHfileWrites()) {
+      // When allowDuplicatesOnHfileWrites is true, allow duplicates to be written to hFile.
+      if (prevRecordKey.equals(recordKey)) {
+        LOG.info("Duplicate recordKey " + recordKey + " found while writing to HFile. Record payload " + record);
+        throw new HoodieDuplicateKeyException("Duplicate recordKey " + recordKey + " found while writing to HFile.");
+      }
     }
     byte[] value = null;
     boolean isRecordSerialized = false;

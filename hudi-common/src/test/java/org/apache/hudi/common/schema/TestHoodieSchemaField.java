@@ -300,4 +300,16 @@ public class TestHoodieSchemaField {
     assertThrows(IllegalArgumentException.class, () -> field.addProp(null, "value"));
     assertThrows(IllegalArgumentException.class, () -> field.addProp("", "value"));
   }
+
+  @Test
+  void testUnionFieldWithNonNullFirstElement() {
+    HoodieSchema stringSchema = HoodieSchema.create(HoodieSchemaType.STRING);
+    HoodieSchema unionSchema = HoodieSchema.createUnion(stringSchema, HoodieSchema.NULL_SCHEMA);
+
+    HoodieSchemaField hoodieField = HoodieSchemaField.of("unionField", unionSchema, "doc", HoodieSchema.NULL_VALUE);
+
+    assertEquals("unionField", hoodieField.name());
+    assertEquals(HoodieSchemaType.UNION, hoodieField.schema().getType());
+    assertEquals(HoodieSchemaType.STRING, hoodieField.schema().getNonNullType().getType());
+  }
 }

@@ -1270,6 +1270,34 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
     return writeStatusCollection;
   }
 
+  @Override
+  public HoodieData<WriteStatus> streamWriteToMetadataPartitions(HoodieData<HoodieRecord> indexRecords, Set<String> dataPartitions, String instantTime) {
+    Pair<List<MetadataPartitionType>, Set<String>> streamingMDTPartitionsPair = getStreamingMetadataPartitionsToUpdate();
+    List<MetadataPartitionType> mdtPartitionsToTag = streamingMDTPartitionsPair.getLeft();
+    Set<String> mdtPartitionPathsToTag = streamingMDTPartitionsPair.getRight();
+
+    if (mdtPartitionPathsToTag.isEmpty()) {
+      return engineContext.emptyHoodieData();
+    }
+
+    maybeInitializeNewFileGroupsForPartitionedRLI(dataPartitions, instantTime);
+
+    List<MetadataPartitionType> mdtPartitionsSupportStreamWrite = mdtPartitionsToTag.stream()
+        .filter(e -> e.equals(RECORD_INDEX) || e.equals(SECONDARY_INDEX))
+        .collect(Collectors.toList());
+    if (mdtPartitionsSupportStreamWrite.isEmpty()) {
+      return engineContext.emptyHoodieData();
+    }
+
+    // tag records w/ location
+    Pair<List<HoodieFileGroupId>, HoodieData<HoodieRecord>> hoodieFileGroupsToUpdateAndTaggedMdtRecords =
+        tagRecordsWithLocationForStreamingWrites(indexRecords, mdtPartitionPathsToTag);
+
+    // write partial writes to MDT table (for those partitions where streaming writes are enabled)
+    // dag not yet de-referenced. do not invoke any action on writeStatusCollection yet.
+    return convertEngineSpecificDataToHoodieData(streamWriteToMetadataTable(hoodieFileGroupsToUpdateAndTaggedMdtRecords, instantTime));
+  }
+
   private Pair<List<MetadataPartitionType>, Set<String>> getStreamingMetadataPartitionsToUpdate() {
     Set<MetadataPartitionType> mdtPartitionsToTag = new HashSet<>();
     // Add record index
@@ -1416,6 +1444,12 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
   private void maybeInitializeNewFileGroupsForPartitionedRLI(HoodieData<WriteStatus> writeStatus, String instantTime) {
     if (dataWriteConfig.isRecordLevelIndexEnabled()) {
       Set<String> partitionsTouchedByInflightCommit = new HashSet<>(writeStatus.map(WriteStatus::getPartitionPath).collectAsList());
+      initializeNewFileGroupsForPartitionedRLIHelper(partitionsTouchedByInflightCommit, instantTime);
+    }
+  }
+
+  private void maybeInitializeNewFileGroupsForPartitionedRLI(Set<String> partitionsTouchedByInflightCommit, String instantTime) {
+    if (dataWriteConfig.isRecordLevelIndexEnabled()) {
       initializeNewFileGroupsForPartitionedRLIHelper(partitionsTouchedByInflightCommit, instantTime);
     }
   }
@@ -1969,7 +2003,8 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
     BaseHoodieWriteClient<?, I, ?, O> writeClient = getWriteClient();
     try {
       // Run any pending table services operations and return the active timeline
-      HoodieActiveTimeline activeTimeline = runPendingTableServicesOperationsAndRefreshTimeline(metadataMetaClient, writeClient, requiresTimelineRefresh);
+      HoodieActiveTimeline activeTimeline = runPendingTableServicesOperationsAndRefreshTimeline(
+          metadataMetaClient, writeClient, requiresTimelineRefresh, metrics);
 
       Option<HoodieInstant> lastInstant = activeTimeline.getDeltaCommitTimeline()
           .filterCompletedInstants()
@@ -1990,7 +2025,9 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
     } catch (Exception e) {
       LOG.error("Exception in running table services on metadata table", e);
       allTableServicesExecutedSuccessfullyOrSkipped = false;
-      throw e;
+      if (dataWriteConfig.getMetadataConfig().shouldFailOnTableServiceFailures()) {
+        throw e;
+      }
     } finally {
       String metadataTableName = writeClient.getConfig().getTableName();
       boolean tableNameExists = StringUtils.nonEmpty(metadataTableName);
@@ -2012,19 +2049,26 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
 
   static HoodieActiveTimeline runPendingTableServicesOperationsAndRefreshTimeline(HoodieTableMetaClient metadataMetaClient,
                                                                                   BaseHoodieWriteClient<?, ?, ?, ?> writeClient,
-                                                                                  boolean initialTimelineRequiresRefresh) {
-    HoodieActiveTimeline activeTimeline = initialTimelineRequiresRefresh ? metadataMetaClient.reloadActiveTimeline() : metadataMetaClient.getActiveTimeline();
-    // finish off any pending log compaction or compactions operations if any from previous attempt.
-    boolean ranServices = false;
-    if (activeTimeline.filterPendingCompactionTimeline().countInstants() > 0) {
-      writeClient.runAnyPendingCompactions();
-      ranServices = true;
+                                                                                  boolean initialTimelineRequiresRefresh,
+                                                                                  Option<HoodieMetadataMetrics> metricsOption) {
+    try {
+      HoodieActiveTimeline activeTimeline = initialTimelineRequiresRefresh ? metadataMetaClient.reloadActiveTimeline() : metadataMetaClient.getActiveTimeline();
+      // finish off any pending log compaction or compactions operations if any from previous attempt.
+      boolean ranServices = false;
+      if (activeTimeline.filterPendingCompactionTimeline().countInstants() > 0) {
+        writeClient.runAnyPendingCompactions();
+        ranServices = true;
+      }
+      if (activeTimeline.filterPendingLogCompactionTimeline().countInstants() > 0) {
+        writeClient.runAnyPendingLogCompactions();
+        ranServices = true;
+      }
+      return ranServices ? metadataMetaClient.reloadActiveTimeline() : activeTimeline;
+    } catch (Exception e) {
+      metricsOption.ifPresent(m -> m.incrementMetric(
+          HoodieMetadataMetrics.PENDING_COMPACTIONS_FAILURES, 1));
+      throw e;
     }
-    if (activeTimeline.filterPendingLogCompactionTimeline().countInstants() > 0) {
-      writeClient.runAnyPendingLogCompactions();
-      ranServices = true;
-    }
-    return ranServices ? metadataMetaClient.reloadActiveTimeline() : activeTimeline;
   }
 
   /**
@@ -2054,18 +2098,35 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
     // let's say we trigger compaction after C5 in MDT and so compaction completes with C4001. but C5 crashed before completing in MDT.
     // and again w/ C6, we will re-attempt compaction at which point latest delta commit is C4 in MDT.
     // and so we try compaction w/ instant C4001. So, we can avoid compaction if we already have compaction w/ same instant time.
-    if (metadataMetaClient.getActiveTimeline().filterCompletedInstants().containsInstant(compactionInstantTime)) {
-      LOG.info("Compaction with same {} time is already present in the timeline.", compactionInstantTime);
-    } else if (writeClient.scheduleCompactionAtInstant(compactionInstantTime, Option.empty())) {
-      LOG.info("Compaction is scheduled for timestamp {}", compactionInstantTime);
-      writeClient.compact(compactionInstantTime, true);
-    } else if (metadataWriteConfig.isLogCompactionEnabled()) {
-      // Schedule and execute log compaction with new instant time.
-      Option<String> scheduledLogCompaction = writeClient.scheduleLogCompaction(Option.empty());
-      if (scheduledLogCompaction.isPresent()) {
-        LOG.info("Log compaction is scheduled for timestamp {}", scheduledLogCompaction.get());
-        writeClient.logCompact(scheduledLogCompaction.get(), true);
+    boolean skipCompactions = metadataMetaClient.getActiveTimeline().filterCompletedInstants().containsInstant(compactionInstantTime);
+    try {
+      if (skipCompactions) {
+        LOG.info("Compaction with same {} time is already present in the timeline.", compactionInstantTime);
+      } else if (writeClient.scheduleCompactionAtInstant(compactionInstantTime, Option.empty())) {
+        LOG.info("Compaction is scheduled for timestamp {}", compactionInstantTime);
+        writeClient.compact(compactionInstantTime, true);
       }
+    } catch (Exception e) {
+      metrics.ifPresent(m -> m.incrementMetric(HoodieMetadataMetrics.COMPACTION_FAILURES, 1));
+      LOG.error("Error in scheduling and executing compaction in metadata table", e);
+      throw e;
+    }
+
+    try {
+      if (skipCompactions) {
+        LOG.info("Compaction with same {} time is already present in the timeline.", compactionInstantTime);
+      } else if (metadataWriteConfig.isLogCompactionEnabled()) {
+        // Schedule and execute log compaction with new instant time.
+        Option<String> scheduledLogCompaction = writeClient.scheduleLogCompaction(Option.empty());
+        if (scheduledLogCompaction.isPresent()) {
+          LOG.info("Log compaction is scheduled for timestamp {}", scheduledLogCompaction.get());
+          writeClient.logCompact(scheduledLogCompaction.get(), true);
+        }
+      }
+    } catch (Exception e) {
+      metrics.ifPresent(m -> m.incrementMetric(HoodieMetadataMetrics.LOG_COMPACTION_FAILURES, 1));
+      LOG.error("Error in scheduling and executing logcompaction in metadata table", e);
+      throw e;
     }
   }
 

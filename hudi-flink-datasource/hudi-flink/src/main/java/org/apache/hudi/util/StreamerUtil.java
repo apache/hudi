@@ -18,6 +18,7 @@
 
 package org.apache.hudi.util;
 
+import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.model.CommitTimeFlinkRecordMerger;
 import org.apache.hudi.client.model.EventTimeFlinkRecordMerger;
@@ -62,6 +63,8 @@ import org.apache.hudi.exception.HoodieValidationException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.keygen.ComplexAvroKeyGenerator;
 import org.apache.hudi.keygen.SimpleAvroKeyGenerator;
+import org.apache.hudi.metadata.FlinkHoodieBackedTableMetadataWriter;
+import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.schema.FilebasedSchemaProvider;
 import org.apache.hudi.sink.transform.ChainedTransformer;
 import org.apache.hudi.sink.transform.Transformer;
@@ -135,6 +138,18 @@ public class StreamerUtil {
     return properties;
   }
 
+  /**
+   * Creates the metadata write client from the given write client for data table.
+   */
+  public static HoodieFlinkWriteClient createMetadataWriteClient(HoodieFlinkWriteClient dataWriteClient) {
+    // Get the metadata writer from the table and use its write client
+    Option<HoodieTableMetadataWriter> metadataWriterOpt =
+        dataWriteClient.getHoodieTable().getMetadataWriter(null, true, true);
+    ValidationUtils.checkArgument(metadataWriterOpt.isPresent(), "Failed to create the metadata writer");
+    FlinkHoodieBackedTableMetadataWriter metadataWriter = (FlinkHoodieBackedTableMetadataWriter) metadataWriterOpt.get();
+    return (HoodieFlinkWriteClient) metadataWriter.getWriteClient();
+  }
+
   public static HoodieSchema getSourceSchema(org.apache.flink.configuration.Configuration conf) {
     if (conf.getOptional(FlinkOptions.SOURCE_AVRO_SCHEMA_PATH).isPresent()) {
       return new FilebasedSchemaProvider(conf).getSourceHoodieSchema();
@@ -173,8 +188,8 @@ public class StreamerUtil {
   public static HoodiePayloadConfig getPayloadConfig(Configuration conf) {
     return HoodiePayloadConfig.newBuilder()
         .withPayloadClass(conf.get(FlinkOptions.PAYLOAD_CLASS_NAME))
-        .withPayloadOrderingFields(conf.get(FlinkOptions.ORDERING_FIELDS))
-        .withPayloadEventTimeField(conf.get(FlinkOptions.ORDERING_FIELDS))
+        .withPayloadOrderingFields(OptionsResolver.getOrderingFieldsStr(conf))
+        .withPayloadEventTimeField(OptionsResolver.getOrderingFieldsStr(conf))
         .build();
   }
 
@@ -652,15 +667,18 @@ public class StreamerUtil {
    */
   public static void checkOrderingFields(Configuration conf, List<String> fields) {
     String orderingFields = conf.get(FlinkOptions.ORDERING_FIELDS);
-    if (!fields.contains(orderingFields)) {
+    if (null == orderingFields || !fields.contains(orderingFields)) {
       if (OptionsResolver.isDefaultHoodieRecordPayloadClazz(conf)) {
+        // default payload force set of some columns existed in schema as ordering ones
         throw new HoodieValidationException("Option '" + FlinkOptions.ORDERING_FIELDS.key()
                 + "' is required for payload class: " + DefaultHoodieRecordPayload.class.getName());
       }
-      if (orderingFields.equals(FlinkOptions.ORDERING_FIELDS.defaultValue())) {
+      if (null == orderingFields) {
+        // if there is no ordering fields we set them as no-precombine
         conf.set(FlinkOptions.ORDERING_FIELDS, FlinkOptions.NO_PRE_COMBINE);
       } else if (!orderingFields.equals(FlinkOptions.NO_PRE_COMBINE)) {
-        throw new HoodieValidationException("Field " + orderingFields + " does not exist in the table schema."
+        // but if no-precombine was passed initially then we shouldn't fail here on schema check
+        throw new HoodieValidationException("Field " + orderingFields + " does not exist in the table schema. "
                 + "Please check '" + FlinkOptions.ORDERING_FIELDS.key() + "' option.");
       }
     }

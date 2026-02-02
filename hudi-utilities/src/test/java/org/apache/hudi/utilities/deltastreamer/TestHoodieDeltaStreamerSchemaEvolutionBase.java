@@ -224,6 +224,7 @@ public class TestHoodieDeltaStreamerSchemaEvolutionBase extends HoodieDeltaStrea
           useSchemaProvider, dfsSourceLimitBytes, false, null, tableType, "timestamp", null);
     }
     cfg.forceDisableCompaction = !shouldCompact;
+    cfg.enableHiveSupport = false;
     return cfg;
   }
 

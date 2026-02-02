@@ -358,6 +358,7 @@ public class TestHoodieSourceSplitReader {
         "/test/table",
         "/test/partition",
         "read_optimized",
+        "19700101000000000",
         fileId
     );
   }

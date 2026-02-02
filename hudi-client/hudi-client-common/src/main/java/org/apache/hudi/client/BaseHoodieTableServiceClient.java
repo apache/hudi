@@ -827,21 +827,23 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
       }
     }
 
+    HoodieCleanMetadata metadata;
     if (inflightClean.isPresent() || cleanInstantTime.isPresent()) {
       table.getMetaClient().reloadActiveTimeline();
       // Proceeds to execute any requested or inflight clean instances in the timeline
       String cleanInstantToExecute = cleanInstantTime.isPresent() ? cleanInstantTime.get() : inflightClean.get();
-      HoodieCleanMetadata metadata = table.clean(context, cleanInstantToExecute);
-      if (timerContext != null && metadata != null) {
-        long durationMs = metrics.getDurationInMs(timerContext.stop());
-        metrics.updateCleanMetrics(durationMs, metadata.getTotalFilesDeleted());
-        log.info("Cleaned {} files Earliest Retained Instant :{} cleanerElapsedMs: {}",
-            metadata.getTotalFilesDeleted(), metadata.getEarliestCommitToRetain(), durationMs);
-      }
+      metadata = table.clean(context, cleanInstantToExecute);
       releaseResources(cleanInstantToExecute);
-      return metadata;
+    } else {
+      metadata = null;
     }
-    return null;
+    if (timerContext != null && metadata != null) {
+      long durationMs = metrics.getDurationInMs(timerContext.stop());
+      metrics.updateCleanMetrics(durationMs, metadata.getTotalFilesDeleted());
+      log.info("Cleaned {} files Earliest Retained Instant :{} cleanerElapsedMs: {}",
+          metadata.getTotalFilesDeleted(), metadata.getEarliestCommitToRetain(), durationMs);
+    }
+    return metadata;
   }
 
   /**
@@ -886,17 +888,19 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
     if (!tableServicesEnabled(config)) {
       return;
     }
+    final Timer.Context timerContext = metrics.getArchiveCtx();
+    int instantsToArchive = 0;
     try {
-      final Timer.Context timerContext = metrics.getArchiveCtx();
       // We cannot have unbounded commit files. Archive commits if we have to archive.
       HoodieTimelineArchiver archiver = TimelineArchivers.getInstance(table.getMetaClient().getTimelineLayoutVersion(), config, table);
-      int instantsToArchive = archiver.archiveIfRequired(context, true);
+      instantsToArchive = archiver.archiveIfRequired(context, true);
+    } catch (IOException ioe) {
+      throw new HoodieIOException("Failed to archive", ioe);
+    } finally {
       if (timerContext != null) {
         long durationMs = metrics.getDurationInMs(timerContext.stop());
         this.metrics.updateArchiveMetrics(durationMs, instantsToArchive);
       }
-    } catch (IOException ioe) {
-      throw new HoodieIOException("Failed to archive", ioe);
     }
   }
 

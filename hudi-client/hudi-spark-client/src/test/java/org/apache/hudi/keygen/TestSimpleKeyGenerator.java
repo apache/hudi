@@ -19,8 +19,10 @@
 
 package org.apache.hudi.keygen;
 
+import org.apache.avro.generic.GenericData;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieKey;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieKeyException;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
@@ -87,6 +89,15 @@ class TestSimpleKeyGenerator extends KeyGeneratorTestUtilities {
   private TypedProperties getPropsWithNestedPartitionPathField() {
     TypedProperties properties = getCommonProps();
     properties.put(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), "nested_col.prop1");
+    return properties;
+  }
+
+  private TypedProperties getPropsWithSlashSeparatedDatePartitioning() {
+    TypedProperties properties = new TypedProperties();
+    properties.put(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), "_row_key");
+    properties.put(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), "timestamp");
+    properties.put(KeyGeneratorOptions.SLASH_SEPARATED_DATE_PARTITIONING.key(), "true");
+    properties.put(KeyGeneratorOptions.HIVE_STYLE_PARTITIONING_ENABLE.key(), "false");
     return properties;
   }
 
@@ -167,5 +178,39 @@ class TestSimpleKeyGenerator extends KeyGeneratorTestUtilities {
     Row row = KeyGeneratorTestUtilities.getRow(avroRecord);
     Assertions.assertEquals("key1", keyGenerator.getRecordKey(row));
     Assertions.assertEquals(expectedPartitionPath, keyGenerator.getPartitionPath(row));
+  }
+
+  @Test
+  void testSlashSeparatedDatePartitioning() {
+    SimpleKeyGenerator keyGenerator = new SimpleKeyGenerator(getPropsWithSlashSeparatedDatePartitioning());
+
+    // Create a record with date in yyyy-MM-dd format
+    GenericRecord avroRecord = new GenericData.Record(HoodieSchema.parse(KeyGeneratorTestUtilities.EXAMPLE_SCHEMA).getAvroSchema());
+    avroRecord.put("timestamp", "2026-01-05");
+    avroRecord.put("_row_key", "key1");
+    avroRecord.put("ts_ms", "2026-01-05");
+    avroRecord.put("pii_col", "val1");
+
+    // The partition path should be transformed to yyyy/MM/dd format
+    HoodieKey key = keyGenerator.getKey(avroRecord);
+    Assertions.assertEquals("key1", key.getRecordKey());
+    Assertions.assertEquals("2026/01/05", key.getPartitionPath());
+  }
+
+  @Test
+  void testSlashSeparatedDatePartitioningWithAlreadyFormattedInput() {
+    SimpleKeyGenerator keyGenerator = new SimpleKeyGenerator(getPropsWithSlashSeparatedDatePartitioning());
+
+    // Create a record with date already in yyyy/MM/dd format
+    GenericRecord avroRecord = new GenericData.Record(HoodieSchema.parse(KeyGeneratorTestUtilities.EXAMPLE_SCHEMA).getAvroSchema());
+    avroRecord.put("timestamp", "2026/01/01");
+    avroRecord.put("_row_key", "key1");
+    avroRecord.put("ts_ms", "2026/01/01");
+    avroRecord.put("pii_col", "val1");
+
+    // The partition path should remain in yyyy/MM/dd format
+    HoodieKey key = keyGenerator.getKey(avroRecord);
+    Assertions.assertEquals("key1", key.getRecordKey());
+    Assertions.assertEquals("2026/01/01", key.getPartitionPath());
   }
 }
