@@ -335,8 +335,6 @@ public class HoodieTableConfig extends HoodieConfig {
       .sinceVersion("1.0.0")
       .withDocumentation("Key Generator type to determine key generator class");
 
-  public static final boolean DEFAULT_USE_PARTITION_VALUE_EXTRACTOR_FOR_READERS = false;
-
   public static final ConfigProperty<String> PARTITION_VALUE_EXTRACTOR_CLASS = ConfigProperty
       .key("hoodie.datasource.hive_sync.partition_extractor_class")
       .defaultValue("org.apache.hudi.hive.MultiPartKeysValueExtractor")

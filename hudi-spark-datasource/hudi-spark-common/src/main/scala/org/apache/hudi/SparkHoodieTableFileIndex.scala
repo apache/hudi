@@ -119,7 +119,8 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
   protected lazy val shouldFastBootstrap = configProperties.getBoolean(DATA_QUERIES_ONLY.key, false)
 
   protected lazy val usePartitionValueExtractorOnRead = configProperties.getBoolean(
-    DataSourceReadOptions.USE_PARTITION_VALUE_EXTRACTOR_ON_READ.key(), false)
+    DataSourceReadOptions.USE_PARTITION_VALUE_EXTRACTOR_ON_READ.key(),
+    DataSourceReadOptions.USE_PARTITION_VALUE_EXTRACTOR_ON_READ.defaultValue().toBoolean)
 
   /**
    * Get the partition schema from the hoodie.properties.
