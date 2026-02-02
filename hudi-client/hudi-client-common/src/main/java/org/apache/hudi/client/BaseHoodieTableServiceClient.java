@@ -58,7 +58,9 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieClusteringException;
 import org.apache.hudi.exception.HoodieCompactionException;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.exception.HoodieHeartbeatException;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.exception.HoodieLockException;
 import org.apache.hudi.exception.HoodieLogCompactException;
 import org.apache.hudi.exception.HoodieRollbackException;
 import org.apache.hudi.metadata.HoodieTableMetadata;
@@ -309,6 +311,23 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
     HoodieTimeline pendingCompactionTimeline = table.getActiveTimeline().filterPendingCompactionTimeline();
     InstantGenerator instantGenerator = table.getMetaClient().getInstantGenerator();
     HoodieInstant inflightInstant = instantGenerator.getCompactionInflightInstant(compactionInstantTime);
+    try {
+      // Transaction serves to ensure only one compact job for this instant will start heartbeat, and any other concurrent
+      // compact job will abort if they attempt to execute compact before heartbeat expires
+      // Note that as long as all jobs for this table use this API for compact, then this alone should prevent
+      // compact rollbacks from running concurrently to compact commits.
+      txnManager.beginStateChange(Option.of(inflightInstant), txnManager.getLastCompletedTransactionOwner());
+      try {
+        if (!this.heartbeatClient.isHeartbeatExpired(compactionInstantTime)) {
+          throw new HoodieLockException("Cannot compact instant " + compactionInstantTime + " due to heartbeat by concurrent writer/job");
+        }
+      } catch (IOException e) {
+        throw new HoodieHeartbeatException("Error accessing heartbeat of instant to compact " + compactionInstantTime, e);
+      }
+      this.heartbeatClient.start(compactionInstantTime);
+    } finally {
+      txnManager.endStateChange(Option.of(inflightInstant));
+    }
     if (pendingCompactionTimeline.containsInstant(inflightInstant)) {
       table.rollbackInflightCompaction(inflightInstant, commitToRollback -> getPendingRollbackInfo(table.getMetaClient(), commitToRollback, false), txnManager);
       table.getMetaClient().reloadActiveTimeline();
@@ -341,9 +360,6 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
 
     HoodieTable table = tableOpt.orElseGet(() -> createTable(config, context.getStorageConf()));
     completeCompaction(compactionWriteMetadata.getCommitMetadata().get(), table, compactionInstantTime, tableWriteStats.getMetadataTableWriteStats());
-    if (config.getWriteConcurrencyMode().supportsMultiWriter()) {
-      this.heartbeatClient.stop(compactionInstantTime);
-    }
   }
 
   /**
@@ -1283,6 +1299,6 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
    * to release any resources used.
    */
   protected void releaseResources(String instantTime) {
-    // do nothing here
+    this.heartbeatClient.stop(instantTime);
   }
 }
