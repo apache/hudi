@@ -113,7 +113,7 @@ import static org.junit.jupiter.params.provider.Arguments.arguments;
  * Tests {@link HoodieFileGroupReader} with different engines
  */
 public abstract class TestHoodieFileGroupReaderBase<T> {
-  private static final List<HoodieFileFormat> DEFAULT_SUPPORTED_FILE_FORMATS = Arrays.asList(HoodieFileFormat.PARQUET, HoodieFileFormat.LANCE);
+  private static final List<HoodieFileFormat> DEFAULT_SUPPORTED_FILE_FORMATS = Arrays.asList(HoodieFileFormat.PARQUET, HoodieFileFormat.ORC);
   protected static List<HoodieFileFormat> supportedFileFormats;
   private static final String KEY_FIELD_NAME = "_row_key";
   protected static final String ORDERING_FIELD_NAME = "timestamp";
