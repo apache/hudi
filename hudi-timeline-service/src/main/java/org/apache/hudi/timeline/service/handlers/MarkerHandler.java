@@ -184,9 +184,12 @@ public class MarkerHandler extends Handler {
    * @param context Javalin app context
    * @param markerDir marker directory path
    * @param markerName marker name
+   * @param basePath base path
+   * @param requestId optional request ID for idempotent retries (POST only); null for legacy or when TLS recovers
    * @return the {@code CompletableFuture} instance for the request
    */
-  public CompletableFuture<String> createMarker(Context context, String markerDir, String markerName, String basePath) {
+  public CompletableFuture<String> createMarker(Context context, String markerDir, String markerName, String basePath,
+                                                String requestId) {
     // Step1 do early conflict detection if enable
     if (timelineServiceConfig.earlyConflictDetectionEnable) {
       try {
@@ -237,18 +240,18 @@ public class MarkerHandler extends Handler {
         log.warn("Failed to execute early conflict detection. Marker creation will continue.", e);
         // When early conflict detection fails to execute, we still allow the marker creation
         // to continue
-        return addMarkerCreationRequestForAsyncProcessing(context, markerDir, markerName);
+        return addMarkerCreationRequestForAsyncProcessing(context, markerDir, markerName, requestId);
       }
     }
 
     // Step 2 create marker
-    return addMarkerCreationRequestForAsyncProcessing(context, markerDir, markerName);
+    return addMarkerCreationRequestForAsyncProcessing(context, markerDir, markerName, requestId);
   }
 
   private MarkerCreationFuture addMarkerCreationRequestForAsyncProcessing(
-      Context context, String markerDir, String markerName) {
+      Context context, String markerDir, String markerName, String requestId) {
     log.debug("Request: Create marker: {}", markerName);
-    MarkerCreationFuture future = new MarkerCreationFuture(context, markerDir, markerName);
+    MarkerCreationFuture future = new MarkerCreationFuture(context, markerDir, markerName, requestId);
     // Add the future to the list
     MarkerDirState markerDirState = getMarkerDirState(markerDir);
     markerDirState.addMarkerCreationFuture(future);

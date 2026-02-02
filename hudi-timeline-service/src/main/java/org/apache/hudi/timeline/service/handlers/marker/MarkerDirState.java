@@ -34,7 +34,6 @@ import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
-import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.hadoop.util.StringUtils;
 
@@ -45,11 +44,13 @@ import java.io.OutputStreamWriter;
 import java.io.Serializable;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -65,13 +66,14 @@ import static org.apache.hudi.timeline.service.RequestHandler.jsonifyResult;
 @Slf4j
 public class MarkerDirState implements Serializable {
 
+  private static final String NULL_REQUEST_ID = "";
   // Marker directory
   private final StoragePath markerDirPath;
   private final HoodieStorage storage;
   private final Registry metricsRegistry;
-  // A cached copy of all markers in memory
-  @Getter
-  private final Set<String> allMarkers = new HashSet<>();
+  // Marker name -> request ID (empty string sentinel when TLS recovers from crash or for legacy clients).
+  // Enables idempotent retries: same requestId for same marker is treated as success.
+  private final Map<String, String> markerToRequestIdMap = new ConcurrentHashMap<>();
   // A cached copy of marker entries in each marker file, stored in StringBuilder
   // for efficient appending
   // Mapping: {markerFileIndex -> markers}
@@ -105,6 +107,13 @@ public class MarkerDirState implements Serializable {
     this.conflictDetectionStrategy = conflictDetectionStrategy;
     // Lazy initialization of markers by reading MARKERS* files on the file system
     syncMarkersFromFileSystem();
+  }
+
+  /**
+   * @return all marker names in the directory (backward compatible).
+   */
+  public Set<String> getAllMarkers() {
+    return Collections.unmodifiableSet(new HashSet<>(markerToRequestIdMap.keySet()));
   }
 
   /**
@@ -211,30 +220,42 @@ public class MarkerDirState implements Serializable {
     synchronized (markerCreationProcessingLock) {
       for (MarkerCreationFuture future : pendingMarkerCreationFutures) {
         String markerName = future.getMarkerName();
-        boolean exists = allMarkers.contains(markerName);
-        if (!exists) {
-          if (conflictDetectionStrategy.isPresent()) {
-            try {
-              conflictDetectionStrategy.get().detectAndResolveConflictIfNecessary();
-            } catch (HoodieEarlyConflictDetectionException he) {
-              log.error("Detected the write conflict due to a concurrent writer, "
-                  + "failing the marker creation as the early conflict detection is enabled", he);
-              future.setIsSuccessful(false);
-              continue;
-            } catch (Exception e) {
-              log.warn("Failed to execute early conflict detection. Marker creation will continue.", e);
-              // When early conflict detection fails to execute, we still allow the marker creation
-              // to continue
-              addMarkerToMap(fileIndex, markerName);
-              future.setIsSuccessful(true);
-              shouldFlushMarkers = true;
-              continue;
-            }
+        String requestId = future.getRequestId();
+        // Idempotent retry: marker already created with same requestId
+        if (markerToRequestIdMap.containsKey(markerName)) {
+          String existingRequestId = markerToRequestIdMap.get(markerName);
+          String normalizedRequestId = requestId == null ? NULL_REQUEST_ID : requestId;
+          boolean idempotentMatch = normalizedRequestId.equals(existingRequestId)
+              || NULL_REQUEST_ID.equals(existingRequestId)
+              || NULL_REQUEST_ID.equals(normalizedRequestId);
+          if (idempotentMatch) {
+            future.setIsSuccessful(true);
+          } else {
+            future.setIsSuccessful(false);
           }
-          addMarkerToMap(fileIndex, markerName);
-          shouldFlushMarkers = true;
+          continue;
         }
-        future.setIsSuccessful(!exists);
+        if (conflictDetectionStrategy.isPresent()) {
+          try {
+            conflictDetectionStrategy.get().detectAndResolveConflictIfNecessary();
+          } catch (HoodieEarlyConflictDetectionException he) {
+            log.error("Detected the write conflict due to a concurrent writer, "
+                + "failing the marker creation as the early conflict detection is enabled", he);
+            future.setIsSuccessful(false);
+            continue;
+          } catch (Exception e) {
+            log.warn("Failed to execute early conflict detection. Marker creation will continue.", e);
+            // When early conflict detection fails to execute, we still allow the marker creation
+            // to continue
+            addMarkerToMap(fileIndex, markerName, requestId);
+            future.setIsSuccessful(true);
+            shouldFlushMarkers = true;
+            continue;
+          }
+        }
+        addMarkerToMap(fileIndex, markerName, requestId);
+        future.setIsSuccessful(true);
+        shouldFlushMarkers = true;
       }
 
       if (!isMarkerTypeWritten) {
@@ -265,13 +286,14 @@ public class MarkerDirState implements Serializable {
    */
   public boolean deleteAllMarkers() {
     boolean result = FSUtils.deleteDir(hoodieEngineContext, storage, markerDirPath, parallelism);
-    allMarkers.clear();
+    markerToRequestIdMap.clear();
     fileMarkersMap.clear();
     return result;
   }
 
   /**
    * Syncs all markers maintained in the underlying files under the marker directory in the file system.
+   * When TLS recovers from crash, we have no request IDs so store sentinel value for each marker.
    */
   private void syncMarkersFromFileSystem() {
     Map<String, Set<String>> fileMarkersSetMap = MarkerUtils.readTimelineServerBasedMarkersFromFileSystem(
@@ -282,7 +304,9 @@ public class MarkerDirState implements Serializable {
         int index = parseMarkerFileIndex(markersFilePathStr);
         if (index >= 0) {
           fileMarkersMap.put(index, new StringBuilder(StringUtils.join(",", fileMarkers)));
-          allMarkers.addAll(fileMarkers);
+          for (String marker : fileMarkers) {
+            markerToRequestIdMap.put(marker, NULL_REQUEST_ID);
+          }
         }
       }
     }
@@ -301,9 +325,10 @@ public class MarkerDirState implements Serializable {
    *
    * @param fileIndex  Marker file index number.
    * @param markerName Marker name.
+   * @param requestId Optional request ID for idempotency; null for legacy or recovery.
    */
-  private void addMarkerToMap(int fileIndex, String markerName) {
-    allMarkers.add(markerName);
+  private void addMarkerToMap(int fileIndex, String markerName, String requestId) {
+    markerToRequestIdMap.put(markerName, requestId == null ? NULL_REQUEST_ID : requestId);
     StringBuilder stringBuilder = fileMarkersMap.computeIfAbsent(fileIndex, k -> new StringBuilder(16384));
     stringBuilder.append(markerName);
     stringBuilder.append('\n');
