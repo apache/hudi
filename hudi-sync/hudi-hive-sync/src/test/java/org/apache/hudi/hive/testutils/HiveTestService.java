@@ -359,25 +359,25 @@ public class HiveTestService {
       throw new IOException("Failed to create HMSHandler using (String, Configuration, boolean) constructor", e);
     }
 
-    // Try Hive 3.x constructor with HiveConf (2 parameters: String, HiveConf)
-    try {
-      Constructor<?> constructor = hmsHandlerClass.getConstructor(String.class, HiveConf.class);
-      return (HiveMetaStore.HMSHandler) constructor.newInstance(handlerName, conf);
-    } catch (NoSuchMethodException e) {
-      // Continue to next option
-    } catch (Exception e) {
-      throw new IOException("Failed to create HMSHandler using (String, HiveConf) constructor", e);
-    }
-
     // Try Hive 2.x constructor (3 parameters: String, HiveConf, boolean)
     try {
       Constructor<?> constructor = hmsHandlerClass.getConstructor(String.class, HiveConf.class, boolean.class);
       return (HiveMetaStore.HMSHandler) constructor.newInstance(handlerName, conf, false);
     } catch (NoSuchMethodException e) {
+      // Continue to next option
+    } catch (Exception e) {
+      throw new IOException("Failed to create HMSHandler using (String, HiveConf, boolean) constructor", e);
+    }
+
+    // Try Hive 2.x constructor with HiveConf (2 parameters: String, HiveConf)
+    try {
+      Constructor<?> constructor = hmsHandlerClass.getConstructor(String.class, HiveConf.class);
+      return (HiveMetaStore.HMSHandler) constructor.newInstance(handlerName, conf);
+    } catch (NoSuchMethodException e) {
       throw new IOException("Failed to create HMSHandler. No compatible constructor found. "
           + "Available constructors: " + java.util.Arrays.toString(hmsHandlerClass.getConstructors()), e);
     } catch (Exception e) {
-      throw new IOException("Failed to create HMSHandler using (String, HiveConf, boolean) constructor", e);
+      throw new IOException("Failed to create HMSHandler using (String, HiveConf) constructor", e);
     }
   }
 
