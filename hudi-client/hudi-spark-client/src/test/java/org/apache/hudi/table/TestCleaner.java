@@ -1329,7 +1329,7 @@ public class TestCleaner extends HoodieCleanerTestBase {
   }
 
   /**
-   * Test that incremental clean properly scans partitions from different operation types.
+   * Test that incremental clean properly scans partitions from different operation types on a COW table.
    * This test verifies that with incremental clean enabled:
    * - Partitions with only bulk_insert (new file groups) are NOT included in clean plan
    * - Partitions with upsert (existing file groups modified) ARE included in clean plan
@@ -1337,7 +1337,7 @@ public class TestCleaner extends HoodieCleanerTestBase {
    * - Partitions with clustering (replace commit) ARE included in clean plan
    */
   @Test
-  public void testIncrementalCleanPartitionScanningWithDifferentOperationTypes() throws Exception {
+  public void testIncrementalCleanPartitionScanningWithDifferentOperationTypesCOW() throws Exception {
     // Setup: Keep latest 2 commits, incremental clean enabled
     HoodieWriteConfig config = getConfigBuilder()
         .withMetadataConfig(HoodieMetadataConfig.newBuilder()
@@ -1478,6 +1478,183 @@ public class TestCleaner extends HoodieCleanerTestBase {
       // (since insert_overwrite is a replace commit with replaced file IDs)
       assertTrue(cleanedPartitions.contains(partitionInsertOverwrite),
           "Insert overwrite partition should be in clean plan as it replaces existing file groups");
+
+      // Verify that cluster partition IS in the clean plan
+      // (since cluster is a replace commit with replaced file IDs)
+      assertTrue(cleanedPartitions.contains(partitionCluster),
+          "Cluster partition should be in clean plan as it replaces existing file groups");
+    }
+  }
+
+  /**
+   * Test that incremental clean properly scans partitions from different operation types on a MOR table.
+   * This test verifies that with incremental clean enabled:
+   * - Partitions with only delta commits (log files) that are NOT part of compaction are NOT included in clean plan
+   * - Partitions that are part of compaction ARE included in clean plan
+   * - Partitions with clustering (replace commit) ARE included in clean plan
+   */
+  @Test
+  public void testIncrementalCleanPartitionScanningWithDifferentOperationTypesMOR() throws Exception {
+    // Initialize MOR table
+    HoodieTestUtils.init(storageConf, basePath, HoodieTableType.MERGE_ON_READ);
+    metaClient = HoodieTableMetaClient.reload(metaClient);
+
+    // Setup: Keep latest 2 commits, incremental clean enabled
+    HoodieWriteConfig config = getConfigBuilder()
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder()
+            .withMaxNumDeltaCommitsBeforeCompaction(1).build())
+        .withCleanConfig(HoodieCleanConfig.newBuilder()
+            .withIncrementalCleaningMode(true)
+            .withAutoClean(false)
+            .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_COMMITS)
+            .retainCommits(2)
+            .build())
+        .withCompactionConfig(HoodieCompactionConfig.newBuilder()
+            .withInlineCompaction(false)
+            .withMaxNumDeltaCommitsBeforeCompaction(10) // Disable auto scheduling of compaction
+            .compactionSmallFileSize(1024 * 1024 * 1024)
+            .build())
+        .withArchivalConfig(HoodieArchivalConfig.newBuilder()
+            .withAutoArchive(false)
+            .build())
+        .withParallelism(1, 1).withBulkInsertParallelism(1).withFinalizeWriteParallelism(1).withDeleteParallelism(1)
+        .build();
+
+    // Define partitions for different operation types
+    final String partitionDeltaOnly = "2020/01/01";       // delta commits only - NOT part of compaction, should NOT be in clean plan
+    final String partitionCompaction = "2020/01/02";      // delta commits + compaction - should be in clean plan
+    final String partitionCluster = "2020/01/03";         // delta commits + clustering - should be in clean plan
+
+    try (SparkRDDWriteClient client = new SparkRDDWriteClient(context, config)) {
+      // Phase 1: Establish initial data and first clean to have a valid earliestCommitToRetain
+
+      // Delta commit 1: Insert to compaction partition with many records to create multiple log files
+      String commit1 = client.startCommit();
+      List<HoodieRecord> recordsCompaction1 = dataGen.generateInsertsForPartition(commit1, 100, partitionCompaction);
+      JavaRDD<WriteStatus> writeStatus1 = client.insert(jsc.parallelize(recordsCompaction1, 1), commit1);
+      client.commit(commit1, writeStatus1, Option.empty(), DELTA_COMMIT_ACTION, Collections.emptyMap(), Option.empty());
+      metaClient = HoodieTableMetaClient.reload(metaClient);
+
+      // Delta commit 2: Updates to compaction partition to add more log files
+      String commit2 = client.startCommit();
+      List<HoodieRecord> recordsCompaction2 = dataGen.generateUpdates(commit2, recordsCompaction1);
+      SparkRDDReadClient readClient = new SparkRDDReadClient(context, config);
+      JavaRDD<HoodieRecord> taggedRecords2 = readClient.tagLocation(jsc.parallelize(recordsCompaction2, 1));
+      JavaRDD<WriteStatus> writeStatus2 = client.upsertPreppedRecords(taggedRecords2, commit2);
+      client.commit(commit2, writeStatus2, Option.empty(), DELTA_COMMIT_ACTION, Collections.emptyMap(), Option.empty());
+      metaClient = HoodieTableMetaClient.reload(metaClient);
+
+      // Delta commit 3: More updates to compaction partition
+      String commit3 = client.startCommit();
+      List<HoodieRecord> recordsCompaction3 = dataGen.generateUpdates(commit3, recordsCompaction2);
+      JavaRDD<HoodieRecord> taggedRecords3 = readClient.tagLocation(jsc.parallelize(recordsCompaction3, 1));
+      JavaRDD<WriteStatus> writeStatus3 = client.upsertPreppedRecords(taggedRecords3, commit3);
+      client.commit(commit3, writeStatus3, Option.empty(), DELTA_COMMIT_ACTION, Collections.emptyMap(), Option.empty());
+      metaClient = HoodieTableMetaClient.reload(metaClient);
+
+      // Delta commit 4: More updates to compaction partition
+      String commit4 = client.startCommit();
+      List<HoodieRecord> recordsCompaction4 = dataGen.generateUpdates(commit4, recordsCompaction3);
+      JavaRDD<HoodieRecord> taggedRecords4 = readClient.tagLocation(jsc.parallelize(recordsCompaction4, 1));
+      JavaRDD<WriteStatus> writeStatus4 = client.upsertPreppedRecords(taggedRecords4, commit4);
+      client.commit(commit4, writeStatus4, Option.empty(), DELTA_COMMIT_ACTION, Collections.emptyMap(), Option.empty());
+      metaClient = HoodieTableMetaClient.reload(metaClient);
+
+      // Run compaction on compaction partition - this creates a commit that replaces log files with base file
+      String compactionInstantTime = client.scheduleCompaction(Option.empty()).get().toString();
+      client.compact(compactionInstantTime);
+      metaClient = HoodieTableMetaClient.reload(metaClient);
+
+      // Run first clean to establish earliestCommitToRetain
+      HoodieCleanMetadata firstCleanMetadata = client.clean();
+      metaClient = HoodieTableMetaClient.reload(metaClient);
+
+      // Phase 2: Now we have a valid clean instant, proceed with testing incremental clean behavior
+
+      // Add initial data to cluster partition (for later clustering)
+      String commit5 = client.startCommit();
+      List<HoodieRecord> initialRecordsCluster = dataGen.generateInsertsForPartition(commit5, 10, partitionCluster);
+      client.insert(jsc.parallelize(initialRecordsCluster, 1), commit5).collect();
+      metaClient = HoodieTableMetaClient.reload(metaClient);
+
+      // Delta commit on deltaOnly partition (only creates log files, NOT part of compaction - should NOT appear in clean plan)
+      String deltaOnlyCommit1 = client.startCommit();
+      List<HoodieRecord> deltaOnlyRecords1 = dataGen.generateInsertsForPartition(deltaOnlyCommit1, 5, partitionDeltaOnly);
+      JavaRDD<WriteStatus> deltaOnlyStatus1 = client.insert(jsc.parallelize(deltaOnlyRecords1, 1), deltaOnlyCommit1);
+      client.commit(deltaOnlyCommit1, deltaOnlyStatus1, Option.empty(), DELTA_COMMIT_ACTION, Collections.emptyMap(), Option.empty());
+      metaClient = HoodieTableMetaClient.reload(metaClient);
+
+      // More updates to compaction partition to create additional log files
+      String commit6 = client.startCommit();
+      List<HoodieRecord> recordsCompaction6 = dataGen.generateUpdates(commit6, recordsCompaction4);
+      JavaRDD<HoodieRecord> taggedRecords6 = readClient.tagLocation(jsc.parallelize(recordsCompaction6, 1));
+      JavaRDD<WriteStatus> writeStatus6 = client.upsertPreppedRecords(taggedRecords6, commit6);
+      client.commit(commit6, writeStatus6, Option.empty(), DELTA_COMMIT_ACTION, Collections.emptyMap(), Option.empty());
+      metaClient = HoodieTableMetaClient.reload(metaClient);
+
+      // Run another compaction on compaction partition
+      String compactionInstantTime2 = client.scheduleCompaction(Option.empty()).get().toString();
+      client.compact(compactionInstantTime2);
+      metaClient = HoodieTableMetaClient.reload(metaClient);
+
+      // Simulate clustering on cluster partition (replace commit with replaced file IDs)
+      String clusteringCommit = WriteClientTestUtils.createNewInstantTime();
+      HoodieTestTable testTable = HoodieTestTable.of(metaClient);
+      Map<String, String> partitionAndFileId = testTable.forReplaceCommit(clusteringCommit).getFileIdsWithBaseFilesInPartitions(partitionCluster);
+      String newFileId = partitionAndFileId.get(partitionCluster);
+
+      HoodieTable table = HoodieSparkTable.create(config, context, metaClient);
+      List<String> existingFileIds = table.getSliceView()
+          .getLatestFileSlices(partitionCluster)
+          .map(fs -> fs.getFileId())
+          .collect(Collectors.toList());
+
+      if (!existingFileIds.isEmpty()) {
+        Pair<HoodieRequestedReplaceMetadata, HoodieReplaceCommitMetadata> replaceMetadata =
+            generateReplaceCommitMetadata(clusteringCommit, partitionCluster, existingFileIds.get(0), newFileId);
+        testTable.addReplaceCommit(clusteringCommit, Option.of(replaceMetadata.getKey()), Option.empty(), replaceMetadata.getValue());
+      }
+      metaClient = HoodieTableMetaClient.reload(metaClient);
+
+      // Add more delta commits on deltaOnly partition (still NOT part of any compaction)
+      String deltaOnlyCommit2 = client.startCommit();
+      List<HoodieRecord> deltaOnlyRecords2 = dataGen.generateUpdates(deltaOnlyCommit2, deltaOnlyRecords1);
+      JavaRDD<HoodieRecord> taggedDeltaOnly2 = readClient.tagLocation(jsc.parallelize(deltaOnlyRecords2, 1));
+      JavaRDD<WriteStatus> deltaOnlyStatus2 = client.upsertPreppedRecords(taggedDeltaOnly2, deltaOnlyCommit2);
+      client.commit(deltaOnlyCommit2, deltaOnlyStatus2, Option.empty(), DELTA_COMMIT_ACTION, Collections.emptyMap(), Option.empty());
+      metaClient = HoodieTableMetaClient.reload(metaClient);
+
+      // More commits to trigger cleaning
+      String commit7 = client.startCommit();
+      List<HoodieRecord> recordsCompaction7 = dataGen.generateUpdates(commit7, recordsCompaction6);
+      JavaRDD<HoodieRecord> taggedRecords7 = readClient.tagLocation(jsc.parallelize(recordsCompaction7, 1));
+      JavaRDD<WriteStatus> writeStatus7 = client.upsertPreppedRecords(taggedRecords7, commit7);
+      client.commit(commit7, writeStatus7, Option.empty(), DELTA_COMMIT_ACTION, Collections.emptyMap(), Option.empty());
+      metaClient = HoodieTableMetaClient.reload(metaClient);
+
+      String commit8 = client.startCommit();
+      List<HoodieRecord> recordsCompaction8 = dataGen.generateUpdates(commit8, recordsCompaction7);
+      JavaRDD<HoodieRecord> taggedRecords8 = readClient.tagLocation(jsc.parallelize(recordsCompaction8, 1));
+      JavaRDD<WriteStatus> writeStatus8 = client.upsertPreppedRecords(taggedRecords8, commit8);
+      client.commit(commit8, writeStatus8, Option.empty(), DELTA_COMMIT_ACTION, Collections.emptyMap(), Option.empty());
+      metaClient = HoodieTableMetaClient.reload(metaClient);
+
+      // Run final clean - this should use incremental mode and only scan relevant partitions
+      HoodieCleanMetadata finalCleanMetadata = client.clean();
+      assertNotNull(finalCleanMetadata, "Final clean should have cleaned some files");
+
+      // Collect all partitions that were cleaned
+      java.util.Set<String> cleanedPartitions = finalCleanMetadata.getPartitionMetadata().keySet();
+
+      // Verify that deltaOnly partition is NOT in the clean plan
+      // (since it only has delta commits that were NOT part of any compaction)
+      assertFalse(cleanedPartitions.contains(partitionDeltaOnly),
+          "Delta-only partition should NOT be in clean plan as it has no compaction or clustering");
+
+      // Verify that compaction partition IS in the clean plan
+      // (since it has compaction commits that replace log files)
+      assertTrue(cleanedPartitions.contains(partitionCompaction),
+          "Compaction partition should be in clean plan as it has compaction replacing log files");
 
       // Verify that cluster partition IS in the clean plan
       // (since cluster is a replace commit with replaced file IDs)

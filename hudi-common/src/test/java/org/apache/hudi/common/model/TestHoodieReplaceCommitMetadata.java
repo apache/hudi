@@ -59,7 +59,7 @@ public class TestHoodieReplaceCommitMetadata {
     commitMetadata.addReplaceFileId("partition1", "replacedFile1");
     commitMetadata.addReplaceFileId("partition2", "replacedFile2");
 
-    Set<String> result = commitMetadata.getWritePartitionPathsWithExistingFileGroupsModified();
+    Set<String> result = commitMetadata.getWritePartitionPathsWithUpdatedFileGroups();
     Set<String> expected = new HashSet<>(Arrays.asList("partition1", "partition2"));
     assertEquals(expected, result, "Result should contain partitions from replaceFileIds");
   }
@@ -73,7 +73,7 @@ public class TestHoodieReplaceCommitMetadata {
     commitMetadata.addWriteStat("partition1", insertStat);
     commitMetadata.addReplaceFileId("partition2", "replacedFile2");
 
-    Set<String> result = commitMetadata.getWritePartitionPathsWithExistingFileGroupsModified();
+    Set<String> result = commitMetadata.getWritePartitionPathsWithUpdatedFileGroups();
     Set<String> expected = new HashSet<>(Arrays.asList("partition2"));
     assertEquals(expected, result, "Result should only contain partition with replaced files");
   }
@@ -87,7 +87,7 @@ public class TestHoodieReplaceCommitMetadata {
     commitMetadata.addWriteStat("partition1", updateStat);
     commitMetadata.addReplaceFileId("partition2", "replacedFile2");
 
-    Set<String> result = commitMetadata.getWritePartitionPathsWithExistingFileGroupsModified();
+    Set<String> result = commitMetadata.getWritePartitionPathsWithUpdatedFileGroups();
     Set<String> expected = new HashSet<>(Arrays.asList("partition1", "partition2"));
     assertEquals(expected, result, "Result should contain both update and replace partitions");
   }
@@ -101,7 +101,7 @@ public class TestHoodieReplaceCommitMetadata {
     commitMetadata.addWriteStat("partition1", updateStat);
     commitMetadata.addReplaceFileId("partition1", "replacedFile1");
 
-    Set<String> result = commitMetadata.getWritePartitionPathsWithExistingFileGroupsModified();
+    Set<String> result = commitMetadata.getWritePartitionPathsWithUpdatedFileGroups();
     Set<String> expected = new HashSet<>(Arrays.asList("partition1"));
     assertEquals(expected, result, "Result should contain partition only once");
   }
@@ -111,7 +111,7 @@ public class TestHoodieReplaceCommitMetadata {
     // When metadata is empty, result should be empty
     HoodieReplaceCommitMetadata commitMetadata = new HoodieReplaceCommitMetadata();
 
-    Set<String> result = commitMetadata.getWritePartitionPathsWithExistingFileGroupsModified();
+    Set<String> result = commitMetadata.getWritePartitionPathsWithUpdatedFileGroups();
     assertTrue(result.isEmpty(), "Result should be empty for empty metadata");
   }
 
@@ -136,7 +136,7 @@ public class TestHoodieReplaceCommitMetadata {
     commitMetadata.addWriteStat("partition4", updateStat4);
     commitMetadata.addReplaceFileId("partition4", "replacedFile4");
 
-    Set<String> result = commitMetadata.getWritePartitionPathsWithExistingFileGroupsModified();
+    Set<String> result = commitMetadata.getWritePartitionPathsWithUpdatedFileGroups();
     Set<String> expected = new HashSet<>(Arrays.asList("partition2", "partition3", "partition4"));
     assertEquals(expected, result, "Result should contain only partitions with modified file groups");
   }

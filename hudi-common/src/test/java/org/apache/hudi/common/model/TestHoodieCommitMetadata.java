@@ -268,7 +268,7 @@ public class TestHoodieCommitMetadata {
     commitMetadata.addWriteStat("partition1", insertStat1);
     commitMetadata.addWriteStat("partition2", insertStat2);
 
-    Set<String> result = commitMetadata.getWritePartitionPathsWithExistingFileGroupsModified();
+    Set<String> result = commitMetadata.getWritePartitionPathsWithUpdatedFileGroups();
     assertTrue(result.isEmpty(), "Result should be empty when all stats are inserts (prevCommit = 'null')");
   }
 
@@ -283,7 +283,7 @@ public class TestHoodieCommitMetadata {
     commitMetadata.addWriteStat("partition1", updateStat1);
     commitMetadata.addWriteStat("partition2", updateStat2);
 
-    Set<String> result = commitMetadata.getWritePartitionPathsWithExistingFileGroupsModified();
+    Set<String> result = commitMetadata.getWritePartitionPathsWithUpdatedFileGroups();
     Set<String> expected = new HashSet<>(Arrays.asList("partition1", "partition2"));
     assertEquals(expected, result, "Result should contain all partitions with updates");
   }
@@ -299,7 +299,7 @@ public class TestHoodieCommitMetadata {
     commitMetadata.addWriteStat("partition1", insertStat);
     commitMetadata.addWriteStat("partition2", updateStat);
 
-    Set<String> result = commitMetadata.getWritePartitionPathsWithExistingFileGroupsModified();
+    Set<String> result = commitMetadata.getWritePartitionPathsWithUpdatedFileGroups();
     Set<String> expected = new HashSet<>(Arrays.asList("partition2"));
     assertEquals(expected, result, "Result should only contain partitions with updates");
   }
@@ -315,7 +315,7 @@ public class TestHoodieCommitMetadata {
     commitMetadata.addWriteStat("partition1", insertStat);
     commitMetadata.addWriteStat("partition1", updateStat);
 
-    Set<String> result = commitMetadata.getWritePartitionPathsWithExistingFileGroupsModified();
+    Set<String> result = commitMetadata.getWritePartitionPathsWithUpdatedFileGroups();
     Set<String> expected = new HashSet<>(Arrays.asList("partition1"));
     assertEquals(expected, result, "Result should contain partition with at least one update");
   }
@@ -331,7 +331,7 @@ public class TestHoodieCommitMetadata {
     commitMetadata.addWriteStat("partition1", statWithNullPrevCommit);
     commitMetadata.addWriteStat("partition2", updateStat);
 
-    Set<String> result = commitMetadata.getWritePartitionPathsWithExistingFileGroupsModified();
+    Set<String> result = commitMetadata.getWritePartitionPathsWithUpdatedFileGroups();
     Set<String> expected = new HashSet<>(Arrays.asList("partition2"));
     assertEquals(expected, result, "Result should not include partitions where prevCommit is null");
   }
@@ -341,7 +341,7 @@ public class TestHoodieCommitMetadata {
     // When metadata is empty, result should be empty
     HoodieCommitMetadata commitMetadata = new HoodieCommitMetadata();
 
-    Set<String> result = commitMetadata.getWritePartitionPathsWithExistingFileGroupsModified();
+    Set<String> result = commitMetadata.getWritePartitionPathsWithUpdatedFileGroups();
     assertTrue(result.isEmpty(), "Result should be empty for empty metadata");
   }
 
