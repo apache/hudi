@@ -248,6 +248,10 @@ abstract class HoodieBaseHadoopFsRelationFactory(val sqlContext: SQLContext,
 
   override def buildOptions(): Map[String, String] = optParams
   override def build(): HadoopFsRelation = {
+    // NOTE: We're refreshing the file-index and timeline here to make sure that we're not missing any files
+    fileIndex.refresh()
+    metaClient.reloadActiveTimeline()
+
     HadoopFsRelation(
       location = buildFileIndex(),
       partitionSchema = buildPartitionSchema(),
