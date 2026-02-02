@@ -166,6 +166,43 @@ class TestRequestHandler extends HoodieCommonTestHarness {
     assertFalse(result3, "Retry with different requestId should fail");
   }
 
+  @Test
+  void testMarkerBackwardCompatibilityNullExistingRequestId() throws IOException, InterruptedException {
+    String basePath = tempDir.resolve("base-path-backward-compat").toUri().toString();
+    HoodieTableMetaClient metaClient = HoodieTestUtils.init(basePath, getTableType());
+    String markerDir = metaClient.getMarkerFolderPath("104");
+    String markerName = "partition1/file1.parquet.marker.CREATE";
+    String newRequestId = java.util.UUID.randomUUID().toString();
+
+    // First request: no requestId (legacy client) → marker stored with null requestId
+    Map<String, String> queryParametersLegacy = new HashMap<>();
+    queryParametersLegacy.put(BASEPATH_PARAM, basePath);
+    queryParametersLegacy.put(MARKER_DIR_PATH_PARAM, markerDir);
+    queryParametersLegacy.put(MARKER_NAME_PARAM, markerName);
+    // Omit MARKER_REQUEST_ID_PARAM
+
+    boolean result1 = timelineServiceClient.makeRequest(
+            TimelineServiceClient.Request.newBuilder(POST, CREATE_MARKER_URL)
+                .addQueryParams(queryParametersLegacy)
+                .build())
+        .getDecodedContent(new TypeReference<Boolean>() {});
+    assertTrue(result1, "First marker creation (no requestId) should succeed");
+
+    // Give server time to process
+    Thread.sleep(500);
+
+    // Second request: same marker with non-null requestId → should succeed (backward compat)
+    Map<String, String> queryParametersWithRequestId = new HashMap<>(queryParametersLegacy);
+    queryParametersWithRequestId.put(MARKER_REQUEST_ID_PARAM, newRequestId);
+
+    boolean result2 = timelineServiceClient.makeRequest(
+            TimelineServiceClient.Request.newBuilder(POST, CREATE_MARKER_URL)
+                .addQueryParams(queryParametersWithRequestId)
+                .build())
+        .getDecodedContent(new TypeReference<Boolean>() {});
+    assertTrue(result2, "Request with non-null requestId when marker has null should succeed (backward compat)");
+  }
+
   private void assertMarkerCreation(String basePath, String schema) throws IOException {
     Map<String, String> queryParameters = new HashMap<>();
     String basePathScheme = getPathWithReplacedSchema(basePath, schema);
