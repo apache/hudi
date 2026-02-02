@@ -265,25 +265,25 @@ public class ITTestSchemaEvolution {
       // Create nullable map type
       HoodieSchema mapType = HoodieSchema.createNullable(HoodieSchema.createMap(stringType));
 
-      writeClient.addColumn("salary", doubleType.getAvroSchema(), null, "name", AFTER);
+      writeClient.addColumn("salary", doubleType, null, "name", AFTER);
       writeClient.deleteColumns("gender");
       writeClient.renameColumn("name", "first_name");
       writeClient.updateColumnType("age", Types.StringType.get());
-      writeClient.addColumn("last_name", stringType.getAvroSchema(), "empty allowed", "salary", BEFORE);
+      writeClient.addColumn("last_name", stringType, "empty allowed", "salary", BEFORE);
       writeClient.reOrderColPosition("age", "first_name", BEFORE);
       // add a field in the middle of the `f_struct` and `f_row_map` columns
-      writeClient.addColumn("f_struct.f2", intType.getAvroSchema(), "add field in middle of struct", "f_struct.f0", AFTER);
-      writeClient.addColumn("f_row_map.value.f2", intType.getAvroSchema(), "add field in middle of struct", "f_row_map.value.f0", AFTER);
+      writeClient.addColumn("f_struct.f2", intType, "add field in middle of struct", "f_struct.f0", AFTER);
+      writeClient.addColumn("f_row_map.value.f2", intType, "add field in middle of struct", "f_row_map.value.f0", AFTER);
       // add a field at the end of `f_struct` and `f_row_map` column
-      writeClient.addColumn("f_struct.f3", stringType.getAvroSchema());
-      writeClient.addColumn("f_row_map.value.f3", stringType.getAvroSchema());
+      writeClient.addColumn("f_struct.f3", stringType);
+      writeClient.addColumn("f_row_map.value.f3", stringType);
 
       // delete and add a field with the same name
       // reads should not return previously inserted datum of dropped field of the same name
       writeClient.deleteColumns("f_struct.drop_add");
-      writeClient.addColumn("f_struct.drop_add", doubleType.getAvroSchema());
+      writeClient.addColumn("f_struct.drop_add", doubleType);
       writeClient.deleteColumns("f_row_map.value.drop_add");
-      writeClient.addColumn("f_row_map.value.drop_add", doubleType.getAvroSchema());
+      writeClient.addColumn("f_row_map.value.drop_add", doubleType);
 
       // perform comprehensive evolution on complex types (struct, array, map) by promoting its primitive types
       writeClient.updateColumnType("f_struct.change_type", Types.LongType.get());
@@ -294,9 +294,9 @@ public class ITTestSchemaEvolution {
       writeClient.updateColumnType("f_map.value", Types.DoubleType.get());
 
       // perform comprehensive schema evolution on table by adding complex typed columns
-      writeClient.addColumn("new_row_col", structType.getAvroSchema());
-      writeClient.addColumn("new_array_col", arrayType.getAvroSchema());
-      writeClient.addColumn("new_map_col", mapType.getAvroSchema());
+      writeClient.addColumn("new_row_col", structType);
+      writeClient.addColumn("new_array_col", arrayType);
+      writeClient.addColumn("new_map_col", mapType);
 
       writeClient.reOrderColPosition("partition", "new_map_col", AFTER);
 
@@ -467,7 +467,7 @@ public class ITTestSchemaEvolution {
 
   private void doCompact(Configuration conf) throws Exception {
     // use sync compaction to ensure compaction finished.
-    conf.set(FlinkOptions.COMPACTION_ASYNC_ENABLED, false);
+    conf.set(FlinkOptions.COMPACTION_OPERATION_EXECUTE_ASYNC_ENABLED, false);
     try (HoodieFlinkWriteClient writeClient = FlinkWriteClients.createWriteClient(conf)) {
       HoodieFlinkTable<?> table = writeClient.getHoodieTable();
 

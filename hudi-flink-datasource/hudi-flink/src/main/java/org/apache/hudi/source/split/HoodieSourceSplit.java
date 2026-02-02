@@ -52,6 +52,8 @@ public class HoodieSourceSplit implements SourceSplit, Serializable {
   private final String partitionPath;
   // source merge type
   private final String mergeType;
+  // latest commit time
+  private final String latestCommit;
   // file id of file splice
   @Setter
   protected String fileId;
@@ -70,6 +72,7 @@ public class HoodieSourceSplit implements SourceSplit, Serializable {
       String tablePath,
       String partitionPath,
       String mergeType,
+      String latestCommit,
       String fileId) {
     this.splitNum = splitNum;
     this.basePath = Option.ofNullable(basePath);
@@ -77,6 +80,7 @@ public class HoodieSourceSplit implements SourceSplit, Serializable {
     this.tablePath = tablePath;
     this.partitionPath = partitionPath;
     this.mergeType = mergeType;
+    this.latestCommit = latestCommit;
     this.fileId = fileId;
     this.fileOffset = 0;
   }
@@ -111,12 +115,12 @@ public class HoodieSourceSplit implements SourceSplit, Serializable {
     HoodieSourceSplit that = (HoodieSourceSplit) o;
     return splitNum == that.splitNum && consumed == that.consumed && fileOffset == that.fileOffset && Objects.equals(basePath, that.basePath)
         && Objects.equals(logPaths, that.logPaths) && Objects.equals(tablePath, that.tablePath) && Objects.equals(partitionPath, that.partitionPath)
-        && Objects.equals(mergeType, that.mergeType) && Objects.equals(fileId, that.fileId);
+        && Objects.equals(mergeType, that.mergeType) && Objects.equals(latestCommit, that.latestCommit) && Objects.equals(fileId, that.fileId);
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(splitNum, basePath, logPaths, tablePath, partitionPath, mergeType, fileId, consumed, fileOffset);
+    return Objects.hash(splitNum, basePath, logPaths, tablePath, partitionPath, mergeType, latestCommit, fileId, consumed, fileOffset);
   }
 
   @Override
@@ -128,6 +132,7 @@ public class HoodieSourceSplit implements SourceSplit, Serializable {
         + ", tablePath='" + tablePath + '\''
         + ", partitionPath='" + partitionPath + '\''
         + ", mergeType='" + mergeType + '\''
+        + ", latestCommit='" + latestCommit + '\''
         + '}';
   }
 }

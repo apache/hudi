@@ -62,6 +62,6 @@ public class MemorySegmentPoolFactory {
 
   public static MemorySegmentPool createMemorySegmentPool(Configuration conf, long maxBufferSize) {
     ValidationUtils.checkArgument(maxBufferSize > 0, "Buffer size should be a positive number.");
-    return new HeapMemorySegmentPool(conf.get(FlinkOptions.WRITE_MEMORY_SEGMENT_PAGE_SIZE), maxBufferSize);
+    return new HeapMemorySegmentPool(conf.get(FlinkOptions.WRITE_MEMORY_SEGMENT_PAGE_SIZE), maxBufferSize * 1024 * 1024);
   }
 }

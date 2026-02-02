@@ -30,7 +30,8 @@ import org.apache.hadoop.conf.Configuration
 import org.apache.parquet.schema.MessageType
 import org.apache.spark.TaskContext
 import org.apache.spark.sql.catalyst.InternalRow
-import org.apache.spark.sql.catalyst.expressions.JoinedRow
+import org.apache.spark.sql.catalyst.expressions.{AttributeReference, JoinedRow}
+import org.apache.spark.sql.catalyst.expressions.codegen.GenerateUnsafeProjection
 import org.apache.spark.sql.execution.datasources.{PartitionedFile, SparkColumnarFileReader}
 import org.apache.spark.sql.execution.datasources.parquet.SparkBasicSchemaEvolution
 import org.apache.spark.sql.internal.SQLConf
@@ -139,9 +140,14 @@ class SparkLanceReaderBase(enableVectorizedReader: Boolean) extends SparkColumna
           // No partition columns - return rows directly
           projectedIter
         } else {
-          // Append partition values to each row using JoinedRow
+          // Create UnsafeProjection to convert JoinedRow to UnsafeRow
+          val fullSchema = (requiredSchema.fields ++ partitionSchema.fields).map(f =>
+            AttributeReference(f.name, f.dataType, f.nullable, f.metadata)())
+          val unsafeProjection = GenerateUnsafeProjection.generate(fullSchema, fullSchema)
+
+          // Append partition values to each row using JoinedRow, then convert to UnsafeRow
           val joinedRow = new JoinedRow()
-          projectedIter.map(row => joinedRow(row, file.partitionValues))
+          projectedIter.map(row => unsafeProjection(joinedRow(row, file.partitionValues)))
         }
 
       } catch {

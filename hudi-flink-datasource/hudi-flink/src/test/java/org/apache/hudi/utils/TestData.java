@@ -155,6 +155,29 @@ public class TestData {
           TimestampData.fromEpochMillis(8), StringData.fromString("par4"))
   );
 
+  public static List<RowData> DATA_SET_GLOBAL_UPDATE_INSERT = Arrays.asList(
+      // advance the age by 1
+      insertRow(StringData.fromString("id1"), StringData.fromString("Danny"), 24,
+          TimestampData.fromEpochMillis(1), StringData.fromString("par1")),
+      insertRow(StringData.fromString("id2"), StringData.fromString("Stephen"), 34,
+          TimestampData.fromEpochMillis(2), StringData.fromString("par1")),
+      // update partition for the key
+      insertRow(StringData.fromString("id3"), StringData.fromString("Julian"), 54,
+          TimestampData.fromEpochMillis(3), StringData.fromString("par3")),
+      insertRow(StringData.fromString("id4"), StringData.fromString("Fabian"), 32,
+          TimestampData.fromEpochMillis(4), StringData.fromString("par3")),
+      // same with before
+      insertRow(StringData.fromString("id5"), StringData.fromString("Sophia"), 18,
+          TimestampData.fromEpochMillis(5), StringData.fromString("par3")),
+      // new data
+      insertRow(StringData.fromString("id9"), StringData.fromString("Jane"), 19,
+          TimestampData.fromEpochMillis(6), StringData.fromString("par3")),
+      insertRow(StringData.fromString("id10"), StringData.fromString("Ella"), 38,
+          TimestampData.fromEpochMillis(7), StringData.fromString("par4")),
+      insertRow(StringData.fromString("id11"), StringData.fromString("Phoebe"), 52,
+          TimestampData.fromEpochMillis(8), StringData.fromString("par4"))
+  );
+
   public static List<RowData> DATA_SET_INSERT_SEPARATE_PARTITION = Arrays.asList(
       insertRow(StringData.fromString("id12"), StringData.fromString("Monica"), 27,
           TimestampData.fromEpochMillis(9), StringData.fromString("par5")),

@@ -95,9 +95,9 @@ public class TestHoodieSourceSplit {
   @Test
   public void testEqualsWithDifferentBasePath() {
     HoodieSourceSplit split1 = new HoodieSourceSplit(
-        1, "base-path-1", Option.empty(), "/table", "/partition1",  "read_optimized", "file1");
+        1, "base-path-1", Option.empty(), "/table", "/partition1",  "read_optimized", "", "file1");
     HoodieSourceSplit split2 = new HoodieSourceSplit(
-        1, "base-path-2", Option.empty(), "/table", "/partition1", "read_optimized", "file1");
+        1, "base-path-2", Option.empty(), "/table", "/partition1", "read_optimized", "", "file1");
 
     assertNotEquals(split1, split2);
   }
@@ -105,9 +105,9 @@ public class TestHoodieSourceSplit {
   @Test
   public void testEqualsWithDifferentLogPaths() {
     HoodieSourceSplit split1 = new HoodieSourceSplit(
-        1, "base-path", Option.of(Arrays.asList("log1", "log2")), "/table", "/partition1", "payload_combine", "file1");
+        1, "base-path", Option.of(Arrays.asList("log1", "log2")), "/table", "/partition1", "payload_combine", "", "file1");
     HoodieSourceSplit split2 = new HoodieSourceSplit(
-        1, "base-path", Option.of(Arrays.asList("log1", "log3")), "/table", "/partition1",  "payload_combine", "file1");
+        1, "base-path", Option.of(Arrays.asList("log1", "log3")), "/table", "/partition1",  "payload_combine", "", "file1");
 
     assertNotEquals(split1, split2);
   }
@@ -115,9 +115,9 @@ public class TestHoodieSourceSplit {
   @Test
   public void testEqualsWithDifferentTablePath() {
     HoodieSourceSplit split1 = new HoodieSourceSplit(
-        1, "base-path", Option.empty(), "/table1", "/partition1",  "read_optimized", "file1");
+        1, "base-path", Option.empty(), "/table1", "/partition1",  "read_optimized", "", "file1");
     HoodieSourceSplit split2 = new HoodieSourceSplit(
-        1, "base-path", Option.empty(), "/table2", "/partition1", "read_optimized", "file1");
+        1, "base-path", Option.empty(), "/table2", "/partition1", "read_optimized", "","file1");
 
     assertNotEquals(split1, split2);
   }
@@ -125,9 +125,9 @@ public class TestHoodieSourceSplit {
   @Test
   public void testEqualsWithDifferentMergeType() {
     HoodieSourceSplit split1 = new HoodieSourceSplit(
-        1, "base-path", Option.empty(), "/table", "/partition1", "read_optimized", "file1");
+        1, "base-path", Option.empty(), "/table", "/partition1", "read_optimized", "","file1");
     HoodieSourceSplit split2 = new HoodieSourceSplit(
-        1, "base-path", Option.empty(), "/table", "/partition1", "payload_combine", "file1");
+        1, "base-path", Option.empty(), "/table", "/partition1", "payload_combine", "", "file1");
 
     assertNotEquals(split1, split2);
   }
@@ -228,7 +228,7 @@ public class TestHoodieSourceSplit {
 
     HoodieSourceSplit split = new HoodieSourceSplit(
         42, basePath, Option.of(Arrays.asList("log1", "log2")),
-        tablePath, partitionPath, mergeType, fileId);
+        tablePath, partitionPath, mergeType, "", fileId);
 
     assertTrue(split.getBasePath().isPresent());
     assertEquals(basePath, split.getBasePath().get());
@@ -267,7 +267,7 @@ public class TestHoodieSourceSplit {
   public void testToString() {
     HoodieSourceSplit split = new HoodieSourceSplit(
         1, "base-path", Option.of(Arrays.asList("log1")),
-        "/table", "/partition", "read_optimized", "file1");
+        "/table", "/partition", "read_optimized", "", "file1");
 
     String result = split.toString();
 
@@ -303,9 +303,9 @@ public class TestHoodieSourceSplit {
   @Test
   public void testEqualsWithNullBasePath() {
     HoodieSourceSplit split1 = new HoodieSourceSplit(
-        1, null, Option.empty(), "/table", "/partition","read_optimized", "file1");
+        1, null, Option.empty(), "/table", "/partition","read_optimized", "", "file1");
     HoodieSourceSplit split2 = new HoodieSourceSplit(
-        1, null, Option.empty(), "/table", "/partition","read_optimized", "file1");
+        1, null, Option.empty(), "/table", "/partition","read_optimized", "", "file1");
 
     assertEquals(split1, split2);
   }
@@ -313,9 +313,9 @@ public class TestHoodieSourceSplit {
   @Test
   public void testEqualsOneNullBasePathOneNot() {
     HoodieSourceSplit split1 = new HoodieSourceSplit(
-        1, null, Option.empty(), "/table", "/partition", "read_optimized", "file1");
+        1, null, Option.empty(), "/table", "/partition", "read_optimized", "", "file1");
     HoodieSourceSplit split2 = new HoodieSourceSplit(
-        1, "base-path", Option.empty(), "/table", "/partition", "read_optimized", "file1");
+        1, "base-path", Option.empty(), "/table", "/partition", "read_optimized", "","file1");
 
     assertNotEquals(split1, split2);
   }
@@ -331,6 +331,7 @@ public class TestHoodieSourceSplit {
         "/test/table",
         partitionPath,
         "read_optimized",
+        "19700101000000000",
         fileId
     );
   }

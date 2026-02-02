@@ -96,14 +96,14 @@ public class SparkReaderContextFactory implements ReaderContextFactory<InternalR
     if (metaClient.getTableConfig().isMultipleBaseFileFormatsEnabled()) {
       SparkColumnarFileReader parquetFileReader = sparkAdapter.createParquetFileReader(false, sqlConf, options, configs);
       SparkColumnarFileReader orcFileReader = getOrcFileReader(resolver, sqlConf, options, configs, sparkAdapter);
-      SparkColumnarFileReader lanceFileReader = getLanceFileReader(sqlConf, options, configs, sparkAdapter);
+      SparkColumnarFileReader lanceFileReader = sparkAdapter.createLanceFileReader(false, sqlConf, options, configs).getOrElse(null);
       baseFileReaderBroadcast = jsc.broadcast(new MultipleColumnarFileFormatReader(parquetFileReader, orcFileReader, lanceFileReader));
     } else if (metaClient.getTableConfig().getBaseFileFormat() == HoodieFileFormat.ORC) {
       SparkColumnarFileReader orcFileReader = getOrcFileReader(resolver, sqlConf, options, configs, sparkAdapter);
       baseFileReaderBroadcast = jsc.broadcast(orcFileReader);
     } else if (metaClient.getTableConfig().getBaseFileFormat() == HoodieFileFormat.LANCE) {
       baseFileReaderBroadcast = jsc.broadcast(
-          sparkAdapter.createLanceFileReader(false, sqlConf, options, configs));
+          sparkAdapter.createLanceFileReader(false, sqlConf, options, configs).getOrElse(null));
     } else {
       baseFileReaderBroadcast = jsc.broadcast(
           sparkAdapter.createParquetFileReader(false, sqlConf, options, configs));
@@ -151,17 +151,6 @@ public class SparkReaderContextFactory implements ReaderContextFactory<InternalR
       return sparkAdapter.createOrcFileReader(false, sqlConf, options, configs, dataSchema);
     } catch (Exception e) {
       throw new HoodieException("Failed to broadcast ORC file reader", e);
-    }
-  }
-
-  private static SparkColumnarFileReader getLanceFileReader(SQLConf sqlConf,
-                                                            scala.collection.immutable.Map<String, String> options,
-                                                            Configuration configs,
-                                                            SparkAdapter sparkAdapter) {
-    try {
-      return sparkAdapter.createLanceFileReader(false, sqlConf, options, configs);
-    } catch (Exception e) {
-      throw new HoodieException("Failed to broadcast Lance file reader", e);
     }
   }
 

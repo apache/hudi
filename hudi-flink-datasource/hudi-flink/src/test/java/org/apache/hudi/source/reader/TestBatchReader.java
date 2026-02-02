@@ -259,6 +259,7 @@ public class TestBatchReader {
         "/test/table",
         "/test/partition",
         "read_optimized",
+        "",
         "file-1"
     );
     for (long i = 0; i < consumed; i++) {

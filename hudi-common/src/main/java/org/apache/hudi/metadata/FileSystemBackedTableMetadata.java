@@ -164,9 +164,10 @@ public class FileSystemBackedTableMetadata extends AbstractHoodieTableMetadata {
           "Listing all partitions on " + this.tableName
               + " with prefix " + relativePathPrefix);
       // Need to use serializable file status here, see HUDI-5936
-      List<StoragePathInfo> dirToFileListing = engineContext.flatMap(pathsToList, path -> {
+      List<Pair<StoragePath, Boolean>> dirToFileListingPairs = engineContext.flatMap(pathsToList, path -> {
         try {
-          return getStorage().listDirectEntries(path).stream();
+          return getStorage().listDirectEntries(path).stream()
+              .map(storagePathInfo -> Pair.of(storagePathInfo.getPath(), storagePathInfo.isDirectory()));
         } catch (FileNotFoundException e) {
           // The partition may have been cleaned.
           return Stream.empty();
@@ -177,16 +178,16 @@ public class FileSystemBackedTableMetadata extends AbstractHoodieTableMetadata {
 
       // if current dictionary contains PartitionMetadata, add it to result
       // if current dictionary does not contain PartitionMetadata, add it to queue to be processed.
-      int fileListingParallelism = Math.min(DEFAULT_LISTING_PARALLELISM, dirToFileListing.size());
-      if (!dirToFileListing.isEmpty()) {
+      int fileListingParallelism = Math.min(DEFAULT_LISTING_PARALLELISM, dirToFileListingPairs.size());
+      if (!dirToFileListingPairs.isEmpty()) {
         // result below holds a list of pair. first entry in the pair optionally holds the deduced list of partitions.
         // and second entry holds optionally a directory path to be processed further.
         engineContext.setJobStatus(this.getClass().getSimpleName(), "Processing listed partitions");
         List<Pair<Option<String>, Option<StoragePath>>> result =
-            engineContext.map(dirToFileListing,
-                fileInfo -> {
-                  StoragePath path = fileInfo.getPath();
-                  if (fileInfo.isDirectory()) {
+            engineContext.map(dirToFileListingPairs,
+                fileInfoPair -> {
+                  StoragePath path = fileInfoPair.getKey();
+                  if (fileInfoPair.getValue()) {
                     if (HoodiePartitionMetadata.hasPartitionMetadata(getStorage(), path)) {
                       return Pair.of(
                           Option.of(FSUtils.getRelativePartitionPath(dataBasePath,

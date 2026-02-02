@@ -233,8 +233,12 @@ public class KeyGenUtils {
     return constructRecordKey(recordKeyFields.toArray(new String[]{}), valueFunction);
   }
 
-  public static String getRecordPartitionPath(GenericRecord record, List<String> partitionPathFields,
-                                              boolean hiveStylePartitioning, boolean encodePartitionPath, boolean consistentLogicalTimestampEnabled) {
+  public static String getRecordPartitionPath(GenericRecord record,
+                                              List<String> partitionPathFields,
+                                              boolean hiveStylePartitioning,
+                                              boolean encodePartitionPath,
+                                              boolean slashSeparatedDatePartitioning,
+                                              boolean consistentLogicalTimestampEnabled) {
     if (partitionPathFields.isEmpty()) {
       return "";
     }
@@ -253,7 +257,10 @@ public class KeyGenUtils {
           fieldVal = PartitionPathEncodeUtils.escapePathName(fieldVal);
         }
         if (hiveStylePartitioning) {
-          partitionPath.append(partitionPathField).append("=");
+          fieldVal = partitionPathField + "=" + fieldVal;
+        }
+        if (partitionPathFields.size() == 1 && slashSeparatedDatePartitioning) {
+          fieldVal = fieldVal.replace('-', '/');
         }
         partitionPath.append(fieldVal);
       }
@@ -273,7 +280,9 @@ public class KeyGenUtils {
   }
 
   public static String getPartitionPath(GenericRecord record, String partitionPathField,
-                                        boolean hiveStylePartitioning, boolean encodePartitionPath, boolean consistentLogicalTimestampEnabled) {
+                                        boolean hiveStylePartitioning, boolean encodePartitionPath,
+                                        boolean slashSeparatedDatePartitioning,
+                                        boolean consistentLogicalTimestampEnabled) {
     String partitionPath = HoodieAvroUtils.getNestedFieldValAsString(record, partitionPathField, true, consistentLogicalTimestampEnabled);
     if (partitionPath == null || partitionPath.isEmpty()) {
       partitionPath = HUDI_DEFAULT_PARTITION_PATH;
@@ -283,6 +292,9 @@ public class KeyGenUtils {
     }
     if (hiveStylePartitioning) {
       partitionPath = partitionPathField + "=" + partitionPath;
+    }
+    if (slashSeparatedDatePartitioning) {
+      partitionPath = partitionPath.replace('-', '/');
     }
     return partitionPath;
   }

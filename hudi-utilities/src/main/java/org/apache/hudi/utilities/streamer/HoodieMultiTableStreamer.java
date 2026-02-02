@@ -279,7 +279,7 @@ public class HoodieMultiTableStreamer {
           + " please use {} to configure multiple target tables", HoodieStreamerConfig.TABLES_TO_BE_INGESTED.key());
     }
 
-    JavaSparkContext jssc = UtilHelpers.buildSparkContext("multi-table-streamer", Constants.LOCAL_SPARK_MASTER);
+    JavaSparkContext jssc = UtilHelpers.buildSparkContext("multi-table-streamer", Constants.LOCAL_SPARK_MASTER, config.enableHiveSupport);
     int exitCode = 0;
     try {
       new HoodieMultiTableStreamer(config, jssc).sync();
@@ -369,6 +369,9 @@ public class HoodieMultiTableStreamer {
 
     @Parameter(names = {"--sync-tool-classes"}, description = "Meta sync client tool, using comma to separate multi tools")
     public String syncClientToolClassNames = HiveSyncTool.class.getName();
+
+    @Parameter(names = {"--enable-hive-support", "-ehs"}, description = "Enables hive support during spark context initialization.")
+    public Boolean enableHiveSupport = true;
 
     @Parameter(names = {"--max-pending-compactions"},
         description = "Maximum number of outstanding inflight/requested compactions. Delta Sync will not happen unless"

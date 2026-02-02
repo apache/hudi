@@ -31,6 +31,7 @@ import org.apache.hudi.common.model.IOType;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieInsertException;
 import org.apache.hudi.storage.HoodieStorage;
@@ -150,6 +151,10 @@ public class HoodieRowDataCreateHandle implements Serializable {
             ? HoodieRecordDelegate.create(recordKey, partitionPath, null, newRecordLocation) : null;
         writeStatus.markSuccess(recordDelegate, Option.empty());
       } catch (Throwable t) {
+        log.error("Error writing record " + record, t);
+        if (!writeConfig.getIgnoreWriteFailed()) {
+          throw new HoodieException(t.getMessage(), t);
+        }
         writeStatus.markFailure(recordKey, partitionPath, t);
       }
     } catch (Throwable ge) {

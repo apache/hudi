@@ -230,7 +230,7 @@ public class TestMinibatchBucketAssignFunction {
       // Check that file ID and instant time are assigned
       assertTrue(row.getFileId() != null && !row.getFileId().isEmpty(), "File ID should be assigned");
       assertEquals("U", row.getInstantTime(), "the record is an update record");
-      assertEquals(i == 0 ? "D" : "I", row.getOperationType());
+      assertEquals(i == 0 ? "-U" : "I", row.getOperationType());
     }
   }
 

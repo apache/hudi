@@ -21,16 +21,22 @@ package org.apache.hudi.table.action.rollback;
 import org.apache.hudi.avro.model.HoodieRollbackPartitionMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackPlan;
 import org.apache.hudi.avro.model.HoodieRollbackRequest;
+import org.apache.hudi.client.HoodieWriteResult;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteClientTestUtils;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
+import org.apache.hudi.client.transaction.SimpleConcurrentFileWritesConflictResolutionStrategy;
+import org.apache.hudi.client.transaction.lock.InProcessLockProvider;
 import org.apache.hudi.common.HoodieRollbackStat;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
+import org.apache.hudi.common.config.LockConfiguration;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieFileGroup;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.marker.MarkerType;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
@@ -38,6 +44,7 @@ import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestTable;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.config.HoodieLockConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieRollbackException;
 import org.apache.hudi.storage.StoragePath;
@@ -65,6 +72,7 @@ import java.util.Properties;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
+import static org.apache.hudi.common.config.LockConfiguration.FILESYSTEM_LOCK_PATH_PROP_KEY;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMMIT_ACTION;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.DEFAULT_SECOND_PARTITION_PATH;
@@ -74,6 +82,7 @@ import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR
 import static org.apache.hudi.testutils.Assertions.assertNoWriteErrors;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
@@ -370,7 +379,7 @@ public class TestCopyOnWriteRollbackActionExecutor extends HoodieClientRollbackT
 
     // we are using test table infra. So, col stats are not populated.
     HoodieTable table =
-        this.getHoodieTable(metaClient, getConfigBuilder().withRollbackBackupEnabled(true)
+        this.getHoodieTable(metaClient, getConfigBuilder().withRollbackUsingMarkers(true).withRollbackBackupEnabled(true)
             .withMetadataConfig(HoodieMetadataConfig.newBuilder().withMetadataIndexColumnStats(false).build())
             .build());
     HoodieInstant needRollBackInstant = HoodieTestUtils.getCompleteInstant(
@@ -428,6 +437,107 @@ public class TestCopyOnWriteRollbackActionExecutor extends HoodieClientRollbackT
     CopyOnWriteRollbackActionExecutor copyOnWriteRollbackActionExecutor =
         new CopyOnWriteRollbackActionExecutor(context, table.getConfig(), table, "003", needRollBackInstant, true, true);
     assertThrows(HoodieRollbackException.class, () -> copyOnWriteRollbackActionExecutor.execute());
+  }
+
+  @Test
+  public void testInflightCommitRollbackWhenReplaceCommitIsPresent() {
+    // Create two insert
+    Properties properties = new Properties();
+    properties.setProperty(FILESYSTEM_LOCK_PATH_PROP_KEY, basePath + "/.hoodie/.locks");
+    properties.setProperty(LockConfiguration.LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP_KEY, "3000");
+    HoodieWriteConfig writeConfig = getConfigBuilder()
+        .withWriteConcurrencyMode(WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL)
+        .withMarkersType(MarkerType.DIRECT.name())
+        .withLockConfig(HoodieLockConfig.newBuilder().withLockProvider(InProcessLockProvider.class)
+            .withConflictResolutionStrategy(new SimpleConcurrentFileWritesConflictResolutionStrategy())
+            .build())
+        .withProperties(properties)
+        .build();
+    SparkRDDWriteClient client = getHoodieWriteClient(writeConfig);
+
+    dataGen = new HoodieTestDataGenerator(new String[] {DEFAULT_FIRST_PARTITION_PATH, DEFAULT_SECOND_PARTITION_PATH, DEFAULT_THIRD_PARTITION_PATH});
+    HoodieTestDataGenerator.writePartitionMetadataDeprecated(
+        storage, new String[] {DEFAULT_FIRST_PARTITION_PATH, DEFAULT_SECOND_PARTITION_PATH, DEFAULT_THIRD_PARTITION_PATH}, basePath);
+
+    // First insert
+    String firstCommit = "001";
+    WriteClientTestUtils.startCommitWithTime(client, firstCommit);
+    List<HoodieRecord> records = dataGen.generateInsertsContainsAllPartitions(firstCommit, 10);
+    JavaRDD<HoodieRecord> writeRecords = jsc.parallelize(records, 1);
+    List<WriteStatus> statusList = client.insert(writeRecords, firstCommit).collect();
+    client.commit(firstCommit, jsc.parallelize(statusList));
+    assertNoWriteErrors(statusList);
+
+    // Second insert
+    String secondCommit = "002";
+    WriteClientTestUtils.startCommitWithTime(client, secondCommit);
+    records = dataGen.generateInsertsContainsAllPartitions(secondCommit, 10);
+    writeRecords = jsc.parallelize(records, 1);
+    statusList = client.insert(writeRecords, secondCommit).collect();
+    client.commit(secondCommit, jsc.parallelize(statusList));
+    assertNoWriteErrors(statusList);
+
+    // Create another insert without commiting
+    String thirdCommit = "003";
+    WriteClientTestUtils.startCommitWithTime(client, thirdCommit);
+    records = dataGen.generateInsertsContainsAllPartitions(thirdCommit, 10);
+    writeRecords = jsc.parallelize(records, 1);
+    statusList = client.insert(writeRecords, thirdCommit).collect();
+    // Note: Not calling commit() here to keep it inflight
+    assertNoWriteErrors(statusList);
+
+    // Create insert-overwrite commit
+    String insertOverwriteCommit1 = "004";
+    List<HoodieRecord> records1 = dataGen.generateInsertsForPartition(insertOverwriteCommit1, 10, DEFAULT_FIRST_PARTITION_PATH);
+    JavaRDD<HoodieRecord> writeRecords1 = jsc.parallelize(records1, 1);
+    WriteClientTestUtils.startCommitWithTime(client, insertOverwriteCommit1, HoodieTimeline.REPLACE_COMMIT_ACTION);
+    HoodieWriteResult result1 = client.insertOverwrite(writeRecords1, insertOverwriteCommit1);
+    List<WriteStatus> statusList1 = result1.getWriteStatuses().collect();
+    client.commit(insertOverwriteCommit1, jsc.parallelize(statusList1), Option.empty(), HoodieTimeline.REPLACE_COMMIT_ACTION, result1.getPartitionToReplaceFileIds());
+    assertNoWriteErrors(statusList1);
+
+    // Create another insert-overwrite commit as inflight
+    String insertOverwriteCommit2 = "005";
+    List<HoodieRecord> records2 = dataGen.generateInsertsForPartition(insertOverwriteCommit2, 10, DEFAULT_SECOND_PARTITION_PATH);
+    JavaRDD<HoodieRecord> writeRecords2 = jsc.parallelize(records2, 1);
+    WriteClientTestUtils.startCommitWithTime(client, insertOverwriteCommit2, HoodieTimeline.REPLACE_COMMIT_ACTION);
+    HoodieWriteResult result2 = client.insertOverwrite(writeRecords2, insertOverwriteCommit2);
+    List<WriteStatus> statusList2 = result2.getWriteStatuses().collect();
+    // Note: Not calling commit() here to keep it inflight
+    assertNoWriteErrors(statusList2);
+
+    metaClient.reloadActiveTimeline();
+    HoodieTable table = this.getHoodieTable(metaClient,
+        getConfigBuilder()
+            .withProperties(writeConfig.getProps())
+            .withRollbackBackupEnabled(true)
+            .build());
+    HoodieInstant needRollBackInstant = INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, "003");
+
+    // Run rollback to remove the third inflight commit. This should succeed.
+    // Schedule rollback
+    BaseRollbackPlanActionExecutor copyOnWriteRollbackPlanActionExecutor =
+        new BaseRollbackPlanActionExecutor(context, table.getConfig(), table, "007", needRollBackInstant, false,
+            table.getConfig().shouldRollbackUsingMarkers(), false);
+    HoodieRollbackPlan hoodieRollbackPlan = (HoodieRollbackPlan) copyOnWriteRollbackPlanActionExecutor.execute().get();
+
+    // execute CopyOnWriteRollbackActionExecutor with filelisting mode
+    CopyOnWriteRollbackActionExecutor copyOnWriteRollbackActionExecutor =
+        new CopyOnWriteRollbackActionExecutor(context, table.getConfig(), table, "007", needRollBackInstant, true, true);
+    copyOnWriteRollbackActionExecutor.execute();
+
+    // Verify that the inflight commit 003 has been rolled back
+    HoodieTimeline timeline = metaClient.reloadActiveTimeline();
+    List<HoodieInstant> instantStream = timeline.getInstants();
+
+    // Check that instant 003 has been removed
+    instantStream.forEach(instant -> {
+      assertNotEquals("003", instant.requestedTime());
+    });
+
+    // Verify that the completed commits are still present
+    assertTrue(timeline.filterCompletedInstants().containsInstant("001"));
+    assertTrue(timeline.filterCompletedInstants().containsInstant("002"));
   }
 
   /**

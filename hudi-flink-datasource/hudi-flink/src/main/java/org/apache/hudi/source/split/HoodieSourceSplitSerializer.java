@@ -73,6 +73,8 @@ public class HoodieSourceSplitSerializer implements SimpleVersionedSerializer<Ho
       out.writeUTF(obj.getPartitionPath());
       // Serialize mergeType
       out.writeUTF(obj.getMergeType());
+      // Serialize latest commit
+      out.writeUTF(obj.getLatestCommit());
       // Serialize fileId
       out.writeUTF(obj.getFileId());
       // Serialize consumed
@@ -118,6 +120,8 @@ public class HoodieSourceSplitSerializer implements SimpleVersionedSerializer<Ho
       String partitionPath = in.readUTF();
       // Deserialize mergeType
       String mergeType = in.readUTF();
+      // Deserialize latestCommit
+      String latestCommit = in.readUTF();
       // Deserialize fileId
       String fileId = in.readUTF();
       // Deserialize consumed
@@ -133,6 +137,7 @@ public class HoodieSourceSplitSerializer implements SimpleVersionedSerializer<Ho
           tablePath,
           partitionPath,
           mergeType,
+          latestCommit,
           fileId);
 
       // Update position to restore consumed and fileOffset

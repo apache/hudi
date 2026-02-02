@@ -31,6 +31,7 @@ import org.apache.flink.runtime.operators.coordination.CoordinationRequest;
 import org.apache.flink.runtime.operators.coordination.CoordinationResponse;
 import org.apache.flink.util.SerializedValue;
 
+import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -72,6 +73,17 @@ public class Correspondent {
       return response.getInstant();
     } catch (Exception e) {
       throw new HoodieException("Error requesting the instant time from the coordinator", e);
+    }
+  }
+
+  /**
+   * Sends a writing metadata event to the coordinator.
+   */
+  public void sendWriteMetadataEvent(WriteMetadataEvent writeMetadataEvent) {
+    try {
+      this.gateway.sendOperatorEventToCoordinator(this.operatorID, new SerializedValue<>(writeMetadataEvent));
+    } catch (IOException e) {
+      throw new HoodieException("Error sending write metadata event to the coordinator", e);
     }
   }
 

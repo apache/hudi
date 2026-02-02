@@ -47,6 +47,7 @@ import org.apache.hudi.common.table.read.HoodieReadStats;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.internal.schema.utils.AvroSchemaEvolutionUtils;
@@ -290,6 +291,9 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
             recordsWritten++;
           } catch (Exception e) {
             log.error("Error writing record {}", record, e);
+            if (!config.getIgnoreWriteFailed()) {
+              throw new HoodieException(e.getMessage(), e);
+            }
             writeStatus.markFailure(record, e, recordMetadata);
             fileGroupReader.onWriteFailure(record.getRecordKey());
           }
