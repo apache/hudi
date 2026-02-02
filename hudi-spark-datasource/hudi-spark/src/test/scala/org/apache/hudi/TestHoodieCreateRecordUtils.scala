@@ -18,6 +18,7 @@
 
 package org.apache.hudi
 
+import org.apache.hudi.common.config.RecordMergeMode
 import org.apache.hudi.common.model.WriteOperationType
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions
@@ -205,6 +206,58 @@ class TestHoodieCreateRecordUtils {
     assertNotNull(exception)
     assertTrue(exception.getMessage.contains(testRecordKey),
       s"Exception message should contain the record key '$testRecordKey' to help identify the problematic record. Actual: ${exception.getMessage}")
+  }
+
+  @Test
+  def testNullPrecombineFieldWithOverwritePayloadSucceeds(): Unit = {
+    // OverwriteWithLatestAvroPayload should allow null precombine values
+    val df = createTestDataFrame(Row("id1", "Alice", 25, null, "par1"))
+    val parameters = createParametersWithPrecombine(
+      payloadClass = "org.apache.hudi.common.model.OverwriteWithLatestAvroPayload")
+
+    // Should not throw exception - OverwriteWithLatestAvroPayload doesn't require ordering values
+    df.write
+      .format("hudi")
+      .options(parameters)
+      .option(DataSourceWriteOptions.TABLE_NAME.key(), TEST_TABLE_NAME)
+      .option("hoodie.table.name", TEST_TABLE_NAME)
+      .option("path", TestHoodieCreateRecordUtils.tempDir + "/test_null_precombine_overwrite")
+      .mode("overwrite")
+      .save()
+
+    // Verify data was written
+    val result = TestHoodieCreateRecordUtils.spark.read
+      .format("hudi")
+      .load(TestHoodieCreateRecordUtils.tempDir + "/test_null_precombine_overwrite")
+    assertTrue(result.count() > 0, "Data should have been written successfully with null precombine using OverwriteWithLatestAvroPayload")
+  }
+
+  @Test
+  def testNullPrecombineFieldWithCommitTimeOrderingSucceeds(): Unit = {
+    // COMMIT_TIME_ORDERING merge mode should allow null precombine values
+    val df = createTestDataFrame(Row("id1", "Alice", 25, null, "par1"))
+    val parameters = createBaseParameters() ++ Map(
+      DataSourceWriteOptions.PRECOMBINE_FIELD.key() -> PRECOMBINE_FIELD,
+      HoodieWriteConfig.COMBINE_BEFORE_UPSERT.key() -> "true",
+      DataSourceWriteOptions.INSERT_DROP_DUPS.key() -> "false",
+      DataSourceWriteOptions.RECORD_MERGE_MODE.key() -> RecordMergeMode.COMMIT_TIME_ORDERING.name()
+    )
+
+    // Should not throw exception - COMMIT_TIME_ORDERING doesn't require ordering values
+    df.write
+      .format("hudi")
+      .options(parameters)
+      .option(DataSourceWriteOptions.TABLE_NAME.key(), TEST_TABLE_NAME)
+      .option("hoodie.table.name", TEST_TABLE_NAME)
+      .option("path", TestHoodieCreateRecordUtils.tempDir + "/test_null_precombine_commit_time")
+      .mode("overwrite")
+      .save()
+
+    // Verify data was written
+    val result = TestHoodieCreateRecordUtils.spark.read
+      .format("hudi")
+      .load(TestHoodieCreateRecordUtils.tempDir + "/test_null_precombine_commit_time")
+    assertTrue(result.count() > 0, "Data should have been written successfully with null precombine using COMMIT_TIME_ORDERING")
   }
 }
 
