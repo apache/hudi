@@ -992,7 +992,7 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
     Future<?> future1 = executors.submit(() -> {
       try {
         // Wait for both writers to be ready
-        cyclicBarrier.await(60, TimeUnit.SECONDS);
+        cyclicBarrier.await();
 
         // Attempt to execute compaction with auto-complete
         client1.compact(compactionInstantTime, true);
@@ -1007,7 +1007,7 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
     Future<?> future2 = executors.submit(() -> {
       try {
         // Wait for both writers to be ready
-        cyclicBarrier.await(60, TimeUnit.SECONDS);
+        cyclicBarrier.await();
 
         // Attempt to execute compaction with auto-complete
         client2.compact(compactionInstantTime, true);
@@ -1031,15 +1031,13 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
     HoodieTimeline reloadedTimeline = metaClient.reloadActiveTimeline();
 
     // Verify compaction instant is completed
-    HoodieTimeline compactionTimeline = reloadedTimeline.getTimelineOfActions(
-        Collections.singleton(HoodieTimeline.COMPACTION_ACTION));
-    List<HoodieInstant> compactionInstants = compactionTimeline.getInstants();
+    HoodieTimeline completedCompactionTimeline = reloadedTimeline.filterCompletedInstants().getCommitTimeline();
 
     // Verify there is a completed compaction instant
-    boolean hasCompletedCompaction = compactionInstants.stream()
-        .anyMatch(instant -> instant.requestedTime().equals(compactionInstantTime) && instant.isCompleted());
+    boolean hasCompletedCompaction = completedCompactionTimeline.getInstantsAsStream()
+        .anyMatch(instant -> instant.requestedTime().equals(compactionInstantTime));
     assertTrue(hasCompletedCompaction,
-        "There should be a completed compaction instant in the timeline");
+        "The completed compaction instant should be in the timeline");
 
     // Verify no pending compaction exists for this instant (it should be completed)
     HoodieTimeline finalPendingCompactionTimeline = reloadedTimeline.filterPendingCompactionTimeline();
