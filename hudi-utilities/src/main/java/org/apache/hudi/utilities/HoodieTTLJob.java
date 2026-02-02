@@ -91,6 +91,9 @@ public class HoodieTTLJob {
     @Parameter(names = {"--spark-memory", "-sm"}, description = "spark memory to use", required = false)
     public String sparkMemory = null;
 
+    @Parameter(names = {"--enable-hive-support", "-ehs"}, description = "Enables hive support during spark context initialization.", required = false)
+    public Boolean enableHiveSupport = false;
+
     @Parameter(names = {"--help", "-h"}, help = true)
     public Boolean help = false;
 
@@ -114,7 +117,7 @@ public class HoodieTTLJob {
     }
 
     String dirName = new Path(cfg.basePath).getName();
-    JavaSparkContext jssc = UtilHelpers.buildSparkContext("hoodie-ttl-job-" + dirName, cfg.sparkMaster);
+    JavaSparkContext jssc = UtilHelpers.buildSparkContext("hoodie-ttl-job-" + dirName, cfg.sparkMaster, cfg.enableHiveSupport);
 
     int exitCode = 0;
     try {

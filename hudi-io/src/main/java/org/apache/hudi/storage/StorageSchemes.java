@@ -57,10 +57,9 @@ public enum StorageSchemes {
   ABFSS("abfss", null, null, null),
   // Aliyun OSS
   OSS("oss", null, null, null),
-  // View FS for federated setups. If federating across cloud stores, then append
-  // support is false
-  // View FS support atomic creation
-  VIEWFS("viewfs", null, true, null),
+  // ViewFS is just a layer on top of other file systems based on hadoop like HDFS.
+  // So file creation is atomic operation but write may not be transactional.
+  VIEWFS("viewfs", false, true, null),
   // ALLUXIO
   ALLUXIO("alluxio", null, null, null),
   // Tencent Cloud Object Storage

@@ -22,6 +22,7 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -220,7 +221,7 @@ public class TestHoodieHiveCatalog extends BaseTestHoodieCatalog {
 
     // validate the full name of table create schema
     HoodieTableConfig tableConfig = StreamerUtil.getTableConfig(table1.getOptions().get(FlinkOptions.PATH.key()), hoodieCatalog.getHiveConf()).get();
-    Option<org.apache.avro.Schema> tableCreateSchema = tableConfig.getTableCreateSchema();
+    Option<HoodieSchema> tableCreateSchema = tableConfig.getTableCreateSchema();
     assertTrue(tableCreateSchema.isPresent(), "Table should have been created");
     assertThat(tableCreateSchema.get().getFullName(), is("hoodie.test.test_record"));
 
@@ -488,7 +489,7 @@ public class TestHoodieHiveCatalog extends BaseTestHoodieCatalog {
     catalog.createTable(tablePath, table, false);
 
     Table hiveTable = hoodieCatalog.getHiveTable(tablePath);
-    assertEquals("false", hiveTable.getParameters().get("hadoop.hive.metastore.schema.verification"));
+    assertEquals("false", hiveTable.getParameters().get("hadoop.hive.metastore.sasl.enabled"));
   }
 
   @Test

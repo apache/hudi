@@ -34,6 +34,7 @@ import org.apache.hudi.avro.processors.TimestampMilliLogicalTypeProcessor;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.schema.HoodieSchemaType;
+import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
@@ -48,6 +49,7 @@ import org.apache.avro.LogicalTypes;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericFixed;
 import org.apache.avro.generic.GenericRecord;
+import org.apache.avro.util.Utf8;
 
 import java.io.IOException;
 import java.math.BigDecimal;
@@ -147,7 +149,7 @@ public class MercifulJsonConverter {
       for (String inputFieldName : inputJson.keySet()) {
         // we expect many fields won't need sanitization so check if un-sanitized field name is already present
         if (!schemaToJsonFieldNames.containsKey(inputFieldName)) {
-          String sanitizedJsonFieldName = HoodieAvroUtils.sanitizeName(inputFieldName, invalidCharMask);
+          String sanitizedJsonFieldName = HoodieSchemaUtils.sanitizeName(inputFieldName, invalidCharMask);
           schemaToJsonFieldNames.putIfAbsent(sanitizedJsonFieldName, inputFieldName);
         }
       }
@@ -433,7 +435,7 @@ public class MercifulJsonConverter {
     };
   }
 
-  private static JsonFieldProcessor generateStringTypeHandler() {
+  protected JsonFieldProcessor generateStringTypeHandler() {
     return new StringProcessor();
   }
 
@@ -443,10 +445,10 @@ public class MercifulJsonConverter {
     @Override
     public Pair<Boolean, Object> convert(Object value, String name, HoodieSchema schema) {
       if (value instanceof String) {
-        return Pair.of(true, value);
+        return Pair.of(true, new Utf8((String) value));
       } else {
         try {
-          return Pair.of(true, STRING_MAPPER.writeValueAsString(value));
+          return Pair.of(true, new Utf8(STRING_MAPPER.writeValueAsString(value)));
         } catch (IOException ex) {
           return Pair.of(false, null);
         }

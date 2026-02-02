@@ -96,8 +96,7 @@ class ConcurrentSchemaEvolutionTableSchemaGetter {
   }
 
   private Option<HoodieSchema> getTableCreateSchemaWithoutMetaField() {
-    return metaClient.getTableConfig().getTableCreateSchema()
-        .map(HoodieSchema::fromAvroSchema);
+    return metaClient.getTableConfig().getTableCreateSchema();
   }
 
   private void setCachedLatestCommitWithValidSchema(Option<HoodieInstant> instantOption) {

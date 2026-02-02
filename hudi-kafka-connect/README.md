@@ -26,7 +26,7 @@ This is work is tracked by [HUDI-2324](https://issues.apache.org/jira/browse/HUD
 
 The first thing you need to do to start using this connector is building it. In order to do that, you need to install the following dependencies:
 
-- [Java 1.8+](https://openjdk.java.net/)
+- [Java 11+](https://openjdk.java.net/)
 - [Apache Maven](https://maven.apache.org/)
 - Install [kcat](https://github.com/edenhill/kcat)
 - Install jq. `brew install jq`

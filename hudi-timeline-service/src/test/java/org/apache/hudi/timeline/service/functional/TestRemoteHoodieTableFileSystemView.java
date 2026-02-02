@@ -84,7 +84,9 @@ public class TestRemoteHoodieTableFileSystemView extends TestHoodieTableFileSyst
       builder.withNumberOfSimulatedConnectionFailures(numberOfSimulatedConnectionFailures);
       server = builder.build(
           HadoopFSUtils.getStorageConf().unwrap(),
-          TimelineService.Config.builder().serverPort(0).build(),
+          TimelineService.Config.builder()
+              .serverPort(0)
+              .build(),
           FileSystemViewManager.createViewManager(localEngineContext, metadataConfig, sConf, commonConfig));
       server.startService();
     } catch (Exception ex) {

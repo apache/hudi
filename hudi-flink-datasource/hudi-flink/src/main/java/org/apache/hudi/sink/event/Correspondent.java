@@ -31,6 +31,10 @@ import org.apache.flink.runtime.operators.coordination.CoordinationRequest;
 import org.apache.flink.runtime.operators.coordination.CoordinationResponse;
 import org.apache.flink.util.SerializedValue;
 
+import java.io.IOException;
+import java.util.HashMap;
+import java.util.Map;
+
 /**
  * Correspondent between a write task with the coordinator.
  */
@@ -73,6 +77,30 @@ public class Correspondent {
   }
 
   /**
+   * Sends a writing metadata event to the coordinator.
+   */
+  public void sendWriteMetadataEvent(WriteMetadataEvent writeMetadataEvent) {
+    try {
+      this.gateway.sendOperatorEventToCoordinator(this.operatorID, new SerializedValue<>(writeMetadataEvent));
+    } catch (IOException e) {
+      throw new HoodieException("Error sending write metadata event to the coordinator", e);
+    }
+  }
+
+  /**
+   * Sends a request to the coordinator to fetch the inflight instants.
+   */
+  public Map<Long, String> requestInflightInstants() {
+    try {
+      InflightInstantsResponse response = CoordinationResponseSerDe.unwrap(this.gateway.sendRequestToCoordinator(this.operatorID,
+          new SerializedValue<>(InflightInstantsRequest.getInstance())).get());
+      return response.getInflightInstants();
+    } catch (Exception e) {
+      throw new HoodieException("Error requesting the instant time from the coordinator", e);
+    }
+  }
+
+  /**
    * A request for instant time with a given checkpoint id.
    */
   @AllArgsConstructor(access = AccessLevel.PRIVATE)
@@ -97,6 +125,32 @@ public class Correspondent {
 
     public static InstantTimeResponse getInstance(String instant) {
       return new InstantTimeResponse(instant);
+    }
+  }
+
+  /**
+   * A request for the current inflight instants in the coordinator.
+   */
+  @AllArgsConstructor(access = AccessLevel.PRIVATE)
+  @Getter
+  public static class InflightInstantsRequest implements CoordinationRequest {
+
+    public static InflightInstantsRequest getInstance() {
+      return new InflightInstantsRequest();
+    }
+  }
+
+  /**
+   * A response with instant time.
+   */
+  @AllArgsConstructor(access = AccessLevel.PRIVATE)
+  @Getter
+  public static class InflightInstantsResponse implements CoordinationResponse {
+
+    private final HashMap<Long, String> inflightInstants;
+
+    public static InflightInstantsResponse getInstance(HashMap<Long, String> inflightInstants) {
+      return new InflightInstantsResponse(inflightInstants);
     }
   }
 }

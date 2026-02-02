@@ -153,6 +153,20 @@ public class FlinkClusteringConfig extends Configuration {
       description = "Min clustering interval of async clustering service, default 10 minutes")
   public Integer minClusteringIntervalSeconds = 600;
 
+  @Parameter(names = {"--retry", "-rt"}, description = "Number of retries for clustering operation. "
+      + "Only effective in single-run mode (not service mode). Default is 0 (no retry).")
+  public Integer retry = 0;
+
+  @Parameter(names = {"--retry-last-failed-job", "-rc"},
+      description = "Check and retry last failed clustering job if the inflight instant exceeds max processing time. "
+          + "Only effective in single-run mode.")
+  public Boolean retryLastFailedJob = false;
+
+  @Parameter(names = {"--job-max-processing-time-ms", "-jt"},
+      description = "Max processing time in milliseconds before considering a clustering job as failed. "
+          + "Used with --retry-last-failed-job. Default 0 means no timeout check.")
+  public Long maxProcessingTimeMs = 0L;
+
   @Parameter(names = {"--hoodie-conf"}, description = "Any configuration that can be set in the properties file "
       + "(using the CLI parameter \"--props\") can also be passed through command line using this parameter.")
   public List<String> configs = new ArrayList<>();

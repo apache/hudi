@@ -22,6 +22,9 @@ import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.internal.schema.Types.Field;
 import org.apache.hudi.internal.schema.Types.RecordType;
 
+import lombok.Getter;
+import lombok.Setter;
+
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -45,8 +48,11 @@ public class InternalSchema implements Serializable {
 
   private static final long DEFAULT_VERSION_ID = 0;
 
+  @Getter
   private final RecordType record;
 
+  @Getter
+  @Setter
   private int maxColumnId;
   private long versionId;
 
@@ -82,10 +88,6 @@ public class InternalSchema implements Serializable {
         ? Collections.emptyMap()
         : idToName.entrySet().stream().collect(Collectors.toMap(Map.Entry::getValue, Map.Entry::getKey));
     this.maxColumnId = idToName.isEmpty() ? -1 : idToName.keySet().stream().max(Comparator.comparing(Integer::valueOf)).get();
-  }
-
-  public RecordType getRecord() {
-    return record;
   }
 
   private static Map<Integer, String> buildIdToName(RecordType record) {
@@ -142,20 +144,6 @@ public class InternalSchema implements Serializable {
    */
   public long schemaId() {
     return this.versionId;
-  }
-
-  /**
-   * Set the version ID for this schema.
-   */
-  public void setMaxColumnId(int maxColumnId) {
-    this.maxColumnId = maxColumnId;
-  }
-
-  /**
-   * Returns the max column id for this schema.
-   */
-  public int getMaxColumnId() {
-    return this.maxColumnId;
   }
 
   /**

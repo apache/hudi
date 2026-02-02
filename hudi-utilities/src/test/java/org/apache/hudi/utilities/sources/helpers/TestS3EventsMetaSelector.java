@@ -40,7 +40,6 @@ import org.mockito.MockitoAnnotations;
 import software.amazon.awssdk.services.sqs.SqsClient;
 import software.amazon.awssdk.services.sqs.model.GetQueueAttributesRequest;
 import software.amazon.awssdk.services.sqs.model.GetQueueAttributesResponse;
-import software.amazon.awssdk.services.sqs.model.Message;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -92,12 +91,12 @@ public class TestS3EventsMetaSelector extends HoodieSparkClientTestHarness {
     S3EventsMetaSelector selector = (S3EventsMetaSelector) ReflectionUtils.loadClass(clazz.getName(), props);
     // setup s3 record
     String bucket = "test-bucket";
-    String key = "part%3Dpart%2Bpart%24part%A3part%23part%26part%3Fpart%7Epart%25.snappy.parquet";
+    String key = "part%3Dpart%2Bpart%24part%C2%A3part%23part%26part%3Fpart%7Epart%25.snappy.parquet";
     String keyRes = "part=part+part$part£part#part&part?part~part%.snappy.parquet";
     Path path = new Path(bucket, key);
     CloudObjectTestUtils.setMessagesInQueue(sqs, path);
 
-    List<Message> processed = new ArrayList<>();
+    List<CloudObjectsSelector.MessageTracker> processed = new ArrayList<>();
 
     // test the return values
     Pair<List<String>, Checkpoint> eventFromQueue =
@@ -125,7 +124,7 @@ public class TestS3EventsMetaSelector extends HoodieSparkClientTestHarness {
                 .attributesWithStrings(attribute)
                 .build());
 
-    List<Message> processed = new ArrayList<>();
+    List<CloudObjectsSelector.MessageTracker> processed = new ArrayList<>();
     Pair<List<String>, Checkpoint> eventFromQueue =
         selector.getNextEventsFromQueue(sqs, Option.empty(), processed);
 

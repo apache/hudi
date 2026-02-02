@@ -151,6 +151,13 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       .sinceVersion("0.14.0")
       .withDocumentation("Controls the criteria to log compacted files groups in metadata table.");
 
+  public static final ConfigProperty<Boolean> DERIVE_FROM_DATA_TABLE_CLEAN_POLICY = ConfigProperty
+      .key(METADATA_PREFIX + ".derive.from.datatable.clean.policy")
+      .defaultValue(true)
+      .markAdvanced()
+      .sinceVersion("1.2.0")
+      .withDocumentation("This config determines whether the cleaner policy should use data table's cleaner policy.");
+
   // Regex to filter out matching directories during bootstrap
   public static final ConfigProperty<String> DIR_FILTER_REGEX = ConfigProperty
       .key(METADATA_PREFIX + ".dir.filter.regex")
@@ -219,7 +226,12 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       .noDefaultValue()
       .markAdvanced()
       .sinceVersion("0.11.0")
-      .withDocumentation("Comma-separated list of columns for which column stats index will be built. If not set, all columns will be indexed");
+      .withDocumentation("Comma-separated list of columns for which column stats index will be built. "
+          + "If not set, all columns will be indexed. "
+          + "For nested fields within ARRAY types, use: field.list.element "
+          + "(e.g., items.list.element or items.list.element.price). "
+          + "For nested fields within MAP types, use: field.key_value.key for keys or field.key_value.value for values "
+          + "(e.g., metadata.key_value.key, metadata.key_value.value, or metadata.key_value.value.nested_field).");
 
   public static final ConfigProperty<Integer> COLUMN_STATS_INDEX_MAX_COLUMNS = ConfigProperty
       .key(METADATA_PREFIX + ".index.column.stats.max.columns.to.index")
@@ -604,6 +616,14 @@ public final class HoodieMetadataConfig extends HoodieConfig {
           + "honor the set value for number of tasks. If not, number of write status's from data "
           + "table writes will be used for metadata table record preparation");
 
+  public static final ConfigProperty<Boolean> FAIL_ON_TABLE_SERVICE_FAILURES = ConfigProperty
+      .key(METADATA_PREFIX + ".write.fail.on.table.service.failures")
+      .defaultValue(true)
+      .markAdvanced()
+      .sinceVersion("1.2.0")
+      .withDocumentation("when set to true, it fails the job on metadata table's "
+          + "table services operation failure");
+
   public long getMaxLogFileSize() {
     return getLong(MAX_LOG_FILE_SIZE_BYTES_PROP);
   }
@@ -882,6 +902,14 @@ public final class HoodieMetadataConfig extends HoodieConfig {
     return getIntOrDefault(RECORD_PREPARATION_PARALLELISM);
   }
 
+  public boolean shouldDeriveFromDataTableCleanPolicy() {
+    return getBooleanOrDefault(DERIVE_FROM_DATA_TABLE_CLEAN_POLICY);
+  }
+
+  public boolean shouldFailOnTableServiceFailures() {
+    return getBooleanOrDefault(FAIL_ON_TABLE_SERVICE_FAILURES);
+  }
+
   /**
    * Checks if a specific metadata index is marked for dropping based on the metadata configuration.
    * NOTE: Only applicable for secondary indexes (SI) or expression indexes (EI).
@@ -1008,6 +1036,11 @@ public final class HoodieMetadataConfig extends HoodieConfig {
 
     public Builder withLogCompactBlocksThreshold(int logCompactBlocksThreshold) {
       metadataConfig.setValue(LOG_COMPACT_BLOCKS_THRESHOLD, Integer.toString(logCompactBlocksThreshold));
+      return this;
+    }
+
+    public HoodieMetadataConfig.Builder deriveFromDataTableCleanPolicy(boolean deriveFromDataTableCleanPolicy) {
+      metadataConfig.setValue(DERIVE_FROM_DATA_TABLE_CLEAN_POLICY, Boolean.toString(deriveFromDataTableCleanPolicy));
       return this;
     }
 
@@ -1186,6 +1219,11 @@ public final class HoodieMetadataConfig extends HoodieConfig {
 
     public Builder withRepartitionDefaultPartitions(int defaultPartitions) {
       metadataConfig.setValue(REPARTITION_DEFAULT_PARTITIONS, String.valueOf(defaultPartitions));
+      return this;
+    }
+
+    public Builder setFailOnTableServiceFailures(boolean failOnTableServiceFailures) {
+      metadataConfig.setValue(FAIL_ON_TABLE_SERVICE_FAILURES, String.valueOf(failOnTableServiceFailures));
       return this;
     }
 

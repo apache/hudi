@@ -18,9 +18,9 @@
 
 package org.apache.hudi.table;
 
-import org.apache.hudi.avro.AvroSchemaUtils;
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.EventTimeAvroPayload;
+import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.exception.HoodieValidationException;
 import org.apache.hudi.hive.MultiPartKeysValueExtractor;
@@ -28,7 +28,7 @@ import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.keygen.ComplexAvroKeyGenerator;
 import org.apache.hudi.keygen.NonpartitionedAvroKeyGenerator;
 import org.apache.hudi.keygen.TimestampBasedAvroKeyGenerator;
-import org.apache.hudi.util.AvroSchemaConverter;
+import org.apache.hudi.util.HoodieSchemaConverter;
 import org.apache.hudi.util.StreamerUtil;
 import org.apache.hudi.utils.CatalogUtils;
 import org.apache.hudi.utils.SchemaBuilder;
@@ -88,6 +88,7 @@ public class TestHoodieTableFactory {
     this.conf = new Configuration();
     this.conf.set(FlinkOptions.PATH, tempFile.getAbsolutePath());
     this.conf.set(FlinkOptions.TABLE_NAME, "t1");
+    this.conf.set(FlinkOptions.RECORD_KEY_FIELD, "uuid");
     StreamerUtil.initTableIfNotExists(this.conf);
   }
 
@@ -110,12 +111,9 @@ public class TestHoodieTableFactory {
     final MockContext sourceContext11 = MockContext.getInstance(this.conf, schema1, "f2");
     assertDoesNotThrow(() -> new HoodieTableFactory().createDynamicTableSource(sourceContext11));
     assertDoesNotThrow(() -> new HoodieTableFactory().createDynamicTableSink(sourceContext11));
-    //miss the pre combine key will be ok
-    HoodieTableSink tableSink11 = (HoodieTableSink) new HoodieTableFactory().createDynamicTableSink(sourceContext11);
-    assertThat(tableSink11.getConf().get(FlinkOptions.ORDERING_FIELDS), is(FlinkOptions.NO_PRE_COMBINE));
-    this.conf.set(FlinkOptions.OPERATION, FlinkOptions.OPERATION.defaultValue());
 
     // a non-exists precombine key will throw exception
+    this.conf.set(FlinkOptions.OPERATION, "upsert");
     ResolvedSchema schema2 = SchemaBuilder.instance()
         .field("f0", DataTypes.INT().notNull())
         .field("f1", DataTypes.VARCHAR(20))
@@ -126,7 +124,6 @@ public class TestHoodieTableFactory {
     // createDynamicTableSource doesn't call sanity check, will not throw exception
     assertDoesNotThrow(() -> new HoodieTableFactory().createDynamicTableSource(sourceContext2));
     assertThrows(HoodieValidationException.class, () -> new HoodieTableFactory().createDynamicTableSink(sourceContext2));
-    this.conf.set(FlinkOptions.ORDERING_FIELDS, FlinkOptions.ORDERING_FIELDS.defaultValue());
 
     // given the pk but miss the pre combine key will be ok
     ResolvedSchema schema3 = SchemaBuilder.instance()
@@ -135,6 +132,7 @@ public class TestHoodieTableFactory {
         .field("f2", DataTypes.TIMESTAMP(3))
         .primaryKey("f0")
         .build();
+    this.conf.removeConfig(FlinkOptions.ORDERING_FIELDS);
     final MockContext sourceContext3 = MockContext.getInstance(this.conf, schema3, "f2");
     HoodieTableSource tableSource = (HoodieTableSource) new HoodieTableFactory().createDynamicTableSource(sourceContext3);
     HoodieTableSink tableSink = (HoodieTableSink) new HoodieTableFactory().createDynamicTableSink(sourceContext3);
@@ -215,6 +213,19 @@ public class TestHoodieTableFactory {
     this.conf.set(FlinkOptions.INDEX_TYPE, "BUCKET");
     final MockContext sourceContext3 = MockContext.getInstance(this.conf, schema, "f2");
     assertDoesNotThrow(() -> new HoodieTableFactory().createDynamicTableSink(sourceContext3));
+
+    // Valid global record level index type will be ok
+    this.conf.set(FlinkOptions.INDEX_TYPE, "GLOBAL_RECORD_LEVEL_INDEX");
+    this.conf.set(FlinkOptions.METADATA_ENABLED, false);
+    final MockContext sourceContext4 = MockContext.getInstance(this.conf, schema, "f2");
+    assertThrows(IllegalArgumentException.class, () -> new HoodieTableFactory().createDynamicTableSink(sourceContext4));
+
+    // Valid global record level index type will be ok
+    this.conf.set(FlinkOptions.INDEX_TYPE, "GLOBAL_RECORD_LEVEL_INDEX");
+    this.conf.set(FlinkOptions.METADATA_ENABLED, true);
+    this.conf.set(FlinkOptions.INDEX_GLOBAL_ENABLED, false);
+    final MockContext sourceContext5 = MockContext.getInstance(this.conf, schema, "f2");
+    assertThrows(IllegalArgumentException.class, () -> new HoodieTableFactory().createDynamicTableSink(sourceContext5));
   }
 
   @Test
@@ -364,7 +375,8 @@ public class TestHoodieTableFactory {
     final HoodieTableSink tableSink3 =
         (HoodieTableSink) new HoodieTableFactory().createDynamicTableSink(MockContext.getInstance(this.conf, schema3, ""));
     final Configuration conf3 = tableSink3.getConf();
-    final String expected = AvroSchemaConverter.convertToSchema(schema3.toSourceRowDataType().getLogicalType(), AvroSchemaUtils.getAvroRecordQualifiedName("t1")).toString();
+    final String expected = HoodieSchemaConverter.convertToSchema(schema3.toSourceRowDataType().getLogicalType(),
+        HoodieSchemaUtils.getRecordQualifiedName("t1")).toString();
     assertThat(conf3.get(FlinkOptions.SOURCE_AVRO_SCHEMA), is(expected));
   }
 
@@ -565,7 +577,8 @@ public class TestHoodieTableFactory {
     final HoodieTableSink tableSink3 =
         (HoodieTableSink) new HoodieTableFactory().createDynamicTableSink(MockContext.getInstance(this.conf, schema3, ""));
     final Configuration conf3 = tableSink3.getConf();
-    final String expected = AvroSchemaConverter.convertToSchema(schema3.toSinkRowDataType().getLogicalType(), AvroSchemaUtils.getAvroRecordQualifiedName("t1")).toString();
+    final String expected = HoodieSchemaConverter.convertToSchema(schema3.toSinkRowDataType().getLogicalType(),
+        HoodieSchemaUtils.getRecordQualifiedName("t1")).toString();
     assertThat(conf3.get(FlinkOptions.SOURCE_AVRO_SCHEMA), is(expected));
   }
 

@@ -22,6 +22,8 @@ import org.apache.hudi.common.testutils.NetworkTestUtils;
 import org.apache.hudi.io.util.FileIOUtils;
 import org.apache.hudi.storage.StoragePath;
 
+import lombok.Getter;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hive.conf.HiveConf;
 import org.apache.hadoop.hive.conf.HiveConf.ConfVars;
@@ -45,8 +47,6 @@ import org.apache.thrift.transport.TSocket;
 import org.apache.thrift.transport.TTransport;
 import org.apache.thrift.transport.TTransportException;
 import org.apache.thrift.transport.TTransportFactory;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.io.IOException;
@@ -59,9 +59,8 @@ import java.util.Objects;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
+@Slf4j
 public class HiveTestService {
-
-  private static final Logger LOG = LoggerFactory.getLogger(HiveTestService.class);
   private static final int CONNECTION_TIMEOUT_MS = 30000;
   private static final String BIND_HOST = "127.0.0.1";
   private static final int HS2_THRIFT_PORT = 9999;
@@ -72,7 +71,9 @@ public class HiveTestService {
   private final Map<String, String> sysProps = new HashMap<>();
   private ExecutorService executorService;
   private TServer tServer;
+  @Getter
   private HiveServer2 hiveServer;
+  @Getter
   private HiveConf hiveConf;
 
   public HiveTestService(Configuration hadoopConf) throws IOException {
@@ -84,7 +85,7 @@ public class HiveTestService {
     Objects.requireNonNull(workDir, "The work dir must be set before starting cluster.");
 
     String localHiveLocation = getHiveLocation(workDir);
-    LOG.info("Cleaning Hive cluster data at: " + localHiveLocation + " and starting fresh.");
+    log.info("Cleaning Hive cluster data at: {} and starting fresh.", localHiveLocation);
     File file = new File(localHiveLocation);
     FileIOUtils.deleteDirectory(file);
 
@@ -99,7 +100,7 @@ public class HiveTestService {
       throw new IOException("Waiting for startup of standalone server");
     }
 
-    LOG.info("Hive Minicluster service started.");
+    log.info("Hive Minicluster service started.");
     return hiveServer;
   }
 
@@ -109,30 +110,22 @@ public class HiveTestService {
       try {
         tServer.stop();
       } catch (Exception e) {
-        LOG.error("Stop meta store failed", e);
+        log.error("Stop meta store failed", e);
       }
     }
     if (hiveServer != null) {
       try {
         hiveServer.stop();
       } catch (Exception e) {
-        LOG.error("Stop hive server failed", e);
+        log.error("Stop hive server failed", e);
       }
     }
     if (executorService != null) {
       executorService.shutdownNow();
     }
-    LOG.info("Hive Minicluster service shut down.");
+    log.info("Hive Minicluster service shut down.");
     tServer = null;
     hiveServer = null;
-  }
-
-  public HiveServer2 getHiveServer() {
-    return hiveServer;
-  }
-
-  public HiveConf getHiveConf() {
-    return hiveConf;
   }
 
   public int getHiveServerPort() {
@@ -174,7 +167,7 @@ public class HiveTestService {
   }
 
   private boolean waitForServerUp(HiveConf serverConf) {
-    LOG.info("waiting for " + serverConf.getVar(ConfVars.METASTOREURIS));
+    log.info("waiting for {}", serverConf.getVar(ConfVars.METASTOREURIS));
     final long start = System.currentTimeMillis();
     while (true) {
       try {
@@ -297,11 +290,11 @@ public class HiveTestService {
             : new TUGIContainingTransport.Factory();
 
         processor = new TUGIBasedProcessor<>(handler);
-        LOG.info("Starting DB backed MetaStore Server with SetUGI enabled");
+        log.info("Starting DB backed MetaStore Server with SetUGI enabled");
       } else {
         transFactory = useFramedTransport ? new TFramedTransport.Factory() : new TTransportFactory();
         processor = new TSetIpAddressProcessor<>(handler);
-        LOG.info("Starting DB backed MetaStore Server");
+        log.info("Starting DB backed MetaStore Server");
       }
 
       TThreadPoolServer.Args args = new TThreadPoolServer.Args(serverTransport).processor(processor)

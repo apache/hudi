@@ -21,10 +21,10 @@ package org.apache.hudi.index.bloom;
 
 import lombok.Value;
 
-import java.util.List;
+import java.util.Set;
 
 @Value
 class HoodieBloomFilterProbingResult {
 
-  List<String> candidateKeys;
+  Set<String> candidateKeys;
 }

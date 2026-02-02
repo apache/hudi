@@ -27,12 +27,15 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.InstantGenerator;
 import org.apache.hudi.common.util.CompactionUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.common.util.TableServiceUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.sink.compact.strategy.CompactionPlanStrategies;
 import org.apache.hudi.table.HoodieFlinkTable;
 import org.apache.hudi.util.CompactionUtil;
+import org.apache.hudi.common.util.RetryHelper;
 import org.apache.hudi.util.FlinkWriteClients;
 import org.apache.hudi.util.StreamerUtil;
 
@@ -73,9 +76,44 @@ public class HoodieFlinkCompactor {
     FlinkCompactionConfig cfg = getFlinkCompactionConfig(args);
     Configuration conf = FlinkCompactionConfig.toFlinkConfig(cfg);
 
-    AsyncCompactionService service = new AsyncCompactionService(cfg, conf);
+    // Validate configuration
+    if (cfg.retryLastFailedJob && cfg.maxProcessingTimeMs <= 0) {
+      LOG.warn("--retry-last-failed-job is enabled but --job-max-processing-time-ms is not set or <= 0. "
+          + "The retry-last-failed feature will have no effect.");
+    }
 
-    new HoodieFlinkCompactor(service).start(cfg.serviceMode);
+    if (cfg.serviceMode) {
+      // Service mode: existing behavior without retry wrapper
+      // Service mode loop provides implicit retry semantics
+      AsyncCompactionService service = new AsyncCompactionService(cfg, conf);
+      new HoodieFlinkCompactor(service).start(true);
+    } else {
+      // Single-run mode: wrap with retry logic
+      new RetryHelper<Void, RuntimeException>(0, cfg.retry, 0, "java.lang.RuntimeException", "Flink compaction")
+          .start(() -> {
+            AsyncCompactionService service;
+            try {
+              service = new AsyncCompactionService(cfg, conf);
+            } catch (Exception e) {
+              throw new RuntimeException("Failed to create AsyncCompactionService", e);
+            }
+            try {
+              new HoodieFlinkCompactor(service).start(false);
+            } catch (ApplicationExecutionException aee) {
+              if (aee.getMessage() != null && aee.getMessage().contains(NO_EXECUTE_KEYWORD)) {
+                LOG.info("Compaction is not performed - no work to do");
+                // Not a failure, no need to retry
+              } else {
+                throw new RuntimeException(aee);
+              }
+            } catch (Exception e) {
+              throw new RuntimeException(e);
+            } finally {
+              service.shutDown();
+            }
+            return null;
+          });
+    }
   }
 
   /**
@@ -96,7 +134,7 @@ public class HoodieFlinkCompactor {
       try {
         compactionScheduleService.compact();
       } catch (ApplicationExecutionException aee) {
-        if (aee.getMessage().contains(NO_EXECUTE_KEYWORD)) {
+        if (aee.getMessage() != null && aee.getMessage().contains(NO_EXECUTE_KEYWORD)) {
           LOG.info("Compaction is not performed");
         } else {
           throw aee;
@@ -172,6 +210,12 @@ public class HoodieFlinkCompactor {
       // get the table name
       conf.set(FlinkOptions.TABLE_NAME, metaClient.getTableConfig().getTableName());
 
+      // get the primary key if absent in conf, but presented in table configs
+      if (!conf.containsKey(FlinkOptions.RECORD_KEY_FIELD.key())
+          && StringUtils.nonEmpty(metaClient.getTableConfig().getRecordKeyFieldProp())) {
+        conf.set(FlinkOptions.RECORD_KEY_FIELD, metaClient.getTableConfig().getRecordKeyFieldProp());
+      }
+
       // set table schema
       CompactionUtil.setAvroSchema(conf, metaClient);
 
@@ -199,7 +243,7 @@ public class HoodieFlinkCompactor {
               compact();
               Thread.sleep(cfg.minCompactionIntervalSeconds * 1000);
             } catch (ApplicationExecutionException aee) {
-              if (aee.getMessage().contains(NO_EXECUTE_KEYWORD)) {
+              if (aee.getMessage() != null && aee.getMessage().contains(NO_EXECUTE_KEYWORD)) {
                 LOG.info("Compaction is not performed.");
               } else {
                 throw new HoodieException(aee.getMessage(), aee);
@@ -234,6 +278,18 @@ public class HoodieFlinkCompactor {
       // fetch the instant based on the configured execution sequence
       HoodieTimeline pendingCompactionTimeline = table.getActiveTimeline().filterPendingCompactionTimeline();
       List<HoodieInstant> requested = CompactionPlanStrategies.getStrategy(cfg).select(pendingCompactionTimeline);
+
+      // If retry-last-failed is enabled, check for stale inflight compaction instants
+      if (requested.isEmpty() && cfg.retryLastFailedJob && cfg.maxProcessingTimeMs > 0) {
+        Option<HoodieInstant> staleInflightInstant = TableServiceUtils.findStaleInflightInstant(
+            table.getMetaClient(), HoodieTimeline.COMPACTION_ACTION, cfg.maxProcessingTimeMs);
+        if (staleInflightInstant.isPresent()) {
+          LOG.info("Found stale inflight compaction instant [{}] exceeding max processing time {}ms. Will rollback and retry.",
+              staleInflightInstant.get(), cfg.maxProcessingTimeMs);
+          requested = java.util.Collections.singletonList(staleInflightInstant.get());
+        }
+      }
+
       if (requested.isEmpty()) {
         // do nothing.
         LOG.info("No compaction plan scheduled, turns on the compaction plan schedule with --schedule option");

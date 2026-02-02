@@ -446,7 +446,7 @@ class HoodieSparkSqlWriterInternal {
             }
 
             // Issue the delete.
-            val schemaStr = new TableSchemaResolver(tableMetaClient).getTableAvroSchema(false).toString
+            val schemaStr = new TableSchemaResolver(tableMetaClient).getTableSchema(false).toString
             val client = hoodieWriteClient.getOrElse(DataSourceUtils.createHoodieClient(jsc,
                 schemaStr, path, tblName,
                 parameters.asJava))
@@ -516,9 +516,6 @@ class HoodieSparkSqlWriterInternal {
             // scalastyle:on
 
             val writeConfig = client.getConfig
-            if (writeConfig.getRecordMerger.getRecordType == HoodieRecordType.SPARK && tableType == MERGE_ON_READ && writeConfig.getLogDataBlockFormat.orElse(HoodieLogBlockType.AVRO_DATA_BLOCK) != HoodieLogBlockType.PARQUET_DATA_BLOCK) {
-              throw new UnsupportedOperationException(s"${writeConfig.getRecordMerger.getClass.getName} only support parquet log.")
-            }
             instantTime = client.startCommit(commitActionType)
             // if table has undergone upgrade, we need to reload table config
             tableMetaClient.reloadTableConfig()
@@ -683,8 +680,7 @@ class HoodieSparkSqlWriterInternal {
 
   private def getLatestTableSchema(tableMetaClient: HoodieTableMetaClient, schemaFromCatalog: Option[HoodieSchema]): Option[HoodieSchema] = {
     val tableSchemaResolver = new TableSchemaResolver(tableMetaClient)
-    toScalaOption(tableSchemaResolver.getTableAvroSchemaFromLatestCommit(false))
-      .map(HoodieSchema.fromAvroSchema)
+    toScalaOption(tableSchemaResolver.getTableSchemaFromLatestCommit(false))
       .orElse(schemaFromCatalog)
   }
 

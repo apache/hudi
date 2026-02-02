@@ -157,6 +157,20 @@ public class FlinkCompactionConfig extends Configuration {
   @Parameter(names = {"--spillable_map_path"}, description = "Default file path prefix for spillable map.")
   public String spillableMapPath = FileIOUtils.getDefaultSpillableMapBasePath();
 
+  @Parameter(names = {"--retry", "-rt"}, description = "Number of retries for compaction operation. "
+      + "Only effective in single-run mode (not service mode). Default is 0 (no retry).")
+  public Integer retry = 0;
+
+  @Parameter(names = {"--retry-last-failed-job", "-rc"},
+      description = "Check and retry last failed compaction job if the inflight instant exceeds max processing time. "
+          + "Only effective in single-run mode.")
+  public Boolean retryLastFailedJob = false;
+
+  @Parameter(names = {"--job-max-processing-time-ms", "-jt"},
+      description = "Max processing time in milliseconds before considering a compaction job as failed. "
+          + "Used with --retry-last-failed-job. Default 0 means no timeout check.")
+  public Long maxProcessingTimeMs = 0L;
+
   @Parameter(names = {"--hoodie-conf"}, description = "Any configuration that can be set in the properties file "
       + "(using the CLI parameter \"--props\") can also be passed through command line using this parameter.")
   public List<String> configs = new ArrayList<>();
@@ -199,7 +213,7 @@ public class FlinkCompactionConfig extends Configuration {
     conf.set(FlinkOptions.COMPACTION_TASKS, config.compactionTasks);
     conf.set(FlinkOptions.CLEAN_ASYNC_ENABLED, config.cleanAsyncEnable);
     // use synchronous compaction always
-    conf.set(FlinkOptions.COMPACTION_ASYNC_ENABLED, false);
+    conf.set(FlinkOptions.COMPACTION_OPERATION_EXECUTE_ASYNC_ENABLED, false);
     conf.set(FlinkOptions.COMPACTION_SCHEDULE_ENABLED, config.schedule);
     // Map memory
     conf.setString(HoodieMemoryConfig.SPILLABLE_MAP_BASE_PATH.key(), config.spillableMapPath);

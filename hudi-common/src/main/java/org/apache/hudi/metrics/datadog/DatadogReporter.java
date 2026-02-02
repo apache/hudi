@@ -36,8 +36,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.fasterxml.jackson.databind.node.TextNode;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.io.IOException;
 import java.util.List;
@@ -53,9 +52,8 @@ import java.util.stream.Collectors;
  * <p>
  * Internally use {@link DatadogHttpClient} to interact with Datadog APIs.
  */
+@Slf4j
 public class DatadogReporter extends ScheduledReporter {
-
-  private static final Logger LOG = LoggerFactory.getLogger(DatadogReporter.class);
 
   private final DatadogHttpClient client;
   private final String prefix;
@@ -117,7 +115,7 @@ public class DatadogReporter extends ScheduledReporter {
       try {
         client.close();
       } catch (IOException e) {
-        LOG.warn("Error disconnecting from Datadog.", e);
+        log.warn("Error disconnecting from Datadog.", e);
       }
     }
   }

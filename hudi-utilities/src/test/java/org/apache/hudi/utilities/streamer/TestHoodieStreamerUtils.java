@@ -23,6 +23,7 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
+import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.util.Option;
@@ -36,10 +37,12 @@ import org.apache.hudi.utilities.testutils.UtilitiesTestBase;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.util.Utf8;
+import org.apache.hadoop.conf.Configuration;
 import org.apache.spark.SparkException;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.unsafe.types.UTF8String;
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
@@ -118,7 +121,7 @@ public class TestHoodieStreamerUtils extends UtilitiesTestBase {
     List<HoodieRecord> records = recordOpt.get().collect();
     assertEquals(1, records.size());
     Object[] columnValues = records.get(0).getColumnValues(
-        schema.toAvroSchema(), new String[] {"timestamp", "_row_key", "partition_path", "rider", "driver"}, false);
+        schema, new String[] {"timestamp", "_row_key", "partition_path", "rider", "driver"}, false);
     Object[] expectedValues = recordType == HoodieRecordType.SPARK
         ? new Object[] {1000L, UTF8String.fromString("key1"), UTF8String.fromString("path1"),
         UTF8String.fromString("rider1"), UTF8String.fromString("driver1")}
@@ -191,5 +194,48 @@ public class TestHoodieStreamerUtils extends UtilitiesTestBase {
             sparkException.getCause().getMessage());
       }
     }
+  }
+
+  @Test
+  void testCombinePropertiesWithNullPropsFilePath() {
+    HoodieStreamer.Config cfg = new HoodieStreamer.Config();
+    cfg.propsFilePath = null;
+    cfg.configs.add("hoodie.test.key=testValue");
+    cfg.tableType = HoodieTableType.COPY_ON_WRITE.name();
+
+    Configuration hadoopConf = new Configuration();
+    TypedProperties result = HoodieStreamer.combineProperties(cfg, Option.empty(), hadoopConf);
+
+    assertEquals("testValue", result.getString("hoodie.test.key"));
+  }
+
+  @Test
+  void testCombinePropertiesWithEmptyPropsFilePath() {
+    HoodieStreamer.Config cfg = new HoodieStreamer.Config();
+    cfg.propsFilePath = "";
+    cfg.configs.add("hoodie.another.key=anotherValue");
+    cfg.tableType = HoodieTableType.COPY_ON_WRITE.name();
+
+    Configuration hadoopConf = new Configuration();
+    TypedProperties result = HoodieStreamer.combineProperties(cfg, Option.empty(), hadoopConf);
+
+    assertEquals("anotherValue", result.getString("hoodie.another.key"));
+  }
+
+  @Test
+  void testCombinePropertiesWithPropsOverride() {
+    HoodieStreamer.Config cfg = new HoodieStreamer.Config();
+    cfg.propsFilePath = "";
+    cfg.configs.add("hoodie.overridden.key=cliValue");
+    cfg.tableType = HoodieTableType.COPY_ON_WRITE.name();
+
+    TypedProperties overrideProps = new TypedProperties();
+    overrideProps.put("hoodie.overridden.key", "overrideValue");
+
+    Configuration hadoopConf = new Configuration();
+    TypedProperties result = HoodieStreamer.combineProperties(cfg, Option.of(overrideProps), hadoopConf);
+
+    // propsOverride takes precedence
+    assertEquals("overrideValue", result.getString("hoodie.overridden.key"));
   }
 }

@@ -22,6 +22,7 @@ import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.view.FileSystemViewManager;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.exception.HoodieException;
@@ -91,6 +92,11 @@ public class HoodieROTablePathFilter implements Configurable, PathFilter, Serial
    */
   private StorageConfiguration<?> conf;
 
+  /**
+   * Completed timeline cache. This is used to cache the completed timeline for each base path.
+   */
+  private Map<String, HoodieTimeline> completedTimelineCache;
+
   private transient HoodieLocalEngineContext engineContext;
 
 
@@ -105,6 +111,18 @@ public class HoodieROTablePathFilter implements Configurable, PathFilter, Serial
     this.nonHoodiePathCache = new HashSet<>();
     this.conf = HadoopFSUtils.getStorageConfWithCopy(conf);
     this.metaClientCache = new HashMap<>();
+    this.completedTimelineCache =  new HashMap<>();
+  }
+
+  /**
+   * By passing metaClient and completedTimeline, we can sync the view seen from this class against HoodieFileIndex class
+   */
+  public HoodieROTablePathFilter(Configuration conf,
+                                 HoodieTableMetaClient metaClient,
+                                 HoodieTimeline completedTimeline) {
+    this(conf);
+    this.metaClientCache.put(metaClient.getBasePath().toString(), metaClient);
+    this.completedTimelineCache.put(metaClient.getBasePath().toString(), completedTimeline);
   }
 
   /**
@@ -182,6 +200,12 @@ public class HoodieROTablePathFilter implements Configurable, PathFilter, Serial
             metaClientCache.put(baseDir.toString(), metaClient);
           }
 
+          HoodieTimeline completedTimeline = completedTimelineCache.get(baseDir.toString());
+          if (null == completedTimeline) {
+            completedTimeline = metaClient.getActiveTimeline().filterCompletedInstants();
+            completedTimelineCache.put(baseDir.toString(), completedTimeline);
+          }
+
           final Configuration conf = getConf();
           final String timestampAsOf = conf.get(TIMESTAMP_AS_OF.key());
           if (nonEmpty(timestampAsOf)) {
@@ -192,10 +216,10 @@ public class HoodieROTablePathFilter implements Configurable, PathFilter, Serial
             // which contains old version files, if not specify this value, these files will be filtered.
             fsView = FileSystemViewManager.createInMemoryFileSystemViewWithTimeline(engineContext,
                 metaClient, HoodieInputFormatUtils.buildMetadataConfig(conf),
-                metaClient.getActiveTimeline().filterCompletedInstants().findInstantsBeforeOrEquals(timestampAsOf));
+                completedTimeline.findInstantsBeforeOrEquals(timestampAsOf));
           } else {
-            fsView = FileSystemViewManager.createInMemoryFileSystemView(engineContext,
-                metaClient, HoodieInputFormatUtils.buildMetadataConfig(conf));
+            fsView = FileSystemViewManager.createInMemoryFileSystemViewWithTimeline(engineContext,
+                metaClient, HoodieInputFormatUtils.buildMetadataConfig(conf), completedTimeline.getCommitsTimeline());
           }
           String partition = HadoopFSUtils.getRelativePartitionPath(new Path(metaClient.getBasePath().toString()), folder);
           List<HoodieBaseFile> latestFiles = fsView.getLatestBaseFiles(partition).collect(Collectors.toList());

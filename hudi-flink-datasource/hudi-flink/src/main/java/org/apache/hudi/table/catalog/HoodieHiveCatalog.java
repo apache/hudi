@@ -19,10 +19,10 @@
 package org.apache.hudi.table.catalog;
 
 import org.apache.hudi.adapter.HiveCatalogConstants.AlterHiveDatabaseOp;
-import org.apache.hudi.avro.AvroSchemaUtils;
 import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.ConfigUtils;
@@ -495,7 +495,7 @@ public class HoodieHiveCatalog extends AbstractCatalog {
     Configuration flinkConf = Configuration.fromMap(catalogTable.getOptions());
     final String avroSchema = HoodieSchemaConverter.convertToSchema(
         DataTypeUtils.toRowType(catalogTable.getUnresolvedSchema()),
-        AvroSchemaUtils.getAvroRecordQualifiedName(tablePath.getObjectName())).toString();
+        HoodieSchemaUtils.getRecordQualifiedName(tablePath.getObjectName())).toString();
     flinkConf.set(FlinkOptions.SOURCE_AVRO_SCHEMA, avroSchema);
 
     // stores two copies of options:
@@ -513,7 +513,7 @@ public class HoodieHiveCatalog extends AbstractCatalog {
     if (catalogTable.isPartitioned() && !flinkConf.contains(FlinkOptions.PARTITION_PATH_FIELD)) {
       final String partitions = String.join(",", catalogTable.getPartitionKeys());
       flinkConf.set(FlinkOptions.PARTITION_PATH_FIELD, partitions);
-      final String[] pks = flinkConf.get(FlinkOptions.RECORD_KEY_FIELD).split(",");
+      final String[] pks = OptionsResolver.getRecordKeyStr(flinkConf).split(",");
       boolean complexHoodieKey = pks.length > 1 || catalogTable.getPartitionKeys().size() > 1;
       StreamerUtil.checkKeygenGenerator(complexHoodieKey, flinkConf);
     }
@@ -568,7 +568,15 @@ public class HoodieHiveCatalog extends AbstractCatalog {
       properties.put(HoodieIndexConfig.INDEX_TYPE.key(), properties.get(FlinkOptions.INDEX_TYPE.key()));
     }
     properties.remove(FlinkOptions.INDEX_TYPE.key());
-    hiveConf.getAllProperties().forEach((k, v) -> properties.put("hadoop." + k, String.valueOf(v)));
+    if (hiveConf.get("hive.metastore.uris") != null) {
+      properties.put("hadoop.hive.metastore.uris", hiveConf.get("hive.metastore.uris"));
+    }
+    if (hiveConf.get("hive.metastore.sasl.enabled") != null) {
+      properties.put("hadoop.hive.metastore.sasl.enabled", hiveConf.get("hive.metastore.sasl.enabled"));
+    }
+    if (hiveConf.get("hive.metastore.kerberos.principle") != null) {
+      properties.put("hadoop.hive.metastore.kerberos.principle", hiveConf.get("hive.metastore.kerberos.principle"));
+    }
 
     if (external) {
       hiveTable.setTableType(TableType.EXTERNAL_TABLE.toString());

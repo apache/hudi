@@ -139,6 +139,8 @@ public final class HoodieFlinkQuickstart {
     // create hudi table
     String hoodieTableDDL = sql(tableName)
         .option(FlinkOptions.PATH, tablePath)
+        .option(FlinkOptions.RECORD_KEY_FIELD, "uuid")
+        .option(FlinkOptions.ORDERING_FIELDS, "ts")
         .option(FlinkOptions.READ_AS_STREAMING, true)
         .option(FlinkOptions.TABLE_TYPE, tableType)
         .option(HoodieWriteConfig.ALLOW_EMPTY_COMMIT.key(), false)

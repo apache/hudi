@@ -245,7 +245,7 @@ public class HFileUtils extends FileFormatUtils {
    */
   private void logRecordMetadata(String msg, byte[] bs, HoodieSchema schema) throws IOException {
     GenericRecord record = HoodieAvroUtils.bytesToAvro(bs, schema.toAvroSchema());
-    if (schema.getField(HoodieRecord.RECORD_KEY_METADATA_FIELD) != null) {
+    if (schema.getField(HoodieRecord.RECORD_KEY_METADATA_FIELD).isPresent()) {
       LOG.error("{}: Hudi meta field values -> Record key: {}, Partition Path: {}, FileName: {}, CommitTime: {}, CommitSeqNo: {}", msg,
           record.get(HoodieRecord.RECORD_KEY_METADATA_FIELD), record.get(HoodieRecord.PARTITION_PATH_METADATA_FIELD),
           record.get(HoodieRecord.FILENAME_METADATA_FIELD), record.get(HoodieRecord.COMMIT_TIME_METADATA_FIELD),
@@ -266,11 +266,11 @@ public class HFileUtils extends FileFormatUtils {
   }
 
   private static Option<String> getRecordKey(HoodieRecord record, HoodieSchema readerSchema, String keyFieldName) {
-    return Option.ofNullable(record.getRecordKey(readerSchema.toAvroSchema(), keyFieldName));
+    return Option.ofNullable(record.getRecordKey(readerSchema, keyFieldName));
   }
 
   private static byte[] serializeRecord(HoodieRecord<?> record, HoodieSchema schema, Option<HoodieSchemaField> keyField) throws IOException {
-    return record.toIndexedRecord(schema.toAvroSchema(), CollectionUtils.emptyProps()).map(HoodieAvroIndexedRecord::getData).map(indexedRecord -> {
+    return record.toIndexedRecord(schema, CollectionUtils.emptyProps()).map(HoodieAvroIndexedRecord::getData).map(indexedRecord -> {
       keyField.ifPresent(field -> indexedRecord.put(field.pos(), StringUtils.EMPTY_STRING));
       return HoodieAvroUtils.avroToBytes(indexedRecord);
     }).orElseThrow(() -> new HoodieException("Unable to convert record to indexed record"));

@@ -296,7 +296,7 @@ public class TestHoodieGlobalBloomIndex extends TestHoodieMetadataBase {
     JavaRDD<HoodieRecord> taggedRecordRDD = tagLocation(index, recordRDD, hoodieTable);
 
     for (HoodieRecord record : taggedRecordRDD.collect()) {
-      IndexedRecord data = record.toIndexedRecord(SIMPLE_RECORD_SCHEMA.toAvroSchema(), CollectionUtils.emptyProps()).get().getData();
+      IndexedRecord data = record.toIndexedRecord(SIMPLE_RECORD_SCHEMA, CollectionUtils.emptyProps()).get().getData();
       switch (record.getRecordKey()) {
         case "000":
           assertEquals(record.getCurrentLocation().getFileId(), fileId1);

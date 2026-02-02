@@ -21,6 +21,7 @@ package org.apache.hudi.utilities.checkpointing;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.checkpoint.CheckpointUtils;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 
@@ -28,8 +29,6 @@ import org.apache.hadoop.conf.Configuration;
 
 import java.io.IOException;
 import java.util.Objects;
-
-import static org.apache.hudi.utilities.streamer.HoodieStreamer.CHECKPOINT_KEY;
 
 /**
  * This is used to set a checkpoint from latest commit of another (mirror) hudi dataset.
@@ -58,10 +57,16 @@ public class InitialCheckpointFromAnotherHoodieTimelineProvider extends InitialC
           try {
             HoodieCommitMetadata commitMetadata =
                 anotherDsHoodieMetaClient.getActiveTimeline().readCommitMetadata(instant);
-            return commitMetadata.getMetadata(CHECKPOINT_KEY);
+            // Use CheckpointUtils to handle both V1 and V2 checkpoint keys
+            return CheckpointUtils.getCheckpoint(commitMetadata).getCheckpointKey();
+          } catch (HoodieException e) {
+            // No checkpoint found in this commit
+            return null;
           } catch (IOException e) {
             return null;
           }
-        }).filter(Objects::nonNull).findFirst().get();
+        }).filter(Objects::nonNull).findFirst()
+        .orElseThrow(() -> new HoodieException("Unable to find checkpoint in source table at: "
+            + path + ". This table may not have been created with checkpoint tracking enabled."));
   }
 }

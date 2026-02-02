@@ -201,7 +201,8 @@ public class MarkerHandler extends Handler {
 
             earlyConflictDetectionStrategy =
                 (TimelineServerBasedDetectionStrategy) ReflectionUtils.loadClass(
-                    strategyClassName, basePath, markerDir, markerName, timelineServiceConfig.checkCommitConflict);
+                    strategyClassName, basePath, markerDir, markerName,
+                    timelineServiceConfig.earlyConflictDetectionCheckCommitConflict);
           }
 
           // markerDir => $base_path/.hoodie/.temp/$instant_time

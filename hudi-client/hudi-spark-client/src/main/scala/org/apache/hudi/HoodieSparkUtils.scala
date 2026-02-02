@@ -28,9 +28,9 @@ import org.apache.hudi.keygen.TimestampBasedAvroKeyGenerator
 import org.apache.hudi.keygen.constant.KeyGeneratorType
 import org.apache.hudi.storage.StoragePath
 import org.apache.hudi.util.ExceptionWrappingIterator
-
 import org.apache.avro.generic.GenericRecord
 import org.apache.hadoop.fs.Path
+import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.spark.SPARK_VERSION
 import org.apache.spark.internal.Logging
 import org.apache.spark.rdd.RDD
@@ -43,6 +43,8 @@ import org.apache.spark.sql.types.{StringType, StructField, StructType}
 import org.apache.spark.sql.DataFrame
 import org.apache.spark.unsafe.types.UTF8String
 
+import java.time.LocalDate
+import java.time.format.{DateTimeFormatter, DateTimeParseException}
 import scala.collection.JavaConverters._
 import scala.reflect.ClassTag
 
@@ -65,6 +67,7 @@ private[hudi] trait SparkVersionsSupport {
 object HoodieSparkUtils extends SparkAdapterSupport with SparkVersionsSupport with Logging {
 
   override def getSparkVersion: String = SPARK_VERSION
+  val dateTimeFormatter = DateTimeFormatter.ofPattern("yyyy/MM/dd")
 
   def getMetaSchema: StructType = {
     StructType(HoodieRecord.HOODIE_META_COLUMNS.asScala.map(col => {
@@ -110,7 +113,7 @@ object HoodieSparkUtils extends SparkAdapterSupport with SparkVersionsSupport wi
 
         // Since caller might request to get records in a different ("evolved") schema, we will be rewriting from
         // existing Writer's schema into Reader's (avro) schema
-        val convert = AvroConversionUtils.createInternalRowToAvroConverter(writerSchema, writerHoodieSchema.toAvroSchema, nullable = nullable)
+        val convert = AvroConversionUtils.createInternalRowToAvroConverter(writerSchema, writerHoodieSchema, nullable = nullable)
 
         rows.map { ir => transform(convert(ir)) }
       }
@@ -162,7 +165,7 @@ object HoodieSparkUtils extends SparkAdapterSupport with SparkVersionsSupport wi
         if (rows.isEmpty) {
           Iterator.empty
         } else {
-          val convert = AvroConversionUtils.createInternalRowToAvroConverter(writerSchema, writerHoodieSchema.toAvroSchema, nullable = nullable)
+          val convert = AvroConversionUtils.createInternalRowToAvroConverter(writerSchema, writerHoodieSchema, nullable = nullable)
           val transform: InternalRow => Either[GenericRecord, InternalRow] = internalRow => try {
             Left(HoodieAvroUtils.rewriteRecordDeep(convert(internalRow), readerHoodieSchema.toAvroSchema, true))
           } catch {
@@ -184,7 +187,7 @@ object HoodieSparkUtils extends SparkAdapterSupport with SparkVersionsSupport wi
         if (rows.isEmpty) {
           Iterator.empty
         } else {
-          val convert = AvroConversionUtils.createInternalRowToAvroConverter(writerSchema, writerHoodieSchema.toAvroSchema, nullable = nullable)
+          val convert = AvroConversionUtils.createInternalRowToAvroConverter(writerSchema, writerHoodieSchema, nullable = nullable)
           rows.map(convert)
         }
       }
@@ -218,12 +221,12 @@ object HoodieSparkUtils extends SparkAdapterSupport with SparkVersionsSupport wi
   }
 
   def parsePartitionColumnValues(partitionColumns: Array[String],
-                                   partitionPath: String,
-                                   tableBasePath: StoragePath,
-                                   tableSchema: StructType,
-                                   tableConfig: java.util.Map[String, String],
-                                   timeZoneId: String,
-                                   shouldValidatePartitionColumns: Boolean): Array[Object] = {
+                                 partitionPath: String,
+                                 tableBasePath: StoragePath,
+                                 tableSchema: StructType,
+                                 tableConfig: java.util.Map[String, String],
+                                 timeZoneId: String,
+                                 shouldValidatePartitionColumns: Boolean): Array[Object] = {
     val keyGeneratorClass = KeyGeneratorType.getKeyGeneratorClassName(tableConfig)
     val timestampKeyGeneratorType = tableConfig.get(TimestampKeyGeneratorConfig.TIMESTAMP_TYPE_FIELD.key())
 
@@ -237,16 +240,18 @@ object HoodieSparkUtils extends SparkAdapterSupport with SparkVersionsSupport wi
       Array.fill(partitionColumns.length)(UTF8String.fromString(partitionPath))
     } else {
       doParsePartitionColumnValues(partitionColumns, partitionPath, tableBasePath, tableSchema, timeZoneId,
-        shouldValidatePartitionColumns)
+        shouldValidatePartitionColumns, tableConfig.getOrDefault(HoodieTableConfig.SLASH_SEPARATED_DATE_PARTITIONING.key,
+          HoodieTableConfig.SLASH_SEPARATED_DATE_PARTITIONING.defaultValue).toBoolean)
     }
   }
 
   def doParsePartitionColumnValues(partitionColumns: Array[String],
-                                 partitionPath: String,
-                                 basePath: StoragePath,
-                                 schema: StructType,
-                                 timeZoneId: String,
-                                 shouldValidatePartitionCols: Boolean): Array[Object] = {
+                                   partitionPath: String,
+                                   basePath: StoragePath,
+                                   schema: StructType,
+                                   timeZoneId: String,
+                                   shouldValidatePartitionCols: Boolean,
+                                   slashSeparatedDatePartitioning: Boolean): Array[Object] = {
     if (partitionColumns.length == 0) {
       // This is a non-partitioned table
       Array.empty
@@ -261,6 +266,8 @@ object HoodieSparkUtils extends SparkAdapterSupport with SparkVersionsSupport wi
           val partitionValue = if (partitionPath.startsWith(prefix)) {
             // support hive style partition path
             partitionPath.substring(prefix.length)
+          } else if (slashSeparatedDatePartitioning) {
+            partitionPath.replace('/', '-')
           } else {
             partitionPath
           }

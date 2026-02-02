@@ -37,18 +37,17 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.sink.utils.BucketStreamWriteFunctionWrapper;
-import org.apache.hudi.sink.utils.StreamWriteFunctionWrapper;
 import org.apache.hudi.sink.utils.BulkInsertFunctionWrapper;
 import org.apache.hudi.sink.utils.ConsistentBucketStreamWriteFunctionWrapper;
 import org.apache.hudi.sink.utils.InsertFunctionWrapper;
+import org.apache.hudi.sink.utils.StreamWriteFunctionWrapper;
 import org.apache.hudi.sink.utils.TestFunctionWrapper;
 import org.apache.hudi.table.HoodieFlinkTable;
 import org.apache.hudi.table.format.FormatUtils;
 import org.apache.hudi.table.format.InternalSchemaManager;
 import org.apache.hudi.util.AvroToRowDataConverters;
-import org.apache.hudi.util.RowDataAvroQueryContexts;
+import org.apache.hudi.util.RowDataQueryContexts;
 
-import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.runtime.operators.coordination.OperatorEvent;
@@ -144,6 +143,29 @@ public class TestData {
           TimestampData.fromEpochMillis(3), StringData.fromString("par2")),
       insertRow(StringData.fromString("id4"), StringData.fromString("Fabian"), 32,
           TimestampData.fromEpochMillis(4), StringData.fromString("par2")),
+      // same with before
+      insertRow(StringData.fromString("id5"), StringData.fromString("Sophia"), 18,
+          TimestampData.fromEpochMillis(5), StringData.fromString("par3")),
+      // new data
+      insertRow(StringData.fromString("id9"), StringData.fromString("Jane"), 19,
+          TimestampData.fromEpochMillis(6), StringData.fromString("par3")),
+      insertRow(StringData.fromString("id10"), StringData.fromString("Ella"), 38,
+          TimestampData.fromEpochMillis(7), StringData.fromString("par4")),
+      insertRow(StringData.fromString("id11"), StringData.fromString("Phoebe"), 52,
+          TimestampData.fromEpochMillis(8), StringData.fromString("par4"))
+  );
+
+  public static List<RowData> DATA_SET_GLOBAL_UPDATE_INSERT = Arrays.asList(
+      // advance the age by 1
+      insertRow(StringData.fromString("id1"), StringData.fromString("Danny"), 24,
+          TimestampData.fromEpochMillis(1), StringData.fromString("par1")),
+      insertRow(StringData.fromString("id2"), StringData.fromString("Stephen"), 34,
+          TimestampData.fromEpochMillis(2), StringData.fromString("par1")),
+      // update partition for the key
+      insertRow(StringData.fromString("id3"), StringData.fromString("Julian"), 54,
+          TimestampData.fromEpochMillis(3), StringData.fromString("par3")),
+      insertRow(StringData.fromString("id4"), StringData.fromString("Fabian"), 32,
+          TimestampData.fromEpochMillis(4), StringData.fromString("par3")),
       // same with before
       insertRow(StringData.fromString("id5"), StringData.fromString("Sophia"), 18,
           TimestampData.fromEpochMillis(5), StringData.fromString("par3")),
@@ -977,8 +999,7 @@ public class TestData {
 
     HoodieTableMetaClient metaClient = createMetaClient(basePath);
     HoodieFlinkTable<?> table = HoodieFlinkTable.create(config, HoodieFlinkEngineContext.DEFAULT, metaClient);
-    Schema schema = new TableSchemaResolver(metaClient).getTableAvroSchema();
-    HoodieSchema hoodieSchema = HoodieSchema.fromAvroSchema(schema);
+    HoodieSchema schema = new TableSchemaResolver(metaClient).getTableSchema();
 
     String latestInstant = metaClient.getActiveTimeline().filterCompletedInstants()
         .lastInstant().map(HoodieInstant::requestedTime).orElse(null);
@@ -993,7 +1014,7 @@ public class TestData {
       List<String> readBuffer = new ArrayList<>();
       List<FileSlice> fileSlices = table.getSliceView().getLatestMergedFileSlicesBeforeOrOn(partitionDir.getName(), latestInstant).collect(Collectors.toList());
       for (FileSlice fileSlice : fileSlices) {
-        try (ClosableIterator<RowData> rowIterator = getRecordIterator(fileSlice, hoodieSchema, metaClient, config)) {
+        try (ClosableIterator<RowData> rowIterator = getRecordIterator(fileSlice, schema, metaClient, config)) {
           while (rowIterator.hasNext()) {
             RowData rowData = rowIterator.next();
             readBuffer.add(filterOutVariables(schema, rowData));
@@ -1048,8 +1069,8 @@ public class TestData {
     return String.join(",", fields);
   }
 
-  private static String filterOutVariables(Schema schema, RowData record) {
-    RowDataAvroQueryContexts.RowDataQueryContext queryContext = RowDataAvroQueryContexts.fromAvroSchema(schema);
+  private static String filterOutVariables(HoodieSchema schema, RowData record) {
+    RowDataQueryContexts.RowDataQueryContext queryContext = RowDataQueryContexts.fromSchema(schema);
     List<String> fields = new ArrayList<>();
     fields.add(getFieldValue(queryContext, record, "_hoodie_record_key"));
     fields.add(getFieldValue(queryContext, record, "_hoodie_partition_path"));
@@ -1061,7 +1082,7 @@ public class TestData {
     return String.join(",", fields);
   }
 
-  private static String getFieldValue(RowDataAvroQueryContexts.RowDataQueryContext queryContext, RowData rowData, String fieldName) {
+  private static String getFieldValue(RowDataQueryContexts.RowDataQueryContext queryContext, RowData rowData, String fieldName) {
     return String.valueOf(queryContext.getFieldQueryContext(fieldName).getValAsJava(rowData, true));
   }
 

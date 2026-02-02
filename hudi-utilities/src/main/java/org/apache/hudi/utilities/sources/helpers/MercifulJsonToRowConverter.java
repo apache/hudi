@@ -189,6 +189,32 @@ public class MercifulJsonToRowConverter extends MercifulJsonConverter {
     };
   }
 
+  /**
+   * Override to return java.lang.String instead of Avro Utf8.
+   * Spark's encoder expects String, not Avro Utf8.
+   */
+  @Override
+  protected JsonFieldProcessor generateStringTypeHandler() {
+    return new StringToRowProcessor();
+  }
+
+  private static class StringToRowProcessor extends JsonFieldProcessor {
+    private static final ObjectMapper STRING_MAPPER = new ObjectMapper();
+
+    @Override
+    public Pair<Boolean, Object> convert(Object value, String name, HoodieSchema schema) {
+      if (value instanceof String) {
+        return Pair.of(true, value);
+      } else {
+        try {
+          return Pair.of(true, STRING_MAPPER.writeValueAsString(value));
+        } catch (IOException ex) {
+          return Pair.of(false, null);
+        }
+      }
+    }
+  }
+
   @Override
   protected JsonFieldProcessor generateFixedTypeHandler() {
     return new FixedToRowTypeProcessor();

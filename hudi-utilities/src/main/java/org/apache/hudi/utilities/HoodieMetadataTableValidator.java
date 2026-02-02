@@ -97,7 +97,6 @@ import org.apache.hudi.utilities.util.BloomFilterData;
 import com.beust.jcommander.JCommander;
 import com.beust.jcommander.Parameter;
 import org.apache.hadoop.fs.Path;
-import org.apache.spark.SparkConf;
 import org.apache.spark.SparkException;
 import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaRDD;
@@ -395,6 +394,9 @@ public class HoodieMetadataTableValidator implements Serializable {
     @Parameter(names = {"--spark-memory", "-sm"}, description = "spark memory to use", required = false)
     public String sparkMemory = "1g";
 
+    @Parameter(names = {"--enable-hive-support", "-ehs"}, description = "Enables hive support during spark context initialization.", required = false)
+    public Boolean enableHiveSupport = false;
+
     @Parameter(names = {"--assume-date-partitioning"}, description = "Should HoodieWriteClient assume the data is partitioned by dates, i.e three levels from base path."
         + "This is a stop-gap to support tables created by versions < 0.3.1. Will be removed eventually", required = false)
     public Boolean assumeDatePartitioning = false;
@@ -502,9 +504,10 @@ public class HoodieMetadataTableValidator implements Serializable {
       System.exit(1);
     }
 
-    SparkConf sparkConf = UtilHelpers.buildSparkConf("Hoodie-Metadata-Table-Validator", cfg.sparkMaster);
-    sparkConf.set("spark.executor.memory", cfg.sparkMemory);
-    JavaSparkContext jsc = new JavaSparkContext(sparkConf);
+    Map<String, String> sparkConfigMap = new HashMap<>();
+    sparkConfigMap.put("spark.executor.memory", cfg.sparkMemory);
+    JavaSparkContext jsc = UtilHelpers.buildSparkContext("Hoodie-Metadata-Table-Validator",
+            cfg.sparkMaster, cfg.enableHiveSupport, sparkConfigMap);
 
     try {
       HoodieMetadataTableValidator validator = new HoodieMetadataTableValidator(jsc, cfg);
@@ -1655,8 +1658,7 @@ public class HoodieMetadataTableValidator implements Serializable {
     for (String logFilePathStr : logFilePathSet) {
       HoodieLogFormat.Reader reader = null;
       try {
-        HoodieSchema readerSchema =
-            HoodieSchema.fromAvroSchema(TableSchemaResolver.readSchemaFromLogFile(storage, new StoragePath(logFilePathStr)));
+        HoodieSchema readerSchema = TableSchemaResolver.readSchemaFromLogFile(storage, new StoragePath(logFilePathStr));
         if (readerSchema == null) {
           LOG.warn("Cannot read schema from log file {}. Skip the check as it's likely being written by an inflight instant.", logFilePathStr);
           continue;

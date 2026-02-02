@@ -294,17 +294,27 @@ public class ParquetUtils extends FileFormatUtils {
   }
 
   public List<HoodieColumnRangeMetadata<Comparable>> readColumnStatsFromMetadata(ParquetMetadata metadata, String filePath, Option<List<String>> columnList, HoodieIndexVersion indexVersion) {
+    // Create a set of columns to match, including both canonical (.list.element) and Parquet (.array) formats
+    // This handles files written by both Spark (uses .array) and Avro (uses .list.element) writers
+    Set<String> columnsToMatch = columnList.map(cols -> {
+      Set<String> set = new HashSet<>(cols);
+      cols.forEach(col -> set.add(convertListElementToArray(col)));
+      return set;
+    }).orElse(null);
+
     // Collect stats from all individual Parquet blocks
     Stream<HoodieColumnRangeMetadata<Comparable>> hoodieColumnRangeMetadataStream =
         metadata.getBlocks().stream().sequential().flatMap(blockMetaData ->
             blockMetaData.getColumns().stream()
-                .filter(f -> !columnList.isPresent() || columnList.get().contains(f.getPath().toDotString()))
+                .filter(f -> columnsToMatch == null || columnsToMatch.contains(f.getPath().toDotString()))
                 .map(columnChunkMetaData -> {
                   Statistics stats = columnChunkMetaData.getStatistics();
                   ValueMetadata valueMetadata = ValueMetadata.getValueMetadata(columnChunkMetaData.getPrimitiveType(), indexVersion);
+                  // Normalize column name to canonical .list.element format for consistent MDT storage
+                  String canonicalColumnName = convertArrayToListElement(columnChunkMetaData.getPath().toDotString());
                   return (HoodieColumnRangeMetadata<Comparable>) HoodieColumnRangeMetadata.<Comparable>create(
                       filePath,
-                      columnChunkMetaData.getPath().toDotString(),
+                      canonicalColumnName,
                       convertToNativeJavaType(
                           columnChunkMetaData.getPrimitiveType(),
                           stats.genericGetMin(),
@@ -427,10 +437,9 @@ public class ParquetUtils extends FileFormatUtils {
     config.setValue("hoodie.avro.schema", writerSchema.toString());
     HoodieRecord.HoodieRecordType recordType = records.iterator().next().getRecordType();
     try (HoodieFileWriter parquetWriter = HoodieFileWriterFactory.getFileWriter(
-        //TODO boundary to revisit in follow up to use HoodieSchema directly
         HoodieFileFormat.PARQUET, outputStream, storage, config, writerSchema, recordType)) {
       for (HoodieRecord<?> record : records) {
-        String recordKey = record.getRecordKey(readerSchema.toAvroSchema(), keyFieldName);
+        String recordKey = record.getRecordKey(readerSchema, keyFieldName);
         parquetWriter.write(recordKey, record, writerSchema);
       }
       outputStream.flush();
@@ -457,7 +466,7 @@ public class ParquetUtils extends FileFormatUtils {
         HoodieFileFormat.PARQUET, outputStream, storage, config, writerSchema, recordType);
     while (recordItr.hasNext()) {
       HoodieRecord record = recordItr.next();
-      String recordKey = record.getRecordKey(readerSchema.toAvroSchema(), keyFieldName);
+      String recordKey = record.getRecordKey(readerSchema, keyFieldName);
       parquetWriter.write(recordKey, record, writerSchema);
     }
     outputStream.flush();
@@ -549,5 +558,32 @@ public class ParquetUtils extends FileFormatUtils {
     } else {
       throw new UnsupportedOperationException(String.format("Unsupported value type (%s)", val.getClass().getName()));
     }
+  }
+
+  /**
+   * Converts Parquet array format (.array) to canonical format (.list.element).
+   * Parquet files written by Spark use ".array" while Avro uses ".list.element".
+   * We normalize to ".list.element" as the canonical format for MDT storage.
+   *
+   * @param columnName the column name from Parquet metadata
+   * @return the column name with .array converted to .list.element
+   */
+  private static String convertArrayToListElement(String columnName) {
+    return columnName
+        .replace(HoodieSchema.PARQUET_ARRAY_SPARK + ".", HoodieSchema.PARQUET_ARRAY_AVRO + ".")
+        .replace(HoodieSchema.PARQUET_ARRAY_SPARK, HoodieSchema.PARQUET_ARRAY_AVRO);
+  }
+
+  /**
+   * Converts canonical format (.list.element) to Parquet array format (.array).
+   * Used to match user-specified columns against Parquet files that use ".array" format.
+   *
+   * @param columnName the column name in canonical format
+   * @return the column name with .list.element converted to .array
+   */
+  private static String convertListElementToArray(String columnName) {
+    return columnName
+        .replace(HoodieSchema.PARQUET_ARRAY_AVRO + ".", HoodieSchema.PARQUET_ARRAY_SPARK + ".")
+        .replace(HoodieSchema.PARQUET_ARRAY_AVRO, HoodieSchema.PARQUET_ARRAY_SPARK);
   }
 }

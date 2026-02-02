@@ -66,6 +66,55 @@ public class CompactionUtil {
   }
 
   /**
+   * Schedules a new compaction/log compaction for the metadata table.
+   *
+   * @param writeClient The metadata write client
+   * @param committed   Whether the triggering instant was committed successfully
+   */
+  public static void scheduleMetadataCompaction(
+      HoodieFlinkWriteClient<?> writeClient,
+      boolean committed) {
+    if (!committed) {
+      return;
+    }
+    if (canScheduleMetadataCompaction(writeClient.getConfig(), writeClient.getHoodieTable().getMetaClient())) {
+      Option<String> compactInstant = writeClient.scheduleCompaction(Option.empty());
+      if (compactInstant.isPresent()) {
+        log.info("Scheduled compaction {} for metadata table.", compactInstant.get());
+        return;
+      }
+      if (!writeClient.getConfig().isLogCompactionEnabled()) {
+        return;
+      }
+      Option<String> logCompactionInstant = writeClient.scheduleLogCompaction(Option.empty());
+      if (logCompactionInstant.isPresent()) {
+        log.info("Scheduled log compaction {} for metadata table.", logCompactionInstant.get());
+      }
+    }
+  }
+
+  /**
+   * Validates the timeline for both data and metadata tables to ensure compaction on MDT can be scheduled.
+   *
+   * @param metadataWriteConfig The write config for metadata write client
+   * @param metadataMetaClient The table metadata client for metadata table
+   *
+   * @return True if the compaction/log compaction can be scheduled for metadata table.
+   */
+  private static boolean canScheduleMetadataCompaction(HoodieWriteConfig metadataWriteConfig, HoodieTableMetaClient metadataMetaClient) {
+    // Under the log compaction scope, the sequence of the log-compaction and compaction needs to be ensured because metadata items such as RLI
+    // only has proc-time ordering semantics. For "ensured", it means the completion sequence of the log-compaction/compaction is the same as the start sequence.
+    if (metadataWriteConfig.isLogCompactionEnabled()) {
+      Option<HoodieInstant> pendingLogCompactionInstant =
+          metadataMetaClient.getActiveTimeline().filterPendingLogCompactionTimeline().firstInstant();
+      Option<HoodieInstant> pendingCompactionInstant =
+          metadataMetaClient.getActiveTimeline().filterPendingCompactionTimeline().firstInstant();
+      return !pendingLogCompactionInstant.isPresent() && !pendingCompactionInstant.isPresent();
+    }
+    return true;
+  }
+
+  /**
    * Sets up the avro schema string into the give configuration {@code conf}
    * through reading from the hoodie table metadata.
    *
@@ -129,7 +178,7 @@ public class CompactionUtil {
    */
   public static void inferChangelogMode(Configuration conf, HoodieTableMetaClient metaClient) throws Exception {
     TableSchemaResolver tableSchemaResolver = new TableSchemaResolver(metaClient);
-    HoodieSchema tableAvroSchema = HoodieSchema.fromAvroSchema(tableSchemaResolver.getTableAvroSchemaFromDataFile());
+    HoodieSchema tableAvroSchema = tableSchemaResolver.getTableSchemaFromDataFile();
     if (tableAvroSchema.getField(HoodieRecord.OPERATION_METADATA_FIELD).isPresent()) {
       conf.set(FlinkOptions.CHANGELOG_ENABLED, true);
     }
@@ -155,6 +204,33 @@ public class CompactionUtil {
     if (table.getMetaClient().reloadActiveTimeline().filterPendingCompactionTimeline().containsInstant(inflightInstant)) {
       log.warn("Failed to rollback compaction instant: [{}]", instantTime);
       table.rollbackInflightCompaction(inflightInstant, transactionManager);
+    }
+  }
+
+  public static void rollbackLogCompaction(HoodieFlinkTable<?> table, String instantTime, TransactionManager transactionManager) {
+    HoodieInstant inflightInstant = table.getInstantGenerator().getLogCompactionInflightInstant(instantTime);
+    if (table.getMetaClient().reloadActiveTimeline().filterPendingLogCompactionTimeline().containsInstant(inflightInstant)) {
+      log.warn("Failed to rollback log compaction instant: [{}]", instantTime);
+      table.rollbackInflightLogCompaction(inflightInstant, transactionManager);
+    }
+  }
+
+  /**
+   * Force rolls back all the inflight log compaction instants, especially for job failover restart.
+   *
+   * @param table The hoodie table
+   */
+  public static void rollbackLogCompaction(HoodieFlinkTable<?> table, HoodieFlinkWriteClient writeClient) {
+    HoodieTimeline inflightCompactionTimeline = table.getActiveTimeline()
+        .filterPendingLogCompactionTimeline()
+        .filter(instant ->
+            instant.getState() == HoodieInstant.State.INFLIGHT);
+    inflightCompactionTimeline.getInstants().forEach(inflightInstant -> {
+      log.info("Rollback the inflight log compaction instant: {} for failover", inflightInstant);
+      table.rollbackInflightLogCompaction(inflightInstant, writeClient.getTransactionManager());
+    });
+    if (!inflightCompactionTimeline.getInstants().isEmpty()) {
+      table.getMetaClient().reloadActiveTimeline();
     }
   }
 

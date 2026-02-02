@@ -19,7 +19,7 @@
 package org.apache.hudi.source.enumerator;
 
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.source.ScanContext;
+import org.apache.hudi.source.HoodieScanContext;
 import org.apache.hudi.source.split.HoodieContinuousSplitBatch;
 import org.apache.hudi.source.split.HoodieContinuousSplitDiscover;
 import org.apache.hudi.source.split.HoodieSourceSplit;
@@ -40,7 +40,7 @@ public class HoodieContinuousSplitEnumerator extends AbstractHoodieSplitEnumerat
   private final SplitEnumeratorContext<HoodieSourceSplit> enumeratorContext;
   private final HoodieSplitProvider splitProvider;
   private final HoodieContinuousSplitDiscover splitDiscover;
-  private final ScanContext scanContext;
+  private final HoodieScanContext scanContext;
 
   /**
    * Instant for the last enumerated commit. Next incremental enumeration should be based off
@@ -52,7 +52,7 @@ public class HoodieContinuousSplitEnumerator extends AbstractHoodieSplitEnumerat
       SplitEnumeratorContext<HoodieSourceSplit> enumeratorContext,
       HoodieSplitProvider splitProvider,
       HoodieContinuousSplitDiscover splitDiscover,
-      ScanContext scanContext,
+      HoodieScanContext scanContext,
       Option<HoodieSplitEnumeratorState> enumStateOpt) {
     super(enumeratorContext, splitProvider);
     this.enumeratorContext = enumeratorContext;

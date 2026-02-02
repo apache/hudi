@@ -19,9 +19,9 @@
 package org.apache.hudi.utils;
 
 import org.apache.hudi.keygen.KeyGenUtils;
-import org.apache.hudi.util.AvroSchemaConverter;
-import org.apache.hudi.util.RowDataToAvroConverters;
+import org.apache.hudi.util.HoodieSchemaConverter;
 import org.apache.hudi.util.RecordKeyToRowDataConverter;
+import org.apache.hudi.util.RowDataToAvroConverters;
 
 import org.apache.avro.generic.GenericRecord;
 import org.apache.flink.table.api.DataTypes;
@@ -103,7 +103,7 @@ public class TestRecordKeyToRowDataConverter {
     RowDataToAvroConverters.RowDataToAvroConverter converter =
         RowDataToAvroConverters.createConverter(rowType);
     GenericRecord avroRecord =
-        (GenericRecord) converter.convert(AvroSchemaConverter.convertToSchema(rowType), rowData);
+        (GenericRecord) converter.convert(HoodieSchemaConverter.convertToSchema(rowType), rowData);
     RecordKeyToRowDataConverter keyToRowDataConverter =
         new RecordKeyToRowDataConverter(new int[]{0, 1, 2, 3, 4, 5, 6}, rowType);
     final String recordKey = KeyGenUtils.getRecordKey(avroRecord, rowType.getFieldNames(), false);

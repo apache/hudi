@@ -140,4 +140,35 @@ class TestHoodieMetadataConfig {
     // Verify that the value is indeed larger than Integer.MAX_VALUE
     assertTrue(largeSize > Integer.MAX_VALUE, "Test value should exceed Integer.MAX_VALUE to validate long type");
   }
+
+  @Test
+  void testFailOnTableServiceFailures() {
+    // Test default value
+    HoodieMetadataConfig config = HoodieMetadataConfig.newBuilder().build();
+    assertTrue(config.shouldFailOnTableServiceFailures());
+
+    // Test setting to false via Properties
+    Properties propsFalse = new Properties();
+    propsFalse.put(HoodieMetadataConfig.FAIL_ON_TABLE_SERVICE_FAILURES.key(), "false");
+    HoodieMetadataConfig configWithFalse = HoodieMetadataConfig.newBuilder()
+        .fromProperties(propsFalse)
+        .build();
+    assertFalse(configWithFalse.shouldFailOnTableServiceFailures());
+
+    // Test setting to true via builder method
+    HoodieMetadataConfig configWithBuilder = HoodieMetadataConfig.newBuilder()
+        .setFailOnTableServiceFailures(true)
+        .build();
+    assertTrue(configWithBuilder.shouldFailOnTableServiceFailures());
+
+    // Test setting to false via builder method
+    HoodieMetadataConfig configWithBuilderFalse = HoodieMetadataConfig.newBuilder()
+        .setFailOnTableServiceFailures(false)
+        .build();
+    assertFalse(configWithBuilderFalse.shouldFailOnTableServiceFailures());
+
+    // Verify the config key is correct
+    assertEquals("hoodie.metadata.write.fail.on.table.service.failures",
+        HoodieMetadataConfig.FAIL_ON_TABLE_SERVICE_FAILURES.key());
+  }
 }

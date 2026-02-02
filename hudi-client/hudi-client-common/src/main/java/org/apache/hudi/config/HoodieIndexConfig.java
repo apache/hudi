@@ -719,12 +719,22 @@ public class HoodieIndexConfig extends HoodieConfig {
     }
 
     public Builder withIndexKeyField(String keyField) {
-      hoodieIndexConfig.setValue(BUCKET_INDEX_HASH_FIELD, keyField);
+      if (StringUtils.nonEmpty(keyField)) {
+        hoodieIndexConfig.setValue(BUCKET_INDEX_HASH_FIELD, keyField);
+      } else {
+        log.warn("'{}' wasn't set during Hoodie index building due to absent key field passed.",
+            BUCKET_INDEX_HASH_FIELD.key());
+      }
       return this;
     }
 
     public Builder withRecordKeyField(String keyField) {
-      hoodieIndexConfig.setValue(KeyGeneratorOptions.RECORDKEY_FIELD_NAME, keyField);
+      if (StringUtils.nonEmpty(keyField)) {
+        hoodieIndexConfig.setValue(KeyGeneratorOptions.RECORDKEY_FIELD_NAME, keyField);
+      } else {
+        log.warn("'{}' wasn't set during Hoodie index building due to absent key field passed.",
+            KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key());
+      }
       return this;
     }
 

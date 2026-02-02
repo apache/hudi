@@ -31,8 +31,7 @@ import org.apache.hudi.metrics.Metrics;
 import org.apache.hudi.storage.HoodieStorage;
 
 import com.codahale.metrics.MetricRegistry;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.io.IOException;
 import java.io.Serializable;
@@ -46,6 +45,7 @@ import java.util.stream.Collectors;
 /**
  * Metrics for metadata.
  */
+@Slf4j
 public class HoodieMetadataMetrics implements Serializable {
 
   // Metric names
@@ -79,8 +79,9 @@ public class HoodieMetadataMetrics implements Serializable {
   public static final String TABLE_SERVICE_EXECUTION_STATUS = "table_service_execution_status";
   public static final String TABLE_SERVICE_EXECUTION_DURATION = "table_service_execution_duration";
   public static final String ASYNC_INDEXER_CATCHUP_TIME = "async_indexer_catchup_time";
-
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieMetadataMetrics.class);
+  public static final String COMPACTION_FAILURES = "compaction_failures";
+  public static final String LOG_COMPACTION_FAILURES = "logcompaction_failures";
+  public static final String PENDING_COMPACTIONS_FAILURES = "pending_compactions_failures";
 
   private final transient MetricRegistry metricsRegistry;
   private final transient Metrics metrics;
@@ -159,7 +160,7 @@ public class HoodieMetadataMetrics implements Serializable {
   }
 
   protected void incrementMetric(String action, long value) {
-    LOG.debug("Updating metadata metrics ({}={}) in {}", action, value, metricsRegistry);
+    log.debug("Updating metadata metrics ({}={}) in {}", action, value, metricsRegistry);
     Option<HoodieGauge<Long>> gaugeOpt = metrics.registerGauge(action);
     gaugeOpt.ifPresent(gauge -> gauge.setValue(gauge.getValue() + value));
   }
