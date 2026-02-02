@@ -164,7 +164,7 @@ public class HoodieSparkLanceReader implements HoodieSparkFileReader {
          LanceFileReader reader = LanceFileReader.open(path.toString(), allocator)) {
       Schema arrowSchema = reader.schema();
       StructType structType = LanceArrowUtils.fromArrowSchema(arrowSchema);
-      return HoodieSchemaConversionUtils.convertStructTypeToHoodieSchema(structType, "record", "", true);
+      return HoodieSchemaConversionUtils.convertStructTypeToHoodieSchema(structType, "record", "", false);
     } catch (Exception e) {
       throw new HoodieException("Failed to read schema from Lance file: " + path, e);
     }

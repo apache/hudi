@@ -158,8 +158,8 @@ class Spark3_4Adapter extends BaseSpark3Adapter {
   override def createLanceFileReader(vectorized: Boolean,
                                      sqlConf: SQLConf,
                                      options: Map[String, String],
-                                     hadoopConf: Configuration): SparkColumnarFileReader = {
-    new SparkLanceReaderBase(vectorized)
+                                     hadoopConf: Configuration): Option[SparkColumnarFileReader] = {
+    Some(new SparkLanceReaderBase(vectorized))
   }
 
   override def stopSparkContext(jssc: JavaSparkContext, exitCode: Int): Unit = {
