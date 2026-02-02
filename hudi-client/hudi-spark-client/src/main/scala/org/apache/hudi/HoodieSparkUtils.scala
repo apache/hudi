@@ -245,6 +245,8 @@ object HoodieSparkUtils extends SparkAdapterSupport with SparkVersionsSupport wi
     } else if(usePartitionValueExtractorOnRead && !StringUtils.isNullOrEmpty(partitionValueExtractorClass)) {
       try {
         val partitionValueExtractor = Class.forName(partitionValueExtractorClass)
+          .getDeclaredConstructor()
+          .newInstance()
           .asInstanceOf[PartitionValueExtractor]
         val partitionValues = partitionValueExtractor.extractPartitionValuesInPath(partitionPath).asScala.toArray
         val partitionSchema = buildPartitionSchemaForNestedFields(tableSchema, partitionColumns)
