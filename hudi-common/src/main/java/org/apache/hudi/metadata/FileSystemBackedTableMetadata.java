@@ -349,16 +349,10 @@ public class FileSystemBackedTableMetadata extends AbstractHoodieTableMetadata {
 
     for (Pair<String, StoragePath> partitionPair : partitionPathList) {
       StoragePath absolutePartitionPath = partitionPair.getRight();
-      try {
-        pathInfoMap.put(partitionPair, getStorage().listDirectEntries(absolutePartitionPath));
-      } catch (IOException e) {
-        if (!getStorage().exists(absolutePartitionPath)) {
-          pathInfoMap.put(partitionPair, Collections.emptyList());
-        } else {
-          // in case the partition path was created by another caller
-          pathInfoMap.put(partitionPair, getStorage().listDirectEntries(absolutePartitionPath));
-        }
-      }
+      // Use FSUtils.getAllDataFilesInPartition to filter out stray files that are not valid
+      // HUDI data or log files. This is consistent with getAllFilesInPartition() and
+      // getAllFilesInPartitions() methods which also use this filtering.
+      pathInfoMap.put(partitionPair, FSUtils.getAllDataFilesInPartition(getStorage(), absolutePartitionPath));
     }
     return pathInfoMap;
   }
