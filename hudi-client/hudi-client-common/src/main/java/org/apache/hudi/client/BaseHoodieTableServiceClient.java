@@ -333,6 +333,7 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
       } finally {
         txnManager.endStateChange(Option.of(inflightInstant));
       }
+      pendingCompactionTimeline = table.getMetaClient().reloadActiveTimeline().filterPendingCompactionTimeline();
     }
     if (pendingCompactionTimeline.containsInstant(inflightInstant)) {
       table.rollbackInflightCompaction(inflightInstant, commitToRollback -> getPendingRollbackInfo(table.getMetaClient(), commitToRollback, false), txnManager);
@@ -395,9 +396,9 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
       log.info("Committing Compaction {}", compactionCommitTime);
       CompactHelpers.getInstance().completeInflightCompaction(table, compactionCommitTime, metadata);
       log.debug("Compaction {} finished with result: {}", compactionCommitTime, metadata);
-      releaseResources(compactionCommitTime);
     } finally {
       this.txnManager.endStateChange(Option.of(compactionInstant));
+      releaseResources(compactionCommitTime);
     }
     WriteMarkersFactory.get(config.getMarkersType(), table, compactionCommitTime)
         .quietDeleteMarkerDir(context, config.getMarkersDeleteParallelism());
@@ -408,6 +409,7 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
       );
     }
     log.info("Compacted successfully on commit {}", compactionCommitTime);
+    this.heartbeatClient.stop(compactionCommitTime);
   }
 
   protected void writeToMetadataTable(HoodieTable table, String instantTime, HoodieCommitMetadata metadata, List<HoodieWriteStat> partialMetadataWriteStats) {
@@ -1319,6 +1321,6 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
    * to release any resources used.
    */
   protected void releaseResources(String instantTime) {
-    this.heartbeatClient.stop(instantTime);
+    // do nothing here
   }
 }
