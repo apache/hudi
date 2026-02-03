@@ -19,7 +19,7 @@
 
 package org.apache.spark.sql.execution.datasources.lance
 
-import org.apache.hudi.common.model.HoodieFileFormat
+import org.apache.hudi.SparkAdapterSupport.sparkAdapter
 import org.apache.hudi.common.util
 import org.apache.hudi.internal.schema.InternalSchema
 import org.apache.hudi.io.memory.HoodieArrowAllocator
@@ -30,10 +30,9 @@ import org.apache.hadoop.conf.Configuration
 import org.apache.parquet.schema.MessageType
 import org.apache.spark.TaskContext
 import org.apache.spark.sql.catalyst.InternalRow
-import org.apache.spark.sql.catalyst.expressions.{AttributeReference, JoinedRow}
+import org.apache.spark.sql.catalyst.expressions.{AttributeReference, JoinedRow, UnsafeProjection, UnsafeRow}
 import org.apache.spark.sql.catalyst.expressions.codegen.GenerateUnsafeProjection
-import org.apache.spark.sql.execution.datasources.{PartitionedFile, SparkColumnarFileReader}
-import org.apache.spark.sql.execution.datasources.parquet.SparkBasicSchemaEvolution
+import org.apache.spark.sql.execution.datasources.{PartitionedFile, SparkColumnarFileReader, SparkSchemaTransformUtils}
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.sources.Filter
 import org.apache.spark.sql.types.StructType
@@ -95,16 +94,13 @@ class SparkLanceReaderBase(enableVectorizedReader: Boolean) extends SparkColumna
         val arrowSchema = lanceReader.schema()
         val fileSchema = LanceArrowUtils.fromArrowSchema(arrowSchema)
 
-        // Use existing schema evolution helper
-        val evolution = new SparkBasicSchemaEvolution(
-          fileSchema,
-          requiredSchema,
-          SQLConf.get.sessionLocalTimeZone,
-          HoodieFileFormat.LANCE
-        )
+        // Build type change info for schema evolution
+        val (implicitTypeChangeInfo, sparkRequestSchema) =
+          SparkSchemaTransformUtils.buildImplicitSchemaChangeInfo(fileSchema, requiredSchema)
 
-        // Get the request schema (only fields that exist in file)
-        val requestSchema = evolution.getRequestSchema
+        // Filter schema to only fields that exist in file (Lance can only read columns present in file)
+        val requestSchema = SparkSchemaTransformUtils.filterSchemaByFileSchema(sparkRequestSchema, fileSchema)
+
         val columnNames = if (requestSchema.nonEmpty) {
           requestSchema.fieldNames.toList.asJava
         } else {
@@ -129,8 +125,25 @@ class SparkLanceReaderBase(enableVectorizedReader: Boolean) extends SparkColumna
           ctx.addTaskCompletionListener[Unit](_ => lanceIterator.close())
         }
 
-        // Apply lance schema evolution generateUnsafeProjection which handles NULL padding
-        val projection = evolution.generateUnsafeProjection()
+        // Create the following projections for schema evolution:
+        // 1. Padding projection: add NULL for missing columns
+        // 2. Casting projection: handle type conversions
+        val schemaUtils = sparkAdapter.getSchemaUtils
+        val paddingProj = SparkSchemaTransformUtils.generateNullPaddingProjection(requestSchema, requiredSchema)
+        val castProj = SparkSchemaTransformUtils.generateUnsafeProjection(
+          schemaUtils.toAttributes(requiredSchema),
+          Some(SQLConf.get.sessionLocalTimeZone),
+          implicitTypeChangeInfo,
+          requiredSchema,
+          new StructType(),
+          schemaUtils
+        )
+
+        // Unify projections by applying padging and then casting for each row
+        val projection: UnsafeProjection = new UnsafeProjection {
+          def apply(row: InternalRow): UnsafeRow =
+            castProj(paddingProj(row))
+        }
         val projectedIter = lanceIterator.asScala.map(projection.apply)
 
         // Handle partition columns

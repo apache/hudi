@@ -76,7 +76,7 @@ object SparkSchemaTransformUtils {
   }
 
   /**
-   * Generate UnsafeProjection that ONLY pads missing columns with NULL literals.
+   * Generate UnsafeProjection that pads missing columns with NULL literals.
    *
    * @param inputSchema Schema from file (fields actually present)
    * @param targetSchema Target output schema (may have more fields than file)
@@ -239,6 +239,60 @@ object SparkSchemaTransformUtils {
   }
 
   /**
+   * Filter requested schema to only include fields that exist in file schema.
+   * Used by readers that can only read columns present in the file.
+   *
+   * @param requestedSchema Schema requested by the query
+   * @param fileSchema Schema from the file
+   * @return Filtered schema containing only fields present in file
+   */
+  def filterSchemaByFileSchema(requestedSchema: StructType, fileSchema: StructType): StructType = {
+    val fileFieldMap = fileSchema.fields.map(f => f.name -> f).toMap
+
+    val filteredFields = requestedSchema.fields.flatMap { requestedField =>
+      fileFieldMap.get(requestedField.name).map { fileField =>
+        val filteredDataType = filterDataType(requestedField.dataType, fileField.dataType)
+        StructField(requestedField.name, filteredDataType, requestedField.nullable, requestedField.metadata)
+      }
+    }
+
+    StructType(filteredFields)
+  }
+
+  /**
+   * Recursively filter data types to only include nested fields that exist in file.
+   */
+  private def filterDataType(requestedType: DataType, fileType: DataType): DataType = (requestedType, fileType) match {
+    case (requestedType, fileType) if requestedType == fileType => fileType
+
+    case (ArrayType(requestedElement, containsNull), ArrayType(fileElement, _)) =>
+      ArrayType(filterDataType(requestedElement, fileElement), containsNull)
+
+    case (MapType(requestedKey, requestedValue, valueContainsNull), MapType(fileKey, fileValue, _)) =>
+      MapType(
+        filterDataType(requestedKey, fileKey),
+        filterDataType(requestedValue, fileValue),
+        valueContainsNull
+      )
+
+    case (StructType(requestedFields), StructType(fileFields)) =>
+      val fileFieldMap = fileFields.map(f => f.name -> f).toMap
+      val filteredFields = requestedFields.flatMap { requestedField =>
+        fileFieldMap.get(requestedField.name).map { fileField =>
+          StructField(
+            requestedField.name,
+            filterDataType(requestedField.dataType, fileField.dataType),
+            requestedField.nullable,
+            requestedField.metadata
+          )
+        }
+      }
+      StructType(filteredFields)
+
+    case _ => requestedType
+  }
+
+  /**
    * Check if a type conversion requires special handling (unsafe cast workaround).
    * Caches results for performance.
    *
@@ -269,7 +323,7 @@ object SparkSchemaTransformUtils {
   }
 
   /**
-   * Build schema change information by comparing file schema to required schema.*
+   * Build schema change information by comparing file schema to required schema.
    * Analyzes schema differences to determine:
    * 1. Which fields need type conversions (stored in typeChangeInfos map)
    * 2. The adjusted reader schema to use when reading the file
