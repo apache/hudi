@@ -19,7 +19,7 @@
 
 package org.apache.hudi.common.table.read
 
-import org.apache.hudi.{AvroConversionUtils, DataSourceWriteOptions, DefaultSparkRecordMerger, HoodieSchemaConversionUtils, SparkAdapterSupport, SparkFileFormatInternalRowReaderContext}
+import org.apache.hudi.{AvroConversionUtils, DataSourceWriteOptions, DefaultSparkRecordMerger, HoodieSchemaConversionUtils, HoodieSparkUtils, SparkAdapterSupport, SparkFileFormatInternalRowReaderContext}
 import org.apache.hudi.DataSourceWriteOptions.{OPERATION, RECORDKEY_FIELD, TABLE_TYPE}
 import org.apache.hudi.common.config.{HoodieReaderConfig, RecordMergeMode, TypedProperties}
 import org.apache.hudi.common.engine.HoodieReaderContext
@@ -89,7 +89,11 @@ class TestHoodieFileGroupReaderOnSpark extends TestHoodieFileGroupReaderBase[Int
     sparkConf.set(LEGACY_RESPECT_NULLABILITY_IN_TEXT_DATASET_CONVERSION.key, "true")
     HoodieSparkKryoRegistrar.register(sparkConf)
     spark = SparkSession.builder.config(sparkConf).getOrCreate
-    supportedFileFormats = util.Arrays.asList(HoodieFileFormat.PARQUET, HoodieFileFormat.ORC, HoodieFileFormat.LANCE)
+    supportedFileFormats = if (HoodieSparkUtils.gteqSpark3_4) {
+      util.Arrays.asList(HoodieFileFormat.PARQUET, HoodieFileFormat.ORC, HoodieFileFormat.LANCE)
+    } else {
+      util.Arrays.asList(HoodieFileFormat.PARQUET, HoodieFileFormat.ORC)
+    }
   }
 
   @AfterEach
