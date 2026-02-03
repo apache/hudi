@@ -48,6 +48,6 @@ public class ChainedSchemaPostProcessor extends SchemaPostProcessor {
     for (SchemaPostProcessor processor : processors) {
       targetSchema = processor.processSchema(targetSchema);
     }
-    return schema;
+    return targetSchema;
   }
 }

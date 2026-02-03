@@ -838,7 +838,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
           sparkSession.conf().set("spark.sql.session.timeZone", "UTC");
           sparkSession.conf().set("spark.sql.parquet.enableVectorizedReader", "false");
           Dataset<Row> df = sparkSession.read().format("hudi").load(tableBasePath);
-          assertDataframe(df, 16, 16);
+          assertDataframe(df, 15, 15, true);
 
           if ("CLUSTER".equals(operation)) {
             // after we cluster, the raw parquet should be correct
@@ -859,7 +859,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
 
             // Read raw parquet files
             Dataset<Row> rawParquetDf = sparkSession.read().parquet(baseFilePaths.toArray(new String[0]));
-            assertDataframe(rawParquetDf, 15, 15);
+            assertDataframe(rawParquetDf, 15, 15, false);
           }
         } finally {
           sparkSession.conf().set("spark.sql.session.timeZone", prevTimezone);
@@ -958,7 +958,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
           sparkSession.conf().set("spark.sql.session.timeZone", "UTC");
           Dataset<Row> df = sparkSession.read().format("hudi").load(tableBasePath);
 
-          assertDataframe(df, 12, 14);
+          assertDataframe(df, 12, 14, false);
 
           metaClient = HoodieTableMetaClient.builder()
               .setConf(hadoopConf)
@@ -978,7 +978,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
 
             // Read raw parquet files
             Dataset<Row> rawParquetDf = sparkSession.read().parquet(baseFilePaths.toArray(new String[0]));
-            assertDataframe(rawParquetDf, 12, 14);
+            assertDataframe(rawParquetDf, 12, 14, false);
           } else if ("COMPACT".equals(operation)) {
             // after compaction some files should be ok
             // Validate raw parquet files
@@ -994,7 +994,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
                 // only read the compacted ones, the others are still incorrect
                 .filter(path -> path.contains(latestInstant.get().getTimestamp()))
                 .toArray(String[]::new));
-            assertDataframe(rawParquetDf, 8, 8);
+            assertDataframe(rawParquetDf, 8, 8, false);
           }
         } finally {
           sparkSession.conf().set("spark.sql.session.timeZone", prevTimezone);
@@ -1006,23 +1006,24 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     });
   }
 
-  public static void assertDataframe(Dataset<Row> df, int above, int below) {
+  public static void assertDataframe(Dataset<Row> df, int above, int below, boolean isCOWSnapshotQuery) {
     List<Row> rows = df.collectAsList();
     assertEquals(above + below, rows.size());
 
+    int indexAdjustment = isCOWSnapshotQuery ? 0 : 1;
     for (Row row : rows) {
       String val = row.getString(6);
       int hash = val.hashCode();
       if ((hash & 1) == 0) {
-        assertEquals("2020-01-01T00:00:00.001Z", row.getTimestamp(15).toInstant().toString());
-        assertEquals("2020-06-01T12:00:00.000001Z", row.getTimestamp(16).toInstant().toString());
-        assertEquals("2015-05-20T12:34:56.001", row.get(17).toString());
-        assertEquals("2017-07-07T07:07:07.000001", row.get(18).toString());
+        assertEquals("2020-01-01T00:00:00.001Z", row.getTimestamp(14 + indexAdjustment).toInstant().toString());
+        assertEquals("2020-06-01T12:00:00.000001Z", row.getTimestamp(15 + indexAdjustment).toInstant().toString());
+        assertEquals("2015-05-20T12:34:56.001", row.get(16 + indexAdjustment).toString());
+        assertEquals("2017-07-07T07:07:07.000001", row.get(17 + indexAdjustment).toString());
       } else {
-        assertEquals("2019-12-31T23:59:59.999Z", row.getTimestamp(15).toInstant().toString());
-        assertEquals("2020-06-01T11:59:59.999999Z", row.getTimestamp(16).toInstant().toString());
-        assertEquals("2015-05-20T12:34:55.999", row.get(17).toString());
-        assertEquals("2017-07-07T07:07:06.999999", row.get(18).toString());
+        assertEquals("2019-12-31T23:59:59.999Z", row.getTimestamp(14 + indexAdjustment).toInstant().toString());
+        assertEquals("2020-06-01T11:59:59.999999Z", row.getTimestamp(15 + indexAdjustment).toInstant().toString());
+        assertEquals("2015-05-20T12:34:55.999", row.get(16 + indexAdjustment).toString());
+        assertEquals("2017-07-07T07:07:06.999999", row.get(17 + indexAdjustment).toString());
       }
     }
 
