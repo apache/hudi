@@ -26,13 +26,13 @@ import org.apache.hudi.source.split.DefaultHoodieSplitProvider;
 import org.apache.hudi.source.split.HoodieContinuousSplitBatch;
 import org.apache.hudi.source.split.HoodieContinuousSplitDiscover;
 import org.apache.hudi.source.split.HoodieSourceSplit;
+import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.utils.TestConfigurations;
 
 import org.apache.flink.api.connector.source.ReaderInfo;
 import org.apache.flink.api.connector.source.SplitEnumeratorContext;
 import org.apache.flink.api.connector.source.SplitsAssignment;
 import org.apache.flink.configuration.Configuration;
-import org.apache.flink.core.fs.Path;
 import org.apache.flink.metrics.groups.SplitEnumeratorMetricGroup;
 import org.apache.flink.metrics.groups.UnregisteredMetricsGroup;
 import org.junit.jupiter.api.BeforeEach;
@@ -76,7 +76,7 @@ public class TestHoodieContinuousSplitEnumerator {
 
     scanContext = TestScanContext.builder()
         .conf(conf)
-        .path(new Path("/tmp/test"))
+        .path(new StoragePath("/tmp/test"))
         .rowType(TestConfigurations.ROW_TYPE)
         .startInstant("20231201000000000")
         .maxPendingSplits(1000)
@@ -400,11 +400,11 @@ public class TestHoodieContinuousSplitEnumerator {
   private static class TestScanContext extends HoodieScanContext {
     private TestScanContext(
         Configuration conf,
-        Path path,
+        StoragePath path,
         org.apache.flink.table.types.logical.RowType rowType,
         String startInstant,
         long maxPendingSplits) {
-      super(conf, path, rowType, startInstant, "",0L, maxPendingSplits, false, false, false, false, false);
+      super(conf, path, rowType, startInstant, "",0L, maxPendingSplits, false, false, false, false, false, null);
     }
 
     public static Builder builder() {
@@ -413,7 +413,7 @@ public class TestHoodieContinuousSplitEnumerator {
 
     public static class Builder {
       private Configuration conf;
-      private Path path;
+      private StoragePath path;
       private org.apache.flink.table.types.logical.RowType rowType;
       private String startInstant;
       private long maxPendingSplits = 1000;
@@ -423,7 +423,7 @@ public class TestHoodieContinuousSplitEnumerator {
         return this;
       }
 
-      public Builder path(Path path) {
+      public Builder path(StoragePath path) {
         this.path = path;
         return this;
       }

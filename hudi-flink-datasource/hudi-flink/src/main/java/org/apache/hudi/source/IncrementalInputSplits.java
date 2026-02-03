@@ -329,6 +329,20 @@ public class IncrementalInputSplits implements Serializable {
   }
 
   /**
+   * Returns Hoodie source split batch for batch incremental query.
+   *
+   * @param metaClient the meta client
+   * @param cdcEnabled whether CDC is enabled
+   * @return the list of incremental input splits or empty if there are no new instants
+   */
+  public HoodieContinuousSplitBatch batchHoodieSourceSplits(
+      HoodieTableMetaClient metaClient,
+      boolean cdcEnabled) {
+    Result result = inputSplits(metaClient, cdcEnabled);
+    return HoodieContinuousSplitBatch.fromResult(result);
+  }
+
+  /**
    * Returns the input splits for streaming incremental read.
    */
   private List<MergeOnReadInputSplit> getIncInputSplits(
