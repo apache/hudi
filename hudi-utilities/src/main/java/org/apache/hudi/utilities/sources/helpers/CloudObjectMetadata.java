@@ -27,6 +27,8 @@ import java.io.Serializable;
 @AllArgsConstructor
 @Getter
 public class CloudObjectMetadata implements Serializable {
+  private static final long serialVersionUID = 1L;
+
 
   private final String path;
   private final long size;
