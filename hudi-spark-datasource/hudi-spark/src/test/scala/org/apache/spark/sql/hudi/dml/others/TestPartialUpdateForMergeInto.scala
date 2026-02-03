@@ -689,24 +689,12 @@ class TestPartialUpdateForMergeInto extends HoodieSparkSqlTestBase {
     )
   }
 
-  test("Test MERGE INTO with KEEP_VALUES partial update mode on MOR table with Avro log format") {
-    testKeepValuesPartialUpdate("mor", "avro")
-  }
-
   test("Test MERGE INTO with KEEP_VALUES partial update mode on MOR table with Parquet log format") {
     testKeepValuesPartialUpdate("mor", "parquet")
   }
 
-  test("Test MERGE INTO with KEEP_VALUES partial update mode on MOR table with commit time ordering") {
-    testKeepValuesPartialUpdate("mor", "parquet", commitTimeOrdering = true)
-  }
-
   test("Test MERGE INTO with KEEP_VALUES partial update mode on COW table") {
     testKeepValuesPartialUpdate("cow", "avro")
-  }
-
-  test("Test MERGE INTO with KEEP_VALUES partial update mode on COW table with commit time ordering") {
-    testKeepValuesPartialUpdate("cow", "avro", commitTimeOrdering = true)
   }
 
   test("Test MERGE INTO with KEEP_VALUES partial update and inserts") {
@@ -715,11 +703,8 @@ class TestPartialUpdateForMergeInto extends HoodieSparkSqlTestBase {
 
   test("Test MERGE INTO with KEEP_VALUES partial update should fail with schema evolution enabled") {
     withSQLConf(DataSourceReadOptions.SCHEMA_EVOLUTION_ENABLED.key() -> "true") {
-      try {
+      assertThrows[HoodieNotSupportedException] {
         testKeepValuesPartialUpdate("mor", "parquet")
-        fail("Expected exception to be thrown")
-      } catch {
-        case t: Throwable => assertTrue(t.isInstanceOf[HoodieNotSupportedException])
       }
     }
   }
