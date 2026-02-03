@@ -31,6 +31,7 @@ import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.hive.ddl.DDLExecutor;
+import org.apache.hudi.hive.ddl.HMSDDLExecutor;
 import org.apache.hudi.hive.ddl.HiveQueryDDLExecutor;
 import org.apache.hudi.hive.ddl.HiveSyncMode;
 import org.apache.hudi.hive.ddl.JDBCExecutor;
@@ -95,7 +96,8 @@ public class HoodieHiveSyncClient extends HoodieSyncClient {
         HiveSyncMode syncMode = HiveSyncMode.of(config.getString(HIVE_SYNC_MODE));
         switch (syncMode) {
           case HMS:
-            throw new UnsupportedOperationException("HMS sync mode is not supported.");
+            ddlExecutor = new HMSDDLExecutor(config, this.client);
+            break;
           case HIVEQL:
             ddlExecutor = new HiveQueryDDLExecutor(config, this.client);
             break;

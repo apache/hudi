@@ -128,6 +128,7 @@ public class TestHiveSyncTool {
 
   private static final List<Object> SYNC_MODES = Arrays.asList(
       "hiveql",
+      "hms",
       "jdbc");
 
   private static Iterable<Object> syncMode() {
