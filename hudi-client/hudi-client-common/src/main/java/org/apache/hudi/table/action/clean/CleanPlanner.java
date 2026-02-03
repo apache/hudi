@@ -239,19 +239,21 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
         HoodieReplaceCommitMetadata replaceCommitMetadata =
             hoodieTable.getActiveTimeline().readReplaceCommitMetadata(instant);
         return Stream.concat(replaceCommitMetadata.getPartitionToReplaceFileIds().keySet().stream(), replaceCommitMetadata.getPartitionToWriteStats().keySet().stream());
-      } else if (HoodieTimeline.COMMIT_ACTION.equals(instant.getAction())) {
+      } else {
+        if (HoodieTimeline.DELTA_COMMIT_ACTION.equals(instant.getAction())) {
+          // Deltacommits only create log files and by themselves don't "leave behind" any (older version) base/log files to cleanup
+          return Stream.empty();
+        }
         HoodieCommitMetadata commitMetadata =
             hoodieTable.getActiveTimeline().readCommitMetadata(instant);
         if (hoodieTable.getMetaClient().getTableType().equals(HoodieTableType.COPY_ON_WRITE)) {
           // For COW only check partitions where the write updated a file slice (leaving behind an older version of the file slice to clean)
+          // Since some partitions may have only had new file slices created (not leaving behind anything to clean yet)
           return commitMetadata.getWritePartitionPathsWithUpdatedFileGroups().stream();
         } else {
-          // For MOR check all partitions targeted by compaction (since older base (and log) files in the file slice will need to be cleaned up)
+          // For other cases like MOR compaction, fall back to checking all partitions affected
           return commitMetadata.getPartitionToWriteStats().keySet().stream();
         }
-      } else {
-        // MOR Deltacommits don't "leave behind" any older base
-        return Stream.empty();
       }
     } catch (IOException e) {
       throw new HoodieIOException(e.getMessage(), e);
