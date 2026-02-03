@@ -340,7 +340,7 @@ public class MarkerDirState implements Serializable {
    *
    * @param fileIndex  Marker file index number.
    * @param markerName Marker name.
-   * @param requestId Optional request ID for idempotency; null for legacy or recovery.
+   * @param requestId Request ID for idempotency; null for recovery.
    */
   private void addMarkerToMap(int fileIndex, String markerName, String requestId) {
     markerToRequestIdMap.put(markerName, requestId == null ? NULL_REQUEST_ID : requestId);
