@@ -243,6 +243,7 @@ public class TestHoodieSparkMergeOnReadTableInsertUpdateDelete extends SparkClie
 
       Option<String> compactionInstant = client.scheduleCompaction(Option.empty());
       client.compact(compactionInstant.get());
+      client.getHeartbeatClient().stop(compactionInstant.get());
 
       // trigger compaction again.
       client.compact(compactionInstant.get());
