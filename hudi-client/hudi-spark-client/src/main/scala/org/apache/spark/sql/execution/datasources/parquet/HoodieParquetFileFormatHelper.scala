@@ -25,7 +25,7 @@ import org.apache.spark.sql.execution.datasources.SparkSchemaTransformUtils
 import org.apache.spark.sql.types.{DataType, StructType}
 
 object HoodieParquetFileFormatHelper {
-  
+
   def buildImplicitSchemaChangeInfo(hadoopConf: Configuration,
                                     parquetFileMetaData: FileMetaData,
                                     requiredSchema: StructType): (java.util.Map[Integer, org.apache.hudi.common.util.collection.Pair[DataType, DataType]], StructType) = {

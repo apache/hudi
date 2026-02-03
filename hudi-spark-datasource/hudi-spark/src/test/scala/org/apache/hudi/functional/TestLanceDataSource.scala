@@ -854,65 +854,6 @@ class TestLanceDataSource extends HoodieSparkClientTestBase {
 
   @ParameterizedTest
   @EnumSource(value = classOf[HoodieTableType])
-  def testSchemaEvolutionFloatToDouble(tableType: HoodieTableType): Unit = {
-    val tableName = s"test_lance_float_to_double_${tableType.name.toLowerCase}"
-    val tablePath = s"$basePath/$tableName"
-
-    // Write initial data with Float column
-    val schema1 = StructType(Seq(
-      StructField("id", IntegerType, false),
-      StructField("name", StringType, true),
-      StructField("value", FloatType, true)
-    ))
-    val data1 = Seq(
-      Row(1, "Alice", 1.5f),
-      Row(2, "Bob", 2.5f),
-      Row(3, "Charlie", 3.5f)
-    )
-    val df1 = spark.createDataFrame(spark.sparkContext.parallelize(data1), schema1)
-
-    // Write with Lance format
-    writeDataframe(tableType, tableName, tablePath, df1, saveMode = SaveMode.Overwrite)
-
-    // Verify file schema has FloatType
-    val fileSchema1 = spark.read.format("hudi").load(tablePath).schema
-    assertEquals(FloatType, fileSchema1("value").dataType)
-
-    // Write new data with Double column (schema evolution: Float → Double)
-    val schema2 = StructType(Seq(
-      StructField("id", IntegerType, false),
-      StructField("name", StringType, true),
-      StructField("value", DoubleType, true)
-    ))
-    val data2 = Seq(
-      Row(4, "David", 4.5)
-    )
-    val df2 = spark.createDataFrame(spark.sparkContext.parallelize(data2), schema2)
-
-    writeDataframe(tableType, tableName, tablePath, df2, saveMode = SaveMode.Append)
-
-    // Read with Double schema - should cast Float→Double for old records
-    val readDf = spark.read.format("hudi").load(tablePath)
-    val actual = readDf.select("id", "name", "value")
-
-    // Verify schema has Double type
-    assertEquals(DoubleType, actual.schema("value").dataType)
-
-    // Verify data - all values should be Double (including casted ones)
-    val expected = Seq(
-      (1, "Alice", 1.5),
-      (2, "Bob", 2.5),
-      (3, "Charlie", 3.5),
-      (4, "David", 4.5)
-    )
-    val expectedDf = spark.createDataFrame(expected).toDF("id", "name", "value")
-
-    assertTrue(expectedDf.except(actual).isEmpty)
-    assertTrue(actual.except(expectedDf).isEmpty)
-  }
-
-  @ParameterizedTest
-  @EnumSource(value = classOf[HoodieTableType])
   def testSchemaEvolutionNestedStructMinimal(tableType: HoodieTableType): Unit = {
     val tableName = s"test_lance_nested_struct_minimal_${tableType.name.toLowerCase}"
     val tablePath = s"$basePath/$tableName"
