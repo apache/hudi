@@ -34,6 +34,7 @@ import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
+import io.javalin.http.Context;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.hadoop.util.StringUtils;
 
@@ -71,7 +72,7 @@ public class MarkerDirState implements Serializable {
   private final StoragePath markerDirPath;
   private final HoodieStorage storage;
   private final Registry metricsRegistry;
-  // Marker name -> request ID (empty string sentinel when TLS recovers from crash or for legacy clients).
+  // Marker name -> request ID (empty string sentinel when TLS recovers from crash).
   // Enables idempotent retries: same requestId for same marker is treated as success.
   private final Map<String, String> markerToRequestIdMap = new ConcurrentHashMap<>();
   // A cached copy of marker entries in each marker file, stored in StringBuilder
@@ -82,8 +83,9 @@ public class MarkerDirState implements Serializable {
   // {@code true} means the file is in use by a {@code BatchCreateMarkerRunnable}.
   // Index of the list is used for the filename, i.e., "1" -> "MARKERS1"
   private final List<Boolean> threadUseStatus;
-  // A list of pending futures from async marker creation requests
-  private final List<MarkerCreationFuture> markerCreationFutures = new ArrayList<>();
+  // Map of in-flight requests: (markerName + "|" + requestId) -> MarkerCreationFuture
+  // Used for BOTH deduplication AND batch marker creation requests queue
+  private final Map<String, MarkerCreationFuture> inflightRequestMap = new ConcurrentHashMap<>();
   private final int parallelism;
   private final Object markerCreationProcessingLock = new Object();
   // Early conflict detection strategy if enabled
@@ -128,15 +130,27 @@ public class MarkerDirState implements Serializable {
   }
 
   /**
-   * Adds a {@code MarkerCreationCompletableFuture} instance from a marker
-   * creation request to the queue.
+   * Checks if an identical in-flight request exists and returns it, or creates a new future.
+   * This deduplicates concurrent requests with the same marker and requestId.
    *
-   * @param future  {@code MarkerCreationCompletableFuture} instance.
+   * @param context    Javalin context
+   * @param markerName Marker name
+   * @param requestId  Request ID (non-null from clients, can be null only during recovery)
+   * @return Existing future if found, otherwise a new future
    */
-  public void addMarkerCreationFuture(MarkerCreationFuture future) {
-    synchronized (markerCreationFutures) {
-      markerCreationFutures.add(future);
+  public MarkerCreationFuture getOrCreateMarkerCreationFuture(Context context, String markerName, String requestId) {
+    String dedupKey = markerName + "|" + (requestId != null ? requestId : NULL_REQUEST_ID);
+
+    MarkerCreationFuture existingFuture = inflightRequestMap.get(dedupKey);
+    if (existingFuture != null) {
+      log.debug("Found existing in-flight request for marker {} with requestId {}. Returning same future.",
+          markerName, requestId != null ? requestId : "null");
+      return existingFuture;
     }
+
+    MarkerCreationFuture future = new MarkerCreationFuture(context, markerDirPath.toString(), markerName, requestId);
+    inflightRequestMap.put(dedupKey, future);
+    return future;
   }
 
   /**
@@ -183,21 +197,32 @@ public class MarkerDirState implements Serializable {
   }
 
   /**
-   * @param shouldClear Should clear the internal request list or not.
+   * @param shouldClear Should clear the internal request map or not.
    * @return futures of pending marker creation requests.
    */
   public List<MarkerCreationFuture> getPendingMarkerCreationRequests(boolean shouldClear) {
-    List<MarkerCreationFuture> pendingFutures;
-    synchronized (markerCreationFutures) {
-      if (markerCreationFutures.isEmpty()) {
-        return new ArrayList<>();
-      }
-      pendingFutures = new ArrayList<>(markerCreationFutures);
-      if (shouldClear) {
-        markerCreationFutures.clear();
-      }
+    if (inflightRequestMap.isEmpty()) {
+      return new ArrayList<>();
+    }
+
+    List<MarkerCreationFuture> pendingFutures = new ArrayList<>(inflightRequestMap.values());
+    if (shouldClear) {
+      inflightRequestMap.clear();
     }
     return pendingFutures;
+  }
+
+  private boolean isMarkerAlreadySeen(MarkerCreationFuture future, String markerName, String requestId) {
+    if (!markerToRequestIdMap.containsKey(markerName)) {
+      return false;
+    }
+
+    String existingRequestId = markerToRequestIdMap.get(markerName);
+    String normalizedRequestId = requestId == null ? NULL_REQUEST_ID : requestId;
+    boolean idempotentMatch = normalizedRequestId.equals(existingRequestId);
+
+    future.setIsSuccessful(idempotentMatch);
+    return true;
   }
 
   /**
@@ -216,46 +241,36 @@ public class MarkerDirState implements Serializable {
     log.debug("timeMs={} markerDirPath={} numRequests={} fileIndex={}",
         System.currentTimeMillis(), markerDirPath, pendingMarkerCreationFutures.size(), fileIndex);
     boolean shouldFlushMarkers = false;
-    
+
     synchronized (markerCreationProcessingLock) {
       for (MarkerCreationFuture future : pendingMarkerCreationFutures) {
         String markerName = future.getMarkerName();
         String requestId = future.getRequestId();
-        // Idempotent retry: marker already created with same requestId
-        if (markerToRequestIdMap.containsKey(markerName)) {
-          String existingRequestId = markerToRequestIdMap.get(markerName);
-          String normalizedRequestId = requestId == null ? NULL_REQUEST_ID : requestId;
-          boolean idempotentMatch = normalizedRequestId.equals(existingRequestId)
-              || NULL_REQUEST_ID.equals(existingRequestId)
-              || NULL_REQUEST_ID.equals(normalizedRequestId);
-          if (idempotentMatch) {
-            future.setIsSuccessful(true);
-          } else {
-            future.setIsSuccessful(false);
+
+        boolean exists = isMarkerAlreadySeen(future, markerName, requestId);
+        if (!exists) {
+          if (conflictDetectionStrategy.isPresent()) {
+            try {
+              conflictDetectionStrategy.get().detectAndResolveConflictIfNecessary();
+            } catch (HoodieEarlyConflictDetectionException he) {
+              log.error("Detected the write conflict due to a concurrent writer, "
+                  + "failing the marker creation as the early conflict detection is enabled", he);
+              future.setIsSuccessful(false);
+              continue;
+            } catch (Exception e) {
+              log.warn("Failed to execute early conflict detection. Marker creation will continue.", e);
+              // When early conflict detection fails to execute, we still allow the marker creation
+              // to continue
+              addMarkerToMap(fileIndex, markerName, requestId);
+              future.setIsSuccessful(true);
+              shouldFlushMarkers = true;
+              continue;
+            }
           }
-          continue;
+          addMarkerToMap(fileIndex, markerName, requestId);
+          future.setIsSuccessful(true);
+          shouldFlushMarkers = true;
         }
-        if (conflictDetectionStrategy.isPresent()) {
-          try {
-            conflictDetectionStrategy.get().detectAndResolveConflictIfNecessary();
-          } catch (HoodieEarlyConflictDetectionException he) {
-            log.error("Detected the write conflict due to a concurrent writer, "
-                + "failing the marker creation as the early conflict detection is enabled", he);
-            future.setIsSuccessful(false);
-            continue;
-          } catch (Exception e) {
-            log.warn("Failed to execute early conflict detection. Marker creation will continue.", e);
-            // When early conflict detection fails to execute, we still allow the marker creation
-            // to continue
-            addMarkerToMap(fileIndex, markerName, requestId);
-            future.setIsSuccessful(true);
-            shouldFlushMarkers = true;
-            continue;
-          }
-        }
-        addMarkerToMap(fileIndex, markerName, requestId);
-        future.setIsSuccessful(true);
-        shouldFlushMarkers = true;
       }
 
       if (!isMarkerTypeWritten) {

@@ -39,9 +39,11 @@ import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 import static org.apache.hudi.common.config.HoodieStorageConfig.HOODIE_STORAGE_CLASS;
+import static org.apache.hudi.common.table.marker.MarkerOperation.ALL_MARKERS_URL;
 import static org.apache.hudi.common.table.marker.MarkerOperation.CREATE_MARKER_URL;
 import static org.apache.hudi.common.table.marker.MarkerOperation.MARKER_DIR_PATH_PARAM;
 import static org.apache.hudi.common.table.marker.MarkerOperation.MARKER_NAME_PARAM;
@@ -50,6 +52,7 @@ import static org.apache.hudi.common.table.view.RemoteHoodieTableFileSystemView.
 import static org.apache.hudi.common.table.view.RemoteHoodieTableFileSystemView.LAST_INSTANT_TS;
 import static org.apache.hudi.common.table.view.RemoteHoodieTableFileSystemView.REFRESH_TABLE_URL;
 import static org.apache.hudi.common.table.view.RemoteHoodieTableFileSystemView.TIMELINE_HASH;
+import static org.apache.hudi.timeline.TimelineServiceClientBase.RequestMethod.GET;
 import static org.apache.hudi.timeline.TimelineServiceClientBase.RequestMethod.POST;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -145,8 +148,7 @@ class TestRequestHandler extends HoodieCommonTestHarness {
         .getDecodedContent(new TypeReference<Boolean>() {});
     assertTrue(result1, "First marker creation should succeed");
 
-    // Give server time to process
-    Thread.sleep(500);
+    waitForMarkerCreation(markerDir, markerName, 1000);
 
     // Retry with same requestId (simulating timeout + retry) should succeed (idempotent)
     boolean result2 = timelineServiceClient.makeRequest(
@@ -188,10 +190,9 @@ class TestRequestHandler extends HoodieCommonTestHarness {
         .getDecodedContent(new TypeReference<Boolean>() {});
     assertTrue(result1, "First marker creation (no requestId) should succeed");
 
-    // Give server time to process
-    Thread.sleep(500);
+    waitForMarkerCreation(markerDir, markerName, 1000);
 
-    // Second request: same marker with non-null requestId → should succeed (backward compat)
+    // Second request: same marker with non-null requestId → should fail (no backward compat)
     Map<String, String> queryParametersWithRequestId = new HashMap<>(queryParametersLegacy);
     queryParametersWithRequestId.put(MARKER_REQUEST_ID_PARAM, newRequestId);
 
@@ -200,7 +201,7 @@ class TestRequestHandler extends HoodieCommonTestHarness {
                 .addQueryParams(queryParametersWithRequestId)
                 .build())
         .getDecodedContent(new TypeReference<Boolean>() {});
-    assertTrue(result2, "Request with non-null requestId when marker has null should succeed (backward compat)");
+    assertFalse(result2, "Request with non-null requestId when marker has null should fail (no backward compat)");
   }
 
   private void assertMarkerCreation(String basePath, String schema) throws IOException {
@@ -231,5 +232,29 @@ class TestRequestHandler extends HoodieCommonTestHarness {
       return schemaToUse + StoragePath.SEPARATOR_CHAR + path;
     }
     throw new IllegalArgumentException("Invalid file provided");
+  }
+
+  private void waitForMarkerCreation(String markerDir, String expectedMarker, long timeoutMs)
+      throws IOException, InterruptedException {
+    long startTime = System.currentTimeMillis();
+    long pollIntervalMs = 50;
+
+    Map<String, String> queryParameters = new HashMap<>();
+    queryParameters.put(MARKER_DIR_PATH_PARAM, markerDir);
+
+    while (System.currentTimeMillis() - startTime < timeoutMs) {
+      List<String> markers = timelineServiceClient.makeRequest(
+          TimelineServiceClient.Request.newBuilder(GET, ALL_MARKERS_URL)
+              .addQueryParams(queryParameters)
+              .build())
+          .getDecodedContent(new TypeReference<List<String>>() {
+          });
+
+      if (markers != null && markers.contains(expectedMarker)) {
+        return;
+      }
+
+      Thread.sleep(pollIntervalMs);
+    }
   }
 }

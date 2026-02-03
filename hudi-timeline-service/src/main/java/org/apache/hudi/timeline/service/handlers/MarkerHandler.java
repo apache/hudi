@@ -250,11 +250,9 @@ public class MarkerHandler extends Handler {
 
   private MarkerCreationFuture addMarkerCreationRequestForAsyncProcessing(
       Context context, String markerDir, String markerName, String requestId) {
-    log.debug("Request: Create marker: {}", markerName);
-    MarkerCreationFuture future = new MarkerCreationFuture(context, markerDir, markerName, requestId);
-    // Add the future to the list
+    log.debug("Request: Create marker: {} with requestId: {}", markerName, requestId);
     MarkerDirState markerDirState = getMarkerDirState(markerDir);
-    markerDirState.addMarkerCreationFuture(future);
+    MarkerCreationFuture future = markerDirState.getOrCreateMarkerCreationFuture(context, markerName, requestId);
     if (!firstCreationRequestSeen) {
       synchronized (firstCreationRequestSeenLock) {
         if (!firstCreationRequestSeen) {
