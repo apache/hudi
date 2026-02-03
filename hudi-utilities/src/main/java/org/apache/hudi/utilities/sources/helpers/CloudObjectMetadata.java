@@ -22,8 +22,13 @@ package org.apache.hudi.utilities.sources.helpers;
 import java.io.Serializable;
 
 public class CloudObjectMetadata implements Serializable {
-  private final String path;
-  private final long size;
+  private static final long serialVersionUID = 1L;
+
+  private String path;
+  private long size;
+
+  public CloudObjectMetadata() {
+  }
 
   public CloudObjectMetadata(String path, long size) {
     this.path = path;
@@ -36,5 +41,13 @@ public class CloudObjectMetadata implements Serializable {
 
   public long getSize() {
     return size;
+  }
+
+  public void setPath(String path) {
+    this.path = path;
+  }
+
+  public void setSize(long size) {
+    this.size = size;
   }
 }

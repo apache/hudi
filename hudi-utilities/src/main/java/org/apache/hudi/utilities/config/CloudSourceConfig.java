@@ -166,6 +166,14 @@ public class CloudSourceConfig extends HoodieConfig {
       .sinceVersion("0.14.1")
       .withDocumentation("specify this value in bytes, to coalesce partitions of source dataset not greater than specified limit");
 
+  public static final ConfigProperty<Long> SOURCE_MAX_ROWS_PER_SYNC = ConfigProperty
+      .key(STREAMER_CONFIG_PREFIX + "source.cloud.data.max.rows.per.sync")
+      .defaultValue(10_000_000L)
+      .markAdvanced()
+      .withDocumentation("Maximum number of rows to process per sync round when using source limit based batching. "
+          + "This limit is applied in addition to the byte-based source limit. The sync will process rows up to "
+          + "whichever limit is reached first - the byte limit or the row limit.");
+
   public static final ConfigProperty<Integer> MAX_FETCH_TIME_PER_SYNC_SECS = ConfigProperty
       .key(STREAMER_CONFIG_PREFIX + "source.cloud.meta.max.fetch.time.per.sync.secs")
       .defaultValue(60)

@@ -244,11 +244,12 @@ public class IncrSourceHelper {
    *
    * @param sourceData  Source dataset
    * @param sourceLimit Max number of bytes to be read from source
+   * @param rowLimit    Max number of rows to be read from source
    * @param queryInfo   Query Info
    * @return end instants along with filtered rows.
    */
   public static Pair<CloudObjectIncrCheckpoint, Option<Dataset<Row>>> filterAndGenerateCheckpointBasedOnSourceLimit(Dataset<Row> sourceData,
-                                                                                                                    long sourceLimit, QueryInfo queryInfo,
+                                                                                                                    long sourceLimit, long rowLimit, QueryInfo queryInfo,
                                                                                                                     CloudObjectIncrCheckpoint cloudObjectIncrCheckpoint) {
     if (sourceData.isEmpty()) {
       // There is no file matching the prefix.
@@ -287,12 +288,13 @@ public class IncrSourceHelper {
       }
     }
 
-    // Limit based on sourceLimit
+    // Limit based on sourceLimit and rowLimit
     WindowSpec windowSpec = Window.orderBy(col(queryInfo.getOrderColumn()), col(queryInfo.getKeyColumn()));
     // Add the 'cumulativeSize' column with running sum of 'limitColumn'
     Dataset<Row> aggregatedData = orderedDf.withColumn(CUMULATIVE_COLUMN_NAME,
         sum(col(queryInfo.getLimitColumn())).over(windowSpec));
     Dataset<Row> collectedRows = aggregatedData.filter(col(CUMULATIVE_COLUMN_NAME).leq(sourceLimit));
+    collectedRows = collectedRows.limit((int) Math.min(rowLimit, Integer.MAX_VALUE));
 
     Row row = null;
     if (collectedRows.isEmpty()) {
