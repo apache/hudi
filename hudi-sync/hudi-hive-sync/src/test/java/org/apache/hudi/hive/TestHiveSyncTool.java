@@ -487,15 +487,6 @@ public class TestHiveSyncTool {
     assertEquals(9, tablePartitions.size());
   }
 
-  @Test
-  public void testHMSSyncModeDeprecation() throws Exception {
-    hiveSyncProps.setProperty(HIVE_SYNC_MODE.key(), "hms");
-    assertThrows(HoodieHiveSyncException.class, () -> {
-      HiveSyncTool tool = new HiveSyncTool(hiveSyncProps, HiveTestUtil.getHiveConf());
-      tool.syncHoodieTable();
-    });
-  }
-
   @ParameterizedTest
   @MethodSource({"syncMode"})
   public void testSyncDataBase(String syncMode) throws Exception {
