@@ -311,24 +311,23 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
     HoodieTimeline pendingCompactionTimeline = table.getActiveTimeline().filterPendingCompactionTimeline();
     InstantGenerator instantGenerator = table.getMetaClient().getInstantGenerator();
     HoodieInstant inflightInstant = instantGenerator.getCompactionInflightInstant(compactionInstantTime);
-    if (config.getWriteConcurrencyMode().supportsMultiWriter()) {
+    try {
+      // Transaction serves to ensure only one compact job for this instant will start heartbeat, and any other concurrent
+      // compact job will abort if they attempt to execute compact before heartbeat expires
+      // Note that as long as all jobs for this table use this API for compact, then this alone should prevent
+      // compact rollbacks from running concurrently to compact commits.
+      txnManager.beginStateChange(Option.of(inflightInstant), txnManager.getLastCompletedTransactionOwner());
       try {
-        // Transaction serves to ensure only one compact job for this instant will start heartbeat, and any other concurrent
-        // compact job will abort if they attempt to execute compact before heartbeat expires
-        // Note that as long as all jobs for this table use this API for compact, then this alone should prevent
-        // compact rollbacks from running concurrently to compact commits.
-        txnManager.beginStateChange(Option.of(inflightInstant), txnManager.getLastCompletedTransactionOwner());
-        try {
-          if (!this.heartbeatClient.isHeartbeatExpired(compactionInstantTime)) {
-            throw new HoodieLockException("Cannot compact instant " + compactionInstantTime + " due to heartbeat by concurrent writer/job");
-          }
-        } catch (IOException e) {
-          throw new HoodieHeartbeatException("Error accessing heartbeat of instant to compact " + compactionInstantTime, e);
+        // If heartbeat is active but
+        if (!this.heartbeatClient.isHeartbeatExpired(compactionInstantTime) && this.heartbeatClient.getHeartbeat(compactionInstantTime) == null) {
+          throw new HoodieLockException("Cannot compact instant " + compactionInstantTime + " due to heartbeat by concurrent writer/job");
         }
-        this.heartbeatClient.start(compactionInstantTime);
-      } finally {
-        txnManager.endStateChange(Option.of(inflightInstant));
+      } catch (IOException e) {
+        throw new HoodieHeartbeatException("Error accessing heartbeat of instant to compact " + compactionInstantTime, e);
       }
+      this.heartbeatClient.start(compactionInstantTime);
+    } finally {
+      txnManager.endStateChange(Option.of(inflightInstant));
     }
     if (pendingCompactionTimeline.containsInstant(inflightInstant)) {
       table.rollbackInflightCompaction(inflightInstant, commitToRollback -> getPendingRollbackInfo(table.getMetaClient(), commitToRollback, false), txnManager);
@@ -391,10 +390,8 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
       log.info("Committing Compaction {}", compactionCommitTime);
       CompactHelpers.getInstance().completeInflightCompaction(table, compactionCommitTime, metadata);
       log.debug("Compaction {} finished with result: {}", compactionCommitTime, metadata);
-      if (config.getWriteConcurrencyMode().supportsMultiWriter()) {
-        HeartbeatUtils.abortIfHeartbeatExpired(compactionCommitTime, table, heartbeatClient, config);
-        releaseResources(compactionCommitTime);
-      }
+      HeartbeatUtils.abortIfHeartbeatExpired(compactionCommitTime, table, heartbeatClient, config);
+      releaseResources(compactionCommitTime);
     } finally {
       this.txnManager.endStateChange(Option.of(compactionInstant));
     }
