@@ -277,7 +277,7 @@ public class TestHoodieFileSystemViews extends HoodieClientTestBase {
   static void assertBaseFileEquality(HoodieBaseFile baseFile1, HoodieBaseFile baseFile2) {
     assertEquals(baseFile1.getFileName(), baseFile2.getFileName());
     assertEquals(baseFile1.getFileId(), baseFile2.getFileId());
-    assertEquals(baseFile1.getFileLen(), baseFile2.getFileLen());
+    assertEquals(baseFile1.getFileSize(), baseFile2.getFileSize());
     assertEquals(baseFile1.getFileSize(), baseFile2.getFileSize());
   }
 

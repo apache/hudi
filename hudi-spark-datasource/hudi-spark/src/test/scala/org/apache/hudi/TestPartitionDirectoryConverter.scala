@@ -122,7 +122,7 @@ class TestPartitionDirectoryConverter extends SparkAdapterSupport {
     val baseFile = fileSlice.getBaseFile
     val logFiles = fileSlice.getLogFiles
     val baseRecordNum = if (baseFile.isPresent) {
-      (baseFile.get().getFileLen / fixedSizePerRecordWithParquetFormat).toInt
+      (baseFile.get().getFileSize / fixedSizePerRecordWithParquetFormat).toInt
     } else {
       0
     }
