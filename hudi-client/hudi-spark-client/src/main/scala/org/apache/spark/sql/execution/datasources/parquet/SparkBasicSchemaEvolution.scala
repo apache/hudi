@@ -22,7 +22,8 @@ package org.apache.spark.sql.execution.datasources.parquet
 import org.apache.hudi.SparkAdapterSupport.sparkAdapter
 import org.apache.hudi.common.model.HoodieFileFormat
 import org.apache.spark.sql.HoodieSchemaUtils
-import org.apache.spark.sql.catalyst.expressions.UnsafeProjection
+import org.apache.spark.sql.catalyst.InternalRow
+import org.apache.spark.sql.catalyst.expressions.{UnsafeProjection, UnsafeRow}
 import org.apache.spark.sql.execution.datasources.SparkSchemaTransformUtils
 import org.apache.spark.sql.types.{ArrayType, DataType, MapType, StructField, StructType}
 
@@ -113,7 +114,7 @@ class SparkBasicSchemaEvolution(fileSchema: StructType,
 
     fileFormat match {
       case HoodieFileFormat.PARQUET =>
-        HoodieParquetFileFormatHelper.generateUnsafeProjection(
+        SparkSchemaTransformUtils.generateUnsafeProjection(
           schemaUtils.toAttributes(requiredSchema),
           Some(sessionLocalTimeZone),
           implicitTypeChangeInfo,
@@ -122,14 +123,28 @@ class SparkBasicSchemaEvolution(fileSchema: StructType,
           schemaUtils
         )
       case HoodieFileFormat.LANCE =>
-        // Lance requires NULL padding for missing columns
+        // Lance requires NULL padding for missing columns and can only read columns present in file
         val requestSchema = getRequestSchema
-        SparkSchemaTransformUtils.generateProjectionWithPadding(
-          schemaUtils.toAttributes(requestSchema),
-          requiredSchema,
-          implicitTypeChangeInfo,
-          Some(sessionLocalTimeZone)
+        // create a projection which will just handle null padding logic only
+        val paddingProj = SparkSchemaTransformUtils.generateNullPaddingProjection(
+          requestSchema,
+          requiredSchema
         )
+
+        // leverage existing generateUnsafeProjection which handles casting logic
+        val castProj = SparkSchemaTransformUtils.generateUnsafeProjection(
+          schemaUtils.toAttributes(requiredSchema),
+          Some(sessionLocalTimeZone),
+          implicitTypeChangeInfo,
+          requiredSchema,
+          new StructType(),
+          schemaUtils
+        )
+
+        // Finally unify projections through chaining with padding first and then casting
+        new UnsafeProjection {
+          def apply(row: InternalRow): UnsafeRow = castProj(paddingProj(row))
+        }
       case _ =>
         throw new UnsupportedOperationException(s"Unsupported file format: $fileFormat")
     }

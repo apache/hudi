@@ -19,8 +19,9 @@
 
 package org.apache.spark.sql.execution.datasources
 
+import org.apache.spark.sql.HoodieSchemaUtils
 import org.apache.spark.sql.catalyst.expressions.codegen.GenerateUnsafeProjection
-import org.apache.spark.sql.catalyst.expressions.{ArrayTransform, Attribute, Cast, CreateNamedStruct, CreateStruct, Expression, GetStructField, LambdaFunction, Literal, MapEntries, MapFromEntries, NamedLambdaVariable, UnsafeProjection}
+import org.apache.spark.sql.catalyst.expressions.{ArrayTransform, Attribute, AttributeReference, Cast, CreateNamedStruct, CreateStruct, Expression, GetStructField, LambdaFunction, Literal, MapEntries, MapFromEntries, NamedLambdaVariable, UnsafeProjection}
 import org.apache.spark.sql.types.{ArrayType, DataType, DateType, DecimalType, DoubleType, FloatType, IntegerType, LongType, MapType, StringType, StructField, StructType, TimestampNTZType}
 
 /**
@@ -35,70 +36,145 @@ import org.apache.spark.sql.types.{ArrayType, DataType, DateType, DecimalType, D
 object SparkSchemaTransformUtils {
 
   /**
-   * Generate UnsafeProjection that pads missing columns with NULL literals.
+   * Generate UnsafeProjection for type casting with special handling for unsupported conversions.
    *
-   * IMPORTANT: This padding behavior is required for Lance format which needs explicit NULL
-   * values for missing columns.
-   *
-   * @param fullSchema Fields actually present in the file
-   * @param requiredSchema Target output schema (may have more fields than file)
-   * @param typeChangeInfos Map of field index to (targetType, readerType) for fields needing casting
+   * @param fullSchema Complete schema including data and partition columns
    * @param timeZoneId Session timezone for timestamp conversions
-   * @return UnsafeProjection that transforms file rows to required schema with NULL padding
+   * @param typeChangeInfos Map of field index to (targetType, readerType) for fields needing casting
+   * @param requiredSchema Schema requested by the query (data columns only)
+   * @param partitionSchema Schema of partition columns
+   * @param schemaUtils Spark adapter schema utilities
+   * @return UnsafeProjection that applies type casting to rows
    */
-  def generateProjectionWithPadding(
-      fullSchema: Seq[Attribute],
-      requiredSchema: StructType,
-      typeChangeInfos: java.util.Map[Integer, org.apache.hudi.common.util.collection.Pair[DataType, DataType]],
-      timeZoneId: Option[String]
-  ): UnsafeProjection = {
-    // fullSchema will contain fields potentially not in file
-    // we also need to compare against the requiredSchema to do correct order and padding
-    val inputFieldMap = fullSchema.map(a => a.name -> a).toMap
+  def generateUnsafeProjection(fullSchema: Seq[Attribute],
+                               timeZoneId: Option[String],
+                               typeChangeInfos: java.util.Map[Integer, org.apache.hudi.common.util.collection.Pair[DataType, DataType]],
+                               requiredSchema: StructType,
+                               partitionSchema: StructType,
+                               schemaUtils: HoodieSchemaUtils): UnsafeProjection = {
+    if (typeChangeInfos.isEmpty) {
+      GenerateUnsafeProjection.generate(fullSchema, fullSchema)
+    } else {
+      // find type changed.
+      val newSchema = new StructType(requiredSchema.fields.zipWithIndex.map { case (f, i) =>
+        if (typeChangeInfos.containsKey(i)) {
+          StructField(f.name, typeChangeInfos.get(i).getRight, f.nullable, f.metadata)
+        } else f
+      })
+      val newFullSchema = schemaUtils.toAttributes(newSchema) ++ schemaUtils.toAttributes(partitionSchema)
+      val castSchema = newFullSchema.zipWithIndex.map { case (attr, i) =>
+        if (typeChangeInfos.containsKey(i)) {
+          val srcType = typeChangeInfos.get(i).getRight
+          val dstType = typeChangeInfos.get(i).getLeft
+          SparkSchemaTransformUtils.recursivelyCastExpressions(
+            attr, srcType, dstType, timeZoneId
+          )
+        } else attr
+      }
+      GenerateUnsafeProjection.generate(castSchema, newFullSchema)
+    }
+  }
 
-    // Build expressions for all required fields, padding missing columns with NULL
-    val expressions = requiredSchema.fields.zipWithIndex.map { case (field, i) =>
+  /**
+   * Generate UnsafeProjection that ONLY pads missing columns with NULL literals.
+   *
+   * @param inputSchema Schema from file (fields actually present)
+   * @param targetSchema Target output schema (may have more fields than file)
+   * @return UnsafeProjection that pads missing columns with NULLs
+   */
+  def generateNullPaddingProjection(
+      inputSchema: StructType,
+      targetSchema: StructType
+  ): UnsafeProjection = {
+    val inputAttributes = inputSchema.fields.map(f =>
+      AttributeReference(f.name, f.dataType, f.nullable)())
+    val inputFieldMap = inputAttributes.map(a => a.name -> a).toMap
+
+    // Build expressions for all target fields, padding missing columns with NULL
+    val expressions = targetSchema.fields.map { field =>
       inputFieldMap.get(field.name) match {
         case Some(attr) =>
-          // Field exists in file - apply casting if needed
-          if (typeChangeInfos.containsKey(i)) {
-            val dstType = typeChangeInfos.get(i).getLeft
-            //  use filtered attr.dataType as source
-            // typeChangeInfos.getRight() contains unfiltered schema with extra nested fields
-            recursivelyCastExpressions(attr, attr.dataType, dstType, timeZoneId, padNestedFields = true)
-          } else if (needsNestedPadding(attr.dataType, field.dataType)) {
-            // Handle nested struct padding even when not in typeChangeInfos
-            recursivelyCastExpressions(attr, attr.dataType, field.dataType, timeZoneId, padNestedFields = true)
+          // Field exists in input - check if nested padding needed
+          if (needsNestedPadding(attr.dataType, field.dataType)) {
+            recursivelyPadExpression(attr, attr.dataType, field.dataType)
           } else {
             attr
           }
         case None =>
-          // Field missing from file, use NULL literal for padding
+          // Field missing from input, use NULL literal for padding
           Literal(null, field.dataType)
       }
     }
 
-    GenerateUnsafeProjection.generate(expressions, fullSchema)
+    GenerateUnsafeProjection.generate(expressions, inputAttributes)
+  }
+
+  /**
+   * Recursively pad nested struct/array/map fields with NULLs.
+   *
+   * @param expr Source expression
+   * @param srcType Source data type
+   * @param dstType Destination data type (may have additional nested fields)
+   * @return Expression with NULL padding for missing nested fields
+   */
+  def recursivelyPadExpression(
+      expr: Expression,
+      srcType: DataType,
+      dstType: DataType
+  ): Expression = (srcType, dstType) match {
+    case (s: StructType, d: StructType) =>
+      val srcFieldMap = s.fields.zipWithIndex.map { case (f, i) => f.name -> (f, i) }.toMap
+      val structFields = d.fields.map { dstField =>
+        srcFieldMap.get(dstField.name) match {
+          case Some((srcField, srcIndex)) =>
+            val child = GetStructField(expr, srcIndex, Some(dstField.name))
+            recursivelyPadExpression(child, srcField.dataType, dstField.dataType)
+          case None =>
+            Literal(null, dstField.dataType)
+        }
+      }
+      CreateNamedStruct(d.fields.zip(structFields).flatMap {
+        case (f, c) => Seq(Literal(f.name), c)
+      })
+
+    case (ArrayType(sElementType, containsNull), ArrayType(dElementType, _))
+        if needsNestedPadding(sElementType, dElementType) =>
+      val lambdaVar = NamedLambdaVariable("element", sElementType, containsNull)
+      val body = recursivelyPadExpression(lambdaVar, sElementType, dElementType)
+      val func = LambdaFunction(body, Seq(lambdaVar))
+      ArrayTransform(expr, func)
+
+    case (MapType(sKeyType, sValType, vnull), MapType(dKeyType, dValType, _))
+        if needsNestedPadding(sKeyType, dKeyType) || needsNestedPadding(sValType, dValType) =>
+      val kv = NamedLambdaVariable("kv", new StructType()
+        .add("key", sKeyType, nullable = false)
+        .add("value", sValType, nullable = vnull), nullable = false)
+      val newKey = recursivelyPadExpression(GetStructField(kv, 0), sKeyType, dKeyType)
+      val newVal = recursivelyPadExpression(GetStructField(kv, 1), sValType, dValType)
+      val entry = CreateStruct(Seq(newKey, newVal))
+      val func = LambdaFunction(entry, Seq(kv))
+      val transformed = ArrayTransform(MapEntries(expr), func)
+      MapFromEntries(transformed)
+
+    case _ =>
+      // No padding needed, return expression as-is
+      expr
   }
 
   /**
    * Recursively cast expressions with special handling for unsupported conversions.
-   * Supports nested structs, arrays, maps with optional NULL padding.
    *
    * @param expr Source expression to cast
    * @param srcType Source data type
    * @param dstType Destination data type
    * @param timeZoneId Session timezone for timestamp conversions
-   * @param padNestedFields If true, adds NULL literals for missing nested struct fields (required for Lance).
-   *                        If false, assumes all fields exist (Parquet behavior - no padding needed).
    * @return Casted expression with workarounds for unsafe conversions
    */
   def recursivelyCastExpressions(
       expr: Expression,
       srcType: DataType,
       dstType: DataType,
-      timeZoneId: Option[String],
-      padNestedFields: Boolean = false
+      timeZoneId: Option[String]
   ): Expression = {
     lazy val needTimeZone = Cast.needsTimeZone(srcType, dstType)
     (srcType, dstType) match {
@@ -112,33 +188,18 @@ object SparkSchemaTransformUtils {
         Cast(expr, dec, if (needTimeZone) timeZoneId else None)
       case (StringType, DateType) =>
         Cast(expr, DateType, if (needTimeZone) timeZoneId else None)
-      case (s: StructType, d: StructType) if padNestedFields || hasUnsupportedConversion(s, d) =>
-        val structFields = if (padNestedFields) {
-          // Padding path: required for Lance to handle missing nested fields
-          val srcFieldMap = s.fields.zipWithIndex.map { case (f, i) => f.name -> (f, i) }.toMap
-          d.fields.map { dstField =>
-            srcFieldMap.get(dstField.name) match {
-              case Some((srcField, srcIndex)) =>
-                val child = GetStructField(expr, srcIndex, Some(dstField.name))
-                recursivelyCastExpressions(child, srcField.dataType, dstField.dataType, timeZoneId, padNestedFields)
-              case None =>
-                Literal(null, dstField.dataType)
-            }
-          }
-        } else {
-          // No-padding path: Parquet behavior, all fields assumed to exist
-          s.fields.zip(d.fields).zipWithIndex.map {
-            case ((srcField, dstField), i) =>
-              val child = GetStructField(expr, i, Some(dstField.name))
-              recursivelyCastExpressions(child, srcField.dataType, dstField.dataType, timeZoneId, padNestedFields)
-          }
+      case (s: StructType, d: StructType) if hasUnsupportedConversion(s, d) =>
+        val structFields = s.fields.zip(d.fields).zipWithIndex.map {
+          case ((srcField, dstField), i) =>
+            val child = GetStructField(expr, i, Some(dstField.name))
+            recursivelyCastExpressions(child, srcField.dataType, dstField.dataType, timeZoneId)
         }
         CreateNamedStruct(d.fields.zip(structFields).flatMap {
           case (f, c) => Seq(Literal(f.name), c)
         })
       case (ArrayType(sElementType, containsNull), ArrayType(dElementType, _)) if hasUnsupportedConversion(sElementType, dElementType) =>
         val lambdaVar = NamedLambdaVariable("element", sElementType, containsNull)
-        val body = recursivelyCastExpressions(lambdaVar, sElementType, dElementType, timeZoneId, padNestedFields)
+        val body = recursivelyCastExpressions(lambdaVar, sElementType, dElementType, timeZoneId)
         val func = LambdaFunction(body, Seq(lambdaVar))
         ArrayTransform(expr, func)
       case (MapType(sKeyType, sValType, vnull), MapType(dKeyType, dValType, _))
@@ -146,8 +207,8 @@ object SparkSchemaTransformUtils {
         val kv = NamedLambdaVariable("kv", new StructType()
           .add("key", sKeyType, nullable = false)
           .add("value", sValType, nullable = vnull), nullable = false)
-        val newKey = recursivelyCastExpressions(GetStructField(kv, 0), sKeyType, dKeyType, timeZoneId, padNestedFields)
-        val newVal = recursivelyCastExpressions(GetStructField(kv, 1), sValType, dValType, timeZoneId, padNestedFields)
+        val newKey = recursivelyCastExpressions(GetStructField(kv, 0), sKeyType, dKeyType, timeZoneId)
+        val newVal = recursivelyCastExpressions(GetStructField(kv, 1), sValType, dValType, timeZoneId)
         val entry = CreateStruct(Seq(newKey, newVal))
         val func = LambdaFunction(entry, Seq(kv))
         val transformed = ArrayTransform(MapEntries(expr), func)

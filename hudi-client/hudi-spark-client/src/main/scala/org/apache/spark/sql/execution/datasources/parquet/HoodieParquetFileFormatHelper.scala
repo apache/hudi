@@ -37,34 +37,4 @@ object HoodieParquetFileFormatHelper {
     val fileStruct = convert.convert(parquetFileMetaData.getSchema)
     SparkSchemaTransformUtils.buildImplicitSchemaChangeInfo(fileStruct, requiredSchema)
   }
-
-  def generateUnsafeProjection(fullSchema: Seq[Attribute],
-                               timeZoneId: Option[String],
-                               typeChangeInfos: java.util.Map[Integer, org.apache.hudi.common.util.collection.Pair[DataType, DataType]],
-                               requiredSchema: StructType,
-                               partitionSchema: StructType,
-                               schemaUtils: HoodieSchemaUtils): UnsafeProjection = {
-    if (typeChangeInfos.isEmpty) {
-      GenerateUnsafeProjection.generate(fullSchema, fullSchema)
-    } else {
-      // find type changed.
-      val newSchema = new StructType(requiredSchema.fields.zipWithIndex.map { case (f, i) =>
-        if (typeChangeInfos.containsKey(i)) {
-          StructField(f.name, typeChangeInfos.get(i).getRight, f.nullable, f.metadata)
-        } else f
-      })
-      val newFullSchema = schemaUtils.toAttributes(newSchema) ++ schemaUtils.toAttributes(partitionSchema)
-      val castSchema = newFullSchema.zipWithIndex.map { case (attr, i) =>
-        if (typeChangeInfos.containsKey(i)) {
-          val srcType = typeChangeInfos.get(i).getRight
-          val dstType = typeChangeInfos.get(i).getLeft
-          // Delegate to format-agnostic utility for type casting (without padding)
-          SparkSchemaTransformUtils.recursivelyCastExpressions(
-            attr, srcType, dstType, timeZoneId, padNestedFields = false
-          )
-        } else attr
-      }
-      GenerateUnsafeProjection.generate(castSchema, newFullSchema)
-    }
-  }
 }
