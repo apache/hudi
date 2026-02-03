@@ -80,9 +80,8 @@ class SparkLanceReaderBase(enableVectorizedReader: Boolean) extends SparkColumna
       // No columns requested - return empty iterator
       Iterator.empty
     } else {
-      // Track iterator and listener registration for cleanup
+      // Track iterator for cleanup
       var lanceIterator: LanceRecordIterator = null
-      var cleanupRegistered = false
 
       // Create child allocator for reading
       val allocator = HoodieArrowAllocator.newChildAllocator(getClass.getSimpleName + "-data-" + filePath,
@@ -125,10 +124,9 @@ class SparkLanceReaderBase(enableVectorizedReader: Boolean) extends SparkColumna
           filePath
         )
 
-        // Register cleanup listener and track registration
-        cleanupRegistered = Option(TaskContext.get()).exists { ctx =>
+        // Register cleanup listener
+        Option(TaskContext.get()).foreach { ctx =>
           ctx.addTaskCompletionListener[Unit](_ => lanceIterator.close())
-          true
         }
 
         // Apply lance schema evolution generateUnsafeProjection which handles NULL padding
@@ -152,13 +150,10 @@ class SparkLanceReaderBase(enableVectorizedReader: Boolean) extends SparkColumna
 
       } catch {
         case e: Exception =>
-          // Only clean up if listener wasn't registered
-          if (!cleanupRegistered) {
-            if (lanceIterator != null) {
-              lanceIterator.close()  // Close iterator which handles lifecycle for all objects
-            } else {
-              allocator.close()      // Close allocator directly
-            }
+          if (lanceIterator != null) {
+            lanceIterator.close()  // Close iterator which handles lifecycle for all objects
+          } else {
+            allocator.close()      // Close allocator directly
           }
           throw new IOException(s"Failed to read Lance file: $filePath", e)
       }
