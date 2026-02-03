@@ -20,6 +20,7 @@ package org.apache.hudi.common.table.log;
 
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieLogFile;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.util.Option;
@@ -28,7 +29,6 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 
-import org.apache.avro.Schema;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -100,14 +100,14 @@ public interface HoodieLogFormat {
     /**
      * Read log file in reverse order and check if prev block is present.
      * 
-     * @return
+     * @return {@code true} if previous block is present, {@code false} otherwise.
      */
     boolean hasPrev();
 
     /**
      * Read log file in reverse order and return prev block if present.
      * 
-     * @return
+     * @return {@link HoodieLogBlock} the previous block
      * @throws IOException
      */
     HoodieLogBlock prev() throws IOException;
@@ -297,12 +297,12 @@ public interface HoodieLogFormat {
     return new WriterBuilder();
   }
 
-  static HoodieLogFormat.Reader newReader(HoodieStorage storage, HoodieLogFile logFile, Schema readerSchema)
+  static HoodieLogFormat.Reader newReader(HoodieStorage storage, HoodieLogFile logFile, HoodieSchema readerSchema)
       throws IOException {
     return new HoodieLogFileReader(storage, logFile, readerSchema, HoodieLogFileReader.DEFAULT_BUFFER_SIZE);
   }
 
-  static HoodieLogFormat.Reader newReader(HoodieStorage storage, HoodieLogFile logFile, Schema readerSchema, boolean reverseReader) throws IOException {
+  static HoodieLogFormat.Reader newReader(HoodieStorage storage, HoodieLogFile logFile, HoodieSchema readerSchema, boolean reverseReader) throws IOException {
     return new HoodieLogFileReader(storage, logFile, readerSchema, HoodieLogFileReader.DEFAULT_BUFFER_SIZE, reverseReader);
   }
 

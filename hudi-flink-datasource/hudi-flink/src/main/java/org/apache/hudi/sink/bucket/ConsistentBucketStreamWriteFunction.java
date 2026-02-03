@@ -30,11 +30,10 @@ import org.apache.hudi.sink.clustering.update.strategy.ConsistentBucketUpdateStr
 import org.apache.hudi.sink.clustering.update.strategy.ConsistentBucketUpdateStrategy.BucketRecords;
 import org.apache.hudi.util.MutableIteratorWrapperIterator;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.table.data.binary.BinaryRowData;
 import org.apache.flink.table.types.logical.RowType;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.Arrays;
@@ -48,9 +47,8 @@ import java.util.stream.Collectors;
  * A stream write function with consistent bucket hash index.
  * The function tags each incoming record with a location of a file based on consistent bucket index.
  */
+@Slf4j
 public class ConsistentBucketStreamWriteFunction extends StreamWriteFunction {
-
-  private static final Logger LOG = LoggerFactory.getLogger(ConsistentBucketStreamWriteFunction.class);
 
   private transient ConsistentBucketUpdateStrategy updateStrategy;
 
@@ -69,7 +67,7 @@ public class ConsistentBucketStreamWriteFunction extends StreamWriteFunction {
     super.open(parameters);
     List<String> indexKeyFields = Arrays.asList(config.get(FlinkOptions.INDEX_KEY_FIELD).split(","));
     this.updateStrategy = new ConsistentBucketUpdateStrategy(this.writeClient, indexKeyFields);
-    LOG.info("Create update strategy with index key fields: {}", indexKeyFields);
+    log.info("Create update strategy with index key fields: {}", indexKeyFields);
   }
 
   @Override

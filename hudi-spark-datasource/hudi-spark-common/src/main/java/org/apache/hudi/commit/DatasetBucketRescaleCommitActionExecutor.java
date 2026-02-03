@@ -28,19 +28,18 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.data.HoodieJavaPairRDD;
 import org.apache.hudi.execution.bulkinsert.BucketIndexBulkInsertPartitionerWithRows;
 import org.apache.hudi.table.BulkInsertPartitioner;
+
+import lombok.extern.slf4j.Slf4j;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.List;
 import java.util.Map;
 
+@Slf4j
 public class DatasetBucketRescaleCommitActionExecutor extends DatasetBulkInsertOverwriteCommitActionExecutor {
 
   private static final long serialVersionUID = 1L;
-
-  private static final Logger LOG = LoggerFactory.getLogger(DatasetBucketRescaleCommitActionExecutor.class);
   private final String expression;
   private final String rule;
   private final int bucketNumber;
@@ -71,7 +70,7 @@ public class DatasetBucketRescaleCommitActionExecutor extends DatasetBulkInsertO
         bucketNumber, rule, PartitionBucketIndexHashingConfig.CURRENT_VERSION, instantTime);
     boolean res = PartitionBucketIndexHashingConfig.saveHashingConfig(hashingConfig, table.getMetaClient());
     ValidationUtils.checkArgument(res);
-    LOG.info("Finish to save hashing config {}", hashingConfig);
+    log.info("Finish to save hashing config {}", hashingConfig);
   }
 
   @Override

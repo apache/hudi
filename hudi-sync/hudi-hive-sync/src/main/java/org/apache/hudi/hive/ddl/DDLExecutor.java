@@ -63,7 +63,7 @@ public interface DDLExecutor extends AutoCloseable {
    * Fetches tableSchema for a table.
    *
    * @param tableName
-   * @return
+   * @return A map containing the schema of the table.
    */
   Map<String, String> getTableSchema(String tableName);
 

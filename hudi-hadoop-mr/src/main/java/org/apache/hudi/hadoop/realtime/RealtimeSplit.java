@@ -20,7 +20,7 @@ package org.apache.hudi.hadoop.realtime;
 
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.hadoop.InputSplitUtils;
+import org.apache.hudi.hadoop.utils.InputSplitUtils;
 import org.apache.hudi.storage.StoragePath;
 
 import org.apache.hadoop.fs.Path;

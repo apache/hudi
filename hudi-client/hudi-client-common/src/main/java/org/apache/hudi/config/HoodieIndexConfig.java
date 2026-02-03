@@ -31,8 +31,8 @@ import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.index.bucket.partition.PartitionBucketIndexRule;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.Getter;
+import lombok.extern.slf4j.Slf4j;
 
 import javax.annotation.concurrent.Immutable;
 
@@ -62,14 +62,13 @@ import static org.apache.hudi.index.HoodieIndex.IndexType.SIMPLE;
  * Indexing related config.
  */
 @Immutable
+@Slf4j
 @ConfigClassProperty(name = "Common Index Configs",
     groupName = ConfigGroups.Names.WRITE_CLIENT,
     subGroupName = ConfigGroups.SubGroupNames.INDEX,
     areCommonConfigs = true,
     description = "")
 public class HoodieIndexConfig extends HoodieConfig {
-
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieIndexConfig.class);
 
   public static final ConfigProperty<String> INDEX_TYPE = ConfigProperty
       .key("hoodie.index.type")
@@ -568,6 +567,7 @@ public class HoodieIndexConfig extends HoodieConfig {
 
   public static class Builder {
 
+    @Getter
     private EngineType engineType = EngineType.SPARK;
     private final HoodieIndexConfig hoodieIndexConfig = new HoodieIndexConfig();
 
@@ -719,12 +719,22 @@ public class HoodieIndexConfig extends HoodieConfig {
     }
 
     public Builder withIndexKeyField(String keyField) {
-      hoodieIndexConfig.setValue(BUCKET_INDEX_HASH_FIELD, keyField);
+      if (StringUtils.nonEmpty(keyField)) {
+        hoodieIndexConfig.setValue(BUCKET_INDEX_HASH_FIELD, keyField);
+      } else {
+        log.warn("'{}' wasn't set during Hoodie index building due to absent key field passed.",
+            BUCKET_INDEX_HASH_FIELD.key());
+      }
       return this;
     }
 
     public Builder withRecordKeyField(String keyField) {
-      hoodieIndexConfig.setValue(KeyGeneratorOptions.RECORDKEY_FIELD_NAME, keyField);
+      if (StringUtils.nonEmpty(keyField)) {
+        hoodieIndexConfig.setValue(KeyGeneratorOptions.RECORDKEY_FIELD_NAME, keyField);
+      } else {
+        log.warn("'{}' wasn't set during Hoodie index building due to absent key field passed.",
+            KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key());
+      }
       return this;
     }
 
@@ -760,10 +770,6 @@ public class HoodieIndexConfig extends HoodieConfig {
       }
     }
 
-    public EngineType getEngineType() {
-      return engineType;
-    }
-
     private void validateBucketIndexConfig() {
       if (hoodieIndexConfig.getString(INDEX_TYPE).equalsIgnoreCase(HoodieIndex.IndexType.BUCKET.toString())) {
         // check the bucket index hash field
@@ -787,14 +793,14 @@ public class HoodieIndexConfig extends HoodieConfig {
         if (StringUtils.isNullOrEmpty(hoodieIndexConfig.getString(BUCKET_INDEX_MAX_NUM_BUCKETS))) {
           hoodieIndexConfig.setValue(BUCKET_INDEX_MAX_NUM_BUCKETS, Integer.toString(bucketNum));
         } else if (hoodieIndexConfig.getInt(BUCKET_INDEX_MAX_NUM_BUCKETS) < bucketNum) {
-          LOG.warn("Maximum bucket number is smaller than bucket number, maximum: {}, bucketNum: {}", hoodieIndexConfig.getInt(BUCKET_INDEX_MAX_NUM_BUCKETS), bucketNum);
+          log.warn("Maximum bucket number is smaller than bucket number, maximum: {}, bucketNum: {}", hoodieIndexConfig.getInt(BUCKET_INDEX_MAX_NUM_BUCKETS), bucketNum);
           hoodieIndexConfig.setValue(BUCKET_INDEX_MAX_NUM_BUCKETS, Integer.toString(bucketNum));
         }
 
         if (StringUtils.isNullOrEmpty(hoodieIndexConfig.getString(BUCKET_INDEX_MIN_NUM_BUCKETS))) {
           hoodieIndexConfig.setValue(BUCKET_INDEX_MIN_NUM_BUCKETS, Integer.toString(bucketNum));
         } else if (hoodieIndexConfig.getInt(BUCKET_INDEX_MIN_NUM_BUCKETS) > bucketNum) {
-          LOG.warn("Minimum bucket number is larger than the bucket number, minimum: {}, bucketNum: {}", hoodieIndexConfig.getInt(BUCKET_INDEX_MIN_NUM_BUCKETS), bucketNum);
+          log.warn("Minimum bucket number is larger than the bucket number, minimum: {}, bucketNum: {}", hoodieIndexConfig.getInt(BUCKET_INDEX_MIN_NUM_BUCKETS), bucketNum);
           hoodieIndexConfig.setValue(BUCKET_INDEX_MIN_NUM_BUCKETS, Integer.toString(bucketNum));
         }
       }

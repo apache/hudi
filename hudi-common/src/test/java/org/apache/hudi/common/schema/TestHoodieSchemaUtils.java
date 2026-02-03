@@ -19,23 +19,43 @@
 package org.apache.hudi.common.schema;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
+import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.internal.schema.HoodieSchemaException;
 
 import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericRecord;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
+import java.math.BigDecimal;
+import java.math.BigInteger;
+import java.nio.ByteBuffer;
+import java.sql.Timestamp;
+import java.time.LocalDate;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Random;
 import java.util.Set;
+import java.util.UUID;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -67,6 +87,52 @@ public class TestHoodieSchemaUtils {
       + "{\"name\": \"non_pii_col\", \"type\": \"string\"},"
       + "{\"name\": \"pii_col\", \"type\": \"string\", \"column_category\": \"user_profile\"}]}";
 
+  private static final String SCHEMA_WITH_AVRO_TYPES_STR = "{\"name\":\"TestRecordAvroTypes\",\"type\":\"record\",\"fields\":["
+      // Primitive types
+      + "{\"name\":\"booleanField\",\"type\":\"boolean\"},"
+      + "{\"name\":\"intField\",\"type\":\"int\"},"
+      + "{\"name\":\"longField\",\"type\":\"long\"},"
+      + "{\"name\":\"floatField\",\"type\":\"float\"},"
+      + "{\"name\":\"doubleField\",\"type\":\"double\"},"
+      + "{\"name\":\"bytesField\",\"type\":\"bytes\"},"
+      + "{\"name\":\"stringField\",\"type\":\"string\"},"
+      + "{\"name\":\"secondLevelField\",\"type\":[\"null\", {\"name\":\"secondLevelField\",\"type\":\"record\",\"fields\":["
+      + "{\"name\":\"firstname\",\"type\":[\"null\",\"string\"],\"default\":null},"
+      + "{\"name\":\"lastname\",\"type\":[\"null\",\"string\"],\"default\":null}"
+      + "]}],\"default\":null},"
+      // Logical types
+      + "{\"name\":\"decimalField\",\"type\":\"bytes\",\"logicalType\":\"decimal\",\"precision\":20,\"scale\":5},"
+      + "{\"name\":\"timeMillisField\",\"type\":\"int\",\"logicalType\":\"time-millis\"},"
+      + "{\"name\":\"timeMicrosField\",\"type\":\"long\",\"logicalType\":\"time-micros\"},"
+      + "{\"name\":\"timestampMillisField\",\"type\":\"long\",\"logicalType\":\"timestamp-millis\"},"
+      + "{\"name\":\"timestampMicrosField\",\"type\":\"long\",\"logicalType\":\"timestamp-micros\"},"
+      + "{\"name\":\"localTimestampMillisField\",\"type\":\"long\",\"logicalType\":\"local-timestamp-millis\"},"
+      + "{\"name\":\"localTimestampMicrosField\",\"type\":\"long\",\"logicalType\":\"local-timestamp-micros\"}"
+      + "]}";
+
+  private static final String SCHEMA_WITH_NON_NULLABLE_FIELD =
+      "{\"type\": \"record\",\"name\": \"testrec3\",\"fields\": [ "
+          + "{\"name\": \"timestamp\",\"type\": \"double\"},{\"name\": \"_row_key\", \"type\": \"string\"},"
+          + "{\"name\": \"non_pii_col\", \"type\": \"string\"},"
+          + "{\"name\": \"pii_col\", \"type\": \"string\", \"column_category\": \"user_profile\"},"
+          + "{\"name\": \"nullable_field\",\"type\": [\"null\" ,\"string\"],\"default\": null},"
+          + "{\"name\": \"non_nullable_field_wo_default\",\"type\": \"string\"},"
+          + "{\"name\": \"non_nullable_field_with_default\",\"type\": \"string\", \"default\": \"dummy\"}]}";
+
+  private static String SCHEMA_WITH_NESTED_FIELD_LARGE_STR = "{\"name\":\"MyClass\",\"type\":\"record\",\"namespace\":\"com.acme.avro\",\"fields\":["
+      + "{\"name\":\"firstname\",\"type\":\"string\"},"
+      + "{\"name\":\"lastname\",\"type\":\"string\"},"
+      + "{\"name\":\"nested_field\",\"type\":[\"null\"," + SCHEMA_WITH_AVRO_TYPES_STR + "],\"default\":null},"
+      + "{\"name\":\"student\",\"type\":{\"name\":\"student\",\"type\":\"record\",\"fields\":["
+      + "{\"name\":\"firstname\",\"type\":[\"null\" ,\"string\"],\"default\": null},{\"name\":\"lastname\",\"type\":[\"null\" ,\"string\"],\"default\": null}]}}]}";
+
+  private static final String SCHEMA_WITH_DECIMAL_FIELD = "{\"type\":\"record\",\"name\":\"record\",\"fields\":["
+      + "{\"name\":\"key_col\",\"type\":[\"null\",\"int\"],\"default\":null},"
+      + "{\"name\":\"decimal_col\",\"type\":[\"null\","
+      + "{\"type\":\"bytes\",\"logicalType\":\"decimal\",\"precision\":8,\"scale\":4}],\"default\":null}]}";
+
+  private static HoodieSchema SCHEMA_WITH_NESTED_FIELD_LARGE = HoodieSchema.parse(SCHEMA_WITH_NESTED_FIELD_LARGE_STR);
+
   @Test
   public void testCreateHoodieWriteSchema() {
     // Test with operation field
@@ -92,7 +158,7 @@ public class TestHoodieSchemaUtils {
   @Test
   public void testCreateHoodieWriteSchemaValidation() {
     // Should throw on null schema
-    assertThrows(IllegalArgumentException.class, () -> HoodieSchemaUtils.createHoodieWriteSchema(null, true));
+    assertThrows(IllegalArgumentException.class, () -> HoodieSchemaUtils.createHoodieWriteSchema((String) null, true));
 
     // Should throw on empty schema
     assertThrows(IllegalArgumentException.class, () -> HoodieSchemaUtils.createHoodieWriteSchema("", true));
@@ -1244,5 +1310,1069 @@ public class TestHoodieSchemaUtils {
     assertEquals(1, newSchema.getFields().size());
     assertEquals("value1", newSchema.getProp("prop1"));
     assertEquals("newField", newSchema.getFields().get(0).name());
+  }
+
+  static Stream<Arguments> getExpectedSchemaForFields() {
+    // Projection of two nested fields. secondLevelField is entirely projected since both its fields are included
+    List<String> fields1 = Arrays.asList("nested_field.secondLevelField.firstname", "nested_field.secondLevelField.lastname");
+    // Expected schema - top level field and one nested field
+    String expectedSchema1 =
+        "{\n"
+            + "  \"type\": \"record\",\n"
+            + "  \"name\": \"MyClass\",\n"
+            + "  \"doc\": \"\",\n"
+            + "  \"namespace\": \"com.acme.avro\",\n"
+            + "  \"fields\": [\n"
+            + "    { \"name\": \"nested_field\", \"type\": [\"null\", {\n"
+            + "      \"type\": \"record\",\n"
+            + "      \"name\": \"TestRecordAvroTypes\",\n"
+            + "      \"fields\": [\n"
+            + "        { \"name\": \"secondLevelField\", \"type\": [\"null\", {\n"
+            + "          \"type\": \"record\",\n"
+            + "          \"name\": \"secondLevelField\",\n"
+            + "          \"fields\": [\n"
+            + "            { \"name\": \"firstname\", \"type\": [\"null\", \"string\"], \"default\": null },\n"
+            + "            { \"name\": \"lastname\", \"type\": [\"null\", \"string\"], \"default\": null }\n"
+            + "          ]\n"
+            + "        }], \"default\": null }\n"
+            + "      ]\n"
+            + "    }], \"default\": null }\n"
+            + "  ]\n"
+            + "}";
+
+    // Projection of first level nested field and top level field which contains the nested field
+    // Also include the nested field twice
+    // Expected schema - top level field
+    List<String> fields2 = Arrays.asList("nested_field.secondLevelField.lastname", "nested_field",
+        "nested_field.secondLevelField.lastname");
+    String expectedSchema2 =
+        "{\n"
+            + "  \"type\": \"record\",\n"
+            + "  \"name\": \"MyClass\",\n"
+            + "  \"doc\": \"\",\n"
+            + "  \"namespace\": \"com.acme.avro\",\n"
+            + "  \"fields\": [\n"
+            + "    { \"name\": \"nested_field\", \"type\": [\"null\", " + SCHEMA_WITH_AVRO_TYPES_STR + "], \"default\": null }\n"
+            + "  ]\n"
+            + "}";
+
+    // Projection of non overlapping nested field and top level field with nested fields
+    // Expected schema - top level field and one nested field
+    List<String> fields3 = Arrays.asList("student.lastname", "nested_field");
+    String expectedSchema3 =
+        "{\n"
+            + "  \"type\": \"record\",\n"
+            + "  \"name\": \"MyClass\",\n"
+            + "  \"doc\": \"\",\n"
+            + "  \"namespace\": \"com.acme.avro\",\n"
+            + "  \"fields\": [\n"
+            + "    { \"name\": \"nested_field\", \"type\": [\"null\", " + SCHEMA_WITH_AVRO_TYPES_STR + "], \"default\": null },\n"
+            + "    { \"name\": \"student\", \"type\": {\n"
+            + "      \"type\": \"record\",\n"
+            + "      \"name\": \"student\",\n"
+            + "      \"fields\": [\n"
+            + "        { \"name\": \"lastname\", \"type\": [\"null\", \"string\"], \"default\": null }\n"
+            + "      ]\n"
+            + "    }}\n"
+            + "  ]\n"
+            + "}";
+
+    // Projection of two nested fields
+    // Expected schema - two nested fields
+    List<String> fields4 = Arrays.asList("student.lastname", "nested_field.secondLevelField.lastname");
+    String expectedSchema4 =
+        "{\n"
+            + "  \"type\": \"record\",\n"
+            + "  \"name\": \"MyClass\",\n"
+            + "  \"doc\": \"\",\n"
+            + "  \"namespace\": \"com.acme.avro\",\n"
+            + "  \"fields\": [\n"
+            + "    { \"name\": \"nested_field\", \"type\": [\"null\", {\n"
+            + "      \"type\": \"record\",\n"
+            + "      \"name\": \"TestRecordAvroTypes\",\n"
+            + "      \"fields\": [\n"
+            + "        { \"name\": \"secondLevelField\", \"type\": [\"null\", {\n"
+            + "          \"type\": \"record\",\n"
+            + "          \"name\": \"secondLevelField\",\n"
+            + "          \"fields\": [\n"
+            + "            { \"name\": \"lastname\", \"type\": [\"null\", \"string\"], \"default\": null }\n"
+            + "          ]\n"
+            + "        }], \"default\": null }\n"
+            + "      ]\n"
+            + "    }], \"default\": null },\n"
+            + "    { \"name\": \"student\", \"type\": {\n"
+            + "      \"type\": \"record\",\n"
+            + "      \"name\": \"student\",\n"
+            + "      \"namespace\": \"com.acme.avro\","
+            + "      \"fields\": [\n"
+            + "        { \"name\": \"lastname\", \"type\": [\"null\", \"string\"], \"default\": null }\n"
+            + "      ]\n"
+            + "    }}\n"
+            + "  ]\n"
+            + "}";
+
+    // Projection of top level field and nested field column
+    List<String> fields5 = Arrays.asList("firstname", "nested_field.secondLevelField.lastname", "nested_field.longField");
+    // Expected schema - top level field and one nested field
+    String expectedSchema5 =
+        "{\n"
+            + "  \"type\": \"record\",\n"
+            + "  \"name\": \"MyClass\",\n"
+            + "  \"doc\": \"\",\n"
+            + "  \"namespace\": \"com.acme.avro\",\n"
+            + "  \"fields\": [\n"
+            + "    { \"name\": \"firstname\", \"type\": \"string\" },\n"
+            + "    { \"name\": \"nested_field\", \"type\": [\"null\", {\n"
+            + "      \"type\": \"record\",\n"
+            + "      \"name\": \"TestRecordAvroTypes\",\n"
+            + "      \"fields\": [\n"
+            + "        { \"name\": \"longField\", \"type\": \"long\" },\n"
+            + "        { \"name\": \"secondLevelField\", \"type\": [\"null\", {\n"
+            + "          \"type\": \"record\",\n"
+            + "          \"name\": \"secondLevelField\",\n"
+            + "          \"fields\": [\n"
+            + "            { \"name\": \"lastname\", \"type\": [\"null\", \"string\"], \"default\": null }\n"
+            + "          ]\n"
+            + "        }], \"default\": null }\n"
+            + "      ]\n"
+            + "    }], \"default\": null }\n"
+            + "  ]\n"
+            + "}";
+
+    return Stream.of(
+        Arguments.of(fields1, expectedSchema1),
+        Arguments.of(fields2, expectedSchema2),
+        Arguments.of(fields3, expectedSchema3),
+        Arguments.of(fields4, expectedSchema4),
+        Arguments.of(fields5, expectedSchema5));
+  }
+
+  @ParameterizedTest
+  @MethodSource("getExpectedSchemaForFields")
+  void testProjectSchemaWithNullableAndNestedFields(List<String> projectedFields, String expectedSchemaStr) {
+    HoodieSchema expectedSchema = HoodieSchema.parse(expectedSchemaStr);
+    HoodieSchema projectedSchema = HoodieSchemaUtils.projectSchema(SCHEMA_WITH_NESTED_FIELD_LARGE, projectedFields);
+    assertEquals(expectedSchema, projectedSchema);
+    assertTrue(HoodieSchemaCompatibility.isSchemaCompatible(projectedSchema, expectedSchema, false));
+  }
+
+  @Test
+  public void testConvertValueForSpecificDataTypes_NullSchema() {
+    // Test with null schema - should return value unchanged
+    String testValue = "test_value";
+    Object result = HoodieSchemaUtils.convertValueForSpecificDataTypes(null, testValue, false);
+    assertEquals(testValue, result);
+  }
+
+  @Test
+  public void testConvertValueForSpecificDataTypes_NullValue_NullableSchema() {
+    // Test with null value and nullable schema - should return null
+    HoodieSchema nullableIntSchema = HoodieSchema.createNullable(HoodieSchema.create(HoodieSchemaType.INT));
+    Object result = HoodieSchemaUtils.convertValueForSpecificDataTypes(nullableIntSchema, null, false);
+    assertNull(result);
+  }
+
+  @Test
+  public void testConvertValueForSpecificDataTypes_NullValue_NonNullableSchema() {
+    // Test with null value and non-nullable schema - should throw exception
+    HoodieSchema nonNullableSchema = HoodieSchema.create(HoodieSchemaType.STRING);
+    assertThrows(IllegalStateException.class, () ->
+        HoodieSchemaUtils.convertValueForSpecificDataTypes(nonNullableSchema, null, false));
+  }
+
+  @Test
+  public void testConvertValueForSpecificDataTypes_DateLogicalType() {
+    // Create date schema
+    HoodieSchema dateSchema = HoodieSchema.createDate();
+
+    // Test value: epoch days for 2023-01-01
+    int epochDays = 19358;
+    Object result = HoodieSchemaUtils.convertValueForSpecificDataTypes(dateSchema, epochDays, false);
+    assertNotNull(result);
+    assertTrue(result instanceof LocalDate);
+    assertEquals(LocalDate.of(2023, 1, 1), result);
+  }
+
+  @Test
+  public void testConvertValueForSpecificDataTypes_TimestampMillis_Enabled() {
+    // Create timestamp-millis schema
+    HoodieSchema timestampMillisSchema = HoodieSchema.createTimestampMillis();
+
+    // Test value: milliseconds for 2023-01-01 00:00:00
+    long millis = 1672560000000L;
+    Object result = HoodieSchemaUtils.convertValueForSpecificDataTypes(timestampMillisSchema, millis, true);
+    assertNotNull(result);
+    assertTrue(result instanceof Timestamp);
+    assertEquals(new Timestamp(millis), result);
+  }
+
+  @Test
+  public void testConvertValueForSpecificDataTypes_TimestampMillis_Disabled() {
+    // Create timestamp-millis schema
+    HoodieSchema timestampMillisSchema = HoodieSchema.createTimestampMillis();
+    long millis = 1672560000000L;
+    Object result = HoodieSchemaUtils.convertValueForSpecificDataTypes(timestampMillisSchema, millis, false);
+    assertEquals(millis, result);
+  }
+
+  @Test
+  public void testConvertValueForSpecificDataTypes_TimestampMicros_Enabled() {
+    // Create timestamp-micros schema
+    HoodieSchema timestampMicrosSchema = HoodieSchema.createTimestampMicros();
+
+    // Test value: microseconds for 2023-01-01 00:00:00
+    long micros = 1672560000000000L;
+    Object result = HoodieSchemaUtils.convertValueForSpecificDataTypes(timestampMicrosSchema, micros, true);
+    assertNotNull(result);
+    assertTrue(result instanceof Timestamp);
+    assertEquals(new Timestamp(micros / 1000), result);
+  }
+
+  @Test
+  public void testConvertValueForSpecificDataTypes_DecimalBytes() {
+    // Create decimal schema with precision=10, scale=2
+    HoodieSchema decimalSchema = HoodieSchema.createDecimal(10, 2);
+
+    // Create test value: 1234.56
+    BigDecimal expectedDecimal = new BigDecimal("1234.56");
+    ByteBuffer byteBuffer = ByteBuffer.wrap(expectedDecimal.unscaledValue().toByteArray());
+    Object result = HoodieSchemaUtils.convertValueForSpecificDataTypes(decimalSchema, byteBuffer, false);
+    assertNotNull(result);
+    assertTrue(result instanceof BigDecimal);
+    assertEquals(expectedDecimal, result);
+  }
+
+  @Test
+  public void testConvertValueForSpecificDataTypes_NonLogicalType() {
+    // Test with non-logical type (plain string) - should return unchanged
+    HoodieSchema stringSchema = HoodieSchema.create(HoodieSchemaType.STRING);
+    String testValue = "test_string";
+    Object result = HoodieSchemaUtils.convertValueForSpecificDataTypes(stringSchema, testValue, false);
+    assertEquals(testValue, result);
+  }
+
+  @Test
+  public void testConvertValueForSpecificDataTypes_UnionWithNull() {
+    // Test with union type containing null
+    HoodieSchema dateSchema = HoodieSchema.createDate();
+    HoodieSchema nullableDateSchema = HoodieSchema.createNullable(dateSchema);
+
+    // Test with non-null value
+    int epochDays = 19358; // 2023-01-01
+    Object result = HoodieSchemaUtils.convertValueForSpecificDataTypes(nullableDateSchema, epochDays, false);
+    assertNotNull(result);
+    assertTrue(result instanceof LocalDate);
+    assertEquals(LocalDate.of(2023, 1, 1), result);
+  }
+
+  @Test
+  void testHasDecimalField() {
+    assertTrue(HoodieSchemaUtils.hasDecimalField(HoodieSchema.parse(SCHEMA_WITH_DECIMAL_FIELD)));
+    assertFalse(HoodieSchemaUtils.hasDecimalField(HoodieSchema.parse(EVOLVED_SCHEMA)));
+    assertFalse(HoodieSchemaUtils.hasDecimalField(HoodieSchema.parse(SCHEMA_WITH_NON_NULLABLE_FIELD)));
+    assertTrue(HoodieSchemaUtils.hasDecimalField(HoodieTestDataGenerator.HOODIE_SCHEMA));
+    assertTrue(HoodieSchemaUtils.hasDecimalField(HoodieTestDataGenerator.HOODIE_TRIP_ENCODED_DECIMAL_SCHEMA));
+    HoodieSchema recordWithMapAndArray = HoodieSchema.createRecord("recordWithMapAndArray", null, null, false,
+        Arrays.asList(
+            HoodieSchemaField.of("mapfield", HoodieSchema.createMap(HoodieSchema.create(HoodieSchemaType.INT)), null, null),
+            HoodieSchemaField.of("arrayfield", HoodieSchema.createArray(HoodieSchema.create(HoodieSchemaType.INT)), null, null)
+        ));
+    assertFalse(HoodieSchemaUtils.hasDecimalField(recordWithMapAndArray));
+    HoodieSchema recordWithDecMapAndArray = HoodieSchema.createRecord("recordWithDecMapAndArray", null, null, false,
+        Arrays.asList(
+            HoodieSchemaField.of("mapfield", HoodieSchema.createMap(HoodieSchema.createDecimal(10, 6)), null, null),
+            HoodieSchemaField.of("arrayfield", HoodieSchema.createArray(HoodieSchema.create(HoodieSchemaType.INT)), null, null)
+        ));
+    assertTrue(HoodieSchemaUtils.hasDecimalField(recordWithDecMapAndArray));
+    HoodieSchema recordWithMapAndDecArray = HoodieSchema.createRecord("recordWithMapAndDecArray", null, null, false,
+        Arrays.asList(
+            HoodieSchemaField.of("mapfield", HoodieSchema.createMap(HoodieSchema.create(HoodieSchemaType.INT)), null, null),
+            HoodieSchemaField.of("arrayfield", HoodieSchema.createArray(HoodieSchema.createDecimal(10, 6)), null, null)
+        ));
+    assertTrue(HoodieSchemaUtils.hasDecimalField(recordWithMapAndDecArray));
+  }
+
+  @Test
+  void testHasSmallPrecisionDecimalField() {
+    assertTrue(HoodieSchemaUtils.hasSmallPrecisionDecimalField(HoodieSchema.parse(SCHEMA_WITH_DECIMAL_FIELD)));
+    assertFalse(HoodieSchemaUtils.hasSmallPrecisionDecimalField(HoodieSchema.parse(SCHEMA_WITH_AVRO_TYPES_STR)));
+    assertFalse(HoodieSchemaUtils.hasSmallPrecisionDecimalField(HoodieSchema.parse(EXAMPLE_SCHEMA)));
+  }
+
+  @Test
+  void testResolveUnionSchemaWithNonUnionSchema() {
+    // Non-union schemas should be returned as-is
+    HoodieSchema stringSchema = HoodieSchema.create(HoodieSchemaType.STRING);
+    HoodieSchema result = HoodieSchemaUtils.resolveUnionSchema(stringSchema, "any");
+
+    assertSame(stringSchema, result);
+  }
+
+  @Test
+  void testResolveUnionSchemaWithSimpleNullableUnion() {
+    // Simple nullable union: ["null", "string"] should return the non-null type efficiently
+    HoodieSchema nullableString = HoodieSchema.createNullable(HoodieSchema.create(HoodieSchemaType.STRING));
+    HoodieSchema result = HoodieSchemaUtils.resolveUnionSchema(nullableString, "string");
+
+    assertEquals(HoodieSchemaType.STRING, result.getType());
+  }
+
+  @Test
+  void testResolveUnionSchemaWithSimpleNullableRecord() {
+    // Test with nullable record type
+    HoodieSchema personSchema = HoodieSchema.createRecord(
+        "Person",
+        null,
+        null,
+        Collections.singletonList(
+            HoodieSchemaField.of("name", HoodieSchema.create(HoodieSchemaType.STRING))
+        )
+    );
+
+    HoodieSchema nullablePerson = HoodieSchema.createNullable(personSchema);
+    HoodieSchema result = HoodieSchemaUtils.resolveUnionSchema(nullablePerson, "Person");
+
+    assertEquals(HoodieSchemaType.RECORD, result.getType());
+    assertEquals("Person", result.getName());
+    assertFalse(result.isNullable());
+  }
+
+  @Test
+  void testResolveUnionSchemaWithComplexUnionMatchingFullName() {
+    // Complex union with 3+ types, matching by fullName
+    String unionSchemaJson = "{"
+        + "\"type\":\"record\","
+        + "\"name\":\"Container\","
+        + "\"fields\":[{"
+        + "  \"name\":\"data\","
+        + "  \"type\":[\"null\","
+        + "    {\"type\":\"record\",\"name\":\"PersonRecord\",\"fields\":[{\"name\":\"name\",\"type\":\"string\"}]},"
+        + "    {\"type\":\"record\",\"name\":\"CompanyRecord\",\"fields\":[{\"name\":\"companyName\",\"type\":\"string\"}]}"
+        + "  ]"
+        + "}]}";
+
+    HoodieSchema containerSchema = HoodieSchema.parse(unionSchemaJson);
+    HoodieSchema dataFieldSchema = containerSchema.getField("data").get().schema();
+
+    // Resolve to PersonRecord
+    HoodieSchema personResult = HoodieSchemaUtils.resolveUnionSchema(dataFieldSchema, "PersonRecord");
+    assertEquals(HoodieSchemaType.RECORD, personResult.getType());
+    assertEquals("PersonRecord", personResult.getName());
+    assertFalse(personResult.isNullable());
+    assertTrue(personResult.getField("name").isPresent());
+
+    // Resolve to CompanyRecord
+    HoodieSchema companyResult = HoodieSchemaUtils.resolveUnionSchema(dataFieldSchema, "CompanyRecord");
+    assertEquals(HoodieSchemaType.RECORD, companyResult.getType());
+    assertEquals("CompanyRecord", companyResult.getName());
+    assertFalse(companyResult.isNullable());
+    assertTrue(companyResult.getField("companyName").isPresent());
+  }
+
+  @Test
+  void testResolveUnionSchemaWithNonNullableTwoTypeUnion() {
+    // Union of two non-nullable types should use the complex resolution path
+    String unionSchemaJson = "{"
+        + "\"type\":\"record\","
+        + "\"name\":\"Container\","
+        + "\"fields\":[{"
+        + "  \"name\":\"data\","
+        + "  \"type\":["
+        + "    {\"type\":\"record\",\"name\":\"TypeA\",\"fields\":[{\"name\":\"fieldA\",\"type\":\"string\"}]},"
+        + "    {\"type\":\"record\",\"name\":\"TypeB\",\"fields\":[{\"name\":\"fieldB\",\"type\":\"int\"}]}"
+        + "  ]"
+        + "}]}";
+
+    HoodieSchema containerSchema = HoodieSchema.parse(unionSchemaJson);
+    HoodieSchema dataFieldSchema = containerSchema.getField("data").get().schema();
+
+    // Resolve to TypeA
+    HoodieSchema typeAResult = HoodieSchemaUtils.resolveUnionSchema(dataFieldSchema, "TypeA");
+    assertEquals(HoodieSchemaType.RECORD, typeAResult.getType());
+    assertEquals("TypeA", typeAResult.getName());
+    assertFalse(typeAResult.isNullable());
+
+    // Resolve to TypeB
+    HoodieSchema typeBResult = HoodieSchemaUtils.resolveUnionSchema(dataFieldSchema, "TypeB");
+    assertEquals(HoodieSchemaType.RECORD, typeBResult.getType());
+    assertEquals("TypeB", typeBResult.getName());
+    assertFalse(typeAResult.isNullable());
+  }
+
+  @Test
+  void testResolveUnionSchemaThrowsExceptionWhenNoMatch() {
+    // Complex union where the requested fullName doesn't match any type
+    String unionSchemaJson = "{"
+        + "\"type\":\"record\","
+        + "\"name\":\"Container\","
+        + "\"fields\":[{"
+        + "  \"name\":\"data\","
+        + "  \"type\":[\"null\","
+        + "    {\"type\":\"record\",\"name\":\"PersonRecord\",\"fields\":[{\"name\":\"name\",\"type\":\"string\"}]},"
+        + "    {\"type\":\"record\",\"name\":\"CompanyRecord\",\"fields\":[{\"name\":\"companyName\",\"type\":\"string\"}]}"
+        + "  ]"
+        + "}]}";
+
+    HoodieSchema containerSchema = HoodieSchema.parse(unionSchemaJson);
+    HoodieSchema dataFieldSchema = containerSchema.getField("data").get().schema();
+
+    // Try to resolve to a type that doesn't exist in the union
+    HoodieSchemaException exception = assertThrows(
+        HoodieSchemaException.class,
+        () -> HoodieSchemaUtils.resolveUnionSchema(dataFieldSchema, "AnimalRecord")
+    );
+
+    assertTrue(exception.getMessage().contains("Unsupported UNION type"));
+    assertTrue(exception.getMessage().contains("Only UNION of a null type and a non-null type is supported"));
+  }
+
+  @Test
+  void testResolveUnionSchemaWithNamespacedRecords() {
+    // Test with fully qualified names (with namespace)
+    String unionSchemaJson = "{"
+        + "\"type\":\"record\","
+        + "\"name\":\"Container\","
+        + "\"namespace\":\"com.example\","
+        + "\"fields\":[{"
+        + "  \"name\":\"data\","
+        + "  \"type\":[\"null\","
+        + "    {\"type\":\"record\",\"name\":\"Person\",\"namespace\":\"com.example.model\",\"fields\":[{\"name\":\"name\",\"type\":\"string\"}]},"
+        + "    {\"type\":\"record\",\"name\":\"Company\",\"namespace\":\"com.example.model\",\"fields\":[{\"name\":\"name\",\"type\":\"string\"}]}"
+        + "  ]"
+        + "}]}";
+
+    HoodieSchema containerSchema = HoodieSchema.parse(unionSchemaJson);
+    HoodieSchema dataFieldSchema = containerSchema.getField("data").get().schema();
+
+    // Resolve using fully qualified name
+    HoodieSchema personResult = HoodieSchemaUtils.resolveUnionSchema(dataFieldSchema, "com.example.model.Person");
+    assertEquals(HoodieSchemaType.RECORD, personResult.getType());
+    assertEquals("Person", personResult.getName());
+    assertFalse(personResult.isNullable());
+    assertEquals("com.example.model", personResult.getNamespace().get());
+
+    // Resolve Company
+    HoodieSchema companyResult = HoodieSchemaUtils.resolveUnionSchema(dataFieldSchema, "com.example.model.Company");
+    assertEquals(HoodieSchemaType.RECORD, companyResult.getType());
+    assertEquals("Company", companyResult.getName());
+    assertFalse(companyResult.isNullable());
+  }
+
+  @Test
+  void testResolveUnionSchemaWithPrimitiveTypes() {
+    // Test union containing primitive types (although less common)
+    // Union of null and string, but passed through the full name matching path
+    HoodieSchema nullableString = HoodieSchema.createNullable(HoodieSchema.create(HoodieSchemaType.STRING));
+
+    // For simple 2-element nullable union, should use fast path
+    HoodieSchema result = HoodieSchemaUtils.resolveUnionSchema(nullableString, "string");
+    assertEquals(HoodieSchemaType.STRING, result.getType());
+  }
+
+  @Test
+  public void testToJavaDefaultValueNull() {
+    // Field with no default value
+    HoodieSchemaField field = HoodieSchemaField.of("testField", HoodieSchema.create(HoodieSchemaType.STRING));
+    Object result = HoodieSchemaUtils.toJavaDefaultValue(field);
+    assertNull(result);
+  }
+
+  @Test
+  public void testToJavaDefaultValueNullValue() {
+    // Field with explicit NULL default value
+    HoodieSchemaField field = HoodieSchemaField.of("testField",
+        HoodieSchema.createNullable(HoodieSchema.create(HoodieSchemaType.STRING)),
+        null,
+        HoodieSchema.NULL_VALUE);
+    Object result = HoodieSchemaUtils.toJavaDefaultValue(field);
+    assertNull(result);
+  }
+
+  @Test
+  public void testToJavaDefaultValueString() {
+    String defaultVal = "defaultString";
+    HoodieSchemaField field = HoodieSchemaField.of("stringField",
+        HoodieSchema.create(HoodieSchemaType.STRING),
+        null,
+        defaultVal);
+    Object result = HoodieSchemaUtils.toJavaDefaultValue(field);
+    assertEquals(defaultVal, result);
+  }
+
+  @Test
+  public void testToJavaDefaultValueInt() {
+    int defaultVal = 42;
+    HoodieSchemaField field = HoodieSchemaField.of("intField",
+        HoodieSchema.create(HoodieSchemaType.INT),
+        null,
+        defaultVal);
+    Object result = HoodieSchemaUtils.toJavaDefaultValue(field);
+    assertEquals(defaultVal, result);
+  }
+
+  @Test
+  public void testToJavaDefaultValueLong() {
+    long defaultVal = 12345L;
+    HoodieSchemaField field = HoodieSchemaField.of("longField",
+        HoodieSchema.create(HoodieSchemaType.LONG),
+        null,
+        defaultVal);
+    Object result = HoodieSchemaUtils.toJavaDefaultValue(field);
+    assertEquals(defaultVal, result);
+  }
+
+  @Test
+  public void testToJavaDefaultValueFloat() {
+    float defaultVal = 3.14f;
+    HoodieSchemaField field = HoodieSchemaField.of("floatField",
+        HoodieSchema.create(HoodieSchemaType.FLOAT),
+        null,
+        defaultVal);
+    Object result = HoodieSchemaUtils.toJavaDefaultValue(field);
+    assertEquals(defaultVal, result);
+  }
+
+  @Test
+  public void testToJavaDefaultValueDouble() {
+    double defaultVal = 2.718;
+    HoodieSchemaField field = HoodieSchemaField.of("doubleField",
+        HoodieSchema.create(HoodieSchemaType.DOUBLE),
+        null,
+        defaultVal);
+    Object result = HoodieSchemaUtils.toJavaDefaultValue(field);
+    assertEquals(defaultVal, result);
+  }
+
+  @Test
+  public void testToJavaDefaultValueBoolean() {
+    HoodieSchemaField field = HoodieSchemaField.of("boolField",
+        HoodieSchema.create(HoodieSchemaType.BOOLEAN),
+        null,
+        true);
+    Object result = HoodieSchemaUtils.toJavaDefaultValue(field);
+    assertEquals(true, result);
+  }
+
+  @Test
+  public void testToJavaDefaultValueBytes() {
+    byte[] defaultBytes = new byte[]{1, 2, 3, 4};
+    HoodieSchemaField field = HoodieSchemaField.of("bytesField",
+        HoodieSchema.create(HoodieSchemaType.BYTES),
+        null,
+        defaultBytes);
+    Object result = HoodieSchemaUtils.toJavaDefaultValue(field);
+    assertArrayEquals(defaultBytes, (byte[]) result);
+  }
+
+  @Test
+  public void testToJavaDefaultValueEnum() {
+    HoodieSchema enumSchema = HoodieSchema.createEnum("Status", null, null, Arrays.asList("ACTIVE", "INACTIVE", "PENDING"));
+    HoodieSchemaField field = HoodieSchemaField.of("statusField",
+        enumSchema,
+        null,
+        "ACTIVE");
+    Object result = HoodieSchemaUtils.toJavaDefaultValue(field);
+    assertEquals("ACTIVE", result);
+  }
+
+  @Test
+  public void testToJavaDefaultValueArray() {
+    // Create array schema with int elements
+    HoodieSchema arraySchema = HoodieSchema.createArray(HoodieSchema.create(HoodieSchemaType.INT));
+
+    // Default value as a list
+    List<Integer> defaultList = Arrays.asList(1, 2, 3);
+    HoodieSchemaField field = HoodieSchemaField.of("arrayField",
+        arraySchema,
+        null,
+        defaultList);
+
+    Object result = HoodieSchemaUtils.toJavaDefaultValue(field);
+    assertNotNull(result);
+    assertInstanceOf(Collection.class, result);
+    assertArrayEquals(defaultList.toArray(), ((Collection<?>) result).toArray());
+  }
+
+  @Test
+  public void testToJavaDefaultValueMap() {
+    // Create map schema with string values
+    HoodieSchema mapSchema = HoodieSchema.createMap(HoodieSchema.create(HoodieSchemaType.STRING));
+
+    // Default value as a map
+    Map<String, String> defaultMap = new HashMap<>();
+    defaultMap.put("key1", "value1");
+    defaultMap.put("key2", "value2");
+
+    HoodieSchemaField field = HoodieSchemaField.of("mapField",
+        mapSchema,
+        null,
+        defaultMap);
+
+    Object result = HoodieSchemaUtils.toJavaDefaultValue(field);
+    assertNotNull(result);
+    // GenericData should return a map
+    assertInstanceOf(Map.class, result);
+  }
+
+  @Test
+  public void testToJavaDefaultValueRecord() {
+    // Create nested record schema
+    HoodieSchema nestedRecordSchema = HoodieSchema.createRecord(
+        "NestedRecord",
+        null,
+        null,
+        Arrays.asList(
+            HoodieSchemaField.of("field1", HoodieSchema.create(HoodieSchemaType.STRING), null, "default1"),
+            HoodieSchemaField.of("field2", HoodieSchema.create(HoodieSchemaType.INT), null, 10)
+        )
+    );
+
+    // Create a default record value
+    Map<String, Object> defaultRecord = new HashMap<>();
+    defaultRecord.put("field1", "default1");
+    defaultRecord.put("field2", 10);
+
+    HoodieSchemaField field = HoodieSchemaField.of("recordField",
+        nestedRecordSchema,
+        null,
+        defaultRecord);
+
+    Object result = HoodieSchemaUtils.toJavaDefaultValue(field);
+    assertNotNull(result);
+    // GenericData should return a GenericRecord
+    assertInstanceOf(GenericRecord.class, result);
+  }
+
+  @Test
+  public void testToJavaDefaultValueNullableField() {
+    // Create nullable string field with default value
+    // With a non-null defaultValue, the union type must be ["string", null]
+    HoodieSchema nullableStringSchema = HoodieSchema.createUnion(
+        HoodieSchema.create(HoodieSchemaType.STRING), HoodieSchema.create(HoodieSchemaType.NULL));
+    HoodieSchemaField field = HoodieSchemaField.of("nullableField",
+        nullableStringSchema,
+        null,
+        "defaultValue");
+
+    Object result = HoodieSchemaUtils.toJavaDefaultValue(field);
+    assertEquals("defaultValue", result);
+  }
+
+  @SuppressWarnings("DataFlowIssue")
+  @Test
+  public void testToJavaDefaultValueNullFieldArgument() {
+    // Should throw IllegalArgumentException for null field
+    assertThrows(IllegalArgumentException.class, () -> HoodieSchemaUtils.toJavaDefaultValue(null));
+  }
+
+  @Test
+  public void testToJavaDefaultValueConsistencyWithAvro() {
+    // Test that HoodieSchemaUtils.toJavaDefaultValue produces equivalent results to HoodieAvroUtils.toJavaDefaultValue
+
+    // Test with primitive types
+    HoodieSchemaField stringField = HoodieSchemaField.of("stringField",
+        HoodieSchema.create(HoodieSchemaType.STRING),
+        null,
+        "test");
+
+    Object hoodieResult = HoodieSchemaUtils.toJavaDefaultValue(stringField);
+    Object avroResult = HoodieAvroUtils.toJavaDefaultValue(stringField.getAvroField());
+
+    assertEquals(avroResult, hoodieResult);
+
+    // Test with int
+    HoodieSchemaField intField = HoodieSchemaField.of("intField",
+        HoodieSchema.create(HoodieSchemaType.INT),
+        null,
+        42);
+
+    Object hoodieIntResult = HoodieSchemaUtils.toJavaDefaultValue(intField);
+    Object avroIntResult = HoodieAvroUtils.toJavaDefaultValue(intField.getAvroField());
+
+    assertEquals(avroIntResult, hoodieIntResult);
+  }
+
+  @Test
+  public void testToJavaDefaultValueFixed() {
+    // Create a fixed schema with size 4
+    HoodieSchema fixedSchema = HoodieSchema.createFixed("FixedType", null, null, 4);
+    byte[] defaultBytes = new byte[]{1, 2, 3, 4};
+    HoodieSchemaField field = HoodieSchemaField.of("fixedField",
+        fixedSchema,
+        null,
+        defaultBytes);
+    Object result = HoodieSchemaUtils.toJavaDefaultValue(field);
+    assertArrayEquals(defaultBytes, (byte[]) result);
+  }
+
+  @Test
+  public void testToJavaDefaultValueDecimal() {
+    // Create a decimal schema with precision 10 and scale 2
+    HoodieSchema decimalSchema = HoodieSchema.createDecimal(10, 2);
+    byte[] decimalBytes = BigInteger.valueOf(12345).toByteArray();
+    HoodieSchemaField field = HoodieSchemaField.of("decimalField",
+        decimalSchema,
+        null,
+        decimalBytes);
+    Object result = HoodieSchemaUtils.toJavaDefaultValue(field);
+    assertArrayEquals(decimalBytes, (byte[]) result);
+  }
+
+  @Test
+  public void testToJavaDefaultValueTimeMillis() {
+    // Create time-millis schema
+    HoodieSchema timeSchema = HoodieSchema.createTimeMillis();
+    // Time is stored as milliseconds since midnight
+    int defaultTime = 43200000; // 12:00:00 in millis
+    HoodieSchemaField field = HoodieSchemaField.of("timeField",
+        timeSchema,
+        null,
+        defaultTime);
+    Object result = HoodieSchemaUtils.toJavaDefaultValue(field);
+    assertEquals(defaultTime, result);
+  }
+
+  @Test
+  public void testToJavaDefaultValueTimeMicros() {
+    // Create time-micros schema
+    HoodieSchema timeSchema = HoodieSchema.createTimeMicros();
+    // Time is stored as microseconds since midnight
+    long defaultTime = 43200000000L; // 12:00:00 in micros
+    HoodieSchemaField field = HoodieSchemaField.of("timeField",
+        timeSchema,
+        null,
+        defaultTime);
+    Object result = HoodieSchemaUtils.toJavaDefaultValue(field);
+    assertEquals(defaultTime, result);
+  }
+
+  @Test
+  public void testToJavaDefaultValueTimestampMillis() {
+    // Create timestamp-millis schema
+    HoodieSchema timestampSchema = HoodieSchema.createTimestampMillis();
+    // Timestamp as milliseconds since epoch
+    long defaultTimestamp = 1609459200000L; // 2021-01-01 00:00:00 UTC
+    HoodieSchemaField field = HoodieSchemaField.of("timestampField",
+        timestampSchema,
+        null,
+        defaultTimestamp);
+    Object result = HoodieSchemaUtils.toJavaDefaultValue(field);
+    assertEquals(defaultTimestamp, result);
+  }
+
+  @Test
+  public void testToJavaDefaultValueTimestampMicros() {
+    // Create timestamp-micros schema
+    HoodieSchema timestampSchema = HoodieSchema.createTimestampMicros();
+    // Timestamp as microseconds since epoch
+    long defaultTimestamp = 1609459200000000L; // 2021-01-01 00:00:00 UTC in micros
+    HoodieSchemaField field = HoodieSchemaField.of("timestampField",
+        timestampSchema,
+        null,
+        defaultTimestamp);
+    Object result = HoodieSchemaUtils.toJavaDefaultValue(field);
+    assertEquals(defaultTimestamp, result);
+  }
+
+  @Test
+  public void testToJavaDefaultValueDate() {
+    // Create date schema
+    HoodieSchema dateSchema = HoodieSchema.createDate();
+    // Date is stored as days since epoch
+    int defaultDate = 18628; // 2021-01-01
+    HoodieSchemaField field = HoodieSchemaField.of("dateField",
+        dateSchema,
+        null,
+        defaultDate);
+    Object result = HoodieSchemaUtils.toJavaDefaultValue(field);
+    assertEquals(defaultDate, result);
+  }
+
+  @Test
+  public void testToJavaDefaultValueUUID() {
+    // Create UUID schema
+    HoodieSchema uuidSchema = HoodieSchema.createUUID();
+    long seed = 123456L;
+    Random random = new Random(seed);
+    long mostSigBits = random.nextLong();
+    long leastSigBits = random.nextLong();
+    String defaultUuid = new UUID(mostSigBits, leastSigBits).toString();
+    HoodieSchemaField field = HoodieSchemaField.of("uuidField",
+        uuidSchema,
+        null,
+        defaultUuid);
+    Object result = HoodieSchemaUtils.toJavaDefaultValue(field);
+    assertEquals(defaultUuid, result);
+  }
+
+  @Test
+  public void testToJavaDefaultValueLocalTimestampMillis() {
+    // Create local-timestamp-millis schema
+    HoodieSchema localTimestampSchema = HoodieSchema.createLocalTimestampMillis();
+    long defaultTimestamp = 1609459200000L;
+    HoodieSchemaField field = HoodieSchemaField.of("localTimestampField",
+        localTimestampSchema,
+        null,
+        defaultTimestamp);
+    Object result = HoodieSchemaUtils.toJavaDefaultValue(field);
+    assertEquals(defaultTimestamp, result);
+  }
+
+  @Test
+  public void testToJavaDefaultValueLocalTimestampMicros() {
+    // Create local-timestamp-micros schema
+    HoodieSchema localTimestampSchema = HoodieSchema.createLocalTimestampMicros();
+    long defaultTimestamp = 1609459200000000L;
+    HoodieSchemaField field = HoodieSchemaField.of("localTimestampField",
+        localTimestampSchema,
+        null,
+        defaultTimestamp);
+    Object result = HoodieSchemaUtils.toJavaDefaultValue(field);
+    assertEquals(defaultTimestamp, result);
+  }
+
+  @Test
+  void testLogicalTypesRetainedAfterPruneWithNestedRecords() {
+    final String logicalTypeKey = "logicalType";
+    final String customLogicalTypeRoot = "CustomLogicalTypeRoot";
+    final String customLogicalTypeNested = "CustomLogicalTypeNested";
+
+    // Create a nested record with logical type
+    HoodieSchema nestedRecord = HoodieSchema.createRecord("nested_record", "nested doc", null,
+        Arrays.asList(HoodieSchemaField.of("nested_col_0", HoodieSchema.create(HoodieSchemaType.INT)),
+        HoodieSchemaField.of("nested_col_1", HoodieSchema.create(HoodieSchemaType.STRING))));
+    nestedRecord.addProp(logicalTypeKey, customLogicalTypeNested);
+
+    // Create root record with timestamp-micros, uuid and nested record containing the nested record all with its own logical type
+    HoodieSchema dataSchema = HoodieSchema.createRecord("test", "test", null,
+        Arrays.asList(HoodieSchemaField.of("col_0", HoodieSchema.createTimestampMicros()),
+        HoodieSchemaField.of("nested", nestedRecord),
+        HoodieSchemaField.of("col_1", HoodieSchema.createUUID())));
+    dataSchema.addProp(logicalTypeKey, customLogicalTypeRoot);
+
+    Set<String> mandatoryFields = new HashSet<>(Collections.singleton("op"));
+
+    // Verify logical types are set on both root and nested records
+    assertEquals(customLogicalTypeRoot, dataSchema.getProp(logicalTypeKey));
+    Option<HoodieSchemaField> nestedFieldSchemaOpt = dataSchema.getField("nested");
+    assertTrue(nestedFieldSchemaOpt.isPresent());
+    assertEquals(customLogicalTypeNested, nestedFieldSchemaOpt.get().schema().getProp(logicalTypeKey));
+
+    // Prune the schema
+    HoodieSchema prunedSchema = HoodieSchemaUtils.pruneDataSchema(dataSchema, dataSchema, mandatoryFields);
+
+    // Verify logical types are retained on both root and nested records after pruning
+    assertEquals(customLogicalTypeRoot, prunedSchema.getProp(logicalTypeKey));
+    Option<HoodieSchemaField> prunedNestedFieldOpt = prunedSchema.getField("nested");
+    assertTrue(prunedNestedFieldOpt.isPresent());
+    assertEquals(customLogicalTypeNested, prunedNestedFieldOpt.get().schema().getProp(logicalTypeKey));
+
+    // Check that the fields that are not nested retain their logical types
+    Option<HoodieSchemaField> prunedCol0FieldOpt = prunedSchema.getField("col_0");
+    Option<HoodieSchemaField> prunedCol1FieldOpt = prunedSchema.getField("col_1");
+    assertTrue(prunedCol0FieldOpt.isPresent());
+    assertTrue(prunedCol1FieldOpt.isPresent());
+    assertEquals("timestamp-micros", prunedCol0FieldOpt.get().schema().getProp(logicalTypeKey));
+    assertEquals("uuid", prunedCol1FieldOpt.get().schema().getProp(logicalTypeKey));
+  }
+
+  @Test
+  public void testGetNestedFieldWithArrayListElement() {
+    // Create schema with array field
+    HoodieSchema schema = HoodieSchema.createRecord(
+        "TestRecord",
+        null,
+        null,
+        Arrays.asList(
+            HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.STRING)),
+            HoodieSchemaField.of("items", HoodieSchema.createArray(HoodieSchema.create(HoodieSchemaType.STRING)))
+        )
+    );
+
+    // Test: items.list.element should resolve to STRING
+    Option<Pair<String, HoodieSchemaField>> result = HoodieSchemaUtils.getNestedField(schema, "items.list.element");
+    assertTrue(result.isPresent());
+    assertEquals("items.list.element", result.get().getLeft());
+    assertEquals("element", result.get().getRight().name());
+    assertEquals(HoodieSchemaType.STRING, result.get().getRight().schema().getType());
+  }
+
+  @Test
+  public void testGetNestedFieldWithArrayListElementAndNesting() {
+    // Create schema with array of records
+    HoodieSchema nestedSchema = HoodieSchema.createRecord(
+        "NestedRecord",
+        null,
+        null,
+        Arrays.asList(
+            HoodieSchemaField.of("nested_int", HoodieSchema.create(HoodieSchemaType.INT)),
+            HoodieSchemaField.of("nested_string", HoodieSchema.create(HoodieSchemaType.STRING))
+        )
+    );
+
+    HoodieSchema schema = HoodieSchema.createRecord(
+        "TestRecord",
+        null,
+        null,
+        Arrays.asList(
+            HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.STRING)),
+            HoodieSchemaField.of("items", HoodieSchema.createArray(nestedSchema))
+        )
+    );
+
+    // Test: items.list.element.nested_int should resolve to INT
+    Option<Pair<String, HoodieSchemaField>> result = HoodieSchemaUtils.getNestedField(schema, "items.list.element.nested_int");
+    assertTrue(result.isPresent());
+    assertEquals("items.list.element.nested_int", result.get().getLeft());
+    assertEquals("nested_int", result.get().getRight().name());
+    assertEquals(HoodieSchemaType.INT, result.get().getRight().schema().getType());
+  }
+
+  @Test
+  public void testGetNestedFieldWithMapKeyValueKey() {
+    // Create schema with map field
+    HoodieSchema schema = HoodieSchema.createRecord(
+        "TestRecord",
+        null,
+        null,
+        Arrays.asList(
+            HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.STRING)),
+            HoodieSchemaField.of("metadata", HoodieSchema.createMap(HoodieSchema.create(HoodieSchemaType.INT)))
+        )
+    );
+
+    // Test: metadata.key_value.key should resolve to STRING (MAP keys are always STRING)
+    Option<Pair<String, HoodieSchemaField>> result = HoodieSchemaUtils.getNestedField(schema, "metadata.key_value.key");
+    assertTrue(result.isPresent());
+    assertEquals("metadata.key_value.key", result.get().getLeft());
+    assertEquals("key", result.get().getRight().name());
+    assertEquals(HoodieSchemaType.STRING, result.get().getRight().schema().getType());
+  }
+
+  @Test
+  public void testGetNestedFieldWithMapKeyValueValue() {
+    // Create schema with map field
+    HoodieSchema schema = HoodieSchema.createRecord(
+        "TestRecord",
+        null,
+        null,
+        Arrays.asList(
+            HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.STRING)),
+            HoodieSchemaField.of("metadata", HoodieSchema.createMap(HoodieSchema.create(HoodieSchemaType.INT)))
+        )
+    );
+
+    // Test: metadata.key_value.value should resolve to INT
+    Option<Pair<String, HoodieSchemaField>> result = HoodieSchemaUtils.getNestedField(schema, "metadata.key_value.value");
+    assertTrue(result.isPresent());
+    assertEquals("metadata.key_value.value", result.get().getLeft());
+    assertEquals("value", result.get().getRight().name());
+    assertEquals(HoodieSchemaType.INT, result.get().getRight().schema().getType());
+  }
+
+  @Test
+  public void testGetNestedFieldWithMapKeyValueValueAndNesting() {
+    // Create schema with map of records (like the original failing case)
+    HoodieSchema nestedSchema = HoodieSchema.createRecord(
+        "NestedRecord",
+        null,
+        null,
+        Arrays.asList(
+            HoodieSchemaField.of("nested_int", HoodieSchema.create(HoodieSchemaType.INT)),
+            HoodieSchemaField.of("nested_string", HoodieSchema.create(HoodieSchemaType.STRING))
+        )
+    );
+
+    HoodieSchema schema = HoodieSchema.createRecord(
+        "TestRecord",
+        null,
+        null,
+        Arrays.asList(
+            HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.STRING)),
+            HoodieSchemaField.of("nested_map", HoodieSchema.createMap(nestedSchema))
+        )
+    );
+
+    // Test: nested_map.key_value.value.nested_int should resolve to INT
+    Option<Pair<String, HoodieSchemaField>> result = HoodieSchemaUtils.getNestedField(schema, "nested_map.key_value.value.nested_int");
+    assertTrue(result.isPresent());
+    assertEquals("nested_map.key_value.value.nested_int", result.get().getLeft());
+    assertEquals("nested_int", result.get().getRight().name());
+    assertEquals(HoodieSchemaType.INT, result.get().getRight().schema().getType());
+  }
+
+  @Test
+  public void testGetNestedFieldWithInvalidArrayPath() {
+    // Create schema with array field
+    HoodieSchema schema = HoodieSchema.createRecord(
+        "TestRecord",
+        null,
+        null,
+        Arrays.asList(
+            HoodieSchemaField.of("items", HoodieSchema.createArray(HoodieSchema.create(HoodieSchemaType.STRING)))
+        )
+    );
+
+    // Test: Invalid array path should return Option.empty()
+    Option<Pair<String, HoodieSchemaField>> result = HoodieSchemaUtils.getNestedField(schema, "items.wrong.path");
+    assertFalse(result.isPresent());
+
+    // Test: Missing "element" should return Option.empty()
+    result = HoodieSchemaUtils.getNestedField(schema, "items.list.missing");
+    assertFalse(result.isPresent());
+  }
+
+  @Test
+  public void testGetNestedFieldWithInvalidMapPath() {
+    // Create schema with map field
+    HoodieSchema schema = HoodieSchema.createRecord(
+        "TestRecord",
+        null,
+        null,
+        Arrays.asList(
+            HoodieSchemaField.of("metadata", HoodieSchema.createMap(HoodieSchema.create(HoodieSchemaType.INT)))
+        )
+    );
+
+    // Test: Invalid map path should return Option.empty()
+    Option<Pair<String, HoodieSchemaField>> result = HoodieSchemaUtils.getNestedField(schema, "metadata.wrong.path");
+    assertFalse(result.isPresent());
+
+    // Test: Missing "key" or "value" should return Option.empty()
+    result = HoodieSchemaUtils.getNestedField(schema, "metadata.key_value.missing");
+    assertFalse(result.isPresent());
+  }
+
+  @Test
+  public void testGetNestedFieldComplexNestedMapAndArray() {
+    // Create complex schema: record with map of arrays of records
+    HoodieSchema innerRecord = HoodieSchema.createRecord(
+        "InnerRecord",
+        null,
+        null,
+        Arrays.asList(
+            HoodieSchemaField.of("value", HoodieSchema.create(HoodieSchemaType.LONG))
+        )
+    );
+
+    HoodieSchema arrayOfRecords = HoodieSchema.createArray(innerRecord);
+    HoodieSchema mapOfArrays = HoodieSchema.createMap(arrayOfRecords);
+
+    HoodieSchema schema = HoodieSchema.createRecord(
+        "TestRecord",
+        null,
+        null,
+        Arrays.asList(
+            HoodieSchemaField.of("complex_field", mapOfArrays)
+        )
+    );
+
+    // Test: complex_field.key_value.value.list.element.value should resolve to LONG
+    Option<Pair<String, HoodieSchemaField>> result = HoodieSchemaUtils.getNestedField(
+        schema, "complex_field.key_value.value.list.element.value");
+    assertTrue(result.isPresent());
+    assertEquals("complex_field.key_value.value.list.element.value", result.get().getLeft());
+    assertEquals("value", result.get().getRight().name());
+    assertEquals(HoodieSchemaType.LONG, result.get().getRight().schema().getType());
   }
 }

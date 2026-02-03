@@ -106,7 +106,7 @@ class HoodieStatsIndexTestBase extends HoodieSparkClientTestBase {
   }
 
   protected def getMetadataMetaClient(hudiOpts: Map[String, String]): HoodieTableMetaClient = {
-    getHoodieTable(metaClient, getWriteConfig(hudiOpts)).getMetadataTable.asInstanceOf[HoodieBackedTableMetadata].getMetadataMetaClient
+    getHoodieTable(metaClient, getWriteConfig(hudiOpts)).getTableMetadata.asInstanceOf[HoodieBackedTableMetadata].getMetadataMetaClient
   }
 
   protected def getLastInstant(): String = {
@@ -158,7 +158,7 @@ class HoodieStatsIndexTestBase extends HoodieSparkClientTestBase {
   protected def deleteLastCompletedCommitFromDataAndMetadataTimeline(hudiOpts: Map[String, String]): Unit = {
     val writeConfig = getWriteConfig(hudiOpts)
     val lastInstant = getHoodieTable(getLatestMetaClient(false), writeConfig).getCompletedCommitsTimeline.lastInstant().get()
-    val metadataTableMetaClient = getHoodieTable(metaClient, writeConfig).getMetadataTable.asInstanceOf[HoodieBackedTableMetadata].getMetadataMetaClient
+    val metadataTableMetaClient = getHoodieTable(metaClient, writeConfig).getTableMetadata.asInstanceOf[HoodieBackedTableMetadata].getMetadataMetaClient
     val metadataTableLastInstant = metadataTableMetaClient.getCommitsTimeline.lastInstant().get()
     assertTrue(storage.deleteFile(new StoragePath(metaClient.getTimelinePath, INSTANT_FILE_NAME_GENERATOR.getFileName(lastInstant))))
     assertTrue(storage.deleteFile(new StoragePath(

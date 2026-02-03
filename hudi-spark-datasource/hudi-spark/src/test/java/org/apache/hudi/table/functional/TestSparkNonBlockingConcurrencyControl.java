@@ -37,6 +37,7 @@ import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.model.PartialUpdateAvroPayload;
 import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.marker.MarkerType;
@@ -59,7 +60,6 @@ import org.apache.hudi.table.action.commit.SparkBucketIndexPartitioner;
 import org.apache.hudi.table.storage.HoodieStorageLayout;
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness;
 
-import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.fs.Path;
@@ -116,12 +116,12 @@ public class TestSparkNonBlockingConcurrencyControl extends SparkClientFunctiona
       + "  ]\n"
       + "}";
 
-  private Schema schema;
+  private HoodieSchema schema;
   private HoodieTableMetaClient metaClient;
 
   @BeforeEach
   public void setUp() throws Exception {
-    schema = new Schema.Parser().parse(jsonSchema);
+    schema = HoodieSchema.parse(jsonSchema);
   }
 
   @Test
@@ -718,7 +718,7 @@ public class TestSparkNonBlockingConcurrencyControl extends SparkClientFunctiona
   }
 
   private GenericRecord str2GenericRecord(String str) {
-    GenericRecord record = new GenericData.Record(schema);
+    GenericRecord record = new GenericData.Record(schema.toAvroSchema());
     String[] fieldValues = str.split(",");
     ValidationUtils.checkArgument(fieldValues.length == 5, "Valid record must have 5 fields");
     record.put("id", StringUtils.isNullOrEmpty(fieldValues[0]) ? null : fieldValues[0]);

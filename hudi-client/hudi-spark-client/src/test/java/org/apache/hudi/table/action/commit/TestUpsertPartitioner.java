@@ -43,9 +43,8 @@ import org.apache.hudi.table.action.cluster.ClusteringTestUtils;
 import org.apache.hudi.table.action.deltacommit.SparkUpsertDeltaCommitPartitioner;
 import org.apache.hudi.testutils.HoodieClientTestBase;
 
+import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.Test;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -61,9 +60,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+@Slf4j
 public class TestUpsertPartitioner extends HoodieClientTestBase {
-
-  private static final Logger LOG = LoggerFactory.getLogger(TestUpsertPartitioner.class);
   private static final HoodieSchema SCHEMA = getSchemaFromResource(TestUpsertPartitioner.class, "/exampleSchema.avsc");
 
   private UpsertPartitioner getUpsertPartitioner(int smallFileSize, int numInserts, int numUpdates, int fileSize,

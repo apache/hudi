@@ -31,13 +31,13 @@ import org.apache.hudi.common.model.MetadataValues;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieInsertException;
 import org.apache.hudi.io.storage.HoodieFileWriter;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.io.IOException;
 import java.util.Collections;
@@ -46,8 +46,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 
+@Slf4j
 public abstract class BaseCreateHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O> {
-  private static final Logger LOG = LoggerFactory.getLogger(BaseCreateHandle.class);
 
   protected HoodieFileWriter fileWriter;
   protected final StoragePath path;
@@ -95,7 +95,7 @@ public abstract class BaseCreateHandle<T, I, K, O> extends HoodieWriteHandle<T, 
     Option<Map<String, String>> recordMetadata = getRecordMetadata(record, schema, props);
     try {
       if (!HoodieOperation.isDelete(record.getOperation()) && !record.isDelete(deleteContext, config.getProps())) {
-        if (record.shouldIgnore(schema.toAvroSchema(), config.getProps())) {
+        if (record.shouldIgnore(schema, config.getProps())) {
           return;
         }
 
@@ -117,10 +117,11 @@ public abstract class BaseCreateHandle<T, I, K, O> extends HoodieWriteHandle<T, 
       // record successful.
       record.deflate();
     } catch (Throwable t) {
-      // Not throwing exception from here, since we don't want to fail the entire job
-      // for a single record
+      log.error("Error writing record " + record, t);
+      if (!config.getIgnoreWriteFailed()) {
+        throw new HoodieException(t.getMessage(), t);
+      }
       writeStatus.markFailure(record, t, recordMetadata);
-      LOG.error("Error writing record " + record, t);
     }
   }
 
@@ -154,7 +155,7 @@ public abstract class BaseCreateHandle<T, I, K, O> extends HoodieWriteHandle<T, 
       fileWriter.write(record.getRecordKey(), populatedRecord, writeSchemaWithMetaFields, config.getProps());
     } else {
       // rewrite the record to include metadata fields in schema, and the values will be set later.
-      record = record.prependMetaFields(schema.toAvroSchema(), writeSchemaWithMetaFields.toAvroSchema(), new MetadataValues(), config.getProps());
+      record = record.prependMetaFields(schema, writeSchemaWithMetaFields, new MetadataValues(), config.getProps());
       if (isSecondaryIndexStatsStreamingWritesEnabled) {
         SecondaryIndexStreamingTracker.trackSecondaryIndexStats(record, writeStatus, writeSchemaWithMetaFields, secondaryIndexDefns, config);
       }
@@ -164,7 +165,7 @@ public abstract class BaseCreateHandle<T, I, K, O> extends HoodieWriteHandle<T, 
 
   protected HoodieRecord<T> updateFileName(HoodieRecord<T> record, HoodieSchema schema, HoodieSchema targetSchema, String fileName, Properties prop) {
     MetadataValues metadataValues = new MetadataValues().setFileName(fileName);
-    return record.prependMetaFields(schema.toAvroSchema(), targetSchema.toAvroSchema(), metadataValues, prop);
+    return record.prependMetaFields(schema, targetSchema, metadataValues, prop);
   }
 
   @Override
@@ -177,7 +178,7 @@ public abstract class BaseCreateHandle<T, I, K, O> extends HoodieWriteHandle<T, 
    */
   @Override
   public List<WriteStatus> close() {
-    LOG.info("Closing the file " + writeStatus.getFileId() + " as we are done with all the records " + recordsWritten);
+    log.info("Closing the file " + writeStatus.getFileId() + " as we are done with all the records " + recordsWritten);
     try {
       if (isClosed()) {
         // Handle has already been closed
@@ -193,7 +194,7 @@ public abstract class BaseCreateHandle<T, I, K, O> extends HoodieWriteHandle<T, 
 
       setupWriteStatus();
 
-      LOG.info("CreateHandle for partitionPath {} fileID {}, took {} ms.",
+      log.info("CreateHandle for partitionPath {} fileID {}, took {} ms.",
           writeStatus.getStat().getPartitionPath(), writeStatus.getStat().getFileId(),
           writeStatus.getStat().getRuntimeStats().getTotalCreateTime());
 

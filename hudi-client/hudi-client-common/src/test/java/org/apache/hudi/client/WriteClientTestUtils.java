@@ -24,12 +24,14 @@ import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator;
 import org.apache.hudi.common.table.timeline.TimeGenerator;
 import org.apache.hudi.common.util.Option;
 
+import lombok.AccessLevel;
+import lombok.NoArgsConstructor;
+
 import java.util.Map;
 import java.util.function.Consumer;
 
+@NoArgsConstructor(access = AccessLevel.PRIVATE)
 public class WriteClientTestUtils {
-  private WriteClientTestUtils() {
-  }
 
   public static void startCommitWithTime(BaseHoodieWriteClient<?, ?, ?, ?> writeClient, String instantTime, String actionType) {
     writeClient.startCommit(Option.of(instantTime), actionType, writeClient.createMetaClient(false));

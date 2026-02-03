@@ -50,8 +50,8 @@ import org.apache.hudi.table.format.cdc.CdcInputFormat;
 import org.apache.hudi.table.format.cow.CopyOnWriteInputFormat;
 import org.apache.hudi.table.format.mor.MergeOnReadInputFormat;
 import org.apache.hudi.table.format.mor.MergeOnReadInputSplit;
-import org.apache.hudi.util.AvroSchemaConverter;
 import org.apache.hudi.util.FlinkWriteClients;
+import org.apache.hudi.util.HoodieSchemaConverter;
 import org.apache.hudi.util.SerializableSchema;
 import org.apache.hudi.util.StreamerUtil;
 import org.apache.hudi.utils.TestConfigurations;
@@ -117,6 +117,9 @@ public class TestInputFormat {
 
   void beforeEach(HoodieTableType tableType, Map<String, String> options) throws IOException {
     conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    // all test cases here expect former default values for record key and ordering fields
+    conf.set(FlinkOptions.RECORD_KEY_FIELD, "uuid");
+    conf.set(FlinkOptions.ORDERING_FIELDS, "ts");
     conf.set(FlinkOptions.TABLE_TYPE, tableType.name());
     if (!conf.contains(FlinkOptions.COMPACTION_ASYNC_ENABLED)) {
       conf.set(FlinkOptions.COMPACTION_ASYNC_ENABLED, false); // by default close the async compaction
@@ -1207,7 +1210,7 @@ public class TestInputFormat {
   void testReadWithWiderSchema(HoodieTableType tableType) throws Exception {
     Map<String, String> options = new HashMap<>();
     options.put(FlinkOptions.SOURCE_AVRO_SCHEMA.key(),
-        AvroSchemaConverter.convertToSchema(TestConfigurations.ROW_TYPE_WIDER).toString());
+        HoodieSchemaConverter.convertToSchema(TestConfigurations.ROW_TYPE_WIDER).toString());
     beforeEach(tableType, options);
 
     TestData.writeData(TestData.DATA_SET_INSERT, conf);
@@ -1222,8 +1225,10 @@ public class TestInputFormat {
     conf.set(FlinkOptions.PATH, tempFile.getAbsolutePath());
     conf.set(FlinkOptions.TABLE_NAME, "TestHoodieTable");
     conf.set(FlinkOptions.TABLE_TYPE, HoodieTableType.MERGE_ON_READ.name());
+    conf.set(FlinkOptions.RECORD_KEY_FIELD, "uuid");
+    conf.set(FlinkOptions.ORDERING_FIELDS, "ts");
     conf.set(FlinkOptions.PARTITION_PATH_FIELD, "partition");
-    conf.setString(FlinkOptions.SOURCE_AVRO_SCHEMA.key(), AvroSchemaConverter.convertToSchema(TestConfigurations.ROW_TYPE_DECIMAL_ORDERING).toString());
+    conf.setString(FlinkOptions.SOURCE_AVRO_SCHEMA.key(), HoodieSchemaConverter.convertToSchema(TestConfigurations.ROW_TYPE_DECIMAL_ORDERING).toString());
     conf.set(FlinkOptions.COMPACTION_ASYNC_ENABLED, false); // by default close the async compaction
     StreamerUtil.initTableIfNotExists(conf);
 

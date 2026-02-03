@@ -21,6 +21,7 @@ package org.apache.hudi.util;
 import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.client.transaction.TransactionManager;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -33,19 +34,16 @@ import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.sink.compact.FlinkCompactionConfig;
 import org.apache.hudi.table.HoodieFlinkTable;
 
-import org.apache.hudi.common.schema.HoodieSchema;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.flink.configuration.Configuration;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.Locale;
 
 /**
  * Utilities for flink hudi compaction.
  */
+@Slf4j
 public class CompactionUtil {
-
-  private static final Logger LOG = LoggerFactory.getLogger(CompactionUtil.class);
 
   /**
    * Schedules a new compaction instant.
@@ -65,6 +63,55 @@ public class CompactionUtil {
       // schedules the compaction anyway.
       writeClient.scheduleCompaction(Option.empty());
     }
+  }
+
+  /**
+   * Schedules a new compaction/log compaction for the metadata table.
+   *
+   * @param writeClient The metadata write client
+   * @param committed   Whether the triggering instant was committed successfully
+   */
+  public static void scheduleMetadataCompaction(
+      HoodieFlinkWriteClient<?> writeClient,
+      boolean committed) {
+    if (!committed) {
+      return;
+    }
+    if (canScheduleMetadataCompaction(writeClient.getConfig(), writeClient.getHoodieTable().getMetaClient())) {
+      Option<String> compactInstant = writeClient.scheduleCompaction(Option.empty());
+      if (compactInstant.isPresent()) {
+        log.info("Scheduled compaction {} for metadata table.", compactInstant.get());
+        return;
+      }
+      if (!writeClient.getConfig().isLogCompactionEnabled()) {
+        return;
+      }
+      Option<String> logCompactionInstant = writeClient.scheduleLogCompaction(Option.empty());
+      if (logCompactionInstant.isPresent()) {
+        log.info("Scheduled log compaction {} for metadata table.", logCompactionInstant.get());
+      }
+    }
+  }
+
+  /**
+   * Validates the timeline for both data and metadata tables to ensure compaction on MDT can be scheduled.
+   *
+   * @param metadataWriteConfig The write config for metadata write client
+   * @param metadataMetaClient The table metadata client for metadata table
+   *
+   * @return True if the compaction/log compaction can be scheduled for metadata table.
+   */
+  private static boolean canScheduleMetadataCompaction(HoodieWriteConfig metadataWriteConfig, HoodieTableMetaClient metadataMetaClient) {
+    // Under the log compaction scope, the sequence of the log-compaction and compaction needs to be ensured because metadata items such as RLI
+    // only has proc-time ordering semantics. For "ensured", it means the completion sequence of the log-compaction/compaction is the same as the start sequence.
+    if (metadataWriteConfig.isLogCompactionEnabled()) {
+      Option<HoodieInstant> pendingLogCompactionInstant =
+          metadataMetaClient.getActiveTimeline().filterPendingLogCompactionTimeline().firstInstant();
+      Option<HoodieInstant> pendingCompactionInstant =
+          metadataMetaClient.getActiveTimeline().filterPendingCompactionTimeline().firstInstant();
+      return !pendingLogCompactionInstant.isPresent() && !pendingCompactionInstant.isPresent();
+    }
+    return true;
   }
 
   /**
@@ -131,7 +178,7 @@ public class CompactionUtil {
    */
   public static void inferChangelogMode(Configuration conf, HoodieTableMetaClient metaClient) throws Exception {
     TableSchemaResolver tableSchemaResolver = new TableSchemaResolver(metaClient);
-    HoodieSchema tableAvroSchema = HoodieSchema.fromAvroSchema(tableSchemaResolver.getTableAvroSchemaFromDataFile());
+    HoodieSchema tableAvroSchema = tableSchemaResolver.getTableSchemaFromDataFile();
     if (tableAvroSchema.getField(HoodieRecord.OPERATION_METADATA_FIELD).isPresent()) {
       conf.set(FlinkOptions.CHANGELOG_ENABLED, true);
     }
@@ -155,8 +202,35 @@ public class CompactionUtil {
   public static void rollbackCompaction(HoodieFlinkTable<?> table, String instantTime, TransactionManager transactionManager) {
     HoodieInstant inflightInstant = table.getInstantGenerator().getCompactionInflightInstant(instantTime);
     if (table.getMetaClient().reloadActiveTimeline().filterPendingCompactionTimeline().containsInstant(inflightInstant)) {
-      LOG.warn("Failed to rollback compaction instant: [{}]", instantTime);
+      log.warn("Failed to rollback compaction instant: [{}]", instantTime);
       table.rollbackInflightCompaction(inflightInstant, transactionManager);
+    }
+  }
+
+  public static void rollbackLogCompaction(HoodieFlinkTable<?> table, String instantTime, TransactionManager transactionManager) {
+    HoodieInstant inflightInstant = table.getInstantGenerator().getLogCompactionInflightInstant(instantTime);
+    if (table.getMetaClient().reloadActiveTimeline().filterPendingLogCompactionTimeline().containsInstant(inflightInstant)) {
+      log.warn("Failed to rollback log compaction instant: [{}]", instantTime);
+      table.rollbackInflightLogCompaction(inflightInstant, transactionManager);
+    }
+  }
+
+  /**
+   * Force rolls back all the inflight log compaction instants, especially for job failover restart.
+   *
+   * @param table The hoodie table
+   */
+  public static void rollbackLogCompaction(HoodieFlinkTable<?> table, HoodieFlinkWriteClient writeClient) {
+    HoodieTimeline inflightCompactionTimeline = table.getActiveTimeline()
+        .filterPendingLogCompactionTimeline()
+        .filter(instant ->
+            instant.getState() == HoodieInstant.State.INFLIGHT);
+    inflightCompactionTimeline.getInstants().forEach(inflightInstant -> {
+      log.info("Rollback the inflight log compaction instant: {} for failover", inflightInstant);
+      table.rollbackInflightLogCompaction(inflightInstant, writeClient.getTransactionManager());
+    });
+    if (!inflightCompactionTimeline.getInstants().isEmpty()) {
+      table.getMetaClient().reloadActiveTimeline();
     }
   }
 
@@ -171,7 +245,7 @@ public class CompactionUtil {
         .filter(instant ->
             instant.getState() == HoodieInstant.State.INFLIGHT);
     inflightCompactionTimeline.getInstants().forEach(inflightInstant -> {
-      LOG.info("Rollback the inflight compaction instant: " + inflightInstant + " for failover");
+      log.info("Rollback the inflight compaction instant: " + inflightInstant + " for failover");
       table.rollbackInflightCompaction(inflightInstant, commitToRollback -> writeClient.getTableServiceClient().getPendingRollbackInfo(table.getMetaClient(), commitToRollback, false),
           writeClient.getTransactionManager());
       table.getMetaClient().reloadActiveTimeline();
@@ -195,7 +269,7 @@ public class CompactionUtil {
       String currentTime = HoodieInstantTimeGenerator.getCurrentInstantTimeStr();
       int timeout = conf.get(FlinkOptions.COMPACTION_TIMEOUT_SECONDS);
       if (StreamerUtil.instantTimeDiffSeconds(currentTime, instant.requestedTime()) >= timeout) {
-        LOG.info("Rollback the inflight compaction instant: " + instant + " for timeout(" + timeout + "s)");
+        log.info("Rollback the inflight compaction instant: " + instant + " for timeout(" + timeout + "s)");
         try (TransactionManager transactionManager = new TransactionManager(table.getConfig(), table.getStorage())) {
           table.rollbackInflightCompaction(instant, transactionManager);
         }

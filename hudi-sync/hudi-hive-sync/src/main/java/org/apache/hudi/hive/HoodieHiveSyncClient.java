@@ -40,6 +40,7 @@ import org.apache.hudi.sync.common.HoodieSyncClient;
 import org.apache.hudi.sync.common.model.FieldSchema;
 import org.apache.hudi.sync.common.model.Partition;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.hadoop.hive.metastore.IMetaStoreClient;
 import org.apache.hadoop.hive.metastore.api.NoSuchObjectException;
 import org.apache.hadoop.hive.metastore.api.SerDeInfo;
@@ -47,8 +48,6 @@ import org.apache.hadoop.hive.metastore.api.StorageDescriptor;
 import org.apache.hadoop.hive.metastore.api.Table;
 import org.apache.hadoop.hive.ql.metadata.Hive;
 import org.apache.thrift.TException;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.HashMap;
 import java.util.List;
@@ -62,7 +61,6 @@ import static org.apache.hudi.hadoop.utils.HoodieInputFormatUtils.getOutputForma
 import static org.apache.hudi.hadoop.utils.HoodieInputFormatUtils.getSerDeClassName;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_SYNC_MODE;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_USE_JDBC;
-import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_USE_PRE_APACHE_INPUT_FORMAT;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_BASE_FILE_FORMAT;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_BASE_PATH;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_DATABASE_NAME;
@@ -72,9 +70,9 @@ import static org.apache.hudi.sync.common.util.TableUtils.tableId;
 /**
  * This class implements logic to sync a Hudi table with either the Hive server or the Hive Metastore.
  */
+@Slf4j
 public class HoodieHiveSyncClient extends HoodieSyncClient {
 
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieHiveSyncClient.class);
   protected final HiveSyncConfig config;
   private final String databaseName;
   private final Map<String, Table> initialTableByName = new HashMap<>();
@@ -187,7 +185,7 @@ public class HoodieHiveSyncClient extends HoodieSyncClient {
 
       // check if any change to input/output format
       HoodieFileFormat baseFileFormat = HoodieFileFormat.valueOf(config.getStringOrDefault(META_SYNC_BASE_FILE_FORMAT).toUpperCase());
-      String inputFormatClassName = getInputFormatClassName(baseFileFormat, useRealtimeFormat, config.getBooleanOrDefault(HIVE_USE_PRE_APACHE_INPUT_FORMAT));
+      String inputFormatClassName = getInputFormatClassName(baseFileFormat, useRealtimeFormat);
       if (!inputFormatClassName.equals(storageDescriptor.getInputFormat())) {
         shouldUpdate = true;
       }
@@ -197,7 +195,7 @@ public class HoodieHiveSyncClient extends HoodieSyncClient {
       }
 
       if (!shouldUpdate) {
-        LOG.debug("Table {} serdeProperties and formatClass already up to date, skip update.", tableName);
+        log.debug("Table {} serdeProperties and formatClass already up to date, skip update.", tableName);
         return false;
       }
 
@@ -356,7 +354,7 @@ public class HoodieHiveSyncClient extends HoodieSyncClient {
       Table table = client.getTable(databaseName, tableName);
       return Option.ofNullable(table.getParameters().getOrDefault(GLOBALLY_CONSISTENT_READ_TIMESTAMP, null));
     } catch (NoSuchObjectException e) {
-      LOG.error("database.table [{}.{}] not found in hms", databaseName, tableName);
+      log.error("database.table [{}.{}] not found in hms", databaseName, tableName);
       return Option.empty();
     } catch (Exception e) {
       throw new HoodieHiveSyncException("Failed to get the last replicated time from the table " + tableName, e);
@@ -384,7 +382,7 @@ public class HoodieHiveSyncClient extends HoodieSyncClient {
       String timestamp = table.getParameters().remove(GLOBALLY_CONSISTENT_READ_TIMESTAMP);
       client.alter_table(databaseName, tableName, table);
       if (timestamp != null) {
-        LOG.info("deleted last replicated timestamp " + timestamp + " for table " + tableName);
+        log.info("deleted last replicated timestamp {} for table {}", timestamp, tableName);
       }
     } catch (NoSuchObjectException e) {
       // this is ok the table doesn't even exist.
@@ -403,7 +401,7 @@ public class HoodieHiveSyncClient extends HoodieSyncClient {
         client = null;
       }
     } catch (Exception e) {
-      LOG.error("Could not close connection ", e);
+      log.error("Could not close connection ", e);
     }
   }
 
@@ -447,10 +445,10 @@ public class HoodieHiveSyncClient extends HoodieSyncClient {
   @Override
   public List<FieldSchema> getStorageFieldSchemas() {
     try {
-      return tableSchemaResolver.getTableAvroSchema(false)
+      return tableSchemaResolver.getTableSchema(false)
           .getFields()
           .stream()
-          .map(f -> new FieldSchema(f.name(), f.schema().getType().getName(), f.doc()))
+          .map(f -> new FieldSchema(f.name(), f.schema().getType().toAvroType().getName(), f.doc()))
           .collect(Collectors.toList());
     } catch (Exception e) {
       throw new HoodieHiveSyncException("Failed to get field schemas from storage : ", e);
@@ -471,7 +469,7 @@ public class HoodieHiveSyncClient extends HoodieSyncClient {
       }
     });
     if (alterComments.isEmpty()) {
-      LOG.info(String.format("No comment difference of %s ", tableName));
+      log.info("No comment difference of {} ", tableName);
       return false;
     } else {
       ddlExecutor.updateTableComments(tableName, alterComments);
@@ -488,7 +486,7 @@ public class HoodieHiveSyncClient extends HoodieSyncClient {
   public void dropTable(String tableName) {
     try {
       client.dropTable(databaseName, tableName);
-      LOG.info("Successfully deleted table in Hive: {}.{}", databaseName, tableName);
+      log.info("Successfully deleted table in Hive: {}.{}", databaseName, tableName);
     } catch (Exception e) {
       throw new HoodieHiveSyncException("Failed to delete the table " + tableId(databaseName, tableName), e);
     }

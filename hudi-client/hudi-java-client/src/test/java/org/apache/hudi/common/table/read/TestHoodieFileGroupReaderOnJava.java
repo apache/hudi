@@ -22,13 +22,13 @@ package org.apache.hudi.common.table.read;
 import org.apache.hudi.avro.ConvertingGenericData;
 import org.apache.hudi.avro.HoodieAvroReaderContext;
 import org.apache.hudi.common.engine.HoodieReaderContext;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
 
-import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -44,18 +44,18 @@ public class TestHoodieFileGroupReaderOnJava extends HoodieFileGroupReaderOnJava
 
   @Override
   public HoodieReaderContext<IndexedRecord> getHoodieReaderContext(
-      String tablePath, Schema avroSchema, StorageConfiguration<?> storageConf, HoodieTableMetaClient metaClient) {
+      String tablePath, HoodieSchema schema, StorageConfiguration<?> storageConf, HoodieTableMetaClient metaClient) {
     return new HoodieAvroReaderContext(storageConf, metaClient.getTableConfig(), Option.empty(), Option.empty());
   }
 
   @Override
-  public void assertRecordsEqual(Schema schema, IndexedRecord expected, IndexedRecord actual) {
+  public void assertRecordsEqual(HoodieSchema schema, IndexedRecord expected, IndexedRecord actual) {
     assertEquals(expected, actual);
   }
 
   @Override
-  public void assertRecordMatchesSchema(Schema schema, IndexedRecord record) {
-    assertTrue(ConvertingGenericData.INSTANCE.validate(schema, record));
+  public void assertRecordMatchesSchema(HoodieSchema schema, IndexedRecord record) {
+    assertTrue(ConvertingGenericData.INSTANCE.validate(schema.toAvroSchema(), record));
   }
 
   @Override

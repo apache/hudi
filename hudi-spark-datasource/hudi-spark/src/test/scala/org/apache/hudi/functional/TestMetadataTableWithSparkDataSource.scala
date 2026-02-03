@@ -32,8 +32,8 @@ import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.metadata.{HoodieBackedTableMetadata, HoodieIndexVersion, HoodieTableMetadata}
 import org.apache.hudi.stats.HoodieColumnRangeMetadata
+import org.apache.hudi.storage.HoodieStorageUtils
 import org.apache.hudi.storage.StoragePath
-import org.apache.hudi.storage.hadoop.HoodieHadoopStorage
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness.getSparkSqlConf
 import org.apache.hudi.util.JavaScalaConverters.convertJavaListToScalaSeq
@@ -42,7 +42,7 @@ import org.apache.spark.SparkConf
 import org.apache.spark.sql.SaveMode
 import org.apache.spark.sql.functions.{col, explode}
 import org.junit.jupiter.api.{Disabled, Tag, Test}
-import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.{assertDoesNotThrow, assertEquals}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.CsvSource
 
@@ -121,7 +121,7 @@ class TestMetadataTableWithSparkDataSource extends SparkClientFunctionalTestHarn
     // Files partition of MT
     val filesPartitionDF = spark.read.format(hudi).load(s"$basePath/.hoodie/metadata/files")
     // Smoke test
-    filesPartitionDF.show()
+    assertEquals(4, filesPartitionDF.collect().length)
 
     // Query w/ 0 requested columns should be working fine
     assertEquals(4, filesPartitionDF.count())
@@ -138,7 +138,7 @@ class TestMetadataTableWithSparkDataSource extends SparkClientFunctionalTestHarn
     // Column Stats Index partition of MT
     val colStatsDF = spark.read.format(hudi).load(s"$basePath/.hoodie/metadata/column_stats")
     // Smoke test
-    colStatsDF.show()
+    assertDoesNotThrow(() => colStatsDF.collect())
 
     // lets pick one data file and validate col stats
     val partitionPathToTest = "2015/03/16"
@@ -160,7 +160,7 @@ class TestMetadataTableWithSparkDataSource extends SparkClientFunctionalTestHarn
     // read parquet file and verify stats
     val colRangeMetadataList: java.util.List[HoodieColumnRangeMetadata[Comparable[_]]] = new ParquetUtils()
       .readColumnStatsFromMetadata(
-        new HoodieHadoopStorage(fileStatuses.get(0).getPath, HadoopFSUtils.getStorageConf(jsc().hadoopConfiguration())),
+        HoodieStorageUtils.getStorage(fileStatuses.get(0).getPath, HadoopFSUtils.getStorageConf(jsc().hadoopConfiguration())),
         fileStatuses.get(0).getPath, Collections.singletonList("begin_lat"), HoodieIndexVersion.V1)
     val columnRangeMetadata = colRangeMetadataList.get(0)
 
@@ -175,7 +175,7 @@ class TestMetadataTableWithSparkDataSource extends SparkClientFunctionalTestHarn
     // Files partition of MT
     val filesPartitionDF = spark.read.format(hudi).load(s"$basePath/.hoodie/metadata/files")
     // Smoke test
-    filesPartitionDF.show()
+    assertEquals(2, filesPartitionDF.collect().length)
 
     // Query w/ 0 requested columns should be working fine
     assertEquals(2, filesPartitionDF.count())
@@ -192,7 +192,7 @@ class TestMetadataTableWithSparkDataSource extends SparkClientFunctionalTestHarn
     // Column Stats Index partition of MT
     val colStatsDF = spark.read.format(hudi).load(s"$basePath/.hoodie/metadata/column_stats")
     // Smoke test
-    colStatsDF.show()
+    assertDoesNotThrow(() => colStatsDF.collect())
 
     // lets pick one data file and validate col stats
     val partitionPathToTest = ""
@@ -218,7 +218,7 @@ class TestMetadataTableWithSparkDataSource extends SparkClientFunctionalTestHarn
     // read parquet file and verify stats
     val colRangeMetadataList: java.util.List[HoodieColumnRangeMetadata[Comparable[_]]] = new ParquetUtils()
       .readColumnStatsFromMetadata(
-        new HoodieHadoopStorage(fileStatuses.get(0).getPath, HadoopFSUtils.getStorageConf(jsc().hadoopConfiguration())),
+        HoodieStorageUtils.getStorage(fileStatuses.get(0).getPath, HadoopFSUtils.getStorageConf(jsc().hadoopConfiguration())),
         fileStatuses.get(0).getPath, Collections.singletonList("begin_lat"), HoodieIndexVersion.V1)
     val columnRangeMetadata = colRangeMetadataList.get(0)
 

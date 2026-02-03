@@ -18,13 +18,13 @@
 
 package org.apache.hudi.common.testutils.minicluster;
 
+import lombok.Getter;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileUtil;
 import org.apache.zookeeper.server.NIOServerCnxnFactory;
 import org.apache.zookeeper.server.ZooKeeperServer;
 import org.apache.zookeeper.server.persistence.FileTxnLog;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.BufferedReader;
 import java.io.File;
@@ -53,9 +53,8 @@ import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
  * <p/>
  * 4. The ZK cluster will re-use a data dir on the local filesystem if it already exists instead of blowing it away.
  */
+@Slf4j
 public class ZookeeperTestService {
-
-  private static final Logger LOG = LoggerFactory.getLogger(ZookeeperTestService.class);
 
   private static final int TICK_TIME = 2000;
   private static final int CONNECTION_TIMEOUT = 30000;
@@ -63,6 +62,7 @@ public class ZookeeperTestService {
   /**
    * Configuration settings.
    */
+  @Getter
   private Configuration hadoopConf;
   private String workDir;
   private Integer clientPort = 2828;
@@ -80,10 +80,6 @@ public class ZookeeperTestService {
   public ZookeeperTestService(Configuration config) throws IOException {
     this.workDir = Files.createTempDirectory(System.currentTimeMillis() + "-").toFile().getAbsolutePath();
     this.hadoopConf = config;
-  }
-
-  public Configuration getHadoopConf() {
-    return hadoopConf;
   }
 
   public ZooKeeperServer start() throws IOException, InterruptedException {
@@ -105,7 +101,7 @@ public class ZookeeperTestService {
 
     // NOTE: Changed from the original, where InetSocketAddress was
     // originally created to bind to the wildcard IP, we now configure it.
-    LOG.info("Zookeeper force binding to: " + this.bindIP);
+    log.info("Zookeeper force binding to: " + this.bindIP);
     standaloneServerFactory.configure(new InetSocketAddress(bindIP, clientPort), 1000);
 
     // Start up this ZK server
@@ -122,7 +118,7 @@ public class ZookeeperTestService {
     }
 
     started = true;
-    LOG.info("Zookeeper Minicluster service started on client port: " + clientPort);
+    log.info("Zookeeper Minicluster service started on client port: " + clientPort);
     return zooKeeperServer;
   }
 
@@ -141,7 +137,7 @@ public class ZookeeperTestService {
     standaloneServerFactory = null;
     zooKeeperServer = null;
 
-    LOG.info("Zookeeper Minicluster service shut down.");
+    log.info("Zookeeper Minicluster service shut down.");
   }
 
   private void recreateDir(File dir, boolean clean) throws IOException {
@@ -221,7 +217,7 @@ public class ZookeeperTestService {
         }
       } catch (IOException e) {
         // ignore as this is expected
-        LOG.info("server " + hostname + ":" + port + " not up " + e);
+        log.info("server " + hostname + ":" + port + " not up " + e);
       }
 
       if (System.currentTimeMillis() > start + timeout) {

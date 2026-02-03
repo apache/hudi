@@ -22,6 +22,7 @@ import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.source.stats.ColumnStats;
 import org.apache.hudi.util.ExpressionUtils;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.flink.table.expressions.CallExpression;
 import org.apache.flink.table.expressions.Expression;
 import org.apache.flink.table.expressions.FieldReferenceExpression;
@@ -30,10 +31,8 @@ import org.apache.flink.table.expressions.ValueLiteralExpression;
 import org.apache.flink.table.functions.BuiltInFunctionDefinitions;
 import org.apache.flink.table.functions.FunctionDefinition;
 import org.apache.flink.table.types.logical.LogicalType;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
-import org.jetbrains.annotations.NotNull;
+import javax.annotation.Nonnull;
 
 import java.io.Serializable;
 import java.math.BigDecimal;
@@ -47,6 +46,7 @@ import java.util.stream.Collectors;
 /**
  * Tool to evaluate the {@link org.apache.flink.table.expressions.ResolvedExpression}s.
  */
+@Slf4j
 public class ExpressionEvaluators {
   
   /**
@@ -194,6 +194,10 @@ public class ExpressionEvaluators {
           "Can not find column " + this.name);
       return columnStats;
     }
+
+    public String getName() {
+      return this.name;
+    }
   }
 
   /**
@@ -218,7 +222,7 @@ public class ExpressionEvaluators {
       }
     }
 
-    protected abstract boolean eval(@NotNull Object val, ColumnStats columnStats, LogicalType type);
+    protected abstract boolean eval(@Nonnull Object val, ColumnStats columnStats, LogicalType type);
   }
 
   /**
@@ -232,7 +236,7 @@ public class ExpressionEvaluators {
     }
 
     @Override
-    protected boolean eval(@NotNull Object val, ColumnStats columnStats, LogicalType type) {
+    protected boolean eval(@Nonnull Object val, ColumnStats columnStats, LogicalType type) {
       Object minVal = columnStats.getMinVal();
       Object maxVal = columnStats.getMaxVal();
       if (minVal == null || maxVal == null) {
@@ -242,6 +246,10 @@ public class ExpressionEvaluators {
         return false;
       }
       return compare(maxVal, val, type) >= 0;
+    }
+
+    public Object getVal() {
+      return this.val;
     }
   }
 
@@ -256,7 +264,7 @@ public class ExpressionEvaluators {
     }
 
     @Override
-    protected boolean eval(@NotNull Object val, ColumnStats columnStats, LogicalType type) {
+    protected boolean eval(@Nonnull Object val, ColumnStats columnStats, LogicalType type) {
       Object minVal = columnStats.getMinVal();
       Object maxVal = columnStats.getMaxVal();
       if (minVal == null || maxVal == null) {
@@ -315,7 +323,7 @@ public class ExpressionEvaluators {
     }
 
     @Override
-    public boolean eval(@NotNull Object val, ColumnStats columnStats, LogicalType type) {
+    public boolean eval(@Nonnull Object val, ColumnStats columnStats, LogicalType type) {
       Object minVal = columnStats.getMinVal();
       if (minVal == null) {
         return false;
@@ -335,7 +343,7 @@ public class ExpressionEvaluators {
     }
 
     @Override
-    protected boolean eval(@NotNull Object val, ColumnStats columnStats, LogicalType type) {
+    protected boolean eval(@Nonnull Object val, ColumnStats columnStats, LogicalType type) {
       Object maxVal = columnStats.getMaxVal();
       if (maxVal == null) {
         return false;
@@ -355,7 +363,7 @@ public class ExpressionEvaluators {
     }
 
     @Override
-    protected boolean eval(@NotNull Object val, ColumnStats columnStats, LogicalType type) {
+    protected boolean eval(@Nonnull Object val, ColumnStats columnStats, LogicalType type) {
       Object minVal = columnStats.getMinVal();
       if (minVal == null) {
         return false;
@@ -375,7 +383,7 @@ public class ExpressionEvaluators {
     }
 
     @Override
-    protected boolean eval(@NotNull Object val, ColumnStats columnStats, LogicalType type) {
+    protected boolean eval(@Nonnull Object val, ColumnStats columnStats, LogicalType type) {
       Object maxVal = columnStats.getMaxVal();
       if (maxVal == null) {
         return false;
@@ -387,9 +395,9 @@ public class ExpressionEvaluators {
   /**
    * To evaluate IN expr.
    */
+  @Slf4j
   public static class In extends LeafEvaluator {
     private static final long serialVersionUID = 1L;
-    private static final Logger LOGGER = LoggerFactory.getLogger(In.class);
 
     private static final int IN_PREDICATE_LIMIT = 200;
 
@@ -413,7 +421,7 @@ public class ExpressionEvaluators {
 
       if (vals.length > IN_PREDICATE_LIMIT) {
         // skip evaluating the predicate if the number of values is too big
-        LOGGER.warn("Skipping evaluation of `in` predicate because the number of values is too big!");
+        log.warn("Skipping evaluation of `in` predicate because the number of values is too big!");
         return true;
       }
 
@@ -423,6 +431,10 @@ public class ExpressionEvaluators {
 
     public void bindVals(Object... vals) {
       this.vals = vals;
+    }
+
+    public Object[] getVals() {
+      return this.vals;
     }
   }
 
@@ -521,6 +533,10 @@ public class ExpressionEvaluators {
       this.evaluators = evaluators;
       return this;
     }
+
+    public Evaluator[] getEvaluators() {
+      return this.evaluators;
+    }
   }
 
   // -------------------------------------------------------------------------
@@ -538,7 +554,7 @@ public class ExpressionEvaluators {
     return vals.toArray();
   }
 
-  private static int compare(@NotNull Object val1, @NotNull Object val2, LogicalType logicalType) {
+  private static int compare(@Nonnull Object val1, @Nonnull Object val2, LogicalType logicalType) {
     switch (logicalType.getTypeRoot()) {
       case TIMESTAMP_WITHOUT_TIME_ZONE:
       case TIME_WITHOUT_TIME_ZONE:
@@ -565,7 +581,7 @@ public class ExpressionEvaluators {
     }
   }
 
-  private static BigDecimal getBigDecimal(@NotNull Object value) {
+  private static BigDecimal getBigDecimal(@Nonnull Object value) {
     if (value instanceof BigDecimal) {
       return (BigDecimal) value;
     } else if (value instanceof Double) {

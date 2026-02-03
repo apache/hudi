@@ -32,6 +32,7 @@ import org.apache.hudi.utilities.sources.helpers.KafkaSourceUtil;
 import org.apache.hudi.utilities.streamer.DefaultStreamContext;
 import org.apache.hudi.utilities.streamer.StreamContext;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
@@ -40,8 +41,6 @@ import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.SparkSession;
 import org.apache.spark.streaming.kafka010.OffsetRange;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import static org.apache.hudi.common.util.ConfigUtils.DELTA_STREAMER_CONFIG_PREFIX;
 import static org.apache.hudi.common.util.ConfigUtils.STREAMER_CONFIG_PREFIX;
@@ -51,9 +50,9 @@ import static org.apache.hudi.utilities.config.KafkaSourceConfig.KAFKA_AVRO_VALU
 /**
  * Reads avro serialized Kafka data, based on the confluent schema-registry.
  */
+@Slf4j
 public class AvroKafkaSource extends KafkaSource<JavaRDD<GenericRecord>> {
 
-  private static final Logger LOG = LoggerFactory.getLogger(AvroKafkaSource.class);
   // These are settings used to pass things to KafkaAvroDeserializer
   public static final String KAFKA_AVRO_VALUE_DESERIALIZER_PROPERTY_PREFIX =
       STREAMER_CONFIG_PREFIX + "source.kafka.value.deserializer.";
@@ -85,7 +84,7 @@ public class AvroKafkaSource extends KafkaSource<JavaRDD<GenericRecord>> {
       props.put(NATIVE_KAFKA_VALUE_DESERIALIZER_PROP, Class.forName(deserializerClassName).getName());
     } catch (ClassNotFoundException e) {
       String error = "Could not load custom avro kafka deserializer: " + deserializerClassName;
-      LOG.error(error);
+      log.error(error);
       throw new HoodieReadFromSourceException(error, e);
     }
 

@@ -31,8 +31,7 @@ import org.apache.hudi.exception.HoodieLockException;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StorageConfiguration;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.io.Serializable;
 import java.util.Arrays;
@@ -44,9 +43,8 @@ import static org.apache.hudi.common.config.LockConfiguration.LOCK_ACQUIRE_CLIEN
 /**
  * This class wraps implementations of {@link LockProvider} and provides an easy way to manage the lifecycle of a lock.
  */
+@Slf4j
 public class LockManager implements Serializable, AutoCloseable {
-
-  private static final Logger LOG = LoggerFactory.getLogger(LockManager.class);
   private final HoodieWriteConfig writeConfig;
   private final LockConfiguration lockConfiguration;
   private final StorageConfiguration<?> storageConf;
@@ -99,7 +97,7 @@ public class LockManager implements Serializable, AutoCloseable {
     try {
       metrics.updateLockHeldTimerMetrics();
     } catch (HoodieException e) {
-      LOG.error(String.format("Exception encountered when updating lock metrics: %s", e));
+      log.error(String.format("Exception encountered when updating lock metrics: %s", e));
     }
     metrics.updateLockReleaseSuccessMetric();
     close();
@@ -108,7 +106,7 @@ public class LockManager implements Serializable, AutoCloseable {
   public synchronized LockProvider getLockProvider() {
     // Perform lazy initialization of lock provider only if needed
     if (lockProvider == null) {
-      LOG.info("LockProvider " + writeConfig.getLockProviderClass());
+      log.info("LockProvider " + writeConfig.getLockProviderClass());
       
       // Try to load lock provider with HoodieLockMetrics constructor first
       Class<?>[] metricsConstructorTypes = {LockConfiguration.class, StorageConfiguration.class, HoodieLockMetrics.class};
@@ -116,7 +114,7 @@ public class LockManager implements Serializable, AutoCloseable {
         lockProvider = (LockProvider) ReflectionUtils.loadClass(writeConfig.getLockProviderClass(),
             metricsConstructorTypes, lockConfiguration, storageConf, metrics);
       } else {
-        LOG.debug("LockProvider does not support HoodieLockMetrics param in constructor, falling back to standard constructor");
+        log.debug("LockProvider does not support HoodieLockMetrics param in constructor, falling back to standard constructor");
         // Fallback to original constructor without metrics
         lockProvider = (LockProvider) ReflectionUtils.loadClass(writeConfig.getLockProviderClass(),
                 new Class<?>[] {LockConfiguration.class, StorageConfiguration.class},
@@ -135,11 +133,11 @@ public class LockManager implements Serializable, AutoCloseable {
     try {
       if (lockProvider != null) {
         lockProvider.close();
-        LOG.info("Released connection created for acquiring lock");
+        log.info("Released connection created for acquiring lock");
         lockProvider = null;
       }
     } catch (Exception e) {
-      LOG.error("Unable to close and release connection created for acquiring lock", e);
+      log.error("Unable to close and release connection created for acquiring lock", e);
     }
   }
 }

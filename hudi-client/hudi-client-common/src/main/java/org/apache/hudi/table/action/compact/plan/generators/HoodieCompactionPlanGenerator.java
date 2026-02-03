@@ -31,17 +31,15 @@ import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.BaseTableServicePlanActionExecutor;
 import org.apache.hudi.table.action.compact.strategy.CompactionStrategy;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.util.List;
 
 import static java.util.stream.Collectors.toList;
 
+@Slf4j
 public class HoodieCompactionPlanGenerator<T extends HoodieRecordPayload, I, K, O>
     extends BaseHoodieCompactionPlanGenerator<T, I, K, O> {
-
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieCompactionPlanGenerator.class);
 
   private final CompactionStrategy compactionStrategy;
 
@@ -49,7 +47,7 @@ public class HoodieCompactionPlanGenerator<T extends HoodieRecordPayload, I, K, 
                                        BaseTableServicePlanActionExecutor executor) {
     super(table, engineContext, writeConfig, executor);
     this.compactionStrategy = writeConfig.getCompactionStrategy();
-    LOG.info("Compaction Strategy used is: " + compactionStrategy.toString());
+    log.info("Compaction Strategy used is: " + compactionStrategy.toString());
   }
 
   @Override

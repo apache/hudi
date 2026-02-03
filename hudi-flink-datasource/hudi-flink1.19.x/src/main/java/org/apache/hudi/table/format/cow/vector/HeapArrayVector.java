@@ -18,6 +18,8 @@
 
 package org.apache.hudi.table.format.cow.vector;
 
+import lombok.Getter;
+import lombok.Setter;
 import org.apache.flink.table.data.ArrayData;
 import org.apache.flink.table.data.columnar.ColumnarArrayData;
 import org.apache.flink.table.data.columnar.vector.ArrayColumnVector;
@@ -34,6 +36,8 @@ public class HeapArrayVector extends AbstractHeapVector
   public long[] offsets;
   public long[] lengths;
   public ColumnVector child;
+  @Getter
+  @Setter
   private int size;
 
   public HeapArrayVector(int len) {
@@ -47,14 +51,6 @@ public class HeapArrayVector extends AbstractHeapVector
     offsets = new long[len];
     lengths = new long[len];
     this.child = vector;
-  }
-
-  public int getSize() {
-    return size;
-  }
-
-  public void setSize(int size) {
-    this.size = size;
   }
 
   public int getLen() {

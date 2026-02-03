@@ -18,7 +18,6 @@
 
 package org.apache.hudi.index.bloom;
 
-import org.apache.hudi.client.utils.LazyIterableIterator;
 import org.apache.hudi.common.function.SerializableFunction;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.util.collection.Pair;
@@ -30,20 +29,18 @@ import org.apache.hudi.io.HoodieKeyLookupResult;
 import org.apache.hudi.table.HoodieTable;
 
 import java.io.Serializable;
-import java.util.ArrayList;
 import java.util.Iterator;
-import java.util.List;
 import java.util.function.Function;
 
 /**
  * Function accepting a tuple of {@link HoodieFileGroupId} and a record key and producing
- * a list of {@link HoodieKeyLookupResult} for every file identified by the file-group ids
+ * {@link HoodieKeyLookupResult} for every file identified by the file-group ids
  *
  * @param <I> type of the tuple of {@code (HoodieFileGroupId, <record-key>)}. Note that this is
  *           parameterized as generic such that this code could be reused for Spark as well
  */
-public class HoodieBloomIndexCheckFunction<I> 
-    implements Function<Iterator<I>, Iterator<List<HoodieKeyLookupResult>>>, Serializable {
+public class HoodieBloomIndexCheckFunction<I>
+    implements Function<Iterator<I>, Iterator<HoodieKeyLookupResult>>, Serializable {
 
   private final HoodieTable hoodieTable;
 
@@ -63,26 +60,30 @@ public class HoodieBloomIndexCheckFunction<I>
   }
 
   @Override
-  public Iterator<List<HoodieKeyLookupResult>> apply(Iterator<I> fileGroupIdRecordKeyPairIterator) {
+  public Iterator<HoodieKeyLookupResult> apply(Iterator<I> fileGroupIdRecordKeyPairIterator) {
     return new LazyKeyCheckIterator(fileGroupIdRecordKeyPairIterator);
   }
 
-  protected class LazyKeyCheckIterator extends LazyIterableIterator<I, List<HoodieKeyLookupResult>> {
+  protected class LazyKeyCheckIterator implements Iterator<HoodieKeyLookupResult> {
 
-    private HoodieKeyLookupHandle keyLookupHandle;
+    private final Iterator<I> filePartitionRecordKeyPairItr;
+    private HoodieKeyLookupHandle keyLookupHandle = null;
 
-    LazyKeyCheckIterator(Iterator<I> filePartitionRecordKeyTripletItr) {
-      super(filePartitionRecordKeyTripletItr);
+    LazyKeyCheckIterator(Iterator<I> filePartitionRecordKeyPairItr) {
+      this.filePartitionRecordKeyPairItr = filePartitionRecordKeyPairItr;
     }
 
     @Override
-    protected List<HoodieKeyLookupResult> computeNext() {
+    public boolean hasNext() {
+      return keyLookupHandle != null || filePartitionRecordKeyPairItr.hasNext();
+    }
 
-      List<HoodieKeyLookupResult> ret = new ArrayList<>();
+    @Override
+    public HoodieKeyLookupResult next() {
       try {
         // process one file in each go.
-        while (inputItr.hasNext()) {
-          I tuple = inputItr.next();
+        while (filePartitionRecordKeyPairItr.hasNext()) {
+          I tuple = filePartitionRecordKeyPairItr.next();
 
           HoodieFileGroupId fileGroupId = fileGroupIdExtractor.apply(tuple);
           String recordKey = recordKeyExtractor.apply(tuple);
@@ -102,17 +103,17 @@ public class HoodieBloomIndexCheckFunction<I>
             keyLookupHandle.addKey(recordKey);
           } else {
             // do the actual checking of file & break out
-            ret.add(keyLookupHandle.getLookupResult());
+            HoodieKeyLookupResult result = keyLookupHandle.getLookupResult();
             keyLookupHandle = new HoodieKeyLookupHandle(config, hoodieTable, partitionPathFilePair);
             keyLookupHandle.addKey(recordKey);
-            break;
+            return result;
           }
         }
 
-        // handle case, where we ran out of input, close pending work, update return val
-        if (!inputItr.hasNext()) {
-          ret.add(keyLookupHandle.getLookupResult());
-        }
+        // handle case, where we ran out of input, close pending work, return result
+        HoodieKeyLookupResult result = keyLookupHandle.getLookupResult();
+        keyLookupHandle = null;
+        return result;
       } catch (Throwable e) {
         if (e instanceof HoodieException) {
           throw (HoodieException) e;
@@ -120,8 +121,6 @@ public class HoodieBloomIndexCheckFunction<I>
 
         throw new HoodieIndexException("Error checking bloom filter index. ", e);
       }
-
-      return ret;
     }
   }
 }

@@ -23,11 +23,12 @@ import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.common.util.ConfigUtils
 import org.apache.hudi.exception.{HoodieException, HoodieValidationException}
 import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils
+import org.apache.hudi.keygen.constant.KeyGeneratorOptions
 
 import org.apache.hadoop.fs.Path
 import org.apache.spark.{SPARK_VERSION, SparkConf}
 import org.apache.spark.sql.{Row, SparkSession}
-import org.apache.spark.sql.avro.SchemaConverters
+import org.apache.spark.sql.avro.HoodieSparkSchemaConverters
 import org.apache.spark.sql.catalyst.analysis.NoSuchDatabaseException
 import org.apache.spark.sql.catalyst.catalog._
 import org.apache.spark.sql.catalyst.catalog.HoodieCatalogTable.needFilterProps
@@ -105,8 +106,8 @@ object CreateHoodieTableCommand {
         case (hoodieTableColumn, userDefinedColumn) =>
           hoodieTableColumn.name.equals(userDefinedColumn.name) &&
             (Cast.canCast(hoodieTableColumn.dataType, userDefinedColumn.dataType) ||
-              SchemaConverters.toAvroType(hoodieTableColumn.dataType)
-                .equals(SchemaConverters.toAvroType(userDefinedColumn.dataType)))
+              HoodieSparkSchemaConverters.toHoodieType(hoodieTableColumn.dataType)
+                .equals(HoodieSparkSchemaConverters.toHoodieType(userDefinedColumn.dataType)))
       }
       if (!diffResult) {
         throw new HoodieValidationException(
@@ -133,6 +134,7 @@ object CreateHoodieTableCommand {
       checkTableConfigEqual(originTableConfig, tableOptions, HoodieTableConfig.KEY_GENERATOR_CLASS_NAME.key)
       checkTableConfigEqual(originTableConfig, tableOptions, HoodieTableConfig.URL_ENCODE_PARTITIONING.key)
       checkTableConfigEqual(originTableConfig, tableOptions, HoodieTableConfig.HIVE_STYLE_PARTITIONING_ENABLE.key)
+      checkTableConfigEqual(originTableConfig, tableOptions, HoodieTableConfig.SLASH_SEPARATED_DATE_PARTITIONING.key)
     }
   }
 

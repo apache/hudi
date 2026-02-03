@@ -20,8 +20,8 @@ package org.apache.hudi.client.transaction.lock.models;
 
 import org.apache.hudi.common.util.VisibleForTesting;
 
+import lombok.extern.slf4j.Slf4j;
 import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import javax.annotation.concurrent.GuardedBy;
 import javax.annotation.concurrent.ThreadSafe;
@@ -40,6 +40,7 @@ import java.util.function.Supplier;
  * It should be responsible for the entire lifecycle of the heartbeat task.
  * Importantly, a new instance should be created for each lock provider.
  */
+@Slf4j
 @ThreadSafe
 public class LockProviderHeartbeatManager implements HeartbeatManager {
   public static long DEFAULT_STOP_HEARTBEAT_TIMEOUT_MS = 15_000L;
@@ -123,8 +124,6 @@ public class LockProviderHeartbeatManager implements HeartbeatManager {
    */
   private final Semaphore heartbeatSemaphore;
 
-  private static final Logger DEFAULT_LOGGER = LoggerFactory.getLogger(LockProviderHeartbeatManager.class);
-
   /**
    * Initializes a heartbeat manager.
    * @param ownerId The identifier for logging of who owns this heartbeat manager.
@@ -142,7 +141,7 @@ public class LockProviderHeartbeatManager implements HeartbeatManager {
             DEFAULT_STOP_HEARTBEAT_TIMEOUT_MS,
             heartbeatFuncToExec,
             new Semaphore(1),
-            DEFAULT_LOGGER);
+            log);
   }
 
   @VisibleForTesting

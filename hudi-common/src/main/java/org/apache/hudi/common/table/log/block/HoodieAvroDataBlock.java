@@ -18,7 +18,6 @@
 
 package org.apache.hudi.common.table.log.block;
 
-import org.apache.hudi.avro.AvroSchemaCache;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.fs.SizeAwareDataInputStream;
@@ -26,6 +25,7 @@ import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaCache;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
@@ -46,7 +46,7 @@ import org.apache.avro.io.Decoder;
 import org.apache.avro.io.DecoderFactory;
 import org.apache.avro.io.Encoder;
 import org.apache.avro.io.EncoderFactory;
-import org.apache.parquet.schema.AvroSchemaRepair;
+import org.apache.parquet.schema.HoodieSchemaRepair;
 
 import javax.annotation.Nonnull;
 
@@ -104,7 +104,7 @@ public class HoodieAvroDataBlock extends HoodieDataBlock {
 
   @Override
   protected ByteArrayOutputStream serializeRecords(List<HoodieRecord> records, HoodieStorage storage) throws IOException {
-    Schema schema = AvroSchemaCache.intern(new Schema.Parser().parse(super.getLogBlockHeader().get(HeaderMetadataType.SCHEMA)));
+    HoodieSchema schema = HoodieSchemaCache.intern(HoodieSchema.parse(super.getLogBlockHeader().get(HeaderMetadataType.SCHEMA)));
     ByteArrayOutputStream baos = new ByteArrayOutputStream();
     try (DataOutputStream output = new DataOutputStream(baos)) {
       // 1. Write out the log block version
@@ -192,13 +192,13 @@ public class HoodieAvroDataBlock extends HoodieDataBlock {
       // writer schema could refer to table schema.
       // avoid this for MDT for sure.
       // and for tables having no logical ts column.
-      Schema repairedWriterSchema = enableLogicalTimestampFieldRepair
-          ? AvroSchemaRepair.repairLogicalTypes(writerSchema.toAvroSchema(), readerSchema.toAvroSchema()) : writerSchema.toAvroSchema();
-      if (recordNeedsRewriteForExtendedAvroTypePromotion(repairedWriterSchema, readerSchema.toAvroSchema())) {
-        this.reader = new GenericDatumReader<>(repairedWriterSchema, repairedWriterSchema);
+      HoodieSchema repairedWriterSchema = enableLogicalTimestampFieldRepair
+          ? HoodieSchemaRepair.repairLogicalTypes(writerSchema, readerSchema) : writerSchema;
+      if (recordNeedsRewriteForExtendedAvroTypePromotion(repairedWriterSchema.toAvroSchema(), readerSchema.toAvroSchema())) {
+        this.reader = new GenericDatumReader<>(repairedWriterSchema.toAvroSchema(), repairedWriterSchema.toAvroSchema());
         this.promotedSchema = Option.of(readerSchema);
       } else {
-        this.reader = new GenericDatumReader<>(repairedWriterSchema, readerSchema.toAvroSchema());
+        this.reader = new GenericDatumReader<>(repairedWriterSchema.toAvroSchema(), readerSchema.toAvroSchema());
       }
     }
 
@@ -279,12 +279,12 @@ public class HoodieAvroDataBlock extends HoodieDataBlock {
         this.totalRecords = this.inputStream.readInt();
       }
 
-      Schema repairedWriterSchema = AvroSchemaRepair.repairLogicalTypes(writerSchema.toAvroSchema(), readerSchema.toAvroSchema());
-      if (recordNeedsRewriteForExtendedAvroTypePromotion(repairedWriterSchema, readerSchema.toAvroSchema())) {
-        this.reader = new GenericDatumReader<>(repairedWriterSchema, repairedWriterSchema);
+      HoodieSchema repairedWriterSchema = HoodieSchemaRepair.repairLogicalTypes(writerSchema, readerSchema);
+      if (recordNeedsRewriteForExtendedAvroTypePromotion(repairedWriterSchema.toAvroSchema(), readerSchema.toAvroSchema())) {
+        this.reader = new GenericDatumReader<>(repairedWriterSchema.toAvroSchema(), repairedWriterSchema.toAvroSchema());
         this.promotedSchema = Option.of(readerSchema);
       } else {
-        this.reader = new GenericDatumReader<>(repairedWriterSchema, readerSchema.toAvroSchema());
+        this.reader = new GenericDatumReader<>(repairedWriterSchema.toAvroSchema(), readerSchema.toAvroSchema());
       }
 
       this.buffer = ByteBuffer.allocate(Math.min(bufferSize, Math.toIntExact(contentLocation.getBlockSize())));
@@ -412,11 +412,11 @@ public class HoodieAvroDataBlock extends HoodieDataBlock {
    * HoodieLogFormat V1.
    */
   @Deprecated
-  public HoodieAvroDataBlock(List<HoodieRecord> records, Schema schema) {
+  public HoodieAvroDataBlock(List<HoodieRecord> records, HoodieSchema schema) {
     super(records, Collections.singletonMap(HeaderMetadataType.SCHEMA, schema.toString()), new HashMap<>(), HoodieRecord.RECORD_KEY_METADATA_FIELD);
   }
 
-  public static HoodieAvroDataBlock getBlock(byte[] content, Schema readerSchema) throws IOException {
+  public static HoodieAvroDataBlock getBlock(byte[] content, HoodieSchema readerSchema) throws IOException {
     return getBlock(content, readerSchema, InternalSchema.getEmptyInternalSchema());
   }
 
@@ -425,7 +425,7 @@ public class HoodieAvroDataBlock extends HoodieDataBlock {
    * HoodieLogFormat V1.
    */
   @Deprecated
-  public static HoodieAvroDataBlock getBlock(byte[] content, Schema readerSchema, InternalSchema internalSchema) throws IOException {
+  public static HoodieAvroDataBlock getBlock(byte[] content, HoodieSchema readerSchema, InternalSchema internalSchema) throws IOException {
 
     SizeAwareDataInputStream dis = new SizeAwareDataInputStream(new DataInputStream(new ByteArrayInputStream(content)));
 
@@ -435,15 +435,12 @@ public class HoodieAvroDataBlock extends HoodieDataBlock {
     dis.readFully(compressedSchema, 0, schemaLength);
     Schema writerSchema = new Schema.Parser().parse(decompress(compressedSchema));
 
-    if (readerSchema == null) {
-      readerSchema = writerSchema;
+    if (readerSchema == null || !internalSchema.isEmptySchema()) {
+      readerSchema = HoodieSchema.fromAvroSchema(writerSchema);
     }
 
-    if (!internalSchema.isEmptySchema()) {
-      readerSchema = writerSchema;
-    }
-
-    GenericDatumReader<IndexedRecord> reader = new GenericDatumReader<>(writerSchema, readerSchema);
+    Schema readerAvroSchema = readerSchema.toAvroSchema();
+    GenericDatumReader<IndexedRecord> reader = new GenericDatumReader<>(writerSchema, readerAvroSchema);
     // 2. Get the total records
     int totalRecords = dis.readInt();
     List<HoodieRecord> records = new ArrayList<>(totalRecords);
@@ -509,7 +506,7 @@ public class HoodieAvroDataBlock extends HoodieDataBlock {
       // 3. Write the records
       Iterator<HoodieRecord<?>> itr = records.iterator();
       while (itr.hasNext()) {
-        IndexedRecord s = itr.next().toIndexedRecord(schema, new Properties()).get().getData();
+        IndexedRecord s = itr.next().toIndexedRecord(HoodieSchema.fromAvroSchema(schema), new Properties()).get().getData();
         ByteArrayOutputStream temp = new ByteArrayOutputStream();
         Encoder encoder = EncoderFactory.get().binaryEncoder(temp, null);
         try {

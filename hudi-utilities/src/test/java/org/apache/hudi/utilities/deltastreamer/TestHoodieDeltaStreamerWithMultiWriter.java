@@ -27,7 +27,7 @@ import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.checkpoint.CheckpointUtils;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.util.FileIOUtils;
+import org.apache.hudi.io.util.FileIOUtils;
 import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.exception.HoodieException;
@@ -298,6 +298,12 @@ public class TestHoodieDeltaStreamerWithMultiWriter extends HoodieDeltaStreamerT
     meta.reloadActiveTimeline();
     int totalCommits = meta.getCommitsTimeline().filterCompletedInstants().countInstants();
 
+    // Capture the checkpoint after backfillJob.sync() to calculate expected final checkpoint
+    HoodieCommitMetadata commitMetadataAfterBackfill = getLatestMetadata(meta);
+    String checkpointAfterBackfill = CheckpointUtils.getCheckpoint(commitMetadataAfterBackfill).getCheckpointKey();
+    int expectedNextCheckpointNum = Integer.parseInt(checkpointAfterBackfill) + 1;
+    String expectedFinalCheckpoint = String.format("%05d", expectedNextCheckpointNum);
+
     // add a new commit to timeline which may not have the checkpoint in extra metadata
     addCommitToTimeline(meta);
     meta.reloadActiveTimeline();
@@ -307,7 +313,7 @@ public class TestHoodieDeltaStreamerWithMultiWriter extends HoodieDeltaStreamerT
     new HoodieDeltaStreamer(cfgBackfillJob, jsc).sync(); // if deltastreamer checkpoint fetch does not walk back to older commits, this sync will fail
     meta.reloadActiveTimeline();
     Assertions.assertEquals(totalCommits + 2, meta.getCommitsTimeline().filterCompletedInstants().countInstants());
-    verifyCommitMetadataCheckpoint(meta, "00008");
+    verifyCommitMetadataCheckpoint(meta, expectedFinalCheckpoint);
   }
 
   private void verifyCommitMetadataCheckpoint(HoodieTableMetaClient metaClient, String expectedCheckpoint) throws IOException {
@@ -372,6 +378,7 @@ public class TestHoodieDeltaStreamerWithMultiWriter extends HoodieDeltaStreamerT
     cfg.transformerClassNames = transformerClassNames;
     cfg.operation = op;
     cfg.enableHiveSync = false;
+    cfg.enableHiveSupport = false;
     cfg.sourceOrderingFields = "timestamp";
     cfg.propsFilePath = propsFilePath;
     cfg.sourceLimit = 1000;

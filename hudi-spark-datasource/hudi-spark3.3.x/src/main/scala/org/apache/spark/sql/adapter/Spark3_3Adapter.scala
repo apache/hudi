@@ -18,6 +18,7 @@
 package org.apache.spark.sql.adapter
 
 import org.apache.hudi.Spark33HoodieFileScanRDD
+import org.apache.hudi.common.schema.HoodieSchema
 import org.apache.hudi.storage.StorageConfiguration
 
 import org.apache.avro.Schema
@@ -84,11 +85,11 @@ class Spark3_3Adapter extends BaseSpark3Adapter {
 
   override def getSparkPartitionedFileUtils: HoodieSparkPartitionedFileUtils = HoodieSpark33PartitionedFileUtils
 
-  override def createAvroSerializer(rootCatalystType: DataType, rootAvroType: Schema, nullable: Boolean): HoodieAvroSerializer =
-    new HoodieSpark3_3AvroSerializer(rootCatalystType, rootAvroType, nullable)
+  override def createAvroSerializer(rootCatalystType: DataType, rootType: HoodieSchema, nullable: Boolean): HoodieAvroSerializer =
+    new HoodieSpark3_3AvroSerializer(rootCatalystType, rootType.toAvroSchema, nullable)
 
-  override def createAvroDeserializer(rootAvroType: Schema, rootCatalystType: DataType): HoodieAvroDeserializer =
-    new HoodieSpark3_3AvroDeserializer(rootAvroType, rootCatalystType)
+  override def createAvroDeserializer(rootType: HoodieSchema, rootCatalystType: DataType): HoodieAvroDeserializer =
+    new HoodieSpark3_3AvroDeserializer(rootType.toAvroSchema, rootCatalystType)
 
   override def createExtendedSparkParser(spark: SparkSession, delegate: ParserInterface): HoodieExtendedParserInterface =
     new HoodieSpark3_3ExtendedSqlParser(spark, delegate)
@@ -151,6 +152,13 @@ class Spark3_3Adapter extends BaseSpark3Adapter {
 
   override def createOrcFileReader(vectorized: Boolean, sqlConf: SQLConf, options: Map[String, String], hadoopConf: Configuration, dataSchema: StructType): SparkColumnarFileReader = {
     Spark33OrcReader.build(vectorized, sqlConf, options, hadoopConf, dataSchema)
+  }
+
+  override def createLanceFileReader(vectorized: Boolean,
+                                     sqlConf: SQLConf,
+                                     options: Map[String, String],
+                                     hadoopConf: Configuration): Option[SparkColumnarFileReader] = {
+    None
   }
 
   override def stopSparkContext(jssc: JavaSparkContext, exitCode: Int): Unit = {

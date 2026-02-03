@@ -352,7 +352,7 @@ class TestMORDataSourceStorage extends SparkClientFunctionalTestHarness {
                                         shouldContainRecordPosition: Boolean,
                                         logFileList: List[HoodieLogFile],
                                         shouldBaseFileInstantTimeMatch: Boolean): Unit = {
-    val schema = new TableSchemaResolver(metaClient).getTableAvroSchema
+    val schema = new TableSchemaResolver(metaClient).getTableSchema
     val fsv = FileSystemViewManager.createInMemoryFileSystemView(
       context(), metaClient, HoodieMetadataConfig.newBuilder().build())
     logFileList.foreach(filename => {

@@ -19,6 +19,7 @@
 package org.apache.hudi.common.util;
 
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
+import org.apache.hudi.io.util.FileIOUtils;
 
 import org.junit.jupiter.api.Test;
 

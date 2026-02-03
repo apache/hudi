@@ -54,7 +54,7 @@ import org.apache.hudi.common.testutils.HoodieTestTable;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.CleanerUtils;
 import org.apache.hudi.common.util.CollectionUtils;
-import org.apache.hudi.common.util.FileIOUtils;
+import org.apache.hudi.io.util.FileIOUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieArchivalConfig;
@@ -77,6 +77,7 @@ import org.apache.hudi.table.upgrade.SparkUpgradeDowngradeHelper;
 import org.apache.hudi.table.upgrade.UpgradeDowngrade;
 import org.apache.hudi.testutils.HoodieSparkClientTestHarness;
 
+import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -84,8 +85,6 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
@@ -141,9 +140,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+@Slf4j
 public class TestHoodieTimelineArchiver extends HoodieSparkClientTestHarness {
-
-  private static final Logger LOG = LoggerFactory.getLogger(TestHoodieTimelineArchiver.class);
 
   private HoodieTableMetadataWriter metadataWriter;
   private HoodieTestTable testTable;
@@ -728,6 +726,28 @@ public class TestHoodieTimelineArchiver extends HoodieSparkClientTestHarness {
   }
 
   @Test
+  public void testCompactionWithLargeL0File() throws Exception {
+    HoodieWriteConfig writeConfig = initTestTableAndGetWriteConfig(true, 4, 5, 2, 3);
+    writeConfig.setValue(HoodieArchivalConfig.TIMELINE_COMPACTION_TARGET_FILE_MAX_BYTES.key(), "3200");
+    // do ingestion and trigger archive actions here.
+    for (int i = 1; i < 19; i++) {
+      testTable.doWriteOperation(
+          WriteClientTestUtils.createNewInstantTime(), WriteOperationType.UPSERT, i == 1 ? Arrays.asList("p1", "p2", "p3") : Collections.emptyList(),
+          i == 1 ? Arrays.asList("p1", "p2", "p3") : Arrays.asList("p1"), 2);
+      archiveAndGetCommitsList(writeConfig);
+    }
+    // first L0 file will be larger than max archived file size
+
+    // loading archived timeline and active timeline success
+    HoodieActiveTimeline rawActiveTimeline = TIMELINE_FACTORY.createActiveTimeline(metaClient, false);
+    HoodieArchivedTimeline archivedTimeLine = metaClient.getArchivedTimeline();
+    assertEquals(4 * 3 + 14, rawActiveTimeline.countInstants() + archivedTimeLine.countInstants());
+    // L0 file should be only one
+    HoodieLSMTimelineManifest latestManifest = LSMTimeline.latestSnapshotManifest(metaClient, metaClient.getArchivePath());
+    assertEquals(1, latestManifest.getFiles().stream().filter(f -> LSMTimeline.isFileFromLayer(f.getFileName(), 0)).count());
+  }
+
+  @Test
   public void testReadArchivedCompactionPlan() throws Exception {
     HoodieWriteConfig writeConfig = initTestTableAndGetWriteConfig(true, 4, 5, 5, HoodieTableType.MERGE_ON_READ);
 
@@ -906,7 +926,7 @@ public class TestHoodieTimelineArchiver extends HoodieSparkClientTestHarness {
       int finalCounter = counter;
       curFuture.exceptionally(ex -> {
         if (!jobFailed.getAndSet(true)) {
-          LOG.warn("One of the job failed. Cancelling all other futures. " + ex.getCause() + ", " + ex.getMessage());
+          log.warn("One of the job failed. Cancelling all other futures. " + ex.getCause() + ", " + ex.getMessage());
           int secondCounter = 0;
           while (secondCounter < futures.size()) {
             if (secondCounter != finalCounter) {

@@ -29,7 +29,7 @@ import org.junit.jupiter.params.provider.CsvSource;
 
 import java.io.IOException;
 
-import static org.apache.hudi.common.util.FileIOUtils.readAsUTFString;
+import static org.apache.hudi.io.util.FileIOUtils.readAsUTFString;
 import static org.apache.hudi.utilities.schema.converter.JsonToAvroSchemaConverter.stripQuotesFromStringValue;
 import static org.apache.hudi.utilities.schema.converter.JsonToAvroSchemaConverterConfig.STRIP_DEFAULT_VALUE_QUOTES;
 import static org.junit.jupiter.api.Assertions.assertEquals;

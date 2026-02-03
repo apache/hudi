@@ -30,6 +30,7 @@ import org.apache.hudi.common.table.timeline.HoodieInstant.State;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.collection.Pair;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.spark.launcher.SparkLauncher;
 import org.springframework.shell.standard.ShellComponent;
 import org.springframework.shell.standard.ShellMethod;
@@ -47,6 +48,7 @@ import static org.apache.hudi.common.table.timeline.HoodieTimeline.ROLLBACK_ACTI
  * CLI command to display rollback options.
  */
 @ShellComponent
+@Slf4j
 public class RollbacksCommand {
 
   @ShellMethod(key = "show rollbacks", value = "List all rollback instants")
@@ -73,7 +75,7 @@ public class RollbacksCommand {
           rows.add(row);
         });
       } catch (IOException e) {
-        e.printStackTrace();
+        log.error("Error reading rollback metadata for instant {}", instant, e);
       }
     });
     TableHeader header = new TableHeader().addTableHeaderField(HoodieTableHeaderFields.HEADER_INSTANT)

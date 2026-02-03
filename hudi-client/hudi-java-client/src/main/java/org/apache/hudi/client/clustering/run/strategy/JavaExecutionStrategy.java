@@ -19,7 +19,6 @@
 
 package org.apache.hudi.client.clustering.run.strategy;
 
-import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieClusteringGroup;
 import org.apache.hudi.avro.model.HoodieClusteringPlan;
 import org.apache.hudi.client.WriteStatus;
@@ -32,6 +31,8 @@ import org.apache.hudi.common.model.ClusteringOperation;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -43,9 +44,7 @@ import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.action.cluster.strategy.ClusteringExecutionStrategy;
 
-import org.apache.avro.Schema;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -58,10 +57,9 @@ import static org.apache.hudi.config.HoodieClusteringConfig.PLAN_STRATEGY_SORT_C
 /**
  * Clustering strategy for Java engine.
  */
+@Slf4j
 public abstract class JavaExecutionStrategy<T>
     extends ClusteringExecutionStrategy<T, HoodieData<HoodieRecord<T>>, HoodieData<HoodieKey>, HoodieData<WriteStatus>> {
-
-  private static final Logger LOG = LoggerFactory.getLogger(JavaExecutionStrategy.class);
 
   public JavaExecutionStrategy(
       HoodieTable table, HoodieEngineContext engineContext, HoodieWriteConfig writeConfig) {
@@ -70,7 +68,7 @@ public abstract class JavaExecutionStrategy<T>
 
   @Override
   public HoodieWriteMetadata<HoodieData<WriteStatus>> performClustering(
-      HoodieClusteringPlan clusteringPlan, Schema schema, String instantTime) {
+      HoodieClusteringPlan clusteringPlan, HoodieSchema schema, String instantTime) {
     // execute clustering for each group and collect WriteStatus
     List<WriteStatus> writeStatusList = new ArrayList<>();
     clusteringPlan.getInputGroups().forEach(
@@ -99,7 +97,7 @@ public abstract class JavaExecutionStrategy<T>
    */
   public abstract List<WriteStatus> performClusteringWithRecordList(
       final List<HoodieRecord<T>> inputRecords, final int numOutputGroups, final String instantTime,
-      final Map<String, String> strategyParams, final Schema schema,
+      final Map<String, String> strategyParams, final HoodieSchema schema,
       final List<HoodieFileGroupId> fileGroupIdList, final boolean preserveHoodieMetadata);
 
   /**
@@ -109,11 +107,11 @@ public abstract class JavaExecutionStrategy<T>
    * @param schema         Schema of the data including metadata fields.
    * @return partitioner for the java engine
    */
-  protected BulkInsertPartitioner<List<HoodieRecord<T>>> getPartitioner(Map<String, String> strategyParams, Schema schema) {
+  protected BulkInsertPartitioner<List<HoodieRecord<T>>> getPartitioner(Map<String, String> strategyParams, HoodieSchema schema) {
     if (strategyParams.containsKey(PLAN_STRATEGY_SORT_COLUMNS.key())) {
       return new JavaCustomColumnsSortPartitioner(
           strategyParams.get(PLAN_STRATEGY_SORT_COLUMNS.key()).split(","),
-          HoodieAvroUtils.addMetadataFields(schema), getWriteConfig());
+          HoodieSchemaUtils.addMetadataFields(schema), getWriteConfig());
     } else {
       return JavaBulkInsertInternalPartitionerFactory.get(getWriteConfig().getBulkInsertSortMode());
     }
@@ -126,7 +124,7 @@ public abstract class JavaExecutionStrategy<T>
       HoodieClusteringGroup clusteringGroup, Map<String, String> strategyParams,
       boolean preserveHoodieMetadata, String instantTime) {
     List<HoodieRecord<T>> inputRecords = readRecordsForGroup(clusteringGroup, instantTime);
-    Schema readerSchema = HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(getWriteConfig().getSchema()));
+    HoodieSchema readerSchema = HoodieSchemaUtils.addMetadataFields(HoodieSchema.parse(getWriteConfig().getSchema()));
     List<HoodieFileGroupId> inputFileIds = clusteringGroup.getSlices().stream()
         .map(info -> new HoodieFileGroupId(info.getPartitionPath(), info.getFileId()))
         .collect(Collectors.toList());
@@ -142,7 +140,7 @@ public abstract class JavaExecutionStrategy<T>
     HoodieWriteConfig config = getWriteConfig();
     List<HoodieRecord<T>> records = new ArrayList<>();
     long maxMemoryPerCompaction = IOUtils.getMaxMemoryPerCompaction(new JavaTaskContextSupplier(), config);
-    LOG.info("MaxMemoryPerCompaction run as part of clustering => {}", maxMemoryPerCompaction);
+    log.info("MaxMemoryPerCompaction run as part of clustering => {}", maxMemoryPerCompaction);
 
     List<Supplier<ClosableIterator<HoodieRecord<T>>>> suppliers = new ArrayList<>(clusteringOps.size());
     clusteringOps.forEach(op -> suppliers.add(() -> getRecordIterator(getEngineContext().getReaderContextFactory(getHoodieTable().getMetaClient()), op, instantTime, maxMemoryPerCompaction)));

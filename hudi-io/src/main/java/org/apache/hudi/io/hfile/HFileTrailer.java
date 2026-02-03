@@ -22,9 +22,11 @@ package org.apache.hudi.io.hfile;
 import org.apache.hudi.io.compress.CompressionCodec;
 import org.apache.hudi.io.hfile.protobuf.generated.HFileProtos;
 
+import lombok.Getter;
+import lombok.ToString;
+
 import java.io.DataInputStream;
 import java.io.IOException;
-import java.util.Arrays;
 
 import static org.apache.hudi.io.hfile.DataSize.MAGIC_LENGTH;
 import static org.apache.hudi.io.hfile.DataSize.SIZEOF_INT32;
@@ -33,7 +35,9 @@ import static org.apache.hudi.io.hfile.DataSize.SIZEOF_INT32;
  * Represents a HFile trailer, which is serialized and deserialized using
  * {@link HFileProtos.TrailerProto} with Protobuf.
  */
+@ToString
 public class HFileTrailer {
+
   // This is the trailer size for HFile V3
   public static final int TRAILER_SIZE = 1024 * 4;
   private static final int NOT_PB_SIZE = MAGIC_LENGTH + SIZEOF_INT32;
@@ -43,15 +47,18 @@ public class HFileTrailer {
 
   // The offset to the section of the file that should be loaded at the time the file is
   // being opened: i.e. on open we load the root index, file info, etc.
+  @Getter
   private long loadOnOpenDataOffset;
 
   // The number of entries in the root data index
+  @Getter
   private int dataIndexCount;
 
   // Total uncompressed size of all blocks of the data index
   private long uncompressedDataIndexSize;
 
   // The number of entries in the meta index
+  @Getter
   private int metaIndexCount;
 
   // The total uncompressed size of keys/values stored in the file
@@ -61,9 +68,11 @@ public class HFileTrailer {
   private long keyValueEntryCount;
 
   // The compression codec used for all blocks.
+  @Getter
   private CompressionCodec compressionCodec = CompressionCodec.NONE;
 
   // The number of levels in the potentially multi-level data index.
+  @Getter
   private int numDataIndexLevels;
 
   // The offset of the first data block.
@@ -90,28 +99,8 @@ public class HFileTrailer {
     return TRAILER_SIZE;
   }
 
-  public long getLoadOnOpenDataOffset() {
-    return loadOnOpenDataOffset;
-  }
-
-  public int getNumDataIndexLevels() {
-    return numDataIndexLevels;
-  }
-
-  public int getDataIndexCount() {
-    return dataIndexCount;
-  }
-  
-  public int getMetaIndexCount() {
-    return metaIndexCount;
-  }
-
   public long getNumKeyValueEntries() {
     return keyValueEntryCount;
-  }
-
-  public CompressionCodec getCompressionCodec() {
-    return compressionCodec;
   }
 
   public void deserialize(DataInputStream stream) throws IOException {
@@ -165,26 +154,5 @@ public class HFileTrailer {
     if (trailerProto.hasEncryptionKey()) {
       encryptionKey = trailerProto.getEncryptionKey().toByteArray();
     }
-  }
-
-  @Override
-  public String toString() {
-    return "HFileTrailer{"
-        + "fileInfoOffset=" + fileInfoOffset
-        + ", loadOnOpenDataOffset=" + loadOnOpenDataOffset
-        + ", dataIndexCount=" + dataIndexCount
-        + ", uncompressedDataIndexSize=" + uncompressedDataIndexSize
-        + ", metaIndexCount=" + metaIndexCount
-        + ", totalUncompressedBytes=" + totalUncompressedBytes
-        + ", entryCount=" + keyValueEntryCount
-        + ", compressionCodec=" + compressionCodec
-        + ", numDataIndexLevels=" + numDataIndexLevels
-        + ", firstDataBlockOffset=" + firstDataBlockOffset
-        + ", lastDataBlockOffset=" + lastDataBlockOffset
-        + ", comparatorClassName='" + comparatorClassName + '\''
-        + ", encryptionKey=" + Arrays.toString(encryptionKey)
-        + ", majorVersion=" + majorVersion
-        + ", minorVersion=" + minorVersion
-        + '}';
   }
 }

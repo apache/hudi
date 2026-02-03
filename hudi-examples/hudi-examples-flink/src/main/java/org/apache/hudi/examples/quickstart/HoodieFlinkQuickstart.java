@@ -24,6 +24,9 @@ import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.examples.quickstart.factory.CollectSinkTableFactory;
 import org.apache.hudi.examples.quickstart.utils.QuickstartConfigurations;
 
+import lombok.AccessLevel;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.core.execution.JobClient;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
@@ -39,7 +42,8 @@ import org.apache.flink.table.catalog.ResolvedCatalogTable;
 import org.apache.flink.table.catalog.ResolvedSchema;
 import org.apache.flink.table.catalog.exceptions.TableNotExistException;
 import org.apache.flink.types.Row;
-import org.jetbrains.annotations.NotNull;
+
+import javax.annotation.Nonnull;
 
 import java.util.Collection;
 import java.util.List;
@@ -49,14 +53,13 @@ import java.util.stream.Collectors;
 
 import static org.apache.hudi.examples.quickstart.utils.QuickstartConfigurations.sql;
 
+@NoArgsConstructor(access = AccessLevel.PRIVATE)
 public final class HoodieFlinkQuickstart {
   private EnvironmentSettings settings = null;
+  @Getter
   private TableEnvironment streamTableEnv = null;
 
   private String tableName;
-
-  private HoodieFlinkQuickstart() {
-  }
 
   public static HoodieFlinkQuickstart instance() {
     return new HoodieFlinkQuickstart();
@@ -105,10 +108,6 @@ public final class HoodieFlinkQuickstart {
     }
   }
 
-  public TableEnvironment getStreamTableEnv() {
-    return streamTableEnv;
-  }
-
   public TableEnvironment getBatchTableEnv() {
     Configuration conf = new Configuration();
     // for batch upsert use cases: current suggestion is to disable these 2 options,
@@ -140,6 +139,8 @@ public final class HoodieFlinkQuickstart {
     // create hudi table
     String hoodieTableDDL = sql(tableName)
         .option(FlinkOptions.PATH, tablePath)
+        .option(FlinkOptions.RECORD_KEY_FIELD, "uuid")
+        .option(FlinkOptions.ORDERING_FIELDS, "ts")
         .option(FlinkOptions.READ_AS_STREAMING, true)
         .option(FlinkOptions.TABLE_TYPE, tableType)
         .option(HoodieWriteConfig.ALLOW_EMPTY_COMMIT.key(), false)
@@ -153,7 +154,7 @@ public final class HoodieFlinkQuickstart {
     streamTableEnv.executeSql(createSource);
   }
 
-  @NotNull List<Row> insertData() throws InterruptedException, TableNotExistException {
+  @Nonnull List<Row> insertData() throws InterruptedException, TableNotExistException {
     // insert data
     String insertInto = String.format("insert into %s select * from source", tableName);
     execInsertSql(streamTableEnv, insertInto);
@@ -166,7 +167,7 @@ public final class HoodieFlinkQuickstart {
     return execSelectSql(streamTableEnv, String.format("select * from %s", tableName), 10);
   }
 
-  @NotNull List<Row> updateData() throws InterruptedException, TableNotExistException {
+  @Nonnull List<Row> updateData() throws InterruptedException, TableNotExistException {
     // update data
     String insertInto = String.format("insert into %s select * from source", tableName);
     execInsertSql(getStreamTableEnv(), insertInto);

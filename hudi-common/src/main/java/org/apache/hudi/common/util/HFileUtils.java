@@ -25,6 +25,7 @@ import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.util.collection.ClosableIterator;
@@ -44,7 +45,6 @@ import org.apache.hudi.stats.HoodieColumnRangeMetadata;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 
-import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -87,7 +87,7 @@ public class HFileUtils extends FileFormatUtils {
   }
 
   @Override
-  public List<GenericRecord> readAvroRecords(HoodieStorage storage, StoragePath filePath, Schema schema) {
+  public List<GenericRecord> readAvroRecords(HoodieStorage storage, StoragePath filePath, HoodieSchema schema) {
     throw new UnsupportedOperationException("HFileUtils does not support readAvroRecords");
   }
 
@@ -152,7 +152,7 @@ public class HFileUtils extends FileFormatUtils {
   }
 
   @Override
-  public Schema readAvroSchema(HoodieStorage storage, StoragePath filePath) {
+  public HoodieSchema readSchema(HoodieStorage storage, StoragePath filePath) {
     LOG.info("Reading schema from {}", filePath);
 
     try (HoodieFileReader fileReader =
@@ -161,8 +161,7 @@ public class HFileUtils extends FileFormatUtils {
                  .getFileReader(
                      ConfigUtils.DEFAULT_HUDI_CONFIG_FOR_READER,
                      filePath)) {
-      //TODO boundary to revisit in later pr to use HoodieSchema directly
-      return fileReader.getSchema().toAvroSchema();
+      return fileReader.getSchema();
     } catch (IOException e) {
       throw new HoodieIOException("Failed to read schema from HFile", e);
     }
@@ -218,9 +217,9 @@ public class HFileUtils extends FileFormatUtils {
           if (i > 0 && recordKey.equals(previousRecordKey)) {
             LOG.error("Found duplicate record with recordKey: {}", recordKey);
             logRecordMetadata("Previous record",
-                serializeRecord(records.get(i - 1), writerSchema, keyField), writerSchema.toAvroSchema());
+                serializeRecord(records.get(i - 1), writerSchema, keyField), writerSchema);
             logRecordMetadata("Current record",
-                serializeRecord(record, writerSchema, keyField), writerSchema.toAvroSchema());
+                serializeRecord(record, writerSchema, keyField), writerSchema);
             throw new HoodieException(String.format(
                 "Writing multiple records with same key %s not supported for Hfile format with Metadata table", recordKey));
           }
@@ -244,9 +243,9 @@ public class HFileUtils extends FileFormatUtils {
   /**
    * Print the meta fields of the record of interest
    */
-  private void logRecordMetadata(String msg, byte[] bs, Schema schema) throws IOException {
-    GenericRecord record = HoodieAvroUtils.bytesToAvro(bs, schema);
-    if (schema.getField(HoodieRecord.RECORD_KEY_METADATA_FIELD) != null) {
+  private void logRecordMetadata(String msg, byte[] bs, HoodieSchema schema) throws IOException {
+    GenericRecord record = HoodieAvroUtils.bytesToAvro(bs, schema.toAvroSchema());
+    if (schema.getField(HoodieRecord.RECORD_KEY_METADATA_FIELD).isPresent()) {
       LOG.error("{}: Hudi meta field values -> Record key: {}, Partition Path: {}, FileName: {}, CommitTime: {}, CommitSeqNo: {}", msg,
           record.get(HoodieRecord.RECORD_KEY_METADATA_FIELD), record.get(HoodieRecord.PARTITION_PATH_METADATA_FIELD),
           record.get(HoodieRecord.FILENAME_METADATA_FIELD), record.get(HoodieRecord.COMMIT_TIME_METADATA_FIELD),
@@ -258,20 +257,20 @@ public class HFileUtils extends FileFormatUtils {
   public Pair<ByteArrayOutputStream, Object> serializeRecordsToLogBlock(
       HoodieStorage storage,
       Iterator<HoodieRecord> records,
-      HoodieRecord.HoodieRecordType recordType,
-      Schema writerSchema,
-      Schema readerSchema,
+      HoodieRecordType recordType,
+      HoodieSchema writerSchema,
+      HoodieSchema readerSchema,
       String keyFieldName,
       Map<String, String> paramsMap) throws IOException {
     throw new UnsupportedOperationException("HFileUtils does not support serializeRecordsToLogBlock returning HoodieColumnRangeMetadata.");
   }
 
   private static Option<String> getRecordKey(HoodieRecord record, HoodieSchema readerSchema, String keyFieldName) {
-    return Option.ofNullable(record.getRecordKey(readerSchema.toAvroSchema(), keyFieldName));
+    return Option.ofNullable(record.getRecordKey(readerSchema, keyFieldName));
   }
 
   private static byte[] serializeRecord(HoodieRecord<?> record, HoodieSchema schema, Option<HoodieSchemaField> keyField) throws IOException {
-    return record.toIndexedRecord(schema.toAvroSchema(), CollectionUtils.emptyProps()).map(HoodieAvroIndexedRecord::getData).map(indexedRecord -> {
+    return record.toIndexedRecord(schema, CollectionUtils.emptyProps()).map(HoodieAvroIndexedRecord::getData).map(indexedRecord -> {
       keyField.ifPresent(field -> indexedRecord.put(field.pos(), StringUtils.EMPTY_STRING));
       return HoodieAvroUtils.avroToBytes(indexedRecord);
     }).orElseThrow(() -> new HoodieException("Unable to convert record to indexed record"));

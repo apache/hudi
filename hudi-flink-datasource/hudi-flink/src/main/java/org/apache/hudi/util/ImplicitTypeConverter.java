@@ -18,9 +18,8 @@
 
 package org.apache.hudi.util;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.flink.table.types.logical.LogicalType;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.Serializable;
 import java.time.LocalDate;
@@ -32,9 +31,8 @@ import java.time.temporal.ChronoField;
 /**
  * Implicit type converter for predicates push down.
  */
+@Slf4j
 public class ImplicitTypeConverter {
-
-  private static final Logger LOG = LoggerFactory.getLogger(ImplicitTypeConverter.class);
 
   /**
    * Convert the literal to the corresponding type.
@@ -127,7 +125,7 @@ public class ImplicitTypeConverter {
           return literal;
       }
     } catch (RuntimeException e) {
-      LOG.warn("Failed to convert literal [{}] to type [{}]. Will use its original type", literal, literalType);
+      log.warn("Failed to convert literal [{}] to type [{}]. Will use its original type", literal, literalType);
       return literal;
     }
   }

@@ -20,6 +20,7 @@ package org.apache.hudi.sink.bulk.sort;
 
 import org.apache.hudi.adapter.Utils;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.metrics.Gauge;
 import org.apache.flink.runtime.memory.MemoryManager;
@@ -42,18 +43,15 @@ import org.apache.flink.table.runtime.typeutils.AbstractRowDataSerializer;
 import org.apache.flink.table.runtime.typeutils.BinaryRowDataSerializer;
 import org.apache.flink.table.runtime.util.StreamRecordCollector;
 import org.apache.flink.util.MutableObjectIterator;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /**
  * Operator for batch sort.
  *
  * <p>Copied from org.apache.flink.table.runtime.operators.sort.SortOperator to change the annotation.
  */
+@Slf4j
 public class SortOperator extends TableStreamOperator<RowData>
     implements OneInputStreamOperator<RowData, RowData>, BoundedOneInput {
-
-  private static final Logger LOG = LoggerFactory.getLogger(SortOperator.class);
 
   private GeneratedNormalizedKeyComputer gComputer;
   private GeneratedRecordComparator gComparator;
@@ -75,7 +73,7 @@ public class SortOperator extends TableStreamOperator<RowData>
   @Override
   public void open() throws Exception {
     super.open();
-    LOG.info("Opening SortOperator");
+    log.info("Opening SortOperator");
 
     ClassLoader cl = getContainingTask().getUserCodeClassLoader();
 
@@ -145,7 +143,7 @@ public class SortOperator extends TableStreamOperator<RowData>
 
   @Override
   public void close() throws Exception {
-    LOG.info("Closing SortOperator");
+    log.info("Closing SortOperator");
     super.close();
     if (sorter != null) {
       sorter.close();

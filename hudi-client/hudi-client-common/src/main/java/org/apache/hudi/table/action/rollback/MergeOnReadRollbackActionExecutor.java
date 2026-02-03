@@ -27,15 +27,13 @@ import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.util.ArrayList;
 import java.util.List;
 
+@Slf4j
 public class MergeOnReadRollbackActionExecutor<T, I, K, O> extends BaseRollbackActionExecutor<T, I, K, O> {
-
-  private static final Logger LOG = LoggerFactory.getLogger(MergeOnReadRollbackActionExecutor.class);
 
   public MergeOnReadRollbackActionExecutor(HoodieEngineContext context,
                                            HoodieWriteConfig config,
@@ -62,11 +60,11 @@ public class MergeOnReadRollbackActionExecutor<T, I, K, O> extends BaseRollbackA
   protected List<HoodieRollbackStat> executeRollback(HoodieRollbackPlan hoodieRollbackPlan) {
     HoodieTimer rollbackTimer = HoodieTimer.start();
 
-    LOG.info("Rolling back instant " + instantToRollback);
+    log.info("Rolling back instant " + instantToRollback);
 
     // Atomically un-publish all non-inflight commits
     if (instantToRollback.isCompleted()) {
-      LOG.info("Un-publishing instant " + instantToRollback + ", deleteInstants=" + deleteInstants);
+      log.info("Un-publishing instant " + instantToRollback + ", deleteInstants=" + deleteInstants);
       resolvedInstant = table.getActiveTimeline().revertToInflight(instantToRollback);
       // reload meta-client to reflect latest timeline status
       table.getMetaClient().reloadActiveTimeline();
@@ -83,13 +81,13 @@ public class MergeOnReadRollbackActionExecutor<T, I, K, O> extends BaseRollbackA
     // For Requested State (like failure during index lookup), there is nothing to do rollback other than
     // deleting the timeline file
     if (!resolvedInstant.isRequested()) {
-      LOG.info("Unpublished " + resolvedInstant);
+      log.info("Unpublished " + resolvedInstant);
       allRollbackStats = executeRollback(instantToRollback, hoodieRollbackPlan);
     }
 
     dropBootstrapIndexIfNeeded(resolvedInstant);
 
-    LOG.info("Time(in ms) taken to finish rollback " + rollbackTimer.endTimer());
+    log.info("Time(in ms) taken to finish rollback " + rollbackTimer.endTimer());
     return allRollbackStats;
   }
 }

@@ -32,6 +32,18 @@ import org.apache.flink.table.runtime.util.MemorySegmentPool;
  */
 public class MemorySegmentPoolFactory {
   public static MemorySegmentPool createMemorySegmentPool(Configuration conf) {
+    return createMemorySegmentPools(conf, 1)[0];
+  }
+
+  /**
+   * Creates multiple memory segment pools that share the total configured memory budget.
+   *
+   * @param conf the configuration
+   * @param numPools number of pools to create
+   * @return array of memory segment pools, each with size = totalSize / numPools
+   */
+  public static MemorySegmentPool[] createMemorySegmentPools(Configuration conf, int numPools) {
+    ValidationUtils.checkArgument(numPools > 0, "numPools must be positive");
     long mergeReaderMem = 100; // constant 100MB
     long mergeMapMaxMem = conf.get(FlinkOptions.WRITE_MERGE_MAX_MEMORY);
     long maxBufferSize = (long) ((conf.get(FlinkOptions.WRITE_TASK_MAX_SIZE) - mergeReaderMem - mergeMapMaxMem) * 1024 * 1024);
@@ -39,6 +51,17 @@ public class MemorySegmentPoolFactory {
         FlinkOptions.WRITE_TASK_MAX_SIZE.key(), FlinkOptions.WRITE_MERGE_MAX_MEMORY.key());
     ValidationUtils.checkState(maxBufferSize > 0, errMsg);
 
-    return new HeapMemorySegmentPool(conf.get(FlinkOptions.WRITE_MEMORY_SEGMENT_PAGE_SIZE), maxBufferSize);
+    int pageSize = conf.get(FlinkOptions.WRITE_MEMORY_SEGMENT_PAGE_SIZE);
+    long poolSize = maxBufferSize / numPools;
+    MemorySegmentPool[] pools = new MemorySegmentPool[numPools];
+    for (int i = 0; i < numPools; i++) {
+      pools[i] = new HeapMemorySegmentPool(pageSize, poolSize);
+    }
+    return pools;
+  }
+
+  public static MemorySegmentPool createMemorySegmentPool(Configuration conf, long maxBufferSize) {
+    ValidationUtils.checkArgument(maxBufferSize > 0, "Buffer size should be a positive number.");
+    return new HeapMemorySegmentPool(conf.get(FlinkOptions.WRITE_MEMORY_SEGMENT_PAGE_SIZE), maxBufferSize * 1024 * 1024);
   }
 }

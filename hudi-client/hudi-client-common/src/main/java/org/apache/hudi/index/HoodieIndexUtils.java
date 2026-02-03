@@ -40,6 +40,8 @@ import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.MetadataValues;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaCache;
+import org.apache.hudi.common.schema.HoodieSchemaField;
+import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -61,6 +63,7 @@ import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.collection.CloseableMappingIterator;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieIndexException;
 import org.apache.hudi.exception.HoodieMetadataIndexException;
@@ -76,23 +79,19 @@ import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
 
-import org.apache.avro.LogicalTypes;
-import org.apache.avro.Schema;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
-import java.util.stream.Collectors;
 
 import static java.util.stream.Collectors.toList;
-import static org.apache.hudi.avro.HoodieAvroUtils.getNestedFieldSchemaFromWriteSchema;
 import static org.apache.hudi.common.config.HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_ENABLE_PROP;
 import static org.apache.hudi.common.util.ConfigUtils.DEFAULT_HUDI_CONFIG_FOR_READER;
 import static org.apache.hudi.common.util.HoodieRecordUtils.getOrderingFieldNames;
@@ -107,9 +106,8 @@ import static org.apache.hudi.table.action.commit.HoodieDeleteHelper.createDelet
 /**
  * Hoodie Index Utilities.
  */
+@Slf4j
 public class HoodieIndexUtils {
-
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieIndexUtils.class);
 
   /**
    * Fetches Pair of partition path and {@link HoodieBaseFile}s for interested partitions.
@@ -138,10 +136,11 @@ public class HoodieIndexUtils {
    * @param tableSchema  table schema
    * @return true if each field's data type are supported for secondary index, false otherwise
    */
-  static boolean validateDataTypeForSecondaryIndex(List<String> sourceFields, Schema tableSchema) {
+  static boolean validateDataTypeForSecondaryIndex(List<String> sourceFields, HoodieSchema tableSchema) {
     return sourceFields.stream().allMatch(fieldToIndex -> {
-      Schema schema = getNestedFieldSchemaFromWriteSchema(tableSchema, fieldToIndex);
-      return isSecondaryIndexSupportedType(schema);
+      Pair<String, HoodieSchemaField> schema = HoodieSchemaUtils.getNestedField(tableSchema, fieldToIndex)
+          .orElseThrow(() -> new HoodieException("Failed to get schema. Not a valid field name: " + fieldToIndex));
+      return isSecondaryIndexSupportedType(schema.getRight().schema());
     });
   }
 
@@ -152,10 +151,14 @@ public class HoodieIndexUtils {
    * @param tableSchema  table schema
    * @return true if each field's data types are supported, false otherwise
    */
-  public static boolean validateDataTypeForSecondaryOrExpressionIndex(List<String> sourceFields, Schema tableSchema) {
+  public static boolean validateDataTypeForSecondaryOrExpressionIndex(List<String> sourceFields, HoodieSchema tableSchema) {
     return sourceFields.stream().anyMatch(fieldToIndex -> {
-      Schema schema = getNestedFieldSchemaFromWriteSchema(tableSchema, fieldToIndex);
-      return schema.getType() != Schema.Type.RECORD && schema.getType() != Schema.Type.ARRAY && schema.getType() != Schema.Type.MAP;
+      Pair<String, HoodieSchemaField> nestedField = HoodieSchemaUtils.getNestedField(tableSchema, fieldToIndex)
+          .orElseThrow(() -> new HoodieException("Failed to get schema. Not a valid field name: " + fieldToIndex));
+      HoodieSchema fieldSchema = nestedField.getRight().schema();
+      return fieldSchema.getType() != HoodieSchemaType.RECORD
+          && fieldSchema.getType() != HoodieSchemaType.ARRAY
+          && fieldSchema.getType() != HoodieSchemaType.MAP;
     });
   }
 
@@ -163,39 +166,27 @@ public class HoodieIndexUtils {
    * Check if the given schema type is supported for secondary index.
    * Supported types are: String (including CHAR), Integer types (Int, BigInt, Long, Short), and timestamp
    */
-  private static boolean isSecondaryIndexSupportedType(Schema schema) {
+  private static boolean isSecondaryIndexSupportedType(HoodieSchema schema) {
     // Handle union types (nullable fields)
-    if (schema.getType() == Schema.Type.UNION) {
+    if (schema.getType() == HoodieSchemaType.UNION) {
       // For union types, check if any of the types is supported
       return schema.getTypes().stream()
-          .anyMatch(s -> s.getType() != Schema.Type.NULL && isSecondaryIndexSupportedType(s));
+          .anyMatch(s -> s.getType() != HoodieSchemaType.NULL && isSecondaryIndexSupportedType(s));
     }
 
     // Check basic types
     switch (schema.getType()) {
       case STRING:
-        // STRING type can have UUID logical type which we don't support
-        return schema.getLogicalType() == null; // UUID and other string-based logical types are not supported
-      // Regular STRING (includes CHAR)
       case INT:
-        // INT type can represent regular integers or dates/times with logical types
-        if (schema.getLogicalType() != null) {
-          // Support date and time-millis logical types
-          return schema.getLogicalType() == LogicalTypes.date()
-              || schema.getLogicalType() == LogicalTypes.timeMillis();
-        }
-        return true; // Regular INT
       case LONG:
-        // LONG type can represent regular longs or timestamps with logical types
-        if (schema.getLogicalType() != null) {
-          // Support timestamp logical types
-          return schema.getLogicalType() == LogicalTypes.timestampMillis()
-              || schema.getLogicalType() == LogicalTypes.timestampMicros()
-              || schema.getLogicalType() == LogicalTypes.timeMicros();
-        }
-        return true; // Regular LONG
       case DOUBLE:
-        return true; // Support DOUBLE type
+      case FLOAT:
+      case DATE:
+      case TIME:
+        return true;
+      case TIMESTAMP:
+        // LOCAL timestamps are not supported
+        return ((HoodieSchema.Timestamp) schema).isUtcAdjusted();
       default:
         return false;
     }
@@ -285,28 +276,27 @@ public class HoodieIndexUtils {
    * @param storage
    * @return List of pairs of candidate keys and positions that are available in the file
    */
-  public static List<Pair<String, Long>> filterKeysFromFile(StoragePath filePath,
-                                                            List<String> candidateRecordKeys,
-                                                            HoodieStorage storage) throws HoodieIndexException {
+  public static Collection<Pair<String, Long>> filterKeysFromFile(StoragePath filePath,
+                                                                  Set<String> candidateRecordKeys,
+                                                                  HoodieStorage storage) throws HoodieIndexException {
     checkArgument(FSUtils.isBaseFile(filePath));
-    List<Pair<String, Long>> foundRecordKeys = new ArrayList<>();
-    LOG.info(String.format("Going to filter %d keys from file %s", candidateRecordKeys.size(), filePath));
+    if (candidateRecordKeys.isEmpty()) {
+      return Collections.emptyList();
+    }
+    log.info("Going to filter {} keys from file {}", candidateRecordKeys.size(), filePath);
     try (HoodieFileReader fileReader = HoodieIOFactory.getIOFactory(storage)
         .getReaderFactory(HoodieRecordType.AVRO)
         .getFileReader(DEFAULT_HUDI_CONFIG_FOR_READER, filePath)) {
       // Load all rowKeys from the file, to double-confirm
-      if (!candidateRecordKeys.isEmpty()) {
-        HoodieTimer timer = HoodieTimer.start();
-        Set<Pair<String, Long>> fileRowKeys = fileReader.filterRowKeys(candidateRecordKeys.stream().collect(Collectors.toSet()));
-        foundRecordKeys.addAll(fileRowKeys);
-        LOG.info("Checked keys against file {}, in {} ms. #candidates ({}) #found ({})", filePath,
-            timer.endTimer(), candidateRecordKeys.size(), foundRecordKeys.size());
-        LOG.debug("Keys matching for file {} => {}", filePath, foundRecordKeys);
-      }
+      HoodieTimer timer = HoodieTimer.start();
+      Set<Pair<String, Long>> fileRowKeys = fileReader.filterRowKeys(candidateRecordKeys);
+      log.info("Checked keys against file {}, in {} ms. #candidates ({}) #found ({})", filePath,
+          timer.endTimer(), candidateRecordKeys.size(), fileRowKeys.size());
+      log.debug("Keys matching for file {} => {}", filePath, fileRowKeys);
+      return fileRowKeys;
     } catch (Exception e) {
       throw new HoodieIndexException("Error checking candidate keys against file.", e);
     }
-    return foundRecordKeys;
   }
 
   /**
@@ -367,11 +357,10 @@ public class HoodieIndexUtils {
           .withHoodieTableMetaClient(metaClient)
           .withLatestCommitTime(instantTime.get())
           .withFileSlice(fileSlice)
-          .withDataSchema(dataSchema.toAvroSchema())
-          .withRequestedSchema(dataSchema.toAvroSchema())
+          .withDataSchema(dataSchema)
+          .withRequestedSchema(dataSchema)
           .withInternalSchema(internalSchemaOption)
           .withProps(metaClient.getTableConfig().getProps())
-          .withEnableOptimizedLogBlockScan(config.enableOptimizedLogBlocksScan())
           .build();
       try {
         final HoodieRecordLocation currentLocation = new HoodieRecordLocation(fileSlice.getBaseInstantTime(), fileSlice.getFileId());
@@ -442,10 +431,10 @@ public class HoodieIndexUtils {
     //record is inserted or updated
     String partitionPath = inferPartitionPath(incoming, existing, writeSchemaWithMetaFields, keyGenerator, existingRecordContext, mergeResult);
     HoodieRecord<R> result = existingRecordContext.constructHoodieRecord(mergeResult, partitionPath);
-    HoodieRecord<R> withMeta = result.prependMetaFields(writeSchema.toAvroSchema(), writeSchemaWithMetaFields.toAvroSchema(),
+    HoodieRecord<R> withMeta = result.prependMetaFields(writeSchema, writeSchemaWithMetaFields,
         new MetadataValues().setRecordKey(incoming.getRecordKey()).setPartitionPath(partitionPath), properties);
-    return Option.of(withMeta.wrapIntoHoodieRecordPayloadWithParams(writeSchemaWithMetaFields.toAvroSchema(), properties, Option.empty(),
-        config.allowOperationMetadataField(), Option.empty(), false, Option.of(writeSchema.toAvroSchema())));
+    return Option.of(withMeta.wrapIntoHoodieRecordPayloadWithParams(writeSchemaWithMetaFields, properties, Option.empty(),
+        config.allowOperationMetadataField(), Option.empty(), false, Option.of(writeSchema)));
   }
 
   private static <R> String inferPartitionPath(HoodieRecord<R> incoming, HoodieRecord<R> existing, HoodieSchema recordSchema, BaseKeyGenerator keyGenerator,
@@ -497,11 +486,11 @@ public class HoodieIndexUtils {
         return Option.of(existingRecordContext.constructHoodieRecord(mergeResult, partitionPath));
       } else {
         HoodieRecord<R> result = existingRecordContext.constructHoodieRecord(mergeResult, partitionPath);
-        HoodieRecord<R> resultWithMetaFields = result.prependMetaFields(writeSchema.toAvroSchema(), writeSchemaWithMetaFields.toAvroSchema(),
+        HoodieRecord<R> resultWithMetaFields = result.prependMetaFields(writeSchema, writeSchemaWithMetaFields,
             new MetadataValues().setRecordKey(incoming.getRecordKey()).setPartitionPath(partitionPath), properties);
         // the merged record needs to be converted back to the original payload
-        return Option.of(resultWithMetaFields.wrapIntoHoodieRecordPayloadWithParams(writeSchemaWithMetaFields.toAvroSchema(), properties, Option.empty(),
-            config.allowOperationMetadataField(), Option.empty(), false, Option.of(writeSchema.toAvroSchema())));
+        return Option.of(resultWithMetaFields.wrapIntoHoodieRecordPayloadWithParams(writeSchemaWithMetaFields, properties, Option.empty(),
+            config.allowOperationMetadataField(), Option.empty(), false, Option.of(writeSchema)));
       }
     }
   }
@@ -555,7 +544,7 @@ public class HoodieIndexUtils {
         readerContext.getMergeMode(),
         false,
         readerContext.getRecordMerger(),
-        writerSchema.toAvroSchema(),
+        writerSchema,
         Option.ofNullable(Pair.of(hoodieTable.getMetaClient().getTableConfig().getPayloadClass(), hoodieTable.getConfig().getPayloadClass())),
         properties,
         hoodieTable.getMetaClient().getTableConfig().getPartialUpdateMode());
@@ -682,7 +671,7 @@ public class HoodieIndexUtils {
    * Table Config is updated if necessary.
    */
   public static void register(HoodieTableMetaClient metaClient, HoodieIndexDefinition indexDefinition) {
-    LOG.info("Registering index {} of using {}", indexDefinition.getIndexName(), indexDefinition.getIndexType());
+    log.info("Registering index {} of using {}", indexDefinition.getIndexName(), indexDefinition.getIndexType());
     // build HoodieIndexMetadata and then add to index definition file
     metaClient.buildIndexDefinition(indexDefinition);
   }
@@ -723,40 +712,32 @@ public class HoodieIndexUtils {
                                                                Map<String, String> options,
                                                                Map<String, Map<String, String>> columns,
                                                                String userIndexName) throws Exception {
-    Schema tableSchema = new TableSchemaResolver(metaClient).getTableAvroSchema();
+    HoodieSchema tableSchema = new TableSchemaResolver(metaClient).getTableSchema();
     List<String> sourceFields = new ArrayList<>(columns.keySet());
     String columnName = sourceFields.get(0); // We know there's only one column from the check above
 
     // First check if the field exists
-    try {
-      getNestedFieldSchemaFromWriteSchema(tableSchema, columnName);
-    } catch (Exception e) {
-      throw new HoodieMetadataIndexException(String.format(
+    Pair<String, HoodieSchemaField> fieldSchema = HoodieSchemaUtils.getNestedField(tableSchema, columnName)
+        .orElseThrow(() -> new HoodieMetadataIndexException(String.format(
           "Cannot create %s index '%s': Column '%s' does not exist in the table schema. "
-          + "Please verify the column name and ensure it exists in the table.",
+              + "Please verify the column name and ensure it exists in the table.",
           indexType.equals(PARTITION_NAME_SECONDARY_INDEX) ? "secondary" : "expression",
-          userIndexName, columnName));
-    }
+            userIndexName, columnName)));
 
     // Check for complex types (RECORD, ARRAY, MAP) - not supported for any index type
     if (!validateDataTypeForSecondaryOrExpressionIndex(sourceFields, tableSchema)) {
-      Schema fieldSchema = getNestedFieldSchemaFromWriteSchema(tableSchema, columnName);
       throw new HoodieMetadataIndexException(String.format(
           "Cannot create %s index '%s': Column '%s' has unsupported data type '%s'. "
           + "Complex types (RECORD, ARRAY, MAP) are not supported for indexing. "
           + "Please choose a column with a primitive data type.",
           indexType.equals(PARTITION_NAME_SECONDARY_INDEX) ? "secondary" : "expression",
-          userIndexName, columnName, fieldSchema.getType()));
+          userIndexName, columnName, fieldSchema.getRight().schema().getType()));
     }
 
     // For secondary index, apply stricter data type validation
     if (indexType.equals(PARTITION_NAME_SECONDARY_INDEX)) {
       if (!validateDataTypeForSecondaryIndex(sourceFields, tableSchema)) {
-        Schema fieldSchema = getNestedFieldSchemaFromWriteSchema(tableSchema, columnName);
-        String actualType = fieldSchema.getType().toString();
-        if (fieldSchema.getLogicalType() != null) {
-          actualType += " with logical type " + fieldSchema.getLogicalType();
-        }
+        String actualType = fieldSchema.getRight().schema().getType().toString();
 
         throw new HoodieMetadataIndexException(String.format(
             "Cannot create secondary index '%s': Column '%s' has unsupported data type '%s'. "

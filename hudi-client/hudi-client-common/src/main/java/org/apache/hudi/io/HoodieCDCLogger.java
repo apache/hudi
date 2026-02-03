@@ -275,7 +275,7 @@ public class HoodieCDCLogger implements Closeable {
   }
 
   private GenericRecord removeCommitMetadata(GenericRecord record) {
-    return record == null ? null : HoodieAvroUtils.rewriteRecordWithNewSchema(record, dataSchema.toAvroSchema(), Collections.emptyMap());
+    return record == null ? null : HoodieAvroUtils.projectRecordToNewSchemaShallow(record, dataSchema.getAvroSchema());
   }
 
   // -------------------------------------------------------------------------

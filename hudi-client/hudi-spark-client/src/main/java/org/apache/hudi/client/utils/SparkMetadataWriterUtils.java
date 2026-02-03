@@ -19,7 +19,7 @@
 
 package org.apache.hudi.client.utils;
 
-import org.apache.hudi.AvroConversionUtils;
+import org.apache.hudi.HoodieSchemaConversionUtils;
 import org.apache.hudi.HoodieSparkUtils;
 import org.apache.hudi.SparkRowSerDe;
 import org.apache.hudi.avro.model.HoodieMetadataRecord;
@@ -71,7 +71,7 @@ import org.apache.hudi.stats.ValueMetadata;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.util.JavaScalaConverters;
 
-import org.apache.avro.Schema;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.spark.api.java.function.FlatMapGroupsFunction;
 import org.apache.spark.api.java.function.MapFunction;
 import org.apache.spark.sql.Column;
@@ -86,8 +86,6 @@ import org.apache.spark.sql.types.DataTypes;
 import org.apache.spark.sql.types.Metadata;
 import org.apache.spark.sql.types.StructField;
 import org.apache.spark.sql.types.StructType;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -105,7 +103,6 @@ import java.util.stream.Stream;
 
 import scala.collection.immutable.Seq;
 
-import static org.apache.hudi.avro.HoodieAvroUtils.addMetadataFields;
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 import static org.apache.hudi.common.util.StringUtils.isNullOrEmpty;
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
@@ -123,9 +120,8 @@ import static org.apache.hudi.metadata.MetadataPartitionType.COLUMN_STATS;
 /**
  * Utility methods for writing metadata for expression index.
  */
+@Slf4j
 public class SparkMetadataWriterUtils {
-
-  private static final Logger LOG = LoggerFactory.getLogger(SparkMetadataWriterUtils.class);
 
   public static Column[] getExpressionIndexColumns() {
     return new Column[] {
@@ -158,7 +154,7 @@ public class SparkMetadataWriterUtils {
   @SuppressWarnings("checkstyle:LineLength")
   public static ExpressionIndexComputationMetadata getExpressionIndexRecordsUsingColumnStats(Dataset<Row> dataset, HoodieExpressionIndex<Column, Column> expressionIndex, String columnToIndex,
                                                                                              Option<Function<HoodiePairData<String, HoodieColumnRangeMetadata<Comparable>>, HoodieData<HoodieRecord>>> partitionRecordsFunctionOpt,
-                                                                                             HoodieIndexVersion indexVersion) {
+                                                                                             HoodieIndexVersion indexVersion, String expressionIndexRangeMetadataStorageLevel) {
     // Aggregate col stats related data for the column to index
     Dataset<Row> columnRangeMetadataDataset = dataset
         .select(columnToIndex, SparkMetadataWriterUtils.getExpressionIndexColumnNames())
@@ -201,7 +197,7 @@ public class SparkMetadataWriterUtils {
 
     if (partitionRecordsFunctionOpt.isPresent()) {
       // TODO: HUDI-8848: Allow configurable storage level while computing expression index update
-      rangeMetadataHoodieJavaRDD.persist("MEMORY_AND_DISK_SER");
+      rangeMetadataHoodieJavaRDD.persist(expressionIndexRangeMetadataStorageLevel);
     }
     HoodieData<HoodieRecord> colStatRecords = rangeMetadataHoodieJavaRDD.map(pair ->
             createColumnStatsRecords(pair.getKey(), Collections.singletonList(pair.getValue()), false, expressionIndex.getIndexName(),
@@ -299,7 +295,7 @@ public class SparkMetadataWriterUtils {
             getExpressionIndexRecordsIterator(readerContextFactory.getContext(), metaClient, tableSchema, readerSchema, dataWriteConfig, entry));
 
     // Generate dataset with expression index metadata
-    StructType structType = AvroConversionUtils.convertAvroSchemaToStructType(readerSchema.toAvroSchema())
+    StructType structType = HoodieSchemaConversionUtils.convertHoodieSchemaToStructType(readerSchema)
         .add(StructField.apply(HoodieExpressionIndex.HOODIE_EXPRESSION_INDEX_PARTITION, DataTypes.StringType, false, Metadata.empty()))
         .add(StructField.apply(HoodieExpressionIndex.HOODIE_EXPRESSION_INDEX_RELATIVE_FILE_PATH, DataTypes.StringType, false, Metadata.empty()))
         .add(StructField.apply(HoodieExpressionIndex.HOODIE_EXPRESSION_INDEX_FILE_SIZE, DataTypes.LongType, false, Metadata.empty()));
@@ -312,7 +308,8 @@ public class SparkMetadataWriterUtils {
 
     // Generate expression index records
     if (indexDefinition.getIndexType().equalsIgnoreCase(PARTITION_NAME_COLUMN_STATS)) {
-      return getExpressionIndexRecordsUsingColumnStats(rowDataset, expressionIndex, columnToIndex, partitionRecordsFunctionOpt, indexDefinition.getVersion());
+      return getExpressionIndexRecordsUsingColumnStats(rowDataset, expressionIndex, columnToIndex, partitionRecordsFunctionOpt, indexDefinition.getVersion(),
+          dataWriteConfig.getIndexingConfig().getExpressionIndexRangeMetadataStorageLevel());
     } else if (indexDefinition.getIndexType().equalsIgnoreCase(PARTITION_NAME_BLOOM_FILTERS)) {
       return getExpressionIndexRecordsUsingBloomFilter(
           rowDataset, columnToIndex, dataWriteConfig.getStorageConfig(), instantTime, indexDefinition);
@@ -341,19 +338,18 @@ public class SparkMetadataWriterUtils {
     HoodieFileGroupReader<InternalRow> fileGroupReader = HoodieFileGroupReader.<InternalRow>newBuilder()
         .withReaderContext(readerContext)
         .withHoodieTableMetaClient(metaClient)
-        .withDataSchema(tableSchema.toAvroSchema())
-        .withRequestedSchema(readerSchema.toAvroSchema())
+        .withDataSchema(tableSchema)
+        .withRequestedSchema(readerSchema)
         .withProps(dataWriteConfig.getProps())
         .withLatestCommitTime(metaClient.getActiveTimeline().lastInstant().map(HoodieInstant::requestedTime).orElse(""))
         .withAllowInflightInstants(true)
         .withBaseFileOption(baseFileOption)
         .withLogFiles(logFileStream)
         .withPartitionPath(partition)
-        .withEnableOptimizedLogBlockScan(dataWriteConfig.enableOptimizedLogBlocksScan())
         .build();
     try {
       ClosableIterator<InternalRow> rowsForFilePath = fileGroupReader.getClosableIterator();
-      SparkRowSerDe sparkRowSerDe = HoodieSparkUtils.getCatalystRowSerDe(HoodieInternalRowUtils.getCachedSchema(readerSchema.toAvroSchema()));
+      SparkRowSerDe sparkRowSerDe = HoodieSparkUtils.getCatalystRowSerDe(HoodieInternalRowUtils.getCachedSchema(readerSchema));
       return getRowsWithExpressionIndexMetadata(rowsForFilePath, sparkRowSerDe, partition, relativeFilePath, fileSize);
     } catch (IOException ex) {
       throw new HoodieIOException("Error reading file " + filePath, ex);
@@ -387,14 +383,14 @@ public class SparkMetadataWriterUtils {
     HoodieIndexDefinition indexDefinition = HoodieTableMetadataUtil.getHoodieIndexDefinition(indexPartition, dataMetaClient);
     List<String> columnsToIndex = Collections.singletonList(indexDefinition.getSourceFields().get(0));
     try {
-      Option<Schema> writerSchema =
+      Option<HoodieSchema> writerSchema =
           Option.ofNullable(commitMetadata.getMetadata(HoodieCommitMetadata.SCHEMA_KEY))
               .flatMap(writerSchemaStr ->
                   isNullOrEmpty(writerSchemaStr)
                       ? Option.empty()
-                      : Option.of(new Schema.Parser().parse(writerSchemaStr)));
+                      : Option.of(HoodieSchema.parse(writerSchemaStr)));
       HoodieTableConfig tableConfig = dataMetaClient.getTableConfig();
-      HoodieSchema tableSchema = writerSchema.map(schema -> tableConfig.populateMetaFields() ? addMetadataFields(schema) : schema).map(HoodieSchema::fromAvroSchema)
+      HoodieSchema tableSchema = writerSchema.map(schema -> tableConfig.populateMetaFields() ? HoodieSchemaUtils.addMetadataFields(schema) : schema)
           .orElseThrow(() -> new IllegalStateException(String.format("Expected writer schema in commit metadata %s", commitMetadata)));
       List<Pair<String, HoodieSchema>> columnsToIndexSchemaMap = columnsToIndex.stream()
           .map(columnToIndex -> HoodieSchemaUtils.getNestedField(tableSchema, columnToIndex))
@@ -412,7 +408,7 @@ public class SparkMetadataWriterUtils {
       }
 
       // Step 2: Compute expression index records for the modified partitions
-      LOG.debug("Indexing following columns for partition stats index: {}", validColumnsToIndex);
+      log.debug("Indexing following columns for partition stats index: {}", validColumnsToIndex);
       List<List<HoodieWriteStat>> partitionedWriteStats = new ArrayList<>(commitMetadata.getWriteStats().stream()
           .collect(Collectors.groupingBy(HoodieWriteStat::getPartitionPath))
           .values());

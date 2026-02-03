@@ -21,10 +21,9 @@ package org.apache.hudi.common.fs.inline;
 
 import org.apache.hudi.common.testutils.FileSystemTestUtils;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.hadoop.fs.HadoopSeekableDataInputStream;
 import org.apache.hudi.hadoop.fs.inline.InLineFileSystem;
-import org.apache.hudi.hadoop.fs.inline.InMemoryFileSystem;
 import org.apache.hudi.io.SeekableDataInputStream;
+import org.apache.hudi.io.hadoop.HadoopSeekableDataInputStream;
 import org.apache.hudi.io.hfile.HFileContext;
 import org.apache.hudi.io.hfile.HFileReader;
 import org.apache.hudi.io.hfile.HFileReaderImpl;
@@ -42,6 +41,7 @@ import org.apache.hadoop.fs.Path;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
+import java.io.ByteArrayOutputStream;
 import java.io.DataOutputStream;
 import java.io.File;
 import java.io.IOException;
@@ -51,10 +51,9 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
-import static org.apache.hudi.common.testutils.FileSystemTestUtils.FILE_SCHEME;
 import static org.apache.hudi.common.testutils.FileSystemTestUtils.RANDOM;
 import static org.apache.hudi.common.testutils.FileSystemTestUtils.getPhantomFile;
-import static org.apache.hudi.common.testutils.FileSystemTestUtils.getRandomOuterInMemPath;
+import static org.apache.hudi.common.testutils.FileSystemTestUtils.getRandomOuterFSPath;
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 import static org.apache.hudi.io.hfile.HFileUtils.getValue;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -67,16 +66,13 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class TestInLineFileSystemWithHFileReader {
   protected static final String LOCAL_FORMATTER = "%010d";
   protected static final String VALUE_PREFIX = "value";
-  private final Configuration inMemoryConf;
+  private final Configuration conf;
   private final Configuration inlineConf;
   private final int maxRows = 100 + RANDOM.nextInt(1000);
   private Path generatedPath;
 
   TestInLineFileSystemWithHFileReader() {
-    inMemoryConf = new Configuration();
-    inMemoryConf.set(
-        "fs." + InMemoryFileSystem.SCHEME + ".impl",
-        InMemoryFileSystem.class.getName());
+    conf = new Configuration();
     inlineConf = new Configuration();
     inlineConf.set(
         "fs." + InLineFileSystem.SCHEME + ".impl",
@@ -95,17 +91,19 @@ class TestInLineFileSystemWithHFileReader {
 
   @Test
   void testSimpleInlineFileSystem() throws IOException {
-    Path outerInMemFSPath = getRandomOuterInMemPath();
-    Path outerPath = new Path(FILE_SCHEME + outerInMemFSPath.toString().substring(outerInMemFSPath.toString().indexOf(':')));
+    Path outerPath = new Path(getRandomOuterFSPath().toUri());
     generatedPath = outerPath;
-    DataOutputStream out = createFSOutput(outerInMemFSPath, inMemoryConf);
+
+    // Write HFile to a ByteArrayOutputStream
+    ByteArrayOutputStream baos = new ByteArrayOutputStream();
+    DataOutputStream out = new DataOutputStream(baos);
     HFileContext context = new HFileContext.Builder().build();
     HFileWriter writer = new HFileWriterImpl(context, out);
 
     writeRecords(writer);
     out.close();
 
-    byte[] inlineBytes = getBytesToInline(outerInMemFSPath);
+    byte[] inlineBytes = baos.toByteArray();
     long startOffset = generateOuterFile(outerPath, inlineBytes);
 
     long inlineLength = inlineBytes.length;
@@ -116,10 +114,10 @@ class TestInLineFileSystemWithHFileReader {
     InLineFileSystem inlineFileSystem = (InLineFileSystem) inlinePath.getFileSystem(inlineConf);
     FSDataInputStream fin = inlineFileSystem.open(inlinePath);
 
-    validateHFileReading(inlineFileSystem, inMemoryConf, inlineConf, inlinePath, maxRows);
+    validateHFileReading(inlineFileSystem, conf, inlineConf, inlinePath, maxRows);
 
     fin.close();
-    outerPath.getFileSystem(inMemoryConf).delete(outerPath, true);
+    outerPath.getFileSystem(conf).delete(outerPath, true);
   }
 
   protected Set<Integer> getRandomValidRowIds(int count) {
@@ -192,10 +190,6 @@ class TestInLineFileSystemWithHFileReader {
     }
   }
 
-  private FSDataOutputStream createFSOutput(Path name, Configuration conf) throws IOException {
-    return name.getFileSystem(conf).create(name);
-  }
-
   private void writeRecords(HFileWriter writer) throws IOException {
     writeSomeRecords(writer);
     writer.close();
@@ -210,7 +204,7 @@ class TestInLineFileSystemWithHFileReader {
   }
 
   private long generateOuterFile(Path outerPath, byte[] inlineBytes) throws IOException {
-    FSDataOutputStream wrappedOut = outerPath.getFileSystem(inMemoryConf).create(outerPath, true);
+    FSDataOutputStream wrappedOut = outerPath.getFileSystem(conf).create(outerPath, true);
     // write random bytes
     writeRandomBytes(wrappedOut, 10);
 
@@ -224,11 +218,6 @@ class TestInLineFileSystemWithHFileReader {
     wrappedOut.hsync();
     wrappedOut.close();
     return startOffset;
-  }
-
-  private byte[] getBytesToInline(Path outerInMemFSPath) throws IOException {
-    InMemoryFileSystem inMemoryFileSystem = (InMemoryFileSystem) outerInMemFSPath.getFileSystem(inMemoryConf);
-    return inMemoryFileSystem.getFileAsBytes();
   }
 
   private void writeRandomBytes(FSDataOutputStream writer, int count) throws IOException {

@@ -23,7 +23,7 @@ import org.apache.hudi.common.lock.LockProvider;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.storage.StorageConfiguration;
 
-import org.jetbrains.annotations.NotNull;
+import javax.annotation.Nonnull;
 
 import java.io.Serializable;
 import java.util.concurrent.TimeUnit;
@@ -43,7 +43,7 @@ public class NoopLockProvider implements LockProvider<ReentrantReadWriteLock>, S
   }
 
   @Override
-  public boolean tryLock(long time, @NotNull TimeUnit unit) throws InterruptedException {
+  public boolean tryLock(long time, @Nonnull TimeUnit unit) throws InterruptedException {
     return true;
   }
 

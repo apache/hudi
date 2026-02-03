@@ -33,8 +33,7 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.BaseActionExecutor;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.util.Collections;
 import java.util.Comparator;
@@ -49,9 +48,8 @@ import static org.apache.hudi.metadata.HoodieTableMetadata.SOLO_COMMIT_TIMESTAMP
 /**
  * Plans the restore action and add a restore.requested meta file to timeline.
  */
+@Slf4j
 public class RestorePlanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I, K, O, Option<HoodieRestorePlan>> {
-
-  private static final Logger LOG = LoggerFactory.getLogger(RestorePlanActionExecutor.class);
 
   public static final Integer RESTORE_PLAN_VERSION_1 = 1;
   public static final Integer RESTORE_PLAN_VERSION_2 = 2;
@@ -105,7 +103,7 @@ public class RestorePlanActionExecutor<T, I, K, O> extends BaseActionExecutor<T,
       HoodieRestorePlan restorePlan = new HoodieRestorePlan(instantsToRollback, LATEST_RESTORE_PLAN_VERSION, savepointToRestoreTimestamp);
       table.getActiveTimeline().saveToRestoreRequested(restoreInstant, restorePlan);
       table.getMetaClient().reloadActiveTimeline();
-      LOG.info("Requesting Restore with instant time {}", restoreInstant);
+      log.info("Requesting Restore with instant time {}", restoreInstant);
       return Option.of(restorePlan);
     } catch (Exception e) {
       throw new HoodieException("Unable to restore to instant: " + savepointToRestoreTimestamp, e);

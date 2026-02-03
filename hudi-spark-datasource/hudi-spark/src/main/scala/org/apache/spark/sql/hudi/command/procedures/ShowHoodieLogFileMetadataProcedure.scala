@@ -20,6 +20,7 @@ package org.apache.spark.sql.hudi.command.procedures
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.HoodieLogFile
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
+import org.apache.hudi.common.schema.HoodieSchema
 import org.apache.hudi.common.table.TableSchemaResolver
 import org.apache.hudi.common.table.log.HoodieLogFormat
 import org.apache.hudi.common.table.log.block.{HoodieCorruptBlock, HoodieDataBlock}

@@ -25,8 +25,7 @@ import org.apache.hudi.common.util.ClusteringUtils;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.util.Comparator;
 import java.util.List;
@@ -42,10 +41,9 @@ import static org.apache.hudi.common.table.timeline.HoodieTimeline.REPLACE_COMMI
  * This class extends the base implementation of conflict resolution strategy.
  * It gives preference to non-blocking ingestion over table services in case of conflicts.
  */
+@Slf4j
 public class PreferWriterConflictResolutionStrategy
     extends SimpleConcurrentFileWritesConflictResolutionStrategy {
-
-  private static final Logger LOG = LoggerFactory.getLogger(PreferWriterConflictResolutionStrategy.class);
 
   /**
    * For tableservices like replacecommit and compaction commits this method also returns ingestion inflight commits.
@@ -75,7 +73,7 @@ public class PreferWriterConflictResolutionStrategy
         .findInstantsModifiedAfterByCompletionTime(currentInstant.requestedTime())
         .getInstantsOrderedByCompletionTime()
         .collect(Collectors.toList());
-    LOG.info("Instants that may have conflict with {} are {}", currentInstant, completedCommitsInstants);
+    log.info("Instants that may have conflict with {} are {}", currentInstant, completedCommitsInstants);
     return completedCommitsInstants.stream();
   }
 
@@ -105,7 +103,7 @@ public class PreferWriterConflictResolutionStrategy
     List<HoodieInstant> instantsToConsider = Stream.concat(completedCommitsStream, inflightIngestionCommitsStream)
         .sorted(Comparator.comparing(o -> o.getCompletionTime()))
         .collect(Collectors.toList());
-    LOG.info("Instants that may have conflict with {} are {}", currentInstant, instantsToConsider);
+    log.info("Instants that may have conflict with {} are {}", currentInstant, instantsToConsider);
     return instantsToConsider.stream();
   }
 

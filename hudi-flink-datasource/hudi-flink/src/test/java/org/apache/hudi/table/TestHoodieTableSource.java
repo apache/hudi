@@ -32,11 +32,14 @@ import org.apache.hudi.util.SerializableSchema;
 import org.apache.hudi.util.StreamerUtil;
 import org.apache.hudi.utils.TestConfigurations;
 import org.apache.hudi.utils.TestData;
+import org.apache.hudi.utils.TestUtils;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.flink.api.common.io.FileInputFormat;
 import org.apache.flink.api.common.io.InputFormat;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.table.api.DataTypes;
+import org.apache.flink.table.catalog.ResolvedSchema;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.expressions.CallExpression;
 import org.apache.flink.table.expressions.FieldReferenceExpression;
@@ -53,8 +56,6 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.math.BigDecimal;
@@ -82,8 +83,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * Test cases for HoodieTableSource.
  */
+@Slf4j
 public class TestHoodieTableSource {
-  private static final Logger LOG = LoggerFactory.getLogger(TestHoodieTableSource.class);
 
   private Configuration conf;
 
@@ -186,6 +187,32 @@ public class TestHoodieTableSource {
     assertEquals(expectedPartitions, hoodieTableSource.getReadPartitions());
   }
 
+  @Test
+  void testDataSkippingWithMetaColumns() throws Exception {
+    final String path = tempFile.getAbsolutePath();
+    conf = TestConfigurations.getDefaultConf(path);
+    conf.setString(HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key(), "true");
+    conf.set(FlinkOptions.READ_DATA_SKIPPING_ENABLED, true);
+    // first insert
+    TestData.writeData(TestData.DATA_SET_INSERT, conf);
+    String firstCommitTime = TestUtils.getLastCompleteInstant(tempFile.toURI().toString());
+    // second insert
+    TestData.writeData(TestData.DATA_SET_INSERT_SEPARATE_PARTITION, conf);
+
+    HoodieTableSource hoodieTableSource = createHoodieTableSource(conf, TestConfigurations.TABLE_SCHEMA_WITH_META_COLUMNS);
+    CallExpression filter1 =
+        CallExpression.permanent(
+            BuiltInFunctionDefinitions.GREATER_THAN,
+            Arrays.asList(
+                new FieldReferenceExpression("_hoodie_commit_time", DataTypes.STRING(), 0, 5),
+                new ValueLiteralExpression(firstCommitTime, DataTypes.STRING().notNull())),
+            DataTypes.BOOLEAN());
+
+    hoodieTableSource.applyFilters(Collections.singletonList(filter1));
+    List<FileSlice> fileSlices = hoodieTableSource.getBaseFileOnlyFileSlices();
+    assertThat("There should be 2 file slices in the second insert.", fileSlices.size(), CoreMatchers.is(2));
+  }
+
   @ParameterizedTest
   @ValueSource(booleans = {true, false})
   void testBucketPruning(boolean hiveStylePartitioning) throws Exception {
@@ -276,7 +303,7 @@ public class TestHoodieTableSource {
 
     // test timestamp filtering
     TestData.writeDataAsBatch(TestData.DATA_SET_INSERT_HOODIE_KEY_SPECIAL_DATA_TYPE, conf1);
-    HoodieTableSource tableSource1 = createHoodieTableSource(conf1);
+    HoodieTableSource tableSource1 = createHoodieTableSource(conf1, TestConfigurations.TABLE_SCHEMA_KEY_SPECIAL_DATA_TYPE);
     tableSource1.applyFilters(Collections.singletonList(
         createLitEquivalenceExpr(f1, 0, DataTypes.TIMESTAMP(3).notNull(),
             LocalDateTime.ofInstant(Instant.ofEpochMilli(1), ZoneId.of("UTC")))));
@@ -293,7 +320,7 @@ public class TestHoodieTableSource {
     conf2.set(FlinkOptions.RECORD_KEY_FIELD, f2);
     conf2.set(FlinkOptions.ORDERING_FIELDS, f2);
     TestData.writeDataAsBatch(TestData.DATA_SET_INSERT_HOODIE_KEY_SPECIAL_DATA_TYPE, conf2);
-    HoodieTableSource tableSource2 = createHoodieTableSource(conf2);
+    HoodieTableSource tableSource2 = createHoodieTableSource(conf2, TestConfigurations.TABLE_SCHEMA_KEY_SPECIAL_DATA_TYPE);
     tableSource2.applyFilters(Collections.singletonList(
         createLitEquivalenceExpr(f2, 1, DataTypes.DATE().notNull(), LocalDate.ofEpochDay(1))));
 
@@ -309,7 +336,8 @@ public class TestHoodieTableSource {
     conf3.set(FlinkOptions.RECORD_KEY_FIELD, f3);
     conf3.set(FlinkOptions.ORDERING_FIELDS, f3);
     TestData.writeDataAsBatch(TestData.DATA_SET_INSERT_HOODIE_KEY_SPECIAL_DATA_TYPE, conf3);
-    HoodieTableSource tableSource3 = createHoodieTableSource(conf3);
+    HoodieTableSource tableSource3 = createHoodieTableSource(conf3, TestConfigurations.TABLE_SCHEMA_KEY_SPECIAL_DATA_TYPE);
+
     tableSource3.applyFilters(Collections.singletonList(
         createLitEquivalenceExpr(f3, 1, DataTypes.DECIMAL(3, 2).notNull(),
             new BigDecimal("1.11"))));
@@ -509,8 +537,12 @@ public class TestHoodieTableSource {
   }
 
   private HoodieTableSource createHoodieTableSource(Configuration conf) {
+    return createHoodieTableSource(conf, TestConfigurations.TABLE_SCHEMA);
+  }
+
+  private HoodieTableSource createHoodieTableSource(Configuration conf, ResolvedSchema resolvedSchema) {
     return new HoodieTableSource(
-        SerializableSchema.create(TestConfigurations.TABLE_SCHEMA),
+        SerializableSchema.create(resolvedSchema),
         new StoragePath(conf.get(FlinkOptions.PATH)),
         Arrays.asList(conf.get(FlinkOptions.PARTITION_PATH_FIELD).split(",")),
         "default-par",
@@ -524,5 +556,236 @@ public class TestHoodieTableSource {
         BuiltInFunctionDefinitions.EQUALS,
         Arrays.asList(ref, literal),
         DataTypes.BOOLEAN());
+  }
+
+  @Test
+  void testNewHoodieSourceCreationWithFlag() throws Exception {
+    beforeEach();
+    Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    conf.set(FlinkOptions.READ_SOURCE_V2_ENABLED, true);
+
+    HoodieTableSource tableSource = createHoodieTableSource(conf);
+    assertNotNull(tableSource, "HoodieTableSource should be created successfully");
+
+    // Verify that the table source can be used in streaming mode with new source
+    conf.set(FlinkOptions.READ_AS_STREAMING, true);
+    HoodieTableSource streamingSource = createHoodieTableSource(conf);
+    assertNotNull(streamingSource, "Streaming HoodieTableSource should be created successfully");
+  }
+
+  @Test
+  void testNewHoodieSourceWithBatchMode() throws Exception {
+    beforeEach();
+    Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    conf.set(FlinkOptions.READ_SOURCE_V2_ENABLED, true);
+    conf.set(FlinkOptions.READ_AS_STREAMING, false);
+
+    HoodieTableSource tableSource = createHoodieTableSource(conf);
+    assertNotNull(tableSource, "Batch mode HoodieTableSource with new source should be created");
+  }
+
+  @Test
+  void testNewHoodieSourceWithStreamingMode() throws Exception {
+    beforeEach();
+    Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    conf.set(FlinkOptions.READ_SOURCE_V2_ENABLED, true);
+    conf.set(FlinkOptions.READ_AS_STREAMING, true);
+
+    HoodieTableSource tableSource = createHoodieTableSource(conf);
+    assertNotNull(tableSource, "Streaming mode HoodieTableSource with new source should be created");
+  }
+
+  @Test
+  void testNewHoodieSourceWithCDCEnabled() throws Exception {
+    beforeEach();
+    Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    conf.set(FlinkOptions.READ_SOURCE_V2_ENABLED, true);
+    conf.set(FlinkOptions.CDC_ENABLED, true);
+
+    HoodieTableSource tableSource = createHoodieTableSource(conf);
+    assertNotNull(tableSource, "HoodieTableSource with CDC enabled should be created");
+  }
+
+  @Test
+  void testNewHoodieSourceWithReadRange() throws Exception {
+    beforeEach();
+    String firstCommitTime = TestUtils.getLastCompleteInstant(tempFile.toURI().toString());
+    TestData.writeData(TestData.DATA_SET_INSERT_SEPARATE_PARTITION, conf);
+    String secondCommitTime = TestUtils.getLastCompleteInstant(tempFile.toURI().toString());
+
+    Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    conf.set(FlinkOptions.READ_SOURCE_V2_ENABLED, true);
+    conf.set(FlinkOptions.READ_START_COMMIT, firstCommitTime);
+    conf.set(FlinkOptions.READ_END_COMMIT, secondCommitTime);
+
+    HoodieTableSource tableSource = createHoodieTableSource(conf);
+    assertNotNull(tableSource, "HoodieTableSource with read range should be created");
+  }
+
+  @Test
+  void testNewHoodieSourceWithSkipFlags() throws Exception {
+    beforeEach();
+    Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    conf.set(FlinkOptions.READ_SOURCE_V2_ENABLED, true);
+    conf.set(FlinkOptions.READ_AS_STREAMING, true);
+    conf.set(FlinkOptions.READ_STREAMING_SKIP_COMPACT, true);
+    conf.set(FlinkOptions.READ_STREAMING_SKIP_CLUSTERING, true);
+    conf.set(FlinkOptions.READ_STREAMING_SKIP_INSERT_OVERWRITE, true);
+
+    HoodieTableSource tableSource = createHoodieTableSource(conf);
+    assertNotNull(tableSource, "HoodieTableSource with skip flags should be created");
+  }
+
+  @Test
+  void testNewHoodieSourceBackwardCompatibility() throws Exception {
+    beforeEach();
+    // Test that old behavior still works when READ_SOURCE_V2_ENABLED is false
+    Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    conf.set(FlinkOptions.READ_SOURCE_V2_ENABLED, false);
+
+    HoodieTableSource tableSource = createHoodieTableSource(conf);
+    assertNotNull(tableSource, "HoodieTableSource with old source should still work");
+  }
+
+  @Test
+  void testNewHoodieSourceWithCopyOnWriteTable() throws Exception {
+    beforeEach();
+    Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    conf.set(FlinkOptions.READ_SOURCE_V2_ENABLED, true);
+    conf.set(FlinkOptions.TABLE_TYPE, FlinkOptions.TABLE_TYPE_COPY_ON_WRITE);
+
+    HoodieTableSource tableSource = createHoodieTableSource(conf);
+    assertNotNull(tableSource, "HoodieTableSource with COW table should be created");
+  }
+
+  @Test
+  void testNewHoodieSourceWithMergeOnReadTable() throws Exception {
+    beforeEach();
+    Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    conf.set(FlinkOptions.READ_SOURCE_V2_ENABLED, true);
+    conf.set(FlinkOptions.TABLE_TYPE, FlinkOptions.TABLE_TYPE_MERGE_ON_READ);
+
+    HoodieTableSource tableSource = createHoodieTableSource(conf);
+    assertNotNull(tableSource, "HoodieTableSource with MOR table should be created");
+  }
+
+  @Test
+  void testNewHoodieSourceWithSnapshotQuery() throws Exception {
+    beforeEach();
+    Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    conf.set(FlinkOptions.READ_SOURCE_V2_ENABLED, true);
+    conf.set(FlinkOptions.QUERY_TYPE, FlinkOptions.QUERY_TYPE_SNAPSHOT);
+
+    HoodieTableSource tableSource = createHoodieTableSource(conf);
+    assertNotNull(tableSource, "HoodieTableSource with snapshot query should be created");
+  }
+
+  @Test
+  void testNewHoodieSourceWithIncrementalQuery() throws Exception {
+    beforeEach();
+    Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    conf.set(FlinkOptions.READ_SOURCE_V2_ENABLED, true);
+    conf.set(FlinkOptions.QUERY_TYPE, FlinkOptions.QUERY_TYPE_INCREMENTAL);
+
+    HoodieTableSource tableSource = createHoodieTableSource(conf);
+    assertNotNull(tableSource, "HoodieTableSource with incremental query should be created");
+  }
+
+  @Test
+  void testNewHoodieSourceWithProjectionPushdown() throws Exception {
+    beforeEach();
+    Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    conf.set(FlinkOptions.READ_SOURCE_V2_ENABLED, true);
+
+    HoodieTableSource tableSource = createHoodieTableSource(conf);
+    // Apply projection - only select uuid and name columns
+    int[][] projections = new int[][] {{0}, {1}};
+    DataType producedType = DataTypes.ROW(
+        DataTypes.FIELD("uuid", DataTypes.STRING()),
+        DataTypes.FIELD("name", DataTypes.STRING())
+    ).bridgedTo(RowData.class);
+
+    tableSource.applyProjection(projections, producedType);
+    assertNotNull(tableSource, "HoodieTableSource with projection should work");
+  }
+
+  @Test
+  void testNewHoodieSourceWithFilterPushdown() throws Exception {
+    beforeEach();
+    Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    conf.set(FlinkOptions.READ_SOURCE_V2_ENABLED, true);
+
+    HoodieTableSource tableSource = createHoodieTableSource(conf);
+
+    // Apply filter - uuid = 'id1'
+    FieldReferenceExpression ref = new FieldReferenceExpression("uuid", DataTypes.STRING(), 0, 0);
+    ValueLiteralExpression literal = new ValueLiteralExpression("id1", DataTypes.STRING().notNull());
+    ResolvedExpression filterExpr = CallExpression.permanent(
+        BuiltInFunctionDefinitions.EQUALS,
+        Arrays.asList(ref, literal),
+        DataTypes.BOOLEAN());
+
+    tableSource.applyFilters(Collections.singletonList(filterExpr));
+    assertNotNull(tableSource, "HoodieTableSource with filter should work");
+  }
+
+  @Test
+  void testNewHoodieSourceWithLimitPushdown() throws Exception {
+    beforeEach();
+    Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    conf.set(FlinkOptions.READ_SOURCE_V2_ENABLED, true);
+
+    HoodieTableSource tableSource = createHoodieTableSource(conf);
+    tableSource.applyLimit(100);
+    assertNotNull(tableSource, "HoodieTableSource with limit should work");
+  }
+
+  @Test
+  void testNewHoodieSourceWithPartitionedTable() throws Exception {
+    beforeEach();
+    Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    conf.set(FlinkOptions.READ_SOURCE_V2_ENABLED, true);
+    conf.set(FlinkOptions.PARTITION_PATH_FIELD, "partition");
+
+    HoodieTableSource tableSource = createHoodieTableSource(conf);
+    assertNotNull(tableSource, "HoodieTableSource with partitioned table should be created");
+  }
+
+  @Test
+  void testNewHoodieSourceWithNonPartitionedTable() throws Exception {
+    beforeEach();
+    Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    conf.set(FlinkOptions.READ_SOURCE_V2_ENABLED, true);
+    conf.set(FlinkOptions.PARTITION_PATH_FIELD, "");
+
+    HoodieTableSource tableSource = createHoodieTableSource(conf);
+    assertNotNull(tableSource, "HoodieTableSource with non-partitioned table should be created");
+  }
+
+  @Test
+  void testNewHoodieSourceCopyRetainsConfig() throws Exception {
+    beforeEach();
+    Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    conf.set(FlinkOptions.READ_SOURCE_V2_ENABLED, true);
+    conf.set(FlinkOptions.READ_AS_STREAMING, true);
+
+    HoodieTableSource tableSource = createHoodieTableSource(conf);
+    HoodieTableSource copiedSource = (HoodieTableSource) tableSource.copy();
+
+    assertNotNull(copiedSource, "Copied source should not be null");
+    assertEquals(tableSource.getConf().get(FlinkOptions.READ_SOURCE_V2_ENABLED),
+                 copiedSource.getConf().get(FlinkOptions.READ_SOURCE_V2_ENABLED),
+                 "READ_SOURCE_V2_ENABLED flag should be retained in copy");
+  }
+
+  @Test
+  void testNewHoodieSourceWithMaxCompactionMemory() throws Exception {
+    beforeEach();
+    Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    conf.set(FlinkOptions.READ_SOURCE_V2_ENABLED, true);
+    conf.set(FlinkOptions.COMPACTION_MAX_MEMORY, 512);
+
+    HoodieTableSource tableSource = createHoodieTableSource(conf);
+    assertNotNull(tableSource, "HoodieTableSource with custom compaction memory should be created");
   }
 }

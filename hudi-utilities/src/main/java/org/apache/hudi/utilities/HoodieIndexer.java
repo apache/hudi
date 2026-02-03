@@ -27,6 +27,7 @@ import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIndexException;
@@ -36,7 +37,6 @@ import com.beust.jcommander.JCommander;
 import com.beust.jcommander.Parameter;
 import org.apache.hadoop.fs.Path;
 import org.apache.spark.api.java.JavaSparkContext;
-import org.jetbrains.annotations.TestOnly;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -124,6 +124,8 @@ public class HoodieIndexer {
     public String sparkMaster = null;
     @Parameter(names = {"--spark-memory", "-sm"}, description = "spark memory to use", required = true)
     public String sparkMemory = null;
+    @Parameter(names = {"--enable-hive-support", "-ehs"}, description = "Enables hive support during spark context initialization.", required = false)
+    public Boolean enableHiveSupport = false;
     @Parameter(names = {"--retry", "-rt"}, description = "number of retries")
     public int retry = 0;
     @Parameter(names = {"--index-types", "-ixt"}, description = "Comma-separated index types to be built, e.g. BLOOM_FILTERS,COLUMN_STATS", required = true)
@@ -154,7 +156,8 @@ public class HoodieIndexer {
       throw new HoodieException("Indexing failed for basePath : " + cfg.basePath);
     }
 
-    final JavaSparkContext jsc = UtilHelpers.buildSparkContext("indexing-" + cfg.tableName, cfg.sparkMaster, cfg.sparkMemory);
+    final JavaSparkContext jsc = UtilHelpers.buildSparkContext("indexing-" + cfg.tableName,
+        cfg.sparkMaster, cfg.sparkMemory, cfg.enableHiveSupport);
     HoodieIndexer indexer = new HoodieIndexer(jsc, cfg);
     int result = indexer.start(cfg.retry);
     String resultMsg = String.format("Indexing with basePath: %s, tableName: %s, runningMode: %s",
@@ -220,7 +223,7 @@ public class HoodieIndexer {
     }, "Indexer failed");
   }
 
-  @TestOnly
+  @VisibleForTesting
   public Option<String> doSchedule() throws Exception {
     return this.scheduleIndexing(jsc);
   }

@@ -20,11 +20,14 @@ package org.apache.hudi.integ.testsuite.dag.nodes;
 
 import org.apache.hudi.common.util.collection.Pair;
 
+import lombok.extern.slf4j.Slf4j;
+
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.List;
 
+@Slf4j
 public abstract class BaseQueryNode extends DagNode<Boolean> {
 
   public void setSessionProperties(List<String> properties, Statement stmt) throws SQLException {

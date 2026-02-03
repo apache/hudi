@@ -34,6 +34,9 @@ import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.model.HoodieDeltaWriteStat;
 import org.apache.hudi.common.model.HoodieFileGroup;
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaField;
+import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
@@ -53,7 +56,6 @@ import org.apache.hudi.stats.ValueMetadata;
 import org.apache.hudi.table.action.clean.CleanPlanner;
 import org.apache.hudi.testutils.HoodieClientTestBase;
 
-import org.apache.avro.Schema;
 import org.apache.spark.api.java.JavaRDD;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -88,10 +90,10 @@ public class TestExternalPathHandling extends HoodieClientTestBase {
     metaClient = HoodieTableMetaClient.reload(metaClient);
     Properties properties = new Properties();
     properties.setProperty(HoodieMetadataConfig.AUTO_INITIALIZE.key(), "false");
-    List<Schema.Field> fields = new ArrayList<>();
-    fields.add(new Schema.Field(FIELD_1, Schema.create(Schema.Type.STRING), null, null));
-    fields.add(new Schema.Field(FIELD_2, Schema.create(Schema.Type.STRING), null, null));
-    Schema simpleSchema = Schema.createRecord("simpleSchema", null, null, false, fields);
+    List<HoodieSchemaField> fields = new ArrayList<>();
+    fields.add(HoodieSchemaField.of(FIELD_1, HoodieSchema.create(HoodieSchemaType.STRING)));
+    fields.add(HoodieSchemaField.of(FIELD_2, HoodieSchema.create(HoodieSchemaType.STRING)));
+    HoodieSchema simpleSchema = HoodieSchema.createRecord("simpleSchema", null, null, false, fields);
 
     writeConfig = HoodieWriteConfig.newBuilder()
         .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(INMEMORY).build())
@@ -111,13 +113,14 @@ public class TestExternalPathHandling extends HoodieClientTestBase {
 
     writeClient = getHoodieWriteClient(writeConfig);
     writeClient.setOperationType(WriteOperationType.INSERT_OVERWRITE);
+    Option<String> prefix = fileIdAndNameGenerator.getPrefix();
     String instantTime1 = writeClient.startCommit(HoodieTimeline.REPLACE_COMMIT_ACTION, metaClient);
     String partitionPath1 = partitions.get(0);
     Pair<String, String> fileIdAndName1 = fileIdAndNameGenerator.generate(1, instantTime1);
     String fileId1 = fileIdAndName1.getLeft();
     String fileName1 = fileIdAndName1.getRight();
-    String filePath1 = getPath(partitionPath1, fileName1);
-    WriteStatus writeStatus1 = createWriteStatus(instantTime1, partitionPath1, filePath1, fileId1);
+    String filePath1 = getPath(partitionPath1, fileName1, prefix);
+    WriteStatus writeStatus1 = createWriteStatus(instantTime1, partitionPath1, filePath1, fileId1, fileName1, prefix);
     JavaRDD<WriteStatus> rdd1 = createRdd(Collections.singletonList(writeStatus1));
     metaClient.getActiveTimeline().transitionReplaceRequestedToInflight(
         INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.REPLACE_COMMIT_ACTION, instantTime1), Option.empty());
@@ -130,8 +133,8 @@ public class TestExternalPathHandling extends HoodieClientTestBase {
     Pair<String, String> fileIdAndName2 = fileIdAndNameGenerator.generate(2, instantTime2);
     String fileId2 = fileIdAndName2.getLeft();
     String fileName2 = fileIdAndName2.getRight();
-    String filePath2 = getPath(partitionPath1, fileName2);
-    WriteStatus newWriteStatus = createWriteStatus(instantTime2, partitionPath1, filePath2, fileId2);
+    String filePath2 = getPath(partitionPath1, fileName2, prefix);
+    WriteStatus newWriteStatus = createWriteStatus(instantTime2, partitionPath1, filePath2, fileId2, fileName2, prefix);
     JavaRDD<WriteStatus> rdd2 = createRdd(Collections.singletonList(newWriteStatus));
     Map<String, List<String>> partitionToReplacedFileIds = new HashMap<>();
     partitionToReplacedFileIds.put(partitionPath1, Collections.singletonList(fileId1));
@@ -147,8 +150,8 @@ public class TestExternalPathHandling extends HoodieClientTestBase {
     Pair<String, String> fileIdAndName3 = fileIdAndNameGenerator.generate(3, instantTime3);
     String fileId3 = fileIdAndName3.getLeft();
     String fileName3 = fileIdAndName3.getRight();
-    String filePath3 = getPath(partitionPath2, fileName3);
-    WriteStatus writeStatus3 = createWriteStatus(instantTime3, partitionPath2, filePath3, fileId3);
+    String filePath3 = getPath(partitionPath2, fileName3, prefix);
+    WriteStatus writeStatus3 = createWriteStatus(instantTime3, partitionPath2, filePath3, fileId3, fileName3, prefix);
     JavaRDD<WriteStatus> rdd3 = createRdd(Collections.singletonList(writeStatus3));
     metaClient.getActiveTimeline().transitionReplaceRequestedToInflight(
         INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.REPLACE_COMMIT_ACTION, instantTime3), Option.empty());
@@ -200,21 +203,50 @@ public class TestExternalPathHandling extends HoodieClientTestBase {
       String fileId = fileName;
       return Pair.of(fileId, fileName);
     };
+    FileIdAndNameGenerator paimonExternal = new FileIdAndNameGenerator() {
+      private static final String PREFIX = "bucket-0";
+
+      @Override
+      public Pair<String, String> generate(int iteration, String instantTime) {
+        String fileName = String.format("file_%d.parquet", iteration);
+        String fileId = PREFIX + "/" + fileName;
+        return Pair.of(fileId, fileName);
+      }
+
+      @Override
+      public Option<String> getPrefix() {
+        return Option.of(PREFIX);
+      }
+    };
     List<String> partitionedTable = Arrays.asList("americas/brazil", "americas/argentina");
     List<String> unpartitionedTable = Arrays.asList("", "");
-    return Stream.of(Arguments.of(external, partitionedTable), Arguments.of(external, unpartitionedTable));
+    return Stream.of(
+        Arguments.of(external, partitionedTable),
+        Arguments.of(external, unpartitionedTable),
+        Arguments.of(paimonExternal, partitionedTable),
+        Arguments.of(paimonExternal, unpartitionedTable));
   }
 
   private String getPath(String partitionPath, String fileName) {
+    return getPath(partitionPath, fileName, Option.empty());
+  }
+
+  private String getPath(String partitionPath, String fileName, Option<String> prefix) {
+    String prefixPath = prefix.map(p -> p + "/").orElse("");
     if (partitionPath.isEmpty()) {
-      return fileName;
+      return prefixPath + fileName;
     }
-    return String.format("%s/%s", partitionPath, fileName);
+    return String.format("%s/%s%s", partitionPath, prefixPath, fileName);
   }
 
   @FunctionalInterface
   private interface FileIdAndNameGenerator {
+    // Returns: Pair<fileId, fileName>
     Pair<String, String> generate(int iteration, String instantTime);
+
+    default Option<String> getPrefix() {
+      return Option.empty();
+    }
   }
 
   private void assertFileGroupCorrectness(String instantTime, String partitionPath, String filePath, String fileId, int expectedSize) {
@@ -269,13 +301,20 @@ public class TestExternalPathHandling extends HoodieClientTestBase {
     return jsc.parallelize(writeStatuses, 1);
   }
 
-  private WriteStatus createWriteStatus(String commitTime, String partitionPath, String filePath, String fileId) {
+  private WriteStatus createWriteStatus(String commitTime, String partitionPath, String filePath,
+      String fileId, String fileName, Option<String> prefix) {
     WriteStatus writeStatus = new WriteStatus();
     writeStatus.setFileId(fileId);
     writeStatus.setPartitionPath(partitionPath);
     HoodieDeltaWriteStat writeStat = new HoodieDeltaWriteStat();
     writeStat.setFileId(fileId);
-    writeStat.setPath(ExternalFilePathUtil.appendCommitTimeAndExternalFileMarker(filePath, commitTime));
+    String markedFileName = prefix.isPresent()
+        ? ExternalFilePathUtil.appendCommitTimeAndExternalFileMarker(fileName, commitTime, prefix.get())
+        : ExternalFilePathUtil.appendCommitTimeAndExternalFileMarker(filePath, commitTime);
+    String fullMarkedPath = prefix.isPresent()
+        ? getPath(partitionPath, markedFileName, prefix)
+        : markedFileName;
+    writeStat.setPath(fullMarkedPath);
     writeStat.setPartitionPath(partitionPath);
     writeStat.setNumWrites(3);
     writeStat.setNumDeletes(0);

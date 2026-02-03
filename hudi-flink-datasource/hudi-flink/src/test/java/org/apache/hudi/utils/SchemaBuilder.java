@@ -52,6 +52,11 @@ public class SchemaBuilder {
     return this;
   }
 
+  public SchemaBuilder metaField(String name, DataType type, boolean isVirtual) {
+    this.columns.add(Column.metadata(name, type, null, isVirtual));
+    return this;
+  }
+
   public SchemaBuilder fields(List<String> names, List<DataType> types) {
     List<Column> columns = IntStream.range(0, names.size())
         .mapToObj(idx -> Column.physical(names.get(idx), types.get(idx)))

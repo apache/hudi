@@ -20,7 +20,7 @@ package org.apache.hudi.common.util.collection;
 
 import org.apache.hudi.common.serialization.CustomSerializer;
 import org.apache.hudi.common.serialization.DefaultSerializer;
-import org.apache.hudi.common.util.FileIOUtils;
+import org.apache.hudi.io.util.FileIOUtils;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.SerializationUtils;
 import org.apache.hudi.common.util.StringUtils;
@@ -49,11 +49,9 @@ import java.io.IOException;
 import java.io.Serializable;
 import java.net.URI;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
-import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
@@ -73,14 +71,16 @@ public class RocksDBDAO {
   private transient RocksDB rocksDB;
   private boolean closed = false;
   private final String rocksDBBasePath;
-  private final transient Map<String, CustomSerializer<?>> columnFamilySerializers;
+  private final transient ConcurrentHashMap<String, CustomSerializer<?>> columnFamilySerializers;
   private long totalBytesWritten;
 
   public RocksDBDAO(String basePath, String rocksDBBasePath) {
-    this(basePath, rocksDBBasePath, new HashMap<>());
+    this(basePath, rocksDBBasePath, new ConcurrentHashMap<>());
   }
 
-  public RocksDBDAO(String basePath, String rocksDBBasePath, Map<String, CustomSerializer<?>> columnFamilySerializers) {
+  public RocksDBDAO(String basePath,
+                    String rocksDBBasePath,
+                    ConcurrentHashMap<String, CustomSerializer<?>> columnFamilySerializers) {
     this.rocksDBBasePath =
         String.format("%s/%s/%s", rocksDBBasePath, URI.create(basePath).getPath().replace(":","").replace("/", "_"), UUID.randomUUID());
     this.columnFamilySerializers = columnFamilySerializers;

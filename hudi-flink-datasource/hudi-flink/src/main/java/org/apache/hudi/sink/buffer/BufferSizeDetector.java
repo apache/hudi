@@ -20,6 +20,7 @@ package org.apache.hudi.sink.buffer;
 
 import org.apache.hudi.common.util.ObjectSizeCalculator;
 
+import lombok.Getter;
 import org.apache.flink.table.data.binary.BinaryRowData;
 
 import java.util.Random;
@@ -33,6 +34,7 @@ public class BufferSizeDetector {
 
   private final double batchSizeBytes;
 
+  @Getter
   public long lastRecordSize = -1L;
   public long totalSize = 0L;
 
@@ -52,10 +54,6 @@ public class BufferSizeDetector {
 
   public boolean isFull() {
     return totalSize > batchSizeBytes;
-  }
-
-  public long getLastRecordSize() {
-    return lastRecordSize;
   }
 
   public boolean sampling() {

@@ -38,8 +38,10 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.ClusteringUtils;
 import org.apache.hudi.common.util.CompactionUtils;
+import org.apache.hudi.common.util.ExternalFilePathUtil;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.SamplingLogger;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
@@ -107,6 +109,9 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
   // Used to concurrently load and populate partition views
   private final ConcurrentHashMap<String, Boolean> addedPartitions = new ConcurrentHashMap<>(4096);
 
+  // Sampling logger for replaced file groups read logs (log at INFO once every 5 times)
+  private final SamplingLogger replacedFileGroupsReadSamplingLogger = new SamplingLogger(LOG, 5);
+
   // Locks to control concurrency. Sync operations use write-lock blocking all fetch operations.
   // For the common-case, we allow concurrent read of single or multiple partitions
   private final ReentrantReadWriteLock globalLock = new ReentrantReadWriteLock();
@@ -170,7 +175,12 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
    */
   public List<HoodieFileGroup> addFilesToView(List<StoragePathInfo> statuses) {
     Map<String, List<StoragePathInfo>> statusesByPartitionPath = statuses.stream()
-        .collect(Collectors.groupingBy(fileStatus -> FSUtils.getRelativePartitionPath(metaClient.getBasePath(), fileStatus.getPath().getParent())));
+        .collect(Collectors.groupingBy(fileStatus -> {
+          String fileName = fileStatus.getPath().getName();
+          StoragePath parent = ExternalFilePathUtil.getFullPathOfPartition(
+              fileStatus.getPath().getParent(), fileName);
+          return FSUtils.getRelativePartitionPath(metaClient.getBasePath(), parent);
+        }));
     return statusesByPartitionPath.entrySet().stream().map(entry -> addFilesToView(entry.getKey(), entry.getValue()))
         .flatMap(List::stream).collect(Collectors.toList());
   }
@@ -294,7 +304,10 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
     Map<HoodieFileGroupId, HoodieInstant> replacedFileGroups = resultStream.collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue,
         (instance1, instance2) -> compareTimestamps(instance1.requestedTime(), LESSER_THAN, instance2.requestedTime()) ? instance2 : instance1));
     resetReplacedFileGroups(replacedFileGroups);
-    LOG.info("Took {} ms to read {} instants, {} replaced file groups", hoodieTimer.endTimer(), replacedTimeline.countInstants(), replacedFileGroups.size());
+    // Sample log: log at INFO once every 5 times to track latencies, otherwise DEBUG
+    replacedFileGroupsReadSamplingLogger.logInfoOrDebug(
+        "Took {} ms to read {} instants, {} replaced file groups",
+        () -> new Object[]{hoodieTimer.endTimer(), replacedTimeline.countInstants(), replacedFileGroups.size()});
   }
 
   @Override
@@ -390,7 +403,12 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
         long beginTs = System.currentTimeMillis();
         // Not loaded yet
         try {
-          LOG.debug("Building file system view for partitions: {}", partitionSet);
+          // For metadata table, log at DEBUG. For data table, log at INFO.
+          if (metaClient.isMetadataTable()) {
+            LOG.debug("Building file system view for {} partition(s)", partitionSet.size());
+          } else {
+            LOG.info("Building file system view for {} partition(s)", partitionSet.size());
+          }
 
           // Pairs of relative partition path and absolute partition path
           List<Pair<String, StoragePath>> absolutePartitionPathList = partitionSet.stream()
@@ -453,7 +471,12 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
       if (!isPartitionAvailableInStore(partitionPathStr)) {
         // Not loaded yet
         try {
-          LOG.info("Building file system view for partition ({})", partitionPathStr);
+          // For metadata table, log at DEBUG. For data table, log at INFO.
+          if (metaClient.isMetadataTable()) {
+            LOG.debug("Building file system view for partition ({})", partitionPathStr);
+          } else {
+            LOG.info("Building file system view for partition ({})", partitionPathStr);
+          }
           List<HoodieFileGroup> groups = addFilesToView(partitionPathStr, getAllFilesInPartition(partitionPathStr));
           if (groups.isEmpty()) {
             storePartitionView(partitionPathStr, new ArrayList<>());

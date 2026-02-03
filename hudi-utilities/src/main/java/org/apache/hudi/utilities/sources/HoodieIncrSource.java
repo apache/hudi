@@ -39,7 +39,8 @@ import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
+import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.utilities.config.HoodieIncrSourceConfig;
 import org.apache.hudi.utilities.ingestion.HoodieIngestionMetrics;
 import org.apache.hudi.utilities.sources.helpers.IncrSourceHelper;
@@ -49,13 +50,12 @@ import org.apache.hudi.utilities.streamer.SourceProfile;
 import org.apache.hudi.utilities.streamer.SourceProfileSupplier;
 import org.apache.hudi.utilities.streamer.StreamContext;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.DataFrameReader;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SparkSession;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.Arrays;
 import java.util.Collections;
@@ -85,9 +85,9 @@ import static org.apache.hudi.utilities.sources.helpers.IncrSourceHelper.coalesc
 import static org.apache.hudi.utilities.sources.helpers.IncrSourceHelper.generateQueryInfo;
 import static org.apache.hudi.utilities.sources.helpers.IncrSourceHelper.getHollowCommitHandleMode;
 
+@Slf4j
 public class HoodieIncrSource extends RowSource {
 
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieIncrSource.class);
   public static final Set<String> HOODIE_INCR_SOURCE_READ_OPT_KEYS =
       CollectionUtils.createImmutableSet(HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key());
   private final Option<SnapshotLoadQuerySplitter> snapshotLoadQuerySplitter;
@@ -201,7 +201,8 @@ public class HoodieIncrSource extends RowSource {
   @Override
   public Pair<Option<Dataset<Row>>, Checkpoint> fetchNextBatch(Option<Checkpoint> lastCheckpoint, long sourceLimit) {
     String srcPath = getStringWithAltKeys(props, HoodieIncrSourceConfig.HOODIE_SRC_BASE_PATH);
-    HoodieTableVersion sourceTableVersion = HoodieTableConfig.loadFromHoodieProps(new HoodieHadoopStorage(srcPath, sparkContext.hadoopConfiguration()), srcPath).getTableVersion();
+    HoodieTableVersion sourceTableVersion = HoodieTableConfig.loadFromHoodieProps(
+        HoodieStorageUtils.getStorage(srcPath, HadoopFSUtils.getStorageConf(sparkContext.hadoopConfiguration())), srcPath).getTableVersion();
     if (sourceTableVersion.greaterThanOrEquals(HoodieTableVersion.EIGHT) && CheckpointUtils.shouldTargetCheckpointV2(writeTableVersion, getClass().getName())) {
       return fetchNextBatchBasedOnCompletionTime(lastCheckpoint, sourceLimit);
     } else {
@@ -237,7 +238,7 @@ public class HoodieIncrSource extends RowSource {
     if (queryContext.isEmpty()
         || (endCompletionTime = queryContext.getMaxCompletionTime())
         .equals(analyzer.getStartCompletionTime().orElseGet(() -> null))) {
-      LOG.info("Already caught up. No new data to process");
+      log.info("Already caught up. No new data to process");
       // TODO(yihua): fix checkpoint translation here as an improvement
       return Pair.of(Option.empty(), lastCheckpoint.orElse(null));
     }
@@ -351,7 +352,7 @@ public class HoodieIncrSource extends RowSource {
     final int numInstantsFromConfig = getIntWithAltKeys(props, HoodieIncrSourceConfig.NUM_INSTANTS_PER_FETCH);
     int numInstantsPerFetch = getLatestSourceProfile().map(sourceProfile -> {
       int numInstantsFromSourceProfile = sourceProfile.getSourceSpecificContext();
-      LOG.info("Overriding numInstantsPerFetch from source profile numInstantsFromSourceProfile {} , numInstantsFromConfig {}",
+      log.info("Overriding numInstantsPerFetch from source profile numInstantsFromSourceProfile {} , numInstantsFromConfig {}",
           numInstantsFromSourceProfile, numInstantsFromConfig);
       return numInstantsFromSourceProfile;
     }).orElse(numInstantsFromConfig);
@@ -363,7 +364,7 @@ public class HoodieIncrSource extends RowSource {
         null, false, Option.empty());
 
     if (queryInfo.areStartAndEndInstantsEqual()) {
-      LOG.info("Already caught up. No new data to process");
+      log.info("Already caught up. No new data to process");
       return Pair.of(Option.empty(), new StreamerCheckpointV1(queryInfo.getEndInstant()));
     }
 

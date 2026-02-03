@@ -22,9 +22,11 @@ package org.apache.hudi.storage;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 
+import lombok.Getter;
+
 import java.util.Arrays;
-import java.util.Set;
 import java.util.HashSet;
+import java.util.Set;
 
 /**
  * All the supported storage schemes in Hoodie.
@@ -55,10 +57,9 @@ public enum StorageSchemes {
   ABFSS("abfss", null, null, null),
   // Aliyun OSS
   OSS("oss", null, null, null),
-  // View FS for federated setups. If federating across cloud stores, then append
-  // support is false
-  // View FS support atomic creation
-  VIEWFS("viewfs", null, true, null),
+  // ViewFS is just a layer on top of other file systems based on hadoop like HDFS.
+  // So file creation is atomic operation but write may not be transactional.
+  VIEWFS("viewfs", false, true, null),
   // ALLUXIO
   ALLUXIO("alluxio", null, null, null),
   // Tencent Cloud Object Storage
@@ -97,11 +98,13 @@ public enum StorageSchemes {
   // here is a trade-off between rpc times and throughput of storage meta service
   private static final Set<String> LIST_STATUS_FRIENDLY_SCHEMES = new HashSet<>(Arrays.asList(FILE.scheme, S3.scheme, S3A.scheme, GCS.scheme));
 
+  @Getter
   private final String scheme;
   // null for uncertain if write is transactional, please update this for each FS
   private final Boolean isWriteTransactional;
   // null for uncertain if dfs support atomic create&delete, please update this for each FS
   private final Boolean supportAtomicCreation;
+  @Getter
   private final String storageLockClass;
 
   StorageSchemes(
@@ -115,10 +118,6 @@ public enum StorageSchemes {
     this.storageLockClass = storageLockClass;
   }
 
-  public String getScheme() {
-    return scheme;
-  }
-
   public boolean isWriteTransactional() {
     return isWriteTransactional != null && isWriteTransactional;
   }
@@ -129,10 +128,6 @@ public enum StorageSchemes {
 
   public boolean implementsStorageLock() {
     return !StringUtils.isNullOrEmpty(storageLockClass);
-  }
-
-  public String getStorageLockClass() {
-    return storageLockClass;
   }
 
   public static boolean isSchemeSupported(String scheme) {

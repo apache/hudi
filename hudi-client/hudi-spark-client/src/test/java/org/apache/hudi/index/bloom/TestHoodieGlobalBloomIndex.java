@@ -92,7 +92,7 @@ public class TestHoodieGlobalBloomIndex extends TestHoodieMetadataBase {
     HoodieGlobalBloomIndex index =
         new HoodieGlobalBloomIndex(config, SparkHoodieBloomIndexHelper.getInstance());
     HoodieTable hoodieTable = HoodieSparkTable.create(config, context, metaClient);
-    HoodieSparkWriteableTestTable testTable = HoodieSparkWriteableTestTable.of(metaClient, SCHEMA.toAvroSchema(), metadataWriter);
+    HoodieSparkWriteableTestTable testTable = HoodieSparkWriteableTestTable.of(metaClient, SCHEMA, metadataWriter);
 
     // Create some partitions, and put some files, along with the meta file
     // "2016/01/21": 0 file
@@ -225,7 +225,7 @@ public class TestHoodieGlobalBloomIndex extends TestHoodieMetadataBase {
         .build();
     HoodieGlobalBloomIndex index = new HoodieGlobalBloomIndex(config, SparkHoodieBloomIndexHelper.getInstance());
     HoodieTable hoodieTable = HoodieSparkTable.create(config, context, metaClient);
-    HoodieSparkWriteableTestTable testTable = HoodieSparkWriteableTestTable.of(metaClient, SCHEMA.toAvroSchema(), metadataWriter);
+    HoodieSparkWriteableTestTable testTable = HoodieSparkWriteableTestTable.of(metaClient, SCHEMA, metadataWriter);
 
     // Create some partitions, and put some files, along with the meta file
     // "2016/01/21": 0 file
@@ -296,7 +296,7 @@ public class TestHoodieGlobalBloomIndex extends TestHoodieMetadataBase {
     JavaRDD<HoodieRecord> taggedRecordRDD = tagLocation(index, recordRDD, hoodieTable);
 
     for (HoodieRecord record : taggedRecordRDD.collect()) {
-      IndexedRecord data = record.toIndexedRecord(SIMPLE_RECORD_SCHEMA.toAvroSchema(), CollectionUtils.emptyProps()).get().getData();
+      IndexedRecord data = record.toIndexedRecord(SIMPLE_RECORD_SCHEMA, CollectionUtils.emptyProps()).get().getData();
       switch (record.getRecordKey()) {
         case "000":
           assertEquals(record.getCurrentLocation().getFileId(), fileId1);

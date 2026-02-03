@@ -23,8 +23,7 @@ import org.apache.hudi.client.bootstrap.BootstrapMode;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.util.List;
 import java.util.Map;
@@ -34,10 +33,10 @@ import java.util.stream.Collectors;
 /**
  * A bootstrap selector which employs bootstrap mode by specified partitions.
  */
+@Slf4j
 public class BootstrapRegexModeSelector extends BootstrapModeSelector {
 
   private static final long serialVersionUID = 1L;
-  private static final Logger LOG = LoggerFactory.getLogger(BootstrapRegexModeSelector.class);
 
   private final Pattern pattern;
   private final BootstrapMode bootstrapModeOnMatch;
@@ -49,7 +48,7 @@ public class BootstrapRegexModeSelector extends BootstrapModeSelector {
     this.bootstrapModeOnMatch = writeConfig.getBootstrapModeForRegexMatch();
     this.defaultMode = BootstrapMode.FULL_RECORD.equals(bootstrapModeOnMatch)
         ? BootstrapMode.METADATA_ONLY : BootstrapMode.FULL_RECORD;
-    LOG.info("Default Mode :" + defaultMode + ", on Match Mode :" + bootstrapModeOnMatch);
+    log.info("Default Mode :" + defaultMode + ", on Match Mode :" + bootstrapModeOnMatch);
   }
 
   @Override

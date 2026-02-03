@@ -32,6 +32,7 @@ import org.apache.hudi.integ.testsuite.configuration.DeltaConfig;
 import org.apache.hudi.integ.testsuite.dag.ExecutionContext;
 import org.apache.hudi.integ.testsuite.schema.SchemaUtils;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
@@ -59,6 +60,7 @@ import static org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer.CHECKP
  * optional config "delete_input_data" that you can set for this node. If set, once validation completes, contents from inputPath are deleted. This will come in handy for long running test suites.
  * README has more details under docker set up for usages of this node.
  */
+@Slf4j
 public abstract class BaseValidateDatasetNode extends DagNode<Boolean> {
 
   public BaseValidateDatasetNode(DeltaConfig.Config config) {
@@ -117,8 +119,8 @@ public abstract class BaseValidateDatasetNode extends DagNode<Boolean> {
         long exceptHudiCount = exceptHudiDf.count();
         log.debug("Except input df count {}, except hudi count {}", exceptInputDf, exceptHudiCount);
         if (exceptInputCount != 0 || exceptHudiCount != 0) {
-          log.error("Data set validation failed. Total count in hudi " + trimmedHudiDf.count() + ", input df count " + inputSnapshotDf.count()
-              + ". InputDf except hudi df = " + exceptInputCount + ", Hudi df except Input df " + exceptHudiCount);
+          log.error("Data set validation failed. Total count in hudi {}, input df count {}. InputDf except hudi df = {}, Hudi df except Input df {}", trimmedHudiDf.count(), inputSnapshotDf.count(),
+              exceptInputCount, exceptHudiCount);
           throw new AssertionError("Hudi contents does not match contents input data. ");
         }
       } else {
@@ -128,14 +130,14 @@ public abstract class BaseValidateDatasetNode extends DagNode<Boolean> {
         log.debug("Input count: {}; output count: {}", inputCount, outputCount);
         // the intersected df should be same as inputDf. if not, there is some mismatch.
         if (outputCount == 0 || inputCount == 0 || inputSnapshotDf.except(intersectionDf).count() != 0) {
-          log.error("Data set validation failed. Total count in hudi " + outputCount + ", input df count " + inputCount);
+          log.error("Data set validation failed. Total count in hudi {}, input df count {}", outputCount, inputCount);
           throw new AssertionError("Hudi contents does not match contents input data. ");
         }
 
         if (config.isValidateHive()) {
           String database = context.getWriterContext().getProps().getString(DataSourceWriteOptions.HIVE_DATABASE().key());
           String tableName = context.getWriterContext().getProps().getString(DataSourceWriteOptions.HIVE_TABLE().key());
-          log.warn("Validating hive table with db : " + database + " and table : " + tableName);
+          log.warn("Validating hive table with db : {} and table : {}", database, tableName);
           session.sql("REFRESH TABLE " + database + "." + tableName);
           Dataset<Row> cowDf = session.sql("SELECT _row_key, rider, driver, begin_lat, begin_lon, end_lat, end_lon, fare, _hoodie_is_deleted, "
               + "test_suite_source_ordering_field FROM " + database + "." + tableName);
@@ -144,10 +146,10 @@ public abstract class BaseValidateDatasetNode extends DagNode<Boolean> {
 
           Dataset<Row> intersectedHiveDf = reorderedInputDf.intersect(cowDf);
           outputCount = trimmedHudiDf.count();
-          log.warn("Input count: " + inputCount + "; output count: " + outputCount);
+          log.warn("Input count: {}; output count: {}", inputCount, outputCount);
           // the intersected df should be same as inputDf. if not, there is some mismatch.
           if (outputCount == 0 || reorderedInputDf.except(intersectedHiveDf).count() != 0) {
-            log.error("Data set validation failed for COW hive table. Total count in hudi " + outputCount + ", input df count " + inputCount);
+            log.error("Data set validation failed for COW hive table. Total count in hudi {}, input df count {}", outputCount, inputCount);
             throw new AssertionError("Hudi hive table contents does not match contents input data. ");
           }
         }
@@ -176,8 +178,7 @@ public abstract class BaseValidateDatasetNode extends DagNode<Boolean> {
     List<FileStatus> subDirList = Arrays.asList(subDirs);
     subDirList.sort(Comparator.comparingLong(entry -> Long.parseLong(entry.getPath().getName())));
     String latestSubDir = subDirList.get(subDirList.size() - 1).getPath().getName();
-    log.info("Latest sub directory in input path " + latestSubDir + ", latest checkpoint from deltastreamer "
-        + (latestCheckpoint.isPresent() ? latestCheckpoint.get() : "none"));
+    log.info("Latest sub directory in input path {}, latest checkpoint from deltastreamer {}", latestSubDir, latestCheckpoint.isPresent() ? latestCheckpoint.get() : "none");
     long maxWaitTime = config.maxWaitTimeForDeltastreamerToCatchupMs();
     long waitedSoFar = 0;
     while (!(latestCheckpoint.isPresent() && latestCheckpoint.get().equals(latestSubDir))) {
@@ -191,8 +192,7 @@ public abstract class BaseValidateDatasetNode extends DagNode<Boolean> {
         throw new AssertionError("DeltaStreamer has not caught up after 5 mins of wait time. Last known checkpoint "
             + (latestCheckpoint.isPresent() ? latestCheckpoint.get() : "none") + ", expected checkpoint to have caught up " + latestSubDir);
       }
-      log.info("Latest sub directory in input path " + latestSubDir + ", latest checkpoint from deltastreamer "
-          + (latestCheckpoint.isPresent() ? latestCheckpoint.get() : "none"));
+      log.info("Latest sub directory in input path {}, latest checkpoint from deltastreamer {}", latestSubDir, latestCheckpoint.isPresent() ? latestCheckpoint.get() : "none");
     }
   }
 

@@ -26,19 +26,16 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieEarlyConflictDetectionException;
 import org.apache.hudi.storage.HoodieStorage;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * This strategy is used for direct marker writers, trying to do early conflict detection.
  * It will use fileSystem api like list and exist directly to check if there is any marker file
  * conflict, with transaction locks using {@link DirectMarkerTransactionManager}.
  */
+@Slf4j
 public class SimpleTransactionDirectMarkerBasedDetectionStrategy
     extends SimpleDirectMarkerBasedDetectionStrategy {
-
-  private static final Logger LOG = LoggerFactory.getLogger(
-      SimpleTransactionDirectMarkerBasedDetectionStrategy.class);
 
   public SimpleTransactionDirectMarkerBasedDetectionStrategy(
       HoodieStorage storage, String partitionPath, String fileId, String instantTime,
@@ -57,7 +54,7 @@ public class SimpleTransactionDirectMarkerBasedDetectionStrategy
       super.detectAndResolveConflictIfNecessary();
 
     } catch (Exception e) {
-      LOG.error("Exception occurs during create marker file in early conflict detection mode within transaction.", e);
+      log.error("Exception occurs during create marker file in early conflict detection mode within transaction.", e);
       throw e;
     } finally {
       // End transaction after created marker file.

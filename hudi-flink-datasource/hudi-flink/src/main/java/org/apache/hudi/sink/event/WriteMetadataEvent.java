@@ -23,6 +23,9 @@ import org.apache.hudi.common.model.HoodieDeltaWriteStat;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.util.WriteStatusMerger;
 
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
 import org.apache.flink.runtime.operators.coordination.OperatorEvent;
 
 import java.util.ArrayList;
@@ -34,6 +37,9 @@ import java.util.stream.Collectors;
 /**
  * An operator event to mark successful checkpoint batch write.
  */
+@NoArgsConstructor
+@Getter
+@Setter
 public class WriteMetadataEvent implements OperatorEvent {
   private static final long serialVersionUID = 1L;
 
@@ -59,6 +65,11 @@ public class WriteMetadataEvent implements OperatorEvent {
   private boolean bootstrap;
 
   /**
+   * true if this write metadata event refers to a write happening in metadata table.
+   */
+  private boolean isMetadataTable;
+
+  /**
    * Creates an event.
    *
    * @param taskID        The task ID
@@ -77,7 +88,8 @@ public class WriteMetadataEvent implements OperatorEvent {
       List<WriteStatus> writeStatuses,
       boolean lastBatch,
       boolean endInput,
-      boolean bootstrap) {
+      boolean bootstrap,
+      boolean isMetadataTable) {
     this.taskID = taskID;
     this.checkpointId = checkpointId;
     this.instantTime = instantTime;
@@ -85,10 +97,7 @@ public class WriteMetadataEvent implements OperatorEvent {
     this.lastBatch = lastBatch;
     this.endInput = endInput;
     this.bootstrap = bootstrap;
-  }
-
-  // default constructor for efficient serialization
-  public WriteMetadataEvent() {
+    this.isMetadataTable = isMetadataTable;
   }
 
   /**
@@ -96,62 +105,6 @@ public class WriteMetadataEvent implements OperatorEvent {
    */
   public static Builder builder() {
     return new Builder();
-  }
-
-  public List<WriteStatus> getWriteStatuses() {
-    return writeStatuses;
-  }
-
-  public void setWriteStatuses(List<WriteStatus> writeStatuses) {
-    this.writeStatuses = writeStatuses;
-  }
-
-  public int getTaskID() {
-    return taskID;
-  }
-
-  public void setTaskID(int taskID) {
-    this.taskID = taskID;
-  }
-
-  public Long getCheckpointId() {
-    return checkpointId;
-  }
-
-  public void setCheckpointId(long checkpointId) {
-    this.checkpointId = checkpointId;
-  }
-
-  public String getInstantTime() {
-    return instantTime;
-  }
-
-  public void setInstantTime(String instantTime) {
-    this.instantTime = instantTime;
-  }
-
-  public boolean isEndInput() {
-    return endInput;
-  }
-
-  public void setEndInput(boolean endInput) {
-    this.endInput = endInput;
-  }
-
-  public boolean isBootstrap() {
-    return bootstrap;
-  }
-
-  public void setBootstrap(boolean bootstrap) {
-    this.bootstrap = bootstrap;
-  }
-
-  public boolean isLastBatch() {
-    return lastBatch;
-  }
-
-  public void setLastBatch(boolean lastBatch) {
-    this.lastBatch = lastBatch;
   }
 
   /**
@@ -185,6 +138,7 @@ public class WriteMetadataEvent implements OperatorEvent {
         + ", lastBatch=" + lastBatch
         + ", endInput=" + endInput
         + ", bootstrap=" + bootstrap
+        + ", isMetadataTable=" + isMetadataTable
         + '}';
   }
 
@@ -198,13 +152,14 @@ public class WriteMetadataEvent implements OperatorEvent {
    * <p>The event indicates that the new instant can start directly,
    * there is no old instant write statuses to recover.
    */
-  public static WriteMetadataEvent emptyBootstrap(int taskId, long checkpointId) {
+  public static WriteMetadataEvent emptyBootstrap(int taskId, long checkpointId, boolean isMetadataTable) {
     return WriteMetadataEvent.builder()
         .taskID(taskId)
         .checkpointId(checkpointId)
         .instantTime(BOOTSTRAP_INSTANT)
         .writeStatus(Collections.emptyList())
         .bootstrap(true)
+        .metadataTable(isMetadataTable)
         .build();
   }
 
@@ -243,12 +198,13 @@ public class WriteMetadataEvent implements OperatorEvent {
     private boolean lastBatch = false;
     private boolean endInput = false;
     private boolean bootstrap = false;
+    private boolean isMetadataTable = false;
 
     public WriteMetadataEvent build() {
       Objects.requireNonNull(taskID);
       Objects.requireNonNull(instantTime);
       Objects.requireNonNull(writeStatus);
-      return new WriteMetadataEvent(taskID, checkpointId, instantTime, writeStatus, lastBatch, endInput, bootstrap);
+      return new WriteMetadataEvent(taskID, checkpointId, instantTime, writeStatus, lastBatch, endInput, bootstrap, isMetadataTable);
     }
 
     public Builder taskID(int taskID) {
@@ -283,6 +239,11 @@ public class WriteMetadataEvent implements OperatorEvent {
 
     public Builder bootstrap(boolean bootstrap) {
       this.bootstrap = bootstrap;
+      return this;
+    }
+
+    public Builder metadataTable(boolean isMetadataTable) {
+      this.isMetadataTable = isMetadataTable;
       return this;
     }
   }

@@ -56,9 +56,8 @@ import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.avro.generic.GenericRecord;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -92,9 +91,8 @@ import static org.apache.hudi.table.upgrade.UpgradeDowngradeUtils.convertComplet
  * Version 7 is going to be placeholder version for bridge release 0.16.0.
  * Version 8 is the placeholder version to track 1.x.
  */
+@Slf4j
 public class EightToSevenDowngradeHandler implements DowngradeHandler {
-
-  private static final Logger LOG = LoggerFactory.getLogger(EightToSevenDowngradeHandler.class);
   private static final Set<String> SUPPORTED_METADATA_PARTITION_PATHS = getSupportedMetadataPartitionPaths();
 
   @Override
@@ -116,7 +114,7 @@ public class EightToSevenDowngradeHandler implements DowngradeHandler {
       instants = metaClient.scanHoodieInstantsFromFileSystem(metaClient.getTimelinePath(),
           ActiveTimelineV2.VALID_EXTENSIONS_IN_ACTIVE_TIMELINE, false);
     } catch (IOException ioe) {
-      LOG.error("Failed to get instants from filesystem", ioe);
+      log.error("Failed to get instants from filesystem", ioe);
       throw new HoodieIOException("Failed to get instants from filesystem", ioe);
     }
 
@@ -231,7 +229,7 @@ public class EightToSevenDowngradeHandler implements DowngradeHandler {
       if (config.isFailOnTimelineArchivingEnabled()) {
         throw new HoodieException("Failed to downgrade LSM timeline to old archived format", e);
       } else {
-        LOG.warn("Failed to downgrade LSM timeline to old archived format", e);
+        log.warn("Failed to downgrade LSM timeline to old archived format", e);
       }
     }
   }
@@ -300,7 +298,7 @@ public class EightToSevenDowngradeHandler implements DowngradeHandler {
     try {
       return rewriteTimelineV2InstantFileToV1Format(instant, metaClient, originalFileName, replacedFileName, commitMetadataSerDeV1, activeTimelineV1);
     } catch (IOException e) {
-      LOG.error("Can not to complete the downgrade from version eight to version seven. The reason for failure is {}", e.getMessage());
+      log.error("Can not to complete the downgrade from version eight to version seven. The reason for failure is {}", e.getMessage());
       throw new HoodieException(e);
     }
   }

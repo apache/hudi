@@ -34,7 +34,7 @@ import org.apache.hudi.exception.TableNotFoundException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.storage.StorageConfiguration;
-import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
+import org.apache.hudi.storage.HoodieStorageUtils;
 
 import com.beust.jcommander.JCommander;
 import com.beust.jcommander.Parameter;
@@ -44,7 +44,6 @@ import com.codahale.metrics.UniformReservoir;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -62,7 +61,9 @@ import java.time.format.DateTimeFormatterBuilder;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -167,6 +168,9 @@ public class TableSizeStats implements Serializable {
     @Parameter(names = {"--spark-memory", "-sm"}, description = "spark memory to use", required = false)
     public String sparkMemory = "1g";
 
+    @Parameter(names = {"--enable-hive-support", "-ehs"}, description = "Enables hive support during spark context initialization.", required = false)
+    public Boolean enableHiveSupport = false;
+
     @Parameter(names = {"--hoodie-conf"}, description = "Any configuration that can be set in the properties file "
         + "(using the CLI parameter \"--props\") can also be passed command line using this parameter. This can be repeated",
         splitter = IdentitySplitter.class)
@@ -229,9 +233,9 @@ public class TableSizeStats implements Serializable {
       System.exit(1);
     }
 
-    SparkConf sparkConf = UtilHelpers.buildSparkConf("Table-Size-Stats", cfg.sparkMaster);
-    sparkConf.set("spark.executor.memory", cfg.sparkMemory);
-    JavaSparkContext jsc = new JavaSparkContext(sparkConf);
+    Map<String, String> sparkConfigMap = new HashMap<>();
+    sparkConfigMap.put("spark.executor.memory", cfg.sparkMemory);
+    JavaSparkContext jsc = UtilHelpers.buildSparkContext("Table-Size-Stats", cfg.sparkMaster, cfg.enableHiveSupport, sparkConfigMap);
 
     try {
       TableSizeStats tableSizeStats = new TableSizeStats(jsc, cfg);
@@ -282,7 +286,7 @@ public class TableSizeStats implements Serializable {
         .setBasePath(basePath)
         .setConf(storageConf.newInstance()).build();
     HoodieTableMetadata tableMetadata = metaClientLocal.getTableFormat().getMetadataFactory().create(
-        engineContext, new HoodieHadoopStorage(basePath, storageConf), metadataConfig, basePath);
+        engineContext, HoodieStorageUtils.getStorage(basePath, storageConf), metadataConfig, basePath);
 
     List<String> allPartitions = tableMetadata.getAllPartitionPaths();
 

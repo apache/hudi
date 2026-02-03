@@ -20,6 +20,7 @@ package org.apache.hudi.sink.utils;
 
 import org.apache.hudi.client.model.HoodieFlinkInternalRow;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.sink.StreamWriteFunction;
@@ -32,6 +33,7 @@ import org.apache.hudi.util.HoodieSchemaConverter;
 import org.apache.hudi.util.StreamerUtil;
 import org.apache.hudi.utils.TestConfigurations;
 
+import lombok.Getter;
 import org.apache.flink.api.common.ExecutionConfig;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.runtime.io.disk.iomanager.IOManager;
@@ -67,7 +69,9 @@ public class BucketStreamWriteFunctionWrapper<I> implements TestFunctionWrapper<
   private final IOManager ioManager;
   protected final StreamingRuntimeContext runtimeContext;
   private final MockOperatorEventGateway gateway;
+  @Getter
   private final MockOperatorCoordinatorContext coordinatorContext;
+  @Getter
   protected final StreamWriteOperatorCoordinator coordinator;
   protected final MockStateInitializationContext stateInitializationContext;
 
@@ -138,12 +142,12 @@ public class BucketStreamWriteFunctionWrapper<I> implements TestFunctionWrapper<
   }
 
   public WriteMetadataEvent[] getEventBuffer() {
-    return this.coordinator.getEventBuffer();
+    return Option.ofNullable(this.coordinator.getEventBuffer()).map(EventBuffers.EventBuffer::getDataWriteEventBuffer).orElse(null);
   }
 
   @Override
   public WriteMetadataEvent[] getEventBuffer(long checkpointId) {
-    return this.coordinator.getEventBuffer(checkpointId);
+    return Option.ofNullable(this.coordinator.getEventBuffer(checkpointId)).map(EventBuffers.EventBuffer::getDataWriteEventBuffer).orElse(null);
   }
 
   public OperatorEvent getNextEvent() {
@@ -197,17 +201,9 @@ public class BucketStreamWriteFunctionWrapper<I> implements TestFunctionWrapper<
     }
   }
 
-  public StreamWriteOperatorCoordinator getCoordinator() {
-    return coordinator;
-  }
-
   @Override
   public AbstractWriteFunction getWriteFunction() {
     return this.writeFunction;
-  }
-
-  public MockOperatorCoordinatorContext getCoordinatorContext() {
-    return coordinatorContext;
   }
 
   // -------------------------------------------------------------------------

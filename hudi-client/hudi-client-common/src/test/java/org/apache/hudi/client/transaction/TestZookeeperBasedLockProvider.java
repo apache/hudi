@@ -18,9 +18,9 @@
 
 package org.apache.hudi.client.transaction;
 
+import org.apache.hudi.client.transaction.lock.BaseZookeeperBasedLockProvider;
 import org.apache.hudi.client.transaction.lock.ZookeeperBasedImplicitBasePathLockProvider;
 import org.apache.hudi.client.transaction.lock.ZookeeperBasedLockProvider;
-import org.apache.hudi.client.transaction.lock.BaseZookeeperBasedLockProvider;
 import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.config.LockConfiguration;
 import org.apache.hudi.common.table.HoodieTableConfig;
@@ -28,6 +28,7 @@ import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.exception.HoodieLockException;
 import org.apache.hudi.storage.StorageConfiguration;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.curator.framework.CuratorFramework;
 import org.apache.curator.framework.CuratorFrameworkFactory;
 import org.apache.curator.retry.RetryOneTime;
@@ -39,8 +40,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.Properties;
@@ -58,9 +57,8 @@ import static org.apache.hudi.common.config.LockConfiguration.ZK_CONNECT_URL_PRO
 import static org.apache.hudi.common.config.LockConfiguration.ZK_LOCK_KEY_PROP_KEY;
 import static org.apache.hudi.common.config.LockConfiguration.ZK_SESSION_TIMEOUT_MS_PROP_KEY;
 
+@Slf4j
 public class TestZookeeperBasedLockProvider {
-
-  private static final Logger LOG = LoggerFactory.getLogger(TestZookeeperBasedLockProvider.class);
 
   private static TestingServer server;
   private static CuratorFramework client;
@@ -79,7 +77,7 @@ public class TestZookeeperBasedLockProvider {
         CuratorFrameworkFactory.Builder builder = CuratorFrameworkFactory.builder();
         client = builder.connectString(server.getConnectString()).retryPolicy(new RetryOneTime(1000)).build();
       } catch (Exception e) {
-        LOG.error("Getting bind exception - retrying to allocate server");
+        log.error("Getting bind exception - retrying to allocate server");
         server = null;
       }
     }

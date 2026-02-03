@@ -20,9 +20,8 @@ package org.apache.hudi.common.util;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.util.collection.FlatLists;
-
-import org.apache.avro.Schema;
 
 import java.util.function.Function;
 
@@ -57,7 +56,7 @@ public class SortUtils {
   public static FlatLists.ComparableList<Comparable<HoodieRecord>> getComparableSortColumns(
       HoodieRecord record,
       String[] sortColumnNames,
-      Schema schema,
+      HoodieSchema schema,
       boolean suffixRecordKey,
       boolean consistentLogicalTimestampEnabled
   ) {
@@ -90,7 +89,7 @@ public class SortUtils {
   public static FlatLists.ComparableList<Comparable<HoodieRecord>> getComparableSortColumns(
       HoodieRecord record,
       String[] sortColumnNames,
-      Schema schema,
+      HoodieSchema schema,
       boolean suffixRecordKey,
       boolean consistentLogicalTimestampEnabled,
       Function<Object[], Object[]> wrapUTF8StringFunc

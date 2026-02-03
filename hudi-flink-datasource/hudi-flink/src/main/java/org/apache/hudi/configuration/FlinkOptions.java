@@ -44,6 +44,8 @@ import org.apache.hudi.sink.overwrite.PartitionOverwriteMode;
 import org.apache.hudi.table.action.cluster.ClusteringPlanPartitionFilterMode;
 import org.apache.hudi.util.ClientIds;
 
+import lombok.AccessLevel;
+import lombok.NoArgsConstructor;
 import org.apache.flink.configuration.ConfigOption;
 import org.apache.flink.configuration.ConfigOptions;
 import org.apache.flink.configuration.Configuration;
@@ -68,9 +70,8 @@ import static org.apache.hudi.common.util.PartitionPathEncodeUtils.DEFAULT_PARTI
     groupName = ConfigGroups.Names.FLINK_SQL,
     description = "Flink jobs using the SQL can be configured through the options in WITH clause."
         + " The actual datasource level configs are listed below.")
+@NoArgsConstructor(access = AccessLevel.PRIVATE)
 public class FlinkOptions extends HoodieConfig {
-  private FlinkOptions() {
-  }
 
   // ------------------------------------------------------------------------
   //  Base Options
@@ -113,7 +114,7 @@ public class FlinkOptions extends HoodieConfig {
   public static final ConfigOption<String> ORDERING_FIELDS = ConfigOptions
       .key("ordering.fields")
       .stringType()
-      .defaultValue("ts")
+      .noDefaultValue()
       .withFallbackKeys("precombine.field", "write.precombine.field", HoodieWriteConfig.PRECOMBINE_FIELD_NAME.key())
       .withDescription("Comma separated list of fields used in records merging. When two records have the same\n"
           + "key value, we will pick the one with the largest value for the ordering field,\n"
@@ -227,6 +228,20 @@ public class FlinkOptions extends HoodieConfig {
       .withFallbackKeys(HoodieMetadataConfig.ENABLE.key())
       .withDescription("Enable the internal metadata table which serves table metadata like level file listings, default enabled");
 
+  @AdvancedConfig
+  public static final ConfigOption<Boolean> METADATA_COMPACTION_SCHEDULE_ENABLED = ConfigOptions
+      .key("metadata.compaction.schedule.enabled")
+      .booleanType()
+      .defaultValue(true)
+      .withDescription("Schedule the compaction plan for metadata table, enabled by default.");
+
+  public static final ConfigOption<Boolean> METADATA_COMPACTION_ASYNC_ENABLED = ConfigOptions
+      .key("metadata.compaction.async.enabled")
+      .booleanType()
+      .defaultValue(true)
+      .withDescription("Whether to enable async compaction for metadata table,"
+          + "if true, the compaction for metadata table will be performed in the compaction pipeline, default enabled.");
+
   public static final ConfigOption<Integer> METADATA_COMPACTION_DELTA_COMMITS = ConfigOptions
       .key("metadata.compaction.delta_commits")
       .intType()
@@ -273,6 +288,40 @@ public class FlinkOptions extends HoodieConfig {
       .defaultValue(".*")
       .withDescription("Whether to load partitions in state if partition path matching， default `*`");
 
+  @AdvancedConfig
+  public static final ConfigOption<Long> INDEX_RLI_CACHE_SIZE = ConfigOptions
+      .key("index.rli.cache.size")
+      .longType()
+      .defaultValue(100L) // default 100 MB
+      .withDescription("Maximum memory in MB for the inflight record index cache during one checkpoint interval.\n"
+          + "When record level index is used to assign bucket, record locations will first be cached before the record index is committed.");
+
+  @AdvancedConfig
+  public static final ConfigOption<Integer> INDEX_RLI_LOOKUP_MINIBATCH_SIZE = ConfigOptions
+      .key("index.rli.lookup.minibatch.size")
+      .intType()
+      .defaultValue(1000) // default 1000
+      .withDescription("The maximum number of input records can be buffered for miniBatch during record index lookup.\n"
+          + "MiniBatch is an optimization to buffer input records to reduce the number of individual index lookups,\n"
+          + "which can significantly improve performance compared to processing each record individually.\n"
+          + "Default value is 1000, which is also the minimum value for the minibatch size, when the configured size\n"
+          + "is less than 1000, the default value will be used.");
+
+  @AdvancedConfig
+  public static final ConfigOption<Long> INDEX_RLI_WRITE_BUFFER_SIZE = ConfigOptions
+      .key("index.rli.write.buffer.size")
+      .longType()
+      .defaultValue(100L) // default 100 MB
+      .withDescription("Maximum memory in MB for the buffer of index record writing operator, when the threshold hits, \n"
+          + "it flushes the index data to avoid OOM, default 100MB.");
+
+  @AdvancedConfig
+  public static final ConfigOption<Integer> INDEX_WRITE_TASKS = ConfigOptions
+      .key("index.write.tasks")
+      .intType()
+      .noDefaultValue()
+      .withDescription("Parallelism of tasks that do the index writing, default is the parallelism of the execution environment");
+
   // ------------------------------------------------------------------------
   //  Read Options
   // ------------------------------------------------------------------------
@@ -297,6 +346,13 @@ public class FlinkOptions extends HoodieConfig {
       .stringType()
       .noDefaultValue()
       .withDescription("Source avro schema string, the parsed schema is used for deserialization");
+
+  @AdvancedConfig
+  public static final ConfigOption<Integer> SOURCE_READER_FETCH_BATCH_RECORD_COUNT =
+      ConfigOptions.key("source.fetch-batch-record-count")
+          .intType()
+          .defaultValue(2048)
+          .withDescription("The target number of records for Hoodie reader fetch batch.");
 
   public static final String QUERY_TYPE_SNAPSHOT = "snapshot";
   public static final String QUERY_TYPE_READ_OPTIMIZED = "read_optimized";
@@ -398,6 +454,12 @@ public class FlinkOptions extends HoodieConfig {
           + "the avg read splits number per-second would be 'read.splits.limit'/'read.streaming.check-interval', by "
           + "default no limit");
 
+  public static final ConfigOption<Boolean> READ_SOURCE_V2_ENABLED = ConfigOptions
+      .key("read.source-v2.enabled")
+      .booleanType()
+      .defaultValue(false)
+      .withDescription("Whether to use Flink FLIP27 new source to consume data files.");
+
   @AdvancedConfig
   public static final ConfigOption<Boolean> READ_CDC_FROM_CHANGELOG = ConfigOptions
       .key("read.cdc.from.changelog")
@@ -416,6 +478,18 @@ public class FlinkOptions extends HoodieConfig {
       .defaultValue(false)
       .withDescription("Enables data-skipping allowing queries to leverage indexes to reduce the search space by "
           + "skipping over files");
+
+  @AdvancedConfig
+  public static final ConfigOption<Integer> READ_DATA_SKIPPING_RLI_KEYS_MAX_NUM = ConfigOptions
+      .key("read.data.skipping.rli.keys.max.num")
+      .intType()
+      .defaultValue(8)
+      .withDescription("Record Level index statistics will be read from metadata table (MDT) for data skipping optimization,\n"
+          + "and currently the index statistics are collected by a single process. This config is used to constrain the maximum \n"
+          + " number of hoodie keys that can be read from MDT without sacrificing any performance. If the number of hoodie keys from query\n"
+          + "predicate is greater than the maximum value, the query will fallback to skip the record level index filtering.\n"
+          + "E.g., given query: SELECT * FROM T WHERE `uuid` IN (1,2,3,4,5,6,7,8,9), the number of hoodie keys is 9, and\n"
+          + "the maximum value is 8, so the source will not perform record level index filtering.");
 
   // ------------------------------------------------------------------------
   //  Write Options
@@ -485,6 +559,7 @@ public class FlinkOptions extends HoodieConfig {
       .key("write.ignore.failed")
       .booleanType()
       .defaultValue(false)
+      .withFallbackKeys("hoodie.write.ignore.failed")
       .withDescription("Flag to indicate whether to ignore any non exception error (e.g. writestatus error). within a checkpoint batch. \n"
           + "By default false. Turning this on, could hide the write status errors while the flink checkpoint moves ahead. \n"
           + "So, would recommend users to use this with caution.");
@@ -500,7 +575,7 @@ public class FlinkOptions extends HoodieConfig {
   public static final ConfigOption<String> RECORD_KEY_FIELD = ConfigOptions
       .key(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key())
       .stringType()
-      .defaultValue("uuid")
+      .noDefaultValue()
       .withDescription("Record key field. Value to be used as the `recordKey` component of `HoodieKey`.\n"
           + "Actual value will be obtained by invoking .toString() on the field value. Nested fields can be specified using "
           + "the dot notation eg: `a.b.c`");
@@ -636,24 +711,51 @@ public class FlinkOptions extends HoodieConfig {
       .key("write.buffer.sort.enabled")
       .booleanType()
       .defaultValue(false) // default no sort
-      .withDescription("Whether to enable buffer sort within append write function. Data is sorted within the buffer configured by number of records or buffer size."
-          + " The order of entire parquet file is not guaranteed.");
+      .withDescription("Deprecated: use write.buffer.type=DISRUPTOR instead. "
+          + "Whether to enable buffer sort within append write function. "
+          + "The order of entire written file is not guaranteed.");
 
   @AdvancedConfig
   public static final ConfigOption<String> WRITE_BUFFER_SORT_KEYS = ConfigOptions
       .key("write.buffer.sort.keys")
       .stringType()
       .noDefaultValue() // default no sort key
-      .withDescription("Sort keys concatenated by comma for buffer sort in append write function. Data is sorted within the buffer configured by number of records or buffer size."
-          + " The order of entire parquet file is not guaranteed.");
+      .withDescription("Sort keys concatenated by comma for buffer sort in append write function. "
+          + "Data is sorted within the buffer configured by number of records or buffer size. "
+          + "The order of entire written file is not guaranteed.");
 
   @AdvancedConfig
   public static final ConfigOption<Long> WRITE_BUFFER_SIZE = ConfigOptions
       .key("write.buffer.size")
       .longType()
       .defaultValue(1000L) // 1000 records
-      .withDescription("Buffer size of each partition key for buffer sort in append write function. Data is sorted within the buffer configured by number of records."
-          +  " The order of entire parquet file is not guaranteed.");
+      .withDescription("Record count threshold for flushing the sort buffer in append write function. "
+          + "When buffer reaches this count, it is sorted and written. "
+          + "The order of entire written file is not guaranteed.");
+
+  @AdvancedConfig
+  public static final ConfigOption<String> WRITE_BUFFER_TYPE = ConfigOptions
+      .key("write.buffer.type")
+      .stringType()
+      .defaultValue("NONE")
+      .withDescription("Buffer type for append write function: "
+          + "NONE (no buffer sort, default), "
+          + "BOUNDED_IN_MEMORY (double buffer with async write), "
+          + "DISRUPTOR (ring buffer with async write, recommended for better throughput)");
+
+  @AdvancedConfig
+  public static final ConfigOption<Integer> WRITE_BUFFER_DISRUPTOR_RING_SIZE = ConfigOptions
+      .key("write.buffer.disruptor.ring.size")
+      .intType()
+      .defaultValue(16384)
+      .withDescription("Ring buffer size for Disruptor (must be power of 2), default 16384");
+
+  @AdvancedConfig
+  public static final ConfigOption<String> WRITE_BUFFER_DISRUPTOR_WAIT_STRATEGY = ConfigOptions
+      .key("write.buffer.disruptor.wait.strategy")
+      .stringType()
+      .defaultValue("BLOCKING_WAIT")
+      .withDescription("Wait strategy for Disruptor: BLOCKING_WAIT (default), SLEEPING_WAIT, YIELDING_WAIT, BUSY_SPIN_WAIT");
 
   @AdvancedConfig
   public static final ConfigOption<Long> WRITE_RATE_LIMIT = ConfigOptions
@@ -806,6 +908,13 @@ public class FlinkOptions extends HoodieConfig {
       .intType()
       .noDefaultValue()
       .withDescription("Parallelism of tasks that do actual compaction, default same as the write task parallelism");
+
+  @AdvancedConfig
+  public static final ConfigOption<Boolean> COMPACTION_OPERATION_EXECUTE_ASYNC_ENABLED = ConfigOptions
+      .key("compaction.operation.execute.async.enabled")
+      .booleanType()
+      .defaultValue(true)
+      .withDescription("Whether the compaction operation should be executed asynchronously on compact operator, default enabled.");
 
   public static final String NUM_COMMITS = "num_commits";
   public static final String TIME_ELAPSED = "time_elapsed";

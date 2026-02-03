@@ -31,6 +31,8 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.OverwriteWithLatestMerger;
 import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaField;
+import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.serialization.CustomSerializer;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.log.InstantRange;
@@ -208,12 +210,21 @@ public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> 
       HoodieSchema requiredSchema) throws IOException {
     HoodieSchema fileOutputSchema;
     Map<String, String> renamedColumns;
-    if (isLogFile) {
+    // Even when dataSchema equals requiredSchema, renamed columns still require schema rewriting
+    // to map old column names to new names during record reading. We only skip the lookup when
+    // both schemas match AND there are no renamed columns.
+    Pair<HoodieSchema, Map<String, String>> requiredSchemaForFileAndRenamedColumns = getSchemaHandler().getRequiredSchemaForFileAndRenamedColumns(filePath);
+    boolean hasNoRenamedColumns = requiredSchemaForFileAndRenamedColumns.getRight().isEmpty();
+    if (isLogFile || (dataSchema.equals(requiredSchema) && hasNoRenamedColumns)) {
+      // Skip per-file schema rewriting in these cases:
+      // 1. Log files: Schema evolution is handled during record merging (via rewriteRecordWithNewSchema),
+      //    not at the file reader level. Log records are read with their writer schema, then promoted later.
+      // 2. Bootstrap skeleton files (and other cases where dataSchema == requiredSchema with no renamed columns):
+      //    No schema rewriting is needed since schemas already match.
       fileOutputSchema = requiredSchema;
       renamedColumns = Collections.emptyMap();
     } else {
-      Pair<Schema, Map<String, String>> requiredSchemaForFileAndRenamedColumns = getSchemaHandler().getRequiredSchemaForFileAndRenamedColumns(filePath);
-      fileOutputSchema = HoodieSchema.fromAvroSchema(requiredSchemaForFileAndRenamedColumns.getLeft());
+      fileOutputSchema = requiredSchemaForFileAndRenamedColumns.getLeft();
       renamedColumns = requiredSchemaForFileAndRenamedColumns.getRight();
     }
     if (keyFilterOpt.isEmpty()) {
@@ -254,7 +265,7 @@ public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> 
 
   @Override
   public SizeEstimator<BufferedRecord<IndexedRecord>> getRecordSizeEstimator() {
-    return new AvroRecordSizeEstimator(getSchemaHandler().getSchemaForUpdates());
+    return new AvroRecordSizeEstimator(getSchemaHandler().getSchemaForUpdates().toAvroSchema());
   }
 
   @Override
@@ -268,7 +279,7 @@ public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> 
                                                                ClosableIterator<IndexedRecord> dataFileIterator,
                                                                HoodieSchema dataRequiredSchema,
                                                                List<Pair<String, Object>> partitionFieldAndValues) {
-    return new BootstrapIterator(skeletonFileIterator, skeletonRequiredSchema.toAvroSchema(), dataFileIterator, dataRequiredSchema.toAvroSchema(), partitionFieldAndValues);
+    return new BootstrapIterator(skeletonFileIterator, skeletonRequiredSchema, dataFileIterator, dataRequiredSchema, partitionFieldAndValues);
   }
 
   /**
@@ -277,24 +288,28 @@ public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> 
    */
   private static class BootstrapIterator implements ClosableIterator<IndexedRecord> {
     private final ClosableIterator<IndexedRecord> skeletonFileIterator;
-    private final Schema skeletonRequiredSchema;
+    private final HoodieSchema skeletonRequiredSchema;
     private final ClosableIterator<IndexedRecord> dataFileIterator;
-    private final Schema dataRequiredSchema;
-    private final Schema mergedSchema;
+    private final HoodieSchema dataRequiredSchema;
+    private final HoodieSchema mergedSchema;
     private final int skeletonFields;
     private final int[] partitionFieldPositions;
     private final Object[] partitionValues;
 
-    public BootstrapIterator(ClosableIterator<IndexedRecord> skeletonFileIterator, Schema skeletonRequiredSchema,
-                             ClosableIterator<IndexedRecord> dataFileIterator, Schema dataRequiredSchema,
+    public BootstrapIterator(ClosableIterator<IndexedRecord> skeletonFileIterator, HoodieSchema skeletonRequiredSchema,
+                             ClosableIterator<IndexedRecord> dataFileIterator, HoodieSchema dataRequiredSchema,
                              List<Pair<String, Object>> partitionFieldAndValues) {
       this.skeletonFileIterator = skeletonFileIterator;
       this.skeletonRequiredSchema = skeletonRequiredSchema;
       this.dataFileIterator = dataFileIterator;
       this.dataRequiredSchema = dataRequiredSchema;
-      this.mergedSchema = AvroSchemaUtils.mergeSchemas(skeletonRequiredSchema, dataRequiredSchema);
+      this.mergedSchema = HoodieSchemaUtils.mergeSchemas(skeletonRequiredSchema, dataRequiredSchema);
       this.skeletonFields = skeletonRequiredSchema.getFields().size();
-      this.partitionFieldPositions = partitionFieldAndValues.stream().map(Pair::getLeft).map(field -> mergedSchema.getField(field).pos()).mapToInt(Integer::intValue).toArray();
+      this.partitionFieldPositions = partitionFieldAndValues.stream()
+          .map(Pair::getLeft)
+          .map(field -> mergedSchema.getField(field).orElseThrow(() -> new IllegalArgumentException("Field not found: " + field)).pos())
+          .mapToInt(Integer::intValue)
+          .toArray();
       this.partitionValues = partitionFieldAndValues.stream().map(Pair::getValue).toArray();
     }
 
@@ -315,13 +330,13 @@ public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> 
     public IndexedRecord next() {
       IndexedRecord skeletonRecord = skeletonFileIterator.next();
       IndexedRecord dataRecord = dataFileIterator.next();
-      GenericRecord mergedRecord = new GenericData.Record(mergedSchema);
+      GenericRecord mergedRecord = new GenericData.Record(mergedSchema.toAvroSchema());
 
-      for (Schema.Field skeletonField : skeletonRequiredSchema.getFields()) {
+      for (HoodieSchemaField skeletonField : skeletonRequiredSchema.getFields()) {
         Schema.Field sourceField = skeletonRecord.getSchema().getField(skeletonField.name());
         mergedRecord.put(skeletonField.pos(), skeletonRecord.get(sourceField.pos()));
       }
-      for (Schema.Field dataField : dataRequiredSchema.getFields()) {
+      for (HoodieSchemaField dataField : dataRequiredSchema.getFields()) {
         Schema.Field sourceField = dataRecord.getSchema().getField(dataField.name());
         mergedRecord.put(dataField.pos() + skeletonFields, dataRecord.get(sourceField.pos()));
       }

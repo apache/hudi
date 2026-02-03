@@ -22,13 +22,12 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.utils.LazyIterableIterator;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.io.CreateHandleFactory;
 import org.apache.hudi.io.WriteHandleFactory;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.util.ExecutorFactory;
-
-import org.apache.avro.Schema;
 
 import java.util.Iterator;
 import java.util.List;
@@ -76,9 +75,9 @@ public abstract class HoodieLazyInsertIterable<T>
   // Used for caching HoodieRecord along with insertValue. We need this to offload computation work to buffering thread.
   public static class HoodieInsertValueGenResult<R extends HoodieRecord> {
     private final R record;
-    public final Schema schema;
+    public final HoodieSchema schema;
 
-    public HoodieInsertValueGenResult(R record, Schema schema) {
+    public HoodieInsertValueGenResult(R record, HoodieSchema schema) {
       this.record = record;
       this.schema = schema;
     }
@@ -92,13 +91,13 @@ public abstract class HoodieLazyInsertIterable<T>
    * Transformer function to help transform a HoodieRecord. This transformer is used by BufferedIterator to offload some
    * expensive operations of transformation to the reader thread.
    */
-  public <T> Function<HoodieRecord<T>, HoodieInsertValueGenResult<HoodieRecord>> getTransformer(Schema schema,
+  public <T> Function<HoodieRecord<T>, HoodieInsertValueGenResult<HoodieRecord>> getTransformer(HoodieSchema schema,
                                                                                                 HoodieWriteConfig writeConfig) {
     return getTransformerInternal(schema, writeConfig);
   }
 
-  public static <T> Function<HoodieRecord<T>, HoodieInsertValueGenResult<HoodieRecord>> getTransformerInternal(Schema schema,
-                                                                                                                HoodieWriteConfig writeConfig) {
+  public static <T> Function<HoodieRecord<T>, HoodieInsertValueGenResult<HoodieRecord>> getTransformerInternal(HoodieSchema schema,
+                                                                                                               HoodieWriteConfig writeConfig) {
     // NOTE: Whether record have to be cloned here is determined based on the executor type used
     //       for writing: executors relying on an inner queue, will be keeping references to the records
     //       and therefore in the environments where underlying buffer holding the record could be

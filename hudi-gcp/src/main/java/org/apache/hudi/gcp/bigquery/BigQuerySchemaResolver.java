@@ -19,6 +19,8 @@
 
 package org.apache.hudi.gcp.bigquery;
 
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.util.VisibleForTesting;
@@ -28,8 +30,6 @@ import com.google.cloud.bigquery.Field;
 import com.google.cloud.bigquery.FieldList;
 import com.google.cloud.bigquery.Schema;
 import com.google.cloud.bigquery.StandardSQLTypeName;
-import org.apache.avro.LogicalType;
-import org.apache.avro.LogicalTypes;
 
 import java.util.List;
 import java.util.function.Function;
@@ -61,7 +61,7 @@ public class BigQuerySchemaResolver {
    */
   Schema getTableSchema(HoodieTableMetaClient metaClient, List<String> partitionFields) {
     try {
-      Schema schema = convertSchema(tableSchemaResolverSupplier.apply(metaClient).getTableAvroSchema());
+      Schema schema = convertSchema(tableSchemaResolverSupplier.apply(metaClient).getTableSchema());
       if (partitionFields.isEmpty()) {
         return schema;
       } else {
@@ -100,34 +100,35 @@ public class BigQuerySchemaResolver {
   }
 
   @VisibleForTesting
-  Schema convertSchema(org.apache.avro.Schema schema) {
+  Schema convertSchema(HoodieSchema schema) {
     return Schema.of(getFields(schema));
   }
 
-  private Field getField(org.apache.avro.Schema fieldSchema, String name, boolean nullable) {
+  private Field getField(HoodieSchema fieldSchema, String name, boolean nullable) {
     final Field.Mode fieldMode = nullable ? Field.Mode.NULLABLE : Field.Mode.REQUIRED;
     StandardSQLTypeName standardSQLTypeName;
     switch (fieldSchema.getType()) {
       case INT:
       case LONG:
-        LogicalType logicalType = fieldSchema.getLogicalType();
-        if (logicalType == null) {
-          standardSQLTypeName = StandardSQLTypeName.INT64;
-        } else if (logicalType.equals(LogicalTypes.date())) {
-          standardSQLTypeName = StandardSQLTypeName.DATE;
-        } else if (logicalType.equals(LogicalTypes.timeMillis()) || logicalType.equals(LogicalTypes.timeMicros())) {
-          standardSQLTypeName = StandardSQLTypeName.TIME;
-        } else if (logicalType.equals(LogicalTypes.timestampMillis()) || logicalType.equals(LogicalTypes.timestampMicros())) {
+        standardSQLTypeName = StandardSQLTypeName.INT64;
+        break;
+      case TIME:
+        standardSQLTypeName = StandardSQLTypeName.TIME;
+        break;
+      case TIMESTAMP:
+        HoodieSchema.Timestamp timestampType = (HoodieSchema.Timestamp) fieldSchema;
+        if (timestampType.isUtcAdjusted()) {
           standardSQLTypeName = StandardSQLTypeName.TIMESTAMP;
-          // Due to older avro support, we need to use strings for local timestamp logical types
-        } else if (logicalType.getName().equals("local-timestamp-millis") || logicalType.getName().equals("local-timestamp-micros")) {
-          standardSQLTypeName = StandardSQLTypeName.INT64;
         } else {
-          throw new IllegalArgumentException("Unexpected logical type in schema: " + logicalType);
+          standardSQLTypeName = StandardSQLTypeName.INT64;
         }
         break;
-      case ENUM:
+      case DATE:
+        standardSQLTypeName = StandardSQLTypeName.DATE;
+        break;
       case STRING:
+      case ENUM:
+      case UUID:
         standardSQLTypeName = StandardSQLTypeName.STRING;
         break;
       case BOOLEAN:
@@ -139,14 +140,10 @@ public class BigQuerySchemaResolver {
         break;
       case BYTES:
       case FIXED:
-        LogicalType bytesLogicalType = fieldSchema.getLogicalType();
-        if (bytesLogicalType == null) {
-          standardSQLTypeName = StandardSQLTypeName.BYTES;
-        } else if (bytesLogicalType instanceof LogicalTypes.Decimal) {
-          standardSQLTypeName = StandardSQLTypeName.NUMERIC;
-        } else {
-          throw new IllegalArgumentException("Unexpected logical type in schema: " + bytesLogicalType);
-        }
+        standardSQLTypeName = StandardSQLTypeName.BYTES;
+        break;
+      case DECIMAL:
+        standardSQLTypeName = StandardSQLTypeName.NUMERIC;
         break;
       case RECORD:
         return Field.newBuilder(name, StandardSQLTypeName.STRUCT,
@@ -160,9 +157,9 @@ public class BigQuerySchemaResolver {
         Field keyValueField = Field.newBuilder("key_value", StandardSQLTypeName.STRUCT, keyField, valueField).setMode(Field.Mode.REPEATED).build();
         return Field.newBuilder(name, StandardSQLTypeName.STRUCT, keyValueField).setMode(Field.Mode.NULLABLE).build();
       case UNION:
-        List<org.apache.avro.Schema> subTypes = fieldSchema.getTypes();
+        List<HoodieSchema> subTypes = fieldSchema.getTypes();
         validateUnion(subTypes);
-        org.apache.avro.Schema fieldSchemaFromUnion = subTypes.get(0).getType() == org.apache.avro.Schema.Type.NULL ? subTypes.get(1) : subTypes.get(0);
+        HoodieSchema fieldSchemaFromUnion = fieldSchema.getNonNullType();
         nullable = true;
         return getField(fieldSchemaFromUnion, name, nullable);
       default:
@@ -171,26 +168,17 @@ public class BigQuerySchemaResolver {
     return Field.newBuilder(name, standardSQLTypeName).setMode(fieldMode).build();
   }
 
-  private List<Field> getFields(org.apache.avro.Schema schema) {
+  private List<Field> getFields(HoodieSchema schema) {
     return schema.getFields().stream().map(field -> {
-      final org.apache.avro.Schema fieldSchema;
-      final boolean nullable;
-      if (field.schema().getType() == org.apache.avro.Schema.Type.UNION) {
-        List<org.apache.avro.Schema> subTypes = field.schema().getTypes();
-        validateUnion(subTypes);
-        fieldSchema = subTypes.get(0).getType() == org.apache.avro.Schema.Type.NULL ? subTypes.get(1) : subTypes.get(0);
-        nullable = true;
-      } else {
-        fieldSchema = field.schema();
-        nullable = false;
-      }
+      final HoodieSchema fieldSchema = field.getNonNullSchema();
+      final boolean nullable = field.isNullable();
       return getField(fieldSchema, field.name(), nullable);
     }).collect(Collectors.toList());
   }
 
-  private void validateUnion(List<org.apache.avro.Schema> subTypes) {
-    if (subTypes.size() != 2 || (subTypes.get(0).getType() != org.apache.avro.Schema.Type.NULL
-        && subTypes.get(1).getType() != org.apache.avro.Schema.Type.NULL)) {
+  private void validateUnion(List<HoodieSchema> subTypes) {
+    if (subTypes.size() != 2 || (subTypes.get(0).getType() != HoodieSchemaType.NULL
+        && subTypes.get(1).getType() != HoodieSchemaType.NULL)) {
       throw new HoodieException("Only unions of a single type and null are currently supported");
     }
   }

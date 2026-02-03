@@ -30,9 +30,9 @@ import org.apache.hudi.utilities.config.DFSPathSelectorConfig;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.json.JSONException;
-import org.json.JSONObject;
 import software.amazon.awssdk.services.sqs.SqsClient;
 import software.amazon.awssdk.services.sqs.model.Message;
+import software.amazon.awssdk.utils.http.SdkHttpUtils;
 
 import java.io.IOException;
 import java.time.Instant;
@@ -49,7 +49,7 @@ import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
  * messages from SQS for {@link org.apache.hudi.utilities.sources.S3EventsSource}.
  */
 public class S3EventsMetaSelector extends CloudObjectsSelector {
-
+  private static final ObjectMapper MAPPER = new ObjectMapper();
   private static final String S3_EVENT_RESPONSE_ELEMENTS = "responseElements";
 
   /**
@@ -86,7 +86,7 @@ public class S3EventsMetaSelector extends CloudObjectsSelector {
    * @param processedMessages array of processed messages to add more messages
    * @return the filtered list of valid S3 events in SQS.
    */
-  protected List<Map<String, Object>> getValidEvents(SqsClient sqs, List<Message> processedMessages) throws IOException {
+  protected List<Map<String, Object>> getValidEvents(SqsClient sqs, List<MessageTracker> processedMessages) throws IOException {
     List<Message> messages =
         getMessagesToProcess(
             sqs,
@@ -98,19 +98,15 @@ public class S3EventsMetaSelector extends CloudObjectsSelector {
     return processAndDeleteInvalidMessages(processedMessages, messages);
   }
 
-  private List<Map<String, Object>> processAndDeleteInvalidMessages(List<Message> processedMessages,
+  private List<Map<String, Object>> processAndDeleteInvalidMessages(List<MessageTracker> processedMessages,
                                                                     List<Message> messages) throws IOException {
     List<Map<String, Object>> validEvents = new ArrayList<>();
+    int skippedMsgCount = 0;
     for (Message message : messages) {
-      JSONObject messageBody = new JSONObject(message.body());
-      Map<String, Object> messageMap;
-      ObjectMapper mapper = new ObjectMapper();
-      if (messageBody.has(SQS_MODEL_MESSAGE)) {
+      Map<String, Object> messageMap = MAPPER.readValue(message.body(), Map.class);
+      if (messageMap.containsKey(SQS_MODEL_MESSAGE)) {
         // If this messages is from S3Event -> SNS -> SQS
-        messageMap = (Map<String, Object>) mapper.readValue(messageBody.getString(SQS_MODEL_MESSAGE), Map.class);
-      } else {
-        // If this messages is from S3Event -> SQS
-        messageMap = (Map<String, Object>) mapper.readValue(messageBody.toString(), Map.class);
+        messageMap = (Map<String, Object>) MAPPER.readValue(messageMap.get(SQS_MODEL_MESSAGE).toString(), Map.class);
       }
       if (messageMap.containsKey(SQS_MODEL_EVENT_RECORDS)) {
         List<Map<String, Object>> events = (List<Map<String, Object>>) messageMap.get(SQS_MODEL_EVENT_RECORDS);
@@ -122,13 +118,16 @@ public class S3EventsMetaSelector extends CloudObjectsSelector {
             validEvents.add(event);
           } else {
             log.debug("This S3 event {} is not allowed, so ignoring it.", eventName);
+            skippedMsgCount++;
           }
         }
       } else {
         log.debug("Message is not expected format or it's s3:TestEvent. Message: {}", message);
+        skippedMsgCount++;
       }
-      processedMessages.add(message);
+      processedMessages.add(new MessageTracker(message));
     }
+    log.info("Messages received: {}, toBeProcessed: {}, skipped: {}", messages.size(), validEvents.size(), skippedMsgCount);
     return validEvents;
   }
 
@@ -140,7 +139,7 @@ public class S3EventsMetaSelector extends CloudObjectsSelector {
    */
   public Pair<List<String>, Checkpoint> getNextEventsFromQueue(SqsClient sqs,
                                                                Option<Checkpoint> lastCheckpoint,
-                                                               List<Message> processedMessages) {
+                                                               List<MessageTracker> processedMessages) {
     processedMessages.clear();
     log.info("Reading messages....");
     try {
@@ -154,9 +153,7 @@ public class S3EventsMetaSelector extends CloudObjectsSelector {
               .getTime()).max().orElse(lastCheckpoint.map(e -> Long.parseLong(e.getCheckpointKey())).orElse(0L));
 
       for (Map<String, Object> eventRecord : eventRecords) {
-        filteredEventRecords.add(new ObjectMapper().writeValueAsString(eventRecord).replace("%3D", "=")
-            .replace("%24", "$").replace("%A3", "£").replace("%23", "#").replace("%26", "&").replace("%3F", "?")
-            .replace("%7E", "~").replace("%25", "%").replace("%2B", "+"));
+        filteredEventRecords.add(SdkHttpUtils.urlDecode(MAPPER.writeValueAsString(eventRecord)));
       }
       // Return the old checkpoint if no messages to consume from queue.
       Checkpoint newCheckpoint = newCheckpointTime == 0 ? lastCheckpoint.orElse(null) : new StreamerCheckpointV2(String.valueOf(newCheckpointTime));

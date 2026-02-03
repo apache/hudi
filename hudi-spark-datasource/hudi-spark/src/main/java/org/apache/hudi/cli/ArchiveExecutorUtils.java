@@ -34,20 +34,19 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.util.CommonClientUtils;
 
+import lombok.AccessLevel;
+import lombok.NoArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.spark.api.java.JavaSparkContext;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 
 /**
  * Archive Utils.
  */
+@NoArgsConstructor(access = AccessLevel.PRIVATE)
+@Slf4j
 public final class ArchiveExecutorUtils {
-  private static final Logger LOG = LoggerFactory.getLogger(ArchiveExecutorUtils.class);
-
-  private ArchiveExecutorUtils() {
-  }
 
   public static int archive(JavaSparkContext jsc,
                             int minCommits,
@@ -69,7 +68,7 @@ public final class ArchiveExecutorUtils {
           TimelineArchivers.getInstance(table.getMetaClient().getTimelineLayoutVersion(), config, table);
       archiver.archiveIfRequired(context, true);
     } catch (IOException ioe) {
-      LOG.error("Failed to archive with IOException: {}", ioe.getMessage());
+      log.error("Failed to archive with IOException: {}", ioe.getMessage());
       throw ioe;
     }
     return 0;

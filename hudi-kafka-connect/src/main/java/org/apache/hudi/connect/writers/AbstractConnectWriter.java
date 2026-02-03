@@ -29,10 +29,9 @@ import org.apache.hudi.keygen.KeyGenerator;
 import org.apache.hudi.schema.SchemaProvider;
 import org.apache.hudi.utilities.sources.helpers.AvroConvertor;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.kafka.connect.sink.SinkRecord;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.UnsupportedEncodingException;
@@ -43,12 +42,12 @@ import java.util.List;
  * converting them to {@link HoodieRecord}s that can be written to Hudi by
  * the derived implementations of this class.
  */
+@Slf4j
 public abstract class AbstractConnectWriter implements ConnectWriter<WriteStatus> {
 
   public static final String KAFKA_AVRO_CONVERTER = "io.confluent.connect.avro.AvroConverter";
   public static final String KAFKA_JSON_CONVERTER = "org.apache.kafka.connect.json.JsonConverter";
   public static final String KAFKA_STRING_CONVERTER = "org.apache.kafka.connect.storage.StringConverter";
-  private static final Logger LOG = LoggerFactory.getLogger(AbstractConnectWriter.class);
   protected final String instantTime;
 
   private final KeyGenerator keyGenerator;

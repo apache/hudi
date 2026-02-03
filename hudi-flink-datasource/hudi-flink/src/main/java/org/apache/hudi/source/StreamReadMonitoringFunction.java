@@ -29,6 +29,8 @@ import org.apache.hudi.source.prune.PartitionPruners;
 import org.apache.hudi.table.format.mor.MergeOnReadInputSplit;
 import org.apache.hudi.util.StreamerUtil;
 
+import lombok.Getter;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.api.common.state.ListState;
 import org.apache.flink.api.common.state.ListStateDescriptor;
@@ -41,8 +43,6 @@ import org.apache.flink.runtime.state.FunctionInitializationContext;
 import org.apache.flink.runtime.state.FunctionSnapshotContext;
 import org.apache.flink.streaming.api.checkpoint.CheckpointedFunction;
 import org.apache.flink.table.types.logical.RowType;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import javax.annotation.Nullable;
 
@@ -71,9 +71,9 @@ import java.util.stream.Collectors;
  * in each downstream task, the splits are also read in receiving sequence. We do not ensure split consuming sequence
  * among the downstream tasks.
  */
+@Slf4j
 public class StreamReadMonitoringFunction
     extends RichSourceFunctionAdapter<MergeOnReadInputSplit> implements CheckpointedFunction {
-  private static final Logger LOG = LoggerFactory.getLogger(StreamReadMonitoringFunction.class);
 
   private static final long serialVersionUID = 1L;
 
@@ -100,6 +100,7 @@ public class StreamReadMonitoringFunction
 
   private String issuedInstant;
 
+  @Getter
   private String issuedOffset;
 
   /**
@@ -166,7 +167,7 @@ public class StreamReadMonitoringFunction
             TypeInformation.of(SplitState.class)));
 
     if (context.isRestored()) {
-      LOG.info("Restoring state for the class {} with table {} and base path {}.",
+      log.info("Restoring state for the class {} with table {} and base path {}.",
           getClass().getSimpleName(), conf.get(FlinkOptions.TABLE_NAME), path);
 
       List<String> retrievedStates = new ArrayList<>();
@@ -187,15 +188,15 @@ public class StreamReadMonitoringFunction
       } else if (retrievedStates.size() == 1) {
         // for forward compatibility
         this.issuedInstant = retrievedStates.get(0);
-        if (LOG.isDebugEnabled()) {
-          LOG.debug("{} retrieved an issued instant of time {} for table {} with path {}.",
+        if (log.isDebugEnabled()) {
+          log.debug("{} retrieved an issued instant of time {} for table {} with path {}.",
               getClass().getSimpleName(), issuedInstant, conf.get(FlinkOptions.TABLE_NAME), path);
         }
       } else if (retrievedStates.size() == 2) {
         this.issuedInstant = retrievedStates.get(0);
         this.issuedOffset = retrievedStates.get(1);
-        if (LOG.isDebugEnabled()) {
-          LOG.debug("{} retrieved an issued instant of time [{}, {}] for table {} with path {}.",
+        if (log.isDebugEnabled()) {
+          log.debug("{} retrieved an issued instant of time [{}, {}] for table {} with path {}.",
               getClass().getSimpleName(), issuedInstant, issuedOffset, conf.get(FlinkOptions.TABLE_NAME), path);
         }
       }
@@ -247,7 +248,7 @@ public class StreamReadMonitoringFunction
 
     if (result.isEmpty() && StringUtils.isNullOrEmpty(result.getEndInstant())) {
       // no new instants, returns early
-      LOG.info("No new instants to read for current run.");
+      log.info("No new instants to read for current run.");
       return;
     }
 
@@ -266,7 +267,7 @@ public class StreamReadMonitoringFunction
     this.issuedOffset = result.getOffset();
     int sentSplits = totalSplits - remainingSplits.size();
     double sentPercentage = totalSplits == 0 ? 0 : (1 - remainingSplits.size() / (double) totalSplits) * 100;
-    LOG.info("\n"
+    log.info("\n"
             + "------------------------------------------------------------\n"
             + "---------- table: {}\n"
             + "---------- consumed to instant: {}\n"
@@ -274,7 +275,7 @@ public class StreamReadMonitoringFunction
             + "------------------------------------------------------------",
         conf.get(FlinkOptions.TABLE_NAME), this.issuedInstant, sentSplits, totalSplits, sentPercentage);
     if (result.isEmpty()) {
-      LOG.info("No new files to read for current run.");
+      log.info("No new files to read for current run.");
     }
   }
 
@@ -289,7 +290,7 @@ public class StreamReadMonitoringFunction
       }
     }
 
-    LOG.debug("Closed File Monitoring Source for path: {}.", path);
+    log.debug("Closed File Monitoring Source for path: {}.", path);
   }
 
   @Override
@@ -329,11 +330,9 @@ public class StreamReadMonitoringFunction
     readMetrics.registerMetrics();
   }
 
-  public String getIssuedOffset() {
-    return issuedOffset;
-  }
-
   private static class SplitState implements Serializable {
+
+    @Getter
     private final int totalSplitState;
     private final List<MergeOnReadInputSplit> remainingSplitState;
 
@@ -344,10 +343,6 @@ public class StreamReadMonitoringFunction
 
     public List<MergeOnReadInputSplit> getRemainingSplits() {
       return remainingSplitState;
-    }
-
-    public int getTotalSplitState() {
-      return totalSplitState;
     }
   }
 

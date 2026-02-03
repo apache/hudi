@@ -44,7 +44,8 @@ import org.apache.flink.table.connector.sink.abilities.SupportsRowLevelDelete;
 import org.apache.flink.table.connector.sink.abilities.SupportsRowLevelUpdate;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.types.logical.RowType;
-import org.jetbrains.annotations.Nullable;
+
+import javax.annotation.Nullable;
 
 import java.util.List;
 import java.util.Map;
@@ -124,10 +125,10 @@ public class HoodieTableSink implements
       final DataStream<HoodieFlinkInternalRow> hoodieRecordDataStream = Pipelines.bootstrap(conf, rowType, dataStream, context.isBounded(), overwrite);
       pipeline = Pipelines.hoodieStreamWrite(conf, rowType, hoodieRecordDataStream);
       // compaction
-      if (OptionsResolver.needsAsyncCompaction(conf)) {
+      if (OptionsResolver.needsAsyncCompaction(conf) || OptionsResolver.needsAsyncMetadataCompaction(conf)) {
         // use synchronous compaction for bounded source.
         if (context.isBounded()) {
-          conf.set(FlinkOptions.COMPACTION_ASYNC_ENABLED, false);
+          conf.set(FlinkOptions.COMPACTION_OPERATION_EXECUTE_ASYNC_ENABLED, false);
         }
         return Pipelines.compact(conf, pipeline);
       } else {

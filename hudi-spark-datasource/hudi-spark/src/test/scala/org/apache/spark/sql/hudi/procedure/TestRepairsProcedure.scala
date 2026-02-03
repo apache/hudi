@@ -508,7 +508,7 @@ class TestRepairsProcedure extends HoodieSparkProcedureTestBase {
 
     // generate 200 records
     val schema: HoodieSchema = HoodieSchemaUtils.addMetadataFields(SchemaTestUtil.getSimpleSchema)
-    val testTable: HoodieSparkWriteableTestTable = HoodieSparkWriteableTestTable.of(metaClient, schema.toAvroSchema)
+    val testTable: HoodieSparkWriteableTestTable = HoodieSparkWriteableTestTable.of(metaClient, schema)
 
     val testUtil = new SchemaTestUtil
     val hoodieRecords1 = testUtil.generateHoodieTestRecords(0, 100, schema)

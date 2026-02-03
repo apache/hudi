@@ -80,12 +80,12 @@ class SparkFileFormatInternalRowReaderContext(baseFileReader: SparkColumnarFileR
     if (hasRowIndexField) {
       assert(getRecordContext.supportsParquetRowIndex())
     }
-    val structType = HoodieInternalRowUtils.getCachedSchema(requiredSchema.toAvroSchema)
+    val structType = HoodieInternalRowUtils.getCachedSchema(requiredSchema)
     val (readSchema, readFilters) = getSchemaAndFiltersForRead(structType, hasRowIndexField)
     if (FSUtils.isLogFile(filePath)) {
       // NOTE: now only primary key based filtering is supported for log files
       new HoodieSparkFileReaderFactory(storage).newParquetFileReader(filePath)
-        .asInstanceOf[HoodieSparkParquetReader].getUnsafeRowIterator(requiredSchema.toAvroSchema, readFilters.asJava).asInstanceOf[ClosableIterator[InternalRow]]
+        .asInstanceOf[HoodieSparkParquetReader].getUnsafeRowIterator(requiredSchema, readFilters.asJava).asInstanceOf[ClosableIterator[InternalRow]]
     } else {
       // partition value is empty because the spark parquet reader will append the partition columns to
       // each row if they are given. That is the only usage of the partition values in the reader.
@@ -95,7 +95,7 @@ class SparkFileFormatInternalRowReaderContext(baseFileReader: SparkColumnarFileR
       // Convert Avro dataSchema to Parquet MessageType for timestamp precision conversion
       val tableSchemaOpt = if (dataSchema != null) {
         val hadoopConf = storage.getConf.unwrapAs(classOf[Configuration])
-        val parquetSchema = getAvroSchemaConverter(hadoopConf).convert(dataSchema.toAvroSchema)
+        val parquetSchema = getAvroSchemaConverter(hadoopConf).convert(dataSchema)
         org.apache.hudi.common.util.Option.of(parquetSchema)
       } else {
         org.apache.hudi.common.util.Option.empty[org.apache.parquet.schema.MessageType]()
@@ -152,10 +152,10 @@ class SparkFileFormatInternalRowReaderContext(baseFileReader: SparkColumnarFileR
 
       //If we need to do position based merging with log files we will leave the row index column at the end
       val dataProjection = if (getShouldMergeUseRecordPosition) {
-        getBootstrapProjection(dataRequiredSchema.toAvroSchema, dataRequiredSchema.toAvroSchema, partitionFieldAndValues)
+        getBootstrapProjection(dataRequiredSchema, dataRequiredSchema, partitionFieldAndValues)
       } else {
-        getBootstrapProjection(dataRequiredSchema.toAvroSchema,
-          HoodieAvroUtils.removeFields(dataRequiredSchema.toAvroSchema, rowIndexColumn), partitionFieldAndValues)
+        getBootstrapProjection(dataRequiredSchema,
+          HoodieSchemaUtils.removeFields(dataRequiredSchema, rowIndexColumn), partitionFieldAndValues)
       }
 
       //row index will always be the last column
@@ -209,7 +209,7 @@ class SparkFileFormatInternalRowReaderContext(baseFileReader: SparkColumnarFileR
         }
       }
     } else {
-      val dataProjection = getBootstrapProjection(dataRequiredSchema.toAvroSchema, dataRequiredSchema.toAvroSchema, partitionFieldAndValues)
+      val dataProjection = getBootstrapProjection(dataRequiredSchema, dataRequiredSchema, partitionFieldAndValues)
       new ClosableIterator[Any] {
         val combinedRow = new JoinedRow()
 

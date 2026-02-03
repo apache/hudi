@@ -18,7 +18,6 @@
 
 package org.apache.hudi.hadoop.realtime;
 
-import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.config.HoodieMemoryConfig;
@@ -53,9 +52,8 @@ import org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils;
 import org.apache.hudi.storage.HoodieInstantWriter;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StorageConfiguration;
-import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
+import org.apache.hudi.storage.HoodieStorageUtils;
 
-import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
@@ -126,7 +124,9 @@ public class TestHoodieRealtimeRecordReader {
     baseJobConf.set(HoodieMemoryConfig.MAX_DFS_STREAM_BUFFER_SIZE.key(), String.valueOf(1024 * 1024));
     baseJobConf.set(HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key(), "false");
     fs = HadoopFSUtils.getFs(basePath.toUri().toString(), baseJobConf);
-    storage = new HoodieHadoopStorage(fs);
+    storage = HoodieStorageUtils.getStorage(
+        HadoopFSUtils.convertToStoragePath(new Path(basePath.toString())),
+        HadoopFSUtils.getStorageConf(fs.getConf()));
   }
 
   @AfterEach
@@ -970,8 +970,8 @@ public class TestHoodieRealtimeRecordReader {
 
     // In some queries, generic records that Hudi gets are just part of the full records.
     // Here test the case that some fields are missing in the record.
-    Schema schemaWithMetaFields = HoodieAvroUtils.addMetadataFields(schema.toAvroSchema());
-    ArrayWritable aWritable2 = (ArrayWritable) HoodieRealtimeRecordReaderUtils.avroToArrayWritable(record, schemaWithMetaFields);
+    HoodieSchema schemaWithMetaFields = HoodieSchemaUtils.addMetadataFields(schema);
+    ArrayWritable aWritable2 = (ArrayWritable) HoodieRealtimeRecordReaderUtils.avroToArrayWritable(record, schemaWithMetaFields.toAvroSchema());
     assertEquals(schemaWithMetaFields.getFields().size(), aWritable2.get().length);
   }
 

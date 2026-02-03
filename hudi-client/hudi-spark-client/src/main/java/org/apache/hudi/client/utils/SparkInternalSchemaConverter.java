@@ -25,6 +25,8 @@ import org.apache.hudi.internal.schema.Types;
 import org.apache.hudi.internal.schema.action.InternalSchemaMerger;
 import org.apache.hudi.internal.schema.utils.InternalSchemaUtils;
 
+import lombok.AccessLevel;
+import lombok.NoArgsConstructor;
 import org.apache.spark.sql.execution.vectorized.WritableColumnVector;
 import org.apache.spark.sql.types.ArrayType;
 import org.apache.spark.sql.types.ArrayType$;
@@ -74,10 +76,8 @@ import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 
+@NoArgsConstructor(access = AccessLevel.PRIVATE)
 public class SparkInternalSchemaConverter {
-  private SparkInternalSchemaConverter() {
-
-  }
 
   public static final String HOODIE_QUERY_SCHEMA = "hoodie.schema.internal.querySchema";
   public static final String HOODIE_TABLE_PATH = "hoodie.tablePath";

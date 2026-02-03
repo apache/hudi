@@ -55,9 +55,8 @@ import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.BulkInsertPartitioner;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.spark.api.java.JavaRDD;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -72,9 +71,8 @@ import static org.apache.hudi.common.table.timeline.HoodieTimeline.REPLACE_COMMI
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getProjectedSchemaForExpressionIndex;
 
+@Slf4j
 public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetadataWriter<JavaRDD<HoodieRecord>, JavaRDD<WriteStatus>> {
-
-  private static final Logger LOG = LoggerFactory.getLogger(SparkHoodieBackedTableMetadataWriter.class);
 
   /**
    * Return a Spark based implementation of {@code HoodieTableMetadataWriter} which can be used to
@@ -216,7 +214,7 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
   @Override
   public void deletePartitions(String instantTime, List<MetadataPartitionType> partitions) {
     List<String> partitionsToDrop = partitions.stream().map(MetadataPartitionType::getPartitionPath).collect(Collectors.toList());
-    LOG.info("Deleting Metadata Table partitions: {}", partitionsToDrop);
+    log.info("Deleting Metadata Table partitions: {}", partitionsToDrop);
 
     SparkRDDWriteClient writeClient = (SparkRDDWriteClient) getWriteClient();
     String actionType = CommitUtils.getCommitActionType(WriteOperationType.DELETE_PARTITION, HoodieTableType.MERGE_ON_READ);
@@ -266,8 +264,8 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
     HoodieSparkExpressionIndex.ExpressionIndexComputationMetadata expressionIndexComputationMetadata =
         SparkMetadataWriterUtils.getExprIndexRecords(partitionFilePathPairs, indexDefinition, dataMetaClient, parallelism, tableSchema, readerSchema, instantTime, engineContext, dataWriteConfig,
             partitionRecordsFunctionOpt);
-    return expressionIndexComputationMetadata.getPartitionStatRecordsOption().isPresent()
-        ? expressionIndexComputationMetadata.getExpressionIndexRecords().union(expressionIndexComputationMetadata.getPartitionStatRecordsOption().get())
+    return expressionIndexComputationMetadata.getPartitionStatRecordsOpt().isPresent()
+        ? expressionIndexComputationMetadata.getExpressionIndexRecords().union(expressionIndexComputationMetadata.getPartitionStatRecordsOpt().get())
         : expressionIndexComputationMetadata.getExpressionIndexRecords();
   }
 
@@ -283,7 +281,7 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
             HoodieTableMetadataUtil.collectAndProcessExprIndexPartitionStatRecords(rangeMetadata, true, Option.of(indexDefinition.getIndexName()))));
     HoodieData<HoodieRecord> exprIndexRecords = expressionIndexComputationMetadata.getExpressionIndexRecords();
     if (indexDefinition.getIndexType().equals(PARTITION_NAME_COLUMN_STATS)) {
-      exprIndexRecords = exprIndexRecords.union(expressionIndexComputationMetadata.getPartitionStatRecordsOption().get());
+      exprIndexRecords = exprIndexRecords.union(expressionIndexComputationMetadata.getPartitionStatRecordsOpt().get());
     }
     return exprIndexRecords;
   }

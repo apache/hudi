@@ -18,11 +18,12 @@
 
 package org.apache.hudi
 
-import org.apache.hudi.HoodieBaseRelation.{convertToAvroSchema, isSchemaEvolutionEnabledOnRead}
+import org.apache.hudi.HoodieBaseRelation.{convertToHoodieSchema, isSchemaEvolutionEnabledOnRead}
 import org.apache.hudi.HoodieConversionUtils.toScalaOption
 import org.apache.hudi.cdc.HoodieCDCFileIndex
 import org.apache.hudi.common.config.HoodieReaderConfig
 import org.apache.hudi.common.model.HoodieRecord
+import org.apache.hudi.common.schema.HoodieSchema
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.table.log.InstantRange.RangeType
 import org.apache.hudi.common.table.timeline.HoodieTimeline
@@ -32,7 +33,6 @@ import org.apache.hudi.internal.schema.convert.InternalSchemaConverter
 import org.apache.hudi.keygen.{CustomAvroKeyGenerator, CustomKeyGenerator, TimestampBasedAvroKeyGenerator, TimestampBasedKeyGenerator}
 import org.apache.hudi.storage.StoragePath
 
-import org.apache.avro.Schema
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.{SparkSession, SQLContext}
 import org.apache.spark.sql.catalyst.analysis.Resolver
@@ -126,7 +126,7 @@ abstract class HoodieBaseHadoopFsRelationFactory(val sqlContext: SQLContext,
     }
   }
 
-  protected lazy val (tableAvroSchema: Schema, internalSchemaOpt: Option[InternalSchema]) = {
+  protected lazy val (tableSchema: HoodieSchema, internalSchemaOpt: Option[InternalSchema]) = {
     val schemaResolver = new TableSchemaResolver(metaClient)
     val internalSchemaOpt = if (!isSchemaEvolutionEnabledOnRead(optParams, sparkSession)) {
       None
@@ -141,21 +141,21 @@ abstract class HoodieBaseHadoopFsRelationFactory(val sqlContext: SQLContext,
       }
     }
 
-    val (name, namespace) = AvroConversionUtils.getAvroRecordNameAndNamespace(tableName)
-    val avroSchema: Schema = internalSchemaOpt.map { is =>
-      InternalSchemaConverter.convert(is, namespace + "." + name).toAvroSchema
+    val (name, namespace) = HoodieSchemaConversionUtils.getRecordNameAndNamespace(tableName)
+    val schema: HoodieSchema = internalSchemaOpt.map { is =>
+      InternalSchemaConverter.convert(is, namespace + "." + name)
     } orElse {
-      specifiedQueryTimestamp.map(schemaResolver.getTableAvroSchema)
+      specifiedQueryTimestamp.map(schemaResolver.getTableSchema)
     } orElse {
-      schemaSpec.map(s => convertToAvroSchema(s, tableName))
+      schemaSpec.map(s => convertToHoodieSchema(s, tableName))
     } getOrElse {
-      Try(schemaResolver.getTableAvroSchema) match {
+      Try(schemaResolver.getTableSchema) match {
         case Success(schema) => schema
         case Failure(e) => throw e
       }
     }
 
-    (avroSchema, internalSchemaOpt)
+    (schema, internalSchemaOpt)
   }
 
   private lazy val validCommits: String = if (internalSchemaOpt.nonEmpty) {
@@ -166,7 +166,7 @@ abstract class HoodieBaseHadoopFsRelationFactory(val sqlContext: SQLContext,
   }
 
   protected lazy val tableStructSchema: StructType = {
-    val converted = AvroConversionUtils.convertAvroSchemaToStructType(tableAvroSchema)
+    val converted = HoodieSchemaConversionUtils.convertHoodieSchemaToStructType(tableSchema)
     val metaFieldMetadata = sparkAdapter.createCatalystMetadataForMetaField
 
     // NOTE: Here we annotate meta-fields with corresponding metadata such that Spark (>= 3.2)
@@ -238,7 +238,7 @@ abstract class HoodieBaseHadoopFsRelationFactory(val sqlContext: SQLContext,
   override def buildFileFormat(): FileFormat = {
     val tableConfig = metaClient.getTableConfig
     new HoodieFileGroupReaderBasedFileFormat(basePath.toString,
-      HoodieTableSchema(tableStructSchema, tableAvroSchema.toString, internalSchemaOpt),
+      HoodieTableSchema(tableStructSchema, tableSchema, internalSchemaOpt),
       tableConfig.getTableName, queryTimestamp.get, getMandatoryFields, isMOR, isBootstrap,
       isIncremental, validCommits, shouldUseRecordPosition, getRequiredFilters,
       tableConfig.isMultipleBaseFileFormatsEnabled, tableConfig.getBaseFileFormat)

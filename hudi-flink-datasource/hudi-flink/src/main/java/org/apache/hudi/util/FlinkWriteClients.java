@@ -71,7 +71,8 @@ public class FlinkWriteClients {
   public static HoodieFlinkWriteClient createWriteClient(Configuration conf) throws IOException {
     HoodieWriteConfig writeConfig = getHoodieClientConfig(conf, true, false);
     // build the write client to start the embedded timeline server
-    final HoodieFlinkWriteClient writeClient = new HoodieFlinkWriteClient<>(new HoodieFlinkEngineContext(HadoopConfigurations.getHadoopConf(conf)), writeConfig);
+    final HoodieFlinkWriteClient writeClient = new HoodieFlinkWriteClient<>(
+        new HoodieFlinkEngineContext(HadoopConfigurations.getHadoopConf(conf)), writeConfig, OptionsResolver.isStreamingIndexWriteEnabled(conf));
     writeClient.setOperationType(WriteOperationType.fromValue(conf.get(FlinkOptions.OPERATION)));
     // create the filesystem view storage properties for client
     final FileSystemViewStorageConfig viewStorageConfig = writeConfig.getViewStorageConfig();
@@ -151,7 +152,7 @@ public class FlinkWriteClients {
             new FlinkTaskContextSupplier(runtimeContext));
 
     HoodieWriteConfig writeConfig = getHoodieClientConfig(conf, loadFsViewStorageConfig);
-    return new HoodieFlinkWriteClient<>(context, writeConfig);
+    return new HoodieFlinkWriteClient<>(context, writeConfig, OptionsResolver.isStreamingIndexWriteEnabled(conf));
   }
 
   /**
@@ -241,7 +242,8 @@ public class FlinkWriteClients {
             .withEmbeddedTimelineServerReuseEnabled(true) // make write client embedded timeline service singleton
             .withAllowOperationMetadataField(conf.get(FlinkOptions.CHANGELOG_ENABLED))
             .withProps(flinkConf2TypedProperties(conf))
-            .withSchema(getSourceSchema(conf).toString());
+            .withSchema(getSourceSchema(conf).toString())
+            .withWriteIgnoreFailed(conf.get(FlinkOptions.IGNORE_FAILED));
 
     // <merge_mode, payload_class, merge_strategy_id>
     Triple<RecordMergeMode, String, String> mergingBehavior = StreamerUtil.inferMergingBehavior(conf);

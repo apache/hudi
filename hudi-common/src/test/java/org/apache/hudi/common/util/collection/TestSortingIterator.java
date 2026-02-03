@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.util.collection;
 
+import lombok.Getter;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -158,8 +159,11 @@ public class TestSortingIterator {
    * Test implementation of AutoCloseable iterator for testing purposes
    */
   private static class TestAutoCloseableIterator<T> implements Iterator<T>, AutoCloseable {
+
     private final Iterator<T> delegate;
+    @Getter
     private boolean closed = false;
+    @Getter
     private int closeCount = 0;
 
     public TestAutoCloseableIterator(Iterator<T> delegate) {
@@ -182,14 +186,6 @@ public class TestSortingIterator {
         closed = true;
         closeCount++;
       }
-    }
-
-    public boolean isClosed() {
-      return closed;
-    }
-
-    public int getCloseCount() {
-      return closeCount;
     }
   }
 }

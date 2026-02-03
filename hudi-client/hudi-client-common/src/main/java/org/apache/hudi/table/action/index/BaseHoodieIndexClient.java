@@ -21,13 +21,13 @@ package org.apache.hudi.table.action.index;
 
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 
+import lombok.NoArgsConstructor;
+
 import java.util.List;
 import java.util.Map;
 
+@NoArgsConstructor
 public abstract class BaseHoodieIndexClient {
-
-  public BaseHoodieIndexClient() {
-  }
 
   /**
    * Create a metadata index.

@@ -20,6 +20,7 @@ package org.apache.hudi.sink.utils;
 
 import org.apache.hudi.adapter.CollectOutputAdapter;
 import org.apache.hudi.adapter.TestStreamConfigs;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.exception.HoodieException;
@@ -35,6 +36,7 @@ import org.apache.hudi.sink.event.WriteMetadataEvent;
 import org.apache.hudi.util.HoodieSchemaConverter;
 import org.apache.hudi.util.StreamerUtil;
 
+import lombok.Getter;
 import org.apache.flink.api.common.ExecutionConfig;
 import org.apache.flink.api.common.functions.MapFunction;
 import org.apache.flink.configuration.Configuration;
@@ -74,7 +76,9 @@ public class BulkInsertFunctionWrapper<I> implements TestFunctionWrapper<I> {
   private final IOManager ioManager;
   private final MockStreamingRuntimeContext runtimeContext;
   private final MockOperatorEventGateway gateway;
+  @Getter
   private final MockOperatorCoordinatorContext coordinatorContext;
+  @Getter
   private StreamWriteOperatorCoordinator coordinator;
   private final boolean needSortInput;
 
@@ -122,12 +126,12 @@ public class BulkInsertFunctionWrapper<I> implements TestFunctionWrapper<I> {
   }
 
   public WriteMetadataEvent[] getEventBuffer() {
-    return this.coordinator.getEventBuffer();
+    return Option.ofNullable(this.coordinator.getEventBuffer()).map(EventBuffers.EventBuffer::getDataWriteEventBuffer).orElse(null);
   }
 
   @Override
   public WriteMetadataEvent[] getEventBuffer(long checkpointId) {
-    return this.coordinator.getEventBuffer(checkpointId);
+    return Option.ofNullable(this.coordinator.getEventBuffer(checkpointId)).map(EventBuffers.EventBuffer::getDataWriteEventBuffer).orElse(null);
   }
 
   public OperatorEvent getNextEvent() {
@@ -179,17 +183,9 @@ public class BulkInsertFunctionWrapper<I> implements TestFunctionWrapper<I> {
     coordinator.notifyCheckpointAborted(checkpointId);
   }
 
-  public StreamWriteOperatorCoordinator getCoordinator() {
-    return coordinator;
-  }
-
   @Override
   public AbstractWriteFunction getWriteFunction() {
     return this.writeFunction;
-  }
-
-  public MockOperatorCoordinatorContext getCoordinatorContext() {
-    return coordinatorContext;
   }
 
   @Override

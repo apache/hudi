@@ -25,9 +25,9 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.sink.compact.CompactOperator;
 import org.apache.hudi.sink.compact.CompactionPlanOperator;
 
+import lombok.Setter;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.flink.metrics.MetricGroup;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.text.ParseException;
 import java.time.Duration;
@@ -36,9 +36,8 @@ import java.time.Instant;
 /**
  * Metrics for flink compaction.
  */
+@Slf4j
 public class FlinkCompactionMetrics extends FlinkWriteMetrics {
-
-  private static final Logger LOG = LoggerFactory.getLogger(FlinkCompactionMetrics.class);
 
   /**
    * Key for compaction timer.
@@ -50,6 +49,7 @@ public class FlinkCompactionMetrics extends FlinkWriteMetrics {
    *
    * @see CompactionPlanOperator
    */
+  @Setter
   private int pendingCompactionCount;
 
   /**
@@ -85,10 +85,6 @@ public class FlinkCompactionMetrics extends FlinkWriteMetrics {
     metricGroup.gauge(getMetricsName(actionType, "compactionStateSignal"), () -> compactionStateSignal);
   }
 
-  public void setPendingCompactionCount(int pendingCompactionCount) {
-    this.pendingCompactionCount = pendingCompactionCount;
-  }
-
   public void setFirstPendingCompactionInstant(Option<HoodieInstant> firstPendingCompactionInstant) {
     try {
       if (!firstPendingCompactionInstant.isPresent()) {
@@ -98,7 +94,7 @@ public class FlinkCompactionMetrics extends FlinkWriteMetrics {
         this.compactionDelay = Duration.between(start, Instant.now()).getSeconds();
       }
     } catch (ParseException e) {
-      LOG.warn("Invalid input compaction instant: {}", firstPendingCompactionInstant);
+      log.warn("Invalid input compaction instant: {}", firstPendingCompactionInstant);
     }
   }
 

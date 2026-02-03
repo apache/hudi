@@ -24,7 +24,7 @@ import org.apache.hudi.cli.testutils.ShellEvaluationResultUtil;
 import org.apache.hudi.client.transaction.lock.audit.StorageLockProviderAuditService;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.model.HoodieTableType;
-import org.apache.hudi.common.util.FileIOUtils;
+import org.apache.hudi.io.util.FileIOUtils;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 

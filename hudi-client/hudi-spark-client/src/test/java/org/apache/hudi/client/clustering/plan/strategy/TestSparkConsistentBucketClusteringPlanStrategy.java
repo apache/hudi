@@ -189,7 +189,7 @@ public class TestSparkConsistentBucketClusteringPlanStrategy extends HoodieSpark
     FileSlice fs = new FileSlice("partition", "001", fileId);
     if (baseFileSize > 0) {
       HoodieBaseFile f = new HoodieBaseFile(fileId);
-      f.setFileLen(baseFileSize);
+      f.setFileSize(baseFileSize);
       fs.setBaseFile(f);
     }
 

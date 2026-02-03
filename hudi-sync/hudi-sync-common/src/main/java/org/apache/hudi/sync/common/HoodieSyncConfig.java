@@ -33,10 +33,11 @@ import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 
 import com.beust.jcommander.Parameter;
+import lombok.Getter;
+import lombok.Setter;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import javax.annotation.concurrent.Immutable;
 
@@ -50,6 +51,7 @@ import static org.apache.hudi.common.config.HoodieCommonConfig.META_SYNC_BASE_PA
 import static org.apache.hudi.common.config.HoodieMetadataConfig.DEFAULT_METADATA_ENABLE_FOR_READERS;
 import static org.apache.hudi.common.table.HoodieTableConfig.BASE_FILE_FORMAT;
 import static org.apache.hudi.common.table.HoodieTableConfig.DATABASE_NAME;
+import static org.apache.hudi.common.table.HoodieTableConfig.SLASH_SEPARATED_DATE_PARTITIONING;
 import static org.apache.hudi.common.table.HoodieTableConfig.HIVE_STYLE_PARTITIONING_ENABLE;
 import static org.apache.hudi.common.table.HoodieTableConfig.HOODIE_TABLE_NAME_KEY;
 import static org.apache.hudi.common.table.HoodieTableConfig.HOODIE_WRITE_TABLE_NAME_KEY;
@@ -59,13 +61,12 @@ import static org.apache.hudi.common.table.HoodieTableConfig.URL_ENCODE_PARTITIO
  * Configs needed to sync data into external meta stores, catalogs, etc.
  */
 @Immutable
+@Slf4j
 @ConfigClassProperty(name = "Common Metadata Sync Configs",
     groupName = ConfigGroups.Names.META_SYNC,
     areCommonConfigs = true,
     description = "")
 public class HoodieSyncConfig extends HoodieConfig {
-
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieSyncConfig.class);
 
   public static final ConfigProperty<String> META_SYNC_BASE_PATH = ConfigProperty
       .key(META_SYNC_BASE_PATH_KEY)
@@ -136,6 +137,9 @@ public class HoodieSyncConfig extends HoodieConfig {
             if (cfg.contains(HIVE_STYLE_PARTITIONING_ENABLE)
                 && cfg.getString(HIVE_STYLE_PARTITIONING_ENABLE).equals("true")) {
               return Option.of("org.apache.hudi.hive.HiveStylePartitionValueExtractor");
+            } else if (cfg.contains(SLASH_SEPARATED_DATE_PARTITIONING)
+                && cfg.getString(SLASH_SEPARATED_DATE_PARTITIONING).equals("true")) {
+              return Option.of("org.apache.hudi.hive.SlashEncodedDayPartitionValueExtractor");
             } else {
               return Option.of("org.apache.hudi.hive.SinglePartPartitionValueExtractor");
             }
@@ -201,7 +205,10 @@ public class HoodieSyncConfig extends HoodieConfig {
           + "This is useful when the partition metadata is large, and the partition info can be "
           + "obtained from Hudi's internal metadata table. Note, " + HoodieMetadataConfig.ENABLE + " must be set to true.");
 
+  @Getter
+  @Setter
   private Configuration hadoopConf;
+  @Getter
   private final HoodieMetricsConfig metricsConfig;
 
   public HoodieSyncConfig(Properties props) {
@@ -210,8 +217,8 @@ public class HoodieSyncConfig extends HoodieConfig {
 
   public HoodieSyncConfig(Properties props, Configuration hadoopConf) {
     super(props);
-    if (LOG.isDebugEnabled()) {
-      LOG.debug("Passed in properties:\n" + props.entrySet()
+    if (log.isDebugEnabled()) {
+      log.debug("Passed in properties:\n{}", props.entrySet()
           .stream()
           .sorted(Comparator.comparing(e -> e.getKey().toString()))
           .map(e -> e.getKey() + "=" + e.getValue())
@@ -224,18 +231,6 @@ public class HoodieSyncConfig extends HoodieConfig {
 
   public String getBasePath() {
     return getString(BASE_PATH);
-  }
-
-  public void setHadoopConf(Configuration hadoopConf) {
-    this.hadoopConf = hadoopConf;
-  }
-
-  public Configuration getHadoopConf() {
-    return hadoopConf;
-  }
-
-  public HoodieMetricsConfig getMetricsConfig() {
-    return metricsConfig;
   }
 
   public FileSystem getHadoopFileSystem() {
@@ -287,12 +282,9 @@ public class HoodieSyncConfig extends HoodieConfig {
     @Parameter(names = {"--sync-no-partition-metadata"}, description = "do not sync partition metadata info to the catalog")
     public Boolean shouldNotSyncPartitionMetadata;
 
+    @Getter
     @Parameter(names = {"--help", "-h"}, help = true)
     public boolean help = false;
-
-    public boolean isHelp() {
-      return help;
-    }
 
     public TypedProperties toProps() {
       final TypedProperties props = new TypedProperties();

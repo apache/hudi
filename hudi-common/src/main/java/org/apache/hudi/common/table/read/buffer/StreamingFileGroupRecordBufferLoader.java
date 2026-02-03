@@ -64,7 +64,7 @@ public class StreamingFileGroupRecordBufferLoader<T> implements FileGroupRecordB
                                                                             TypedProperties props, ReaderParameters readerParameters, HoodieReadStats readStats,
                                                                             Option<BaseFileUpdateCallback<T>> fileGroupUpdateCallback) {
     HoodieSchema recordSchema = HoodieSchemaCache.intern(getRecordSchema(readerContext, props));
-    readerContext.getSchemaHandler().setSchemaForUpdates(recordSchema.toAvroSchema());
+    readerContext.getSchemaHandler().setSchemaForUpdates(recordSchema);
     HoodieTableConfig tableConfig = hoodieTableMetaClient.getTableConfig();
     Option<PartialUpdateMode> partialUpdateModeOpt = tableConfig.getPartialUpdateMode();
     UpdateProcessor<T> updateProcessor = UpdateProcessor.create(readStats, readerContext, readerParameters.emitDeletes(), fileGroupUpdateCallback, props);
@@ -100,7 +100,7 @@ public class StreamingFileGroupRecordBufferLoader<T> implements FileGroupRecordB
       String schemaStr = props.getString("hoodie.payload.record.schema");
       return HoodieSchema.parse(schemaStr);
     } else {
-      return HoodieSchemaUtils.removeMetadataFields(HoodieSchema.fromAvroSchema(readerContext.getSchemaHandler().getRequestedSchema()));
+      return HoodieSchemaUtils.removeMetadataFields(readerContext.getSchemaHandler().getRequestedSchema());
     }
   }
 }

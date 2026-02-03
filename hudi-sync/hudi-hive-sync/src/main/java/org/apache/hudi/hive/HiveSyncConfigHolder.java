@@ -49,13 +49,6 @@ public class HiveSyncConfigHolder {
       .key("hoodie.datasource.hive_sync.jdbcurl")
       .defaultValue("jdbc:hive2://localhost:10000")
       .withDocumentation("Hive metastore url");
-  public static final ConfigProperty<String> HIVE_USE_PRE_APACHE_INPUT_FORMAT = ConfigProperty
-      .key("hoodie.datasource.hive_sync.use_pre_apache_input_format")
-      .defaultValue("false")
-      .markAdvanced()
-      .withDocumentation("Flag to choose InputFormat under com.uber.hoodie package instead of org.apache.hudi package. "
-          + "Use this when you are in the process of migrating from "
-          + "com.uber.hoodie to org.apache.hudi. Stop using this after you migrated the table definition to org.apache.hudi input format");
   /**
    * @deprecated Use {@link #HIVE_SYNC_MODE} instead of this config from 0.9.0
    */

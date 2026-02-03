@@ -23,6 +23,7 @@ import org.apache.hudi.avro.model.HoodieArchivedMetaEntry;
 import org.apache.hudi.client.timeline.ActiveActionWithDetails;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.table.log.block.HoodieAvroDataBlock;
@@ -40,10 +41,9 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import javax.annotation.Nonnull;
 
@@ -63,8 +63,8 @@ import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 /**
  * Tools used for migrating to new LSM tree style archived timeline.
  */
+@Slf4j
 public class LegacyArchivedMetaEntryReader {
-  private static final Logger LOG = LoggerFactory.getLogger(LegacyArchivedMetaEntryReader.class);
 
   private static final Pattern ARCHIVE_FILE_PATTERN =
       Pattern.compile("^\\.commits_\\.archive\\.([0-9]+).*");
@@ -120,9 +120,13 @@ public class LegacyArchivedMetaEntryReader {
       return null;
     });
     InstantGenerator instantGenerator = metaClient.getInstantGenerator();
-    HoodieInstant instant = instantGenerator.createNewInstant(HoodieInstant.State.valueOf(record.get(ACTION_STATE).toString()), action,
+    // Older log files don't have action state set.
+    final HoodieInstant.State state = Option.ofNullable(record.get(ACTION_STATE))
+        .map(s -> HoodieInstant.State.valueOf(s.toString()))
+        .orElse(HoodieInstant.State.COMPLETED);
+    HoodieInstant instant = instantGenerator.createNewInstant(state, action,
         instantTime, stateTransitionTime);
-    return Pair.of(instant,details);
+    return Pair.of(instant, details);
   }
 
   @Nonnull
@@ -147,7 +151,7 @@ public class LegacyArchivedMetaEntryReader {
       case HoodieTimeline.INDEXING_ACTION:
         return Option.of("hoodieIndexCommitMetadata");
       default:
-        LOG.error(String.format("Unknown action in metadata (%s)", action));
+        log.error(String.format("Unknown action in metadata (%s)", action));
         return Option.empty();
     }
   }
@@ -268,7 +272,7 @@ public class LegacyArchivedMetaEntryReader {
             reader = HoodieLogFormat.newReader(
                 metaClient.getStorage(),
                 new HoodieLogFile(pathInfo.getPath()),
-                HoodieArchivedMetaEntry.getClassSchema());
+                HoodieSchema.fromAvroSchema(HoodieArchivedMetaEntry.getClassSchema()));
           } catch (IOException ioe) {
             throw new HoodieIOException(
                 "Error initializing the reader for archived log: " + pathInfo.getPath(), ioe);
@@ -328,7 +332,7 @@ public class LegacyArchivedMetaEntryReader {
       }
     } catch (NumberFormatException e) {
       // log and ignore any format warnings
-      LOG.warn("error getting suffix for archived file: {}", f.getPath());
+      log.warn("error getting suffix for archived file: {}", f.getPath());
     }
     // return default value in case of any errors
     return 0;

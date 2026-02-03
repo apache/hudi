@@ -18,22 +18,20 @@
 
 package org.apache.hudi.utilities.sources.helpers.gcs;
 
+import lombok.AllArgsConstructor;
+import lombok.Getter;
+
 import java.util.List;
 
 /**
  * A batch of messages fetched from Google Cloud Pubsub within the metadata fetcher of
  * Incremental GCS ingestion module.
  */
+@AllArgsConstructor
+@Getter
 public class MessageBatch {
+
   private final List<String> messages;
-
-  public MessageBatch(List<String> messages) {
-    this.messages = messages;
-  }
-
-  public List<String> getMessages() {
-    return messages;
-  }
 
   public boolean isEmpty() {
     return messages.isEmpty();

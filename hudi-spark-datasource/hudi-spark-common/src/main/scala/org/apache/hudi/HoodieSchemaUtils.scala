@@ -23,9 +23,9 @@ import org.apache.hudi.HoodieSparkSqlWriter.{CANONICALIZE_SCHEMA, SQL_MERGE_INTO
 import org.apache.hudi.avro.AvroSchemaUtils.{isSchemaCompatible}
 import org.apache.hudi.common.config.{HoodieCommonConfig, HoodieConfig, TypedProperties}
 import org.apache.hudi.common.model.HoodieRecord
-import org.apache.hudi.common.schema.{HoodieSchema, HoodieSchemaCompatibility}
+import org.apache.hudi.common.schema.{HoodieSchema, HoodieSchemaCompatibility, HoodieSchemaUtils => HoodieCommonSchemaUtils}
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
-import org.apache.hudi.common.util.{ConfigUtils, StringUtils}
+import org.apache.hudi.common.util.ConfigUtils
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.exception.{HoodieException, SchemaCompatibilityException}
 import org.apache.hudi.internal.schema.InternalSchema
@@ -33,8 +33,8 @@ import org.apache.hudi.internal.schema.convert.InternalSchemaConverter
 import org.apache.hudi.internal.schema.utils.AvroSchemaEvolutionUtils
 import org.apache.hudi.internal.schema.utils.AvroSchemaEvolutionUtils.reconcileSchemaRequirements
 
-import org.apache.avro.Schema
-import org.apache.spark.sql.types.{StructField, StructType}
+import org.apache.spark.sql.types.StructField
+import org.apache.spark.sql.types.StructType
 import org.slf4j.LoggerFactory
 
 import java.util.Properties
@@ -47,22 +47,30 @@ import scala.collection.JavaConverters._
 object HoodieSchemaUtils {
   private val log = LoggerFactory.getLogger(getClass)
 
+  /**
+   * Gets a field (including nested fields) from the schema using dot notation.
+   * This method delegates to the consolidated implementation in [[HoodieSchema.getNestedField]].
+   *
+   * Supports nested field access using dot notation. For example:
+   * - "name" - retrieves top-level field
+   * - "user.profile.displayName" - retrieves nested field
+   * - "items.list.element" - retrieves array element schema
+   * - "metadata.key_value.key" - retrieves map key schema
+   * - "metadata.key_value.value" - retrieves map value schema
+   *
+   * @param schema    the Spark StructType to search in
+   * @param fieldName the field name (may contain dots for nested fields)
+   * @return Pair of canonical field name and the StructField
+   * @throws HoodieException if field is not found
+   */
   def getSchemaForField(schema: StructType, fieldName: String): org.apache.hudi.common.util.collection.Pair[String, StructField] = {
-    getSchemaForField(schema, fieldName, StringUtils.EMPTY_STRING)
-  }
-
-  def getSchemaForField(schema: StructType, fieldName: String, prefix: String): org.apache.hudi.common.util.collection.Pair[String, StructField] = {
-    if (!(fieldName.contains("."))) {
-      org.apache.hudi.common.util.collection.Pair.of(prefix + schema.fields(schema.fieldIndex(fieldName)).name, schema.fields(schema.fieldIndex(fieldName)))
-    }
-    else {
-      val rootFieldIndex: Int = fieldName.indexOf(".")
-      val rootField: StructField = schema.fields(schema.fieldIndex(fieldName.substring(0, rootFieldIndex)))
-      if (rootField == null) {
-        throw new HoodieException("Failed to find " + fieldName + " in the table schema ")
-      }
-      getSchemaForField(rootField.dataType.asInstanceOf[StructType], fieldName.substring(rootFieldIndex + 1), prefix + fieldName.substring(0, rootFieldIndex + 1))
-    }
+    val result = HoodieSchemaConversionUtils.convertStructTypeToHoodieSchema(schema, "temp_schema", "")
+      .getNestedField(fieldName)
+      .orElseThrow(() => new HoodieException(s"Failed to find $fieldName in the table schema"))
+    org.apache.hudi.common.util.collection.Pair.of(result.getLeft,
+      StructField(result.getRight.name(),
+        HoodieSchemaConversionUtils.convertHoodieSchemaToDataType(result.getRight.schema()),
+        result.getRight.isNullable))
   }
 
   /**
@@ -119,7 +127,7 @@ object HoodieSchemaUtils {
         //       we're stripping them to make sure we can perform proper analysis
         // add call to fix null ordering to ensure backwards compatibility
         val latestTableSchema = InternalSchemaConverter.fixNullOrdering(
-          org.apache.hudi.common.schema.HoodieSchemaUtils.removeMetadataFields(latestTableSchemaWithMetaFields))
+          HoodieCommonSchemaUtils.removeMetadataFields(latestTableSchemaWithMetaFields))
         // Before validating whether schemas are compatible, we need to "canonicalize" source's schema
         // relative to the table's one, by doing a (minor) reconciliation of the nullability constraints:
         // for ex, if in incoming schema column A is designated as non-null, but it's designated as nullable
@@ -201,7 +209,7 @@ object HoodieSchemaUtils {
         val mergedInternalSchema = AvroSchemaEvolutionUtils.reconcileSchema(canonicalizedSourceSchema.toAvroSchema(), internalSchema, setNullForMissingColumns)
         val evolvedSchema = InternalSchemaConverter.convert(mergedInternalSchema, latestTableSchema.getFullName)
         val shouldRemoveMetaDataFromInternalSchema = sourceSchema.getFields.asScala.filter(f => f.name().equalsIgnoreCase(HoodieRecord.RECORD_KEY_METADATA_FIELD)).isEmpty
-        if (shouldRemoveMetaDataFromInternalSchema) org.apache.hudi.common.schema.HoodieSchemaUtils.removeMetadataFields(evolvedSchema) else evolvedSchema
+        if (shouldRemoveMetaDataFromInternalSchema) HoodieCommonSchemaUtils.removeMetadataFields(evolvedSchema) else evolvedSchema
 
       case None =>
         // In case schema reconciliation is enabled we will employ (legacy) reconciliation

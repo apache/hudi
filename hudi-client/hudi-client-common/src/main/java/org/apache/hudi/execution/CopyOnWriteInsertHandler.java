@@ -21,7 +21,6 @@ package org.apache.hudi.execution;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.util.queue.HoodieConsumer;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.execution.HoodieLazyInsertIterable.HoodieInsertValueGenResult;
@@ -29,8 +28,7 @@ import org.apache.hudi.io.HoodieWriteHandle;
 import org.apache.hudi.io.WriteHandleFactory;
 import org.apache.hudi.table.HoodieTable;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -43,10 +41,9 @@ import static org.apache.hudi.common.util.ValidationUtils.checkState;
 /**
  * Consumes stream of hoodie records from in-memory queue and writes to one or more create-handles.
  */
+@Slf4j
 public class CopyOnWriteInsertHandler<T>
     implements HoodieConsumer<HoodieInsertValueGenResult<HoodieRecord>, List<WriteStatus>> {
-
-  private static final Logger LOG = LoggerFactory.getLogger(CopyOnWriteInsertHandler.class);
 
   private final HoodieWriteConfig config;
   private final String instantTime;
@@ -89,7 +86,7 @@ public class CopyOnWriteInsertHandler<T>
         return;
       }
     } catch (IOException e) {
-      LOG.warn("Writing record should be ignore {}", record, e);
+      log.warn("Writing record should be ignore {}", record, e);
     }
     HoodieWriteHandle<?,?,?,?> handle = handles.get(partitionPath);
     if (handle == null) {
@@ -113,7 +110,7 @@ public class CopyOnWriteInsertHandler<T>
           record.getPartitionPath(), idPrefix, taskContextSupplier);
       handles.put(partitionPath, handle);
     }
-    handle.write(record, HoodieSchema.fromAvroSchema(genResult.schema), config.getProps());
+    handle.write(record, genResult.schema, config.getProps());
   }
 
   @Override

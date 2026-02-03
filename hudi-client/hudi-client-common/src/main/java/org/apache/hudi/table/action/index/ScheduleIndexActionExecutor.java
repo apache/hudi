@@ -34,8 +34,7 @@ import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.BaseActionExecutor;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.util.Collections;
 import java.util.EnumSet;
@@ -61,9 +60,8 @@ import static org.apache.hudi.metadata.HoodieTableMetadataUtil.metadataPartition
  * 3. Initialize file groups for the enabled partition types within a transaction.
  * </li>
  */
+@Slf4j
 public class ScheduleIndexActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I, K, O, Option<HoodieIndexPlan>> {
-
-  private static final Logger LOG = LoggerFactory.getLogger(ScheduleIndexActionExecutor.class);
   private static final Integer INDEX_PLAN_VERSION_1 = 1;
   private static final Integer LATEST_INDEX_PLAN_VERSION = INDEX_PLAN_VERSION_1;
 
@@ -102,10 +100,10 @@ public class ScheduleIndexActionExecutor<T, I, K, O> extends BaseActionExecutor<
     requestedPartitions.removeAll(indexesInflightOrCompleted);
 
     if (!requestedPartitions.isEmpty()) {
-      LOG.info("Some index partitions already exist: {}. Scheduling indexing of only these remaining partitions: {}",
+      log.info("Some index partitions already exist: {}. Scheduling indexing of only these remaining partitions: {}",
           indexesInflightOrCompleted, requestedPartitions);
     } else {
-      LOG.info("All requested index partitions exist (either inflight or built): {}", partitionIndexTypes);
+      log.info("All requested index partitions exist (either inflight or built): {}", partitionIndexTypes);
       return Option.empty();
     }
     List<MetadataPartitionType> finalPartitionsToIndex = partitionIndexTypes.stream()
@@ -135,7 +133,7 @@ public class ScheduleIndexActionExecutor<T, I, K, O> extends BaseActionExecutor<
         return Option.of(indexPlan);
       }
     } catch (HoodieIOException e) {
-      LOG.error("Could not initialize file groups", e);
+      log.error("Could not initialize file groups", e);
       // abort gracefully
       abort(indexInstant);
     }

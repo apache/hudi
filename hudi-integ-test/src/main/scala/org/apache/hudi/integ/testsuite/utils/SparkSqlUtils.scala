@@ -19,14 +19,15 @@
 
 package org.apache.hudi.integ.testsuite.utils
 
-import org.apache.hudi.{AvroConversionUtils, HoodieSparkUtils}
+import org.apache.hudi.HoodieSchemaConversionUtils
+import org.apache.hudi.HoodieSparkUtils
 import org.apache.hudi.common.model.HoodieRecord
+import org.apache.hudi.common.schema.HoodieSchema
 import org.apache.hudi.common.util.Option
 import org.apache.hudi.integ.testsuite.configuration.DeltaConfig.Config
 import org.apache.hudi.integ.testsuite.generator.GenericRecordFullPayloadGenerator
 import org.apache.hudi.utilities.schema.RowBasedSchemaProvider
 
-import org.apache.avro.Schema
 import org.apache.avro.generic.GenericRecord
 import org.apache.spark.api.java.JavaRDD
 import org.apache.spark.sql.SparkSession
@@ -137,8 +138,8 @@ object SparkSqlUtils {
    * @return an array of field names and types
    */
   def getFieldNamesAndTypes(avroSchemaString: String): Array[(String, String)] = {
-    val schema = new Schema.Parser().parse(avroSchemaString)
-    val structType = AvroConversionUtils.convertAvroSchemaToStructType(schema)
+    val schema = HoodieSchema.parse(avroSchemaString)
+    val structType = HoodieSchemaConversionUtils.convertHoodieSchemaToStructType(schema)
     structType.fields.map(field => (field.name, field.dataType.simpleString))
   }
 

@@ -27,6 +27,7 @@ import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.InstantRange;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
+import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.InstantGenerator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieCompactionException;
@@ -34,6 +35,9 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.table.HoodieTable;
+
+import lombok.AccessLevel;
+import lombok.NoArgsConstructor;
 
 import java.io.IOException;
 import java.util.List;
@@ -47,12 +51,10 @@ import java.util.Set;
  * @param <K> Type of keys
  * @param <O> Type of outputs
  */
+@NoArgsConstructor(access = AccessLevel.PRIVATE)
 public class CompactHelpers<T, I, K, O> {
 
   private static final CompactHelpers SINGLETON_INSTANCE = new CompactHelpers();
-
-  private CompactHelpers() {
-  }
 
   public static CompactHelpers getInstance() {
     return SINGLETON_INSTANCE;
@@ -61,16 +63,24 @@ public class CompactHelpers<T, I, K, O> {
   public HoodieCommitMetadata createCompactionMetadata(
       HoodieTable table, String compactionInstantTime, HoodieData<WriteStatus> writeStatuses,
       String schema) throws IOException {
+    return createCompactionMetadata(table, compactionInstantTime, writeStatuses, schema, WriteOperationType.COMPACT);
+  }
+
+  public HoodieCommitMetadata createCompactionMetadata(
+      HoodieTable table, String compactionInstantTime, HoodieData<WriteStatus> writeStatuses,
+      String schema, WriteOperationType operationType) throws IOException {
     InstantGenerator instantGenerator = table.getInstantGenerator();
-    HoodieCompactionPlan compactionPlan = table.getActiveTimeline().readCompactionPlan(
-        instantGenerator.getCompactionRequestedInstant(compactionInstantTime));
+    HoodieInstant requestedInstant = operationType == WriteOperationType.COMPACT
+        ? instantGenerator.getCompactionRequestedInstant(compactionInstantTime)
+        : instantGenerator.getLogCompactionRequestedInstant(compactionInstantTime);
+    HoodieCompactionPlan compactionPlan = table.getActiveTimeline().readCompactionPlan(requestedInstant);
     List<HoodieWriteStat> updateStatusMap = writeStatuses.map(WriteStatus::getStat).collectAsList();
     HoodieCommitMetadata metadata = new HoodieCommitMetadata(true);
     for (HoodieWriteStat stat : updateStatusMap) {
       metadata.addWriteStat(stat.getPartitionPath(), stat);
     }
     metadata.addMetadata(org.apache.hudi.common.model.HoodieCommitMetadata.SCHEMA_KEY, schema);
-    metadata.setOperationType(WriteOperationType.COMPACT);
+    metadata.setOperationType(operationType);
     if (compactionPlan.getExtraMetadata() != null) {
       compactionPlan.getExtraMetadata().forEach(metadata::addMetadata);
     }

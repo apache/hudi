@@ -27,6 +27,7 @@ import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieArchivedTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.InstantComparator;
 import org.apache.hudi.common.util.NumericUtils;
@@ -38,8 +39,10 @@ import org.springframework.shell.standard.ShellMethod;
 import org.springframework.shell.standard.ShellOption;
 
 import java.io.IOException;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -358,6 +361,36 @@ public class CommitsCommand {
 
     return HoodiePrintHelper.print(header, new HashMap<>(), sortByField, descending,
         limit, headerOnly, rows, exportTableName);
+  }
+
+  @ShellMethod(key = "commits show_infights", value = "Show inflight instants that are left longer than a certain duration")
+  public String showInflightCommits(
+      @ShellOption(value = {"--lookbackInMins"}, help = "Only show inflight commits that started before the specified lookback duration (in minutes).", defaultValue = "0") final Long durationInMins) {
+    HoodieTableMetaClient metaClient = HoodieCLI.getTableMetaClient();
+
+    // Fetch inflight commits.
+    long goBackMs = Duration.ofMinutes(durationInMins).getSeconds() * 1000;
+    String oldestAllowedTimestamp = HoodieInstantTimeGenerator
+        .formatDate(new Date(System.currentTimeMillis() - goBackMs));
+
+    List<HoodieInstant> inflightInstants =  metaClient
+        .reloadActiveTimeline()
+        .getWriteTimeline()
+        .filterInflightsAndRequested()
+        .findInstantsBefore(oldestAllowedTimestamp)
+        .getInstants();
+
+    // Create a table out of inflight commits.
+    List<String[]> data = new ArrayList<>();
+    inflightInstants.forEach(instant ->
+        data.add(new String[]{instant.requestedTime(), instant.getAction(), instant.getState().name()}));
+    String[] header = new String[]{HoodieTableHeaderFields.HEADER_COMMIT_TIME,
+        HoodieTableHeaderFields.HEADER_ACTION, HoodieTableHeaderFields.HEADER_STATE};
+    if (data.isEmpty()) {
+      return "No inflight instants are found.";
+    } else {
+      return HoodiePrintHelper.print(header, data.toArray(new String[0][]));
+    }
   }
 
   @ShellMethod(key = "commits compare", value = "Compare commits with another Hoodie table")

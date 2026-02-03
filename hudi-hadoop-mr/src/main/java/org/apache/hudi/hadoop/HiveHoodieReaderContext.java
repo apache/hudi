@@ -34,6 +34,7 @@ import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.CloseableMappingIterator;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieAvroSchemaException;
+import org.apache.hudi.hadoop.utils.HiveTypeUtils;
 import org.apache.hudi.internal.schema.HoodieSchemaException;
 import org.apache.hudi.io.storage.HoodieIOFactory;
 import org.apache.hudi.storage.HoodieStorage;
@@ -41,7 +42,6 @@ import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 
-import org.apache.avro.Schema;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hive.ql.io.sarg.ConvertAstToSearchArg;
@@ -49,7 +49,6 @@ import org.apache.hadoop.hive.ql.plan.TableScanDesc;
 import org.apache.hadoop.hive.serde.serdeConstants;
 import org.apache.hadoop.hive.serde2.ColumnProjectionUtils;
 import org.apache.hadoop.hive.serde2.avro.AvroSerdeException;
-import org.apache.hadoop.hive.serde2.avro.HiveTypeUtils;
 import org.apache.hadoop.hive.serde2.typeinfo.TypeInfo;
 import org.apache.hadoop.io.ArrayWritable;
 import org.apache.hadoop.io.NullWritable;
@@ -59,7 +58,7 @@ import org.apache.hadoop.mapred.InputSplit;
 import org.apache.hadoop.mapred.JobConf;
 import org.apache.hadoop.mapred.RecordReader;
 import org.apache.parquet.avro.AvroSchemaConverter;
-import org.apache.parquet.schema.AvroSchemaRepair;
+import org.apache.parquet.schema.HoodieSchemaRepair;
 
 import java.io.IOException;
 import java.util.Collections;
@@ -101,7 +100,7 @@ public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> 
     jobConf.set(serdeConstants.LIST_COLUMNS, String.join(",", dataColumnNameList));
     List<TypeInfo> columnTypes;
     try {
-      columnTypes = HiveTypeUtils.generateColumnTypes(dataSchema.toAvroSchema());
+      columnTypes = HiveTypeUtils.generateColumnTypes(dataSchema);
     } catch (AvroSerdeException e) {
       throw new HoodieAvroSchemaException(String.format("Failed to generate hive column types from schema: %s, due to %s", dataSchema, e));
     }
@@ -134,9 +133,8 @@ public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> 
     // Read file schema and repair logical types if needed
     HoodieSchema fileSchema;
     if (isParquetOrOrc) {
-      Schema avroFileSchema = HoodieIOFactory.getIOFactory(storage).getFileFormatUtils(filePath).readAvroSchema(storage, filePath);
-      Schema repairedAvroSchema = AvroSchemaRepair.repairLogicalTypes(avroFileSchema, dataSchema.toAvroSchema());
-      fileSchema = HoodieSchema.fromAvroSchema(repairedAvroSchema);
+      HoodieSchema rawFileSchema = HoodieIOFactory.getIOFactory(storage).getFileFormatUtils(filePath).readSchema(storage, filePath);
+      fileSchema = HoodieSchemaRepair.repairLogicalTypes(rawFileSchema, dataSchema);
     } else {
       fileSchema = dataSchema;
     }

@@ -35,7 +35,7 @@ import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StorageConfiguration;
-import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
+import org.apache.hudi.storage.HoodieStorageUtils;
 
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.fs.FileSystem;
@@ -47,7 +47,7 @@ import java.util.Properties;
 
 import static org.apache.hudi.common.table.HoodieTableConfig.POPULATE_META_FIELDS;
 import static org.apache.hudi.common.table.HoodieTableConfig.RECORDKEY_FIELDS;
-import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.AVRO_SCHEMA;
+import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.HOODIE_SCHEMA;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.getDefaultStorageConf;
 import static org.apache.hudi.common.testutils.reader.HoodieFileSliceTestUtils.ROW_KEY;
 
@@ -118,7 +118,7 @@ public class HoodieFileGroupReaderTestHarness extends HoodieCommonTestHarness {
       throws IOException, InterruptedException {
     assert (numFiles >= 1 && numFiles <= keyRanges.size());
 
-    HoodieStorage hoodieStorage = new HoodieHadoopStorage(basePath, storageConf);
+    HoodieStorage hoodieStorage = HoodieStorageUtils.getStorage(basePath, storageConf);
 
     Option<FileSlice> fileSliceOpt =
         HoodieFileSliceTestUtils.getFileSlice(
@@ -142,8 +142,8 @@ public class HoodieFileGroupReaderTestHarness extends HoodieCommonTestHarness {
         .withHoodieTableMetaClient(metaClient)
         .withLatestCommitTime("1000") // Not used internally.
         .withFileSlice(fileSliceOpt.orElseThrow(() -> new IllegalArgumentException("FileSlice is not present")))
-        .withDataSchema(AVRO_SCHEMA)
-        .withRequestedSchema(AVRO_SCHEMA)
+        .withDataSchema(HOODIE_SCHEMA)
+        .withRequestedSchema(HOODIE_SCHEMA)
         .withProps(properties)
         .withShouldUseRecordPosition(shouldReadPositions)
         .withAllowInflightInstants(allowInflightCommits)

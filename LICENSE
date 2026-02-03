@@ -358,13 +358,3 @@ Copyright (c) 2005, European Commission project OneLab under contract 034819 (ht
 
   Home page: https://github.com/streamsets/datacollector-oss
   License: http://www.apache.org/licenses/LICENSE-2.0
-
- -------------------------------------------------------------------------------
-
- This product includes code from Apache Avro
-
- * org.apache.hudi.avro.JsonEncoder adapted from org.apache.avro.io.JsonEncoder
-
- Copyright: 2010-2019 The Apache Software Foundation
- Home page: https://avro.apache.org
- License: http://www.apache.org/licenses/LICENSE-2.0

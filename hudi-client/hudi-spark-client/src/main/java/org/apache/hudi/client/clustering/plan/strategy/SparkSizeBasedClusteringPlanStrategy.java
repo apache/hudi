@@ -31,9 +31,8 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.cluster.strategy.PartitionAwareClusteringPlanStrategy;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.spark.api.java.JavaRDD;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.HashMap;
 import java.util.List;
@@ -47,9 +46,9 @@ import static org.apache.hudi.config.HoodieClusteringConfig.PLAN_STRATEGY_SORT_C
  * 1) Creates clustering groups based on max size allowed per group.
  * 2) Excludes files that are greater than 'small.file.limit' from clustering plan.
  */
+@Slf4j
 public class SparkSizeBasedClusteringPlanStrategy<T>
     extends PartitionAwareClusteringPlanStrategy<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> {
-  private static final Logger LOG = LoggerFactory.getLogger(SparkSizeBasedClusteringPlanStrategy.class);
 
   public SparkSizeBasedClusteringPlanStrategy(HoodieTable table,
                                               HoodieEngineContext engineContext,

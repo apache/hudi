@@ -24,23 +24,22 @@ import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
-import org.apache.hudi.common.table.timeline.TimelineUtils;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.TableServiceUtils;
 import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.table.HoodieSparkTable;
 
 import com.beust.jcommander.JCommander;
 import com.beust.jcommander.Parameter;
 import org.apache.spark.api.java.JavaSparkContext;
-import org.jetbrains.annotations.TestOnly;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.Serializable;
 import java.util.ArrayList;
-import java.util.Date;
 import java.util.List;
 
 import static org.apache.hudi.utilities.UtilHelpers.EXECUTE;
@@ -90,6 +89,8 @@ public class HoodieClusteringJob {
     public String sparkMaster = null;
     @Parameter(names = {"--spark-memory", "-sm"}, description = "spark memory to use", required = false)
     public String sparkMemory = null;
+    @Parameter(names = {"--enable-hive-support", "-ehs"}, description = "Enables hive support during spark context initialization.", required = false)
+    public Boolean enableHiveSupport = false;
     @Parameter(names = {"--retry", "-rt"}, description = "number of retries")
     public int retry = 0;
     @Parameter(names = {"--skip-clean", "-sc"}, description = "do not trigger clean after clustering", required = false)
@@ -98,9 +99,9 @@ public class HoodieClusteringJob {
     @Parameter(names = {"--schedule", "-sch"}, description = "Schedule clustering @desperate soon please use \"--mode schedule\" instead")
     public Boolean runSchedule = false;
 
-    @Parameter(names = {"--retry-last-failed-clustering-job", "-rc"}, description = "Take effect when using --mode/-m scheduleAndExecute. Set true means "
+    @Parameter(names = {"--retry-last-failed-job", "-rc"}, description = "Take effect when using --mode/-m scheduleAndExecute. Set true means "
         + "check, rollback and execute last failed clustering plan instead of planing a new clustering job directly.")
-    public Boolean retryLastFailedClusteringJob = false;
+    public Boolean retryLastFailedJob = false;
 
     @Parameter(names = {"--mode", "-m"}, description = "Set job mode: Set \"schedule\" means make a cluster plan; "
         + "Set \"execute\" means execute a cluster plan at given instant which means --instant-time is needed here; "
@@ -135,7 +136,7 @@ public class HoodieClusteringJob {
           + "   --retry " + retry + ", \n"
           + "   --skipClean " + skipClean + ", \n"
           + "   --schedule " + runSchedule + ", \n"
-          + "   --retry-last-failed-clustering-job " + retryLastFailedClusteringJob + ", \n"
+          + "   --retry-last-failed-job " + retryLastFailedJob + ", \n"
           + "   --mode " + runningMode + ", \n"
           + "   --job-max-processing-time-ms " + maxProcessingTimeMs + ", \n"
           + "   --props " + propsFilePath + ", \n"
@@ -153,7 +154,8 @@ public class HoodieClusteringJob {
       throw new HoodieException("Clustering failed for basePath: " + cfg.basePath);
     }
 
-    final JavaSparkContext jsc = UtilHelpers.buildSparkContext("clustering-" + cfg.tableName, cfg.sparkMaster, cfg.sparkMemory);
+    final JavaSparkContext jsc = UtilHelpers.buildSparkContext("clustering-" + cfg.tableName,
+        cfg.sparkMaster, cfg.sparkMemory, cfg.enableHiveSupport);
     int result = new HoodieClusteringJob(jsc, cfg).cluster(cfg.retry);
     String resultMsg = String.format("Clustering with basePath: %s, tableName: %s, runningMode: %s",
         cfg.basePath, cfg.tableName, cfg.runningMode);
@@ -231,7 +233,7 @@ public class HoodieClusteringJob {
     }
   }
 
-  @TestOnly
+  @VisibleForTesting
   public Option<String> doSchedule() throws Exception {
     return this.doSchedule(jsc);
   }
@@ -255,21 +257,12 @@ public class HoodieClusteringJob {
     try (SparkRDDWriteClient<HoodieRecordPayload> client = UtilHelpers.createHoodieClient(jsc, cfg.basePath, schemaStr, cfg.parallelism, Option.empty(), props)) {
       Option<String> instantTime = Option.empty();
 
-      if (cfg.retryLastFailedClusteringJob) {
-        HoodieSparkTable<HoodieRecordPayload> table = HoodieSparkTable.create(client.getConfig(), client.getEngineContext());
-        client.validateAgainstTableProperties(table.getMetaClient().getTableConfig(), client.getConfig());
-        Option<HoodieInstant> lastClusterOpt = table.getActiveTimeline().getLastPendingClusterInstant();
-
-        if (lastClusterOpt.isPresent()) {
-          HoodieInstant inflightClusteringInstant = lastClusterOpt.get();
-          Date clusteringStartTime = TimelineUtils.parseDateFromInstantTime(inflightClusteringInstant.requestedTime());
-          if (clusteringStartTime.getTime() + cfg.maxProcessingTimeMs < System.currentTimeMillis()) {
-            // if there has failed clustering, then we will use the failed clustering instant-time to trigger next clustering action which will rollback and clustering.
-            LOG.info("Found failed clustering instant at : " + inflightClusteringInstant + "; Will rollback the failed clustering and re-trigger again.");
-            instantTime = Option.of(inflightClusteringInstant.requestedTime());
-          } else {
-            LOG.info(inflightClusteringInstant + " might still be in progress, will trigger a new clustering job.");
-          }
+      if (cfg.retryLastFailedJob) {
+        Option<HoodieInstant> staleInstant = TableServiceUtils.findStaleInflightInstant(
+            metaClient, HoodieTimeline.CLUSTERING_ACTION, cfg.maxProcessingTimeMs);
+        if (staleInstant.isPresent()) {
+          LOG.info("Found failed clustering instant at : " + staleInstant.get() + "; Will rollback the failed clustering and re-trigger again.");
+          instantTime = Option.of(staleInstant.get().requestedTime());
         }
       }
 

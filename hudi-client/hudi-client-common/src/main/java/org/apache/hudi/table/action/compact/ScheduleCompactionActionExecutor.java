@@ -41,8 +41,7 @@ import org.apache.hudi.table.action.BaseTableServicePlanActionExecutor;
 import org.apache.hudi.table.action.compact.plan.generators.BaseHoodieCompactionPlanGenerator;
 import org.apache.hudi.table.action.compact.plan.generators.HoodieLogCompactionPlanGenerator;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import javax.annotation.Nullable;
 
@@ -54,9 +53,8 @@ import static org.apache.hudi.common.table.timeline.InstantComparison.compareTim
 import static org.apache.hudi.common.util.CollectionUtils.nonEmpty;
 import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
 
+@Slf4j
 public class ScheduleCompactionActionExecutor<T, I, K, O> extends BaseTableServicePlanActionExecutor<T, I, K, O, Option<HoodieCompactionPlan>> {
-
-  private static final Logger LOG = LoggerFactory.getLogger(ScheduleCompactionActionExecutor.class);
   private final WriteOperationType operationType;
   private final Option<Map<String, String>> extraMetadata;
   private BaseHoodieCompactionPlanGenerator planGenerator;
@@ -97,7 +95,7 @@ public class ScheduleCompactionActionExecutor<T, I, K, O> extends BaseTableServi
         // if there are inflight writes, their instantTime must not be less than that of compaction instant time
         Option<HoodieInstant> earliestInflightOpt = table.getActiveTimeline().getCommitsTimeline().filterPendingExcludingCompactionAndLogCompaction().firstInstant();
         if (earliestInflightOpt.isPresent() && !compareTimestamps(earliestInflightOpt.get().requestedTime(), GREATER_THAN, instantTime)) {
-          LOG.info("Earliest write inflight instant time must be later than compaction time. Earliest :{}, Compaction scheduled at {}. Hence skipping to schedule compaction",
+          log.info("Earliest write inflight instant time must be later than compaction time. Earliest :{}, Compaction scheduled at {}. Hence skipping to schedule compaction",
               earliestInflightOpt.get(), instantTime);
           return Option.empty();
         }
@@ -125,11 +123,11 @@ public class ScheduleCompactionActionExecutor<T, I, K, O> extends BaseTableServi
 
   @Nullable
   private HoodieCompactionPlan scheduleCompaction() {
-    LOG.info("Checking if compaction needs to be run on " + config.getBasePath());
+    log.info("Checking if compaction needs to be run on " + config.getBasePath());
     // judge if we need to compact according to num delta commits and time elapsed
     boolean compactable = needCompact(config.getInlineCompactTriggerStrategy());
     if (compactable) {
-      LOG.info("Generating compaction plan for merge on read table " + config.getBasePath());
+      log.info("Generating compaction plan for merge on read table " + config.getBasePath());
       try {
         context.setJobStatus(this.getClass().getSimpleName(), "Compaction: generating compaction plan");
         return planGenerator.generateCompactionPlan(instantTime);
@@ -179,7 +177,7 @@ public class ScheduleCompactionActionExecutor<T, I, K, O> extends BaseTableServi
       case NUM_COMMITS:
         compactable = inlineCompactDeltaCommitMax <= latestDeltaCommitInfo.getLeft();
         if (compactable) {
-          LOG.info("The delta commits >= {}, trigger compaction scheduler.", inlineCompactDeltaCommitMax);
+          log.info("The delta commits >= {}, trigger compaction scheduler.", inlineCompactDeltaCommitMax);
         }
         break;
       case NUM_COMMITS_AFTER_LAST_REQUEST:
@@ -191,20 +189,20 @@ public class ScheduleCompactionActionExecutor<T, I, K, O> extends BaseTableServi
         latestDeltaCommitInfo = latestDeltaCommitInfoOption.get();
         compactable = inlineCompactDeltaCommitMax <= latestDeltaCommitInfo.getLeft();
         if (compactable) {
-          LOG.info("The delta commits >= {} since the last compaction request, trigger compaction scheduler.", inlineCompactDeltaCommitMax);
+          log.info("The delta commits >= {} since the last compaction request, trigger compaction scheduler.", inlineCompactDeltaCommitMax);
         }
         break;
       case TIME_ELAPSED:
         compactable = inlineCompactDeltaSecondsMax <= parsedToSeconds(instantTime) - parsedToSeconds(latestDeltaCommitInfo.getRight());
         if (compactable) {
-          LOG.info("The elapsed time >={}s, trigger compaction scheduler.", inlineCompactDeltaSecondsMax);
+          log.info("The elapsed time >={}s, trigger compaction scheduler.", inlineCompactDeltaSecondsMax);
         }
         break;
       case NUM_OR_TIME:
         compactable = inlineCompactDeltaCommitMax <= latestDeltaCommitInfo.getLeft()
             || inlineCompactDeltaSecondsMax <= parsedToSeconds(instantTime) - parsedToSeconds(latestDeltaCommitInfo.getRight());
         if (compactable) {
-          LOG.info("The delta commits >= {} or elapsed_time >={}s, trigger compaction scheduler.", inlineCompactDeltaCommitMax,
+          log.info("The delta commits >= {} or elapsed_time >={}s, trigger compaction scheduler.", inlineCompactDeltaCommitMax,
               inlineCompactDeltaSecondsMax);
         }
         break;
@@ -212,7 +210,7 @@ public class ScheduleCompactionActionExecutor<T, I, K, O> extends BaseTableServi
         compactable = inlineCompactDeltaCommitMax <= latestDeltaCommitInfo.getLeft()
             && inlineCompactDeltaSecondsMax <= parsedToSeconds(instantTime) - parsedToSeconds(latestDeltaCommitInfo.getRight());
         if (compactable) {
-          LOG.info("The delta commits >= {} and elapsed_time >={}s, trigger compaction scheduler.", inlineCompactDeltaCommitMax,
+          log.info("The delta commits >= {} and elapsed_time >={}s, trigger compaction scheduler.", inlineCompactDeltaCommitMax,
               inlineCompactDeltaSecondsMax);
         }
         break;

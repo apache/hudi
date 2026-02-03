@@ -20,6 +20,7 @@ package org.apache.hudi.io.storage.row.parquet;
 
 import org.apache.hudi.common.util.collection.Pair;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.flink.table.api.DataTypes;
 import org.apache.flink.table.types.DataType;
 import org.apache.flink.table.types.logical.ArrayType;
@@ -37,8 +38,6 @@ import org.apache.parquet.schema.OriginalType;
 import org.apache.parquet.schema.PrimitiveType;
 import org.apache.parquet.schema.Type;
 import org.apache.parquet.schema.Types;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.List;
 import java.util.stream.Collectors;
@@ -50,8 +49,8 @@ import static org.apache.parquet.schema.LogicalTypeAnnotation.TimeUnit;
  *
  * <p>Reference org.apache.flink.formats.parquet.utils.ParquetSchemaConverter to support timestamp of INT64 8 bytes.
  */
+@Slf4j
 public class ParquetSchemaConverter {
-  private static final Logger LOGGER = LoggerFactory.getLogger(ParquetSchemaConverter.class);
 
   static final String MAP_REPEATED_NAME = "key_value";
   static final String MAP_KEY_NAME = "key";

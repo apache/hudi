@@ -18,24 +18,30 @@
 
 package org.apache.hudi.common.schema;
 
-import org.apache.avro.JsonProperties;
 import org.apache.hudi.avro.AvroSchemaUtils;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.internal.schema.HoodieSchemaException;
 
+import org.apache.avro.JsonProperties;
 import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericData;
 
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.math.MathContext;
 import java.math.RoundingMode;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
+import java.util.function.Function;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 /**
@@ -52,6 +58,11 @@ import java.util.stream.Collectors;
  * @since 1.2.0
  */
 public final class HoodieSchemaUtils {
+
+  // As per https://avro.apache.org/docs/current/spec.html#names
+  private static final Pattern INVALID_AVRO_CHARS_IN_NAMES_PATTERN = Pattern.compile("[^A-Za-z0-9_]");
+  private static final Pattern INVALID_AVRO_FIRST_CHAR_IN_NAMES_PATTERN = Pattern.compile("[^A-Za-z_]");
+  private static final String MASK_FOR_INVALID_CHARS_IN_NAMES = "__";
 
   public static final HoodieSchema METADATA_FIELD_SCHEMA = HoodieSchema.createNullable(HoodieSchemaType.STRING);
   public static final HoodieSchema RECORD_KEY_SCHEMA = initRecordKeySchema();
@@ -301,9 +312,31 @@ public final class HoodieSchemaUtils {
     ValidationUtils.checkArgument(name != null && !name.isEmpty(), "Field name cannot be null or empty");
     ValidationUtils.checkArgument(schema != null, "Field schema cannot be null");
 
+    return HoodieSchemaField.of(name, schema, doc, defaultValue);
+  }
+
+  /**
+   * Creates a new schema field with the specified properties, including field order.
+   * This is equivalent to HoodieAvroUtils.createNewSchemaField() but returns HoodieSchemaField.
+   *
+   * @param name         field name
+   * @param schema       field schema
+   * @param doc          field documentation (can be null)
+   * @param defaultValue default value (can be null)
+   * @param order        field order for sorting
+   * @return new HoodieSchemaField instance
+   * @throws IllegalArgumentException if name, schema, or order is null/empty
+   * @since 1.2.0
+   */
+  public static HoodieSchemaField createNewSchemaField(String name, HoodieSchema schema,
+                                                       String doc, Object defaultValue, HoodieFieldOrder order) {
+    ValidationUtils.checkArgument(name != null && !name.isEmpty(), "Field name cannot be null or empty");
+    ValidationUtils.checkArgument(schema != null, "Field schema cannot be null");
+    ValidationUtils.checkArgument(order != null, "Field order cannot be null");
+
     // Delegate to HoodieAvroUtils
     Schema.Field avroField = HoodieAvroUtils.createNewSchemaField(
-        name, schema.toAvroSchema(), doc, defaultValue);
+        name, schema.toAvroSchema(), doc, defaultValue, order.toAvroOrder());
     return HoodieSchemaField.fromAvroField(avroField);
   }
 
@@ -350,12 +383,15 @@ public final class HoodieSchemaUtils {
 
   /**
    * Gets a field (including nested fields) from the schema using dot notation.
-   * This is equivalent to HoodieAvroUtils.getSchemaForField() but operates on HoodieSchema.
+   * This method delegates to {@link HoodieSchema#getNestedField(String)}.
    * <p>
    * Supports nested field access using dot notation. For example:
    * <ul>
    *   <li>"name" - retrieves top-level field</li>
    *   <li>"user.profile.displayName" - retrieves nested field</li>
+   *   <li>"items.list.element" - retrieves array element schema </li>
+   *   <li>"metadata.key_value.key" - retrieves map key schema</li>
+   *   <li>"metadata.key_value.value" - retrieves map value schema</li>
    * </ul>
    *
    * @param schema    the schema to search in
@@ -367,44 +403,7 @@ public final class HoodieSchemaUtils {
   public static Option<Pair<String, HoodieSchemaField>> getNestedField(HoodieSchema schema, String fieldName) {
     ValidationUtils.checkArgument(schema != null, "Schema cannot be null");
     ValidationUtils.checkArgument(fieldName != null && !fieldName.isEmpty(), "Field name cannot be null or empty");
-    return getNestedFieldInternal(schema, fieldName, "");
-  }
-
-  /**
-   * Internal helper method for recursively retrieving nested fields.
-   *
-   * @param schema    the current schema to search in
-   * @param fieldName the remaining field path
-   * @param prefix    the accumulated field path prefix
-   * @return Option containing Pair of canonical field name and the HoodieSchemaField, or Option.empty() if field not found
-   */
-  private static Option<Pair<String, HoodieSchemaField>> getNestedFieldInternal(HoodieSchema schema, String fieldName, String prefix) {
-    HoodieSchema nonNullableSchema = getNonNullTypeFromUnion(schema);
-
-    if (!fieldName.contains(".")) {
-      // Base case: simple field name
-      if (nonNullableSchema.getType() != HoodieSchemaType.RECORD) {
-        return Option.empty();
-      }
-      return nonNullableSchema.getField(fieldName)
-          .map(field -> Pair.of(prefix + fieldName, field));
-    } else {
-      // Recursive case: nested field
-      if (nonNullableSchema.getType() != HoodieSchemaType.RECORD) {
-        return Option.empty();
-      }
-
-      int dotIndex = fieldName.indexOf(".");
-      String rootFieldName = fieldName.substring(0, dotIndex);
-      String remainingPath = fieldName.substring(dotIndex + 1);
-
-      return nonNullableSchema.getField(rootFieldName)
-          .flatMap(rootField -> getNestedFieldInternal(
-              rootField.schema(),
-              remainingPath,
-              prefix + rootFieldName + "."
-          ));
-    }
+    return schema.getNestedField(fieldName);
   }
 
   /**
@@ -480,6 +479,19 @@ public final class HoodieSchemaUtils {
    */
   public static HoodieSchema appendFieldsToSchemaDedupNested(HoodieSchema schema, List<HoodieSchemaField> newFields) {
     return HoodieSchema.fromAvroSchema(AvroSchemaUtils.appendFieldsToSchemaDedupNested(schema.toAvroSchema(),
+        newFields.stream().map(HoodieSchemaField::getAvroField).collect(Collectors.toList())));
+  }
+
+  /**
+   * Appends provided new fields at the end of the given schema
+   * <p>
+   * NOTE: No deduplication is made, this method simply appends fields at the end of the list
+   *       of the source schema as is
+   * <p>
+   * This is equivalent to {@link AvroSchemaUtils#appendFieldsToSchema(Schema, List)} but operates on HoodieSchema.
+   */
+  public static HoodieSchema appendFieldsToSchema(HoodieSchema schema, List<HoodieSchemaField> newFields) {
+    return HoodieSchema.fromAvroSchema(AvroSchemaUtils.appendFieldsToSchema(schema.toAvroSchema(),
         newFields.stream().map(HoodieSchemaField::getAvroField).collect(Collectors.toList())));
   }
 
@@ -573,4 +585,265 @@ public final class HoodieSchemaUtils {
     return RECORD_KEY_SCHEMA;
   }
 
+  /**
+   * Converts field values for specific data types with logical type handling.
+   * This is equivalent to HoodieAvroUtils.convertValueForSpecificDataTypes() but operates on HoodieSchema.
+   * <p>
+   * Handles special conversions for Avro logical types:
+   * <ul>
+   *   <li>Date type - converts epoch day integer to LocalDate</li>
+   *   <li>Timestamp types - converts epoch milliseconds/microseconds to Timestamp</li>
+   *   <li>Decimal type - converts bytes/fixed to BigDecimal</li>
+   * </ul>
+   *
+   * @param fieldSchema the field schema
+   * @param fieldValue the field value to convert
+   * @param consistentLogicalTimestampEnabled whether to use consistent logical timestamp handling
+   * @return converted value for logical types, or original value
+   * @throws IllegalStateException if fieldValue is null but schema is not nullable
+   * @since 1.2.0
+   */
+  public static Object convertValueForSpecificDataTypes(HoodieSchema fieldSchema,
+                                                        Object fieldValue,
+                                                        boolean consistentLogicalTimestampEnabled) {
+    if (fieldSchema == null) {
+      return fieldValue;
+    } else if (fieldValue == null) {
+      ValidationUtils.checkState(fieldSchema.isNullable(),
+          "Field value is null but schema is not nullable");
+      return null;
+    }
+
+    // Delegate to existing Avro utility
+    return HoodieAvroUtils.convertValueForSpecificDataTypes(
+        fieldSchema.toAvroSchema(),
+        fieldValue,
+        consistentLogicalTimestampEnabled
+    );
+  }
+
+  /**
+   * Fetch schema for record key and partition path.
+   * This is equivalent to HoodieAvroUtils.getRecordKeyPartitionPathSchema() but returns HoodieSchema.
+   *
+   * @return HoodieSchema containing record key and partition path fields
+   */
+  public static HoodieSchema getRecordKeyPartitionPathSchema() {
+    List<HoodieSchemaField> toBeAddedFields = new ArrayList<>(2);
+
+    HoodieSchemaField recordKeyField =
+        createNewSchemaField(HoodieRecord.RECORD_KEY_METADATA_FIELD, METADATA_FIELD_SCHEMA, "", JsonProperties.NULL_VALUE);
+    HoodieSchemaField partitionPathField =
+        createNewSchemaField(HoodieRecord.PARTITION_PATH_METADATA_FIELD, METADATA_FIELD_SCHEMA, "", JsonProperties.NULL_VALUE);
+
+    toBeAddedFields.add(recordKeyField);
+    toBeAddedFields.add(partitionPathField);
+    return HoodieSchema.createRecord("HoodieRecordKey", "", "", false, toBeAddedFields);
+  }
+
+  /**
+   * Fetches projected schema given list of fields to project. The field can be nested in format `a.b.c` where a is
+   * the top level field, b is at second level and so on.
+   * This is equivalent to {@link HoodieAvroUtils#projectSchema(Schema, List)} but operates on HoodieSchema.
+   *
+   * @param fileSchema the original schema
+   * @param fields     list of fields to project
+   * @return projected schema containing only specified fields
+   */
+  public static HoodieSchema projectSchema(HoodieSchema fileSchema, List<String> fields) {
+    return HoodieSchema.fromAvroSchema(HoodieAvroUtils.projectSchema(fileSchema.toAvroSchema(), fields));
+  }
+
+  /**
+   * Generates fully-qualified name for the Avro's schema based on the Table's name
+   *
+   * <p>The qualified name follows the pattern: hoodie.{tableName}.{tableName}_record
+   * where tableName is sanitized for Avro compatibility.</p>
+   *
+   * NOTE: PLEASE READ CAREFULLY BEFORE CHANGING
+   *       This method should not change for compatibility reasons as older versions
+   *       of Avro might be comparing fully-qualified names rather than just the record
+   *       names
+   *
+   * @param tableName the Hudi table name
+   * @return the fully-qualified Avro record name (e.g., "hoodie.my_table.my_table_record")
+   * @throws IllegalArgumentException if tableName is null or empty
+   * @since 1.2.0
+   */
+  public static String getRecordQualifiedName(String tableName) {
+    ValidationUtils.checkArgument(tableName != null && !tableName.trim().isEmpty(),
+        "Table name cannot be null or empty");
+
+    String sanitizedTableName = sanitizeName(tableName);
+    return "hoodie." + sanitizedTableName + "." + sanitizedTableName + "_record";
+  }
+
+  public static boolean hasDecimalField(HoodieSchema schema) {
+    return hasDecimalWithCondition(schema, unused -> true);
+  }
+
+  /**
+   * Checks whether the provided schema contains a decimal with a precision less than or equal to 18,
+   * which allows the decimal to be stored as int/long instead of a fixed size byte array in
+   * <a href="https://github.com/apache/parquet-format/blob/master/LogicalTypes.md">parquet logical types</a>
+   * @param schema the input schema to search
+   * @return true if the schema contains a small precision decimal field and false otherwise
+   */
+  public static boolean hasSmallPrecisionDecimalField(HoodieSchema schema) {
+    return hasDecimalWithCondition(schema, HoodieSchemaUtils::isSmallPrecisionDecimalField);
+  }
+
+  private static boolean hasDecimalWithCondition(HoodieSchema schema, Function<HoodieSchema.Decimal, Boolean> condition) {
+    switch (schema.getType()) {
+      case RECORD:
+        for (HoodieSchemaField field : schema.getFields()) {
+          if (hasDecimalWithCondition(field.schema(), condition)) {
+            return true;
+          }
+        }
+        return false;
+      case ARRAY:
+        return hasDecimalWithCondition(schema.getElementType(), condition);
+      case MAP:
+        return hasDecimalWithCondition(schema.getValueType(), condition);
+      case UNION:
+        return hasDecimalWithCondition(schema.getNonNullType(), condition);
+      case DECIMAL:
+        HoodieSchema.Decimal decimal = (HoodieSchema.Decimal) schema;
+        return condition.apply(decimal);
+      default:
+        return false;
+    }
+  }
+
+  private static boolean isSmallPrecisionDecimalField(HoodieSchema.Decimal decimal) {
+    return decimal.getPrecision() <= 18;
+  }
+
+  /**
+   * Resolves a union schema by finding the schema matching the given full name.
+   * Handles both simple nullable unions (null + non-null) and complex unions with multiple types.
+   *
+   * <p>This method supports the following union types:
+   * <ul>
+   *   <li>Simple nullable unions: {@code ["null", "Type"]} - returns the non-null type</li>
+   *   <li>Complex unions: {@code ["null", "TypeA", "TypeB"]} - returns the type matching fieldSchemaFullName</li>
+   *   <li>Non-union schemas - returns the schema as-is</li>
+   * </ul>
+   *
+   * @param schema the schema to resolve (may or may not be a union)
+   * @param fieldSchemaFullName the full name of the schema to find within the union
+   * @return the resolved schema
+   * @throws HoodieSchemaException if the union cannot be resolved or no matching type is found
+   */
+  public static HoodieSchema resolveUnionSchema(HoodieSchema schema, String fieldSchemaFullName) {
+    if (schema.getType() != HoodieSchemaType.UNION) {
+      return schema;
+    }
+
+    List<HoodieSchema> innerTypes = schema.getTypes();
+    if (innerTypes.size() == 2 && schema.isNullable()) {
+      // this is a basic nullable field so handle it more efficiently
+      return schema.getNonNullType();
+    }
+
+    HoodieSchema nonNullType = innerTypes.stream()
+        .filter(it -> it.getType() != HoodieSchemaType.NULL && Objects.equals(it.getFullName(), fieldSchemaFullName))
+        .findFirst()
+        .orElse(null);
+
+    if (nonNullType == null) {
+      throw new HoodieSchemaException(
+          String.format("Unsupported UNION type %s: Only UNION of a null type and a non-null type is supported", schema));
+    }
+
+    return nonNullType;
+  }
+
+  public static String addMetadataColumnTypes(String hiveColumnTypes) {
+    return "string,string,string,string,string," + hiveColumnTypes;
+  }
+
+  public static boolean isMetadataField(String fieldName) {
+    return HoodieRecord.HOODIE_META_COLUMNS_WITH_OPERATION.contains(fieldName);
+  }
+
+  /**
+   * Converts a HoodieSchemaField's default value to its Java representation.
+   * This is equivalent to {@link org.apache.hudi.avro.HoodieAvroUtils#toJavaDefaultValue(org.apache.avro.Schema.Field)}
+   * but operates on HoodieSchemaField.
+   *
+   * <p>For primitive types (STRING, INT, LONG, FLOAT, DOUBLE, BOOLEAN, ENUM, BYTES, FIXED, DECIMAL)
+   * and logical types (TIME, TIMESTAMP, DATE, UUID), the default value is returned as-is.
+   * For complex types (ARRAY, MAP, RECORD), Avro's GenericData utility is used
+   * to properly construct the default value.</p>
+   *
+   * @param field the HoodieSchemaField containing the default value
+   * @return the Java representation of the default value, or null if no default value exists
+   * @throws IllegalArgumentException if the field's type is not supported
+   * @since 1.2.0
+   */
+  public static Object toJavaDefaultValue(HoodieSchemaField field) {
+    ValidationUtils.checkArgument(field != null, "Field cannot be null");
+
+    Option<Object> defaultValOpt = field.defaultVal();
+    if (!defaultValOpt.isPresent() || defaultValOpt.get() == HoodieJsonProperties.NULL_VALUE) {
+      return null;
+    }
+
+    Object defaultVal = defaultValOpt.get();
+    HoodieSchemaType type = field.getNonNullSchema().getType();
+
+    switch (type) {
+      case STRING:
+      case INT:
+      case LONG:
+      case FLOAT:
+      case DOUBLE:
+      case BOOLEAN:
+      case ENUM:
+      case BYTES:
+      case FIXED:
+      case DECIMAL:
+      case TIME:
+      case TIMESTAMP:
+      case DATE:
+      case UUID:
+        return defaultVal;
+      case ARRAY:
+      case MAP:
+      case RECORD:
+        // Use Avro's standard GenericData utility for complex types
+        // Delegate to the underlying Avro field
+        return GenericData.get().getDefaultValue(field.getAvroField());
+      default:
+        throw new IllegalArgumentException("Unsupported HoodieSchema type: " + type);
+    }
+  }
+
+  /**
+   * Sanitizes Name according to Avro rule for names.
+   * Removes characters other than the ones mentioned in <a href="https://avro.apache.org/docs/current/spec.html#names">avro spec</a> .
+   *
+   * @param name input name
+   * @return sanitized name
+   */
+  public static String sanitizeName(String name) {
+    return sanitizeName(name, MASK_FOR_INVALID_CHARS_IN_NAMES);
+  }
+
+  /**
+   * Sanitizes Name according to Avro rule for names.
+   * Removes characters other than the ones mentioned in <a href="https://avro.apache.org/docs/current/spec.html#names">avro spec</a>.
+   *
+   * @param name            input name
+   * @param invalidCharMask replacement for invalid characters.
+   * @return sanitized name
+   */
+  public static String sanitizeName(String name, String invalidCharMask) {
+    if (INVALID_AVRO_FIRST_CHAR_IN_NAMES_PATTERN.matcher(name.substring(0, 1)).matches()) {
+      name = INVALID_AVRO_FIRST_CHAR_IN_NAMES_PATTERN.matcher(name).replaceFirst(invalidCharMask);
+    }
+    return INVALID_AVRO_CHARS_IN_NAMES_PATTERN.matcher(name).replaceAll(invalidCharMask);
+  }
 }

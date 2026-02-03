@@ -21,8 +21,8 @@ package org.apache.hudi.utilities.sources.helpers.gcs;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.pubsub.v1.PubsubMessage;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.AllArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
 import java.io.IOException;
 
@@ -34,9 +34,9 @@ import static org.apache.hudi.utilities.sources.helpers.gcs.MessageValidity.Proc
  * adds relevant helper methods.
  * For details of CSPN messages see: https://cloud.google.com/storage/docs/pubsub-notifications
  */
+@AllArgsConstructor
+@Slf4j
 public class MetadataMessage {
-
-  private static final Logger LOG = LoggerFactory.getLogger(MetadataMessage.class);
 
   // The CSPN message to wrap
   private final PubsubMessage message;
@@ -47,10 +47,6 @@ public class MetadataMessage {
   private static final String ATTR_OBJECT_ID = "objectId";
   private static final String ATTR_OVERWROTE_GENERATION = "overwroteGeneration";
   private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
-
-  public MetadataMessage(PubsubMessage message) {
-    this.message = message;
-  }
 
   public String toStringUtf8() {
     return message.getData().toStringUtf8();
@@ -78,7 +74,7 @@ public class MetadataMessage {
         return new MessageValidity(DO_SKIP, "Object " + getObjectId() + " is empty.");
       }
     } catch (IOException e) {
-      LOG.error("Exception while extracting the size for object " + getObjectId(), e);
+      log.error("Exception while extracting the size for object {}", getObjectId(), e);
     }
 
     return MessageValidity.DEFAULT_VALID_MESSAGE;
@@ -127,5 +123,4 @@ public class MetadataMessage {
     JsonNode fieldNode = root.get(fieldName);
     return fieldNode.asText();
   }
-
 }

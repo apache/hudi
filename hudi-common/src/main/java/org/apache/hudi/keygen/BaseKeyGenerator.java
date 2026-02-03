@@ -22,6 +22,7 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.exception.HoodieKeyException;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 
+import lombok.Getter;
 import org.apache.avro.generic.GenericRecord;
 
 import java.util.List;
@@ -36,13 +37,18 @@ public abstract class BaseKeyGenerator extends KeyGenerator {
   public static final String CUSTOM_KEY_GENERATOR_SPLIT_REGEX = ":";
   public static final String FIELD_SEPARATOR = ",";
   protected List<String> recordKeyFields;
+  @Getter
   protected List<String> partitionPathFields;
+  protected final boolean slashSeparatedDatePartitioning;
   protected final boolean encodePartitionPath;
   protected final boolean hiveStylePartitioning;
+  @Getter
   protected final boolean consistentLogicalTimestampEnabled;
 
   protected BaseKeyGenerator(TypedProperties config) {
     super(config);
+    this.slashSeparatedDatePartitioning = config.getBoolean(KeyGeneratorOptions.SLASH_SEPARATED_DATE_PARTITIONING.key(),
+        Boolean.parseBoolean(KeyGeneratorOptions.SLASH_SEPARATED_DATE_PARTITIONING.defaultValue()));
     this.encodePartitionPath = config.getBoolean(KeyGeneratorOptions.URL_ENCODE_PARTITIONING.key(),
         Boolean.parseBoolean(KeyGeneratorOptions.URL_ENCODE_PARTITIONING.defaultValue()));
     this.hiveStylePartitioning = config.getBoolean(KeyGeneratorOptions.HIVE_STYLE_PARTITIONING_ENABLE.key(),
@@ -75,13 +81,5 @@ public abstract class BaseKeyGenerator extends KeyGenerator {
   @Override
   public List<String> getRecordKeyFieldNames() {
     return recordKeyFields;
-  }
-
-  public List<String> getPartitionPathFields() {
-    return partitionPathFields;
-  }
-
-  public boolean isConsistentLogicalTimestampEnabled() {
-    return consistentLogicalTimestampEnabled;
   }
 }

@@ -21,10 +21,9 @@ package org.apache.hudi.data.partitioner;
 
 import org.apache.hudi.common.util.ValidationUtils;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.spark.Partitioner;
 import org.apache.spark.api.java.JavaPairRDD;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.Serializable;
 import java.util.ArrayList;
@@ -45,8 +44,8 @@ import scala.Tuple2;
  * 2. There is at most only 1 key per partition.
  * 3. For partitions containing entries of the same key, the value ranges are not overlapping.
  */
+@Slf4j
 public class ConditionalRangePartitioner<S extends Comparable<S>, V extends Comparable<V>> extends Partitioner {
-  private static final Logger LOG = LoggerFactory.getLogger(ConditionalRangePartitioner.class);
 
   private final Map<S, List<V>> splitPoints;
   private final Map<S, Integer> startIndex;
@@ -63,7 +62,7 @@ public class ConditionalRangePartitioner<S extends Comparable<S>, V extends Comp
       idx += splitPoints.get(sortedKey).size() + 1;
     }
     this.totalPartitions = idx;
-    LOG.info("Total num of partitions to be enforced is {}", totalPartitions);
+    log.info("Total num of partitions to be enforced is {}", totalPartitions);
   }
 
   @Override

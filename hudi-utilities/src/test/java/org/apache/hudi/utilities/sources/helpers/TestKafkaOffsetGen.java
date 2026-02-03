@@ -21,13 +21,14 @@ package org.apache.hudi.utilities.sources.helpers;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.table.checkpoint.StreamerCheckpointV2;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
+import org.apache.hudi.common.util.LogicalClock;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.utilities.config.KafkaSourceConfig;
 import org.apache.hudi.utilities.ingestion.HoodieIngestionMetrics;
+import org.apache.hudi.utilities.testutils.KafkaTestUtils;
 import org.apache.hudi.utilities.testutils.UtilitiesTestBase.Helpers;
-import org.apache.hudi.common.util.LogicalClock;
 
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.Config;
@@ -42,10 +43,10 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.serialization.StringDeserializer;
-import org.apache.spark.streaming.kafka010.KafkaTestUtils;
 import org.apache.spark.streaming.kafka010.OffsetRange;
+import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -88,18 +89,23 @@ import static org.mockito.Mockito.when;
 public class TestKafkaOffsetGen {
 
   private final String testTopicName = "hoodie_test_" + UUID.randomUUID();
-  private HoodieIngestionMetrics metrics = mock(HoodieIngestionMetrics.class);
-  private KafkaTestUtils testUtils;
+  private final HoodieIngestionMetrics metrics = mock(HoodieIngestionMetrics.class);
+  private static KafkaTestUtils testUtils;
 
-  @BeforeEach
-  public void setup() throws Exception {
+  @BeforeAll
+  public static void setup() throws Exception {
     testUtils = new KafkaTestUtils();
     testUtils.setup();
   }
 
-  @AfterEach
-  public void teardown() throws Exception {
+  @AfterAll
+  public static void teardown() throws Exception {
     testUtils.teardown();
+  }
+
+  @AfterEach
+  void cleanupTopics() {
+    testUtils.deleteTopics();
   }
 
   private TypedProperties getConsumerConfigs(String autoOffsetReset, String kafkaCheckpointType) {

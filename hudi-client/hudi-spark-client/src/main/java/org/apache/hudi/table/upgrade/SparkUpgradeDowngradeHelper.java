@@ -27,16 +27,17 @@ import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.util.SparkKeyGenUtils;
 
+import lombok.AccessLevel;
+import lombok.NoArgsConstructor;
+
 /**
  * Spark upgrade and downgrade helper.
  */
+@NoArgsConstructor(access = AccessLevel.PRIVATE)
 public class SparkUpgradeDowngradeHelper implements SupportsUpgradeDowngrade {
 
   private static final SparkUpgradeDowngradeHelper SINGLETON_INSTANCE =
       new SparkUpgradeDowngradeHelper();
-
-  private SparkUpgradeDowngradeHelper() {
-  }
 
   public static SparkUpgradeDowngradeHelper getInstance() {
     return SINGLETON_INSTANCE;

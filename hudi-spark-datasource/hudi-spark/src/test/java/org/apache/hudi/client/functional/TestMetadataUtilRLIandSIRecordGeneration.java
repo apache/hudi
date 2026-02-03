@@ -298,7 +298,7 @@ public class TestMetadataUtilRLIandSIRecordGeneration extends HoodieClientTestBa
       HoodieCommitMetadata compactionCommitMetadata = (HoodieCommitMetadata) compactionWriteMetadata.getCommitMetadata().get();
       // no RLI records should be generated for compaction operation.
       assertTrue(convertMetadataToRecordIndexRecords(context, compactionCommitMetadata, writeConfig.getMetadataConfig(),
-          metaClient, writeConfig.getWritesFileIdEncoding(), compactionInstantOpt.get(), EngineType.SPARK, writeConfig.enableOptimizedLogBlocksScan()).isEmpty());
+          metaClient, writeConfig.getWritesFileIdEncoding(), compactionInstantOpt.get(), EngineType.SPARK).isEmpty());
     }
   }
 
@@ -533,7 +533,7 @@ public class TestMetadataUtilRLIandSIRecordGeneration extends HoodieClientTestBa
             // used for RLI
             HoodieReaderContext<?> readerContext = context.getReaderContextFactory(metaClient).getContext();
             finalActualDeletes.addAll(getRevivedAndDeletedKeysFromMergedLogs(metaClient, latestCommitTimestamp, Collections.singletonList(fullFilePath.toString()), writerSchemaOpt,
-                Collections.singletonList(fullFilePath.toString()), writeStat.getPartitionPath(), readerContext, writeConfig.enableOptimizedLogBlocksScan()).getValue());
+                Collections.singletonList(fullFilePath.toString()), writeStat.getPartitionPath(), readerContext).getValue());
 
             // used in SI flow
             actualUpdatesAndDeletes.addAll(getRecordKeys(writeStat.getPartitionPath(), writeStat.getPrevCommit(), writeStat.getFileId(),
@@ -714,8 +714,8 @@ public class TestMetadataUtilRLIandSIRecordGeneration extends HoodieClientTestBa
       HoodieReaderContext readerContext = context.getReaderContextFactory(metaClient).getContext();
       HoodieFileGroupReader reader = HoodieFileGroupReader.newBuilder()
           .withReaderContext(readerContext)
-          .withDataSchema(writerSchemaOpt.get().toAvroSchema())
-          .withRequestedSchema(writerSchemaOpt.get().toAvroSchema())
+          .withDataSchema(writerSchemaOpt.get())
+          .withRequestedSchema(writerSchemaOpt.get())
           .withEmitDelete(true)
           .withPartitionPath(partition)
           .withLogFiles(logFilePaths.stream().map(HoodieLogFile::new))
@@ -724,7 +724,6 @@ public class TestMetadataUtilRLIandSIRecordGeneration extends HoodieClientTestBa
           .withHoodieTableMetaClient(datasetMetaClient)
           .withProps(properties)
           .withEmitDelete(true)
-          .withEnableOptimizedLogBlockScan(writeConfig.enableOptimizedLogBlocksScan())
           .build();
       Set<String> allRecordKeys = new HashSet<>();
       try (ClosableIterator<String> keysIterator = reader.getClosableKeyIterator()) {

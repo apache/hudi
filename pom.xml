@@ -81,21 +81,22 @@
   </organization>
 
   <properties>
-    <maven-jar-plugin.version>3.2.0</maven-jar-plugin.version>
-    <maven-surefire-plugin.version>2.22.2</maven-surefire-plugin.version>
-    <maven-failsafe-plugin.version>2.22.2</maven-failsafe-plugin.version>
-    <maven-shade-plugin.version>3.5.1</maven-shade-plugin.version>
-    <maven-javadoc-plugin.version>3.1.1</maven-javadoc-plugin.version>
-    <maven-compiler-plugin.version>3.13.0</maven-compiler-plugin.version>
+    <maven-jar-plugin.version>3.5.0</maven-jar-plugin.version>
+    <maven-surefire-plugin.version>3.5.4</maven-surefire-plugin.version>
+    <maven-failsafe-plugin.version>3.5.4</maven-failsafe-plugin.version>
+    <!-- bump to 3.5.3 to fix MSHADE-461 -->
+    <maven-shade-plugin.version>3.5.3</maven-shade-plugin.version>
+    <maven-javadoc-plugin.version>3.12.0</maven-javadoc-plugin.version>
+    <maven-compiler-plugin.version>3.14.1</maven-compiler-plugin.version>
     <maven-deploy-plugin.version>2.4</maven-deploy-plugin.version>
     <genjavadoc-plugin.version>0.18_2.13.10</genjavadoc-plugin.version>
-    <build-helper-maven-plugin.version>1.7</build-helper-maven-plugin.version>
-    <maven-enforcer-plugin.version>3.0.0-M1</maven-enforcer-plugin.version>
-    <maven-docker-plugin.version>0.45.0</maven-docker-plugin.version>
+    <build-helper-maven-plugin.version>3.6.1</build-helper-maven-plugin.version>
+    <maven-enforcer-plugin.version>3.6.2</maven-enforcer-plugin.version>
+    <maven-docker-plugin.version>0.48.0</maven-docker-plugin.version>
 
-    <java.version>8</java.version>
+    <java.version>11</java.version>
     <kryo.shaded.version>4.0.2</kryo.shaded.version>
-    <fasterxml.spark3.version>2.10.0</fasterxml.spark3.version>
+    <fasterxml.spark3.version>2.15.2</fasterxml.spark3.version>
     <fasterxml.spark4.version>2.17.1</fasterxml.spark4.version>
     <fasterxml.version>${fasterxml.spark3.version}</fasterxml.version>
     <fasterxml.jackson.databind.version>${fasterxml.spark3.version}</fasterxml.jackson.databind.version>
@@ -111,17 +112,17 @@
     <confluent.version>5.5.0</confluent.version>
     <glassfish.version>2.17</glassfish.version>
     <glassfish.el.version>3.0.1-b12</glassfish.el.version>
-    <parquet.version>1.10.1</parquet.version>
-    <junit.jupiter.version>5.13.4</junit.jupiter.version>
-    <junit.vintage.version>5.13.4</junit.vintage.version>
-    <junit.platform.version>1.13.4</junit.platform.version>
-    <mockito.jupiter.version>4.11.0</mockito.jupiter.version>
-    <log4j2.version>2.17.2</log4j2.version>
+    <parquet.version>1.13.1</parquet.version>
+    <junit.jupiter.version>5.14.1</junit.jupiter.version>
+    <junit.vintage.version>5.14.1</junit.vintage.version>
+    <junit.platform.version>1.14.1</junit.platform.version>
+    <mockito.jupiter.version>5.21.0</mockito.jupiter.version>
+    <log4j2.version>2.25.3</log4j2.version>
     <slf4j.version>1.7.36</slf4j.version>
     <joda.version>2.9.9</joda.version>
     <hadoop.version>2.10.2</hadoop.version>
     <hive.groupid>org.apache.hive</hive.groupid>
-    <hive.version>2.3.4</hive.version>
+    <hive.version>2.3.10</hive.version>
     <hive.parquet.version>1.10.1</hive.parquet.version>
     <hive.avro.version>1.11.4</hive.avro.version>
     <presto.version>0.273</presto.version>
@@ -142,6 +143,7 @@
     <spark3.version>${spark35.version}</spark3.version>
     <spark4.version>4.0.1</spark4.version>
     <sparkbundle.version></sparkbundle.version>
+    <flink2.1.version>2.1.1</flink2.1.version>
     <flink2.0.version>2.0.0</flink2.0.version>
     <flink1.20.version>1.20.1</flink1.20.version>
     <flink1.19.version>1.19.2</flink1.19.version>
@@ -182,7 +184,7 @@
     <scala.collection-compat.version>2.8.1</scala.collection-compat.version>
     <scala.binary.version>2.12</scala.binary.version>
     <apache-rat-plugin.version>0.16.1</apache-rat-plugin.version>
-    <scala-maven-plugin.version>3.3.1</scala-maven-plugin.version>
+    <scala-maven-plugin.version>3.4.6</scala-maven-plugin.version>
     <scalatest.spark3.version>3.1.0</scalatest.spark3.version>
     <!-- TODO (HUDI-9401): Need to upgrade to 3.2.18+ after removing deprecated FunSuite -->
     <scalatest.spark4.version>3.1.4</scalatest.spark4.version>
@@ -230,7 +232,7 @@
     <google.cloud.pubsub.version>1.120.0</google.cloud.pubsub.version>
     <gcp-libraries-bom.version>26.15.0</gcp-libraries-bom.version>
     <gcs.connector.version>hadoop2-2.2.7</gcs.connector.version>
-    <testcontainers.version>1.20.2</testcontainers.version>
+    <testcontainers.version>1.21.4</testcontainers.version>
     <dynamodb-local.port>8000</dynamodb-local.port>
     <dynamodb-local.endpoint>http://localhost:${dynamodb-local.port}</dynamodb-local.endpoint>
     <moto.port>5002</moto.port>
@@ -238,6 +240,11 @@
     <springboot.version>2.7.10</springboot.version>
     <spring.shell.version>2.1.1</spring.shell.version>
     <snappy.version>1.1.10.7</snappy.version>
+    <arrow.version>18.3.0</arrow.version>
+    <lance.version>1.0.2</lance.version>
+    <lance.spark.connector.version>0.0.15</lance.spark.connector.version>
+    <lance.spark.artifact>lance-spark-3.5_${scala.binary.version}</lance.spark.artifact>
+    <lance.skip.tests>false</lance.skip.tests>
     <!-- The following properties are only used for Jacoco coverage report aggregation -->
     <copy.files>false</copy.files>
     <copy.files.target.dir>${maven.multiModuleProjectDirectory}</copy.files.target.dir>
@@ -283,7 +290,7 @@
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-source-plugin</artifactId>
-        <version>2.2.1</version>
+        <version>3.4.0</version>
         <executions>
           <execution>
             <id>attach-sources</id>
@@ -296,7 +303,7 @@
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-checkstyle-plugin</artifactId>
-        <version>3.4.0</version>
+        <version>3.6.0</version>
         <dependencies>
           <dependency>
             <groupId>com.puppycrawl.tools</groupId>
@@ -395,14 +402,6 @@
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-failsafe-plugin</artifactId>
         <version>${maven-failsafe-plugin.version}</version>
-        <configuration>
-          <skip>${skipITs}</skip>
-          <argLine>@{argLine}</argLine>
-          <useSystemClassLoader>false</useSystemClassLoader>
-          <systemPropertyVariables>
-            <log4j.configurationFile>${surefire-log4j.file}</log4j.configurationFile>
-          </systemPropertyVariables>
-        </configuration>
       </plugin>
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
@@ -500,6 +499,11 @@
       <plugins>
         <plugin>
           <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-dependency-plugin</artifactId>
+          <version>3.9.0</version>
+        </plugin>
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
           <artifactId>maven-surefire-plugin</artifactId>
           <version>${maven-surefire-plugin.version}</version>
           <configuration>
@@ -508,10 +512,38 @@
             <trimStackTrace>false</trimStackTrace>
             <systemPropertyVariables>
               <log4j.configurationFile>${surefire-log4j.file}</log4j.configurationFile>
+              <lance.skip.tests>${lance.skip.tests}</lance.skip.tests>
             </systemPropertyVariables>
             <useSystemClassLoader>false</useSystemClassLoader>
             <forkedProcessExitTimeoutInSeconds>30</forkedProcessExitTimeoutInSeconds>
           </configuration>
+          <dependencies>
+            <dependency>
+              <groupId>org.apache.maven.surefire</groupId>
+              <artifactId>surefire-junit-platform</artifactId>
+              <version>${maven-surefire-plugin.version}</version>
+            </dependency>
+          </dependencies>
+        </plugin>
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-failsafe-plugin</artifactId>
+          <version>${maven-failsafe-plugin.version}</version>
+          <configuration>
+            <skip>${skipITs}</skip>
+            <argLine>@{argLine}</argLine>
+            <useSystemClassLoader>false</useSystemClassLoader>
+            <systemPropertyVariables>
+              <log4j.configurationFile>${surefire-log4j.file}</log4j.configurationFile>
+            </systemPropertyVariables>
+          </configuration>
+          <dependencies>
+            <dependency>
+              <groupId>org.apache.maven.surefire</groupId>
+              <artifactId>surefire-junit-platform</artifactId>
+              <version>${maven-surefire-plugin.version}</version>
+            </dependency>
+          </dependencies>
         </plugin>
         <plugin>
           <groupId>org.scalatest</groupId>
@@ -524,6 +556,7 @@
             <filereports>TestSuite.txt</filereports>
             <systemProperties>
               <log4j.configurationFile>${surefire-log4j.file}</log4j.configurationFile>
+              <lance.skip.tests>${lance.skip.tests}</lance.skip.tests>
             </systemProperties>
           </configuration>
           <executions>
@@ -545,8 +578,30 @@
           <artifactId>scala-maven-plugin</artifactId>
           <version>${scala-maven-plugin.version}</version>
           <configuration>
+            <source>${java.version}</source>
+            <target>${java.version}</target>
             <checkMultipleScalaVersions>false</checkMultipleScalaVersions>
+            <args>
+              <arg>-nobootcp</arg>
+            </args>
           </configuration>
+          <executions>
+            <execution>
+              <id>scala-compile-first</id>
+              <phase>process-resources</phase>
+              <goals>
+                <goal>add-source</goal>
+                <goal>compile</goal>
+              </goals>
+            </execution>
+            <execution>
+              <id>scala-test-compile</id>
+              <phase>process-test-resources</phase>
+              <goals>
+                <goal>testCompile</goal>
+              </goals>
+            </execution>
+          </executions>
         </plugin>
         <plugin>
           <groupId>org.apache.maven.plugins</groupId>
@@ -607,6 +662,7 @@
               <exclude>**/dependency-reduced-pom.xml</exclude>
               <exclude>**/test/resources/*.data</exclude>
               <exclude>**/test/resources/*.commit</exclude>
+              <exclude>**/test/resources/**/*.data</exclude>
               <exclude>**/test/resources/**/*.txt</exclude>
               <exclude>**/test/resources/**/*.avsc</exclude>
               <exclude>**/test/resources/**/.zip</exclude>
@@ -898,7 +954,35 @@
         <version>${orc.spark.version}</version>
         <scope>compile</scope>
       </dependency>
-
+      <!-- Lance Core SDK -->
+      <dependency>
+        <groupId>org.lance</groupId>
+        <artifactId>lance-core</artifactId>
+        <version>${lance.version}</version>
+      </dependency>
+      <!-- Lance Spark for Arrow conversion -->
+      <dependency>
+        <groupId>com.lancedb</groupId>
+        <artifactId>${lance.spark.artifact}</artifactId>
+        <version>${lance.spark.connector.version}</version>
+        <exclusions>
+          <exclusion>
+            <groupId>com.lancedb</groupId>
+            <artifactId>lance-core</artifactId>
+          </exclusion>
+        </exclusions>
+      </dependency>
+      <!-- Apache Arrow -->
+      <dependency>
+        <groupId>org.apache.arrow</groupId>
+        <artifactId>arrow-vector</artifactId>
+        <version>${arrow.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.apache.arrow</groupId>
+        <artifactId>arrow-memory-netty</artifactId>
+        <version>${arrow.version}</version>
+      </dependency>
       <!-- RoaringBitmap -->
       <dependency>
         <groupId>org.roaringbitmap</groupId>
@@ -1497,6 +1581,10 @@
             <groupId>org.apache.hbase</groupId>
             <artifactId>*</artifactId>
           </exclusion>
+          <exclusion>
+            <groupId>org.codehaus.janino</groupId>
+            <artifactId>*</artifactId>
+          </exclusion>
         </exclusions>
       </dependency>
       <dependency>
@@ -1551,6 +1639,10 @@
           </exclusion>
           <exclusion>
             <groupId>org.apache.hbase</groupId>
+            <artifactId>*</artifactId>
+          </exclusion>
+          <exclusion>
+            <groupId>org.codehaus.janino</groupId>
             <artifactId>*</artifactId>
           </exclusion>
         </exclusions>
@@ -1648,9 +1740,14 @@
       </dependency>
       <dependency>
         <groupId>org.mockito</groupId>
-        <artifactId>mockito-inline</artifactId>
-        <scope>test</scope>
+        <artifactId>mockito-core</artifactId>
         <version>${mockito.jupiter.version}</version>
+        <scope>test</scope>
+      </dependency>
+      <dependency>
+        <groupId>net.bytebuddy</groupId>
+        <artifactId>byte-buddy-agent</artifactId>
+        <version>1.17.7</version>
       </dependency>
       <dependency>
         <groupId>org.junit.platform</groupId>
@@ -1824,6 +1921,12 @@
         <version>${testcontainers.version}</version>
         <scope>test</scope>
       </dependency>
+      <dependency>
+        <groupId>org.testcontainers</groupId>
+        <artifactId>kafka</artifactId>
+        <version>${testcontainers.version}</version>
+        <scope>test</scope>
+      </dependency>
 
       <!-- Lombok -->
       <dependency>
@@ -1899,7 +2002,10 @@
               </execution>
             </executions>
             <configuration>
+              <source>11</source>
               <doclint>none</doclint>
+              <failOnWarnings>false</failOnWarnings>
+              <failOnError>false</failOnError>
             </configuration>
           </plugin>
           <plugin>
@@ -2454,6 +2560,9 @@
         <!-- This glob has to include hudi-spark3-common, hudi-spark3.2plus-common -->
         <hudi.spark.common.module>hudi-spark3-common</hudi.spark.common.module>
         <kafka.version>2.8.1</kafka.version>
+        <!-- Lance: Skip tests for Spark 3.3 due to lack of support -->
+        <lance.spark.artifact>lance-spark-base_${scala.binary.version}</lance.spark.artifact>
+        <lance.skip.tests>true</lance.skip.tests>
         <!-- NOTE: Some Hudi modules require standalone Parquet/Orc/etc file-format dependency (hudi-hive-sync,
                    hudi-hadoop-mr, for ex). Since these Hudi modules might be used from w/in the execution engine(s)
                    bringing these file-formats as dependencies as well, we need to make sure that versions are
@@ -2495,6 +2604,9 @@
         <hudi.spark.common.module>hudi-spark3-common</hudi.spark.common.module>
         <scalatest.version>${scalatest.spark3.version}</scalatest.version>
         <kafka.version>3.3.2</kafka.version>
+        <!-- Lance: Use Spark 3.4-specific artifact -->
+        <lance.spark.artifact>lance-spark-3.4_${scala.binary.version}</lance.spark.artifact>
+        <lance.skip.tests>true</lance.skip.tests>
         <!-- NOTE: Some Hudi modules require standalone Parquet/Orc/etc file-format dependency (hudi-hive-sync,
                    hudi-hadoop-mr, for ex). Since these Hudi modules might be used from w/in the execution engine(s)
                    bringing these file-formats as dependencies as well, we need to make sure that versions are
@@ -2546,6 +2658,9 @@
         <scalatest.version>${scalatest.spark3.version}</scalatest.version>
         <kafka.version>3.4.1</kafka.version>
         <hive.storage.version>2.8.1</hive.storage.version>
+        <!-- Lance: Use Spark 3.5-specific artifact -->
+        <lance.spark.artifact>lance-spark-3.5_${scala.binary.version}</lance.spark.artifact>
+        <lance.skip.tests>false</lance.skip.tests>
         <!-- NOTE: Some Hudi modules require standalone Parquet/Orc/etc file-format dependency (hudi-hive-sync,
                    hudi-hadoop-mr, for ex). Since these Hudi modules might be used from w/in the execution engine(s)
                    bringing these file-formats as dependencies as well, we need to make sure that versions are
@@ -2605,6 +2720,9 @@
         <hadoop.version>3.4.0</hadoop.version>
         <kafka.version>3.8.0</kafka.version>
         <hive.storage.version>2.8.1</hive.storage.version>
+        <!-- Lance: Use Spark 4.0-specific artifact (Scala 2.13 only) -->
+        <lance.spark.artifact>lance-spark-4.0_2.13</lance.spark.artifact>
+        <lance.skip.tests>false</lance.skip.tests>
         <!-- NOTE: Some Hudi modules require standalone Parquet/Orc/etc file-format dependency (hudi-hive-sync,
                    hudi-hadoop-mr, for ex). Since these Hudi modules might be used from w/in the execution engine(s)
                    bringing these file-formats as dependencies as well, we need to make sure that versions are
@@ -2623,7 +2741,6 @@
         <glassfish.version>3.0.12</glassfish.version>
         <log4j2.version>2.20.0</log4j2.version>
         <slf4j.version>2.0.7</slf4j.version>
-        <skip.hudi-spark2.unit.tests>true</skip.hudi-spark2.unit.tests>
         <skipITs>true</skipITs>
       </properties>
       <modules>
@@ -2650,6 +2767,28 @@
       </activation>
     </profile>
 
+    <profile>
+      <id>flink2.1</id>
+      <properties>
+        <flink.version>${flink2.1.version}</flink.version>
+        <hudi.flink.module>hudi-flink2.1.x</hudi.flink.module>
+        <flink.bundle.version>2.1</flink.bundle.version>
+        <!-- check kafka version -->
+        <flink.connector.kafka.version>4.0.1-2.0</flink.connector.kafka.version>
+        <orc.flink.version>1.5.6</orc.flink.version>
+        <flink.avro.version>1.11.4</flink.avro.version>
+        <flink.format.parquet.version>1.15.2</flink.format.parquet.version>
+        <flink.hadoop.compatibility.artifactId>flink-hadoop-compatibility</flink.hadoop.compatibility.artifactId>
+      </properties>
+      <modules>
+        <module>hudi-flink-datasource/hudi-flink2.1.x</module>
+      </modules>
+      <activation>
+        <property>
+          <name>flink2.1</name>
+        </property>
+      </activation>
+    </profile>
     <profile>
       <id>flink2.0</id>
       <properties>
@@ -2770,15 +2909,24 @@
       </activation>
     </profile>
 
+    <!-- Java 11+ profile: adds module system flags and uses Parallel GC for faster test execution -->
+    <profile>
+      <id>java11</id>
+      <properties>
+        <argLine>-Xmx2g -Xms512m -XX:+UseParallelGC --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.lang.invoke=ALL-UNNAMED --add-opens=java.base/java.lang.reflect=ALL-UNNAMED --add-opens=java.base/java.io=ALL-UNNAMED --add-opens=java.base/java.net=ALL-UNNAMED --add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/java.util=ALL-UNNAMED --add-opens=java.base/java.util.concurrent=ALL-UNNAMED --add-opens=java.base/java.util.concurrent.atomic=ALL-UNNAMED --add-opens=java.base/sun.nio.ch=ALL-UNNAMED --add-opens=java.base/sun.nio.cs=ALL-UNNAMED --add-opens=java.base/sun.security.action=ALL-UNNAMED --add-opens=java.base/sun.util.calendar=ALL-UNNAMED --add-opens=java.security.jgss/sun.security.krb5=ALL-UNNAMED -XX:-OmitStackTraceInFastThrow</argLine>
+      </properties>
+      <activation>
+        <jdk>[11,17)</jdk>
+      </activation>
+    </profile>
+
     <profile>
       <id>java17</id>
       <properties>
-        <argLine>-Xmx2g --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.lang.invoke=ALL-UNNAMED --add-opens=java.base/java.lang.reflect=ALL-UNNAMED --add-opens=java.base/java.io=ALL-UNNAMED --add-opens=java.base/java.net=ALL-UNNAMED --add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/java.util=ALL-UNNAMED --add-opens=java.base/java.util.concurrent=ALL-UNNAMED --add-opens=java.base/java.util.concurrent.atomic=ALL-UNNAMED --add-opens=java.base/sun.nio.ch=ALL-UNNAMED --add-opens=java.base/sun.nio.cs=ALL-UNNAMED --add-opens=java.base/sun.security.action=ALL-UNNAMED --add-opens=java.base/sun.util.calendar=ALL-UNNAMED --add-opens=java.security.jgss/sun.security.krb5=ALL-UNNAMED -Djol.magicFieldOffset=true -XX:-OmitStackTraceInFastThrow</argLine>
+        <argLine>-Xmx2g -Xms512m -XX:+UseParallelGC --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.lang.invoke=ALL-UNNAMED --add-opens=java.base/java.lang.reflect=ALL-UNNAMED --add-opens=java.base/java.io=ALL-UNNAMED --add-opens=java.base/java.net=ALL-UNNAMED --add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/java.util=ALL-UNNAMED --add-opens=java.base/java.util.concurrent=ALL-UNNAMED --add-opens=java.base/java.util.concurrent.atomic=ALL-UNNAMED --add-opens=java.base/sun.nio.ch=ALL-UNNAMED --add-opens=java.base/sun.nio.cs=ALL-UNNAMED --add-opens=java.base/sun.security.action=ALL-UNNAMED --add-opens=java.base/sun.util.calendar=ALL-UNNAMED --add-opens=java.security.jgss/sun.security.krb5=ALL-UNNAMED -Djol.magicFieldOffset=true -XX:-OmitStackTraceInFastThrow</argLine>
       </properties>
       <activation>
-        <property>
-          <name>java17</name>
-        </property>
+        <jdk>[17,)</jdk>
       </activation>
     </profile>
 

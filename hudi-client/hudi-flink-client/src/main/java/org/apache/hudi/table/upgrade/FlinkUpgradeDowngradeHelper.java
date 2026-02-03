@@ -27,16 +27,17 @@ import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.table.HoodieFlinkTable;
 import org.apache.hudi.table.HoodieTable;
 
+import lombok.AccessLevel;
+import lombok.NoArgsConstructor;
+
 /**
  * Flink upgrade and downgrade helper.
  */
+@NoArgsConstructor(access = AccessLevel.PRIVATE)
 public class FlinkUpgradeDowngradeHelper implements SupportsUpgradeDowngrade {
 
   private static final FlinkUpgradeDowngradeHelper SINGLETON_INSTANCE =
       new FlinkUpgradeDowngradeHelper();
-
-  private FlinkUpgradeDowngradeHelper() {
-  }
 
   public static FlinkUpgradeDowngradeHelper getInstance() {
     return SINGLETON_INSTANCE;

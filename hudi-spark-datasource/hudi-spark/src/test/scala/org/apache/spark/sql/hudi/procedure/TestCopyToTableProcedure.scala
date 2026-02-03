@@ -17,7 +17,8 @@
 
 package org.apache.spark.sql.hudi.procedure
 
-import org.apache.hudi.hadoop.fs.HadoopFSUtils
+import org.apache.hudi.common.testutils.HoodieTestUtils
+import org.apache.hudi.storage.StoragePath
 import org.apache.hudi.testutils.DataSourceTestUtils
 
 import org.apache.spark.sql.Row
@@ -192,11 +193,11 @@ class TestCopyToTableProcedure extends HoodieSparkProcedureTestBase {
       spark.sql(s"insert into $tableName select 2, 'a2', 20, 1500")
 
       // mark startCompletionTime
-      val fs = HadoopFSUtils.getFs(tablePath, spark.sessionState.newHadoopConf())
-      val startCompletionTime = DataSourceTestUtils.latestCommitCompletionTime(fs, tablePath)
+      val storage = HoodieTestUtils.getStorage(new StoragePath(tablePath))
+      val startCompletionTime = DataSourceTestUtils.latestCommitCompletionTime(storage, tablePath)
       spark.sql(s"insert into $tableName select 3, 'a3', 30, 2000")
       spark.sql(s"insert into $tableName select 4, 'a4', 40, 2500")
-      val endCompletionTime = DataSourceTestUtils.latestCommitCompletionTime(fs, tablePath)
+      val endCompletionTime = DataSourceTestUtils.latestCommitCompletionTime(storage, tablePath)
 
       val copyTableName = generateTableName
       // Check required fields

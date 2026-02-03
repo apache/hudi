@@ -23,24 +23,20 @@ import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.bloom.BloomFilterFactory;
 import org.apache.hudi.common.util.StringUtils;
 
+import lombok.NoArgsConstructor;
+
 import java.util.HashMap;
 import java.util.Map;
 
 import static org.apache.hudi.avro.HoodieBloomFilterWriteSupport.HOODIE_AVRO_BLOOM_FILTER_METADATA_KEY;
 
+@NoArgsConstructor
 public class HoodieFileMetadataMerger {
 
   private final HashMap<String, String> mergedMetadata = new HashMap<>();
-
   private BloomFilter bloomFilter;
-
   private String minRecordKey;
-
   private String maxRecordKey;
-
-  public HoodieFileMetadataMerger() {
-
-  }
 
   public Map<String, String> mergeMetaData(Map<String, String> metaMap) {
     mergedMetadata.putAll(metaMap);

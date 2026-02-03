@@ -19,15 +19,14 @@
 
 package org.apache.hudi.functional;
 
-import org.apache.hudi.AvroConversionUtils;
 import org.apache.hudi.DefaultSparkRecordMerger;
+import org.apache.hudi.HoodieSchemaConversionUtils;
 import org.apache.hudi.OverwriteWithLatestSparkRecordMerger;
 import org.apache.hudi.avro.HoodieAvroReaderContext;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.engine.RecordContext;
-import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.model.HoodieAvroRecordMerger;
 import org.apache.hudi.common.model.HoodieEmptyRecord;
@@ -38,6 +37,7 @@ import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.HoodieSparkRecord;
 import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.schema.HoodieSchemaType;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.PartialUpdateMode;
@@ -59,7 +59,6 @@ import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness;
 
-import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
@@ -67,13 +66,14 @@ import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.sql.catalyst.expressions.GenericInternalRow;
 import org.apache.spark.sql.types.StructType;
 import org.apache.spark.unsafe.types.UTF8String;
-import org.jetbrains.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
+
+import javax.annotation.Nullable;
 
 import java.io.IOException;
 import java.util.Arrays;
@@ -106,7 +106,7 @@ class TestBufferedRecordMerger extends SparkClientFunctionalTestHarness {
       getSchema4(),
       getSchema5(),
       getSchema6());
-  private static final Schema READER_SCHEMA = getSchema6().toAvroSchema();
+  private static final HoodieSchema READER_SCHEMA = getSchema6();
   private HoodieTableConfig tableConfig;
   private StorageConfiguration<?> storageConfig;
   private TypedProperties props;
@@ -622,7 +622,7 @@ class TestBufferedRecordMerger extends SparkClientFunctionalTestHarness {
     avroReaderContext.setHasBootstrapBaseFile(false);
     HoodieTableMetaClient metaClient = mock(HoodieTableMetaClient.class);
     when(metaClient.getTableConfig()).thenReturn(tableConfig);
-    avroReaderContext.setSchemaHandler(new FileGroupReaderSchemaHandler<>(avroReaderContext, customSchema.toAvroSchema(), customSchema.toAvroSchema(), Option.empty(), props, metaClient));
+    avroReaderContext.setSchemaHandler(new FileGroupReaderSchemaHandler<>(avroReaderContext, customSchema, customSchema, Option.empty(), props, metaClient));
     avroReaderContext.getRecordContext().encodeSchema(customSchema);
 
     BufferedRecordMerger<IndexedRecord> merger = BufferedRecordMergerFactory.create(
@@ -631,7 +631,7 @@ class TestBufferedRecordMerger extends SparkClientFunctionalTestHarness {
         false,
         recordMerger,
         payloadClassName,
-        customSchema.toAvroSchema(),
+        customSchema,
         props,
         Option.empty());
 
@@ -930,7 +930,7 @@ class TestBufferedRecordMerger extends SparkClientFunctionalTestHarness {
 
     @Override
     public Object getValue(InternalRow record, HoodieSchema schema, String fieldName) {
-      return getFieldValueFromInternalRow(record, schema.toAvroSchema(), fieldName);
+      return getFieldValueFromInternalRow(record, schema, fieldName);
     }
 
     @Override
@@ -949,7 +949,7 @@ class TestBufferedRecordMerger extends SparkClientFunctionalTestHarness {
 
       HoodieSchema schema = getSchemaFromBufferRecord(bufferedRecord);
       InternalRow row = bufferedRecord.getRecord();
-      StructType sparkSchema = AvroConversionUtils.convertAvroSchemaToStructType(schema.toAvroSchema());
+      StructType sparkSchema = HoodieSchemaConversionUtils.convertHoodieSchemaToStructType(schema);
       return new HoodieSparkRecord(hoodieKey, row, sparkSchema, false);
     }
 
@@ -1039,15 +1039,15 @@ class TestBufferedRecordMerger extends SparkClientFunctionalTestHarness {
     }
   }
 
-  public static void assertRowEqual(InternalRow expected, InternalRow actual, Schema schema) {
+  public static void assertRowEqual(InternalRow expected, InternalRow actual, HoodieSchema schema) {
     assertRowEqualsRecursive(expected, actual, schema.getFields(), "");
   }
 
   private static void assertRowEqualsRecursive(InternalRow expected, InternalRow actual,
-                                               List<Schema.Field> fields, String pathPrefix) {
+                                               List<HoodieSchemaField> fields, String pathPrefix) {
     for (int i = 0; i < fields.size(); i++) {
-      Schema.Field field = fields.get(i);
-      Schema fieldSchema = getNonNullSchema(field.schema());
+      HoodieSchemaField field = fields.get(i);
+      HoodieSchema fieldSchema = field.schema().getNonNullType();
       String path = pathPrefix + field.name();
 
       if (expected.isNullAt(i) || actual.isNullAt(i)) {
@@ -1085,16 +1085,5 @@ class TestBufferedRecordMerger extends SparkClientFunctionalTestHarness {
           throw new UnsupportedOperationException("Unsupported type: " + fieldSchema.getType() + " at " + path);
       }
     }
-  }
-
-  private static Schema getNonNullSchema(Schema schema) {
-    if (schema.getType() == Schema.Type.UNION) {
-      for (Schema s : schema.getTypes()) {
-        if (s.getType() != Schema.Type.NULL) {
-          return s;
-        }
-      }
-    }
-    return schema;
   }
 }

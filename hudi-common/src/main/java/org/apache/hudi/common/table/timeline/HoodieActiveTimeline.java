@@ -46,7 +46,7 @@ public interface HoodieActiveTimeline extends HoodieTimeline {
 
   /**
    * Return Valid extensions expected in active timeline.
-   * @return
+   * @return {@link Set<String>} of extensions that are valid in active timeline.
    */
   Set<String> getValidExtensionsInActiveTimeline();
 
@@ -158,7 +158,7 @@ public interface HoodieActiveTimeline extends HoodieTimeline {
   /**
    * Read cleaner Info from instant file.
    * @param instant Instant to read from.
-   * @return
+   * @return {@link Option} of read bytes
    */
   Option<byte[]> readCleanerInfoAsBytes(HoodieInstant instant);
 
@@ -169,7 +169,7 @@ public interface HoodieActiveTimeline extends HoodieTimeline {
   /**
    * Read compaction Plan from instant file.
    * @param instant Instant to read from.
-   * @return
+   * @return {@link Option} of read bytes
    */
   Option<byte[]> readCompactionPlanAsBytes(HoodieInstant instant);
 
@@ -421,7 +421,7 @@ public interface HoodieActiveTimeline extends HoodieTimeline {
 
   /**
    * Reloads timeline from storage
-   * @return
+   * @return {@link HoodieActiveTimeline}
    */
   HoodieActiveTimeline reload();
 
@@ -434,7 +434,7 @@ public interface HoodieActiveTimeline extends HoodieTimeline {
 
   /**
    * Valid Extensions in active timeline.
-   * @return
+   * @return {@link Set<String>} of valid extensions.
    */
   Set<String> getValidExtensions();
 }

@@ -180,8 +180,8 @@ public class CloudObjectsSelector {
    * Create partitions of list using specific batch size. we can't use third party API for this
    * functionality, due to https://github.com/apache/hudi/blob/master/style/checkstyle.xml#L270
    */
-  protected List<List<Message>> createListPartitions(List<Message> singleList, int eachBatchSize) {
-    List<List<Message>> listPartitions = new ArrayList<>();
+  protected List<List<MessageTracker>> createListPartitions(List<MessageTracker> singleList, int eachBatchSize) {
+    List<List<MessageTracker>> listPartitions = new ArrayList<>();
     if (singleList.size() == 0 || eachBatchSize < 1) {
       return listPartitions;
     }
@@ -199,18 +199,18 @@ public class CloudObjectsSelector {
   /**
    * Delete batch of messages from queue.
    */
-  protected void deleteBatchOfMessages(SqsClient sqs, String queueUrl, List<Message> messagesToBeDeleted) {
+  protected void deleteBatchOfMessages(SqsClient sqs, String queueUrl, List<MessageTracker> messagesToBeDeleted) {
     if (messagesToBeDeleted.isEmpty()) {
       return;
     }
     DeleteMessageBatchRequest.Builder builder = DeleteMessageBatchRequest.builder().queueUrl(queueUrl);
     List<DeleteMessageBatchRequestEntry> deleteEntries = new ArrayList<>();
 
-    for (Message message : messagesToBeDeleted) {
+    for (MessageTracker message : messagesToBeDeleted) {
       deleteEntries.add(
           DeleteMessageBatchRequestEntry.builder()
-                  .id(message.messageId())
-                  .receiptHandle(message.receiptHandle())
+                  .id(message.messageId)
+                  .receiptHandle(message.receiptHandle)
                   .build());
     }
     builder.entries(deleteEntries);
@@ -223,20 +223,21 @@ public class CloudObjectsSelector {
       log.warn(
           "Failed to delete {} messages out of {} from queue.", deleteFailures.size(), deleteEntries.size());
     } else {
-      log.info("Successfully deleted {} messages from queue.", deleteEntries.size());
+      log.debug("Successfully deleted {} messages from queue.", deleteEntries.size());
     }
   }
 
   /**
    * Delete Queue Messages after hudi commit. This method will be invoked by source.onCommit.
    */
-  public void deleteProcessedMessages(SqsClient sqs, String queueUrl, List<Message> processedMessages) {
+  public void deleteProcessedMessages(SqsClient sqs, String queueUrl, List<MessageTracker> processedMessages) {
     if (!processedMessages.isEmpty()) {
       // create batch for deletion, SES DeleteMessageBatchRequest only accept max 10 entries
-      List<List<Message>> deleteBatches = createListPartitions(processedMessages, 10);
-      for (List<Message> deleteBatch : deleteBatches) {
+      List<List<MessageTracker>> deleteBatches = createListPartitions(processedMessages, 10);
+      for (List<MessageTracker> deleteBatch : deleteBatches) {
         deleteBatchOfMessages(sqs, queueUrl, deleteBatch);
       }
+      log.info("Deleted {} processed messages from queue.", processedMessages.size());
     }
   }
 
@@ -295,5 +296,15 @@ public class CloudObjectsSelector {
      */
     @Deprecated
     public static final String SOURCE_INPUT_SELECTOR = DFSPathSelectorConfig.SOURCE_INPUT_SELECTOR.key();
+  }
+
+  public static class MessageTracker {
+    private final String messageId;
+    private final String receiptHandle;
+
+    MessageTracker(Message message) {
+      this.messageId = message.messageId();
+      this.receiptHandle = message.receiptHandle();
+    }
   }
 }

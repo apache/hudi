@@ -22,7 +22,6 @@ import org.apache.hudi.avro.AvroRecordContext;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.config.HoodieMemoryConfig;
-import org.apache.hudi.common.config.HoodieReaderConfig;
 import org.apache.hudi.common.engine.RecordContext;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieAvroRecordMerger;
@@ -34,7 +33,7 @@ import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.table.read.BufferedRecords;
 import org.apache.hudi.common.table.read.DeleteContext;
 import org.apache.hudi.common.util.ConfigUtils;
-import org.apache.hudi.common.util.FileIOUtils;
+import org.apache.hudi.io.util.FileIOUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.hadoop.utils.HiveAvroSerializer;
@@ -86,7 +85,7 @@ public class RealtimeCompactedRecordReader extends AbstractRealtimeRecordReader
         .map(HoodieVirtualKeyInfo::getRecordKeyFieldIndex)
         .orElse(HoodieInputFormatUtils.HOODIE_RECORD_KEY_COL_POS);
     this.orderingFields = ConfigUtils.getOrderingFields(payloadProps);
-    HoodieSchema logScannerReaderSchema = HoodieSchema.fromAvroSchema(getLogScannerReaderSchema());
+    HoodieSchema logScannerReaderSchema = getLogScannerReaderSchema();
     this.deleteContext = new DeleteContext(payloadProps, logScannerReaderSchema).withReaderSchema(logScannerReaderSchema);
   }
 
@@ -114,8 +113,6 @@ public class RealtimeCompactedRecordReader extends AbstractRealtimeRecordReader
         .withDiskMapType(jobConf.getEnum(HoodieCommonConfig.SPILLABLE_DISK_MAP_TYPE.key(), HoodieCommonConfig.SPILLABLE_DISK_MAP_TYPE.defaultValue()))
         .withBitCaskDiskMapCompressionEnabled(jobConf.getBoolean(HoodieCommonConfig.DISK_MAP_BITCASK_COMPRESSION_ENABLED.key(),
             HoodieCommonConfig.DISK_MAP_BITCASK_COMPRESSION_ENABLED.defaultValue()))
-        .withOptimizedLogBlocksScan(jobConf.getBoolean(HoodieReaderConfig.ENABLE_OPTIMIZED_LOG_BLOCKS_SCAN.key(),
-            Boolean.parseBoolean(HoodieReaderConfig.ENABLE_OPTIMIZED_LOG_BLOCKS_SCAN.defaultValue())))
         .withInternalSchema(schemaEvolutionContext.internalSchemaOption.orElse(InternalSchema.getEmptyInternalSchema()))
         .build();
   }
@@ -169,12 +166,12 @@ public class RealtimeCompactedRecordReader extends AbstractRealtimeRecordReader
     if (usesCustomPayload) {
       // If using a custom payload, return only the projection fields. The readerSchema is a schema derived from
       // the writerSchema with only the projection fields
-      recordToReturn = HoodieAvroUtils.rewriteRecord((GenericRecord) rec.get().getData(), getReaderSchema());
+      recordToReturn = HoodieAvroUtils.rewriteRecord((GenericRecord) rec.get().getData(), getReaderSchema().toAvroSchema());
     }
     // we assume, a later safe record in the log, is newer than what we have in the map &
     // replace it. Since we want to return an arrayWritable which is the same length as the elements in the latest
     // schema, we use writerSchema to create the arrayWritable from the latest generic record
-    ArrayWritable aWritable = (ArrayWritable) HoodieRealtimeRecordReaderUtils.avroToArrayWritable(recordToReturn, getHiveSchema(), isSupportTimestamp());
+    ArrayWritable aWritable = (ArrayWritable) HoodieRealtimeRecordReaderUtils.avroToArrayWritable(recordToReturn, getHiveSchema().toAvroSchema(), isSupportTimestamp());
     Writable[] replaceValue = aWritable.get();
     if (LOG.isDebugEnabled()) {
       LOG.debug(String.format("key %s, base values: %s, log values: %s", key, HoodieRealtimeRecordReaderUtils.arrayWritableToString(arrayWritable),
@@ -208,7 +205,7 @@ public class RealtimeCompactedRecordReader extends AbstractRealtimeRecordReader
     GenericRecord genericRecord = HiveAvroSerializer.rewriteRecordIgnoreResultCheck(oldRecord, getLogScannerReaderSchema());
     RecordContext<IndexedRecord> recordContext = AvroRecordContext.getFieldAccessorInstance();
     BufferedRecord record = BufferedRecords.fromEngineRecord(genericRecord, HoodieSchema.fromAvroSchema(genericRecord.getSchema()), recordContext, orderingFields, newRecord.getRecordKey(), false);
-    BufferedRecord newBufferedRecord = BufferedRecords.fromHoodieRecord(newRecord, HoodieSchema.fromAvroSchema(getLogScannerReaderSchema()),
+    BufferedRecord newBufferedRecord = BufferedRecords.fromHoodieRecord(newRecord, HoodieSchema.fromAvroSchema(getLogScannerReaderSchema().toAvroSchema()),
         recordContext, payloadProps, orderingFields, deleteContext);
     BufferedRecord mergeResult = merger.merge(record, newBufferedRecord, recordContext, payloadProps);
     if (mergeResult.isDelete()) {

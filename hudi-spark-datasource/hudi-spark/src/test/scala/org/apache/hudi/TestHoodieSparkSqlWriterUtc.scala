@@ -52,7 +52,7 @@ class TestHoodieSparkSqlWriterUtc extends HoodieSparkWriterTestBase {
 
       // generate the inserts
       val schema = DataSourceTestUtils.getStructTypeExampleSchema
-      val structType = AvroConversionUtils.convertAvroSchemaToStructType(schema)
+      val structType = HoodieSchemaConversionUtils.convertHoodieSchemaToStructType(schema)
       val records = DataSourceTestUtils.generateRandomRows(100)
       val recordsSeq = convertRowListToSeq(records)
       val df = spark.createDataFrame(sc.parallelize(recordsSeq), structType)

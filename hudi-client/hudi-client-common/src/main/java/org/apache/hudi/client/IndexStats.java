@@ -20,6 +20,9 @@ package org.apache.hudi.client;
 
 import org.apache.hudi.common.model.HoodieRecordDelegate;
 
+import lombok.Getter;
+import lombok.Setter;
+
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -30,6 +33,8 @@ import java.util.Map;
  * Class to hold all index stats required to generate Metadata records for all enabled partitions.
  * Supported stats are record level index stats and secondary index stats.
  */
+@Getter
+@Setter
 public class IndexStats implements Serializable {
   private static final long serialVersionUID = 1L;
 
@@ -40,10 +45,6 @@ public class IndexStats implements Serializable {
     this.writtenRecordDelegates.add(hoodieRecordDelegate);
   }
 
-  public List<HoodieRecordDelegate> getWrittenRecordDelegates() {
-    return writtenRecordDelegates;
-  }
-
   public void initSecondaryIndexStats(String secondaryIndexPartitionPath) {
     secondaryIndexStats.put(secondaryIndexPartitionPath, new ArrayList<>());
   }
@@ -51,17 +52,5 @@ public class IndexStats implements Serializable {
   public void addSecondaryIndexStats(String secondaryIndexPartitionPath, String recordKey, String secondaryIndexValue, boolean isDeleted) {
     secondaryIndexStats.computeIfAbsent(secondaryIndexPartitionPath, k -> new ArrayList<>())
         .add(new SecondaryIndexStats(recordKey, secondaryIndexValue, isDeleted));
-  }
-
-  public Map<String, List<SecondaryIndexStats>> getSecondaryIndexStats() {
-    return secondaryIndexStats;
-  }
-
-  public void setWrittenRecordDelegates(List<HoodieRecordDelegate> writtenRecordDelegates) {
-    this.writtenRecordDelegates = writtenRecordDelegates;
-  }
-
-  public void setSecondaryIndexStats(Map<String, List<SecondaryIndexStats>> secondaryIndexStats) {
-    this.secondaryIndexStats = secondaryIndexStats;
   }
 }

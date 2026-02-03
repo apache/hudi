@@ -26,10 +26,9 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieValidationException;
 import org.apache.hudi.table.HoodieSparkTable;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SQLContext;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.List;
 
@@ -39,8 +38,8 @@ import java.util.List;
  * <p>
  * Example configuration: "query1#expectedResult1;query2#expectedResult2;"
  */
+@Slf4j
 public class SqlQuerySingleResultPreCommitValidator<T, I, K, O extends HoodieData<WriteStatus>> extends SqlQueryPreCommitValidator<T, I, K, O> {
-  private static final Logger LOG = LoggerFactory.getLogger(SqlQuerySingleResultPreCommitValidator.class);
 
   public SqlQuerySingleResultPreCommitValidator(HoodieSparkTable<T> table, HoodieEngineContext engineContext, HoodieWriteConfig config) {
     super(table, engineContext, config);
@@ -67,11 +66,11 @@ public class SqlQuerySingleResultPreCommitValidator<T, I, K, O extends HoodieDat
     }
     Object result = newRows.get(0).apply(0);
     if (result == null || !expectedResult.equals(result.toString())) {
-      LOG.error("Mismatch query result. Expected: " + expectedResult + " got " + result + " on Query: " + query);
+      log.error("Mismatch query result. Expected: " + expectedResult + " got " + result + " on Query: " + query);
       throw new HoodieValidationException("Query validation failed for '" + query
           + "'. Expected " + expectedResult + " row(s), Found " + result);
     } else {
-      LOG.info("Query validation successful. Expected: " + expectedResult + " got " + result);
+      log.info("Query validation successful. Expected: " + expectedResult + " got " + result);
     }
   }
 }

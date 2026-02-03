@@ -29,9 +29,8 @@ import org.apache.hudi.sync.common.util.ManifestFileWriter;
 
 import com.beust.jcommander.JCommander;
 import com.google.cloud.bigquery.Schema;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.hadoop.conf.Configuration;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.Collections;
 import java.util.List;
@@ -53,9 +52,9 @@ import static org.apache.hudi.gcp.bigquery.BigQuerySyncConfig.BIGQUERY_SYNC_USE_
  *
  * @Experimental
  */
+@Slf4j
 public class BigQuerySyncTool extends HoodieSyncTool {
 
-  private static final Logger LOG = LoggerFactory.getLogger(BigQuerySyncTool.class);
   private static final String SUFFIX_MANIFEST = "_manifest";
   private static final String SUFFIX_VERSIONS = "_versions";
 
@@ -124,14 +123,14 @@ public class BigQuerySyncTool extends HoodieSyncTool {
 
   private boolean tableExists(HoodieBigQuerySyncClient bqSyncClient, String tableName) {
     if (bqSyncClient.tableExists(tableName)) {
-      LOG.info("{} already exists. Skip table creation.", tableName);
+      log.info("{} already exists. Skip table creation.", tableName);
       return true;
     }
     return false;
   }
 
   private void syncTable(HoodieBigQuerySyncClient bqSyncClient) {
-    LOG.info("Sync hoodie table {} at base path {}", snapshotViewName, bqSyncClient.getBasePath());
+    log.info("Sync hoodie table {} at base path {}", snapshotViewName, bqSyncClient.getBasePath());
 
     if (!bqSyncClient.datasetExists()) {
       throw new HoodieBigQuerySyncException("Dataset not found: " + config.getString(BIGQUERY_SYNC_DATASET_NAME));
@@ -149,13 +148,13 @@ public class BigQuerySyncTool extends HoodieSyncTool {
             manifestFileWriter.getManifestSourceUri(true),
             config.getString(BIGQUERY_SYNC_SOURCE_URI_PREFIX),
             latestSchema);
-        LOG.info("Completed table {} creation using the manifest file", tableName);
+        log.info("Completed table {} creation using the manifest file", tableName);
       } else {
         bqSyncClient.updateTableSchema(tableName, latestSchema, partitionFields);
-        LOG.info("Synced schema for {}", tableName);
+        log.info("Synced schema for {}", tableName);
       }
 
-      LOG.info("Sync table complete for {}", tableName);
+      log.info("Sync table complete for {}", tableName);
       return;
     }
 
@@ -163,7 +162,7 @@ public class BigQuerySyncTool extends HoodieSyncTool {
 
     if (!tableExists(bqSyncClient, manifestTableName)) {
       bqSyncClient.createManifestTable(manifestTableName, manifestFileWriter.getManifestSourceUri(false));
-      LOG.info("Manifest table creation complete for {}", manifestTableName);
+      log.info("Manifest table creation complete for {}", manifestTableName);
     }
 
     if (!tableExists(bqSyncClient, versionsTableName)) {
@@ -172,15 +171,15 @@ public class BigQuerySyncTool extends HoodieSyncTool {
           config.getString(BIGQUERY_SYNC_SOURCE_URI),
           config.getString(BIGQUERY_SYNC_SOURCE_URI_PREFIX),
           config.getSplitStrings(BIGQUERY_SYNC_PARTITION_FIELDS));
-      LOG.info("Versions table creation complete for {}", versionsTableName);
+      log.info("Versions table creation complete for {}", versionsTableName);
     }
 
     if (!tableExists(bqSyncClient, snapshotViewName)) {
       bqSyncClient.createSnapshotView(snapshotViewName, versionsTableName, manifestTableName);
-      LOG.info("Snapshot view creation complete for {}", snapshotViewName);
+      log.info("Snapshot view creation complete for {}", snapshotViewName);
     }
 
-    LOG.info("Sync table complete for {}", snapshotViewName);
+    log.info("Sync table complete for {}", snapshotViewName);
   }
 
   @Override

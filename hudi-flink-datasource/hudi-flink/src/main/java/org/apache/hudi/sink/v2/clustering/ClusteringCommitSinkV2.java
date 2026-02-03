@@ -42,13 +42,12 @@ import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.util.ClusteringUtil;
 import org.apache.hudi.util.FlinkWriteClients;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.metrics.MetricGroup;
 import org.apache.flink.streaming.api.functions.ProcessFunction;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.util.Collector;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.Collection;
 import java.util.HashMap;
@@ -71,8 +70,8 @@ import java.util.stream.Collectors;
  * <p>Note: The difference with {@code ClusteringCommitSink} is {@code ClusteringCommitSinkV2}
  * extends {@code ProcessFunction}, while {@code ClusteringCommitSink} is a {@code SinkFunction}.
  */
+@Slf4j
 public class ClusteringCommitSinkV2 extends CleanFunctionV2<ClusteringCommitEvent> {
-  private static final Logger LOG = LoggerFactory.getLogger(ClusteringCommitSinkV2.class);
 
   /**
    * Config options.
@@ -124,7 +123,7 @@ public class ClusteringCommitSinkV2 extends CleanFunctionV2<ClusteringCommitEven
     if (event.isFailed()
         || (event.getWriteStatuses() != null
         && event.getWriteStatuses().stream().anyMatch(writeStatus -> writeStatus.getTotalErrorRecords() > 0))) {
-      LOG.warn("Received abnormal ClusteringCommitEvent of instant {}, task ID is {},"
+      log.warn("Received abnormal ClusteringCommitEvent of instant {}, task ID is {},"
               + " is failed: {}, error record count: {}",
           instant, event.getTaskID(), event.isFailed(), getNumErrorRecords(event));
     }
@@ -186,7 +185,7 @@ public class ClusteringCommitSinkV2 extends CleanFunctionV2<ClusteringCommitEven
       doCommit(instant, clusteringPlan, events);
     } catch (Throwable throwable) {
       // make it fail-safe
-      LOG.error("Error while committing clustering instant: " + instant, throwable);
+      log.error("Error while committing clustering instant: " + instant, throwable);
     } finally {
       // reset the status
       reset(instant);
@@ -203,7 +202,7 @@ public class ClusteringCommitSinkV2 extends CleanFunctionV2<ClusteringCommitEven
 
     if (numErrorRecords > 0 && !this.conf.get(FlinkOptions.IGNORE_FAILED)) {
       // handle failure case
-      LOG.error("Got {} error records during clustering of instant {},\n"
+      log.error("Got {} error records during clustering of instant {},\n"
           + "option '{}' is configured as false,"
           + "rolls back the clustering", numErrorRecords, instant, FlinkOptions.IGNORE_FAILED.key());
       ClusteringUtil.rollbackClustering(table, writeClient, instant);
@@ -232,7 +231,7 @@ public class ClusteringCommitSinkV2 extends CleanFunctionV2<ClusteringCommitEven
     clusteringMetrics.updateCommitMetrics(instant, writeMetadata.getCommitMetadata().get());
     // whether to clean up the input base parquet files used for clustering
     if (!conf.get(FlinkOptions.CLEAN_ASYNC_ENABLED) && !isCleaning) {
-      LOG.info("Running inline clean");
+      log.info("Running inline clean");
       this.writeClient.clean();
     }
   }

@@ -40,10 +40,11 @@ import org.apache.hudi.sink.compact.CompactOperator;
 import org.apache.hudi.sink.compact.CompactionCommitEvent;
 import org.apache.hudi.sink.compact.CompactionCommitSink;
 import org.apache.hudi.sink.compact.CompactionPlanSourceFunction;
-import org.apache.hudi.util.AvroSchemaConverter;
 import org.apache.hudi.util.FlinkWriteClients;
+import org.apache.hudi.util.HoodieSchemaConverter;
 import org.apache.hudi.utils.FlinkMiniCluster;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
@@ -57,16 +58,14 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.io.TempDir;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.List;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
@@ -87,8 +86,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @SuppressWarnings({"SqlDialectInspection", "SqlNoDataSourceInspection"})
 @ExtendWith(FlinkMiniCluster.class)
+@Slf4j
 public class ITTestSchemaEvolution {
-  private static final Logger LOG = LoggerFactory.getLogger(ITTestSchemaEvolution.class);
 
   @TempDir File tempFile;
   private StreamTableEnvironment tEnv;
@@ -266,25 +265,25 @@ public class ITTestSchemaEvolution {
       // Create nullable map type
       HoodieSchema mapType = HoodieSchema.createNullable(HoodieSchema.createMap(stringType));
 
-      writeClient.addColumn("salary", doubleType.getAvroSchema(), null, "name", AFTER);
+      writeClient.addColumn("salary", doubleType, null, "name", AFTER);
       writeClient.deleteColumns("gender");
       writeClient.renameColumn("name", "first_name");
       writeClient.updateColumnType("age", Types.StringType.get());
-      writeClient.addColumn("last_name", stringType.getAvroSchema(), "empty allowed", "salary", BEFORE);
+      writeClient.addColumn("last_name", stringType, "empty allowed", "salary", BEFORE);
       writeClient.reOrderColPosition("age", "first_name", BEFORE);
       // add a field in the middle of the `f_struct` and `f_row_map` columns
-      writeClient.addColumn("f_struct.f2", intType.getAvroSchema(), "add field in middle of struct", "f_struct.f0", AFTER);
-      writeClient.addColumn("f_row_map.value.f2", intType.getAvroSchema(), "add field in middle of struct", "f_row_map.value.f0", AFTER);
+      writeClient.addColumn("f_struct.f2", intType, "add field in middle of struct", "f_struct.f0", AFTER);
+      writeClient.addColumn("f_row_map.value.f2", intType, "add field in middle of struct", "f_row_map.value.f0", AFTER);
       // add a field at the end of `f_struct` and `f_row_map` column
-      writeClient.addColumn("f_struct.f3", stringType.getAvroSchema());
-      writeClient.addColumn("f_row_map.value.f3", stringType.getAvroSchema());
+      writeClient.addColumn("f_struct.f3", stringType);
+      writeClient.addColumn("f_row_map.value.f3", stringType);
 
       // delete and add a field with the same name
       // reads should not return previously inserted datum of dropped field of the same name
       writeClient.deleteColumns("f_struct.drop_add");
-      writeClient.addColumn("f_struct.drop_add", doubleType.getAvroSchema());
+      writeClient.addColumn("f_struct.drop_add", doubleType);
       writeClient.deleteColumns("f_row_map.value.drop_add");
-      writeClient.addColumn("f_row_map.value.drop_add", doubleType.getAvroSchema());
+      writeClient.addColumn("f_row_map.value.drop_add", doubleType);
 
       // perform comprehensive evolution on complex types (struct, array, map) by promoting its primitive types
       writeClient.updateColumnType("f_struct.change_type", Types.LongType.get());
@@ -295,9 +294,9 @@ public class ITTestSchemaEvolution {
       writeClient.updateColumnType("f_map.value", Types.DoubleType.get());
 
       // perform comprehensive schema evolution on table by adding complex typed columns
-      writeClient.addColumn("new_row_col", structType.getAvroSchema());
-      writeClient.addColumn("new_array_col", arrayType.getAvroSchema());
-      writeClient.addColumn("new_map_col", mapType.getAvroSchema());
+      writeClient.addColumn("new_row_col", structType);
+      writeClient.addColumn("new_array_col", arrayType);
+      writeClient.addColumn("new_map_col", mapType);
 
       writeClient.reOrderColPosition("partition", "new_map_col", AFTER);
 
@@ -314,7 +313,7 @@ public class ITTestSchemaEvolution {
   private void writeTableWithSchema2(TableOptions tableOptions) throws ExecutionException, InterruptedException {
     tableOptions.withOption(
         FlinkOptions.SOURCE_AVRO_SCHEMA.key(),
-        AvroSchemaConverter.convertToSchema(ROW_TYPE_EVOLUTION_AFTER, "hoodie.t1.t1_record"));
+        HoodieSchemaConverter.convertToSchema(ROW_TYPE_EVOLUTION_AFTER, "hoodie.t1.t1_record"));
 
     //language=SQL
     tEnv.executeSql("drop table t1");
@@ -385,7 +384,7 @@ public class ITTestSchemaEvolution {
         KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), "partition",
         KeyGeneratorOptions.HIVE_STYLE_PARTITIONING_ENABLE.key(), true,
         FlinkOptions.WRITE_BATCH_SIZE.key(), 0.000001, // each record triggers flush
-        FlinkOptions.SOURCE_AVRO_SCHEMA.key(), AvroSchemaConverter.convertToSchema(ROW_TYPE_EVOLUTION_BEFORE),
+        FlinkOptions.SOURCE_AVRO_SCHEMA.key(), HoodieSchemaConverter.convertToSchema(ROW_TYPE_EVOLUTION_BEFORE),
         FlinkOptions.READ_TASKS.key(), 1,
         FlinkOptions.WRITE_TASKS.key(), 1,
         FlinkOptions.INDEX_BOOTSTRAP_TASKS.key(), 1,
@@ -468,7 +467,7 @@ public class ITTestSchemaEvolution {
 
   private void doCompact(Configuration conf) throws Exception {
     // use sync compaction to ensure compaction finished.
-    conf.set(FlinkOptions.COMPACTION_ASYNC_ENABLED, false);
+    conf.set(FlinkOptions.COMPACTION_OPERATION_EXECUTE_ASYNC_ENABLED, false);
     try (HoodieFlinkWriteClient writeClient = FlinkWriteClients.createWriteClient(conf)) {
       HoodieFlinkTable<?> table = writeClient.getHoodieTable();
 
@@ -533,12 +532,12 @@ public class ITTestSchemaEvolution {
 
     for (String expectedItem : expected) {
       if (!actual.contains(expectedItem)) {
-        LOG.info("Not in actual: {}", expectedItem);
+        log.info("Not in actual: {}", expectedItem);
       }
     }
     for (String actualItem : actual) {
       if (!expected.contains(actualItem)) {
-        LOG.info("Not in expected: {}", actualItem);
+        log.info("Not in expected: {}", actualItem);
       }
     }
     assertEquals(expected, actual);

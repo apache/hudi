@@ -25,8 +25,7 @@ import org.apache.hudi.config.HoodieTTLConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.table.HoodieTable;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.io.IOException;
 import java.util.Locale;
@@ -40,9 +39,8 @@ import static org.apache.hudi.config.HoodieTTLConfig.PARTITION_TTL_STRATEGY_TYPE
  * This factory will try {@link HoodieTTLConfig#PARTITION_TTL_STRATEGY_CLASS_NAME} firstly,
  * this ensures the class prop will not be overwritten by {@link PartitionTTLStrategyType}
  */
+@Slf4j
 public class HoodiePartitionTTLStrategyFactory {
-
-  private static final Logger LOG = LoggerFactory.getLogger(HoodiePartitionTTLStrategyFactory.class);
 
   public static PartitionTTLStrategy createStrategy(HoodieTable hoodieTable, TypedProperties props, String instantTime) throws IOException {
     String strategyClassName = getPartitionTTLStrategyClassName(props);

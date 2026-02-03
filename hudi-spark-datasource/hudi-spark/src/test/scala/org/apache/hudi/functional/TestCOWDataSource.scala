@@ -17,7 +17,7 @@
 
 package org.apache.hudi.functional
 
-import org.apache.hudi.{AvroConversionUtils, DataSourceReadOptions, DataSourceWriteOptions, HoodieDataSourceHelpers, HoodieSparkUtils, QuickstartUtils, ScalaAssertionSupport}
+import org.apache.hudi.{AvroConversionUtils, DataSourceReadOptions, DataSourceWriteOptions, HoodieDataSourceHelpers, HoodieSchemaConversionUtils, HoodieSparkUtils, QuickstartUtils, ScalaAssertionSupport}
 import org.apache.hudi.DataSourceWriteOptions.{INLINE_CLUSTERING_ENABLE, KEYGENERATOR_CLASS_NAME}
 import org.apache.hudi.HoodieConversionUtils.toJavaOption
 import org.apache.hudi.QuickstartUtils.{convertToStringList, getQuickstartWriteConfigs}
@@ -27,7 +27,7 @@ import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.config.{HoodieCommonConfig, HoodieMetadataConfig, RecordMergeMode}
 import org.apache.hudi.common.config.TimestampKeyGeneratorConfig.{TIMESTAMP_INPUT_DATE_FORMAT, TIMESTAMP_OUTPUT_DATE_FORMAT, TIMESTAMP_TIMEZONE_FORMAT, TIMESTAMP_TYPE_FIELD}
 import org.apache.hudi.common.fs.FSUtils
-import org.apache.hudi.common.model.{HoodieRecord, WriteOperationType}
+import org.apache.hudi.common.model.{HoodieRecord, HoodieReplaceCommitMetadata, WriteOperationType}
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, HoodieTableVersion, TableSchemaResolver}
 import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline, TimelineUtils}
@@ -38,7 +38,6 @@ import org.apache.hudi.common.util.{ClusteringUtils, Option}
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.config.metrics.HoodieMetricsConfig
 import org.apache.hudi.exception.{HoodieException, SchemaBackwardsCompatibilityException}
-import org.apache.hudi.exception.ExceptionUtil.getRootCause
 import org.apache.hudi.hive.HiveSyncConfigHolder
 import org.apache.hudi.keygen.{ComplexKeyGenerator, CustomKeyGenerator, GlobalDeleteKeyGenerator, NonpartitionedKeyGenerator, SimpleKeyGenerator, TimestampBasedKeyGenerator}
 import org.apache.hudi.keygen.constant.{KeyGeneratorOptions, KeyGeneratorType}
@@ -488,7 +487,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
     val t = assertThrows(classOf[Throwable]) {
       writeToHudi(optsForBatch2, inputDF)
     }
-    assertTrue(getRootCause(t).getMessage.contains("Config conflict"))
+    assertTrue(HoodieTestUtils.getRootCause(t).getMessage.contains("Config conflict"))
   }
 
   @ParameterizedTest
@@ -548,6 +547,99 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
       .options(readOpts)
       .load(basePath)
     assertEquals(snapshotDF2.count(), 8)
+  }
+
+  @Test
+  def testInsertOverwriteUnpartitionedTable(): Unit = {
+    // Test INSERT_OVERWRITE on unpartitioned table using bulk_insert + row writer
+    // This validates the optimization in DatasetBulkInsertOverwriteCommitActionExecutor
+    // that short-circuits the distinct() operation for unpartitioned tables
+
+    val writeOpts = Map(
+      "hoodie.insert.shuffle.parallelism" -> "4",
+      "hoodie.upsert.shuffle.parallelism" -> "4",
+      "hoodie.bulkinsert.shuffle.parallelism" -> "2",
+      DataSourceWriteOptions.RECORDKEY_FIELD.key -> "_row_key",
+      DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "",
+      DataSourceWriteOptions.PRECOMBINE_FIELD.key -> "timestamp",
+      HoodieWriteConfig.TBL_NAME.key -> "hoodie_test",
+      DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key -> classOf[NonpartitionedKeyGenerator].getName,
+      "hoodie.datasource.write.row.writer.enable" -> "true"
+    )
+
+    val readOpts = Map[String, String]()
+
+    val records1 = recordsToStrings(dataGen.generateInserts("001", 10)).asScala.toList
+    val inputDF1 = spark.read.json(spark.sparkContext.parallelize(records1, 2))
+    inputDF1.write.format("org.apache.hudi")
+      .options(writeOpts)
+      .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.BULK_INSERT_OPERATION_OPT_VAL)
+      .mode(SaveMode.Overwrite)
+      .save(basePath)
+
+    val snapshotDF1 = spark.read.format("org.apache.hudi")
+      .options(readOpts)
+      .load(basePath)
+    assertEquals(10, snapshotDF1.count())
+
+    val metaClient = createMetaClient(spark, basePath)
+
+    val firstCommit = metaClient.getActiveTimeline.filterCompletedInstants().getInstants.toArray
+      .map(_.asInstanceOf[HoodieInstant]).head
+    assertEquals("commit", firstCommit.getAction)
+
+    val firstCommitFiles = storage.listDirectEntries(new StoragePath(basePath))
+      .asScala
+      .filter(_.getPath.getName.endsWith(".parquet"))
+      .map(_.getPath.getName.split("_")(0))
+      .toSet
+    assertTrue(firstCommitFiles.nonEmpty, "Should have at least one file from first commit")
+
+    // Perform INSERT_OVERWRITE with new batch of 5 records
+    val records2 = recordsToStrings(dataGen.generateInserts("002", 5)).asScala.toList
+    val inputDF2 = spark.read.json(spark.sparkContext.parallelize(records2, 2))
+    inputDF2.write.format("org.apache.hudi")
+      .options(writeOpts)
+      .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OVERWRITE_OPERATION_OPT_VAL)
+      .mode(SaveMode.Append)
+      .save(basePath)
+
+    // Verify final data count
+    val snapshotDF2 = spark.read.format("org.apache.hudi")
+      .options(readOpts)
+      .load(basePath)
+    assertEquals(5, snapshotDF2.count(), "Should only have records from second batch after INSERT_OVERWRITE")
+
+    // Validate replacecommit metadata
+    metaClient.reloadActiveTimeline()
+    val commits = metaClient.getActiveTimeline.filterCompletedInstants().getInstants.toArray
+      .map(_.asInstanceOf[HoodieInstant])
+
+    assertEquals(2, commits.size)
+    assertEquals("commit", commits(0).getAction)
+    assertEquals("replacecommit", commits(1).getAction)
+
+    val replaceCommitInstant = commits(1)
+    val metadata = TimelineUtils.getCommitMetadata(replaceCommitInstant, metaClient.getActiveTimeline)
+    assertTrue(metadata.isInstanceOf[HoodieReplaceCommitMetadata],
+      "Metadata should be HoodieReplaceCommitMetadata for INSERT_OVERWRITE")
+
+    val replaceMetadata = metadata.asInstanceOf[HoodieReplaceCommitMetadata]
+    val partitionToReplaceFileIds = replaceMetadata.getPartitionToReplaceFileIds
+
+    // Validate the key optimization: unpartitioned tables should have exactly 1 entry with empty string key
+    assertEquals(1, partitionToReplaceFileIds.size(),
+      "Unpartitioned table should have exactly 1 partition entry")
+    assertTrue(partitionToReplaceFileIds.containsKey(""),
+      "Partition key should be empty string for unpartitioned table")
+
+    val replacedFileIds = partitionToReplaceFileIds.get("").asScala.toList
+    assertTrue(replacedFileIds.nonEmpty, "Should have file IDs to replace")
+
+    // Verify that all files from the first commit are replaced
+    val replacedFileIdsSet = replacedFileIds.toSet
+    assertTrue(replacedFileIdsSet.subsetOf(firstCommitFiles),
+      s"Replaced file IDs should be from first commit. Replaced: $replacedFileIdsSet, First commit: $firstCommitFiles")
   }
 
   @Test
@@ -697,12 +789,12 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
     val tableMetaClient = createMetaClient(spark, basePath)
     assertFalse(tableMetaClient.getArchivedTimeline.empty())
 
-    val actualSchema = new TableSchemaResolver(tableMetaClient).getTableAvroSchema(false)
+    val actualSchema = new TableSchemaResolver(tableMetaClient).getTableSchema(false)
     val (structName, nameSpace) = AvroConversionUtils.getAvroRecordNameAndNamespace(CommonOptionUtils.commonOpts(HoodieWriteConfig.TBL_NAME.key))
     spark.sparkContext.getConf.registerKryoClasses(
       Array(classOf[org.apache.avro.generic.GenericData],
         classOf[org.apache.avro.Schema]))
-    val schema = AvroConversionUtils.convertStructTypeToAvroSchema(structType, structName, nameSpace)
+    val schema = HoodieSchemaConversionUtils.convertStructTypeToHoodieSchema(structType, structName, nameSpace)
     assertTrue(actualSchema != null)
     assertEquals(schema, actualSchema)
   }
@@ -1313,7 +1405,8 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
         .save(basePath)
     }
 
-    assertEquals("Single partition-path field is expected; provided (driver,rider)", getRootCause(t).getMessage)
+    assertEquals("Single partition-path field is expected; provided (driver,rider)",
+      HoodieTestUtils.getRootCause(t).getMessage)
   }
 
   @ParameterizedTest

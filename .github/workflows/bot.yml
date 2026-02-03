@@ -33,7 +33,7 @@ env:
   JAVA_UT_FILTER1: -Dtest=!TestCOWDataSource,!TestMORDataSource,!TestHoodieFileSystemViews
   JAVA_UT_FILTER2: -Dtest=TestCOWDataSource,TestMORDataSource,TestHoodieFileSystemViews
   SCALA_TEST_DML_FILTER: -DwildcardSuites=org.apache.spark.sql.hudi.dml
-  SCALA_TEST_OTHERS_FILTER: -DwildcardSuites=org.apache.hudi,org.apache.spark.hudi,org.apache.spark.sql.avro,org.apache.spark.sql.execution,org.apache.spark.sql.hudi.analysis,org.apache.spark.sql.hudi.command,org.apache.spark.sql.hudi.common,org.apache.spark.sql.hudi.ddl,org.apache.spark.sql.hudi.procedure,org.apache.spark.sql.hudi.feature
+  SCALA_TEST_OTHERS_FILTER: -DwildcardSuites=org.apache.hudi,org.apache.spark.hudi,org.apache.spark.sql.avro,org.apache.spark.sql.execution,org.apache.spark.sql.hudi.analysis,org.apache.spark.sql.hudi.catalog,org.apache.spark.sql.hudi.command,org.apache.spark.sql.hudi.common,org.apache.spark.sql.hudi.ddl,org.apache.spark.sql.hudi.procedure,org.apache.spark.sql.hudi.feature
   FLINK_IT_FILTER1: -Dit.test=ITTestHoodieDataSource
   FLINK_IT_FILTER2: -Dit.test=!ITTestHoodieDataSource
 
@@ -41,11 +41,11 @@ jobs:
   validate-source:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
-      - name: Set up JDK 8
-        uses: actions/setup-java@v3
+      - uses: actions/checkout@v5
+      - name: Set up JDK 11
+        uses: actions/setup-java@v5
         with:
-          java-version: '8'
+          java-version: '11'
           distribution: 'temurin'
           architecture: x64
           cache: maven
@@ -81,13 +81,14 @@ jobs:
             sparkModules: "hudi-spark-datasource/hudi-spark3.5.x"
 
     steps:
-      - uses: actions/checkout@v3
-      - name: Set up JDK 8
-        uses: actions/setup-java@v3
+      - uses: actions/checkout@v5
+      - name: Set up JDK 11
+        uses: actions/setup-java@v5
         with:
-          java-version: '8'
+          java-version: '11'
           distribution: 'temurin'
           architecture: x64
+          cache: maven
       - name: Build Project
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
@@ -102,7 +103,7 @@ jobs:
           SPARK_MODULES: ${{ matrix.sparkModules }}
         if: ${{ !endsWith(env.SPARK_PROFILE, '3.5') || !endsWith(env.SCALA_PROFILE, '2.12') }} # skip test Spark 3.5 and Scala 2.12 as it's covered by Azure CI
         run:
-          mvn test -Punit-tests -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DwildcardSuites=skipScalaTests $JAVA_UT_FILTER1 -DfailIfNoTests=false -pl "$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS
+          mvn test -Punit-tests -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DwildcardSuites=skipScalaTests $JAVA_UT_FILTER1 -Dsurefire.failIfNoSpecifiedTests=false -pl "$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS
 
   test-spark-java-tests-part2:
     runs-on: ubuntu-latest
@@ -122,13 +123,14 @@ jobs:
             sparkModules: "hudi-spark-datasource/hudi-spark3.5.x"
 
     steps:
-      - uses: actions/checkout@v3
-      - name: Set up JDK 8
-        uses: actions/setup-java@v3
+      - uses: actions/checkout@v5
+      - name: Set up JDK 11
+        uses: actions/setup-java@v5
         with:
-          java-version: '8'
+          java-version: '11'
           distribution: 'temurin'
           architecture: x64
+          cache: maven
       - name: Build Project
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
@@ -148,14 +150,14 @@ jobs:
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
           SPARK_MODULES: ${{ matrix.sparkModules }}
         run:
-          mvn test -Punit-tests -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DwildcardSuites=skipScalaTests $JAVA_UT_FILTER2 -DfailIfNoTests=false -pl "$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS
+          mvn test -Punit-tests -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DwildcardSuites=skipScalaTests $JAVA_UT_FILTER2 -Dsurefire.failIfNoSpecifiedTests=false -pl "$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS
       - name: Java FTA - Spark
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
           SPARK_MODULES: ${{ matrix.sparkModules }}
         run:
-          mvn test -Pfunctional-tests -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DwildcardSuites=skipScalaTests -DfailIfNoTests=false -pl "$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS
+          mvn test -Pfunctional-tests -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DwildcardSuites=skipScalaTests -Dsurefire.failIfNoSpecifiedTests=false -pl "$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS
 
   test-spark-java-tests-part3:
     runs-on: ubuntu-latest
@@ -175,13 +177,14 @@ jobs:
             sparkModules: "hudi-spark-datasource/hudi-spark3.5.x"
 
     steps:
-      - uses: actions/checkout@v3
-      - name: Set up JDK 8
-        uses: actions/setup-java@v3
+      - uses: actions/checkout@v5
+      - name: Set up JDK 11
+        uses: actions/setup-java@v5
         with:
-          java-version: '8'
+          java-version: '11'
           distribution: 'temurin'
           architecture: x64
+          cache: maven
       - name: Build Project
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
@@ -195,14 +198,14 @@ jobs:
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
           SPARK_MODULES: ${{ matrix.sparkModules }}
         run:
-          mvn test -Pfunctional-tests-b -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DwildcardSuites=skipScalaTests -DfailIfNoTests=false -pl "$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS
+          mvn test -Pfunctional-tests-b -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DwildcardSuites=skipScalaTests -Dsurefire.failIfNoSpecifiedTests=false -pl "$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS
       - name: Java FTC - Spark
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
           SPARK_MODULES: ${{ matrix.sparkModules }}
         run:
-          mvn test -Pfunctional-tests-c -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DwildcardSuites=skipScalaTests -DfailIfNoTests=false -pl "$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS
+          mvn test -Pfunctional-tests-c -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DwildcardSuites=skipScalaTests -Dsurefire.failIfNoSpecifiedTests=false -pl "$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS
 
   test-spark-scala-dml-tests:
     runs-on: ubuntu-latest
@@ -222,13 +225,14 @@ jobs:
             sparkModules: "hudi-spark-datasource/hudi-spark3.5.x"
 
     steps:
-      - uses: actions/checkout@v3
-      - name: Set up JDK 8
-        uses: actions/setup-java@v3
+      - uses: actions/checkout@v5
+      - name: Set up JDK 11
+        uses: actions/setup-java@v5
         with:
-          java-version: '8'
+          java-version: '11'
           distribution: 'temurin'
           architecture: x64
+          cache: maven
       - name: Build Project
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
@@ -242,14 +246,14 @@ jobs:
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
           SPARK_MODULES: ${{ matrix.sparkModules }}
         run:
-          mvn test -Punit-tests -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -Dtest=skipJavaTests $SCALA_TEST_DML_FILTER -DfailIfNoTests=false -pl "$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS
+          mvn test -Punit-tests -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -Dtest=skipJavaTests $SCALA_TEST_DML_FILTER -Dsurefire.failIfNoSpecifiedTests=false -pl "$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS
       - name: Scala FT - Spark
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
           SPARK_MODULES: ${{ matrix.sparkModules }}
         run:
-          mvn test -Pfunctional-tests -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -Dtest=skipJavaTests $SCALA_TEST_DML_FILTER -DfailIfNoTests=false -pl "$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS
+          mvn test -Pfunctional-tests -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -Dtest=skipJavaTests $SCALA_TEST_DML_FILTER -Dsurefire.failIfNoSpecifiedTests=false -pl "$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS
 
   test-spark-scala-other-tests:
     runs-on: ubuntu-latest
@@ -269,13 +273,14 @@ jobs:
             sparkModules: "hudi-spark-datasource/hudi-spark3.5.x"
 
     steps:
-      - uses: actions/checkout@v3
-      - name: Set up JDK 8
-        uses: actions/setup-java@v3
+      - uses: actions/checkout@v5
+      - name: Set up JDK 11
+        uses: actions/setup-java@v5
         with:
-          java-version: '8'
+          java-version: '11'
           distribution: 'temurin'
           architecture: x64
+          cache: maven
       - name: Build Project
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
@@ -289,14 +294,14 @@ jobs:
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
           SPARK_MODULES: ${{ matrix.sparkModules }}
         run:
-          mvn test -Punit-tests -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -Dtest=skipJavaTests $SCALA_TEST_OTHERS_FILTER -DfailIfNoTests=false -pl "$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS
+          mvn test -Punit-tests -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -Dtest=skipJavaTests $SCALA_TEST_OTHERS_FILTER -Dsurefire.failIfNoSpecifiedTests=false -pl "$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS
       - name: Scala FT - Spark
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
           SPARK_MODULES: ${{ matrix.sparkModules }}
         run:
-          mvn test -Pfunctional-tests -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -Dtest=skipJavaTests $SCALA_TEST_OTHERS_FILTER -DfailIfNoTests=false -pl "$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS
+          mvn test -Pfunctional-tests -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -Dtest=skipJavaTests $SCALA_TEST_OTHERS_FILTER -Dsurefire.failIfNoSpecifiedTests=false -pl "$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS
 
   test-hudi-hadoop-mr-and-hudi-java-client:
     runs-on: ubuntu-latest
@@ -309,30 +314,28 @@ jobs:
             flinkProfile: "flink1.20"
 
     steps:
-      - uses: actions/checkout@v3
-      - name: Set up JDK 8
-        uses: actions/setup-java@v3
+      - uses: actions/checkout@v5
+      - name: Set up JDK 11
+        uses: actions/setup-java@v5
         with:
-          java-version: '8'
+          java-version: '11'
           distribution: 'temurin'
           architecture: x64
-      - name: Generate Maven Wrapper
-        run:
-          mvn -N io.takari:maven:wrapper
+          cache: maven
       - name: Build Project
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
           FLINK_PROFILE: ${{ matrix.flinkProfile }}
         run:
-          ./mvnw clean install -T 2 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -D"FLINK_PROFILE" -DskipTests=true -Phudi-platform-service $MVN_ARGS -am -pl hudi-hadoop-mr,hudi-client/hudi-java-client
+          mvn clean install -T 2 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -D"FLINK_PROFILE" -DskipTests=true -Phudi-platform-service $MVN_ARGS -am -pl hudi-hadoop-mr,hudi-client/hudi-java-client
       - name: UT - hudi-hadoop-mr and hudi-client/hudi-java-client
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
           FLINK_PROFILE: ${{ matrix.flinkProfile }}
         run:
-          ./mvnw test -Punit-tests -fae -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -D"FLINK_PROFILE" -pl hudi-hadoop-mr,hudi-client/hudi-java-client $MVN_ARGS
+          mvn test -Punit-tests -fae -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -D"FLINK_PROFILE" -pl hudi-hadoop-mr,hudi-client/hudi-java-client $MVN_ARGS
 
   test-spark-java17-java-tests-part1:
     runs-on: ubuntu-latest
@@ -350,13 +353,14 @@ jobs:
             sparkModules: "hudi-spark-datasource/hudi-spark4.0.x"
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v5
       - name: Set up JDK 17
-        uses: actions/setup-java@v3
+        uses: actions/setup-java@v5
         with:
           java-version: '17'
           distribution: 'temurin'
           architecture: x64
+          cache: maven
       - name: Build Project
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
@@ -364,19 +368,13 @@ jobs:
           SPARK_MODULES: ${{ matrix.sparkModules }}
         run:
           mvn clean install -T 2 -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DskipTests=true $MVN_ARGS -am -pl "hudi-examples/hudi-examples-spark,hudi-common,$SPARK_COMMON_MODULES,$SPARK_MODULES"
-      - name: Set up JDK 17
-        uses: actions/setup-java@v3
-        with:
-          java-version: '17'
-          distribution: 'temurin'
-          architecture: x64
       - name: Java UT 1 - Common & Spark
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
           SPARK_MODULES: ${{ matrix.sparkModules }}
         run:
-          mvn test -Punit-tests -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DwildcardSuites=skipScalaTests $JAVA_UT_FILTER1 -DfailIfNoTests=false -pl "hudi-common,$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS
+          mvn test -Punit-tests -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DwildcardSuites=skipScalaTests $JAVA_UT_FILTER1 -Dsurefire.failIfNoSpecifiedTests=false -pl "hudi-common,$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS
 
   test-spark-java17-java-tests-part2:
     runs-on: ubuntu-latest
@@ -394,13 +392,14 @@ jobs:
             sparkModules: "hudi-spark-datasource/hudi-spark4.0.x"
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v5
       - name: Set up JDK 17
-        uses: actions/setup-java@v3
+        uses: actions/setup-java@v5
         with:
           java-version: '17'
           distribution: 'temurin'
           architecture: x64
+          cache: maven
       - name: Build Project
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
@@ -408,25 +407,19 @@ jobs:
           SPARK_MODULES: ${{ matrix.sparkModules }}
         run:
           mvn clean install -T 2 -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DskipTests=true $MVN_ARGS -am -pl "hudi-examples/hudi-examples-spark,hudi-common,$SPARK_COMMON_MODULES,$SPARK_MODULES"
-      - name: Set up JDK 17
-        uses: actions/setup-java@v3
-        with:
-          java-version: '17'
-          distribution: 'temurin'
-          architecture: x64
       - name: Quickstart Test
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
         run:
-          mvn test -Punit-tests -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DwildcardSuites=skipScalaTests -DfailIfNoTests=false -pl hudi-examples/hudi-examples-spark $MVN_ARGS
+          mvn test -Punit-tests -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DwildcardSuites=skipScalaTests -Dsurefire.failIfNoSpecifiedTests=false -pl hudi-examples/hudi-examples-spark $MVN_ARGS
       - name: Java UT 2 - Common & Spark
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
           SPARK_MODULES: ${{ matrix.sparkModules }}
         run:
-          mvn test -Punit-tests -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DwildcardSuites=skipScalaTests $JAVA_UT_FILTER2 -DfailIfNoTests=false -pl "hudi-common,$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS
+          mvn test -Punit-tests -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DwildcardSuites=skipScalaTests $JAVA_UT_FILTER2 -Dsurefire.failIfNoSpecifiedTests=false -pl "hudi-common,$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS
       - name: Java FTA - Spark
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
@@ -451,13 +444,14 @@ jobs:
             sparkModules: "hudi-spark-datasource/hudi-spark4.0.x"
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v5
       - name: Set up JDK 17
-        uses: actions/setup-java@v3
+        uses: actions/setup-java@v5
         with:
           java-version: '17'
           distribution: 'temurin'
           architecture: x64
+          cache: maven
       - name: Build Project
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
@@ -465,12 +459,6 @@ jobs:
           SPARK_MODULES: ${{ matrix.sparkModules }}
         run:
           mvn clean install -T 2 -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DskipTests=true $MVN_ARGS -am -pl "hudi-examples/hudi-examples-spark,hudi-common,$SPARK_COMMON_MODULES,$SPARK_MODULES"
-      - name: Set up JDK 17
-        uses: actions/setup-java@v3
-        with:
-          java-version: '17'
-          distribution: 'temurin'
-          architecture: x64
       - name: Java FTB - Spark
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
@@ -502,13 +490,14 @@ jobs:
             sparkModules: "hudi-spark-datasource/hudi-spark4.0.x"
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v5
       - name: Set up JDK 17
-        uses: actions/setup-java@v3
+        uses: actions/setup-java@v5
         with:
           java-version: '17'
           distribution: 'temurin'
           architecture: x64
+          cache: maven
       - name: Build Project
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
@@ -516,26 +505,20 @@ jobs:
           SPARK_MODULES: ${{ matrix.sparkModules }}
         run:
           mvn clean install -T 2 -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DskipTests=true $MVN_ARGS -am -pl "hudi-examples/hudi-examples-spark,hudi-common,$SPARK_COMMON_MODULES,$SPARK_MODULES"
-      - name: Set up JDK 17
-        uses: actions/setup-java@v3
-        with:
-          java-version: '17'
-          distribution: 'temurin'
-          architecture: x64
       - name: Scala UT - Common & Spark
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
           SPARK_MODULES: ${{ matrix.sparkModules }}
         run:
-          mvn test -Punit-tests -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -Dtest=skipJavaTests $SCALA_TEST_DML_FILTER -DfailIfNoTests=false -pl "hudi-common,$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS
+          mvn test -Punit-tests -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -Dtest=skipJavaTests $SCALA_TEST_DML_FILTER -Dsurefire.failIfNoSpecifiedTests=false -pl "hudi-common,$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS
       - name: Scala FT - Spark
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
           SPARK_MODULES: ${{ matrix.sparkModules }}
         run:
-          mvn test -Pfunctional-tests -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -Dtest=skipJavaTests $SCALA_TEST_DML_FILTER -DfailIfNoTests=false -pl "$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS
+          mvn test -Pfunctional-tests -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -Dtest=skipJavaTests $SCALA_TEST_DML_FILTER -Dsurefire.failIfNoSpecifiedTests=false -pl "$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS
 
   test-spark-java17-scala-other-tests:
     runs-on: ubuntu-latest
@@ -553,13 +536,14 @@ jobs:
             sparkModules: "hudi-spark-datasource/hudi-spark4.0.x"
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v5
       - name: Set up JDK 17
-        uses: actions/setup-java@v3
+        uses: actions/setup-java@v5
         with:
           java-version: '17'
           distribution: 'temurin'
           architecture: x64
+          cache: maven
       - name: Build Project
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
@@ -567,26 +551,20 @@ jobs:
           SPARK_MODULES: ${{ matrix.sparkModules }}
         run:
           mvn clean install -T 2 -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DskipTests=true $MVN_ARGS -am -pl "hudi-examples/hudi-examples-spark,hudi-common,$SPARK_COMMON_MODULES,$SPARK_MODULES"
-      - name: Set up JDK 17
-        uses: actions/setup-java@v3
-        with:
-          java-version: '17'
-          distribution: 'temurin'
-          architecture: x64
       - name: Scala UT - Common & Spark
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
           SPARK_MODULES: ${{ matrix.sparkModules }}
         run:
-          mvn test -Punit-tests -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -Dtest=skipJavaTests $SCALA_TEST_OTHERS_FILTER -DfailIfNoTests=false -pl "hudi-common,$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS
+          mvn test -Punit-tests -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -Dtest=skipJavaTests $SCALA_TEST_OTHERS_FILTER -Dsurefire.failIfNoSpecifiedTests=false -pl "hudi-common,$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS
       - name: Scala FT - Spark
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
           SPARK_MODULES: ${{ matrix.sparkModules }}
         run:
-          mvn test -Pfunctional-tests -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -Dtest=skipJavaTests $SCALA_TEST_OTHERS_FILTER -DfailIfNoTests=false -pl "$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS
+          mvn test -Pfunctional-tests -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -Dtest=skipJavaTests $SCALA_TEST_OTHERS_FILTER -Dsurefire.failIfNoSpecifiedTests=false -pl "$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS
 
   test-spark-java11-17-java-tests-part1:
     runs-on: ubuntu-latest
@@ -601,13 +579,14 @@ jobs:
             sparkModules: "hudi-spark-datasource/hudi-spark3.5.x"
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v5
       - name: Set up JDK 11
-        uses: actions/setup-java@v3
+        uses: actions/setup-java@v5
         with:
           java-version: '11'
           distribution: 'temurin'
           architecture: x64
+          cache: maven
       - name: Build Project
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
@@ -616,7 +595,7 @@ jobs:
         run:
           mvn clean install -T 2 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DskipTests=true $MVN_ARGS -am -pl "hudi-examples/hudi-examples-spark,hudi-common,$SPARK_COMMON_MODULES,$SPARK_MODULES"
       - name: Set up JDK 17
-        uses: actions/setup-java@v3
+        uses: actions/setup-java@v5
         with:
           java-version: '17'
           distribution: 'temurin'
@@ -627,7 +606,7 @@ jobs:
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
           SPARK_MODULES: ${{ matrix.sparkModules }}
         run:
-          mvn test -Punit-tests -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DwildcardSuites=skipScalaTests $JAVA_UT_FILTER1 -DfailIfNoTests=false -pl "hudi-common,$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS
+          mvn test -Punit-tests -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DwildcardSuites=skipScalaTests $JAVA_UT_FILTER1 -Dsurefire.failIfNoSpecifiedTests=false -pl "hudi-common,$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS
 
   test-spark-java11-17-java-tests-part2:
     runs-on: ubuntu-latest
@@ -642,13 +621,14 @@ jobs:
             sparkModules: "hudi-spark-datasource/hudi-spark3.5.x"
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v5
       - name: Set up JDK 11
-        uses: actions/setup-java@v3
+        uses: actions/setup-java@v5
         with:
           java-version: '11'
           distribution: 'temurin'
           architecture: x64
+          cache: maven
       - name: Build Project
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
@@ -657,7 +637,7 @@ jobs:
         run:
           mvn clean install -T 2 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DskipTests=true $MVN_ARGS -am -pl "hudi-examples/hudi-examples-spark,hudi-common,$SPARK_COMMON_MODULES,$SPARK_MODULES"
       - name: Set up JDK 17
-        uses: actions/setup-java@v3
+        uses: actions/setup-java@v5
         with:
           java-version: '17'
           distribution: 'temurin'
@@ -667,14 +647,14 @@ jobs:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
         run:
-          mvn test -Punit-tests -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DwildcardSuites=skipScalaTests -DfailIfNoTests=false -pl hudi-examples/hudi-examples-spark $MVN_ARGS
+          mvn test -Punit-tests -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DwildcardSuites=skipScalaTests -Dsurefire.failIfNoSpecifiedTests=false -pl hudi-examples/hudi-examples-spark $MVN_ARGS
       - name: Java UT 2 - Common & Spark
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
           SPARK_MODULES: ${{ matrix.sparkModules }}
         run:
-          mvn test -Punit-tests -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DwildcardSuites=skipScalaTests $JAVA_UT_FILTER2 -DfailIfNoTests=false -pl "hudi-common,$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS
+          mvn test -Punit-tests -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DwildcardSuites=skipScalaTests $JAVA_UT_FILTER2 -Dsurefire.failIfNoSpecifiedTests=false -pl "hudi-common,$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS
       - name: Java FTA - Spark
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
@@ -696,13 +676,14 @@ jobs:
             sparkModules: "hudi-spark-datasource/hudi-spark3.5.x"
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v5
       - name: Set up JDK 11
-        uses: actions/setup-java@v3
+        uses: actions/setup-java@v5
         with:
           java-version: '11'
           distribution: 'temurin'
           architecture: x64
+          cache: maven
       - name: Build Project
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
@@ -711,7 +692,7 @@ jobs:
         run:
           mvn clean install -T 2 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DskipTests=true $MVN_ARGS -am -pl "hudi-examples/hudi-examples-spark,hudi-common,$SPARK_COMMON_MODULES,$SPARK_MODULES"
       - name: Set up JDK 17
-        uses: actions/setup-java@v3
+        uses: actions/setup-java@v5
         with:
           java-version: '17'
           distribution: 'temurin'
@@ -744,13 +725,14 @@ jobs:
             sparkModules: "hudi-spark-datasource/hudi-spark3.5.x"
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v5
       - name: Set up JDK 11
-        uses: actions/setup-java@v3
+        uses: actions/setup-java@v5
         with:
           java-version: '11'
           distribution: 'temurin'
           architecture: x64
+          cache: maven
       - name: Build Project
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
@@ -759,7 +741,7 @@ jobs:
         run:
           mvn clean install -T 2 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DskipTests=true $MVN_ARGS -am -pl "hudi-examples/hudi-examples-spark,hudi-common,$SPARK_COMMON_MODULES,$SPARK_MODULES"
       - name: Set up JDK 17
-        uses: actions/setup-java@v3
+        uses: actions/setup-java@v5
         with:
           java-version: '17'
           distribution: 'temurin'
@@ -770,14 +752,14 @@ jobs:
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
           SPARK_MODULES: ${{ matrix.sparkModules }}
         run:
-          mvn test -Punit-tests -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -Dtest=skipJavaTests $SCALA_TEST_DML_FILTER -DfailIfNoTests=false -pl "hudi-common,$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS
+          mvn test -Punit-tests -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -Dtest=skipJavaTests $SCALA_TEST_DML_FILTER -Dsurefire.failIfNoSpecifiedTests=false -pl "hudi-common,$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS
       - name: Scala FT - Spark
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
           SPARK_MODULES: ${{ matrix.sparkModules }}
         run:
-          mvn test -Pfunctional-tests -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -Dtest=skipJavaTests $SCALA_TEST_DML_FILTER -DfailIfNoTests=false -pl "$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS
+          mvn test -Pfunctional-tests -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -Dtest=skipJavaTests $SCALA_TEST_DML_FILTER -Dsurefire.failIfNoSpecifiedTests=false -pl "$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS
 
   test-spark-java11-17-scala-other-tests:
     runs-on: ubuntu-latest
@@ -792,13 +774,14 @@ jobs:
             sparkModules: "hudi-spark-datasource/hudi-spark3.5.x"
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v5
       - name: Set up JDK 11
-        uses: actions/setup-java@v3
+        uses: actions/setup-java@v5
         with:
           java-version: '11'
           distribution: 'temurin'
           architecture: x64
+          cache: maven
       - name: Build Project
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
@@ -807,7 +790,7 @@ jobs:
         run:
           mvn clean install -T 2 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DskipTests=true $MVN_ARGS -am -pl "hudi-examples/hudi-examples-spark,hudi-common,$SPARK_COMMON_MODULES,$SPARK_MODULES"
       - name: Set up JDK 17
-        uses: actions/setup-java@v3
+        uses: actions/setup-java@v5
         with:
           java-version: '17'
           distribution: 'temurin'
@@ -818,14 +801,14 @@ jobs:
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
           SPARK_MODULES: ${{ matrix.sparkModules }}
         run:
-          mvn test -Punit-tests -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -Dtest=skipJavaTests $SCALA_TEST_OTHERS_FILTER -DfailIfNoTests=false -pl "hudi-common,$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS
+          mvn test -Punit-tests -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -Dtest=skipJavaTests $SCALA_TEST_OTHERS_FILTER -Dsurefire.failIfNoSpecifiedTests=false -pl "hudi-common,$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS
       - name: Scala FT - Spark
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
           SPARK_MODULES: ${{ matrix.sparkModules }}
         run:
-          mvn test -Pfunctional-tests -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -Dtest=skipJavaTests $SCALA_TEST_OTHERS_FILTER -DfailIfNoTests=false -pl "$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS
+          mvn test -Pfunctional-tests -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -Dtest=skipJavaTests $SCALA_TEST_OTHERS_FILTER -Dsurefire.failIfNoSpecifiedTests=false -pl "$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS
 
   test-flink-1:
     runs-on: ubuntu-latest
@@ -847,14 +830,18 @@ jobs:
           - flinkProfile: "flink2.0"
             flinkAvroVersion: "1.11.4"
             flinkParquetVersion: '1.14.4'
+          - flinkProfile: "flink2.1"
+            flinkAvroVersion: "1.11.4"
+            flinkParquetVersion: '1.15.2'
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v5
       - name: Set up JDK 11
-        uses: actions/setup-java@v3
+        uses: actions/setup-java@v5
         with:
           java-version: '11'
           distribution: 'temurin'
           architecture: x64
+          cache: maven
       - name: Build Project
         env:
           SCALA_PROFILE: 'scala-2.12'
@@ -891,13 +878,14 @@ jobs:
             flinkAvroVersion: "1.11.4"
             flinkParquetVersion: '1.13.1'
     steps:
-      - uses: actions/checkout@v3
-      - name: Set up JDK 8
-        uses: actions/setup-java@v3
+      - uses: actions/checkout@v5
+      - name: Set up JDK 11
+        uses: actions/setup-java@v5
         with:
-          java-version: '8'
+          java-version: '11'
           distribution: 'temurin'
           architecture: x64
+          cache: maven
       - name: Build Project
         env:
           SCALA_PROFILE: 'scala-2.12'
@@ -940,13 +928,14 @@ jobs:
             sparkRuntime: 'spark4.0.0'
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v5
       - name: Set up JDK 17
-        uses: actions/setup-java@v3
+        uses: actions/setup-java@v5
         with:
           java-version: '17'
           distribution: 'temurin'
           architecture: x64
+          cache: maven
       - name: UT/FT - Docker Test - OpenJDK 17
         env:
           FLINK_PROFILE: ${{ matrix.flinkProfile }}
@@ -989,13 +978,14 @@ jobs:
             sparkRuntime: 'spark3.3.4'
 
     steps:
-      - uses: actions/checkout@v3
-      - name: Set up JDK 8
-        uses: actions/setup-java@v3
+      - uses: actions/checkout@v5
+      - name: Set up JDK 11
+        uses: actions/setup-java@v5
         with:
-          java-version: '8'
+          java-version: '11'
           distribution: 'temurin'
           architecture: x64
+          cache: maven
       - name: Build Project
         env:
           FLINK_PROFILE: ${{ matrix.flinkProfile }}
@@ -1010,17 +1000,8 @@ jobs:
             mvn clean package -T 2 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -D"$FLINK_PROFILE" -DdeployArtifacts=true -DskipTests=true $MVN_ARGS
             # TODO remove the sudo below. It's a needed workaround as detailed in HUDI-5708.
             sudo chown -R "$USER:$(id -g -n)" hudi-platform-service/hudi-metaserver/target/generated-sources
-            mvn clean package -T 2 -D"$SCALA_PROFILE" -D"$FLINK_PROFILE" -DdeployArtifacts=true -DskipTests=true $MVN_ARGS -pl packaging/hudi-flink-bundle -am -Davro.version="$FLINK_AVRO_VERSION" -Dparquet.version="$FLINK_PARQUET_VERSION" -Dparquet.version="$FLINK_PARQUET_VERSION"
+            mvn package -T 2 -D"$SCALA_PROFILE" -D"$FLINK_PROFILE" -DdeployArtifacts=true -DskipTests=true $MVN_ARGS -pl packaging/hudi-flink-bundle -am -Davro.version="$FLINK_AVRO_VERSION" -Dparquet.version="$FLINK_PARQUET_VERSION" -Dparquet.version="$FLINK_PARQUET_VERSION"
           fi
-      - name: IT - Bundle Validation - OpenJDK 8
-        env:
-          FLINK_PROFILE: ${{ matrix.flinkProfile }}
-          SPARK_PROFILE: ${{ matrix.sparkProfile }}
-          SPARK_RUNTIME: ${{ matrix.sparkRuntime }}
-          SCALA_PROFILE: ${{ matrix.scalaProfile }}
-        run: |
-          HUDI_VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
-          ./packaging/bundle-validation/ci_run.sh hudi_docker_java8 $HUDI_VERSION openjdk8
       - name: IT - Bundle Validation - OpenJDK 11
         env:
           FLINK_PROFILE: ${{ matrix.flinkProfile }}
@@ -1052,9 +1033,9 @@ jobs:
             sparkProfile: 'spark4.0'
             sparkRuntime: 'spark4.0.0'
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v5
       - name: Set up JDK 17
-        uses: actions/setup-java@v3
+        uses: actions/setup-java@v5
         with:
           java-version: '17'
           distribution: 'temurin'
@@ -1078,7 +1059,7 @@ jobs:
           HUDI_VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
           ./packaging/bundle-validation/ci_run.sh hudi_docker_java17 $HUDI_VERSION openjdk17
 
-  # flink 2.0 only support Java 11 and above version
+  # flink 2.0/2.1 only support Java 11 and above version
   validate-bundles-java11:
     runs-on: ubuntu-latest
     strategy:
@@ -1090,15 +1071,22 @@ jobs:
             flinkParquetVersion: '1.14.4'
             sparkProfile: 'spark3.5'
             sparkRuntime: 'spark3.5.1'
+          - scalaProfile: 'scala-2.12'
+            flinkProfile: 'flink2.1'
+            flinkAvroVersion: '1.11.4'
+            flinkParquetVersion: '1.15.2'
+            sparkProfile: 'spark3.5'
+            sparkRuntime: 'spark3.5.1'
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v5
       - name: Set up JDK 11
-        uses: actions/setup-java@v3
+        uses: actions/setup-java@v5
         with:
           java-version: '11'
           distribution: 'temurin'
           architecture: x64
+          cache: maven
       - name: Build Project
         env:
           FLINK_PROFILE: ${{ matrix.flinkProfile }}
@@ -1127,60 +1115,6 @@ jobs:
           HUDI_VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
           ./packaging/bundle-validation/ci_run.sh hudi_docker_java17 $HUDI_VERSION openjdk17
 
-#  validate-bundles-java11:
-#    runs-on: ubuntu-latest
-#    strategy:
-#      matrix:
-#        include:
-#          - scalaProfile: 'scala-2.13'
-#            flinkProfile: 'flink1.20'
-#            sparkProfile: 'spark3.5'
-#            sparkRuntime: 'spark3.5.0'
-#          - scalaProfile: 'scala-2.12'
-#            flinkProfile: 'flink1.20'
-#            sparkProfile: 'spark3.5'
-#            sparkRuntime: 'spark3.5.0'
-#    steps:
-#      - uses: actions/checkout@v3
-#      - name: Set up JDK 11
-#        uses: actions/setup-java@v3
-#        with:
-#          java-version: '11'
-#          distribution: 'temurin'
-#          architecture: x64
-#      - name: Build Project
-#        env:
-#          FLINK_PROFILE: ${{ matrix.flinkProfile }}
-#          SPARK_PROFILE: ${{ matrix.sparkProfile }}
-#          SCALA_PROFILE: ${{ matrix.scalaProfile }}
-#        run: |
-#          if [ "$SCALA_PROFILE" == "scala-2.13" ]; then
-#            mvn clean package -T 2 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DdeployArtifacts=true -DskipTests=true $MVN_ARGS -Dmaven.javadoc.skip=true -pl packaging/hudi-hadoop-mr-bundle,packaging/hudi-spark-bundle,packaging/hudi-utilities-bundle,packaging/hudi-utilities-slim-bundle -am
-#          else
-#            mvn clean package -T 2 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DdeployArtifacts=true -DskipTests=true $MVN_ARGS -Dmaven.javadoc.skip=true
-#            # TODO remove the sudo below. It's a needed workaround as detailed in HUDI-5708.
-#            sudo chown -R "$USER:$(id -g -n)" hudi-platform-service/hudi-metaserver/target/generated-sources
-#            mvn clean package -T 2 -D"$SCALA_PROFILE" -D"$FLINK_PROFILE" -DdeployArtifacts=true -DskipTests=true $MVN_ARGS -Dmaven.javadoc.skip=true -pl packaging/hudi-flink-bundle -am -Davro.version=1.10.0
-#          fi
-#      - name: IT - Bundle Validation - OpenJDK 11
-#        env:
-#          FLINK_PROFILE: ${{ matrix.flinkProfile }}
-#          SPARK_PROFILE: ${{ matrix.sparkProfile }}
-#          SPARK_RUNTIME: ${{ matrix.sparkRuntime }}
-#          SCALA_PROFILE: ${{ matrix.scalaProfile }}
-#        run: |
-#          HUDI_VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
-#          ./packaging/bundle-validation/ci_run.sh hudi_docker_java11 $HUDI_VERSION openjdk11
-#      - name: IT - Bundle Validation - OpenJDK 17
-#        env:
-#          FLINK_PROFILE: ${{ matrix.flinkProfile }}
-#          SPARK_PROFILE: ${{ matrix.sparkProfile }}
-#          SPARK_RUNTIME: ${{ matrix.sparkRuntime }}
-#          SCALA_PROFILE: ${{ matrix.scalaProfile }}
-#        run: |
-#          HUDI_VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
-#          ./packaging/bundle-validation/ci_run.sh hudi_docker_java17 $HUDI_VERSION openjdk17
-
   integration-tests:
     runs-on: ubuntu-latest
     strategy:
@@ -1190,13 +1124,14 @@ jobs:
             flinkProfile: 'flink1.20'
             sparkArchive: 'spark-3.5.3/spark-3.5.3-bin-hadoop3.tgz'
     steps:
-      - uses: actions/checkout@v3
-      - name: Set up JDK 8
-        uses: actions/setup-java@v3
+      - uses: actions/checkout@v5
+      - name: Set up JDK 11
+        uses: actions/setup-java@v5
         with:
-          java-version: '8'
+          java-version: '11'
           distribution: 'temurin'
           architecture: x64
+          cache: maven
       - name: Check disk space
         run: df -h
       - name: 'Free space'
@@ -1214,7 +1149,7 @@ jobs:
           FLINK_PROFILE: ${{ matrix.flinkProfile }}
           SCALA_PROFILE: '-Dscala-2.12 -Dscala.binary.version=2.12'
         run:
-          mvn clean install -T 2 $SCALA_PROFILE -D"$SPARK_PROFILE" -D"$FLINK_PROFILE" -Pintegration-tests -DskipTests=true $MVN_ARGS
+          mvn clean install -T 2 $SCALA_PROFILE -D"$SPARK_PROFILE" -D"$FLINK_PROFILE" -Pintegration-tests -DskipTests=true $MVN_ARGS -Ddocker.compose.skip=true
       - name: 'UT integ-test'
         env:
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
@@ -1228,7 +1163,7 @@ jobs:
           SCALA_PROFILE: '-Dscala-2.12 -Dscala.binary.version=2.12'
         run: |
           echo "Downloading $SPARK_ARCHIVE"
-          curl https://archive.apache.org/dist/spark/$SPARK_ARCHIVE --create-dirs -o $GITHUB_WORKSPACE/$SPARK_ARCHIVE
+          curl --retry 5 https://archive.apache.org/dist/spark/$SPARK_ARCHIVE --create-dirs -o $GITHUB_WORKSPACE/$SPARK_ARCHIVE
           tar -xvf $GITHUB_WORKSPACE/$SPARK_ARCHIVE -C $GITHUB_WORKSPACE/
           mkdir /tmp/spark-events/
           SPARK_ARCHIVE_BASENAME=$(basename $SPARK_ARCHIVE)
@@ -1262,13 +1197,14 @@ jobs:
             sparkModules: "hudi-spark-datasource/hudi-spark4.0.x"
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v5
       - name: Set up JDK 17
-        uses: actions/setup-java@v3
+        uses: actions/setup-java@v5
         with:
           java-version: '17'
           distribution: 'temurin'
           architecture: x64
+          cache: maven
       - name: Build Project
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
@@ -1293,13 +1229,14 @@ jobs:
             flinkAvroVersion: '1.11.4'
             flinkParquetVersion: '1.13.1'
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v5
       - name: Set up JDK 17
-        uses: actions/setup-java@v3
+        uses: actions/setup-java@v5
         with:
           java-version: '17'
           distribution: 'temurin'
           architecture: x64
+          cache: maven
       - name: Build Project
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
@@ -1319,15 +1256,16 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v5
       - name: Set up JDK 23
-        uses: actions/setup-java@v3
+        uses: actions/setup-java@v5
         with:
           # Note: We are not caching here again, as we want to use the .m2 repository populated by
           # the previous step
           java-version: '23'
           distribution: 'temurin'
           architecture: x64
+          cache: maven
       - name: Build hudi-trino-plugin with JDK 23
         working-directory: ./hudi-trino-plugin
         run:

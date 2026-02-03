@@ -19,13 +19,12 @@
 package org.apache.hudi.io.storage;
 
 import org.apache.hudi.SparkAdapterSupport$;
-import org.apache.hudi.avro.AvroSchemaUtils;
-import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieSparkRecord;
 import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.util.FileFormatUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ParquetReaderIterator;
@@ -37,7 +36,6 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 
-import org.apache.avro.Schema;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 import org.apache.parquet.filter2.predicate.FilterApi;
@@ -47,6 +45,7 @@ import org.apache.parquet.hadoop.ParquetReader;
 import org.apache.parquet.schema.MessageType;
 import org.apache.parquet.schema.SchemaRepair;
 import org.apache.spark.sql.HoodieInternalRowUtils;
+import org.apache.spark.sql.avro.HoodieSparkSchemaConverters;
 import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.sql.catalyst.expressions.UnsafeProjection;
 import org.apache.spark.sql.catalyst.expressions.UnsafeRow;
@@ -82,7 +81,7 @@ public class HoodieSparkParquetReader implements HoodieSparkFileReader {
   private final List<ClosableIterator> readerIterators = new ArrayList<>();
   private Option<MessageType> fileSchemaOption = Option.empty();
   private Option<StructType> structTypeOption = Option.empty();
-  private Option<Schema> schemaOption = Option.empty();
+  private Option<HoodieSchema> schemaOption = Option.empty();
 
   public HoodieSparkParquetReader(HoodieStorage storage, StoragePath path) {
     this.path = path;
@@ -115,14 +114,13 @@ public class HoodieSparkParquetReader implements HoodieSparkFileReader {
 
   @Override
   public ClosableIterator<HoodieRecord<InternalRow>> getRecordIterator(HoodieSchema schema) throws IOException {
-    //TODO boundary to revisit in later pr to use HoodieSchema directly
-    ClosableIterator<UnsafeRow> iterator = getUnsafeRowIterator(schema.getAvroSchema());
+    ClosableIterator<UnsafeRow> iterator = getUnsafeRowIterator(schema);
     return new CloseableMappingIterator<>(iterator, data -> unsafeCast(new HoodieSparkRecord(data)));
   }
 
   @Override
   public ClosableIterator<String> getRecordKeyIterator() throws IOException {
-    Schema schema = HoodieAvroUtils.getRecordKeySchema();
+    HoodieSchema schema = HoodieSchemaUtils.getRecordKeySchema();
     ClosableIterator<UnsafeRow> iterator = getUnsafeRowIterator(schema);
     return new CloseableMappingIterator<>(iterator, data -> {
       HoodieSparkRecord record = unsafeCast(new HoodieSparkRecord(data));
@@ -130,7 +128,7 @@ public class HoodieSparkParquetReader implements HoodieSparkFileReader {
     });
   }
 
-  public ClosableIterator<UnsafeRow> getUnsafeRowIterator(Schema requestedSchema) throws IOException {
+  public ClosableIterator<UnsafeRow> getUnsafeRowIterator(HoodieSchema requestedSchema) throws IOException {
     return getUnsafeRowIterator(requestedSchema, Collections.emptyList());
   }
 
@@ -140,8 +138,8 @@ public class HoodieSparkParquetReader implements HoodieSparkFileReader {
    * Currently, the filter must only contain field references related to the primary key, as the primary key does not involve schema evolution.
    * If it is necessary to expand to push down more fields in the future, please consider the issue of schema evolution carefully
    */
-  public ClosableIterator<UnsafeRow> getUnsafeRowIterator(Schema requestedSchema, List<Filter> readFilters) throws IOException {
-    Schema nonNullSchema = AvroSchemaUtils.getNonNullTypeFromUnion(requestedSchema);
+  public ClosableIterator<UnsafeRow> getUnsafeRowIterator(HoodieSchema requestedSchema, List<Filter> readFilters) throws IOException {
+    HoodieSchema nonNullSchema = HoodieSchemaUtils.getNonNullTypeFromUnion(requestedSchema);
     StructType structSchema = HoodieInternalRowUtils.getCachedSchema(nonNullSchema);
     Option<MessageType> messageSchema = Option.of(getAvroSchemaConverter(storage.getConf().unwrapAs(Configuration.class)).convert(nonNullSchema));
     boolean enableTimestampFieldRepair = storage.getConf().getBoolean(ENABLE_LOGICAL_TIMESTAMP_REPAIR, true);
@@ -191,7 +189,7 @@ public class HoodieSparkParquetReader implements HoodieSparkFileReader {
 
   private MessageType getFileSchema() {
     if (fileSchemaOption.isEmpty()) {
-      MessageType messageType = ((ParquetUtils) parquetUtils).readSchema(storage, path);
+      MessageType messageType = ((ParquetUtils) parquetUtils).readMessageType(storage, path);
       fileSchemaOption = Option.of(messageType);
     }
     return fileSchemaOption.get();
@@ -205,12 +203,10 @@ public class HoodieSparkParquetReader implements HoodieSparkFileReader {
       // and therefore if we convert to Avro directly we'll lose logical type-info.
       MessageType messageType = getFileSchema();
       StructType structType = getStructSchema();
-      schemaOption = Option.of(SparkAdapterSupport$.MODULE$.sparkAdapter()
-          .getAvroSchemaConverters()
-          .toAvroType(structType, true, messageType.getName(), StringUtils.EMPTY_STRING));
+      schemaOption = Option.of(HoodieSparkSchemaConverters.toHoodieType(
+          structType, true, messageType.getName(), StringUtils.EMPTY_STRING));
     }
-    //TODO boundary to revisit using HoodieSchema directly
-    return HoodieSchema.fromAvroSchema(schemaOption.get());
+    return schemaOption.get();
   }
 
   protected StructType getStructSchema() {

@@ -25,6 +25,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.util.StreamerUtil;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.api.common.typeutils.TypeSerializer;
@@ -37,8 +38,6 @@ import org.apache.flink.table.runtime.typeutils.InternalSerializers;
 import org.apache.flink.table.runtime.typeutils.InternalTypeInfo;
 import org.apache.flink.table.types.logical.RowType;
 import org.apache.flink.util.FlinkRuntimeException;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.time.Duration;
 import java.util.ArrayList;
@@ -51,9 +50,8 @@ import java.util.Map;
  *
  * <p>Note: reference Flink FileSystemLookupFunction to avoid additional connector jar dependencies.
  */
+@Slf4j
 public class HoodieLookupFunction extends TableFunction<RowData> {
-
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieLookupFunction.class);
 
   // the max number of retries before throwing exception, in case of failure to load the table
   // into cache
@@ -124,22 +122,22 @@ public class HoodieLookupFunction extends TableFunction<RowData> {
       return;
     }
     if (nextLoadTime > 0) {
-      LOG.info(
+      log.info(
           "Lookup join cache has expired after {} minute(s), reloading",
           reloadInterval.toMinutes());
     } else {
-      LOG.info("Populating lookup join cache");
+      log.info("Populating lookup join cache");
     }
 
     HoodieActiveTimeline latestCommit = metaClient.reloadActiveTimeline();
     Option<HoodieInstant> latestCommitInstant = latestCommit.getCommitsTimeline().lastInstant();
     if (latestCommit.empty()) {
-      LOG.info("No commit instant found currently.");
+      log.info("No commit instant found currently.");
       return;
     }
     // Determine whether to reload data by comparing instant
     if (latestCommitInstant.get().equals(currentCommit)) {
-      LOG.info("Ignore loading data because the commit instant " + currentCommit + " has not changed.");
+      log.info("Ignore loading data because the commit instant " + currentCommit + " has not changed.");
       return;
     }
 
@@ -160,7 +158,7 @@ public class HoodieLookupFunction extends TableFunction<RowData> {
         }
         partitionReader.close();
         nextLoadTime = System.currentTimeMillis() + reloadInterval.toMillis();
-        LOG.info("Loaded {} row(s) into lookup join cache", count);
+        log.info("Loaded {} row(s) into lookup join cache", count);
         return;
       } catch (Exception e) {
         if (numRetry >= MAX_RETRIES) {
@@ -171,11 +169,11 @@ public class HoodieLookupFunction extends TableFunction<RowData> {
         }
         numRetry++;
         long toSleep = numRetry * RETRY_INTERVAL.toMillis();
-        LOG.info("Failed to load table into cache, will retry in {} seconds", toSleep / 1000, e);
+        log.info("Failed to load table into cache, will retry in {} seconds", toSleep / 1000, e);
         try {
           Thread.sleep(toSleep);
         } catch (InterruptedException ex) {
-          LOG.error("Interrupted while waiting to retry failed cache load, aborting", ex);
+          log.error("Interrupted while waiting to retry failed cache load, aborting", ex);
           throw new FlinkRuntimeException(ex);
         }
       }

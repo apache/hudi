@@ -22,8 +22,9 @@ import org.apache.hudi.adapter.Utils;
 import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.common.model.PartitionBucketIndexHashingConfig;
 import org.apache.hudi.common.model.WriteOperationType;
-import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
@@ -31,10 +32,11 @@ import org.apache.hudi.exception.HoodieCatalogException;
 import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.internal.schema.Type;
 import org.apache.hudi.internal.schema.convert.InternalSchemaConverter;
-import org.apache.hudi.util.AvroSchemaConverter;
 import org.apache.hudi.util.FlinkWriteClients;
+import org.apache.hudi.util.HoodieSchemaConverter;
 import org.apache.hudi.util.StreamerUtil;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.configuration.ConfigOption;
 import org.apache.flink.table.catalog.AbstractCatalog;
@@ -50,8 +52,6 @@ import org.apache.flink.table.types.logical.LogicalType;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hive.conf.HiveConf;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import javax.annotation.Nullable;
 
@@ -77,8 +77,8 @@ import static org.apache.hudi.table.catalog.CatalogOptions.HIVE_SITE_FILE;
 /**
  * Utilities for Hoodie Catalog.
  */
+@Slf4j
 public class HoodieCatalogUtil {
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieCatalogUtil.class);
 
   /**
    * Returns a new {@code HiveConf}.
@@ -96,7 +96,7 @@ public class HoodieCatalogUtil {
     HiveConf.setLoadHiveServer2Config(false);
     HiveConf hiveConf = new HiveConf(hadoopConf, HiveConf.class);
 
-    LOG.info("Setting hive conf dir as {}", hiveConfDir);
+    log.info("Setting hive conf dir as {}", hiveConfDir);
 
     if (hiveConfDir != null) {
       Path hiveSite = new Path(hiveConfDir, HIVE_SITE_FILE);
@@ -117,7 +117,7 @@ public class HoodieCatalogUtil {
       URL hiveSite =
           Thread.currentThread().getContextClassLoader().getResource(HIVE_SITE_FILE);
       if (hiveSite != null) {
-        LOG.info("Found {} in classpath: {}", HIVE_SITE_FILE, hiveSite);
+        log.info("Found {} in classpath: {}", HIVE_SITE_FILE, hiveSite);
         hiveConf.addResource(hiveSite);
       }
     }
@@ -233,7 +233,7 @@ public class HoodieCatalogUtil {
       HoodieFlinkWriteClient<?> writeClient = createWriteClient(tablePath, oldTable, hadoopConf, inferTablePathFunc);
       Pair<InternalSchema, HoodieTableMetaClient> pair = writeClient.getInternalSchemaAndMetaClient();
       InternalSchema oldSchema = pair.getLeft();
-      Function<LogicalType, Type> convertFunc = (LogicalType logicalType) -> InternalSchemaConverter.convertToField(HoodieSchema.fromAvroSchema(AvroSchemaConverter.convertToSchema(logicalType)));
+      Function<LogicalType, Type> convertFunc = (LogicalType logicalType) -> InternalSchemaConverter.convertToField(HoodieSchemaConverter.convertToSchema(logicalType));
       InternalSchema newSchema = Utils.applyTableChange(oldSchema, tableChanges, convertFunc);
       if (!oldSchema.equals(newSchema)) {
         writeClient.setOperationType(WriteOperationType.ALTER_SCHEMA);
@@ -258,13 +258,18 @@ public class HoodieCatalogUtil {
       String tablePathStr,
       ObjectPath tablePath,
       org.apache.hadoop.conf.Configuration hadoopConf) {
-    return FlinkWriteClients.createWriteClientV2(
+    HoodieTableConfig tableConfig = StreamerUtil.createMetaClient(tablePathStr, hadoopConf).getTableConfig();
+    org.apache.flink.configuration.Configuration conf =
         org.apache.flink.configuration.Configuration.fromMap(options)
             .set(FlinkOptions.TABLE_NAME, tablePath.getObjectName())
             .set(
                 FlinkOptions.SOURCE_AVRO_SCHEMA,
-                StreamerUtil.createMetaClient(tablePathStr, hadoopConf)
-                    .getTableConfig().getTableCreateSchema().get().toString()));
+                tableConfig.getTableCreateSchema().get().toString());
+    String recordKey = tableConfig.getRecordKeyFieldProp();
+    if (StringUtils.nonEmpty(recordKey)) {
+      conf.set(FlinkOptions.RECORD_KEY_FIELD, recordKey);
+    }
+    return FlinkWriteClients.createWriteClientV2(conf);
   }
 
   private static boolean sameOptions(Map<String, String> parameters1, Map<String, String> parameters2, ConfigOption<String> option) {

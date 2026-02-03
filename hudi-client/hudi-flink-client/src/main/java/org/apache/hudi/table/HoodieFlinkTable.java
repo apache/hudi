@@ -52,10 +52,14 @@ public abstract class HoodieFlinkTable<T>
   }
 
   public static <T> HoodieFlinkTable<T> create(HoodieWriteConfig config, HoodieEngineContext context) {
+    return create(config, context, true);
+  }
+
+  public static <T> HoodieFlinkTable<T> create(HoodieWriteConfig config, HoodieEngineContext context, boolean loadActiveTimelineOnLoad) {
     HoodieTableMetaClient metaClient =
         HoodieTableMetaClient.builder()
             .setConf(context.getStorageConf().newInstance()).setBasePath(config.getBasePath())
-            .setLoadActiveTimelineOnLoad(true).setConsistencyGuardConfig(config.getConsistencyGuardConfig())
+            .setLoadActiveTimelineOnLoad(loadActiveTimelineOnLoad).setConsistencyGuardConfig(config.getConsistencyGuardConfig())
             .setTimeGeneratorConfig(config.getTimeGeneratorConfig())
             .setFileSystemRetryConfig(config.getFileSystemRetryConfig()).build();
     return HoodieFlinkTable.create(config, context, metaClient);
@@ -91,6 +95,12 @@ public abstract class HoodieFlinkTable<T>
     return FlinkHoodieIndexFactory.createIndex((HoodieFlinkEngineContext) context, config);
   }
 
+  @Override
+  public boolean shouldTrackSuccessRecords() {
+    // don't track success records for index writing, because flink writer has a dedicated index writer operator.
+    return false;
+  }
+
   /**
    * Fetch instance of {@link HoodieTableMetadataWriter}.
    *
@@ -108,7 +118,7 @@ public abstract class HoodieFlinkTable<T>
     if (config.isMetadataTableEnabled() || getMetaClient().getTableConfig().isMetadataTableAvailable()) {
       return Option.of(FlinkHoodieBackedTableMetadataWriter.create(
           getContext().getStorageConf(), config, failedWritesCleaningPolicy, getContext(),
-          Option.of(triggeringInstantTimestamp)));
+          Option.ofNullable(triggeringInstantTimestamp), streamingWrites));
     } else {
       return Option.empty();
     }

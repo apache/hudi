@@ -18,7 +18,6 @@
 
 package org.apache.hudi.table.format;
 
-import org.apache.hudi.avro.AvroSchemaUtils;
 import org.apache.hudi.client.model.BootstrapRowData;
 import org.apache.hudi.client.model.CommitTimeFlinkRecordMerger;
 import org.apache.hudi.client.model.EventTimeFlinkRecordMerger;
@@ -31,6 +30,7 @@ import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.log.InstantRange;
 import org.apache.hudi.common.table.read.FileGroupReaderSchemaHandler;
@@ -46,10 +46,9 @@ import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.util.Lazy;
-import org.apache.hudi.util.RowDataAvroQueryContexts;
 import org.apache.hudi.util.RecordKeyToRowDataConverter;
+import org.apache.hudi.util.RowDataQueryContexts;
 
-import org.apache.avro.Schema;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.data.utils.JoinedRowData;
 import org.apache.flink.table.types.DataType;
@@ -107,8 +106,8 @@ public class FlinkRowDataReaderContext extends HoodieReaderContext<RowData> {
         (HoodieRowDataParquetReader) HoodieIOFactory.getIOFactory(storage)
             .getReaderFactory(HoodieRecord.HoodieRecordType.FLINK)
             .getFileReader(tableConfig, filePath, HoodieFileFormat.PARQUET, Option.empty());
-    DataType rowType = RowDataAvroQueryContexts.fromAvroSchema(dataSchema.toAvroSchema()).getRowType();
-    return rowDataParquetReader.getRowDataIterator(schemaManager, rowType, requiredSchema, getSafePredicates(requiredSchema.toAvroSchema()));
+    DataType rowType = RowDataQueryContexts.fromSchema(dataSchema).getRowType();
+    return rowDataParquetReader.getRowDataIterator(schemaManager, rowType, requiredSchema, getSafePredicates(requiredSchema));
   }
 
   @Override
@@ -189,14 +188,14 @@ public class FlinkRowDataReaderContext extends HoodieReaderContext<RowData> {
       return;
     }
     // primary key semantic is lost if not all primary key fields are included in the request schema.
-    boolean pkSemanticLost = Arrays.stream(recordKeysOpt.get()).anyMatch(k -> schemaHandler.getRequestedSchema().getField(k) == null);
+    boolean pkSemanticLost = Arrays.stream(recordKeysOpt.get()).anyMatch(k -> schemaHandler.getRequestedSchema().getField(k).isEmpty());
     if (pkSemanticLost) {
       return;
     }
-    Schema requiredSchema = schemaHandler.getRequiredSchema();
+    HoodieSchema requiredSchema = schemaHandler.getRequiredSchema();
     // get primary key field position in required schema.
     int[] pkFieldsPos = Arrays.stream(recordKeysOpt.get())
-        .map(k -> Option.ofNullable(requiredSchema.getField(k)).map(Schema.Field::pos).orElse(-1))
+        .map(k -> requiredSchema.getField(k).map(HoodieSchemaField::pos).orElse(-1))
         .mapToInt(Integer::intValue)
         .toArray();
     // the converter is used to create a RowData contains primary key fields only
@@ -204,12 +203,12 @@ public class FlinkRowDataReaderContext extends HoodieReaderContext<RowData> {
     // For e.g, if the pk fields are [a, b] but user only select a, then the pk
     // semantics is lost.
     RecordKeyToRowDataConverter recordKeyRowConverter = new RecordKeyToRowDataConverter(
-        pkFieldsPos, (RowType) RowDataAvroQueryContexts.fromAvroSchema(requiredSchema).getRowType().getLogicalType());
+        pkFieldsPos, (RowType) RowDataQueryContexts.fromSchema(requiredSchema).getRowType().getLogicalType());
     ((FlinkRecordContext) recordContext).setRecordKeyRowConverter(recordKeyRowConverter);
   }
 
-  private List<ExpressionPredicates.Predicate> getSafePredicates(Schema requiredSchema) {
-    boolean hasRowIndexField = AvroSchemaUtils.containsFieldInSchema(requiredSchema, ROW_INDEX_TEMPORARY_COLUMN_NAME);
+  private List<ExpressionPredicates.Predicate> getSafePredicates(HoodieSchema requiredSchema) {
+    boolean hasRowIndexField = requiredSchema.getField(ROW_INDEX_TEMPORARY_COLUMN_NAME).isPresent();
     if (!getHasLogFiles() && !getNeedsBootstrapMerge()) {
       return allPredicates;
     } else if (!getHasLogFiles() && hasRowIndexField) {

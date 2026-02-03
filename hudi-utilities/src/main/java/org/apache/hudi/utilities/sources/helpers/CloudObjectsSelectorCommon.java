@@ -18,10 +18,12 @@
 
 package org.apache.hudi.utilities.sources.helpers;
 
-import org.apache.hudi.AvroConversionUtils;
+import org.apache.hudi.HoodieSchemaConversionUtils;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaField;
+import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.exception.HoodieException;
@@ -32,10 +34,9 @@ import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.utilities.config.CloudSourceConfig;
 import org.apache.hudi.utilities.config.S3EventsHoodieIncrSourceConfig;
 import org.apache.hudi.utilities.schema.SchemaProvider;
-import org.apache.hudi.utilities.sources.InputBatch;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import org.apache.avro.Schema;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
@@ -52,8 +53,6 @@ import org.apache.spark.sql.types.DataType;
 import org.apache.spark.sql.types.Metadata;
 import org.apache.spark.sql.types.StructField;
 import org.apache.spark.sql.types.StructType;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.net.URLDecoder;
@@ -92,9 +91,8 @@ import static org.apache.spark.sql.functions.split;
  * NOTE: DO NOT use any implementation specific classes here. This class is supposed to across S3EventsSource,
  * GcsEventsSource etc...so you can't assume the classes for your specific implementation will be available here.
  */
+@Slf4j
 public class CloudObjectsSelectorCommon {
-
-  private static final Logger LOG = LoggerFactory.getLogger(CloudObjectsSelectorCommon.class);
 
   public static final String S3_OBJECT_KEY = "s3.object.key";
   public static final String S3_OBJECT_SIZE = "s3.object.size";
@@ -125,7 +123,7 @@ public class CloudObjectsSelectorCommon {
       rows.forEachRemaining(row -> {
         Option<String> filePathUrl = getUrlForFile(row, storageUrlSchemePrefix, storageConf, checkIfExists);
         filePathUrl.ifPresent(url -> {
-          LOG.info("Adding file: " + url);
+          log.info("Adding file: {}", url);
           long size;
           Object obj = row.get(2);
           if (obj instanceof String) {
@@ -169,7 +167,7 @@ public class CloudObjectsSelectorCommon {
       boolean exists = checkIfFileExists(storageUrlSchemePrefix, bucket, filePathUrl, configuration);
       return exists ? Option.of(filePathUrl) : Option.empty();
     } catch (Exception exception) {
-      LOG.error("Failed to generate path to cloud file {}", filePath, exception);
+      log.error("Failed to generate path to cloud file {}", filePath, exception);
       throw new HoodieException(String.format("Failed to generate path to cloud file %s", filePath), exception);
     }
   }
@@ -185,7 +183,7 @@ public class CloudObjectsSelectorCommon {
       return fs.exists(new Path(filePathUrl));
     } catch (IOException ioe) {
       String errMsg = String.format("Error while checking path exists for %s ", filePathUrl);
-      LOG.error(errMsg, ioe);
+      log.error(errMsg, ioe);
       throw new HoodieIOException(errMsg, ioe);
     }
   }
@@ -275,9 +273,9 @@ public class CloudObjectsSelectorCommon {
 
   public Option<Dataset<Row>> loadAsDataset(SparkSession spark, List<CloudObjectMetadata> cloudObjectMetadata,
                                             String fileFormat, Option<SchemaProvider> schemaProviderOption, int numPartitions) {
-    if (LOG.isDebugEnabled()) {
-      LOG.debug("Extracted distinct files " + cloudObjectMetadata.size()
-          + " and some samples " + cloudObjectMetadata.stream().map(CloudObjectMetadata::getPath).limit(10).collect(Collectors.toList()));
+    if (log.isDebugEnabled()) {
+      log.debug("Extracted distinct files {} and some samples {}",
+          cloudObjectMetadata.size(), cloudObjectMetadata.stream().map(CloudObjectMetadata::getPath).limit(10).collect(Collectors.toList()));
     }
 
     if (isNullOrEmpty(cloudObjectMetadata)) {
@@ -289,11 +287,10 @@ public class CloudObjectsSelectorCommon {
     StructType rowSchema = null;
     if (schemaProviderOption.isPresent()) {
       HoodieSchema sourceSchema = schemaProviderOption.get().getSourceHoodieSchema();
-      if (sourceSchema != null && !sourceSchema.equals(InputBatch.NULL_SCHEMA)) {
-        Schema sourceAvroSchema = sourceSchema.toAvroSchema();
-        rowSchema = AvroConversionUtils.convertAvroSchemaToStructType(sourceAvroSchema);
+      if (sourceSchema != null && !sourceSchema.equals(HoodieSchema.NULL_SCHEMA)) {
+        rowSchema = HoodieSchemaConversionUtils.convertHoodieSchemaToStructType(sourceSchema);
         if (isCoalesceRequired(properties, sourceSchema)) {
-          reader = reader.schema(addAliasesToRowSchema(sourceAvroSchema, rowSchema));
+          reader = reader.schema(addAliasesToRowSchema(sourceSchema, rowSchema));
         } else {
           reader = reader.schema(rowSchema);
         }
@@ -312,7 +309,7 @@ public class CloudObjectsSelectorCommon {
       } catch (IOException e) {
         throw new HoodieException(String.format("Failed to parse sparkOptions: %s", datasourceOpts), e);
       }
-      LOG.info("SparkOptions loaded: {}", sparkOptionsMap);
+      log.info("SparkOptions loaded: {}", sparkOptionsMap);
       reader = reader.options(sparkOptionsMap);
     }
     List<String> paths = new ArrayList<>();
@@ -331,7 +328,7 @@ public class CloudObjectsSelectorCommon {
     if (schemaProviderOption.isPresent()) {
       HoodieSchema sourceSchema = schemaProviderOption.get().getSourceHoodieSchema();
       if (isCoalesceRequired(properties, sourceSchema)) {
-        dataset = spark.createDataFrame(coalesceAliasFields(dataset, sourceSchema.toAvroSchema()).rdd(), rowSchema);
+        dataset = spark.createDataFrame(coalesceAliasFields(dataset, sourceSchema).rdd(), rowSchema);
       }
     }
 
@@ -341,7 +338,7 @@ public class CloudObjectsSelectorCommon {
       // Add partition column for all path-based partition keys. If key is not present in path, the value will be null.
       for (String partitionKey : partitionKeysToAdd) {
         String partitionPathPattern = String.format("%s=", partitionKey);
-        LOG.info(String.format("Adding column %s to dataset", partitionKey));
+        log.info("Adding column {} to dataset", partitionKey);
         dataset = dataset.withColumn(partitionKey, split(split(input_file_name(), partitionPathPattern).getItem(1), StoragePath.SEPARATOR).getItem(0));
       }
     }
@@ -352,19 +349,19 @@ public class CloudObjectsSelectorCommon {
   private static boolean isCoalesceRequired(TypedProperties properties, HoodieSchema sourceSchema) {
     return getBooleanWithAltKeys(properties, CloudSourceConfig.SPARK_DATASOURCE_READER_COALESCE_ALIAS_COLUMNS)
         && Objects.nonNull(sourceSchema)
-        && hasFieldWithAliases(sourceSchema.toAvroSchema());
+        && hasFieldWithAliases(sourceSchema);
   }
 
   /**
-   * Recursively checks if an Avro schema or any of its nested fields contain aliases.
+   * Recursively checks if a schema or any of its nested fields contain aliases.
    *
-   * @param schema The Avro schema to check.
+   * @param schema The schema to check.
    * @return True if the schema or any of its fields contain aliases, false otherwise.
    */
-  private static boolean hasFieldWithAliases(Schema schema) {
+  private static boolean hasFieldWithAliases(HoodieSchema schema) {
     // If the schema is a record, check its fields recursively
     if (isNestedRecord(schema)) {
-      for (Schema.Field field : getRecordFields(schema)) {
+      for (HoodieSchemaField field : getRecordFields(schema)) {
         // Check if the field has aliases
         if (!field.aliases().isEmpty()) {
           return true;
@@ -379,27 +376,27 @@ public class CloudObjectsSelectorCommon {
     return false;
   }
 
-  private static StructType addAliasesToRowSchema(Schema avroSchema, StructType rowSchema) {
+  private static StructType addAliasesToRowSchema(HoodieSchema schema, StructType rowSchema) {
     Map<String, StructField> rowFieldsMap = Arrays.stream(rowSchema.fields())
         .collect(Collectors.toMap(StructField::name, Function.identity()));
 
-    StructField[] modifiedFields = getRecordFields(avroSchema).stream()
-        .flatMap(avroField -> generateRowFieldsWithAliases(avroField, rowFieldsMap.get(avroField.name())).stream())
+    StructField[] modifiedFields = getRecordFields(schema).stream()
+        .flatMap(field -> generateRowFieldsWithAliases(field, rowFieldsMap.get(field.name())).stream())
         .toArray(StructField[]::new);
 
     return new StructType(modifiedFields);
   }
 
-  private static List<Schema.Field> getRecordFields(Schema schema) {
-    if (schema.getType() == Schema.Type.RECORD) {
+  private static List<HoodieSchemaField> getRecordFields(HoodieSchema schema) {
+    if (schema.getType() == HoodieSchemaType.RECORD) {
       return schema.getFields();
     }
 
-    if (schema.getType() == Schema.Type.UNION) {
+    if (schema.getType() == HoodieSchemaType.UNION) {
       return schema.getTypes().stream()
-          .filter(subSchema -> subSchema.getType() == Schema.Type.RECORD)
+          .filter(subSchema -> subSchema.getType() == HoodieSchemaType.RECORD)
           .findFirst()
-          .map(Schema::getFields)
+          .map(HoodieSchema::getFields)
           .orElse(Collections.emptyList());
     }
 
@@ -407,35 +404,35 @@ public class CloudObjectsSelectorCommon {
   }
 
   /**
-   * Generates a list of StructFields with aliases applied based on the provided Avro field schema.
+   * Generates a list of StructFields with aliases applied based on the provided field's schema.
    * <p>
-   * This method processes a given Avro field and its corresponding Spark SQL StructField, handling
-   * nested records and aliases. If the Avro field contains nested records, the method recursively
-   * updates the schema for these records and applies any aliases defined in the Avro schema.
-   * If the Avro field has aliases, they are added as new fields with nullable set to true and
+   * This method processes a given field and its corresponding Spark SQL StructField, handling
+   * nested records and aliases. If the field contains nested records, the method recursively
+   * updates the schema for these records and applies any aliases defined in the schema.
+   * If the field has aliases, they are added as new fields with nullable set to true and
    * appropriate metadata in the returned list. If no aliases or nesting are present, the original
    * StructField is returned unchanged.
    *
-   * @param avroField The Avro field schema to process.
-   * @param rowField  The corresponding Spark SQL StructField to map the Avro field to.
-   * @return A list of StructFields with aliases applied as per the Avro schema.
+   * @param field The field from the schema to process.
+   * @param rowField  The corresponding Spark SQL StructField to map the field to.
+   * @return A list of StructFields with aliases applied as per the provided schema.
    */
-  private static List<StructField> generateRowFieldsWithAliases(Schema.Field avroField, StructField rowField) {
+  private static List<StructField> generateRowFieldsWithAliases(HoodieSchemaField field, StructField rowField) {
     List<StructField> fieldList = new ArrayList<>();
 
     // Handle nested records
-    if (isNestedRecord(avroField.schema())) {
-      StructType updatedSchema = addAliasesToRowSchema(avroField.schema(), (StructType) rowField.dataType());
+    if (isNestedRecord(field.schema())) {
+      StructType updatedSchema = addAliasesToRowSchema(field.schema(), (StructType) rowField.dataType());
 
-      if (schemaModifiedOrHasAliases(avroField, updatedSchema, rowField)) {
+      if (schemaModifiedOrHasAliases(field, updatedSchema, rowField)) {
         // Add the original field with the updated schema and add aliases if present
-        addFieldWithAliases(fieldList, avroField.name(), updatedSchema, rowField.metadata(), avroField.aliases());
+        addFieldWithAliases(fieldList, field.name(), updatedSchema, rowField.metadata(), field.aliases());
       } else {
         fieldList.add(rowField);
       }
-    } else if (!avroField.aliases().isEmpty()) {
+    } else if (!field.aliases().isEmpty()) {
       // If the field has aliases, add them to the schema
-      addFieldWithAliases(fieldList, avroField.name(), rowField.dataType(), rowField.metadata(), avroField.aliases());
+      addFieldWithAliases(fieldList, field.name(), rowField.dataType(), rowField.metadata(), field.aliases());
     } else {
       // No aliases or nesting, return the original field
       fieldList.add(rowField);
@@ -448,22 +445,22 @@ public class CloudObjectsSelectorCommon {
     aliases.forEach(alias -> fieldList.add(new StructField(alias, dataType, true, metadata)));
   }
 
-  private static Dataset<Row> coalesceAliasFields(Dataset<Row> dataset, Schema sourceSchema) {
+  private static Dataset<Row> coalesceAliasFields(Dataset<Row> dataset, HoodieSchema sourceSchema) {
     return coalesceNestedAliases(coalesceTopLevelAliases(dataset, sourceSchema), sourceSchema);
   }
 
   /**
    * Merges top-level fields with their aliases in the dataset.
    * <p>
-   * This method goes through the top-level fields in the Avro schema, and for any field that has aliases,
+   * This method goes through the top-level fields in the schema, and for any field that has aliases,
    * it combines them in the dataset using a coalesce operation. This ensures that if a field is null,
    * the value from its alias is used instead.
    *
    * @param dataset      The dataset to process.
-   * @param sourceSchema The Avro schema defining the fields and their aliases.
+   * @param sourceSchema The schema defining the fields and their aliases.
    * @return A dataset with fields merged with their aliases.
    */
-  private static Dataset<Row> coalesceTopLevelAliases(Dataset<Row> dataset, Schema sourceSchema) {
+  private static Dataset<Row> coalesceTopLevelAliases(Dataset<Row> dataset, HoodieSchema sourceSchema) {
     return getRecordFields(sourceSchema).stream()
         .filter(field -> !field.aliases().isEmpty())
         .reduce(dataset,
@@ -482,17 +479,17 @@ public class CloudObjectsSelectorCommon {
   /**
    * Merges nested fields with their aliases in the dataset.
    * <p>
-   * This method iterates through the fields of the provided Avro schema and checks if they represent
+   * This method iterates through the fields of the provided schema and checks if they represent
    * nested records. For each nested record, it verifies if there are any alias fields present. If
    * aliases are found, the method generates a list of nested fields, coalescing them with their aliases,
    * and creates a new column in the dataset with the merged data.
    *
    * @param dataset      The dataset to process.
-   * @param sourceSchema The Avro schema defining the structure and aliases of the data.
+   * @param sourceSchema The schema defining the structure and aliases of the data.
    * @return A dataset with nested fields merged with their aliases.
    */
-  private static Dataset<Row> coalesceNestedAliases(Dataset<Row> dataset, Schema sourceSchema) {
-    for (Schema.Field field : getRecordFields(sourceSchema)) {
+  private static Dataset<Row> coalesceNestedAliases(Dataset<Row> dataset, HoodieSchema sourceSchema) {
+    for (HoodieSchemaField field : getRecordFields(sourceSchema)) {
       // check if this is a nested record and contains an alias field within
       if (isNestedRecord(field.schema()) && hasFieldWithAliases(field.schema())) {
         dataset = dataset.withColumn(field.name(), functions.struct(getNestedFields("", field, dataset)));
@@ -501,32 +498,32 @@ public class CloudObjectsSelectorCommon {
     return dataset;
   }
 
-  private static Column[] getNestedFields(String parentField, Schema.Field field, Dataset<Row> dataset) {
+  private static Column[] getNestedFields(String parentField, HoodieSchemaField field, Dataset<Row> dataset) {
     return getRecordFields(field.schema()).stream()
-        .map(avroField -> {
+        .map(schemaField -> {
           List<Column> columns = new ArrayList<>();
           String newParentField = getFullName(parentField, field.name());
-          if (isNestedRecord(avroField.schema())) {
+          if (isNestedRecord(schemaField.schema())) {
             // if field is nested, recursively fetch nested column
-            columns.add(functions.struct(getNestedFields(newParentField, avroField, dataset)));
+            columns.add(functions.struct(getNestedFields(newParentField, schemaField, dataset)));
           } else {
-            columns.add(dataset.col(getFullName(newParentField, avroField.name())));
+            columns.add(dataset.col(getFullName(newParentField, schemaField.name())));
           }
-          avroField.aliases().forEach(alias -> columns.add(dataset.col(getFullName(newParentField, alias))));
-          // if avro field contains aliases, coalesce the column with others matching the aliases otherwise return actual column
-          return avroField.aliases().isEmpty() ? columns.get(0)
-              : functions.coalesce(columns.toArray(new Column[0])).alias(avroField.name());
+          schemaField.aliases().forEach(alias -> columns.add(dataset.col(getFullName(newParentField, alias))));
+          // if field contains aliases, coalesce the column with others matching the aliases otherwise return actual column
+          return schemaField.aliases().isEmpty() ? columns.get(0)
+              : functions.coalesce(columns.toArray(new Column[0])).alias(schemaField.name());
         }).toArray(Column[]::new);
   }
 
-  private static boolean isNestedRecord(Schema schema) {
-    if (schema.getType() == Schema.Type.RECORD) {
+  private static boolean isNestedRecord(HoodieSchema schema) {
+    if (schema.getType() == HoodieSchemaType.RECORD) {
       return true;
     }
 
-    if (schema.getType() == Schema.Type.UNION) {
+    if (schema.getType() == HoodieSchemaType.UNION) {
       return schema.getTypes().stream()
-          .anyMatch(subSchema -> subSchema.getType() == Schema.Type.RECORD);
+          .anyMatch(subSchema -> subSchema.getType() == HoodieSchemaType.RECORD);
     }
 
     return false;
@@ -536,8 +533,8 @@ public class CloudObjectsSelectorCommon {
     return namespace.isEmpty() ? fieldName : namespace + "." + fieldName;
   }
 
-  private static boolean schemaModifiedOrHasAliases(Schema.Field avroField, StructType modifiedNestedSchema, StructField rowField) {
-    return !modifiedNestedSchema.equals(rowField.dataType()) || !avroField.aliases().isEmpty();
+  private static boolean schemaModifiedOrHasAliases(HoodieSchemaField field, StructType modifiedNestedSchema, StructField rowField) {
+    return !modifiedNestedSchema.equals(rowField.dataType()) || !field.aliases().isEmpty();
   }
 
   private static Option<String> getPropVal(TypedProperties props, ConfigProperty<String> configProperty) {
