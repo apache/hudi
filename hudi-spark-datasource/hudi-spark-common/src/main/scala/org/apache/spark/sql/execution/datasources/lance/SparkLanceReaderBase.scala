@@ -139,7 +139,7 @@ class SparkLanceReaderBase(enableVectorizedReader: Boolean) extends SparkColumna
           schemaUtils
         )
 
-        // Unify projections by applying padging and then casting for each row
+        // Unify projections by applying padding and then casting for each row
         val projection: UnsafeProjection = new UnsafeProjection {
           def apply(row: InternalRow): UnsafeRow =
             castProj(paddingProj(row))

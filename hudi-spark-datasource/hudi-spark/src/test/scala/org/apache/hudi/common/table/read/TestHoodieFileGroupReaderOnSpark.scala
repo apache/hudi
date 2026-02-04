@@ -121,10 +121,10 @@ class TestHoodieFileGroupReaderOnSpark extends TestHoodieFileGroupReaderBase[Int
   }
 
   override def commitProcessedRecordsToTable(recordList: util.List[HoodieRecord[_]],
-                                             operation: String,
-                                             firstCommit: Boolean,
-                                             options: util.Map[String, String],
-                                             schemaStr: String): Unit = {
+                             operation: String,
+                             firstCommit: Boolean,
+                             options: util.Map[String, String],
+                             schemaStr: String): Unit = {
     val schema = HoodieSchema.parse(schemaStr)
     val genericRecords = spark.sparkContext.parallelize((hoodieRecordsToIndexedRecords(recordList, schema)
       .stream().map[GenericRecord](entry => entry.getValue.asInstanceOf[GenericRecord])

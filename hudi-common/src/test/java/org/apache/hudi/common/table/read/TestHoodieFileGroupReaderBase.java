@@ -543,10 +543,9 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
       args.add(arguments(HoodieFileFormat.LANCE, "avro"));
       args.add(arguments(HoodieFileFormat.LANCE, "parquet"));
     }
-
     args.add(arguments(HoodieFileFormat.PARQUET, "avro"));
     args.add(arguments(HoodieFileFormat.PARQUET, "parquet"));
-
+    
     return args.stream();
   }
   
