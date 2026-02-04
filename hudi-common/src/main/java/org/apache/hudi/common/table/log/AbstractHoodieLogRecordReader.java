@@ -44,6 +44,7 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.internal.schema.action.InternalSchemaMerger;
 import org.apache.hudi.internal.schema.convert.AvroInternalSchemaConverter;
+import org.apache.hudi.io.storage.HoodieFileReader;
 
 import org.apache.avro.Schema;
 import org.apache.hadoop.fs.FileSystem;
@@ -187,7 +188,8 @@ public abstract class AbstractHoodieLogRecordReader {
     this.forceFullScan = forceFullScan;
     this.internalSchema = internalSchema == null ? InternalSchema.getEmptyInternalSchema() : internalSchema;
     this.enableOptimizedLogBlocksScan = enableOptimizedLogBlocksScan;
-    this.enableLogicalTimestampFieldRepair = readerSchema != null && AvroSchemaUtils.hasTimestampMillisField(readerSchema);
+    this.enableLogicalTimestampFieldRepair = storage.getConf().getBoolean(HoodieFileReader.ENABLE_LOGICAL_TIMESTAMP_REPAIR,
+        () -> readerSchema != null && AvroSchemaUtils.hasTimestampMillisField(readerSchema));
 
     if (keyFieldOverride.isPresent()) {
       // NOTE: This branch specifically is leveraged handling Metadata Table

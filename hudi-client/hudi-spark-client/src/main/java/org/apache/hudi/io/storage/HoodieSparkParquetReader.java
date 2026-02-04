@@ -64,7 +64,6 @@ public class HoodieSparkParquetReader implements HoodieSparkFileReader {
   private final Configuration conf;
   private final BaseFileUtils parquetUtils;
   private List<ParquetReaderIterator> readerIterators = new ArrayList<>();
-  public static final String ENABLE_LOGICAL_TIMESTAMP_REPAIR = "spark.hudi.logicalTimestampField.repair.enable";
   private Option<MessageType> fileSchemaOption = Option.empty();
   private Option<StructType> structTypeOption = Option.empty();
   private Option<Schema> schemaOption = Option.empty();
@@ -127,8 +126,9 @@ public class HoodieSparkParquetReader implements HoodieSparkFileReader {
       requestedSchema = readerSchema;
     }
     // Set configuration for timestamp_millis type repair.
-    conf.set(ENABLE_LOGICAL_TIMESTAMP_REPAIR, Boolean.toString(AvroSchemaUtils.hasTimestampMillisField(readerSchema)));
-
+    if (!storage.getConf().contains(HoodieFileReader.ENABLE_LOGICAL_TIMESTAMP_REPAIR)) {
+      storage.getConf().set(ENABLE_LOGICAL_TIMESTAMP_REPAIR, Boolean.toString(AvroSchemaUtils.hasTimestampMillisField(readerSchema)));
+    }
     MessageType fileSchema = getFileSchema();
     Schema nonNullSchema = AvroSchemaUtils.getNonNullTypeFromUnion(requestedSchema);
     Option<MessageType> messageSchema = Option.of(getAvroSchemaConverter(conf).convert(nonNullSchema));

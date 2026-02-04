@@ -36,7 +36,7 @@ import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.exception.{HoodieException, HoodieIncrementalPathNotFoundException}
 import org.apache.hudi.internal.schema.InternalSchema
 import org.apache.hudi.internal.schema.utils.SerDeHelper
-import org.apache.hudi.io.storage.HoodieSparkParquetReader
+import org.apache.hudi.io.storage.HoodieFileReader
 import org.apache.hudi.table.HoodieSparkTable
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.rdd.RDD
@@ -210,7 +210,7 @@ class IncrementalRelation(val sqlContext: SQLContext,
         LegacyHoodieParquetFileFormat.setTableAvroSchemaInConf(
           sqlContext.sparkContext.hadoopConfiguration, tableAvroSchema)
         sqlContext.sparkContext.hadoopConfiguration.set(
-          HoodieSparkParquetReader.ENABLE_LOGICAL_TIMESTAMP_REPAIR,
+          HoodieFileReader.ENABLE_LOGICAL_TIMESTAMP_REPAIR,
           AvroSchemaUtils.hasTimestampMillisField(tableAvroSchema).toString)
       }
       val formatClassName = metaClient.getTableConfig.getBaseFileFormat match {
