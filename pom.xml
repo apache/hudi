@@ -2482,6 +2482,8 @@
         <hudi.spark.common.modules.1>hudi-spark2-common</hudi.spark.common.modules.1>
         <hudi.spark.common.modules.2/>
         <kafka.version>2.0.0</kafka.version>
+        <!-- hive.storage.version same as orc.spark.version-->
+        <hive.storage.version>2.6.0</hive.storage.version>
         <parquet.version>1.10.1</parquet.version>
         <orc.spark.version>1.6.0</orc.spark.version>
         <avro.version>1.8.2</avro.version>
