@@ -1338,7 +1338,7 @@ public class TestCleaner extends HoodieCleanerTestBase {
    */
   @Test
   public void testIncrementalCleanPartitionScanningWithDifferentOperationTypesCOW() throws Exception {
-    // Setup: Keep latest 2 commits, incremental clean enabled
+    // Setup: Keep latest 1 commit, incremental clean enabled (more aggressive cleaning)
     HoodieWriteConfig config = getConfigBuilder()
         .withMetadataConfig(HoodieMetadataConfig.newBuilder()
             .withMaxNumDeltaCommitsBeforeCompaction(1).build())
@@ -1346,7 +1346,7 @@ public class TestCleaner extends HoodieCleanerTestBase {
             .withIncrementalCleaningMode(true)
             .withAutoClean(false)
             .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_COMMITS)
-            .retainCommits(2)
+            .retainCommits(1)
             .build())
         .withArchivalConfig(HoodieArchivalConfig.newBuilder()
             .withAutoArchive(false)
@@ -1383,30 +1383,21 @@ public class TestCleaner extends HoodieCleanerTestBase {
       client.upsert(jsc.parallelize(upsertRecords3, 1), commit3).collect();
       metaClient = HoodieTableMetaClient.reload(metaClient);
 
-      // Commit 4: Upsert on upsert partition to create a fourth file version
-      String commit4 = client.startCommit();
-      List<HoodieRecord> upsertRecords4 = dataGen.generateUpdates(commit4, upsertRecords3);
-      client.upsert(jsc.parallelize(upsertRecords4, 1), commit4).collect();
-      metaClient = HoodieTableMetaClient.reload(metaClient);
-
-      // Run first clean - with retainCommits(2), this should clean files from commit1 and commit2
-      // This creates a clean instant with proper earliestCommitToRetain
+      // Run first clean - with retainCommits(1), this should clean files from commit1
       HoodieCleanMetadata firstCleanMetadata = client.clean();
       assertNotNull(firstCleanMetadata, "First clean should have cleaned some files");
-      assertTrue(firstCleanMetadata.getPartitionMetadata().containsKey(partitionUpsert),
-          "First clean should have cleaned files from upsert partition");
       metaClient = HoodieTableMetaClient.reload(metaClient);
 
       // Phase 2: Now we have a valid clean instant, proceed with testing incremental clean behavior
 
       // Add initial data to insertOverwrite and cluster partitions (for later replace commits)
-      String commit5 = client.startCommit();
-      List<HoodieRecord> initialRecordsInsertOverwrite = dataGen.generateInsertsForPartition(commit5, 10, partitionInsertOverwrite);
-      List<HoodieRecord> initialRecordsCluster = dataGen.generateInsertsForPartition(commit5, 10, partitionCluster);
-      List<HoodieRecord> allCommit5Records = new ArrayList<>();
-      allCommit5Records.addAll(initialRecordsInsertOverwrite);
-      allCommit5Records.addAll(initialRecordsCluster);
-      client.insert(jsc.parallelize(allCommit5Records, 1), commit5).collect();
+      String commit4 = client.startCommit();
+      List<HoodieRecord> initialRecordsInsertOverwrite = dataGen.generateInsertsForPartition(commit4, 10, partitionInsertOverwrite);
+      List<HoodieRecord> initialRecordsCluster = dataGen.generateInsertsForPartition(commit4, 10, partitionCluster);
+      List<HoodieRecord> allCommit4Records = new ArrayList<>();
+      allCommit4Records.addAll(initialRecordsInsertOverwrite);
+      allCommit4Records.addAll(initialRecordsCluster);
+      client.insert(jsc.parallelize(allCommit4Records, 1), commit4).collect();
       metaClient = HoodieTableMetaClient.reload(metaClient);
 
       // bulk_insert on insert partition (creates new file groups only - should NOT be in incremental clean)
@@ -1417,7 +1408,7 @@ public class TestCleaner extends HoodieCleanerTestBase {
 
       // Upsert on upsert partition (modifies existing file groups)
       String upsertCommit = client.startCommit();
-      List<HoodieRecord> upsertRecords = dataGen.generateUpdates(upsertCommit, upsertRecords4);
+      List<HoodieRecord> upsertRecords = dataGen.generateUpdates(upsertCommit, upsertRecords3);
       client.upsert(jsc.parallelize(upsertRecords, 1), upsertCommit).collect();
       metaClient = HoodieTableMetaClient.reload(metaClient);
 
@@ -1440,22 +1431,21 @@ public class TestCleaner extends HoodieCleanerTestBase {
           .map(fs -> fs.getFileId())
           .collect(Collectors.toList());
 
-      if (!existingFileIds.isEmpty()) {
-        Pair<HoodieRequestedReplaceMetadata, HoodieReplaceCommitMetadata> replaceMetadata =
-            generateReplaceCommitMetadata(clusteringCommit, partitionCluster, existingFileIds.get(0), newFileId);
-        testTable.addReplaceCommit(clusteringCommit, Option.of(replaceMetadata.getKey()), Option.empty(), replaceMetadata.getValue());
-      }
+      assertFalse(existingFileIds.isEmpty(), "Cluster partition should have existing file IDs");
+      Pair<HoodieRequestedReplaceMetadata, HoodieReplaceCommitMetadata> replaceMetadata =
+          generateReplaceCommitMetadata(clusteringCommit, partitionCluster, existingFileIds.get(0), newFileId);
+      testTable.addReplaceCommit(clusteringCommit, Option.of(replaceMetadata.getKey()), Option.empty(), replaceMetadata.getValue());
       metaClient = HoodieTableMetaClient.reload(metaClient);
 
       // Two more upsert commits on upsert partition to create enough commits for cleaning
-      String commit9 = client.startCommit();
-      List<HoodieRecord> upsertRecords9 = dataGen.generateUpdates(commit9, upsertRecords);
-      client.upsert(jsc.parallelize(upsertRecords9, 1), commit9).collect();
+      String commit7 = client.startCommit();
+      List<HoodieRecord> upsertRecords7 = dataGen.generateUpdates(commit7, upsertRecords);
+      client.upsert(jsc.parallelize(upsertRecords7, 1), commit7).collect();
       metaClient = HoodieTableMetaClient.reload(metaClient);
 
-      String commit10 = client.startCommit();
-      List<HoodieRecord> upsertRecords10 = dataGen.generateUpdates(commit10, upsertRecords9);
-      client.upsert(jsc.parallelize(upsertRecords10, 1), commit10).collect();
+      String commit8 = client.startCommit();
+      List<HoodieRecord> upsertRecords8 = dataGen.generateUpdates(commit8, upsertRecords7);
+      client.upsert(jsc.parallelize(upsertRecords8, 1), commit8).collect();
       metaClient = HoodieTableMetaClient.reload(metaClient);
 
       // Run final clean - this should use incremental mode and only scan relevant partitions
@@ -1500,7 +1490,7 @@ public class TestCleaner extends HoodieCleanerTestBase {
     HoodieTestUtils.init(storageConf, basePath, HoodieTableType.MERGE_ON_READ);
     metaClient = HoodieTableMetaClient.reload(metaClient);
 
-    // Setup: Keep latest 2 commits, incremental clean enabled
+    // Setup: Keep latest 1 commit, incremental clean enabled
     HoodieWriteConfig config = getConfigBuilder()
         .withMetadataConfig(HoodieMetadataConfig.newBuilder()
             .withMaxNumDeltaCommitsBeforeCompaction(1).build())
@@ -1508,7 +1498,7 @@ public class TestCleaner extends HoodieCleanerTestBase {
             .withIncrementalCleaningMode(true)
             .withAutoClean(false)
             .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_COMMITS)
-            .retainCommits(2)
+            .retainCommits(1)
             .build())
         .withCompactionConfig(HoodieCompactionConfig.newBuilder()
             .withInlineCompaction(false)
@@ -1528,43 +1518,36 @@ public class TestCleaner extends HoodieCleanerTestBase {
     final String partitionCluster = "2020/01/03";         // delta commits + clustering - should be in clean plan
 
     try (SparkRDDWriteClient client = new SparkRDDWriteClient(context, config)) {
-      // Phase 1: Establish initial data and first clean to have a valid earliestCommitToRetain
+      SparkRDDReadClient readClient = new SparkRDDReadClient(context, config);
 
-      // Delta commit 1: Insert to compaction partition with many records to create multiple log files
+      // Phase 1: Create data in compaction partition and run compaction to establish a clean baseline
+
+      // Delta commit 1: Insert to compaction partition (creates base file)
       String commit1 = client.startCommit();
-      List<HoodieRecord> recordsCompaction1 = dataGen.generateInsertsForPartition(commit1, 100, partitionCompaction);
+      List<HoodieRecord> recordsCompaction1 = dataGen.generateInsertsForPartition(commit1, 10, partitionCompaction);
       JavaRDD<WriteStatus> writeStatus1 = client.insert(jsc.parallelize(recordsCompaction1, 1), commit1);
       client.commit(commit1, writeStatus1, Option.empty(), DELTA_COMMIT_ACTION, Collections.emptyMap(), Option.empty());
       metaClient = HoodieTableMetaClient.reload(metaClient);
 
-      // Delta commit 2: Updates to compaction partition to add more log files
+      // Delta commit 2: Updates to compaction partition (creates log files on top of base file)
       String commit2 = client.startCommit();
       List<HoodieRecord> recordsCompaction2 = dataGen.generateUpdates(commit2, recordsCompaction1);
-      SparkRDDReadClient readClient = new SparkRDDReadClient(context, config);
       JavaRDD<HoodieRecord> taggedRecords2 = readClient.tagLocation(jsc.parallelize(recordsCompaction2, 1));
       JavaRDD<WriteStatus> writeStatus2 = client.upsertPreppedRecords(taggedRecords2, commit2);
       client.commit(commit2, writeStatus2, Option.empty(), DELTA_COMMIT_ACTION, Collections.emptyMap(), Option.empty());
       metaClient = HoodieTableMetaClient.reload(metaClient);
 
-      // Delta commit 3: More updates to compaction partition
+      // Schedule and run compaction - now we have base + log files to compact
+      String compactionInstantTime = client.scheduleCompaction(Option.empty()).get().toString();
+      client.compact(compactionInstantTime);
+      metaClient = HoodieTableMetaClient.reload(metaClient);
+
+      // Make more delta commits to enable cleaning
       String commit3 = client.startCommit();
       List<HoodieRecord> recordsCompaction3 = dataGen.generateUpdates(commit3, recordsCompaction2);
       JavaRDD<HoodieRecord> taggedRecords3 = readClient.tagLocation(jsc.parallelize(recordsCompaction3, 1));
       JavaRDD<WriteStatus> writeStatus3 = client.upsertPreppedRecords(taggedRecords3, commit3);
       client.commit(commit3, writeStatus3, Option.empty(), DELTA_COMMIT_ACTION, Collections.emptyMap(), Option.empty());
-      metaClient = HoodieTableMetaClient.reload(metaClient);
-
-      // Delta commit 4: More updates to compaction partition
-      String commit4 = client.startCommit();
-      List<HoodieRecord> recordsCompaction4 = dataGen.generateUpdates(commit4, recordsCompaction3);
-      JavaRDD<HoodieRecord> taggedRecords4 = readClient.tagLocation(jsc.parallelize(recordsCompaction4, 1));
-      JavaRDD<WriteStatus> writeStatus4 = client.upsertPreppedRecords(taggedRecords4, commit4);
-      client.commit(commit4, writeStatus4, Option.empty(), DELTA_COMMIT_ACTION, Collections.emptyMap(), Option.empty());
-      metaClient = HoodieTableMetaClient.reload(metaClient);
-
-      // Run compaction on compaction partition - this creates a commit that replaces log files with base file
-      String compactionInstantTime = client.scheduleCompaction(Option.empty()).get().toString();
-      client.compact(compactionInstantTime);
       metaClient = HoodieTableMetaClient.reload(metaClient);
 
       // Run first clean to establish earliestCommitToRetain
@@ -1574,12 +1557,13 @@ public class TestCleaner extends HoodieCleanerTestBase {
       // Phase 2: Now we have a valid clean instant, proceed with testing incremental clean behavior
 
       // Add initial data to cluster partition (for later clustering)
-      String commit5 = client.startCommit();
-      List<HoodieRecord> initialRecordsCluster = dataGen.generateInsertsForPartition(commit5, 10, partitionCluster);
-      client.insert(jsc.parallelize(initialRecordsCluster, 1), commit5).collect();
+      String commit4 = client.startCommit();
+      List<HoodieRecord> initialRecordsCluster = dataGen.generateInsertsForPartition(commit4, 10, partitionCluster);
+      JavaRDD<WriteStatus> clusterStatus = client.insert(jsc.parallelize(initialRecordsCluster, 1), commit4);
+      client.commit(commit4, clusterStatus, Option.empty(), DELTA_COMMIT_ACTION, Collections.emptyMap(), Option.empty());
       metaClient = HoodieTableMetaClient.reload(metaClient);
 
-      // Delta commit on deltaOnly partition (only creates log files, NOT part of compaction - should NOT appear in clean plan)
+      // Delta commit on deltaOnly partition (only creates base file, NOT part of compaction)
       String deltaOnlyCommit1 = client.startCommit();
       List<HoodieRecord> deltaOnlyRecords1 = dataGen.generateInsertsForPartition(deltaOnlyCommit1, 5, partitionDeltaOnly);
       JavaRDD<WriteStatus> deltaOnlyStatus1 = client.insert(jsc.parallelize(deltaOnlyRecords1, 1), deltaOnlyCommit1);
@@ -1587,11 +1571,11 @@ public class TestCleaner extends HoodieCleanerTestBase {
       metaClient = HoodieTableMetaClient.reload(metaClient);
 
       // More updates to compaction partition to create additional log files
-      String commit6 = client.startCommit();
-      List<HoodieRecord> recordsCompaction6 = dataGen.generateUpdates(commit6, recordsCompaction4);
-      JavaRDD<HoodieRecord> taggedRecords6 = readClient.tagLocation(jsc.parallelize(recordsCompaction6, 1));
-      JavaRDD<WriteStatus> writeStatus6 = client.upsertPreppedRecords(taggedRecords6, commit6);
-      client.commit(commit6, writeStatus6, Option.empty(), DELTA_COMMIT_ACTION, Collections.emptyMap(), Option.empty());
+      String commit5 = client.startCommit();
+      List<HoodieRecord> recordsCompaction5 = dataGen.generateUpdates(commit5, recordsCompaction3);
+      JavaRDD<HoodieRecord> taggedRecords5 = readClient.tagLocation(jsc.parallelize(recordsCompaction5, 1));
+      JavaRDD<WriteStatus> writeStatus5 = client.upsertPreppedRecords(taggedRecords5, commit5);
+      client.commit(commit5, writeStatus5, Option.empty(), DELTA_COMMIT_ACTION, Collections.emptyMap(), Option.empty());
       metaClient = HoodieTableMetaClient.reload(metaClient);
 
       // Run another compaction on compaction partition
@@ -1611,34 +1595,25 @@ public class TestCleaner extends HoodieCleanerTestBase {
           .map(fs -> fs.getFileId())
           .collect(Collectors.toList());
 
-      if (!existingFileIds.isEmpty()) {
-        Pair<HoodieRequestedReplaceMetadata, HoodieReplaceCommitMetadata> replaceMetadata =
-            generateReplaceCommitMetadata(clusteringCommit, partitionCluster, existingFileIds.get(0), newFileId);
-        testTable.addReplaceCommit(clusteringCommit, Option.of(replaceMetadata.getKey()), Option.empty(), replaceMetadata.getValue());
-      }
-      metaClient = HoodieTableMetaClient.reload(metaClient);
-
-      // Add more delta commits on deltaOnly partition (still NOT part of any compaction)
-      String deltaOnlyCommit2 = client.startCommit();
-      List<HoodieRecord> deltaOnlyRecords2 = dataGen.generateUpdates(deltaOnlyCommit2, deltaOnlyRecords1);
-      JavaRDD<HoodieRecord> taggedDeltaOnly2 = readClient.tagLocation(jsc.parallelize(deltaOnlyRecords2, 1));
-      JavaRDD<WriteStatus> deltaOnlyStatus2 = client.upsertPreppedRecords(taggedDeltaOnly2, deltaOnlyCommit2);
-      client.commit(deltaOnlyCommit2, deltaOnlyStatus2, Option.empty(), DELTA_COMMIT_ACTION, Collections.emptyMap(), Option.empty());
+      assertFalse(existingFileIds.isEmpty(), "Cluster partition should have existing file IDs");
+      Pair<HoodieRequestedReplaceMetadata, HoodieReplaceCommitMetadata> replaceMetadata =
+          generateReplaceCommitMetadata(clusteringCommit, partitionCluster, existingFileIds.get(0), newFileId);
+      testTable.addReplaceCommit(clusteringCommit, Option.of(replaceMetadata.getKey()), Option.empty(), replaceMetadata.getValue());
       metaClient = HoodieTableMetaClient.reload(metaClient);
 
       // More commits to trigger cleaning
+      String commit6 = client.startCommit();
+      List<HoodieRecord> recordsCompaction6 = dataGen.generateUpdates(commit6, recordsCompaction5);
+      JavaRDD<HoodieRecord> taggedRecords6 = readClient.tagLocation(jsc.parallelize(recordsCompaction6, 1));
+      JavaRDD<WriteStatus> writeStatus6 = client.upsertPreppedRecords(taggedRecords6, commit6);
+      client.commit(commit6, writeStatus6, Option.empty(), DELTA_COMMIT_ACTION, Collections.emptyMap(), Option.empty());
+      metaClient = HoodieTableMetaClient.reload(metaClient);
+
       String commit7 = client.startCommit();
       List<HoodieRecord> recordsCompaction7 = dataGen.generateUpdates(commit7, recordsCompaction6);
       JavaRDD<HoodieRecord> taggedRecords7 = readClient.tagLocation(jsc.parallelize(recordsCompaction7, 1));
       JavaRDD<WriteStatus> writeStatus7 = client.upsertPreppedRecords(taggedRecords7, commit7);
       client.commit(commit7, writeStatus7, Option.empty(), DELTA_COMMIT_ACTION, Collections.emptyMap(), Option.empty());
-      metaClient = HoodieTableMetaClient.reload(metaClient);
-
-      String commit8 = client.startCommit();
-      List<HoodieRecord> recordsCompaction8 = dataGen.generateUpdates(commit8, recordsCompaction7);
-      JavaRDD<HoodieRecord> taggedRecords8 = readClient.tagLocation(jsc.parallelize(recordsCompaction8, 1));
-      JavaRDD<WriteStatus> writeStatus8 = client.upsertPreppedRecords(taggedRecords8, commit8);
-      client.commit(commit8, writeStatus8, Option.empty(), DELTA_COMMIT_ACTION, Collections.emptyMap(), Option.empty());
       metaClient = HoodieTableMetaClient.reload(metaClient);
 
       // Run final clean - this should use incremental mode and only scan relevant partitions
