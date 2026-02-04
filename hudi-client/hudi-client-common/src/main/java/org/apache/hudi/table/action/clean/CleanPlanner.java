@@ -32,6 +32,7 @@ import org.apache.hudi.common.model.HoodieFileGroup;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
+import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
@@ -243,7 +244,9 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
         HoodieCommitMetadata commitMetadata =
             hoodieTable.getActiveTimeline().readCommitMetadata(instant);
         WriteOperationType operationType = commitMetadata.getOperationType();
-        if (HoodieTimeline.COMMIT_ACTION.equals(instant.getAction())) {
+        if ((HoodieTimeline.COMMIT_ACTION.equals(instant.getAction()) && hoodieTable.getMetaClient().getTableType().equals(
+            HoodieTableType.COPY_ON_WRITE)) || (HoodieTimeline.DELTA_COMMIT_ACTION.equals(instant.getAction()) && hoodieTable.getMetaClient().getTableType().equals(
+            HoodieTableType.MERGE_ON_READ))) {
           if (WriteOperationType.isUpsert(operationType) || WriteOperationType.isInsertWithoutReplace(operationType)) {
             // For COW only check partitions where the write updated a file slice (leaving behind an older version of the file slice to clean)
             // Since some partitions may have only had new file slices created (not leaving behind anything to clean yet)
