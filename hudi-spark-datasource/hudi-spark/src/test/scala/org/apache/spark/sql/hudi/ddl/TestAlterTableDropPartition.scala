@@ -554,6 +554,9 @@ class TestAlterTableDropPartition extends HoodieSparkSqlTestBase {
 
         val showClusteringResults = spark.sql(s"call show_clustering('$tableName')").collect()
         assertResult(3)(showClusteringResults.length)
+        val expectedPartitionPaths = Set("ts=1000", "ts=1001", "ts=1002")
+        val actualPartitionPaths = showClusteringResults.map(_.getString(6)).toSet
+        assertResult(expectedPartitionPaths)(actualPartitionPaths)
         showClusteringResults.foreach { row =>
           assertResult(HoodieInstant.State.REQUESTED.name())(row.getString(2))
           assertResult(3)(row.getInt(5))
@@ -605,6 +608,9 @@ class TestAlterTableDropPartition extends HoodieSparkSqlTestBase {
 
       val showCompactionResults = spark.sql(s"call show_compaction('$tableName')").collect()
       assertResult(5)(showCompactionResults.length)
+      val expectedPartitionPaths = Set("ts=1000", "ts=1001", "ts=1002", "ts=1003", "ts=1004")
+      val actualPartitionPaths = showCompactionResults.map(_.getString(6)).toSet
+      assertResult(expectedPartitionPaths)(actualPartitionPaths)
 
         val partition = "ts=1002"
         val errMsg = s"Failed to drop partitions. Please ensure that there are no pending table service actions (clustering/compaction) for the partitions to be deleted: [$partition]"
