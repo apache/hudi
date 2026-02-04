@@ -21,6 +21,7 @@ package org.apache.hudi.source.enumerator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.source.HoodieScanContext;
+import org.apache.hudi.source.assign.HoodieSplitNumberAssigner;
 import org.apache.hudi.source.split.DefaultHoodieSplitProvider;
 import org.apache.hudi.source.split.HoodieContinuousSplitBatch;
 import org.apache.hudi.source.split.HoodieContinuousSplitDiscover;
@@ -67,7 +68,7 @@ public class TestHoodieContinuousSplitEnumerator {
   @BeforeEach
   public void setUp() {
     context = new MockSplitEnumeratorContext();
-    splitProvider = new DefaultHoodieSplitProvider();
+    splitProvider = new DefaultHoodieSplitProvider(new HoodieSplitNumberAssigner(1));
 
     Configuration conf = new Configuration();
     conf.set(FlinkOptions.PATH, "/tmp/test");
@@ -252,7 +253,7 @@ public class TestHoodieContinuousSplitEnumerator {
   private HoodieSourceSplit createTestSplit(int splitNum, String fileId) {
     return new HoodieSourceSplit(
         splitNum,
-        "basePath_" + splitNum,
+        "40e603a8-3cc1-4d09-b0a5-1432992b4bf7_1-0" + splitNum + "_20260126034717000.parquet",
         Option.empty(),
         "/table/path",
         "/table/path/partition1",

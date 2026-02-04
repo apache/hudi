@@ -143,7 +143,7 @@ abstract class AbstractHoodieSplitEnumerator
 
       int awaitingSubtask = nextAwaiting.getKey();
       String hostname = nextAwaiting.getValue();
-      Option<HoodieSourceSplit> splitOption = splitProvider.getNext(hostname);
+      Option<HoodieSourceSplit> splitOption = splitProvider.getNext(awaitingSubtask, hostname);
       if (splitOption.isPresent()) {
         log.info("Assign split to subtask {}: {}", awaitingSubtask, splitOption.get());
         enumeratorContext.assignSplit(splitOption.get(), awaitingSubtask);

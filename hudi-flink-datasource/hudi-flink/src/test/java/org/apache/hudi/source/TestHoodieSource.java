@@ -511,7 +511,7 @@ public class TestHoodieSource {
   private HoodieSourceSplit createTestSplit(int splitNum, String fileId, String partitionPath) {
     return new HoodieSourceSplit(
         splitNum,
-        "base-path-" + splitNum,
+        "40e603a8-3cc1-4d09-b0a5-1432992b4bf7_1-0" + splitNum + "_20260126034717000.parquet",
         Option.of(Collections.emptyList()),
         "/test/table",
         partitionPath,
@@ -525,6 +525,7 @@ public class TestHoodieSource {
     SplitEnumeratorContext<HoodieSourceSplit> mockEnumContext = mock(SplitEnumeratorContext.class);
     SplitEnumeratorMetricGroup metricGroup = UnregisteredMetricsGroup.createSplitEnumeratorMetricGroup();
     doReturn(metricGroup).when(mockEnumContext).metricGroup();
+    doReturn(1).when(mockEnumContext).currentParallelism();
 
     return mockEnumContext;
   }
@@ -551,5 +552,165 @@ public class TestHoodieSource {
         .skipInsertOverwrite(skipInsertOverwrite)
         .cdcEnabled(false)
         .build();
+  }
+
+  @Test
+  public void testEnumeratorUsesDefaultSplitAssignerForCow() throws Exception {
+    HoodieTableMetaClient metaClient = HoodieTestUtils.init(tempDir.getAbsolutePath(), HoodieTableType.COPY_ON_WRITE);
+    Configuration conf = TestConfigurations.getDefaultConf(tempDir.getAbsolutePath());
+    conf.set(FlinkOptions.TABLE_TYPE, HoodieTableType.COPY_ON_WRITE.name());
+    conf.set(FlinkOptions.OPERATION, "upsert");
+    conf.set(FlinkOptions.READ_AS_STREAMING, true);
+
+    TestData.writeData(TestData.DATA_SET_INSERT, conf);
+    metaClient.reloadActiveTimeline();
+    HoodieScanContext scanContext = createScanContext(conf);
+
+    HoodieSource<RowData> source = new HoodieSource<>(
+        scanContext,
+        mockReaderFunction,
+        mockComparator,
+        metaClient,
+        mockRecordEmitter
+    );
+
+    SplitEnumeratorContext<HoodieSourceSplit> mockEnumContext = createMockSplitEnumeratorContext();
+    SplitEnumerator<HoodieSourceSplit, HoodieSplitEnumeratorState> enumerator =
+        source.createEnumerator(mockEnumContext);
+
+    assertNotNull(enumerator, "Should create enumerator with DefaultSplitAssigner for COW");
+  }
+
+  @Test
+  public void testEnumeratorUsesBucketAssignerForMorWithBucketIndex() throws Exception {
+    HoodieTableMetaClient metaClient = HoodieTestUtils.init(tempDir.getAbsolutePath(), HoodieTableType.MERGE_ON_READ);
+    Configuration conf = TestConfigurations.getDefaultConf(tempDir.getAbsolutePath());
+    conf.set(FlinkOptions.TABLE_TYPE, HoodieTableType.MERGE_ON_READ.name());
+    conf.set(FlinkOptions.INDEX_TYPE, "BUCKET");
+    conf.set(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS, 8);
+    conf.set(FlinkOptions.OPERATION, "upsert");
+    conf.set(FlinkOptions.READ_AS_STREAMING, true);
+
+    TestData.writeData(TestData.DATA_SET_INSERT, conf);
+    metaClient.reloadActiveTimeline();
+    HoodieScanContext scanContext = createScanContext(conf);
+
+    HoodieSource<RowData> source = new HoodieSource<>(
+        scanContext,
+        mockReaderFunction,
+        mockComparator,
+        metaClient,
+        mockRecordEmitter
+    );
+
+    SplitEnumeratorContext<HoodieSourceSplit> mockEnumContext = createMockSplitEnumeratorContext();
+    SplitEnumerator<HoodieSourceSplit, HoodieSplitEnumeratorState> enumerator =
+        source.createEnumerator(mockEnumContext);
+
+    assertNotNull(enumerator, "Should create enumerator with BucketSplitAssigner for MOR with bucket index");
+  }
+
+  @Test
+  public void testEnumeratorUsesNumberAssignerForAppendMode() throws Exception {
+    HoodieTableMetaClient metaClient = HoodieTestUtils.init(tempDir.getAbsolutePath(), HoodieTableType.COPY_ON_WRITE);
+    Configuration conf = TestConfigurations.getDefaultConf(tempDir.getAbsolutePath());
+    conf.set(FlinkOptions.TABLE_TYPE, HoodieTableType.COPY_ON_WRITE.name());
+    conf.set(FlinkOptions.OPERATION, "insert");
+    conf.set(FlinkOptions.READ_AS_STREAMING, true);
+
+    TestData.writeData(TestData.DATA_SET_INSERT, conf);
+    metaClient.reloadActiveTimeline();
+    HoodieScanContext scanContext = createScanContext(conf);
+
+    HoodieSource<RowData> source = new HoodieSource<>(
+        scanContext,
+        mockReaderFunction,
+        mockComparator,
+        metaClient,
+        mockRecordEmitter
+    );
+
+    SplitEnumeratorContext<HoodieSourceSplit> mockEnumContext = createMockSplitEnumeratorContext();
+    SplitEnumerator<HoodieSourceSplit, HoodieSplitEnumeratorState> enumerator =
+        source.createEnumerator(mockEnumContext);
+
+    assertNotNull(enumerator, "Should create enumerator with NumberSplitAssigner for append mode");
+  }
+
+  @Test
+  public void testRestoreEnumeratorUsesCorrectSplitAssigner() throws Exception {
+    HoodieTableMetaClient metaClient = HoodieTestUtils.init(tempDir.getAbsolutePath(), HoodieTableType.MERGE_ON_READ);
+    Configuration conf = TestConfigurations.getDefaultConf(tempDir.getAbsolutePath());
+    conf.set(FlinkOptions.TABLE_TYPE, HoodieTableType.MERGE_ON_READ.name());
+    conf.set(FlinkOptions.INDEX_TYPE, "BUCKET");
+    conf.set(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS, 4);
+    conf.set(FlinkOptions.OPERATION, "upsert");
+    conf.set(FlinkOptions.READ_AS_STREAMING, true);
+
+    TestData.writeData(TestData.DATA_SET_INSERT, conf);
+    metaClient.reloadActiveTimeline();
+    HoodieScanContext scanContext = createScanContext(conf);
+
+    HoodieSource<RowData> source = new HoodieSource<>(
+        scanContext,
+        mockReaderFunction,
+        mockComparator,
+        metaClient,
+        mockRecordEmitter
+    );
+
+    // Create state with splits
+    HoodieSourceSplit split1 = createTestSplit(1, "00000001_fileId", "/partition1");
+    HoodieSourceSplit split2 = createTestSplit(2, "00000002_fileId", "/partition2");
+
+    List<HoodieSourceSplitState> splitStates = Arrays.asList(
+        new HoodieSourceSplitState(split1, HoodieSourceSplitStatus.UNASSIGNED),
+        new HoodieSourceSplitState(split2, HoodieSourceSplitStatus.UNASSIGNED)
+    );
+
+    HoodieSplitEnumeratorState state = new HoodieSplitEnumeratorState(
+        splitStates,
+        Option.of("20240101000000"),
+        Option.empty()
+    );
+
+    SplitEnumeratorContext<HoodieSourceSplit> mockEnumContext = createMockSplitEnumeratorContext();
+    SplitEnumerator<HoodieSourceSplit, HoodieSplitEnumeratorState> enumerator =
+        source.restoreEnumerator(mockEnumContext, state);
+
+    assertNotNull(enumerator, "Should restore enumerator with correct split assigner");
+  }
+
+  @Test
+  public void testEnumeratorWithDifferentParallelism() throws Exception {
+    HoodieTableMetaClient metaClient = HoodieTestUtils.init(tempDir.getAbsolutePath(), HoodieTableType.COPY_ON_WRITE);
+    Configuration conf = TestConfigurations.getDefaultConf(tempDir.getAbsolutePath());
+    conf.set(FlinkOptions.READ_AS_STREAMING, true);
+
+    TestData.writeData(TestData.DATA_SET_INSERT, conf);
+    metaClient.reloadActiveTimeline();
+    HoodieScanContext scanContext = createScanContext(conf);
+
+    HoodieSource<RowData> source = new HoodieSource<>(
+        scanContext,
+        mockReaderFunction,
+        mockComparator,
+        metaClient,
+        mockRecordEmitter
+    );
+
+    // Test with different parallelism values
+    int[] parallelisms = {1, 4, 8, 16};
+    for (int parallelism : parallelisms) {
+      SplitEnumeratorContext<HoodieSourceSplit> mockEnumContext = mock(SplitEnumeratorContext.class);
+      SplitEnumeratorMetricGroup metricGroup = UnregisteredMetricsGroup.createSplitEnumeratorMetricGroup();
+      doReturn(metricGroup).when(mockEnumContext).metricGroup();
+      doReturn(parallelism).when(mockEnumContext).currentParallelism();
+
+      SplitEnumerator<HoodieSourceSplit, HoodieSplitEnumeratorState> enumerator =
+          source.createEnumerator(mockEnumContext);
+
+      assertNotNull(enumerator, "Should create enumerator with parallelism " + parallelism);
+    }
   }
 }

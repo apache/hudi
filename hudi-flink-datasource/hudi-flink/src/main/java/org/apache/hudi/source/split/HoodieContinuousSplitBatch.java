@@ -57,7 +57,7 @@ public class HoodieContinuousSplitBatch {
   public static HoodieContinuousSplitBatch fromResult(IncrementalInputSplits.Result result) {
     List<HoodieSourceSplit> splits = result.getInputSplits().stream().map(split ->
         new HoodieSourceSplit(
-            HoodieSourceSplit.SPLIT_COUNTER.incrementAndGet(),
+            HoodieSourceSplit.SPLIT_ID_GEN.incrementAndGet(),
             split.getBasePath().orElse(null),
             split.getLogPaths(), split.getTablePath(),
             EMPTY_PARTITION_PATH, split.getMergeType(),
