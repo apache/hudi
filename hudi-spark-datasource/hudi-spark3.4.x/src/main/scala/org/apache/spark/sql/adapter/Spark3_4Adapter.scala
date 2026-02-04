@@ -115,6 +115,13 @@ class Spark3_4Adapter extends BaseSpark3Adapter {
     TableValuedFunctions.funcs.foreach(extensions.injectTableFunction)
   }
 
+  override def injectScalarFunctions(extensions: SparkSessionExtensions): Unit = {
+    import org.apache.spark.sql.hudi.analysis.ScalarFunctions
+    ScalarFunctions.funcs.foreach { case (funcId, expressionInfo, builder) =>
+      extensions.injectFunction((funcId, expressionInfo, builder))
+    }
+  }
+
   /**
    * Converts instance of [[StorageLevel]] to a corresponding string
    */

@@ -21,7 +21,6 @@ import org.apache.hudi.Spark35HoodieFileScanRDD
 import org.apache.hudi.common.schema.HoodieSchema
 import org.apache.hudi.storage.StorageConfiguration
 
-import org.apache.avro.Schema
 import org.apache.hadoop.conf.Configuration
 import org.apache.parquet.schema.MessageType
 import org.apache.spark.api.java.JavaSparkContext
@@ -42,6 +41,7 @@ import org.apache.spark.sql.execution.datasources.orc.Spark35OrcReader
 import org.apache.spark.sql.execution.datasources.parquet.{ParquetFileFormat, ParquetFilters, Spark35LegacyHoodieParquetFileFormat, Spark35ParquetReader}
 import org.apache.spark.sql.execution.datasources.v2.DataSourceV2Relation
 import org.apache.spark.sql.hudi.analysis.TableValuedFunctions
+import org.apache.spark.sql.hudi.blob.ScalarFunctions
 import org.apache.spark.sql.internal.{LegacyBehaviorPolicy, SQLConf}
 import org.apache.spark.sql.parser.{HoodieExtendedParserInterface, HoodieSpark3_5ExtendedSqlParser}
 import org.apache.spark.sql.types.{DataType, DataTypes, Metadata, MetadataBuilder, StructType}
@@ -116,6 +116,12 @@ class Spark3_5Adapter extends BaseSpark3Adapter {
 
   override def injectTableFunctions(extensions: SparkSessionExtensions): Unit = {
     TableValuedFunctions.funcs.foreach(extensions.injectTableFunction)
+  }
+
+  override def injectScalarFunctions(extensions: SparkSessionExtensions): Unit = {
+    ScalarFunctions.funcs.foreach { case (funcId, expressionInfo, builder) =>
+      extensions.injectFunction((funcId, expressionInfo, builder))
+    }
   }
 
   /**
