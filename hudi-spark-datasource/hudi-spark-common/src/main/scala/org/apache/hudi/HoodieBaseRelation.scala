@@ -47,7 +47,7 @@ import org.apache.hudi.internal.schema.convert.AvroInternalSchemaConverter
 import org.apache.hudi.internal.schema.utils.{InternalSchemaUtils, SerDeHelper}
 import org.apache.hudi.internal.schema.{HoodieSchemaException, InternalSchema}
 import org.apache.hudi.io.storage.HoodieAvroHFileReader
-import org.apache.hudi.io.storage.HoodieSparkParquetReader
+import org.apache.hudi.io.storage.HoodieFileReader
 import org.apache.hudi.metadata.HoodieTableMetadata
 import org.apache.spark.execution.datasources.HoodieInMemoryFileIndex
 import org.apache.spark.internal.Logging
@@ -111,7 +111,7 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
 
   protected lazy val conf: Configuration = {
     val c = new Configuration(sqlContext.sparkContext.hadoopConfiguration)
-    c.set(HoodieSparkParquetReader.ENABLE_LOGICAL_TIMESTAMP_REPAIR,
+    c.set(HoodieFileReader.ENABLE_LOGICAL_TIMESTAMP_REPAIR,
       AvroSchemaUtils.hasTimestampMillisField(tableAvroSchema).toString)
     c
   }
