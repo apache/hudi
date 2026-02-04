@@ -23,8 +23,9 @@ import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration
 
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.expressions.{Alias, Attribute, AttributeReference, Expression, NamedExpression}
-import org.apache.spark.sql.catalyst.plans.logical.{LogicalPlan, Project}
+import org.apache.spark.sql.catalyst.plans.logical.{Aggregate, LogicalPlan, Project}
 import org.apache.spark.sql.catalyst.rules.Rule
+import org.apache.spark.sql.hudi.blob.BatchedByteRangeReader.DATA_COL
 import org.apache.spark.sql.hudi.expressions.ResolveBytesExpression
 import org.slf4j.LoggerFactory
 
@@ -67,18 +68,22 @@ import org.slf4j.LoggerFactory
 case class ResolveBlobReferencesRule(spark: SparkSession) extends Rule[LogicalPlan] {
 
   private val logger = LoggerFactory.getLogger(classOf[ResolveBlobReferencesRule])
-  private val DATA_COL = "__temp__data"
 
   override def apply(plan: LogicalPlan): LogicalPlan = plan resolveOperatorsUp {
-    case p @ Project(projectList, child) if containsResolveBytesExpression(projectList) =>
+    case _ @ Project(projectList, child) if containsResolveBytesExpression(projectList) =>
       // Only process if we have resolve_bytes expressions
-      transformProjectWithBlobResolution(p, projectList, child)
+      transformProjectWithBlobResolution(projectList, child)
+
+    case _ @ Aggregate(groupingExpressions, aggregateExpressions, child)
+        if containsResolveBytesExpression(aggregateExpressions) ||
+           containsResolveBytesExpression(groupingExpressions) =>
+      transformAggregateWithBlobResolution(groupingExpressions, aggregateExpressions, child)
   }
 
   /**
    * Check if any expression in the project list contains a ResolveBytesExpression.
    */
-  private def containsResolveBytesExpression(projectList: Seq[NamedExpression]): Boolean = {
+  private def containsResolveBytesExpression(projectList: Seq[Expression]): Boolean = {
     projectList.exists(expr => containsResolveBytesInExpression(expr))
   }
 
@@ -94,72 +99,130 @@ case class ResolveBlobReferencesRule(spark: SparkSession) extends Rule[LogicalPl
    *
    * This method:
    * <ol>
-   *   <li>Converts child plan to DataFrame</li>
-   *   <li>Extracts column name from ResolveBytesExpression</li>
-   *   <li>Applies BatchedByteRangeReader with configured parameters</li>
-   *   <li>Replaces ResolveBytesExpression markers with data column references</li>
+   *   <li>Applies BatchedByteRangeReader to child plan</li>
+   *   <li>Transforms project list expressions</li>
    *   <li>Returns new Project with resolved plan</li>
    * </ol>
    */
   private def transformProjectWithBlobResolution(
-      project: Project,
       projectList: Seq[NamedExpression],
       child: LogicalPlan): LogicalPlan = {
 
-    // Extract the blob column name from ResolveBytesExpression
-    val blobColumnName = extractBlobColumnName(projectList)
+    // Apply batched reader and get resolved plan with mappings
+    val (resolvedPlan, dataAttr, attributeMap) = applyBatchedReader(child, projectList, "Project")
+
+    // Transform project list expressions
+    val newProjectList = transformNamedExpressions(projectList, dataAttr, attributeMap)
+
+    // Create new project on top of resolved DataFrame's logical plan
+    Project(newProjectList, resolvedPlan)
+  }
+
+  /**
+   * Transform the aggregate to use BatchedByteRangeReader.
+   *
+   * Similar to Project transformation, but handles both grouping and aggregate expressions.
+   */
+  private def transformAggregateWithBlobResolution(
+      groupingExpressions: Seq[Expression],
+      aggregateExpressions: Seq[NamedExpression],
+      child: LogicalPlan): LogicalPlan = {
+
+    // Apply batched reader and get resolved plan with mappings
+    val (resolvedPlan, dataAttr, attributeMap) =
+      applyBatchedReader(child, aggregateExpressions ++ groupingExpressions, "Aggregate")
+
+    // Transform grouping expressions
+    val newGroupingExpressions = groupingExpressions.map { expr =>
+      val transformed = replaceResolveBytesExpression(expr, dataAttr)
+      remapAttributes(transformed, attributeMap)
+    }
+
+    // Transform aggregate expressions
+    val newAggregateExpressions = transformNamedExpressions(aggregateExpressions, dataAttr, attributeMap)
+
+    // Create new Aggregate on top of resolved plan
+    Aggregate(newGroupingExpressions, newAggregateExpressions, resolvedPlan)
+  }
+
+  /**
+   * Apply BatchedByteRangeReader to child plan and return resolved plan with mappings.
+   *
+   * This shared method handles the common logic for both Project and Aggregate transformations:
+   * <ol>
+   *   <li>Extract blob column name from expressions</li>
+   *   <li>Create DataFrame from child plan</li>
+   *   <li>Apply BatchedByteRangeReader with configured parameters</li>
+   *   <li>Extract data attribute and create attribute mapping</li>
+   * </ol>
+   *
+   * @param child Child logical plan to transform
+   * @param expressions Expressions to search for blob column name
+   * @param nodeType Node type for logging ("Project" or "Aggregate")
+   * @return Tuple of (resolvedPlan, dataAttribute, attributeMap)
+   */
+  private def applyBatchedReader(
+      child: LogicalPlan,
+      expressions: Seq[Expression],
+      nodeType: String): (LogicalPlan, Attribute, Map[String, Attribute]) = {
+
+    // Extract blob column name from expressions
+    val blobColumnName = extractBlobColumnNameFromExpressions(expressions)
 
     // Apply BatchedByteRangeReader to the child DataFrame
     val childDF = org.apache.spark.sql.Dataset.ofRows(spark, child)
-
     val storageConf = new HadoopStorageConfiguration(spark.sparkContext.hadoopConfiguration)
 
     // Get configuration parameters
     val maxGapBytes = spark.conf.get("hoodie.blob.batching.max.gap.bytes", "4096").toInt
     val lookaheadSize = spark.conf.get("hoodie.blob.batching.lookahead.size", "50").toInt
 
-    logger.info(s"Resolving blob references with batched reader " +
+    logger.debug(s"Resolving blob references in $nodeType with batched reader " +
       s"(maxGapBytes=$maxGapBytes, lookaheadSize=$lookaheadSize)" +
       blobColumnName.map(name => s", columnName=$name").getOrElse(""))
 
-    // Apply batched reading with explicit column name
     val resolvedDF = BatchedByteRangeReader.readBatched(
-      childDF,
-      storageConf,
-      maxGapBytes,
-      lookaheadSize,
-      blobColumnName,
-      keepTempColumn = true  // Keep __temp__data for expression replacement
-    )
+      childDF, storageConf, maxGapBytes, lookaheadSize, blobColumnName, keepTempColumn = true)
 
-    // Transform the project list:
-    // Replace ResolveBytesExpression with reference to __temp__data column
+    // Get the data attribute
     val dataAttr = resolvedDF.queryExecution.analyzed.output.find(_.name == DATA_COL).getOrElse {
       throw new RuntimeException(s"Expected data column '$DATA_COL' not found in resolved DataFrame")
     }
 
-    // Create attribute mapping from old child to new resolved child
+    // Create attribute mapping
     val resolvedPlan = resolvedDF.queryExecution.analyzed
     val attributeMap = createAttributeMapping(child.output, resolvedPlan.output)
 
-    val newProjectList = projectList.map {
+    (resolvedPlan, dataAttr, attributeMap)
+  }
+
+  /**
+   * Transform a sequence of NamedExpressions by replacing ResolveBytesExpression and remapping attributes.
+   *
+   * This shared method handles the common expression transformation logic used by both
+   * Project and Aggregate nodes. It preserves expression IDs and metadata.
+   *
+   * @param expressions Expressions to transform
+   * @param dataAttr Data attribute to replace ResolveBytesExpression with
+   * @param attributeMap Map for remapping attribute references
+   * @return Transformed expressions
+   */
+  private def transformNamedExpressions(
+      expressions: Seq[NamedExpression],
+      dataAttr: Attribute,
+      attributeMap: Map[String, Attribute]): Seq[NamedExpression] = {
+    expressions.map {
       case alias @ Alias(childExpr, name) =>
         val transformed = replaceResolveBytesExpression(childExpr, dataAttr)
         val remapped = remapAttributes(transformed, attributeMap)
-        Alias(remapped, name)(
-          alias.exprId, alias.qualifier, alias.explicitMetadata)
+        Alias(remapped, name)(alias.exprId, alias.qualifier, alias.explicitMetadata)
       case attr: AttributeReference =>
-        // For simple attributes: remap to new child, wrap in Alias to preserve output ID
         val remapped = remapAttributes(attr, attributeMap)
         Alias(remapped, attr.name)(attr.exprId)
       case expr =>
-        // For other named expressions: transform and remap
         val transformed = replaceResolveBytesExpression(expr, dataAttr)
         remapAttributes(transformed, attributeMap).asInstanceOf[NamedExpression]
     }
-
-    // Create new project on top of resolved DataFrame's logical plan
-    Project(newProjectList, resolvedPlan)
   }
 
   /**
@@ -182,22 +245,26 @@ case class ResolveBlobReferencesRule(spark: SparkSession) extends Rule[LogicalPl
   }
 
   /**
-   * Extract the blob column name from ResolveBytesExpression.
-   *
-   * Finds the first ResolveBytesExpression and extracts the column name
-   * from its child expression (which should be an AttributeReference).
-   *
-   * @param projectList The project list to search
-   * @return Optional column name if found
+   * Extract blob column name from expressions (handles nesting in aggregate functions).
    */
-  private def extractBlobColumnName(projectList: Seq[NamedExpression]): Option[String] = {
-    projectList.collectFirst {
-      case Alias(ResolveBytesExpression(child), _) =>
-        child match {
-          case attr: AttributeReference => attr.name
-          case _ => null
-        }
-    }.filter(_ != null)
+  private def extractBlobColumnNameFromExpressions(expressions: Seq[Expression]): Option[String] = {
+    expressions.collectFirst {
+      case expr if containsResolveBytesInExpression(expr) =>
+        findBlobColumnName(expr)
+    }.flatten
+  }
+
+  /**
+   * Recursively search for ResolveBytesExpression and extract column name.
+   */
+  private def findBlobColumnName(expr: Expression): Option[String] = expr match {
+    case ResolveBytesExpression(child) =>
+      child match {
+        case attr: AttributeReference => Some(attr.name)
+        case _ => None
+      }
+    case other =>
+      other.children.flatMap(findBlobColumnName).headOption
   }
 
   /**

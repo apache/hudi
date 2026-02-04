@@ -401,7 +401,7 @@ object BatchedByteRangeReader {
   /** Default lookahead buffer size */
   val DEFAULT_LOOKAHEAD_SIZE = 50
 
-  private val DATA_COL = "__temp__data"
+  val DATA_COL = "__temp__data"
 
   /**
    * Read byte ranges from a DataFrame with a struct column.
