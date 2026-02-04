@@ -42,6 +42,7 @@ import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
+import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.model.HoodieTableType;
@@ -991,6 +992,10 @@ public class StreamSync implements Serializable, Closeable {
           writeResult = writeClient.insertOverwriteTable(records, instantTime);
           writeClientWriteResult = new WriteClientWriteResult(writeResult.getWriteStatuses());
           writeClientWriteResult.setPartitionToReplacedFileIds(writeResult.getPartitionToReplaceFileIds());
+          break;
+        case DELETE:
+          JavaRDD<HoodieKey> keysToDelete = records.map(HoodieRecord::getKey);
+          writeClientWriteResult = new WriteClientWriteResult(writeClient.delete(keysToDelete, instantTime));
           break;
         case DELETE_PARTITION:
           List<String> partitions = records.map(record -> record.getPartitionPath()).distinct().collect();
