@@ -388,9 +388,12 @@ public class TestHiveSyncTool {
     hivePartitions = hiveClient.getAllPartitions(HiveTestUtil.TABLE_NAME);
     List<String> writtenPartitionsSince = hiveClient.getWrittenPartitionsSince(Option.empty(), Option.empty());
     List<PartitionEvent> partitionEvents = hiveClient.getPartitionEvents(hivePartitions, writtenPartitionsSince, Collections.emptySet());
-    assertEquals(1, partitionEvents.size(), "There should be only one partition event");
-    assertEquals(PartitionEventType.UPDATE, partitionEvents.iterator().next().eventType,
-        "The one partition event must of type UPDATE");
+    assertEquals(1, partitionEvents.stream()
+        .filter(partitionEvent -> partitionEvent.eventType.equals(PartitionEventType.UPDATE)).count(),
+        "There should be only one update partition event");
+    assertEquals(6, partitionEvents.stream()
+        .filter(partitionEvent -> partitionEvent.eventType.equals(PartitionEventType.TOUCH)).count(),
+        "There should be total 6 touch partition events");
 
     // Add a partition that does not belong to the table, i.e., not in the same base path
     // This should not happen in production.  However, if this happens, when doing fallback
