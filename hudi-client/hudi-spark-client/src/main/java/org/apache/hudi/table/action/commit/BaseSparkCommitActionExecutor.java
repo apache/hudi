@@ -23,7 +23,6 @@ import org.apache.hudi.client.clustering.update.strategy.SparkAllowUpdateStrateg
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.client.transaction.TransactionManager;
 import org.apache.hudi.client.utils.SparkPartitionUtils;
-import org.apache.hudi.client.utils.SparkUtils;
 import org.apache.hudi.client.utils.SparkValidatorUtils;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.data.HoodieData.HoodieDataCacheKey;
@@ -330,9 +329,18 @@ public abstract class BaseSparkCommitActionExecutor<T> extends
   protected void setCommitMetadata(HoodieWriteMetadata<HoodieData<WriteStatus>> result) {
     List<HoodieWriteStat> writeStats = result.getWriteStatuses().map(WriteStatus::getStat).collectAsList();
     result.setWriteStats(writeStats);
+    // Merge engine-specific metadata (e.g., spark_application_id) with extra metadata
+    Option<Map<String, String>> mergedExtraMetadata = extraMetadata;
+    Map<String, String> engineMetadata = context.getEngineCommitMetadata();
+    if (!engineMetadata.isEmpty()) {
+      mergedExtraMetadata = mergedExtraMetadata.isPresent()
+          ? Option.of(new HashMap<>(mergedExtraMetadata.get()))
+          : Option.of(new HashMap<>());
+      mergedExtraMetadata.get().putAll(engineMetadata);
+    }
     result.setCommitMetadata(Option.of(CommitUtils.buildMetadata(writeStats,
         result.getPartitionToReplaceFileIds(),
-        SparkUtils.addExtraMetadataProperties(extraMetadata, context), operationType, getSchemaToStoreInCommit(), getCommitActionType())));
+        mergedExtraMetadata, operationType, getSchemaToStoreInCommit(), getCommitActionType())));
   }
 
   @Override

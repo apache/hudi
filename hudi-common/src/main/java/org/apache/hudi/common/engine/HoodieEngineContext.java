@@ -40,6 +40,7 @@ import org.apache.hudi.keygen.KeyGenerator;
 import org.apache.hudi.storage.StorageConfiguration;
 
 import java.io.IOException;
+import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -205,4 +206,15 @@ public abstract class HoodieEngineContext {
   }
 
   public abstract KeyGenerator createKeyGenerator(TypedProperties props) throws IOException;
+
+  /**
+   * Returns engine-specific metadata to be added to commit metadata.
+   * This allows each engine to add its own identifying information to commits.
+   * For example, Spark adds spark_application_id, Flink could add flink_job_id.
+   *
+   * @return Map of engine-specific metadata key-value pairs
+   */
+  public Map<String, String> getEngineCommitMetadata() {
+    return Collections.emptyMap();
+  }
 }
