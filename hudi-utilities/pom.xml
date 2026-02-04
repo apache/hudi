@@ -454,6 +454,13 @@
 
     <!-- Hive -->
     <dependency>
+      <groupId>org.apache.hive</groupId>
+      <artifactId>hive-storage-api</artifactId>
+      <version>${hive.storage.version}</version>
+      <scope>test</scope>
+    </dependency>
+
+    <dependency>
       <groupId>${hive.groupid}</groupId>
       <artifactId>hive-jdbc</artifactId>
       <version>${hive.version}</version>
