@@ -32,6 +32,14 @@ import org.apache.spark.sql.types.{ArrayType, DataType, DateType, DecimalType, D
  * - Pad missing columns with NULL literals (required for Lance)
  * - Handle nested struct/array/map type conversions
  * - Work around Spark unsafe cast issues (float->double, numeric->decimal)
+ *
+ * Note: The following functions were originally part of HoodieParquetFileFormatHelper
+ * and have been moved here to allow reuse across multiple file formats:
+ * - buildImplicitSchemaChangeInfo
+ * - isDataTypeEqual
+ * - generateUnsafeProjection
+ * - hasUnsupportedConversion
+ * - recursivelyCastExpressions
  */
 object SparkSchemaTransformUtils {
 
@@ -117,7 +125,7 @@ object SparkSchemaTransformUtils {
    * @param dstType Destination data type (may have additional nested fields)
    * @return Expression with NULL padding for missing nested fields
    */
-  def recursivelyPadExpression(
+  private def recursivelyPadExpression(
       expr: Expression,
       srcType: DataType,
       dstType: DataType
@@ -225,7 +233,7 @@ object SparkSchemaTransformUtils {
    * @param dstType Destination data type
    * @return true if destination has additional fields requiring NULL padding
    */
-  def needsNestedPadding(srcType: DataType, dstType: DataType): Boolean = (srcType, dstType) match {
+  private def needsNestedPadding(srcType: DataType, dstType: DataType): Boolean = (srcType, dstType) match {
     // Need padding if destination has more fields or nested fields differ
     case (StructType(srcFields), StructType(dstFields)) =>
       dstFields.length > srcFields.length ||
