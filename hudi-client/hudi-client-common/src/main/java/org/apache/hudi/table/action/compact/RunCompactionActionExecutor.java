@@ -109,6 +109,8 @@ public class RunCompactionActionExecutor<T> extends
         metadata.addMetadata(HoodieCommitMetadata.SCHEMA_KEY, schemaPair.getRight().get());
       }
       metadata.setOperationType(operationType);
+      // Add engine-specific metadata (e.g., spark_application_id)
+      context.getEngineCommitMetadata().forEach(metadata::addMetadata);
       compactionWriteMetadata.setCommitMetadata(Option.of(metadata));
       compactionWriteMetadata.setWriteStatuses(statuses);
       compactionWriteMetadata.setCommitted(false);
