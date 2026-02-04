@@ -122,7 +122,10 @@ public abstract class PartitionAwareClusteringPlanStrategy<T,I,K,O> extends Clus
    * Return list of partition paths to be considered for clustering.
    */
   public Pair<List<String>, List<String>> filterPartitionPaths(HoodieWriteConfig writeConfig, List<String> partitions) {
-    return ClusteringPlanPartitionFilter.filter(partitions, getWriteConfig());
+    Pair<List<String>, List<String>> result = ClusteringPlanPartitionFilter.filter(partitions, getWriteConfig());
+    result.getLeft().sort(String::compareTo);
+    log.debug("Filtered to the following partitions after sorting: {}", result.getLeft());
+    return result;
   }
 
   @Override
