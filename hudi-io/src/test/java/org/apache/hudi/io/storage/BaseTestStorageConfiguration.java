@@ -117,6 +117,28 @@ public abstract class BaseTestStorageConfiguration<T> {
   }
 
   @Test
+  public void testContains() {
+    StorageConfiguration<T> storageConf = getStorageConfiguration(getConf(EMPTY_MAP));
+    assertFalse(storageConf.contains(KEY_STRING));
+    assertFalse(storageConf.contains(KEY_BOOLEAN));
+    assertFalse(storageConf.contains(KEY_NON_EXISTENT));
+
+    storageConf.set(KEY_STRING, VALUE_STRING);
+    storageConf.set(KEY_BOOLEAN, VALUE_BOOLEAN);
+    assertTrue(storageConf.contains(KEY_STRING));
+    assertTrue(storageConf.contains(KEY_BOOLEAN));
+    assertFalse(storageConf.contains(KEY_NON_EXISTENT));
+
+    // Test with pre-populated configuration
+    StorageConfiguration<T> prepopulatedConf = getStorageConfiguration(getConf(prepareConfigs()));
+    assertTrue(prepopulatedConf.contains(KEY_STRING));
+    assertTrue(prepopulatedConf.contains(KEY_BOOLEAN));
+    assertTrue(prepopulatedConf.contains(KEY_LONG));
+    assertTrue(prepopulatedConf.contains(KEY_ENUM));
+    assertFalse(prepopulatedConf.contains(KEY_NON_EXISTENT));
+  }
+
+  @Test
   public void testGet() {
     StorageConfiguration<?> storageConf = getStorageConfiguration(getConf(prepareConfigs()));
     validateConfigs(storageConf);

@@ -39,6 +39,7 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.io.SeekableDataInputStream;
+import org.apache.hudi.io.storage.HoodieFileReader;
 import org.apache.hudi.io.util.IOUtils;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
@@ -99,7 +100,8 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
                              boolean enableRecordLookups, String keyField) throws IOException {
     this(storage, logFile, readerSchema, bufferSize, reverseReader, enableRecordLookups, keyField,
         InternalSchema.getEmptyInternalSchema(),
-        readerSchema != null && AvroSchemaUtils.hasTimestampMillisField(readerSchema));
+        storage.getConf().getBoolean(HoodieFileReader.ENABLE_LOGICAL_TIMESTAMP_REPAIR,
+            () -> readerSchema != null && AvroSchemaUtils.hasTimestampMillisField(readerSchema)));
   }
 
   public HoodieLogFileReader(HoodieStorage storage, HoodieLogFile logFile, Schema readerSchema, int bufferSize, boolean reverseReader,
