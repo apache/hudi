@@ -1351,6 +1351,7 @@ public class TestCleaner extends HoodieCleanerTestBase {
         .withArchivalConfig(HoodieArchivalConfig.newBuilder()
             .withAutoArchive(false)
             .build())
+        .withEmbeddedTimelineServerEnabled(false)
         .withParallelism(1, 1).withBulkInsertParallelism(1).withFinalizeWriteParallelism(1).withDeleteParallelism(1)
         .build();
 
@@ -1517,6 +1518,7 @@ public class TestCleaner extends HoodieCleanerTestBase {
         .withArchivalConfig(HoodieArchivalConfig.newBuilder()
             .withAutoArchive(false)
             .build())
+        .withEmbeddedTimelineServerEnabled(false)
         .withParallelism(1, 1).withBulkInsertParallelism(1).withFinalizeWriteParallelism(1).withDeleteParallelism(1)
         .build();
 
