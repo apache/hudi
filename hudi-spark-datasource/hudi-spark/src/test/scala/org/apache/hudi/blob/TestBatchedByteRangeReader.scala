@@ -19,17 +19,13 @@
 
 package org.apache.hudi.blob
 
+import org.apache.hudi.blob.BlobTestHelpers._
 import org.apache.hudi.testutils.HoodieClientTestBase
 
-import org.apache.spark.sql.Column
 import org.apache.spark.sql.functions._
 import org.apache.spark.sql.hudi.blob.BatchedByteRangeReader
-import org.apache.spark.sql.types.{Metadata, MetadataBuilder}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
-
-import java.io.File
-import java.nio.file.Files
 
 /**
  * Tests for BatchedByteRangeReader.
@@ -39,44 +35,17 @@ import java.nio.file.Files
  */
 class TestBatchedByteRangeReader extends HoodieClientTestBase {
 
-  /**
-   * Create a test file with predictable content.
-   */
-  private def createTestFile(name: String, size: Int): String = {
-    val file = new File(tempDir.toString, name)
-    val bytes = (0 until size).map(i => (i % 256).toByte).toArray
-    Files.write(file.toPath, bytes)
-    file.getAbsolutePath
-  }
-
-  /**
-   * Create a blob metadata object with hudi_blob=true.
-   */
-  private def blobMetadata: Metadata = {
-    new MetadataBuilder()
-      .putBoolean("hudi_blob", true)
-      .build()
-  }
-
-  /**
-   * Create a struct column with blob metadata.
-   */
-  private def blobStructCol(name: String, filePathCol: Column, offsetCol: Column, lengthCol: Column): Column = {
-    struct(filePathCol, offsetCol, lengthCol).as(name, blobMetadata)
-  }
-
   @Test
   def testBasicBatchedRead(): Unit = {
-
-    val filePath = createTestFile("basic.bin", 10000)
+    val filePath = createTestFile(tempDir, "basic.bin", 10000)
 
     // Create input with struct column
     val inputDF = sparkSession.createDataFrame(Seq(
-      (filePath, 0L, 100),
-      (filePath, 100L, 100),
-      (filePath, 200L, 100)
-    )).toDF("file_path", "offset", "length")
-      .withColumn("data", blobStructCol("data", col("file_path"), col("offset"), col("length")))
+      (filePath, 0L, 100L),
+      (filePath, 100L, 100L),
+      (filePath, 200L, 100L)
+    )).toDF("file_path", "position", "length")
+      .withColumn("data", blobStructCol("data", col("file_path"), col("position"), col("length")))
       .select("data")
 
     // Read with batching
@@ -96,27 +65,24 @@ class TestBatchedByteRangeReader extends HoodieClientTestBase {
       assertEquals(100, data.length)
 
       // Verify content matches expected pattern
-      for (j <- 0 until 100) {
-        val expectedValue = ((i * 100) + j) % 256
-        assertEquals(expectedValue, data(j) & 0xFF, s"Mismatch at row $i, byte $j")
-      }
+      assertBytesContent(data, expectedOffset = i * 100)
     }
   }
 
   @Test
   def testNoBatchingDifferentFiles(): Unit = {
     // Create different files
-    val file1 = createTestFile("file1.bin", 5000)
-    val file2 = createTestFile("file2.bin", 5000)
-    val file3 = createTestFile("file3.bin", 5000)
+    val file1 = createTestFile(tempDir, "file1.bin", 5000)
+    val file2 = createTestFile(tempDir, "file2.bin", 5000)
+    val file3 = createTestFile(tempDir, "file3.bin", 5000)
 
     // Reads from different files (no batching possible)
     val inputDF = sparkSession.createDataFrame(Seq(
-      (file1, 0L, 100),
-      (file2, 0L, 100),
-      (file3, 0L, 100)
-    )).toDF("file_path", "offset", "length")
-      .withColumn("data", blobStructCol("data", col("file_path"), col("offset"), col("length")))
+      (file1, 0L, 100L),
+      (file2, 0L, 100L),
+      (file3, 0L, 100L)
+    )).toDF("file_path", "position", "length")
+      .withColumn("data", blobStructCol("data", col("file_path"), col("position"), col("length")))
       .select("data")
 
     val resultDF = BatchedByteRangeReader.readBatched(inputDF, storageConf)
@@ -134,16 +100,16 @@ class TestBatchedByteRangeReader extends HoodieClientTestBase {
   @Test
   def testGapThresholdSmallGaps(): Unit = {
 
-    val filePath = createTestFile("small-gaps.bin", 10000)
+    val filePath = createTestFile(tempDir, "small-gaps.bin", 10000)
 
     // Reads with small gaps (should batch with default threshold of 4KB)
     val inputDF = sparkSession.createDataFrame(Seq(
-      (filePath, 0L, 100),
-      (filePath, 120L, 100),    // 20 byte gap
-      (filePath, 240L, 100),    // 20 byte gap
-      (filePath, 360L, 100)     // 20 byte gap
-    )).toDF("file_path", "offset", "length")
-      .withColumn("data", blobStructCol("data", col("file_path"), col("offset"), col("length")))
+      (filePath, 0L, 100L),
+      (filePath, 120L, 100L),    // 20 byte gap
+      (filePath, 240L, 100L),    // 20 byte gap
+      (filePath, 360L, 100L)     // 20 byte gap
+    )).toDF("file_path", "position", "length")
+      .withColumn("data", blobStructCol("data", col("file_path"), col("position"), col("length")))
       .select("data")
 
     // Use default maxGapBytes=4096 which should batch these
@@ -161,16 +127,16 @@ class TestBatchedByteRangeReader extends HoodieClientTestBase {
   @Test
   def testGapThresholdLargeGaps(): Unit = {
 
-    val filePath = createTestFile("large-gaps.bin", 50000)
+    val filePath = createTestFile(tempDir, "large-gaps.bin", 50000)
 
     // Reads with large gaps (should NOT batch with small threshold)
     val inputDF = sparkSession.createDataFrame(Seq(
-      (filePath, 0L, 100),
-      (filePath, 10000L, 100),   // 9.9KB gap
-      (filePath, 20000L, 100),   // 9.9KB gap
-      (filePath, 30000L, 100)    // 9.9KB gap
-    )).toDF("file_path", "offset", "length")
-      .withColumn("data", blobStructCol("data", col("file_path"), col("offset"), col("length")))
+      (filePath, 0L, 100L),
+      (filePath, 10000L, 100L),   // 9.9KB gap
+      (filePath, 20000L, 100L),   // 9.9KB gap
+      (filePath, 30000L, 100L)    // 9.9KB gap
+    )).toDF("file_path", "position", "length")
+      .withColumn("data", blobStructCol("data", col("file_path"), col("position"), col("length")))
       .select("data")
 
     // Use small maxGapBytes that won't batch these
@@ -189,16 +155,16 @@ class TestBatchedByteRangeReader extends HoodieClientTestBase {
   @Test
   def testPreserveInputOrder(): Unit = {
 
-    val filePath = createTestFile("order.bin", 10000)
+    val filePath = createTestFile(tempDir, "order.bin", 10000)
 
     // Create input in specific order with record IDs
     val inputDF = sparkSession.createDataFrame(Seq(
-      (filePath, 0L, 100, "rec1"),
-      (filePath, 100L, 100, "rec2"),
-      (filePath, 200L, 100, "rec3"),
-      (filePath, 300L, 100, "rec4")
-    )).toDF("file_path", "offset", "length", "record_id")
-      .withColumn("data", blobStructCol("data", col("file_path"), col("offset"), col("length")))
+      (filePath, 0L, 100L, "rec1"),
+      (filePath, 100L, 100L, "rec2"),
+      (filePath, 200L, 100L, "rec3"),
+      (filePath, 300L, 100L, "rec4")
+    )).toDF("file_path", "position", "length", "record_id")
+      .withColumn("data", blobStructCol("data", col("file_path"), col("position"), col("length")))
       .select("data", "record_id")
 
     val resultDF = BatchedByteRangeReader.readBatched(inputDF, storageConf)
@@ -216,24 +182,24 @@ class TestBatchedByteRangeReader extends HoodieClientTestBase {
   @Test
   def testMixedScenario(): Unit = {
 
-    val file1 = createTestFile("mixed1.bin", 10000)
-    val file2 = createTestFile("mixed2.bin", 10000)
+    val file1 = createTestFile(tempDir, "mixed1.bin", 10000)
+    val file2 = createTestFile(tempDir, "mixed2.bin", 10000)
 
     // Mix of batchable and non-batchable reads
     val inputDF = sparkSession.createDataFrame(Seq(
       // Batchable group from file1
-      (file1, 0L, 100),
-      (file1, 100L, 100),
-      (file1, 200L, 100),
+      (file1, 0L, 100L),
+      (file1, 100L, 100L),
+      (file1, 200L, 100L),
       // Single read from file2
-      (file2, 0L, 100),
+      (file2, 0L, 100L),
       // Another batchable group from file1
-      (file1, 300L, 100),
-      (file1, 400L, 100),
+      (file1, 300L, 100L),
+      (file1, 400L, 100L),
       // Large gap in file1 (may not batch depending on threshold)
-      (file1, 5000L, 100)
-    )).toDF("file_path", "offset", "length")
-      .withColumn("data", blobStructCol("data", col("file_path"), col("offset"), col("length")))
+      (file1, 5000L, 100L)
+    )).toDF("file_path", "position", "length")
+      .withColumn("data", blobStructCol("data", col("file_path"), col("position"), col("length")))
       .select("data")
 
     val resultDF = BatchedByteRangeReader.readBatched(inputDF, storageConf)
@@ -252,8 +218,8 @@ class TestBatchedByteRangeReader extends HoodieClientTestBase {
   def testEmptyDataset(): Unit = {
 
     val inputDF = sparkSession.createDataFrame(Seq.empty[(String, Long, Int)])
-      .toDF("file_path", "offset", "length")
-      .withColumn("data", blobStructCol("data", col("file_path"), col("offset"), col("length")))
+      .toDF("file_path", "position", "length")
+      .withColumn("data", blobStructCol("data", col("file_path"), col("position"), col("length")))
       .select("data")
 
     val resultDF = BatchedByteRangeReader.readBatched(inputDF, storageConf)
@@ -264,25 +230,20 @@ class TestBatchedByteRangeReader extends HoodieClientTestBase {
   @Test
   def testPreserveAdditionalColumns(): Unit = {
 
-    val filePath = createTestFile("preserve-cols.bin", 5000)
+    val filePath = createTestFile(tempDir, "preserve-cols.bin", 5000)
 
     // Input with multiple additional columns
     val inputDF = sparkSession.createDataFrame(Seq(
-      (filePath, 0L, 100, "rec1", 42, true, 3.14),
-      (filePath, 100L, 100, "rec2", 43, false, 2.71)
-      )).toDF("file_path", "offset", "length", "record_id", "sequence", "flag", "value")
-      .withColumn("data", blobStructCol("data", col("file_path"), col("offset"), col("length")))
+      (filePath, 0L, 100L, "rec1", 42, true, 3.14),
+      (filePath, 100L, 100L, "rec2", 43, false, 2.71)
+      )).toDF("file_path", "position", "length", "record_id", "sequence", "flag", "value")
+      .withColumn("data", blobStructCol("data", col("file_path"), col("position"), col("length")))
       .select("data", "record_id", "sequence", "flag", "value")
 
     val resultDF = BatchedByteRangeReader.readBatched(inputDF, storageConf)
 
     // Verify all columns are preserved
-    assertTrue(resultDF.columns.contains("data"))
-    assertTrue(resultDF.columns.contains("record_id"))
-    assertTrue(resultDF.columns.contains("sequence"))
-    assertTrue(resultDF.columns.contains("flag"))
-    assertTrue(resultDF.columns.contains("value"))
-    assertTrue(resultDF.columns.contains("data"))
+    assertColumnsExist(resultDF, "data", "record_id", "sequence", "flag", "value")
 
     val results = resultDF.collect()
     assertEquals(2, results.length)
@@ -304,16 +265,16 @@ class TestBatchedByteRangeReader extends HoodieClientTestBase {
     // Test that explicit column name resolves the correct column
     // when multiple blob columns exist in the schema
 
-    val file1 = createTestFile("blob1.bin", 5000)
-    val file2 = createTestFile("blob2.bin", 5000)
+    val file1 = createTestFile(tempDir, "blob1.bin", 5000)
+    val file2 = createTestFile(tempDir, "blob2.bin", 5000)
 
     // Create DataFrame with two blob columns
     val inputDF = sparkSession.createDataFrame(Seq(
-      (1, file1, 0L, 100, file2, 0L, 50),
-      (2, file1, 100L, 100, file2, 50L, 50)
-    )).toDF("id", "path1", "offset1", "len1", "path2", "offset2", "len2")
-      .withColumn("blob1", blobStructCol("blob1", col("path1"), col("offset1"), col("len1")))
-      .withColumn("blob2", blobStructCol("blob2", col("path2"), col("offset2"), col("len2")))
+      (1, file1, 0L, 100L, file2, 0L, 50L),
+      (2, file1, 100L, 100L, file2, 50L, 50L)
+    )).toDF("id", "path1", "position1", "len1", "path2", "position2", "len2")
+      .withColumn("blob1", blobStructCol("blob1", col("path1"), col("position1"), col("len1")))
+      .withColumn("blob2", blobStructCol("blob2", col("path2"), col("position2"), col("len2")))
       .select("id", "blob1", "blob2")
 
     // Resolve blob1 explicitly
@@ -354,14 +315,23 @@ class TestBatchedByteRangeReader extends HoodieClientTestBase {
     // Test that explicit column name works even when column doesn't have hudi_blob metadata
     // This allows the SQL plan rule to directly specify which column to resolve
 
-    val filePath = createTestFile("no-metadata.bin", 5000)
+    val filePath = createTestFile(tempDir, "no-metadata.bin", 5000)
 
     // Create DataFrame with struct column but NO blob metadata
     val inputDF = sparkSession.createDataFrame(Seq(
-      (filePath, 0L, 100),
-      (filePath, 100L, 100)
-    )).toDF("file_path", "offset", "length")
-      .withColumn("file_info", struct(col("file_path"), col("offset"), col("length")))
+      (filePath, 0L, 100L),
+      (filePath, 100L, 100L)
+    )).toDF("file_path", "position", "length")
+      .withColumn("file_info", struct(
+        lit("out_of_line").as("storage_type"),
+        lit(null).cast("binary").as("bytes"),
+        struct(
+          col("file_path").as("file"),
+          col("position").as("position"),
+          col("length").as("length"),
+          lit(false).as("managed")
+        ).as("reference")
+      ))
       .select("file_info")
 
     // Should work when column name is explicitly provided
@@ -385,14 +355,14 @@ class TestBatchedByteRangeReader extends HoodieClientTestBase {
     // Test that when no explicit column name is provided,
     // it falls back to searching for hudi_blob=true metadata
 
-    val filePath = createTestFile("fallback.bin", 5000)
+    val filePath = createTestFile(tempDir, "fallback.bin", 5000)
 
     // Create DataFrame with blob metadata (the traditional way)
     val inputDF = sparkSession.createDataFrame(Seq(
-      (filePath, 0L, 100),
-      (filePath, 100L, 100)
-    )).toDF("file_path", "offset", "length")
-      .withColumn("data", blobStructCol("data", col("file_path"), col("offset"), col("length")))
+      (filePath, 0L, 100L),
+      (filePath, 100L, 100L)
+    )).toDF("file_path", "position", "length")
+      .withColumn("data", blobStructCol("data", col("file_path"), col("position"), col("length")))
       .select("data")
 
     // Should work without explicit column name (uses metadata)

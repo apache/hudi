@@ -64,18 +64,20 @@ object ScalarFunctions {
         """
           |Usage: resolve_bytes(blob_column) - Resolves blob references to binary data
           |
-          |Reads byte ranges from files referenced in a struct column containing
-          |file_path, offset, and length fields. The column must have metadata
-          |hudi_blob=true.
+          |Reads byte ranges from files referenced in a blob column. The column must have
+          |metadata hudi_blob=true.
           |
           |This function uses batched I/O operations for optimal performance.
-          |For best results, ensure data is sorted by (file_path, offset).
+          |For best results, ensure data is sorted by (reference.file, reference.position).
           |
           |Example:
           |  SELECT id, name, resolve_bytes(file_ref) as data FROM table
           |
           |Arguments:
-          |  blob_column - Struct column with fields: file_path (string), offset (long), length (int)
+          |  blob_column - Struct column with HoodieSchema.Blob structure:
+          |    - storage_type (string): "out_of_line" or "inline"
+          |    - bytes (binary, nullable): inline blob data or null
+          |    - reference (struct, nullable): {file, position, length, managed}
           |
           |Returns:
           |  Binary data read from the file

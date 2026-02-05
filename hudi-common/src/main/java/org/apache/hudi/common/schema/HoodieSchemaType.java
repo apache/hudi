@@ -119,6 +119,8 @@ public enum HoodieSchemaType {
 
   VARIANT(Schema.Type.RECORD),
 
+  BLOB(Schema.Type.RECORD),
+
   /**
    * BLOB type - represents binary large objects, stored as records with either inline bytes or a reference to a file and range within that file.
    */

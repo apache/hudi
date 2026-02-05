@@ -51,9 +51,14 @@ import scala.collection.mutable.ArrayBuffer
  *
  * val df = spark.table("file_references")
  *   .withColumn("file_info", struct(
- *     col("file_path"),
- *     col("offset"),
- *     col("length")
+ *     lit("out_of_line").as("storage_type"),
+ *     lit(null).cast("binary").as("bytes"),
+ *     struct(
+ *       col("file_path").as("file"),
+ *       col("offset").as("position"),
+ *       col("length").as("length"),
+ *       lit(false).as("managed")
+ *     ).as("reference")
  *   ))
  *   .select("file_info", "record_id")
  *
@@ -66,7 +71,7 @@ import scala.collection.mutable.ArrayBuffer
  *
  * <h3>Performance Tips:</h3>
  * <ul>
- *   <li>Sort input by (file_path, offset) for maximum batching effectiveness</li>
+ *   <li>Sort input by (reference.file, reference.position) for maximum batching effectiveness</li>
  *   <li>Increase lookaheadSize for better batch detection (at cost of memory)</li>
  *   <li>Tune maxGapBytes based on your data access patterns</li>
  * </ul>
@@ -161,10 +166,12 @@ class BatchedByteRangeReader(
           val row = bufferedRows.next()
           val structValue = row.getStruct(structColIdx)
 
-          // Extract file_path, offset, length from struct
-          val filePath = structValue.getString(0)
-          val offset = structValue.getLong(1)
-          val length = structValue.getInt(2)
+          // Extract blob reference from nested structure
+          // structValue has: storage_type (0), bytes (1), reference (2)
+          val reference = structValue.getStruct(2)  // Get reference struct
+          val filePath = reference.getString(0)      // file field
+          val offset = reference.getLong(1)          // position field
+          val length = reference.getLong(2).toInt    // length field (Long in schema, cast to Int)
 
           batch += RowInfo(
             originalRow = row,
@@ -296,7 +303,7 @@ class BatchedByteRangeReader(
       // Split buffer into individual results
       range.rows.map { rowInfo =>
         val relativeOffset = (rowInfo.offset - range.startOffset).toInt
-        val data = buffer.slice(relativeOffset, relativeOffset + rowInfo.length)
+        val data = buffer.slice(relativeOffset, relativeOffset + rowInfo.length.toInt)
 
         // Create output row: original columns + data
         val outputValues = new Array[Any](rowInfo.originalRow.length + 1)
@@ -347,7 +354,7 @@ private case class RowInfo(
     originalRow: Row,
     filePath: String,
     offset: Long,
-    length: Int,
+    length: Long,
     index: Long)
 
 /**
@@ -406,7 +413,10 @@ object BatchedByteRangeReader {
   /**
    * Read byte ranges from a DataFrame with a struct column.
    *
-   * The struct column must contain fields: file_path (String), offset (Long), length (Int).
+   * The struct column must contain the HoodieSchema.Blob structure:
+   * - storage_type (String): "out_of_line" or "inline"
+   * - bytes (Binary, nullable): inline blob data or null
+   * - reference (Struct, nullable): out-of-line reference with file, position, length, managed fields
    * Returns a DataFrame with all original columns plus a "data" column containing byte arrays.
    *
    * For best performance, sort the input DataFrame by the struct fields (file_path, offset)

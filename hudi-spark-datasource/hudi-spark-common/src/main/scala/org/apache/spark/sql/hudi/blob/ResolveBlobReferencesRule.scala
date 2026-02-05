@@ -58,7 +58,7 @@ import org.slf4j.LoggerFactory
  *
  * <h3>Performance:</h3>
  * <ul>
- *   <li>2-5x speedup for sorted data (by file_path, offset)</li>
+ *   <li>2-5x speedup for sorted data (by reference.file, reference.position)</li>
  *   <li>Reduces file seeks by merging consecutive reads</li>
  *   <li>Configurable batching parameters for different workloads</li>
  * </ul>

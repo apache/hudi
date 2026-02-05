@@ -19,15 +19,12 @@
 
 package org.apache.hudi.blob
 
+import org.apache.hudi.blob.BlobTestHelpers._
 import org.apache.hudi.testutils.HoodieClientTestBase
 
 import org.apache.spark.sql.functions._
-import org.apache.spark.sql.types.MetadataBuilder
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
-
-import java.io.File
-import java.nio.file.Files
 
 /**
  * Tests for the resolve_bytes() SQL function.
@@ -42,39 +39,18 @@ import java.nio.file.Files
  */
 class TestResolveBytesSQL extends HoodieClientTestBase {
 
-  /**
-   * Create a test file with predictable content.
-   * Content pattern: byte at position i = i % 256
-   */
-  private def createTestFile(name: String, size: Int): String = {
-    val file = new File(tempDir.toString, name)
-    val bytes = (0 until size).map(i => (i % 256).toByte).toArray
-    Files.write(file.toPath, bytes)
-    file.getAbsolutePath
-  }
-
-  /**
-   * Create blob metadata for marking struct columns as blob references.
-   */
-  private def blobMetadata = {
-    new MetadataBuilder()
-      .putBoolean("hudi_blob", true)
-      .build()
-  }
-
   @Test
   def testBasicResolveBytesSQL(): Unit = {
-    val filePath = createTestFile("basic.bin", 10000)
+    val filePath = createTestFile(tempDir, "basic.bin", 10000)
 
     // Create table with blob column
     val df = sparkSession.createDataFrame(Seq(
-      (1, "record1", filePath, 0L, 100),
-      (2, "record2", filePath, 100L, 100),
-      (3, "record3", filePath, 200L, 100)
-    )).toDF("id", "name", "file_path", "offset", "length")
+      (1, "record1", filePath, 0L, 100L),
+      (2, "record2", filePath, 100L, 100L),
+      (3, "record3", filePath, 200L, 100L)
+    )).toDF("id", "name", "file_path", "position", "length")
       .withColumn("file_info",
-        struct(col("file_path"), col("offset"), col("length"))
-          .as("file_info", blobMetadata))
+        blobStructCol("file_info", col("file_path"), col("position"), col("length")))
       .select("id", "name", "file_info")
 
     df.createOrReplaceTempView("test_table")
@@ -94,29 +70,24 @@ class TestResolveBytesSQL extends HoodieClientTestBase {
     assertEquals(100, data1.length)
 
     // Verify content matches expected pattern
-    for (i <- 0 until 100) {
-      assertEquals(i % 256, data1(i) & 0xFF)
-    }
+    assertBytesContent(data1)
 
     val data2 = rows(1).getAs[Array[Byte]]("data")
     assertEquals(100, data2.length)
-    for (i <- 0 until 100) {
-      assertEquals((100 + i) % 256, data2(i) & 0xFF)
-    }
+    assertBytesContent(data2, expectedOffset = 100)
   }
 
   @Test
   def testResolveBytesWithJoin(): Unit = {
-    val filePath = createTestFile("join.bin", 10000)
+    val filePath = createTestFile(tempDir, "join.bin", 10000)
 
     // Create blob table
     val blobDF = sparkSession.createDataFrame(Seq(
-      (1, filePath, 0L, 100),
-      (2, filePath, 100L, 100)
-    )).toDF("id", "file_path", "offset", "length")
+      (1, filePath, 0L, 100L),
+      (2, filePath, 100L, 100L)
+    )).toDF("id", "file_path", "position", "length")
       .withColumn("file_info",
-        struct(col("file_path"), col("offset"), col("length"))
-          .as("file_info", blobMetadata))
+        blobStructCol("file_info", col("file_path"), col("position"), col("length")))
       .select("id", "file_info")
 
     blobDF.createOrReplaceTempView("blob_table")
@@ -146,23 +117,20 @@ class TestResolveBytesSQL extends HoodieClientTestBase {
 
     // Verify data content
     val data1 = rows(0).getAs[Array[Byte]]("data")
-    for (i <- 0 until 100) {
-      assertEquals(i % 256, data1(i) & 0xFF)
-    }
+    assertBytesContent(data1)
   }
 
   @Test
   def testResolveBytesWithAggregation(): Unit = {
-    val filePath = createTestFile("agg.bin", 10000)
+    val filePath = createTestFile(tempDir, "agg.bin", 10000)
 
     val df = sparkSession.createDataFrame(Seq(
-      (1, "A", filePath, 0L, 100),
-      (2, "A", filePath, 100L, 100),
-      (3, "B", filePath, 200L, 100)
-    )).toDF("id", "category", "file_path", "offset", "length")
+      (1, "A", filePath, 0L, 100L),
+      (2, "A", filePath, 100L, 100L),
+      (3, "B", filePath, 200L, 100L)
+    )).toDF("id", "category", "file_path", "position", "length")
       .withColumn("file_info",
-        struct(col("file_path"), col("offset"), col("length"))
-          .as("file_info", blobMetadata))
+        blobStructCol("file_info", col("file_path"), col("position"), col("length")))
       .select("id", "category", "file_info")
 
     df.createOrReplaceTempView("agg_table")
@@ -199,16 +167,15 @@ class TestResolveBytesSQL extends HoodieClientTestBase {
 
   @Test
   def testResolveBytesWithOrderBy(): Unit = {
-    val filePath = createTestFile("order.bin", 10000)
+    val filePath = createTestFile(tempDir, "order.bin", 10000)
 
     val df = sparkSession.createDataFrame(Seq(
-      (3, filePath, 200L, 50),
-      (1, filePath, 0L, 50),
-      (2, filePath, 100L, 50)
+      (3, filePath, 200L, 50L),
+      (1, filePath, 0L, 50L),
+      (2, filePath, 100L, 50L)
     )).toDF("id", "file_path", "offset", "length")
       .withColumn("file_info",
-        struct(col("file_path"), col("offset"), col("length"))
-          .as("file_info", blobMetadata))
+        blobStructCol("file_info", col("file_path"), col("offset"), col("length")))
       .select("id", "file_info")
 
     df.createOrReplaceTempView("order_table")
@@ -228,23 +195,20 @@ class TestResolveBytesSQL extends HoodieClientTestBase {
 
     // Verify data content for ordered results
     val data1 = rows(0).getAs[Array[Byte]]("data")
-    for (i <- 0 until 50) {
-      assertEquals(i % 256, data1(i) & 0xFF)
-    }
+    assertBytesContent(data1)
   }
 
   @Test
   def testResolveBytesInSubquery(): Unit = {
-    val filePath = createTestFile("subquery.bin", 10000)
+    val filePath = createTestFile(tempDir, "subquery.bin", 10000)
 
     val df = sparkSession.createDataFrame(Seq(
-      (1, "A", filePath, 0L, 100),
-      (2, "A", filePath, 100L, 100),
-      (3, "B", filePath, 200L, 100)
-    )).toDF("id", "category", "file_path", "offset", "length")
+      (1, "A", filePath, 0L, 100L),
+      (2, "A", filePath, 100L, 100L),
+      (3, "B", filePath, 200L, 100L)
+    )).toDF("id", "category", "file_path", "position", "length")
       .withColumn("file_info",
-        struct(col("file_path"), col("offset"), col("length"))
-          .as("file_info", blobMetadata))
+        blobStructCol("file_info", col("file_path"), col("position"), col("length")))
       .select("id", "category", "file_info")
 
     df.createOrReplaceTempView("subquery_table")
@@ -267,57 +231,52 @@ class TestResolveBytesSQL extends HoodieClientTestBase {
 
   @Test
   def testConfigurationParameters(): Unit = {
-    val filePath = createTestFile("config.bin", 50000)
+    val filePath = createTestFile(tempDir, "config.bin", 50000)
 
     val df = sparkSession.createDataFrame(Seq(
-      (1, filePath, 0L, 100),
-      (2, filePath, 5000L, 100),  // 4.9KB gap
-      (3, filePath, 10000L, 100)
-    )).toDF("id", "file_path", "offset", "length")
+      (1, filePath, 0L, 100L),
+      (2, filePath, 5000L, 100L),  // 4.9KB gap
+      (3, filePath, 10000L, 100L)
+    )).toDF("id", "file_path", "position", "length")
       .withColumn("file_info",
-        struct(col("file_path"), col("offset"), col("length"))
-          .as("file_info", blobMetadata))
+        blobStructCol("file_info", col("file_path"), col("position"), col("length")))
       .select("id", "file_info")
 
     df.createOrReplaceTempView("config_table")
 
-    // Set custom configuration
-    sparkSession.conf.set("hoodie.blob.batching.max.gap.bytes", "10000")
-    sparkSession.conf.set("hoodie.blob.batching.lookahead.size", "100")
+    // Use withSparkConfig to automatically manage configuration
+    withSparkConfig(sparkSession, Map(
+      "hoodie.blob.batching.max.gap.bytes" -> "10000",
+      "hoodie.blob.batching.lookahead.size" -> "100"
+    )) {
+      val result = sparkSession.sql("""
+        SELECT id, resolve_bytes(file_info) as data
+        FROM config_table
+      """)
 
-    val result = sparkSession.sql("""
-      SELECT id, resolve_bytes(file_info) as data
-      FROM config_table
-    """)
+      val rows = result.collect()
+      assertEquals(3, rows.length)
 
-    val rows = result.collect()
-    assertEquals(3, rows.length)
-
-    // Verify all reads completed successfully
-    rows.foreach { row =>
-      assertEquals(100, row.getAs[Array[Byte]]("data").length)
+      // Verify all reads completed successfully
+      rows.foreach { row =>
+        assertEquals(100, row.getAs[Array[Byte]]("data").length)
+      }
     }
-
-    // Reset config
-    sparkSession.conf.unset("hoodie.blob.batching.max.gap.bytes")
-    sparkSession.conf.unset("hoodie.blob.batching.lookahead.size")
   }
 
   @Test
   def testMultipleResolveBytesInSameQuery(): Unit = {
-    val filePath1 = createTestFile("multi1.bin", 10000)
-    val filePath2 = createTestFile("multi2.bin", 10000)
+    val filePath1 = createTestFile(tempDir, "multi1.bin", 10000)
+    val filePath2 = createTestFile(tempDir, "multi2.bin", 10000)
 
     val df = sparkSession.createDataFrame(Seq(
-      (1, filePath1, 0L, 50, filePath2, 0L, 50),
-      (2, filePath1, 100L, 50, filePath2, 100L, 50)
+      (1, filePath1, 0L, 50L, filePath2, 0L, 50L),
+      (2, filePath1, 100L, 50L, filePath2, 100L, 50L)
     )).toDF("id", "file_path1", "offset1", "length1", "file_path2", "offset2", "length2")
       .withColumn("file_info1",
-        struct(col("file_path1"), col("offset1"), col("length1"))
-          .as("file_info1", blobMetadata))
+        blobStructCol("file_info1", col("file_path1"), col("offset1"), col("length1")))
       .withColumn("file_info2",
-        struct(col("file_path2"), col("offset2"), col("length2"))
-          .as("file_info2", blobMetadata))
+        blobStructCol("file_info2", col("file_path2"), col("offset2"), col("length2")))
       .select("id", "file_info1", "file_info2")
 
     df.createOrReplaceTempView("multi_table")
@@ -342,15 +301,14 @@ class TestResolveBytesSQL extends HoodieClientTestBase {
 
   @Test
   def testResolveBytesWithEmptyResult(): Unit = {
-    val filePath = createTestFile("empty.bin", 10000)
+    val filePath = createTestFile(tempDir, "empty.bin", 10000)
 
     val df = sparkSession.createDataFrame(Seq(
-      (1, filePath, 0L, 100),
-      (2, filePath, 100L, 100)
+      (1, filePath, 0L, 100L),
+      (2, filePath, 100L, 100L)
     )).toDF("id", "file_path", "offset", "length")
       .withColumn("file_info",
-        struct(col("file_path"), col("offset"), col("length"))
-          .as("file_info", blobMetadata))
+        blobStructCol("file_info", col("file_path"), col("offset"), col("length")))
       .select("id", "file_info")
 
     df.createOrReplaceTempView("empty_table")
@@ -368,18 +326,17 @@ class TestResolveBytesSQL extends HoodieClientTestBase {
 
   @Test
   def testResolveBytesMultipleFiles(): Unit = {
-    val filePath1 = createTestFile("file1.bin", 10000)
-    val filePath2 = createTestFile("file2.bin", 10000)
+    val filePath1 = createTestFile(tempDir, "file1.bin", 10000)
+    val filePath2 = createTestFile(tempDir, "file2.bin", 10000)
 
     val df = sparkSession.createDataFrame(Seq(
-      (1, filePath1, 0L, 100),
-      (2, filePath2, 0L, 100),
-      (3, filePath1, 100L, 100),
-      (4, filePath2, 100L, 100)
+      (1, filePath1, 0L, 100L),
+      (2, filePath2, 0L, 100L),
+      (3, filePath1, 100L, 100L),
+      (4, filePath2, 100L, 100L)
     )).toDF("id", "file_path", "offset", "length")
     .withColumn("file_info",
-        struct(col("file_path"), col("offset"), col("length"))
-          .as("file_info", blobMetadata))
+      blobStructCol("file_info", col("file_path"), col("offset"), col("length")))
       .select("id", "file_info")
 
     df.createOrReplaceTempView("multi_file_table")
@@ -402,16 +359,15 @@ class TestResolveBytesSQL extends HoodieClientTestBase {
 
   @Test
   def testResolveBytesWithCaseWhen(): Unit = {
-    val filePath = createTestFile("case.bin", 10000)
+    val filePath = createTestFile(tempDir, "case.bin", 10000)
 
     val df = sparkSession.createDataFrame(Seq(
-      (1, true, filePath, 0L, 100),
-      (2, false, filePath, 100L, 100),
-      (3, true, filePath, 200L, 100)
+      (1, true, filePath, 0L, 100L),
+      (2, false, filePath, 100L, 100L),
+      (3, true, filePath, 200L, 100L)
     )).toDF("id", "should_resolve", "file_path", "offset", "length")
       .withColumn("file_info",
-        struct(col("file_path"), col("offset"), col("length"))
-          .as("file_info", blobMetadata))
+        blobStructCol("file_info", col("file_path"), col("offset"), col("length")))
       .select("id", "should_resolve", "file_info")
 
     df.createOrReplaceTempView("case_table")
