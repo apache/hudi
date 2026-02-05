@@ -300,9 +300,9 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
                                                    Expression partitionColumnPredicates) {
     List<String> matchedPartitionPaths;
     try {
-      // First try listing from the catalog. If not enabled, we will list from the tableMetadata
-      matchedPartitionPaths = getMatchingPartitionPathsFromCatalog(relativePartitionPaths);
-      if (matchedPartitionPaths == null) {
+      if (isPartitionListingViaCatalogEnabled()) {
+        matchedPartitionPaths = getMatchingPartitionPathsFromCatalog(relativePartitionPaths);
+      } else {
         matchedPartitionPaths = tableMetadata.getPartitionPathWithPathPrefixUsingFilterExpression(relativePartitionPaths,
             partitionFields, partitionColumnPredicates);
       }
@@ -324,9 +324,9 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
           HoodieTimeline timelineToQuery = findInstantsInRange();
           matchedPartitionPaths = TimelineUtils.getWrittenPartitions(timelineToQuery);
         } else {
-          // First try listing from the catalog. If not enabled, we will list from the tableMetadata
-          matchedPartitionPaths = getMatchingPartitionPathsFromCatalog(relativePartitionPaths);
-          if (matchedPartitionPaths == null) {
+          if (isPartitionListingViaCatalogEnabled()) {
+            matchedPartitionPaths = getMatchingPartitionPathsFromCatalog(relativePartitionPaths);
+          } else {
             matchedPartitionPaths = tableMetadata.getPartitionPathWithPathPrefixes(relativePartitionPaths);
           }
         }
@@ -376,10 +376,20 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
    * "year=2022/month=07" returns only two partitions.
    *
    * @param relativePathPrefixes The prefixes to relative partition paths that must match
-   * @return null if not supported by File Index implementation
+   * @return list of matching partition paths from the catalog
    */
   protected List<String> getMatchingPartitionPathsFromCatalog(List<String> relativePathPrefixes) {
-    return null;
+    return Collections.emptyList();
+  }
+
+  /**
+   * Returns whether partition listing via catalog is enabled.
+   * Subclasses should override this method to enable catalog-based partition listing.
+   *
+   * @return true if partition listing via catalog is enabled, false otherwise
+   */
+  protected boolean isPartitionListingViaCatalogEnabled() {
+    return false;
   }
 
   protected void refresh() {

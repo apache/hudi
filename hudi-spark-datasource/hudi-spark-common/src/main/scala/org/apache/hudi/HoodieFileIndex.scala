@@ -527,10 +527,10 @@ object HoodieFileIndex extends Logging {
       properties.setProperty(DataSourceReadOptions.FILE_INDEX_LISTING_MODE_OVERRIDE.key, listingModeOverride)
     }
 
-    var hmsListingEnabled = getConfigValue(options, sqlConf,
-      DataSourceReadOptions.FILE_INDEX_LIST_PARTITION_PATHS_FROM_HMS_ENABLED.key, null)
-    if (hmsListingEnabled != null) {
-      properties.setProperty(DataSourceReadOptions.FILE_INDEX_LIST_PARTITION_PATHS_FROM_HMS_ENABLED.key, hmsListingEnabled)
+    var partitionListingViaCatalog = getConfigValue(options, sqlConf,
+      DataSourceReadOptions.FILE_INDEX_PARTITION_LISTING_VIA_CATALOG.key, null)
+    if (partitionListingViaCatalog != null) {
+      properties.setProperty(DataSourceReadOptions.FILE_INDEX_PARTITION_LISTING_VIA_CATALOG.key, partitionListingViaCatalog)
     }
 
     if (tableConfig != null) {

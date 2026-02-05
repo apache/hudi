@@ -17,7 +17,7 @@
 
 package org.apache.hudi
 
-import org.apache.hudi.DataSourceReadOptions.{FILE_INDEX_LIST_PARTITION_PATHS_FROM_HMS_ENABLED, QUERY_TYPE, QUERY_TYPE_SNAPSHOT_OPT_VAL}
+import org.apache.hudi.DataSourceReadOptions.{FILE_INDEX_PARTITION_LISTING_VIA_CATALOG, QUERY_TYPE, QUERY_TYPE_SNAPSHOT_OPT_VAL}
 import org.apache.hudi.common.config.{HoodieMetadataConfig, TypedProperties}
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.storage.StoragePath
@@ -37,9 +37,9 @@ import scala.collection.JavaConverters._
  * Tests for SparkHoodieTableFileIndex HMS partition listing feature.
  *
  * This test verifies that:
- * 1. When FILE_INDEX_LIST_PARTITION_PATHS_FROM_HMS_ENABLED is true and MDT is not available,
+ * 1. When FILE_INDEX_PARTITION_LISTING_VIA_CATALOG is true and MDT is not available,
  *    partition listing comes from the HMS (external catalog)
- * 2. When FILE_INDEX_LIST_PARTITION_PATHS_FROM_HMS_ENABLED is false, HMS listing is not used
+ * 2. When FILE_INDEX_PARTITION_LISTING_VIA_CATALOG is false, HMS listing is not used
  * 3. When MDT is available, HMS listing is not used (even if the config is enabled)
  */
 class TestSparkHoodieTableFileIndexHmsListing extends HoodieSparkSqlTestBase {
@@ -88,7 +88,7 @@ class TestSparkHoodieTableFileIndexHmsListing extends HoodieSparkSqlTestBase {
       val configProperties = new TypedProperties()
       configProperties.setProperty("path", tablePath)
       configProperties.setProperty(QUERY_TYPE.key, QUERY_TYPE_SNAPSHOT_OPT_VAL)
-      configProperties.setProperty(FILE_INDEX_LIST_PARTITION_PATHS_FROM_HMS_ENABLED.key, "false")
+      configProperties.setProperty(FILE_INDEX_PARTITION_LISTING_VIA_CATALOG.key, "false")
       configProperties.setProperty(HoodieMetadataConfig.ENABLE.key, "false")
 
       val fileIndex = new SparkHoodieTableFileIndex(
@@ -115,7 +115,7 @@ class TestSparkHoodieTableFileIndexHmsListing extends HoodieSparkSqlTestBase {
       val configProperties = new TypedProperties()
       configProperties.setProperty("path", tablePath)
       configProperties.setProperty(QUERY_TYPE.key, QUERY_TYPE_SNAPSHOT_OPT_VAL)
-      configProperties.setProperty(FILE_INDEX_LIST_PARTITION_PATHS_FROM_HMS_ENABLED.key, "true")
+      configProperties.setProperty(FILE_INDEX_PARTITION_LISTING_VIA_CATALOG.key, "true")
       configProperties.setProperty(HoodieMetadataConfig.ENABLE.key, "false")
 
       val fileIndex = new SparkHoodieTableFileIndex(
@@ -149,7 +149,7 @@ class TestSparkHoodieTableFileIndexHmsListing extends HoodieSparkSqlTestBase {
       val configProperties = new TypedProperties()
       configProperties.setProperty("path", tablePath)
       configProperties.setProperty(QUERY_TYPE.key, QUERY_TYPE_SNAPSHOT_OPT_VAL)
-      configProperties.setProperty(FILE_INDEX_LIST_PARTITION_PATHS_FROM_HMS_ENABLED.key, "true")
+      configProperties.setProperty(FILE_INDEX_PARTITION_LISTING_VIA_CATALOG.key, "true")
       configProperties.setProperty(HoodieMetadataConfig.ENABLE.key, "false")
 
       val fileIndex = new SparkHoodieTableFileIndex(
@@ -214,7 +214,7 @@ class TestSparkHoodieTableFileIndexHmsListing extends HoodieSparkSqlTestBase {
     val configProperties = new TypedProperties()
     configProperties.setProperty("path", tablePath)
     configProperties.setProperty(QUERY_TYPE.key, QUERY_TYPE_SNAPSHOT_OPT_VAL)
-    configProperties.setProperty(FILE_INDEX_LIST_PARTITION_PATHS_FROM_HMS_ENABLED.key, "true")
+    configProperties.setProperty(FILE_INDEX_PARTITION_LISTING_VIA_CATALOG.key, "true")
     configProperties.setProperty(HoodieMetadataConfig.ENABLE.key, "true")
 
     val fileIndex = new SparkHoodieTableFileIndex(
@@ -264,7 +264,7 @@ class TestSparkHoodieTableFileIndexHmsListing extends HoodieSparkSqlTestBase {
 
     // Read with HMS listing enabled
     val df = spark.read.format("hudi")
-      .option(FILE_INDEX_LIST_PARTITION_PATHS_FROM_HMS_ENABLED.key, "true")
+      .option(FILE_INDEX_PARTITION_LISTING_VIA_CATALOG.key, "true")
       .option(HoodieMetadataConfig.ENABLE.key, "false")
       .load(spark.sessionState.catalog.getTableMetadata(TableIdentifier(tableName))
         .storage.properties("path"))

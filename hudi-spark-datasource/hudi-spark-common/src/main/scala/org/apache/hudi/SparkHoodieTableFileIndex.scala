@@ -456,40 +456,41 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
    * "year=2022/month=07" returns only two partitions.
    *
    * @param relativePathPrefixes The prefixes to relative partition paths that must match
-   * @return null if not supported by File Index implementation
+   * @return list of matching partition paths from the catalog
    */
   override protected def getMatchingPartitionPathsFromCatalog(relativePathPrefixes: List[String]): List[String] = {
-    // If listing from the catalog is disabled, or if MDT is available (which is faster), return null
-    if (!configProperties.getBoolean(FILE_INDEX_LIST_PARTITION_PATHS_FROM_HMS_ENABLED.key, FILE_INDEX_LIST_PARTITION_PATHS_FROM_HMS_ENABLED.defaultValue())
-        || metaClient.getTableConfig.isMetadataTableAvailable) {
-      null
-    } else {
-      // Retrieve all the partition paths from the catalog
-      logInfo("Listing partition paths from the catalog using path prefixes " + relativePathPrefixes.toString)
-      val databaseName = metaClient.getTableConfig.getDatabaseName
-      val tableName = metaClient.getTableConfig.getTableName
-      val basePath = metaClient.getBasePath
-      val allPartitionPaths: Seq[String] = spark.sessionState.catalog.externalCatalog
-        .listPartitions(databaseName, tableName)
-        .map(tablePartition => {
-          val partitionStorageFullPath = new Path(tablePartition.location)
-          val relPartitionPathForFiltering = FSUtils.getRelativePartitionPath(basePath, new StoragePath(partitionStorageFullPath.toUri))
-          logDebug("Found partition path from catalog " + relPartitionPathForFiltering)
-          relPartitionPathForFiltering
-        })
-        .filter((relPartitionPath: String) =>
-          // If the relativePathPrefix is empty, return all partition paths;
-          // else if the relative path prefix is the same as the path, this is an exact match;
-          // else, we need to make sure the path is a subdirectory of relativePathPrefix, by
-          // checking if the path starts with relativePathPrefix appended by a slash ("/").
-          relativePathPrefixes.stream.anyMatch((relativePathPrefix: String) =>
-            StringUtils.isNullOrEmpty(relativePathPrefix)
-              || relPartitionPath == (relativePathPrefix)
-              || relPartitionPath.startsWith(relativePathPrefix + "/")
-          ))
+    // Retrieve all the partition paths from the catalog
+    logInfo("Listing partition paths from the catalog using path prefixes " + relativePathPrefixes.toString)
+    val databaseName = metaClient.getTableConfig.getDatabaseName
+    val tableName = metaClient.getTableConfig.getTableName
+    val basePath = metaClient.getBasePath
+    val allPartitionPaths: Seq[String] = spark.sessionState.catalog.externalCatalog
+      .listPartitions(databaseName, tableName)
+      .map(tablePartition => {
+        val partitionStorageFullPath = new Path(tablePartition.location)
+        val relPartitionPathForFiltering = FSUtils.getRelativePartitionPath(basePath, new StoragePath(partitionStorageFullPath.toUri))
+        logDebug("Found partition path from catalog " + relPartitionPathForFiltering)
+        relPartitionPathForFiltering
+      })
 
+    if (relativePathPrefixes.isEmpty || relativePathPrefixes.stream.allMatch(StringUtils.isNullOrEmpty(_))) {
+      // Return all partitions if no prefix filter
       allPartitionPaths.toList.asJava
+    } else {
+      // Filter partitions based on prefixes
+      val filteredPartitionPaths = allPartitionPaths.filter((relPartitionPath: String) =>
+        relativePathPrefixes.stream.anyMatch((relativePathPrefix: String) =>
+          StringUtils.isNullOrEmpty(relativePathPrefix)
+            || relPartitionPath == relativePathPrefix
+            || relPartitionPath.startsWith(relativePathPrefix + "/")
+        ))
+      filteredPartitionPaths.toList.asJava
     }
+  }
+
+  override protected def isPartitionListingViaCatalogEnabled(): Boolean = {
+    configProperties.getBoolean(FILE_INDEX_PARTITION_LISTING_VIA_CATALOG.key, FILE_INDEX_PARTITION_LISTING_VIA_CATALOG.defaultValue())
+      && !metaClient.getTableConfig.isMetadataTableAvailable
   }
 }
 
