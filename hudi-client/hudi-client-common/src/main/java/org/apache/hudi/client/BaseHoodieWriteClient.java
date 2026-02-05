@@ -40,6 +40,7 @@ import org.apache.hudi.common.model.ActionType;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieKey;
+import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.TableServiceType;
 import org.apache.hudi.common.model.WriteOperationType;
@@ -1249,13 +1250,29 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     if (instantTime.isPresent()) {
       ownerInstant = Option.of(new HoodieInstant(true, CommitUtils.getCommitActionType(operationType, metaClient.getTableType()), instantTime.get()));
     }
+    boolean requiresInitTable = needsUpgradeOrDowngrade(metaClient) || config.isMetadataTableEnabled();
+    if (!requiresInitTable) {
+      return;
+    }
+    executeUsingTxnManager(ownerInstant, () -> {
+      tryUpgrade(metaClient, instantTime);
+      // TODO: this also does MT table management..
+      initMetadataTable(instantTime, metaClient);
+    });
+  }
+
+  private void executeUsingTxnManager(Option<HoodieInstant> ownerInstant, Runnable r) {
     this.txnManager.beginTransaction(ownerInstant, Option.empty());
     try {
-      tryUpgrade(metaClient, instantTime);
-      initMetadataTable(instantTime, metaClient);
+      r.run();
     } finally {
       this.txnManager.endTransaction(ownerInstant);
     }
+  }
+
+  private boolean needsUpgradeOrDowngrade(HoodieTableMetaClient metaClient) {
+    UpgradeDowngrade upgradeDowngrade = new UpgradeDowngrade(metaClient, config, context, upgradeDowngradeHelper);
+    return upgradeDowngrade.needsUpgradeOrDowngrade(HoodieTableVersion.current());
   }
 
   /**
