@@ -18,7 +18,7 @@
 package org.apache.spark.sql.execution.datasources
 
 import org.apache.spark.sql.catalyst.expressions.GenericInternalRow
-import org.apache.spark.sql.catalyst.util.ArrayData
+import org.apache.spark.sql.catalyst.util.{ArrayBasedMapData, ArrayData}
 import org.apache.spark.sql.types._
 import org.apache.spark.unsafe.types.UTF8String
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
@@ -172,6 +172,66 @@ class TestSparkSchemaTransformUtils {
     assertTrue(outputStruct2.isNullAt(2), "price field should be NULL")
   }
   
+  @Test
+  def testGenerateNullPaddingProjection_mapWithStructValues(): Unit = {
+    // Input schema: config: map<string, struct<id: int, name: string>>
+    val inputSchema = StructType(Seq(
+      StructField("config", MapType(
+        StringType,
+        StructType(Seq(
+          StructField("id", IntegerType, nullable = false),
+          StructField("name", StringType, nullable = false)
+        ))
+      ), nullable = false)
+    ))
+
+    // Target schema: config: map<string, struct<id: int, name: string, enabled: boolean>>
+    val targetSchema = StructType(Seq(
+      StructField("config", MapType(
+        StringType,
+        StructType(Seq(
+          StructField("id", IntegerType, nullable = false),
+          StructField("name", StringType, nullable = false),
+          StructField("enabled", BooleanType, nullable = true)
+        ))
+      ), nullable = false)
+    ))
+
+    val projection = SparkSchemaTransformUtils.generateNullPaddingProjection(inputSchema, targetSchema)
+
+    // Test with sample data: Map("key1" -> struct(1, "config1"), "key2" -> struct(2, "config2"))
+    val struct1 = new GenericInternalRow(Array[Any](1, UTF8String.fromString("config1")))
+    val struct2 = new GenericInternalRow(Array[Any](2, UTF8String.fromString("config2")))
+    val keys = ArrayData.toArrayData(Array(UTF8String.fromString("key1"), UTF8String.fromString("key2")))
+    val values = ArrayData.toArrayData(Array(struct1, struct2))
+    val mapData = new ArrayBasedMapData(keys, values)
+    val inputRow = new GenericInternalRow(Array[Any](mapData))
+
+    val outputRow = projection.apply(inputRow)
+
+    // Verify map values have padded NULL fields
+    assertEquals(1, outputRow.numFields)
+    val outputMap = outputRow.getMap(0)
+    assertEquals(2, outputMap.numElements())
+
+    val outputKeys = outputMap.keyArray()
+    val outputValues = outputMap.valueArray()
+
+    // Verify first map entry: "key1" -> struct(1, "config1", NULL)
+    assertEquals(UTF8String.fromString("key1"), outputKeys.getUTF8String(0))
+    val outputStruct1 = outputValues.getStruct(0, 3)
+    assertEquals(1, outputStruct1.getInt(0))
+    assertEquals(UTF8String.fromString("config1"), outputStruct1.getUTF8String(1))
+    assertTrue(outputStruct1.isNullAt(2), "enabled field should be NULL")
+
+    // Verify second map entry: "key2" -> struct(2, "config2", NULL)
+    assertEquals(UTF8String.fromString("key2"), outputKeys.getUTF8String(1))
+    val outputStruct2 = outputValues.getStruct(1, 3)
+    assertEquals(2, outputStruct2.getInt(0))
+    assertEquals(UTF8String.fromString("config2"), outputStruct2.getUTF8String(1))
+    assertTrue(outputStruct2.isNullAt(2), "enabled field should be NULL")
+  }
+
   @Test
   def testFilterSchemaByFileSchema_allFieldsPresent(): Unit = {
     // Both schemas have (id, name, age)
