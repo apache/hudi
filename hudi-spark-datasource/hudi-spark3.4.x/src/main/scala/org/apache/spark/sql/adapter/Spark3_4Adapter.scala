@@ -19,7 +19,7 @@ package org.apache.spark.sql.adapter
 
 import org.apache.hudi.avro.AvroSchemaUtils
 import org.apache.hudi.{Spark34HoodieFileScanRDD, SparkAdapterSupport$}
-import org.apache.hudi.io.storage.HoodieSparkParquetReader
+import org.apache.hudi.io.storage.HoodieFileReader
 
 import org.apache.avro.Schema
 import org.apache.hadoop.conf.Configuration
@@ -84,7 +84,7 @@ class Spark3_4Adapter extends BaseSpark3Adapter {
   override def getParquetReadSupport(conf: Configuration,
                                      messageSchema: org.apache.hudi.common.util.Option[MessageType]): ParquetReadSupport = {
     val enableTimestampFieldRepair = conf.getBoolean(
-      HoodieSparkParquetReader.ENABLE_LOGICAL_TIMESTAMP_REPAIR, true)
+      HoodieFileReader.ENABLE_LOGICAL_TIMESTAMP_REPAIR, true)
     new HoodieParquetReadSupport(
       Option.empty[ZoneId],
       enableVectorizedReader = true,
@@ -169,7 +169,7 @@ class Spark3_4Adapter extends BaseSpark3Adapter {
     val nonNullRequestedSchema = AvroSchemaUtils.getNonNullTypeFromUnion(requestedSchema)
     val cachedRequestedSchema = HoodieInternalRowUtils.getCachedSchema(nonNullRequestedSchema)
     val requestedSchemaInMessageType = org.apache.hudi.common.util.Option.of(getAvroSchemaConverter(conf).convert(nonNullRequestedSchema))
-    val enableTimestampFieldRepair = conf.getBoolean(HoodieSparkParquetReader.ENABLE_LOGICAL_TIMESTAMP_REPAIR, true)
+    val enableTimestampFieldRepair = conf.getBoolean(HoodieFileReader.ENABLE_LOGICAL_TIMESTAMP_REPAIR, true)
     val repairedRequestedSchema = repairSchemaIfSpecified(enableTimestampFieldRepair, fileSchema, requestedSchemaInMessageType)
     val repairedRequestedStructType = new ParquetToSparkSchemaConverter(conf).convert(repairedRequestedSchema)
     val evolution = new SparkBasicSchemaEvolution(repairedRequestedStructType, cachedRequestedSchema, SQLConf.get.sessionLocalTimeZone)
