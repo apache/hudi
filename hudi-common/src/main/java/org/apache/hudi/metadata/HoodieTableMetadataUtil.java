@@ -1112,9 +1112,9 @@ public class HoodieTableMetadataUtil {
     Set<String> revivedKeys = new HashSet<>(deletedKeysForPreviousLogs);
     revivedKeys.retainAll(validKeysForAllLogs); // Intersection of previously deleted and now valid
 
-    // Compute deleted keys: previously valid but now deleted
-    Set<String> deletedKeys = new HashSet<>(validKeysForPreviousLogs);
-    deletedKeys.retainAll(deletedKeysForAllLogs); // Intersection of previously valid and now deleted
+    // Compute deleted keys: newly deleted keys that weren't deleted before
+    Set<String> deletedKeys = new HashSet<>(deletedKeysForAllLogs);
+    deletedKeys.removeAll(deletedKeysForPreviousLogs); // Remove previously deleted keys
 
     return Pair.of(revivedKeys, deletedKeys);
   }
