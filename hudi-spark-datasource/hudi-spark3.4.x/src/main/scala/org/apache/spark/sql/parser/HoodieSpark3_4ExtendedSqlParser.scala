@@ -128,7 +128,8 @@ class HoodieSpark3_4ExtendedSqlParser(session: SparkSession, delegate: ParserInt
       normalized.contains("create index") ||
       normalized.contains("drop index") ||
       normalized.contains("show indexes") ||
-      normalized.contains("refresh index")
+      normalized.contains("refresh index") ||
+      normalized.contains(" blob")
   }
 }
 
