@@ -130,7 +130,7 @@ public abstract class QueryBasedDDLExecutor implements DDLExecutor {
       return;
     }
     log.info("Changing partitions {} on {}", changedPartitions.size(), tableName);
-    List<String> sqls = constructChangePartitions(tableName, changedPartitions);
+    List<String> sqls = constructPartitionAlterStatements(tableName, changedPartitions, PartitionAlterType.SET_LOCATION);
     for (String sql : sqls) {
       runSQL(sql);
     }
@@ -202,25 +202,6 @@ public abstract class QueryBasedDDLExecutor implements DDLExecutor {
     return String.join(",", partBuilder);
   }
 
-  private List<String> constructChangePartitions(String tableName, List<String> partitions) {
-    List<String> changePartitions = new ArrayList<>();
-    // Hive 2.x doesn't like db.table name for operations, hence we need to change to using the database first
-    String useDatabase = "USE " + HIVE_ESCAPE_CHARACTER + databaseName + HIVE_ESCAPE_CHARACTER;
-    changePartitions.add(useDatabase);
-    String alterTable = "ALTER TABLE " + HIVE_ESCAPE_CHARACTER + tableName + HIVE_ESCAPE_CHARACTER;
-    for (String partition : partitions) {
-      String partitionClause = getPartitionClause(partition);
-      Path partitionPath = HadoopFSUtils.constructAbsolutePathInHadoopPath(config.getString(META_SYNC_BASE_PATH), partition);
-      String partitionScheme = partitionPath.toUri().getScheme();
-      String fullPartitionPath = StorageSchemes.HDFS.getScheme().equals(partitionScheme)
-          ? HadoopFSUtils.getDFSFullPartitionPath(config.getHadoopFileSystem(), partitionPath) : partitionPath.toString();
-      String changePartition =
-          alterTable + " PARTITION (" + partitionClause + ") SET LOCATION '" + fullPartitionPath + "'";
-      changePartitions.add(changePartition);
-    }
-    return changePartitions;
-  }
-
   @Override
   public void touchPartitionsToTable(String tableName, List<String> touchPartitions) {
     if (touchPartitions.isEmpty()) {
@@ -228,23 +209,50 @@ public abstract class QueryBasedDDLExecutor implements DDLExecutor {
       return;
     }
     log.info("Touching partitions " + touchPartitions.size() + " on " + tableName);
-    List<String> sqls = constructTouchPartitions(tableName, touchPartitions);
+    List<String> sqls = constructPartitionAlterStatements(tableName, touchPartitions, PartitionAlterType.TOUCH);
     for (String sql : sqls) {
       runSQL(sql);
     }
   }
 
-  private List<String> constructTouchPartitions(String tableName, List<String> partitions) {
-    List<String> touchPartitions = new ArrayList<>();
+  /**
+   * Builds SQL statements to either touch partitions or set their location.
+   * TOUCH: one ALTER TABLE ... TOUCH PARTITION (p1) PARTITION (p2) ...
+   * SET_LOCATION: one ALTER TABLE ... PARTITION (p) SET LOCATION '...' per partition.
+   */
+  private List<String> constructPartitionAlterStatements(String tableName, List<String> partitions, PartitionAlterType alterType) {
+    List<String> result = new ArrayList<>();
+    // Hive 2.x doesn't like db.table name for operations, hence we need to change to using the database first
     String useDatabase = "USE " + HIVE_ESCAPE_CHARACTER + databaseName + HIVE_ESCAPE_CHARACTER;
-    touchPartitions.add(useDatabase);
-    String alterTable = "ALTER TABLE " + HIVE_ESCAPE_CHARACTER + tableName + HIVE_ESCAPE_CHARACTER + " TOUCH";
-    for (String partition : partitions) {
-      String partitionClause = getPartitionClause(partition);
-      alterTable += " PARTITION (" + partitionClause + ")";
+    result.add(useDatabase);
+    String alterTablePrefix = "ALTER TABLE " + HIVE_ESCAPE_CHARACTER + tableName + HIVE_ESCAPE_CHARACTER;
+    switch (alterType) {
+      case TOUCH:
+        String alterTable = alterTablePrefix + " TOUCH";
+        for (String partition : partitions) {
+          alterTable += " PARTITION (" + getPartitionClause(partition) + ")";
+        }
+        result.add(alterTable);
+        break;
+      case SET_LOCATION:
+        for (String partition : partitions) {
+          String partitionClause = getPartitionClause(partition);
+          Path partitionPath = HadoopFSUtils.constructAbsolutePathInHadoopPath(config.getString(META_SYNC_BASE_PATH), partition);
+          String partitionScheme = partitionPath.toUri().getScheme();
+          String fullPartitionPath = StorageSchemes.HDFS.getScheme().equals(partitionScheme)
+              ? HadoopFSUtils.getDFSFullPartitionPath(config.getHadoopFileSystem(), partitionPath) : partitionPath.toString();
+          result.add(alterTablePrefix + " PARTITION (" + partitionClause + ") SET LOCATION '" + fullPartitionPath + "'");
+        }
+        break;
+      default:
+        throw new HoodieHiveSyncException("Partition alter type not supported: " + alterType);
     }
-    touchPartitions.add(alterTable);
-    return touchPartitions;
+    return result;
+  }
+
+  private enum PartitionAlterType {
+    TOUCH,
+    SET_LOCATION
   }
 }
 
