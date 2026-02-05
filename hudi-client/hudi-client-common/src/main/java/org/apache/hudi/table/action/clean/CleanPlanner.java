@@ -275,18 +275,20 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
     }
 
     // Static list of partitions takes precedence over regex pattern
+    List<String> filteredPartitions;
     if (!StringUtils.isNullOrEmpty(partitionSelected)) {
       List<String> selectedPartitions = Arrays.asList(partitionSelected.split(","));
-      LOG.info("Restricting partitions to clean using selected list: {}", selectedPartitions);
-      return allPartitionPaths.stream()
+      filteredPartitions = allPartitionPaths.stream()
           .filter(selectedPartitions::contains)
           .collect(Collectors.toList());
+      log.info("Restricting partitions to clean using selected list. Partitions to clean: {}", filteredPartitions);
     } else {
-      LOG.info("Restricting partitions to clean using regex: {}", partitionRegex);
-      return allPartitionPaths.stream()
+      filteredPartitions = allPartitionPaths.stream()
           .filter(p -> p.matches(partitionRegex))
           .collect(Collectors.toList());
+      log.info("Restricting partitions to clean using regex '{}'. Partitions to clean: {}", partitionRegex, filteredPartitions);
     }
+    return filteredPartitions;
   }
 
   /**
