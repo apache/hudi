@@ -756,7 +756,7 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
       initializeFilegroupsAndCommit(RECORD_INDEX, RECORD_INDEX.getPartitionPath(), fgCountAndRecordIndexRecords, commitTimeForPartition);
     }
     // Validate record index after commit if validation is enabled
-    if (dataWriteConfig.getMetadataConfig().isRecordIndexBootstrapValidationEnabled()) {
+    if (dataWriteConfig.getMetadataConfig().isRecordIndexInitializationValidationEnabled()) {
       validateRecordIndex(recordIndexRecords, fileGroupCount);
     }
     recordIndexRecords.unpersist();
@@ -858,23 +858,27 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
   private void validateRecordIndex(HoodieData<HoodieRecord> recordIndexRecords, int fileGroupCount) {
     String partitionName = MetadataPartitionType.RECORD_INDEX.getPartitionPath();
     HoodieTableFileSystemView fsView = HoodieTableMetadataUtil.getFileSystemViewForMetadataTable(metadataMetaClient);
-    // Use merged file slices to handle cases with pending compactions
-    List<FileSlice> fileSlices = HoodieTableMetadataUtil.getPartitionLatestMergedFileSlices(metadataMetaClient, fsView, partitionName);
+    try {
+      // Use merged file slices to handle cases with pending compactions
+      List<FileSlice> fileSlices = HoodieTableMetadataUtil.getPartitionLatestMergedFileSlices(metadataMetaClient, fsView, partitionName);
 
-    // Filter to only file slices with base files and extract their storage paths
-    List<StoragePath> baseFilePaths = fileSlices.stream()
-        .filter(fs -> fs.getBaseFile().isPresent())
-        .map(fs -> fs.getBaseFile().get().getStoragePath())
-        .collect(Collectors.toList());
+      // Filter to only file slices with base files and extract their storage paths
+      List<StoragePath> baseFilePaths = fileSlices.stream()
+          .filter(fs -> fs.getBaseFile().isPresent())
+          .map(fs -> fs.getBaseFile().get().getStoragePath())
+          .collect(Collectors.toList());
 
-    // Count records in a distributed manner using the engine context
-    long totalRecords = countRecordsInHFiles(baseFilePaths);
-    long expectedRecordCount = recordIndexRecords.count();
+      // Count records in a distributed manner using the engine context
+      long totalRecords = countRecordsInHFiles(baseFilePaths);
+      long expectedRecordCount = recordIndexRecords.count();
 
-    ValidationUtils.checkArgument(totalRecords == expectedRecordCount, "Record Count Validation failed with "
-        + totalRecords + " present in record index vs the expected " + expectedRecordCount);
-    LOG.info(String.format("Record index bootstrapped on %d shards (expected = %d) with %d records (expected = %d)",
-        fileSlices.size(), fileGroupCount, totalRecords, expectedRecordCount));
+      ValidationUtils.checkArgument(totalRecords == expectedRecordCount, "Record Count Validation failed with "
+          + totalRecords + " present in record index vs the expected " + expectedRecordCount);
+      LOG.info(String.format("Record index initialized on %d shards (expected = %d) with %d records (expected = %d)",
+          fileSlices.size(), fileGroupCount, totalRecords, expectedRecordCount));
+    } finally {
+      fsView.close();
+    }
   }
 
   /**

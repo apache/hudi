@@ -2916,6 +2916,8 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     Properties props = new Properties();
     props.setProperty(HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_ENABLE_PROP.key(), "true");
     props.setProperty(HoodieIndexConfig.INDEX_TYPE.key(), "RECORD_INDEX");
+    // Enable validation of record index on initialization
+    props.setProperty(HoodieMetadataConfig.RECORD_INDEX_INITIALIZATION_VALIDATION_ENABLE.key(), "true");
     HoodieWriteConfig cfg = getWriteConfigBuilder(true, true, false)
         .withProps(props).build();
     // Initialize write client.
