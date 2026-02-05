@@ -108,14 +108,14 @@ public class RecordLevelIndexBackend implements MinibatchIndexBackend {
   }
 
   @Override
-  public void onCheckpointComplete(Correspondent correspondent, long completedCheckpointId) {
+  public void onCheckpointComplete(Correspondent correspondent, long completedCheckpointID) {
     Map<Long, String> inflightInstants = correspondent.requestInflightInstants();
-    log.info("Inflight instants and the corresponding checkpoint ids: {}, notified completed checkpoint id: {}",
-        inflightInstants, completedCheckpointId);
-    // if there are no inflight instants, then the latest completed checkpoint id is used
-    // as the minium checkpoint id for the inflight instant, since the streaming write operator
-    // always uses previous checkpoint id to request instant to flush data.
-    recordIndexCache.markAsEvictable(inflightInstants.keySet().stream().min(Long::compareTo).orElse(completedCheckpointId));
+    log.info("Inflight instants and the corresponding checkpoints: {}, notified completed checkpoints: {}",
+        inflightInstants, completedCheckpointID);
+    // if there are no inflight instants,
+    // the latest completed checkpoint id is used as the minimum checkpoint id,
+    // since the streaming write operator always uses previous checkpoint id to request the new instant.
+    recordIndexCache.markAsEvictable(inflightInstants.keySet().stream().min(Long::compareTo).orElse(completedCheckpointID));
     this.metaClient.reloadActiveTimeline();
     reloadMetadataTable();
   }

@@ -293,7 +293,7 @@ public class FlinkOptions extends HoodieConfig {
       .key("index.rli.cache.size")
       .longType()
       .defaultValue(256L) // default 256 MB
-      .withDescription("Maximum total memory allocated for the record level index cache in the bucket assigning operator.\n"
+      .withDescription("Maximum memory allocated for the record level index cache per bucket-assign task.\n"
           + "The memory size of each individual cache within a checkpoint interval is dynamically calculated based on the \n"
           + "average memory size of caches for historical checkpoints.");
 

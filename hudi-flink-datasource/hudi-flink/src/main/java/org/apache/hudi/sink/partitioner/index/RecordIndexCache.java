@@ -53,17 +53,17 @@ public class RecordIndexCache implements Closeable {
   @VisibleForTesting
   @Getter
   private final long maxCacheSizeInBytes;
-  // the minimum checkpoint id for the inflight hoodie instant to be retained
+  // the minimum checkpoint id retained in the cache.
   private long minRetainedCheckpointId;
   private long recordCnt = 0;
 
   /**
-   * Check the total memory size of the cache after inserting 100 records
+   * Step size to check the total memory size of the cache.
    */
-  private static final int NUMBER_OF_RECORDS_TO_CHECK_MEMORY_SIZE = 100;
+  private static final int NUMBER_OF_RECORDS_TO_CHECK_MEMORY_SIZE = 1000;
 
   /**
-   * Factor for estimating the real size of memory used by a spilled map
+   * Factor for estimating the real size of memory used by a spilled map.
    */
   @VisibleForTesting
   public static final double FACTOR_FOR_MEMORY_SIZE_OF_SPILLED_MAP = 0.8;
@@ -84,18 +84,18 @@ public class RecordIndexCache implements Closeable {
   public void addCheckpointCache(long checkpointId) {
     try {
       long inferredCacheSize = inferMemorySizeForCache();
-      // clean the caches for committed instants if there is no enough memory
+      // clean the caches to ensure enough memory for the new cache
       cleanIfNecessary(inferredCacheSize);
-      // Create a new ExternalSpillableMap for this checkpoint
+      // create a new map cache for this checkpoint
       ExternalSpillableMap<String, HoodieRecordGlobalLocation> newCache =
           new ExternalSpillableMap<>(
               inferredCacheSize,
               writeConfig.getSpillableMapBasePath(),
               new DefaultSizeEstimator<>(),
               new DefaultSizeEstimator<>(),
-              // Using ROCKS_DB disk map always. For BITCASK type, there will be extra memory
-              // cost for each key during spilling: key -> ValueMetadata(filePath, valueSize, position, ts)
-              // So it's redundant to use BITCASK disk map since we are using the map to store
+              // using ROCKS_DB disk map always. As BITCASK disk map get extra memory
+              // cost for each key during spilling: key -> ValueMetadata(filePath, valueSize, position, ts).
+              // so it's redundant to use BITCASK disk map since the map is used to store
               // HoodieRecordGlobalLocation which has similar size as ValueMetadata.
               ExternalSpillableMap.DiskMapType.ROCKS_DB,
               new DefaultSerializer<>(),
@@ -159,20 +159,20 @@ public class RecordIndexCache implements Closeable {
    * @param recordGlobalLocation the record location.
    */
   public void update(String recordKey, HoodieRecordGlobalLocation recordGlobalLocation) {
-    ValidationUtils.checkArgument(!caches.isEmpty(), "record index cache should not be empty.");
-    // Get the sub cache with the largest checkpoint ID (first entry in the reverse-ordered TreeMap)
+    ValidationUtils.checkArgument(!caches.isEmpty(), "Record index cache should not be empty.");
+    // get the cache with the largest checkpoint ID (first entry in the reverse-ordered TreeMap).
     caches.firstEntry().getValue().put(recordKey, recordGlobalLocation);
 
     if ((++recordCnt) % NUMBER_OF_RECORDS_TO_CHECK_MEMORY_SIZE == 0) {
-      cleanIfNecessary(1L);
+      cleanIfNecessary(0L);
       recordCnt = 0;
     }
   }
 
   /**
-   * Mark the cache entries as evictable, whose checkpoint id is less than the given checkpoint id.
+   * Marks the historical cache entries as evictable.
    *
-   * @param checkpointId The checkpoint id for the minimum inflight instant
+   * @param checkpointId The minimum retained checkpoint id
    */
   public void markAsEvictable(long checkpointId) {
     ValidationUtils.checkArgument(checkpointId >= minRetainedCheckpointId,
@@ -182,7 +182,7 @@ public class RecordIndexCache implements Closeable {
   }
 
   /**
-   * Perform the actual cleaning of the cache to free up memories for new record index records.
+   * Performs the actual cleaning to release memory for new caches.
    *
    * @param nextCacheSize the size for the next new cache
    */
@@ -201,9 +201,8 @@ public class RecordIndexCache implements Closeable {
 
   @Override
   public void close() throws IOException {
-    // Close all the ExternalSpillableMap instances before removing them
+    // Close all the map instances before removing them
     caches.values().forEach(ExternalSpillableMap::close);
-    // Close all ExternalSpillableMap instances before clearing the cache
     caches.clear();
   }
 }
