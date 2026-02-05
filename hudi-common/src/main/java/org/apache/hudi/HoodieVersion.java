@@ -29,7 +29,7 @@ import java.util.Properties;
  * HUDI versions are configured through maven and are formatted as <major>.<minor>.<patch>. Example: 0.12.2 or 0.12.3-snapshot
  */
 public final class HoodieVersion {
-  private static String HOODIE_DEFAULT_VERSION = "1.2.3";
+  public static String HOODIE_DEFAULT_VERSION = "1.2.3";
 
   public static final String HOODIE_WRITER_VERSION = "hudi_writer_version";
 

@@ -557,7 +557,7 @@ public class HoodieMetrics {
     if (config.isMetricsOn()) {
       final String version = HoodieVersion.get();
       metrics.registerGauge(getMetricsName("userName", System.getProperty("user.name")), 1);
-      metrics.registerGauge(getMetricsName("version", StringUtils.isNullOrEmpty(version) ? "0.14.x" : version), 1);
+      metrics.registerGauge(getMetricsName("version", StringUtils.isNullOrEmpty(version) ? HoodieVersion.HOODIE_DEFAULT_VERSION : version), 1);
     }
   }
 
