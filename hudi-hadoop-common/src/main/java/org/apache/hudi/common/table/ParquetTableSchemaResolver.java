@@ -21,8 +21,9 @@ package org.apache.hudi.common.table;
 
 import org.apache.avro.Schema;
 import org.apache.hadoop.conf.Configuration;
-import org.apache.parquet.avro.AvroSchemaConverter;
 import org.apache.parquet.schema.MessageType;
+
+import static org.apache.parquet.avro.HoodieAvroParquetSchemaConverter.getAvroSchemaConverter;
 
 public class ParquetTableSchemaResolver extends TableSchemaResolver {
 
@@ -31,18 +32,15 @@ public class ParquetTableSchemaResolver extends TableSchemaResolver {
   }
 
   public static MessageType convertAvroSchemaToParquet(Schema schema, Configuration hadoopConf) {
-    AvroSchemaConverter avroSchemaConverter = new AvroSchemaConverter(hadoopConf);
-    return avroSchemaConverter.convert(schema);
+    return getAvroSchemaConverter(hadoopConf).convert(schema);
   }
 
   private Schema convertParquetSchemaToAvro(MessageType parquetSchema) {
-    AvroSchemaConverter avroSchemaConverter = new AvroSchemaConverter(metaClient.getStorageConf().unwrapAs(Configuration.class));
-    return avroSchemaConverter.convert(parquetSchema);
+    return getAvroSchemaConverter(metaClient.getStorageConf().unwrapAs(Configuration.class)).convert(parquetSchema);
   }
 
   private MessageType convertAvroSchemaToParquet(Schema schema) {
-    AvroSchemaConverter avroSchemaConverter = new AvroSchemaConverter(metaClient.getStorageConf().unwrapAs(Configuration.class));
-    return avroSchemaConverter.convert(schema);
+    return getAvroSchemaConverter(metaClient.getStorageConf().unwrapAs(Configuration.class)).convert(schema);
   }
 
   /**
