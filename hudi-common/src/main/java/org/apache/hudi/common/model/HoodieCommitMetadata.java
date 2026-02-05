@@ -498,7 +498,9 @@ public class HoodieCommitMetadata implements Serializable {
         .filter(partitionAndWriteStats -> partitionAndWriteStats
             .getValue()
             .stream()
-            .anyMatch(writeStat -> !Option.ofNullable(writeStat.getPrevCommit()).orElse("null").equalsIgnoreCase("null")))
+            .anyMatch(writeStat -> !Option.ofNullable(writeStat.getPrevCommit())
+                .orElse(HoodieWriteStat.NULL_COMMIT)
+                .equalsIgnoreCase(HoodieWriteStat.NULL_COMMIT)))
         .map(partitionAndWriteStats -> partitionAndWriteStats.getKey())
         .collect(Collectors.toSet());
   }

@@ -244,15 +244,6 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
         HoodieCommitMetadata commitMetadata =
             hoodieTable.getActiveTimeline().readCommitMetadata(instant);
         WriteOperationType operationType = commitMetadata.getOperationType();
-        if ((HoodieTimeline.COMMIT_ACTION.equals(instant.getAction()) && hoodieTable.getMetaClient().getTableType().equals(
-            HoodieTableType.COPY_ON_WRITE)) || (HoodieTimeline.DELTA_COMMIT_ACTION.equals(instant.getAction()) && hoodieTable.getMetaClient().getTableType().equals(
-            HoodieTableType.MERGE_ON_READ))) {
-          if (WriteOperationType.isUpsert(operationType) || WriteOperationType.isInsertWithoutReplace(operationType)) {
-            // For COW only check partitions where the write updated a file slice (leaving behind an older version of the file slice to clean)
-            // Since some partitions may have only had new file slices created (not leaving behind anything to clean yet)
-            return commitMetadata.getWritePartitionPathsWithUpdatedFileGroups().stream();
-          }
-        }
         if (WriteOperationType.isUpsert(operationType) || WriteOperationType.isInsertWithoutReplace(operationType)) {
           if (HoodieTimeline.COMMIT_ACTION.equals(instant.getAction()) && hoodieTable.getMetaClient().getTableType().equals(
               HoodieTableType.COPY_ON_WRITE)) {
