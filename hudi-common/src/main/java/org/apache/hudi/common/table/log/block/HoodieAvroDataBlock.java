@@ -511,7 +511,8 @@ public class HoodieAvroDataBlock extends HoodieDataBlock {
       while (itr.hasNext()) {
         IndexedRecord s = itr.next().toIndexedRecord(HoodieSchema.fromAvroSchema(schema), new Properties()).get().getData();
         ByteArrayOutputStream temp = new ByteArrayOutputStream();
-        Encoder encoder = EncoderFactory.get().binaryEncoder(temp, null);
+        BinaryEncoder encoder = EncoderFactory.get().binaryEncoder(temp, encoderCache.get());
+        encoderCache.set(encoder);
         try {
           // Encode the record into bytes
           writer.write(s, encoder);
