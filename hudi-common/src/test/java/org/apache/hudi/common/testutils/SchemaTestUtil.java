@@ -76,16 +76,8 @@ public final class SchemaTestUtil {
     return new Schema.Parser().parse(SchemaTestUtil.class.getResourceAsStream("/simple-test.avsc"));
   }
 
-  public static Schema getSchema(String path) throws IOException {
-    return new Schema.Parser().parse(SchemaTestUtil.class.getResourceAsStream(path));
-  }
-
   public static List<IndexedRecord> generateTestRecords(int from, int limit) throws IOException, URISyntaxException {
     return toRecords(getSimpleSchema(), getSimpleSchema(), from, limit);
-  }
-
-  public static List<IndexedRecord> generateTestRecords(String schemaPath, String dataPath) throws IOException, URISyntaxException {
-    return toRecords(getSchema(schemaPath), getSchema(schemaPath), dataPath);
   }
 
   public static List<GenericRecord> generateTestGenericRecords(int from, int limit) throws IOException, URISyntaxException {
