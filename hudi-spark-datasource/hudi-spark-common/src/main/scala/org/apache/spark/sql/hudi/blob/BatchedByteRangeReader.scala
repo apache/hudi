@@ -185,7 +185,7 @@ class BatchedByteRangeReader(
           collected += 1
         }
 
-        batch
+        batch.toSeq
       }
     }
 
@@ -216,7 +216,7 @@ class BatchedByteRangeReader(
       allRanges ++= merged
     }
 
-    allRanges
+    allRanges.toSeq
   }
 
   /**
@@ -264,7 +264,7 @@ class BatchedByteRangeReader(
       result += current
     }
 
-    result
+    result.toSeq
   }
 
   /**
@@ -433,7 +433,7 @@ object BatchedByteRangeReader {
    */
   def readBatched(
       df: Dataset[Row],
-      storageConf: StorageConfiguration[?],
+      storageConf: StorageConfiguration[_],
       maxGapBytes: Int = DEFAULT_MAX_GAP_BYTES,
       lookaheadSize: Int = DEFAULT_LOOKAHEAD_SIZE,
       columnName: Option[String] = None,
