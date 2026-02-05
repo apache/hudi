@@ -41,7 +41,6 @@ import org.apache.hudi.common.util.collection.CloseableMappingIterator;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
-import org.apache.hudi.hadoop.CachingPath;
 import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.internal.schema.action.InternalSchemaMerger;
 import org.apache.hudi.internal.schema.convert.AvroInternalSchemaConverter;
@@ -112,6 +111,8 @@ public abstract class AbstractHoodieLogRecordReader {
   private final TypedProperties payloadProps;
   // Log File Paths
   protected final List<String> logFilePaths;
+  // Read block lazily - when true, reads block content on demand
+  private final boolean readBlocksLazily;
   // Reverse reader - Not implemented yet (NA -> Why do we need ?)
   // but present here for plumbing for future implementation
   private final boolean reverseReader;
@@ -177,6 +178,7 @@ public abstract class AbstractHoodieLogRecordReader {
     this.recordMerger = recordMerger;
     this.totalLogFiles.addAndGet(logFilePaths.size());
     this.logFilePaths = logFilePaths;
+    this.readBlocksLazily = readBlocksLazily;
     this.reverseReader = reverseReader;
     this.fs = fs;
     this.bufferSize = bufferSize;
@@ -244,11 +246,11 @@ public abstract class AbstractHoodieLogRecordReader {
     HoodieTimeline inflightInstantsTimeline = commitsTimeline.filterInflights();
     try {
       // Iterate over the paths
-      logFormatReaderWrapper = new HoodieLogFormatReader(storage,
+      logFormatReaderWrapper = new HoodieLogFormatReader(fs,
           logFilePaths.stream()
-              .map(filePath -> new HoodieLogFile(new StoragePath(filePath)))
+              .map(filePath -> new HoodieLogFile(filePath))
               .collect(Collectors.toList()),
-          readerSchema, reverseReader, bufferSize, shouldLookupRecords(), recordKeyField, internalSchema,
+          readerSchema, readBlocksLazily, reverseReader, bufferSize, shouldLookupRecords(), recordKeyField, internalSchema,
           enableLogicalTimestampFieldRepair);
 
       Set<HoodieLogFile> scannedLogFiles = new HashSet<>();
@@ -560,11 +562,11 @@ public abstract class AbstractHoodieLogRecordReader {
     HoodieTimeline inflightInstantsTimeline = commitsTimeline.filterInflights();
     try {
       // Iterate over the paths
-      logFormatReaderWrapper = new HoodieLogFormatReader(storage,
+      logFormatReaderWrapper = new HoodieLogFormatReader(fs,
           logFilePaths.stream()
-              .map(logFile -> new HoodieLogFile(new StoragePath(logFile)))
+              .map(logFile -> new HoodieLogFile(logFile))
               .collect(Collectors.toList()),
-          readerSchema, reverseReader, bufferSize, shouldLookupRecords(), recordKeyField, internalSchema,
+          readerSchema, readBlocksLazily, reverseReader, bufferSize, shouldLookupRecords(), recordKeyField, internalSchema,
           enableLogicalTimestampFieldRepair);
 
       /**

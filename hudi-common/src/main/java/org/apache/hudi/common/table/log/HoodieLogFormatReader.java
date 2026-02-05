@@ -64,7 +64,7 @@ public class HoodieLogFormatReader implements HoodieLogFormat.Reader {
     this.enableLogicalTimestampFieldRepair = enableLogicalTimestampFieldRepair;
     if (!logFiles.isEmpty()) {
       HoodieLogFile nextLogFile = logFiles.remove(0);
-      this.currentReader = new HoodieLogFileReader(storage, nextLogFile, readerSchema, bufferSize, false,
+      this.currentReader = new HoodieLogFileReader(fs, nextLogFile, readerSchema, bufferSize, readBlocksLazily, false,
           enableRecordLookups, recordKeyField, internalSchema, enableLogicalTimestampFieldRepair);
     }
   }
@@ -89,7 +89,7 @@ public class HoodieLogFormatReader implements HoodieLogFormat.Reader {
       try {
         HoodieLogFile nextLogFile = logFiles.remove(0);
         this.currentReader.close();
-        this.currentReader = new HoodieLogFileReader(storage, nextLogFile, readerSchema, bufferSize, false,
+        this.currentReader = new HoodieLogFileReader(fs, nextLogFile, readerSchema, bufferSize, readBlocksLazily, false,
             enableInlineReading, recordKeyField, internalSchema, enableLogicalTimestampFieldRepair);
       } catch (IOException io) {
         throw new HoodieIOException("unable to initialize read with log file ", io);

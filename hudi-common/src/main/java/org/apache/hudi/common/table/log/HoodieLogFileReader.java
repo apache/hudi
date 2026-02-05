@@ -25,7 +25,6 @@ import org.apache.hudi.common.fs.StorageSchemes;
 import org.apache.hudi.common.fs.TimedFSDataInputStream;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.avro.AvroSchemaUtils;
 import org.apache.hudi.common.table.log.block.HoodieAvroDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieCDCDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieCommandBlock;
@@ -100,20 +99,18 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
   public HoodieLogFileReader(FileSystem fs, HoodieLogFile logFile, Schema readerSchema, int bufferSize,
                              boolean readBlockLazily, boolean reverseReader) throws IOException {
     this(fs, logFile, readerSchema, bufferSize, readBlockLazily, reverseReader, false,
-        HoodieRecord.RECORD_KEY_METADATA_FIELD);
+        HoodieRecord.RECORD_KEY_METADATA_FIELD, InternalSchema.getEmptyInternalSchema(), false);
   }
 
-  public HoodieLogFileReader(HoodieStorage storage, HoodieLogFile logFile, Schema readerSchema, int bufferSize, boolean reverseReader,
-                             boolean enableRecordLookups, String keyField) throws IOException {
-    this(storage, logFile, readerSchema, bufferSize, reverseReader, enableRecordLookups, keyField,
-        InternalSchema.getEmptyInternalSchema(),
-        readerSchema != null && AvroSchemaUtils.hasTimestampMillisField(readerSchema));
-  }
-
-  public HoodieLogFileReader(HoodieStorage storage, HoodieLogFile logFile, Schema readerSchema, int bufferSize, boolean reverseReader,
-                             boolean enableRecordLookups, String keyField, InternalSchema internalSchema,
+  /**
+   * Constructor with full options for use by HoodieLogFormatReader (FileSystem-based, no storage abstraction).
+   */
+  public HoodieLogFileReader(FileSystem fs, HoodieLogFile logFile, Schema readerSchema, int bufferSize,
+                             boolean readBlockLazily, boolean reverseReader, boolean enableRecordLookups,
+                             String keyField, InternalSchema internalSchema,
                              boolean enableLogicalTimestampFieldRepair) throws IOException {
-    this.storage = storage;
+    this.fs = fs;
+    this.hadoopConf = fs.getConf();
     // NOTE: We repackage {@code HoodieLogFile} here to make sure that the provided path
     //       is prefixed with an appropriate scheme given that we're not propagating the FS
     //       further
@@ -203,7 +200,7 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
         if (nextBlockVersion.getVersion() == HoodieLogFormatVersion.DEFAULT_VERSION) {
           return HoodieAvroDataBlock.getBlock(content.get(), readerSchema, internalSchema);
         } else {
-          return new HoodieAvroDataBlock(() -> getDataInputStream(storage, this.logFile, bufferSize), content, true, logBlockContentLoc,
+          return new HoodieAvroDataBlock(() -> getFSDataInputStream(fs, this.logFile, bufferSize), content, true, logBlockContentLoc,
               getTargetReaderSchemaForBlock(), header, footer, keyField, enableLogicalTimestampFieldRepair);
         }
 

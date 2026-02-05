@@ -81,9 +81,9 @@ class Spark3_4Adapter extends BaseSpark3Adapter {
     dataType == DataTypes.TimestampNTZType
   }
 
-  override def getParquetReadSupport(storage: HoodieStorage,
+  override def getParquetReadSupport(conf: Configuration,
                                      messageSchema: org.apache.hudi.common.util.Option[MessageType]): ParquetReadSupport = {
-    val enableTimestampFieldRepair = storage.getConf.getBoolean(
+    val enableTimestampFieldRepair = conf.getBoolean(
       HoodieSparkParquetReader.ENABLE_LOGICAL_TIMESTAMP_REPAIR, true)
     new HoodieParquetReadSupport(
       Option.empty[ZoneId],
