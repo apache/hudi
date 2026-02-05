@@ -38,7 +38,8 @@ import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
-import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 
 import java.io.File;
 import java.io.IOException;
@@ -53,13 +54,14 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TestBlobSupport extends SparkClientFunctionalTestHarness {
-  HoodieSchema schema = HoodieSchema.createRecord("test_blobs", null, null, Arrays.asList(
+  private static final HoodieSchema SCHEMA = HoodieSchema.createRecord("test_blobs", null, null, Arrays.asList(
       HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.STRING), null, null),
       HoodieSchemaField.of("value", HoodieSchema.create(HoodieSchemaType.INT), null, null),
       HoodieSchemaField.of("data", HoodieSchema.createBlob(), null, null)));
 
-  @Test
-  void testEndToEnd() throws IOException {
+  @ParameterizedTest
+  @EnumSource(value = HoodieTableType.class)
+  void testEndToEnd(HoodieTableType tableType) throws IOException {
     String filePath1 = createTestFile("file1.bin", 1000);
     String filePath2 = createTestFile("file2.bin", 1000);
 
@@ -69,8 +71,8 @@ public class TestBlobSupport extends SparkClientFunctionalTestHarness {
     properties.put(HoodieTableConfig.RECORDKEY_FIELDS.key(), "id");
     properties.put(HoodieTableConfig.PARTITION_FIELDS.key(), "");
     properties.setProperty(HoodieTableConfig.BASE_FILE_FORMAT.key(), HoodieFileFormat.PARQUET.toString());
-    HoodieTableMetaClient metaClient = getHoodieMetaClient(HoodieTableType.MERGE_ON_READ, properties);
-    HoodieWriteConfig config = getConfigBuilder(true).withSchema(schema.toString()).build();
+    HoodieTableMetaClient metaClient = getHoodieMetaClient(tableType, properties);
+    HoodieWriteConfig config = getConfigBuilder(true).withSchema(SCHEMA.toString()).build();
     try (SparkRDDWriteClient client = getHoodieWriteClient(config)) {
       String commit1 = client.startCommit();
       List<HoodieRecord> firstBatch = createTestRecords(filePath1);
@@ -104,17 +106,17 @@ public class TestBlobSupport extends SparkClientFunctionalTestHarness {
       HoodieKey key = new HoodieKey(id, "");
 
       GenericRecord fileReference = new GenericData.Record(
-          schema.getField("data").get().schema().getField("reference").get().getNonNullSchema().toAvroSchema());
+          SCHEMA.getField("data").get().schema().getField("reference").get().getNonNullSchema().toAvroSchema());
       fileReference.put("file", filePath);
       fileReference.put("position", i * 100);
       fileReference.put("length", 100);
       fileReference.put("managed", false);
 
-      GenericRecord blobRecord = new GenericData.Record(schema.getField("data").get().schema().toAvroSchema());
+      GenericRecord blobRecord = new GenericData.Record(SCHEMA.getField("data").get().schema().toAvroSchema());
       blobRecord.put("storage_type", "out_of_line");
       blobRecord.put("reference", fileReference);
 
-      GenericRecord record = new GenericData.Record(schema.toAvroSchema());
+      GenericRecord record = new GenericData.Record(SCHEMA.toAvroSchema());
       record.put("id", id);
       record.put("value", i);
       record.put("data", blobRecord);
