@@ -378,4 +378,42 @@ class TestSparkSchemaTransformUtils {
     assertEquals(IntegerType, elementStruct.fields(0).dataType)
     assertEquals(StringType, elementStruct.fields(1).dataType)
   }
+
+  @Test
+  def testGenerateNullPaddingProjection_nestedStructSameCountDifferentNames(): Unit = {
+    // Input schema: person: struct<firstName: string, age: int>
+    val inputSchema = StructType(Seq(
+      StructField("person", StructType(Seq(
+        StructField("firstName", StringType, nullable = false),
+        StructField("age", IntegerType, nullable = false)
+      )), nullable = false)
+    ))
+
+    // Target schema: person: struct<fullName: string, age: int>
+    // Note: "fullName" is different from "firstName", but same position and type
+    val targetSchema = StructType(Seq(
+      StructField("person", StructType(Seq(
+        StructField("fullName", StringType, nullable = true),
+        StructField("age", IntegerType, nullable = false)
+      )), nullable = false)
+    ))
+
+    val projection = SparkSchemaTransformUtils.generateNullPaddingProjection(inputSchema, targetSchema)
+
+    // Test with sample data: struct("Alice", 30)
+    val personData = new GenericInternalRow(Array[Any](
+      UTF8String.fromString("Alice"),
+      30
+    ))
+    val inputRow = new GenericInternalRow(Array[Any](personData))
+
+    val outputRow = projection.apply(inputRow)
+
+    assertEquals(1, outputRow.numFields)
+    val outputPerson = outputRow.getStruct(0, 2)
+
+    assertTrue(outputPerson.isNullAt(0),
+      "fullName should be NULL - field 'fullName' doesn't exist in source schema (only 'firstName' exists)")
+    assertEquals(30, outputPerson.getInt(1), "age should be 30")
+  }
 }

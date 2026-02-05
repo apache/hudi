@@ -178,7 +178,7 @@ object SparkSchemaTransformUtils {
    * @param timeZoneId Session timezone for timestamp conversions
    * @return Casted expression with workarounds for unsafe conversions
    */
-  def recursivelyCastExpressions(
+  private def recursivelyCastExpressions(
       expr: Expression,
       srcType: DataType,
       dstType: DataType,
@@ -234,10 +234,18 @@ object SparkSchemaTransformUtils {
    * @return true if destination has additional fields requiring NULL padding
    */
   private def needsNestedPadding(srcType: DataType, dstType: DataType): Boolean = (srcType, dstType) match {
-    // Need padding if destination has more fields or nested fields differ
     case (StructType(srcFields), StructType(dstFields)) =>
-      dstFields.length > srcFields.length ||
-        srcFields.zip(dstFields).exists { case (sf, df) => needsNestedPadding(sf.dataType, df.dataType) }
+      val srcFieldMap = srcFields.map(f => f.name -> f).toMap
+      dstFields.exists { dstField =>
+        srcFieldMap.get(dstField.name) match {
+          case Some(srcField) =>
+            // Field exists in both, check if nested types need padding
+            needsNestedPadding(srcField.dataType, dstField.dataType)
+          case None =>
+            // Field only exists in destination, padding needed
+            true
+        }
+      }
     case (ArrayType(srcElem, _), ArrayType(dstElem, _)) =>
       needsNestedPadding(srcElem, dstElem)
     case (MapType(srcKey, srcVal, _), MapType(dstKey, dstVal, _)) =>
@@ -308,7 +316,7 @@ object SparkSchemaTransformUtils {
    * @param dst Destination data type
    * @return true if conversion needs special handling (e.g., float->double via string)
    */
-  def hasUnsupportedConversion(src: DataType, dst: DataType): Boolean = {
+  private def hasUnsupportedConversion(src: DataType, dst: DataType): Boolean = {
     val addedCastCache = scala.collection.mutable.HashMap.empty[(DataType, DataType), Boolean]
     addedCastCache.getOrElseUpdate((src, dst), {
       (src, dst) match {
@@ -369,7 +377,7 @@ object SparkSchemaTransformUtils {
    * @param fileType Type from file schema
    * @return true if types are compatible for reading
    */
-  def isDataTypeEqual(requiredType: DataType, fileType: DataType): Boolean = (requiredType, fileType) match {
+  private def isDataTypeEqual(requiredType: DataType, fileType: DataType): Boolean = (requiredType, fileType) match {
     case (requiredType, fileType) if requiredType == fileType => true
 
     // prevent illegal cast - TimestampNTZ can be stored as Long in files
@@ -408,7 +416,7 @@ object SparkSchemaTransformUtils {
    * @param fileType Type from file schema
    * @return Reconciled type that includes both file and required fields
    */
-  def addMissingFields(requiredType: DataType, fileType: DataType): DataType = (requiredType, fileType) match {
+  private def addMissingFields(requiredType: DataType, fileType: DataType): DataType = (requiredType, fileType) match {
     case (requiredType, fileType) if requiredType == fileType => fileType
     case (ArrayType(rt, _), ArrayType(ft, _)) => ArrayType(addMissingFields(rt, ft))
     case (MapType(requiredKey, requiredValue, _), MapType(fileKey, fileValue, _)) =>
