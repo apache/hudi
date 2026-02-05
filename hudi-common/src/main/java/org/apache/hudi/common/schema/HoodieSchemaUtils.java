@@ -452,21 +452,6 @@ public final class HoodieSchemaUtils {
   }
 
   /**
-   * Checks if two schemas are projection equivalent (i.e., they have the same fields and types
-   * for projection purposes, ignoring certain metadata differences).
-   *
-   * @param schema1 the first schema
-   * @param schema2 the second schema
-   * @return true if schemas are projection equivalent
-   * @throws IllegalArgumentException if either schema is null
-   * @since 1.2.0
-   */
-  public static boolean areSchemasProjectionEquivalent(HoodieSchema schema1, HoodieSchema schema2) {
-    // Delegate to AvroSchemaUtils
-    return HoodieSchemaCompatibility.areSchemasProjectionEquivalent(schema1, schema2);
-  }
-
-  /**
    * Adds newFields to the schema. Will add nested fields without duplicating the field
    * For example if your schema is "a.b.{c,e}" and newfields contains "a.{b.{d,e},x.y}",
    * It will stitch them together to be "a.{b.{c,d,e},x.y}
