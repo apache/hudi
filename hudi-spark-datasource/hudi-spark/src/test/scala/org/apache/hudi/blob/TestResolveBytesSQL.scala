@@ -32,7 +32,7 @@ import org.junit.jupiter.api.Test
  * This test suite verifies:
  * <ul>
  *   <li>Basic SQL integration with resolve_bytes()</li>
- *   <li>Integration with WHERE clauses, JOINs, aggregations</li>
+ *   <li>Integration with WHERE clauses, JOINs</li>
  *   <li>Configuration parameter handling</li>
  *   <li>Error handling for invalid inputs</li>
  * </ul>
@@ -118,51 +118,6 @@ class TestResolveBytesSQL extends HoodieClientTestBase {
     // Verify data content
     val data1 = rows(0).getAs[Array[Byte]]("data")
     assertBytesContent(data1)
-  }
-
-  @Test
-  def testResolveBytesWithAggregation(): Unit = {
-    val filePath = createTestFile(tempDir, "agg.bin", 10000)
-
-    val df = sparkSession.createDataFrame(Seq(
-      (1, "A", filePath, 0L, 100L),
-      (2, "A", filePath, 100L, 100L),
-      (3, "B", filePath, 200L, 100L)
-    )).toDF("id", "category", "file_path", "position", "length")
-      .withColumn("file_info",
-        blobStructCol("file_info", col("file_path"), col("position"), col("length")))
-      .select("id", "category", "file_info")
-
-    df.createOrReplaceTempView("agg_table")
-
-    // SQL with aggregation
-    val result = sparkSession.sql("""
-      SELECT
-        category,
-        COUNT(*) as count,
-        COLLECT_LIST(resolve_bytes(file_info)) as all_data
-      FROM agg_table
-      GROUP BY category
-      ORDER BY category
-    """)
-
-    val rows = result.collect()
-    assertEquals(2, rows.length)
-
-    // Category A should have 2 records
-    assertEquals("A", rows(0).getAs[String]("category"))
-    assertEquals(2, rows(0).getAs[Long]("count"))
-    val dataListA = rows(0).getSeq[Array[Byte]](2)
-    assertEquals(2, dataListA.length)
-    assertEquals(100, dataListA(0).length)
-    assertEquals(100, dataListA(1).length)
-
-    // Category B should have 1 record
-    assertEquals("B", rows(1).getAs[String]("category"))
-    assertEquals(1, rows(1).getAs[Long]("count"))
-    val dataListB = rows(1).getSeq[Array[Byte]](2)
-    assertEquals(1, dataListB.length)
-    assertEquals(100, dataListB(0).length)
   }
 
   @Test

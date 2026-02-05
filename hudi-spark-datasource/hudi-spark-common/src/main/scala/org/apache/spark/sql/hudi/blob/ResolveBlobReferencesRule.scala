@@ -19,11 +19,12 @@
 
 package org.apache.spark.sql.hudi.blob
 
+import org.apache.hudi.HoodieDatasetBulkInsertHelper.sparkAdapter
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration
 
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.expressions.{Alias, Attribute, AttributeReference, Expression, NamedExpression}
-import org.apache.spark.sql.catalyst.plans.logical.{Aggregate, LogicalPlan, Project}
+import org.apache.spark.sql.catalyst.plans.logical.{LogicalPlan, Project}
 import org.apache.spark.sql.catalyst.rules.Rule
 import org.apache.spark.sql.hudi.blob.BatchedByteRangeReader.DATA_COL
 import org.apache.spark.sql.hudi.expressions.ResolveBytesExpression
@@ -71,13 +72,7 @@ case class ResolveBlobReferencesRule(spark: SparkSession) extends Rule[LogicalPl
 
   override def apply(plan: LogicalPlan): LogicalPlan = plan resolveOperatorsUp {
     case _ @ Project(projectList, child) if containsResolveBytesExpression(projectList) =>
-      // Only process if we have resolve_bytes expressions
       transformProjectWithBlobResolution(projectList, child)
-
-    case _ @ Aggregate(groupingExpressions, aggregateExpressions, child)
-        if containsResolveBytesExpression(aggregateExpressions) ||
-           containsResolveBytesExpression(groupingExpressions) =>
-      transformAggregateWithBlobResolution(groupingExpressions, aggregateExpressions, child)
   }
 
   /**
@@ -109,40 +104,13 @@ case class ResolveBlobReferencesRule(spark: SparkSession) extends Rule[LogicalPl
       child: LogicalPlan): LogicalPlan = {
 
     // Apply batched reader and get resolved plan with mappings
-    val (resolvedPlan, dataAttr, attributeMap) = applyBatchedReader(child, projectList, "Project")
+    val (resolvedPlan, dataAttr, attributeMap) = applyBatchedReader(child, projectList)
 
     // Transform project list expressions
     val newProjectList = transformNamedExpressions(projectList, dataAttr, attributeMap)
 
     // Create new project on top of resolved DataFrame's logical plan
     Project(newProjectList, resolvedPlan)
-  }
-
-  /**
-   * Transform the aggregate to use BatchedByteRangeReader.
-   *
-   * Similar to Project transformation, but handles both grouping and aggregate expressions.
-   */
-  private def transformAggregateWithBlobResolution(
-      groupingExpressions: Seq[Expression],
-      aggregateExpressions: Seq[NamedExpression],
-      child: LogicalPlan): LogicalPlan = {
-
-    // Apply batched reader and get resolved plan with mappings
-    val (resolvedPlan, dataAttr, attributeMap) =
-      applyBatchedReader(child, aggregateExpressions ++ groupingExpressions, "Aggregate")
-
-    // Transform grouping expressions
-    val newGroupingExpressions = groupingExpressions.map { expr =>
-      val transformed = replaceResolveBytesExpression(expr, dataAttr)
-      remapAttributes(transformed, attributeMap)
-    }
-
-    // Transform aggregate expressions
-    val newAggregateExpressions = transformNamedExpressions(aggregateExpressions, dataAttr, attributeMap)
-
-    // Create new Aggregate on top of resolved plan
-    Aggregate(newGroupingExpressions, newAggregateExpressions, resolvedPlan)
   }
 
   /**
@@ -158,26 +126,24 @@ case class ResolveBlobReferencesRule(spark: SparkSession) extends Rule[LogicalPl
    *
    * @param child Child logical plan to transform
    * @param expressions Expressions to search for blob column name
-   * @param nodeType Node type for logging ("Project" or "Aggregate")
    * @return Tuple of (resolvedPlan, dataAttribute, attributeMap)
    */
   private def applyBatchedReader(
       child: LogicalPlan,
-      expressions: Seq[Expression],
-      nodeType: String): (LogicalPlan, Attribute, Map[String, Attribute]) = {
+      expressions: Seq[Expression]): (LogicalPlan, Attribute, Map[String, Attribute]) = {
 
     // Extract blob column name from expressions
     val blobColumnName = extractBlobColumnNameFromExpressions(expressions)
 
     // Apply BatchedByteRangeReader to the child DataFrame
-    val childDF = org.apache.spark.sql.Dataset.ofRows(spark, child)
+    val childDF = sparkAdapter.getUnsafeUtils.createDataFrameFrom(spark, child)
     val storageConf = new HadoopStorageConfiguration(spark.sparkContext.hadoopConfiguration)
 
     // Get configuration parameters
     val maxGapBytes = spark.conf.get("hoodie.blob.batching.max.gap.bytes", "4096").toInt
     val lookaheadSize = spark.conf.get("hoodie.blob.batching.lookahead.size", "50").toInt
 
-    logger.debug(s"Resolving blob references in $nodeType with batched reader " +
+    logger.debug(s"Resolving blob references with batched reader " +
       s"(maxGapBytes=$maxGapBytes, lookaheadSize=$lookaheadSize)" +
       blobColumnName.map(name => s", columnName=$name").getOrElse(""))
 
