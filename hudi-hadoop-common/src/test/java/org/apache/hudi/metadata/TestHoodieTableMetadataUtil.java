@@ -691,7 +691,7 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
 
     // Expected Results
     Set<String> expectedRevivedKeys = new HashSet<>(Collections.singletonList("K4")); // Revived: Deleted in previous but now valid
-    Set<String> expectedDeletedKeys = new HashSet<>(Collections.singletonList("K1")); // Deleted: Valid in previous but now deleted
+    Set<String> expectedDeletedKeys = new HashSet<>(Arrays.asList("K1", "K7")); // Deleted: Valid in previous but now deleted
 
     // Compute Revived and Deleted Keys
     Pair<Set<String>, Set<String>> result = computeRevivedAndDeletedKeys(validKeysForPreviousLogs, deletedKeysForPreviousLogs, validKeysForAllLogs, deletedKeysForAllLogs);
