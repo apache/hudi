@@ -660,7 +660,7 @@ public class TestKafkaOffsetGen {
     HoodieIngestionMetrics mockMetrics = mock(HoodieIngestionMetrics.class);
     KafkaOffsetGen kafkaOffsetGen = new KafkaOffsetGen(getConsumerConfigs("earliest", KAFKA_CHECKPOINT_TYPE_STRING));
 
-    // Checkpoint with some consumed messages, creating lag (0:250, 1:249 = 499 consumed)
+    // Checkpoint with some consumed messages, creating lag (0:250, 1:249 = 499)
     // Note: Cannot assert exact delay count because Kafka's message distribution across
     // partitions is non-deterministic when messages don't have explicit partition keys
     String lastCheckpointString = testTopicName + ",0:250,1:249";
