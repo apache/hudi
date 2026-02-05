@@ -22,7 +22,9 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.table.timeline.versioning.v2.ActiveTimelineV2;
+import org.apache.hudi.common.table.timeline.InstantGenerator;
+import org.apache.hudi.common.table.timeline.versioning.v1.ActiveTimelineV1;
+import org.apache.hudi.common.table.timeline.versioning.v1.InstantGeneratorV1;
 import org.apache.hudi.common.util.Option;
 
 import org.junit.jupiter.api.Test;
@@ -33,7 +35,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
-import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
@@ -43,6 +44,9 @@ import static org.mockito.Mockito.when;
  * Tests for {@link HoodieBackedTableMetadataWriterTableVersionSix}.
  */
 class TestHoodieBackedTableMetadataWriterTableVersionSix {
+
+  // Use V1 instant generator for table version 6 (V2 is for table version 8)
+  private static final InstantGenerator INSTANT_GENERATOR = new InstantGeneratorV1();
 
   /**
    * Test shouldInitializeFromFilesystem returns true when there are no pending data instants.
@@ -243,7 +247,8 @@ class TestHoodieBackedTableMetadataWriterTableVersionSix {
 
   @SuppressWarnings("deprecation")
   private HoodieActiveTimeline createMockTimeline(List<HoodieInstant> instants) {
-    ActiveTimelineV2 timeline = new ActiveTimelineV2();
+    // Use V1 timeline for table version 6 (V2 is for table version 8)
+    ActiveTimelineV1 timeline = new ActiveTimelineV1();
     timeline.setInstants(instants);
     return timeline;
   }
