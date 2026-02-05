@@ -51,7 +51,7 @@ public class KeyGenUtils {
   protected static final String HUDI_DEFAULT_PARTITION_PATH = PartitionPathEncodeUtils.DEFAULT_PARTITION_PATH;
   public static final String DEFAULT_PARTITION_PATH_SEPARATOR = "/";
   public static final String DEFAULT_RECORD_KEY_PARTS_SEPARATOR = ",";
-  public static final String DEFAULT_COMPOSITE_KEY_FILED_VALUE = ":";
+  public static final String DEFAULT_COMPOSITE_KEY_FIELD_VALUE = ":";
 
   public static final String RECORD_KEY_GEN_PARTITION_ID_CONFIG = "_hoodie.record.key.gen.partition.id";
   public static final String RECORD_KEY_GEN_INSTANT_TIME_CONFIG = "_hoodie.record.key.gen.instant.time";
@@ -132,7 +132,7 @@ public class KeyGenUtils {
 
   public static String[] extractRecordKeysByFields(String recordKey, List<String> fields) {
     String[] fieldKV = recordKey.split(DEFAULT_RECORD_KEY_PARTS_SEPARATOR);
-    return Arrays.stream(fieldKV).map(kv -> kv.split(DEFAULT_COMPOSITE_KEY_FILED_VALUE, 2))
+    return Arrays.stream(fieldKV).map(kv -> kv.split(DEFAULT_COMPOSITE_KEY_FIELD_VALUE, 2))
         .filter(kvArray -> kvArray.length == 1 || fields.isEmpty() || (fields.contains(kvArray[0])))
         .map(kvArray -> {
           if (kvArray.length == 1) {
@@ -153,11 +153,11 @@ public class KeyGenUtils {
     for (String recordKeyField : recordKeyFields) {
       String recordKeyValue = HoodieAvroUtils.getNestedFieldValAsString(record, recordKeyField, true, consistentLogicalTimestampEnabled);
       if (recordKeyValue == null) {
-        recordKey.append(recordKeyField + DEFAULT_COMPOSITE_KEY_FILED_VALUE + NULL_RECORDKEY_PLACEHOLDER + DEFAULT_RECORD_KEY_PARTS_SEPARATOR);
+        recordKey.append(recordKeyField + DEFAULT_COMPOSITE_KEY_FIELD_VALUE + NULL_RECORDKEY_PLACEHOLDER + DEFAULT_RECORD_KEY_PARTS_SEPARATOR);
       } else if (recordKeyValue.isEmpty()) {
-        recordKey.append(recordKeyField + DEFAULT_COMPOSITE_KEY_FILED_VALUE + EMPTY_RECORDKEY_PLACEHOLDER + DEFAULT_RECORD_KEY_PARTS_SEPARATOR);
+        recordKey.append(recordKeyField + DEFAULT_COMPOSITE_KEY_FIELD_VALUE + EMPTY_RECORDKEY_PLACEHOLDER + DEFAULT_RECORD_KEY_PARTS_SEPARATOR);
       } else {
-        recordKey.append(recordKeyField + DEFAULT_COMPOSITE_KEY_FILED_VALUE + recordKeyValue + DEFAULT_RECORD_KEY_PARTS_SEPARATOR);
+        recordKey.append(recordKeyField + DEFAULT_COMPOSITE_KEY_FIELD_VALUE + recordKeyValue + DEFAULT_RECORD_KEY_PARTS_SEPARATOR);
         keyIsNullEmpty = false;
       }
     }
@@ -278,7 +278,7 @@ public class KeyGenUtils {
         + "change in the key encoding in the _hoodie_record_key meta field (HUDI-7001) which "
         + "is crucial for upserts. Please take action based on the details on the deployment "
         + "guide (https://hudi.apache.org/docs/deployment#complex-key-generator) "
-        + "before resuming the " + operation + " to the this table. If you're certain "
+        + "before resuming the " + operation + " to the table. If you're certain "
         + "that the table is not affected by the key encoding change, set "
         + "`hoodie.write.complex.keygen.validation.enable=false` to skip this validation.";
   }
