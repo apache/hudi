@@ -188,8 +188,8 @@ public abstract class AbstractHoodieLogRecordReader {
     this.forceFullScan = forceFullScan;
     this.internalSchema = internalSchema == null ? InternalSchema.getEmptyInternalSchema() : internalSchema;
     this.enableOptimizedLogBlocksScan = enableOptimizedLogBlocksScan;
-    this.enableLogicalTimestampFieldRepair = storage.getConf().getBoolean(HoodieFileReader.ENABLE_LOGICAL_TIMESTAMP_REPAIR,
-        () -> readerSchema != null && AvroSchemaUtils.hasTimestampMillisField(readerSchema));
+    this.enableLogicalTimestampFieldRepair = fs.getConf().getBoolean(HoodieFileReader.ENABLE_LOGICAL_TIMESTAMP_REPAIR,
+        readerSchema != null && AvroSchemaUtils.hasTimestampMillisField(readerSchema));
 
     if (keyFieldOverride.isPresent()) {
       // NOTE: This branch specifically is leveraged handling Metadata Table
