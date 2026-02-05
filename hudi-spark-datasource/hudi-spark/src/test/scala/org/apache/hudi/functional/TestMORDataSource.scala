@@ -2298,6 +2298,18 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
       .mode(SaveMode.Overwrite)
       .save(basePath)
 
+    // Add an upsert to create log files in the MOR table
+    val dfUpdate = Seq(
+      ("row1", "partition1", 2000L, "value1_updated"),
+      ("row4", "partition2", 2001L, "value4")
+    ).toDF("_row_key", "_hoodie_partition_path", "timestamp", "data")
+
+    dfUpdate.write.format("hudi")
+      .options(writeOpts)
+      .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL)
+      .mode(SaveMode.Append)
+      .save(basePath)
+
     // Initialize metaClient
     metaClient = createMetaClient(spark, basePath)
 
@@ -2307,17 +2319,18 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
       .option(DataSourceReadOptions.START_COMMIT.key, "000")
       .load(basePath)
 
-    // Verify the data was read correctly
-    assertEquals(3, incrementalDf.count())
+    // Verify the data was read correctly (3 original + 1 new = 4 rows)
+    assertEquals(4, incrementalDf.count())
 
     // Verify that the _hoodie_partition_path field is present and correct
     val results = incrementalDf.select("_row_key", "_hoodie_partition_path", "data")
       .orderBy("_row_key")
       .collect()
 
+    // row1 was updated with new value
     assertEquals("row1", results(0).getAs[String]("_row_key"))
     assertEquals("partition1", results(0).getAs[String]("_hoodie_partition_path"))
-    assertEquals("value1", results(0).getAs[String]("data"))
+    assertEquals("value1_updated", results(0).getAs[String]("data"))
 
     assertEquals("row2", results(1).getAs[String]("_row_key"))
     assertEquals("partition1", results(1).getAs[String]("_hoodie_partition_path"))
@@ -2326,6 +2339,11 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
     assertEquals("row3", results(2).getAs[String]("_row_key"))
     assertEquals("partition2", results(2).getAs[String]("_hoodie_partition_path"))
     assertEquals("value3", results(2).getAs[String]("data"))
+
+    // row4 is new from the upsert
+    assertEquals("row4", results(3).getAs[String]("_row_key"))
+    assertEquals("partition2", results(3).getAs[String]("_hoodie_partition_path"))
+    assertEquals("value4", results(3).getAs[String]("data"))
   }
 }
 
