@@ -139,7 +139,6 @@ public class HoodieBloomIndex extends HoodieIndex<Object, Object> {
     // Preload the partitions so that each parallel op does not have to perform listing.
     // This is only needed when the embedded timeline server is not enabled, as TLS caches file listings.
     if (!config.isEmbeddedTimelineServerEnabled()) {
-      hoodieTable.getHoodieView().sync();
       affectedPartitionPathList.forEach(partition -> hoodieTable.getBaseFileOnlyView().getAllBaseFiles(partition));
     }
 
