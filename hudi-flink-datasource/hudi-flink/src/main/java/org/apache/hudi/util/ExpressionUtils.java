@@ -18,6 +18,11 @@
 
 package org.apache.hudi.util;
 
+import org.apache.hudi.common.model.HoodieIndexDefinition;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.metadata.HoodieTableMetadataUtil;
+
 import org.apache.flink.api.java.tuple.Tuple2;
 import org.apache.flink.table.expressions.CallExpression;
 import org.apache.flink.table.expressions.Expression;
@@ -45,6 +50,8 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
+
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS;
 
 /**
  * Utilities for expression resolving.
@@ -292,6 +299,24 @@ public class ExpressionUtils {
       }
       return Tuple2.of(nonPartitionFilters, partitionFilters);
     }
+  }
+
+  /**
+   * Filter the filter expressions that only contain indexed columns.
+   */
+  public static List<ResolvedExpression> filterExpressionWithIndexedCols(List<ResolvedExpression> expressions, HoodieTableMetaClient metaClient, HoodieSchema tableSchema) {
+    if (metaClient == null) {
+      return Collections.emptyList();
+    }
+    HoodieIndexDefinition indexDefinition = metaClient.getIndexMetadata().map(indexMeta -> indexMeta.getIndexDefinitions().get(PARTITION_NAME_COLUMN_STATS)).orElse(null);
+    if (indexDefinition == null) {
+      return Collections.emptyList();
+    }
+    List<String> indexedCols = HoodieTableMetadataUtil.getValidIndexedColumns(indexDefinition, tableSchema, metaClient.getTableConfig());
+    return expressions.stream().filter(expr -> {
+      String[] refs = referencedColumns(Collections.singletonList(expr));
+      return Arrays.stream(refs).allMatch(indexedCols::contains);
+    }).collect(Collectors.toList());
   }
 
   private static List<CallExpression> splitByAnd(ResolvedExpression expr) {

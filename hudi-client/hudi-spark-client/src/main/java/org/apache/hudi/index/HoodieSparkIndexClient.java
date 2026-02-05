@@ -65,7 +65,6 @@ import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_BL
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_RECORD_INDEX;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_SECONDARY_INDEX;
-import static org.apache.hudi.metadata.HoodieTableMetadataUtil.existingIndexVersionOrDefault;
 
 @Slf4j
 public class HoodieSparkIndexClient extends BaseHoodieIndexClient {
@@ -132,21 +131,6 @@ public class HoodieSparkIndexClient extends BaseHoodieIndexClient {
       drop(metaClient, fullIndexName, Option.empty());
       throw t;
     }
-  }
-
-  @Override
-  public void createOrUpdateColumnStatsIndexDefinition(HoodieTableMetaClient metaClient, List<String> columnsToIndex) {
-    HoodieIndexDefinition indexDefinition = HoodieIndexDefinition.newBuilder()
-        .withIndexName(PARTITION_NAME_COLUMN_STATS)
-        .withIndexType(PARTITION_NAME_COLUMN_STATS)
-        .withIndexFunction(PARTITION_NAME_COLUMN_STATS)
-        .withSourceFields(columnsToIndex)
-        // Use the existing version if exists, otherwise fall back to the default version.
-        .withVersion(existingIndexVersionOrDefault(PARTITION_NAME_COLUMN_STATS, metaClient))
-        .withIndexOptions(Collections.EMPTY_MAP)
-        .build();
-    log.info("Registering or updating index: {} of type: {}", indexDefinition.getIndexName(), indexDefinition.getIndexType());
-    register(metaClient, indexDefinition);
   }
 
   private void createExpressionOrSecondaryIndex(HoodieTableMetaClient metaClient, String userIndexName, String indexType,
