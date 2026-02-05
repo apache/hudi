@@ -233,6 +233,39 @@ class TestSparkSchemaTransformUtils {
   }
 
   @Test
+  def testGenerateNullPaddingProjection_nullStructInInputRow(): Unit = {
+    // Input schema: person: struct<name: string>
+    val inputSchema = StructType(Seq(
+      StructField("person", StructType(Seq(
+        StructField("name", StringType, nullable = false)
+      )), nullable = true)
+    ))
+
+    // Target schema: person: struct<name: string, age: int, city: string>
+    val targetSchema = StructType(Seq(
+      StructField("person", StructType(Seq(
+        StructField("name", StringType, nullable = false),
+        StructField("age", IntegerType, nullable = true),
+        StructField("city", StringType, nullable = true)
+      )), nullable = true)
+    ))
+
+    val projection = SparkSchemaTransformUtils.generateNullPaddingProjection(inputSchema, targetSchema)
+
+    // Test with sample data where person struct is NULL
+    val inputRow = new GenericInternalRow(Array[Any](null))
+
+    val outputRow = projection.apply(inputRow)
+
+    // Verify the NULL struct gets expanded to a struct with all NULL fields
+    assertEquals(1, outputRow.numFields)
+    val outputStruct = outputRow.getStruct(0, 3)
+    assertTrue(outputStruct.isNullAt(0), "name field should be NULL")
+    assertTrue(outputStruct.isNullAt(1), "age field should be NULL")
+    assertTrue(outputStruct.isNullAt(2), "city field should be NULL")
+  }
+
+  @Test
   def testFilterSchemaByFileSchema_allFieldsPresent(): Unit = {
     // Both schemas have (id, name, age)
     val requestedSchema = StructType(Seq(
