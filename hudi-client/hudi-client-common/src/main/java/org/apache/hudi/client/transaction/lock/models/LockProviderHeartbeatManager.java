@@ -112,6 +112,9 @@ public class LockProviderHeartbeatManager implements HeartbeatManager {
   @GuardedBy("this")
   private ScheduledFuture<?> scheduledFuture;
 
+  // Flag to distinguish externally-cancelled heartbeats (via stopHeartbeat) from genuine failures.
+  private volatile boolean stopRequested = false;
+
   /**
    * Semaphore for managing heartbeat task execution synchronization.
    *
@@ -191,6 +194,7 @@ public class LockProviderHeartbeatManager implements HeartbeatManager {
       return false;
     }
     try {
+      this.stopRequested = false;
       scheduledFuture = scheduler.scheduleAtFixedRate(() -> heartbeatTaskRunner(threadToMonitor), heartbeatTimeMs, heartbeatTimeMs, TimeUnit.MILLISECONDS);
       logger.debug("Owner {}: Heartbeat started with interval: {} ms", ownerId, heartbeatTimeMs);
       return true;
@@ -222,9 +226,11 @@ public class LockProviderHeartbeatManager implements HeartbeatManager {
     // Call synchronized method after releasing the semaphore
     if (!heartbeatExecutionSuccessful) {
       logger.error("Owner {}: Heartbeat function did not succeed.", ownerId);
-      // Interrupt the monitored thread to notify it of heartbeat failure.
-      threadToMonitor.interrupt();
-      logger.info("Owner {}: Interrupted monitored thread due to heartbeat failure.", ownerId);
+      if (!stopRequested) {
+        // Interrupt the monitored thread to notify it of heartbeat failure.
+        threadToMonitor.interrupt();
+        logger.info("Owner {}: Interrupted monitored thread due to heartbeat failure.", ownerId);
+      }
       // Unschedule self from further execution if heartbeat was unsuccessful.
       heartbeatTaskUnscheduleItself();
     }
@@ -305,6 +311,9 @@ public class LockProviderHeartbeatManager implements HeartbeatManager {
       return true;
     }
 
+    // Signal that stop was externally requested before cancelling, so the heartbeat task runner
+    // knows not to interrupt the monitored thread if the inflight heartbeat fails due to cancellation.
+    this.stopRequested = true;
     // Attempt to cancel the scheduled future
     boolean cancellationSuccessful = scheduledFuture.cancel(mayInterruptIfRunning);
     logger.debug("Owner {}: Requested termination of heartbeat task. Cancellation returned {}", ownerId, cancellationSuccessful);
