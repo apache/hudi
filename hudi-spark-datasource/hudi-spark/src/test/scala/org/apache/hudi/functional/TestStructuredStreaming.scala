@@ -37,7 +37,7 @@ import org.apache.spark.sql._
 import org.apache.spark.sql.streaming.{OutputMode, StreamingQuery, Trigger}
 import org.apache.spark.sql.types.StructType
 import org.junit.jupiter.api.{BeforeEach, Test}
-import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{CsvSource, EnumSource, ValueSource}
 import org.slf4j.LoggerFactory
@@ -566,5 +566,45 @@ class TestStructuredStreaming extends HoodieSparkClientTestBase {
         assertEquals(0, expectedUpdatedRecords.except(updatedRecords).count())
       }
     }
+  }
+
+  @ParameterizedTest
+  @EnumSource(value = classOf[HoodieTableType])
+  def testStructuredStreamingWithAutoKeyGen(tableType: HoodieTableType): Unit = {
+    val (sourcePath, destPath) = initStreamingSourceAndDestPath("source", "dest")
+    // First chunk of data
+    val records1 = recordsToStrings(dataGen.generateInserts("000", 10)).asScala.toList
+    val inputDF1 = spark.read.json(spark.sparkContext.parallelize(records1, 2))
+    inputDF1.coalesce(1).write.mode(SaveMode.Append).json(sourcePath)
+    val extraOpts = Map(
+      DataSourceWriteOptions.STREAMING_DISABLE_COMPACTION.key -> "true",
+      DataSourceWriteOptions.TABLE_TYPE.key -> tableType.name,
+      "hoodie.datasource.compaction.async.enable" -> "false",
+      "hoodie.write.record.merge.mode" -> "COMMIT_TIME_ORDERING",
+      "hoodie.clean.commits.retained" -> "5",
+      "hoodie.keep.max.commits" -> "3",
+      "hoodie.keep.min.commits" -> "2",
+      "hoodie.clustering.inline" -> "true",
+      "hoodie.clustering.inline.max.commits" -> "2")
+    var opts = commonOpts ++ extraOpts
+    // Enable AutoKeyGen
+    opts -= "hoodie.datasource.write.recordkey.field"
+    streamingWrite(inputDF1.schema, sourcePath, destPath, opts)
+    var metaClient = HoodieTestUtils.createMetaClient(storage, destPath)
+    assertTrue(metaClient.getTableConfig.getRecordKeyFields.isEmpty)
+
+    for (i <- 1 to 24) {
+      val id = String.format("%03d", new Integer(i))
+      val records = recordsToStrings(dataGen.generateUpdates(id, 10)).asScala.toList
+      val inputDF = spark.read.json(spark.sparkContext.parallelize(records, 2))
+      inputDF.coalesce(1).write.mode(SaveMode.Append).json(sourcePath)
+      streamingWrite(inputDF.schema, sourcePath, destPath, opts)
+    }
+    metaClient = HoodieTableMetaClient.reload(metaClient)
+    assertTrue(metaClient.getTableConfig.getRecordKeyFields.isEmpty)
+    assertFalse(metaClient.getActiveTimeline.getCompletedReplaceTimeline.empty())
+    assertFalse(metaClient.getActiveTimeline.getCleanerTimeline.empty())
+    assertFalse(metaClient.getArchivedTimeline.empty())
+    assertEquals(250, spark.read.format("hudi").load(destPath).count())
   }
 }
