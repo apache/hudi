@@ -517,12 +517,18 @@ class HoodieSparkSqlWriterInternal {
             // if table has undergone upgrade, we need to reload table config
             tableMetaClient.reloadTableConfig()
             tableConfig = tableMetaClient.getTableConfig
-            // Convert to RDD[HoodieRecord]
-            val hoodieRecords = Try(HoodieCreateRecordUtils.createHoodieRecordRdd(
+            // Convert to RDD[HoodieRecord] and force type immediately
+            val hoodieRecords: JavaRDD[HoodieRecord[_]] = Try(HoodieCreateRecordUtils.createHoodieRecordRdd(
               HoodieCreateRecordUtils.createHoodieRecordRddArgs(df, writeConfig, parameters, avroRecordName,
                 avroRecordNamespace, writerSchema, processedDataSchema, operation, instantTime, preppedSparkSqlWrites,
                 preppedSparkSqlMergeInto, preppedWriteOperation, tableConfig))) match {
-              case Success(recs) => recs
+              // CAST EXPLANATION:
+              // This cast is required due to Scala/Java generic variance mismatch.
+              // 1. Java returns JavaRDD[HoodieRecord[_ <: Object]] (wildcard maps to Object bound)
+              // 2. Scala expects JavaRDD[HoodieRecord[_]] (existential type maps to Any)
+              // 3. JavaRDD is Invariant in Scala, so these types are not compatible without a cast.
+              // Please do not remove, even if IDE marks it as redundant.
+              case Success(recs) => recs.asInstanceOf[JavaRDD[HoodieRecord[_]]]
               case Failure(e) => throw new HoodieRecordCreationException("Failed to create Hoodie Spark Record", e)
             }
 
