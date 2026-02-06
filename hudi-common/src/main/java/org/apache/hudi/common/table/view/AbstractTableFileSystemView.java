@@ -1452,7 +1452,10 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
    * @param maxInstantTime The max instant time
    */
   private Option<FileSlice> fetchAllLogsMergedFileSlice(HoodieFileGroup fileGroup, String maxInstantTime) {
-    List<FileSlice> fileSlices = fileGroup.getAllFileSlicesBeforeOn(maxInstantTime).collect(Collectors.toList());
+    List<FileSlice> fileSlices = fileGroup.getAllRawFileSlices().collect(Collectors.toList());
+    fileSlices = fileSlices.stream()
+        .filter(slice -> HoodieTimeline.compareTimestamps(slice.getBaseInstantTime(), LESSER_THAN_OR_EQUALS, maxInstantTime))
+        .collect(Collectors.toList());
     if (fileSlices.size() == 0) {
       return Option.empty();
     }
