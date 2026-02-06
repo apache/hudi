@@ -228,6 +228,7 @@ public enum HoodieSchemaType {
       case MAP:
       case UNION:
       case VARIANT:
+      case BLOB:
         return true;
       default:
         return false;
