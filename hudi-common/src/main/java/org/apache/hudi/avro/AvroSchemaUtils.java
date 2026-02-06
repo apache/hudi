@@ -19,7 +19,6 @@
 package org.apache.hudi.avro;
 
 import org.apache.hudi.common.schema.HoodieSchema;
-import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieAvroSchemaException;
 import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.internal.schema.action.TableChanges;
@@ -30,14 +29,11 @@ import lombok.NoArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.avro.Schema;
 
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.stream.Collectors;
 
-import static org.apache.hudi.avro.HoodieAvroUtils.createNewSchemaField;
 import static org.apache.hudi.common.util.CollectionUtils.reduce;
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
 import static org.apache.hudi.internal.schema.convert.InternalSchemaConverter.convert;
@@ -48,117 +44,6 @@ import static org.apache.hudi.internal.schema.convert.InternalSchemaConverter.co
 @NoArgsConstructor(access = AccessLevel.PRIVATE)
 @Slf4j
 public class AvroSchemaUtils {
-
-  /**
-   * Get gets a field from a record, works on nested fields as well (if you provide the whole name, eg: toplevel.nextlevel.child)
-   * @return the field, including its lineage.
-   * For example, if you have a schema: record(a:int, b:record(x:int, y:long, z:record(z1: int, z2: float, z3: double), c:bool)
-   * "fieldName" | output
-   * ---------------------------------
-   * "a"         | a:int
-   * "b"         | b:record(x:int, y:long, z:record(z1: int, z2: int, z3: int)
-   * "c"         | c:bool
-   * "b.x"       | b:record(x:int)
-   * "b.z.z2"    | b:record(z:record(z2:float))
-   *
-   * this is intended to be used with appendFieldsToSchemaDedupNested
-   */
-  public static Option<Schema.Field> findNestedField(Schema schema, String fieldName) {
-    return findNestedField(schema, fieldName.split("\\."), 0);
-  }
-
-  private static Option<Schema.Field> findNestedField(Schema schema, String[] fieldParts, int index) {
-    if (schema.getType().equals(Schema.Type.UNION)) {
-      Option<Schema.Field> notUnion = findNestedField(getNonNullTypeFromUnion(schema), fieldParts, index);
-      if (!notUnion.isPresent()) {
-        return Option.empty();
-      }
-      Schema.Field nu = notUnion.get();
-      return Option.of(createNewSchemaField(nu));
-    }
-    if (fieldParts.length <= index) {
-      return Option.empty();
-    }
-
-    Schema.Field foundField = schema.getField(fieldParts[index]);
-    if (foundField == null) {
-      return Option.empty();
-    }
-
-    if (index == fieldParts.length - 1) {
-      return Option.of(createNewSchemaField(foundField));
-    }
-
-    Schema foundSchema = foundField.schema();
-    Option<Schema.Field> nestedPart = findNestedField(foundSchema, fieldParts, index + 1);
-    if (!nestedPart.isPresent()) {
-      return Option.empty();
-    }
-    boolean isUnion = false;
-    if (foundSchema.getType().equals(Schema.Type.UNION)) {
-      isUnion = true;
-      foundSchema = getNonNullTypeFromUnion(foundSchema);
-    }
-    Schema newSchema = createNewSchemaFromFieldsWithReference(foundSchema, Collections.singletonList(nestedPart.get()));
-    return Option.of(createNewSchemaField(foundField.name(), isUnion ? createNullableSchema(newSchema) : newSchema, foundField.doc(), foundField.defaultVal()));
-  }
-
-  /**
-   * Adds newFields to the schema. Will add nested fields without duplicating the field
-   * For example if your schema is "a.b.{c,e}" and newfields contains "a.{b.{d,e},x.y}",
-   * It will stitch them together to be "a.{b.{c,d,e},x.y}
-   */
-  public static Schema appendFieldsToSchemaDedupNested(Schema schema, List<Schema.Field> newFields) {
-    return appendFieldsToSchemaBase(schema, newFields, true);
-  }
-
-  public static Schema mergeSchemas(Schema a, Schema b) {
-    if (!a.getType().equals(Schema.Type.RECORD)) {
-      return a;
-    }
-    List<Schema.Field> fields = new ArrayList<>();
-    for (Schema.Field f : a.getFields()) {
-      Schema.Field foundField = b.getField(f.name());
-      fields.add(createNewSchemaField(f.name(), foundField == null ? f.schema() : mergeSchemas(f.schema(), foundField.schema()),
-          f.doc(), f.defaultVal()));
-    }
-    for (Schema.Field f : b.getFields()) {
-      if (a.getField(f.name()) == null) {
-        fields.add(createNewSchemaField(f));
-      }
-    }
-    return createNewSchemaFromFieldsWithReference(a, fields);
-  }
-
-  /**
-   * Appends provided new fields at the end of the given schema
-   *
-   * NOTE: No deduplication is made, this method simply appends fields at the end of the list
-   *       of the source schema as is
-   */
-  public static Schema appendFieldsToSchema(Schema schema, List<Schema.Field> newFields) {
-    return appendFieldsToSchemaBase(schema, newFields, false);
-  }
-
-  private static Schema appendFieldsToSchemaBase(Schema schema, List<Schema.Field> newFields, boolean dedupNested) {
-    List<Schema.Field> fields = schema.getFields().stream()
-        .map(HoodieAvroUtils::createNewSchemaField)
-        .collect(Collectors.toList());
-    if (dedupNested) {
-      for (Schema.Field f : newFields) {
-        Schema.Field foundField = schema.getField(f.name());
-        if (foundField != null) {
-          fields.set(foundField.pos(), createNewSchemaField(foundField.name(), mergeSchemas(foundField.schema(), f.schema()), foundField.doc(), foundField.defaultVal()));
-        } else {
-          fields.add(f);
-        }
-      }
-    } else {
-      fields.addAll(newFields);
-    }
-
-    return createNewSchemaFromFieldsWithReference(schema, fields);
-  }
 
   /**
    * Create a new schema but maintain all meta info from the old schema
@@ -184,83 +69,6 @@ public class AvroSchemaUtils {
     }
     newSchema.setFields(fields);
     return newSchema;
-  }
-
-  /**
-   * Prunes a data schema to match the structure of a required schema while preserving
-   * original metadata where possible.
-   *
-   * <p>This method recursively traverses both schemas and creates a new schema that:
-   * <ul>
-   *   <li>Contains only fields present in the required schema</li>
-   *   <li>Preserves field metadata (type, documentation, default values) from the data schema</li>
-   *   <li>Optionally includes fields from the required schema that are marked for exclusion</li>
-   * </ul>
-   *
-   * @param dataSchema the source schema containing the original data structure and metadata
-   * @param requiredSchema the target schema that defines the desired structure and field requirements
-   * @param mandatoryFields a set of top level field names that should be included from the required schema
-   *                     even if they don't exist in the data schema. This allows for fields like cdc operation
-   *                     don't exist in the data schema. We keep the types matching the required schema because
-   *                     timestamp partition cols can be read as a different type than the data schema
-   *
-   * @return a new pruned schema that matches the required schema structure while preserving
-   *         data schema metadata where possible
-   */
-  public static Schema pruneDataSchema(Schema dataSchema, Schema requiredSchema, Set<String> mandatoryFields) {
-    Schema prunedDataSchema = pruneDataSchemaInternal(getNonNullTypeFromUnion(dataSchema), getNonNullTypeFromUnion(requiredSchema), mandatoryFields);
-    if (dataSchema.isNullable() && !prunedDataSchema.isNullable()) {
-      return createNullableSchema(prunedDataSchema);
-    }
-    return prunedDataSchema;
-  }
-
-  private static Schema pruneDataSchemaInternal(Schema dataSchema, Schema requiredSchema, Set<String> mandatoryFields) {
-    switch (requiredSchema.getType()) {
-      case RECORD:
-        if (dataSchema.getType() != Schema.Type.RECORD) {
-          throw new IllegalArgumentException("Data schema is not a record");
-        }
-        List<Schema.Field> newFields = new ArrayList<>();
-        for (Schema.Field requiredSchemaField : requiredSchema.getFields()) {
-          if (mandatoryFields.contains(requiredSchemaField.name())) {
-            newFields.add(createNewSchemaField(requiredSchemaField));
-          } else {
-            Schema.Field dataSchemaField = dataSchema.getField(requiredSchemaField.name());
-            if (dataSchemaField != null) {
-              Schema.Field newField = createNewSchemaField(
-                  dataSchemaField.name(),
-                  pruneDataSchema(dataSchemaField.schema(), requiredSchemaField.schema(), Collections.emptySet()),
-                  dataSchemaField.doc(),
-                  dataSchemaField.defaultVal()
-              );
-              newFields.add(newField);
-            }
-          }
-        }
-        Schema newRecord = Schema.createRecord(dataSchema.getName(), dataSchema.getDoc(), dataSchema.getNamespace(), dataSchema.isError());
-        copyProperties(dataSchema, newRecord);
-        newRecord.setFields(newFields);
-        return newRecord;
-
-      case ARRAY:
-        if (dataSchema.getType() != Schema.Type.ARRAY) {
-          throw new IllegalArgumentException("Data schema is not an array");
-        }
-        return Schema.createArray(pruneDataSchema(dataSchema.getElementType(), requiredSchema.getElementType(), Collections.emptySet()));
-
-      case MAP:
-        if (dataSchema.getType() != Schema.Type.MAP) {
-          throw new IllegalArgumentException("Data schema is not a map");
-        }
-        return Schema.createMap(pruneDataSchema(dataSchema.getValueType(), requiredSchema.getValueType(), Collections.emptySet()));
-
-      case UNION:
-        throw new IllegalArgumentException("Data schema is a union");
-
-      default:
-        return dataSchema;
-    }
   }
 
   /**
@@ -301,14 +109,6 @@ public class AvroSchemaUtils {
     return firstInnerType.getType() == Schema.Type.NULL ? secondInnerType : firstInnerType;
   }
 
-  /**
-   * Creates schema following Avro's typical nullable schema definition: {@code Union(Schema.Type.NULL, <NonNullType>)},
-   * wrapping around provided target non-null type
-   */
-  public static Schema createNullableSchema(Schema.Type avroType) {
-    return createNullableSchema(Schema.create(avroType));
-  }
-
   public static Schema createNullableSchema(Schema schema) {
     checkState(schema.getType() != Schema.Type.NULL);
     return Schema.createUnion(Schema.create(Schema.Type.NULL), schema);
@@ -335,18 +135,5 @@ public class AvroSchemaUtils {
     schemaChange = reduce(filterCols, schemaChange,
             (change, field) -> change.updateColumnNullability(field, true));
     return convert(SchemaChangeUtils.applyTableChanges2Schema(internalSchema, schemaChange), schema.getFullName()).toAvroSchema();
-  }
-
-  /**
-   * Helper to copy properties and logical types from source schema to target schema.
-   */
-  private static Schema copyProperties(Schema source, Schema target) {
-    for (Map.Entry<String, Object> prop : source.getObjectProps().entrySet()) {
-      target.addProp(prop.getKey(), prop.getValue());
-    }
-    if (source.getLogicalType() != null) {
-      source.getLogicalType().addToSchema(target);
-    }
-    return target;
   }
 }
