@@ -27,6 +27,7 @@ import org.apache.hudi.common.util.ValidationUtils;
 import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.Properties;
 import java.util.stream.Collectors;
@@ -168,7 +169,7 @@ public class FileSystemViewStorageConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> REMOTE_RESPONSE_CHARSET = ConfigProperty
       .key("hoodie.filesystem.view.remote.response.charset")
-      .defaultValue("ISO-8859-1")
+      .defaultValue(StandardCharsets.ISO_8859_1.name())
       .markAdvanced()
       .sinceVersion("0.14.1")
       .withDocumentation("Charset used for decoding HTTP responses from the timeline server. "
