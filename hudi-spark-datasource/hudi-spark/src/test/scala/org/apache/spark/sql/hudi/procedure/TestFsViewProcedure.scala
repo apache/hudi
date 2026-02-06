@@ -17,6 +17,8 @@
 
 package org.apache.spark.sql.hudi.procedure
 
+import org.apache.hudi.config.HoodieWriteConfig
+
 class TestFsViewProcedure extends HoodieSparkProcedureTestBase {
   test("Test Call show_fsview_all Procedure") {
     withTempDir { tmp =>
@@ -114,7 +116,8 @@ class TestFsViewProcedure extends HoodieSparkProcedureTestBase {
            | location '${tmp.getCanonicalPath}/$tableName'
            | tblproperties (
            |  primaryKey = 'id',
-           |  preCombineField = 'ts'
+           |  preCombineField = 'ts',
+           |  ${HoodieWriteConfig.ENABLE_COMPLEX_KEYGEN_VALIDATION.key()} = 'false'
            | )
        """.stripMargin)
       // insert data to table

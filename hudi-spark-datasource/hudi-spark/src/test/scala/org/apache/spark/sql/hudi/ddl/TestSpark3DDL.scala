@@ -1039,7 +1039,8 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
            |tblproperties (
            | primaryKey = 'id',
            | type = 'cow',
-           | preCombineField = 'ts'
+           | preCombineField = 'ts',
+           | ${HoodieWriteConfig.ENABLE_COMPLEX_KEYGEN_VALIDATION.key()} = 'false'
            |)
            |partitioned by (region, dt)""".stripMargin)
 

@@ -19,6 +19,7 @@ package org.apache.spark.sql.hudi.dml
 
 import org.apache.hudi.HoodieSparkUtils.isSpark2
 import org.apache.hudi.common.util.PartitionPathEncodeUtils.DEFAULT_PARTITION_PATH
+import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
 
 class TestShowPartitions extends HoodieSparkSqlTestBase {
@@ -124,7 +125,8 @@ class TestShowPartitions extends HoodieSparkSqlTestBase {
          | partitioned by (year, month, day)
          | tblproperties (
          |   primaryKey = 'id',
-         |   preCombineField = 'ts'
+         |   preCombineField = 'ts',
+         |   ${HoodieWriteConfig.ENABLE_COMPLEX_KEYGEN_VALIDATION.key()} = 'false'
          | )
        """.stripMargin)
     // Empty partitions
@@ -229,7 +231,8 @@ class TestShowPartitions extends HoodieSparkSqlTestBase {
            | partitioned by (year, month, day)
            | tblproperties (
            |   primaryKey = 'id',
-           |   preCombineField = 'ts'
+           |   preCombineField = 'ts',
+           |   ${HoodieWriteConfig.ENABLE_COMPLEX_KEYGEN_VALIDATION.key()} = 'false'
            | )
          """.stripMargin)
 
