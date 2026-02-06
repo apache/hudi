@@ -39,7 +39,7 @@ public class GlobalHiveSyncTool extends HiveSyncTool {
 
   public GlobalHiveSyncTool(Properties props, Configuration hadoopConf) {
     super(props, hadoopConf);
-    this.config = new GlobalHiveSyncConfig(props, hadoopConf);
+    this.config = new GlobalHiveSyncConfig(this.props, hadoopConf);
   }
 
   @Override
