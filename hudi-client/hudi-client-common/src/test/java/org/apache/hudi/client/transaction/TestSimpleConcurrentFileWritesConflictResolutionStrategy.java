@@ -518,7 +518,7 @@ public class TestSimpleConcurrentFileWritesConflictResolutionStrategy extends Ho
 
   @Test
   public void testErrorMessageForConflictWithCompaction() throws Exception {
-    initMetaClient();
+    initMetaClient(true, HoodieTableType.MERGE_ON_READ);
     createCommit(WriteClientTestUtils.createNewInstantTime(), metaClient);
     HoodieActiveTimeline timeline = metaClient.getActiveTimeline();
     Option<HoodieInstant> lastSuccessfulInstant = timeline.getCommitsTimeline().filterCompletedInstants().lastInstant();
