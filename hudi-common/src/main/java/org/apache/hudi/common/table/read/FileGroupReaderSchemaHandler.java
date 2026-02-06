@@ -175,7 +175,17 @@ public class FileGroupReaderSchemaHandler<T> {
       return requestedSchema;
     }
 
-    if (hoodieTableConfig.getRecordMergeMode() == RecordMergeMode.CUSTOM) {
+    RecordMergeMode mergeMode = hoodieTableConfig.getRecordMergeMode();
+    if (hoodieTableConfig.getTableVersion().lesserThan(HoodieTableVersion.NINE)) {
+      Triple<RecordMergeMode, String, String> mergingConfigs = inferMergingConfigsForPreV9Table(
+          hoodieTableConfig.getRecordMergeMode(),
+          hoodieTableConfig.getPayloadClass(),
+          hoodieTableConfig.getRecordMergeStrategyId(),
+          hoodieTableConfig.getOrderingFieldsStr().orElse(null),
+          hoodieTableConfig.getTableVersion());
+      mergeMode = mergingConfigs.getLeft();
+    }
+    if (mergeMode == RecordMergeMode.CUSTOM) {
       if (!readerContext.getRecordMerger().get().isProjectionCompatible()) {
         return this.tableSchema;
       }
