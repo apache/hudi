@@ -344,17 +344,18 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
     boolean supportsORC = supportedFileFormats.contains(HoodieFileFormat.ORC);
     boolean supportsLance = supportedFileFormats.contains(HoodieFileFormat.LANCE);
     List<Arguments> args = new ArrayList<>();
-
     if (supportsORC) {
       args.add(arguments(RecordMergeMode.COMMIT_TIME_ORDERING, HoodieFileFormat.ORC, "avro", false));
       args.add(arguments(RecordMergeMode.EVENT_TIME_ORDERING, HoodieFileFormat.ORC, "avro", true));
     }
-
     if (supportsLance) {
       args.add(arguments(RecordMergeMode.COMMIT_TIME_ORDERING, HoodieFileFormat.LANCE, "avro", false));
       args.add(arguments(RecordMergeMode.EVENT_TIME_ORDERING, HoodieFileFormat.LANCE, "avro", true));
     }
-    
+    if (!supportsORC && !supportsLance) {
+      args.add(arguments(RecordMergeMode.COMMIT_TIME_ORDERING, HoodieFileFormat.PARQUET, "avro", false));
+      args.add(arguments(RecordMergeMode.EVENT_TIME_ORDERING, HoodieFileFormat.PARQUET, "avro", true));
+    }
     args.add(arguments(RecordMergeMode.COMMIT_TIME_ORDERING, HoodieFileFormat.PARQUET, "parquet", true));
     args.add(arguments(RecordMergeMode.EVENT_TIME_ORDERING, HoodieFileFormat.PARQUET, "parquet", true));
     args.add(arguments(RecordMergeMode.CUSTOM, HoodieFileFormat.PARQUET, "avro", false));
