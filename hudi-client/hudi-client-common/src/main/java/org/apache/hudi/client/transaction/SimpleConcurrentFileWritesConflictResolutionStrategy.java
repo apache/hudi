@@ -164,8 +164,75 @@ public class SimpleConcurrentFileWritesConflictResolutionStrategy
       return thisOperation.getCommitMetadataOption();
     }
     // just abort the current write if conflicts are found
-    throw new HoodieWriteConflictException(new ConcurrentModificationException("Cannot resolve conflicts for overlapping writes between first operation = " + thisOperation
-        + ", second operation = " + otherOperation));
+    throw new HoodieWriteConflictException(new ConcurrentModificationException(buildConflictErrorMessage(thisOperation, otherOperation)));
+  }
+
+  /**
+   * Builds a detailed error message for write conflicts based on the operation types involved.
+   */
+  private String buildConflictErrorMessage(ConcurrentOperation thisOperation, ConcurrentOperation otherOperation) {
+    boolean otherIsTableService = isTableService(otherOperation.getOperationType());
+
+    String thisOpDesc = formatOperationDescription(thisOperation);
+    String otherOpDesc = formatOperationDescription(otherOperation);
+
+    // If other operation is a table service, provide specific retry guidance
+    if (otherIsTableService) {
+      String serviceType = getTableServiceDisplayName(otherOperation.getOperationType());
+      return String.format(
+          "Cannot resolve conflicts for overlapping writes. %s is currently running and has overlapping file groups with %s. "
+              + "Please retry the write operation after the %s completes.",
+          otherOpDesc, thisOpDesc, serviceType.toLowerCase()
+      );
+    }
+
+    // For all other cases (this is table service or both are regular operations)
+    return String.format(
+        "Cannot resolve conflicts for overlapping writes. %s has overlapping file groups with %s.",
+        thisOpDesc, otherOpDesc
+    );
+  }
+
+  /**
+   * Formats a description of an operation including its type, instant, and state.
+   */
+  private String formatOperationDescription(ConcurrentOperation operation) {
+    String operationName = isTableService(operation.getOperationType())
+        ? "Table " + getTableServiceDisplayName(operation.getOperationType())
+        : operation.getOperationType().value() + " operation";
+
+    return String.format("%s (instant: %s, state: %s)",
+        operationName,
+        operation.getInstantTimestamp(),
+        operation.getInstantActionState());
+  }
+
+  /**
+   * Checks if the given operation type is a table service operation.
+   */
+  private boolean isTableService(WriteOperationType operationType) {
+    return operationType == WriteOperationType.COMPACT
+        || operationType == WriteOperationType.CLUSTER
+        || operationType == WriteOperationType.LOG_COMPACT
+        || operationType == WriteOperationType.INDEX;
+  }
+
+  /**
+   * Returns a user-friendly display name for table service operations.
+   */
+  private String getTableServiceDisplayName(WriteOperationType operationType) {
+    switch (operationType) {
+      case COMPACT:
+        return "Compaction";
+      case CLUSTER:
+        return "Clustering";
+      case LOG_COMPACT:
+        return "Log Compaction";
+      case INDEX:
+        return "Indexing";
+      default:
+        return operationType.value();
+    }
   }
 
   @Override

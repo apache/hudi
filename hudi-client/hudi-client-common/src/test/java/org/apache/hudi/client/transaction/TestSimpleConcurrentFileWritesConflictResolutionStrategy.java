@@ -515,4 +515,175 @@ public class TestSimpleConcurrentFileWritesConflictResolutionStrategy extends Ho
       }
     }
   }
+
+  @Test
+  public void testErrorMessageForConflictWithCompaction() throws Exception {
+    initMetaClient();
+    createCommit(HoodieActiveTimeline.createNewInstantTime(), metaClient);
+    HoodieActiveTimeline timeline = metaClient.getActiveTimeline();
+    Option<HoodieInstant> lastSuccessfulInstant = timeline.getCommitsTimeline().filterCompletedInstants().lastInstant();
+
+    // writer 1 starts
+    String currentWriterInstant = HoodieActiveTimeline.createNewInstantTime();
+    createInflightCommit(currentWriterInstant, metaClient);
+
+    // compaction gets scheduled and runs
+    String compactionInstant = HoodieActiveTimeline.createNewInstantTime();
+    createCompactionRequested(compactionInstant, metaClient);
+
+    Option<HoodieInstant> currentInstant = Option.of(INSTANT_GENERATOR.createNewInstant(State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, currentWriterInstant));
+    SimpleConcurrentFileWritesConflictResolutionStrategy strategy = new SimpleConcurrentFileWritesConflictResolutionStrategy();
+    HoodieCommitMetadata currentMetadata = createCommitMetadata(currentWriterInstant);
+    metaClient.reloadActiveTimeline();
+
+    List<HoodieInstant> candidateInstants = strategy.getCandidateInstants(metaClient, currentInstant.get(), lastSuccessfulInstant)
+        .collect(Collectors.toList());
+    Assertions.assertEquals(1, candidateInstants.size());
+
+    ConcurrentOperation thatCompactionOperation = new ConcurrentOperation(candidateInstants.get(0), metaClient);
+    ConcurrentOperation thisCommitOperation = new ConcurrentOperation(currentInstant.get(), currentMetadata);
+    Assertions.assertTrue(strategy.hasConflict(thisCommitOperation, thatCompactionOperation));
+
+    HoodieWriteConflictException exception = Assertions.assertThrows(HoodieWriteConflictException.class,
+        () -> strategy.resolveConflict(null, thisCommitOperation, thatCompactionOperation));
+
+    String errorMessage = exception.getMessage();
+    Assertions.assertTrue(errorMessage.contains("Table Compaction"),
+        "Error message should mention 'Table Compaction', but was: " + errorMessage);
+    Assertions.assertTrue(errorMessage.contains("is currently running"),
+        "Error message should contain 'is currently running', but was: " + errorMessage);
+    Assertions.assertTrue(errorMessage.contains("Please retry the write operation after the compaction completes"),
+        "Error message should contain retry guidance, but was: " + errorMessage);
+    Assertions.assertTrue(errorMessage.contains(compactionInstant),
+        "Error message should contain compaction instant time, but was: " + errorMessage);
+  }
+
+  @Test
+  public void testErrorMessageForConflictWithClustering() throws Exception {
+    initMetaClient();
+    createCommit(HoodieActiveTimeline.createNewInstantTime(), metaClient);
+    HoodieActiveTimeline timeline = metaClient.getActiveTimeline();
+    Option<HoodieInstant> lastSuccessfulInstant = timeline.getCommitsTimeline().filterCompletedInstants().lastInstant();
+
+    // writer 1 starts
+    String currentWriterInstant = HoodieActiveTimeline.createNewInstantTime();
+    createInflightCommit(currentWriterInstant, metaClient);
+
+    // clustering gets scheduled
+    String clusteringInstant = HoodieActiveTimeline.createNewInstantTime();
+    createClusterRequested(clusteringInstant, metaClient);
+
+    Option<HoodieInstant> currentInstant = Option.of(INSTANT_GENERATOR.createNewInstant(State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, currentWriterInstant));
+    SimpleConcurrentFileWritesConflictResolutionStrategy strategy = new SimpleConcurrentFileWritesConflictResolutionStrategy();
+    HoodieCommitMetadata currentMetadata = createCommitMetadata(currentWriterInstant);
+    metaClient.reloadActiveTimeline();
+
+    List<HoodieInstant> candidateInstants = strategy.getCandidateInstants(metaClient, currentInstant.get(), lastSuccessfulInstant)
+        .collect(Collectors.toList());
+    Assertions.assertEquals(1, candidateInstants.size());
+
+    ConcurrentOperation thatClusteringOperation = new ConcurrentOperation(candidateInstants.get(0), metaClient);
+    ConcurrentOperation thisCommitOperation = new ConcurrentOperation(currentInstant.get(), currentMetadata);
+    Assertions.assertTrue(strategy.hasConflict(thisCommitOperation, thatClusteringOperation));
+
+    HoodieWriteConflictException exception = Assertions.assertThrows(HoodieWriteConflictException.class,
+        () -> strategy.resolveConflict(null, thisCommitOperation, thatClusteringOperation));
+
+    String errorMessage = exception.getMessage();
+    Assertions.assertTrue(errorMessage.contains("Table Clustering"),
+        "Error message should mention 'Table Clustering', but was: " + errorMessage);
+    Assertions.assertTrue(errorMessage.contains("is currently running"),
+        "Error message should contain 'is currently running', but was: " + errorMessage);
+    Assertions.assertTrue(errorMessage.contains("Please retry the write operation after the clustering completes"),
+        "Error message should contain retry guidance, but was: " + errorMessage);
+    Assertions.assertTrue(errorMessage.contains(clusteringInstant),
+        "Error message should contain clustering instant time, but was: " + errorMessage);
+  }
+
+  @Test
+  public void testErrorMessageForConflictBetweenRegularWrites() throws Exception {
+    initMetaClient();
+    createCommit(HoodieActiveTimeline.createNewInstantTime(), metaClient);
+    HoodieActiveTimeline timeline = metaClient.getActiveTimeline();
+    Option<HoodieInstant> lastSuccessfulInstant = timeline.getCommitsTimeline().filterCompletedInstants().lastInstant();
+
+    // writer 1 starts
+    String currentWriterInstant = HoodieActiveTimeline.createNewInstantTime();
+    createInflightCommit(currentWriterInstant, metaClient);
+
+    // writer 2 starts and finishes
+    String writer2Instant = HoodieActiveTimeline.createNewInstantTime();
+    createCommit(writer2Instant, metaClient);
+
+    Option<HoodieInstant> currentInstant = Option.of(INSTANT_GENERATOR.createNewInstant(State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, currentWriterInstant));
+    SimpleConcurrentFileWritesConflictResolutionStrategy strategy = new SimpleConcurrentFileWritesConflictResolutionStrategy();
+    HoodieCommitMetadata currentMetadata = createCommitMetadata(currentWriterInstant);
+    metaClient.reloadActiveTimeline();
+
+    List<HoodieInstant> candidateInstants = strategy.getCandidateInstants(metaClient, currentInstant.get(), lastSuccessfulInstant)
+        .collect(Collectors.toList());
+    Assertions.assertEquals(1, candidateInstants.size());
+
+    ConcurrentOperation thatCommitOperation = new ConcurrentOperation(candidateInstants.get(0), metaClient);
+    ConcurrentOperation thisCommitOperation = new ConcurrentOperation(currentInstant.get(), currentMetadata);
+    Assertions.assertTrue(strategy.hasConflict(thisCommitOperation, thatCommitOperation));
+
+    HoodieWriteConflictException exception = Assertions.assertThrows(HoodieWriteConflictException.class,
+        () -> strategy.resolveConflict(null, thisCommitOperation, thatCommitOperation));
+
+    String errorMessage = exception.getMessage();
+    Assertions.assertTrue(errorMessage.contains("Cannot resolve conflicts for overlapping writes"),
+        "Error message should mention overlapping writes, but was: " + errorMessage);
+    Assertions.assertTrue(errorMessage.contains("has overlapping file groups"),
+        "Error message should contain 'has overlapping file groups', but was: " + errorMessage);
+    Assertions.assertTrue(errorMessage.contains(currentWriterInstant),
+        "Error message should contain current writer instant time, but was: " + errorMessage);
+    Assertions.assertTrue(errorMessage.contains(writer2Instant),
+        "Error message should contain other writer instant time, but was: " + errorMessage);
+    // Should NOT contain table service specific messaging
+    Assertions.assertFalse(errorMessage.contains("Table Compaction"),
+        "Error message should not mention table services for regular writes, but was: " + errorMessage);
+    Assertions.assertFalse(errorMessage.contains("Please retry"),
+        "Error message should not contain retry guidance for regular writes, but was: " + errorMessage);
+  }
+
+  @Test
+  public void testErrorMessageForConflictWithCompletedClustering() throws Exception {
+    initMetaClient();
+    createCommit(HoodieActiveTimeline.createNewInstantTime(), metaClient);
+    HoodieActiveTimeline timeline = metaClient.getActiveTimeline();
+    Option<HoodieInstant> lastSuccessfulInstant = timeline.getCommitsTimeline().filterCompletedInstants().lastInstant();
+
+    // writer 1 starts
+    String currentWriterInstant = HoodieActiveTimeline.createNewInstantTime();
+    createInflightCommit(currentWriterInstant, metaClient);
+
+    // clustering completes
+    String clusteringInstant = HoodieActiveTimeline.createNewInstantTime();
+    createCluster(clusteringInstant, metaClient);
+
+    Option<HoodieInstant> currentInstant = Option.of(INSTANT_GENERATOR.createNewInstant(State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, currentWriterInstant));
+    SimpleConcurrentFileWritesConflictResolutionStrategy strategy = new SimpleConcurrentFileWritesConflictResolutionStrategy();
+    HoodieCommitMetadata currentMetadata = createCommitMetadata(currentWriterInstant);
+    metaClient.reloadActiveTimeline();
+
+    List<HoodieInstant> candidateInstants = strategy.getCandidateInstants(metaClient, currentInstant.get(), lastSuccessfulInstant)
+        .collect(Collectors.toList());
+    Assertions.assertEquals(1, candidateInstants.size());
+
+    ConcurrentOperation thatClusteringOperation = new ConcurrentOperation(candidateInstants.get(0), metaClient);
+    ConcurrentOperation thisCommitOperation = new ConcurrentOperation(currentInstant.get(), currentMetadata);
+    Assertions.assertTrue(strategy.hasConflict(thisCommitOperation, thatClusteringOperation));
+
+    HoodieWriteConflictException exception = Assertions.assertThrows(HoodieWriteConflictException.class,
+        () -> strategy.resolveConflict(null, thisCommitOperation, thatClusteringOperation));
+
+    String errorMessage = exception.getMessage();
+    Assertions.assertTrue(errorMessage.contains("Table Clustering"),
+        "Error message should mention 'Table Clustering', but was: " + errorMessage);
+    Assertions.assertTrue(errorMessage.contains(clusteringInstant),
+        "Error message should contain clustering instant time, but was: " + errorMessage);
+    Assertions.assertTrue(errorMessage.contains("COMPLETED"),
+        "Error message should indicate the state of the clustering operation, but was: " + errorMessage);
+  }
 }
