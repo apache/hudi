@@ -1801,6 +1801,8 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     // Complete first insert-overwrite operation.
     client.commit(secondCommit, result1.getWriteStatuses(),
         Option.empty(), REPLACE_COMMIT_ACTION, result1.getPartitionToReplaceFileIds());
+    assertEquals(secondCommit, metaClient.reloadActiveTimeline()
+        .filterCompletedInstants().lastInstant().get().requestedTime());
 
     // Now try completing the second insert-overwrite operation, this should throw an error since it is replacing
     // the same files as the previous insert overwrite operation.
@@ -1861,6 +1863,8 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
               Option.of(Arrays.asList()), "000", 100,
               SparkRDDWriteClient::upsert, false, false, 100,
               200, 3, insertWriteConfig.populateMetaFields(), INSTANT_GENERATOR));
+      HoodieActiveTimeline timeline = metaClient.reloadActiveTimeline();
+      assertEquals(secondInstant, timeline.filterInflights().lastInstant().get().requestedTime());
     }
   }
 
