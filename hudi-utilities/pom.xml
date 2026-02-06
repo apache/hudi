@@ -542,11 +542,5 @@
       <version>${thrift.version}</version>
       <scope>test</scope>
     </dependency>
-      <dependency>
-          <groupId>org.apache.hudi</groupId>
-          <artifactId>hudi-spark-common_2.12</artifactId>
-          <version>0.14.2-SNAPSHOT</version>
-          <scope>test</scope>
-      </dependency>
   </dependencies>
 </project>
