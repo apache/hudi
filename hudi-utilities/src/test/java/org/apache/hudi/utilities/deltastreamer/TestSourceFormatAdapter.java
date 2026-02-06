@@ -110,7 +110,7 @@ public class TestSourceFormatAdapter {
     TypedProperties typedProperties = new TypedProperties();
     typedProperties.put(HoodieStreamerConfig.SANITIZE_SCHEMA_FIELD_NAMES.key(), true);
     typedProperties.put(HoodieStreamerConfig.SCHEMA_FIELD_NAME_INVALID_CHAR_MASK.key(), "__");
-    setupJsonSource(rdd, HoodieSparkSchemaConverters.toHoodieType(sanitizedSchema, false, "record", ""));
+    setupJsonSource(rdd, HoodieSparkSchemaConverters.toHoodieType(sanitizedSchema, "record", false));
     SourceFormatAdapter sourceFormatAdapter = new SourceFormatAdapter(testJsonDataSource, Option.empty(), Option.of(typedProperties));
     return sourceFormatAdapter.fetchNewDataInRowFormat(Option.of(new StreamerCheckpointV2(DUMMY_CHECKPOINT)), 10L);
   }

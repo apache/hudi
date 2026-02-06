@@ -29,7 +29,6 @@ import org.apache.hudi.common.util.FileFormatUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ParquetReaderIterator;
 import org.apache.hudi.common.util.ParquetUtils;
-import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.CloseableMappingIterator;
 import org.apache.hudi.common.util.collection.Pair;
@@ -203,8 +202,7 @@ public class HoodieSparkParquetReader implements HoodieSparkFileReader {
       // and therefore if we convert to Avro directly we'll lose logical type-info.
       MessageType messageType = getFileSchema();
       StructType structType = getStructSchema();
-      schemaOption = Option.of(HoodieSparkSchemaConverters.toHoodieType(
-          structType, true, messageType.getName(), StringUtils.EMPTY_STRING));
+      schemaOption = Option.of(HoodieSparkSchemaConverters.toHoodieType(structType, messageType.getName(), true));
     }
     return schemaOption.get();
   }
