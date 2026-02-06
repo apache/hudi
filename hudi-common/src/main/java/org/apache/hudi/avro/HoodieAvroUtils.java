@@ -1272,10 +1272,10 @@ public class HoodieAvroUtils {
       String payloadClass,
       String[] preCombineFields,
       Option<Pair<String, String>> simpleKeyGenFieldsOpt,
-      Boolean withOperation,
+      boolean withOperation,
       Option<String> partitionNameOp,
-      Boolean populateMetaFields,
-      Option<Schema> schemaWithoutMetaFields) {
+      boolean populateMetaFields,
+      Option<HoodieSchema> schemaWithoutMetaFields) {
     if (populateMetaFields) {
       return SpillableMapUtils.convertToHoodieRecordPayload((GenericRecord) data,
           payloadClass, preCombineFields, withOperation);

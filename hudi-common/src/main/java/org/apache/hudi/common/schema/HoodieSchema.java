@@ -20,6 +20,7 @@ package org.apache.hudi.common.schema;
 
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieAvroSchemaException;
 import org.apache.hudi.exception.HoodieIOException;
 
@@ -27,8 +28,6 @@ import org.apache.avro.JsonProperties;
 import org.apache.avro.LogicalType;
 import org.apache.avro.LogicalTypes;
 import org.apache.avro.Schema;
-
-import org.apache.hudi.common.util.collection.Pair;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -864,7 +863,7 @@ public class HoodieSchema implements Serializable {
    * @return the property value, or null if not found
    */
   public Object getProp(String key) {
-    return avroSchema.getProp(key);
+    return avroSchema.getObjectProp(key);
   }
 
   /**

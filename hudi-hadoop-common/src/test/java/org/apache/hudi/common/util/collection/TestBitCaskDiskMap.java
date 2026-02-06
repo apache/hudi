@@ -194,13 +194,13 @@ public class TestBitCaskDiskMap extends HoodieCommonTestHarness {
     List<HoodieRecord> hoodieRecords = testUtil.generateHoodieTestRecords(0, 1, schema);
 
     long payloadSize =
-        SpillableMapUtils.computePayloadSize(hoodieRecords.remove(0), new HoodieRecordSizeEstimator(schema.toAvroSchema()));
+        SpillableMapUtils.computePayloadSize(hoodieRecords.remove(0), new HoodieRecordSizeEstimator(schema));
     assertTrue(payloadSize > 0);
 
     // Test sizeEstimator with hoodie metadata fields
     schema = HoodieSchemaUtils.addMetadataFields(schema);
     hoodieRecords = testUtil.generateHoodieTestRecords(0, 1, schema);
-    payloadSize = SpillableMapUtils.computePayloadSize(hoodieRecords.remove(0), new HoodieRecordSizeEstimator(schema.toAvroSchema()));
+    payloadSize = SpillableMapUtils.computePayloadSize(hoodieRecords.remove(0), new HoodieRecordSizeEstimator(schema));
     assertTrue(payloadSize > 0);
 
     // Following tests payloads without an Avro Schema in the Record
@@ -211,7 +211,7 @@ public class TestBitCaskDiskMap extends HoodieCommonTestHarness {
     hoodieRecords =
         indexedRecords.stream().map(r -> new HoodieAvroRecord<>(new HoodieKey(UUID.randomUUID().toString(), "0000/00/00"),
             new AvroBinaryTestPayload(Option.of((GenericRecord) r)))).collect(Collectors.toList());
-    payloadSize = SpillableMapUtils.computePayloadSize(hoodieRecords.remove(0), new HoodieRecordSizeEstimator(schema.toAvroSchema()));
+    payloadSize = SpillableMapUtils.computePayloadSize(hoodieRecords.remove(0), new HoodieRecordSizeEstimator(schema));
     assertTrue(payloadSize > 0);
 
     // Test sizeEstimator with hoodie metadata fields and without schema object in the payload
@@ -222,7 +222,7 @@ public class TestBitCaskDiskMap extends HoodieCommonTestHarness {
             new AvroBinaryTestPayload(
                 Option.of(HoodieAvroUtils.rewriteRecord((GenericRecord) r, simpleSchemaWithMetadata.toAvroSchema())))))
         .collect(Collectors.toList());
-    payloadSize = SpillableMapUtils.computePayloadSize(hoodieRecords.remove(0), new HoodieRecordSizeEstimator(schema.toAvroSchema()));
+    payloadSize = SpillableMapUtils.computePayloadSize(hoodieRecords.remove(0), new HoodieRecordSizeEstimator(schema));
     assertTrue(payloadSize > 0);
   }
 
@@ -261,7 +261,7 @@ public class TestBitCaskDiskMap extends HoodieCommonTestHarness {
     HoodieSchema schema = SchemaTestUtil.getSimpleSchema();
     SchemaTestUtil testUtil = new SchemaTestUtil();
     List<HoodieRecord> hoodieRecords = testUtil.generateHoodieTestRecords(0, 1, schema);
-    HoodieRecordSizeEstimator sizeEstimator = new HoodieRecordSizeEstimator<>(schema.toAvroSchema());
+    HoodieRecordSizeEstimator sizeEstimator = new HoodieRecordSizeEstimator<>(schema);
     HoodieRecord record = hoodieRecords.remove(0);
     long startTime = System.currentTimeMillis();
     SpillableMapUtils.computePayloadSize(record, sizeEstimator);

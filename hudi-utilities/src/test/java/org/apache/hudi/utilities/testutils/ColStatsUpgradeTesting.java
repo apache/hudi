@@ -19,6 +19,7 @@
 
 package org.apache.hudi.utilities.testutils;
 
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
@@ -26,7 +27,6 @@ import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.utilities.deltastreamer.TestHoodieDeltaStreamer;
 
-import org.apache.avro.Schema;
 import org.junit.jupiter.api.Disabled;
 
 import java.io.IOException;
@@ -99,14 +99,14 @@ public class ColStatsUpgradeTesting {
       storage.deleteDirectory(directory);
     }
     assertTrue(storage.createDirectory(directory));
-    Schema schema;
+    HoodieSchema schema;
     String schemaStr;
     //TODO: once we add the fixes to v8 to allow more types
     if (version == 6 || version == 8) {
-      schema = HoodieTestDataGenerator.AVRO_TRIP_LOGICAL_TYPES_SCHEMA_V6;
+      schema = HoodieTestDataGenerator.HOODIE_SCHEMA_TRIP_LOGICAL_TYPES_SCHEMA_V6;
       schemaStr = HoodieTestDataGenerator.TRIP_LOGICAL_TYPES_SCHEMA_V6;
     } else {
-      schema = HoodieTestDataGenerator.AVRO_TRIP_LOGICAL_TYPES_SCHEMA;
+      schema = HoodieTestDataGenerator.HOODIE_SCHEMA_TRIP_LOGICAL_TYPES_SCHEMA;
       schemaStr = HoodieTestDataGenerator.TRIP_LOGICAL_TYPES_SCHEMA;
     }
 
