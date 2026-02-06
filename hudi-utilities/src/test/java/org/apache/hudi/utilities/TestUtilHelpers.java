@@ -103,7 +103,7 @@ public class TestUtilHelpers {
   }
 
   @Test
-  void testExtractSchemaFromDatasetWithNullableDisabled() {
+  void testExtractSchemaFromDatasetWithNullableDisabled() throws IOException {
     SparkSession spark = SparkSession
         .builder()
         .config(getSparkConfForTest(TestUtilHelpers.class.getName()))
@@ -128,7 +128,7 @@ public class TestUtilHelpers {
   }
 
   @Test
-  void testExtractSchemaFromDatasetWithNullableEnabled() {
+  void testExtractSchemaFromDatasetWithNullableEnabled() throws IOException {
     SparkSession spark = SparkSession
         .builder()
         .config(getSparkConfForTest(TestUtilHelpers.class.getName()))
@@ -158,7 +158,7 @@ public class TestUtilHelpers {
   }
 
   @Test
-  void testExtractSchemaFromDatasetWithAlternativeKey() {
+  void testExtractSchemaFromDatasetWithAlternativeKey() throws IOException {
     SparkSession spark = SparkSession
         .builder()
         .config(getSparkConfForTest(TestUtilHelpers.class.getName()))
