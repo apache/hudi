@@ -84,7 +84,7 @@ class TestDescribeTable extends HoodieSparkSqlTestBase {
            | dat string
            |)
            | using parquet
-           | location '$basePath';
+           | location '$basePath'
        """.stripMargin)
 
       // just for scala-2.11 compatibility
