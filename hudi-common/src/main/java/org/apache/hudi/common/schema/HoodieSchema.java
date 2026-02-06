@@ -708,7 +708,7 @@ public class HoodieSchema implements Serializable {
    * @return true if this type can have fields (RECORD or VARIANT)
    */
   public boolean hasFields() {
-    return type == HoodieSchemaType.RECORD || type == HoodieSchemaType.VARIANT;
+    return type == HoodieSchemaType.RECORD || type == HoodieSchemaType.VARIANT || type == HoodieSchemaType.BLOB;
   }
 
   /**
