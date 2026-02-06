@@ -240,10 +240,14 @@ object HoodieAnalysis extends SparkAdapterSupport {
             }
 
             if (updatedTargetTable.isDefined || updatedQuery.isDefined) {
-              mit.asInstanceOf[MergeIntoTable].copy(
+              val mergeIntoTable = mit.asInstanceOf[MergeIntoTable]
+              // Use all parameters to avoid NoSuchMethodError when method signature changes between Spark versions
+              mergeIntoTable.copy(
                 targetTable = updatedTargetTable.getOrElse(targetTable),
-                sourceTable = updatedQuery.getOrElse(query)
-              )
+                sourceTable = updatedQuery.getOrElse(query),
+                mergeCondition = mergeIntoTable.mergeCondition,
+                matchedActions = mergeIntoTable.matchedActions,
+                notMatchedActions = mergeIntoTable.notMatchedActions)
             } else {
               mit
             }

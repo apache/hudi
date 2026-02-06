@@ -38,11 +38,12 @@ object DataSkippingUtils extends Logging {
    *
    * @param dataTableFilterExpr source table's query's filter expression
    * @param indexSchema index table schema
+   * @param columnsToSkip optional set of column names to skip from filter translation (e.g., timestamp-millis columns)
    * @return filter for column-stats index's table
    */
-  def translateIntoColumnStatsIndexFilterExpr(dataTableFilterExpr: Expression, indexSchema: StructType): Expression = {
+  def translateIntoColumnStatsIndexFilterExpr(dataTableFilterExpr: Expression, indexSchema: StructType, columnsToSkip: Set[String] = Set.empty): Expression = {
     try {
-      createColumnStatsIndexFilterExprInternal(dataTableFilterExpr, indexSchema)
+      createColumnStatsIndexFilterExprInternal(dataTableFilterExpr, indexSchema, columnsToSkip)
     } catch {
       case e: AnalysisException =>
         logDebug(s"Failed to translated provided data table filter expr into column stats one ($dataTableFilterExpr)", e)
@@ -50,10 +51,10 @@ object DataSkippingUtils extends Logging {
     }
   }
 
-  private def createColumnStatsIndexFilterExprInternal(dataTableFilterExpr: Expression, indexSchema: StructType): Expression = {
+  private def createColumnStatsIndexFilterExprInternal(dataTableFilterExpr: Expression, indexSchema: StructType, columnsToSkip: Set[String] = Set.empty): Expression = {
     // Try to transform original Source Table's filter expression into
     // Column-Stats Index filter expression
-    tryComposeIndexFilterExpr(dataTableFilterExpr, indexSchema) match {
+    tryComposeIndexFilterExpr(dataTableFilterExpr, indexSchema, columnsToSkip) match {
       case Some(e) => e
       // NOTE: In case we can't transform source filter expression, we fallback
       // to {@code TrueLiteral}, to essentially avoid pruning any indexed files from scanning
@@ -61,7 +62,7 @@ object DataSkippingUtils extends Logging {
     }
   }
 
-  private def tryComposeIndexFilterExpr(sourceFilterExpr: Expression, indexSchema: StructType): Option[Expression] = {
+  private def tryComposeIndexFilterExpr(sourceFilterExpr: Expression, indexSchema: StructType, columnsToSkip: Set[String] = Set.empty): Option[Expression] = {
     //
     // For translation of the Filter Expression for the Data Table into Filter Expression for Column Stats Index, we're
     // assuming that
@@ -91,6 +92,11 @@ object DataSkippingUtils extends Logging {
     //       colA_minValue = min(colA)  =>  transform_expr(colA_minValue) = min(transform_expr(colA))
     //       colA_maxValue = max(colA)  =>  transform_expr(colA_maxValue) = max(transform_expr(colA))
     //
+    // NOTE: We skip filter translation for columns that are not indexed (e.g., timestamp-millis columns which are
+    //       excluded from column stats index due to schema mismatch issues between Parquet file format and table schema).
+    //       If a column is not in the index schema, getTargetIndexedColumnName will return None, causing this method
+    //       to return None, which results in TrueLiteral (no filtering) being applied.
+    //
     sourceFilterExpr match {
       // If Expression is not resolved, we can't perform the analysis accurately, bailing
       case expr if !expr.resolved => None
@@ -98,7 +104,7 @@ object DataSkippingUtils extends Logging {
       // Filter "expr(colA) = B" and "B = expr(colA)"
       // Translates to "(expr(colA_minValue) <= B) AND (B <= expr(colA_maxValue))" condition for index lookup
       case EqualTo(sourceExpr @ AllowedTransformationExpression(attrRef), valueExpr: Expression) if isValueExpression(valueExpr) =>
-        getTargetIndexedColumnName(attrRef, indexSchema)
+        getTargetIndexedColumnName(attrRef, indexSchema, columnsToSkip)
           .map { colName =>
             // NOTE: Since we're supporting (almost) arbitrary expressions of the form `f(colA) = B`, we have to
             //       appropriately translate such original expression targeted at Data Table, to corresponding
@@ -110,7 +116,7 @@ object DataSkippingUtils extends Logging {
           }
 
       case EqualTo(valueExpr: Expression, sourceExpr @ AllowedTransformationExpression(attrRef)) if isValueExpression(valueExpr) =>
-        getTargetIndexedColumnName(attrRef, indexSchema)
+        getTargetIndexedColumnName(attrRef, indexSchema, columnsToSkip)
           .map { colName =>
             val targetExprBuilder: Expression => Expression = swapAttributeRefInExpr(sourceExpr, attrRef, _)
             genColumnValuesEqualToExpression(colName, valueExpr, targetExprBuilder)
@@ -121,14 +127,14 @@ object DataSkippingUtils extends Logging {
       // NOTE: This is NOT an inversion of `colA = b`, instead this filter ONLY excludes files for which `colA = B`
       //       holds true
       case Not(EqualTo(sourceExpr @ AllowedTransformationExpression(attrRef), value: Expression)) if isValueExpression(value) =>
-        getTargetIndexedColumnName(attrRef, indexSchema)
+        getTargetIndexedColumnName(attrRef, indexSchema, columnsToSkip)
           .map { colName =>
             val targetExprBuilder: Expression => Expression = swapAttributeRefInExpr(sourceExpr, attrRef, _)
             Not(genColumnOnlyValuesEqualToExpression(colName, value, targetExprBuilder))
           }
 
       case Not(EqualTo(value: Expression, sourceExpr @ AllowedTransformationExpression(attrRef))) if isValueExpression(value) =>
-        getTargetIndexedColumnName(attrRef, indexSchema)
+        getTargetIndexedColumnName(attrRef, indexSchema, columnsToSkip)
           .map { colName =>
             val targetExprBuilder: Expression => Expression = swapAttributeRefInExpr(sourceExpr, attrRef, _)
             Not(genColumnOnlyValuesEqualToExpression(colName, value, targetExprBuilder))
@@ -137,20 +143,20 @@ object DataSkippingUtils extends Logging {
       // Filter "colA = null"
       // Translates to "colA_nullCount = null" for index lookup
       case EqualNullSafe(attrRef: AttributeReference, litNull @ Literal(null, _)) =>
-        getTargetIndexedColumnName(attrRef, indexSchema)
+        getTargetIndexedColumnName(attrRef, indexSchema, columnsToSkip)
           .map(colName => EqualTo(genColNumNullsExpr(colName), litNull))
 
       // Filter "expr(colA) < B" and "B > expr(colA)"
       // Translates to "expr(colA_minValue) < B" for index lookup
       case LessThan(sourceExpr @ AllowedTransformationExpression(attrRef), value: Expression) if isValueExpression(value) =>
-        getTargetIndexedColumnName(attrRef, indexSchema)
+        getTargetIndexedColumnName(attrRef, indexSchema, columnsToSkip)
           .map { colName =>
             val targetExprBuilder: Expression => Expression = swapAttributeRefInExpr(sourceExpr, attrRef, _)
             LessThan(targetExprBuilder.apply(genColMinValueExpr(colName)), value)
           }
 
       case GreaterThan(value: Expression, sourceExpr @ AllowedTransformationExpression(attrRef)) if isValueExpression(value) =>
-        getTargetIndexedColumnName(attrRef, indexSchema)
+        getTargetIndexedColumnName(attrRef, indexSchema, columnsToSkip)
           .map { colName =>
             val targetExprBuilder: Expression => Expression = swapAttributeRefInExpr(sourceExpr, attrRef, _)
             LessThan(targetExprBuilder.apply(genColMinValueExpr(colName)), value)
@@ -159,14 +165,14 @@ object DataSkippingUtils extends Logging {
       // Filter "B < expr(colA)" and "expr(colA) > B"
       // Translates to "B < colA_maxValue" for index lookup
       case LessThan(value: Expression, sourceExpr @ AllowedTransformationExpression(attrRef)) if isValueExpression(value) =>
-        getTargetIndexedColumnName(attrRef, indexSchema)
+        getTargetIndexedColumnName(attrRef, indexSchema, columnsToSkip)
           .map { colName =>
             val targetExprBuilder: Expression => Expression = swapAttributeRefInExpr(sourceExpr, attrRef, _)
             GreaterThan(targetExprBuilder.apply(genColMaxValueExpr(colName)), value)
           }
 
       case GreaterThan(sourceExpr @ AllowedTransformationExpression(attrRef), value: Expression) if isValueExpression(value) =>
-        getTargetIndexedColumnName(attrRef, indexSchema)
+        getTargetIndexedColumnName(attrRef, indexSchema, columnsToSkip)
           .map { colName =>
             val targetExprBuilder: Expression => Expression = swapAttributeRefInExpr(sourceExpr, attrRef, _)
             GreaterThan(targetExprBuilder.apply(genColMaxValueExpr(colName)), value)
@@ -175,14 +181,14 @@ object DataSkippingUtils extends Logging {
       // Filter "expr(colA) <= B" and "B >= expr(colA)"
       // Translates to "colA_minValue <= B" for index lookup
       case LessThanOrEqual(sourceExpr @ AllowedTransformationExpression(attrRef), value: Expression) if isValueExpression(value) =>
-        getTargetIndexedColumnName(attrRef, indexSchema)
+        getTargetIndexedColumnName(attrRef, indexSchema, columnsToSkip)
           .map { colName =>
             val targetExprBuilder: Expression => Expression = swapAttributeRefInExpr(sourceExpr, attrRef, _)
             LessThanOrEqual(targetExprBuilder.apply(genColMinValueExpr(colName)), value)
           }
 
       case GreaterThanOrEqual(value: Expression, sourceExpr @ AllowedTransformationExpression(attrRef)) if isValueExpression(value) =>
-        getTargetIndexedColumnName(attrRef, indexSchema)
+        getTargetIndexedColumnName(attrRef, indexSchema, columnsToSkip)
           .map { colName =>
             val targetExprBuilder: Expression => Expression = swapAttributeRefInExpr(sourceExpr, attrRef, _)
             LessThanOrEqual(targetExprBuilder.apply(genColMinValueExpr(colName)), value)
@@ -191,14 +197,14 @@ object DataSkippingUtils extends Logging {
       // Filter "B <= expr(colA)" and "expr(colA) >= B"
       // Translates to "B <= colA_maxValue" for index lookup
       case LessThanOrEqual(value: Expression, sourceExpr @ AllowedTransformationExpression(attrRef)) if isValueExpression(value) =>
-        getTargetIndexedColumnName(attrRef, indexSchema)
+        getTargetIndexedColumnName(attrRef, indexSchema, columnsToSkip)
           .map { colName =>
             val targetExprBuilder: Expression => Expression = swapAttributeRefInExpr(sourceExpr, attrRef, _)
             GreaterThanOrEqual(targetExprBuilder.apply(genColMaxValueExpr(colName)), value)
           }
 
       case GreaterThanOrEqual(sourceExpr @ AllowedTransformationExpression(attrRef), value: Expression) if isValueExpression(value) =>
-        getTargetIndexedColumnName(attrRef, indexSchema)
+        getTargetIndexedColumnName(attrRef, indexSchema, columnsToSkip)
           .map { colName =>
             val targetExprBuilder: Expression => Expression = swapAttributeRefInExpr(sourceExpr, attrRef, _)
             GreaterThanOrEqual(targetExprBuilder.apply(genColMaxValueExpr(colName)), value)
@@ -207,7 +213,7 @@ object DataSkippingUtils extends Logging {
       // Filter "colA is null"
       // Translates to "colA_nullCount > 0" for index lookup
       case IsNull(attribute: AttributeReference) =>
-        getTargetIndexedColumnName(attribute, indexSchema)
+        getTargetIndexedColumnName(attribute, indexSchema, columnsToSkip)
           .map(colName => GreaterThan(genColNumNullsExpr(colName), Literal(0)))
 
       // Filter "colA is not null"
@@ -215,7 +221,7 @@ object DataSkippingUtils extends Logging {
       // "colA_nullCount = null or colA_valueCount = null" means we are not certain whether the column is null or not,
       // hence we return True to ensure this does not affect the query.
       case IsNotNull(attribute: AttributeReference) =>
-        getTargetIndexedColumnName(attribute, indexSchema)
+        getTargetIndexedColumnName(attribute, indexSchema, columnsToSkip)
           .map {colName =>
             val numNullExpr = genColNumNullsExpr(colName)
             val valueCountExpr = genColValueCountExpr
@@ -227,7 +233,7 @@ object DataSkippingUtils extends Logging {
       // for index lookup
       // NOTE: This is equivalent to "colA = B1 OR colA = B2 OR ..."
       case In(sourceExpr @ AllowedTransformationExpression(attrRef), list: Seq[Expression]) if list.forall(isValueExpression) =>
-        getTargetIndexedColumnName(attrRef, indexSchema)
+        getTargetIndexedColumnName(attrRef, indexSchema, columnsToSkip)
           .map { colName =>
             val targetExprBuilder: Expression => Expression = swapAttributeRefInExpr(sourceExpr, attrRef, _)
             list.map(lit => genColumnValuesEqualToExpression(colName, lit, targetExprBuilder)).reduce(Or)
@@ -237,7 +243,7 @@ object DataSkippingUtils extends Logging {
       // NOTE: [[InSet]] is an optimized version of the [[In]] expression, where every sub-expression w/in the
       //       set is a static literal
       case InSet(sourceExpr @ AllowedTransformationExpression(attrRef), hset: Set[Any]) =>
-        getTargetIndexedColumnName(attrRef, indexSchema)
+        getTargetIndexedColumnName(attrRef, indexSchema, columnsToSkip)
           .map { colName =>
             val targetExprBuilder: Expression => Expression = swapAttributeRefInExpr(sourceExpr, attrRef, _)
             hset.map { value =>
@@ -255,7 +261,7 @@ object DataSkippingUtils extends Logging {
       // Translates to "NOT((colA_minValue = B1 AND colA_maxValue = B1) OR (colA_minValue = B2 AND colA_maxValue = B2))" for index lookup
       // NOTE: This is NOT an inversion of `in (B1, B2, ...)` expr, this is equivalent to "colA != B1 AND colA != B2 AND ..."
       case Not(In(sourceExpr @ AllowedTransformationExpression(attrRef), list: Seq[Expression])) if list.forall(_.foldable) =>
-        getTargetIndexedColumnName(attrRef, indexSchema)
+        getTargetIndexedColumnName(attrRef, indexSchema, columnsToSkip)
           .map { colName =>
             val targetExprBuilder: Expression => Expression = swapAttributeRefInExpr(sourceExpr, attrRef, _)
             Not(list.map(lit => genColumnOnlyValuesEqualToExpression(colName, lit, targetExprBuilder)).reduce(Or))
@@ -268,7 +274,7 @@ object DataSkippingUtils extends Logging {
       //       lexicographically, we essentially need to check that provided literal falls w/in min/max bounds of the
       //       given column
       case StartsWith(sourceExpr @ AllowedTransformationExpression(attrRef), v @ Literal(_: UTF8String, _)) =>
-        getTargetIndexedColumnName(attrRef, indexSchema)
+        getTargetIndexedColumnName(attrRef, indexSchema, columnsToSkip)
           .map { colName =>
             val targetExprBuilder: Expression => Expression = swapAttributeRefInExpr(sourceExpr, attrRef, _)
             genColumnValuesEqualToExpression(colName, v, targetExprBuilder)
@@ -278,7 +284,7 @@ object DataSkippingUtils extends Logging {
       // Translates to "NOT(expr(colA_minValue) like 'xxx%' AND expr(colA_maxValue) like 'xxx%')" for index lookup
       // NOTE: This is NOT an inversion of "colA like xxx"
       case Not(StartsWith(sourceExpr @ AllowedTransformationExpression(attrRef), value @ Literal(_: UTF8String, _))) =>
-        getTargetIndexedColumnName(attrRef, indexSchema)
+        getTargetIndexedColumnName(attrRef, indexSchema, columnsToSkip)
           .map { colName =>
             val targetExprBuilder: Expression => Expression = swapAttributeRefInExpr(sourceExpr, attrRef, _)
             val minValueExpr = targetExprBuilder.apply(genColMinValueExpr(colName))
@@ -287,14 +293,14 @@ object DataSkippingUtils extends Logging {
           }
 
       case or: Or =>
-        val resLeft = createColumnStatsIndexFilterExprInternal(or.left, indexSchema)
-        val resRight = createColumnStatsIndexFilterExprInternal(or.right, indexSchema)
+        val resLeft = createColumnStatsIndexFilterExprInternal(or.left, indexSchema, columnsToSkip)
+        val resRight = createColumnStatsIndexFilterExprInternal(or.right, indexSchema, columnsToSkip)
 
         Option(Or(resLeft, resRight))
 
       case and: And =>
-        val resLeft = createColumnStatsIndexFilterExprInternal(and.left, indexSchema)
-        val resRight = createColumnStatsIndexFilterExprInternal(and.right, indexSchema)
+        val resLeft = createColumnStatsIndexFilterExprInternal(and.left, indexSchema, columnsToSkip)
+        val resRight = createColumnStatsIndexFilterExprInternal(and.right, indexSchema, columnsToSkip)
 
         Option(And(resLeft, resRight))
 
@@ -305,10 +311,10 @@ object DataSkippingUtils extends Logging {
       //
 
       case Not(And(left: Expression, right: Expression)) =>
-        Option(createColumnStatsIndexFilterExprInternal(Or(Not(left), Not(right)), indexSchema))
+        Option(createColumnStatsIndexFilterExprInternal(Or(Not(left), Not(right)), indexSchema, columnsToSkip))
 
       case Not(Or(left: Expression, right: Expression)) =>
-        Option(createColumnStatsIndexFilterExprInternal(And(Not(left), Not(right)), indexSchema))
+        Option(createColumnStatsIndexFilterExprInternal(And(Not(left), Not(right)), indexSchema, columnsToSkip))
 
       case _: Expression => None
     }
@@ -323,13 +329,22 @@ object DataSkippingUtils extends Logging {
       .forall(stat => indexSchema.exists(_.name == stat))
   }
 
-  private def getTargetIndexedColumnName(resolvedExpr: AttributeReference, indexSchema: StructType): Option[String] = {
+  private def getTargetIndexedColumnName(resolvedExpr: AttributeReference, indexSchema: StructType, columnsToSkip: Set[String] = Set.empty): Option[String] = {
     val colName = UnresolvedAttribute(getTargetColNameParts(resolvedExpr)).name
 
-    // Verify that the column is indexed
-    if (checkColIsIndexed(colName, indexSchema)) {
+    // Skip columns that should not be used for filtering (e.g., timestamp-millis columns that were
+    // incorrectly indexed before the fix, or columns explicitly marked to skip)
+    if (columnsToSkip.contains(colName)) {
+      logDebug(s"Skipping filter translation for column '$colName' as it is in the skip list (likely timestamp-millis)")
+      None
+    } else if (checkColIsIndexed(colName, indexSchema)) {
+      // Verify that the column is indexed
+      // NOTE: This check ensures that columns not in the column stats index (e.g., timestamp-millis columns
+      //       which are excluded due to schema mismatch) will not have their filters translated, preventing
+      //       incorrect file filtering during data skipping.
       Option.apply(colName)
     } else {
+      logDebug(s"Skipping filter translation for column '$colName' as it is not indexed in column stats index")
       None
     }
   }
