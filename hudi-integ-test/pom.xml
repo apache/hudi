@@ -375,7 +375,9 @@
 
   <properties>
     <dockerCompose.envFile>${project.basedir}/compose_env</dockerCompose.envFile>
-    <dockerCompose.file>${project.basedir}/../docker/compose/docker-compose_hadoop284_hive233_spark244.yml</dockerCompose.file>
+    <dockerCompose.file>
+      ${project.basedir}/../docker/compose/docker-compose_hadoop284_hive233_spark244.yml
+    </dockerCompose.file>
     <docker.compose.skip>${skipITs}</docker.compose.skip>
     <main.basedir>${project.parent.basedir}</main.basedir>
   </properties>
@@ -499,7 +501,9 @@
     <profile>
       <id>m1-mac</id>
       <properties>
-        <dockerCompose.file>${project.basedir}/../docker/compose/docker-compose_hadoop284_hive233_spark244_mac_aarch64.yml</dockerCompose.file>
+        <dockerCompose.file>
+          ${project.basedir}/../docker/compose/docker-compose_hadoop284_hive233_spark244_mac_aarch64.yml
+        </dockerCompose.file>
       </properties>
       <activation>
         <os>
