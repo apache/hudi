@@ -863,7 +863,7 @@ public class HoodieSchema implements Serializable {
    * @return the property value, or null if not found
    */
   public Object getProp(String key) {
-    return avroSchema.getObjectProps().get(key);
+    return avroSchema.getObjectProp(key);
   }
 
   /**
