@@ -465,7 +465,6 @@ public class TestHoodieSource {
         org.apache.hudi.common.util.Option.empty());
 
     return new HoodieSource<>(
-        tablePath,
         scanContext,
         splitReaderFunction,
         new HoodieSourceSplitComparator(),

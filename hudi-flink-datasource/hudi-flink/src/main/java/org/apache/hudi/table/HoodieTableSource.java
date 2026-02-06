@@ -312,7 +312,7 @@ public class HoodieTableSource extends FileIndexReader implements
         HoodieSchemaConverter.convertToSchema(requiredRowType),
         conf.get(FlinkOptions.MERGE_TYPE),
         Option.empty());
-    return new HoodieSource<>(path, context, splitReaderFunction, new HoodieSourceSplitComparator(), metaClient, new HoodieRecordEmitter<>());
+    return new HoodieSource<>(context, splitReaderFunction, new HoodieSourceSplitComparator(), metaClient, new HoodieRecordEmitter<>());
   }
 
   /**
@@ -663,20 +663,17 @@ public class HoodieTableSource extends FileIndexReader implements
   }
 
   @Override
-  public FileIndex buildFileIndex() {
-    if (this.fileIndex == null) {
-      this.fileIndex = FileIndex.builder()
-          .path(this.path)
-          .conf(this.conf)
-          .rowType(this.tableRowType)
-          .metaClient(metaClient)
-          .columnStatsProbe(this.columnStatsProbe)
-          .partitionPruner(this.partitionPruner)
-          .partitionBucketIdFunc(PartitionBucketIdFunc.create(this.dataBucketFunc,
-              this.metaClient, conf.get(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS)))
-          .build();
-    }
-    return this.fileIndex;
+  protected FileIndex buildFileIndex() {
+    return FileIndex.builder()
+        .path(this.path)
+        .conf(this.conf)
+        .rowType(this.tableRowType)
+        .metaClient(metaClient)
+        .columnStatsProbe(this.columnStatsProbe)
+        .partitionPruner(this.partitionPruner)
+        .partitionBucketIdFunc(PartitionBucketIdFunc.create(this.dataBucketFunc,
+            this.metaClient, conf.get(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS)))
+        .build();
   }
 
   private int[] getLookupKeys(int[][] keys) {

@@ -35,6 +35,7 @@ import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.table.format.FilePathUtils;
 import org.apache.hudi.table.format.mor.MergeOnReadInputSplit;
 
+import java.io.Serializable;
 import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -49,7 +50,7 @@ import static org.apache.hudi.util.StreamerUtil.EMPTY_PARTITION_PATH;
  * input splits for both base files and merge-on-read scenarios. Subclasses must
  * implement {@link #buildFileIndex()} to provide the file index.
  */
-public abstract class FileIndexReader {
+public abstract class FileIndexReader implements Serializable {
   protected transient FileIndex fileIndex;
 
   /**
@@ -132,6 +133,7 @@ public abstract class FileIndexReader {
                 split.getBasePath().orElse(null),
                 split.getLogPaths(),
                 split.getTablePath(),
+                // TODO: MergeOnReadInputSplit does not carry partition path info; clean it up
                 EMPTY_PARTITION_PATH,
                 split.getMergeType(),
                 split.getLatestCommit(),

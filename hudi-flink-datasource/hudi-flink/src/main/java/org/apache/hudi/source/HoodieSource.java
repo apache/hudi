@@ -52,7 +52,6 @@ import org.apache.flink.api.connector.source.SourceReaderContext;
 import org.apache.flink.api.connector.source.SplitEnumerator;
 import org.apache.flink.api.connector.source.SplitEnumeratorContext;
 import org.apache.flink.core.io.SimpleVersionedSerializer;
-import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.util.FileIndexReader;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -75,7 +74,6 @@ import java.util.stream.Collectors;
 public class HoodieSource<T> extends FileIndexReader implements Source<T, HoodieSourceSplit, HoodieSplitEnumeratorState> {
   private static final Logger LOG = LoggerFactory.getLogger(HoodieSource.class);
 
-  private final StoragePath storagePath;
   private final HoodieScanContext scanContext;
   private final SplitReaderFunction<T> readerFunction;
   private final SerializableComparator<HoodieSourceSplit> splitComparator;
@@ -83,20 +81,17 @@ public class HoodieSource<T> extends FileIndexReader implements Source<T, Hoodie
   private final HoodieRecordEmitter<T> recordEmitter;
 
   public HoodieSource(
-      StoragePath storagePath,
       HoodieScanContext scanContext,
       SplitReaderFunction<T> readerFunction,
       SerializableComparator<HoodieSourceSplit> splitComparator,
       HoodieTableMetaClient metaClient,
       HoodieRecordEmitter<T> recordEmitter) {
-    ValidationUtils.checkArgument(storagePath != null, "storagePath can't be null.");
     ValidationUtils.checkArgument(scanContext != null, "scanContext can't be null.");
     ValidationUtils.checkArgument(readerFunction != null, "readerFunction can't be null.");
     ValidationUtils.checkArgument(splitComparator != null, "splitComparator can't be null.");
     ValidationUtils.checkArgument(metaClient != null, "metaClient can't be null.");
     ValidationUtils.checkArgument(recordEmitter != null, "recordEmitter can't be null.");
 
-    this.storagePath = storagePath;
     this.scanContext = scanContext;
     this.readerFunction = readerFunction;
     this.splitComparator = splitComparator;
@@ -185,12 +180,12 @@ public class HoodieSource<T> extends FileIndexReader implements Source<T, Hoodie
             }
             return splits;
           case COPY_ON_WRITE:
-            return baseFileOnlyHoodieSourceSplits(metaClient, storagePath, flinkConf.get(FlinkOptions.MERGE_TYPE));
+            return baseFileOnlyHoodieSourceSplits(metaClient, scanContext.getPath(), flinkConf.get(FlinkOptions.MERGE_TYPE));
           default:
             throw new HoodieException("Unexpected table type: " + flinkConf.get(FlinkOptions.TABLE_TYPE));
         }
       case FlinkOptions.QUERY_TYPE_READ_OPTIMIZED:
-        return baseFileOnlyHoodieSourceSplits(metaClient, storagePath, flinkConf.get(FlinkOptions.MERGE_TYPE));
+        return baseFileOnlyHoodieSourceSplits(metaClient, scanContext.getPath(), flinkConf.get(FlinkOptions.MERGE_TYPE));
       case FlinkOptions.QUERY_TYPE_INCREMENTAL:
         IncrementalInputSplits incrementalInputSplits = IncrementalInputSplits.builder()
             .conf(scanContext.getConf())
@@ -210,7 +205,7 @@ public class HoodieSource<T> extends FileIndexReader implements Source<T, Hoodie
   @Override
   protected FileIndex buildFileIndex() {
     return FileIndex.builder()
-        .path(this.storagePath)
+        .path(scanContext.getPath())
         .conf(this.scanContext.getConf())
         .rowType(scanContext.getRowType())
         .metaClient(metaClient)
