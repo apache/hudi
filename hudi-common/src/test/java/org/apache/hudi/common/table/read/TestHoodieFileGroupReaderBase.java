@@ -143,6 +143,8 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
                             String schemaStr) {
     boolean isLance = writeConfigs.getOrDefault(HoodieTableConfig.BASE_FILE_FORMAT.key(), HoodieFileFormat.PARQUET.name()).equalsIgnoreCase(HoodieFileFormat.LANCE.name());
     if (isLance) {
+      // Currently we have some extra steps for preprocessing records for lance
+      // This is due to Lance format version 2.1 not supporting MAP types as well as requiring nested fields to be nullable
       HoodieSchema originalSchema = HoodieSchema.parse(schemaStr);
       HoodieSchema processedSchema = makeNestedFieldsNullable(removeMapsFromSchema(originalSchema));
       List<HoodieRecord> updatedRecords = recordList.stream().map(hoodieRecord -> {
@@ -341,19 +343,24 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
   private static Stream<Arguments> testArguments() {
     boolean supportsORC = supportedFileFormats.contains(HoodieFileFormat.ORC);
     boolean supportsLance = supportedFileFormats.contains(HoodieFileFormat.LANCE);
+    List<Arguments> args = new ArrayList<>();
 
-    // Use Lance if available, else ORC if available, else Parquet
-    HoodieFileFormat alternateFormat = supportsLance ? HoodieFileFormat.LANCE :
-                                      (supportsORC ? HoodieFileFormat.ORC : HoodieFileFormat.PARQUET);
+    if (supportsORC) {
+      args.add(arguments(RecordMergeMode.COMMIT_TIME_ORDERING, HoodieFileFormat.ORC, "avro", false));
+      args.add(arguments(RecordMergeMode.EVENT_TIME_ORDERING, HoodieFileFormat.ORC, "avro", true));
+    }
 
-    return Stream.of(
-        arguments(RecordMergeMode.COMMIT_TIME_ORDERING, alternateFormat, "avro", false),
-        arguments(RecordMergeMode.COMMIT_TIME_ORDERING, HoodieFileFormat.PARQUET, "parquet", true),
-        arguments(RecordMergeMode.EVENT_TIME_ORDERING, alternateFormat, "avro", true),
-        arguments(RecordMergeMode.EVENT_TIME_ORDERING, HoodieFileFormat.PARQUET, "parquet", true),
-        arguments(RecordMergeMode.CUSTOM, HoodieFileFormat.PARQUET, "avro", false),
-        arguments(RecordMergeMode.CUSTOM, HoodieFileFormat.PARQUET, "parquet", true)
-    );
+    if (supportsLance) {
+      args.add(arguments(RecordMergeMode.COMMIT_TIME_ORDERING, HoodieFileFormat.LANCE, "avro", false));
+      args.add(arguments(RecordMergeMode.EVENT_TIME_ORDERING, HoodieFileFormat.LANCE, "avro", true));
+    }
+    
+    args.add(arguments(RecordMergeMode.COMMIT_TIME_ORDERING, HoodieFileFormat.PARQUET, "parquet", true));
+    args.add(arguments(RecordMergeMode.EVENT_TIME_ORDERING, HoodieFileFormat.PARQUET, "parquet", true));
+    args.add(arguments(RecordMergeMode.CUSTOM, HoodieFileFormat.PARQUET, "avro", false));
+    args.add(arguments(RecordMergeMode.CUSTOM, HoodieFileFormat.PARQUET, "parquet", true));
+
+    return args.stream();
   }
 
   @BeforeAll
