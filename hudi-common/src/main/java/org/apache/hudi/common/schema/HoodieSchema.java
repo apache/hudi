@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.schema;
 
+import org.apache.hudi.avro.AvroSchemaUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
@@ -950,6 +951,19 @@ public class HoodieSchema implements Serializable {
       }
     }
     return HoodieSchema.createUnion(nonNullTypes);
+  }
+
+  public boolean isBlobType() {
+    if (getType() == HoodieSchemaType.BLOB) {
+      return true;
+    } else if (getType() == HoodieSchemaType.ARRAY) {
+      return getElementType().isBlobType();
+    } else if (getType() == HoodieSchemaType.MAP) {
+      return getValueType().isBlobType();
+    } else if (getType() == HoodieSchemaType.UNION) {
+      return getTypes().stream().anyMatch(HoodieSchema::isBlobType);
+    }
+    return false;
   }
 
   /**
@@ -1937,15 +1951,15 @@ public class HoodieSchema implements Serializable {
    */
   public static class Blob extends HoodieSchema {
     private static final String DEFAULT_NAME = "blob";
-    private static final String STORAGE_TYPE = "storage_type";
-    private static final String INLINE_DATA_FIELD = "data";
-    private static final String REFERENCE = "reference";
-    private static final String EXTERNAL_PATH = "external_path";
+    public static final String STORAGE_TYPE = "storage_type";
+    public static final String INLINE_DATA_FIELD = "data";
+    public static final String EXTERNAL_FILE_REFERENCE = "reference";
+    public static final String EXTERNAL_PATH = "external_path";
     // if offset is not specified, it is assumed to be 0 (start of file)
-    private static final String EXTERNAL_PATH_OFFSET = "offset";
+    public static final String EXTERNAL_PATH_OFFSET = "offset";
     // if length is not specified, it is assumed to be the rest of the file starting from offset
-    private static final String EXTERNAL_PATH_LENGTH = "length";
-    private static final String IS_MANAGED = "managed";
+    public static final String EXTERNAL_PATH_LENGTH = "length";
+    public static final String EXTERNAL_PATH_IS_MANAGED = "managed";
 
     /**
      * Creates a new HoodieSchema wrapping the given Avro schema.
@@ -1973,20 +1987,20 @@ public class HoodieSchema implements Serializable {
 
     private static Schema createSchema(String name) {
       Schema bytesField = Schema.create(Schema.Type.BYTES);
-      Schema referenceField = Schema.createRecord(REFERENCE, null, null, false);
+      Schema referenceField = Schema.createRecord(EXTERNAL_FILE_REFERENCE, null, null, false);
       List<Schema.Field> referenceFields = Arrays.asList(
           new Schema.Field(EXTERNAL_PATH, Schema.create(Schema.Type.STRING), null, null),
-          new Schema.Field(EXTERNAL_PATH_OFFSET, Schema.create(Schema.Type.LONG), null, null),
-          new Schema.Field(EXTERNAL_PATH_LENGTH, Schema.create(Schema.Type.LONG), null, null),
-          new Schema.Field(IS_MANAGED, Schema.create(Schema.Type.BOOLEAN), null, null)
+          new Schema.Field(EXTERNAL_PATH_OFFSET, AvroSchemaUtils.createNullableSchema(Schema.create(Schema.Type.LONG)), null, null),
+          new Schema.Field(EXTERNAL_PATH_LENGTH, AvroSchemaUtils.createNullableSchema(Schema.create(Schema.Type.LONG)), null, null),
+          new Schema.Field(EXTERNAL_PATH_IS_MANAGED, Schema.create(Schema.Type.BOOLEAN), null, null)
       );
       referenceField.setFields(referenceFields);
 
       Schema blobSchema = Schema.createRecord(name, null, null, false);
       List<Schema.Field> blobFields = Arrays.asList(
           new Schema.Field(STORAGE_TYPE, Schema.create(Schema.Type.STRING), null, null),
-          new Schema.Field(INLINE_DATA_FIELD, Schema.createUnion(Schema.create(Schema.Type.NULL), bytesField), null, Schema.Field.NULL_DEFAULT_VALUE),
-          new Schema.Field(REFERENCE, Schema.createUnion(Schema.create(Schema.Type.NULL), referenceField), null, Schema.Field.NULL_DEFAULT_VALUE)
+          new Schema.Field(INLINE_DATA_FIELD, AvroSchemaUtils.createNullableSchema(bytesField), null, Schema.Field.NULL_DEFAULT_VALUE),
+          new Schema.Field(EXTERNAL_FILE_REFERENCE, AvroSchemaUtils.createNullableSchema(referenceField), null, Schema.Field.NULL_DEFAULT_VALUE)
       );
       blobSchema.setFields(blobFields);
       BlobLogicalType.blob().addToSchema(blobSchema);

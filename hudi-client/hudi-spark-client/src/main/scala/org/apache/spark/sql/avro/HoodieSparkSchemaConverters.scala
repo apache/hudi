@@ -80,11 +80,11 @@ object HoodieSparkSchemaConverters {
 
       // Complex types
       case ArrayType(elementType, containsNull) =>
-        val elementSchema = toHoodieType(elementType, containsNull, recordName, nameSpace, Metadata.empty)
+        val elementSchema = toHoodieType(elementType, containsNull, recordName, nameSpace, metadata)
         HoodieSchema.createArray(elementSchema)
 
       case MapType(StringType, valueType, valueContainsNull) =>
-        val valueSchema = toHoodieType(valueType, valueContainsNull, recordName, nameSpace, Metadata.empty)
+        val valueSchema = toHoodieType(valueType, valueContainsNull, recordName, nameSpace, metadata)
         HoodieSchema.createMap(valueSchema)
 
       case _: StructType if metadata.contains(HoodieSchema.TYPE_METADATA_FIELD) &&
@@ -200,7 +200,7 @@ object HoodieSparkSchemaConverters {
           } else {
             Metadata.empty
           }
-          val metadata = if (f.schema.getNonNullType.getType == HoodieSchemaType.BLOB) {
+          val metadata = if (f.schema.isBlobType) {
             // Mark blob fields with metadata for identification
             new MetadataBuilder()
               .withMetadata(commentMetadata)
