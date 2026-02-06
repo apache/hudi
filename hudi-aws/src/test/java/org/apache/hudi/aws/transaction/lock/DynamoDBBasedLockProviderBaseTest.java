@@ -21,8 +21,8 @@ package org.apache.hudi.aws.transaction.lock;
 import org.apache.hudi.common.config.LockConfiguration;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.config.DynamoDbBasedLockConfig;
-import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
 
+import org.apache.hadoop.conf.Configuration;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -67,7 +67,7 @@ class DynamoDBBasedLockProviderBaseTest {
   void testLockProviderBaseInitialization(boolean isNull) {
     Exception e = null;
     try {
-      new DynamoDBBasedLockProvider(LOCK_CONFIGURATION, new HadoopStorageConfiguration(true), isNull ? null : mockClient);
+      new DynamoDBBasedLockProvider(LOCK_CONFIGURATION, new Configuration(), isNull ? null : mockClient);
     } catch (Exception ex) {
       e = ex;
     }
