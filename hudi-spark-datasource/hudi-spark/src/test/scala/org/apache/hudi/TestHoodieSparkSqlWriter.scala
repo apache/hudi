@@ -1400,7 +1400,8 @@ def testBulkInsertForDropPartitionColumn(): Unit = {
       DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key -> "org.apache.hudi.keygen.SimpleKeyGenerator",
       HoodieWriteConfig.TBL_NAME.key -> "hoodie_test",
       "hoodie.insert.shuffle.parallelism" -> "1",
-      "hoodie.upsert.shuffle.parallelism" -> "1"
+      "hoodie.upsert.shuffle.parallelism" -> "1",
+      "hoodie.filesystem.view.remote.response.charset" -> "UTF-8"
     )
 
     // Unicode partition value containing German umlaut ü (U+00FC)

@@ -166,6 +166,15 @@ public class FileSystemViewStorageConfig extends HoodieConfig {
       .withDocumentation("The class name of the Exception that needs to be retried, separated by commas. "
           + "Default is empty which means retry all the IOException and RuntimeException from Remote Request.");
 
+  public static final ConfigProperty<String> REMOTE_RESPONSE_CHARSET = ConfigProperty
+      .key("hoodie.filesystem.view.remote.response.charset")
+      .defaultValue("ISO-8859-1")
+      .markAdvanced()
+      .sinceVersion("0.14.1")
+      .withDocumentation("Charset used for decoding HTTP responses from the timeline server. "
+          + "Set to 'UTF-8' if partition paths or file paths contain non-ASCII characters (e.g. Unicode). "
+          + "Default is ISO-8859-1 for backwards compatibility.");
+
   public static final ConfigProperty<String> REMOTE_BACKUP_VIEW_ENABLE = ConfigProperty
       .key("hoodie.filesystem.remote.backup.view.enable")
       .defaultValue("true") // Need to be disabled only for tests.
@@ -265,6 +274,10 @@ public class FileSystemViewStorageConfig extends HoodieConfig {
 
   public FileSystemViewStorageType getSecondaryStorageType() {
     return FileSystemViewStorageType.valueOf(getString(SECONDARY_VIEW_TYPE));
+  }
+
+  public String getRemoteResponseCharset() {
+    return getStringOrDefault(REMOTE_RESPONSE_CHARSET);
   }
 
   public boolean shouldEnableBackupForRemoteFileSystemView() {
@@ -371,6 +384,11 @@ public class FileSystemViewStorageConfig extends HoodieConfig {
 
     public Builder withRocksDBPath(String basePath) {
       fileSystemViewStorageConfig.setValue(ROCKSDB_BASE_PATH, basePath);
+      return this;
+    }
+
+    public Builder withRemoteResponseCharset(String charset) {
+      fileSystemViewStorageConfig.setValue(REMOTE_RESPONSE_CHARSET, charset);
       return this;
     }
 
