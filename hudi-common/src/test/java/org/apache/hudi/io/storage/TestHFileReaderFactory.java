@@ -99,7 +99,7 @@ class TestHFileReaderFactory {
     assertInstanceOf(HFileReaderImpl.class, result);
 
     // Verify that content was downloaded (cache was used)
-    verify(mockStorage, times(2)).getPathInfo(mockPath); // Once for size determination, once for download
+    verify(mockStorage, times(1)).getPathInfo(mockPath); // Once for size determination, which is reused for download
     verify(mockStorage, times(1)).openSeekable(mockPath, false); // For content download
     verify(mockInputStream, times(1)).readFully(any(byte[].class));
   }
