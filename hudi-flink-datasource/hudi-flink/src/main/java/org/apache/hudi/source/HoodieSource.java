@@ -21,6 +21,8 @@ package org.apache.hudi.source;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.source.assign.HoodieSplitAssigner;
+import org.apache.hudi.source.assign.HoodieSplitAssigners;
 import org.apache.hudi.source.enumerator.HoodieContinuousSplitEnumerator;
 import org.apache.hudi.source.enumerator.HoodieEnumeratorStateSerializer;
 import org.apache.hudi.source.enumerator.HoodieSplitEnumeratorState;
@@ -33,7 +35,6 @@ import org.apache.hudi.source.split.DefaultHoodieSplitProvider;
 import org.apache.hudi.source.split.HoodieContinuousSplitBatch;
 import org.apache.hudi.source.split.HoodieContinuousSplitDiscover;
 import org.apache.hudi.source.split.HoodieSourceSplit;
-import org.apache.hudi.source.split.HoodieSourceSplitComparator;
 import org.apache.hudi.source.split.HoodieSourceSplitSerializer;
 import org.apache.hudi.source.split.HoodieSourceSplitState;
 import org.apache.hudi.source.split.HoodieSplitProvider;
@@ -126,8 +127,11 @@ public class HoodieSource<T> implements Source<T, HoodieSourceSplit, HoodieSplit
       SplitEnumeratorContext<HoodieSourceSplit> enumContext,
       @Nullable HoodieSplitEnumeratorState enumeratorState) {
     HoodieSplitProvider splitProvider;
+    HoodieSplitAssigner splitAssigner = HoodieSplitAssigners.createHoodieSplitAssigner(
+            scanContext.getConf(), enumContext.currentParallelism());
+
     if (enumeratorState == null) {
-      splitProvider = new DefaultHoodieSplitProvider(new HoodieSourceSplitComparator());
+      splitProvider = new DefaultHoodieSplitProvider(splitAssigner);
     } else {
       LOG.info(
           "Hoodie source restored {} splits from state for table {}",
@@ -135,7 +139,7 @@ public class HoodieSource<T> implements Source<T, HoodieSourceSplit, HoodieSplit
           metaClient.getTableConfig().getTableName());
       List<HoodieSourceSplit> pendingSplits =
           enumeratorState.getPendingSplitStates().stream().map(HoodieSourceSplitState::split).collect(Collectors.toList());
-      splitProvider = new DefaultHoodieSplitProvider();
+      splitProvider = new DefaultHoodieSplitProvider(splitAssigner);
       splitProvider.onDiscoveredSplits(pendingSplits);
     }
 
