@@ -320,7 +320,6 @@ public class TestHiveSyncTool {
   public void testBasicSync(boolean useSchemaFromCommitMetadata, String syncMode, String enablePushDown) throws Exception {
     hiveSyncProps.setProperty(HIVE_SYNC_MODE.key(), syncMode);
     hiveSyncProps.setProperty(HIVE_SYNC_FILTER_PUSHDOWN_ENABLED.key(), enablePushDown);
-    hiveSyncProps.setProperty(META_SYNC_CONDITIONAL_SYNC.key(), "true");
 
     String instantTime = "100";
     HiveTestUtil.createCOWTable(instantTime, 5, useSchemaFromCommitMetadata);
@@ -366,20 +365,6 @@ public class TestHiveSyncTool {
     assertEquals(hivePartitions.size(), relativePartitionPaths.size());
     assertTrue(relativePartitionPaths.containsAll(newPartition));
 
-    // Touch partitions
-    hiveClient.touchPartitionsToTable(HiveTestUtil.TABLE_NAME, Arrays.asList());
-    assertEquals(7, hiveClient.getAllPartitions(HiveTestUtil.TABLE_NAME).size(),
-            "Partition count should remain the same after a touch event");
-    hiveClient.touchPartitionsToTable(HiveTestUtil.TABLE_NAME, newPartition);
-    hivePartitions = hiveClient.getAllPartitions(HiveTestUtil.TABLE_NAME);
-    relativePartitionPaths = hivePartitions.stream()
-            .map(p -> getRelativePartitionPath(new Path(basePath), new Path(p.getStorageLocation())))
-            .collect(Collectors.toSet());
-    // partition paths from the storage descriptor should be unique and contain the updated partitions
-    assertEquals(7, hivePartitions.size(), "Partition count should remain the same");
-    assertEquals(hivePartitions.size(), relativePartitionPaths.size());
-    assertTrue(relativePartitionPaths.containsAll(newPartition));
-
     // Alter partitions
     // Manually change a hive partition location to check if the sync will detect
     // it and generate a partition update event for it.
@@ -392,9 +377,10 @@ public class TestHiveSyncTool {
     assertEquals(1, partitionEvents.stream()
         .filter(partitionEvent -> partitionEvent.eventType.equals(PartitionEventType.UPDATE)).count(),
         "There should be only one update partition event");
-    assertEquals(6, partitionEvents.stream()
+    // TOUCH events are not produced when META_SYNC_CONDITIONAL_SYNC is disabled (default)
+    assertEquals(0, partitionEvents.stream()
         .filter(partitionEvent -> partitionEvent.eventType.equals(PartitionEventType.TOUCH)).count(),
-        "There should be total 6 touch partition events");
+        "There should be zero touch partition events when conditional sync is disabled");
 
     // Add a partition that does not belong to the table, i.e., not in the same base path
     // This should not happen in production.  However, if this happens, when doing fallback

@@ -48,6 +48,7 @@ import java.util.Objects;
 import java.util.Set;
 
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_BASE_PATH;
+import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_CONDITIONAL_SYNC;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_DATABASE_NAME;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_TABLE_NAME;
@@ -242,7 +243,8 @@ public abstract class HoodieSyncClient implements HoodieMetaSyncOperations, Auto
             events.add(PartitionEvent.newPartitionAddEvent(storagePartition));
           } else if (!paths.get(storageValue).equals(fullStoragePartitionPath)) {
             events.add(PartitionEvent.newPartitionUpdateEvent(storagePartition));
-          } else {
+          } else if (config.getBoolean(META_SYNC_CONDITIONAL_SYNC)) {
+            // Only produce TOUCH events when conditional sync is enabled
             events.add(PartitionEvent.newPartitionTouchEvent(storagePartition));
           }
         }
