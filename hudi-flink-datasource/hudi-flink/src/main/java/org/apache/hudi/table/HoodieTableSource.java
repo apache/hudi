@@ -344,7 +344,9 @@ public class HoodieTableSource extends FileIndexReader implements
    */
   private DataStream<MergeOnReadInputSplit> addFileDistributionStrategy(SingleOutputStreamOperator<MergeOnReadInputSplit> source) {
     if (OptionsResolver.isMorWithBucketIndexUpsert(conf)) {
-      return source.partitionCustom(new StreamReadBucketIndexPartitioner(conf.get(FlinkOptions.READ_TASKS)), new StreamReadBucketIndexKeySelector());
+      return source.partitionCustom(
+          new StreamReadBucketIndexPartitioner(conf, conf.get(FlinkOptions.READ_TASKS)),
+          new StreamReadBucketIndexKeySelector(conf.get(FlinkOptions.PATH)));
     } else if (OptionsResolver.isAppendMode(conf)) {
       return source.partitionCustom(new StreamReadAppendPartitioner(conf.get(FlinkOptions.READ_TASKS)), new StreamReadAppendKeySelector());
     } else {
