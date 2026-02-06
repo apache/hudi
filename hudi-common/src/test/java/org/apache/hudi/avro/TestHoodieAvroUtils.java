@@ -64,7 +64,6 @@ import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.RewriteAvroPayload;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaUtils;
-import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.SchemaCompatibilityException;
 
@@ -807,54 +806,6 @@ public class TestHoodieAvroUtils {
     } else {
       assertArrayEquals(new Object[] {"partition1", "val1", 3.5}, sortColumnValues);
     }
-  }
-
-  public static Stream<Arguments> getSchemaForFieldParams() {
-    Object[][] data =
-        new Object[][] {
-            {"booleanField", Schema.Type.BOOLEAN},
-            {"intField", Schema.Type.INT},
-            {"longField", Schema.Type.LONG},
-            {"floatField", Schema.Type.FLOAT},
-            {"bytesField", Schema.Type.BYTES},
-            {"stringField", Schema.Type.STRING},
-            {"decimalField", Schema.Type.BYTES},
-            {"timestampMillisField", Schema.Type.LONG}
-        };
-    return Stream.of(data).map(Arguments::of);
-  }
-
-  @ParameterizedTest
-  @MethodSource("getSchemaForFieldParams")
-  public void testGetSchemaForFieldSimple(String colName, Schema.Type schemaType) {
-    Pair<String, Schema.Field> actualColNameAndSchemaFile = HoodieAvroUtils.getSchemaForField(SCHEMA_WITH_AVRO_TYPES, colName);
-    assertEquals(colName, actualColNameAndSchemaFile.getKey());
-    assertEquals(schemaType, actualColNameAndSchemaFile.getValue().schema().getType());
-  }
-
-  public static Stream<Arguments> getSchemaForFieldParamsNested() {
-    Object[][] data =
-        new Object[][] {
-            {"student.firstname", Schema.Type.STRING},
-            {"student.lastname", Schema.Type.STRING},
-            {"nested_field.booleanField", Schema.Type.BOOLEAN},
-            {"nested_field.intField", Schema.Type.INT},
-            {"nested_field.longField", Schema.Type.LONG},
-            {"nested_field.floatField", Schema.Type.FLOAT},
-            {"nested_field.bytesField", Schema.Type.BYTES},
-            {"nested_field.stringField", Schema.Type.STRING},
-            {"nested_field.decimalField", Schema.Type.BYTES},
-            {"nested_field.timestampMillisField", Schema.Type.LONG}
-        };
-    return Stream.of(data).map(Arguments::of);
-  }
-
-  @ParameterizedTest
-  @MethodSource("getSchemaForFieldParamsNested")
-  public void testGetSchemaForFieldNested(String colName, Schema.Type schemaType) {
-    Pair<String, Schema.Field> actualColNameAndSchemaFile = HoodieAvroUtils.getSchemaForField(SCHEMA_WITH_NESTED_FIELD_LARGE, colName);
-    assertEquals(colName, actualColNameAndSchemaFile.getKey());
-    assertEquals(schemaType, getNonNullTypeFromUnion(actualColNameAndSchemaFile.getValue().schema()).getType());
   }
 
   private static Stream<Arguments> recordNeedsRewriteForExtendedAvroTypePromotion() {

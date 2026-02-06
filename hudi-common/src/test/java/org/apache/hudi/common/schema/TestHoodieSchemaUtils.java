@@ -18,7 +18,6 @@
 
 package org.apache.hudi.common.schema;
 
-import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.Option;
@@ -26,7 +25,6 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.internal.schema.HoodieSchemaException;
 
-import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -231,7 +229,7 @@ public class TestHoodieSchemaUtils {
 
       if (field.name().equals("pii_col")) {
         piiPresent = true;
-        assertTrue(props.containsKey("column_category"), "sensitivity_level is removed in field 'pii_col'");
+        assertTrue(props.containsKey("column_category"));
       } else {
         assertEquals(0, props.size(), "The property shows up but not set");
       }
@@ -861,32 +859,6 @@ public class TestHoodieSchemaUtils {
 
     // Null fieldsToRemove should return original schema unchanged
     assertSame(schema, HoodieSchemaUtils.removeFields(schema, null));
-  }
-
-  @Test
-  public void testRemoveFieldsConsistencyWithAvro() {
-    // Test that HoodieSchemaUtils.removeFields produces equivalent results to HoodieAvroUtils.removeFields
-    String schemaString = "{"
-        + "\"type\":\"record\","
-        + "\"name\":\"TestRecord\","
-        + "\"fields\":["
-        + "{\"name\":\"id\",\"type\":\"string\"},"
-        + "{\"name\":\"name\",\"type\":\"string\"},"
-        + "{\"name\":\"age\",\"type\":\"int\"},"
-        + "{\"name\":\"email\",\"type\":\"string\"}"
-        + "]}";
-
-    Schema avroSchema = new Schema.Parser().parse(schemaString);
-    HoodieSchema hoodieSchema = HoodieSchema.parse(schemaString);
-
-    Set<String> fieldsToRemove = new HashSet<>(Arrays.asList("age", "email"));
-
-    // Apply removeFields using both approaches
-    Schema avroResult = HoodieAvroUtils.removeFields(avroSchema, fieldsToRemove);
-    HoodieSchema hoodieResult = HoodieSchemaUtils.removeFields(hoodieSchema, fieldsToRemove);
-
-    // Should produce equivalent schemas
-    assertEquals(avroResult.toString(), hoodieResult.toString());
   }
 
   @Test
@@ -1843,33 +1815,6 @@ public class TestHoodieSchemaUtils {
   public void testToJavaDefaultValueNullFieldArgument() {
     // Should throw IllegalArgumentException for null field
     assertThrows(IllegalArgumentException.class, () -> HoodieSchemaUtils.toJavaDefaultValue(null));
-  }
-
-  @Test
-  public void testToJavaDefaultValueConsistencyWithAvro() {
-    // Test that HoodieSchemaUtils.toJavaDefaultValue produces equivalent results to HoodieAvroUtils.toJavaDefaultValue
-
-    // Test with primitive types
-    HoodieSchemaField stringField = HoodieSchemaField.of("stringField",
-        HoodieSchema.create(HoodieSchemaType.STRING),
-        null,
-        "test");
-
-    Object hoodieResult = HoodieSchemaUtils.toJavaDefaultValue(stringField);
-    Object avroResult = HoodieAvroUtils.toJavaDefaultValue(stringField.getAvroField());
-
-    assertEquals(avroResult, hoodieResult);
-
-    // Test with int
-    HoodieSchemaField intField = HoodieSchemaField.of("intField",
-        HoodieSchema.create(HoodieSchemaType.INT),
-        null,
-        42);
-
-    Object hoodieIntResult = HoodieSchemaUtils.toJavaDefaultValue(intField);
-    Object avroIntResult = HoodieAvroUtils.toJavaDefaultValue(intField.getAvroField());
-
-    assertEquals(avroIntResult, hoodieIntResult);
   }
 
   @Test

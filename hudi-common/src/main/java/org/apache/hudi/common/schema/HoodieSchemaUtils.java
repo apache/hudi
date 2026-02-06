@@ -75,7 +75,6 @@ public final class HoodieSchemaUtils {
 
   /**
    * Creates a write schema for Hudi operations, adding necessary metadata fields.
-   * This is equivalent to HoodieAvroUtils.createHoodieWriteSchema() but returns HoodieSchema.
    *
    * @param schema             the base schema string (JSON format)
    * @param withOperationField whether to include operation metadata field
@@ -91,7 +90,6 @@ public final class HoodieSchemaUtils {
 
   /**
    * Adds Hudi metadata fields to the given schema with the withOperationField flag set as false.
-   * This is equivalent to HoodieAvroUtils#.addMetadataFields() but operates on HoodieSchema.
    *
    * @param schema             the input schema
    * @return new HoodieSchema with metadata fields added
@@ -859,8 +857,6 @@ public final class HoodieSchemaUtils {
 
   /**
    * Converts a HoodieSchemaField's default value to its Java representation.
-   * This is equivalent to {@link org.apache.hudi.avro.HoodieAvroUtils#toJavaDefaultValue(org.apache.avro.Schema.Field)}
-   * but operates on HoodieSchemaField.
    *
    * <p>For primitive types (STRING, INT, LONG, FLOAT, DOUBLE, BOOLEAN, ENUM, BYTES, FIXED, DECIMAL)
    * and logical types (TIME, TIMESTAMP, DATE, UUID), the default value is returned as-is.

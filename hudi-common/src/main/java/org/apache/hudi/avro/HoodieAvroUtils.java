@@ -26,7 +26,6 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.SpillableMapUtils;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
-import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieAvroSchemaException;
 import org.apache.hudi.exception.HoodieException;
@@ -231,10 +230,6 @@ public class HoodieAvroUtils {
     return decoder;
   }
 
-  public static boolean isTypeNumeric(Schema.Type type) {
-    return type == Schema.Type.INT || type == Schema.Type.LONG || type == Schema.Type.FLOAT || type == Schema.Type.DOUBLE;
-  }
-
   /**
    * Creates a new Avro Schema.Field from an existing field, with special handling for
    * default values to ensure compatibility with Avro 1.12.0 and later versions.
@@ -293,7 +288,7 @@ public class HoodieAvroUtils {
     return new Schema.Field(name, schema, doc, convertDefaultValueForAvroCompatibility(defaultValue), order);
   }
 
-  public static Schema removeFields(Schema schema, Set<String> fieldsToRemove) {
+  private static Schema removeFields(Schema schema, Set<String> fieldsToRemove) {
     List<Schema.Field> filteredFields = schema.getFields()
         .stream()
         .filter(field -> !fieldsToRemove.contains(field.name()))
@@ -1340,71 +1335,6 @@ public class HoodieAvroUtils {
 
   static boolean gteqAvro1_12() {
     return StringUtils.compareVersions(AVRO_VERSION, "1.12") >= 0;
-  }
-
-  /**
-   * Returns field name and the resp data type of the field. The data type will always refer to the leaf node.
-   * for eg, for a.b.c, we turn Pair.of(a.b.c, DataType(c))
-   * @param schema schema of table.
-   * @param fieldName field name of interest.
-   * @return
-   */
-  @VisibleForTesting
-  public static Pair<String, Schema.Field> getSchemaForField(Schema schema, String fieldName) {
-    return getSchemaForField(schema, fieldName, StringUtils.EMPTY_STRING);
-  }
-
-  @VisibleForTesting
-  public static Pair<String, Schema.Field> getSchemaForField(Schema schema, String fieldName, String prefix) {
-    Schema nonNullableSchema = unwrapNullable(schema);
-    if (!fieldName.contains(".")) {
-      return Pair.of(prefix + fieldName, nonNullableSchema.getField(fieldName));
-    } else {
-      int rootFieldIndex = fieldName.indexOf(".");
-      Schema.Field rootField = nonNullableSchema.getField(fieldName.substring(0, rootFieldIndex));
-      if (rootField == null) {
-        throw new HoodieException("Failed to find " + fieldName + " in the table schema ");
-      }
-      return getSchemaForField(rootField.schema(), fieldName.substring(rootFieldIndex + 1), prefix + fieldName.substring(0, rootFieldIndex + 1));
-    }
-  }
-
-  public static Object toJavaDefaultValue(Schema.Field field) {
-    Object defaultVal = field.defaultVal();
-    if (defaultVal == null || defaultVal == org.apache.avro.JsonProperties.NULL_VALUE) {
-      return null;
-    }
-
-    Schema.Type type = getNonNullType(field.schema());
-    switch (type) {
-      case STRING:
-      case INT:
-      case LONG:
-      case FLOAT:
-      case DOUBLE:
-      case BOOLEAN:
-      case ENUM:
-      case BYTES:
-        return defaultVal;
-      case ARRAY:
-      case MAP:
-      case RECORD:
-        // Use Avro's standard GenericData utility for complex types
-        return GenericData.get().getDefaultValue(field);
-      default:
-        throw new IllegalArgumentException("Unsupported Avro type: " + type);
-    }
-  }
-
-  private static Schema.Type getNonNullType(Schema schema) {
-    if (schema.getType() == Schema.Type.UNION) {
-      return schema.getTypes().stream()
-          .filter(s -> s.getType() != Schema.Type.NULL)
-          .findFirst()
-          .orElseThrow(() -> new IllegalArgumentException("Only NULL in union"))
-          .getType();
-    }
-    return schema.getType();
   }
 
   private static Object convertDefaultValueForAvroCompatibility(Object defaultValue) {
