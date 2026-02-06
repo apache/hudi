@@ -56,12 +56,9 @@ public class DynamoDBBasedImplicitPartitionKeyLockProvider extends DynamoDBBased
 
   @Override
   public String getDynamoDBPartitionKey(LockConfiguration lockConfiguration) {
-    // Ensure consistent format for S3 URI.
-    String hudiTableBasePathNormalized = s3aToS3(lockConfiguration.getConfig().getString(
-        HoodieCommonConfig.BASE_PATH.key()));
-    String partitionKey = HashID.generateXXHashAsString(hudiTableBasePathNormalized, HashID.Size.BITS_64);
+    String partitionKey = HashID.generateXXHashAsString(hudiTableBasePath, HashID.Size.BITS_64);
     LOG.info(String.format("The DynamoDB partition key of the lock provider for the base path %s is %s",
-        hudiTableBasePathNormalized, partitionKey));
+        hudiTableBasePath, partitionKey));
     return partitionKey;
   }
 
