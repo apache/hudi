@@ -312,10 +312,12 @@ public class ParquetUtils extends BaseFileUtils {
         Collectors.groupingBy(HoodieColumnRangeMetadata::getColumnName);
 
     // Collect stats from all individual Parquet blocks
-    Map<String, List<HoodieColumnRangeMetadata<Comparable>>> columnToStatsListMap =
-        (Map<String, List<HoodieColumnRangeMetadata<Comparable>>>) metadata.getBlocks().stream().sequential()
-          .flatMap(blockMetaData ->
-              blockMetaData.getColumns().stream()
+    // NOTE: Explicit cast on inner stream helps Java with type inference
+    @SuppressWarnings("unchecked")
+    Stream<HoodieColumnRangeMetadata<Comparable>> blockStream = metadata.getBlocks().stream().sequential()
+        .flatMap(blockMetaData -> {
+          Stream<HoodieColumnRangeMetadata<Comparable>> columnStream =
+              (Stream<HoodieColumnRangeMetadata<Comparable>>) (Stream<?>) blockMetaData.getColumns().stream()
                 .filter(f -> cols.contains(f.getPath().toDotString()))
                 .map(columnChunkMetaData -> {
                   Statistics stats = columnChunkMetaData.getStatistics();
@@ -335,9 +337,11 @@ public class ParquetUtils extends BaseFileUtils {
                       columnChunkMetaData.getValueCount(),
                       columnChunkMetaData.getTotalSize(),
                       columnChunkMetaData.getTotalUncompressedSize());
-                })
-          )
-          .collect(groupingByCollector);
+                });
+          return columnStream;
+        });
+
+    Map<String, List<HoodieColumnRangeMetadata<Comparable>>> columnToStatsListMap = blockStream.collect(groupingByCollector);
 
     // Combine those into file-level statistics
     // NOTE: Inlining this var makes javac (1.8) upset (due to its inability to infer

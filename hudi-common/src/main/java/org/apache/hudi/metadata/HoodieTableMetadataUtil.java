@@ -241,7 +241,7 @@ public class HoodieTableMetadataUtil {
     Collector<HoodieColumnRangeMetadata<Comparable>, ?, Map<String, HoodieColumnRangeMetadata<Comparable>>> collector =
         Collectors.toMap(colRangeMetadata -> colRangeMetadata.getColumnName(), Function.identity());
 
-    return (Map<String, HoodieColumnRangeMetadata<Comparable>>) targetFields.stream()
+    Stream<HoodieColumnRangeMetadata<Comparable>> stream = targetFields.stream()
         .map(field -> {
           ColumnStats colStats = allColumnStats.get(field.name());
           return HoodieColumnRangeMetadata.<Comparable>create(
@@ -257,8 +257,9 @@ public class HoodieTableMetadataUtil {
               0,
               0
           );
-        })
-        .collect(collector);
+        });
+
+    return stream.collect(collector);
   }
 
   /**
