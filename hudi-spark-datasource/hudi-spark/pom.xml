@@ -335,6 +335,18 @@
           <groupId>org.pentaho</groupId>
           <artifactId>*</artifactId>
         </exclusion>
+        <exclusion>
+          <groupId>org.apache.parquet</groupId>
+          <artifactId>*</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>org.codehaus.janino</groupId>
+          <artifactId>janino</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>org.codehaus.janino</groupId>
+          <artifactId>commons-compiler</artifactId>
+        </exclusion>
       </exclusions>
     </dependency>
     <dependency>
@@ -349,6 +361,18 @@
         <exclusion>
           <groupId>javax.servlet.jsp</groupId>
           <artifactId>*</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>org.apache.parquet</groupId>
+          <artifactId>*</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>org.codehaus.janino</groupId>
+          <artifactId>janino</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>org.codehaus.janino</groupId>
+          <artifactId>commons-compiler</artifactId>
         </exclusion>
       </exclusions>
     </dependency>
@@ -365,6 +389,18 @@
           <groupId>javax.servlet.jsp</groupId>
           <artifactId>*</artifactId>
         </exclusion>
+        <exclusion>
+          <groupId>org.apache.parquet</groupId>
+          <artifactId>*</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>org.codehaus.janino</groupId>
+          <artifactId>janino</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>org.codehaus.janino</groupId>
+          <artifactId>commons-compiler</artifactId>
+        </exclusion>
       </exclusions>
     </dependency>
     <dependency>
@@ -375,6 +411,18 @@
         <exclusion>
           <groupId>org.eclipse.jetty.orbit</groupId>
           <artifactId>javax.servlet</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>org.apache.parquet</groupId>
+          <artifactId>*</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>org.codehaus.janino</groupId>
+          <artifactId>janino</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>org.codehaus.janino</groupId>
+          <artifactId>commons-compiler</artifactId>
         </exclusion>
       </exclusions>
     </dependency>
@@ -403,6 +451,16 @@
       <artifactId>hudi-tests-common</artifactId>
       <version>${project.version}</version>
       <scope>test</scope>
+      <exclusions>
+        <exclusion>
+          <groupId>org.codehaus.janino</groupId>
+          <artifactId>janino</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>org.codehaus.janino</groupId>
+          <artifactId>commons-compiler</artifactId>
+        </exclusion>
+      </exclusions>
     </dependency>
     <dependency>
       <groupId>org.apache.hudi</groupId>
@@ -411,6 +469,16 @@
       <classifier>tests</classifier>
       <type>test-jar</type>
       <scope>test</scope>
+      <exclusions>
+        <exclusion>
+          <groupId>org.codehaus.janino</groupId>
+          <artifactId>janino</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>org.codehaus.janino</groupId>
+          <artifactId>commons-compiler</artifactId>
+        </exclusion>
+      </exclusions>
     </dependency>
     <dependency>
       <groupId>org.apache.hudi</groupId>
@@ -419,6 +487,16 @@
       <classifier>tests</classifier>
       <type>test-jar</type>
       <scope>test</scope>
+      <exclusions>
+        <exclusion>
+          <groupId>org.codehaus.janino</groupId>
+          <artifactId>janino</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>org.codehaus.janino</groupId>
+          <artifactId>commons-compiler</artifactId>
+        </exclusion>
+      </exclusions>
     </dependency>
     <dependency>
       <groupId>org.apache.hudi</groupId>

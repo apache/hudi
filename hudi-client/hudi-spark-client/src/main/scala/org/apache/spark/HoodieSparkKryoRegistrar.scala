@@ -89,6 +89,8 @@ object HoodieSparkKryoRegistrar {
   private val KRYO_USER_REGISTRATORS = "spark.kryo.registrator"
 
   def register(conf: SparkConf): SparkConf = {
-    conf.set(KRYO_USER_REGISTRATORS, Seq(classOf[HoodieSparkKryoRegistrar].getName).mkString(","))
+    // Use class name directly to avoid Scala collection binary compatibility issues
+    // when compiled with Scala 2.13 but running with Spark 3.5 (Scala 2.12)
+    conf.set(KRYO_USER_REGISTRATORS, classOf[HoodieSparkKryoRegistrar].getName)
   }
 }
