@@ -1405,7 +1405,7 @@ def testBulkInsertForDropPartitionColumn(): Unit = {
     )
 
     // Unicode partition value containing German umlaut ü (U+00FC)
-    val unicodePartition = "GEFO Gesellschaft f\u00fcr Oltransporte GmbH"
+    val unicodePartition = "M\u00fcnchen"
 
     // First write - insert with Overwrite
     val df = spark.createDataFrame(Seq(
