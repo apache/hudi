@@ -59,8 +59,8 @@ class TestSchemaConverters {
         HoodieSchemaField.of("thumbnail", HoodieSchema.createNullable(HoodieSchema.createBlob()))
       )))))
 
-    // Hudi -> Spark -> Hudi
-    val (sparkType, _) = HoodieSparkSchemaConverters.toSqlType(originalSchema)
+    // Hudi -> Spark
+    val sparkType = HoodieSparkSchemaConverters.toSqlType(originalSchema)._1
     // validate the metadata is set on the blob fields and nullability is preserved
     val metadataSparkField = sparkType.asInstanceOf[StructType].fields.find(_.name == "metadata").get.dataType.asInstanceOf[StructType]
     val thumbNailSparkField = metadataSparkField.fields.find(_.name == "thumbnail").get
@@ -69,19 +69,19 @@ class TestSchemaConverters {
     validateBlobFields(thumbNailSparkField.dataType.asInstanceOf[StructType])
     val imageSparkField = metadataSparkField.fields.find(_.name == "image").get
     assertEquals(HoodieSchemaType.BLOB.name(), imageSparkField.metadata.getString(HoodieSchema.TYPE_METADATA_FIELD))
-    assertTrue(!imageSparkField.nullable)
+    assertFalse(imageSparkField.nullable)
     validateBlobFields(imageSparkField.dataType.asInstanceOf[StructType])
 
+    // Spark -> Hudi
     val reconstructed = HoodieSparkSchemaConverters.toHoodieType(sparkType, recordName = "document", nameSpace = "test")
-
     // Verify the blob type and nullability are preserved in the reconstructed schema
     assertTrue(reconstructed.getField("id").isPresent)
     val metadataField = reconstructed.getField("metadata").get()
     val thumbnailField = metadataField.schema().getField("thumbnail").get()
-    assertTrue(thumbnailField.schema().isNullable())
-    assertEquals(HoodieSchemaType.BLOB, thumbnailField.schema().getNonNullType().getType)
+    assertTrue(thumbnailField.schema().isNullable)
+    assertEquals(HoodieSchemaType.BLOB, thumbnailField.schema().getNonNullType.getType)
     val imageField = metadataField.schema().getField("image").get()
-    assertFalse(imageField.schema().isNullable())
+    assertFalse(imageField.schema().isNullable)
     assertEquals(HoodieSchemaType.BLOB, imageField.schema().getType)
   }
 
@@ -99,7 +99,7 @@ class TestSchemaConverters {
 
     // Roundtrip
     val (sparkType, _) = HoodieSparkSchemaConverters.toSqlType(originalSchema)
-    val reconstructed = HoodieSparkSchemaConverters.toHoodieType(sparkType, recordName = "BlobArrays")
+    val reconstructed = HoodieSparkSchemaConverters.toHoodieType(sparkType, recordName = "BlobArrays", nameSpace = "test")
 
     // Verify simple array
     val simpleField = reconstructed.getField("simple_blobs").get()
@@ -162,7 +162,7 @@ class TestSchemaConverters {
       StructField(HoodieSchema.Blob.EXTERNAL_PATH, DataTypes.StringType, nullable = false),
       StructField(HoodieSchema.Blob.EXTERNAL_PATH_OFFSET, DataTypes.LongType, nullable = true),
       StructField(HoodieSchema.Blob.EXTERNAL_PATH_LENGTH, DataTypes.LongType, nullable = true),
-      StructField(HoodieSchema.Blob.EXTERNAL_PATH_IS_MANAGED, DataTypes.BooleanType, nullable = false),
+      StructField(HoodieSchema.Blob.EXTERNAL_PATH_IS_MANAGED, DataTypes.BooleanType, nullable = false)
     )), referenceField.dataType)
     assertTrue(referenceField.nullable)
   }
