@@ -161,6 +161,8 @@ public enum HoodieSchemaType {
         return UUID;
       } else if (logicalType instanceof VariantLogicalType) {
         return VARIANT;
+      } else if (logicalType == HoodieSchema.BlobLogicalType.blob()) {
+        return BLOB;
       }
     }
     switch (avroSchema.getType()) {

@@ -1732,13 +1732,13 @@ public class TestHoodieSchema {
 
     Option<HoodieSchemaField> offsetOpt = refSchema.getField("offset");
     assertTrue(offsetOpt.isPresent());
-    assertEquals(HoodieSchemaType.LONG, offsetOpt.get().schema().getType());
-    assertFalse(offsetOpt.get().schema().isNullable());
+    assertEquals(HoodieSchemaType.LONG, offsetOpt.get().schema().getNonNullType().getType());
+    assertTrue(offsetOpt.get().schema().isNullable());
 
     Option<HoodieSchemaField> lengthOpt = refSchema.getField("length");
     assertTrue(lengthOpt.isPresent());
-    assertEquals(HoodieSchemaType.LONG, lengthOpt.get().schema().getType());
-    assertFalse(lengthOpt.get().schema().isNullable());
+    assertEquals(HoodieSchemaType.LONG, lengthOpt.get().schema().getNonNullType().getType());
+    assertTrue(lengthOpt.get().schema().isNullable());
 
     Option<HoodieSchemaField> managedOpt = refSchema.getField("managed");
     assertTrue(managedOpt.isPresent());

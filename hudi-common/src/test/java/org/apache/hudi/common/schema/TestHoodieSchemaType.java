@@ -206,6 +206,7 @@ public class TestHoodieSchemaType {
     map.put(HoodieSchemaType.UUID,
         LogicalTypes.uuid().addToSchema(Schema.create(Schema.Type.STRING)));
     map.put(HoodieSchemaType.VARIANT, createVariantSchemaForTest());
+    map.put(HoodieSchemaType.BLOB, HoodieSchema.createBlob().toAvroSchema());
     return map;
   }
 
