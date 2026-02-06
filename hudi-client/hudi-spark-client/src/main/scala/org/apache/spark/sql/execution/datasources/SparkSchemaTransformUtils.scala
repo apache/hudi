@@ -33,13 +33,6 @@ import org.apache.spark.sql.types.{ArrayType, DataType, DateType, DecimalType, D
  * - Handle nested struct/array/map type conversions
  * - Work around Spark unsafe cast issues (float->double, numeric->decimal)
  *
- * Note: The following functions were originally part of HoodieParquetFileFormatHelper
- * and have been moved here to allow reuse across multiple file formats:
- * - buildImplicitSchemaChangeInfo
- * - isDataTypeEqual
- * - generateUnsafeProjection
- * - hasUnsupportedConversion
- * - recursivelyCastExpressions
  */
 object SparkSchemaTransformUtils {
 
