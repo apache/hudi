@@ -18,8 +18,8 @@
 
 package org.apache.hudi.hadoop.avro;
 
-import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.internal.schema.InternalSchema;
 
 import org.apache.hadoop.conf.Configuration;
