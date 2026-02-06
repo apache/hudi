@@ -165,7 +165,7 @@ public class HoodieAvroParquetReader extends HoodieAvroFileReaderBase {
     Option<Schema> promotedSchema = Option.empty();
     if (!renamedColumns.isPresent() || HoodieAvroUtils.recordNeedsRewriteForExtendedAvroTypePromotion(repairedFileSchema, schema)) {
       AvroReadSupport.setAvroReadSchema(conf, repairedFileSchema);
-      AvroReadSupport.setRequestedProjection(conf, repairedFileSchema);
+      AvroReadSupport.setRequestedProjection(conf, schema);
       promotedSchema = Option.of(schema);
     } else {
       AvroReadSupport.setAvroReadSchema(conf, schema);
