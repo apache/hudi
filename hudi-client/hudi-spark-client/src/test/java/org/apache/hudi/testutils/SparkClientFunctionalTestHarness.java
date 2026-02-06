@@ -117,8 +117,15 @@ public class SparkClientFunctionalTestHarness implements SparkProvider, HoodieMe
     Map<String, String> sqlConf = new HashMap<>();
     sqlConf.put("spark.sql.extensions", "org.apache.spark.sql.hudi.HoodieSparkSessionExtension");
 
-    if (HoodieSparkUtils.gteqSpark3_2()) {
-      sqlConf.put("spark.sql.catalog.spark_catalog", "org.apache.spark.sql.hudi.catalog.HoodieCatalog");
+    try {
+      if (HoodieSparkUtils.gteqSpark3_2()) {
+        sqlConf.put("spark.sql.catalog.spark_catalog", "org.apache.spark.sql.hudi.catalog.HoodieCatalog");
+      }
+    } catch (LinkageError e) {
+      // Handle Scala version compatibility issues (e.g., Scala 2.12 vs 2.13)
+      // If we can't determine the Spark version, skip setting the catalog
+      // This can happen when Scala code compiled with 2.12 references types removed in 2.13
+      // LinkageError catches both NoClassDefFoundError and other linkage errors
     }
 
     return sqlConf;
