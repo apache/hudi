@@ -60,6 +60,7 @@ import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieLockConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieSchemaEvolutionConflictException;
 import org.apache.hudi.exception.HoodieSchemaNotFoundException;
 import org.apache.hudi.exception.HoodieWriteConflictException;
@@ -1048,6 +1049,240 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
     executors.shutdown();
     client.close();
     client1.close();
+    client2.close();
+    FileIOUtils.deleteDirectory(new File(basePath));
+  }
+
+  /**
+   * Test that when writer1 starts compaction (with auto commit enabled) execution and fails mid-way,
+   * and after sometime writer2 starts and is able to rollback and execute the failed compaction
+   * (after heartbeat expired).
+   *
+   * This test uses a MOR table with multiwriter/optimistic concurrent control enabled.
+   */
+  @Test
+  public void testCompactionRecoveryAfterWriterFailureWithHeartbeatExpiry() throws Exception {
+    // Set up MOR table
+    setUpMORTestTable();
+
+    // Use short heartbeat interval so we can wait for expiry in test
+    int heartbeatIntervalMs = 2000;
+    int numTolerableHeartbeatMisses = 1;
+
+    Properties properties = new Properties();
+    properties.setProperty(FILESYSTEM_LOCK_PATH_PROP_KEY, basePath + "/.hoodie/.locks");
+    properties.setProperty(LockConfiguration.LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP_KEY, "3000");
+    properties.setProperty(LockConfiguration.LOCK_ACQUIRE_RETRY_WAIT_TIME_IN_MILLIS_PROP_KEY, "1000");
+    properties.setProperty(LockConfiguration.LOCK_ACQUIRE_NUM_RETRIES_PROP_KEY, "3");
+
+    // Build write config with multiwriter/OCC enabled and short heartbeat
+    HoodieWriteConfig.Builder writeConfigBuilder = getConfigBuilder()
+        .withHeartbeatIntervalInMs(heartbeatIntervalMs)
+        .withHeartbeatTolerableMisses(numTolerableHeartbeatMisses)
+        .withCleanConfig(HoodieCleanConfig.newBuilder()
+            .withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.LAZY)
+            .withAutoClean(false).build())
+        .withArchivalConfig(HoodieArchivalConfig.newBuilder()
+            .withAutoArchive(false).build())
+        .withCompactionConfig(HoodieCompactionConfig.newBuilder()
+            .withInlineCompaction(false)
+            .withMaxNumDeltaCommitsBeforeCompaction(2).build())
+        .withEmbeddedTimelineServerEnabled(false)
+        .withMarkersType(MarkerType.DIRECT.name())
+        .withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder()
+            .withStorageType(FileSystemViewStorageType.MEMORY)
+            .withSecondaryStorageType(FileSystemViewStorageType.MEMORY).build())
+        .withWriteConcurrencyMode(WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL)
+        .withLockConfig(HoodieLockConfig.newBuilder()
+            .withLockProvider(InProcessLockProvider.class)
+            .withConflictResolutionStrategy(new SimpleConcurrentFileWritesConflictResolutionStrategy())
+            .build())
+        .withProperties(properties);
+
+    HoodieWriteConfig cfg = writeConfigBuilder.build();
+
+    // Create initial commit with inserts (creates base files)
+    SparkRDDWriteClient client = getHoodieWriteClient(cfg);
+    String firstCommitTime = WriteClientTestUtils.createNewInstantTime();
+    createCommitWithInserts(cfg, client, "000", firstCommitTime, 200);
+
+    // Create delta commits (upserts create log files which are needed for compaction)
+    String secondCommitTime = WriteClientTestUtils.createNewInstantTime();
+    createCommitWithUpserts(cfg, client, firstCommitTime, Option.empty(), secondCommitTime, 100);
+    String thirdCommitTime = WriteClientTestUtils.createNewInstantTime();
+    createCommitWithUpserts(cfg, client, secondCommitTime, Option.empty(), thirdCommitTime, 100);
+
+    // Schedule compaction - this creates the compaction plan (requested instant)
+    Option<String> compactionInstantOpt = client.scheduleTableService(Option.empty(), Option.empty(), TableServiceType.COMPACT);
+    assertTrue(compactionInstantOpt.isPresent(), "Compaction should be scheduled");
+    String compactionInstantTime = compactionInstantOpt.get();
+    client.close();
+
+    // Verify compaction is in requested state before execution
+    HoodieTimeline pendingCompactionTimeline = metaClient.reloadActiveTimeline().filterPendingCompactionTimeline();
+    assertTrue(pendingCompactionTimeline.containsInstant(compactionInstantTime),
+        "Compaction instant should be in pending state after scheduling");
+
+    // Writer1: Start compaction with auto-commit, but simulate failure by starting heartbeat
+    // and then stopping the writer without completing the compaction
+    SparkRDDWriteClient client1 = getHoodieWriteClient(cfg);
+
+    // Simulate writer1 starting compaction but failing mid-way:
+    // 1. Start heartbeat for the compaction instant
+    // 2. Transition the compaction to inflight state (simulating that execution started)
+    // 3. Then "fail" by stopping heartbeat and closing the client without completing
+
+    // Start heartbeat for this compaction instant (simulating writer1 started execution)
+    client1.getHeartbeatClient().start(compactionInstantTime);
+
+    // Transition compaction from requested to inflight (simulating execution started)
+    HoodieInstant requestedInstant = metaClient.reloadActiveTimeline()
+        .filterPendingCompactionTimeline()
+        .getInstantsAsStream()
+        .filter(i -> i.requestedTime().equals(compactionInstantTime))
+        .findFirst()
+        .get();
+    metaClient.getActiveTimeline().transitionCompactionRequestedToInflight(requestedInstant);
+
+    // Verify compaction is now inflight
+    HoodieTimeline reloadedTimeline = metaClient.reloadActiveTimeline();
+    HoodieInstant inflightInstant = INSTANT_GENERATOR.getCompactionInflightInstant(compactionInstantTime);
+    assertTrue(reloadedTimeline.filterPendingCompactionTimeline().containsInstant(inflightInstant),
+        "Compaction instant should be in inflight state");
+
+    // Simulate writer1 failure by stopping heartbeat (this will allow heartbeat to expire)
+    client1.getHeartbeatClient().stop(compactionInstantTime);
+    client1.close();
+
+    // Wait for heartbeat to expire
+    // maxAllowableHeartbeatIntervalInMs = heartbeatIntervalMs * numTolerableHeartbeatMisses
+    long maxHeartbeatInterval = (long) heartbeatIntervalMs * numTolerableHeartbeatMisses;
+    Thread.sleep(maxHeartbeatInterval + 2000); // Add buffer time
+
+    // Writer2: Now comes in after heartbeat expired, should be able to rollback and execute compaction
+    SparkRDDWriteClient client2 = getHoodieWriteClient(cfg);
+
+    // Writer2 attempts to execute the compaction with auto-commit
+    // This should detect expired heartbeat, rollback the inflight compaction, and re-execute it
+    assertDoesNotThrow(() -> {
+      client2.compact(compactionInstantTime, true);
+    }, "Writer2 should be able to rollback and execute the failed compaction after heartbeat expires");
+
+    // Reload timeline and verify compaction is completed
+    HoodieTimeline finalTimeline = metaClient.reloadActiveTimeline();
+
+    // Verify compaction instant is completed
+    HoodieTimeline completedCompactionTimeline = finalTimeline.filterCompletedInstants().getCommitTimeline();
+    boolean hasCompletedCompaction = completedCompactionTimeline.getInstantsAsStream()
+        .anyMatch(instant -> instant.requestedTime().equals(compactionInstantTime));
+    assertTrue(hasCompletedCompaction,
+        "The compaction instant should be completed after writer2 recovery");
+
+    // Verify no pending compaction exists for this instant (it should be completed)
+    HoodieTimeline finalPendingCompactionTimeline = finalTimeline.filterPendingCompactionTimeline();
+    assertFalse(finalPendingCompactionTimeline.containsInstant(compactionInstantTime),
+        "Compaction instant should no longer be pending after recovery execution");
+
+    // Clean up
+    client2.close();
+    FileIOUtils.deleteDirectory(new File(basePath));
+  }
+
+  /**
+   * Test that when a writer starts compaction but the compaction instant is no longer in the
+   * active timeline (either already completed or removed), it should throw an appropriate error.
+   *
+   * This test uses a MOR table with multiwriter/optimistic concurrent control enabled.
+   */
+  @Test
+  public void testCompactionFailsWhenInstantNotInActiveTimeline() throws Exception {
+    // Set up MOR table
+    setUpMORTestTable();
+
+    Properties properties = new Properties();
+    properties.setProperty(FILESYSTEM_LOCK_PATH_PROP_KEY, basePath + "/.hoodie/.locks");
+    properties.setProperty(LockConfiguration.LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP_KEY, "3000");
+    properties.setProperty(LockConfiguration.LOCK_ACQUIRE_RETRY_WAIT_TIME_IN_MILLIS_PROP_KEY, "1000");
+    properties.setProperty(LockConfiguration.LOCK_ACQUIRE_NUM_RETRIES_PROP_KEY, "3");
+
+    // Build write config with multiwriter/OCC enabled
+    HoodieWriteConfig.Builder writeConfigBuilder = getConfigBuilder()
+        .withHeartbeatIntervalInMs(60 * 1000)
+        .withCleanConfig(HoodieCleanConfig.newBuilder()
+            .withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.LAZY)
+            .withAutoClean(false).build())
+        .withArchivalConfig(HoodieArchivalConfig.newBuilder()
+            .withAutoArchive(false).build())
+        .withCompactionConfig(HoodieCompactionConfig.newBuilder()
+            .withInlineCompaction(false)
+            .withMaxNumDeltaCommitsBeforeCompaction(2).build())
+        .withEmbeddedTimelineServerEnabled(false)
+        .withMarkersType(MarkerType.DIRECT.name())
+        .withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder()
+            .withStorageType(FileSystemViewStorageType.MEMORY)
+            .withSecondaryStorageType(FileSystemViewStorageType.MEMORY).build())
+        .withWriteConcurrencyMode(WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL)
+        .withLockConfig(HoodieLockConfig.newBuilder()
+            .withLockProvider(InProcessLockProvider.class)
+            .withConflictResolutionStrategy(new SimpleConcurrentFileWritesConflictResolutionStrategy())
+            .build())
+        .withProperties(properties);
+
+    HoodieWriteConfig cfg = writeConfigBuilder.build();
+
+    // Create initial commit with inserts (creates base files)
+    SparkRDDWriteClient client = getHoodieWriteClient(cfg);
+    String firstCommitTime = WriteClientTestUtils.createNewInstantTime();
+    createCommitWithInserts(cfg, client, "000", firstCommitTime, 200);
+
+    // Create delta commits (upserts create log files which are needed for compaction)
+    String secondCommitTime = WriteClientTestUtils.createNewInstantTime();
+    createCommitWithUpserts(cfg, client, firstCommitTime, Option.empty(), secondCommitTime, 100);
+    String thirdCommitTime = WriteClientTestUtils.createNewInstantTime();
+    createCommitWithUpserts(cfg, client, secondCommitTime, Option.empty(), thirdCommitTime, 100);
+
+    // Schedule compaction - this creates the compaction plan (requested instant)
+    Option<String> compactionInstantOpt = client.scheduleTableService(Option.empty(), Option.empty(), TableServiceType.COMPACT);
+    assertTrue(compactionInstantOpt.isPresent(), "Compaction should be scheduled");
+    String compactionInstantTime = compactionInstantOpt.get();
+    client.close();
+
+    // Verify compaction is in pending state
+    HoodieTimeline pendingCompactionTimeline = metaClient.reloadActiveTimeline().filterPendingCompactionTimeline();
+    assertTrue(pendingCompactionTimeline.containsInstant(compactionInstantTime),
+        "Compaction instant should be in pending state after scheduling");
+
+    // Now, simulate the scenario where the compaction instant is removed from the active timeline
+    // This could happen if another writer already completed the compaction and it was archived,
+    // or the instant was manually deleted. We simulate this by deleting the compaction instant files.
+    HoodieInstant requestedInstant = metaClient.reloadActiveTimeline()
+        .filterPendingCompactionTimeline()
+        .getInstantsAsStream()
+        .filter(i -> i.requestedTime().equals(compactionInstantTime))
+        .findFirst()
+        .get();
+
+    // Delete the compaction instant from timeline (simulating it's no longer in active timeline)
+    metaClient.getActiveTimeline().deletePending(requestedInstant);
+
+    // Verify compaction instant is no longer in the timeline
+    pendingCompactionTimeline = metaClient.reloadActiveTimeline().filterPendingCompactionTimeline();
+    assertFalse(pendingCompactionTimeline.containsInstant(compactionInstantTime),
+        "Compaction instant should no longer be in pending timeline after deletion");
+
+    // Writer attempts to execute the compaction that is no longer in the timeline
+    SparkRDDWriteClient client2 = getHoodieWriteClient(cfg);
+
+    // Attempting to compact should throw HoodieException since the instant is not in active timeline
+    HoodieException exception = assertThrows(HoodieException.class, () -> {
+      client2.compact(compactionInstantTime, true);
+    }, "Compaction should throw an error when instant is not in active timeline");
+
+    // Verify the error message indicates the compaction instant is not in active timeline
+    assertTrue(exception.getMessage().contains("is not present as pending or already completed in the active timeline"),
+        "Exception message should indicate compaction instant is not in active timeline. Actual: " + exception.getMessage());
+
+    // Clean up
     client2.close();
     FileIOUtils.deleteDirectory(new File(basePath));
   }
