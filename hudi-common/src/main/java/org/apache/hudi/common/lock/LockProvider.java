@@ -26,6 +26,8 @@ import java.util.concurrent.locks.Lock;
  */
 public interface LockProvider<T> extends Lock, AutoCloseable {
 
+  String BASE_PATH_CONFIG_KEY = "hoodie.base.path";
+
   @Override
   default void lockInterruptibly() {
     throw new UnsupportedOperationException();
