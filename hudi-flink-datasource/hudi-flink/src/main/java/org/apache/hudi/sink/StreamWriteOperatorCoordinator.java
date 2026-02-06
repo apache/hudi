@@ -390,6 +390,9 @@ public class StreamWriteOperatorCoordinator
     if (request instanceof Correspondent.InflightInstantsRequest) {
       return handleInFlightInstantsRequest((Correspondent.InflightInstantsRequest) request);
     }
+    if (request instanceof Correspondent.AwaitPendingInstantsRequest) {
+      return handleAwaitPendingInstantsRequest((Correspondent.AwaitPendingInstantsRequest) request);
+    }
     throw new HoodieException("Unexpected coordination request type: " + request.getClass().getSimpleName());
   }
 
@@ -415,6 +418,16 @@ public class StreamWriteOperatorCoordinator
   private CompletableFuture<CoordinationResponse> handleInFlightInstantsRequest(Correspondent.InflightInstantsRequest request) {
     CoordinationResponse coordinationResponse = Correspondent.InflightInstantsResponse.getInstance(eventBuffers.getAllCheckpointIdAndInstants());
     return CompletableFuture.completedFuture(CoordinationResponseSerDe.wrap(coordinationResponse));
+  }
+
+  private CompletableFuture<CoordinationResponse> handleAwaitPendingInstantsRequest(Correspondent.AwaitPendingInstantsRequest request) {
+    CompletableFuture<CoordinationResponse> response = new CompletableFuture<>();
+    instantRequestExecutor.execute(() -> {
+      // wait until receiving any bootstrap event.
+      eventBuffers.awaitPrevInstantsToComplete(request.getCheckpointId());
+      response.complete(CoordinationResponseSerDe.wrap(Correspondent.AwaitPendingInstantsResponse.getInstance()));
+    }, "await pending instants to complete");
+    return response;
   }
 
   // -------------------------------------------------------------------------

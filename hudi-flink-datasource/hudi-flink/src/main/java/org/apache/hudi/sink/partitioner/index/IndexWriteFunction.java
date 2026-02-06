@@ -180,6 +180,7 @@ public class IndexWriteFunction extends AbstractStreamWriteFunction<RowData> {
 
   @Override
   public void endInput() {
+    super.endInput();
     // flush index data buffer
     flushBuffer(true, true);
   }

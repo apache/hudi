@@ -20,7 +20,7 @@ package org.apache.hudi.client.clustering.run.strategy;
 
 import org.apache.hudi.client.SparkTaskContextSupplier;
 import org.apache.hudi.client.WriteStatus;
-import org.apache.hudi.client.utils.LazyConcatenatingIterator;
+import org.apache.hudi.util.LazyConcatenatingIterator;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.engine.ReaderContextFactory;
 import org.apache.hudi.common.engine.TaskContextSupplier;

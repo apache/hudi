@@ -205,6 +205,10 @@ public class OptionsResolver {
     return indexType == HoodieIndex.IndexType.GLOBAL_RECORD_LEVEL_INDEX;
   }
 
+  public static boolean isRLIWithBootstrap(Configuration conf) {
+    return isRecordLevelIndex(conf) && conf.get(FlinkOptions.INDEX_BOOTSTRAP_ENABLED);
+  }
+
   /**
    * Returns whether it is a MERGE_ON_READ table, and updates by bucket index.
    */

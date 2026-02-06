@@ -36,6 +36,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Spliterator;
 import java.util.Spliterators;
+import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.stream.Collector;
 import java.util.stream.Collectors;
@@ -83,6 +84,13 @@ public class HoodieListPairData<K, V> extends HoodieBaseListData<Pair<K, V>> imp
   @Override
   public List<Pair<K, V>> get() {
     return collectAsList();
+  }
+
+  @Override
+  public void forEach(Consumer<Pair<K, V>> consumer) {
+    try (Stream<Pair<K, V>> stream = asStream()) {
+      stream.sequential().forEach(consumer);
+    }
   }
 
   @Override

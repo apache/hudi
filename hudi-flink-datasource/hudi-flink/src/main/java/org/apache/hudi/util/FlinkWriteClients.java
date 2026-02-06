@@ -234,6 +234,10 @@ public class FlinkWriteClients {
             .withMetadataConfig(HoodieMetadataConfig.newBuilder()
                 .withEngineType(EngineType.FLINK) // this affects the default value inference
                 .enable(conf.get(FlinkOptions.METADATA_ENABLED))
+                .withRecordIndexFileGroupCount(
+                    Integer.parseInt(conf.getString(HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_MIN_FILE_GROUP_COUNT_PROP.key(), "8")),
+                    Integer.parseInt(conf.getString(HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_MAX_FILE_GROUP_COUNT_PROP.key(),
+                        HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_MAX_FILE_GROUP_COUNT_PROP.defaultValue() + "")))
                 .withMaxNumDeltaCommitsBeforeCompaction(conf.get(FlinkOptions.METADATA_COMPACTION_DELTA_COMMITS))
                 .build())
             .withIndexConfig(StreamerUtil.getIndexConfig(conf))

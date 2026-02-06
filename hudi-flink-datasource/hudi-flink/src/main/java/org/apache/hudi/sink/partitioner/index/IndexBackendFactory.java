@@ -58,20 +58,24 @@ public class IndexBackendFactory {
         ValidationUtils.checkArgument(indexState != null, "indexState should not be null when using FLINK_STATE index!");
         return new FlinkStateIndexBackend(indexState);
       case GLOBAL_RECORD_LEVEL_INDEX:
-        ListState<JobID> jobIdState = context.getOperatorStateStore().getListState(
-            new ListStateDescriptor<>(
-                "bucket-assign-job-id-state",
-                TypeInformation.of(JobID.class)
-            ));
-        long initCheckpointId = -1;
-        if (context.isRestored()) {
-          int attemptId = RuntimeContextUtils.getAttemptNumber(runtimeContext);
-          initCheckpointId = initCheckpointId(attemptId, jobIdState, context.getRestoredCheckpointId().orElse(-1L), runtimeContext);
+        if (conf.get(FlinkOptions.INDEX_BOOTSTRAP_ENABLED)) {
+          return new RocksDBIndexBackend(conf.get(FlinkOptions.INDEX_BOOTSTRAP_ROCKSDB_PATH));
+        } else {
+          ListState<JobID> jobIdState = context.getOperatorStateStore().getListState(
+              new ListStateDescriptor<>(
+                  "bucket-assign-job-id-state",
+                  TypeInformation.of(JobID.class)
+              ));
+          long initCheckpointId = -1;
+          if (context.isRestored()) {
+            int attemptId = RuntimeContextUtils.getAttemptNumber(runtimeContext);
+            initCheckpointId = initCheckpointId(attemptId, jobIdState, context.getRestoredCheckpointId().orElse(-1L), runtimeContext);
+          }
+          // set the jobId state with current job id.
+          jobIdState.clear();
+          jobIdState.add(RuntimeContextUtils.getJobId(runtimeContext));
+          return new RecordLevelIndexBackend(conf, initCheckpointId);
         }
-        // set the jobId state with current job id.
-        jobIdState.clear();
-        jobIdState.add(RuntimeContextUtils.getJobId(runtimeContext));
-        return new RecordLevelIndexBackend(conf, initCheckpointId);
       default:
         throw new UnsupportedOperationException("Index type " + indexType + " is not supported for bucket assigning yet.");
     }

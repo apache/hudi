@@ -72,6 +72,7 @@ import org.apache.hudi.io.storage.HoodieIOFactory;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
+import org.apache.hudi.util.LazyConcatenatingIterator;
 
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
@@ -91,6 +92,7 @@ import java.util.Set;
 import java.util.TreeSet;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -353,6 +355,71 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
       return readIndexRecordsWithKeys(rawKeys, MetadataPartitionType.RECORD_INDEX.getPartitionPath(), dataTablePartition)
           .mapToPair((Pair<String, HoodieMetadataPayload> p) -> Pair.of(p.getLeft(), p.getRight().getRecordGlobalLocation()));
     });
+  }
+
+  @Override
+  public HoodiePairData<String, HoodieRecordGlobalLocation> readRecordIndexLocations(
+      SerializableFunctionUnchecked<List<FileSlice>, List<FileSlice>> fileSlicesFilter) {
+    ValidationUtils.checkState(dataMetaClient.getTableConfig().isMetadataPartitionAvailable(RECORD_INDEX),
+        "Record index is not initialized in MDT");
+
+    return dataCleanupManager.ensureDataCleanupOnException(v -> {
+      // Get all file slices for the record index partition
+      List<FileSlice> fileSlices = partitionFileSliceMap.computeIfAbsent(
+          RECORD_INDEX.getPartitionPath(),
+          k -> HoodieTableMetadataUtil.getPartitionLatestMergedFileSlices(
+              metadataMetaClient, getMetadataFileSystemView(), RECORD_INDEX.getPartitionPath()));
+
+      List<FileSlice> targetFileSlices = fileSlicesFilter.apply(fileSlices);
+      if (targetFileSlices.isEmpty()) {
+        return HoodieListPairData.eager(Collections.emptyList());
+      }
+
+      List<Supplier<ClosableIterator<HoodieRecord<HoodieMetadataPayload>>>> iteratorSuppliers =
+          targetFileSlices.stream().map(targetFileSlice -> {
+            return new Supplier<ClosableIterator<HoodieRecord<HoodieMetadataPayload>>>() {
+              @Override
+              public ClosableIterator<HoodieRecord<HoodieMetadataPayload>> get() {
+                return scanRecordsItr(
+                    targetFileSlice,
+                    metadataRecord -> {
+                      HoodieMetadataPayload payload = new HoodieMetadataPayload(Option.of(metadataRecord));
+                      String rowKey = payload.key != null ? payload.key : metadataRecord.get(KEY_FIELD_NAME).toString();
+                      HoodieKey hoodieKey = new HoodieKey(rowKey, RECORD_INDEX.getPartitionPath());
+                      return new HoodieAvroRecord<>(hoodieKey, payload);
+                    });
+              }
+            };
+          }).collect(Collectors.toList());
+
+      HoodieData<HoodieRecord<HoodieMetadataPayload>> allRecords =
+          HoodieListData.lazy(new LazyConcatenatingIterator<>(iteratorSuppliers)).filter(r -> !r.getData().isDeleted());
+      // Map records to key-location pairs
+      return allRecords.mapToPair(record -> {
+        String recordKey = record.getRecordKey();
+        HoodieRecordGlobalLocation location = record.getData().getRecordGlobalLocation();
+        return Pair.of(recordKey, location);
+      });
+    });
+  }
+
+  /**
+   * Helper method to read all records from a file slice without key filtering
+   */
+  private ClosableIterator<HoodieRecord<HoodieMetadataPayload>> scanRecordsItr(
+      FileSlice fileSlice,
+      SerializableFunctionUnchecked<GenericRecord, HoodieRecord<HoodieMetadataPayload>> transformer) {
+    // Read all records from the file slice without any key filtering
+    // This bypasses the normal predicate building mechanism
+    try {
+      ClosableIterator<IndexedRecord> rawIterator = readSliceWithFilter(Predicates.alwaysTrue(), fileSlice);
+      return new CloseableMappingIterator<>(rawIterator, record -> {
+        GenericRecord metadataRecord = (GenericRecord) record;
+        return transformer.apply(metadataRecord);
+      });
+    } catch (IOException e) {
+      throw new HoodieIOException("Error reading all records from metadata table file slice", e);
+    }
   }
 
   /**

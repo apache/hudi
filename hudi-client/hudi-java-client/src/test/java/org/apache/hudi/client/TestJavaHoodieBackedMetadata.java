@@ -170,6 +170,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
@@ -1289,6 +1290,61 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
           MetadataPartitionType.FILES.getPartitionPath()).size(), 1);
       assertEquals(HoodieTableMetadataUtil.getPartitionLatestFileSlices(metadataReader.getMetadataMetaClient(), Option.empty(),
           MetadataPartitionType.RECORD_INDEX.getPartitionPath()).size(), 3);
+    }
+  }
+
+  @Test
+  public void testReadRecordIndexLocationsByBucketId() throws Exception {
+    init(HoodieTableType.COPY_ON_WRITE);
+    HoodieEngineContext engineContext = new HoodieJavaEngineContext(storageConf);
+
+    HoodieWriteConfig writeConfig = getWriteConfigBuilder(true, true, false)
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder()
+            .enable(true)
+            .withEnableGlobalRecordLevelIndex(true)
+            .withRecordIndexFileGroupCount(3, 3)
+            .build())
+        .build();
+
+    try (HoodieJavaWriteClient client = new HoodieJavaWriteClient(engineContext, writeConfig)) {
+      String instantTime = client.startCommit();
+      List<HoodieRecord> records = dataGen.generateInserts(instantTime, 120);
+      List<WriteStatus> writeStatuses = client.insert(records, instantTime);
+      client.commit(instantTime, writeStatuses);
+      assertNoWriteErrors(writeStatuses);
+
+      HoodieBackedTableMetadata metadataReader = (HoodieBackedTableMetadata) metadata(client);
+      int bucketCount = metadataReader.getNumFileGroupsForPartition(MetadataPartitionType.RECORD_INDEX);
+      assertEquals(3, bucketCount);
+
+      long totalRecords = metadataReader.readRecordIndexLocations(fileSlices -> fileSlices).count();
+      assertEquals(records.size(), totalRecords);
+    }
+  }
+
+  @Test
+  public void testReadRecordIndexLocationsByBucketIdFailsWhenRecordIndexDisabled() throws Exception {
+    init(HoodieTableType.COPY_ON_WRITE);
+    HoodieEngineContext engineContext = new HoodieJavaEngineContext(storageConf);
+
+    HoodieWriteConfig writeConfig = getWriteConfigBuilder(true, true, false)
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder()
+            .enable(true)
+            .withEnableGlobalRecordLevelIndex(false)
+            .build())
+        .build();
+
+    try (HoodieJavaWriteClient client = new HoodieJavaWriteClient(engineContext, writeConfig)) {
+      String instantTime = client.startCommit();
+      List<HoodieRecord> records = dataGen.generateInserts(instantTime, 20);
+      List<WriteStatus> writeStatuses = client.insert(records, instantTime);
+      client.commit(instantTime, writeStatuses);
+      assertNoWriteErrors(writeStatuses);
+
+      HoodieBackedTableMetadata metadataReader = (HoodieBackedTableMetadata) metadata(client);
+      IllegalStateException exception =
+          assertThrows(IllegalStateException.class, () -> metadataReader.readRecordIndexLocations(fileSlices -> fileSlices));
+      assertTrue(exception.getMessage().contains("Record index is not initialized in MDT"));
     }
   }
 

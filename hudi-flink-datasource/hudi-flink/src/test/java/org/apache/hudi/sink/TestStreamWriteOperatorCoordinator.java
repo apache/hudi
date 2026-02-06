@@ -38,6 +38,7 @@ import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
+import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.sink.muttley.AthenaIngestionGateway;
 import org.apache.hudi.sink.event.Correspondent;
@@ -669,6 +670,33 @@ public class TestStreamWriteOperatorCoordinator {
     assertTrue(inflightInstants.containsKey(2L));
     assertEquals(instant1, inflightInstants.get(1L));
     assertEquals(instant2, inflightInstants.get(2L));
+  }
+
+  @Test
+  void testHandleAwaitPendingInstantsRequest() throws Exception {
+    Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    conf.set(FlinkOptions.TABLE_TYPE, HoodieTableType.MERGE_ON_READ.name());
+    conf.set(FlinkOptions.INDEX_TYPE, HoodieIndex.IndexType.GLOBAL_RECORD_LEVEL_INDEX.name());
+    conf.set(FlinkOptions.INDEX_BOOTSTRAP_ENABLED, true);
+    conf.set(FlinkOptions.INDEX_WRITE_TASKS, 4);
+    coordinator = createCoordinator(conf, 1);
+
+    Thread t = new Thread(() -> {
+      try {
+        CompletableFuture<CoordinationResponse> responseFuture =
+            coordinator.handleCoordinationRequest(Correspondent.AwaitPendingInstantsRequest.getInstance(1));
+        Correspondent.AwaitPendingInstantsResponse response =
+            CoordinationResponseSerDe.unwrap(responseFuture.get());
+        assertNotNull(response);
+      } catch (Exception e) {
+        throw new HoodieException(e);
+      }
+    });
+    t.start();
+    // send a bootstrap event to unblock the simulated request from bootstrap operator.
+    WriteMetadataEvent event1 = createBootstrapEvent(0, 0, coordinator.getInstant(), "par1");
+    coordinator.handleEventFromOperator(0, event1);
+    t.join();
   }
 
   // -------------------------------------------------------------------------

@@ -25,6 +25,7 @@ import org.apache.hudi.client.model.CommitTimeFlinkRecordMerger;
 import org.apache.hudi.client.model.EventTimeFlinkRecordMerger;
 import org.apache.hudi.client.model.PartialUpdateFlinkRecordMerger;
 import org.apache.hudi.client.transaction.lock.FileSystemBasedLockProvider;
+import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.EventTimeAvroPayload;
@@ -39,6 +40,7 @@ import org.apache.hudi.common.table.marker.MarkerType;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.io.FileGroupReaderBasedMergeHandle;
+import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.marker.DirectWriteMarkers;
 import org.apache.hudi.table.marker.TimelineServerBasedWriteMarkers;
@@ -101,6 +103,21 @@ public class TestFlinkWriteClients {
       metaClient.reloadTableConfig();
       assertThat(metaClient.getTableConfig().getMetadataPartitions().toString(), is("[files]"));
     }
+  }
+
+  @Test
+  void testDefaultGlobalRecordIndexMinFileGroupCountForFlink() {
+    conf.set(FlinkOptions.INDEX_TYPE, HoodieIndex.IndexType.GLOBAL_RECORD_LEVEL_INDEX.name());
+    HoodieWriteConfig writeConfig = FlinkWriteClients.getHoodieClientConfig(conf, false, false);
+    assertEquals(8, writeConfig.getGlobalRecordLevelIndexMinFileGroupCount());
+  }
+
+  @Test
+  void testUserConfiguredGlobalRecordIndexMinFileGroupCountIsNotOverridden() {
+    conf.set(FlinkOptions.INDEX_TYPE, HoodieIndex.IndexType.GLOBAL_RECORD_LEVEL_INDEX.name());
+    conf.setString(HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_MIN_FILE_GROUP_COUNT_PROP.key(), "12");
+    HoodieWriteConfig writeConfig = FlinkWriteClients.getHoodieClientConfig(conf, false, false);
+    assertEquals(12, writeConfig.getGlobalRecordLevelIndexMinFileGroupCount());
   }
 
   @ParameterizedTest

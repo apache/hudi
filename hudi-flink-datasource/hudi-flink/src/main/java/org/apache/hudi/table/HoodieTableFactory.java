@@ -413,6 +413,10 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
       conf.setString(HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_ENABLE_PROP.key(), "true");
       conf.set(FlinkOptions.INDEX_GLOBAL_ENABLED, true);
       conf.setString(HoodieMetadataConfig.STREAMING_WRITE_ENABLED.key(), "true");
+      // set index bootstrap as true if not specified by user explicitly.
+      if (!conf.contains(FlinkOptions.INDEX_BOOTSTRAP_ENABLED)) {
+        conf.set(FlinkOptions.INDEX_BOOTSTRAP_ENABLED, true);
+      }
       // generally size of index data is much smaller than data record, so set the buffer size of
       // the index writer as 1/4 of that for data writer if it's not set by user explicitly.
       if (!conf.contains(FlinkOptions.INDEX_RLI_WRITE_BUFFER_SIZE)) {

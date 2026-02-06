@@ -35,7 +35,6 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.configuration.OptionsResolver;
-import org.apache.hudi.sink.bootstrap.aggregate.BootstrapAggFunction;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.format.FormatUtils;
@@ -54,20 +53,13 @@ import org.apache.flink.configuration.Configuration;
 import org.apache.flink.runtime.state.KeyGroupRangeAssignment;
 import org.apache.flink.runtime.state.StateInitializationContext;
 import org.apache.flink.runtime.state.StateSnapshotContext;
-import org.apache.flink.runtime.taskexecutor.GlobalAggregateManager;
-import org.apache.flink.streaming.api.graph.StreamConfig;
-import org.apache.flink.streaming.api.operators.AbstractStreamOperator;
-import org.apache.flink.streaming.api.operators.OneInputStreamOperator;
-import org.apache.flink.streaming.api.operators.Output;
 import org.apache.flink.streaming.runtime.streamrecord.StreamRecord;
-import org.apache.flink.streaming.runtime.tasks.StreamTask;
 import org.apache.flink.table.data.RowData;
 
 import java.io.IOException;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
-import java.util.concurrent.TimeUnit;
 import java.util.regex.Pattern;
 
 import static java.util.stream.Collectors.toList;
@@ -84,17 +76,12 @@ import static org.apache.hudi.util.StreamerUtil.metadataConfig;
  */
 @Slf4j
 public class BootstrapOperator
-    extends AbstractStreamOperator<HoodieFlinkInternalRow>
-    implements OneInputStreamOperator<HoodieFlinkInternalRow, HoodieFlinkInternalRow> {
+    extends AbstractBootstrapOperator {
 
   protected HoodieTable<?, ?, ?, ?> hoodieTable;
 
-  protected final Configuration conf;
-
   protected transient org.apache.hadoop.conf.Configuration hadoopConf;
   protected transient HoodieWriteConfig writeConfig;
-
-  private transient GlobalAggregateManager aggregateManager;
 
   private transient ListState<String> instantState;
   private transient HoodieTableMetaClient metaClient;
@@ -104,17 +91,8 @@ public class BootstrapOperator
   private String lastInstantTime;
 
   public BootstrapOperator(Configuration conf) {
-    this.conf = conf;
+    super(conf);
     this.pattern = Pattern.compile(conf.get(FlinkOptions.INDEX_PARTITION_REGEX));
-  }
-
-  /**
-   * The modifier of this method is updated to `protected` sink Flink 2.0, here we overwrite the method
-   * with `public` modifier to make it compatible considering usage in hudi-flink module.
-   */
-  @Override
-  public void setup(StreamTask<?, ?> containingTask, StreamConfig config, Output<StreamRecord<HoodieFlinkInternalRow>> output) {
-    super.setup(containingTask, config, output);
   }
 
   @Override
@@ -146,7 +124,6 @@ public class BootstrapOperator
     this.writeConfig = FlinkWriteClients.getHoodieClientConfig(
         this.conf, false, !OptionsResolver.isIncrementalJobGraph(conf));
     this.hoodieTable = FlinkTables.createTable(writeConfig, hadoopConf, getRuntimeContext());
-    this.aggregateManager = getRuntimeContext().getGlobalAggregateManager();
     this.metaClient = StreamerUtil.createMetaClient(conf, hadoopConf);
     this.internalSchemaManager = InternalSchemaManager.get(hoodieTable.getStorageConf(), metaClient);
 
@@ -171,29 +148,6 @@ public class BootstrapOperator
     // wait for the other bootstrap tasks finish bootstrapping.
     waitForBootstrapReady(taskID);
     hoodieTable = null;
-  }
-
-  /**
-   * Wait for other bootstrap tasks to finish the index bootstrap.
-   */
-  private void waitForBootstrapReady(int taskID) {
-    int taskNum = RuntimeContextUtils.getNumberOfParallelSubtasks(getRuntimeContext());
-    int readyTaskNum = 1;
-    while (taskNum != readyTaskNum) {
-      try {
-        readyTaskNum = aggregateManager.updateGlobalAggregate(BootstrapAggFunction.NAME + conf.get(FlinkOptions.TABLE_NAME), taskID, new BootstrapAggFunction());
-        log.info("Waiting for other bootstrap tasks to complete, taskId = {}.", taskID);
-
-        TimeUnit.SECONDS.sleep(5);
-      } catch (Exception e) {
-        log.error("Updating global task bootstrap summary failed", e);
-      }
-    }
-  }
-
-  @Override
-  public void processElement(StreamRecord<HoodieFlinkInternalRow> element) throws Exception {
-    output.collect(element);
   }
 
   /**

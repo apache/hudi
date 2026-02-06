@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.client.utils;
+package org.apache.hudi.util;
 
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
@@ -30,7 +30,7 @@ import java.util.function.Supplier;
  * Provides iterator interface over List of iterators. Consumes all records from first iterator element
  * before moving to next iterator in the list. That is concatenating elements across multiple iterators.
  *
- * <p>Different with {@link ConcatenatingIterator}, the internal iterators are instantiated lazily.
+ * <p>Different with {@code ConcatenatingIterator}, the internal iterators are instantiated lazily.
  */
 public class LazyConcatenatingIterator<T> implements ClosableIterator<T> {
 
