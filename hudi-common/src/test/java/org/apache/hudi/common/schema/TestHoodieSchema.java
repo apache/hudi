@@ -1689,4 +1689,127 @@ public class TestHoodieSchema {
     // Verify the logical type name
     assertEquals("variant", instance1.getName());
   }
+
+  // ==================== Blob Type Tests ====================
+
+  @Test
+  public void testCreateBlob() {
+    HoodieSchema.Blob blob = HoodieSchema.createBlob();
+
+    assertNotNull(blob);
+    assertEquals("blob", blob.getName());
+    assertEquals(HoodieSchemaType.BLOB, blob.getType());
+
+    // Verify storage_type field
+    Option<HoodieSchemaField> storageTypeOpt = blob.getField("storage_type");
+    assertTrue(storageTypeOpt.isPresent());
+    HoodieSchemaField storageTypeField = storageTypeOpt.get();
+    assertEquals(HoodieSchemaType.STRING, storageTypeField.schema().getType());
+    assertFalse(storageTypeField.schema().isNullable());
+
+    // Verify data field is nullable
+    Option<HoodieSchemaField> dataOpt = blob.getField("data");
+    assertTrue(dataOpt.isPresent());
+    HoodieSchemaField dataField = dataOpt.get();
+    assertTrue(dataField.schema().isNullable());
+    assertEquals(HoodieSchemaType.BYTES, dataField.schema().getNonNullType().getType());
+
+    // Verify reference field is nullable
+    Option<HoodieSchemaField> refOpt = blob.getField("reference");
+    assertTrue(refOpt.isPresent());
+    HoodieSchemaField refField = refOpt.get();
+    assertTrue(refField.schema().isNullable());
+    assertEquals(HoodieSchemaType.RECORD, refField.schema().getNonNullType().getType());
+
+    HoodieSchema refSchema = refOpt.get().schema().getNonNullType();
+    assertEquals(HoodieSchemaType.RECORD, refSchema.getType());
+
+    // Verify reference has all required fields
+    Option<HoodieSchemaField> externalPathOpt = refSchema.getField("external_path");
+    assertTrue(externalPathOpt.isPresent());
+    assertEquals(HoodieSchemaType.STRING, externalPathOpt.get().schema().getType());
+    assertFalse(externalPathOpt.get().schema().isNullable());
+
+    Option<HoodieSchemaField> offsetOpt = refSchema.getField("offset");
+    assertTrue(offsetOpt.isPresent());
+    assertEquals(HoodieSchemaType.LONG, offsetOpt.get().schema().getType());
+    assertFalse(offsetOpt.get().schema().isNullable());
+
+    Option<HoodieSchemaField> lengthOpt = refSchema.getField("length");
+    assertTrue(lengthOpt.isPresent());
+    assertEquals(HoodieSchemaType.LONG, lengthOpt.get().schema().getType());
+    assertFalse(lengthOpt.get().schema().isNullable());
+
+    Option<HoodieSchemaField> managedOpt = refSchema.getField("managed");
+    assertTrue(managedOpt.isPresent());
+    assertEquals(HoodieSchemaType.BOOLEAN, managedOpt.get().schema().getType());
+    assertFalse(managedOpt.get().schema().isNullable());
+  }
+
+  @Test
+  public void testBlobLogicalTypeDetection() {
+    HoodieSchema.Blob blob = HoodieSchema.createBlob();
+
+    // Verify logical type is set
+    Schema avroSchema = blob.toAvroSchema();
+    assertNotNull(avroSchema.getLogicalType());
+    assertEquals("blob", avroSchema.getLogicalType().getName());
+
+    // Verify it can be detected back
+    HoodieSchema reconstructed = HoodieSchema.fromAvroSchema(avroSchema);
+    assertInstanceOf(HoodieSchema.Blob.class, reconstructed);
+    assertEquals(HoodieSchemaType.BLOB, reconstructed.getType());
+  }
+
+  @Test
+  public void testBlobAsRecordField() {
+    HoodieSchema recordSchema = HoodieSchema.createRecord("test_record", null, null, Arrays.asList(
+        HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.INT)),
+        HoodieSchemaField.of("file_data", HoodieSchema.createBlob())
+    ));
+
+    Option<HoodieSchemaField> blobFieldOpt = recordSchema.getField("file_data");
+    assertTrue(blobFieldOpt.isPresent());
+    HoodieSchemaField blobField = blobFieldOpt.get();
+    assertEquals(HoodieSchemaType.BLOB, blobField.schema().getType());
+
+    // Verify the blob field has proper structure
+    HoodieSchema blobSchema = blobField.schema();
+    assertInstanceOf(HoodieSchema.Blob.class, blobSchema);
+
+    // Validate the blob schema can be converted to string and back without losing the logical type
+    String recordJson = recordSchema.toString();
+    HoodieSchema parsedRecord = HoodieSchema.parse(recordJson);
+    Option<HoodieSchemaField> parsedBlobFieldOpt = parsedRecord.getField("file_data");
+    assertTrue(parsedBlobFieldOpt.isPresent());
+    HoodieSchemaField parsedBlobField = parsedBlobFieldOpt.get();
+    assertInstanceOf(HoodieSchema.Blob.class, parsedBlobField.schema());
+    assertEquals(HoodieSchemaType.BLOB, parsedBlobField.schema().getType());
+  }
+
+  @Test
+  public void testParseBlobFromJsonWithLogicalType() {
+    // JSON representation of a Blob schema
+    String blobJson = "{"
+        + "\"type\":\"record\","
+        + "\"name\":\"blob\","
+        + "\"logicalType\":\"blob\","
+        + "\"fields\":["
+        + "  {\"name\":\"storage_type\",\"type\":\"string\"},"
+        + "  {\"name\":\"data\",\"type\":[\"null\",\"bytes\"],\"default\":null},"
+        + "  {\"name\":\"reference\",\"type\":[\"null\",{\"type\":\"record\",\"name\":\"reference\",\"fields\":["
+        + "    {\"name\":\"external_path\",\"type\":\"string\"},"
+        + "    {\"name\":\"offset\",\"type\":\"long\"},"
+        + "    {\"name\":\"length\",\"type\":\"long\"},"
+        + "    {\"name\":\"managed\",\"type\":\"boolean\"}"
+        + "  ]}],\"default\":null}"
+        + "]"
+        + "}";
+
+    HoodieSchema parsedSchema = HoodieSchema.parse(blobJson);
+
+    assertInstanceOf(HoodieSchema.Blob.class, parsedSchema);
+    HoodieSchema.Blob parsedBlob = (HoodieSchema.Blob) parsedSchema;
+    assertEquals(HoodieSchemaType.BLOB, parsedBlob.getType());
+  }
 }

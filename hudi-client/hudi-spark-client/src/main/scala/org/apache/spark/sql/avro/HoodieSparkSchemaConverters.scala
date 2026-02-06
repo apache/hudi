@@ -51,10 +51,6 @@ object HoodieSparkSchemaConverters {
     (result.dataType, result.nullable)
   }
 
-  def toHoodieType(dataType: DataType, recordName: String, nullable: Boolean = false): HoodieSchema = {
-    toHoodieType(dataType, nullable, recordName)
-  }
-
   def toHoodieType(catalystType: DataType,
                    nullable: Boolean = false,
                    recordName: String = "topLevelRecord",

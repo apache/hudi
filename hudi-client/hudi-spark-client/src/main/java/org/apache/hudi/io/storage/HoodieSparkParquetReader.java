@@ -29,6 +29,7 @@ import org.apache.hudi.common.util.FileFormatUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ParquetReaderIterator;
 import org.apache.hudi.common.util.ParquetUtils;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.CloseableMappingIterator;
 import org.apache.hudi.common.util.collection.Pair;
@@ -56,6 +57,7 @@ import org.apache.spark.sql.execution.datasources.parquet.ParquetToSparkSchemaCo
 import org.apache.spark.sql.execution.datasources.parquet.SparkBasicSchemaEvolution;
 import org.apache.spark.sql.internal.SQLConf;
 import org.apache.spark.sql.sources.Filter;
+import org.apache.spark.sql.types.Metadata;
 import org.apache.spark.sql.types.StructType;
 
 import java.io.IOException;
@@ -202,7 +204,8 @@ public class HoodieSparkParquetReader implements HoodieSparkFileReader {
       // and therefore if we convert to Avro directly we'll lose logical type-info.
       MessageType messageType = getFileSchema();
       StructType structType = getStructSchema();
-      schemaOption = Option.of(HoodieSparkSchemaConverters.toHoodieType(structType, messageType.getName(), true));
+      schemaOption = Option.of(HoodieSparkSchemaConverters.toHoodieType(
+          structType, true, messageType.getName(), StringUtils.EMPTY_STRING, Metadata.empty()));
     }
     return schemaOption.get();
   }
