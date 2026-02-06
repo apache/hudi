@@ -371,8 +371,8 @@ public class TestHiveSyncTool {
     ddlExecutor.runSQL("ALTER TABLE `" + HiveTestUtil.TABLE_NAME
         + "` PARTITION (`datestr`='2050-01-01') SET LOCATION '"
         + FSUtils.constructAbsolutePath(basePath, "2050/1/1").toString() + "'");
-    hivePartitions = hiveClient.getAllPartitions(HiveTestUtil.TABLE_NAME);
 
+    hivePartitions = hiveClient.getAllPartitions(HiveTestUtil.TABLE_NAME);
     List<String> writtenPartitionsSince = hiveClient.getWrittenPartitionsSince(Option.empty(), Option.empty());
     List<PartitionEvent> partitionEvents = hiveClient.getPartitionEvents(hivePartitions, writtenPartitionsSince, Collections.emptySet());
     assertEquals(1, partitionEvents.stream()
@@ -395,7 +395,7 @@ public class TestHiveSyncTool {
 
     // Lets do the sync
     reSyncHiveTable();
-    
+
     // Sync should update the changed partition to correct path
     List<Partition> tablePartitions = hiveClient.getAllPartitions(HiveTestUtil.TABLE_NAME);
     assertEquals(8, tablePartitions.size(), "The two partitions we wrote should be added to hive");
