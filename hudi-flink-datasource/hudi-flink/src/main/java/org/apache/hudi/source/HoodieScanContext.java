@@ -21,6 +21,7 @@ package org.apache.hudi.source;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.source.prune.PartitionPruners;
 
+import lombok.AllArgsConstructor;
 import lombok.Getter;
 import org.apache.flink.annotation.Internal;
 import org.apache.flink.configuration.Configuration;
@@ -35,6 +36,7 @@ import java.time.Duration;
  */
 @Internal
 @Getter
+@AllArgsConstructor
 public class HoodieScanContext implements Serializable {
   private final Configuration conf;
   private final StoragePath path;
@@ -56,35 +58,6 @@ public class HoodieScanContext implements Serializable {
   private final boolean isStreaming;
   // Partition pruner
   private final PartitionPruners.PartitionPruner partitionPruner;
-
-  public HoodieScanContext(
-      Configuration conf,
-      StoragePath path,
-      RowType rowType,
-      String startCommit,
-      String endCommit,
-      long maxCompactionMemoryInBytes,
-      long maxPendingSplits,
-      boolean skipCompaction,
-      boolean skipClustering,
-      boolean skipInsertOverwrite,
-      boolean cdcEnabled,
-      boolean isStreaming,
-      PartitionPruners.PartitionPruner partitionPruner) {
-    this.conf = conf;
-    this.path = path;
-    this.rowType = rowType;
-    this.startCommit = startCommit;
-    this.endCommit = endCommit;
-    this.maxCompactionMemoryInBytes = maxCompactionMemoryInBytes;
-    this.maxPendingSplits = maxPendingSplits;
-    this.skipCompaction = skipCompaction;
-    this.skipClustering = skipClustering;
-    this.skipInsertOverwrite = skipInsertOverwrite;
-    this.cdcEnabled = cdcEnabled;
-    this.isStreaming = isStreaming;
-    this.partitionPruner = partitionPruner;
-  }
 
   public Duration getScanInterval() {
     return Duration.ofSeconds(conf.get(FlinkOptions.READ_STREAMING_CHECK_INTERVAL));
