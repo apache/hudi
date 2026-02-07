@@ -950,6 +950,7 @@ public class HoodieWriteConfig extends HoodieConfig {
   private HoodieTimeGeneratorConfig timeGeneratorConfig;
   private HoodieIndexingConfig indexingConfig;
   private final EngineType engineType;
+  private String applicationId = "Unknown";
 
   /**
    * @deprecated Use {@link #TBL_NAME} and its methods instead
@@ -2693,6 +2694,14 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public String getLockHiveTableName() {
     return getString(HoodieLockConfig.HIVE_TABLE_NAME);
+  }
+
+  public String getApplicationId() {
+    return applicationId;
+  }
+
+  public void setApplicationId(String appId) {
+    applicationId = appId;
   }
 
   public ConflictResolutionStrategy getWriteConflictResolutionStrategy() {

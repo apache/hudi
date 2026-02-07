@@ -250,6 +250,11 @@ public class HoodieSparkEngineContext extends HoodieEngineContext {
   }
 
   @Override
+  public String getApplicationId() {
+    return javaSparkContext.sc().applicationId();
+  }
+
+  @Override
   public <I, O> O aggregate(HoodieData<I> data, O zeroValue, Functions.Function2<O, I, O> seqOp, Functions.Function2<O, O, O> combOp) {
     Function2<O, I, O> seqOpFunc = seqOp::apply;
     Function2<O, O, O> combOpFunc = combOp::apply;
