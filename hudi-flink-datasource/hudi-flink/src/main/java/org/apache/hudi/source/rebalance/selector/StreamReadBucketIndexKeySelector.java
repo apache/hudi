@@ -38,14 +38,17 @@ public class StreamReadBucketIndexKeySelector implements KeySelector<MergeOnRead
 
   @Override
   public Pair<String, String> getKey(MergeOnReadInputSplit mergeOnReadInputSplit) throws Exception {
-    String fileId = mergeOnReadInputSplit.getFileId();
-    Option<String> validFilePath = getValidFilePathFromInputSplit(mergeOnReadInputSplit);
-    String partitionPath = "";
-    if (validFilePath.isPresent()) {
-      partitionPath = getPartitionPathFromFullPath(new StoragePath(validFilePath.get()), tablePath);
+    String partitionPath = mergeOnReadInputSplit.getPartitionPath();
+    // handle MergeOnReadInputSplit is restored from state
+    if (partitionPath == null) {
+      Option<String> validFilePath = getValidFilePathFromInputSplit(mergeOnReadInputSplit);
+      if (validFilePath.isPresent()) {
+        partitionPath = getPartitionPathFromFullPath(new StoragePath(validFilePath.get()), tablePath);
+      } else {
+        partitionPath = "";
+      }
     }
-
-    return Pair.of(partitionPath, fileId);
+    return Pair.of(partitionPath, mergeOnReadInputSplit.getFileId());
   }
 
   /**

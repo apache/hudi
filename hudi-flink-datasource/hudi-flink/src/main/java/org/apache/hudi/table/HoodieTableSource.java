@@ -525,8 +525,8 @@ public class HoodieTableSource implements
             .sorted(HoodieLogFile.getLogFileComparator())
             .map(logFile -> logFile.getPath().toString())
             .collect(Collectors.toList()));
-        return new MergeOnReadInputSplit(cnt.getAndAdd(1), basePath, logPaths, latestCommit,
-            metaClient.getBasePath().toString(), maxCompactionMemoryInBytes, mergeType, null, fileSlice.getFileId());
+        return new MergeOnReadInputSplit(cnt.getAndAdd(1), basePath, logPaths, latestCommit, metaClient.getBasePath().toString(),
+            maxCompactionMemoryInBytes, mergeType, null, fileSlice.getFileId(), fileSlice.getPartitionPath());
       }).collect(Collectors.toList());
     } finally {
       this.fileIndex = null;

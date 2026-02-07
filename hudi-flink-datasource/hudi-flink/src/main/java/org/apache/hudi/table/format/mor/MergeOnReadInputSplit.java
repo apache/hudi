@@ -48,6 +48,7 @@ public class MergeOnReadInputSplit implements InputSplit {
   private final Option<InstantRange> instantRange;
   @Setter
   protected String fileId;
+  private transient String partitionPath;
 
   // for streaming reader to record the consumed offset,
   // which is the start of next round reading.
@@ -72,6 +73,21 @@ public class MergeOnReadInputSplit implements InputSplit {
     this.mergeType = mergeType;
     this.instantRange = Option.ofNullable(instantRange);
     this.fileId = fileId;
+  }
+
+  public MergeOnReadInputSplit(
+      int splitNum,
+      @Nullable String basePath,
+      Option<List<String>> logPaths,
+      String latestCommit,
+      String tablePath,
+      long maxCompactionMemoryInBytes,
+      String mergeType,
+      @Nullable InstantRange instantRange,
+      String fileId,
+      String partitionPath) {
+    this(splitNum, basePath, logPaths, latestCommit, tablePath, maxCompactionMemoryInBytes, mergeType, instantRange, fileId);
+    this.partitionPath = partitionPath;
   }
 
   @Override
