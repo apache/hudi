@@ -301,7 +301,7 @@ public class TestProtoConversionUtil {
       wrappedStringOutput = getWrappedRecord(schema, "wrapped_string", wrappedString);
       wrappedIntOutput = getWrappedRecord(schema, "wrapped_int", wrappedInt);
       wrappedLongOutput = getWrappedRecord(schema, "wrapped_long", wrappedLong);
-      wrappedUIntOutput = getWrappedRecord(schema, "wrapped_unsigned_int", (long) wrappedUnsignedInt);
+      wrappedUIntOutput = getWrappedRecord(schema, "wrapped_unsigned_int", Integer.toUnsignedLong(wrappedUnsignedInt));
       wrappedULongOutput = getWrappedRecord(schema, "wrapped_unsigned_long", unsignedLongAsGenericFixed(wrappedUnsignedLong, unsignedLongSchema));
       wrappedDoubleOutput = getWrappedRecord(schema, "wrapped_double", wrappedDouble);
       wrappedFloatOutput = getWrappedRecord(schema, "wrapped_float", wrappedFloat);
@@ -312,7 +312,7 @@ public class TestProtoConversionUtil {
       wrappedStringOutput = wrappedString;
       wrappedIntOutput = wrappedInt;
       wrappedLongOutput = wrappedLong;
-      wrappedUIntOutput = (long) wrappedUnsignedInt;
+      wrappedUIntOutput = Integer.toUnsignedLong(wrappedUnsignedInt);
       wrappedULongOutput = unsignedLongAsGenericFixed(wrappedUnsignedLong, unsignedLongSchema);
       wrappedDoubleOutput = wrappedDouble;
       wrappedFloatOutput = wrappedFloat;
@@ -326,7 +326,7 @@ public class TestProtoConversionUtil {
     expectedRecord.put("primitive_float", primitiveFloat);
     expectedRecord.put("primitive_int", primitiveInt);
     expectedRecord.put("primitive_long", primitiveLong);
-    expectedRecord.put("primitive_unsigned_int", (long) primitiveUnsignedInt);
+    expectedRecord.put("primitive_unsigned_int", Integer.toUnsignedLong(primitiveUnsignedInt));
     expectedRecord.put("primitive_unsigned_long", unsignedLongAsGenericFixed(primitiveUnsignedLong, unsignedLongSchema));
     expectedRecord.put("primitive_signed_int", primitiveSignedInt);
     expectedRecord.put("primitive_signed_long", primitiveSignedLong);
