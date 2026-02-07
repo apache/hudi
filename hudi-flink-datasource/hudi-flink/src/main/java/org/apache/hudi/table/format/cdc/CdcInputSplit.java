@@ -48,6 +48,18 @@ public class CdcInputSplit extends MergeOnReadInputSplit {
     this.changes = changes;
   }
 
+  public CdcInputSplit(
+      int splitNum,
+      String tablePath,
+      long maxCompactionMemoryInBytes,
+      String fileId,
+      HoodieCDCFileSplit[] changes,
+      String partitionPath) {
+    super(splitNum, null, Option.empty(), "", tablePath,
+        maxCompactionMemoryInBytes, "", null, fileId, partitionPath);
+    this.changes = changes;
+  }
+
   @Override
   public String toString() {
     return "CdcInputSplit{"

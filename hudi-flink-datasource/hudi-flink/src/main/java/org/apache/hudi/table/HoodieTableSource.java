@@ -353,7 +353,9 @@ public class HoodieTableSource implements
    */
   private DataStream<MergeOnReadInputSplit> addFileDistributionStrategy(SingleOutputStreamOperator<MergeOnReadInputSplit> source) {
     if (OptionsResolver.isMorWithBucketIndexUpsert(conf)) {
-      return source.partitionCustom(new StreamReadBucketIndexPartitioner(conf.get(FlinkOptions.READ_TASKS)), new StreamReadBucketIndexKeySelector());
+      return source.partitionCustom(
+          new StreamReadBucketIndexPartitioner(conf, conf.get(FlinkOptions.READ_TASKS)),
+          new StreamReadBucketIndexKeySelector(conf.get(FlinkOptions.PATH)));
     } else if (OptionsResolver.isAppendMode(conf)) {
       return source.partitionCustom(new StreamReadAppendPartitioner(conf.get(FlinkOptions.READ_TASKS)), new StreamReadAppendKeySelector());
     } else {
@@ -523,8 +525,8 @@ public class HoodieTableSource implements
             .sorted(HoodieLogFile.getLogFileComparator())
             .map(logFile -> logFile.getPath().toString())
             .collect(Collectors.toList()));
-        return new MergeOnReadInputSplit(cnt.getAndAdd(1), basePath, logPaths, latestCommit,
-            metaClient.getBasePath().toString(), maxCompactionMemoryInBytes, mergeType, null, fileSlice.getFileId());
+        return new MergeOnReadInputSplit(cnt.getAndAdd(1), basePath, logPaths, latestCommit, metaClient.getBasePath().toString(),
+            maxCompactionMemoryInBytes, mergeType, null, fileSlice.getFileId(), fileSlice.getPartitionPath());
       }).collect(Collectors.toList());
     } finally {
       this.fileIndex = null;

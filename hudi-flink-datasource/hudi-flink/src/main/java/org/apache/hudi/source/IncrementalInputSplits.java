@@ -407,9 +407,8 @@ public class IncrementalInputSplits implements Serializable {
       // the latest commit is used as the limit of the log reader instant upper threshold,
       // it must be at least the latest instant time of the file slice to avoid data loss.
       String latestCommit = InstantComparison.minInstant(fileSlice.getLatestInstantTime(), endInstant);
-      return new MergeOnReadInputSplit(cnt.getAndAdd(1),
-          basePath, logPaths, latestCommit,
-          metaClient.getBasePath().toString(), maxCompactionMemoryInBytes, mergeType, instantRange, fileSlice.getFileId());
+      return new MergeOnReadInputSplit(cnt.getAndAdd(1), basePath, logPaths, latestCommit, metaClient.getBasePath().toString(),
+          maxCompactionMemoryInBytes, mergeType, instantRange, fileSlice.getFileId(), fileSlice.getPartitionPath());
     }).sorted(Comparator.comparing(MergeOnReadInputSplit::getLatestCommit)).collect(Collectors.toList());
   }
 
@@ -427,8 +426,8 @@ public class IncrementalInputSplits implements Serializable {
     final AtomicInteger cnt = new AtomicInteger(0);
     return fileSplits.entrySet().stream()
         .map(splits ->
-            new CdcInputSplit(cnt.getAndAdd(1), metaClient.getBasePath().toString(), maxCompactionMemoryInBytes,
-                splits.getKey().getFileId(), splits.getValue().stream().sorted().toArray(HoodieCDCFileSplit[]::new)))
+            new CdcInputSplit(cnt.getAndAdd(1), metaClient.getBasePath().toString(), maxCompactionMemoryInBytes, splits.getKey().getFileId(),
+                splits.getValue().stream().sorted().toArray(HoodieCDCFileSplit[]::new), splits.getKey().getPartitionPath()))
         .collect(Collectors.toList());
   }
 
