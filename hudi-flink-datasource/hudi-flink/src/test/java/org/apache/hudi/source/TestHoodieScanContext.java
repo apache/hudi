@@ -91,7 +91,7 @@ public class TestHoodieScanContext {
         TestConfigurations.ROW_TYPE, expectedInstant, 100 * 1024 * 1024,
         1000, false, false, false, false);
 
-    assertEquals(expectedInstant, scanContext.getStartCommit(),
+    assertEquals(expectedInstant, scanContext.getStartInstant(),
         "Start instant should match");
   }
 
@@ -224,7 +224,7 @@ public class TestHoodieScanContext {
         maxPendingSplits, true, true, true, true);
 
     assertEquals(path, scanContext.getPath());
-    assertEquals(startInstant, scanContext.getStartCommit());
+    assertEquals(startInstant, scanContext.getStartInstant());
     assertEquals(maxCompactionMemory, scanContext.getMaxCompactionMemoryInBytes());
     assertEquals(maxPendingSplits, scanContext.getMaxPendingSplits());
     assertTrue(scanContext.isSkipCompaction());
@@ -239,7 +239,7 @@ public class TestHoodieScanContext {
     Configuration conf = new Configuration();
     StoragePath path = new StoragePath("/tmp/test");
 
-    HoodieScanContext scanContext = new HoodieScanContext.Builder()
+    HoodieScanContext scanContext = HoodieScanContext.builder()
         .conf(conf)
         .path(path)
         .rowType(TestConfigurations.ROW_TYPE)
@@ -261,7 +261,7 @@ public class TestHoodieScanContext {
     Configuration conf = new Configuration();
     StoragePath path = new StoragePath("/tmp/test");
 
-    HoodieScanContext.Builder builder = new HoodieScanContext.Builder();
+    HoodieScanContext.HoodieScanContextBuilder builder = HoodieScanContext.builder();
     HoodieScanContext scanContext = builder
         .conf(conf)
         .path(path)
@@ -291,7 +291,7 @@ public class TestHoodieScanContext {
     StoragePath path = new StoragePath("/tmp/test");
     String endInstant = "20240201000000";
 
-    HoodieScanContext scanContext = new HoodieScanContext.Builder()
+    HoodieScanContext scanContext = HoodieScanContext.builder()
         .conf(conf)
         .path(path)
         .rowType(TestConfigurations.ROW_TYPE)
@@ -306,7 +306,7 @@ public class TestHoodieScanContext {
         .build();
 
     assertNotNull(scanContext);
-    assertEquals(endInstant, scanContext.getEndCommit());
+    assertEquals(endInstant, scanContext.getEndInstant());
   }
 
   @Test
@@ -319,7 +319,7 @@ public class TestHoodieScanContext {
 
     assertFalse(streamingScanContext.isStreaming(), "Should not be streaming by default");
 
-    HoodieScanContext batchScanContext = new HoodieScanContext.Builder()
+    HoodieScanContext batchScanContext = HoodieScanContext.builder()
         .conf(conf)
         .path(new StoragePath("/tmp/test"))
         .rowType(TestConfigurations.ROW_TYPE)
@@ -341,7 +341,7 @@ public class TestHoodieScanContext {
     Configuration conf = new Configuration();
     String endCommit = "20240201000000";
 
-    HoodieScanContext scanContext = new HoodieScanContext.Builder()
+    HoodieScanContext scanContext = HoodieScanContext.builder()
         .conf(conf)
         .path(new StoragePath("/tmp/test"))
         .rowType(TestConfigurations.ROW_TYPE)
@@ -355,7 +355,7 @@ public class TestHoodieScanContext {
         .cdcEnabled(false)
         .build();
 
-    assertEquals(endCommit, scanContext.getEndCommit());
+    assertEquals(endCommit, scanContext.getEndInstant());
   }
 
   @Test
@@ -363,7 +363,7 @@ public class TestHoodieScanContext {
     Configuration conf = new Configuration();
     StoragePath path = new StoragePath("/tmp/test");
 
-    HoodieScanContext.Builder builder = new HoodieScanContext.Builder()
+    HoodieScanContext.HoodieScanContextBuilder builder = HoodieScanContext.builder()
         .conf(conf)
         .path(path)
         .rowType(TestConfigurations.ROW_TYPE)
@@ -395,7 +395,7 @@ public class TestHoodieScanContext {
       boolean skipClustering,
       boolean skipInsertOverwrite,
       boolean cdcEnabled) throws Exception {
-    return new HoodieScanContext.Builder()
+    return HoodieScanContext.builder()
         .conf(conf)
         .path(path)
         .rowType(rowType)
@@ -415,7 +415,7 @@ public class TestHoodieScanContext {
     StoragePath path = new StoragePath("/tmp/test");
 
     // Test with isStreaming = true
-    HoodieScanContext streamingContext = new HoodieScanContext.Builder()
+    HoodieScanContext streamingContext = HoodieScanContext.builder()
         .conf(conf)
         .path(path)
         .rowType(TestConfigurations.ROW_TYPE)
@@ -432,7 +432,7 @@ public class TestHoodieScanContext {
     assertTrue(streamingContext.isStreaming(), "Streaming mode should be enabled");
 
     // Test with isStreaming = false (batch mode)
-    HoodieScanContext batchContext = new HoodieScanContext.Builder()
+    HoodieScanContext batchContext = HoodieScanContext.builder()
         .conf(conf)
         .path(path)
         .rowType(TestConfigurations.ROW_TYPE)
@@ -454,7 +454,7 @@ public class TestHoodieScanContext {
     Configuration conf = new Configuration();
     StoragePath path = new StoragePath("/tmp/test");
 
-    HoodieScanContext scanContext = new HoodieScanContext.Builder()
+    HoodieScanContext scanContext = HoodieScanContext.builder()
         .conf(conf)
         .path(path)
         .rowType(TestConfigurations.ROW_TYPE)
@@ -475,7 +475,7 @@ public class TestHoodieScanContext {
     Configuration conf = new Configuration();
     StoragePath path = new StoragePath("/tmp/test");
 
-    HoodieScanContext scanContext = new HoodieScanContext.Builder()
+    HoodieScanContext scanContext = HoodieScanContext.builder()
         .conf(conf)
         .path(path)
         .rowType(TestConfigurations.ROW_TYPE)
@@ -503,7 +503,7 @@ public class TestHoodieScanContext {
     String startInstant = "20240101000000";
     String endInstant = "20240201000000";
 
-    HoodieScanContext scanContext = new HoodieScanContext.Builder()
+    HoodieScanContext scanContext = HoodieScanContext.builder()
         .conf(conf)
         .path(path)
         .rowType(TestConfigurations.ROW_TYPE)
@@ -517,8 +517,8 @@ public class TestHoodieScanContext {
         .cdcEnabled(false)
         .build();
 
-    assertEquals(startInstant, scanContext.getStartCommit(), "Start instant should match");
-    assertEquals(endInstant, scanContext.getEndCommit(), "End instant should match");
+    assertEquals(startInstant, scanContext.getStartInstant(), "Start instant should match");
+    assertEquals(endInstant, scanContext.getEndInstant(), "End instant should match");
   }
 
   @Test
@@ -527,7 +527,7 @@ public class TestHoodieScanContext {
     conf.set(FlinkOptions.READ_STREAMING_CHECK_INTERVAL, 10);
     StoragePath path = new StoragePath("/tmp/test");
 
-    HoodieScanContext scanContext = new HoodieScanContext.Builder()
+    HoodieScanContext scanContext = HoodieScanContext.builder()
         .conf(conf)
         .path(path)
         .rowType(TestConfigurations.ROW_TYPE)
@@ -550,7 +550,7 @@ public class TestHoodieScanContext {
     StoragePath path = new StoragePath("/tmp/test");
     long largeMemory = 10L * 1024L * 1024L * 1024L; // 10GB
 
-    HoodieScanContext scanContext = new HoodieScanContext.Builder()
+    HoodieScanContext scanContext = HoodieScanContext.builder()
         .conf(conf)
         .path(path)
         .rowType(TestConfigurations.ROW_TYPE)
@@ -573,7 +573,7 @@ public class TestHoodieScanContext {
     StoragePath path = new StoragePath("/tmp/test");
     long highPendingSplits = 100000L;
 
-    HoodieScanContext scanContext = new HoodieScanContext.Builder()
+    HoodieScanContext scanContext = HoodieScanContext.builder()
         .conf(conf)
         .path(path)
         .rowType(TestConfigurations.ROW_TYPE)
@@ -597,7 +597,7 @@ public class TestHoodieScanContext {
     PartitionPruners.PartitionPruner mockPruner = mock(PartitionPruners.PartitionPruner.class);
 
     // Test with partition pruner
-    HoodieScanContext contextWithPruner = new HoodieScanContext.Builder()
+    HoodieScanContext contextWithPruner = HoodieScanContext.builder()
         .conf(conf)
         .path(path)
         .rowType(TestConfigurations.ROW_TYPE)
@@ -617,7 +617,7 @@ public class TestHoodieScanContext {
         "Partition pruner should match the mock instance");
 
     // Test without partition pruner
-    HoodieScanContext contextWithoutPruner = new HoodieScanContext.Builder()
+    HoodieScanContext contextWithoutPruner = HoodieScanContext.builder()
         .conf(conf)
         .path(path)
         .rowType(TestConfigurations.ROW_TYPE)
@@ -642,7 +642,7 @@ public class TestHoodieScanContext {
     StoragePath path = new StoragePath("/tmp/test");
     PartitionPruners.PartitionPruner mockPruner = mock(PartitionPruners.PartitionPruner.class);
 
-    HoodieScanContext scanContext = new HoodieScanContext.Builder()
+    HoodieScanContext scanContext = HoodieScanContext.builder()
         .conf(conf)
         .path(path)
         .rowType(TestConfigurations.ROW_TYPE)
@@ -665,8 +665,8 @@ public class TestHoodieScanContext {
     assertTrue(scanContext.isSkipClustering(), "Skip clustering should be enabled");
     assertTrue(scanContext.isSkipInsertOverwrite(), "Skip insert overwrite should be enabled");
     assertTrue(scanContext.isCdcEnabled(), "CDC should be enabled");
-    assertEquals("20240101000000", scanContext.getStartCommit(), "Start instant should match");
-    assertEquals("20240201000000", scanContext.getEndCommit(), "End instant should match");
+    assertEquals("20240101000000", scanContext.getStartInstant(), "Start instant should match");
+    assertEquals("20240201000000", scanContext.getEndInstant(), "End instant should match");
   }
 
   @Test
@@ -677,7 +677,7 @@ public class TestHoodieScanContext {
     PartitionPruners.PartitionPruner mockPruner2 = mock(PartitionPruners.PartitionPruner.class);
 
     // Create two scan contexts with different pruners
-    HoodieScanContext scanContext1 = new HoodieScanContext.Builder()
+    HoodieScanContext scanContext1 = HoodieScanContext.builder()
         .conf(conf)
         .path(path)
         .rowType(TestConfigurations.ROW_TYPE)
@@ -692,7 +692,7 @@ public class TestHoodieScanContext {
         .partitionPruner(mockPruner1)
         .build();
 
-    HoodieScanContext scanContext2 = new HoodieScanContext.Builder()
+    HoodieScanContext scanContext2 = HoodieScanContext.builder()
         .conf(conf)
         .path(path)
         .rowType(TestConfigurations.ROW_TYPE)

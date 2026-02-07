@@ -188,7 +188,7 @@ public class TestDefaultHoodieSplitDiscover extends HoodieCommonTestHarness {
     DefaultHoodieSplitDiscover discover = new DefaultHoodieSplitDiscover(
         scanContext, metaClient);
 
-    HoodieContinuousSplitBatch result = discover.discoverSplits(scanContext.getStartCommit());
+    HoodieContinuousSplitBatch result = discover.discoverSplits(scanContext.getStartInstant());
 
     assertNotNull(result, "Result should not be null");
     assertNotNull(result.getSplits(), "Splits should not be null");
@@ -217,7 +217,7 @@ public class TestDefaultHoodieSplitDiscover extends HoodieCommonTestHarness {
       boolean skipCompaction,
       boolean skipClustering,
       boolean skipInsertOverwrite) throws Exception {
-    return new HoodieScanContext.Builder()
+    return HoodieScanContext.builder()
         .conf(conf)
         .path(new StoragePath(basePath))
         .rowType(TestConfigurations.ROW_TYPE)
