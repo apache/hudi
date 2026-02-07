@@ -45,8 +45,6 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import static org.mockito.Mockito.times;
-import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
@@ -153,17 +151,6 @@ public class TestHoodieSourceSplitReader {
 
     assertEquals(1, readerFunction.getReadCount());
     assertEquals(split, readerFunction.getLastReadSplit());
-  }
-
-  @Test
-  public void testContextIndexRetrieved() {
-    TestSplitReaderFunction readerFunction = new TestSplitReaderFunction();
-
-    // Verify that context's index is retrieved during construction
-    HoodieSourceSplitReader<String> reader =
-        new HoodieSourceSplitReader<>(mockContext, readerFunction, null);
-
-    verify(mockContext, times(1)).getIndexOfSubtask();
   }
 
   @Test

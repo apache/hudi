@@ -115,10 +115,10 @@ public abstract class FileIndexReader implements Serializable {
   }
 
   /**
-   * Builds Hoodie source splits from merge-on-read input splits.
+   * Builds Hoodie source splits for the table.
    *
-   * <p>This method converts MergeOnReadInputSplit objects to HoodieSourceSplit objects
-   * for MERGE_ON_READ tables where both base files and log files need to be processed.
+   * <p>This method creates HoodieSourceSplit objects for MERGE_ON_READ tables by combining
+   * base files with their corresponding log files from the file system view.
    *
    * @param metaClient the Hudi table meta client
    * @param conf the Flink configuration

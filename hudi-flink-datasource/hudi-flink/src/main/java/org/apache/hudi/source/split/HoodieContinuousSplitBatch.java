@@ -24,6 +24,8 @@ import org.apache.hudi.source.IncrementalInputSplits;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.format.mor.MergeOnReadInputSplit;
 
+import lombok.Getter;
+
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
@@ -34,6 +36,7 @@ import static org.apache.hudi.util.StreamerUtil.EMPTY_PARTITION_PATH;
 /**
  * Result from continuous enumerator. It has the same semantic to the {@link org.apache.hudi.source.IncrementalInputSplits.Result}.
  */
+@Getter
 public class HoodieContinuousSplitBatch {
   public static final HoodieContinuousSplitBatch EMPTY = new HoodieContinuousSplitBatch(Collections.emptyList(), "", "");
   private final Collection<HoodieSourceSplit> splits;
@@ -70,18 +73,6 @@ public class HoodieContinuousSplitBatch {
     ).collect(Collectors.toList());
 
     return new HoodieContinuousSplitBatch(splits, result.getEndInstant(), result.getOffset());
-  }
-
-  public Collection<HoodieSourceSplit> getSplits() {
-    return splits;
-  }
-
-  public String getEndInstant() {
-    return endInstant;
-  }
-
-  public String getOffset() {
-    return offset;
   }
 
   /**

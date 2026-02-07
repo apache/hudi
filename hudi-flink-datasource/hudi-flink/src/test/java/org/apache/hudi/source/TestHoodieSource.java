@@ -398,7 +398,7 @@ public class TestHoodieSource {
       HoodieTableMetaClient metaClient,
       PartitionPruners.PartitionPruner partitionPruner) {
     RowType rowType = TestConfigurations.ROW_TYPE;
-    HoodieScanContext scanContext = new HoodieScanContext.Builder()
+    HoodieScanContext scanContext = HoodieScanContext.builder()
         .conf(conf)
         .path(tablePath)
         .rowType(rowType)

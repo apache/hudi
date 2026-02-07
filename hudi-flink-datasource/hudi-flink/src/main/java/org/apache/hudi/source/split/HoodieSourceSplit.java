@@ -20,21 +20,24 @@ package org.apache.hudi.source.split;
 
 import org.apache.hudi.common.util.Option;
 
+import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.Setter;
+import lombok.ToString;
 import org.apache.flink.api.connector.source.SourceSplit;
 
 import javax.annotation.Nullable;
 
 import java.io.Serializable;
 import java.util.List;
-import java.util.Objects;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Hoodie SourceSplit implementation for source V2. It has the same semantic to the {@link org.apache.hudi.table.format.mor.MergeOnReadInputSplit}.
  */
 @Getter
+@EqualsAndHashCode
+@ToString
 public class HoodieSourceSplit implements SourceSplit, Serializable {
   public static AtomicInteger SPLIT_ID_GEN = new AtomicInteger(-1);
   private static final long serialVersionUID = 1L;
@@ -103,36 +106,4 @@ public class HoodieSourceSplit implements SourceSplit, Serializable {
     consumed = newRecordOffset;
   }
 
-  @Override
-  public boolean equals(Object o) {
-    if (this == o) {
-      return true;
-    }
-    if (o == null || getClass() != o.getClass()) {
-      return false;
-    }
-
-    HoodieSourceSplit that = (HoodieSourceSplit) o;
-    return splitNum == that.splitNum && consumed == that.consumed && fileOffset == that.fileOffset && Objects.equals(basePath, that.basePath)
-        && Objects.equals(logPaths, that.logPaths) && Objects.equals(tablePath, that.tablePath) && Objects.equals(partitionPath, that.partitionPath)
-        && Objects.equals(mergeType, that.mergeType) && Objects.equals(latestCommit, that.latestCommit) && Objects.equals(fileId, that.fileId);
-  }
-
-  @Override
-  public int hashCode() {
-    return Objects.hash(splitNum, basePath, logPaths, tablePath, partitionPath, mergeType, latestCommit, fileId, consumed, fileOffset);
-  }
-
-  @Override
-  public String toString() {
-    return "HoodieSourceSplit{"
-        + "splitNum=" + splitNum
-        + ", basePath=" + basePath
-        + ", logPaths=" + logPaths
-        + ", tablePath='" + tablePath + '\''
-        + ", partitionPath='" + partitionPath + '\''
-        + ", mergeType='" + mergeType + '\''
-        + ", latestCommit='" + latestCommit + '\''
-        + '}';
-  }
 }

@@ -46,14 +46,14 @@ public class DefaultHoodieSplitDiscover implements HoodieContinuousSplitDiscover
         .path(new Path(scanContext.getPath().toUri()))
         .rowType(scanContext.getRowType())
         .maxCompactionMemoryInBytes(scanContext.getMaxCompactionMemoryInBytes())
-        .skipCompaction(scanContext.skipCompaction())
-        .skipClustering(scanContext.skipClustering())
-        .skipInsertOverwrite(scanContext.skipInsertOverwrite())
-        .partitionPruner(scanContext.partitionPruner()).build();
+        .skipCompaction(scanContext.isSkipCompaction())
+        .skipClustering(scanContext.isSkipClustering())
+        .skipInsertOverwrite(scanContext.isSkipInsertOverwrite())
+        .partitionPruner(scanContext.getPartitionPruner()).build();
   }
 
   @Override
   public HoodieContinuousSplitBatch discoverSplits(String lastInstant) {
-    return incrementalInputSplits.inputHoodieSourceSplits(metaClient, lastInstant, scanContext.cdcEnabled());
+    return incrementalInputSplits.inputHoodieSourceSplits(metaClient, lastInstant, scanContext.isCdcEnabled());
   }
 }

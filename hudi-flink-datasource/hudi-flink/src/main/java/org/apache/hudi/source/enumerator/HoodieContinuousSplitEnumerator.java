@@ -87,7 +87,7 @@ public class HoodieContinuousSplitEnumerator extends AbstractHoodieSplitEnumerat
 
   @Override
   public HoodieSplitEnumeratorState snapshotState(long checkpointId) throws Exception {
-    return new HoodieSplitEnumeratorState(splitProvider.state(), position.get().issuedInstant(), position.get().issuedOffset());
+    return new HoodieSplitEnumeratorState(splitProvider.state(), position.get().getIssuedInstant(), position.get().getIssuedOffset());
   }
 
   private HoodieContinuousSplitBatch discoverSplits() {
@@ -98,7 +98,7 @@ public class HoodieContinuousSplitEnumerator extends AbstractHoodieSplitEnumerat
           pendingSplitNumber);
       return HoodieContinuousSplitBatch.EMPTY;
     }
-    return splitDiscover.discoverSplits(position.get().issuedOffset().isPresent() ? position.get().issuedOffset().get() : null);
+    return splitDiscover.discoverSplits(position.get().getIssuedOffset().isPresent() ? position.get().getIssuedOffset().get() : null);
   }
 
   private void processDiscoveredSplits(HoodieContinuousSplitBatch result, Throwable throwable) {
@@ -111,12 +111,12 @@ public class HoodieContinuousSplitEnumerator extends AbstractHoodieSplitEnumerat
       LOG.debug(
           "Added {} splits discovered between ({}, {}] to the assigner",
           result.getSplits().size(),
-          position.get().issuedOffset(),
+          position.get().getIssuedOffset(),
           result.getOffset());
     } else {
       LOG.debug(
           "No new splits discovered between ({}, {}]",
-          position.get().issuedOffset(),
+          position.get().getIssuedOffset(),
           result.getOffset());
     }
     position.set(HoodieEnumeratorPosition.of(result.getEndInstant(), result.getOffset()));

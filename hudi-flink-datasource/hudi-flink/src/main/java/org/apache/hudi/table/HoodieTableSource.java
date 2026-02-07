@@ -322,7 +322,7 @@ public class HoodieTableSource extends FileIndexReader implements
    * @return the configured HoodieScanContext instance
    */
   private HoodieScanContext createHoodieScanContext(RowType rowType) {
-    return new HoodieScanContext.Builder()
+    return HoodieScanContext.builder()
         .conf(conf)
         .path(path)
         .cdcEnabled(conf.get(FlinkOptions.CDC_ENABLED))

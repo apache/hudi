@@ -145,7 +145,7 @@ public class HoodieSource<T> extends FileIndexReader implements Source<T, Hoodie
           enumeratorState.getPendingSplitStates().size(),
           metaClient.getTableConfig().getTableName());
       List<HoodieSourceSplit> pendingSplits =
-          enumeratorState.getPendingSplitStates().stream().map(HoodieSourceSplitState::split).collect(Collectors.toList());
+          enumeratorState.getPendingSplitStates().stream().map(HoodieSourceSplitState::getSplit).collect(Collectors.toList());
       splitProvider = new DefaultHoodieSplitProvider(splitAssigner);
       splitProvider.onDiscoveredSplits(pendingSplits);
     }
@@ -192,11 +192,11 @@ public class HoodieSource<T> extends FileIndexReader implements Source<T, Hoodie
             .path(new Path(scanContext.getPath().toUri()))
             .rowType(scanContext.getRowType())
             .maxCompactionMemoryInBytes(scanContext.getMaxCompactionMemoryInBytes())
-            .skipCompaction(scanContext.skipCompaction())
-            .skipClustering(scanContext.skipClustering())
-            .partitionPruner(scanContext.partitionPruner())
-            .skipInsertOverwrite(scanContext.skipInsertOverwrite()).build();
-        return new ArrayList<>(incrementalInputSplits.batchHoodieSourceSplits(metaClient, scanContext.cdcEnabled()).getSplits());
+            .skipCompaction(scanContext.isSkipCompaction())
+            .skipClustering(scanContext.isSkipClustering())
+            .partitionPruner(scanContext.getPartitionPruner())
+            .skipInsertOverwrite(scanContext.isSkipInsertOverwrite()).build();
+        return new ArrayList<>(incrementalInputSplits.batchHoodieSourceSplits(metaClient, scanContext.isCdcEnabled()).getSplits());
       default:
         throw new HoodieException("Unsupported query type: " + queryType);
     }
@@ -209,7 +209,7 @@ public class HoodieSource<T> extends FileIndexReader implements Source<T, Hoodie
         .conf(this.scanContext.getConf())
         .rowType(scanContext.getRowType())
         .metaClient(metaClient)
-        .partitionPruner(scanContext.partitionPruner())
+        .partitionPruner(scanContext.getPartitionPruner())
         .build();
   }
 }

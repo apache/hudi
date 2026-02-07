@@ -63,7 +63,6 @@ public class TestHoodieContinuousSplitEnumerator {
   private HoodieContinuousSplitEnumerator enumerator;
   private HoodieSourceSplit split1;
   private HoodieSourceSplit split2;
-  private HoodieSourceSplit split3;
 
   @BeforeEach
   public void setUp() {
@@ -74,7 +73,7 @@ public class TestHoodieContinuousSplitEnumerator {
     conf.set(FlinkOptions.PATH, "/tmp/test");
     conf.set(FlinkOptions.READ_STREAMING_CHECK_INTERVAL, 1);
 
-    scanContext = TestScanContext.builder()
+    scanContext = HoodieScanContext.builder()
         .conf(conf)
         .path(new StoragePath("/tmp/test"))
         .rowType(TestConfigurations.ROW_TYPE)
@@ -86,7 +85,6 @@ public class TestHoodieContinuousSplitEnumerator {
 
     split1 = createTestSplit(1, "file1");
     split2 = createTestSplit(2, "file2");
-    split3 = createTestSplit(3, "file3");
   }
 
   @Test
@@ -394,58 +392,4 @@ public class TestHoodieContinuousSplitEnumerator {
     }
   }
 
-  /**
-   * Test implementation of ScanContext for testing.
-   */
-  private static class TestScanContext extends HoodieScanContext {
-    private TestScanContext(
-        Configuration conf,
-        StoragePath path,
-        org.apache.flink.table.types.logical.RowType rowType,
-        String startInstant,
-        long maxPendingSplits) {
-      super(conf, path, rowType, startInstant, "",0L, maxPendingSplits, false, false, false, false, false, null);
-    }
-
-    public static Builder builder() {
-      return new Builder();
-    }
-
-    public static class Builder {
-      private Configuration conf;
-      private StoragePath path;
-      private org.apache.flink.table.types.logical.RowType rowType;
-      private String startInstant;
-      private long maxPendingSplits = 1000;
-
-      public Builder conf(Configuration conf) {
-        this.conf = conf;
-        return this;
-      }
-
-      public Builder path(StoragePath path) {
-        this.path = path;
-        return this;
-      }
-
-      public Builder rowType(org.apache.flink.table.types.logical.RowType rowType) {
-        this.rowType = rowType;
-        return this;
-      }
-
-      public Builder startInstant(String startInstant) {
-        this.startInstant = startInstant;
-        return this;
-      }
-
-      public Builder maxPendingSplits(long maxPendingSplits) {
-        this.maxPendingSplits = maxPendingSplits;
-        return this;
-      }
-
-      public HoodieScanContext build() {
-        return new TestScanContext(conf, path, rowType, startInstant, maxPendingSplits);
-      }
-    }
-  }
 }
