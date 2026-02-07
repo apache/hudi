@@ -156,17 +156,6 @@ public class TestHoodieSourceSplitReader {
   }
 
   @Test
-  public void testContextIndexRetrieved() {
-    TestSplitReaderFunction readerFunction = new TestSplitReaderFunction();
-
-    // Verify that context's index is retrieved during construction
-    HoodieSourceSplitReader<String> reader =
-        new HoodieSourceSplitReader<>(mockContext, readerFunction, null);
-
-    verify(mockContext, times(1)).getIndexOfSubtask();
-  }
-
-  @Test
   public void testReaderFunctionClosedOnReaderClose() throws Exception {
     TestSplitReaderFunction readerFunction = new TestSplitReaderFunction();
     HoodieSourceSplitReader<String> reader =

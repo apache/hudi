@@ -63,7 +63,6 @@ public class TestHoodieContinuousSplitEnumerator {
   private HoodieContinuousSplitEnumerator enumerator;
   private HoodieSourceSplit split1;
   private HoodieSourceSplit split2;
-  private HoodieSourceSplit split3;
 
   @BeforeEach
   public void setUp() {
@@ -86,7 +85,6 @@ public class TestHoodieContinuousSplitEnumerator {
 
     split1 = createTestSplit(1, "file1");
     split2 = createTestSplit(2, "file2");
-    split3 = createTestSplit(3, "file3");
   }
 
   @Test

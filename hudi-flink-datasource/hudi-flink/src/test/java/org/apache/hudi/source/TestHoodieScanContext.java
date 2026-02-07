@@ -128,12 +128,12 @@ public class TestHoodieScanContext {
     HoodieScanContext scanContextTrue = createTestScanContext(conf, new StoragePath("/tmp/test"),
         TestConfigurations.ROW_TYPE, "20231201000000000", 100 * 1024 * 1024,
         1000, true, false, false, false);
-    assertTrue(scanContextTrue.skipCompaction(), "Skip compaction should be true");
+    assertTrue(scanContextTrue.isSkipCompaction(), "Skip compaction should be true");
 
     HoodieScanContext scanContextFalse = createTestScanContext(conf, new StoragePath("/tmp/test"),
         TestConfigurations.ROW_TYPE, "20231201000000000", 100 * 1024 * 1024,
         1000, false, false, false, false);
-    assertFalse(scanContextFalse.skipCompaction(), "Skip compaction should be false");
+    assertFalse(scanContextFalse.isSkipCompaction(), "Skip compaction should be false");
   }
 
   @Test
@@ -143,12 +143,12 @@ public class TestHoodieScanContext {
     HoodieScanContext scanContextTrue = createTestScanContext(conf, new StoragePath("/tmp/test"),
         TestConfigurations.ROW_TYPE, "20231201000000000", 100 * 1024 * 1024,
         1000, false, true, false, false);
-    assertTrue(scanContextTrue.skipClustering(), "Skip clustering should be true");
+    assertTrue(scanContextTrue.isSkipClustering(), "Skip clustering should be true");
 
     HoodieScanContext scanContextFalse = createTestScanContext(conf, new StoragePath("/tmp/test"),
         TestConfigurations.ROW_TYPE, "20231201000000000", 100 * 1024 * 1024,
         1000, false, false, false, false);
-    assertFalse(scanContextFalse.skipClustering(), "Skip clustering should be false");
+    assertFalse(scanContextFalse.isSkipClustering(), "Skip clustering should be false");
   }
 
   @Test
@@ -158,12 +158,12 @@ public class TestHoodieScanContext {
     HoodieScanContext scanContextTrue = createTestScanContext(conf, new StoragePath("/tmp/test"),
         TestConfigurations.ROW_TYPE, "20231201000000000", 100 * 1024 * 1024,
         1000, false, false, true, false);
-    assertTrue(scanContextTrue.skipInsertOverwrite(), "Skip insert overwrite should be true");
+    assertTrue(scanContextTrue.isSkipInsertOverwrite(), "Skip insert overwrite should be true");
 
     HoodieScanContext scanContextFalse = createTestScanContext(conf, new StoragePath("/tmp/test"),
         TestConfigurations.ROW_TYPE, "20231201000000000", 100 * 1024 * 1024,
         1000, false, false, false, false);
-    assertFalse(scanContextFalse.skipInsertOverwrite(), "Skip insert overwrite should be false");
+    assertFalse(scanContextFalse.isSkipInsertOverwrite(), "Skip insert overwrite should be false");
   }
 
   @Test
@@ -173,12 +173,12 @@ public class TestHoodieScanContext {
     HoodieScanContext scanContextTrue = createTestScanContext(conf, new StoragePath("/tmp/test"),
         TestConfigurations.ROW_TYPE, "20231201000000000", 100 * 1024 * 1024,
         1000, false, false, false, true);
-    assertTrue(scanContextTrue.cdcEnabled(), "CDC should be enabled");
+    assertTrue(scanContextTrue.isCdcEnabled(), "CDC should be enabled");
 
     HoodieScanContext scanContextFalse = createTestScanContext(conf, new StoragePath("/tmp/test"),
         TestConfigurations.ROW_TYPE, "20231201000000000", 100 * 1024 * 1024,
         1000, false, false, false, false);
-    assertFalse(scanContextFalse.cdcEnabled(), "CDC should be disabled");
+    assertFalse(scanContextFalse.isCdcEnabled(), "CDC should be disabled");
   }
 
   @Test
@@ -227,10 +227,10 @@ public class TestHoodieScanContext {
     assertEquals(startInstant, scanContext.getStartCommit());
     assertEquals(maxCompactionMemory, scanContext.getMaxCompactionMemoryInBytes());
     assertEquals(maxPendingSplits, scanContext.getMaxPendingSplits());
-    assertTrue(scanContext.skipCompaction());
-    assertTrue(scanContext.skipClustering());
-    assertTrue(scanContext.skipInsertOverwrite());
-    assertTrue(scanContext.cdcEnabled());
+    assertTrue(scanContext.isSkipCompaction());
+    assertTrue(scanContext.isSkipClustering());
+    assertTrue(scanContext.isSkipInsertOverwrite());
+    assertTrue(scanContext.isCdcEnabled());
     assertEquals(Duration.ofSeconds(10), scanContext.getScanInterval());
   }
 
@@ -278,10 +278,10 @@ public class TestHoodieScanContext {
         .build();
 
     assertNotNull(scanContext);
-    assertTrue(scanContext.skipCompaction());
-    assertTrue(scanContext.skipClustering());
-    assertTrue(scanContext.skipInsertOverwrite());
-    assertTrue(scanContext.cdcEnabled());
+    assertTrue(scanContext.isSkipCompaction());
+    assertTrue(scanContext.isSkipClustering());
+    assertTrue(scanContext.isSkipInsertOverwrite());
+    assertTrue(scanContext.isCdcEnabled());
     assertTrue(scanContext.isStreaming());
   }
 
@@ -489,10 +489,10 @@ public class TestHoodieScanContext {
         .isStreaming(true)
         .build();
 
-    assertTrue(scanContext.skipCompaction(), "skipCompaction should be true");
-    assertTrue(scanContext.skipClustering(), "skipClustering should be true");
-    assertTrue(scanContext.skipInsertOverwrite(), "skipInsertOverwrite should be true");
-    assertTrue(scanContext.cdcEnabled(), "cdcEnabled should be true");
+    assertTrue(scanContext.isSkipCompaction(), "skipCompaction should be true");
+    assertTrue(scanContext.isSkipClustering(), "skipClustering should be true");
+    assertTrue(scanContext.isSkipInsertOverwrite(), "skipInsertOverwrite should be true");
+    assertTrue(scanContext.isCdcEnabled(), "cdcEnabled should be true");
     assertTrue(scanContext.isStreaming(), "isStreaming should be true");
   }
 
@@ -612,8 +612,8 @@ public class TestHoodieScanContext {
         .partitionPruner(mockPruner)
         .build();
 
-    assertNotNull(contextWithPruner.partitionPruner(), "Partition pruner should not be null");
-    assertEquals(mockPruner, contextWithPruner.partitionPruner(),
+    assertNotNull(contextWithPruner.getPartitionPruner(), "Partition pruner should not be null");
+    assertEquals(mockPruner, contextWithPruner.getPartitionPruner(),
         "Partition pruner should match the mock instance");
 
     // Test without partition pruner
@@ -631,7 +631,7 @@ public class TestHoodieScanContext {
         .isStreaming(false)
         .build();
 
-    assertNull(contextWithoutPruner.partitionPruner(),
+    assertNull(contextWithoutPruner.getPartitionPruner(),
         "Partition pruner should be null when not set");
   }
 
@@ -659,12 +659,12 @@ public class TestHoodieScanContext {
         .build();
 
     // Verify all properties are correctly set
-    assertNotNull(scanContext.partitionPruner(), "Partition pruner should be set");
+    assertNotNull(scanContext.getPartitionPruner(), "Partition pruner should be set");
     assertTrue(scanContext.isStreaming(), "Should be in streaming mode");
-    assertTrue(scanContext.skipCompaction(), "Skip compaction should be enabled");
-    assertTrue(scanContext.skipClustering(), "Skip clustering should be enabled");
-    assertTrue(scanContext.skipInsertOverwrite(), "Skip insert overwrite should be enabled");
-    assertTrue(scanContext.cdcEnabled(), "CDC should be enabled");
+    assertTrue(scanContext.isSkipCompaction(), "Skip compaction should be enabled");
+    assertTrue(scanContext.isSkipClustering(), "Skip clustering should be enabled");
+    assertTrue(scanContext.isSkipInsertOverwrite(), "Skip insert overwrite should be enabled");
+    assertTrue(scanContext.isCdcEnabled(), "CDC should be enabled");
     assertEquals("20240101000000", scanContext.getStartCommit(), "Start instant should match");
     assertEquals("20240201000000", scanContext.getEndCommit(), "End instant should match");
   }
@@ -708,11 +708,11 @@ public class TestHoodieScanContext {
         .build();
 
     // Verify that each context has its own independent pruner
-    assertEquals(mockPruner1, scanContext1.partitionPruner(),
+    assertEquals(mockPruner1, scanContext1.getPartitionPruner(),
         "First context should have first pruner");
-    assertEquals(mockPruner2, scanContext2.partitionPruner(),
+    assertEquals(mockPruner2, scanContext2.getPartitionPruner(),
         "Second context should have second pruner");
-    assertNotEquals(scanContext1.partitionPruner(), scanContext2.partitionPruner(),
+    assertNotEquals(scanContext1.getPartitionPruner(), scanContext2.getPartitionPruner(),
         "Pruners should be independent across contexts");
   }
 }

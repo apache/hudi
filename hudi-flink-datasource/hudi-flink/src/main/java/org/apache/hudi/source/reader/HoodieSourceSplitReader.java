@@ -51,7 +51,6 @@ public class HoodieSourceSplitReader<T> implements SplitReader<HoodieRecordWithP
 
   private final SerializableComparator<HoodieSourceSplit> splitComparator;
   private final SplitReaderFunction<T> readerFunction;
-  private final int indexOfSubTask;
   private final Queue<HoodieSourceSplit> splits;
 
   private HoodieSourceSplit currentSplit;
@@ -64,7 +63,6 @@ public class HoodieSourceSplitReader<T> implements SplitReader<HoodieRecordWithP
       SerializableComparator<HoodieSourceSplit> splitComparator) {
     this.splitComparator = splitComparator;
     this.readerFunction = readerFunction;
-    this.indexOfSubTask = context.getIndexOfSubtask();
     this.splits = new ArrayDeque<>();
   }
 

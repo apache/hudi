@@ -21,6 +21,7 @@ package org.apache.hudi.source;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.source.prune.PartitionPruners;
 
+import lombok.Getter;
 import org.apache.flink.annotation.Internal;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.table.types.logical.RowType;
@@ -33,6 +34,7 @@ import java.time.Duration;
  * Hudi source scan context for finding completed commits for streaming and incremental read.
  */
 @Internal
+@Getter
 public class HoodieScanContext implements Serializable {
   private final Configuration conf;
   private final StoragePath path;
@@ -82,58 +84,6 @@ public class HoodieScanContext implements Serializable {
     this.cdcEnabled = cdcEnabled;
     this.isStreaming = isStreaming;
     this.partitionPruner = partitionPruner;
-  }
-
-  public Configuration getConf() {
-    return conf;
-  }
-
-  public StoragePath getPath() {
-    return path;
-  }
-
-  public RowType getRowType() {
-    return rowType;
-  }
-
-  public String getStartCommit() {
-    return startCommit;
-  }
-
-  public String getEndCommit() {
-    return endCommit;
-  }
-
-  public long getMaxCompactionMemoryInBytes() {
-    return maxCompactionMemoryInBytes;
-  }
-
-  public long getMaxPendingSplits() {
-    return maxPendingSplits;
-  }
-
-  public boolean skipCompaction() {
-    return skipCompaction;
-  }
-
-  public PartitionPruners.PartitionPruner partitionPruner() {
-    return partitionPruner;
-  }
-
-  public boolean skipClustering() {
-    return skipClustering;
-  }
-
-  public boolean skipInsertOverwrite() {
-    return skipInsertOverwrite;
-  }
-
-  public boolean cdcEnabled() {
-    return cdcEnabled;
-  }
-
-  public boolean isStreaming() {
-    return isStreaming;
   }
 
   public Duration getScanInterval() {
