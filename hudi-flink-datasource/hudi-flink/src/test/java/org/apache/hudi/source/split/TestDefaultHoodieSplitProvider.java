@@ -123,7 +123,7 @@ public class TestDefaultHoodieSplitProvider {
 
     // Verify all states are UNASSIGNED
     for (HoodieSourceSplitState state : states) {
-      assertEquals(HoodieSourceSplitStatus.UNASSIGNED, state.status(),
+      assertEquals(HoodieSourceSplitStatus.UNASSIGNED, state.getStatus(),
           "All splits should have UNASSIGNED status");
     }
   }
@@ -140,8 +140,8 @@ public class TestDefaultHoodieSplitProvider {
     assertEquals(1, states.size(), "Should have 1 remaining split state");
 
     HoodieSourceSplitState state = states.iterator().next();
-    assertEquals(split2.splitId(), state.split().splitId(), "Remaining split should be split2");
-    assertEquals(HoodieSourceSplitStatus.UNASSIGNED, state.status(), "Split should be UNASSIGNED");
+    assertEquals(split2.splitId(), state.getSplit().splitId(), "Remaining split should be split2");
+    assertEquals(HoodieSourceSplitStatus.UNASSIGNED, state.getStatus(), "Split should be UNASSIGNED");
   }
 
   @Test

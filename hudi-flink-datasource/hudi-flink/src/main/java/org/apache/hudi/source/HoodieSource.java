@@ -145,7 +145,7 @@ public class HoodieSource<T> extends FileIndexReader implements Source<T, Hoodie
           enumeratorState.getPendingSplitStates().size(),
           metaClient.getTableConfig().getTableName());
       List<HoodieSourceSplit> pendingSplits =
-          enumeratorState.getPendingSplitStates().stream().map(HoodieSourceSplitState::split).collect(Collectors.toList());
+          enumeratorState.getPendingSplitStates().stream().map(HoodieSourceSplitState::getSplit).collect(Collectors.toList());
       splitProvider = new DefaultHoodieSplitProvider(splitAssigner);
       splitProvider.onDiscoveredSplits(pendingSplits);
     }

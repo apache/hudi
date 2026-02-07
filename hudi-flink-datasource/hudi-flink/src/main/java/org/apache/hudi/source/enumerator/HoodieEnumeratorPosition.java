@@ -21,15 +21,21 @@ package org.apache.hudi.source.enumerator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 
+import lombok.EqualsAndHashCode;
+import lombok.Getter;
+import lombok.ToString;
+
 import java.io.Serializable;
-import java.util.Objects;
 
 /**
  * The position of {@link HoodieContinuousSplitEnumerator}. The completionTime notion which is introduced in incremental
- * read mainly for scenarios of “hollow” instants: instants start very early but finished long time after, the completion
+ * read mainly for scenarios of "hollow" instants: instants start very early but finished long time after, the completion
  * time based inc query gives clear semantics of the consumption boundaries. The instantTime is from legacy readers and
  * now just used for logging purposes.
  */
+@Getter
+@EqualsAndHashCode
+@ToString
 public class HoodieEnumeratorPosition implements Serializable {
   // Max instant time consumed
   private final Option<String> issuedInstant;
@@ -56,38 +62,5 @@ public class HoodieEnumeratorPosition implements Serializable {
   private HoodieEnumeratorPosition(Option<String> issuedInstant, Option<String> issuedOffset) {
     this.issuedInstant = issuedInstant;
     this.issuedOffset = issuedOffset;
-  }
-
-  public Option<String> issuedInstant() {
-    return issuedInstant;
-  }
-
-  public Option<String> issuedOffset() {
-    return issuedOffset;
-  }
-
-  @Override
-  public boolean equals(Object o) {
-    if (this == o) {
-      return true;
-    }
-    if (o == null || getClass() != o.getClass()) {
-      return false;
-    }
-    HoodieEnumeratorPosition that = (HoodieEnumeratorPosition) o;
-    return Objects.equals(issuedInstant, that.issuedInstant) && Objects.equals(issuedOffset, that.issuedOffset);
-  }
-
-  @Override
-  public int hashCode() {
-    return Objects.hash(issuedInstant, issuedOffset);
-  }
-
-  @Override
-  public String toString() {
-    return "HoodieEnumeratorPosition{"
-        + "issuedInstant=" + issuedInstant
-        + ", issuedOffset=" + issuedOffset
-        + '}';
   }
 }
