@@ -698,30 +698,6 @@ public class TestIncrementalInputSplits extends HoodieCommonTestHarness {
   }
 
   @Test
-  void testBatchHoodieSourceSplits() throws Exception {
-    metaClient = HoodieTestUtils.init(basePath, HoodieTableType.COPY_ON_WRITE);
-    Configuration conf = TestConfigurations.getDefaultConf(basePath);
-    conf.set(FlinkOptions.READ_START_COMMIT, FlinkOptions.START_COMMIT_EARLIEST);
-
-    // Insert test data
-    TestData.writeData(TestData.DATA_SET_INSERT, conf);
-    metaClient.reloadActiveTimeline();
-
-    IncrementalInputSplits iis = IncrementalInputSplits.builder()
-        .conf(conf)
-        .path(new Path(basePath))
-        .rowType(TestConfigurations.ROW_TYPE)
-        .build();
-
-    org.apache.hudi.source.split.HoodieContinuousSplitBatch result =
-        iis.batchHoodieSourceSplits(metaClient, false);
-
-    assertNotNull(result, "Batch result should not be null");
-    assertNotNull(result.getSplits(), "Batch splits should not be null");
-    assertFalse(result.getSplits().isEmpty(), "Batch splits should not be empty");
-  }
-
-  @Test
   void testBatchHoodieSourceSplitsWithCDCEnabled() throws Exception {
     metaClient = HoodieTestUtils.init(basePath, HoodieTableType.COPY_ON_WRITE);
     Configuration conf = TestConfigurations.getDefaultConf(basePath);
@@ -789,5 +765,6 @@ public class TestIncrementalInputSplits extends HoodieCommonTestHarness {
 
     assertNotNull(result, "Batch result should not be null for table type: " + tableType);
     assertNotNull(result.getSplits(), "Batch splits should not be null for table type: " + tableType);
+    assertFalse(result.getSplits().isEmpty(), "Batch splits should not be empty for table type: " + tableType);
   }
 }

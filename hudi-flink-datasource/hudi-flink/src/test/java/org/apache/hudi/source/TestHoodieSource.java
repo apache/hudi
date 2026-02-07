@@ -115,42 +115,6 @@ public class TestHoodieSource {
   }
 
   @Test
-  public void testCreateBatchHoodieSplitsForCopyOnWrite() throws Exception {
-    metaClient = HoodieTestUtils.init(tempDir.getAbsolutePath(), HoodieTableType.COPY_ON_WRITE);
-    conf.set(FlinkOptions.TABLE_TYPE, HoodieTableType.COPY_ON_WRITE.name());
-    conf.set(FlinkOptions.QUERY_TYPE, FlinkOptions.QUERY_TYPE_SNAPSHOT);
-
-    TestData.writeData(TestData.DATA_SET_INSERT, conf);
-    metaClient.reloadActiveTimeline();
-
-    HoodieSource<RowData> source = createHoodieSource(conf, metaClient);
-    List<HoodieSourceSplit> splits = source.createBatchHoodieSplits();
-
-    assertNotNull(splits, "Splits should not be null");
-    assertFalse(splits.isEmpty(), "Splits should not be empty");
-    splits.forEach(split -> {
-      assertNotNull(split.getBasePath(), "Base path should not be null");
-      assertNotNull(split.getFileId(), "File ID should not be null");
-    });
-  }
-
-  @Test
-  public void testCreateBatchHoodieSplitsForMergeOnRead() throws Exception {
-    metaClient = HoodieTestUtils.init(tempDir.getAbsolutePath(), HoodieTableType.MERGE_ON_READ);
-    conf.set(FlinkOptions.TABLE_TYPE, HoodieTableType.MERGE_ON_READ.name());
-    conf.set(FlinkOptions.QUERY_TYPE, FlinkOptions.QUERY_TYPE_SNAPSHOT);
-
-    TestData.writeData(TestData.DATA_SET_INSERT, conf);
-    metaClient.reloadActiveTimeline();
-
-    HoodieSource<RowData> source = createHoodieSource(conf, metaClient);
-    List<HoodieSourceSplit> splits = source.createBatchHoodieSplits();
-
-    assertNotNull(splits, "Splits should not be null");
-    assertFalse(splits.isEmpty(), "Splits should not be empty for MOR table");
-  }
-
-  @Test
   public void testCreateBatchHoodieSplitsWithReadOptimizedQuery() throws Exception {
     metaClient = HoodieTestUtils.init(tempDir.getAbsolutePath(), HoodieTableType.MERGE_ON_READ);
     conf.set(FlinkOptions.TABLE_TYPE, HoodieTableType.MERGE_ON_READ.name());
@@ -251,6 +215,10 @@ public class TestHoodieSource {
 
     assertNotNull(splits, "Splits should not be null for table type: " + tableType);
     assertFalse(splits.isEmpty(), "Splits should not be empty for table type: " + tableType);
+    splits.forEach(split -> {
+      assertNotNull(split.getBasePath(), "Base path should not be null for: " + tableType);
+      assertNotNull(split.getFileId(), "File ID should not be null for: " + tableType);
+    });
   }
 
   @Test

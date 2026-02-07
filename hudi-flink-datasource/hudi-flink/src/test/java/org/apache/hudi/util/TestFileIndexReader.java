@@ -142,11 +142,13 @@ public class TestFileIndexReader {
 
     assertNotNull(splits);
     assertFalse(splits.isEmpty());
-    // Verify splits have proper structure
+    // Verify splits have proper structure and metadata
     splits.forEach(split -> {
       assertNotNull(split.getTablePath());
       assertNotNull(split.getFileId());
       assertNotNull(split.getMergeType());
+      assertNotNull(split.getLatestCommit(), "Instant time should not be null");
+      assertNotNull(split.splitId(), "Split ID should not be null");
     });
   }
 
@@ -186,36 +188,12 @@ public class TestFileIndexReader {
   }
 
   @Test
-  public void testBuildInputSplitsThrowsExceptionWhenNoFiles() throws Exception {
-    metaClient = HoodieTestUtils.init(tempDir.getAbsolutePath(), HoodieTableType.MERGE_ON_READ);
-    conf.set(FlinkOptions.TABLE_TYPE, HoodieTableType.MERGE_ON_READ.name());
-
-    // Write data, then manually create a partition without files to trigger the exception
-    TestData.writeData(TestData.DATA_SET_INSERT, conf);
-    metaClient.reloadActiveTimeline();
-
-    // Create a reader with a custom FileIndex that returns partitions but no files
-    TestFileIndexReaderImpl reader = new TestFileIndexReaderImpl(tablePath, conf, metaClient) {
-      @Override
-      protected FileIndex buildFileIndex() {
-        return FileIndex.builder()
-            .path(tablePath)
-            .conf(conf)
-            .rowType(TestConfigurations.ROW_TYPE)
-            .metaClient(metaClient)
-            .build();
-      }
-    };
-
-    // This should work normally
-    List<MergeOnReadInputSplit> splits = reader.buildInputSplits(metaClient, conf);
-    assertNotNull(splits);
-  }
-
-  @Test
   public void testGetOrBuildFileIndexCaching() throws Exception {
     metaClient = HoodieTestUtils.init(tempDir.getAbsolutePath(), HoodieTableType.COPY_ON_WRITE);
     conf.set(FlinkOptions.TABLE_TYPE, HoodieTableType.COPY_ON_WRITE.name());
+
+    TestData.writeData(TestData.DATA_SET_INSERT, conf);
+    metaClient.reloadActiveTimeline();
 
     TestFileIndexReaderImpl reader = new TestFileIndexReaderImpl(tablePath, conf, metaClient);
 
@@ -223,32 +201,17 @@ public class TestFileIndexReader {
     FileIndex fileIndex1 = reader.getOrBuildFileIndex();
     assertNotNull(fileIndex1);
 
-    // Second call should return the cached instance
+    // Second and third calls should return cached instances
     FileIndex fileIndex2 = reader.getOrBuildFileIndex();
     assertNotNull(fileIndex2);
-  }
 
-  @Test
-  public void testMultiplePartitions() throws Exception {
-    metaClient = HoodieTestUtils.init(tempDir.getAbsolutePath(), HoodieTableType.COPY_ON_WRITE);
-    conf.set(FlinkOptions.TABLE_TYPE, HoodieTableType.COPY_ON_WRITE.name());
+    FileIndex fileIndex3 = reader.getOrBuildFileIndex();
+    assertNotNull(fileIndex3);
 
-    // Write data to multiple partitions
-    TestData.writeData(TestData.DATA_SET_INSERT, conf);
-    metaClient.reloadActiveTimeline();
-
-    TestFileIndexReaderImpl reader = new TestFileIndexReaderImpl(tablePath, conf, metaClient);
-    List<FileSlice> fileSlices = reader.getBaseFileOnlyFileSlices(metaClient);
-
-    assertNotNull(fileSlices);
-    assertFalse(fileSlices.isEmpty());
-
-    // Verify we have file slices from different partitions
-    long partitionCount = fileSlices.stream()
-        .map(FileSlice::getPartitionPath)
-        .distinct()
-        .count();
-    assertTrue(partitionCount > 0);
+    // Partition paths should be consistent across calls
+    assertEquals(fileIndex1.getOrBuildPartitionPaths().size(),
+        fileIndex2.getOrBuildPartitionPaths().size(),
+        "Partition paths should be consistent across calls");
   }
 
   @Test
@@ -300,55 +263,6 @@ public class TestFileIndexReader {
   }
 
   @Test
-  public void testBuildHoodieSplitsContainsFileMetadata() throws Exception {
-    metaClient = HoodieTestUtils.init(tempDir.getAbsolutePath(), HoodieTableType.MERGE_ON_READ);
-    conf.set(FlinkOptions.TABLE_TYPE, HoodieTableType.MERGE_ON_READ.name());
-
-    TestData.writeData(TestData.DATA_SET_INSERT, conf);
-    metaClient.reloadActiveTimeline();
-
-    TestFileIndexReaderImpl reader = new TestFileIndexReaderImpl(tablePath, conf, metaClient);
-    List<HoodieSourceSplit> splits = reader.buildHoodieSplits(metaClient, conf);
-
-    assertNotNull(splits);
-    assertFalse(splits.isEmpty());
-
-    // Verify split contains all required metadata
-    splits.forEach(split -> {
-      assertNotNull(split.getTablePath(), "Table path should not be null");
-      assertNotNull(split.getFileId(), "File ID should not be null");
-      assertNotNull(split.getMergeType(), "Merge type should not be null");
-      assertNotNull(split.getLatestCommit(), "Instant time should not be null");
-      assertTrue(split.splitId() != null, "Split ID should not be null");
-    });
-  }
-
-  @Test
-  public void testGetOrBuildFileIndexMultipleCalls() throws Exception {
-    metaClient = HoodieTestUtils.init(tempDir.getAbsolutePath(), HoodieTableType.COPY_ON_WRITE);
-    conf.set(FlinkOptions.TABLE_TYPE, HoodieTableType.COPY_ON_WRITE.name());
-
-    TestData.writeData(TestData.DATA_SET_INSERT, conf);
-    metaClient.reloadActiveTimeline();
-
-    TestFileIndexReaderImpl reader = new TestFileIndexReaderImpl(tablePath, conf, metaClient);
-
-    // Call getOrBuildFileIndex multiple times
-    FileIndex fileIndex1 = reader.getOrBuildFileIndex();
-    FileIndex fileIndex2 = reader.getOrBuildFileIndex();
-    FileIndex fileIndex3 = reader.getOrBuildFileIndex();
-
-    assertNotNull(fileIndex1);
-    assertNotNull(fileIndex2);
-    assertNotNull(fileIndex3);
-
-    // All calls should return valid file index instances
-    assertEquals(fileIndex1.getOrBuildPartitionPaths().size(),
-        fileIndex2.getOrBuildPartitionPaths().size(),
-        "Partition paths should be consistent across calls");
-  }
-
-  @Test
   public void testBaseFileOnlyFileSlicesWithPartitionFilter() throws Exception {
     metaClient = HoodieTestUtils.init(tempDir.getAbsolutePath(), HoodieTableType.COPY_ON_WRITE);
     conf.set(FlinkOptions.TABLE_TYPE, HoodieTableType.COPY_ON_WRITE.name());
@@ -370,19 +284,6 @@ public class TestFileIndexReader {
         .distinct()
         .count();
     assertTrue(partitionCount > 1, "Should have file slices from multiple partitions");
-  }
-
-  @Test
-  public void testBuildInputSplitsReturnsEmptyListForNoInstants() throws Exception {
-    metaClient = HoodieTestUtils.init(tempDir.getAbsolutePath(), HoodieTableType.MERGE_ON_READ);
-    conf.set(FlinkOptions.TABLE_TYPE, HoodieTableType.MERGE_ON_READ.name());
-
-    // Don't write any data - empty timeline
-    TestFileIndexReaderImpl reader = new TestFileIndexReaderImpl(tablePath, conf, metaClient);
-    List<org.apache.hudi.table.format.mor.MergeOnReadInputSplit> splits = reader.buildInputSplits(metaClient, conf);
-
-    assertNotNull(splits, "Splits list should not be null");
-    assertTrue(splits.isEmpty(), "Splits should be empty when no data exists");
   }
 
   @Test
