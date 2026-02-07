@@ -117,7 +117,7 @@ public abstract class FileIndexReader implements Serializable {
   /**
    * Builds Hoodie source splits for the table.
    *
-   * p>This method creates HoodieSourceSplit objects for MERGE_ON_READ tables by combining
+   * <p>This method creates HoodieSourceSplit objects for MERGE_ON_READ tables by combining
    * base files with their corresponding log files from the file system view.
    *
    * @param metaClient the Hudi table meta client

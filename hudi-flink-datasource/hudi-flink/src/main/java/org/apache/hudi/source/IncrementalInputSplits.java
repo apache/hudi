@@ -497,22 +497,17 @@ public class IncrementalInputSplits implements Serializable {
   /**
    * Represents a result of calling {@link #inputSplits}.
    */
+  @Getter
   public static class Result {
-    @Getter
     private final List<MergeOnReadInputSplit> inputSplits; // input splits
-    @Getter
     private final String endInstant; // end instant to consume to
+    @Nullable
     private final String offset;     // monotonic increasing consumption offset
 
     public static final Result EMPTY = instance(Collections.emptyList(), "");
 
     public boolean isEmpty() {
       return this.inputSplits.size() == 0;
-    }
-
-    @Nullable
-    public String getOffset() {
-      return offset;
     }
 
     private Result(List<MergeOnReadInputSplit> inputSplits, String endInstant, @Nullable String offset) {
