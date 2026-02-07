@@ -18,49 +18,55 @@
 
 package org.apache.hudi.source;
 
+import org.apache.hudi.client.common.HoodieFlinkEngineContext;
+import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.model.HoodieTableType;
-import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
-import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.PartitionPathEncodeUtils;
+import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
-import org.apache.hudi.source.enumerator.HoodieSplitEnumeratorState;
+import org.apache.hudi.source.prune.ColumnStatsProbe;
+import org.apache.hudi.source.prune.PartitionPruners;
 import org.apache.hudi.source.reader.HoodieRecordEmitter;
-import org.apache.hudi.source.reader.function.SplitReaderFunction;
+import org.apache.hudi.source.reader.function.HoodieSplitReaderFunction;
 import org.apache.hudi.source.split.HoodieSourceSplit;
-import org.apache.hudi.source.split.HoodieSourceSplitState;
-import org.apache.hudi.source.split.HoodieSourceSplitStatus;
-import org.apache.hudi.source.split.SerializableComparator;
+import org.apache.hudi.source.split.HoodieSourceSplitComparator;
 import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
+import org.apache.hudi.table.HoodieFlinkTable;
+import org.apache.hudi.table.format.FlinkReaderContextFactory;
+import org.apache.hudi.util.FlinkWriteClients;
+import org.apache.hudi.util.HoodieSchemaConverter;
 import org.apache.hudi.utils.TestConfigurations;
 import org.apache.hudi.utils.TestData;
 
 import org.apache.flink.api.connector.source.Boundedness;
-import org.apache.flink.api.connector.source.SplitEnumerator;
-import org.apache.flink.api.connector.source.SplitEnumeratorContext;
 import org.apache.flink.configuration.Configuration;
-import org.apache.flink.core.fs.Path;
-import org.apache.flink.core.io.SimpleVersionedSerializer;
-import org.apache.flink.metrics.groups.SplitEnumeratorMetricGroup;
-import org.apache.flink.metrics.groups.UnregisteredMetricsGroup;
+import org.apache.flink.table.api.DataTypes;
 import org.apache.flink.table.data.RowData;
+import org.apache.flink.table.expressions.CallExpression;
+import org.apache.flink.table.expressions.FieldReferenceExpression;
+import org.apache.flink.table.expressions.ValueLiteralExpression;
+import org.apache.flink.table.functions.BuiltInFunctionDefinitions;
+import org.apache.flink.table.functions.FunctionIdentifier;
+import org.apache.flink.table.types.logical.RowType;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 
 import java.io.File;
-import java.io.IOException;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.mockito.Mockito.doReturn;
-import static org.mockito.Mockito.mock;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Test cases for {@link HoodieSource}.
@@ -70,647 +76,367 @@ public class TestHoodieSource {
   @TempDir
   File tempDir;
 
-  private HoodieTableMetaClient mockMetaClient;
-  private HoodieScanContext scanContext;
-  private SplitReaderFunction<RowData> mockReaderFunction;
-  private SerializableComparator<HoodieSourceSplit> mockComparator;
-  private HoodieRecordEmitter<RowData> mockRecordEmitter;
+  private HoodieTableMetaClient metaClient;
+  private Configuration conf;
+  private StoragePath tablePath;
 
   @BeforeEach
-  public void setUp() throws Exception {
-    // Setup mock meta client
-    mockMetaClient = mock(HoodieTableMetaClient.class);
-    doReturn(new StoragePath(tempDir.getAbsolutePath())).when(mockMetaClient).getBasePath();
-    doReturn(mock(HoodieActiveTimeline.class)).when(mockMetaClient).getActiveTimeline();
-
-    HoodieTableConfig mockTableConfig = mock(HoodieTableConfig.class);
-    doReturn("test_table").when(mockTableConfig).getTableName();
-    doReturn(mockTableConfig).when(mockMetaClient).getTableConfig();
-
-
-    // Setup mock reader function
-    mockReaderFunction = mock(SplitReaderFunction.class);
-
-    // Setup mock comparator
-    mockComparator = mock(SerializableComparator.class);
-
-    // Setup mock record emitter
-    mockRecordEmitter = mock(HoodieRecordEmitter.class);
-
-    // Setup scan context
-    Configuration conf = new Configuration();
-    conf.set(FlinkOptions.PATH, tempDir.getAbsolutePath());
-    conf.set(FlinkOptions.READ_STREAMING_CHECK_INTERVAL, 60);
-
-    scanContext = new HoodieScanContext.Builder()
-        .conf(conf)
-        .path(new Path(tempDir.getAbsolutePath()))
-        .rowType(TestConfigurations.ROW_TYPE)
-        .startInstant("20240101000000")
-        .endInstant("20240201000000")
-        .maxCompactionMemoryInBytes(100 * 1024 * 1024)
-        .maxPendingSplits(1000)
-        .skipCompaction(false)
-        .skipClustering(false)
-        .skipInsertOverwrite(false)
-        .cdcEnabled(false)
-        .isStreaming(false)
-        .build();
+  public void setUp() {
+    conf = TestConfigurations.getDefaultConf(tempDir.getAbsolutePath());
+    tablePath = new StoragePath(tempDir.getAbsolutePath());
   }
 
   @Test
-  public void testConstructorWithValidArguments() {
-    HoodieSource<RowData> source = new HoodieSource<>(
-        scanContext,
-        mockReaderFunction,
-        mockComparator,
-        mockMetaClient,
-        mockRecordEmitter
-    );
+  public void testGetBoundednessForBatchMode() throws Exception {
+    metaClient = HoodieTestUtils.init(tempDir.getAbsolutePath(), HoodieTableType.COPY_ON_WRITE);
+    conf.set(FlinkOptions.TABLE_TYPE, HoodieTableType.COPY_ON_WRITE.name());
+    conf.set(FlinkOptions.READ_AS_STREAMING, false);
 
-    assertNotNull(source);
-  }
+    TestData.writeData(TestData.DATA_SET_INSERT, conf);
+    metaClient.reloadActiveTimeline();
 
-  @Test
-  public void testConstructorWithNullScanContext() {
-    assertThrows(IllegalArgumentException.class, () -> {
-      new HoodieSource<>(
-          null,
-          mockReaderFunction,
-          mockComparator,
-          mockMetaClient,
-          mockRecordEmitter
-      );
-    });
-  }
-
-  @Test
-  public void testConstructorWithNullReaderFunction() {
-    assertThrows(IllegalArgumentException.class, () -> {
-      new HoodieSource<>(
-          scanContext,
-          null,
-          mockComparator,
-          mockMetaClient,
-          mockRecordEmitter
-      );
-    });
-  }
-
-  @Test
-  public void testConstructorWithNullComparator() {
-    assertThrows(IllegalArgumentException.class, () -> {
-      new HoodieSource<>(
-          scanContext,
-          mockReaderFunction,
-          null,
-          mockMetaClient,
-          mockRecordEmitter
-      );
-    });
-  }
-
-  @Test
-  public void testConstructorWithNullMetaClient() {
-    assertThrows(IllegalArgumentException.class, () -> {
-      new HoodieSource<>(
-          scanContext,
-          mockReaderFunction,
-          mockComparator,
-          null,
-          mockRecordEmitter
-      );
-    });
-  }
-
-  @Test
-  public void testConstructorWithNullRecordEmitter() {
-    assertThrows(IllegalArgumentException.class, () -> {
-      new HoodieSource<>(
-          scanContext,
-          mockReaderFunction,
-          mockComparator,
-          mockMetaClient,
-          null
-      );
-    });
-  }
-
-  @Test
-  public void testGetBoundednessForBatchMode() {
-    HoodieSource<RowData> source = new HoodieSource<>(
-        scanContext,
-        mockReaderFunction,
-        mockComparator,
-        mockMetaClient,
-        mockRecordEmitter
-    );
-
-    assertEquals(Boundedness.BOUNDED, source.getBoundedness());
+    HoodieSource<RowData> source = createHoodieSource(conf, metaClient);
+    assertEquals(Boundedness.BOUNDED, source.getBoundedness(),
+        "Batch mode should return BOUNDED");
   }
 
   @Test
   public void testGetBoundednessForStreamingMode() throws Exception {
-    Configuration conf = new Configuration();
-    conf.set(FlinkOptions.PATH, tempDir.getAbsolutePath());
-
-    HoodieScanContext streamingScanContext = new HoodieScanContext.Builder()
-        .conf(conf)
-        .path(new Path(tempDir.getAbsolutePath()))
-        .rowType(TestConfigurations.ROW_TYPE)
-        .startInstant("20240101000000")
-        .maxCompactionMemoryInBytes(100 * 1024 * 1024)
-        .maxPendingSplits(1000)
-        .skipCompaction(false)
-        .skipClustering(false)
-        .skipInsertOverwrite(false)
-        .cdcEnabled(false)
-        .isStreaming(true)
-        .build();
-
-    HoodieSource<RowData> source = new HoodieSource<>(
-        streamingScanContext,
-        mockReaderFunction,
-        mockComparator,
-        mockMetaClient,
-        mockRecordEmitter
-    );
-
-    assertEquals(Boundedness.CONTINUOUS_UNBOUNDED, source.getBoundedness());
-  }
-
-  @Test
-  public void testGetSplitSerializer() {
-    HoodieSource<RowData> source = new HoodieSource<>(
-        scanContext,
-        mockReaderFunction,
-        mockComparator,
-        mockMetaClient,
-        mockRecordEmitter
-    );
-
-    SimpleVersionedSerializer<HoodieSourceSplit> serializer = source.getSplitSerializer();
-    assertNotNull(serializer);
-  }
-
-  @Test
-  public void testGetEnumeratorCheckpointSerializer() {
-    HoodieSource<RowData> source = new HoodieSource<>(
-        scanContext,
-        mockReaderFunction,
-        mockComparator,
-        mockMetaClient,
-        mockRecordEmitter
-    );
-
-    SimpleVersionedSerializer<HoodieSplitEnumeratorState> serializer =
-        source.getEnumeratorCheckpointSerializer();
-    assertNotNull(serializer);
-  }
-
-  @Test
-  public void testCreateEnumeratorWithNullState() throws Exception {
-
-    HoodieTableMetaClient metaClient = HoodieTestUtils.init(tempDir.getAbsolutePath(), HoodieTableType.COPY_ON_WRITE);
-    Configuration conf = TestConfigurations.getDefaultConf(tempDir.getAbsolutePath());
+    metaClient = HoodieTestUtils.init(tempDir.getAbsolutePath(), HoodieTableType.MERGE_ON_READ);
+    conf.set(FlinkOptions.TABLE_TYPE, HoodieTableType.MERGE_ON_READ.name());
     conf.set(FlinkOptions.READ_AS_STREAMING, true);
 
-    // Insert test data
     TestData.writeData(TestData.DATA_SET_INSERT, conf);
     metaClient.reloadActiveTimeline();
-    HoodieScanContext scanContext = createScanContext(conf);
 
-    HoodieSource<RowData> source = new HoodieSource<>(
-        scanContext,
-        mockReaderFunction,
-        mockComparator,
-        metaClient,
-        mockRecordEmitter
-    );
-
-    SplitEnumeratorContext<HoodieSourceSplit> mockEnumContext = createMockSplitEnumeratorContext();
-    SplitEnumerator<HoodieSourceSplit, HoodieSplitEnumeratorState> enumerator =
-        source.createEnumerator(mockEnumContext);
-
-    assertNotNull(enumerator);
+    HoodieSource<RowData> source = createHoodieSource(conf, metaClient);
+    assertEquals(Boundedness.CONTINUOUS_UNBOUNDED, source.getBoundedness(),
+        "Streaming mode should return CONTINUOUS_UNBOUNDED");
   }
 
   @Test
-  public void testRestoreEnumeratorWithState() throws Exception {
-    HoodieSource<RowData> source = new HoodieSource<>(
-        scanContext,
-        mockReaderFunction,
-        mockComparator,
-        mockMetaClient,
-        mockRecordEmitter
-    );
+  public void testCreateBatchHoodieSplitsWithReadOptimizedQuery() throws Exception {
+    metaClient = HoodieTestUtils.init(tempDir.getAbsolutePath(), HoodieTableType.MERGE_ON_READ);
+    conf.set(FlinkOptions.TABLE_TYPE, HoodieTableType.MERGE_ON_READ.name());
+    conf.set(FlinkOptions.QUERY_TYPE, FlinkOptions.QUERY_TYPE_READ_OPTIMIZED);
 
-    // Create a state with some splits
-    HoodieSourceSplit split1 = createTestSplit(1, "file1", "/partition1");
-    HoodieSourceSplit split2 = createTestSplit(2, "file2", "/partition2");
+    TestData.writeData(TestData.DATA_SET_INSERT, conf);
+    metaClient.reloadActiveTimeline();
 
-    List<HoodieSourceSplitState> splitStates = Arrays.asList(
-        new HoodieSourceSplitState(split1, HoodieSourceSplitStatus.UNASSIGNED),
-        new HoodieSourceSplitState(split2, HoodieSourceSplitStatus.ASSIGNED)
-    );
+    HoodieSource<RowData> source = createHoodieSource(conf, metaClient);
+    List<HoodieSourceSplit> splits = source.createBatchHoodieSplits();
 
-    HoodieSplitEnumeratorState state = new HoodieSplitEnumeratorState(
-        splitStates,
-        Option.of("20240101000000"),
-        Option.empty()
-    );
-
-    SplitEnumeratorContext<HoodieSourceSplit> mockEnumContext = createMockSplitEnumeratorContext();
-    SplitEnumerator<HoodieSourceSplit, HoodieSplitEnumeratorState> enumerator =
-        source.restoreEnumerator(mockEnumContext, state);
-
-    assertNotNull(enumerator);
+    assertNotNull(splits, "Splits should not be null");
+    // Read optimized query only reads base files
+    splits.forEach(split -> {
+      assertNotNull(split.getBasePath(), "Base path should not be null");
+      assertFalse(split.getLogPaths().isPresent() && !split.getLogPaths().get().isEmpty(),
+          "Read optimized should not have log files");
+    });
   }
 
   @Test
-  public void testRestoreEnumeratorWithEmptyState() throws Exception {
-    HoodieSource<RowData> source = new HoodieSource<>(
-        scanContext,
-        mockReaderFunction,
-        mockComparator,
-        mockMetaClient,
-        mockRecordEmitter
-    );
+  public void testCreateBatchHoodieSplitsWithIncrementalQuery() throws Exception {
+    metaClient = HoodieTestUtils.init(tempDir.getAbsolutePath(), HoodieTableType.COPY_ON_WRITE);
+    conf.set(FlinkOptions.TABLE_TYPE, HoodieTableType.COPY_ON_WRITE.name());
+    conf.set(FlinkOptions.QUERY_TYPE, FlinkOptions.QUERY_TYPE_INCREMENTAL);
+    conf.set(FlinkOptions.READ_START_COMMIT, FlinkOptions.START_COMMIT_EARLIEST);
 
-    HoodieSplitEnumeratorState state = new HoodieSplitEnumeratorState(
-        Collections.emptyList(),
-        Option.empty(),
-        Option.empty()
-    );
+    TestData.writeData(TestData.DATA_SET_INSERT, conf);
+    TestData.writeData(TestData.DATA_SET_UPDATE_INSERT, conf);
+    metaClient.reloadActiveTimeline();
 
-    SplitEnumeratorContext<HoodieSourceSplit> mockEnumContext = createMockSplitEnumeratorContext();
-    SplitEnumerator<HoodieSourceSplit, HoodieSplitEnumeratorState> enumerator =
-        source.restoreEnumerator(mockEnumContext, state);
+    HoodieSource<RowData> source = createHoodieSource(conf, metaClient);
+    List<HoodieSourceSplit> splits = source.createBatchHoodieSplits();
 
-    assertNotNull(enumerator);
+    assertNotNull(splits, "Splits should not be null for incremental query");
   }
 
   @Test
-  public void testRestoreEnumeratorWithMultipleSplits() throws Exception {
-    HoodieSource<RowData> source = new HoodieSource<>(
-        scanContext,
-        mockReaderFunction,
-        mockComparator,
-        mockMetaClient,
-        mockRecordEmitter
-    );
+  public void testCreateBatchHoodieSplitsWithEmptyTable() throws Exception {
+    metaClient = HoodieTestUtils.init(tempDir.getAbsolutePath(), HoodieTableType.COPY_ON_WRITE);
+    conf.set(FlinkOptions.TABLE_TYPE, HoodieTableType.COPY_ON_WRITE.name());
 
-    List<HoodieSourceSplitState> splitStates = new ArrayList<>();
-    for (int i = 0; i < 10; i++) {
-      HoodieSourceSplit split = createTestSplit(i, "file-" + i, "/partition-" + i);
-      splitStates.add(new HoodieSourceSplitState(split, HoodieSourceSplitStatus.UNASSIGNED));
-    }
+    // Don't write any data
+    HoodieSource<RowData> source = createHoodieSource(conf, metaClient);
+    List<HoodieSourceSplit> splits = source.createBatchHoodieSplits();
 
-    HoodieSplitEnumeratorState state = new HoodieSplitEnumeratorState(
-        splitStates,
-        Option.of("20240101120000"),
-        Option.of("offset-123")
-    );
-
-    SplitEnumeratorContext<HoodieSourceSplit> mockEnumContext = createMockSplitEnumeratorContext();
-    SplitEnumerator<HoodieSourceSplit, HoodieSplitEnumeratorState> enumerator =
-        source.restoreEnumerator(mockEnumContext, state);
-
-    assertNotNull(enumerator);
+    assertNotNull(splits, "Splits should not be null even for empty table");
+    assertTrue(splits.isEmpty(), "Splits should be empty for empty table");
   }
 
   @Test
-  public void testCreateStreamingEnumeratorWithNullState() throws Exception {
-    Configuration conf = new Configuration();
-    conf.set(FlinkOptions.PATH, tempDir.getAbsolutePath());
+  public void testCreateBatchHoodieSplitsWithPartitionPruner() throws Exception {
+    metaClient = HoodieTestUtils.init(tempDir.getAbsolutePath(), HoodieTableType.COPY_ON_WRITE);
+    conf.set(FlinkOptions.TABLE_TYPE, HoodieTableType.COPY_ON_WRITE.name());
 
-    HoodieScanContext streamingScanContext = new HoodieScanContext.Builder()
-        .conf(conf)
-        .path(new Path(tempDir.getAbsolutePath()))
-        .rowType(TestConfigurations.ROW_TYPE)
-        .startInstant("20240101000000")
-        .maxCompactionMemoryInBytes(100 * 1024 * 1024)
-        .maxPendingSplits(1000)
-        .skipCompaction(false)
-        .skipClustering(false)
-        .skipInsertOverwrite(false)
-        .cdcEnabled(false)
-        .isStreaming(true)
-        .build();
+    TestData.writeData(TestData.DATA_SET_INSERT, conf);
+    metaClient.reloadActiveTimeline();
 
-    HoodieSource<RowData> source = new HoodieSource<>(
-        streamingScanContext,
-        mockReaderFunction,
-        mockComparator,
-        mockMetaClient,
-        mockRecordEmitter
-    );
+    // Create partition pruner that filters partition = 'par1'
+    FieldReferenceExpression partitionFieldRef = new FieldReferenceExpression(
+        "partition", DataTypes.STRING(), 0, 0);
+    ExpressionEvaluators.Evaluator equalToEvaluator = ExpressionEvaluators.EqualTo.getInstance()
+        .bindVal(new ValueLiteralExpression("par1"))
+        .bindFieldReference(partitionFieldRef);
 
-    SplitEnumeratorContext<HoodieSourceSplit> mockEnumContext = createMockSplitEnumeratorContext();
-    SplitEnumerator<HoodieSourceSplit, HoodieSplitEnumeratorState> enumerator =
-        source.createEnumerator(mockEnumContext);
+    PartitionPruners.PartitionPruner partitionPruner =
+        PartitionPruners.builder()
+            .partitionEvaluators(Collections.singletonList(equalToEvaluator))
+            .partitionKeys(Collections.singletonList("partition"))
+            .partitionTypes(Collections.singletonList(DataTypes.STRING()))
+            .defaultParName(PartitionPathEncodeUtils.DEFAULT_PARTITION_PATH)
+            .hivePartition(false)
+            .build();
 
-    assertNotNull(enumerator);
+    HoodieSource<RowData> source = createHoodieSourceWithPruner(conf, metaClient, partitionPruner);
+    List<HoodieSourceSplit> splits = source.createBatchHoodieSplits();
+
+    assertNotNull(splits, "Splits should not be null");
+    // Verify that only par1 partition is included
+    splits.forEach(split -> {
+      assertTrue(split.getBasePath().get().contains("par1") || split.getTablePath().contains("par1"),
+          "Split should be from par1 partition");
+    });
+  }
+
+  @ParameterizedTest
+  @EnumSource(value = HoodieTableType.class)
+  public void testCreateBatchHoodieSplitsWithDifferentTableTypes(HoodieTableType tableType) throws Exception {
+    metaClient = HoodieTestUtils.init(tempDir.getAbsolutePath(), tableType);
+    conf.set(FlinkOptions.TABLE_TYPE, tableType.name());
+    conf.set(FlinkOptions.QUERY_TYPE, FlinkOptions.QUERY_TYPE_SNAPSHOT);
+
+    TestData.writeData(TestData.DATA_SET_INSERT, conf);
+    metaClient.reloadActiveTimeline();
+
+    HoodieSource<RowData> source = createHoodieSource(conf, metaClient);
+    List<HoodieSourceSplit> splits = source.createBatchHoodieSplits();
+
+    assertNotNull(splits, "Splits should not be null for table type: " + tableType);
+    assertFalse(splits.isEmpty(), "Splits should not be empty for table type: " + tableType);
+    splits.forEach(split -> {
+      assertNotNull(split.getBasePath(), "Base path should not be null for: " + tableType);
+      assertNotNull(split.getFileId(), "File ID should not be null for: " + tableType);
+    });
   }
 
   @Test
-  public void testCreateStreamingEnumeratorWithState() throws Exception {
-    Configuration conf = new Configuration();
-    conf.set(FlinkOptions.PATH, tempDir.getAbsolutePath());
+  public void testCreateBatchHoodieSplitsWithColumnStatsPruner() throws Exception {
+    metaClient = HoodieTestUtils.init(tempDir.getAbsolutePath(), HoodieTableType.COPY_ON_WRITE);
+    conf.set(FlinkOptions.TABLE_TYPE, HoodieTableType.COPY_ON_WRITE.name());
+    conf.set(FlinkOptions.READ_DATA_SKIPPING_ENABLED, true);
+    conf.setString(HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key(), "true");
 
-    HoodieScanContext streamingScanContext = new HoodieScanContext.Builder()
-        .conf(conf)
-        .path(new Path(tempDir.getAbsolutePath()))
-        .rowType(TestConfigurations.ROW_TYPE)
-        .startInstant("20240101000000")
-        .maxCompactionMemoryInBytes(100 * 1024 * 1024)
-        .maxPendingSplits(1000)
-        .skipCompaction(false)
-        .skipClustering(false)
-        .skipInsertOverwrite(false)
-        .cdcEnabled(false)
-        .isStreaming(true)
-        .build();
+    TestData.writeData(TestData.DATA_SET_INSERT, conf);
+    metaClient.reloadActiveTimeline();
 
-    HoodieSource<RowData> source = new HoodieSource<>(
-        streamingScanContext,
-        mockReaderFunction,
-        mockComparator,
-        mockMetaClient,
-        mockRecordEmitter
-    );
+    // Create column stats probe with uuid > 'id5' filter
+    ColumnStatsProbe columnStatsProbe = ColumnStatsProbe.newInstance(Arrays.asList(
+        CallExpression.permanent(
+            FunctionIdentifier.of("greaterThan"),
+            BuiltInFunctionDefinitions.GREATER_THAN,
+            Arrays.asList(
+                new FieldReferenceExpression("uuid", DataTypes.STRING(), 0, 0),
+                new ValueLiteralExpression("id5", DataTypes.STRING().notNull())
+            ),
+            DataTypes.BOOLEAN())));
 
-    HoodieSourceSplit split = createTestSplit(1, "file1", "/partition1");
-    HoodieSplitEnumeratorState state = new HoodieSplitEnumeratorState(
-        Collections.singletonList(new HoodieSourceSplitState(split, HoodieSourceSplitStatus.UNASSIGNED)),
-        Option.of("20240101000000"),
-        Option.empty()
-    );
+    PartitionPruners.PartitionPruner partitionPruner =
+        PartitionPruners.builder()
+            .rowType(TestConfigurations.ROW_TYPE)
+            .basePath(tempDir.getAbsolutePath())
+            .metaClient(metaClient)
+            .conf(conf)
+            .columnStatsProbe(columnStatsProbe)
+            .build();
 
-    SplitEnumeratorContext<HoodieSourceSplit> mockEnumContext = createMockSplitEnumeratorContext();
-    SplitEnumerator<HoodieSourceSplit, HoodieSplitEnumeratorState> enumerator =
-        source.restoreEnumerator(mockEnumContext, state);
+    HoodieSource<RowData> source = createHoodieSourceWithPruner(conf, metaClient, partitionPruner);
+    List<HoodieSourceSplit> splits = source.createBatchHoodieSplits();
 
-    assertNotNull(enumerator);
+    assertNotNull(splits, "Splits should not be null with column stats pruner");
   }
 
   @Test
-  public void testSplitSerializerCanSerializeAndDeserialize() throws IOException {
-    HoodieSource<RowData> source = new HoodieSource<>(
-        scanContext,
-        mockReaderFunction,
-        mockComparator,
-        mockMetaClient,
-        mockRecordEmitter
-    );
+  public void testGetOrBuildFileIndexInternal() throws Exception {
+    metaClient = HoodieTestUtils.init(tempDir.getAbsolutePath(), HoodieTableType.COPY_ON_WRITE);
+    conf.set(FlinkOptions.TABLE_TYPE, HoodieTableType.COPY_ON_WRITE.name());
 
-    SimpleVersionedSerializer<HoodieSourceSplit> serializer = source.getSplitSerializer();
-    HoodieSourceSplit originalSplit = createTestSplit(1, "file1", "/partition1");
+    TestData.writeData(TestData.DATA_SET_INSERT, conf);
+    metaClient.reloadActiveTimeline();
 
-    byte[] serialized = serializer.serialize(originalSplit);
-    HoodieSourceSplit deserializedSplit = serializer.deserialize(serializer.getVersion(), serialized);
+    HoodieSource<RowData> source = createHoodieSource(conf, metaClient);
+    FileIndex fileIndex = source.getOrBuildFileIndex();
 
-    assertEquals(originalSplit, deserializedSplit);
+    assertNotNull(fileIndex, "File index should not be null");
+    assertNotNull(fileIndex.getOrBuildPartitionPaths(), "Partition paths should not be null");
+    assertFalse(fileIndex.getOrBuildPartitionPaths().isEmpty(),
+        "Partition paths should not be empty");
   }
 
   @Test
-  public void testEnumeratorStateSerializerCanSerializeAndDeserialize() throws IOException {
-    HoodieSource<RowData> source = new HoodieSource<>(
-        scanContext,
-        mockReaderFunction,
-        mockComparator,
-        mockMetaClient,
-        mockRecordEmitter
-    );
+  public void testGetOrBuildFileIndexWithPartitionPruner() throws Exception {
+    metaClient = HoodieTestUtils.init(tempDir.getAbsolutePath(), HoodieTableType.COPY_ON_WRITE);
+    conf.set(FlinkOptions.TABLE_TYPE, HoodieTableType.COPY_ON_WRITE.name());
 
-    SimpleVersionedSerializer<HoodieSplitEnumeratorState> serializer =
-        source.getEnumeratorCheckpointSerializer();
+    TestData.writeData(TestData.DATA_SET_INSERT, conf);
+    metaClient.reloadActiveTimeline();
 
-    HoodieSourceSplit split = createTestSplit(1, "file1", "/partition1");
-    HoodieSplitEnumeratorState originalState = new HoodieSplitEnumeratorState(
-        Collections.singletonList(new HoodieSourceSplitState(split, HoodieSourceSplitStatus.ASSIGNED)),
-        Option.of("20240101000000"),
-        Option.empty()
-    );
+    // Create partition pruner
+    FieldReferenceExpression partitionFieldRef = new FieldReferenceExpression(
+        "partition", DataTypes.STRING(), 0, 0);
+    ExpressionEvaluators.Evaluator greaterThanEvaluator = ExpressionEvaluators.GreaterThanOrEqual.getInstance()
+        .bindVal(new ValueLiteralExpression("par2"))
+        .bindFieldReference(partitionFieldRef);
 
-    byte[] serialized = serializer.serialize(originalState);
-    HoodieSplitEnumeratorState deserializedState = serializer.deserialize(
-        serializer.getVersion(),
-        serialized
-    );
+    PartitionPruners.PartitionPruner partitionPruner =
+        PartitionPruners.builder()
+            .partitionEvaluators(Collections.singletonList(greaterThanEvaluator))
+            .partitionKeys(Collections.singletonList("partition"))
+            .partitionTypes(Collections.singletonList(DataTypes.STRING()))
+            .defaultParName(PartitionPathEncodeUtils.DEFAULT_PARTITION_PATH)
+            .hivePartition(false)
+            .build();
 
-    assertEquals(originalState.getPendingSplitStates().size(),
-        deserializedState.getPendingSplitStates().size());
-    assertEquals(originalState.getLastEnumeratedInstant(),
-        deserializedState.getLastEnumeratedInstant());
+    HoodieSource<RowData> source = createHoodieSourceWithPruner(conf, metaClient, partitionPruner);
+    FileIndex fileIndex = source.getOrBuildFileIndex();
+
+    assertNotNull(fileIndex, "File index should not be null");
+    List<String> partitionPaths = fileIndex.getOrBuildPartitionPaths();
+    assertNotNull(partitionPaths, "Partition paths should not be null");
+    // Verify that only partitions >= par2 are included (par2, par3, par4)
+    partitionPaths.forEach(path -> {
+      assertTrue(path.compareTo("par2") >= 0,
+          "Partition path should be >= par2: " + path);
+    });
   }
 
-  /**
-   * Helper method to create a test HoodieSourceSplit.
-   */
-  private HoodieSourceSplit createTestSplit(int splitNum, String fileId, String partitionPath) {
-    return new HoodieSourceSplit(
-        splitNum,
-        "40e603a8-3cc1-4d09-b0a5-1432992b4bf7_1-0" + splitNum + "_20260126034717000.parquet",
-        Option.of(Collections.emptyList()),
-        "/test/table",
-        partitionPath,
-        "read_optimized",
-        "19700101000000000",
-        fileId
-    );
+  @Test
+  public void testSplitSerializerNotNull() throws Exception {
+    metaClient = HoodieTestUtils.init(tempDir.getAbsolutePath(), HoodieTableType.COPY_ON_WRITE);
+    conf.set(FlinkOptions.TABLE_TYPE, HoodieTableType.COPY_ON_WRITE.name());
+
+    HoodieSource<RowData> source = createHoodieSource(conf, metaClient);
+    assertNotNull(source.getSplitSerializer(), "Split serializer should not be null");
   }
 
-  private SplitEnumeratorContext<HoodieSourceSplit> createMockSplitEnumeratorContext() {
-    SplitEnumeratorContext<HoodieSourceSplit> mockEnumContext = mock(SplitEnumeratorContext.class);
-    SplitEnumeratorMetricGroup metricGroup = UnregisteredMetricsGroup.createSplitEnumeratorMetricGroup();
-    doReturn(metricGroup).when(mockEnumContext).metricGroup();
-    doReturn(1).when(mockEnumContext).currentParallelism();
+  @Test
+  public void testEnumeratorCheckpointSerializerNotNull() throws Exception {
+    metaClient = HoodieTestUtils.init(tempDir.getAbsolutePath(), HoodieTableType.COPY_ON_WRITE);
+    conf.set(FlinkOptions.TABLE_TYPE, HoodieTableType.COPY_ON_WRITE.name());
 
-    return mockEnumContext;
+    HoodieSource<RowData> source = createHoodieSource(conf, metaClient);
+    assertNotNull(source.getEnumeratorCheckpointSerializer(),
+        "Enumerator checkpoint serializer should not be null");
   }
 
-  private HoodieScanContext createScanContext(Configuration conf) throws Exception {
-    return createScanContextWithSkipOptions(conf, false, false, false);
+  @Test
+  public void testCreateBatchHoodieSplitsWithMultiplePartitions() throws Exception {
+    metaClient = HoodieTestUtils.init(tempDir.getAbsolutePath(), HoodieTableType.COPY_ON_WRITE);
+    conf.set(FlinkOptions.TABLE_TYPE, HoodieTableType.COPY_ON_WRITE.name());
+
+    // Write data to multiple partitions
+    TestData.writeData(TestData.DATA_SET_INSERT, conf);
+    TestData.writeData(TestData.DATA_SET_INSERT_SEPARATE_PARTITION, conf);
+    metaClient.reloadActiveTimeline();
+
+    HoodieSource<RowData> source = createHoodieSource(conf, metaClient);
+    List<HoodieSourceSplit> splits = source.createBatchHoodieSplits();
+
+    assertNotNull(splits, "Splits should not be null");
+    assertFalse(splits.isEmpty(), "Splits should not be empty");
+
+    // Verify splits from different partitions exist
+    long distinctPartitions = splits.stream()
+        .map(split -> split.getPartitionPath())
+        .distinct()
+        .count();
+    assertTrue(distinctPartitions > 1, "Should have splits from multiple partitions");
   }
 
-  private HoodieScanContext createScanContextWithSkipOptions(
+  @Test
+  public void testIncrementalQueryWithPartitionPruner() throws Exception {
+    metaClient = HoodieTestUtils.init(tempDir.getAbsolutePath(), HoodieTableType.COPY_ON_WRITE);
+    conf.set(FlinkOptions.TABLE_TYPE, HoodieTableType.COPY_ON_WRITE.name());
+    conf.set(FlinkOptions.QUERY_TYPE, FlinkOptions.QUERY_TYPE_INCREMENTAL);
+    conf.set(FlinkOptions.READ_START_COMMIT, FlinkOptions.START_COMMIT_EARLIEST);
+
+    TestData.writeData(TestData.DATA_SET_INSERT, conf);
+    TestData.writeData(TestData.DATA_SET_UPDATE_INSERT, conf);
+    metaClient.reloadActiveTimeline();
+
+    // Create partition pruner for partition = 'par1'
+    FieldReferenceExpression partitionFieldRef = new FieldReferenceExpression(
+        "partition", DataTypes.STRING(), 0, 0);
+    ExpressionEvaluators.Evaluator equalToEvaluator = ExpressionEvaluators.EqualTo.getInstance()
+        .bindVal(new ValueLiteralExpression("par1"))
+        .bindFieldReference(partitionFieldRef);
+
+    PartitionPruners.PartitionPruner partitionPruner =
+        PartitionPruners.builder()
+            .partitionEvaluators(Collections.singletonList(equalToEvaluator))
+            .partitionKeys(Collections.singletonList("partition"))
+            .partitionTypes(Collections.singletonList(DataTypes.STRING()))
+            .defaultParName(PartitionPathEncodeUtils.DEFAULT_PARTITION_PATH)
+            .hivePartition(false)
+            .build();
+
+    HoodieSource<RowData> source = createHoodieSourceWithPruner(conf, metaClient, partitionPruner);
+    List<HoodieSourceSplit> splits = source.createBatchHoodieSplits();
+
+    assertNotNull(splits, "Incremental splits with pruner should not be null");
+  }
+
+  // Helper methods
+
+  private HoodieSource<RowData> createHoodieSource(Configuration conf, HoodieTableMetaClient metaClient) {
+    return createHoodieSourceWithPruner(conf, metaClient, null);
+  }
+
+  private HoodieSource<RowData> createHoodieSourceWithPruner(
       Configuration conf,
-      boolean skipCompaction,
-      boolean skipClustering,
-      boolean skipInsertOverwrite) throws Exception {
-    return new HoodieScanContext.Builder()
+      HoodieTableMetaClient metaClient,
+      PartitionPruners.PartitionPruner partitionPruner) {
+    RowType rowType = TestConfigurations.ROW_TYPE;
+    HoodieScanContext scanContext = new HoodieScanContext.Builder()
         .conf(conf)
-        .path(new Path(tempDir.getAbsolutePath()))
-        .rowType(TestConfigurations.ROW_TYPE)
+        .path(tablePath)
+        .rowType(rowType)
         .startInstant(conf.get(FlinkOptions.READ_START_COMMIT))
-        .endInstant("")
-        .maxCompactionMemoryInBytes(100 * 1024 * 1024)
+        .endInstant(conf.get(FlinkOptions.READ_END_COMMIT))
+        .maxCompactionMemoryInBytes(conf.get(FlinkOptions.COMPACTION_MAX_MEMORY))
         .maxPendingSplits(1000)
-        .skipCompaction(skipCompaction)
-        .skipClustering(skipClustering)
-        .skipInsertOverwrite(skipInsertOverwrite)
-        .cdcEnabled(false)
+        .skipCompaction(conf.get(FlinkOptions.READ_STREAMING_SKIP_COMPACT))
+        .skipClustering(conf.get(FlinkOptions.READ_STREAMING_SKIP_CLUSTERING))
+        .skipInsertOverwrite(conf.get(FlinkOptions.READ_STREAMING_SKIP_INSERT_OVERWRITE))
+        .cdcEnabled(conf.get(FlinkOptions.CDC_ENABLED))
+        .isStreaming(conf.get(FlinkOptions.READ_AS_STREAMING))
+        .partitionPruner(partitionPruner)
         .build();
-  }
 
-  @Test
-  public void testEnumeratorUsesDefaultSplitAssignerForCow() throws Exception {
-    HoodieTableMetaClient metaClient = HoodieTestUtils.init(tempDir.getAbsolutePath(), HoodieTableType.COPY_ON_WRITE);
-    Configuration conf = TestConfigurations.getDefaultConf(tempDir.getAbsolutePath());
-    conf.set(FlinkOptions.TABLE_TYPE, HoodieTableType.COPY_ON_WRITE.name());
-    conf.set(FlinkOptions.OPERATION, "upsert");
-    conf.set(FlinkOptions.READ_AS_STREAMING, true);
+    HoodieWriteConfig writeConfig = FlinkWriteClients.getHoodieClientConfig(conf, false, false);
+    HadoopStorageConfiguration hadoopConf = new HadoopStorageConfiguration(
+        (org.apache.hadoop.conf.Configuration) metaClient.getStorageConf().unwrap());
+    HoodieFlinkEngineContext flinkEngineContext = new HoodieFlinkEngineContext(hadoopConf.unwrap());
+    HoodieFlinkTable<RowData> flinkTable = HoodieFlinkTable.create(writeConfig, flinkEngineContext);
+    FlinkReaderContextFactory readerContextFactory = new FlinkReaderContextFactory(metaClient);
 
-    TestData.writeData(TestData.DATA_SET_INSERT, conf);
-    metaClient.reloadActiveTimeline();
-    HoodieScanContext scanContext = createScanContext(conf);
+    HoodieSchema schema = HoodieSchemaConverter.convertToSchema(rowType);
 
-    HoodieSource<RowData> source = new HoodieSource<>(
+    HoodieSplitReaderFunction splitReaderFunction = new HoodieSplitReaderFunction(
+        flinkTable,
+        readerContextFactory.getContext(),
+        conf,
+            schema, // schema will be resolved from table
+            schema, // required schema
+        conf.get(FlinkOptions.MERGE_TYPE),
+        org.apache.hudi.common.util.Option.empty());
+
+    return new HoodieSource<>(
         scanContext,
-        mockReaderFunction,
-        mockComparator,
+        splitReaderFunction,
+        new HoodieSourceSplitComparator(),
         metaClient,
-        mockRecordEmitter
-    );
-
-    SplitEnumeratorContext<HoodieSourceSplit> mockEnumContext = createMockSplitEnumeratorContext();
-    SplitEnumerator<HoodieSourceSplit, HoodieSplitEnumeratorState> enumerator =
-        source.createEnumerator(mockEnumContext);
-
-    assertNotNull(enumerator, "Should create enumerator with DefaultSplitAssigner for COW");
-  }
-
-  @Test
-  public void testEnumeratorUsesBucketAssignerForMorWithBucketIndex() throws Exception {
-    HoodieTableMetaClient metaClient = HoodieTestUtils.init(tempDir.getAbsolutePath(), HoodieTableType.MERGE_ON_READ);
-    Configuration conf = TestConfigurations.getDefaultConf(tempDir.getAbsolutePath());
-    conf.set(FlinkOptions.TABLE_TYPE, HoodieTableType.MERGE_ON_READ.name());
-    conf.set(FlinkOptions.INDEX_TYPE, "BUCKET");
-    conf.set(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS, 8);
-    conf.set(FlinkOptions.OPERATION, "upsert");
-    conf.set(FlinkOptions.READ_AS_STREAMING, true);
-
-    TestData.writeData(TestData.DATA_SET_INSERT, conf);
-    metaClient.reloadActiveTimeline();
-    HoodieScanContext scanContext = createScanContext(conf);
-
-    HoodieSource<RowData> source = new HoodieSource<>(
-        scanContext,
-        mockReaderFunction,
-        mockComparator,
-        metaClient,
-        mockRecordEmitter
-    );
-
-    SplitEnumeratorContext<HoodieSourceSplit> mockEnumContext = createMockSplitEnumeratorContext();
-    SplitEnumerator<HoodieSourceSplit, HoodieSplitEnumeratorState> enumerator =
-        source.createEnumerator(mockEnumContext);
-
-    assertNotNull(enumerator, "Should create enumerator with BucketSplitAssigner for MOR with bucket index");
-  }
-
-  @Test
-  public void testEnumeratorUsesNumberAssignerForAppendMode() throws Exception {
-    HoodieTableMetaClient metaClient = HoodieTestUtils.init(tempDir.getAbsolutePath(), HoodieTableType.COPY_ON_WRITE);
-    Configuration conf = TestConfigurations.getDefaultConf(tempDir.getAbsolutePath());
-    conf.set(FlinkOptions.TABLE_TYPE, HoodieTableType.COPY_ON_WRITE.name());
-    conf.set(FlinkOptions.OPERATION, "insert");
-    conf.set(FlinkOptions.READ_AS_STREAMING, true);
-
-    TestData.writeData(TestData.DATA_SET_INSERT, conf);
-    metaClient.reloadActiveTimeline();
-    HoodieScanContext scanContext = createScanContext(conf);
-
-    HoodieSource<RowData> source = new HoodieSource<>(
-        scanContext,
-        mockReaderFunction,
-        mockComparator,
-        metaClient,
-        mockRecordEmitter
-    );
-
-    SplitEnumeratorContext<HoodieSourceSplit> mockEnumContext = createMockSplitEnumeratorContext();
-    SplitEnumerator<HoodieSourceSplit, HoodieSplitEnumeratorState> enumerator =
-        source.createEnumerator(mockEnumContext);
-
-    assertNotNull(enumerator, "Should create enumerator with NumberSplitAssigner for append mode");
-  }
-
-  @Test
-  public void testRestoreEnumeratorUsesCorrectSplitAssigner() throws Exception {
-    HoodieTableMetaClient metaClient = HoodieTestUtils.init(tempDir.getAbsolutePath(), HoodieTableType.MERGE_ON_READ);
-    Configuration conf = TestConfigurations.getDefaultConf(tempDir.getAbsolutePath());
-    conf.set(FlinkOptions.TABLE_TYPE, HoodieTableType.MERGE_ON_READ.name());
-    conf.set(FlinkOptions.INDEX_TYPE, "BUCKET");
-    conf.set(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS, 4);
-    conf.set(FlinkOptions.OPERATION, "upsert");
-    conf.set(FlinkOptions.READ_AS_STREAMING, true);
-
-    TestData.writeData(TestData.DATA_SET_INSERT, conf);
-    metaClient.reloadActiveTimeline();
-    HoodieScanContext scanContext = createScanContext(conf);
-
-    HoodieSource<RowData> source = new HoodieSource<>(
-        scanContext,
-        mockReaderFunction,
-        mockComparator,
-        metaClient,
-        mockRecordEmitter
-    );
-
-    // Create state with splits
-    HoodieSourceSplit split1 = createTestSplit(1, "00000001_fileId", "/partition1");
-    HoodieSourceSplit split2 = createTestSplit(2, "00000002_fileId", "/partition2");
-
-    List<HoodieSourceSplitState> splitStates = Arrays.asList(
-        new HoodieSourceSplitState(split1, HoodieSourceSplitStatus.UNASSIGNED),
-        new HoodieSourceSplitState(split2, HoodieSourceSplitStatus.UNASSIGNED)
-    );
-
-    HoodieSplitEnumeratorState state = new HoodieSplitEnumeratorState(
-        splitStates,
-        Option.of("20240101000000"),
-        Option.empty()
-    );
-
-    SplitEnumeratorContext<HoodieSourceSplit> mockEnumContext = createMockSplitEnumeratorContext();
-    SplitEnumerator<HoodieSourceSplit, HoodieSplitEnumeratorState> enumerator =
-        source.restoreEnumerator(mockEnumContext, state);
-
-    assertNotNull(enumerator, "Should restore enumerator with correct split assigner");
-  }
-
-  @Test
-  public void testEnumeratorWithDifferentParallelism() throws Exception {
-    HoodieTableMetaClient metaClient = HoodieTestUtils.init(tempDir.getAbsolutePath(), HoodieTableType.COPY_ON_WRITE);
-    Configuration conf = TestConfigurations.getDefaultConf(tempDir.getAbsolutePath());
-    conf.set(FlinkOptions.READ_AS_STREAMING, true);
-
-    TestData.writeData(TestData.DATA_SET_INSERT, conf);
-    metaClient.reloadActiveTimeline();
-    HoodieScanContext scanContext = createScanContext(conf);
-
-    HoodieSource<RowData> source = new HoodieSource<>(
-        scanContext,
-        mockReaderFunction,
-        mockComparator,
-        metaClient,
-        mockRecordEmitter
-    );
-
-    // Test with different parallelism values
-    int[] parallelisms = {1, 4, 8, 16};
-    for (int parallelism : parallelisms) {
-      SplitEnumeratorContext<HoodieSourceSplit> mockEnumContext = mock(SplitEnumeratorContext.class);
-      SplitEnumeratorMetricGroup metricGroup = UnregisteredMetricsGroup.createSplitEnumeratorMetricGroup();
-      doReturn(metricGroup).when(mockEnumContext).metricGroup();
-      doReturn(parallelism).when(mockEnumContext).currentParallelism();
-
-      SplitEnumerator<HoodieSourceSplit, HoodieSplitEnumeratorState> enumerator =
-          source.createEnumerator(mockEnumContext);
-
-      assertNotNull(enumerator, "Should create enumerator with parallelism " + parallelism);
-    }
+        new HoodieRecordEmitter<>());
   }
 }

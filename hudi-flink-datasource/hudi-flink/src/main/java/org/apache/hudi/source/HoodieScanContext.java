@@ -19,11 +19,12 @@
 package org.apache.hudi.source;
 
 import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.source.prune.PartitionPruners;
 
 import org.apache.flink.annotation.Internal;
 import org.apache.flink.configuration.Configuration;
-import org.apache.flink.core.fs.Path;
 import org.apache.flink.table.types.logical.RowType;
+import org.apache.hudi.storage.StoragePath;
 
 import java.io.Serializable;
 import java.time.Duration;
@@ -34,7 +35,7 @@ import java.time.Duration;
 @Internal
 public class HoodieScanContext implements Serializable {
   private final Configuration conf;
-  private final Path path;
+  private final StoragePath path;
   private final RowType rowType;
   private final String startCommit;
   private final String endCommit;
@@ -51,10 +52,12 @@ public class HoodieScanContext implements Serializable {
   private final boolean cdcEnabled;
   // is streaming mode
   private final boolean isStreaming;
+  // Partition pruner
+  private final PartitionPruners.PartitionPruner partitionPruner;
 
   public HoodieScanContext(
       Configuration conf,
-      Path path,
+      StoragePath path,
       RowType rowType,
       String startCommit,
       String endCommit,
@@ -64,7 +67,8 @@ public class HoodieScanContext implements Serializable {
       boolean skipClustering,
       boolean skipInsertOverwrite,
       boolean cdcEnabled,
-      boolean isStreaming) {
+      boolean isStreaming,
+      PartitionPruners.PartitionPruner partitionPruner) {
     this.conf = conf;
     this.path = path;
     this.rowType = rowType;
@@ -77,13 +81,14 @@ public class HoodieScanContext implements Serializable {
     this.skipInsertOverwrite = skipInsertOverwrite;
     this.cdcEnabled = cdcEnabled;
     this.isStreaming = isStreaming;
+    this.partitionPruner = partitionPruner;
   }
 
   public Configuration getConf() {
     return conf;
   }
 
-  public Path getPath() {
+  public StoragePath getPath() {
     return path;
   }
 
@@ -111,6 +116,10 @@ public class HoodieScanContext implements Serializable {
     return skipCompaction;
   }
 
+  public PartitionPruners.PartitionPruner partitionPruner() {
+    return partitionPruner;
+  }
+
   public boolean skipClustering() {
     return skipClustering;
   }
@@ -136,7 +145,7 @@ public class HoodieScanContext implements Serializable {
    */
   public static class Builder {
     private Configuration conf;
-    private Path path;
+    private StoragePath path;
     private RowType rowType;
     private String startInstant;
     private String endInstant;
@@ -147,13 +156,14 @@ public class HoodieScanContext implements Serializable {
     private boolean skipInsertOverwrite;
     private boolean cdcEnabled;
     private boolean isStreaming;
+    private PartitionPruners.PartitionPruner partitionPruner;
 
     public Builder conf(Configuration conf) {
       this.conf = conf;
       return this;
     }
 
-    public Builder path(Path path) {
+    public Builder path(StoragePath path) {
       this.path = path;
       return this;
     }
@@ -208,6 +218,11 @@ public class HoodieScanContext implements Serializable {
       return this;
     }
 
+    public Builder partitionPruner(PartitionPruners.PartitionPruner partitionPruner) {
+      this.partitionPruner = partitionPruner;
+      return this;
+    }
+
     public HoodieScanContext build() {
       return new HoodieScanContext(
           conf,
@@ -221,7 +236,8 @@ public class HoodieScanContext implements Serializable {
           skipClustering,
           skipInsertOverwrite,
           cdcEnabled,
-          isStreaming);
+          isStreaming,
+          partitionPruner);
     }
   }
 }

@@ -18,6 +18,7 @@
 
 package org.apache.hudi.source.split;
 
+import org.apache.flink.core.fs.Path;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.source.IncrementalInputSplits;
 import org.apache.hudi.source.HoodieScanContext;
@@ -42,12 +43,13 @@ public class DefaultHoodieSplitDiscover implements HoodieContinuousSplitDiscover
     this.metaClient = metaClient;
     this.incrementalInputSplits = IncrementalInputSplits.builder()
         .conf(scanContext.getConf())
-        .path(scanContext.getPath())
+        .path(new Path(scanContext.getPath().toUri()))
         .rowType(scanContext.getRowType())
         .maxCompactionMemoryInBytes(scanContext.getMaxCompactionMemoryInBytes())
         .skipCompaction(scanContext.skipCompaction())
         .skipClustering(scanContext.skipClustering())
-        .skipInsertOverwrite(scanContext.skipInsertOverwrite()).build();
+        .skipInsertOverwrite(scanContext.skipInsertOverwrite())
+        .partitionPruner(scanContext.partitionPruner()).build();
   }
 
   @Override

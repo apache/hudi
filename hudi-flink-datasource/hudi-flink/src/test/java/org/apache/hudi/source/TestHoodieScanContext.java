@@ -19,10 +19,11 @@
 package org.apache.hudi.source;
 
 import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.source.prune.PartitionPruners;
+import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.utils.TestConfigurations;
 
 import org.apache.flink.configuration.Configuration;
-import org.apache.flink.core.fs.Path;
 import org.apache.flink.table.types.logical.RowType;
 import org.junit.jupiter.api.Test;
 
@@ -30,8 +31,12 @@ import java.time.Duration;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import static org.mockito.Mockito.mock;
 
 /**
  * Test cases for {@link HoodieScanContext}.
@@ -43,7 +48,7 @@ public class TestHoodieScanContext {
     Configuration conf = new Configuration();
     conf.set(FlinkOptions.PATH, "/tmp/test");
 
-    HoodieScanContext scanContext = createTestScanContext(conf,  new Path("/tmp/test"),
+    HoodieScanContext scanContext = createTestScanContext(conf,  new StoragePath("/tmp/test"),
         TestConfigurations.ROW_TYPE, "20231201000000000", 100 * 1024 * 1024,
         1000, false, false, false, false);
 
@@ -55,7 +60,7 @@ public class TestHoodieScanContext {
   @Test
   public void testGetPath() throws Exception {
     Configuration conf = new Configuration();
-    Path expectedPath = new Path("/tmp/test/table");
+    StoragePath expectedPath = new StoragePath("/tmp/test/table");
 
     HoodieScanContext scanContext = createTestScanContext(conf, expectedPath,
         TestConfigurations.ROW_TYPE, "20231201000000000", 100 * 1024 * 1024,
@@ -69,7 +74,7 @@ public class TestHoodieScanContext {
     Configuration conf = new Configuration();
     RowType rowType = TestConfigurations.ROW_TYPE;
 
-    HoodieScanContext scanContext = createTestScanContext(conf, new Path("/tmp/test"),
+    HoodieScanContext scanContext = createTestScanContext(conf, new StoragePath("/tmp/test"),
         rowType, "20231201000000000", 100 * 1024 * 1024,
         1000, false, false, false, false);
 
@@ -82,7 +87,7 @@ public class TestHoodieScanContext {
     Configuration conf = new Configuration();
     String expectedInstant = "20231201000000000";
 
-    HoodieScanContext scanContext = createTestScanContext(conf, new Path("/tmp/test"),
+    HoodieScanContext scanContext = createTestScanContext(conf, new StoragePath("/tmp/test"),
         TestConfigurations.ROW_TYPE, expectedInstant, 100 * 1024 * 1024,
         1000, false, false, false, false);
 
@@ -95,7 +100,7 @@ public class TestHoodieScanContext {
     Configuration conf = new Configuration();
     long expectedMemory = 1024L * 1024L * 1024L; // 1GB
 
-    HoodieScanContext scanContext = createTestScanContext(conf, new Path("/tmp/test"),
+    HoodieScanContext scanContext = createTestScanContext(conf, new StoragePath("/tmp/test"),
         TestConfigurations.ROW_TYPE, "20231201000000000", expectedMemory,
         1000, false, false, false, false);
 
@@ -108,7 +113,7 @@ public class TestHoodieScanContext {
     Configuration conf = new Configuration();
     long expectedMaxPendingSplits = 5000L;
 
-    HoodieScanContext scanContext = createTestScanContext(conf, new Path("/tmp/test"),
+    HoodieScanContext scanContext = createTestScanContext(conf, new StoragePath("/tmp/test"),
         TestConfigurations.ROW_TYPE, "20231201000000000", 100 * 1024 * 1024,
         expectedMaxPendingSplits, false, false, false, false);
 
@@ -120,12 +125,12 @@ public class TestHoodieScanContext {
   public void testSkipCompaction() throws Exception {
     Configuration conf = new Configuration();
 
-    HoodieScanContext scanContextTrue = createTestScanContext(conf, new Path("/tmp/test"),
+    HoodieScanContext scanContextTrue = createTestScanContext(conf, new StoragePath("/tmp/test"),
         TestConfigurations.ROW_TYPE, "20231201000000000", 100 * 1024 * 1024,
         1000, true, false, false, false);
     assertTrue(scanContextTrue.skipCompaction(), "Skip compaction should be true");
 
-    HoodieScanContext scanContextFalse = createTestScanContext(conf, new Path("/tmp/test"),
+    HoodieScanContext scanContextFalse = createTestScanContext(conf, new StoragePath("/tmp/test"),
         TestConfigurations.ROW_TYPE, "20231201000000000", 100 * 1024 * 1024,
         1000, false, false, false, false);
     assertFalse(scanContextFalse.skipCompaction(), "Skip compaction should be false");
@@ -135,12 +140,12 @@ public class TestHoodieScanContext {
   public void testSkipClustering() throws Exception {
     Configuration conf = new Configuration();
 
-    HoodieScanContext scanContextTrue = createTestScanContext(conf, new Path("/tmp/test"),
+    HoodieScanContext scanContextTrue = createTestScanContext(conf, new StoragePath("/tmp/test"),
         TestConfigurations.ROW_TYPE, "20231201000000000", 100 * 1024 * 1024,
         1000, false, true, false, false);
     assertTrue(scanContextTrue.skipClustering(), "Skip clustering should be true");
 
-    HoodieScanContext scanContextFalse = createTestScanContext(conf, new Path("/tmp/test"),
+    HoodieScanContext scanContextFalse = createTestScanContext(conf, new StoragePath("/tmp/test"),
         TestConfigurations.ROW_TYPE, "20231201000000000", 100 * 1024 * 1024,
         1000, false, false, false, false);
     assertFalse(scanContextFalse.skipClustering(), "Skip clustering should be false");
@@ -150,12 +155,12 @@ public class TestHoodieScanContext {
   public void testSkipInsertOverwrite() throws Exception {
     Configuration conf = new Configuration();
 
-    HoodieScanContext scanContextTrue = createTestScanContext(conf, new Path("/tmp/test"),
+    HoodieScanContext scanContextTrue = createTestScanContext(conf, new StoragePath("/tmp/test"),
         TestConfigurations.ROW_TYPE, "20231201000000000", 100 * 1024 * 1024,
         1000, false, false, true, false);
     assertTrue(scanContextTrue.skipInsertOverwrite(), "Skip insert overwrite should be true");
 
-    HoodieScanContext scanContextFalse = createTestScanContext(conf, new Path("/tmp/test"),
+    HoodieScanContext scanContextFalse = createTestScanContext(conf, new StoragePath("/tmp/test"),
         TestConfigurations.ROW_TYPE, "20231201000000000", 100 * 1024 * 1024,
         1000, false, false, false, false);
     assertFalse(scanContextFalse.skipInsertOverwrite(), "Skip insert overwrite should be false");
@@ -165,12 +170,12 @@ public class TestHoodieScanContext {
   public void testCdcEnabled() throws Exception {
     Configuration conf = new Configuration();
 
-    HoodieScanContext scanContextTrue = createTestScanContext(conf, new Path("/tmp/test"),
+    HoodieScanContext scanContextTrue = createTestScanContext(conf, new StoragePath("/tmp/test"),
         TestConfigurations.ROW_TYPE, "20231201000000000", 100 * 1024 * 1024,
         1000, false, false, false, true);
     assertTrue(scanContextTrue.cdcEnabled(), "CDC should be enabled");
 
-    HoodieScanContext scanContextFalse = createTestScanContext(conf, new Path("/tmp/test"),
+    HoodieScanContext scanContextFalse = createTestScanContext(conf, new StoragePath("/tmp/test"),
         TestConfigurations.ROW_TYPE, "20231201000000000", 100 * 1024 * 1024,
         1000, false, false, false, false);
     assertFalse(scanContextFalse.cdcEnabled(), "CDC should be disabled");
@@ -181,7 +186,7 @@ public class TestHoodieScanContext {
     Configuration conf = new Configuration();
     conf.set(FlinkOptions.READ_STREAMING_CHECK_INTERVAL, 5);
 
-    HoodieScanContext scanContext = createTestScanContext(conf, new Path("/tmp/test"),
+    HoodieScanContext scanContext = createTestScanContext(conf, new StoragePath("/tmp/test"),
         TestConfigurations.ROW_TYPE, "20231201000000000", 100 * 1024 * 1024,
         1000, false, false, false, false);
     Duration scanInterval = scanContext.getScanInterval();
@@ -195,7 +200,7 @@ public class TestHoodieScanContext {
     Configuration conf = new Configuration();
     // Not setting READ_STREAMING_CHECK_INTERVAL to use default
 
-    HoodieScanContext scanContext = createTestScanContext(conf, new Path("/tmp/test"),
+    HoodieScanContext scanContext = createTestScanContext(conf, new StoragePath("/tmp/test"),
         TestConfigurations.ROW_TYPE, "20231201000000000", 100 * 1024 * 1024,
         1000, false, false, false, false);
     Duration scanInterval = scanContext.getScanInterval();
@@ -209,7 +214,7 @@ public class TestHoodieScanContext {
   public void testAllFieldsInitialized() throws Exception {
     Configuration conf = new Configuration();
     conf.set(FlinkOptions.READ_STREAMING_CHECK_INTERVAL, 10);
-    Path path = new Path("/tmp/hoodie/table");
+    StoragePath path = new StoragePath("/tmp/hoodie/table");
     String startInstant = "20231215120000000";
     long maxCompactionMemory = 2L * 1024L * 1024L * 1024L; // 2GB
     long maxPendingSplits = 10000L;
@@ -232,7 +237,7 @@ public class TestHoodieScanContext {
   @Test
   public void testBuilderWithMinimalConfiguration() throws Exception {
     Configuration conf = new Configuration();
-    Path path = new Path("/tmp/test");
+    StoragePath path = new StoragePath("/tmp/test");
 
     HoodieScanContext scanContext = new HoodieScanContext.Builder()
         .conf(conf)
@@ -254,7 +259,7 @@ public class TestHoodieScanContext {
   @Test
   public void testBuilderChaining() throws Exception {
     Configuration conf = new Configuration();
-    Path path = new Path("/tmp/test");
+    StoragePath path = new StoragePath("/tmp/test");
 
     HoodieScanContext.Builder builder = new HoodieScanContext.Builder();
     HoodieScanContext scanContext = builder
@@ -283,7 +288,7 @@ public class TestHoodieScanContext {
   @Test
   public void testBuilderWithEndInstant() throws Exception {
     Configuration conf = new Configuration();
-    Path path = new Path("/tmp/test");
+    StoragePath path = new StoragePath("/tmp/test");
     String endInstant = "20240201000000";
 
     HoodieScanContext scanContext = new HoodieScanContext.Builder()
@@ -308,7 +313,7 @@ public class TestHoodieScanContext {
   public void testIsStreaming() throws Exception {
     Configuration conf = new Configuration();
 
-    HoodieScanContext streamingScanContext = createTestScanContext(conf, new Path("/tmp/test"),
+    HoodieScanContext streamingScanContext = createTestScanContext(conf, new StoragePath("/tmp/test"),
         TestConfigurations.ROW_TYPE, "20240101000000", 100 * 1024 * 1024,
         1000, false, false, false, false);
 
@@ -316,7 +321,7 @@ public class TestHoodieScanContext {
 
     HoodieScanContext batchScanContext = new HoodieScanContext.Builder()
         .conf(conf)
-        .path(new Path("/tmp/test"))
+        .path(new StoragePath("/tmp/test"))
         .rowType(TestConfigurations.ROW_TYPE)
         .startInstant("20240101000000")
         .maxCompactionMemoryInBytes(100 * 1024 * 1024)
@@ -338,7 +343,7 @@ public class TestHoodieScanContext {
 
     HoodieScanContext scanContext = new HoodieScanContext.Builder()
         .conf(conf)
-        .path(new Path("/tmp/test"))
+        .path(new StoragePath("/tmp/test"))
         .rowType(TestConfigurations.ROW_TYPE)
         .startInstant("20240101000000")
         .endInstant(endCommit)
@@ -356,7 +361,7 @@ public class TestHoodieScanContext {
   @Test
   public void testBuilderProducesIndependentInstances() throws Exception {
     Configuration conf = new Configuration();
-    Path path = new Path("/tmp/test");
+    StoragePath path = new StoragePath("/tmp/test");
 
     HoodieScanContext.Builder builder = new HoodieScanContext.Builder()
         .conf(conf)
@@ -381,7 +386,7 @@ public class TestHoodieScanContext {
   // Helper method to create ScanContext using the Builder
   private HoodieScanContext createTestScanContext(
       Configuration conf,
-      Path path,
+      StoragePath path,
       RowType rowType,
       String startInstant,
       long maxCompactionMemoryInBytes,
@@ -407,7 +412,7 @@ public class TestHoodieScanContext {
   @Test
   public void testStreamingModeConfiguration() throws Exception {
     Configuration conf = new Configuration();
-    Path path = new Path("/tmp/test");
+    StoragePath path = new StoragePath("/tmp/test");
 
     // Test with isStreaming = true
     HoodieScanContext streamingContext = new HoodieScanContext.Builder()
@@ -447,7 +452,7 @@ public class TestHoodieScanContext {
   @Test
   public void testStreamingModeDefault() throws Exception {
     Configuration conf = new Configuration();
-    Path path = new Path("/tmp/test");
+    StoragePath path = new StoragePath("/tmp/test");
 
     HoodieScanContext scanContext = new HoodieScanContext.Builder()
         .conf(conf)
@@ -468,7 +473,7 @@ public class TestHoodieScanContext {
   @Test
   public void testBuilderWithAllStreamingFlags() throws Exception {
     Configuration conf = new Configuration();
-    Path path = new Path("/tmp/test");
+    StoragePath path = new StoragePath("/tmp/test");
 
     HoodieScanContext scanContext = new HoodieScanContext.Builder()
         .conf(conf)
@@ -494,7 +499,7 @@ public class TestHoodieScanContext {
   @Test
   public void testBuilderWithStartAndEndInstants() throws Exception {
     Configuration conf = new Configuration();
-    Path path = new Path("/tmp/test");
+    StoragePath path = new StoragePath("/tmp/test");
     String startInstant = "20240101000000";
     String endInstant = "20240201000000";
 
@@ -520,7 +525,7 @@ public class TestHoodieScanContext {
   public void testBuilderWithCustomScanInterval() throws Exception {
     Configuration conf = new Configuration();
     conf.set(FlinkOptions.READ_STREAMING_CHECK_INTERVAL, 10);
-    Path path = new Path("/tmp/test");
+    StoragePath path = new StoragePath("/tmp/test");
 
     HoodieScanContext scanContext = new HoodieScanContext.Builder()
         .conf(conf)
@@ -542,7 +547,7 @@ public class TestHoodieScanContext {
   @Test
   public void testBuilderWithLargeMemoryConfiguration() throws Exception {
     Configuration conf = new Configuration();
-    Path path = new Path("/tmp/test");
+    StoragePath path = new StoragePath("/tmp/test");
     long largeMemory = 10L * 1024L * 1024L * 1024L; // 10GB
 
     HoodieScanContext scanContext = new HoodieScanContext.Builder()
@@ -565,7 +570,7 @@ public class TestHoodieScanContext {
   @Test
   public void testBuilderWithHighMaxPendingSplits() throws Exception {
     Configuration conf = new Configuration();
-    Path path = new Path("/tmp/test");
+    StoragePath path = new StoragePath("/tmp/test");
     long highPendingSplits = 100000L;
 
     HoodieScanContext scanContext = new HoodieScanContext.Builder()
@@ -583,5 +588,131 @@ public class TestHoodieScanContext {
 
     assertEquals(highPendingSplits, scanContext.getMaxPendingSplits(),
         "High max pending splits should be preserved");
+  }
+
+  @Test
+  public void testPartitionPrunerField() throws Exception {
+    Configuration conf = new Configuration();
+    StoragePath path = new StoragePath("/tmp/test");
+    PartitionPruners.PartitionPruner mockPruner = mock(PartitionPruners.PartitionPruner.class);
+
+    // Test with partition pruner
+    HoodieScanContext contextWithPruner = new HoodieScanContext.Builder()
+        .conf(conf)
+        .path(path)
+        .rowType(TestConfigurations.ROW_TYPE)
+        .startInstant("20240101000000")
+        .maxCompactionMemoryInBytes(100 * 1024 * 1024)
+        .maxPendingSplits(1000)
+        .skipCompaction(false)
+        .skipClustering(false)
+        .skipInsertOverwrite(false)
+        .cdcEnabled(false)
+        .isStreaming(true)
+        .partitionPruner(mockPruner)
+        .build();
+
+    assertNotNull(contextWithPruner.partitionPruner(), "Partition pruner should not be null");
+    assertEquals(mockPruner, contextWithPruner.partitionPruner(),
+        "Partition pruner should match the mock instance");
+
+    // Test without partition pruner
+    HoodieScanContext contextWithoutPruner = new HoodieScanContext.Builder()
+        .conf(conf)
+        .path(path)
+        .rowType(TestConfigurations.ROW_TYPE)
+        .startInstant("20240101000000")
+        .maxCompactionMemoryInBytes(100 * 1024 * 1024)
+        .maxPendingSplits(1000)
+        .skipCompaction(false)
+        .skipClustering(false)
+        .skipInsertOverwrite(false)
+        .cdcEnabled(false)
+        .isStreaming(false)
+        .build();
+
+    assertNull(contextWithoutPruner.partitionPruner(),
+        "Partition pruner should be null when not set");
+  }
+
+  @Test
+  public void testPartitionPrunerWithAllConfigOptions() throws Exception {
+    Configuration conf = new Configuration();
+    conf.set(FlinkOptions.READ_STREAMING_CHECK_INTERVAL, 5);
+    StoragePath path = new StoragePath("/tmp/test");
+    PartitionPruners.PartitionPruner mockPruner = mock(PartitionPruners.PartitionPruner.class);
+
+    HoodieScanContext scanContext = new HoodieScanContext.Builder()
+        .conf(conf)
+        .path(path)
+        .rowType(TestConfigurations.ROW_TYPE)
+        .startInstant("20240101000000")
+        .endInstant("20240201000000")
+        .maxCompactionMemoryInBytes(100 * 1024 * 1024)
+        .maxPendingSplits(1000)
+        .skipCompaction(true)
+        .skipClustering(true)
+        .skipInsertOverwrite(true)
+        .cdcEnabled(true)
+        .isStreaming(true)
+        .partitionPruner(mockPruner)
+        .build();
+
+    // Verify all properties are correctly set
+    assertNotNull(scanContext.partitionPruner(), "Partition pruner should be set");
+    assertTrue(scanContext.isStreaming(), "Should be in streaming mode");
+    assertTrue(scanContext.skipCompaction(), "Skip compaction should be enabled");
+    assertTrue(scanContext.skipClustering(), "Skip clustering should be enabled");
+    assertTrue(scanContext.skipInsertOverwrite(), "Skip insert overwrite should be enabled");
+    assertTrue(scanContext.cdcEnabled(), "CDC should be enabled");
+    assertEquals("20240101000000", scanContext.getStartCommit(), "Start instant should match");
+    assertEquals("20240201000000", scanContext.getEndCommit(), "End instant should match");
+  }
+
+  @Test
+  public void testPartitionPrunerIndependenceAcrossInstances() throws Exception {
+    Configuration conf = new Configuration();
+    StoragePath path = new StoragePath("/tmp/test");
+    PartitionPruners.PartitionPruner mockPruner1 = mock(PartitionPruners.PartitionPruner.class);
+    PartitionPruners.PartitionPruner mockPruner2 = mock(PartitionPruners.PartitionPruner.class);
+
+    // Create two scan contexts with different pruners
+    HoodieScanContext scanContext1 = new HoodieScanContext.Builder()
+        .conf(conf)
+        .path(path)
+        .rowType(TestConfigurations.ROW_TYPE)
+        .startInstant("20240101000000")
+        .maxCompactionMemoryInBytes(100 * 1024 * 1024)
+        .maxPendingSplits(1000)
+        .skipCompaction(false)
+        .skipClustering(false)
+        .skipInsertOverwrite(false)
+        .cdcEnabled(false)
+        .isStreaming(true)
+        .partitionPruner(mockPruner1)
+        .build();
+
+    HoodieScanContext scanContext2 = new HoodieScanContext.Builder()
+        .conf(conf)
+        .path(path)
+        .rowType(TestConfigurations.ROW_TYPE)
+        .startInstant("20240101000000")
+        .maxCompactionMemoryInBytes(100 * 1024 * 1024)
+        .maxPendingSplits(1000)
+        .skipCompaction(false)
+        .skipClustering(false)
+        .skipInsertOverwrite(false)
+        .cdcEnabled(false)
+        .isStreaming(true)
+        .partitionPruner(mockPruner2)
+        .build();
+
+    // Verify that each context has its own independent pruner
+    assertEquals(mockPruner1, scanContext1.partitionPruner(),
+        "First context should have first pruner");
+    assertEquals(mockPruner2, scanContext2.partitionPruner(),
+        "Second context should have second pruner");
+    assertNotEquals(scanContext1.partitionPruner(), scanContext2.partitionPruner(),
+        "Pruners should be independent across contexts");
   }
 }
