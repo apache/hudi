@@ -26,6 +26,8 @@ import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.collection.ImmutablePair;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.source.FileIndex;
@@ -40,8 +42,6 @@ import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
-
-import static org.apache.hudi.util.StreamerUtil.EMPTY_PARTITION_PATH;
 
 /**
  * Abstract base class for creating input splits from a Hudi file index.
@@ -125,19 +125,29 @@ public abstract class FileIndexReader implements Serializable {
    * @return list of Hoodie source splits
    */
   public List<HoodieSourceSplit> buildHoodieSplits(HoodieTableMetaClient metaClient, Configuration conf) {
-    List<MergeOnReadInputSplit> splits = buildInputSplits(metaClient, conf);
-    return splits.stream()
-        .map(split ->
-            new HoodieSourceSplit(
-                HoodieSourceSplit.SPLIT_ID_GEN.incrementAndGet(),
-                split.getBasePath().orElse(null),
-                split.getLogPaths(),
-                split.getTablePath(),
-                // TODO: MergeOnReadInputSplit does not carry partition path info; clean it up
-                EMPTY_PARTITION_PATH,
-                split.getMergeType(),
-                split.getLatestCommit(),
-                split.getFileId()))
+
+    Pair<List<FileSlice>, String> result = readFileSlice(metaClient, conf);
+    final String mergeType = conf.get(FlinkOptions.MERGE_TYPE);
+    final AtomicInteger cnt = new AtomicInteger(0);
+    // generates one Hoodie source split for each file group
+    return result.getLeft().stream()
+        .map(fileSlice -> {
+          String basePath = fileSlice.getBaseFile().map(BaseFile::getPath).orElse(null);
+          Option<List<String>> logPaths = Option.ofNullable(
+              fileSlice.getLogFiles()
+                  .sorted(HoodieLogFile.getLogFileComparator())
+                  .map(logFile -> logFile.getPath().toString())
+                  .collect(Collectors.toList()));
+          return new HoodieSourceSplit(
+              cnt.getAndAdd(1),
+              basePath,
+              logPaths,
+              metaClient.getBasePath().toString(),
+              fileSlice.getPartitionPath(),
+              mergeType,
+              result.getRight(),
+              fileSlice.getFileId());
+        })
         .collect(Collectors.toList());
   }
 
@@ -153,10 +163,37 @@ public abstract class FileIndexReader implements Serializable {
    * @throws HoodieException if no files are found for reading
    */
   public List<MergeOnReadInputSplit> buildInputSplits(HoodieTableMetaClient metaClient, Configuration conf) {
+    Pair<List<FileSlice>, String> result = readFileSlice(metaClient, conf);
+    final String mergeType = conf.get(FlinkOptions.MERGE_TYPE);
+    final AtomicInteger cnt = new AtomicInteger(0);
+    // generates one input split for each file group
+    return result.getLeft().stream()
+        .map(fileSlice -> {
+          String basePath = fileSlice.getBaseFile().map(BaseFile::getPath).orElse(null);
+          Option<List<String>> logPaths = Option.ofNullable(
+              fileSlice.getLogFiles()
+                  .sorted(HoodieLogFile.getLogFileComparator())
+                  .map(logFile -> logFile.getPath().toString())
+                  .collect(Collectors.toList()));
+          return new MergeOnReadInputSplit(
+              cnt.getAndAdd(1),
+              basePath,
+              logPaths,
+              result.getRight(),
+              metaClient.getBasePath().toString(),
+              StreamerUtil.getMaxCompactionMemoryInBytes(conf),
+              mergeType,
+              null,
+              fileSlice.getFileId());
+        })
+        .collect(Collectors.toList());
+  }
+
+  private Pair<List<FileSlice>, String> readFileSlice(HoodieTableMetaClient metaClient, Configuration conf) {
     try (FileIndex fileIndex = getOrBuildFileIndex()) {
       List<String> relPartitionPaths = fileIndex.getOrBuildPartitionPaths();
       if (relPartitionPaths.isEmpty()) {
-        return Collections.emptyList();
+        return ImmutablePair.of(Collections.emptyList(), "");
       }
       List<StoragePathInfo> pathInfoList = fileIndex.getFilesInPartitions();
       if (pathInfoList.isEmpty()) {
@@ -166,41 +203,17 @@ public abstract class FileIndexReader implements Serializable {
       String latestCommit;
       List<FileSlice> allFileSlices;
       // file-slice after pending compaction-requested instant-time is also considered valid
-      try (HoodieTableFileSystemView fsView = new HoodieTableFileSystemView(
-          metaClient, metaClient.getCommitsAndCompactionTimeline().filterCompletedAndCompactionInstants(), pathInfoList)) {
+      try (HoodieTableFileSystemView fsView = new HoodieTableFileSystemView(metaClient,
+          metaClient.getCommitsAndCompactionTimeline().filterCompletedAndCompactionInstants(), pathInfoList)) {
         if (!fsView.getLastInstant().isPresent()) {
-          return Collections.emptyList();
+          return ImmutablePair.of(Collections.emptyList(), "");
         }
         latestCommit = fsView.getLastInstant().get().requestedTime();
         allFileSlices = relPartitionPaths.stream()
             .flatMap(par -> fsView.getLatestMergedFileSlicesBeforeOrOn(par, latestCommit))
             .collect(Collectors.toList());
       }
-      List<FileSlice> fileSlices = fileIndex.filterFileSlices(allFileSlices);
-
-      final String mergeType = conf.get(FlinkOptions.MERGE_TYPE);
-      final AtomicInteger cnt = new AtomicInteger(0);
-      // generates one input split for each file group
-      return fileSlices.stream()
-          .map(fileSlice -> {
-            String basePath = fileSlice.getBaseFile().map(BaseFile::getPath).orElse(null);
-            Option<List<String>> logPaths = Option.ofNullable(
-                fileSlice.getLogFiles()
-                    .sorted(HoodieLogFile.getLogFileComparator())
-                    .map(logFile -> logFile.getPath().toString())
-                    .collect(Collectors.toList()));
-            return new MergeOnReadInputSplit(
-                cnt.getAndAdd(1),
-                basePath,
-                logPaths,
-                latestCommit,
-                metaClient.getBasePath().toString(),
-                StreamerUtil.getMaxCompactionMemoryInBytes(conf),
-                mergeType,
-                null,
-                fileSlice.getFileId());
-          })
-          .collect(Collectors.toList());
+      return ImmutablePair.of(fileIndex.filterFileSlices(allFileSlices), latestCommit);
     } finally {
       fileIndex = null;
     }
