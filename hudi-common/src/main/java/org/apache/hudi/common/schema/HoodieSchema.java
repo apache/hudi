@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.schema;
 
+import org.apache.hudi.avro.AvroSchemaUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
@@ -80,14 +81,18 @@ import java.util.stream.Collectors;
  * @since 1.2.0
  */
 public class HoodieSchema implements Serializable {
-
+  private static final long serialVersionUID = 1L;
   /**
    * Constant representing a null JSON value, equivalent to JsonProperties.NULL_VALUE.
    * This provides compatibility with Avro's JsonProperties while maintaining Hudi's API.
    */
   public static final Object NULL_VALUE = JsonProperties.NULL_VALUE;
   public static final HoodieSchema NULL_SCHEMA = HoodieSchema.create(HoodieSchemaType.NULL);
-  private static final long serialVersionUID = 1L;
+
+  /**
+   * Constant to use when attaching type metadata to external schema systems like Spark's StructType.
+   */
+  public static final String TYPE_METADATA_FIELD = "hudi_type";
 
   /**
    * Constants for Parquet-style accessor patterns used in nested MAP and ARRAY navigation.
@@ -115,6 +120,7 @@ public class HoodieSchema implements Serializable {
   // Register the Variant logical type with Avro
   static {
     LogicalTypes.register(VariantLogicalType.VARIANT_LOGICAL_TYPE_NAME, new VariantLogicalTypeFactory());
+    LogicalTypes.register(BlobLogicalType.BLOB_LOGICAL_TYPE_NAME, new BlogLogicalTypeFactory());
   }
 
   /**
@@ -163,6 +169,8 @@ public class HoodieSchema implements Serializable {
         return new HoodieSchema.Timestamp(avroSchema);
       } else if (logicalType == VariantLogicalType.variant()) {
         return new HoodieSchema.Variant(avroSchema);
+      } else if (logicalType == BlobLogicalType.blob()) {
+        return new HoodieSchema.Blob(avroSchema);
       }
     }
     return new HoodieSchema(avroSchema);
@@ -632,6 +640,10 @@ public class HoodieSchema implements Serializable {
     return new HoodieSchema.Variant(recordSchema);
   }
 
+  public static HoodieSchema.Blob createBlob() {
+    return new HoodieSchema.Blob(Blob.DEFAULT_NAME);
+  }
+
   /**
    * Returns the Hudi schema version information.
    *
@@ -698,7 +710,7 @@ public class HoodieSchema implements Serializable {
    * @return true if this type can have fields (RECORD or VARIANT)
    */
   public boolean hasFields() {
-    return type == HoodieSchemaType.RECORD || type == HoodieSchemaType.VARIANT;
+    return type == HoodieSchemaType.RECORD || type == HoodieSchemaType.VARIANT || type == HoodieSchemaType.BLOB;
   }
 
   /**
@@ -924,6 +936,19 @@ public class HoodieSchema implements Serializable {
       throw new IllegalStateException("Union schema has more than two types");
     }
     return types.get(0).getType() != HoodieSchemaType.NULL ? types.get(0) : types.get(1);
+  }
+
+  public boolean isBlobType() {
+    if (getType() == HoodieSchemaType.BLOB) {
+      return true;
+    } else if (getType() == HoodieSchemaType.ARRAY) {
+      return getElementType().isBlobType();
+    } else if (getType() == HoodieSchemaType.MAP) {
+      return getValueType().isBlobType();
+    } else if (getType() == HoodieSchemaType.UNION) {
+      return getTypes().stream().anyMatch(HoodieSchema::isBlobType);
+    }
+    return false;
   }
 
   /**
@@ -1866,6 +1891,107 @@ public class HoodieSchema implements Serializable {
     public int hashCode() {
       return Objects.hash(super.hashCode(), isShredded, typedValueSchema);
     }
+  }
+
+  static class BlobLogicalType extends LogicalType {
+
+    private static final String BLOB_LOGICAL_TYPE_NAME = "blob";
+    // Eager initialization of singleton
+    private static final BlobLogicalType INSTANCE = new BlobLogicalType();
+
+    private BlobLogicalType() {
+      super(BlobLogicalType.BLOB_LOGICAL_TYPE_NAME);
+    }
+
+    public static BlobLogicalType blob() {
+      return INSTANCE;
+    }
+
+    @Override
+    public void validate(Schema schema) {
+      super.validate(schema);
+      if (schema.getType() != Schema.Type.RECORD) {
+        throw new IllegalArgumentException("Blob logical type can only be applied to RECORD schemas, got: " + schema.getType());
+      }
+    }
+  }
+
+  /**
+   * Factory for creating VariantLogicalType instances.
+   */
+  private static class BlogLogicalTypeFactory implements LogicalTypes.LogicalTypeFactory {
+    @Override
+    public LogicalType fromSchema(Schema schema) {
+      return BlobLogicalType.blob();
+    }
+
+    @Override
+    public String getTypeName() {
+      return BlobLogicalType.BLOB_LOGICAL_TYPE_NAME;
+    }
+  }
+
+  /**
+   * Blob types represent raw binary data. The data can be stored in-line as a byte array or out-of-line as a reference to a file or offset and length within that file.
+   */
+  public static class Blob extends HoodieSchema {
+    private static final String DEFAULT_NAME = "blob";
+    public static final String STORAGE_TYPE = "storage_type";
+    public static final String INLINE_DATA_FIELD = "data";
+    public static final String EXTERNAL_FILE_REFERENCE = "reference";
+    public static final String EXTERNAL_PATH = "external_path";
+    // if offset is not specified, it is assumed to be 0 (start of file)
+    public static final String EXTERNAL_PATH_OFFSET = "offset";
+    // if length is not specified, it is assumed to be the rest of the file starting from offset
+    public static final String EXTERNAL_PATH_LENGTH = "length";
+    public static final String EXTERNAL_PATH_IS_MANAGED = "managed";
+
+    /**
+     * Creates a new HoodieSchema wrapping the given Avro schema.
+     *
+     * @param name Name for the blob schema
+     * @throws IllegalArgumentException if avroSchema is null or does not have a valid blob logical type
+     */
+    private Blob(String name) {
+      super(createSchema(name));
+    }
+
+    private Blob(Schema avroSchema) {
+      super(avroSchema);
+    }
+
+    @Override
+    public String getName() {
+      return "blob";
+    }
+
+    @Override
+    public HoodieSchemaType getType() {
+      return HoodieSchemaType.BLOB;
+    }
+
+    private static Schema createSchema(String name) {
+      Schema bytesField = Schema.create(Schema.Type.BYTES);
+      Schema referenceField = Schema.createRecord(EXTERNAL_FILE_REFERENCE, null, null, false);
+      List<Schema.Field> referenceFields = Arrays.asList(
+          new Schema.Field(EXTERNAL_PATH, Schema.create(Schema.Type.STRING), null, null),
+          new Schema.Field(EXTERNAL_PATH_OFFSET, AvroSchemaUtils.createNullableSchema(Schema.create(Schema.Type.LONG)), null, null),
+          new Schema.Field(EXTERNAL_PATH_LENGTH, AvroSchemaUtils.createNullableSchema(Schema.create(Schema.Type.LONG)), null, null),
+          new Schema.Field(EXTERNAL_PATH_IS_MANAGED, Schema.create(Schema.Type.BOOLEAN), null, null)
+      );
+      referenceField.setFields(referenceFields);
+
+      Schema blobSchema = Schema.createRecord(name, null, null, false);
+      List<Schema.Field> blobFields = Arrays.asList(
+          new Schema.Field(STORAGE_TYPE, Schema.create(Schema.Type.STRING), null, null),
+          new Schema.Field(INLINE_DATA_FIELD, AvroSchemaUtils.createNullableSchema(bytesField), null, Schema.Field.NULL_DEFAULT_VALUE),
+          new Schema.Field(EXTERNAL_FILE_REFERENCE, AvroSchemaUtils.createNullableSchema(referenceField), null, Schema.Field.NULL_DEFAULT_VALUE)
+      );
+      blobSchema.setFields(blobFields);
+      BlobLogicalType.blob().addToSchema(blobSchema);
+      return blobSchema;
+    }
+
   }
 
   private void writeObject(ObjectOutputStream oos) throws IOException {

@@ -41,6 +41,7 @@ import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SparkSession;
 import org.apache.spark.sql.avro.HoodieSparkSchemaConverters;
+import org.apache.spark.sql.types.Metadata;
 import org.apache.spark.sql.types.StructType;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
@@ -110,7 +111,7 @@ public class TestSourceFormatAdapter {
     TypedProperties typedProperties = new TypedProperties();
     typedProperties.put(HoodieStreamerConfig.SANITIZE_SCHEMA_FIELD_NAMES.key(), true);
     typedProperties.put(HoodieStreamerConfig.SCHEMA_FIELD_NAME_INVALID_CHAR_MASK.key(), "__");
-    setupJsonSource(rdd, HoodieSparkSchemaConverters.toHoodieType(sanitizedSchema, false, "record", ""));
+    setupJsonSource(rdd, HoodieSparkSchemaConverters.toHoodieType(sanitizedSchema, false, "record", "", Metadata.empty()));
     SourceFormatAdapter sourceFormatAdapter = new SourceFormatAdapter(testJsonDataSource, Option.empty(), Option.of(typedProperties));
     return sourceFormatAdapter.fetchNewDataInRowFormat(Option.of(new StreamerCheckpointV2(DUMMY_CHECKPOINT)), 10L);
   }
