@@ -164,8 +164,66 @@ public class SimpleConcurrentFileWritesConflictResolutionStrategy
       return thisOperation.getCommitMetadataOption();
     }
     // just abort the current write if conflicts are found
-    throw new HoodieWriteConflictException(new ConcurrentModificationException("Cannot resolve conflicts for overlapping writes between first operation = " + thisOperation
-        + ", second operation = " + otherOperation));
+    throw new HoodieWriteConflictException(new ConcurrentModificationException(buildConflictErrorMessage(thisOperation, otherOperation)));
+  }
+
+  /**
+   * Builds a detailed error message for write conflicts based on the operation types involved.
+   */
+  private String buildConflictErrorMessage(ConcurrentOperation thisOperation, ConcurrentOperation otherOperation) {
+    boolean thisIsTableService = WriteOperationType.isTableService(thisOperation.getOperationType());
+    boolean otherIsTableService = WriteOperationType.isTableService(otherOperation.getOperationType());
+    String thisOperationDescription = formatOperationDescription(thisOperation);
+    String otherOperationDescription = formatOperationDescription(otherOperation);
+    // If either operation is a table service, provide specific retry guidance
+    if (thisIsTableService || otherIsTableService) {
+      ConcurrentOperation tableServiceOperation = thisIsTableService ? thisOperation : otherOperation;
+      String tableServiceDescription = thisIsTableService ? thisOperationDescription : otherOperationDescription;
+      String regularOperationDescription = thisIsTableService ? otherOperationDescription : thisOperationDescription;
+      String serviceType = getTableServiceDisplayName(tableServiceOperation.getOperationType());
+      return String.format(
+          "Cannot resolve conflicts for overlapping writes. %s is currently running and has overlapping file groups with %s. "
+              + "Please retry the write operation after the %s completes.",
+          tableServiceDescription, regularOperationDescription, serviceType.toLowerCase()
+      );
+    }
+    // For regular write operations conflicting with each other
+    return String.format(
+        "Cannot resolve conflicts for overlapping writes. %s has overlapping file groups with %s.",
+        thisOperationDescription, otherOperationDescription
+    );
+  }
+
+  /**
+   * Formats a description of an operation including its type, instant, and state.
+   */
+  private String formatOperationDescription(ConcurrentOperation operation) {
+    String operationName = WriteOperationType.isTableService(operation.getOperationType())
+        ? "Table " + getTableServiceDisplayName(operation.getOperationType())
+        : operation.getOperationType().value() + " operation";
+
+    return String.format("%s (instant: %s, state: %s)",
+        operationName,
+        operation.getInstantTimestamp(),
+        operation.getInstantActionState());
+  }
+
+  /**
+   * Returns a user-friendly display name for table service operations.
+   */
+  private String getTableServiceDisplayName(WriteOperationType operationType) {
+    switch (operationType) {
+      case COMPACT:
+        return "Compaction";
+      case CLUSTER:
+        return "Clustering";
+      case LOG_COMPACT:
+        return "Log Compaction";
+      case INDEX:
+        return "Indexing";
+      default:
+        return operationType.value();
+    }
   }
 
   @Override
