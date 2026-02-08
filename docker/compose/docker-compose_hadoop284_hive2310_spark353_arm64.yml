@@ -12,62 +12,60 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+
 services:
+
   namenode:
-    image: apachehudi/hudi-hadoop_3.3.4-namenode:latest
-    platform: linux/amd64
+    image: apachehudi/hudi-hadoop_2.8.4-namenode:latest
     hostname: namenode
     container_name: namenode
     environment:
-      - CLUSTER_NAME=hudi_hadoop334_hive313_spark353
+      - CLUSTER_NAME=hudi_hadoop284_hive2310_spark353
     ports:
-      - "8020:8020" # HDFS NameNode IPC
-      - "9000:9000" # HDFS NameNode Client
-      - "9870:9870" # HDFS NameNode Web UI
+      - "50070:50070"
+      - "8020:8020"
     env_file:
       - ./hadoop.env
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://namenode:9870"]
+      test: ["CMD", "curl", "-f", "http://namenode:50070"]
       interval: 30s
       timeout: 10s
       retries: 3
+
   datanode1:
-    image: apachehudi/hudi-hadoop_3.3.4-datanode:latest
-    platform: linux/amd64
+    image: apachehudi/hudi-hadoop_2.8.4-datanode:latest
     container_name: datanode1
     hostname: datanode1
     environment:
-      - CLUSTER_NAME=hudi_hadoop334_hive313_spark353
+      - CLUSTER_NAME=hudi_hadoop284_hive2310_spark353
     env_file:
       - ./hadoop.env
     ports:
-      - "9864:9864"   # HDFS DataNode Web UI
-      - "50010:50010" # HDFS DataNode IPC
-      - "50020:50020" # HDFS DataNode HTTP
+      - "50075:50075"
+      - "50010:50010"
     links:
       - "namenode"
       - "historyserver"
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://datanode1:9864"]
+      test: ["CMD", "curl", "-f", "http://datanode1:50075"]
       interval: 30s
       timeout: 10s
       retries: 3
     depends_on:
       - namenode
+
   historyserver:
-    image: apachehudi/hudi-hadoop_3.3.4-history:latest
-    platform: linux/amd64
+    image: apachehudi/hudi-hadoop_2.8.4-history:latest
     hostname: historyserver
     container_name: historyserver
     environment:
-      - CLUSTER_NAME=hudi_hadoop334_hive313_spark353
+      - CLUSTER_NAME=hudi_hadoop284_hive2310_spark353
     depends_on:
       - "namenode"
     links:
       - "namenode"
     ports:
-      - "8188:8188" # MapReduce JobHistory Server Port
-      - "19888:19888" # MapReduce JobHistory Server's web UI
+      - "58188:8188"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://historyserver:8188"]
       interval: 30s
@@ -77,18 +75,16 @@ services:
       - ./hadoop.env
     volumes:
       - historyserver:/hadoop/yarn/timeline
+
   hive-metastore-postgresql:
-    image: bde2020/hive-metastore-postgresql:3.1.0
-    platform: linux/amd64
-    ports:
-      - "5432:5432" # PostgreSQL Port
+    image: bde2020/hive-metastore-postgresql:2.3.0
     volumes:
       - hive-metastore-postgresql:/var/lib/postgresql
     hostname: hive-metastore-postgresql
     container_name: hive-metastore-postgresql
+
   hivemetastore:
-    image: apachehudi/hudi-hadoop_3.3.4-hive_3.1.3:latest
-    platform: linux/amd64
+    image: apachehudi/hudi-hadoop_2.8.4-hive_2.3.10:latest
     hostname: hivemetastore
     container_name: hivemetastore
     links:
@@ -98,9 +94,9 @@ services:
       - ./hadoop.env
     command: /opt/hive/bin/hive --service metastore
     environment:
-      - "SERVICE_PRECONDITION=namenode:9870 hive-metastore-postgresql:5432"
+      - "SERVICE_PRECONDITION=namenode:50070 hive-metastore-postgresql:5432"
     ports:
-      - "9083:9083" # Hive Metastore Thrift Port
+      - "9083:9083"
     healthcheck:
       test: ["CMD", "nc", "-z", "hivemetastore", "9083"]
       interval: 30s
@@ -109,9 +105,9 @@ services:
     depends_on:
       - "hive-metastore-postgresql"
       - "namenode"
+
   hiveserver:
-    image: apachehudi/hudi-hadoop_3.3.4-hive_3.1.3:latest
-    platform: linux/amd64
+    image: apachehudi/hudi-hadoop_2.8.4-hive_2.3.10:latest
     hostname: hiveserver
     container_name: hiveserver
     env_file:
@@ -119,8 +115,7 @@ services:
     environment:
       - SERVICE_PRECONDITION=hivemetastore:9083
     ports:
-      - "10000:10000" # HiveServer2 Thrift Port
-      - "10002:10002" # HiveServer2 Beeline Port
+      - "10000:10000"
     depends_on:
       - "hivemetastore"
     links:
@@ -129,50 +124,16 @@ services:
       - "namenode"
     volumes:
       - ${HUDI_WS}:/var/hoodie/ws
-  zookeeper:
-    image: 'bitnami/zookeeper:3.6.4'
-    platform: linux/amd64
-    hostname: zookeeper
-    container_name: zookeeper
-    ports:
-      - "2181:2181" # Zookeeper Client Port
-    environment:
-      - ALLOW_ANONYMOUS_LOGIN=yes
-  kafka:
-    image: 'apache/kafka:3.7.2'
-    platform: linux/amd64
-    hostname: kafkabroker
-    container_name: kafkabroker
-    ports:
-      - "9092:9092" # Kafka Broker
-    environment:
-      - KAFKA_NODE_ID=1
-      - KAFKA_PROCESS_ROLES=broker,controller
-      - KAFKA_LISTENERS=PLAINTEXT://0.0.0.0:29092,CONTROLLER://0.0.0.0:9093,PLAINTEXT_HOST://0.0.0.0:9092
-      - KAFKA_ADVERTISED_LISTENERS=PLAINTEXT://kafkabroker:29092,PLAINTEXT_HOST://localhost:9092
-      - KAFKA_CONTROLLER_LISTENER_NAMES=CONTROLLER
-      - KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
-      - KAFKA_INTER_BROKER_LISTENER_NAME=PLAINTEXT
-      - KAFKA_CONTROLLER_QUORUM_VOTERS=1@kafkabroker:9093
-      - KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR=1
-      - KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR=1
-      - KAFKA_TRANSACTION_STATE_LOG_MIN_ISR=1
-      - KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS=0
-      - KAFKA_NUM_PARTITIONS=3
+
   sparkmaster:
-    image: apachehudi/hudi-hadoop_3.3.4-hive_3.1.3-sparkmaster_3.5.3:latest
-    platform: linux/amd64
+    image: apachehudi/hudi-hadoop_2.8.4-hive_2.3.10-sparkmaster_3.5.3:latest
     hostname: sparkmaster
     container_name: sparkmaster
     env_file:
       - ./hadoop.env
     ports:
-      - "8080:8080" # Spark Master UI
-      - "7077:7077" # Spark Master Port
-      - "8888:8888" # Jupyter Notebook
-    volumes:
-      - ${HUDI_WS}:/var/hoodie/ws
-      - ./notebooks:/opt/workspace/notebooks
+      - "8080:8080"
+      - "7077:7077"
     environment:
       - INIT_DAEMON_STEP=setup_spark
     links:
@@ -180,9 +141,9 @@ services:
       - "hiveserver"
       - "hive-metastore-postgresql"
       - "namenode"
+
   spark-worker-1:
-    image: apachehudi/hudi-hadoop_3.3.4-hive_3.1.3-sparkworker_3.5.3:latest
-    platform: linux/amd64
+    image: apachehudi/hudi-hadoop_2.8.4-hive_2.3.10-sparkworker_3.5.3:latest
     hostname: spark-worker-1
     container_name: spark-worker-1
     env_file:
@@ -190,7 +151,7 @@ services:
     depends_on:
       - sparkmaster
     ports:
-      - "8081:8081" # Spark Worker UI
+      - "8081:8081"
     environment:
       - SPARK_MASTER=spark://sparkmaster:7077
     links:
@@ -198,9 +159,105 @@ services:
       - "hiveserver"
       - "hive-metastore-postgresql"
       - "namenode"
+
+  zookeeper:
+    image: 'bitnamilegacy/zookeeper:3.6.4'
+    hostname: zookeeper
+    container_name: zookeeper
+    ports:
+      - "2181:2181"
+    environment:
+      - ALLOW_ANONYMOUS_LOGIN=yes
+
+  kafka:
+    image: 'bitnamilegacy/kafka:3.4.1'
+    hostname: kafkabroker
+    container_name: kafkabroker
+    ports:
+      - "9092:9092"
+    environment:
+      - KAFKA_ZOOKEEPER_CONNECT=zookeeper:2181
+      - ALLOW_PLAINTEXT_LISTENER=yes
+
+  presto-coordinator-1:
+    container_name: presto-coordinator-1
+    hostname: presto-coordinator-1
+    image: apachehudi/hudi-hadoop_2.8.4-prestobase_0.271:latest
+    ports:
+      - "8090:8090"
+    environment:
+      - PRESTO_JVM_MAX_HEAP=512M
+      - PRESTO_QUERY_MAX_MEMORY=1GB
+      - PRESTO_QUERY_MAX_MEMORY_PER_NODE=256MB
+      - PRESTO_QUERY_MAX_TOTAL_MEMORY_PER_NODE=384MB
+      - PRESTO_MEMORY_HEAP_HEADROOM_PER_NODE=100MB
+      - TERM=xterm
+    links:
+      - "hivemetastore"
+    volumes:
+      - ${HUDI_WS}:/var/hoodie/ws
+    command: coordinator
+
+  presto-worker-1:
+    container_name: presto-worker-1
+    hostname: presto-worker-1
+    image: apachehudi/hudi-hadoop_2.8.4-prestobase_0.271:latest
+    depends_on: [ "presto-coordinator-1" ]
+    environment:
+      - PRESTO_JVM_MAX_HEAP=512M
+      - PRESTO_QUERY_MAX_MEMORY=1GB
+      - PRESTO_QUERY_MAX_MEMORY_PER_NODE=256MB
+      - PRESTO_QUERY_MAX_TOTAL_MEMORY_PER_NODE=384MB
+      - PRESTO_MEMORY_HEAP_HEADROOM_PER_NODE=100MB
+      - TERM=xterm
+    links:
+      - "hivemetastore"
+      - "hiveserver"
+      - "hive-metastore-postgresql"
+      - "namenode"
+    volumes:
+      - ${HUDI_WS}:/var/hoodie/ws
+    command: worker
+
+  trino-coordinator-1:
+    container_name: trino-coordinator-1
+    hostname: trino-coordinator-1
+    image: apachehudi/hudi-hadoop_2.8.4-trinocoordinator_368:latest
+    ports:
+      - "8091:8091"
+    links:
+      - "hivemetastore"
+    volumes:
+      - ${HUDI_WS}:/var/hoodie/ws
+    command: http://trino-coordinator-1:8091 trino-coordinator-1
+
+  trino-worker-1:
+    container_name: trino-worker-1
+    hostname: trino-worker-1
+    image: apachehudi/hudi-hadoop_2.8.4-trinoworker_368:latest
+    depends_on: [ "trino-coordinator-1" ]
+    ports:
+      - "8092:8092"
+    links:
+      - "hivemetastore"
+      - "hiveserver"
+      - "hive-metastore-postgresql"
+      - "namenode"
+    volumes:
+      - ${HUDI_WS}:/var/hoodie/ws
+    command: http://trino-coordinator-1:8091 trino-worker-1
+
+  graphite:
+    container_name: graphite
+    hostname: graphite
+    image: graphiteapp/graphite-statsd
+    ports:
+      - 80:80
+      - 2003-2004:2003-2004
+      - 8126:8126
+
   adhoc-1:
-    image: apachehudi/hudi-hadoop_3.3.4-hive_3.1.3-sparkadhoc_3.5.3:latest
-    platform: linux/amd64
+    image: apachehudi/hudi-hadoop_2.8.4-hive_2.3.10-sparkadhoc_3.5.3:latest
     hostname: adhoc-1
     container_name: adhoc-1
     env_file:
@@ -208,7 +265,7 @@ services:
     depends_on:
       - sparkmaster
     ports:
-      - '4040:4040' # Spark Application UI
+      - '4040:4040'
       # JVM debugging port (mapped to 5006 on the host)
       - "5006:5005"
     environment:
@@ -218,11 +275,13 @@ services:
       - "hiveserver"
       - "hive-metastore-postgresql"
       - "namenode"
+      - "presto-coordinator-1"
+      - "trino-coordinator-1"
     volumes:
       - ${HUDI_WS}:/var/hoodie/ws
+
   adhoc-2:
-    image: apachehudi/hudi-hadoop_3.3.4-hive_3.1.3-sparkadhoc_3.5.3:latest
-    platform: linux/amd64
+    image: apachehudi/hudi-hadoop_2.8.4-hive_2.3.10-sparkadhoc_3.5.3:latest
     hostname: adhoc-2
     container_name: adhoc-2
     env_file:
@@ -239,43 +298,16 @@ services:
       - "hiveserver"
       - "hive-metastore-postgresql"
       - "namenode"
+      - "presto-coordinator-1"
+      - "trino-coordinator-1"
     volumes:
       - ${HUDI_WS}:/var/hoodie/ws
-  minio:
-    image: 'minio/minio:latest'
-    platform: linux/amd64
-    hostname: minio
-    container_name: minio
-    ports:
-      - 9090:9090  # MinIO API port
-      - 9091:9091  # MinIO Console port
-    volumes:
-      - minio-data:/data
-    environment:
-      - MINIO_ACCESS_KEY=minio
-      - MINIO_SECRET_KEY=minio123
-      - MINIO_DOMAIN=minio
-    command: server --address ":9090" --console-address ":9091" /data
-  mc:
-    image: minio/mc
-    platform: linux/amd64
-    container_name: mc
-    entrypoint: >
-      /bin/sh -c "
-      until (/usr/bin/mc alias set minio http://minio:9090 minio minio123 --api S3v4) do echo '...waiting...' && sleep 1; done;
-      /usr/bin/mc rm -r --force minio/warehouse;
-      /usr/bin/mc mb minio/warehouse;
-      /usr/bin/mc policy set public minio/warehouse;
-      tail -f /dev/null
-      "
-    depends_on:
-      - minio
+
 volumes:
   namenode:
   historyserver:
   hive-metastore-postgresql:
-  minio-data:
+
 networks:
   default:
     name: hudi
-
