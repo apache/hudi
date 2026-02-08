@@ -69,7 +69,7 @@ abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordBuffer<T
   protected final HoodieSchema readerSchema;
   protected final List<String> orderingFieldNames;
   protected final RecordMergeMode recordMergeMode;
-  protected final Option<PartialUpdateMode> partialUpdateModeOpt;
+  protected Option<PartialUpdateMode> partialUpdateModeOpt;
   protected final Option<HoodieRecordMerger> recordMerger;
   // The pair of payload classes represents the payload class for the table and the payload class for the incoming records.
   // The two classes are only expected to be different when there is a merge-into operation that leverages the ExpressionPayload.
@@ -83,7 +83,6 @@ abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordBuffer<T
   protected UpdateProcessor<T> updateProcessor;
   protected Iterator<BufferedRecord<T>> logRecordIterator;
   protected BufferedRecord<T> nextRecord;
-  protected boolean enablePartialMerging = false;
   protected InternalSchema internalSchema;
   protected HoodieTableMetaClient hoodieTableMetaClient;
   protected BufferedRecordMerger<T> bufferedRecordMerger;
@@ -116,7 +115,7 @@ abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordBuffer<T
       throw new HoodieIOException("IOException when creating ExternalSpillableMap at " + spillableMapBasePath, e);
     }
     this.bufferedRecordMerger = BufferedRecordMergerFactory.create(
-        readerContext, recordMergeMode, enablePartialMerging, recordMerger, readerSchema, payloadClasses, props, partialUpdateModeOpt);
+        readerContext, recordMergeMode, recordMerger, readerSchema, payloadClasses, props, partialUpdateModeOpt);
     this.deleteContext = readerContext.getSchemaHandler().getDeleteContext().withReaderSchema(this.readerSchema);
     this.bufferedRecordConverter = BufferedRecordConverter.createConverter(readerContext.getIteratorMode(), readerSchema, readerContext.getRecordContext(), orderingFieldNames);
   }

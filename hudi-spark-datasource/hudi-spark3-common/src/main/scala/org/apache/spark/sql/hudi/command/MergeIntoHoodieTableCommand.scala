@@ -519,9 +519,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
       // After HUDI-9257 is done, we can remove this limitation.
       && !useGlobalIndex(parameters)
       // Partial update is disabled when custom merge mode is set.
-      && !useCustomMergeMode(parameters)
-      // Partial update is disabled when partialUpdateMode is set.
-      && getPartialUpdateMode(parameters).isEmpty)
+      && !useCustomMergeMode(parameters))
   }
 
   private def getOperationType(parameters: Map[String, String]) = {

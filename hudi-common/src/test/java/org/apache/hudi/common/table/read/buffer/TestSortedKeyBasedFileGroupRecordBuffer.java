@@ -45,6 +45,8 @@ import org.apache.hudi.storage.StorageConfiguration;
 
 import org.apache.avro.generic.IndexedRecord;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -56,6 +58,8 @@ import java.util.stream.Stream;
 import static org.apache.hudi.common.model.DefaultHoodieRecordPayload.DELETE_KEY;
 import static org.apache.hudi.common.model.DefaultHoodieRecordPayload.DELETE_MARKER;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.Mockito.RETURNS_DEEP_STUBS;
@@ -188,7 +192,81 @@ class TestSortedKeyBasedFileGroupRecordBuffer extends BaseTestFileGroupRecordBuf
     assertEquals(1, readStats.getNumDeletes());
   }
 
+  /**
+   * Verifies that partial merging (enablePartialMerging / partialUpdateModeOpt) is only enabled when we first
+   * process a data block that contains partial updates (e.g., 3rd log file with MOR partial encoding).
+   * Base + 2 log files with full schema should not enable partial merging; 3rd log file with partial updates should.
+   */
+  @Test
+  void partialMergingEnabledOnlyWhenBlockWithPartialUpdatesProcessed() throws IOException {
+    HoodieReadStats readStats = new HoodieReadStats();
+    HoodieReaderContext<TestRecord> mockReaderContext = mock(HoodieReaderContext.class, RETURNS_DEEP_STUBS);
+    SortedKeyBasedFileGroupRecordBuffer<TestRecord> fileGroupRecordBuffer = buildSortedKeyBasedFileGroupRecordBuffer(mockReaderContext, readStats);
+
+    // Block 1: full schema (no partial updates) – like 1st log file
+    HoodieDataBlock dataBlock1 = mock(HoodieDataBlock.class);
+    when(dataBlock1.getSchema()).thenReturn(HoodieTestDataGenerator.HOODIE_SCHEMA);
+    when(dataBlock1.containsPartialUpdates()).thenReturn(false);
+    when(dataBlock1.getEngineRecordIterator(mockReaderContext)).thenReturn(ClosableIterator.wrap(Collections.emptyIterator()));
+    fileGroupRecordBuffer.processDataBlock(dataBlock1, Option.empty());
+    assertFalse(fileGroupRecordBuffer.isPartialMergingEnabled(), "Partial merging should not be enabled after 1st block (full schema)");
+
+    // Block 2: full schema (no partial updates) – like 2nd log file
+    HoodieDataBlock dataBlock2 = mock(HoodieDataBlock.class);
+    when(dataBlock2.getSchema()).thenReturn(HoodieTestDataGenerator.HOODIE_SCHEMA);
+    when(dataBlock2.containsPartialUpdates()).thenReturn(false);
+    when(dataBlock2.getEngineRecordIterator(mockReaderContext)).thenReturn(ClosableIterator.wrap(Collections.emptyIterator()));
+    fileGroupRecordBuffer.processDataBlock(dataBlock2, Option.empty());
+    assertFalse(fileGroupRecordBuffer.isPartialMergingEnabled(), "Partial merging should not be enabled after 2nd block (full schema)");
+
+    // Block 3: contains partial updates (MOR partial encoding) – like 3rd log file
+    HoodieDataBlock dataBlock3 = mock(HoodieDataBlock.class);
+    when(dataBlock3.getSchema()).thenReturn(HoodieTestDataGenerator.HOODIE_SCHEMA);
+    when(dataBlock3.containsPartialUpdates()).thenReturn(true);
+    when(dataBlock3.getEngineRecordIterator(mockReaderContext)).thenReturn(ClosableIterator.wrap(Collections.emptyIterator()));
+    fileGroupRecordBuffer.processDataBlock(dataBlock3, Option.empty());
+    assertTrue(fileGroupRecordBuffer.isPartialMergingEnabled(), "Partial merging should be enabled after 3rd block (partial updates)");
+  }
+
+  /**
+   * Verifies the full read path (buffer + KEEP_VALUES merger) for both EVENT_TIME_ORDERING and COMMIT_TIME_ORDERING.
+   * With uniform ordering values (all stubbed to 0) both produce the same merged output.
+   */
+  @ParameterizedTest
+  @EnumSource(value = RecordMergeMode.class, names = {"EVENT_TIME_ORDERING", "COMMIT_TIME_ORDERING"})
+  void readBaseFileAndLogFileWithKeepValues(RecordMergeMode recordMergeMode) throws IOException {
+    HoodieReadStats readStats = new HoodieReadStats();
+    HoodieReaderContext<TestRecord> mockReaderContext = mock(HoodieReaderContext.class, RETURNS_DEEP_STUBS);
+    SortedKeyBasedFileGroupRecordBuffer<TestRecord> fileGroupRecordBuffer = buildSortedKeyBasedFileGroupRecordBuffer(
+        mockReaderContext, readStats, recordMergeMode, Option.of(PartialUpdateMode.KEEP_VALUES));
+
+    fileGroupRecordBuffer.setBaseFileIterator(ClosableIterator.wrap(Arrays.asList(testRecord2, testRecord3, testRecord5).iterator()));
+
+    HoodieDataBlock dataBlock = mock(HoodieDataBlock.class);
+    when(dataBlock.getSchema()).thenReturn(HoodieTestDataGenerator.HOODIE_SCHEMA);
+    when(dataBlock.getEngineRecordIterator(mockReaderContext)).thenReturn(
+        ClosableIterator.wrap(Arrays.asList(testRecord6, testRecord4, testRecord1, testRecord6Update, testRecord2Update).iterator()));
+
+    HoodieDeleteBlock deleteBlock = mock(HoodieDeleteBlock.class);
+    when(deleteBlock.getRecordsToDelete()).thenReturn(new DeleteRecord[] {DeleteRecord.create("3", "")});
+    fileGroupRecordBuffer.processDataBlock(dataBlock, Option.empty());
+    fileGroupRecordBuffer.processDeleteBlock(deleteBlock);
+
+    List<TestRecord> actualRecords = getActualRecordsForSortedKeyBased(fileGroupRecordBuffer);
+    assertEquals(Arrays.asList(testRecord1, testRecord2Update, testRecord4, testRecord5, testRecord6Update), actualRecords);
+    assertEquals(3, readStats.getNumInserts());
+    assertEquals(1, readStats.getNumUpdates());
+    assertEquals(1, readStats.getNumDeletes());
+  }
+
   private SortedKeyBasedFileGroupRecordBuffer<TestRecord> buildSortedKeyBasedFileGroupRecordBuffer(HoodieReaderContext<TestRecord> mockReaderContext, HoodieReadStats readStats) {
+    return buildSortedKeyBasedFileGroupRecordBuffer(mockReaderContext, readStats, RecordMergeMode.COMMIT_TIME_ORDERING, Option.empty());
+  }
+
+  private SortedKeyBasedFileGroupRecordBuffer<TestRecord> buildSortedKeyBasedFileGroupRecordBuffer(HoodieReaderContext<TestRecord> mockReaderContext,
+                                                                                                   HoodieReadStats readStats,
+                                                                                                   RecordMergeMode recordMergeMode,
+                                                                                                   Option<PartialUpdateMode> partialUpdateModeOpt) {
     when(mockReaderContext.getSchemaHandler().getRequiredSchema()).thenReturn(HoodieTestDataGenerator.HOODIE_SCHEMA);
     when(mockReaderContext.getSchemaHandler().getInternalSchema()).thenReturn(InternalSchema.getEmptyInternalSchema());
     when(mockReaderContext.getRecordContext().getDeleteRow(any())).thenAnswer(invocation -> {
@@ -197,12 +275,11 @@ class TestSortedKeyBasedFileGroupRecordBuffer extends BaseTestFileGroupRecordBuf
     });
     when(mockReaderContext.getRecordContext().getRecordKey(any(), any())).thenAnswer(invocation -> ((TestRecord) invocation.getArgument(0)).getRecordKey());
     when(mockReaderContext.getRecordContext().getOrderingValue(any(), any(), anyList())).thenReturn(0);
+    when(mockReaderContext.getRecordContext().getOrderingValue(any(DeleteRecord.class))).thenReturn(0);
     when(mockReaderContext.getRecordContext().getSchemaFromBufferRecord(any())).thenReturn(HoodieTestDataGenerator.HOODIE_SCHEMA);
     when(mockReaderContext.getRecordContext().toBinaryRow(any(), any())).thenAnswer(invocation -> invocation.getArgument(1));
     when(mockReaderContext.getRecordContext().seal(any())).thenAnswer(invocation -> invocation.getArgument(0));
     HoodieTableMetaClient mockMetaClient = mock(HoodieTableMetaClient.class);
-    RecordMergeMode recordMergeMode = RecordMergeMode.COMMIT_TIME_ORDERING;
-    Option<PartialUpdateMode> partialUpdateModeOpt = Option.empty();
     TypedProperties props = new TypedProperties();
     when(mockReaderContext.getPayloadClasses(any())).thenReturn(Option.empty());
     UpdateProcessor<TestRecord> updateProcessor = UpdateProcessor.create(readStats, mockReaderContext, false, Option.empty(), props);
