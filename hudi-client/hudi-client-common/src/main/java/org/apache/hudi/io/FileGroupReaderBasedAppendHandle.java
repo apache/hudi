@@ -83,10 +83,20 @@ public class FileGroupReaderBasedAppendHandle<T, I, K, O> extends HoodieAppendHa
         new HoodieLogFile(new StoragePath(FSUtils.constructAbsolutePath(
             config.getBasePath(), operation.getPartitionPath()), logFileName)));
     // Initializes the record iterator, log compaction requires writing the deletes into the delete block of the resulting log file.
-    try (HoodieFileGroupReader<T> fileGroupReader = HoodieFileGroupReader.<T>newBuilder().withReaderContext(readerContext).withHoodieTableMetaClient(hoodieTable.getMetaClient())
-        .withLatestCommitTime(instantTime).withPartitionPath(partitionPath).withLogFiles(logFiles).withBaseFileOption(Option.empty()).withDataSchema(writeSchemaWithMetaFields)
-        .withRequestedSchema(writeSchemaWithMetaFields).withInternalSchema(internalSchemaOption).withProps(props).withEmitDelete(true)
-        .withShouldUseRecordPosition(usePosition).withSortOutput(hoodieTable.requireSortedRecords())
+    try (HoodieFileGroupReader<T> fileGroupReader = HoodieFileGroupReader.<T>builder()
+        .withReaderContext(readerContext)
+        .withHoodieTableMetaClient(hoodieTable.getMetaClient())
+        .withLatestCommitTime(instantTime)
+        .withPartitionPath(partitionPath)
+        .withLogFiles(logFiles)
+        .withBaseFileOption(Option.empty())
+        .withDataSchema(writeSchemaWithMetaFields)
+        .withRequestedSchema(writeSchemaWithMetaFields)
+        .withInternalSchemaOpt(internalSchemaOption)
+        .withProps(props)
+        .withEmitDelete(true)
+        .withShouldUseRecordPosition(usePosition)
+        .withSortOutput(hoodieTable.requireSortedRecords())
         // instead of using config.enableOptimizedLogBlocksScan(), we set to true as log compaction blocks only supported in scanV2
         .build()) {
       recordItr = new CloseableMappingIterator<>(fileGroupReader.getLogRecordsOnly(), record -> {
@@ -97,7 +107,7 @@ public class FileGroupReaderBasedAppendHandle<T, I, K, O> extends HoodieAppendHa
       header.put(HoodieLogBlock.HeaderMetadataType.COMPACTED_BLOCK_TIMES,
           StringUtils.join(fileGroupReader.getValidBlockInstants(), ","));
       super.doAppend();
-      this.readStats = fileGroupReader.getStats();
+      this.readStats = fileGroupReader.getReadStats();
     } catch (IOException e) {
       throw new HoodieIOException("Failed to initialize file group reader for " + fileId, e);
     }

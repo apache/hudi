@@ -119,10 +119,12 @@ public class HoodieSplitReaderFunction implements SplitReaderFunction<RowData> {
     );
 
     // Build the file group reader
-    HoodieFileGroupReader.Builder<RowData> builder = HoodieFileGroupReader.<RowData>newBuilder()
+    HoodieFileGroupReader.HoodieFileGroupReaderBuilder<RowData> builder = HoodieFileGroupReader.<RowData>builder()
         .withReaderContext(readerContext)
         .withHoodieTableMetaClient(hoodieTable.getMetaClient())
-        .withFileSlice(fileSlice)
+        .withBaseFileOption(fileSlice.getBaseFile())
+        .withLogFiles(fileSlice.getLogFiles())
+        .withPartitionPath(fileSlice.getPartitionPath())
         .withProps(props)
         .withShouldUseRecordPosition(true)
         .withDataSchema(tableSchema)
@@ -130,7 +132,7 @@ public class HoodieSplitReaderFunction implements SplitReaderFunction<RowData> {
 
 
     if (internalSchemaOption.isPresent()) {
-      builder.withInternalSchema(internalSchemaOption);
+      builder.withInternalSchemaOpt(internalSchemaOption);
     }
 
     return builder.build();

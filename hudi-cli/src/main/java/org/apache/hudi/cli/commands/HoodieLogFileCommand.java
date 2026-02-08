@@ -242,10 +242,12 @@ public class HoodieLogFileCommand {
           Option.empty(),
           Option.empty(),
           fileGroupReaderProperties);
-      try (HoodieFileGroupReader<IndexedRecord> fileGroupReader = HoodieFileGroupReader.<IndexedRecord>newBuilder()
+      try (HoodieFileGroupReader<IndexedRecord> fileGroupReader = HoodieFileGroupReader.<IndexedRecord>builder()
           .withReaderContext(readerContext)
           .withHoodieTableMetaClient(HoodieCLI.getTableMetaClient())
-          .withFileSlice(fileSlice)
+          .withBaseFileOption(fileSlice.getBaseFile())
+          .withLogFiles(fileSlice.getLogFiles())
+          .withPartitionPath(fileSlice.getPartitionPath())
           .withDataSchema(readerSchema)
           .withRequestedSchema(readerSchema)
           .withLatestCommitTime(client.getActiveTimeline().getCommitAndReplaceTimeline().lastInstant().map(HoodieInstant::requestedTime).orElse(HoodieInstantTimeGenerator.getCurrentInstantTimeStr()))

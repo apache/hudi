@@ -131,14 +131,16 @@ public class FormatUtils {
     final TypedProperties typedProps = FlinkClientUtil.getReadProps(metaClient.getTableConfig(), writeConfig);
     typedProps.put(HoodieReaderConfig.MERGE_TYPE.key(), mergeType);
 
-    return HoodieFileGroupReader.<RowData>newBuilder()
+    return HoodieFileGroupReader.<RowData>builder()
         .withReaderContext(readerContext)
         .withHoodieTableMetaClient(metaClient)
         .withLatestCommitTime(latestInstant)
-        .withFileSlice(fileSlice)
+        .withBaseFileOption(fileSlice.getBaseFile())
+        .withLogFiles(fileSlice.getLogFiles())
+        .withPartitionPath(fileSlice.getPartitionPath())
         .withDataSchema(tableSchema)
         .withRequestedSchema(requiredSchema)
-        .withInternalSchema(Option.ofNullable(internalSchemaManager.getQuerySchema()))
+        .withInternalSchemaOpt(Option.ofNullable(internalSchemaManager.getQuerySchema()))
         .withProps(typedProps)
         .withShouldUseRecordPosition(false)
         .withEmitDelete(emitDelete)
