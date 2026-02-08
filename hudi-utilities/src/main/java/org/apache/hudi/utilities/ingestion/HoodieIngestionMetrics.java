@@ -48,6 +48,10 @@ public abstract class HoodieIngestionMetrics {
 
   public abstract void updateStreamerMetrics(long durationNanos);
 
+  public abstract void emitStreamerJobSuccessMetrics();
+
+  public abstract void emitStreamerJobFailedMetrics();
+
   public abstract void updateStreamerMetaSyncMetrics(String syncClassShortName, long syncTimeNanos);
 
   public abstract void updateStreamerSyncMetrics(long syncEpochTimeMs);
@@ -63,6 +67,8 @@ public abstract class HoodieIngestionMetrics {
   public abstract void updateStreamerSourceParallelism(int sourceParallelism);
 
   public abstract void updateStreamerSourceBytesToBeIngestedInSyncRound(long sourceBytesToBeIngested);
+
+  public abstract void updateHoodieIncrSourceMetrics(long commitsInProgress, long unprocessedCommits);
 
   public abstract void shutdown();
 }

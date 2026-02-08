@@ -25,6 +25,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
+import org.apache.hudi.utilities.ingestion.HoodieIngestionMetrics;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 
 import lombok.extern.slf4j.Slf4j;
@@ -65,16 +66,19 @@ public class SqlFileBasedSource extends RowSource {
 
   private final String sourceSqlFile;
   private final boolean shouldEmitCheckPoint;
+  private HoodieIngestionMetrics metrics;
 
   public SqlFileBasedSource(
       TypedProperties props,
       JavaSparkContext sparkContext,
       SparkSession sparkSession,
-      SchemaProvider schemaProvider) {
+      SchemaProvider schemaProvider,
+      HoodieIngestionMetrics metrics) {
     super(props, sparkContext, sparkSession, schemaProvider);
     checkRequiredConfigProperties(props, Collections.singletonList(SOURCE_SQL_FILE));
     sourceSqlFile = getStringWithAltKeys(props, SOURCE_SQL_FILE);
     shouldEmitCheckPoint = getBooleanWithAltKeys(props, EMIT_EPOCH_CHECKPOINT);
+    this.metrics = metrics;
   }
 
   @Override
