@@ -54,10 +54,10 @@ public class HoodieCleanStat implements Serializable {
   @Builder.Default
   List<String> deleteBootstrapBasePathPatterns = CollectionUtils.createImmutableList();
   @Builder.Default
-  List<String> successDeleteBootstrapBaseFiles = CollectionUtils.createImmutableList();;
+  List<String> successDeleteBootstrapBaseFiles = CollectionUtils.createImmutableList();
   // Files that could not be deleted
   @Builder.Default
-  List<String> failedDeleteBootstrapBaseFiles = CollectionUtils.createImmutableList();;
+  List<String> failedDeleteBootstrapBaseFiles = CollectionUtils.createImmutableList();
   // set to true if partition is deleted
   boolean isPartitionDeleted;
 }

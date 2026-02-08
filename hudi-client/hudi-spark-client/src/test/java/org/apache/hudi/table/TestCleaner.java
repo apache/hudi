@@ -731,7 +731,7 @@ public class TestCleaner extends HoodieCleanerTestBase {
 
     // create partition2 empty clean stat.
     HoodieCleanStat cleanStat2 = HoodieCleanStat.builder()
-        .withPolicy(HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS)
+        .withPolicy(HoodieCleaningPolicy.KEEP_LATEST_COMMITS)
         .withPartitionPath(partition2)
         .withDeletePathPatterns(deletePathPatterns2)
         .withSuccessDeleteFiles(successDeleteFiles2)

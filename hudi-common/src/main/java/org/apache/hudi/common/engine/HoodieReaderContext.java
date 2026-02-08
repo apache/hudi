@@ -53,7 +53,6 @@ import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 
-import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.Setter;
 import lombok.experimental.Accessors;
@@ -80,44 +79,52 @@ import static org.apache.hudi.common.table.HoodieTableConfig.inferMergingConfigs
  * @param <T> The type of engine-specific record representation, e.g.,{@code InternalRow} in Spark
  *            and {@code RowData} in Flink.
  */
-@Getter
-@Setter
 public abstract class HoodieReaderContext<T> {
 
-  @Setter(AccessLevel.NONE)
+  @Getter
   private final StorageConfiguration<?> storageConfiguration;
-  @Getter(AccessLevel.NONE)
-  @Setter(AccessLevel.NONE)
   protected final HoodieFileFormat baseFileFormat;
   // For general predicate pushdown.
-  @Setter(AccessLevel.NONE)
+  @Getter
   protected final Option<Predicate> keyFilterOpt;
-  @Getter(AccessLevel.NONE)
-  @Setter(AccessLevel.NONE)
   protected final HoodieTableConfig tableConfig;
-  @Getter(AccessLevel.NONE)
+  @Setter
   private String tablePath = null;
+  @Getter
+  @Setter
   private String latestCommitTime = null;
+  @Getter
+  @Setter
   private Option<HoodieRecordMerger> recordMerger = null;
+  @Getter
+  @Setter
   private Boolean hasLogFiles = null;
+  @Getter
+  @Setter
   private Boolean hasBootstrapBaseFile = null;
+  @Getter
+  @Setter
   private Boolean needsBootstrapMerge = null;
 
+  @Getter
+  @Setter
   // should we do position based merging for mor
   private Boolean shouldMergeUseRecordPosition = null;
-  @Getter(AccessLevel.NONE)
-  @Setter(AccessLevel.NONE)
   protected Option<InstantRange> instantRangeOpt;
-  @Setter(AccessLevel.NONE)
+  @Getter
   private RecordMergeMode mergeMode;
-  @Setter(AccessLevel.NONE)
+  @Getter
   protected RecordContext<T> recordContext;
+  @Getter
+  @Setter
   private FileGroupReaderSchemaHandler<T> schemaHandler = null;
   // the default iterator mode is engine-specific record mode
-  @Getter(AccessLevel.NONE)
+  @Setter
   private IteratorMode iteratorMode = IteratorMode.ENGINE_RECORD;
-  @Setter(AccessLevel.NONE)
+  @Getter
   protected final HoodieConfig hoodieReaderConfig;
+  @Getter
+  @Setter
   @Accessors(fluent = true)
   private Boolean enableLogicalTimestampFieldRepair = true;
 
