@@ -3042,6 +3042,13 @@ public class HoodieTableMetadataUtil {
     return indexName;
   }
 
+  /**
+   * Returns whether the given file slice contains only an initialized log file for the metadata index partition.
+   */
+  public static boolean isInitialFileSlice(FileSlice fileSlice) {
+    return fileSlice.getBaseFile().isEmpty() && fileSlice.getBaseInstantTime().startsWith(SOLO_COMMIT_TIMESTAMP) && fileSlice.getLogFiles().count() == 1;
+  }
+
   private static Set<String> getIndexPartitionsToInitBasedOnIndexDefinition(MetadataPartitionType partitionType, HoodieTableMetaClient dataMetaClient) {
     if (dataMetaClient.getIndexMetadata().isEmpty()) {
       return Collections.emptySet();
