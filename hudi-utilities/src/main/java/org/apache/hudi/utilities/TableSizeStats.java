@@ -33,20 +33,19 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.TableNotFoundException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.metadata.HoodieTableMetadata;
-import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.HoodieStorageUtils;
+import org.apache.hudi.storage.StorageConfiguration;
 
 import com.beust.jcommander.JCommander;
 import com.beust.jcommander.Parameter;
 import com.codahale.metrics.Histogram;
 import com.codahale.metrics.Snapshot;
 import com.codahale.metrics.UniformReservoir;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.spark.api.java.JavaSparkContext;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import javax.annotation.Nullable;
 
@@ -97,10 +96,10 @@ import java.util.stream.Collectors;
  * --base-path <base-path> \
  * --num-days <number-of-days>
  */
+@Slf4j
 public class TableSizeStats implements Serializable {
 
   private static final long serialVersionUID = 1L;
-  private static final Logger LOG = LoggerFactory.getLogger(TableSizeStats.class);
 
   // Date formatter for parsing partition dates (example: 2023/5/5/ or 2023-5-5).
   private static final DateTimeFormatter DATE_FORMATTER =
@@ -138,6 +137,7 @@ public class TableSizeStats implements Serializable {
   }
 
   public static class Config implements Serializable {
+
     @Parameter(names = {"--base-path", "-bp"}, description = "Base path for the table", required = false)
     public String basePath = null;
 
@@ -241,9 +241,9 @@ public class TableSizeStats implements Serializable {
       TableSizeStats tableSizeStats = new TableSizeStats(jsc, cfg);
       tableSizeStats.run();
     } catch (TableNotFoundException e) {
-      LOG.warn("The Hudi data table is not found: [{}].", cfg.basePath, e);
+      log.warn("The Hudi data table is not found: [{}].", cfg.basePath, e);
     } catch (Throwable throwable) {
-      LOG.error("Failed to get table size stats for {}", cfg, throwable);
+      log.error("Failed to get table size stats for {}", cfg, throwable);
     } finally {
       jsc.stop();
     }
@@ -251,8 +251,8 @@ public class TableSizeStats implements Serializable {
 
   public void run() {
     try {
-      LOG.info(cfg.toString());
-      LOG.info(" ****** Fetching table size stats ******");
+      log.info(cfg.toString());
+      log.info(" ****** Fetching table size stats ******");
 
       // Determine starting and ending date intervals for filtering data files.
       LocalDate[] dateInterval = getUserSpecifiedDateInterval(cfg);
@@ -276,7 +276,7 @@ public class TableSizeStats implements Serializable {
 
   private void logTableStats(String basePath, LocalDate[] dateInterval) throws IOException {
 
-    LOG.info("Processing table {}", basePath);
+    log.info("Processing table {}", basePath);
     HoodieMetadataConfig metadataConfig = HoodieMetadataConfig.newBuilder()
         .enable(isMetadataEnabled(basePath, jsc))
         .build();
@@ -351,7 +351,7 @@ public class TableSizeStats implements Serializable {
       logStats("Table stats [path: " + basePath + "]", tableHistogram);
     } else {
       // Display only total talbe size
-      LOG.info("Total size: {}", getFileSizeUnit(Arrays.stream(tableHistogram.getSnapshot().getValues()).sum()));
+      log.info("Total size: {}", getFileSizeUnit(Arrays.stream(tableHistogram.getSnapshot().getValues()).sum()));
     }
   }
 
@@ -378,7 +378,7 @@ public class TableSizeStats implements Serializable {
         line = reader.readLine();
       }
     } catch (IOException ioe) {
-      LOG.error("Error reading in properties from dfs from file." + propsPath);
+      log.error("Error reading in properties from dfs from file. {}", propsPath);
       throw new HoodieIOException("Cannot read properties from dfs from file " + propsPath, ioe);
     }
     return filePaths;
@@ -390,12 +390,12 @@ public class TableSizeStats implements Serializable {
     if (cfg.endDate != null) {
       try {
         endDate = LocalDate.parse(cfg.endDate, DATE_FORMATTER);
-        LOG.info("Setting ending date to {}. ", endDate);
+        log.info("Setting ending date to {}.", endDate);
       } catch (DateTimeParseException dtpe) {
         throw new HoodieException("Unable to parse --end-date. ", dtpe);
       }
     } else {
-      LOG.info("End date is not specified: {}.", endDate);
+      log.info("End date is not specified: {}.", endDate);
     }
 
     // Set startDate to null by default.
@@ -404,14 +404,14 @@ public class TableSizeStats implements Serializable {
     // Set startDate to cfg.startDate if specified. cfg.startDate takes priority over cfg.numDays if both are specified.
     if (cfg.startDate != null) {
       startDate = LocalDate.parse(cfg.startDate, DATE_FORMATTER);
-      LOG.info("Setting starting date to {}.", startDate);
+      log.info("Setting starting date to {}.", startDate);
     } else {
       if (cfg.numDays == 0) {
-        LOG.info("Start date not specified: {}.", startDate);
+        log.info("Start date not specified: {}.", startDate);
       } else if (cfg.numDays > 0) {
         endDate = LocalDate.now();
         startDate = endDate.minusDays(cfg.numDays);
-        LOG.info("Setting starting date to {} ({} - {} days). ", startDate, endDate, cfg.numDays);
+        log.info("Setting starting date to {} ({} - {} days). ", startDate, endDate, cfg.numDays);
       } else {
         throw new HoodieException("--num-days must specify a positive value.");
       }
@@ -422,7 +422,7 @@ public class TableSizeStats implements Serializable {
       throw new HoodieException("Starting date must be before ending date. Start Date: " + startDate + ", End Date: " + endDate);
     }
 
-    return startDate == null && endDate == null ? null : new LocalDate[]{startDate, endDate};
+    return startDate == null && endDate == null ? null : new LocalDate[] {startDate, endDate};
   }
 
   @Nullable
@@ -442,7 +442,7 @@ public class TableSizeStats implements Serializable {
     try {
       return LocalDate.parse(dateString, DATE_FORMATTER);
     } catch (DateTimeParseException dtpe) {
-      LOG.error("Partition name {} must conform to date format if --start-date, --end-date, or --num-days are specified. ", partition, dtpe);
+      log.error("Partition name {} must conform to date format if --start-date, --end-date, or --num-days are specified. ", partition, dtpe);
     }
     return partitionDate;
   }
@@ -458,17 +458,17 @@ public class TableSizeStats implements Serializable {
   }
 
   private static void logStats(String header, Histogram histogram) {
-    LOG.info(header);
+    log.info(header);
     Snapshot snapshot = histogram.getSnapshot();
-    LOG.info("Number of files: {}", snapshot.size());
-    LOG.info("Total size: {}", getFileSizeUnit(Arrays.stream(snapshot.getValues()).sum()));
-    LOG.info("Minimum file size: {}", getFileSizeUnit(snapshot.getMin()));
-    LOG.info("Maximum file size: {}", getFileSizeUnit(snapshot.getMax()));
-    LOG.info("Average file size: {}", getFileSizeUnit(snapshot.getMean()));
-    LOG.info("Median file size: {}", getFileSizeUnit(snapshot.getMedian()));
-    LOG.info("P50 file size: {}", getFileSizeUnit(snapshot.getValue(0.5)));
-    LOG.info("P90 file size: {}", getFileSizeUnit(snapshot.getValue(0.9)));
-    LOG.info("P95 file size: {}", getFileSizeUnit(snapshot.getValue(0.95)));
-    LOG.info("P99 file size: {}", getFileSizeUnit(snapshot.getValue(0.99)));
+    log.info("Number of files: {}", snapshot.size());
+    log.info("Total size: {}", getFileSizeUnit(Arrays.stream(snapshot.getValues()).sum()));
+    log.info("Minimum file size: {}", getFileSizeUnit(snapshot.getMin()));
+    log.info("Maximum file size: {}", getFileSizeUnit(snapshot.getMax()));
+    log.info("Average file size: {}", getFileSizeUnit(snapshot.getMean()));
+    log.info("Median file size: {}", getFileSizeUnit(snapshot.getMedian()));
+    log.info("P50 file size: {}", getFileSizeUnit(snapshot.getValue(0.5)));
+    log.info("P90 file size: {}", getFileSizeUnit(snapshot.getValue(0.9)));
+    log.info("P95 file size: {}", getFileSizeUnit(snapshot.getValue(0.95)));
+    log.info("P99 file size: {}", getFileSizeUnit(snapshot.getValue(0.99)));
   }
 }
