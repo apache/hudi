@@ -624,6 +624,15 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       .withDocumentation("when set to true, it fails the job on metadata table's "
           + "table services operation failure");
 
+  public static final ConfigProperty<Boolean> RECORD_INDEX_INITIALIZATION_VALIDATION_ENABLE = ConfigProperty
+      .key(METADATA_PREFIX + ".record.index.enable.validation.on.initialization")
+      .defaultValue(false)
+      .markAdvanced()
+      .sinceVersion("1.1.0")
+      .withDocumentation("Enable validation of record index after initialization by comparing the expected record count "
+          + "with the actual record count stored in the metadata table. This validation runs in a distributed manner "
+          + "using the compute engine. Disabled by default as it adds overhead to the initialization process.");
+
   public long getMaxLogFileSize() {
     return getLong(MAX_LOG_FILE_SIZE_BYTES_PROP);
   }
@@ -766,6 +775,10 @@ public final class HoodieMetadataConfig extends HoodieConfig {
 
   public int getRecordIndexMaxParallelism() {
     return getInt(RECORD_INDEX_MAX_PARALLELISM);
+  }
+
+  public boolean isRecordIndexInitializationValidationEnabled() {
+    return getBooleanOrDefault(RECORD_INDEX_INITIALIZATION_VALIDATION_ENABLE);
   }
 
   public boolean shouldAutoInitialize() {
