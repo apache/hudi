@@ -270,6 +270,17 @@ services:
     depends_on:
       - minio
 
+  trino:
+    image: apachehudi/trino477:latest
+    container_name: trino
+    depends_on:
+      - hivemetastore
+      - minio
+    ports:
+      - "8085:8080"
+    volumes:
+      - ${HUDI_WS}:/var/hoodie/ws
+
 volumes:
   namenode:
   historyserver:
