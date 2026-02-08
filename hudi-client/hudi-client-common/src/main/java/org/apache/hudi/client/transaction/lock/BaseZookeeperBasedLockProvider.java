@@ -170,8 +170,8 @@ public abstract class BaseZookeeperBasedLockProvider implements LockProvider<Int
 
   private void acquireLock(long time, TimeUnit unit) throws Exception {
     ValidationUtils.checkArgument(this.lock == null, generateLogStatement(LockState.ALREADY_ACQUIRED, generateLogSuffixString()));
-    InterProcessMutex newLock = new InterProcessMutex(
-        this.curatorFrameworkClient, getLockPath());
+    InterProcessMutex newLock = new HoodieInterProcessMutex(
+        this.curatorFrameworkClient, getLockPath(), this.lockConfiguration);
     boolean acquired = newLock.acquire(time, unit);
     if (!acquired) {
       throw new HoodieLockException(generateLogStatement(LockState.FAILED_TO_ACQUIRE, generateLogSuffixString()));
