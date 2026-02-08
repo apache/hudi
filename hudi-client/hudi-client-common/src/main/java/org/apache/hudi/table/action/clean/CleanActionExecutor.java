@@ -216,11 +216,17 @@ public class CleanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I, K,
       }
 
       table.getMetaClient().reloadActiveTimeline();
+      // Merge engine-specific metadata (e.g., spark_application_id) with plan's extra metadata
+      Map<String, String> mergedExtraMetadata = new HashMap<>();
+      if (cleanerPlan.getExtraMetadata() != null) {
+        mergedExtraMetadata.putAll(cleanerPlan.getExtraMetadata());
+      }
+      mergedExtraMetadata.putAll(context.getEngineCommitMetadata());
       HoodieCleanMetadata metadata = CleanerUtils.convertCleanMetadata(
           inflightInstant.requestedTime(),
           Option.of(timer.endTimer()),
           cleanStats,
-          cleanerPlan.getExtraMetadata()
+          mergedExtraMetadata
       );
       this.txnManager.beginStateChange(Option.of(inflightInstant), Option.empty());
       writeTableMetadata(metadata, inflightInstant.requestedTime());
