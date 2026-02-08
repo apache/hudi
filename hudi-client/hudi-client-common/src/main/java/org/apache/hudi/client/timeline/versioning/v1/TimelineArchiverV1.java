@@ -22,6 +22,7 @@ package org.apache.hudi.client.timeline.versioning.v1;
 import org.apache.hudi.avro.model.HoodieArchivedMetaEntry;
 import org.apache.hudi.client.timeline.HoodieTimelineArchiver;
 import org.apache.hudi.client.transaction.TransactionManager;
+import org.apache.hudi.client.utils.ArchivalMetrics;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieArchivedLogFile;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
@@ -96,6 +97,7 @@ public class TimelineArchiverV1<T extends HoodieAvroPayload, I, K, O> implements
   private final HoodieTable<T, I, K, O> table;
   private final HoodieTableMetaClient metaClient;
   private final TransactionManager txnManager;
+  private final Map<String, Long> metrics;
 
   public TimelineArchiverV1(HoodieWriteConfig config, HoodieTable<T, I, K, O> table) {
     this.config = config;
@@ -106,6 +108,7 @@ public class TimelineArchiverV1<T extends HoodieAvroPayload, I, K, O> implements
     Pair<Integer, Integer> minAndMaxInstants = getMinAndMaxInstantsToKeep(table, metaClient);
     this.minInstantsToKeep = minAndMaxInstants.getLeft();
     this.maxInstantsToKeep = minAndMaxInstants.getRight();
+    this.metrics = new HashMap<>();
   }
 
   private Writer openWriter(StoragePath archivePath) {
@@ -141,23 +144,48 @@ public class TimelineArchiverV1<T extends HoodieAvroPayload, I, K, O> implements
         txnManager.beginStateChange(Option.empty(), Option.empty());
       }
       List<HoodieInstant> instantsToArchive = getInstantsToArchive();
+      addArchivalCommitMetrics(instantsToArchive);
+      boolean success = true;
       if (!instantsToArchive.isEmpty()) {
         this.writer = openWriter(archiveFilePath.getParent());
         log.info("Archiving instants {} for table {}", instantsToArchive, config.getBasePath());
         archive(context, instantsToArchive);
         log.info("Deleting archived instants {} for table {}", instantsToArchive, config.getBasePath());
-        deleteArchivedInstants(instantsToArchive, context);
+        success = deleteArchivedInstants(instantsToArchive, context);
       } else {
         log.info("No Instants to archive for table {}", config.getBasePath());
       }
 
+      metrics.put(ArchivalMetrics.ARCHIVAL_STATUS, success ? 1L : -1L);
       return instantsToArchive.size();
+    } catch (OutOfMemoryError oom) {
+      metrics.put(ArchivalMetrics.ARCHIVAL_OOM_FAILURE, 1L);
+      throw oom;
+    } catch (Exception e) {
+      String failureMetricName = String.join(".", ArchivalMetrics.ARCHIVAL_FAILURE, e.getClass().getSimpleName());
+      metrics.put(failureMetricName, 1L);
+      throw e;
     } finally {
       close();
       if (acquireLock) {
         txnManager.endStateChange(Option.empty());
       }
     }
+  }
+
+  @Override
+  public Map<String, Long> getMetrics() {
+    return metrics;
+  }
+
+  private void addArchivalCommitMetrics(List<HoodieInstant> instantsToArchive) {
+    Set<HoodieInstant> completedInstants = instantsToArchive.stream()
+        .filter(HoodieInstant::isCompleted)
+        .collect(Collectors.toSet());
+    metrics.put(ArchivalMetrics.ARCHIVAL_NUM_ALL_COMMITS, (long) completedInstants.size());
+    metrics.put(ArchivalMetrics.ARCHIVAL_NUM_WRITE_COMMITS, completedInstants.stream()
+        .filter(instant -> CollectionUtils.createSet(HoodieTimeline.COMMIT_ACTION, HoodieTimeline.REPLACE_COMMIT_ACTION)
+            .contains(instant.getAction())).count());
   }
 
   /**

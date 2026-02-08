@@ -900,8 +900,9 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
         long durationMs = metrics.getDurationInMs(timerContext.stop());
         this.metrics.updateArchiveMetrics(durationMs, instantsToArchive);
       }
+      // Emit additional archival metrics (OOM tracking, failure tracking, etc.)
       if (archiver != null) {
-        metrics.updateArchivalMetrics(archiver.getMetrics());
+        this.metrics.updateArchivalMetrics(archiver.getMetrics());
       }
     }
   }
