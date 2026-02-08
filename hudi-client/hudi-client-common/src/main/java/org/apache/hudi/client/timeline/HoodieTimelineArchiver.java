@@ -23,6 +23,8 @@ import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieAvroPayload;
 
 import java.io.IOException;
+import java.util.Collections;
+import java.util.Map;
 
 /**
  * Archiver to bound the growth of files under .hoodie meta path.
@@ -37,4 +39,12 @@ public interface HoodieTimelineArchiver<T extends HoodieAvroPayload, I, K, O> {
    * Check if commits need to be archived. If yes, archive commits.
    */
   int archiveIfRequired(HoodieEngineContext context, boolean acquireLock) throws IOException;
+
+  /**
+   * Returns metrics collected during archival.
+   * Keys are metric names, values are metric values.
+   */
+  default Map<String, Long> getMetrics() {
+    return Collections.emptyMap();
+  }
 }
