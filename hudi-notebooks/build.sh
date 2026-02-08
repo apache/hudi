@@ -24,6 +24,8 @@ export HIVE_VERSION=3.1.3
 export HIVE_VERSION_TAG=${HIVE_VERSION}
 export TRINO_VERSION=477
 export TRINO_VERSION_TAG=${TRINO_VERSION}
+export PRESTO_VERSION=0.296
+export PRESTO_VERSION_TAG=${PRESTO_VERSION}
 
 SCRIPT_DIR=$(cd $(dirname $0); pwd)
 
@@ -53,3 +55,11 @@ docker build \
     -t apachehudi/trino:latest \
     -t apachehudi/trino:"$TRINO_VERSION_TAG" \
     -f "$SCRIPT_DIR"/Dockerfile.trino .
+
+echo "Building Presto Docker image using Presto version: $PRESTO_VERSION"
+
+docker build \
+    --build-arg PRESTO_VERSION="$PRESTO_VERSION" \
+    -t apachehudi/presto:latest \
+    -t apachehudi/presto:"$PRESTO_VERSION_TAG" \
+    -f "$SCRIPT_DIR"/Dockerfile.presto .
