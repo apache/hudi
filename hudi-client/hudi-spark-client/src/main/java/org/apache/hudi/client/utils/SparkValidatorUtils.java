@@ -204,7 +204,17 @@ public class SparkValidatorUtils {
         .collect(Collectors.toList());
 
     if (newFiles.isEmpty()) {
-      return sqlContext.emptyDataFrame();
+      // Empty write: return empty DataFrame with table schema so validators that reference
+      // columns (e.g. _row_key) do not fail with AnalysisException "Column ... does not exist".
+      try {
+        return sqlContext.createDataFrame(
+            sqlContext.emptyDataFrame().rdd(),
+            HoodieSchemaConversionUtils.convertHoodieSchemaToStructType(
+                new TableSchemaResolver(table.getMetaClient()).getTableSchema()));
+      } catch (Exception e) {
+        LOG.warn("Could not get table schema for empty pending commits DataFrame.", e);
+        return sqlContext.emptyDataFrame();
+      }
     }
 
     return readRecordsForBaseFiles(sqlContext, newFiles, table);
