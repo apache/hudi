@@ -35,7 +35,6 @@ import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR
 
 /**
  * Tests for {@link SparkValidatorUtils}.
- * Ported from commit 94cf96d3 (HUDI-6630): SparkValidatorUtils should not throw
  * "Column ... does not exist" when running a precommit validation query against an empty write.
  */
 public class TestSparkValidatorUtils extends HoodieClientTestBase {
