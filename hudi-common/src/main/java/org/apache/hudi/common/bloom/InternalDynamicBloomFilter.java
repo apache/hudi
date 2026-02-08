@@ -18,6 +18,8 @@
 
 package org.apache.hudi.common.bloom;
 
+import lombok.NoArgsConstructor;
+
 import java.io.DataInput;
 import java.io.DataOutput;
 import java.io.IOException;
@@ -27,6 +29,7 @@ import java.io.IOException;
  * with bounds on maximum number of entries. Once the max entries is reached, false positive guarantees are not
  * honored.
  */
+@NoArgsConstructor
 class InternalDynamicBloomFilter extends InternalFilter {
 
   /**
@@ -46,12 +49,6 @@ class InternalDynamicBloomFilter extends InternalFilter {
    * The matrix of Bloom filter.
    */
   private InternalBloomFilter[] matrix;
-
-  /**
-   * Zero-args constructor for the serialization.
-   */
-  public InternalDynamicBloomFilter() {
-  }
 
   /**
    * Constructor.

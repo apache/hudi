@@ -53,6 +53,10 @@ import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 
+import lombok.Getter;
+import lombok.Setter;
+import lombok.experimental.Accessors;
+
 import java.io.IOException;
 import java.util.List;
 import java.util.Map;
@@ -76,28 +80,53 @@ import static org.apache.hudi.common.table.HoodieTableConfig.inferMergingConfigs
  *            and {@code RowData} in Flink.
  */
 public abstract class HoodieReaderContext<T> {
+
+  @Getter
   private final StorageConfiguration<?> storageConfiguration;
   protected final HoodieFileFormat baseFileFormat;
   // For general predicate pushdown.
+  @Getter
   protected final Option<Predicate> keyFilterOpt;
   protected final HoodieTableConfig tableConfig;
+  @Setter
   private String tablePath = null;
+  @Getter
+  @Setter
   private String latestCommitTime = null;
+  @Getter
+  @Setter
   private Option<HoodieRecordMerger> recordMerger = null;
+  @Getter
+  @Setter
   private Boolean hasLogFiles = null;
+  @Getter
+  @Setter
   private Boolean hasBootstrapBaseFile = null;
+  @Getter
+  @Setter
   private Boolean needsBootstrapMerge = null;
 
+  @Getter
+  @Setter
   // should we do position based merging for mor
   private Boolean shouldMergeUseRecordPosition = null;
   protected Option<InstantRange> instantRangeOpt;
+  @Getter
   private RecordMergeMode mergeMode;
+  @Getter
   protected RecordContext<T> recordContext;
+  @Getter
+  @Setter
   private FileGroupReaderSchemaHandler<T> schemaHandler = null;
   // the default iterator mode is engine-specific record mode
+  @Setter
   private IteratorMode iteratorMode = IteratorMode.ENGINE_RECORD;
+  @Getter
   protected final HoodieConfig hoodieReaderConfig;
-  private boolean enableLogicalTimestampFieldRepair = true;
+  @Getter
+  @Setter
+  @Accessors(fluent = true)
+  private Boolean enableLogicalTimestampFieldRepair = true;
 
   protected HoodieReaderContext(StorageConfiguration<?> storageConfiguration,
       HoodieTableConfig tableConfig,
@@ -122,19 +151,6 @@ public abstract class HoodieReaderContext<T> {
     this.hoodieReaderConfig = hoodieReaderConfig;
   }
 
-  // Getter and Setter for schemaHandler
-  public FileGroupReaderSchemaHandler<T> getSchemaHandler() {
-    return schemaHandler;
-  }
-
-  public void setSchemaHandler(FileGroupReaderSchemaHandler<T> schemaHandler) {
-    this.schemaHandler = schemaHandler;
-  }
-
-  public void setIteratorMode(IteratorMode iteratorMode) {
-    this.iteratorMode = iteratorMode;
-  }
-
   public IteratorMode getIteratorMode() {
     ValidationUtils.checkArgument(iteratorMode != null, "iterator mode should not be null!");
     return this.iteratorMode;
@@ -147,80 +163,8 @@ public abstract class HoodieReaderContext<T> {
     return tablePath;
   }
 
-  public void setEnableLogicalTimestampFieldRepair(boolean enableLogicalTimestampFieldRepair) {
-    this.enableLogicalTimestampFieldRepair = enableLogicalTimestampFieldRepair;
-  }
-
-  public void setTablePath(String tablePath) {
-    this.tablePath = tablePath;
-  }
-
-  public String getLatestCommitTime() {
-    return latestCommitTime;
-  }
-
-  public void setLatestCommitTime(String latestCommitTime) {
-    this.latestCommitTime = latestCommitTime;
-  }
-
-  public Option<HoodieRecordMerger> getRecordMerger() {
-    return recordMerger;
-  }
-
-  public void setRecordMerger(Option<HoodieRecordMerger> recordMerger) {
-    this.recordMerger = recordMerger;
-  }
-
-  // Getter and Setter for hasLogFiles
-  public boolean getHasLogFiles() {
-    return hasLogFiles;
-  }
-
-  public void setHasLogFiles(boolean hasLogFiles) {
-    this.hasLogFiles = hasLogFiles;
-  }
-
-  // Getter and Setter for hasBootstrapBaseFile
-  public boolean getHasBootstrapBaseFile() {
-    return hasBootstrapBaseFile;
-  }
-
-  public void setHasBootstrapBaseFile(boolean hasBootstrapBaseFile) {
-    this.hasBootstrapBaseFile = hasBootstrapBaseFile;
-  }
-
-  // Getter and Setter for needsBootstrapMerge
-  public boolean getNeedsBootstrapMerge() {
-    return needsBootstrapMerge;
-  }
-
-  public boolean enableLogicalTimestampFieldRepair() {
-    return enableLogicalTimestampFieldRepair;
-  }
-
-  public void setNeedsBootstrapMerge(boolean needsBootstrapMerge) {
-    this.needsBootstrapMerge = needsBootstrapMerge;
-  }
-
-  // Getter and Setter for useRecordPosition
-  public boolean getShouldMergeUseRecordPosition() {
-    return shouldMergeUseRecordPosition;
-  }
-
-  public void setShouldMergeUseRecordPosition(boolean shouldMergeUseRecordPosition) {
-    this.shouldMergeUseRecordPosition = shouldMergeUseRecordPosition;
-  }
-
-  public StorageConfiguration<?> getStorageConfiguration() {
-    return storageConfiguration;
-  }
-
   public TypedProperties getMergeProps(TypedProperties props) {
     return ConfigUtils.getMergeProps(props, this.tableConfig);
-  }
-
-  public Option<Predicate> getKeyFilterOpt() {
-    return keyFilterOpt;
   }
 
   public SizeEstimator<BufferedRecord<T>> getRecordSizeEstimator() {
@@ -229,14 +173,6 @@ public abstract class HoodieReaderContext<T> {
 
   public CustomSerializer<BufferedRecord<T>> getRecordSerializer() {
     return new DefaultSerializer<>();
-  }
-
-  public RecordContext<T> getRecordContext() {
-    return recordContext;
-  }
-
-  public HoodieConfig getHoodieReaderConfig() {
-    return hoodieReaderConfig;
   }
 
   /**
@@ -332,10 +268,6 @@ public abstract class HoodieReaderContext<T> {
     this.recordMerger = getRecordMerger(recordMergeMode, mergeStrategyId,
         properties.getString(RECORD_MERGE_IMPL_CLASSES_WRITE_CONFIG_KEY,
             properties.getString(RECORD_MERGE_IMPL_CLASSES_DEPRECATED_WRITE_CONFIG_KEY, "")));
-  }
-
-  public RecordMergeMode getMergeMode() {
-    return mergeMode;
   }
 
   /**
