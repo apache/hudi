@@ -545,11 +545,13 @@ public class RequestHandler {
 
     app.post(MarkerOperation.CREATE_MARKER_URL, new ViewHandler(ctx -> {
       metricsRegistry.add("CREATE_MARKER", 1);
+      String requestId = ctx.queryParam(MarkerOperation.MARKER_REQUEST_ID_PARAM);
       ctx.future(markerHandler.createMarker(
           ctx,
           getMarkerDirParam(ctx),
           ctx.queryParamAsClass(MarkerOperation.MARKER_NAME_PARAM, String.class).getOrDefault(""),
-          ctx.queryParamAsClass(MarkerOperation.MARKER_BASEPATH_PARAM, String.class).getOrDefault("")));
+          ctx.queryParamAsClass(MarkerOperation.MARKER_BASEPATH_PARAM, String.class).getOrDefault(""),
+          requestId));
     }, false));
 
     app.post(MarkerOperation.DELETE_MARKER_DIR_URL, new ViewHandler(ctx -> {
