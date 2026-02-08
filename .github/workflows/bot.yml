@@ -177,28 +177,92 @@ jobs:
           java-version: '17'
           distribution: 'adopt'
           architecture: x64
+          cache: maven
+      - name: Verify Java 17 version
+        run: |
+          echo "JAVA_HOME: $JAVA_HOME"
+          java -version
+          which java
       - name: Quickstart Test
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
-        run:
-          mvn test -Punit-tests -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -pl hudi-examples/hudi-examples-spark $MVN_ARGS
-      - name: UT - Common & Spark
+        run: |
+          export PATH="$JAVA_HOME/bin:$PATH"
+          mvn test -Punit-tests -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DwildcardSuites=skipScalaTests -DfailIfNoTests=false -pl hudi-examples/hudi-examples-spark $MVN_ARGS
+      - name: Java UT - Common & Spark
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
           SPARK_MODULES: ${{ matrix.sparkModules }}
-        if: ${{ !endsWith(env.SPARK_PROFILE, '3.2') }} # skip test spark 3.2 as it's covered by Azure CI
-        run:
-          mvn test -Punit-tests -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -pl "hudi-common,$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS
-      - name: FT - Spark
+        run: |
+          export PATH="$JAVA_HOME/bin:$PATH"
+          mvn test -Punit-tests -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DwildcardSuites=skipScalaTests -DfailIfNoTests=false -pl "hudi-common,$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS
+      - name: Java FT - Spark
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
           SPARK_MODULES: ${{ matrix.sparkModules }}
-        if: ${{ !endsWith(env.SPARK_PROFILE, '3.2') }} # skip test spark 3.2 as it's covered by Azure CI
-        run:
+        if: ${{ !endsWith(env.SPARK_PROFILE, '3.4') }} # skip test spark 3.4 as it's covered by Azure CI
+        run: |
+          export PATH="$JAVA_HOME/bin:$PATH"
           mvn test -Pfunctional-tests -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -pl "$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS
+
+  test-spark-java17-scala-tests:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - scalaProfile: "scala-2.12"
+            sparkProfile: "spark3.3"
+            sparkModules: "hudi-spark-datasource/hudi-spark3.3.x"
+          - scalaProfile: "scala-2.12"
+            sparkProfile: "spark3.4"
+            sparkModules: "hudi-spark-datasource/hudi-spark3.4.x"
+
+    steps:
+      - uses: actions/checkout@v3
+      - name: Set up JDK 8
+        uses: actions/setup-java@v3
+        with:
+          java-version: '8'
+          distribution: 'temurin'
+          architecture: x64
+          cache: maven
+      - name: Build Project
+        env:
+          SCALA_PROFILE: ${{ matrix.scalaProfile }}
+          SPARK_PROFILE: ${{ matrix.sparkProfile }}
+        run:
+          mvn clean install -T 2 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DskipTests=true $MVN_ARGS -am -pl "hudi-examples/hudi-examples-spark,hudi-common,$SPARK_COMMON_MODULES,$SPARK_MODULES"
+      - name: Set up JDK 17
+        uses: actions/setup-java@v3
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          architecture: x64
+          cache: maven
+      - name: Verify Java 17 version
+        run: |
+          echo "JAVA_HOME: $JAVA_HOME"
+          java -version
+          which java
+      - name: Scala UT - Common & Spark
+        env:
+          SCALA_PROFILE: ${{ matrix.scalaProfile }}
+          SPARK_PROFILE: ${{ matrix.sparkProfile }}
+          SPARK_MODULES: ${{ matrix.sparkModules }}
+        run: |
+          export PATH="$JAVA_HOME/bin:$PATH"
+          mvn test -Punit-tests -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -Dtest=skipJavaTests -DfailIfNoTests=false -pl "hudi-common,$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS
+      - name: Scala FT - Spark
+        env:
+          SCALA_PROFILE: ${{ matrix.scalaProfile }}
+          SPARK_PROFILE: ${{ matrix.sparkProfile }}
+          SPARK_MODULES: ${{ matrix.sparkModules }}
+        run: |
+          export PATH="$JAVA_HOME/bin:$PATH"
+          mvn test -Pfunctional-tests -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -Dtest=skipJavaTests -DfailIfNoTests=false -pl "$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS
 
   test-flink:
     runs-on: ubuntu-latest

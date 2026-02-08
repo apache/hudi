@@ -18,10 +18,13 @@
 
 package org.apache.hudi.functional;
 
+import org.apache.hudi.avro.AvroSchemaUtils;
 import org.apache.hudi.avro.model.HoodieClusteringGroup;
 import org.apache.hudi.avro.model.HoodieClusteringPlan;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.HoodieStorageConfig;
+import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
+import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieWriteStat;
@@ -33,6 +36,7 @@ import org.apache.hudi.common.table.view.FileSystemViewStorageType;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.ClusteringUtils;
+import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieClusteringConfig;
@@ -42,6 +46,10 @@ import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.action.cluster.ClusteringPlanPartitionFilterMode;
 import org.apache.hudi.testutils.HoodieSparkClientTestHarness;
 import org.apache.hudi.testutils.MetadataMergeWriteStatus;
+
+import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericData;
+import org.apache.avro.generic.GenericRecord;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
@@ -50,14 +58,19 @@ import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
+import java.io.UncheckedIOException;
+import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
+import java.time.LocalDate;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+import java.util.Random;
 import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 public class TestSparkSortAndSizeClustering extends HoodieSparkClientTestHarness {
-
 
   private HoodieWriteConfig config;
   private HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator(0);
@@ -164,5 +177,58 @@ public class TestSparkSortAndSizeClustering extends HoodieSparkClientTestHarness
         .forTable("clustering-table")
         .withEmbeddedTimelineServerEnabled(true).withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder()
             .withStorageType(FileSystemViewStorageType.EMBEDDED_KV_STORE).build());
+  }
+
+  private List<HoodieRecord> generateInserts(String instant, long ts, int count) {
+    Schema schema = getSchema();
+    Schema decimalSchema = schema.getField("decimal_field").schema();
+    Schema nestedSchema = AvroSchemaUtils.getNonNullTypeFromUnion(schema.getField("nested_record").schema());
+    Schema enumSchema = AvroSchemaUtils.getNonNullTypeFromUnion(schema.getField("enum_field").schema());
+    Random random = new Random(0);
+    return IntStream.range(0, count)
+        .mapToObj(i -> {
+          GenericRecord record = new GenericData.Record(schema);
+          String key = "key_" + i;
+          String partition = "partition_" + (i % 3);
+          record.put("_row_key", key);
+          record.put("ts", ts);
+          record.put("partition_path", partition);
+          record.put("_hoodie_is_deleted", false);
+          record.put("double_field", random.nextDouble());
+          record.put("float_field", random.nextFloat());
+          record.put("int_field", random.nextInt());
+          record.put("long_field", random.nextLong());
+          record.put("string_field", instant);
+          record.put("bytes_field", ByteBuffer.wrap(instant.getBytes(StandardCharsets.UTF_8)));
+          GenericRecord nestedRecord = new GenericData.Record(nestedSchema);
+          nestedRecord.put("nested_int", random.nextInt());
+          nestedRecord.put("nested_string", "nested_" + instant);
+          nestedRecord.put("nested_timestamp_millis_field", ts);
+          record.put("nested_record", nestedRecord);
+          record.put("array_field", Collections.singletonList(nestedRecord));
+          record.put("nullable_map_field", Collections.singletonMap("key_" + instant, nestedRecord));
+          // logical types
+          record.put("date_nullable_field", random.nextBoolean() ? null : LocalDate.now().minusDays(random.nextInt(3)));
+          record.put("timestamp_millis_field", ts);
+          record.put("timestamp_micros_nullable_field", random.nextBoolean() ? null : ts * 1000);
+          record.put("timestamp_local_millis_nullable_field", random.nextBoolean() ? null : ts);
+          record.put("timestamp_local_micros_field", ts * 1000);
+          record.put("enum_field", new GenericData.EnumSymbol(
+              enumSchema,
+              enumSchema
+                  .getEnumSymbols()
+                  .get(random.nextInt(enumSchema.getEnumSymbols().size()))));
+          return new HoodieAvroIndexedRecord(new HoodieKey(key, partition), record);
+        })
+        .collect(Collectors.toList());
+  }
+
+  private Schema getSchema() {
+    try {
+      String schema = FileIOUtils.readAsUTFString(this.getClass().getClassLoader().getResourceAsStream("schema_with_logical_types.avsc"));
+      return new Schema.Parser().parse(schema);
+    } catch (IOException e) {
+      throw new UncheckedIOException(e);
+    }
   }
 }

@@ -87,6 +87,7 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
   private long lastReverseLogFilePosition;
   private final boolean reverseReader;
   private final boolean enableRecordLookups;
+  private final boolean enableLogicalTimestampFieldRepair;
   private boolean closed = false;
   private FSDataInputStream inputStream;
 
@@ -98,18 +99,16 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
   public HoodieLogFileReader(FileSystem fs, HoodieLogFile logFile, Schema readerSchema, int bufferSize,
                              boolean readBlockLazily, boolean reverseReader) throws IOException {
     this(fs, logFile, readerSchema, bufferSize, readBlockLazily, reverseReader, false,
-        HoodieRecord.RECORD_KEY_METADATA_FIELD);
+        HoodieRecord.RECORD_KEY_METADATA_FIELD, InternalSchema.getEmptyInternalSchema(), false);
   }
 
+  /**
+   * Constructor with full options for use by HoodieLogFormatReader (FileSystem-based, no storage abstraction).
+   */
   public HoodieLogFileReader(FileSystem fs, HoodieLogFile logFile, Schema readerSchema, int bufferSize,
                              boolean readBlockLazily, boolean reverseReader, boolean enableRecordLookups,
-                             String keyField) throws IOException {
-    this(fs, logFile, readerSchema, bufferSize, readBlockLazily, reverseReader, enableRecordLookups, keyField, InternalSchema.getEmptyInternalSchema());
-  }
-
-  public HoodieLogFileReader(FileSystem fs, HoodieLogFile logFile, Schema readerSchema, int bufferSize,
-                             boolean readBlockLazily, boolean reverseReader, boolean enableRecordLookups,
-                             String keyField, InternalSchema internalSchema) throws IOException {
+                             String keyField, InternalSchema internalSchema,
+                             boolean enableLogicalTimestampFieldRepair) throws IOException {
     this.fs = fs;
     this.hadoopConf = fs.getConf();
     // NOTE: We repackage {@code HoodieLogFile} here to make sure that the provided path
@@ -125,6 +124,7 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
     this.enableRecordLookups = enableRecordLookups;
     this.keyField = keyField;
     this.internalSchema = internalSchema == null ? InternalSchema.getEmptyInternalSchema() : internalSchema;
+    this.enableLogicalTimestampFieldRepair = enableLogicalTimestampFieldRepair;
     if (this.reverseReader) {
       this.reverseLogFilePosition = this.lastReverseLogFilePosition = this.logFile.getFileSize();
     }
@@ -200,8 +200,8 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
         if (nextBlockVersion.getVersion() == HoodieLogFormatVersion.DEFAULT_VERSION) {
           return HoodieAvroDataBlock.getBlock(content.get(), readerSchema, internalSchema);
         } else {
-          return new HoodieAvroDataBlock(() -> getFSDataInputStream(fs, this.logFile, bufferSize), content, readBlockLazily, logBlockContentLoc,
-              getTargetReaderSchemaForBlock(), header, footer, keyField);
+          return new HoodieAvroDataBlock(() -> getFSDataInputStream(fs, this.logFile, bufferSize), content, true, logBlockContentLoc,
+              getTargetReaderSchemaForBlock(), header, footer, keyField, enableLogicalTimestampFieldRepair);
         }
 
       case HFILE_DATA_BLOCK:
