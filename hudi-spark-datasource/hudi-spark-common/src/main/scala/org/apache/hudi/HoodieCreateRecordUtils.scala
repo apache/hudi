@@ -153,8 +153,17 @@ object HoodieCreateRecordUtils {
               val orderingVal = OrderingValues.create(
                 orderingFields,
                 JFunction.toJavaFunction[String, Comparable[_]](
-                  field => HoodieAvroUtils.getNestedFieldVal(avroRec, field, false,
-                    consistentLogicalTimestampEnabled).asInstanceOf[Comparable[_]]))
+                  field => {
+                    val fieldVal = HoodieAvroUtils.getNestedFieldVal(avroRec, field, false,
+                      consistentLogicalTimestampEnabled)
+                    if (fieldVal == null) {
+                      throw new IllegalArgumentException(
+                        s"Precombine/ordering field '$field' has null value for record key '${hoodieKey.getRecordKey}'. " +
+                          s"Please ensure all records have non-null values for the precombine field, " +
+                          s"or use a payload class that doesn't require ordering (e.g., OverwriteWithLatestAvroPayload).")
+                    }
+                    fieldVal.asInstanceOf[Comparable[_]]
+                  }))
               HoodieRecordUtils.createHoodieRecord(processedRecord, orderingVal, hoodieKey,
                 config.getPayloadClass, null, recordLocation, requiresPayload, isDelete)
             } else {
