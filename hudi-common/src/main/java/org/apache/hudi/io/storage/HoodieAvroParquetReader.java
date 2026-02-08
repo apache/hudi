@@ -44,7 +44,9 @@ import org.apache.parquet.hadoop.ParquetReader;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 import static org.apache.hudi.avro.AvroSchemaUtils.getRepairedSchema;
 import static org.apache.hudi.common.util.TypeUtils.unsafeCast;
@@ -165,7 +167,8 @@ public class HoodieAvroParquetReader extends HoodieAvroFileReaderBase {
     Option<Schema> promotedSchema = Option.empty();
     if (!renamedColumns.isPresent() || HoodieAvroUtils.recordNeedsRewriteForExtendedAvroTypePromotion(repairedFileSchema, schema)) {
       AvroReadSupport.setAvroReadSchema(conf, repairedFileSchema);
-      AvroReadSupport.setRequestedProjection(conf, schema);
+      Schema projectionSchema = computeSafeProjection(repairedFileSchema, schema);
+      AvroReadSupport.setRequestedProjection(conf, projectionSchema);
       promotedSchema = Option.of(schema);
     } else {
       AvroReadSupport.setAvroReadSchema(conf, schema);
@@ -183,6 +186,41 @@ public class HoodieAvroParquetReader extends HoodieAvroFileReaderBase {
         : new ParquetReaderIterator<>(reader);
     readerIterators.add(parquetReaderIterator);
     return parquetReaderIterator;
+  }
+
+  /**
+   * Computes a safe projection schema by intersecting the requested schema with the file schema.
+   * This ensures we only request fields that actually exist in the file, enabling column pruning
+   * while avoiding "field not found" errors.
+   *
+   * @param fileSchema The schema from the file (with repaired types)
+   * @param requestedSchema The schema we'd like to read
+   * @return A projection schema containing only fields that exist in both schemas
+   */
+  private Schema computeSafeProjection(Schema fileSchema, Schema requestedSchema) {
+    Map<String, Schema.Field> fileFields = fileSchema.getFields().stream()
+        .collect(Collectors.toMap(Schema.Field::name, f -> f));
+
+    List<Schema.Field> projectedFields = requestedSchema.getFields().stream()
+        .filter(field -> fileFields.containsKey(field.name()))
+        .map(field -> {
+          Schema.Field fileField = fileFields.get(field.name());
+          return new Schema.Field(fileField.name(), fileField.schema(), fileField.doc(), fileField.defaultVal());
+        })
+        .collect(Collectors.toList());
+
+    if (projectedFields.isEmpty()) {
+      return fileSchema;
+    }
+
+    Schema projectedSchema = Schema.createRecord(
+        fileSchema.getName(),
+        fileSchema.getDoc(),
+        fileSchema.getNamespace(),
+        fileSchema.isError()
+    );
+    projectedSchema.setFields(projectedFields);
+    return projectedSchema;
   }
 
   @Override
