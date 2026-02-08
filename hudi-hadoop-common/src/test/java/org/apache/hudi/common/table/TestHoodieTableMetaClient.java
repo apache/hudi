@@ -25,6 +25,7 @@ import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.io.util.FileIOUtils;
@@ -377,5 +378,32 @@ class TestHoodieTableMetaClient extends HoodieCommonTestHarness {
         throw new RuntimeException(e);
       }
     }, "Should throw HoodieIOException for invalid JSON");
+  }
+
+  @Test
+  void testGetRawActiveTimeline() {
+    // With V2 layout
+    HoodieTableMetaClient freshMetaClient = HoodieTableMetaClient.builder()
+            .setConf(metaClient.getStorageConf())
+            .setBasePath(basePath)
+            .setLayoutVersion(Option.of(TimelineLayoutVersion.LAYOUT_VERSION_2))
+            .setLoadActiveTimelineOnLoad(false)
+            .build();
+
+    HoodieActiveTimeline activeTimeline = freshMetaClient.getActiveTimeline();
+
+    assertNotNull(activeTimeline);
+    assertNotNull(freshMetaClient.getRawActiveTimeline());
+
+    // Load while initialization of client itself
+    freshMetaClient = HoodieTableMetaClient.builder()
+            .setConf(metaClient.getStorageConf())
+            .setBasePath(basePath)
+            .setLayoutVersion(Option.of(TimelineLayoutVersion.LAYOUT_VERSION_2))
+            .setLoadActiveTimelineOnLoad(true)
+            .build();
+
+    assertNotNull(freshMetaClient.getActiveTimeline());
+    assertNotNull(freshMetaClient.getRawActiveTimeline());
   }
 }
