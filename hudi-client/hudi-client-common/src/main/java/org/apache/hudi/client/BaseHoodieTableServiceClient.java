@@ -942,7 +942,7 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
       try {
         rollbackPlan = RollbackUtils.getRollbackPlan(metaClient, rollbackInstant);
       } catch (Exception e) {
-        if (rollbackInstant.isRequested()) {
+        if (!config.getWriteConcurrencyMode().supportsMultiWriter() && rollbackInstant.isRequested()) {
           log.warn("Fetching rollback plan failed for {}, deleting the plan since it's in REQUESTED state", rollbackInstant, e);
           try {
             metaClient.getActiveTimeline().deletePending(rollbackInstant);
