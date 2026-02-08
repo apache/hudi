@@ -50,6 +50,11 @@ public abstract class AppendWriteFunctions {
       return new AppendWriteFunctionWithRateLimit<>(rowType, conf);
     }
 
+    // Check if continuous sorting is enabled (requires WRITE_BUFFER_SORT_ENABLED or appropriate buffer type)
+    if (conf.get(FlinkOptions.WRITE_BUFFER_SORT_CONTINUOUS_ENABLED)) {
+      return new AppendWriteFunctionWithContinuousSort<>(conf, rowType);
+    }
+
     String bufferType = resolveBufferType(conf);
     if (BufferType.DISRUPTOR.name().equalsIgnoreCase(bufferType)) {
       return new AppendWriteFunctionWithDisruptorBufferSort<>(conf, rowType);
