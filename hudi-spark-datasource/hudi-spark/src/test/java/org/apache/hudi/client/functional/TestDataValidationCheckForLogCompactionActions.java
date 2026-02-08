@@ -50,7 +50,6 @@ import org.apache.hudi.testutils.MetadataMergeWriteStatus;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.spark.api.java.JavaRDD;
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -98,21 +97,6 @@ public class TestDataValidationCheckForLogCompactionActions extends HoodieClient
   @BeforeEach
   public void setUpTestTable() {
     HoodieSparkWriteableTestTable.of(metaClient);
-  }
-
-  //TODO: include both the table's contents.
-  /**
-   * Cleanups resource group for the subclasses of {@link HoodieClientTestBase}.
-   */
-  @AfterEach
-  public void cleanupResources() throws IOException {
-    cleanupTimelineService();
-    cleanupClients();
-    cleanupSparkContexts();
-    cleanupTestDataGenerator();
-    cleanupFileSystem();
-    cleanupExecutorService();
-    System.gc();
   }
 
   /**

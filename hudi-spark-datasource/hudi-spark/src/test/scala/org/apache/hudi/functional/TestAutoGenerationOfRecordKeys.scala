@@ -66,14 +66,6 @@ class TestAutoGenerationOfRecordKeys extends HoodieSparkClientTestBase with Scal
     initHoodieStorage()
   }
 
-  @AfterEach override def tearDown() = {
-    cleanupSparkContexts()
-    cleanupTestDataGenerator()
-    cleanupFileSystem()
-    FileSystem.closeAll()
-    System.gc()
-  }
-
   @ParameterizedTest
   @CsvSource(value = Array(
     "AVRO,insert,COPY_ON_WRITE", "AVRO,bulk_insert,COPY_ON_WRITE", "AVRO,insert,MERGE_ON_READ", "AVRO,bulk_insert,MERGE_ON_READ"
