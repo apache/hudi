@@ -18,13 +18,14 @@
 
 package org.apache.hudi.common.schema;
 
-import lombok.AccessLevel;
-import lombok.NoArgsConstructor;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.exception.MissingSchemaFieldException;
 import org.apache.hudi.exception.SchemaBackwardsCompatibilityException;
 import org.apache.hudi.internal.schema.HoodieSchemaException;
+
+import lombok.AccessLevel;
+import lombok.NoArgsConstructor;
 
 import java.util.ArrayDeque;
 import java.util.ArrayList;
