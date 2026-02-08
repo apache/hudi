@@ -29,6 +29,7 @@ import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.SerializationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieCleanConfig;
@@ -38,6 +39,7 @@ import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.metadata.HoodieTableMetadata;
+import org.apache.hudi.sink.muttley.AthenaIngestionGateway;
 import org.apache.hudi.sink.event.Correspondent;
 import org.apache.hudi.sink.event.WriteMetadataEvent;
 import org.apache.hudi.sink.utils.CoordinationResponseSerDe;
@@ -46,6 +48,7 @@ import org.apache.hudi.sink.utils.MockCoordinatorExecutor;
 import org.apache.hudi.sink.utils.NonThrownExecutor;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
+import org.apache.hudi.util.StreamerUtil;
 import org.apache.hudi.utils.TestConfigurations;
 import org.apache.hudi.utils.TestUtils;
 
@@ -69,6 +72,7 @@ import org.slf4j.Logger;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
@@ -770,5 +774,438 @@ public class TestStreamWriteOperatorCoordinator {
     assertThat(coordinator.getContext(), instanceOf(MockOperatorCoordinatorContext.class));
     MockOperatorCoordinatorContext context = (MockOperatorCoordinatorContext) coordinator.getContext();
     assertTrue(context.isJobFailed(), message);
+  }
+
+  // -------------------------------------------------------------------------
+  //  Kafka Offset Tests
+  // -------------------------------------------------------------------------
+
+  @Test
+  public void testStringFyMethod() throws Exception {
+    String topic = "test-topic";
+    Map<Integer, Long> offsetMap = new HashMap<>();
+    offsetMap.put(0, 100L);
+    offsetMap.put(1, 200L);
+    offsetMap.put(2, 300L);
+
+    String result = StreamerUtil.stringFy(topic, "test-cluster", offsetMap);
+
+    assertEquals("kafka_metadata%3Atest-topic%3A0:100;kafka_metadata%3Atest-topic%3A1:200;"
+        + "kafka_metadata%3Atest-topic%3A2:300;kafka_metadata%3Akafka_cluster%3Atest-topic%3A:test-cluster", result);
+  }
+
+  @Test
+  public void testCollectKafkaOffsetCheckpointException() throws Exception {
+    Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    conf.set(FlinkOptions.DC, "dca");
+    conf.set(FlinkOptions.ENV, "production");
+    conf.set(FlinkOptions.JOB_NAME, "test-job");
+    conf.set(FlinkOptions.HADOOP_USER, "test-user");
+    conf.set(FlinkOptions.SOURCE_KAFKA_CLUSTER, "kafka-test");
+    conf.set(FlinkOptions.TARGET_KAFKA_CLUSTER, "kafka-test");
+    conf.set(FlinkOptions.ATHENA_SERVICE, "athena-test");
+    conf.set(FlinkOptions.CALLER_SERVICE_NAME, "test-service");
+    conf.set(FlinkOptions.KAFKA_TOPIC_NAME, "test-topic");
+    conf.set(FlinkOptions.SERVICE_TIER, "DEFAULT");
+    conf.set(FlinkOptions.SERVICE_NAME, "ingestion-rt");
+
+    AthenaIngestionGateway mockGateway = Mockito.mock(AthenaIngestionGateway.class);
+    Mockito.when(mockGateway.getKafkaCheckpointsInfo(
+        Mockito.anyString(), Mockito.anyString(), Mockito.anyLong(),
+        Mockito.anyString(), Mockito.anyString(), Mockito.anyString(),
+        Mockito.anyString(), Mockito.anyInt(), Mockito.anyMap(),
+        Mockito.anyString(), Mockito.anyString()))
+        .thenThrow(new IOException("Network error"));
+
+    FlinkCheckpointClient mockClient = new FlinkCheckpointClient(mockGateway);
+    String result = StreamerUtil.collectKafkaOffsetCheckpoint(conf, 123L, mockClient);
+
+    // Fail open: returns cluster metadata even on exception
+    assertNotNull(result);
+    assertEquals("kafka_metadata%3Akafka_cluster%3Atest-topic%3A:kafka-test", result);
+  }
+
+  @Test
+  public void testCollectKafkaOffsetCheckpointNullKafkaOffsetsInfo() throws Exception {
+    Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    conf.set(FlinkOptions.DC, "dca");
+    conf.set(FlinkOptions.ENV, "production");
+    conf.set(FlinkOptions.JOB_NAME, "test-job");
+    conf.set(FlinkOptions.HADOOP_USER, "test-user");
+    conf.set(FlinkOptions.SOURCE_KAFKA_CLUSTER, "kafka-test");
+    conf.set(FlinkOptions.TARGET_KAFKA_CLUSTER, "kafka-test");
+    conf.set(FlinkOptions.ATHENA_SERVICE, "athena-test");
+    conf.set(FlinkOptions.CALLER_SERVICE_NAME, "test-service");
+    conf.set(FlinkOptions.KAFKA_TOPIC_NAME, "test-topic");
+    conf.set(FlinkOptions.SERVICE_TIER, "DEFAULT");
+    conf.set(FlinkOptions.SERVICE_NAME, "ingestion-rt");
+
+    AthenaIngestionGateway mockGateway = Mockito.mock(AthenaIngestionGateway.class);
+    AthenaIngestionGateway.CheckpointKafkaOffsetInfo offsetInfo =
+        new AthenaIngestionGateway.CheckpointKafkaOffsetInfo(
+            String.valueOf(System.currentTimeMillis()),
+            null,
+            "20231201120000",
+            "14458"
+        );
+
+    Mockito.when(mockGateway.getKafkaCheckpointsInfo(
+        Mockito.anyString(), Mockito.anyString(), Mockito.anyLong(),
+        Mockito.anyString(), Mockito.anyString(), Mockito.anyString(),
+        Mockito.anyString(), Mockito.anyInt(), Mockito.anyMap(),
+        Mockito.anyString(), Mockito.anyString()))
+        .thenReturn(Option.of(offsetInfo));
+
+    FlinkCheckpointClient mockClient = new FlinkCheckpointClient(mockGateway);
+    String result = StreamerUtil.collectKafkaOffsetCheckpoint(conf, 123L, mockClient);
+
+    // Fail open: returns cluster metadata when kafkaOffsetsInfo is null
+    assertNotNull(result);
+    assertEquals("kafka_metadata%3Akafka_cluster%3Atest-topic%3A:kafka-test", result);
+  }
+
+  @Test
+  public void testCollectKafkaOffsetCheckpointMultipleTopics() throws Exception {
+    Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    conf.set(FlinkOptions.DC, "dca");
+    conf.set(FlinkOptions.ENV, "production");
+    conf.set(FlinkOptions.JOB_NAME, "test-job");
+    conf.set(FlinkOptions.HADOOP_USER, "test-user");
+    conf.set(FlinkOptions.SOURCE_KAFKA_CLUSTER, "kafka-test");
+    conf.set(FlinkOptions.TARGET_KAFKA_CLUSTER, "kafka-test");
+    conf.set(FlinkOptions.ATHENA_SERVICE, "athena-test");
+    conf.set(FlinkOptions.CALLER_SERVICE_NAME, "test-service");
+    conf.set(FlinkOptions.KAFKA_TOPIC_NAME, "test-topic");
+    conf.set(FlinkOptions.SERVICE_TIER, "DEFAULT");
+    conf.set(FlinkOptions.SERVICE_NAME, "ingestion-rt");
+
+    AthenaIngestionGateway mockGateway = Mockito.mock(AthenaIngestionGateway.class);
+
+    AthenaIngestionGateway.CheckpointKafkaOffsetInfo.KafkaOffsetsInfo.Offsets offsets1 =
+        new AthenaIngestionGateway.CheckpointKafkaOffsetInfo.KafkaOffsetsInfo.Offsets(
+            Collections.singletonMap(0, 100L));
+    AthenaIngestionGateway.CheckpointKafkaOffsetInfo.KafkaOffsetsInfo topic1 =
+        new AthenaIngestionGateway.CheckpointKafkaOffsetInfo.KafkaOffsetsInfo("topic1", "test-cluster", offsets1);
+
+    AthenaIngestionGateway.CheckpointKafkaOffsetInfo.KafkaOffsetsInfo.Offsets offsets2 =
+        new AthenaIngestionGateway.CheckpointKafkaOffsetInfo.KafkaOffsetsInfo.Offsets(
+            Collections.singletonMap(0, 200L));
+    AthenaIngestionGateway.CheckpointKafkaOffsetInfo.KafkaOffsetsInfo topic2 =
+        new AthenaIngestionGateway.CheckpointKafkaOffsetInfo.KafkaOffsetsInfo("topic2", "test-cluster", offsets2);
+
+    AthenaIngestionGateway.CheckpointKafkaOffsetInfo offsetInfo =
+        new AthenaIngestionGateway.CheckpointKafkaOffsetInfo(
+            String.valueOf(System.currentTimeMillis()),
+            Arrays.asList(topic1, topic2),
+            "20231201120000",
+            "14458"
+        );
+
+    Mockito.when(mockGateway.getKafkaCheckpointsInfo(
+        Mockito.anyString(), Mockito.anyString(), Mockito.anyLong(),
+        Mockito.anyString(), Mockito.anyString(), Mockito.anyString(),
+        Mockito.anyString(), Mockito.anyInt(), Mockito.anyMap(),
+        Mockito.anyString(), Mockito.anyString()))
+        .thenReturn(Option.of(offsetInfo));
+
+    FlinkCheckpointClient mockClient = new FlinkCheckpointClient(mockGateway);
+    // Multiple topics throws IllegalStateException, caught by fail-open
+    String result = StreamerUtil.collectKafkaOffsetCheckpoint(conf, 123L, mockClient);
+    assertNotNull(result);
+    assertEquals("kafka_metadata%3Akafka_cluster%3Atest-topic%3A:kafka-test", result);
+  }
+
+  @Test
+  public void testCollectKafkaOffsetCheckpointWithoutKafkaTopicName() throws Exception {
+    Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    conf.set(FlinkOptions.DC, "dca1");
+    conf.set(FlinkOptions.ENV, "production");
+    conf.set(FlinkOptions.JOB_NAME, "test-job");
+    conf.set(FlinkOptions.HADOOP_USER, "test-user");
+    conf.set(FlinkOptions.SOURCE_KAFKA_CLUSTER, "test-kafka-cluster");
+    conf.set(FlinkOptions.TARGET_KAFKA_CLUSTER, "kafka-test");
+    conf.set(FlinkOptions.ATHENA_SERVICE, "athena-test");
+    conf.set(FlinkOptions.CALLER_SERVICE_NAME, "test-service");
+    conf.set(FlinkOptions.SERVICE_TIER, "DEFAULT");
+    conf.set(FlinkOptions.SERVICE_NAME, "ingestion-rt");
+    conf.set(FlinkOptions.TOPIC_ID, "test-job_production_dca1_test-owner_kafka_hoodie_10_test-feed");
+    conf.set(FlinkOptions.KAFKA_TOPIC_NAME, "test-topic");
+
+    AthenaIngestionGateway mockGateway = Mockito.mock(AthenaIngestionGateway.class);
+
+    Map<Integer, Long> offsetMap = new HashMap<>();
+    offsetMap.put(0, 1000L);
+
+    AthenaIngestionGateway.CheckpointKafkaOffsetInfo.KafkaOffsetsInfo.Offsets offsets =
+        new AthenaIngestionGateway.CheckpointKafkaOffsetInfo.KafkaOffsetsInfo.Offsets(offsetMap);
+
+    String expectedTopicId = "test-job_production_dca1_test-owner_kafka_hoodie_10_test-feed";
+    AthenaIngestionGateway.CheckpointKafkaOffsetInfo.KafkaOffsetsInfo kafkaOffsetsInfo =
+        new AthenaIngestionGateway.CheckpointKafkaOffsetInfo.KafkaOffsetsInfo(expectedTopicId, "test-cluster", offsets);
+
+    AthenaIngestionGateway.CheckpointKafkaOffsetInfo offsetInfo =
+        new AthenaIngestionGateway.CheckpointKafkaOffsetInfo(
+            String.valueOf(System.currentTimeMillis()),
+            Collections.singletonList(kafkaOffsetsInfo),
+            "20231201120000",
+            "14458"
+        );
+
+    Mockito.when(mockGateway.getKafkaCheckpointsInfo(
+        Mockito.anyString(), Mockito.anyString(), Mockito.anyLong(),
+        Mockito.anyString(), Mockito.anyString(), Mockito.anyString(),
+        Mockito.anyString(), Mockito.anyInt(), Mockito.anyMap(),
+        Mockito.anyString(), Mockito.anyString()))
+        .thenReturn(Option.of(offsetInfo));
+
+    FlinkCheckpointClient mockClient = new FlinkCheckpointClient(mockGateway);
+    String result = StreamerUtil.collectKafkaOffsetCheckpoint(conf, 123L, mockClient);
+
+    assertNotNull(result);
+    assertEquals("kafka_metadata%3Atest-topic%3A0:1000;kafka_metadata%3Akafka_cluster%3Atest-topic%3A:test-kafka-cluster", result);
+  }
+
+  @Test
+  public void testCollectKafkaOffsetCheckpointMissingConfig() throws Exception {
+    Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    // Missing DC - only set some configs
+    conf.set(FlinkOptions.ENV, "production");
+    conf.set(FlinkOptions.JOB_NAME, "test-job");
+    conf.set(FlinkOptions.HADOOP_USER, "test-user");
+    conf.set(FlinkOptions.SOURCE_KAFKA_CLUSTER, "kafka-test");
+    conf.set(FlinkOptions.TARGET_KAFKA_CLUSTER, "kafka-test");
+    conf.set(FlinkOptions.ATHENA_SERVICE, "athena-test");
+    conf.set(FlinkOptions.CALLER_SERVICE_NAME, "test-service");
+    conf.set(FlinkOptions.KAFKA_TOPIC_NAME, "test-topic");
+    conf.set(FlinkOptions.SERVICE_TIER, "DEFAULT");
+    conf.set(FlinkOptions.SERVICE_NAME, "ingestion-rt");
+
+    // Missing DC: returns cluster metadata (fail open)
+    String result = StreamerUtil.collectKafkaOffsetCheckpoint(conf, 123L, null);
+    assertNotNull(result);
+    assertEquals("kafka_metadata%3Akafka_cluster%3Atest-topic%3A:kafka-test", result);
+  }
+
+  @Test
+  public void testStringFyWithEmptyOffsets() {
+    String result = StreamerUtil.stringFy("test-topic", "test-cluster", new HashMap<>());
+    assertEquals("kafka_metadata%3Akafka_cluster%3Atest-topic%3A:test-cluster", result);
+  }
+
+  @Test
+  public void testStringFyWithNullOffsetMap() {
+    String result = StreamerUtil.stringFy("test-topic", "test-cluster", null);
+    assertEquals("kafka_metadata%3Akafka_cluster%3Atest-topic%3A:test-cluster", result);
+  }
+
+  @Test
+  public void testStringFyWithSinglePartition() {
+    Map<Integer, Long> offsetMap = new HashMap<>();
+    offsetMap.put(0, 12345L);
+
+    String result = StreamerUtil.stringFy("single-partition-topic", "test-cluster", offsetMap);
+    assertEquals("kafka_metadata%3Asingle-partition-topic%3A0:12345;"
+        + "kafka_metadata%3Akafka_cluster%3Asingle-partition-topic%3A:test-cluster", result);
+  }
+
+  @Test
+  public void testStringFyWithUnorderedPartitions() {
+    Map<Integer, Long> offsetMap = new HashMap<>();
+    offsetMap.put(2, 300L);
+    offsetMap.put(0, 100L);
+    offsetMap.put(3, 400L);
+    offsetMap.put(1, 200L);
+
+    String result = StreamerUtil.stringFy("unordered-topic", "test-cluster", offsetMap);
+    assertEquals("kafka_metadata%3Aunordered-topic%3A0:100;kafka_metadata%3Aunordered-topic%3A1:200;"
+        + "kafka_metadata%3Aunordered-topic%3A2:300;kafka_metadata%3Aunordered-topic%3A3:400;"
+        + "kafka_metadata%3Akafka_cluster%3Aunordered-topic%3A:test-cluster", result);
+  }
+
+  @Test
+  public void testCollectKafkaOffsetCheckpointEmptyOffsets() throws Exception {
+    Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    conf.set(FlinkOptions.DC, "dca");
+    conf.set(FlinkOptions.ENV, "production");
+    conf.set(FlinkOptions.JOB_NAME, "test-job");
+    conf.set(FlinkOptions.HADOOP_USER, "test-user");
+    conf.set(FlinkOptions.SOURCE_KAFKA_CLUSTER, "kafka-test");
+    conf.set(FlinkOptions.TARGET_KAFKA_CLUSTER, "kafka-test");
+    conf.set(FlinkOptions.ATHENA_SERVICE, "athena-test");
+    conf.set(FlinkOptions.CALLER_SERVICE_NAME, "test-service");
+    conf.set(FlinkOptions.KAFKA_TOPIC_NAME, "test-topic");
+    conf.set(FlinkOptions.SERVICE_TIER, "DEFAULT");
+    conf.set(FlinkOptions.SERVICE_NAME, "ingestion-rt");
+
+    AthenaIngestionGateway mockGateway = Mockito.mock(AthenaIngestionGateway.class);
+    Mockito.when(mockGateway.getKafkaCheckpointsInfo(
+        Mockito.anyString(), Mockito.anyString(), Mockito.anyLong(),
+        Mockito.anyString(), Mockito.anyString(), Mockito.anyString(),
+        Mockito.anyString(), Mockito.anyInt(), Mockito.anyMap(),
+        Mockito.anyString(), Mockito.anyString()))
+        .thenReturn(Option.empty());
+
+    FlinkCheckpointClient mockClient = new FlinkCheckpointClient(mockGateway);
+    String result = StreamerUtil.collectKafkaOffsetCheckpoint(conf, 123L, mockClient);
+
+    // Fail open: returns cluster metadata when no offsets found
+    assertNotNull(result);
+    assertEquals("kafka_metadata%3Akafka_cluster%3Atest-topic%3A:kafka-test", result);
+  }
+
+  @Test
+  public void testCollectKafkaOffsetCheckpointNegativeCheckpointId() throws Exception {
+    Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    conf.set(FlinkOptions.DC, "dca");
+    conf.set(FlinkOptions.ENV, "production");
+    conf.set(FlinkOptions.JOB_NAME, "test-job");
+    conf.set(FlinkOptions.HADOOP_USER, "test-user");
+    conf.set(FlinkOptions.SOURCE_KAFKA_CLUSTER, "kafka-test");
+    conf.set(FlinkOptions.TARGET_KAFKA_CLUSTER, "kafka-test");
+    conf.set(FlinkOptions.ATHENA_SERVICE, "athena-test");
+    conf.set(FlinkOptions.CALLER_SERVICE_NAME, "test-service");
+    conf.set(FlinkOptions.KAFKA_TOPIC_NAME, "test-topic");
+    conf.set(FlinkOptions.SERVICE_TIER, "DEFAULT");
+    conf.set(FlinkOptions.SERVICE_NAME, "ingestion-rt");
+
+    // Negative checkpoint ID: returns cluster metadata (fail open)
+    String result = StreamerUtil.collectKafkaOffsetCheckpoint(conf, -1L, null);
+    assertNotNull(result);
+    assertEquals("kafka_metadata%3Akafka_cluster%3Atest-topic%3A:kafka-test", result);
+
+    result = StreamerUtil.collectKafkaOffsetCheckpoint(conf, -100L, null);
+    assertNotNull(result);
+    assertEquals("kafka_metadata%3Akafka_cluster%3Atest-topic%3A:kafka-test", result);
+  }
+
+  @Test
+  public void testStringFyWithNullOrEmptyTopic() {
+    Map<Integer, Long> offsetMap = new HashMap<>();
+    offsetMap.put(0, 100L);
+    offsetMap.put(1, 200L);
+
+    assertEquals("", StreamerUtil.stringFy(null, "test-cluster", offsetMap));
+    assertEquals("", StreamerUtil.stringFy("", "test-cluster", offsetMap));
+  }
+
+  @Test
+  public void testStringFyWithNullCluster() {
+    Map<Integer, Long> offsetMap = new HashMap<>();
+    offsetMap.put(0, 100L);
+    offsetMap.put(1, 200L);
+
+    String result = StreamerUtil.stringFy("test-topic", null, offsetMap);
+    assertEquals("kafka_metadata%3Atest-topic%3A0:100;kafka_metadata%3Atest-topic%3A1:200", result);
+
+    result = StreamerUtil.stringFy("test-topic", "", offsetMap);
+    assertEquals("kafka_metadata%3Atest-topic%3A0:100;kafka_metadata%3Atest-topic%3A1:200", result);
+  }
+
+  @Test
+  public void testCollectKafkaOffsetCheckpointWithInvalidPartitionData() throws Exception {
+    Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    conf.set(FlinkOptions.DC, "dca");
+    conf.set(FlinkOptions.ENV, "production");
+    conf.set(FlinkOptions.JOB_NAME, "test-job");
+    conf.set(FlinkOptions.HADOOP_USER, "test-user");
+    conf.set(FlinkOptions.SOURCE_KAFKA_CLUSTER, "kafka-test");
+    conf.set(FlinkOptions.TARGET_KAFKA_CLUSTER, "kafka-test");
+    conf.set(FlinkOptions.ATHENA_SERVICE, "athena-test");
+    conf.set(FlinkOptions.CALLER_SERVICE_NAME, "test-service");
+    conf.set(FlinkOptions.KAFKA_TOPIC_NAME, "test-topic");
+    conf.set(FlinkOptions.SERVICE_TIER, "DEFAULT");
+    conf.set(FlinkOptions.SERVICE_NAME, "ingestion-rt");
+
+    // Negative partition ID
+    Map<Integer, Long> offsetMapNegativePartition = new HashMap<>();
+    offsetMapNegativePartition.put(-1, 1000L);
+    offsetMapNegativePartition.put(0, 2000L);
+
+    AthenaIngestionGateway.CheckpointKafkaOffsetInfo.KafkaOffsetsInfo.Offsets offsetsNegPartition =
+        new AthenaIngestionGateway.CheckpointKafkaOffsetInfo.KafkaOffsetsInfo.Offsets(offsetMapNegativePartition);
+    AthenaIngestionGateway.CheckpointKafkaOffsetInfo.KafkaOffsetsInfo kafkaOffsetsInfoNegPartition =
+        new AthenaIngestionGateway.CheckpointKafkaOffsetInfo.KafkaOffsetsInfo("test-topic", "test-cluster", offsetsNegPartition);
+    AthenaIngestionGateway.CheckpointKafkaOffsetInfo offsetInfoNegPartition =
+        new AthenaIngestionGateway.CheckpointKafkaOffsetInfo(
+            String.valueOf(System.currentTimeMillis()),
+            Collections.singletonList(kafkaOffsetsInfoNegPartition),
+            "20231201120000",
+            "14458"
+        );
+
+    AthenaIngestionGateway mockGateway = Mockito.mock(AthenaIngestionGateway.class);
+    Mockito.when(mockGateway.getKafkaCheckpointsInfo(
+        Mockito.anyString(), Mockito.anyString(), Mockito.eq(123L),
+        Mockito.anyString(), Mockito.anyString(), Mockito.anyString(),
+        Mockito.anyString(), Mockito.anyInt(), Mockito.anyMap(),
+        Mockito.anyString(), Mockito.anyString()))
+        .thenReturn(Option.of(offsetInfoNegPartition));
+
+    FlinkCheckpointClient mockClient = new FlinkCheckpointClient(mockGateway);
+    String result = StreamerUtil.collectKafkaOffsetCheckpoint(conf, 123L, mockClient);
+    // Negative partition is still included in offsets (stringFy doesn't filter)
+    assertNotNull(result);
+    assertTrue(result.contains("kafka_metadata%3Akafka_cluster%3Atest-topic%3A:kafka-test"));
+  }
+
+  @Test
+  public void testCollectKafkaOffsetCheckpointFormat() throws Exception {
+    Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    conf.set(FlinkOptions.DC, "dca");
+    conf.set(FlinkOptions.ENV, "production");
+    conf.set(FlinkOptions.JOB_NAME, "production_hp-bliss-policy-engine-execution-service-execute-policy_streaming_shadow_1");
+    conf.set(FlinkOptions.HADOOP_USER, "hoover");
+    conf.set(FlinkOptions.SOURCE_KAFKA_CLUSTER, "kafka-ingestion-dca");
+    conf.set(FlinkOptions.TARGET_KAFKA_CLUSTER, "kafka-ingestion-dca");
+    conf.set(FlinkOptions.ATHENA_SERVICE, "athena-test");
+    conf.set(FlinkOptions.CALLER_SERVICE_NAME, "test-service");
+    conf.set(FlinkOptions.SERVICE_TIER, "DEFAULT");
+    conf.set(FlinkOptions.SERVICE_NAME, "ingestion-rt");
+    conf.set(FlinkOptions.KAFKA_TOPIC_NAME,
+        "production_hp-bliss-policy-engine-execution-service-execute-policy_streaming_shadow");
+    conf.set(FlinkOptions.TOPIC_ID,
+        "production_hp-bliss-policy-engine-execution-service-execute-policy_streaming_shadow_1_"
+        + "production_dca1_hadoop_platform_self_serve_5_kafka_hoodie_streaming_"
+        + "hp-bliss-policy-engine-execution-service-execute-policy_streaming_shadow");
+
+    AthenaIngestionGateway mockGateway = Mockito.mock(AthenaIngestionGateway.class);
+
+    Map<Integer, Long> offsetMap = new HashMap<>();
+    offsetMap.put(0, 1000L);
+    offsetMap.put(1, 2000L);
+    offsetMap.put(2, 3000L);
+
+    AthenaIngestionGateway.CheckpointKafkaOffsetInfo.KafkaOffsetsInfo.Offsets offsets =
+        new AthenaIngestionGateway.CheckpointKafkaOffsetInfo.KafkaOffsetsInfo.Offsets(offsetMap);
+    AthenaIngestionGateway.CheckpointKafkaOffsetInfo.KafkaOffsetsInfo kafkaOffsetsInfo =
+        new AthenaIngestionGateway.CheckpointKafkaOffsetInfo.KafkaOffsetsInfo(
+            "production_hp-bliss-policy-engine-execution-service-execute-policy_streaming_shadow_1_"
+            + "production_dca1_hadoop_platform_self_serve_5_kafka_hoodie_streaming_"
+            + "hp-bliss-policy-engine-execution-service-execute-policy_streaming_shadow",
+            "test-cluster",
+            offsets);
+    AthenaIngestionGateway.CheckpointKafkaOffsetInfo offsetInfo =
+        new AthenaIngestionGateway.CheckpointKafkaOffsetInfo(
+            String.valueOf(System.currentTimeMillis()),
+            Collections.singletonList(kafkaOffsetsInfo),
+            "20231201120000",
+            "14458"
+        );
+
+    Mockito.when(mockGateway.getKafkaCheckpointsInfo(
+        Mockito.anyString(), Mockito.anyString(), Mockito.anyLong(),
+        Mockito.anyString(), Mockito.anyString(), Mockito.anyString(),
+        Mockito.anyString(), Mockito.anyInt(), Mockito.anyMap(),
+        Mockito.anyString(), Mockito.anyString()))
+        .thenReturn(Option.of(offsetInfo));
+
+    FlinkCheckpointClient mockClient = new FlinkCheckpointClient(mockGateway);
+    String result = StreamerUtil.collectKafkaOffsetCheckpoint(conf, 14458L, mockClient);
+
+    assertNotNull(result);
+    assertTrue(result.contains("kafka_metadata%3A"));
+    assertTrue(result.contains("production_hp-bliss-policy-engine-execution-service-execute-policy_streaming_shadow"));
+    assertTrue(result.contains("kafka_metadata%3Akafka_cluster%3A"));
+    assertTrue(result.contains("kafka-ingestion-dca"));
   }
 }
