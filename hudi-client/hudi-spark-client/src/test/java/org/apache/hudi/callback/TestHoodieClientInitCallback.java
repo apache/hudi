@@ -30,6 +30,9 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.execution.bulkinsert.NonSortPartitionerWithRows;
 import org.apache.hudi.storage.StorageConfiguration;
 
+import org.apache.spark.SparkConf;
+import org.apache.spark.SparkContext;
+import org.apache.spark.api.java.JavaSparkContext;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -69,6 +72,17 @@ public class TestHoodieClientInitCallback {
 
   @BeforeAll
   public static void setup() {
+    // Mock JavaSparkContext and SparkContext for speculative execution check
+    JavaSparkContext mockJavaSparkContext = Mockito.mock(JavaSparkContext.class);
+    SparkContext mockSparkContext = Mockito.mock(SparkContext.class);
+    SparkConf mockSparkConf = Mockito.mock(SparkConf.class);
+
+    // Setup the mock chain
+    when(engineContext.getJavaSparkContext()).thenReturn(mockJavaSparkContext);
+    when(mockJavaSparkContext.sc()).thenReturn(mockSparkContext);
+    when(mockSparkContext.conf()).thenReturn(mockSparkConf);
+    when(mockSparkConf.getBoolean("spark.speculation", false)).thenReturn(false);
+
     StorageConfiguration storageConfToReturn = getDefaultStorageConf();
     when(engineContext.getStorageConf()).thenReturn(storageConfToReturn);
   }
