@@ -119,6 +119,8 @@ public enum HoodieSchemaType {
 
   VARIANT(Schema.Type.RECORD),
 
+  BLOB(Schema.Type.RECORD),
+
   /**
    * Null type - represents the absence of a value
    */

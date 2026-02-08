@@ -33,6 +33,7 @@ import org.apache.spark.sql.execution.command._
 import org.apache.spark.sql.execution.datasources.{CreateTable, LogicalRelation}
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.{isMetaField, removeMetaFields}
 import org.apache.spark.sql.hudi.analysis.HoodieAnalysis.{sparkAdapter, MatchCreateIndex, MatchCreateTableLike, MatchDropIndex, MatchInsertIntoStatement, MatchMergeIntoTable, MatchRefreshIndex, MatchShowIndexes, ResolvesToHudiTable}
+import org.apache.spark.sql.hudi.blob.ResolveBlobReferencesRule
 import org.apache.spark.sql.hudi.command._
 import org.apache.spark.sql.hudi.command.HoodieLeafRunnableCommand.stripMetaFieldAttributes
 import org.apache.spark.sql.hudi.command.InsertIntoHoodieTableCommand.alignQueryOutput
@@ -119,7 +120,8 @@ object HoodieAnalysis extends SparkAdapterSupport {
       // NOTE: By default all commands are converted into corresponding Hudi implementations during
       //       "post-hoc resolution" phase
       session => ResolveImplementations(session),
-      session => HoodiePostAnalysisRule(session)
+      session => HoodiePostAnalysisRule(session),
+      session => ResolveBlobReferencesRule(session)
     )
 
     val postHocResolutionClass = "org.apache.spark.sql.hudi.analysis.PostAnalysisRule"

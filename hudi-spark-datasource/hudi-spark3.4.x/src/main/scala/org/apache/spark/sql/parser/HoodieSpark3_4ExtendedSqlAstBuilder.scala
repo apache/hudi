@@ -40,6 +40,7 @@ import org.apache.spark.sql.connector.catalog.TableChange.ColumnPosition
 import org.apache.spark.sql.connector.expressions.{ApplyTransform, BucketTransform, DaysTransform, Expression => V2Expression, FieldReference, HoursTransform, IdentityTransform, LiteralValue, MonthsTransform, Transform, YearsTransform}
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types._
+import org.apache.spark.sql.types.BlobType
 import org.apache.spark.unsafe.types.{CalendarInterval, UTF8String}
 import org.apache.spark.util.Utils.isTesting
 import org.apache.spark.util.random.RandomSampler
@@ -2606,6 +2607,7 @@ class HoodieSpark3_4ExtendedSqlAstBuilder(conf: SQLConf, delegate: ParserInterfa
       case ("character" | "char", length :: Nil) => CharType(length.getText.toInt)
       case ("varchar", length :: Nil) => VarcharType(length.getText.toInt)
       case ("binary", Nil) => BinaryType
+      case ("blob", Nil) => BlobType()
       case ("decimal" | "dec" | "numeric", Nil) => DecimalType.USER_DEFAULT
       case ("decimal" | "dec" | "numeric", precision :: Nil) =>
         DecimalType(precision.getText.toInt, 0)
@@ -2689,9 +2691,17 @@ class HoodieSpark3_4ExtendedSqlAstBuilder(conf: SQLConf, delegate: ParserInterfa
       builder.putString("comment", _)
     }
 
+    val dataType = typedVisit[DataType](ctx.dataType)
+
+    // Tag BLOB types with hudi_blob metadata by checking original type text
+    val typeText = ctx.dataType.getText.toLowerCase(Locale.ROOT)
+    if (typeText == "blob") {
+      builder.putBoolean(org.apache.hudi.common.schema.HoodieSchema.Blob.HUDI_BLOB, true)
+    }
+
     StructField(
       name = colName.getText,
-      dataType = typedVisit[DataType](ctx.dataType),
+      dataType = dataType,
       nullable = NULL == null,
       metadata = builder.build())
   }
@@ -2716,11 +2726,21 @@ class HoodieSpark3_4ExtendedSqlAstBuilder(conf: SQLConf, delegate: ParserInterfa
    */
   override def visitComplexColType(ctx: ComplexColTypeContext): StructField = withOrigin(ctx) {
     import ctx._
-    val structField = StructField(
+    val builder = new MetadataBuilder
+    // Add comment to metadata
+    Option(commentSpec()).map(visitCommentSpec).foreach {
+      builder.putString("comment", _)
+    }
+    // Tag BLOB types with hudi_blob metadata by checking original type text
+    val typeText = ctx.dataType.getText.toLowerCase(Locale.ROOT)
+    if (typeText == "blob") {
+      builder.putBoolean(org.apache.hudi.common.schema.HoodieSchema.Blob.HUDI_BLOB, true)
+    }
+    StructField(
       name = identifier.getText,
       dataType = typedVisit(dataType()),
-      nullable = NULL == null)
-    Option(commentSpec).map(visitCommentSpec).map(structField.withComment).getOrElse(structField)
+      nullable = NULL == null,
+      metadata = builder.build())
   }
 
   /**
