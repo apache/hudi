@@ -134,6 +134,7 @@ class TestCustomParitionValueExtractor extends HoodieSparkSqlTestBase {
            |  'preCombineField'='ts',
            |  'hoodie.datasource.write.hive_style_partitioning'='false',
            |  'hoodie.datasource.write.keygenerator.class'='org.apache.spark.sql.hudi.common.TestCustomSlashKeyGenerator',
+           |  'hoodie.table.keygenerator.class'='org.apache.spark.sql.hudi.common.TestCustomSlashKeyGenerator',
            |  '${HoodieSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS.key()}'='org.apache.spark.sql.hudi.common.TestCustomSlashPartitionValueExtractor'
            | )
            | partitioned by (`datestr`, `country`, `state`, `city`)
