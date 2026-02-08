@@ -2547,8 +2547,9 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
     })
   }
 
-  @Test
-  def testNestedFieldPartition(): Unit = {
+  @ParameterizedTest
+  @CsvSource(Array("COW", "MOR"))
+  def testNestedFieldPartition(tableType: String): Unit = {
     // Define schema with nested_record containing level field
     val nestedSchema = StructType(Seq(
       StructField("nested_int", IntegerType, nullable = false),
@@ -2566,7 +2567,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
 
     // Create test data where top-level 'level' and 'nested_record.level' have DIFFERENT values
     // This helps verify we're correctly partitioning/filtering on the nested field
-    val records = Seq(
+    val recordsCommit1 = Seq(
       Row("key1", 1L, "L1", 1, "str1", Row(10, "INFO")),
       Row("key2", 2L, "L2", 2, "str2", Row(20, "ERROR")),
       Row("key3", 3L, "L3", 3, "str3", Row(30, "INFO")),
@@ -2574,40 +2575,172 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
       Row("key5", 5L, "L5", 5, "str5", Row(50, "INFO"))
     )
 
-    val inputDF = spark.createDataFrame(
-      spark.sparkContext.parallelize(records),
+    val tableTypeOptVal = if (tableType == "MOR") {
+      DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL
+    } else {
+      DataSourceWriteOptions.COW_TABLE_TYPE_OPT_VAL
+    }
+
+    val baseWriteOpts = Map(
+      "hoodie.insert.shuffle.parallelism" -> "4",
+      "hoodie.upsert.shuffle.parallelism" -> "4",
+      DataSourceWriteOptions.RECORDKEY_FIELD.key -> "key",
+      DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "nested_record.level",
+      HoodieTableConfig.ORDERING_FIELDS.key -> "ts",
+      HoodieWriteConfig.TBL_NAME.key -> "test_nested_partition",
+      DataSourceWriteOptions.TABLE_TYPE.key -> tableTypeOptVal
+    )
+    val writeOpts = if (tableType == "MOR") {
+      baseWriteOpts + ("hoodie.compact.inline" -> "false")
+    } else {
+      baseWriteOpts
+    }
+
+    // Commit 1 - Initial insert
+    val inputDF1 = spark.createDataFrame(
+      spark.sparkContext.parallelize(recordsCommit1),
       schema
     )
-
-    // Write to Hudi partitioned by nested_record.level
-    inputDF.write.format("hudi")
-      .option("hoodie.insert.shuffle.parallelism", "4")
-      .option("hoodie.upsert.shuffle.parallelism", "4")
-      .option(DataSourceWriteOptions.RECORDKEY_FIELD.key, "key")
-      .option(DataSourceWriteOptions.PARTITIONPATH_FIELD.key, "nested_record.level")
-      .option(HoodieTableConfig.ORDERING_FIELDS.key, "ts")
-      .option(HoodieWriteConfig.TBL_NAME.key, "test_nested_partition")
+    inputDF1.write.format("hudi")
+      .options(writeOpts)
       .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
       .mode(SaveMode.Overwrite)
       .save(basePath)
+    val commit1 = DataSourceTestUtils.latestCommitCompletionTime(storage, basePath)
 
-    // Read and filter on nested_record.level = 'INFO'
-    val results = spark.read.format("hudi")
+    // Commit 2 - Upsert: update key1 (int_field 1->100), insert key6 (INFO)
+    val recordsCommit2 = Seq(
+      Row("key1", 10L, "L1", 100, "str1", Row(10, "INFO")),
+      Row("key6", 6L, "L6", 6, "str6", Row(60, "INFO"))
+    )
+    val inputDF2 = spark.createDataFrame(
+      spark.sparkContext.parallelize(recordsCommit2),
+      schema
+    )
+    inputDF2.write.format("hudi")
+      .options(writeOpts)
+      .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL)
+      .mode(SaveMode.Append)
+      .save(basePath)
+    val commit2 = DataSourceTestUtils.latestCommitCompletionTime(storage, basePath)
+
+    // Commit 3 - Upsert: update key3 (int_field 3->300), insert key7 (INFO)
+    val recordsCommit3 = Seq(
+      Row("key3", 30L, "L3", 300, "str3", Row(30, "INFO")),
+      Row("key7", 7L, "L7", 7, "str7", Row(70, "INFO"))
+    )
+    val inputDF3 = spark.createDataFrame(
+      spark.sparkContext.parallelize(recordsCommit3),
+      schema
+    )
+    inputDF3.write.format("hudi")
+      .options(writeOpts)
+      .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL)
+      .mode(SaveMode.Append)
+      .save(basePath)
+    val commit3 = DataSourceTestUtils.latestCommitCompletionTime(storage, basePath)
+
+    // Snapshot read - filter on nested_record.level = 'INFO' (latest state: 5 records)
+    val snapshotResults = spark.read.format("hudi")
       .load(basePath)
       .filter("nested_record.level = 'INFO'")
       .select("key", "ts", "level", "int_field", "string_field", "nested_record")
       .orderBy("key")
       .collect()
 
-    // Expected results - 3 records with nested_record.level = 'INFO'
-    val expectedResults = Array(
+    val expectedSnapshot = Array(
+      Row("key1", 10L, "L1", 100, "str1", Row(10, "INFO")),
+      Row("key3", 30L, "L3", 300, "str3", Row(30, "INFO")),
+      Row("key5", 5L, "L5", 5, "str5", Row(50, "INFO")),
+      Row("key6", 6L, "L6", 6, "str6", Row(60, "INFO")),
+      Row("key7", 7L, "L7", 7, "str7", Row(70, "INFO"))
+    )
+    assertEquals(expectedSnapshot.length, snapshotResults.length,
+      s"Snapshot (INFO) count mismatch for $tableType")
+    expectedSnapshot.zip(snapshotResults).foreach { case (expected, actual) =>
+      assertEquals(expected, actual)
+    }
+
+    // Time travel - as of commit1 (only initial 5 records; INFO = key1, key3, key5)
+    val timeTravelCommit1 = spark.read.format("hudi")
+      .option(DataSourceReadOptions.TIME_TRAVEL_AS_OF_INSTANT.key, commit1)
+      .load(basePath)
+      .filter("nested_record.level = 'INFO'")
+      .select("key", "ts", "level", "int_field", "string_field", "nested_record")
+      .orderBy("key")
+      .collect()
+
+    val expectedAfterCommit1 = Array(
       Row("key1", 1L, "L1", 1, "str1", Row(10, "INFO")),
       Row("key3", 3L, "L3", 3, "str3", Row(30, "INFO")),
       Row("key5", 5L, "L5", 5, "str5", Row(50, "INFO"))
     )
+    assertEquals(expectedAfterCommit1.length, timeTravelCommit1.length,
+      s"Time travel to commit1 (INFO) count mismatch for $tableType")
+    expectedAfterCommit1.zip(timeTravelCommit1).foreach { case (expected, actual) =>
+      assertEquals(expected, actual)
+    }
 
-    assertEquals(expectedResults.length, results.length)
-    expectedResults.zip(results).foreach { case (expected, actual) =>
+    // Time travel - as of commit2 (after 2nd commit; INFO = key1 updated, key3, key5, key6)
+    val timeTravelCommit2 = spark.read.format("hudi")
+      .option(DataSourceReadOptions.TIME_TRAVEL_AS_OF_INSTANT.key, commit2)
+      .load(basePath)
+      .filter("nested_record.level = 'INFO'")
+      .select("key", "ts", "level", "int_field", "string_field", "nested_record")
+      .orderBy("key")
+      .collect()
+
+    val expectedAfterCommit2 = Array(
+      Row("key1", 10L, "L1", 100, "str1", Row(10, "INFO")),
+      Row("key3", 3L, "L3", 3, "str3", Row(30, "INFO")),
+      Row("key5", 5L, "L5", 5, "str5", Row(50, "INFO")),
+      Row("key6", 6L, "L6", 6, "str6", Row(60, "INFO"))
+    )
+    assertEquals(expectedAfterCommit2.length, timeTravelCommit2.length,
+      s"Time travel to commit2 (INFO) count mismatch for $tableType")
+    expectedAfterCommit2.zip(timeTravelCommit2).foreach { case (expected, actual) =>
+      assertEquals(expected, actual)
+    }
+
+    // Incremental query - from commit1 to commit2 (only key1 update and key6 insert; both INFO)
+    val incrementalCommit1To2 = spark.read.format("hudi")
+      .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
+      .option(DataSourceReadOptions.START_COMMIT.key, commit1)
+      .option(DataSourceReadOptions.END_COMMIT.key, commit2)
+      .load(basePath)
+      .filter("nested_record.level = 'INFO'")
+      .select("key", "ts", "level", "int_field", "string_field", "nested_record")
+      .orderBy("key")
+      .collect()
+
+    val expectedInc1To2 = Array(
+      Row("key1", 10L, "L1", 100, "str1", Row(10, "INFO")),
+      Row("key6", 6L, "L6", 6, "str6", Row(60, "INFO"))
+    )
+    assertEquals(expectedInc1To2.length, incrementalCommit1To2.length,
+      s"Incremental (commit1->commit2, INFO) count mismatch for $tableType")
+    expectedInc1To2.zip(incrementalCommit1To2).foreach { case (expected, actual) =>
+      assertEquals(expected, actual)
+    }
+
+    // Incremental query - from commit2 to commit3 (only key3 update and key7 insert; both INFO)
+    val incrementalCommit2To3 = spark.read.format("hudi")
+      .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
+      .option(DataSourceReadOptions.START_COMMIT.key, commit2)
+      .option(DataSourceReadOptions.END_COMMIT.key, commit3)
+      .load(basePath)
+      .filter("nested_record.level = 'INFO'")
+      .select("key", "ts", "level", "int_field", "string_field", "nested_record")
+      .orderBy("key")
+      .collect()
+
+    val expectedInc2To3 = Array(
+      Row("key3", 30L, "L3", 300, "str3", Row(30, "INFO")),
+      Row("key7", 7L, "L7", 7, "str7", Row(70, "INFO"))
+    )
+    assertEquals(expectedInc2To3.length, incrementalCommit2To3.length,
+      s"Incremental (commit2->commit3, INFO) count mismatch for $tableType")
+    expectedInc2To3.zip(incrementalCommit2To3).foreach { case (expected, actual) =>
       assertEquals(expected, actual)
     }
   }

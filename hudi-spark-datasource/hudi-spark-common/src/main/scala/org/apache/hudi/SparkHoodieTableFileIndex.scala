@@ -33,7 +33,7 @@ import org.apache.hudi.config.HoodieBootstrapConfig.DATA_QUERIES_ONLY
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.internal.schema.Types.RecordType
 import org.apache.hudi.internal.schema.utils.Conversions
-import org.apache.hudi.keygen.{CustomAvroKeyGenerator, CustomKeyGenerator, StringPartitionPathFormatter, TimestampBasedAvroKeyGenerator, TimestampBasedKeyGenerator}
+import org.apache.hudi.keygen.{StringPartitionPathFormatter, TimestampBasedAvroKeyGenerator, TimestampBasedKeyGenerator}
 import org.apache.hudi.storage.{StoragePath, StoragePathInfo}
 import org.apache.hudi.util.JFunction
 
@@ -131,13 +131,14 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
       val keyGeneratorClassName = tableConfig.getKeyGeneratorClassName
       if (classOf[TimestampBasedKeyGenerator].getName.equalsIgnoreCase(keyGeneratorClassName)
         || classOf[TimestampBasedAvroKeyGenerator].getName.equalsIgnoreCase(keyGeneratorClassName)) {
-        // || classOf[CustomKeyGenerator].getName.equalsIgnoreCase(keyGeneratorClassName)
-        // || classOf[CustomAvroKeyGenerator].getName.equalsIgnoreCase(keyGeneratorClassName)) {
         val partitionFields: Array[StructField] = partitionColumns.get().map(column => StructField(column, StringType))
         StructType(partitionFields)
       } else {
+        // Use full partition path (e.g. "nested_record.level") as the partition column name so that
+        // data schema does not exclude a same-named top-level column (e.g. "level") when partition
+        // path is a nested field. Otherwise partition value would overwrite the data column on read.
         val partitionFields: Array[StructField] = partitionColumns.get().filter(column => nameFieldMap.contains(column))
-          .map(column => nameFieldMap.apply(column))
+          .map(column => StructField(column, nameFieldMap.apply(column).dataType))
 
         if (partitionFields.length != partitionColumns.get().length) {
           val isBootstrapTable = tableConfig.getBootstrapBasePath.isPresent
