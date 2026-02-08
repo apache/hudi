@@ -18,13 +18,13 @@
 
 package org.apache.hudi.source.reader;
 
-import org.apache.flink.api.connector.source.SourceReaderContext;
 import org.apache.flink.connector.base.source.reader.RecordsBySplits;
 import org.apache.flink.connector.base.source.reader.RecordsWithSplitIds;
 import org.apache.flink.connector.base.source.reader.splitreader.SplitReader;
 import org.apache.flink.connector.base.source.reader.splitreader.SplitsAddition;
 import org.apache.flink.connector.base.source.reader.splitreader.SplitsChange;
 import org.apache.flink.util.CloseableIterator;
+import org.apache.hudi.metrics.FlinkStreamReadMetrics;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -56,13 +56,15 @@ public class HoodieSourceSplitReader<T> implements SplitReader<HoodieRecordWithP
   private HoodieSourceSplit currentSplit;
   private String currentSplitId;
   private CloseableIterator<RecordsWithSplitIds<HoodieRecordWithPosition<T>>> currentReader;
+  private FlinkStreamReadMetrics readerMetrics;
 
   public HoodieSourceSplitReader(
-      SourceReaderContext context,
       SplitReaderFunction<T> readerFunction,
-      SerializableComparator<HoodieSourceSplit> splitComparator) {
+      SerializableComparator<HoodieSourceSplit> splitComparator,
+      FlinkStreamReadMetrics readerMetrics) {
     this.splitComparator = splitComparator;
     this.readerFunction = readerFunction;
+    this.readerMetrics = readerMetrics;
     this.splits = new ArrayDeque<>();
   }
 
@@ -74,6 +76,7 @@ public class HoodieSourceSplitReader<T> implements SplitReader<HoodieRecordWithP
         currentSplit = nextSplit;
         currentSplitId = nextSplit.splitId();
         currentReader = readerFunction.read(currentSplit);
+        readerMetrics.setSplitLatestCommit(currentSplit.getLatestCommit());
       } else {
         // return an empty result, which will lead to split fetch to be idle.
         // SplitFetcherManager will then close idle fetcher.

@@ -19,6 +19,7 @@
 package org.apache.hudi.source.enumerator;
 
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.metrics.FlinkStreamReadMetrics;
 import org.apache.hudi.source.HoodieScanContext;
 import org.apache.hudi.source.split.HoodieContinuousSplitBatch;
 import org.apache.hudi.source.split.HoodieContinuousSplitDiscover;
@@ -41,6 +42,7 @@ public class HoodieContinuousSplitEnumerator extends AbstractHoodieSplitEnumerat
   private final HoodieSplitProvider splitProvider;
   private final HoodieContinuousSplitDiscover splitDiscover;
   private final HoodieScanContext scanContext;
+  private final FlinkStreamReadMetrics readerMetrics;
 
   /**
    * Instant for the last enumerated commit. Next incremental enumeration should be based off
@@ -53,12 +55,14 @@ public class HoodieContinuousSplitEnumerator extends AbstractHoodieSplitEnumerat
       HoodieSplitProvider splitProvider,
       HoodieContinuousSplitDiscover splitDiscover,
       HoodieScanContext scanContext,
-      Option<HoodieSplitEnumeratorState> enumStateOpt) {
+      Option<HoodieSplitEnumeratorState> enumStateOpt,
+      FlinkStreamReadMetrics readerMetrics) {
     super(enumeratorContext, splitProvider);
     this.enumeratorContext = enumeratorContext;
     this.splitProvider = splitProvider;
     this.splitDiscover = splitDiscover;
     this.scanContext = scanContext;
+    this.readerMetrics = readerMetrics;
     this.position = new AtomicReference<>();
 
     if (enumStateOpt.isPresent()) {
@@ -108,6 +112,7 @@ public class HoodieContinuousSplitEnumerator extends AbstractHoodieSplitEnumerat
 
     if (!result.getSplits().isEmpty()) {
       splitProvider.onDiscoveredSplits(result.getSplits());
+      readerMetrics.setIssuedInstant(position.get().getIssuedInstant().orElse(""));
       LOG.debug(
           "Added {} splits discovered between ({}, {}] to the assigner",
           result.getSplits().size(),

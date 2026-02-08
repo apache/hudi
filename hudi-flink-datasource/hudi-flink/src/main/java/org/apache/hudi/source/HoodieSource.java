@@ -25,6 +25,7 @@ import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.metrics.FlinkStreamReadMetrics;
 import org.apache.hudi.source.assign.HoodieSplitAssigner;
 import org.apache.hudi.source.assign.HoodieSplitAssigners;
 import org.apache.hudi.configuration.FlinkOptions;
@@ -127,7 +128,9 @@ public class HoodieSource<T> extends FileIndexReader implements Source<T, Hoodie
 
   @Override
   public SourceReader<T, HoodieSourceSplit> createReader(SourceReaderContext readerContext) throws Exception {
-    return new HoodieSourceReader<T>(recordEmitter, scanContext.getConf(), readerContext, readerFunction, splitComparator);
+    FlinkStreamReadMetrics readMetrics = new FlinkStreamReadMetrics(readerContext.metricGroup());
+    readMetrics.registerMetrics();
+    return new HoodieSourceReader<T>(recordEmitter, scanContext.getConf(), readerContext, readerFunction, splitComparator, readMetrics);
   }
 
   private SplitEnumerator<HoodieSourceSplit, HoodieSplitEnumeratorState> createEnumerator(
@@ -151,10 +154,15 @@ public class HoodieSource<T> extends FileIndexReader implements Source<T, Hoodie
     }
 
     if (scanContext.isStreaming()) {
+      FlinkStreamReadMetrics readerMetrics = new FlinkStreamReadMetrics(enumContext.metricGroup());
+      readerMetrics.registerMetrics();
+
       HoodieContinuousSplitDiscover discover = new DefaultHoodieSplitDiscover(
           scanContext, metaClient);
 
-      return new HoodieContinuousSplitEnumerator(enumContext, splitProvider, discover, scanContext, enumeratorState == null ? Option.empty() : Option.of(enumeratorState));
+      return new HoodieContinuousSplitEnumerator(
+              enumContext, splitProvider, discover, scanContext,
+              enumeratorState == null ? Option.empty() : Option.of(enumeratorState), readerMetrics);
     } else {
       if (enumeratorState == null) {
         List<HoodieSourceSplit> splits = createBatchHoodieSplits();
