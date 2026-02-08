@@ -381,7 +381,7 @@ public final class BitCaskDiskMap<T extends Serializable, R> extends DiskMap<T, 
   /**
    * The value relevant metadata.
    */
-  @AllArgsConstructor(access = AccessLevel.PRIVATE)
+  @AllArgsConstructor(access = AccessLevel.PROTECTED)
   @Getter
   public static final class ValueMetadata implements Comparable<ValueMetadata> {
 
