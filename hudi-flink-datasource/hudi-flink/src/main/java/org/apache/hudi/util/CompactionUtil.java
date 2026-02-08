@@ -70,27 +70,31 @@ public class CompactionUtil {
    *
    * @param writeClient The metadata write client
    * @param committed   Whether the triggering instant was committed successfully
+   *
+   * @return The scheduled compaction instant time.
    */
-  public static void scheduleMetadataCompaction(
+  public static Option<String> scheduleMetadataCompaction(
       HoodieFlinkWriteClient<?> writeClient,
       boolean committed) {
     if (!committed) {
-      return;
+      return Option.empty();
     }
     if (canScheduleMetadataCompaction(writeClient.getConfig(), writeClient.getHoodieTable().getMetaClient())) {
       Option<String> compactInstant = writeClient.scheduleCompaction(Option.empty());
       if (compactInstant.isPresent()) {
         log.info("Scheduled compaction {} for metadata table.", compactInstant.get());
-        return;
+        return compactInstant;
       }
       if (!writeClient.getConfig().isLogCompactionEnabled()) {
-        return;
+        return Option.empty();
       }
       Option<String> logCompactionInstant = writeClient.scheduleLogCompaction(Option.empty());
       if (logCompactionInstant.isPresent()) {
         log.info("Scheduled log compaction {} for metadata table.", logCompactionInstant.get());
+        return logCompactionInstant;
       }
     }
+    return Option.empty();
   }
 
   /**
