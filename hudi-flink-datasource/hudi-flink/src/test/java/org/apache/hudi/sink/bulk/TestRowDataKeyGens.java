@@ -246,6 +246,26 @@ public class TestRowDataKeyGens {
   }
 
   @Test
+  void testTimestampBasedKeyGeneratorForKeylessWrite() {
+    final String partitionFormat = "yyyy/MM/dd";
+    final int taskId = 3;
+    final String instantTime = "000001";
+
+    Configuration conf = TestConfigurations.getDefaultConf("path1");
+    conf.setString(FlinkOptions.RECORD_KEY_FIELD, "");
+    conf.setString(FlinkOptions.PARTITION_PATH_FIELD, "ts");
+    conf.setString(FlinkOptions.PARTITION_FORMAT, partitionFormat);
+    HoodieTableFactory.setupTimestampKeygenOptions(conf, DataTypes.TIMESTAMP(3));
+
+    final RowData rowData = insertRow(StringData.fromString("id1"), StringData.fromString("Danny"), 23,
+            TimestampData.fromEpochMillis(7200000), StringData.fromString("par1"));
+
+    final RowDataKeyGen keyGen = RowDataKeyGens.instance(conf, TestConfigurations.ROW_TYPE, taskId, instantTime);
+    assertThat(keyGen.getRecordKey(rowData), is(instantTime + "_" + taskId + "_0"));
+    assertThat(keyGen.getPartitionPath(rowData), is("1970/01/01"));
+  }
+
+  @Test
   void testRecordKeyContainsTimestamp() {
     Configuration conf = TestConfigurations.getDefaultConf("path1");
     conf.set(FlinkOptions.RECORD_KEY_FIELD, "uuid,ts");
