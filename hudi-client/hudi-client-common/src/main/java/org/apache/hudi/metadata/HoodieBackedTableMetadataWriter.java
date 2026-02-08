@@ -55,6 +55,7 @@ import org.apache.hudi.common.schema.HoodieSchemaCache;
 import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
+import org.apache.hudi.common.table.log.HoodieLogFormatWriter;
 import org.apache.hudi.common.table.log.block.HoodieDeleteBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock.HeaderMetadataType;
 import org.apache.hudi.common.table.read.HoodieFileGroupReader;
@@ -1074,12 +1075,12 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
 
         final HoodieDeleteBlock block = new HoodieDeleteBlock(Collections.emptyList(), blockHeader);
 
-        try (HoodieLogFormat.Writer writer = HoodieLogFormat.newWriterBuilder()
-            .onParentPath(FSUtils.constructAbsolutePath(metadataWriteConfig.getBasePath(), relativePartitionPath))
-            .withFileId(fileGroupFileId)
+        try (HoodieLogFormat.Writer writer = HoodieLogFormatWriter.builder()
+            .withParentPath(FSUtils.constructAbsolutePath(metadataWriteConfig.getBasePath(), relativePartitionPath))
+            .withLogFileId(fileGroupFileId)
             .withInstantTime(instantTime)
             .withLogVersion(HoodieLogFile.LOGFILE_BASE_VERSION)
-            .withFileSize(0L)
+            .withFileLen(0L)
             .withSizeThreshold(metadataWriteConfig.getLogFileMaxSize())
             .withStorage(dataMetaClient.getStorage())
             .withLogWriteToken(HoodieLogFormat.DEFAULT_WRITE_TOKEN)
