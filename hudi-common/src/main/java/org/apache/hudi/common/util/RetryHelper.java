@@ -21,8 +21,7 @@ package org.apache.hudi.common.util;
 
 import org.apache.hudi.exception.HoodieException;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.io.IOException;
 import java.io.Serializable;
@@ -36,8 +35,9 @@ import java.util.stream.Collectors;
  *
  * @param <T> Type of return value for checked function.
  */
+@Slf4j
 public class RetryHelper<T, R extends Exception> implements Serializable {
-  private static final Logger LOG = LoggerFactory.getLogger(RetryHelper.class);
+
   private static final List<? extends Class<? extends Exception>> DEFAULT_RETRY_EXCEPTIONS = Arrays.asList(IOException.class, RuntimeException.class);
   private transient CheckedFunction<T, R> func;
   private final int num;
@@ -68,7 +68,7 @@ public class RetryHelper<T, R extends Exception> implements Serializable {
             .map(Exception::getClass)
             .collect(Collectors.toList());
       } catch (HoodieException e) {
-        LOG.error("Exception while loading retry exceptions classes '" + retryExceptions + "'.", e);
+        log.error("Exception while loading retry exceptions classes '{}'.", retryExceptions, e);
         this.retryExceptionsClasses = DEFAULT_RETRY_EXCEPTIONS;
       }
     }
@@ -99,10 +99,10 @@ public class RetryHelper<T, R extends Exception> implements Serializable {
         }
         if (retries++ >= num) {
           String message = "Still failed to " + taskInfo + " after retried " + num + " times.";
-          LOG.error(message, e);
+          log.error(message, e);
           throw e;
         }
-        LOG.warn("Task [{}] failed. current retry number {}, will retry after {} ms.", taskInfo, retries, waitTime, e);
+        log.warn("Task [{}] failed. current retry number {}, will retry after {} ms.", taskInfo, retries, waitTime, e);
         try {
           Thread.sleep(waitTime);
         } catch (InterruptedException ex) {
@@ -112,7 +112,7 @@ public class RetryHelper<T, R extends Exception> implements Serializable {
     }
 
     if (retries > 0) {
-      LOG.info("Success to {} after retried {} times.", taskInfo, retries);
+      log.info("Success to {} after retried {} times.", taskInfo, retries);
     }
 
     return functionResult;
