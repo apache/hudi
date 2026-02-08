@@ -74,14 +74,14 @@ import org.apache.hudi.utilities.sources.JsonDFSSource;
 
 import com.beust.jcommander.JCommander;
 import com.beust.jcommander.Parameter;
+import lombok.Getter;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.SparkSession;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.Serializable;
@@ -96,7 +96,6 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
-import static java.lang.String.format;
 import static org.apache.hudi.common.table.checkpoint.StreamerCheckpointV1.STREAMER_CHECKPOINT_RESET_KEY_V1;
 import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
 import static org.apache.hudi.utilities.UtilHelpers.buildProperties;
@@ -111,10 +110,10 @@ import static org.apache.hudi.utilities.UtilHelpers.readConfig;
  * write-to-sink (c) Schedule Compactions if needed (d) Conditionally Sync to Hive each cycle. For MOR table with
  * continuous mode enabled, a separate compactor thread is allocated to execute compactions
  */
+@Slf4j
 public class HoodieStreamer implements Serializable {
 
   private static final long serialVersionUID = 1L;
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieStreamer.class);
   private static final List<String> DEFAULT_SENSITIVE_CONFIG_KEYS = Arrays.asList(
       HoodieWriteConfig.SENSITIVE_CONFIG_KEYS_FILTER.defaultValue().split(","));
   private static final String SENSITIVE_VALUES_MASKED = "SENSITIVE_INFO_MASKED";
@@ -214,9 +213,9 @@ public class HoodieStreamer implements Serializable {
 
   public void shutdownGracefully() {
     ingestionService.ifPresent(ds -> {
-      LOG.info("Shutting down DeltaStreamer");
+      log.info("Shutting down DeltaStreamer");
       ds.shutdown(false);
-      LOG.info("Async service shutdown complete. Closing DeltaSync ");
+      log.info("Async service shutdown complete. Closing DeltaSync ");
       ds.close();
     });
   }
@@ -226,7 +225,7 @@ public class HoodieStreamer implements Serializable {
    */
   public void sync() throws Exception {
     if (bootstrapExecutor.isPresent()) {
-      LOG.info("Performing bootstrap. Source=" + bootstrapExecutor.get().getBootstrapConfig().getBootstrapSourceBasePath());
+      log.info("Performing bootstrap. Source={}", bootstrapExecutor.get().getBootstrapConfig().getBootstrapSourceBasePath());
       bootstrapExecutor.get().execute();
     } else {
       ingestionService.ifPresent(HoodieIngestionService::startIngestion);
@@ -608,7 +607,7 @@ public class HoodieStreamer implements Serializable {
     for (String key : allKeys) {
       String value = Option.ofNullable(props.get(key)).orElse("").toString();
       // Truncate too long values.
-      if (value.length() > 255 && !LOG.isDebugEnabled()) {
+      if (value.length() > 255 && !log.isDebugEnabled()) {
         value = value.substring(0, 128) + "[...]";
       }
 
@@ -648,7 +647,7 @@ public class HoodieStreamer implements Serializable {
       jssc = UtilHelpers.buildSparkContext(sparkAppName, cfg.sparkMaster, cfg.enableHiveSupport, additionalSparkConfigs);
     }
     if (cfg.enableHiveSync) {
-      LOG.warn("--enable-hive-sync will be deprecated in a future release; please use --enable-sync instead for Hive syncing");
+      log.warn("--enable-hive-sync will be deprecated in a future release; please use --enable-sync instead for Hive syncing");
     }
 
     int exitCode = 0;
@@ -676,11 +675,13 @@ public class HoodieStreamer implements Serializable {
     /**
      * Schema provider that supplies the command for reading the input and writing out the target table.
      */
+    @Getter
     private transient SchemaProvider schemaProvider;
 
     /**
      * Spark Session.
      */
+    @Getter
     private transient SparkSession sparkSession;
 
     /**
@@ -696,6 +697,7 @@ public class HoodieStreamer implements Serializable {
     /**
      * Bag of properties with source, hoodie client, key generator etc.
      */
+    @Getter
     TypedProperties props;
 
     /**
@@ -757,7 +759,7 @@ public class HoodieStreamer implements Serializable {
           properties.get().forEach((k, v) -> propsToValidate.put(k.toString(), v.toString()));
           HoodieWriterUtils.validateTableConfig(this.sparkSession, org.apache.hudi.HoodieConversionUtils.mapAsScalaImmutableMap(propsToValidate), meta.getTableConfig());
         } catch (HoodieIOException e) {
-          LOG.warn("Full exception msg {},  msg {}", e.getLocalizedMessage(), e.getMessage());
+          log.warn("Full exception msg {},  msg {}", e.getLocalizedMessage(), e.getMessage());
           if (e.getMessage().contains("Could not load Hoodie properties") && e.getMessage().contains(HoodieTableConfig.HOODIE_PROPERTIES_FILE)) {
             initializeTableTypeAndBaseFileFormat();
           } else {
@@ -772,7 +774,7 @@ public class HoodieStreamer implements Serializable {
           "'--filter-dupes' needs to be disabled when '--op' is 'UPSERT' to ensure updates are not missed.");
 
       this.props = properties.get();
-      LOG.info(toSortedTruncatedString(props));
+      log.info(toSortedTruncatedString(props));
 
       this.schemaProvider = UtilHelpers.wrapSchemaProviderWithPostProcessor(
           UtilHelpers.createSchemaProvider(cfg.schemaProviderClassName, props, hoodieSparkContext.jsc()),
@@ -817,7 +819,7 @@ public class HoodieStreamer implements Serializable {
         boolean error = false;
         if (cfg.isAsyncCompactionEnabled()) {
           // set Scheduler Pool.
-          LOG.info("Setting Spark Pool name for delta-sync to " + STREAMSYNC_POOL_NAME);
+          log.info("Setting Spark Pool name for delta-sync to {}", STREAMSYNC_POOL_NAME);
           hoodieSparkContext.setProperty(EngineProperty.DELTASYNC_POOL_NAME, STREAMSYNC_POOL_NAME);
         }
 
@@ -834,14 +836,14 @@ public class HoodieStreamer implements Serializable {
                 if (newProps.isPresent()) {
                   this.props = newProps.get();
                   // reinit the DeltaSync only when the props updated
-                  LOG.info("Re-init delta sync with new config properties:");
-                  LOG.info(toSortedTruncatedString(props));
+                  log.info("Re-init delta sync with new config properties:");
+                  log.info(toSortedTruncatedString(props));
                   reInitDeltaSync();
                 }
               }
               Option<Pair<Option<String>, JavaRDD<WriteStatus>>> scheduledCompactionInstantAndRDD = Option.ofNullable(streamSync.syncOnce());
               if (scheduledCompactionInstantAndRDD.isPresent() && scheduledCompactionInstantAndRDD.get().getLeft().isPresent()) {
-                LOG.info("Enqueuing new pending compaction instant (" + scheduledCompactionInstantAndRDD.get().getLeft() + ")");
+                log.info("Enqueuing new pending compaction instant ({})", scheduledCompactionInstantAndRDD.get().getLeft());
                 asyncCompactService.get().enqueuePendingAsyncServiceInstant(scheduledCompactionInstantAndRDD.get().getLeft().get());
                 asyncCompactService.get().waitTillPendingAsyncServiceInstantsReducesTo(cfg.maxPendingCompactions);
                 if (asyncCompactService.get().hasError()) {
@@ -852,7 +854,7 @@ public class HoodieStreamer implements Serializable {
               if (clusteringConfig.isAsyncClusteringEnabled()) {
                 Option<String> clusteringInstant = streamSync.getClusteringInstantOpt();
                 if (clusteringInstant.isPresent()) {
-                  LOG.info("Scheduled async clustering for instant: " + clusteringInstant.get());
+                  log.info("Scheduled async clustering for instant: {}", clusteringInstant.get());
                   asyncClusteringService.get().enqueuePendingAsyncServiceInstant(clusteringInstant.get());
                   asyncClusteringService.get().waitTillPendingAsyncServiceInstantsReducesTo(cfg.maxPendingClustering);
                   if (asyncClusteringService.get().hasError()) {
@@ -865,7 +867,7 @@ public class HoodieStreamer implements Serializable {
               Option<HoodieData<WriteStatus>> lastWriteStatuses = Option.ofNullable(
                   scheduledCompactionInstantAndRDD.isPresent() ? HoodieJavaRDD.of(scheduledCompactionInstantAndRDD.get().getRight()) : null);
               if (requestShutdownIfNeeded(lastWriteStatuses)) {
-                LOG.info("Closing and shutting down ingestion service");
+                log.info("Closing and shutting down ingestion service");
                 error = true;
                 onIngestionCompletes(false);
                 shutdown(true);
@@ -875,7 +877,7 @@ public class HoodieStreamer implements Serializable {
             } catch (HoodieUpsertException ue) {
               handleUpsertException(ue);
             } catch (Exception e) {
-              LOG.error("Shutting down delta-sync due to exception", e);
+              log.error("Shutting down delta-sync due to exception", e);
               error = true;
               throw new HoodieException(e.getMessage(), e);
             }
@@ -890,7 +892,7 @@ public class HoodieStreamer implements Serializable {
 
     private void handleUpsertException(HoodieUpsertException ue) {
       if (ue.getCause() instanceof HoodieClusteringUpdateException) {
-        LOG.warn("Write rejected due to conflicts with pending clustering operation. Going to retry after 1 min with the hope "
+        log.warn("Write rejected due to conflicts with pending clustering operation. Going to retry after 1 min with the hope "
             + "that clustering will complete by then.", ue);
         try {
           Thread.sleep(60000); // Intentionally not using cfg.minSyncIntervalSeconds, since it could be too high or it could be 0.
@@ -907,13 +909,13 @@ public class HoodieStreamer implements Serializable {
      * Shutdown async services like compaction/clustering as DeltaSync is shutdown.
      */
     private void shutdownAsyncServices(boolean error) {
-      LOG.info("Delta Sync shutdown. Error ?{}", error);
+      log.info("Delta Sync shutdown. Error ?{}", error);
       if (asyncCompactService.isPresent()) {
-        LOG.info("Gracefully shutting down compactor");
+        log.info("Gracefully shutting down compactor");
         asyncCompactService.get().shutdown(false);
       }
       if (asyncClusteringService.isPresent()) {
-        LOG.info("Gracefully shutting down clustering service");
+        log.info("Gracefully shutting down clustering service");
         asyncClusteringService.get().shutdown(false);
       }
     }
@@ -979,7 +981,7 @@ public class HoodieStreamer implements Serializable {
               .setBasePath(cfg.targetBasePath)
               .setLoadActiveTimelineOnLoad(true).build();
           List<HoodieInstant> pending = ClusteringUtils.getPendingClusteringInstantTimes(meta);
-          LOG.info(format("Found %d pending clustering instants ", pending.size()));
+          log.info("Found {} pending clustering instants ", pending.size());
           pending.forEach(hoodieInstant -> asyncClusteringService.get().enqueuePendingAsyncServiceInstant(hoodieInstant.requestedTime()));
           asyncClusteringService.get().start(error -> true);
           try {
@@ -997,7 +999,7 @@ public class HoodieStreamer implements Serializable {
 
     @Override
     protected boolean onIngestionCompletes(boolean hasError) {
-      LOG.info("Ingestion completed. Has error: " + hasError);
+      log.info("Ingestion completed. Has error: {}", hasError);
       close();
       return true;
     }
@@ -1012,18 +1014,6 @@ public class HoodieStreamer implements Serializable {
       if (streamSync != null) {
         streamSync.close();
       }
-    }
-
-    public SchemaProvider getSchemaProvider() {
-      return schemaProvider;
-    }
-
-    public SparkSession getSparkSession() {
-      return sparkSession;
-    }
-
-    public TypedProperties getProps() {
-      return props;
     }
 
     @VisibleForTesting

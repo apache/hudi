@@ -30,13 +30,12 @@ import org.apache.hudi.utilities.config.SourceTestConfig;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.sources.AvroSource;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SQLContext;
 import org.apache.spark.sql.SparkSession;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.io.IOException;
@@ -48,11 +47,10 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
+@Slf4j
 public abstract class AbstractBaseTestSource extends AvroSource {
 
   public static String schemaStr = HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
-
-  private static final Logger LOG = LoggerFactory.getLogger(AbstractBaseTestSource.class);
 
   public static final int DEFAULT_PARTITION_NUM = 0;
 
@@ -69,7 +67,7 @@ public abstract class AbstractBaseTestSource extends AvroSource {
       boolean useRocksForTestDataGenKeys = ConfigUtils.getBooleanWithAltKeys(props, SourceTestConfig.USE_ROCKSDB_FOR_TEST_DATAGEN_KEYS);
       String baseStoreDir = ConfigUtils.getStringWithAltKeys(props, SourceTestConfig.ROCKSDB_BASE_DIR_FOR_TEST_DATAGEN_KEYS,
           File.createTempFile("test_data_gen", ".keys").getParent()) + "/" + partition;
-      LOG.info("useRocksForTestDataGenKeys={}, BaseStoreDir={}", useRocksForTestDataGenKeys, baseStoreDir);
+      log.info("useRocksForTestDataGenKeys={}, BaseStoreDir={}", useRocksForTestDataGenKeys, baseStoreDir);
       dataGeneratorMap.put(partition, new HoodieTestDataGenerator(HoodieTestDataGenerator.DEFAULT_PARTITION_PATHS,
           useRocksForTestDataGenKeys ? new RocksDBBasedMap<>(baseStoreDir) : new HashMap<>()));
     } catch (IOException e) {
@@ -114,11 +112,11 @@ public abstract class AbstractBaseTestSource extends AvroSource {
 
     // generate `sourceLimit` number of upserts each time.
     int numExistingKeys = dataGenerator.getNumExistingKeys(schemaStr);
-    LOG.info("NumExistingKeys={}", numExistingKeys);
+    log.info("NumExistingKeys={}", numExistingKeys);
 
     int numUpdates = Math.min(numExistingKeys, sourceLimit / 2);
     int numInserts = sourceLimit - numUpdates;
-    LOG.info("Before adjustments => numInserts={}, numUpdates={}", numInserts, numUpdates);
+    log.info("Before adjustments => numInserts={}, numUpdates={}", numInserts, numUpdates);
     boolean reachedMax = false;
 
     if (numInserts + numExistingKeys > maxUniqueKeys) {
@@ -135,16 +133,16 @@ public abstract class AbstractBaseTestSource extends AvroSource {
     Stream<GenericRecord> deleteStream = Stream.empty();
     Stream<GenericRecord> updateStream;
     long memoryUsage1 = Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory();
-    LOG.info("Before DataGen. Memory Usage={}, Total Memory={}, Free Memory={}", memoryUsage1, Runtime.getRuntime().totalMemory(),
+    log.info("Before DataGen. Memory Usage={}, Total Memory={}, Free Memory={}", memoryUsage1, Runtime.getRuntime().totalMemory(),
         Runtime.getRuntime().freeMemory());
     if (!reachedMax && numUpdates >= 50) {
-      LOG.info("After adjustments => NumInserts={}, NumUpdates={}, NumDeletes=50, maxUniqueRecords={}", numInserts, (numUpdates - 50), maxUniqueKeys);
+      log.info("After adjustments => NumInserts={}, NumUpdates={}, NumDeletes=50, maxUniqueRecords={}", numInserts, (numUpdates - 50), maxUniqueKeys);
       // if we generate update followed by deletes -> some keys in update batch might be picked up for deletes. Hence generating delete batch followed by updates
       deleteStream = dataGenerator.generateUniqueDeleteRecordStream(instantTime, 50, false, schemaStr, 0L).map(AbstractBaseTestSource::toGenericRecord);
       updateStream = dataGenerator.generateUniqueUpdatesStream(instantTime, numUpdates - 50, schemaStr, 0L)
           .map(AbstractBaseTestSource::toGenericRecord);
     } else {
-      LOG.info("After adjustments => NumInserts={}, NumUpdates={}, maxUniqueRecords={}", numInserts, numUpdates, maxUniqueKeys);
+      log.info("After adjustments => NumInserts={}, NumUpdates={}, maxUniqueRecords={}", numInserts, numUpdates, maxUniqueKeys);
       updateStream = dataGenerator.generateUniqueUpdatesStream(instantTime, numUpdates, schemaStr, 0L)
           .map(AbstractBaseTestSource::toGenericRecord);
     }

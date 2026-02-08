@@ -44,12 +44,12 @@ import org.apache.hudi.util.SparkKeyGenUtils;
 import org.apache.hudi.utilities.UtilHelpers;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 
+import lombok.Getter;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.spark.api.java.JavaSparkContext;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.Serializable;
@@ -71,9 +71,8 @@ import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_BASE_PATH;
 /**
  * Performs bootstrap from a non-hudi source.
  */
+@Slf4j
 public class BootstrapExecutor implements Serializable {
-
-  private static final Logger LOG = LoggerFactory.getLogger(BootstrapExecutor.class);
 
   /**
    * Config.
@@ -103,6 +102,7 @@ public class BootstrapExecutor implements Serializable {
   /**
    * Bootstrap Configuration.
    */
+  @Getter
   private final HoodieWriteConfig bootstrapConfig;
 
   /**
@@ -146,7 +146,7 @@ public class BootstrapExecutor implements Serializable {
       builder = builder.withSchema(schemaProvider.getTargetHoodieSchema().toString());
     }
     this.bootstrapConfig = builder.build();
-    LOG.info("Created bootstrap executor with configs : " + bootstrapConfig.getProps());
+    log.info("Created bootstrap executor with configs: {}", bootstrapConfig.getProps());
   }
 
   /**
@@ -189,7 +189,7 @@ public class BootstrapExecutor implements Serializable {
     Path basePath = new Path(cfg.targetBasePath);
     if (fs.exists(basePath)) {
       if (cfg.bootstrapOverwrite) {
-        LOG.info("Target base path already exists, overwrite it");
+        log.info("Target base path already exists, overwrite it");
         fs.delete(basePath, true);
       } else {
         throw new HoodieException("target base path already exists at " + cfg.targetBasePath
@@ -243,9 +243,5 @@ public class BootstrapExecutor implements Serializable {
     }
 
     builder.initTable(HadoopFSUtils.getStorageConfWithCopy(jssc.hadoopConfiguration()), cfg.targetBasePath);
-  }
-
-  public HoodieWriteConfig getBootstrapConfig() {
-    return bootstrapConfig;
   }
 }
