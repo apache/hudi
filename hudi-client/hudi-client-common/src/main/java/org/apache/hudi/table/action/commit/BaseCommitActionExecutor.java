@@ -67,6 +67,7 @@ import java.io.IOException;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -309,8 +310,17 @@ public abstract class BaseCommitActionExecutor<T, I, K, O, R>
     writeMetadata.setWriteStatuses(statuses);
 
     log.debug("Create place holder commit metadata for clustering with instant time " + instantTime);
+    // Merge engine-specific metadata (e.g., spark_application_id) with extra metadata
+    Option<Map<String, String>> mergedExtraMetadata = extraMetadata;
+    Map<String, String> engineMetadata = context.getEngineCommitMetadata();
+    if (!engineMetadata.isEmpty()) {
+      mergedExtraMetadata = mergedExtraMetadata.isPresent()
+          ? Option.of(new HashMap<>(mergedExtraMetadata.get()))
+          : Option.of(new HashMap<>());
+      mergedExtraMetadata.get().putAll(engineMetadata);
+    }
     HoodieCommitMetadata commitMetadata = CommitUtils.buildMetadata(Collections.emptyList(), Collections.emptyMap(),
-        extraMetadata, operationType, schema.get().toString(), getCommitActionType());
+        mergedExtraMetadata, operationType, schema.get().toString(), getCommitActionType());
     writeMetadata.setCommitMetadata(Option.of(commitMetadata));
 
     return writeMetadata;

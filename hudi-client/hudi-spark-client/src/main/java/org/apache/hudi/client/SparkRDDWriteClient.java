@@ -61,6 +61,7 @@ import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 
 import java.io.Serializable;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicLong;
@@ -145,7 +146,10 @@ public class SparkRDDWriteClient<T> extends
       // when streaming writes are enabled, writeStatuses is a mix of data table write status and mdt write status
       List<HoodieWriteStat> dataTableHoodieWriteStats = slimWriteStatsList.stream().filter(entry -> !entry.isMetadataTable()).map(SlimWriteStats::getWriteStat).collect(Collectors.toList());
       List<HoodieWriteStat> partialMetadataTableWriteStats = slimWriteStatsList.stream().filter(entry -> entry.isMetadataTable).map(SlimWriteStats::getWriteStat).collect(Collectors.toList());
-      return commitStats(instantTime, new TableWriteStats(dataTableHoodieWriteStats, partialMetadataTableWriteStats), extraMetadata, commitActionType, partitionToReplacedFileIds, extraPreCommitFunc,
+      // Merge engine-specific metadata (e.g., spark_application_id) with extra metadata
+      Option<Map<String, String>> mergedExtraMetadata = mergeEngineCommitMetadata(extraMetadata);
+      return commitStats(instantTime, new TableWriteStats(dataTableHoodieWriteStats, partialMetadataTableWriteStats),
+          mergedExtraMetadata, commitActionType, partitionToReplacedFileIds, extraPreCommitFunc,
           false, Option.of(table));
     } else {
       log.error("Exiting early due to errors with write operation ");
@@ -420,6 +424,21 @@ public class SparkRDDWriteClient<T> extends
   public void releaseResources(String instantTime) {
     super.releaseResources(instantTime);
     SparkReleaseResources.releaseCachedData(context, config, basePath, instantTime);
+  }
+
+  /**
+   * Merges engine-specific metadata (e.g., spark_application_id) with the provided extra metadata.
+   */
+  private Option<Map<String, String>> mergeEngineCommitMetadata(Option<Map<String, String>> extraMetadata) {
+    Map<String, String> engineMetadata = context.getEngineCommitMetadata();
+    if (engineMetadata.isEmpty()) {
+      return extraMetadata;
+    }
+    Map<String, String> merged = extraMetadata.isPresent()
+        ? new HashMap<>(extraMetadata.get())
+        : new HashMap<>();
+    merged.putAll(engineMetadata);
+    return Option.of(merged);
   }
 
   /**

@@ -317,6 +317,16 @@ public class HoodieSparkEngineContext extends HoodieEngineContext {
   }
 
   /**
+   * Key for spark application id in commit metadata.
+   */
+  public static final String SPARK_APPLICATION_ID_KEY = "spark_application_id";
+
+  @Override
+  public Map<String, String> getEngineCommitMetadata() {
+    return Collections.singletonMap(SPARK_APPLICATION_ID_KEY, javaSparkContext.sc().applicationId());
+  }
+
+  /**
    * Performs range-based repartitioning of data based on key distribution to optimize partition sizes.
    *
    * <p>This method achieves efficient data distribution by:</p>
