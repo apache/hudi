@@ -1383,6 +1383,57 @@ def testBulkInsertForDropPartitionColumn(): Unit = {
     val tableMetaClient = createMetaClient(spark, tempBasePath)
     new TableSchemaResolver(tableMetaClient).getTableSchema(false)
   }
+
+  /**
+   * Test that upsert works correctly when partition path contains Unicode characters.
+   * Reproduces a bug where UTF-8 bytes for characters like "ü" (U+00FC) get misinterpreted
+   * as Latin-1 during the String-to-Path round-trip, causing file-not-found errors on the
+   * second write.
+   */
+  @Test
+  def testUpsertWithUnicodePartitionPath(): Unit = {
+    val options = Map(
+      DataSourceWriteOptions.TABLE_TYPE.key -> HoodieTableType.COPY_ON_WRITE.name(),
+      DataSourceWriteOptions.PRECOMBINE_FIELD.key -> "ts",
+      DataSourceWriteOptions.RECORDKEY_FIELD.key -> "uuid",
+      DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "company",
+      DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key -> "org.apache.hudi.keygen.SimpleKeyGenerator",
+      HoodieWriteConfig.TBL_NAME.key -> "hoodie_test",
+      "hoodie.insert.shuffle.parallelism" -> "1",
+      "hoodie.upsert.shuffle.parallelism" -> "1",
+      "hoodie.filesystem.view.remote.response.charset" -> "UTF-8"
+    )
+
+    // Unicode partition value containing German umlaut ü (U+00FC)
+    val unicodePartition = "M\u00fcnchen"
+
+    // First write - insert with Overwrite
+    val df = spark.createDataFrame(Seq(
+      ("id1", 100L, unicodePartition),
+      ("id2", 200L, unicodePartition)
+    )).toDF("uuid", "ts", "company")
+
+    df.write.format("hudi")
+      .options(options)
+      .mode(SaveMode.Overwrite)
+      .save(tempBasePath)
+
+    // Second write - upsert with Append (triggers reading existing Parquet data)
+    val dfUpdate = spark.createDataFrame(Seq(
+      ("id1", 300L, unicodePartition),
+      ("id2", 400L, unicodePartition)
+    )).toDF("uuid", "ts", "company")
+
+    dfUpdate.write.format("hudi")
+      .options(options)
+      .mode(SaveMode.Append)
+      .save(tempBasePath)
+
+    // Verify upserted data can be read back
+    val dfResult = spark.read.format("hudi").load(tempBasePath)
+    assert(dfResult.count() == 2)
+    assert(dfResult.where("ts >= 300").count() == 2)
+  }
 }
 
 object TestHoodieSparkSqlWriter {
