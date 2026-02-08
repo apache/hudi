@@ -819,7 +819,7 @@ public class HoodieStreamer implements Serializable {
         boolean error = false;
         if (cfg.isAsyncCompactionEnabled()) {
           // set Scheduler Pool.
-          log.info("Setting Spark Pool name for delta-sync to " + STREAMSYNC_POOL_NAME);
+          log.info("Setting Spark Pool name for delta-sync to {}", STREAMSYNC_POOL_NAME);
           hoodieSparkContext.setProperty(EngineProperty.DELTASYNC_POOL_NAME, STREAMSYNC_POOL_NAME);
         }
 
