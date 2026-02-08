@@ -23,6 +23,7 @@ import org.apache.flink.configuration.Configuration;
 import org.apache.flink.connector.base.source.reader.RecordEmitter;
 import org.apache.flink.connector.base.source.reader.SingleThreadMultiplexSourceReaderBase;
 
+import org.apache.hudi.metrics.FlinkStreamReadMetrics;
 import org.apache.hudi.source.reader.function.SplitReaderFunction;
 import org.apache.hudi.source.split.HoodieSourceSplit;
 import org.apache.hudi.source.split.SerializableComparator;
@@ -45,8 +46,9 @@ public class HoodieSourceReader<T> extends
           Configuration config,
           SourceReaderContext context,
           SplitReaderFunction<T> readerFunction,
-          SerializableComparator<HoodieSourceSplit> splitComparator) {
-    super(() -> new HoodieSourceSplitReader<>(context, readerFunction, splitComparator), recordEmitter, config, context);
+          SerializableComparator<HoodieSourceSplit> splitComparator,
+          FlinkStreamReadMetrics readMetrics) {
+    super(() -> new HoodieSourceSplitReader<>(readerFunction, splitComparator, readMetrics), recordEmitter, config, context);
   }
 
   @Override
