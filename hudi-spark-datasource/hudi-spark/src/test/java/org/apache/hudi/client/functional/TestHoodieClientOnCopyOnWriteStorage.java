@@ -28,11 +28,13 @@ import org.apache.hudi.client.WriteClientTestUtils;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.clustering.plan.strategy.SparkSingleFileSortPlanStrategy;
 import org.apache.hudi.client.clustering.run.strategy.SparkSingleFileSortExecutionStrategy;
+import org.apache.hudi.client.clustering.update.strategy.SparkAllowUpdateStrategy;
 import org.apache.hudi.client.clustering.update.strategy.SparkRejectUpdateStrategy;
 import org.apache.hudi.client.transaction.ConflictResolutionStrategy;
 import org.apache.hudi.client.transaction.FileSystemBasedLockProviderTestClass;
 import org.apache.hudi.client.transaction.PreferWriterConflictResolutionStrategy;
 import org.apache.hudi.client.transaction.SimpleConcurrentFileWritesConflictResolutionStrategy;
+import org.apache.hudi.client.transaction.lock.InProcessLockProvider;
 import org.apache.hudi.client.validator.SparkPreCommitValidator;
 import org.apache.hudi.client.validator.SqlQueryEqualityPreCommitValidator;
 import org.apache.hudi.client.validator.SqlQuerySingleResultPreCommitValidator;
@@ -170,6 +172,13 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
         Arguments.of(true, false),
         Arguments.of(false, true),
         Arguments.of(false, false)
+    );
+  }
+
+  private static Stream<Arguments> conflictResolutionStrategyParams() {
+    return Stream.of(
+        Arguments.of(new PreferWriterConflictResolutionStrategy()),
+        Arguments.of(new SimpleConcurrentFileWritesConflictResolutionStrategy())
     );
   }
 
@@ -1745,6 +1754,118 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
 
     // When ingestion writer is committing it should throw an exception.
     assertThrows(HoodieWriteConflictException.class, () -> client.commit(inflightCommit, ingestionResult));
+  }
+
+  @ParameterizedTest
+  @MethodSource("conflictResolutionStrategyParams")
+  public void testParallelInsertOverwriteOperations(ConflictResolutionStrategy strategy) throws Exception {
+    Properties properties = new Properties();
+    HoodieLockConfig lockConfig = HoodieLockConfig.newBuilder()
+        .withLockProvider(InProcessLockProvider.class)
+        .withConflictResolutionStrategy(strategy)
+        .build();
+    HoodieWriteConfig insertWriteConfig = getConfigBuilder()
+        .withLockConfig(lockConfig)
+        .withWriteConcurrencyMode(WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL)
+        .withProperties(properties)
+        .build();
+    SparkRDDWriteClient client = getHoodieWriteClient(insertWriteConfig);
+    // Create base commit.
+    String firstCommit = WriteClientTestUtils.createNewInstantTime();
+    insertFirstBatch(insertWriteConfig, client, firstCommit, "000", 10,
+        SparkRDDWriteClient::insert, false, false, 10,
+        insertWriteConfig.populateMetaFields(), INSTANT_GENERATOR, false);
+    assertEquals(firstCommit, metaClient.reloadActiveTimeline()
+            .filterCompletedInstants().lastInstant().get().requestedTime());
+
+    // Do insert-overwrite operation on the existing partitions, without committing the data.
+    String secondCommit = WriteClientTestUtils.createNewInstantTime();
+    WriteClientTestUtils.startCommitWithTime(client, secondCommit, REPLACE_COMMIT_ACTION);
+    List<HoodieRecord> records1 = dataGen.generateInserts(secondCommit, 10);
+    JavaRDD<HoodieRecord> writeRecords1 = jsc.parallelize(records1, 1);
+    HoodieWriteResult result1 = client.insertOverwrite(writeRecords1, secondCommit);
+    assertEquals(secondCommit, metaClient.reloadActiveTimeline()
+        .filterInflightsAndRequested().lastInstant().get().requestedTime());
+
+    // Create second writer and do another insert-overwrite operation on the existing partitions,
+    // without committing the data.
+    SparkRDDWriteClient client2 = new SparkRDDWriteClient(context, insertWriteConfig);
+    String thirdCommit = WriteClientTestUtils.createNewInstantTime();
+    WriteClientTestUtils.startCommitWithTime(client2, thirdCommit, REPLACE_COMMIT_ACTION);
+    List<HoodieRecord> records2 = dataGen.generateInserts(thirdCommit, 10);
+    JavaRDD<HoodieRecord> writeRecords2 = jsc.parallelize(records2, 1);
+    HoodieWriteResult result2 = client2.insertOverwrite(writeRecords2, thirdCommit);
+    assertEquals(thirdCommit, metaClient.reloadActiveTimeline()
+        .filterInflightsAndRequested().lastInstant().get().requestedTime());
+
+    // Complete first insert-overwrite operation.
+    client.commit(secondCommit, result1.getWriteStatuses(),
+        Option.empty(), REPLACE_COMMIT_ACTION, result1.getPartitionToReplaceFileIds());
+    assertEquals(secondCommit, metaClient.reloadActiveTimeline()
+        .filterCompletedInstants().lastInstant().get().requestedTime());
+
+    // Now try completing the second insert-overwrite operation, this should throw an error since it is replacing
+    // the same files as the previous insert overwrite operation.
+    assertThrows(HoodieWriteConflictException.class, () ->
+        client2.commit(thirdCommit, result2.getWriteStatuses(), Option.empty(),
+            REPLACE_COMMIT_ACTION, result2.getPartitionToReplaceFileIds()));
+  }
+
+  @ParameterizedTest
+  @MethodSource("conflictResolutionStrategyParams")
+  public void testParallelClusteringAndUpdateOperation(ConflictResolutionStrategy strategy) throws Exception {
+    Properties properties = new Properties();
+    HoodieLockConfig lockConfig = HoodieLockConfig.newBuilder()
+        .withLockProvider(InProcessLockProvider.class)
+        .withConflictResolutionStrategy(strategy)
+        .build();
+    HoodieClusteringConfig clusteringConfig = createClusteringBuilder(false, 1)
+        .withClusteringUpdatesStrategy(SparkAllowUpdateStrategy.class.getName())
+        .withAsyncClusteringMaxCommits(1)
+        .build();
+    HoodieWriteConfig insertWriteConfig = getConfigBuilder()
+        .withLockConfig(lockConfig)
+        .withClusteringConfig(clusteringConfig)
+        .withWriteConcurrencyMode(WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL)
+        .withProperties(properties)
+        .build();
+    SparkRDDWriteClient client = getHoodieWriteClient(insertWriteConfig);
+    // Create base commit.
+    String firstCommit = WriteClientTestUtils.createNewInstantTime();
+    insertFirstBatch(insertWriteConfig, client, firstCommit, "000", 200,
+        SparkRDDWriteClient::insert, false, false, 10,
+        insertWriteConfig.populateMetaFields(), INSTANT_GENERATOR, false);
+    assertEquals(firstCommit, metaClient.reloadActiveTimeline()
+            .filterCompletedInstants().lastInstant().get().requestedTime());
+
+    // Create clustering writer
+    SparkRDDWriteClient clusteringClient = getHoodieWriteClient(insertWriteConfig);
+    Option<String> clusteringInstant = clusteringClient.scheduleClustering(Option.empty());
+    assertTrue(clusteringInstant.isPresent());
+    assertEquals(clusteringInstant.get(), metaClient.reloadActiveTimeline()
+            .filterPendingReplaceOrClusteringTimeline().lastInstant().get().requestedTime());
+
+    String secondInstant = WriteClientTestUtils.createNewInstantTime();
+    if (strategy instanceof PreferWriterConflictResolutionStrategy) {
+      updateBatch(insertWriteConfig, client, secondInstant, firstCommit,
+          Option.of(Arrays.asList()), "000", 100,
+          SparkRDDWriteClient::upsert, false, false, 100,
+          200, 3, insertWriteConfig.populateMetaFields(), INSTANT_GENERATOR);
+      HoodieClusteringException exception = assertThrows(HoodieClusteringException.class, () ->
+          clusteringClient.cluster(clusteringInstant.get()));
+      assertTrue(exception.getCause() instanceof HoodieWriteConflictException);
+      HoodieActiveTimeline timeline = metaClient.reloadActiveTimeline();
+      assertEquals(clusteringInstant.get(), timeline.filterPendingReplaceOrClusteringTimeline().lastInstant().get().requestedTime());
+      assertEquals(secondInstant, timeline.filterCompletedInstants().lastInstant().get().requestedTime());
+    } else {
+      assertThrows(HoodieWriteConflictException.class, () ->
+          updateBatch(insertWriteConfig, client, secondInstant, firstCommit,
+              Option.of(Arrays.asList()), "000", 100,
+              SparkRDDWriteClient::upsert, false, false, 100,
+              200, 3, insertWriteConfig.populateMetaFields(), INSTANT_GENERATOR));
+      HoodieActiveTimeline timeline = metaClient.reloadActiveTimeline();
+      assertEquals(secondInstant, timeline.filterInflights().lastInstant().get().requestedTime());
+    }
   }
 
   protected HoodieInstant createRequestedClusterInstant(HoodieTableMetaClient metaClient, String clusterTime, List<FileSlice>[] fileSlices) throws IOException {
