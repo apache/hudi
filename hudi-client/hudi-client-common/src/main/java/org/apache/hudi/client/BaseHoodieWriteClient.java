@@ -1220,7 +1220,8 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
   public HoodieWriteMetadata<O> compact(String compactionInstantTime, boolean shouldComplete) {
     HoodieTable table = createTable(config);
     preWrite(compactionInstantTime, WriteOperationType.COMPACT, table.getMetaClient());
-    return tableServiceClient.compact(table, compactionInstantTime, shouldComplete);
+    HoodieWriteMetadata<O> writeMetadata = tableServiceClient.compact(table, compactionInstantTime, shouldComplete);
+    return writeMetadata;
   }
 
   /**
