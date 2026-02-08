@@ -15,20 +15,16 @@
  * limitations under the License.
  */
 
-package org.apache.spark.sql.hudi.analysis
-
-import org.apache.hudi.{HoodieBaseRelation, HoodieFileIndex}
 import org.apache.hudi.SparkAdapterSupport.sparkAdapter
-
+import org.apache.hudi.{HoodieBaseRelation, HoodieFileIndex}
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.catalog.CatalogStatistics
 import org.apache.spark.sql.catalyst.expressions.{And, AttributeReference, AttributeSet, Expression, ExpressionSet, NamedExpression, PredicateHelper, SubqueryExpression}
 import org.apache.spark.sql.catalyst.planning.PhysicalOperation
-import org.apache.spark.sql.catalyst.plans.logical.{Filter, LeafNode, LogicalPlan, Project}
 import org.apache.spark.sql.catalyst.plans.logical.statsEstimation.FilterEstimation
+import org.apache.spark.sql.catalyst.plans.logical.{Filter, LeafNode, LogicalPlan, Project}
 import org.apache.spark.sql.catalyst.rules.Rule
 import org.apache.spark.sql.execution.datasources.{HadoopFsRelation, LogicalRelation}
-import org.apache.spark.sql.hudi.analysis.Spark3HoodiePruneFileSourcePartitions.{exprUtils, getPartitionFiltersAndDataFilters, rebuildPhysicalOperation, HoodieRelationMatcher}
 import org.apache.spark.sql.sources.BaseRelation
 import org.apache.spark.sql.types.StructType
 
@@ -36,9 +32,9 @@ import org.apache.spark.sql.types.StructType
  * Prune the partitions of Hudi table based relations by the means of pushing down the
  * partition filters
  *
- * NOTE: [[HoodiePruneFileSourcePartitions]] is a replica in kind to Spark's [[PruneFileSourcePartitions]]
+ * NOTE: [[Spark34HoodiePruneFileSourcePartitions]] is a replica in kind to Spark's [[PruneFileSourcePartitions]]
  */
-case class Spark3HoodiePruneFileSourcePartitions(spark: SparkSession) extends Rule[LogicalPlan] {
+case class Spark34HoodiePruneFileSourcePartitions(spark: SparkSession) extends Rule[LogicalPlan] {
 
   override def apply(plan: LogicalPlan): LogicalPlan = plan transformDown {
     case op @ PhysicalOperation(projects, filters, lr @ LogicalRelation(HoodieRelationMatcher(fileIndex), _, _, _))
@@ -81,7 +77,7 @@ case class Spark3HoodiePruneFileSourcePartitions(spark: SparkSession) extends Ru
 
 }
 
-private object Spark3HoodiePruneFileSourcePartitions extends PredicateHelper {
+private object Spark34HoodiePruneFileSourcePartitions extends PredicateHelper {
 
   private val exprUtils = sparkAdapter.getCatalystExpressionUtils
 

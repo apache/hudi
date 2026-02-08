@@ -160,8 +160,12 @@ object HoodieAnalysis extends SparkAdapterSupport {
     //          - Precedes actual [[customEarlyScanPushDownRules]] invocation
     val pruneFileSourcePartitionsClass = if (HoodieSparkUtils.gteqSpark4_0) {
       "org.apache.spark.sql.hudi.analysis.Spark4HoodiePruneFileSourcePartitions"
+    } else if (HoodieSparkUtils.isSpark3_3) {
+      "org.apache.spark.sql.hudi.analysis.Spark33HoodiePruneFileSourcePartitions"
+    } else if (HoodieSparkUtils.isSpark3_4) {
+      "org.apache.spark.sql.hudi.analysis.Spark34HoodiePruneFileSourcePartitions"
     } else {
-      "org.apache.spark.sql.hudi.analysis.Spark3HoodiePruneFileSourcePartitions"
+      "org.apache.spark.sql.hudi.analysis.Spark35HoodiePruneFileSourcePartitions"
     }
     rules += (spark => instantiateKlass(pruneFileSourcePartitionsClass, spark))
 
