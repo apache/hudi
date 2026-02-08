@@ -134,8 +134,11 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
         val partitionFields: Array[StructField] = partitionColumns.get().map(column => StructField(column, StringType))
         StructType(partitionFields)
       } else {
+        // Use full partition path (e.g. "nested_record.level") as the partition column name so that
+        // data schema does not exclude a same-named top-level column (e.g. "level") when partition
+        // path is a nested field. Otherwise partition value would overwrite the data column on read.
         val partitionFields: Array[StructField] = partitionColumns.get().filter(column => nameFieldMap.contains(column))
-          .map(column => nameFieldMap.apply(column))
+          .map(column => StructField(column, nameFieldMap.apply(column).dataType))
 
         if (partitionFields.length != partitionColumns.get().length) {
           val isBootstrapTable = tableConfig.getBootstrapBasePath.isPresent
