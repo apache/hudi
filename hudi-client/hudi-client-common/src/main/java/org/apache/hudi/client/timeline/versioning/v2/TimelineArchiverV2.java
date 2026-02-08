@@ -21,6 +21,7 @@ package org.apache.hudi.client.timeline.versioning.v2;
 
 import org.apache.hudi.client.timeline.HoodieTimelineArchiver;
 import org.apache.hudi.client.transaction.TransactionManager;
+import org.apache.hudi.client.utils.ArchivalMetrics;
 import org.apache.hudi.common.NativeTableFormat;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieAvroPayload;
@@ -52,6 +53,7 @@ import lombok.extern.slf4j.Slf4j;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -78,6 +80,7 @@ public class TimelineArchiverV2<T extends HoodieAvroPayload, I, K, O> implements
   private final TransactionManager txnManager;
 
   private final LSMTimelineWriter timelineWriter;
+  private final Map<String, Long> metrics;
 
   public TimelineArchiverV2(HoodieWriteConfig config, HoodieTable<T, I, K, O> table) {
     this.config = config;
@@ -88,6 +91,7 @@ public class TimelineArchiverV2<T extends HoodieAvroPayload, I, K, O> implements
     Pair<Integer, Integer> minAndMaxInstants = getMinAndMaxInstantsToKeep(table, metaClient);
     this.minInstantsToKeep = minAndMaxInstants.getLeft();
     this.maxInstantsToKeep = minAndMaxInstants.getRight();
+    this.metrics = new HashMap<>();
   }
 
   @Override
@@ -105,6 +109,8 @@ public class TimelineArchiverV2<T extends HoodieAvroPayload, I, K, O> implements
     try {
       // Sort again because the cleaning and rollback instants could break the sequence.
       List<ActiveAction> instantsToArchive = getInstantsToArchive().sorted().collect(Collectors.toList());
+      addArchivalCommitMetrics(instantsToArchive);
+      boolean success = true;
       if (!instantsToArchive.isEmpty()) {
         log.info("Archiving and deleting instants {}", instantsToArchive);
         Consumer<Exception> exceptionHandler = e -> {
@@ -114,7 +120,7 @@ public class TimelineArchiverV2<T extends HoodieAvroPayload, I, K, O> implements
         };
         this.timelineWriter.write(instantsToArchive, Option.of(action -> deleteAnyLeftOverMarkers(context, action)), Option.of(exceptionHandler));
         log.debug("Deleting archived instants");
-        deleteArchivedActions(instantsToArchive, context);
+        success = deleteArchivedActions(instantsToArchive, context);
         // triggers compaction and cleaning only after archiving action
         this.timelineWriter.compactAndClean(context);
         Supplier<List<HoodieInstant>> archivedInstants = () -> instantsToArchive.stream()
@@ -125,12 +131,38 @@ public class TimelineArchiverV2<T extends HoodieAvroPayload, I, K, O> implements
       } else {
         log.info("No Instants to archive");
       }
+      metrics.put(ArchivalMetrics.ARCHIVAL_STATUS, success ? 1L : -1L);
       return instantsToArchive.size();
+    } catch (OutOfMemoryError oom) {
+      metrics.put(ArchivalMetrics.ARCHIVAL_OOM_FAILURE, 1L);
+      throw oom;
+    } catch (Exception e) {
+      String failureMetricName = String.join(".", ArchivalMetrics.ARCHIVAL_FAILURE, e.getClass().getSimpleName());
+      metrics.put(failureMetricName, 1L);
+      throw e;
     } finally {
       if (acquireLock) {
         txnManager.endStateChange(Option.empty());
       }
     }
+  }
+
+  @Override
+  public Map<String, Long> getMetrics() {
+    return metrics;
+  }
+
+  private void addArchivalCommitMetrics(List<ActiveAction> instantsToArchive) {
+    long completedCount = instantsToArchive.stream()
+        .flatMap(action -> action.getCompletedInstants().stream())
+        .count();
+    metrics.put(ArchivalMetrics.ARCHIVAL_NUM_ALL_COMMITS, completedCount);
+    long writeCommitCount = instantsToArchive.stream()
+        .flatMap(action -> action.getCompletedInstants().stream())
+        .filter(instant -> CollectionUtils.createSet(HoodieTimeline.COMMIT_ACTION, HoodieTimeline.REPLACE_COMMIT_ACTION)
+            .contains(instant.getAction()))
+        .count();
+    metrics.put(ArchivalMetrics.ARCHIVAL_NUM_WRITE_COMMITS, writeCommitCount);
   }
 
   private List<HoodieInstant> getCleanAndRollbackInstantsToArchive(HoodieInstant latestCommitInstantToArchive) {
