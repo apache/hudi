@@ -61,7 +61,7 @@ public class TestHoodieStaticSplitEnumerator {
   public void setUp() {
     context = new MockSplitEnumeratorContext();
     splitProvider = new DefaultHoodieSplitProvider(new HoodieSplitNumberAssigner(2));
-    enumerator = new HoodieStaticSplitEnumerator(context, splitProvider);
+    enumerator = new HoodieStaticSplitEnumerator("test-table", context, splitProvider);
 
     split1 = createTestSplit(1, "file1");
     split2 = createTestSplit(2, "file2");

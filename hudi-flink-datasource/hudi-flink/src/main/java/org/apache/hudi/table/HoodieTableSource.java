@@ -260,6 +260,7 @@ public class HoodieTableSource extends FileIndexReader implements
       TypeInformation<RowData> typeInfo) {
     if (conf.get(FlinkOptions.READ_AS_STREAMING)) {
       StreamReadMonitoringFunction monitoringFunction = new StreamReadMonitoringFunction(
+              metaClient == null ? "" : metaClient.getTableConfig().getTableName(),
           conf, FilePathUtils.toFlinkPath(path), tableRowType, maxCompactionMemoryInBytes, partitionPruner);
       InputFormat<RowData, ?> inputFormat = getInputFormat(true);
       OneInputStreamOperatorFactory<MergeOnReadInputSplit, RowData> factory = StreamReadOperator.factory((MergeOnReadInputFormat) inputFormat);

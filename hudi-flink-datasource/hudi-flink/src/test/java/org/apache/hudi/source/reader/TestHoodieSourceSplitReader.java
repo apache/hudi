@@ -18,13 +18,14 @@
 
 package org.apache.hudi.source.reader;
 
+import org.apache.flink.api.connector.source.SourceReaderContext;
+import org.apache.flink.metrics.groups.UnregisteredMetricsGroup;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.source.reader.function.SplitReaderFunction;
 import org.apache.hudi.source.split.HoodieSourceSplit;
 
-import org.apache.flink.api.connector.source.SourceReaderContext;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.connector.base.source.reader.RecordsWithSplitIds;
 import org.apache.flink.connector.base.source.reader.splitreader.SplitsAddition;
@@ -45,27 +46,26 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.doReturn;
 
 /**
  * Test cases for {@link HoodieSourceSplitReader}.
  */
 public class TestHoodieSourceSplitReader {
-
-  private SourceReaderContext mockContext;
-  private int subtaskIndex = 0;
+  private static final String TABLE_NAME = "test_table";
+  private SourceReaderContext readerContext;
 
   @BeforeEach
   public void setUp() {
-    mockContext = Mockito.mock(SourceReaderContext.class);
-    when(mockContext.getIndexOfSubtask()).thenReturn(subtaskIndex);
+    readerContext = Mockito.mock(SourceReaderContext.class);
+    doReturn(UnregisteredMetricsGroup.createSourceReaderMetricGroup()).when(readerContext).metricGroup();
   }
 
   @Test
   public void testFetchWithNoSplits() throws IOException {
     TestSplitReaderFunction readerFunction = new TestSplitReaderFunction();
     HoodieSourceSplitReader<String> reader =
-        new HoodieSourceSplitReader<>(mockContext, readerFunction, null);
+        new HoodieSourceSplitReader<>(TABLE_NAME, readerContext, readerFunction, null);
 
     RecordsWithSplitIds<HoodieRecordWithPosition<String>> result = reader.fetch();
 
@@ -79,7 +79,7 @@ public class TestHoodieSourceSplitReader {
     TestSplitReaderFunction readerFunction = new TestSplitReaderFunction(testData);
 
     HoodieSourceSplitReader<String> reader =
-        new HoodieSourceSplitReader<>(mockContext, readerFunction, null);
+        new HoodieSourceSplitReader<>(TABLE_NAME, readerContext, readerFunction, null);
 
     HoodieSourceSplit split = createTestSplit(1, "file1");
     SplitsAddition<HoodieSourceSplit> splitsChange = new SplitsAddition<>(Collections.singletonList(split));
@@ -95,7 +95,7 @@ public class TestHoodieSourceSplitReader {
   public void testClose() throws Exception {
     TestSplitReaderFunction readerFunction = new TestSplitReaderFunction();
     HoodieSourceSplitReader<String> reader =
-        new HoodieSourceSplitReader<>(mockContext, readerFunction, null);
+        new HoodieSourceSplitReader<>(TABLE_NAME, readerContext, readerFunction, null);
 
     HoodieSourceSplit split = createTestSplit(1, "file1");
     reader.handleSplitsChanges(new SplitsAddition<>(Collections.singletonList(split)));
@@ -114,7 +114,7 @@ public class TestHoodieSourceSplitReader {
   public void testWakeUp() {
     TestSplitReaderFunction readerFunction = new TestSplitReaderFunction();
     HoodieSourceSplitReader<String> reader =
-        new HoodieSourceSplitReader<>(mockContext, readerFunction, null);
+        new HoodieSourceSplitReader<>(TABLE_NAME, readerContext, readerFunction, null);
 
     // wakeUp is a no-op, should not throw any exception
     reader.wakeUp();
@@ -124,7 +124,7 @@ public class TestHoodieSourceSplitReader {
   public void testPauseOrResumeSplits() {
     TestSplitReaderFunction readerFunction = new TestSplitReaderFunction();
     HoodieSourceSplitReader<String> reader =
-        new HoodieSourceSplitReader<>(mockContext, readerFunction, null);
+        new HoodieSourceSplitReader<>(TABLE_NAME, readerContext, readerFunction, null);
 
     HoodieSourceSplit split1 = createTestSplit(1, "file1");
     HoodieSourceSplit split2 = createTestSplit(2, "file2");
@@ -142,7 +142,7 @@ public class TestHoodieSourceSplitReader {
     TestSplitReaderFunction readerFunction = new TestSplitReaderFunction(testData);
 
     HoodieSourceSplitReader<String> reader =
-        new HoodieSourceSplitReader<>(mockContext, readerFunction, null);
+        new HoodieSourceSplitReader<>(TABLE_NAME, readerContext, readerFunction, null);
 
     HoodieSourceSplit split = createTestSplit(1, "file1");
     reader.handleSplitsChanges(new SplitsAddition<>(Collections.singletonList(split)));
@@ -157,7 +157,7 @@ public class TestHoodieSourceSplitReader {
   public void testReaderFunctionClosedOnReaderClose() throws Exception {
     TestSplitReaderFunction readerFunction = new TestSplitReaderFunction();
     HoodieSourceSplitReader<String> reader =
-        new HoodieSourceSplitReader<>(mockContext, readerFunction, null);
+        new HoodieSourceSplitReader<>(TABLE_NAME, readerContext, readerFunction, null);
 
     reader.close();
 
@@ -168,7 +168,7 @@ public class TestHoodieSourceSplitReader {
   public void testFetchEmptyResultWhenNoSplitsAdded() throws IOException {
     TestSplitReaderFunction readerFunction = new TestSplitReaderFunction();
     HoodieSourceSplitReader<String> reader =
-        new HoodieSourceSplitReader<>(mockContext, readerFunction, null);
+        new HoodieSourceSplitReader<>(TABLE_NAME, readerContext, readerFunction, null);
 
     RecordsWithSplitIds<HoodieRecordWithPosition<String>> result = reader.fetch();
 
@@ -187,7 +187,7 @@ public class TestHoodieSourceSplitReader {
 
     TestSplitReaderFunction readerFunction = new TestSplitReaderFunction(testData);
     HoodieSourceSplitReader<String> reader =
-        new HoodieSourceSplitReader<>(mockContext, readerFunction, null);
+        new HoodieSourceSplitReader<>(TABLE_NAME, readerContext, readerFunction, null);
 
     HoodieSourceSplit split = createTestSplit(1, "file1");
     reader.handleSplitsChanges(new SplitsAddition<>(Collections.singletonList(split)));
@@ -234,7 +234,7 @@ public class TestHoodieSourceSplitReader {
         new TestSplitReaderFunctionWithBatchSize(testData, 3);
 
     HoodieSourceSplitReader<String> reader =
-        new HoodieSourceSplitReader<>(mockContext, readerFunction, null);
+        new HoodieSourceSplitReader<>(TABLE_NAME, readerContext, readerFunction, null);
 
     HoodieSourceSplit split = createTestSplit(1, "file1");
     reader.handleSplitsChanges(new SplitsAddition<>(Collections.singletonList(split)));
@@ -273,7 +273,7 @@ public class TestHoodieSourceSplitReader {
     TestSplitReaderFunction readerFunction = new TestSplitReaderFunction(testData);
 
     HoodieSourceSplitReader<String> reader =
-        new HoodieSourceSplitReader<>(mockContext, readerFunction, null);
+        new HoodieSourceSplitReader<>(TABLE_NAME, readerContext, readerFunction, null);
 
     HoodieSourceSplit split = createTestSplit(1, "file1");
     reader.handleSplitsChanges(new SplitsAddition<>(Collections.singletonList(split)));
@@ -309,7 +309,7 @@ public class TestHoodieSourceSplitReader {
         new TestSplitReaderFunctionWithBatchSize(testData, 10);
 
     HoodieSourceSplitReader<String> reader =
-        new HoodieSourceSplitReader<>(mockContext, readerFunction, null);
+        new HoodieSourceSplitReader<>(TABLE_NAME, readerContext, readerFunction, null);
 
     HoodieSourceSplit split = createTestSplit(1, "file1");
     reader.handleSplitsChanges(new SplitsAddition<>(Collections.singletonList(split)));
