@@ -21,6 +21,7 @@ package org.apache.hudi.client.transaction;
 
 import com.codahale.metrics.Counter;
 import com.codahale.metrics.MetricRegistry;
+import com.codahale.metrics.Timer;
 import org.apache.hudi.client.transaction.lock.metrics.HoodieLockMetrics;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.config.metrics.HoodieMetricsConfig;
@@ -34,6 +35,7 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.mockito.Mockito.mock;
 
 public class TestHoodieLockMetrics {
@@ -357,5 +359,35 @@ public class TestHoodieLockMetrics {
         "updateLockExpirationDeadlineMetric should not throw when locking metrics disabled");
     assertDoesNotThrow(lockMetrics::updateLockDanglingMetric,
         "updateLockDanglingMetric should not throw when locking metrics disabled");
+  }
+
+  @Test
+  public void testCreateTimerForMetricsDoesNotShareTimerInstances() {
+    // Test that createTimerForMetrics creates separate Timer instances for different metrics
+    HoodieStorage storage = mock(HoodieStorage.class);
+    HoodieMetricsConfig metricsConfig = HoodieMetricsConfig.newBuilder().withPath("/test")
+        .withReporterType(MetricsReporterType.INMEMORY.name()).withLockingMetrics(true).build();
+    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder()
+        .forTable("testTable").withPath("/test/path")
+        .withMetricsConfig(metricsConfig)
+        .build();
+
+    // Create the lock metrics instance which calls createTimerForMetrics twice internally
+    new HoodieLockMetrics(writeConfig, storage);
+    Metrics metrics = Metrics.getInstance(metricsConfig, storage);
+    MetricRegistry registry = metrics.getRegistry();
+
+    // Get the two timer metrics created in the constructor
+    String lockDurationMetricName = writeConfig.getMetricReporterMetricsNamePrefix() + "." + HoodieLockMetrics.LOCK_ACQUIRE_DURATION_TIMER_NAME;
+    String lockRequestLatencyMetricName = writeConfig.getMetricReporterMetricsNamePrefix() + "." + HoodieLockMetrics.LOCK_REQUEST_LATENCY_TIMER_NAME;
+    Timer lockDurationTimer = registry.getTimers().get(lockDurationMetricName);
+    Timer lockRequestLatencyTimer = registry.getTimers().get(lockRequestLatencyMetricName);
+
+    // Verify both timers exist
+    assertNotNull(lockDurationTimer, "Lock duration timer should be registered");
+    assertNotNull(lockRequestLatencyTimer, "Lock request latency timer should be registered");
+    // Verify they are different instances (this would fail with the bug)
+    assertNotSame(lockDurationTimer, lockRequestLatencyTimer,
+        "Different timer metrics should not share the same Timer instance");
   }
 }
