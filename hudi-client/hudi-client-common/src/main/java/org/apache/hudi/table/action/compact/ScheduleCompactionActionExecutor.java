@@ -164,19 +164,14 @@ public class ScheduleCompactionActionExecutor<T, I, K, O> extends BaseTableServi
     boolean compactable;
     // get deltaCommitsSinceLastCompaction and lastCompactionTs
     Option<Pair<Integer, String>> latestDeltaCommitInfoOption = getLatestDeltaCommitInfo();
-    log.info("DEBUG needCompact: latestDeltaCommitInfoOption.isPresent={}", latestDeltaCommitInfoOption.isPresent());
     if (!latestDeltaCommitInfoOption.isPresent()) {
       return false;
     }
     Pair<Integer, String> latestDeltaCommitInfo = latestDeltaCommitInfoOption.get();
-    log.info("DEBUG needCompact: deltaCommitCount={}, lastCompactionTime={}, strategy={}", 
-        latestDeltaCommitInfo.getLeft(), latestDeltaCommitInfo.getRight(), compactionTriggerStrategy);
     if (WriteOperationType.LOG_COMPACT.equals(operationType)) {
       return true;
     }
     int inlineCompactDeltaCommitMax = config.getInlineCompactDeltaCommitMax();
-    log.info("DEBUG needCompact: inlineCompactDeltaCommitMax={}, checking {} <= {}", 
-        inlineCompactDeltaCommitMax, inlineCompactDeltaCommitMax, latestDeltaCommitInfo.getLeft());
     int inlineCompactDeltaSecondsMax = config.getInlineCompactDeltaSecondsMax();
     switch (compactionTriggerStrategy) {
       case NUM_COMMITS:
