@@ -1531,13 +1531,19 @@ public class HoodieSchema implements Serializable {
 
     // Field names
     public static final String DIMENSION_FIELD = "dimension";
+    public static final String ELEMENT_TYPE_FIELD = "elementType";
     public static final String STORAGE_BACKING_FIELD = "storageBacking";
     public static final String VALUES_FIXED_FIELD = "valuesFixed";
+
+    // Element types
+    public static final String ELEMENT_TYPE_FLOAT = "FLOAT";
+    public static final String ELEMENT_TYPE_DOUBLE = "DOUBLE";
 
     // Storage backing types
     public static final String STORAGE_BACKING_FIXED_BYTES = "FIXED_BYTES";
 
     private final int dimension;
+    private final String elementType;
     private final String storageBacking;
 
     /**
@@ -1550,6 +1556,7 @@ public class HoodieSchema implements Serializable {
       super(avroSchema);
       validateVectorSchema(avroSchema);
       this.dimension = extractDimension(avroSchema);
+      this.elementType = extractElementType(avroSchema);
       this.storageBacking = extractStorageBacking(avroSchema);
     }
 
@@ -1577,6 +1584,9 @@ public class HoodieSchema implements Serializable {
       // Create dimension field (required INT)
       Schema dimensionSchema = Schema.create(Schema.Type.INT);
 
+      // Create elementType field (required STRING)
+      Schema elementTypeSchema = Schema.create(Schema.Type.STRING);
+
       // Create storageBacking field (required STRING)
       Schema storageBackingSchema = Schema.create(Schema.Type.STRING);
 
@@ -1584,10 +1594,11 @@ public class HoodieSchema implements Serializable {
       Schema bytesSchema = Schema.create(Schema.Type.BYTES);
       Schema nullableBytesSchema = AvroSchemaUtils.createNullableSchema(bytesSchema);
 
-      // Create RECORD wrapper with three fields
+      // Create RECORD wrapper with four fields
       Schema vectorSchema = Schema.createRecord(name, null, null, false);
       List<Schema.Field> fields = Arrays.asList(
         new Schema.Field(DIMENSION_FIELD, dimensionSchema, "Vector dimension", dimension),
+        new Schema.Field(ELEMENT_TYPE_FIELD, elementTypeSchema, "Element type (FLOAT or DOUBLE)", ELEMENT_TYPE_FLOAT),
         new Schema.Field(STORAGE_BACKING_FIELD, storageBackingSchema, "Storage backing type", STORAGE_BACKING_FIXED_BYTES),
         new Schema.Field(VALUES_FIXED_FIELD, nullableBytesSchema, "Packed vector bytes (FIXED_BYTES storage)", Schema.Field.NULL_DEFAULT_VALUE)
       );
@@ -1615,6 +1626,13 @@ public class HoodieSchema implements Serializable {
           () -> "Vector schema missing '" + DIMENSION_FIELD + "' field");
       ValidationUtils.checkArgument(dimensionField.schema().getType() == Schema.Type.INT,
           () -> "Vector dimension field must be INT, got: " + dimensionField.schema().getType());
+
+      // Validate elementType field exists and is STRING
+      Schema.Field elementTypeField = avroSchema.getField(ELEMENT_TYPE_FIELD);
+      ValidationUtils.checkArgument(elementTypeField != null,
+          () -> "Vector schema missing '" + ELEMENT_TYPE_FIELD + "' field");
+      ValidationUtils.checkArgument(elementTypeField.schema().getType() == Schema.Type.STRING,
+          () -> "Vector elementType field must be STRING, got: " + elementTypeField.schema().getType());
 
       // Validate storageBacking field exists and is STRING
       Schema.Field storageBackingField = avroSchema.getField(STORAGE_BACKING_FIELD);
@@ -1651,6 +1669,15 @@ public class HoodieSchema implements Serializable {
     }
 
     /**
+     * Extracts element type from field default value (defaults to FLOAT).
+     */
+    private String extractElementType(Schema avroSchema) {
+      Schema.Field elementTypeField = avroSchema.getField(ELEMENT_TYPE_FIELD);
+      Object defaultValue = elementTypeField.defaultVal();
+      return defaultValue != null ? defaultValue.toString() : ELEMENT_TYPE_FLOAT;
+    }
+
+    /**
      * Extracts storage backing from field default value (defaults to FIXED_BYTES).
      */
     private String extractStorageBacking(Schema avroSchema) {
@@ -1666,6 +1693,15 @@ public class HoodieSchema implements Serializable {
      */
     public int getDimension() {
       return dimension;
+    }
+
+    /**
+     * Returns the element type of this vector.
+     *
+     * @return element type string (e.g., "FLOAT" or "DOUBLE")
+     */
+    public String getVectorElementType() {
+      return elementType;
     }
 
     /**
@@ -1685,6 +1721,16 @@ public class HoodieSchema implements Serializable {
     public HoodieSchema getDimensionField() {
       Schema.Field dimensionField = getAvroSchema().getField(DIMENSION_FIELD);
       return HoodieSchema.fromAvroSchema(dimensionField.schema());
+    }
+
+    /**
+     * Returns the elementType field schema (STRING).
+     *
+     * @return HoodieSchema for the elementType field
+     */
+    public HoodieSchema getElementTypeField() {
+      Schema.Field elementTypeField = getAvroSchema().getField(ELEMENT_TYPE_FIELD);
+      return HoodieSchema.fromAvroSchema(elementTypeField.schema());
     }
 
     /**
@@ -1721,12 +1767,13 @@ public class HoodieSchema implements Serializable {
       }
       Vector vector = (Vector) o;
       return dimension == vector.dimension
+          && Objects.equals(elementType, vector.elementType)
           && Objects.equals(storageBacking, vector.storageBacking);
     }
 
     @Override
     public int hashCode() {
-      return Objects.hash(super.hashCode(), dimension, storageBacking);
+      return Objects.hash(super.hashCode(), dimension, elementType, storageBacking);
     }
   }
 
