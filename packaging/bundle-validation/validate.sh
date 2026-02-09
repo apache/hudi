@@ -38,6 +38,13 @@ ln -sf $JARS_DIR/hudi-utilities-slim*.jar $JARS_DIR/utilities-slim.jar
 ln -sf $JARS_DIR/hudi-kafka-connect-bundle*.jar $JARS_DIR/kafka-connect.jar
 ln -sf $JARS_DIR/hudi-metaserver-server-bundle*.jar $JARS_DIR/metaserver.jar
 
+# Resolve spark bundle jar to actual file (symlink may be broken if no hudi-spark*.jar was mounted)
+SPARK_JAR=$(ls $JARS_DIR/hudi-spark*.jar 2>/dev/null | head -1)
+if [ -z "$SPARK_JAR" ] || [ ! -f "$SPARK_JAR" ]; then
+  echo "::error::validate.sh Hudi Spark bundle jar not found in $JARS_DIR (no hudi-spark*.jar)"
+  exit 1
+fi
+
 ##
 # Function to change Java runtime version by changing JAVA_HOME
 ##
@@ -76,15 +83,17 @@ test_spark_hadoop_mr_bundles () {
     local HIVE_PID=$!
     change_java_runtime_version
     echo "::warning::validate.sh Writing sample data via Spark DataSource and run Hive Sync..."
-    $SPARK_HOME/bin/spark-shell --jars $JARS_DIR/spark.jar < $WORKDIR/spark_hadoop_mr/write.scala
+    # Use resolved SPARK_JAR and driver classpath so HoodieCatalog (spark-defaults.conf for Spark 3.2/3.3) is visible
+    $SPARK_HOME/bin/spark-shell --jars "$SPARK_JAR" --conf "spark.driver.extraClassPath=$SPARK_JAR" < $WORKDIR/spark_hadoop_mr/write.scala
 
     echo "::warning::validate.sh Query and validate the results using Spark SQL"
     # save Spark SQL query results
-    $SPARK_HOME/bin/spark-shell --jars $JARS_DIR/spark.jar \
+    $SPARK_HOME/bin/spark-shell --jars "$SPARK_JAR" --conf "spark.driver.extraClassPath=$SPARK_JAR" \
       -i <(echo 'spark.sql("select * from trips").coalesce(1).write.csv("/tmp/spark-bundle/sparksql/trips/results"); System.exit(0)')
-    numRecords=$(cat /tmp/spark-bundle/sparksql/trips/results/*.csv | wc -l)
+    numRecords=$(cat /tmp/spark-bundle/sparksql/trips/results/*.csv 2>/dev/null | wc -l)
+    numRecords=${numRecords:-0}
     if [ "$numRecords" -ne 10 ]; then
-        echo "::error::validate.sh Spark SQL validation failed."
+        echo "::error::validate.sh Spark SQL validation failed (expected 10 records, got $numRecords)."
         exit 1
     fi
     echo "::warning::validate.sh Query and validate the results using HiveQL"
@@ -246,13 +255,14 @@ test_metaserver_bundle () {
 
     change_java_runtime_version
     echo "::warning::validate.sh Writing sample data via Spark DataSource."
-    $SPARK_HOME/bin/spark-shell --jars $JARS_DIR/spark.jar < $WORKDIR/service/write.scala
+    $SPARK_HOME/bin/spark-shell --jars "$SPARK_JAR" < $WORKDIR/service/write.scala
     ls /tmp/hudi-bundles/tests/trips
 
     echo "::warning::validate.sh Query and validate the results using Spark DataSource"
     # save Spark DataSource query results
-    $SPARK_HOME/bin/spark-shell --jars $JARS_DIR/spark.jar  < $WORKDIR/service/read.scala
-    numRecords=$(cat /tmp/metaserver-bundle/sparkdatasource/trips/results/*.csv | wc -l)
+    $SPARK_HOME/bin/spark-shell --jars "$SPARK_JAR" < $WORKDIR/service/read.scala
+    numRecords=$(cat /tmp/metaserver-bundle/sparkdatasource/trips/results/*.csv 2>/dev/null | wc -l)
+    numRecords=${numRecords:-0}
     echo $numRecords
     use_default_java_runtime
     if [ "$numRecords" -ne 10 ]; then
@@ -289,7 +299,7 @@ else
 fi
 
 echo "::warning::validate.sh validating utilities slim bundle"
-test_utilities_bundle $JARS_DIR/utilities-slim.jar $JARS_DIR/spark.jar
+test_utilities_bundle $JARS_DIR/utilities-slim.jar $SPARK_JAR
 if [ "$?" -ne 0 ]; then
     exit 1
 fi
