@@ -202,7 +202,7 @@ public class MarkerDirState implements Serializable {
    */
   public List<MarkerCreationFuture> getPendingMarkerCreationRequests(boolean shouldClear) {
     if (inflightRequestMap.isEmpty()) {
-      return new ArrayList<>();
+      return Collections.emptyList();
     }
 
     List<MarkerCreationFuture> pendingFutures = new ArrayList<>(inflightRequestMap.values());
