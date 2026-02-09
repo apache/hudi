@@ -407,7 +407,7 @@ public class AvroSchemaUtils {
 
   public static Schema getRepairedSchema(Schema writerSchema, Schema readerSchema) {
     if (AVRO_SCHEMA_REPAIR_CLASS == null) {
-      return writerSchema;
+      return readerSchema;
     }
     try {
       Method repairMethod =

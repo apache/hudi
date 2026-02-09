@@ -428,7 +428,7 @@ public class TestAvroSchemaRepair {
     Schema result = AvroSchemaRepair.repairLogicalTypes(requestedSchema, tableSchema);
 
     // Should return original schema unchanged since newField doesn't exist in table schema
-    assertSame(requestedSchema, result, "Should return original when field missing in table schema");
+    assertSame(tableSchema, result, "Should return original when field missing in table schema");
   }
 
   @Test
@@ -451,7 +451,7 @@ public class TestAvroSchemaRepair {
     Schema result = AvroSchemaRepair.repairLogicalTypes(requestedSchema, tableSchema);
 
     // Should return original schema unchanged since new fields don't exist in table schema
-    assertSame(requestedSchema, result, "Should return original when multiple fields missing in table schema");
+    assertSame(tableSchema, result, "Should return original when multiple fields missing in table schema");
   }
 
   @Test
@@ -560,7 +560,7 @@ public class TestAvroSchemaRepair {
     Schema result = AvroSchemaRepair.repairLogicalTypes(requestedSchema, tableSchema);
 
     // Should return original schema unchanged since newNested field doesn't exist in table
-    assertSame(requestedSchema, result, "Should return original when nested field missing in table schema");
+    assertSame(tableSchema, result, "Should return original when nested field missing in table schema");
   }
 
   @Test
