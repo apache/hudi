@@ -668,6 +668,7 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
     Map<HoodieFileGroupId, List<FileSlice>> retainedFileSlicesByFileGroupId = retainedFileSlices.stream().collect(Collectors.groupingBy(FileSlice::getFileGroupId));
     Map<HoodieFileGroupId, List<FileSlice>> removedFileSlicesByFileGroupId = removedFileSlices.stream().collect(Collectors.groupingBy(FileSlice::getFileGroupId));
 
+    // Managed files belong to a given file group so process the removed file slices by file group
     return removedFileSlicesByFileGroupId.keySet().stream().flatMap(fileGroupId -> {
       HoodieReaderContext<R> readerContext = ((ReaderContextFactory<R>) table.getContext().getReaderContextFactory(metaClient)).getContext();
       RecordContext<R> recordContext = readerContext.getRecordContext();
@@ -708,8 +709,7 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
       });
 
       // The remaining blob file paths in managedBlobFilePaths are the ones that can be removed.
-      return managedBlobFilePaths.stream()
-          .map(path -> new CleanFileInfo(path, false))
+      return managedBlobFilePaths.stream().map(path -> new CleanFileInfo(path, false));
     }).collect(Collectors.toList());
   }
 

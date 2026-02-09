@@ -167,11 +167,11 @@ public class TestBlobCleaner extends HoodieClientTestBase {
       } else if (i % 3 == 1) {
         // Managed external reference - should be cleaned when record is removed
         String managedPath = basePath + "/.hoodie/blobs/" + commitTime + "_" + i + ".bin";
-        blobValue = createManagedBlob(schema, managedPath, 0L, 1024L);
+        blobValue = createBlob(schema, managedPath, 0L, 1024L, true);
       } else {
         // Unmanaged external reference - should NEVER be cleaned
         String unmanagedPath = basePath + "/.hoodie/blobs/" + commitTime + "_" + i +  ".bin";
-        blobValue = createUnmanagedBlob(schema, unmanagedPath, 0L, 2048L);
+        blobValue = createBlob(schema, unmanagedPath, 0L, 2048L, false);
       }
 
       record.put("file_data", blobValue);
@@ -194,10 +194,10 @@ public class TestBlobCleaner extends HoodieClientTestBase {
   }
 
   /**
-   * Create a managed blob (Hudi-managed external file reference).
+   * Create a blob
    */
-  private GenericRecord createManagedBlob(
-      HoodieSchema recordSchema, String path, Long offset, Long length) {
+  private GenericRecord createBlob(
+      HoodieSchema recordSchema, String path, Long offset, Long length, boolean managed) {
     HoodieSchema blobSchema = recordSchema.getField("file_data").get().getNonNullSchema();
     HoodieSchema refSchema = blobSchema.getField("reference").get().getNonNullSchema();
 
@@ -205,28 +205,7 @@ public class TestBlobCleaner extends HoodieClientTestBase {
     reference.put("external_path", path);
     reference.put("offset", offset);
     reference.put("length", length);
-    reference.put("managed", true);  // KEY: managed = true
-
-    GenericRecord blob = new GenericData.Record(blobSchema.toAvroSchema());
-    blob.put("storage_type", "out_of_line");
-    blob.put("data", null);
-    blob.put("reference", reference);
-    return blob;
-  }
-
-  /**
-   * Create an unmanaged blob (external file reference not managed by Hudi).
-   */
-  private GenericRecord createUnmanagedBlob(
-      HoodieSchema recordSchema, String path, Long offset, Long length) {
-    HoodieSchema blobSchema = recordSchema.getField("file_data").get().getNonNullSchema();
-    HoodieSchema refSchema = blobSchema.getField("reference").get().getNonNullSchema();
-
-    GenericRecord reference = new GenericData.Record(refSchema.toAvroSchema());
-    reference.put("external_path", path);
-    reference.put("offset", offset);
-    reference.put("length", length);
-    reference.put("managed", false);  // KEY: managed = false
+    reference.put("managed", managed);
 
     GenericRecord blob = new GenericData.Record(blobSchema.toAvroSchema());
     blob.put("storage_type", "out_of_line");
@@ -291,11 +270,11 @@ public class TestBlobCleaner extends HoodieClientTestBase {
     // Check commit 1 managed blobs - should be DELETED (only i % 3 == 1)
     for (int i = 0; i < 10; i++) {
       if (i % 3 == 1) {
-        StoragePath blobPath = new StoragePath(blobDir, commit1 + "_" + i + ".bin");
+        StoragePath blobPath = getStoragePathForBlob(commit1, blobDir, i);
         assertFalse(storage.exists(blobPath), "Managed blob from old commit should be deleted: " + blobPath);
       } else if (i % 3 == 2) {
         // Unmanaged blobs should never be deleted
-        StoragePath blobPath = new StoragePath(blobDir, commit1 + "_" + i + ".bin");
+        StoragePath blobPath = getStoragePathForBlob(commit1, blobDir, i);
         assertTrue(storage.exists(blobPath), "Unmanaged blob should never be deleted: " + blobPath);
       }
     }
@@ -303,12 +282,12 @@ public class TestBlobCleaner extends HoodieClientTestBase {
     // Check commit 2 managed blobs - should be DELETED (only i % 3 == 1)
     for (int i = 0; i < 15; i++) {
       if (i % 3 == 1) {
-        StoragePath blobPath = new StoragePath(blobDir, commit2 + "_" + i + ".bin");
+        StoragePath blobPath = getStoragePathForBlob(commit2, blobDir, i);
         // only records 0-12 are updated
         assertEquals(i >= 12, storage.exists(blobPath), "Managed and updated blob from commit2 should be removed: " + blobPath);
       } else if (i % 3 == 2) {
         // Unmanaged blobs should never be deleted
-        StoragePath blobPath = new StoragePath(blobDir, commit2 + "_" + i + ".bin");
+        StoragePath blobPath = getStoragePathForBlob(commit2, blobDir, i);
         assertTrue(storage.exists(blobPath), "Unmanaged blob should never be deleted: " + blobPath);
       }
     }
@@ -316,11 +295,11 @@ public class TestBlobCleaner extends HoodieClientTestBase {
     // Check commit 3 managed blobs - should be RETAINED (only i % 3 == 1)
     for (int i = 0; i < 12; i++) {
       if (i % 3 == 1) {
-        StoragePath blobPath = new StoragePath(blobDir, commit3 + "_" + i + ".bin");
+        StoragePath blobPath = getStoragePathForBlob(commit3, blobDir, i);
         assertTrue(storage.exists(blobPath), "Managed blob from latest commit should be retained: " + blobPath);
       } else if (i % 3 == 2) {
         // Unmanaged blobs should never be deleted
-        StoragePath blobPath = new StoragePath(blobDir, commit3 + "_" + i + ".bin");
+        StoragePath blobPath = getStoragePathForBlob(commit3, blobDir, i);
         assertTrue(storage.exists(blobPath), "Unmanaged blob should never be deleted: " + blobPath);
       }
     }
@@ -328,13 +307,17 @@ public class TestBlobCleaner extends HoodieClientTestBase {
     // Check commit 4 managed blobs - should be RETAINED (only i % 3 == 1)
     for (int i = 0; i < 8; i++) {
       if (i % 3 == 1) {
-        StoragePath blobPath = new StoragePath(blobDir, commit4 + "_" + i + ".bin");
+        StoragePath blobPath = getStoragePathForBlob(commit4, blobDir, i);
         assertTrue(storage.exists(blobPath), "Managed blob from latest commit should be retained: " + blobPath);
       } else if (i % 3 == 2) {
         // Unmanaged blobs should never be deleted
-        StoragePath blobPath = new StoragePath(blobDir, commit4 + "_" + i + ".bin");
+        StoragePath blobPath = getStoragePathForBlob(commit4, blobDir, i);
         assertTrue(storage.exists(blobPath), "Unmanaged blob should never be deleted: " + blobPath);
       }
     }
+  }
+
+  private static StoragePath getStoragePathForBlob(String commit2, StoragePath blobDir, int i) {
+    return new StoragePath(blobDir, commit2 + "_" + i + ".bin");
   }
 }
