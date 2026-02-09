@@ -2913,7 +2913,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
       // create pending instant in data table
       testTable.addRequestedCommit(HoodieActiveTimeline.createNewInstantTime(1));
       // continue writing
-      for (int i = 0; i <= maxNumDeltaCommits; i++) {
+      for (int i = 0; i < maxNumDeltaCommits; i++) {
         doWriteOperation(testTable, HoodieActiveTimeline.createNewInstantTime(1));
       }
       Throwable t = assertThrows(HoodieMetadataException.class, () -> doWriteOperation(testTable, HoodieActiveTimeline.createNewInstantTime(1)));
