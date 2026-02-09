@@ -1742,8 +1742,8 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getInt(HoodieCleanConfig.CLEANER_HOURS_RETAINED);
   }
 
-  public boolean useLocalEngineForMetadataAndNonParitionedDatasets() {
-    return getBoolean(HoodieCleanConfig.USE_LOCAL_ENGINE_FOR_METADATA_NON_PARTITIONED_DATASETS);
+  public boolean isCleanOptimizationWithLocalEngineEnabled() {
+    return getBoolean(HoodieCleanConfig.CLEAN_OPTIMIZE_USING_LOCAL_ENGINE_CONTEXT);
   }
 
   public int getMaxCommitsToKeep() {

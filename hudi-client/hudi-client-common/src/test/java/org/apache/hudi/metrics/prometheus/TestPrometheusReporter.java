@@ -77,7 +77,7 @@ public class TestPrometheusReporter {
       try {
         metrics.shutdown();
       } catch (Exception e) {
-        log.debug("Exception during metrics shutdown: {}", e.getMessage());
+        log.error("Exception during metrics shutdown: {}", e.getMessage());
       }
     }
 
@@ -85,7 +85,7 @@ public class TestPrometheusReporter {
       try {
         reporter.stop();
       } catch (Exception e) {
-        log.debug("Exception during test cleanup: {}", e.getMessage());
+        log.error("Exception during test cleanup: {}", e.getMessage());
       }
     }
     reportersToCleanup.clear();

@@ -201,16 +201,16 @@ public class HoodieCleanConfig extends HoodieConfig {
           + "table receives updates/deletes. Another reason to turn this on, would be to ensure data residing in bootstrap "
           + "base files are also physically deleted, to comply with data privacy enforcement processes.");
 
-  public static final ConfigProperty<Boolean> USE_LOCAL_ENGINE_FOR_METADATA_NON_PARTITIONED_DATASETS = ConfigProperty
-      .key("hoodie.clean.planner.use.local.engine.on.metadata.and.non-partitioned.tables")
+  public static final ConfigProperty<Boolean> CLEAN_OPTIMIZE_USING_LOCAL_ENGINE_CONTEXT = ConfigProperty
+      .key("hoodie.clean.optimize.using.local.engine.context")
       .defaultValue(true)
       .markAdvanced()
       .sinceVersion("1.2.0")
-      .withDocumentation("Some datasets have huge record_index partition, listing this partition is causing OOM errors on clean planner. "
-          + "So, if we increase executor memory it will increase for all the executors. So, by passing local engine context to clean "
-          + "planner, listing is done on the driver. In that case, if OOM error were come we can increase driver memory alone to "
-          + "handle the memory requirement. Once this config is enabled, both non-partitioned datasets and metadata table uses driver "
-          + "for scheduling the cleans.");
+      .withDocumentation("Optimizes clean planning by using local engine context (driver-only) for metadata tables and non-partitioned "
+          + "datasets. This allows handling OOM errors during clean planning by scaling only driver memory instead of all executor memory. "
+          + "Some datasets with large record_index partitions can cause OOM errors during file listing in clean planning. "
+          + "By using local engine context, file listing is performed on the driver, allowing targeted memory scaling. "
+          + "When enabled, both non-partitioned datasets and metadata tables use the driver for scheduling cleans.");
 
   /** @deprecated Use {@link #CLEANER_POLICY} and its methods instead */
   @Deprecated
@@ -372,10 +372,8 @@ public class HoodieCleanConfig extends HoodieConfig {
       return this;
     }
 
-    public HoodieCleanConfig.Builder useLocalEngineForMetadataAndPartitionedDatasets(
-            Boolean useLocalEngineForMetadataAndPartitionedDatasets) {
-      cleanConfig.setValue(USE_LOCAL_ENGINE_FOR_METADATA_NON_PARTITIONED_DATASETS,
-              String.valueOf(useLocalEngineForMetadataAndPartitionedDatasets));
+    public HoodieCleanConfig.Builder withCleanOptimizationWithLocalEngineEnabled(Boolean cleanOptimizationWithLocalEngineEnabled) {
+      cleanConfig.setValue(CLEAN_OPTIMIZE_USING_LOCAL_ENGINE_CONTEXT, String.valueOf(cleanOptimizationWithLocalEngineEnabled));
       return this;
     }
 

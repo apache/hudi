@@ -205,7 +205,7 @@ public class CleanPlanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I
     }
 
     HoodieEngineContext cleanerEngineContext;
-    if (config.useLocalEngineForMetadataAndNonParitionedDatasets()
+    if (config.isCleanOptimizationWithLocalEngineEnabled()
         && (HoodieTableMetadata.isMetadataTable(config.getBasePath())
             || !table.isPartitioned())) {
       cleanerEngineContext = new HoodieLocalEngineContext(context.getStorageConf());
