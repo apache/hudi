@@ -237,8 +237,11 @@ class TestHoodiePruneFileSourcePartitions extends HoodieClientTestBase with Scal
   }
 
   @ParameterizedTest
-  @CsvSource(value = Array("cow", "mor"))
-  def testMultiplePartitionFiltersPushDown(tableType: String): Unit = {
+  @CsvSource(value = Array(
+    "cow,6", "cow,9",
+    "mor,6", "mor,9"
+  ))
+  def testMultiplePartitionFiltersPushDown(tableType: String, tableVersion: String): Unit = {
     spark.sql(
       s"""
          |CREATE TABLE $tableName (
@@ -252,7 +255,8 @@ class TestHoodiePruneFileSourcePartitions extends HoodieClientTestBase with Scal
          |TBLPROPERTIES (
          |  type = '$tableType',
          |  primaryKey = 'id',
-         |  orderingFields = 'ts'
+         |  orderingFields = 'ts',
+         |  hoodie.write.table.version = '$tableVersion'
          |)
          |LOCATION '$basePath/$tableName'
          """.stripMargin)
