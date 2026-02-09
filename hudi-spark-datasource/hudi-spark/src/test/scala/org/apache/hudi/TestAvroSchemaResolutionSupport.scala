@@ -854,17 +854,8 @@ class TestAvroSchemaResolutionSupport extends HoodieClientTestBase with ScalaAss
     upsertData(df2, tempRecordPath, tableType.equals("COPY_ON_WRITE"))
 
     // after implicit type change, read the table with vectorized read enabled
-    val isCow = tableType.equals("COPY_ON_WRITE")
-    if (HoodieSparkUtils.gteqSpark3_3 && !HoodieSparkUtils.gteqSpark3_4 && isCow) {
-      assertThrows(classOf[SparkException]) {
-        withSQLConf("spark.sql.parquet.enableNestedColumnVectorizedReader" -> "true") {
-          readTable(tempRecordPath)
-        }
-      }
-    } else {
-      withSQLConf("spark.sql.parquet.enableNestedColumnVectorizedReader" -> "true") {
-        readTable(tempRecordPath)
-      }
+    withSQLConf("spark.sql.parquet.enableNestedColumnVectorizedReader" -> "true") {
+      readTable(tempRecordPath)
     }
 
     withSQLConf("spark.sql.parquet.enableNestedColumnVectorizedReader" -> "false") {
