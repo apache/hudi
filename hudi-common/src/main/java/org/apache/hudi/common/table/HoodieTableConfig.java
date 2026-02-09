@@ -336,14 +336,14 @@ public class HoodieTableConfig extends HoodieConfig {
       .withDocumentation("Key Generator type to determine key generator class");
 
   public static final ConfigProperty<String> PARTITION_VALUE_EXTRACTOR_CLASS = ConfigProperty
-      .key("hoodie.datasource.hive_sync.partition_extractor_class")
-      .defaultValue("org.apache.hudi.hive.MultiPartKeysValueExtractor")
+      .key("hoodie.table.hive_sync.partition_extractor_class")
+      .noDefaultValue()
       .withInferFunction(cfg -> {
         Option<String> partitionFieldsOpt = HoodieTableConfig.getPartitionFieldProp(cfg)
             .or(() -> Option.ofNullable(cfg.getString(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME)));
 
         if (!partitionFieldsOpt.isPresent()) {
-          return Option.empty();
+          return Option.of("org.apache.hudi.hive.NonPartitionedExtractor");
         }
         String partitionFields = partitionFieldsOpt.get();
         if (StringUtils.nonEmpty(partitionFields)) {
@@ -364,7 +364,7 @@ public class HoodieTableConfig extends HoodieConfig {
       })
       .markAdvanced()
       .withDocumentation("Class which implements PartitionValueExtractor to extract the partition values, "
-          + "default 'org.apache.hudi.hive.MultiPartKeysValueExtractor'.");
+          + "default is inferred based on partition configuration.");
 
   // TODO: this has to be UTC. why is it not the default?
   public static final ConfigProperty<HoodieTimelineTimeZone> TIMELINE_TIMEZONE = ConfigProperty
@@ -1240,7 +1240,7 @@ public class HoodieTableConfig extends HoodieConfig {
   }
 
   public String getPartitionValueExtractorClass() {
-    return getStringOrDefault(PARTITION_VALUE_EXTRACTOR_CLASS);
+    return getStringOrDefault(PARTITION_VALUE_EXTRACTOR_CLASS, "");
   }
 
   public HoodieTimelineTimeZone getTimelineTimezone() {

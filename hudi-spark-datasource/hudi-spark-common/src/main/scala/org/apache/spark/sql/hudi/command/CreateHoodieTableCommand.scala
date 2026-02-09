@@ -135,6 +135,7 @@ object CreateHoodieTableCommand {
       checkTableConfigEqual(originTableConfig, tableOptions, HoodieTableConfig.URL_ENCODE_PARTITIONING.key)
       checkTableConfigEqual(originTableConfig, tableOptions, HoodieTableConfig.HIVE_STYLE_PARTITIONING_ENABLE.key)
       checkTableConfigEqual(originTableConfig, tableOptions, HoodieTableConfig.SLASH_SEPARATED_DATE_PARTITIONING.key)
+      checkTableConfigEqual(originTableConfig, tableOptions, HoodieTableConfig.PARTITION_VALUE_EXTRACTOR_CLASS.key)
     }
   }
 

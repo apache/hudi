@@ -32,7 +32,7 @@ import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.sync.common.model.Partition;
 import org.apache.hudi.sync.common.model.PartitionEvent;
-import org.apache.hudi.hive.sync.PartitionValueExtractor;
+import org.apache.hudi.sync.common.model.PartitionValueExtractor;
 
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
