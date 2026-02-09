@@ -751,7 +751,7 @@ class HoodieSparkSqlWriterInternal {
           String.valueOf(HoodieTableConfig.PARTITION_METAFILE_USE_BASE_FORMAT.defaultValue())
         ))
         val tableFormat = hoodieConfig.getStringOrDefault(HoodieTableConfig.TABLE_FORMAT)
-
+        val partitionValueExtractorClassName = hoodieConfig.getStringOrDefault(HoodieSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS)
         HoodieTableMetaClient.newTableBuilder()
           .setTableType(HoodieTableType.valueOf(tableType))
           .setTableName(tableName)
@@ -771,8 +771,7 @@ class HoodieSparkSqlWriterInternal {
           .setCDCSupplementalLoggingMode(hoodieConfig.getStringOrDefault(HoodieTableConfig.CDC_SUPPLEMENTAL_LOGGING_MODE))
           .setPopulateMetaFields(populateMetaFields)
           .setKeyGeneratorClassProp(keyGenProp)
-          .setPartitionValueExtractorClass(hoodieConfig.getStringOrDefault(HoodieTableConfig.PARTITION_VALUE_EXTRACTOR_CLASS.key(),
-            HoodieTableConfig.PARTITION_VALUE_EXTRACTOR_CLASS.defaultValue()))
+          .setPartitionValueExtractorClass(partitionValueExtractorClassName)
           .set(timestampKeyGeneratorConfigs.asJava.asInstanceOf[java.util.Map[String, Object]])
           .setHiveStylePartitioningEnable(hoodieConfig.getBoolean(HIVE_STYLE_PARTITIONING))
           .setUrlEncodePartitioning(hoodieConfig.getBoolean(URL_ENCODE_PARTITIONING))
