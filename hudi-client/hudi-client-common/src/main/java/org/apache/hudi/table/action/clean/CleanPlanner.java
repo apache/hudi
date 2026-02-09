@@ -38,6 +38,8 @@ import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaField;
+import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.read.HoodieFileGroupReader;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -654,8 +656,8 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
     HoodieSchema requestedSchema = blobSchemaAndColumns.getLeft();
     List<String> blobColumns = blobSchemaAndColumns.getRight();
     Option<String> latestCommitTimeOpt = metaClient.getActiveTimeline().lastInstant().map(HoodieInstant::requestedTime);
-    if (!latestCommitTimeOpt.isPresent()) {
-      // no commits, no blob files to clean
+    if (!latestCommitTimeOpt.isPresent() || blobColumns.isEmpty()) {
+      // no commits or blob files to clean
       return Collections.emptyList();
     }
     Set<String> managedBlobFilePaths = removedFileSlices.stream()
@@ -715,7 +717,81 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
    * @return a pair of the blob schema and the list of blob column paths
    */
   private Pair<HoodieSchema, List<String>> getBlobSchemaAndColumns(HoodieSchema schema) {
+    List<String> blobPaths = new ArrayList<>();
+    List<HoodieSchemaField> blobFields = new ArrayList<>();
 
+    // Traverse schema to find blob columns
+    for (HoodieSchemaField field : schema.getFields()) {
+      collectBlobFieldsAndPaths(field, field.name(), blobPaths, blobFields);
+    }
+
+    // Create projection schema with only blob fields
+    HoodieSchema projectionSchema = blobFields.isEmpty()
+        ? schema  // No blobs, return original schema to avoid errors
+        : HoodieSchema.createRecord(
+            schema.getName(),
+            schema.getNamespace().orElse(null),
+            schema.getDoc().orElse(null),
+            blobFields);
+
+    return Pair.of(projectionSchema, blobPaths);
+  }
+
+  private void collectBlobFieldsAndPaths(HoodieSchemaField field, String currentPath,
+                                         List<String> blobPaths, List<HoodieSchemaField> blobFields) {
+    HoodieSchema fieldSchema = field.schema();
+    HoodieSchema nonNullSchema = fieldSchema.isNullable() ? fieldSchema.getNonNullType() : fieldSchema;
+
+    switch (nonNullSchema.getType()) {
+      case BLOB:
+        // Found a blob field
+        blobPaths.add(currentPath);
+        blobFields.add(HoodieSchemaUtils.createNewSchemaField(field));
+        break;
+      case RECORD:
+        // Recursively traverse nested record fields
+        List<HoodieSchemaField> nestedBlobFields = new ArrayList<>();
+        for (HoodieSchemaField nestedField : nonNullSchema.getFields()) {
+          collectBlobFieldsAndPaths(nestedField, currentPath + "." + nestedField.name(),
+                                    blobPaths, nestedBlobFields);
+        }
+
+        // If any nested field contains blob, include this record field
+        if (!nestedBlobFields.isEmpty()) {
+          HoodieSchema nestedRecordSchema = HoodieSchema.createRecord(
+              nonNullSchema.getName(),
+              nonNullSchema.getNamespace().orElse(null),
+              nonNullSchema.getDoc().orElse(null),
+              nestedBlobFields);
+
+          HoodieSchema finalSchema = fieldSchema.isNullable()
+              ? HoodieSchema.createNullable(nestedRecordSchema)
+              : nestedRecordSchema;
+
+          blobFields.add(HoodieSchemaUtils.createNewSchemaField(
+              field.name(), finalSchema, field.doc().orElse(null), field.defaultVal().orElse(null)));
+        }
+        break;
+      case ARRAY:
+        // Check if array element type contains blob
+        HoodieSchema elementType = nonNullSchema.getElementType();
+        if (elementType.isBlobType()) {
+          blobPaths.add(currentPath);
+          blobFields.add(HoodieSchemaUtils.createNewSchemaField(field));
+        }
+        break;
+      case MAP:
+        // Check if map value type contains blob
+        HoodieSchema valueType = nonNullSchema.getValueType();
+        if (valueType.isBlobType()) {
+          blobPaths.add(currentPath);
+          blobFields.add(HoodieSchemaUtils.createNewSchemaField(field));
+        }
+        break;
+      default:
+        // No blob type, do nothing
+        break;
+    }
   }
 
   private <R> Option<String> getManagedBlobPath(HoodieSchema schema, String path, R record, RecordContext<R> recordContext) {
