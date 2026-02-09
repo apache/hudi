@@ -236,7 +236,8 @@ object DataSourceReadOptions {
         " This is mainly necessary when the metadata table is not enabled or corrupted and the job " +
         " is doing recursive calls to fetch the partition paths and the dataset has multiple versions" +
         " of the same file in the same partition and it could lead to Out of Memory on the driver if" +
-        " the dataset is too large.")
+        " the dataset is too large. Another important limitation is that this config should not be" +
+        " used if there are bootstrap files present in the file system")
 
   val INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN: ConfigProperty[String] = ConfigProperty
     .key("hoodie.datasource.read.incr.fallback.fulltablescan.enable")
