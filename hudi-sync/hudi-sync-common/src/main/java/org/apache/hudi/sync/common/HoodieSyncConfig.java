@@ -114,7 +114,41 @@ public class HoodieSyncConfig extends HoodieConfig {
       .markAdvanced()
       .withDocumentation("Field in the table to use for determining hive partition columns.");
 
-  public static final ConfigProperty<String> META_SYNC_PARTITION_EXTRACTOR_CLASS = HoodieTableConfig.PARTITION_VALUE_EXTRACTOR_CLASS;
+  public static final ConfigProperty<String> META_SYNC_PARTITION_EXTRACTOR_CLASS = ConfigProperty
+      .key("hoodie.datasource.hive_sync.partition_extractor_class")
+      .defaultValue("org.apache.hudi.hive.MultiPartKeysValueExtractor")
+      .withInferFunction(cfg -> {
+        Option<String> partitionFieldsOpt;
+        if (StringUtils.nonEmpty(cfg.getString(META_SYNC_PARTITION_FIELDS))) {
+          partitionFieldsOpt = Option.ofNullable(cfg.getString(META_SYNC_PARTITION_FIELDS));
+        } else {
+          partitionFieldsOpt = HoodieTableConfig.getPartitionFieldProp(cfg)
+              .or(() -> Option.ofNullable(cfg.getString(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME)));
+        }
+
+        if (!partitionFieldsOpt.isPresent()) {
+          return Option.of("org.apache.hudi.hive.NonPartitionedExtractor");
+        }
+        String partitionFields = partitionFieldsOpt.get();
+        if (StringUtils.nonEmpty(partitionFields)) {
+          int numOfPartFields = partitionFields.split(",").length;
+          if (numOfPartFields == 1) {
+            if (cfg.contains(KeyGeneratorOptions.HIVE_STYLE_PARTITIONING_ENABLE.key())
+                && cfg.getString(KeyGeneratorOptions.HIVE_STYLE_PARTITIONING_ENABLE.key()).equals("true")) {
+              return Option.of("org.apache.hudi.hive.HiveStylePartitionValueExtractor");
+            } else {
+              return Option.of("org.apache.hudi.hive.SinglePartPartitionValueExtractor");
+            }
+          } else {
+            return Option.of("org.apache.hudi.hive.MultiPartKeysValueExtractor");
+          }
+        } else {
+          return Option.of("org.apache.hudi.hive.NonPartitionedExtractor");
+        }
+      })
+      .markAdvanced()
+      .withDocumentation("Class which implements PartitionValueExtractor to extract the partition values, "
+          + "default is inferred based on partition configuration.");
 
   public static final ConfigProperty<Boolean> META_SYNC_DECODE_PARTITION = ConfigProperty
       .key("hoodie.meta.sync.decode_partition")

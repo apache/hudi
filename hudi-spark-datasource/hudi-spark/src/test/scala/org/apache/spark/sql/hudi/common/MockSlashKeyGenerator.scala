@@ -43,7 +43,7 @@ import scala.jdk.CollectionConverters._
  * The first partition field (typically a date) will have its hyphens replaced with slashes.
  * All partition fields are then combined with "/" as the separator.
  */
-class TestCustomSlashKeyGenerator(props: TypedProperties) extends BuiltinKeyGenerator(props) {
+class MockSlashKeyGenerator(props: TypedProperties) extends BuiltinKeyGenerator(props) {
 
   private val complexAvroKeyGenerator: ComplexAvroKeyGenerator = new ComplexAvroKeyGenerator(props)
 
@@ -60,7 +60,7 @@ class TestCustomSlashKeyGenerator(props: TypedProperties) extends BuiltinKeyGene
   }
 
   override def getPartitionPath(record: GenericRecord): String = {
-    complexAvroKeyGenerator.getPartitionPath(record)
+    complexAvroKeyGenerator.getPartitionPath(record).replace('-', '/')
   }
 
   override def getRecordKey(row: Row): String = {

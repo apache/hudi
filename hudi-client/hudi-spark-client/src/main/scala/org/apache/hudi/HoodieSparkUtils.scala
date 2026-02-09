@@ -31,7 +31,7 @@ import org.apache.hudi.util.ExceptionWrappingIterator
 import org.apache.avro.generic.GenericRecord
 import org.apache.hadoop.fs.Path
 import org.apache.hudi.common.table.HoodieTableConfig
-import org.apache.hudi.hive.sync.PartitionValueExtractor
+import org.apache.hudi.sync.common.model.PartitionValueExtractor
 
 import org.apache.spark.SPARK_VERSION
 import org.apache.spark.internal.Logging
@@ -243,24 +243,42 @@ object HoodieSparkUtils extends SparkAdapterSupport with SparkVersionsSupport wi
       // But the output for these cases is in a string format, so we can pass partitionPath as UTF8String
       Array.fill(partitionColumns.length)(UTF8String.fromString(partitionPath))
     } else if(usePartitionValueExtractorOnRead && !StringUtils.isNullOrEmpty(partitionValueExtractorClass)) {
-      try {
-        val partitionValueExtractor = Class.forName(partitionValueExtractorClass)
-          .getDeclaredConstructor()
-          .newInstance()
-          .asInstanceOf[PartitionValueExtractor]
-        val partitionValues = partitionValueExtractor.extractPartitionValuesInPath(partitionPath).asScala.toArray
-        val partitionSchema = buildPartitionSchemaForNestedFields(tableSchema, partitionColumns)
-        val typedValues = partitionValues.zip(partitionSchema.fields).map { case (stringValue, field) =>
-          castStringToType(stringValue, field.dataType)
-        }
-        typedValues.map(_.asInstanceOf[Object])
-      } catch {
-        case e: Exception =>
-          throw new RuntimeException(s"Failed to extract partition value using $partitionValueExtractorClass class", e)
-      }
+      parsePartitionValuesBasedOnPartitionValueExtractor(partitionValueExtractorClass, partitionPath,
+        partitionColumns, tableSchema)
     } else {
       doParsePartitionColumnValues(partitionColumns, partitionPath, tableBasePath, tableSchema, timeZoneId,
         shouldValidatePartitionColumns, tableConfig.getSlashSeparatedDatePartitioning)
+    }
+  }
+
+  /**
+   * Parses partition values from partition path using a custom PartitionValueExtractor.
+   *
+   * @param partitionValueExtractorClass Fully qualified class name of the PartitionValueExtractor implementation
+   * @param partitionPath The partition path to extract values from
+   * @param partitionColumns Array of partition column names
+   * @param tableSchema The schema of the table
+   * @return Array of partition values as Objects, properly typed according to the schema
+   */
+  private def parsePartitionValuesBasedOnPartitionValueExtractor(
+      partitionValueExtractorClass: String,
+      partitionPath: String,
+      partitionColumns: Array[String],
+      tableSchema: StructType): Array[Object] = {
+    try {
+      val partitionValueExtractor = Class.forName(partitionValueExtractorClass)
+        .getDeclaredConstructor()
+        .newInstance()
+        .asInstanceOf[PartitionValueExtractor]
+      val partitionValues = partitionValueExtractor.extractPartitionValuesInPath(partitionPath).asScala.toArray
+      val partitionSchema = buildPartitionSchemaForNestedFields(tableSchema, partitionColumns)
+      val typedValues = partitionValues.zip(partitionSchema.fields).map { case (stringValue, field) =>
+        castStringToType(stringValue, field.dataType)
+      }
+      typedValues.map(_.asInstanceOf[Object])
+    } catch {
+      case e: Exception =>
+        throw new RuntimeException(s"Failed to extract partition value using $partitionValueExtractorClass class", e)
     }
   }
 

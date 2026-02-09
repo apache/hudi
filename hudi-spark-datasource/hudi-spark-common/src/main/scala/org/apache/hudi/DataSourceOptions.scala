@@ -280,7 +280,7 @@ object DataSourceReadOptions {
 
   val USE_PARTITION_VALUE_EXTRACTOR_ON_READ: ConfigProperty[String] = ConfigProperty
     .key("hoodie.datasource.read.partition.value.using.partion-value-extractor-class")
-    .defaultValue("true")
+    .defaultValue("false")
     .markAdvanced()
     .sinceVersion("1.2.0")
     .withDocumentation("This config helps whether PartitionValueExtractor interface can be used" +

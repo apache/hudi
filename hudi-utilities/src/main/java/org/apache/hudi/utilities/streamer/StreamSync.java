@@ -91,6 +91,7 @@ import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.sync.common.HoodieSyncConfig;
 import org.apache.hudi.sync.common.util.SyncUtilHelpers;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.util.JavaScalaConverters;
@@ -452,7 +453,8 @@ public class StreamSync implements Serializable, Closeable {
       payloadClass = overridingMergeConfigs.get().getMiddle();
       mergeStrategyId = overridingMergeConfigs.get().getRight();
     }
-
+    String partitionValueExtractorClassName = props.getString(HoodieSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS.key(),
+        HoodieSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS.defaultValue());
     return tableBuilder.setTableType(cfg.tableType)
         .setTableName(cfg.targetTableName)
         .setArchiveLogFolder(TIMELINE_HISTORY_PATH.defaultValue())
@@ -466,9 +468,7 @@ public class StreamSync implements Serializable, Closeable {
         .setPopulateMetaFields(props.getBoolean(HoodieTableConfig.POPULATE_META_FIELDS.key(),
             HoodieTableConfig.POPULATE_META_FIELDS.defaultValue()))
         .setKeyGeneratorClassProp(keyGenClassName)
-        .setPartitionValueExtractorClass(props.getString(
-            HoodieTableConfig.PARTITION_VALUE_EXTRACTOR_CLASS.key(),
-            HoodieTableConfig.PARTITION_VALUE_EXTRACTOR_CLASS.defaultValue()))
+        .setPartitionValueExtractorClass(partitionValueExtractorClassName)
         .setOrderingFields(cfg.sourceOrderingFields)
         .setPartitionMetafileUseBaseFormat(props.getBoolean(HoodieTableConfig.PARTITION_METAFILE_USE_BASE_FORMAT.key(),
             HoodieTableConfig.PARTITION_METAFILE_USE_BASE_FORMAT.defaultValue()))

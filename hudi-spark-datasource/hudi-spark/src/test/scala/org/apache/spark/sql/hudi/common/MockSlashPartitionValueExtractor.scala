@@ -16,11 +16,11 @@
  */
 package org.apache.spark.sql.hudi.common
 
-import org.apache.hudi.hive.sync.PartitionValueExtractor
+import org.apache.hudi.sync.common.model.PartitionValueExtractor
 
 import java.util
 
-class TestCustomSlashPartitionValueExtractor extends PartitionValueExtractor {
+class MockSlashPartitionValueExtractor extends PartitionValueExtractor {
 
   /**
    *
