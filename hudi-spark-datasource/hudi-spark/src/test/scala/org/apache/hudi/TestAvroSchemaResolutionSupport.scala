@@ -854,9 +854,8 @@ class TestAvroSchemaResolutionSupport extends HoodieClientTestBase with ScalaAss
     upsertData(df2, tempRecordPath, tableType.equals("COPY_ON_WRITE"))
 
     // after implicit type change, read the table with vectorized read enabled
-    // Spark 3.3 has a ClassCastException bug with vectorized nested column reader after type changes
-    // Spark 3.4+ with computeSafeProjection fix handles type promotions correctly
-    if (HoodieSparkUtils.gteqSpark3_3 && !HoodieSparkUtils.gteqSpark3_4) {
+    val isCow = tableType.equals("COPY_ON_WRITE")
+    if (HoodieSparkUtils.gteqSpark3_3 && !HoodieSparkUtils.gteqSpark3_4 && isCow) {
       assertThrows(classOf[SparkException]) {
         withSQLConf("spark.sql.parquet.enableNestedColumnVectorizedReader" -> "true") {
           readTable(tempRecordPath)
