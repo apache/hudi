@@ -154,11 +154,14 @@ public class TestMetadataCommand extends CLIFunctionalTestHarness {
 
       // Validate entries in the Global RLI.
       validateRecordIndexOutput(recordKey, Option.empty(), newCommitTime, DEFAULT_FIRST_PARTITION_PATH);
+
+      // Test non-existent record key
+      validateNonExistentRecordKey("non_existent_key", Option.empty());
     }
   }
 
   @Test
-  public void testGetRecordIndexInfoForNonGlobalRLI() throws Exception {
+  public void testGetRecordIndexInfoForPartitionedRLI() throws Exception {
     HoodieTableMetaClient.newTableBuilder()
         .setTableType(HoodieTableType.COPY_ON_WRITE.name())
         .setTableName(tableName())
@@ -215,6 +218,9 @@ public class TestMetadataCommand extends CLIFunctionalTestHarness {
       // Validate entries in the Non-Global RLI.
       validateRecordIndexOutput(firstRecordKey, Option.of(firstPartitionPath), firstCommitTime, DEFAULT_FIRST_PARTITION_PATH);
       validateRecordIndexOutput(secondRecordKey, Option.of(secondPartitionPath), secondCommitTime, DEFAULT_SECOND_PARTITION_PATH);
+
+      // Test non-existent record key with partition path
+      validateNonExistentRecordKey("non_existent_key", Option.of(firstPartitionPath));
     }
   }
 
@@ -240,5 +246,23 @@ public class TestMetadataCommand extends CLIFunctionalTestHarness {
             && output.contains("File Id")
             && output.contains("Instant time"),
         "Command output should contain either the record key, an info message, or mention Record key. Got: " + output);
+  }
+
+  private void validateNonExistentRecordKey(String recordKey, Option<String> partitionPathOp) {
+    Object shellResult;
+    if (partitionPathOp.isPresent()) {
+      shellResult = shell.evaluate(() -> "metadata lookup-record-index --record_key " + recordKey
+          + " --partition_path " + partitionPathOp.get());
+    } else {
+      shellResult = shell.evaluate(() -> "metadata lookup-record-index --record_key " + recordKey);
+    }
+
+    String output = shellResult.toString();
+    assertTrue(output.contains("[INFO] Record key " + recordKey) && output.contains("not found in Record Index"),
+        "Command output should indicate record key not found. Got: " + output);
+    if (partitionPathOp.isPresent()) {
+      assertTrue(output.contains("in partition " + partitionPathOp.get()),
+          "Command output should mention the partition path. Got: " + output);
+    }
   }
 }

@@ -409,8 +409,16 @@ public class MetadataCommand {
     ValidationUtils.checkState(metaClient.getTableConfig().isMetadataPartitionAvailable(MetadataPartitionType.RECORD_INDEX),
         "[ERROR] Record index partition is not enabled/initialized\n\n");
 
-    // Check if RLI is partitioned and validate partition_path is provided
-    if (config.isRecordLevelIndexEnabled() && !config.isGlobalRecordLevelIndexEnabled()) {
+    // Check if RLI is partitioned from the index definition and validate partition_path is provided
+    boolean isPartitionedRLI = metaClient.getIndexMetadata()
+        .map(indexMetadata ->
+            indexMetadata.getIndexDefinitions()
+                .get(org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_RECORD_INDEX))
+        .map(indexDefinition -> "true".equalsIgnoreCase(
+            indexDefinition.getIndexOptions().getOrDefault(org.apache.hudi.index.record.HoodieRecordIndex.IS_PARTITIONED_OPTION, "false")))
+        .orElse(false);
+
+    if (isPartitionedRLI) {
       ValidationUtils.checkState(!StringUtils.isNullOrEmpty(partitionPath),
           "[ERROR] Partitioned Record Level Index requires --partition_path to be provided\n\n");
     }
