@@ -64,6 +64,13 @@ import java.net.URI
  */
 class Spark33LegacyHoodieParquetFileFormat(private val shouldAppendPartitionValues: Boolean) extends ParquetFileFormat {
 
+  override def supportBatch(sparkSession: SparkSession, schema: StructType): Boolean = {
+    val conf = sparkSession.sessionState.conf
+    conf.parquetVectorizedReaderEnabled &&
+      schema.forall(_.dataType.isInstanceOf[AtomicType]) &&
+      ParquetUtils.isBatchReadSupportedForSchema(conf, schema)
+  }
+
   override def buildReaderWithPartitionValues(sparkSession: SparkSession,
                                               dataSchema: StructType,
                                               partitionSchema: StructType,
@@ -121,7 +128,9 @@ class Spark33LegacyHoodieParquetFileFormat(private val shouldAppendPartitionValu
     val sqlConf = sparkSession.sessionState.conf
     val enableOffHeapColumnVector = sqlConf.offHeapColumnVectorEnabled
     val enableVectorizedReader: Boolean =
-      ParquetUtils.isBatchReadSupportedForSchema(sqlConf, resultSchema)
+      sqlConf.parquetVectorizedReaderEnabled &&
+        resultSchema.forall(_.dataType.isInstanceOf[AtomicType]) &&
+        ParquetUtils.isBatchReadSupportedForSchema(sqlConf, resultSchema)
     val enableRecordFilter: Boolean = sqlConf.parquetRecordFilterEnabled
     val timestampConversion: Boolean = sqlConf.isParquetINT96TimestampConversion
     val capacity = sqlConf.parquetVectorizedReaderBatchSize

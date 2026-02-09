@@ -854,6 +854,8 @@ class TestAvroSchemaResolutionSupport extends HoodieClientTestBase with ScalaAss
     upsertData(df2, tempRecordPath, tableType.equals("COPY_ON_WRITE"))
 
     // after implicit type change, read the table with vectorized read enabled
+    // The supportBatch override in Spark33/34LegacyHoodieParquetFileFormat ensures that
+    // nested types use row-based reading instead of columnar batches, preventing ClassCastException
     withSQLConf("spark.sql.parquet.enableNestedColumnVectorizedReader" -> "true") {
       readTable(tempRecordPath)
     }
