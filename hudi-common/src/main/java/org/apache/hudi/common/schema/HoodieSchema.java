@@ -115,6 +115,7 @@ public class HoodieSchema implements Serializable {
   // Register the Variant logical type with Avro
   static {
     LogicalTypes.register(VariantLogicalType.VARIANT_LOGICAL_TYPE_NAME, new VariantLogicalTypeFactory());
+    LogicalTypes.register(VectorLogicalType.VECTOR_LOGICAL_TYPE_NAME, new VectorLogicalTypeFactory());
   }
 
   /**
@@ -163,6 +164,8 @@ public class HoodieSchema implements Serializable {
         return new HoodieSchema.Timestamp(avroSchema);
       } else if (logicalType == VariantLogicalType.variant()) {
         return new HoodieSchema.Variant(avroSchema);
+      } else if (logicalType == VectorLogicalType.vector()) {
+        return new HoodieSchema.Vector(avroSchema);
       }
     }
     return new HoodieSchema(avroSchema);
@@ -633,6 +636,29 @@ public class HoodieSchema implements Serializable {
   }
 
   /**
+   * Creates Vector schema with default name and specified dimension.
+   *
+   * @param dimension vector dimension (must be > 0)
+   * @return new HoodieSchema.Vector
+   */
+  public static HoodieSchema.Vector createVector(int dimension) {
+    return createVector(null, dimension);
+  }
+
+  /**
+   * Creates Vector schema with custom name and dimension.
+   *
+   * @param name record name (null uses default "vector")
+   * @param dimension vector dimension (must be > 0)
+   * @return new HoodieSchema.Vector
+   */
+  public static HoodieSchema.Vector createVector(String name, int dimension) {
+    String vectorName = (name != null && !name.isEmpty()) ? name : Vector.DEFAULT_NAME;
+    Schema vectorSchema = Vector.createSchema(vectorName, dimension);
+    return new HoodieSchema.Vector(vectorSchema);
+  }
+
+  /**
    * Returns the Hudi schema version information.
    *
    * @return version string of the Hudi schema system
@@ -906,6 +932,13 @@ public class HoodieSchema implements Serializable {
 
   public boolean isSchemaNull() {
     return type == null || type == HoodieSchemaType.NULL;
+  }
+
+  public boolean isVector() {
+    if (getType() == HoodieSchemaType.VECTOR) {
+      return true;
+    }
+    return false;
   }
 
   /**
@@ -1492,6 +1525,237 @@ public class HoodieSchema implements Serializable {
     }
   }
 
+  public static class Vector extends HoodieSchema {
+    private static final String DEFAULT_NAME = "vector";
+
+    // Field names
+    public static final String DIMENSION_FIELD = "dimension";
+    public static final String STORAGE_BACKING_FIELD = "storageBacking";
+    public static final String VALUES_ARRAY_FIELD = "valuesArray";
+    public static final String VALUES_FIXED_FIELD = "valuesFixed";
+
+    // Storage backing types
+    public static final String STORAGE_BACKING_ARRAY_FLOAT = "ARRAY_FLOAT";
+    public static final String STORAGE_BACKING_FIXED_BYTES = "FIXED_BYTES";  // for future use
+
+    private final int dimension;
+    private final String storageBacking;
+
+    /**
+     * Creates Vector from pre-built schema (used by factory methods).
+     *
+     * @param avroSchema the Avro schema to wrap, must be a valid Vector schema
+     * @throws IllegalArgumentException if avroSchema is null or not a valid Vector schema
+     */
+    private Vector(Schema avroSchema) {
+      super(avroSchema);
+      validateVectorSchema(avroSchema);
+      this.dimension = extractDimension(avroSchema);
+      this.storageBacking = extractStorageBacking(avroSchema);
+    }
+
+    @Override
+    public String getName() {
+      return "vector";
+    }
+
+    @Override
+    public HoodieSchemaType getType() {
+      return HoodieSchemaType.VECTOR;
+    }
+
+    /**
+     * Creates vector schema with specified dimension.
+     *
+     * @param name record name (not null)
+     * @param dimension vector dimension (must be > 0)
+     * @return new Vector schema
+     */
+    private static Schema createSchema(String name, int dimension) {
+      ValidationUtils.checkArgument(dimension > 0,
+          () -> "Vector dimension must be positive: " + dimension);
+      Schema dimensionSchema = Schema.create(Schema.Type.INT);
+      Schema storageBackingSchema = Schema.create(Schema.Type.STRING);
+
+      // Create valuesArray field (for ARRAY<FLOAT>)
+      Schema floatSchema = Schema.create(Schema.Type.FLOAT);
+      Schema arraySchema = Schema.createArray(floatSchema);
+      Schema nullableArraySchema = AvroSchemaUtils.createNullableSchema(arraySchema);
+
+      // Create valuesFixed field (this will be used in future potentially as another backing)
+      Schema bytesSchema = Schema.create(Schema.Type.BYTES);
+      Schema nullableBytesSchema = AvroSchemaUtils.createNullableSchema(bytesSchema);
+
+      // Create RECORD wrapper with four fields
+      Schema vectorSchema = Schema.createRecord(name, null, null, false);
+      List<Schema.Field> fields = Arrays.asList(
+        new Schema.Field(DIMENSION_FIELD, dimensionSchema, "Vector dimension", dimension),
+        new Schema.Field(STORAGE_BACKING_FIELD, storageBackingSchema, "Storage backing type", STORAGE_BACKING_ARRAY_FLOAT),
+        new Schema.Field(VALUES_ARRAY_FIELD, nullableArraySchema, "Dense vector float values (ARRAY_FLOAT storage)", Schema.Field.NULL_DEFAULT_VALUE),
+        new Schema.Field(VALUES_FIXED_FIELD, nullableBytesSchema, "Packed vector bytes (FIXED_BYTES storage)", Schema.Field.NULL_DEFAULT_VALUE)
+      );
+      vectorSchema.setFields(fields);
+
+      // Apply logical type
+      VectorLogicalType.vector().addToSchema(vectorSchema);
+
+      return vectorSchema;
+    }
+
+    /**
+     * Validates that the given Avro schema conforms to Vector specification.
+     *
+     * @param avroSchema the schema to validate
+     * @throws IllegalArgumentException if schema is invalid
+     */
+    private void validateVectorSchema(Schema avroSchema) {
+      ValidationUtils.checkArgument(avroSchema.getType() == Schema.Type.RECORD,
+          () -> "Vector schema must be RECORD type, got: " + avroSchema.getType());
+
+      // Validate dimension field exists and is INT
+      Schema.Field dimensionField = avroSchema.getField(DIMENSION_FIELD);
+      ValidationUtils.checkArgument(dimensionField != null,
+          () -> "Vector schema missing '" + DIMENSION_FIELD + "' field");
+      ValidationUtils.checkArgument(dimensionField.schema().getType() == Schema.Type.INT,
+          () -> "Vector dimension field must be INT, got: " + dimensionField.schema().getType());
+
+      // Validate storageBacking field exists and is STRING
+      Schema.Field storageBackingField = avroSchema.getField(STORAGE_BACKING_FIELD);
+      ValidationUtils.checkArgument(storageBackingField != null,
+          () -> "Vector schema missing '" + STORAGE_BACKING_FIELD + "' field");
+      ValidationUtils.checkArgument(storageBackingField.schema().getType() == Schema.Type.STRING,
+          () -> "Vector storageBacking field must be STRING, got: " + storageBackingField.schema().getType());
+
+      // Validate valuesArray field exists and is ARRAY<FLOAT>
+      Schema.Field valuesArrayField = avroSchema.getField(VALUES_ARRAY_FIELD);
+      ValidationUtils.checkArgument(valuesArrayField != null,
+          () -> "Vector schema missing '" + VALUES_ARRAY_FIELD + "' field");
+
+      Schema valuesArraySchema = AvroSchemaUtils.getNonNullTypeFromUnion(valuesArrayField.schema());
+      ValidationUtils.checkArgument(valuesArraySchema.getType() == Schema.Type.ARRAY,
+          () -> "Vector valuesArray field must be ARRAY, got: " + valuesArraySchema.getType());
+
+      Schema elementSchema = valuesArraySchema.getElementType();
+      ValidationUtils.checkArgument(elementSchema.getType() == Schema.Type.FLOAT,
+          () -> "Vector array elements must be FLOAT, got: " + elementSchema.getType());
+
+      // Validate valuesFixed field exists and is nullable BYTES
+      Schema.Field valuesFixedField = avroSchema.getField(VALUES_FIXED_FIELD);
+      ValidationUtils.checkArgument(valuesFixedField != null,
+          () -> "Vector schema missing '" + VALUES_FIXED_FIELD + "' field");
+
+      Schema valuesFixedSchema = AvroSchemaUtils.getNonNullTypeFromUnion(valuesFixedField.schema());
+      ValidationUtils.checkArgument(valuesFixedSchema.getType() == Schema.Type.BYTES,
+          () -> "Vector valuesFixed field must be BYTES, got: " + valuesFixedSchema.getType());
+    }
+
+    /**
+     * Extracts dimension from field default value.
+     */
+    private int extractDimension(Schema avroSchema) {
+      Schema.Field dimensionField = avroSchema.getField(DIMENSION_FIELD);
+      Object defaultValue = dimensionField.defaultVal();
+
+      if (defaultValue instanceof Number) {
+        int dim = ((Number) defaultValue).intValue();
+        ValidationUtils.checkArgument(dim > 0,
+            () -> "Vector dimension must be positive, got: " + dim);
+        return dim;
+      }
+
+      throw new IllegalArgumentException("Invalid dimension field default: " + defaultValue);
+    }
+
+    /**
+     * Extracts storage backing from field default value (defaults to ARRAY_FLOAT).
+     */
+    private String extractStorageBacking(Schema avroSchema) {
+      Schema.Field storageBackingField = avroSchema.getField(STORAGE_BACKING_FIELD);
+      Object defaultValue = storageBackingField.defaultVal();
+      return defaultValue != null ? defaultValue.toString() : STORAGE_BACKING_ARRAY_FLOAT;
+    }
+
+    /**
+     * Returns the dimension of this vector.
+     *
+     * @return vector dimension (always > 0)
+     */
+    public int getDimension() {
+      return dimension;
+    }
+
+    /**
+     * Returns the storage backing type.
+     *
+     * @return storage backing string (e.g., "ARRAY_FLOAT")
+     */
+    public String getStorageBacking() {
+      return storageBacking;
+    }
+
+    /**
+     * Returns the dimension field schema (INT).
+     *
+     * @return HoodieSchema for the dimension field
+     */
+    public HoodieSchema getDimensionField() {
+      Schema.Field dimensionField = getAvroSchema().getField(DIMENSION_FIELD);
+      return HoodieSchema.fromAvroSchema(dimensionField.schema());
+    }
+
+    /**
+     * Returns the storageBacking field schema (STRING).
+     *
+     * @return HoodieSchema for the storageBacking field
+     */
+    public HoodieSchema getStorageBackingField() {
+      Schema.Field storageBackingField = getAvroSchema().getField(STORAGE_BACKING_FIELD);
+      return HoodieSchema.fromAvroSchema(storageBackingField.schema());
+    }
+
+    /**
+     * Returns the valuesArray field schema (nullable ARRAY<FLOAT>).
+     *
+     * @return HoodieSchema for the valuesArray field
+     */
+    public HoodieSchema getValuesArrayField() {
+      Schema.Field valuesArrayField = getAvroSchema().getField(VALUES_ARRAY_FIELD);
+      return HoodieSchema.fromAvroSchema(valuesArrayField.schema());
+    }
+
+    /**
+     * Returns the valuesFixed field schema (nullable BYTES).
+     *
+     * @return HoodieSchema for the valuesFixed field
+     */
+    public HoodieSchema getValuesFixedField() {
+      Schema.Field valuesFixedField = getAvroSchema().getField(VALUES_FIXED_FIELD);
+      return HoodieSchema.fromAvroSchema(valuesFixedField.schema());
+    }
+
+    @Override
+    public boolean equals(Object o) {
+      //TODO check array contents
+      if (this == o) {
+        return true;
+      }
+      if (o == null || getClass() != o.getClass()) {
+        return false;
+      }
+      if (!super.equals(o)) {
+        return false;
+      }
+      Vector vector = (Vector) o;
+      return dimension == vector.dimension
+          && Objects.equals(storageBacking, vector.storageBacking);
+    }
+
+    @Override
+    public int hashCode() {
+      return Objects.hash(super.hashCode(), dimension, storageBacking);
+    }
+  }
+
   public static class Timestamp extends HoodieSchema {
     private final boolean isUtcAdjusted;
     private final TimePrecision precision;
@@ -1657,6 +1921,43 @@ public class HoodieSchema implements Serializable {
       if (schema.getType() != Schema.Type.RECORD) {
         throw new IllegalArgumentException("Variant logical type can only be applied to RECORD schemas, got: " + schema.getType());
       }
+    }
+  }
+
+  static class VectorLogicalType extends LogicalType {
+    private static final String VECTOR_LOGICAL_TYPE_NAME = "vector";
+    // Eager initialization of singleton
+    private static final VectorLogicalType INSTANCE = new VectorLogicalType();
+
+    private VectorLogicalType() {
+      super(VectorLogicalType.VECTOR_LOGICAL_TYPE_NAME);
+    }
+
+    public static VectorLogicalType vector() {
+      return INSTANCE;
+    }
+
+    @Override
+    public void validate(Schema schema) {
+      super.validate(schema);
+      if (schema.getType() != Schema.Type.RECORD) {
+        throw new IllegalArgumentException("vector logical type can only be applied to RECORD schemas, got: " + schema.getType());
+      }
+    }
+  }
+
+  /**
+   * Factory for creating VectorLogicalType instances.
+   */
+  private static class VectorLogicalTypeFactory implements LogicalTypes.LogicalTypeFactory {
+    @Override
+    public LogicalType fromSchema(Schema schema) {
+      return VectorLogicalType.vector();
+    }
+
+    @Override
+    public String getTypeName() {
+      return VectorLogicalType.VECTOR_LOGICAL_TYPE_NAME;
     }
   }
 

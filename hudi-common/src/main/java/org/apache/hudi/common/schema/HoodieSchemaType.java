@@ -119,6 +119,8 @@ public enum HoodieSchemaType {
 
   VARIANT(Schema.Type.RECORD),
 
+  VECTOR(Schema.Type.RECORD),
+
   /**
    * Null type - represents the absence of a value
    */
@@ -156,6 +158,8 @@ public enum HoodieSchemaType {
         return UUID;
       } else if (logicalType instanceof VariantLogicalType) {
         return VARIANT;
+      } else if (logicalType instanceof HoodieSchema.VectorLogicalType) {
+        return VECTOR;
       }
     }
     switch (avroSchema.getType()) {
@@ -223,6 +227,7 @@ public enum HoodieSchemaType {
       case MAP:
       case UNION:
       case VARIANT:
+      case VECTOR:
         return true;
       default:
         return false;
