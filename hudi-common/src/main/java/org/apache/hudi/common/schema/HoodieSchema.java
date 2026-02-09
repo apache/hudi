@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.schema;
 
+import org.apache.hudi.avro.AvroSchemaUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
@@ -1531,12 +1532,10 @@ public class HoodieSchema implements Serializable {
     // Field names
     public static final String DIMENSION_FIELD = "dimension";
     public static final String STORAGE_BACKING_FIELD = "storageBacking";
-    public static final String VALUES_ARRAY_FIELD = "valuesArray";
     public static final String VALUES_FIXED_FIELD = "valuesFixed";
 
     // Storage backing types
-    public static final String STORAGE_BACKING_ARRAY_FLOAT = "ARRAY_FLOAT";
-    public static final String STORAGE_BACKING_FIXED_BYTES = "FIXED_BYTES";  // for future use
+    public static final String STORAGE_BACKING_FIXED_BYTES = "FIXED_BYTES";
 
     private final int dimension;
     private final String storageBacking;
@@ -1574,24 +1573,22 @@ public class HoodieSchema implements Serializable {
     private static Schema createSchema(String name, int dimension) {
       ValidationUtils.checkArgument(dimension > 0,
           () -> "Vector dimension must be positive: " + dimension);
+
+      // Create dimension field (required INT)
       Schema dimensionSchema = Schema.create(Schema.Type.INT);
+
+      // Create storageBacking field (required STRING)
       Schema storageBackingSchema = Schema.create(Schema.Type.STRING);
 
-      // Create valuesArray field (for ARRAY<FLOAT>)
-      Schema floatSchema = Schema.create(Schema.Type.FLOAT);
-      Schema arraySchema = Schema.createArray(floatSchema);
-      Schema nullableArraySchema = AvroSchemaUtils.createNullableSchema(arraySchema);
-
-      // Create valuesFixed field (this will be used in future potentially as another backing)
+      // Create valuesFixed field (nullable BYTES) - for FIXED_BYTES storage
       Schema bytesSchema = Schema.create(Schema.Type.BYTES);
       Schema nullableBytesSchema = AvroSchemaUtils.createNullableSchema(bytesSchema);
 
-      // Create RECORD wrapper with four fields
+      // Create RECORD wrapper with three fields
       Schema vectorSchema = Schema.createRecord(name, null, null, false);
       List<Schema.Field> fields = Arrays.asList(
         new Schema.Field(DIMENSION_FIELD, dimensionSchema, "Vector dimension", dimension),
-        new Schema.Field(STORAGE_BACKING_FIELD, storageBackingSchema, "Storage backing type", STORAGE_BACKING_ARRAY_FLOAT),
-        new Schema.Field(VALUES_ARRAY_FIELD, nullableArraySchema, "Dense vector float values (ARRAY_FLOAT storage)", Schema.Field.NULL_DEFAULT_VALUE),
+        new Schema.Field(STORAGE_BACKING_FIELD, storageBackingSchema, "Storage backing type", STORAGE_BACKING_FIXED_BYTES),
         new Schema.Field(VALUES_FIXED_FIELD, nullableBytesSchema, "Packed vector bytes (FIXED_BYTES storage)", Schema.Field.NULL_DEFAULT_VALUE)
       );
       vectorSchema.setFields(fields);
@@ -1626,19 +1623,6 @@ public class HoodieSchema implements Serializable {
       ValidationUtils.checkArgument(storageBackingField.schema().getType() == Schema.Type.STRING,
           () -> "Vector storageBacking field must be STRING, got: " + storageBackingField.schema().getType());
 
-      // Validate valuesArray field exists and is ARRAY<FLOAT>
-      Schema.Field valuesArrayField = avroSchema.getField(VALUES_ARRAY_FIELD);
-      ValidationUtils.checkArgument(valuesArrayField != null,
-          () -> "Vector schema missing '" + VALUES_ARRAY_FIELD + "' field");
-
-      Schema valuesArraySchema = AvroSchemaUtils.getNonNullTypeFromUnion(valuesArrayField.schema());
-      ValidationUtils.checkArgument(valuesArraySchema.getType() == Schema.Type.ARRAY,
-          () -> "Vector valuesArray field must be ARRAY, got: " + valuesArraySchema.getType());
-
-      Schema elementSchema = valuesArraySchema.getElementType();
-      ValidationUtils.checkArgument(elementSchema.getType() == Schema.Type.FLOAT,
-          () -> "Vector array elements must be FLOAT, got: " + elementSchema.getType());
-
       // Validate valuesFixed field exists and is nullable BYTES
       Schema.Field valuesFixedField = avroSchema.getField(VALUES_FIXED_FIELD);
       ValidationUtils.checkArgument(valuesFixedField != null,
@@ -1667,12 +1651,12 @@ public class HoodieSchema implements Serializable {
     }
 
     /**
-     * Extracts storage backing from field default value (defaults to ARRAY_FLOAT).
+     * Extracts storage backing from field default value (defaults to FIXED_BYTES).
      */
     private String extractStorageBacking(Schema avroSchema) {
       Schema.Field storageBackingField = avroSchema.getField(STORAGE_BACKING_FIELD);
       Object defaultValue = storageBackingField.defaultVal();
-      return defaultValue != null ? defaultValue.toString() : STORAGE_BACKING_ARRAY_FLOAT;
+      return defaultValue != null ? defaultValue.toString() : STORAGE_BACKING_FIXED_BYTES;
     }
 
     /**
@@ -1711,16 +1695,6 @@ public class HoodieSchema implements Serializable {
     public HoodieSchema getStorageBackingField() {
       Schema.Field storageBackingField = getAvroSchema().getField(STORAGE_BACKING_FIELD);
       return HoodieSchema.fromAvroSchema(storageBackingField.schema());
-    }
-
-    /**
-     * Returns the valuesArray field schema (nullable ARRAY<FLOAT>).
-     *
-     * @return HoodieSchema for the valuesArray field
-     */
-    public HoodieSchema getValuesArrayField() {
-      Schema.Field valuesArrayField = getAvroSchema().getField(VALUES_ARRAY_FIELD);
-      return HoodieSchema.fromAvroSchema(valuesArrayField.schema());
     }
 
     /**
