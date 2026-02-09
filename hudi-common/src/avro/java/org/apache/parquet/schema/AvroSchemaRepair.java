@@ -165,7 +165,7 @@ public class AvroSchemaRepair {
 
     // If nothing changed, return the original schema
     if (firstChangedIndex == -1) {
-      return fileSchema;
+      return tableSchema;
     }
 
     // Second pass: build the new schema with repaired fields
