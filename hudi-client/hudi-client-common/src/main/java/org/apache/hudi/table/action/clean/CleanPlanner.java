@@ -415,6 +415,7 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
           String fileCommitTime = aSlice.getBaseInstantTime();
           if (isFileSliceExistInSavepointedFiles(aSlice, savepointedFiles)) {
             // do not clean up a savepoint data file
+            retainedFileSlices.add(aSlice);
             continue;
           }
 
@@ -424,6 +425,7 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
           // still uses this file.
           if (fileCommitTime.equals(lastVersion) || fileCommitTime.equals(lastVersionBeforeEarliestCommitToRetain)) {
             // move on to the next file
+            retainedFileSlices.add(aSlice);
             continue;
           }
 
@@ -441,6 +443,9 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
             // and normal log files for mor tables.
             deletePaths.addAll(aSlice.getLogFiles().map(lf -> new CleanFileInfo(lf.getPath().toString(), false))
                 .collect(Collectors.toList()));
+            removedFileSlices.add(aSlice);
+          } else {
+            retainedFileSlices.add(aSlice);
           }
         }
       }
@@ -646,59 +651,70 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
   }
 
   private <R> List<CleanFileInfo> getBlobFilesToRemove(HoodieTable table, HoodieSchema schema, List<FileSlice> retainedFileSlices, List<FileSlice> removedFileSlices) {
+    // Skip if there are no removed file slices
+    if (removedFileSlices.isEmpty()) {
+      return Collections.emptyList();
+    }
+    // Validate there is at least one completed commit and check if there are any blob columns to clean
     HoodieTableMetaClient metaClient = table.getMetaClient();
-    HoodieReaderContext<R> readerContext = ((ReaderContextFactory<R>) table.getContext().getReaderContextFactory(metaClient)).getContext();
-    RecordContext<R> recordContext = readerContext.getRecordContext();
-    // Iterate through the removed file slices with skip merging to find all the blob files that are referenced by the removed file slices.
-    TypedProperties properties = TypedProperties.copy(config.getProps());
-    properties.put(HoodieReaderConfig.MERGE_TYPE.key(), REALTIME_SKIP_MERGE);
+    Option<String> latestCommitTimeOpt = metaClient.getActiveTimeline().lastInstant().map(HoodieInstant::requestedTime);
     Pair<HoodieSchema, List<String>> blobSchemaAndColumns = getBlobSchemaAndColumns(schema);
     HoodieSchema requestedSchema = blobSchemaAndColumns.getLeft();
     List<String> blobColumns = blobSchemaAndColumns.getRight();
-    Option<String> latestCommitTimeOpt = metaClient.getActiveTimeline().lastInstant().map(HoodieInstant::requestedTime);
     if (!latestCommitTimeOpt.isPresent() || blobColumns.isEmpty()) {
       // no commits or blob files to clean
       return Collections.emptyList();
     }
-    Set<String> managedBlobFilePaths = removedFileSlices.stream()
-        .flatMap(fileSlice -> {
-          HoodieFileGroupReader<R> reader = getHoodieFileGroupReader(schema, fileSlice, readerContext, metaClient, latestCommitTimeOpt, requestedSchema);
-          Set<String> managedBlobFilePathsInSlice = new HashSet<>();
-          try (ClosableIterator<R> recordItr = reader.getClosableIterator()) {
-            while (recordItr.hasNext()) {
-              R record = recordItr.next();
-              for (String blobColumn : blobColumns) {
-                getManagedBlobPath(schema, blobColumn, record, recordContext).ifPresent(managedBlobFilePathsInSlice::add);
+    Map<HoodieFileGroupId, List<FileSlice>> retainedFileSlicesByFileGroupId = retainedFileSlices.stream().collect(Collectors.groupingBy(FileSlice::getFileGroupId));
+    Map<HoodieFileGroupId, List<FileSlice>> removedFileSlicesByFileGroupId = removedFileSlices.stream().collect(Collectors.groupingBy(FileSlice::getFileGroupId));
+
+    return removedFileSlicesByFileGroupId.keySet().stream().flatMap(fileGroupId -> {
+      HoodieReaderContext<R> readerContext = ((ReaderContextFactory<R>) table.getContext().getReaderContextFactory(metaClient)).getContext();
+      RecordContext<R> recordContext = readerContext.getRecordContext();
+      // Iterate through the removed file slices with skip merging to find all the blob files that are referenced by the removed file slices.
+      TypedProperties properties = TypedProperties.copy(config.getProps());
+      properties.put(HoodieReaderConfig.MERGE_TYPE.key(), REALTIME_SKIP_MERGE);
+
+      Set<String> managedBlobFilePaths = removedFileSlicesByFileGroupId.get(fileGroupId).stream()
+          .flatMap(fileSlice -> {
+            HoodieFileGroupReader<R> reader = getHoodieFileGroupReader(schema, fileSlice, readerContext, metaClient, latestCommitTimeOpt, requestedSchema, properties);
+            Set<String> managedBlobFilePathsInSlice = new HashSet<>();
+            try (ClosableIterator<R> recordItr = reader.getClosableIterator()) {
+              while (recordItr.hasNext()) {
+                R record = recordItr.next();
+                for (String blobColumn : blobColumns) {
+                  getManagedBlobPath(schema, blobColumn, record, recordContext).ifPresent(managedBlobFilePathsInSlice::add);
+                }
               }
+            } catch (IOException e) {
+              throw new HoodieIOException("Error reading records from file slice: " + fileSlice, e);
             }
-          } catch (IOException e) {
-            throw new HoodieIOException("Error reading records from file slice: " + fileSlice, e);
+            return managedBlobFilePathsInSlice.stream();
+          })
+          .collect(Collectors.toSet());
+      // Then iterate through the retained file slices with skip merging to find all the blob files that are still referenced by the retained file slices.
+      retainedFileSlicesByFileGroupId.getOrDefault(fileGroupId, Collections.emptyList()).forEach(fileSlice -> {
+        HoodieFileGroupReader<R> reader = getHoodieFileGroupReader(schema, fileSlice, readerContext, metaClient, latestCommitTimeOpt, requestedSchema, properties);
+        try (ClosableIterator<R> recordItr = reader.getClosableIterator()) {
+          while (recordItr.hasNext()) {
+            R record = recordItr.next();
+            for (String blobColumn : blobColumns) {
+              getManagedBlobPath(schema, blobColumn, record, recordContext).ifPresent(managedBlobFilePaths::remove);
+            }
           }
-          return managedBlobFilePathsInSlice.stream();
-        })
-        .collect(Collectors.toSet());
-    // Then iterate through the retained file slices with skip merging to find all the blob files that are still referenced by the retained file slices.
-    retainedFileSlices.forEach(fileSlice -> {
-      HoodieFileGroupReader<R> reader = getHoodieFileGroupReader(schema, fileSlice, readerContext, metaClient, latestCommitTimeOpt, requestedSchema);
-      try (ClosableIterator<R> recordItr = reader.getClosableIterator()) {
-        while (recordItr.hasNext()) {
-          R record = recordItr.next();
-          for (String blobColumn : blobColumns) {
-            getManagedBlobPath(schema, blobColumn, record, recordContext).ifPresent(managedBlobFilePaths::remove);
-          }
+        } catch (IOException e) {
+          throw new HoodieIOException("Error reading records from file slice: " + fileSlice, e);
         }
-      } catch (IOException e) {
-        throw new HoodieIOException("Error reading records from file slice: " + fileSlice, e);
-      }
-    });
-    // The remaining blob file paths in managedBlobFilePaths are the ones that can be removed.
-    return managedBlobFilePaths.stream()
-        .map(path -> new CleanFileInfo(path, false))
-        .collect(Collectors.toList());
+      });
+
+      // The remaining blob file paths in managedBlobFilePaths are the ones that can be removed.
+      return managedBlobFilePaths.stream()
+          .map(path -> new CleanFileInfo(path, false))
+    }).collect(Collectors.toList());
   }
 
   private <R> HoodieFileGroupReader<R> getHoodieFileGroupReader(HoodieSchema schema, FileSlice fileSlice, HoodieReaderContext<R> readerContext, HoodieTableMetaClient metaClient,
-                                                                Option<String> latestCommitTimeOpt, HoodieSchema requestedSchema) {
+                                                                Option<String> latestCommitTimeOpt, HoodieSchema requestedSchema, TypedProperties props) {
     return HoodieFileGroupReader.<R>newBuilder()
         .withReaderContext(readerContext)
         .withHoodieTableMetaClient(metaClient)
@@ -706,7 +722,7 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
         .withFileSlice(fileSlice)
         .withDataSchema(schema)
         .withRequestedSchema(requestedSchema)
-        .withProps(config.getProps())
+        .withProps(props)
         .build();
   }
 
@@ -797,7 +813,7 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
   private <R> Option<String> getManagedBlobPath(HoodieSchema schema, String path, R record, RecordContext<R> recordContext) {
     if (recordContext.getValue(record, schema, path + "." + HoodieSchema.Blob.EXTERNAL_FILE_REFERENCE) != null
         && (boolean) recordContext.getValue(record, schema, path + "." + HoodieSchema.Blob.EXTERNAL_FILE_REFERENCE + "." + HoodieSchema.Blob.EXTERNAL_PATH_IS_MANAGED)) {
-      return Option.of((String) recordContext.getValue(record, schema, path + "." + HoodieSchema.Blob.EXTERNAL_FILE_REFERENCE + "." + HoodieSchema.Blob.EXTERNAL_PATH));
+      return Option.of(recordContext.getValue(record, schema, path + "." + HoodieSchema.Blob.EXTERNAL_FILE_REFERENCE + "." + HoodieSchema.Blob.EXTERNAL_PATH).toString());
     }
     return Option.empty();
   }
