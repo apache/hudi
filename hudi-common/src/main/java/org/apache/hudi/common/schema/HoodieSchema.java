@@ -910,7 +910,6 @@ public class HoodieSchema implements Serializable {
    * If this is a union schema, returns the non-null type. Otherwise, returns this schema.
    *
    * @return the non-null schema from a union or the current schema
-   * @throws IllegalStateException if the union has more than two types
    */
   public HoodieSchema getNonNullType() {
     if (type != HoodieSchemaType.UNION) {
