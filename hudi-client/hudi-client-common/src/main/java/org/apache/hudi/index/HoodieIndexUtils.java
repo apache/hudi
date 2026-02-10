@@ -352,14 +352,16 @@ public class HoodieIndexUtils {
       Option<InternalSchema> internalSchemaOption = SerDeHelper.fromJson(config.getInternalSchema());
       FileSlice fileSlice = fileSliceOption.get();
       HoodieReaderContext<R> readerContext = readerContextFactory.getContext();
-      HoodieFileGroupReader<R> fileGroupReader = HoodieFileGroupReader.<R>newBuilder()
+      HoodieFileGroupReader<R> fileGroupReader = HoodieFileGroupReader.<R>builder()
           .withReaderContext(readerContext)
           .withHoodieTableMetaClient(metaClient)
           .withLatestCommitTime(instantTime.get())
-          .withFileSlice(fileSlice)
+          .withBaseFileOption(fileSlice.getBaseFile())
+          .withLogFiles(fileSlice.getLogFiles())
+          .withPartitionPath(fileSlice.getPartitionPath())
           .withDataSchema(dataSchema)
           .withRequestedSchema(dataSchema)
-          .withInternalSchema(internalSchemaOption)
+          .withInternalSchemaOpt(internalSchemaOption)
           .withProps(metaClient.getTableConfig().getProps())
           .build();
       try {
