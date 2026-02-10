@@ -702,13 +702,23 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
         return Stream.empty();
       }
       // Then iterate through the retained file slices with skip merging to find all the blob files that are still referenced by the retained file slices.
-      retainedFileSlicesByFileGroupId.getOrDefault(fileGroupId, Collections.emptyList()).forEach(fileSlice -> {
+      List<FileSlice> retainedFileSlicesForFileGroup = retainedFileSlicesByFileGroupId.get(fileGroupId);
+      if (retainedFileSlicesForFileGroup == null) {
+        // This is due to replace commit or clustering so we must inspect all retained file slices for this file group
+        // TODO: is there a smart way to filter these
+        retainedFileSlicesForFileGroup = retainedFileSlices;
+      }
+      retainedFileSlicesForFileGroup.forEach(fileSlice -> {
         HoodieFileGroupReader<R> reader = getHoodieFileGroupReader(schema, fileSlice, readerContext, metaClient, latestCommitTimeOpt, requestedSchema, properties);
         try (ClosableIterator<R> recordItr = reader.getClosableIterator()) {
           while (recordItr.hasNext()) {
             R record = recordItr.next();
             for (String blobColumn : blobColumns) {
               getManagedBlobPath(schema, blobColumn, record, recordContext).ifPresent(managedBlobFilePaths::remove);
+            }
+            if (managedBlobFilePaths.isEmpty()) {
+              // all blob files referenced by the removed file slices are still referenced by the retained file slices, skip
+              break;
             }
           }
         } catch (IOException e) {

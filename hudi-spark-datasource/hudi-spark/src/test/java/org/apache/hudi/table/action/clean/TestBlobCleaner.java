@@ -29,7 +29,9 @@ import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieCleanConfig;
+import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.storage.StoragePath;
@@ -45,15 +47,17 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.config.HoodieCompactionConfig.PARQUET_SMALL_FILE_LIMIT;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-public class TestBlobCleaner extends HoodieClientTestBase {
+class TestBlobCleaner extends HoodieClientTestBase {
 
   /**
    * Test cleaning with blob fields containing inline blobs, managed external references,
@@ -69,13 +73,7 @@ public class TestBlobCleaner extends HoodieClientTestBase {
     // Create schema with blob fields
     HoodieSchema blobSchema = createBlobTestSchema();
 
-    HoodieWriteConfig.Builder configBuilder = getConfigBuilder()
-        .withCleanConfig(HoodieCleanConfig.newBuilder()
-            .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_COMMITS)
-            .retainCommits(1)  // Keep only 1 commit as history so 2 commits are cleaned later
-            .withAutoClean(false) // Manually trigger clean to control timing
-            .build())
-        .withSchema(blobSchema.toString());
+    HoodieWriteConfig.Builder configBuilder = getConfigBuilder(blobSchema);
     if (tableType == HoodieTableType.MERGE_ON_READ) {
       configBuilder = configBuilder.withCompactionConfig(HoodieCompactionConfig.newBuilder()
           .withInlineCompaction(true)
@@ -88,28 +86,66 @@ public class TestBlobCleaner extends HoodieClientTestBase {
 
     try (SparkRDDWriteClient client = getHoodieWriteClient(config)) {
       // Commit 1: Write initial records with blobs
-      String commit1 = client.startCommit();
-      List<GenericRecord> records1 = generateBlobRecords(commit1, 10, blobSchema);
-      createManagedBlobFiles(commit1, 10);
-      writeRecordsWithBlobs(client, commit1, records1);
+      String commit1 = generateAndWriteBlobs(client, 10, blobSchema);
 
       // Commit 2: Update some records, add new ones
-      String commit2 = client.startCommit();
-      List<GenericRecord> records2 = generateBlobRecords(commit2, 15, blobSchema);
-      createManagedBlobFiles(commit2, 15);
-      writeRecordsWithBlobs(client, commit2, records2);
+      String commit2 = generateAndWriteBlobs(client, 15, blobSchema);
 
       // Commit 3: More updates
-      String commit3 = client.startCommit();
-      List<GenericRecord> records3 = generateBlobRecords(commit3, 12, blobSchema);
-      createManagedBlobFiles(commit3, 12);
-      writeRecordsWithBlobs(client, commit3, records3);
+      String commit3 = generateAndWriteBlobs(client, 12, blobSchema);
 
       // Commit 4: Final updates
-      String commit4 = client.startCommit();
-      List<GenericRecord> records4 = generateBlobRecords(commit4, 8, blobSchema);
-      createManagedBlobFiles(commit4, 8);
-      writeRecordsWithBlobs(client, commit4, records4);
+      String commit4 = generateAndWriteBlobs(client, 8, blobSchema);
+
+      // Trigger clean (should remove commit 1 and 2 files)
+      HoodieCleanMetadata cleanMetadata = client.clean();
+
+      // Verify blob file cleanup
+      assertNotNull(cleanMetadata, "Clean metadata should not be null");
+      verifyBlobFileCleanup(commit1, commit2, commit3, commit4);
+    }
+  }
+
+  /**
+   * Validate that blob files are cleaned correctly after clustering operation which can move references between file groups.
+   */
+  @ParameterizedTest
+  @EnumSource(HoodieTableType.class)
+  void testCleaningAfterClustering(HoodieTableType tableType) throws Exception {
+    // Create schema with blob fields
+    HoodieSchema blobSchema = createBlobTestSchema();
+
+    HoodieWriteConfig.Builder configBuilder = getConfigBuilder(blobSchema)
+        .withClusteringConfig(HoodieClusteringConfig.newBuilder()
+            .withInlineClustering(false) // disable inline clustering to control timing
+            .withAsyncClusteringMaxCommits(1)
+            .build());
+    if (tableType == HoodieTableType.MERGE_ON_READ) {
+      configBuilder = configBuilder.withCompactionConfig(HoodieCompactionConfig.newBuilder()
+          .withInlineCompaction(false) // disable compaction, log files are compacted during clustering
+          .build());
+    }
+    HoodieWriteConfig config = configBuilder.build();
+
+    HoodieTestUtils.init(storageConf, basePath, tableType);
+
+    try (SparkRDDWriteClient client = getHoodieWriteClient(config)) {
+      // Commit 1: Write initial records with blobs
+      String commit1 = generateAndWriteBlobs(client, 10, blobSchema);
+
+      // Commit 2: Insert more records to create a new file group
+      String commit2 = generateAndWriteBlobs(client, 15, blobSchema);
+
+      // Commit 3: Write updates
+      String commit3 = generateAndWriteBlobs(client, 12, blobSchema);
+
+      // Trigger clustering
+      Option<String> clusteringInstant = client.scheduleClustering(Option.empty());
+      assertTrue(clusteringInstant.isPresent(), "Clustering should be scheduled");
+      client.cluster(clusteringInstant.get());
+
+      // Commit 4: Final updates
+      String commit4 = generateAndWriteBlobs(client, 8, blobSchema);
 
       // Trigger clean (should remove commit 1 and 2 files)
       HoodieCleanMetadata cleanMetadata = client.clean();
@@ -140,6 +176,25 @@ public class TestBlobCleaner extends HoodieClientTestBase {
             HoodieSchemaField.of("file_data", blobSchema)  // Single blob field for all types
         )
     );
+  }
+
+  private HoodieWriteConfig.Builder getConfigBuilder(HoodieSchema blobSchema) {
+    return getConfigBuilder()
+        .withProps(Collections.singletonMap(PARQUET_SMALL_FILE_LIMIT.key(), "0")) // Disable small file handling to introduce multiple file groups in the test
+        .withCleanConfig(HoodieCleanConfig.newBuilder()
+            .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_COMMITS)
+            .retainCommits(1)  // Keep only 1 commit as history so 2 commits are cleaned later
+            .withAutoClean(false) // Manually trigger clean to control timing
+            .build())
+        .withSchema(blobSchema.toString());
+  }
+
+  private String generateAndWriteBlobs(SparkRDDWriteClient client, int numRecords, HoodieSchema blobSchema) throws IOException {
+    String instant = client.startCommit();
+    List<GenericRecord> records1 = generateBlobRecords(instant, numRecords, blobSchema);
+    createManagedBlobFiles(instant, numRecords);
+    writeRecordsWithBlobs(client, instant, records1);
+    return instant;
   }
 
   /**
