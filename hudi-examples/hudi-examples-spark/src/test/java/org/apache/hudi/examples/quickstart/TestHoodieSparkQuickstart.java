@@ -100,6 +100,69 @@ public class TestHoodieSparkQuickstart implements SparkProvider {
   }
 
   @Test
+  public void printClasspath() throws Exception {
+    // Write to both console and file
+    String outputFile = "/tmp/hudi-classpath-debug.txt";
+    java.io.PrintWriter writer = new java.io.PrintWriter(new java.io.FileWriter(outputFile));
+
+    System.err.println("=== CLASSPATH DEBUG START ===");
+    writer.println("=== CLASSPATH DEBUG START ===");
+
+    String classpath = System.getProperty("java.class.path");
+    String[] paths = classpath.split(System.getProperty("path.separator"));
+
+    System.err.println("Total classpath entries: " + paths.length);
+    writer.println("Total classpath entries: " + paths.length);
+
+    boolean foundHudiCommon = false;
+    for (String path : paths) {
+      writer.println(path);
+      if (path.contains("hudi-common")) {
+        System.err.println("FOUND hudi-common: " + path);
+        writer.println("FOUND hudi-common: " + path);
+        foundHudiCommon = true;
+      }
+    }
+
+    System.err.println("hudi-common found in classpath: " + foundHudiCommon);
+    writer.println("hudi-common found in classpath: " + foundHudiCommon);
+
+    // Try to load the class
+    System.err.println("=== Attempting to load AvroSchemaRepair ===");
+    writer.println("=== Attempting to load AvroSchemaRepair ===");
+    try {
+      Class<?> clazz = Class.forName("org.apache.parquet.schema.AvroSchemaRepair");
+      System.err.println("SUCCESS: AvroSchemaRepair loaded from: " +
+          clazz.getProtectionDomain().getCodeSource().getLocation());
+      writer.println("SUCCESS: AvroSchemaRepair loaded from: " +
+          clazz.getProtectionDomain().getCodeSource().getLocation());
+    } catch (ClassNotFoundException e) {
+      System.err.println("FAILED: AvroSchemaRepair NOT FOUND");
+      writer.println("FAILED: AvroSchemaRepair NOT FOUND");
+      e.printStackTrace(System.err);
+      e.printStackTrace(writer);
+    }
+
+    // Check classloader hierarchy
+    System.err.println("=== CLASSLOADER HIERARCHY ===");
+    writer.println("=== CLASSLOADER HIERARCHY ===");
+    ClassLoader cl = Thread.currentThread().getContextClassLoader();
+    int level = 0;
+    while (cl != null) {
+      System.err.println("Level " + level + ": " + cl.getClass().getName());
+      writer.println("Level " + level + ": " + cl.getClass().getName());
+      cl = cl.getParent();
+      level++;
+    }
+
+    System.err.println("=== CLASSPATH DEBUG END ===");
+    writer.println("=== CLASSPATH DEBUG END ===");
+    writer.close();
+
+    System.err.println("Output written to: " + outputFile);
+  }
+
+  @Test
   public void testHoodieSparkQuickstart() {
     String tableName = "spark_quick_start";
     String tablePath = tablePath(tableName);

@@ -153,7 +153,7 @@ public class TestTimestampBasedKeyGenerator {
     // timezone is GMT+8:00, createTime is BigDecimal
     BigDecimal decimal = new BigDecimal("1578283932000.0001");
     Conversions.DecimalConversion conversion = new Conversions.DecimalConversion();
-    Schema resolvedNullableSchema = AvroSchemaUtils.resolveNullableSchema(schema.getField("createTimeDecimal").schema());
+    Schema resolvedNullableSchema = AvroSchemaUtils.getNonNullTypeFromUnion(schema.getField("createTimeDecimal").schema());
     GenericFixed avroDecimal = conversion.toFixed(decimal, resolvedNullableSchema, LogicalTypes.decimal(20, 4));
     baseRecord.put("createTimeDecimal", avroDecimal);
     properties = getBaseKeyConfig("createTimeDecimal", "EPOCHMILLISECONDS", "yyyy-MM-dd hh", "GMT+8:00", null);
@@ -209,6 +209,31 @@ public class TestTimestampBasedKeyGenerator {
     assertEquals("1970-01-01 12:00:00", keyGen.getPartitionPath(baseRow));
     internalRow = KeyGeneratorTestUtilities.getInternalRow(baseRow);
     assertEquals(UTF8String.fromString("1970-01-01 12:00:00"), keyGen.getPartitionPath(internalRow, baseRow.schema()));
+
+    // Timestamp field is in long type, with `EPOCHMICROSECONDS` timestamp type in the key generator
+    baseRecord.put("createTime", 1578283932123456L);
+    properties = getBaseKeyConfig("createTime", "EPOCHMICROSECONDS", "yyyy-MM-dd hh", "GMT+8:00", null);
+    keyGen = new TimestampBasedKeyGenerator(properties);
+    HoodieKey key = keyGen.getKey(baseRecord);
+    assertEquals("2020-01-06 12", key.getPartitionPath());
+    baseRow = genericRecordToRow(baseRecord);
+    assertEquals("2020-01-06 12", keyGen.getPartitionPath(baseRow));
+    internalRow = KeyGeneratorTestUtilities.getInternalRow(baseRow);
+    assertEquals(UTF8String.fromString("2020-01-06 12"), keyGen.getPartitionPath(internalRow, baseRow.schema()));
+
+    // Timestamp field is in decimal type, with `EPOCHMICROSECONDS` timestamp type in the key generator
+    decimal = new BigDecimal("1578283932123456.0001");
+    resolvedNullableSchema = AvroSchemaUtils.getNonNullTypeFromUnion(
+        schema.getField("createTimeDecimal").schema());
+    avroDecimal = conversion.toFixed(decimal, resolvedNullableSchema, LogicalTypes.decimal(20, 4));
+    baseRecord.put("createTimeDecimal", avroDecimal);
+    properties = getBaseKeyConfig(
+        "createTimeDecimal", "EPOCHMICROSECONDS", "yyyy-MM-dd hh", "GMT+8:00", null);
+    keyGen = new TimestampBasedKeyGenerator(properties);
+    bigDecimalKey = keyGen.getKey(baseRecord);
+    assertEquals("2020-01-06 12", bigDecimalKey.getPartitionPath());
+    baseRow = genericRecordToRow(baseRecord);
+    assertEquals("2020-01-06 12", keyGen.getPartitionPath(baseRow));
   }
 
   @Test
