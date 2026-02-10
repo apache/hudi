@@ -210,10 +210,3 @@ SQL Extensions needs to be added to define the table in a hudi type native way.
 TODO: There is an open question regarding the need to maintain type ids to track schema evolution and how it would interplay with NBCC. 
 
 The main implementation change would require replacing the Avro schema references with the new type system. 
-
-
-
-
- 
-
-
