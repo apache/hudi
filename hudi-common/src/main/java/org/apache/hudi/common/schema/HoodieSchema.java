@@ -28,6 +28,7 @@ import org.apache.avro.JsonProperties;
 import org.apache.avro.LogicalType;
 import org.apache.avro.LogicalTypes;
 import org.apache.avro.Schema;
+import org.apache.hudi.internal.schema.HoodieSchemaException;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -80,6 +81,7 @@ import java.util.stream.Collectors;
  * @since 1.2.0
  */
 public class HoodieSchema implements Serializable {
+  private static final long serialVersionUID = 1L;
 
   /**
    * Constant representing a null JSON value, equivalent to JsonProperties.NULL_VALUE.
@@ -87,7 +89,12 @@ public class HoodieSchema implements Serializable {
    */
   public static final Object NULL_VALUE = JsonProperties.NULL_VALUE;
   public static final HoodieSchema NULL_SCHEMA = HoodieSchema.create(HoodieSchemaType.NULL);
-  private static final long serialVersionUID = 1L;
+  /**
+   * Constant to use when attaching type metadata to external schema systems like Spark's StructType.
+   */
+  public static final String TYPE_METADATA_FIELD = "hudi_type";
+  public static final String TYPE_DIMENSION_FIELD = "hudi_type_dimension";
+
 
   /**
    * Constants for Parquet-style accessor patterns used in nested MAP and ARRAY navigation.
@@ -975,6 +982,64 @@ public class HoodieSchema implements Serializable {
     return types.get(0).getType() != HoodieSchemaType.NULL ? types.get(0) : types.get(1);
   }
 
+  boolean containsVectorType() {
+    if (getType() == HoodieSchemaType.VECTOR) {
+      return true;
+    } else if (getType() == HoodieSchemaType.UNION) {
+      return getTypes().stream().anyMatch(HoodieSchema::containsVectorType);
+    } else if (getType() == HoodieSchemaType.RECORD) {
+      return getFields().stream().anyMatch(field -> field.schema().containsVectorType());
+    }
+    return false;
+  }
+
+  /**
+   * Validates that the schema does not contain arrays or maps with vector types.
+   * This method recursively traverses the schema tree to check for invalid structures.
+   *
+   * @param schema the schema to validate
+   * @throws HoodieSchemaException if the schema contains arrays or maps with blob types
+   */
+  private static void validateNoVectorsInArrayOrMap(HoodieSchema schema) {
+    if (schema == null) {
+      return;
+    }
+
+    HoodieSchemaType type = schema.getType();
+
+    switch (type) {
+      case ARRAY:
+        HoodieSchema elementType = schema.getElementType();
+        if (elementType.containsVectorType()) {
+          throw new HoodieSchemaException("Array element type cannot be or contain a VECTOR type");
+        }
+        break;
+      case MAP:
+        HoodieSchema valueType = schema.getValueType();
+        if (valueType.containsVectorType()) {
+          throw new HoodieSchemaException("Map value type cannot be or contain a VECTOR type");
+        }
+        break;
+      case RECORD:
+        // Validate all record fields
+        List<HoodieSchemaField> fields = schema.getFields();
+        for (HoodieSchemaField field : fields) {
+          validateNoVectorsInArrayOrMap(field.schema());
+        }
+        break;
+      case UNION:
+        // Validate all union types
+        List<HoodieSchema> types = schema.getTypes();
+        for (HoodieSchema unionType : types) {
+          validateNoVectorsInArrayOrMap(unionType);
+        }
+        break;
+      // For primitives, BLOB, ENUM, FIXED, NULL - no nested validation needed
+      default:
+        break;
+    }
+  }
+
   /**
    * Gets a nested field using dot notation, supporting Parquet-style array/map accessors.
    *
@@ -1434,11 +1499,15 @@ public class HoodieSchema implements Serializable {
 
         case ARRAY:
           ValidationUtils.checkArgument(elementType != null, "Array element type is required");
+          ValidationUtils.checkArgument(!elementType.containsVectorType(),
+                  "Array element type cannot be or contain a VECTOR type");
           avroSchema = Schema.createArray(elementType.getAvroSchema());
           break;
 
         case MAP:
           ValidationUtils.checkArgument(valueType != null, "Map value type is required");
+          ValidationUtils.checkArgument(!elementType.containsVectorType(),
+                  "Array element type cannot be or contain a VECTOR type");
           avroSchema = Schema.createMap(valueType.getAvroSchema());
           break;
 

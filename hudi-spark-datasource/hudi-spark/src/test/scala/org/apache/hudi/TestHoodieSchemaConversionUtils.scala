@@ -570,6 +570,121 @@ class TestHoodieSchemaConversionUtils extends FunSuite with Matchers {
     internalRowCompare(row1, row2, sparkSchema)
   }
 
+  test("test VECTOR type conversion - Spark to HoodieSchema") {
+    val metadata = new MetadataBuilder()
+      .putString(HoodieSchema.TYPE_METADATA_FIELD, HoodieSchemaType.VECTOR.name())
+      .putLong(HoodieSchema.TYPE_DIMENSION_FIELD, 128)
+      .build()
+    val struct = new StructType()
+      .add("id", IntegerType, false)
+      .add("embedding", ArrayType(FloatType, containsNull = false), nullable = false, metadata)
+
+    val hoodieSchema = HoodieSchemaConversionUtils.convertStructTypeToHoodieSchema(
+      struct, "VectorTest", "test")
+
+    // Verify the embedding field is VECTOR type
+    val embeddingField = hoodieSchema.getField("embedding").get()
+    assert(embeddingField.schema().getType == HoodieSchemaType.VECTOR)
+    assert(embeddingField.schema().isInstanceOf[HoodieSchema.Vector])
+
+    val vectorSchema = embeddingField.schema().asInstanceOf[HoodieSchema.Vector]
+    assert(vectorSchema.getDimension == 128)
+    assert(vectorSchema.getVectorElementType == HoodieSchema.Vector.VectorElementType.FLOAT)
+    assert(!embeddingField.isNullable())
+  }
+
+  test("test VECTOR type conversion - HoodieSchema to Spark") {
+    val vectorSchema = HoodieSchema.createVector(256, HoodieSchema.Vector.VectorElementType.FLOAT)
+    val fields = java.util.Arrays.asList(
+      HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.INT)),
+      HoodieSchemaField.of("embedding", vectorSchema)
+    )
+    val hoodieSchema = HoodieSchema.createRecord("VectorTest", "test", null, fields)
+
+    val structType = HoodieSchemaConversionUtils.convertHoodieSchemaToStructType(hoodieSchema)
+
+    // Verify the embedding field is ArrayType(FloatType)
+    assert(structType.fields.length == 2)
+    val embeddingField = structType.fields(1)
+    assert(embeddingField.name == "embedding")
+    assert(embeddingField.dataType.isInstanceOf[ArrayType])
+    assert(!embeddingField.nullable)
+
+    val arrayType = embeddingField.dataType.asInstanceOf[ArrayType]
+    assert(arrayType.elementType == FloatType)
+    assert(!arrayType.containsNull)
+
+    // Verify metadata contains dimension
+    assert(embeddingField.metadata.contains(HoodieSchema.TYPE_DIMENSION_FIELD))
+    assert(embeddingField.metadata.getLong(HoodieSchema.TYPE_DIMENSION_FIELD) == 256)
+  }
+
+  test("test VECTOR round-trip conversion - Spark to HoodieSchema to Spark") {
+    val metadata = new MetadataBuilder()
+      .putString(HoodieSchema.TYPE_METADATA_FIELD, HoodieSchemaType.VECTOR.name())
+      .putLong(HoodieSchema.TYPE_DIMENSION_FIELD, 512)
+      .build()
+    val originalStruct = new StructType()
+      .add("id", LongType, false)
+      .add("vector_field", ArrayType(FloatType, containsNull = false), nullable = false, metadata)
+      .add("name", StringType, true)
+
+    // Convert Spark -> HoodieSchema -> Spark
+    val hoodieSchema = HoodieSchemaConversionUtils.convertStructTypeToHoodieSchema(
+      originalStruct, "RoundTripTest", "test")
+    val convertedStruct = HoodieSchemaConversionUtils.convertHoodieSchemaToStructType(hoodieSchema)
+
+    // Verify structure is preserved
+    assert(convertedStruct.fields.length == originalStruct.fields.length)
+
+    // Verify vector field properties
+    val originalVectorField = originalStruct.fields(1)
+    val convertedVectorField = convertedStruct.fields(1)
+
+    assert(convertedVectorField.name == originalVectorField.name)
+    assert(convertedVectorField.dataType == originalVectorField.dataType)
+    assert(convertedVectorField.nullable == originalVectorField.nullable)
+
+    // Verify metadata is preserved
+    assert(convertedVectorField.metadata.contains(HoodieSchema.TYPE_DIMENSION_FIELD))
+    assert(convertedVectorField.metadata.getLong(HoodieSchema.TYPE_DIMENSION_FIELD) == 512)
+
+    // Verify array properties
+    val convertedArrayType = convertedVectorField.dataType.asInstanceOf[ArrayType]
+    assert(convertedArrayType.elementType == FloatType)
+    assert(!convertedArrayType.containsNull)
+  }
+
+  test("test VECTOR round-trip conversion - HoodieSchema to Spark to HoodieSchema") {
+    val originalVectorSchema = HoodieSchema.createVector(1024, HoodieSchema.Vector.VectorElementType.FLOAT)
+    val fields = java.util.Arrays.asList(
+      HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.LONG)),
+      HoodieSchemaField.of("embedding", originalVectorSchema),
+      HoodieSchemaField.of("metadata", HoodieSchema.createNullable(HoodieSchemaType.STRING))
+    )
+    val originalHoodieSchema = HoodieSchema.createRecord("RoundTripTest", "test", null, fields)
+
+    // Convert HoodieSchema -> Spark -> HoodieSchema
+    val sparkStruct = HoodieSchemaConversionUtils.convertHoodieSchemaToStructType(originalHoodieSchema)
+    val convertedHoodieSchema = HoodieSchemaConversionUtils.convertStructTypeToHoodieSchema(
+      sparkStruct, "RoundTripTest", "test")
+
+    // Verify the vector field is preserved
+    val convertedEmbeddingField = convertedHoodieSchema.getField("embedding").get()
+    assert(convertedEmbeddingField.schema().getType == HoodieSchemaType.VECTOR)
+    assert(convertedEmbeddingField.schema().isInstanceOf[HoodieSchema.Vector])
+
+    val convertedVectorSchema = convertedEmbeddingField.schema().asInstanceOf[HoodieSchema.Vector]
+    assert(convertedVectorSchema.getDimension == 1024)
+    assert(convertedVectorSchema.getVectorElementType == HoodieSchema.Vector.VectorElementType.FLOAT)
+    assert(!convertedEmbeddingField.isNullable())
+
+    // Verify other fields are preserved
+    assert(convertedHoodieSchema.getFields.size() == 3)
+    assert(convertedHoodieSchema.getField("id").get().schema().getType == HoodieSchemaType.LONG)
+    assert(convertedHoodieSchema.getField("metadata").get().isNullable())
+  }
+
   private def internalRowCompare(expected: Any, actual: Any, schema: DataType): Unit = {
     schema match {
       case StructType(fields) =>

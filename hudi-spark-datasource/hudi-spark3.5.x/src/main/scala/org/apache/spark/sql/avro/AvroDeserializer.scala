@@ -164,6 +164,31 @@ private[sql] class AvroDeserializer(rootAvroType: Schema,
           s"Avro logical type $other cannot be converted to SQL type ${TimestampNTZType.sql}.")
       }
 
+      // Handle VECTOR logical type
+      case (FIXED, ArrayType(FloatType, false))
+          if avroType.getLogicalType != null &&
+             avroType.getLogicalType.getName == "vector" =>
+
+        val dimension = avroType.getObjectProp("dimension").asInstanceOf[Number].intValue()
+
+        (updater, ordinal, value) => {
+          val bytes = value.asInstanceOf[GenericData.Fixed].bytes()
+
+          // Validate size
+          val expectedSize = dimension * 4
+          if (bytes.length != expectedSize) {
+            throw new IncompatibleSchemaException(
+              s"VECTOR byte size mismatch: expected=$expectedSize, actual=${bytes.length}")
+          }
+
+          // Unpack bytes to float array (little-endian)
+          val buffer = java.nio.ByteBuffer.wrap(bytes)
+            .order(java.nio.ByteOrder.LITTLE_ENDIAN)
+          val floats = (0 until dimension).map(_ => buffer.getFloat()).toArray
+
+          updater.set(ordinal, ArrayData.toArrayData(floats))
+        }
+
       // Before we upgrade Avro to 1.8 for logical type support, spark-avro converts Long to Date.
       // For backward compatibility, we still keep this conversion.
       case (LONG, DateType) => (updater, ordinal, value) =>

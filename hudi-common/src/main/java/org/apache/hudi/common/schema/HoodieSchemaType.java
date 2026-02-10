@@ -119,7 +119,7 @@ public enum HoodieSchemaType {
 
   VARIANT(Schema.Type.RECORD),
 
-  VECTOR(Schema.Type.RECORD),
+  VECTOR(Schema.Type.FIXED),
 
   /**
    * Null type - represents the absence of a value
