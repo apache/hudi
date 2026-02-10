@@ -123,7 +123,6 @@ public abstract class BaseHoodieClient implements Serializable, AutoCloseable {
     this.txnManager = transactionManager;
     this.timeGenerator = timeGenerator;
     startEmbeddedServerView();
-    initWrapperFSMetrics();
     runClientInitCallbacks();
   }
 
@@ -187,10 +186,6 @@ public abstract class BaseHoodieClient implements Serializable, AutoCloseable {
 
   public HoodieEngineContext getEngineContext() {
     return context;
-  }
-
-  protected void initWrapperFSMetrics() {
-    // no-op.
   }
 
   protected HoodieTableMetaClient createMetaClient(boolean loadActiveTimelineOnLoad) {

@@ -82,6 +82,16 @@ public class HoodieWrapperFileSystem extends FileSystem {
   private static final String METAFOLDER_NAME = ".hoodie";
 
   /**
+   * Registry name for file system metrics.
+   */
+  public static final String REGISTRY_NAME = HoodieWrapperFileSystem.class.getSimpleName();
+
+  /**
+   * Registry name for metadata folder file system metrics.
+   */
+  public static final String REGISTRY_META_NAME = HoodieWrapperFileSystem.class.getSimpleName() + "MetaFolder";
+
+  /**
    * Names for metrics.
    */
   protected enum MetricName {
