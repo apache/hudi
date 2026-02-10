@@ -655,7 +655,32 @@ public class HoodieSchema implements Serializable {
    */
   public static HoodieSchema.Vector createVector(String name, int dimension) {
     String vectorName = (name != null && !name.isEmpty()) ? name : Vector.DEFAULT_NAME;
-    Schema vectorSchema = Vector.createSchema(vectorName, dimension);
+    Schema vectorSchema = Vector.createSchema(vectorName, dimension, Vector.ELEMENT_TYPE_FLOAT);
+    return new HoodieSchema.Vector(vectorSchema);
+  }
+
+  /**
+   * Creates Vector schema with custom dimension and element type.
+   *
+   * @param dimension vector dimension (must be > 0)
+   * @param elementType element type (use Vector.ELEMENT_TYPE_FLOAT or Vector.ELEMENT_TYPE_DOUBLE)
+   * @return new HoodieSchema.Vector
+   */
+  public static HoodieSchema.Vector createVector(int dimension, String elementType) {
+    return createVector(null, dimension, elementType);
+  }
+
+  /**
+   * Creates Vector schema with custom name, dimension, and element type.
+   *
+   * @param name record name (null uses default "vector")
+   * @param dimension vector dimension (must be > 0)
+   * @param elementType element type (use Vector.ELEMENT_TYPE_FLOAT or Vector.ELEMENT_TYPE_DOUBLE)
+   * @return new HoodieSchema.Vector
+   */
+  public static HoodieSchema.Vector createVector(String name, int dimension, String elementType) {
+    String vectorName = (name != null && !name.isEmpty()) ? name : Vector.DEFAULT_NAME;
+    Schema vectorSchema = Vector.createSchema(vectorName, dimension, elementType);
     return new HoodieSchema.Vector(vectorSchema);
   }
 
@@ -1571,15 +1596,19 @@ public class HoodieSchema implements Serializable {
     }
 
     /**
-     * Creates vector schema with specified dimension.
+     * Creates vector schema with specified dimension and element type.
      *
      * @param name record name (not null)
      * @param dimension vector dimension (must be > 0)
+     * @param elementType element type (FLOAT or DOUBLE, defaults to FLOAT if null)
      * @return new Vector schema
      */
-    private static Schema createSchema(String name, int dimension) {
+    private static Schema createSchema(String name, int dimension, String elementType) {
       ValidationUtils.checkArgument(dimension > 0,
           () -> "Vector dimension must be positive: " + dimension);
+
+      // Validate elementType
+      String resolvedElementType = elementType != null ? elementType : ELEMENT_TYPE_FLOAT;
 
       // Create dimension field (required INT)
       Schema dimensionSchema = Schema.create(Schema.Type.INT);
@@ -1598,7 +1627,7 @@ public class HoodieSchema implements Serializable {
       Schema vectorSchema = Schema.createRecord(name, null, null, false);
       List<Schema.Field> fields = Arrays.asList(
         new Schema.Field(DIMENSION_FIELD, dimensionSchema, "Vector dimension", dimension),
-        new Schema.Field(ELEMENT_TYPE_FIELD, elementTypeSchema, "Element type (FLOAT or DOUBLE)", ELEMENT_TYPE_FLOAT),
+        new Schema.Field(ELEMENT_TYPE_FIELD, elementTypeSchema, "Element type (FLOAT or DOUBLE)", resolvedElementType),
         new Schema.Field(STORAGE_BACKING_FIELD, storageBackingSchema, "Storage backing type", STORAGE_BACKING_FIXED_BYTES),
         new Schema.Field(VALUES_FIXED_FIELD, nullableBytesSchema, "Packed vector bytes (FIXED_BYTES storage)", Schema.Field.NULL_DEFAULT_VALUE)
       );
@@ -1755,7 +1784,6 @@ public class HoodieSchema implements Serializable {
 
     @Override
     public boolean equals(Object o) {
-      //TODO check array contents
       if (this == o) {
         return true;
       }
