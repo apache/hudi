@@ -340,6 +340,44 @@ public class TestHoodieSchema {
   }
 
   @Test
+  public void testGetNonNullTypeWithUnionSchemas() {
+    // create schema that represents union of null, string and int
+    HoodieSchema union = HoodieSchema.createUnion(
+        HoodieSchema.create(HoodieSchemaType.NULL),
+        HoodieSchema.create(HoodieSchemaType.STRING),
+        HoodieSchema.create(HoodieSchemaType.INT)
+    );
+
+    HoodieSchema nonNullType = union.getNonNullType();
+    assertEquals(HoodieSchemaType.UNION, nonNullType.getType());
+    assertEquals(Arrays.asList(HoodieSchema.create(HoodieSchemaType.STRING), HoodieSchema.create(HoodieSchemaType.INT)), nonNullType.getTypes());
+
+    // Calling get getNonNullType on a union without null should return same union
+    HoodieSchema unionWithoutNull = HoodieSchema.createUnion(
+        HoodieSchema.create(HoodieSchemaType.STRING),
+        HoodieSchema.create(HoodieSchemaType.INT)
+    );
+    assertSame(unionWithoutNull, unionWithoutNull.getNonNullType());
+
+    // Create a schema with more types and validate
+    HoodieSchema complexUnion = HoodieSchema.createUnion(
+        HoodieSchema.create(HoodieSchemaType.NULL),
+        HoodieSchema.create(HoodieSchemaType.STRING),
+        HoodieSchema.create(HoodieSchemaType.INT),
+        HoodieSchema.create(HoodieSchemaType.BOOLEAN)
+    );
+    HoodieSchema complexNonNullType = complexUnion.getNonNullType();
+    assertEquals(HoodieSchemaType.UNION, complexNonNullType.getType());
+    assertEquals(Arrays.asList(
+        HoodieSchema.create(HoodieSchemaType.STRING),
+        HoodieSchema.create(HoodieSchemaType.INT),
+        HoodieSchema.create(HoodieSchemaType.BOOLEAN)
+    ), complexNonNullType.getTypes());
+
+    assertSame(complexNonNullType, complexNonNullType.getNonNullType());
+  }
+
+  @Test
   public void testFixedSchemaSize() {
     Schema avroFixed = Schema.createFixed("MD5", "MD5 hash", null, 16);
     HoodieSchema fixedSchema = HoodieSchema.fromAvroSchema(avroFixed);
