@@ -40,6 +40,11 @@ public class DistributedRegistry extends AccumulatorV2<Map<String, Long>, Map<St
     this.name = name;
   }
 
+  @Override
+  public String getName() {
+    return name;
+  }
+
   public void register(JavaSparkContext jsc) {
     if (!isRegistered()) {
       jsc.sc().register(this);
