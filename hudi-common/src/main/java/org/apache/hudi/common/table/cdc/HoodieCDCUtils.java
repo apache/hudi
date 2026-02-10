@@ -21,7 +21,6 @@ package org.apache.hudi.common.table.cdc;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.schema.HoodieSchemaType;
-import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.exception.HoodieException;
 
 import org.apache.avro.generic.GenericData;
@@ -86,8 +85,8 @@ public class HoodieCDCUtils {
   }
 
   private static HoodieSchema createCDCSchema(HoodieSchema tableSchema, boolean withAfterImage) {
-    HoodieSchema imageSchema = HoodieSchemaUtils.createNullableSchema(tableSchema);
-    HoodieSchema nullableString = HoodieSchema.createNullable(HoodieSchema.create(HoodieSchemaType.STRING));
+    HoodieSchema imageSchema = HoodieSchema.createNullable(tableSchema);
+    HoodieSchema nullableString = HoodieSchema.createNullable(HoodieSchemaType.STRING);
 
     HoodieSchemaField opField = HoodieSchemaField.of(CDC_OPERATION_TYPE, nullableString, "", HoodieSchema.NULL_VALUE);
     HoodieSchemaField beforeField = HoodieSchemaField.of(CDC_BEFORE_IMAGE, imageSchema, "", HoodieSchema.NULL_VALUE);

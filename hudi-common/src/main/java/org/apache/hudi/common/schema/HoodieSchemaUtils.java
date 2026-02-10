@@ -276,23 +276,6 @@ public final class HoodieSchemaUtils {
   }
 
   /**
-   * Extracts the non-null type from a union schema.
-   * This is equivalent to AvroSchemaUtils.getNonNullTypeFromUnion() but operates on HoodieSchema.
-   *
-   * @param unionSchema union schema containing null and other types
-   * @return HoodieSchema representing the non-null type
-   * @throws IllegalStateException    if schema is not a union or doesn't contain non-null type
-   * @throws IllegalArgumentException if schema is null
-   */
-  public static HoodieSchema getNonNullTypeFromUnion(HoodieSchema unionSchema) {
-    ValidationUtils.checkArgument(unionSchema != null, "Union schema cannot be null");
-
-    // Delegate to AvroSchemaUtils
-    Schema nonNullAvro = AvroSchemaUtils.getNonNullTypeFromUnion(unionSchema.toAvroSchema());
-    return HoodieSchema.fromAvroSchema(nonNullAvro);
-  }
-
-  /**
    * Finds fields that are present in the table schema but missing in the writer schema.
    * This is equivalent to AvroSchemaUtils.findMissingFields() but operates on HoodieSchemas.
    *
@@ -493,9 +476,9 @@ public final class HoodieSchemaUtils {
 
     Set<String> mandatorySet = mandatoryFields != null ? mandatoryFields : Collections.emptySet();
 
-    HoodieSchema prunedDataSchema = pruneDataSchemaInternal(getNonNullTypeFromUnion(dataSchema), getNonNullTypeFromUnion(requiredSchema), mandatorySet);
+    HoodieSchema prunedDataSchema = pruneDataSchemaInternal(dataSchema.getNonNullType(), requiredSchema.getNonNullType(), mandatorySet);
     if (dataSchema.isNullable() && !prunedDataSchema.isNullable()) {
-      return createNullableSchema(prunedDataSchema);
+      return HoodieSchema.createNullable(prunedDataSchema);
     }
     return prunedDataSchema;
   }
@@ -621,7 +604,7 @@ public final class HoodieSchemaUtils {
 
   private static Option<HoodieSchemaField> findNestedField(HoodieSchema schema, String[] fieldParts, int index) {
     if (schema.getType() == HoodieSchemaType.UNION) {
-      Option<HoodieSchemaField> notUnion = findNestedField(getNonNullTypeFromUnion(schema), fieldParts, index);
+      Option<HoodieSchemaField> notUnion = findNestedField(schema.getNonNullType(), fieldParts, index);
       if (!notUnion.isPresent()) {
         return Option.empty();
       }
@@ -650,7 +633,7 @@ public final class HoodieSchemaUtils {
     boolean isUnion = false;
     if (foundSchema.getType() == HoodieSchemaType.UNION) {
       isUnion = true;
-      foundSchema = getNonNullTypeFromUnion(foundSchema);
+      foundSchema = foundSchema.getNonNullType();
     }
     HoodieSchema newSchema = createNewSchemaFromFieldsWithReference(foundSchema, Collections.singletonList(nestedPart.get()));
     return Option.of(createNewSchemaField(foundField.name(), isUnion ? HoodieSchema.createNullable(newSchema) : newSchema, foundField.doc().orElse(null), foundField.defaultVal().orElse(null)));

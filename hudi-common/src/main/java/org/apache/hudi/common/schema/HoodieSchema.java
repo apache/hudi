@@ -247,26 +247,24 @@ public class HoodieSchema implements Serializable {
 
     if (schema.getType() == HoodieSchemaType.UNION) {
       // Already a union, check if it contains null
-      List<Schema> unionTypes = inputAvroSchema.getTypes();
-      boolean hasNull = unionTypes.stream().anyMatch(s -> s.getType() == Schema.Type.NULL);
+      List<HoodieSchema> unionTypes = schema.getTypes();
+      boolean hasNull = unionTypes.stream().anyMatch(s -> s.getType() == HoodieSchemaType.NULL);
 
       if (hasNull) {
         return schema; // Already nullable
       }
 
       // Add null to existing union
-      List<Schema> newUnionTypes = new ArrayList<>(unionTypes.size() + 1);
-      newUnionTypes.add(Schema.create(Schema.Type.NULL));
+      List<HoodieSchema> newUnionTypes = new ArrayList<>(unionTypes.size() + 1);
+      newUnionTypes.add(NULL_SCHEMA);
       newUnionTypes.addAll(unionTypes);
-      Schema nullableSchema = Schema.createUnion(newUnionTypes);
-      return new HoodieSchema(nullableSchema);
+      return HoodieSchema.createUnion(newUnionTypes);
     } else {
       // Create new union with null
-      List<Schema> unionTypes = new ArrayList<>(2);
-      unionTypes.add(Schema.create(Schema.Type.NULL));
-      unionTypes.add(inputAvroSchema);
-      Schema nullableSchema = Schema.createUnion(unionTypes);
-      return new HoodieSchema(nullableSchema);
+      List<HoodieSchema> unionTypes = new ArrayList<>(2);
+      unionTypes.add(NULL_SCHEMA);
+      unionTypes.add(schema);
+      return HoodieSchema.createUnion(unionTypes);
     }
   }
 
@@ -920,10 +918,28 @@ public class HoodieSchema implements Serializable {
     }
 
     List<HoodieSchema> types = getTypes();
-    if (types.size() != 2) {
-      throw new IllegalStateException("Union schema has more than two types");
+    if (types.size() == 2) {
+      if (types.get(0).getType() == HoodieSchemaType.NULL) {
+        return types.get(1);
+      } else if (types.get(1).getType() == HoodieSchemaType.NULL) {
+        return types.get(0);
+      } else {
+        // This is a non-null union of types
+        return this;
+      }
     }
-    return types.get(0).getType() != HoodieSchemaType.NULL ? types.get(0) : types.get(1);
+    List<HoodieSchema> nonNullTypes = new ArrayList<>(types.size() - 1);
+    for (int i = 0; i < types.size(); i++) {
+      HoodieSchema schema = types.get(i);
+      if (schema.getType() != HoodieSchemaType.NULL) {
+        if (i == types.size() - 1 && nonNullTypes.size() == types.size() - 1) {
+          // Last type and all previous were non-null, return original schema
+          return this;
+        }
+        nonNullTypes.add(schema);
+      }
+    }
+    return HoodieSchema.createUnion(nonNullTypes);
   }
 
   /**

@@ -283,7 +283,7 @@ public class HoodieTableMetadataUtil {
       targetFields.forEach(fieldNameFieldPair -> {
         String fieldName = fieldNameFieldPair.getKey();
         HoodieSchemaField field = fieldNameFieldPair.getValue();
-        HoodieSchema fieldSchema = HoodieSchemaUtils.getNonNullTypeFromUnion(field.schema());
+        HoodieSchema fieldSchema = field.schema().getNonNullType();
         ColumnStats colStats = allColumnStats.computeIfAbsent(fieldName, ignored -> new ColumnStats(getValueMetadata(fieldSchema, indexVersion)));
         Object fieldValue = collectColumnRangeFieldValue(record, colStats.valueMetadata, fieldName, fieldSchema, recordSchema, properties);
 
@@ -710,7 +710,7 @@ public class HoodieTableMetadataUtil {
    * @return true if the field is of type timestamp_millis, false otherwise
    */
   static boolean isTimestampMillisField(HoodieSchema fieldSchema) {
-    HoodieSchema nonNullableSchema = HoodieSchemaUtils.getNonNullTypeFromUnion(fieldSchema);
+    HoodieSchema nonNullableSchema = fieldSchema.getNonNullType();
     if (nonNullableSchema.getType() == HoodieSchemaType.TIMESTAMP) {
       HoodieSchema.Timestamp timestampSchema = (HoodieSchema.Timestamp) nonNullableSchema;
       return timestampSchema.getPrecision().equals(TimePrecision.MILLIS);

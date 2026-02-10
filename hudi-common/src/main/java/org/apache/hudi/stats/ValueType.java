@@ -23,7 +23,6 @@ import org.apache.hudi.ParquetAdapter;
 import org.apache.hudi.avro.HoodieAvroWrapperUtils;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaType;
-import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.util.DateTimeUtils;
 
 import org.apache.avro.generic.GenericData;
@@ -296,7 +295,7 @@ public enum ValueType {
       case UUID:
         return ValueType.UUID;
       case UNION:
-        return fromSchema(HoodieSchemaUtils.getNonNullTypeFromUnion(schema));
+        return fromSchema(schema.getNonNullType());
       default:
         throw new IllegalArgumentException("Unsupported type: " + type);
     }

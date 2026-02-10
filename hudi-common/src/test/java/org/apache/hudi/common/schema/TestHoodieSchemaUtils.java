@@ -284,42 +284,6 @@ public class TestHoodieSchemaUtils {
   }
 
   @Test
-  public void testCreateNullableSchema() {
-    HoodieSchema stringSchema = HoodieSchema.create(HoodieSchemaType.STRING);
-
-    // Create nullable version
-    HoodieSchema nullableSchema = HoodieSchemaUtils.createNullableSchema(stringSchema);
-
-    assertNotNull(nullableSchema);
-    assertEquals(HoodieSchemaType.UNION, nullableSchema.getType());
-    assertTrue(nullableSchema.isNullable());
-  }
-
-  @Test
-  public void testCreateNullableSchemaValidation() {
-    // Should throw on null schema
-    assertThrows(IllegalArgumentException.class, () -> HoodieSchemaUtils.createNullableSchema(null));
-  }
-
-  @Test
-  public void testGetNonNullTypeFromUnion() {
-    HoodieSchema stringSchema = HoodieSchema.create(HoodieSchemaType.STRING);
-    HoodieSchema nullableSchema = HoodieSchemaUtils.createNullableSchema(stringSchema);
-
-    // Extract non-null type
-    HoodieSchema nonNullType = HoodieSchemaUtils.getNonNullTypeFromUnion(nullableSchema);
-
-    assertNotNull(nonNullType);
-    assertEquals(HoodieSchemaType.STRING, nonNullType.getType());
-  }
-
-  @Test
-  public void testGetNonNullTypeFromUnionValidation() {
-    // Should throw on null schema
-    assertThrows(IllegalArgumentException.class, () -> HoodieSchemaUtils.getNonNullTypeFromUnion(null));
-  }
-
-  @Test
   public void testFindMissingFields() {
     HoodieSchema fullSchema = HoodieSchema.parse(EVOLVED_SCHEMA);
     HoodieSchema partialSchema = HoodieSchema.parse(SIMPLE_SCHEMA);

@@ -548,8 +548,8 @@ object ExpressionPayload {
         .zipWithIndex
         .foreach {
           case ((expectedField, targetField), idx) =>
-            val expectedFieldSchema = HoodieSchemaUtils.getNonNullTypeFromUnion(expectedField.schema())
-            val targetFieldSchema = HoodieSchemaUtils.getNonNullTypeFromUnion(targetField.schema())
+            val expectedFieldSchema = expectedField.schema().getNonNullType
+            val targetFieldSchema = targetField.schema().getNonNullType
 
             val equal = Objects.equals(expectedFieldSchema, targetFieldSchema)
             ValidationUtils.checkState(equal,
