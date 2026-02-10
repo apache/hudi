@@ -91,7 +91,7 @@ public class HiveSyncConfig extends HoodieSyncConfig {
   public static final ConfigProperty<Boolean> RECREATE_HIVE_TABLE_ON_ERROR = ConfigProperty
       .key("hoodie.datasource.hive_sync.recreate_table_on_error")
       .defaultValue(false)
-      .sinceVersion("0.14.0")
+      .sinceVersion("0.14.2")
       .markAdvanced()
       .withDocumentation("Hive sync may fail if the Hive table exists with partitions differing from the Hoodie table or if schema evolution if not supported by Hive."
           + "Enabling this configuration will drop and create the table to match the Hoodie config");

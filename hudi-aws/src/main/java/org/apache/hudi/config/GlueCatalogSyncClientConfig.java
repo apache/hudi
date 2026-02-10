@@ -93,7 +93,7 @@ public class GlueCatalogSyncClientConfig extends HoodieConfig {
   public static final ConfigProperty<Boolean> RECREATE_GLUE_TABLE_ON_ERROR = ConfigProperty
       .key(GLUE_CLIENT_PROPERTY_PREFIX + "recreate_table_on_error")
       .defaultValue(false)
-      .sinceVersion("0.14.0")
+      .sinceVersion("0.14.2")
       .markAdvanced()
       .withDocumentation("Glue sync may fail if the Glue table exists with partitions differing from the Hoodie table or if schema evolution is not supported by Glue."
           + "Enabling this configuration will drop and create the table to match the Hoodie config");
