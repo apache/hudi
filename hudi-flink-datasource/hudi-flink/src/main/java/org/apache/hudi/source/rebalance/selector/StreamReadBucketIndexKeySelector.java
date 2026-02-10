@@ -32,8 +32,8 @@ public class StreamReadBucketIndexKeySelector implements KeySelector<MergeOnRead
 
   private final StoragePath basePath;
 
-  public StreamReadBucketIndexKeySelector(String tablePath) {
-    this.basePath = new StoragePath(tablePath);
+  public StreamReadBucketIndexKeySelector(String basePath) {
+    this.basePath = new StoragePath(basePath);
   }
 
   @Override
@@ -42,7 +42,7 @@ public class StreamReadBucketIndexKeySelector implements KeySelector<MergeOnRead
     String relPartitionPath = "";
     if (validFilePath.isPresent()) {
       StoragePath fullPartitionPath = new StoragePath(validFilePath.get()).getParent();
-      relPartitionPath = FSUtils.getRelativePartitionPath(fullPartitionPath, basePath);
+      relPartitionPath = FSUtils.getRelativePartitionPath(basePath, fullPartitionPath);
     }
 
     return Pair.of(relPartitionPath, mergeOnReadInputSplit.getFileId());
