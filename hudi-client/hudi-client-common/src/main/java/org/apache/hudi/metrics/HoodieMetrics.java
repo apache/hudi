@@ -40,8 +40,6 @@ import java.util.Set;
 
 import static org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator.MILLIS_INSTANT_TIMESTAMP_FORMAT_LENGTH;
 
-import java.util.Map;
-
 /**
  * Wrapper for metrics-related operations.
  */
