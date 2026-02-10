@@ -18,7 +18,6 @@
 
 package org.apache.hudi.avro;
 
-import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaUtils;
@@ -27,7 +26,6 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.SpillableMapUtils;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
-import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieAvroSchemaException;
 import org.apache.hudi.exception.HoodieException;
@@ -115,11 +113,6 @@ public class HoodieAvroUtils {
   public static final Conversions.DecimalConversion DECIMAL_CONVERSION = new Conversions.DecimalConversion();
 
   private static final Properties PROPERTIES = new Properties();
-
-  // All metadata fields are optional strings.
-  public static final Schema METADATA_FIELD_SCHEMA = AvroSchemaUtils.createNullableSchema(Schema.Type.STRING);
-
-  public static final Schema RECORD_KEY_SCHEMA = initRecordKeySchema();
 
   /**
    * Convert a given avro record to bytes.
@@ -237,79 +230,6 @@ public class HoodieAvroUtils {
     return decoder;
   }
 
-  public static boolean isTypeNumeric(Schema.Type type) {
-    return type == Schema.Type.INT || type == Schema.Type.LONG || type == Schema.Type.FLOAT || type == Schema.Type.DOUBLE;
-  }
-
-  public static Schema createHoodieWriteSchema(Schema originalSchema) {
-    return HoodieAvroUtils.addMetadataFields(originalSchema);
-  }
-
-  public static Schema createHoodieWriteSchema(String originalSchema) {
-    return createHoodieWriteSchema(new Schema.Parser().parse(originalSchema));
-  }
-
-  public static Schema createHoodieWriteSchema(String originalSchema, boolean withOperationField) {
-    return addMetadataFields(new Schema.Parser().parse(originalSchema), withOperationField);
-  }
-
-  /**
-   * Adds the Hoodie metadata fields to the given schema.
-   *
-   * @param schema The schema
-   */
-  public static Schema addMetadataFields(Schema schema) {
-    return addMetadataFields(schema, false);
-  }
-
-  /**
-   * Adds the Hoodie metadata fields to the given schema.
-   *
-   * @param schema             The schema
-   * @param withOperationField Whether to include the '_hoodie_operation' field
-   */
-  public static Schema addMetadataFields(Schema schema, boolean withOperationField) {
-    if (isSchemaNull(schema)) {
-      return schema;
-    }
-    int newFieldsSize = HoodieRecord.HOODIE_META_COLUMNS.size() + (withOperationField ? 1 : 0);
-    List<Schema.Field> parentFields = new ArrayList<>(schema.getFields().size() + newFieldsSize);
-
-    Schema.Field commitTimeField =
-        new Schema.Field(HoodieRecord.COMMIT_TIME_METADATA_FIELD, METADATA_FIELD_SCHEMA, "", JsonProperties.NULL_VALUE);
-    Schema.Field commitSeqnoField =
-        new Schema.Field(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD, METADATA_FIELD_SCHEMA, "", JsonProperties.NULL_VALUE);
-    Schema.Field recordKeyField =
-        new Schema.Field(HoodieRecord.RECORD_KEY_METADATA_FIELD, METADATA_FIELD_SCHEMA, "", JsonProperties.NULL_VALUE);
-    Schema.Field partitionPathField =
-        new Schema.Field(HoodieRecord.PARTITION_PATH_METADATA_FIELD, METADATA_FIELD_SCHEMA, "", JsonProperties.NULL_VALUE);
-    Schema.Field fileNameField =
-        new Schema.Field(HoodieRecord.FILENAME_METADATA_FIELD, METADATA_FIELD_SCHEMA, "", JsonProperties.NULL_VALUE);
-
-    parentFields.add(commitTimeField);
-    parentFields.add(commitSeqnoField);
-    parentFields.add(recordKeyField);
-    parentFields.add(partitionPathField);
-    parentFields.add(fileNameField);
-
-    if (withOperationField) {
-      final Schema.Field operationField =
-          new Schema.Field(HoodieRecord.OPERATION_METADATA_FIELD, METADATA_FIELD_SCHEMA, "", JsonProperties.NULL_VALUE);
-      parentFields.add(operationField);
-    }
-
-    for (Schema.Field field : schema.getFields()) {
-      if (!HoodieSchemaUtils.isMetadataField(field.name())) {
-        Schema.Field newField = createNewSchemaField(field);
-        for (Map.Entry<String, Object> prop : field.getObjectProps().entrySet()) {
-          newField.addProp(prop.getKey(), prop.getValue());
-        }
-        parentFields.add(newField);
-      }
-    }
-    return AvroSchemaUtils.createNewSchemaFromFieldsWithReference(schema, parentFields);
-  }
-
   /**
    * Creates a new Avro Schema.Field from an existing field, with special handling for
    * default values to ensure compatibility with Avro 1.12.0 and later versions.
@@ -368,18 +288,7 @@ public class HoodieAvroUtils {
     return new Schema.Field(name, schema, doc, convertDefaultValueForAvroCompatibility(defaultValue), order);
   }
 
-  public static boolean isSchemaNull(Schema schema) {
-    return schema == null || schema.getType() == Schema.Type.NULL;
-  }
-
-  public static Schema removeMetadataFields(Schema schema) {
-    if (isSchemaNull(schema)) {
-      return schema;
-    }
-    return removeFields(schema, HoodieRecord.HOODIE_META_COLUMNS_WITH_OPERATION);
-  }
-
-  public static Schema removeFields(Schema schema, Set<String> fieldsToRemove) {
+  private static Schema removeFields(Schema schema, Set<String> fieldsToRemove) {
     List<Schema.Field> filteredFields = schema.getFields()
         .stream()
         .filter(field -> !fieldsToRemove.contains(field.name()))
@@ -402,36 +311,6 @@ public class HoodieAvroUtils {
         })
         .collect(Collectors.toList());
     return AvroSchemaUtils.createNewSchemaFromFieldsWithReference(schema, filteredFields);
-  }
-
-  private static Schema initRecordKeySchema() {
-    Schema.Field recordKeyField =
-        new Schema.Field(HoodieRecord.RECORD_KEY_METADATA_FIELD, METADATA_FIELD_SCHEMA, "", JsonProperties.NULL_VALUE);
-    Schema recordKeySchema = Schema.createRecord("HoodieRecordKey", "", "", false);
-    recordKeySchema.setFields(Collections.singletonList(recordKeyField));
-    return recordKeySchema;
-  }
-
-  public static Schema getRecordKeySchema() {
-    return RECORD_KEY_SCHEMA;
-  }
-
-  /**
-   * Fetch schema for record key and partition path.
-   */
-  public static Schema getRecordKeyPartitionPathSchema() {
-    List<Schema.Field> toBeAddedFields = new ArrayList<>();
-    Schema recordSchema = Schema.createRecord("HoodieRecordKey", "", "", false);
-
-    Schema.Field recordKeyField =
-        new Schema.Field(HoodieRecord.RECORD_KEY_METADATA_FIELD, METADATA_FIELD_SCHEMA, "", JsonProperties.NULL_VALUE);
-    Schema.Field partitionPathField =
-        new Schema.Field(HoodieRecord.PARTITION_PATH_METADATA_FIELD, METADATA_FIELD_SCHEMA, "", JsonProperties.NULL_VALUE);
-
-    toBeAddedFields.add(recordKeyField);
-    toBeAddedFields.add(partitionPathField);
-    recordSchema.setFields(toBeAddedFields);
-    return recordSchema;
   }
 
   /**
@@ -575,11 +454,6 @@ public class HoodieAvroUtils {
     return record;
   }
 
-  public static GenericRecord addOperationToRecord(GenericRecord record, HoodieOperation operation) {
-    record.put(HoodieRecord.OPERATION_METADATA_FIELD, operation.getName());
-    return record;
-  }
-
   /**
    * Adds the Hoodie commit metadata into the provided Generic Record.
    */
@@ -653,29 +527,6 @@ public class HoodieAvroUtils {
   public static GenericRecord removeFields(GenericRecord record, Set<String> fieldsToRemove) {
     Schema newSchema = removeFields(record.getSchema(), fieldsToRemove);
     return rewriteRecord(record, newSchema);
-  }
-
-  /**
-   * Generate a reader schema off the provided writeSchema, to just project out the provided columns.
-   */
-  public static Schema generateProjectionSchema(Schema originalSchema, List<String> fieldNames) {
-    Map<String, Field> schemaFieldsMap = originalSchema.getFields().stream()
-        .map(r -> Pair.of(r.name().toLowerCase(), r)).collect(Collectors.toMap(Pair::getLeft, Pair::getRight));
-    List<Schema.Field> projectedFields = new ArrayList<>();
-    for (String fn : fieldNames) {
-      Schema.Field field = schemaFieldsMap.get(fn.toLowerCase());
-      if (field == null) {
-        throw new HoodieException("Field " + fn + " not found in log schema. Query cannot proceed! "
-            + "Derived Schema Fields: " + new ArrayList<>(schemaFieldsMap.keySet()));
-      } else {
-        projectedFields.add(createNewSchemaField(field));
-      }
-    }
-
-    Schema projectedSchema = Schema.createRecord(originalSchema.getName(), originalSchema.getDoc(),
-        originalSchema.getNamespace(), originalSchema.isError());
-    projectedSchema.setFields(projectedFields);
-    return projectedSchema;
   }
 
   /**
@@ -778,61 +629,6 @@ public class HoodieAvroUtils {
   }
 
   /**
-   * Get schema for the given field and record. Field can be nested, denoted by dot notation. e.g: a.b.c
-   *
-   * @param record    - record containing the value of the given field
-   * @param fieldName - name of the field
-   * @return
-   */
-  public static Schema getNestedFieldSchemaFromRecord(GenericRecord record, String fieldName) {
-    String[] parts = fieldName.split("\\.");
-    GenericRecord valueNode = record;
-    int i = 0;
-    for (; i < parts.length; i++) {
-      String part = parts[i];
-      Object val = valueNode.get(part);
-
-      if (i == parts.length - 1) {
-        return AvroSchemaUtils.getNonNullTypeFromUnion(valueNode.getSchema().getField(part).schema());
-      } else {
-        if (!(val instanceof GenericRecord)) {
-          throw new HoodieException("Cannot find a record at part value :" + part);
-        }
-        valueNode = (GenericRecord) val;
-      }
-    }
-    throw new HoodieException("Failed to get schema. Not a valid field name: " + fieldName);
-  }
-
-  /**
-   * Get schema for the given field and write schema. Field can be nested, denoted by dot notation. e.g: a.b.c
-   * Use this method when record is not available. Otherwise, prefer to use {@link #getNestedFieldSchemaFromRecord(GenericRecord, String)}
-   *
-   * @param writeSchema - write schema of the record
-   * @param fieldName   -  name of the field
-   * @return
-   */
-  public static Schema getNestedFieldSchemaFromWriteSchema(Schema writeSchema, String fieldName) {
-    String[] parts = fieldName.split("\\.");
-    Schema currentSchema = writeSchema;
-    for (int i = 0; i < parts.length; i++) {
-      String part = parts[i];
-      try {
-        // Resolve nullable/union schema to the actual schema
-        currentSchema = AvroSchemaUtils.getNonNullTypeFromUnion(currentSchema.getField(part).schema());
-
-        if (i == parts.length - 1) {
-          // Return the schema for the final part
-          return AvroSchemaUtils.getNonNullTypeFromUnion(currentSchema);
-        }
-      } catch (Exception e) {
-        throw new HoodieException("Failed to get schema. Not a valid field name: " + fieldName);
-      }
-    }
-    throw new HoodieException("Failed to get schema. Not a valid field name: " + fieldName);
-  }
-
-  /**
    * Returns the string value of the given record {@code rec} and field {@code fieldName}.
    * The field and value both could be missing.
    *
@@ -902,10 +698,6 @@ public class HoodieAvroUtils {
       }
     }
     return fieldValue;
-  }
-
-  public static Schema getNullSchema() {
-    return Schema.create(Schema.Type.NULL);
   }
 
   /**
@@ -1480,10 +1272,10 @@ public class HoodieAvroUtils {
       String payloadClass,
       String[] preCombineFields,
       Option<Pair<String, String>> simpleKeyGenFieldsOpt,
-      Boolean withOperation,
+      boolean withOperation,
       Option<String> partitionNameOp,
-      Boolean populateMetaFields,
-      Option<Schema> schemaWithoutMetaFields) {
+      boolean populateMetaFields,
+      Option<HoodieSchema> schemaWithoutMetaFields) {
     if (populateMetaFields) {
       return SpillableMapUtils.convertToHoodieRecordPayload((GenericRecord) data,
           payloadClass, preCombineFields, withOperation);
@@ -1543,71 +1335,6 @@ public class HoodieAvroUtils {
 
   static boolean gteqAvro1_12() {
     return StringUtils.compareVersions(AVRO_VERSION, "1.12") >= 0;
-  }
-
-  /**
-   * Returns field name and the resp data type of the field. The data type will always refer to the leaf node.
-   * for eg, for a.b.c, we turn Pair.of(a.b.c, DataType(c))
-   * @param schema schema of table.
-   * @param fieldName field name of interest.
-   * @return
-   */
-  @VisibleForTesting
-  public static Pair<String, Schema.Field> getSchemaForField(Schema schema, String fieldName) {
-    return getSchemaForField(schema, fieldName, StringUtils.EMPTY_STRING);
-  }
-
-  @VisibleForTesting
-  public static Pair<String, Schema.Field> getSchemaForField(Schema schema, String fieldName, String prefix) {
-    Schema nonNullableSchema = unwrapNullable(schema);
-    if (!fieldName.contains(".")) {
-      return Pair.of(prefix + fieldName, nonNullableSchema.getField(fieldName));
-    } else {
-      int rootFieldIndex = fieldName.indexOf(".");
-      Schema.Field rootField = nonNullableSchema.getField(fieldName.substring(0, rootFieldIndex));
-      if (rootField == null) {
-        throw new HoodieException("Failed to find " + fieldName + " in the table schema ");
-      }
-      return getSchemaForField(rootField.schema(), fieldName.substring(rootFieldIndex + 1), prefix + fieldName.substring(0, rootFieldIndex + 1));
-    }
-  }
-
-  public static Object toJavaDefaultValue(Schema.Field field) {
-    Object defaultVal = field.defaultVal();
-    if (defaultVal == null || defaultVal == org.apache.avro.JsonProperties.NULL_VALUE) {
-      return null;
-    }
-
-    Schema.Type type = getNonNullType(field.schema());
-    switch (type) {
-      case STRING:
-      case INT:
-      case LONG:
-      case FLOAT:
-      case DOUBLE:
-      case BOOLEAN:
-      case ENUM:
-      case BYTES:
-        return defaultVal;
-      case ARRAY:
-      case MAP:
-      case RECORD:
-        // Use Avro's standard GenericData utility for complex types
-        return GenericData.get().getDefaultValue(field);
-      default:
-        throw new IllegalArgumentException("Unsupported Avro type: " + type);
-    }
-  }
-
-  private static Schema.Type getNonNullType(Schema schema) {
-    if (schema.getType() == Schema.Type.UNION) {
-      return schema.getTypes().stream()
-          .filter(s -> s.getType() != Schema.Type.NULL)
-          .findFirst()
-          .orElseThrow(() -> new IllegalArgumentException("Only NULL in union"))
-          .getType();
-    }
-    return schema.getType();
   }
 
   private static Object convertDefaultValueForAvroCompatibility(Object defaultValue) {

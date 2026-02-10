@@ -59,8 +59,8 @@ public class FlinkStreamReadMetrics extends HoodieFlinkMetrics {
    */
   private long splitLatestCommitDelay;
 
-  public FlinkStreamReadMetrics(MetricGroup metricGroup) {
-    super(metricGroup);
+  public FlinkStreamReadMetrics(MetricGroup metricGroup, String tableName) {
+    super(metricGroup.addGroup("table", tableName));
   }
 
   @Override

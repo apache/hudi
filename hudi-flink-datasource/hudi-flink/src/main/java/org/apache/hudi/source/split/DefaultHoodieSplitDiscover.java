@@ -18,6 +18,7 @@
 
 package org.apache.hudi.source.split;
 
+import org.apache.flink.core.fs.Path;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.source.IncrementalInputSplits;
 import org.apache.hudi.source.HoodieScanContext;
@@ -42,16 +43,17 @@ public class DefaultHoodieSplitDiscover implements HoodieContinuousSplitDiscover
     this.metaClient = metaClient;
     this.incrementalInputSplits = IncrementalInputSplits.builder()
         .conf(scanContext.getConf())
-        .path(scanContext.getPath())
+        .path(new Path(scanContext.getPath().toUri()))
         .rowType(scanContext.getRowType())
         .maxCompactionMemoryInBytes(scanContext.getMaxCompactionMemoryInBytes())
-        .skipCompaction(scanContext.skipCompaction())
-        .skipClustering(scanContext.skipClustering())
-        .skipInsertOverwrite(scanContext.skipInsertOverwrite()).build();
+        .skipCompaction(scanContext.isSkipCompaction())
+        .skipClustering(scanContext.isSkipClustering())
+        .skipInsertOverwrite(scanContext.isSkipInsertOverwrite())
+        .partitionPruner(scanContext.getPartitionPruner()).build();
   }
 
   @Override
   public HoodieContinuousSplitBatch discoverSplits(String lastInstant) {
-    return incrementalInputSplits.inputHoodieSourceSplits(metaClient, lastInstant, scanContext.cdcEnabled());
+    return incrementalInputSplits.inputHoodieSourceSplits(metaClient, lastInstant, scanContext.isCdcEnabled());
   }
 }

@@ -47,7 +47,6 @@ import org.apache.hudi.io.storage.HoodieIOFactory;
 import org.apache.hudi.io.util.FileIOUtils;
 
 import lombok.extern.slf4j.Slf4j;
-import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.spark.api.java.JavaPairRDD;
@@ -209,8 +208,9 @@ public class DFSHoodieDatasetInputReader extends DFSDeltaInputReader {
 
   private JavaRDD<GenericRecord> projectSchema(JavaRDD<GenericRecord> updates) {
     // The records read from the hoodie dataset have the hoodie record fields, rewrite the record to eliminate them
+    HoodieSchema schema = HoodieSchema.parse(schemaStr);
     return updates
-        .map(r -> HoodieAvroUtils.rewriteRecord(r, new Schema.Parser().parse(schemaStr)));
+        .map(r -> HoodieAvroUtils.rewriteRecord(r, schema.toAvroSchema()));
   }
 
   private JavaRDD<GenericRecord> generateUpdates(Map<String, Integer> adjustedPartitionToFileIdCountMap,
@@ -300,11 +300,11 @@ public class DFSHoodieDatasetInputReader extends DFSDeltaInputReader {
           .build();
       // readAvro log files
       Iterable<HoodieRecord> iterable = () -> scanner.iterator();
-      Schema schema = new Schema.Parser().parse(schemaStr);
+      HoodieSchema schema = HoodieSchema.parse(schemaStr);
       return StreamSupport.stream(iterable.spliterator(), false)
           .map(e -> {
             try {
-              return (IndexedRecord) ((HoodieAvroRecord)e).getData().getInsertValue(schema).get();
+              return (IndexedRecord) ((HoodieAvroRecord)e).getData().getInsertValue(schema.toAvroSchema()).get();
             } catch (IOException io) {
               throw new UncheckedIOException(io);
             }

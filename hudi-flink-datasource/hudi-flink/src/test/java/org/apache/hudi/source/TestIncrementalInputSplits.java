@@ -696,4 +696,75 @@ public class TestIncrementalInputSplits extends HoodieCommonTestHarness {
     assertNotNull(result, "Result should not be null for table type: " + tableType);
     assertNotNull(result.getSplits(), "Splits should not be null for table type: " + tableType);
   }
+
+  @Test
+  void testBatchHoodieSourceSplitsWithCDCEnabled() throws Exception {
+    metaClient = HoodieTestUtils.init(basePath, HoodieTableType.COPY_ON_WRITE);
+    Configuration conf = TestConfigurations.getDefaultConf(basePath);
+    conf.set(FlinkOptions.READ_START_COMMIT, FlinkOptions.START_COMMIT_EARLIEST);
+    conf.set(FlinkOptions.CHANGELOG_ENABLED, true);
+
+    // Insert test data
+    TestData.writeData(TestData.DATA_SET_INSERT, conf);
+    metaClient.reloadActiveTimeline();
+
+    IncrementalInputSplits iis = IncrementalInputSplits.builder()
+        .conf(conf)
+        .path(new Path(basePath))
+        .rowType(TestConfigurations.ROW_TYPE)
+        .build();
+
+    org.apache.hudi.source.split.HoodieContinuousSplitBatch result =
+        iis.batchHoodieSourceSplits(metaClient, true);
+
+    assertNotNull(result, "Batch result with CDC should not be null");
+    assertNotNull(result.getSplits(), "Batch splits with CDC should not be null");
+  }
+
+  @Test
+  void testBatchHoodieSourceSplitsWithEmptyTable() throws Exception {
+    metaClient = HoodieTestUtils.init(basePath, HoodieTableType.COPY_ON_WRITE);
+    Configuration conf = TestConfigurations.getDefaultConf(basePath);
+    conf.set(FlinkOptions.READ_START_COMMIT, FlinkOptions.START_COMMIT_EARLIEST);
+
+    // Don't write any data - test with empty table
+    IncrementalInputSplits iis = IncrementalInputSplits.builder()
+        .conf(conf)
+        .path(new Path(basePath))
+        .rowType(TestConfigurations.ROW_TYPE)
+        .build();
+
+    org.apache.hudi.source.split.HoodieContinuousSplitBatch result =
+        iis.batchHoodieSourceSplits(metaClient, false);
+
+    assertNotNull(result, "Batch result for empty table should not be null");
+    assertNotNull(result.getSplits(), "Batch splits for empty table should not be null");
+    assertTrue(result.getSplits().isEmpty(), "Batch splits for empty table should be empty");
+  }
+
+  @ParameterizedTest
+  @EnumSource(value = HoodieTableType.class)
+  void testBatchHoodieSourceSplitsWithDifferentTableTypes(HoodieTableType tableType) throws Exception {
+    metaClient = HoodieTestUtils.init(basePath, tableType);
+    Configuration conf = TestConfigurations.getDefaultConf(basePath);
+    conf.set(FlinkOptions.READ_START_COMMIT, FlinkOptions.START_COMMIT_EARLIEST);
+    conf.set(FlinkOptions.TABLE_TYPE, tableType.name());
+
+    // Insert test data
+    TestData.writeData(TestData.DATA_SET_INSERT, conf);
+    metaClient.reloadActiveTimeline();
+
+    IncrementalInputSplits iis = IncrementalInputSplits.builder()
+        .conf(conf)
+        .path(new Path(basePath))
+        .rowType(TestConfigurations.ROW_TYPE)
+        .build();
+
+    org.apache.hudi.source.split.HoodieContinuousSplitBatch result =
+        iis.batchHoodieSourceSplits(metaClient, false);
+
+    assertNotNull(result, "Batch result should not be null for table type: " + tableType);
+    assertNotNull(result.getSplits(), "Batch splits should not be null for table type: " + tableType);
+    assertFalse(result.getSplits().isEmpty(), "Batch splits should not be empty for table type: " + tableType);
+  }
 }

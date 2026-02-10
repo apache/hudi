@@ -19,14 +19,18 @@
 package org.apache.hudi.source.split;
 
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.source.assign.HoodieSplitAssigner;
 
 import javax.annotation.Nullable;
 
+import java.util.ArrayList;
 import java.util.Collection;
+import java.util.List;
+import java.util.Map;
 import java.util.Queue;
+
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ConcurrentLinkedDeque;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.PriorityBlockingQueue;
 import java.util.stream.Collectors;
 
@@ -36,27 +40,29 @@ import java.util.stream.Collectors;
 public class DefaultHoodieSplitProvider implements HoodieSplitProvider {
   public static final int DEFAULT_SPLIT_QUEUE_SIZE = 20;
 
-  private Queue<HoodieSourceSplit> pendingSplits;
-
-  public DefaultHoodieSplitProvider() {
-    this.pendingSplits = new ConcurrentLinkedDeque<>();
-  }
+  private final Map<Integer, Queue<HoodieSourceSplit>> pendingSplits;
+  private final HoodieSplitAssigner splitAssigner;
+  private final SerializableComparator<HoodieSourceSplit> comparator;
+  private CompletableFuture<Void> availableFuture;
 
   /**
-   * Creates a DefaultHoodieSplitProvider with a custom comparator for ordering splits.
+   * Creates a DefaultHoodieSplitProvider.
    *
-   * @param comparator the comparator to use for ordering splits
+   * @param splitAssigner the assigner that assigns each split to a task ID (must not be null)
    */
-  public DefaultHoodieSplitProvider(SerializableComparator<HoodieSourceSplit> comparator) {
-    ValidationUtils.checkArgument(comparator != null,
-        "The hoodie source split comparator can't be null");
-    this.pendingSplits = new PriorityBlockingQueue<>(DEFAULT_SPLIT_QUEUE_SIZE, comparator);
+  public DefaultHoodieSplitProvider(HoodieSplitAssigner splitAssigner) {
+    this.comparator = new HoodieSourceSplitComparator();
+    this.pendingSplits = new ConcurrentHashMap<>();
+    this.splitAssigner = splitAssigner;
   }
 
   @Override
-  public Option<HoodieSourceSplit> getNext(@Nullable String hostname) {
-    if (!pendingSplits.isEmpty()) {
-      return Option.of(pendingSplits.poll());
+  public Option<HoodieSourceSplit> getNext(int subTaskId, @Nullable String hostname) {
+    if (pendingSplits.containsKey(subTaskId)) {
+      Queue<HoodieSourceSplit> splits = pendingSplits.get(subTaskId);
+      if (!splits.isEmpty()) {
+        return Option.of(splits.poll());
+      }
     }
 
     return Option.empty();
@@ -73,28 +79,52 @@ public class DefaultHoodieSplitProvider implements HoodieSplitProvider {
   }
 
   private void addSplits(Collection<HoodieSourceSplit> splits) {
-    this.pendingSplits.addAll(splits);
+    for (HoodieSourceSplit split : splits) {
+      int taskId = splitAssigner.assign(split);
+      Queue<HoodieSourceSplit> queue = pendingSplits.computeIfAbsent(
+          taskId, k -> new PriorityBlockingQueue<>(DEFAULT_SPLIT_QUEUE_SIZE, comparator));
+      queue.add(split);
+
+      // complete pending future if new splits are discovered
+      completeAvailableFuturesIfNeeded();
+    }
   }
 
   @Override
   public Collection<HoodieSourceSplitState> state() {
-    return pendingSplits.stream().map(
-        split -> new HoodieSourceSplitState(split, HoodieSourceSplitStatus.UNASSIGNED))
-        .collect(Collectors.toList());
+    List<HoodieSourceSplitState> splitList = new ArrayList<>();
+
+    for (Queue<HoodieSourceSplit> queue: pendingSplits.values()) {
+      splitList.addAll(queue.stream()
+          .map(split -> new HoodieSourceSplitState(split, HoodieSourceSplitStatus.UNASSIGNED))
+          .collect(Collectors.toList()));
+    }
+
+    return splitList;
   }
 
   @Override
   public CompletableFuture<Void> isAvailable() {
-    return new CompletableFuture<>();
+    if (availableFuture == null) {
+      availableFuture = new CompletableFuture<>();
+    }
+    return availableFuture;
   }
 
   @Override
   public int pendingSplitCount() {
-    return pendingSplits.size();
+    return pendingSplits.values().stream().mapToInt(Collection::size).sum();
   }
 
   @Override
   public long pendingRecords() {
     throw new UnsupportedOperationException("Pending records is not supported in DefaultSplitProvider.");
+  }
+
+  private synchronized void completeAvailableFuturesIfNeeded() {
+    if (availableFuture != null && !pendingSplits.isEmpty()) {
+      availableFuture.complete(null);
+    }
+    availableFuture = null;
   }
 }

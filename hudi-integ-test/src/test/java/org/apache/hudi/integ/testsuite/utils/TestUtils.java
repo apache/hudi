@@ -19,9 +19,9 @@
 package org.apache.hudi.integ.testsuite.utils;
 
 import java.util.List;
-import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hudi.AvroConversionUtils;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.utilities.schema.RowBasedSchemaProvider;
 import org.apache.spark.api.java.JavaRDD;
@@ -59,7 +59,7 @@ public class TestUtils {
    */
   public static void createAvroFiles(JavaSparkContext jsc, SparkSession sparkSession, String basePath, int numFiles,
       int numRecordsPerFile) {
-    Schema schema = HoodieTestDataGenerator.AVRO_SCHEMA;
+    HoodieSchema schema = HoodieTestDataGenerator.HOODIE_SCHEMA;
     for (int i = 0; i < numFiles; i++) {
       JavaRDD<GenericRecord> rdd = makeRDD(jsc, numRecordsPerFile);
       AvroConversionUtils.createDataFrame(rdd.rdd(), schema.toString(), sparkSession).write()
@@ -68,8 +68,8 @@ public class TestUtils {
     }
   }
 
-  public static Schema getSchema() {
-    return HoodieTestDataGenerator.AVRO_SCHEMA;
+  public static HoodieSchema getSchema() {
+    return HoodieTestDataGenerator.HOODIE_SCHEMA;
   }
 
 }

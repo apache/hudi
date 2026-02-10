@@ -85,8 +85,8 @@ public class TestHoodieEnumeratorStateSerializer {
     assertFalse(deserialized.getLastEnumeratedInstantOffset().isPresent());
 
     List<HoodieSourceSplitState> splitStates = new ArrayList<>(deserialized.getPendingSplitStates());
-    assertEquals(HoodieSourceSplitStatus.UNASSIGNED, splitStates.get(0).status());
-    assertEquals(split, splitStates.get(0).split());
+    assertEquals(HoodieSourceSplitStatus.UNASSIGNED, splitStates.get(0).getStatus());
+    assertEquals(split, splitStates.get(0).getSplit());
   }
 
   @Test
@@ -118,9 +118,9 @@ public class TestHoodieEnumeratorStateSerializer {
     assertEquals("offset-123", deserialized.getLastEnumeratedInstantOffset().get());
 
     List<HoodieSourceSplitState> deserializedStates = new ArrayList<>(deserialized.getPendingSplitStates());
-    assertEquals(HoodieSourceSplitStatus.UNASSIGNED, deserializedStates.get(0).status());
-    assertEquals(HoodieSourceSplitStatus.ASSIGNED, deserializedStates.get(1).status());
-    assertEquals(HoodieSourceSplitStatus.COMPLETED, deserializedStates.get(2).status());
+    assertEquals(HoodieSourceSplitStatus.UNASSIGNED, deserializedStates.get(0).getStatus());
+    assertEquals(HoodieSourceSplitStatus.ASSIGNED, deserializedStates.get(1).getStatus());
+    assertEquals(HoodieSourceSplitStatus.COMPLETED, deserializedStates.get(2).getStatus());
   }
 
   @Test
@@ -214,8 +214,8 @@ public class TestHoodieEnumeratorStateSerializer {
 
     List<HoodieSourceSplitState> deserializedStates = new ArrayList<>(deserialized.getPendingSplitStates());
     for (int i = 0; i < 10; i++) {
-      assertEquals(splitStates.get(i).split(), deserializedStates.get(i).split());
-      assertEquals(splitStates.get(i).status(), deserializedStates.get(i).status());
+      assertEquals(splitStates.get(i).getSplit(), deserializedStates.get(i).getSplit());
+      assertEquals(splitStates.get(i).getStatus(), deserializedStates.get(i).getStatus());
     }
   }
 
@@ -241,9 +241,9 @@ public class TestHoodieEnumeratorStateSerializer {
     HoodieSplitEnumeratorState deserialized = serializer.deserialize(serializer.getVersion(), serialized);
 
     List<HoodieSourceSplitState> deserializedStates = new ArrayList<>(deserialized.getPendingSplitStates());
-    assertEquals(HoodieSourceSplitStatus.UNASSIGNED, deserializedStates.get(0).status());
-    assertEquals(HoodieSourceSplitStatus.ASSIGNED, deserializedStates.get(1).status());
-    assertEquals(HoodieSourceSplitStatus.COMPLETED, deserializedStates.get(2).status());
+    assertEquals(HoodieSourceSplitStatus.UNASSIGNED, deserializedStates.get(0).getStatus());
+    assertEquals(HoodieSourceSplitStatus.ASSIGNED, deserializedStates.get(1).getStatus());
+    assertEquals(HoodieSourceSplitStatus.COMPLETED, deserializedStates.get(2).getStatus());
   }
 
   @Test
@@ -318,9 +318,9 @@ public class TestHoodieEnumeratorStateSerializer {
     HoodieSplitEnumeratorState deserialized = serializer.deserialize(serializer.getVersion(), serialized);
 
     List<HoodieSourceSplitState> deserializedStates = new ArrayList<>(deserialized.getPendingSplitStates());
-    assertEquals(2L, deserializedStates.get(0).split().getConsumed());
-    assertEquals(500L, deserializedStates.get(1).split().getConsumed());
-    assertEquals(5, deserializedStates.get(1).split().getFileOffset());
+    assertEquals(2L, deserializedStates.get(0).getSplit().getConsumed());
+    assertEquals(500L, deserializedStates.get(1).getSplit().getConsumed());
+    assertEquals(5, deserializedStates.get(1).getSplit().getFileOffset());
   }
 
   @Test
@@ -418,9 +418,9 @@ public class TestHoodieEnumeratorStateSerializer {
     HoodieSplitEnumeratorState deserialized = serializer.deserialize(serializer.getVersion(), serialized);
 
     List<HoodieSourceSplitState> deserializedStates = new ArrayList<>(deserialized.getPendingSplitStates());
-    assertEquals(HoodieSourceSplitStatus.UNASSIGNED, deserializedStates.get(0).status());
-    assertEquals(HoodieSourceSplitStatus.ASSIGNED, deserializedStates.get(1).status());
-    assertEquals(HoodieSourceSplitStatus.COMPLETED, deserializedStates.get(2).status());
+    assertEquals(HoodieSourceSplitStatus.UNASSIGNED, deserializedStates.get(0).getStatus());
+    assertEquals(HoodieSourceSplitStatus.ASSIGNED, deserializedStates.get(1).getStatus());
+    assertEquals(HoodieSourceSplitStatus.COMPLETED, deserializedStates.get(2).getStatus());
   }
 
   @Test
@@ -474,9 +474,9 @@ public class TestHoodieEnumeratorStateSerializer {
 
     assertEquals(3, deserialized.getPendingSplitStates().size());
     List<HoodieSourceSplitState> deserializedStates = new ArrayList<>(deserialized.getPendingSplitStates());
-    assertEquals(1L, deserializedStates.get(0).split().getConsumed());
-    assertFalse(deserializedStates.get(1).split().getBasePath().isPresent());
-    assertEquals(Integer.MAX_VALUE, deserializedStates.get(2).split().getFileOffset());
+    assertEquals(1L, deserializedStates.get(0).getSplit().getConsumed());
+    assertFalse(deserializedStates.get(1).getSplit().getBasePath().isPresent());
+    assertEquals(Integer.MAX_VALUE, deserializedStates.get(2).getSplit().getFileOffset());
   }
 
   /**
