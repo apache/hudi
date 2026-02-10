@@ -30,22 +30,22 @@ import java.util.List;
 
 public class StreamReadBucketIndexKeySelector implements KeySelector<MergeOnReadInputSplit, Pair<String, String>> {
 
-  private final StoragePath tablePath;
+  private final StoragePath basePath;
 
   public StreamReadBucketIndexKeySelector(String tablePath) {
-    this.tablePath = new StoragePath(tablePath);
+    this.basePath = new StoragePath(tablePath);
   }
 
   @Override
   public Pair<String, String> getKey(MergeOnReadInputSplit mergeOnReadInputSplit) throws Exception {
-    String fileId = mergeOnReadInputSplit.getFileId();
     Option<String> validFilePath = getValidFilePathFromInputSplit(mergeOnReadInputSplit);
-    String partitionPath = "";
+    String relPartitionPath = "";
     if (validFilePath.isPresent()) {
-      partitionPath = getPartitionPathFromFullPath(new StoragePath(validFilePath.get()), tablePath);
+      StoragePath fullPartitionPath = new StoragePath(validFilePath.get()).getParent();
+      relPartitionPath = FSUtils.getRelativePartitionPath(fullPartitionPath, basePath);
     }
 
-    return Pair.of(partitionPath, fileId);
+    return Pair.of(relPartitionPath, mergeOnReadInputSplit.getFileId());
   }
 
   /**
@@ -63,18 +63,5 @@ public class StreamReadBucketIndexKeySelector implements KeySelector<MergeOnRead
     }
 
     return Option.empty();
-  }
-
-  /**
-   * Get relative partition path from a full file path
-   *
-   */
-  private String getPartitionPathFromFullPath(StoragePath fullPath, StoragePath tablePath) {
-    String relativePartitionPath = FSUtils.getRelativePartitionPath(tablePath, fullPath);
-    String fileName = fullPath.getName();
-    if (relativePartitionPath.equals(fileName)) {
-      return "";
-    }
-    return relativePartitionPath.substring(0, relativePartitionPath.indexOf(fileName) - 1);
   }
 }

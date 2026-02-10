@@ -38,8 +38,8 @@ public class StreamReadBucketIndexPartitioner implements Partitioner<Pair<String
 
   private Functions.Function3<Integer, String, Integer, Integer> partitionIndexFunc;
 
-  public StreamReadBucketIndexPartitioner(Configuration conf, int parallelism) {
-    this.parallelism = parallelism;
+  public StreamReadBucketIndexPartitioner(Configuration conf) {
+    this.parallelism = conf.get(FlinkOptions.READ_TASKS);
     this.numBucketsFunction = new NumBucketsFunction(conf.get(FlinkOptions.BUCKET_INDEX_PARTITION_EXPRESSIONS),
         conf.get(FlinkOptions.BUCKET_INDEX_PARTITION_RULE), conf.get(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS));
   }
