@@ -204,6 +204,41 @@ class TestRequestHandler extends HoodieCommonTestHarness {
     assertFalse(result2, "Request with non-null requestId when marker has null should fail (no backward compat)");
   }
 
+  @Test
+  void testMarkerCreationAfterRecovery() throws IOException, InterruptedException {
+    String basePath = tempDir.resolve("base-path-recovery").toUri().toString();
+    HoodieTableMetaClient metaClient = HoodieTestUtils.init(basePath, getTableType());
+    String markerDir = metaClient.getMarkerFolderPath("105");
+    String markerName = "partition1/file1.parquet.marker.CREATE";
+    String requestId = java.util.UUID.randomUUID().toString();
+
+    Map<String, String> queryParameters = new HashMap<>();
+    queryParameters.put(BASEPATH_PARAM, basePath);
+    queryParameters.put(MARKER_DIR_PATH_PARAM, markerDir);
+    queryParameters.put(MARKER_NAME_PARAM, markerName);
+    queryParameters.put(MARKER_REQUEST_ID_PARAM, requestId);
+
+    boolean result = timelineServiceClient.makeRequest(
+            TimelineServiceClient.Request.newBuilder(POST, CREATE_MARKER_URL)
+                .addQueryParams(queryParameters)
+                .build())
+        .getDecodedContent(new TypeReference<Boolean>() {});
+    assertTrue(result, "Initial marker creation should succeed");
+    waitForMarkerCreation(markerDir, markerName, 1000);
+
+    // Restart server to simulate recovery
+    tearDown();
+    setUp();
+
+    queryParameters.put(MARKER_REQUEST_ID_PARAM, java.util.UUID.randomUUID().toString());
+    boolean afterRecovery = timelineServiceClient.makeRequest(
+            TimelineServiceClient.Request.newBuilder(POST, CREATE_MARKER_URL)
+                .addQueryParams(queryParameters)
+                .build())
+        .getDecodedContent(new TypeReference<Boolean>() {});
+    assertFalse(afterRecovery, "After recovery (backfill NULL), different requestId should fail");
+  }
+
   private void assertMarkerCreation(String basePath, String schema) throws IOException {
     Map<String, String> queryParameters = new HashMap<>();
     String basePathScheme = getPathWithReplacedSchema(basePath, schema);

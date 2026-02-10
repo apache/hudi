@@ -4,6 +4,7 @@ target/
 metastore_db/
 .metals/
 .mvn/
+.m2repo/
 *.bloop/
 *.vscode/
 *.metals/
