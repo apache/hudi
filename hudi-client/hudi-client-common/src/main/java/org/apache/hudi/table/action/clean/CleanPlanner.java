@@ -655,13 +655,17 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
     if (removedFileSlices.isEmpty()) {
       return Collections.emptyList();
     }
-    // Validate there is at least one completed commit and check if there are any blob columns to clean
-    HoodieTableMetaClient metaClient = table.getMetaClient();
-    Option<String> latestCommitTimeOpt = metaClient.getActiveTimeline().lastInstant().map(HoodieInstant::requestedTime);
     Pair<HoodieSchema, List<String>> blobSchemaAndColumns = getBlobSchemaAndColumns(schema);
     HoodieSchema requestedSchema = blobSchemaAndColumns.getLeft();
     List<String> blobColumns = blobSchemaAndColumns.getRight();
-    if (!latestCommitTimeOpt.isPresent() || blobColumns.isEmpty()) {
+    if (blobColumns.isEmpty()) {
+      // no blob columns, no blob files to clean
+      return Collections.emptyList();
+    }
+    // Validate there is at least one completed commit
+    HoodieTableMetaClient metaClient = table.getMetaClient();
+    Option<String> latestCommitTimeOpt = metaClient.getActiveTimeline().lastInstant().map(HoodieInstant::requestedTime);
+    if (!latestCommitTimeOpt.isPresent()) {
       // no commits or blob files to clean
       return Collections.emptyList();
     }
@@ -693,6 +697,10 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
             return managedBlobFilePathsInSlice.stream();
           })
           .collect(Collectors.toSet());
+      if (managedBlobFilePaths.isEmpty()) {
+        // no blob files referenced by the removed file slices, skip
+        return Stream.empty();
+      }
       // Then iterate through the retained file slices with skip merging to find all the blob files that are still referenced by the retained file slices.
       retainedFileSlicesByFileGroupId.getOrDefault(fileGroupId, Collections.emptyList()).forEach(fileSlice -> {
         HoodieFileGroupReader<R> reader = getHoodieFileGroupReader(schema, fileSlice, readerContext, metaClient, latestCommitTimeOpt, requestedSchema, properties);
