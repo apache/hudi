@@ -756,7 +756,7 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
   private void collectBlobFieldsAndPaths(HoodieSchemaField field, String currentPath,
                                          List<String> blobPaths, List<HoodieSchemaField> blobFields) {
     HoodieSchema fieldSchema = field.schema();
-    HoodieSchema nonNullSchema = fieldSchema.isNullable() ? fieldSchema.getNonNullType() : fieldSchema;
+    HoodieSchema nonNullSchema = fieldSchema.getNonNullType();
 
     switch (nonNullSchema.getType()) {
       case BLOB:
