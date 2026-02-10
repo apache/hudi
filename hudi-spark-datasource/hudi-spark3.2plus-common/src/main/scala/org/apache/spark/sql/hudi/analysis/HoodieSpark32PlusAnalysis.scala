@@ -32,6 +32,7 @@ import org.apache.spark.sql.catalyst.rules.Rule
 import org.apache.spark.sql.connector.catalog.CatalogV2Implicits.IdentifierHelper
 import org.apache.spark.sql.connector.catalog.{Table, V1Table}
 import org.apache.spark.sql.connector.catalog.CatalogV2Implicits.IdentifierHelper
+import org.apache.spark.sql.execution.command.DescribeTableCommand
 import org.apache.spark.sql.execution.datasources.{DataSource, LogicalRelation}
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.isMetaField
 import org.apache.spark.sql.hudi.ProvidesHoodieConfig
@@ -258,6 +259,9 @@ case class HoodieSpark32PlusPostAnalysisRule(sparkSession: SparkSession) extends
           purge,
           retainData = true
         )
+
+      case DescribeRelation(MatchResolvedTable(_, id, HoodieV1OrV2Table(_)), partitionSpec, isExtended, output) =>
+        DescribeTableCommand(id.asTableIdentifier, partitionSpec, isExtended, output)
 
       case _ => plan
     }
