@@ -218,9 +218,9 @@ public class MarkerDirState implements Serializable {
     }
 
     String existingRequestId = markerToRequestIdMap.get(markerName);
-    String normalizedRequestId = requestId == null ? NULL_REQUEST_ID : requestId;
     boolean idempotentMatch = !NULL_REQUEST_ID.equals(existingRequestId)
-        && normalizedRequestId.equals(existingRequestId);
+        && requestId != null
+        && requestId.equals(existingRequestId);
 
     future.setIsSuccessful(idempotentMatch);
     return true;

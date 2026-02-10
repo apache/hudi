@@ -33,6 +33,7 @@ import org.apache.hudi.timeline.TimelineServiceClient;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import org.apache.hadoop.conf.Configuration;
+import org.apache.http.client.HttpResponseException;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -55,6 +56,7 @@ import static org.apache.hudi.common.table.view.RemoteHoodieTableFileSystemView.
 import static org.apache.hudi.timeline.TimelineServiceClientBase.RequestMethod.GET;
 import static org.apache.hudi.timeline.TimelineServiceClientBase.RequestMethod.POST;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class TestRequestHandler extends HoodieCommonTestHarness {
@@ -138,6 +140,15 @@ class TestRequestHandler extends HoodieCommonTestHarness {
     queryParameters.put(BASEPATH_PARAM, basePath);
     queryParameters.put(MARKER_DIR_PATH_PARAM, markerDir);
     queryParameters.put(MARKER_NAME_PARAM, markerName);
+    
+    // No requestId → server returns 400
+    assertThrows(HttpResponseException.class, () ->
+        timelineServiceClient.makeRequest(
+                TimelineServiceClient.Request.newBuilder(POST, CREATE_MARKER_URL)
+                    .addQueryParams(queryParameters)
+                    .build())
+            .getDecodedContent(new TypeReference<Boolean>() {}));
+
     queryParameters.put(MARKER_REQUEST_ID_PARAM, requestId1);
 
     // First request
@@ -166,42 +177,6 @@ class TestRequestHandler extends HoodieCommonTestHarness {
                 .build())
         .getDecodedContent(new TypeReference<Boolean>() {});
     assertFalse(result3, "Retry with different requestId should fail");
-  }
-
-  @Test
-  void testMarkerBackwardCompatibilityNullExistingRequestId() throws IOException, InterruptedException {
-    String basePath = tempDir.resolve("base-path-backward-compat").toUri().toString();
-    HoodieTableMetaClient metaClient = HoodieTestUtils.init(basePath, getTableType());
-    String markerDir = metaClient.getMarkerFolderPath("104");
-    String markerName = "partition1/file1.parquet.marker.CREATE";
-    String newRequestId = java.util.UUID.randomUUID().toString();
-
-    // First request: no requestId (legacy client) → marker stored with null requestId
-    Map<String, String> queryParametersLegacy = new HashMap<>();
-    queryParametersLegacy.put(BASEPATH_PARAM, basePath);
-    queryParametersLegacy.put(MARKER_DIR_PATH_PARAM, markerDir);
-    queryParametersLegacy.put(MARKER_NAME_PARAM, markerName);
-    // Omit MARKER_REQUEST_ID_PARAM
-
-    boolean result1 = timelineServiceClient.makeRequest(
-            TimelineServiceClient.Request.newBuilder(POST, CREATE_MARKER_URL)
-                .addQueryParams(queryParametersLegacy)
-                .build())
-        .getDecodedContent(new TypeReference<Boolean>() {});
-    assertTrue(result1, "First marker creation (no requestId) should succeed");
-
-    waitForMarkerCreation(markerDir, markerName, 1000);
-
-    // Second request: same marker with non-null requestId → should fail (no backward compat)
-    Map<String, String> queryParametersWithRequestId = new HashMap<>(queryParametersLegacy);
-    queryParametersWithRequestId.put(MARKER_REQUEST_ID_PARAM, newRequestId);
-
-    boolean result2 = timelineServiceClient.makeRequest(
-            TimelineServiceClient.Request.newBuilder(POST, CREATE_MARKER_URL)
-                .addQueryParams(queryParametersWithRequestId)
-                .build())
-        .getDecodedContent(new TypeReference<Boolean>() {});
-    assertFalse(result2, "Request with non-null requestId when marker has null should fail (no backward compat)");
   }
 
   @Test
