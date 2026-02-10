@@ -22,7 +22,8 @@ import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.avro.model.HoodieSavepointMetadata;
 import org.apache.hudi.client.BaseHoodieWriteClient;
-import org.apache.hudi.client.HoodieTimelineArchiver;
+import org.apache.hudi.client.timeline.HoodieTimelineArchiver;
+import org.apache.hudi.client.timeline.TimelineArchivers;
 import org.apache.hudi.client.WriteClientTestUtils;
 import org.apache.hudi.client.timeline.versioning.v2.LSMTimelineWriter;
 import org.apache.hudi.client.timeline.versioning.v2.TimelineArchiverV2;
@@ -2079,14 +2080,14 @@ public class TestHoodieTimelineArchiver extends HoodieSparkClientTestHarness {
 
       // Save the large commit
       metaClient.getActiveTimeline().saveAsComplete(
-          new HoodieInstant(State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, largeCommitTime),
+          new HoodieInstant(State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, largeCommitTime, InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR),
           Option.of(largeCommitMetadata.toJsonString().getBytes(StandardCharsets.UTF_8)));
       metaClient.reloadActiveTimeline();
     }
 
     // Create archiver and attempt archival
     HoodieTable table = HoodieSparkTable.create(writeConfig, context, metaClient);
-    HoodieTimelineArchiver archiver = new HoodieTimelineArchiver(writeConfig, table);
+    HoodieTimelineArchiver archiver = TimelineArchivers.getInstance(table.getMetaClient().getTimelineLayoutVersion(), writeConfig, table);
 
     // Verify that archival throws OOM
     assertThrows(OutOfMemoryError.class, () -> archiver.archiveIfRequired(context));
