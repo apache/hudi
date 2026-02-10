@@ -79,6 +79,7 @@ public class HoodieSource<T> extends FileIndexReader implements Source<T, Hoodie
   private final SerializableComparator<HoodieSourceSplit> splitComparator;
   private final HoodieTableMetaClient metaClient;
   private final HoodieRecordEmitter<T> recordEmitter;
+  private final String tableName;
 
   public HoodieSource(
       HoodieScanContext scanContext,
@@ -97,6 +98,7 @@ public class HoodieSource<T> extends FileIndexReader implements Source<T, Hoodie
     this.splitComparator = splitComparator;
     this.metaClient = metaClient;
     this.recordEmitter = recordEmitter;
+    this.tableName = metaClient.getTableConfig().getTableName();
   }
 
   @Override
@@ -127,7 +129,7 @@ public class HoodieSource<T> extends FileIndexReader implements Source<T, Hoodie
 
   @Override
   public SourceReader<T, HoodieSourceSplit> createReader(SourceReaderContext readerContext) throws Exception {
-    return new HoodieSourceReader<T>(recordEmitter, scanContext.getConf(), readerContext, readerFunction, splitComparator);
+    return new HoodieSourceReader<T>(tableName, recordEmitter, scanContext.getConf(), readerContext, readerFunction, splitComparator);
   }
 
   private SplitEnumerator<HoodieSourceSplit, HoodieSplitEnumeratorState> createEnumerator(
@@ -142,8 +144,7 @@ public class HoodieSource<T> extends FileIndexReader implements Source<T, Hoodie
     } else {
       LOG.info(
           "Hoodie source restored {} splits from state for table {}",
-          enumeratorState.getPendingSplitStates().size(),
-          metaClient.getTableConfig().getTableName());
+          enumeratorState.getPendingSplitStates().size(), tableName);
       List<HoodieSourceSplit> pendingSplits =
           enumeratorState.getPendingSplitStates().stream().map(HoodieSourceSplitState::getSplit).collect(Collectors.toList());
       splitProvider = new DefaultHoodieSplitProvider(splitAssigner);
@@ -154,13 +155,15 @@ public class HoodieSource<T> extends FileIndexReader implements Source<T, Hoodie
       HoodieContinuousSplitDiscover discover = new DefaultHoodieSplitDiscover(
           scanContext, metaClient);
 
-      return new HoodieContinuousSplitEnumerator(enumContext, splitProvider, discover, scanContext, enumeratorState == null ? Option.empty() : Option.of(enumeratorState));
+      return new HoodieContinuousSplitEnumerator(
+              tableName, enumContext, splitProvider, discover, scanContext,
+              enumeratorState == null ? Option.empty() : Option.of(enumeratorState));
     } else {
       if (enumeratorState == null) {
         List<HoodieSourceSplit> splits = createBatchHoodieSplits();
         splitProvider.onDiscoveredSplits(splits);
       }
-      return new HoodieStaticSplitEnumerator(enumContext, splitProvider);
+      return new HoodieStaticSplitEnumerator(tableName, enumContext, splitProvider);
     }
   }
 

@@ -49,12 +49,13 @@ public class HoodieContinuousSplitEnumerator extends AbstractHoodieSplitEnumerat
   private final AtomicReference<HoodieEnumeratorPosition> position;
 
   public HoodieContinuousSplitEnumerator(
+      String tableName,
       SplitEnumeratorContext<HoodieSourceSplit> enumeratorContext,
       HoodieSplitProvider splitProvider,
       HoodieContinuousSplitDiscover splitDiscover,
       HoodieScanContext scanContext,
       Option<HoodieSplitEnumeratorState> enumStateOpt) {
-    super(enumeratorContext, splitProvider);
+    super(tableName, enumeratorContext, splitProvider);
     this.enumeratorContext = enumeratorContext;
     this.splitProvider = splitProvider;
     this.splitDiscover = splitDiscover;
@@ -108,6 +109,7 @@ public class HoodieContinuousSplitEnumerator extends AbstractHoodieSplitEnumerat
 
     if (!result.getSplits().isEmpty()) {
       splitProvider.onDiscoveredSplits(result.getSplits());
+      position.get().getIssuedInstant().ifPresent(enumeratorMetrics::setIssuedInstant);
       LOG.debug(
           "Added {} splits discovered between ({}, {}] to the assigner",
           result.getSplits().size(),

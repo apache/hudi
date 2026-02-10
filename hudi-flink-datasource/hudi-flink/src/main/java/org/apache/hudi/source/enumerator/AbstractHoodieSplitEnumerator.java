@@ -19,6 +19,7 @@
 package org.apache.hudi.source.enumerator;
 
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.metrics.FlinkStreamReadMetrics;
 import org.apache.hudi.source.split.HoodieSourceSplit;
 import org.apache.hudi.source.split.HoodieSplitProvider;
 import org.apache.hudi.source.split.SplitRequestEvent;
@@ -47,9 +48,12 @@ import java.util.concurrent.atomic.AtomicReference;
 abstract class AbstractHoodieSplitEnumerator
     implements SplitEnumerator<HoodieSourceSplit, HoodieSplitEnumeratorState>,
     SupportsHandleExecutionAttemptSourceEvent {
-
+  // Table name
+  protected final String tableName;
   // Split provider that provide Hoodie split for split request
   protected final HoodieSplitProvider splitProvider;
+  // Stream Read metrics
+  protected final FlinkStreamReadMetrics enumeratorMetrics;
   // Context of split enumerator
   private final SplitEnumeratorContext<HoodieSourceSplit> enumeratorContext;
   // Registered reader task id to request host home map
@@ -58,8 +62,10 @@ abstract class AbstractHoodieSplitEnumerator
   private final AtomicReference<CompletableFuture<Void>> availableFuture;
 
   AbstractHoodieSplitEnumerator(
+      String tableName,
       SplitEnumeratorContext<HoodieSourceSplit> enumeratorContext,
       HoodieSplitProvider splitProvider) {
+    this.tableName = tableName;
     this.enumeratorContext = enumeratorContext;
     // Use LinkedHashMap to make sure split request are handled in request order
     this.readersAwaitingSplit = new LinkedHashMap<>();
@@ -70,6 +76,8 @@ abstract class AbstractHoodieSplitEnumerator
         // This number may not capture the entire backlog due to split discovery throttling to avoid
         // excessive memory footprint. Some pending splits may not have been discovered yet.
         .setUnassignedSplitsGauge(() -> Long.valueOf(splitProvider.pendingSplitCount()));
+    this.enumeratorMetrics = new FlinkStreamReadMetrics(enumeratorContext.metricGroup(), tableName);
+    enumeratorMetrics.registerMetrics();
   }
 
   @Override
