@@ -21,7 +21,6 @@ package org.apache.hudi.table;
 import org.apache.hudi.adapter.DataStreamScanProviderAdapter;
 import org.apache.hudi.adapter.InputFormatSourceFunctionAdapter;
 import org.apache.hudi.adapter.TableFunctionProviderAdapter;
-import org.apache.hudi.client.common.HoodieFlinkEngineContext;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieTableType;
@@ -34,7 +33,6 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.configuration.OptionsInference;
@@ -66,7 +64,6 @@ import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
 import org.apache.hudi.table.format.FilePathUtils;
-import org.apache.hudi.table.format.FlinkReaderContextFactory;
 import org.apache.hudi.table.format.InternalSchemaManager;
 import org.apache.hudi.table.format.cdc.CdcInputFormat;
 import org.apache.hudi.table.format.cow.CopyOnWriteInputFormat;
@@ -78,7 +75,6 @@ import org.apache.hudi.table.lookup.HoodieLookupTableReader;
 import org.apache.hudi.util.DataTypeUtils;
 import org.apache.hudi.util.ExpressionUtils;
 import org.apache.hudi.util.ChangelogModes;
-import org.apache.hudi.util.FlinkWriteClients;
 import org.apache.hudi.util.HoodieSchemaConverter;
 import org.apache.hudi.util.InputFormats;
 import org.apache.hudi.util.FileIndexReader;
@@ -301,13 +297,8 @@ public class HoodieTableSource extends FileIndexReader implements
     final RowType requiredRowType = (RowType) getProducedDataType().notNull().getLogicalType();
 
     HoodieScanContext context = createHoodieScanContext(rowType);
-    HoodieWriteConfig writeConfig = FlinkWriteClients.getHoodieClientConfig(conf, false, false);
-    HoodieFlinkEngineContext flinkEngineContext = new HoodieFlinkEngineContext(hadoopConf.unwrap());
-    HoodieFlinkTable<RowData> flinkTable = HoodieFlinkTable.create(writeConfig, flinkEngineContext);
-    FlinkReaderContextFactory readerContextFactory = new FlinkReaderContextFactory(metaClient);
     HoodieSplitReaderFunction splitReaderFunction = new HoodieSplitReaderFunction(
-        flinkTable,
-        readerContextFactory.getContext(),
+        metaClient,
         conf,
         tableSchema,
         HoodieSchemaConverter.convertToSchema(requiredRowType),
