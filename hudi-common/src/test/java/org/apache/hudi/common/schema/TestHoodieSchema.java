@@ -853,11 +853,18 @@ public class TestHoodieSchema {
 
     assertTrue(schema.getAvroSchema().getLogicalType() instanceof VectorLogicalType);
 
-    assertEquals(4, vectorSchema.getFields().size());
-    assertEquals("dimension", vectorSchema.getFields().get(0).name());
-    assertEquals("elementType", vectorSchema.getFields().get(1).name());
-    assertEquals("storageBacking", vectorSchema.getFields().get(2).name());
-    assertEquals("valuesFixed", vectorSchema.getFields().get(3).name());
+    // Verify properties are at schema level, not fields
+    Schema avroSchema = vectorSchema.getAvroSchema();
+    assertEquals(1536, ((Number) avroSchema.getObjectProp("dimension")).intValue());
+    assertEquals(HoodieSchema.Vector.ELEMENT_TYPE_FLOAT, avroSchema.getProp("elementType"));
+    assertEquals(HoodieSchema.Vector.STORAGE_BACKING_FIXED_BYTES, avroSchema.getProp("storageBacking"));
+
+    // Verify only valuesFixed is a field
+    assertEquals(1, vectorSchema.getFields().size());
+    assertEquals("valuesFixed", vectorSchema.getFields().get(0).name());
+    assertNull(avroSchema.getField("dimension")); // Should NOT be a field
+    assertNull(avroSchema.getField("elementType")); // Should NOT be a field
+    assertNull(avroSchema.getField("storageBacking")); // Should NOT be a field
   }
 
   @Test
@@ -932,25 +939,37 @@ public class TestHoodieSchema {
   void testVectorSchemaValidation() {
     // Create vector and verify field structure
     HoodieSchema.Vector vectorSchema = HoodieSchema.createVector(768);
-    assertEquals(4, vectorSchema.getFields().size());
+    Schema avroSchema = vectorSchema.getAvroSchema();
 
-    Schema.Field dimensionField = vectorSchema.getAvroSchema().getField("dimension");
-    assertNotNull(dimensionField);
-    assertEquals(Schema.Type.INT, dimensionField.schema().getType());
+    // Verify only 1 field exists (valuesFixed)
+    assertEquals(1, vectorSchema.getFields().size());
 
-    Schema.Field elementTypeField = vectorSchema.getAvroSchema().getField("elementType");
-    assertNotNull(elementTypeField);
-    assertEquals(Schema.Type.STRING, elementTypeField.schema().getType());
+    // Verify dimension, elementType, storageBacking are schema properties (not fields)
+    assertEquals(768, ((Number) avroSchema.getObjectProp("dimension")).intValue());
+    assertEquals(HoodieSchema.Vector.ELEMENT_TYPE_FLOAT, avroSchema.getProp("elementType"));
+    assertEquals(HoodieSchema.Vector.STORAGE_BACKING_FIXED_BYTES, avroSchema.getProp("storageBacking"));
 
-    Schema.Field storageBackingField = vectorSchema.getAvroSchema().getField("storageBacking");
-    assertNotNull(storageBackingField);
-    assertEquals(Schema.Type.STRING, storageBackingField.schema().getType());
+    // Verify these are NOT fields
+    assertNull(avroSchema.getField("dimension"));
+    assertNull(avroSchema.getField("elementType"));
+    assertNull(avroSchema.getField("storageBacking"));
 
-    Schema.Field valuesFixedField = vectorSchema.getAvroSchema().getField("valuesFixed");
+    // Verify valuesFixed field exists and uses FIXED type
+    Schema.Field valuesFixedField = avroSchema.getField("valuesFixed");
     assertNotNull(valuesFixedField);
     assertEquals(Schema.Type.UNION, valuesFixedField.schema().getType());
-    // Union should contain null and bytes
+    // Union should contain null and FIXED
     assertEquals(2, valuesFixedField.schema().getTypes().size());
+
+    // Get non-null type from union - should be FIXED
+    Schema fixedSchema = valuesFixedField.schema().getTypes().stream()
+        .filter(s -> s.getType() != Schema.Type.NULL)
+        .findFirst()
+        .orElseThrow(() -> new AssertionError("Expected FIXED type in union"));
+    assertEquals(Schema.Type.FIXED, fixedSchema.getType());
+
+    // Verify FIXED size = dimension × elementSize (768 × 4 bytes for FLOAT)
+    assertEquals(768 * 4, fixedSchema.getFixedSize());
   }
 
   @Test
@@ -964,18 +983,12 @@ public class TestHoodieSchema {
     assertEquals(768, vectorDouble.getDimension());
     assertEquals(HoodieSchema.Vector.ELEMENT_TYPE_DOUBLE, vectorDouble.getVectorElementType());
 
-    HoodieSchema dimensionField = vectorFloat.getDimensionField();
-    assertNotNull(dimensionField);
-    assertEquals(HoodieSchemaType.INT, dimensionField.getType());
+    // Verify dimension/elementType/storageBacking are accessible via properties
+    assertEquals(1536, ((Number) vectorFloat.getAvroSchema().getObjectProp("dimension")).intValue());
+    assertEquals(HoodieSchema.Vector.ELEMENT_TYPE_FLOAT, vectorFloat.getAvroSchema().getProp("elementType"));
+    assertEquals(HoodieSchema.Vector.STORAGE_BACKING_FIXED_BYTES, vectorFloat.getAvroSchema().getProp("storageBacking"));
 
-    HoodieSchema elementTypeField = vectorFloat.getElementTypeField();
-    assertNotNull(elementTypeField);
-    assertEquals(HoodieSchemaType.STRING, elementTypeField.getType());
-
-    HoodieSchema storageBackingField = vectorFloat.getStorageBackingField();
-    assertNotNull(storageBackingField);
-    assertEquals(HoodieSchemaType.STRING, storageBackingField.getType());
-
+    // Only valuesFixed is a field
     HoodieSchema valuesFixedField = vectorFloat.getValuesFixedField();
     assertNotNull(valuesFixedField);
   }
