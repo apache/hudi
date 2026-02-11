@@ -195,8 +195,8 @@ public class HoodieWriteConfig extends HoodieConfig {
       .key("hoodie.write.complex.keygen.new.encoding")
       .defaultValue(false)
       .markAdvanced()
-      .sinceVersion("1.1.0")
-      .supportedVersions("0.14.2", "0.15.1", "1.0.3")
+      .sinceVersion("0.14.2")
+      .supportedVersions("0.14.2", "0.15.1", "1.0.3", "1.1.0")
       .withDocumentation("This config only takes effect for writing table version 8 and below. "
           + "If set to false, the record key field name is encoded and prepended "
           + "in the case where a single record key field is used in the complex key generator, "
@@ -211,8 +211,8 @@ public class HoodieWriteConfig extends HoodieConfig {
       .key("hoodie.write.complex.keygen.validation.enable")
       .defaultValue(true)
       .markAdvanced()
-      .sinceVersion("1.1.0")
-      .supportedVersions("0.14.2", "0.15.1", "1.0.3")
+      .sinceVersion("0.14.2")
+      .supportedVersions("0.14.2", "0.15.1", "1.0.3", "1.1.0")
       .withDocumentation("This config only takes effect for writing table version 8 and below, "
           + "upgrade or downgrade. If set to true, the writer enables the validation on whether the "
           + "table uses the complex key generator with a single record key field, which can be affected "

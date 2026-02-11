@@ -51,7 +51,7 @@ public class KeyGenUtils {
   protected static final String HUDI_DEFAULT_PARTITION_PATH = PartitionPathEncodeUtils.DEFAULT_PARTITION_PATH;
   public static final String DEFAULT_PARTITION_PATH_SEPARATOR = "/";
   public static final String DEFAULT_RECORD_KEY_PARTS_SEPARATOR = ",";
-  public static final String DEFAULT_COMPOSITE_KEY_FIELD_VALUE = ":";
+  public static final String DEFAULT_COLUMN_VALUE_SEPARATOR = ":";
 
   public static final String RECORD_KEY_GEN_PARTITION_ID_CONFIG = "_hoodie.record.key.gen.partition.id";
   public static final String RECORD_KEY_GEN_INSTANT_TIME_CONFIG = "_hoodie.record.key.gen.instant.time";
@@ -132,7 +132,7 @@ public class KeyGenUtils {
 
   public static String[] extractRecordKeysByFields(String recordKey, List<String> fields) {
     String[] fieldKV = recordKey.split(DEFAULT_RECORD_KEY_PARTS_SEPARATOR);
-    return Arrays.stream(fieldKV).map(kv -> kv.split(DEFAULT_COMPOSITE_KEY_FIELD_VALUE, 2))
+    return Arrays.stream(fieldKV).map(kv -> kv.split(DEFAULT_COLUMN_VALUE_SEPARATOR, 2))
         .filter(kvArray -> kvArray.length == 1 || fields.isEmpty() || (fields.contains(kvArray[0])))
         .map(kvArray -> {
           if (kvArray.length == 1) {
@@ -153,11 +153,11 @@ public class KeyGenUtils {
     for (String recordKeyField : recordKeyFields) {
       String recordKeyValue = HoodieAvroUtils.getNestedFieldValAsString(record, recordKeyField, true, consistentLogicalTimestampEnabled);
       if (recordKeyValue == null) {
-        recordKey.append(recordKeyField + DEFAULT_COMPOSITE_KEY_FIELD_VALUE + NULL_RECORDKEY_PLACEHOLDER + DEFAULT_RECORD_KEY_PARTS_SEPARATOR);
+        recordKey.append(recordKeyField).append(DEFAULT_COLUMN_VALUE_SEPARATOR).append(NULL_RECORDKEY_PLACEHOLDER);
       } else if (recordKeyValue.isEmpty()) {
-        recordKey.append(recordKeyField + DEFAULT_COMPOSITE_KEY_FIELD_VALUE + EMPTY_RECORDKEY_PLACEHOLDER + DEFAULT_RECORD_KEY_PARTS_SEPARATOR);
+        recordKey.append(recordKeyField).append(DEFAULT_COLUMN_VALUE_SEPARATOR).append(EMPTY_RECORDKEY_PLACEHOLDER);
       } else {
-        recordKey.append(recordKeyField + DEFAULT_COMPOSITE_KEY_FIELD_VALUE + recordKeyValue + DEFAULT_RECORD_KEY_PARTS_SEPARATOR);
+        recordKey.append(recordKeyField).append(DEFAULT_COLUMN_VALUE_SEPARATOR).append(recordKeyValue);
         keyIsNullEmpty = false;
       }
     }
