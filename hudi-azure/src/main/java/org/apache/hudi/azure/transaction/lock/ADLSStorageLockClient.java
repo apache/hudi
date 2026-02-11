@@ -28,18 +28,26 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieLockException;
+import org.apache.hudi.config.StorageBasedLockConfig;
 
+import com.azure.core.exception.HttpResponseException;
+import com.azure.core.http.policy.ExponentialBackoffOptions;
+import com.azure.core.http.policy.RetryOptions;
+import com.azure.core.http.rest.Response;
 import com.azure.core.credential.AzureSasCredential;
 import com.azure.core.util.BinaryData;
 import com.azure.core.util.Context;
+import com.azure.core.util.HttpClientOptions;
 import com.azure.identity.DefaultAzureCredentialBuilder;
 import com.azure.storage.blob.BlobClient;
 import com.azure.storage.blob.BlobContainerClient;
 import com.azure.storage.blob.BlobServiceClient;
 import com.azure.storage.blob.BlobServiceClientBuilder;
+import com.azure.storage.blob.models.BlobErrorCode;
 import com.azure.storage.blob.models.BlobProperties;
 import com.azure.storage.blob.models.BlobRequestConditions;
 import com.azure.storage.blob.models.BlobStorageException;
+import com.azure.storage.blob.models.BlockBlobItem;
 import com.azure.storage.blob.options.BlobParallelUploadOptions;
 import lombok.extern.slf4j.Slf4j;
 import org.slf4j.Logger;
@@ -52,6 +60,7 @@ import java.io.InputStream;
 import java.io.UncheckedIOException;
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.time.Duration;
 import java.util.Properties;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
@@ -139,6 +148,7 @@ public class ADLSStorageLockClient implements StorageLockClient {
     return (location) -> {
       Properties props = location.props;
       BlobServiceClientBuilder builder = new BlobServiceClientBuilder();
+      configureAzureClientOptions(builder, props);
 
       String connectionString = props == null ? null : props.getProperty(AZURE_CONNECTION_STRING);
       if (connectionString != null && !connectionString.trim().isEmpty()) {
@@ -156,6 +166,37 @@ public class ADLSStorageLockClient implements StorageLockClient {
     };
   }
 
+  private static void configureAzureClientOptions(BlobServiceClientBuilder builder, Properties props) {
+    // Set Azure SDK timeouts based on lock validity to avoid long-hanging calls.
+    long validityTimeoutSecs = getLongProperty(props, StorageBasedLockConfig.VALIDITY_TIMEOUT_SECONDS);
+    long azureCallTimeoutSecs = Math.max(1, validityTimeoutSecs / 5);
+
+    // Disable automatic SDK retries; Hudi manages retries at the lock-provider level.
+    ExponentialBackoffOptions exponentialOptions = new ExponentialBackoffOptions().setMaxRetries(0);
+    RetryOptions retryOptions = new RetryOptions(exponentialOptions);
+
+    HttpClientOptions clientOptions = new HttpClientOptions()
+        .setResponseTimeout(Duration.ofSeconds(azureCallTimeoutSecs))
+        .setReadTimeout(Duration.ofSeconds(azureCallTimeoutSecs));
+
+    builder.retryOptions(retryOptions).clientOptions(clientOptions);
+  }
+
+  private static long getLongProperty(Properties props, org.apache.hudi.common.config.ConfigProperty<Long> prop) {
+    if (props == null) {
+      return prop.defaultValue();
+    }
+    Object value = props.get(prop.key());
+    if (value == null) {
+      return prop.defaultValue();
+    }
+    try {
+      return Long.parseLong(String.valueOf(value));
+    } catch (NumberFormatException e) {
+      return prop.defaultValue();
+    }
+  }
+
   @Override
   public Pair<LockUpsertResult, Option<StorageLockFile>> tryUpsertLockFile(
       StorageLockData newLockData,
@@ -165,17 +206,12 @@ public class ADLSStorageLockClient implements StorageLockClient {
       StorageLockFile updated = createOrUpdateLockFileInternal(newLockData, expectedEtag);
       return Pair.of(LockUpsertResult.SUCCESS, Option.of(updated));
     } catch (BlobStorageException e) {
-      int code = e.getStatusCode();
-      if (code == PRECONDITION_FAILURE_ERROR_CODE || code == CONFLICT_ERROR_CODE) {
-        logger.info("OwnerId: {}, Unable to write new lock file. Another process has modified this lockfile {} already.",
-            ownerId, lockFileUri);
-        return Pair.of(LockUpsertResult.ACQUIRED_BY_OTHERS, Option.empty());
-      } else if (code == RATE_LIMIT_ERROR_CODE) {
-        logger.warn("OwnerId: {}, Rate limit exceeded for lock file: {}", ownerId, lockFileUri);
-      } else if (code >= INTERNAL_SERVER_ERROR_CODE_MIN) {
-        logger.warn("OwnerId: {}, Azure returned internal server error code for lock file: {}",
-            ownerId, lockFileUri, e);
-      } else {
+      return Pair.of(handleUpsertBlobStorageException(e), Option.empty());
+    } catch (HttpResponseException e) {
+      logger.error("OwnerId: {}, Unexpected Azure SDK error while writing lock file: {}",
+          ownerId, lockFileUri, e);
+      if (!previousLockFile.isPresent()) {
+        // For create, fail fast since this indicates a larger issue.
         throw e;
       }
       return Pair.of(LockUpsertResult.UNKNOWN_ERROR, Option.empty());
@@ -203,7 +239,7 @@ public class ADLSStorageLockClient implements StorageLockClient {
 
   private LockGetResult handleGetStorageException(BlobStorageException e, boolean ignore404) {
     int code = e.getStatusCode();
-    if (code == NOT_FOUND_ERROR_CODE) {
+    if (code == NOT_FOUND_ERROR_CODE || e.getErrorCode() == BlobErrorCode.BLOB_NOT_FOUND) {
       if (ignore404) {
         logger.info("OwnerId: {}, Azure stream read failure detected: {}", ownerId, lockFileUri);
       } else {
@@ -239,11 +275,31 @@ public class ADLSStorageLockClient implements StorageLockClient {
 
     BlobParallelUploadOptions options = new BlobParallelUploadOptions(BinaryData.fromBytes(bytes))
         .setRequestConditions(conditions);
-    lockBlobClient.uploadWithResponse(options, null, Context.NONE);
-    String newEtag = lockBlobClient.getProperties().getETag();
+    Response<BlockBlobItem> response = lockBlobClient.uploadWithResponse(options, null, Context.NONE);
+    String newEtag = response.getValue() != null ? response.getValue().getETag() : null;
+    if (newEtag == null) {
+      newEtag = lockBlobClient.getProperties().getETag();
+    }
     return new StorageLockFile(lockData, newEtag);
   }
 
+  private LockUpsertResult handleUpsertBlobStorageException(BlobStorageException e) {
+    int code = e.getStatusCode();
+    if (code == PRECONDITION_FAILURE_ERROR_CODE || e.getErrorCode() == BlobErrorCode.CONDITION_NOT_MET) {
+      logger.info("OwnerId: {}, Unable to write new lock file. Another process has modified this lockfile {} already.",
+          ownerId, lockFileUri);
+      return LockUpsertResult.ACQUIRED_BY_OTHERS;
+    } else if (code == CONFLICT_ERROR_CODE) {
+      logger.info("OwnerId: {}, Retriable conditional request conflict error: {}", ownerId, lockFileUri);
+    } else if (code == RATE_LIMIT_ERROR_CODE) {
+      logger.warn("OwnerId: {}, Rate limit exceeded for lock file: {}", ownerId, lockFileUri);
+    } else if (code >= INTERNAL_SERVER_ERROR_CODE_MIN) {
+      logger.warn("OwnerId: {}, Azure returned internal server error code for lock file: {}", ownerId, lockFileUri, e);
+    } else {
+      logger.warn("OwnerId: {}, Error writing lock file: {}", ownerId, lockFileUri, e);
+    }
+    return LockUpsertResult.UNKNOWN_ERROR;
+  }
   @Override
   public Option<String> readObject(String filePath, boolean checkExistsFirst) {
     try {
