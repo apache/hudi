@@ -21,19 +21,23 @@ package org.apache.hudi.common.model;
 import com.esotericsoftware.kryo.Kryo;
 import com.esotericsoftware.kryo.io.Input;
 import com.esotericsoftware.kryo.io.Output;
-
-import java.util.Objects;
+import lombok.Data;
+import lombok.EqualsAndHashCode;
+import lombok.NoArgsConstructor;
+import lombok.ToString;
 
 /**
  * Similar with {@link org.apache.hudi.common.model.HoodieRecordLocation} but with partition path.
  */
+@NoArgsConstructor
+@Data
+@EqualsAndHashCode(callSuper = true)
+@ToString(callSuper = true)
 public final class HoodieRecordGlobalLocation extends HoodieRecordLocation {
+
   private static final long serialVersionUID = 1L;
 
   private String partitionPath;
-
-  public HoodieRecordGlobalLocation() {
-  }
 
   public HoodieRecordGlobalLocation(String partitionPath, String instantTime, String fileId) {
     super(instantTime, fileId);
@@ -42,42 +46,6 @@ public final class HoodieRecordGlobalLocation extends HoodieRecordLocation {
 
   public HoodieRecordGlobalLocation(String partitionPath, String instantTime, String fileId, long position) {
     super(instantTime, fileId, position);
-    this.partitionPath = partitionPath;
-  }
-
-  @Override
-  public String toString() {
-    return "HoodieGlobalRecordLocation {" + "partitionPath=" + partitionPath + ", "
-        + "instantTime=" + instantTime + ", "
-        + "fileId=" + fileId + ", "
-        + "position=" + position
-        + '}';
-  }
-
-  @Override
-  public boolean equals(Object o) {
-    if (this == o) {
-      return true;
-    }
-    if (o == null || getClass() != o.getClass()) {
-      return false;
-    }
-    HoodieRecordGlobalLocation otherLoc = (HoodieRecordGlobalLocation) o;
-    return Objects.equals(partitionPath, otherLoc.partitionPath)
-        && Objects.equals(instantTime, otherLoc.instantTime)
-        && Objects.equals(fileId, otherLoc.fileId);
-  }
-
-  @Override
-  public int hashCode() {
-    return Objects.hash(partitionPath, instantTime, fileId);
-  }
-
-  public String getPartitionPath() {
-    return partitionPath;
-  }
-
-  public void setPartitionPath(String partitionPath) {
     this.partitionPath = partitionPath;
   }
 

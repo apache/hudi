@@ -264,15 +264,14 @@ public class HoodieAvroIndexedRecord extends HoodieRecord<IndexedRecord> {
       HoodieSchema recordSchema,
       Properties props,
       Option<Pair<String, String>> simpleKeyGenFieldsOpt,
-      Boolean withOperation,
+      boolean withOperation,
       Option<String> partitionNameOp,
-      Boolean populateMetaFields,
+      boolean populateMetaFields,
       Option<HoodieSchema> schemaWithoutMetaFields) {
     String payloadClass = ConfigUtils.getPayloadClass(props);
     String[] orderingFields = ConfigUtils.getOrderingFields(props);
     decodeRecord(recordSchema.toAvroSchema());
-    Option<Schema> avroSchemaWithoutMetaFields = schemaWithoutMetaFields.map(HoodieSchema::toAvroSchema);
-    return HoodieAvroUtils.createHoodieRecordFromAvro(data, payloadClass, orderingFields, simpleKeyGenFieldsOpt, withOperation, partitionNameOp, populateMetaFields, avroSchemaWithoutMetaFields);
+    return HoodieAvroUtils.createHoodieRecordFromAvro(data, payloadClass, orderingFields, simpleKeyGenFieldsOpt, withOperation, partitionNameOp, populateMetaFields, schemaWithoutMetaFields);
   }
 
   @Override

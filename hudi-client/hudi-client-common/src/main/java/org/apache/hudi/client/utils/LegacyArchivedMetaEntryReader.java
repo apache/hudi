@@ -120,9 +120,13 @@ public class LegacyArchivedMetaEntryReader {
       return null;
     });
     InstantGenerator instantGenerator = metaClient.getInstantGenerator();
-    HoodieInstant instant = instantGenerator.createNewInstant(HoodieInstant.State.valueOf(record.get(ACTION_STATE).toString()), action,
+    // Older log files don't have action state set.
+    final HoodieInstant.State state = Option.ofNullable(record.get(ACTION_STATE))
+        .map(s -> HoodieInstant.State.valueOf(s.toString()))
+        .orElse(HoodieInstant.State.COMPLETED);
+    HoodieInstant instant = instantGenerator.createNewInstant(state, action,
         instantTime, stateTransitionTime);
-    return Pair.of(instant,details);
+    return Pair.of(instant, details);
   }
 
   @Nonnull

@@ -93,7 +93,7 @@ public class KafkaOffsetPostProcessor extends SchemaPostProcessor {
       if (!fieldNames.contains(KAFKA_SOURCE_KEY_COLUMN)) {
         newFieldList.add(
             HoodieSchemaField.of(KAFKA_SOURCE_KEY_COLUMN,
-                HoodieSchemaUtils.createNullableSchema(HoodieSchema.create(HoodieSchemaType.STRING)), "kafka key column", HoodieSchema.NULL_VALUE));
+                HoodieSchema.createNullable(HoodieSchemaType.STRING), "kafka key column", HoodieSchema.NULL_VALUE));
       }
       return HoodieSchema.createRecord(schema.getName() + "_processed", schema.getDoc().orElse(null), schema.getNamespace().orElse(null), false, newFieldList);
     } catch (Exception e) {

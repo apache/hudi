@@ -55,7 +55,9 @@ import org.apache.flink.configuration.Configuration;
 import org.apache.flink.table.data.RowData;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.EnumSource;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
@@ -63,6 +65,7 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -857,12 +860,17 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
     testHarness.checkpointComplete(1).checkWrittenData(EXPECTED1).end();
   }
 
-  @Test
-  public void testBucketAssignWithRLI() throws Exception {
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  public void testBucketAssignWithRLI(boolean mdtCompactionEnabled) throws Exception {
     // use record level index
     conf.set(FlinkOptions.INDEX_TYPE, HoodieIndex.IndexType.GLOBAL_RECORD_LEVEL_INDEX.name());
     conf.setString(HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_ENABLE_PROP.key(), "true");
     conf.setString(HoodieMetadataConfig.STREAMING_WRITE_ENABLED.key(), "true");
+    conf.set(FlinkOptions.METADATA_COMPACTION_SCHEDULE_ENABLED, mdtCompactionEnabled);
+    if (mdtCompactionEnabled) {
+      conf.set(FlinkOptions.METADATA_COMPACTION_DELTA_COMMITS, 1);
+    }
     TestHarness testHarness =
         preparePipeline(conf)
             .consume(TestData.DATA_SET_INSERT)
@@ -895,6 +903,10 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
         .checkpointComplete(2)
         .checkWrittenData(EXPECTED1)
         .end();
+
+    if (mdtCompactionEnabled) {
+      TestUtils.validateMdtCompactionInstant(conf.get(FlinkOptions.PATH), false);
+    }
   }
 
   @Test
@@ -912,8 +924,8 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
         .assertInflightCachesOfBucketAssigner(2)
         .assertNextEvent(4, "par1,par2,par3,par4")
         .checkpointComplete(1)
-        // clean the first inflight cache, left the latest inflight cache.
-        .assertInflightCachesOfBucketAssigner(1)
+        // the first inflight cache will not be cleaned, since the current total memory size does not exceed the limit.
+        .assertInflightCachesOfBucketAssigner(2)
         .checkWrittenData(EXPECTED1);
   }
 
@@ -938,12 +950,22 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
         .end();
   }
 
-  @Test
-  public void testIndexWriteFunctionWithMultipleCheckpoints() throws Exception {
+  @ParameterizedTest
+  @MethodSource("mdtCompactionParams")
+  public void testIndexWriteFunctionWithMultipleCheckpoints(boolean mdtCompactionEnabled, boolean isLogCompaction) throws Exception {
     // Test IndexWriteFunction with multiple checkpoint operations
     conf.set(FlinkOptions.INDEX_TYPE, HoodieIndex.IndexType.GLOBAL_RECORD_LEVEL_INDEX.name());
     conf.setString(HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_ENABLE_PROP.key(), "true");
     conf.setString(HoodieMetadataConfig.STREAMING_WRITE_ENABLED.key(), "true");
+    conf.set(FlinkOptions.METADATA_COMPACTION_SCHEDULE_ENABLED, mdtCompactionEnabled);
+    if (mdtCompactionEnabled) {
+      if (isLogCompaction) {
+        conf.setString(HoodieMetadataConfig.ENABLE_LOG_COMPACTION_ON_METADATA_TABLE.key(), "true");
+        conf.setString(HoodieMetadataConfig.LOG_COMPACT_BLOCKS_THRESHOLD.key(), "2");
+      } else {
+        conf.set(FlinkOptions.METADATA_COMPACTION_DELTA_COMMITS, 1);
+      }
+    }
 
     TestHarness testHarness =
         preparePipeline()
@@ -985,6 +1007,23 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
         getRecordKeyIndex(metaClient, Arrays.asList("id1", "id2", "id3", "id4", "id5", "id6", "id7", "id8", "id9", "id10", "id11"));
     assertEquals(11, result.size());
     result.forEach((key, value) -> assertEquals(expectedKeyPartitionMap.get(key), value.getPartitionPath()));
+
+    if (mdtCompactionEnabled) {
+      TestUtils.validateMdtCompactionInstant(conf.get(FlinkOptions.PATH), isLogCompaction);
+    }
+  }
+
+  /**
+   * Return test params => (mdt compaction enabled, log compaction enabled).
+   */
+  private static Stream<Arguments> mdtCompactionParams() {
+    Object[][] data =
+        new Object[][] {
+            {true, false},
+            {true, true},
+            {false, false},
+            {false, true}};
+    return Stream.of(data).map(Arguments::of);
   }
 
   private Map<String, HoodieRecordGlobalLocation> getRecordKeyIndex(HoodieTableMetaClient metaClient, List<String> keys) {

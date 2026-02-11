@@ -23,7 +23,6 @@ import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.config.HoodieMemoryConfig;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
-import org.apache.hudi.common.config.HoodieReaderConfig;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieAvroRecord;
@@ -48,7 +47,6 @@ import org.apache.hudi.io.storage.HoodieIOFactory;
 import org.apache.hudi.io.util.FileIOUtils;
 
 import lombok.extern.slf4j.Slf4j;
-import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.spark.api.java.JavaPairRDD;
@@ -210,8 +208,9 @@ public class DFSHoodieDatasetInputReader extends DFSDeltaInputReader {
 
   private JavaRDD<GenericRecord> projectSchema(JavaRDD<GenericRecord> updates) {
     // The records read from the hoodie dataset have the hoodie record fields, rewrite the record to eliminate them
+    HoodieSchema schema = HoodieSchema.parse(schemaStr);
     return updates
-        .map(r -> HoodieAvroUtils.rewriteRecord(r, new Schema.Parser().parse(schemaStr)));
+        .map(r -> HoodieAvroUtils.rewriteRecord(r, schema.toAvroSchema()));
   }
 
   private JavaRDD<GenericRecord> generateUpdates(Map<String, Integer> adjustedPartitionToFileIdCountMap,
@@ -297,16 +296,15 @@ public class DFSHoodieDatasetInputReader extends DFSDeltaInputReader {
           .withSpillableMapBasePath(FileIOUtils.getDefaultSpillableMapBasePath())
           .withDiskMapType(HoodieCommonConfig.SPILLABLE_DISK_MAP_TYPE.defaultValue())
           .withBitCaskDiskMapCompressionEnabled(HoodieCommonConfig.DISK_MAP_BITCASK_COMPRESSION_ENABLED.defaultValue())
-          .withOptimizedLogBlocksScan(Boolean.parseBoolean(HoodieReaderConfig.ENABLE_OPTIMIZED_LOG_BLOCKS_SCAN.defaultValue()))
           .withRecordMerger(HoodieRecordUtils.loadRecordMerger(HoodieAvroRecordMerger.class.getName()))
           .build();
       // readAvro log files
       Iterable<HoodieRecord> iterable = () -> scanner.iterator();
-      Schema schema = new Schema.Parser().parse(schemaStr);
+      HoodieSchema schema = HoodieSchema.parse(schemaStr);
       return StreamSupport.stream(iterable.spliterator(), false)
           .map(e -> {
             try {
-              return (IndexedRecord) ((HoodieAvroRecord)e).getData().getInsertValue(schema).get();
+              return (IndexedRecord) ((HoodieAvroRecord)e).getData().getInsertValue(schema.toAvroSchema()).get();
             } catch (IOException io) {
               throw new UncheckedIOException(io);
             }

@@ -228,6 +228,20 @@ public class FlinkOptions extends HoodieConfig {
       .withFallbackKeys(HoodieMetadataConfig.ENABLE.key())
       .withDescription("Enable the internal metadata table which serves table metadata like level file listings, default enabled");
 
+  @AdvancedConfig
+  public static final ConfigOption<Boolean> METADATA_COMPACTION_SCHEDULE_ENABLED = ConfigOptions
+      .key("metadata.compaction.schedule.enabled")
+      .booleanType()
+      .defaultValue(true)
+      .withDescription("Schedule the compaction plan for metadata table, enabled by default.");
+
+  public static final ConfigOption<Boolean> METADATA_COMPACTION_ASYNC_ENABLED = ConfigOptions
+      .key("metadata.compaction.async.enabled")
+      .booleanType()
+      .defaultValue(true)
+      .withDescription("Whether to enable async compaction for metadata table,"
+          + "if true, the compaction for metadata table will be performed in the compaction pipeline, default enabled.");
+
   public static final ConfigOption<Integer> METADATA_COMPACTION_DELTA_COMMITS = ConfigOptions
       .key("metadata.compaction.delta_commits")
       .intType()
@@ -278,9 +292,10 @@ public class FlinkOptions extends HoodieConfig {
   public static final ConfigOption<Long> INDEX_RLI_CACHE_SIZE = ConfigOptions
       .key("index.rli.cache.size")
       .longType()
-      .defaultValue(100L) // default 100 MB
-      .withDescription("Maximum memory in MB for the inflight record index cache during one checkpoint interval.\n"
-          + "When record level index is used to assign bucket, record locations will first be cached before the record index is committed.");
+      .defaultValue(256L) // default 256 MB
+      .withDescription("Maximum memory allocated for the record level index cache per bucket-assign task.\n"
+          + "The memory size of each individual cache within a checkpoint interval is dynamically calculated based on the \n"
+          + "average memory size of caches for historical checkpoints.");
 
   @AdvancedConfig
   public static final ConfigOption<Integer> INDEX_RLI_LOOKUP_MINIBATCH_SIZE = ConfigOptions
@@ -440,6 +455,12 @@ public class FlinkOptions extends HoodieConfig {
           + "the avg read splits number per-second would be 'read.splits.limit'/'read.streaming.check-interval', by "
           + "default no limit");
 
+  public static final ConfigOption<Boolean> READ_SOURCE_V2_ENABLED = ConfigOptions
+      .key("read.source-v2.enabled")
+      .booleanType()
+      .defaultValue(false)
+      .withDescription("Whether to use Flink FLIP27 new source to consume data files.");
+
   @AdvancedConfig
   public static final ConfigOption<Boolean> READ_CDC_FROM_CHANGELOG = ConfigOptions
       .key("read.cdc.from.changelog")
@@ -539,6 +560,7 @@ public class FlinkOptions extends HoodieConfig {
       .key("write.ignore.failed")
       .booleanType()
       .defaultValue(false)
+      .withFallbackKeys("hoodie.write.ignore.failed")
       .withDescription("Flag to indicate whether to ignore any non exception error (e.g. writestatus error). within a checkpoint batch. \n"
           + "By default false. Turning this on, could hide the write status errors while the flink checkpoint moves ahead. \n"
           + "So, would recommend users to use this with caution.");
@@ -887,6 +909,13 @@ public class FlinkOptions extends HoodieConfig {
       .intType()
       .noDefaultValue()
       .withDescription("Parallelism of tasks that do actual compaction, default same as the write task parallelism");
+
+  @AdvancedConfig
+  public static final ConfigOption<Boolean> COMPACTION_OPERATION_EXECUTE_ASYNC_ENABLED = ConfigOptions
+      .key("compaction.operation.execute.async.enabled")
+      .booleanType()
+      .defaultValue(true)
+      .withDescription("Whether the compaction operation should be executed asynchronously on compact operator, default enabled.");
 
   public static final String NUM_COMMITS = "num_commits";
   public static final String TIME_ELAPSED = "time_elapsed";

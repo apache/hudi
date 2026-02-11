@@ -42,6 +42,8 @@ import com.google.protobuf.Timestamp;
 import com.google.protobuf.UInt32Value;
 import com.google.protobuf.UInt64Value;
 import com.google.protobuf.util.Timestamps;
+import lombok.AllArgsConstructor;
+import lombok.Getter;
 import org.apache.avro.Conversions;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
@@ -104,40 +106,23 @@ public class ProtoConversionUtil {
     return AvroSupport.convert(schema, message);
   }
 
+  // Configuration used when generating a schema for a proto class.
+  @AllArgsConstructor
+  @Getter
   public static class SchemaConfig {
-    private final boolean wrappedPrimitivesAsRecords;
-    private final int maxRecursionDepth;
-    private final boolean timestampsAsRecords;
 
-    /**
-     * Configuration used when generating a schema for a proto class.
-     * @param wrappedPrimitivesAsRecords if true, to treat wrapped primitives like record with a single "value" field. If false, treat them as a nullable field
-     * @param maxRecursionDepth the number of times to unravel a recursive proto schema before spilling the rest to bytes
-     * @param timestampsAsRecords if true convert {@link Timestamp} to a Record with a seconds and nanos field. If false, convert it to a long with the timestamp-mircos logical type.
-     */
-    public SchemaConfig(boolean wrappedPrimitivesAsRecords, int maxRecursionDepth, boolean timestampsAsRecords) {
-      this.wrappedPrimitivesAsRecords = wrappedPrimitivesAsRecords;
-      this.maxRecursionDepth = maxRecursionDepth;
-      this.timestampsAsRecords = timestampsAsRecords;
-    }
+    // if true, to treat wrapped primitives like record with a single "value" field. If false, treat them as a nullable field
+    private final boolean wrappedPrimitivesAsRecords;
+    // the number of times to unravel a recursive proto schema before spilling the rest to bytes
+    private final int maxRecursionDepth;
+    // if true convert {@link Timestamp} to a Record with a seconds and nanos field. If false, convert it to a long with the timestamp-mircos logical type.
+    private final boolean timestampsAsRecords;
 
     public static SchemaConfig fromProperties(TypedProperties props) {
       boolean wrappedPrimitivesAsRecords = getBooleanWithAltKeys(props, PROTO_SCHEMA_WRAPPED_PRIMITIVES_AS_RECORDS);
       int maxRecursionDepth = getIntWithAltKeys(props, PROTO_SCHEMA_MAX_RECURSION_DEPTH);
       boolean timestampsAsRecords = getBooleanWithAltKeys(props, PROTO_SCHEMA_TIMESTAMPS_AS_RECORDS);
       return new ProtoConversionUtil.SchemaConfig(wrappedPrimitivesAsRecords, maxRecursionDepth, timestampsAsRecords);
-    }
-
-    public boolean isWrappedPrimitivesAsRecords() {
-      return wrappedPrimitivesAsRecords;
-    }
-
-    public boolean isTimestampsAsRecords() {
-      return timestampsAsRecords;
-    }
-
-    public int getMaxRecursionDepth() {
-      return maxRecursionDepth;
     }
   }
 
@@ -458,7 +443,7 @@ public class ProtoConversionUtil {
           }
           // unsigned ints need to be casted to long
           if (tmpValue instanceof Integer) {
-            tmpValue = new Long((Integer) tmpValue);
+            tmpValue = Integer.toUnsignedLong((Integer) tmpValue);
           }
           return tmpValue;
         case MAP:

@@ -18,9 +18,17 @@
 
 package org.apache.hudi.source;
 
+import org.apache.flink.annotation.VisibleForTesting;
+import org.apache.flink.configuration.Configuration;
+import org.apache.flink.core.fs.Path;
+import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.source.assign.HoodieSplitAssigner;
+import org.apache.hudi.source.assign.HoodieSplitAssigners;
+import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.source.enumerator.HoodieContinuousSplitEnumerator;
 import org.apache.hudi.source.enumerator.HoodieEnumeratorStateSerializer;
 import org.apache.hudi.source.enumerator.HoodieSplitEnumeratorState;
@@ -30,10 +38,8 @@ import org.apache.hudi.source.reader.HoodieSourceReader;
 import org.apache.hudi.source.reader.function.SplitReaderFunction;
 import org.apache.hudi.source.split.DefaultHoodieSplitDiscover;
 import org.apache.hudi.source.split.DefaultHoodieSplitProvider;
-import org.apache.hudi.source.split.HoodieContinuousSplitBatch;
 import org.apache.hudi.source.split.HoodieContinuousSplitDiscover;
 import org.apache.hudi.source.split.HoodieSourceSplit;
-import org.apache.hudi.source.split.HoodieSourceSplitComparator;
 import org.apache.hudi.source.split.HoodieSourceSplitSerializer;
 import org.apache.hudi.source.split.HoodieSourceSplitState;
 import org.apache.hudi.source.split.HoodieSplitProvider;
@@ -46,29 +52,37 @@ import org.apache.flink.api.connector.source.SourceReaderContext;
 import org.apache.flink.api.connector.source.SplitEnumerator;
 import org.apache.flink.api.connector.source.SplitEnumeratorContext;
 import org.apache.flink.core.io.SimpleVersionedSerializer;
+import org.apache.hudi.util.FileIndexReader;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.annotation.Nullable;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 
 /**
- * Hoodie Source implementation.
- * @param <T> record Type
+ * Hudi Flink Source V2 implementation for Flink streaming and batch reads.
+ *
+ * <p>This source supports both bounded (batch) and unbounded (streaming) modes
+ * based on the configuration. It uses Flink's new Source API @see FLIP-27 to
+ * provide efficient reading of Hudi tables.
+ *
+ * @param <T> the record type to emit
  */
-public class HoodieSource<T> implements Source<T, HoodieSourceSplit, HoodieSplitEnumeratorState> {
+public class HoodieSource<T> extends FileIndexReader implements Source<T, HoodieSourceSplit, HoodieSplitEnumeratorState> {
   private static final Logger LOG = LoggerFactory.getLogger(HoodieSource.class);
 
-  private final ScanContext scanContext;
+  private final HoodieScanContext scanContext;
   private final SplitReaderFunction<T> readerFunction;
   private final SerializableComparator<HoodieSourceSplit> splitComparator;
   private final HoodieTableMetaClient metaClient;
   private final HoodieRecordEmitter<T> recordEmitter;
+  private final String tableName;
 
-  HoodieSource(
-      ScanContext scanContext,
+  public HoodieSource(
+      HoodieScanContext scanContext,
       SplitReaderFunction<T> readerFunction,
       SerializableComparator<HoodieSourceSplit> splitComparator,
       HoodieTableMetaClient metaClient,
@@ -84,6 +98,7 @@ public class HoodieSource<T> implements Source<T, HoodieSourceSplit, HoodieSplit
     this.splitComparator = splitComparator;
     this.metaClient = metaClient;
     this.recordEmitter = recordEmitter;
+    this.tableName = metaClient.getTableConfig().getTableName();
   }
 
   @Override
@@ -114,23 +129,25 @@ public class HoodieSource<T> implements Source<T, HoodieSourceSplit, HoodieSplit
 
   @Override
   public SourceReader<T, HoodieSourceSplit> createReader(SourceReaderContext readerContext) throws Exception {
-    return new HoodieSourceReader<T>(recordEmitter, scanContext.getConf(), readerContext, readerFunction, splitComparator);
+    return new HoodieSourceReader<T>(tableName, recordEmitter, scanContext.getConf(), readerContext, readerFunction, splitComparator);
   }
 
   private SplitEnumerator<HoodieSourceSplit, HoodieSplitEnumeratorState> createEnumerator(
       SplitEnumeratorContext<HoodieSourceSplit> enumContext,
       @Nullable HoodieSplitEnumeratorState enumeratorState) {
     HoodieSplitProvider splitProvider;
+    HoodieSplitAssigner splitAssigner = HoodieSplitAssigners.createHoodieSplitAssigner(
+            scanContext.getConf(), enumContext.currentParallelism());
+
     if (enumeratorState == null) {
-      splitProvider = new DefaultHoodieSplitProvider(new HoodieSourceSplitComparator());
+      splitProvider = new DefaultHoodieSplitProvider(splitAssigner);
     } else {
       LOG.info(
           "Hoodie source restored {} splits from state for table {}",
-          enumeratorState.getPendingSplitStates().size(),
-          metaClient.getTableConfig().getTableName());
+          enumeratorState.getPendingSplitStates().size(), tableName);
       List<HoodieSourceSplit> pendingSplits =
-          enumeratorState.getPendingSplitStates().stream().map(HoodieSourceSplitState::split).collect(Collectors.toList());
-      splitProvider = new DefaultHoodieSplitProvider();
+          enumeratorState.getPendingSplitStates().stream().map(HoodieSourceSplitState::getSplit).collect(Collectors.toList());
+      splitProvider = new DefaultHoodieSplitProvider(splitAssigner);
       splitProvider.onDiscoveredSplits(pendingSplits);
     }
 
@@ -138,24 +155,64 @@ public class HoodieSource<T> implements Source<T, HoodieSourceSplit, HoodieSplit
       HoodieContinuousSplitDiscover discover = new DefaultHoodieSplitDiscover(
           scanContext, metaClient);
 
-      return new HoodieContinuousSplitEnumerator(enumContext, splitProvider, discover, scanContext, enumeratorState == null ? Option.empty() : Option.of(enumeratorState));
+      return new HoodieContinuousSplitEnumerator(
+              tableName, enumContext, splitProvider, discover, scanContext,
+              enumeratorState == null ? Option.empty() : Option.of(enumeratorState));
     } else {
       if (enumeratorState == null) {
-        // Only do scan planning if nothing is restored from checkpoint state
+        List<HoodieSourceSplit> splits = createBatchHoodieSplits();
+        splitProvider.onDiscoveredSplits(splits);
+      }
+      return new HoodieStaticSplitEnumerator(tableName, enumContext, splitProvider);
+    }
+  }
+
+  @VisibleForTesting
+  List<HoodieSourceSplit> createBatchHoodieSplits() {
+    final Configuration flinkConf = this.scanContext.getConf();
+    final String queryType = flinkConf.get(FlinkOptions.QUERY_TYPE);
+    switch (queryType) {
+      case FlinkOptions.QUERY_TYPE_SNAPSHOT:
+        final HoodieTableType tableType = HoodieTableType.valueOf(flinkConf.get(FlinkOptions.TABLE_TYPE));
+        switch (tableType) {
+          case MERGE_ON_READ:
+            List<HoodieSourceSplit> splits = buildHoodieSplits(metaClient, flinkConf);
+            if (splits.isEmpty()) {
+              // When there is no input splits, just return an empty source.
+              LOG.info("No input splits generate for MERGE_ON_READ input format. Returning empty collection");
+            }
+            return splits;
+          case COPY_ON_WRITE:
+            return baseFileOnlyHoodieSourceSplits(metaClient, scanContext.getPath(), flinkConf.get(FlinkOptions.MERGE_TYPE));
+          default:
+            throw new HoodieException("Unexpected table type: " + flinkConf.get(FlinkOptions.TABLE_TYPE));
+        }
+      case FlinkOptions.QUERY_TYPE_READ_OPTIMIZED:
+        return baseFileOnlyHoodieSourceSplits(metaClient, scanContext.getPath(), flinkConf.get(FlinkOptions.MERGE_TYPE));
+      case FlinkOptions.QUERY_TYPE_INCREMENTAL:
         IncrementalInputSplits incrementalInputSplits = IncrementalInputSplits.builder()
             .conf(scanContext.getConf())
-            .path(scanContext.getPath())
+            .path(new Path(scanContext.getPath().toUri()))
             .rowType(scanContext.getRowType())
             .maxCompactionMemoryInBytes(scanContext.getMaxCompactionMemoryInBytes())
-            .skipCompaction(scanContext.skipCompaction())
-            .skipClustering(scanContext.skipClustering())
-            .skipInsertOverwrite(scanContext.skipInsertOverwrite()).build();
-
-        HoodieContinuousSplitBatch batch = incrementalInputSplits.inputHoodieSourceSplits(metaClient, null, scanContext.cdcEnabled());
-        splitProvider.onDiscoveredSplits(batch.getSplits());
-      }
-
-      return new HoodieStaticSplitEnumerator(enumContext, splitProvider);
+            .skipCompaction(scanContext.isSkipCompaction())
+            .skipClustering(scanContext.isSkipClustering())
+            .partitionPruner(scanContext.getPartitionPruner())
+            .skipInsertOverwrite(scanContext.isSkipInsertOverwrite()).build();
+        return new ArrayList<>(incrementalInputSplits.batchHoodieSourceSplits(metaClient, scanContext.isCdcEnabled()).getSplits());
+      default:
+        throw new HoodieException("Unsupported query type: " + queryType);
     }
+  }
+
+  @Override
+  protected FileIndex buildFileIndex() {
+    return FileIndex.builder()
+        .path(scanContext.getPath())
+        .conf(this.scanContext.getConf())
+        .rowType(scanContext.getRowType())
+        .metaClient(metaClient)
+        .partitionPruner(scanContext.getPartitionPruner())
+        .build();
   }
 }

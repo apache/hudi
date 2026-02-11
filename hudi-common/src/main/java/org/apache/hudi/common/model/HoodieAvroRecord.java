@@ -34,7 +34,7 @@ import org.apache.hudi.metadata.HoodieMetadataPayload;
 import com.esotericsoftware.kryo.Kryo;
 import com.esotericsoftware.kryo.io.Input;
 import com.esotericsoftware.kryo.io.Output;
-import org.apache.avro.Schema;
+import lombok.NoArgsConstructor;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 
@@ -50,6 +50,7 @@ import static org.apache.hudi.common.model.HoodieAvroIndexedRecord.updateMetadat
  *
  * @param <T> payload implementation.
  */
+@NoArgsConstructor
 public class HoodieAvroRecord<T extends HoodieRecordPayload> extends HoodieRecord<T> {
 
   public HoodieAvroRecord(HoodieKey key, T data) {
@@ -76,9 +77,6 @@ public class HoodieAvroRecord<T extends HoodieRecordPayload> extends HoodieRecor
       HoodieRecordLocation currentLocation,
       HoodieRecordLocation newLocation) {
     super(key, data, operation, currentLocation, newLocation);
-  }
-
-  public HoodieAvroRecord() {
   }
 
   @Override
@@ -228,16 +226,15 @@ public class HoodieAvroRecord<T extends HoodieRecordPayload> extends HoodieRecor
   public HoodieRecord wrapIntoHoodieRecordPayloadWithParams(
       HoodieSchema recordSchema, Properties props,
       Option<Pair<String, String>> simpleKeyGenFieldsOpt,
-      Boolean withOperation,
+      boolean withOperation,
       Option<String> partitionNameOp,
-      Boolean populateMetaFields,
+      boolean populateMetaFields,
       Option<HoodieSchema> schemaWithoutMetaFields) throws IOException {
     IndexedRecord indexedRecord = (IndexedRecord) data.getInsertValue(recordSchema.toAvroSchema(), props).get();
     String payloadClass = ConfigUtils.getPayloadClass(props);
     String[] orderingFields = ConfigUtils.getOrderingFields(props);
-    Option<Schema> avroSchemaWithoutMetaFields = schemaWithoutMetaFields.map(HoodieSchema::toAvroSchema);
     return HoodieAvroUtils.createHoodieRecordFromAvro(indexedRecord, payloadClass, orderingFields, simpleKeyGenFieldsOpt,
-        withOperation, partitionNameOp, populateMetaFields, avroSchemaWithoutMetaFields);
+        withOperation, partitionNameOp, populateMetaFields, schemaWithoutMetaFields);
   }
 
   @Override

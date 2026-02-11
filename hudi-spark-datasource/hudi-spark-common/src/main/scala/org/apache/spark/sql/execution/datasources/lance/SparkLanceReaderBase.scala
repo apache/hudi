@@ -19,6 +19,7 @@
 
 package org.apache.spark.sql.execution.datasources.lance
 
+import org.apache.hudi.SparkAdapterSupport.sparkAdapter
 import org.apache.hudi.common.util
 import org.apache.hudi.internal.schema.InternalSchema
 import org.apache.hudi.io.memory.HoodieArrowAllocator
@@ -29,8 +30,10 @@ import org.apache.hadoop.conf.Configuration
 import org.apache.parquet.schema.MessageType
 import org.apache.spark.TaskContext
 import org.apache.spark.sql.catalyst.InternalRow
-import org.apache.spark.sql.catalyst.expressions.JoinedRow
-import org.apache.spark.sql.execution.datasources.{PartitionedFile, SparkColumnarFileReader}
+import org.apache.spark.sql.catalyst.expressions.{AttributeReference, JoinedRow, UnsafeProjection, UnsafeRow}
+import org.apache.spark.sql.catalyst.expressions.codegen.GenerateUnsafeProjection
+import org.apache.spark.sql.execution.datasources.{PartitionedFile, SparkColumnarFileReader, SparkSchemaTransformUtils}
+import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.sources.Filter
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.util.LanceArrowUtils
@@ -76,6 +79,9 @@ class SparkLanceReaderBase(enableVectorizedReader: Boolean) extends SparkColumna
       // No columns requested - return empty iterator
       Iterator.empty
     } else {
+      // Track iterator for cleanup
+      var lanceIterator: LanceRecordIterator = null
+
       // Create child allocator for reading
       val allocator = HoodieArrowAllocator.newChildAllocator(getClass.getSimpleName + "-data-" + filePath,
         HoodieSparkLanceReader.LANCE_DATA_ALLOCATOR_SIZE);
@@ -84,9 +90,19 @@ class SparkLanceReaderBase(enableVectorizedReader: Boolean) extends SparkColumna
         // Open Lance file reader
         val lanceReader = LanceFileReader.open(filePath, allocator)
 
-        // Extract column names from required schema for projection
-        val columnNames: java.util.List[String] = if (requiredSchema.nonEmpty) {
-          requiredSchema.fields.map(_.name).toList.asJava
+        // Get schema from Lance file
+        val arrowSchema = lanceReader.schema()
+        val fileSchema = LanceArrowUtils.fromArrowSchema(arrowSchema)
+
+        // Build type change info for schema evolution
+        val (implicitTypeChangeInfo, sparkRequestSchema) =
+          SparkSchemaTransformUtils.buildImplicitSchemaChangeInfo(fileSchema, requiredSchema)
+
+        // Filter schema to only fields that exist in file (Lance can only read columns present in file)
+        val requestSchema = SparkSchemaTransformUtils.filterSchemaByFileSchema(sparkRequestSchema, fileSchema)
+
+        val columnNames = if (requestSchema.nonEmpty) {
+          requestSchema.fieldNames.toList.asJava
         } else {
           // If only partition columns requested, read minimal data
           null
@@ -95,44 +111,63 @@ class SparkLanceReaderBase(enableVectorizedReader: Boolean) extends SparkColumna
         // Read data with column projection (filters not supported yet)
         val arrowReader = lanceReader.readAll(columnNames, null, DEFAULT_BATCH_SIZE)
 
-        val schemaForIterator = if (requiredSchema.nonEmpty) {
-          requiredSchema
-        } else {
-          // Only compute schema from Lance file when requiredSchema is empty
-          val arrowSchema = lanceReader.schema()
-          LanceArrowUtils.fromArrowSchema(arrowSchema)
-        }
-
         // Create iterator using shared LanceRecordIterator
-        val lanceIterator = new LanceRecordIterator(
+        lanceIterator = new LanceRecordIterator(
           allocator,
           lanceReader,
           arrowReader,
-          schemaForIterator,
+          requestSchema,
           filePath
         )
 
-        // Register cleanup listener with Spark task context
-        Option(TaskContext.get()).foreach(
-          _.addTaskCompletionListener[Unit](_ => lanceIterator.close())
+        // Register cleanup listener
+        Option(TaskContext.get()).foreach { ctx =>
+          ctx.addTaskCompletionListener[Unit](_ => lanceIterator.close())
+        }
+
+        // Create the following projections for schema evolution:
+        // 1. Padding projection: add NULL for missing columns
+        // 2. Casting projection: handle type conversions
+        val schemaUtils = sparkAdapter.getSchemaUtils
+        val paddingProj = SparkSchemaTransformUtils.generateNullPaddingProjection(requestSchema, requiredSchema)
+        val castProj = SparkSchemaTransformUtils.generateUnsafeProjection(
+          schemaUtils.toAttributes(requiredSchema),
+          Some(SQLConf.get.sessionLocalTimeZone),
+          implicitTypeChangeInfo,
+          requiredSchema,
+          new StructType(),
+          schemaUtils
         )
 
-        // Need to convert to scala iterator for proper reading
-        val iter = lanceIterator.asScala
+        // Unify projections by applying padding and then casting for each row
+        val projection: UnsafeProjection = new UnsafeProjection {
+          def apply(row: InternalRow): UnsafeRow =
+            castProj(paddingProj(row))
+        }
+        val projectedIter = lanceIterator.asScala.map(projection.apply)
 
         // Handle partition columns
         if (partitionSchema.length == 0) {
           // No partition columns - return rows directly
-          iter.asInstanceOf[Iterator[InternalRow]]
+          projectedIter
         } else {
-          // Append partition values to each row using JoinedRow
+          // Create UnsafeProjection to convert JoinedRow to UnsafeRow
+          val fullSchema = (requiredSchema.fields ++ partitionSchema.fields).map(f =>
+            AttributeReference(f.name, f.dataType, f.nullable, f.metadata)())
+          val unsafeProjection = GenerateUnsafeProjection.generate(fullSchema, fullSchema)
+
+          // Append partition values to each row using JoinedRow, then convert to UnsafeRow
           val joinedRow = new JoinedRow()
-          iter.map(row => joinedRow(row, file.partitionValues))
+          projectedIter.map(row => unsafeProjection(joinedRow(row, file.partitionValues)))
         }
 
       } catch {
         case e: Exception =>
-          allocator.close()
+          if (lanceIterator != null) {
+            lanceIterator.close()  // Close iterator which handles lifecycle for all objects
+          } else {
+            allocator.close()      // Close allocator directly
+          }
           throw new IOException(s"Failed to read Lance file: $filePath", e)
       }
     }

@@ -45,14 +45,6 @@ public class HoodieReaderConfig extends HoodieConfig {
       .withDocumentation("HoodieLogFormatReader reads a logfile in the forward direction starting from pos=0 to pos=file_length. "
           + "If this config is set to true, the reader reads the logfile in reverse direction, from pos=file_length to pos=0");
 
-  public static final ConfigProperty<String> ENABLE_OPTIMIZED_LOG_BLOCKS_SCAN = ConfigProperty
-      .key("hoodie" + HoodieMetadataConfig.OPTIMIZED_LOG_BLOCKS_SCAN)
-      .defaultValue("false")
-      .markAdvanced()
-      .sinceVersion("0.13.0")
-      .withDocumentation("New optimized scan for log blocks that handles all multi-writer use-cases while appending to log files. "
-          + "It also differentiates original blocks written by ingestion writers and compacted blocks written log compaction.");
-
   public static final ConfigProperty<Boolean> FILE_GROUP_READER_ENABLED = ConfigProperty
       .key("hoodie.file.group.reader.enabled")
       .defaultValue(true)

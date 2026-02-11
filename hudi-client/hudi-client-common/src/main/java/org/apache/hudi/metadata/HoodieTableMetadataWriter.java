@@ -177,4 +177,9 @@ public interface HoodieTableMetadataWriter<I,O> extends Serializable, AutoClosea
   default void performTableServices(Option<String> inFlightInstantTimestamp) {
     performTableServices(inFlightInstantTimestamp, false);
   }
+
+  /**
+   * This returns true if the metadata table's partitions state is changed.
+   */
+  boolean hasPartitionsStateChanged();
 }

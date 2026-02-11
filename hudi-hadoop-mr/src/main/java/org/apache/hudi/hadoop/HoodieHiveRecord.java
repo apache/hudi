@@ -218,8 +218,8 @@ public class HoodieHiveRecord extends HoodieRecord<ArrayWritable> {
   }
 
   @Override
-  public HoodieRecord wrapIntoHoodieRecordPayloadWithParams(HoodieSchema recordSchema, Properties props, Option<Pair<String, String>> simpleKeyGenFieldsOpt, Boolean withOperation,
-                                                            Option<String> partitionNameOp, Boolean populateMetaFieldsOp, Option<HoodieSchema> schemaWithoutMetaFields) throws IOException {
+  public HoodieRecord wrapIntoHoodieRecordPayloadWithParams(HoodieSchema recordSchema, Properties props, Option<Pair<String, String>> simpleKeyGenFieldsOpt, boolean withOperation,
+                                                            Option<String> partitionNameOp, boolean populateMetaFieldsOp, Option<HoodieSchema> schemaWithoutMetaFields) throws IOException {
     throw new UnsupportedOperationException("Not supported for HoodieHiveRecord");
   }
 

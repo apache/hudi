@@ -63,6 +63,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -311,12 +312,11 @@ public class TestHoodieBloomIndex extends TestHoodieMetadataBase {
     assertFalse(filter.mightContain(record4.getRecordKey()));
 
     // Compare with file
-    List<String> uuids =
-        Arrays.asList(record1.getRecordKey(), record2.getRecordKey(), record3.getRecordKey(), record4.getRecordKey());
+    Set<String> uuids =
+        Set.of(record1.getRecordKey(), record2.getRecordKey(), record3.getRecordKey(), record4.getRecordKey());
 
-    HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath).build();
-    List<Pair<String, Long>> results = HoodieIndexUtils.filterKeysFromFile(
-        new StoragePath(Paths.get(basePath, partition, filename).toString()), uuids, storage);
+    List<Pair<String, Long>> results = new ArrayList<>(HoodieIndexUtils.filterKeysFromFile(
+        new StoragePath(Paths.get(basePath, partition, filename).toString()), uuids, storage));
 
     assertEquals(results.size(), 2);
     assertTrue(results.get(0).getLeft().equals("1eb5b87a-1feh-4edd-87b4-6ec96dc405a0")
@@ -657,6 +657,66 @@ public class TestHoodieBloomIndex extends TestHoodieMetadataBase {
         assertFalse(record.isCurrentLocationKnown());
       }
     }
+  }
+
+  @Test
+  public void testPreloadPartitionsWhenTimelineServerDisabled() throws Exception {
+    // This test verifies that when TLS is disabled, file listings are preloaded
+    // to avoid redundant listings by parallel operations
+    HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath)
+        .withEmbeddedTimelineServerEnabled(false)
+        .withIndexConfig(HoodieIndexConfig.newBuilder()
+            .bloomIndexPruneByRanges(true)
+            .bloomIndexUseMetadata(false)
+            .build())
+        .build();
+
+    HoodieBloomIndex index = new HoodieBloomIndex(config, SparkHoodieBloomIndexHelper.getInstance());
+    metadataWriter = SparkHoodieBackedTableMetadataWriter.create(storageConf, config, context);
+    HoodieSparkWriteableTestTable testTable = HoodieSparkWriteableTestTable.of(metaClient, SCHEMA, metadataWriter, Option.of(context));
+
+    // Create partitions with files
+    final String partition1 = "2016/01/31";
+    final String partition2 = "2015/01/31";
+    testTable.withPartitionMetaFiles(partition1, partition2);
+
+    HoodieRecord record1 = createSimpleRecord("000", "2016-01-31T03:16:41.415Z", 12);
+    HoodieRecord record2 = createSimpleRecord("001", "2015-01-31T03:16:41.415Z", 15);
+
+    final Map<String, List<Pair<String, Integer>>> partitionToFilesNameLengthMap = new HashMap<>();
+    String commitTime = "20160131010101";
+    StoragePath baseFilePath = testTable.forCommit(commitTime)
+        .withInserts(partition1, "file1", Collections.singletonList(record1));
+    long baseFileLength = storage.getPathInfo(baseFilePath).getLength();
+    partitionToFilesNameLengthMap.put(partition1,
+        Collections.singletonList(Pair.of("file1", (int) baseFileLength)));
+    testTable.doWriteOperation(commitTime, WriteOperationType.UPSERT,
+        Collections.singletonList(partition1), partitionToFilesNameLengthMap, false, false);
+
+    commitTime = "20150131010101";
+    partitionToFilesNameLengthMap.clear();
+    baseFilePath = testTable.forCommit(commitTime)
+        .withInserts(partition2, "file2", Collections.singletonList(record2));
+    baseFileLength = storage.getPathInfo(baseFilePath).getLength();
+    partitionToFilesNameLengthMap.put(partition2,
+        Collections.singletonList(Pair.of("file2", (int) baseFileLength)));
+    testTable.doWriteOperation(commitTime, WriteOperationType.UPSERT,
+        Collections.singletonList(partition2), partitionToFilesNameLengthMap, false, false);
+
+    metaClient = HoodieTableMetaClient.reload(metaClient);
+    HoodieTable hoodieTable = HoodieSparkTable.create(config, context, metaClient);
+
+    // Load column ranges - this should work correctly with preloading
+    List<String> partitions = Arrays.asList(partition1, partition2);
+    List<Pair<String, BloomIndexFileInfo>> filesList = index.loadColumnRangesFromFiles(partitions, context, hoodieTable);
+
+    // Verify files were loaded for both partitions
+    assertEquals(2, filesList.size());
+    Set<String> loadedPartitions = filesList.stream()
+        .map(Pair::getLeft)
+        .collect(Collectors.toSet());
+    assertTrue(loadedPartitions.contains(partition1));
+    assertTrue(loadedPartitions.contains(partition2));
   }
 
   private static String genRandomUUID() {

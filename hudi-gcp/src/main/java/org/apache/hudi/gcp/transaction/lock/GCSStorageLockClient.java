@@ -29,6 +29,7 @@ import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieIOException;
 
+import com.google.api.gax.retrying.RetrySettings;
 import com.google.cloud.storage.Blob;
 import com.google.cloud.storage.BlobId;
 import com.google.cloud.storage.BlobInfo;
@@ -98,9 +99,16 @@ public class GCSStorageLockClient implements StorageLockClient {
 
   private static Functions.Function1<Properties, Storage> createDefaultGcsClient() {
     return (props) -> {
-      // Provide the option to customize the timeouts later on.
-      // For now, defaults suffice
-      return StorageOptions.newBuilder().build().getService();
+      // Configure with no retries - only one attempt per operation
+      RetrySettings retrySettings =
+          StorageOptions.getDefaultRetrySettings()
+              .toBuilder()
+              .setMaxAttempts(1)
+              .build();
+      return StorageOptions.newBuilder()
+          .setRetrySettings(retrySettings)
+          .build()
+          .getService();
     };
   }
 

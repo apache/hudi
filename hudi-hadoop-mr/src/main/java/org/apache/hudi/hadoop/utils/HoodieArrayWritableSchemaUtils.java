@@ -24,7 +24,6 @@ import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaCompatibility;
 import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.schema.HoodieSchemaType;
-import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.exception.SchemaCompatibilityException;
@@ -71,8 +70,8 @@ public class HoodieArrayWritableSchemaUtils {
     if (writable == null) {
       return null;
     }
-    HoodieSchema oldSchemaNonNull = HoodieSchemaUtils.getNonNullTypeFromUnion(oldSchema);
-    HoodieSchema newSchemaNonNull = HoodieSchemaUtils.getNonNullTypeFromUnion(newSchema);
+    HoodieSchema oldSchemaNonNull = oldSchema.getNonNullType();
+    HoodieSchema newSchemaNonNull = newSchema.getNonNullType();
     if (HoodieSchemaCompatibility.areSchemasProjectionEquivalent(oldSchemaNonNull, newSchemaNonNull)) {
       return writable;
     }
@@ -108,7 +107,7 @@ public class HoodieArrayWritableSchemaUtils {
           } else if (!newField.schema().isNullable() && newField.defaultVal().isEmpty()) {
             throw new SchemaCompatibilityException("Field " + createFullName(fieldNames) + " has no default value and is non-nullable");
           } else if (newField.defaultVal().isPresent()) {
-            switch (HoodieSchemaUtils.getNonNullTypeFromUnion(newField.schema()).getType()) {
+            switch (newField.getNonNullSchema().getType()) {
               case BOOLEAN:
                 values[i] = new BooleanWritable((Boolean) newField.defaultVal().get());
                 break;

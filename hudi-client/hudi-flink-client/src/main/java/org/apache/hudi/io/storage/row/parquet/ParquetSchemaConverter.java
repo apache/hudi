@@ -294,13 +294,14 @@ public class ParquetSchemaConverter {
                 Types
                     .repeatedGroup()
                     .addField(convertToParquetType("key", keyType, Type.Repetition.REQUIRED))
-                    .addField(convertToParquetType("value", valueType, repetition))
+                    .addField(convertToParquetType("value", valueType, valueType.isNullable() ? Type.Repetition.OPTIONAL : Type.Repetition.REQUIRED))
                     .named("key_value"))
             .named(name);
       case ROW:
         RowType rowType = (RowType) type;
         Types.GroupBuilder<GroupType> builder = Types.buildGroup(repetition);
-        rowType.getFields().forEach(field -> builder.addField(convertToParquetType(field.getName(), field.getType(), repetition)));
+        rowType.getFields().forEach(field -> builder
+            .addField(convertToParquetType(field.getName(), field.getType(), field.getType().isNullable() ? Type.Repetition.OPTIONAL : Type.Repetition.REQUIRED)));
         return builder.named(name);
       default:
         throw new UnsupportedOperationException("Unsupported type: " + type);

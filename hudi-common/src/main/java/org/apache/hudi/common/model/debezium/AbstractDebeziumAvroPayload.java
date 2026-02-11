@@ -22,11 +22,10 @@ import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.util.Option;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 
@@ -42,9 +41,8 @@ import java.io.IOException;
  * <p>
  * This payload implementation will issue matching insert, delete, updates against the hudi table
  */
+@Slf4j
 public abstract class AbstractDebeziumAvroPayload extends OverwriteWithLatestAvroPayload {
-
-  private static final Logger LOG = LoggerFactory.getLogger(AbstractDebeziumAvroPayload.class);
 
   public AbstractDebeziumAvroPayload(GenericRecord record, Comparable orderingVal) {
     super(record, orderingVal);

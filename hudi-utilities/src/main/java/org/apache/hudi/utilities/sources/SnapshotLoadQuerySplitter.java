@@ -27,6 +27,8 @@ import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.utilities.sources.helpers.QueryInfo;
 import org.apache.hudi.utilities.streamer.SourceProfileSupplier;
 
+import lombok.AllArgsConstructor;
+import lombok.Getter;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 
@@ -36,6 +38,7 @@ import static org.apache.hudi.utilities.sources.SnapshotLoadQuerySplitter.Config
  * Abstract splitter responsible for managing the snapshot load query operations.
  */
 @PublicAPIClass(maturity = ApiMaturityLevel.EVOLVING)
+@AllArgsConstructor
 public abstract class SnapshotLoadQuerySplitter {
   /**
    * Configuration properties for the splitter.
@@ -55,31 +58,12 @@ public abstract class SnapshotLoadQuerySplitter {
   /**
    * Checkpoint returned for the SnapshotLoadQuerySplitter.
    */
+  @AllArgsConstructor
+  @Getter
   public static class CheckpointWithPredicates {
+
     private final String endCompletionTime;
     private final String predicateFilter;
-
-    public CheckpointWithPredicates(String endCompletionTime, String predicateFilter) {
-      this.endCompletionTime = endCompletionTime;
-      this.predicateFilter = predicateFilter;
-    }
-
-    public String getEndCompletionTime() {
-      return endCompletionTime;
-    }
-
-    public String getPredicateFilter() {
-      return predicateFilter;
-    }
-  }
-
-  /**
-   * Constructor initializing the properties.
-   *
-   * @param properties Configuration properties for the splitter.
-   */
-  public SnapshotLoadQuerySplitter(TypedProperties properties) {
-    this.properties = properties;
   }
 
   /**

@@ -84,12 +84,12 @@ import lombok.extern.slf4j.Slf4j;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
-import java.util.stream.Collectors;
 
 import static java.util.stream.Collectors.toList;
 import static org.apache.hudi.common.config.HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_ENABLE_PROP;
@@ -276,28 +276,27 @@ public class HoodieIndexUtils {
    * @param storage
    * @return List of pairs of candidate keys and positions that are available in the file
    */
-  public static List<Pair<String, Long>> filterKeysFromFile(StoragePath filePath,
-                                                            List<String> candidateRecordKeys,
-                                                            HoodieStorage storage) throws HoodieIndexException {
+  public static Collection<Pair<String, Long>> filterKeysFromFile(StoragePath filePath,
+                                                                  Set<String> candidateRecordKeys,
+                                                                  HoodieStorage storage) throws HoodieIndexException {
     checkArgument(FSUtils.isBaseFile(filePath));
-    List<Pair<String, Long>> foundRecordKeys = new ArrayList<>();
+    if (candidateRecordKeys.isEmpty()) {
+      return Collections.emptyList();
+    }
     log.info("Going to filter {} keys from file {}", candidateRecordKeys.size(), filePath);
     try (HoodieFileReader fileReader = HoodieIOFactory.getIOFactory(storage)
         .getReaderFactory(HoodieRecordType.AVRO)
         .getFileReader(DEFAULT_HUDI_CONFIG_FOR_READER, filePath)) {
       // Load all rowKeys from the file, to double-confirm
-      if (!candidateRecordKeys.isEmpty()) {
-        HoodieTimer timer = HoodieTimer.start();
-        Set<Pair<String, Long>> fileRowKeys = fileReader.filterRowKeys(candidateRecordKeys.stream().collect(Collectors.toSet()));
-        foundRecordKeys.addAll(fileRowKeys);
-        log.info("Checked keys against file {}, in {} ms. #candidates ({}) #found ({})", filePath,
-            timer.endTimer(), candidateRecordKeys.size(), foundRecordKeys.size());
-        log.debug("Keys matching for file {} => {}", filePath, foundRecordKeys);
-      }
+      HoodieTimer timer = HoodieTimer.start();
+      Set<Pair<String, Long>> fileRowKeys = fileReader.filterRowKeys(candidateRecordKeys);
+      log.info("Checked keys against file {}, in {} ms. #candidates ({}) #found ({})", filePath,
+          timer.endTimer(), candidateRecordKeys.size(), fileRowKeys.size());
+      log.debug("Keys matching for file {} => {}", filePath, fileRowKeys);
+      return fileRowKeys;
     } catch (Exception e) {
       throw new HoodieIndexException("Error checking candidate keys against file.", e);
     }
-    return foundRecordKeys;
   }
 
   /**
@@ -362,7 +361,6 @@ public class HoodieIndexUtils {
           .withRequestedSchema(dataSchema)
           .withInternalSchema(internalSchemaOption)
           .withProps(metaClient.getTableConfig().getProps())
-          .withEnableOptimizedLogBlockScan(config.enableOptimizedLogBlocksScan())
           .build();
       try {
         final HoodieRecordLocation currentLocation = new HoodieRecordLocation(fileSlice.getBaseInstantTime(), fileSlice.getFileId());

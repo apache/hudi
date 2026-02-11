@@ -119,7 +119,7 @@ public class TestParquetSchemaConverter {
   void testConvertComplexTypes() {
     DataType dataType = DataTypes.ROW(
         DataTypes.FIELD("f_array",
-            DataTypes.ARRAY(DataTypes.CHAR(10))),
+            DataTypes.ARRAY(DataTypes.CHAR(10).notNull())),
         DataTypes.FIELD("f_map",
             DataTypes.MAP(DataTypes.INT(), DataTypes.VARCHAR(20))),
         DataTypes.FIELD("f_row",
@@ -136,7 +136,7 @@ public class TestParquetSchemaConverter {
     final String expected = "message converted {\n"
         + "  optional group f_array (LIST) {\n"
         + "    repeated group list {\n"
-        + "      optional binary element (STRING);\n"
+        + "      required binary element (STRING);\n"
         + "    }\n"
         + "  }\n"
         + "  optional group f_map (MAP) {\n"
@@ -151,6 +151,49 @@ public class TestParquetSchemaConverter {
         + "    optional group f_row_f2 {\n"
         + "      optional int32 f_row_f2_f0;\n"
         + "      optional binary f_row_f2_f1 (STRING);\n"
+        + "    }\n"
+        + "  }\n"
+        + "}\n";
+    assertThat(messageType.toString(), is(expected));
+  }
+
+  @Test
+  void testConvertNestedComplexTypes() {
+    DataType dataType = DataTypes.ROW(
+        DataTypes.FIELD("f_array",
+            DataTypes.ARRAY(DataTypes.ROW(
+                DataTypes.FIELD("f_array_f0", DataTypes.INT()),
+                DataTypes.FIELD("f_array_f1", DataTypes.VARCHAR(10).notNull()),
+                DataTypes.FIELD("f_array_f3", DataTypes.ARRAY(DataTypes.CHAR(10).notNull()))).notNull())),
+        DataTypes.FIELD("f_map",
+            DataTypes.MAP(DataTypes.INT(), DataTypes.ROW(
+                DataTypes.FIELD("f_map_f0", DataTypes.INT()),
+                DataTypes.FIELD("f_map_f1", DataTypes.VARCHAR(10))).notNull())));
+
+    org.apache.parquet.schema.MessageType messageType = ParquetSchemaConverter.convertToParquetMessageType("converted", (RowType) dataType.getLogicalType());
+
+    assertThat(messageType.getColumns().size(), is(6));
+    final String expected = "message converted {\n"
+        + "  optional group f_array (LIST) {\n"
+        + "    repeated group list {\n"
+        + "      required group element {\n"
+        + "        optional int32 f_array_f0;\n"
+        + "        required binary f_array_f1 (STRING);\n"
+        + "        optional group f_array_f3 (LIST) {\n"
+        + "          repeated group list {\n"
+        + "            required binary element (STRING);\n"
+        + "          }\n"
+        + "        }\n"
+        + "      }\n"
+        + "    }\n"
+        + "  }\n"
+        + "  optional group f_map (MAP) {\n"
+        + "    repeated group key_value {\n"
+        + "      required int32 key;\n"
+        + "      required group value {\n"
+        + "        optional int32 f_map_f0;\n"
+        + "        optional binary f_map_f1 (STRING);\n"
+        + "      }\n"
         + "    }\n"
         + "  }\n"
         + "}\n";

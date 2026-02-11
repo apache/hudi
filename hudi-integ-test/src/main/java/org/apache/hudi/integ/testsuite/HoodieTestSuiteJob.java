@@ -22,6 +22,7 @@ import org.apache.hudi.DataSourceWriteOptions;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
@@ -50,7 +51,6 @@ import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer;
 import com.beust.jcommander.JCommander;
 import com.beust.jcommander.Parameter;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.avro.Schema;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
@@ -155,8 +155,8 @@ public class HoodieTestSuiteJob {
       HoodieCommitMetadata commit = timeline.readCommitMetadata(prevInstant);
       Map<String, String> extraMetadata = commit.getExtraMetadata();
       String avroSchemaStr = extraMetadata.get(HoodieCommitMetadata.SCHEMA_KEY);
-      Schema avroSchema = new Schema.Parser().parse(avroSchemaStr);
-      version = Integer.parseInt(avroSchema.getObjectProp("schemaVersion").toString());
+      HoodieSchema schema = HoodieSchema.parse(avroSchemaStr);
+      version = Integer.parseInt(schema.getProp("schemaVersion").toString());
       // DAG will generate & ingest data for 2 versions (n-th version being validated, n-1).
       log.info("Last used schemaVersion from latest commit file was {}. Optimizing the DAG.", version);
     } catch (Exception e) {
@@ -182,7 +182,7 @@ public class HoodieTestSuiteJob {
     }
 
     JavaSparkContext jssc = UtilHelpers.buildSparkContext("workload-generator-" + cfg.outputTypeName
-        + "-" + cfg.inputFormatName, cfg.sparkMaster);
+        + "-" + cfg.inputFormatName, cfg.sparkMaster, cfg.enableHiveSupport);
     new HoodieTestSuiteJob(cfg, jssc, true).runTestSuite();
   }
 

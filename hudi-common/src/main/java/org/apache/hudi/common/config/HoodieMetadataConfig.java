@@ -616,6 +616,14 @@ public final class HoodieMetadataConfig extends HoodieConfig {
           + "honor the set value for number of tasks. If not, number of write status's from data "
           + "table writes will be used for metadata table record preparation");
 
+  public static final ConfigProperty<Boolean> FAIL_ON_TABLE_SERVICE_FAILURES = ConfigProperty
+      .key(METADATA_PREFIX + ".write.fail.on.table.service.failures")
+      .defaultValue(true)
+      .markAdvanced()
+      .sinceVersion("1.2.0")
+      .withDocumentation("when set to true, it fails the job on metadata table's "
+          + "table services operation failure");
+
   public long getMaxLogFileSize() {
     return getLong(MAX_LOG_FILE_SIZE_BYTES_PROP);
   }
@@ -898,6 +906,10 @@ public final class HoodieMetadataConfig extends HoodieConfig {
     return getBooleanOrDefault(DERIVE_FROM_DATA_TABLE_CLEAN_POLICY);
   }
 
+  public boolean shouldFailOnTableServiceFailures() {
+    return getBooleanOrDefault(FAIL_ON_TABLE_SERVICE_FAILURES);
+  }
+
   /**
    * Checks if a specific metadata index is marked for dropping based on the metadata configuration.
    * NOTE: Only applicable for secondary indexes (SI) or expression indexes (EI).
@@ -1077,6 +1089,11 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       return this;
     }
 
+    public Builder withEnableRecordLevelIndex(boolean enabled) {
+      metadataConfig.setValue(RECORD_LEVEL_INDEX_ENABLE_PROP, String.valueOf(enabled));
+      return this;
+    }
+
     public Builder withRecordIndexFileGroupCount(int minCount, int maxCount) {
       metadataConfig.setValue(GLOBAL_RECORD_LEVEL_INDEX_MIN_FILE_GROUP_COUNT_PROP, String.valueOf(minCount));
       metadataConfig.setValue(GLOBAL_RECORD_LEVEL_INDEX_MAX_FILE_GROUP_COUNT_PROP, String.valueOf(maxCount));
@@ -1207,6 +1224,11 @@ public final class HoodieMetadataConfig extends HoodieConfig {
 
     public Builder withRepartitionDefaultPartitions(int defaultPartitions) {
       metadataConfig.setValue(REPARTITION_DEFAULT_PARTITIONS, String.valueOf(defaultPartitions));
+      return this;
+    }
+
+    public Builder setFailOnTableServiceFailures(boolean failOnTableServiceFailures) {
+      metadataConfig.setValue(FAIL_ON_TABLE_SERVICE_FAILURES, String.valueOf(failOnTableServiceFailures));
       return this;
     }
 

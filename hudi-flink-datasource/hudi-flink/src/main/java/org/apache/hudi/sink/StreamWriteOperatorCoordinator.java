@@ -129,8 +129,6 @@ public class StreamWriteOperatorCoordinator
    */
   protected final Context context;
 
-  private final boolean isStreamingIndexWriteEnabled;
-
   /**
    * Gateways for sending events to sub-tasks.
    */
@@ -140,6 +138,11 @@ public class StreamWriteOperatorCoordinator
    * Write client.
    */
   private transient HoodieFlinkWriteClient writeClient;
+
+  /**
+   * Write client for the metadata table.
+   */
+  private transient HoodieFlinkWriteClient metadataWriteClient;
 
   /**
    * Meta client.
@@ -209,7 +212,6 @@ public class StreamWriteOperatorCoordinator
     this.context = context;
     this.parallelism = context.currentParallelism();
     this.storageConf = HadoopFSUtils.getStorageConfWithCopy(HadoopConfigurations.getHiveConf(conf));
-    this.isStreamingIndexWriteEnabled = OptionsResolver.isStreamingIndexWriteEnabled(conf);
   }
 
   @Override
@@ -227,6 +229,11 @@ public class StreamWriteOperatorCoordinator
       this.writeClient = FlinkWriteClients.createWriteClient(conf);
       this.writeClient.tryUpgrade(instant, this.metaClient);
       initMetadataTable(this.writeClient);
+
+      if (tableState.scheduleMdtCompaction) {
+        this.metadataWriteClient = StreamerUtil.createMetadataWriteClient(writeClient);
+      }
+
       // start the executor
       this.executor = NonThrownExecutor.builder(log)
           .threadFactory(getThreadFactory("meta-event-handle"))
@@ -267,6 +274,9 @@ public class StreamWriteOperatorCoordinator
     // because the task in the service may send requests to the embedded timeline service.
     if (writeClient != null) {
       writeClient.close();
+    }
+    if (metadataWriteClient != null) {
+      metadataWriteClient.close();
     }
     this.eventBuffers = null;
     if (this.clientIds != null) {
@@ -458,6 +468,10 @@ public class StreamWriteOperatorCoordinator
     if (tableState.scheduleCompaction) {
       CompactionUtil.scheduleCompaction(writeClient, tableState.isDeltaTimeCompaction, committed);
     }
+    if (tableState.scheduleMdtCompaction) {
+      // schedule compaction for the metadata table
+      CompactionUtil.scheduleMetadataCompaction(metadataWriteClient, committed);
+    }
     // if clustering is on, schedule the clustering
     if (tableState.scheduleClustering) {
       ClusteringUtil.scheduleClustering(conf, writeClient, committed);
@@ -491,7 +505,7 @@ public class StreamWriteOperatorCoordinator
     this.instant = this.writeClient.startCommit(tableState.commitAction, this.metaClient);
     this.metaClient.getActiveTimeline().transitionRequestedToInflight(tableState.commitAction, this.instant);
     // start commit for MDT if streaming writes to MDT is enabled
-    if (isStreamingIndexWriteEnabled) {
+    if (tableState.isStreamingIndexWriteEnabled) {
       this.writeClient.startCommitForMetadataTable(this.instant, this.writeClient.getHoodieTable());
     }
     this.writeClient.setWriteTimer(tableState.commitAction);
@@ -605,53 +619,41 @@ public class StreamWriteOperatorCoordinator
    */
   @SuppressWarnings("unchecked")
   private void doCommit(long checkpointId, String instant, List<WriteStatus> dataWriteResults, List<WriteStatus> indexWriteResults) {
-    // commit or rollback
+    // commit and error logging
+    HashMap<String, String> checkpointCommitMetadata = new HashMap<>();
+    StreamerUtil.addFlinkCheckpointIdIntoMetaData(conf, checkpointCommitMetadata, checkpointId);
+    final Map<String, List<String>> partitionToReplacedFileIds = tableState.isOverwrite
+        ? writeClient.getPartitionToReplacedFileIds(tableState.operationType, dataWriteResults)
+        : Collections.emptyMap();
+    List<WriteStatus> allWriteStatus = Stream.concat(dataWriteResults.stream(), indexWriteResults.stream()).collect(Collectors.toList());
+    boolean success = writeClient.commit(instant, allWriteStatus, Option.of(checkpointCommitMetadata),
+        tableState.commitAction, partitionToReplacedFileIds);
+    if (success) {
+      this.eventBuffers.reset(checkpointId);
+      log.info("Commit instant [{}] success!", instant);
+    } else {
+      throw new HoodieException(String.format("Commit instant [%s] failed!", instant));
+    }
+
     long totalErrorRecords = dataWriteResults.stream().map(WriteStatus::getTotalErrorRecords).reduce(Long::sum).orElse(0L);
     long totalRecords = dataWriteResults.stream().map(WriteStatus::getTotalRecords).reduce(Long::sum).orElse(0L);
     boolean hasErrors = totalErrorRecords > 0;
 
-    if (!hasErrors || this.conf.get(FlinkOptions.IGNORE_FAILED)) {
-      HashMap<String, String> checkpointCommitMetadata = new HashMap<>();
-      StreamerUtil.addFlinkCheckpointIdIntoMetaData(conf, checkpointCommitMetadata, checkpointId);
-
-      if (hasErrors) {
-        log.warn("Some records failed to merge but forcing commit since commitOnErrors set to true. Errors/Total={}/{}",
-            totalErrorRecords, totalRecords);
-      }
-
-      final Map<String, List<String>> partitionToReplacedFileIds = tableState.isOverwrite
-          ? writeClient.getPartitionToReplacedFileIds(tableState.operationType, dataWriteResults)
-          : Collections.emptyMap();
-      List<WriteStatus> allWriteStatus = Stream.concat(dataWriteResults.stream(), indexWriteResults.stream()).collect(Collectors.toList());
-      boolean success = writeClient.commit(instant, allWriteStatus, Option.of(checkpointCommitMetadata),
-          tableState.commitAction, partitionToReplacedFileIds);
-      if (success) {
-        this.eventBuffers.reset(checkpointId);
-        log.info("Commit instant [{}] success!", instant);
-      } else {
-        throw new HoodieException(String.format("Commit instant [%s] failed!", instant));
-      }
-    } else {
-      if (log.isErrorEnabled()) {
-        log.error("Error when writing. Errors/Total={}/{}", totalErrorRecords, totalRecords);
-        log.error("The first 10 files with write errors:");
-        dataWriteResults.stream().filter(WriteStatus::hasErrors).limit(10).forEach(ws -> {
-          if (ws.getGlobalError() != null) {
-            log.error("Global error for partition path {} and fileID {}: {}",
-                ws.getPartitionPath(), ws.getFileId(), ws.getGlobalError());
-          }
-          if (!ws.getErrors().isEmpty()) {
-            log.error("The first 100 records-level errors for partition path {} and fileID {}:",
-                ws.getPartitionPath(), ws.getFileId());
-            ws.getErrors().entrySet().stream().limit(100).forEach(entry ->
-                log.error("Error for key: {} and Exception: {}", entry.getKey(), entry.getValue().getMessage()));
-          }
-        });
-      }
-
-      // Rolls back instant
-      writeClient.rollback(instant);
-      throw new HoodieException(String.format("Commit instant [%s] failed and rolled back !", instant));
+    if (hasErrors && log.isErrorEnabled()) {
+      log.error("Error when writing. Errors/Total={}/{}", totalErrorRecords, totalRecords);
+      log.error("The first 10 files with write errors:");
+      dataWriteResults.stream().filter(WriteStatus::hasErrors).limit(10).forEach(ws -> {
+        if (ws.getGlobalError() != null) {
+          log.error("Global error for partition path {} and fileID {}: {}",
+              ws.getPartitionPath(), ws.getFileId(), ws.getGlobalError());
+        }
+        if (!ws.getErrors().isEmpty()) {
+          log.error("The first 100 records-level errors for partition path {} and fileID {}:",
+              ws.getPartitionPath(), ws.getFileId());
+          ws.getErrors().entrySet().stream().limit(100).forEach(entry ->
+              log.error("Error for key: {} and Exception: {}", entry.getKey(), entry.getValue().getMessage()));
+        }
+      });
     }
   }
 
@@ -725,10 +727,12 @@ public class StreamWriteOperatorCoordinator
     final String commitAction;
     final boolean isOverwrite;
     final boolean scheduleCompaction;
+    final boolean scheduleMdtCompaction;
     final boolean scheduleClustering;
     final boolean syncHive;
     final boolean syncMetadata;
     final boolean isDeltaTimeCompaction;
+    final boolean isStreamingIndexWriteEnabled;
 
     private TableState(Configuration conf) {
       this.operationType = WriteOperationType.fromValue(conf.get(FlinkOptions.OPERATION));
@@ -737,9 +741,11 @@ public class StreamWriteOperatorCoordinator
       this.isOverwrite = WriteOperationType.isOverwrite(this.operationType);
       this.scheduleCompaction = OptionsResolver.needsScheduleCompaction(conf);
       this.scheduleClustering = OptionsResolver.needsScheduleClustering(conf);
+      this.scheduleMdtCompaction = OptionsResolver.needsScheduleMdtCompaction(conf);
       this.syncHive = conf.get(FlinkOptions.HIVE_SYNC_ENABLED);
       this.syncMetadata = conf.get(FlinkOptions.METADATA_ENABLED);
       this.isDeltaTimeCompaction = OptionsResolver.isDeltaTimeCompaction(conf);
+      this.isStreamingIndexWriteEnabled = OptionsResolver.isStreamingIndexWriteEnabled(conf);
     }
 
     public static TableState create(Configuration conf) {

@@ -23,6 +23,7 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.serialization.DefaultSerializer;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.util.DefaultSizeEstimator;
@@ -36,7 +37,6 @@ import org.apache.hudi.keygen.KeyGenerator;
 import org.apache.hudi.schema.SchemaProvider;
 
 import lombok.extern.slf4j.Slf4j;
-import org.apache.avro.Schema;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -77,7 +77,7 @@ public class BufferedConnectWriter extends AbstractConnectWriter {
       this.bufferedRecords = new ExternalSpillableMap<>(memoryForMerge,
           config.getSpillableMapBasePath(),
           new DefaultSizeEstimator(),
-          new HoodieRecordSizeEstimator(new Schema.Parser().parse(config.getSchema())),
+          new HoodieRecordSizeEstimator(HoodieSchema.parse(config.getSchema())),
           config.getCommonConfig().getSpillableDiskMapType(),
           new DefaultSerializer<>(),
           config.getCommonConfig().isBitCaskDiskMapCompressionEnabled(),

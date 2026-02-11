@@ -65,8 +65,12 @@ public interface HoodieSplitProvider extends Closeable {
    *
    * <p>If enumerator wasn't able to assign the split (e.g., reader disconnected), enumerator should
    * call {@link HoodieSplitProvider#onUnassignedSplits} to return the split.
+   *
+   * @param taskId the ID of the task requesting a split
+   * @param hostname the hostname of the reader requesting a split (can be null)
+   * @return an Optional containing the next split if available, or empty if no split is available
    */
-  Option<HoodieSourceSplit> getNext(@Nullable String hostname);
+  Option<HoodieSourceSplit> getNext(int taskId, @Nullable String hostname);
 
   /** Add new splits discovered by enumerator */
   void onDiscoveredSplits(Collection<HoodieSourceSplit> splits);

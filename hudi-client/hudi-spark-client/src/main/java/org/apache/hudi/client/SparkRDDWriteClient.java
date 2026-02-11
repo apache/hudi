@@ -57,6 +57,7 @@ import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.spark.SparkContext;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 
@@ -81,6 +82,7 @@ public class SparkRDDWriteClient<T> extends
                              Option<EmbeddedTimelineService> timelineService) {
     super(context, writeConfig, timelineService, SparkUpgradeDowngradeHelper.getInstance());
     this.tableServiceClient = new SparkRDDTableServiceClient<T>(context, writeConfig, getTimelineServer());
+    checkSpeculativeExecution();
   }
 
   @Override
@@ -377,6 +379,9 @@ public class SparkRDDWriteClient<T> extends
     try (HoodieTableMetadataWriter writer = SparkMetadataWriterFactory.create(
         context.getStorageConf(), config, context, inFlightInstantTimestamp, tableConfig)) {
       if (writer.isInitialized()) {
+        if (writer.hasPartitionsStateChanged()) {
+          metaClient.reloadTableConfig();
+        }
         writer.performTableServices(inFlightInstantTimestamp);
       }
     } catch (Exception e) {
@@ -417,6 +422,27 @@ public class SparkRDDWriteClient<T> extends
   public void releaseResources(String instantTime) {
     super.releaseResources(instantTime);
     SparkReleaseResources.releaseCachedData(context, config, basePath, instantTime);
+  }
+
+  /**
+   * Check if Spark speculative execution is enabled and block writes if the guardrail is enabled.
+   * Speculative execution can lead to duplicate writes and data corruption.
+   */
+  private void checkSpeculativeExecution() {
+    if (config.shouldBlockWritesOnSpeculativeExecution() && context != null) {
+      // Get Spark context from the HoodieSparkEngineContext
+      SparkContext sparkContext = ((HoodieSparkEngineContext) context).getJavaSparkContext().sc();
+      boolean speculationEnabled = sparkContext.conf().getBoolean("spark.speculation", false);
+
+      if (speculationEnabled) {
+        String errorMsg = "Spark speculative execution is enabled (spark.speculation=true). "
+            + "This can lead to duplicate writes and data corruption. "
+            + "Disable spark.speculation to fix this issue, or set hoodie.block.writes.on.speculative.execution=false "
+            + "to bypass this guardrail at your own risk.";
+        LOG.error(errorMsg);
+        throw new HoodieException(errorMsg);
+      }
+    }
   }
 
   /**

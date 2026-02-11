@@ -492,11 +492,11 @@ public class StorageBasedLockProvider implements LockProvider<StorageLockFile> {
         setLock(null);
         return true;
       case ACQUIRED_BY_OTHERS:
-        // As we are confident no lock is held by itself, clean up the cached lock object.
-        logErrorLockState(RELEASED, "lock should not have been acquired by others.");
+        // Lock was acquired by others, indicating heartbeat failure during lock hold period.
+        logErrorLockState(FAILED_TO_RELEASE, "lock was acquired by others, indicating heartbeat failure.");
         setLock(null);
         hoodieLockMetrics.ifPresent(HoodieLockMetrics::updateLockAcquiredByOthersErrorMetric);
-        return true;
+        return false;
       default:
         hoodieLockMetrics.ifPresent(HoodieLockMetrics::updateLockReleaseFailureMetric);
         throw new HoodieLockException("Unexpected lock update result: " + result.getLeft());

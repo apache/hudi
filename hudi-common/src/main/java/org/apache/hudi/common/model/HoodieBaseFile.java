@@ -22,11 +22,17 @@ import org.apache.hudi.common.util.ExternalFilePathUtil;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.storage.StoragePathInfo;
 
+import lombok.Getter;
+import lombok.ToString;
+
 /**
  * Hoodie base file - Represents metadata about Hudi file in DFS.
  * Supports APIs to get Hudi FileId, Commit Time and bootstrap file (if any).
  */
+@Getter
+@ToString
 public class HoodieBaseFile extends BaseFile {
+
   private static final long serialVersionUID = 1L;
   private static final char UNDERSCORE = '_';
   private static final char DOT = '.';
@@ -120,25 +126,7 @@ public class HoodieBaseFile extends BaseFile {
     return ExternalFilePathUtil.parseFileIdAndCommitTimeFromExternalFile(fileName);
   }
 
-  public String getFileId() {
-    return fileId;
-  }
-
-  public String getCommitTime() {
-    return commitTime;
-  }
-
-  public Option<BaseFile> getBootstrapBaseFile() {
-    return bootstrapBaseFile;
-  }
-
   public void setBootstrapBaseFile(BaseFile bootstrapBaseFile) {
     this.bootstrapBaseFile = Option.ofNullable(bootstrapBaseFile);
-  }
-
-  @Override
-  public String toString() {
-    return "HoodieBaseFile{fullPath=" + getPath() + ", fileLen=" + getFileLen()
-        + ", BootstrapBaseFile=" + bootstrapBaseFile.orElse(null) + '}';
   }
 }

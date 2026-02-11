@@ -25,26 +25,25 @@ import org.apache.hudi.common.config.EnumDescription;
 import org.apache.hudi.common.config.EnumFieldDescription;
 import org.apache.hudi.common.config.HoodieConfig;
 
+import lombok.AccessLevel;
+import lombok.AllArgsConstructor;
+import lombok.Getter;
+
 import static org.apache.hudi.common.table.HoodieTableConfig.BOOTSTRAP_INDEX_CLASS_NAME;
 import static org.apache.hudi.common.table.HoodieTableConfig.BOOTSTRAP_INDEX_ENABLE;
 import static org.apache.hudi.common.table.HoodieTableConfig.BOOTSTRAP_INDEX_TYPE;
 
+@AllArgsConstructor(access = AccessLevel.PACKAGE)
+@Getter
 @EnumDescription("Bootstrap index type to use for mapping between skeleton and actual data files.")
 public enum BootstrapIndexType {
+
   @EnumFieldDescription("Maintains mapping in HFile format.")
   HFILE(HFileBootstrapIndex.class.getName()),
   @EnumFieldDescription("No-op, an empty implementation.")
   NONE(NoOpBootstrapIndex.class.getName());
 
   private final String className;
-
-  BootstrapIndexType(String className) {
-    this.className = className;
-  }
-
-  public String getClassName() {
-    return className;
-  }
 
   public static BootstrapIndexType fromClassName(String className) {
     for (BootstrapIndexType type : BootstrapIndexType.values()) {
