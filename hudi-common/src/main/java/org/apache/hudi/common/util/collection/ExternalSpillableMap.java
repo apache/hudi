@@ -22,8 +22,8 @@ import org.apache.hudi.common.serialization.CustomSerializer;
 import org.apache.hudi.common.util.SizeEstimator;
 import org.apache.hudi.exception.HoodieIOException;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.Getter;
+import lombok.extern.slf4j.Slf4j;
 
 import javax.annotation.concurrent.NotThreadSafe;
 
@@ -57,11 +57,11 @@ import java.util.stream.Stream;
  * frequently and incur unnecessary disk writes.
  */
 @NotThreadSafe
+@Slf4j
 public class ExternalSpillableMap<T extends Serializable, R> implements Map<T, R>, Serializable, Closeable, KeyFilteringIterable<T, R> {
 
   // Find the actual estimated payload size after inserting N records
   private static final int NUMBER_OF_RECORDS_TO_ESTIMATE_PAYLOAD_SIZE = 100;
-  private static final Logger LOG = LoggerFactory.getLogger(ExternalSpillableMap.class);
   // maximum space allowed in-memory for this map
   private final long maxInMemorySizeInBytes;
   // Map to store key-values in memory until it hits maxInMemorySizeInBytes
@@ -80,6 +80,7 @@ public class ExternalSpillableMap<T extends Serializable, R> implements Map<T, R
   // Enables compression of values stored in disc
   private final boolean isCompressionEnabled;
   // current space occupied by this map in-memory
+  @Getter
   private long currentInMemoryMapSize;
   // An estimate of the size of each payload written to this map
   private volatile long estimatedPayloadSize = 0;
@@ -102,7 +103,7 @@ public class ExternalSpillableMap<T extends Serializable, R> implements Map<T, R
     this.isCompressionEnabled = isCompressionEnabled;
     this.valueSerializer = valueSerializer;
     this.loggingContext = loggingContext;
-    LOG.debug("{} : Initializing ExternalSpillableMap with baseFilePath = {}, maxInMemorySizeInBytes = {}, diskMapType = {}", loggingContext, baseFilePath, maxInMemorySizeInBytes, diskMapType);
+    log.debug("{} : Initializing ExternalSpillableMap with baseFilePath = {}, maxInMemorySizeInBytes = {}, diskMapType = {}", loggingContext, baseFilePath, maxInMemorySizeInBytes, diskMapType);
   }
 
   private void initDiskBasedMap() {
@@ -170,13 +171,6 @@ public class ExternalSpillableMap<T extends Serializable, R> implements Map<T, R
     return inMemoryMap.size();
   }
 
-  /**
-   * Approximate memory footprint of the in-memory map.
-   */
-  public long getCurrentInMemoryMapSize() {
-    return currentInMemoryMapSize;
-  }
-
   @Override
   public int size() {
     return inMemoryMap.size() + getDiskBasedMapNumEntries();
@@ -228,7 +222,7 @@ public class ExternalSpillableMap<T extends Serializable, R> implements Map<T, R
         this.estimatedPayloadSize = (long) (this.estimatedPayloadSize * 0.9 + (keySizeEstimator.sizeEstimate(key) + valueSizeEstimator.sizeEstimate(value)) * 0.1);
         this.currentInMemoryMapSize = this.inMemoryMap.size() * this.estimatedPayloadSize;
         if (this.inMemoryMap.size() / NUMBER_OF_RECORDS_TO_ESTIMATE_PAYLOAD_SIZE == 1) {
-          LOG.info("{} : Updated Estimated Payload size {}", loggingContext, this.estimatedPayloadSize);
+          log.info("{} : Updated Estimated Payload size {}", loggingContext, this.estimatedPayloadSize);
         }
       }
       this.currentInMemoryMapSize += this.estimatedPayloadSize;
@@ -239,7 +233,7 @@ public class ExternalSpillableMap<T extends Serializable, R> implements Map<T, R
       this.inMemoryMap.put(key, value);
     } else {
       if (diskBasedMap == null) {
-        LOG.info("{} : Initializing disk based map as max memory threshold {} is reached", loggingContext, maxInMemorySizeInBytes);
+        log.info("{} : Initializing disk based map as max memory threshold {} is reached", loggingContext, maxInMemorySizeInBytes);
         initDiskBasedMap();
       }
       diskBasedMap.put(key, value);
@@ -279,7 +273,7 @@ public class ExternalSpillableMap<T extends Serializable, R> implements Map<T, R
     if (!inMemoryMap.isEmpty()) {
       String diskBasedMapLog = diskBasedMap == null ? "No entries were spilled to disk. " : String.format("Total entries in diskBasedMap %s and rough size spilled to disk %s",
           diskBasedMap.size(), (estimatedPayloadSize * diskBasedMap.size()));
-      LOG.info("{} : Total entries in InMemory map {}, with average record size as {}, currentInMemoryMapSize {}. {}", loggingContext,
+      log.info("{} : Total entries in InMemory map {}, with average record size as {}, currentInMemoryMapSize {}. {}", loggingContext,
           inMemoryMap.size(), estimatedPayloadSize, currentInMemoryMapSize, diskBasedMapLog);
     }
     inMemoryMap.clear();
