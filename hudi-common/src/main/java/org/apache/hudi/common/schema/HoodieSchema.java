@@ -18,7 +18,6 @@
 
 package org.apache.hudi.common.schema;
 
-import org.apache.hudi.avro.AvroSchemaUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
@@ -1701,9 +1700,9 @@ public class HoodieSchema implements Serializable {
       int expectedSize = dimension * getElementSize(elementType);
       int actualSize = avroSchema.getFixedSize();
       ValidationUtils.checkArgument(actualSize == expectedSize,
-          () -> "Vector FIXED size mismatch: expected " + expectedSize +
-                " bytes (dimension=" + dimension + " × elementSize=" +
-                getElementSize(elementType) + "), got " + actualSize);
+          () -> "Vector FIXED size mismatch: expected " + expectedSize
+                + " bytes (dimension=" + dimension + " × elementSize="
+                + getElementSize(elementType) + "), got " + actualSize);
     }
 
     /**
