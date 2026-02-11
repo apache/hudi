@@ -1655,8 +1655,7 @@ public class HoodieSchema implements Serializable {
       vectorSchema.setFields(fields);
 
       // Apply logical type with properties
-      VectorLogicalType vectorLogicalType = new VectorLogicalType(
-        dimension, resolvedElementType, STORAGE_BACKING_FIXED_BYTES);
+      VectorLogicalType vectorLogicalType = new VectorLogicalType(dimension, resolvedElementType, STORAGE_BACKING_FIXED_BYTES);
       vectorLogicalType.addToSchema(vectorSchema);
 
       return vectorSchema;
@@ -1685,8 +1684,7 @@ public class HoodieSchema implements Serializable {
       int expectedSize = dimension * getElementSize(elementType);
       int actualSize = valuesFixedSchema.getFixedSize();
       ValidationUtils.checkArgument(actualSize == expectedSize,
-          () -> "Vector FIXED size mismatch: expected " + expectedSize + " bytes (dimension=" +
-                dimension + " × elementSize=" + getElementSize(elementType) + "), got " + actualSize);
+          () -> "Vector FIXED size mismatch: expected " + expectedSize + " bytes (dimension=" + dimension + " × elementSize=" + getElementSize(elementType) + "), got " + actualSize);
     }
 
     /**
