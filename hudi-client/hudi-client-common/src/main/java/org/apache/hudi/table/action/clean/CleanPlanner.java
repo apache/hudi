@@ -184,15 +184,16 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
     }
 
     // Check whether there are any other commits apart from deltacommits between last compaction and last clean.
-    int numNonDeltaCommitsAfterLastClean = activeTimeline
+    int numNonDeltaInstantsAfterCleanRequestedTime = activeTimeline
         .getWriteTimeline()
         .filterCompletedInstants()
-        .findInstantsAfter(lastCleanInstant.get().requestedTime())
         .filter(instant -> !instant.getAction().equals(HoodieTimeline.DELTA_COMMIT_ACTION))
+        .filter(instant -> InstantComparison.compareTimestamps(instant.getCompletionTime(),
+            GREATER_THAN, lastCleanInstant.get().requestedTime()))
         .countInstants();
     return InstantComparison.compareTimestamps(lastCompactionInstant.get().getCompletionTime(),
         InstantComparison.LESSER_THAN, lastCleanInstant.get().requestedTime())
-        && numNonDeltaCommitsAfterLastClean == 0;
+        && numNonDeltaInstantsAfterCleanRequestedTime == 0;
   }
 
   /**
