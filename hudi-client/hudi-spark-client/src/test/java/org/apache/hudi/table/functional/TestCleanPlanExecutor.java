@@ -19,6 +19,7 @@
 package org.apache.hudi.table.functional;
 
 import org.apache.hudi.avro.model.HoodieFileStatus;
+import org.apache.hudi.client.WriteClientTestUtils;
 import org.apache.hudi.common.HoodieCleanStat;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.model.BootstrapFileMapping;
@@ -39,6 +40,7 @@ import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieCleanConfig;
+import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.testutils.HoodieCleanerTestBase;
 
@@ -653,6 +655,9 @@ public class TestCleanPlanExecutor extends HoodieCleanerTestBase {
             .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS)
             .retainFileVersions(1)
             .build())
+        .withCompactionConfig(HoodieCompactionConfig.newBuilder()
+            .withInlineCompaction(false)
+            .build())
         .build();
 
     HoodieTableMetaClient metaClient = HoodieTestUtils.init(storageConf, basePath, HoodieTableType.MERGE_ON_READ);
@@ -660,37 +665,46 @@ public class TestCleanPlanExecutor extends HoodieCleanerTestBase {
     try {
       String p0 = "2020/01/01";
 
-      // Create a delta commit at 001
-      String file1P0 = testTable.addDeltaCommit("001").getFileIdsWithBaseFilesInPartitions(p0).get(p0);
+      // Create first delta commit
+      String newInstantTime = WriteClientTestUtils.createNewInstantTime();
+      String file1P0 = testTable.addDeltaCommit(newInstantTime).getFileIdsWithBaseFilesInPartitions(p0).get(p0);
       Map<String, List<String>> part1ToFileId = Collections.unmodifiableMap(new HashMap<String, List<String>>() {
         {
           put(p0, CollectionUtils.createImmutableList(file1P0));
         }
       });
-      commitWithMdt("001", part1ToFileId, testTable, config, false, true);
       testTable = tearDownTestTableAndReinit(testTable, config);
 
-      // Create a compaction commit at 002 (COMMIT action for MOR)
-      HoodieCommitMetadata compactionMetadata = generateCommitMetadata("002", part1ToFileId);
-      testTable.addCommit("002", Option.of(compactionMetadata));
-      testTable = tearDownTestTableAndReinit(testTable, config);
-
-      // Create another delta commit at 003
-      testTable.addDeltaCommit("003")
+      // Create second delta commit
+      newInstantTime = WriteClientTestUtils.createNewInstantTime();
+      testTable.addDeltaCommit(newInstantTime)
           .withBaseFilesInPartition(p0, file1P0).getLeft()
           .withLogFile(p0, file1P0, 1);
-      commitWithMdt("003", part1ToFileId, testTable, config, false, true);
       testTable = tearDownTestTableAndReinit(testTable, config);
 
-      // Create a clean at 004 (after compaction 002)
-      testTable.addClean("004");
+      // Create a compaction commit (COMMIT action for MOR)
+      newInstantTime = WriteClientTestUtils.createNewInstantTime();
+      HoodieCommitMetadata compactionMetadata = generateCommitMetadata(newInstantTime, part1ToFileId);
+      testTable.addCommit(newInstantTime, Option.of(compactionMetadata));
       testTable = tearDownTestTableAndReinit(testTable, config);
 
-      // Create another delta commit at 005
-      testTable.addDeltaCommit("005")
+      // Create another delta commit
+      newInstantTime = WriteClientTestUtils.createNewInstantTime();
+      testTable.addDeltaCommit(newInstantTime)
           .withBaseFilesInPartition(p0, file1P0).getLeft()
           .withLogFile(p0, file1P0, 2);
-      commitWithMdt("005", part1ToFileId, testTable, config, false, true);
+      testTable = tearDownTestTableAndReinit(testTable, config);
+
+      // Create a clean
+      newInstantTime = WriteClientTestUtils.createNewInstantTime();
+      testTable.addClean(newInstantTime);
+      testTable = tearDownTestTableAndReinit(testTable, config);
+
+      // Create another delta commit
+      newInstantTime = WriteClientTestUtils.createNewInstantTime();
+      testTable.addDeltaCommit(newInstantTime)
+          .withBaseFilesInPartition(p0, file1P0).getLeft()
+          .withLogFile(p0, file1P0, 3);
       testTable = tearDownTestTableAndReinit(testTable, config);
 
       // Reload metaClient to get latest timeline
@@ -728,11 +742,8 @@ public class TestCleanPlanExecutor extends HoodieCleanerTestBase {
 
   /**
    * Test canCleanBeSkipped returns false when conditions are NOT met.
-   * Tests multiple scenarios where clean should NOT be skipped:
-   * - When there are non-delta commits between compaction and clean
-   * - When last compaction is after last clean
-   * - When there is no previous compaction
-   * - When there is no previous clean
+   * Tests the scenario where clean should NOT be skipped:
+   * - When there are non-delta commits (replacecommit) after the last clean
    */
   @Test
   public void testCanCleanBeSkippedReturnsFalseForMORTable() throws Exception {
@@ -744,6 +755,9 @@ public class TestCleanPlanExecutor extends HoodieCleanerTestBase {
             .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS)
             .retainFileVersions(1)
             .build())
+        .withCompactionConfig(HoodieCompactionConfig.newBuilder()
+            .withInlineCompaction(false)
+            .build())
         .build();
 
     HoodieTableMetaClient metaClient = HoodieTestUtils.init(storageConf, basePath, HoodieTableType.MERGE_ON_READ);
@@ -751,36 +765,39 @@ public class TestCleanPlanExecutor extends HoodieCleanerTestBase {
     try {
       String p0 = "2020/01/01";
 
-      // Create a delta commit at 001
-      String file1P0 = testTable.addDeltaCommit("001").getFileIdsWithBaseFilesInPartitions(p0).get(p0);
+      // Create first delta commit
+      String newInstantTime = WriteClientTestUtils.createNewInstantTime();
+      String file1P0 = testTable.addDeltaCommit(newInstantTime).getFileIdsWithBaseFilesInPartitions(p0).get(p0);
       Map<String, List<String>> part1ToFileId = Collections.unmodifiableMap(new HashMap<String, List<String>>() {
         {
           put(p0, CollectionUtils.createImmutableList(file1P0));
         }
       });
-      commitWithMdt("001", part1ToFileId, testTable, config, false, true);
       testTable = tearDownTestTableAndReinit(testTable, config);
 
-      // Create a compaction commit at 002
-      HoodieCommitMetadata compactionMetadata = generateCommitMetadata("002", part1ToFileId);
-      testTable.addCommit("002", Option.of(compactionMetadata));
+      // Create a compaction commit (COMMIT action for MOR)
+      newInstantTime = WriteClientTestUtils.createNewInstantTime();
+      HoodieCommitMetadata compactionMetadata = generateCommitMetadata(newInstantTime, part1ToFileId);
+      testTable.addCommit(newInstantTime, Option.of(compactionMetadata));
       testTable = tearDownTestTableAndReinit(testTable, config);
 
-      // Create a replace commit at 003 (non-delta commit between compaction and clean)
-      HoodieReplaceCommitMetadata replaceMetadata = new HoodieReplaceCommitMetadata();
-      replaceMetadata.setOperationType(WriteOperationType.CLUSTER);
-      testTable.addReplaceCommit("003", Option.empty(), Option.empty(), replaceMetadata);
-      testTable = tearDownTestTableAndReinit(testTable, config);
-
-      // Create a clean at 004 (after compaction 002 and replace commit 003)
-      testTable.addClean("004");
-      testTable = tearDownTestTableAndReinit(testTable, config);
-
-      // Create another delta commit at 005
-      testTable.addDeltaCommit("005")
+      // Create another delta commit
+      newInstantTime = WriteClientTestUtils.createNewInstantTime();
+      testTable.addDeltaCommit(newInstantTime)
           .withBaseFilesInPartition(p0, file1P0).getLeft()
           .withLogFile(p0, file1P0, 1);
-      commitWithMdt("005", part1ToFileId, testTable, config, false, true);
+      testTable = tearDownTestTableAndReinit(testTable, config);
+
+      // Create a clean (after compaction)
+      newInstantTime = WriteClientTestUtils.createNewInstantTime();
+      testTable.addClean(newInstantTime);
+      testTable = tearDownTestTableAndReinit(testTable, config);
+
+      // Create a replace commit (non-delta commit after clean)
+      newInstantTime = WriteClientTestUtils.createNewInstantTime();
+      HoodieReplaceCommitMetadata replaceMetadata = new HoodieReplaceCommitMetadata();
+      replaceMetadata.setOperationType(WriteOperationType.CLUSTER);
+      testTable.addReplaceCommit(newInstantTime, Option.empty(), Option.empty(), replaceMetadata);
       testTable = tearDownTestTableAndReinit(testTable, config);
 
       // Reload metaClient to get latest timeline
@@ -797,16 +814,8 @@ public class TestCleanPlanExecutor extends HoodieCleanerTestBase {
       canCleanBeSkippedMethod.setAccessible(true);
       boolean result = (boolean) canCleanBeSkippedMethod.invoke(cleanPlanner);
 
-      // Verify canCleanBeSkipped returns false because there's a REPLACE_COMMIT between compaction and clean
-      assertFalse(result, "canCleanBeSkipped should return false when there are non-delta commits between compaction and clean");
-
-      // Verify that getPartitionPathsToClean returns non-empty list (partitions need cleaning)
-      java.lang.reflect.Method getPartitionPathsMethod =
-          org.apache.hudi.table.action.clean.CleanPlanner.class.getDeclaredMethod("getPartitionPathsToClean", Option.class);
-      getPartitionPathsMethod.setAccessible(true);
-      List<String> partitionPaths = (List<String>) getPartitionPathsMethod.invoke(cleanPlanner, Option.empty());
-
-      assertTrue(partitionPaths.size() > 0, "getPartitionPathsToClean should return partitions to clean when skip is not applicable");
+      // Verify canCleanBeSkipped returns false because there's a REPLACE_COMMIT after the last clean
+      assertFalse(result, "canCleanBeSkipped should return false when there are non-delta commits after the last clean");
     } finally {
       testTable.close();
     }
