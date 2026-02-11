@@ -967,10 +967,6 @@ public class HoodieSchema implements Serializable {
   boolean containsBlobType() {
     if (getType() == HoodieSchemaType.BLOB) {
       return true;
-    } else if (getType() == HoodieSchemaType.ARRAY) {
-      return getElementType().containsBlobType();
-    } else if (getType() == HoodieSchemaType.MAP) {
-      return getValueType().containsBlobType();
     } else if (getType() == HoodieSchemaType.UNION) {
       return getTypes().stream().anyMatch(HoodieSchema::containsBlobType);
     } else if (getType() == HoodieSchemaType.RECORD) {

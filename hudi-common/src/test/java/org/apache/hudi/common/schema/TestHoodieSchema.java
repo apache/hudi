@@ -1705,7 +1705,8 @@ public class TestHoodieSchema {
     Option<HoodieSchemaField> storageTypeOpt = blob.getField("storage_type");
     assertTrue(storageTypeOpt.isPresent());
     HoodieSchemaField storageTypeField = storageTypeOpt.get();
-    assertEquals(HoodieSchemaType.STRING, storageTypeField.schema().getType());
+    assertEquals(HoodieSchemaType.ENUM, storageTypeField.schema().getType());
+    assertEquals(Arrays.asList("INLINE", "OUT_OF_LINE"), storageTypeField.schema().getEnumSymbols());
     assertFalse(storageTypeField.schema().isNullable());
 
     // Verify data field is nullable
@@ -1862,35 +1863,17 @@ public class TestHoodieSchema {
   }
 
   @Test
-  public void testContainsBlobTypeArray() {
-    assertFalse(HoodieSchema.createArray(HoodieSchema.create(HoodieSchemaType.STRING)).containsBlobType());
-
-    assertTrue(HoodieSchema.createArray(HoodieSchema.createBlob()).containsBlobType());
-
-    assertTrue(HoodieSchema.createArray(createRecordWithBlob()).containsBlobType());
-  }
-
-  @Test
-  public void testContainsBlobTypeMap() {
-    assertFalse(HoodieSchema.createMap(HoodieSchema.create(HoodieSchemaType.INT)).containsBlobType());
-
-    assertTrue(HoodieSchema.createMap(HoodieSchema.createBlob()).containsBlobType());
-
-    assertTrue(HoodieSchema.createMap(createRecordWithBlob()).containsBlobType());
-  }
-
-  @Test
   public void testCreateArrayWithBlobTypeShouldFail() {
-    assertThrows(HoodieSchemaException.class, () -> HoodieSchema.createArray(HoodieSchema.createBlob()));
+    assertThrows(IllegalArgumentException.class, () -> HoodieSchema.createArray(HoodieSchema.createBlob()));
 
-    assertThrows(HoodieSchemaException.class, () -> HoodieSchema.createArray(createRecordWithBlob()));
+    assertThrows(IllegalArgumentException.class, () -> HoodieSchema.createArray(createRecordWithBlob()));
   }
 
   @Test
   public void testCreateMapWithBlobTypeShouldFail() {
-    assertThrows(HoodieSchemaException.class, () -> HoodieSchema.createMap(HoodieSchema.createBlob()));
+    assertThrows(IllegalArgumentException.class, () -> HoodieSchema.createMap(HoodieSchema.createBlob()));
 
-    assertThrows(HoodieSchemaException.class, () -> HoodieSchema.createMap(createRecordWithBlob()));
+    assertThrows(IllegalArgumentException.class, () -> HoodieSchema.createMap(createRecordWithBlob()));
   }
 
   @Test
@@ -1911,7 +1894,7 @@ public class TestHoodieSchema {
 
   @Test
   public void testBuilderArrayWithBlobShouldFail() {
-    assertThrows(HoodieSchemaException.class, () ->
+    assertThrows(IllegalArgumentException.class, () ->
       new HoodieSchema.Builder(HoodieSchemaType.ARRAY)
           .setElementType(HoodieSchema.createBlob())
           .build());
@@ -1919,7 +1902,7 @@ public class TestHoodieSchema {
 
   @Test
   public void testBuilderMapWithBlobShouldFail() {
-    assertThrows(HoodieSchemaException.class, () ->
+    assertThrows(IllegalArgumentException.class, () ->
       new HoodieSchema.Builder(HoodieSchemaType.MAP)
           .setValueType(HoodieSchema.createBlob())
           .build());
