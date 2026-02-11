@@ -257,7 +257,8 @@ public class TestSparkSizeBasedClusteringPlanStrategy {
   private FileSlice createFileSliceWithCommitTime(long baseFileSize, String commitTime) {
     String fileId = FSUtils.createNewFileId(FSUtils.createNewFileIdPfx(), 0);
     FileSlice fs = new FileSlice("p0", commitTime, fileId);
-    HoodieBaseFile f = new HoodieBaseFile(fileId);
+    String basePath = "/test/path/" + fileId + "_" + commitTime + ".parquet";
+    HoodieBaseFile f = new HoodieBaseFile(basePath);
     f.setFileSize(baseFileSize);
     fs.setBaseFile(f);
     return fs;
