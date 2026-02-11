@@ -853,18 +853,18 @@ public class TestHoodieSchema {
 
     assertTrue(schema.getAvroSchema().getLogicalType() instanceof VectorLogicalType);
 
-    // Verify properties are at schema level, not fields
+    // Verify properties are at schema level
     Schema avroSchema = vectorSchema.getAvroSchema();
     assertEquals(1536, ((Number) avroSchema.getObjectProp("dimension")).intValue());
     assertEquals(HoodieSchema.Vector.VectorElementType.FLOAT.getName(), avroSchema.getProp("elementType"));
     assertEquals(HoodieSchema.Vector.STORAGE_BACKING_FIXED_BYTES, avroSchema.getProp("storageBacking"));
 
-    // Verify only valuesFixed is a field
-    assertEquals(1, vectorSchema.getFields().size());
-    assertEquals("valuesFixed", vectorSchema.getFields().get(0).name());
-    assertNull(avroSchema.getField("dimension")); // Should NOT be a field
-    assertNull(avroSchema.getField("elementType")); // Should NOT be a field
-    assertNull(avroSchema.getField("storageBacking")); // Should NOT be a field
+    // Verify Vector is FIXED type (not RECORD)
+    assertEquals(Schema.Type.FIXED, avroSchema.getType());
+    assertFalse(vectorSchema.hasFields());
+
+    // Verify FIXED size = dimension × elementSize (1536 × 4 bytes for FLOAT)
+    assertEquals(1536 * 4, avroSchema.getFixedSize());
   }
 
   @Test
@@ -937,39 +937,22 @@ public class TestHoodieSchema {
 
   @Test
   void testVectorSchemaValidation() {
-    // Create vector and verify field structure
+    // Create vector and verify FIXED structure
     HoodieSchema.Vector vectorSchema = HoodieSchema.createVector(768);
     Schema avroSchema = vectorSchema.getAvroSchema();
 
-    // Verify only 1 field exists (valuesFixed)
-    assertEquals(1, vectorSchema.getFields().size());
+    // Verify Vector is FIXED type
+    assertEquals(Schema.Type.FIXED, avroSchema.getType());
+    assertFalse(vectorSchema.hasFields());
 
-    // Verify dimension, elementType, storageBacking are schema properties (not fields)
+    // Verify dimension, elementType, storageBacking are schema properties
     assertEquals(768, ((Number) avroSchema.getObjectProp("dimension")).intValue());
     assertEquals(HoodieSchema.Vector.VectorElementType.FLOAT.getName(), avroSchema.getProp("elementType"));
     assertEquals(HoodieSchema.Vector.STORAGE_BACKING_FIXED_BYTES, avroSchema.getProp("storageBacking"));
 
-    // Verify these are NOT fields
-    assertNull(avroSchema.getField("dimension"));
-    assertNull(avroSchema.getField("elementType"));
-    assertNull(avroSchema.getField("storageBacking"));
-
-    // Verify valuesFixed field exists and uses FIXED type
-    Schema.Field valuesFixedField = avroSchema.getField("valuesFixed");
-    assertNotNull(valuesFixedField);
-    assertEquals(Schema.Type.UNION, valuesFixedField.schema().getType());
-    // Union should contain null and FIXED
-    assertEquals(2, valuesFixedField.schema().getTypes().size());
-
-    // Get non-null type from union - should be FIXED
-    Schema fixedSchema = valuesFixedField.schema().getTypes().stream()
-        .filter(s -> s.getType() != Schema.Type.NULL)
-        .findFirst()
-        .orElseThrow(() -> new AssertionError("Expected FIXED type in union"));
-    assertEquals(Schema.Type.FIXED, fixedSchema.getType());
-
     // Verify FIXED size = dimension × elementSize (768 × 4 bytes for FLOAT)
-    assertEquals(768 * 4, fixedSchema.getFixedSize());
+    assertEquals(768 * 4, avroSchema.getFixedSize());
+    assertEquals(768 * 4, vectorSchema.getFixedSize());
   }
 
   @Test
@@ -988,9 +971,9 @@ public class TestHoodieSchema {
     assertEquals(HoodieSchema.Vector.VectorElementType.FLOAT.getName(), vectorFloat.getAvroSchema().getProp("elementType"));
     assertEquals(HoodieSchema.Vector.STORAGE_BACKING_FIXED_BYTES, vectorFloat.getAvroSchema().getProp("storageBacking"));
 
-    // Only valuesFixed is a field
-    HoodieSchema valuesFixedField = vectorFloat.getValuesFixedField();
-    assertNotNull(valuesFixedField);
+    // Verify FIXED size access
+    assertEquals(1536 * 4, vectorFloat.getFixedSize()); // FLOAT is 4 bytes
+    assertEquals(768 * 8, vectorDouble.getFixedSize()); // DOUBLE is 8 bytes
   }
   
   @Test

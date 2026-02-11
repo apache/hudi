@@ -751,8 +751,7 @@ public class HoodieSchema implements Serializable {
    */
   public boolean hasFields() {
     return type == HoodieSchemaType.RECORD
-        || type == HoodieSchemaType.VARIANT
-        || type == HoodieSchemaType.VECTOR;
+        || type == HoodieSchemaType.VARIANT;
   }
 
   /**
@@ -1555,7 +1554,6 @@ public class HoodieSchema implements Serializable {
 
   public static class Vector extends HoodieSchema {
     private static final String DEFAULT_NAME = "vector";
-    public static final String VALUES_FIXED_FIELD = "valuesFixed";
 
     /**
      * Enum representing vector element data types.
@@ -1663,7 +1661,7 @@ public class HoodieSchema implements Serializable {
     /**
      * Creates vector schema with specified dimension and element type.
      *
-     * @param name record name (not null)
+     * @param name fixed type name (not null)
      * @param dimension vector dimension (must be > 0)
      * @param elementType element type (defaults to FLOAT if null)
      * @return new Vector schema
@@ -1679,19 +1677,10 @@ public class HoodieSchema implements Serializable {
       int elementSize = getElementSize(resolvedElementType);
       int fixedSize = dimension * elementSize;
 
-      // Create FIXED type for vector bytes
-      Schema fixedSchema = Schema.createFixed(name + "_bytes", null, null, fixedSize);
-      Schema nullableFixedSchema = AvroSchemaUtils.createNullableSchema(fixedSchema);
+      // Create fixed Schema
+      Schema vectorSchema = Schema.createFixed(name, null, null, fixedSize);
 
-      // Create RECORD wrapper with only valuesFixed field
-      Schema vectorSchema = Schema.createRecord(name, null, null, false);
-      List<Schema.Field> fields = Arrays.asList(
-        new Schema.Field(VALUES_FIXED_FIELD, nullableFixedSchema,
-                         "vector fixed bytes", Schema.Field.NULL_DEFAULT_VALUE)
-      );
-      vectorSchema.setFields(fields);
-
-      // Apply logical type with properties
+      // Apply logical type with properties directly to FIXED
       VectorLogicalType vectorLogicalType = new VectorLogicalType(dimension, resolvedElementType.getName(), STORAGE_BACKING_FIXED_BYTES);
       vectorLogicalType.addToSchema(vectorSchema);
 
@@ -1705,23 +1694,16 @@ public class HoodieSchema implements Serializable {
      * @throws IllegalArgumentException if schema is invalid
      */
     private void validateVectorSchema(Schema avroSchema) {
-      ValidationUtils.checkArgument(avroSchema.getType() == Schema.Type.RECORD,
-          () -> "Vector schema must be RECORD type, got: " + avroSchema.getType());
-
-      // Validate valuesFixed field exists and is nullable FIXED
-      Schema.Field valuesFixedField = avroSchema.getField(VALUES_FIXED_FIELD);
-      ValidationUtils.checkArgument(valuesFixedField != null,
-          () -> "Vector schema missing '" + VALUES_FIXED_FIELD + "' field");
-
-      Schema valuesFixedSchema = AvroSchemaUtils.getNonNullTypeFromUnion(valuesFixedField.schema());
-      ValidationUtils.checkArgument(valuesFixedSchema.getType() == Schema.Type.FIXED,
-          () -> "Vector valuesFixed field must be FIXED, got: " + valuesFixedSchema.getType());
+      ValidationUtils.checkArgument(avroSchema.getType() == Schema.Type.FIXED,
+          () -> "Vector schema must be FIXED type, got: " + avroSchema.getType());
 
       // Verify FIXED size matches: dimension × elementSize
       int expectedSize = dimension * getElementSize(elementType);
-      int actualSize = valuesFixedSchema.getFixedSize();
+      int actualSize = avroSchema.getFixedSize();
       ValidationUtils.checkArgument(actualSize == expectedSize,
-          () -> "Vector FIXED size mismatch: expected " + expectedSize + " bytes (dimension=" + dimension + " × elementSize=" + getElementSize(elementType) + "), got " + actualSize);
+          () -> "Vector FIXED size mismatch: expected " + expectedSize +
+                " bytes (dimension=" + dimension + " × elementSize=" +
+                getElementSize(elementType) + "), got " + actualSize);
     }
 
     /**
@@ -1752,13 +1734,12 @@ public class HoodieSchema implements Serializable {
     }
 
     /**
-     * Returns the valuesFixed field schema (nullable FIXED).
+     * Returns the size of the fixed bytes backing this vector.
      *
-     * @return HoodieSchema for the valuesFixed field
+     * @return size in bytes (dimension × elementSize)
      */
-    public HoodieSchema getValuesFixedField() {
-      Schema.Field valuesFixedField = getAvroSchema().getField(VALUES_FIXED_FIELD);
-      return HoodieSchema.fromAvroSchema(valuesFixedField.schema());
+    public int getFixedSize() {
+      return getAvroSchema().getFixedSize();
     }
 
     @Override
@@ -2002,8 +1983,8 @@ public class HoodieSchema implements Serializable {
       super.validate(schema);
       // Only validate schema structure compatibility, not property presence
       // Properties are added by addToSchema(), following the pattern of VariantLogicalType
-      if (schema.getType() != Schema.Type.RECORD) {
-        throw new IllegalArgumentException("vector logical type can only be applied to RECORD schemas, got: " + schema.getType());
+      if (schema.getType() != Schema.Type.FIXED) {
+        throw new IllegalArgumentException("Vector logical type can only be applied to FIXED schemas, got: " + schema.getType());
       }
     }
   }
