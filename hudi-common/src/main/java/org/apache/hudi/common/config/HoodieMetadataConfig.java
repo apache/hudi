@@ -687,6 +687,16 @@ public final class HoodieMetadataConfig extends HoodieConfig {
     return getLong(MAX_LOG_FILE_SIZE_BYTES_PROP);
   }
 
+  public static final ConfigProperty<Boolean> FILE_GROUP_BUCKETING_ENABLE = ConfigProperty
+          .key(METADATA_PREFIX + ".file.group.bucketing.enable")
+          .defaultValue(false)
+          .withDocumentation("This flag indicates whether there should be intermediate partitions under partitions such as record index and filelisting");
+
+  public static final ConfigProperty<Integer> FILE_GROUP_BUCKET_SIZE = ConfigProperty
+          .key(METADATA_PREFIX + ".file.group.bucket.size")
+          .defaultValue(1000)
+          .withDocumentation("This is paired with " + FILE_GROUP_BUCKETING_ENABLE.key() + ". This represents number of shards under a single bucket");
+
   private HoodieMetadataConfig() {
     super();
   }
@@ -1018,6 +1028,14 @@ public final class HoodieMetadataConfig extends HoodieConfig {
     checkArgument(indexName.startsWith(PARTITION_NAME_EXPRESSION_INDEX_PREFIX)
         || indexName.startsWith(PARTITION_NAME_SECONDARY_INDEX_PREFIX), "Unexpected index name to drop: " + indexName);
     return subIndexNameToDrop.contains(indexName);
+  }
+
+  public boolean isFileGroupBucketingEnabled() {
+    return getBoolean(FILE_GROUP_BUCKETING_ENABLE);
+  }
+
+  public int getFileGroupBucketSize() {
+    return getInt(FILE_GROUP_BUCKET_SIZE);
   }
 
   public static class Builder {
@@ -1368,6 +1386,16 @@ public final class HoodieMetadataConfig extends HoodieConfig {
             + " (supported: " + SUPPORTED_TABLE_SERVICE_MANAGER_ACTIONS + ").");
       }
       return metadataConfig;
+    }
+
+    public Builder withFileGroupBucketingEnable(boolean fileGroupBucketingEnable) {
+      metadataConfig.setValue(FILE_GROUP_BUCKETING_ENABLE, String.valueOf(fileGroupBucketingEnable));
+      return this;
+    }
+
+    public Builder withFileGroupBucketSize(int bucketSize) {
+      metadataConfig.setValue(FILE_GROUP_BUCKET_SIZE, String.valueOf(bucketSize));
+      return this;
     }
 
     private boolean getDefaultMetadataEnable(EngineType engineType) {

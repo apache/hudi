@@ -1010,7 +1010,8 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
 
     HoodieTable table = HoodieSparkTable.create(metadataTableWriteConfig, context, metadataMetaClient);
     table.getHoodieView().sync();
-    List<FileSlice> fileSlices = table.getSliceView().getLatestFileSlices("files").collect(Collectors.toList());
+    List<FileSlice> fileSlices = HoodieTableMetadataUtil.getPartitionLatestFileSlices(metadataMetaClient, Option.empty(),
+            MetadataPartitionType.FILES.getPartitionPath());
     HoodieBaseFile baseFile = fileSlices.get(0).getBaseFile().get();
     HoodieAvroHFileReaderImplBase hoodieHFileReader = (HoodieAvroHFileReaderImplBase)
         getHoodieSparkIOFactory(storage).getReaderFactory(HoodieRecordType.AVRO).getFileReader(
@@ -1531,7 +1532,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
           enableMetaFields);
     }, "Metadata table should have valid log files!");
 
-    verifyMetadataRecordKeyExcludeFromPayloadBaseFiles(table, enableMetaFields);
+    verifyMetadataRecordKeyExcludeFromPayloadBaseFiles(table, metadataMetaClient, enableMetaFields);
 
     // 2 more commits
     doWriteOperation(testTable, "0000002", UPSERT);
@@ -1546,7 +1547,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
 
     // Verify the base file created by the just completed compaction.
     assertDoesNotThrow(() -> {
-      verifyMetadataRecordKeyExcludeFromPayloadBaseFiles(table, enableMetaFields);
+      verifyMetadataRecordKeyExcludeFromPayloadBaseFiles(table, metadataMetaClient, enableMetaFields);
     }, "Metadata table should have a valid base file!");
 
     // 2 more commits to trigger one more compaction, along with a clean
@@ -1559,7 +1560,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     }, "Metadata table should have valid log files!");
 
     assertDoesNotThrow(() -> {
-      verifyMetadataRecordKeyExcludeFromPayloadBaseFiles(table, enableMetaFields);
+      verifyMetadataRecordKeyExcludeFromPayloadBaseFiles(table, metadataMetaClient, enableMetaFields);
     }, "Metadata table should have a valid base file!");
 
     validateMetadata(testTable);
@@ -1575,15 +1576,16 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
    * @param latestCommitTimestamp - Latest commit timestamp
    * @param enableMetaFields      - Enable meta fields for the table records
    */
-  private void verifyMetadataRecordKeyExcludeFromPayloadLogFiles(HoodieTable table, HoodieTableMetaClient metadataMetaClient,
+  private void verifyMetadataRecordKeyExcludeFromPayloadLogFiles(HoodieTable table,
+                                                                 HoodieTableMetaClient metadataMetaClient,
                                                                  String latestCommitTimestamp,
                                                                  boolean enableMetaFields) throws IOException {
     table.getHoodieView().sync();
 
     // Compaction should not be triggered yet. Let's verify no base file
     // and few log files available.
-    List<FileSlice> fileSlices = table.getSliceView()
-        .getLatestFileSlices(FILES.getPartitionPath()).collect(Collectors.toList());
+    List<FileSlice> fileSlices = HoodieTableMetadataUtil.getPartitionLatestFileSlices(metadataMetaClient, Option.empty(),
+            MetadataPartitionType.FILES.getPartitionPath());
     if (fileSlices.isEmpty()) {
       throw new IllegalStateException("LogFile slices are not available!");
     }
@@ -1592,7 +1594,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     List<HoodieLogFile> logFiles = fileSlices.get(0).getLogFiles().collect(Collectors.toList());
 
     // Verify the on-disk raw records before they get materialized
-    verifyMetadataRawRecords(table, logFiles, enableMetaFields);
+    verifyMetadataRawRecords(logFiles, enableMetaFields);
 
     // Verify the in-memory materialized and merged records
     verifyMetadataMergedRecords(metadataMetaClient, logFiles, latestCommitTimestamp);
@@ -1603,11 +1605,10 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
    * these records should have additional meta fields in the payload. When key deduplication
    * is enabled, these records on the disk should have key in the payload as empty string.
    *
-   * @param table
    * @param logFiles         - Metadata table log files to be verified
    * @param enableMetaFields - Enable meta fields for records
    */
-  private static void verifyMetadataRawRecords(HoodieTable table, List<HoodieLogFile> logFiles, boolean enableMetaFields) throws IOException {
+private static void verifyMetadataRawRecords(HoodieTable table, List<HoodieLogFile> logFiles, boolean enableMetaFields) throws IOException {
     HoodieStorage storage = table.getStorage();
     for (HoodieLogFile logFile : logFiles) {
       List<StoragePathInfo> pathInfoList = storage.listDirectEntries(logFile.getPath());
@@ -1691,13 +1692,14 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
    * the key deduplication is enabled, the records persisted on the disk in the base file
    * should have key field in the payload as empty string.
    *
-   * @param table            - Metadata table
-   * @param enableMetaFields - Enable meta fields
+   * @param table              - Metadata table
+   * @param metadataMetaClient
+   * @param enableMetaFields   - Enable meta fields
    */
-  private void verifyMetadataRecordKeyExcludeFromPayloadBaseFiles(HoodieTable table, boolean enableMetaFields) throws IOException {
+  private void verifyMetadataRecordKeyExcludeFromPayloadBaseFiles(HoodieTable table, HoodieTableMetaClient metadataMetaClient, boolean enableMetaFields) throws IOException {
     table.getHoodieView().sync();
-    List<FileSlice> fileSlices = table.getSliceView()
-        .getLatestFileSlices(FILES.getPartitionPath()).collect(Collectors.toList());
+    List<FileSlice> fileSlices = HoodieTableMetadataUtil.getPartitionLatestFileSlices(metadataMetaClient, Option.empty(),
+            FILES.getPartitionPath());
     if (!fileSlices.get(0).getBaseFile().isPresent()) {
       throw new IllegalStateException("Base file not available!");
     }
@@ -4039,7 +4041,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     }
   }
 
-  private void validateMetadata(SparkRDDWriteClient testClient) throws Exception {
+private void validateMetadata(SparkRDDWriteClient testClient) throws Exception {
     validateMetadata(testClient, Option.empty());
   }
 
@@ -4263,7 +4265,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
       // Metadata table has a fixed number of partitions
       // Cannot use FSUtils.getAllFoldersWithPartitionMetaFile for this as that function filters all directory
       // in the .hoodie folder.
-      List<String> metadataTablePartitions = FSUtils.getAllPartitionPaths(engineContext, metadataMetaClient, false);
+List<String> metadataTablePartitions = FSUtils.getAllPartitionPaths(engineContext, metadataMetaClient, false);
       // check if the last instant is restore, then the metadata table should have only the partitions that are not deleted
       metaClient.reloadActiveTimeline().getReverseOrderedInstants().findFirst().ifPresent(instant -> {
         if (instant.getAction().equals(HoodieActiveTimeline.RESTORE_ACTION)) {
@@ -4282,7 +4284,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
         List<HoodieLogFile> logFiles = latestSlices.get(0).getLogFiles().collect(Collectors.toList());
         try {
           if (FILES.getPartitionPath().equals(partition)) {
-            verifyMetadataRawRecords(table, logFiles, false);
+            verifyMetadataRawRecords(logFiles, false);
           }
           if (COLUMN_STATS.getPartitionPath().equals(partition)) {
             verifyMetadataColumnStatsRecords(storage, logFiles);
