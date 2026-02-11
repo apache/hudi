@@ -82,6 +82,31 @@ public class TestSparkSizeBasedClusteringPlanStrategy {
     Assertions.assertEquals(1, clusteringGroups.get(1).getNumOutputFileGroups());
   }
 
+  @Test
+  public void testRemaningFileInPartitionNotClustered() {
+    HoodieWriteConfig config = HoodieWriteConfig.newBuilder()
+        .withPath("")
+        .withClusteringConfig(HoodieClusteringConfig.newBuilder()
+            .withClusteringPlanStrategyClass(SparkSizeBasedClusteringPlanStrategy.class.getName())
+            .withClusteringMaxBytesInGroup(2000)
+            .withClusteringTargetFileMaxBytes(1000)
+            .withClusteringPlanSmallFileLimit(500)
+            .withSingleGroupClusteringEnabled(false)
+            .build())
+        .build();
+
+    SparkSizeBasedClusteringPlanStrategy planStrategy = new SparkSizeBasedClusteringPlanStrategy(table, context, config);
+
+    ArrayList<FileSlice> fileSlices = new ArrayList<>();
+    fileSlices.add(createFileSlice(200));
+
+    Stream<HoodieClusteringGroup> clusteringGroupStream = (Stream<HoodieClusteringGroup>) planStrategy.buildClusteringGroupsForPartition("p0", fileSlices).getLeft();
+    List<HoodieClusteringGroup> clusteringGroups = clusteringGroupStream.collect(Collectors.toList());
+
+    // The only file in partition should not be clustered
+    Assertions.assertEquals(0, clusteringGroups.size());
+  }
+
   private FileSlice createFileSlice(long baseFileSize) {
     String fileId = FSUtils.createNewFileId(FSUtils.createNewFileIdPfx(), 0);
     FileSlice fs = new FileSlice("p0", "001", fileId);

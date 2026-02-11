@@ -102,15 +102,23 @@ public abstract class PartitionAwareClusteringPlanStrategy<T,I,K,O> extends Clus
     }
 
     if (!currentGroup.isEmpty()) {
-      if (currentGroup.size() > 1 || writeConfig.shouldClusteringSingleGroup()) {
-        int numOutputGroups = getNumberOfOutputFileGroups(totalSizeSoFar, writeConfig.getClusteringTargetFileMaxBytes());
+      int numOutputGroups = getNumberOfOutputFileGroups(totalSizeSoFar, writeConfig.getClusteringTargetFileMaxBytes());
         log.info("Adding final clustering group " + totalSizeSoFar + " max bytes: "
             + writeConfig.getClusteringMaxBytesInGroup() + " num input slices: " + currentGroup.size() + " output groups: " + numOutputGroups);
         fileSliceGroups.add(Pair.of(currentGroup, numOutputGroups));
-      }
     }
 
-    return Pair.of(fileSliceGroups.stream().map(fileSliceGroup ->
+    return Pair.of(fileSliceGroups.stream().filter(fileSliceGroup -> {
+      if (fileSliceGroup.getLeft().size() == 1 && fileSliceGroup.getRight() == 1 && !writeConfig.isSingleGroupClusteringEnabled()) {
+        FileSlice targetedFileSlice = fileSliceGroup.getLeft().get(0);
+        long size = targetedFileSlice.getBaseFile().isPresent() ? targetedFileSlice.getBaseFile().get().getFileSize() : writeConfig.getParquetMaxFileSize();
+        log.info(String.format("Removing clustering group due to input and output slices both being 1 and single group clustering is disabled."
+                + " Group stats: currentGroupSize= %s, maxBytesPerClusteringGroup= %s",
+            size, writeConfig.getClusteringMaxBytesInGroup()));
+        return false;
+      }
+      return true;
+    }).map(fileSliceGroup ->
         HoodieClusteringGroup.newBuilder()
             .setSlices(getFileSliceInfo(fileSliceGroup.getLeft()))
             .setNumOutputFileGroups(fileSliceGroup.getRight())
