@@ -24,12 +24,16 @@ import org.apache.hudi.cli.TableHeader;
 import org.apache.hudi.cli.utils.SparkUtil;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
+import org.apache.hudi.common.data.HoodieListData;
+import org.apache.hudi.common.data.HoodiePairData;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
+import org.apache.hudi.common.model.HoodieRecordGlobalLocation;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.metadata.FileSystemBackedTableMetadata;
 import org.apache.hudi.metadata.HoodieBackedTableMetadata;
@@ -38,6 +42,7 @@ import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.metadata.SparkMetadataWriterFactory;
+import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 
@@ -137,7 +142,7 @@ public class MetadataCommand {
   @ShellMethod(key = "metadata delete", value = "Remove the Metadata Table")
   public String delete(@ShellOption(value = "--backup", help = "Backup the metadata table before delete", defaultValue = "true", arity = 1) final boolean backup) throws Exception {
     HoodieTableMetaClient dataMetaClient = HoodieCLI.getTableMetaClient();
-    String backupPath = HoodieTableMetadataUtil.deleteMetadataTable(dataMetaClient, new HoodieSparkEngineContext(jsc), backup);
+    String backupPath = HoodieTableMetadataUtil.deleteMetadataTable(dataMetaClient, new HoodieLocalEngineContext(dataMetaClient.getStorageConf()), backup);
     if (backup) {
       return "Metadata Table has been deleted and backed up to " + backupPath;
     } else {
@@ -385,6 +390,66 @@ public class MetadataCommand {
         .addTableHeaderField(" FS size")
         .addTableHeaderField(" Metadata size");
     return HoodiePrintHelper.print(header, new HashMap<>(), "", false, Integer.MAX_VALUE, false, rows);
+  }
+
+  @ShellMethod(key = "metadata lookup-record-index", value = "Print Record index information for a record_key. "
+      + "For global RLI, only record key is required. For partitioned RLI, both record key and partition path are required.")
+  public String getRecordIndexInfo(
+      @ShellOption(value = "--record_key", help = "Record key entry whose info will be fetched")
+      final String recordKey,
+      @ShellOption(value = "--partition_path", help = "Partition path. Required for partitioned (non-global) Record Level Index.",
+          defaultValue = "") final String partitionPath) {
+    HoodieTableMetaClient metaClient = HoodieCLI.getTableMetaClient();
+    HoodieStorage storage = metaClient.getStorage();
+    HoodieMetadataConfig config = HoodieMetadataConfig.newBuilder().enable(true).build();
+    HoodieBackedTableMetadata metaReader = new HoodieBackedTableMetadata(
+        new HoodieLocalEngineContext(HoodieCLI.conf), storage, config, HoodieCLI.basePath);
+
+    ValidationUtils.checkState(metaReader.enabled(), "[ERROR] Metadata Table not enabled/initialized\n\n");
+    ValidationUtils.checkState(metaClient.getTableConfig().isMetadataPartitionAvailable(MetadataPartitionType.RECORD_INDEX),
+        "[ERROR] Record index partition is not enabled/initialized\n\n");
+
+    // Check if RLI is partitioned from the index definition and validate partition_path is provided
+    boolean isPartitionedRLI = metaClient.getIndexMetadata()
+        .map(indexMetadata ->
+            indexMetadata.getIndexDefinitions()
+                .get(org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_RECORD_INDEX))
+        .map(indexDefinition -> "true".equalsIgnoreCase(
+            indexDefinition.getIndexOptions().getOrDefault(org.apache.hudi.index.record.HoodieRecordIndex.IS_PARTITIONED_OPTION, "false")))
+        .orElse(false);
+
+    if (isPartitionedRLI) {
+      ValidationUtils.checkState(!StringUtils.isNullOrEmpty(partitionPath),
+          "[ERROR] Partitioned Record Level Index requires --partition_path to be provided\n\n");
+    }
+
+    Option<String> dataTablePartition = StringUtils.isNullOrEmpty(partitionPath) ? Option.empty() : Option.of(partitionPath);
+    HoodiePairData<String, HoodieRecordGlobalLocation> recordKeyToGlobalLocationMap =
+        metaReader.readRecordIndexLocationsWithKeys(HoodieListData.eager(Collections.singletonList(recordKey)), dataTablePartition);
+    List<Pair<String, HoodieRecordGlobalLocation>> recordLocationKeyPair = recordKeyToGlobalLocationMap.collectAsList();
+    if (recordLocationKeyPair.isEmpty()) {
+      String notFoundMessage = "[INFO] Record key " + recordKey;
+      if (!StringUtils.isNullOrEmpty(partitionPath)) {
+        notFoundMessage += " in partition " + partitionPath;
+      }
+      notFoundMessage += " not found in Record Index";
+      return notFoundMessage;
+    }
+    ValidationUtils.checkArgument(recordKey.equals(recordLocationKeyPair.get(0).getKey()),
+        "Record index lookup returned wrong key " + recordLocationKeyPair.get(0).getKey());
+    HoodieRecordGlobalLocation location = recordLocationKeyPair.get(0).getValue();
+    Comparable[] row = new Comparable[4];
+    row[0] = recordKey;
+    row[1] = location.getPartitionPath();
+    row[2] = location.getFileId();
+    row[3] = location.getInstantTime();
+    TableHeader header = new TableHeader()
+        .addTableHeaderField("Record key")
+        .addTableHeaderField("Partition path")
+        .addTableHeaderField("File Id")
+        .addTableHeaderField("Instant time");
+    return HoodiePrintHelper.print(header, new HashMap<>(), "",
+        false, Integer.MAX_VALUE, false, Collections.singletonList(row));
   }
 
   private HoodieWriteConfig getWriteConfig() {
