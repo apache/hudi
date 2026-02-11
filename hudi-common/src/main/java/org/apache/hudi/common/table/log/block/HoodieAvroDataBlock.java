@@ -213,6 +213,7 @@ public class HoodieAvroDataBlock extends HoodieDataBlock {
       try {
         this.dis.close();
         decoderCache.remove();
+        encoderCache.remove();
         this.content = null;
       } catch (IOException e) {
         // ignore
