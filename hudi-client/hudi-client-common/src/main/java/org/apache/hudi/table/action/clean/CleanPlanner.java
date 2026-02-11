@@ -166,10 +166,7 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
   }
 
   /**
-   * Returns true if the clean operation can be skipped entirely
-   * Basically it checks if last_compaction_timestamp < last_clean_timestamp and modified time of last completed compaction
-   * is less than modified time of last clean's requested instant
-   * In such cases, clean call can be skipped.
+   * Returns true if clean can be skipped for MOR tables when only delta commits occurred after the last clean.
    */
   private boolean canCleanBeSkipped() {
     if (!HoodieTableType.MERGE_ON_READ.equals(hoodieTable.getMetaClient().getTableType())) {
