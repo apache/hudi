@@ -1989,6 +1989,10 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getLong(HoodieClusteringConfig.PLAN_STRATEGY_TARGET_FILE_MAX_BYTES);
   }
 
+  public boolean isEarlierInstantsFirst() {
+    return getBoolean(HoodieClusteringConfig.EARLIER_INSTANTS_FIRST);
+  }
+
   public int getTargetPartitionsForClustering() {
     return getInt(HoodieClusteringConfig.DAYBASED_LOOKBACK_PARTITIONS);
   }
