@@ -148,10 +148,9 @@ class TestHoodieAnalysisErrorHandling extends HoodieSparkSqlTestBase {
 
       // Verify the error message contains helpful information
       val errorMessage = exception.getMessage
-      assert(errorMessage.contains("nonexistent_source_table") ||
-        errorMessage.contains("not found") ||
-        errorMessage.contains("Table or view not found"),
-        s"Error message should mention the unresolved table. Actual message: $errorMessage")
+      assert(errorMessage.contains("typos in column or table names") &&
+        errorMessage.contains("unresolved"),
+        s"Error message should mention typos and unresolved references. Actual message: $errorMessage")
     }
   }
 
@@ -177,13 +176,14 @@ class TestHoodieAnalysisErrorHandling extends HoodieSparkSqlTestBase {
       // Insert initial data
       spark.sql(s"INSERT INTO $tableName VALUES (1, 'a1', 10.0, 1000)")
 
-      // Test MERGE INTO with typo in column name (pricee instead of price)
+      // Test MERGE INTO with typo in column name - reference non-existent source.pricee
+      // when source only has 'price' column
       val exception = intercept[AnalysisException] {
         spark.sql(
           s"""
              |MERGE INTO $tableName AS target
              |USING (
-             |  SELECT 1 AS id, 'updated' AS name, 20.0 AS pricee, 2000 AS ts
+             |  SELECT 1 AS id, 'updated' AS name, 20.0 AS price, 2000 AS ts
              |) AS source
              |ON target.id = source.id
              |WHEN MATCHED THEN UPDATE SET
