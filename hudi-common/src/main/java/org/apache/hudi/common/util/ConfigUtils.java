@@ -854,6 +854,8 @@ public class ConfigUtils {
         metadataConfig.getStringOrDefault(HoodieReaderConfig.HFILE_BLOCK_CACHE_SIZE));
     props.setProperty(HoodieReaderConfig.HFILE_BLOCK_CACHE_TTL_MINUTES.key(),
         metadataConfig.getStringOrDefault(HoodieReaderConfig.HFILE_BLOCK_CACHE_TTL_MINUTES));
+    props.setProperty(HoodieMetadataConfig.METADATA_FILE_CACHE_MAX_SIZE_MB.key(),
+        metadataConfig.getStringOrDefault(HoodieMetadataConfig.METADATA_FILE_CACHE_MAX_SIZE_MB));
     return props;
   }
 }
