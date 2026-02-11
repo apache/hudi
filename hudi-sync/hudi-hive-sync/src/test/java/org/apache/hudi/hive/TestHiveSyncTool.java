@@ -116,6 +116,7 @@ import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_INCREMENTAL
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_PARTITION_FIELDS;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_TABLE_NAME;
+import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_TOUCH_PARTITIONS_ENABLED;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -163,6 +164,16 @@ public class TestHiveSyncTool {
       opts.add(new Object[] {mode, HoodieSyncTableStrategy.ALL});
       opts.add(new Object[] {mode, HoodieSyncTableStrategy.RO});
       opts.add(new Object[] {mode, HoodieSyncTableStrategy.RT});
+    }
+    return opts;
+  }
+
+  // syncMode, touchPartitionsEnabled
+  private static Iterable<Object[]> syncModeAndTouchPartitionsEnabled() {
+    List<Object[]> opts = new ArrayList<>();
+    for (Object mode : SYNC_MODES) {
+      opts.add(new Object[] {mode, true});
+      opts.add(new Object[] {mode, false});
     }
     return opts;
   }
@@ -378,10 +389,10 @@ public class TestHiveSyncTool {
     assertEquals(1, partitionEvents.stream()
         .filter(partitionEvent -> partitionEvent.eventType.equals(PartitionEventType.UPDATE)).count(),
         "There should be only one update partition event");
-    // TOUCH events are not produced when META_SYNC_CONDITIONAL_SYNC is disabled (default)
+    // TOUCH events are not produced when META_SYNC_TOUCH_PARTITIONS_ENABLED is disabled (default)
     assertEquals(0, partitionEvents.stream()
         .filter(partitionEvent -> partitionEvent.eventType.equals(PartitionEventType.TOUCH)).count(),
-        "There should be zero touch partition events when conditional sync is disabled");
+        "There should be zero touch partition events when touch partitions is disabled");
 
     // Add a partition that does not belong to the table, i.e., not in the same base path
     // This should not happen in production.  However, if this happens, when doing fallback
@@ -1469,10 +1480,10 @@ public class TestHiveSyncTool {
   }
 
   @ParameterizedTest
-  @MethodSource("syncMode")
-  public void testTouchPartition(String syncMode) throws Exception {
+  @MethodSource("syncModeAndTouchPartitionsEnabled")
+  public void testTouchPartition(String syncMode, boolean touchPartitionsEnabled) throws Exception {
     hiveSyncProps.setProperty(HIVE_SYNC_MODE.key(), syncMode);
-    hiveSyncProps.setProperty(META_SYNC_CONDITIONAL_SYNC.key(), "true");
+    hiveSyncProps.setProperty(META_SYNC_TOUCH_PARTITIONS_ENABLED.key(), String.valueOf(touchPartitionsEnabled));
     String instantTime = "100";
     HiveTestUtil.createCOWTable(instantTime, 5, true);
 
@@ -1493,7 +1504,7 @@ public class TestHiveSyncTool {
             "Hive Schema should match the table schema + partition field");
 
     List<Partition> partitions = hiveClient.getAllPartitions(HiveTestUtil.TABLE_NAME);
-    String partitionToTouch = getRelativePartitionPath(new Path(HiveTestUtil.basePath), 
+    String partitionToTouch = getRelativePartitionPath(new Path(HiveTestUtil.basePath),
         new Path(partitions.get(0).getStorageLocation()));
 
     assertEquals(5, partitions.size(),
@@ -1513,58 +1524,24 @@ public class TestHiveSyncTool {
     List<Partition> hivePartitions = hiveClient.getAllPartitions(HiveTestUtil.TABLE_NAME);
     List<String> writtenPartitionsSince = hiveClient.getWrittenPartitionsSince(lastCommitTimeSynced, lastCommitCompletionTimeSynced);
     List<PartitionEvent> partitionEvents = hiveClient.getPartitionEvents(hivePartitions, writtenPartitionsSince, Collections.emptySet());
-    List<String> touchPartitionEvents  = partitionEvents.stream().filter(s ->  s.eventType == PartitionEventType.TOUCH).map(s -> s.storagePartition)
+    List<String> touchPartitionEvents = partitionEvents.stream()
+            .filter(s -> s.eventType == PartitionEventType.TOUCH)
+            .map(s -> s.storagePartition)
             .collect(Collectors.toList());
-    // check touch partition event was detected
-    assertEquals(1, touchPartitionEvents.size(), "There should be only one touch partition event: " + touchPartitionEvents + "written: " + writtenPartitionsSince + "hive: " + hivePartitions);
-  }
 
-  @ParameterizedTest
-  @MethodSource("syncMode")
-  public void testTouchPartitionNotSyncedWhenConditionalSyncDisabled(String syncMode) throws Exception {
-    hiveSyncProps.setProperty(HIVE_SYNC_MODE.key(), syncMode);
-    hiveSyncProps.setProperty(META_SYNC_CONDITIONAL_SYNC.key(), "false");
-    String instantTime = "100";
-    HiveTestUtil.createCOWTable(instantTime, 5, true);
+    if (touchPartitionsEnabled) {
+      // check touch partition event was detected
+      assertEquals(1, touchPartitionEvents.size(),
+              "There should be one touch partition event when touch partitions is enabled");
+    } else {
+      // check no touch partition events when disabled
+      assertEquals(0, touchPartitionEvents.size(),
+              "There should be no touch partition events when touch partitions is disabled");
+    }
 
-    HiveTestUtil.getCreatedTablesSet().add(HiveTestUtil.DB_NAME + "." + HiveTestUtil.TABLE_NAME);
-    reInitHiveSyncClient();
-    assertFalse(hiveClient.tableExists(HiveTestUtil.TABLE_NAME),
-            "Table " + HiveTestUtil.TABLE_NAME + " should not exist initially");
-    hiveSyncTool.syncHoodieTable();
-
-    // Reinitialize client after sync as the previous client was closed
-    reInitHiveSyncClient();
-    assertTrue(hiveClient.tableExists(HiveTestUtil.TABLE_NAME),
-            "Table " + HiveTestUtil.TABLE_NAME + " should exist after sync completes");
-
-    List<Partition> partitions = hiveClient.getAllPartitions(HiveTestUtil.TABLE_NAME);
-    String partitionToTouch = getRelativePartitionPath(new Path(HiveTestUtil.basePath), 
-        new Path(partitions.get(0).getStorageLocation()));
-
-    assertEquals(5, partitions.size(),
-            "Table partitions should match the number of partitions we wrote");
-
-    // insert into existing partition (creates a touch event)
-    HiveTestUtil.addCOWPartition(partitionToTouch, true, true, "101");
-
-    // sync - with META_SYNC_CONDITIONAL_SYNC=false, touch partitions should not be synced to HMS
-    // even though the partition was written to
-    reInitHiveSyncClient();
-    hiveSyncTool.syncHoodieTable();
-
-    // Reinitialize client after sync as the previous client was closed
-    reInitHiveSyncClient();
-    List<Partition> hivePartitionsAfter = hiveClient.getAllPartitions(HiveTestUtil.TABLE_NAME);
-    
-    // Verify the partition count remains the same (no new partitions added)
-    // This demonstrates that touch partitions are NOT synced to HMS when META_SYNC_CONDITIONAL_SYNC=false
-    assertEquals(5, hivePartitionsAfter.size(),
-            "Partition count should remain the same when touch partition is not synced to HMS");
-    
-    // Verify last commit time was still updated (because conditional sync is disabled)
+    // Verify last commit time was updated
     assertEquals("101", hiveClient.getLastCommitTimeSynced(HiveTestUtil.TABLE_NAME).get(),
-            "Last commit time should be updated even with conditional sync disabled");
+            "Last commit time should be updated");
   }
 
   @ParameterizedTest
