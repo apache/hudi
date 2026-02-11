@@ -1039,17 +1039,58 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
   }
 
   /**
-   * Initialize file groups for a partition. For file listing, we just have one file group.
-   * <p>
-   * All FileGroups for a given metadata partition has a fixed prefix as per the {@link MetadataPartitionType#getFileIdPrefix()}.
-   * Each file group is suffixed with 4 digits with increments of 1 starting with 0000.
-   * <p>
-   * Let's say we configure 10 file groups for record level index partition, and prefix as "record-index-bucket-"
-   * File groups will be named as :
-   * record-index-bucket-0000, .... -> ..., record-index-bucket-0009
+   * Initialize file groups for a MDT partition.
+   *
+   * All FileGroups for a given metadata partition have a fixed prefix as per the {@link MetadataPartitionType#getFileIdPrefix()}.
+   * Each file group is suffixed with 4 digits with increments of 1 starting with 0000. To limit the number of files that
+   * are created in a single folder, the file groups can be arranged in buckets.
+   *
+   * ==== When file group bucketing is disabled
+   * Let's say we configure 2000 file groups for record index partition. File groups will be created as follows inside the
+   * record_index partition directory:
+   *    record_index/
+   *    record_index/.hoodie_partition_metadata
+   *    record_index/record-index-0000
+   *    record_index/record-index-0001
+   *    ...
+   *    record_index/record-index-1999
+   *
+   *  So 1000 file groups are created in the metadata partition directory.
+   *
+   * ==== When file group bucketing is enabled
+   * Let's say we configure 2000 file groups for record index partition. File groups will be created as follows in 2
+   * buckets (0000 and 0001) in the record_index partition directory.:
+   *    record_index/
+   *    record_index/000/.hoodie_partition_metadata
+   *    record_index/0000/record-index-0000
+   *    record_index/0000/record-index-0001
+   *    ...
+   *    record_index/0000/record-index-0999
+   *    record_index/0001/.hoodie_partition_metadata
+   *    record_index/0001/record-index-1000
+   *    record_index/0001/record-index-1001
+   *    ...
+   *    record_index/0001/record-index-1999
+   *
+   *  So 1000 file groups are created in each bucket within the metadata partition directory.
    */
   private void initializeFileGroups(HoodieTableMetaClient dataMetaClient, MetadataPartitionType metadataPartition, String instantTime,
                                     int fileGroupCount, String relativePartitionPath, Option<String> dataPartitionName) throws IOException {
+    // Capture the storage to avoid lambda capture issues with dataMetaClient reassignment
+    final HoodieStorage storage = dataMetaClient.getStorage();
+
+    // Bucketing is enabled for the entire MDT at the time it is initialized. The bucketing cannot be changed later.
+    boolean bucketingEnabled = false;
+    if (dataMetaClient.getTableConfig().isMetadataTablePartitionBucketingEnabled()) {
+      // already enabled on MDT so we need to ensure that the bucketing is enabled for this partition too
+      bucketingEnabled = true;
+    } else if (dataWriteConfig.getMetadataConfig().isFileGroupBucketingEnabled()) {
+      // Enabled via config. Ensure there are no existing partitions that have been initialized without bucketing
+      bucketingEnabled = !dataMetaClient.getTableConfig().isMetadataTableAvailable();
+      if (!bucketingEnabled) {
+        throw new HoodieMetadataException(String.format("Cannot enable MDT partition %s with bucketing as MDT is already initialized without bucketing", metadataPartition.name()));
+      }
+    }
 
     // Archival of data table has a dependency on compaction(base files) in metadata table.
     // It is assumed that as of time Tx of base instant (/compaction time) in metadata table,
@@ -1060,37 +1101,63 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
     // during initial commit, then the fileGroup would still be recognized (as a FileSlice with no baseFiles but a
     // valid logFile). Since these log files being created have no content, it is safe to add them here before
     // the bulkInsert.
-    final String msg = String.format("Creating %d file groups for partition %s with base fileId %s at instant time %s",
-        fileGroupCount, relativePartitionPath, metadataPartition.getFileIdPrefix(), instantTime);
+    final int bucketCount = (int) Math.ceil((float) fileGroupCount / metadataWriteConfig.getMetadataConfig().getFileGroupBucketSize());
+    List<Pair<String, String>> fileGroupIdAndPathPairList;
+    final String msg;
+    if (bucketingEnabled) {
+      msg = String.format("Creating bucketed file groups for MDT partition %s: #buckets=%d, #fileGroups=%d, fileId=%s, instant_time=%s",
+          relativePartitionPath, bucketCount, fileGroupCount, metadataPartition.getFileIdPrefix(), instantTime);
+      fileGroupIdAndPathPairList = IntStream.range(0, fileGroupCount)
+          // Since bucketing is enabled, the filegroups will be located in the bucket directory inside metadata partition directory
+          .mapToObj(i -> {
+            final int bucketIndex = i / metadataWriteConfig.getMetadataConfig().getFileGroupBucketSize();
+            final String bucketPath = HoodieTableMetadataUtil.getBucketRelativePath(relativePartitionPath, bucketIndex);
+            return Pair.of(HoodieTableMetadataUtil.getFileIDForFileGroup(metadataPartition, i, relativePartitionPath, dataPartitionName), bucketPath);
+          })
+          .collect(Collectors.toList());
+    } else {
+      msg = String.format("Creating file groups for MDT partition %s: #fileGroups=%d, fileId=%s, instant_time=%s",
+          relativePartitionPath, fileGroupCount, metadataPartition.getFileIdPrefix(), instantTime);
+      fileGroupIdAndPathPairList = IntStream.range(0, fileGroupCount)
+          // Since bucketing is disabled, the filegroups will be located directly under the metadata partition directory
+          .mapToObj(i -> Pair.of(HoodieTableMetadataUtil.getFileIDForFileGroup(metadataPartition, i, relativePartitionPath, dataPartitionName), relativePartitionPath))
+          .collect(Collectors.toList());
+    }
+
+    ValidationUtils.checkArgument(fileGroupIdAndPathPairList.size() == fileGroupCount);
     LOG.info(msg);
-    final List<String> fileGroupFileIds = IntStream.range(0, fileGroupCount)
-        .mapToObj(i -> HoodieTableMetadataUtil.getFileIDForFileGroup(metadataPartition, i, relativePartitionPath, dataPartitionName))
-        .collect(Collectors.toList());
-    ValidationUtils.checkArgument(fileGroupFileIds.size() == fileGroupCount);
     engineContext.setJobStatus(this.getClass().getSimpleName(), msg);
-    engineContext.foreach(fileGroupFileIds, fileGroupFileId -> {
+    engineContext.foreach(fileGroupIdAndPathPairList, p -> {
+      final String fileGroupFileId = p.getKey();
+      final String relativePath = p.getValue();
+
       try {
         final Map<HeaderMetadataType, String> blockHeader = Collections.singletonMap(HeaderMetadataType.INSTANT_TIME, instantTime);
 
         final HoodieDeleteBlock block = new HoodieDeleteBlock(Collections.emptyList(), blockHeader);
 
         try (HoodieLogFormat.Writer writer = HoodieLogFormat.newWriterBuilder()
-            .onParentPath(FSUtils.constructAbsolutePath(metadataWriteConfig.getBasePath(), relativePartitionPath))
+            .onParentPath(FSUtils.constructAbsolutePath(metadataWriteConfig.getBasePath(), relativePath))
             .withFileId(fileGroupFileId)
             .withInstantTime(instantTime)
             .withLogVersion(HoodieLogFile.LOGFILE_BASE_VERSION)
             .withFileSize(0L)
             .withSizeThreshold(metadataWriteConfig.getLogFileMaxSize())
-            .withStorage(dataMetaClient.getStorage())
+            .withStorage(storage)
             .withLogWriteToken(HoodieLogFormat.DEFAULT_WRITE_TOKEN)
             .withTableVersion(metadataWriteConfig.getWriteVersion())
             .withFileExtension(HoodieLogFile.DELTA_EXTENSION).build()) {
           writer.appendBlock(block);
         }
       } catch (InterruptedException e) {
-        throw new HoodieException(String.format("Failed to created fileGroup %s for partition %s", fileGroupFileId, relativePartitionPath), e);
+        throw new HoodieException(String.format("Failed to created fileGroup %s for partition %s", fileGroupFileId, relativePath), e);
       }
-    }, fileGroupFileIds.size());
+    }, fileGroupIdAndPathPairList.size());
+
+    if (bucketingEnabled && !dataMetaClient.getTableConfig().isMetadataTablePartitionBucketingEnabled()) {
+      // Bucketing has been enabled so set it in the table config
+      dataMetaClient = HoodieTableMetadataUtil.setMetadataTablePartitionBucketing(dataMetaClient, bucketingEnabled);
+    }
   }
 
   void clearExistingMetadataPartition(String relativePartitionPath) throws IOException {
@@ -1912,6 +1979,8 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
   protected Pair<HoodieData<HoodieRecord>, List<HoodieFileGroupId>> tagRecordsWithLocation(Map<String, HoodieData<HoodieRecord>> partitionRecordsMap, boolean isInitializing) {
     // The result set
     HoodieData<HoodieRecord> allPartitionRecords = engineContext.emptyHoodieData();
+    // Is fileGroup bucketing enabled
+    final boolean bucketingEnabled = dataMetaClient.getTableConfig().isMetadataTablePartitionBucketingEnabled();
     try (HoodieTableFileSystemView fsView = HoodieTableMetadataUtil.getFileSystemViewForMetadataTable(metadataMetaClient)) {
       List<HoodieFileGroupId> hoodieFileGroupIdList = new ArrayList<>();
       for (Map.Entry<String, HoodieData<HoodieRecord>> entry : partitionRecordsMap.entrySet()) {
