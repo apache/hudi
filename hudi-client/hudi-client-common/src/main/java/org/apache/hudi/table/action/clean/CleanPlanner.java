@@ -177,23 +177,16 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
     }
     HoodieTimeline activeTimeline = hoodieTable.getActiveTimeline();
     Option<HoodieInstant> lastCleanInstant = activeTimeline.getCleanerTimeline().lastInstant();
-    Option<HoodieInstant> lastCompactionInstant = getCommitTimeline()
-        .filter(instant -> instant.getAction().equals(HoodieTimeline.COMMIT_ACTION)).lastInstant();
-    if (!lastCompactionInstant.isPresent() || !lastCleanInstant.isPresent()) {
+    if (!lastCleanInstant.isPresent()) {
       return false;
     }
 
-    // Check whether there are any other commits apart from deltacommits between last compaction and last clean.
-    int numNonDeltaInstantsAfterCleanRequestedTime = activeTimeline
-        .getWriteTimeline()
+    // Check whether there are any other commits apart from deltacommits after last clean's requested time.
+    return activeTimeline.getWriteTimeline()
         .filterCompletedInstants()
         .filter(instant -> !instant.getAction().equals(HoodieTimeline.DELTA_COMMIT_ACTION))
         .filter(instant -> InstantComparison.compareTimestamps(instant.getCompletionTime(),
-            GREATER_THAN, lastCleanInstant.get().requestedTime()))
-        .countInstants();
-    return InstantComparison.compareTimestamps(lastCompactionInstant.get().getCompletionTime(),
-        InstantComparison.LESSER_THAN, lastCleanInstant.get().requestedTime())
-        && numNonDeltaInstantsAfterCleanRequestedTime == 0;
+            GREATER_THAN, lastCleanInstant.get().requestedTime())).countInstants() == 0;
   }
 
   /**
