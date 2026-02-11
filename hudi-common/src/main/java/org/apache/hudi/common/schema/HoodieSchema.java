@@ -655,7 +655,7 @@ public class HoodieSchema implements Serializable {
    */
   public static HoodieSchema.Vector createVector(String name, int dimension) {
     String vectorName = (name != null && !name.isEmpty()) ? name : Vector.DEFAULT_NAME;
-    Schema vectorSchema = Vector.createSchema(vectorName, dimension, Vector.ELEMENT_TYPE_FLOAT);
+    Schema vectorSchema = Vector.createSchema(vectorName, dimension, Vector.VectorElementType.FLOAT);
     return new HoodieSchema.Vector(vectorSchema);
   }
 
@@ -663,10 +663,10 @@ public class HoodieSchema implements Serializable {
    * Creates Vector schema with custom dimension and element type.
    *
    * @param dimension vector dimension (must be > 0)
-   * @param elementType element type (use Vector.ELEMENT_TYPE_FLOAT or Vector.ELEMENT_TYPE_DOUBLE)
+   * @param elementType element type (use Vector.VectorElementType.FLOAT or Vector.VectorElementType.DOUBLE)
    * @return new HoodieSchema.Vector
    */
-  public static HoodieSchema.Vector createVector(int dimension, String elementType) {
+  public static HoodieSchema.Vector createVector(int dimension, Vector.VectorElementType elementType) {
     return createVector(null, dimension, elementType);
   }
 
@@ -675,10 +675,10 @@ public class HoodieSchema implements Serializable {
    *
    * @param name record name (null uses default "vector")
    * @param dimension vector dimension (must be > 0)
-   * @param elementType element type (use Vector.ELEMENT_TYPE_FLOAT or Vector.ELEMENT_TYPE_DOUBLE)
+   * @param elementType element type (use Vector.VectorElementType.FLOAT or Vector.VectorElementType.DOUBLE)
    * @return new HoodieSchema.Vector
    */
-  public static HoodieSchema.Vector createVector(String name, int dimension, String elementType) {
+  public static HoodieSchema.Vector createVector(String name, int dimension, Vector.VectorElementType elementType) {
     String vectorName = (name != null && !name.isEmpty()) ? name : Vector.DEFAULT_NAME;
     Schema vectorSchema = Vector.createSchema(vectorName, dimension, elementType);
     return new HoodieSchema.Vector(vectorSchema);
@@ -1557,16 +1557,62 @@ public class HoodieSchema implements Serializable {
     private static final String DEFAULT_NAME = "vector";
     public static final String VALUES_FIXED_FIELD = "valuesFixed";
 
-    // Element types
-    public static final String ELEMENT_TYPE_FLOAT = "FLOAT";
-    public static final String ELEMENT_TYPE_DOUBLE = "DOUBLE";
-    public static final String ELEMENT_TYPE_INT8 = "INT8";
+    /**
+     * Enum representing vector element data types.
+     */
+    public enum VectorElementType {
+      FLOAT("FLOAT", 4),
+      DOUBLE("DOUBLE", 8),
+      INT8("INT8", 1);
+
+      private final String name;
+      private final int byteSize;
+
+      VectorElementType(String name, int byteSize) {
+        this.name = name;
+        this.byteSize = byteSize;
+      }
+
+      /**
+       * Returns the string representation for serialization.
+       *
+       * @return element type name
+       */
+      public String getName() {
+        return name;
+      }
+
+      /**
+       * Returns the byte size of this element type.
+       *
+       * @return number of bytes per element
+       */
+      public int getByteSize() {
+        return byteSize;
+      }
+
+      /**
+       * Converts a string to VectorElementType enum.
+       *
+       * @param name the element type name (e.g., "FLOAT", "DOUBLE", "INT8")
+       * @return the corresponding enum value
+       * @throws IllegalArgumentException if name is unknown
+       */
+      public static VectorElementType fromString(String name) {
+        for (VectorElementType type : values()) {
+          if (type.name.equals(name)) {
+            return type;
+          }
+        }
+        throw new IllegalArgumentException("Unknown element type: " + name);
+      }
+    }
 
     // Storage backing types
     public static final String STORAGE_BACKING_FIXED_BYTES = "FIXED_BYTES";
 
     private final int dimension;
-    private final String elementType;
+    private final VectorElementType elementType;
     private final String storageBacking;
 
     /**
@@ -1587,7 +1633,7 @@ public class HoodieSchema implements Serializable {
 
       VectorLogicalType vectorLogicalType = (VectorLogicalType) logicalType;
       this.dimension = vectorLogicalType.getDimension();
-      this.elementType = vectorLogicalType.getElementType();
+      this.elementType = VectorElementType.fromString(vectorLogicalType.getElementType());
       this.storageBacking = vectorLogicalType.getStorageBacking();
 
       // Validate schema structure
@@ -1607,20 +1653,11 @@ public class HoodieSchema implements Serializable {
     /**
      * Gets the byte size of a single element based on element type.
      *
-     * @param elementType the element type (FLOAT, DOUBLE, INT8, etc.)
+     * @param elementType the element type
      * @return number of bytes per element
      */
-    private static int getElementSize(String elementType) {
-      switch (elementType) {
-        case ELEMENT_TYPE_FLOAT:
-          return 4;
-        case ELEMENT_TYPE_DOUBLE:
-          return 8;
-        case ELEMENT_TYPE_INT8:
-          return 1;
-        default:
-          throw new IllegalArgumentException("Unknown elementType: " + elementType);
-      }
+    private static int getElementSize(VectorElementType elementType) {
+      return elementType.getByteSize();
     }
 
     /**
@@ -1628,15 +1665,15 @@ public class HoodieSchema implements Serializable {
      *
      * @param name record name (not null)
      * @param dimension vector dimension (must be > 0)
-     * @param elementType element type (FLOAT or INT8, defaults to FLOAT if null)
+     * @param elementType element type (defaults to FLOAT if null)
      * @return new Vector schema
      */
-    private static Schema createSchema(String name, int dimension, String elementType) {
+    private static Schema createSchema(String name, int dimension, VectorElementType elementType) {
       ValidationUtils.checkArgument(dimension > 0,
           () -> "Vector dimension must be positive: " + dimension);
 
       // Validate elementType
-      String resolvedElementType = elementType != null ? elementType : ELEMENT_TYPE_FLOAT;
+      VectorElementType resolvedElementType = elementType != null ? elementType : VectorElementType.FLOAT;
 
       // Calculate fixed size: dimension × element size in bytes
       int elementSize = getElementSize(resolvedElementType);
@@ -1655,7 +1692,7 @@ public class HoodieSchema implements Serializable {
       vectorSchema.setFields(fields);
 
       // Apply logical type with properties
-      VectorLogicalType vectorLogicalType = new VectorLogicalType(dimension, resolvedElementType, STORAGE_BACKING_FIXED_BYTES);
+      VectorLogicalType vectorLogicalType = new VectorLogicalType(dimension, resolvedElementType.getName(), STORAGE_BACKING_FIXED_BYTES);
       vectorLogicalType.addToSchema(vectorSchema);
 
       return vectorSchema;
@@ -1699,16 +1736,16 @@ public class HoodieSchema implements Serializable {
     /**
      * Returns the element type of this vector.
      *
-     * @return element type string (e.g., "FLOAT" or "DOUBLE")
+     * @return element type enum (e.g., VectorElementType.FLOAT, VectorElementType.DOUBLE, VectorElementType.INT8)
      */
-    public String getVectorElementType() {
+    public VectorElementType getVectorElementType() {
       return elementType;
     }
 
     /**
      * Returns the storage backing type.
      *
-     * @return storage backing string (e.g., "ARRAY_FLOAT")
+     * @return storage backing string (e.g., "FIXED_BYTES")
      */
     public String getStorageBacking() {
       return storageBacking;
@@ -1983,7 +2020,7 @@ public class HoodieSchema implements Serializable {
 
       String elementType = schema.getProp("elementType");
       if (elementType == null) {
-        elementType = Vector.ELEMENT_TYPE_FLOAT; // default
+        elementType = Vector.VectorElementType.FLOAT.getName();
       }
 
       String storageBacking = schema.getProp("storageBacking");
