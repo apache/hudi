@@ -201,11 +201,11 @@ public class HoodieCleanConfig extends HoodieConfig {
           + "table receives updates/deletes. Another reason to turn this on, would be to ensure data residing in bootstrap "
           + "base files are also physically deleted, to comply with data privacy enforcement processes.");
 
-  private static final String CLEANER_PARTITION_FILTER_REGEX_KEY = "hoodie.clean.partition.filter.regex";
-  private static final String CLEANER_PARTITION_FILTER_SELECTED_KEY = "hoodie.clean.partition.filter.selected";
+  private static final String CLEAN_PARTITION_FILTER_REGEX_KEY = "hoodie.clean.partition.filter.regex";
+  private static final String CLEAN_PARTITION_FILTER_SELECTED_KEY = "hoodie.clean.partition.filter.selected";
 
-  public static final ConfigProperty<String> CLEANER_PARTITION_FILTER_REGEX = ConfigProperty
-      .key(CLEANER_PARTITION_FILTER_REGEX_KEY)
+  public static final ConfigProperty<String> CLEAN_PARTITION_FILTER_REGEX = ConfigProperty
+      .key(CLEAN_PARTITION_FILTER_REGEX_KEY)
       .noDefaultValue()
       .withAlternatives("hoodie.cleaner.partition.filter.regex")
       .markAdvanced()
@@ -213,10 +213,10 @@ public class HoodieCleanConfig extends HoodieConfig {
       .withDocumentation("When incremental clean is disabled, this regex can be used to filter the partitions to be cleaned. "
           + "Only partitions matching this regex pattern will be cleaned. "
           + "This can be useful for very large tables to avoid OOM issues during cleaning. "
-          + "If both this config and " + CLEANER_PARTITION_FILTER_SELECTED_KEY + " are set, the selected partitions take precedence.");
+          + "If both this config and " + CLEAN_PARTITION_FILTER_SELECTED_KEY + " are set, the selected partitions take precedence.");
 
-  public static final ConfigProperty<String> CLEANER_PARTITION_FILTER_SELECTED = ConfigProperty
-      .key(CLEANER_PARTITION_FILTER_SELECTED_KEY)
+  public static final ConfigProperty<String> CLEAN_PARTITION_FILTER_SELECTED = ConfigProperty
+      .key(CLEAN_PARTITION_FILTER_SELECTED_KEY)
       .noDefaultValue()
       .withAlternatives("hoodie.cleaner.partition.filter.selected")
       .markAdvanced()
@@ -224,7 +224,7 @@ public class HoodieCleanConfig extends HoodieConfig {
       .withDocumentation("When incremental clean is disabled, this comma-separated list of partitions can be used to filter the partitions to be cleaned. "
           + "Only the specified partitions will be cleaned. "
           + "This can be useful for very large tables to avoid OOM issues during cleaning. "
-          + "If both this config and " + CLEANER_PARTITION_FILTER_REGEX_KEY + " are set, the selected partitions take precedence.");
+          + "If both this config and " + CLEAN_PARTITION_FILTER_REGEX_KEY + " are set, the selected partitions take precedence.");
 
   /** @deprecated Use {@link #CLEANER_POLICY} and its methods instead */
   @Deprecated

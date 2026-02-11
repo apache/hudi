@@ -699,7 +699,7 @@ public class TestCleanPlanner {
             .withIncrementalCleaningMode(false)
             .build())
         .withProperties(Collections.singletonMap(
-            HoodieCleanConfig.CLEANER_PARTITION_FILTER_REGEX.key(), "partition[12]"))
+            HoodieCleanConfig.CLEAN_PARTITION_FILTER_REGEX.key(), "partition[12]"))
         .build();
 
     List<String> allPartitions = Arrays.asList(PARTITION1, PARTITION2, PARTITION3);
@@ -728,7 +728,7 @@ public class TestCleanPlanner {
             .withIncrementalCleaningMode(false)
             .build())
         .withProperties(Collections.singletonMap(
-            HoodieCleanConfig.CLEANER_PARTITION_FILTER_SELECTED.key(), "partition1,partition3"))
+            HoodieCleanConfig.CLEAN_PARTITION_FILTER_SELECTED.key(), "partition1,partition3"))
         .build();
 
     List<String> allPartitions = Arrays.asList(PARTITION1, PARTITION2, PARTITION3);
@@ -751,8 +751,8 @@ public class TestCleanPlanner {
   void testSelectedListTakesPrecedenceOverRegex() throws IOException {
     // Setup config with both selected list and regex filter
     Map<String, String> props = new HashMap<>();
-    props.put(HoodieCleanConfig.CLEANER_PARTITION_FILTER_SELECTED.key(), "partition1");
-    props.put(HoodieCleanConfig.CLEANER_PARTITION_FILTER_REGEX.key(), "partition[23]");
+    props.put(HoodieCleanConfig.CLEAN_PARTITION_FILTER_SELECTED.key(), "partition1");
+    props.put(HoodieCleanConfig.CLEAN_PARTITION_FILTER_REGEX.key(), "partition[23]");
 
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath("/tmp")
         .withCleanConfig(HoodieCleanConfig.newBuilder()
@@ -788,7 +788,7 @@ public class TestCleanPlanner {
             .withIncrementalCleaningMode(true)
             .build())
         .withProperties(Collections.singletonMap(
-            HoodieCleanConfig.CLEANER_PARTITION_FILTER_REGEX.key(), "partition.*"))
+            HoodieCleanConfig.CLEAN_PARTITION_FILTER_REGEX.key(), "partition.*"))
         .build();
 
     List<String> allPartitions = Arrays.asList(PARTITION1, PARTITION2, PARTITION3);

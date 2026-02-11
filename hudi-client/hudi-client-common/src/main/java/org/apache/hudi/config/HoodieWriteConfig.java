@@ -1823,11 +1823,11 @@ public class HoodieWriteConfig extends HoodieConfig {
   }
 
   public String getCleanerPartitionFilterRegex() {
-    return getString(HoodieCleanConfig.CLEANER_PARTITION_FILTER_REGEX);
+    return getString(HoodieCleanConfig.CLEAN_PARTITION_FILTER_REGEX);
   }
 
   public String getCleanerPartitionFilterSelected() {
-    return getString(HoodieCleanConfig.CLEANER_PARTITION_FILTER_SELECTED);
+    return getString(HoodieCleanConfig.CLEAN_PARTITION_FILTER_SELECTED);
   }
 
   public boolean inlineCompactionEnabled() {
