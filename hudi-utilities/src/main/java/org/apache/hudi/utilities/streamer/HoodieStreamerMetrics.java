@@ -57,7 +57,7 @@ public class HoodieStreamerMetrics extends HoodieIngestionMetrics {
   }
 
   @VisibleForTesting
-  Metrics getMetrics() {
+  public Metrics getMetrics() {
     return metrics;
   }
 
