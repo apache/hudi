@@ -45,6 +45,7 @@ import java.io.IOException;
 import java.util.Collections;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.RETURNS_DEEP_STUBS;
 import static org.mockito.Mockito.doReturn;
@@ -168,6 +169,34 @@ class TestCleanPlanActionExecutor {
     HoodieCleanerPlan emptyPlan = new HoodieCleanerPlan();
     doReturn(emptyPlan).when(executor).requestClean(engineContext);
     assertEquals(Option.empty(), executor.requestClean());
+  }
+
+  @Test
+  void testRequestCleanUsesLocalEngineContext() {
+    HoodieTable table = mock(HoodieTable.class, RETURNS_DEEP_STUBS);
+    when(table.isPartitioned()).thenReturn(false);
+
+    // allow clean to trigger
+    mockThatCleanIsRequired(table);
+    // No last clean
+    when(table.getCleanTimeline().filterCompletedInstants().lastInstant()).thenReturn(Option.empty());
+    HoodieEngineContext engineContext = new HoodieLocalEngineContext(new HadoopStorageConfiguration(false));
+
+    // Custom executor that captures the engine context passed to requestClean
+    CleanPlanActionExecutor<?, ?, ?, ?> executor = new CleanPlanActionExecutor<>(engineContext, HoodieWriteConfig.newBuilder().withPath("file://tmp").build(), table, Option.empty()) {
+      @Override
+      HoodieCleanerPlan requestClean(HoodieEngineContext context) {
+        // Verify that the context is HoodieLocalEngineContext, not a Spark context
+        assertEquals(HoodieLocalEngineContext.class, context.getClass(),
+            "Expected HoodieLocalEngineContext but got " + context.getClass().getName());
+        // Verify that a new HoodieLocalEngineContext instance is created, not the same one passed to constructor
+        assertNotSame(engineContext, context,
+            "Expected a new HoodieLocalEngineContext instance, but got the same instance");
+        return new HoodieCleanerPlan();
+      }
+    };
+
+    executor.requestClean();
   }
 
   private static void mockEmptyLastCompletedClean(HoodieTable table, HoodieInstant lastCompletedInstant, HoodieActiveTimeline activeTimeline, boolean hasEmptyPlan) {
