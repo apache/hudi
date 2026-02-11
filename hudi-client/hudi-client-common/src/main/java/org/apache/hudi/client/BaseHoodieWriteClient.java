@@ -178,6 +178,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     super(context, writeConfig, timelineService);
     this.index = createIndex(writeConfig);
     this.upgradeDowngradeHelper = upgradeDowngradeHelper;
+    this.metrics.emitVersionMetrics();
     this.metrics.emitIndexTypeMetrics(config.getIndexType().ordinal());
   }
 
