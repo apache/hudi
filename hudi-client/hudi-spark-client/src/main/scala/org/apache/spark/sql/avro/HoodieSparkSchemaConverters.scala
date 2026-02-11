@@ -200,7 +200,7 @@ object HoodieSparkSchemaConverters {
           } else {
             Metadata.empty
           }
-          val metadata = if (f.schema.isBlobType) {
+          val metadata = if (f.getNonNullSchema.getType == HoodieSchemaType.BLOB) {
             // Mark blob fields with metadata for identification
             new MetadataBuilder()
               .withMetadata(commentMetadata)

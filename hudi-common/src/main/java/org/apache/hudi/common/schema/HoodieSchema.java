@@ -24,6 +24,7 @@ import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieAvroSchemaException;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.internal.schema.HoodieSchemaException;
 
 import org.apache.avro.JsonProperties;
 import org.apache.avro.LogicalType;
@@ -158,22 +159,28 @@ public class HoodieSchema implements Serializable {
     if (avroSchema == null) {
       return null;
     }
+    HoodieSchema schema;
     LogicalType logicalType = avroSchema.getLogicalType();
     if (logicalType != null) {
       if (logicalType instanceof LogicalTypes.Decimal) {
-        return new HoodieSchema.Decimal(avroSchema);
+        schema = new HoodieSchema.Decimal(avroSchema);
       } else if (logicalType instanceof LogicalTypes.TimeMillis || logicalType instanceof LogicalTypes.TimeMicros) {
-        return new HoodieSchema.Time(avroSchema);
+        schema = new HoodieSchema.Time(avroSchema);
       } else if (logicalType instanceof LogicalTypes.TimestampMillis || logicalType instanceof LogicalTypes.TimestampMicros
           || logicalType instanceof LogicalTypes.LocalTimestampMillis || logicalType instanceof LogicalTypes.LocalTimestampMicros) {
-        return new HoodieSchema.Timestamp(avroSchema);
+        schema = new HoodieSchema.Timestamp(avroSchema);
       } else if (logicalType == VariantLogicalType.variant()) {
-        return new HoodieSchema.Variant(avroSchema);
+        schema = new HoodieSchema.Variant(avroSchema);
       } else if (logicalType == BlobLogicalType.blob()) {
-        return new HoodieSchema.Blob(avroSchema);
+        schema = new HoodieSchema.Blob(avroSchema);
+      } else {
+        schema = new HoodieSchema(avroSchema);
       }
+    } else {
+      schema = new HoodieSchema(avroSchema);
     }
-    return new HoodieSchema(avroSchema);
+    validateNoBlobsInArrayOrMap(schema);
+    return schema;
   }
 
   /**
@@ -287,6 +294,8 @@ public class HoodieSchema implements Serializable {
 
     Schema elementAvroSchema = elementSchema.avroSchema;
     ValidationUtils.checkState(elementAvroSchema != null, "Element schema's Avro schema cannot be null");
+    ValidationUtils.checkArgument(!elementSchema.containsBlobType(),
+        "Array element type cannot be or contain a BLOB type");
 
     Schema arraySchema = Schema.createArray(elementAvroSchema);
     return new HoodieSchema(arraySchema);
@@ -303,6 +312,8 @@ public class HoodieSchema implements Serializable {
 
     Schema valueAvroSchema = valueSchema.avroSchema;
     ValidationUtils.checkState(valueAvroSchema != null, "Value schema's Avro schema cannot be null");
+    ValidationUtils.checkArgument(!valueSchema.containsBlobType(),
+        "Map value type cannot be or contain a BLOB type");
 
     Schema mapSchema = Schema.createMap(valueAvroSchema);
     return new HoodieSchema(mapSchema);
@@ -953,17 +964,66 @@ public class HoodieSchema implements Serializable {
     return HoodieSchema.createUnion(nonNullTypes);
   }
 
-  public boolean isBlobType() {
+  boolean containsBlobType() {
     if (getType() == HoodieSchemaType.BLOB) {
       return true;
     } else if (getType() == HoodieSchemaType.ARRAY) {
-      return getElementType().isBlobType();
+      return getElementType().containsBlobType();
     } else if (getType() == HoodieSchemaType.MAP) {
-      return getValueType().isBlobType();
+      return getValueType().containsBlobType();
     } else if (getType() == HoodieSchemaType.UNION) {
-      return getTypes().stream().anyMatch(HoodieSchema::isBlobType);
+      return getTypes().stream().anyMatch(HoodieSchema::containsBlobType);
+    } else if (getType() == HoodieSchemaType.RECORD) {
+      return getFields().stream().anyMatch(field -> field.schema().containsBlobType());
     }
     return false;
+  }
+
+  /**
+   * Validates that the schema does not contain arrays or maps with blob types.
+   * This method recursively traverses the schema tree to check for invalid structures.
+   *
+   * @param schema the schema to validate
+   * @throws HoodieSchemaException if the schema contains arrays or maps with blob types
+   */
+  private static void validateNoBlobsInArrayOrMap(HoodieSchema schema) {
+    if (schema == null) {
+      return;
+    }
+
+    HoodieSchemaType type = schema.getType();
+
+    switch (type) {
+      case ARRAY:
+        HoodieSchema elementType = schema.getElementType();
+        if (elementType.containsBlobType()) {
+          throw new HoodieSchemaException("Array element type cannot be or contain a BLOB type");
+        }
+        break;
+      case MAP:
+        HoodieSchema valueType = schema.getValueType();
+        if (valueType.containsBlobType()) {
+          throw new HoodieSchemaException("Map value type cannot be or contain a BLOB type");
+        }
+        break;
+      case RECORD:
+        // Validate all record fields
+        List<HoodieSchemaField> fields = schema.getFields();
+        for (HoodieSchemaField field : fields) {
+          validateNoBlobsInArrayOrMap(field.schema());
+        }
+        break;
+      case UNION:
+        // Validate all union types
+        List<HoodieSchema> types = schema.getTypes();
+        for (HoodieSchema unionType : types) {
+          validateNoBlobsInArrayOrMap(unionType);
+        }
+        break;
+      // For primitives, BLOB, ENUM, FIXED, NULL - no nested validation needed
+      default:
+        break;
+    }
   }
 
   /**
@@ -1425,11 +1485,15 @@ public class HoodieSchema implements Serializable {
 
         case ARRAY:
           ValidationUtils.checkArgument(elementType != null, "Array element type is required");
+          ValidationUtils.checkArgument(!elementType.containsBlobType(),
+              "Array element type cannot be or contain a BLOB type");
           avroSchema = Schema.createArray(elementType.getAvroSchema());
           break;
 
         case MAP:
           ValidationUtils.checkArgument(valueType != null, "Map value type is required");
+          ValidationUtils.checkArgument(!valueType.containsBlobType(),
+              "Map value type cannot be or contain a BLOB type");
           avroSchema = Schema.createMap(valueType.getAvroSchema());
           break;
 
@@ -1953,13 +2017,13 @@ public class HoodieSchema implements Serializable {
     private static final String DEFAULT_NAME = "blob";
     public static final String STORAGE_TYPE = "storage_type";
     public static final String INLINE_DATA_FIELD = "data";
-    public static final String EXTERNAL_FILE_REFERENCE = "reference";
-    public static final String EXTERNAL_PATH = "external_path";
+    public static final String EXTERNAL_REFERENCE = "reference";
+    public static final String EXTERNAL_REFERENCE_PATH = "external_path";
     // if offset is not specified, it is assumed to be 0 (start of file)
-    public static final String EXTERNAL_PATH_OFFSET = "offset";
+    public static final String EXTERNAL_REFERENCE_OFFSET = "offset";
     // if length is not specified, it is assumed to be the rest of the file starting from offset
-    public static final String EXTERNAL_PATH_LENGTH = "length";
-    public static final String EXTERNAL_PATH_IS_MANAGED = "managed";
+    public static final String EXTERNAL_REFERENCE_LENGTH = "length";
+    public static final String EXTERNAL_REFERENCE_IS_MANAGED = "managed";
 
     /**
      * Creates a new HoodieSchema wrapping the given Avro schema.
@@ -1987,20 +2051,20 @@ public class HoodieSchema implements Serializable {
 
     private static Schema createSchema(String name) {
       Schema bytesField = Schema.create(Schema.Type.BYTES);
-      Schema referenceField = Schema.createRecord(EXTERNAL_FILE_REFERENCE, null, null, false);
+      Schema referenceField = Schema.createRecord(EXTERNAL_REFERENCE, null, null, false);
       List<Schema.Field> referenceFields = Arrays.asList(
-          new Schema.Field(EXTERNAL_PATH, Schema.create(Schema.Type.STRING), null, null),
-          new Schema.Field(EXTERNAL_PATH_OFFSET, AvroSchemaUtils.createNullableSchema(Schema.create(Schema.Type.LONG)), null, null),
-          new Schema.Field(EXTERNAL_PATH_LENGTH, AvroSchemaUtils.createNullableSchema(Schema.create(Schema.Type.LONG)), null, null),
-          new Schema.Field(EXTERNAL_PATH_IS_MANAGED, Schema.create(Schema.Type.BOOLEAN), null, null)
+          new Schema.Field(EXTERNAL_REFERENCE_PATH, Schema.create(Schema.Type.STRING), null, null),
+          new Schema.Field(EXTERNAL_REFERENCE_OFFSET, AvroSchemaUtils.createNullableSchema(Schema.create(Schema.Type.LONG)), null, null),
+          new Schema.Field(EXTERNAL_REFERENCE_LENGTH, AvroSchemaUtils.createNullableSchema(Schema.create(Schema.Type.LONG)), null, null),
+          new Schema.Field(EXTERNAL_REFERENCE_IS_MANAGED, Schema.create(Schema.Type.BOOLEAN), null, null)
       );
       referenceField.setFields(referenceFields);
 
       Schema blobSchema = Schema.createRecord(name, null, null, false);
       List<Schema.Field> blobFields = Arrays.asList(
-          new Schema.Field(STORAGE_TYPE, Schema.create(Schema.Type.STRING), null, null),
+          new Schema.Field(STORAGE_TYPE, Schema.createEnum("blob_storage_type", null, null, Arrays.asList("INLINE", "OUT_OF_LINE")), null, null),
           new Schema.Field(INLINE_DATA_FIELD, AvroSchemaUtils.createNullableSchema(bytesField), null, Schema.Field.NULL_DEFAULT_VALUE),
-          new Schema.Field(EXTERNAL_FILE_REFERENCE, AvroSchemaUtils.createNullableSchema(referenceField), null, Schema.Field.NULL_DEFAULT_VALUE)
+          new Schema.Field(EXTERNAL_REFERENCE, AvroSchemaUtils.createNullableSchema(referenceField), null, Schema.Field.NULL_DEFAULT_VALUE)
       );
       blobSchema.setFields(blobFields);
       BlobLogicalType.blob().addToSchema(blobSchema);

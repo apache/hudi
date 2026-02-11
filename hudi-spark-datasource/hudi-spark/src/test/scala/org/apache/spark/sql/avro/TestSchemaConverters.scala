@@ -51,7 +51,7 @@ class TestSchemaConverters {
   }
 
   @Test
-  def testSchemaWithBlobsRoundtrip(): Unit = {
+  def testSchemaWithBlobsRoundTrip(): Unit = {
     val originalSchema = HoodieSchema.createRecord("document", "test", null, util.Arrays.asList(
       HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.LONG)),
       HoodieSchemaField.of("metadata", HoodieSchema.createRecord("meta", null, null, util.Arrays.asList(
@@ -85,64 +85,6 @@ class TestSchemaConverters {
     assertEquals(HoodieSchemaType.BLOB, imageField.schema().getType)
   }
 
-  @Test
-  def testBlobArrayRoundtrip(): Unit = {
-    // Test array containing blobs at various nesting levels
-    val innerArray = HoodieSchema.createArray(HoodieSchema.createBlob())
-    val outerArray = HoodieSchema.createArray(innerArray)
-
-    val fields = util.Arrays.asList(
-      HoodieSchemaField.of("simple_blobs", HoodieSchema.createArray(HoodieSchema.createBlob())),
-      HoodieSchemaField.of("nested_blobs", outerArray)
-    )
-    val originalSchema = HoodieSchema.createRecord("BlobArrays", "test", null, fields)
-
-    // Roundtrip
-    val (sparkType, _) = HoodieSparkSchemaConverters.toSqlType(originalSchema)
-    val reconstructed = HoodieSparkSchemaConverters.toHoodieType(sparkType, recordName = "BlobArrays", nameSpace = "test")
-
-    // Verify simple array
-    val simpleField = reconstructed.getField("simple_blobs").get()
-    assertEquals(HoodieSchemaType.ARRAY, simpleField.schema().getType)
-    assertEquals(HoodieSchemaType.BLOB, simpleField.schema().getElementType.getType)
-
-    // Verify nested array
-    val nestedField = reconstructed.getField("nested_blobs").get()
-    assertEquals(HoodieSchemaType.ARRAY, nestedField.schema().getType)
-    val nestedArrayType = nestedField.schema().getElementType
-    assertEquals(HoodieSchemaType.ARRAY, nestedArrayType.getType)
-    assertEquals(HoodieSchemaType.BLOB, nestedArrayType.getElementType.getType)
-  }
-
-  @Test
-  def testBlobMapRoundtrip(): Unit = {
-    // Test map containing blobs at various nesting levels
-    val innerMap = HoodieSchema.createMap(HoodieSchema.createBlob())
-    val outerMap = HoodieSchema.createMap(innerMap)
-
-    val fields = util.Arrays.asList(
-      HoodieSchemaField.of("simple_blobs_map", HoodieSchema.createMap(HoodieSchema.createBlob())),
-      HoodieSchemaField.of("nested_blobs_map", outerMap)
-    )
-    val originalSchema = HoodieSchema.createRecord("BlobMaps", "test", null, fields)
-
-    // Roundtrip
-    val (sparkType, _) = HoodieSparkSchemaConverters.toSqlType(originalSchema)
-    val reconstructed = HoodieSparkSchemaConverters.toHoodieType(sparkType, recordName = "BlobMaps")
-
-    // Verify simple map
-    val simpleField = reconstructed.getField("simple_blobs_map").get()
-    assertEquals(HoodieSchemaType.MAP, simpleField.schema().getType)
-    assertEquals(HoodieSchemaType.BLOB, simpleField.schema().getValueType.getType)
-
-    // Verify nested map
-    val nestedField = reconstructed.getField("nested_blobs_map").get()
-    assertEquals(HoodieSchemaType.MAP, nestedField.schema().getType)
-    val nestedMapType = nestedField.schema().getValueType
-    assertEquals(HoodieSchemaType.MAP, nestedMapType.getType)
-    assertEquals(HoodieSchemaType.BLOB, nestedMapType.getValueType.getType)
-  }
-
   /**
    * Validates the content of the blob fields to ensure the fields match our expectations.
    * @param dataType the StructType containing the blob fields to validate
@@ -157,12 +99,12 @@ class TestSchemaConverters {
     assertEquals(DataTypes.BinaryType, dataField.dataType)
     assertTrue(dataField.nullable)
     // reference is a nullable struct field
-    val referenceField = dataType.fields.find(_.name == HoodieSchema.Blob.EXTERNAL_FILE_REFERENCE).get
+    val referenceField = dataType.fields.find(_.name == HoodieSchema.Blob.EXTERNAL_REFERENCE).get
     assertEquals(new StructType(Array[StructField](
-      StructField(HoodieSchema.Blob.EXTERNAL_PATH, DataTypes.StringType, nullable = false),
-      StructField(HoodieSchema.Blob.EXTERNAL_PATH_OFFSET, DataTypes.LongType, nullable = true),
-      StructField(HoodieSchema.Blob.EXTERNAL_PATH_LENGTH, DataTypes.LongType, nullable = true),
-      StructField(HoodieSchema.Blob.EXTERNAL_PATH_IS_MANAGED, DataTypes.BooleanType, nullable = false)
+      StructField(HoodieSchema.Blob.EXTERNAL_REFERENCE_PATH, DataTypes.StringType, nullable = false),
+      StructField(HoodieSchema.Blob.EXTERNAL_REFERENCE_OFFSET, DataTypes.LongType, nullable = true),
+      StructField(HoodieSchema.Blob.EXTERNAL_REFERENCE_LENGTH, DataTypes.LongType, nullable = true),
+      StructField(HoodieSchema.Blob.EXTERNAL_REFERENCE_IS_MANAGED, DataTypes.BooleanType, nullable = false)
     )), referenceField.dataType)
     assertTrue(referenceField.nullable)
   }

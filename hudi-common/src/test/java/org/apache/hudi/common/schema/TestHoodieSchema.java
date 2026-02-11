@@ -21,6 +21,7 @@ package org.apache.hudi.common.schema;
 import org.apache.hudi.common.schema.HoodieSchema.VariantLogicalType;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieAvroSchemaException;
+import org.apache.hudi.internal.schema.HoodieSchemaException;
 
 import org.apache.avro.JsonProperties;
 import org.apache.avro.LogicalType;
@@ -1787,29 +1788,140 @@ public class TestHoodieSchema {
     assertEquals(HoodieSchemaType.BLOB, parsedBlobField.schema().getType());
   }
 
+  private static final String BLOB_JSON = "{"
+      + "\"type\":\"record\","
+      + "\"name\":\"blob\","
+      + "\"logicalType\":\"blob\","
+      + "\"fields\":["
+      + "  {\"name\":\"storage_type\",\"type\":\"string\"},"
+      + "  {\"name\":\"data\",\"type\":[\"null\",\"bytes\"],\"default\":null},"
+      + "  {\"name\":\"reference\",\"type\":[\"null\",{\"type\":\"record\",\"name\":\"reference\",\"fields\":["
+      + "    {\"name\":\"external_path\",\"type\":\"string\"},"
+      + "    {\"name\":\"offset\",\"type\":\"long\"},"
+      + "    {\"name\":\"length\",\"type\":\"long\"},"
+      + "    {\"name\":\"managed\",\"type\":\"boolean\"}"
+      + "  ]}],\"default\":null}"
+      + "]"
+      + "}";
+
   @Test
   public void testParseBlobFromJsonWithLogicalType() {
     // JSON representation of a Blob schema
-    String blobJson = "{"
-        + "\"type\":\"record\","
-        + "\"name\":\"blob\","
-        + "\"logicalType\":\"blob\","
-        + "\"fields\":["
-        + "  {\"name\":\"storage_type\",\"type\":\"string\"},"
-        + "  {\"name\":\"data\",\"type\":[\"null\",\"bytes\"],\"default\":null},"
-        + "  {\"name\":\"reference\",\"type\":[\"null\",{\"type\":\"record\",\"name\":\"reference\",\"fields\":["
-        + "    {\"name\":\"external_path\",\"type\":\"string\"},"
-        + "    {\"name\":\"offset\",\"type\":\"long\"},"
-        + "    {\"name\":\"length\",\"type\":\"long\"},"
-        + "    {\"name\":\"managed\",\"type\":\"boolean\"}"
-        + "  ]}],\"default\":null}"
-        + "]"
-        + "}";
-
-    HoodieSchema parsedSchema = HoodieSchema.parse(blobJson);
+    HoodieSchema parsedSchema = HoodieSchema.parse(BLOB_JSON);
 
     assertInstanceOf(HoodieSchema.Blob.class, parsedSchema);
     HoodieSchema.Blob parsedBlob = (HoodieSchema.Blob) parsedSchema;
     assertEquals(HoodieSchemaType.BLOB, parsedBlob.getType());
+  }
+
+  private static HoodieSchema createRecordWithBlob() {
+    return HoodieSchema.createRecord("record", null, null,
+        Arrays.asList(HoodieSchemaField.of("field1", HoodieSchema.create(HoodieSchemaType.INT)), HoodieSchemaField.of("field2", HoodieSchema.createBlob())));
+  }
+
+  @Test
+  public void testContainsBlobTypeDirectBlob() {
+    HoodieSchema blob = HoodieSchema.createBlob();
+    assertTrue(blob.containsBlobType());
+  }
+
+  @Test
+  public void testContainsBlobTypeInUnion() {
+    HoodieSchema unionWithBlob = HoodieSchema.createUnion(
+        HoodieSchema.create(HoodieSchemaType.STRING),
+        HoodieSchema.createBlob()
+    );
+    assertTrue(unionWithBlob.containsBlobType());
+
+    HoodieSchema unionNonBlob = HoodieSchema.createUnion(
+        HoodieSchema.create(HoodieSchemaType.STRING),
+        HoodieSchema.create(HoodieSchemaType.INT)
+    );
+    assertFalse(unionNonBlob.containsBlobType());
+  }
+
+  @Test
+  public void testContainsBlobTypeNullable() {
+    HoodieSchema nullableBlob = HoodieSchema.createNullable(HoodieSchema.createBlob());
+    assertTrue(nullableBlob.containsBlobType());
+
+    HoodieSchema nestedNullableBlob = HoodieSchema.createRecord("record", null, null, Arrays.asList(
+        HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.INT)),
+        HoodieSchemaField.of("data", HoodieSchema.createNullable(HoodieSchema.createBlob()))
+    ));
+    assertTrue(nestedNullableBlob.containsBlobType());
+  }
+
+  @Test
+  public void testContainsBlobTypeRecordWithoutBlob() {
+    HoodieSchema schema = HoodieSchema.createRecord("test", null, null, Arrays.asList(
+        HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.INT)),
+        HoodieSchemaField.of("name", HoodieSchema.create(HoodieSchemaType.STRING))
+    ));
+    assertFalse(schema.containsBlobType());
+  }
+
+  @Test
+  public void testContainsBlobTypeArray() {
+    assertFalse(HoodieSchema.createArray(HoodieSchema.create(HoodieSchemaType.STRING)).containsBlobType());
+
+    assertTrue(HoodieSchema.createArray(HoodieSchema.createBlob()).containsBlobType());
+
+    assertTrue(HoodieSchema.createArray(createRecordWithBlob()).containsBlobType());
+  }
+
+  @Test
+  public void testContainsBlobTypeMap() {
+    assertFalse(HoodieSchema.createMap(HoodieSchema.create(HoodieSchemaType.INT)).containsBlobType());
+
+    assertTrue(HoodieSchema.createMap(HoodieSchema.createBlob()).containsBlobType());
+
+    assertTrue(HoodieSchema.createMap(createRecordWithBlob()).containsBlobType());
+  }
+
+  @Test
+  public void testCreateArrayWithBlobTypeShouldFail() {
+    assertThrows(HoodieSchemaException.class, () -> HoodieSchema.createArray(HoodieSchema.createBlob()));
+
+    assertThrows(HoodieSchemaException.class, () -> HoodieSchema.createArray(createRecordWithBlob()));
+  }
+
+  @Test
+  public void testCreateMapWithBlobTypeShouldFail() {
+    assertThrows(HoodieSchemaException.class, () -> HoodieSchema.createMap(HoodieSchema.createBlob()));
+
+    assertThrows(HoodieSchemaException.class, () -> HoodieSchema.createMap(createRecordWithBlob()));
+  }
+
+  @Test
+  public void testParseRecordWithArrayOfBlobFieldShouldFail() {
+    String schemaJson = "{\"type\":\"record\",\"name\":\"test\",\"fields\":["
+        + "{\"name\":\"files\",\"type\":{\"type\":\"array\",\"items\":" + BLOB_JSON + "}}"
+        + "]}";
+    assertThrows(HoodieSchemaException.class, () -> HoodieSchema.parse(schemaJson));
+  }
+
+  @Test
+  public void testParseRecordWithMapOfBlobFieldShouldFail() {
+    String schemaJson = "{\"type\":\"record\",\"name\":\"test\",\"fields\":["
+        + "{\"name\":\"files\",\"type\":{\"type\":\"map\",\"values\":" + BLOB_JSON + "}}"
+        + "]}";
+    assertThrows(HoodieSchemaException.class, () -> HoodieSchema.parse(schemaJson));
+  }
+
+  @Test
+  public void testBuilderArrayWithBlobShouldFail() {
+    assertThrows(HoodieSchemaException.class, () ->
+      new HoodieSchema.Builder(HoodieSchemaType.ARRAY)
+          .setElementType(HoodieSchema.createBlob())
+          .build());
+  }
+
+  @Test
+  public void testBuilderMapWithBlobShouldFail() {
+    assertThrows(HoodieSchemaException.class, () ->
+      new HoodieSchema.Builder(HoodieSchemaType.MAP)
+          .setValueType(HoodieSchema.createBlob())
+          .build());
   }
 }
