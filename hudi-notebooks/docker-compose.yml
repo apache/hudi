@@ -101,6 +101,17 @@ services:
     networks:
       - hudi-datalake
 
+  presto:
+    image: apachehudi/presto:latest
+    container_name: presto
+    depends_on:
+      - hive-metastore
+      - minio
+    ports:
+      - "8086:8080"   # Trino Web UI
+    networks:
+      - hudi-datalake
+
 networks:
   hudi-datalake:
     name: hudi-datalake
