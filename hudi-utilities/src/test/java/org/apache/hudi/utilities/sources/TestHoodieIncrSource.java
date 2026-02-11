@@ -109,11 +109,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.mockito.ArgumentMatchers.anyLong;
-import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.reset;
-import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 public class TestHoodieIncrSource extends SparkClientFunctionalTestHarness {
@@ -969,7 +965,8 @@ public class TestHoodieIncrSource extends SparkClientFunctionalTestHarness {
     properties.putAll(extraProps);
     snapshotCheckPointImplClassOpt.map(className ->
         properties.setProperty(SnapshotLoadQuerySplitter.Config.SNAPSHOT_LOAD_QUERY_SPLITTER_CLASS_NAME, className));
-    HoodieIncrSource incrSource = new HoodieIncrSource(properties, jsc(), spark(), metricsOp.orElse(metrics), new DefaultStreamContext(new DummySchemaProvider(HoodieTestDataGenerator.HOODIE_SCHEMA), sourceProfile));
+    HoodieIncrSource incrSource = new HoodieIncrSource(properties, jsc(), spark(), metricsOp.orElse(metrics),
+        new DefaultStreamContext(new DummySchemaProvider(HoodieTestDataGenerator.HOODIE_SCHEMA), sourceProfile));
 
     // read everything until latest
     Pair<Option<Dataset<Row>>, Checkpoint> batchCheckPoint = incrSource.fetchNextBatch(checkpointToPull, 500);
