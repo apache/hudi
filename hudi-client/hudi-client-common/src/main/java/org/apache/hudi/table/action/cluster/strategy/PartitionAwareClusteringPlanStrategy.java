@@ -103,9 +103,9 @@ public abstract class PartitionAwareClusteringPlanStrategy<T,I,K,O> extends Clus
 
     if (!currentGroup.isEmpty()) {
       int numOutputGroups = getNumberOfOutputFileGroups(totalSizeSoFar, writeConfig.getClusteringTargetFileMaxBytes());
-        log.info("Adding final clustering group " + totalSizeSoFar + " max bytes: "
-            + writeConfig.getClusteringMaxBytesInGroup() + " num input slices: " + currentGroup.size() + " output groups: " + numOutputGroups);
-        fileSliceGroups.add(Pair.of(currentGroup, numOutputGroups));
+      log.info("Adding final clustering group " + totalSizeSoFar + " max bytes: "
+          + writeConfig.getClusteringMaxBytesInGroup() + " num input slices: " + currentGroup.size() + " output groups: " + numOutputGroups);
+      fileSliceGroups.add(Pair.of(currentGroup, numOutputGroups));
     }
 
     return Pair.of(fileSliceGroups.stream().filter(fileSliceGroup -> {
