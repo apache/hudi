@@ -51,7 +51,7 @@ import java.util.function.Supplier;
 import scala.Function1;
 
 import static org.apache.hudi.common.util.CollectionUtils.tail;
-import static org.apache.hudi.keygen.KeyGenUtils.DEFAULT_COMPOSITE_KEY_FILED_VALUE;
+import static org.apache.hudi.keygen.KeyGenUtils.DEFAULT_COMPOSITE_KEY_FIELD_VALUE;
 import static org.apache.hudi.keygen.KeyGenUtils.DEFAULT_RECORD_KEY_PARTS_SEPARATOR;
 import static org.apache.hudi.keygen.KeyGenUtils.EMPTY_RECORDKEY_PLACEHOLDER;
 import static org.apache.hudi.keygen.KeyGenUtils.NULL_RECORDKEY_PLACEHOLDER;
@@ -70,8 +70,6 @@ import static org.apache.hudi.keygen.KeyGenUtils.NULL_RECORDKEY_PLACEHOLDER;
 public abstract class BuiltinKeyGenerator extends BaseKeyGenerator implements SparkKeyGeneratorInterface {
 
   private static final Logger LOG = LoggerFactory.getLogger(BuiltinKeyGenerator.class);
-
-  private static final String COMPOSITE_KEY_FIELD_VALUE_INFIX = ":";
 
   protected static final String FIELDS_SEP = ",";
 
@@ -183,8 +181,10 @@ public abstract class BuiltinKeyGenerator extends BaseKeyGenerator implements Sp
    * NOTE: This method has to stay final (so that it's easier for JIT compiler to apply certain
    *       optimizations, like inlining)
    */
-  protected final String combineCompositeRecordKey(Object... recordKeyParts) {
+  protected final String combineCompositeRecordKey(boolean encodeSingleKeyFieldName,
+                                                   Object... recordKeyParts) {
     return combineCompositeRecordKeyInternal(
+        encodeSingleKeyFieldName,
         StringPartitionPathFormatter.JavaStringBuilder::new,
         BuiltinKeyGenerator::toString,
         BuiltinKeyGenerator::handleNullOrEmptyCompositeKeyPart,
@@ -197,8 +197,10 @@ public abstract class BuiltinKeyGenerator extends BaseKeyGenerator implements Sp
    * NOTE: This method has to stay final (so that it's easier for JIT compiler to apply certain
    *       optimizations, like inlining)
    */
-  protected final UTF8String combineCompositeRecordKeyUnsafe(Object... recordKeyParts) {
+  protected final UTF8String combineCompositeRecordKeyUnsafe(boolean encodeSingleKeyFieldName,
+                                                             Object... recordKeyParts) {
     return combineCompositeRecordKeyInternal(
+        encodeSingleKeyFieldName,
         UTF8StringPartitionPathFormatter.UTF8StringBuilder::new,
         BuiltinKeyGenerator::toUTF8String,
         BuiltinKeyGenerator::handleNullOrEmptyCompositeKeyPartUTF8,
@@ -220,7 +222,7 @@ public abstract class BuiltinKeyGenerator extends BaseKeyGenerator implements Sp
 
     PartitionPathFormatterBase.StringBuilder<S> sb = builderFactory.get();
     for (int i = 0; i < recordKeyParts.size(); ++i) {
-      sb.appendJava(fieldNames.get(i)).appendJava(DEFAULT_COMPOSITE_KEY_FILED_VALUE);
+      sb.appendJava(fieldNames.get(i)).appendJava(DEFAULT_COMPOSITE_KEY_FIELD_VALUE);
       // NOTE: If record-key part has already been a string [[toString]] will be a no-op
       sb.append(emptyKeyPartHandler.apply(converter.apply(recordKeyParts.get(i))));
 
@@ -233,23 +235,43 @@ public abstract class BuiltinKeyGenerator extends BaseKeyGenerator implements Sp
   }
 
   private <S> S combineCompositeRecordKeyInternal(
+      boolean encodeSingleKeyFieldName,
       Supplier<PartitionPathFormatterBase.StringBuilder<S>> builderFactory,
       Function<Object, S> converter,
       Function<S, S> emptyKeyPartHandler,
       Predicate<S> isNullOrEmptyKeyPartPredicate,
       Object... recordKeyParts
   ) {
-    boolean hasNonNullNonEmptyPart = false;
+    if (recordKeyParts.length == 0) {
+      throw new HoodieKeyException(String.format("All of the values for (%s) were either null or empty", recordKeyFields));
+    }
 
     PartitionPathFormatterBase.StringBuilder<S> sb = builderFactory.get();
+
+    if (recordKeyParts.length == 1) {
+      // NOTE: If record-key part has already been a string [[toString]] will be a no-op
+      S convertedKeyPart = emptyKeyPartHandler.apply(converter.apply(recordKeyParts[0]));
+
+      if (encodeSingleKeyFieldName) {
+        sb.appendJava(recordKeyFields.get(0));
+        sb.appendJava(DEFAULT_COMPOSITE_KEY_FIELD_VALUE);
+      }
+      sb.append(convertedKeyPart);
+      // This check is to validate that overall composite-key has at least one non-null, non-empty
+      // segment
+      if (isNullOrEmptyKeyPartPredicate.test(convertedKeyPart)) {
+        throw new HoodieKeyException(String.format("All of the values for (%s) were either null or empty", recordKeyFields));
+      }
+      return sb.build();
+    }
+
+    boolean hasNonNullNonEmptyPart = false;
     for (int i = 0; i < recordKeyParts.length; ++i) {
       // NOTE: If record-key part has already been a string [[toString]] will be a no-op
       S convertedKeyPart = emptyKeyPartHandler.apply(converter.apply(recordKeyParts[i]));
 
-      if (recordKeyParts.length > 1) {
-        sb.appendJava(recordKeyFields.get(i));
-        sb.appendJava(COMPOSITE_KEY_FIELD_VALUE_INFIX);
-      }
+      sb.appendJava(recordKeyFields.get(i));
+      sb.appendJava(DEFAULT_COMPOSITE_KEY_FIELD_VALUE);
       sb.append(convertedKeyPart);
       // This check is to validate that overall composite-key has at least one non-null, non-empty
       // segment
