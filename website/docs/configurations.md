@@ -22,6 +22,7 @@ It helps to have a central configuration file for your common cross job configur
 
 Hudi always loads the configuration file under default directory `file:/etc/hudi/conf`, if exists, to set the default configs. Besides, you can specify another configuration directory location by setting the `HUDI_CONF_DIR` environment variable. The configs stored in `HUDI_CONF_DIR/hudi-defaults.conf` are loaded, overriding any configs already set by the config file in the default directory.
 - [**Spark Datasource Configs**](#SPARK_DATASOURCE): These configs control the Hudi Spark Datasource, providing ability to define keys/partitioning, pick out the write operation, specify how to merge records or choosing query type to read.
+- [**Parquet Configs**](#PARQUET_CONFIG): These configs makes it possible to bring native parquet features
 - [**Flink Sql Configs**](#FLINK_SQL): These configs control the Hudi Flink SQL source/sink connectors, providing ability to define record keys, pick out the write operation, specify how to merge records, enable/disable asynchronous compaction or choosing query type to read.
 - [**Write Client Configs**](#WRITE_CLIENT): Internally, the Hudi datasource uses a RDD based HoodieWriteClient API to actually perform writes to storage. These configs provide deep control over lower level aspects like file sizing, compression, parallelism, compaction, write schema, cleaning etc. Although Hudi provides sane defaults, from time-time these configs may need to be tweaked to optimize for specific workloads.
 - [**Reader Configs**](#READER): Please fill in the description for Config Group Name: Reader Configs
@@ -161,6 +162,7 @@ Options useful for reading tables via `read.format.option(...)`
 ### Write Options {#Write-Options}
 You can pass down any of the WriteClient level configs directly using `options()` or `option(k,v)` methods.
 
+
 ```java
 inputDF.write()
 .format("org.apache.hudi")
@@ -272,6 +274,9 @@ The following set of configurations help validate new data before commits.
 | [hoodie.precommit.validators.inequality.sql.queries](#hoodieprecommitvalidatorsinequalitysqlqueries)    |         | Spark SQL queries to run on table before committing new data to validate state before and after commit.Multiple queries separated by ';' delimiter are supported.Example query: 'select count(*) from \&lt;TABLE_NAME\&gt; where col=null'Note \&lt;TABLE_NAME\&gt; variable is expected to be present in query.<br />`Config Param: INEQUALITY_SQL_QUERIES`                            |
 | [hoodie.precommit.validators.single.value.sql.queries](#hoodieprecommitvalidatorssinglevaluesqlqueries) |         | Spark SQL queries to run on table before committing new data to validate state after commit.Multiple queries separated by ';' delimiter are supported.Expected result is included as part of query separated by '#'. Example query: 'query1#result1:query2#result2'Note \&lt;TABLE_NAME\&gt; variable is expected to be present in query.<br />`Config Param: SINGLE_VALUE_SQL_QUERIES` |
 ---
+
+## Parquet Config {#PARQUET_CONFIG}
+Hudi supports [parquet modular encryption](/docs/encryption) and [parquet bloom filters](/docs/parquet_bloom) through hadoop configurations.
 
 ## Flink Sql Configs {#FLINK_SQL}
 These configs control the Hudi Flink SQL source/sink connectors, providing ability to define record keys, pick out the write operation, specify how to merge records, enable/disable asynchronous compaction or choosing query type to read.
