@@ -150,7 +150,7 @@ class TestHoodieCreateRecordUtils {
       s"Expected IllegalArgumentException but got ${exception.getClass.getName}")
     assertTrue(exception.getMessage.contains("has null value for record key"),
       s"Exception message should mention null value for record key. Actual: ${exception.getMessage}")
-    assertTrue(exception.getMessage.contains("Please ensure all records have non-null values for the precombine field"),
+    assertTrue(exception.getMessage.contains("Please ensure all records have non-null values for the ordering field"),
       s"Exception message should provide guidance. Actual: ${exception.getMessage}")
     assertTrue(exception.getMessage.contains("OverwriteWithLatestAvroPayload"),
       s"Exception message should suggest alternative payload class. Actual: ${exception.getMessage}")

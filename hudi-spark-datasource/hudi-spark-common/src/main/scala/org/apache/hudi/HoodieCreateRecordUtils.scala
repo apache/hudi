@@ -158,8 +158,8 @@ object HoodieCreateRecordUtils {
                       consistentLogicalTimestampEnabled)
                     if (fieldVal == null) {
                       throw new IllegalArgumentException(
-                        s"Precombine/ordering field '$field' has null value for record key '${hoodieKey.getRecordKey}'. " +
-                          s"Please ensure all records have non-null values for the precombine field, " +
+                        s"Ordering field '$field' has null value for record key '${hoodieKey.getRecordKey}'. " +
+                          s"Please ensure all records have non-null values for the ordering field, " +
                           s"or use a payload class that doesn't require ordering (e.g., OverwriteWithLatestAvroPayload).")
                     }
                     fieldVal.asInstanceOf[Comparable[_]]

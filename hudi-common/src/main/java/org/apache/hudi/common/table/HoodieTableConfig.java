@@ -61,6 +61,7 @@ import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.keygen.constant.KeyGeneratorType;
 import org.apache.hudi.metadata.MetadataPartitionType;
+import org.apache.hudi.storage.HoodieInstantWriter;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 
@@ -84,6 +85,7 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.ServiceLoader;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiConsumer;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -129,8 +131,6 @@ public class HoodieTableConfig extends HoodieConfig {
 
   public static final String HOODIE_PROPERTIES_FILE = "hoodie.properties";
   public static final String HOODIE_PROPERTIES_FILE_BACKUP = "hoodie.properties.backup";
-  // suffix to add at end for the config file while creating the temp properties file
-  private static final String TEMP_SUFFIX = ".temp";
   public static final String HOODIE_WRITE_TABLE_NAME_KEY = "hoodie.datasource.write.table.name";
   public static final String HOODIE_TABLE_NAME_KEY = "hoodie.table.name";
   public static final String PARTIAL_UPDATE_UNAVAILABLE_VALUE = "hoodie.write.partial.update.unavailable.value";
@@ -541,15 +541,13 @@ public class HoodieTableConfig extends HoodieConfig {
       // 3. delete the properties file, reads will go to the backup, until we are done.
       deleteFile(storage, cfgPath);
 
-      // 4. Upsert and save back, by writing to a temporary file and then renaming it
-      String checksum;
-      StoragePath tmpCfgPath = new StoragePath(cfgPath.toString() + TEMP_SUFFIX);
-      try (OutputStream out = storage.create(tmpCfgPath, true)) {
-        propsToUpdate.accept(props, modifyProps);
-        propsToDelete.forEach(propToDelete -> props.remove(propToDelete));
-        checksum = storeProperties(props, out, tmpCfgPath);
-      }
-      storage.rename(tmpCfgPath, cfgPath);
+      // 4. Upsert and save back using createImmutableFileInPath for atomic writes
+      propsToUpdate.accept(props, modifyProps);
+      propsToDelete.forEach(propToDelete -> props.remove(propToDelete));
+      AtomicReference<String> checksumRef = new AtomicReference<>();
+      HoodieInstantWriter writer = outputStream -> checksumRef.set(storeProperties(props, outputStream, cfgPath));
+      storage.createImmutableFileInPath(cfgPath, Option.of(writer));
+      String checksum = checksumRef.get();
       LOG.warn(String.format("%s modified to: %s (at %s)", cfgPath.getName(), props, cfgPath.getParent()));
 
       // 5. verify and remove backup.
