@@ -388,7 +388,7 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
       validateSchemaAndProperties(tableName, storageSchema, inputFormatClass, outputFormatClass, serdeClass, serdeProperties, tableProperties);
       // drop and recreate the actual table
       dropTable(tableName);
-      createTable(tableName, storageSchema, inputFormatClass, outputFormatClass, serdeClass, serdeProperties, tableProperties)
+      createTable(tableName, storageSchema, inputFormatClass, outputFormatClass, serdeClass, serdeProperties, tableProperties);
     } catch (Exception e) {
       throw new HoodieGlueSyncException("Fail to recreate the table" + tableId(databaseName, tableName), e);
     }
@@ -621,6 +621,16 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
   @Override
   public void deleteLastReplicatedTimeStamp(String tableName) {
     throw new UnsupportedOperationException("Not supported: `deleteLastReplicatedTimeStamp`");
+  }
+
+  @Override
+  public String getTableLocation(String tableName) {
+    try {
+      Table table = getTable(awsGlue, databaseName, tableName);
+      return table.storageDescriptor().location();
+    } catch (Exception e) {
+      throw new HoodieGlueSyncException("Fail to get base path for the table " + tableId(databaseName, tableName), e);
+    }
   }
 
   private List<Column> getColumnsFromSchema(Map<String, String> mapSchema) {
