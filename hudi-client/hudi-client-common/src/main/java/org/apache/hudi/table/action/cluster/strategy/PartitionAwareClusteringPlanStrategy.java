@@ -109,7 +109,7 @@ public abstract class PartitionAwareClusteringPlanStrategy<T,I,K,O> extends Clus
     }
 
     return Pair.of(fileSliceGroups.stream().filter(fileSliceGroup -> {
-      if (fileSliceGroup.getLeft().size() == 1 && fileSliceGroup.getRight() == 1 && !writeConfig.isSingleGroupClusteringEnabled()) {
+      if (fileSliceGroup.getLeft().size() == 1 && fileSliceGroup.getRight() == 1 && !writeConfig.shouldClusteringSingleGroup()) {
         FileSlice targetedFileSlice = fileSliceGroup.getLeft().get(0);
         long size = targetedFileSlice.getBaseFile().isPresent() ? targetedFileSlice.getBaseFile().get().getFileSize() : writeConfig.getParquetMaxFileSize();
         log.info(String.format("Removing clustering group due to input and output slices both being 1 and single group clustering is disabled."
