@@ -37,6 +37,118 @@ import java.io.File
 
 class TestInsertTable extends HoodieSparkSqlTestBase {
 
+  test("Test table type name incase-sensitive test") {
+    withTempDir { tmp =>
+      val targetTable = generateTableName
+      val tablePath = s"${tmp.getCanonicalPath}/$targetTable"
+
+      spark.sql(
+        s"""
+           |create table ${targetTable} (
+           |  `id` string,
+           |  `name` string,
+           |  `dt` bigint,
+           |  `day` STRING,
+           |  `hour` INT
+           |) using hudi
+           |tblproperties (
+           |  'primaryKey' = 'id',
+           |  'type' = 'MOR',
+           |  'preCombineField'='dt',
+           |  'hoodie.index.type' = 'BUCKET',
+           |  'hoodie.bucket.index.hash.field' = 'id',
+           |  'hoodie.bucket.index.num.buckets'=512,
+           |   ${HoodieWriteConfig.ENABLE_COMPLEX_KEYGEN_VALIDATION.key()} = 'false'
+           | )
+             partitioned by (`day`,`hour`)
+             location '${tablePath}'
+             """.stripMargin)
+
+      spark.sql(
+        s"""
+           |insert into ${targetTable}
+           |select '1' as id, 'aa' as name, 123 as dt, '2024-02-19' as `day`, 10 as `hour`
+           |""".stripMargin)
+
+      spark.sql(
+        s"""
+           |merge into ${targetTable} as target
+           |using (
+           |select '2' as id, 'bb' as name, 456 as dt, '2024-02-19' as `day`, 10 as `hour`
+           |) as source
+           |on target.id = source.id
+           |when matched then update set *
+           |when not matched then insert *
+           |""".stripMargin
+      )
+
+      // check result after insert and merge data into target table
+      checkAnswer(s"select id, name, dt, day, hour from $targetTable limit 10")(
+        Seq("1", "aa", 123, "2024-02-19", 10),
+        Seq("2", "bb", 456, "2024-02-19", 10)
+      )
+    }
+  }
+
+  test("Test FirstValueAvroPayload test") {
+    withTempDir { tmp =>
+      val targetTable = generateTableName
+      val tablePath = s"${tmp.getCanonicalPath}/$targetTable"
+
+      spark.sql(
+        s"""
+           |create table ${targetTable} (
+           |  `id` string,
+           |  `name` string,
+           |  `dt` bigint,
+           |  `day` STRING,
+           |  `hour` INT
+           |) using hudi
+           |tblproperties (
+           |  'primaryKey' = 'id',
+           |  'type' = 'mor',
+           |  'preCombineField'='dt',
+           |  'hoodie.index.type' = 'BUCKET',
+           |  'hoodie.bucket.index.hash.field' = 'id',
+           |  'hoodie.bucket.index.num.buckets'=12,
+           |  'hoodie.datasource.write.payload.class'='org.apache.hudi.common.model.FirstValueAvroPayload',
+           |   ${HoodieWriteConfig.ENABLE_COMPLEX_KEYGEN_VALIDATION.key()} = 'false'
+           | )
+           partitioned by (`day`,`hour`)
+           location '${tablePath}'
+           """.stripMargin)
+
+      spark.sql("set hoodie.file.group.reader.enabled=false")
+
+      spark.sql(
+        s"""
+           |insert into ${targetTable}
+           |select '1' as id, 'aa' as name, 123 as dt, '2024-02-19' as `day`, 10 as `hour`
+           |""".stripMargin)
+
+      spark.sql(
+        s"""
+           |insert into ${targetTable}
+           |select '1' as id, 'bb' as name, 123 as dt, '2024-02-19' as `day`, 10 as `hour`
+           |""".stripMargin)
+
+      checkAnswer(s"select id, name, dt, day, hour from $targetTable limit 10")(
+        Seq("1", "aa", 123, "2024-02-19", 10)
+      )
+
+      spark.sql(
+        s"""
+           |insert into ${targetTable}
+           |select '1' as id, 'cc' as name, 124 as dt, '2024-02-19' as `day`, 10 as `hour`
+           |""".stripMargin)
+
+      checkAnswer(s"select id, name, dt, day, hour from $targetTable limit 10")(
+        Seq("1", "cc", 124, "2024-02-19", 10)
+      )
+
+    }
+  }
+
   test("Test Insert Into with values") {
     withRecordType()(withTempDir { tmp =>
       val tableName = generateTableName
@@ -193,7 +305,10 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
            |  ht string,
            |  ts long
            |) using hudi
-           | tblproperties (primaryKey = 'id')
+           | tblproperties (
+           |  primaryKey = 'id',
+           |  ${HoodieWriteConfig.ENABLE_COMPLEX_KEYGEN_VALIDATION.key()} = 'false'
+           |)
            | partitioned by (dt, ht)
            | location '${tmp.getCanonicalPath}'
        """.stripMargin)
@@ -520,7 +635,8 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
                |) using hudi
                | tblproperties (
                |  type = '$tableType',
-               |  primaryKey = 'id'
+               |  primaryKey = 'id',
+               |  ${HoodieWriteConfig.ENABLE_COMPLEX_KEYGEN_VALIDATION.key()} = 'false'
                | )
                | partitioned by (dt, hh)
           """.stripMargin
@@ -818,7 +934,8 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
                  |) using hudi
                  | tblproperties (
                  |  type = '$tableType',
-                 |  primaryKey = 'id'
+                 |  primaryKey = 'id',
+                 |  ${HoodieWriteConfig.ENABLE_COMPLEX_KEYGEN_VALIDATION.key()} = 'false'
                  | )
                  | partitioned by (dt, hh)
                  | location '${tmp.getCanonicalPath}/$tableMultiPartition'
@@ -1193,6 +1310,7 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
           .option(HoodieWriteConfig.INSERT_PARALLELISM_VALUE.key, "1")
           .option(HoodieWriteConfig.UPSERT_PARALLELISM_VALUE.key, "1")
           .option(HoodieWriteConfig.ALLOW_OPERATION_METADATA_FIELD.key, "true")
+          .option(HoodieWriteConfig.ENABLE_COMPLEX_KEYGEN_VALIDATION.key(), "false")
           .mode(SaveMode.Overwrite)
           .save(tablePath)
 
@@ -2186,6 +2304,45 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
             dupPolicy, true)
         }
       }
+    })
+  }
+
+  test("Test various data types as partition fields") {
+    withRecordType()(withTempDir { tmp =>
+      val tableName = generateTableName
+      spark.sql(
+        s"""
+           |CREATE TABLE $tableName (
+           |  id INT,
+           |  boolean_field BOOLEAN,
+           |  float_field FLOAT,
+           |  byte_field BYTE,
+           |  short_field SHORT,
+           |  decimal_field DECIMAL(10, 5),
+           |  date_field DATE,
+           |  string_field STRING,
+           |  timestamp_field TIMESTAMP
+           |) USING hudi
+           | TBLPROPERTIES (
+           | primaryKey = 'id',
+           | ${HoodieWriteConfig.ENABLE_COMPLEX_KEYGEN_VALIDATION.key()} = 'false'
+           |)
+           | PARTITIONED BY (boolean_field, float_field, byte_field, short_field, decimal_field, date_field, string_field, timestamp_field)
+           |LOCATION '${tmp.getCanonicalPath}'
+     """.stripMargin)
+
+      // Insert data into partitioned table
+      spark.sql(
+        s"""
+           |INSERT INTO $tableName VALUES
+           |(1, TRUE, CAST(1.0 as FLOAT), 1, 1, 1234.56789, DATE '2021-01-05', 'partition1', TIMESTAMP '2021-01-05 10:00:00'),
+           |(2, FALSE,CAST(2.0 as FLOAT), 2, 2, 6789.12345, DATE '2021-01-06', 'partition2', TIMESTAMP '2021-01-06 11:00:00')
+     """.stripMargin)
+
+      checkAnswer(s"SELECT id, boolean_field FROM $tableName ORDER BY id")(
+        Seq(1, true),
+        Seq(2, false)
+      )
     })
   }
 

@@ -56,7 +56,6 @@ import org.junit.jupiter.params.provider.{Arguments, CsvSource, MethodSource, Va
 
 import java.util.Properties
 import java.util.function.Consumer
-import scala.collection.JavaConversions._
 import scala.collection.JavaConverters._
 import scala.util.Random
 
@@ -122,6 +121,7 @@ class TestHoodieFileIndex extends HoodieSparkClientTestBase with ScalaAssertionS
       .option(TIMESTAMP_TYPE_FIELD.key, TimestampType.DATE_STRING.name())
       .option(TIMESTAMP_INPUT_DATE_FORMAT.key, "yyyy/MM/dd")
       .option(TIMESTAMP_OUTPUT_DATE_FORMAT.key, "yyyy-MM-dd")
+      .option(HoodieWriteConfig.ENABLE_COMPLEX_KEYGEN_VALIDATION.key(), "false")
       .mode(SaveMode.Overwrite)
 
     if (isNullOrEmpty(keyGenerator)) {
@@ -315,7 +315,8 @@ class TestHoodieFileIndex extends HoodieSparkClientTestBase with ScalaAssertionS
       RECORDKEY_FIELD.key -> "id",
       PRECOMBINE_FIELD.key -> "version",
       PARTITIONPATH_FIELD.key -> "dt,hh",
-      HoodieMetadataConfig.ENABLE.key -> useMetadataTable.toString
+      HoodieMetadataConfig.ENABLE.key -> useMetadataTable.toString,
+      HoodieWriteConfig.ENABLE_COMPLEX_KEYGEN_VALIDATION.key -> "false"
     )
 
     val readerOpts: Map[String, String] = queryOpts ++ Map(
@@ -458,7 +459,8 @@ class TestHoodieFileIndex extends HoodieSparkClientTestBase with ScalaAssertionS
       RECORDKEY_FIELD.key -> "id",
       PRECOMBINE_FIELD.key -> "version",
       PARTITIONPATH_FIELD.key -> partitionNames.mkString(","),
-      HoodieMetadataConfig.ENABLE.key -> useMetadataTable.toString
+      HoodieMetadataConfig.ENABLE.key -> useMetadataTable.toString,
+      HoodieWriteConfig.ENABLE_COMPLEX_KEYGEN_VALIDATION.key() -> "false"
     )
 
     val readerOpts: Map[String, String] = queryOpts ++ Map(
@@ -512,7 +514,8 @@ class TestHoodieFileIndex extends HoodieSparkClientTestBase with ScalaAssertionS
       DataSourceWriteOptions.OPERATION.key -> DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,
       RECORDKEY_FIELD.key -> "id",
       PRECOMBINE_FIELD.key -> "version",
-      PARTITIONPATH_FIELD.key -> "dt,hh"
+      PARTITIONPATH_FIELD.key -> "dt,hh",
+      HoodieWriteConfig.ENABLE_COMPLEX_KEYGEN_VALIDATION.key() -> "false"
     )
 
     val readerOpts: Map[String, String] = queryOpts ++ Map(
@@ -572,7 +575,8 @@ class TestHoodieFileIndex extends HoodieSparkClientTestBase with ScalaAssertionS
       HoodieMetadataConfig.ENABLE.key -> enableMetadataTable.toString,
       RECORDKEY_FIELD.key -> "id",
       PARTITIONPATH_FIELD.key -> "region_code,dt",
-      DataSourceWriteOptions.PRECOMBINE_FIELD.key -> "price"
+      DataSourceWriteOptions.PRECOMBINE_FIELD.key -> "price",
+      HoodieWriteConfig.ENABLE_COMPLEX_KEYGEN_VALIDATION.key() -> "false"
     )
 
     val readerOpts: Map[String, String] = queryOpts ++ Map(
