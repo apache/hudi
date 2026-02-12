@@ -1003,26 +1003,6 @@ public class TestHoodieSchema {
     assertNotEquals(v1, "string");
   }
 
-  @Test
-  void testVectorRoundTripSerializationToJson() throws Exception {
-    // Create vector with DOUBLE element type
-    HoodieSchema.Vector original = HoodieSchema.createVector(512, HoodieSchema.Vector.VectorElementType.DOUBLE);
-
-    // Serialize to JSON
-    String jsonSchema = original.toString();
-    assertNotNull(jsonSchema);
-
-    // Parse from JSON
-    HoodieSchema parsed = HoodieSchema.parse(jsonSchema);
-
-    // Verify
-    assertTrue(parsed instanceof HoodieSchema.Vector);
-    assertEquals(original, parsed);
-
-    HoodieSchema.Vector parsedVector = (HoodieSchema.Vector) parsed;
-    assertEquals(512, parsedVector.getDimension());
-    assertEquals(HoodieSchema.Vector.VectorElementType.DOUBLE, parsedVector.getVectorElementType());
-  }
 
   @Test
   void testVectorSerialization() throws Exception {
@@ -1070,6 +1050,16 @@ public class TestHoodieSchema {
     assertTrue(embeddingSchema instanceof HoodieSchema.Vector);
     assertEquals(128, ((HoodieSchema.Vector) embeddingSchema).getDimension());
 
+    // Round-trip record with vector field through JSON
+    String recordJson = recordSchema.toString();
+    HoodieSchema parsedRecord = HoodieSchema.parse(recordJson);
+    assertEquals(recordSchema, parsedRecord);
+    Schema.Field parsedEmbeddingField = parsedRecord.getAvroSchema().getField("embedding");
+    assertNotNull(parsedEmbeddingField);
+    HoodieSchema parsedEmbedding = HoodieSchema.fromAvroSchema(parsedEmbeddingField.schema());
+    assertTrue(parsedEmbedding instanceof HoodieSchema.Vector);
+    assertEquals(128, ((HoodieSchema.Vector) parsedEmbedding).getDimension());
+
     // Test vector in array
     HoodieSchema arraySchema = HoodieSchema.createArray(vectorSchema);
     assertEquals(HoodieSchemaType.ARRAY, arraySchema.getType());
@@ -1077,12 +1067,28 @@ public class TestHoodieSchema {
     assertTrue(arrayElement instanceof HoodieSchema.Vector);
     assertEquals(128, ((HoodieSchema.Vector) arrayElement).getDimension());
 
+    // Round-trip array of vectors through JSON
+    String arrayJson = arraySchema.toString();
+    HoodieSchema parsedArray = HoodieSchema.parse(arrayJson);
+    assertEquals(arraySchema, parsedArray);
+    HoodieSchema parsedArrayElement = parsedArray.getElementType();
+    assertTrue(parsedArrayElement instanceof HoodieSchema.Vector);
+    assertEquals(128, ((HoodieSchema.Vector) parsedArrayElement).getDimension());
+
     // Test vector in map
     HoodieSchema mapSchema = HoodieSchema.createMap(vectorSchema);
     assertEquals(HoodieSchemaType.MAP, mapSchema.getType());
     HoodieSchema mapValue = mapSchema.getValueType();
     assertTrue(mapValue instanceof HoodieSchema.Vector);
     assertEquals(128, ((HoodieSchema.Vector) mapValue).getDimension());
+
+    // Round-trip map with vector values through JSON
+    String mapJson = mapSchema.toString();
+    HoodieSchema parsedMap = HoodieSchema.parse(mapJson);
+    assertEquals(mapSchema, parsedMap);
+    HoodieSchema parsedMapValue = parsedMap.getValueType();
+    assertTrue(parsedMapValue instanceof HoodieSchema.Vector);
+    assertEquals(128, ((HoodieSchema.Vector) parsedMapValue).getDimension());
   }
 
   @Test
