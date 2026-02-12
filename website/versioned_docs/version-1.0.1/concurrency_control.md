@@ -174,7 +174,7 @@ A single writer with all table services such as cleaning, clustering, compaction
 
 ### Async table services
 
-Hudi provides the option of running the table services in an async fashion, where most of the heavy lifting (e.g actually rewriting the columnar data by compaction service) is done asynchronously. In this model, the async deployment eliminates any repeated wasteful retries and optimizes the table using clustering techniques while a single writer consumes the writes to the table without having to be blocked by such table services. This model avoids the need for taking an [external lock](concurrency_control.md#external-locking-and-lock-providers) to control concurrency and avoids the need to separately orchestrate and monitor offline table services jobs..
+Hudi provides the option of running the table services in an async fashion, where most of the heavy lifting (e.g actually rewriting the columnar data by compaction service) is done asynchronously. In this model, the async deployment eliminates any repeated wasteful retries and optimizes the table using clustering techniques while a single writer consumes the writes to the table without having to be blocked by such table services. This model avoids the need for taking an [external lock](concurrency_control.md#distributed-locking) to control concurrency and avoids the need to separately orchestrate and monitor offline table services jobs..
 
 A single writer along with async table services runs in the same process. For example, you can have a  Hudi Streamer in continuous mode write to a MOR table using async compaction; you can use Spark Streaming (where [compaction](https://hudi.apache.org/docs/compaction) is async by default), and you can use Flink streaming or your own job setup and enable async table services inside the same writer.
 
@@ -195,7 +195,7 @@ In this model, the following are the guarantees on [write operations](https://hu
 Hudi has introduced a new concurrency mode `NON_BLOCKING_CONCURRENCY_CONTROL`, where unlike OCC, multiple writers can
 operate on the table with non-blocking conflict resolution. The writers can write into the same file group with the
 conflicts resolved automatically by the query reader and the compactor. The new concurrency mode is currently
-available for preview in version 1.0.1-beta only. You can read more about it under section [Model C: Multi-writer](concurrency_control.md#model-c-multi-writer).
+available for preview in version 1.0.1-beta only. You can read more about it under section [Model C: Multi-writer](concurrency_control.md#full-on-multi-writer--async-table-services).
 
 It is not always possible to serialize all write operations to a table (such as UPSERT, INSERT or DELETE) into the same write process and therefore, multi-writing capability may be required. 
 In multi-writing, disparate distributed processes run in parallel or overlapping time windows to write to the same table. In such cases, an external locking mechanism is a must to safely 

@@ -59,7 +59,7 @@ latency with data skipping. Two new indices are added to the metadata table
 They are disabled by default. You can enable them by setting `hoodie.metadata.index.bloom.filter.enable`
 and `hoodie.metadata.index.column.stats.enable` to `true`, respectively.
 
-*Refer to the [metadata table guide](/docs/metadata#deployment-considerations-for-metadata-table) for detailed instructions on upgrade and
+*Refer to the [metadata table guide](/docs/metadata) for detailed instructions on upgrade and
 deployment.*
 
 ### Data Skipping with Metadata Table

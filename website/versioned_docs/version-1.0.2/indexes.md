@@ -7,7 +7,7 @@ toc_max_heading_level: 4
 
 In databases, indexes are auxiliary data structures maintained to quickly locate records needed, without reading unnecessary data
 from storage. Given that Hudi’s design has been heavily optimized for handling mutable change streams, with different
-write patterns, Hudi considers [indexing](indexes.md#indexing) as an integral part of its design and has uniquely supported
+write patterns, Hudi considers [indexing](indexes.md) as an integral part of its design and has uniquely supported
 [indexing capabilities](https://hudi.apache.org/blog/2020/11/11/hudi-indexing-mechanisms/) from its inception, to speed
 up writes on the [data lakehouse](https://hudi.apache.org/blog/2024/07/11/what-is-a-data-lakehouse/), while still providing
 columnar query performance.
@@ -171,7 +171,7 @@ HBase index are by nature a global index.
 
 For Spark DataSource, Spark SQL, Hudi Streamer and Structured Streaming following are the key configs that control
 indexing behavior. Please refer to [Advanced Configs](https://hudi.apache.org/docs/next/configurations#Common-Index-Configs-advanced-configs)
-for more details. All these, support the index types mentioned [above](indexes.md#index-types-in-hudi).
+for more details. All these, support the index types mentioned [above](indexes.md).
 
 | Config Name                                                                          | Default                                                                                         | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
 | ------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------- |------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
