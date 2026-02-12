@@ -80,7 +80,7 @@ public class TestBatchReader {
     Configuration config = new Configuration();
     config.set(FlinkOptions.SOURCE_READER_FETCH_BATCH_RECORD_COUNT, 50);
 
-    HoodieBatchReader<String> batchReader = new DefaultHoodieBatchReader<>(config);
+    HoodieBatchReader<String> batchReader = new DefaultHoodieBatchReader<>(config, (a) -> a);
 
     List<String> data = createTestData(150);
     HoodieSourceSplit split = createTestSplit(0);
@@ -117,7 +117,7 @@ public class TestBatchReader {
     Configuration config = new Configuration();
     config.set(FlinkOptions.SOURCE_READER_FETCH_BATCH_RECORD_COUNT, 10);
 
-    HoodieBatchReader<Integer> intBatchReader = new DefaultHoodieBatchReader<>(config);
+    HoodieBatchReader<Integer> intBatchReader = new DefaultHoodieBatchReader<>(config, (a) -> a);
 
     List<Integer> intData = new ArrayList<>();
     for (int i = 0; i < 25; i++) {
@@ -151,7 +151,7 @@ public class TestBatchReader {
   public void testBatchReaderSerialization() {
     // BatchReader interface extends Serializable
     Configuration config = new Configuration();
-    HoodieBatchReader<String> batchReader = new DefaultHoodieBatchReader<>(config);
+    HoodieBatchReader<String> batchReader = new DefaultHoodieBatchReader<>(config, (a) -> a);
 
     // Verify it's serializable
     assertTrue(batchReader instanceof java.io.Serializable);
@@ -160,7 +160,7 @@ public class TestBatchReader {
   @Test
   public void testBatchReaderWithEmptyIterator() throws Exception {
     Configuration config = new Configuration();
-    HoodieBatchReader<String> batchReader = new DefaultHoodieBatchReader<>(config);
+    HoodieBatchReader<String> batchReader = new DefaultHoodieBatchReader<>(config, (a) -> a);
 
     HoodieSourceSplit split = createTestSplit(0);
     CloseableIterator<RecordsWithSplitIds<HoodieRecordWithPosition<String>>> batchIterator =
@@ -179,8 +179,8 @@ public class TestBatchReader {
     Configuration config2 = new Configuration();
     config2.set(FlinkOptions.SOURCE_READER_FETCH_BATCH_RECORD_COUNT, 20);
 
-    HoodieBatchReader<String> batchReader1 = new DefaultHoodieBatchReader<>(config1);
-    HoodieBatchReader<String> batchReader2 = new DefaultHoodieBatchReader<>(config2);
+    HoodieBatchReader<String> batchReader1 = new DefaultHoodieBatchReader<>(config1, (a) -> a);
+    HoodieBatchReader<String> batchReader2 = new DefaultHoodieBatchReader<>(config2, (a) -> a);
 
     List<String> data = createTestData(100);
 
@@ -216,7 +216,7 @@ public class TestBatchReader {
     Configuration config = new Configuration();
     config.set(FlinkOptions.SOURCE_READER_FETCH_BATCH_RECORD_COUNT, 5);
 
-    HoodieBatchReader<String> batchReader = new DefaultHoodieBatchReader<>(config);
+    HoodieBatchReader<String> batchReader = new DefaultHoodieBatchReader<>(config, (a) -> a);
 
     List<String> data = createTestData(10);
     HoodieSourceSplit split = createTestSplit(0);

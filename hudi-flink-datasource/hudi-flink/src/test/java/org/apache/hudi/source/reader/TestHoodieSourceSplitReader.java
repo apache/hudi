@@ -372,7 +372,7 @@ public class TestHoodieSourceSplitReader {
       readCount++;
       lastReadSplit = split;
       ClosableIterator<String> iterator = createClosableIterator(testData);
-      DefaultHoodieBatchReader<String> reader = new DefaultHoodieBatchReader<String>(new Configuration());
+      DefaultHoodieBatchReader<String> reader = new DefaultHoodieBatchReader<String>(new Configuration(), (a) -> a);
       return reader.batch(split, iterator);
     }
 
@@ -431,7 +431,7 @@ public class TestHoodieSourceSplitReader {
       ClosableIterator<String> iterator = createClosableIterator(testData);
       Configuration config = new Configuration();
       config.set(FlinkOptions.SOURCE_READER_FETCH_BATCH_RECORD_COUNT, batchSize);
-      DefaultHoodieBatchReader<String> reader = new DefaultHoodieBatchReader<String>(config);
+      DefaultHoodieBatchReader<String> reader = new DefaultHoodieBatchReader<String>(config, (a) -> a);
       return reader.batch(split, iterator);
     }
 
