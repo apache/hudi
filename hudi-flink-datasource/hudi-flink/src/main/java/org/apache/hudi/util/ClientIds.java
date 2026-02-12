@@ -200,7 +200,7 @@ public class ClientIds implements AutoCloseable, Serializable {
         // 1. If there are any zombie client ids, reuse the smallest one
         for (Path path : zombieHeartbeatPaths) {
           fs.delete(path, true);
-          LOG.warn("Delete inactive ckp metadata path: " + path);
+          LOG.warn("Deleting inactive checkpoint metadata path: {}", path);
         }
         return getClientId(zombieHeartbeatPaths.get(0));
       }

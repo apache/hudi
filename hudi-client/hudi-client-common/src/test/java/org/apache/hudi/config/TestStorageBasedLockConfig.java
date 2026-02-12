@@ -41,7 +41,7 @@ class TestStorageBasedLockConfig {
         .build();
 
     assertEquals(5 * 60, config.getValiditySeconds(), "Default lock validity should be 5 minutes");
-    assertEquals(30, config.getHeartbeatPollSeconds(), "Default heartbeat poll time should be 30 seconds");
+    assertEquals(30, config.getRenewIntervalSecs(), "Default heartbeat poll time should be 30 seconds");
   }
 
   @Test
@@ -49,7 +49,7 @@ class TestStorageBasedLockConfig {
     // Testing that custom values which differ from defaults can be read properly
     TypedProperties props = new TypedProperties();
     props.setProperty(StorageBasedLockConfig.VALIDITY_TIMEOUT_SECONDS.key(), "120");
-    props.setProperty(StorageBasedLockConfig.HEARTBEAT_POLL_SECONDS.key(), "10");
+    props.setProperty(StorageBasedLockConfig.RENEW_INTERVAL_SECS.key(), "10");
     props.setProperty(BASE_PATH.key(), "/hudi/table/basepath");
 
     StorageBasedLockConfig config = new StorageBasedLockConfig.Builder()
@@ -57,7 +57,7 @@ class TestStorageBasedLockConfig {
         .build();
 
     assertEquals(120, config.getValiditySeconds());
-    assertEquals(10, config.getHeartbeatPollSeconds());
+    assertEquals(10, config.getRenewIntervalSecs());
     assertEquals("/hudi/table/basepath", config.getHudiTableBasePath());
   }
 
@@ -81,7 +81,7 @@ class TestStorageBasedLockConfig {
     props.setProperty(BASE_PATH.key(), "/hudi/table/basepath");
     // Invalid config case: validity timeout is less than 10x of heartbeat poll period
     props.setProperty(StorageBasedLockConfig.VALIDITY_TIMEOUT_SECONDS.key(), "5");
-    props.setProperty(StorageBasedLockConfig.HEARTBEAT_POLL_SECONDS.key(), "3");
+    props.setProperty(StorageBasedLockConfig.RENEW_INTERVAL_SECS.key(), "3");
     StorageBasedLockConfig.Builder propsBuilder = new StorageBasedLockConfig.Builder();
 
     IllegalArgumentException exception = assertThrows(IllegalArgumentException.class,
@@ -89,13 +89,13 @@ class TestStorageBasedLockConfig {
     assertTrue(exception.getMessage().contains(StorageBasedLockConfig.VALIDITY_TIMEOUT_SECONDS.key()));
     // Invalid config case: validity timeout is less than 10 seconds
     props.setProperty(StorageBasedLockConfig.VALIDITY_TIMEOUT_SECONDS.key(), "9");
-    props.setProperty(StorageBasedLockConfig.HEARTBEAT_POLL_SECONDS.key(), "1");
+    props.setProperty(StorageBasedLockConfig.RENEW_INTERVAL_SECS.key(), "1");
     exception = assertThrows(IllegalArgumentException.class, () -> propsBuilder.fromProperties(props));
     assertTrue(exception.getMessage().contains(StorageBasedLockConfig.VALIDITY_TIMEOUT_SECONDS.key()));
     // Invalid config case: heartbeat poll period is less than 1 second
     props.setProperty(StorageBasedLockConfig.VALIDITY_TIMEOUT_SECONDS.key(), "10");
-    props.setProperty(StorageBasedLockConfig.HEARTBEAT_POLL_SECONDS.key(), "0");
+    props.setProperty(StorageBasedLockConfig.RENEW_INTERVAL_SECS.key(), "0");
     exception = assertThrows(IllegalArgumentException.class, () -> propsBuilder.fromProperties(props));
-    assertTrue(exception.getMessage().contains(StorageBasedLockConfig.HEARTBEAT_POLL_SECONDS.key()));
+    assertTrue(exception.getMessage().contains(StorageBasedLockConfig.RENEW_INTERVAL_SECS.key()));
   }
 }

@@ -94,7 +94,7 @@ public class TestLockProviderHeartbeatManager {
 
     assertTrue(manager.startHeartbeatForThread(Thread.currentThread()));
     assertFalse(manager.startHeartbeatForThread(Thread.currentThread()));
-    verify(mockLogger).warn("Owner {}: Heartbeat is already running.", LOGGER_ID);
+    verify(mockLogger).error("Owner {}: Heartbeat is already running.", LOGGER_ID);
   }
 
   @Test
@@ -114,7 +114,7 @@ public class TestLockProviderHeartbeatManager {
     manager = createDefaultManagerWithMocks(() -> true);
 
     assertFalse(manager.stopHeartbeat(true));
-    verify(mockLogger).warn("Owner {}: No active heartbeat task to stop.", LOGGER_ID);
+    verify(mockLogger).info("Owner {}: No active heartbeat task to stop.", LOGGER_ID);
   }
 
   @Test
@@ -132,7 +132,7 @@ public class TestLockProviderHeartbeatManager {
 
     // Call stop again
     assertFalse(manager.stopHeartbeat(true));
-    verify(mockLogger).warn("Owner {}: No active heartbeat task to stop.", LOGGER_ID);
+    verify(mockLogger).info("Owner {}: No active heartbeat task to stop.", LOGGER_ID);
   }
 
   @Test
@@ -212,7 +212,7 @@ public class TestLockProviderHeartbeatManager {
     // This call will wait for heartbeat task to stop itself, as the semaphore has already been acquired by the heartbeat task.
     assertFalse(manager.stopHeartbeat(true));
 
-    verify(mockLogger).warn("Owner {}: No active heartbeat task to stop.", LOGGER_ID);
+    verify(mockLogger).info("Owner {}: No active heartbeat task to stop.", LOGGER_ID);
     verify(mockLogger).debug(
             "Owner {}: Heartbeat started with interval: {} ms",
             "test-owner",

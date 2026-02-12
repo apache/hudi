@@ -156,7 +156,7 @@ public abstract class AbstractIndexingCatchupTask implements IndexingCatchupTask
     }
     if (!instant.isCompleted()) {
       try {
-        LOG.warn("instant not completed, reloading timeline " + instant);
+        LOG.info("instant not completed, reloading timeline {}", instant);
         reloadTimelineWithWait(instant);
       } catch (InterruptedException e) {
         throw new HoodieIndexException(String.format("Thread interrupted while running indexing check for instant: %s", instant), e);

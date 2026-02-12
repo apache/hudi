@@ -56,7 +56,7 @@ public class ClusteringPlanActionExecutor<T, I, K, O> extends BaseActionExecutor
   }
 
   protected Option<HoodieClusteringPlan> createClusteringPlan() {
-    LOG.info("Checking if clustering needs to be run on " + config.getBasePath());
+    LOG.info("Checking if clustering needs to be run on {}", config.getBasePath());
     Option<HoodieInstant> lastClusteringInstant =
         table.getActiveTimeline().getLastClusteringInstant();
 
@@ -65,20 +65,20 @@ public class ClusteringPlanActionExecutor<T, I, K, O> extends BaseActionExecutor
         .countInstants();
 
     if (config.inlineClusteringEnabled() && config.getInlineClusterMaxCommits() > commitsSinceLastClustering) {
-      LOG.warn("Not scheduling inline clustering as only " + commitsSinceLastClustering
-          + " commits was found since last clustering " + lastClusteringInstant + ". Waiting for "
-          + config.getInlineClusterMaxCommits());
+      LOG.info("Not scheduling inline clustering as only {} commits was found since last clustering {}. Waiting for {}",
+          commitsSinceLastClustering, lastClusteringInstant,
+          config.getInlineClusterMaxCommits());
       return Option.empty();
     }
 
     if (config.isAsyncClusteringEnabled() && config.getAsyncClusterMaxCommits() > commitsSinceLastClustering) {
-      LOG.warn("Not scheduling async clustering as only " + commitsSinceLastClustering
+      LOG.info("Not scheduling async clustering as only " + commitsSinceLastClustering
           + " commits was found since last clustering " + lastClusteringInstant + ". Waiting for "
           + config.getAsyncClusterMaxCommits());
       return Option.empty();
     }
 
-    LOG.info("Generating clustering plan for table " + config.getBasePath());
+    LOG.info("Generating clustering plan for table {}", config.getBasePath());
     ClusteringPlanStrategy strategy = (ClusteringPlanStrategy) ReflectionUtils.loadClass(
         ClusteringPlanStrategy.checkAndGetClusteringPlanStrategy(config),
             new Class<?>[] {HoodieTable.class, HoodieEngineContext.class, HoodieWriteConfig.class}, table, context, config);

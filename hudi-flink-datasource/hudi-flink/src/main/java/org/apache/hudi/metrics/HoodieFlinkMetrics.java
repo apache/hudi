@@ -44,14 +44,14 @@ public abstract class HoodieFlinkMetrics {
 
   protected void startTimer(String name) {
     if (timers.containsKey(name)) {
-      LOG.warn("Restarting timer for name: {}, override the value", name);
+      LOG.info("Restarting timer for name: {}, overriding the existing value", name);
     }
     timers.put(name, System.currentTimeMillis());
   }
 
   protected long stopTimer(String name) {
     if (!timers.containsKey(name)) {
-      LOG.warn("Cannot found name {} in timer, potentially caused by inconsistent call", name);
+      LOG.warn("Cannot find name {} in timer, potentially caused by inconsistent call", name);
       return 0;
     }
     long costs = System.currentTimeMillis() - timers.get(name);

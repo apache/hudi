@@ -441,7 +441,7 @@ public class HoodieHiveCatalog extends AbstractCatalog {
       }
       schema = builder.build();
     } else {
-      LOG.warn("{} does not have any hoodie schema, and use hive table schema to infer the table schema", tablePath);
+      LOG.warn(" Table: {}, does not have a hoodie schema. Using hive table schema instead.", tablePath);
       schema = HiveSchemaUtils.convertTableSchema(hiveTable);
     }
     Map<String, String> options = supplementOptions(tablePath, parameters);
