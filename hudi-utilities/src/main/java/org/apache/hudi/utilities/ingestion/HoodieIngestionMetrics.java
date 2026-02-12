@@ -64,5 +64,7 @@ public abstract class HoodieIngestionMetrics {
 
   public abstract void updateStreamerSourceBytesToBeIngestedInSyncRound(long sourceBytesToBeIngested);
 
+  public abstract void updateHoodieIncrSourceMetrics(long numCommitsInProgress, long numUnprocessedCommits);
+
   public abstract void shutdown();
 }

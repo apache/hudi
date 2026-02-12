@@ -185,7 +185,7 @@ public class GcsEventsHoodieIncrSource extends HoodieIncrSource {
         missingCheckpointStrategy, handlingMode, HoodieRecord.COMMIT_TIME_METADATA_FIELD,
         CloudObjectsSelectorCommon.GCS_OBJECT_KEY,
         CloudObjectsSelectorCommon.GCS_OBJECT_SIZE, true,
-        Option.ofNullable(cloudObjectIncrCheckpoint.getKey()));
+        Option.ofNullable(cloudObjectIncrCheckpoint.getKey()), metricsOption);
     log.info("Querying GCS with:{} and queryInfo:{}", cloudObjectIncrCheckpoint, queryInfo);
 
     if (isNullOrEmpty(cloudObjectIncrCheckpoint.getKey()) && queryInfo.areStartAndEndInstantsEqual()) {

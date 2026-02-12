@@ -36,6 +36,7 @@ import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer;
+import org.apache.hudi.utilities.ingestion.HoodieIngestionMetrics;
 import org.apache.hudi.utilities.sources.HoodieIncrSource;
 import org.apache.hudi.utilities.streamer.SourceProfile;
 
@@ -108,7 +109,7 @@ public class IncrSourceHelper {
                                             HollowCommitHandling handlingMode,
                                             String orderColumn, String keyColumn, String limitColumn,
                                             boolean sourceLimitBasedBatching,
-                                            Option<String> lastCheckpointKey) {
+                                            Option<String> lastCheckpointKey, Option<HoodieIngestionMetrics> metrics) {
     ValidationUtils.checkArgument(numInstantsPerFetch > 0,
         "Make sure the config hoodie.streamer.source.hoodieincr.num_instants is set to a positive value");
     HoodieTableMetaClient srcMetaClient = HoodieTableMetaClient.builder()
@@ -169,16 +170,25 @@ public class IncrSourceHelper {
         nthInstant = Option.fromJavaOptional(activeCommitTimeline
             .findInstantsAfter(beginInstantTime, numInstantsPerFetch).getInstantsAsStream().reduce((x, y) -> y));
       }
+      String endInstant = nthInstant.map(HoodieInstant::requestedTime).orElse(beginInstantTime);
+      metrics.ifPresent(m -> publishIncrSourceMetrics(beginInstantTime, endInstant, m, completedCommitTimeline));
       return new QueryInfo(DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL(), previousInstantTime,
-          beginInstantTime, nthInstant.map(HoodieInstant::requestedTime).orElse(beginInstantTime),
-          orderColumn, keyColumn, limitColumn);
+          beginInstantTime, endInstant, orderColumn, keyColumn, limitColumn);
     } else {
       // when MissingCheckpointStrategy is set to read everything until latest, trigger snapshot query.
       Option<HoodieInstant> lastInstant = activeCommitTimeline.lastInstant();
+      metrics.ifPresent(m -> publishIncrSourceMetrics(beginInstantTime, lastInstant.get().requestedTime(), m, completedCommitTimeline));
       return new QueryInfo(DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL(),
           previousInstantTime, beginInstantTime, lastInstant.get().requestedTime(),
           orderColumn, keyColumn, limitColumn);
     }
+  }
+
+  private static void publishIncrSourceMetrics(String startInstant, String endInstant,
+                                               HoodieIngestionMetrics metrics, HoodieTimeline completedCommitTimeline) {
+    long numUnprocessedCommits = completedCommitTimeline.findInstantsAfter(endInstant).countInstants();
+    long numCommitsInProgress = completedCommitTimeline.findInstantsInRange(startInstant, endInstant).countInstants();
+    metrics.updateHoodieIncrSourceMetrics(numCommitsInProgress, numUnprocessedCommits);
   }
 
   public static IncrementalQueryAnalyzer getIncrementalQueryAnalyzer(
