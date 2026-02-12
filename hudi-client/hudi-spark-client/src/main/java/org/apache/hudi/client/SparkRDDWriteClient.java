@@ -147,9 +147,9 @@ public class SparkRDDWriteClient<T> extends
       List<HoodieWriteStat> dataTableHoodieWriteStats = slimWriteStatsList.stream().filter(entry -> !entry.isMetadataTable()).map(SlimWriteStats::getWriteStat).collect(Collectors.toList());
       List<HoodieWriteStat> partialMetadataTableWriteStats = slimWriteStatsList.stream().filter(entry -> entry.isMetadataTable).map(SlimWriteStats::getWriteStat).collect(Collectors.toList());
       // Merge engine-specific metadata (e.g., spark_application_id) with extra metadata
-      Option<Map<String, String>> mergedExtraMetadata = mergeEngineCommitMetadata(extraMetadata);
+      Option<Map<String, String>> mergedMetadata = mergeEngineCommitMetadata(extraMetadata);
       return commitStats(instantTime, new TableWriteStats(dataTableHoodieWriteStats, partialMetadataTableWriteStats),
-          mergedExtraMetadata, commitActionType, partitionToReplacedFileIds, extraPreCommitFunc,
+          mergedMetadata, commitActionType, partitionToReplacedFileIds, extraPreCommitFunc,
           false, Option.of(table));
     } else {
       log.error("Exiting early due to errors with write operation ");
