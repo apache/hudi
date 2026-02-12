@@ -17,6 +17,8 @@
 
 package org.apache.spark.sql.hudi.common
 
+import org.apache.hudi.config.HoodieWriteConfig
+
 class TestLazyPartitionPathFetching extends HoodieSparkSqlTestBase {
 
   test("Test querying with string column + partition pruning") {
@@ -102,7 +104,8 @@ class TestLazyPartitionPathFetching extends HoodieSparkSqlTestBase {
            | tblproperties (
            |  primaryKey ='id',
            |  type = 'cow',
-           |  preCombineField = 'ts'
+           |  preCombineField = 'ts',
+           |  ${HoodieWriteConfig.ENABLE_COMPLEX_KEYGEN_VALIDATION.key()} = 'false'
            | )
            | PARTITIONED BY (country, date_par)
          """.stripMargin)
