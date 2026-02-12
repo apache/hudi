@@ -46,4 +46,12 @@ public class GlueCatalogSyncClientConfig extends HoodieConfig {
       .markAdvanced()
       .sinceVersion("0.14.0")
       .withDocumentation("Makes athena use the metadata table to list partitions and files. Currently it won't benefit from other features such stats indexes");
+
+  public static final ConfigProperty<Boolean> RECREATE_GLUE_TABLE_ON_ERROR = ConfigProperty
+      .key(GLUE_CLIENT_PROPERTY_PREFIX + "recreate_table_on_error")
+      .defaultValue(false)
+      .sinceVersion("0.14.0")
+      .markAdvanced()
+      .withDocumentation("Glue sync may fail if the Glue table exists with partitions differing from the Hoodie table or if schema evolution is not supported by Glue."
+          + "Enabling this configuration will drop and create the table to match the Hoodie config");
 }
