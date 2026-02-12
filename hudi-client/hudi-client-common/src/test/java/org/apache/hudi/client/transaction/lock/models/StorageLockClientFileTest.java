@@ -18,6 +18,8 @@
 
 package org.apache.hudi.client.transaction.lock.models;
 
+import org.apache.hudi.client.transaction.lock.StorageLockClient;
+import org.apache.hudi.client.transaction.lock.audit.StorageLockProviderAuditService;
 import org.apache.hudi.exception.HoodieIOException;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -161,5 +163,61 @@ public class StorageLockClientFileTest {
     StorageLockData data = new StorageLockData(false, 1700000000000L, "testOwner");
     StorageLockFile file = new StorageLockFile(data, VERSION_ID);
     assertEquals(VERSION_ID, file.getVersionId());
+  }
+
+  @Test
+  void testGetLockFolderPathWithoutTrailingSlash() {
+    String basePath = "s3://bucket/table";
+    String expected = "s3://bucket/table/.hoodie/.locks";
+    String actual = StorageLockClient.getLockFolderPath(basePath);
+    assertEquals(expected, actual);
+  }
+
+  @Test
+  void testGetLockFolderPathWithTrailingSlash() {
+    String basePath = "s3://bucket/table/";
+    String expected = "s3://bucket/table/.hoodie/.locks";
+    String actual = StorageLockClient.getLockFolderPath(basePath);
+    assertEquals(expected, actual, "Path with trailing slash should be normalized correctly");
+  }
+
+  @Test
+  void testGetLockFolderPathWithMultipleTrailingSlashes() {
+    String basePath = "s3://bucket/table///";
+    String expected = "s3://bucket/table/.hoodie/.locks";
+    String actual = StorageLockClient.getLockFolderPath(basePath);
+    assertEquals(expected, actual);
+  }
+
+  @Test
+  void testGetLockFolderPathLocalFileSystem() {
+    String basePath = "/tmp/hudi/table";
+    String expected = "/tmp/hudi/table/.hoodie/.locks";
+    String actual = StorageLockClient.getLockFolderPath(basePath);
+    assertEquals(expected, actual);
+  }
+
+  @Test
+  void testGetLockFolderPathLocalFileSystemWithTrailingSlash() {
+    String basePath = "/tmp/hudi/table/";
+    String expected = "/tmp/hudi/table/.hoodie/.locks";
+    String actual = StorageLockClient.getLockFolderPath(basePath);
+    assertEquals(expected, actual);
+  }
+
+  @Test
+  void testGetAuditConfigPathWithTrailingSlash() {
+    String basePath = "s3://bucket/table/";
+    String expected = "s3://bucket/table/.hoodie/.locks/audit_enabled.json";
+    String actual = StorageLockProviderAuditService.getAuditConfigPath(basePath);
+    assertEquals(expected, actual, "Audit config path with trailing slash should be normalized correctly");
+  }
+
+  @Test
+  void testGetAuditFolderPathWithTrailingSlash() {
+    String basePath = "s3://bucket/table/";
+    String expected = "s3://bucket/table/.hoodie/.locks/audit";
+    String actual = StorageLockProviderAuditService.getAuditFolderPath(basePath);
+    assertEquals(expected, actual, "Audit folder path with trailing slash should be normalized correctly");
   }
 }
