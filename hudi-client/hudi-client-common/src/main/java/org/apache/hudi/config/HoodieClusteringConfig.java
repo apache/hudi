@@ -347,6 +347,17 @@ public class HoodieClusteringConfig extends HoodieConfig {
           + "Please exercise caution while setting this config, especially when clustering is done very frequently. This could lead to race condition in "
           + "rare scenarios, for example, when the clustering completes after instants are fetched but before rollback completed.");
 
+  public static final ConfigProperty<Boolean> COMPUTE_PLAN_PER_PARTITION_PARALLEL = ConfigProperty
+      .key("hoodie.clustering.plan.compute.partition.parallel")
+      .defaultValue(true)
+      .sinceVersion("0.10.0")
+      .withDocumentation("Compute clustering groups for each partition independently in parallel (using engine context) when generating "
+          + "clustering plan. For example, with Spark engine setting this to true would lead to a separate spark task computing all clustering "
+          + "groups per dataset partition, whereas setting this to false would lead to all clustering groups for all partitions being serially "
+          + "computed on the driver. By default this should be true, but should be set to false for cases where there are guaranteed to only be "
+          + "a few partitions with many files in clustering plan and (when using Spark) it would be more resource-efficient to just have a driver program "
+          + "(with extra memory) compute it all rather than allocate more memory per core for all executors (which won't be needed later in spark job).");
+
   public static final ConfigProperty<Boolean> FILE_STITCHING_BINARY_COPY_SCHEMA_EVOLUTION_ENABLE = ConfigProperty
       .key(CLUSTERING_STRATEGY_PARAM_PREFIX + "binary.copy.schema.evolution.enable")
       .defaultValue(false)
@@ -627,6 +638,11 @@ public class HoodieClusteringConfig extends HoodieConfig {
 
     public Builder withFileStitchingBinaryCopySchemaEvolutionEnabled(Boolean enabled) {
       clusteringConfig.setValue(FILE_STITCHING_BINARY_COPY_SCHEMA_EVOLUTION_ENABLE, String.valueOf(enabled));
+      return this;
+    }
+
+    public Builder clusteringComputePlanPerPartitionParallel(Boolean parallel) {
+      clusteringConfig.setValue(COMPUTE_PLAN_PER_PARTITION_PARALLEL, String.valueOf(parallel));
       return this;
     }
 
