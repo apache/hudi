@@ -83,7 +83,6 @@ import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.LocalFileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hbase.Cell;
-import org.apache.hadoop.hbase.io.hfile.CacheConfig;
 import org.apache.hadoop.hbase.io.hfile.HFile;
 import org.apache.hadoop.hbase.io.hfile.HFileScanner;
 import org.junit.jupiter.api.AfterAll;
@@ -996,12 +995,10 @@ public abstract class HoodieJavaClientTestHarness extends HoodieWriterClientTest
     List<GenericRecord> valuesAsList = new LinkedList<>();
 
     FileSystem fs = FSUtils.getFs(paths[0], context.getHadoopConf().get());
-    CacheConfig cacheConfig = new CacheConfig(fs.getConf());
     Schema schema = null;
     for (String path : paths) {
       try {
-        HFile.Reader reader =
-            HoodieHFileUtils.createHFileReader(fs, new Path(path), cacheConfig, fs.getConf());
+        HFile.Reader reader = HoodieHFileUtils.createHFileReader(fs, new Path(path), fs.getConf());
         if (schema == null) {
           schema = new Schema.Parser().parse(new String(reader.getHFileInfo().get(SCHEMA_KEY.getBytes())));
         }
