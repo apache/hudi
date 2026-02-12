@@ -201,6 +201,16 @@ public class HoodieCleanConfig extends HoodieConfig {
           + "table receives updates/deletes. Another reason to turn this on, would be to ensure data residing in bootstrap "
           + "base files are also physically deleted, to comply with data privacy enforcement processes.");
 
+  public static final ConfigProperty<Boolean> CLEAN_OPTIMIZE_USING_LOCAL_ENGINE_CONTEXT = ConfigProperty
+      .key("hoodie.clean.optimize.using.local.engine.context")
+      .defaultValue(true)
+      .markAdvanced()
+      .sinceVersion("1.2.0")
+      .withDocumentation("Optimizes clean planning by using local engine context (driver-only) for metadata tables and non-partitioned "
+          + "datasets. This allows handling OOM errors during clean planning by scaling only driver memory instead of all executor memory. "
+          + "Some datasets with large record_index partitions can cause OOM errors during file listing in clean planning. "
+          + "By using local engine context, file listing is performed on the driver, allowing targeted memory scaling. "
+          + "When enabled, both non-partitioned datasets and metadata tables use the driver for scheduling cleans.");
 
   /** @deprecated Use {@link #CLEANER_POLICY} and its methods instead */
   @Deprecated
@@ -359,6 +369,11 @@ public class HoodieCleanConfig extends HoodieConfig {
 
     public HoodieCleanConfig.Builder withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy failedWritesPolicy) {
       cleanConfig.setValue(FAILED_WRITES_CLEANER_POLICY, failedWritesPolicy.name());
+      return this;
+    }
+
+    public HoodieCleanConfig.Builder withCleanOptimizationWithLocalEngineEnabled(Boolean cleanOptimizationWithLocalEngineEnabled) {
+      cleanConfig.setValue(CLEAN_OPTIMIZE_USING_LOCAL_ENGINE_CONTEXT, String.valueOf(cleanOptimizationWithLocalEngineEnabled));
       return this;
     }
 

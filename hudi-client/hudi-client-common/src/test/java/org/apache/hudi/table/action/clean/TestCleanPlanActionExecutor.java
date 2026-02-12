@@ -45,6 +45,7 @@ import java.io.IOException;
 import java.util.Collections;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.RETURNS_DEEP_STUBS;
 import static org.mockito.Mockito.doReturn;
@@ -60,6 +61,7 @@ class TestCleanPlanActionExecutor {
     HoodieTable table = mock(HoodieTable.class, RETURNS_DEEP_STUBS);
     HoodieTableMetaClient metaClient = mock(HoodieTableMetaClient.class);
     when(table.getMetaClient()).thenReturn(metaClient);
+    when(table.isPartitioned()).thenReturn(true);
     InstantGenerator instantGenerator = mock(InstantGenerator.class);
     when(table.getInstantGenerator()).thenReturn(instantGenerator);
     HoodieActiveTimeline activeTimeline = mock(HoodieActiveTimeline.class);
@@ -108,6 +110,7 @@ class TestCleanPlanActionExecutor {
   @Test
   void emptyCompletedClean_failsToReadPreviousPlan() throws IOException {
     HoodieTable table = mock(HoodieTable.class, RETURNS_DEEP_STUBS);
+    when(table.isPartitioned()).thenReturn(true);
     InstantGenerator instantGenerator = mock(InstantGenerator.class);
     when(table.getInstantGenerator()).thenReturn(instantGenerator);
     HoodieActiveTimeline activeTimeline = mock(HoodieActiveTimeline.class);
@@ -132,6 +135,7 @@ class TestCleanPlanActionExecutor {
   @Test
   void lastCleanIsNonEmpty() {
     HoodieTable table = mock(HoodieTable.class, RETURNS_DEEP_STUBS);
+    when(table.isPartitioned()).thenReturn(true);
     HoodieActiveTimeline activeTimeline = mock(HoodieActiveTimeline.class);
 
     // allow clean to trigger
@@ -153,6 +157,7 @@ class TestCleanPlanActionExecutor {
   @Test
   void lastCleanIsNotPresent() {
     HoodieTable table = mock(HoodieTable.class, RETURNS_DEEP_STUBS);
+    when(table.isPartitioned()).thenReturn(true);
 
     // allow clean to trigger
     mockThatCleanIsRequired(table);
@@ -164,6 +169,34 @@ class TestCleanPlanActionExecutor {
     HoodieCleanerPlan emptyPlan = new HoodieCleanerPlan();
     doReturn(emptyPlan).when(executor).requestClean(engineContext);
     assertEquals(Option.empty(), executor.requestClean());
+  }
+
+  @Test
+  void testRequestCleanUsesLocalEngineContext() {
+    HoodieTable table = mock(HoodieTable.class, RETURNS_DEEP_STUBS);
+    when(table.isPartitioned()).thenReturn(false);
+
+    // allow clean to trigger
+    mockThatCleanIsRequired(table);
+    // No last clean
+    when(table.getCleanTimeline().filterCompletedInstants().lastInstant()).thenReturn(Option.empty());
+    HoodieEngineContext engineContext = new HoodieLocalEngineContext(new HadoopStorageConfiguration(false));
+
+    // Custom executor that captures the engine context passed to requestClean
+    CleanPlanActionExecutor<?, ?, ?, ?> executor = new CleanPlanActionExecutor<>(engineContext, HoodieWriteConfig.newBuilder().withPath("file://tmp").build(), table, Option.empty()) {
+      @Override
+      HoodieCleanerPlan requestClean(HoodieEngineContext context) {
+        // Verify that the context is HoodieLocalEngineContext, not a Spark context
+        assertEquals(HoodieLocalEngineContext.class, context.getClass(),
+            "Expected HoodieLocalEngineContext but got " + context.getClass().getName());
+        // Verify that a new HoodieLocalEngineContext instance is created, not the same one passed to constructor
+        assertNotSame(engineContext, context,
+            "Expected a new HoodieLocalEngineContext instance, but got the same instance");
+        return new HoodieCleanerPlan();
+      }
+    };
+
+    executor.requestClean();
   }
 
   private static void mockEmptyLastCompletedClean(HoodieTable table, HoodieInstant lastCompletedInstant, HoodieActiveTimeline activeTimeline, boolean hasEmptyPlan) {
