@@ -79,7 +79,7 @@ us schedule the indexing for COLUMN_STATS index. First we need to define a prope
 As mentioned before, metadata indices are pluggable. One can add any index at any point in time depending on changing
 business requirements. Some configurations to enable particular indices are listed below. Currently, available indices under
 metadata table can be explored [here](metadata.md) along with [configs](metadata.md#enable-hudi-metadata-table-and-multi-modal-index-in-write-side) 
-to enable them. The full set of metadata configurations can be explored [here](configurations/#Metadata-Configs).
+to enable them. The full set of metadata configurations can be explored [here](configurations.md#Metadata-Configs).
 
 :::note
 Enabling the metadata table and configuring a lock provider are the prerequisites for using async indexer. Checkout a sample
