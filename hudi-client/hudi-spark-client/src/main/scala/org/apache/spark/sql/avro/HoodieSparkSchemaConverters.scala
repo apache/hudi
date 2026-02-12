@@ -88,7 +88,8 @@ object HoodieSparkSchemaConverters {
             s"VECTOR type does not support nullable elements (field: $recordName)")
         }
 
-        val dimension = metadata.getLong(HoodieSchema.TYPE_DIMENSION_FIELD).toInt
+        val typeMetadata = HoodieSchema.parseTypeMetadata(metadata.getString(HoodieSchema.TYPE_METADATA_PROPS_FIELD))
+        val dimension = typeMetadata.get("vector.dimension").toInt
         if (dimension <= 0) {
           throw new IncompatibleSchemaException(
             s"VECTOR dimension must be positive, got: $dimension (field: $recordName)")
@@ -201,9 +202,11 @@ object HoodieSparkSchemaConverters {
         val vectorSchema = hoodieSchema.asInstanceOf[HoodieSchema.Vector]
         val dimension = vectorSchema.getDimension
 
+        val typeMetadataStr = HoodieSchema.buildTypeMetadata(
+          java.util.Collections.singletonMap("vector.dimension", dimension.toString))
         val metadata = new MetadataBuilder()
           .putString(HoodieSchema.TYPE_METADATA_FIELD, HoodieSchemaType.VECTOR.name())
-          .putLong(HoodieSchema.TYPE_DIMENSION_FIELD, dimension)
+          .putString(HoodieSchema.TYPE_METADATA_PROPS_FIELD, typeMetadataStr)
           .build()
 
         SchemaType(ArrayType(FloatType, containsNull = false), nullable = false, Some(metadata))
