@@ -1702,7 +1702,7 @@ public class TestHoodieSchema {
     assertEquals(HoodieSchemaType.BLOB, blob.getType());
 
     // Verify storage_type field
-    Option<HoodieSchemaField> storageTypeOpt = blob.getField("storage_type");
+    Option<HoodieSchemaField> storageTypeOpt = blob.getField("type");
     assertTrue(storageTypeOpt.isPresent());
     HoodieSchemaField storageTypeField = storageTypeOpt.get();
     assertEquals(HoodieSchemaType.ENUM, storageTypeField.schema().getType());
