@@ -27,7 +27,9 @@ import org.apache.spark.sql.{DataFrameUtil, Dataset, Row, SparkSession}
 object SparkConversionUtils {
 
   def createDataFrame[T](rdd: RDD[HoodieRecord[T]], ss: SparkSession, structType: StructType): Dataset[Row] = {
-    if (rdd.isEmpty()) {
+    // Avoid calling isEmpty() which can cause serialization issues with Ordering$Reverse
+    // Check partition count instead, which doesn't require task serialization
+    if (rdd.getNumPartitions == 0) {
       ss.emptyDataFrame
     } else {
       DataFrameUtil.createFromInternalRows(ss, structType, rdd.map(_.getData.asInstanceOf[InternalRow]))

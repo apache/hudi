@@ -20,6 +20,7 @@ package org.apache.hudi.functional
 
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
+import org.apache.hudi.{AvroConversionUtils, ColumnStatsIndexSupport, DataSourceWriteOptions}
 import org.apache.hudi.ColumnStatsIndexSupport.composeIndexSchema
 import org.apache.hudi.DataSourceWriteOptions.{PRECOMBINE_FIELD, RECORDKEY_FIELD}
 import org.apache.hudi.HoodieConversionUtils.toProperties
@@ -29,7 +30,6 @@ import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.util.ParquetUtils
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.functional.ColumnStatIndexTestBase.ColumnStatsTestCase
-import org.apache.hudi.{ColumnStatsIndexSupport, DataSourceWriteOptions}
 import org.apache.spark.sql._
 import org.apache.spark.sql.catalyst.analysis.UnresolvedAttribute
 import org.apache.spark.sql.catalyst.expressions.{And, AttributeReference, GreaterThan, Literal, Or}
@@ -109,10 +109,11 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       HoodieTableConfig.POPULATE_META_FIELDS.key -> "true"
     ) ++ metadataOpts
 
-    val schema = StructType(StructField("c1", IntegerType, false) :: StructField("c2", StringType, true) :: Nil)
+    val structSchema = StructType(StructField("c1", IntegerType, false) :: StructField("c2", StringType, true) :: Nil)
+    val avroSchema = AvroConversionUtils.convertStructTypeToAvroSchema(structSchema, "record", "")
     val inputDF = spark.createDataFrame(
       spark.sparkContext.parallelize(Seq(Row(1, "v1"), Row(2, "v2"), Row(3, null), Row(4, "v4"))),
-      schema)
+      structSchema)
 
     inputDF
       .sort("c1", "c2")
@@ -129,7 +130,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       .fromProperties(toProperties(metadataOpts))
       .build()
 
-    val columnStatsIndex = new ColumnStatsIndexSupport(spark, schema, metadataConfig, metaClient)
+    val columnStatsIndex = new ColumnStatsIndexSupport(spark, structSchema, metadataConfig, metaClient)
     columnStatsIndex.loadTransposed(Seq("c2"), false) { transposedDF =>
       val result = transposedDF.select("valueCount", "c2_nullCount")
         .collect().head

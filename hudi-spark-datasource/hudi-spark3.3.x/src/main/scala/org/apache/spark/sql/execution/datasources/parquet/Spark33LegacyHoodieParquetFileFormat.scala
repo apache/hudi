@@ -64,6 +64,13 @@ import java.net.URI
  */
 class Spark33LegacyHoodieParquetFileFormat(private val shouldAppendPartitionValues: Boolean) extends ParquetFileFormat {
 
+  override def supportBatch(sparkSession: SparkSession, schema: StructType): Boolean = {
+    val conf = sparkSession.sessionState.conf
+    conf.parquetVectorizedReaderEnabled &&
+      schema.forall(_.dataType.isInstanceOf[AtomicType]) &&
+      ParquetUtils.isBatchReadSupportedForSchema(conf, schema)
+  }
+
   override def buildReaderWithPartitionValues(sparkSession: SparkSession,
                                               dataSchema: StructType,
                                               partitionSchema: StructType,
@@ -122,7 +129,8 @@ class Spark33LegacyHoodieParquetFileFormat(private val shouldAppendPartitionValu
     val enableOffHeapColumnVector = sqlConf.offHeapColumnVectorEnabled
     val enableVectorizedReader: Boolean =
       sqlConf.parquetVectorizedReaderEnabled &&
-        resultSchema.forall(_.dataType.isInstanceOf[AtomicType])
+        resultSchema.forall(_.dataType.isInstanceOf[AtomicType]) &&
+        ParquetUtils.isBatchReadSupportedForSchema(sqlConf, resultSchema)
     val enableRecordFilter: Boolean = sqlConf.parquetRecordFilterEnabled
     val timestampConversion: Boolean = sqlConf.isParquetINT96TimestampConversion
     val capacity = sqlConf.parquetVectorizedReaderBatchSize
@@ -342,9 +350,10 @@ class Spark33LegacyHoodieParquetFileFormat(private val shouldAppendPartitionValu
           DataSourceUtils.int96RebaseSpec(footerFileMetaData.getKeyValueMetaData.get, int96RebaseModeInRead)
           val datetimeRebaseSpec =
             DataSourceUtils.datetimeRebaseSpec(footerFileMetaData.getKeyValueMetaData.get, datetimeRebaseModeInRead)
-          new ParquetReadSupport(
+          new HoodieParquetReadSupport(
             convertTz,
             enableVectorizedReader = false,
+            enableTimestampFieldRepair = true,
             datetimeRebaseSpec,
             int96RebaseSpec)
         } else {
