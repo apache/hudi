@@ -1002,8 +1002,7 @@ public class TestHoodieSchema {
     // Different class
     assertNotEquals(v1, "string");
   }
-
-
+  
   @Test
   void testVectorSerialization() throws Exception {
     // Create vector with DOUBLE element type
