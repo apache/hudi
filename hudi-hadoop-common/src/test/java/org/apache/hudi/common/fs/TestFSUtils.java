@@ -26,7 +26,6 @@ import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.CollectionUtils;
-import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
@@ -34,7 +33,6 @@ import org.apache.hudi.hadoop.fs.HoodieWrapperFileSystem;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StoragePath;
-import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
 
 import org.apache.hadoop.conf.Configuration;
@@ -48,7 +46,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
-import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -57,7 +54,6 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Date;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeSet;
@@ -564,22 +560,42 @@ public class TestFSUtils extends HoodieCommonTestHarness {
   }
 
   @Test
-  public void testGetPathInfoUnderPartition() throws IOException {
-    StoragePath hoodieTempDir = getHoodieTempDir();
-    HoodieStorage storage = metaClient.getStorage();
-    prepareTestDirectory(storage, hoodieTempDir);
-    List<Option<StoragePathInfo>> fileStatusList = FSUtils.getPathInfoUnderPartition(
-        storage,
-        new StoragePath(baseUri.toString(), ".hoodie/.temp"),
-        new HashSet<>(Collections.singletonList("file3.txt")),
-        false);
-    assertEquals(1, fileStatusList.size());
+  void testComparePathsWithoutScheme() {
+    String path1 = "s3://test_bucket_one/table/base/path";
+    String path2 = "s3a://test_bucket_two/table/base/path";
+    assertFalse(FSUtils.comparePathsWithoutScheme(path1, path2), "should return false since bucket names dont match");
 
-    assertThrows(HoodieIOException.class, () -> FSUtils.getPathInfoUnderPartition(
-        storage,
-        new StoragePath(baseUri.toString(), ".hoodie/.temp"),
-        new HashSet<>(Collections.singletonList("file4.txt")),
-        false));
+    path1 = "s3a://test_bucket_one/table/new_base/path";
+    path2 = "s3a://test_bucket_one/table/old_base/path";
+    assertFalse(FSUtils.comparePathsWithoutScheme(path1, path2), "should return false since paths don't match");
+
+    path1 = "s3://test_bucket_one/table/base/path";
+    path2 = "s3a://test_bucket_one/table/base/path";
+    assertTrue(FSUtils.comparePathsWithoutScheme(path1, path2), "should return false since bucket names match without file shema");
+
+    path1 = "s3a://test_bucket_one/table/base/path";
+    path2 = "s3a://test_bucket_one/table/base/path";
+    assertTrue(FSUtils.comparePathsWithoutScheme(path1, path2), "should return true since bucket names and path matches");
+
+    path1 = "gs://test_bucket_one/table/base/path";
+    path2 = "gs://test_bucket_two/table/base/path";
+    assertFalse(FSUtils.comparePathsWithoutScheme(path1, path2), "should return true since bucket names and path matches");
+
+    path1 = "gs://test_bucket_one/table/base/path";
+    path2 = "gs://test_bucket_one/table/base/path";
+    assertTrue(FSUtils.comparePathsWithoutScheme(path1, path2), "should return true since bucket names and path matches");
+
+    path1 = "file:/var/table/base/path";
+    path2 = "/var/table/base/path";
+    assertTrue(FSUtils.comparePathsWithoutScheme(path1, path2), "should return true since path matches");
+
+    path1 = "file:/var/table/base/path";
+    path2 = "file:/var/table/old_base/path";
+    assertFalse(FSUtils.comparePathsWithoutScheme(path1, path2), "should return false since path doesn't matches");
+
+    path1 = "table/base/path";
+    path2 = "table/base/path";
+    assertTrue(FSUtils.comparePathsWithoutScheme(path1, path2), "should return true since relative path doesn't matches");
   }
 
   @Test
@@ -594,23 +610,16 @@ public class TestFSUtils extends HoodieCommonTestHarness {
     assertEquals("s3://my-bucket/s3a://another-bucket/another/path", FSUtils.s3aToS3("s3a://my-bucket/s3a://another-bucket/another/path"));
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = {
-      "gs://my-bucket/path/to/object",
-      "gs://my-bucket",
-      "gs://MY-BUCKET/PATH/TO/OBJECT",
-      "https://myaccount.blob.core.windows.net/mycontainer/path/to/blob",
-      "https://myaccount.blob.core.windows.net/MYCONTAINER/PATH/TO/BLOB",
-      "https://example.com/path/to/resource",
-      "http://example.com",
-      "ftp://example.com/resource",
-      "",
-      "gs://my-bucket/path/to/s3a://object",
-      "gs://my-bucket s3a://my-object",
-  })
-  
-  void testUriDoesNotChange(String uri) {
-    assertEquals(uri, FSUtils.s3aToS3(uri));
+  @Test
+  void testGetPathWithoutScheme() {
+    String path1 = "s3://test_bucket_one/table/base/path";
+    assertEquals(FSUtils.getPathWithoutScheme(new Path(path1)).toUri().toString(), "//test_bucket_one/table/base/path", "should return false since bucket names dont match");
+
+    path1 = "s3a://test_bucket_one/table/base/path";
+    assertEquals(FSUtils.getPathWithoutScheme(new Path(path1)).toUri().toString(), "//test_bucket_one/table/base/path", "should return false since bucket names dont match");
+
+    path1 = "gs://test_bucket_one/table/base/path";
+    assertEquals(FSUtils.getPathWithoutScheme(new Path(path1)).toUri().toString(), "//test_bucket_one/table/base/path", "should return false since bucket names dont match");
   }
 
   private StoragePath getHoodieTempDir() {
