@@ -35,14 +35,14 @@ const HomepageFeatures = () => {
       title: "ACID Transactional guarantees for your data lake",
       description:
         "Atomic writes, with relational/streaming data consistency models, snapshot isolation and non-blocking concurrency controls tailored for longer-running lake transactions.",
-      link: "/docs/use_cases/",
+      link: "/docs/concurrency_control",
     },
     {
       icon: HistoricalTimeTravel,
       title: "Analyze historical data with time travel",
       description:
         "Query historical data with the ability to roll back to a table version; debug data versions to understand what changed over time; audit data changes by viewing the commit history.",
-      link: "/docs/use_cases/",
+      link: "/docs/sql_queries#time-travel-query",
     },
     {
       icon: Interoperable,
