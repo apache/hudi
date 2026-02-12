@@ -43,10 +43,6 @@ import software.amazon.awssdk.services.dynamodb.model.BillingMode;
         + " are auto managed internally.")
 public class DynamoDbBasedLockConfig extends HoodieConfig {
 
-  public static DynamoDbBasedLockConfig.Builder newBuilder() {
-    return new DynamoDbBasedLockConfig.Builder();
-  }
-
   // configs for DynamoDb based locks
   public static final String DYNAMODB_BASED_LOCK_PROPERTY_PREFIX = LockConfiguration.LOCK_PREFIX + "dynamodb.";
 
@@ -132,34 +128,12 @@ public class DynamoDbBasedLockConfig extends HoodieConfig {
       .sinceVersion("0.10.0")
       .withDocumentation("Lock Acquire Wait Timeout in milliseconds");
 
-  /**
-   * Builder for {@link DynamoDbBasedLockConfig}.
-   */
-  public static class Builder {
-    private final DynamoDbBasedLockConfig lockConfig = new DynamoDbBasedLockConfig();
-
-    public DynamoDbBasedLockConfig build() {
-      lockConfig.setDefaults(DynamoDbBasedLockConfig.class.getName());
-      checkRequiredProps(lockConfig);
-      return lockConfig;
-    }
-
-    public Builder fromProperties(TypedProperties props) {
-      lockConfig.getProps().putAll(props);
-      return this;
-    }
-
-    private void checkRequiredProps(final DynamoDbBasedLockConfig config) {
-      String errorMsg = "Config key is not found: ";
-      ValidationUtils.checkArgument(
-          config.contains(DYNAMODB_LOCK_TABLE_NAME.key()),
-          errorMsg + DYNAMODB_LOCK_TABLE_NAME.key());
-      ValidationUtils.checkArgument(
-          config.contains(DYNAMODB_LOCK_REGION.key()),
-          errorMsg + DYNAMODB_LOCK_REGION.key());
-      ValidationUtils.checkArgument(
-          config.contains(DYNAMODB_LOCK_PARTITION_KEY.key()),
-          errorMsg + DYNAMODB_LOCK_PARTITION_KEY.key());
-    }
+  public static DynamoDbBasedLockConfig from(TypedProperties properties) {
+    DynamoDbBasedLockConfig config = new DynamoDbBasedLockConfig();
+    config.getProps().putAll(properties);
+    config.setDefaults(DynamoDbBasedLockConfig.class.getName());
+    ValidationUtils.checkArgument(config.contains(DYNAMODB_LOCK_TABLE_NAME.key()), "Config key is not found: " + DYNAMODB_LOCK_TABLE_NAME.key());
+    ValidationUtils.checkArgument(config.contains(DYNAMODB_LOCK_REGION.key()), "Config key is not found: " + DYNAMODB_LOCK_REGION.key());
+    return config;
   }
 }
