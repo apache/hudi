@@ -82,7 +82,7 @@ public class TestProtoConversionUtil {
   private static final Conversions.DecimalConversion DECIMAL_CONVERSION = new Conversions.DecimalConversion();
 
   @Test
-  public void allFieldsSet_wellKnownTypesAndTimestampsAsRecords() throws IOException {
+  public void allFieldsSet_wellKnownTypesAndTimestampsAsRecords() {
     HoodieSchema convertedSchema = new HoodieSchema.Parser().parse(getClass().getClassLoader().getResourceAsStream("schema-provider/proto/sample_schema_wrapped_and_timestamp_as_record.avsc"));
     Pair<Sample, GenericRecord> inputAndOutput = createInputOutputSampleWithRandomValues(convertedSchema.toAvroSchema(), true);
     Sample input = inputAndOutput.getLeft();
@@ -96,7 +96,7 @@ public class TestProtoConversionUtil {
   }
 
   @Test
-  public void noFieldsSet_wellKnownTypesAndTimestampsAsRecords() throws IOException {
+  public void noFieldsSet_wellKnownTypesAndTimestampsAsRecords() {
     Sample sample = Sample.newBuilder().build();
     HoodieSchema convertedSchema = new HoodieSchema.Parser().parse(getClass().getClassLoader().getResourceAsStream("schema-provider/proto/sample_schema_wrapped_and_timestamp_as_record.avsc"));
     GenericRecord actual = serializeAndDeserializeAvro(ProtoConversionUtil.convertToAvro(convertedSchema, sample), convertedSchema.toAvroSchema());
@@ -104,7 +104,7 @@ public class TestProtoConversionUtil {
   }
 
   @Test
-  public void allFieldsSet_defaultOptions() throws IOException {
+  public void allFieldsSet_defaultOptions() {
     HoodieSchema convertedSchema = new HoodieSchema.Parser().parse(getClass().getClassLoader().getResourceAsStream("schema-provider/proto/sample_schema_defaults.avsc"));
     Pair<Sample, GenericRecord> inputAndOutput = createInputOutputSampleWithRandomValues(convertedSchema.toAvroSchema(), false);
     Sample input = inputAndOutput.getLeft();
@@ -118,7 +118,7 @@ public class TestProtoConversionUtil {
   }
 
   @Test
-  public void noFieldsSet_defaultOptions() throws IOException {
+  public void noFieldsSet_defaultOptions() {
     Sample sample = Sample.newBuilder().build();
     HoodieSchema convertedSchema = new HoodieSchema.Parser().parse(getClass().getClassLoader().getResourceAsStream("schema-provider/proto/sample_schema_defaults.avsc"));
     GenericRecord actual = serializeAndDeserializeAvro(ProtoConversionUtil.convertToAvro(convertedSchema, sample), convertedSchema.toAvroSchema());
@@ -126,7 +126,7 @@ public class TestProtoConversionUtil {
   }
 
   @Test
-  public void recursiveSchema_noOverflow() throws IOException {
+  public void recursiveSchema_noOverflow() {
     HoodieSchema convertedSchema = new HoodieSchema.Parser().parse(getClass().getClassLoader().getResourceAsStream("schema-provider/proto/parent_schema_recursive_depth_2.avsc"));
     Pair<Parent, GenericRecord> inputAndOutput = createInputOutputForRecursiveSchemaNoOverflow(convertedSchema.toAvroSchema());
     GenericRecord actual = serializeAndDeserializeAvro(ProtoConversionUtil.convertToAvro(convertedSchema, inputAndOutput.getLeft()), convertedSchema.toAvroSchema());
@@ -152,7 +152,7 @@ public class TestProtoConversionUtil {
   }
 
   @Test
-  public void oneOfSchema() throws IOException {
+  public void oneOfSchema() {
     HoodieSchema convertedSchema = new HoodieSchema.Parser().parse(getClass().getClassLoader().getResourceAsStream("schema-provider/proto/oneof_schema.avsc"));
     WithOneOf input = WithOneOf.newBuilder().setLong(32L).build();
     GenericRecord actual = serializeAndDeserializeAvro(ProtoConversionUtil.convertToAvro(convertedSchema, input), convertedSchema.toAvroSchema());
@@ -234,8 +234,8 @@ public class TestProtoConversionUtil {
     float wrappedFloat = RANDOM.nextFloat();
     int wrappedInt = RANDOM.nextInt();
     long wrappedLong = RANDOM.nextLong();
-    int wrappedUnsignedInt = RANDOM.nextInt();
-    long wrappedUnsignedLong = primitiveUnsignedLongInUnsignedRange ? RANDOM.nextLong() : Long.parseUnsignedLong(MAX_UNSIGNED_LONG) - RANDOM.nextInt(1000);
+    int wrappedUnsignedInt = Math.abs(RANDOM.nextInt());
+    long wrappedUnsignedLong = primitiveUnsignedLongInUnsignedRange ? Math.abs(RANDOM.nextLong()) : Long.parseUnsignedLong(MAX_UNSIGNED_LONG) - RANDOM.nextInt(1000);
     boolean wrappedBoolean = RANDOM.nextBoolean();
     String wrappedString = randomString(10);
     byte[] wrappedBytes = getUTF8Bytes(randomString(10));
