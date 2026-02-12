@@ -91,7 +91,7 @@ class TestSchemaConverters {
    */
   private def validateBlobFields(dataType: StructType): Unit = {
     // storage_type is a non-null string field
-    val storageTypeField = dataType.fields.find(_.name == HoodieSchema.Blob.STORAGE_TYPE).get
+    val storageTypeField = dataType.fields.find(_.name == HoodieSchema.Blob.TYPE).get
     assertEquals(DataTypes.StringType, storageTypeField.dataType)
     assertFalse(storageTypeField.nullable)
     // data is a nullable binary field
