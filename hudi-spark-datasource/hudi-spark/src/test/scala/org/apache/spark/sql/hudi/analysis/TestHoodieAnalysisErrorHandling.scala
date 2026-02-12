@@ -110,13 +110,22 @@ class TestHoodieAnalysisErrorHandling extends HoodieSparkSqlTestBase {
              """.stripMargin)
       }
 
-      // Verify the error message contains helpful information
+      // Unresolved columns in ON conditions are caught by Spark's standard analysis
+      // before Hudi's error handling can intercept, so we get Spark's native error message
+      // Format: [UNRESOLVED_COLUMN.WITH_SUGGESTION] A column or function parameter with name
+      // `target`.`nonexistent_id` cannot be resolved. Did you mean one of the following? [...]
       val errorMessage = exception.getMessage
-      assert(errorMessage.contains("Failed to resolve query") &&
-        errorMessage.contains("The query contains unresolved") &&
-        errorMessage.contains("typos in column or table names") &&
-        errorMessage.contains("nonexistent_id"),
-        s"Error message should contain enhanced guidance and mention 'nonexistent_id'. Actual message: $errorMessage")
+      assert(errorMessage.contains("nonexistent_id"),
+        s"Error message should mention the unresolved column 'nonexistent_id'. Actual message: $errorMessage")
+      assert(errorMessage.contains("[UNRESOLVED_COLUMN"),
+        s"Error message should contain Spark's UNRESOLVED_COLUMN error class. Actual message: $errorMessage")
+      assert(errorMessage.contains("cannot be resolved"),
+        s"Error message should indicate the column cannot be resolved. Actual message: $errorMessage")
+      assert(errorMessage.contains("Did you mean one of the following?"),
+        s"Error message should provide column suggestions. Actual message: $errorMessage")
+      // Verify that 'id' is suggested as a valid column (in backtick format)
+      assert(errorMessage.contains("`id`"),
+        s"Error message should suggest the valid column 'id'. Actual message: $errorMessage")
     }
   }
 
@@ -148,13 +157,19 @@ class TestHoodieAnalysisErrorHandling extends HoodieSparkSqlTestBase {
              """.stripMargin)
       }
 
-      // Verify the error message contains helpful information
+      // This case goes through Hudi's error handling (ProducesHudiMetaFields.unapply)
+      // which catches UnresolvedException and provides enhanced error guidance
       val errorMessage = exception.getMessage
-      assert(errorMessage.contains("Failed to resolve query") &&
-        errorMessage.contains("The query contains unresolved") &&
-        errorMessage.contains("typos in column or table names") &&
-        errorMessage.contains("nonexistent_source_table"),
-        s"Error message should contain enhanced guidance and mention 'nonexistent_source_table'. Actual message: $errorMessage")
+      assert(errorMessage.contains("Failed to resolve query"),
+        s"Error message should contain 'Failed to resolve query'. Actual message: $errorMessage")
+      assert(errorMessage.contains("The query contains unresolved"),
+        s"Error message should explain the issue. Actual message: $errorMessage")
+      assert(errorMessage.contains("typos in column or table names"),
+        s"Error message should suggest checking for typos. Actual message: $errorMessage")
+      assert(errorMessage.contains("missing table definitions"),
+        s"Error message should suggest checking for missing tables. Actual message: $errorMessage")
+      assert(errorMessage.contains("Original error"),
+        s"Error message should include the original error context. Actual message: $errorMessage")
     }
   }
 
@@ -200,13 +215,23 @@ class TestHoodieAnalysisErrorHandling extends HoodieSparkSqlTestBase {
              """.stripMargin)
       }
 
-      // Verify the error message is helpful
+      // Unresolved columns in UPDATE/INSERT clauses are caught by Spark's standard
+      // analysis before Hudi's error handling can intercept, so we get Spark's
+      // native error message with UNRESOLVED_COLUMN error class
+      // Format: [UNRESOLVED_COLUMN.WITH_SUGGESTION] A column or function parameter with name
+      // source.pricee cannot be resolved. Did you mean one of the following? [...source.price...]
       val errorMessage = exception.getMessage
-      assert(errorMessage.contains("Failed to resolve query") &&
-        errorMessage.contains("The query contains unresolved") &&
-        errorMessage.contains("typos in column or table names") &&
-        errorMessage.contains("pricee"),
-        s"Error message should contain enhanced guidance and mention 'pricee'. Actual message: $errorMessage")
+      assert(errorMessage.contains("pricee"),
+        s"Error message should mention the typo 'pricee'. Actual message: $errorMessage")
+      assert(errorMessage.contains("[UNRESOLVED_COLUMN"),
+        s"Error message should contain Spark's UNRESOLVED_COLUMN error class. Actual message: $errorMessage")
+      assert(errorMessage.contains("cannot be resolved"),
+        s"Error message should indicate the column cannot be resolved. Actual message: $errorMessage")
+      assert(errorMessage.contains("Did you mean one of the following?"),
+        s"Error message should provide column suggestions. Actual message: $errorMessage")
+      // Verify that the correct column 'price' is suggested (in the suggestion list)
+      assert(errorMessage.contains("source.price") || errorMessage.contains("`price`"),
+        s"Error message should suggest the correct column 'price'. Actual message: $errorMessage")
     }
   }
 }
