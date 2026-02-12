@@ -29,7 +29,6 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieValidationException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
@@ -37,7 +36,6 @@ import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.testutils.HoodieSparkClientTestBase;
 
-import jodd.io.FileUtil;
 import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
@@ -48,6 +46,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
+import java.io.File;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -260,7 +259,7 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
     String latestCompletedCommitMetaFile = basePath + "/.hoodie/" + lastInstant.getFileName();
     String tempDir = getTempLocation();
     String destFilePath = tempDir + "/" + lastInstant.getFileName();
-    FileUtil.move(latestCompletedCommitMetaFile, destFilePath);
+    new File(latestCompletedCommitMetaFile).renameTo(new File(destFilePath));
 
     MockHoodieMetadataTableValidatorForRli validator = new MockHoodieMetadataTableValidatorForRli(jsc, config);
     validator.setOriginalFilePath(latestCompletedCommitMetaFile);
@@ -287,12 +286,8 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
                                                                         String basePath,
                                                                         String latestCompletedCommit) {
       // move the completed file back to ".hoodie" to simuate the false positive case.
-      try {
-        FileUtil.move(destFilePath, originalFilePath);
-        return super.getRecordLocationsFromRLI(sparkEngineContext, basePath, latestCompletedCommit);
-      } catch (IOException e) {
-        throw new HoodieException("Move should not have failed");
-      }
+      new File(destFilePath).renameTo(new File(originalFilePath));
+      return super.getRecordLocationsFromRLI(sparkEngineContext, basePath, latestCompletedCommit);
     }
 
     public void setDestFilePath(String destFilePath) {

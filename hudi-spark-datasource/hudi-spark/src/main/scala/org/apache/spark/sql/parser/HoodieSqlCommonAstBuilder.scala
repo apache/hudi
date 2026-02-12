@@ -36,7 +36,7 @@ import scala.collection.JavaConverters._
 class HoodieSqlCommonAstBuilder(session: SparkSession, delegate: ParserInterface)
   extends HoodieSqlCommonBaseVisitor[AnyRef] with Logging with SparkAdapterSupport {
 
-  import ParserUtils._
+  import ParserUtils.{checkDuplicateKeys, operationNotAllowed, string}
 
   /**
    * Override the default behavior for all visit methods. This will only return a non-null result
@@ -51,25 +51,25 @@ class HoodieSqlCommonAstBuilder(session: SparkSession, delegate: ParserInterface
     }
   }
 
-  override def visitSingleStatement(ctx: SingleStatementContext): LogicalPlan = withOrigin(ctx) {
+  override def visitSingleStatement(ctx: SingleStatementContext): LogicalPlan = ParserUtils.withOrigin(ctx) {
     ctx.statement().accept(this).asInstanceOf[LogicalPlan]
   }
 
-  override def visitCompactionOnTable(ctx: CompactionOnTableContext): LogicalPlan = withOrigin(ctx) {
+  override def visitCompactionOnTable(ctx: CompactionOnTableContext): LogicalPlan = ParserUtils.withOrigin(ctx) {
     val table = ctx.tableIdentifier().accept(this).asInstanceOf[LogicalPlan]
     val operation = CompactionOperation.withName(ctx.operation.getText.toUpperCase)
     val timestamp = if (ctx.instantTimestamp != null) Some(ctx.instantTimestamp.getText.toLong) else None
     CompactionTable(table, operation, timestamp)
   }
 
-  override def visitCompactionOnPath(ctx: CompactionOnPathContext): LogicalPlan = withOrigin(ctx) {
+  override def visitCompactionOnPath(ctx: CompactionOnPathContext): LogicalPlan = ParserUtils.withOrigin(ctx) {
     val path = string(ctx.path)
     val operation = CompactionOperation.withName(ctx.operation.getText.toUpperCase)
     val timestamp = if (ctx.instantTimestamp != null) Some(ctx.instantTimestamp.getText.toLong) else None
     CompactionPath(path, operation, timestamp)
   }
 
-  override def visitShowCompactionOnTable(ctx: ShowCompactionOnTableContext): LogicalPlan = withOrigin(ctx) {
+  override def visitShowCompactionOnTable(ctx: ShowCompactionOnTableContext): LogicalPlan = ParserUtils.withOrigin(ctx) {
     val table = ctx.tableIdentifier().accept(this).asInstanceOf[LogicalPlan]
     if (ctx.limit != null) {
       CompactionShowOnTable(table, ctx.limit.getText.toInt)
@@ -78,7 +78,7 @@ class HoodieSqlCommonAstBuilder(session: SparkSession, delegate: ParserInterface
     }
   }
 
-  override def visitShowCompactionOnPath(ctx: ShowCompactionOnPathContext): LogicalPlan = withOrigin(ctx) {
+  override def visitShowCompactionOnPath(ctx: ShowCompactionOnPathContext): LogicalPlan = ParserUtils.withOrigin(ctx) {
     val path = string(ctx.path)
     if (ctx.limit != null) {
       CompactionShowOnPath(path, ctx.limit.getText.toInt)
@@ -87,11 +87,11 @@ class HoodieSqlCommonAstBuilder(session: SparkSession, delegate: ParserInterface
     }
   }
 
-  override def visitTableIdentifier(ctx: TableIdentifierContext): LogicalPlan = withOrigin(ctx) {
+  override def visitTableIdentifier(ctx: TableIdentifierContext): LogicalPlan = ParserUtils.withOrigin(ctx) {
     UnresolvedRelation(TableIdentifier(ctx.table.getText, Option(ctx.db).map(_.getText)))
   }
 
-  override def visitCall(ctx: CallContext): LogicalPlan = withOrigin(ctx) {
+  override def visitCall(ctx: CallContext): LogicalPlan = ParserUtils.withOrigin(ctx) {
     if (ctx.callArgumentList() == null || ctx.callArgumentList().callArgument() == null || ctx.callArgumentList().callArgument().size() == 0) {
       val name: Seq[String] = ctx.multipartIdentifier().parts.asScala.map(_.getText).toSeq
       CallCommand(name, Seq())
@@ -105,14 +105,14 @@ class HoodieSqlCommonAstBuilder(session: SparkSession, delegate: ParserInterface
   /**
    * Return a multi-part identifier as Seq[String].
    */
-  override def visitMultipartIdentifier(ctx: MultipartIdentifierContext): Seq[String] = withOrigin(ctx) {
+  override def visitMultipartIdentifier(ctx: MultipartIdentifierContext): Seq[String] = ParserUtils.withOrigin(ctx) {
     ctx.parts.asScala.map(_.getText).toSeq
   }
 
   /**
    * Create a positional argument in a stored procedure call.
    */
-  override def visitPositionalArgument(ctx: PositionalArgumentContext): CallArgument = withOrigin(ctx) {
+  override def visitPositionalArgument(ctx: PositionalArgumentContext): CallArgument = ParserUtils.withOrigin(ctx) {
     val expr = typedVisit[Expression](ctx.expression)
     PositionalArgument(expr)
   }
@@ -120,7 +120,7 @@ class HoodieSqlCommonAstBuilder(session: SparkSession, delegate: ParserInterface
   /**
    * Create a named argument in a stored procedure call.
    */
-  override def visitNamedArgument(ctx: NamedArgumentContext): CallArgument = withOrigin(ctx) {
+  override def visitNamedArgument(ctx: NamedArgumentContext): CallArgument = ParserUtils.withOrigin(ctx) {
     val name = ctx.identifier.getText
     val expr = typedVisit[Expression](ctx.expression)
     NamedArgument(name, expr)
@@ -160,7 +160,7 @@ class HoodieSqlCommonAstBuilder(session: SparkSession, delegate: ParserInterface
    *   indexPropertyList: index_property_name [= index_property_value] [ ,  . . . ]
    * }}}
    */
-  override def visitCreateIndex(ctx: CreateIndexContext): LogicalPlan = withOrigin(ctx) {
+  override def visitCreateIndex(ctx: CreateIndexContext): LogicalPlan = ParserUtils.withOrigin(ctx) {
     val (indexName, indexType) = if (ctx.identifier.size() == 1) {
       (ctx.identifier(0).getText, "")
     } else {
@@ -189,7 +189,7 @@ class HoodieSqlCommonAstBuilder(session: SparkSession, delegate: ParserInterface
    *   DROP INDEX [IF EXISTS] index_name ON [TABLE] table_name
    * }}}
    */
-  override def visitDropIndex(ctx: DropIndexContext): LogicalPlan = withOrigin(ctx) {
+  override def visitDropIndex(ctx: DropIndexContext): LogicalPlan = ParserUtils.withOrigin(ctx) {
     val indexName = ctx.identifier.getText
     DropIndex(
       visitTableIdentifier(ctx.tableIdentifier()),
@@ -204,7 +204,7 @@ class HoodieSqlCommonAstBuilder(session: SparkSession, delegate: ParserInterface
    *   SHOW INDEXES (FROM | IN) [TABLE] table_name
    * }}}
    */
-  override def visitShowIndexes(ctx: ShowIndexesContext): LogicalPlan = withOrigin(ctx) {
+  override def visitShowIndexes(ctx: ShowIndexesContext): LogicalPlan = ParserUtils.withOrigin(ctx) {
     ShowIndexes(visitTableIdentifier(ctx.tableIdentifier()))
   }
 
@@ -215,7 +215,7 @@ class HoodieSqlCommonAstBuilder(session: SparkSession, delegate: ParserInterface
    *   REFRESH INDEX index_name ON [TABLE] table_name
    * }}}
    */
-  override def visitRefreshIndex(ctx: RefreshIndexContext): LogicalPlan = withOrigin(ctx) {
+  override def visitRefreshIndex(ctx: RefreshIndexContext): LogicalPlan = ParserUtils.withOrigin(ctx) {
     RefreshIndex(visitTableIdentifier(ctx.tableIdentifier()), ctx.identifier.getText)
   }
 
@@ -224,7 +224,7 @@ class HoodieSqlCommonAstBuilder(session: SparkSession, delegate: ParserInterface
    * This should be called through [[visitPropertyKeyValues]] or [[visitPropertyKeys]].
    */
   override def visitPropertyList(
-                                  ctx: PropertyListContext): Map[String, String] = withOrigin(ctx) {
+                                  ctx: PropertyListContext): Map[String, String] = ParserUtils.withOrigin(ctx) {
     val properties = ctx.property.asScala.map { property =>
       val key = visitPropertyKey(property.key)
       val value = visitPropertyValue(property.value)
