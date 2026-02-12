@@ -22,6 +22,7 @@ import org.apache.hudi.avro.model.HoodieClusteringGroup;
 import org.apache.hudi.avro.model.HoodieClusteringPlan;
 import org.apache.hudi.avro.model.HoodieClusteringStrategy;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.TableServiceType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -164,7 +165,14 @@ public abstract class PartitionAwareClusteringPlanStrategy<T,I,K,O> extends Clus
       return Option.empty();
     }
 
-    List<Pair<List<HoodieClusteringGroup>, String>> res = getEngineContext().map(partitionPaths, partitionPath -> {
+    final HoodieEngineContext engineContext;
+    if (getWriteConfig().isClusteringComputePlanPerPartitionParallel()) {
+      engineContext = getEngineContext();
+    } else {
+      engineContext = new HoodieLocalEngineContext(getEngineContext().getStorageConf());
+    }
+
+    List<Pair<List<HoodieClusteringGroup>, String>> res = engineContext.map(partitionPaths, partitionPath -> {
       List<FileSlice> fileSlicesEligible = getFileSlicesEligibleForClustering(partitionPath).collect(Collectors.toList());
       Pair<Stream<HoodieClusteringGroup>, Boolean> groupPair = buildClusteringGroupsForPartition(partitionPath, fileSlicesEligible);
       List<HoodieClusteringGroup> clusteringGroupsPartition = groupPair.getLeft().collect(Collectors.toList());
