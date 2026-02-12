@@ -86,6 +86,19 @@ object HoodieSpark35CatalystPlanUtils extends BaseHoodieCatalystPlanUtils {
       messageParameters = Map("relationName" -> s"`$tableName`"))
   }
 
+  override def failUnresolvedQuery(unresolvedRefs: Seq[String], originalError: String): Nothing = {
+    val unresolvedInfo = if (unresolvedRefs.nonEmpty) {
+      s" Unresolved references: [${unresolvedRefs.mkString(", ")}]."
+    } else {
+      ""
+    }
+    throw new AnalysisException(
+      s"Failed to resolve query. The query contains unresolved columns or tables.$unresolvedInfo " +
+        s"Please check for: (1) typos in column or table names, (2) missing table definitions, " +
+        s"(3) incorrect database/schema references, (4) columns that don't exist in the source tables. " +
+        s"Original error: $originalError")
+  }
+
   override def unapplyCreateIndex(plan: LogicalPlan): Option[(LogicalPlan, String, String, Boolean, Seq[(Seq[String], Map[String, String])], Map[String, String])] = {
     plan match {
       case ci@CreateIndex(table, indexName, indexType, ignoreIfExists, columns, properties) =>

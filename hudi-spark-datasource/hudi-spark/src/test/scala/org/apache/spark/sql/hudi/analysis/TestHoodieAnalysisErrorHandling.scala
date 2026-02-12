@@ -66,10 +66,11 @@ class TestHoodieAnalysisErrorHandling extends HoodieSparkSqlTestBase {
 
       // Verify the error message contains helpful information
       val errorMessage = exception.getMessage
-      assert(errorMessage.contains("nonexistent_column") ||
-        errorMessage.contains("unresolved") ||
-        errorMessage.contains("cannot be resolved"),
-        s"Error message should mention the unresolved column. Actual message: $errorMessage")
+      assert(errorMessage.contains("Failed to resolve query") &&
+        errorMessage.contains("The query contains unresolved") &&
+        errorMessage.contains("typos in column or table names") &&
+        errorMessage.contains("nonexistent_column"),
+        s"Error message should contain enhanced guidance and mention 'nonexistent_column'. Actual message: $errorMessage")
     }
   }
 
@@ -111,10 +112,11 @@ class TestHoodieAnalysisErrorHandling extends HoodieSparkSqlTestBase {
 
       // Verify the error message contains helpful information
       val errorMessage = exception.getMessage
-      assert(errorMessage.contains("nonexistent_id") ||
-        errorMessage.contains("unresolved") ||
-        errorMessage.contains("cannot be resolved"),
-        s"Error message should mention the unresolved column. Actual message: $errorMessage")
+      assert(errorMessage.contains("Failed to resolve query") &&
+        errorMessage.contains("The query contains unresolved") &&
+        errorMessage.contains("typos in column or table names") &&
+        errorMessage.contains("nonexistent_id"),
+        s"Error message should contain enhanced guidance and mention 'nonexistent_id'. Actual message: $errorMessage")
     }
   }
 
@@ -148,9 +150,11 @@ class TestHoodieAnalysisErrorHandling extends HoodieSparkSqlTestBase {
 
       // Verify the error message contains helpful information
       val errorMessage = exception.getMessage
-      assert(errorMessage.contains("typos in column or table names") &&
-        errorMessage.contains("unresolved"),
-        s"Error message should mention typos and unresolved references. Actual message: $errorMessage")
+      assert(errorMessage.contains("Failed to resolve query") &&
+        errorMessage.contains("The query contains unresolved") &&
+        errorMessage.contains("typos in column or table names") &&
+        errorMessage.contains("nonexistent_source_table"),
+        s"Error message should contain enhanced guidance and mention 'nonexistent_source_table'. Actual message: $errorMessage")
     }
   }
 
@@ -198,10 +202,11 @@ class TestHoodieAnalysisErrorHandling extends HoodieSparkSqlTestBase {
 
       // Verify the error message is helpful
       val errorMessage = exception.getMessage
-      assert(errorMessage.contains("pricee") ||
-        errorMessage.contains("unresolved") ||
-        errorMessage.contains("cannot be resolved"),
-        s"Error message should mention the typo column. Actual message: $errorMessage")
+      assert(errorMessage.contains("Failed to resolve query") &&
+        errorMessage.contains("The query contains unresolved") &&
+        errorMessage.contains("typos in column or table names") &&
+        errorMessage.contains("pricee"),
+        s"Error message should contain enhanced guidance and mention 'pricee'. Actual message: $errorMessage")
     }
   }
 }

@@ -21,7 +21,7 @@ import org.apache.hudi.{HoodieSchemaUtils, HoodieSparkUtils, SparkAdapterSupport
 import org.apache.hudi.common.util.{ReflectionUtils, ValidationUtils}
 import org.apache.hudi.common.util.ReflectionUtils.loadClass
 
-import org.apache.spark.sql.{AnalysisException, SparkSession}
+import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.analysis.{UnresolvedAttribute, UnresolvedException}
 import org.apache.spark.sql.catalyst.catalog.{CatalogStorageFormat, CatalogTable, HoodieCatalogTable}
@@ -314,16 +314,7 @@ object HoodieAnalysis extends SparkAdapterSupport {
         } catch {
           case e: UnresolvedException =>
             val unresolvedRefs = collectUnresolvedReferences(plan)
-            val unresolvedInfo = if (unresolvedRefs.nonEmpty) {
-              s" Unresolved references: [${unresolvedRefs.mkString(", ")}]."
-            } else {
-              ""
-            }
-            throw new AnalysisException(
-              s"Failed to resolve query. The query contains unresolved columns or tables.$unresolvedInfo " +
-              s"Please check for: (1) typos in column or table names, (2) missing table definitions, " +
-              s"(3) incorrect database/schema references, (4) columns that don't exist in the source tables. " +
-              s"Original error: ${e.getMessage}")
+            sparkAdapter.getCatalystPlanUtils.failUnresolvedQuery(unresolvedRefs, e.getMessage)
         }
       }
 
