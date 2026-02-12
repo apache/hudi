@@ -486,4 +486,14 @@ public class HoodieHiveSyncClient extends HoodieSyncClient {
       throw new HoodieHiveSyncException("Failed to delete the table " + tableId(databaseName, tableName), e);
     }
   }
+
+  @Override
+  public String getTableLocation(String tableName) {
+    try {
+      Table table = client.getTable(databaseName, tableName);
+      return table.getSd().getLocation();
+    } catch (Exception e) {
+      throw new HoodieHiveSyncException("Failed to get the basepath of the table " + tableId(databaseName, tableName), e);
+    }
+  }
 }
