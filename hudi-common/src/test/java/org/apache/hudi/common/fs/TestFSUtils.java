@@ -606,6 +606,18 @@ public class TestFSUtils extends HoodieCommonTestHarness {
   }
 
   @Test
+  void testS3aToS3_AWS() {
+    // Test cases for AWS S3 URLs
+    assertEquals("s3://my-bucket/path/to/object", FSUtils.s3aToS3("s3a://my-bucket/path/to/object"));
+    assertEquals("s3://my-bucket", FSUtils.s3aToS3("s3a://my-bucket"));
+    assertEquals("s3://MY-BUCKET/PATH/TO/OBJECT", FSUtils.s3aToS3("s3a://MY-BUCKET/PATH/TO/OBJECT"));
+    assertEquals("s3://my-bucket/path/to/object", FSUtils.s3aToS3("S3a://my-bucket/path/to/object"));
+    assertEquals("s3://my-bucket/path/to/object", FSUtils.s3aToS3("s3A://my-bucket/path/to/object"));
+    assertEquals("s3://my-bucket/path/to/object", FSUtils.s3aToS3("S3A://my-bucket/path/to/object"));
+    assertEquals("s3://my-bucket/s3a://another-bucket/another/path", FSUtils.s3aToS3("s3a://my-bucket/s3a://another-bucket/another/path"));
+  }
+
+  @Test
   void testGetPathWithoutScheme() {
     String path1 = "s3://test_bucket_one/table/base/path";
     assertEquals(FSUtils.getPathWithoutScheme(new Path(path1)).toUri().toString(), "//test_bucket_one/table/base/path", "should return false since bucket names dont match");
