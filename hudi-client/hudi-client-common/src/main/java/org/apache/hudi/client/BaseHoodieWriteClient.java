@@ -1419,7 +1419,10 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
       }
       if (!keyGenClass.equals("org.apache.hudi.keygen.SimpleKeyGenerator")
           && !keyGenClass.equals("org.apache.hudi.keygen.NonpartitionedKeyGenerator")
-          && !keyGenClass.equals("org.apache.hudi.keygen.ComplexKeyGenerator")) {
+          && !keyGenClass.equals("org.apache.hudi.keygen.ComplexKeyGenerator")
+          && !keyGenClass.equals("org.apache.hudi.keygen.SimpleAvroKeyGenerator")
+          && !keyGenClass.equals("org.apache.hudi.keygen.NonpartitionedAvroKeyGenerator")
+          && !keyGenClass.equals("org.apache.hudi.keygen.ComplexAvroKeyGenerator")) {
         throw new HoodieException("Only simple, non-partitioned or complex key generator are supported when meta-fields are disabled. Used: " + keyGenClass);
       }
     }
