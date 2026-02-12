@@ -1693,9 +1693,6 @@ public class HoodieSchema implements Serializable {
      * @throws IllegalArgumentException if schema is invalid
      */
     private void validateVectorSchema(Schema avroSchema) {
-      ValidationUtils.checkArgument(avroSchema.getType() == Schema.Type.FIXED,
-          () -> "Vector schema must be FIXED type, got: " + avroSchema.getType());
-
       // Verify FIXED size matches: dimension × elementSize
       int expectedSize = dimension * getElementSize(elementType);
       int actualSize = avroSchema.getFixedSize();
@@ -1980,11 +1977,6 @@ public class HoodieSchema implements Serializable {
     @Override
     public void validate(Schema schema) {
       super.validate(schema);
-      // Only validate schema structure compatibility, not property presence
-      // Properties are added by addToSchema(), following the pattern of VariantLogicalType
-      if (schema.getType() != Schema.Type.FIXED) {
-        throw new IllegalArgumentException("Vector logical type can only be applied to FIXED schemas, got: " + schema.getType());
-      }
     }
   }
 
