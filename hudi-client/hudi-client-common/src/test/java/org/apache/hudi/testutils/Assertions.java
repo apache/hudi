@@ -21,12 +21,17 @@ package org.apache.hudi.testutils;
 
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.testutils.CheckedFunction;
+import org.apache.hudi.exception.HoodieException;
+
+import org.junit.jupiter.api.function.Executable;
 
 import java.util.List;
 
+import static org.apache.hudi.keygen.KeyGenUtils.getComplexKeygenErrorMessage;
 import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 /**
  * Commonly used assertion functions.
@@ -51,4 +56,8 @@ public class Assertions {
         assertEquals(fileSizeGetter.apply(status), status.getStat().getFileSizeInBytes())));
   }
 
+  public static void assertComplexKeyGeneratorValidationThrows(Executable writeOperation, String operation) {
+    HoodieException exception = assertThrows(HoodieException.class, writeOperation);
+    assertEquals(getComplexKeygenErrorMessage(operation), exception.getMessage());
+  }
 }
