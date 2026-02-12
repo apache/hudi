@@ -18,6 +18,7 @@
 
 package org.apache.hudi.internal.schema.convert;
 
+import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.internal.schema.HoodieSchemaException;
 import org.apache.hudi.internal.schema.InternalSchema;
@@ -231,15 +232,18 @@ public class AvroInternalSchemaConverter {
       } else if (logical instanceof LogicalTypes.Date) {
         return Types.DateType.get();
 
-      } else if (
-              logical instanceof LogicalTypes.TimeMillis
-                      || logical instanceof LogicalTypes.TimeMicros) {
+      } else if (logical instanceof LogicalTypes.TimeMillis) {
+        return Types.TimeMillisType.get();
+      } else if (logical instanceof LogicalTypes.TimeMicros) {
         return Types.TimeType.get();
-
-      } else if (
-              logical instanceof LogicalTypes.TimestampMillis
-                      || logical instanceof LogicalTypes.TimestampMicros) {
+      } else if (logical instanceof LogicalTypes.TimestampMillis) {
+        return Types.TimestampMillisType.get();
+      } else if (logical instanceof LogicalTypes.TimestampMicros) {
         return Types.TimestampType.get();
+      } else if (HoodieAvroUtils.isLocalTimestampMillis(logical)) {
+        return Types.LocalTimestampMillisType.get();
+      } else if (HoodieAvroUtils.isLocalTimestampMicros(logical)) {
+        return Types.LocalTimestampMicrosType.get();
       } else if (LogicalTypes.uuid().getName().equals(name)) {
         return Types.UUIDType.get();
       }
@@ -428,8 +432,20 @@ public class AvroInternalSchemaConverter {
       case TIME:
         return LogicalTypes.timeMicros().addToSchema(Schema.create(Schema.Type.LONG));
 
+      case TIME_MILLIS:
+        return LogicalTypes.timeMillis().addToSchema(Schema.create(Schema.Type.INT));
+
       case TIMESTAMP:
         return LogicalTypes.timestampMicros().addToSchema(Schema.create(Schema.Type.LONG));
+
+      case TIMESTAMP_MILLIS:
+        return LogicalTypes.timestampMillis().addToSchema(Schema.create(Schema.Type.LONG));
+
+      case LOCAL_TIMESTAMP_MICROS:
+        return createLocalTimestampMicrosSchema();
+
+      case LOCAL_TIMESTAMP_MILLIS:
+        return createLocalTimestampMillisSchema();
 
       case STRING:
         return Schema.create(Schema.Type.STRING);
@@ -480,5 +496,35 @@ public class AvroInternalSchemaConverter {
       numBytes += 1;
     }
     return numBytes;
+  }
+
+  /**
+   * Creates a LocalTimestampMicros schema using reflection.
+   * Returns null if the class doesn't exist (e.g., in Avro 1.8.2).
+   */
+  private static Schema createLocalTimestampMicrosSchema() {
+    try {
+      java.lang.reflect.Method method = LogicalTypes.class.getMethod("localTimestampMicros");
+      LogicalType logicalType = (LogicalType) method.invoke(null);
+      return logicalType.addToSchema(Schema.create(Schema.Type.LONG));
+    } catch (Exception e) {
+      // Method doesn't exist (e.g., Avro 1.8.2)
+      throw new UnsupportedOperationException("LocalTimestampMicros is not supported in this Avro version", e);
+    }
+  }
+
+  /**
+   * Creates a LocalTimestampMillis schema using reflection.
+   * Returns null if the class doesn't exist (e.g., in Avro 1.8.2).
+   */
+  private static Schema createLocalTimestampMillisSchema() {
+    try {
+      java.lang.reflect.Method method = LogicalTypes.class.getMethod("localTimestampMillis");
+      LogicalType logicalType = (LogicalType) method.invoke(null);
+      return logicalType.addToSchema(Schema.create(Schema.Type.LONG));
+    } catch (Exception e) {
+      // Method doesn't exist (e.g., Avro 1.8.2)
+      throw new UnsupportedOperationException("LocalTimestampMillis is not supported in this Avro version", e);
+    }
   }
 }

@@ -33,11 +33,13 @@ import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.util.DateTimeUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.SpillableMapUtils;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.exception.HoodieAvroSchemaException;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.SchemaCompatibilityException;
@@ -47,10 +49,12 @@ import org.apache.avro.AvroRuntimeException;
 import org.apache.avro.Conversions;
 import org.apache.avro.Conversions.DecimalConversion;
 import org.apache.avro.JsonProperties;
+import org.apache.avro.LogicalType;
 import org.apache.avro.LogicalTypes;
 import org.apache.avro.LogicalTypes.Decimal;
 import org.apache.avro.Schema;
 import org.apache.avro.Schema.Field;
+import org.apache.avro.Schema.Field.Order;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericData.Record;
 import org.apache.avro.generic.GenericDatumReader;
@@ -104,10 +108,10 @@ import static org.apache.avro.Schema.Type.MAP;
 import static org.apache.avro.Schema.Type.UNION;
 import static org.apache.hudi.avro.AvroSchemaUtils.createNullableSchema;
 import static org.apache.hudi.avro.AvroSchemaUtils.isNullable;
-import static org.apache.hudi.avro.AvroSchemaUtils.resolveNullableSchema;
 import static org.apache.hudi.avro.AvroSchemaUtils.resolveUnionSchema;
 import static org.apache.hudi.common.util.DateTimeUtils.instantToMicros;
 import static org.apache.hudi.common.util.DateTimeUtils.microsToInstant;
+import static org.apache.hudi.avro.AvroSchemaUtils.getNonNullTypeFromUnion;
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.tryUpcastDecimal;
 
@@ -156,6 +160,19 @@ public class HoodieAvroUtils {
   private static final Pattern INVALID_AVRO_CHARS_IN_NAMES_PATTERN = Pattern.compile("[^A-Za-z0-9_]");
   private static final Pattern INVALID_AVRO_FIRST_CHAR_IN_NAMES_PATTERN = Pattern.compile("[^A-Za-z_]");
   private static final String MASK_FOR_INVALID_CHARS_IN_NAMES = "__";
+
+  // Cached Avro logical type classes (null if not available, e.g., Avro 1.8.2).
+  // Loaded once at class init to avoid repeated Class.forName() and reflection cost per record.
+  private static final Class<?> LOCAL_TIMESTAMP_MILLIS_CLASS = loadClassSafe("org.apache.avro.LogicalTypes$LocalTimestampMillis");
+  private static final Class<?> LOCAL_TIMESTAMP_MICROS_CLASS = loadClassSafe("org.apache.avro.LogicalTypes$LocalTimestampMicros");
+
+  private static Class<?> loadClassSafe(String name) {
+    try {
+      return Class.forName(name);
+    } catch (ClassNotFoundException e) {
+      return null;
+    }
+  }
 
   // All metadata fields are optional strings.
   public static final Schema METADATA_FIELD_SCHEMA = createNullableSchema(Schema.Type.STRING);
@@ -653,7 +670,7 @@ public class HoodieAvroUtils {
       Object val = valueNode.get(part);
 
       if (i == parts.length - 1) {
-        return resolveNullableSchema(valueNode.getSchema().getField(part).schema());
+        return getNonNullTypeFromUnion(valueNode.getSchema().getField(part).schema());
       } else {
         if (!(val instanceof GenericRecord)) {
           throw new HoodieException("Cannot find a record at part value :" + part);
@@ -674,13 +691,20 @@ public class HoodieAvroUtils {
    */
   public static Schema getNestedFieldSchemaFromWriteSchema(Schema writeSchema, String fieldName) {
     String[] parts = fieldName.split("\\.");
+    Schema currentSchema = writeSchema;
     int i = 0;
     for (; i < parts.length; i++) {
       String part = parts[i];
-      Schema schema = writeSchema.getField(part).schema();
+      try {
+        // Resolve nullable/union schema to the actual schema
+        currentSchema = getNonNullTypeFromUnion(currentSchema.getField(part).schema());
 
-      if (i == parts.length - 1) {
-        return resolveNullableSchema(schema);
+        if (i == parts.length - 1) {
+          // Return the schema for the final part
+          return getNonNullTypeFromUnion(currentSchema);
+        }
+      } catch (Exception e) {
+        throw new HoodieException("Failed to get schema. Not a valid field name: " + fieldName);
       }
     }
     throw new HoodieException("Failed to get schema. Not a valid field name: " + fieldName);
@@ -718,7 +742,7 @@ public class HoodieAvroUtils {
       return null;
     }
 
-    return convertValueForAvroLogicalTypes(resolveNullableSchema(fieldSchema), fieldValue, consistentLogicalTimestampEnabled);
+    return convertValueForAvroLogicalTypes(getNonNullTypeFromUnion(fieldSchema), fieldValue, consistentLogicalTimestampEnabled);
   }
 
   /**
@@ -968,11 +992,34 @@ public class HoodieAvroUtils {
         case NULL:
         case BOOLEAN:
         case INT:
-        case LONG:
         case FLOAT:
         case DOUBLE:
         case BYTES:
         case STRING:
+          return oldValue;
+        case LONG:
+          if (oldSchema.getLogicalType() != newSchema.getLogicalType()) {
+            if (oldSchema.getLogicalType() == null || newSchema.getLogicalType() == null) {
+              return oldValue;
+            } else if (oldSchema.getLogicalType() instanceof LogicalTypes.TimestampMillis) {
+              if (newSchema.getLogicalType() instanceof LogicalTypes.TimestampMicros) {
+                return DateTimeUtils.millisToMicros((Long) oldValue);
+              }
+            } else if (oldSchema.getLogicalType() instanceof LogicalTypes.TimestampMicros) {
+              if (newSchema.getLogicalType() instanceof LogicalTypes.TimestampMillis) {
+                return DateTimeUtils.microsToMillis((Long) oldValue);
+              }
+            } else if (isLocalTimestampMillis(oldSchema.getLogicalType())) {
+              if (isLocalTimestampMicros(newSchema.getLogicalType())) {
+                return DateTimeUtils.millisToMicros((Long) oldValue);
+              }
+            } else if (isLocalTimestampMicros(oldSchema.getLogicalType())) {
+              if (isLocalTimestampMillis(newSchema.getLogicalType())) {
+                return DateTimeUtils.microsToMillis((Long) oldValue);
+              }
+            }
+            throw new HoodieAvroSchemaException("Long type logical change from " + oldSchema.getLogicalType() + " to " + newSchema.getLogicalType() + " is not supported");
+          }
           return oldValue;
         case FIXED:
           if (oldSchema.getFixedSize() != newSchema.getFixedSize()) {
@@ -1271,6 +1318,10 @@ public class HoodieAvroUtils {
     return VersionUtil.compareVersions(AVRO_VERSION, "1.10") >= 0;
   }
 
+  public static boolean gteqAvro1_12() {
+    return VersionUtil.compareVersions(AVRO_VERSION, "1.12") >= 0;
+  }
+
   /**
    * Wraps a value into Avro type wrapper.
    *
@@ -1364,4 +1415,95 @@ public class HoodieAvroUtils {
     }
   }
 
+  /**
+   * Checks if a logical type is an instance of LocalTimestampMillis using reflection.
+   * Returns false if the class doesn't exist (e.g., in Avro 1.8.2).
+   */
+  public static boolean isLocalTimestampMillis(LogicalType logicalType) {
+    if (logicalType == null || LOCAL_TIMESTAMP_MILLIS_CLASS == null) {
+      return false;
+    }
+    return LOCAL_TIMESTAMP_MILLIS_CLASS.isInstance(logicalType);
+  }
+
+  /**
+   * Checks if a logical type is an instance of LocalTimestampMicros using reflection.
+   * Returns false if the class doesn't exist (e.g., in Avro 1.8.2).
+   */
+  public static boolean isLocalTimestampMicros(LogicalType logicalType) {
+    if (logicalType == null || LOCAL_TIMESTAMP_MICROS_CLASS == null) {
+      return false;
+    }
+    return LOCAL_TIMESTAMP_MICROS_CLASS.isInstance(logicalType);
+  }
+
+  private static Object convertDefaultValueForAvroCompatibility(Object defaultValue) {
+    if (gteqAvro1_12() && defaultValue instanceof byte[]) {
+      // For Avro 1.12.0 compatibility, we need to convert the default value in byte array
+      // to String so that correct JsonNode is used for the default value for validation,
+      // instead of directly relying on Avro's JacksonUtils.toJsonNode which is called
+      // by `Schema.Field` constructor
+      // The logic of getting the String value is copied from JacksonUtils.toJsonNode in Avro 1.11.4
+      return new String((byte[]) defaultValue, StandardCharsets.ISO_8859_1);
+    }
+    return defaultValue;
+  }
+
+  /**
+   * Creates a new Avro Schema.Field from an existing field, with special handling for
+   * default values to ensure compatibility with Avro 1.12.0 and later versions.
+   *
+   * @param field the original Schema.Field to create a new field from
+   * @return a new Schema.Field with the same properties but properly formatted default value
+   */
+  public static Schema.Field createNewSchemaField(Schema.Field field) {
+    return createNewSchemaField(field.name(), field.schema(), field.doc(), field.defaultVal());
+  }
+
+  /**
+   * Creates a new Avro Schema.Field with special handling for default values to ensure
+   * compatibility with Avro 1.12.0 and later versions.
+   *
+   * <p>In Avro 1.12.0+, the validation of default values for bytes fields is stricter.
+   * When the default value is a byte array, it needs to be converted to a String using
+   * ISO-8859-1 encoding so that the correct JsonNode type (TextNode) is used for validation,
+   * rather than BinaryNode which would fail validation. Changes in Avro 1.12.0 that
+   * lead to this behavior: [AVRO-3876] https://github.com/apache/avro/pull/2529
+   *
+   * <p>This conversion ensures that schemas with bytes fields having default values
+   * can be properly constructed without AvroTypeException in Avro 1.12.0+.
+   *
+   * @param name         the name of the field
+   * @param schema       the schema of the field
+   * @param doc          the documentation for the field (can be null)
+   * @param defaultValue the default value for the field (can be null)
+   * @return a new Schema.Field with properly formatted default value for Avro 1.12.0+ compatibility
+   */
+  public static Schema.Field createNewSchemaField(String name, Schema schema, String doc, Object defaultValue) {
+    return new Schema.Field(name, schema, doc, convertDefaultValueForAvroCompatibility(defaultValue));
+  }
+
+  /**
+   * Creates a new Avro Schema.Field with special handling for default values to ensure
+   * compatibility with Avro 1.12.0 and later versions.
+   *
+   * <p>In Avro 1.12.0+, the validation of default values for bytes fields is stricter.
+   * When the default value is a byte array, it needs to be converted to a String using
+   * ISO-8859-1 encoding so that the correct JsonNode type (TextNode) is used for validation,
+   * rather than BinaryNode which would fail validation. Changes in Avro 1.12.0 that
+   * lead to this behavior: [AVRO-3876] https://github.com/apache/avro/pull/2529
+   *
+   * <p>This conversion ensures that schemas with bytes fields having default values
+   * can be properly constructed without AvroTypeException in Avro 1.12.0+.
+   *
+   * @param name         the name of the field
+   * @param schema       the schema of the field
+   * @param doc          the documentation for the field (can be null)
+   * @param defaultValue the default value for the field (can be null)
+   * @param order        the sort order for this field (can be null, defaults to ascending)
+   * @return a new Schema.Field with properly formatted default value for Avro 1.12.0+ compatibility
+   */
+  public static Schema.Field createNewSchemaField(String name, Schema schema, String doc, Object defaultValue, Order order) {
+    return new Schema.Field(name, schema, doc, convertDefaultValueForAvroCompatibility(defaultValue), order);
+  }
 }

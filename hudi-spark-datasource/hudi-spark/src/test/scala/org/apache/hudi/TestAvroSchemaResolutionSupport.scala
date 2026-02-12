@@ -23,9 +23,13 @@ import org.apache.hudi.common.model.HoodieTableType
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.exception.SchemaCompatibilityException
 import org.apache.hudi.testutils.HoodieClientTestBase
+import org.apache.spark.SparkException
+import org.apache.spark.sql.{DataFrame, Row, SparkSession}
 import org.apache.spark.sql.types._
 import org.apache.spark.sql.{DataFrame, Row, SparkSession}
 import org.junit.jupiter.api.{AfterEach, BeforeEach}
+import org.junit.jupiter.api.Assertions.assertDoesNotThrow
+import org.junit.jupiter.api.function.Executable
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{CsvSource, ValueSource}
 
@@ -807,5 +811,90 @@ class TestAvroSchemaResolutionSupport extends HoodieClientTestBase with ScalaAss
     readDf.printSchema()
     readDf.show(false)
     readDf.foreach(_ => {})
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = Array("COPY_ON_WRITE", "MERGE_ON_READ"))
+  def testNestedTypeVectorizedReadWithTypeChange(tableType: String): Unit = {
+    // test to change the value type of a MAP in a column of ARRAY< MAP<k,v> > type
+    val tempRecordPath = basePath + "/record_tbl/"
+    val arrayMapData = Seq(
+      Row(1, 100, List(Map("2022-12-01" -> 120), Map("2022-12-02" -> 130)), "aaa")
+    )
+    val arrayMapSchema = new StructType()
+      .add("id", IntegerType)
+      .add("userid", IntegerType)
+      .add("salesMap", ArrayType(
+        new MapType(StringType, IntegerType, true)))
+      .add("name", StringType)
+    val df1 = spark.createDataFrame(spark.sparkContext.parallelize(arrayMapData), arrayMapSchema)
+    df1.printSchema()
+    df1.show(false)
+
+    // recreate table
+    initialiseTable(df1, tempRecordPath, tableType.equals("COPY_ON_WRITE"))
+
+    // read out the table, will not throw any exception
+    readTable(tempRecordPath)
+
+    // change value type from integer to long
+    val newArrayMapData = Seq(
+      Row(2, 200, List(Map("2022-12-01" -> 220L), Map("2022-12-02" -> 230L)), "bbb")
+    )
+    val newArrayMapSchema = new StructType()
+      .add("id", IntegerType)
+      .add("userid", IntegerType)
+      .add("salesMap", ArrayType(
+        new MapType(StringType, LongType, true)))
+      .add("name", StringType)
+    val df2 = spark.createDataFrame(spark.sparkContext.parallelize(newArrayMapData), newArrayMapSchema)
+    df2.printSchema()
+    df2.show(false)
+    // upsert
+    upsertData(df2, tempRecordPath, tableType.equals("COPY_ON_WRITE"))
+
+    // after implicit type change, read the table with vectorized read enabled
+    // Spark 3.3 has a ClassCastException bug with vectorized nested column reader after type changes
+    // Spark 3.4+ with computeSafeProjection fix handles type promotions correctly
+    if (HoodieSparkUtils.gteqSpark3_3 && !HoodieSparkUtils.gteqSpark3_4) {
+      assertThrows(classOf[SparkException]) {
+        withSQLConf("spark.sql.parquet.enableNestedColumnVectorizedReader" -> "true") {
+          readTable(tempRecordPath)
+        }
+      }
+    } else {
+      withSQLConf("spark.sql.parquet.enableNestedColumnVectorizedReader" -> "true") {
+        readTable(tempRecordPath)
+      }
+    }
+
+    withSQLConf("spark.sql.parquet.enableNestedColumnVectorizedReader" -> "false") {
+      readTable(tempRecordPath)
+    }
+  }
+
+
+  private def readTable(path: String): Unit = {
+    // read out the table
+    val readDf = spark.read.format("hudi").load(path)
+    readDf.printSchema()
+    readDf.show(false)
+    readDf.foreach(_ => {})
+  }
+
+  protected def withSQLConf[T](pairs: (String, String)*)(f: => T): T = {
+    val conf = spark.sessionState.conf
+    val currentValues = pairs.unzip._1.map { k =>
+      if (conf.contains(k)) {
+        Some(conf.getConfString(k))
+      } else None
+    }
+    pairs.foreach { case (k, v) => conf.setConfString(k, v) }
+    try f finally {
+      pairs.unzip._1.zip(currentValues).foreach {
+        case (key, Some(value)) => conf.setConfString(key, value)
+        case (key, None) => conf.unsetConf(key)
+      }
+    }
   }
 }
