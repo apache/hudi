@@ -36,10 +36,4 @@ If you would like to present in one of the community calls, please fill out the 
 ### Schedules
 Refer to the [Apache Hudi events calendar](https://calendar.google.com/calendar/embed?src=rgpb1ta2mgp5au38fr2834poa8%40group.calendar.google.com&ctz=America%2FLos_Angeles) to find upcoming Hudi events.
 
-Here's a quick view of the upcoming community calls: 
- - 24th Jul 2024, 9:00 - 10:00am pacific time
- - 20th Aug 2024, 9:00 - 10:00am pacific time
- - 25th Sep 2024, 9:00 - 10:00am pacific time
- - 23rd Oct 2024, 9:00 - 10:00am pacific time
- - 27th Nov 2024, 9:00 - 10:00am pacific time
 
