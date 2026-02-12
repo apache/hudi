@@ -12,7 +12,7 @@ In such cases, you can leverage another tool like Apache Spark or Apache Flink t
 | Onehouse.ai       | [Read + Write](https://www.onehouse.ai/universal-data-lakehouse)                                                         |             |
 | Apache Spark      | [Read + Write](https://hudi.apache.org/docs/quick-start-guide)                                                           |             |
 | Apache Flink      | [Read + Write](https://hudi.apache.org/docs/flink-quick-start-guide)                                                     |             |
-| Presto            | [Read](https://prestodb.io/docs/current/connector/hudi.html)                                                             |             |
+| Presto            | [Read](https://hudi.apache.org/docs/presto_hudi_connector)                                                             |             |
 | Trino             | [Read](https://trino.io/docs/current/connector/hudi.html)                                                                |             |
 | Hive              | [Read](https://hudi.apache.org/docs/next/query_engine_setup/#hive)                                                       |             |
 | DBT               | [Read + Write](https://hudi.apache.org/blog/2022/07/11/build-open-lakehouse-using-apache-hudi-and-dbt)                   |             |
