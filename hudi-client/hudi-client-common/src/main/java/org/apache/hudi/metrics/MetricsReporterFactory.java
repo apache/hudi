@@ -24,7 +24,6 @@ import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.config.metrics.HoodieMetricsConfig;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.metrics.cloudwatch.CloudWatchMetricsReporter;
 import org.apache.hudi.metrics.custom.CustomizableMetricsReporter;
 import org.apache.hudi.metrics.datadog.DatadogMetricsReporter;
 import org.apache.hudi.metrics.prometheus.PrometheusReporter;
@@ -87,7 +86,8 @@ public class MetricsReporterFactory {
         reporter = new ConsoleMetricsReporter(registry);
         break;
       case CLOUDWATCH:
-        reporter = new CloudWatchMetricsReporter(config, registry);
+        reporter = (MetricsReporter) ReflectionUtils.loadClass("org.apache.hudi.aws.metrics.cloudwatch.CloudWatchMetricsReporter",
+            new Class[]{HoodieWriteConfig.class, MetricRegistry.class}, config, registry);
         break;
       default:
         LOG.error("Reporter type[" + type + "] is not supported.");
