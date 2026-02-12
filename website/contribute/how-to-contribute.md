@@ -14,7 +14,7 @@ A GitHub account is needed to file issues, start discussions, and send pull requ
  - Engage with the community on [GitHub Discussions](https://github.com/apache/hudi/discussions) or Slack
  - Help improve docs and contribute blogs [here](https://github.com/apache/hudi/tree/asf-site) for hudi.apache.org
  - Share [new feature](https://github.com/apache/hudi/issues/new?template=hudi_feature.yml) requests or propose a [new RFC](/contribute/rfc-process)
- - Contribute code to the project by raising [pull requests (PR)](https://github.com/apache/hudi/pulls) adhering to the [contribution guide](/contribute/developer-setup). Here are some good [first issues](https://github.com/apache/hudi/issues?q=state%3Aopen%20label%3Agood-first-issues).
+ - Contribute code to the project by raising [pull requests (PR)](https://github.com/apache/hudi/pulls) adhering to the [contribution guide](/contribute/developer-setup). Here are some [good first issues](https://github.com/apache/hudi/contribute).
  - Report [bugs](https://github.com/apache/hudi/issues/new?template=hudi_bug.yml) or suggest [improvements](https://github.com/apache/hudi/issues/new?template=hudi_improvement.yml) to the user experience; review code or RFCs on GitHub
  - Share your success story on [Hudi LinkedIn](https://www.linkedin.com/company/apache-hudi/) Community Syncs.
  - Pull requests can only be merged by a Hudi committer, listed [here](/community/team), but anyone is free to review.
