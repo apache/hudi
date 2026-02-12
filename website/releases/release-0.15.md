@@ -17,7 +17,7 @@ This page contains release notes for all Apache Hudi 0.15.x releases, including:
 Apache Hudi 0.15.0 release brings enhanced engine integration, new features, and improvements in several areas. These
 include Spark 3.5 and Scala 2.13 support, Flink 1.18 support, better Trino Hudi native connector support with newly
 introduced Hadoop-agnostic storage and I/O abstractions. We encourage users to review
-the [Release Highlights](#release-highlights) and [Migration Guide](#migration-guide-overview) down below on
+the [Release Highlights](#release-highlights) and [Migration Guide](#migration-guide) down below on
 relevant [module and API changes](#module-and-api-changes) and
 [behavior changes](#behavior-changes) before using the 0.15.0 release.
 

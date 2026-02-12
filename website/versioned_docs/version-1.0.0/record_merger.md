@@ -54,7 +54,7 @@ With event time ordering, the merging picks the record with the highest value on
 In the example above, two microservices product change records about orders at different times, that can arrive out-of-order. As color coded, 
 this can lead to application-level inconsistent states in the table if simply merged in commit time order like a cancelled order being re-created or 
 a paid order moved back to just created state expecting payment again. Event time ordering helps by ignoring older state changes that arrive late and
-avoiding order status from "jumping back" in time. Combined with [non-blocking concurrency control](concurrency_control.md#non-blocking-concurrency-control-mode), 
+avoiding order status from "jumping back" in time. Combined with [non-blocking concurrency control](concurrency_control.md#non-blocking-concurrency-control), 
 this provides a very powerful way for processing such data streams efficiently and correctly.
 
 ### CUSTOM

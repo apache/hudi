@@ -69,7 +69,7 @@ These are options only for `online compaction`.
 :::
 
 :::note
-Turn off online compaction by setting `compaction.async.enabled` = `false`, but we still recommend turning on `compaction.schedule.enable` for the writing job. You can then execute the compaction plan by [`offline compaction`](#offline-compaction).
+Turn off online compaction by setting `compaction.async.enabled` = `false`, but we still recommend turning on `compaction.schedule.enable` for the writing job. You can then execute the compaction plan by [`offline compaction`](#compaction).
 :::
 
 |  Option Name  | Description | Default | Remarks |

@@ -61,7 +61,7 @@ Broadly, there can be two types of data files
 | Table Type           | Trade-off                                                                                                                                                                                        |
 |:---------------------|:-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | Copy-on-Write (CoW)  | Data is stored entirely in base files, optimized for read performance and ideal for slow changing datasets                                                                                       |
-| Merge-on-read (MoR)  | Data is stored in a combination of base and log files, optimized to [balance the write and read performance](##balancing-write-and-query-performance) and ideal for frequently changing datasets |
+| Merge-on-read (MoR)  | Data is stored in a combination of base and log files, optimized to [balance the write and read performance](#balancing-write-and-query-performance) and ideal for frequently changing datasets |
 
 ### Data Model
 Hudi's data model is designed like an update-able database like a key-value store. Within each partition, data is organized into key-value model, where every record is uniquely identified with a record key. 
