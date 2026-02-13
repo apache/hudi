@@ -45,6 +45,8 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.avro.HoodieAvroUtils.createNewSchemaField;
+
 /**
  * Wrapper class for Avro Schema that provides Hudi-specific schema functionality
  * while maintaining binary compatibility with Avro.
@@ -179,7 +181,7 @@ public class HoodieSchema implements Serializable {
     } else {
       schema = new HoodieSchema(avroSchema);
     }
-    validateNoBlobsInArrayOrMap(schema);
+    validateNoBlobsInArrayMapOrVariant(schema);
     return schema;
   }
 
@@ -607,6 +609,7 @@ public class HoodieSchema implements Serializable {
    * @return a new HoodieSchema.Variant representing a shredded variant
    */
   public static HoodieSchema.Variant createVariantShredded(String name, String namespace, String doc, HoodieSchema typedValueSchema) {
+    ValidationUtils.checkArgument(typedValueSchema == null || !typedValueSchema.containsBlobType(), "Typed value cannot be or contain a BLOB type");
     String variantName = (name != null && !name.isEmpty()) ? name : VariantLogicalType.VARIANT_LOGICAL_TYPE_NAME;
 
     List<HoodieSchemaField> fields = new ArrayList<>();
@@ -982,7 +985,7 @@ public class HoodieSchema implements Serializable {
    * @param schema the schema to validate
    * @throws HoodieSchemaException if the schema contains arrays or maps with blob types
    */
-  private static void validateNoBlobsInArrayOrMap(HoodieSchema schema) {
+  private static void validateNoBlobsInArrayMapOrVariant(HoodieSchema schema) {
     if (schema == null) {
       return;
     }
@@ -1002,18 +1005,26 @@ public class HoodieSchema implements Serializable {
           throw new HoodieSchemaException("Map value type cannot be or contain a BLOB type");
         }
         break;
+      case VARIANT:
+        HoodieSchema.Variant variantSchema = (HoodieSchema.Variant) schema;
+        variantSchema.getTypedValueField().ifPresent(typedValueField -> {
+          if (typedValueField.getNonNullType().containsBlobType()) {
+            throw new HoodieSchemaException("Variant typed_value field cannot be or contain a BLOB type");
+          }
+        });
+        break;
       case RECORD:
         // Validate all record fields
         List<HoodieSchemaField> fields = schema.getFields();
         for (HoodieSchemaField field : fields) {
-          validateNoBlobsInArrayOrMap(field.schema());
+          validateNoBlobsInArrayMapOrVariant(field.schema());
         }
         break;
       case UNION:
         // Validate all union types
         List<HoodieSchema> types = schema.getTypes();
         for (HoodieSchema unionType : types) {
-          validateNoBlobsInArrayOrMap(unionType);
+          validateNoBlobsInArrayMapOrVariant(unionType);
         }
         break;
       // For primitives, BLOB, ENUM, FIXED, NULL - no nested validation needed
@@ -1988,6 +1999,9 @@ public class HoodieSchema implements Serializable {
       if (schema.getType() != Schema.Type.RECORD) {
         throw new IllegalArgumentException("Blob logical type can only be applied to RECORD schemas, got: " + schema.getType());
       }
+      if (!schema.getFields().equals(HoodieSchema.Blob.BLOB_FIELDS)) {
+        throw new IllegalArgumentException("Blob logical type cannot be applied to schema: " + schema);
+      }
     }
   }
 
@@ -2011,6 +2025,8 @@ public class HoodieSchema implements Serializable {
    */
   public static class Blob extends HoodieSchema {
     private static final String DEFAULT_NAME = "blob";
+    private static final List<Schema.Field> BLOB_FIELDS = createBlobFields();
+
     public static final String TYPE = "type";
     public static final String INLINE_DATA_FIELD = "data";
     public static final String EXTERNAL_REFERENCE = "reference";
@@ -2046,6 +2062,18 @@ public class HoodieSchema implements Serializable {
     }
 
     private static Schema createSchema(String name) {
+      Schema blobSchema = Schema.createRecord(name, null, null, false);
+      // each instance requires its own copy of the fields list
+      List<Schema.Field> fields = new ArrayList<>(BLOB_FIELDS.size());
+      for (Schema.Field field : BLOB_FIELDS) {
+        fields.add(createNewSchemaField(field));
+      }
+      blobSchema.setFields(fields);
+      BlobLogicalType.blob().addToSchema(blobSchema);
+      return blobSchema;
+    }
+
+    private static List<Schema.Field> createBlobFields() {
       Schema bytesField = Schema.create(Schema.Type.BYTES);
       Schema referenceField = Schema.createRecord(EXTERNAL_REFERENCE, null, null, false);
       List<Schema.Field> referenceFields = Arrays.asList(
@@ -2056,17 +2084,12 @@ public class HoodieSchema implements Serializable {
       );
       referenceField.setFields(referenceFields);
 
-      Schema blobSchema = Schema.createRecord(name, null, null, false);
-      List<Schema.Field> blobFields = Arrays.asList(
+      return Arrays.asList(
           new Schema.Field(TYPE, Schema.createEnum("blob_storage_type", null, null, Arrays.asList("INLINE", "OUT_OF_LINE")), null, null),
           new Schema.Field(INLINE_DATA_FIELD, AvroSchemaUtils.createNullableSchema(bytesField), null, Schema.Field.NULL_DEFAULT_VALUE),
           new Schema.Field(EXTERNAL_REFERENCE, AvroSchemaUtils.createNullableSchema(referenceField), null, Schema.Field.NULL_DEFAULT_VALUE)
       );
-      blobSchema.setFields(blobFields);
-      BlobLogicalType.blob().addToSchema(blobSchema);
-      return blobSchema;
     }
-
   }
 
   private void writeObject(ObjectOutputStream oos) throws IOException {

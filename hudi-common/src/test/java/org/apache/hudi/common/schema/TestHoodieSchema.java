@@ -1691,8 +1691,6 @@ public class TestHoodieSchema {
     assertEquals("variant", instance1.getName());
   }
 
-  // ==================== Blob Type Tests ====================
-
   @Test
   public void testCreateBlob() {
     HoodieSchema.Blob blob = HoodieSchema.createBlob();
@@ -1864,6 +1862,12 @@ public class TestHoodieSchema {
   }
 
   @Test
+  public void testCreateVariantWithBlobTypedValueShouldFail() {
+    assertThrows(IllegalArgumentException.class, () -> HoodieSchema.createVariantShredded(HoodieSchema.createBlob()));
+    assertThrows(IllegalArgumentException.class, () -> HoodieSchema.createVariantShredded(createRecordWithBlob()));
+  }
+
+  @Test
   public void testParseRecordWithArrayOfBlobFieldShouldFail() {
     String schemaJson = "{\"type\":\"record\",\"name\":\"test\",\"fields\":["
         + "{\"name\":\"files\",\"type\":{\"type\":\"array\",\"items\":" + BLOB_JSON + "}}"
@@ -1875,6 +1879,18 @@ public class TestHoodieSchema {
   public void testParseRecordWithMapOfBlobFieldShouldFail() {
     String schemaJson = "{\"type\":\"record\",\"name\":\"test\",\"fields\":["
         + "{\"name\":\"files\",\"type\":{\"type\":\"map\",\"values\":" + BLOB_JSON + "}}"
+        + "]}";
+    assertThrows(HoodieSchemaException.class, () -> HoodieSchema.parse(schemaJson));
+  }
+
+  @Test
+  public void testParseRecordWithVariantWithBlobTypedValueShouldFail() {
+    String schemaJson = "{\"type\":\"record\",\"name\":\"test\",\"fields\":["
+        + "{\"name\":\"data\",\"type\":{\"type\":\"record\",\"name\":\"variant\",\"logicalType\":\"variant\",\"fields\":["
+        + "{\"name\":\"metadata\",\"type\":\"bytes\"},"
+        + "{\"name\":\"value\",\"type\":\"bytes\"},"
+        + "{\"name\":\"typed_value\",\"type\":" + BLOB_JSON + "}"
+        + "]}}"
         + "]}";
     assertThrows(HoodieSchemaException.class, () -> HoodieSchema.parse(schemaJson));
   }
