@@ -969,7 +969,7 @@ public class HoodieSchema implements Serializable {
       return true;
     } else if (getType() == HoodieSchemaType.UNION) {
       return getTypes().stream().anyMatch(HoodieSchema::containsBlobType);
-    } else if (getType() == HoodieSchemaType.RECORD) {
+    } else if (hasFields()) {
       return getFields().stream().anyMatch(field -> field.schema().containsBlobType());
     }
     return false;
@@ -1992,7 +1992,7 @@ public class HoodieSchema implements Serializable {
   }
 
   /**
-   * Factory for creating VariantLogicalType instances.
+   * Factory for creating BlobLogicalType instances.
    */
   private static class BlogLogicalTypeFactory implements LogicalTypes.LogicalTypeFactory {
     @Override

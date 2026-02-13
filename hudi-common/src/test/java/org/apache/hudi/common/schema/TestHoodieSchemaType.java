@@ -85,7 +85,7 @@ public class TestHoodieSchemaType {
     assertTrue(HoodieSchemaType.MAP.isComplex(), "MAP should be complex");
     assertTrue(HoodieSchemaType.UNION.isComplex(), "UNION should be complex");
     assertTrue(HoodieSchemaType.VARIANT.isComplex(), "VARIANT should be complex");
-    assertTrue(HoodieSchemaType.BLOB.isComplex(), "TIMESTAMP should be complex");
+    assertTrue(HoodieSchemaType.BLOB.isComplex(), "BLOB should be complex");
 
     assertFalse(HoodieSchemaType.STRING.isComplex(), "STRING should not be complex");
     assertFalse(HoodieSchemaType.INT.isComplex(), "INT should not be complex");

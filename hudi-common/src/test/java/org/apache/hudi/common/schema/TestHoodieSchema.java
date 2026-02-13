@@ -1787,23 +1787,10 @@ public class TestHoodieSchema {
     HoodieSchemaField parsedBlobField = parsedBlobFieldOpt.get();
     assertInstanceOf(HoodieSchema.Blob.class, parsedBlobField.schema());
     assertEquals(HoodieSchemaType.BLOB, parsedBlobField.schema().getType());
+    assertSame(HoodieSchema.BlobLogicalType.blob(), parsedBlobField.schema().toAvroSchema().getLogicalType());
   }
 
-  private static final String BLOB_JSON = "{"
-      + "\"type\":\"record\","
-      + "\"name\":\"blob\","
-      + "\"logicalType\":\"blob\","
-      + "\"fields\":["
-      + "  {\"name\":\"storage_type\",\"type\":\"string\"},"
-      + "  {\"name\":\"data\",\"type\":[\"null\",\"bytes\"],\"default\":null},"
-      + "  {\"name\":\"reference\",\"type\":[\"null\",{\"type\":\"record\",\"name\":\"reference\",\"fields\":["
-      + "    {\"name\":\"external_path\",\"type\":\"string\"},"
-      + "    {\"name\":\"offset\",\"type\":\"long\"},"
-      + "    {\"name\":\"length\",\"type\":\"long\"},"
-      + "    {\"name\":\"managed\",\"type\":\"boolean\"}"
-      + "  ]}],\"default\":null}"
-      + "]"
-      + "}";
+  private static final String BLOB_JSON = HoodieSchema.createBlob().toString();
 
   @Test
   public void testParseBlobFromJsonWithLogicalType() {
