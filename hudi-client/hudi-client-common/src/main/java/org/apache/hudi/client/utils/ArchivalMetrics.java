@@ -35,6 +35,8 @@ public final class ArchivalMetrics {
   public static final String ARCHIVAL_OOM_FAILURE = "archivalOutOfMemory";
   public static final String ARCHIVAL_NUM_ALL_COMMITS = "archivalNumAllCommits";
   public static final String ARCHIVAL_NUM_WRITE_COMMITS = "archivalNumWriteCommits";
+  public static final String ARCHIVAL_NUM_CLEAN_COMMITS = "archivalNumCleanCommits";
+  public static final String ARCHIVAL_NUM_ROLLBACK_COMMITS = "archivalNumRollbackCommits";
   public static final String ARCHIVAL_FAILURE = "archivalFailure";
   public static final String ARCHIVAL_STATUS = "archivalStatus";
 
@@ -54,12 +56,20 @@ public final class ArchivalMetrics {
    * @param metrics map to populate with archival metrics
    */
   public static void addArchivalCommitMetrics(Stream<HoodieInstant> completedInstants, Map<String, Long> metrics) {
-    // Collect to list since we need to iterate twice
+    // Collect to list since we need to iterate multiple times
     List<HoodieInstant> instantsList = completedInstants.collect(Collectors.toList());
     metrics.put(ARCHIVAL_NUM_ALL_COMMITS, (long) instantsList.size());
     long writeCommitCount = instantsList.stream()
         .filter(instant -> WRITE_COMMIT_ACTIONS.contains(instant.getAction()))
         .count();
     metrics.put(ARCHIVAL_NUM_WRITE_COMMITS, writeCommitCount);
+    long cleanCommitCount = instantsList.stream()
+        .filter(instant -> HoodieTimeline.CLEAN_ACTION.equals(instant.getAction()))
+        .count();
+    metrics.put(ARCHIVAL_NUM_CLEAN_COMMITS, cleanCommitCount);
+    long rollbackCommitCount = instantsList.stream()
+        .filter(instant -> HoodieTimeline.ROLLBACK_ACTION.equals(instant.getAction()))
+        .count();
+    metrics.put(ARCHIVAL_NUM_ROLLBACK_COMMITS, rollbackCommitCount);
   }
 }
