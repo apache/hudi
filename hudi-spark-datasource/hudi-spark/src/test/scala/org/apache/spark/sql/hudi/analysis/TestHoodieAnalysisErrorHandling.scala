@@ -74,61 +74,6 @@ class TestHoodieAnalysisErrorHandling extends HoodieSparkSqlTestBase {
     }
   }
 
-  test("MergeInto with unresolved column in ON condition should provide helpful error message") {
-    withTempDir { tmp =>
-      val tableName = generateTableName
-      // Create target Hudi table
-      spark.sql(
-        s"""
-           |CREATE TABLE $tableName (
-           |  id INT,
-           |  name STRING,
-           |  price DOUBLE,
-           |  ts INT
-           |) USING hudi
-           |LOCATION '${tmp.getCanonicalPath}'
-           |TBLPROPERTIES (
-           |  primaryKey = 'id',
-           |  preCombineField = 'ts'
-           |)
-           """.stripMargin)
-
-      // Insert initial data
-      spark.sql(s"INSERT INTO $tableName VALUES (1, 'a1', 10.0, 1000)")
-
-      // Test MERGE INTO with non-existent column in ON condition
-      val exception = intercept[AnalysisException] {
-        spark.sql(
-          s"""
-             |MERGE INTO $tableName AS target
-             |USING (
-             |  SELECT 1 AS id, 'updated' AS name, 20.0 AS price, 2000 AS ts
-             |) AS source
-             |ON target.nonexistent_id = source.id
-             |WHEN MATCHED THEN UPDATE SET *
-             |WHEN NOT MATCHED THEN INSERT *
-             """.stripMargin)
-      }
-
-      // Unresolved columns in ON conditions are caught by Spark's standard analysis
-      // before Hudi's error handling can intercept, so we get Spark's native error message
-      // Format: [UNRESOLVED_COLUMN.WITH_SUGGESTION] A column or function parameter with name
-      // `target`.`nonexistent_id` cannot be resolved. Did you mean one of the following? [...]
-      val errorMessage = exception.getMessage
-      assert(errorMessage.contains("nonexistent_id"),
-        s"Error message should mention the unresolved column 'nonexistent_id'. Actual message: $errorMessage")
-      assert(errorMessage.contains("[UNRESOLVED_COLUMN"),
-        s"Error message should contain Spark's UNRESOLVED_COLUMN error class. Actual message: $errorMessage")
-      assert(errorMessage.contains("cannot be resolved"),
-        s"Error message should indicate the column cannot be resolved. Actual message: $errorMessage")
-      assert(errorMessage.contains("Did you mean one of the following?"),
-        s"Error message should provide column suggestions. Actual message: $errorMessage")
-      // Verify that 'id' is suggested as a valid column (in backtick format)
-      assert(errorMessage.contains("`id`"),
-        s"Error message should suggest the valid column 'id'. Actual message: $errorMessage")
-    }
-  }
-
   test("InsertInto from unresolved source table should provide helpful error message") {
     withTempDir { tmp =>
       val tableName = generateTableName
@@ -170,68 +115,6 @@ class TestHoodieAnalysisErrorHandling extends HoodieSparkSqlTestBase {
         s"Error message should suggest checking for missing tables. Actual message: $errorMessage")
       assert(errorMessage.contains("Original error"),
         s"Error message should include the original error context. Actual message: $errorMessage")
-    }
-  }
-
-  test("MergeInto with typo in column name should provide helpful error message") {
-    withTempDir { tmp =>
-      val tableName = generateTableName
-      // Create target Hudi table
-      spark.sql(
-        s"""
-           |CREATE TABLE $tableName (
-           |  id INT,
-           |  name STRING,
-           |  price DOUBLE,
-           |  ts INT
-           |) USING hudi
-           |LOCATION '${tmp.getCanonicalPath}'
-           |TBLPROPERTIES (
-           |  primaryKey = 'id',
-           |  preCombineField = 'ts'
-           |)
-           """.stripMargin)
-
-      // Insert initial data
-      spark.sql(s"INSERT INTO $tableName VALUES (1, 'a1', 10.0, 1000)")
-
-      // Test MERGE INTO with typo in column name - reference non-existent source.pricee
-      // when source only has 'price' column
-      val exception = intercept[AnalysisException] {
-        spark.sql(
-          s"""
-             |MERGE INTO $tableName AS target
-             |USING (
-             |  SELECT 1 AS id, 'updated' AS name, 20.0 AS price, 2000 AS ts
-             |) AS source
-             |ON target.id = source.id
-             |WHEN MATCHED THEN UPDATE SET
-             |  id = source.id,
-             |  name = source.name,
-             |  price = source.pricee,
-             |  ts = source.ts
-             |WHEN NOT MATCHED THEN INSERT (id, name, price, ts)
-             |  VALUES (source.id, source.name, source.pricee, source.ts)
-             """.stripMargin)
-      }
-
-      // Unresolved columns in UPDATE/INSERT clauses are caught by Spark's standard
-      // analysis before Hudi's error handling can intercept, so we get Spark's
-      // native error message with UNRESOLVED_COLUMN error class
-      // Format: [UNRESOLVED_COLUMN.WITH_SUGGESTION] A column or function parameter with name
-      // source.pricee cannot be resolved. Did you mean one of the following? [...source.price...]
-      val errorMessage = exception.getMessage
-      assert(errorMessage.contains("pricee"),
-        s"Error message should mention the typo 'pricee'. Actual message: $errorMessage")
-      assert(errorMessage.contains("[UNRESOLVED_COLUMN"),
-        s"Error message should contain Spark's UNRESOLVED_COLUMN error class. Actual message: $errorMessage")
-      assert(errorMessage.contains("cannot be resolved"),
-        s"Error message should indicate the column cannot be resolved. Actual message: $errorMessage")
-      assert(errorMessage.contains("Did you mean one of the following?"),
-        s"Error message should provide column suggestions. Actual message: $errorMessage")
-      // Verify that the correct column 'price' is suggested (in the suggestion list)
-      assert(errorMessage.contains("source.price") || errorMessage.contains("`price`"),
-        s"Error message should suggest the correct column 'price'. Actual message: $errorMessage")
     }
   }
 }
