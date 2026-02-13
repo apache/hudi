@@ -262,7 +262,8 @@ public class TestHoodieContinuousSplitEnumerator {
         "/table/path/partition1",
         "read_optimized",
         "19700101000000000",
-        fileId
+        fileId,
+        Option.empty()
     );
   }
 

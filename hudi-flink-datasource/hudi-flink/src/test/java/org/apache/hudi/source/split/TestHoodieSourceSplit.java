@@ -18,6 +18,7 @@
 
 package org.apache.hudi.source.split;
 
+import org.apache.hudi.common.table.log.InstantRange;
 import org.apache.hudi.common.util.Option;
 
 import org.junit.jupiter.api.Test;
@@ -28,6 +29,7 @@ import java.util.Collections;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -95,9 +97,9 @@ public class TestHoodieSourceSplit {
   @Test
   public void testEqualsWithDifferentBasePath() {
     HoodieSourceSplit split1 = new HoodieSourceSplit(
-        1, "base-path-1", Option.empty(), "/table", "/partition1",  "read_optimized", "", "file1");
+        1, "base-path-1", Option.empty(), "/table", "/partition1",  "read_optimized", "", "file1", Option.empty());
     HoodieSourceSplit split2 = new HoodieSourceSplit(
-        1, "base-path-2", Option.empty(), "/table", "/partition1", "read_optimized", "", "file1");
+        1, "base-path-2", Option.empty(), "/table", "/partition1", "read_optimized", "", "file1", Option.empty());
 
     assertNotEquals(split1, split2);
   }
@@ -105,9 +107,9 @@ public class TestHoodieSourceSplit {
   @Test
   public void testEqualsWithDifferentLogPaths() {
     HoodieSourceSplit split1 = new HoodieSourceSplit(
-        1, "base-path", Option.of(Arrays.asList("log1", "log2")), "/table", "/partition1", "payload_combine", "", "file1");
+        1, "base-path", Option.of(Arrays.asList("log1", "log2")), "/table", "/partition1", "payload_combine", "", "file1", Option.empty());
     HoodieSourceSplit split2 = new HoodieSourceSplit(
-        1, "base-path", Option.of(Arrays.asList("log1", "log3")), "/table", "/partition1",  "payload_combine", "", "file1");
+        1, "base-path", Option.of(Arrays.asList("log1", "log3")), "/table", "/partition1",  "payload_combine", "", "file1", Option.empty());
 
     assertNotEquals(split1, split2);
   }
@@ -115,9 +117,9 @@ public class TestHoodieSourceSplit {
   @Test
   public void testEqualsWithDifferentTablePath() {
     HoodieSourceSplit split1 = new HoodieSourceSplit(
-        1, "base-path", Option.empty(), "/table1", "/partition1",  "read_optimized", "", "file1");
+        1, "base-path", Option.empty(), "/table1", "/partition1",  "read_optimized", "", "file1", Option.empty());
     HoodieSourceSplit split2 = new HoodieSourceSplit(
-        1, "base-path", Option.empty(), "/table2", "/partition1", "read_optimized", "","file1");
+        1, "base-path", Option.empty(), "/table2", "/partition1", "read_optimized", "","file1", Option.empty());
 
     assertNotEquals(split1, split2);
   }
@@ -125,9 +127,9 @@ public class TestHoodieSourceSplit {
   @Test
   public void testEqualsWithDifferentMergeType() {
     HoodieSourceSplit split1 = new HoodieSourceSplit(
-        1, "base-path", Option.empty(), "/table", "/partition1", "read_optimized", "","file1");
+        1, "base-path", Option.empty(), "/table", "/partition1", "read_optimized", "","file1", Option.empty());
     HoodieSourceSplit split2 = new HoodieSourceSplit(
-        1, "base-path", Option.empty(), "/table", "/partition1", "payload_combine", "", "file1");
+        1, "base-path", Option.empty(), "/table", "/partition1", "payload_combine", "", "file1", Option.empty());
 
     assertNotEquals(split1, split2);
   }
@@ -228,7 +230,7 @@ public class TestHoodieSourceSplit {
 
     HoodieSourceSplit split = new HoodieSourceSplit(
         42, basePath, Option.of(Arrays.asList("log1", "log2")),
-        tablePath, partitionPath, mergeType, "", fileId);
+        tablePath, partitionPath, mergeType, "", fileId, Option.empty());
 
     assertTrue(split.getBasePath().isPresent());
     assertEquals(basePath, split.getBasePath().get());
@@ -267,7 +269,7 @@ public class TestHoodieSourceSplit {
   public void testToString() {
     HoodieSourceSplit split = new HoodieSourceSplit(
         1, "base-path", Option.of(Arrays.asList("log1")),
-        "/table", "/partition", "read_optimized", "", "file1");
+        "/table", "/partition", "read_optimized", "", "file1", Option.empty());
 
     String result = split.toString();
 
@@ -303,9 +305,9 @@ public class TestHoodieSourceSplit {
   @Test
   public void testEqualsWithNullBasePath() {
     HoodieSourceSplit split1 = new HoodieSourceSplit(
-        1, null, Option.empty(), "/table", "/partition","read_optimized", "", "file1");
+        1, null, Option.empty(), "/table", "/partition","read_optimized", "", "file1", Option.empty());
     HoodieSourceSplit split2 = new HoodieSourceSplit(
-        1, null, Option.empty(), "/table", "/partition","read_optimized", "", "file1");
+        1, null, Option.empty(), "/table", "/partition","read_optimized", "", "file1", Option.empty());
 
     assertEquals(split1, split2);
   }
@@ -313,9 +315,9 @@ public class TestHoodieSourceSplit {
   @Test
   public void testEqualsOneNullBasePathOneNot() {
     HoodieSourceSplit split1 = new HoodieSourceSplit(
-        1, null, Option.empty(), "/table", "/partition", "read_optimized", "", "file1");
+        1, null, Option.empty(), "/table", "/partition", "read_optimized", "", "file1", Option.empty());
     HoodieSourceSplit split2 = new HoodieSourceSplit(
-        1, "base-path", Option.empty(), "/table", "/partition", "read_optimized", "","file1");
+        1, "base-path", Option.empty(), "/table", "/partition", "read_optimized", "","file1", Option.empty());
 
     assertNotEquals(split1, split2);
   }
@@ -332,7 +334,149 @@ public class TestHoodieSourceSplit {
         partitionPath,
         "read_optimized",
         "19700101000000000",
-        fileId
+        fileId,
+        Option.empty()
     );
+  }
+
+  @Test
+  public void testInstantRangePresent() {
+    InstantRange instantRange = InstantRange.builder()
+        .startInstant("20230101000000000")
+        .endInstant("20230131235959999")
+        .rangeType(org.apache.hudi.common.table.log.InstantRange.RangeType.OPEN_CLOSED)
+        .build();
+
+    HoodieSourceSplit split = new HoodieSourceSplit(
+        1,
+        "base-path",
+        Option.empty(),
+        "/table/path",
+        "/partition/path",
+        "read_optimized",
+        "19700101000000000",
+        "file-1",
+        Option.of(instantRange)
+    );
+
+    assertTrue(split.getInstantRange().isPresent());
+    assertEquals("20230101000000000", split.getInstantRange().get().getStartInstant().get());
+    assertEquals("20230131235959999", split.getInstantRange().get().getEndInstant().get());
+  }
+
+  @Test
+  public void testInstantRangeEmpty() {
+    HoodieSourceSplit split = new HoodieSourceSplit(
+        1,
+        "base-path",
+        Option.empty(),
+        "/table/path",
+        "/partition/path",
+        "read_optimized",
+        "19700101000000000",
+        "file-1",
+        Option.empty()
+    );
+
+    assertFalse(split.getInstantRange().isPresent());
+  }
+
+  @Test
+  public void testInstantRangeWithOnlyStart() {
+    InstantRange instantRange = InstantRange.builder()
+        .startInstant("20230101000000000")
+        .rangeType(org.apache.hudi.common.table.log.InstantRange.RangeType.OPEN_CLOSED)
+        .nullableBoundary(true)
+        .build();
+
+    HoodieSourceSplit split = new HoodieSourceSplit(
+        1,
+        "base-path",
+        Option.of(Arrays.asList("log1", "log2")),
+        "/table/path",
+        "/partition/path",
+        "payload_combine",
+        "19700101000000000",
+        "file-1",
+        Option.of(instantRange)
+    );
+
+    assertTrue(split.getInstantRange().isPresent());
+    assertTrue(split.getInstantRange().get().getStartInstant().isPresent());
+    assertFalse(split.getInstantRange().get().getEndInstant().isPresent());
+    assertEquals("20230101000000000", split.getInstantRange().get().getStartInstant().get());
+  }
+
+  @Test
+  public void testEqualsWithDifferentInstantRange() {
+    InstantRange range1 = InstantRange.builder()
+        .startInstant("20230101000000000")
+        .endInstant("20230131235959999")
+        .rangeType(InstantRange.RangeType.OPEN_CLOSED)
+        .build();
+
+    InstantRange range2 = InstantRange.builder()
+        .startInstant("20230201000000000")
+        .endInstant("20230228235959999")
+        .rangeType(InstantRange.RangeType.OPEN_CLOSED)
+        .build();
+
+    HoodieSourceSplit split1 = new HoodieSourceSplit(
+        1, "base-path", Option.empty(), "/table", "/partition1", "read_optimized", "19700101000000000", "file1", Option.of(range1));
+    HoodieSourceSplit split2 = new HoodieSourceSplit(
+        1, "base-path", Option.empty(), "/table", "/partition1", "read_optimized", "19700101000000000", "file1", Option.of(range2));
+
+    assertNotEquals(split1, split2);
+  }
+
+  @Test
+  public void testToStringWithInstantRange() {
+    InstantRange instantRange = InstantRange.builder()
+        .startInstant("20230101000000000")
+        .endInstant("20230131235959999")
+        .rangeType(InstantRange.RangeType.OPEN_CLOSED)
+        .build();
+
+    HoodieSourceSplit split = new HoodieSourceSplit(
+        1,
+        "base-path",
+        Option.of(Arrays.asList("log1")),
+        "/table",
+        "/partition",
+        "read_optimized",
+        "19700101000000000",
+        "file1",
+        Option.of(instantRange)
+    );
+
+    String result = split.toString();
+
+    assertNotNull(result);
+    assertTrue(result.contains("HoodieSourceSplit"));
+  }
+
+  @Test
+  public void testClosedClosedInstantRange() {
+    InstantRange instantRange = InstantRange.builder()
+        .startInstant("20230101000000000")
+        .endInstant("20230131235959999")
+        .rangeType(InstantRange.RangeType.CLOSED_CLOSED)
+        .build();
+
+    HoodieSourceSplit split = new HoodieSourceSplit(
+        1,
+        "base-path",
+        Option.of(Arrays.asList("log1", "log2")),
+        "/table/path",
+        "/partition/path",
+        "payload_combine",
+        "19700101000000000",
+        "file-1",
+        Option.of(instantRange)
+    );
+
+    assertTrue(split.getInstantRange().isPresent());
+    assertTrue(split.getInstantRange().get().getStartInstant().isPresent());
+    assertTrue(split.getInstantRange().get().getEndInstant().isPresent());
   }
 }
