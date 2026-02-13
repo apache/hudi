@@ -660,7 +660,7 @@ public class HoodieSchema implements Serializable {
    * Creates Vector schema with custom dimension and element type.
    *
    * @param dimension vector dimension (must be > 0)
-   * @param elementType element type (use Vector.VectorElementType.FLOAT or Vector.VectorElementType.DOUBLE)
+   * @param elementType element type (use {@link Vector.VectorElementType#FLOAT} or {@link Vector.VectorElementType#DOUBLE})
    * @return new HoodieSchema.Vector
    */
   public static HoodieSchema.Vector createVector(int dimension, Vector.VectorElementType elementType) {
@@ -672,7 +672,7 @@ public class HoodieSchema implements Serializable {
    *
    * @param name record name (null uses default "vector")
    * @param dimension vector dimension (must be > 0)
-   * @param elementType element type (use Vector.VectorElementType.FLOAT or Vector.VectorElementType.DOUBLE)
+   * @param elementType element type (use {@link Vector.VectorElementType#FLOAT} or {@link Vector.VectorElementType#DOUBLE})
    * @return new HoodieSchema.Vector
    */
   public static HoodieSchema.Vector createVector(String name, int dimension, Vector.VectorElementType elementType) {
@@ -1587,7 +1587,7 @@ public class HoodieSchema implements Serializable {
        */
       public static VectorElementType fromString(String name) {
         for (VectorElementType type : values()) {
-          if (type.dataType.equals(name)) {
+          if (type.dataType.equalsIgnoreCase(name)) {
             return type;
           }
         }
@@ -1704,7 +1704,7 @@ public class HoodieSchema implements Serializable {
     /**
      * Returns the element type of this vector.
      *
-     * @return element type enum (e.g., VectorElementType.FLOAT, VectorElementType.DOUBLE, VectorElementType.INT8)
+     * @return element type enum (e.g., {@link VectorElementType#FLOAT}, {@link VectorElementType#DOUBLE}, {@link VectorElementType#INT8})
      */
     public VectorElementType getVectorElementType() {
       return elementType;
@@ -1972,15 +1972,15 @@ public class HoodieSchema implements Serializable {
     @Override
     public LogicalType fromSchema(Schema schema) {
       // Extract properties from schema
-      Object dimObj = schema.getObjectProp("dimension");
+      Object dimObj = schema.getObjectProp(VectorLogicalType.PROP_DIMENSION);
       int dimension = dimObj instanceof Number ? ((Number) dimObj).intValue() : 0;
 
-      String elementType = schema.getProp("elementType");
+      String elementType = schema.getProp(VectorLogicalType.PROP_ELEMENT_TYPE);
       if (elementType == null) {
         elementType = Vector.VectorElementType.FLOAT.getDataType();
       }
 
-      String storageBacking = schema.getProp("storageBacking");
+      String storageBacking = schema.getProp(VectorLogicalType.PROP_STORAGE_BACKING);
       if (storageBacking == null) {
         storageBacking = Vector.STORAGE_BACKING_FIXED_BYTES; // default
       }
