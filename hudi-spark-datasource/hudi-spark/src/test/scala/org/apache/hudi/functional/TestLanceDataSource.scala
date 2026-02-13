@@ -751,8 +751,7 @@ class TestLanceDataSource extends HoodieSparkClientTestBase {
     val createTablePartitionClause = if (isPartitioned) "partitioned by (dt)" else ""
 
     // CREATE TABLE with Lance configuration
-    // Note: DefaultSparkRecordMerger not explicitly set - relies on system defaults
-    // (TestInsertTable pattern doesn't set it either)
+    // Lance format requires Spark record merger for writing
     spark.sql(s"""
       create table $tableName (
         id int,
@@ -764,7 +763,8 @@ class TestLanceDataSource extends HoodieSparkClientTestBase {
       tblproperties (
         hoodie.table.base.file.format = 'LANCE',
         type = '${tableType.name()}',
-        primaryKey = 'id'
+        primaryKey = 'id',
+        hoodie.datasource.write.record.merger.impls = '${classOf[DefaultSparkRecordMerger].getName}'
       )
       $createTablePartitionClause
       location '$tablePath'
@@ -777,7 +777,7 @@ class TestLanceDataSource extends HoodieSparkClientTestBase {
              (2, 'Bob', 25, 87.3, '2025-01-02')
     """.stripMargin)
 
-    checkAnswer(s"select id, name, age, score, dt from $tableName")(
+    checkAnswer(s"select id, name, age, score, dt from $tableName order by id")(
       Seq(1, "Alice", 30, 95.5, "2025-01-01"),
       Seq(2, "Bob", 25, 87.3, "2025-01-02")
     )
@@ -788,7 +788,7 @@ class TestLanceDataSource extends HoodieSparkClientTestBase {
       values ('2025-01-03', 'Charlie', 3, 35, 92.1)
     """.stripMargin)
 
-    checkAnswer(s"select id, name, age, score, dt from $tableName")(
+    checkAnswer(s"select id, name, age, score, dt from $tableName order by id")(
       Seq(1, "Alice", 30, 95.5, "2025-01-01"),
       Seq(2, "Bob", 25, 87.3, "2025-01-02"),
       Seq(3, "Charlie", 35, 92.1, "2025-01-03")
@@ -800,7 +800,7 @@ class TestLanceDataSource extends HoodieSparkClientTestBase {
       values ('2025-01-04', 40, 'Diana', 4)
     """.stripMargin)
 
-    checkAnswer(s"select id, name, age, score, dt from $tableName")(
+    checkAnswer(s"select id, name, age, score, dt from $tableName order by id")(
       Seq(1, "Alice", 30, 95.5, "2025-01-01"),
       Seq(2, "Bob", 25, 87.3, "2025-01-02"),
       Seq(3, "Charlie", 35, 92.1, "2025-01-03"),
@@ -814,7 +814,7 @@ class TestLanceDataSource extends HoodieSparkClientTestBase {
         values (28, 5, 'Eve')
       """.stripMargin)
 
-      checkAnswer(s"select id, name, age, score, dt from $tableName")(
+      checkAnswer(s"select id, name, age, score, dt from $tableName order by id")(
         Seq(1, "Alice", 30, 95.5, "2025-01-01"),
         Seq(2, "Bob", 25, 87.3, "2025-01-02"),
         Seq(3, "Charlie", 35, 92.1, "2025-01-03"),
