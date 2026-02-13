@@ -235,7 +235,7 @@ public class MarkerHandler extends Handler {
       } catch (HoodieEarlyConflictDetectionException he) {
         log.error("Detected the write conflict due to a concurrent writer, "
             + "failing the marker creation as the early conflict detection is enabled", he);
-        return finishCreateMarkerFuture(context, markerDir, markerName);
+        return finishCreateMarkerFuture(context, markerDir, markerName, requestId);
       } catch (Exception e) {
         log.warn("Failed to execute early conflict detection. Marker creation will continue.", e);
         // When early conflict detection fails to execute, we still allow the marker creation
@@ -266,8 +266,9 @@ public class MarkerHandler extends Handler {
     return future;
   }
 
-  private CompletableFuture<String> finishCreateMarkerFuture(Context context, String markerDir, String markerName) {
-    MarkerCreationFuture future = new MarkerCreationFuture(context, markerDir, markerName);
+  private CompletableFuture<String> finishCreateMarkerFuture(Context context, String markerDir, String markerName,
+      String requestId) {
+    MarkerCreationFuture future = new MarkerCreationFuture(context, markerDir, markerName, requestId);
     try {
       future.complete(jsonifyResult(
           future.getContext(), future.isSuccessful(), metricsRegistry));

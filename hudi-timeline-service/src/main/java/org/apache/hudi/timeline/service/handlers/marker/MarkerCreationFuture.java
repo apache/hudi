@@ -43,10 +43,6 @@ public class MarkerCreationFuture extends CompletableFuture<String> {
   @Getter(AccessLevel.NONE)
   private final HoodieTimer timer;
 
-  public MarkerCreationFuture(Context context, String markerDirPath, String markerName) {
-    this(context, markerDirPath, markerName, null);
-  }
-
   public MarkerCreationFuture(Context context, String markerDirPath, String markerName, String requestId) {
     super();
     this.timer = HoodieTimer.start();
