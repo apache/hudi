@@ -17,10 +17,9 @@
  * under the License.
  */
 
-package org.apache.spark.sql.hudi.expressions
+package org.apache.spark.sql.hudi.blob
 
 import org.apache.spark.sql.catalyst.expressions.{Expression, UnaryExpression, Unevaluable}
-import org.apache.spark.sql.catalyst.expressions.codegen.CodegenFallback
 import org.apache.spark.sql.types.{BinaryType, DataType}
 
 /**

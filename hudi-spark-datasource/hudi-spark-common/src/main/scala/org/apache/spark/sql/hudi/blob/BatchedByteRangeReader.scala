@@ -19,15 +19,15 @@
 
 package org.apache.spark.sql.hudi.blob
 
+import org.apache.hudi.common.schema.HoodieSchema
 import org.apache.hudi.io.SeekableDataInputStream
 import org.apache.hudi.storage.{HoodieStorage, HoodieStorageUtils, StorageConfiguration, StoragePath}
 
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.{Dataset, Encoders, Row}
 import org.apache.spark.sql.catalyst.InternalRow
-import org.apache.spark.sql.catalyst.expressions.{GenericInternalRow, GenericRowWithSchema, SpecificInternalRow}
+import org.apache.spark.sql.catalyst.expressions.{GenericRowWithSchema, SpecificInternalRow}
 import org.apache.spark.sql.types.{BinaryType, StructField, StructType}
-import org.apache.spark.unsafe.types.UTF8String
 import org.slf4j.LoggerFactory
 
 import scala.collection.mutable.ArrayBuffer
@@ -175,15 +175,14 @@ class BatchedByteRangeReader(
 
         while (bufferedRows.hasNext && collected < lookaheadSize) {
           val row = bufferedRows.next()
-          val structValue = accessor.getStruct(row, structColIdx)
+          val blobStruct = accessor.getStruct(row, structColIdx, HoodieSchema.Blob.getBlobFieldCount)
 
-          // TODO: define constants in the HoodieSchema for these field indices
           // Extract blob reference from nested structure
-          // structValue has: storage_type (0), bytes (1), reference (2)
-          val reference = accessor.getStruct(structValue, 2)  // Get reference struct
-          val filePath = accessor.getString(reference, 0)      // file field
-          val offset = accessor.getLong(reference, 1)          // position field
-          val length = accessor.getLong(reference, 2).toInt    // length field (Long in schema, cast to Int)
+          // structValue has: type (0), data (1), reference (2)
+          val referenceStruct = accessor.getStruct(blobStruct, 2, HoodieSchema.Blob.getBlobReferenceFieldCount)  // Get reference struct
+          val filePath = accessor.getString(referenceStruct, 0)     // file field
+          val offset = accessor.getLong(referenceStruct, 1)         // offset field
+          val length = accessor.getLong(referenceStruct, 2).toInt   // length field (Long in schema, cast to Int)
 
           batch += RowInfo[R](
             originalRow = row,
@@ -357,7 +356,7 @@ class BatchedByteRangeReader(
  * @tparam R Row type (Row or InternalRow)
  */
 private[blob] trait RowAccessor[R] {
-  def getStruct(row: R, structColIdx: Int): R
+  def getStruct(row: R, structColIdx: Int, numFields: Int): R
   def getString(struct: R, fieldIdx: Int): String
   def getLong(struct: R, fieldIdx: Int): Long
 }
@@ -377,14 +376,14 @@ private[blob] trait RowBuilder[R] {
  */
 private[blob] object RowAccessor {
   implicit val rowAccessor: RowAccessor[Row] = new RowAccessor[Row] {
-    override def getStruct(row: Row, structColIdx: Int): Row = row.getStruct(structColIdx)
+    override def getStruct(row: Row, structColIdx: Int, numFields: Int): Row = row.getStruct(structColIdx)
     override def getString(struct: Row, fieldIdx: Int): String = struct.getString(fieldIdx)
     override def getLong(struct: Row, fieldIdx: Int): Long = struct.getLong(fieldIdx)
   }
 
   implicit val internalRowAccessor: RowAccessor[InternalRow] = new RowAccessor[InternalRow] {
-    override def getStruct(row: InternalRow, structColIdx: Int): InternalRow =
-      row.getStruct(structColIdx, 3)  // 3 fields in blob struct
+    override def getStruct(row: InternalRow, structColIdx: Int, numFields: Int): InternalRow =
+      row.getStruct(structColIdx, numFields)
 
     override def getString(struct: InternalRow, fieldIdx: Int): String =
       struct.getUTF8String(fieldIdx).toString

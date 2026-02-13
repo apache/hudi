@@ -21,7 +21,6 @@ package org.apache.spark.sql.hudi.blob
 
 import org.apache.spark.sql.catalyst.FunctionIdentifier
 import org.apache.spark.sql.catalyst.expressions.{Expression, ExpressionInfo}
-import org.apache.spark.sql.hudi.expressions.ReadBlobExpression
 
 /**
  * Registry of scalar functions for Hudi SQL integration.
@@ -45,7 +44,7 @@ import org.apache.spark.sql.hudi.expressions.ReadBlobExpression
  */
 object ScalarFunctions {
 
-  val READ_BLOB_FUNC_NAME = "read_blob"
+  private val READ_BLOB_FUNC_NAME = "read_blob"
 
   /**
    * Function definitions as tuples of:
@@ -75,15 +74,14 @@ object ScalarFunctions {
           |
           |Arguments:
           |  blob_column - Struct column with HoodieSchema.Blob structure:
-          |    - storage_type (string): "out_of_line" or "inline"
-          |    - bytes (binary, nullable): inline blob data or null
-          |    - reference (struct, nullable): {file, position, length, managed}
+          |    - type (string): "out_of_line" or "inline"
+          |    - data (binary, nullable): inline blob data or null
+          |    - reference (struct, nullable): {file, offset, length, managed}
           |
           |Returns:
           |  Binary data read from the file
           |
           |Performance:
-          |  - 2-5x speedup for sorted data via batched I/O
           |  - Configure batching: hoodie.blob.batching.max.gap.bytes (default 4096)
           |  - Configure lookahead: hoodie.blob.batching.lookahead.size (default 50)
         """.stripMargin
