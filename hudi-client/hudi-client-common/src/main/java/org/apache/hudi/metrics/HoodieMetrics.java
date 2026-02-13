@@ -368,12 +368,6 @@ public class HoodieMetrics {
     }
   }
 
-  public void emitCleanFailure() {
-    if (config.isMetricsOn()) {
-      metrics.registerGauge(getMetricsName("clean", "failure"), 1);
-    }
-  }
-
   public void updateFinalizeWriteMetrics(long durationInMs, long numFilesFinalized) {
     if (config.isMetricsOn()) {
       log.debug("Sending finalize write metrics ({}={}, {}={})", DURATION_STR, durationInMs,

@@ -153,16 +153,9 @@ public class TimelineArchiverV2<T extends HoodieAvroPayload, I, K, O> implements
   }
 
   private void addArchivalCommitMetrics(List<ActiveAction> instantsToArchive) {
-    long completedCount = instantsToArchive.stream()
-        .flatMap(action -> action.getCompletedInstants().stream())
-        .count();
-    metrics.put(ArchivalMetrics.ARCHIVAL_NUM_ALL_COMMITS, completedCount);
-    long writeCommitCount = instantsToArchive.stream()
-        .flatMap(action -> action.getCompletedInstants().stream())
-        .filter(instant -> CollectionUtils.createSet(HoodieTimeline.COMMIT_ACTION, HoodieTimeline.REPLACE_COMMIT_ACTION)
-            .contains(instant.getAction()))
-        .count();
-    metrics.put(ArchivalMetrics.ARCHIVAL_NUM_WRITE_COMMITS, writeCommitCount);
+    ArchivalMetrics.addArchivalCommitMetrics(
+        instantsToArchive.stream().flatMap(action -> action.getCompletedInstants().stream()),
+        metrics);
   }
 
   private List<HoodieInstant> getCleanAndRollbackInstantsToArchive(HoodieInstant latestCommitInstantToArchive) {
