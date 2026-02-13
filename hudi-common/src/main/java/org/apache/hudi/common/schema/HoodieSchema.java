@@ -123,7 +123,7 @@ public class HoodieSchema implements Serializable {
   // Register the Variant logical type with Avro
   static {
     LogicalTypes.register(VariantLogicalType.VARIANT_LOGICAL_TYPE_NAME, new VariantLogicalTypeFactory());
-    LogicalTypes.register(BlobLogicalType.BLOB_LOGICAL_TYPE_NAME, new BlogLogicalTypeFactory());
+    LogicalTypes.register(BlobLogicalType.BLOB_LOGICAL_TYPE_NAME, new BlobLogicalTypeFactory());
   }
 
   /**
@@ -2008,7 +2008,7 @@ public class HoodieSchema implements Serializable {
   /**
    * Factory for creating BlobLogicalType instances.
    */
-  private static class BlogLogicalTypeFactory implements LogicalTypes.LogicalTypeFactory {
+  private static class BlobLogicalTypeFactory implements LogicalTypes.LogicalTypeFactory {
     @Override
     public LogicalType fromSchema(Schema schema) {
       return BlobLogicalType.blob();
