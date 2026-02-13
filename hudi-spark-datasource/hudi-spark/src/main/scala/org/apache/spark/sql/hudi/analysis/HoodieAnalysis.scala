@@ -21,7 +21,7 @@ import org.apache.hudi.{HoodieSchemaUtils, HoodieSparkUtils, SparkAdapterSupport
 import org.apache.hudi.common.util.{ReflectionUtils, ValidationUtils}
 import org.apache.hudi.common.util.ReflectionUtils.loadClass
 
-import org.apache.spark.sql.{SparkSession, Strategy}
+import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.analysis.UnresolvedAttribute
 import org.apache.spark.sql.catalyst.catalog.{CatalogStorageFormat, CatalogTable, HoodieCatalogTable}
@@ -33,7 +33,7 @@ import org.apache.spark.sql.execution.command._
 import org.apache.spark.sql.execution.datasources.{CreateTable, LogicalRelation}
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.{isMetaField, removeMetaFields}
 import org.apache.spark.sql.hudi.analysis.HoodieAnalysis.{sparkAdapter, MatchCreateIndex, MatchCreateTableLike, MatchDropIndex, MatchInsertIntoStatement, MatchMergeIntoTable, MatchRefreshIndex, MatchShowIndexes, ResolvesToHudiTable}
-import org.apache.spark.sql.hudi.blob.{BatchedBlobStrategy, ReadBlobRule}
+import org.apache.spark.sql.hudi.blob.ReadBlobRule
 import org.apache.spark.sql.hudi.command._
 import org.apache.spark.sql.hudi.command.HoodieLeafRunnableCommand.stripMetaFieldAttributes
 import org.apache.spark.sql.hudi.command.InsertIntoHoodieTableCommand.alignQueryOutput
@@ -170,10 +170,6 @@ object HoodieAnalysis extends SparkAdapterSupport {
 
     rules.toSeq
   }
-
-  def customPlannerStrategies: Seq[SparkSession => Strategy] = Seq(
-    session => BatchedBlobStrategy(session)
-  )
 
   /**
    * This rule adjusts output of the [[LogicalRelation]] resolving int Hudi tables such that all of the

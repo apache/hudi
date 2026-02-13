@@ -79,6 +79,8 @@ trait SparkAdapter extends Serializable {
    */
   def injectScalarFunctions(extensions: SparkSessionExtensions): Unit
 
+  def injectPlannerStrategy(extensions: SparkSessionExtensions): Unit
+
   /**
    * Returns an instance of [[HoodieCatalystExpressionUtils]] providing for common utils operating
    * on Catalyst [[Expression]]s

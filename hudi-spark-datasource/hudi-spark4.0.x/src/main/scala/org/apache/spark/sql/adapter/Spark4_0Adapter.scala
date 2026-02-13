@@ -40,7 +40,7 @@ import org.apache.spark.sql.execution.datasources.orc.Spark40OrcReader
 import org.apache.spark.sql.execution.datasources.parquet.{ParquetFileFormat, Spark40LegacyHoodieParquetFileFormat, Spark40ParquetReader}
 import org.apache.spark.sql.execution.datasources.v2.DataSourceV2Relation
 import org.apache.spark.sql.hudi.analysis.TableValuedFunctions
-import org.apache.spark.sql.hudi.blob.ScalarFunctions
+import org.apache.spark.sql.hudi.blob.{BatchedBlobStrategy, ScalarFunctions}
 import org.apache.spark.sql.internal.{LegacyBehaviorPolicy, SQLConf}
 import org.apache.spark.sql.parser.{HoodieExtendedParserInterface, HoodieSpark4_0ExtendedSqlParser}
 import org.apache.spark.sql.types.{DataType, DataTypes, Metadata, MetadataBuilder, StructType}
@@ -118,8 +118,12 @@ class Spark4_0Adapter extends BaseSpark4Adapter {
   }
 
   override def injectScalarFunctions(extensions: SparkSessionExtensions): Unit = {
-    ScalarFunctions.funcs.foreach { case (funcId, expressionInfo, builder) =>
-      extensions.injectFunction((funcId, expressionInfo, builder))
+    ScalarFunctions.funcs.foreach(extensions.injectFunction)
+  }
+
+  override def injectPlannerStrategy(extensions: SparkSessionExtensions): Unit = {
+    extensions.injectPlannerStrategy { session =>
+      BatchedBlobStrategy(session)
     }
   }
 
