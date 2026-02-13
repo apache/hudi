@@ -56,9 +56,9 @@ case class ResolveBytesExpression(child: Expression)
 
   override def dataType: DataType = BinaryType
 
-  override def nullable: Boolean = false
+  override def nullable: Boolean = true
 
-  override protected def withNewChildInternal(newChild: Expression): Expression = {
+  override protected def withNewChildInternal(newChild: Expression): ResolveBytesExpression = {
     copy(child = newChild)
   }
 

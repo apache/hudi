@@ -45,6 +45,10 @@ class HoodieSparkSessionExtension extends (SparkSessionExtensions => Unit)
       extensions.injectOptimizerRule(ruleBuilder(_))
     }
 
+    HoodieAnalysis.customPlannerStrategies.foreach { strategyBuilder =>
+      extensions.injectPlannerStrategy(strategyBuilder(_))
+    }
+
     /*
     // CBO is only supported in Spark >= 3.1.x
     HoodieAnalysis.customPreCBORules.foreach { ruleBuilder =>

@@ -22,9 +22,12 @@ package org.apache.spark.sql.hudi.blob
 import org.apache.hudi.io.SeekableDataInputStream
 import org.apache.hudi.storage.{HoodieStorage, HoodieStorageUtils, StorageConfiguration, StoragePath}
 
-import org.apache.spark.sql.{Dataset, Row}
-import org.apache.spark.sql.catalyst.expressions.GenericRowWithSchema
+import org.apache.spark.rdd.RDD
+import org.apache.spark.sql.{Dataset, Encoders, Row}
+import org.apache.spark.sql.catalyst.InternalRow
+import org.apache.spark.sql.catalyst.expressions.{GenericInternalRow, GenericRowWithSchema, SpecificInternalRow}
 import org.apache.spark.sql.types.{BinaryType, StructField, StructType}
+import org.apache.spark.unsafe.types.UTF8String
 import org.slf4j.LoggerFactory
 
 import scala.collection.mutable.ArrayBuffer
@@ -97,19 +100,23 @@ class BatchedByteRangeReader(
    * @param rows         Iterator of input rows with struct column
    * @param structColIdx Index of the struct column in the row
    * @param outputSchema Schema for output rows
+   * @param accessor     Type class for accessing row fields
+   * @param builder      Type class for building output rows
+   * @tparam R           Row type (Row or InternalRow)
    * @return Iterator of output rows with data column added
    */
-  def processPartition(
-      rows: Iterator[Row],
+  def processPartition[R](
+      rows: Iterator[R],
       structColIdx: Int,
-      outputSchema: StructType): Iterator[Row] = {
+      outputSchema: StructType)
+      (implicit accessor: RowAccessor[R], builder: RowBuilder[R]): Iterator[R] = {
 
     // Create buffered iterator for lookahead
     val bufferedRows = rows.buffered
 
     // Result buffer to maintain order
-    val resultIterator = new Iterator[Row] {
-      private var currentBatch: Iterator[Row] = Iterator.empty
+    val resultIterator = new Iterator[R] {
+      private var currentBatch: Iterator[R] = Iterator.empty
       private var rowIndex = 0L
 
       override def hasNext: Boolean = {
@@ -124,7 +131,7 @@ class BatchedByteRangeReader(
         }
       }
 
-      override def next(): Row = {
+      override def next(): R = {
         if (!hasNext) {
           throw new NoSuchElementException("No more rows")
         }
@@ -134,7 +141,7 @@ class BatchedByteRangeReader(
       /**
        * Collect and process the next batch of rows.
        */
-      private def processNextBatch(): Iterator[Row] = {
+      private def processNextBatch(): Iterator[R] = {
         // Collect up to lookaheadSize rows with their original indices
         val batch = collectBatch()
 
@@ -158,22 +165,23 @@ class BatchedByteRangeReader(
       /**
        * Collect up to lookaheadSize rows from the input iterator.
        */
-      private def collectBatch(): Seq[RowInfo] = {
-        val batch = ArrayBuffer[RowInfo]()
+      private def collectBatch(): Seq[RowInfo[R]] = {
+        val batch = ArrayBuffer[RowInfo[R]]()
         var collected = 0
 
         while (bufferedRows.hasNext && collected < lookaheadSize) {
           val row = bufferedRows.next()
-          val structValue = row.getStruct(structColIdx)
+          val structValue = accessor.getStruct(row, structColIdx)
 
+          // TODO: define constants in the HoodieSchema for these field indices
           // Extract blob reference from nested structure
           // structValue has: storage_type (0), bytes (1), reference (2)
-          val reference = structValue.getStruct(2)  // Get reference struct
-          val filePath = reference.getString(0)      // file field
-          val offset = reference.getLong(1)          // position field
-          val length = reference.getLong(2).toInt    // length field (Long in schema, cast to Int)
+          val reference = accessor.getStruct(structValue, 2)  // Get reference struct
+          val filePath = accessor.getString(reference, 0)      // file field
+          val offset = accessor.getLong(reference, 1)          // position field
+          val length = accessor.getLong(reference, 2).toInt    // length field (Long in schema, cast to Int)
 
-          batch += RowInfo(
+          batch += RowInfo[R](
             originalRow = row,
             filePath = filePath,
             offset = offset,
@@ -201,11 +209,11 @@ class BatchedByteRangeReader(
    * @param rows Sequence of row information
    * @return Sequence of merged ranges
    */
-  private def identifyConsecutiveRanges(rows: Seq[RowInfo]): Seq[MergedRange] = {
+  private def identifyConsecutiveRanges[R](rows: Seq[RowInfo[R]]): Seq[MergedRange[R]] = {
     // Group by file path
     val byFile = rows.groupBy(_.filePath)
 
-    val allRanges = ArrayBuffer[MergedRange]()
+    val allRanges = ArrayBuffer[MergedRange[R]]()
 
     byFile.foreach { case (filePath, fileRows) =>
       // Sort by offset
@@ -226,15 +234,15 @@ class BatchedByteRangeReader(
    * @param maxGap Maximum gap to consider for merging
    * @return Sequence of merged ranges
    */
-  private def mergeRanges(rows: Seq[RowInfo], maxGap: Int): Seq[MergedRange] = {
+  private def mergeRanges[R](rows: Seq[RowInfo[R]], maxGap: Int): Seq[MergedRange[R]] = {
 
-    val result = ArrayBuffer[MergedRange]()
-    var current: MergedRange = null
+    val result = ArrayBuffer[MergedRange[R]]()
+    var current: MergedRange[R] = null
 
     rows.foreach { row =>
       if (current == null) {
         // Start first range
-        current = MergedRange(
+        current = MergedRange[R](
           filePath = row.filePath,
           startOffset = row.offset,
           endOffset = row.offset + row.length,
@@ -249,7 +257,7 @@ class BatchedByteRangeReader(
         } else {
           // Save current range and start new one
           result += current
-          current = MergedRange(
+          current = MergedRange[R](
             filePath = row.filePath,
             startOffset = row.offset,
             endOffset = row.offset + row.length,
@@ -276,11 +284,14 @@ class BatchedByteRangeReader(
    *
    * @param range        The merged range to read
    * @param outputSchema Schema for output rows
+   * @param builder      Type class for building output rows
+   * @tparam R           Row type (Row or InternalRow)
    * @return Sequence of row results with original indices
    */
-  private def readAndSplitRange(
-      range: MergedRange,
-      outputSchema: StructType): Seq[RowResult] = {
+  private def readAndSplitRange[R](
+      range: MergedRange[R],
+      outputSchema: StructType)
+      (implicit builder: RowBuilder[R]): Seq[RowResult[R]] = {
 
     var inputStream: SeekableDataInputStream = null
     try {
@@ -305,17 +316,11 @@ class BatchedByteRangeReader(
         val relativeOffset = (rowInfo.offset - range.startOffset).toInt
         val data = buffer.slice(relativeOffset, relativeOffset + rowInfo.length.toInt)
 
-        // Create output row: original columns + data
-        val outputValues = new Array[Any](rowInfo.originalRow.length + 1)
-        var i = 0
-        while (i < rowInfo.originalRow.length) {
-          outputValues(i) = rowInfo.originalRow.get(i)
-          i += 1
-        }
-        outputValues(rowInfo.originalRow.length) = data
+        // Build output row using type class
+        val outputRow = builder.buildRow(rowInfo.originalRow, data, outputSchema)
 
-        RowResult(
-          row = new GenericRowWithSchema(outputValues, outputSchema),
+        RowResult[R](
+          row = outputRow,
           index = rowInfo.index
         )
       }
@@ -342,6 +347,88 @@ class BatchedByteRangeReader(
 }
 
 /**
+ * Type class for accessing row fields.
+ * Abstracts over Row and InternalRow API differences.
+ *
+ * @tparam R Row type (Row or InternalRow)
+ */
+private[blob] trait RowAccessor[R] {
+  def getStruct(row: R, structColIdx: Int): R
+  def getString(struct: R, fieldIdx: Int): String
+  def getLong(struct: R, fieldIdx: Int): Long
+}
+
+/**
+ * Type class for building output rows.
+ * Abstracts over Row and InternalRow construction.
+ *
+ * @tparam R Row type (Row or InternalRow)
+ */
+private[blob] trait RowBuilder[R] {
+  def buildRow(originalRow: R, data: Array[Byte], outputSchema: StructType): R
+}
+
+/**
+ * Type class instances for Row.
+ */
+private[blob] object RowAccessor {
+  implicit val rowAccessor: RowAccessor[Row] = new RowAccessor[Row] {
+    override def getStruct(row: Row, structColIdx: Int): Row = row.getStruct(structColIdx)
+    override def getString(struct: Row, fieldIdx: Int): String = struct.getString(fieldIdx)
+    override def getLong(struct: Row, fieldIdx: Int): Long = struct.getLong(fieldIdx)
+  }
+
+  implicit val internalRowAccessor: RowAccessor[InternalRow] = new RowAccessor[InternalRow] {
+    override def getStruct(row: InternalRow, structColIdx: Int): InternalRow =
+      row.getStruct(structColIdx, 3)  // 3 fields in blob struct
+
+    override def getString(struct: InternalRow, fieldIdx: Int): String =
+      struct.getUTF8String(fieldIdx).toString
+
+    override def getLong(struct: InternalRow, fieldIdx: Int): Long =
+      struct.getLong(fieldIdx)
+  }
+}
+
+/**
+ * Type class instances for Row builders.
+ */
+private[blob] object RowBuilder {
+  implicit val rowBuilder: RowBuilder[Row] = new RowBuilder[Row] {
+    override def buildRow(originalRow: Row, data: Array[Byte], outputSchema: StructType): Row = {
+      val outputValues = new Array[Any](originalRow.length + 1)
+      var i = 0
+      while (i < originalRow.length) {
+        outputValues(i) = originalRow.get(i)
+        i += 1
+      }
+      outputValues(originalRow.length) = data
+      new GenericRowWithSchema(outputValues, outputSchema)
+    }
+  }
+
+  implicit val internalRowBuilder: RowBuilder[InternalRow] = new RowBuilder[InternalRow] {
+    override def buildRow(originalRow: InternalRow, data: Array[Byte], outputSchema: StructType): InternalRow = {
+      val outputRow = new SpecificInternalRow(outputSchema.fields.map(_.dataType))
+      var i = 0
+      while (i < originalRow.numFields) {
+        if (originalRow.isNullAt(i)) {
+          outputRow.setNullAt(i)
+        } else {
+          val dataType = outputSchema.fields(i).dataType
+          // Copy field using generic get/update for compatibility
+          outputRow.update(i, originalRow.get(i, dataType))
+        }
+        i += 1
+      }
+      // Set the data field (last position)
+      outputRow.update(originalRow.numFields, data)
+      outputRow
+    }
+  }
+}
+
+/**
  * Information about a single row to be read.
  *
  * @param originalRow Original input row
@@ -349,9 +436,10 @@ class BatchedByteRangeReader(
  * @param offset      Byte offset in file
  * @param length      Number of bytes to read
  * @param index       Original position in input (for ordering)
+ * @tparam R          Row type (Row or InternalRow)
  */
-private case class RowInfo(
-    originalRow: Row,
+private case class RowInfo[R](
+    originalRow: R,
     filePath: String,
     offset: Long,
     length: Long,
@@ -364,12 +452,13 @@ private case class RowInfo(
  * @param startOffset Start byte offset of merged range
  * @param endOffset   End byte offset of merged range (exclusive)
  * @param rows        Individual rows included in this range
+ * @tparam R          Row type (Row or InternalRow)
  */
-private case class MergedRange(
+private case class MergedRange[R](
     filePath: String,
     startOffset: Long,
     endOffset: Long,
-    rows: Seq[RowInfo]) {
+    rows: Seq[RowInfo[R]]) {
 
   /**
    * Merge another row into this range.
@@ -377,7 +466,7 @@ private case class MergedRange(
    * @param row Row to merge
    * @return New merged range including the row
    */
-  def merge(row: RowInfo): MergedRange = {
+  def merge(row: RowInfo[R]): MergedRange[R] = {
     copy(
       endOffset = math.max(endOffset, row.offset + row.length),
       rows = rows :+ row
@@ -390,9 +479,10 @@ private case class MergedRange(
  *
  * @param row   Output row with data
  * @param index Original position in input
+ * @tparam R    Row type (Row or InternalRow)
  */
-private case class RowResult(
-    row: Row,
+private case class RowResult[R](
+    row: R,
     index: Long)
 
 /**
@@ -462,31 +552,80 @@ object BatchedByteRangeReader {
     val broadcastConf = spark.sparkContext.broadcast(storageConf)
 
     // Apply mapPartitions
-    val resultRDD = df.rdd.mapPartitions { partition =>
-      var reader: BatchedByteRangeReader = null
-
+    val result = df.mapPartitions { partition =>
       try {
         // Create storage and reader for this partition
         val storage = HoodieStorageUtils.getStorage(broadcastConf.value)
-        reader = new BatchedByteRangeReader(storage, maxGapBytes, lookaheadSize)
+        val reader = new BatchedByteRangeReader(storage, maxGapBytes, lookaheadSize)
+
+        // Import implicit instances for Row
+        import RowAccessor.rowAccessor
+        import RowBuilder.rowBuilder
 
         // Process partition
-        reader.processPartition(partition, structColIdx, outputSchema)
+        reader.processPartition[Row](partition, structColIdx, outputSchema)
 
       } catch {
         case e: Exception =>
           logger.error("Error processing partition", e)
           throw e
       }
-    }
+    } (Encoders.row(outputSchema))
 
-    val resultDF = spark.createDataFrame(resultRDD, outputSchema)
     if (keepTempColumn) {
       // Keep both columns for ResolveBlobReferencesRule
-      resultDF
+      result
     } else {
       // Backwards compatible behavior: rename __temp__data to original column name
-      resultDF.drop(structColName).withColumnRenamed(DATA_COL, structColName)
+      result.drop(structColName).withColumnRenamed(DATA_COL, structColName)
+    }
+  }
+
+  /**
+   * Process RDD[InternalRow] directly without DataFrame conversion.
+   *
+   * This method provides optimized processing for physical plan execution,
+   * avoiding the overhead of RDD → DataFrame → RDD conversions.
+   *
+   * @param rdd           Input RDD of InternalRows
+   * @param schema        Schema of the input RDD
+   * @param storageConf   Storage configuration for file access
+   * @param maxGapBytes   Max gap to consider consecutive (default: 4096)
+   * @param lookaheadSize Rows to buffer for batching (default: 50)
+   * @param columnName    Optional column name to resolve. If not provided, searches for column with hudi_blob=true metadata
+   * @return RDD with struct column + data column
+   * @throws IllegalArgumentException if struct column is missing or has wrong schema
+   */
+  def processRDD(
+      rdd: RDD[InternalRow],
+      schema: StructType,
+      storageConf: StorageConfiguration[_],
+      maxGapBytes: Int = DEFAULT_MAX_GAP_BYTES,
+      lookaheadSize: Int = DEFAULT_LOOKAHEAD_SIZE,
+      columnName: String): RDD[InternalRow] = {
+
+    require(maxGapBytes >= 0, "maxGapBytes must be non-negative")
+    require(lookaheadSize > 0, "lookaheadSize must be positive")
+
+    // Get struct column index
+    val structColIdx = schema.fieldIndex(columnName)
+
+    // Create output schema (input + __temp__data column)
+    val outputSchema = schema.add(StructField(DATA_COL, BinaryType, nullable = false))
+
+    // Broadcast configuration
+    val broadcastConf = rdd.sparkContext.broadcast(storageConf)
+
+    // Process partitions using InternalRow type classes
+    rdd.mapPartitions { partition =>
+      val storage = HoodieStorageUtils.getStorage(broadcastConf.value)
+      val reader = new BatchedByteRangeReader(storage, maxGapBytes, lookaheadSize)
+
+      // Import implicit instances for InternalRow
+      import RowAccessor.internalRowAccessor
+      import RowBuilder.internalRowBuilder
+
+      reader.processPartition[InternalRow](partition, structColIdx, outputSchema)
     }
   }
 
