@@ -572,8 +572,7 @@ class TestHoodieSchemaConversionUtils extends FunSuite with Matchers {
 
   test("test VECTOR type conversion - Spark to HoodieSchema") {
     val metadata = new MetadataBuilder()
-      .putString(HoodieSchema.TYPE_METADATA_FIELD, HoodieSchemaType.VECTOR.name())
-      .putString(HoodieSchema.TYPE_METADATA_PROPS_FIELD, HoodieSchema.VECTOR_DIMENSION_PROP + "=128")
+      .putString(HoodieSchema.TYPE_METADATA_FIELD, "VECTOR(128)")
       .build()
     val struct = new StructType()
       .add("id", IntegerType, false)
@@ -614,16 +613,16 @@ class TestHoodieSchemaConversionUtils extends FunSuite with Matchers {
     assert(arrayType.elementType == FloatType)
     assert(!arrayType.containsNull)
 
-    // Verify metadata contains dimension
-    assert(embeddingField.metadata.contains(HoodieSchema.TYPE_METADATA_PROPS_FIELD))
-    val typeMetadata = HoodieSchema.parseTypeMetadata(embeddingField.metadata.getString(HoodieSchema.TYPE_METADATA_PROPS_FIELD))
-    assert(typeMetadata.get(HoodieSchema.VECTOR_DIMENSION_PROP) == "256")
+    // Verify metadata contains type descriptor with dimension
+    assert(embeddingField.metadata.contains(HoodieSchema.TYPE_METADATA_FIELD))
+    val typeDescriptor = HoodieSchema.parseTypeString(embeddingField.metadata.getString(HoodieSchema.TYPE_METADATA_FIELD))
+    assert(typeDescriptor.getType == HoodieSchemaType.VECTOR)
+    assert(typeDescriptor.getParam(0) == "256")
   }
 
   test("test VECTOR round-trip conversion - Spark to HoodieSchema to Spark") {
     val metadata = new MetadataBuilder()
-      .putString(HoodieSchema.TYPE_METADATA_FIELD, HoodieSchemaType.VECTOR.name())
-      .putString(HoodieSchema.TYPE_METADATA_PROPS_FIELD, HoodieSchema.VECTOR_DIMENSION_PROP + "=512")
+      .putString(HoodieSchema.TYPE_METADATA_FIELD, "VECTOR(512)")
       .build()
     val originalStruct = new StructType()
       .add("id", LongType, false)
@@ -647,9 +646,10 @@ class TestHoodieSchemaConversionUtils extends FunSuite with Matchers {
     assert(convertedVectorField.nullable == originalVectorField.nullable)
 
     // Verify metadata is preserved
-    assert(convertedVectorField.metadata.contains(HoodieSchema.TYPE_METADATA_PROPS_FIELD))
-    val roundTripMetadata = HoodieSchema.parseTypeMetadata(convertedVectorField.metadata.getString(HoodieSchema.TYPE_METADATA_PROPS_FIELD))
-    assert(roundTripMetadata.get(HoodieSchema.VECTOR_DIMENSION_PROP) == "512")
+    assert(convertedVectorField.metadata.contains(HoodieSchema.TYPE_METADATA_FIELD))
+    val roundTripDescriptor = HoodieSchema.parseTypeString(convertedVectorField.metadata.getString(HoodieSchema.TYPE_METADATA_FIELD))
+    assert(roundTripDescriptor.getType == HoodieSchemaType.VECTOR)
+    assert(roundTripDescriptor.getParam(0) == "512")
 
     // Verify array properties
     val convertedArrayType = convertedVectorField.dataType.asInstanceOf[ArrayType]

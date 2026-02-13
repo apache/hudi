@@ -82,21 +82,24 @@ object HoodieSparkSchemaConverters {
       // Check for VECTOR type metadata property in spark struct type
       case arrayType @ ArrayType(FloatType, containsNull) // for now checking floats but will need to check element type
           if metadata.contains(HoodieSchema.TYPE_METADATA_FIELD) &&
-            metadata.getString(HoodieSchema.TYPE_METADATA_FIELD).equalsIgnoreCase(HoodieSchemaType.VECTOR.name())   =>
+            metadata.getString(HoodieSchema.TYPE_METADATA_FIELD).startsWith("VECTOR") =>
         if (containsNull) {
           throw new IncompatibleSchemaException(
             s"VECTOR type does not support nullable elements (field: $recordName)")
         }
 
-        val typeMetadata = HoodieSchema.parseTypeMetadata(metadata.getString(HoodieSchema.TYPE_METADATA_PROPS_FIELD))
-        val dimension = typeMetadata.get(HoodieSchema.VECTOR_DIMENSION_PROP).toInt
+        val typeDescriptor = HoodieSchema.parseTypeString(metadata.getString(HoodieSchema.TYPE_METADATA_FIELD))
+        val dimension = typeDescriptor.getParam(0).toInt
         if (dimension <= 0) {
           throw new IncompatibleSchemaException(
             s"VECTOR dimension must be positive, got: $dimension (field: $recordName)")
         }
 
-        // Create VECTOR schema
-        HoodieSchema.createVector(dimension, HoodieSchema.Vector.VectorElementType.FLOAT)
+        val elementType = if (typeDescriptor.getParams.size() > 1)
+          HoodieSchema.Vector.VectorElementType.fromString(typeDescriptor.getParam(1))
+        else HoodieSchema.Vector.VectorElementType.FLOAT
+
+        HoodieSchema.createVector(dimension, elementType)
 
       case ArrayType(elementType, containsNull) =>
         val elementSchema = toHoodieType(elementType, containsNull, recordName, nameSpace)
@@ -200,13 +203,8 @@ object HoodieSparkSchemaConverters {
       // Complex types
       case HoodieSchemaType.VECTOR =>
         val vectorSchema = hoodieSchema.asInstanceOf[HoodieSchema.Vector]
-        val dimension = vectorSchema.getDimension
-
-        val typeMetadataStr = HoodieSchema.buildTypeMetadata(
-          java.util.Collections.singletonMap(HoodieSchema.VECTOR_DIMENSION_PROP, dimension.toString))
         val metadata = new MetadataBuilder()
-          .putString(HoodieSchema.TYPE_METADATA_FIELD, HoodieSchemaType.VECTOR.name())
-          .putString(HoodieSchema.TYPE_METADATA_PROPS_FIELD, typeMetadataStr)
+          .putString(HoodieSchema.TYPE_METADATA_FIELD, HoodieSchema.toTypeString(vectorSchema))
           .build()
 
         SchemaType(ArrayType(FloatType, containsNull = false), nullable = false, Some(metadata))

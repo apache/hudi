@@ -90,30 +90,86 @@ public class HoodieSchema implements Serializable {
   public static final HoodieSchema NULL_SCHEMA = HoodieSchema.create(HoodieSchemaType.NULL);
   /**
    * Constant to use when attaching type metadata to external schema systems like Spark's StructType.
+   * Stores a parameterized type string for custom Hudi logical types such as VECTOR and BLOB.
+   * Examples: "VECTOR(128)", "VECTOR(512, DOUBLE)", "BLOB".
    */
   public static final String TYPE_METADATA_FIELD = "hudi_type";
-  public static final String TYPE_METADATA_PROPS_FIELD = "hudi_type_metadata";
-  public static final String VECTOR_DIMENSION_PROP = "vector.dimension";
 
   /**
-   * Builds a comma-separated key=value metadata string from the given map.
-   * Example: {"vector.dimension": "128"} → "vector.dimension=128"
+   * Converts a HoodieSchema to its parameterized type string for custom Hudi logical types
+   * such as VECTOR and BLOB. Only supports custom logical types — throws for standard types.
+   * Parameterized types include positional parameters: "VECTOR(128)", "VECTOR(128, DOUBLE)".
+   * Default parameters are omitted: VECTOR(dim) implies elementType=FLOAT.
    */
-  public static String buildTypeMetadata(Map<String, String> props) {
-    return props.entrySet().stream()
-        .map(e -> e.getKey() + "=" + e.getValue())
-        .collect(Collectors.joining(","));
+  public static String toTypeString(HoodieSchema schema) {
+    HoodieSchemaType type = schema.getType();
+    switch (type) {
+      case VECTOR:
+        Vector v = (Vector) schema;
+        if (v.getVectorElementType() == Vector.VectorElementType.FLOAT) {
+          return "VECTOR(" + v.getDimension() + ")";
+        }
+        return "VECTOR(" + v.getDimension() + ", " + v.getVectorElementType().getDataType() + ")";
+      default:
+        throw new IllegalArgumentException(
+            "toTypeString only supports custom logical types, got: " + type);
+    }
   }
 
   /**
-   * Parses a comma-separated key=value metadata string into a map.
-   * Example: "vector.dimension=128" → {"vector.dimension": "128"}
+   * Parses a parameterized type string for custom Hudi logical types such as VECTOR and BLOB.
+   * Examples: "VECTOR(128)" or "VECTOR(512, DOUBLE)".
+   * Throws for non-custom logical type names.
    */
-  public static Map<String, String> parseTypeMetadata(String metadata) {
-    return Arrays.stream(metadata.split(","))
-        .map(kv -> kv.split("=", 2))
-        .filter(parts -> parts.length == 2)
-        .collect(Collectors.toMap(parts -> parts[0], parts -> parts[1]));
+  public static TypeDescriptor parseTypeString(String descriptor) {
+    int parenStart = descriptor.indexOf('(');
+    String typeName;
+    List<String> params;
+    if (parenStart == -1) {
+      typeName = descriptor.trim();
+      params = Collections.emptyList();
+    } else {
+      typeName = descriptor.substring(0, parenStart).trim();
+      String paramStr = descriptor.substring(parenStart + 1, descriptor.length() - 1).trim();
+      params = Arrays.stream(paramStr.split(","))
+          .map(String::trim)
+          .collect(Collectors.toList());
+    }
+    HoodieSchemaType type = HoodieSchemaType.valueOf(typeName);
+    if (!CUSTOM_LOGICAL_TYPES.contains(type)) {
+      throw new IllegalArgumentException(
+          "parseTypeString only supports custom logical types, got: " + type);
+    }
+    return new TypeDescriptor(type, params);
+  }
+
+  private static final java.util.Set<HoodieSchemaType> CUSTOM_LOGICAL_TYPES =
+      java.util.EnumSet.of(HoodieSchemaType.VECTOR);
+
+  /**
+   * Descriptor for a parameterized type string for custom Hudi logical types such as VECTOR and BLOB.
+   * For example, "VECTOR(128, DOUBLE)" yields type=VECTOR, params=["128", "DOUBLE"].
+   */
+  public static class TypeDescriptor {
+    private final HoodieSchemaType type;
+    private final List<String> params;
+
+    public TypeDescriptor(HoodieSchemaType type, List<String> params) {
+      this.type = type;
+      this.params = params;
+    }
+
+    public HoodieSchemaType getType() {
+      return type;
+    }
+
+    public List<String> getParams() {
+      return params;
+    }
+
+    public String getParam(int index) {
+      return params.get(index);
+    }
   }
 
 
