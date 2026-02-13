@@ -19,6 +19,7 @@
 
 package org.apache.hudi.client;
 
+import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.client.embedded.EmbeddedTimelineService;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.data.HoodieData.HoodieDataCacheKey;
@@ -34,8 +35,12 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.metadata.HoodieTableMetadata;
+import org.apache.hudi.metrics.Metrics;
+import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness;
 
+import com.codahale.metrics.Gauge;
+import com.codahale.metrics.MetricRegistry;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.spark.api.java.JavaRDD;
 import org.junit.jupiter.api.Test;
@@ -53,9 +58,13 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.getCommitTimeAtUTC;
+import static org.apache.hudi.metrics.HoodieMetrics.DURATION_STR;
+import static org.apache.hudi.metrics.HoodieMetrics.FAILURE_COUNTER;
+import static org.apache.hudi.metrics.HoodieMetrics.POST_COMMIT_STR;
 import static org.apache.hudi.testutils.Assertions.assertNoWriteErrors;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -310,5 +319,124 @@ class TestSparkRDDWriteClient extends SparkClientFunctionalTestHarness {
 
     // Reset speculation config after test
     jsc().sc().conf().set("spark.speculation", "false");
+  }
+
+  @Test
+  public void testPostCommitFailureHandlingWithMetrics() throws IOException {
+    HoodieTableMetaClient metaClient = getHoodieMetaClient(storageConf(), URI.create(basePath()).getPath(), new Properties());
+
+    // Create a custom write client that throws exception during post commit operations
+    class PostCommitFailingWriteClient extends SparkRDDWriteClient {
+      private boolean shouldFailPostCommit = false;
+
+      public PostCommitFailingWriteClient(HoodieSparkEngineContext context, HoodieWriteConfig writeConfig) {
+        super(context, writeConfig);
+      }
+
+      public void setShouldFailPostCommit(boolean shouldFail) {
+        this.shouldFailPostCommit = shouldFail;
+      }
+
+      @Override
+      protected void mayBeCleanAndArchive(HoodieTable table) {
+        if (shouldFailPostCommit) {
+          throw new RuntimeException("Simulated post commit failure for testing");
+        }
+        super.mayBeCleanAndArchive(table);
+      }
+    }
+
+    // Test with post commit failures ignored
+    HoodieWriteConfig configWithIgnore = getConfigBuilder(true)
+        .withPath(metaClient.getBasePath())
+        .withIgnorePostCommitFailure(true)
+        .withMetricsConfig(org.apache.hudi.config.metrics.HoodieMetricsConfig.newBuilder()
+            .on(true)
+            .withReporterType("INMEMORY")
+            .build())
+        .build();
+
+    HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator();
+    String instant1 = getCommitTimeAtUTC(1);
+
+    PostCommitFailingWriteClient clientWithIgnore = new PostCommitFailingWriteClient(context(), configWithIgnore);
+    clientWithIgnore.setShouldFailPostCommit(true);
+
+    // Generate and write records - this should succeed even though postCommit fails
+    List<HoodieRecord> records1 = dataGen.generateInserts(instant1, 10);
+    JavaRDD<HoodieRecord> writeRecords1 = jsc().parallelize(records1, 2);
+
+    WriteClientTestUtils.startCommitWithTime(clientWithIgnore, instant1);
+    List<WriteStatus> writeStatuses1 = clientWithIgnore.insert(writeRecords1, instant1).collect();
+    assertNoWriteErrors(writeStatuses1);
+
+    // The commit should succeed despite postCommit failure because we have ignore flag enabled
+    clientWithIgnore.commitStats(instant1, writeStatuses1.stream().map(WriteStatus::getStat).collect(Collectors.toList()),
+        Option.empty(), metaClient.getCommitActionType());
+
+    // Verify metrics were updated for failure
+    Metrics metrics = Metrics.getInstance(configWithIgnore.getMetricsConfig(), hoodieStorage());
+    MetricRegistry registry = metrics.getRegistry();
+
+    // Build metric names correctly using HoodieMetrics.getMetricsName pattern
+    String failureMetricName = clientWithIgnore.getMetrics().getMetricsName(POST_COMMIT_STR, FAILURE_COUNTER);
+    String durationMetricName = clientWithIgnore.getMetrics().getMetricsName(POST_COMMIT_STR, DURATION_STR);
+
+    Gauge<Long> failureGauge = (Gauge<Long>) registry.getGauges().get(failureMetricName);
+    Gauge<Long> durationGauge = (Gauge<Long>) registry.getGauges().get(durationMetricName);
+
+    assertNotNull(failureGauge, "Failure metric should be registered");
+    assertEquals(1L, failureGauge.getValue(), "Failure count should be 1");
+    assertNotNull(durationGauge, "Duration metric should be registered");
+    assertTrue(durationGauge.getValue() >= 0, "Duration should be non-negative");
+
+    clientWithIgnore.close();
+
+    // Test with post commit failures NOT ignored (should throw exception)
+    HoodieWriteConfig configWithoutIgnore = getConfigBuilder(true)
+        .withPath(metaClient.getBasePath())
+        .withIgnorePostCommitFailure(false)
+        .withMetricsConfig(org.apache.hudi.config.metrics.HoodieMetricsConfig.newBuilder()
+            .on(true)
+            .withReporterType("INMEMORY")
+            .build())
+        .build();
+
+    String instant2 = getCommitTimeAtUTC(2);
+    PostCommitFailingWriteClient clientWithoutIgnore = new PostCommitFailingWriteClient(context(), configWithoutIgnore);
+    clientWithoutIgnore.setShouldFailPostCommit(true);
+
+    List<HoodieRecord> records2 = dataGen.generateInserts(instant2, 10);
+    JavaRDD<HoodieRecord> writeRecords2 = jsc().parallelize(records2, 2);
+
+    WriteClientTestUtils.startCommitWithTime(clientWithoutIgnore, instant2);
+    List<WriteStatus> writeStatuses2 = clientWithoutIgnore.insert(writeRecords2, instant2).collect();
+    assertNoWriteErrors(writeStatuses2);
+
+    // This should throw RuntimeException because ignore flag is false
+    RuntimeException exception = assertThrows(RuntimeException.class, () -> {
+      clientWithoutIgnore.commitStats(instant2, writeStatuses2.stream().map(WriteStatus::getStat).collect(Collectors.toList()),
+          Option.empty(), metaClient.getCommitActionType());
+    });
+
+    assertTrue(exception.getMessage().contains("Simulated post commit failure for testing"),
+        "Exception message should contain the simulated failure message");
+
+    // Verify metrics were still updated even when exception was thrown
+    Metrics metrics2 = Metrics.getInstance(configWithoutIgnore.getMetricsConfig(), hoodieStorage());
+    MetricRegistry registry2 = metrics2.getRegistry();
+
+    String failureMetricName2 = clientWithoutIgnore.getMetrics().getMetricsName(POST_COMMIT_STR, FAILURE_COUNTER);
+    String durationMetricName2 = clientWithoutIgnore.getMetrics().getMetricsName(POST_COMMIT_STR, DURATION_STR);
+
+    Gauge<Long> failureGauge2 = (Gauge<Long>) registry2.getGauges().get(failureMetricName2);
+    Gauge<Long> durationGauge2 = (Gauge<Long>) registry2.getGauges().get(durationMetricName2);
+
+    assertNotNull(failureGauge2, "Failure metric should be registered for second test");
+    assertEquals(1L, failureGauge2.getValue(), "Failure count should be 1");
+    assertNotNull(durationGauge2, "Duration metric should be registered for second test");
+    assertTrue(durationGauge2.getValue() >= 0, "Duration should be non-negative");
+
+    clientWithoutIgnore.close();
   }
 }

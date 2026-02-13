@@ -720,6 +720,12 @@ public class HoodieWriteConfig extends HoodieConfig {
       .markAdvanced()
       .withDocumentation("");
 
+  public static final ConfigProperty<String> POST_COMMIT_FAILURES_IGNORED = ConfigProperty
+      .key("hoodie.post.commit.failures.ignored")
+      .defaultValue("false")
+      .withDocumentation("When this config is true, any failures in the post commit operations will be"
+          + " ignored and does not kill the application.");
+
   public static final ConfigProperty<String> AVRO_EXTERNAL_SCHEMA_TRANSFORMATION_ENABLE = ConfigProperty
       .key(AVRO_SCHEMA_STRING.key() + ".external.transformation")
       .defaultValue("false")
@@ -2755,6 +2761,10 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getBoolean(BLOCK_WRITES_ON_SPECULATIVE_EXECUTION);
   }
 
+  public Boolean postCommitFailuresIngnored() {
+    return getBoolean(POST_COMMIT_FAILURES_IGNORED);
+  }
+
   /**
    * Are any table services configured to run inline for both scheduling and execution?
    *
@@ -3422,6 +3432,11 @@ public class HoodieWriteConfig extends HoodieConfig {
 
     public Builder withWriteConcurrencyMode(WriteConcurrencyMode concurrencyMode) {
       writeConfig.setValue(WRITE_CONCURRENCY_MODE, concurrencyMode.name());
+      return this;
+    }
+
+    public Builder withIgnorePostCommitFailure(boolean postCommitFailureIgnored) {
+      writeConfig.setValue(POST_COMMIT_FAILURES_IGNORED, Boolean.toString(postCommitFailureIgnored));
       return this;
     }
 
