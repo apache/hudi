@@ -87,9 +87,10 @@ object HoodieSparkSchemaConverters {
         val valueSchema = toHoodieType(valueType, valueContainsNull, recordName, nameSpace, metadata)
         HoodieSchema.createMap(valueSchema)
 
-      case _: StructType if metadata.contains(HoodieSchema.TYPE_METADATA_FIELD) &&
+      case st: StructType if metadata.contains(HoodieSchema.TYPE_METADATA_FIELD) &&
         metadata.getString(HoodieSchema.TYPE_METADATA_FIELD).equalsIgnoreCase(HoodieSchemaType.BLOB.name()) =>
-        // Handle blob struct type
+        // Validate blob structure before accepting
+        validateBlobStructure(st)
         HoodieSchema.createBlob()
       case st: StructType =>
         val childNameSpace = if (nameSpace != "") s"$nameSpace.$recordName" else recordName
@@ -256,6 +257,24 @@ object HoodieSparkSchemaConverters {
         }
 
       case other => throw new IncompatibleSchemaException(s"Unsupported HoodieSchemaType: $other")
+    }
+  }
+
+  private lazy val expectedBlobStructType: StructType = toSqlType(HoodieSchema.createBlob())._1.asInstanceOf[StructType]
+
+  /**
+   * Validates that a StructType matches the expected blob schema structure defined in {@link HoodieSchema.Blob}.
+   *
+   * @param structType the StructType to validate
+   * @throws IllegalArgumentException if the structure does not match the expected blob schema
+   */
+  private def validateBlobStructure(structType: StructType): Unit = {
+    if (!structType.equals(expectedBlobStructType)) {
+      throw new IllegalArgumentException(
+        s"""Invalid blob schema structure. Expected schema:
+           |${expectedBlobStructType.toDDL}
+           |Got schema:
+           |${structType.toDDL}""".stripMargin)
     }
   }
 

@@ -21,8 +21,8 @@ import org.apache.hudi.avro.model.HoodieMetadataColumnStats
 import org.apache.hudi.common.schema.{HoodieSchema, HoodieSchemaField, HoodieSchemaType}
 
 import org.apache.avro.JsonProperties
-import org.apache.spark.sql.types.{DataTypes, StructField, StructType}
-import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
+import org.apache.spark.sql.types.{DataTypes, MetadataBuilder, StructField, StructType}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertThrows, assertTrue}
 import org.junit.jupiter.api.Test
 
 import java.util
@@ -83,6 +83,24 @@ class TestSchemaConverters {
     val imageField = metadataField.schema().getField("image").get()
     assertFalse(imageField.schema().isNullable)
     assertEquals(HoodieSchemaType.BLOB, imageField.schema().getType)
+  }
+
+  @Test
+  def testInvalidBlobSchema(): Unit = {
+    // Struct with only 2 fields marked as blob
+    val invalidStruct = new StructType(Array[StructField](
+      StructField(HoodieSchema.Blob.TYPE, DataTypes.StringType, nullable = false),
+      StructField(HoodieSchema.Blob.INLINE_DATA_FIELD, DataTypes.BinaryType, nullable = true)
+    ))
+
+    val metadata = new MetadataBuilder()
+      .putString(HoodieSchema.TYPE_METADATA_FIELD, HoodieSchemaType.BLOB.name())
+      .build()
+
+    val exception = assertThrows(classOf[IllegalArgumentException], () => {
+      HoodieSparkSchemaConverters.toHoodieType(invalidStruct, nullable = false, metadata = metadata)
+    })
+    assertTrue(exception.getMessage.startsWith("Invalid blob schema structure"))
   }
 
   /**
