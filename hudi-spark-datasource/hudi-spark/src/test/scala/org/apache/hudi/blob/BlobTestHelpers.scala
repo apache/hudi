@@ -36,13 +36,13 @@ object BlobTestHelpers {
       .build()
   }
 
-  def blobStructCol(name: String, filePathCol: Column, positionCol: Column, lengthCol: Column): Column = {
+  def blobStructCol(name: String, filePathCol: Column, offsetCol: Column, lengthCol: Column): Column = {
     struct(
-      lit("out_of_line").as("storage_type"),
-      lit(null).cast("binary").as("bytes"),
+      lit("out_of_line").as("type"),
+      lit(null).cast("binary").as("data"),
       struct(
-        filePathCol.as("file"),
-        positionCol.as("position"),
+        filePathCol.as("external_path"),
+        offsetCol.as("offset"),
         lengthCol.as("length"),
         lit(false).as("managed")
       ).as("reference")

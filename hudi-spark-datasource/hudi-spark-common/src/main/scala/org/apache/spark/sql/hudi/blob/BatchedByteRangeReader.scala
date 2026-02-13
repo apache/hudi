@@ -39,6 +39,21 @@ import scala.collection.mutable.ArrayBuffer
  * consecutive or nearby reads into single I/O operations. This significantly reduces
  * the number of seeks and reads when processing sorted data.
  *
+ * <h3>Schema Requirement:</h3>
+ * The blob column must match the schema defined in {@link org.apache.hudi.common.schema.HoodieSchema.Blob}:
+ * <pre>
+ * struct {
+ *   type: string                   // "inline" or "out_of_line"
+ *   bytes: binary (nullable)       // inline data (null for out_of_line)
+ *   reference: struct (nullable) { // file reference (null for inline)
+ *     external_path: string
+ *     offset: long
+ *     length: long
+ *     managed: boolean
+ *   }
+ * }
+ * </pre>
+ *
  * <h3>Key Features:</h3>
  * <ul>
  *   <li>Batches consecutive reads from the same file</li>
@@ -51,30 +66,19 @@ import scala.collection.mutable.ArrayBuffer
  * {{{
  * import org.apache.hudi.udf.BatchedByteRangeReader
  * import org.apache.spark.sql.functions._
+ * // Read a table with a blob column (e.g. image_data)
+ * val df = spark.read.format("hudi").load("/my_path").select("image_data", "record_id")
  *
- * val df = spark.table("file_references")
- *   .withColumn("file_info", struct(
- *     lit("out_of_line").as("storage_type"),
- *     lit(null).cast("binary").as("bytes"),
- *     struct(
- *       col("file_path").as("file"),
- *       col("offset").as("position"),
- *       col("length").as("length"),
- *       lit(false).as("managed")
- *     ).as("reference")
- *   ))
- *   .select("file_info", "record_id")
- *
- * // Read with batching (best when data is sorted by file_path, offset)
+ * // Read with batching (best when data is sorted by external_path, offset)
  * val result = BatchedByteRangeReader.readBatched(df, structColName = "file_info")
  *
- * // Result has: file_info, record_id, data
+ * // Result has: image_data, record_id, data
  * result.show()
  * }}}
  *
  * <h3>Performance Tips:</h3>
  * <ul>
- *   <li>Sort input by (reference.file, reference.position) for maximum batching effectiveness</li>
+ *   <li>Sort input by (blob.reference.external_path, blob.reference.offset) for maximum batching effectiveness</li>
  *   <li>Increase lookaheadSize for better batch detection (at cost of memory)</li>
  *   <li>Tune maxGapBytes based on your data access patterns</li>
  * </ul>
@@ -501,12 +505,12 @@ object BatchedByteRangeReader {
   val DATA_COL = "__temp__data"
 
   /**
-   * Read byte ranges from a DataFrame with a struct column.
+   * Read byte ranges from a DataFrame with a Blob column.
    *
    * The struct column must contain the HoodieSchema.Blob structure:
    * - storage_type (String): "out_of_line" or "inline"
    * - bytes (Binary, nullable): inline blob data or null
-   * - reference (Struct, nullable): out-of-line reference with file, position, length, managed fields
+   * - reference (Struct, nullable): out-of-line reference with external_path, offset, length, and managed fields
    * Returns a DataFrame with all original columns plus a "data" column containing byte arrays.
    *
    * For best performance, sort the input DataFrame by the struct fields (file_path, offset)
@@ -573,7 +577,7 @@ object BatchedByteRangeReader {
     } (Encoders.row(outputSchema))
 
     if (keepTempColumn) {
-      // Keep both columns for ResolveBlobReferencesRule
+      // Keep both columns for ReadBlobRule
       result
     } else {
       // Backwards compatible behavior: rename __temp__data to original column name

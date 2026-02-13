@@ -19,58 +19,34 @@
 
 package org.apache.spark.sql.hudi.blob
 
-import org.apache.hudi.HoodieDatasetBulkInsertHelper.sparkAdapter
-import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration
-
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.expressions.{Alias, Attribute, AttributeReference, Expression, NamedExpression}
 import org.apache.spark.sql.catalyst.plans.logical.{LogicalPlan, Project}
 import org.apache.spark.sql.catalyst.rules.Rule
-import org.apache.spark.sql.hudi.blob.BatchedByteRangeReader.DATA_COL
-import org.apache.spark.sql.hudi.expressions.ResolveBytesExpression
-import org.slf4j.LoggerFactory
+import org.apache.spark.sql.hudi.expressions.ReadBlobExpression
 
 /**
- * Analyzer rule to resolve blob references efficiently using BatchedByteRangeReader.
+ * Transforms queries with `read_blob()` to use lazy batched I/O.
  *
- * This rule detects queries containing [[ResolveBytesExpression]] markers (created by
- * the `resolve_bytes()` SQL function) and transforms the logical plan to use batched
- * I/O operations for efficient blob data reading.
+ * Replaces [[ReadBlobExpression]] markers with [[BatchedBlobRead]] nodes
+ * that read blob data during physical execution.
  *
- * <h3>Transformation Process:</h3>
- * {{{
- * Before: Project([id, resolve_bytes(file_info) as data], child)
- * After:  Project([id, __temp__data as data], BatchedRead(child))
- * }}}
- *
- * <h3>How It Works:</h3>
- * <ol>
- *   <li>Detects [[Project]] nodes containing [[ResolveBytesExpression]] markers</li>
- *   <li>Applies [[BatchedByteRangeReader.readBatched()]] to the child DataFrame</li>
- *   <li>Replaces [[ResolveBytesExpression]] with references to the `__temp__data` column</li>
- *   <li>Returns transformed plan with efficient batched I/O</li>
- * </ol>
- *
- * <h3>Configuration:</h3>
- * <ul>
- *   <li>`hoodie.blob.batching.max.gap.bytes` (default: 4096) - Max gap between reads to batch</li>
- *   <li>`hoodie.blob.batching.lookahead.size` (default: 50) - Rows to buffer for batch detection</li>
- * </ul>
+ * Example: `SELECT id, read_blob(image_data) FROM table`
  *
  * @param spark SparkSession for accessing configuration
  */
-case class ResolveBlobReferencesRule(spark: SparkSession) extends Rule[LogicalPlan] {
+case class ReadBlobRule(spark: SparkSession) extends Rule[LogicalPlan] {
 
   override def apply(plan: LogicalPlan): LogicalPlan = plan resolveOperatorsUp {
     case Project(projectList, child)
-      if containsResolveBytesExpression(projectList)
+      if containsReadBlobExpression(projectList)
         && !child.isInstanceOf[BatchedBlobRead] =>
 
       val blobColumn =
         extractBlobColumnFromExpressions(projectList).getOrElse {
           throw new IllegalStateException(
-            "resolve_bytes() function found but no valid blob column reference could be extracted. " +
-              "Ensure that resolve_bytes() is called on a BLOB type."
+            "read_blob() function found but no valid blob column reference could be extracted. " +
+              "Ensure that read_blob() is called on a BLOB type."
           )
         }
 
@@ -83,16 +59,16 @@ case class ResolveBlobReferencesRule(spark: SparkSession) extends Rule[LogicalPl
   }
 
   /**
-   * Check if any expression in the project list contains a ResolveBytesExpression.
+   * Check if any expression in the project list contains a ReadBlobExpression.
    */
-  private def containsResolveBytesExpression(projectList: Seq[Expression]): Boolean = {
-    projectList.exists(expr => containsResolveBytesInExpression(expr))
+  private def containsReadBlobExpression(projectList: Seq[Expression]): Boolean = {
+    projectList.exists(expr => containsReadBlobInExpression(expr))
   }
 
-  private def containsResolveBytesInExpression(expr: Expression): Boolean = {
+  private def containsReadBlobInExpression(expr: Expression): Boolean = {
     expr match {
-      case _: ResolveBytesExpression => true
-      case other => other.children.exists(containsResolveBytesInExpression)
+      case _: ReadBlobExpression => true
+      case other => other.children.exists(containsReadBlobInExpression)
     }
   }
 
@@ -102,7 +78,7 @@ case class ResolveBlobReferencesRule(spark: SparkSession) extends Rule[LogicalPl
     expressions.map {
 
       case alias @ Alias(childExpr, name) =>
-        val rewritten = replaceResolveBytesExpression(childExpr, dataAttr)
+        val rewritten = replaceReadBlobExpression(childExpr, dataAttr)
         Alias(rewritten, name)(
           alias.exprId,
           alias.qualifier,
@@ -114,28 +90,28 @@ case class ResolveBlobReferencesRule(spark: SparkSession) extends Rule[LogicalPl
         attr
 
       case other =>
-        replaceResolveBytesExpression(other, dataAttr)
+        replaceReadBlobExpression(other, dataAttr)
           .asInstanceOf[NamedExpression]
     }
   }
 
   /**
-   * Replace ResolveBytesExpression with reference to resolved data column.
+   * Replace ReadBlobExpression with reference to resolved data column.
    *
-   * Recursively traverses expression tree and replaces all [[ResolveBytesExpression]]
+   * Recursively traverses expression tree and replaces all [[ReadBlobExpression]]
    * nodes with references to the data column produced by [[BatchedByteRangeReader]].
    */
-  private def replaceResolveBytesExpression(
+  private def replaceReadBlobExpression(
       expr: Expression,
       dataAttr: Attribute): Expression = expr match {
 
-    case ResolveBytesExpression(_) =>
+    case ReadBlobExpression(_) =>
       // Replace with reference to the data column
       dataAttr
 
     case other =>
       // Recursively process children
-      other.mapChildren(child => replaceResolveBytesExpression(child, dataAttr))
+      other.mapChildren(child => replaceReadBlobExpression(child, dataAttr))
   }
 
   /**
@@ -143,21 +119,21 @@ case class ResolveBlobReferencesRule(spark: SparkSession) extends Rule[LogicalPl
    */
   private def extractBlobColumnFromExpressions(expressions: Seq[Expression]): Option[AttributeReference] = {
     expressions.collectFirst {
-      case expr if containsResolveBytesInExpression(expr) =>
-        findBlobColumnName(expr)
+      case expr if containsReadBlobInExpression(expr) =>
+        findBlobColumn(expr)
     }.flatten
   }
 
   /**
-   * Recursively search for ResolveBytesExpression and extract column name.
+   * Recursively search for ReadBlobExpression and extract column name.
    */
-  private def findBlobColumnName(expr: Expression): Option[AttributeReference] = expr match {
-    case ResolveBytesExpression(child) =>
+  private def findBlobColumn(expr: Expression): Option[AttributeReference] = expr match {
+    case ReadBlobExpression(child) =>
       child match {
         case attr: AttributeReference => Some(attr)
         case _ => None
       }
     case other =>
-      other.children.flatMap(findBlobColumnName).headOption
+      other.children.flatMap(findBlobColumn).headOption
   }
 }

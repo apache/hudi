@@ -27,20 +27,20 @@ import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
 
 /**
- * Tests for the resolve_bytes() SQL function.
+ * Tests for the read_blob() SQL function.
  *
  * This test suite verifies:
  * <ul>
- *   <li>Basic SQL integration with resolve_bytes()</li>
+ *   <li>Basic SQL integration with read_blob()</li>
  *   <li>Integration with WHERE clauses, JOINs</li>
  *   <li>Configuration parameter handling</li>
  *   <li>Error handling for invalid inputs</li>
  * </ul>
  */
-class TestResolveBytesSQL extends HoodieClientTestBase {
+class TestReadBlobSQL extends HoodieClientTestBase {
 
   @Test
-  def testBasicResolveBytesSQL(): Unit = {
+  def testBasicReadBlobSQL(): Unit = {
     val filePath = createTestFile(tempDir, "basic.bin", 10000)
 
     // Create table with blob column
@@ -48,16 +48,16 @@ class TestResolveBytesSQL extends HoodieClientTestBase {
       (1, "record1", filePath, 0L, 100L),
       (2, "record2", filePath, 100L, 100L),
       (3, "record3", filePath, 200L, 100L)
-    )).toDF("id", "name", "file_path", "position", "length")
+    )).toDF("id", "name", "external_path", "offset", "length")
       .withColumn("file_info",
-        blobStructCol("file_info", col("file_path"), col("position"), col("length")))
+        blobStructCol("file_info", col("external_path"), col("offset"), col("length")))
       .select("id", "name", "file_info")
 
     df.createOrReplaceTempView("test_table")
 
-    // Use SQL with resolve_bytes
+    // Use SQL with read_blob
     val result = sparkSession.sql("""
-      SELECT id, name, resolve_bytes(file_info) as data
+      SELECT id, name, read_blob(file_info) as data
       FROM test_table
       WHERE id <= 2
     """)
@@ -78,16 +78,16 @@ class TestResolveBytesSQL extends HoodieClientTestBase {
   }
 
   @Test
-  def testResolveBytesWithJoin(): Unit = {
+  def testReadBlobWithJoin(): Unit = {
     val filePath = createTestFile(tempDir, "join.bin", 10000)
 
     // Create blob table
     val blobDF = sparkSession.createDataFrame(Seq(
       (1, filePath, 0L, 100L),
       (2, filePath, 100L, 100L)
-    )).toDF("id", "file_path", "position", "length")
+    )).toDF("id", "external_path", "offset", "length")
       .withColumn("file_info",
-        blobStructCol("file_info", col("file_path"), col("position"), col("length")))
+        blobStructCol("file_info", col("external_path"), col("offset"), col("length")))
       .select("id", "file_info")
 
     blobDF.createOrReplaceTempView("blob_table")
@@ -102,7 +102,7 @@ class TestResolveBytesSQL extends HoodieClientTestBase {
 
     // SQL with JOIN
     val result = sparkSession.sql("""
-      SELECT m.id, m.name, resolve_bytes(b.file_info) as data
+      SELECT m.id, m.name, read_blob(b.file_info) as data
       FROM meta_table m
       JOIN blob_table b ON m.id = b.id
       ORDER BY m.id
@@ -121,23 +121,23 @@ class TestResolveBytesSQL extends HoodieClientTestBase {
   }
 
   @Test
-  def testResolveBytesWithOrderBy(): Unit = {
+  def testReadBlobWithOrderBy(): Unit = {
     val filePath = createTestFile(tempDir, "order.bin", 10000)
 
     val df = sparkSession.createDataFrame(Seq(
       (3, filePath, 200L, 50L),
       (1, filePath, 0L, 50L),
       (2, filePath, 100L, 50L)
-    )).toDF("id", "file_path", "offset", "length")
+    )).toDF("id", "external_path", "offset", "length")
       .withColumn("file_info",
-        blobStructCol("file_info", col("file_path"), col("offset"), col("length")))
+        blobStructCol("file_info", col("external_path"), col("offset"), col("length")))
       .select("id", "file_info")
 
     df.createOrReplaceTempView("order_table")
 
     // SQL with ORDER BY
     val result = sparkSession.sql("""
-      SELECT id, resolve_bytes(file_info) as data
+      SELECT id, read_blob(file_info) as data
       FROM order_table
       ORDER BY id
     """)
@@ -154,16 +154,16 @@ class TestResolveBytesSQL extends HoodieClientTestBase {
   }
 
   @Test
-  def testResolveBytesInSubquery(): Unit = {
+  def testReadBlobInSubquery(): Unit = {
     val filePath = createTestFile(tempDir, "subquery.bin", 10000)
 
     val df = sparkSession.createDataFrame(Seq(
       (1, "A", filePath, 0L, 100L),
       (2, "A", filePath, 100L, 100L),
       (3, "B", filePath, 200L, 100L)
-    )).toDF("id", "category", "file_path", "position", "length")
+    )).toDF("id", "category", "external_path", "offset", "length")
       .withColumn("file_info",
-        blobStructCol("file_info", col("file_path"), col("position"), col("length")))
+        blobStructCol("file_info", col("external_path"), col("offset"), col("length")))
       .select("id", "category", "file_info")
 
     df.createOrReplaceTempView("subquery_table")
@@ -171,7 +171,7 @@ class TestResolveBytesSQL extends HoodieClientTestBase {
     // SQL with subquery
     val result = sparkSession.sql("""
       SELECT * FROM (
-        SELECT id, category, resolve_bytes(file_info) as data
+        SELECT id, category, read_blob(file_info) as data
         FROM subquery_table
       ) WHERE category = 'A'
     """)
@@ -192,9 +192,9 @@ class TestResolveBytesSQL extends HoodieClientTestBase {
       (1, filePath, 0L, 100L),
       (2, filePath, 5000L, 100L),  // 4.9KB gap
       (3, filePath, 10000L, 100L)
-    )).toDF("id", "file_path", "position", "length")
+    )).toDF("id", "external_path", "offset", "length")
       .withColumn("file_info",
-        blobStructCol("file_info", col("file_path"), col("position"), col("length")))
+        blobStructCol("file_info", col("external_path"), col("offset"), col("length")))
       .select("id", "file_info")
 
     df.createOrReplaceTempView("config_table")
@@ -205,7 +205,7 @@ class TestResolveBytesSQL extends HoodieClientTestBase {
       "hoodie.blob.batching.lookahead.size" -> "100"
     )) {
       val result = sparkSession.sql("""
-        SELECT id, resolve_bytes(file_info) as data
+        SELECT id, read_blob(file_info) as data
         FROM config_table
       """)
 
@@ -220,28 +220,28 @@ class TestResolveBytesSQL extends HoodieClientTestBase {
   }
 
   @Test
-  def testMultipleResolveBytesInSameQuery(): Unit = {
+  def testMultipleReadBlobInSameQuery(): Unit = {
     val filePath1 = createTestFile(tempDir, "multi1.bin", 10000)
     val filePath2 = createTestFile(tempDir, "multi2.bin", 10000)
 
     val df = sparkSession.createDataFrame(Seq(
       (1, filePath1, 0L, 50L, filePath2, 0L, 50L),
       (2, filePath1, 100L, 50L, filePath2, 100L, 50L)
-    )).toDF("id", "file_path1", "offset1", "length1", "file_path2", "offset2", "length2")
+    )).toDF("id", "external_path1", "offset1", "length1", "external_path2", "offset2", "length2")
       .withColumn("file_info1",
-        blobStructCol("file_info1", col("file_path1"), col("offset1"), col("length1")))
+        blobStructCol("file_info1", col("external_path1"), col("offset1"), col("length1")))
       .withColumn("file_info2",
-        blobStructCol("file_info2", col("file_path2"), col("offset2"), col("length2")))
+        blobStructCol("file_info2", col("external_path2"), col("offset2"), col("length2")))
       .select("id", "file_info1", "file_info2")
 
     df.createOrReplaceTempView("multi_table")
 
-    // SQL with multiple resolve_bytes calls
+    // SQL with multiple read_blob calls
     val result = sparkSession.sql("""
       SELECT
         id,
-        resolve_bytes(file_info1) as data1,
-        resolve_bytes(file_info2) as data2
+        read_blob(file_info1) as data1,
+        read_blob(file_info2) as data2
       FROM multi_table
     """)
 
@@ -255,22 +255,22 @@ class TestResolveBytesSQL extends HoodieClientTestBase {
   }
 
   @Test
-  def testResolveBytesWithEmptyResult(): Unit = {
+  def testReadBlobWithEmptyResult(): Unit = {
     val filePath = createTestFile(tempDir, "empty.bin", 10000)
 
     val df = sparkSession.createDataFrame(Seq(
       (1, filePath, 0L, 100L),
       (2, filePath, 100L, 100L)
-    )).toDF("id", "file_path", "offset", "length")
+    )).toDF("id", "external_path", "offset", "length")
       .withColumn("file_info",
-        blobStructCol("file_info", col("file_path"), col("offset"), col("length")))
+        blobStructCol("file_info", col("external_path"), col("offset"), col("length")))
       .select("id", "file_info")
 
     df.createOrReplaceTempView("empty_table")
 
     // SQL that returns no rows
     val result = sparkSession.sql("""
-      SELECT id, resolve_bytes(file_info) as data
+      SELECT id, read_blob(file_info) as data
       FROM empty_table
       WHERE id > 100
     """)
@@ -280,7 +280,7 @@ class TestResolveBytesSQL extends HoodieClientTestBase {
   }
 
   @Test
-  def testResolveBytesMultipleFiles(): Unit = {
+  def testReadBlobMultipleFiles(): Unit = {
     val filePath1 = createTestFile(tempDir, "file1.bin", 10000)
     val filePath2 = createTestFile(tempDir, "file2.bin", 10000)
 
@@ -289,16 +289,16 @@ class TestResolveBytesSQL extends HoodieClientTestBase {
       (2, filePath2, 0L, 100L),
       (3, filePath1, 100L, 100L),
       (4, filePath2, 100L, 100L)
-    )).toDF("id", "file_path", "offset", "length")
+    )).toDF("id", "external_path", "offset", "length")
     .withColumn("file_info",
-      blobStructCol("file_info", col("file_path"), col("offset"), col("length")))
+      blobStructCol("file_info", col("external_path"), col("offset"), col("length")))
       .select("id", "file_info")
 
     df.createOrReplaceTempView("multi_file_table")
 
     // SQL reading from multiple files
     val result = sparkSession.sql("""
-      SELECT id, resolve_bytes(file_info) as data
+      SELECT id, read_blob(file_info) as data
       FROM multi_file_table
       ORDER BY id
     """)
@@ -313,16 +313,16 @@ class TestResolveBytesSQL extends HoodieClientTestBase {
   }
 
   @Test
-  def testResolveBytesWithCaseWhen(): Unit = {
+  def testReadBlobWithCaseWhen(): Unit = {
     val filePath = createTestFile(tempDir, "case.bin", 10000)
 
     val df = sparkSession.createDataFrame(Seq(
       (1, true, filePath, 0L, 100L),
       (2, false, filePath, 100L, 100L),
       (3, true, filePath, 200L, 100L)
-    )).toDF("id", "should_resolve", "file_path", "offset", "length")
+    )).toDF("id", "should_resolve", "external_path", "offset", "length")
       .withColumn("file_info",
-        blobStructCol("file_info", col("file_path"), col("offset"), col("length")))
+        blobStructCol("file_info", col("external_path"), col("offset"), col("length")))
       .select("id", "should_resolve", "file_info")
 
     df.createOrReplaceTempView("case_table")
@@ -334,7 +334,7 @@ class TestResolveBytesSQL extends HoodieClientTestBase {
         id,
         should_resolve,
         CASE
-          WHEN should_resolve THEN resolve_bytes(file_info)
+          WHEN should_resolve THEN read_blob(file_info)
           ELSE NULL
         END as data
       FROM case_table

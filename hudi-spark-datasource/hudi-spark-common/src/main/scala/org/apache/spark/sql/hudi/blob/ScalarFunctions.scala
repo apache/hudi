@@ -21,7 +21,7 @@ package org.apache.spark.sql.hudi.blob
 
 import org.apache.spark.sql.catalyst.FunctionIdentifier
 import org.apache.spark.sql.catalyst.expressions.{Expression, ExpressionInfo}
-import org.apache.spark.sql.hudi.expressions.ResolveBytesExpression
+import org.apache.spark.sql.hudi.expressions.ReadBlobExpression
 
 /**
  * Registry of scalar functions for Hudi SQL integration.
@@ -45,7 +45,7 @@ import org.apache.spark.sql.hudi.expressions.ResolveBytesExpression
  */
 object ScalarFunctions {
 
-  val RESOLVE_BYTES_FUNC_NAME = "resolve_bytes"
+  val READ_BLOB_FUNC_NAME = "read_blob"
 
   /**
    * Function definitions as tuples of:
@@ -57,12 +57,12 @@ object ScalarFunctions {
    */
   val funcs: Seq[(FunctionIdentifier, ExpressionInfo, Seq[Expression] => Expression)] = Seq(
     (
-      FunctionIdentifier(RESOLVE_BYTES_FUNC_NAME),
+      FunctionIdentifier(READ_BLOB_FUNC_NAME),
       new ExpressionInfo(
-        classOf[ResolveBytesExpression].getCanonicalName,
-        RESOLVE_BYTES_FUNC_NAME,
+        classOf[ReadBlobExpression].getCanonicalName,
+        READ_BLOB_FUNC_NAME,
         """
-          |Usage: resolve_bytes(blob_column) - Resolves blob references to binary data
+          |Usage: read_blob(blob_column) - Reads blob data from storage
           |
           |Reads byte ranges from files referenced in a blob column. The column must have
           |metadata hudi_blob=true.
@@ -71,7 +71,7 @@ object ScalarFunctions {
           |For best results, ensure data is sorted by (reference.file, reference.position).
           |
           |Example:
-          |  SELECT id, name, resolve_bytes(file_ref) as data FROM table
+          |  SELECT id, name, read_blob(file_ref) as data FROM table
           |
           |Arguments:
           |  blob_column - Struct column with HoodieSchema.Blob structure:
@@ -89,8 +89,8 @@ object ScalarFunctions {
         """.stripMargin
       ),
       (args: Seq[Expression]) => {
-        require(args.length == 1, s"resolve_bytes expects exactly 1 argument, got ${args.length}")
-        ResolveBytesExpression(args.head)
+        require(args.length == 1, s"read_blob expects exactly 1 argument, got ${args.length}")
+        ReadBlobExpression(args.head)
       }
     )
   )

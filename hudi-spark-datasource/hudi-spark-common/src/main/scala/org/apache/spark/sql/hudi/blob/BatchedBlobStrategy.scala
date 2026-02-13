@@ -26,6 +26,13 @@ import org.apache.spark.sql.catalyst.analysis.SimpleAnalyzer.conf
 import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
 import org.apache.spark.sql.execution.{SparkPlan, SparkStrategy}
 
+/**
+ * Spark strategy that converts [[BatchedBlobRead]] logical nodes to [[BatchedBlobReadExec]] physical nodes.
+ *
+ * Reads configuration for batching parameters and creates physical plan with appropriate settings.
+ *
+ * @param sparkSession SparkSession for accessing configuration
+ */
 case class BatchedBlobStrategy(sparkSession: SparkSession) extends SparkStrategy {
   def apply(plan: LogicalPlan): Seq[SparkPlan] = plan match {
     case read @ BatchedBlobRead(child, _, _) =>

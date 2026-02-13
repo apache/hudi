@@ -24,33 +24,16 @@ import org.apache.spark.sql.catalyst.expressions.codegen.CodegenFallback
 import org.apache.spark.sql.types.{BinaryType, DataType}
 
 /**
- * Marker expression for blob reference resolution.
+ * Marker expression for lazy blob data reading.
  *
- * This expression is NOT evaluated directly. Instead, it's detected by the
- * [[ResolveBlobReferencesRule]] which transforms the entire query plan to use
- * [[BatchedByteRangeReader]] for efficient batched I/O.
+ * This expression is detected by [[ReadBlobRule]] and transformed to use
+ * batched I/O for efficient blob reading during physical execution.
  *
- * The expression serves as a marker during the analysis phase, signaling that
- * the child expression (which should be a struct containing file_path, offset, length)
- * needs to be resolved to binary data.
+ * Example: `SELECT id, read_blob(image_data) FROM table`
  *
- * <h3>Usage in SQL:</h3>
- * {{{
- * SELECT id, name, resolve_bytes(file_info) as data FROM table
- * }}}
- *
- * <h3>Design Pattern:</h3>
- * This follows the marker expression pattern where:
- * <ul>
- *   <li>Expression creation happens during parsing/initial analysis</li>
- *   <li>A logical plan rule detects these markers post-analysis</li>
- *   <li>The rule applies efficient transformations (batched I/O)</li>
- *   <li>Markers are replaced with actual data references</li>
- * </ul>
- *
- * @param child Expression representing the blob reference column (struct with file_path, offset, length)
+ * @param child Expression representing the blob column (matching the definition in {@link org.apache.hudi.common.schema.HoodieSchema.Blob})
  */
-case class ResolveBytesExpression(child: Expression)
+case class ReadBlobExpression(child: Expression)
     extends UnaryExpression
     with Unevaluable {
 
@@ -58,9 +41,9 @@ case class ResolveBytesExpression(child: Expression)
 
   override def nullable: Boolean = true
 
-  override protected def withNewChildInternal(newChild: Expression): ResolveBytesExpression = {
+  override protected def withNewChildInternal(newChild: Expression): ReadBlobExpression = {
     copy(child = newChild)
   }
 
-  override def toString: String = s"resolve_bytes($child)"
+  override def toString: String = s"read_blob($child)"
 }

@@ -96,7 +96,7 @@ public class TestBlobSupport extends SparkClientFunctionalTestHarness {
     });
 
     table.createOrReplaceTempView("hudi_table_view");
-    List<Row> sqlRows = spark().sql("SELECT id, value, resolve_bytes(data) as full_bytes from hudi_table_view").collectAsList();
+    List<Row> sqlRows = spark().sql("SELECT id, value, read_blob(data) as full_bytes from hudi_table_view").collectAsList();
     assertEquals(10, sqlRows.size());
   }
 

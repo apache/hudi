@@ -24,6 +24,16 @@ import org.apache.spark.sql.catalyst.plans.logical.{LogicalPlan, UnaryNode}
 import org.apache.spark.sql.hudi.blob.BatchedByteRangeReader.DATA_COL
 import org.apache.spark.sql.types.BinaryType
 
+/**
+ * Logical plan node for batched blob reading.
+ *
+ * Created by [[ReadBlobRule]] when `read_blob()` is detected in queries.
+ * Converted to [[BatchedBlobReadExec]] by [[BatchedBlobStrategy]] during physical planning.
+ *
+ * @param child Child logical plan
+ * @param blobAttr The blob column attribute to read from
+ * @param dataAttr The output attribute for resolved blob data
+ */
 case class BatchedBlobRead(
                             child: LogicalPlan,
                             blobAttr: Attribute,

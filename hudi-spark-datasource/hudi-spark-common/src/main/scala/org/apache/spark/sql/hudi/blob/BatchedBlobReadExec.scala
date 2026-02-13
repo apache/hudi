@@ -19,7 +19,6 @@
 
 package org.apache.spark.sql.hudi.blob
 
-import org.apache.hudi.HoodieSparkUtils.sparkAdapter
 import org.apache.hudi.storage.StorageConfiguration
 
 import org.apache.spark.rdd.RDD
@@ -27,6 +26,18 @@ import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.Attribute
 import org.apache.spark.sql.execution.{SparkPlan, UnaryExecNode}
 
+/**
+ * Physical plan node that executes batched blob reads.
+ *
+ * Reads blob data from storage using [[BatchedByteRangeReader]] to batch
+ * reads efficiently when data is sorted by file and position.
+ *
+ * @param child Child physical plan
+ * @param maxGapBytes Maximum gap between reads to batch (from config)
+ * @param storageConf Storage configuration for file access
+ * @param lookaheadSize Number of rows to buffer for batch detection
+ * @param logical The logical plan node this was created from
+ */
 case class BatchedBlobReadExec(child: SparkPlan,
                                 maxGapBytes: Int,
                                 storageConf: StorageConfiguration[_],

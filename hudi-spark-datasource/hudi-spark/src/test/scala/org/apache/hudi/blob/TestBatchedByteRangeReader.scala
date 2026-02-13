@@ -44,8 +44,8 @@ class TestBatchedByteRangeReader extends HoodieClientTestBase {
       (filePath, 0L, 100L),
       (filePath, 100L, 100L),
       (filePath, 200L, 100L)
-    )).toDF("file_path", "position", "length")
-      .withColumn("data", blobStructCol("data", col("file_path"), col("position"), col("length")))
+    )).toDF("external_path", "offset", "length")
+      .withColumn("data", blobStructCol("data", col("external_path"), col("offset"), col("length")))
       .select("data")
 
     // Read with batching
@@ -81,8 +81,8 @@ class TestBatchedByteRangeReader extends HoodieClientTestBase {
       (file1, 0L, 100L),
       (file2, 0L, 100L),
       (file3, 0L, 100L)
-    )).toDF("file_path", "position", "length")
-      .withColumn("data", blobStructCol("data", col("file_path"), col("position"), col("length")))
+    )).toDF("external_path", "offset", "length")
+      .withColumn("data", blobStructCol("data", col("external_path"), col("offset"), col("length")))
       .select("data")
 
     val resultDF = BatchedByteRangeReader.readBatched(inputDF, storageConf)
@@ -108,8 +108,8 @@ class TestBatchedByteRangeReader extends HoodieClientTestBase {
       (filePath, 120L, 100L),    // 20 byte gap
       (filePath, 240L, 100L),    // 20 byte gap
       (filePath, 360L, 100L)     // 20 byte gap
-    )).toDF("file_path", "position", "length")
-      .withColumn("data", blobStructCol("data", col("file_path"), col("position"), col("length")))
+    )).toDF("external_path", "offset", "length")
+      .withColumn("data", blobStructCol("data", col("external_path"), col("offset"), col("length")))
       .select("data")
 
     // Use default maxGapBytes=4096 which should batch these
@@ -135,8 +135,8 @@ class TestBatchedByteRangeReader extends HoodieClientTestBase {
       (filePath, 10000L, 100L),   // 9.9KB gap
       (filePath, 20000L, 100L),   // 9.9KB gap
       (filePath, 30000L, 100L)    // 9.9KB gap
-    )).toDF("file_path", "position", "length")
-      .withColumn("data", blobStructCol("data", col("file_path"), col("position"), col("length")))
+    )).toDF("external_path", "offset", "length")
+      .withColumn("data", blobStructCol("data", col("external_path"), col("offset"), col("length")))
       .select("data")
 
     // Use small maxGapBytes that won't batch these
@@ -163,8 +163,8 @@ class TestBatchedByteRangeReader extends HoodieClientTestBase {
       (filePath, 100L, 100L, "rec2"),
       (filePath, 200L, 100L, "rec3"),
       (filePath, 300L, 100L, "rec4")
-    )).toDF("file_path", "position", "length", "record_id")
-      .withColumn("data", blobStructCol("data", col("file_path"), col("position"), col("length")))
+    )).toDF("external_path", "offset", "length", "record_id")
+      .withColumn("data", blobStructCol("data", col("external_path"), col("offset"), col("length")))
       .select("data", "record_id")
 
     val resultDF = BatchedByteRangeReader.readBatched(inputDF, storageConf)
@@ -198,8 +198,8 @@ class TestBatchedByteRangeReader extends HoodieClientTestBase {
       (file1, 400L, 100L),
       // Large gap in file1 (may not batch depending on threshold)
       (file1, 5000L, 100L)
-    )).toDF("file_path", "position", "length")
-      .withColumn("data", blobStructCol("data", col("file_path"), col("position"), col("length")))
+    )).toDF("external_path", "offset", "length")
+      .withColumn("data", blobStructCol("data", col("external_path"), col("offset"), col("length")))
       .select("data")
 
     val resultDF = BatchedByteRangeReader.readBatched(inputDF, storageConf)
@@ -218,8 +218,8 @@ class TestBatchedByteRangeReader extends HoodieClientTestBase {
   def testEmptyDataset(): Unit = {
 
     val inputDF = sparkSession.createDataFrame(Seq.empty[(String, Long, Int)])
-      .toDF("file_path", "position", "length")
-      .withColumn("data", blobStructCol("data", col("file_path"), col("position"), col("length")))
+      .toDF("external_path", "offset", "length")
+      .withColumn("data", blobStructCol("data", col("external_path"), col("offset"), col("length")))
       .select("data")
 
     val resultDF = BatchedByteRangeReader.readBatched(inputDF, storageConf)
@@ -236,8 +236,8 @@ class TestBatchedByteRangeReader extends HoodieClientTestBase {
     val inputDF = sparkSession.createDataFrame(Seq(
       (filePath, 0L, 100L, "rec1", 42, true, 3.14),
       (filePath, 100L, 100L, "rec2", 43, false, 2.71)
-      )).toDF("file_path", "position", "length", "record_id", "sequence", "flag", "value")
-      .withColumn("data", blobStructCol("data", col("file_path"), col("position"), col("length")))
+      )).toDF("external_path", "offset", "length", "record_id", "sequence", "flag", "value")
+      .withColumn("data", blobStructCol("data", col("external_path"), col("offset"), col("length")))
       .select("data", "record_id", "sequence", "flag", "value")
 
     val resultDF = BatchedByteRangeReader.readBatched(inputDF, storageConf)
@@ -272,9 +272,9 @@ class TestBatchedByteRangeReader extends HoodieClientTestBase {
     val inputDF = sparkSession.createDataFrame(Seq(
       (1, file1, 0L, 100L, file2, 0L, 50L),
       (2, file1, 100L, 100L, file2, 50L, 50L)
-    )).toDF("id", "path1", "position1", "len1", "path2", "position2", "len2")
-      .withColumn("blob1", blobStructCol("blob1", col("path1"), col("position1"), col("len1")))
-      .withColumn("blob2", blobStructCol("blob2", col("path2"), col("position2"), col("len2")))
+    )).toDF("id", "path1", "offset1", "len1", "path2", "offset2", "len2")
+      .withColumn("blob1", blobStructCol("blob1", col("path1"), col("offset1"), col("len1")))
+      .withColumn("blob2", blobStructCol("blob2", col("path2"), col("offset2"), col("len2")))
       .select("id", "blob1", "blob2")
 
     // Resolve blob1 explicitly
@@ -311,46 +311,6 @@ class TestBatchedByteRangeReader extends HoodieClientTestBase {
   }
 
   @Test
-  def testExplicitColumnNameWithoutBlobMetadata(): Unit = {
-    // Test that explicit column name works even when column doesn't have hudi_blob metadata
-    // This allows the SQL plan rule to directly specify which column to resolve
-
-    val filePath = createTestFile(tempDir, "no-metadata.bin", 5000)
-
-    // Create DataFrame with struct column but NO blob metadata
-    val inputDF = sparkSession.createDataFrame(Seq(
-      (filePath, 0L, 100L),
-      (filePath, 100L, 100L)
-    )).toDF("file_path", "position", "length")
-      .withColumn("file_info", struct(
-        lit("out_of_line").as("storage_type"),
-        lit(null).cast("binary").as("bytes"),
-        struct(
-          col("file_path").as("file"),
-          col("position").as("position"),
-          col("length").as("length"),
-          lit(false).as("managed")
-        ).as("reference")
-      ))
-      .select("file_info")
-
-    // Should work when column name is explicitly provided
-    val resultDF = BatchedByteRangeReader.readBatched(
-      inputDF,
-      storageConf,
-      columnName = Some("file_info")
-    )
-
-    val results = resultDF.collect()
-    assertEquals(2, results.length)
-
-    results.foreach { row =>
-      val data = row.getAs[Array[Byte]]("file_info")
-      assertEquals(100, data.length)
-    }
-  }
-
-  @Test
   def testFallbackToMetadataWhenNoColumnNameProvided(): Unit = {
     // Test that when no explicit column name is provided,
     // it falls back to searching for hudi_blob=true metadata
@@ -361,8 +321,8 @@ class TestBatchedByteRangeReader extends HoodieClientTestBase {
     val inputDF = sparkSession.createDataFrame(Seq(
       (filePath, 0L, 100L),
       (filePath, 100L, 100L)
-    )).toDF("file_path", "position", "length")
-      .withColumn("data", blobStructCol("data", col("file_path"), col("position"), col("length")))
+    )).toDF("external_path", "offset", "length")
+      .withColumn("data", blobStructCol("data", col("external_path"), col("offset"), col("length")))
       .select("data")
 
     // Should work without explicit column name (uses metadata)
