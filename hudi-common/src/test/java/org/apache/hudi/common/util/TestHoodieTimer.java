@@ -17,11 +17,25 @@
  * under the License.
  */
 
-package org.apache.hudi.aws.utils;
+package org.apache.hudi.common.util;
 
-public final class S3Utils {
+import org.junit.jupiter.api.Test;
 
-  public static String s3aToS3(String s3aUrl) {
-    return s3aUrl.replaceFirst("(?i)^s3a://", "s3://");
+import static java.lang.Thread.sleep;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+public class TestHoodieTimer {
+
+  @Test
+  public void testTryStop() throws InterruptedException {
+    HoodieTimer timer = new HoodieTimer();
+    assertFalse(timer.tryEndTimer().isPresent());
+
+    timer.startTimer();
+    sleep(250);
+    Option<Long> result = timer.tryEndTimer();
+    assertTrue(result.isPresent());
+    assertTrue(result.get() >= 250);
   }
 }

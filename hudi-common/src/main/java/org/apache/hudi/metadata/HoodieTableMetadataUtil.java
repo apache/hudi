@@ -638,6 +638,7 @@ public class HoodieTableMetadataUtil {
 
     if (columnsToIndex.isEmpty()) {
       // In case there are no columns to index, bail
+      LOG.info("No columns to index for column stats index.");
       return engineContext.emptyHoodieData();
     }
 
@@ -805,7 +806,7 @@ public class HoodieTableMetadataUtil {
       final String filename = partitionFileFlagTuple.f1;
       final boolean isDeleted = partitionFileFlagTuple.f2;
       if (!FSUtils.isBaseFile(new Path(filename))) {
-        LOG.warn(String.format("Ignoring file %s as it is not a base file", filename));
+        LOG.info(String.format("Ignoring file %s as it is not a base file", filename));
         return Stream.<HoodieRecord>empty().iterator();
       }
 
@@ -1360,7 +1361,7 @@ public class HoodieTableMetadataUtil {
               timeline.readRollbackInfoAsBytes(new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.ROLLBACK_ACTION,
                   instant.getTimestamp())).get(), HoodieRollbackPlan.class);
           commitsToRollback = Collections.singletonList(rollbackPlan.getInstantToRollback().getCommitTime());
-          LOG.warn("Had to fetch rollback info from requested instant since completed file is empty " + instant.toString());
+          LOG.info("Had to fetch rollback info from requested instant since completed file is empty " + instant.toString());
         }
         return commitsToRollback;
       }

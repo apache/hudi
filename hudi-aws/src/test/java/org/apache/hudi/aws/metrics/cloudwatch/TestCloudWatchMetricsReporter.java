@@ -16,9 +16,8 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.metrics.cloudwatch;
+package org.apache.hudi.aws.metrics.cloudwatch;
 
-import org.apache.hudi.aws.cloudwatch.CloudWatchReporter;
 import org.apache.hudi.config.HoodieWriteConfig;
 
 import com.codahale.metrics.MetricRegistry;
@@ -37,6 +36,9 @@ import static org.mockito.Mockito.when;
 public class TestCloudWatchMetricsReporter {
 
   @Mock
+  private HoodieWriteConfig writeConfig;
+
+  @Mock
   private HoodieWriteConfig config;
 
   @Mock
@@ -49,6 +51,21 @@ public class TestCloudWatchMetricsReporter {
   public void testReporter() {
     when(config.getCloudWatchReportPeriodSeconds()).thenReturn(30);
     CloudWatchMetricsReporter metricsReporter = new CloudWatchMetricsReporter(config, registry, reporter);
+
+    metricsReporter.start();
+    verify(reporter, times(1)).start(30, TimeUnit.SECONDS);
+
+    metricsReporter.report();
+    verify(reporter, times(1)).report();
+
+    metricsReporter.stop();
+    verify(reporter, times(1)).stop();
+  }
+
+  @Test
+  public void testReporterUsingMetricsConfig() {
+    when(writeConfig.getCloudWatchReportPeriodSeconds()).thenReturn(30);
+    CloudWatchMetricsReporter metricsReporter = new CloudWatchMetricsReporter(writeConfig, registry, reporter);
 
     metricsReporter.start();
     verify(reporter, times(1)).start(30, TimeUnit.SECONDS);

@@ -214,13 +214,13 @@ public class FlinkMergeHandle<T, I, K, O>
     try {
       close();
     } catch (Throwable throwable) {
-      LOG.warn("Error while trying to dispose the MERGE handle", throwable);
+      LOG.error("Failed to close the MERGE handle", throwable);
       try {
         fs.delete(newFilePath, false);
         LOG.info("Deleting the intermediate MERGE data file: " + newFilePath + " success!");
       } catch (IOException e) {
         // logging a warning and ignore the exception.
-        LOG.warn("Deleting the intermediate MERGE data file: " + newFilePath + " failed", e);
+        LOG.info("Deleting the intermediate MERGE data file: " + newFilePath + " failed", e);
       }
     }
   }

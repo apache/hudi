@@ -111,7 +111,7 @@
     <junit.jupiter.version>5.7.2</junit.jupiter.version>
     <junit.vintage.version>5.7.2</junit.vintage.version>
     <junit.platform.version>1.7.2</junit.platform.version>
-    <mockito.jupiter.version>3.3.3</mockito.jupiter.version>
+    <mockito.jupiter.version>3.4.0</mockito.jupiter.version>
     <log4j2.version>2.17.2</log4j2.version>
     <slf4j.version>1.7.36</slf4j.version>
     <joda.version>2.9.9</joda.version>
@@ -215,7 +215,7 @@
     <zk-curator.version>2.7.1</zk-curator.version>
     <disruptor.version>3.4.2</disruptor.version>
     <antlr.version>4.8</antlr.version>
-    <aws.sdk.version>2.18.40</aws.sdk.version>
+    <aws.sdk.version>2.29.52</aws.sdk.version>
     <proto.version>3.21.7</proto.version>
     <protoc.version>3.21.5</protoc.version>
     <dynamodb.lockclient.version>1.2.0</dynamodb.lockclient.version>
@@ -223,6 +223,7 @@
     <openjdk.jol.version>0.16</openjdk.jol.version>
     <google.cloud.pubsub.version>1.120.0</google.cloud.pubsub.version>
     <gcs.connector.version>hadoop2-2.2.7</gcs.connector.version>
+    <testcontainers.version>1.20.2</testcontainers.version>
     <dynamodb-local.port>8000</dynamodb-local.port>
     <dynamodb-local.endpoint>http://localhost:${dynamodb-local.port}</dynamodb-local.endpoint>
     <springboot.version>2.7.3</springboot.version>
@@ -1735,6 +1736,18 @@
             <artifactId>guava</artifactId>
           </exclusion>
         </exclusions>
+      </dependency>
+      <dependency>
+        <groupId>org.testcontainers</groupId>
+        <artifactId>testcontainers</artifactId>
+        <version>${testcontainers.version}</version>
+        <scope>test</scope>
+      </dependency>
+      <dependency>
+        <groupId>org.testcontainers</groupId>
+        <artifactId>localstack</artifactId>
+        <version>${testcontainers.version}</version>
+        <scope>test</scope>
       </dependency>
     </dependencies>
   </dependencyManagement>

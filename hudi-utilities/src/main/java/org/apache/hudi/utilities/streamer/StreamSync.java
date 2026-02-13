@@ -325,7 +325,7 @@ public class StreamSync implements Serializable, Closeable {
             throw new HoodieException("Unsupported table type :" + meta.getTableType());
         }
       } catch (HoodieIOException e) {
-        LOG.warn("Full exception msg " + e.getMessage());
+        LOG.warn("Full exception msg {}", e.getMessage());
         if (e.getMessage().contains("Could not load Hoodie properties") && e.getMessage().contains(HoodieTableConfig.HOODIE_PROPERTIES_FILE)) {
           String basePathWithForwardSlash = cfg.targetBasePath.endsWith("/") ? cfg.targetBasePath : String.format("%s/", cfg.targetBasePath);
           String pathToHoodieProps = String.format("%s%s/%s", basePathWithForwardSlash, HoodieTableMetaClient.METAFOLDER_NAME, HoodieTableConfig.HOODIE_PROPERTIES_FILE);

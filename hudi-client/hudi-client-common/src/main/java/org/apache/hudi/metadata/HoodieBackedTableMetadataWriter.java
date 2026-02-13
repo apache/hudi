@@ -729,10 +729,10 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
       String partitionPath = partitionType.getPartitionPath();
       // first update table config
       dataMetaClient.getTableConfig().setMetadataPartitionState(dataMetaClient, partitionType, false);
-      LOG.warn("Deleting Metadata Table partition: " + partitionPath);
+      LOG.info("Deleting Metadata Table partition: " + partitionPath);
       dataMetaClient.getFs().delete(new Path(metadataWriteConfig.getBasePath(), partitionPath), true);
       // delete corresponding pending indexing instant file in the timeline
-      LOG.warn("Deleting pending indexing instant from the timeline for partition: " + partitionPath);
+      LOG.info("Deleting pending indexing instant from the timeline for partition: " + partitionPath);
       deletePendingIndexingInstant(dataMetaClient, partitionPath);
     }
     closeInternal();
@@ -829,7 +829,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
 
   public void buildMetadataPartitions(HoodieEngineContext engineContext, List<HoodieIndexPartitionInfo> indexPartitionInfos) throws IOException {
     if (indexPartitionInfos.isEmpty()) {
-      LOG.warn("No partition to index in the plan");
+      LOG.debug("No partition to index in the plan");
       return;
     }
     String indexUptoInstantTime = indexPartitionInfos.get(0).getIndexUptoInstant();
@@ -1315,7 +1315,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
     Option<HoodieInstant> pendingCompactionInstant =
         metadataMetaClient.getActiveTimeline().filterPendingCompactionTimeline().firstInstant();
     if (pendingLogCompactionInstant.isPresent() || pendingCompactionInstant.isPresent()) {
-      LOG.warn(String.format("Not scheduling compaction or logCompaction, since a pending compaction instant %s or logCompaction %s instant is present",
+      LOG.info(String.format("Not scheduling compaction or logCompaction, since a pending compaction instant %s or logCompaction %s instant is present",
           pendingCompactionInstant, pendingLogCompactionInstant));
       return false;
     }

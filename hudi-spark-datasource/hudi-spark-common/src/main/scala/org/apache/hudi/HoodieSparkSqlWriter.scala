@@ -203,7 +203,7 @@ class HoodieSparkSqlWriterInternal {
       try {
         toReturn = writeInternal(sqlContext, mode, optParams, sourceDf, streamingWritesParamsOpt, hoodieWriteClient)
         if (counter > 0) {
-          log.warn(s"Succeeded with attempt no $counter")
+          log.info(s"Succeeded with attempt no $counter")
         }
         succeeded = true
       } catch {
@@ -211,7 +211,7 @@ class HoodieSparkSqlWriterInternal {
           val writeConcurrencyMode = optParams.getOrElse(HoodieWriteConfig.WRITE_CONCURRENCY_MODE.key(), HoodieWriteConfig.WRITE_CONCURRENCY_MODE.defaultValue())
           if (writeConcurrencyMode.equalsIgnoreCase(WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL.name()) && counter < maxRetry) {
             counter += 1
-            log.warn(s"Conflict found. Retrying again for attempt no $counter")
+            log.info(s"Conflict found. Retrying again for attempt no $counter")
           } else {
             throw e
           }
@@ -280,7 +280,7 @@ class HoodieSparkSqlWriterInternal {
 
     val keyGenerator = HoodieSparkKeyGeneratorFactory.createKeyGenerator(new TypedProperties(hoodieConfig.getProps))
     if (mode == SaveMode.Ignore && tableExists) {
-      log.warn(s"hoodie table at $basePath already exists. Ignoring & not performing actual writes.")
+      log.info(s"hoodie table at $basePath already exists. Ignoring & not performing actual writes.")
       (false, common.util.Option.empty(), common.util.Option.empty(), common.util.Option.empty(), hoodieWriteClient.orNull, tableConfig)
     } else {
       // Handle various save modes
@@ -531,7 +531,6 @@ class HoodieSparkSqlWriterInternal {
     val asyncCompactionEnabled = isAsyncCompactionEnabled(writeClient, tableConfig, parameters, configuration)
     val asyncClusteringEnabled = isAsyncClusteringEnabled(writeClient, parameters)
     if (!asyncCompactionEnabled && !asyncClusteringEnabled) {
-      log.warn("Closing write client")
       writeClient.close()
     }
   }
@@ -826,7 +825,7 @@ class HoodieSparkSqlWriterInternal {
     }
 
     if (mode == SaveMode.Ignore && tableExists) {
-      log.warn(s"hoodie table at $basePath already exists. Ignoring & not performing actual writes.")
+      log.error(s"hoodie table at $basePath already exists. Ignoring & not performing actual writes.")
       if (!hoodieWriteClient.isEmpty) {
         hoodieWriteClient.get.close()
       }

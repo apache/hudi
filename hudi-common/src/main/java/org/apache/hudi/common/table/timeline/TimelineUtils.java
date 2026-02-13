@@ -430,9 +430,8 @@ public class TimelineUtils {
             "Found hollow commit: '%s'. Adjust config `%s` accordingly if to avoid throwing this exception.",
             hollowCommitTimestamp, INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT.key()));
       case BLOCK:
-        LOG.warn(String.format(
-            "Found hollow commit '%s'. Config `%s` was set to `%s`: no data will be returned beyond '%s' until it's completed.",
-            hollowCommitTimestamp, INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT.key(), handlingMode, hollowCommitTimestamp));
+        LOG.warn("Found hollow commit '{}'. Config `{}` was set to `{}`: no data will be returned beyond '{}' until it's completed.",
+            hollowCommitTimestamp, INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT.key(), handlingMode, hollowCommitTimestamp);
         return completedCommitTimeline.findInstantsBefore(hollowCommitTimestamp);
       default:
         throw new HoodieException("Unexpected handling mode: " + handlingMode);

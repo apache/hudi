@@ -215,7 +215,9 @@ public class ExpressionPredicates {
       if (literalObject instanceof Serializable) {
         this.literal = (Serializable) literalObject;
       } else {
-        LOG.warn("Encountered a non-serializable literal. " + "Cannot push predicate with value literal [{}] into FileInputFormat. " + "This is a bug and should be reported.", valueLiteral);
+        LOG.warn("Encountered a non-serializable literal. "
+            + "Cannot push predicate with value literal [{}] into FileInputFormat. "
+            + "This is a bug and should be reported.", valueLiteral);
         this.literal = null;
       }
       return this;
@@ -435,7 +437,9 @@ public class ExpressionPredicates {
         if (literalObject instanceof Serializable) {
           return (Serializable) literalObject;
         } else {
-          LOG.warn("Encountered a non-serializable literal. " + "Cannot push predicate with value literal [{}] into FileInputFormat. " + "This is a bug and should be reported.", valueLiteral);
+          LOG.warn("Encountered a non-serializable literal. "
+              + "Cannot push predicate with value literal [{}] into FileInputFormat. "
+              + "This is a bug and should be reported.", valueLiteral);
           return null;
         }
       }).collect(Collectors.toList());

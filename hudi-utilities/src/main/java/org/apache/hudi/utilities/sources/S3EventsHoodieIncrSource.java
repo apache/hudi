@@ -163,10 +163,10 @@ public class S3EventsHoodieIncrSource extends HoodieIncrSource {
             HoodieRecord.COMMIT_TIME_METADATA_FIELD,
             S3_OBJECT_KEY, S3_OBJECT_SIZE, true,
             Option.ofNullable(cloudObjectIncrCheckpoint.getKey()));
-    LOG.info("Querying S3 with:" + cloudObjectIncrCheckpoint + ", queryInfo:" + queryInfo);
+    LOG.info("Querying S3 with:{}, queryInfo:{}", cloudObjectIncrCheckpoint, queryInfo);
 
     if (isNullOrEmpty(cloudObjectIncrCheckpoint.getKey()) && queryInfo.areStartAndEndInstantsEqual()) {
-      LOG.warn("Already caught up. No new data to process");
+      LOG.info("Already caught up. No new data to process");
       return Pair.of(Option.empty(), queryInfo.getEndInstant());
     }
     Pair<QueryInfo, Dataset<Row>> queryInfoDatasetPair = queryRunner.run(queryInfo, snapshotLoadQuerySplitter);

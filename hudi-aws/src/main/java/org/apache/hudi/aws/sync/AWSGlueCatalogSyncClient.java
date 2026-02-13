@@ -70,7 +70,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
 
-import static org.apache.hudi.aws.utils.S3Utils.s3aToS3;
+import static org.apache.hudi.common.fs.FSUtils.s3aToS3;
 import static org.apache.hudi.common.util.MapUtils.containsAll;
 import static org.apache.hudi.common.util.MapUtils.isNullOrEmpty;
 import static org.apache.hudi.config.GlueCatalogSyncClientConfig.GLUE_METADATA_FILE_LISTING;
@@ -166,7 +166,7 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
           if (response.errors().stream()
               .allMatch(
                   (error) -> "AlreadyExistsException".equals(error.errorDetail().errorCode()))) {
-            LOG.warn("Partitions already exist in glue: " + response.errors());
+            LOG.info("Partitions already exist in glue: " + response.errors());
           } else {
             throw new HoodieGlueSyncException("Fail to add partitions to " + tableId(databaseName, tableName)
               + " with error(s): " + response.errors());
@@ -460,7 +460,7 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
       return Objects.nonNull(awsGlue.getTable(request).get().table());
     } catch (ExecutionException e) {
       if (e.getCause() instanceof EntityNotFoundException) {
-        LOG.info("Table not found: " + tableId(databaseName, tableName), e);
+        LOG.info("Table not found: {}.{}", databaseName, tableName, e);
         return false;
       } else {
         throw new HoodieGlueSyncException("Fail to get table: " + tableId(databaseName, tableName), e);
@@ -477,7 +477,7 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
       return Objects.nonNull(awsGlue.getDatabase(request).get().database());
     } catch (ExecutionException e) {
       if (e.getCause() instanceof EntityNotFoundException) {
-        LOG.info("Database not found: " + databaseName, e);
+        LOG.info("Database not found: {}", databaseName, e);
         return false;
       } else {
         throw new HoodieGlueSyncException("Fail to check if database exists " + databaseName, e);
@@ -504,7 +504,7 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
       CreateDatabaseResponse result = awsGlue.createDatabase(request).get();
       LOG.info("Successfully created database in AWS Glue: " + result.toString());
     } catch (AlreadyExistsException e) {
-      LOG.warn("AWS Glue Database " + databaseName + " already exists", e);
+      LOG.info("AWS Glue Database {} already exists", databaseName, e);
     } catch (Exception e) {
       throw new HoodieGlueSyncException("Fail to create database " + databaseName, e);
     }
@@ -528,7 +528,7 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
   @Override
   public void updateLastCommitTimeSynced(String tableName) {
     if (!getActiveTimeline().lastInstant().isPresent()) {
-      LOG.warn("No commit in active timeline.");
+      LOG.info("No commit in active timeline.");
       return;
     }
     final String lastCommitTimestamp = getActiveTimeline().lastInstant().get().getTimestamp();

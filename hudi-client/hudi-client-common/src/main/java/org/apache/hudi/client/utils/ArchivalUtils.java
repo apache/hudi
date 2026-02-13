@@ -131,7 +131,7 @@ public class ArchivalUtils {
           metaClient.getTableConfig().getTimelineTimezone());
     } catch (ParseException e) {
       if (NOT_PARSABLE_TIMESTAMPS.stream().noneMatch(ts -> latestCommit.get().getTimestamp().startsWith(ts))) {
-        LOG.warn("Error parsing instant time: " + latestCommit.get().getTimestamp());
+        LOG.info("Error parsing instant time: " + latestCommit.get().getTimestamp());
       }
     }
     return earliestCommitToRetain;
