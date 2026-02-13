@@ -573,7 +573,7 @@ class TestHoodieSchemaConversionUtils extends FunSuite with Matchers {
   test("test VECTOR type conversion - Spark to HoodieSchema") {
     val metadata = new MetadataBuilder()
       .putString(HoodieSchema.TYPE_METADATA_FIELD, HoodieSchemaType.VECTOR.name())
-      .putString(HoodieSchema.TYPE_METADATA_PROPS_FIELD, "vector.dimension=128")
+      .putString(HoodieSchema.TYPE_METADATA_PROPS_FIELD, HoodieSchema.VECTOR_DIMENSION_PROP + "=128")
       .build()
     val struct = new StructType()
       .add("id", IntegerType, false)
@@ -617,13 +617,13 @@ class TestHoodieSchemaConversionUtils extends FunSuite with Matchers {
     // Verify metadata contains dimension
     assert(embeddingField.metadata.contains(HoodieSchema.TYPE_METADATA_PROPS_FIELD))
     val typeMetadata = HoodieSchema.parseTypeMetadata(embeddingField.metadata.getString(HoodieSchema.TYPE_METADATA_PROPS_FIELD))
-    assert(typeMetadata.get("vector.dimension") == "256")
+    assert(typeMetadata.get(HoodieSchema.VECTOR_DIMENSION_PROP) == "256")
   }
 
   test("test VECTOR round-trip conversion - Spark to HoodieSchema to Spark") {
     val metadata = new MetadataBuilder()
       .putString(HoodieSchema.TYPE_METADATA_FIELD, HoodieSchemaType.VECTOR.name())
-      .putString(HoodieSchema.TYPE_METADATA_PROPS_FIELD, "vector.dimension=512")
+      .putString(HoodieSchema.TYPE_METADATA_PROPS_FIELD, HoodieSchema.VECTOR_DIMENSION_PROP + "=512")
       .build()
     val originalStruct = new StructType()
       .add("id", LongType, false)
@@ -649,7 +649,7 @@ class TestHoodieSchemaConversionUtils extends FunSuite with Matchers {
     // Verify metadata is preserved
     assert(convertedVectorField.metadata.contains(HoodieSchema.TYPE_METADATA_PROPS_FIELD))
     val roundTripMetadata = HoodieSchema.parseTypeMetadata(convertedVectorField.metadata.getString(HoodieSchema.TYPE_METADATA_PROPS_FIELD))
-    assert(roundTripMetadata.get("vector.dimension") == "512")
+    assert(roundTripMetadata.get(HoodieSchema.VECTOR_DIMENSION_PROP) == "512")
 
     // Verify array properties
     val convertedArrayType = convertedVectorField.dataType.asInstanceOf[ArrayType]

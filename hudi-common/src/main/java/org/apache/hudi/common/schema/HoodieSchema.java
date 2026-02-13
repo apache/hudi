@@ -93,6 +93,7 @@ public class HoodieSchema implements Serializable {
    */
   public static final String TYPE_METADATA_FIELD = "hudi_type";
   public static final String TYPE_METADATA_PROPS_FIELD = "hudi_type_metadata";
+  public static final String VECTOR_DIMENSION_PROP = "vector.dimension";
 
   /**
    * Builds a comma-separated key=value metadata string from the given map.
@@ -111,6 +112,7 @@ public class HoodieSchema implements Serializable {
   public static Map<String, String> parseTypeMetadata(String metadata) {
     return Arrays.stream(metadata.split(","))
         .map(kv -> kv.split("=", 2))
+        .filter(parts -> parts.length == 2)
         .collect(Collectors.toMap(parts -> parts[0], parts -> parts[1]));
   }
 

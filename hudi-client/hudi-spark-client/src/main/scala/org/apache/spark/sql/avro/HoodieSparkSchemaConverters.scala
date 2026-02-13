@@ -89,7 +89,7 @@ object HoodieSparkSchemaConverters {
         }
 
         val typeMetadata = HoodieSchema.parseTypeMetadata(metadata.getString(HoodieSchema.TYPE_METADATA_PROPS_FIELD))
-        val dimension = typeMetadata.get("vector.dimension").toInt
+        val dimension = typeMetadata.get(HoodieSchema.VECTOR_DIMENSION_PROP).toInt
         if (dimension <= 0) {
           throw new IncompatibleSchemaException(
             s"VECTOR dimension must be positive, got: $dimension (field: $recordName)")
@@ -203,7 +203,7 @@ object HoodieSparkSchemaConverters {
         val dimension = vectorSchema.getDimension
 
         val typeMetadataStr = HoodieSchema.buildTypeMetadata(
-          java.util.Collections.singletonMap("vector.dimension", dimension.toString))
+          java.util.Collections.singletonMap(HoodieSchema.VECTOR_DIMENSION_PROP, dimension.toString))
         val metadata = new MetadataBuilder()
           .putString(HoodieSchema.TYPE_METADATA_FIELD, HoodieSchemaType.VECTOR.name())
           .putString(HoodieSchema.TYPE_METADATA_PROPS_FIELD, typeMetadataStr)
