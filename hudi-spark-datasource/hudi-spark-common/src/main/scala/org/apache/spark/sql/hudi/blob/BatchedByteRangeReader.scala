@@ -19,6 +19,7 @@
 
 package org.apache.spark.sql.hudi.blob
 
+import org.apache.hudi.HoodieSparkUtils.sparkAdapter
 import org.apache.hudi.common.schema.HoodieSchema
 import org.apache.hudi.io.SeekableDataInputStream
 import org.apache.hudi.storage.{HoodieStorage, HoodieStorageUtils, StorageConfiguration, StoragePath}
@@ -40,7 +41,7 @@ import scala.collection.mutable.ArrayBuffer
  * the number of seeks and reads when processing sorted data.
  *
  * <h3>Schema Requirement:</h3>
- * The blob column must match the schema defined in {@link org.apache.hudi.common.schema.HoodieSchema.Blob}:
+ * The blob column must match the schema defined in {@link HoodieSchema.Blob}:
  * <pre>
  * struct {
  *   type: string                   // "inline" or "out_of_line"
@@ -556,24 +557,17 @@ object BatchedByteRangeReader {
 
     // Apply mapPartitions
     val result = df.mapPartitions { partition =>
-      try {
-        // Create storage and reader for this partition
-        val storage = HoodieStorageUtils.getStorage(broadcastConf.value)
-        val reader = new BatchedByteRangeReader(storage, maxGapBytes, lookaheadSize)
+      // Create storage and reader for this partition
+      val storage = HoodieStorageUtils.getStorage(broadcastConf.value)
+      val reader = new BatchedByteRangeReader(storage, maxGapBytes, lookaheadSize)
 
-        // Import implicit instances for Row
-        import RowAccessor.rowAccessor
-        import RowBuilder.rowBuilder
+      // Import implicit instances for Row
+      import RowAccessor.rowAccessor
+      import RowBuilder.rowBuilder
 
-        // Process partition
-        reader.processPartition[Row](partition, structColIdx, outputSchema)
-
-      } catch {
-        case e: Exception =>
-          logger.error("Error processing partition", e)
-          throw e
-      }
-    } (Encoders.row(outputSchema))
+      // Process partition
+      reader.processPartition[Row](partition, structColIdx, outputSchema)
+    } (sparkAdapter.getCatalystExpressionUtils.getEncoder(outputSchema))
 
     if (keepTempColumn) {
       // Keep both columns for ReadBlobRule
