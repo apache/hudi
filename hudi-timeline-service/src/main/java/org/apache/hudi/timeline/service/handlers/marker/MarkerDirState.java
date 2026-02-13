@@ -19,6 +19,7 @@
 package org.apache.hudi.timeline.service.handlers.marker;
 
 import org.apache.hudi.common.conflict.detection.TimelineServerBasedDetectionStrategy;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
@@ -83,9 +84,9 @@ public class MarkerDirState implements Serializable {
   // {@code true} means the file is in use by a {@code BatchCreateMarkerRunnable}.
   // Index of the list is used for the filename, i.e., "1" -> "MARKERS1"
   private final List<Boolean> threadUseStatus;
-  // Map of in-flight requests: (markerName + "|" + requestId) -> MarkerCreationFuture
+  // Map of in-flight requests: (markerName, requestId) -> MarkerCreationFuture
   // Used for BOTH deduplication AND batch marker creation requests queue
-  private final Map<String, MarkerCreationFuture> inflightRequestMap = new ConcurrentHashMap<>();
+  private final Map<Pair<String, String>, MarkerCreationFuture> inflightRequestMap = new ConcurrentHashMap<>();
   private final int parallelism;
   private final Object markerCreationProcessingLock = new Object();
   // Early conflict detection strategy if enabled
@@ -139,18 +140,15 @@ public class MarkerDirState implements Serializable {
    * @return Existing future if found, otherwise a new future
    */
   public MarkerCreationFuture getOrCreateMarkerCreationFuture(Context context, String markerName, String requestId) {
-    String dedupKey = markerName + "|" + (requestId != null ? requestId : NULL_REQUEST_ID);
+    Pair<String, String> dedupKey = Pair.of(markerName, requestId != null ? requestId : NULL_REQUEST_ID);
 
-    MarkerCreationFuture existingFuture = inflightRequestMap.get(dedupKey);
-    if (existingFuture != null) {
-      log.debug("Found existing in-flight request for marker {} with requestId {}. Returning same future.",
-          markerName, requestId != null ? requestId : "null");
-      return existingFuture;
+    synchronized (inflightRequestMap) {
+      return inflightRequestMap.computeIfAbsent(dedupKey, k -> {
+        log.debug("Creating new in-flight request for marker {} with requestId {}.",
+            markerName, requestId != null ? requestId : "null");
+        return new MarkerCreationFuture(context, markerDirPath.toString(), markerName, requestId);
+      });
     }
-
-    MarkerCreationFuture future = new MarkerCreationFuture(context, markerDirPath.toString(), markerName, requestId);
-    inflightRequestMap.put(dedupKey, future);
-    return future;
   }
 
   /**
@@ -205,13 +203,24 @@ public class MarkerDirState implements Serializable {
       return Collections.emptyList();
     }
 
-    List<MarkerCreationFuture> pendingFutures = new ArrayList<>(inflightRequestMap.values());
-    if (shouldClear) {
-      inflightRequestMap.clear();
+    synchronized (inflightRequestMap) {
+      List<MarkerCreationFuture> pendingFutures = new ArrayList<>(inflightRequestMap.values());
+      if (shouldClear) {
+        inflightRequestMap.clear();
+      }
+      return pendingFutures;
     }
-    return pendingFutures;
   }
 
+  /**
+   * Returns {@code true} if the marker was created by another request (e.g. a concurrent duplicate).
+   * Used for idempotency when the same marker+requestId was already processed.
+   *
+   * @param future    The marker creation future to update with success/failure status
+   * @param markerName Marker name
+   * @param requestId  Request ID for idempotency check
+   * @return {@code true} if the marker already exists (created by another request), {@code false} otherwise
+   */
   private boolean isMarkerAlreadySeen(MarkerCreationFuture future, String markerName, String requestId) {
     if (!markerToRequestIdMap.containsKey(markerName)) {
       return false;
