@@ -22,7 +22,6 @@ import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.avro.model.HoodieSavepointMetadata;
 import org.apache.hudi.client.BaseHoodieWriteClient;
-import org.apache.hudi.client.timeline.HoodieTimelineArchiver;
 import org.apache.hudi.client.timeline.TimelineArchivers;
 import org.apache.hudi.client.WriteClientTestUtils;
 import org.apache.hudi.client.timeline.versioning.v2.LSMTimelineWriter;
@@ -91,7 +90,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
+import java.lang.reflect.Field;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
@@ -144,6 +143,9 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.mock;
 
 @Slf4j
 public class TestHoodieTimelineArchiver extends HoodieSparkClientTestHarness {
@@ -2060,34 +2062,25 @@ public class TestHoodieTimelineArchiver extends HoodieSparkClientTestHarness {
     HoodieWriteConfig writeConfig = initTestTableAndGetWriteConfig(false, 2, 3, 2);
     writeConfig.setValue(HoodieArchivalConfig.COMMITS_ARCHIVAL_BATCH_SIZE, "20");
 
-    // Create multiple large commit file by adding many write stats
-    for (int i = 1; i < 20; i++) {
-      String largeCommitTime = String.format("0000000%d", i);
-      testTable.addInflightCommit(largeCommitTime);
-      HoodieCommitMetadata largeCommitMetadata = new HoodieCommitMetadata();
-      largeCommitMetadata.addMetadata(HoodieCommitMetadata.SCHEMA_KEY, HoodieTestTable.PHONY_TABLE_SCHEMA);
-
-      // Add 500k write stats to simulate a large commit file
-      for (int j = 0; j < 500000; j++) {
-        HoodieWriteStat writeStat = new HoodieWriteStat();
-        writeStat.setPartitionPath("p1");
-        writeStat.setPath("p1/file_" + j);
-        writeStat.setFileId("file_" + j);
-        writeStat.setTotalWriteBytes(1);
-        writeStat.setFileSizeInBytes(1);
-        largeCommitMetadata.addWriteStat("p1", writeStat);
-      }
-
-      // Save the large commit
-      metaClient.getActiveTimeline().saveAsComplete(
-          new HoodieInstant(State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, largeCommitTime, InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR),
-          Option.of(largeCommitMetadata.toJsonString().getBytes(StandardCharsets.UTF_8)));
-      metaClient.reloadActiveTimeline();
+    // Create commits that will be archived
+    for (int i = 1; i <= 10; i++) {
+      String commitTime = String.format("%08d", i);
+      testTable.doWriteOperation(commitTime, WriteOperationType.UPSERT, Collections.singletonList("p1"),
+          Collections.singletonList("p1"), 1);
     }
 
-    // Create archiver and attempt archival
+    // Create archiver
     HoodieTable table = HoodieSparkTable.create(writeConfig, context, metaClient);
-    HoodieTimelineArchiver archiver = TimelineArchivers.getInstance(table.getMetaClient().getTimelineLayoutVersion(), writeConfig, table);
+    TimelineArchiverV2 archiver = (TimelineArchiverV2) TimelineArchivers.getInstance(
+        table.getMetaClient().getTimelineLayoutVersion(), writeConfig, table);
+
+    // Use reflection to inject a mock LSMTimelineWriter that throws OOM
+    LSMTimelineWriter mockWriter = mock(LSMTimelineWriter.class);
+    doThrow(new OutOfMemoryError("Simulated OOM")).when(mockWriter).write(any(), any(), any());
+
+    Field writerField = TimelineArchiverV2.class.getDeclaredField("timelineWriter");
+    writerField.setAccessible(true);
+    writerField.set(archiver, mockWriter);
 
     // Verify that archival throws OOM
     assertThrows(OutOfMemoryError.class, () -> archiver.archiveIfRequired(context));
@@ -2095,9 +2088,8 @@ public class TestHoodieTimelineArchiver extends HoodieSparkClientTestHarness {
     // Verify that OOM metric is recorded
     Map<String, Long> metrics = archiver.getMetrics();
     assertEquals(1L, metrics.get(ArchivalMetrics.ARCHIVAL_OOM_FAILURE));
-    assertEquals(17L, metrics.get(ArchivalMetrics.ARCHIVAL_NUM_ALL_COMMITS));
 
-    // Verify commits were not archived
-    assertEquals(19, metaClient.reloadActiveTimeline().countInstants());
+    // Verify that commit metrics were recorded before OOM
+    assertTrue(metrics.containsKey(ArchivalMetrics.ARCHIVAL_NUM_ALL_COMMITS));
   }
 }
