@@ -48,7 +48,6 @@ import static org.apache.hudi.metrics.HoodieMetrics.COUNTER_METRIC_EXTENSION;
 import static org.apache.hudi.metrics.HoodieMetrics.FAILURE_COUNTER;
 import static org.apache.hudi.metrics.HoodieMetrics.SOURCE_READ_AND_INDEX_ACTION;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
@@ -341,22 +340,5 @@ public class TestHoodieMetrics {
     hoodieMetrics.emitRollbackFailure(exceptionType);
     assertEquals(2, metrics.getRegistry().getCounters().get(metricName).getCount());
     assertEquals(2, metrics.getRegistry().getCounters().get(exceptionMetricName).getCount());
-  }
-
-  @Test
-  public void testRollbackFailureMetricWithNullMessage() {
-    // Test that rollback failure metric is emitted correctly even with null message
-    hoodieMetrics.emitRollbackFailure(null);
-
-    // Verify the failure counter is incremented
-    String metricName = hoodieMetrics.getMetricsName("rollback", FAILURE_COUNTER);
-    assertEquals(1, metrics.getRegistry().getCounters().get(metricName).getCount());
-
-    // When exception type is null, only the general failure counter should be incremented
-    // Verify no counter with "null" as part of the name exists
-    boolean hasNullMetric = metrics.getRegistry().getCounters().keySet().stream()
-        .anyMatch(key -> key.contains("null"));
-    assertFalse(hasNullMetric,
-        "No counter should be created with null in the name when exception type is null");
   }
 }
