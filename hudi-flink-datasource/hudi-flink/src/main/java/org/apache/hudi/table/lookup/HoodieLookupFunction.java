@@ -27,20 +27,21 @@ import org.apache.hudi.util.StreamerUtil;
 
 import lombok.extern.slf4j.Slf4j;
 import org.apache.flink.annotation.VisibleForTesting;
-import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.api.common.typeutils.TypeSerializer;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.table.data.GenericRowData;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.functions.FunctionContext;
-import org.apache.flink.table.functions.TableFunction;
+import org.apache.flink.table.functions.LookupFunction;
 import org.apache.flink.table.runtime.typeutils.InternalSerializers;
-import org.apache.flink.table.runtime.typeutils.InternalTypeInfo;
 import org.apache.flink.table.types.logical.RowType;
 import org.apache.flink.util.FlinkRuntimeException;
 
+import java.io.Closeable;
+import java.io.Serializable;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -51,7 +52,9 @@ import java.util.Map;
  * <p>Note: reference Flink FileSystemLookupFunction to avoid additional connector jar dependencies.
  */
 @Slf4j
-public class HoodieLookupFunction extends TableFunction<RowData> {
+public class HoodieLookupFunction  extends LookupFunction implements Serializable, Closeable {
+
+  private static final long serialVersionUID = 1L;
 
   // the max number of retries before throwing exception, in case of failure to load the table
   // into cache
@@ -73,6 +76,7 @@ public class HoodieLookupFunction extends TableFunction<RowData> {
   private transient HoodieTableMetaClient metaClient;
   private transient HoodieInstant currentCommit;
   private final Configuration conf;
+  protected FunctionContext functionContext;
 
   public HoodieLookupFunction(
       HoodieLookupTableReader partitionReader,
@@ -94,7 +98,7 @@ public class HoodieLookupFunction extends TableFunction<RowData> {
 
   @Override
   public void open(FunctionContext context) throws Exception {
-    super.open(context);
+    functionContext = context;
     cache = new HashMap<>();
     nextLoadTime = -1L;
     org.apache.hadoop.conf.Configuration hadoopConf = HadoopConfigurations.getHadoopConf(conf);
@@ -102,18 +106,12 @@ public class HoodieLookupFunction extends TableFunction<RowData> {
   }
 
   @Override
-  public TypeInformation<RowData> getResultType() {
-    return InternalTypeInfo.of(rowType);
-  }
-
-  public void eval(Object... values) {
-    checkCacheReload();
-    RowData lookupKey = GenericRowData.of(values);
-    List<RowData> matchedRows = cache.get(lookupKey);
-    if (matchedRows != null) {
-      for (RowData matchedRow : matchedRows) {
-        collect(matchedRow);
-      }
+  public Collection<RowData> lookup(RowData keyRow) {
+    try {
+      checkCacheReload();
+      return cache.get(keyRow);
+    } catch (Exception e) {
+      throw new RuntimeException(e);
     }
   }
 
@@ -189,7 +187,7 @@ public class HoodieLookupFunction extends TableFunction<RowData> {
   }
 
   @Override
-  public void close() throws Exception {
+  public void close() {
     // no operation
   }
 
