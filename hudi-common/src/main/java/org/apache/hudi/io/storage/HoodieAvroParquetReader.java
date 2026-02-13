@@ -24,6 +24,7 @@ import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.BaseFileUtils;
+import org.apache.hudi.common.util.HoodieAvroParquetReaderIterator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ParquetReaderIterator;
 import org.apache.hudi.common.util.collection.ClosableIterator;
@@ -45,7 +46,9 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 
+import static org.apache.hudi.avro.AvroSchemaUtils.getRepairedSchema;
 import static org.apache.hudi.common.util.TypeUtils.unsafeCast;
+import static org.apache.parquet.avro.HoodieAvroParquetSchemaConverter.getAvroSchemaConverter;
 
 /**
  * {@link HoodieFileReader} implementation for parquet format.
@@ -95,8 +98,8 @@ public class HoodieAvroParquetReader extends HoodieAvroFileReaderBase {
   }
 
   @Override
-  protected ClosableIterator<IndexedRecord> getIndexedRecordIterator(Schema readerSchema, Schema requestedSchema) throws IOException {
-    return getIndexedRecordIteratorInternal(readerSchema, Option.of(requestedSchema));
+  public ClosableIterator<IndexedRecord> getIndexedRecordIterator(Schema readerSchema, Schema requestedSchema) throws IOException {
+    return getIndexedRecordIteratorInternal(requestedSchema, Option.empty());
   }
 
   @Override
@@ -154,19 +157,30 @@ public class HoodieAvroParquetReader extends HoodieAvroFileReaderBase {
     return conf;
   }
 
-  private ClosableIterator<IndexedRecord> getIndexedRecordIteratorInternal(Schema schema, Option<Schema> requestedSchema) throws IOException {
+  private ClosableIterator<IndexedRecord> getIndexedRecordIteratorInternal(Schema schema, Option<Schema> renamedColumns) throws IOException {
     // NOTE: We have to set both Avro read-schema and projection schema to make
     //       sure that in case the file-schema is not equal to read-schema we'd still
     //       be able to read that file (in case projection is a proper one)
-    if (!requestedSchema.isPresent()) {
+    Schema repairedFileSchema = getRepairedSchema(getSchema(), schema);
+    Option<Schema> promotedSchema = Option.empty();
+    if (!renamedColumns.isPresent() || HoodieAvroUtils.recordNeedsRewriteForExtendedAvroTypePromotion(repairedFileSchema, schema)) {
+      AvroReadSupport.setAvroReadSchema(conf, repairedFileSchema);
+      AvroReadSupport.setRequestedProjection(conf, repairedFileSchema);
+      promotedSchema = Option.of(schema);
+    } else {
       AvroReadSupport.setAvroReadSchema(conf, schema);
       AvroReadSupport.setRequestedProjection(conf, schema);
-    } else {
-      AvroReadSupport.setAvroReadSchema(conf, requestedSchema.get());
-      AvroReadSupport.setRequestedProjection(conf, requestedSchema.get());
     }
-    ParquetReader<IndexedRecord> reader = new HoodieAvroParquetReaderBuilder<IndexedRecord>(path).withConf(conf).build();
-    ParquetReaderIterator<IndexedRecord> parquetReaderIterator = new ParquetReaderIterator<>(reader);
+    ParquetReader<IndexedRecord> reader =
+        new HoodieAvroParquetReaderBuilder<IndexedRecord>(path)
+            .withTableSchema(getAvroSchemaConverter(conf).convert(schema))
+            .withConf(conf)
+            .set(AvroSchemaConverter.ADD_LIST_ELEMENT_RECORDS, conf.get(AvroSchemaConverter.ADD_LIST_ELEMENT_RECORDS))
+            .set(ParquetInputFormat.STRICT_TYPE_CHECKING, conf.get(ParquetInputFormat.STRICT_TYPE_CHECKING))
+            .build();
+    ParquetReaderIterator<IndexedRecord> parquetReaderIterator = promotedSchema.isPresent()
+        ? new HoodieAvroParquetReaderIterator(reader, promotedSchema.get())
+        : new ParquetReaderIterator<>(reader);
     readerIterators.add(parquetReaderIterator);
     return parquetReaderIterator;
   }

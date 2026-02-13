@@ -84,7 +84,7 @@ object AvroConversionUtils {
                             recordNamespace: String): Row => GenericRecord = {
     val serde = sparkAdapter.createSparkRowSerDe(sourceSqlType)
     val avroSchema = AvroConversionUtils.convertStructTypeToAvroSchema(sourceSqlType, structName, recordNamespace)
-    val nullable = AvroSchemaUtils.resolveNullableSchema(avroSchema) != avroSchema
+    val nullable = AvroSchemaUtils.getNonNullTypeFromUnion(avroSchema) != avroSchema
 
     val converter = AvroConversionUtils.createInternalRowToAvroConverter(sourceSqlType, avroSchema, nullable)
 
@@ -97,8 +97,11 @@ object AvroConversionUtils {
    * TODO convert directly from GenericRecord into InternalRow instead
    */
   def createDataFrame(rdd: RDD[GenericRecord], schemaStr: String, ss: SparkSession): Dataset[Row] = {
-    if (rdd.isEmpty()) {
-      ss.emptyDataFrame
+    // Avoid calling isEmpty() which can cause serialization issues with Ordering$Reverse
+    // Check partition count instead, which doesn't require task serialization
+    val structType = convertAvroSchemaToStructType(new Schema.Parser().parse(schemaStr))
+    if (rdd.getNumPartitions == 0) {
+      ss.createDataFrame(ss.sparkContext.emptyRDD[Row], structType)
     } else {
       ss.createDataFrame(rdd.mapPartitions { records =>
         if (records.isEmpty) Iterator.empty
@@ -108,7 +111,7 @@ object AvroConversionUtils {
           val converter = createConverterToRow(schema, dataType)
           records.map { r => converter(r) }
         }
-      }, convertAvroSchemaToStructType(new Schema.Parser().parse(schemaStr)))
+      }, structType)
     }
   }
 
