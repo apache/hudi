@@ -44,7 +44,7 @@ case class ShowHoodieTablePartitionsCommand(
 
     val schemaOpt = hoodieCatalogTable.tableSchema
     val partitionColumnNamesOpt = hoodieCatalogTable.tableConfig.getPartitionFields
-    val useSlashEncodedPartitioning = hoodieCatalogTable.tableConfig.getSlashSeparatedDatePartitioning
+    val useSlashSeparatedDatePartitioning = hoodieCatalogTable.tableConfig.getSlashSeparatedDatePartitioning
 
       if (partitionColumnNamesOpt.isPresent && partitionColumnNamesOpt.get.nonEmpty && schemaOpt.nonEmpty) {
         val partitions: Seq[Row] = specOpt.map { spec =>
@@ -56,7 +56,7 @@ case class ShowHoodieTablePartitionsCommand(
             }
           }
           .getOrElse(hoodieCatalogTable.getPartitionPaths)
-          .map(partitionVal => if (useSlashEncodedPartitioning) {
+          .map(partitionVal => if (useSlashSeparatedDatePartitioning) {
             ValidationUtils.checkState(partitionColumnNamesOpt.get().length == 1,
               "Only one partition field is allowed for SlashEncodedPartitioning")
             Row(partitionColumnNamesOpt.get()(0) + "=" + partitionVal.replace('/', '-'))
