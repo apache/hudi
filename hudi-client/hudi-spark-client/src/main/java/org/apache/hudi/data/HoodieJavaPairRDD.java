@@ -111,6 +111,11 @@ public class HoodieJavaPairRDD<K, V> implements HoodiePairData<K, V> {
   }
 
   @Override
+  public HoodiePairData<K, V> groupByKeyAndReduce(SerializableFunction<Iterable<V>,V> function) {
+    return new HoodieJavaPairRDD<>(pairRDDData.groupByKey().mapValues(function::apply));
+  }
+
+  @Override
   public HoodiePairData<K, V> reduceByKey(SerializableBiFunction<V, V, V> combiner, int parallelism) {
     return HoodieJavaPairRDD.of(pairRDDData.reduceByKey(combiner::apply, parallelism));
   }
