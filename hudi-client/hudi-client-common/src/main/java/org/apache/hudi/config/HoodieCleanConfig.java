@@ -201,6 +201,7 @@ public class HoodieCleanConfig extends HoodieConfig {
           + "table receives updates/deletes. Another reason to turn this on, would be to ensure data residing in bootstrap "
           + "base files are also physically deleted, to comply with data privacy enforcement processes.");
 
+<<<<<<< HEAD
   public static final ConfigProperty<Boolean> CLEAN_OPTIMIZE_USING_LOCAL_ENGINE_CONTEXT = ConfigProperty
       .key("hoodie.clean.optimize.using.local.engine.context")
       .defaultValue(true)
@@ -211,6 +212,16 @@ public class HoodieCleanConfig extends HoodieConfig {
           + "Some datasets with large record_index partitions can cause OOM errors during file listing in clean planning. "
           + "By using local engine context, file listing is performed on the driver, allowing targeted memory scaling. "
           + "When enabled, both non-partitioned datasets and metadata tables use the driver for scheduling cleans.");
+=======
+  public static final ConfigProperty<String> PREWRITE_CLEANER_POLICY = ConfigProperty
+      .key("hoodie.cleaner.prewrite.cleaner.policy")
+      .defaultValue("")
+      .withDocumentation("[UBER] If set, force attempting clean and/or failed writes rollback before starting a new ingestion write commit. "
+          + "Setting 'clean' will force a CLEAN table service call (which will both do rollback of failed writes and attempt scheduling "
+          + "a CLEAN), whereas 'rollback_failed_writes' will only perform rollback of failed writes. "
+          + "This should only be set to ensure that data files do not build up on DFS if an ingestion "
+          + "writer is perpetually failing before completing a CLEAN.");
+>>>>>>> b5280ea68f (port pre write clean policy)
 
   /** @deprecated Use {@link #CLEANER_POLICY} and its methods instead */
   @Deprecated
@@ -372,8 +383,13 @@ public class HoodieCleanConfig extends HoodieConfig {
       return this;
     }
 
+<<<<<<< HEAD
     public HoodieCleanConfig.Builder withCleanOptimizationWithLocalEngineEnabled(Boolean cleanOptimizationWithLocalEngineEnabled) {
       cleanConfig.setValue(CLEAN_OPTIMIZE_USING_LOCAL_ENGINE_CONTEXT, String.valueOf(cleanOptimizationWithLocalEngineEnabled));
+=======
+    public HoodieCleanConfig.Builder withPreWriteCleanerPolicy(String preWriteCleanerPolicy) {
+      cleanConfig.setValue(PREWRITE_CLEANER_POLICY, preWriteCleanerPolicy);
+>>>>>>> b5280ea68f (port pre write clean policy)
       return this;
     }
 

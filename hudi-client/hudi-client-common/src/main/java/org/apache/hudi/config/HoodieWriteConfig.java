@@ -1952,6 +1952,10 @@ public class HoodieWriteConfig extends HoodieConfig {
         .valueOf(getString(HoodieCleanConfig.FAILED_WRITES_CLEANER_POLICY));
   }
 
+  public String getPreWriteCleanerPolicy() {
+    return getString(HoodieCleanConfig.PREWRITE_CLEANER_POLICY);
+  }
+
   public String getCompactionSpecifyPartitionPathRegex() {
     return getString(HoodieCompactionConfig.COMPACTION_SPECIFY_PARTITION_PATH_REGEX);
   }
