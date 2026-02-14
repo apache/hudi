@@ -382,13 +382,13 @@ public class HoodieCleanConfig extends HoodieConfig {
       return this;
     }
 
-<<<<<<< HEAD
     public HoodieCleanConfig.Builder withCleanOptimizationWithLocalEngineEnabled(Boolean cleanOptimizationWithLocalEngineEnabled) {
       cleanConfig.setValue(CLEAN_OPTIMIZE_USING_LOCAL_ENGINE_CONTEXT, String.valueOf(cleanOptimizationWithLocalEngineEnabled));
-=======
+      return this;
+    }
+
     public HoodieCleanConfig.Builder withPreWriteCleanerPolicy(String preWriteCleanerPolicy) {
       cleanConfig.setValue(PREWRITE_CLEANER_POLICY, preWriteCleanerPolicy);
->>>>>>> b5280ea68f (port pre write clean policy)
       return this;
     }
 
