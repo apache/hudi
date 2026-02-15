@@ -19,7 +19,6 @@ package org.apache.hudi.functional
 
 import org.apache.hudi.{AvroConversionUtils, DataSourceReadOptions, DataSourceWriteOptions, HoodieDataSourceHelpers, HoodieSchemaConversionUtils, HoodieSparkUtils, QuickstartUtils, ScalaAssertionSupport}
 import org.apache.hudi.DataSourceWriteOptions.{INLINE_CLUSTERING_ENABLE, KEYGENERATOR_CLASS_NAME}
-import org.apache.hudi.HoodieConversionUtils.toJavaOption
 import org.apache.hudi.QuickstartUtils.{convertToStringList, getQuickstartWriteConfigs}
 import org.apache.hudi.client.SparkRDDWriteClient
 import org.apache.hudi.client.common.HoodieSparkEngineContext
@@ -42,15 +41,14 @@ import org.apache.hudi.hive.HiveSyncConfigHolder
 import org.apache.hudi.keygen.{ComplexKeyGenerator, CustomKeyGenerator, GlobalDeleteKeyGenerator, NonpartitionedKeyGenerator, SimpleKeyGenerator, TimestampBasedKeyGenerator}
 import org.apache.hudi.keygen.constant.{KeyGeneratorOptions, KeyGeneratorType}
 import org.apache.hudi.metrics.{Metrics, MetricsReporterType}
-import org.apache.hudi.storage.{StoragePath, StoragePathFilter}
+import org.apache.hudi.storage.{HoodieStorage, StoragePath, StoragePathFilter}
 import org.apache.hudi.table.HoodieSparkTable
-import org.apache.hudi.testutils.{DataSourceTestUtils, HoodieSparkClientTestBase}
-import org.apache.hudi.util.JFunction
+import org.apache.hudi.testutils.{DataSourceTestUtils, HoodieClientTestUtils, SparkClientFunctionalTestHarnessScala}
+import org.apache.hudi.testutils.SparkClientFunctionalTestHarness.getSparkSqlConf
 
-import org.apache.hadoop.fs.FileSystem
-import org.apache.spark.sql.{DataFrame, DataFrameWriter, Dataset, Encoders, Row, SaveMode, SparkSession, SparkSessionExtensions}
+import org.apache.spark.SparkConf
+import org.apache.spark.sql.{DataFrame, DataFrameWriter, Dataset, Encoders, Row, SaveMode, SparkSession}
 import org.apache.spark.sql.functions.{col, concat, lit, udf, when}
-import org.apache.spark.sql.hudi.HoodieSparkSessionExtension
 import org.apache.spark.sql.types.{ArrayType, DataTypes, DateType, IntegerType, LongType, MapType, StringType, StructField, StructType, TimestampType}
 import org.joda.time.DateTime
 import org.joda.time.format.DateTimeFormat
@@ -64,7 +62,6 @@ import java.net.URI
 import java.nio.file.Paths
 import java.sql.{Date, Timestamp}
 import java.util.concurrent.{CountDownLatch, TimeUnit}
-import java.util.function.Consumer
 
 import scala.annotation.tailrec
 import scala.collection.JavaConverters._
@@ -73,32 +70,33 @@ import scala.util.matching.Regex
 /**
  * Basic tests on the spark datasource for COW table.
  */
-class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSupport {
-  var spark: SparkSession = null
+class TestCOWDataSource extends SparkClientFunctionalTestHarnessScala with ScalaAssertionSupport {
 
   val verificationCol: String = "driver"
   val updatedVerificationVal: String = "driver_update"
 
-  override def getSparkSessionExtensionsInjector: Option[Consumer[SparkSessionExtensions]] =
-    toJavaOption(
-      Some(
-        JFunction.toJavaConsumer((receiver: SparkSessionExtensions) => new HoodieSparkSessionExtension().apply(receiver)))
-    )
+  var dataGen: HoodieTestDataGenerator = _
+  var metaClient: HoodieTableMetaClient = _
 
-  @BeforeEach override def setUp() {
-    initPath()
-    initSparkContexts()
-    spark = sqlContext.sparkSession
-    initTestDataGenerator()
-    initHoodieStorage()
+  override def conf: SparkConf = conf(getSparkSqlConf)
+
+  def storage: HoodieStorage = hoodieStorage()
+
+  protected def createMetaClient(spark: SparkSession, basePath: String): HoodieTableMetaClient = {
+    HoodieClientTestUtils.createMetaClient(spark, basePath)
   }
 
-  @AfterEach override def tearDown() = {
-    cleanupSparkContexts()
-    cleanupTestDataGenerator()
-    cleanupFileSystem()
-    FileSystem.closeAll()
-    System.gc()
+  protected def createMetaClient(basePath: String): HoodieTableMetaClient = {
+    HoodieTestUtils.createMetaClient(storageConf, basePath)
+  }
+
+  @BeforeEach def setUp(): Unit = {
+    dataGen = new HoodieTestDataGenerator()
+  }
+
+  @AfterEach def tearDown(): Unit = {
+    dataGen = null
+    metaClient = null
   }
 
   @Test

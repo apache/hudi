@@ -95,7 +95,8 @@ public class HoodieClientTestUtils {
         .set("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
         .set("spark.kryo.registrator", "org.apache.spark.HoodieSparkKryoRegistrar")
         .set("spark.sql.shuffle.partitions", "4")
-        .set("spark.default.parallelism", "4");
+        .set("spark.default.parallelism", "4")
+        .set("spark.sql.adaptive.enabled", "false");
 
     // NOTE: This utility is used in modules where this class might not be present, therefore
     //       to avoid littering output w/ [[ClassNotFoundException]]s we will skip adding it

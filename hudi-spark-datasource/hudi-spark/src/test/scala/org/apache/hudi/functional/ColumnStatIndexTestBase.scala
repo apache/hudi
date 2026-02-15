@@ -32,11 +32,15 @@ import org.apache.hudi.config.{HoodieCompactionConfig, HoodieWriteConfig}
 import org.apache.hudi.functional.ColumnStatIndexTestBase.{ColumnStatsTestCase, ColumnStatsTestParams}
 import org.apache.hudi.metadata.HoodieTableMetadataUtil
 import org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS
+import org.apache.hudi.storage.HoodieStorage
 import org.apache.hudi.storage.StoragePath
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration
-import org.apache.hudi.testutils.{HoodieSparkClientTestBase, LogFileColStatsTestUtil}
+import org.apache.hudi.testutils.LogFileColStatsTestUtil
+import org.apache.hudi.testutils.SparkClientFunctionalTestHarness.getSparkSqlConf
+import org.apache.hudi.testutils.SparkClientFunctionalTestHarnessScala
 
 import org.apache.avro.Schema
+import org.apache.spark.SparkConf
 import org.apache.spark.sql.{DataFrame, _}
 import org.apache.spark.sql.functions.{lit, typedLit}
 import org.apache.spark.sql.types._
@@ -54,8 +58,7 @@ import scala.collection.JavaConverters._
 import scala.collection.immutable.TreeSet
 import scala.util.Random
 
-class ColumnStatIndexTestBase extends HoodieSparkClientTestBase {
-  var spark: SparkSession = _
+class ColumnStatIndexTestBase extends SparkClientFunctionalTestHarnessScala {
   var dfList: Seq[DataFrame] = Seq()
 
   val sourceTableSchema =
@@ -71,23 +74,21 @@ class ColumnStatIndexTestBase extends HoodieSparkClientTestBase {
 
   val sourceTableHoodieSchema: HoodieSchema = HoodieSchemaConversionUtils.convertStructTypeToHoodieSchema(sourceTableSchema, "record", "")
 
+  var metaClient: HoodieTableMetaClient = _
+
+  override def conf: SparkConf = conf(getSparkSqlConf)
+
+  def storage: HoodieStorage = hoodieStorage()
+
   @BeforeEach
-  override def setUp() {
-    initPath()
-    initQueryIndexConf()
-    initSparkContexts()
-    initHoodieStorage()
-
-    setTableName("hoodie_test")
-    initMetaClient()
-
-    spark = sqlContext.sparkSession
+  def setUp(): Unit = {
+    spark.conf.set("hoodie.fileIndex.dataSkippingFailureMode", "strict")
+    metaClient = getHoodieMetaClient(HoodieTableType.COPY_ON_WRITE)
   }
 
   @AfterEach
-  override def tearDown() = {
-    cleanupFileSystem()
-    cleanupSparkContexts()
+  def tearDown(): Unit = {
+    metaClient = null
   }
 
   protected def doWriteAndValidateColumnStats(params: ColumnStatsTestParams, addNestedFiled : Boolean = false): Unit = {

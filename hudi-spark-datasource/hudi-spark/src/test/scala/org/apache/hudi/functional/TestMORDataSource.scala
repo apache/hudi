@@ -19,7 +19,6 @@ package org.apache.hudi.functional
 
 import org.apache.hudi.{DataSourceReadOptions, DataSourceUtils, DataSourceWriteOptions, DefaultSparkRecordMerger, HoodieDataSourceHelpers, HoodieSparkUtils, ScalaAssertionSupport, SparkDatasetMixin}
 import org.apache.hudi.DataSourceWriteOptions._
-import org.apache.hudi.HoodieConversionUtils.toJavaOption
 import org.apache.hudi.client.SparkRDDWriteClient
 import org.apache.hudi.common.config.{HoodieMemoryConfig, HoodieMetadataConfig, HoodieStorageConfig, RecordMergeMode}
 import org.apache.hudi.common.config.TimestampKeyGeneratorConfig.{TIMESTAMP_INPUT_DATE_FORMAT, TIMESTAMP_OUTPUT_DATE_FORMAT, TIMESTAMP_TIMEZONE_FORMAT, TIMESTAMP_TYPE_FIELD}
@@ -35,17 +34,17 @@ import org.apache.hudi.exception.{HoodieException, HoodieUpgradeDowngradeExcepti
 import org.apache.hudi.index.HoodieIndex.IndexType
 import org.apache.hudi.keygen.constant.KeyGeneratorType
 import org.apache.hudi.metadata.HoodieTableMetadataUtil.{metadataPartitionExists, PARTITION_NAME_SECONDARY_INDEX_PREFIX}
-import org.apache.hudi.storage.{StoragePath, StoragePathInfo}
+import org.apache.hudi.storage.{HoodieStorage, StoragePath, StoragePathInfo}
 import org.apache.hudi.table.action.compact.CompactionTriggerStrategy
 import org.apache.hudi.table.upgrade.TestUpgradeDowngrade.getFixtureName
-import org.apache.hudi.testutils.{DataSourceTestUtils, HoodieSparkClientTestBase}
-import org.apache.hudi.util.JFunction
+import org.apache.hudi.testutils.{DataSourceTestUtils, HoodieClientTestUtils, SparkClientFunctionalTestHarnessScala}
+import org.apache.hudi.testutils.SparkClientFunctionalTestHarness.getSparkSqlConf
 
 import org.apache.commons.io.FileUtils
 import org.apache.hadoop.fs.Path
+import org.apache.spark.SparkConf
 import org.apache.spark.sql._
 import org.apache.spark.sql.functions._
-import org.apache.spark.sql.hudi.HoodieSparkSessionExtension
 import org.apache.spark.sql.types.{LongType, StringType, StructField, StructType}
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
@@ -56,7 +55,6 @@ import java.io.File
 import java.net.URI
 import java.nio.file.{Files, Paths}
 import java.sql.Timestamp
-import java.util.function.Consumer
 import java.util.stream.Collectors
 
 import scala.collection.JavaConverters._
@@ -64,9 +62,8 @@ import scala.collection.JavaConverters._
 /**
  * Tests on Spark DataSource for MOR table.
  */
-class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin with ScalaAssertionSupport {
+class TestMORDataSource extends SparkClientFunctionalTestHarnessScala with SparkDatasetMixin with ScalaAssertionSupport {
 
-  var spark: SparkSession = null
   val commonOpts = Map(
     "hoodie.insert.shuffle.parallelism" -> "4",
     "hoodie.upsert.shuffle.parallelism" -> "4",
@@ -83,26 +80,29 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
   val verificationCol: String = "driver"
   val updatedVerificationVal: String = "driver_update"
 
-  @BeforeEach override def setUp() {
-    setTableName("hoodie_test")
-    initPath()
-    initSparkContexts()
-    spark = sqlContext.sparkSession
-    initTestDataGenerator()
-    initHoodieStorage()
+  var dataGen: HoodieTestDataGenerator = _
+  var metaClient: HoodieTableMetaClient = _
+
+  override def conf: SparkConf = conf(getSparkSqlConf)
+
+  def storage: HoodieStorage = hoodieStorage()
+
+  protected def createMetaClient(spark: SparkSession, basePath: String): HoodieTableMetaClient = {
+    HoodieClientTestUtils.createMetaClient(spark, basePath)
   }
 
-  @AfterEach override def tearDown() = {
-    cleanupSparkContexts()
-    cleanupTestDataGenerator()
-    cleanupFileSystem()
+  protected def initMetaClient(tableType: HoodieTableType): Unit = {
+    metaClient = getHoodieMetaClient(tableType)
   }
 
-  override def getSparkSessionExtensionsInjector: Option[Consumer[SparkSessionExtensions]] =
-    toJavaOption(
-      Some(
-        JFunction.toJavaConsumer((receiver: SparkSessionExtensions) => new HoodieSparkSessionExtension().apply(receiver)))
-    )
+  @BeforeEach def setUp(): Unit = {
+    dataGen = new HoodieTestDataGenerator()
+  }
+
+  @AfterEach def tearDown(): Unit = {
+    dataGen = null
+    metaClient = null
+  }
 
   @ParameterizedTest
   @CsvSource(Array(

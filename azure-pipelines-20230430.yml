@@ -19,10 +19,12 @@
 # See scripts/jacoco/README.md for how aggregated code coverage report works
 # across multiple modules.
 
+# TODO: Remove Azure CI once GitHub CI (bot.yml) is validated to cover all tests.
+# GitHub CI now includes Spark 3.5 + Scala 2.12 coverage that was previously Azure-only.
 trigger:
   branches:
     include:
-      - '*'  # must quote since "*" is a YAML reserved character; we want a string
+      - '*'
 
 pool:
   vmImage: 'ubuntu-22.04'
