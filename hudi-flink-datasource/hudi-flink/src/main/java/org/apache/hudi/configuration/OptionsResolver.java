@@ -534,9 +534,15 @@ public class OptionsResolver {
 
   /**
    * Returns whether the writers should use blocking instant time generation.
+   *
+   * <p>Blocking instant generation is enabled only for upsert workloads that require strict
+   * instant ordering, i.e. upsert on COW tables, or upsert with CDC enabled.
+   *
+   * <p>When this returns {@code true}, writer tasks wait for commit acknowledgement with timeout
+   * ({@link FlinkOptions#WRITE_COMMIT_ACK_TIMEOUT}). When this returns {@code false}.
    */
   public static boolean isBlockingInstantGeneration(Configuration conf) {
-    return isCowTable(conf) && isUpsertOperation(conf);
+    return (isCowTable(conf) || conf.get(FlinkOptions.CDC_ENABLED)) && isUpsertOperation(conf);
   }
 
   /**

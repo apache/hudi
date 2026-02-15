@@ -24,6 +24,8 @@ import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.table.cdc.HoodieCDCFileSplit;
+import org.apache.hudi.common.table.cdc.HoodieCDCInferenceCase;
 import org.apache.hudi.common.table.log.InstantRange;
 import org.apache.hudi.common.table.read.IncrementalQueryAnalyzer;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
@@ -40,9 +42,12 @@ import org.apache.hudi.sink.partitioner.profile.WriteProfiles;
 import org.apache.hudi.source.prune.ColumnStatsProbe;
 import org.apache.hudi.source.prune.PartitionPruners;
 import org.apache.hudi.storage.StoragePathInfo;
+import org.apache.hudi.table.format.cdc.CdcInputSplit;
+import org.apache.hudi.table.format.mor.MergeOnReadInputSplit;
 import org.apache.hudi.util.StreamerUtil;
 import org.apache.hudi.utils.TestConfigurations;
 import org.apache.hudi.utils.TestData;
+import org.apache.hudi.utils.TestUtils;
 
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.core.fs.Path;
@@ -77,6 +82,7 @@ import static org.apache.hudi.common.table.timeline.InstantComparison.compareTim
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertIterableEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -85,6 +91,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * Test cases for {@link IncrementalInputSplits}.
  */
 public class TestIncrementalInputSplits extends HoodieCommonTestHarness {
+  // for RowData write function: to trigger buffer flush with batch size exceeded by 3 rows, each record is 48 bytes
+  private static final double BATCH_SIZE_MB = 0.00013;
 
   @BeforeEach
   void init() {
@@ -719,6 +727,42 @@ public class TestIncrementalInputSplits extends HoodieCommonTestHarness {
 
     assertNotNull(result, "Batch result with CDC should not be null");
     assertNotNull(result.getSplits(), "Batch splits with CDC should not be null");
+  }
+
+  @Test
+  void testOrderingOfCDCInputSplitsWithEagerFlushing() throws Exception {
+    metaClient = HoodieTestUtils.init(basePath, HoodieTableType.MERGE_ON_READ);
+    Configuration conf = TestConfigurations.getDefaultConf(basePath);
+    conf.set(FlinkOptions.WRITE_BATCH_SIZE, BATCH_SIZE_MB);
+    conf.set(FlinkOptions.TABLE_TYPE, HoodieTableType.MERGE_ON_READ.name());
+    // Insert test data
+    TestData.writeData(TestData.DATA_SET_INSERT_DUPLICATES, 1, conf);
+
+    String firstCommit = TestUtils.getFirstCompleteInstant(basePath);
+    conf.set(FlinkOptions.READ_START_COMMIT, firstCommit);
+
+    IncrementalInputSplits iis = IncrementalInputSplits.builder()
+        .conf(conf)
+        .path(new Path(basePath))
+        .rowType(TestConfigurations.ROW_TYPE)
+        .build();
+
+    List<MergeOnReadInputSplit> splits = iis.inputSplits(metaClient, true).getInputSplits();
+    assertEquals(1, splits.size());
+    assertInstanceOf(CdcInputSplit.class, splits.get(0));
+    CdcInputSplit cdcInputSplit = (CdcInputSplit) splits.get(0);
+
+    // there are two cdc file splits since eager flushing happens.
+    HoodieCDCFileSplit[] cdcFileSplits = cdcInputSplit.getChanges();
+    assertEquals(2, cdcFileSplits.length);
+    // instant fields for these two splits are the same
+    assertEquals(cdcFileSplits[0].getInstant(), cdcFileSplits[1].getInstant());
+    assertEquals(HoodieCDCInferenceCase.LOG_FILE, cdcFileSplits[0].getCdcInferCase());
+    assertEquals(HoodieCDCInferenceCase.LOG_FILE, cdcFileSplits[1].getCdcInferCase());
+    // validate the order of splits with same instant
+    assertTrue(cdcFileSplits[0].getBeforeFileSlice().isPresent());
+    assertTrue(cdcFileSplits[1].getBeforeFileSlice().isPresent());
+    assertTrue(cdcFileSplits[0].getCdcFiles().get(0).compareTo(cdcFileSplits[1].getCdcFiles().get(0)) < 0);
   }
 
   @Test
