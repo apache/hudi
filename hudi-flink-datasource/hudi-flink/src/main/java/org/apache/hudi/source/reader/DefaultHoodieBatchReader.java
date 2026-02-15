@@ -38,28 +38,31 @@ import java.util.NoSuchElementException;
  * @param <T> record type
  */
 public class DefaultHoodieBatchReader<T> implements HoodieBatchReader<T> {
-
+  private RecordCloner<T> recordCloner;
   private final int batchSize;
 
-  public DefaultHoodieBatchReader(Configuration configuration) {
+  public DefaultHoodieBatchReader(Configuration configuration, RecordCloner<T> recordCloner) {
     this.batchSize = configuration.get(FlinkOptions.SOURCE_READER_FETCH_BATCH_RECORD_COUNT);
+    this.recordCloner = recordCloner;
     ValidationUtils.checkArgument(batchSize > 0, "source.fetch-batch-record-count can only be positive.");
   }
 
   @Override
   public CloseableIterator<RecordsWithSplitIds<HoodieRecordWithPosition<T>>> batch(
       HoodieSourceSplit split, ClosableIterator<T> inputIterator) {
-    return new ListBatchIterator(split, inputIterator);
+    return new ListBatchIterator(split, inputIterator, recordCloner);
   }
 
-  private class ListBatchIterator implements CloseableIterator<RecordsWithSplitIds<HoodieRecordWithPosition<T>>> {
+  private class ListBatchIterator<T> implements CloseableIterator<RecordsWithSplitIds<HoodieRecordWithPosition<T>>> {
     private final ClosableIterator<T> inputIterator;
     private final HoodieSourceSplit split;
+    private RecordCloner<T> recordCloner;
     private long consumed;
 
-    ListBatchIterator(HoodieSourceSplit split, ClosableIterator<T> inputIterator) {
+    ListBatchIterator(HoodieSourceSplit split, ClosableIterator<T> inputIterator, RecordCloner<T> recordCloner) {
       this.inputIterator = inputIterator;
       this.split = split;
+      this.recordCloner = recordCloner;
       this.consumed = split.getConsumed();
       seek();
     }
@@ -80,11 +83,11 @@ public class DefaultHoodieBatchReader<T> implements HoodieBatchReader<T> {
       while (inputIterator.hasNext() && recordCount < batchSize) {
         T nextRecord = inputIterator.next();
         consumed++;
-        batch.add(nextRecord);
+        batch.add(recordCloner.clone(nextRecord));
         recordCount++;
       }
 
-      return HoodieBatchRecords.forRecords(
+      return HoodieBatchRecords.<T>forRecords(
           split.splitId(), ClosableIterator.wrap(batch.iterator()), split.getFileOffset(), consumed - recordCount);
     }
 

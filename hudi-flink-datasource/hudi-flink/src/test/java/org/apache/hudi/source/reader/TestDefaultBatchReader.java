@@ -18,6 +18,8 @@
 
 package org.apache.hudi.source.reader;
 
+import org.apache.flink.table.types.logical.RowType;
+import org.apache.flink.table.types.logical.VarCharType;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.configuration.FlinkOptions;
@@ -45,12 +47,14 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * Test cases for {@link DefaultHoodieBatchReader}.
  */
 public class TestDefaultBatchReader {
+  private RowType rowType = RowType.of(VarCharType.STRING_TYPE);
+  private RecordCloner recordCloner = a -> a;
 
   @Test
   public void testBatchWithDefaultSize() throws Exception {
     Configuration config = new Configuration();
     // Default batch size is 2048
-    DefaultHoodieBatchReader<String> batchReader = new DefaultHoodieBatchReader<>(config);
+    DefaultHoodieBatchReader<String> batchReader = new DefaultHoodieBatchReader<>(config, recordCloner);
 
     List<String> data = createTestData(5000);
     HoodieSourceSplit split = createTestSplit(0);
@@ -89,7 +93,7 @@ public class TestDefaultBatchReader {
   public void testBatchWithCustomSize() throws Exception {
     Configuration config = new Configuration();
     config.set(FlinkOptions.SOURCE_READER_FETCH_BATCH_RECORD_COUNT, 100);
-    DefaultHoodieBatchReader<String> batchReader = new DefaultHoodieBatchReader<>(config);
+    DefaultHoodieBatchReader<String> batchReader = new DefaultHoodieBatchReader<>(config, recordCloner);
 
     List<String> data = createTestData(250);
     HoodieSourceSplit split = createTestSplit(0);
@@ -120,7 +124,7 @@ public class TestDefaultBatchReader {
   @Test
   public void testBatchWithEmptyInput() throws Exception {
     Configuration config = new Configuration();
-    DefaultHoodieBatchReader<String> batchReader = new DefaultHoodieBatchReader<>(config);
+    DefaultHoodieBatchReader<String> batchReader = new DefaultHoodieBatchReader<>(config, recordCloner);
 
     List<String> data = Collections.emptyList();
     HoodieSourceSplit split = createTestSplit(0);
@@ -137,7 +141,7 @@ public class TestDefaultBatchReader {
   public void testBatchWithSingleRecord() throws Exception {
     Configuration config = new Configuration();
     config.set(FlinkOptions.SOURCE_READER_FETCH_BATCH_RECORD_COUNT, 10);
-    DefaultHoodieBatchReader<String> batchReader = new DefaultHoodieBatchReader<>(config);
+    DefaultHoodieBatchReader<String> batchReader = new DefaultHoodieBatchReader<>(config, recordCloner);
 
     List<String> data = Collections.singletonList("single-record");
     HoodieSourceSplit split = createTestSplit(0);
@@ -158,7 +162,7 @@ public class TestDefaultBatchReader {
   public void testBatchWithExactBatchSize() throws Exception {
     Configuration config = new Configuration();
     config.set(FlinkOptions.SOURCE_READER_FETCH_BATCH_RECORD_COUNT, 100);
-    DefaultHoodieBatchReader<String> batchReader = new DefaultHoodieBatchReader<>(config);
+    DefaultHoodieBatchReader<String> batchReader = new DefaultHoodieBatchReader<>(config, recordCloner);
 
     List<String> data = createTestData(100);
     HoodieSourceSplit split = createTestSplit(0);
@@ -179,7 +183,7 @@ public class TestDefaultBatchReader {
   public void testBatchWithLessThanBatchSize() throws Exception {
     Configuration config = new Configuration();
     config.set(FlinkOptions.SOURCE_READER_FETCH_BATCH_RECORD_COUNT, 1000);
-    DefaultHoodieBatchReader<String> batchReader = new DefaultHoodieBatchReader<>(config);
+    DefaultHoodieBatchReader<String> batchReader = new DefaultHoodieBatchReader<>(config, recordCloner);
 
     List<String> data = createTestData(50);
     HoodieSourceSplit split = createTestSplit(0);
@@ -200,7 +204,7 @@ public class TestDefaultBatchReader {
   public void testNextWithoutHasNext() throws Exception {
     Configuration config = new Configuration();
     config.set(FlinkOptions.SOURCE_READER_FETCH_BATCH_RECORD_COUNT, 10);
-    DefaultHoodieBatchReader<String> batchReader = new DefaultHoodieBatchReader<>(config);
+    DefaultHoodieBatchReader<String> batchReader = new DefaultHoodieBatchReader<>(config, recordCloner);
 
     List<String> data = createTestData(5);
     HoodieSourceSplit split = createTestSplit(0);
@@ -222,7 +226,7 @@ public class TestDefaultBatchReader {
   public void testSeekWithConsumedRecords() throws Exception {
     Configuration config = new Configuration();
     config.set(FlinkOptions.SOURCE_READER_FETCH_BATCH_RECORD_COUNT, 10);
-    DefaultHoodieBatchReader<String> batchReader = new DefaultHoodieBatchReader<>(config);
+    DefaultHoodieBatchReader<String> batchReader = new DefaultHoodieBatchReader<>(config, recordCloner);
 
     List<String> data = createTestData(100);
     // Create a split with 20 already consumed records
@@ -247,7 +251,7 @@ public class TestDefaultBatchReader {
   public void testSeekBeyondAvailableRecords() {
     Configuration config = new Configuration();
     config.set(FlinkOptions.SOURCE_READER_FETCH_BATCH_RECORD_COUNT, 10);
-    DefaultHoodieBatchReader<String> batchReader = new DefaultHoodieBatchReader<>(config);
+    DefaultHoodieBatchReader<String> batchReader = new DefaultHoodieBatchReader<>(config, recordCloner);
 
     List<String> data = createTestData(50);
     // Try to consume from position 100, but only 50 records available
@@ -261,12 +265,12 @@ public class TestDefaultBatchReader {
   @Test
   public void testCloseIterator() throws Exception {
     Configuration config = new Configuration();
-    DefaultHoodieBatchReader<String> batchReader = new DefaultHoodieBatchReader<>(config);
+    DefaultHoodieBatchReader<String> batchReader = new DefaultHoodieBatchReader<>(config, recordCloner);
 
     List<String> data = createTestData(10);
     HoodieSourceSplit split = createTestSplit(0);
 
-    TestClosableIterator<String> closableIterator = new TestClosableIterator<>(data.iterator());
+    TestClosableIterator<String> closableIterator = new TestClosableIterator(data.iterator());
     CloseableIterator<RecordsWithSplitIds<HoodieRecordWithPosition<String>>> batchIterator =
         batchReader.batch(split, closableIterator);
 
@@ -281,7 +285,7 @@ public class TestDefaultBatchReader {
   public void testMultipleSplitsWithDifferentOffsets() throws Exception {
     Configuration config = new Configuration();
     config.set(FlinkOptions.SOURCE_READER_FETCH_BATCH_RECORD_COUNT, 10);
-    DefaultHoodieBatchReader<String> batchReader = new DefaultHoodieBatchReader<>(config);
+    DefaultHoodieBatchReader<String> batchReader = new DefaultHoodieBatchReader<>(config, recordCloner);
 
     // Test first split with no consumed records
     List<String> data1 = createTestData(30);
@@ -314,7 +318,7 @@ public class TestDefaultBatchReader {
   public void testBatchPreservesRecordOrder() throws Exception {
     Configuration config = new Configuration();
     config.set(FlinkOptions.SOURCE_READER_FETCH_BATCH_RECORD_COUNT, 5);
-    DefaultHoodieBatchReader<String> batchReader = new DefaultHoodieBatchReader<>(config);
+    DefaultHoodieBatchReader<String> batchReader = new DefaultHoodieBatchReader<>(config, recordCloner);
 
     List<String> data = Arrays.asList("A", "B", "C", "D", "E", "F", "G", "H", "I", "J");
     HoodieSourceSplit split = createTestSplit(0);
@@ -343,7 +347,7 @@ public class TestDefaultBatchReader {
   public void testBatchSizeOfOne() throws Exception {
     Configuration config = new Configuration();
     config.set(FlinkOptions.SOURCE_READER_FETCH_BATCH_RECORD_COUNT, 1);
-    DefaultHoodieBatchReader<String> batchReader = new DefaultHoodieBatchReader<>(config);
+    DefaultHoodieBatchReader<String> batchReader = new DefaultHoodieBatchReader<>(config, recordCloner);
 
     List<String> data = createTestData(5);
     HoodieSourceSplit split = createTestSplit(0);
@@ -367,7 +371,7 @@ public class TestDefaultBatchReader {
   public void testLargeBatchSize() throws Exception {
     Configuration config = new Configuration();
     config.set(FlinkOptions.SOURCE_READER_FETCH_BATCH_RECORD_COUNT, 100000);
-    DefaultHoodieBatchReader<String> batchReader = new DefaultHoodieBatchReader<>(config);
+    DefaultHoodieBatchReader<String> batchReader = new DefaultHoodieBatchReader<>(config, recordCloner);
 
     List<String> data = createTestData(1000);
     HoodieSourceSplit split = createTestSplit(0);
@@ -389,7 +393,7 @@ public class TestDefaultBatchReader {
   public void testMultipleHasNextCalls() throws Exception {
     Configuration config = new Configuration();
     config.set(FlinkOptions.SOURCE_READER_FETCH_BATCH_RECORD_COUNT, 10);
-    DefaultHoodieBatchReader<String> batchReader = new DefaultHoodieBatchReader<>(config);
+    DefaultHoodieBatchReader<String> batchReader = new DefaultHoodieBatchReader<>(config, recordCloner);
 
     List<String> data = createTestData(15);
     HoodieSourceSplit split = createTestSplit(0);
@@ -413,6 +417,109 @@ public class TestDefaultBatchReader {
 
     assertFalse(batchIterator.hasNext());
     assertFalse(batchIterator.hasNext());
+
+    batchIterator.close();
+  }
+
+  @Test
+  public void testRecordClonerIsInvoked() throws Exception {
+    Configuration config = new Configuration();
+    config.set(FlinkOptions.SOURCE_READER_FETCH_BATCH_RECORD_COUNT, 5);
+
+    // Use a tracking cloner that counts invocations
+    TrackingRecordCloner<String> trackingCloner = new TrackingRecordCloner<>();
+    DefaultHoodieBatchReader<String> batchReader = new DefaultHoodieBatchReader<>(config, trackingCloner);
+
+    List<String> data = createTestData(12);
+    HoodieSourceSplit split = createTestSplit(0);
+
+    CloseableIterator<RecordsWithSplitIds<HoodieRecordWithPosition<String>>> batchIterator =
+        batchReader.batch(split, createClosableIterator(data));
+
+    // Read all batches
+    int totalRecords = 0;
+    while (batchIterator.hasNext()) {
+      RecordsWithSplitIds<HoodieRecordWithPosition<String>> batch = batchIterator.next();
+      totalRecords += countRecords(batch);
+    }
+
+    // Verify cloner was invoked for each record
+    assertEquals(12, totalRecords);
+    assertEquals(12, trackingCloner.getCloneCount());
+
+    batchIterator.close();
+  }
+
+  @Test
+  public void testRecordClonerProducesIndependentCopies() throws Exception {
+    Configuration config = new Configuration();
+    config.set(FlinkOptions.SOURCE_READER_FETCH_BATCH_RECORD_COUNT, 10);
+
+    // Use a cloner that creates mutable wrapper objects
+    RecordCloner<MutableWrapper> cloner = original -> new MutableWrapper(original.getValue());
+    DefaultHoodieBatchReader<MutableWrapper> batchReader = new DefaultHoodieBatchReader<>(config, cloner);
+
+    // Create mutable test data
+    List<MutableWrapper> data = new ArrayList<>();
+    for (int i = 0; i < 5; i++) {
+      data.add(new MutableWrapper(i));
+    }
+
+    HoodieSourceSplit split = createTestSplit(0);
+
+    CloseableIterator<RecordsWithSplitIds<HoodieRecordWithPosition<MutableWrapper>>> batchIterator =
+        batchReader.batch(split, createClosableIteratorForMutable(data));
+
+    assertTrue(batchIterator.hasNext());
+    RecordsWithSplitIds<HoodieRecordWithPosition<MutableWrapper>> batch = batchIterator.next();
+
+    // Collect cloned records
+    List<MutableWrapper> clonedRecords = new ArrayList<>();
+    HoodieRecordWithPosition<MutableWrapper> record;
+    while ((record = batch.nextRecordFromSplit()) != null) {
+      clonedRecords.add(record.record());
+    }
+
+    // Modify original data
+    for (MutableWrapper wrapper : data) {
+      wrapper.setValue(999);
+    }
+
+    // Verify cloned records are unaffected
+    for (int i = 0; i < clonedRecords.size(); i++) {
+      assertEquals(i, clonedRecords.get(i).getValue(),
+          "Cloned record should retain original value");
+    }
+
+    batchIterator.close();
+  }
+
+  @Test
+  public void testClonerWithNullRecords() throws Exception {
+    Configuration config = new Configuration();
+    config.set(FlinkOptions.SOURCE_READER_FETCH_BATCH_RECORD_COUNT, 10);
+
+    // Cloner that handles nulls
+    RecordCloner<String> nullHandlingCloner = data -> data == null ? null : new String(data);
+    DefaultHoodieBatchReader<String> batchReader = new DefaultHoodieBatchReader<>(config, nullHandlingCloner);
+
+    List<String> data = Arrays.asList("A", null, "B", null, "C");
+    HoodieSourceSplit split = createTestSplit(0);
+
+    CloseableIterator<RecordsWithSplitIds<HoodieRecordWithPosition<String>>> batchIterator =
+        batchReader.batch(split, createClosableIterator(data));
+
+    assertTrue(batchIterator.hasNext());
+    RecordsWithSplitIds<HoodieRecordWithPosition<String>> batch = batchIterator.next();
+
+    List<String> results = new ArrayList<>();
+    HoodieRecordWithPosition<String> record;
+    while ((record = batch.nextRecordFromSplit()) != null) {
+      results.add(record.record());
+    }
+
+    // Verify nulls are preserved
+    assertEquals(Arrays.asList("A", null, "B", null, "C"), results);
 
     batchIterator.close();
   }
@@ -508,5 +615,61 @@ public class TestDefaultBatchReader {
     public boolean isClosed() {
       return closed;
     }
+  }
+
+  /**
+   * A tracking cloner that counts how many times clone() was called.
+   */
+  private static class TrackingRecordCloner<T> implements RecordCloner<T> {
+    private int cloneCount = 0;
+
+    @Override
+    public T clone(T data) {
+      cloneCount++;
+      return data;
+    }
+
+    public int getCloneCount() {
+      return cloneCount;
+    }
+  }
+
+  /**
+   * A mutable wrapper class for testing cloning behavior.
+   */
+  private static class MutableWrapper {
+    private int value;
+
+    public MutableWrapper(int value) {
+      this.value = value;
+    }
+
+    public int getValue() {
+      return value;
+    }
+
+    public void setValue(int value) {
+      this.value = value;
+    }
+  }
+
+  private ClosableIterator<MutableWrapper> createClosableIteratorForMutable(List<MutableWrapper> items) {
+    Iterator<MutableWrapper> iterator = items.iterator();
+    return new ClosableIterator<MutableWrapper>() {
+      @Override
+      public void close() {
+        // No-op
+      }
+
+      @Override
+      public boolean hasNext() {
+        return iterator.hasNext();
+      }
+
+      @Override
+      public MutableWrapper next() {
+        return iterator.next();
+      }
+    };
   }
 }
