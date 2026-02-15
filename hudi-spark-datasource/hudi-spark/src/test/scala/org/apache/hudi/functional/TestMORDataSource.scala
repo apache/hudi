@@ -1158,7 +1158,7 @@ class TestMORDataSource extends SparkClientFunctionalTestHarnessScala with Spark
       }
       spark.conf.set("spark.sql.session.timeZone", "UTC")
       val tableName = "trips_logical_types_json_mor_read_v" + tableVersion + logBlockString
-      val dataPath = "file://" + basePath + "/" + tableName
+      val dataPath = basePath + "/" + tableName
       val zipOutput = Paths.get(new URI(dataPath))
       HoodieTestUtils.extractZipToDirectory("/" + tableName + ".zip", zipOutput, getClass)
       val tableBasePath = zipOutput.toString
@@ -2168,7 +2168,7 @@ class TestMORDataSource extends SparkClientFunctionalTestHarnessScala with Spark
       .sort("_row_key")
     var actualKeyDF = actualDF.select("_hoodie_record_key").sort("_hoodie_record_key")
     assertTrue(inputKeyDF.except(actualKeyDF).isEmpty && actualKeyDF.except(inputKeyDF).isEmpty)
-    val metaClient = getHoodieMetaClient(storageConf, basePath)
+    val metaClient = HoodieTableMetaClient.builder().setConf(storageConf.newInstance()).setBasePath(basePath).build()
     val actualKeyGenType = metaClient.getTableConfig
       .getProps.getString(HoodieTableConfig.KEY_GENERATOR_TYPE.key, null)
     assertEquals(expectedKeyGenType, actualKeyGenType)
@@ -2208,7 +2208,7 @@ class TestMORDataSource extends SparkClientFunctionalTestHarnessScala with Spark
       // Copy extracted table to test location
       val tableName = fixtureName.replace(".zip", "")
       val extractedTablePath = tempFixtureDir.resolve(tableName).toFile
-      val testTablePath = new File(testBasePath)
+      val testTablePath = new File(new URI(testBasePath))
 
       // Copy the extracted table contents to our test path
       FileUtils.copyDirectory(extractedTablePath, testTablePath)

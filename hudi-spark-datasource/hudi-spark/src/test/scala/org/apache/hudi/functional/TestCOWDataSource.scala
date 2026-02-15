@@ -1854,7 +1854,7 @@ class TestCOWDataSource extends SparkClientFunctionalTestHarnessScala with Scala
       spark.conf.set("spark.sql.parquet.enableVectorizedReader", vectorizedReadEnabled.toString)
       spark.conf.set("spark.sql.session.timeZone", "UTC")
       val tableName = "trips_logical_types_json_cow_read_v" + tableVersion
-      val dataPath = "file://" + basePath + "/" + tableName
+      val dataPath = basePath + "/" + tableName
       val zipOutput = Paths.get(new URI(dataPath))
       HoodieTestUtils.extractZipToDirectory("/" + tableName + ".zip", zipOutput, getClass)
       val tableBasePath = zipOutput.toString
@@ -2518,7 +2518,7 @@ class TestCOWDataSource extends SparkClientFunctionalTestHarnessScala with Scala
       .sort("_row_key")
     var actualKeyDF = actualDF.select("_hoodie_record_key").sort("_hoodie_record_key")
     assertTrue(inputKeyDF.except(actualKeyDF).isEmpty && actualKeyDF.except(inputKeyDF).isEmpty)
-    val metaClient = getHoodieMetaClient(storageConf, basePath)
+    val metaClient = HoodieTableMetaClient.builder().setConf(storageConf.newInstance()).setBasePath(basePath).build()
     val actualKeyGenType = metaClient.getTableConfig
       .getProps.getString(HoodieTableConfig.KEY_GENERATOR_TYPE.key, null)
     assertEquals(expectedKeyGenType, actualKeyGenType)
