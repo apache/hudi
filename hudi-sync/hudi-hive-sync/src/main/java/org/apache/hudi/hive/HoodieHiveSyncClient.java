@@ -26,6 +26,7 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.MapUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.Pair;
@@ -60,6 +61,7 @@ import static org.apache.hudi.hadoop.utils.HoodieInputFormatUtils.getInputFormat
 import static org.apache.hudi.hadoop.utils.HoodieInputFormatUtils.getOutputFormatClassName;
 import static org.apache.hudi.hadoop.utils.HoodieInputFormatUtils.getSerDeClassName;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_SYNC_MODE;
+import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_SYNC_USE_SPARK_CATALOG;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_USE_JDBC;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_BASE_FILE_FORMAT;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_BASE_PATH;
@@ -87,7 +89,7 @@ public class HoodieHiveSyncClient extends HoodieSyncClient {
     // Support JDBC, HiveQL and metastore based implementations for backwards compatibility. Future users should
     // disable jdbc and depend on metastore client for all hive registrations
     try {
-      this.client = IMetaStoreClientUtil.getMSC(config.getHiveConf());
+      this.client = createMetaStoreClient(config);
       if (!StringUtils.isNullOrEmpty(config.getString(HIVE_SYNC_MODE))) {
         HiveSyncMode syncMode = HiveSyncMode.of(config.getString(HIVE_SYNC_MODE));
         switch (syncMode) {
@@ -106,6 +108,20 @@ public class HoodieHiveSyncClient extends HoodieSyncClient {
       } else {
         ddlExecutor = config.getBoolean(HIVE_USE_JDBC) ? new JDBCExecutor(config) : new HiveQueryDDLExecutor(config, this.client);
       }
+    } catch (Exception e) {
+      throw new HoodieHiveSyncException("Failed to create HiveMetaStoreClient", e);
+    }
+  }
+
+  private IMetaStoreClient createMetaStoreClient(HiveSyncConfig config) {
+    try {
+      if (config.getBooleanOrDefault(HIVE_SYNC_USE_SPARK_CATALOG)) {
+        return (IMetaStoreClient) ReflectionUtils.loadClass(
+            "org.apache.spark.sql.hive.SparkCatalogMetaStoreClient",
+            new Class<?>[] {HiveSyncConfig.class},
+            config);
+      }
+      return IMetaStoreClientUtil.getMSC(config.getHiveConf());
     } catch (Exception e) {
       throw new HoodieHiveSyncException("Failed to create HiveMetaStoreClient", e);
     }
