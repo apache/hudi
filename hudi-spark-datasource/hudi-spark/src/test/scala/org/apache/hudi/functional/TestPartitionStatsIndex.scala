@@ -45,6 +45,7 @@ import org.apache.spark.sql.catalyst.expressions.{And, AttributeReference, Bitwi
 import org.apache.spark.sql.hudi.DataSkippingUtils
 import org.apache.spark.sql.types.StringType
 import org.junit.jupiter.api.{Tag, Test}
+import org.junit.jupiter.api.parallel.{Execution, ExecutionMode}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{Arguments, EnumSource, MethodSource}
@@ -61,6 +62,7 @@ import scala.concurrent.duration.Duration
  * Test cases on partition stats index with Spark datasource.
  */
 @Tag("functional-b")
+@Execution(ExecutionMode.CONCURRENT)
 class TestPartitionStatsIndex extends PartitionStatsIndexTestBase {
 
   val sqlTempTable = "hudi_tbl"
