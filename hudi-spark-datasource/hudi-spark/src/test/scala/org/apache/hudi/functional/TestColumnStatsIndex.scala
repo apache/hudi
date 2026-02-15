@@ -96,7 +96,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       ) ++ metadataOpts
 
       // write empty first commit to validate edge cases
-      sparkSession.emptyDataFrame
+      spark.emptyDataFrame
         .write
         .format("hudi")
         .options(commonOpts)
