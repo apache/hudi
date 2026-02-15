@@ -47,7 +47,8 @@ public class CLIFunctionalTestHarness implements SparkProvider {
   protected static final String BASE_FILE_EXTENSION = HoodieTableConfig.BASE_FILE_FORMAT.defaultValue().getFileExtension();
 
   protected static int timelineServicePort =
-      FileSystemViewStorageConfig.REMOTE_PORT_NUM.defaultValue();
+      FileSystemViewStorageConfig.REMOTE_PORT_NUM.defaultValue()
+          + (Integer.parseInt(System.getProperty("surefire.forkNumber", "1")) - 1) * 1000;
   protected static transient TimelineService timelineService;
   protected static transient HoodieSparkEngineContext context;
   private static transient SparkSession spark;

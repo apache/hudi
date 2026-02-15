@@ -520,7 +520,7 @@ class TestColumnStatsIndexWithSQL extends ColumnStatIndexTestBase {
       HoodieCompactionConfig.PARQUET_SMALL_FILE_LIMIT.key() -> "0"
     ) ++ metadataOpts
 
-    FileIOUtils.deleteDirectory(new File(basePath))
+    FileIOUtils.deleteDirectory(new File(new java.net.URI(basePath)))
     spark.sql(
       s"""
          |create table $tableName (
