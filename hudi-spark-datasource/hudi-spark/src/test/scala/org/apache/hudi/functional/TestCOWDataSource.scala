@@ -901,7 +901,6 @@ class TestCOWDataSource extends SparkClientFunctionalTestHarnessScala with Scala
   @ParameterizedTest
   @ValueSource(ints = Array(0, 2))
   def testCopyOnWriteConcurrentUpdates(numRetries: Integer): Unit = {
-    initTestDataGenerator()
     val records1 = recordsToStrings(dataGen.generateInserts("000", 1000)).asScala.toList
     val inputDF1 = spark.read.json(spark.sparkContext.parallelize(records1, 2))
     inputDF1.write.format("org.apache.hudi")
@@ -1751,7 +1750,7 @@ class TestCOWDataSource extends SparkClientFunctionalTestHarnessScala with Scala
     val dataGenerator = new QuickstartUtils.DataGenerator()
     val records = convertToStringList(dataGenerator.generateInserts(10))
     val recordsRDD = spark.sparkContext.parallelize(records.asScala.toSeq, 2)
-    val inputDF = spark.read.json(sparkSession.createDataset(recordsRDD)(Encoders.STRING))
+    val inputDF = spark.read.json(spark.createDataset(recordsRDD)(Encoders.STRING))
     inputDF.write.format("hudi")
       .options(writeOpts)
       .option(DataSourceWriteOptions.RECORDKEY_FIELD.key, "uuid")
