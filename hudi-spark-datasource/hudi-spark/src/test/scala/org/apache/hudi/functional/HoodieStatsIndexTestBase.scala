@@ -18,7 +18,7 @@
 
 package org.apache.hudi.functional
 
-import org.apache.hudi.DataSourceWriteOptions.{INSERT_OVERWRITE_OPERATION_OPT_VAL, INSERT_OVERWRITE_TABLE_OPERATION_OPT_VAL, ORDERING_FIELDS, PARTITIONPATH_FIELD, RECORDKEY_FIELD}
+import org.apache.hudi.DataSourceWriteOptions.{INSERT_OVERWRITE_OPERATION_OPT_VAL, INSERT_OVERWRITE_TABLE_OPERATION_OPT_VAL, RECORDKEY_FIELD}
 import org.apache.hudi.client.SparkRDDWriteClient
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.config.TypedProperties
@@ -27,9 +27,10 @@ import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieInstantTimeGenerator, MetadataConversionUtils}
 import org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FILE_NAME_GENERATOR
 import org.apache.hudi.config.HoodieWriteConfig
+import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.metadata.HoodieBackedTableMetadata
-import org.apache.hudi.storage.StoragePath
-import org.apache.hudi.testutils.HoodieSparkClientTestBase
+import org.apache.hudi.storage.{StorageConfiguration, StoragePath}
+import org.apache.hudi.testutils.{HoodieClientTestUtils, HoodieSparkClientTestBase}
 import org.apache.hudi.util.JavaConversions
 
 import org.apache.hadoop.conf.Configuration
@@ -38,9 +39,6 @@ import org.apache.spark.SparkContext
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.sql.{Column, DataFrame, Row, SparkSession}
 import org.apache.spark.sql.functions.{col, not}
-import org.apache.hudi.hadoop.fs.HadoopFSUtils
-import org.apache.hudi.storage.StorageConfiguration
-import org.apache.hudi.testutils.HoodieClientTestUtils
 import org.junit.jupiter.api.{AfterAll, AfterEach, BeforeEach}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 
