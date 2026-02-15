@@ -112,8 +112,12 @@ public enum KeyGeneratorType {
 
   private String className;
 
-  public static final Set<KeyGeneratorType> NO_METAFIELDS_KEYGEN_ALLOWLIST =
+  private static final Set<KeyGeneratorType> NO_METAFIELDS_KEYGEN_ALLOWLIST =
       new HashSet<>(Arrays.asList(SIMPLE, SIMPLE_AVRO, COMPLEX, COMPLEX_AVRO,NON_PARTITION, NON_PARTITION_AVRO));
+
+  public static boolean isKeyGenValidForDisabledMetaFields(String keyGenClass) {
+    return NO_METAFIELDS_KEYGEN_ALLOWLIST.contains(KeyGeneratorType.fromClassName(keyGenClass));
+  }
 
   public static KeyGeneratorType fromClassName(String className) {
     if (StringUtils.isNullOrEmpty(className)) {

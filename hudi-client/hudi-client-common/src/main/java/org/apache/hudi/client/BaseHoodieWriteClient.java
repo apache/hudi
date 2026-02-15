@@ -117,7 +117,6 @@ import static org.apache.hudi.common.model.HoodieCommitMetadata.SCHEMA_KEY;
 import static org.apache.hudi.common.table.timeline.InstantComparison.LESSER_THAN_OR_EQUALS;
 import static org.apache.hudi.keygen.KeyGenUtils.getComplexKeygenErrorMessage;
 import static org.apache.hudi.keygen.KeyGenUtils.isComplexKeyGeneratorWithSingleRecordKeyField;
-import static org.apache.hudi.keygen.constant.KeyGeneratorType.NO_METAFIELDS_KEYGEN_ALLOWLIST;
 import static org.apache.hudi.metadata.HoodieTableMetadata.getMetadataTableBasePath;
 
 /**
@@ -1418,7 +1417,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
       if (StringUtils.isNullOrEmpty(keyGenClass)) {
         keyGenClass = "org.apache.hudi.keygen.SimpleKeyGenerator";
       }
-      if (!NO_METAFIELDS_KEYGEN_ALLOWLIST.contains(KeyGeneratorType.fromClassName(keyGenClass))) {
+      if (!KeyGeneratorType.isKeyGenValidForDisabledMetaFields(keyGenClass)) {
         throw new HoodieException("Only simple, non-partitioned or complex key generator are supported when meta-fields are disabled. Used: " + keyGenClass);
       }
     }
