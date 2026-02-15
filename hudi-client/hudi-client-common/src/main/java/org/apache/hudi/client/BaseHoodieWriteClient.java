@@ -1417,9 +1417,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
       if (StringUtils.isNullOrEmpty(keyGenClass)) {
         keyGenClass = "org.apache.hudi.keygen.SimpleKeyGenerator";
       }
-      if (!keyGenClass.equals("org.apache.hudi.keygen.SimpleKeyGenerator")
-          && !keyGenClass.equals("org.apache.hudi.keygen.NonpartitionedKeyGenerator")
-          && !keyGenClass.equals("org.apache.hudi.keygen.ComplexKeyGenerator")) {
+      if (!KeyGeneratorType.isKeyGenValidForDisabledMetaFields(keyGenClass)) {
         throw new HoodieException("Only simple, non-partitioned or complex key generator are supported when meta-fields are disabled. Used: " + keyGenClass);
       }
     }
