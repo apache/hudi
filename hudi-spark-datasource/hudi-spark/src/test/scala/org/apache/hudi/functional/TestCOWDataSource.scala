@@ -42,7 +42,7 @@ import org.apache.hudi.hive.HiveSyncConfigHolder
 import org.apache.hudi.keygen.{ComplexKeyGenerator, CustomKeyGenerator, GlobalDeleteKeyGenerator, NonpartitionedKeyGenerator, SimpleKeyGenerator, TimestampBasedKeyGenerator}
 import org.apache.hudi.keygen.constant.{KeyGeneratorOptions, KeyGeneratorType}
 import org.apache.hudi.metrics.{Metrics, MetricsReporterType}
-import org.apache.hudi.storage.{StoragePath, StoragePathFilter}
+import org.apache.hudi.storage.{HoodieStorage, StoragePath, StoragePathFilter}
 import org.apache.hudi.table.HoodieSparkTable
 import org.apache.hudi.testutils.{DataSourceTestUtils, HoodieSparkClientTestBase}
 import org.apache.hudi.util.JFunction
@@ -2547,9 +2547,19 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
     })
   }
 
-  @ParameterizedTest
-  @CsvSource(Array("COW", "MOR"))
-  def testNestedFieldPartition(tableType: String): Unit = {
+  @Test
+  def testNestedFieldPartition(): Unit = {
+    TestCOWDataSource.runNestedFieldPartitionTest(spark, basePath, storage, "COW")
+  }
+}
+
+object TestCOWDataSource {
+
+  /**
+   * Shared test logic for nested field partition (COW and MOR).
+   * Used by TestCOWDataSource.testNestedFieldPartition and TestMORDataSource.testNestedFieldPartition.
+   */
+  def runNestedFieldPartitionTest(spark: SparkSession, basePath: String, storage: HoodieStorage, tableType: String): Unit = {
     // Define schema with nested_record containing level field
     val nestedSchema = StructType(Seq(
       StructField("nested_int", IntegerType, nullable = false),
@@ -2744,9 +2754,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
       assertEquals(expected, actual)
     }
   }
-}
 
-object TestCOWDataSource {
   def convertColumnsToNullable(df: DataFrame, cols: String*): DataFrame = {
     cols.foldLeft(df) { (df, c) =>
       // NOTE: This is the trick to make Spark convert a non-null column "c" into a nullable

@@ -105,11 +105,31 @@ private object Spark4HoodiePruneFileSourcePartitions extends PredicateHelper {
     Project(projects, withFilter)
   }
 
+  /**
+   * Returns the logical name of an attribute by stripping Spark's internal exprId suffix (e.g. #136).
+   * Filter expressions may reference columns with these suffixed names (e.g. nested_record#136.level),
+   * while partition schema uses logical names (e.g. nested_record.level).
+   */
+  private def logicalAttributeName(attr: AttributeReference): String = {
+    attr.name.replaceAll("#\\d+$", "")
+  }
+
+  /**
+   * Returns true if the given attribute references a partition column. An attribute references a
+   * partition column if its logical name (without #exprId) equals a partition column name or
+   * is the struct parent of a nested partition path (e.g. nested_record for nested_record.level).
+   */
+  private def isPartitionColumnReference(attr: AttributeReference, partitionSchema: StructType): Boolean = {
+    val logicalName = logicalAttributeName(attr)
+    partitionSchema.names.contains(logicalName) ||
+      partitionSchema.names.exists(_.startsWith(logicalName + "."))
+  }
+
   def getPartitionFiltersAndDataFilters(partitionSchema: StructType,
                                         normalizedFilters: Seq[Expression]): (Seq[Expression], Seq[Expression]) = {
     val partitionColumns = normalizedFilters.flatMap { expr =>
       expr.collect {
-        case attr: AttributeReference if partitionSchema.names.contains(attr.name) =>
+        case attr: AttributeReference if isPartitionColumnReference(attr, partitionSchema) =>
           attr
       }
     }
