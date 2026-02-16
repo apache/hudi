@@ -117,6 +117,8 @@
         <artifactId>scalatest-maven-plugin</artifactId>
         <configuration>
           <tagsToExclude>org.apache.hudi.functional.SparkSQLCoreFlow</tagsToExclude>
+          <parallel>true</parallel>
+          <threadCount>4</threadCount>
         </configuration>
       </plugin>
       <plugin>
