@@ -234,8 +234,12 @@ public class HoodieCommitMetadata implements Serializable {
   }
 
   /**
-   * For a mor log file, get the completed previous file slice from the related commit metadata.
-   * This file slice will be used when we extract the change data from this mor log file.
+   * For a log file, get the dependent file slice from the commit metadata.
+   * The file slice is utilized to infer the row-level changes from the given log file payloads.
+   *
+   * @param inputStream    The commit metadata input stream
+   * @param fileGroupId    The file group id
+   * @param currentLogFile The log file
    */
   public static Option<Pair<String, List<String>>> getDependentFileSliceForFileGroupFromDeltaCommit(
       InputStream inputStream, HoodieFileGroupId fileGroupId, String currentLogFile) {
@@ -259,14 +263,16 @@ public class HoodieCommitMetadata implements Serializable {
         return Option.of(Pair.of(writeStat.getBaseFile() == null ? "" : writeStat.getBaseFile(),
             writeStat.getLogFiles().stream().filter(logFile -> !logFile.equals(currentLogFile)).collect(Collectors.toList())));
       } else {
-        // There maybe multiple write stats for the same file group id, e.g., when the write buffer exceeds the limit,
-        // flink writer will eager flushing records into the log file with increasing file versions inside one checkpoint.
+        // There are two cases that multiple write-stats are generated for the same file group within one commit:
+        // 1). log file rolls over(the file size exceeds the upper threshold);
+        // 2). eager flush from flink memory buffer(when memory buffer reaches the limit).
         String baseFile = "";
         List<String> logFiles = new ArrayList<>();
         for (org.apache.hudi.avro.model.HoodieWriteStat writeStat: targetWriteStats) {
           baseFile = writeStat.getBaseFile() == null ? "" : writeStat.getBaseFile();
           logFiles.addAll(writeStat.getLogFiles());
         }
+        // filter out the log files written after the given log file.
         return Option.of(Pair.of(baseFile, logFiles.stream().filter(f -> f.compareTo(currentLogFile) < 0).distinct().sorted().collect(Collectors.toList())));
       }
     } catch (Exception e) {
