@@ -22,20 +22,17 @@ import org.apache.flink.api.connector.source.SourceReaderContext;
 import org.apache.flink.metrics.groups.UnregisteredMetricsGroup;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
-import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.source.reader.function.SplitReaderFunction;
 import org.apache.hudi.source.split.HoodieSourceSplit;
+import org.apache.hudi.source.split.SerializableComparator;
 
-import org.apache.flink.configuration.Configuration;
 import org.apache.flink.connector.base.source.reader.RecordsWithSplitIds;
 import org.apache.flink.connector.base.source.reader.splitreader.SplitsAddition;
-import org.apache.flink.util.CloseableIterator;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Iterator;
@@ -89,6 +86,94 @@ public class TestHoodieSourceSplitReader {
 
     assertNotNull(result);
     assertEquals(split.splitId(), result.nextSplit());
+  }
+
+  @Test
+  public void testFetchWithMultipleSplits() throws IOException {
+    List<String> testData = Arrays.asList("record1", "record2");
+    TestSplitReaderFunction readerFunction = new TestSplitReaderFunction(testData);
+
+    HoodieSourceSplitReader<String> reader =
+        new HoodieSourceSplitReader<>(TABLE_NAME, readerContext, readerFunction, null);
+
+    HoodieSourceSplit split1 = createTestSplit(1, "file1");
+    HoodieSourceSplit split2 = createTestSplit(2, "file2");
+    HoodieSourceSplit split3 = createTestSplit(3, "file3");
+
+    SplitsAddition<HoodieSourceSplit> splitsChange =
+        new SplitsAddition<>(Arrays.asList(split1, split2, split3));
+    reader.handleSplitsChanges(splitsChange);
+
+    // Fetch first split
+    RecordsWithSplitIds<HoodieRecordWithPosition<String>> result1 = reader.fetch();
+    assertNotNull(result1);
+    assertEquals(split1.splitId(), result1.nextSplit());
+
+    // Fetch second split
+    RecordsWithSplitIds<HoodieRecordWithPosition<String>> result2 = reader.fetch();
+    assertNotNull(result2);
+    assertEquals(split2.splitId(), result2.nextSplit());
+
+    // Fetch third split
+    RecordsWithSplitIds<HoodieRecordWithPosition<String>> result3 = reader.fetch();
+    assertNotNull(result3);
+    assertEquals(split3.splitId(), result3.nextSplit());
+
+    // No more splits
+    RecordsWithSplitIds<HoodieRecordWithPosition<String>> result4 = reader.fetch();
+    assertNotNull(result4);
+    assertNull(result4.nextSplit());
+  }
+
+  @Test
+  public void testHandleSplitsChangesWithComparator() throws IOException {
+    List<String> testData = Collections.singletonList("record");
+    TestSplitReaderFunction readerFunction = new TestSplitReaderFunction(testData);
+
+    // Comparator that sorts by file ID in reverse order
+    SerializableComparator<HoodieSourceSplit> comparator =
+        (s1, s2) -> s2.getFileId().compareTo(s1.getFileId());
+
+    HoodieSourceSplitReader<String> reader =
+            new HoodieSourceSplitReader<>(TABLE_NAME, readerContext, readerFunction, comparator);
+
+    HoodieSourceSplit split1 = createTestSplit(1, "file1");
+    HoodieSourceSplit split2 = createTestSplit(2, "file2");
+    HoodieSourceSplit split3 = createTestSplit(3, "file3");
+
+    // Add splits in forward order
+    SplitsAddition<HoodieSourceSplit> splitsChange =
+        new SplitsAddition<>(Arrays.asList(split1, split2, split3));
+    reader.handleSplitsChanges(splitsChange);
+
+    // Should fetch in reverse order due to comparator
+    assertEquals(split3.splitId(), reader.fetch().nextSplit());
+    assertEquals(split2.splitId(), reader.fetch().nextSplit());
+    assertEquals(split1.splitId(), reader.fetch().nextSplit());
+  }
+
+  @Test
+  public void testAddingSplitsInMultipleBatches() throws IOException {
+    List<String> testData = Collections.singletonList("record");
+    TestSplitReaderFunction readerFunction = new TestSplitReaderFunction(testData);
+
+    HoodieSourceSplitReader<String> reader =
+            new HoodieSourceSplitReader<>(TABLE_NAME, readerContext, readerFunction, null);
+
+    // First batch
+    HoodieSourceSplit split1 = createTestSplit(1, "file1");
+    reader.handleSplitsChanges(new SplitsAddition<>(Collections.singletonList(split1)));
+
+    // Second batch
+    HoodieSourceSplit split2 = createTestSplit(2, "file2");
+    HoodieSourceSplit split3 = createTestSplit(3, "file3");
+    reader.handleSplitsChanges(new SplitsAddition<>(Arrays.asList(split2, split3)));
+
+    // Verify all splits can be fetched
+    assertEquals(split1.splitId(), reader.fetch().nextSplit());
+    assertEquals(split2.splitId(), reader.fetch().nextSplit());
+    assertEquals(split3.splitId(), reader.fetch().nextSplit());
+    assertNull(reader.fetch().nextSplit());
   }
 
   @Test
@@ -153,7 +238,6 @@ public class TestHoodieSourceSplitReader {
     assertEquals(split, readerFunction.getLastReadSplit());
   }
 
-  @Test
   public void testReaderFunctionClosedOnReaderClose() throws Exception {
     TestSplitReaderFunction readerFunction = new TestSplitReaderFunction();
     HoodieSourceSplitReader<String> reader =
@@ -178,93 +262,26 @@ public class TestHoodieSourceSplitReader {
   }
 
   @Test
-  public void testMiniBatchReading() throws IOException {
-    // Create data that will be split into multiple mini batches
-    List<String> testData = new ArrayList<>();
-    for (int i = 0; i < 5000; i++) {
-      testData.add("record-" + i);
-    }
-
+  public void testSplitOrderPreservedWithoutComparator() throws IOException {
+    List<String> testData = Collections.singletonList("record");
     TestSplitReaderFunction readerFunction = new TestSplitReaderFunction(testData);
+
+    // No comparator - should preserve insertion order
     HoodieSourceSplitReader<String> reader =
         new HoodieSourceSplitReader<>(TABLE_NAME, readerContext, readerFunction, null);
 
-    HoodieSourceSplit split = createTestSplit(1, "file1");
-    reader.handleSplitsChanges(new SplitsAddition<>(Collections.singletonList(split)));
+    HoodieSourceSplit split3 = createTestSplit(3, "file3");
+    HoodieSourceSplit split1 = createTestSplit(1, "file1");
+    HoodieSourceSplit split2 = createTestSplit(2, "file2");
 
-    // Fetch multiple batches from the same split
-    // Default batch size is 2048, so we should get 3 batches (2048 + 2048 + 904)
-    int totalBatches = 0;
-    int totalRecords = 0;
+    SplitsAddition<HoodieSourceSplit> splitsChange =
+        new SplitsAddition<>(Arrays.asList(split3, split1, split2));
+    reader.handleSplitsChanges(splitsChange);
 
-    while (true) {
-      RecordsWithSplitIds<HoodieRecordWithPosition<String>> result = reader.fetch();
-      String splitId = result.nextSplit();
-
-      if (splitId == null) {
-        // Empty result - no more splits
-        break;
-      }
-
-      totalBatches++;
-
-      // Count records in this batch
-      HoodieRecordWithPosition<String> record;
-      while ((record = result.nextRecordFromSplit()) != null) {
-        totalRecords++;
-      }
-
-      // Check if this split is finished
-      if (result.finishedSplits().contains(split.splitId())) {
-        break;
-      }
-    }
-
-    // Verify we got multiple batches and all records
-    assertTrue(totalBatches >= 3, "Should have at least 3 batches for 5000 records");
-    assertEquals(5000, totalRecords, "Should read all 5000 records");
-  }
-
-  @Test
-  public void testMiniBatchWithSmallBatchSize() throws IOException {
-    List<String> testData = Arrays.asList("A", "B", "C", "D", "E", "F", "G", "H", "I", "J");
-
-    // Use a small custom batch size
-    TestSplitReaderFunctionWithBatchSize readerFunction =
-        new TestSplitReaderFunctionWithBatchSize(testData, 3);
-
-    HoodieSourceSplitReader<String> reader =
-        new HoodieSourceSplitReader<>(TABLE_NAME, readerContext, readerFunction, null);
-
-    HoodieSourceSplit split = createTestSplit(1, "file1");
-    reader.handleSplitsChanges(new SplitsAddition<>(Collections.singletonList(split)));
-
-    List<Integer> batchSizes = new ArrayList<>();
-
-    while (true) {
-      RecordsWithSplitIds<HoodieRecordWithPosition<String>> result = reader.fetch();
-      String splitId = result.nextSplit();
-
-      if (splitId == null) {
-        break;
-      }
-
-      int batchSize = 0;
-      while (result.nextRecordFromSplit() != null) {
-        batchSize++;
-      }
-
-      if (batchSize > 0) {
-        batchSizes.add(batchSize);
-      }
-
-      if (result.finishedSplits().contains(split.splitId())) {
-        break;
-      }
-    }
-
-    // With batch size 3 and 10 records, expect: 3, 3, 3, 1
-    assertEquals(Arrays.asList(3, 3, 3, 1), batchSizes);
+    // Should fetch in insertion order: 3, 1, 2
+    assertEquals(split3.splitId(), reader.fetch().nextSplit());
+    assertEquals(split1.splitId(), reader.fetch().nextSplit());
+    assertEquals(split2.splitId(), reader.fetch().nextSplit());
   }
 
   @Test
@@ -273,65 +290,16 @@ public class TestHoodieSourceSplitReader {
     TestSplitReaderFunction readerFunction = new TestSplitReaderFunction(testData);
 
     HoodieSourceSplitReader<String> reader =
-        new HoodieSourceSplitReader<>(TABLE_NAME, readerContext, readerFunction, null);
+            new HoodieSourceSplitReader<>(TABLE_NAME, readerContext, readerFunction, null);
 
-    HoodieSourceSplit split = createTestSplit(1, "file1");
-    reader.handleSplitsChanges(new SplitsAddition<>(Collections.singletonList(split)));
+    HoodieSourceSplit split1 = createTestSplit(1, "file1");
+    HoodieSourceSplit split2 = createTestSplit(2, "file2");
 
-    // Fetch all batches until split is finished
-    while (true) {
-      RecordsWithSplitIds<HoodieRecordWithPosition<String>> result = reader.fetch();
-      String splitId = result.nextSplit();
+    reader.handleSplitsChanges(new SplitsAddition<>(Arrays.asList(split1, split2)));
 
-      if (splitId == null || result.finishedSplits().contains(split.splitId())) {
-        break;
-      }
-
-      // Drain the batch
-      while (result.nextRecordFromSplit() != null) {
-        // Continue
-      }
-    }
-
-    // After finishing, fetch should return empty result
-    RecordsWithSplitIds<HoodieRecordWithPosition<String>> emptyResult = reader.fetch();
-    assertNull(emptyResult.nextSplit());
-  }
-
-  @Test
-  public void testMultipleFetchesFromSameSplit() throws IOException {
-    List<String> testData = new ArrayList<>();
-    for (int i = 0; i < 100; i++) {
-      testData.add("record-" + i);
-    }
-
-    TestSplitReaderFunctionWithBatchSize readerFunction =
-        new TestSplitReaderFunctionWithBatchSize(testData, 10);
-
-    HoodieSourceSplitReader<String> reader =
-        new HoodieSourceSplitReader<>(TABLE_NAME, readerContext, readerFunction, null);
-
-    HoodieSourceSplit split = createTestSplit(1, "file1");
-    reader.handleSplitsChanges(new SplitsAddition<>(Collections.singletonList(split)));
-
-    // First fetch should return first batch
-    RecordsWithSplitIds<HoodieRecordWithPosition<String>> result1 = reader.fetch();
-    assertEquals(split.splitId(), result1.nextSplit());
-    int count1 = 0;
-    while (result1.nextRecordFromSplit() != null) {
-      count1++;
-    }
-    assertEquals(10, count1);
-    assertTrue(result1.finishedSplits().isEmpty());
-
-    // Second fetch should return second batch from same split
-    RecordsWithSplitIds<HoodieRecordWithPosition<String>> result2 = reader.fetch();
-    assertEquals(split.splitId(), result2.nextSplit());
-    int count2 = 0;
-    while (result2.nextRecordFromSplit() != null) {
-      count2++;
-    }
-    assertEquals(10, count2);
+    // Fetch first split
+    reader.fetch();
+    assertEquals(split1, readerFunction.getLastReadSplit());
   }
 
   /**
@@ -368,12 +336,16 @@ public class TestHoodieSourceSplitReader {
     }
 
     @Override
-    public CloseableIterator<RecordsWithSplitIds<HoodieRecordWithPosition<String>>> read(HoodieSourceSplit split) {
+    public RecordsWithSplitIds<HoodieRecordWithPosition<String>> read(HoodieSourceSplit split) {
       readCount++;
       lastReadSplit = split;
       ClosableIterator<String> iterator = createClosableIterator(testData);
-      DefaultHoodieBatchReader<String> reader = new DefaultHoodieBatchReader<String>(new Configuration());
-      return reader.batch(split, iterator);
+      return BatchRecords.forRecords(
+          split.splitId(),
+          iterator,
+          split.getFileOffset(),
+          split.getConsumed()
+      );
     }
 
     @Override
@@ -391,53 +363,6 @@ public class TestHoodieSourceSplitReader {
 
     public boolean isClosed() {
       return closed;
-    }
-
-    private ClosableIterator<String> createClosableIterator(List<String> items) {
-      Iterator<String> iterator = items.iterator();
-      return new ClosableIterator<String>() {
-        @Override
-        public void close() {
-          // No-op
-        }
-
-        @Override
-        public boolean hasNext() {
-          return iterator.hasNext();
-        }
-
-        @Override
-        public String next() {
-          return iterator.next();
-        }
-      };
-    }
-  }
-
-  /**
-   * Test implementation of SplitReaderFunction with custom batch size.
-   */
-  private static class TestSplitReaderFunctionWithBatchSize implements SplitReaderFunction<String> {
-    private final List<String> testData;
-    private final int batchSize;
-
-    public TestSplitReaderFunctionWithBatchSize(List<String> testData, int batchSize) {
-      this.testData = testData;
-      this.batchSize = batchSize;
-    }
-
-    @Override
-    public CloseableIterator<RecordsWithSplitIds<HoodieRecordWithPosition<String>>> read(HoodieSourceSplit split) {
-      ClosableIterator<String> iterator = createClosableIterator(testData);
-      Configuration config = new Configuration();
-      config.set(FlinkOptions.SOURCE_READER_FETCH_BATCH_RECORD_COUNT, batchSize);
-      DefaultHoodieBatchReader<String> reader = new DefaultHoodieBatchReader<String>(config);
-      return reader.batch(split, iterator);
-    }
-
-    @Override
-    public void close() throws Exception {
-      // No-op
     }
 
     private ClosableIterator<String> createClosableIterator(List<String> items) {

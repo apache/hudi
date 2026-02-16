@@ -348,13 +348,6 @@ public class FlinkOptions extends HoodieConfig {
       .noDefaultValue()
       .withDescription("Source avro schema string, the parsed schema is used for deserialization");
 
-  @AdvancedConfig
-  public static final ConfigOption<Integer> SOURCE_READER_FETCH_BATCH_RECORD_COUNT =
-      ConfigOptions.key("source.fetch-batch-record-count")
-          .intType()
-          .defaultValue(2048)
-          .withDescription("The target number of records for Hoodie reader fetch batch.");
-
   public static final String QUERY_TYPE_SNAPSHOT = "snapshot";
   public static final String QUERY_TYPE_READ_OPTIMIZED = "read_optimized";
   public static final String QUERY_TYPE_INCREMENTAL = "incremental";

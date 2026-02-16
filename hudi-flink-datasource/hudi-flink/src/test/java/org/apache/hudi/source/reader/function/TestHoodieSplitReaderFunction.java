@@ -57,8 +57,7 @@ public class TestHoodieSplitReaderFunction {
     assertThrows(IllegalArgumentException.class, () -> {
       new HoodieSplitReaderFunction(
           mockMetaClient,
-          new Configuration(),
-          null,  // null tableSchema should throw
+          new Configuration(), null,  // null tableSchema should throw
           requiredSchema,
           "AVRO_PAYLOAD",
           Option.empty()
@@ -176,7 +175,6 @@ public class TestHoodieSplitReaderFunction {
   public void testSchemaHandling() {
     HoodieSchema customTableSchema = mock(HoodieSchema.class);
     HoodieSchema customRequiredSchema = mock(HoodieSchema.class);
-
     HoodieSplitReaderFunction function =
         new HoodieSplitReaderFunction(
             mockMetaClient,
@@ -264,7 +262,5 @@ public class TestHoodieSplitReaderFunction {
         );
 
     assertNotNull(function);
-    // The read method signature has changed to return CloseableIterator<RecordsWithSplitIds<...>>
-    // This test verifies the function can be constructed with the new signature
   }
 }

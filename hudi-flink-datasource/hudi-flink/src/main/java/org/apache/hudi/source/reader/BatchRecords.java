@@ -31,14 +31,17 @@ import org.apache.flink.connector.base.source.reader.RecordsWithSplitIds;
  *
  * Type parameters: <T> – record type
  */
-public class HoodieBatchRecords<T> implements RecordsWithSplitIds<HoodieRecordWithPosition<T>> {
+public class BatchRecords<T> implements RecordsWithSplitIds<HoodieRecordWithPosition<T>> {
   private String splitId;
   private String nextSprintId;
   private final ClosableIterator<T> recordIterator;
   private final Set<String> finishedSplits;
   private final HoodieRecordWithPosition<T> recordAndPosition;
 
-  HoodieBatchRecords(
+  // point to current read position within the records list
+  private int position;
+
+  BatchRecords(
       String splitId,
       ClosableIterator<T> recordIterator,
       int fileOffset,
@@ -55,6 +58,7 @@ public class HoodieBatchRecords<T> implements RecordsWithSplitIds<HoodieRecordWi
     this.finishedSplits = finishedSplits;
     this.recordAndPosition = new HoodieRecordWithPosition<>();
     this.recordAndPosition.set(null, fileOffset, startingRecordOffset);
+    this.position = 0;
   }
 
   @Nullable
@@ -75,8 +79,11 @@ public class HoodieBatchRecords<T> implements RecordsWithSplitIds<HoodieRecordWi
   public HoodieRecordWithPosition<T> nextRecordFromSplit() {
     if (recordIterator.hasNext()) {
       recordAndPosition.record(recordIterator.next());
+      position = position + 1;
       return recordAndPosition;
     } else {
+      finishedSplits.add(splitId);
+      recordIterator.close();
       return null;
     }
   }
@@ -93,10 +100,25 @@ public class HoodieBatchRecords<T> implements RecordsWithSplitIds<HoodieRecordWi
     }
   }
 
-  public static <T> HoodieBatchRecords<T> forRecords(
+  public void seek(long startingRecordOffset) {
+    for (long i = 0; i < startingRecordOffset; ++i) {
+      if (recordIterator.hasNext()) {
+        position = position + 1;
+        recordIterator.next();
+      } else {
+        throw new IllegalStateException(
+            String.format(
+                "Invalid starting record offset %d for split %s",
+                startingRecordOffset,
+                splitId));
+      }
+    }
+  }
+
+  public static <T> BatchRecords<T> forRecords(
       String splitId, ClosableIterator<T> recordIterator, int fileOffset, long startingRecordOffset) {
 
-    return new HoodieBatchRecords<>(
+    return new BatchRecords<>(
         splitId, recordIterator, fileOffset, startingRecordOffset, new HashSet<>());
   }
 }
