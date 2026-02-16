@@ -502,4 +502,113 @@ class TestHoodieSchemaComparatorForSchemaEvolution {
         HoodieSchema.parse(timeMicros)
     ));
   }
+
+  @Test
+  void testBlobSchemaEquality() {
+    // Tests that BLOB schemas are compared correctly
+    // BLOB schemas should be equal to themselves and other identical BLOB schemas
+    HoodieSchema blob1 = HoodieSchema.createBlob();
+    HoodieSchema blob2 = HoodieSchema.createBlob();
+
+    // Two identical BLOB schemas should be equal
+    assertTrue(HoodieSchemaComparatorForSchemaEvolution.schemaEquals(blob1, blob2));
+
+    // BLOB schema should equal itself
+    assertTrue(HoodieSchemaComparatorForSchemaEvolution.schemaEquals(blob1, blob1));
+
+    // BLOB and RECORD with same structure should NOT be equal (different types)
+    HoodieSchema recordWithSameStructure = HoodieSchema.createRecord("record", null, null, false,
+        Arrays.asList(
+            HoodieSchemaField.of("type", HoodieSchema.create(HoodieSchemaType.STRING), null, null),
+            HoodieSchemaField.of("data", HoodieSchema.createNullable(HoodieSchemaType.BYTES), null, null),
+            HoodieSchemaField.of("reference", HoodieSchema.createNullable(
+                HoodieSchema.createRecord("ref", null, null, false,
+                    Arrays.asList(
+                        HoodieSchemaField.of("external_path", HoodieSchema.create(HoodieSchemaType.STRING), null, null),
+                        HoodieSchemaField.of("offset", HoodieSchema.createNullable(HoodieSchemaType.LONG), null, null),
+                        HoodieSchemaField.of("length", HoodieSchema.createNullable(HoodieSchemaType.LONG), null, null),
+                        HoodieSchemaField.of("managed", HoodieSchema.create(HoodieSchemaType.BOOLEAN), null, null)
+                    ))), null, null)
+        ));
+
+    assertFalse(HoodieSchemaComparatorForSchemaEvolution.schemaEquals(blob1, recordWithSameStructure));
+  }
+
+  @Test
+  void testBlobInNestedStructures() {
+    // Tests that BLOB handling works correctly in complex nested types
+    HoodieSchema blob = HoodieSchema.createBlob();
+
+    // BLOB inside ARRAY
+    HoodieSchema arrayOfBlobs1 = HoodieSchema.createArray(blob);
+    HoodieSchema arrayOfBlobs2 = HoodieSchema.createArray(HoodieSchema.createBlob());
+    assertTrue(HoodieSchemaComparatorForSchemaEvolution.schemaEquals(arrayOfBlobs1, arrayOfBlobs2));
+
+    // BLOB inside MAP
+    HoodieSchema mapWithBlobs1 = HoodieSchema.createMap(blob);
+    HoodieSchema mapWithBlobs2 = HoodieSchema.createMap(HoodieSchema.createBlob());
+    assertTrue(HoodieSchemaComparatorForSchemaEvolution.schemaEquals(mapWithBlobs1, mapWithBlobs2));
+
+    // BLOB inside RECORD field
+    HoodieSchema recordWithBlob1 = HoodieSchema.createRecord("test", null, null, false,
+        Collections.singletonList(
+            HoodieSchemaField.of("blob_field", blob, null, null)
+        ));
+    HoodieSchema recordWithBlob2 = HoodieSchema.createRecord("test", null, null, false,
+        Collections.singletonList(
+            HoodieSchemaField.of("blob_field", HoodieSchema.createBlob(), null, null)
+        ));
+    assertTrue(HoodieSchemaComparatorForSchemaEvolution.schemaEquals(recordWithBlob1, recordWithBlob2));
+
+    // ARRAY of different types should not be equal
+    HoodieSchema arrayOfStrings = HoodieSchema.createArray(HoodieSchema.create(HoodieSchemaType.STRING));
+    assertFalse(HoodieSchemaComparatorForSchemaEvolution.schemaEquals(arrayOfBlobs1, arrayOfStrings));
+  }
+
+  @Test
+  void testBlobFieldEquality() {
+    // Tests that BLOB field comparison follows RECORD rules
+    // BLOBs have a fixed structure with 3 fields: type, data, reference
+    HoodieSchema blob1 = HoodieSchema.createBlob();
+    HoodieSchema blob2 = HoodieSchema.createBlob();
+
+    // Same BLOB schemas should be equal
+    assertTrue(HoodieSchemaComparatorForSchemaEvolution.schemaEquals(blob1, blob2));
+
+    // Create a BLOB-like record with different field types
+    HoodieSchema blobWithDifferentTypes = HoodieSchema.createRecord("blob", null, null, false,
+        Arrays.asList(
+            HoodieSchemaField.of("type", HoodieSchema.create(HoodieSchemaType.INT), null, null), // Changed from STRING to INT
+            HoodieSchemaField.of("data", HoodieSchema.createNullable(HoodieSchemaType.BYTES), null, null),
+            HoodieSchemaField.of("reference", HoodieSchema.createNullable(
+                HoodieSchema.createRecord("ref", null, null, false,
+                    Arrays.asList(
+                        HoodieSchemaField.of("external_path", HoodieSchema.create(HoodieSchemaType.STRING), null, null),
+                        HoodieSchemaField.of("offset", HoodieSchema.createNullable(HoodieSchemaType.LONG), null, null),
+                        HoodieSchemaField.of("length", HoodieSchema.createNullable(HoodieSchemaType.LONG), null, null),
+                        HoodieSchemaField.of("managed", HoodieSchema.create(HoodieSchemaType.BOOLEAN), null, null)
+                    ))), null, null)
+        ));
+
+    // BLOB with different field types should not be equal (even though structure is similar)
+    assertFalse(HoodieSchemaComparatorForSchemaEvolution.schemaEquals(blob1, blobWithDifferentTypes));
+
+    // Create a BLOB-like record with fields in different order
+    HoodieSchema blobWithDifferentOrder = HoodieSchema.createRecord("blob", null, null, false,
+        Arrays.asList(
+            HoodieSchemaField.of("data", HoodieSchema.createNullable(HoodieSchemaType.BYTES), null, null),
+            HoodieSchemaField.of("type", HoodieSchema.create(HoodieSchemaType.STRING), null, null), // Different order
+            HoodieSchemaField.of("reference", HoodieSchema.createNullable(
+                HoodieSchema.createRecord("ref", null, null, false,
+                    Arrays.asList(
+                        HoodieSchemaField.of("external_path", HoodieSchema.create(HoodieSchemaType.STRING), null, null),
+                        HoodieSchemaField.of("offset", HoodieSchema.createNullable(HoodieSchemaType.LONG), null, null),
+                        HoodieSchemaField.of("length", HoodieSchema.createNullable(HoodieSchemaType.LONG), null, null),
+                        HoodieSchemaField.of("managed", HoodieSchema.create(HoodieSchemaType.BOOLEAN), null, null)
+                    ))), null, null)
+        ));
+
+    // BLOB with fields in different order should not be equal (order matters)
+    assertFalse(HoodieSchemaComparatorForSchemaEvolution.schemaEquals(blob1, blobWithDifferentOrder));
+  }
 }

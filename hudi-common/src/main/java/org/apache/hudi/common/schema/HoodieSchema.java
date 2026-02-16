@@ -979,6 +979,20 @@ public class HoodieSchema implements Serializable {
   }
 
   /**
+   * A convenience method to check if the current field represents a blob type.
+   * This checks if the current schema is a BLOB or if it is an ARRAY or MAP whose element or value type is a BLOB, respectively.
+   * It does not check for BLOB types nested within unions or record fields.
+   * @return true if the current schema is a BLOB or an ARRAY/MAP of BLOBs, false otherwise
+   */
+  public boolean isBlobField() {
+    HoodieSchema nonNullSchema = getNonNullType();
+    HoodieSchemaType nonNullSchemaType = nonNullSchema.getType();
+    return nonNullSchemaType == HoodieSchemaType.BLOB
+        || (nonNullSchemaType == HoodieSchemaType.ARRAY && nonNullSchema.getElementType().getNonNullType().getType() == HoodieSchemaType.BLOB)
+        || (nonNullSchemaType == HoodieSchemaType.MAP && nonNullSchema.getValueType().getNonNullType().getType() == HoodieSchemaType.BLOB);
+  }
+
+  /**
    * Validates that the schema does not contain variants with shredded blob types.
    * This method recursively traverses the schema tree to check for invalid structures.
    *

@@ -47,6 +47,10 @@ import java.util.Arrays;
 import java.util.Collections;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TestSparkSchemaUtils {
   private final SparkSqlParser parser = createSqlParser();
@@ -153,5 +157,41 @@ public class TestSparkSchemaUtils {
     String sparkSchemaWithNullableJson = SparkSchemaUtils.convertToSparkSchemaJson(schemaWithNullable);
     StructType convertedSparkSchemaWithNullable = (StructType) StructType.fromJson(sparkSchemaWithNullableJson);
     assertEquals(sparkSchemaWithNullable.json(), convertedSparkSchemaWithNullable.json());
+  }
+
+  @Test
+  public void testConvertSchemaWithBlobField() {
+    // Tests that schema with BLOB field converts to Spark schema JSON correctly
+    // Create a simple record with 1 non-BLOB field and 1 BLOB field
+    HoodieSchema schema = HoodieSchema.createRecord("root", null, null, false, Arrays.asList(
+        HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.INT), null, null),
+        HoodieSchemaField.of("blob_data", HoodieSchema.createBlob(), null, null)
+    ));
+
+    // Convert to Spark JSON
+    String sparkJson = SparkSchemaUtils.convertToSparkSchemaJson(schema);
+
+    // Validate JSON is valid and parseable
+    assertNotNull(sparkJson);
+    assertFalse(sparkJson.isEmpty());
+
+    StructType sparkSchema = (StructType) StructType.fromJson(sparkJson);
+
+    // Verify basic structure: 2 fields
+    assertEquals(2, sparkSchema.fields().length);
+    assertEquals("id", sparkSchema.fields()[0].name());
+    assertEquals("blob_data", sparkSchema.fields()[1].name());
+
+    // Verify BLOB field converted to struct (not primitive)
+    assertInstanceOf(StructType.class, sparkSchema.fields()[1].dataType());
+
+    // Verify metadata attached to blob field
+    Metadata blobMetadata = sparkSchema.fields()[1].metadata();
+    assertTrue(blobMetadata.contains(HoodieSchema.TYPE_METADATA_FIELD));
+    assertEquals(HoodieSchemaType.BLOB.name(), blobMetadata.getString(HoodieSchema.TYPE_METADATA_FIELD));
+
+    // Verify BLOB structure has 3 fields (type, data, reference)
+    StructType blobStruct = (StructType) sparkSchema.fields()[1].dataType();
+    assertEquals(3, blobStruct.fields().length);
   }
 }

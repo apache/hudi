@@ -1888,4 +1888,22 @@ public class TestHoodieSchema {
         + "]}";
     assertThrows(HoodieSchemaException.class, () -> HoodieSchema.parse(schemaJson));
   }
+
+  @Test
+  public void testIsBlobField() {
+    // blobs, arrays with blob elements, and map with blob values should be detected as blob fields
+    assertTrue(HoodieSchema.createBlob().isBlobField());
+    assertTrue(HoodieSchema.createNullable(HoodieSchema.createBlob()).isBlobField());
+    assertTrue(HoodieSchema.createMap(HoodieSchema.createBlob()).isBlobField());
+    assertTrue(HoodieSchema.createNullable(HoodieSchema.createMap(HoodieSchema.createNullable(HoodieSchema.createBlob()))).isBlobField());
+    assertTrue(HoodieSchema.createArray(HoodieSchema.createBlob()).isBlobField());
+    assertTrue(HoodieSchema.createNullable(HoodieSchema.createArray(HoodieSchema.createNullable(HoodieSchema.createBlob()))).isBlobField());
+    // non-blob types should not be detected as blob fields
+    assertFalse(HoodieSchema.create(HoodieSchemaType.STRING).isBlobField());
+    // A record that does not contain a blob field should not be detected as a blob field itself
+    assertFalse(createRecordWithBlob().isBlobField());
+    // Similarly, arrays and maps with records as the element/value type should not be detected as blob fields
+    assertFalse(HoodieSchema.createArray(createRecordWithBlob()).isBlobField());
+    assertFalse(HoodieSchema.createMap(createRecordWithBlob()).isBlobField());
+  }
 }
