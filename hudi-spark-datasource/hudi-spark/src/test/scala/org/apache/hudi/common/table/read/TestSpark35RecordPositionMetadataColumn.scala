@@ -141,6 +141,6 @@ class TestSpark35RecordPositionMetadataColumn extends SparkClientFunctionalTestH
     val usRecords = allRecords
       .select("userid")
       .filter("country = 'US'").map(_.getInt(0)).collect()
-    assertArrayEquals(Array[Int](1, 3), usRecords)
+    assertArrayEquals(Array[Int](1, 3), usRecords.sorted)
   }
 }
