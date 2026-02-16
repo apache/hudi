@@ -2005,6 +2005,9 @@ public class HoodieSchema implements Serializable {
       if (schema.getType() != Schema.Type.RECORD) {
         throw new IllegalArgumentException("Blob logical type can only be applied to RECORD schemas, got: " + schema.getType());
       }
+      if (!schema.getFields().equals(HoodieSchema.Blob.BLOB_FIELDS)) {
+        throw new IllegalArgumentException("Blob logical type cannot be applied to schema: " + schema);
+      }
     }
   }
 
