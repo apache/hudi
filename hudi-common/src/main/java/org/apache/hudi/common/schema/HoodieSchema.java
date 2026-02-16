@@ -2026,6 +2026,14 @@ public class HoodieSchema implements Serializable {
     public static final String EXTERNAL_REFERENCE_LENGTH = "length";
     public static final String EXTERNAL_REFERENCE_IS_MANAGED = "managed";
 
+    public static int getFieldCount() {
+      return BLOB_FIELDS.size();
+    }
+
+    public static int getReferenceFieldCount() {
+      return AvroSchemaUtils.getNonNullTypeFromUnion(BLOB_FIELDS.get(2).schema()).getFields().size();
+    }
+
     /**
      * Creates a new HoodieSchema wrapping the given Avro schema.
      *
