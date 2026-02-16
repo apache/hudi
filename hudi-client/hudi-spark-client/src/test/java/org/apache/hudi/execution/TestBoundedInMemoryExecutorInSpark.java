@@ -19,71 +19,44 @@
 package org.apache.hudi.execution;
 
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.testutils.InProcessTimeGenerator;
-import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.queue.BoundedInMemoryExecutor;
 import org.apache.hudi.common.util.queue.ExecutorType;
 import org.apache.hudi.common.util.queue.HoodieConsumer;
+import org.apache.hudi.common.util.queue.HoodieExecutor;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.testutils.HoodieSparkClientTestHarness;
 
-import org.apache.avro.generic.IndexedRecord;
-import org.apache.spark.TaskContext;
-import org.apache.spark.TaskContext$;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.util.Iterator;
-import java.util.List;
 
-import scala.Tuple2;
 
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.HOODIE_SCHEMA;
 import static org.apache.hudi.execution.HoodieLazyInsertIterable.getTransformerInternal;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-public class TestBoundedInMemoryExecutorInSpark extends HoodieSparkClientTestHarness {
-
-  private final String instantTime = InProcessTimeGenerator.createNewInstantTime();
+/**
+ * Tests for {@link BoundedInMemoryExecutor}.
+ */
+public class TestBoundedInMemoryExecutorInSpark extends BaseExecutorTestHarness {
 
   private final HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder()
       .withExecutorType(ExecutorType.BOUNDED_IN_MEMORY.name())
       .withWriteBufferLimitBytes(1024)
       .build(false);
 
-  @BeforeEach
-  public void setUp() throws Exception {
-    initTestDataGenerator();
-  }
-
-  @AfterEach
-  public void tearDown() throws Exception {
-    cleanupResources();
-  }
-
-  private Runnable getPreExecuteRunnable() {
-    final TaskContext taskContext = TaskContext.get();
-    return () -> TaskContext$.MODULE$.setTaskContext(taskContext);
-  }
-
-  @Test
-  public void testExecutor() {
-
-    final int recordNumber = 100;
-    final List<HoodieRecord> hoodieRecords = dataGen.generateInserts(instantTime, recordNumber);
-
-    HoodieConsumer<HoodieLazyInsertIterable.HoodieInsertValueGenResult<HoodieRecord>, Integer> consumer =
+  @Override
+  protected HoodieExecutor<Integer> createExecutor(
+      Iterator<HoodieRecord> records, HoodieConsumer<HoodieRecord, Integer> consumer) {
+    // BoundedInMemoryExecutor with getTransformerInternal produces HoodieInsertValueGenResult
+    @SuppressWarnings("rawtypes")
+    HoodieConsumer<HoodieLazyInsertIterable.HoodieInsertValueGenResult<HoodieRecord>, Integer> wrappedConsumer =
         new HoodieConsumer<HoodieLazyInsertIterable.HoodieInsertValueGenResult<HoodieRecord>, Integer>() {
-
           private int count = 0;
 
           @Override
-          public void consume(HoodieLazyInsertIterable.HoodieInsertValueGenResult<HoodieRecord> record) {
+          public void consume(HoodieLazyInsertIterable.HoodieInsertValueGenResult<HoodieRecord> result) throws Exception {
+            // Extract the HoodieRecord from the result and pass to original consumer
+            consumer.consume(result.getResult());
             count++;
           }
 
@@ -93,62 +66,30 @@ public class TestBoundedInMemoryExecutorInSpark extends HoodieSparkClientTestHar
           }
         };
 
-    BoundedInMemoryExecutor<HoodieRecord, Tuple2<HoodieRecord, Option<IndexedRecord>>, Integer> executor = null;
-    try {
-      executor = new BoundedInMemoryExecutor(writeConfig.getWriteBufferLimitBytes(), hoodieRecords.iterator(), consumer,
-          getTransformerInternal(HOODIE_SCHEMA, writeConfig), getPreExecuteRunnable());
-      int result = executor.execute();
-
-      assertEquals(100, result);
-      // There should be no remaining records in the buffer
-      assertFalse(executor.isRunning());
-    } finally {
-      if (executor != null) {
-        executor.shutdownNow();
-        executor.awaitTermination();
-      }
-    }
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    BoundedInMemoryExecutor executor = new BoundedInMemoryExecutor(
+        writeConfig.getWriteBufferLimitBytes(),
+        records,
+        wrappedConsumer,
+        getTransformerInternal(HOODIE_SCHEMA, writeConfig),
+        getPreExecuteRunnable());
+    
+    return executor;
   }
 
-  @Test
-  public void testInterruptExecutor() {
-    final List<HoodieRecord> hoodieRecords = dataGen.generateInserts(instantTime, 100);
+  @Override
+  protected boolean requiresExecutorService() {
+    return false;
+  }
 
-    HoodieConsumer<HoodieLazyInsertIterable.HoodieInsertValueGenResult<HoodieRecord>, Integer> consumer =
-        new HoodieConsumer<HoodieLazyInsertIterable.HoodieInsertValueGenResult<HoodieRecord>, Integer>() {
+  @Override
+  protected boolean supportsInterruptTest() {
+    return true;
+  }
 
-          @Override
-          public void consume(HoodieLazyInsertIterable.HoodieInsertValueGenResult<HoodieRecord> record) {
-            try {
-              while (true) {
-                Thread.sleep(1000);
-              }
-            } catch (InterruptedException ie) {
-              return;
-            }
-          }
-
-          @Override
-          public Integer finish() {
-            return 0;
-          }
-        };
-
-    BoundedInMemoryExecutor<HoodieRecord, Tuple2<HoodieRecord, Option<IndexedRecord>>, Integer> executor =
-        new BoundedInMemoryExecutor(writeConfig.getWriteBufferLimitBytes(), hoodieRecords.iterator(), consumer,
-            getTransformerInternal(HOODIE_SCHEMA, writeConfig), getPreExecuteRunnable());
-
-    // Interrupt the current thread (therefore triggering executor to throw as soon as it
-    // invokes [[get]] on the [[CompletableFuture]])
-    Thread.currentThread().interrupt();
-
-    assertThrows(HoodieException.class, executor::execute);
-
-    // Validate that interrupted flag is reset, after [[InterruptedException]] is thrown
-    assertTrue(Thread.interrupted());
-
-    executor.shutdownNow();
-    executor.awaitTermination();
+  @Override
+  protected boolean supportsRunningStatusCheck() {
+    return true;
   }
 
   @Test
@@ -165,6 +106,7 @@ public class TestBoundedInMemoryExecutorInSpark extends HoodieSparkClientTestHar
       }
     };
 
+    @SuppressWarnings("rawtypes")
     HoodieConsumer<HoodieLazyInsertIterable.HoodieInsertValueGenResult<HoodieRecord>, Integer> consumer =
         new HoodieConsumer<HoodieLazyInsertIterable.HoodieInsertValueGenResult<HoodieRecord>, Integer>() {
           @Override
@@ -177,8 +119,10 @@ public class TestBoundedInMemoryExecutorInSpark extends HoodieSparkClientTestHar
           }
         };
 
-    BoundedInMemoryExecutor<HoodieRecord, Tuple2<HoodieRecord, Option<IndexedRecord>>, Integer> executor =
-        new BoundedInMemoryExecutor(writeConfig.getWriteBufferLimitBytes(), unboundedRecordIter,
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    BoundedInMemoryExecutor executor =
+        new BoundedInMemoryExecutor(
+            writeConfig.getWriteBufferLimitBytes(), unboundedRecordIter,
             consumer, getTransformerInternal(HOODIE_SCHEMA, writeConfig),
             getPreExecuteRunnable());
     executor.shutdownNow();
