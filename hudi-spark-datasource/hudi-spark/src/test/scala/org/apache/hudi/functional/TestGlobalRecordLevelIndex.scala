@@ -332,7 +332,12 @@ class TestGlobalRecordLevelIndex extends RecordLevelIndexTestBase {
     {
       val hudiTable = "hudi_indexed_table_" + java.util.UUID.randomUUID().toString.replace("-", "").substring(0, 8)
       spark.sql(s"SET hoodie.hfile.block.cache.size = 200")
-      spark.sql(s"CREATE TABLE IF NOT EXISTS $hudiTable USING hudi OPTIONS (hoodie.metadata.enable = 'true', hoodie.metadata.record.index.enable = 'true', hoodie.write.merge.handle.class = 'org.apache.hudi.io.FileGroupReaderBasedMergeHandle') LOCATION '$basePath'")
+      val versionOpts = hudiOpts.collect {
+        case (k, v) if k == HoodieTableConfig.VERSION.key() || k == HoodieWriteConfig.WRITE_TABLE_VERSION.key() => s"$k = '$v'"
+      }.mkString(", ")
+      val createOpts = "hoodie.metadata.enable = 'true', hoodie.metadata.record.index.enable = 'true', hoodie.write.merge.handle.class = 'org.apache.hudi.io.FileGroupReaderBasedMergeHandle'" +
+        (if (versionOpts.nonEmpty) s", $versionOpts" else "")
+      spark.sql(s"CREATE TABLE IF NOT EXISTS $hudiTable USING hudi OPTIONS ($createOpts) LOCATION '$basePath'")
       val keysToDelete = spark.read.format("hudi").options(hudiOpts).load(basePath)
         .select("_row_key").limit(2).collect().map(_.getString(0))
       try {
