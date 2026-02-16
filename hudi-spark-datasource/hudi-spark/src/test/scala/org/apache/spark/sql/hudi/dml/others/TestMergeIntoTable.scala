@@ -1054,8 +1054,9 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
             .option(DataSourceReadOptions.START_COMMIT.key, "000")
             .option(DataSourceReadOptions.END_COMMIT.key, firstCompletionTime)
             .load(targetBasePath)
-          hudiIncDF1.createOrReplaceTempView("inc1")
-          checkAnswer(s"select id, name, price, _ts from inc1")(
+          val incView1 = generateTableName
+          hudiIncDF1.createOrReplaceTempView(incView1)
+          checkAnswer(s"select id, name, price, _ts from $incView1")(
             Seq(1, "a1", 10, 1000)
           )
           // Third merge
@@ -1077,8 +1078,9 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
             .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
             .option(DataSourceReadOptions.START_COMMIT.key, secondCompletionTime)
             .load(targetBasePath)
-          hudiIncDF2.createOrReplaceTempView("inc2")
-          checkAnswer(s"select id, name, price, _ts from inc2 order by id")(
+          val incView2 = generateTableName
+          hudiIncDF2.createOrReplaceTempView(incView2)
+          checkAnswer(s"select id, name, price, _ts from $incView2 order by id")(
             Seq(1, "a1", 12, 1001),
             Seq(2, "a2", 10, 1001)
           )

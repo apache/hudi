@@ -29,11 +29,24 @@ import org.apache.hudi.config.HoodieWriteConfig.{DELETE_PARALLELISM_VALUE, INSER
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.util.JavaConversions
 
-import org.apache.spark.sql.{Row, SaveMode}
+import org.apache.spark.sql.{Row, SaveMode, SparkSession}
 import org.apache.spark.sql.streaming.StreamTest
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 
 class TestStreamingSource extends StreamTest {
+
+  // Reuse the existing shared SparkSession instead of SharedSparkSessionBase's
+  // behavior of stopping it (which breaks parallel suite execution)
+  override def beforeAll(): Unit = {
+    _spark = SparkSession.builder()
+      .master("local[*]")
+      .config(sparkConf)
+      .getOrCreate()
+  }
+
+  override def afterAll(): Unit = {
+    // Do not stop the shared SparkSession
+  }
 
   import testImplicits._
   protected val commonOptions: Map[String, String] = Map(
