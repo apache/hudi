@@ -117,6 +117,9 @@ class Spark34LegacyHoodieParquetFileFormat(private val shouldAppendPartitionValu
     )
     hadoopConf.setBoolean(SQLConf.PARQUET_INFER_TIMESTAMP_NTZ_ENABLED.key, sparkSession.sessionState.conf.parquetInferTimestampNTZEnabled)
     hadoopConf.setBoolean(SQLConf.LEGACY_PARQUET_NANOS_AS_LONG.key, sparkSession.sessionState.conf.legacyParquetNanosAsLong)
+    options.get(SparkInternalSchemaConverter.HOODIE_QUERY_SCHEMA).foreach(hadoopConf.set(SparkInternalSchemaConverter.HOODIE_QUERY_SCHEMA, _))
+    options.get(SparkInternalSchemaConverter.HOODIE_TABLE_PATH).foreach(hadoopConf.set(SparkInternalSchemaConverter.HOODIE_TABLE_PATH, _))
+    options.get(SparkInternalSchemaConverter.HOODIE_VALID_COMMITS_LIST).foreach(hadoopConf.set(SparkInternalSchemaConverter.HOODIE_VALID_COMMITS_LIST, _))
     val internalSchemaStr = hadoopConf.get(SparkInternalSchemaConverter.HOODIE_QUERY_SCHEMA)
     // For Spark DataSource v1, there's no Physical Plan projection/schema pruning w/in Spark itself,
     // therefore it's safe to do schema projection here

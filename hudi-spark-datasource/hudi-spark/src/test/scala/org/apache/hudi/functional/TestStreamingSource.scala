@@ -20,6 +20,7 @@ package org.apache.hudi.functional
 import org.apache.hudi.DataSourceReadOptions
 import org.apache.hudi.DataSourceReadOptions.{START_OFFSET, STREAMING_READ_TABLE_VERSION}
 import org.apache.hudi.DataSourceWriteOptions.{ORDERING_FIELDS, RECORDKEY_FIELD}
+import org.apache.hudi.common.config.HoodieReaderConfig
 import org.apache.hudi.common.model.HoodieTableType
 import org.apache.hudi.common.model.HoodieTableType.{COPY_ON_WRITE, MERGE_ON_READ}
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, HoodieTableVersion}
@@ -102,6 +103,78 @@ class TestStreamingSource extends StreamTest {
             Row("5", "a5", "15", "000")),
           lastOnly = true, isSorted = false)
       )
+    }
+  }
+
+  test("test cow stream source without file group reader") {
+    withTempDir { inputDir =>
+      val tablePath = s"${inputDir.getCanonicalPath}/test_cow_stream"
+      HoodieTableMetaClient.newTableBuilder()
+        .setTableType(COPY_ON_WRITE)
+        .setTableName(getTableName(tablePath))
+        .setRecordKeyFields("id")
+        .setOrderingFields("ts")
+        .initTable(HadoopFSUtils.getStorageConf(spark.sessionState.newHadoopConf()), tablePath)
+
+      val hadoopConf = spark.sparkContext.hadoopConfiguration
+
+      // Capture the current values
+      val querySchemaBeforeRead = hadoopConf.get("hoodie.schema.internal.querySchema")
+      val tablePathBeforeRead = hadoopConf.get("hoodie.tablePath")
+      val validCommitsBeforeRead = hadoopConf.get("hoodie.valid.commits.list")
+
+      addData(tablePath, Seq(("1", "a1", "10", "000")))
+      val df = spark.readStream
+        .format("org.apache.hudi")
+        .option(HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key(), "false")
+        .load(tablePath)
+        .select("id", "name", "price", "ts")
+
+      testStream(df)(
+        AssertOnQuery { q => q.processAllAvailable(); true },
+        CheckAnswerRows(Seq(Row("1", "a1", "10", "000")), lastOnly = true, isSorted = false),
+        StopStream,
+
+        addDataToQuery(tablePath, Seq(("1", "a1", "12", "000"))),
+        StartStream(),
+        AssertOnQuery { q => q.processAllAvailable(); true },
+        CheckAnswerRows(Seq(Row("1", "a1", "12", "000")), lastOnly = true, isSorted = false),
+
+        addDataToQuery(tablePath,
+          Seq(("2", "a2", "12", "000"),
+            ("3", "a3", "12", "000"),
+            ("4", "a4", "12", "000"))),
+        AssertOnQuery { q => q.processAllAvailable(); true },
+        CheckAnswerRows(
+          Seq(Row("2", "a2", "12", "000"),
+            Row("3", "a3", "12", "000"),
+            Row("4", "a4", "12", "000")),
+          lastOnly = true, isSorted = false),
+        StopStream,
+
+        addDataToQuery(tablePath, Seq(("5", "a5", "12", "000"))),
+        addDataToQuery(tablePath, Seq(("6", "a6", "12", "000"))),
+        addDataToQuery(tablePath, Seq(("5", "a5", "15", "000"))),
+        StartStream(),
+        AssertOnQuery { q => q.processAllAvailable(); true },
+        CheckAnswerRows(
+          Seq(Row("6", "a6", "12", "000"),
+            Row("5", "a5", "15", "000")),
+          lastOnly = true, isSorted = false)
+      )
+
+      // Verify that the Spark Hadoop configuration was not modified
+      // Only local hadoop conf should be modified instead of global hadoop configuration
+      val querySchemaAfterRead = hadoopConf.get("hoodie.schema.internal.querySchema")
+      val tablePathAfterRead = hadoopConf.get("hoodie.tablePath")
+      val validCommitsAfterRead = hadoopConf.get("hoodie.valid.commits.list")
+
+      assertEquals(querySchemaBeforeRead, querySchemaAfterRead,
+        "hoodie.schema.internal.querySchema should not be modified in Spark Hadoop conf")
+      assertEquals(tablePathBeforeRead, tablePathAfterRead,
+        "hoodie.tablePath should not be modified in Spark Hadoop conf")
+      assertEquals(validCommitsBeforeRead, validCommitsAfterRead,
+        "hoodie.valid.commits.list should not be modified in Spark Hadoop conf")
     }
   }
 
