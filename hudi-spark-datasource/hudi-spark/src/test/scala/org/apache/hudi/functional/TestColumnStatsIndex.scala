@@ -18,7 +18,7 @@
 
 package org.apache.hudi.functional
 
-import org.apache.hudi.{AvroConversionUtils, ColumnStatsIndexSupport, DataSourceReadOptions, DataSourceWriteOptions, HoodieSchemaConversionUtils}
+import org.apache.hudi.{ColumnStatsIndexSupport, DataSourceReadOptions, DataSourceWriteOptions, HoodieSchemaConversionUtils}
 import org.apache.hudi.ColumnStatsIndexSupport.composeIndexSchema
 import org.apache.hudi.DataSourceWriteOptions.{PARTITIONPATH_FIELD, RECORDKEY_FIELD}
 import org.apache.hudi.HoodieConversionUtils.toProperties
@@ -27,7 +27,6 @@ import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.config.{HoodieCommonConfig, HoodieMetadataConfig, HoodieStorageConfig}
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.{HoodieRecord, HoodieTableType}
-import org.apache.hudi.common.schema.HoodieSchema
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, HoodieTableVersion}
 import org.apache.hudi.common.table.timeline.versioning.v1.InstantFileNameGeneratorV1
 import org.apache.hudi.common.table.view.FileSystemViewManager
@@ -35,7 +34,7 @@ import org.apache.hudi.common.testutils.HoodieTestUtils
 import org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FILE_NAME_GENERATOR
 import org.apache.hudi.common.util.{ParquetUtils, StringUtils}
 import org.apache.hudi.config.{HoodieCleanConfig, HoodieCompactionConfig, HoodieWriteConfig}
-import org.apache.hudi.functional.ColumnStatIndexTestBase.{ColumnStatsTestCase, ColumnStatsTestParams, WrapperCreator}
+import org.apache.hudi.functional.ColumnStatIndexTestBase.{getSeqShouldReadInMemory, ColumnStatsTestCase, ColumnStatsTestParams, WrapperCreator}
 import org.apache.hudi.metadata.HoodieIndexVersion
 import org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS
 import org.apache.hudi.storage.StoragePath
@@ -431,37 +430,40 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       "array_field.list.element.nested_int"
     )
 
-    columnStatsIndex.loadTransposed(indexedColumns, testCase.shouldReadInMemory) { transposedDF =>
-      // Verify we have stats for all 3 file groups (may have more files for MOR due to updates)
-      val fileCount = transposedDF.select("fileName").distinct().count()
-      assertTrue(fileCount >= 3, s"Expected at least 3 files with column stats, got $fileCount")
+    getSeqShouldReadInMemory(testCase.shouldTestBothReadModes).foreach(shouldReadInMemory => {
+      columnStatsIndex.loadTransposed(indexedColumns, shouldReadInMemory) { transposedDF =>
+        // Verify we have stats for all 3 file groups (may have more files for MOR due to updates)
+        val fileCount = transposedDF.select("fileName").distinct().count()
+        assertTrue(fileCount >= 3, s"Expected at least 3 files with column stats, got $fileCount")
 
-      // Verify min/max ranges for MAP field
-      val mapStats = transposedDF.select(
-        "`nullable_map_field.key_value.value.nested_int_minValue`",
-        "`nullable_map_field.key_value.value.nested_int_maxValue`"
-      ).collect().map(row => (row.getInt(0), row.getInt(1))).sorted
+        // Verify min/max ranges for MAP field
+        val mapStats = transposedDF.select(
+          "`nullable_map_field.key_value.value.nested_int_minValue`",
+          "`nullable_map_field.key_value.value.nested_int_maxValue`"
+        ).collect().map(row => (row.getInt(0), row.getInt(1))).sorted
 
-      // Expected stats: Batch1[30,90], Batch2[230,290], Batch3[30,90]
-      // We should have exactly one file with [230,290] (high range) and at least two with [30,90] (low range)
-      val mapHighRangeCount = mapStats.count(stat => stat._1 == 230 && stat._2 == 290)
-      val mapLowRangeCount = mapStats.count(stat => stat._1 == 30 && stat._2 == 90)
-      assertEquals(1, mapHighRangeCount, "Expected exactly 1 file with MAP range [230,290]")
-      assertTrue(mapLowRangeCount >= 2, s"Expected at least 2 files with MAP range [30,90], got $mapLowRangeCount")
+        // Expected stats: Batch1[30,90], Batch2[230,290], Batch3[30,90]
+        // We should have exactly one file with [230,290] (high range) and at least two with [30,90] (low range)
+        val mapHighRangeCount = mapStats.count(stat => stat._1 == 230 && stat._2 == 290)
+        val mapLowRangeCount = mapStats.count(stat => stat._1 == 30 && stat._2 == 90)
+        assertEquals(1, mapHighRangeCount, "Expected exactly 1 file with MAP range [230,290]")
+        assertTrue(mapLowRangeCount >= 2, s"Expected at least 2 files with MAP range [30,90], got $mapLowRangeCount")
 
-      // Verify min/max ranges for ARRAY field
-      val arrayStats = transposedDF.select(
-        "`array_field.list.element.nested_int_minValue`",
-        "`array_field.list.element.nested_int_maxValue`"
-      ).collect().map(row => (row.getInt(0), row.getInt(1))).sorted
+        // Verify min/max ranges for ARRAY field
+        val arrayStats = transposedDF.select(
+          "`array_field.list.element.nested_int_minValue`",
+          "`array_field.list.element.nested_int_maxValue`"
+        ).collect().map(row => (row.getInt(0), row.getInt(1))).sorted
 
-      // Expected stats: Batch1[40,80], Batch2[260,280], Batch3[240,280]
-      // We should have exactly one file with [40,80] (low range) and at least two with high ranges
-      val arrayLowRangeCount = arrayStats.count(stat => stat._1 == 40 && stat._2 == 80)
-      val arrayHighRangeCount = arrayStats.count(stat => stat._1 >= 240 && stat._2 == 280)
-      assertEquals(1, arrayLowRangeCount, "Expected exactly 1 file with ARRAY range [40,80]")
-      assertTrue(arrayHighRangeCount >= 2, s"Expected at least 2 files with ARRAY high ranges, got $arrayHighRangeCount")
-    }
+        // Expected stats: Batch1[40,80], Batch2[260,280], Batch3[240,280]
+        // We should have exactly one file with [40,80] (low range) and at least two with high ranges
+        val arrayLowRangeCount = arrayStats.count(stat => stat._1 == 40 && stat._2 == 80)
+        val arrayHighRangeCount = arrayStats.count(stat => stat._1 >= 240 && stat._2 == 280)
+        assertEquals(1, arrayLowRangeCount, "Expected exactly 1 file with ARRAY range [40,80]")
+        assertTrue(arrayHighRangeCount >= 2, s"Expected at least 2 files with ARRAY high ranges, got $arrayHighRangeCount")
+      }
+    })
+
     // Validate that indexed columns are registered correctly
     validateColumnsToIndex(metaClient, Seq(
       HoodieRecord.COMMIT_TIME_METADATA_FIELD,
@@ -584,44 +586,46 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       "level2_array_struct.list.element.list.element.value"
     )
 
-    columnStatsIndex.loadTransposed(indexedColumns, testCase.shouldReadInMemory) { transposedDF =>
-      // Verify we have stats for both file groups
-      val fileCount = transposedDF.select("fileName").distinct().count()
-      assertTrue(fileCount >= 2, s"Expected at least 2 files with column stats, got $fileCount")
+    getSeqShouldReadInMemory(testCase.shouldTestBothReadModes).foreach(shouldReadInMemory => {
+      columnStatsIndex.loadTransposed(indexedColumns, shouldReadInMemory) { transposedDF =>
+        // Verify we have stats for both file groups
+        val fileCount = transposedDF.select("fileName").distinct().count()
+        assertTrue(fileCount >= 2, s"Expected at least 2 files with column stats, got $fileCount")
 
-      // Verify 2-level array stats
-      val level2Stats = transposedDF.select(
-        "`level2_array.list.element.list.element_minValue`",
-        "`level2_array.list.element.list.element_maxValue`"
-      ).collect().map(row => (row.getInt(0), row.getInt(1))).sorted
+        // Verify 2-level array stats
+        val level2Stats = transposedDF.select(
+          "`level2_array.list.element.list.element_minValue`",
+          "`level2_array.list.element.list.element_maxValue`"
+        ).collect().map(row => (row.getInt(0), row.getInt(1))).sorted
 
-      val level2LowCount = level2Stats.count(stat => stat._1 >= 10 && stat._2 <= 50)
-      val level2HighCount = level2Stats.count(stat => stat._1 >= 500 && stat._2 >= 800)
-      assertTrue(level2LowCount >= 1, s"Expected at least 1 file with level2 low range, got $level2LowCount")
-      assertTrue(level2HighCount >= 1, s"Expected at least 1 file with level2 high range, got $level2HighCount")
+        val level2LowCount = level2Stats.count(stat => stat._1 >= 10 && stat._2 <= 50)
+        val level2HighCount = level2Stats.count(stat => stat._1 >= 500 && stat._2 >= 800)
+        assertTrue(level2LowCount >= 1, s"Expected at least 1 file with level2 low range, got $level2LowCount")
+        assertTrue(level2HighCount >= 1, s"Expected at least 1 file with level2 high range, got $level2HighCount")
 
-      // Verify 3-level array stats
-      val level3Stats = transposedDF.select(
-        "`level3_array.list.element.list.element.list.element_minValue`",
-        "`level3_array.list.element.list.element.list.element_maxValue`"
-      ).collect().map(row => (row.getInt(0), row.getInt(1))).sorted
+        // Verify 3-level array stats
+        val level3Stats = transposedDF.select(
+          "`level3_array.list.element.list.element.list.element_minValue`",
+          "`level3_array.list.element.list.element.list.element_maxValue`"
+        ).collect().map(row => (row.getInt(0), row.getInt(1))).sorted
 
-      val level3LowCount = level3Stats.count(stat => stat._1 >= 5 && stat._2 <= 25)
-      val level3HighCount = level3Stats.count(stat => stat._1 >= 300 && stat._2 >= 450)
-      assertTrue(level3LowCount >= 1, s"Expected at least 1 file with level3 low range, got $level3LowCount")
-      assertTrue(level3HighCount >= 1, s"Expected at least 1 file with level3 high range, got $level3HighCount")
+        val level3LowCount = level3Stats.count(stat => stat._1 >= 5 && stat._2 <= 25)
+        val level3HighCount = level3Stats.count(stat => stat._1 >= 300 && stat._2 >= 450)
+        assertTrue(level3LowCount >= 1, s"Expected at least 1 file with level3 low range, got $level3LowCount")
+        assertTrue(level3HighCount >= 1, s"Expected at least 1 file with level3 high range, got $level3HighCount")
 
-      // Verify 2-level array of struct stats
-      val level2StructStats = transposedDF.select(
-        "`level2_array_struct.list.element.list.element.value_minValue`",
-        "`level2_array_struct.list.element.list.element.value_maxValue`"
-      ).collect().map(row => (row.getInt(0), row.getInt(1))).sorted
+        // Verify 2-level array of struct stats
+        val level2StructStats = transposedDF.select(
+          "`level2_array_struct.list.element.list.element.value_minValue`",
+          "`level2_array_struct.list.element.list.element.value_maxValue`"
+        ).collect().map(row => (row.getInt(0), row.getInt(1))).sorted
 
-      val structLowCount = level2StructStats.count(stat => stat._1 >= 100 && stat._2 <= 200)
-      val structHighCount = level2StructStats.count(stat => stat._1 >= 1000 && stat._2 >= 1500)
-      assertTrue(structLowCount >= 1, s"Expected at least 1 file with struct low range, got $structLowCount")
-      assertTrue(structHighCount >= 1, s"Expected at least 1 file with struct high range, got $structHighCount")
-    }
+        val structLowCount = level2StructStats.count(stat => stat._1 >= 100 && stat._2 <= 200)
+        val structHighCount = level2StructStats.count(stat => stat._1 >= 1000 && stat._2 >= 1500)
+        assertTrue(structLowCount >= 1, s"Expected at least 1 file with struct low range, got $structLowCount")
+        assertTrue(structHighCount >= 1, s"Expected at least 1 file with struct high range, got $structHighCount")
+      }
+    })
 
     // Validate that indexed columns are registered correctly
     validateColumnsToIndex(metaClient, Seq(
@@ -639,7 +643,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
   @ParameterizedTest
   @MethodSource(Array("testTableTypePartitionTypeParams"))
   def testMetadataColumnStatsIndexInitializationWithUpserts(tableType: HoodieTableType, partitionCol : String, tableVersion: Int): Unit = {
-    val testCase = ColumnStatsTestCase(tableType, shouldReadInMemory = true, tableVersion)
+    val testCase = ColumnStatsTestCase(tableType, shouldTestBothReadModes = false, tableVersion)
     val metadataOpts = Map(
       HoodieMetadataConfig.ENABLE.key -> "true",
       HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key -> "false"
@@ -756,7 +760,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
   @ParameterizedTest
   @MethodSource(Array("testTableTypePartitionTypeParams"))
   def testMetadataColumnStatsIndexInitializationWithRollbacks(tableType: HoodieTableType, partitionCol : String, tableVersion: Int): Unit = {
-    val testCase = ColumnStatsTestCase(tableType, shouldReadInMemory = true, tableVersion)
+    val testCase = ColumnStatsTestCase(tableType, shouldTestBothReadModes = false, tableVersion)
     val metadataOpts = Map(
       HoodieMetadataConfig.ENABLE.key -> "true",
       HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key -> "false"
@@ -887,7 +891,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
   def testMORDeleteBlocks(tableVersion: Int): Unit = {
     val tableType: HoodieTableType = HoodieTableType.MERGE_ON_READ
     val partitionCol = "c8"
-    val testCase = ColumnStatsTestCase(tableType, shouldReadInMemory = true, tableVersion)
+    val testCase = ColumnStatsTestCase(tableType, shouldTestBothReadModes = false, tableVersion)
     val metadataOpts = Map(
       HoodieMetadataConfig.ENABLE.key -> "true",
       HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key -> "true"
@@ -945,7 +949,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
   @CsvSource(value = Array("'',6", "'',8", "c8,6", "c8,8"))
   def testColStatsWithCleanCOW(partitionCol: String, tableVersion: Int): Unit = {
     val tableType: HoodieTableType = HoodieTableType.COPY_ON_WRITE
-    val testCase = ColumnStatsTestCase(tableType, shouldReadInMemory = true, tableVersion)
+    val testCase = ColumnStatsTestCase(tableType, shouldTestBothReadModes = false, tableVersion)
     val metadataOpts = Map(
       HoodieMetadataConfig.ENABLE.key -> "true"
     )
@@ -1011,7 +1015,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
   @CsvSource(value = Array("'',6", "'',8", "c8,6", "c8,8"))
   def testColStatsWithCleanMOR(partitionCol: String, tableVersion: Int): Unit = {
     val tableType: HoodieTableType = HoodieTableType.MERGE_ON_READ
-    val testCase = ColumnStatsTestCase(tableType, shouldReadInMemory = true, tableVersion)
+    val testCase = ColumnStatsTestCase(tableType, shouldTestBothReadModes = false, tableVersion)
     val metadataOpts = Map(
       HoodieMetadataConfig.ENABLE.key -> "true"
     )
