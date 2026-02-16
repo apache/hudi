@@ -24,6 +24,7 @@ import org.apache.hudi.client.transaction.lock.InProcessLockProvider;
 import org.apache.hudi.common.HoodiePendingRollbackInfo;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
+import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.versioning.v1.InstantComparatorV1;
@@ -32,17 +33,22 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.SerializationUtils;
 import org.apache.hudi.config.HoodieLockConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieInconsistentMetadataException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.table.storage.HoodieStorageLayout;
 
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.function.Function;
 
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMPACTION_ACTION;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -135,5 +141,59 @@ class TestHoodieTable extends HoodieCommonTestHarness {
         inflightInstant, getPendingRollbackInstantFunc, transactionManager);
     // Validate that function scheduleRollback is called.
     assertEquals(1, ((TestBaseHoodieTable) hoodieTable).getCountOfScheduleRollbackFunctionCalls());
+  }
+
+  @Test
+  void testZeroCountWriteStatsValidation() throws IOException {
+    initMetaClient();
+    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder()
+        .withPath(basePath)
+        .build();
+    HoodieEngineContext context = new HoodieLocalEngineContext(metaClient.getStorageConf());
+    HoodieTable hoodieTable = new TestBaseHoodieTable(writeConfig, context, metaClient);
+
+    // Scenario 1: Both numWrites and numDeletes are zero - should throw exception
+    List<HoodieWriteStat> statsWithBothZeros = new ArrayList<>();
+    HoodieWriteStat zeroStat = new HoodieWriteStat();
+    zeroStat.setFileId("test-file-id");
+    zeroStat.setPath("partA/test-file.parquet");
+    zeroStat.setPartitionPath("partA");
+    zeroStat.setNumWrites(0);
+    zeroStat.setNumInserts(0);
+    zeroStat.setNumDeletes(0);
+    zeroStat.setNumUpdateWrites(0);
+    statsWithBothZeros.add(zeroStat);
+
+    assertThrows(HoodieInconsistentMetadataException.class, () -> {
+      hoodieTable.finalizeWrite(context, "001", statsWithBothZeros);
+    }, "Expected HoodieInconsistentMetadataException when both numWrites and numDeletes are zero");
+
+    // Scenario 2: Valid stats with numWrites > 0, numDeletes = 0 - should NOT throw exception
+    List<HoodieWriteStat> validStatsWithWrites = new ArrayList<>();
+    HoodieWriteStat validStatWithWrites = new HoodieWriteStat();
+    validStatWithWrites.setFileId("test-file-id-2");
+    validStatWithWrites.setPath("partB/test-file-2.parquet");
+    validStatWithWrites.setPartitionPath("partB");
+    validStatWithWrites.setNumWrites(10);
+    validStatWithWrites.setNumInserts(5);
+    validStatWithWrites.setNumDeletes(0);
+    validStatWithWrites.setNumUpdateWrites(5);
+    validStatsWithWrites.add(validStatWithWrites);
+    assertDoesNotThrow(() ->
+        hoodieTable.validateWriteStats("002", validStatsWithWrites), "Should not throw exception for valid write stats with numWrites > 0");
+
+    // Scenario 3: Valid stats with numWrites = 0 but numDeletes > 0 - should NOT throw exception
+    List<HoodieWriteStat> validStatsWithDeletes = new ArrayList<>();
+    HoodieWriteStat validStatWithDeletes = new HoodieWriteStat();
+    validStatWithDeletes.setFileId("test-file-id-3");
+    validStatWithDeletes.setPath("partC/test-file-3.parquet");
+    validStatWithDeletes.setPartitionPath("partC");
+    validStatWithDeletes.setNumWrites(0);
+    validStatWithDeletes.setNumInserts(0);
+    validStatWithDeletes.setNumDeletes(5);
+    validStatWithDeletes.setNumUpdateWrites(0);
+    validStatsWithDeletes.add(validStatWithDeletes);
+    assertDoesNotThrow(() ->
+        hoodieTable.validateWriteStats("003", validStatsWithDeletes), "Should not throw exception for delete-only stats with numDeletes > 0");
   }
 }
