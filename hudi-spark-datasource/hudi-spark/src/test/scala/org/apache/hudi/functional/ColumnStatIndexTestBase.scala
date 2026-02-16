@@ -76,7 +76,11 @@ class ColumnStatIndexTestBase extends SparkClientFunctionalTestHarnessScala {
 
   var metaClient: HoodieTableMetaClient = _
 
-  override def conf: SparkConf = conf(getSparkSqlConf)
+  override def conf: SparkConf = {
+    val c = conf(getSparkSqlConf)
+    c.setMaster("local[8,1]")
+    c
+  }
 
   def storage: HoodieStorage = hoodieStorage()
 

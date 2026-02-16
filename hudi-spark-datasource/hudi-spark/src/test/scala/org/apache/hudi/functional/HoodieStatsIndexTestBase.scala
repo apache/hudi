@@ -241,6 +241,7 @@ object HoodieStatsIndexTestBase {
       initLock.synchronized {
         if (sharedSpark == null) {
           val sparkConf = HoodieClientTestUtils.getSparkConfForTest("HoodieStatsIndexTestBase")
+          sparkConf.setMaster("local[8,1]")
           sparkConf.set("hoodie.fileIndex.dataSkippingFailureMode", "strict")
           val sparkContext = new SparkContext(sparkConf)
           HoodieClientTestUtils.overrideSparkHadoopConfiguration(sparkContext)
