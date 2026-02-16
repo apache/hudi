@@ -109,19 +109,6 @@ class TestPartitionStatsIndex extends PartitionStatsIndexTestBase {
   }
 
   /**
-   * Test case to do a write (no updates) and validate the partition stats index initialization.
-   */
-  @ParameterizedTest
-  @EnumSource(classOf[HoodieTableType])
-  def testIndexInitialization(tableType: HoodieTableType): Unit = {
-    val hudiOpts = commonOpts + (DataSourceWriteOptions.TABLE_TYPE.key -> tableType.name())
-    doWriteAndValidateDataAndPartitionStats(
-      hudiOpts,
-      operation = DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,
-      saveMode = SaveMode.Overwrite)
-  }
-
-  /**
    * Test case to do a write with updates and validate the partition stats index.
    */
   @ParameterizedTest
