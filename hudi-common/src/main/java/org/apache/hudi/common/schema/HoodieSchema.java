@@ -181,7 +181,7 @@ public class HoodieSchema implements Serializable {
     } else {
       schema = new HoodieSchema(avroSchema);
     }
-    validateNoBlobsInArrayMapOrVariant(schema);
+    validateNoBlobsInVariant(schema);
     return schema;
   }
 
@@ -296,8 +296,6 @@ public class HoodieSchema implements Serializable {
 
     Schema elementAvroSchema = elementSchema.avroSchema;
     ValidationUtils.checkState(elementAvroSchema != null, "Element schema's Avro schema cannot be null");
-    ValidationUtils.checkArgument(!elementSchema.containsBlobType(),
-        "Array element type cannot be or contain a BLOB type");
 
     Schema arraySchema = Schema.createArray(elementAvroSchema);
     return new HoodieSchema(arraySchema);
@@ -314,8 +312,6 @@ public class HoodieSchema implements Serializable {
 
     Schema valueAvroSchema = valueSchema.avroSchema;
     ValidationUtils.checkState(valueAvroSchema != null, "Value schema's Avro schema cannot be null");
-    ValidationUtils.checkArgument(!valueSchema.containsBlobType(),
-        "Map value type cannot be or contain a BLOB type");
 
     Schema mapSchema = Schema.createMap(valueAvroSchema);
     return new HoodieSchema(mapSchema);
@@ -970,6 +966,10 @@ public class HoodieSchema implements Serializable {
   boolean containsBlobType() {
     if (getType() == HoodieSchemaType.BLOB) {
       return true;
+    } else if (getType() == HoodieSchemaType.ARRAY) {
+      return getElementType().containsBlobType();
+    } else if (getType() == HoodieSchemaType.MAP) {
+      return getValueType().containsBlobType();
     } else if (getType() == HoodieSchemaType.UNION) {
       return getTypes().stream().anyMatch(HoodieSchema::containsBlobType);
     } else if (hasFields()) {
@@ -979,13 +979,13 @@ public class HoodieSchema implements Serializable {
   }
 
   /**
-   * Validates that the schema does not contain arrays or maps with blob types.
+   * Validates that the schema does not contain variants with shredded blob types.
    * This method recursively traverses the schema tree to check for invalid structures.
    *
    * @param schema the schema to validate
    * @throws HoodieSchemaException if the schema contains arrays or maps with blob types
    */
-  private static void validateNoBlobsInArrayMapOrVariant(HoodieSchema schema) {
+  private static void validateNoBlobsInVariant(HoodieSchema schema) {
     if (schema == null) {
       return;
     }
@@ -995,15 +995,11 @@ public class HoodieSchema implements Serializable {
     switch (type) {
       case ARRAY:
         HoodieSchema elementType = schema.getElementType();
-        if (elementType.containsBlobType()) {
-          throw new HoodieSchemaException("Array element type cannot be or contain a BLOB type");
-        }
+        validateNoBlobsInVariant(elementType);
         break;
       case MAP:
         HoodieSchema valueType = schema.getValueType();
-        if (valueType.containsBlobType()) {
-          throw new HoodieSchemaException("Map value type cannot be or contain a BLOB type");
-        }
+        validateNoBlobsInVariant(valueType);
         break;
       case VARIANT:
         HoodieSchema.Variant variantSchema = (HoodieSchema.Variant) schema;
@@ -1017,14 +1013,14 @@ public class HoodieSchema implements Serializable {
         // Validate all record fields
         List<HoodieSchemaField> fields = schema.getFields();
         for (HoodieSchemaField field : fields) {
-          validateNoBlobsInArrayMapOrVariant(field.schema());
+          validateNoBlobsInVariant(field.schema());
         }
         break;
       case UNION:
         // Validate all union types
         List<HoodieSchema> types = schema.getTypes();
         for (HoodieSchema unionType : types) {
-          validateNoBlobsInArrayMapOrVariant(unionType);
+          validateNoBlobsInVariant(unionType);
         }
         break;
       // For primitives, BLOB, ENUM, FIXED, NULL - no nested validation needed
@@ -1492,15 +1488,11 @@ public class HoodieSchema implements Serializable {
 
         case ARRAY:
           ValidationUtils.checkArgument(elementType != null, "Array element type is required");
-          ValidationUtils.checkArgument(!elementType.containsBlobType(),
-              "Array element type cannot be or contain a BLOB type");
           avroSchema = Schema.createArray(elementType.getAvroSchema());
           break;
 
         case MAP:
           ValidationUtils.checkArgument(valueType != null, "Map value type is required");
-          ValidationUtils.checkArgument(!valueType.containsBlobType(),
-              "Map value type cannot be or contain a BLOB type");
           avroSchema = Schema.createMap(valueType.getAvroSchema());
           break;
 
@@ -1998,9 +1990,6 @@ public class HoodieSchema implements Serializable {
       super.validate(schema);
       if (schema.getType() != Schema.Type.RECORD) {
         throw new IllegalArgumentException("Blob logical type can only be applied to RECORD schemas, got: " + schema.getType());
-      }
-      if (!schema.getFields().equals(HoodieSchema.Blob.BLOB_FIELDS)) {
-        throw new IllegalArgumentException("Blob logical type cannot be applied to schema: " + schema);
       }
     }
   }

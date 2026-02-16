@@ -103,6 +103,64 @@ class TestSchemaConverters {
     assertTrue(exception.getMessage.startsWith("Invalid blob schema structure"))
   }
 
+  @Test
+  def testBlobArrayRoundtrip(): Unit = {
+    // Test array containing blobs at various nesting levels
+    val innerArray = HoodieSchema.createArray(HoodieSchema.createBlob())
+    val outerArray = HoodieSchema.createArray(innerArray)
+
+    val fields = util.Arrays.asList(
+      HoodieSchemaField.of("simple_blobs", HoodieSchema.createArray(HoodieSchema.createBlob())),
+      HoodieSchemaField.of("nested_blobs", outerArray)
+    )
+    val originalSchema = HoodieSchema.createRecord("BlobArrays", "test", null, fields)
+
+    // Roundtrip
+    val (sparkType, _) = HoodieSparkSchemaConverters.toSqlType(originalSchema)
+    val reconstructed = HoodieSparkSchemaConverters.toHoodieType(sparkType, recordName = "BlobArrays", nameSpace = "test")
+
+    // Verify simple array
+    val simpleField = reconstructed.getField("simple_blobs").get()
+    assertEquals(HoodieSchemaType.ARRAY, simpleField.schema().getType)
+    assertEquals(HoodieSchemaType.BLOB, simpleField.schema().getElementType.getType)
+
+    // Verify nested array
+    val nestedField = reconstructed.getField("nested_blobs").get()
+    assertEquals(HoodieSchemaType.ARRAY, nestedField.schema().getType)
+    val nestedArrayType = nestedField.schema().getElementType
+    assertEquals(HoodieSchemaType.ARRAY, nestedArrayType.getType)
+    assertEquals(HoodieSchemaType.BLOB, nestedArrayType.getElementType.getType)
+  }
+
+  @Test
+  def testBlobMapRoundtrip(): Unit = {
+    // Test map containing blobs at various nesting levels
+    val innerMap = HoodieSchema.createMap(HoodieSchema.createBlob())
+    val outerMap = HoodieSchema.createMap(innerMap)
+
+    val fields = util.Arrays.asList(
+      HoodieSchemaField.of("simple_blobs_map", HoodieSchema.createMap(HoodieSchema.createBlob())),
+      HoodieSchemaField.of("nested_blobs_map", outerMap)
+    )
+    val originalSchema = HoodieSchema.createRecord("BlobMaps", "test", null, fields)
+
+    // Roundtrip
+    val (sparkType, _) = HoodieSparkSchemaConverters.toSqlType(originalSchema)
+    val reconstructed = HoodieSparkSchemaConverters.toHoodieType(sparkType, recordName = "BlobMaps")
+
+    // Verify simple map
+    val simpleField = reconstructed.getField("simple_blobs_map").get()
+    assertEquals(HoodieSchemaType.MAP, simpleField.schema().getType)
+    assertEquals(HoodieSchemaType.BLOB, simpleField.schema().getValueType.getType)
+
+    // Verify nested map
+    val nestedField = reconstructed.getField("nested_blobs_map").get()
+    assertEquals(HoodieSchemaType.MAP, nestedField.schema().getType)
+    val nestedMapType = nestedField.schema().getValueType
+    assertEquals(HoodieSchemaType.MAP, nestedMapType.getType)
+    assertEquals(HoodieSchemaType.BLOB, nestedMapType.getValueType.getType)
+  }
+
   /**
    * Validates the content of the blob fields to ensure the fields match our expectations.
    * @param dataType the StructType containing the blob fields to validate

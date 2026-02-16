@@ -1848,39 +1848,33 @@ public class TestHoodieSchema {
   }
 
   @Test
-  public void testCreateArrayWithBlobTypeShouldFail() {
-    assertThrows(IllegalArgumentException.class, () -> HoodieSchema.createArray(HoodieSchema.createBlob()));
+  public void testContainsBlobTypeInMaps() {
+    HoodieSchema mapWithBlob = HoodieSchema.createMap(HoodieSchema.createBlob());
+    assertTrue(mapWithBlob.containsBlobType());
 
-    assertThrows(IllegalArgumentException.class, () -> HoodieSchema.createArray(createRecordWithBlob()));
+    HoodieSchema mapWithNestedBlob = HoodieSchema.createMap(HoodieSchema.createNullable(createRecordWithBlob()));
+    assertTrue(mapWithNestedBlob.containsBlobType());
+
+    HoodieSchema mapNonBlob = HoodieSchema.createMap(HoodieSchema.create(HoodieSchemaType.STRING));
+    assertFalse(mapNonBlob.containsBlobType());
   }
 
   @Test
-  public void testCreateMapWithBlobTypeShouldFail() {
-    assertThrows(IllegalArgumentException.class, () -> HoodieSchema.createMap(HoodieSchema.createBlob()));
+  public void testContainsBlobTypeInArrays() {
+    HoodieSchema arrayWithBlob = HoodieSchema.createArray(HoodieSchema.createBlob());
+    assertTrue(arrayWithBlob.containsBlobType());
 
-    assertThrows(IllegalArgumentException.class, () -> HoodieSchema.createMap(createRecordWithBlob()));
+    HoodieSchema arrayWithNestedBlob = HoodieSchema.createArray(HoodieSchema.createNullable(createRecordWithBlob()));
+    assertTrue(arrayWithNestedBlob.containsBlobType());
+
+    HoodieSchema arrayNonBlob = HoodieSchema.createArray(HoodieSchema.create(HoodieSchemaType.STRING));
+    assertFalse(arrayNonBlob.containsBlobType());
   }
 
   @Test
   public void testCreateVariantWithBlobTypedValueShouldFail() {
     assertThrows(IllegalArgumentException.class, () -> HoodieSchema.createVariantShredded(HoodieSchema.createBlob()));
     assertThrows(IllegalArgumentException.class, () -> HoodieSchema.createVariantShredded(createRecordWithBlob()));
-  }
-
-  @Test
-  public void testParseRecordWithArrayOfBlobFieldShouldFail() {
-    String schemaJson = "{\"type\":\"record\",\"name\":\"test\",\"fields\":["
-        + "{\"name\":\"files\",\"type\":{\"type\":\"array\",\"items\":" + BLOB_JSON + "}}"
-        + "]}";
-    assertThrows(HoodieSchemaException.class, () -> HoodieSchema.parse(schemaJson));
-  }
-
-  @Test
-  public void testParseRecordWithMapOfBlobFieldShouldFail() {
-    String schemaJson = "{\"type\":\"record\",\"name\":\"test\",\"fields\":["
-        + "{\"name\":\"files\",\"type\":{\"type\":\"map\",\"values\":" + BLOB_JSON + "}}"
-        + "]}";
-    assertThrows(HoodieSchemaException.class, () -> HoodieSchema.parse(schemaJson));
   }
 
   @Test
@@ -1893,21 +1887,5 @@ public class TestHoodieSchema {
         + "]}}"
         + "]}";
     assertThrows(HoodieSchemaException.class, () -> HoodieSchema.parse(schemaJson));
-  }
-
-  @Test
-  public void testBuilderArrayWithBlobShouldFail() {
-    assertThrows(IllegalArgumentException.class, () ->
-      new HoodieSchema.Builder(HoodieSchemaType.ARRAY)
-          .setElementType(HoodieSchema.createBlob())
-          .build());
-  }
-
-  @Test
-  public void testBuilderMapWithBlobShouldFail() {
-    assertThrows(IllegalArgumentException.class, () ->
-      new HoodieSchema.Builder(HoodieSchemaType.MAP)
-          .setValueType(HoodieSchema.createBlob())
-          .build());
   }
 }
