@@ -51,7 +51,6 @@ class TestHoodieInternalRowUtils extends FunSuite with Matchers with BeforeAndAf
   }
 
   override protected def afterAll(): Unit = {
-    sparkSession.close()
   }
 
   private val schema1 = StructType(Seq(

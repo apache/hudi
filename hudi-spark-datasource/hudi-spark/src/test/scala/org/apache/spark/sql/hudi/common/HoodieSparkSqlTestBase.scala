@@ -114,9 +114,12 @@ class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
         testFun
       } finally {
         val catalog = spark.sessionState.catalog
+        val prefix = s"h${getClass.getSimpleName.toLowerCase}_"
         catalog.listDatabases().foreach { db =>
           catalog.listTables(db).foreach { table =>
-            catalog.dropTable(table, true, true)
+            if (table.table.startsWith(prefix)) {
+              catalog.dropTable(table, true, true)
+            }
           }
         }
       }
@@ -129,7 +132,6 @@ class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
 
   override protected def afterAll(): Unit = {
     Utils.deleteRecursively(sparkWareHouse)
-    spark.stop()
   }
 
   protected def checkAnswer(sql: String)(expects: Seq[Any]*): Unit = {
