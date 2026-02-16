@@ -42,6 +42,7 @@ import org.apache.spark.sql.functions.lit
 import org.apache.spark.sql.types.{StringType, StructField, StructType}
 import org.junit.jupiter.api._
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
+import org.junit.jupiter.api.parallel.{Execution, ExecutionMode}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{Arguments, CsvSource, EnumSource, MethodSource}
 import org.junit.jupiter.params.provider.Arguments.arguments
@@ -57,6 +58,7 @@ import scala.language.postfixOps
 import scala.util.Using
 
 @Tag("functional-b")
+@Execution(ExecutionMode.CONCURRENT)
 class TestGlobalRecordLevelIndex extends RecordLevelIndexTestBase {
 
   @ParameterizedTest

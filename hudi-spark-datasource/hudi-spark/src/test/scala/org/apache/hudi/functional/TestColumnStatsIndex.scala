@@ -51,6 +51,7 @@ import org.apache.spark.sql.hudi.DataSkippingUtils.translateIntoColumnStatsIndex
 import org.apache.spark.sql.types._
 import org.junit.jupiter.api._
 import org.junit.jupiter.api.Assertions.{assertArrayEquals, assertEquals, assertNotNull, assertTrue}
+import org.junit.jupiter.api.parallel.{Execution, ExecutionMode}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{Arguments, CsvSource, MethodSource}
 
@@ -63,6 +64,7 @@ import scala.collection.JavaConverters._
 import scala.collection.convert.ImplicitConversions.`collection AsScalaIterable`
 
 @Tag("functional-b")
+@Execution(ExecutionMode.CONCURRENT)
 class TestColumnStatsIndex extends ColumnStatIndexTestBase {
 
   protected def withRDDPersistenceValidation(f: => Unit): Unit = {

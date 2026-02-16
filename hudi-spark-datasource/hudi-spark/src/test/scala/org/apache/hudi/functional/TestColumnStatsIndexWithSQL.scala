@@ -18,14 +18,13 @@
 
 package org.apache.hudi.functional
 
-import org.apache.hudi.{AvroConversionUtils, ColumnStatsIndexSupport, DataSourceReadOptions, DataSourceWriteOptions, HoodieFileIndex, HoodieSchemaConversionUtils}
+import org.apache.hudi.{ColumnStatsIndexSupport, DataSourceReadOptions, DataSourceWriteOptions, HoodieFileIndex, HoodieSchemaConversionUtils}
 import org.apache.hudi.DataSourceWriteOptions.{DELETE_OPERATION_OPT_VAL, RECORDKEY_FIELD}
 import org.apache.hudi.client.SparkRDDWriteClient
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.config.{HoodieMetadataConfig, TypedProperties}
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.{HoodieCommitMetadata, HoodieTableType, WriteOperationType}
-import org.apache.hudi.common.schema.HoodieSchema
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.table.timeline.{HoodieInstant, MetadataConversionUtils}
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView
@@ -44,6 +43,7 @@ import org.apache.spark.sql.hudi.DataSkippingUtils
 import org.apache.spark.sql.types.StringType
 import org.junit.jupiter.api.{Tag, Test}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
+import org.junit.jupiter.api.parallel.{Execution, ExecutionMode}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.MethodSource
 
@@ -52,6 +52,7 @@ import java.io.File
 import scala.collection.JavaConverters._
 
 @Tag("functional-b")
+@Execution(ExecutionMode.CONCURRENT)
 class TestColumnStatsIndexWithSQL extends ColumnStatIndexTestBase {
 
   @ParameterizedTest

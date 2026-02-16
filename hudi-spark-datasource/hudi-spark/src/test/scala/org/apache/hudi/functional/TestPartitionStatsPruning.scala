@@ -33,10 +33,12 @@ import org.apache.hudi.storage.StoragePath
 import org.apache.spark.sql.SaveMode
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Tag
+import org.junit.jupiter.api.parallel.{Execution, ExecutionMode}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.MethodSource
 
 @Tag("functional-b")
+@Execution(ExecutionMode.CONCURRENT)
 class TestPartitionStatsPruning extends ColumnStatIndexTestBase {
 
   val DEFAULT_COLUMNS_TO_INDEX = Seq(HoodieRecord.COMMIT_TIME_METADATA_FIELD, HoodieRecord.RECORD_KEY_METADATA_FIELD,
