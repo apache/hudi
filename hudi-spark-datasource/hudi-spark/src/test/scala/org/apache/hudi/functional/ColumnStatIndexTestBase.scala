@@ -46,7 +46,7 @@ import org.junit.jupiter.api._
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.junit.jupiter.params.provider.Arguments
 
-import java.math.{BigInteger, BigDecimal => JBigDecimal}
+import java.math.{BigDecimal => JBigDecimal, BigInteger}
 import java.nio.ByteBuffer
 import java.sql.{Date, Timestamp}
 import java.util
