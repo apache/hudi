@@ -321,7 +321,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
       // Assert that the file-size of the file being added is positive, since Hudi
       // should not be creating empty files
       checkState(fileSize > 0, "File name " + fileName
-          + ", is a 0 byte file, it does not contain any contents");
+          + ", is a 0 byte file. It does not have any contents");
       fileInfo.put(fileName, new HoodieMetadataFileInfo(fileSize, false));
     });
 
