@@ -264,6 +264,12 @@ public class TimelineUtils {
   private static Option<String> getMetadataValue(HoodieTableMetaClient metaClient, String extraMetadataKey, HoodieInstant instant) {
     try {
       LOG.info("reading checkpoint info for:" + instant + " key: " + extraMetadataKey);
+      byte[] contents = metaClient.getCommitsTimeline().getInstantDetails(instant).get();
+      if (instant.isCompleted()) {
+        if (contents == null || contents.length == 0) {
+          throw new HoodieIOException("Completed commit has no contents for instant " + instant.requestedTime());
+        }
+      }
       HoodieCommitMetadata commitMetadata =
           metaClient.getCommitsTimeline().readCommitMetadata(instant);
 
