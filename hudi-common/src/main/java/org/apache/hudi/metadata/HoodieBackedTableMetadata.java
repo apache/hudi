@@ -618,6 +618,10 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
     if (sortedKeys.isEmpty()) {
       return new EmptyIterator<>();
     }
+    // if the file slice is an initial file slice, return empty directly, since the initial log is empty.
+    if (HoodieTableMetadataUtil.isInitialFileSlice(fileSlice)) {
+      return new EmptyIterator<>();
+    }
     try {
       Predicate predicate = buildPredicate(partitionName, sortedKeys, isFullKey);
       ClosableIterator<IndexedRecord> rawIterator = readSliceWithFilter(predicate, fileSlice);
