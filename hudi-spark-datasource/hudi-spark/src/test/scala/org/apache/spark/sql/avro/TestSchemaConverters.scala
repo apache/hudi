@@ -106,11 +106,14 @@ class TestSchemaConverters {
   @Test
   def testBlobArrayRoundtrip(): Unit = {
     // Test array containing blobs at various nesting levels
-    val innerArray = HoodieSchema.createArray(HoodieSchema.createBlob())
-    val outerArray = HoodieSchema.createArray(innerArray)
+    val innerSchema = HoodieSchema.createRecord("nested", null, null, util.Arrays.asList(
+      HoodieSchemaField.of("nested_long", HoodieSchema.create(HoodieSchemaType.LONG)),
+      HoodieSchemaField.of("nested_blob", HoodieSchema.createBlob())))
+    val outerArray = HoodieSchema.createArray(innerSchema)
 
     val fields = util.Arrays.asList(
       HoodieSchemaField.of("simple_blobs", HoodieSchema.createArray(HoodieSchema.createBlob())),
+      HoodieSchemaField.of("simple_nullable_blobs", HoodieSchema.createArray(HoodieSchema.createNullable(HoodieSchema.createBlob()))),
       HoodieSchemaField.of("nested_blobs", outerArray)
     )
     val originalSchema = HoodieSchema.createRecord("BlobArrays", "test", null, fields)
@@ -121,25 +124,35 @@ class TestSchemaConverters {
 
     // Verify simple array
     val simpleField = reconstructed.getField("simple_blobs").get()
-    assertEquals(HoodieSchemaType.ARRAY, simpleField.schema().getType)
-    assertEquals(HoodieSchemaType.BLOB, simpleField.schema().getElementType.getType)
+    assertEquals(HoodieSchemaType.ARRAY, simpleField.schema.getType)
+    assertFalse(simpleField.schema.getElementType.isNullable)
+    assertEquals(HoodieSchemaType.BLOB, simpleField.schema.getElementType.getType)
+
+    // Verify simple nullable array
+    val nullableField = reconstructed.getField("simple_nullable_blobs").get()
+    assertEquals(HoodieSchemaType.ARRAY, nullableField.schema.getType)
+    assertTrue(nullableField.schema.getElementType.isNullable)
+    assertEquals(HoodieSchemaType.BLOB, nullableField.schema.getElementType.getNonNullType.getType)
 
     // Verify nested array
     val nestedField = reconstructed.getField("nested_blobs").get()
-    assertEquals(HoodieSchemaType.ARRAY, nestedField.schema().getType)
-    val nestedArrayType = nestedField.schema().getElementType
-    assertEquals(HoodieSchemaType.ARRAY, nestedArrayType.getType)
-    assertEquals(HoodieSchemaType.BLOB, nestedArrayType.getElementType.getType)
+    assertEquals(HoodieSchemaType.ARRAY, nestedField.schema.getType)
+    val nestedArrayType = nestedField.schema.getElementType
+    assertEquals(HoodieSchemaType.RECORD, nestedArrayType.getType)
+    assertEquals(HoodieSchemaType.BLOB, nestedArrayType.getField("nested_blob").get.schema.getType)
   }
 
   @Test
   def testBlobMapRoundtrip(): Unit = {
     // Test map containing blobs at various nesting levels
-    val innerMap = HoodieSchema.createMap(HoodieSchema.createBlob())
-    val outerMap = HoodieSchema.createMap(innerMap)
+    val innerSchema = HoodieSchema.createRecord("nested", null, null, util.Arrays.asList(
+      HoodieSchemaField.of("nested_long", HoodieSchema.create(HoodieSchemaType.LONG)),
+      HoodieSchemaField.of("nested_blob", HoodieSchema.createBlob())))
+    val outerMap = HoodieSchema.createMap(innerSchema)
 
     val fields = util.Arrays.asList(
       HoodieSchemaField.of("simple_blobs_map", HoodieSchema.createMap(HoodieSchema.createBlob())),
+      HoodieSchemaField.of("simple_nullable_blobs_map", HoodieSchema.createMap(HoodieSchema.createNullable(HoodieSchema.createBlob()))),
       HoodieSchemaField.of("nested_blobs_map", outerMap)
     )
     val originalSchema = HoodieSchema.createRecord("BlobMaps", "test", null, fields)
@@ -150,15 +163,22 @@ class TestSchemaConverters {
 
     // Verify simple map
     val simpleField = reconstructed.getField("simple_blobs_map").get()
-    assertEquals(HoodieSchemaType.MAP, simpleField.schema().getType)
-    assertEquals(HoodieSchemaType.BLOB, simpleField.schema().getValueType.getType)
+    assertEquals(HoodieSchemaType.MAP, simpleField.schema.getType)
+    assertFalse(simpleField.schema.getValueType.isNullable)
+    assertEquals(HoodieSchemaType.BLOB, simpleField.schema.getValueType.getNonNullType.getType)
+
+    // Verify simple nullable map
+    val nullableField = reconstructed.getField("simple_nullable_blobs_map").get()
+    assertEquals(HoodieSchemaType.MAP, nullableField.schema.getType)
+    assertTrue(nullableField.schema.getValueType.isNullable)
+    assertEquals(HoodieSchemaType.BLOB, nullableField.schema.getValueType.getNonNullType.getType)
 
     // Verify nested map
     val nestedField = reconstructed.getField("nested_blobs_map").get()
-    assertEquals(HoodieSchemaType.MAP, nestedField.schema().getType)
-    val nestedMapType = nestedField.schema().getValueType
-    assertEquals(HoodieSchemaType.MAP, nestedMapType.getType)
-    assertEquals(HoodieSchemaType.BLOB, nestedMapType.getValueType.getType)
+    assertEquals(HoodieSchemaType.MAP, nestedField.schema.getType)
+    val nestedMapType = nestedField.schema.getValueType
+    assertEquals(HoodieSchemaType.RECORD, nestedMapType.getType)
+    assertEquals(HoodieSchemaType.BLOB, nestedMapType.getField("nested_blob").get.schema.getType)
   }
 
   /**
