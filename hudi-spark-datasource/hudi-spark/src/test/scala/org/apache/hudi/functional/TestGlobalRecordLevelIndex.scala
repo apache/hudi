@@ -273,23 +273,28 @@ class TestGlobalRecordLevelIndex extends RecordLevelIndexTestBase {
   def testRLIWithDeletes(tableType: HoodieTableType): Unit = {
     val hudiOpts = commonOpts + (DataSourceWriteOptions.TABLE_TYPE.key -> tableType.name())
 
-    // Single INSERT shared across all delete cases
-    val insertDf = doWriteAndValidateDataAndRecordIndex(hudiOpts,
+    // Two INSERTs to ensure enough records for all delete cases
+    doWriteAndValidateDataAndRecordIndex(hudiOpts,
       operation = DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,
       saveMode = SaveMode.Overwrite)
-    insertDf.cache()
+    doWriteAndValidateDataAndRecordIndex(hudiOpts,
+      operation = DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,
+      saveMode = SaveMode.Append)
 
     // Case 1: Basic delete operation
     {
-      val deleteDf = insertDf.limit(1)
+      val deleteDf = mergedDfList.last.limit(1)
+      deleteDf.cache()
+      val keyToDelete = deleteDf.collect().head.getAs[String]("_row_key")
       deleteDf.write.format("hudi")
         .options(hudiOpts)
         .option(DataSourceWriteOptions.OPERATION.key, DELETE_OPERATION_OPT_VAL)
         .mode(SaveMode.Append)
         .save(basePath)
       val prevDf = mergedDfList.last
-      mergedDfList = mergedDfList :+ prevDf.except(deleteDf)
+      mergedDfList = mergedDfList :+ prevDf.filter(row => row.getAs[String]("_row_key") != keyToDelete)
       validateDataAndRecordIndices(hudiOpts, deleteDf)
+      deleteDf.unpersist()
     }
 
     // Case 2: Delete with _hoodie_is_deleted column and partition updates
@@ -323,22 +328,23 @@ class TestGlobalRecordLevelIndex extends RecordLevelIndexTestBase {
     }
 
     // Case 3: SQL Delete
+    // Read keys from actual table data since dataGen's key pool may be exhausted by prior cases
     {
       val hudiTable = "hudi_indexed_table_" + java.util.UUID.randomUUID().toString.replace("-", "").substring(0, 8)
       spark.sql(s"SET hoodie.hfile.block.cache.size = 200")
       spark.sql(s"CREATE TABLE IF NOT EXISTS $hudiTable USING hudi OPTIONS (hoodie.metadata.enable = 'true', hoodie.metadata.record.index.enable = 'true', hoodie.write.merge.handle.class = 'org.apache.hudi.io.FileGroupReaderBasedMergeHandle') LOCATION '$basePath'")
-      val existingKeys = dataGen.getExistingKeys
+      val keysToDelete = spark.read.format("hudi").options(hudiOpts).load(basePath)
+        .select("_row_key").limit(2).collect().map(_.getString(0))
       try {
-        spark.sql(s"DELETE FROM $hudiTable WHERE _row_key IN ('${existingKeys.get(0)}', '${existingKeys.get(1)}')")
+        spark.sql(s"DELETE FROM $hudiTable WHERE _row_key IN ('${keysToDelete(0)}', '${keysToDelete(1)}')")
       } finally {
         spark.sql(s"DROP TABLE IF EXISTS $hudiTable")
       }
       val prevDf = mergedDfList.last
-      mergedDfList = mergedDfList :+ prevDf.filter(row => row.getAs("_row_key").asInstanceOf[String] != existingKeys.get(0) &&
-        row.getAs("_row_key").asInstanceOf[String] != existingKeys.get(1))
+      mergedDfList = mergedDfList :+ prevDf.filter(row => !keysToDelete.contains(row.getAs[String]("_row_key")))
       val structType = new StructType(Array(StructField("_row_key", StringType)))
       val convertToRow: Function[String, Row] = key => new GenericRowWithSchema(Array(key), structType)
-      val rows: java.util.List[Row] = util.Arrays.asList(convertToRow.apply(existingKeys.get(0)), convertToRow.apply(existingKeys.get(1)))
+      val rows: java.util.List[Row] = util.Arrays.asList(keysToDelete.map(convertToRow.apply): _*)
       val deleteDf = spark.createDataFrame(rows, structType)
       validateDataAndRecordIndices(hudiOpts, deleteDf)
     }
@@ -348,18 +354,17 @@ class TestGlobalRecordLevelIndex extends RecordLevelIndexTestBase {
       val morOpts = hudiOpts + (HoodieWriteConfig.MERGE_SMALL_FILE_GROUP_CANDIDATES_LIMIT.key -> "0")
       val deleteDf = spark.read.format("hudi").options(hudiOpts).load(basePath).limit(2)
       deleteDf.cache()
+      val keysToDelete = deleteDf.collect().map(_.getAs[String]("_row_key"))
       deleteDf.write.format("hudi")
         .options(morOpts)
         .option(DataSourceWriteOptions.OPERATION.key(), DataSourceWriteOptions.DELETE_OPERATION_OPT_VAL)
         .mode(SaveMode.Append)
         .save(basePath)
       val prevDf = mergedDfList.last
-      mergedDfList = mergedDfList :+ prevDf.except(deleteDf)
+      mergedDfList = mergedDfList :+ prevDf.filter(row => !keysToDelete.contains(row.getAs[String]("_row_key")))
       validateDataAndRecordIndices(morOpts, deleteDf)
       deleteDf.unpersist()
     }
-
-    insertDf.unpersist()
   }
 
   @ParameterizedTest
