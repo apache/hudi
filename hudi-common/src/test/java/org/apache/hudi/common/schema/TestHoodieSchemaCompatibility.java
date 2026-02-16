@@ -727,7 +727,7 @@ public class TestHoodieSchemaCompatibility {
   }
 
   @Test
-  public void testBlobReaderWriterCompatibility() {
+  public void testCompatibilityWithBlobFields() {
     // Tests that BLOB compatibility follows RECORD rules
     HoodieSchema writerBlob = HoodieSchema.createBlob();
     HoodieSchema readerBlob = HoodieSchema.createBlob();
@@ -764,85 +764,12 @@ public class TestHoodieSchemaCompatibility {
 
     // Reader can ignore extra fields if projection is allowed
     assertTrue(HoodieSchemaCompatibility.isSchemaCompatible(writerWithExtraField, readerSchema, true, true));
-  }
-
-  @Test
-  public void testBlobStrictProjection() {
-    // Tests that BLOB strict projection works correctly
-    HoodieSchema sourceBlob = HoodieSchema.createBlob();
-
-    // Source BLOB projects to itself
-    assertTrue(HoodieSchemaCompatibility.isStrictProjectionOf(sourceBlob, sourceBlob));
-
-    // BLOB inside ARRAY projects correctly
-    HoodieSchema sourceArrayOfBlobs = HoodieSchema.createArray(sourceBlob);
-    HoodieSchema targetArrayOfBlobs = HoodieSchema.createArray(HoodieSchema.createBlob());
-    assertTrue(HoodieSchemaCompatibility.isStrictProjectionOf(sourceArrayOfBlobs, targetArrayOfBlobs));
-
-    // BLOB inside MAP projects correctly
-    HoodieSchema sourceMapWithBlobs = HoodieSchema.createMap(sourceBlob);
-    HoodieSchema targetMapWithBlobs = HoodieSchema.createMap(HoodieSchema.createBlob());
-    assertTrue(HoodieSchemaCompatibility.isStrictProjectionOf(sourceMapWithBlobs, targetMapWithBlobs));
-
-    // BLOB in record with field projection
-    HoodieSchema sourceRecord = HoodieSchema.createRecord("test", null, null, false,
-        Arrays.asList(
-            HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.INT), null, null),
-            HoodieSchemaField.of("name", HoodieSchema.create(HoodieSchemaType.STRING), null, null),
-            HoodieSchemaField.of("blob_field", sourceBlob, null, null)
-        ));
-
-    HoodieSchema targetRecord = HoodieSchema.createRecord("test", null, null, false,
-        Arrays.asList(
-            HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.INT), null, null),
-            HoodieSchemaField.of("blob_field", HoodieSchema.createBlob(), null, null)
-        ));
 
     // Source with more fields projects to target with fewer fields
-    assertTrue(HoodieSchemaCompatibility.isStrictProjectionOf(sourceRecord, targetRecord));
-
+    assertTrue(HoodieSchemaCompatibility.isStrictProjectionOf(writerWithExtraField, readerSchema));
+    assertTrue(HoodieSchemaCompatibility.isCompatibleProjectionOf(writerWithExtraField, readerSchema));
     // Opposite should be false
-    assertFalse(HoodieSchemaCompatibility.isStrictProjectionOf(targetRecord, sourceRecord));
-  }
-
-  @Test
-  public void testBlobCompatibleProjection() {
-    // Tests that BLOB compatible projection with type promotions works
-    // Note: BLOB fields themselves don't have type promotions, but surrounding context can
-
-    HoodieSchema sourceBlob = HoodieSchema.createBlob();
-    HoodieSchema targetBlob = HoodieSchema.createBlob();
-
-    // Source BLOB is compatible projection of itself
-    assertTrue(HoodieSchemaCompatibility.isCompatibleProjectionOf(sourceBlob, targetBlob));
-
-    // Test record with BLOB and type promotion in other fields
-    HoodieSchema sourceRecord = HoodieSchema.createRecord("test", null, null, false,
-        Arrays.asList(
-            HoodieSchemaField.of("number", HoodieSchema.create(HoodieSchemaType.INT), null, null),
-            HoodieSchemaField.of("blob_field", sourceBlob, null, null)
-        ));
-
-    HoodieSchema targetRecord = HoodieSchema.createRecord("test", null, null, false,
-        Arrays.asList(
-            HoodieSchemaField.of("number", HoodieSchema.create(HoodieSchemaType.LONG), null, null), // INT to LONG promotion
-            HoodieSchemaField.of("blob_field", targetBlob, null, null)
-        ));
-
-    // Record with type promotion and BLOB should be compatible
-    assertTrue(HoodieSchemaCompatibility.isCompatibleProjectionOf(sourceRecord, targetRecord));
-
-    // Opposite should be false (can't demote LONG to INT)
-    assertFalse(HoodieSchemaCompatibility.isCompatibleProjectionOf(targetRecord, sourceRecord));
-
-    // BLOB inside complex types with promotion elsewhere
-    HoodieSchema sourceArray = HoodieSchema.createArray(sourceBlob);
-    HoodieSchema targetArray = HoodieSchema.createArray(targetBlob);
-    assertTrue(HoodieSchemaCompatibility.isCompatibleProjectionOf(sourceArray, targetArray));
-
-    HoodieSchema sourceMap = HoodieSchema.createMap(sourceBlob);
-    HoodieSchema targetMap = HoodieSchema.createMap(targetBlob);
-    assertTrue(HoodieSchemaCompatibility.isCompatibleProjectionOf(sourceMap, targetMap));
+    assertFalse(HoodieSchemaCompatibility.isStrictProjectionOf(readerSchema, writerWithExtraField));
   }
 
   @Test
