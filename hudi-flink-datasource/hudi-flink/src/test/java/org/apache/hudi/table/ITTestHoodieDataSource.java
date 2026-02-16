@@ -105,6 +105,7 @@ import static org.apache.hudi.utils.TestData.assertRowsEquals;
 import static org.apache.hudi.utils.TestData.assertRowsEqualsUnordered;
 import static org.apache.hudi.utils.TestData.map;
 import static org.apache.hudi.utils.TestData.row;
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertLinesMatch;
@@ -825,8 +826,8 @@ public class ITTestHoodieDataSource {
   }
 
   @ParameterizedTest
-  @EnumSource(value = HoodieTableType.class)
-  void testLookupJoin(HoodieTableType tableType) {
+  @MethodSource("tableTypeAndAsyncLookupParams")
+  void testLookupJoin(HoodieTableType tableType, boolean async) {
     TableEnvironment tableEnv = streamTableEnv;
     String hoodieTableDDL = sql("t1")
         .option(FlinkOptions.PATH, tempFile.getAbsolutePath() + "/t1")
@@ -849,13 +850,49 @@ public class ITTestHoodieDataSource {
 
     // Join two hudi tables with the same data
     String sql = "insert into t2 select b.* from t1_view o "
-        + "       join t1/*+ OPTIONS('lookup.join.cache.ttl'= '2 day') */  "
+        + "       join t1/*+ OPTIONS('lookup.join.cache.ttl'= '2 day', 'lookup.async'='" + async + "') */  "
         + "       FOR SYSTEM_TIME AS OF o.proc_time AS b on o.uuid = b.uuid";
     execInsertSql(tableEnv, sql);
     List<Row> result = CollectionUtil.iterableToList(
         () -> tableEnv.sqlQuery("select * from t2").execute().collect());
 
     assertRowsEquals(result, TestData.DATA_SET_SOURCE_INSERT);
+  }
+
+  private void initTablesForLookupJoin(HoodieTableType tableType) {
+    String tDDL = "create table T(i INT PRIMARY KEY NOT ENFORCED, `proctime` AS PROCTIME())"
+        + " with ('connector'='hudi', 'path'='" + tempFile.getAbsolutePath() + "/T')";
+    streamTableEnv.executeSql(tDDL);
+    String dimDDL = "CREATE TABLE DIM (i INT PRIMARY KEY NOT ENFORCED, j INT, k1 INT, k2 INT) "
+        + "with ('connector'='hudi', 'table.type'='" + tableType + "',"
+        + " 'path'='" + tempFile.getAbsolutePath() + "/DIM', 'continuous.discovery-interval'='1 ms')";
+    streamTableEnv.executeSql(dimDDL);
+  }
+
+  @ParameterizedTest
+  @MethodSource("tableTypeAndAsyncLookupParams")
+  void testLookup(HoodieTableType tableType, boolean async) {
+    initTablesForLookupJoin(tableType);
+    execInsertSql(streamTableEnv, "INSERT INTO DIM VALUES (1, 11, 111, 1111), (2, 22, 222, 2222)");
+    execInsertSql(streamTableEnv, "INSERT INTO T VALUES (1), (2), (3)");
+
+    String query = "SELECT T.i, D.j, D.k1, D.k2 FROM T LEFT JOIN DIM /*+ OPTIONS('lookup.async'='" + async
+        + "', 'lookup.join.cache.ttl'='1s') */ for system_time as of T.proctime AS D ON T.i = D.i";
+    List<Row> result = CollectionUtil.iterableToList(() -> streamTableEnv.executeSql(query).collect());
+    assertThat(result).containsExactlyInAnyOrder(
+        Row.of(1, 11, 111, 1111),
+        Row.of(2, 22, 222, 2222),
+        Row.of(3, null, null, null));
+
+    execInsertSql(streamTableEnv, "INSERT INTO DIM VALUES (2, 44, 444, 4444), (3, 33, 333, 3333)");
+    execInsertSql(streamTableEnv, "INSERT INTO T VALUES (1), (2), (3), (4)");
+
+    result = CollectionUtil.iterableToList(() -> streamTableEnv.executeSql(query).collect());
+    assertThat(result).containsExactlyInAnyOrder(
+        Row.of(1, 11, 111, 1111),
+        Row.of(2, 44, 444, 4444),
+        Row.of(3, 33, 333, 3333),
+        Row.of(4, null, null, null));
   }
 
   @ParameterizedTest
@@ -3145,6 +3182,19 @@ public class ITTestHoodieDataSource {
             {"FLINK_STATE", HoodieTableType.MERGE_ON_READ},
             {"BUCKET", HoodieTableType.COPY_ON_WRITE},
             {"BUCKET", HoodieTableType.MERGE_ON_READ}};
+    return Stream.of(data).map(Arguments::of);
+  }
+
+  /**
+   * Return test params => (table type, async lookup).
+   */
+  private static Stream<Arguments> tableTypeAndAsyncLookupParams() {
+    Object[][] data = new Object[][] {
+        {HoodieTableType.COPY_ON_WRITE, false},
+        {HoodieTableType.COPY_ON_WRITE, true},
+        {HoodieTableType.MERGE_ON_READ, false},
+        {HoodieTableType.MERGE_ON_READ, true}
+    };
     return Stream.of(data).map(Arguments::of);
   }
 

@@ -1301,6 +1301,17 @@ public class FlinkOptions extends HoodieConfig {
           .withDescription(
               "The cache TTL (e.g. 10min) for the build table in lookup join.");
 
+  public static final ConfigOption<Boolean> LOOKUP_ASYNC =
+      key("lookup.async")
+          .booleanType()
+          .defaultValue(false)
+          .withDescription("Whether to enable async lookup join.");
+
+  public static final ConfigOption<Integer> LOOKUP_ASYNC_THREAD_NUMBER =
+      key("lookup.async-thread-number")
+          .intType()
+          .defaultValue(16)
+          .withDescription("The thread number for lookup async.");
 
   // -------------------------------------------------------------------------
   //  Utilities

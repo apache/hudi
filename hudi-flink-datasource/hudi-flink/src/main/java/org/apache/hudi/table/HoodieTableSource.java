@@ -20,7 +20,6 @@ package org.apache.hudi.table;
 
 import org.apache.hudi.adapter.DataStreamScanProviderAdapter;
 import org.apache.hudi.adapter.InputFormatSourceFunctionAdapter;
-import org.apache.hudi.adapter.TableFunctionProviderAdapter;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieTableType;
@@ -72,6 +71,7 @@ import org.apache.hudi.table.format.mor.MergeOnReadInputSplit;
 import org.apache.hudi.table.format.mor.MergeOnReadTableState;
 import org.apache.hudi.table.lookup.HoodieLookupFunction;
 import org.apache.hudi.table.lookup.HoodieLookupTableReader;
+import org.apache.hudi.table.lookup.LookupRuntimeProviderFactory;
 import org.apache.hudi.util.DataTypeUtils;
 import org.apache.hudi.util.ExpressionUtils;
 import org.apache.hudi.util.ChangelogModes;
@@ -125,6 +125,8 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
+import static org.apache.hudi.configuration.FlinkOptions.LOOKUP_ASYNC;
+import static org.apache.hudi.configuration.FlinkOptions.LOOKUP_ASYNC_THREAD_NUMBER;
 import static org.apache.hudi.configuration.FlinkOptions.LOOKUP_JOIN_CACHE_TTL;
 import static org.apache.hudi.configuration.HadoopConfigurations.getParquetConf;
 import static org.apache.hudi.util.ExpressionUtils.filterSimpleCallExpression;
@@ -399,14 +401,16 @@ public class HoodieTableSource extends FileIndexReader implements
   @Override
   public LookupRuntimeProvider getLookupRuntimeProvider(LookupContext context) {
     Duration duration = conf.get(LOOKUP_JOIN_CACHE_TTL);
-    return TableFunctionProviderAdapter.of(
+    boolean asyncEnabled = conf.get(LOOKUP_ASYNC);
+    int asyncThreadNumber = conf.get(LOOKUP_ASYNC_THREAD_NUMBER);
+    return LookupRuntimeProviderFactory.create(
         new HoodieLookupFunction(
             new HoodieLookupTableReader(this::getBatchInputFormat, conf),
             (RowType) getProducedDataType().notNull().getLogicalType(),
             getLookupKeys(context.getKeys()),
             duration,
             conf
-        ));
+        ), asyncEnabled, asyncThreadNumber);
   }
 
   private DataType getProducedDataType() {
