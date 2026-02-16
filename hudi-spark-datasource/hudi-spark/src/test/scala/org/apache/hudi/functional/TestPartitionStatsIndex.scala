@@ -65,7 +65,7 @@ import scala.concurrent.duration.Duration
 @Execution(ExecutionMode.CONCURRENT)
 class TestPartitionStatsIndex extends PartitionStatsIndexTestBase {
 
-  val sqlTempTable = "hudi_tbl"
+  val sqlTempTable = "hudi_tbl_" + java.util.UUID.randomUUID().toString.replace("-", "").substring(0, 8)
 
   /**
    * Test case to validate partition stats for a logical type column

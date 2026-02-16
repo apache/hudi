@@ -392,10 +392,15 @@ class TestGlobalRecordLevelIndex extends RecordLevelIndexTestBase {
       saveMode = SaveMode.Overwrite)
     insertDf.cache()
 
+    val hudiTable = "hudi_indexed_table_" + java.util.UUID.randomUUID().toString.replace("-", "").substring(0, 8)
     spark.sql(s"SET hoodie.hfile.block.cache.size = 200")
-    spark.sql(s"CREATE TABLE IF NOT EXISTS hudi_indexed_table USING hudi OPTIONS (hoodie.metadata.enable = 'true', hoodie.metadata.record.index.enable = 'true', hoodie.write.merge.handle.class = 'org.apache.hudi.io.FileGroupReaderBasedMergeHandle') LOCATION '$basePath'")
+    spark.sql(s"CREATE TABLE IF NOT EXISTS $hudiTable USING hudi OPTIONS (hoodie.metadata.enable = 'true', hoodie.metadata.record.index.enable = 'true', hoodie.write.merge.handle.class = 'org.apache.hudi.io.FileGroupReaderBasedMergeHandle') LOCATION '$basePath'")
     val existingKeys = dataGen.getExistingKeys
-    spark.sql(s"DELETE FROM hudi_indexed_table WHERE _row_key IN ('${existingKeys.get(0)}', '${existingKeys.get(1)}')")
+    try {
+      spark.sql(s"DELETE FROM $hudiTable WHERE _row_key IN ('${existingKeys.get(0)}', '${existingKeys.get(1)}')")
+    } finally {
+      spark.sql(s"DROP TABLE IF EXISTS $hudiTable")
+    }
 
     val prevDf = mergedDfList.last
     mergedDfList = mergedDfList :+ prevDf.filter(row => row.getAs("_row_key").asInstanceOf[String] != existingKeys.get(0) &&

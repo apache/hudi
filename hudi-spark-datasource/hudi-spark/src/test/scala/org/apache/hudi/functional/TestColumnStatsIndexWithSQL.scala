@@ -55,6 +55,8 @@ import scala.collection.JavaConverters._
 @Execution(ExecutionMode.CONCURRENT)
 class TestColumnStatsIndexWithSQL extends ColumnStatIndexTestBase {
 
+  private val tblName = "tbl_" + java.util.UUID.randomUUID().toString.replace("-", "").substring(0, 8)
+
   @ParameterizedTest
   @MethodSource(Array("testMetadataColumnStatsIndexParams"))
   def testMetadataColumnStatsIndexWithSQL(testCase: ColumnStatsTestCase): Unit = {
@@ -614,9 +616,9 @@ class TestColumnStatsIndexWithSQL extends ColumnStatIndexTestBase {
       .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL)
       .option(DataSourceReadOptions.ENABLE_DATA_SKIPPING.key, "false")
       .load(basePath)
-    inputDF1.createOrReplaceTempView("tbl")
-    val numRecordsForFirstQuery = spark.sql("select * from tbl where c5 > 70").count()
-    val numRecordsForSecondQuery = spark.sql("select * from tbl where c5 > 70 and c6 >= '2020-03-28'").count()
+    inputDF1.createOrReplaceTempView(tblName)
+    val numRecordsForFirstQuery = spark.sql(s"select * from $tblName where c5 > 70").count()
+    val numRecordsForSecondQuery = spark.sql(s"select * from $tblName where c5 > 70 and c6 >= '2020-03-28'").count()
     // verify snapshot query
     verifySQLQueries(numRecordsForFirstQuery, numRecordsForSecondQuery, DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL, commonOpts, isTableDataSameAsAfterSecondInstant)
 
@@ -700,8 +702,8 @@ class TestColumnStatsIndexWithSQL extends ColumnStatIndexTestBase {
 
   private def verifySQLQueries(numRecordsForFirstQueryAtPrevInstant: Long, numRecordsForSecondQueryAtPrevInstant: Long,
                                queryType: String, opts: Map[String, String], isLastOperationDelete: Boolean): Unit = {
-    val firstQuery = "select * from tbl where c5 > 70"
-    val secondQuery = "select * from tbl where c5 > 70 and c6 >= '2020-03-28'"
+    val firstQuery = s"select * from $tblName where c5 > 70"
+    val secondQuery = s"select * from $tblName where c5 > 70 and c6 >= '2020-03-28'"
     // 2 records are updated with c5 greater than 70 and one record is inserted with c5 value greater than 70
     var commonOpts: Map[String, String] = opts
     createSQLTable(commonOpts, queryType)
@@ -744,7 +746,7 @@ class TestColumnStatsIndexWithSQL extends ColumnStatIndexTestBase {
       DataSourceReadOptions.START_COMMIT.key() -> metaClient.getActiveTimeline.getInstants.get(0).requestedTime.replaceFirst(".", "0")
     )
     val inputDF1 = spark.read.format("hudi").options(opts).load(basePath)
-    inputDF1.createOrReplaceTempView("tbl")
+    inputDF1.createOrReplaceTempView(tblName)
   }
 
   private def createIncrementalSQLTable(hudiOpts: Map[String, String], startCompletionTime: String): Unit = {
@@ -753,7 +755,7 @@ class TestColumnStatsIndexWithSQL extends ColumnStatIndexTestBase {
       DataSourceReadOptions.START_COMMIT.key() -> startCompletionTime
     )
     val inputDF1 = spark.read.format("hudi").options(opts).load(basePath)
-    inputDF1.createOrReplaceTempView("tbl")
+    inputDF1.createOrReplaceTempView(tblName)
   }
 
   private def hasLogFiles(): Boolean = {
