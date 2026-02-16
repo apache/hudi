@@ -24,7 +24,6 @@ import org.apache.hudi.common.table.checkpoint.Checkpoint;
 import org.apache.hudi.common.table.checkpoint.StreamerCheckpointV2;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.utilities.config.HoodieSchemaProviderConfig;
 import org.apache.hudi.utilities.config.KafkaSourceConfig;
 import org.apache.hudi.utilities.deser.KafkaAvroSchemaDeserializer;
 import org.apache.hudi.utilities.exception.HoodieReadFromSourceException;
@@ -79,7 +78,7 @@ public abstract class DebeziumSource extends RowSource {
 
   private final KafkaOffsetGen offsetGen;
   private final HoodieIngestionMetrics metrics;
-  private final SchemaRegistryProvider schemaRegistryProvider;
+  private final SchemaProvider schemaProvider;
   private final String deserializerClassName;
 
   public DebeziumSource(TypedProperties props, JavaSparkContext sparkContext,
@@ -99,15 +98,14 @@ public abstract class DebeziumSource extends RowSource {
       throw new HoodieReadFromSourceException(error, e);
     }
 
-    // Currently, debezium source requires Confluent/Kafka schema-registry to fetch the latest schema.
-    if (schemaProvider == null || !(schemaProvider instanceof SchemaRegistryProvider)) {
-      schemaRegistryProvider = new SchemaRegistryProvider(props, sparkContext);
+    if (schemaProvider == null) {
+      this.schemaProvider = new SchemaRegistryProvider(props, sparkContext);
     } else {
-      schemaRegistryProvider = (SchemaRegistryProvider) schemaProvider;
+      this.schemaProvider = schemaProvider;
     }
 
     if (deserializerClassName.equals(KafkaAvroSchemaDeserializer.class.getName())) {
-      KafkaSourceUtil.configureSchemaDeserializer(schemaRegistryProvider, props);
+      KafkaSourceUtil.configureSchemaDeserializer(this.schemaProvider, props);
     }
 
     offsetGen = new KafkaOffsetGen(props);
@@ -123,7 +121,7 @@ public abstract class DebeziumSource extends RowSource {
     log.info("About to read {} from Kafka for topic :{}", totalNewMsgs, offsetGen.getTopicName());
 
     try {
-      String schemaStr = schemaRegistryProvider.fetchSchemaFromRegistry(getStringWithAltKeys(props, HoodieSchemaProviderConfig.SRC_SCHEMA_REGISTRY_URL));
+      String schemaStr = schemaProvider.getSourceHoodieSchema().getAvroSchema().toString();
       Dataset<Row> dataset = toDataset(offsetRanges, offsetGen, schemaStr);
       log.info("Spark schema of Kafka Payload for topic {}:\n{}", offsetGen.getTopicName(), dataset.schema().treeString());
       log.info("New checkpoint string: {}", CheckpointUtils.offsetsToStr(offsetRanges));
