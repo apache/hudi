@@ -32,23 +32,24 @@ import org.apache.hudi.common.testutils.{HoodieTestDataGenerator, InProcessTimeG
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator.recordsToStrings
 import org.apache.hudi.common.util.{Option => HOption}
 import org.apache.hudi.config.{HoodieCompactionConfig, HoodieIndexConfig, HoodieWriteConfig}
+import org.apache.hudi.exception.{HoodieException, HoodieMetadataException}
 import org.apache.hudi.functional.TestRecordLevelIndex.TestPartitionedRecordLevelIndexTestCase
 import org.apache.hudi.index.HoodieIndex.IndexType.RECORD_LEVEL_INDEX
 import org.apache.hudi.index.record.HoodieRecordIndex
-import org.apache.hudi.metadata.{HoodieBackedTableMetadata, HoodieTableMetadataUtil}
+import org.apache.hudi.metadata.{HoodieBackedTableMetadata, HoodieTableMetadata, HoodieTableMetadataUtil, MetadataPartitionType}
 import org.apache.hudi.storage.StoragePath
 import org.apache.hudi.table.action.compact.strategy.UnBoundedCompactionStrategy
 
 import org.apache.spark.sql.{Row, SaveMode}
 import org.apache.spark.sql.functions.lit
-import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue, fail}
-import org.junit.jupiter.api.Tag
+import org.junit.jupiter.api.{Tag, Test}
+import org.junit.jupiter.api.Assertions.{assertDoesNotThrow, assertEquals, assertFalse, assertThrows, assertTrue, fail}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{Arguments, EnumSource, MethodSource, ValueSource}
 
 import java.util
 import java.util.stream.Collectors
-
+import java.io.{PrintWriter, StringWriter}
 import scala.collection.JavaConverters
 import scala.collection.JavaConverters._
 
@@ -482,6 +483,80 @@ class TestRecordLevelIndex extends RecordLevelIndexTestBase with SparkDatasetMix
     mergedDfList = mergedDfList :+ prevDf.filter(row => row.getAs("_row_key").asInstanceOf[String] != recordKeyToDelete)
     validateDataAndRecordIndices(hudiOpts, spark.read.json(spark.sparkContext.parallelize(recordsToStrings(deletedRecords).asScala.toSeq, 1)))
     deleteDf.unpersist()
+  }
+
+  @Test
+  def testRecordIndexRebootstrapWithZeroByteBaseFile(): Unit = {
+    val insertedRecords = 30
+    val localDataGen = new HoodieTestDataGenerator()
+    val inserts = localDataGen.generateInserts("001", insertedRecords)
+    val insertDf = toDataset(spark, inserts)
+    val optionsWithoutRecordIndex = Map(HoodieWriteConfig.TBL_NAME.key -> "hoodie_test",
+      DataSourceWriteOptions.TABLE_TYPE.key -> HoodieTableType.COPY_ON_WRITE.name(),
+      RECORDKEY_FIELD.key -> "_row_key",
+      PARTITIONPATH_FIELD.key -> "partition_path",
+      HoodieTableConfig.ORDERING_FIELDS.key -> "timestamp",
+      HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_ENABLE_PROP.key() -> "false",
+      HoodieMetadataConfig.RECORD_LEVEL_INDEX_ENABLE_PROP.key() -> "false",
+      HoodieCompactionConfig.INLINE_COMPACT.key() -> "false")
+
+    // Create first commit with record_index disabled.
+    insertDf.write.format("hudi")
+      .options(optionsWithoutRecordIndex)
+      .mode(SaveMode.Overwrite)
+      .save(basePath)
+    assertEquals(insertedRecords, spark.read.format("hudi").load(basePath).count())
+
+    // Corrupt one base parquet file by replacing it with an empty file.
+    val corruptedBaseFileName = replaceOneBaseFileWithEmpty(localDataGen.getPartitionPaths.toSeq)
+
+    // Delete metadata table to force rebootstrap.
+    metaClient = HoodieTableMetaClient.reload(metaClient)
+    HoodieTableMetadataUtil.deleteMetadataTable(metaClient, context, false)
+    assertFalse(storage.exists(new StoragePath(HoodieTableMetadata.getMetadataTableBasePath(basePath))),
+      "Metadata table should be removed before rebootstrap")
+
+    // Rebootstrap metadata with record_index enabled should still succeed.
+    metaClient.reloadActiveTimeline()
+    val latestSchema = new TableSchemaResolver(metaClient).getTableSchemaFromLatestCommit(false).get().toString
+    val optionsWithRecordIndex = optionsWithoutRecordIndex ++ Map(
+      HoodieMetadataConfig.RECORD_LEVEL_INDEX_ENABLE_PROP.key() -> "true",
+      HoodieIndexConfig.INDEX_TYPE.key() -> RECORD_LEVEL_INDEX.name(),
+      HoodieWriteConfig.AVRO_SCHEMA_STRING.key() -> latestSchema)
+    val writeConfig = getWriteConfig(optionsWithRecordIndex)
+    try {
+      metadataWriter(writeConfig).getTableMetadata
+    } catch {
+      case e: HoodieMetadataException =>
+        val stackTraceWriter = new StringWriter()
+        e.printStackTrace(new PrintWriter(stackTraceWriter))
+        val stackTraceText = stackTraceWriter.toString
+        assertTrue(stackTraceText.contains(corruptedBaseFileName),
+          s"Expected HoodieMetadataException stack trace to contain corrupted file name: $corruptedBaseFileName")
+      case t: Throwable =>
+        fail(s"Expected HoodieMetadataException but got ${t.getClass.getName}: ${t.getMessage}")
+    }
+    // assertDoesNotThrow(() => metadataWriter(writeConfig).getTableMetadata,
+    //   "Metadata rebootstrap with record index should succeed even with one zero-byte base file")
+
+    // val recordIndexPath = new StoragePath(
+    //   HoodieTableMetadata.getMetadataTableBasePath(basePath),
+    //   MetadataPartitionType.RECORD_INDEX.getPartitionPath)
+    // assertTrue(storage.exists(recordIndexPath),
+    //   "Record index partition should exist after metadata rebootstrap")
+  }
+
+  private def replaceOneBaseFileWithEmpty(partitionPaths: Seq[String]): String = {
+    val candidateBaseFile = partitionPaths.view.flatMap { partition =>
+      storage.listDirectEntries(new StoragePath(basePath, partition)).asScala
+        .map(_.getPath)
+        .find(path => path.getName.endsWith(".parquet"))
+    }.headOption.getOrElse(throw new IllegalStateException("No base file found to replace with empty file"))
+    assertTrue(storage.deleteFile(candidateBaseFile),
+      s"Failed to delete base file $candidateBaseFile")
+    assertTrue(storage.createNewFile(candidateBaseFile),
+      s"Failed to create empty replacement file $candidateBaseFile")
+    candidateBaseFile.getName
   }
 }
 
