@@ -19,6 +19,7 @@
 package org.apache.hudi.sink.compact;
 
 import org.apache.hudi.common.config.HoodieMemoryConfig;
+import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.HoodieReaderConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
@@ -125,6 +126,12 @@ public class FlinkCompactionConfig extends Configuration {
       + "Default is false")
   public Boolean schedule = false;
 
+  @Parameter(names = {"--metadata-table", "-mt"}, description = "")
+  public Boolean metadataTable = false;
+
+  @Parameter(names = {"--log-compaction-enabled"}, description = "")
+  public Boolean logCompactionEnabled = false;
+
   public static final String SEQ_FIFO = "FIFO";
   public static final String SEQ_LIFO = "LIFO";
   @Parameter(names = {"--seq"}, description = "Compaction plan execution sequence, two options are supported:\n"
@@ -219,6 +226,7 @@ public class FlinkCompactionConfig extends Configuration {
     conf.setString(HoodieMemoryConfig.SPILLABLE_MAP_BASE_PATH.key(), config.spillableMapPath);
     // set file group reader
     conf.setString(HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key(), !config.fileGroupReaderDisabled + "");
+    conf.setString(HoodieMetadataConfig.ENABLE_LOG_COMPACTION_ON_METADATA_TABLE.key(), config.logCompactionEnabled + "");
 
     return conf;
   }
