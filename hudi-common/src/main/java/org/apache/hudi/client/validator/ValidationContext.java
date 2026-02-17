@@ -19,27 +19,35 @@
 
 package org.apache.hudi.client.validator;
 
+import org.apache.hudi.ApiMaturityLevel;
+import org.apache.hudi.PublicAPIClass;
+import org.apache.hudi.PublicAPIMethod;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.Option;
 
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
 /**
  * Provides validators with access to commit information.
- * Engine-specific implementations (Spark, Flink, Java) provide concrete implementations.
+ * Engine-specific implementations (Spark, Flink, Java) provide concrete implementations
+ * for the core methods; computed convenience methods are provided as defaults.
  *
- * This interface abstracts away engine-specific details while providing consistent
- * access to validation data across all write engines.
+ * <p>This interface abstracts away engine-specific details while providing consistent
+ * access to validation data across all write engines.</p>
  *
- * Example implementations:
- * - SparkValidationContext (Phase 3): Accesses Spark RDD write metadata
- * - FlinkValidationContext (Phase 2): Accesses Flink checkpoint state
- * - JavaValidationContext (Future): Accesses Java client write metadata
+ * <p>Example implementations:</p>
+ * <ul>
+ *   <li>SparkValidationContext (Phase 3): Accesses Spark RDD write metadata</li>
+ *   <li>FlinkValidationContext (Phase 2): Accesses Flink checkpoint state</li>
+ *   <li>JavaValidationContext (Future): Accesses Java client write metadata</li>
+ * </ul>
  */
+@PublicAPIClass(maturity = ApiMaturityLevel.EVOLVING)
 public interface ValidationContext {
 
   /**
@@ -47,6 +55,7 @@ public interface ValidationContext {
    *
    * @return Instant time string (format: yyyyMMddHHmmss)
    */
+  @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
   String getInstantTime();
 
   /**
@@ -55,6 +64,7 @@ public interface ValidationContext {
    *
    * @return Optional commit metadata
    */
+  @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
   Option<HoodieCommitMetadata> getCommitMetadata();
 
   /**
@@ -63,31 +73,8 @@ public interface ValidationContext {
    *
    * @return Optional list of write statistics per partition
    */
+  @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
   Option<List<HoodieWriteStat>> getWriteStats();
-
-  /**
-   * Get all extra metadata from the current commit.
-   * This includes:
-   * - Streaming checkpoints (Kafka offsets, Pulsar message IDs, etc.)
-   * - Custom metadata added by users
-   * - Schema information
-   *
-   * Common keys:
-   * - "deltastreamer.checkpoint.key" (DeltaStreamer Kafka checkpoint)
-   * - "flink.kafka.checkpoint" (Flink Kafka checkpoint)
-   * - "schema" (Table schema)
-   *
-   * @return Map of metadata key to value
-   */
-  Map<String, String> getExtraMetadata();
-
-  /**
-   * Get a specific extra metadata value by key.
-   *
-   * @param key Metadata key
-   * @return Optional metadata value
-   */
-  Option<String> getExtraMetadata(String key);
 
   /**
    * Get the active timeline for accessing previous commits.
@@ -95,6 +82,7 @@ public interface ValidationContext {
    *
    * @return Active timeline
    */
+  @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
   HoodieActiveTimeline getActiveTimeline();
 
   /**
@@ -103,6 +91,7 @@ public interface ValidationContext {
    *
    * @return Optional previous instant
    */
+  @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
   Option<HoodieInstant> getPreviousCommitInstant();
 
   /**
@@ -111,42 +100,80 @@ public interface ValidationContext {
    *
    * @return Optional previous commit metadata
    */
+  @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
   Option<HoodieCommitMetadata> getPreviousCommitMetadata();
+
+  // ========== Default convenience methods derived from core methods ==========
+
+  /**
+   * Get all extra metadata from the current commit.
+   * Derived from {@link #getCommitMetadata()}.
+   *
+   * @return Map of metadata key to value, or empty map if no metadata
+   */
+  default Map<String, String> getExtraMetadata() {
+    return getCommitMetadata()
+        .map(HoodieCommitMetadata::getExtraMetadata)
+        .orElse(Collections.emptyMap());
+  }
+
+  /**
+   * Get a specific extra metadata value by key.
+   * Derived from {@link #getCommitMetadata()}.
+   *
+   * @param key Metadata key
+   * @return Optional metadata value
+   */
+  default Option<String> getExtraMetadata(String key) {
+    return getCommitMetadata()
+        .flatMap(metadata -> Option.ofNullable(metadata.getMetadata(key)));
+  }
 
   /**
    * Calculate total records written in the current commit.
-   * Sum of inserts, updates, and deletes across all partitions.
-   *
-   * Formula: sum(writeStats.numWrites) for all partitions
+   * Derived from {@link #getWriteStats()} by summing {@code numWrites} across all partitions.
    *
    * @return Total record count
    */
-  long getTotalRecordsWritten();
+  default long getTotalRecordsWritten() {
+    return getWriteStats()
+        .map(stats -> stats.stream().mapToLong(HoodieWriteStat::getNumWrites).sum())
+        .orElse(0L);
+  }
 
   /**
    * Calculate total insert records written.
-   *
-   * Formula: sum(writeStats.numInserts) for all partitions
+   * Derived from {@link #getWriteStats()} by summing {@code numInserts} across all partitions.
    *
    * @return Total insert count
    */
-  long getTotalInsertRecordsWritten();
+  default long getTotalInsertRecordsWritten() {
+    return getWriteStats()
+        .map(stats -> stats.stream().mapToLong(HoodieWriteStat::getNumInserts).sum())
+        .orElse(0L);
+  }
 
   /**
    * Calculate total update records written.
-   *
-   * Formula: sum(writeStats.numUpdateWrites) for all partitions
+   * Derived from {@link #getWriteStats()} by summing {@code numUpdateWrites} across all partitions.
    *
    * @return Total update count
    */
-  long getTotalUpdateRecordsWritten();
+  default long getTotalUpdateRecordsWritten() {
+    return getWriteStats()
+        .map(stats -> stats.stream().mapToLong(HoodieWriteStat::getNumUpdateWrites).sum())
+        .orElse(0L);
+  }
 
   /**
    * Check if this is the first commit (no previous commits exist).
+   * Derived from {@link #getPreviousCommitInstant()}.
    * Validators should skip validation for first commit since there's
    * no previous checkpoint to compare against.
    *
    * @return true if first commit
    */
-  boolean isFirstCommit();
+  default boolean isFirstCommit() {
+    return !getPreviousCommitInstant().isPresent();
+  }
 }
