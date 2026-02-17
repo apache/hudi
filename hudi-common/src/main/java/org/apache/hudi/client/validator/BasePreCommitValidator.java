@@ -19,6 +19,9 @@
 
 package org.apache.hudi.client.validator;
 
+import org.apache.hudi.ApiMaturityLevel;
+import org.apache.hudi.PublicAPIClass;
+import org.apache.hudi.PublicAPIMethod;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.exception.HoodieValidationException;
 
@@ -26,13 +29,21 @@ import org.apache.hudi.exception.HoodieValidationException;
  * Base class for all pre-commit validators across all engines (Spark, Flink, Java).
  * Engine-specific implementations extend this class and implement ValidationContext.
  *
- * This is the foundation for engine-agnostic validation logic that can access
- * commit metadata, timeline, and write statistics.
+ * <p>This is the foundation for engine-agnostic validation logic that can access
+ * commit metadata, timeline, and write statistics.</p>
  *
- * Phase 1: Core framework in hudi-common
- * Phase 2: Flink-specific implementations in hudi-flink-datasource
- * Phase 3: Spark-specific implementations in hudi-client/hudi-spark-client
+ * <p>Integration with existing framework:
+ * In Phase 3, the existing {@code SparkPreCommitValidator} will be refactored to extend
+ * this class, and {@code SparkValidatorUtils.runValidators()} will be updated to invoke
+ * {@link #validateWithMetadata(ValidationContext)} for validators that extend this class.
+ * The existing validator class names configured via
+ * {@code HoodiePreCommitValidatorConfig.VALIDATOR_CLASS_NAMES} will continue to work.</p>
+ *
+ * <p>Phase 1: Core framework in hudi-common</p>
+ * <p>Phase 2: Flink-specific implementations in hudi-flink-datasource</p>
+ * <p>Phase 3: Spark-specific implementations in hudi-client/hudi-spark-client</p>
  */
+@PublicAPIClass(maturity = ApiMaturityLevel.EVOLVING)
 public abstract class BasePreCommitValidator {
 
   protected final TypedProperties config;
@@ -47,27 +58,20 @@ public abstract class BasePreCommitValidator {
   }
 
   /**
-   * Indicates if this validator supports metadata-based validation.
-   * Override to return true for validators that use commit metadata, timeline, or stats.
-   *
-   * @return true if metadata validation is supported
-   */
-  protected boolean supportsMetadataValidation() {
-    return false;
-  }
-
-  /**
    * Perform validation using commit metadata, timeline, and write statistics.
    * This method is called by the engine-specific orchestration layer.
    *
-   * Subclasses should override this method to implement validation logic that:
-   * - Accesses commit metadata (checkpoints, custom metadata)
-   * - Navigates timeline (previous commits)
-   * - Analyzes write statistics (record counts, partition info)
+   * <p>Subclasses should override this method to implement validation logic that:</p>
+   * <ul>
+   *   <li>Accesses commit metadata (checkpoints, custom metadata)</li>
+   *   <li>Navigates timeline (previous commits)</li>
+   *   <li>Analyzes write statistics (record counts, partition info)</li>
+   * </ul>
    *
    * @param context Validation context providing access to metadata (engine-specific implementation)
    * @throws HoodieValidationException if validation fails
    */
+  @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
   protected void validateWithMetadata(ValidationContext context) throws HoodieValidationException {
     // Default no-op implementation
     // Concrete validators override this to implement validation logic
@@ -78,6 +82,7 @@ public abstract class BasePreCommitValidator {
    *
    * @return Typed properties with validator settings
    */
+  @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
   public TypedProperties getConfig() {
     return config;
   }

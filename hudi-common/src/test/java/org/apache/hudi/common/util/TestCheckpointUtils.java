@@ -98,6 +98,10 @@ public class TestCheckpointUtils {
 
     assertThrows(IllegalArgumentException.class, () ->
         CheckpointUtils.extractTopicName(null));
+
+    // Topic-only without partition data should be invalid
+    assertThrows(IllegalArgumentException.class, () ->
+        CheckpointUtils.extractTopicName("just_topic"));
   }
 
   @Test

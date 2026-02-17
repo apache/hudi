@@ -33,6 +33,12 @@ import org.slf4j.LoggerFactory;
  *
  * This validator compares source offset differences with actual record counts written to detect data loss.
  *
+ * <p><b>Note:</b> This validator is primarily intended for append-only ingestion scenarios.
+ * For upsert workloads with deduplication or event-time ordering, the deviation between
+ * source offsets and records written can be legitimately large (e.g., duplicate keys are
+ * deduplicated, late-arriving events are dropped). In such cases, configure an appropriate
+ * tolerance percentage or use warn-only mode.</p>
+ *
  * Algorithm:
  * 1. Extract current and previous checkpoints from commit metadata
  * 2. Calculate offset difference using source-specific format
@@ -53,7 +59,8 @@ public abstract class StreamingOffsetValidator extends BasePreCommitValidator {
 
   private static final Logger LOG = LoggerFactory.getLogger(StreamingOffsetValidator.class);
 
-  // Configuration keys
+  // Configuration keys - these mirror the ConfigProperty definitions in
+  // HoodiePreCommitValidatorConfig (hudi-client-common) for documentation surfacing.
   protected static final String TOLERANCE_PERCENTAGE_KEY = "hoodie.precommit.validators.streaming.offset.tolerance.percentage";
   protected static final String WARN_ONLY_MODE_KEY = "hoodie.precommit.validators.warn.only";
 
@@ -81,11 +88,6 @@ public abstract class StreamingOffsetValidator extends BasePreCommitValidator {
     this.checkpointFormat = checkpointFormat;
     this.tolerancePercentage = config.getDouble(TOLERANCE_PERCENTAGE_KEY, DEFAULT_TOLERANCE_PERCENTAGE);
     this.warnOnlyMode = config.getBoolean(WARN_ONLY_MODE_KEY, DEFAULT_WARN_ONLY_MODE);
-  }
-
-  @Override
-  protected boolean supportsMetadataValidation() {
-    return true;
   }
 
   @Override
@@ -175,8 +177,8 @@ public abstract class StreamingOffsetValidator extends BasePreCommitValidator {
         throw new HoodieValidationException(errorMsg);
       }
     } else {
-      LOG.info("Offset validation passed. Offset diff: {}, Records: {}, Deviation: {:.2f}% (within {}%)",
-          offsetDiff, recordsWritten, deviation, tolerancePercentage);
+      LOG.info("Offset validation passed. Offset diff: {}, Records: {}, Deviation: {}% (within {}%)",
+          offsetDiff, recordsWritten, String.format("%.2f", deviation), tolerancePercentage);
     }
   }
 

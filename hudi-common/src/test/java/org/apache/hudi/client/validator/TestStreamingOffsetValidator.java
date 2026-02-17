@@ -156,12 +156,4 @@ public class TestStreamingOffsetValidator {
         validator.testValidateOffsetConsistency(1000, 999, "cur", "prev"));
   }
 
-  @Test
-  public void testSupportsMetadataValidation() {
-    TypedProperties config = new TypedProperties();
-    MockOffsetValidator validator = new MockOffsetValidator(config);
-
-    // StreamingOffsetValidator should always support metadata validation
-    assert validator.supportsMetadataValidation();
-  }
 }

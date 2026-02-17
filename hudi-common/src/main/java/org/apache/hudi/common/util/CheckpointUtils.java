@@ -178,7 +178,7 @@ public class CheckpointUtils {
     }
 
     String[] splits = checkpointStr.split(",");
-    if (splits.length < 1) {
+    if (splits.length < 2) {
       throw new IllegalArgumentException(
           "Invalid checkpoint format. Expected: topic,partition:offset,... Got: " + checkpointStr);
     }
@@ -192,6 +192,11 @@ public class CheckpointUtils {
    * Parse DeltaStreamer (Spark) Kafka checkpoint.
    * Format: "topic,partition:offset,partition:offset,..."
    * Example: "events,0:1000,1:2000,2:1500"
+   *
+   * <p>Note: {@code KafkaOffsetGen.CheckpointUtils#strToOffsets} in hudi-utilities
+   * parses the same format but returns {@code Map<TopicPartition, Long>} (Kafka-specific).
+   * This method returns {@code Map<Integer, Long>} to avoid Kafka client dependencies
+   * in hudi-common. The two should be consolidated in a future refactoring.</p>
    *
    * @param checkpointStr Checkpoint string
    * @return Map of partition → offset
