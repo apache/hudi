@@ -51,6 +51,7 @@ import org.apache.hudi.common.table.view.SyncableFileSystemView;
 import org.apache.hudi.common.util.CleanerUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -655,10 +656,8 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
     if (removedFileSlices.isEmpty()) {
       return Collections.emptyList();
     }
-    Pair<HoodieSchema, List<String>> blobSchemaAndColumns = getBlobSchemaAndColumns(schema);
-    HoodieSchema requestedSchema = blobSchemaAndColumns.getLeft();
-    List<String> blobColumns = blobSchemaAndColumns.getRight();
-    if (blobColumns.isEmpty()) {
+    Option<HoodieSchema> requestedSchema = getReducedBlobSchema(schema);
+    if (requestedSchema.isEmpty()) {
       // no blob columns, no blob files to clean
       return Collections.emptyList();
     }
@@ -682,14 +681,12 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
 
       Set<String> managedBlobFilePaths = removedFileSlicesByFileGroupId.get(fileGroupId).stream()
           .flatMap(fileSlice -> {
-            HoodieFileGroupReader<R> reader = getHoodieFileGroupReader(schema, fileSlice, readerContext, metaClient, latestCommitTimeOpt, requestedSchema, properties);
+            HoodieFileGroupReader<R> reader = getHoodieFileGroupReader(schema, fileSlice, readerContext, metaClient, latestCommitTimeOpt, requestedSchema.get(), properties);
             Set<String> managedBlobFilePathsInSlice = new HashSet<>();
             try (ClosableIterator<R> recordItr = reader.getClosableIterator()) {
               while (recordItr.hasNext()) {
                 R record = recordItr.next();
-                for (String blobColumn : blobColumns) {
-                  getManagedBlobPath(schema, blobColumn, record, recordContext).ifPresent(managedBlobFilePathsInSlice::add);
-                }
+                managedBlobFilePathsInSlice.addAll(getManagedBlobPaths(schema, record, recordContext));
               }
             } catch (IOException e) {
               throw new HoodieIOException("Error reading records from file slice: " + fileSlice, e);
@@ -709,13 +706,11 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
         retainedFileSlicesForFileGroup = retainedFileSlices;
       }
       retainedFileSlicesForFileGroup.forEach(fileSlice -> {
-        HoodieFileGroupReader<R> reader = getHoodieFileGroupReader(schema, fileSlice, readerContext, metaClient, latestCommitTimeOpt, requestedSchema, properties);
+        HoodieFileGroupReader<R> reader = getHoodieFileGroupReader(schema, fileSlice, readerContext, metaClient, latestCommitTimeOpt, requestedSchema.get(), properties);
         try (ClosableIterator<R> recordItr = reader.getClosableIterator()) {
           while (recordItr.hasNext()) {
             R record = recordItr.next();
-            for (String blobColumn : blobColumns) {
-              getManagedBlobPath(schema, blobColumn, record, recordContext).ifPresent(managedBlobFilePaths::remove);
-            }
+            getManagedBlobPaths(schema, record, recordContext).forEach(managedBlobFilePaths::remove);
             if (managedBlobFilePaths.isEmpty()) {
               // all blob files referenced by the removed file slices are still referenced by the retained file slices, skip
               break;
@@ -745,49 +740,43 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
   }
 
   /**
-   * Finds all the blob columns and returns a schema limited to these columns along with a list of the dot-separated paths to these columns.
+   * Finds all the blob columns and returns a schema limited to these columns.
    * This is used to read only the blob columns when finding the blob files to clean.
    * @param schema the table's schema
-   * @return a pair of the blob schema and the list of blob column paths
+   * @return an option of the reduced schema containing only the blob columns or empty option if no blobs are found
    */
-  private Pair<HoodieSchema, List<String>> getBlobSchemaAndColumns(HoodieSchema schema) {
-    List<String> blobPaths = new ArrayList<>();
+  private Option<HoodieSchema> getReducedBlobSchema(HoodieSchema schema) {
     List<HoodieSchemaField> blobFields = new ArrayList<>();
 
     // Traverse schema to find blob columns
     for (HoodieSchemaField field : schema.getFields()) {
-      collectBlobFieldsAndPaths(field, field.name(), blobPaths, blobFields);
+      collectBlobFieldsAndPaths(field, blobFields);
     }
 
     // Create projection schema with only blob fields
-    HoodieSchema projectionSchema = blobFields.isEmpty()
-        ? schema  // No blobs, return original schema to avoid errors
-        : HoodieSchema.createRecord(
+    return blobFields.isEmpty()
+        ? Option.empty()
+        : Option.of(HoodieSchema.createRecord(
             schema.getName(),
             schema.getNamespace().orElse(null),
             schema.getDoc().orElse(null),
-            blobFields);
-
-    return Pair.of(projectionSchema, blobPaths);
+            blobFields));
   }
 
-  private void collectBlobFieldsAndPaths(HoodieSchemaField field, String currentPath,
-                                         List<String> blobPaths, List<HoodieSchemaField> blobFields) {
+  private void collectBlobFieldsAndPaths(HoodieSchemaField field,
+                                         List<HoodieSchemaField> blobFields) {
     HoodieSchema fieldSchema = field.schema();
     HoodieSchema nonNullSchema = fieldSchema.getNonNullType();
 
     switch (nonNullSchema.getType()) {
       case BLOB:
-        // Found a blob field
-        blobPaths.add(currentPath);
         blobFields.add(HoodieSchemaUtils.createNewSchemaField(field));
         break;
       case RECORD:
         // Recursively traverse nested record fields
         List<HoodieSchemaField> nestedBlobFields = new ArrayList<>();
         for (HoodieSchemaField nestedField : nonNullSchema.getFields()) {
-          collectBlobFieldsAndPaths(nestedField, currentPath + "." + nestedField.name(),
-                                    blobPaths, nestedBlobFields);
+          collectBlobFieldsAndPaths(nestedField, nestedBlobFields);
         }
 
         // If any nested field contains blob, include this record field
@@ -809,16 +798,14 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
       case ARRAY:
         // Check if array element type contains blob
         HoodieSchema elementType = nonNullSchema.getElementType();
-        if (elementType.isBlobType()) {
-          blobPaths.add(currentPath);
+        if (elementType.containsBlobType()) {
           blobFields.add(HoodieSchemaUtils.createNewSchemaField(field));
         }
         break;
       case MAP:
         // Check if map value type contains blob
         HoodieSchema valueType = nonNullSchema.getValueType();
-        if (valueType.isBlobType()) {
-          blobPaths.add(currentPath);
+        if (valueType.containsBlobType()) {
           blobFields.add(HoodieSchemaUtils.createNewSchemaField(field));
         }
         break;
@@ -828,11 +815,86 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
     }
   }
 
-  private <R> Option<String> getManagedBlobPath(HoodieSchema schema, String path, R record, RecordContext<R> recordContext) {
-    if (recordContext.getValue(record, schema, path + "." + HoodieSchema.Blob.EXTERNAL_FILE_REFERENCE) != null
-        && (boolean) recordContext.getValue(record, schema, path + "." + HoodieSchema.Blob.EXTERNAL_FILE_REFERENCE + "." + HoodieSchema.Blob.EXTERNAL_PATH_IS_MANAGED)) {
-      return Option.of(recordContext.getValue(record, schema, path + "." + HoodieSchema.Blob.EXTERNAL_FILE_REFERENCE + "." + HoodieSchema.Blob.EXTERNAL_PATH).toString());
+  /**
+   * Finds the blob file paths referenced by a record. The schema is used to find all blob columns in the record.
+   * Any blob column that has an external reference with isManaged=true will be included in the result.
+   * @param schema the record schema
+   * @param record the record to inspect
+   * @param recordContext the record context to use for retrieving values from the record
+   * @return a list of managed blob file paths referenced at this path
+   * @param <R> the record type
+   */
+  @VisibleForTesting
+  <R> List<String> getManagedBlobPaths(HoodieSchema schema, R record, RecordContext<R> recordContext) {
+    List<String> managedPaths = new ArrayList<>();
+
+    for (int i = 0; i < schema.getFields().size(); i++) {
+      HoodieSchemaField field = schema.getFields().get(i);
+      HoodieSchema fieldSchema = field.schema().getNonNullType();
+      Object value = recordContext.getValue(record, schema, field.name());
+      managedPaths.addAll(getManagedBlobPathsForField(value, fieldSchema, recordContext));
     }
-    return Option.empty();
+    return managedPaths;
+  }
+
+  private <R> List<String> getManagedBlobPathsForField(Object value, HoodieSchema fieldSchema, RecordContext<R> recordContext) {
+    if (value == null) {
+      return Collections.emptyList();
+    }
+    List<String> managedPaths = new ArrayList<>();
+    switch (fieldSchema.getType()) {
+      case BLOB:
+        // Process blob field
+        extractManagedPathFromBlob((R) value, fieldSchema, recordContext).ifPresent(managedPaths::add);
+        break;
+      case RECORD:
+        managedPaths.addAll(getManagedBlobPaths(fieldSchema, (R) value, recordContext));
+        break;
+      case ARRAY:
+        if (value instanceof Iterable) {
+          for (Object element : (Iterable<?>) value) {
+            if (element != null) {
+              managedPaths.addAll(getManagedBlobPathsForField(element, fieldSchema.getElementType().getNonNullType(), recordContext));
+            }
+          }
+        }
+        break;
+      case MAP:
+        if (value instanceof Map) {
+          for (Object entry : ((Map<?, ?>) value).values()) {
+            if (entry != null) {
+              managedPaths.addAll(getManagedBlobPathsForField(entry, fieldSchema.getValueType().getNonNullType(), recordContext));
+            }
+          }
+        }
+        break;
+      default:
+        // No blob type, skip
+    }
+    return managedPaths;
+  }
+
+  private <R> Option<String> extractManagedPathFromBlob(R blobRecord, HoodieSchema blobSchema, RecordContext<R> recordContext) {
+    // Handle null values
+    if (blobRecord == null) {
+      return Option.empty();
+    }
+
+    // Extract the "type" field to check if blob is OUT_OF_LINE
+    Object typeValue = recordContext.getValue(blobRecord, blobSchema, HoodieSchema.Blob.TYPE);
+    if (!"OUT_OF_LINE".equalsIgnoreCase(typeValue.toString())) {
+      // Inline blob or invalid type, no external file
+      return Option.empty();
+    }
+
+    // Check if this is a managed reference
+    boolean isManaged = (boolean) recordContext.getValue(blobRecord, blobSchema, HoodieSchema.Blob.EXTERNAL_REFERENCE + "." + HoodieSchema.Blob.EXTERNAL_REFERENCE_IS_MANAGED);
+    if (!isManaged) {
+      // Unmanaged blob, don't delete
+      return Option.empty();
+    }
+
+    String path = (String) recordContext.getValue(blobRecord, blobSchema, HoodieSchema.Blob.EXTERNAL_REFERENCE + "." + HoodieSchema.Blob.EXTERNAL_REFERENCE_PATH);
+    return Option.ofNullable(path);
   }
 }
