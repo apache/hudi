@@ -38,7 +38,7 @@ import org.apache.hudi.testutils.HoodieClientTestUtils.{createMetaClient, getSpa
 
 import org.apache.hadoop.fs.Path
 import org.apache.spark.SparkConf
-import org.apache.spark.sql.{Row, SparkSession}
+import org.apache.spark.sql.{Row, SparkSession, SQLImplicits}
 import org.apache.spark.sql.catalyst.util.DateTimeUtils
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase.checkMessageContains
 import org.apache.spark.sql.types.StructField
@@ -90,6 +90,11 @@ class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
     val s = sessionOverride.get()
     if (s != null) s else sharedSpark
   }
+
+  // Stable reference for `import testImplicits._` — Scala requires a stable
+  // identifier for imports, and `spark` is a def (for thread-local isolation).
+  // Implicits are SparkContext-level so using the shared session is correct.
+  protected lazy val testImplicits: SQLImplicits = sharedSpark.implicits
 
   private var tableId = new AtomicInteger(0)
 

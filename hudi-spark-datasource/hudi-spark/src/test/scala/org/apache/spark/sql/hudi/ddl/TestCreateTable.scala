@@ -951,7 +951,7 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
       Seq("2021-08-02", "2021/08/02").foreach { partitionValue =>
         val tableName = generateTableName
         val tablePath = s"${tmp.getCanonicalPath}/$tableName"
-        import spark.implicits._
+        import testImplicits._
         val df = Seq((1, "a1", 10, 1000, partitionValue)).toDF("id", "name", "value", "ts", "dt")
         // Write a table by spark dataframe.
         df.write.format("hudi")
@@ -1029,7 +1029,7 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
       Seq("2021-08-02", "2021/08/02").foreach { day =>
         val tableName = generateTableName
         val tablePath = s"${tmp.getCanonicalPath}/$tableName"
-        import spark.implicits._
+        import testImplicits._
         val df = Seq((1, "a1", 10, 1000, day, 12)).toDF("id", "name", "value", "ts", "day", "hh")
         // Write a table by spark dataframe.
         df.write.format("hudi")
@@ -1101,7 +1101,7 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
         val tablePath = s"${tmp.getCanonicalPath}/$tableName"
         val encodeSingleKeyFieldValue = params._1
         val tableVersion = params._2
-        import spark.implicits._
+        import testImplicits._
         // The COMPLEX_KEYGEN_NEW_ENCODING config only works for table version 8 and below
         val keyPrefix = if (encodeSingleKeyFieldValue && tableVersion < 9) "" else "id:"
         val df = Seq((1, "a1", 10, 1000, "2025-07-29", 12)).toDF("id", "name", "value", "ts", "day", "hh")
@@ -1205,7 +1205,7 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
     withTempDir { tmp =>
       val tableName = generateTableName
       val tablePath = s"${tmp.getCanonicalPath}/$tableName"
-      import spark.implicits._
+      import testImplicits._
       val df = Seq((1, "a1", 10, 1000, "2025-07-29", 12)).toDF("id", "name", "value", "ts", "day", "hh")
       // Write a table by spark dataframe.
       df.write.format("hudi")
@@ -1277,7 +1277,7 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
     withTempDir { tmp =>
       // Write a table by spark dataframe.
       val tableName = generateTableName
-      import spark.implicits._
+      import testImplicits._
       val df = Seq((1, "a1", 10, 1000)).toDF("id", "name", "value", "ts")
       df.write.format("hudi")
         .option(HoodieWriteConfig.TBL_NAME.key, tableName)
@@ -1934,7 +1934,7 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
         (2, "Bob", 200L),
         (3, "Charlie", 300L)
       )
-      import spark.implicits._
+      import testImplicits._
       data.toDF("id", "name", "ts")
         .write
         .format("hudi")

@@ -36,12 +36,18 @@ import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 class TestStreamingSource extends StreamTest {
 
   // Reuse the existing shared SparkSession instead of SharedSparkSessionBase's
-  // behavior of stopping it (which breaks parallel suite execution)
+  // behavior of stopping it (which breaks parallel suite execution).
+  // _spark is private in SharedSparkSessionBase, so we override the spark accessor.
+  @transient private lazy val _reusedSpark: SparkSession = SparkSession.builder()
+    .master("local[*]")
+    .config(sparkConf)
+    .getOrCreate()
+
+  override implicit def spark: SparkSession = _reusedSpark
+
   override def beforeAll(): Unit = {
-    _spark = SparkSession.builder()
-      .master("local[*]")
-      .config(sparkConf)
-      .getOrCreate()
+    // Don't call super.beforeAll() — it calls cleanupAnyExistingSession()
+    _reusedSpark // force initialization
   }
 
   override def afterAll(): Unit = {
