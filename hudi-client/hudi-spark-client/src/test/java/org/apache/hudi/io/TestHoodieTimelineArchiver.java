@@ -1930,6 +1930,50 @@ public class TestHoodieTimelineArchiver extends HoodieSparkClientTestHarness {
         + "be deleted now");
   }
 
+  @Test
+  public void testArchivalInMetadataTableCanProceedUntilECTR() throws Exception {
+    init(HoodieTableType.COPY_ON_WRITE);
+    // Test configs where metadata table has more aggressive archival configs than the compaction config
+    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder().withPath(basePath)
+        .withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA).withParallelism(2, 2)
+        .withArchivalConfig(HoodieArchivalConfig.newBuilder().archiveCommitsWith(4, 5).build())
+        .withCleanConfig(HoodieCleanConfig.newBuilder().retainCommits(3).build())
+        .withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder()
+            .withRemoteServerPort(timelineServicePort).build())
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(true)
+            .withMaxNumDeltaCommitsBeforeCompaction(2)
+            .build())
+        .forTable("test-trip-table").build();
+    initWriteConfigAndMetatableWriter(writeConfig, true);
+
+    HoodieTableMetaClient metadataTableMetaClient = HoodieTestUtils.createMetaClient(
+        metaClient.getStorageConf(), HoodieTableMetadata.getMetadataTableBasePath(basePath));
+
+    // Create 8 writes and 4 compactions on MDT
+    for (int i = 1; i <= 8; i++) {
+      testTable.doWriteOperation("000000" + String.format("%02d", i), WriteOperationType.UPSERT,
+          Arrays.asList("p1", "p2"), Arrays.asList("p1", "p2"), 2);
+    }
+    metadataTableMetaClient = HoodieTableMetaClient.reload(metadataTableMetaClient);
+    List<HoodieInstant> metadataTableInstants = metadataTableMetaClient.getActiveTimeline()
+        .getCommitsTimeline().filterCompletedInstants().getInstants();
+    // All 12 write instants are still on MDT since first instant on data table is still present and unarchived
+    assertEquals(12, metadataTableInstants.size());
+    // Create a clean with ECTR of latest write instant
+    testTable.addIncrementalClean("000000" + String.format("%02d", 9), "000000" + String.format("%02d", 8));
+    testTable.doWriteOperation("000000" + String.format("%02d", 10), WriteOperationType.UPSERT,
+        Arrays.asList("p1", "p2"), Arrays.asList("p1", "p2"), 2);
+
+    archiveAndGetCommitsList(writeConfig);
+
+    metadataTableMetaClient = HoodieTableMetaClient.reload(metadataTableMetaClient);
+    metadataTableInstants = metadataTableMetaClient.getActiveTimeline()
+        .getCommitsTimeline().filterCompletedInstants().getInstants();
+    // Archival on MDT is now blocked by the ECTR of data table instead of earliest instant,
+    // allowing more instants in MDT to be archived
+    assertEquals(6, metadataTableInstants.size());
+  }
+
   /**
    * IMPORTANT: this method is only suitable for one time trigger of archival validation.
    */

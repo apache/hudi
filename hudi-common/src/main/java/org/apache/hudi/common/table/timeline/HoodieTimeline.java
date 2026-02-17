@@ -642,6 +642,11 @@ public interface HoodieTimeline extends HoodieInstantReader, Serializable {
   Option<HoodieInstant> getFirstNonSavepointCommit();
 
   /**
+   * Returns the first write commit that has been savepoint-ed.
+   */
+  Option<HoodieInstant> findFirstSavepointedWrite();
+
+  /**
    * get the most recent cluster commit if present
    */
   Option<HoodieInstant> getLastClusteringInstant();
