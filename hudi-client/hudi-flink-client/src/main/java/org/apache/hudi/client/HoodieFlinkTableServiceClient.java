@@ -70,36 +70,41 @@ public class HoodieFlinkTableServiceClient<T> extends BaseHoodieTableServiceClie
 
   @Override
   protected void completeCompaction(HoodieCommitMetadata metadata, HoodieTable table, String compactionCommitTime, List<HoodieWriteStat> partialMetadataWriteStats) {
-    this.context.setJobStatus(this.getClass().getSimpleName(), "Collect compaction write status and commit compaction: " + config.getTableName());
-    List<HoodieWriteStat> writeStats = metadata.getWriteStats();
-    final HoodieInstant compactionInstant = table.getInstantGenerator().getCompactionInflightInstant(compactionCommitTime);
     try {
-      this.txnManager.beginStateChange(Option.of(compactionInstant), Option.empty());
-      finalizeWrite(table, compactionCommitTime, writeStats);
-      // commit to data table after committing to metadata table.
-      // Do not do any conflict resolution here as we do with regular writes. We take the lock here to ensure all writes to metadata table happens within a
-      // single lock (single writer). Because more than one write to metadata table will result in conflicts since all of them updates the same partition.
-      writeTableMetadata(table, compactionCommitTime, metadata);
-      log.info("Committing Compaction {} finished with result {}.", compactionCommitTime, metadata);
-      CompactHelpers.getInstance().completeInflightCompaction(table, compactionCommitTime, metadata);
-    } finally {
-      this.txnManager.endStateChange(Option.of(compactionInstant));
-    }
-    WriteMarkersFactory
-        .get(config.getMarkersType(), table, compactionCommitTime)
-        .quietDeleteMarkerDir(context, config.getMarkersDeleteParallelism());
-    if (compactionTimer != null) {
-      long durationInMs = metrics.getDurationInMs(compactionTimer.stop());
+      this.context.setJobStatus(this.getClass().getSimpleName(), "Collect compaction write status and commit compaction: " + config.getTableName());
+      List<HoodieWriteStat> writeStats = metadata.getWriteStats();
+      final HoodieInstant compactionInstant = table.getInstantGenerator().getCompactionInflightInstant(compactionCommitTime);
       try {
-        metrics.updateCommitMetrics(TimelineUtils.parseDateFromInstantTime(compactionCommitTime).getTime(),
-            durationInMs, metadata, HoodieActiveTimeline.COMPACTION_ACTION);
-      } catch (ParseException e) {
-        throw new HoodieCommitException("Commit time is not of valid format. Failed to commit compaction "
-            + config.getBasePath() + " at time " + compactionCommitTime, e);
+        this.txnManager.beginStateChange(Option.of(compactionInstant), Option.empty());
+        finalizeWrite(table, compactionCommitTime, writeStats);
+        // commit to data table after committing to metadata table.
+        // Do not do any conflict resolution here as we do with regular writes. We take the lock here to ensure all writes to metadata table happens within a
+        // single lock (single writer). Because more than one write to metadata table will result in conflicts since all of them updates the same partition.
+        writeTableMetadata(table, compactionCommitTime, metadata);
+        log.info("Committing Compaction {} finished with result {}.", compactionCommitTime, metadata);
+        CompactHelpers.getInstance().completeInflightCompaction(table, compactionCommitTime, metadata);
+      } finally {
+        this.txnManager.endStateChange(Option.of(compactionInstant));
       }
+      WriteMarkersFactory
+          .get(config.getMarkersType(), table, compactionCommitTime)
+          .quietDeleteMarkerDir(context, config.getMarkersDeleteParallelism());
+      if (compactionTimer != null) {
+        long durationInMs = metrics.getDurationInMs(compactionTimer.stop());
+        try {
+          metrics.updateCommitMetrics(TimelineUtils.parseDateFromInstantTime(compactionCommitTime).getTime(),
+              durationInMs, metadata, HoodieActiveTimeline.COMPACTION_ACTION);
+        } catch (ParseException e) {
+          throw new HoodieCommitException("Commit time is not of valid format. Failed to commit compaction "
+              + config.getBasePath() + " at time " + compactionCommitTime, e);
+        }
+      }
+      log.info("Compacted successfully on commit " + compactionCommitTime);
+    } catch (Exception e) {
+      throw e;
+    } finally {
+      this.heartbeatClient.stop(compactionCommitTime);
     }
-    log.info("Compacted successfully on commit " + compactionCommitTime);
-    this.heartbeatClient.stop(compactionCommitTime);
   }
 
   protected void completeClustering(
