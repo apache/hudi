@@ -940,7 +940,7 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
   }
 
   private HoodieTableMetaClient initializeMetaClient() throws IOException {
-    HoodieTableMetaClient.newTableBuilder()
+    HoodieTableMetaClient.TableBuilder builder = HoodieTableMetaClient.newTableBuilder()
         .setTableType(HoodieTableType.MERGE_ON_READ)
         .setTableName(dataWriteConfig.getTableName() + METADATA_TABLE_NAME_SUFFIX)
         // MT version should match DT, such that same readers can read both.
@@ -950,8 +950,16 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
         .setBaseFileFormat(HoodieFileFormat.HFILE.toString())
         .setRecordKeyFields(RECORD_KEY_FIELD_NAME)
         .setPopulateMetaFields(DEFAULT_METADATA_POPULATE_META_FIELDS)
-        .setKeyGeneratorClassProp(HoodieTableMetadataKeyGenerator.class.getCanonicalName())
-        .initTable(storageConf.newInstance(), metadataWriteConfig.getBasePath());
+        .setKeyGeneratorClassProp(HoodieTableMetadataKeyGenerator.class.getCanonicalName());
+
+    // Get the database name from dataTable config
+    String databaseName = dataMetaClient.getTableConfig().getDatabaseName();
+
+    if (!StringUtils.isNullOrEmpty(databaseName)) {
+      builder.setDatabaseName(databaseName);
+    }
+
+    builder.initTable(storageConf.newInstance(), metadataWriteConfig.getBasePath());
 
     // reconcile the meta client with time generator config.
     return HoodieTableMetaClient.builder()
