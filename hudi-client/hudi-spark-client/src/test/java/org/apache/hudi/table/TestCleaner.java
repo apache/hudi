@@ -41,6 +41,7 @@ import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
+import org.apache.hudi.common.model.HoodiePreWriteCleanerPolicy;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
@@ -1333,20 +1334,20 @@ public class TestCleaner extends HoodieCleanerTestBase {
 
   private static Stream<Arguments> preWriteCleanPolicyTypeAndCommitTimeSpecified() {
     return Stream.of(
-        Arguments.of("clean", true),
-        Arguments.of("clean", false),
-        Arguments.of("rollback_failed_writes", true),
-        Arguments.of("rollback_failed_writes", false)
+        Arguments.of(HoodiePreWriteCleanerPolicy.CLEAN, true),
+        Arguments.of(HoodiePreWriteCleanerPolicy.CLEAN, false),
+        Arguments.of(HoodiePreWriteCleanerPolicy.ROLLBACK_FAILED_WRITES, true),
+        Arguments.of(HoodiePreWriteCleanerPolicy.ROLLBACK_FAILED_WRITES, false)
     );
   }
 
   /**
-   * Test that both pre write clean policies (clean and rollback_failed_writes) are enforced/executed by APIs
+   * Test that both pre write clean policies (CLEAN and ROLLBACK_FAILED_WRITES) are enforced/executed by APIs
    * used for starting an (ingestion) write commit (startCommit and startCommitWithTime).
    */
   @ParameterizedTest
   @MethodSource("preWriteCleanPolicyTypeAndCommitTimeSpecified")
-  public void testPreWriteCleanPolicy(String preWriteCleanPolicy, boolean commitTimeSpecified) throws Exception {
+  public void testPreWriteCleanPolicy(HoodiePreWriteCleanerPolicy policy, boolean commitTimeSpecified) throws Exception {
     int maxCommits = 2; // keep up to 2 commits from the past
     HoodieWriteConfig cfg = getConfigBuilder()
         .withCleanConfig(HoodieCleanConfig.newBuilder()
@@ -1354,7 +1355,7 @@ public class TestCleaner extends HoodieCleanerTestBase {
             .withAutoClean(false)
             .withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.LAZY)
             .withCleanerPolicy(KEEP_LATEST_COMMITS)
-            .withPreWriteCleanerPolicy(preWriteCleanPolicy)
+            .withPreWriteCleanerPolicy(policy)
             .retainCommits(maxCommits).build())
         .withParallelism(1, 1).withBulkInsertParallelism(1).withFinalizeWriteParallelism(1).withDeleteParallelism(1)
         .withConsistencyGuardConfig(ConsistencyGuardConfig.newBuilder().withConsistencyCheckEnabled(true).build())
@@ -1392,9 +1393,9 @@ public class TestCleaner extends HoodieCleanerTestBase {
     // this inflight as a failed write
     client.getHeartbeatClient().stop(fifthCommit);
 
-    // fifthCommit inflight will still be present, but if policy is 'clean' then a clean should be completed
+    // fifthCommit inflight will still be present, but if policy is CLEAN then a clean should be completed
     assertEquals(5, metaClient.reloadActiveTimeline().getWriteTimeline().countInstants());
-    if (preWriteCleanPolicy.equals("clean")) {
+    if (policy.isClean()) {
       assertEquals(1, metaClient.getActiveTimeline().getCleanerTimeline().countInstants());
     } else {
       assertEquals(0, metaClient.getActiveTimeline().getCleanerTimeline().countInstants());
@@ -1413,10 +1414,10 @@ public class TestCleaner extends HoodieCleanerTestBase {
       seventhCommit = client.startCommit();
     }
 
-    // fifthCommit inflight should be rolled back for both clean and rollback_failed_writes policies.
+    // fifthCommit inflight should be rolled back for both CLEAN and ROLLBACK_FAILED_WRITES policies.
     // But only the former should lead to creating another clean
     assertEquals(6, metaClient.reloadActiveTimeline().getWriteTimeline().countInstants());
-    if (preWriteCleanPolicy.equals("clean")) {
+    if (policy.isClean()) {
       assertEquals(2, metaClient.getActiveTimeline().getCleanerTimeline().countInstants());
     } else {
       assertEquals(0, metaClient.getActiveTimeline().getCleanerTimeline().countInstants());

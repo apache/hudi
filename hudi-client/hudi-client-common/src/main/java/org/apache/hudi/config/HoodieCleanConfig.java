@@ -24,6 +24,7 @@ import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
+import org.apache.hudi.common.model.HoodiePreWriteCleanerPolicy;
 import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.table.action.clean.CleaningTriggerStrategy;
@@ -214,13 +215,9 @@ public class HoodieCleanConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> PREWRITE_CLEANER_POLICY = ConfigProperty
       .key("hoodie.cleaner.prewrite.cleaner.policy")
-      .defaultValue("")
+      .defaultValue(HoodiePreWriteCleanerPolicy.NONE.name())
       .sinceVersion("1.2.0")
-      .withDocumentation("If set, force attempting clean and/or failed writes rollback before starting a new ingestion write commit. "
-          + "Setting 'clean' will force a CLEAN table service call (which will both do rollback of failed writes and attempt scheduling "
-          + "a CLEAN), whereas 'rollback_failed_writes' will only perform rollback of failed writes. "
-          + "This should only be set to ensure that data files do not build up on DFS if an ingestion "
-          + "writer is perpetually failing before completing a CLEAN.");
+      .withDocumentation(HoodiePreWriteCleanerPolicy.class);
 
   /** @deprecated Use {@link #CLEANER_POLICY} and its methods instead */
   @Deprecated
@@ -387,14 +384,15 @@ public class HoodieCleanConfig extends HoodieConfig {
       return this;
     }
 
-    public HoodieCleanConfig.Builder withPreWriteCleanerPolicy(String preWriteCleanerPolicy) {
-      cleanConfig.setValue(PREWRITE_CLEANER_POLICY, preWriteCleanerPolicy);
+    public HoodieCleanConfig.Builder withPreWriteCleanerPolicy(HoodiePreWriteCleanerPolicy preWriteCleanerPolicy) {
+      cleanConfig.setValue(PREWRITE_CLEANER_POLICY, preWriteCleanerPolicy.name());
       return this;
     }
 
     public HoodieCleanConfig build() {
       cleanConfig.setDefaults(HoodieCleanConfig.class.getName());
       HoodieCleaningPolicy.valueOf(cleanConfig.getString(CLEANER_POLICY));
+      HoodiePreWriteCleanerPolicy.fromString(cleanConfig.getString(PREWRITE_CLEANER_POLICY));
       return cleanConfig;
     }
   }

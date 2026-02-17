@@ -38,6 +38,7 @@ import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.ActionType;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
+import org.apache.hudi.common.model.HoodiePreWriteCleanerPolicy;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieWriteStat;
@@ -1682,15 +1683,15 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
   }
 
   private void runPreWriteCleanerPolicy(HoodieTableMetaClient metaClient) {
-    String policy = config.getPreWriteCleanerPolicy();
-    if (policy == null || policy.isEmpty()) {
+    HoodiePreWriteCleanerPolicy policy = config.getPreWriteCleanerPolicy();
+    if (policy.isNone()) {
       return;
     }
     switch (policy) {
-      case "clean":
-        tableServiceClient.clean(Option.empty(), true);
+      case CLEAN:
+        tableServiceClient.clean(Option.of(metaClient.createNewInstantTime(false)), true);
         break;
-      case "rollback_failed_writes":
+      case ROLLBACK_FAILED_WRITES:
         tableServiceClient.rollbackFailedWrites(metaClient);
         break;
       default:
