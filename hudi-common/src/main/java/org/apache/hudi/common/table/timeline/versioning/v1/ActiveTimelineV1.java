@@ -56,6 +56,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Stream;
@@ -89,6 +90,12 @@ public class ActiveTimelineV1 extends BaseTimelineV1 implements HoodieActiveTime
     this.metaClient = metaClient;
     // multiple casts will make this lambda serializable -
     // http://docs.oracle.com/javase/specs/jls/se8/html/jls-15.html#jls-15.16
+    LOG.debug("Loaded instants upto : " + lastInstant());
+  }
+
+  public ActiveTimelineV1(HoodieTableMetaClient metaClient, List<HoodieInstant> instants) {
+    this.setInstants(instants);
+    this.metaClient = metaClient;
     LOG.debug("Loaded instants upto : " + lastInstant());
   }
 
