@@ -1150,14 +1150,10 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
     assertTrue(reloadedTimeline.filterPendingCompactionTimeline().containsInstant(inflightInstant),
         "Compaction instant should be in inflight state");
 
-    // Simulate writer1 failure by stopping heartbeat (this will allow heartbeat to expire)
+    // Simulate writer1 failure by stopping heartbeat (deletes heartbeat file from DFS, so it is immediately
+    // considered expired when writer2 checks)
     client1.getHeartbeatClient().stop(compactionInstantTime);
     client1.close();
-
-    // Wait for heartbeat to expire
-    // maxAllowableHeartbeatIntervalInMs = heartbeatIntervalMs * numTolerableHeartbeatMisses
-    long maxHeartbeatInterval = (long) heartbeatIntervalMs * numTolerableHeartbeatMisses;
-    Thread.sleep(maxHeartbeatInterval + 2000); // Add buffer time
 
     // Writer2: Now comes in after heartbeat expired, should be able to rollback and execute compaction
     SparkRDDWriteClient client2 = getHoodieWriteClient(cfg);
