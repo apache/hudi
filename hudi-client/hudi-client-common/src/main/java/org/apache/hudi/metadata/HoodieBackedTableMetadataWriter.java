@@ -769,7 +769,7 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
     HoodieTimer partitionInitTimer = HoodieTimer.start();
 
     // Generate the file groups
-    HoodieData<HoodieRecord> records = engineContext.emptyHoodieData();
+    List<HoodieData<HoodieRecord>> hoodieDataList = new ArrayList<>();
     clearExistingMetadataPartition(RECORD_INDEX.getPartitionPath());
     TreeMap<String, Integer> partitionSizes = new TreeMap<>();
     for (String dataPartition : fileGroupCountAndRecordsPairMap.keySet()) {
@@ -777,9 +777,9 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
       ValidationUtils.checkArgument(fileGroupCountAndRecordsPair.getKey() > 0, "FileGroup count for partitioned RLI data partition " + dataPartition + " should be > 0");
       partitionSizes.put(dataPartition, fileGroupCountAndRecordsPair.getKey());
       initializeFileGroups(dataMetaClient, RECORD_INDEX, commitTimeForPartition, fileGroupCountAndRecordsPair.getKey(), RECORD_INDEX.getPartitionPath(), Option.of(dataPartition));
-      records = records.union(fileGroupCountAndRecordsPair.getValue());
+      hoodieDataList.add(fileGroupCountAndRecordsPair.getValue());
     }
-
+    HoodieData<HoodieRecord> records = engineContext.union(hoodieDataList);
     // Perform the commit using bulkCommit
     bulkCommit(commitTimeForPartition, RECORD_INDEX.getPartitionPath(), records,  new BucketizedMetadataTableFileGroupIndexParser(partitionSizes));
     dataMetaClient.getTableConfig().setMetadataPartitionState(dataMetaClient, RECORD_INDEX.getPartitionPath(), true);
