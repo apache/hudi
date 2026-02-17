@@ -37,7 +37,7 @@ import org.apache.spark.internal.Logging
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.{InternalRow, TableIdentifier}
 import org.apache.spark.sql.catalyst.catalog.HoodieCatalogTable
-import org.apache.spark.sql.catalyst.expressions.{Expression, Literal}
+import org.apache.spark.sql.catalyst.expressions.{AttributeReference, AttributeSet, Expression, Literal}
 import org.apache.spark.sql.execution.datasources.{FileIndex, FileStatusCache, NoopCache, PartitionDirectory}
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils
 import org.apache.spark.sql.internal.SQLConf
@@ -167,17 +167,47 @@ case class HoodieFileIndex(spark: SparkSession,
   /**
    * Invoked by Spark to fetch list of latest base files per partition.
    *
-   * @param partitionFilters partition column filters
+   * NOTE: For tables with nested partition columns (e.g. `nested_record.level`), Spark's
+   * [[org.apache.spark.sql.execution.datasources.FileSourceScanExec]] uses standard attribute-name
+   * matching when splitting filters into partition vs. data filters. Because the filter expression
+   * for `nested_record.level = 'INFO'` is represented as
+   * `GetStructField(AttributeReference("nested_record"), …)` — whose reference is the *struct*
+   * attribute `nested_record`, not the flat partition attribute `nested_record.level` — Spark
+   * classifies it as a data filter.  This means `partitionFilters` arrives here empty and
+   * `dataFilters` contains the nested-field predicate.  We re-split the combined set of filters
+   * below so that predicates whose only references are struct-parents of partition columns are
+   * treated as partition filters, matching the behaviour of [[HoodiePruneFileSourcePartitions]].
+   *
+   * @param partitionFilters partition column filters (may be incomplete for nested columns)
    * @param dataFilters      data columns filters
    * @return list of PartitionDirectory containing partition to base files mapping
    */
   override def listFiles(partitionFilters: Seq[Expression], dataFilters: Seq[Expression]): Seq[PartitionDirectory] = {
-    val slices = filterFileSlices(dataFilters, partitionFilters).flatMap(
+    val (actualPartitionFilters, actualDataFilters) =
+      reclassifyFiltersForNestedPartitionColumns(partitionFilters, dataFilters)
+    val slices = filterFileSlices(actualDataFilters, actualPartitionFilters).flatMap(
       { case (partitionOpt, fileSlices) =>
         fileSlices.filter(!_.isEmpty).map(fs => ( InternalRow.fromSeq(partitionOpt.get.getValues), fs))
       }
     )
     prepareFileSlices(slices)
+  }
+
+  /**
+   * Re-splits the combined partition + data filters so that expressions whose attribute
+   * references are all struct-parents of nested partition columns (e.g. `nested_record` for
+   * partition column `nested_record.level`) are promoted to partition filters.
+   *
+   * This is a no-op when the partition schema contains no nested (dot-path) columns.
+   */
+  private def reclassifyFiltersForNestedPartitionColumns(
+      partitionFilters: Seq[Expression],
+      dataFilters: Seq[Expression]): (Seq[Expression], Seq[Expression]) = {
+    HoodieFileIndex.reclassifyFiltersForNestedPartitionColumns(
+      partitionSchema.fieldNames,
+      spark.sessionState.analyzer.resolver,
+      partitionFilters,
+      dataFilters)
   }
 
   protected def prepareFileSlices(slices: Seq[(InternalRow, FileSlice)]): Seq[PartitionDirectory] = {
@@ -500,6 +530,66 @@ object HoodieFileIndex extends Logging {
 
     val Fallback: Val = Val("fallback")
     val Strict: Val   = Val("strict")
+  }
+
+  /**
+   * Re-splits the combined set of filters so that predicates whose attribute references are
+   * all struct-parents of nested partition column names are promoted to partition filters.
+   *
+   * == Root cause of misclassification ==
+   * In `FileSourceStrategy.apply` (Spark's physical planning rule), filters are split into
+   * partition filters and data filters using:
+   * {{{
+   *   val partitionSet = AttributeSet(l.resolve(relation.partitionSchema, resolver))
+   *   val (partitionFilters, dataFilters) = normalizedFilters.partition { f =>
+   *     f.references.subsetOf(partitionSet)
+   *   }
+   * }}}
+   * For a Hudi table with partition column `nested_record.level`, the partition schema holds
+   * a flat `StructField("nested_record.level", StringType)`.  However, when Spark's analyser
+   * resolves the user filter `nested_record.level = 'INFO'`, it sees `nested_record` as a
+   * known `StructType` attribute in the table output and rewrites the predicate as
+   * `GetStructField(AttributeReference("nested_record", StructType(…)), ordinal, "level") = "INFO"`.
+   * That expression's `references` set is `{nested_record}`.  Because `{nested_record}` is not
+   * a subset of the `partitionSet` (which contains the unresolvable flat name `nested_record.level`),
+   * the predicate is classified as a data filter and `listFiles` is called with empty
+   * `partitionFilters`, bypassing partition pruning entirely.
+   *
+   * This method corrects the classification by treating any `AttributeReference` whose logical
+   * name is a struct-parent prefix of a nested partition column name (e.g. `nested_record` for
+   * `nested_record.level`) as a partition attribute, and re-partitions all filters accordingly.
+   *
+   * This is a no-op when `partitionColumnNames` contains no nested (dot-path) names.
+   *
+   * @param partitionColumnNames flat dot-path names of all partition columns (e.g. `["nested_record.level"]`)
+   * @param resolver             case-sensitivity resolver from the active Spark session
+   * @param partitionFilters     filters already classified as partition filters by Spark
+   * @param dataFilters          filters already classified as data filters by Spark
+   * @return corrected `(partitionFilters, dataFilters)` pair
+   */
+  private[hudi] def reclassifyFiltersForNestedPartitionColumns(
+      partitionColumnNames: Seq[String],
+      resolver: (String, String) => Boolean,
+      partitionFilters: Seq[Expression],
+      dataFilters: Seq[Expression]): (Seq[Expression], Seq[Expression]) = {
+    // Only applies to tables that have at least one nested partition column.
+    if (!partitionColumnNames.exists(_.contains("."))) {
+      return (partitionFilters, dataFilters)
+    }
+    val allFilters = partitionFilters ++ dataFilters
+    // Identify AttributeReferences that are exact matches or struct-parent prefixes
+    // of nested partition column names (e.g. "nested_record" for "nested_record.level").
+    val partitionAttrRefs = allFilters.flatMap { expr =>
+      expr.collect {
+        case attr: AttributeReference
+          if {
+            val logicalName = attr.name.replaceAll("#\\d+$", "")
+            partitionColumnNames.exists(col => resolver(logicalName, col) || col.startsWith(logicalName + "."))
+          } => attr
+      }
+    }
+    val partitionSet = AttributeSet(partitionAttrRefs)
+    allFilters.partition(f => f.references.subsetOf(partitionSet))
   }
 
   def collectReferencedColumns(spark: SparkSession, queryFilters: Seq[Expression], schema: StructType): Seq[String] = {

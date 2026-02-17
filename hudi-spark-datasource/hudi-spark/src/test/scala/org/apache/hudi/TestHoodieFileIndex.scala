@@ -44,7 +44,7 @@ import org.apache.hudi.testutils.HoodieSparkClientTestBase
 import org.apache.hudi.util.JFunction
 
 import org.apache.spark.sql._
-import org.apache.spark.sql.catalyst.expressions.{And, AttributeReference, EqualTo, GreaterThanOrEqual, LessThan, Literal}
+import org.apache.spark.sql.catalyst.expressions.{And, AttributeReference, EqualTo, GetStructField, GreaterThanOrEqual, LessThan, Literal}
 import org.apache.spark.sql.execution.datasources.{NoopCache, PartitionDirectory}
 import org.apache.spark.sql.functions.{lit, struct}
 import org.apache.spark.sql.hudi.HoodieSparkSessionExtension
@@ -857,6 +857,175 @@ class TestHoodieFileIndex extends HoodieSparkClientTestBase with ScalaAssertionS
     } else {
       partitionValues.mkString(StoragePath.SEPARATOR)
     }
+  }
+
+  // -------------------------------------------------------------------------
+  // Tests for HoodieFileIndex.reclassifyFiltersForNestedPartitionColumns
+  // -------------------------------------------------------------------------
+
+  /**
+   * Build a simple GetStructField expression that mimics the Spark resolution of
+   * `structColName.fieldName = value` for the given struct schema.
+   *
+   * The struct is represented as a top-level AttributeReference; the field is accessed
+   * via GetStructField with the ordinal derived from `structSchema`.
+   */
+  private def nestedEq(structColName: String,
+                       structSchema: StructType,
+                       fieldName: String,
+                       value: String): EqualTo = {
+    val structAttr = AttributeReference(structColName, structSchema)()
+    val fieldOrdinal = structSchema.fieldIndex(fieldName)
+    EqualTo(GetStructField(structAttr, fieldOrdinal, Some(fieldName)), Literal(value))
+  }
+
+  /** A simple case-insensitive resolver (mirrors Spark's default). */
+  private def resolver: (String, String) => Boolean = (a, b) => a.equalsIgnoreCase(b)
+
+  @Test
+  def testReclassifyFlatPartitionColumnNoChange(): Unit = {
+    // Flat partition columns (no dots) → method should be a no-op.
+    val partitionColumnNames = Seq("dt")
+    val filter = EqualTo(AttributeReference("dt", StringType)(), Literal("2024-01-01"))
+    val (pf, df) = HoodieFileIndex.reclassifyFiltersForNestedPartitionColumns(
+      partitionColumnNames, resolver, partitionFilters = Seq.empty, dataFilters = Seq(filter))
+    // Nothing promoted: the caller already classified correctly for flat columns.
+    assertEquals(Seq.empty, pf)
+    assertEquals(Seq(filter), df)
+  }
+
+  @Test
+  def testReclassifyEmptyPartitionColumnsNoChange(): Unit = {
+    // No partition columns at all → no-op.
+    val filter = EqualTo(AttributeReference("x", StringType)(), Literal("v"))
+    val (pf, df) = HoodieFileIndex.reclassifyFiltersForNestedPartitionColumns(
+      partitionColumnNames = Seq.empty, resolver,
+      partitionFilters = Seq.empty, dataFilters = Seq(filter))
+    assertEquals(Seq.empty, pf)
+    assertEquals(Seq(filter), df)
+  }
+
+  @Test
+  def testReclassifyNestedColumnPromotesGetStructFieldFromDataFilters(): Unit = {
+    // Core scenario: Spark puts GetStructField(nested_record, level) = 'INFO' into
+    // dataFilters because it can't match the struct attribute to the flat partition
+    // attribute "nested_record.level".  The method must promote it to partitionFilters.
+    val nestedSchema = StructType(Seq(
+      StructField("nested_int", IntegerType),
+      StructField("level", StringType)))
+    val partitionColumnNames = Seq("nested_record.level")
+    val structFilter = nestedEq("nested_record", nestedSchema, "level", "INFO")
+
+    val (pf, df) = HoodieFileIndex.reclassifyFiltersForNestedPartitionColumns(
+      partitionColumnNames, resolver, partitionFilters = Seq.empty, dataFilters = Seq(structFilter))
+
+    assertEquals(Seq(structFilter), pf, "GetStructField filter should be promoted to partition filters")
+    assertEquals(Seq.empty, df, "dataFilters should be empty after promotion")
+  }
+
+  @Test
+  def testReclassifyNestedColumnAlreadyInPartitionFiltersNoChange(): Unit = {
+    // If Spark somehow already puts the filter in partitionFilters, the result stays the same.
+    val nestedSchema = StructType(Seq(
+      StructField("nested_int", IntegerType),
+      StructField("level", StringType)))
+    val partitionColumnNames = Seq("nested_record.level")
+    val structFilter = nestedEq("nested_record", nestedSchema, "level", "INFO")
+
+    val (pf, df) = HoodieFileIndex.reclassifyFiltersForNestedPartitionColumns(
+      partitionColumnNames, resolver, partitionFilters = Seq(structFilter), dataFilters = Seq.empty)
+
+    assertEquals(Seq(structFilter), pf)
+    assertEquals(Seq.empty, df)
+  }
+
+  @Test
+  def testReclassifyMixedStructFilterPromotedDataFilterRetained(): Unit = {
+    // A filter on the struct-parent is promoted; a filter on an unrelated column stays.
+    val nestedSchema = StructType(Seq(
+      StructField("nested_int", IntegerType),
+      StructField("level", StringType)))
+    val partitionColumnNames = Seq("nested_record.level")
+    val structFilter = nestedEq("nested_record", nestedSchema, "level", "INFO")
+    val tsFilter = GreaterThanOrEqual(AttributeReference("ts", LongType)(), Literal(1000L))
+
+    val (pf, df) = HoodieFileIndex.reclassifyFiltersForNestedPartitionColumns(
+      partitionColumnNames, resolver, partitionFilters = Seq.empty,
+      dataFilters = Seq(structFilter, tsFilter))
+
+    assertEquals(Seq(structFilter), pf, "Struct-field filter should be promoted")
+    assertEquals(Seq(tsFilter), df, "Unrelated data filter should remain in dataFilters")
+  }
+
+  @Test
+  def testReclassifyAttrWithExprIdSuffixStrippedCorrectly(): Unit = {
+    // Spark sometimes appends an exprId suffix like "#136" to attribute names in filter
+    // expressions.  The method must strip this suffix before comparing.
+    val nestedSchema = StructType(Seq(StructField("level", StringType)))
+    val partitionColumnNames = Seq("nested_record.level")
+
+    // Simulate "nested_record#136" – the name produced by Spark's internal representation.
+    val structAttrWithSuffix = AttributeReference("nested_record#136", nestedSchema)()
+    val structFilter = EqualTo(
+      GetStructField(structAttrWithSuffix, 0, Some("level")), Literal("INFO"))
+
+    val (pf, df) = HoodieFileIndex.reclassifyFiltersForNestedPartitionColumns(
+      partitionColumnNames, resolver, partitionFilters = Seq.empty, dataFilters = Seq(structFilter))
+
+    assertEquals(Seq(structFilter), pf, "Filter with exprId-suffixed attr name should be promoted")
+    assertEquals(Seq.empty, df)
+  }
+
+  @Test
+  def testReclassifyMultipleNestedPartitionColumnsAllPromoted(): Unit = {
+    // Tables may have more than one nested partition column.
+    val schemaA = StructType(Seq(StructField("b", StringType)))
+    val schemaC = StructType(Seq(StructField("d", StringType)))
+    val partitionColumnNames = Seq("a.b", "c.d")
+    val filterAB = nestedEq("a", schemaA, "b", "x")
+    val filterCD = nestedEq("c", schemaC, "d", "y")
+
+    val (pf, df) = HoodieFileIndex.reclassifyFiltersForNestedPartitionColumns(
+      partitionColumnNames, resolver, partitionFilters = Seq.empty,
+      dataFilters = Seq(filterAB, filterCD))
+
+    assertEquals(2, pf.size, "Both nested-column filters should be promoted")
+    assertEquals(Seq.empty, df)
+  }
+
+  @Test
+  def testReclassifyFilterOnNonPartitionStructNotPromoted(): Unit = {
+    // A filter that references a struct that is NOT a partition-column parent
+    // must stay in dataFilters.
+    val otherSchema = StructType(Seq(StructField("field", StringType)))
+    val partitionColumnNames = Seq("nested_record.level")
+    val unrelatedFilter = nestedEq("other_struct", otherSchema, "field", "val")
+
+    val (pf, df) = HoodieFileIndex.reclassifyFiltersForNestedPartitionColumns(
+      partitionColumnNames, resolver, partitionFilters = Seq.empty,
+      dataFilters = Seq(unrelatedFilter))
+
+    assertEquals(Seq.empty, pf, "Filter on an unrelated struct should not be promoted")
+    assertEquals(Seq(unrelatedFilter), df)
+  }
+
+  @Test
+  def testReclassifyFilterReferencingBothPartitionAndDataNotPromoted(): Unit = {
+    // A conjunctive filter that references BOTH the partition struct-parent AND an
+    // unrelated column must not be promoted, because it also references data columns.
+    val nestedSchema = StructType(Seq(StructField("level", StringType)))
+    val partitionColumnNames = Seq("nested_record.level")
+    val structFilter = nestedEq("nested_record", nestedSchema, "level", "INFO")
+    val tsFilter = GreaterThanOrEqual(AttributeReference("ts", LongType)(), Literal(1000L))
+    // An AND combining partition-related and data columns: should stay in dataFilters.
+    val combined = And(structFilter, tsFilter)
+
+    val (pf, df) = HoodieFileIndex.reclassifyFiltersForNestedPartitionColumns(
+      partitionColumnNames, resolver, partitionFilters = Seq.empty, dataFilters = Seq(combined))
+
+    assertEquals(Seq.empty, pf,
+      "Combined filter referencing both partition and data columns should not be promoted")
+    assertEquals(Seq(combined), df)
   }
 }
 
