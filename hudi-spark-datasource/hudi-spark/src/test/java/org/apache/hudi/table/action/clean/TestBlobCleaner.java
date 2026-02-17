@@ -37,6 +37,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.testutils.HoodieClientTestBase;
 
+import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.spark.api.java.JavaRDD;
@@ -45,6 +46,7 @@ import org.junit.jupiter.params.provider.EnumSource;
 
 import java.io.IOException;
 import java.io.OutputStream;
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -58,6 +60,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class TestBlobCleaner extends HoodieClientTestBase {
+  private static final Schema BLOB_TYPE_SCHEMA = HoodieSchema.createBlob().getField(HoodieSchema.Blob.TYPE).get().schema().toAvroSchema();
 
   /**
    * Test cleaning with blob fields containing inline blobs, managed external references,
@@ -242,9 +245,9 @@ class TestBlobCleaner extends HoodieClientTestBase {
   private GenericRecord createInlineBlob(HoodieSchema recordSchema, byte[] data) {
     HoodieSchema blobSchema = recordSchema.getField("file_data").get().getNonNullSchema();
     GenericRecord blob = new GenericData.Record(blobSchema.toAvroSchema());
-    blob.put("storage_type", "inline");
-    blob.put("data", java.nio.ByteBuffer.wrap(data));
-    blob.put("reference", null);
+    blob.put(HoodieSchema.Blob.TYPE, getBlobType("INLINE"));
+    blob.put(HoodieSchema.Blob.INLINE_DATA_FIELD, ByteBuffer.wrap(data));
+    blob.put(HoodieSchema.Blob.EXTERNAL_REFERENCE, null);
     return blob;
   }
 
@@ -254,19 +257,23 @@ class TestBlobCleaner extends HoodieClientTestBase {
   private GenericRecord createBlob(
       HoodieSchema recordSchema, String path, Long offset, Long length, boolean managed) {
     HoodieSchema blobSchema = recordSchema.getField("file_data").get().getNonNullSchema();
-    HoodieSchema refSchema = blobSchema.getField("reference").get().getNonNullSchema();
+    HoodieSchema refSchema = blobSchema.getField(HoodieSchema.Blob.EXTERNAL_REFERENCE).get().getNonNullSchema();
 
     GenericRecord reference = new GenericData.Record(refSchema.toAvroSchema());
-    reference.put("external_path", path);
-    reference.put("offset", offset);
-    reference.put("length", length);
-    reference.put("managed", managed);
+    reference.put(HoodieSchema.Blob.EXTERNAL_REFERENCE_PATH, path);
+    reference.put(HoodieSchema.Blob.EXTERNAL_REFERENCE_OFFSET, offset);
+    reference.put(HoodieSchema.Blob.EXTERNAL_REFERENCE_LENGTH, length);
+    reference.put(HoodieSchema.Blob.EXTERNAL_REFERENCE_IS_MANAGED, managed);
 
     GenericRecord blob = new GenericData.Record(blobSchema.toAvroSchema());
-    blob.put("storage_type", "out_of_line");
-    blob.put("data", null);
-    blob.put("reference", reference);
+    blob.put(HoodieSchema.Blob.TYPE, getBlobType("OUT_OF_LINE"));
+    blob.put(HoodieSchema.Blob.INLINE_DATA_FIELD, null);
+    blob.put(HoodieSchema.Blob.EXTERNAL_REFERENCE, reference);
     return blob;
+  }
+
+  private static GenericData.EnumSymbol getBlobType(String value) {
+    return new GenericData.EnumSymbol(BLOB_TYPE_SCHEMA, value);
   }
 
   /**

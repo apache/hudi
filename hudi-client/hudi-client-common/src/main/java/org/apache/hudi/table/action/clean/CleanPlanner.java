@@ -894,7 +894,7 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
       return Option.empty();
     }
 
-    String path = (String) recordContext.getValue(blobRecord, blobSchema, HoodieSchema.Blob.EXTERNAL_REFERENCE + "." + HoodieSchema.Blob.EXTERNAL_REFERENCE_PATH);
+    String path = recordContext.getValue(blobRecord, blobSchema, HoodieSchema.Blob.EXTERNAL_REFERENCE + "." + HoodieSchema.Blob.EXTERNAL_REFERENCE_PATH).toString();
     return Option.ofNullable(path);
   }
 }
