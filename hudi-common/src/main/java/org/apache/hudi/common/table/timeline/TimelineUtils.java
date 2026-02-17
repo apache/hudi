@@ -409,8 +409,7 @@ public class TimelineUtils {
       }
       return Option.of(ectr);
     } catch (IOException e) {
-      LOG.warn("Failed to read clean metadata for " + lastClean.get(), e);
-      return Option.empty();
+      throw new HoodieIOException("Failed to read clean metadata for " + lastClean.get(), e);
     }
   }
 
