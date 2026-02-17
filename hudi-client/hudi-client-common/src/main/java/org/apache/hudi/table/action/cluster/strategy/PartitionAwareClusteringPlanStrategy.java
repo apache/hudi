@@ -166,7 +166,7 @@ public abstract class PartitionAwareClusteringPlanStrategy<T,I,K,O> extends Clus
     }
 
     final HoodieEngineContext engineContext;
-    if (getWriteConfig().isClusteringComputePlanPerPartitionParallel()) {
+    if (getWriteConfig().isClusteringPlanPartitionParallel()) {
       engineContext = getEngineContext();
     } else {
       engineContext = new HoodieLocalEngineContext(getEngineContext().getStorageConf());

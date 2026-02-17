@@ -347,17 +347,17 @@ public class HoodieClusteringConfig extends HoodieConfig {
           + "Please exercise caution while setting this config, especially when clustering is done very frequently. This could lead to race condition in "
           + "rare scenarios, for example, when the clustering completes after instants are fetched but before rollback completed.");
 
-  public static final ConfigProperty<Boolean> COMPUTE_PLAN_PER_PARTITION_PARALLEL = ConfigProperty
-      .key("hoodie.clustering.plan.compute.partition.parallel")
+  public static final ConfigProperty<Boolean> PLAN_PARTITION_PARALLEL = ConfigProperty
+      .key("hoodie.clustering.plan.partition.parallel")
       .defaultValue(true)
-      .sinceVersion("1.1.0")
-      .withDocumentation("Compute clustering groups for each partition independently in parallel (using engine context) when generating "
-          + "clustering plan. For example, with Spark engine setting this to true would lead to a separate spark task computing all clustering "
-          + "groups per dataset partition, whereas setting this to false would lead to all clustering groups for all partitions being serially "
-          + "computed on the driver. By default this should be true, but can be disabled for cases where there are guaranteed to only be "
-          + "a few partitions with many files in clustering plan. And (when using Spark) it would be more resource-efficient to just use local " 
-          + "engine contexthave the spark driver (with extra memory) compute it all rather than allocate more memory per executor "
-          + "(which won't be needed later in spark job).");
+      .sinceVersion("1.2.0")
+      .withDocumentation("Compute clustering groups for each partition in parallel using engine context when generating "
+          + "the clustering plan. For example, with Spark engine setting this to true would lead to a separate spark task (computing all clustering "
+          + "groups per dataset partition), whereas setting this to false would lead to all clustering groups for all partitions being locally "
+          + "computed in parallel on the driver. By default this should be enabled, but can be disabled for cases where there are guaranteed to only be "
+          + "a few partitions with many files in clustering plan. And (when using Spark) it would be more resource-efficient to just use local "
+          + "engine context which will allow the spark driver (which has extra memory) to compute it all locally, rather than allocate more memory per executor "
+          + "(which won't anyway be needed later in the spark job).");
 
   public static final ConfigProperty<Boolean> FILE_STITCHING_BINARY_COPY_SCHEMA_EVOLUTION_ENABLE = ConfigProperty
       .key(CLUSTERING_STRATEGY_PARAM_PREFIX + "binary.copy.schema.evolution.enable")
@@ -642,8 +642,8 @@ public class HoodieClusteringConfig extends HoodieConfig {
       return this;
     }
 
-    public Builder clusteringComputePlanPerPartitionParallel(Boolean parallel) {
-      clusteringConfig.setValue(COMPUTE_PLAN_PER_PARTITION_PARALLEL, String.valueOf(parallel));
+    public Builder planPartitionParallel(Boolean isParallel) {
+      clusteringConfig.setValue(PLAN_PARTITION_PARALLEL, String.valueOf(isParallel));
       return this;
     }
 
