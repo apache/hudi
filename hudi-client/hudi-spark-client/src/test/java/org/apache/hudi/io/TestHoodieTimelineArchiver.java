@@ -1971,7 +1971,7 @@ public class TestHoodieTimelineArchiver extends HoodieSparkClientTestHarness {
         .getCommitsTimeline().filterCompletedInstants().getInstants();
     // Archival on MDT is now blocked by the ECTR of data table instead of earliest instant,
     // allowing more instants in MDT to be archived
-    assertEquals(6, metadataTableInstants.size());
+    assertEquals(7, metadataTableInstants.size());
   }
 
   /**
