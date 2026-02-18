@@ -88,9 +88,9 @@ public class HiveMetastoreBasedLockProvider implements LockProvider<LockResponse
   public HiveMetastoreBasedLockProvider(final LockConfiguration lockConfiguration, final Configuration conf) {
     this(lockConfiguration);
     try {
-      if (!StringUtils.isNullOrEmpty(conf.getString(CommonConfigurationKeysPublic.HADOOP_SECURITY_CREDENTIAL_PROVIDER_PATH, null))
-          && StringUtils.isNullOrEmpty(conf.getString(HiveConf.ConfVars.METASTOREPWD.varname, null))) {
-        String passwd = ShimLoader.getHadoopShims().getPassword((Configuration) conf.unwrap(), HiveConf.ConfVars.METASTOREPWD.varname);
+      if (!StringUtils.isNullOrEmpty(conf.get(CommonConfigurationKeysPublic.HADOOP_SECURITY_CREDENTIAL_PROVIDER_PATH))
+          && StringUtils.isNullOrEmpty(conf.get(HiveConf.ConfVars.METASTOREPWD.varname))) {
+        String passwd = ShimLoader.getHadoopShims().getPassword(conf, HiveConf.ConfVars.METASTOREPWD.varname);
         if (!StringUtils.isNullOrEmpty(passwd)) {
           conf.set(HiveConf.ConfVars.METASTOREPWD.varname, passwd);
         }
