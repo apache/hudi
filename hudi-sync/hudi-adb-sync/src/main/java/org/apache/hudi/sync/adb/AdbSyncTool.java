@@ -83,7 +83,7 @@ public class AdbSyncTool extends HoodieSyncTool {
 
   public AdbSyncTool(Properties props) {
     super(props);
-    this.config = new AdbSyncConfig(props);
+    this.config = new AdbSyncConfig(this.props);
     this.databaseName = config.getString(META_SYNC_DATABASE_NAME);
     this.tableName = config.getString(META_SYNC_TABLE_NAME);
     this.syncClient = new HoodieAdbJdbcClient(config);
