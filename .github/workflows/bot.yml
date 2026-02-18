@@ -1272,7 +1272,5 @@ jobs:
           mvn clean install -DskipTests
       - name: Test hudi-trino-plugin with JDK 23
         working-directory: ./hudi-trino-plugin
-        env:
-          DOCKER_API_VERSION: "1.44"
         run:
-          mvn test
+          mvn test -Dapi.version=1.44
