@@ -44,7 +44,7 @@ class TestComplexTypeSchemaEvolution extends HoodieSparkClientTestBase with Scal
     initPath()
     initSparkContexts()
     spark = sqlContext.sparkSession
-    initHoodieStorage()
+    initFileSystem()
   }
 
   @AfterEach override def tearDown(): Unit = {
