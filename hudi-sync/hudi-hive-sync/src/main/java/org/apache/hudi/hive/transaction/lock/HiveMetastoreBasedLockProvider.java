@@ -27,6 +27,7 @@ import org.apache.hudi.exception.HoodieLockException;
 import org.apache.hudi.hive.util.IMetaStoreClientUtil;
 
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.CommonConfigurationKeysPublic;
 import org.apache.hadoop.hive.conf.HiveConf;
 import org.apache.hadoop.hive.metastore.IMetaStoreClient;
 import org.apache.hadoop.hive.metastore.LockRequestBuilder;
@@ -39,6 +40,7 @@ import org.apache.hadoop.hive.metastore.api.LockType;
 import org.apache.hadoop.hive.metastore.api.MetaException;
 import org.apache.hadoop.hive.ql.metadata.Hive;
 import org.apache.hadoop.hive.ql.metadata.HiveException;
+import org.apache.hadoop.hive.shims.ShimLoader;
 import org.apache.thrift.TException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -85,6 +87,17 @@ public class HiveMetastoreBasedLockProvider implements LockProvider<LockResponse
 
   public HiveMetastoreBasedLockProvider(final LockConfiguration lockConfiguration, final Configuration conf) {
     this(lockConfiguration);
+    try {
+      if (!StringUtils.isNullOrEmpty(conf.get(CommonConfigurationKeysPublic.HADOOP_SECURITY_CREDENTIAL_PROVIDER_PATH))
+          && StringUtils.isNullOrEmpty(conf.get(HiveConf.ConfVars.METASTOREPWD.varname))) {
+        String passwd = ShimLoader.getHadoopShims().getPassword(conf, HiveConf.ConfVars.METASTOREPWD.varname);
+        if (!StringUtils.isNullOrEmpty(passwd)) {
+          conf.set(HiveConf.ConfVars.METASTOREPWD.varname, passwd);
+        }
+      }
+    } catch (Exception e) {
+      LOG.info("Exception while trying to get Hive password from hadoop credential store", e);
+    }
     try {
       HiveConf hiveConf = new HiveConf();
       setHiveLockConfs(hiveConf);
