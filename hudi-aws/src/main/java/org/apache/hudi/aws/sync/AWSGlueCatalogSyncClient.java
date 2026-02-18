@@ -43,7 +43,6 @@ import software.amazon.awssdk.services.glue.model.CreateDatabaseResponse;
 import software.amazon.awssdk.services.glue.model.CreateTableRequest;
 import software.amazon.awssdk.services.glue.model.CreateTableResponse;
 import software.amazon.awssdk.services.glue.model.DatabaseInput;
-import software.amazon.awssdk.services.glue.model.DeletePartitionIndexRequest;
 import software.amazon.awssdk.services.glue.model.DeleteTableRequest;
 import software.amazon.awssdk.services.glue.model.EntityNotFoundException;
 import software.amazon.awssdk.services.glue.model.GetDatabaseRequest;
