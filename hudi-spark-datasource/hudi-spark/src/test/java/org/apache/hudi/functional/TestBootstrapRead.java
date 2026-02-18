@@ -19,6 +19,7 @@
 package org.apache.hudi.functional;
 
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.config.HoodieWriteConfig;
 
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
@@ -28,6 +29,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
+import java.util.HashMap;
 import java.util.Map;
 import java.util.stream.Stream;
 
@@ -68,13 +70,18 @@ public class TestBootstrapRead extends TestBootstrapReadBase {
     this.dashPartitions = dashPartitions;
     this.tableType = tableType;
     this.nPartitions = nPartitions;
-    setupDirs();
+    Map<String, String> overrideOpts = new HashMap<>();
+    if (nPartitions > 1) {
+      overrideOpts.put(HoodieWriteConfig.ENABLE_COMPLEX_KEYGEN_VALIDATION.key(), "false");
+    }
+    setupDirs(overrideOpts);
 
     // do bootstrap
     Map<String, String> options = setBootstrapOptions();
     Dataset<Row> bootstrapDf = sparkSession.emptyDataFrame();
     bootstrapDf.write().format("hudi")
         .options(options)
+        .options(overrideOpts)
         .mode(SaveMode.Overwrite)
         .save(bootstrapTargetPath);
     compareTables();
@@ -82,6 +89,7 @@ public class TestBootstrapRead extends TestBootstrapReadBase {
 
     // do upserts
     options = basicOptions();
+    options.putAll(overrideOpts);
     doUpdate(options, "001");
     compareTables();
     verifyMetaColOnlyRead(1);
