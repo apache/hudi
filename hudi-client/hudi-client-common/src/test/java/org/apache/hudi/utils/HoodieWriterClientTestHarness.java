@@ -571,7 +571,6 @@ public abstract class HoodieWriterClientTestHarness extends HoodieCommonTestHarn
     BufferedRecordMerger<HoodieRecord> recordMerger = BufferedRecordMergerFactory.create(
         readerContext,
         metaClient.getTableConfig().getRecordMergeMode(),
-        false,
         Option.ofNullable(writeClient.getConfig().getRecordMerger()),
         Option.ofNullable(writeClient.getConfig().getPayloadClass()),
         HoodieSchema.parse(writeClient.getConfig().getSchema()),

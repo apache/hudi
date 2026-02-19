@@ -26,6 +26,7 @@ import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.table.PartialUpdateMode;
+import org.apache.hudi.exception.HoodieIOException;
 
 import java.io.Serializable;
 import java.util.List;
@@ -45,6 +46,7 @@ public class PartialUpdateHandler<T> implements Serializable {
   private final RecordContext<T> recordContext;
   private final PartialUpdateMode partialUpdateMode;
   private final Map<String, String> mergeProperties;
+  private final PartialMergerWithKeepValues<T> keepValuesPartialMergingUtils;
 
   public PartialUpdateHandler(RecordContext<T> recordContext,
                               PartialUpdateMode partialUpdateMode,
@@ -52,6 +54,7 @@ public class PartialUpdateHandler<T> implements Serializable {
     this.recordContext = recordContext;
     this.partialUpdateMode = partialUpdateMode;
     this.mergeProperties = parseMergeProperties(props);
+    this.keepValuesPartialMergingUtils = new PartialMergerWithKeepValues<>();
   }
 
 
@@ -82,6 +85,8 @@ public class PartialUpdateHandler<T> implements Serializable {
     }
 
     switch (partialUpdateMode) {
+      case KEEP_VALUES:
+        return reconcileBasedOnKeepValues(highOrderRecord, lowOrderRecord, highOrderSchema, lowOrderSchema, newSchema);
       case IGNORE_DEFAULTS:
         return reconcileDefaultValues(
             highOrderRecord, lowOrderRecord, highOrderSchema, lowOrderSchema, newSchema);
@@ -89,8 +94,32 @@ public class PartialUpdateHandler<T> implements Serializable {
         return reconcileMarkerValues(
             highOrderRecord, lowOrderRecord, highOrderSchema, lowOrderSchema, newSchema);
       default:
-        return highOrderRecord;
+        throw new HoodieIOException("Unsupported PartialUpdateMode " + partialUpdateMode + " detected");
     }
+  }
+
+  /**
+   * Reconcile two versions of the record based on KEEP_VALUES.
+   * i.e for values missing from new record, we pick from older record, if not, value from new record is picked for each column.
+   * @param highOrderRecord record with higher commit time or higher ordering value
+   * @param lowOrderRecord  record with lower commit time or lower ordering value
+   * @param highOrderSchema The schema of highOrderRecord
+   * @param lowOrderSchema  The schema of the older record
+   * @param newSchema       The schema of the new incoming record
+   * @return the merged record of type {@link BufferedRecord}
+   */
+  private BufferedRecord<T> reconcileBasedOnKeepValues(BufferedRecord<T> highOrderRecord,
+                                               BufferedRecord<T> lowOrderRecord,
+                                               HoodieSchema highOrderSchema,
+                                               HoodieSchema lowOrderSchema,
+                                               HoodieSchema newSchema) {
+    return keepValuesPartialMergingUtils.mergePartialRecords(
+            lowOrderRecord,
+            lowOrderSchema,
+            highOrderRecord,
+            highOrderSchema,
+            newSchema,
+            recordContext).getLeft();
   }
 
   /**
