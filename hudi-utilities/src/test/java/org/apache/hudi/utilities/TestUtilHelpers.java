@@ -24,19 +24,27 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieLockConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.storage.HoodieStorageUtils;
+import org.apache.hudi.utilities.config.HoodieStreamerConfig;
 import org.apache.hudi.utilities.sources.AvroKafkaSource;
 import org.apache.hudi.utilities.sources.Source;
 import org.apache.hudi.utilities.sources.helpers.SchemaTestProvider;
 import org.apache.hudi.utilities.streamer.DefaultStreamContext;
 import org.apache.hudi.utilities.streamer.HoodieStreamerMetrics;
 
+import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
+import org.apache.spark.sql.Dataset;
+import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SparkSession;
+import org.apache.spark.sql.types.StructField;
+import org.apache.spark.sql.types.StructType;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
+import java.util.Collections;
 
 import static org.apache.hudi.common.testutils.HoodieTestUtils.getDefaultStorageConf;
+import static org.apache.hudi.testutils.HoodieClientTestUtils.getSparkConfForTest;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -92,5 +100,90 @@ public class TestUtilHelpers {
         new DefaultStreamContext(new SchemaTestProvider(typedProperties), Option.empty())));
     // We expect two constructors to complain about this error.
     assertEquals(2, e.getSuppressed().length);
+  }
+
+  @Test
+  void testExtractSchemaFromDatasetWithNullableDisabled() throws IOException {
+    SparkSession spark = SparkSession
+        .builder()
+        .config(getSparkConfForTest(TestUtilHelpers.class.getName()))
+        .getOrCreate();
+
+    try {
+      JavaSparkContext jsc = JavaSparkContext.fromSparkContext(spark.sparkContext());
+
+      // Create test data with non-nullable fields (integer type defaults to non-nullable in JSON)
+      String testData = "{\"id\": 1, \"name\": \"test\"}";
+      JavaRDD<String> testRdd = jsc.parallelize(Collections.singletonList(testData), 1);
+      Dataset<Row> ds = spark.read().json(testRdd);
+
+      // Without the config, should return original schema
+      TypedProperties props = new TypedProperties();
+      StructType resultSchema = UtilHelpers.extractSchemaFromDataset(ds, props);
+
+      assertEquals(ds.schema(), resultSchema);
+    } finally {
+      spark.close();
+    }
+  }
+
+  @Test
+  void testExtractSchemaFromDatasetWithNullableEnabled() throws IOException {
+    SparkSession spark = SparkSession
+        .builder()
+        .config(getSparkConfForTest(TestUtilHelpers.class.getName()))
+        .getOrCreate();
+
+    try {
+      JavaSparkContext jsc = JavaSparkContext.fromSparkContext(spark.sparkContext());
+
+      // Create test data
+      String testData = "{\"id\": 1, \"name\": \"test\"}";
+      JavaRDD<String> testRdd = jsc.parallelize(Collections.singletonList(testData), 1);
+      Dataset<Row> ds = spark.read().json(testRdd);
+
+      // Enable nullable config
+      TypedProperties props = new TypedProperties();
+      props.setProperty(HoodieStreamerConfig.TRANSFORMED_ROW_NULLABLE.key(), "true");
+
+      StructType resultSchema = UtilHelpers.extractSchemaFromDataset(ds, props);
+
+      // All fields should be nullable
+      for (StructField field : resultSchema.fields()) {
+        assertTrue(field.nullable(), "Field " + field.name() + " should be nullable");
+      }
+    } finally {
+      spark.close();
+    }
+  }
+
+  @Test
+  void testExtractSchemaFromDatasetWithAlternativeKey() throws IOException {
+    SparkSession spark = SparkSession
+        .builder()
+        .config(getSparkConfForTest(TestUtilHelpers.class.getName()))
+        .getOrCreate();
+
+    try {
+      JavaSparkContext jsc = JavaSparkContext.fromSparkContext(spark.sparkContext());
+
+      // Create test data
+      String testData = "{\"id\": 1, \"name\": \"test\"}";
+      JavaRDD<String> testRdd = jsc.parallelize(Collections.singletonList(testData), 1);
+      Dataset<Row> ds = spark.read().json(testRdd);
+
+      // Use the alternative (deprecated deltastreamer) key
+      TypedProperties props = new TypedProperties();
+      props.setProperty("hoodie.deltastreamer.transformed.row.nullable", "true");
+
+      StructType resultSchema = UtilHelpers.extractSchemaFromDataset(ds, props);
+
+      // All fields should be nullable when using alternative key
+      for (StructField field : resultSchema.fields()) {
+        assertTrue(field.nullable(), "Field " + field.name() + " should be nullable with alternative key");
+      }
+    } finally {
+      spark.close();
+    }
   }
 }

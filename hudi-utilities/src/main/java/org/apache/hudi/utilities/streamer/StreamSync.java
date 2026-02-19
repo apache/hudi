@@ -125,6 +125,7 @@ import org.apache.spark.rdd.RDD;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SparkSession;
+import org.apache.spark.sql.types.StructType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -728,9 +729,10 @@ public class StreamSync implements Serializable, Closeable {
       } else {
         // Deduce proper target (writer's) schema for the input dataset, reconciling its
         // schema w/ the table's one
-        HoodieSchema incomingSchema = transformed.map(df ->
-                HoodieSchemaConversionUtils.convertStructTypeToHoodieSchema(df.schema(), getRecordQualifiedName(cfg.targetTableName)))
-            .orElseGet(dataAndCheckpoint.getSchemaProvider()::getTargetHoodieSchema);
+        HoodieSchema incomingSchema = transformed.map(df -> {
+          StructType structType = UtilHelpers.extractSchemaFromDataset(df, props);
+          return HoodieSchemaConversionUtils.convertStructTypeToHoodieSchema(structType, getRecordQualifiedName(cfg.targetTableName));
+        }).orElseGet(dataAndCheckpoint.getSchemaProvider()::getTargetHoodieSchema);
         schemaProvider = getDeducedSchemaProvider(incomingSchema, dataAndCheckpoint.getSchemaProvider(), metaClient);
 
         if (canUseRowWriter(schemaProvider.getTargetHoodieSchema())) {
