@@ -19,6 +19,7 @@
 
 package org.apache.spark.sql.hudi.blob
 
+import org.apache.hudi.HoodieSparkConfUtils
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration
 
 import org.apache.spark.sql.SparkSession
@@ -33,14 +34,19 @@ import org.apache.spark.sql.execution.{SparkPlan, SparkStrategy}
  *
  * @param sparkSession SparkSession for accessing configuration
  */
-case class BatchedBlobStrategy(sparkSession: SparkSession) extends SparkStrategy {
+case class BatchedBlobReaderStrategy(sparkSession: SparkSession) extends SparkStrategy {
   def apply(plan: LogicalPlan): Seq[SparkPlan] = plan match {
     case read @ BatchedBlobRead(child, _, _) =>
       // TODO find proper way to access these configs
-      val maxGapBytes =
-        conf.getConfString("hoodie.blob.batching.max.gap.bytes", "4096").toInt
-      val lookaheadSize =
-        conf.getConfString("hoodie.blob.batching.lookahead.size", "50").toInt
+      val maxGapBytes = HoodieSparkConfUtils.getConfigValue(
+        Map.empty, sparkSession.sqlContext.conf,
+        BatchedByteRangeReader.MAX_GAP_BYTES_CONF,
+        String.valueOf(BatchedByteRangeReader.DEFAULT_MAX_GAP_BYTES)).toInt
+
+      val lookaheadSize = HoodieSparkConfUtils.getConfigValue(
+        Map.empty, sparkSession.sqlContext.conf,
+        BatchedByteRangeReader.LOOKAHEAD_SIZE_CONF,
+        String.valueOf(BatchedByteRangeReader.DEFAULT_LOOKAHEAD_SIZE)).toInt
 
       val storageConf = new HadoopStorageConfiguration(sparkSession.sparkContext.hadoopConfiguration)
       BatchedBlobReadExec(

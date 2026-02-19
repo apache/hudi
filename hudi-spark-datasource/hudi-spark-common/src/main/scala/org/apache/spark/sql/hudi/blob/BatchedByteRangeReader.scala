@@ -494,7 +494,8 @@ private case class RowResult[R](
  */
 object BatchedByteRangeReader {
 
-  private val logger = LoggerFactory.getLogger(BatchedByteRangeReader.getClass)
+  val MAX_GAP_BYTES_CONF = "hoodie.blob.batching.max.gap.bytes"
+  val LOOKAHEAD_SIZE_CONF = "hoodie.blob.batching.lookahead.size"
 
   /** Default maximum gap to consider for batching */
   val DEFAULT_MAX_GAP_BYTES = 4096

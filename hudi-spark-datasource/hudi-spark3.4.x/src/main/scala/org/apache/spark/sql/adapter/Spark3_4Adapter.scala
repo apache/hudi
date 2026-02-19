@@ -42,7 +42,7 @@ import org.apache.spark.sql.execution.datasources.orc.Spark34OrcReader
 import org.apache.spark.sql.execution.datasources.parquet.{ParquetFileFormat, ParquetFilters, Spark34LegacyHoodieParquetFileFormat, Spark34ParquetReader}
 import org.apache.spark.sql.execution.datasources.v2.DataSourceV2Relation
 import org.apache.spark.sql.hudi.analysis.TableValuedFunctions
-import org.apache.spark.sql.hudi.blob.{BatchedBlobStrategy, ScalarFunctions}
+import org.apache.spark.sql.hudi.blob.{BatchedBlobReaderStrategy, ScalarFunctions}
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.internal.SQLConf.LegacyBehaviorPolicy
 import org.apache.spark.sql.parser.{HoodieExtendedParserInterface, HoodieSpark3_4ExtendedSqlParser}
@@ -122,7 +122,7 @@ class Spark3_4Adapter extends BaseSpark3Adapter {
 
   override def injectPlannerStrategy(extensions: SparkSessionExtensions): Unit = {
     extensions.injectPlannerStrategy { session =>
-      BatchedBlobStrategy(session)
+      BatchedBlobReaderStrategy(session)
     }
   }
 

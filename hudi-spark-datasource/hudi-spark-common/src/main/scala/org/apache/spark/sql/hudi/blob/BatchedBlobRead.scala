@@ -28,7 +28,7 @@ import org.apache.spark.sql.types.BinaryType
  * Logical plan node for batched blob reading.
  *
  * Created by [[ReadBlobRule]] when `read_blob()` is detected in queries.
- * Converted to [[BatchedBlobReadExec]] by [[BatchedBlobStrategy]] during physical planning.
+ * Converted to [[BatchedBlobReadExec]] by [[BatchedBlobReaderStrategy]] during physical planning.
  *
  * @param child Child logical plan
  * @param blobAttr The blob column attribute to read from
