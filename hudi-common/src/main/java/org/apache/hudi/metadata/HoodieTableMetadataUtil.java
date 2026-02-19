@@ -2047,7 +2047,8 @@ public class HoodieTableMetadataUtil {
     // HUDI-8585 will add support for BYTES and FIXED
     return type != HoodieSchemaType.RECORD && type != HoodieSchemaType.ARRAY && type != HoodieSchemaType.MAP
         && type != HoodieSchemaType.ENUM && type != HoodieSchemaType.BYTES && type != HoodieSchemaType.FIXED
-        && type != HoodieSchemaType.BLOB && type != HoodieSchemaType.DECIMAL; // DECIMAL's underlying type is BYTES
+        && type != HoodieSchemaType.DECIMAL // DECIMAL's underlying type is BYTES
+        && type != HoodieSchemaType.BLOB;
   }
 
   private static boolean isColumnTypeSupportedV2(HoodieSchema schema) {
