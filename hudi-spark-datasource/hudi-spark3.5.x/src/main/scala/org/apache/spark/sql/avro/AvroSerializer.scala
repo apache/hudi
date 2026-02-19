@@ -144,6 +144,34 @@ private[sql] class AvroSerializer(rootCatalystType: DataType,
           decimalConversions.toBytes(decimal.toJavaBigDecimal, avroType,
             LogicalTypes.decimal(d.precision, d.scale))
 
+      // Handle VECTOR logical type
+      case (ArrayType(FloatType, false), FIXED)
+          if avroType.getLogicalType != null &&
+             avroType.getLogicalType.getName == "vector" =>
+
+        val dimension = avroType.getObjectProp("dimension").asInstanceOf[Number].intValue()
+
+        (getter, ordinal) => {
+          val arrayData = getter.getArray(ordinal)
+
+          // Validate dimension
+          if (arrayData.numElements() != dimension) {
+            throw new IncompatibleSchemaException(
+              s"VECTOR dimension mismatch at ${toFieldStr(catalystPath)}: " +
+              s"expected=$dimension, actual=${arrayData.numElements()}")
+          }
+
+          // Pack floats into bytes (little-endian, 4 bytes per float)
+          val buffer = java.nio.ByteBuffer.allocate(dimension * 4)
+            .order(java.nio.ByteOrder.LITTLE_ENDIAN)
+
+          (0 until dimension).foreach { i =>
+            buffer.putFloat(arrayData.getFloat(i))
+          }
+
+          new Fixed(avroType, buffer.array())
+        }
+
       case (StringType, ENUM) =>
         val enumSymbols: Set[String] = avroType.getEnumSymbols.asScala.toSet
         (getter, ordinal) =>

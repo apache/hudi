@@ -44,7 +44,7 @@ object HoodieSparkSchemaConverters {
   /**
    * Internal wrapper for SQL data type and nullability.
    */
-  case class SchemaType(dataType: DataType, nullable: Boolean)
+  case class SchemaType(dataType: DataType, nullable: Boolean, metadata: Option[Metadata] = None)
 
   def toSqlType(hoodieSchema: HoodieSchema): (DataType, Boolean) = {
     val result = toSqlTypeHelper(hoodieSchema, Set.empty)
@@ -54,7 +54,8 @@ object HoodieSparkSchemaConverters {
   def toHoodieType(catalystType: DataType,
                    nullable: Boolean = false,
                    recordName: String = "topLevelRecord",
-                   nameSpace: String = ""): HoodieSchema = {
+                   nameSpace: String = "",
+                   metadata: Metadata = Metadata.empty): HoodieSchema = {
     val schema = catalystType match {
       // Primitive types
       case BooleanType => HoodieSchema.create(HoodieSchemaType.BOOLEAN)
@@ -78,6 +79,28 @@ object HoodieSparkSchemaConverters {
         HoodieSchema.createDecimal(name, nameSpace, null, d.precision, d.scale, fixedSize)
 
       // Complex types
+      // Check for VECTOR type metadata property in spark struct type
+      case arrayType @ ArrayType(FloatType, containsNull) // for now checking floats but will need to check element type
+          if metadata.contains(HoodieSchema.TYPE_METADATA_FIELD) &&
+            metadata.getString(HoodieSchema.TYPE_METADATA_FIELD).startsWith("VECTOR") =>
+        if (containsNull) {
+          throw new IncompatibleSchemaException(
+            s"VECTOR type does not support nullable elements (field: $recordName)")
+        }
+
+        val typeDescriptor = HoodieSchema.parseTypeString(metadata.getString(HoodieSchema.TYPE_METADATA_FIELD))
+        val dimension = typeDescriptor.getParam(0).toInt
+        if (dimension <= 0) {
+          throw new IncompatibleSchemaException(
+            s"VECTOR dimension must be positive, got: $dimension (field: $recordName)")
+        }
+
+        val elementType = if (typeDescriptor.getParams.size() > 1)
+          HoodieSchema.Vector.VectorElementType.fromString(typeDescriptor.getParam(1))
+        else HoodieSchema.Vector.VectorElementType.FLOAT
+
+        HoodieSchema.createVector(dimension, elementType)
+
       case ArrayType(elementType, containsNull) =>
         val elementSchema = toHoodieType(elementType, containsNull, recordName, nameSpace)
         HoodieSchema.createArray(elementSchema)
@@ -103,7 +126,7 @@ object HoodieSparkSchemaConverters {
         } else {
           // Create record
           val fields = st.map { f =>
-            val fieldSchema = toHoodieType(f.dataType, f.nullable, f.name, childNameSpace)
+            val fieldSchema = toHoodieType(f.dataType, f.nullable, f.name, childNameSpace, f.metadata)
             val doc = f.getComment.orNull
             // Match existing Avro SchemaConverters behavior: use NULL_VALUE for nullable unions
             // to avoid serializing "default":null in JSON representation
@@ -178,6 +201,14 @@ object HoodieSparkSchemaConverters {
         SchemaType(StringType, nullable = false)
 
       // Complex types
+      case HoodieSchemaType.VECTOR =>
+        val vectorSchema = hoodieSchema.asInstanceOf[HoodieSchema.Vector]
+        val metadata = new MetadataBuilder()
+          .putString(HoodieSchema.TYPE_METADATA_FIELD, HoodieSchema.toTypeString(vectorSchema))
+          .build()
+
+        SchemaType(ArrayType(FloatType, containsNull = false), nullable = false, Some(metadata))
+
       case HoodieSchemaType.RECORD =>
         val fullName = hoodieSchema.getFullName
         if (existingRecordNames.contains(fullName)) {
@@ -190,10 +221,20 @@ object HoodieSparkSchemaConverters {
         val newRecordNames = existingRecordNames + fullName
         val fields = hoodieSchema.getFields.asScala.map { f =>
           val schemaType = toSqlTypeHelper(f.schema(), newRecordNames)
-          val metadata = if (f.doc().isPresent && !f.doc().get().isEmpty) {
-            new MetadataBuilder().putString("comment", f.doc().get()).build()
-          } else {
-            Metadata.empty
+          val metadata = schemaType.metadata match {
+            case Some(typeMetadata) =>
+              if (f.doc().isPresent && !f.doc().get().isEmpty) {
+                new MetadataBuilder().withMetadata(typeMetadata)
+                  .putString("comment", f.doc().get()).build()
+              } else {
+                typeMetadata
+              }
+            case None =>
+              if (f.doc().isPresent && !f.doc().get().isEmpty) {
+                new MetadataBuilder().putString("comment", f.doc().get()).build()
+              } else {
+                Metadata.empty
+              }
           }
           StructField(f.name(), schemaType.dataType, schemaType.nullable, metadata)
         }

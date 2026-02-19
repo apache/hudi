@@ -202,6 +202,7 @@ public class TestHoodieSchemaType {
     map.put(HoodieSchemaType.UUID,
         LogicalTypes.uuid().addToSchema(Schema.create(Schema.Type.STRING)));
     map.put(HoodieSchemaType.VARIANT, createVariantSchemaForTest());
+    map.put(HoodieSchemaType.VECTOR, createVectorSchemaForTest());
     return map;
   }
 
@@ -218,5 +219,27 @@ public class TestHoodieSchemaType {
     ));
     HoodieSchema.VariantLogicalType.variant().addToSchema(variantRecord);
     return variantRecord;
+  }
+
+  /**
+   * Creates a vector schema manually using Avro APIs.
+   *
+   * @return a vector FIXED schema with VectorLogicalType metadata
+   */
+  private static Schema createVectorSchemaForTest() {
+    int dimension = 128;
+    String elementType = HoodieSchema.Vector.VectorElementType.FLOAT.getDataType();
+    String storageBacking = HoodieSchema.Vector.STORAGE_BACKING_FIXED_BYTES;
+
+    int fixedSize = dimension * 4;
+    // Create FIXED schema directly
+    Schema vectorSchema = Schema.createFixed("vector", null, null, fixedSize);
+
+    // Apply VectorLogicalType with metadata
+    HoodieSchema.VectorLogicalType vectorLogicalType =
+        new HoodieSchema.VectorLogicalType(dimension, elementType, storageBacking);
+    vectorLogicalType.addToSchema(vectorSchema);
+
+    return vectorSchema;
   }
 }
