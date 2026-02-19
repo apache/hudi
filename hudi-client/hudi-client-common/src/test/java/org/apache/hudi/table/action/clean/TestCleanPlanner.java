@@ -33,6 +33,7 @@ import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFileGroup;
+import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.schema.HoodieSchema;
@@ -719,6 +720,164 @@ public class TestCleanPlanner {
     blob.put(HoodieSchema.Blob.INLINE_DATA_FIELD, null);
     blob.put(HoodieSchema.Blob.EXTERNAL_REFERENCE, reference);
     return blob;
+  }
+
+  @Test
+  public void testGetFileSliceComparisonGroups_empty() {
+    List<CleanPlanner.FileSliceComparisonGroup> result =
+        CleanPlanner.getFileSliceComparisonGroups(Collections.emptyMap(), Collections.emptyMap());
+    assertEquals(0, result.size());
+  }
+
+  @Test
+  public void testGetFileSliceComparisonGroups_allHaveRetained() {
+    HoodieFileGroupId fg1 = new HoodieFileGroupId(PARTITION1, "fg1");
+    HoodieFileGroupId fg2 = new HoodieFileGroupId(PARTITION1, "fg2");
+
+    FileSlice removed1 = new FileSlice(fg1, "001");
+    FileSlice removed2 = new FileSlice(fg2, "002");
+    FileSlice retained1 = new FileSlice(fg1, "003");
+    FileSlice retained2 = new FileSlice(fg2, "004");
+    FileSlice retained3 = new FileSlice(fg2, "005");
+
+    Map<HoodieFileGroupId, List<FileSlice>> retained = new HashMap<>();
+    retained.put(fg1, Collections.singletonList(retained1));
+    retained.put(fg2, Arrays.asList(retained2, retained3));
+
+    Map<HoodieFileGroupId, List<FileSlice>> removed = new HashMap<>();
+    removed.put(fg1, Collections.singletonList(removed1));
+    removed.put(fg2, Collections.singletonList(removed2));
+
+    List<CleanPlanner.FileSliceComparisonGroup> result =
+        CleanPlanner.getFileSliceComparisonGroups(retained, removed);
+    assertEquals(2, result.size());
+
+    CleanPlanner.FileSliceComparisonGroup expectedGroup1 = new CleanPlanner.FileSliceComparisonGroup(Collections.singleton(retained1), Collections.singleton(removed1));
+    CleanPlanner.FileSliceComparisonGroup expectedGroup2 = new CleanPlanner.FileSliceComparisonGroup(Set.of(retained2, retained3), Collections.singleton(removed2));
+    assertEquals(Set.of(expectedGroup1, expectedGroup2), new HashSet<>(result));
+  }
+
+  @Test
+  public void testGetFileSliceComparisonGroups_noneHaveRetained() {
+    HoodieFileGroupId fg1 = new HoodieFileGroupId(PARTITION1, "fg1");
+    HoodieFileGroupId fg2 = new HoodieFileGroupId(PARTITION1, "fg2");
+    HoodieFileGroupId fg3 = new HoodieFileGroupId(PARTITION1, "fg3");
+
+    FileSlice removed1 = new FileSlice(fg1, "002");
+    FileSlice removed2 = new FileSlice(fg2, "003");
+    // fg3 created at "004" which is > min(002, 003) = "002"
+    FileSlice retained3 = new FileSlice(fg3, "004");
+
+    Map<HoodieFileGroupId, List<FileSlice>> retained = new HashMap<>();
+    retained.put(fg3, Collections.singletonList(retained3));
+
+    Map<HoodieFileGroupId, List<FileSlice>> removed = new HashMap<>();
+    removed.put(fg1, Collections.singletonList(removed1));
+    removed.put(fg2, Collections.singletonList(removed2));
+
+    List<CleanPlanner.FileSliceComparisonGroup> result =
+        CleanPlanner.getFileSliceComparisonGroups(retained, removed);
+    assertEquals(1, result.size());
+
+    CleanPlanner.FileSliceComparisonGroup expectedGroup = new CleanPlanner.FileSliceComparisonGroup(Collections.singleton(retained3), Set.of(removed1, removed2));
+    assertEquals(expectedGroup, result.get(0));
+  }
+
+  @Test
+  public void testGetFileSliceComparisonGroups_retainedCreatedBeforeThreshold() {
+    HoodieFileGroupId fg1 = new HoodieFileGroupId(PARTITION1, "fg1");
+    HoodieFileGroupId fg2 = new HoodieFileGroupId(PARTITION1, "fg2");
+    HoodieFileGroupId fg3 = new HoodieFileGroupId(PARTITION1, "fg3");
+
+    FileSlice removed1 = new FileSlice(fg1, "003");
+    // Both fg2 and fg3 have base instants before "003" so they should be excluded
+    FileSlice retainedBefore1 = new FileSlice(fg2, "002");
+    FileSlice retainedBefore2 = new FileSlice(fg3, "001");
+
+    Map<HoodieFileGroupId, List<FileSlice>> retained = new HashMap<>();
+    retained.put(fg2, Collections.singletonList(retainedBefore1));
+    retained.put(fg3, Collections.singletonList(retainedBefore2));
+
+    Map<HoodieFileGroupId, List<FileSlice>> removed = new HashMap<>();
+    removed.put(fg1, Collections.singletonList(removed1));
+
+    List<CleanPlanner.FileSliceComparisonGroup> result =
+        CleanPlanner.getFileSliceComparisonGroups(retained, removed);
+    assertEquals(1, result.size());
+
+    CleanPlanner.FileSliceComparisonGroup expectedGroup = new CleanPlanner.FileSliceComparisonGroup(Collections.emptySet(), Collections.singleton(removed1));
+    assertEquals(expectedGroup, result.get(0));
+  }
+
+  @Test
+  public void testGetFileSliceComparisonGroups_mixed() {
+    // FG1: removed at "002", retained at "004" → direct pairing
+    HoodieFileGroupId fg1 = new HoodieFileGroupId(PARTITION1, "fg1");
+    // FG2: removed at "002", no retained counterpart
+    HoodieFileGroupId fg2 = new HoodieFileGroupId(PARTITION1, "fg2");
+    // FG3: retained at "005" (after threshold "002") → included in clustering group
+    HoodieFileGroupId fg3 = new HoodieFileGroupId(PARTITION1, "fg3");
+    // FG4: retained at "001" (before threshold "002") → excluded
+    HoodieFileGroupId fg4 = new HoodieFileGroupId(PARTITION1, "fg4");
+
+    FileSlice removed1 = new FileSlice(fg1, "002");
+    FileSlice removed2 = new FileSlice(fg2, "002");
+    FileSlice retained1 = new FileSlice(fg1, "004");
+    FileSlice retained3 = new FileSlice(fg3, "005");
+    FileSlice retained4 = new FileSlice(fg4, "001");
+
+    Map<HoodieFileGroupId, List<FileSlice>> retained = new HashMap<>();
+    retained.put(fg1, Collections.singletonList(retained1));
+    retained.put(fg3, Collections.singletonList(retained3));
+    retained.put(fg4, Collections.singletonList(retained4));
+
+    Map<HoodieFileGroupId, List<FileSlice>> removed = new HashMap<>();
+    removed.put(fg1, Collections.singletonList(removed1));
+    removed.put(fg2, Collections.singletonList(removed2));
+
+    List<CleanPlanner.FileSliceComparisonGroup> result =
+        CleanPlanner.getFileSliceComparisonGroups(retained, removed);
+    assertEquals(2, result.size());
+
+    CleanPlanner.FileSliceComparisonGroup expectedDirectGroup = new CleanPlanner.FileSliceComparisonGroup(Collections.singleton(retained1), Collections.singleton(removed1));
+    CleanPlanner.FileSliceComparisonGroup expectedClusteringGroup = new CleanPlanner.FileSliceComparisonGroup(Set.of(retained1, retained3), Collections.singleton(removed2));
+    assertEquals(Set.of(expectedDirectGroup, expectedClusteringGroup), new HashSet<>(result));
+  }
+
+  @Test
+  public void testGetFileSliceComparisonGroups_thresholdFromMinOfMaxInstants() {
+    // FG1 (no retained): slices at "001" and "003" → max = "003"
+    HoodieFileGroupId fg1 = new HoodieFileGroupId(PARTITION1, "fg1");
+    // FG2 (no retained): slices at "001" and "005" → max = "005"
+    HoodieFileGroupId fg2 = new HoodieFileGroupId(PARTITION1, "fg2");
+    // threshold = min("003", "005") = "003"
+    // FG3 retained at "004" (> "003") → included
+    HoodieFileGroupId fg3 = new HoodieFileGroupId(PARTITION1, "fg3");
+    // FG4 retained at "003" (not GREATER_THAN "003") → excluded
+    HoodieFileGroupId fg4 = new HoodieFileGroupId(PARTITION1, "fg4");
+
+    FileSlice removed1a = new FileSlice(fg1, "001");
+    FileSlice removed1b = new FileSlice(fg1, "003");
+    FileSlice removed2a = new FileSlice(fg2, "001");
+    FileSlice removed2b = new FileSlice(fg2, "005");
+    FileSlice retained3 = new FileSlice(fg3, "004");
+    FileSlice retained4 = new FileSlice(fg4, "003");
+
+    Map<HoodieFileGroupId, List<FileSlice>> retained = new HashMap<>();
+    retained.put(fg3, Collections.singletonList(retained3));
+    retained.put(fg4, Collections.singletonList(retained4));
+
+    Map<HoodieFileGroupId, List<FileSlice>> removed = new HashMap<>();
+    removed.put(fg1, Arrays.asList(removed1a, removed1b));
+    removed.put(fg2, Arrays.asList(removed2a, removed2b));
+
+    List<CleanPlanner.FileSliceComparisonGroup> result =
+        CleanPlanner.getFileSliceComparisonGroups(retained, removed);
+    assertEquals(1, result.size());
+
+    // Only fg3 (at "004") is included; fg4 (at "003") is excluded because "003" is NOT > "003"
+    CleanPlanner.FileSliceComparisonGroup expectedGroup = new CleanPlanner.FileSliceComparisonGroup(Collections.singleton(retained3), Set.of(removed1a, removed1b, removed2a, removed2b));
+    assertEquals(expectedGroup, result.get(0));
   }
 
   private void assertPathsEqual(List<String> expected, List<String> actual) {

@@ -336,7 +336,8 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
 
       while (fileSliceIterator.hasNext() && keepVersions > 0) {
         // Skip this most recent version
-        retainedFileSlices.map(list -> list.add(fileSliceIterator.next()));
+        FileSlice nextSlice = fileSliceIterator.next();
+        retainedFileSlices.map(list -> list.add(nextSlice));
         keepVersions--;
       }
       // Delete the remaining files
@@ -756,8 +757,9 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
    * @param removedFileSlicesByFileGroupId the map of removed file slices grouped by HoodieFileGroupId
    * @return the list of FileSliceComparisonGroup which contains the groups of file slices to compare for finding dereferenced blobs
    */
-  private List<FileSliceComparisonGroup> getFileSliceComparisonGroups(Map<HoodieFileGroupId, List<FileSlice>> retainedFileSlicesByFileGroupId,
-                                                                      Map<HoodieFileGroupId, List<FileSlice>> removedFileSlicesByFileGroupId) {
+  @VisibleForTesting
+  static List<FileSliceComparisonGroup> getFileSliceComparisonGroups(Map<HoodieFileGroupId, List<FileSlice>> retainedFileSlicesByFileGroupId,
+                                                                     Map<HoodieFileGroupId, List<FileSlice>> removedFileSlicesByFileGroupId) {
     List<FileSliceComparisonGroup> groupings = new ArrayList<>();
     List<List<FileSlice>> removedFileSlicesWithoutRetainedSlices = new ArrayList<>();
     removedFileSlicesByFileGroupId.keySet().forEach(fileGroupId -> {
@@ -767,7 +769,7 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
         // This is due to replace commit or clustering so we must handle this case separately
         removedFileSlicesWithoutRetainedSlices.add(removedSlices);
       } else {
-        groupings.add(FileSliceComparisonGroup.builder().removedFileSlices(removedSlices).retainedFileSlices(retainedSlices).build());
+        groupings.add(FileSliceComparisonGroup.builder().removedFileSlices(new HashSet<>(removedSlices)).retainedFileSlices(new HashSet<>(retainedSlices)).build());
       }
     });
     if (!removedFileSlicesWithoutRetainedSlices.isEmpty()) {
@@ -778,11 +780,11 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
               .orElseThrow(() -> new HoodieException("File slices should have at least one file")))
           .reduce(InstantComparison::minInstant).orElseThrow(() -> new HoodieException("There should be at least one file slice to remove"));
       // find the file groups created after this instant and get the retained file slices for those file groups
-      List<FileSlice> retainedFileSlicesRequiringComparison = retainedFileSlicesByFileGroupId.entrySet().stream()
+      Set<FileSlice> retainedFileSlicesRequiringComparison = retainedFileSlicesByFileGroupId.entrySet().stream()
           .filter(entry -> entry.getValue().stream().allMatch(fileSlice -> compareTimestamps(fileSlice.getBaseInstantTime(), GREATER_THAN, instant)))
           .flatMap(entry -> entry.getValue().stream())
-          .collect(Collectors.toList());
-      List<FileSlice> flattenedRemovedFileSlicesWithoutRetainedSlices = removedFileSlicesWithoutRetainedSlices.stream().flatMap(Collection::stream).collect(Collectors.toList());
+          .collect(Collectors.toSet());
+      Set<FileSlice> flattenedRemovedFileSlicesWithoutRetainedSlices = removedFileSlicesWithoutRetainedSlices.stream().flatMap(Collection::stream).collect(Collectors.toSet());
       groupings.add(FileSliceComparisonGroup.builder().removedFileSlices(flattenedRemovedFileSlicesWithoutRetainedSlices).retainedFileSlices(retainedFileSlicesRequiringComparison).build());
     }
     return groupings;
@@ -790,9 +792,9 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
 
   @Value
   @Builder
-  private static class FileSliceComparisonGroup {
-    List<FileSlice> retainedFileSlices;
-    List<FileSlice> removedFileSlices;
+  static class FileSliceComparisonGroup {
+    Set<FileSlice> retainedFileSlices;
+    Set<FileSlice> removedFileSlices;
   }
 
   /**
