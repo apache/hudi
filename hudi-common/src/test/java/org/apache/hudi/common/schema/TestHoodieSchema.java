@@ -21,7 +21,6 @@ package org.apache.hudi.common.schema;
 import org.apache.hudi.common.schema.HoodieSchema.VariantLogicalType;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieAvroSchemaException;
-import org.apache.hudi.internal.schema.HoodieSchemaException;
 
 import org.apache.avro.JsonProperties;
 import org.apache.avro.LogicalType;
@@ -1762,10 +1761,11 @@ public class TestHoodieSchema {
   }
 
   @Test
-  public void testBlobAsRecordField() {
+  public void testBlobsAsRecordFields() {
     HoodieSchema recordSchema = HoodieSchema.createRecord("test_record", null, null, Arrays.asList(
         HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.INT)),
-        HoodieSchemaField.of("file_data", HoodieSchema.createBlob())
+        HoodieSchemaField.of("file_data", HoodieSchema.createBlob()),
+        HoodieSchemaField.of("image_data", HoodieSchema.createBlob())
     ));
 
     Option<HoodieSchemaField> blobFieldOpt = recordSchema.getField("file_data");
@@ -1780,12 +1780,20 @@ public class TestHoodieSchema {
     // Validate the blob schema can be converted to string and back without losing the logical type
     String recordJson = recordSchema.toString();
     HoodieSchema parsedRecord = HoodieSchema.parse(recordJson);
-    Option<HoodieSchemaField> parsedBlobFieldOpt = parsedRecord.getField("file_data");
-    assertTrue(parsedBlobFieldOpt.isPresent());
-    HoodieSchemaField parsedBlobField = parsedBlobFieldOpt.get();
-    assertInstanceOf(HoodieSchema.Blob.class, parsedBlobField.schema());
-    assertEquals(HoodieSchemaType.BLOB, parsedBlobField.schema().getType());
-    assertSame(HoodieSchema.BlobLogicalType.blob(), parsedBlobField.schema().toAvroSchema().getLogicalType());
+
+    Option<HoodieSchemaField> parsedFileDataFieldOpt = parsedRecord.getField("file_data");
+    assertTrue(parsedFileDataFieldOpt.isPresent());
+    HoodieSchemaField parsedFileDataField = parsedFileDataFieldOpt.get();
+    assertInstanceOf(HoodieSchema.Blob.class, parsedFileDataField.schema());
+    assertEquals(HoodieSchemaType.BLOB, parsedFileDataField.schema().getType());
+    assertSame(HoodieSchema.BlobLogicalType.blob(), parsedFileDataField.schema().toAvroSchema().getLogicalType());
+
+    Option<HoodieSchemaField> parsedImageDataFieldOpt = parsedRecord.getField("image_data");
+    assertTrue(parsedImageDataFieldOpt.isPresent());
+    HoodieSchemaField parsedImageDataField = parsedImageDataFieldOpt.get();
+    assertInstanceOf(HoodieSchema.Blob.class, parsedImageDataField.schema());
+    assertEquals(HoodieSchemaType.BLOB, parsedImageDataField.schema().getType());
+    assertSame(HoodieSchema.BlobLogicalType.blob(), parsedImageDataField.schema().toAvroSchema().getLogicalType());
   }
 
   private static final String BLOB_JSON = HoodieSchema.createBlob().toString();
@@ -1886,7 +1894,7 @@ public class TestHoodieSchema {
         + "{\"name\":\"typed_value\",\"type\":" + BLOB_JSON + "}"
         + "]}}"
         + "]}";
-    assertThrows(HoodieSchemaException.class, () -> HoodieSchema.parse(schemaJson));
+    assertThrows(IllegalArgumentException.class, () -> HoodieSchema.parse(schemaJson).getField("data"));
   }
 
   @Test

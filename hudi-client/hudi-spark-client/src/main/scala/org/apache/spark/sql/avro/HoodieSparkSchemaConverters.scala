@@ -87,10 +87,10 @@ object HoodieSparkSchemaConverters {
         val valueSchema = toHoodieType(valueType, valueContainsNull, recordName, nameSpace, metadata)
         HoodieSchema.createMap(valueSchema)
 
-      case st: StructType if metadata.contains(HoodieSchema.TYPE_METADATA_FIELD) &&
+      case blobStruct: StructType if metadata.contains(HoodieSchema.TYPE_METADATA_FIELD) &&
         metadata.getString(HoodieSchema.TYPE_METADATA_FIELD).equalsIgnoreCase(HoodieSchemaType.BLOB.name()) =>
         // Validate blob structure before accepting
-        validateBlobStructure(st)
+        validateBlobStructure(blobStruct)
         HoodieSchema.createBlob()
       case st: StructType =>
         val childNameSpace = if (nameSpace != "") s"$nameSpace.$recordName" else recordName
@@ -203,7 +203,8 @@ object HoodieSparkSchemaConverters {
           }
           val fieldSchema = f.getNonNullSchema
           val metadata = if (fieldSchema.isBlobField) {
-            // Mark blob fields with metadata for identification
+            // Mark blob fields with metadata for identification.
+            // This assumes blobs are always part of a record and not the top level schema itself
             new MetadataBuilder()
               .withMetadata(commentMetadata)
               .putString(HoodieSchema.TYPE_METADATA_FIELD, HoodieSchemaType.BLOB.name())

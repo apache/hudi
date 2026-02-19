@@ -24,7 +24,6 @@ import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieAvroSchemaException;
 import org.apache.hudi.exception.HoodieIOException;
-import org.apache.hudi.internal.schema.HoodieSchemaException;
 
 import org.apache.avro.JsonProperties;
 import org.apache.avro.LogicalType;
@@ -161,28 +160,22 @@ public class HoodieSchema implements Serializable {
     if (avroSchema == null) {
       return null;
     }
-    HoodieSchema schema;
     LogicalType logicalType = avroSchema.getLogicalType();
     if (logicalType != null) {
       if (logicalType instanceof LogicalTypes.Decimal) {
-        schema = new HoodieSchema.Decimal(avroSchema);
+        return new HoodieSchema.Decimal(avroSchema);
       } else if (logicalType instanceof LogicalTypes.TimeMillis || logicalType instanceof LogicalTypes.TimeMicros) {
-        schema = new HoodieSchema.Time(avroSchema);
+        return new HoodieSchema.Time(avroSchema);
       } else if (logicalType instanceof LogicalTypes.TimestampMillis || logicalType instanceof LogicalTypes.TimestampMicros
           || logicalType instanceof LogicalTypes.LocalTimestampMillis || logicalType instanceof LogicalTypes.LocalTimestampMicros) {
-        schema = new HoodieSchema.Timestamp(avroSchema);
+        return new HoodieSchema.Timestamp(avroSchema);
       } else if (logicalType == VariantLogicalType.variant()) {
-        schema = new HoodieSchema.Variant(avroSchema);
+        return new HoodieSchema.Variant(avroSchema);
       } else if (logicalType == BlobLogicalType.blob()) {
-        schema = new HoodieSchema.Blob(avroSchema);
-      } else {
-        schema = new HoodieSchema(avroSchema);
+        return new HoodieSchema.Blob(avroSchema);
       }
-    } else {
-      schema = new HoodieSchema(avroSchema);
     }
-    validateNoBlobsInVariant(schema);
-    return schema;
+    return new HoodieSchema(avroSchema);
   }
 
   /**
@@ -990,57 +983,6 @@ public class HoodieSchema implements Serializable {
     return nonNullSchemaType == HoodieSchemaType.BLOB
         || (nonNullSchemaType == HoodieSchemaType.ARRAY && nonNullSchema.getElementType().getNonNullType().getType() == HoodieSchemaType.BLOB)
         || (nonNullSchemaType == HoodieSchemaType.MAP && nonNullSchema.getValueType().getNonNullType().getType() == HoodieSchemaType.BLOB);
-  }
-
-  /**
-   * Validates that the schema does not contain variants with shredded blob types.
-   * This method recursively traverses the schema tree to check for invalid structures.
-   *
-   * @param schema the schema to validate
-   * @throws HoodieSchemaException if the schema contains arrays or maps with blob types
-   */
-  private static void validateNoBlobsInVariant(HoodieSchema schema) {
-    if (schema == null) {
-      return;
-    }
-
-    HoodieSchemaType type = schema.getType();
-
-    switch (type) {
-      case ARRAY:
-        HoodieSchema elementType = schema.getElementType();
-        validateNoBlobsInVariant(elementType);
-        break;
-      case MAP:
-        HoodieSchema valueType = schema.getValueType();
-        validateNoBlobsInVariant(valueType);
-        break;
-      case VARIANT:
-        HoodieSchema.Variant variantSchema = (HoodieSchema.Variant) schema;
-        variantSchema.getTypedValueField().ifPresent(typedValueField -> {
-          if (typedValueField.getNonNullType().containsBlobType()) {
-            throw new HoodieSchemaException("Variant typed_value field cannot be or contain a BLOB type");
-          }
-        });
-        break;
-      case RECORD:
-        // Validate all record fields
-        List<HoodieSchemaField> fields = schema.getFields();
-        for (HoodieSchemaField field : fields) {
-          validateNoBlobsInVariant(field.schema());
-        }
-        break;
-      case UNION:
-        // Validate all union types
-        List<HoodieSchema> types = schema.getTypes();
-        for (HoodieSchema unionType : types) {
-          validateNoBlobsInVariant(unionType);
-        }
-        break;
-      // For primitives, BLOB, ENUM, FIXED, NULL - no nested validation needed
-      default:
-        break;
-    }
   }
 
   /**
@@ -1916,6 +1858,11 @@ public class HoodieSchema implements Serializable {
           // If not a union, it should at least be bytes (some shredded variants may have non-null value)
           throw new IllegalArgumentException("Shredded Variant value field must be BYTES or nullable BYTES, got: " + valueSchema.getType());
         }
+        Option.ofNullable(avroSchema.getField(Variant.VARIANT_TYPED_VALUE_FIELD)).ifPresent(field -> {
+          if (HoodieSchema.fromAvroSchema(field.schema()).containsBlobType()) {
+            throw new IllegalArgumentException("Variant typed_value field cannot be or contain a BLOB type");
+          }
+        });
       } else {
         // Unshredded: value must be non-nullable bytes
         if (valueSchema.getType() != Schema.Type.BYTES) {
