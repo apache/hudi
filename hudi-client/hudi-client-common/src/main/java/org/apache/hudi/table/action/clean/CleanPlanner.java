@@ -44,6 +44,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.read.HoodieFileGroupReader;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.timeline.InstantComparison;
 import org.apache.hudi.common.table.timeline.versioning.clean.CleanPlanV1MigrationHandler;
 import org.apache.hudi.common.table.timeline.versioning.clean.CleanPlanV2MigrationHandler;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
@@ -55,13 +56,16 @@ import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieSavepointException;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
 
 import lombok.AccessLevel;
+import lombok.Builder;
 import lombok.Getter;
+import lombok.Value;
 import lombok.extern.slf4j.Slf4j;
 
 import java.io.IOException;
@@ -69,6 +73,7 @@ import java.io.Serializable;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -308,8 +313,10 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
         .flatMap(this::getSavepointedDataFiles)
         .collect(Collectors.toList());
 
-    List<FileSlice> retainedFileSlices = new ArrayList<>();
-    List<FileSlice> removedFileSlices = new ArrayList<>();
+    Option<HoodieSchema> blobSchemaOpt = getReducedBlobSchema(schema);
+    // Track retained and removed slices if blob cleanup is required
+    Option<List<FileSlice>> retainedFileSlices = blobSchemaOpt.map(s -> new ArrayList<>());
+    Option<List<FileSlice>> removedFileSlices = blobSchemaOpt.map(s -> new ArrayList<>());
     // In this scenario, we will assume that once replaced a file group automatically becomes eligible for cleaning completely
     // In other words, the file versions only apply to the active file groups.
     deletePaths.addAll(getReplacedFilesEligibleToClean(savepointedFiles, partitionPath, Option.empty(), retainedFileSlices, removedFileSlices));
@@ -329,7 +336,7 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
 
       while (fileSliceIterator.hasNext() && keepVersions > 0) {
         // Skip this most recent version
-        retainedFileSlices.add(fileSliceIterator.next());
+        retainedFileSlices.map(list -> list.add(fileSliceIterator.next()));
         keepVersions--;
       }
       // Delete the remaining files
@@ -337,14 +344,14 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
         FileSlice nextSlice = fileSliceIterator.next();
         if (isFileSliceExistInSavepointedFiles(nextSlice, savepointedFiles)) {
           // do not clean up a savepoint data file
-          retainedFileSlices.add(nextSlice);
+          retainedFileSlices.map(list -> list.add(nextSlice));
         } else {
-          removedFileSlices.add(nextSlice);
+          removedFileSlices.map(list -> list.add(nextSlice));
           deletePaths.addAll(getCleanFileInfoForSlice(nextSlice));
         }
       }
     }
-    deletePaths.addAll(getBlobFilesToRemove(hoodieTable, schema, retainedFileSlices, removedFileSlices));
+    deletePaths.addAll(getBlobFilesToRemove(hoodieTable, schema, blobSchemaOpt, retainedFileSlices, removedFileSlices));
     // if there are no valid file groups
     // and no pending data files under the partition [IMPORTANT],
     // mark it to be deleted
@@ -391,8 +398,10 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
     // determine if we have enough commits, to start cleaning.
     boolean toDeletePartition = false;
     if (getCommitTimeline().countInstants() > commitsRetained) {
-      List<FileSlice> retainedFileSlices = new ArrayList<>();
-      List<FileSlice> removedFileSlices = new ArrayList<>();
+      Option<HoodieSchema> blobSchemaOpt = getReducedBlobSchema(schema);
+      // Track retained and removed slices if blob cleanup is required
+      Option<List<FileSlice>> retainedFileSlices = blobSchemaOpt.map(s -> new ArrayList<>());
+      Option<List<FileSlice>> removedFileSlices = blobSchemaOpt.map(s -> new ArrayList<>());
       HoodieInstant earliestInstant = earliestCommitToRetain.get();
       // all replaced file groups before earliestCommitToRetain are eligible to clean
       deletePaths.addAll(getReplacedFilesEligibleToClean(savepointedFiles, partitionPath, earliestCommitToRetain, retainedFileSlices, removedFileSlices));
@@ -416,7 +425,7 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
           String fileCommitTime = aSlice.getBaseInstantTime();
           if (isFileSliceExistInSavepointedFiles(aSlice, savepointedFiles)) {
             // do not clean up a savepoint data file
-            retainedFileSlices.add(aSlice);
+            retainedFileSlices.map(list -> list.add(aSlice));
             continue;
           }
 
@@ -426,7 +435,7 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
           // still uses this file.
           if (fileCommitTime.equals(lastVersion) || fileCommitTime.equals(lastVersionBeforeEarliestCommitToRetain)) {
             // move on to the next file
-            retainedFileSlices.add(aSlice);
+            retainedFileSlices.map(list -> list.add(aSlice));
             continue;
           }
 
@@ -444,13 +453,13 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
             // and normal log files for mor tables.
             deletePaths.addAll(aSlice.getLogFiles().map(lf -> new CleanFileInfo(lf.getPath().toString(), false))
                 .collect(Collectors.toList()));
-            removedFileSlices.add(aSlice);
+            removedFileSlices.map(list -> list.add(aSlice));
           } else {
-            retainedFileSlices.add(aSlice);
+            retainedFileSlices.map(list -> list.add(aSlice));
           }
         }
       }
-      deletePaths.addAll(getBlobFilesToRemove(hoodieTable, schema, retainedFileSlices, removedFileSlices));
+      deletePaths.addAll(getBlobFilesToRemove(hoodieTable, schema, blobSchemaOpt, retainedFileSlices, removedFileSlices));
       // if there are no valid file groups
       // and no pending data files under the partition [IMPORTANT],
       // and no subsequent replace commit after the earliest retained commit
@@ -501,7 +510,7 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
   }
 
   private List<CleanFileInfo> getReplacedFilesEligibleToClean(List<String> savepointedFiles, String partitionPath, Option<HoodieInstant> earliestCommitToRetain,
-                                                              List<FileSlice> retainedFileSlices, List<FileSlice> removedFileSlices) {
+                                                              Option<List<FileSlice>> retainedFileSlices, Option<List<FileSlice>> removedFileSlices) {
     final Stream<HoodieFileGroup> replacedGroups;
     if (earliestCommitToRetain.isPresent()) {
       replacedGroups = hoodieTable.getHoodieView().getReplacedFileGroupsBefore(earliestCommitToRetain.get().requestedTime(), partitionPath);
@@ -512,10 +521,10 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
         // do not delete savepointed files  (archival will make sure corresponding replacecommit file is not deleted)
         .flatMap(slice -> {
           if (!isFileSliceExistInSavepointedFiles(slice, savepointedFiles)) {
-            removedFileSlices.add(slice);
+            removedFileSlices.map(list -> list.add(slice));
             return getCleanFileInfoForSlice(slice).stream();
           } else {
-            retainedFileSlices.add(slice);
+            retainedFileSlices.map(list -> list.add(slice));
             return Stream.empty();
           }
         })
@@ -651,14 +660,14 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
     return !hoodieTable.getHoodieView().getReplacedFileGroupsAfterOrOn(earliestCommitToRetain, partitionPath).findAny().isPresent();
   }
 
-  private <R> List<CleanFileInfo> getBlobFilesToRemove(HoodieTable table, HoodieSchema schema, List<FileSlice> retainedFileSlices, List<FileSlice> removedFileSlices) {
-    // Skip if there are no removed file slices
-    if (removedFileSlices.isEmpty()) {
-      return Collections.emptyList();
-    }
-    Option<HoodieSchema> requestedSchema = getReducedBlobSchema(schema);
+  private <R> List<CleanFileInfo> getBlobFilesToRemove(HoodieTable table, HoodieSchema schema, Option<HoodieSchema> requestedSchema,
+                                                       Option<List<FileSlice>> retainedFileSlices, Option<List<FileSlice>> removedFileSlices) {
     if (requestedSchema.isEmpty()) {
       // no blob columns, no blob files to clean
+      return Collections.emptyList();
+    }
+    // Skip if there are no removed file slices
+    if (removedFileSlices.isEmpty()) {
       return Collections.emptyList();
     }
     // Validate there is at least one completed commit
@@ -668,18 +677,19 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
       // no commits or blob files to clean
       return Collections.emptyList();
     }
-    Map<HoodieFileGroupId, List<FileSlice>> retainedFileSlicesByFileGroupId = retainedFileSlices.stream().collect(Collectors.groupingBy(FileSlice::getFileGroupId));
-    Map<HoodieFileGroupId, List<FileSlice>> removedFileSlicesByFileGroupId = removedFileSlices.stream().collect(Collectors.groupingBy(FileSlice::getFileGroupId));
+    Map<HoodieFileGroupId, List<FileSlice>> retainedFileSlicesByFileGroupId = retainedFileSlices.orElseThrow(() -> new HoodieException("Retained file slices must be set"))
+        .stream().collect(Collectors.groupingBy(FileSlice::getFileGroupId));
+    Map<HoodieFileGroupId, List<FileSlice>> removedFileSlicesByFileGroupId = removedFileSlices.orElseThrow(() -> new HoodieException("Removed file slices must be set"))
+        .stream().collect(Collectors.groupingBy(FileSlice::getFileGroupId));
 
-    // Managed files belong to a given file group so process the removed file slices by file group
-    return removedFileSlicesByFileGroupId.keySet().stream().flatMap(fileGroupId -> {
+    return getFileSliceComparisonGroups(retainedFileSlicesByFileGroupId, removedFileSlicesByFileGroupId).stream().flatMap(group -> {
       HoodieReaderContext<R> readerContext = ((ReaderContextFactory<R>) table.getContext().getReaderContextFactory(metaClient)).getContext();
       RecordContext<R> recordContext = readerContext.getRecordContext();
       // Iterate through the removed file slices with skip merging to find all the blob files that are referenced by the removed file slices.
       TypedProperties properties = TypedProperties.copy(config.getProps());
       properties.put(HoodieReaderConfig.MERGE_TYPE.key(), REALTIME_SKIP_MERGE);
 
-      Set<String> managedBlobFilePaths = removedFileSlicesByFileGroupId.get(fileGroupId).stream()
+      Set<String> managedBlobFilePaths = group.getRemovedFileSlices().stream()
           .flatMap(fileSlice -> {
             HoodieFileGroupReader<R> reader = getHoodieFileGroupReader(schema, fileSlice, readerContext, metaClient, latestCommitTimeOpt, requestedSchema.get(), properties);
             Set<String> managedBlobFilePathsInSlice = new HashSet<>();
@@ -699,13 +709,7 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
         return Stream.empty();
       }
       // Then iterate through the retained file slices with skip merging to find all the blob files that are still referenced by the retained file slices.
-      List<FileSlice> retainedFileSlicesForFileGroup = retainedFileSlicesByFileGroupId.get(fileGroupId);
-      if (retainedFileSlicesForFileGroup == null) {
-        // This is due to replace commit or clustering so we must inspect all retained file slices for this file group
-        // TODO: is there a smart way to filter these
-        retainedFileSlicesForFileGroup = retainedFileSlices;
-      }
-      retainedFileSlicesForFileGroup.forEach(fileSlice -> {
+      group.getRetainedFileSlices().forEach(fileSlice -> {
         HoodieFileGroupReader<R> reader = getHoodieFileGroupReader(schema, fileSlice, readerContext, metaClient, latestCommitTimeOpt, requestedSchema.get(), properties);
         try (ClosableIterator<R> recordItr = reader.getClosableIterator()) {
           while (recordItr.hasNext()) {
@@ -737,6 +741,58 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
         .withRequestedSchema(requestedSchema)
         .withProps(props)
         .build();
+  }
+
+  // TODO: How does this work for tables with global index?
+  /**
+   * Cleaning blob files requires that we inspect the contents of the retained and removed file slices to find the blob file references that can be removed.
+   * To optimize the process, we limit the comparisons required with the following grouping logic:
+   * 1) If a removed file slice has a corresponding retained file slice in the same file group, we will compare the removed file slice with the retained file slice(s) in the same file group.
+   * 2) If a removed file slice does not have a corresponding retained file slice in the same file group, this implies that there is a replace or clustering commit. This requires comparing the
+   *    removed file slice with all retained file slices that were created after the removed file slice's latest instant time, as these are the only retained file slices
+   *    that could be part of a replace or clustering commit that removes these files from the active view of the table. All slices that fall into this case are put into the same comparison group to
+   *    avoid reading the same file multiple times.
+   * @param retainedFileSlicesByFileGroupId the map of retained file slices grouped by HoodieFileGroupId
+   * @param removedFileSlicesByFileGroupId the map of removed file slices grouped by HoodieFileGroupId
+   * @return the list of FileSliceComparisonGroup which contains the groups of file slices to compare for finding dereferenced blobs
+   */
+  private List<FileSliceComparisonGroup> getFileSliceComparisonGroups(Map<HoodieFileGroupId, List<FileSlice>> retainedFileSlicesByFileGroupId,
+                                                                      Map<HoodieFileGroupId, List<FileSlice>> removedFileSlicesByFileGroupId) {
+    List<FileSliceComparisonGroup> groupings = new ArrayList<>();
+    List<List<FileSlice>> removedFileSlicesWithoutRetainedSlices = new ArrayList<>();
+    removedFileSlicesByFileGroupId.keySet().forEach(fileGroupId -> {
+      List<FileSlice> removedSlices = removedFileSlicesByFileGroupId.get(fileGroupId);
+      List<FileSlice> retainedSlices = retainedFileSlicesByFileGroupId.get(fileGroupId);
+      if (retainedSlices == null) {
+        // This is due to replace commit or clustering so we must handle this case separately
+        removedFileSlicesWithoutRetainedSlices.add(removedSlices);
+      } else {
+        groupings.add(FileSliceComparisonGroup.builder().removedFileSlices(removedSlices).retainedFileSlices(retainedSlices).build());
+      }
+    });
+    if (!removedFileSlicesWithoutRetainedSlices.isEmpty()) {
+      // File slices that do not have a retained commit are due to replace commit or clustering, so we will compare them against all retained file slices created after the oldest removed file slice.
+      String instant = removedFileSlicesWithoutRetainedSlices.stream()
+          // for each file group we get the latest instant time
+          .map(fileSlices -> fileSlices.stream().map(FileSlice::getLatestInstantTime).reduce(InstantComparison::maxInstant)
+              .orElseThrow(() -> new HoodieException("File slices should have at least one file")))
+          .reduce(InstantComparison::minInstant).orElseThrow(() -> new HoodieException("There should be at least one file slice to remove"));
+      // find the file groups created after this instant and get the retained file slices for those file groups
+      List<FileSlice> retainedFileSlicesRequiringComparison = retainedFileSlicesByFileGroupId.entrySet().stream()
+          .filter(entry -> entry.getValue().stream().allMatch(fileSlice -> compareTimestamps(fileSlice.getBaseInstantTime(), GREATER_THAN, instant)))
+          .flatMap(entry -> entry.getValue().stream())
+          .collect(Collectors.toList());
+      List<FileSlice> flattenedRemovedFileSlicesWithoutRetainedSlices = removedFileSlicesWithoutRetainedSlices.stream().flatMap(Collection::stream).collect(Collectors.toList());
+      groupings.add(FileSliceComparisonGroup.builder().removedFileSlices(flattenedRemovedFileSlicesWithoutRetainedSlices).retainedFileSlices(retainedFileSlicesRequiringComparison).build());
+    }
+    return groupings;
+  }
+
+  @Value
+  @Builder
+  private static class FileSliceComparisonGroup {
+    List<FileSlice> retainedFileSlices;
+    List<FileSlice> removedFileSlices;
   }
 
   /**
