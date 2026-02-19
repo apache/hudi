@@ -808,7 +808,7 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
 
     // Traverse schema to find blob columns
     for (HoodieSchemaField field : schema.getFields()) {
-      collectBlobFieldsAndPaths(field, blobFields);
+      filterSchemaForBlobFields(field, blobFields);
     }
 
     // Create projection schema with only blob fields
@@ -821,7 +821,7 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
             blobFields));
   }
 
-  private void collectBlobFieldsAndPaths(HoodieSchemaField field,
+  private void filterSchemaForBlobFields(HoodieSchemaField field,
                                          List<HoodieSchemaField> blobFields) {
     HoodieSchema fieldSchema = field.schema();
     HoodieSchema nonNullSchema = fieldSchema.getNonNullType();
@@ -834,7 +834,7 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
         // Recursively traverse nested record fields
         List<HoodieSchemaField> nestedBlobFields = new ArrayList<>();
         for (HoodieSchemaField nestedField : nonNullSchema.getFields()) {
-          collectBlobFieldsAndPaths(nestedField, nestedBlobFields);
+          filterSchemaForBlobFields(nestedField, nestedBlobFields);
         }
 
         // If any nested field contains blob, include this record field

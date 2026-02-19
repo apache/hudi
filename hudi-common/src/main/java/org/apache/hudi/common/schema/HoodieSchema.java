@@ -956,7 +956,7 @@ public class HoodieSchema implements Serializable {
     return HoodieSchema.createUnion(nonNullTypes);
   }
 
-  boolean containsBlobType() {
+  public boolean containsBlobType() {
     if (getType() == HoodieSchemaType.BLOB) {
       return true;
     } else if (getType() == HoodieSchemaType.ARRAY) {
