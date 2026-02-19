@@ -365,6 +365,11 @@ public class HoodieTableConfig extends HoodieConfig {
       .sinceVersion("1.1.0")
       .withDocumentation("This property when set, will define how two versions of the record will be merged together when records are partially formed");
 
+  public static final ConfigProperty<String> METADATA_TABLE_PARTITION_BUCKETING_ENABLE = ConfigProperty
+          .key("hoodie.metadata.partitions.bucketing.enable")
+          .defaultValue("false")
+          .withDocumentation("This flag indicates whether metadata table file groups should be saved within buckets in each partition such as record index and files.");
+
   public static final ConfigProperty<String> URL_ENCODE_PARTITIONING = KeyGeneratorOptions.URL_ENCODE_PARTITIONING;
   public static final ConfigProperty<String> HIVE_STYLE_PARTITIONING_ENABLE = KeyGeneratorOptions.HIVE_STYLE_PARTITIONING_ENABLE;
   public static final ConfigProperty<String> SLASH_SEPARATED_DATE_PARTITIONING = KeyGeneratorOptions.SLASH_SEPARATED_DATE_PARTITIONING;
@@ -1363,6 +1368,22 @@ public class HoodieTableConfig extends HoodieConfig {
       }
     }
     return configs;
+  }
+
+  /**
+   * Enables or disables the bucketing for file groups within the metadata table partitions.
+   *
+   * @param enable Whether to enable or disable bucketing
+   */
+  public void setMetadataTableBucketing(boolean enable) {
+    setValue(METADATA_TABLE_PARTITION_BUCKETING_ENABLE, String.valueOf(enable));
+  }
+
+  /**
+   * @returns true if metadata table partition bucketing is enabled, else returns false.
+   */
+  public boolean isMetadataTablePartitionBucketingEnabled() {
+    return getBooleanOrDefault(METADATA_TABLE_PARTITION_BUCKETING_ENABLE);
   }
 
   public Map<String, String> propsMap() {
