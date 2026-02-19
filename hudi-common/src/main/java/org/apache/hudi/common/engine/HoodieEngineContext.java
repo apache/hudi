@@ -36,6 +36,8 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableSortingIterator;
 import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.common.metrics.LocalRegistry;
+import org.apache.hudi.common.metrics.Registry;
 import org.apache.hudi.keygen.KeyGenerator;
 import org.apache.hudi.storage.StorageConfiguration;
 
@@ -122,6 +124,18 @@ public abstract class HoodieEngineContext {
   public abstract void cancelJob(String jobId);
 
   public abstract void cancelAllJobs();
+
+  /**
+   * Return a metric registry for the given table and registry name. This is used for tracking metrics.
+   * The default implementation returns a LocalRegistry. Engine-specific implementations (like Spark) should override
+   * this to return a DistributedRegistry for tracking metrics across executors.
+   *
+   * @param tableName Name of the table for which the registry is needed
+   * @param registryName Name of the registry
+   */
+  public Registry getMetricRegistry(String tableName, String registryName) {
+    return Registry.getRegistryOfClass(tableName, registryName, LocalRegistry.class.getName());
+  }
 
   /**
    * Aggregate the elements of each partition, and then the results for all the partitions, using given combine functions and a neutral "zero value".

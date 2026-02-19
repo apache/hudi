@@ -24,7 +24,6 @@ import org.apache.hudi.client.embedded.EmbeddedTimelineService;
 import org.apache.hudi.client.utils.SparkReleaseResources;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
-import org.apache.hudi.common.metrics.Registry;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -37,20 +36,19 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.hadoop.fs.HoodieWrapperFileSystem;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.index.HoodieSparkIndexClient;
 import org.apache.hudi.index.SparkHoodieIndexFactory;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.metadata.SparkMetadataWriterFactory;
-import org.apache.hudi.metrics.DistributedRegistry;
 import org.apache.hudi.metrics.HoodieMetrics;
 import org.apache.hudi.table.BulkInsertPartitioner;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.upgrade.SparkUpgradeDowngradeHelper;
+import org.apache.hudi.util.DistributedRegistryUtil;
 
 import com.codahale.metrics.Timer;
 import lombok.AllArgsConstructor;
@@ -59,7 +57,6 @@ import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.spark.SparkContext;
 import org.apache.spark.api.java.JavaRDD;
-import org.apache.spark.api.java.JavaSparkContext;
 
 import java.io.Serializable;
 import java.util.List;
@@ -81,6 +78,7 @@ public class SparkRDDWriteClient<T> extends
   public SparkRDDWriteClient(HoodieEngineContext context, HoodieWriteConfig writeConfig,
                              Option<EmbeddedTimelineService> timelineService) {
     super(context, writeConfig, timelineService, SparkUpgradeDowngradeHelper.getInstance());
+    DistributedRegistryUtil.createWrapperFileSystemRegistries(context, writeConfig);
     this.tableServiceClient = new SparkRDDTableServiceClient<T>(context, writeConfig, getTimelineServer());
     checkSpeculativeExecution();
   }
@@ -386,30 +384,6 @@ public class SparkRDDWriteClient<T> extends
       }
     } catch (Exception e) {
       throw new HoodieException("Failed to instantiate Metadata table ", e);
-    }
-  }
-
-  @Override
-  protected void initWrapperFSMetrics() {
-    if (config.isMetricsOn()) {
-      Registry registry;
-      Registry registryMeta;
-      JavaSparkContext jsc = ((HoodieSparkEngineContext) context).getJavaSparkContext();
-
-      if (config.isExecutorMetricsEnabled()) {
-        // Create a distributed registry for HoodieWrapperFileSystem
-        registry = Registry.getRegistry(HoodieWrapperFileSystem.class.getSimpleName(),
-            DistributedRegistry.class.getName());
-        ((DistributedRegistry) registry).register(jsc);
-        registryMeta = Registry.getRegistry(HoodieWrapperFileSystem.class.getSimpleName() + "MetaFolder",
-            DistributedRegistry.class.getName());
-        ((DistributedRegistry) registryMeta).register(jsc);
-      } else {
-        registry = Registry.getRegistry(HoodieWrapperFileSystem.class.getSimpleName());
-        registryMeta = Registry.getRegistry(HoodieWrapperFileSystem.class.getSimpleName() + "MetaFolder");
-      }
-
-      HoodieWrapperFileSystem.setMetricsRegistry(registry, registryMeta);
     }
   }
 

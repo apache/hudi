@@ -34,6 +34,11 @@ public class LocalRegistry implements Registry {
   }
 
   @Override
+  public String getName() {
+    return name;
+  }
+
+  @Override
   public void clear() {
     counters.clear();
   }
