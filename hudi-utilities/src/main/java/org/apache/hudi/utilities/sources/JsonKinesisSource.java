@@ -24,6 +24,7 @@ import org.apache.hudi.utilities.config.KinesisSourceConfig;
 import org.apache.hudi.utilities.ingestion.HoodieIngestionMetrics;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.sources.helpers.KinesisOffsetGen;
+import org.apache.hudi.utilities.sources.helpers.KinesisReadConfig;
 import org.apache.hudi.utilities.streamer.DefaultStreamContext;
 import org.apache.hudi.utilities.streamer.StreamContext;
 
@@ -64,6 +65,11 @@ public class JsonKinesisSource extends KinesisSource<JavaRDD<String>> {
     private final Option<String> lastSequenceNumber;
   }
 
+  /** Persisted fetch RDD - must be unpersisted in releaseResources to avoid memory leak. */
+  private transient org.apache.spark.api.java.JavaRDD<ShardFetchResult> persistedFetchRdd;
+  /** Record count from fetch, avoids redundant batch.count() Spark job. */
+  private long lastRecordCount;
+
   public JsonKinesisSource(TypedProperties properties, JavaSparkContext sparkContext, SparkSession sparkSession,
                            SchemaProvider schemaProvider, HoodieIngestionMetrics metrics) {
     this(properties, sparkContext, sparkSession, metrics,
@@ -79,25 +85,30 @@ public class JsonKinesisSource extends KinesisSource<JavaRDD<String>> {
 
   @Override
   protected JavaRDD<String> toBatch(KinesisOffsetGen.KinesisShardRange[] shardRanges) {
-    int maxRecordsPerRequest = getIntWithAltKeys(props, KinesisSourceConfig.KINESIS_GET_RECORDS_MAX_RECORDS);
-    long intervalMs = getLongWithAltKeys(props, KinesisSourceConfig.KINESIS_GET_RECORDS_INTERVAL_MS);
-    long maxEvents = getLongWithAltKeys(props, KinesisSourceConfig.MAX_EVENTS_FROM_KINESIS_SOURCE);
-    long maxRecordsPerShard = shardRanges.length > 0 ? Math.max(1, maxEvents / shardRanges.length) : maxEvents;
+    KinesisReadConfig readConfig = new KinesisReadConfig(
+        offsetGen.getStreamName(),
+        offsetGen.getRegion(),
+        offsetGen.getEndpointUrl().orElse(null),
+        offsetGen.getStartingPosition(),
+        shouldAddOffsets,
+        getIntWithAltKeys(props, KinesisSourceConfig.KINESIS_GET_RECORDS_MAX_RECORDS),
+        getLongWithAltKeys(props, KinesisSourceConfig.KINESIS_GET_RECORDS_INTERVAL_MS),
+        shardRanges.length > 0 ? Math.max(1, getLongWithAltKeys(props, KinesisSourceConfig.MAX_EVENTS_FROM_KINESIS_SOURCE) / shardRanges.length) : Long.MAX_VALUE);
 
     JavaRDD<ShardFetchResult> fetchRdd = sparkContext.parallelize(
         java.util.Arrays.asList(shardRanges), shardRanges.length)
         .mapPartitions(shardRangeIt -> {
           List<ShardFetchResult> results = new ArrayList<>();
-          try (KinesisClient client = offsetGen.createKinesisClient()) {
+          try (KinesisClient client = createKinesisClientFromConfig(readConfig)) {
             while (shardRangeIt.hasNext()) {
               KinesisOffsetGen.KinesisShardRange range = shardRangeIt.next();
               KinesisOffsetGen.ShardReadResult readResult = KinesisOffsetGen.readShardRecords(
-                  client, offsetGen.getStreamName(), range, offsetGen.getStartingPosition(),
-                  maxRecordsPerRequest, intervalMs, maxRecordsPerShard);
+                  client, readConfig.getStreamName(), range, readConfig.getStartingPosition(),
+                  readConfig.getMaxRecordsPerRequest(), readConfig.getIntervalMs(), readConfig.getMaxRecordsPerShard());
 
               List<String> recordStrings = new ArrayList<>();
               for (Record r : readResult.getRecords()) {
-                String json = recordToJson(r, range.getShardId());
+                String json = recordToJsonStatic(r, range.getShardId(), readConfig.isShouldAddOffsets());
                 if (json != null) {
                   recordStrings.add(json);
                 }
@@ -111,17 +122,28 @@ public class JsonKinesisSource extends KinesisSource<JavaRDD<String>> {
 
     // Cache so we can both get records and checkpoint from the same RDD
     fetchRdd.persist(org.apache.spark.storage.StorageLevel.MEMORY_AND_DISK());
+    persistedFetchRdd = fetchRdd;
 
     JavaRDD<String> recordRdd = fetchRdd.flatMap(r -> r.getRecords().iterator());
 
     // Collect fetch results to build checkpoint - this triggers execution
     List<ShardFetchResult> fetchResults = fetchRdd.collect();
     lastCheckpointData = buildCheckpointFromFetchResults(fetchResults);
+    lastRecordCount = fetchResults.stream().mapToLong(r -> r.getRecords().size()).sum();
 
     return recordRdd;
   }
 
-  private String recordToJson(Record record, String shardId) {
+  private static KinesisClient createKinesisClientFromConfig(KinesisReadConfig config) {
+    software.amazon.awssdk.services.kinesis.KinesisClientBuilder builder =
+        KinesisClient.builder().region(software.amazon.awssdk.regions.Region.of(config.getRegion()));
+    if (config.getEndpointUrl() != null && !config.getEndpointUrl().isEmpty()) {
+      builder = builder.endpointOverride(java.net.URI.create(config.getEndpointUrl()));
+    }
+    return builder.build();
+  }
+
+  private static String recordToJsonStatic(Record record, String shardId, boolean shouldAddOffsets) {
     String dataStr = record.data().asUtf8String();
 
     if (dataStr == null || dataStr.trim().isEmpty()) {
@@ -173,6 +195,15 @@ public class JsonKinesisSource extends KinesisSource<JavaRDD<String>> {
 
   @Override
   protected long getRecordCount(JavaRDD<String> batch) {
-    return batch.count();
+    return lastRecordCount;
+  }
+
+  @Override
+  public void releaseResources() {
+    super.releaseResources();
+    if (persistedFetchRdd != null) {
+      persistedFetchRdd.unpersist();
+      persistedFetchRdd = null;
+    }
   }
 }
