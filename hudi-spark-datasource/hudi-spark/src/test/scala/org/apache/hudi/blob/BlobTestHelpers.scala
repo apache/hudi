@@ -23,7 +23,7 @@ import org.apache.hudi.common.schema.HoodieSchema
 
 import org.apache.spark.sql.{Column, SparkSession}
 import org.apache.spark.sql.functions.{lit, struct}
-import org.apache.spark.sql.types.{Metadata, MetadataBuilder}
+import org.apache.spark.sql.types._
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 
 import java.io.File
@@ -35,6 +35,39 @@ object BlobTestHelpers {
       .putBoolean(HoodieSchema.Blob.HUDI_BLOB, true)
       .build()
   }
+
+  def inlineBlobStructCol(name: String, bytesCol: Column): Column = {
+    struct(
+      lit("inline").as("storage_type"),
+      bytesCol.as("bytes"),
+      lit(null).cast("struct<file:string,position:bigint,length:bigint,managed:boolean>")
+        .as("reference")
+    ).as(name, blobMetadata)
+  }
+
+  def wholeFileBlobStructCol(name: String, filePathCol: Column): Column = {
+    struct(
+      lit("out_of_line").as("storage_type"),
+      lit(null).cast("binary").as("bytes"),
+      struct(
+        filePathCol.as("file"),
+        lit(null).cast("bigint").as("position"),
+        lit(null).cast("bigint").as("length"),
+        lit(false).as("managed")
+      ).as("reference")
+    ).as(name, blobMetadata)
+  }
+
+  def mixedBlobReferenceType: StructType = new StructType()
+    .add("file", StringType, nullable = true)
+    .add("position", LongType, nullable = true)
+    .add("length", LongType, nullable = true)
+    .add("managed", BooleanType, nullable = true)
+
+  def mixedBlobType: StructType = new StructType()
+    .add("storage_type", StringType, nullable = false)
+    .add("bytes", BinaryType, nullable = true)
+    .add("reference", mixedBlobReferenceType, nullable = true)
 
   def blobStructCol(name: String, filePathCol: Column, offsetCol: Column, lengthCol: Column): Column = {
     struct(

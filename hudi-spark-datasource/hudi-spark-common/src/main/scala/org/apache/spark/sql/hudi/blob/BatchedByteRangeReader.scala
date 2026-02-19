@@ -34,7 +34,7 @@ import org.slf4j.LoggerFactory
 import scala.collection.mutable.ArrayBuffer
 
 /**
- * Batched byte range reader that optimizes I/O by combining consecutive reads.
+ * Batched byte range reader that optimizes I/O by combining consecutive reads for out-of-line data.
  *
  * This reader analyzes sequences of read requests within a partition and merges
  * consecutive or nearby reads into single I/O operations. This significantly reduces
@@ -45,7 +45,7 @@ import scala.collection.mutable.ArrayBuffer
  * <pre>
  * struct {
  *   type: string                   // "inline" or "out_of_line"
- *   bytes: binary (nullable)       // inline data (null for out_of_line)
+ *   data: binary (nullable)       // inline data (null for out_of_line)
  *   reference: struct (nullable) { // file reference (null for inline)
  *     external_path: string
  *     offset: long
@@ -153,17 +153,24 @@ class BatchedByteRangeReader(
         if (batch.isEmpty) {
           Iterator.empty
         } else {
+          // Partition the batch into three groups
+          val (inlineRows, outOfLineRows) = batch.partition(_.inlineBytes.isDefined)
+          val (wholeFileRows, rangeRows) = outOfLineRows.partition(_.length < 0)
 
-          // Identify and merge consecutive ranges
-          val mergedRanges = identifyConsecutiveRanges(batch)
-
-          // Read and split each merged range
-          val results = mergedRanges.flatMap { range =>
-            readAndSplitRange(range, outputSchema)
+          // Case 1: Inline — return bytes directly without I/O
+          val inlineResults = inlineRows.map { ri =>
+            RowResult(builder.buildRow(ri.originalRow, ri.inlineBytes.get, outputSchema), ri.index)
           }
 
+          // Case 2: Whole-file reads
+          val wholeFileResults = wholeFileRows.map(readWholeFile(_, outputSchema))
+
+          // Case 3: Regular range reads — merge consecutive ranges and batch
+          val mergedRanges = identifyConsecutiveRanges(rangeRows)
+          val rangeResults = mergedRanges.flatMap(readAndSplitRange(_, outputSchema))
+
           // Sort by original index to preserve input order
-          results.sortBy(_.index).map(_.row).iterator
+          (inlineResults ++ wholeFileResults ++ rangeResults).sortBy(_.index).map(_.row).iterator
         }
       }
 
@@ -178,20 +185,49 @@ class BatchedByteRangeReader(
           val row = bufferedRows.next()
           val blobStruct = accessor.getStruct(row, structColIdx, HoodieSchema.Blob.getBlobFieldCount)
 
-          // Extract blob reference from nested structure
-          // structValue has: type (0), data (1), reference (2)
-          val referenceStruct = accessor.getStruct(blobStruct, 2, HoodieSchema.Blob.getBlobReferenceFieldCount)  // Get reference struct
-          val filePath = accessor.getString(referenceStruct, 0)     // file field
-          val offset = accessor.getLong(referenceStruct, 1)         // offset field
-          val length = accessor.getLong(referenceStruct, 2).toInt   // length field (Long in schema, cast to Int)
+          // Dispatch based on storage_type (field 0)
+          val storageType = accessor.getString(blobStruct, 0)
 
-          batch += RowInfo[R](
-            originalRow = row,
-            filePath = filePath,
-            offset = offset,
-            length = length,
-            index = rowIndex
-          )
+          if (storageType == "inline") {
+            // Case 1: Inline — bytes are in field 1
+            val bytes = accessor.getBytes(blobStruct, 1)
+            batch += RowInfo[R](
+              originalRow = row,
+              filePath = "",
+              offset = -1,
+              length = -1,
+              index = rowIndex,
+              inlineBytes = Some(bytes)
+            )
+          } else {
+            // Case 2 or 3: Out-of-line — get reference struct (field 2)
+            val referenceStruct = accessor.getStruct(blobStruct, 2, HoodieSchema.Blob.getBlobReferenceFieldCount)
+            val filePath = accessor.getString(referenceStruct, 0)
+            val offsetIsNull = accessor.isNullAt(referenceStruct, 1)
+            val lengthIsNull = accessor.isNullAt(referenceStruct, 2)
+
+            if (offsetIsNull || lengthIsNull) {
+              // Case 2: Whole-file read — no offset/length specified; sentinel length = -1
+              batch += RowInfo[R](
+                originalRow = row,
+                filePath = filePath,
+                offset = 0,
+                length = -1,
+                index = rowIndex
+              )
+            } else {
+              // Case 3: Regular range read
+              val offset = accessor.getLong(referenceStruct, 1)
+              val length = accessor.getLong(referenceStruct, 2)
+              batch += RowInfo[R](
+                originalRow = row,
+                filePath = filePath,
+                offset = offset,
+                length = length,
+                index = rowIndex
+              )
+            }
+          }
 
           rowIndex += 1
           collected += 1
@@ -280,6 +316,45 @@ class BatchedByteRangeReader(
   }
 
   /**
+   * Read an entire file and return it as a single row result.
+   *
+   * Used for whole-file out-of-line blobs where no offset or length is specified.
+   *
+   * @param rowInfo      Row information with the file path
+   * @param outputSchema Schema for output rows
+   * @param builder      Type class for building output rows
+   * @tparam R           Row type (Row or InternalRow)
+   * @return Sequence containing a single row result
+   */
+  private def readWholeFile[R](
+      rowInfo: RowInfo[R],
+      outputSchema: StructType)
+      (implicit builder: RowBuilder[R]): RowResult[R] = {
+
+    var inputStream: SeekableDataInputStream = null
+    try {
+      val path = new StoragePath(rowInfo.filePath)
+      val fileLength = storage.getPathInfo(path).getLength.toInt
+      inputStream = storage.openSeekable(path, false)
+      val buffer = new Array[Byte](fileLength)
+      inputStream.readFully(buffer, 0, fileLength)
+
+      logger.debug(s"Read entire file ${rowInfo.filePath} ($fileLength bytes)")
+
+      RowResult(builder.buildRow(rowInfo.originalRow, buffer, outputSchema), rowInfo.index)
+    } finally {
+      if (inputStream != null) {
+        try {
+          inputStream.close()
+        } catch {
+          case e: Exception =>
+            logger.warn(s"Error closing stream for ${rowInfo.filePath}", e)
+        }
+      }
+    }
+  }
+
+  /**
    * Read a merged range and split it back into individual row results.
    *
    * This method performs a single I/O operation to read the entire merged
@@ -360,6 +435,8 @@ private[blob] trait RowAccessor[R] {
   def getStruct(row: R, structColIdx: Int, numFields: Int): R
   def getString(struct: R, fieldIdx: Int): String
   def getLong(struct: R, fieldIdx: Int): Long
+  def getBytes(row: R, fieldIdx: Int): Array[Byte]
+  def isNullAt(row: R, fieldIdx: Int): Boolean
 }
 
 /**
@@ -380,17 +457,16 @@ private[blob] object RowAccessor {
     override def getStruct(row: Row, structColIdx: Int, numFields: Int): Row = row.getStruct(structColIdx)
     override def getString(struct: Row, fieldIdx: Int): String = struct.getString(fieldIdx)
     override def getLong(struct: Row, fieldIdx: Int): Long = struct.getLong(fieldIdx)
+    override def getBytes(row: Row, fieldIdx: Int): Array[Byte] = row.getAs[Array[Byte]](fieldIdx)
+    override def isNullAt(row: Row, fieldIdx: Int): Boolean = row.isNullAt(fieldIdx)
   }
 
   implicit val internalRowAccessor: RowAccessor[InternalRow] = new RowAccessor[InternalRow] {
-    override def getStruct(row: InternalRow, structColIdx: Int, numFields: Int): InternalRow =
-      row.getStruct(structColIdx, numFields)
-
-    override def getString(struct: InternalRow, fieldIdx: Int): String =
-      struct.getUTF8String(fieldIdx).toString
-
-    override def getLong(struct: InternalRow, fieldIdx: Int): Long =
-      struct.getLong(fieldIdx)
+    override def getStruct(row: InternalRow, structColIdx: Int, numFields: Int): InternalRow = row.getStruct(structColIdx, numFields)
+    override def getString(struct: InternalRow, fieldIdx: Int): String = struct.getUTF8String(fieldIdx).toString
+    override def getLong(struct: InternalRow, fieldIdx: Int): Long = struct.getLong(fieldIdx)
+    override def getBytes(row: InternalRow, fieldIdx: Int): Array[Byte] = row.getBinary(fieldIdx)
+    override def isNullAt(row: InternalRow, fieldIdx: Int): Boolean = row.isNullAt(fieldIdx)
   }
 }
 
@@ -447,7 +523,8 @@ private case class RowInfo[R](
     filePath: String,
     offset: Long,
     length: Long,
-    index: Long)
+    index: Long,
+    inlineBytes: Option[Array[Byte]] = None)
 
 /**
  * A merged range combining multiple consecutive reads.

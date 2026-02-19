@@ -22,8 +22,10 @@ package org.apache.hudi.blob
 import org.apache.hudi.blob.BlobTestHelpers._
 import org.apache.hudi.testutils.HoodieClientTestBase
 
+import org.apache.spark.sql.Row
 import org.apache.spark.sql.functions._
 import org.apache.spark.sql.hudi.blob.BatchedByteRangeReader
+import org.apache.spark.sql.types._
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
 
@@ -339,5 +341,79 @@ class TestBatchedByteRangeReader extends HoodieClientTestBase {
       val data = row.getAs[Array[Byte]]("data")
       assertEquals(100, data.length)
     }
+  }
+
+  @Test
+  def testInlineBlobRead(): Unit = {
+    val inlineData = Array[Byte](10, 20, 30, 40, 50)
+    val inputDF = sparkSession.createDataFrame(Seq(Tuple1("rec1")))
+      .toDF("record_id")
+      .withColumn("data", inlineBlobStructCol("data", lit(inlineData)))
+      .select("data", "record_id")
+
+    val resultDF = BatchedByteRangeReader.readBatched(inputDF, storageConf)
+    val results = resultDF.collect()
+    assertEquals(1, results.length)
+    assertArrayEquals(inlineData, results(0).getAs[Array[Byte]]("data"))
+    assertEquals("rec1", results(0).getAs[String]("record_id"))
+  }
+
+  @Test
+  def testWholeFileBlobRead(): Unit = {
+    val size = 500
+    val filePath = createTestFile(tempDir, "whole.bin", size)
+
+    val inputDF = sparkSession.createDataFrame(Seq(Tuple1("rec1")))
+      .toDF("record_id")
+      .withColumn("data", wholeFileBlobStructCol("data", lit(filePath)))
+      .select("data", "record_id")
+
+    val resultDF = BatchedByteRangeReader.readBatched(inputDF, storageConf)
+    val results = resultDF.collect()
+    assertEquals(1, results.length)
+    val data = results(0).getAs[Array[Byte]]("data")
+    assertEquals(size, data.length)
+    assertBytesContent(data, expectedOffset = 0)
+  }
+
+  @Test
+  def testMixedBlobTypes(): Unit = {
+    val fileSize = 1000
+    val filePath = createTestFile(tempDir, "mixed-types.bin", fileSize)
+    val inlineData = Array[Byte](7, 8, 9)
+
+    val outerSchema = StructType(Seq(
+      StructField("record_id", StringType, nullable = false),
+      StructField("data", mixedBlobType, nullable = false, metadata = blobMetadata)
+    ))
+
+    val rows = Seq(
+      Row("inline_row",    Row("inline",     inlineData, null)),
+      Row("wholefile_row", Row("out_of_line", null, Row(filePath, null, null, false))),
+      Row("range_row_1",   Row("out_of_line", null, Row(filePath, 0L,   100L, false))),
+      Row("range_row_2",   Row("out_of_line", null, Row(filePath, 100L, 100L, false)))
+    )
+
+    val inputDF = sparkSession.createDataFrame(
+      sparkSession.sparkContext.parallelize(rows), outerSchema)
+
+    val resultDF = BatchedByteRangeReader.readBatched(inputDF, storageConf, columnName = Some("data"))
+    val results = resultDF.orderBy("record_id").collect()
+    assertEquals(4, results.length)
+
+    val inlineRow = results.find(_.getAs[String]("record_id") == "inline_row").get
+    assertArrayEquals(inlineData, inlineRow.getAs[Array[Byte]]("data"))
+
+    val wholeFileRow = results.find(_.getAs[String]("record_id") == "wholefile_row").get
+    val wholeFileData = wholeFileRow.getAs[Array[Byte]]("data")
+    assertEquals(fileSize, wholeFileData.length)
+
+    val range1 = results.find(_.getAs[String]("record_id") == "range_row_1").get
+    assertEquals(100, range1.getAs[Array[Byte]]("data").length)
+    assertBytesContent(range1.getAs[Array[Byte]]("data"), expectedOffset = 0)
+
+    val range2 = results.find(_.getAs[String]("record_id") == "range_row_2").get
+    assertEquals(100, range2.getAs[Array[Byte]]("data").length)
+    assertBytesContent(range2.getAs[Array[Byte]]("data"), expectedOffset = 100)
   }
 }
