@@ -51,28 +51,18 @@ start_datanode () {
 
   echo "::warning::docker_test_java17.sh starting datanode:"$DN
 
-  cat $HADOOP_HOME/hadoop/etc/hdfs-site.xml
-  cat $HADOOP_HOME/hadoop/etc/core-site.xml
-
   DN_DIR_PREFIX=$DOCKER_TEST_DIR/additional_datanode/
   PID_DIR=$DOCKER_TEST_DIR/pid/$1
 
-  if [ -z $DN_DIR_PREFIX ]; then
-    mkdir -p $DN_DIR_PREFIX
-  fi
-
-  if [ -z $PID_DIR ]; then
-    mkdir -p $PID_DIR
-  fi
-
-  export HADOOP_PID_DIR=$PID_PREFIX
+  mkdir -p $DN_DIR_PREFIX $PID_DIR
+  export HADOOP_PID_DIR=$PID_DIR
   DN_CONF_OPTS="\
   -Dhadoop.tmp.dir=$DN_DIR_PREFIX$DN\
   -Ddfs.datanode.address=localhost:5001$DN \
   -Ddfs.datanode.http.address=localhost:5008$DN \
   -Ddfs.datanode.ipc.address=localhost:5002$DN"
-  $HADOOP_HOME/bin/hdfs --daemon start datanode $DN_CONF_OPTS
-  $HADOOP_HOME/bin/hdfs dfsadmin -report
+  bash $HADOOP_HOME/bin/hdfs --daemon start datanode $DN_CONF_OPTS
+  bash $HADOOP_HOME/bin/hdfs dfsadmin -report
 }
 
 setup_hdfs () {
@@ -80,20 +70,41 @@ setup_hdfs () {
   mv /opt/bundle-validation/tmp-conf-dir/hdfs-site.xml $HADOOP_HOME/etc/hadoop/hdfs-site.xml
   mv /opt/bundle-validation/tmp-conf-dir/core-site.xml $HADOOP_HOME/etc/hadoop/core-site.xml
 
-  $HADOOP_HOME/bin/hdfs namenode -format
-  $HADOOP_HOME/bin/hdfs --daemon start namenode
-  echo "::warning::docker_test_java17.sh starting hadoop hdfs"
-  $HADOOP_HOME/sbin/start-dfs.sh
+  mkdir -p $DOCKER_TEST_DIR/pid
+  export HADOOP_PID_DIR=$DOCKER_TEST_DIR/pid
 
-  # start datanodes
+  bash $HADOOP_HOME/bin/hdfs namenode -format
+  bash $HADOOP_HOME/bin/hdfs --daemon start namenode
+
+  echo "::warning::docker_test_java17.sh waiting for NameNode to start"
+  NAMENODE_READY=0
+  for i in $(seq 1 30); do
+    if bash $HADOOP_HOME/bin/hdfs dfsadmin -report >/dev/null 2>&1; then
+      NAMENODE_READY=1
+      break
+    fi
+    sleep 2
+  done
+  if [ "$NAMENODE_READY" -ne 1 ]; then
+    echo "::error::docker_test_java17.sh NameNode failed to start"
+    exit 1
+  fi
+
+  echo "::warning::docker_test_java17.sh starting default datanode"
+  bash $HADOOP_HOME/bin/hdfs --daemon start datanode
+
+  echo "::warning::docker_test_java17.sh waiting for DataNode to register"
+  sleep 10
+
+  # start additional datanodes
   for i in $(seq 1 3)
   do
     start_datanode $i
   done
 
   echo "::warning::docker_test_java17.sh starting hadoop hdfs, hdfs report"
-  $HADOOP_HOME/bin/hdfs dfs -mkdir -p /user/root
-  $HADOOP_HOME/bin/hdfs dfs -ls /user/
+  bash $HADOOP_HOME/bin/hdfs dfs -mkdir -p /user/root
+  bash $HADOOP_HOME/bin/hdfs dfs -ls /user/
   if [ "$?" -ne 0 ]; then
     echo "::error::docker_test_java17.sh Failed setting up HDFS!"
     exit 1
@@ -103,7 +114,14 @@ setup_hdfs () {
 stop_hdfs() {
   use_default_java_runtime
   echo "::warning::docker_test_java17.sh stopping hadoop hdfs"
-  $HADOOP_HOME/sbin/stop-dfs.sh
+  export HADOOP_PID_DIR=${HADOOP_PID_DIR:-$DOCKER_TEST_DIR/pid}
+  bash $HADOOP_HOME/bin/hdfs --daemon stop datanode 2>/dev/null || true
+  for i in 1 2 3; do
+    export HADOOP_PID_DIR=$DOCKER_TEST_DIR/pid/$i
+    bash $HADOOP_HOME/bin/hdfs --daemon stop datanode 2>/dev/null || true
+  done
+  export HADOOP_PID_DIR=$DOCKER_TEST_DIR/pid
+  bash $HADOOP_HOME/bin/hdfs --daemon stop namenode 2>/dev/null || true
 }
 
 build_hudi_java8 () {
@@ -123,7 +141,14 @@ build_hudi_java8 () {
     mkdir -p $JARS_DIR
   fi
 
-  cp ./packaging/hudi-spark-bundle/target/hudi-spark*.jar $JARS_DIR/spark.jar
+  echo "::warning::docker_test_java17.sh copy hudi-spark bundle jar to target folder"
+  cp ./packaging/hudi-spark-bundle/target/hudi-spark*SNAPSHOT.jar $JARS_DIR/spark.jar
+  echo "::warning::docker_test_java17.sh copy hudi-spark bundle jar to target folder DONE"
+
+  if [ "$?" -ne 0 ]; then
+    echo "::error::docker_test_java17.sh Failed to copy hudi-spark bundle jar to target folder"
+    exit 1
+  fi
 }
 
 run_docker_tests() {
