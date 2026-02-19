@@ -86,7 +86,7 @@ public class TestSparkSizeBasedClusteringPlanStrategy {
     String fileId = FSUtils.createNewFileId(FSUtils.createNewFileIdPfx(), 0);
     FileSlice fs = new FileSlice("p0", "001", fileId);
     HoodieBaseFile f = new HoodieBaseFile(fileId);
-    f.setFileLen(baseFileSize);
+    f.setFileSize(baseFileSize);
     fs.setBaseFile(f);
     return fs;
   }

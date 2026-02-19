@@ -92,13 +92,13 @@ public class TestFileSliceMetricUtils {
         InProcessTimeGenerator.createNewInstantTime(),
         UUID.randomUUID().toString());
     HoodieBaseFile baseFile = new HoodieBaseFile(baseFilePath);
-    baseFile.setFileLen(baseFileLen);
+    baseFile.setFileSize(baseFileLen);
     slice.setBaseFile(baseFile);
     int logVersion = 1;
     for (long logFileLen : logFileLens) {
       String logFilePath = "." + UUID.randomUUID().toString() + "_20170101134598.log." + logVersion;
       HoodieLogFile logFile = new HoodieLogFile(logFilePath);
-      logFile.setFileLen(logFileLen);
+      logFile.setFileSize(logFileLen);
       slice.addLogFile(logFile);
       logVersion++;
     }

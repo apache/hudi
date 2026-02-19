@@ -25,6 +25,7 @@ import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaCompatibility;
 import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.table.HoodieTableConfig;
@@ -165,12 +166,12 @@ public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> 
 
     setSchemas(jobConfCopy, modifiedDataSchema, actualRequiredSchema);
     InputSplit inputSplit = new FileSplit(new Path(filePath.toString()), start, length, hosts);
-    RecordReader<NullWritable, ArrayWritable> recordReader = readerCreator.getRecordReader(inputSplit, jobConfCopy, modifiedDataSchema.toAvroSchema());
+    RecordReader<NullWritable, ArrayWritable> recordReader = readerCreator.getRecordReader(inputSplit, jobConfCopy, modifiedDataSchema);
     if (firstRecordReader == null) {
       firstRecordReader = recordReader;
     }
     ClosableIterator<ArrayWritable> recordIterator = new RecordReaderValueIterator<>(recordReader);
-    if (HoodieSchemaUtils.areSchemasProjectionEquivalent(modifiedDataSchema, requiredSchema)) {
+    if (HoodieSchemaCompatibility.areSchemasProjectionEquivalent(modifiedDataSchema, requiredSchema)) {
       return recordIterator;
     }
     // record reader puts the required columns in the positions of the data schema and nulls the rest of the columns

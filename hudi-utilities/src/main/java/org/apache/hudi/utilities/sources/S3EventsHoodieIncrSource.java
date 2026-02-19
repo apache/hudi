@@ -37,12 +37,11 @@ import org.apache.hudi.utilities.sources.helpers.QueryRunner;
 import org.apache.hudi.utilities.streamer.DefaultStreamContext;
 import org.apache.hudi.utilities.streamer.StreamContext;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SparkSession;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.Collections;
 
@@ -59,9 +58,9 @@ import static org.apache.hudi.utilities.sources.helpers.IncrSourceHelper.getMiss
 /**
  * This source will use the S3 events meta information from hoodie table generate by {@link S3EventsSource}.
  */
+@Slf4j
 public class S3EventsHoodieIncrSource extends HoodieIncrSource {
 
-  private static final Logger LOG = LoggerFactory.getLogger(S3EventsHoodieIncrSource.class);
   private final String srcPath;
   private final int numInstantsPerFetch;
   private final IncrSourceHelper.MissingCheckpointStrategy missingCheckpointStrategy;
@@ -132,11 +131,11 @@ public class S3EventsHoodieIncrSource extends HoodieIncrSource {
             HoodieRecord.COMMIT_TIME_METADATA_FIELD,
             CloudObjectsSelectorCommon.S3_OBJECT_KEY,
             CloudObjectsSelectorCommon.S3_OBJECT_SIZE, true,
-            Option.ofNullable(cloudObjectIncrCheckpoint.getKey()));
-    LOG.info("Querying S3 with:{}, queryInfo:{}", cloudObjectIncrCheckpoint, queryInfo);
+            Option.ofNullable(cloudObjectIncrCheckpoint.getKey()), metricsOption);
+    log.info("Querying S3 with:{}, queryInfo:{}", cloudObjectIncrCheckpoint, queryInfo);
 
     if (isNullOrEmpty(cloudObjectIncrCheckpoint.getKey()) && queryInfo.areStartAndEndInstantsEqual()) {
-      LOG.info("Already caught up. No new data to process");
+      log.info("Already caught up. No new data to process");
       return Pair.of(Option.empty(), new StreamerCheckpointV1(queryInfo.getEndInstant()));
     }
     return cloudDataFetcher.fetchPartitionedSource(S3, cloudObjectIncrCheckpoint, this.sourceProfileSupplier, queryRunner.run(queryInfo, snapshotLoadQuerySplitter), this.schemaProvider, sourceLimit);

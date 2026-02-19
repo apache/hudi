@@ -18,14 +18,13 @@
 
 package org.apache.hudi.common.schema;
 
-import org.apache.hudi.avro.HoodieAvroUtils;
+import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.internal.schema.HoodieSchemaException;
 
-import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -131,6 +130,12 @@ public class TestHoodieSchemaUtils {
       + "{\"name\":\"decimal_col\",\"type\":[\"null\","
       + "{\"type\":\"bytes\",\"logicalType\":\"decimal\",\"precision\":8,\"scale\":4}],\"default\":null}]}";
 
+  private static final String EXAMPLE_SCHEMA_WITH_PROPS = "{\"type\": \"record\",\"name\": \"testrec\",\"fields\": [ "
+      + "{\"name\": \"timestamp\",\"type\": \"double\", \"custom_field_property\":\"value\"},{\"name\": \"_row_key\", \"type\": \"string\"},"
+      + "{\"name\": \"non_pii_col\", \"type\": \"string\"},"
+      + "{\"name\": \"pii_col\", \"type\": \"string\", \"column_category\": \"user_profile\"}], "
+      + "\"custom_schema_property\": \"custom_schema_property_value\"}";
+
   private static HoodieSchema SCHEMA_WITH_NESTED_FIELD_LARGE = HoodieSchema.parse(SCHEMA_WITH_NESTED_FIELD_LARGE_STR);
 
   @Test
@@ -185,9 +190,51 @@ public class TestHoodieSchemaUtils {
   }
 
   @Test
+  public void testAddMetadataFieldsWithProps() {
+    HoodieSchema baseSchema = HoodieSchema.parse(EXAMPLE_SCHEMA_WITH_PROPS);
+    HoodieSchema schemaWithMetadata = HoodieSchemaUtils.addMetadataFields(baseSchema);
+    List<HoodieSchemaField> updatedFields = schemaWithMetadata.getFields();
+    // assert fields added in expected order
+    assertEquals(HoodieRecord.COMMIT_TIME_METADATA_FIELD, updatedFields.get(0).name());
+    assertEquals(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD, updatedFields.get(1).name());
+    assertEquals(HoodieRecord.RECORD_KEY_METADATA_FIELD, updatedFields.get(2).name());
+    assertEquals(HoodieRecord.PARTITION_PATH_METADATA_FIELD, updatedFields.get(3).name());
+    assertEquals(HoodieRecord.FILENAME_METADATA_FIELD, updatedFields.get(4).name());
+    // assert original fields are copied over
+    List<HoodieSchemaField> originalFieldsInUpdatedSchema = updatedFields.subList(5, updatedFields.size());
+    assertEquals(baseSchema.getFields(), originalFieldsInUpdatedSchema);
+    // validate properties are properly copied over
+    assertEquals("custom_schema_property_value", schemaWithMetadata.getProp("custom_schema_property"));
+    assertEquals("value", originalFieldsInUpdatedSchema.get(0).getProp("custom_field_property"));
+  }
+
+  @Test
   public void testAddMetadataFieldsValidation() {
     // Should throw on null schema
     assertThrows(IllegalArgumentException.class, () -> HoodieSchemaUtils.addMetadataFields(null, true));
+  }
+
+  @Test
+  public void testPropsPresent() {
+    HoodieSchema schema = HoodieSchemaUtils.addMetadataFields(HoodieSchema.parse(EXAMPLE_SCHEMA));
+    boolean piiPresent = false;
+    for (HoodieSchemaField field : schema.getFields()) {
+      if (HoodieSchemaUtils.isMetadataField(field.name())) {
+        continue;
+      }
+
+      assertNotNull(field.name(), "field name is null");
+      Map<String, Object> props = field.getObjectProps();
+      assertNotNull(props, "The property is null");
+
+      if (field.name().equals("pii_col")) {
+        piiPresent = true;
+        assertTrue(props.containsKey("column_category"));
+      } else {
+        assertEquals(0, props.size(), "The property shows up but not set");
+      }
+    }
+    assertTrue(piiPresent, "column pii_col doesn't show up");
   }
 
   @Test
@@ -234,42 +281,6 @@ public class TestHoodieSchemaUtils {
 
     // Should throw on null target schema
     assertThrows(IllegalArgumentException.class, () -> HoodieSchemaUtils.mergeSchemas(schema, null));
-  }
-
-  @Test
-  public void testCreateNullableSchema() {
-    HoodieSchema stringSchema = HoodieSchema.create(HoodieSchemaType.STRING);
-
-    // Create nullable version
-    HoodieSchema nullableSchema = HoodieSchemaUtils.createNullableSchema(stringSchema);
-
-    assertNotNull(nullableSchema);
-    assertEquals(HoodieSchemaType.UNION, nullableSchema.getType());
-    assertTrue(nullableSchema.isNullable());
-  }
-
-  @Test
-  public void testCreateNullableSchemaValidation() {
-    // Should throw on null schema
-    assertThrows(IllegalArgumentException.class, () -> HoodieSchemaUtils.createNullableSchema(null));
-  }
-
-  @Test
-  public void testGetNonNullTypeFromUnion() {
-    HoodieSchema stringSchema = HoodieSchema.create(HoodieSchemaType.STRING);
-    HoodieSchema nullableSchema = HoodieSchemaUtils.createNullableSchema(stringSchema);
-
-    // Extract non-null type
-    HoodieSchema nonNullType = HoodieSchemaUtils.getNonNullTypeFromUnion(nullableSchema);
-
-    assertNotNull(nonNullType);
-    assertEquals(HoodieSchemaType.STRING, nonNullType.getType());
-  }
-
-  @Test
-  public void testGetNonNullTypeFromUnionValidation() {
-    // Should throw on null schema
-    assertThrows(IllegalArgumentException.class, () -> HoodieSchemaUtils.getNonNullTypeFromUnion(null));
   }
 
   @Test
@@ -339,19 +350,6 @@ public class TestHoodieSchemaUtils {
 
     // Should throw on null schema
     assertThrows(IllegalArgumentException.class, () -> HoodieSchemaUtils.createNewSchemaField("name", null, "doc", null));
-  }
-
-  @Test
-  public void testConsistencyWithAvroUtilities() {
-    // Test that HoodieSchemaUtils produces equivalent results to AvroSchemaUtils
-    String schemaString = SIMPLE_SCHEMA;
-
-    // Compare createHoodieWriteSchema results
-    Schema avroResult = HoodieAvroUtils.createHoodieWriteSchema(schemaString, true);
-    HoodieSchema hoodieResult = HoodieSchemaUtils.createHoodieWriteSchema(schemaString, true);
-
-    // Should produce equivalent schemas
-    assertEquals(avroResult.toString(), hoodieResult.toString());
   }
 
   @Test
@@ -825,188 +823,6 @@ public class TestHoodieSchemaUtils {
 
     // Null fieldsToRemove should return original schema unchanged
     assertSame(schema, HoodieSchemaUtils.removeFields(schema, null));
-  }
-
-  @Test
-  public void testRemoveFieldsConsistencyWithAvro() {
-    // Test that HoodieSchemaUtils.removeFields produces equivalent results to HoodieAvroUtils.removeFields
-    String schemaString = "{"
-        + "\"type\":\"record\","
-        + "\"name\":\"TestRecord\","
-        + "\"fields\":["
-        + "{\"name\":\"id\",\"type\":\"string\"},"
-        + "{\"name\":\"name\",\"type\":\"string\"},"
-        + "{\"name\":\"age\",\"type\":\"int\"},"
-        + "{\"name\":\"email\",\"type\":\"string\"}"
-        + "]}";
-
-    Schema avroSchema = new Schema.Parser().parse(schemaString);
-    HoodieSchema hoodieSchema = HoodieSchema.parse(schemaString);
-
-    Set<String> fieldsToRemove = new HashSet<>(Arrays.asList("age", "email"));
-
-    // Apply removeFields using both approaches
-    Schema avroResult = HoodieAvroUtils.removeFields(avroSchema, fieldsToRemove);
-    HoodieSchema hoodieResult = HoodieSchemaUtils.removeFields(hoodieSchema, fieldsToRemove);
-
-    // Should produce equivalent schemas
-    assertEquals(avroResult.toString(), hoodieResult.toString());
-  }
-
-  @Test
-  void testAreSchemasProjectionEquivalentRecordSchemas() {
-    HoodieSchema s1 = HoodieSchema.parse("{\"type\":\"record\",\"name\":\"R\",\"fields\":[{\"name\":\"f1\",\"type\":\"int\"}]}");
-    HoodieSchema s2 = HoodieSchema.parse("{\"type\":\"record\",\"name\":\"R2\",\"fields\":[{\"name\":\"f1\",\"type\":\"int\"}]}");
-    assertTrue(HoodieSchemaUtils.areSchemasProjectionEquivalent(s1, s2));
-  }
-
-  @Test
-  void testAreSchemasProjectionEquivalentDifferentFieldCountInRecords() {
-    HoodieSchema s1 = HoodieSchema.parse("{\"type\":\"record\",\"name\":\"R1\",\"fields\":[{\"name\":\"a\",\"type\":\"int\"}]}");
-    HoodieSchema s2 = HoodieSchema.parse("{\"type\":\"record\",\"name\":\"R2\",\"fields\":[]}");
-    assertFalse(HoodieSchemaUtils.areSchemasProjectionEquivalent(s1, s2));
-  }
-
-  @Test
-  void testAreSchemasProjectionEquivalentNestedRecordSchemas() {
-    HoodieSchema s1 = HoodieSchema.parse("{\"type\":\"record\",\"name\":\"Outer1\",\"fields\":[{\"name\":\"inner\","
-        + "\"type\":{\"type\":\"record\",\"name\":\"Inner1\",\"fields\":[{\"name\":\"x\",\"type\":\"string\"}]}}]}");
-    HoodieSchema s2 = HoodieSchema.parse("{\"type\":\"record\",\"name\":\"Outer2\",\"fields\":[{\"name\":\"inner\","
-        + "\"type\":{\"type\":\"record\",\"name\":\"Inner2\",\"fields\":[{\"name\":\"x\",\"type\":\"string\"}]}}]}");
-    s1.addProp("prop1", "value1"); // prevent Objects.equals from returning true
-    assertTrue(HoodieSchemaUtils.areSchemasProjectionEquivalent(s1, s2));
-  }
-
-  @Test
-  void testAreSchemasProjectionEquivalentArraySchemas() {
-    HoodieSchema s1 = HoodieSchema.createArray(HoodieSchema.create(HoodieSchemaType.STRING));
-    HoodieSchema s2 = HoodieSchema.createArray(HoodieSchema.create(HoodieSchemaType.STRING));
-    s1.addProp("prop1", "value1"); // prevent Objects.equals from returning true
-    assertTrue(HoodieSchemaUtils.areSchemasProjectionEquivalent(s1, s2));
-  }
-
-  @Test
-  void testAreSchemasProjectionEquivalentDifferentElementTypeInArray() {
-    HoodieSchema s1 = HoodieSchema.createArray(HoodieSchema.create(HoodieSchemaType.STRING));
-    HoodieSchema s2 = HoodieSchema.createArray(HoodieSchema.create(HoodieSchemaType.INT));
-    assertFalse(HoodieSchemaUtils.areSchemasProjectionEquivalent(s1, s2));
-  }
-
-  @Test
-  void testAreSchemasProjectionEquivalentMapSchemas() {
-    HoodieSchema s1 = HoodieSchema.createMap(HoodieSchema.create(HoodieSchemaType.LONG));
-    HoodieSchema s2 = HoodieSchema.createMap(HoodieSchema.create(HoodieSchemaType.LONG));
-    s1.addProp("prop1", "value1"); // prevent Objects.equals from returning true
-    assertTrue(HoodieSchemaUtils.areSchemasProjectionEquivalent(s1, s2));
-  }
-
-  @Test
-  void testAreSchemasProjectionEquivalentDifferentMapValueTypes() {
-    HoodieSchema s1 = HoodieSchema.createMap(HoodieSchema.create(HoodieSchemaType.LONG));
-    HoodieSchema s2 = HoodieSchema.createMap(HoodieSchema.create(HoodieSchemaType.STRING));
-    s1.addProp("prop1", "value1"); // prevent Objects.equals from returning true
-    assertFalse(HoodieSchemaUtils.areSchemasProjectionEquivalent(s1, s2));
-  }
-
-  @Test
-  void testAreSchemasProjectionEquivalentNullableSchemaComparison() {
-    HoodieSchema s1 = HoodieSchema.createNullable(HoodieSchema.create(HoodieSchemaType.INT));
-    HoodieSchema s2 = HoodieSchema.create(HoodieSchemaType.INT);
-    s2.addProp("prop1", "value1"); // prevent Objects.equals from returning true
-    assertTrue(HoodieSchemaUtils.areSchemasProjectionEquivalent(s1, s2));
-  }
-
-  @Test
-  void testAreSchemasProjectionEquivalentListVsString() {
-    HoodieSchema stringSchema = HoodieSchema.create(HoodieSchemaType.STRING);
-    HoodieSchema listSchema = HoodieSchema.createArray(HoodieSchema.create(HoodieSchemaType.STRING));
-    assertFalse(HoodieSchemaUtils.areSchemasProjectionEquivalent(listSchema, stringSchema));
-    assertFalse(HoodieSchemaUtils.areSchemasProjectionEquivalent(stringSchema, listSchema));
-  }
-
-  @Test
-  void testAreSchemasProjectionEquivalentMapVsString() {
-    HoodieSchema stringSchema = HoodieSchema.create(HoodieSchemaType.STRING);
-    HoodieSchema mapSchema = HoodieSchema.createMap(HoodieSchema.create(HoodieSchemaType.STRING));
-    assertFalse(HoodieSchemaUtils.areSchemasProjectionEquivalent(mapSchema, stringSchema));
-    assertFalse(HoodieSchemaUtils.areSchemasProjectionEquivalent(stringSchema, mapSchema));
-  }
-
-  @Test
-  void testAreSchemasProjectionEquivalentEqualFixedSchemas() {
-    HoodieSchema s1 = HoodieSchema.createFixed("F", null, null, 16);
-    HoodieSchema s2 = HoodieSchema.createFixed("F", null, null, 16);
-    s1.addProp("prop1", "value1"); // prevent Objects.equals from returning true
-    assertTrue(HoodieSchemaUtils.areSchemasProjectionEquivalent(s1, s2));
-  }
-
-  @Test
-  void testAreSchemasProjectionEquivalentDifferentFixedSize() {
-    HoodieSchema s1 = HoodieSchema.createFixed("F", null, null, 8);
-    HoodieSchema s2 = HoodieSchema.createFixed("F", null, null, 4);
-    s1.addProp("prop1", "value1"); // prevent Objects.equals from returning true
-    assertFalse(HoodieSchemaUtils.areSchemasProjectionEquivalent(s1, s2));
-  }
-
-  @Test
-  void testAreSchemasProjectionEquivalentEnums() {
-    HoodieSchema s1 = HoodieSchema.createEnum("E", null, null, Arrays.asList("A", "B", "C"));
-    HoodieSchema s2 = HoodieSchema.createEnum("E", null, null, Arrays.asList("A", "B", "C"));
-    s1.addProp("prop1", "value1"); // prevent Objects.equals from returning true
-    assertTrue(HoodieSchemaUtils.areSchemasProjectionEquivalent(s1, s2));
-  }
-
-  @Test
-  void testAreSchemasProjectionEquivalentDifferentEnumSymbols() {
-    HoodieSchema s1 = HoodieSchema.createEnum("E", null, null, Arrays.asList("X", "Y"));
-    HoodieSchema s2 = HoodieSchema.createEnum("E", null, null, Arrays.asList("A", "B"));
-    assertFalse(HoodieSchemaUtils.areSchemasProjectionEquivalent(s1, s2));
-  }
-
-  @Test
-  void testAreSchemasProjectionEquivalentEnumSymbolSubset() {
-    HoodieSchema s1 = HoodieSchema.createEnum("E", null, null, Arrays.asList("A", "B"));
-    HoodieSchema s2 = HoodieSchema.createEnum("E", null, null, Arrays.asList("A", "B", "C"));
-    s1.addProp("prop1", "value1"); // prevent Objects.equals from returning true
-    assertTrue(HoodieSchemaUtils.areSchemasProjectionEquivalent(s1, s2));
-    assertFalse(HoodieSchemaUtils.areSchemasProjectionEquivalent(s2, s1));
-  }
-
-  @Test
-  void testAreSchemasProjectionEquivalentEqualDecimalLogicalTypes() {
-    HoodieSchema s1 = HoodieSchema.createDecimal(12, 2);
-    HoodieSchema s2 = HoodieSchema.createDecimal(12, 2);
-    s1.addProp("prop1", "value1"); // prevent Objects.equals from returning true
-
-    assertTrue(HoodieSchemaUtils.areSchemasProjectionEquivalent(s1, s2));
-  }
-
-  @Test
-  void testAreSchemasProjectionEquivalentDifferentPrecision() {
-    HoodieSchema s1 = HoodieSchema.createDecimal(12, 2);
-    HoodieSchema s2 = HoodieSchema.createDecimal(13, 2);
-    assertFalse(HoodieSchemaUtils.areSchemasProjectionEquivalent(s1, s2));
-  }
-
-  @Test
-  void testAreSchemasProjectionEquivalentLogicalVsNoLogicalType() {
-    HoodieSchema s1 = HoodieSchema.createDecimal(10, 2);
-    HoodieSchema s2 = HoodieSchema.create(HoodieSchemaType.BYTES);
-
-    assertFalse(HoodieSchemaUtils.areSchemasProjectionEquivalent(s1, s2));
-  }
-
-  @Test
-  void testAreSchemasProjectionEquivalentSameReferenceSchema() {
-    HoodieSchema s = HoodieSchema.create(HoodieSchemaType.STRING);
-    assertTrue(HoodieSchemaUtils.areSchemasProjectionEquivalent(s, s));
-  }
-
-  @Test
-  void testAreSchemasProjectionEquivalentNullSchemaComparison() {
-    HoodieSchema s = HoodieSchema.create(HoodieSchemaType.STRING);
-    assertFalse(HoodieSchemaUtils.areSchemasProjectionEquivalent(null, s));
-    assertFalse(HoodieSchemaUtils.areSchemasProjectionEquivalent(s, null));
   }
 
   @Test
@@ -1963,33 +1779,6 @@ public class TestHoodieSchemaUtils {
   public void testToJavaDefaultValueNullFieldArgument() {
     // Should throw IllegalArgumentException for null field
     assertThrows(IllegalArgumentException.class, () -> HoodieSchemaUtils.toJavaDefaultValue(null));
-  }
-
-  @Test
-  public void testToJavaDefaultValueConsistencyWithAvro() {
-    // Test that HoodieSchemaUtils.toJavaDefaultValue produces equivalent results to HoodieAvroUtils.toJavaDefaultValue
-
-    // Test with primitive types
-    HoodieSchemaField stringField = HoodieSchemaField.of("stringField",
-        HoodieSchema.create(HoodieSchemaType.STRING),
-        null,
-        "test");
-
-    Object hoodieResult = HoodieSchemaUtils.toJavaDefaultValue(stringField);
-    Object avroResult = HoodieAvroUtils.toJavaDefaultValue(stringField.getAvroField());
-
-    assertEquals(avroResult, hoodieResult);
-
-    // Test with int
-    HoodieSchemaField intField = HoodieSchemaField.of("intField",
-        HoodieSchema.create(HoodieSchemaType.INT),
-        null,
-        42);
-
-    Object hoodieIntResult = HoodieSchemaUtils.toJavaDefaultValue(intField);
-    Object avroIntResult = HoodieAvroUtils.toJavaDefaultValue(intField.getAvroField());
-
-    assertEquals(avroIntResult, hoodieIntResult);
   }
 
   @Test

@@ -7,7 +7,7 @@
  * "License"); you may not use this file except in compliance
  * with the License.  You may obtain a copy of the License at
  *
- * http://www.apache.org/licenses/LICENSE-2.0
+ *      http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -16,29 +16,20 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.source.reader;
+package org.apache.hudi.source.assign;
 
-import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.source.split.HoodieSourceSplit;
 
-import org.apache.flink.connector.base.source.reader.RecordsWithSplitIds;
-import org.apache.flink.util.CloseableIterator;
-
-import java.io.Serializable;
-
 /**
- * Interface for batch read.
- *
- * @param <T> record type
+ * Interface for assigning {@link HoodieSourceSplit} instances to task IDs.
  */
-public interface HoodieBatchReader<T> extends Serializable {
+public interface HoodieSplitAssigner {
 
   /**
-   * Read data from input iterator batch by batch
-   * @param split Hoodie source split
-   * @param inputIterator iterator for hudi reader
-   * @return iterator for batches of records
+   * Assigns a split to a specific task ID.
+   *
+   * @param split the split to assign
+   * @return the task ID that should process this split
    */
-  CloseableIterator<RecordsWithSplitIds<HoodieRecordWithPosition<T>>> batch(
-      HoodieSourceSplit split, ClosableIterator<T> inputIterator);
+  int assign(HoodieSourceSplit split);
 }

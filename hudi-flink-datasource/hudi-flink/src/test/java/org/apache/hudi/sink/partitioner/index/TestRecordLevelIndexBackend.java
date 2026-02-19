@@ -38,6 +38,7 @@ import java.io.IOException;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -106,13 +107,84 @@ public class TestRecordLevelIndexBackend {
       Map<Long, String> inflightInstants = new HashMap<>();
       inflightInstants.put(1L, "0001");
       when(correspondent.requestInflightInstants()).thenReturn(inflightInstants);
-      recordLevelIndexBackend.onCheckpointComplete(correspondent);
-      assertEquals(1, recordLevelIndexBackend.getRecordIndexCache().getCaches().size());
-      // the cache will only contain 'new_key', others are cleaned.
+      recordLevelIndexBackend.onCheckpointComplete(correspondent, 1);
+      assertEquals(2, recordLevelIndexBackend.getRecordIndexCache().getCaches().size());
+      // the cache contains 'new_key', and other old locations
       location = recordLevelIndexBackend.getRecordIndexCache().get("new_key");
       assertEquals(newLocation, location);
       location = recordLevelIndexBackend.getRecordIndexCache().get("id1");
-      assertNull(location);
+      assertNotNull(location);
+    }
+  }
+
+  @Test
+  void testRecordLevelIndexCacheClean() throws Exception {
+    // set a small value for RLI cache
+    conf.set(FlinkOptions.INDEX_RLI_CACHE_SIZE, 1L);
+
+    try (RecordLevelIndexBackend recordLevelIndexBackend = new RecordLevelIndexBackend(conf, -1)) {
+
+      for (int i = 0; i < 1500; i++) {
+        recordLevelIndexBackend.update("id1_" + i,
+            new HoodieRecordGlobalLocation("par1", "000000001", UUID.randomUUID().toString(), -1));
+      }
+      // new checkpoint
+      recordLevelIndexBackend.onCheckpoint(1);
+      Correspondent correspondent = mock(Correspondent.class);
+      Map<Long, String> inflightInstants = new HashMap<>();
+      inflightInstants.put(1L, "0001");
+      when(correspondent.requestInflightInstants()).thenReturn(inflightInstants);
+      recordLevelIndexBackend.onCheckpointComplete(correspondent, 1);
+
+      for (int i = 0; i < 2000; i++) {
+        recordLevelIndexBackend.update("id2_" + i,
+            new HoodieRecordGlobalLocation("par1", "000000001", UUID.randomUUID().toString(), -1));
+      }
+
+      // new checkpoint
+      recordLevelIndexBackend.onCheckpoint(2);
+      correspondent = mock(Correspondent.class);
+      inflightInstants = new HashMap<>();
+      inflightInstants.put(2L, "0002");
+      when(correspondent.requestInflightInstants()).thenReturn(inflightInstants);
+      recordLevelIndexBackend.onCheckpointComplete(correspondent, 2);
+
+      for (int i = 0; i < 2000; i++) {
+        recordLevelIndexBackend.update("id3_" + i,
+            new HoodieRecordGlobalLocation("par1", "000000001", UUID.randomUUID().toString(), -1));
+      }
+
+      // the cache for the first instant is evicted
+      assertEquals(2, recordLevelIndexBackend.getRecordIndexCache().getCaches().size());
+
+      // new checkpoint
+      recordLevelIndexBackend.onCheckpoint(3);
+      correspondent = mock(Correspondent.class);
+      inflightInstants = new HashMap<>();
+      inflightInstants.put(3L, "0003");
+      when(correspondent.requestInflightInstants()).thenReturn(inflightInstants);
+      recordLevelIndexBackend.onCheckpointComplete(correspondent, 3);
+
+      for (int i = 0; i < 500; i++) {
+        recordLevelIndexBackend.update("id4_" + i,
+            new HoodieRecordGlobalLocation("par1", "000000001", UUID.randomUUID().toString(), -1));
+      }
+
+      assertEquals(3, recordLevelIndexBackend.getRecordIndexCache().getCaches().size());
+
+      // insert another batch of records, which will trigger the cleaning of the cache.
+      // another cache clean is triggered
+      for (int i = 500; i < 1500; i++) {
+        recordLevelIndexBackend.update("id4_" + i,
+            new HoodieRecordGlobalLocation("par1", "000000001", UUID.randomUUID().toString(), -1));
+      }
+      assertEquals(3, recordLevelIndexBackend.getRecordIndexCache().getCaches().size());
+      // cache for the oldest ckp id will be cleaned
+      assertNull(recordLevelIndexBackend.getRecordIndexCache().getCaches().get(-1L));
+      // caches for the latest 3 ckp id still in the cache
+      assertEquals("par1", recordLevelIndexBackend.get("id2_0").getPartitionPath());
+      assertEquals("par1", recordLevelIndexBackend.get("id3_0").getPartitionPath());
+      assertEquals("par1", recordLevelIndexBackend.get("id4_0").getPartitionPath());
     }
   }
 }

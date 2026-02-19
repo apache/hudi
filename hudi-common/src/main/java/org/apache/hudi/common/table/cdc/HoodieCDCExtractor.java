@@ -330,8 +330,8 @@ public class HoodieCDCExtractor {
     if (instant.getAction().equals(DELTA_COMMIT_ACTION)) {
       String currentLogFileName = new StoragePath(currentLogFile).getName();
       Option<Pair<String, List<String>>> fileSliceOpt =
-          HoodieCommitMetadata.getFileSliceForFileGroupFromDeltaCommit(
-              metaClient.getActiveTimeline().getInstantContentStream(instant), fgId);
+          HoodieCommitMetadata.getDependentFileSliceForFileGroupFromDeltaCommit(
+              metaClient.getActiveTimeline().getInstantContentStream(instant), fgId, currentLogFileName);
       if (fileSliceOpt.isPresent()) {
         Pair<String, List<String>> fileSlice = fileSliceOpt.get();
         try {
@@ -339,7 +339,6 @@ public class HoodieCDCExtractor {
               ? null
               : new HoodieBaseFile(storage.getPathInfo(new StoragePath(partitionPath, fileSlice.getLeft())));
           List<StoragePath> logFilePaths = fileSlice.getRight().stream()
-              .filter(logFile -> !logFile.equals(currentLogFileName))
               .map(logFile -> new StoragePath(partitionPath, logFile))
               .collect(Collectors.toList());
           // get files list from unfinished compaction commit

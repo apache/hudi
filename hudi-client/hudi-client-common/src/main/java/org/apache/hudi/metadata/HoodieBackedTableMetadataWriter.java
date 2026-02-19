@@ -175,6 +175,7 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
   protected HoodieTableMetaClient dataMetaClient;
   protected Option<HoodieMetadataMetrics> metrics;
   protected StorageConfiguration<?> storageConf;
+  private boolean hasPartitionsStateChanged = false;
   protected final transient HoodieEngineContext engineContext;
   @Getter
   protected final List<MetadataPartitionType> enabledPartitionTypes;
@@ -519,6 +520,7 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
         LOG.error(errMsg, e);
         throw new HoodieMetadataException(errMsg, e);
       }
+      hasPartitionsStateChanged = true;
     }
     return true;
   }
@@ -634,7 +636,7 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
     List<Pair<String, Pair<String, Long>>> partitionFilePathSizeTriplet = new ArrayList<>();
     partitionFileSlicePairs.forEach(entry -> {
       if (entry.getValue().getBaseFile().isPresent()) {
-        partitionFilePathSizeTriplet.add(Pair.of(entry.getKey(), Pair.of(entry.getValue().getBaseFile().get().getPath(), entry.getValue().getBaseFile().get().getFileLen())));
+        partitionFilePathSizeTriplet.add(Pair.of(entry.getKey(), Pair.of(entry.getValue().getBaseFile().get().getPath(), entry.getValue().getBaseFile().get().getFileSize())));
       }
       entry.getValue().getLogFiles()
           .forEach(hoodieLogFile -> partitionFilePathSizeTriplet.add(Pair.of(entry.getKey(), Pair.of(hoodieLogFile.getPath().toString(), hoodieLogFile.getFileSize()))));
@@ -884,7 +886,6 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
           .withInternalSchema(internalSchemaOption)
           .withShouldUseRecordPosition(false)
           .withProps(metaClient.getTableConfig().getProps())
-          .withEnableOptimizedLogBlockScan(dataWriteConfig.enableOptimizedLogBlocksScan())
           .build();
       String baseFileInstantTime = fileSlice.getBaseInstantTime();
       return new CloseableMappingIterator<>(fileGroupReader.getClosableIterator(), record -> {
@@ -1495,7 +1496,7 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
               dataWriteConfig.getMetadataConfig(),
               partitionsToUpdate, dataWriteConfig.getBloomFilterType(),
               dataWriteConfig.getBloomIndexParallelism(), dataWriteConfig.getWritesFileIdEncoding(), getEngineType(),
-              Option.of(dataWriteConfig.getRecordMerger().getRecordType()), dataWriteConfig.enableOptimizedLogBlocksScan());
+              Option.of(dataWriteConfig.getRecordMerger().getRecordType()));
 
       // Updates for record index are created by parsing the WriteStatus which is a hudi-client object. Hence, we cannot yet move this code
       // to the HoodieTableMetadataUtil class in hudi-common.
@@ -2279,4 +2280,9 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
   }
 
   protected abstract BaseHoodieWriteClient<?, I, ?, O> initializeWriteClient();
+
+  public boolean hasPartitionsStateChanged() {
+    return hasPartitionsStateChanged;
+  }
+
 }

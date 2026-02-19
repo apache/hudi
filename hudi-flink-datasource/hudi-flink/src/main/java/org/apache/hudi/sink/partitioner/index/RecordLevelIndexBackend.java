@@ -33,6 +33,7 @@ import org.apache.hudi.sink.event.Correspondent;
 import org.apache.hudi.util.StreamerUtil;
 
 import lombok.Getter;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.flink.configuration.Configuration;
 
 import java.io.IOException;
@@ -45,6 +46,7 @@ import java.util.Map;
 /**
  * An implementation of {@link IndexBackend} based on the record level index in metadata table.
  */
+@Slf4j
 public class RecordLevelIndexBackend implements MinibatchIndexBackend {
   @VisibleForTesting
   @Getter
@@ -106,9 +108,14 @@ public class RecordLevelIndexBackend implements MinibatchIndexBackend {
   }
 
   @Override
-  public void onCheckpointComplete(Correspondent correspondent) {
+  public void onCheckpointComplete(Correspondent correspondent, long completedCheckpointID) {
     Map<Long, String> inflightInstants = correspondent.requestInflightInstants();
-    recordIndexCache.clean(inflightInstants.keySet().stream().min(Long::compareTo).orElse(Long.MAX_VALUE));
+    log.info("Inflight instants and the corresponding checkpoints: {}, notified completed checkpoints: {}",
+        inflightInstants, completedCheckpointID);
+    // if there are no inflight instants,
+    // the latest completed checkpoint id is used as the minimum checkpoint id,
+    // since the streaming write operator always uses previous checkpoint id to request the new instant.
+    recordIndexCache.markAsEvictable(inflightInstants.keySet().stream().min(Long::compareTo).orElse(completedCheckpointID));
     this.metaClient.reloadActiveTimeline();
     reloadMetadataTable();
   }

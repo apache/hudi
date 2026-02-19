@@ -22,7 +22,7 @@ package org.apache.spark.sql.hudi.dml.insert
 import org.apache.hudi.HoodieSparkUtils
 import org.apache.hudi.common.config.HoodieStorageConfig
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
-import org.apache.hudi.exception.HoodieDuplicateKeyException
+import org.apache.hudi.exception.{HoodieDuplicateKeyException, HoodieException}
 import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
 
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils
@@ -528,6 +528,108 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
         }
       }
     }
+  }
+
+  test("Test Insert Into partitioned table with non-populated meta fields and allowed key generator names") {
+    Seq(
+      "org.apache.hudi.keygen.SimpleKeyGenerator",
+      "org.apache.hudi.keygen.SimpleAvroKeyGenerator",
+      "org.apache.hudi.keygen.ComplexKeyGenerator",
+      "org.apache.hudi.keygen.ComplexAvroKeyGenerator"
+    ).foreach(keyGenClassName =>
+      withTempDir { tmp =>
+        val tableName = generateTableName
+        spark.sql(
+          s"""
+             |create table $tableName (
+             |  id int,
+             |  name string,
+             |  price double,
+             |  par string
+             |) using hudi
+             | location '${tmp.getCanonicalPath}/$tableName'
+             | tblproperties (
+             |  type = 'cow',
+             |  primaryKey = 'id',
+             |  'hoodie.populate.meta.fields' = 'false',
+             |  'hoodie.table.keygenerator.class' = '$keyGenClassName'
+             | ) partitioned by (par)
+     """.stripMargin)
+        spark.sql(s"insert into $tableName values(1, 'a1', 10, 'parr')")
+        checkAnswer(s"select id, name, price, par from $tableName")(
+          Seq(1, "a1", 10.0, "parr")
+        )
+      })
+  }
+
+  test("Test Insert Into non-partitioned table with non-populated meta fields and allowed key generator names") {
+    Seq(
+      "org.apache.hudi.keygen.NonpartitionedKeyGenerator",
+      "org.apache.hudi.keygen.NonpartitionedAvroKeyGenerator"
+    ).foreach(keyGenClassName =>
+      withTempDir { tmp =>
+        val tableName = generateTableName
+        spark.sql(
+          s"""
+             |create table $tableName (
+             |  id int,
+             |  name string,
+             |  price double
+             |) using hudi
+             | location '${tmp.getCanonicalPath}/$tableName'
+             | tblproperties (
+             |  type = 'mor',
+             |  primaryKey = 'id',
+             |  'hoodie.populate.meta.fields' = 'false',
+             |  'hoodie.table.keygenerator.class' = '$keyGenClassName'
+             | )
+     """.stripMargin)
+        spark.sql(s"insert into $tableName values(1, 'a1', 10)")
+        checkAnswer(s"select id, name, price from $tableName")(
+          Seq(1, "a1", 10.0)
+        )
+      })
+  }
+
+  test("Test Insert Into partitioned table with non-populated meta fields and not allowed key generator names") {
+    Seq(
+      "org.apache.hudi.keygen.CustomKeyGenerator",
+      "org.apache.hudi.keygen.CustomAvroKeyGenerator"
+    ).foreach(keyGenClassName =>
+      withTempDir { tmp =>
+        val tableName = generateTableName
+        spark.sql(
+          s"""
+             |create table $tableName (
+             |  id int,
+             |  name string,
+             |  price double,
+             |  par string
+             |) using hudi
+             | location '${tmp.getCanonicalPath}/$tableName'
+             | tblproperties (
+             |  type = 'cow',
+             |  primaryKey = 'id',
+             |  'hoodie.populate.meta.fields' = 'false',
+             |  'hoodie.table.keygenerator.class' = '$keyGenClassName',
+             |  'hoodie.datasource.write.partitionpath.field' = 'par:simple'
+             | ) partitioned by (par)
+     """.stripMargin)
+        assertThrows[HoodieException] {
+          try {
+            spark.sql(s"insert into $tableName values(1, 'a1', 10, 'parr')")
+          } catch {
+            case e: Exception =>
+              var root: Throwable = e
+              while (root.getCause != null) {
+                root = root.getCause
+              }
+              assert(root.getMessage.equals(
+                s"Only simple, non-partitioned or complex key generator are supported when meta-fields are disabled. Used: $keyGenClassName"))
+              throw root
+          }
+        }
+      })
   }
 
   test("Test Insert Overwrite") {

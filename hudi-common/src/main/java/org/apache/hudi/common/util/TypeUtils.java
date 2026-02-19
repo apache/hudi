@@ -17,6 +17,9 @@
 
 package org.apache.hudi.common.util;
 
+import lombok.AccessLevel;
+import lombok.NoArgsConstructor;
+
 import javax.annotation.Nonnull;
 
 import java.util.Arrays;
@@ -27,10 +30,8 @@ import java.util.stream.Collectors;
 /**
  * Utils for Java type cast.
  */
+@NoArgsConstructor(access = AccessLevel.PRIVATE)
 public final class TypeUtils {
-
-  private TypeUtils() {
-  }
 
   /**
    * Maps values from the provided Enum's {@link Class} into corresponding values,

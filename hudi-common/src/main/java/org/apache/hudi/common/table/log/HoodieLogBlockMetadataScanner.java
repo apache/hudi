@@ -33,9 +33,11 @@ import java.util.List;
  */
 public class HoodieLogBlockMetadataScanner extends BaseHoodieLogRecordReader<IndexedRecord> {
 
-  public HoodieLogBlockMetadataScanner(HoodieTableMetaClient metaClient, List<HoodieLogFile> logFiles, int bufferSize, String maxInstantTime, Option<InstantRange> instantRange) {
-    super(getReaderContext(metaClient, maxInstantTime), metaClient, metaClient.getStorage(), logFiles, false, bufferSize, instantRange, false, false, Option.empty(), Option.empty(), true,
-        null, false);
+  public HoodieLogBlockMetadataScanner(HoodieTableMetaClient metaClient, List<HoodieLogFile> logFiles,
+                                       int bufferSize, String maxInstantTime, Option<InstantRange> instantRange) {
+    super(getReaderContext(metaClient, maxInstantTime), metaClient, metaClient.getStorage(), logFiles,
+        false, bufferSize, instantRange, false, false, Option.empty(),
+        Option.empty(), null, false);
     scanInternal(Option.empty(), true);
   }
 

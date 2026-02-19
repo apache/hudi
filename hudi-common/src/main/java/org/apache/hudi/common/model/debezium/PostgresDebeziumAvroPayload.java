@@ -21,12 +21,11 @@ package org.apache.hudi.common.model.debezium;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieDebeziumAvroPayloadException;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -47,9 +46,9 @@ import static org.apache.hudi.common.util.StringUtils.fromUTF8Bytes;
  * <p>
  * This payload implementation will issue matching insert, delete, updates against the hudi table
  */
+@Slf4j
 public class PostgresDebeziumAvroPayload extends AbstractDebeziumAvroPayload {
 
-  private static final Logger LOG = LoggerFactory.getLogger(PostgresDebeziumAvroPayload.class);
   public static final String DEBEZIUM_TOASTED_VALUE = "__debezium_unavailable_value";
 
   public PostgresDebeziumAvroPayload(GenericRecord record, Comparable orderingVal) {

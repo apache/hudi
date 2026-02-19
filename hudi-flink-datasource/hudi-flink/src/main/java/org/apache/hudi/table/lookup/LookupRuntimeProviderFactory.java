@@ -7,7 +7,7 @@
  * "License"); you may not use this file except in compliance
  * with the License.  You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -16,22 +16,18 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.spark.internal;
+package org.apache.hudi.table.lookup;
 
-import org.apache.hudi.client.WriteStatus;
-import org.apache.hudi.internal.BaseWriterCommitMessage;
+import org.apache.flink.table.connector.source.LookupTableSource.LookupRuntimeProvider;
+import org.apache.flink.table.connector.source.lookup.AsyncLookupFunctionProvider;
+import org.apache.flink.table.connector.source.lookup.LookupFunctionProvider;
 
-import org.apache.spark.sql.connector.write.WriterCommitMessage;
+/** Factory to create {@link LookupRuntimeProvider}. */
+public class LookupRuntimeProviderFactory {
 
-import java.util.List;
-
-/**
- * Hoodie's {@link WriterCommitMessage} used in datasource "hudi.spark.internal" implementation.
- */
-public class HoodieWriterCommitMessage extends BaseWriterCommitMessage
-    implements WriterCommitMessage {
-
-  public HoodieWriterCommitMessage(List<WriteStatus> writeStatuses) {
-    super(writeStatuses);
+  public static LookupRuntimeProvider create(HoodieLookupFunction function, boolean enableAsync, int asyncThreadNumber) {
+    return enableAsync
+        ? AsyncLookupFunctionProvider.of(new AsyncLookupFunctionWrapper(function, asyncThreadNumber))
+        : LookupFunctionProvider.of(function);
   }
 }

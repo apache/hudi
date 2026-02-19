@@ -1529,7 +1529,6 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
         .withRequestedSchema(schema)
         .withDataSchema(schema)
         .withProps(new TypedProperties())
-        .withEnableOptimizedLogBlockScan(writeConfig.getMetadataConfig().isOptimizedLogBlocksScanEnabled())
         .build();
 
     try (ClosableIterator<HoodieRecord<IndexedRecord>> iter = fileGroupReader.getClosableHoodieRecordIterator()) {
@@ -3472,9 +3471,9 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
 
       // 1 partition should be cleaned
       assertEquals(1, cleanMetadata.getPartitionMetadata().size());
-      // 1 file cleaned but was already deleted so will be a failed delete
-      assertEquals(0, cleanMetadata.getPartitionMetadata().get(partition).getSuccessDeleteFiles().size());
-      assertEquals(1, cleanMetadata.getPartitionMetadata().get(partition).getFailedDeleteFiles().size());
+      // 1 file cleaned but was already deleted so will be counted as success (file not found = nothing to delete = success)
+      assertEquals(1, cleanMetadata.getPartitionMetadata().get(partition).getSuccessDeleteFiles().size());
+      assertEquals(0, cleanMetadata.getPartitionMetadata().get(partition).getFailedDeleteFiles().size());
       assertEquals(1, cleanMetadata.getPartitionMetadata().get(partition).getDeletePathPatterns().size());
 
       validateMetadata(client);

@@ -224,13 +224,13 @@ public final class HoodieFileGroupReader<T> implements Closeable {
     HoodieSchema requiredSchema = readerContext.getSchemaHandler().createSchemaFromFields(requiredFields);
     StoragePathInfo fileStoragePathInfo = file.getPathInfo();
     if (fileStoragePathInfo != null) {
-      return Option.of(Pair.of(readerContext.getFileRecordIterator(fileStoragePathInfo, 0, file.getFileLen(),
+      return Option.of(Pair.of(readerContext.getFileRecordIterator(fileStoragePathInfo, 0, file.getFileSize(),
           readerContext.getSchemaHandler().createSchemaFromFields(allFields), requiredSchema, storage), requiredSchema));
     } else {
       // If the base file length passed in is invalid, i.e., -1,
       // the file group reader fetches the length from the file system
-      long fileLength = file.getFileLen() >= 0
-          ? file.getFileLen() : storage.getPathInfo(file.getStoragePath()).getLength();
+      long fileLength = file.getFileSize() >= 0
+          ? file.getFileSize() : storage.getPathInfo(file.getStoragePath()).getLength();
       return Option.of(Pair.of(readerContext.getFileRecordIterator(file.getStoragePath(), 0, fileLength,
           readerContext.getSchemaHandler().createSchemaFromFields(allFields), requiredSchema, storage), requiredSchema));
     }
@@ -380,7 +380,6 @@ public final class HoodieFileGroupReader<T> implements Closeable {
     private boolean allowInflightInstants = false;
     private boolean emitDelete;
     private boolean sortOutput = false;
-    private Boolean enableOptimizedLogBlockScan = false;
     private Option<BaseFileUpdateCallback<T>> fileGroupUpdateCallback = Option.empty();
     private FileGroupRecordBufferLoader<T> recordBufferLoader;
 
@@ -478,11 +477,6 @@ public final class HoodieFileGroupReader<T> implements Closeable {
       return this;
     }
 
-    public Builder<T> withEnableOptimizedLogBlockScan(boolean enableOptimizedLogBlockScan) {
-      this.enableOptimizedLogBlockScan = enableOptimizedLogBlockScan;
-      return this;
-    }
-
     /**
      * If true, the output of the merge will be sorted instead of appending log records to end of the iterator if they do not have matching keys in the base file.
      * This assumes that the base file is already sorted by key.
@@ -513,11 +507,6 @@ public final class HoodieFileGroupReader<T> implements Closeable {
       ValidationUtils.checkArgument(props != null, "Props is required");
       ValidationUtils.checkArgument(baseFileOption != null, "Base file option is required");
       ValidationUtils.checkArgument(partitionPath != null, "Partition path is required");
-      if (enableOptimizedLogBlockScan == null) {
-        // check to see if props contains this key if not explicitly set
-        // otherwise use the default value from the config itself
-        enableOptimizedLogBlockScan = Boolean.valueOf(ConfigUtils.getRawValueWithAltKeys(props, HoodieReaderConfig.ENABLE_OPTIMIZED_LOG_BLOCKS_SCAN, true));
-      }
 
       if (recordBufferLoader == null) {
         recordBufferLoader = FileGroupRecordBufferLoader.createDefault();
@@ -528,7 +517,6 @@ public final class HoodieFileGroupReader<T> implements Closeable {
           .emitDeletes(emitDelete)
           .sortOutputs(sortOutput)
           .allowInflightInstants(allowInflightInstants)
-          .enableOptimizedLogBlockScan(enableOptimizedLogBlockScan)
           .build();
       InputSplit inputSplit = new InputSplit(baseFileOption, recordIterator != null ? Either.right(recordIterator) : Either.left(logFiles == null ? Stream.empty() : logFiles),
           partitionPath, start, length);

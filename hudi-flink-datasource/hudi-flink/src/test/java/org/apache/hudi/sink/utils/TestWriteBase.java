@@ -657,7 +657,7 @@ public class TestWriteBase {
     }
 
     public TestHarness checkLastPendingInstantCompleted() {
-      this.pipeline.checkpointComplete(3);
+      this.pipeline.checkpointComplete(4);
       checkInstantState(HoodieInstant.State.COMPLETED, this.lastPending);
       this.lastComplete = lastPending;
       this.lastPending = lastPendingInstant();

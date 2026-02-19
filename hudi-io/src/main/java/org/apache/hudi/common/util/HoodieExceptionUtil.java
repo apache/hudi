@@ -16,24 +16,26 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.internal;
+package org.apache.hudi.common.util;
 
-import org.apache.hudi.client.WriteStatus;
-
-import lombok.AllArgsConstructor;
-import lombok.Getter;
-import lombok.ToString;
-
-import java.io.Serializable;
-import java.util.List;
+import java.io.IOException;
 
 /**
- * Base class for HoodieWriterCommitMessage used by Spark datasource v2.
+ * Utility class for exception handling and analysis.
  */
-@AllArgsConstructor
-@Getter
-@ToString
-public class BaseWriterCommitMessage implements Serializable {
+public class HoodieExceptionUtil {
 
-  private final List<WriteStatus> writeStatuses;
+  /**
+   * Checks if the given IOException is a permission denied error.
+   * This works across different storage implementations (Hadoop, S3, GCS, etc.)
+   * by checking both the exception class name and message.
+   *
+   * @param e the IOException to check
+   * @return true if the exception indicates permission denied, false otherwise
+   */
+  public static boolean isPermissionDeniedException(IOException e) {
+    return e.getClass().getSimpleName().contains("AccessControl")
+        || (e.getMessage() != null && (e.getMessage().contains("Permission denied")
+        || e.getMessage().contains("Access denied")));
+  }
 }

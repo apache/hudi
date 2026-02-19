@@ -32,6 +32,7 @@ import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.data.HoodieJavaRDD;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness;
 
@@ -55,6 +56,7 @@ import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.getCommit
 import static org.apache.hudi.testutils.Assertions.assertNoWriteErrors;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class TestSparkRDDWriteClient extends SparkClientFunctionalTestHarness {
@@ -69,6 +71,16 @@ class TestSparkRDDWriteClient extends SparkClientFunctionalTestHarness {
         Arguments.of(HoodieTableType.COPY_ON_WRITE, false, false),
         Arguments.of(HoodieTableType.MERGE_ON_READ, false, true),
         Arguments.of(HoodieTableType.MERGE_ON_READ, false, false)
+    );
+  }
+
+  static Stream<Arguments> testSpeculativeExecutionGuardrail() {
+    return Stream.of(
+        // blockOnSpeculativeExecution, speculationEnabled
+        Arguments.of(true, true),    // Guardrail enabled (default), speculation enabled -> should throw
+        Arguments.of(true, false),   // Guardrail enabled (default), speculation disabled -> should not throw
+        Arguments.of(false, true),   // Guardrail disabled, speculation enabled -> should not throw
+        Arguments.of(false, false)   // Guardrail disabled, speculation disabled -> should not throw
     );
   }
 
@@ -223,5 +235,80 @@ class TestSparkRDDWriteClient extends SparkClientFunctionalTestHarness {
     metaClient.getActiveTimeline().filterCompletedInstants().getInstants().forEach(hoodieInstant -> {
       assertTrue(InstantComparison.compareTimestamps(hoodieInstant.requestedTime(), InstantComparison.LESSER_THAN, hoodieInstant.getCompletionTime()));
     });
+  }
+
+  /**
+   * Test that initializeMetadataTable invokes reloadTableConfig when hasPartitionsStateChanged returns true.
+   */
+  @Test
+  public void testInitializeMetadataTableReloadsConfigWhenPartitionsStateChanged() throws Exception {
+    HoodieTableMetaClient metaClient = getHoodieMetaClient(storageConf(), URI.create(basePath()).getPath(), new Properties());
+
+    HoodieWriteConfig config = getConfigBuilder(true)
+        .withPath(metaClient.getBasePath())
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder()
+            .enable(true)
+            .withMetadataIndexBloomFilter(true)
+            .withMetadataIndexColumnStats(true)
+            .build())
+        .build();
+
+    try (SparkRDDWriteClient client = new SparkRDDWriteClient(context(), config)) {
+      // Use reflection to access the private initializeMetadataTable method
+      java.lang.reflect.Method initializeMetadataTableMethod =
+          SparkRDDWriteClient.class.getDeclaredMethod("initializeMetadataTable", Option.class, HoodieTableMetaClient.class);
+      initializeMetadataTableMethod.setAccessible(true);
+
+      // Get initial metadata partition count
+      metaClient = HoodieTableMetaClient.reload(metaClient);
+      int initialPartitionCount = metaClient.getTableConfig().getMetadataPartitions().size();
+
+      // Create a spy on the metaClient to track reloadTableConfig calls
+      HoodieTableMetaClient spyMetaClient = org.mockito.Mockito.spy(metaClient);
+
+      // Invoke initializeMetadataTable
+      initializeMetadataTableMethod.invoke(client, Option.of("001"), spyMetaClient);
+
+      // Reload metaClient to check if partitions were actually bootstrapped
+      HoodieTableMetaClient reloadedMetaClient = HoodieTableMetaClient.reload(metaClient);
+      int finalPartitionCount = reloadedMetaClient.getTableConfig().getMetadataPartitions().size();
+
+      // If partitions were bootstrapped (count increased), verify reloadTableConfig was called
+      if (finalPartitionCount > initialPartitionCount) {
+        org.mockito.Mockito.verify(spyMetaClient, org.mockito.Mockito.atLeastOnce()).reloadTableConfig();
+      }
+    }
+  }
+
+  @ParameterizedTest
+  @MethodSource("testSpeculativeExecutionGuardrail")
+  public void testSpeculativeExecutionGuardrail(boolean blockOnSpeculativeExecution, boolean speculationEnabled) throws IOException {
+    // Set spark.speculation based on the test parameter
+    jsc().sc().conf().set("spark.speculation", String.valueOf(speculationEnabled));
+
+    HoodieTableMetaClient metaClient = getHoodieMetaClient(storageConf(), URI.create(basePath()).getPath(), new Properties());
+    HoodieWriteConfig writeConfig = getConfigBuilder(true)
+        .withPath(metaClient.getBasePath().toString())
+        .withBlockWritesOnSpeculativeExecution(blockOnSpeculativeExecution)
+        .build();
+
+    if (blockOnSpeculativeExecution && speculationEnabled) {
+      // When speculative execution is enabled and the guardrail is enabled,
+      // creating a SparkRDDWriteClient should throw an exception
+      HoodieException exception = assertThrows(HoodieException.class, () -> {
+        new SparkRDDWriteClient(context(), writeConfig);
+      });
+
+      // Verify the exception message
+      assertTrue(exception.getMessage().contains("Spark speculative execution is enabled"));
+      assertTrue(exception.getMessage().contains("can lead to duplicate writes and data corruption"));
+    } else {
+      // In all other cases, creating a SparkRDDWriteClient should not throw an exception
+      SparkRDDWriteClient writeClient = new SparkRDDWriteClient(context(), writeConfig);
+      writeClient.close();
+    }
+
+    // Reset speculation config after test
+    jsc().sc().conf().set("spark.speculation", "false");
   }
 }

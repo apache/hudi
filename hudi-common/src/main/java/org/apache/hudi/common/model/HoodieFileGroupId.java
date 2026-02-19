@@ -18,30 +18,24 @@
 
 package org.apache.hudi.common.model;
 
+import lombok.AllArgsConstructor;
+import lombok.Getter;
+import lombok.ToString;
+
 import java.io.Serializable;
 import java.util.Objects;
 
 /**
  * Unique ID to identify a file-group in a data-set.
  */
+@AllArgsConstructor
+@Getter
+@ToString
 public class HoodieFileGroupId implements Serializable, Comparable<HoodieFileGroupId> {
 
   private final String partitionPath;
 
   private final String fileId;
-
-  public HoodieFileGroupId(String partitionPath, String fileId) {
-    this.partitionPath = partitionPath;
-    this.fileId = fileId;
-  }
-
-  public String getPartitionPath() {
-    return partitionPath;
-  }
-
-  public String getFileId() {
-    return fileId;
-  }
 
   @Override
   public boolean equals(Object o) {
@@ -55,14 +49,16 @@ public class HoodieFileGroupId implements Serializable, Comparable<HoodieFileGro
     return Objects.equals(partitionPath, that.partitionPath) && Objects.equals(fileId, that.fileId);
   }
 
+  /**
+   * <b>NOTE</b>: Manually implement equals/hashCode because Lombok uses a different prime (59) than Objects.hash (31).
+   * Changing the hash algorithm alters bucket distribution in partitioners like BucketizedBloomCheckPartitioner
+   * breaking tests and backward compatibility.
+   *
+   * @return hashcode calculated using prime number 31.
+   */
   @Override
   public int hashCode() {
     return Objects.hash(partitionPath, fileId);
-  }
-
-  @Override
-  public String toString() {
-    return "HoodieFileGroupId{partitionPath='" + partitionPath + '\'' + ", fileId='" + fileId + '\'' + '}';
   }
 
   @Override

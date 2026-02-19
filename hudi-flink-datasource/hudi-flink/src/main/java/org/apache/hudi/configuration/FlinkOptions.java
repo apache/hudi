@@ -292,9 +292,10 @@ public class FlinkOptions extends HoodieConfig {
   public static final ConfigOption<Long> INDEX_RLI_CACHE_SIZE = ConfigOptions
       .key("index.rli.cache.size")
       .longType()
-      .defaultValue(100L) // default 100 MB
-      .withDescription("Maximum memory in MB for the inflight record index cache during one checkpoint interval.\n"
-          + "When record level index is used to assign bucket, record locations will first be cached before the record index is committed.");
+      .defaultValue(256L) // default 256 MB
+      .withDescription("Maximum memory allocated for the record level index cache per bucket-assign task.\n"
+          + "The memory size of each individual cache within a checkpoint interval is dynamically calculated based on the \n"
+          + "average memory size of caches for historical checkpoints.");
 
   @AdvancedConfig
   public static final ConfigOption<Integer> INDEX_RLI_LOOKUP_MINIBATCH_SIZE = ConfigOptions
@@ -346,13 +347,6 @@ public class FlinkOptions extends HoodieConfig {
       .stringType()
       .noDefaultValue()
       .withDescription("Source avro schema string, the parsed schema is used for deserialization");
-
-  @AdvancedConfig
-  public static final ConfigOption<Integer> SOURCE_READER_FETCH_BATCH_RECORD_COUNT =
-      ConfigOptions.key("source.fetch-batch-record-count")
-          .intType()
-          .defaultValue(2048)
-          .withDescription("The target number of records for Hoodie reader fetch batch.");
 
   public static final String QUERY_TYPE_SNAPSHOT = "snapshot";
   public static final String QUERY_TYPE_READ_OPTIMIZED = "read_optimized";
@@ -1300,6 +1294,17 @@ public class FlinkOptions extends HoodieConfig {
           .withDescription(
               "The cache TTL (e.g. 10min) for the build table in lookup join.");
 
+  public static final ConfigOption<Boolean> LOOKUP_ASYNC =
+      key("lookup.async")
+          .booleanType()
+          .defaultValue(false)
+          .withDescription("Whether to enable async lookup join.");
+
+  public static final ConfigOption<Integer> LOOKUP_ASYNC_THREAD_NUMBER =
+      key("lookup.async-thread-number")
+          .intType()
+          .defaultValue(16)
+          .withDescription("The thread number for lookup async.");
 
   // -------------------------------------------------------------------------
   //  Utilities

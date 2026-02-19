@@ -34,8 +34,7 @@ import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.io.BufferedWriter;
 import java.io.IOException;
@@ -58,10 +57,11 @@ import static org.apache.hudi.io.util.FileIOUtils.closeQuietly;
 /**
  * A utility class for marker related operations.
  */
+@Slf4j
 public class MarkerUtils {
+
   public static final String MARKERS_FILENAME_PREFIX = "MARKERS";
   public static final String MARKER_TYPE_FILENAME = MARKERS_FILENAME_PREFIX + ".type";
-  private static final Logger LOG = LoggerFactory.getLogger(MarkerUtils.class);
 
   /**
    * Strips the folder prefix of the marker file path corresponding to a data file.
@@ -230,13 +230,13 @@ public class MarkerUtils {
     InputStream inputStream = null;
     Set<String> markers = new HashSet<>();
     try {
-      LOG.debug("Read marker file: {}", markersFilePath);
+      log.debug("Read marker file: {}", markersFilePath);
       HoodieStorage storage = HoodieStorageUtils.getStorage(markersFilePath, conf);
       inputStream = storage.open(markersFilePath);
       markers = new HashSet<>(FileIOUtils.readAsUTFStringLines(inputStream));
     } catch (IOException e) {
       if (ignoreException) {
-        LOG.warn("Failed to read MARKERS file {}", markersFilePath, e);
+        log.warn("Failed to read MARKERS file {}", markersFilePath, e);
       } else {
         throw new HoodieIOException("Failed to read MARKERS file " + markersFilePath, e);
       }

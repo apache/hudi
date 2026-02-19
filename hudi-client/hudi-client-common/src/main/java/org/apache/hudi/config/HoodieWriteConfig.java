@@ -779,6 +779,18 @@ public class HoodieWriteConfig extends HoodieConfig {
       .withDocumentation("When table is upgraded from pre 0.12 to 0.12, we check for \"default\" partition and fail if found one. "
           + "Users are expected to rewrite the data in those partitions. Enabling this config will bypass this validation");
 
+  /**
+   * Config that determines whether to block writes when Spark speculative execution is enabled.
+   */
+  public static final ConfigProperty<Boolean> BLOCK_WRITES_ON_SPECULATIVE_EXECUTION = ConfigProperty
+      .key("hoodie.block.writes.on.speculative.execution")
+      .defaultValue(true)
+      .sinceVersion("0.14.0")
+      .withDocumentation("When enabled (default), throws an exception if Spark speculative execution is enabled "
+          + "during the client creation. This prevents potential data corruption "
+          + "due to duplicate writes by speculative executors. Set to false only if you understand the risks "
+          + "of running with Spark speculative execution enabled.");
+
   public static final ConfigProperty<String> EARLY_CONFLICT_DETECTION_STRATEGY_CLASS_NAME = ConfigProperty
       .key(CONCURRENCY_PREFIX + "early.conflict.detection.strategy")
       .noDefaultValue()
@@ -1714,10 +1726,6 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getInt(HoodieCompactionConfig.LOG_COMPACTION_BLOCKS_THRESHOLD);
   }
 
-  public boolean enableOptimizedLogBlocksScan() {
-    return getBoolean(HoodieReaderConfig.ENABLE_OPTIMIZED_LOG_BLOCKS_SCAN);
-  }
-
   public HoodieCleaningPolicy getCleanerPolicy() {
     return HoodieCleaningPolicy.valueOf(getString(CLEANER_POLICY));
   }
@@ -1732,6 +1740,10 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public int getCleanerHoursRetained() {
     return getInt(HoodieCleanConfig.CLEANER_HOURS_RETAINED);
+  }
+
+  public boolean isCleanOptimizationWithLocalEngineEnabled() {
+    return getBoolean(HoodieCleanConfig.CLEAN_OPTIMIZE_USING_LOCAL_ENGINE_CONTEXT);
   }
 
   public int getMaxCommitsToKeep() {
@@ -2739,6 +2751,10 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getBoolean(SKIP_DEFAULT_PARTITION_VALIDATION);
   }
 
+  public boolean shouldBlockWritesOnSpeculativeExecution() {
+    return getBoolean(BLOCK_WRITES_ON_SPECULATIVE_EXECUTION);
+  }
+
   /**
    * Are any table services configured to run inline for both scheduling and execution?
    *
@@ -3446,6 +3462,11 @@ public class HoodieWriteConfig extends HoodieConfig {
 
     public Builder doSkipDefaultPartitionValidation(boolean skipDefaultPartitionValidation) {
       writeConfig.setValue(SKIP_DEFAULT_PARTITION_VALIDATION, String.valueOf(skipDefaultPartitionValidation));
+      return this;
+    }
+
+    public Builder withBlockWritesOnSpeculativeExecution(boolean blockWritesOnSpeculativeExecution) {
+      writeConfig.setValue(BLOCK_WRITES_ON_SPECULATIVE_EXECUTION, String.valueOf(blockWritesOnSpeculativeExecution));
       return this;
     }
 

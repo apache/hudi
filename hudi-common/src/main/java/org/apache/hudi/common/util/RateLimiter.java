@@ -18,8 +18,7 @@
 
 package org.apache.hudi.common.util;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import javax.annotation.concurrent.ThreadSafe;
 
@@ -31,6 +30,7 @@ import java.util.concurrent.TimeUnit;
 /**
  * Thread-safe rate limiter implementation.
  */
+@Slf4j
 @ThreadSafe
 public class RateLimiter {
 
@@ -41,8 +41,6 @@ public class RateLimiter {
   private static final long RELEASE_PERMITS_PERIOD_IN_SECONDS = 1L;
   private static final long WAIT_BEFORE_NEXT_ACQUIRE_PERMIT_IN_MS = 5;
   private static final int SCHEDULER_CORE_THREAD_POOL_SIZE = 1;
-
-  private static final Logger LOG = LoggerFactory.getLogger(RateLimiter.class);
 
   public static RateLimiter create(int permits, TimeUnit timePeriod) {
     final RateLimiter limiter = new RateLimiter(permits, timePeriod);
@@ -74,7 +72,7 @@ public class RateLimiter {
       while (!semaphore.tryAcquire(numOps)) {
         Thread.sleep(WAIT_BEFORE_NEXT_ACQUIRE_PERMIT_IN_MS);
       }
-      LOG.debug("acquire permits: {}, maxPermits: {}", numOps, maxPermits);
+      log.debug("acquire permits: {}, maxPermits: {}", numOps, maxPermits);
     } catch (InterruptedException e) {
       throw new RuntimeException("Unable to acquire permits", e);
     }
@@ -88,7 +86,7 @@ public class RateLimiter {
   public void releasePermitsPeriodically() {
     scheduler = Executors.newScheduledThreadPool(SCHEDULER_CORE_THREAD_POOL_SIZE);
     scheduler.scheduleAtFixedRate(() -> {
-      LOG.debug("Release permits: maxPermits: {}, available: {}", maxPermits, semaphore.availablePermits());
+      log.debug("Release permits: maxPermits: {}, available: {}", maxPermits, semaphore.availablePermits());
       semaphore.release(maxPermits - semaphore.availablePermits());
     }, RELEASE_PERMITS_PERIOD_IN_SECONDS, RELEASE_PERMITS_PERIOD_IN_SECONDS, timePeriod);
 

@@ -142,7 +142,7 @@ abstract class BaseMergeOnReadSnapshotRelation(sqlContext: SQLContext,
 
       val partitionedBaseFile = baseFile.map { file =>
         createPartitionedFile(
-          getPartitionColumnsAsInternalRow(file.getPathInfo), file.getPathInfo.getPath, 0, file.getFileLen)
+          getPartitionColumnsAsInternalRow(file.getPathInfo), file.getPathInfo.getPath, 0, file.getFileSize)
       }
 
       HoodieMergeOnReadFileSplit(partitionedBaseFile, logFiles)

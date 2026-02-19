@@ -19,6 +19,7 @@
 package org.apache.hudi.source.enumerator;
 
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.source.assign.HoodieSplitNumberAssigner;
 import org.apache.hudi.source.split.DefaultHoodieSplitProvider;
 import org.apache.hudi.source.split.HoodieSourceSplit;
 import org.apache.hudi.source.split.SplitRequestEvent;
@@ -59,8 +60,8 @@ public class TestHoodieStaticSplitEnumerator {
   @BeforeEach
   public void setUp() {
     context = new MockSplitEnumeratorContext();
-    splitProvider = new DefaultHoodieSplitProvider();
-    enumerator = new HoodieStaticSplitEnumerator(context, splitProvider);
+    splitProvider = new DefaultHoodieSplitProvider(new HoodieSplitNumberAssigner(2));
+    enumerator = new HoodieStaticSplitEnumerator("test-table", context, splitProvider);
 
     split1 = createTestSplit(1, "file1");
     split2 = createTestSplit(2, "file2");
@@ -126,6 +127,9 @@ public class TestHoodieStaticSplitEnumerator {
 
     context.registerReader(new ReaderInfo(0, "localhost"));
     enumerator.handleSplitRequest(0, "localhost");
+
+    context.registerReader(new ReaderInfo(1, "localhost"));
+    enumerator.handleSplitRequest(1, "localhost");
 
     // Simulate reader failure - add splits back
     enumerator.addSplitsBack(Arrays.asList(split1), 0);
@@ -207,10 +211,10 @@ public class TestHoodieStaticSplitEnumerator {
     splitProvider.onDiscoveredSplits(Arrays.asList(split1));
     enumerator.start();
 
-    context.registerReader(new ReaderInfo(0, "localhost"));
+    context.registerReader(new ReaderInfo(1, "localhost"));
 
     SplitRequestEvent event = new SplitRequestEvent(Collections.emptyList(), "localhost");
-    enumerator.handleSourceEvent(0, 1, event);
+    enumerator.handleSourceEvent(1, 1, event);
 
     assertTrue(context.getAssignedSplits().size() > 0, "Should assign split via attempt-aware method");
   }
@@ -218,7 +222,7 @@ public class TestHoodieStaticSplitEnumerator {
   private HoodieSourceSplit createTestSplit(int splitNum, String fileId) {
     return new HoodieSourceSplit(
         splitNum,
-        "basePath_" + splitNum,
+        "40e603a8-3cc1-4d09-b0a5-1432992b4bf7_1-0" + splitNum + "_20260126034717000.parquet",
         Option.empty(),
         "/table/path",
         "/table/path/partition1",

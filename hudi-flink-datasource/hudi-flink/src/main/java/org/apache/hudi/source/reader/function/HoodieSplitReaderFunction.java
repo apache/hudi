@@ -18,30 +18,28 @@
 
 package org.apache.hudi.source.reader.function;
 
+import org.apache.flink.configuration.Configuration;
 import org.apache.hudi.common.config.HoodieReaderConfig;
 import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.read.HoodieFileGroupReader;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.internal.schema.InternalSchema;
+import org.apache.hudi.source.reader.BatchRecords;
 import org.apache.hudi.source.reader.HoodieRecordWithPosition;
-import org.apache.hudi.source.reader.DefaultHoodieBatchReader;
 import org.apache.hudi.source.split.HoodieSourceSplit;
-import org.apache.hudi.table.HoodieFlinkTable;
 
-import org.apache.flink.configuration.Configuration;
 import org.apache.flink.connector.base.source.reader.RecordsWithSplitIds;
 import org.apache.flink.table.data.RowData;
-import org.apache.flink.util.CloseableIterator;
-
+import org.apache.hudi.table.format.FlinkReaderContextFactory;
 import java.io.IOException;
 import java.util.Collections;
 import java.util.stream.Collectors;
@@ -50,18 +48,15 @@ import java.util.stream.Collectors;
  * Default reader function implementation for both MOR and COW tables.
  */
 public class HoodieSplitReaderFunction implements SplitReaderFunction<RowData> {
-  private final HoodieFlinkTable<RowData> hoodieTable;
-  private final HoodieReaderContext<RowData> readerContext;
+  private final HoodieTableMetaClient metaClient;
   private final HoodieSchema tableSchema;
   private final HoodieSchema requiredSchema;
-  private final Configuration configuration;
   private final Option<InternalSchema> internalSchemaOption;
   private final TypedProperties props;
   private HoodieFileGroupReader<RowData> fileGroupReader;
 
   public HoodieSplitReaderFunction(
-      HoodieFlinkTable<RowData> hoodieTable,
-      HoodieReaderContext<RowData> readerContext,
+      HoodieTableMetaClient metaClient,
       Configuration configuration,
       HoodieSchema tableSchema,
       HoodieSchema requiredSchema,
@@ -70,11 +65,8 @@ public class HoodieSplitReaderFunction implements SplitReaderFunction<RowData> {
 
     ValidationUtils.checkArgument(tableSchema != null, "tableSchema can't be null");
     ValidationUtils.checkArgument(requiredSchema != null, "requiredSchema can't be null");
-
-    this.hoodieTable = hoodieTable;
-    this.readerContext = readerContext;
+    this.metaClient = metaClient;
     this.tableSchema = tableSchema;
-    this.configuration = configuration;
     this.requiredSchema = requiredSchema;
     this.internalSchemaOption = internalSchemaOption;
     this.props = new TypedProperties();
@@ -83,12 +75,14 @@ public class HoodieSplitReaderFunction implements SplitReaderFunction<RowData> {
   }
 
   @Override
-  public CloseableIterator<RecordsWithSplitIds<HoodieRecordWithPosition<RowData>>> read(HoodieSourceSplit split) {
+  public RecordsWithSplitIds<HoodieRecordWithPosition<RowData>> read(HoodieSourceSplit split) {
+    final String splitId = split.splitId();
     try {
       this.fileGroupReader = createFileGroupReader(split);
       final ClosableIterator<RowData> recordIterator = fileGroupReader.getClosableIterator();
-      DefaultHoodieBatchReader<RowData> defaultBatchReader = new DefaultHoodieBatchReader<RowData>(configuration);
-      return defaultBatchReader.batch(split, recordIterator);
+      BatchRecords<RowData> records = BatchRecords.forRecords(splitId, recordIterator, split.getFileOffset(), split.getConsumed());
+      records.seek(split.getConsumed());
+      return records;
     } catch (IOException e) {
       throw new HoodieIOException("Failed to read from file group: " + split.getFileId(), e);
     }
@@ -118,10 +112,12 @@ public class HoodieSplitReaderFunction implements SplitReaderFunction<RowData> {
         ).orElse(Collections.emptyList())
     );
 
+    FlinkReaderContextFactory readerContextFactory = new FlinkReaderContextFactory(metaClient);
+
     // Build the file group reader
     HoodieFileGroupReader.Builder<RowData> builder = HoodieFileGroupReader.<RowData>newBuilder()
-        .withReaderContext(readerContext)
-        .withHoodieTableMetaClient(hoodieTable.getMetaClient())
+        .withReaderContext(readerContextFactory.getContext())
+        .withHoodieTableMetaClient(metaClient)
         .withFileSlice(fileSlice)
         .withProps(props)
         .withShouldUseRecordPosition(true)

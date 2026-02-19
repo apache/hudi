@@ -110,17 +110,17 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordScanner
                                          Option<String> partitionName,
                                          InternalSchema internalSchema,
                                          Option<String> keyFieldOverride,
-                                         boolean enableOptimizedLogBlocksScan, HoodieRecordMerger recordMerger,
+                                         HoodieRecordMerger recordMerger,
                                          Option<HoodieTableMetaClient> hoodieTableMetaClientOption,
                                          boolean allowInflightInstants) {
     super(storage, basePath, logFilePaths, readerSchema, latestInstantTime, reverseReader, bufferSize,
-        instantRange, withOperationField, forceFullScan, partitionName, internalSchema, keyFieldOverride, enableOptimizedLogBlocksScan, recordMerger,
+        instantRange, withOperationField, forceFullScan, partitionName, internalSchema, keyFieldOverride, recordMerger,
         hoodieTableMetaClientOption);
     try {
       this.maxMemorySizeInBytes = maxMemorySizeInBytes;
       // Store merged records for all versions for this log file, set the in-memory footprint to maxInMemoryMapSize
       this.records = new ExternalSpillableMap<>(maxMemorySizeInBytes, spillableMapBasePath, new DefaultSizeEstimator(),
-          new HoodieRecordSizeEstimator(readerSchema.toAvroSchema()), diskMapType, new DefaultSerializer<>(), isBitCaskDiskMapCompressionEnabled, getClass().getSimpleName());
+          new HoodieRecordSizeEstimator(readerSchema), diskMapType, new DefaultSerializer<>(), isBitCaskDiskMapCompressionEnabled, getClass().getSimpleName());
       this.scannedPrefixes = new HashSet<>();
       this.allowInflightInstants = allowInflightInstants;
       this.orderingFields = ConfigUtils.getOrderingFields(this.hoodieTableMetaClient.getTableConfig().getProps());
@@ -359,7 +359,6 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordScanner
     private String keyFieldOverride;
     // By default, we're doing a full-scan
     private boolean forceFullScan = true;
-    private boolean enableOptimizedLogBlocksScan = false;
     protected boolean allowInflightInstants = false;
     private HoodieRecordMerger recordMerger = new HoodiePreCombineAvroRecordMerger();
     protected HoodieTableMetaClient hoodieTableMetaClient;
@@ -458,12 +457,6 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordScanner
     }
 
     @Override
-    public Builder withOptimizedLogBlocksScan(boolean enableOptimizedLogBlocksScan) {
-      this.enableOptimizedLogBlocksScan = enableOptimizedLogBlocksScan;
-      return this;
-    }
-
-    @Override
     public Builder withRecordMerger(HoodieRecordMerger recordMerger) {
       this.recordMerger = HoodieRecordUtils.mergerToPreCombineMode(recordMerger);
       return this;
@@ -502,7 +495,7 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordScanner
           latestInstantTime, maxMemorySizeInBytes, reverseReader,
           bufferSize, spillableMapBasePath, instantRange,
           diskMapType, isBitCaskDiskMapCompressionEnabled, withOperationField, forceFullScan,
-          Option.ofNullable(partitionName), internalSchema, Option.ofNullable(keyFieldOverride), enableOptimizedLogBlocksScan, recordMerger,
+          Option.ofNullable(partitionName), internalSchema, Option.ofNullable(keyFieldOverride), recordMerger,
           Option.ofNullable(hoodieTableMetaClient), allowInflightInstants);
     }
   }

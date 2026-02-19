@@ -182,7 +182,7 @@ public class TestMergeHandle extends BaseTestHandle {
     for (HoodieRecordDelegate recordDelegate : writeStatus.getIndexStats().getWrittenRecordDelegates()) {
       if (!recordDelegate.getNewLocation().isPresent()) {
         numDeletedRecordDelegates++;
-        if (recordDelegate.getIgnoreIndexUpdate()) {
+        if (recordDelegate.isIgnoreIndexUpdate()) {
           numDeletedRecordDelegatesWithIgnoreIndexUpdate++;
         }
       } else {

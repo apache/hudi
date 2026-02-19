@@ -1273,4 +1273,4 @@ jobs:
       - name: Test hudi-trino-plugin with JDK 23
         working-directory: ./hudi-trino-plugin
         run:
-          mvn test
+          mvn test -Dapi.version=1.44

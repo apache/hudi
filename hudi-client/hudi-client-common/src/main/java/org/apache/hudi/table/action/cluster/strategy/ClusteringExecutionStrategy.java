@@ -96,11 +96,10 @@ public abstract class ClusteringExecutionStrategy<T, I, K, O> implements Seriali
 
     FileSlice fileSlice = clusteringOperationToFileSlice(table.getMetaClient().getBasePath().toString(), operation);
     final boolean usePosition = getWriteConfig().getBooleanOrDefault(MERGE_USE_RECORD_POSITIONS);
-    final boolean enableLogBlocksScan = getWriteConfig().enableOptimizedLogBlocksScan();
     Option<InternalSchema> internalSchema = SerDeHelper.fromJson(getWriteConfig().getInternalSchema());
     try {
       return getFileGroupReader(table.getMetaClient(), fileSlice, readerSchemaWithMetaFields, internalSchema,
-              readerContextFactory, instantTime, props, usePosition, enableLogBlocksScan).getClosableHoodieRecordIterator();
+              readerContextFactory, instantTime, props, usePosition).getClosableHoodieRecordIterator();
     } catch (IOException e) {
       throw new HoodieClusteringException("Error reading file slices", e);
     }
@@ -141,11 +140,11 @@ public abstract class ClusteringExecutionStrategy<T, I, K, O> implements Seriali
 
   protected static <R> HoodieFileGroupReader<R> getFileGroupReader(HoodieTableMetaClient metaClient, FileSlice fileSlice, HoodieSchema readerSchema, Option<InternalSchema> internalSchemaOption,
                                                                    ReaderContextFactory<R> readerContextFactory, String instantTime,
-                                                                   TypedProperties properties, boolean usePosition, boolean enableLogBlocksScan) {
+                                                                   TypedProperties properties, boolean usePosition) {
     HoodieReaderContext<R> readerContext = readerContextFactory.getContext();
     return HoodieFileGroupReader.<R>newBuilder()
         .withReaderContext(readerContext).withHoodieTableMetaClient(metaClient).withLatestCommitTime(instantTime)
         .withFileSlice(fileSlice).withDataSchema(readerSchema).withRequestedSchema(readerSchema).withInternalSchema(internalSchemaOption)
-        .withShouldUseRecordPosition(usePosition).withEnableOptimizedLogBlockScan(enableLogBlocksScan).withProps(properties).build();
+        .withShouldUseRecordPosition(usePosition).withProps(properties).build();
   }
 }

@@ -28,6 +28,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.mockito.Mockito;
 
 import java.io.File;
 import java.io.IOException;
@@ -40,6 +41,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.when;
 
 /**
  * Test cases for {@link RecordIndexCache}.
@@ -57,7 +59,7 @@ public class TestRecordIndexCache {
   }
 
   @AfterEach
-  void clean() throws IOException {
+  void markAsEvictable() throws IOException {
     this.cache.close();
   }
 
@@ -150,37 +152,46 @@ public class TestRecordIndexCache {
   }
 
   @Test
-  void testClean() {
-    cache.addCheckpointCache(2L);
-    cache.addCheckpointCache(3L);
-    cache.addCheckpointCache(4L);
-    
-    String recordKey1 = "key1";
-    String recordKey2 = "key2";
+  void testMarkAsEvictable() {
+    Configuration conf = TestConfigurations.getDefaultConf(tempDir.getAbsolutePath());
+    conf.set(FlinkOptions.INDEX_RLI_CACHE_SIZE, 1L); // 100MB cache size
+    cache = new RecordIndexCache(conf, 1L);
+
     HoodieRecordGlobalLocation location1 = new HoodieRecordGlobalLocation("partition1", "1001", "file_id1");
     HoodieRecordGlobalLocation location2 = new HoodieRecordGlobalLocation("partition2", "1002", "file_id2");
-    
     // Add records to different checkpoints
-    cache.getCaches().get(1L).put(recordKey1, location1);
-    cache.getCaches().get(2L).put(recordKey2, location2);
-    
+    for (int i = 0; i < 5000; i++) {
+      cache.update("k1_" + i, location1);
+    }
+    cache.addCheckpointCache(2L);
+    for (int i = 0; i < 5000; i++) {
+      cache.update("k2_" + i, location2);
+    }
+
     // Verify records exist before cleaning
-    assertNotNull(cache.get(recordKey1));
-    assertNotNull(cache.get(recordKey2));
-    
-    // Clean checkpoints up to and including 2
-    cache.clean(3L);
-    
-    // Check that checkpoints 1 and 2 are removed
-    assertEquals(2, cache.getCaches().size()); // Should have checkpoints 3 and 4
+    assertNotNull(cache.get("k1_0"));
+    assertNotNull(cache.get("k2_0"));
+
+    cache.addCheckpointCache(3L);
+    for (int i = 0; i < 800; i++) {
+      cache.update("k3_" + i, location2);
+    }
+
+    cache.addCheckpointCache(4L);
+    // mark 1,2 as cleanable
+    cache.markAsEvictable(3L);
+    // write another batch of records to trigger cleaning
+    for (int i = 0; i < 800; i++) {
+      cache.update("k4_" + i, location2);
+    }
+
+    // Check that checkpoint 1 are removed
+    assertEquals(3, cache.getCaches().size()); // Should have checkpoints 2, 3 and 4
+
     assertFalse(cache.getCaches().containsKey(1L));
-    assertFalse(cache.getCaches().containsKey(2L));
+    assertTrue(cache.getCaches().containsKey(2L));
     assertTrue(cache.getCaches().containsKey(3L));
     assertTrue(cache.getCaches().containsKey(4L));
-    
-    // Records from cleaned checkpoints should no longer be accessible
-    assertNull(cache.get(recordKey1));
-    assertNull(cache.get(recordKey2));
   }
 
   @Test
@@ -279,5 +290,58 @@ public class TestRecordIndexCache {
         assertEquals(locations.get(i), retrievedLocation);
       }
     }
+  }
+
+  @Test
+  void testInferMemorySizeForCacheWithEmptyCaches() {
+    cache.getCaches().clear();
+
+    // infer the cache for the first checkpoint
+    long inferredSize = cache.inferMemorySizeForCache();
+    assertEquals(cache.getMaxCacheSizeInBytes() / 2, inferredSize);
+
+    // cache for the first checkpoint is empty
+    ExternalSpillableMap<String, HoodieRecordGlobalLocation> map1 = Mockito.mock(ExternalSpillableMap.class);
+    when(map1.getSizeOfFileOnDiskInBytes()).thenReturn(0L);
+    when(map1.getCurrentInMemoryMapSize()).thenReturn(0L);
+    cache.getCaches().put(1L, map1);
+
+    inferredSize = cache.inferMemorySizeForCache();
+    assertEquals(cache.getMaxCacheSizeInBytes() / 2, inferredSize);
+  }
+
+  @Test
+  void testInferMemorySizeForCacheUsesAverageInMemorySize() {
+    cache.getCaches().clear();
+
+    ExternalSpillableMap<String, HoodieRecordGlobalLocation> map1 = Mockito.mock(ExternalSpillableMap.class);
+    ExternalSpillableMap<String, HoodieRecordGlobalLocation> map2 = Mockito.mock(ExternalSpillableMap.class);
+    when(map1.getSizeOfFileOnDiskInBytes()).thenReturn(0L);
+    when(map2.getSizeOfFileOnDiskInBytes()).thenReturn(0L);
+    when(map1.getCurrentInMemoryMapSize()).thenReturn(100L);
+    when(map2.getCurrentInMemoryMapSize()).thenReturn(300L);
+
+    cache.getCaches().put(1L, map1);
+    cache.getCaches().put(2L, map2);
+
+    assertEquals(200L, cache.inferMemorySizeForCache());
+  }
+
+  @Test
+  void testInferMemorySizeForCacheAdjustsForSpilledMaps() {
+    cache.getCaches().clear();
+
+    ExternalSpillableMap<String, HoodieRecordGlobalLocation> spilledMap = Mockito.mock(ExternalSpillableMap.class);
+    ExternalSpillableMap<String, HoodieRecordGlobalLocation> inMemoryMap = Mockito.mock(ExternalSpillableMap.class);
+    when(spilledMap.getSizeOfFileOnDiskInBytes()).thenReturn(200L);
+    when(spilledMap.getCurrentInMemoryMapSize()).thenReturn(800L);
+    when(inMemoryMap.getSizeOfFileOnDiskInBytes()).thenReturn(0L);
+    when(inMemoryMap.getCurrentInMemoryMapSize()).thenReturn(500L);
+
+    cache.getCaches().put(2L, spilledMap);
+    cache.getCaches().put(1L, inMemoryMap);
+
+    long expected = (long) ((800L / RecordIndexCache.FACTOR_FOR_MEMORY_SIZE_OF_SPILLED_MAP) + 500L) / 2;
+    assertEquals(expected, cache.inferMemorySizeForCache());
   }
 }

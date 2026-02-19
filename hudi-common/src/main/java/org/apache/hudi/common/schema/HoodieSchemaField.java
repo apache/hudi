@@ -339,7 +339,7 @@ public class HoodieSchemaField implements Serializable {
       return this; // Already nullable
     }
 
-    HoodieSchema nullableSchema = HoodieSchemaUtils.createNullableSchema(schema());
+    HoodieSchema nullableSchema = HoodieSchema.createNullable(schema());
     return HoodieSchemaField.of(name(), nullableSchema, doc().orElse(null), defaultVal().orElse(null));
   }
 
@@ -388,9 +388,6 @@ public class HoodieSchemaField implements Serializable {
    * @return the non-null schema type
    */
   public HoodieSchema getNonNullSchema() {
-    if (!isNullable()) {
-      return schema();
-    }
-    return HoodieSchemaUtils.getNonNullTypeFromUnion(schema());
+    return schema().getNonNullType();
   }
 }

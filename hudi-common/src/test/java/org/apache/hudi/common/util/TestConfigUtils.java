@@ -21,6 +21,8 @@ package org.apache.hudi.common.util;
 
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieCommonConfig;
+import org.apache.hudi.common.config.HoodieMetadataConfig;
+import org.apache.hudi.common.config.HoodieReaderConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodiePayloadProps;
 import org.apache.hudi.common.table.HoodieTableConfig;
@@ -453,5 +455,25 @@ public class TestConfigUtils {
     // Case-5: without checksum property, invalid properties
     props.remove(HoodieTableConfig.NAME.key());
     assertTrue(ConfigUtils.isPropertiesInvalid(props));
+  }
+
+  @Test
+  void testBuildFileGroupReaderPropertiesIncludesMetadataFileCacheConfig() {
+    TypedProperties metadataProps = new TypedProperties();
+    metadataProps.setProperty(HoodieMetadataConfig.METADATA_FILE_CACHE_MAX_SIZE_MB.key(), "123");
+    metadataProps.setProperty(HoodieReaderConfig.HFILE_BLOCK_CACHE_ENABLED.key(), "false");
+    metadataProps.setProperty(HoodieReaderConfig.HFILE_BLOCK_CACHE_SIZE.key(), "200000");
+    metadataProps.setProperty(HoodieReaderConfig.HFILE_BLOCK_CACHE_TTL_MINUTES.key(), "7");
+
+    HoodieMetadataConfig metadataConfig = HoodieMetadataConfig.newBuilder()
+        .fromProperties(metadataProps)
+        .build();
+
+    TypedProperties fileGroupReaderProps = ConfigUtils.buildFileGroupReaderProperties(metadataConfig, false);
+
+    assertEquals("123", fileGroupReaderProps.getProperty(HoodieMetadataConfig.METADATA_FILE_CACHE_MAX_SIZE_MB.key()));
+    assertEquals("false", fileGroupReaderProps.getProperty(HoodieReaderConfig.HFILE_BLOCK_CACHE_ENABLED.key()));
+    assertEquals("200000", fileGroupReaderProps.getProperty(HoodieReaderConfig.HFILE_BLOCK_CACHE_SIZE.key()));
+    assertEquals("7", fileGroupReaderProps.getProperty(HoodieReaderConfig.HFILE_BLOCK_CACHE_TTL_MINUTES.key()));
   }
 }

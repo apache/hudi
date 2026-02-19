@@ -27,7 +27,6 @@ import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.internal.schema.action.InternalSchemaMerger;
 import org.apache.hudi.internal.schema.convert.InternalSchemaConverter;
 
-import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.conf.Configuration;
@@ -55,9 +54,9 @@ public class HoodieAvroParquetReader extends RecordReader<Void, ArrayWritable> {
   private final ParquetRecordReader<GenericData.Record> parquetRecordReader;
   private HoodieSchema baseSchema;
 
-  public HoodieAvroParquetReader(InputSplit inputSplit, Configuration conf, Option<InternalSchema> internalSchemaOption, Option<Schema> dataSchema) throws IOException {
+  public HoodieAvroParquetReader(InputSplit inputSplit, Configuration conf, Option<InternalSchema> internalSchemaOption, Option<HoodieSchema> dataSchema) throws IOException {
     if (dataSchema.isPresent()) {
-      baseSchema = HoodieSchema.fromAvroSchema(dataSchema.get());
+      baseSchema = dataSchema.get();
     } else {
       // get base schema
       ParquetMetadata fileFooter =

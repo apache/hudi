@@ -19,6 +19,11 @@
 
 package org.apache.hudi.common.table.read;
 
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
+import lombok.ToString;
+
 import javax.annotation.concurrent.NotThreadSafe;
 
 import java.io.Serializable;
@@ -27,6 +32,10 @@ import java.io.Serializable;
  * Statistics about a single Hoodie read operation.
  */
 @NotThreadSafe
+@NoArgsConstructor
+@Getter
+@Setter
+@ToString
 public class HoodieReadStats implements Serializable {
   private static final long serialVersionUID = 1L;
 
@@ -53,57 +62,10 @@ public class HoodieReadStats implements Serializable {
   // Total number of rollback blocks seen in a compaction operation
   protected long totalRollbackBlocks;
 
-  public HoodieReadStats() {
-  }
-
   public HoodieReadStats(long numInserts, long numUpdates, long numDeletes) {
     this.numInserts = numInserts;
     this.numUpdates = numUpdates;
     this.numDeletes = numDeletes;
-  }
-
-  public long getNumInserts() {
-    return numInserts;
-  }
-
-  public long getNumUpdates() {
-    return numUpdates;
-  }
-
-  public long getNumDeletes() {
-    return numDeletes;
-  }
-
-  public long getTotalLogReadTimeMs() {
-    return totalLogReadTimeMs;
-  }
-
-  public long getTotalLogRecords() {
-    return totalLogRecords;
-  }
-
-  public long getTotalLogFilesCompacted() {
-    return totalLogFilesCompacted;
-  }
-
-  public long getTotalUpdatedRecordsCompacted() {
-    return totalUpdatedRecordsCompacted;
-  }
-
-  public long getTotalLogSizeCompacted() {
-    return totalLogSizeCompacted;
-  }
-
-  public long getTotalLogBlocks() {
-    return totalLogBlocks;
-  }
-
-  public long getTotalCorruptLogBlock() {
-    return totalCorruptLogBlock;
-  }
-
-  public long getTotalRollbackBlocks() {
-    return totalRollbackBlocks;
   }
 
   public void incrementNumInserts() {
@@ -116,37 +78,5 @@ public class HoodieReadStats implements Serializable {
 
   public void incrementNumDeletes() {
     numDeletes++;
-  }
-
-  public void setTotalLogReadTimeMs(long totalLogReadTimeMs) {
-    this.totalLogReadTimeMs = totalLogReadTimeMs;
-  }
-
-  public void setTotalLogRecords(long totalLogRecords) {
-    this.totalLogRecords = totalLogRecords;
-  }
-
-  public void setTotalLogFilesCompacted(long totalLogFilesCompacted) {
-    this.totalLogFilesCompacted = totalLogFilesCompacted;
-  }
-
-  public void setTotalUpdatedRecordsCompacted(long totalUpdatedRecordsCompacted) {
-    this.totalUpdatedRecordsCompacted = totalUpdatedRecordsCompacted;
-  }
-
-  public void setTotalLogSizeCompacted(long totalLogSizeCompacted) {
-    this.totalLogSizeCompacted = totalLogSizeCompacted;
-  }
-
-  public void setTotalLogBlocks(long totalLogBlocks) {
-    this.totalLogBlocks = totalLogBlocks;
-  }
-
-  public void setTotalCorruptLogBlock(long totalCorruptLogBlock) {
-    this.totalCorruptLogBlock = totalCorruptLogBlock;
-  }
-
-  public void setTotalRollbackBlocks(long totalRollbackBlocks) {
-    this.totalRollbackBlocks = totalRollbackBlocks;
   }
 }

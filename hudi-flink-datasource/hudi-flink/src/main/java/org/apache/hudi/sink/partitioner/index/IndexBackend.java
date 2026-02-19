@@ -58,9 +58,10 @@ public interface IndexBackend extends Closeable {
   /**
    * Listener method called when the bucket assign operator receives a notify checkpoint complete event.
    *
-   * @param correspondent The Correspondent used to get inflight instants from the coordinator.
+   * @param correspondent         The Correspondent used to get inflight instants from the coordinator.
+   * @param completedCheckpointId The latest completed checkpoint id
    */
-  default void onCheckpointComplete(Correspondent correspondent) {
+  default void onCheckpointComplete(Correspondent correspondent, long completedCheckpointId) {
     // do nothing.
   }
 }

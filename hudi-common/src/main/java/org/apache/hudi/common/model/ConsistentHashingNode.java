@@ -23,6 +23,8 @@ import org.apache.hudi.common.util.JsonUtils;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import lombok.Getter;
+import lombok.ToString;
 
 import java.io.IOException;
 import java.io.Serializable;
@@ -35,10 +37,12 @@ import java.util.List;
  * Record the end hash range value and its corresponding file group id.
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
+@Getter
 public class ConsistentHashingNode implements Serializable {
 
   private final int value;
   private final String fileIdPrefix;
+  @ToString.Exclude
   private final NodeTag tag;
 
   public ConsistentHashingNode(int value, String fileIdPrefix) {
@@ -63,25 +67,6 @@ public class ConsistentHashingNode implements Serializable {
 
     ConsistentHashingNode[] nodes = JsonUtils.getObjectMapper().readValue(json, ConsistentHashingNode[].class);
     return Arrays.asList(nodes);
-  }
-
-  public int getValue() {
-    return value;
-  }
-
-  public String getFileIdPrefix() {
-    return fileIdPrefix;
-  }
-
-  public NodeTag getTag() {
-    return tag;
-  }
-
-  @Override
-  public String toString() {
-    return "ConsistentHashingNode{" + "value=" + value
-        + ", fileIdPfx='" + fileIdPrefix + '\''
-        + '}';
   }
 
   /**

@@ -18,6 +18,11 @@
 
 package org.apache.hudi.common.model;
 
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+
+@NoArgsConstructor
+@Getter
 public class MetadataValues {
 
   // NOTE: These fields are laid out in the same order as they are encoded in
@@ -30,33 +35,6 @@ public class MetadataValues {
   private String operation;
 
   private boolean set = false;
-
-  public MetadataValues() {
-  }
-
-  public String getCommitTime() {
-    return commitTime;
-  }
-
-  public String getCommitSeqNo() {
-    return commitSeqNo;
-  }
-
-  public String getRecordKey() {
-    return recordKey;
-  }
-
-  public String getPartitionPath() {
-    return partitionPath;
-  }
-
-  public String getFileName() {
-    return fileName;
-  }
-
-  public String getOperation() {
-    return operation;
-  }
 
   public MetadataValues setCommitTime(String value) {
     this.commitTime = value;

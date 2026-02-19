@@ -18,6 +18,7 @@
 
 package org.apache.hudi.metrics;
 
+import org.apache.hudi.HoodieVersion;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -551,6 +552,14 @@ public class HoodieMetrics {
   public void emitIndexTypeMetrics(int indexTypeOrdinal) {
     if (config.isMetricsOn()) {
       metrics.registerGauge(getMetricsName("index", "type"), indexTypeOrdinal);
+    }
+  }
+
+  public void emitVersionMetrics() {
+    if (config.isMetricsOn()) {
+      final String version = HoodieVersion.get();
+      metrics.registerGauge(getMetricsName("userName", System.getProperty("user.name")), 1);
+      metrics.registerGauge(getMetricsName("version", StringUtils.isNullOrEmpty(version) ? HoodieVersion.HOODIE_DEFAULT_VERSION : version), 1);
     }
   }
 
