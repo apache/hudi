@@ -61,6 +61,7 @@ import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.keygen.constant.KeyGeneratorType;
 import org.apache.hudi.metadata.MetadataPartitionType;
+import org.apache.hudi.storage.HoodieInstantWriter;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 
@@ -84,6 +85,7 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.ServiceLoader;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiConsumer;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -540,27 +542,31 @@ public class HoodieTableConfig extends HoodieConfig {
       // 3. delete the properties file, reads will go to the backup, until we are done.
       deleteFile(storage, cfgPath);
 
-      // 4. Upsert and save back.
-      String checksum;
-      try (OutputStream out = storage.create(cfgPath, true)) {
-        propsToUpdate.accept(props, modifyProps);
-        propsToDelete.forEach(propToDelete -> props.remove(propToDelete));
-        checksum = storeProperties(props, out, cfgPath);
-      }
+      // 4. Upsert and save back using createImmutableFileInPath for atomic writes
+      propsToUpdate.accept(props, modifyProps);
+      propsToDelete.forEach(propToDelete -> props.remove(propToDelete));
+      AtomicReference<String> checksumRef = new AtomicReference<>();
+      HoodieInstantWriter writer = outputStream -> checksumRef.set(storeProperties(props, outputStream, cfgPath));
+      storage.createImmutableFileInPath(cfgPath, Option.of(writer));
+      String checksum = checksumRef.get();
+      LOG.warn(String.format("%s modified to: %s (at %s)", cfgPath.getName(), props, cfgPath.getParent()));
 
-      // 4. verify and remove backup.
+      // 5. verify and remove backup.
       try (InputStream in = storage.open(cfgPath)) {
-        props.clear();
-        props.load(in);
-        if (!props.containsKey(TABLE_CHECKSUM.key()) || !props.getProperty(TABLE_CHECKSUM.key()).equals(checksum)) {
+        Properties verifyProps = new Properties();
+        verifyProps.load(in);
+        if (verifyProps.isEmpty() || verifyProps.size() != props.size()
+                || !verifyProps.containsKey(TABLE_CHECKSUM.key())
+                || !verifyProps.getProperty(TABLE_CHECKSUM.key()).equals(checksum)) {
           // delete the properties file and throw exception indicating update failure
           // subsequent writes will recover and update, reads will go to the backup until then
           deleteFile(storage, cfgPath);
-          throw new HoodieIOException("Checksum property missing or does not match.");
+          throw new HoodieIOException(String.format("Checksum property missing or properties do not match. %d vs %d",
+              props.size(), verifyProps.size()));
         }
       }
 
-      // 5. delete the backup properties file
+      // 6. delete the backup properties file
       deleteFile(storage, backupCfgPath);
     } catch (IOException e) {
       throw new HoodieIOException("Error updating table configs.", e);
