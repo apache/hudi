@@ -525,6 +525,11 @@
       <artifactId>kafka</artifactId>
       <scope>test</scope>
     </dependency>
+    <dependency>
+      <groupId>org.testcontainers</groupId>
+      <artifactId>localstack</artifactId>
+      <scope>test</scope>
+    </dependency>
 
     <!-- AWS Services -->
     <!-- https://mvnrepository.com/artifact/software.amazon.awssdk/aws-java-sdk-sqs -->

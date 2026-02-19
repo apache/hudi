@@ -110,6 +110,7 @@ import org.apache.hudi.utilities.sources.CsvDFSSource;
 import org.apache.hudi.utilities.sources.InputBatch;
 import org.apache.hudi.utilities.sources.JdbcSource;
 import org.apache.hudi.utilities.sources.JsonKafkaSource;
+import org.apache.hudi.utilities.sources.JsonKinesisSource;
 import org.apache.hudi.utilities.sources.ORCDFSSource;
 import org.apache.hudi.utilities.sources.ParquetDFSSource;
 import org.apache.hudi.utilities.sources.SqlSource;
@@ -120,7 +121,9 @@ import org.apache.hudi.utilities.streamer.HoodieStreamer;
 import org.apache.hudi.utilities.streamer.NoNewDataTerminationStrategy;
 import org.apache.hudi.utilities.streamer.StreamSync;
 import org.apache.hudi.utilities.streamer.StreamerCheckpointUtils;
+import org.apache.hudi.utilities.config.KinesisSourceConfig;
 import org.apache.hudi.utilities.testutils.JdbcTestUtils;
+import org.apache.hudi.utilities.testutils.KinesisTestUtils;
 import org.apache.hudi.utilities.testutils.UtilitiesTestBase;
 import org.apache.hudi.utilities.testutils.sources.AbstractBaseTestSource;
 import org.apache.hudi.utilities.testutils.sources.DistributedTestDataSource;
@@ -146,9 +149,12 @@ import org.apache.spark.sql.api.java.UDF4;
 import org.apache.spark.sql.functions;
 import org.apache.spark.sql.types.DataTypes;
 import org.apache.spark.sql.types.StructField;
+import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Disabled;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -3110,6 +3116,88 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     deltaStreamer.sync();
     assertRecordCount(totalRecords, tableBasePath, sqlContext);
     deltaStreamer.shutdownGracefully();
+  }
+
+  /**
+   * Tests DeltaStreamer ingestion from JsonKinesisSource using LocalStack.
+   */
+  @Nested
+  @org.junit.jupiter.api.TestInstance(org.junit.jupiter.api.TestInstance.Lifecycle.PER_CLASS)
+  class TestKinesisSource {
+
+    private KinesisTestUtils kinesisTestUtils;
+
+    @BeforeAll
+    void initKinesis() {
+      kinesisTestUtils = new KinesisTestUtils().setup();
+    }
+
+    @AfterAll
+    void tearDownKinesis() {
+      if (kinesisTestUtils != null) {
+        kinesisTestUtils.teardown();
+      }
+    }
+
+    @Test
+    public void testJsonKinesisDFSSource() throws Exception {
+      String streamName = "test-kinesis-stream-" + testNum;
+      prepareJsonKinesisDFSFiles(JSON_KINESIS_NUM_RECORDS, true, streamName);
+      prepareJsonKinesisDFSSource(PROPS_FILENAME_TEST_JSON_KINESIS, streamName);
+      String tableBasePath = basePath + "/test_json_kinesis_table" + testNum;
+      HoodieDeltaStreamer deltaStreamer = new HoodieDeltaStreamer(
+          TestHelpers.makeConfig(tableBasePath, WriteOperationType.UPSERT, JsonKinesisSource.class.getName(),
+              Collections.emptyList(), PROPS_FILENAME_TEST_JSON_KINESIS, false,
+              true, 100000, false, null, null, "timestamp", null), jsc);
+      deltaStreamer.sync();
+      assertRecordCount(JSON_KINESIS_NUM_RECORDS, tableBasePath, sqlContext);
+
+      int totalRecords = JSON_KINESIS_NUM_RECORDS;
+      int records = 10;
+      totalRecords += records;
+      prepareJsonKinesisDFSFiles(records, false, streamName);
+      deltaStreamer.sync();
+      assertRecordCount(totalRecords, tableBasePath, sqlContext);
+      deltaStreamer.shutdownGracefully();
+
+      // Verify data correctness: read back and check _row_key exists
+      sqlContext.clearCache();
+      Dataset<Row> ds = sqlContext.read().format("org.apache.hudi").load(tableBasePath);
+      assertEquals(totalRecords, ds.count());
+      assertTrue(ds.filter("_row_key is not null").count() > 0);
+    }
+
+    private void prepareJsonKinesisDFSFiles(int numRecords, boolean createStream, String streamName) {
+      prepareJsonKinesisDFSFiles(numRecords, createStream, streamName, HoodieTestDataGenerator.TRIP_SCHEMA, System.nanoTime());
+    }
+
+    private void prepareJsonKinesisDFSFiles(int numRecords, boolean createStream, String streamName, String schemaStr, long seed) {
+      if (createStream) {
+        kinesisTestUtils.createStream(streamName, 1);
+      }
+      HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator(seed);
+      String[] jsonRecords = UtilitiesTestBase.Helpers.jsonifyRecords(
+          dataGenerator.generateInsertsAsPerSchema("000", numRecords, schemaStr));
+      kinesisTestUtils.sendRecords(streamName, jsonRecords);
+    }
+
+    private void prepareJsonKinesisDFSSource(String propsFileName, String streamName) throws IOException {
+      TypedProperties props = new TypedProperties();
+      populateCommonProps(props, basePath);
+      populateCommonHiveProps(props);
+      props.setProperty("include", "base.properties");
+      props.setProperty("hoodie.embed.timeline.server", "false");
+      props.setProperty("hoodie.datasource.write.recordkey.field", "_row_key");
+      props.setProperty("hoodie.datasource.write.partitionpath.field", "driver");
+      props.setProperty("hoodie.streamer.source.dfs.root", JSON_KINESIS_SOURCE_ROOT);
+      props.setProperty(KinesisSourceConfig.KINESIS_STREAM_NAME.key(), streamName);
+      props.setProperty(KinesisSourceConfig.KINESIS_REGION.key(), kinesisTestUtils.getRegion());
+      props.setProperty(KinesisSourceConfig.KINESIS_ENDPOINT_URL.key(), kinesisTestUtils.getEndpointUrl());
+      props.setProperty(KinesisSourceConfig.KINESIS_STARTING_POSITION.key(), "TRIM_HORIZON");
+      props.setProperty("hoodie.streamer.schemaprovider.source.schema.file", basePath + "/source_uber.avsc");
+      props.setProperty("hoodie.streamer.schemaprovider.target.schema.file", basePath + "/target_uber.avsc");
+      UtilitiesTestBase.Helpers.savePropsToDFS(props, storage, basePath + "/" + propsFileName);
+    }
   }
 
   @Test
