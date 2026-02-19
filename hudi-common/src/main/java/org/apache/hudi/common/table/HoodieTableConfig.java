@@ -335,6 +335,37 @@ public class HoodieTableConfig extends HoodieConfig {
       .sinceVersion("1.0.0")
       .withDocumentation("Key Generator type to determine key generator class");
 
+  public static final ConfigProperty<String> PARTITION_VALUE_EXTRACTOR_CLASS = ConfigProperty
+      .key("hoodie.table.hive_sync.partition_extractor_class")
+      .noDefaultValue()
+      .withInferFunction(cfg -> {
+        Option<String> partitionFieldsOpt = HoodieTableConfig.getPartitionFieldProp(cfg)
+            .or(() -> Option.ofNullable(cfg.getString(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME)));
+
+        if (!partitionFieldsOpt.isPresent()) {
+          return Option.of("org.apache.hudi.hive.NonPartitionedExtractor");
+        }
+        String partitionFields = partitionFieldsOpt.get();
+        if (StringUtils.nonEmpty(partitionFields)) {
+          int numOfPartFields = partitionFields.split(",").length;
+          if (numOfPartFields == 1) {
+            if (cfg.contains(KeyGeneratorOptions.HIVE_STYLE_PARTITIONING_ENABLE.key())
+                && cfg.getString(KeyGeneratorOptions.HIVE_STYLE_PARTITIONING_ENABLE.key()).equals("true")) {
+              return Option.of("org.apache.hudi.hive.HiveStylePartitionValueExtractor");
+            } else {
+              return Option.of("org.apache.hudi.hive.SinglePartPartitionValueExtractor");
+            }
+          } else {
+            return Option.of("org.apache.hudi.hive.MultiPartKeysValueExtractor");
+          }
+        } else {
+          return Option.of("org.apache.hudi.hive.NonPartitionedExtractor");
+        }
+      })
+      .markAdvanced()
+      .withDocumentation("Class which implements PartitionValueExtractor to extract the partition values, "
+          + "default is inferred based on partition configuration.");
+
   // TODO: this has to be UTC. why is it not the default?
   public static final ConfigProperty<HoodieTimelineTimeZone> TIMELINE_TIMEZONE = ConfigProperty
       .key("hoodie.table.timeline.timezone")
@@ -1206,6 +1237,10 @@ public class HoodieTableConfig extends HoodieConfig {
 
   public String getKeyGeneratorClassName() {
     return KeyGeneratorType.getKeyGeneratorClassName(this);
+  }
+
+  public String getPartitionValueExtractorClass() {
+    return getStringOrDefault(PARTITION_VALUE_EXTRACTOR_CLASS, "");
   }
 
   public HoodieTimelineTimeZone getTimelineTimezone() {

@@ -118,6 +118,10 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
 
   protected lazy val shouldFastBootstrap = configProperties.getBoolean(DATA_QUERIES_ONLY.key, false)
 
+  protected lazy val usePartitionValueExtractorOnRead = configProperties.getBoolean(
+    DataSourceReadOptions.USE_PARTITION_VALUE_EXTRACTOR_ON_READ.key(),
+    DataSourceReadOptions.USE_PARTITION_VALUE_EXTRACTOR_ON_READ.defaultValue().toBoolean)
+
   /**
    * Get the partition schema from the hoodie.properties.
    */
@@ -432,9 +436,10 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
       partitionPath,
       getBasePath,
       schema,
-      metaClient.getTableConfig.propsMap,
+      metaClient.getTableConfig,
       configProperties.getString(DateTimeUtils.TIMEZONE_OPTION, SQLConf.get.sessionLocalTimeZone),
-      shouldValidatePartitionColumns(spark))
+      shouldValidatePartitionColumns(spark),
+      usePartitionValueExtractorOnRead)
   }
 
   private def arePartitionPathsUrlEncoded: Boolean =

@@ -23,7 +23,7 @@ import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.hudi.common.config.TimestampKeyGeneratorConfig
 import org.apache.hudi.common.model.HoodieRecord
 import org.apache.hudi.common.schema.HoodieSchema
-import org.apache.hudi.common.util.{Option => HOption}
+import org.apache.hudi.common.util.{StringUtils, Option => HOption}
 import org.apache.hudi.keygen.TimestampBasedAvroKeyGenerator
 import org.apache.hudi.keygen.constant.KeyGeneratorType
 import org.apache.hudi.storage.StoragePath
@@ -31,6 +31,8 @@ import org.apache.hudi.util.ExceptionWrappingIterator
 import org.apache.avro.generic.GenericRecord
 import org.apache.hadoop.fs.Path
 import org.apache.hudi.common.table.HoodieTableConfig
+import org.apache.hudi.sync.common.model.PartitionValueExtractor
+
 import org.apache.spark.SPARK_VERSION
 import org.apache.spark.internal.Logging
 import org.apache.spark.rdd.RDD
@@ -224,11 +226,13 @@ object HoodieSparkUtils extends SparkAdapterSupport with SparkVersionsSupport wi
                                  partitionPath: String,
                                  tableBasePath: StoragePath,
                                  tableSchema: StructType,
-                                 tableConfig: java.util.Map[String, String],
+                                 tableConfig: HoodieTableConfig,
                                  timeZoneId: String,
-                                 shouldValidatePartitionColumns: Boolean): Array[Object] = {
+                                 shouldValidatePartitionColumns: Boolean,
+                                 usePartitionValueExtractorOnRead: Boolean): Array[Object] = {
     val keyGeneratorClass = KeyGeneratorType.getKeyGeneratorClassName(tableConfig)
-    val timestampKeyGeneratorType = tableConfig.get(TimestampKeyGeneratorConfig.TIMESTAMP_TYPE_FIELD.key())
+    val timestampKeyGeneratorType = tableConfig.propsMap().get(TimestampKeyGeneratorConfig.TIMESTAMP_TYPE_FIELD.key())
+    val partitionValueExtractorClass = tableConfig.getPartitionValueExtractorClass
 
     if (null != keyGeneratorClass
       && null != timestampKeyGeneratorType
@@ -238,10 +242,43 @@ object HoodieSparkUtils extends SparkAdapterSupport with SparkVersionsSupport wi
       // we couldn't reconstruct initial partition column values from partition paths due to lost data after formatting.
       // But the output for these cases is in a string format, so we can pass partitionPath as UTF8String
       Array.fill(partitionColumns.length)(UTF8String.fromString(partitionPath))
+    } else if(usePartitionValueExtractorOnRead && !StringUtils.isNullOrEmpty(partitionValueExtractorClass)) {
+      parsePartitionValuesBasedOnPartitionValueExtractor(partitionValueExtractorClass, partitionPath,
+        partitionColumns, tableSchema)
     } else {
       doParsePartitionColumnValues(partitionColumns, partitionPath, tableBasePath, tableSchema, timeZoneId,
-        shouldValidatePartitionColumns, tableConfig.getOrDefault(HoodieTableConfig.SLASH_SEPARATED_DATE_PARTITIONING.key,
-          HoodieTableConfig.SLASH_SEPARATED_DATE_PARTITIONING.defaultValue).toBoolean)
+        shouldValidatePartitionColumns, tableConfig.getSlashSeparatedDatePartitioning)
+    }
+  }
+
+  /**
+   * Parses partition values from partition path using a custom PartitionValueExtractor.
+   *
+   * @param partitionValueExtractorClass Fully qualified class name of the PartitionValueExtractor implementation
+   * @param partitionPath The partition path to extract values from
+   * @param partitionColumns Array of partition column names
+   * @param tableSchema The schema of the table
+   * @return Array of partition values as Objects, properly typed according to the schema
+   */
+  private def parsePartitionValuesBasedOnPartitionValueExtractor(
+      partitionValueExtractorClass: String,
+      partitionPath: String,
+      partitionColumns: Array[String],
+      tableSchema: StructType): Array[Object] = {
+    try {
+      val partitionValueExtractor = Class.forName(partitionValueExtractorClass)
+        .getDeclaredConstructor()
+        .newInstance()
+        .asInstanceOf[PartitionValueExtractor]
+      val partitionValues = partitionValueExtractor.extractPartitionValuesInPath(partitionPath).asScala.toArray
+      val partitionSchema = buildPartitionSchemaForNestedFields(tableSchema, partitionColumns)
+      val typedValues = partitionValues.zip(partitionSchema.fields).map { case (stringValue, field) =>
+        castStringToType(stringValue, field.dataType)
+      }
+      typedValues.map(_.asInstanceOf[Object])
+    } catch {
+      case e: Exception =>
+        throw new RuntimeException(s"Failed to extract partition value using $partitionValueExtractorClass class", e)
     }
   }
 
@@ -336,7 +373,7 @@ object HoodieSparkUtils extends SparkAdapterSupport with SparkVersionsSupport wi
     ).toSeq(partitionSchema)
   }
 
-  private def buildPartitionSchemaForNestedFields(schema: StructType, partitionColumns: Array[String]): StructType = {
+  def buildPartitionSchemaForNestedFields(schema: StructType, partitionColumns: Array[String]): StructType = {
     val partitionFields = partitionColumns.flatMap { partitionCol =>
       extractNestedField(schema, partitionCol)
     }
@@ -364,7 +401,7 @@ object HoodieSparkUtils extends SparkAdapterSupport with SparkVersionsSupport wi
     traverseSchema(schema, pathParts.toList, fieldPath)
   }
 
-  private def castStringToType(value: String, dataType: org.apache.spark.sql.types.DataType): Any = {
+  def castStringToType(value: String, dataType: org.apache.spark.sql.types.DataType): Any = {
     import org.apache.spark.sql.types._
 
     // handling cases where the value contains path separators or is complex

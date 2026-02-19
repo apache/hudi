@@ -314,6 +314,7 @@ public class StreamerUtil {
           .setPartitionFields(conf.getString(FlinkOptions.PARTITION_PATH_FIELD.key(), null))
           .setKeyGeneratorClassProp(
               conf.getOptional(FlinkOptions.KEYGEN_CLASS_NAME).orElse(SimpleAvroKeyGenerator.class.getName()))
+          .setPartitionValueExtractorClass(conf.getString(FlinkOptions.PARTITION_VALUE_EXTRACTOR.key(), null))
           .setHiveStylePartitioningEnable(conf.get(FlinkOptions.HIVE_STYLE_PARTITIONING))
           .setUrlEncodePartitioning(conf.get(FlinkOptions.URL_ENCODE_PARTITIONING))
           .setCDCEnabled(conf.get(FlinkOptions.CDC_ENABLED))
