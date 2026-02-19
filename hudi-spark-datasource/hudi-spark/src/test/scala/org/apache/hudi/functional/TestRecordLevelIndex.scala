@@ -47,9 +47,10 @@ import org.junit.jupiter.api.Assertions.{assertDoesNotThrow, assertEquals, asser
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{Arguments, EnumSource, MethodSource, ValueSource}
 
+import java.io.{PrintWriter, StringWriter}
 import java.util
 import java.util.stream.Collectors
-import java.io.{PrintWriter, StringWriter}
+
 import scala.collection.JavaConverters
 import scala.collection.JavaConverters._
 
@@ -536,14 +537,6 @@ class TestRecordLevelIndex extends RecordLevelIndexTestBase with SparkDatasetMix
       case t: Throwable =>
         fail(s"Expected HoodieMetadataException but got ${t.getClass.getName}: ${t.getMessage}")
     }
-    // assertDoesNotThrow(() => metadataWriter(writeConfig).getTableMetadata,
-    //   "Metadata rebootstrap with record index should succeed even with one zero-byte base file")
-
-    // val recordIndexPath = new StoragePath(
-    //   HoodieTableMetadata.getMetadataTableBasePath(basePath),
-    //   MetadataPartitionType.RECORD_INDEX.getPartitionPath)
-    // assertTrue(storage.exists(recordIndexPath),
-    //   "Record index partition should exist after metadata rebootstrap")
   }
 
   private def replaceOneBaseFileWithEmpty(partitionPaths: Seq[String]): String = {
