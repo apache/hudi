@@ -47,7 +47,7 @@ case class ShowHoodieTablePartitionsCommand(
     val useSlashSeparatedDatePartitioning = hoodieCatalogTable.tableConfig.getSlashSeparatedDatePartitioning
 
       if (partitionColumnNamesOpt.isPresent && partitionColumnNamesOpt.get.nonEmpty && schemaOpt.nonEmpty) {
-        val partitions: Seq[Row] = specOpt.map { spec =>
+        specOpt.map { spec =>
             hoodieCatalogTable.getPartitionPaths.filter { partitionPath =>
               val part = PartitioningUtils.parsePathFragment(partitionPath)
               spec.forall { case (col, value) =>
@@ -63,7 +63,6 @@ case class ShowHoodieTablePartitionsCommand(
           } else {
             Row(partitionVal)
           })
-        partitions
     } else {
       Seq.empty[Row]
     }
