@@ -86,7 +86,7 @@ public class MarkerDirState implements Serializable {
   private final List<Boolean> threadUseStatus;
   // Map of in-flight requests: (markerName, requestId) -> MarkerCreationFuture
   // Used for BOTH deduplication AND batch marker creation requests queue
-  private final Map<Pair<String, String>, MarkerCreationFuture> inflightRequestMap = new ConcurrentHashMap<>();
+  private final Map<Pair<String, String>, MarkerCreationFuture> inflightRequestMap = new HashMap<>();
   private final int parallelism;
   private final Object markerCreationProcessingLock = new Object();
   // Early conflict detection strategy if enabled
@@ -199,11 +199,10 @@ public class MarkerDirState implements Serializable {
    * @return futures of pending marker creation requests.
    */
   public List<MarkerCreationFuture> getPendingMarkerCreationRequests(boolean shouldClear) {
-    if (inflightRequestMap.isEmpty()) {
-      return Collections.emptyList();
-    }
-
     synchronized (inflightRequestMap) {
+      if (inflightRequestMap.isEmpty()) {
+        return Collections.emptyList();
+      }
       List<MarkerCreationFuture> pendingFutures = new ArrayList<>(inflightRequestMap.values());
       if (shouldClear) {
         inflightRequestMap.clear();
