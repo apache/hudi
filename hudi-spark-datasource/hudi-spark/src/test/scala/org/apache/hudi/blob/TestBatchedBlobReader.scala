@@ -24,7 +24,7 @@ import org.apache.hudi.testutils.HoodieClientTestBase
 
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.functions._
-import org.apache.spark.sql.hudi.blob.BatchedByteRangeReader
+import org.apache.spark.sql.hudi.blob.BatchedBlobReader
 import org.apache.spark.sql.types._
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
@@ -35,7 +35,7 @@ import org.junit.jupiter.api.Test
  * These tests verify the batching behavior and effectiveness of the
  * BatchedByteRangeReader compared to non-batched approaches.
  */
-class TestBatchedByteRangeReader extends HoodieClientTestBase {
+class TestBatchedBlobReader extends HoodieClientTestBase {
 
   @Test
   def testBasicBatchedRead(): Unit = {
@@ -51,7 +51,7 @@ class TestBatchedByteRangeReader extends HoodieClientTestBase {
       .select("data")
 
     // Read with batching
-    val resultDF = BatchedByteRangeReader.readBatched(inputDF, storageConf)
+    val resultDF = BatchedBlobReader.readBatched(inputDF, storageConf)
 
     // Verify schema
     assertTrue(resultDF.columns.contains("data"))
@@ -87,7 +87,7 @@ class TestBatchedByteRangeReader extends HoodieClientTestBase {
       .withColumn("data", blobStructCol("data", col("external_path"), col("offset"), col("length")))
       .select("data")
 
-    val resultDF = BatchedByteRangeReader.readBatched(inputDF, storageConf)
+    val resultDF = BatchedBlobReader.readBatched(inputDF, storageConf)
 
     val results = resultDF.collect()
     assertEquals(3, results.length)
@@ -115,7 +115,7 @@ class TestBatchedByteRangeReader extends HoodieClientTestBase {
       .select("data")
 
     // Use default maxGapBytes=4096 which should batch these
-    val resultDF = BatchedByteRangeReader.readBatched(inputDF, storageConf, maxGapBytes = 4096)
+    val resultDF = BatchedBlobReader.readBatched(inputDF, storageConf, maxGapBytes = 4096)
 
     val results = resultDF.collect()
     assertEquals(4, results.length)
@@ -142,7 +142,7 @@ class TestBatchedByteRangeReader extends HoodieClientTestBase {
       .select("data")
 
     // Use small maxGapBytes that won't batch these
-    val resultDF = BatchedByteRangeReader.readBatched(inputDF, storageConf, maxGapBytes = 1000)
+    val resultDF = BatchedBlobReader.readBatched(inputDF, storageConf, maxGapBytes = 1000)
 
     val results = resultDF.collect()
     assertEquals(4, results.length)
@@ -169,7 +169,7 @@ class TestBatchedByteRangeReader extends HoodieClientTestBase {
       .withColumn("data", blobStructCol("data", col("external_path"), col("offset"), col("length")))
       .select("data", "record_id")
 
-    val resultDF = BatchedByteRangeReader.readBatched(inputDF, storageConf)
+    val resultDF = BatchedBlobReader.readBatched(inputDF, storageConf)
 
     val results = resultDF.collect()
     assertEquals(4, results.length)
@@ -204,7 +204,7 @@ class TestBatchedByteRangeReader extends HoodieClientTestBase {
       .withColumn("data", blobStructCol("data", col("external_path"), col("offset"), col("length")))
       .select("data")
 
-    val resultDF = BatchedByteRangeReader.readBatched(inputDF, storageConf)
+    val resultDF = BatchedBlobReader.readBatched(inputDF, storageConf)
 
     val results = resultDF.collect()
     assertEquals(7, results.length)
@@ -224,7 +224,7 @@ class TestBatchedByteRangeReader extends HoodieClientTestBase {
       .withColumn("data", blobStructCol("data", col("external_path"), col("offset"), col("length")))
       .select("data")
 
-    val resultDF = BatchedByteRangeReader.readBatched(inputDF, storageConf)
+    val resultDF = BatchedBlobReader.readBatched(inputDF, storageConf)
 
     assertEquals(0, resultDF.count())
   }
@@ -242,7 +242,7 @@ class TestBatchedByteRangeReader extends HoodieClientTestBase {
       .withColumn("data", blobStructCol("data", col("external_path"), col("offset"), col("length")))
       .select("data", "record_id", "sequence", "flag", "value")
 
-    val resultDF = BatchedByteRangeReader.readBatched(inputDF, storageConf)
+    val resultDF = BatchedBlobReader.readBatched(inputDF, storageConf)
 
     // Verify all columns are preserved
     assertColumnsExist(resultDF, "data", "record_id", "sequence", "flag", "value")
@@ -280,7 +280,7 @@ class TestBatchedByteRangeReader extends HoodieClientTestBase {
       .select("id", "blob1", "blob2")
 
     // Resolve blob1 explicitly
-    val result1 = BatchedByteRangeReader.readBatched(
+    val result1 = BatchedBlobReader.readBatched(
       inputDF,
       storageConf,
       columnName = Some("blob1")
@@ -296,7 +296,7 @@ class TestBatchedByteRangeReader extends HoodieClientTestBase {
     }
 
     // Resolve blob2 explicitly
-    val result2 = BatchedByteRangeReader.readBatched(
+    val result2 = BatchedBlobReader.readBatched(
       inputDF,
       storageConf,
       columnName = Some("blob2")
@@ -328,7 +328,7 @@ class TestBatchedByteRangeReader extends HoodieClientTestBase {
       .select("data")
 
     // Should work without explicit column name (uses metadata)
-    val resultDF = BatchedByteRangeReader.readBatched(
+    val resultDF = BatchedBlobReader.readBatched(
       inputDF,
       storageConf
       // Note: columnName parameter is NOT provided
@@ -351,7 +351,7 @@ class TestBatchedByteRangeReader extends HoodieClientTestBase {
       .withColumn("data", inlineBlobStructCol("data", lit(inlineData)))
       .select("data", "record_id")
 
-    val resultDF = BatchedByteRangeReader.readBatched(inputDF, storageConf)
+    val resultDF = BatchedBlobReader.readBatched(inputDF, storageConf)
     val results = resultDF.collect()
     assertEquals(1, results.length)
     assertArrayEquals(inlineData, results(0).getAs[Array[Byte]]("data"))
@@ -368,7 +368,7 @@ class TestBatchedByteRangeReader extends HoodieClientTestBase {
       .withColumn("data", wholeFileBlobStructCol("data", lit(filePath)))
       .select("data", "record_id")
 
-    val resultDF = BatchedByteRangeReader.readBatched(inputDF, storageConf)
+    val resultDF = BatchedBlobReader.readBatched(inputDF, storageConf)
     val results = resultDF.collect()
     assertEquals(1, results.length)
     val data = results(0).getAs[Array[Byte]]("data")
@@ -397,7 +397,7 @@ class TestBatchedByteRangeReader extends HoodieClientTestBase {
     val inputDF = sparkSession.createDataFrame(
       sparkSession.sparkContext.parallelize(rows), outerSchema)
 
-    val resultDF = BatchedByteRangeReader.readBatched(inputDF, storageConf, columnName = Some("data"))
+    val resultDF = BatchedBlobReader.readBatched(inputDF, storageConf, columnName = Some("data"))
     val results = resultDF.orderBy("record_id").collect()
     assertEquals(4, results.length)
 

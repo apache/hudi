@@ -98,7 +98,7 @@ case class ReadBlobRule(spark: SparkSession) extends Rule[LogicalPlan] {
    * Replace ReadBlobExpression with reference to resolved data column.
    *
    * Recursively traverses expression tree and replaces all [[ReadBlobExpression]]
-   * nodes with references to the data column produced by [[BatchedByteRangeReader]].
+   * nodes with references to the data column produced by [[BatchedBlobReader]].
    */
   private def replaceReadBlobExpression(
       expr: Expression,

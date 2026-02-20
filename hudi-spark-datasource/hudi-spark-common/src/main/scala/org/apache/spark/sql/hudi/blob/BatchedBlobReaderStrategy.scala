@@ -39,14 +39,14 @@ case class BatchedBlobReaderStrategy(sparkSession: SparkSession) extends SparkSt
     case read @ BatchedBlobRead(child, _, _) =>
       // TODO find proper way to access these configs
       val maxGapBytes = HoodieSparkConfUtils.getConfigValue(
-        Map.empty, sparkSession.sqlContext.conf,
-        BatchedByteRangeReader.MAX_GAP_BYTES_CONF,
-        String.valueOf(BatchedByteRangeReader.DEFAULT_MAX_GAP_BYTES)).toInt
+        Map.empty, sparkSession.sessionState.conf,
+        BatchedBlobReader.MAX_GAP_BYTES_CONF,
+        String.valueOf(BatchedBlobReader.DEFAULT_MAX_GAP_BYTES)).toInt
 
       val lookaheadSize = HoodieSparkConfUtils.getConfigValue(
-        Map.empty, sparkSession.sqlContext.conf,
-        BatchedByteRangeReader.LOOKAHEAD_SIZE_CONF,
-        String.valueOf(BatchedByteRangeReader.DEFAULT_LOOKAHEAD_SIZE)).toInt
+        Map.empty, sparkSession.sessionState.conf,
+        BatchedBlobReader.LOOKAHEAD_SIZE_CONF,
+        String.valueOf(BatchedBlobReader.DEFAULT_LOOKAHEAD_SIZE)).toInt
 
       val storageConf = new HadoopStorageConfiguration(sparkSession.sparkContext.hadoopConfiguration)
       BatchedBlobReadExec(

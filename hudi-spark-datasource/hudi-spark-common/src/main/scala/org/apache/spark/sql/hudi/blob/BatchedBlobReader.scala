@@ -88,12 +88,12 @@ import scala.collection.mutable.ArrayBuffer
  * @param maxGapBytes    Maximum gap between ranges to consider for batching (default: 4KB)
  * @param lookaheadSize  Number of rows to buffer for batch detection (default: 50)
  */
-class BatchedByteRangeReader(
+class BatchedBlobReader(
     storage: HoodieStorage,
     maxGapBytes: Int = 4096,
     lookaheadSize: Int = 50) {
 
-  private val logger = LoggerFactory.getLogger(classOf[BatchedByteRangeReader])
+  private val logger = LoggerFactory.getLogger(classOf[BatchedBlobReader])
 
   /**
    * Process a partition iterator, batching consecutive reads.
@@ -569,7 +569,7 @@ private case class RowResult[R](
 /**
  * Companion object providing the main API for batched byte range reading.
  */
-object BatchedByteRangeReader {
+object BatchedBlobReader {
 
   val MAX_GAP_BYTES_CONF = "hoodie.blob.batching.max.gap.bytes"
   val LOOKAHEAD_SIZE_CONF = "hoodie.blob.batching.lookahead.size"
@@ -637,7 +637,7 @@ object BatchedByteRangeReader {
     val result = df.mapPartitions { partition =>
       // Create storage and reader for this partition
       val storage = HoodieStorageUtils.getStorage(broadcastConf.value)
-      val reader = new BatchedByteRangeReader(storage, maxGapBytes, lookaheadSize)
+      val reader = new BatchedBlobReader(storage, maxGapBytes, lookaheadSize)
 
       // Import implicit instances for Row
       import RowAccessor.rowAccessor
@@ -694,7 +694,7 @@ object BatchedByteRangeReader {
     // Process partitions using InternalRow type classes
     rdd.mapPartitions { partition =>
       val storage = HoodieStorageUtils.getStorage(broadcastConf.value)
-      val reader = new BatchedByteRangeReader(storage, maxGapBytes, lookaheadSize)
+      val reader = new BatchedBlobReader(storage, maxGapBytes, lookaheadSize)
 
       // Import implicit instances for InternalRow
       import RowAccessor.internalRowAccessor

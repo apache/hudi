@@ -29,7 +29,7 @@ import org.apache.spark.sql.execution.{SparkPlan, UnaryExecNode}
 /**
  * Physical plan node that executes batched blob reads.
  *
- * Reads blob data from storage using [[BatchedByteRangeReader]] to batch
+ * Reads blob data from storage using [[BatchedBlobReader]] to batch
  * reads efficiently when data is sorted by file and position.
  *
  * @param child Child physical plan
@@ -51,7 +51,7 @@ case class BatchedBlobReadExec(child: SparkPlan,
     val childRDD = child.execute()
 
     // Use direct RDD processing - no DataFrame conversion!
-    BatchedByteRangeReader.processRDD(
+    BatchedBlobReader.processRDD(
       childRDD,
       child.schema,
       storageConf,

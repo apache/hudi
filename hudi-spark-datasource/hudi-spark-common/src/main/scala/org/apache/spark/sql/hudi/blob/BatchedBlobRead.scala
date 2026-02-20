@@ -21,7 +21,7 @@ package org.apache.spark.sql.hudi.blob
 
 import org.apache.spark.sql.catalyst.expressions.{Attribute, AttributeReference, AttributeSet, Expression}
 import org.apache.spark.sql.catalyst.plans.logical.{LogicalPlan, UnaryNode}
-import org.apache.spark.sql.hudi.blob.BatchedByteRangeReader.DATA_COL
+import org.apache.spark.sql.hudi.blob.BatchedBlobReader.DATA_COL
 import org.apache.spark.sql.types.BinaryType
 
 /**
