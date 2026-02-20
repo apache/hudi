@@ -87,6 +87,14 @@ public class KinesisSourceConfig extends HoodieConfig {
       .markAdvanced()
       .withDocumentation("When enabled, appends Kinesis metadata (sequence number, shard id, arrival timestamp, partition key) to records.");
 
+  public static final ConfigProperty<Boolean> KINESIS_ENABLE_DEAGGREGATION = ConfigProperty
+      .key(PREFIX + "enable.deaggregation")
+      .defaultValue(true)
+      .withAlternatives(OLD_PREFIX + "enable.deaggregation")
+      .markAdvanced()
+      .withDocumentation("When enabled, de-aggregates records produced by Kinesis Producer Library (KPL). "
+          + "Non-aggregated records pass through unchanged. Set to false if producers do not use KPL.");
+
   public static final ConfigProperty<Boolean> ENABLE_FAIL_ON_DATA_LOSS = ConfigProperty
       .key(PREFIX + "enable.failOnDataLoss")
       .defaultValue(false)

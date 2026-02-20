@@ -45,6 +45,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import static org.apache.hudi.common.util.ConfigUtils.getBooleanWithAltKeys;
 import static org.apache.hudi.common.util.ConfigUtils.getIntWithAltKeys;
 import static org.apache.hudi.common.util.ConfigUtils.getLongWithAltKeys;
 
@@ -91,6 +92,7 @@ public class JsonKinesisSource extends KinesisSource<JavaRDD<String>> {
         offsetGen.getEndpointUrl().orElse(null),
         offsetGen.getStartingPosition(),
         shouldAddOffsets,
+        getBooleanWithAltKeys(props, KinesisSourceConfig.KINESIS_ENABLE_DEAGGREGATION),
         getIntWithAltKeys(props, KinesisSourceConfig.KINESIS_GET_RECORDS_MAX_RECORDS),
         getLongWithAltKeys(props, KinesisSourceConfig.KINESIS_GET_RECORDS_INTERVAL_MS),
         shardRanges.length > 0 ? Math.max(1, getLongWithAltKeys(props, KinesisSourceConfig.MAX_EVENTS_FROM_KINESIS_SOURCE) / shardRanges.length) : Long.MAX_VALUE);
@@ -104,7 +106,8 @@ public class JsonKinesisSource extends KinesisSource<JavaRDD<String>> {
               KinesisOffsetGen.KinesisShardRange range = shardRangeIt.next();
               KinesisOffsetGen.ShardReadResult readResult = KinesisOffsetGen.readShardRecords(
                   client, readConfig.getStreamName(), range, readConfig.getStartingPosition(),
-                  readConfig.getMaxRecordsPerRequest(), readConfig.getIntervalMs(), readConfig.getMaxRecordsPerShard());
+                  readConfig.getMaxRecordsPerRequest(), readConfig.getIntervalMs(), readConfig.getMaxRecordsPerShard(),
+                  readConfig.isEnableDeaggregation());
 
               List<String> recordStrings = new ArrayList<>();
               for (Record r : readResult.getRecords()) {
@@ -155,6 +158,7 @@ public class JsonKinesisSource extends KinesisSource<JavaRDD<String>> {
   private static String recordToJsonStatic(Record record, String shardId, boolean shouldAddOffsets) {
     String dataStr = record.data().asUtf8String();
 
+    // Pure empty or null records in Kinesis is not meaningful.
     if (dataStr == null || dataStr.trim().isEmpty()) {
       return null;
     }
@@ -189,16 +193,18 @@ public class JsonKinesisSource extends KinesisSource<JavaRDD<String>> {
 
   @Override
   protected String createCheckpointFromBatch(JavaRDD<String> batch, KinesisOffsetGen.KinesisShardRange[] shardRanges) {
-    // Start with previous checkpoint for shards we didn't read from
+    // Build checkpoint: for each shard, use lastSeq from read (or startSeq if no records) and endSeq for closed shards
     Map<String, String> fullCheckpoint = new HashMap<>();
     for (KinesisOffsetGen.KinesisShardRange range : shardRanges) {
-      fullCheckpoint.put(range.getShardId(), range.getStartingSequenceNumber().orElse(""));
+      String lastSeq = lastCheckpointData != null && lastCheckpointData.containsKey(range.getShardId())
+          ? lastCheckpointData.get(range.getShardId())
+          : range.getStartingSequenceNumber().orElse("");
+      String endSeq = range.getEndingSequenceNumber().orElse(null);
+      String value = KinesisOffsetGen.CheckpointUtils.buildCheckpointValue(lastSeq, endSeq);
+      if (lastSeq != null && !lastSeq.isEmpty()) {
+        fullCheckpoint.put(range.getShardId(), value);
+      }
     }
-    if (lastCheckpointData != null) {
-      fullCheckpoint.putAll(lastCheckpointData);
-    }
-    // Remove shards with empty sequence
-    fullCheckpoint.entrySet().removeIf(e -> e.getValue() == null || e.getValue().isEmpty());
     return KinesisOffsetGen.CheckpointUtils.offsetsToStr(offsetGen.getStreamName(), fullCheckpoint);
   }
 

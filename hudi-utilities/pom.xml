@@ -543,6 +543,12 @@
       <artifactId>kinesis</artifactId>
       <version>${aws.sdk.version}</version>
     </dependency>
+    <!-- KPL de-aggregation: extracts user records from Kinesis Producer Library aggregated records -->
+    <dependency>
+      <groupId>com.amazonaws</groupId>
+      <artifactId>amazon-kinesis-deaggregator</artifactId>
+      <version>1.0.3</version>
+    </dependency>
 
     <!-- Hive - Test -->
     <dependency>

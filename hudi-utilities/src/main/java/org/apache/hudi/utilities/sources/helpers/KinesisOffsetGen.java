@@ -69,36 +69,71 @@ import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
 public class KinesisOffsetGen {
 
   public static class CheckpointUtils {
+    /** Separator between lastSeq and endSeq for closed shards. Seq numbers are numeric, so this is safe. */
+    private static final String END_SEQ_SEPARATOR = "|";
     /**
      * Kinesis checkpoint pattern.
-     * Format: streamName,shardId:sequenceNumber,shardId:sequenceNumber,...
+     * Format: streamName,shardId:lastSeq,shardId:lastSeq|endSeq,...
+     * For closed shards we store lastSeq|endSeq so we can detect data loss when shard expires.
      */
     private static final Pattern PATTERN = Pattern.compile(".*,.*:.*");
 
     /**
-     * Parse checkpoint string to shardId -> sequenceNumber map.
+     * Parse checkpoint string to shardId -> value map. Value is lastSeq or lastSeq|endSeq for closed shards.
      */
     public static Map<String, String> strToOffsets(String checkpointStr) {
       Map<String, String> offsetMap = new HashMap<>();
       String[] splits = checkpointStr.split(",");
       for (int i = 1; i < splits.length; i++) {
         String part = splits[i];
-        int colonIdx = part.lastIndexOf(':');
-        if (colonIdx > 0) {
+        int colonIdx = part.indexOf(':');
+        if (colonIdx > 0 && colonIdx < part.length() - 1) {
           String shardId = part.substring(0, colonIdx);
-          String seqNum = part.substring(colonIdx + 1);
-          offsetMap.put(shardId, seqNum);
+          String value = part.substring(colonIdx + 1);
+          offsetMap.put(shardId, value);
         }
       }
       return offsetMap;
     }
 
     /**
-     * String representation of checkpoint.
-     * Format: streamName,shardId:sequenceNumber,shardId:sequenceNumber,...
+     * Extract lastSeq from checkpoint value (which may be "lastSeq" or "lastSeq|endSeq").
      */
-    public static String offsetsToStr(String streamName, Map<String, String> shardToSequenceNumber) {
-      String parts = shardToSequenceNumber.entrySet().stream()
+    public static String getLastSeqFromValue(String value) {
+      if (value == null || value.isEmpty()) {
+        return value;
+      }
+      int sep = value.indexOf(END_SEQ_SEPARATOR);
+      return sep >= 0 ? value.substring(0, sep) : value;
+    }
+
+    /**
+     * Extract endSeq from checkpoint value if present. Returns null for open shards.
+     */
+    public static String getEndSeqFromValue(String value) {
+      if (value == null || value.isEmpty()) {
+        return null;
+      }
+      int sep = value.indexOf(END_SEQ_SEPARATOR);
+      return sep >= 0 && sep < value.length() - 1 ? value.substring(sep + 1) : null;
+    }
+
+    /**
+     * Build checkpoint value: "lastSeq" or "lastSeq|endSeq" when endSeq is present (closed shards).
+     */
+    public static String buildCheckpointValue(String lastSeq, String endSeq) {
+      if (endSeq != null && !endSeq.isEmpty()) {
+        return lastSeq + END_SEQ_SEPARATOR + endSeq;
+      }
+      return lastSeq;
+    }
+
+    /**
+     * String representation of checkpoint.
+     * Format: streamName,shardId:value,shardId:value,... where value is lastSeq or lastSeq|endSeq.
+     */
+    public static String offsetsToStr(String streamName, Map<String, String> shardToValue) {
+      String parts = shardToValue.entrySet().stream()
           .sorted(Map.Entry.comparingByKey())
           .map(e -> e.getKey() + ":" + e.getValue())
           .collect(Collectors.joining(","));
@@ -112,6 +147,8 @@ public class KinesisOffsetGen {
 
   /**
    * Represents a shard to read from, with optional starting sequence number.
+   * For closed shards, endingSequenceNumber is set so we can store it in the checkpoint
+   * and later detect data loss when the shard expires.
    */
   @AllArgsConstructor
   @Getter
@@ -119,9 +156,15 @@ public class KinesisOffsetGen {
     private final String shardId;
     /** If empty, use TRIM_HORIZON or LATEST based on config. */
     private final Option<String> startingSequenceNumber;
+    /** For closed shards: the shard's ending sequence number. Empty for open shards. */
+    private final Option<String> endingSequenceNumber;
 
     public static KinesisShardRange of(String shardId, Option<String> seqNum) {
-      return new KinesisShardRange(shardId, seqNum);
+      return new KinesisShardRange(shardId, seqNum, Option.empty());
+    }
+
+    public static KinesisShardRange of(String shardId, Option<String> seqNum, Option<String> endSeq) {
+      return new KinesisShardRange(shardId, seqNum, endSeq);
     }
   }
 
@@ -176,12 +219,15 @@ public class KinesisOffsetGen {
       nextToken = response.nextToken();
     } while (nextToken != null);
 
-    // Filter to only open shards (shards that have an open range)
-    List<Shard> openShards = allShards.stream()
+    // Include both open and closed shards. Closed shards (e.g., from resharding) may still contain
+    // unread records within the retention period. GetRecords works on closed shards until all data
+    // is consumed, at which point NextShardIterator returns null.
+    long openCount = allShards.stream()
         .filter(s -> s.sequenceNumberRange() != null && s.sequenceNumberRange().endingSequenceNumber() == null)
-        .collect(Collectors.toList());
-    log.info("Found {} open shards for stream {} ({} total)", openShards.size(), streamName, allShards.size());
-    return openShards;
+        .count();
+    log.info("Found {} shards for stream {} ({} open, {} closed)",
+        allShards.size(), streamName, openCount, allShards.size() - openCount);
+    return allShards;
   }
 
   /**
@@ -208,25 +254,43 @@ public class KinesisOffsetGen {
       if (lastCheckpointStr.isPresent() && CheckpointUtils.checkStreamCheckpoint(lastCheckpointStr)) {
         Map<String, String> checkpointOffsets = CheckpointUtils.strToOffsets(lastCheckpointStr.get());
         if (!checkpointOffsets.isEmpty() && lastCheckpointStr.get().startsWith(streamName + ",")) {
-          // Check for expired/closed shards (checkpoint references shards not in current list)
-          Set<String> openShardIds = shards.stream().map(Shard::shardId).collect(Collectors.toSet());
+          // Check for expired shards (checkpoint references shards no longer in stream, e.g., past retention)
+          Set<String> availableShardIds = shards.stream().map(Shard::shardId).collect(Collectors.toSet());
           List<String> expiredShardIds = checkpointOffsets.keySet().stream()
-              .filter(id -> !openShardIds.contains(id))
+              .filter(id -> !availableShardIds.contains(id))
               .collect(Collectors.toList());
           if (!expiredShardIds.isEmpty()) {
             boolean failOnDataLoss = getBooleanWithAltKeys(props, KinesisSourceConfig.ENABLE_FAIL_ON_DATA_LOSS);
-            if (failOnDataLoss) {
-              throw new HoodieReadFromSourceException("Checkpoint references expired/closed shards that are no longer "
-                  + "available: " + expiredShardIds + ". Data may have been lost due to stream resharding. "
-                  + "Set " + KinesisSourceConfig.ENABLE_FAIL_ON_DATA_LOSS.key() + "=false to seek from "
-                  + "TRIM_HORIZON/LATEST instead.");
+            for (String shardId : expiredShardIds) {
+              String value = checkpointOffsets.get(shardId);
+              String lastSeq = CheckpointUtils.getLastSeqFromValue(value);
+              String endSeq = CheckpointUtils.getEndSeqFromValue(value);
+              boolean fullyConsumed;
+              if (endSeq != null) {
+                fullyConsumed = lastSeq != null && lastSeq.compareTo(endSeq) >= 0;
+              } else {
+                fullyConsumed = false;
+              }
+              if (fullyConsumed) {
+                log.info("Expired shard {} was fully consumed (lastSeq >= endSeq); pruning from checkpoint",
+                    shardId);
+              } else {
+                if (failOnDataLoss) {
+                  throw new HoodieReadFromSourceException("Checkpoint references expired shard " + shardId
+                      + " with unread data (lastSeq < endSeq or no endSeq stored). Data loss may have occurred. "
+                      + "Set " + KinesisSourceConfig.ENABLE_FAIL_ON_DATA_LOSS.key() + "=false to continue.");
+                }
+                log.warn("Expired shard {} may have unread data; pruning and continuing (failOnDataLoss=false)",
+                    shardId);
+              }
             }
-            log.warn("Checkpoint references expired shards {}; seeking from starting position for current shards",
-                expiredShardIds);
           }
-          for (String shardId : openShardIds) {
+          for (String shardId : availableShardIds) {
             if (checkpointOffsets.containsKey(shardId)) {
-              fromSequenceNumbers.put(shardId, checkpointOffsets.get(shardId));
+              String lastSeq = CheckpointUtils.getLastSeqFromValue(checkpointOffsets.get(shardId));
+              if (lastSeq != null && !lastSeq.isEmpty()) {
+                fromSequenceNumbers.put(shardId, lastSeq);
+              }
             }
           }
         }
@@ -238,7 +302,11 @@ public class KinesisOffsetGen {
         Option<String> startSeq = fromSequenceNumbers.containsKey(shardId)
             ? Option.of(fromSequenceNumbers.get(shardId))
             : Option.empty();
-        ranges.add(KinesisShardRange.of(shardId, startSeq));
+        Option<String> endSeq = (shard.sequenceNumberRange() != null
+            && shard.sequenceNumberRange().endingSequenceNumber() != null)
+            ? Option.of(shard.sequenceNumberRange().endingSequenceNumber())
+            : Option.empty();
+        ranges.add(KinesisShardRange.of(shardId, startSeq, endSeq));
       }
 
       int targetParallelism = minPartitions > 0
@@ -272,10 +340,12 @@ public class KinesisOffsetGen {
 
   /**
    * Read records from a single shard.
+   * @param enableDeaggregation when true, de-aggregates KPL records into individual user records
    */
   public static ShardReadResult readShardRecords(KinesisClient client, String streamName,
       KinesisShardRange range, KinesisSourceConfig.KinesisStartingPosition defaultPosition,
-      int maxRecordsPerRequest, long intervalMs, long maxTotalRecords) throws InterruptedException {
+      int maxRecordsPerRequest, long intervalMs, long maxTotalRecords,
+      boolean enableDeaggregation) throws InterruptedException {
     String shardIterator;
     try {
       shardIterator = getShardIterator(client, streamName, range, defaultPosition);
@@ -312,10 +382,13 @@ public class KinesisOffsetGen {
       if (records.isEmpty()) {
         break;
       }
-      for (Record r : records) {
+      List<Record> toAdd = enableDeaggregation ? KinesisDeaggregator.deaggregate(records) : records;
+      for (Record r : toAdd) {
         allRecords.add(r);
         lastSequenceNumber = r.sequenceNumber();
       }
+      // Checkpoint uses the last Kinesis record's sequence number (from raw records, not deaggregated)
+      lastSequenceNumber = records.get(records.size() - 1).sequenceNumber();
 
       shardIterator = response.nextShardIterator();
       requestCount++;
