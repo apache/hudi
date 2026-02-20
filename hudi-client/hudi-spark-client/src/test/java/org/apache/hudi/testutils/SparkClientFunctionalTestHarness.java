@@ -103,7 +103,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 public class SparkClientFunctionalTestHarness implements SparkProvider, HoodieMetaClientProvider, HoodieWriteClientProvider {
 
   protected static int timelineServicePort =
-      FileSystemViewStorageConfig.REMOTE_PORT_NUM.defaultValue();
+      FileSystemViewStorageConfig.REMOTE_PORT_NUM.defaultValue()
+          + (Integer.parseInt(System.getProperty("surefire.forkNumber", "1")) - 1) * 1000;
   private static transient SparkSession spark;
   private static transient SQLContext sqlContext;
   private static transient JavaSparkContext jsc;

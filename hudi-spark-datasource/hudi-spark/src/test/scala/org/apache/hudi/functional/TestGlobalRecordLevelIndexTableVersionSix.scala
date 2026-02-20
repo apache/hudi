@@ -22,8 +22,10 @@ import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.config.HoodieWriteConfig
 
 import org.junit.jupiter.api.Tag
+import org.junit.jupiter.api.parallel.{Execution, ExecutionMode}
 
 @Tag("functional-b")
+@Execution(ExecutionMode.CONCURRENT)
 class TestGlobalRecordLevelIndexTableVersionSix extends TestGlobalRecordLevelIndex {
   override def commonOpts: Map[String, String] = super.commonOpts ++ Map(
     HoodieTableConfig.VERSION.key() -> "6",

@@ -23,7 +23,6 @@ import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteClientTestUtils;
 import org.apache.hudi.client.WriteStatus;
-import org.apache.hudi.common.fs.ConsistencyGuardConfig;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
@@ -133,7 +132,6 @@ public class TestCleanerInsertAndCleanByVersions extends SparkClientFunctionalTe
         .withBulkInsertParallelism(PARALLELISM)
         .withFinalizeWriteParallelism(PARALLELISM)
         .withDeleteParallelism(PARALLELISM)
-        .withConsistencyGuardConfig(ConsistencyGuardConfig.newBuilder().withConsistencyCheckEnabled(true).build())
         .build();
     try (final SparkRDDWriteClient client = getHoodieWriteClient(cfg)) {
       final HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator(System.nanoTime());

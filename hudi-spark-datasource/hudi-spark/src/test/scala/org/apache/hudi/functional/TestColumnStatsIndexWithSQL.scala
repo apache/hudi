@@ -18,14 +18,13 @@
 
 package org.apache.hudi.functional
 
-import org.apache.hudi.{AvroConversionUtils, ColumnStatsIndexSupport, DataSourceReadOptions, DataSourceWriteOptions, HoodieFileIndex, HoodieSchemaConversionUtils}
+import org.apache.hudi.{ColumnStatsIndexSupport, DataSourceReadOptions, DataSourceWriteOptions, HoodieFileIndex, HoodieSchemaConversionUtils}
 import org.apache.hudi.DataSourceWriteOptions.{DELETE_OPERATION_OPT_VAL, RECORDKEY_FIELD}
 import org.apache.hudi.client.SparkRDDWriteClient
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.config.{HoodieMetadataConfig, TypedProperties}
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.{HoodieCommitMetadata, HoodieTableType, WriteOperationType}
-import org.apache.hudi.common.schema.HoodieSchema
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.table.timeline.{HoodieInstant, MetadataConversionUtils}
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView
@@ -44,6 +43,7 @@ import org.apache.spark.sql.hudi.DataSkippingUtils
 import org.apache.spark.sql.types.StringType
 import org.junit.jupiter.api.{Tag, Test}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
+import org.junit.jupiter.api.parallel.{Execution, ExecutionMode}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.MethodSource
 
@@ -52,7 +52,10 @@ import java.io.File
 import scala.collection.JavaConverters._
 
 @Tag("functional-b")
+@Execution(ExecutionMode.CONCURRENT)
 class TestColumnStatsIndexWithSQL extends ColumnStatIndexTestBase {
+
+  private val tblName = "tbl_" + java.util.UUID.randomUUID().toString.replace("-", "").substring(0, 8)
 
   @ParameterizedTest
   @MethodSource(Array("testMetadataColumnStatsIndexParams"))
@@ -520,7 +523,7 @@ class TestColumnStatsIndexWithSQL extends ColumnStatIndexTestBase {
       HoodieCompactionConfig.PARQUET_SMALL_FILE_LIMIT.key() -> "0"
     ) ++ metadataOpts
 
-    FileIOUtils.deleteDirectory(new File(basePath))
+    FileIOUtils.deleteDirectory(new File(new java.net.URI(basePath)))
     spark.sql(
       s"""
          |create table $tableName (
@@ -613,9 +616,9 @@ class TestColumnStatsIndexWithSQL extends ColumnStatIndexTestBase {
       .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL)
       .option(DataSourceReadOptions.ENABLE_DATA_SKIPPING.key, "false")
       .load(basePath)
-    inputDF1.createOrReplaceTempView("tbl")
-    val numRecordsForFirstQuery = spark.sql("select * from tbl where c5 > 70").count()
-    val numRecordsForSecondQuery = spark.sql("select * from tbl where c5 > 70 and c6 >= '2020-03-28'").count()
+    inputDF1.createOrReplaceTempView(tblName)
+    val numRecordsForFirstQuery = spark.sql(s"select * from $tblName where c5 > 70").count()
+    val numRecordsForSecondQuery = spark.sql(s"select * from $tblName where c5 > 70 and c6 >= '2020-03-28'").count()
     // verify snapshot query
     verifySQLQueries(numRecordsForFirstQuery, numRecordsForSecondQuery, DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL, commonOpts, isTableDataSameAsAfterSecondInstant)
 
@@ -699,8 +702,8 @@ class TestColumnStatsIndexWithSQL extends ColumnStatIndexTestBase {
 
   private def verifySQLQueries(numRecordsForFirstQueryAtPrevInstant: Long, numRecordsForSecondQueryAtPrevInstant: Long,
                                queryType: String, opts: Map[String, String], isLastOperationDelete: Boolean): Unit = {
-    val firstQuery = "select * from tbl where c5 > 70"
-    val secondQuery = "select * from tbl where c5 > 70 and c6 >= '2020-03-28'"
+    val firstQuery = s"select * from $tblName where c5 > 70"
+    val secondQuery = s"select * from $tblName where c5 > 70 and c6 >= '2020-03-28'"
     // 2 records are updated with c5 greater than 70 and one record is inserted with c5 value greater than 70
     var commonOpts: Map[String, String] = opts
     createSQLTable(commonOpts, queryType)
@@ -743,7 +746,7 @@ class TestColumnStatsIndexWithSQL extends ColumnStatIndexTestBase {
       DataSourceReadOptions.START_COMMIT.key() -> metaClient.getActiveTimeline.getInstants.get(0).requestedTime.replaceFirst(".", "0")
     )
     val inputDF1 = spark.read.format("hudi").options(opts).load(basePath)
-    inputDF1.createOrReplaceTempView("tbl")
+    inputDF1.createOrReplaceTempView(tblName)
   }
 
   private def createIncrementalSQLTable(hudiOpts: Map[String, String], startCompletionTime: String): Unit = {
@@ -752,7 +755,7 @@ class TestColumnStatsIndexWithSQL extends ColumnStatIndexTestBase {
       DataSourceReadOptions.START_COMMIT.key() -> startCompletionTime
     )
     val inputDF1 = spark.read.format("hudi").options(opts).load(basePath)
-    inputDF1.createOrReplaceTempView("tbl")
+    inputDF1.createOrReplaceTempView(tblName)
   }
 
   private def hasLogFiles(): Boolean = {

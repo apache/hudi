@@ -39,8 +39,8 @@ public interface SparkProvider extends org.apache.hudi.testutils.providers.Hoodi
     SparkConf sparkConf = new SparkConf();
     sparkConf.set("spark.app.name", getClass().getName());
     sparkConf.set("spark.master", "local[8,1]");
-    sparkConf.set("spark.default.parallelism", "4");
-    sparkConf.set("spark.sql.shuffle.partitions", "4");
+    sparkConf.set("spark.default.parallelism", "2");
+    sparkConf.set("spark.sql.shuffle.partitions", "2");
     sparkConf.set("spark.driver.maxResultSize", "2g");
     sparkConf.set("spark.hadoop.mapred.output.compress", "true");
     sparkConf.set("spark.hadoop.mapred.output.compression.codec", "true");
@@ -49,6 +49,7 @@ public interface SparkProvider extends org.apache.hudi.testutils.providers.Hoodi
     sparkConf.set("spark.serializer", "org.apache.spark.serializer.KryoSerializer");
     sparkConf.set("spark.kryo.registrator", "org.apache.spark.HoodieSparkKryoRegistrar");
     sparkConf.set("spark.ui.enabled", "false");
+    sparkConf.set("spark.sql.adaptive.enabled", "false");
     overwritingConfigs.forEach(sparkConf::set);
     return sparkConf;
   }

@@ -415,7 +415,7 @@ class TestInsertTable2 extends HoodieSparkSqlTestBase {
     withTempDir { tmp => {
       Seq(true, false).foreach { combineConfig => {
         Seq(true, false).foreach { populateMetaConfig => {
-          import spark.implicits._
+          import testImplicits._
 
           val tableName = generateTableName
           val tablePath = s"${tmp.getCanonicalPath}/$tableName"
@@ -762,7 +762,7 @@ class TestInsertTable2 extends HoodieSparkSqlTestBase {
     withRecordType()(withTempDir { tmp => {
       val tableName = generateTableName
       val tablePath = s"${tmp.getCanonicalPath}/$tableName"
-      import spark.implicits._
+      import testImplicits._
       val day = "2021-08-02"
       val df = Seq((1, "a1", 10, 1000, day, 12)).toDF("id", "name", "value", "ts", "day", "hh")
       // Write a table by spark dataframe.

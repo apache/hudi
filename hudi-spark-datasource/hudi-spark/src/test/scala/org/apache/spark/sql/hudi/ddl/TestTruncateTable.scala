@@ -66,7 +66,7 @@ class TestTruncateTable extends HoodieSparkSqlTestBase {
         val tableName = generateTableName
         val tablePath = s"${tmp.getCanonicalPath}/$tableName"
 
-        import spark.implicits._
+        import testImplicits._
         val df = Seq((1, "z3", "v1", "2021/10/01"), (2, "l4", "v1", "2021/10/02"))
           .toDF("id", "name", "ts", "dt")
 
@@ -107,7 +107,7 @@ class TestTruncateTable extends HoodieSparkSqlTestBase {
         val tableName = generateTableName
         val tablePath = s"${tmp.getCanonicalPath}/$tableName"
 
-        import spark.implicits._
+        import testImplicits._
         val df = Seq((1, "z3", "v1", "2021", "10", "01"), (2, "l4", "v1", "2021", "10","02"))
           .toDF("id", "name", "ts", "year", "month", "day")
 

@@ -74,8 +74,8 @@ class TestHoodieFileGroupReaderOnSpark extends TestHoodieFileGroupReaderBase[Int
     val sparkConf = new SparkConf
     sparkConf.set("spark.app.name", getClass.getName)
     sparkConf.set("spark.master", "local[8]")
-    sparkConf.set("spark.default.parallelism", "4")
-    sparkConf.set("spark.sql.shuffle.partitions", "4")
+    sparkConf.set("spark.default.parallelism", "2")
+    sparkConf.set("spark.sql.shuffle.partitions", "2")
     sparkConf.set("spark.driver.maxResultSize", "2g")
     sparkConf.set("spark.hadoop.mapred.output.compress", "true")
     sparkConf.set("spark.hadoop.mapred.output.compression.codec", "true")

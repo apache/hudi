@@ -31,11 +31,31 @@ import org.apache.hudi.config.HoodieWriteConfig.{DELETE_PARALLELISM_VALUE, INSER
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
 
 import org.apache.spark.api.java.JavaRDD
+import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.streaming.StreamTest
 
 import scala.collection.JavaConverters._
 
 class TestStreamSourceReadByStateTransitionTime extends StreamTest  {
+
+  // Reuse the existing shared SparkSession instead of SharedSparkSessionBase's
+  // behavior of stopping it (which breaks parallel suite execution).
+  // _spark is private in SharedSparkSessionBase, so we override the spark accessor.
+  @transient private lazy val _reusedSpark: SparkSession = SparkSession.builder()
+    .master("local[*]")
+    .config(sparkConf)
+    .getOrCreate()
+
+  override implicit def spark: SparkSession = _reusedSpark
+
+  override def beforeAll(): Unit = {
+    // Don't call super.beforeAll() — it calls cleanupAnyExistingSession()
+    _reusedSpark // force initialization
+  }
+
+  override def afterAll(): Unit = {
+    // Do not stop the shared SparkSession
+  }
 
   protected val commonOptions: Map[String, String] = Map(
     RECORDKEY_FIELD.key -> "id",

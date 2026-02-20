@@ -18,7 +18,7 @@
 
 package org.apache.hudi.functional
 
-import org.apache.hudi.DataSourceWriteOptions.{INSERT_OVERWRITE_OPERATION_OPT_VAL, INSERT_OVERWRITE_TABLE_OPERATION_OPT_VAL, ORDERING_FIELDS, PARTITIONPATH_FIELD, RECORDKEY_FIELD}
+import org.apache.hudi.DataSourceWriteOptions.{INSERT_OVERWRITE_OPERATION_OPT_VAL, INSERT_OVERWRITE_TABLE_OPERATION_OPT_VAL, RECORDKEY_FIELD}
 import org.apache.hudi.client.SparkRDDWriteClient
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.config.TypedProperties
@@ -27,14 +27,19 @@ import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieInstantTimeGenerator, MetadataConversionUtils}
 import org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FILE_NAME_GENERATOR
 import org.apache.hudi.config.HoodieWriteConfig
+import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.metadata.HoodieBackedTableMetadata
-import org.apache.hudi.storage.StoragePath
-import org.apache.hudi.testutils.HoodieSparkClientTestBase
+import org.apache.hudi.storage.{StorageConfiguration, StoragePath}
+import org.apache.hudi.testutils.{HoodieClientTestUtils, HoodieSparkClientTestBase}
 import org.apache.hudi.util.JavaConversions
 
+import org.apache.hadoop.conf.Configuration
+import org.apache.hadoop.fs.FileSystem
+import org.apache.spark.SparkContext
+import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.sql.{Column, DataFrame, Row, SparkSession}
 import org.apache.spark.sql.functions.{col, not}
-import org.junit.jupiter.api.{AfterEach, BeforeEach}
+import org.junit.jupiter.api.{AfterAll, AfterEach, BeforeEach}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 
 import java.util.concurrent.atomic.AtomicInteger
@@ -61,7 +66,15 @@ class HoodieStatsIndexTestBase extends HoodieSparkClientTestBase {
   override def setUp() {
     initPath()
     initQueryIndexConf()
-    initSparkContexts()
+
+    // Use shared SparkSession instead of creating/destroying per method
+    val (ss, sharedJsc, ctx, sConf) = HoodieStatsIndexTestBase.getOrCreateSharedSparkSession()
+    this.sparkSession = ss
+    this.jsc = sharedJsc
+    this.context = ctx
+    this.storageConf = sConf
+    this.sqlContext = ss.sqlContext
+
     initHoodieStorage()
     initTestDataGenerator()
 
@@ -71,13 +84,13 @@ class HoodieStatsIndexTestBase extends HoodieSparkClientTestBase {
 
     instantTime = new AtomicInteger(1)
 
-    spark = sqlContext.sparkSession
+    spark = sparkSession
   }
 
   @AfterEach
   override def tearDown() = {
     cleanupFileSystem()
-    cleanupSparkContexts()
+    // Do NOT call cleanupSparkContexts() — SparkSession is shared
   }
 
   protected def getLatestCompactionInstant(): org.apache.hudi.common.util.Option[HoodieInstant] = {
@@ -213,5 +226,57 @@ class HoodieStatsIndexTestBase extends HoodieSparkClientTestBase {
         sparkSession.emptyDataFrame
       }
     }
+  }
+}
+
+object HoodieStatsIndexTestBase {
+  @volatile private var sharedSpark: SparkSession = _
+  @volatile private var sharedJsc: JavaSparkContext = _
+  @volatile private var sharedContext: HoodieSparkEngineContext = _
+  @volatile private var sharedStorageConf: StorageConfiguration[Configuration] = _
+  private val initLock = new Object()
+
+  def getOrCreateSharedSparkSession(): (SparkSession, JavaSparkContext, HoodieSparkEngineContext, StorageConfiguration[Configuration]) = {
+    if (sharedSpark == null) {
+      initLock.synchronized {
+        if (sharedSpark == null) {
+          val sparkConf = HoodieClientTestUtils.getSparkConfForTest("HoodieStatsIndexTestBase")
+          sparkConf.setMaster("local[8,1]")
+          sparkConf.set("hoodie.fileIndex.dataSkippingFailureMode", "strict")
+          val sparkContext = new SparkContext(sparkConf)
+          HoodieClientTestUtils.overrideSparkHadoopConfiguration(sparkContext)
+          val jsc = new JavaSparkContext(sparkContext)
+          jsc.setLogLevel("ERROR")
+          val storageConf = HadoopFSUtils.getStorageConf(jsc.hadoopConfiguration())
+          val ss = SparkSession.builder().config(jsc.getConf).getOrCreate()
+          val context = new HoodieSparkEngineContext(jsc, ss.sqlContext)
+          System.setProperty("spark.testing", "true")
+
+          sharedSpark = ss
+          sharedJsc = jsc
+          sharedContext = context
+          sharedStorageConf = storageConf
+        }
+      }
+    }
+    (sharedSpark, sharedJsc, sharedContext, sharedStorageConf)
+  }
+
+  def cleanupSharedSparkSession(): Unit = {
+    initLock.synchronized {
+      if (sharedSpark != null) {
+        sharedSpark.stop()
+        sharedSpark = null
+        sharedJsc = null
+        sharedContext = null
+        sharedStorageConf = null
+      }
+    }
+  }
+
+  @AfterAll
+  def tearDownAll(): Unit = {
+    cleanupSharedSparkSession()
+    FileSystem.closeAll()
   }
 }

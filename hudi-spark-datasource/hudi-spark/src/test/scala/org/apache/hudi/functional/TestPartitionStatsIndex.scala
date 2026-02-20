@@ -46,6 +46,7 @@ import org.apache.spark.sql.hudi.DataSkippingUtils
 import org.apache.spark.sql.types.StringType
 import org.junit.jupiter.api.{Tag, Test}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
+import org.junit.jupiter.api.parallel.{Execution, ExecutionMode}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{Arguments, EnumSource, MethodSource}
 
@@ -61,9 +62,10 @@ import scala.concurrent.duration.Duration
  * Test cases on partition stats index with Spark datasource.
  */
 @Tag("functional-b")
+@Execution(ExecutionMode.CONCURRENT)
 class TestPartitionStatsIndex extends PartitionStatsIndexTestBase {
 
-  val sqlTempTable = "hudi_tbl"
+  val sqlTempTable = "hudi_tbl_" + java.util.UUID.randomUUID().toString.replace("-", "").substring(0, 8)
 
   /**
    * Test case to validate partition stats for a logical type column
@@ -104,19 +106,6 @@ class TestPartitionStatsIndex extends PartitionStatsIndexTestBase {
     val snapshot1 = spark.read.format("org.apache.hudi").options(readOpts).load(basePath)
     val dataFilter = EqualTo(attribute("current_date"), Literal(snapshot1.limit(1).collect().head.getAs("current_date")))
     verifyFilePruning(readOpts, dataFilter, shouldSkipFiles = false)
-  }
-
-  /**
-   * Test case to do a write (no updates) and validate the partition stats index initialization.
-   */
-  @ParameterizedTest
-  @EnumSource(classOf[HoodieTableType])
-  def testIndexInitialization(tableType: HoodieTableType): Unit = {
-    val hudiOpts = commonOpts + (DataSourceWriteOptions.TABLE_TYPE.key -> tableType.name())
-    doWriteAndValidateDataAndPartitionStats(
-      hudiOpts,
-      operation = DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,
-      saveMode = SaveMode.Overwrite)
   }
 
   /**

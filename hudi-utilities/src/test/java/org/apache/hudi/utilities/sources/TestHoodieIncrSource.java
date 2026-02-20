@@ -664,6 +664,9 @@ public class TestHoodieIncrSource extends SparkClientFunctionalTestHarness {
           Arguments.of("200", 101, "300", 100, 1),
           Arguments.of("300", 101, "300", 0, 0)
       */
+      // Set large openCostInBytes so Spark's file scan planner assigns each file its own task,
+      // making RDD partition count match the number of Hudi file groups regardless of spark.default.parallelism.
+      spark().conf().set("spark.sql.files.openCostInBytes", String.valueOf(512 * 1024 * 1024));
       TypedProperties extraProps = new TypedProperties();
       extraProps.setProperty(TestSnapshotQuerySplitterImpl.MAX_ROWS_PER_BATCH, String.valueOf(1));
       readAndAssert(IncrSourceHelper.MissingCheckpointStrategy.READ_UPTO_LATEST_COMMIT,

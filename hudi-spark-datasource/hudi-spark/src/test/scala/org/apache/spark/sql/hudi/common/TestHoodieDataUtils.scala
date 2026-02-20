@@ -45,9 +45,6 @@ class TestHoodieDataUtils extends HoodieSparkSqlTestBase {
   }
 
   override def afterAll(): Unit = {
-    if (jsc != null) {
-      jsc.close()
-    }
     super.afterAll()
   }
 

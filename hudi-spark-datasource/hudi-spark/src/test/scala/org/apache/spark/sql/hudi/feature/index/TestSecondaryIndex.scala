@@ -1111,7 +1111,7 @@ class TestSecondaryIndex extends HoodieSparkSqlTestBase {
   }
 
   test("Test Secondary Index with Schema Evolution - Column Type Change Should Fail") {
-    import spark.implicits._
+    import testImplicits._
     withTempDir { tmp =>
       val tableName = generateTableName
       val basePath = s"${tmp.getCanonicalPath}/$tableName"

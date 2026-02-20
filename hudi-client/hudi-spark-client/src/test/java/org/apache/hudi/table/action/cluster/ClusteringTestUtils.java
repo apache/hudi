@@ -58,7 +58,8 @@ import static org.apache.hudi.utils.HoodieWriterClientTestHarness.getPropertiesF
 
 public class ClusteringTestUtils {
   protected static int timelineServicePort =
-      FileSystemViewStorageConfig.REMOTE_PORT_NUM.defaultValue();
+      FileSystemViewStorageConfig.REMOTE_PORT_NUM.defaultValue()
+          + (Integer.parseInt(System.getProperty("surefire.forkNumber", "1")) - 1) * 1000;
   private static final String COUNT_SQL_QUERY_FOR_VALIDATION = "select count(*) from <TABLE_NAME>";
 
   public static HoodieWriteConfig getClusteringConfig(String basePath) {

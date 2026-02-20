@@ -18,7 +18,7 @@
 
 package org.apache.hudi.functional
 
-import org.apache.hudi.{AvroConversionUtils, ColumnStatsIndexSupport, DataSourceWriteOptions, HoodieSchemaConversionUtils, HoodieSparkUtils, PartitionStatsIndexSupport}
+import org.apache.hudi.{ColumnStatsIndexSupport, DataSourceWriteOptions, HoodieSchemaConversionUtils, HoodieSparkUtils, PartitionStatsIndexSupport}
 import org.apache.hudi.ColumnStatsIndexSupport.composeIndexSchema
 import org.apache.hudi.HoodieConversionUtils.toProperties
 import org.apache.hudi.avro.model.DecimalWrapper
@@ -29,14 +29,16 @@ import org.apache.hudi.common.schema.HoodieSchema
 import org.apache.hudi.common.table.{HoodieTableMetaClient, HoodieTableVersion, TableSchemaResolver}
 import org.apache.hudi.common.table.view.FileSystemViewManager
 import org.apache.hudi.config.{HoodieCompactionConfig, HoodieWriteConfig}
-import org.apache.hudi.functional.ColumnStatIndexTestBase.{ColumnStatsTestCase, ColumnStatsTestParams}
+import org.apache.hudi.functional.ColumnStatIndexTestBase.{getSeqShouldReadInMemory, ColumnStatsTestCase, ColumnStatsTestParams}
 import org.apache.hudi.metadata.HoodieTableMetadataUtil
 import org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS
-import org.apache.hudi.storage.StoragePath
+import org.apache.hudi.storage.{HoodieStorage, StoragePath}
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration
-import org.apache.hudi.testutils.{HoodieSparkClientTestBase, LogFileColStatsTestUtil}
+import org.apache.hudi.testutils.{LogFileColStatsTestUtil, SparkClientFunctionalTestHarnessScala}
+import org.apache.hudi.testutils.SparkClientFunctionalTestHarness.getSparkSqlConf
 
 import org.apache.avro.Schema
+import org.apache.spark.SparkConf
 import org.apache.spark.sql.{DataFrame, _}
 import org.apache.spark.sql.functions.{lit, typedLit}
 import org.apache.spark.sql.types._
@@ -54,8 +56,7 @@ import scala.collection.JavaConverters._
 import scala.collection.immutable.TreeSet
 import scala.util.Random
 
-class ColumnStatIndexTestBase extends HoodieSparkClientTestBase {
-  var spark: SparkSession = _
+class ColumnStatIndexTestBase extends SparkClientFunctionalTestHarnessScala {
   var dfList: Seq[DataFrame] = Seq()
 
   val sourceTableSchema =
@@ -71,23 +72,25 @@ class ColumnStatIndexTestBase extends HoodieSparkClientTestBase {
 
   val sourceTableHoodieSchema: HoodieSchema = HoodieSchemaConversionUtils.convertStructTypeToHoodieSchema(sourceTableSchema, "record", "")
 
+  var metaClient: HoodieTableMetaClient = _
+
+  override def conf: SparkConf = {
+    val c = conf(getSparkSqlConf)
+    c.setMaster("local[8,1]")
+    c
+  }
+
+  def storage: HoodieStorage = hoodieStorage()
+
   @BeforeEach
-  override def setUp() {
-    initPath()
-    initQueryIndexConf()
-    initSparkContexts()
-    initHoodieStorage()
-
-    setTableName("hoodie_test")
-    initMetaClient()
-
-    spark = sqlContext.sparkSession
+  def setUp(): Unit = {
+    spark.conf.set("hoodie.fileIndex.dataSkippingFailureMode", "strict")
+    metaClient = getHoodieMetaClient(HoodieTableType.COPY_ON_WRITE)
   }
 
   @AfterEach
-  override def tearDown() = {
-    cleanupFileSystem()
-    cleanupSparkContexts()
+  def tearDown(): Unit = {
+    metaClient = null
   }
 
   protected def doWriteAndValidateColumnStats(params: ColumnStatsTestParams, addNestedFiled : Boolean = false): Unit = {
@@ -307,30 +310,32 @@ class ColumnStatIndexTestBase extends HoodieSparkClientTestBase {
     val sortedIndexedColumns : Set[String] = TreeSet(indexedColumns.toSeq:_*)
     val (expectedColStatsSchema, _) = composeIndexSchema(sortedIndexedColumns.toSeq, indexedColumns.toSeq, localSourceTableSchema)
 
-    columnStatsIndex.loadTransposed(indexedColumns.toSeq, testCase.shouldReadInMemory) { transposedColStatsDF =>
-      // Match against expected column stats table
-      val expectedColStatsIndexTableDf =
-        spark.read
-          .schema(expectedColStatsSchema)
-          .json(getClass.getClassLoader.getResource(expectedColStatsSourcePath).toString)
+    Seq(true, false).foreach(shouldReadInMemory => {
+      columnStatsIndex.loadTransposed(indexedColumns.toSeq, shouldReadInMemory) { transposedColStatsDF =>
+        // Match against expected column stats table
+        val expectedColStatsIndexTableDf =
+          spark.read
+            .schema(expectedColStatsSchema)
+            .json(getClass.getClassLoader.getResource(expectedColStatsSourcePath).toString)
 
-      assertEquals(expectedColStatsIndexTableDf.schema, transposedColStatsDF.schema)
-      // NOTE: We have to drop the `fileName` column as it contains semi-random components
-      //       that we can't control in this test. Nevertheless, since we manually verify composition of the
-      //       ColStats Index by reading Parquet footers from individual Parquet files, this is not an issue
-      assertEquals(asJson(sort(expectedColStatsIndexTableDf, validationSortColumns)),
-        asJson(sort(transposedColStatsDF.drop("fileName"), validationSortColumns)))
+        assertEquals(expectedColStatsIndexTableDf.schema, transposedColStatsDF.schema)
+        // NOTE: We have to drop the `fileName` column as it contains semi-random components
+        //       that we can't control in this test. Nevertheless, since we manually verify composition of the
+        //       ColStats Index by reading Parquet footers from individual Parquet files, this is not an issue
+        assertEquals(asJson(sort(expectedColStatsIndexTableDf, validationSortColumns)),
+          asJson(sort(transposedColStatsDF.drop("fileName"), validationSortColumns)))
 
-      if (validateColumnStatsManually) {
-        // TODO(HUDI-4557): support validation of column stats of avro log files
-        // Collect Column Stats manually (reading individual Parquet files)
-        val manualColStatsTableDF =
-        buildColumnStatsTableManually(basePath, indexedColumns.toSeq, indexedColumns.toSeq, expectedColStatsSchema, localSourceTableSchema)
+        if (validateColumnStatsManually) {
+          // TODO(HUDI-4557): support validation of column stats of avro log files
+          // Collect Column Stats manually (reading individual Parquet files)
+          val manualColStatsTableDF =
+            buildColumnStatsTableManually(basePath, indexedColumns.toSeq, indexedColumns.toSeq, expectedColStatsSchema, localSourceTableSchema)
 
-        assertEquals(asJson(sort(manualColStatsTableDF, validationSortColumns)),
-          asJson(sort(transposedColStatsDF, validationSortColumns)))
+          assertEquals(asJson(sort(manualColStatsTableDF, validationSortColumns)),
+            asJson(sort(transposedColStatsDF, validationSortColumns)))
+        }
       }
-    }
+    })
   }
 
   protected def validatePartitionStatsIndex(testCase: ColumnStatsTestCase,
@@ -356,34 +361,36 @@ class ColumnStatIndexTestBase extends HoodieSparkClientTestBase {
       Seq("c1_maxValue", "c1_minValue", "c2_maxValue", "c2_minValue", "c3_maxValue", "c3_minValue")
     }
 
-    pStatsIndex.loadTransposed(localSourceTableSchema.fieldNames, testCase.shouldReadInMemory) { pTransposedColStatsDF =>
-      // Match against expected column stats table
-      val pExpectedColStatsIndexTableDf = {
-        spark.read
-          .schema(pExpectedColStatsSchema)
-          .json(getClass.getClassLoader.getResource(expectedColStatsSourcePath).toString)
-      }
+    getSeqShouldReadInMemory(testCase.shouldTestBothReadModes).foreach(shouldReadInMemory => {
+      pStatsIndex.loadTransposed(localSourceTableSchema.fieldNames, shouldReadInMemory) { pTransposedColStatsDF =>
+        // Match against expected column stats table
+        val pExpectedColStatsIndexTableDf = {
+          spark.read
+            .schema(pExpectedColStatsSchema)
+            .json(getClass.getClassLoader.getResource(expectedColStatsSourcePath).toString)
+        }
 
-      val colsToDrop = if (testCase.tableType == HoodieTableType.COPY_ON_WRITE) {
-        Seq("fileName")
-      } else {
-        Seq("fileName","valueCount") // for MOR, value count may not match, since w/ we could have repeated updates across multiple log files.
-        // So, value count might be larger w/ MOR stats when compared to calculating it manually.
-      }
+        val colsToDrop = if (testCase.tableType == HoodieTableType.COPY_ON_WRITE) {
+          Seq("fileName")
+        } else {
+          Seq("fileName", "valueCount") // for MOR, value count may not match, since w/ we could have repeated updates across multiple log files.
+          // So, value count might be larger w/ MOR stats when compared to calculating it manually.
+        }
 
-      assertEquals(asJson(sort(pExpectedColStatsIndexTableDf.drop(colsToDrop: _*), pValidationSortColumns)),
-        asJson(sort(pTransposedColStatsDF.drop(colsToDrop: _*), pValidationSortColumns)))
-
-      val convertedSchema = HoodieSchemaConversionUtils.convertHoodieSchemaToStructType(HoodieSchemaConversionUtils.convertStructTypeToHoodieSchema(pExpectedColStatsSchema, "col_stats_schema"))
-
-      if (testCase.tableType == HoodieTableType.COPY_ON_WRITE) {
-        val manualColStatsTableDF =
-          buildPartitionStatsTableManually(basePath, pIndexedColumns, pIndexedColumns, convertedSchema)
-
-        assertEquals(asJson(sort(manualColStatsTableDF.drop(colsToDrop: _*), pValidationSortColumns)),
+        assertEquals(asJson(sort(pExpectedColStatsIndexTableDf.drop(colsToDrop: _*), pValidationSortColumns)),
           asJson(sort(pTransposedColStatsDF.drop(colsToDrop: _*), pValidationSortColumns)))
+
+        val convertedSchema = HoodieSchemaConversionUtils.convertHoodieSchemaToStructType(HoodieSchemaConversionUtils.convertStructTypeToHoodieSchema(pExpectedColStatsSchema, "col_stats_schema"))
+
+        if (testCase.tableType == HoodieTableType.COPY_ON_WRITE) {
+          val manualColStatsTableDF =
+            buildPartitionStatsTableManually(basePath, pIndexedColumns, pIndexedColumns, convertedSchema)
+
+          assertEquals(asJson(sort(manualColStatsTableDF.drop(colsToDrop: _*), pValidationSortColumns)),
+            asJson(sort(pTransposedColStatsDF.drop(colsToDrop: _*), pValidationSortColumns)))
+        }
       }
-    }
+    })
   }
 
   protected def generateRandomDataFrame(spark: SparkSession): DataFrame = {
@@ -446,67 +453,53 @@ class ColumnStatIndexTestBase extends HoodieSparkClientTestBase {
 
 object ColumnStatIndexTestBase {
 
-  case class ColumnStatsTestCase(tableType: HoodieTableType, shouldReadInMemory: Boolean, tableVersion: Int)
+  case class ColumnStatsTestCase(tableType: HoodieTableType, shouldTestBothReadModes: Boolean, tableVersion: Int)
+
+  def getSeqShouldReadInMemory(shouldTestBothReadModes: Boolean): Seq[Boolean] = {
+    if (shouldTestBothReadModes) {
+      Seq(false, true)
+    } else {
+      Seq(true)
+    }
+  }
 
   // General providers (both in-memory and on-disk variants)
   def testMetadataColumnStatsIndexParams: java.util.stream.Stream[Arguments] = {
-    testMetadataColumnStatsIndexParams(true)
+    testMetadataColumnStatsIndexParams(testV6 = true, shouldTestBothReadModes = true)
   }
 
   def testMetadataPartitionStatsIndexParams: java.util.stream.Stream[Arguments] = {
-    testMetadataColumnStatsIndexParams(false)
+    testMetadataColumnStatsIndexParams(testV6 = false, shouldTestBothReadModes = true)
   }
 
-  def testMetadataColumnStatsIndexParams(testV6: Boolean): java.util.stream.Stream[Arguments] = {
+  // In-memory providers (only shouldReadInMemory = true)
+  def testMetadataColumnStatsIndexParamsInMemory: java.util.stream.Stream[Arguments] = {
+    testMetadataColumnStatsIndexParams(testV6 = true, shouldTestBothReadModes = false)
+  }
+
+  def testMetadataPartitionStatsIndexParamsInMemory: java.util.stream.Stream[Arguments] = {
+    testMetadataColumnStatsIndexParams(testV6 = false, shouldTestBothReadModes = false)
+  }
+
+  def testMetadataColumnStatsIndexParams(testV6: Boolean, shouldTestBothReadModes: Boolean): java.util.stream.Stream[Arguments] = {
     val currentVersionCode = HoodieTableVersion.current().versionCode()
     java.util.stream.Stream.of(
       HoodieTableType.values().toStream.flatMap { tableType =>
         val v6Seq = if (testV6) {
           Seq(
-            Arguments.arguments(ColumnStatsTestCase(tableType, shouldReadInMemory = true, tableVersion = 6)),
-            Arguments.arguments(ColumnStatsTestCase(tableType, shouldReadInMemory = false, tableVersion = 6))
+            Arguments.arguments(ColumnStatsTestCase(tableType, shouldTestBothReadModes, tableVersion = 6))
           )
         } else {
           Seq.empty
         }
 
         v6Seq ++ Seq(
-          Arguments.arguments(ColumnStatsTestCase(tableType, shouldReadInMemory = true, tableVersion = 8)),
-          Arguments.arguments(ColumnStatsTestCase(tableType, shouldReadInMemory = false, tableVersion = 8)),
-          Arguments.arguments(ColumnStatsTestCase(tableType, shouldReadInMemory = true, tableVersion = currentVersionCode)),
-          Arguments.arguments(ColumnStatsTestCase(tableType, shouldReadInMemory = false, tableVersion = currentVersionCode))
+          Arguments.arguments(ColumnStatsTestCase(tableType, shouldTestBothReadModes, tableVersion = 8)),
+          Arguments.arguments(ColumnStatsTestCase(tableType, shouldTestBothReadModes, tableVersion = currentVersionCode))
         )
       }: _*
     )
   }
-
-  // In-memory providers (only shouldReadInMemory = true)
-  def testMetadataColumnStatsIndexParamsInMemory: java.util.stream.Stream[Arguments] = {
-    testMetadataColumnStatsIndexParamsInMemory(true)
-  }
-
-  def testMetadataPartitionStatsIndexParamsInMemory: java.util.stream.Stream[Arguments] = {
-    testMetadataColumnStatsIndexParamsInMemory(false)
-  }
-
-  def testMetadataColumnStatsIndexParamsInMemory(testV6: Boolean): java.util.stream.Stream[Arguments] = {
-    val currentVersionCode = HoodieTableVersion.current().versionCode()
-    java.util.stream.Stream.of(
-      HoodieTableType.values().toStream.flatMap { tableType =>
-        val v6Seq = if (testV6) {
-          Seq(Arguments.arguments(ColumnStatsTestCase(tableType, shouldReadInMemory = true, tableVersion = 6)))
-        } else {
-          Seq.empty
-        }
-
-        v6Seq ++ Seq(
-          Arguments.arguments(ColumnStatsTestCase(tableType, shouldReadInMemory = true, tableVersion = 8)),
-          Arguments.arguments(ColumnStatsTestCase(tableType, shouldReadInMemory = true, tableVersion = currentVersionCode))
-        )
-      }: _*
-    )
-  }
-
 
   // MOR-only providers
   def testMetadataColumnStatsIndexParamsForMOR: java.util.stream.Stream[Arguments] = {
@@ -521,13 +514,10 @@ object ColumnStatIndexTestBase {
     val currentVersionCode = HoodieTableVersion.current().versionCode()
     java.util.stream.Stream.of(
       (if (testV6) Seq(
-        Arguments.arguments(ColumnStatsTestCase(HoodieTableType.MERGE_ON_READ, shouldReadInMemory = true, tableVersion = 6)),
-        Arguments.arguments(ColumnStatsTestCase(HoodieTableType.MERGE_ON_READ, shouldReadInMemory = false, tableVersion = 6))
+        Arguments.arguments(ColumnStatsTestCase(HoodieTableType.MERGE_ON_READ, shouldTestBothReadModes = true, tableVersion = 6))
       ) else Seq.empty) ++ Seq(
-        Arguments.arguments(ColumnStatsTestCase(HoodieTableType.MERGE_ON_READ, shouldReadInMemory = true, tableVersion = 8)),
-        Arguments.arguments(ColumnStatsTestCase(HoodieTableType.MERGE_ON_READ, shouldReadInMemory = false, tableVersion = 8)),
-        Arguments.arguments(ColumnStatsTestCase(HoodieTableType.MERGE_ON_READ, shouldReadInMemory = true, tableVersion = currentVersionCode)),
-        Arguments.arguments(ColumnStatsTestCase(HoodieTableType.MERGE_ON_READ, shouldReadInMemory = false, tableVersion = currentVersionCode))
+        Arguments.arguments(ColumnStatsTestCase(HoodieTableType.MERGE_ON_READ, shouldTestBothReadModes = true, tableVersion = 8)),
+        Arguments.arguments(ColumnStatsTestCase(HoodieTableType.MERGE_ON_READ, shouldTestBothReadModes = true, tableVersion = currentVersionCode))
       ): _*
     )
   }

@@ -147,7 +147,9 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 public abstract class HoodieWriterClientTestHarness extends HoodieCommonTestHarness {
-  protected static int timelineServicePort = FileSystemViewStorageConfig.REMOTE_PORT_NUM.defaultValue();
+  protected static int timelineServicePort =
+      FileSystemViewStorageConfig.REMOTE_PORT_NUM.defaultValue()
+          + (Integer.parseInt(System.getProperty("surefire.forkNumber", "1")) - 1) * 1000;
   protected static final String CLUSTERING_FAILURE = "CLUSTERING FAILURE";
   protected static final String CLEANING_FAILURE = "CLEANING FAILURE";
 

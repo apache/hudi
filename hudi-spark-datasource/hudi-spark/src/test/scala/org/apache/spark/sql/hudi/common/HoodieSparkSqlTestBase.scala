@@ -38,7 +38,7 @@ import org.apache.hudi.testutils.HoodieClientTestUtils.{createMetaClient, getSpa
 
 import org.apache.hadoop.fs.Path
 import org.apache.spark.SparkConf
-import org.apache.spark.sql.{Row, SparkSession}
+import org.apache.spark.sql.{Row, SparkSession, SQLImplicits}
 import org.apache.spark.sql.catalyst.util.DateTimeUtils
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase.checkMessageContains
 import org.apache.spark.sql.types.StructField
@@ -72,7 +72,7 @@ class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
   //       is consistent with the fixtures
   DateTimeZone.setDefault(DateTimeZone.UTC)
   TimeZone.setDefault(DateTimeUtils.getTimeZone("UTC"))
-  protected lazy val spark: SparkSession = SparkSession.builder()
+  private lazy val sharedSpark: SparkSession = SparkSession.builder()
     .config("spark.sql.warehouse.dir", sparkWareHouse.getCanonicalPath)
     .config("spark.sql.session.timeZone", "UTC")
     .config("hoodie.insert.shuffle.parallelism", "4")
@@ -80,6 +80,21 @@ class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
     .config("hoodie.delete.shuffle.parallelism", "4")
     .config(sparkConf())
     .getOrCreate()
+
+  // Thread-local SparkSession override for withSQLConf isolation.
+  // Each cloned session has its own SQLConf so parallel suites don't
+  // interfere with each other's config settings.
+  private val sessionOverride = new ThreadLocal[SparkSession]
+
+  protected def spark: SparkSession = {
+    val s = sessionOverride.get()
+    if (s != null) s else sharedSpark
+  }
+
+  // Stable reference for `import testImplicits._` — Scala requires a stable
+  // identifier for imports, and `spark` is a def (for thread-local isolation).
+  // Implicits are SparkContext-level so using the shared session is correct.
+  protected lazy val testImplicits: SQLImplicits = sharedSpark.implicits
 
   private var tableId = new AtomicInteger(0)
 
@@ -114,9 +129,12 @@ class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
         testFun
       } finally {
         val catalog = spark.sessionState.catalog
+        val prefix = s"h${getClass.getSimpleName.toLowerCase}_"
         catalog.listDatabases().foreach { db =>
           catalog.listTables(db).foreach { table =>
-            catalog.dropTable(table, true, true)
+            if (table.table.startsWith(prefix)) {
+              catalog.dropTable(table, true, true)
+            }
           }
         }
       }
@@ -129,7 +147,6 @@ class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
 
   override protected def afterAll(): Unit = {
     Utils.deleteRecursively(sparkWareHouse)
-    spark.stop()
   }
 
   protected def checkAnswer(sql: String)(expects: Seq[Any]*): Unit = {
@@ -312,22 +329,23 @@ class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
   }
 
   /**
-   * Please use this method to set SQL conf in a block and restore them after the block.
-   * WARN: Please don't set the SQL conf like `spark.sql("set xxx = yyy")`, replace it with this method.
+   * Sets SQL conf in a block with thread-safe isolation. Creates a cloned SparkSession
+   * so that config changes do not affect other parallel test suites.
    */
   protected def withSQLConf[T](pairs: (String, String)*)(f: => T): T = {
-    val conf = spark.sessionState.conf
-    val currentValues = pairs.unzip._1.map { k =>
-      if (conf.contains(k)) {
-        Some(conf.getConfString(k))
-      } else None
+    val currentSession = spark
+    val cloned = currentSession.newSession()
+    // Copy effective config from current session to the new session
+    currentSession.sessionState.conf.getAllConfs.foreach { case (k, v) =>
+      try { cloned.conf.set(k, v) } catch { case _: Exception => }
     }
-    pairs.foreach { case (k, v) => conf.setConfString(k, v) }
+    // Apply the overrides
+    pairs.foreach { case (k, v) => cloned.conf.set(k, v) }
+    val previous = sessionOverride.get()
+    sessionOverride.set(cloned)
     try f finally {
-      pairs.unzip._1.zip(currentValues).foreach {
-        case (key, Some(value)) => conf.setConfString(key, value)
-        case (key, None) => conf.unsetConf(key)
-      }
+      if (previous != null) sessionOverride.set(previous)
+      else sessionOverride.remove()
     }
   }
 
@@ -346,18 +364,8 @@ class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
 
   protected def withSparkSqlSessionConfigWithCondition(configNameValues: ((String, String), Boolean)*
                                                       )(f: => Unit): Unit = {
-    try {
-      configNameValues.foreach { case ((configName, configValue), condition) =>
-        if (condition) {
-          spark.sql(s"set $configName=$configValue")
-        }
-      }
-      f
-    } finally {
-      configNameValues.foreach { case ((configName, configValue), condition) =>
-        spark.sql(s"reset $configName")
-      }
-    }
+    val activePairs = configNameValues.collect { case ((k, v), true) => (k, v) }
+    withSQLConf(activePairs: _*)(f)
   }
 
   protected def withRecordType(recordTypes: Seq[HoodieRecordType] = Seq(HoodieRecordType.AVRO, HoodieRecordType.SPARK),

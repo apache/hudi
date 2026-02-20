@@ -113,7 +113,7 @@ class TestPolarisHoodieCatalogDelegation extends AnyFunSuite {
         verify(mockPolarisDelegate, never()).createTable(any(), any(), any(), any())
 
       } finally {
-        customSession.stop()
+        // Do not stop the shared SparkSession
       }
     }
   }
@@ -144,7 +144,7 @@ class TestPolarisHoodieCatalogDelegation extends AnyFunSuite {
         verify(mockPolarisDelegate, times(1)).createTable(any(), any(), any(), any())
 
       } finally {
-        customSession.stop()
+        // Do not stop the shared SparkSession
       }
     }
   }
