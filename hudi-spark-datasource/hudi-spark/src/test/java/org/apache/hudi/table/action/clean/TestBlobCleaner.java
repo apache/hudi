@@ -59,6 +59,9 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+/**
+ * Functional tests for creating and cleaning managed blob files.
+ */
 class TestBlobCleaner extends HoodieClientTestBase {
   private static final Schema BLOB_TYPE_SCHEMA = HoodieSchema.createBlob().getField(HoodieSchema.Blob.TYPE).get().schema().toAvroSchema();
 
@@ -224,11 +227,11 @@ class TestBlobCleaner extends HoodieClientTestBase {
         blobValue = createInlineBlob(schema, ("inline_data_" + commitTime + "_" + i).getBytes());
       } else if (i % 3 == 1) {
         // Managed external reference - should be cleaned when record is removed
-        String managedPath = tempDir + "/blobs/" + commitTime + "_" + i + ".bin";
+        String managedPath = getStoragePathForBlob(commitTime, i).toString();
         blobValue = createBlob(schema, managedPath, 0L, 1024L, true);
       } else {
         // Unmanaged external reference - should NEVER be cleaned
-        String unmanagedPath = tempDir + "/blobs/" + commitTime + "_" + i +  ".bin";
+        String unmanagedPath = getStoragePathForBlob(commitTime, i).toString();
         blobValue = createBlob(schema, unmanagedPath, 0L, 2048L, false);
       }
 
@@ -297,19 +300,18 @@ class TestBlobCleaner extends HoodieClientTestBase {
 
   /**
    * Create managed blob files that are referenced by managed blob fields.
-   * Only creates files for records where i % 3 == 1 (managed blobs).
+   * Creates files for managed blobs (i % 3 == 1) and unmanaged blobs (i % 3 == 2).
    */
   private void createManagedBlobFiles(String commitTime, int numRecords) throws IOException {
-    StoragePath blobDir = new StoragePath(tempDir.toString(), "blobs");
+    StoragePath blobDir = getBlobDir();
     if (!storage.exists(blobDir)) {
       storage.createDirectory(blobDir);
     }
 
     for (int i = 0; i < numRecords; i++) {
-      // Only create files for managed blobs (i % 3 == 1)
+      // Create files for managed and unmanaged blobs (i % 3 != 0)
       if (i % 3 != 0) {
-        String blobFileName = commitTime + "_" + i + ".bin";
-        StoragePath blobPath = new StoragePath(blobDir, blobFileName);
+        StoragePath blobPath = getStoragePathForBlob(commitTime, i);
 
         // Write dummy data to blob file
         byte[] dummyData = new byte[1024];
@@ -328,15 +330,14 @@ class TestBlobCleaner extends HoodieClientTestBase {
    */
   private void verifyBlobFileCleanup(String commit1, String commit2, String commit3, String commit4)
       throws IOException {
-    StoragePath blobDir = new StoragePath(tempDir.toString(), "blobs");
     // Check commit 1 managed blobs - should be DELETED (only i % 3 == 1)
     for (int i = 0; i < 10; i++) {
       if (i % 3 == 1) {
-        StoragePath blobPath = getStoragePathForBlob(commit1, blobDir, i);
+        StoragePath blobPath = getStoragePathForBlob(commit1, i);
         assertFalse(storage.exists(blobPath), "Managed blob from old commit should be deleted: " + blobPath);
       } else if (i % 3 == 2) {
         // Unmanaged blobs should never be deleted
-        StoragePath blobPath = getStoragePathForBlob(commit1, blobDir, i);
+        StoragePath blobPath = getStoragePathForBlob(commit1, i);
         assertTrue(storage.exists(blobPath), "Unmanaged blob should never be deleted: " + blobPath);
       }
     }
@@ -344,12 +345,12 @@ class TestBlobCleaner extends HoodieClientTestBase {
     // Check commit 2 managed blobs - should be DELETED (only i % 3 == 1)
     for (int i = 0; i < 15; i++) {
       if (i % 3 == 1) {
-        StoragePath blobPath = getStoragePathForBlob(commit2, blobDir, i);
+        StoragePath blobPath = getStoragePathForBlob(commit2, i);
         // only records 0-12 are updated
         assertEquals(i >= 12, storage.exists(blobPath), "Managed and updated blob from commit2 should be removed: " + blobPath);
       } else if (i % 3 == 2) {
         // Unmanaged blobs should never be deleted
-        StoragePath blobPath = getStoragePathForBlob(commit2, blobDir, i);
+        StoragePath blobPath = getStoragePathForBlob(commit2, i);
         assertTrue(storage.exists(blobPath), "Unmanaged blob should never be deleted: " + blobPath);
       }
     }
@@ -357,11 +358,11 @@ class TestBlobCleaner extends HoodieClientTestBase {
     // Check commit 3 managed blobs - should be RETAINED (only i % 3 == 1)
     for (int i = 0; i < 12; i++) {
       if (i % 3 == 1) {
-        StoragePath blobPath = getStoragePathForBlob(commit3, blobDir, i);
+        StoragePath blobPath = getStoragePathForBlob(commit3, i);
         assertTrue(storage.exists(blobPath), "Managed blob from latest commit should be retained: " + blobPath);
       } else if (i % 3 == 2) {
         // Unmanaged blobs should never be deleted
-        StoragePath blobPath = getStoragePathForBlob(commit3, blobDir, i);
+        StoragePath blobPath = getStoragePathForBlob(commit3, i);
         assertTrue(storage.exists(blobPath), "Unmanaged blob should never be deleted: " + blobPath);
       }
     }
@@ -369,17 +370,21 @@ class TestBlobCleaner extends HoodieClientTestBase {
     // Check commit 4 managed blobs - should be RETAINED (only i % 3 == 1)
     for (int i = 0; i < 8; i++) {
       if (i % 3 == 1) {
-        StoragePath blobPath = getStoragePathForBlob(commit4, blobDir, i);
+        StoragePath blobPath = getStoragePathForBlob(commit4, i);
         assertTrue(storage.exists(blobPath), "Managed blob from latest commit should be retained: " + blobPath);
       } else if (i % 3 == 2) {
         // Unmanaged blobs should never be deleted
-        StoragePath blobPath = getStoragePathForBlob(commit4, blobDir, i);
+        StoragePath blobPath = getStoragePathForBlob(commit4, i);
         assertTrue(storage.exists(blobPath), "Unmanaged blob should never be deleted: " + blobPath);
       }
     }
   }
 
-  private static StoragePath getStoragePathForBlob(String commit, StoragePath blobDir, int i) {
-    return new StoragePath(blobDir, commit + "_" + i + ".bin");
+  private StoragePath getBlobDir() {
+    return new StoragePath(tempDir.toString(), "blobs");
+  }
+
+  private StoragePath getStoragePathForBlob(String commit, int i) {
+    return new StoragePath(getBlobDir(), commit + "_" + i + ".bin");
   }
 }
