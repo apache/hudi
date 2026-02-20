@@ -255,4 +255,8 @@ public class HoodieTestUtils {
     conf.set("dfs.replication", "3");
     return (DistributedFileSystem) DistributedFileSystem.get(conf);
   }
+
+  public static HoodieTableMetaClient createMetaClient(Configuration conf, String basePath) {
+    return HoodieTableMetaClient.builder().setConf(conf).setBasePath(basePath).build();
+  }
 }

@@ -21,6 +21,8 @@ package org.apache.hudi.keygen;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.PartitionPathEncodeUtils;
 import org.apache.hudi.common.util.ReflectionUtils;
@@ -39,6 +41,8 @@ import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.config.HoodieWriteConfig.COMPLEX_KEYGEN_NEW_ENCODING;
+
 public class KeyGenUtils {
 
   protected static final String NULL_RECORDKEY_PLACEHOLDER = "__null__";
@@ -47,7 +51,7 @@ public class KeyGenUtils {
   protected static final String HUDI_DEFAULT_PARTITION_PATH = PartitionPathEncodeUtils.DEFAULT_PARTITION_PATH;
   public static final String DEFAULT_PARTITION_PATH_SEPARATOR = "/";
   public static final String DEFAULT_RECORD_KEY_PARTS_SEPARATOR = ",";
-  public static final String DEFAULT_COMPOSITE_KEY_FILED_VALUE = ":";
+  public static final String DEFAULT_COLUMN_VALUE_SEPARATOR = ":";
 
   public static final String RECORD_KEY_GEN_PARTITION_ID_CONFIG = "_hoodie.record.key.gen.partition.id";
   public static final String RECORD_KEY_GEN_INSTANT_TIME_CONFIG = "_hoodie.record.key.gen.instant.time";
@@ -128,7 +132,7 @@ public class KeyGenUtils {
 
   public static String[] extractRecordKeysByFields(String recordKey, List<String> fields) {
     String[] fieldKV = recordKey.split(DEFAULT_RECORD_KEY_PARTS_SEPARATOR);
-    return Arrays.stream(fieldKV).map(kv -> kv.split(DEFAULT_COMPOSITE_KEY_FILED_VALUE, 2))
+    return Arrays.stream(fieldKV).map(kv -> kv.split(DEFAULT_COLUMN_VALUE_SEPARATOR, 2))
         .filter(kvArray -> kvArray.length == 1 || fields.isEmpty() || (fields.contains(kvArray[0])))
         .map(kvArray -> {
           if (kvArray.length == 1) {
@@ -149,11 +153,11 @@ public class KeyGenUtils {
     for (String recordKeyField : recordKeyFields) {
       String recordKeyValue = HoodieAvroUtils.getNestedFieldValAsString(record, recordKeyField, true, consistentLogicalTimestampEnabled);
       if (recordKeyValue == null) {
-        recordKey.append(recordKeyField + DEFAULT_COMPOSITE_KEY_FILED_VALUE + NULL_RECORDKEY_PLACEHOLDER + DEFAULT_RECORD_KEY_PARTS_SEPARATOR);
+        recordKey.append(recordKeyField).append(DEFAULT_COLUMN_VALUE_SEPARATOR).append(NULL_RECORDKEY_PLACEHOLDER).append(DEFAULT_RECORD_KEY_PARTS_SEPARATOR);
       } else if (recordKeyValue.isEmpty()) {
-        recordKey.append(recordKeyField + DEFAULT_COMPOSITE_KEY_FILED_VALUE + EMPTY_RECORDKEY_PLACEHOLDER + DEFAULT_RECORD_KEY_PARTS_SEPARATOR);
+        recordKey.append(recordKeyField).append(DEFAULT_COLUMN_VALUE_SEPARATOR).append(EMPTY_RECORDKEY_PLACEHOLDER).append(DEFAULT_RECORD_KEY_PARTS_SEPARATOR);
       } else {
-        recordKey.append(recordKeyField + DEFAULT_COMPOSITE_KEY_FILED_VALUE + recordKeyValue + DEFAULT_RECORD_KEY_PARTS_SEPARATOR);
+        recordKey.append(recordKeyField).append(DEFAULT_COLUMN_VALUE_SEPARATOR).append(recordKeyValue).append(DEFAULT_RECORD_KEY_PARTS_SEPARATOR);
         keyIsNullEmpty = false;
       }
     }
@@ -259,5 +263,31 @@ public class KeyGenUtils {
    */
   public static boolean enableAutoGenerateRecordKeys(TypedProperties props) {
     return !props.containsKey(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key());
+  }
+
+  public static boolean isComplexKeyGeneratorWithSingleRecordKeyField(HoodieTableConfig tableConfig) {
+    Option<String[]> recordKeyFields = tableConfig.getRecordKeyFields();
+    return KeyGeneratorType.isComplexKeyGenerator(tableConfig)
+        && recordKeyFields.isPresent() && recordKeyFields.get().length == 1;
+  }
+
+  public static String getComplexKeygenErrorMessage(String operation) {
+    return "This table uses the complex key generator with a single record "
+        + "key field. If the table is written with Hudi 0.14.1, 0.15.0, 1.0.0, 1.0.1, or 1.0.2 "
+        + "release before, the table may potentially contain duplicates due to a breaking "
+        + "change in the key encoding in the _hoodie_record_key meta field (HUDI-7001) which "
+        + "is crucial for upserts. Please take action based on the details on the deployment "
+        + "guide (https://hudi.apache.org/docs/deployment#complex-key-generator) "
+        + "before resuming the " + operation + " to the table. If you're certain "
+        + "that the table is not affected by the key encoding change, set "
+        + "`hoodie.write.complex.keygen.validation.enable=false` to skip this validation.";
+  }
+
+  public static boolean encodeSingleKeyFieldNameForComplexKeyGen(TypedProperties props) {
+    return !ConfigUtils.getBooleanWithAltKeys(props, COMPLEX_KEYGEN_NEW_ENCODING);
+  }
+
+  public static boolean mayUseNewEncodingForComplexKeyGen(HoodieTableConfig tableConfig) {
+    return isComplexKeyGeneratorWithSingleRecordKeyField(tableConfig);
   }
 }
