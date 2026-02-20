@@ -39,6 +39,25 @@ import java.util.List;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_BASE_FILE_FORMAT;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_BASE_PATH;
 
+/**
+ * Utility job for running Hive sync on-demand for Hudi tables.
+ * <p>
+ * This tool allows you to synchronize Hudi table metadata with Hive metastore
+ * independently from ingestion workflows, useful for backfills, manual data
+ * corrections, or quick metadata reconciliation.
+ * <p>
+ * Example usage:
+ * <pre>
+ * spark-submit \
+ *   --class org.apache.hudi.utilities.HudiHiveSyncJob \
+ *   hudi-utilities.jar \
+ *   --base-path /path/to/hudi/table \
+ *   --base-file-format PARQUET \
+ *   --props-file-path /path/to/hive-sync.properties \
+ *   --hoodie-conf hoodie.datasource.hive_sync.database=my_db \
+ *   --hoodie-conf hoodie.datasource.hive_sync.table=my_table
+ * </pre>
+ */
 public class HudiHiveSyncJob {
 
   private static final Logger LOG = LoggerFactory.getLogger(HudiHiveSyncJob.class);
@@ -64,17 +83,21 @@ public class HudiHiveSyncJob {
   public void run() throws IOException {
     LOG.info("Starting hive sync for {}", cfg.basePath);
     HoodieTimer timer = HoodieTimer.start();
+    HiveSyncTool syncTool = null;
     try {
       props.put(META_SYNC_BASE_PATH.key(), cfg.basePath);
       props.put(META_SYNC_BASE_FILE_FORMAT.key(), cfg.baseFileFormat);
 
       LOG.info("HiveSyncConfig props used to sync data {}", props);
-      HiveSyncTool syncTool = new HiveSyncTool(props, new HiveConf(hadoopConf, HiveConf.class));
+      syncTool = new HiveSyncTool(props, new HiveConf(hadoopConf, HiveConf.class));
       syncTool.syncHoodieTable();
     } catch (Exception e) {
       LOG.error("Exception in running hive-sync", e);
       throw new HoodieException("Hive sync failed", e);
     } finally {
+      if (syncTool != null) {
+        syncTool.close();
+      }
       LOG.info("Hive-sync duration in ms {}", timer.endTimer());
     }
   }
@@ -94,12 +117,6 @@ public class HudiHiveSyncJob {
         splitter = IdentitySplitter.class)
     public List<String> configs = new ArrayList<>();
 
-    @Parameter(names = {"--datacenter", "-dc"}, description = "Datacenter")
-    public String datacenter = null;
-
-    @Parameter(names = {"--environment", "-en"}, description = "Environment")
-    public String environment = null;
-
     @Override
     public String toString() {
       return "Config{"
@@ -107,8 +124,6 @@ public class HudiHiveSyncJob {
           + ", baseFileFormat='" + baseFileFormat + '\''
           + ", propsFilePath='" + propsFilePath + '\''
           + ", configs=" + configs
-          + ", datacenter='" + datacenter + '\''
-          + ", environment='" + environment + '\''
           + '}';
     }
   }
