@@ -1325,6 +1325,15 @@ public class FlinkOptions extends HoodieConfig {
               + "Each task manager will create a unique subdirectory under this path. "
               + "The directory is cleaned up when the lookup function is closed.");
 
+  public static final ConfigOption<String> LOOKUP_PARTITIONS =
+      key("lookup.partitions")
+          .stringType()
+          .noDefaultValue()
+          .withDescription("Partitions to load into the lookup join cache. "
+              + "Each partition is specified as comma-separated key=value pairs, e.g. 'dt=2024-01-01,region=us'. "
+              + "Multiple partitions are separated by ';', e.g. 'dt=2024-01-01,region=us;dt=2024-01-02,region=eu'. "
+              + "When set, only data from the specified partitions is loaded into the cache.");
+
   // -------------------------------------------------------------------------
   //  Utilities
   // -------------------------------------------------------------------------

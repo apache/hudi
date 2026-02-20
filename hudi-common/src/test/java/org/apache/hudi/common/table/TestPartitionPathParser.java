@@ -23,6 +23,7 @@ import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.common.util.Option;
 
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
@@ -30,9 +31,14 @@ import org.junit.jupiter.params.provider.MethodSource;
 import java.nio.charset.StandardCharsets;
 import java.sql.Date;
 import java.sql.Timestamp;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
 import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class TestPartitionPathParser {
 
@@ -91,5 +97,83 @@ class TestPartitionPathParser {
     } else {
       assertEquals(expected, PartitionPathParser.parseValue(value, fieldSchema));
     }
+  }
+
+  private static Stream<Arguments> lookupPartitionPathsCases() {
+    List<String> singleKey  = Collections.singletonList("pt");
+    List<String> multiKeys  = Arrays.asList("year", "month");
+
+    return Stream.of(
+        // single partition key, hive-style
+        Arguments.of("pt=p1",           singleKey, true,  Arrays.asList("pt=p1")),
+        // single partition key, non-hive-style
+        Arguments.of("pt=p1",           singleKey, false, Arrays.asList("p1")),
+        // multiple partitions separated by ';', hive-style
+        Arguments.of("pt=p1;pt=p2",     singleKey, true,  Arrays.asList("pt=p1", "pt=p2")),
+        // multiple partitions separated by ';', non-hive-style
+        Arguments.of("pt=p1;pt=p2",     singleKey, false, Arrays.asList("p1", "p2")),
+        // multi-key partition, hive-style — keys in spec order, path in partitionKeys order
+        Arguments.of("year=2024,month=01", multiKeys, true,  Arrays.asList("year=2024/month=01")),
+        // multi-key partition, non-hive-style — values in partitionKeys order
+        Arguments.of("year=2024,month=01", multiKeys, false, Arrays.asList("2024/01")),
+        // keys specified in reverse order — output must still follow partitionKeys order
+        Arguments.of("month=01,year=2024", multiKeys, true,  Arrays.asList("year=2024/month=01")),
+        Arguments.of("month=01,year=2024", multiKeys, false, Arrays.asList("2024/01")),
+        // multiple multi-key partitions, hive-style
+        Arguments.of("year=2024,month=01;year=2024,month=02", multiKeys, true,
+            Arrays.asList("year=2024/month=01", "year=2024/month=02")),
+        // multiple multi-key partitions, non-hive-style
+        Arguments.of("year=2024,month=01;year=2024,month=02", multiKeys, false,
+            Arrays.asList("2024/01", "2024/02")),
+        // extra whitespace around semicolons and key=value pairs
+        Arguments.of(" pt=p1 ; pt=p2 ", singleKey, true,  Arrays.asList("pt=p1", "pt=p2")),
+        Arguments.of(" pt=p1 ; pt=p2 ", singleKey, false, Arrays.asList("p1", "p2")),
+        // consecutive semicolons produce empty entries that are silently skipped
+        Arguments.of("pt=p1;;pt=p2",    singleKey, true,  Arrays.asList("pt=p1", "pt=p2")),
+        // trailing semicolon is silently ignored
+        Arguments.of("pt=p1;",          singleKey, false, Arrays.asList("p1"))
+    );
+  }
+
+  @ParameterizedTest
+  @MethodSource("lookupPartitionPathsCases")
+  void testParseLookupPartitionPaths(String spec, List<String> partitionKeys, boolean hiveStyle,
+                                     List<String> expected) {
+    List<String> result = PartitionPathParser.parseLookupPartitionPaths(spec, partitionKeys, hiveStyle);
+    assertEquals(expected, result);
+  }
+
+  @Test
+  void testParseLookupPartitionPaths_unknownKey_throwsIllegalArgument() {
+    List<String> partitionKeys = Arrays.asList("dt", "region");
+    IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
+        () -> PartitionPathParser.parseLookupPartitionPaths(
+            "dt=2024-01-01,unknown=foo", partitionKeys, false));
+    assertTrue(ex.getMessage().contains("unknown"));
+    assertTrue(ex.getMessage().contains("[dt, region]"));
+  }
+
+  @Test
+  void testParseLookupPartitionPaths_missingEqualsSign_throwsIllegalArgument() {
+    List<String> partitionKeys = Collections.singletonList("pt");
+    IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
+        () -> PartitionPathParser.parseLookupPartitionPaths("p1", partitionKeys, false));
+    assertTrue(ex.getMessage().contains("key=value"));
+  }
+
+  @Test
+  void testParseLookupPartitionPaths_unknownKeyInSecondPartition_throwsIllegalArgument() {
+    List<String> partitionKeys = Collections.singletonList("pt");
+    IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
+        () -> PartitionPathParser.parseLookupPartitionPaths(
+            "pt=p1;badkey=p2", partitionKeys, true));
+    assertTrue(ex.getMessage().contains("badkey"));
+  }
+
+  @Test
+  void testParseLookupPartitionPaths_emptySpec_returnsEmptyList() {
+    List<String> result = PartitionPathParser.parseLookupPartitionPaths(
+        "", Collections.singletonList("pt"), false);
+    assertTrue(result.isEmpty());
   }
 }
