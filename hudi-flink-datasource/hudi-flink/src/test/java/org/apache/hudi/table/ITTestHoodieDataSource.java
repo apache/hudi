@@ -896,6 +896,53 @@ public class ITTestHoodieDataSource {
   }
 
   @ParameterizedTest
+  @MethodSource("tableTypeAsyncAndHiveStyleParams")
+  void testLookupWithPartitionFilter(HoodieTableType tableType, boolean async, boolean hiveStyle) {
+    String dimDDL = "CREATE TABLE DIM ("
+        + "  i INT PRIMARY KEY NOT ENFORCED,"
+        + "  j INT,"
+        + "  pt VARCHAR(10)"
+        + ") PARTITIONED BY (pt)"
+        + " with ("
+        + "  'connector' = 'hudi',"
+        + "  'table.type' = '" + tableType + "',"
+        + "  'path' = '" + tempFile.getAbsolutePath() + "/DIM',"
+        + "  'hoodie.datasource.write.hive_style_partitioning' = '" + hiveStyle + "',"
+        + "  'continuous.discovery-interval' = '1 ms'"
+        + ")";
+    streamTableEnv.executeSql(dimDDL);
+
+    String tDDL = "CREATE TABLE T ("
+        + "  i INT PRIMARY KEY NOT ENFORCED,"
+        + "  `proctime` AS PROCTIME()"
+        + ") with ("
+        + "  'connector' = 'hudi',"
+        + "  'path' = '" + tempFile.getAbsolutePath() + "/T'"
+        + ")";
+    streamTableEnv.executeSql(tDDL);
+
+    execInsertSql(streamTableEnv, "INSERT INTO DIM VALUES (1, 11, 'p1'), (2, 22, 'p2'), (3, 33, 'p3')");
+    execInsertSql(streamTableEnv, "INSERT INTO T VALUES (1), (2), (3)");
+
+    // lookup.partitions specifies only p1 and p2 — p3 is excluded from the cache.
+    String query = "SELECT T.i, D.j FROM T"
+        + " LEFT JOIN DIM /*+ OPTIONS("
+        + "  'lookup.async' = '" + async + "',"
+        + "  'lookup.join.cache.ttl' = '1s',"
+        + "  'lookup.partitions' = 'pt=p1;pt=p2'"
+        + ") */ FOR SYSTEM_TIME AS OF T.proctime AS D ON T.i = D.i";
+
+    List<Row> result = CollectionUtil.iterableToList(() -> streamTableEnv.executeSql(query).collect());
+
+    // i=1 (p1) and i=2 (p2) are in the cached partitions → join succeeds
+    // i=3 (p3) is not in the cached partitions → D.j is null
+    assertThat(result).containsExactlyInAnyOrder(
+        Row.of(1, 11),
+        Row.of(2, 22),
+        Row.of(3, null));
+  }
+
+  @ParameterizedTest
   @EnumSource(value = ExecMode.class)
   void testWriteAndReadParMiddle(ExecMode execMode) throws Exception {
     boolean streaming = execMode == ExecMode.STREAM;
@@ -3194,6 +3241,23 @@ public class ITTestHoodieDataSource {
         {HoodieTableType.COPY_ON_WRITE, true},
         {HoodieTableType.MERGE_ON_READ, false},
         {HoodieTableType.MERGE_ON_READ, true}
+    };
+    return Stream.of(data).map(Arguments::of);
+  }
+
+  /**
+   * Return test params => (HoodieTableType, async lookup, hive-style partitioning).
+   */
+  private static Stream<Arguments> tableTypeAsyncAndHiveStyleParams() {
+    Object[][] data = new Object[][] {
+        {HoodieTableType.COPY_ON_WRITE, false, false},
+        {HoodieTableType.COPY_ON_WRITE, false, true},
+        {HoodieTableType.COPY_ON_WRITE, true,  false},
+        {HoodieTableType.COPY_ON_WRITE, true,  true},
+        {HoodieTableType.MERGE_ON_READ, false, false},
+        {HoodieTableType.MERGE_ON_READ, false, true},
+        {HoodieTableType.MERGE_ON_READ, true,  false},
+        {HoodieTableType.MERGE_ON_READ, true,  true}
     };
     return Stream.of(data).map(Arguments::of);
   }

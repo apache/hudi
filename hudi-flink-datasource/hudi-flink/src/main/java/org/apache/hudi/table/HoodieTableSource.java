@@ -26,6 +26,7 @@ import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.PartitionPathParser;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -128,6 +129,7 @@ import java.util.stream.IntStream;
 import static org.apache.hudi.configuration.FlinkOptions.LOOKUP_ASYNC;
 import static org.apache.hudi.configuration.FlinkOptions.LOOKUP_ASYNC_THREAD_NUMBER;
 import static org.apache.hudi.configuration.FlinkOptions.LOOKUP_JOIN_CACHE_TTL;
+import static org.apache.hudi.configuration.FlinkOptions.LOOKUP_PARTITIONS;
 import static org.apache.hudi.configuration.HadoopConfigurations.getParquetConf;
 import static org.apache.hudi.util.ExpressionUtils.filterSimpleCallExpression;
 import static org.apache.hudi.util.ExpressionUtils.splitExprByPartitionCall;
@@ -403,14 +405,43 @@ public class HoodieTableSource extends FileIndexReader implements
     Duration duration = conf.get(LOOKUP_JOIN_CACHE_TTL);
     boolean asyncEnabled = conf.get(LOOKUP_ASYNC);
     int asyncThreadNumber = conf.get(LOOKUP_ASYNC_THREAD_NUMBER);
+    Option<PartitionPruners.PartitionPruner> lookupPruner = buildLookupPartitionPruner();
     return LookupRuntimeProviderFactory.create(
         new HoodieLookupFunction(
-            new HoodieLookupTableReader(this::getBatchInputFormat, conf),
+            new HoodieLookupTableReader(
+                lookupPruner.isPresent()
+                    ? () -> getBatchInputFormatWithPruner(lookupPruner.get())
+                    : this::getBatchInputFormat,
+                conf),
             (RowType) getProducedDataType().notNull().getLogicalType(),
             getLookupKeys(context.getKeys()),
             duration,
             conf
         ), asyncEnabled, asyncThreadNumber);
+  }
+
+  private Option<PartitionPruners.PartitionPruner> buildLookupPartitionPruner() {
+    if (!conf.contains(LOOKUP_PARTITIONS) || !isPartitioned()) {
+      return Option.empty();
+    }
+    List<String> partitionPaths = PartitionPathParser.parseLookupPartitionPaths(
+        conf.get(LOOKUP_PARTITIONS), this.partitionKeys, conf.get(FlinkOptions.HIVE_STYLE_PARTITIONING));
+    if (partitionPaths.isEmpty()) {
+      return Option.empty();
+    }
+    return Option.of(PartitionPruners.builder()
+        .candidatePartitions(partitionPaths)
+        .build());
+  }
+
+  private InputFormat<RowData, ?> getBatchInputFormatWithPruner(PartitionPruners.PartitionPruner lookupPruner) {
+    PartitionPruners.PartitionPruner saved = this.partitionPruner;
+    this.partitionPruner = lookupPruner;
+    try {
+      return getBatchInputFormat();
+    } finally {
+      this.partitionPruner = saved;
+    }
   }
 
   private DataType getProducedDataType() {

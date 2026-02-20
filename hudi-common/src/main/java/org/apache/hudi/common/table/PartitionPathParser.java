@@ -32,6 +32,13 @@ import java.sql.Date;
 import java.sql.Timestamp;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 public class PartitionPathParser {
   public static final String DEPRECATED_DEFAULT_PARTITION_PATH = "default";
@@ -163,5 +170,54 @@ public class PartitionPathParser {
 
   private static boolean isTimeBasedType(HoodieSchemaType type) {
     return type == HoodieSchemaType.DATE || type == HoodieSchemaType.TIMESTAMP || type == HoodieSchemaType.TIME;
+  }
+
+  /**
+   * Parses the {@code lookup.partitions} option value into a list of Hudi partition paths.
+   *
+   * <p>The spec format is {@code key1=val1,key2=val2} per partition, with multiple partitions
+   * separated by {@code ;}. Example: {@code "dt=2024-01-01,region=us;dt=2024-01-02,region=eu"}.
+   *
+   * @param spec         the raw option value
+   * @param partitionKeys ordered list of partition key names as defined in the table schema
+   * @param hiveStyle    whether the table uses Hive-style partitioning ({@code key=value} directories)
+   * @return list of partition paths in the format used by Hudi's file index
+   * @throws IllegalArgumentException if any key in the spec is not a valid partition key,
+   *                                  or if a key-value pair does not follow {@code key=value} format
+   */
+  public static List<String> parseLookupPartitionPaths(String spec, List<String> partitionKeys, boolean hiveStyle) {
+    Set<String> validKeys = new HashSet<>(partitionKeys);
+    List<String> result = new ArrayList<>();
+    for (String partitionSpec : spec.split(";")) {
+      String trimmed = partitionSpec.trim();
+      if (trimmed.isEmpty()) {
+        continue;
+      }
+      Map<String, String> kvMap = new HashMap<>();
+      for (String kv : trimmed.split(",")) {
+        String[] parts = kv.split("=", 2);
+        if (parts.length != 2) {
+          throw new IllegalArgumentException(
+              "Invalid entry '" + kv.trim() + "' in lookup.partitions spec '" + spec + "'. Each entry must follow 'key=value' format");
+        }
+        String key = parts[0].trim();
+        if (!validKeys.contains(key)) {
+          throw new IllegalArgumentException(
+              "Unknown partition key '" + key + "' in lookup.partitions spec '" + spec + "'. Valid partition keys: " + partitionKeys);
+        }
+        kvMap.put(key, parts[1].trim());
+      }
+      if (hiveStyle) {
+        result.add(partitionKeys.stream()
+            .filter(kvMap::containsKey)
+            .map(k -> k + "=" + kvMap.get(k))
+            .collect(Collectors.joining("/")));
+      } else {
+        result.add(partitionKeys.stream()
+            .map(k -> kvMap.getOrDefault(k, ""))
+            .collect(Collectors.joining("/")));
+      }
+    }
+    return result;
   }
 }
