@@ -205,6 +205,14 @@ public class HoodieSyncConfig extends HoodieConfig {
           + "This is useful when the partition metadata is large, and the partition info can be "
           + "obtained from Hudi's internal metadata table. Note, " + HoodieMetadataConfig.ENABLE + " must be set to true.");
 
+  public static final ConfigProperty<Boolean> META_SYNC_TOUCH_PARTITIONS_ENABLED = ConfigProperty
+      .key("hoodie.meta.sync.touch.partitions.enabled")
+      .defaultValue(false)
+      .sinceVersion("1.2.0")
+      .markAdvanced()
+      .withDocumentation("If true, TOUCH partition events will be emitted during meta sync. "
+          + "TOUCH events indicate partitions that exist in both storage and metastore but have no changes.");
+
   @Getter
   @Setter
   private Configuration hadoopConf;

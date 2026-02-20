@@ -72,6 +72,7 @@ import static org.apache.hudi.hive.util.HiveSchemaUtil.getSchemaDifference;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_BASE_FILE_FORMAT;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_BASE_PATH;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_CONDITIONAL_SYNC;
+import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_TOUCH_PARTITIONS_ENABLED;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_INCREMENTAL;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_PARTITION_FIELDS;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_SNAPSHOT_WITH_TABLE_NAME;
@@ -550,7 +551,17 @@ public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
       syncClient.dropPartitions(tableName, dropPartitions);
     }
 
-    return !updatePartitions.isEmpty() || !newPartitions.isEmpty() || !dropPartitions.isEmpty();
+    boolean touchPartitionsChanged = false;
+    if (config.getBoolean(META_SYNC_TOUCH_PARTITIONS_ENABLED)) {
+      List<String> touchPartitions = filterPartitions(partitionEventList, PartitionEventType.TOUCH);
+      if (!touchPartitions.isEmpty()) {
+        log.info("Touch Partitions " + touchPartitions);
+        syncClient.touchPartitionsToTable(tableName, touchPartitions);
+        touchPartitionsChanged = true;
+      }
+    }
+
+    return !updatePartitions.isEmpty() || !newPartitions.isEmpty() || !dropPartitions.isEmpty() || touchPartitionsChanged;
   }
 
   private List<String> filterPartitions(List<PartitionEvent> events, PartitionEventType eventType) {
