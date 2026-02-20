@@ -200,15 +200,21 @@ public class HoodiePipeline {
     builder.append("create table ")
         .append(tableName)
         .append("(\n");
-    for (String field : fields) {
+    for (int i = 0; i < fields.size(); i++) {
       builder.append("  ")
-          .append(field)
-          .append(",\n");
+              .append(fields.get(i));
+      if (i == fields.size() - 1 && pkField == null) {
+        builder.append(")\n");
+      } else {
+        builder.append(",\n");
+      }
     }
-    builder.append("  PRIMARY KEY(")
-        .append(pkField)
-        .append(") NOT ENFORCED\n")
-        .append(")\n");
+    if (pkField != null) {
+      builder.append("  PRIMARY KEY(")
+              .append(pkField)
+              .append(") NOT ENFORCED\n")
+              .append(")\n");
+    }
     if (!partitionField.isEmpty()) {
       String partitions = partitionField
           .stream()

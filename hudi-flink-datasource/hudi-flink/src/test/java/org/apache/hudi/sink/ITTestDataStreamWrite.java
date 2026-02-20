@@ -403,8 +403,9 @@ public class ITTestDataStreamWrite extends TestLogger {
     TestData.assertRowDataEquals(result, TestData.dataSetInsert(5, 6));
   }
 
-  @Test
-  public void testHoodiePipelineBuilderSink() throws Exception {
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  public void testHoodiePipelineBuilderSink(boolean usePrimaryKey) throws Exception {
     StreamExecutionEnvironment execEnv = StreamExecutionEnvironment.getExecutionEnvironment();
     Map<String, String> options = new HashMap<>();
     execEnv.getConfig().disableObjectReuse();
@@ -435,9 +436,12 @@ public class ITTestDataStreamWrite extends TestLogger {
         .column("age int")
         .column("`ts` timestamp(3)")
         .column("`partition` string")
-        .pk("uuid")
         .partition("partition")
         .options(options);
+
+    if (usePrimaryKey) {
+      builder = builder.pk("uuid");
+    }
 
     builder.sink(dataStream, false);
 
