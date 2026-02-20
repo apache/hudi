@@ -38,47 +38,36 @@ object BlobTestHelpers {
 
   def inlineBlobStructCol(name: String, bytesCol: Column): Column = {
     struct(
-      lit("inline").as("storage_type"),
-      bytesCol.as("bytes"),
-      lit(null).cast("struct<file:string,position:bigint,length:bigint,managed:boolean>")
-        .as("reference")
+      lit(HoodieSchema.Blob.INLINE).as(HoodieSchema.Blob.TYPE),
+      bytesCol.as(HoodieSchema.Blob.INLINE_DATA_FIELD),
+      lit(null).cast("struct<externalPath:string,offset:bigint,length:bigint,managed:boolean>")
+        .as(HoodieSchema.Blob.EXTERNAL_REFERENCE)
     ).as(name, blobMetadata)
   }
 
   def wholeFileBlobStructCol(name: String, filePathCol: Column): Column = {
     struct(
-      lit("out_of_line").as("storage_type"),
-      lit(null).cast("binary").as("bytes"),
+      lit(HoodieSchema.Blob.OUT_OF_LINE).as(HoodieSchema.Blob.TYPE),
+      lit(null).cast("binary").as(HoodieSchema.Blob.INLINE_DATA_FIELD),
       struct(
-        filePathCol.as("file"),
-        lit(null).cast("bigint").as("position"),
-        lit(null).cast("bigint").as("length"),
-        lit(false).as("managed")
-      ).as("reference")
+        filePathCol.as(HoodieSchema.Blob.EXTERNAL_REFERENCE_PATH),
+        lit(null).cast("bigint").as(HoodieSchema.Blob.EXTERNAL_REFERENCE_OFFSET),
+        lit(null).cast("bigint").as(HoodieSchema.Blob.EXTERNAL_REFERENCE_LENGTH),
+        lit(false).as(HoodieSchema.Blob.EXTERNAL_REFERENCE_IS_MANAGED)
+      ).as(HoodieSchema.Blob.EXTERNAL_REFERENCE)
     ).as(name, blobMetadata)
   }
 
-  def mixedBlobReferenceType: StructType = new StructType()
-    .add("file", StringType, nullable = true)
-    .add("position", LongType, nullable = true)
-    .add("length", LongType, nullable = true)
-    .add("managed", BooleanType, nullable = true)
-
-  def mixedBlobType: StructType = new StructType()
-    .add("storage_type", StringType, nullable = false)
-    .add("bytes", BinaryType, nullable = true)
-    .add("reference", mixedBlobReferenceType, nullable = true)
-
   def blobStructCol(name: String, filePathCol: Column, offsetCol: Column, lengthCol: Column): Column = {
     struct(
-      lit("out_of_line").as("type"),
-      lit(null).cast("binary").as("data"),
+      lit(HoodieSchema.Blob.OUT_OF_LINE).as(HoodieSchema.Blob.TYPE),
+      lit(null).cast("binary").as(HoodieSchema.Blob.INLINE_DATA_FIELD),
       struct(
-        filePathCol.as("external_path"),
-        offsetCol.as("offset"),
-        lengthCol.as("length"),
-        lit(false).as("managed")
-      ).as("reference")
+        filePathCol.as(HoodieSchema.Blob.EXTERNAL_REFERENCE_PATH),
+        offsetCol.as(HoodieSchema.Blob.EXTERNAL_REFERENCE_OFFSET),
+        lengthCol.as(HoodieSchema.Blob.EXTERNAL_REFERENCE_LENGTH),
+        lit(false).as(HoodieSchema.Blob.EXTERNAL_REFERENCE_IS_MANAGED)
+      ).as(HoodieSchema.Blob.EXTERNAL_REFERENCE)
     ).as(name, blobMetadata)
   }
 

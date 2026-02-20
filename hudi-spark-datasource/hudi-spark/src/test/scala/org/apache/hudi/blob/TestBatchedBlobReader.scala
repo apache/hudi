@@ -20,6 +20,7 @@
 package org.apache.hudi.blob
 
 import org.apache.hudi.blob.BlobTestHelpers._
+import org.apache.hudi.common.schema.HoodieSchema
 import org.apache.hudi.testutils.HoodieClientTestBase
 
 import org.apache.spark.sql.Row
@@ -384,14 +385,14 @@ class TestBatchedBlobReader extends HoodieClientTestBase {
 
     val outerSchema = StructType(Seq(
       StructField("record_id", StringType, nullable = false),
-      StructField("data", mixedBlobType, nullable = false, metadata = blobMetadata)
+      StructField("data", BlobType(), nullable = false, metadata = blobMetadata)
     ))
 
     val rows = Seq(
-      Row("inline_row",    Row("inline",     inlineData, null)),
-      Row("wholefile_row", Row("out_of_line", null, Row(filePath, null, null, false))),
-      Row("range_row_1",   Row("out_of_line", null, Row(filePath, 0L,   100L, false))),
-      Row("range_row_2",   Row("out_of_line", null, Row(filePath, 100L, 100L, false)))
+      Row("inline_row",    Row(HoodieSchema.Blob.INLINE,     inlineData, null)),
+      Row("wholefile_row", Row(HoodieSchema.Blob.OUT_OF_LINE, null, Row(filePath, null, null, false))),
+      Row("range_row_1",   Row(HoodieSchema.Blob.OUT_OF_LINE, null, Row(filePath, 0L,   100L, false))),
+      Row("range_row_2",   Row(HoodieSchema.Blob.OUT_OF_LINE, null, Row(filePath, 100L, 100L, false)))
     )
 
     val inputDF = sparkSession.createDataFrame(

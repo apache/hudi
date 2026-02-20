@@ -20,7 +20,7 @@
 package org.apache.spark.sql.hudi.blob
 
 import org.apache.hudi.HoodieSparkUtils.sparkAdapter
-import org.apache.hudi.common.schema.HoodieSchema
+import org.apache.hudi.common.schema.{HoodieSchema, HoodieSchemaType}
 import org.apache.hudi.io.SeekableDataInputStream
 import org.apache.hudi.storage.{HoodieStorage, HoodieStorageUtils, StorageConfiguration, StoragePath}
 
@@ -188,7 +188,7 @@ class BatchedBlobReader(
           // Dispatch based on storage_type (field 0)
           val storageType = accessor.getString(blobStruct, 0)
 
-          if (storageType == "inline") {
+          if (storageType == HoodieSchema.Blob.INLINE) {
             // Case 1: Inline — bytes are in field 1
             val bytes = accessor.getBytes(blobStruct, 1)
             batch += RowInfo[R](
@@ -718,7 +718,8 @@ object BatchedBlobReader {
   private def getBlobColumn(structType: StructType): (Int, String) = {
     // Find field with metadata key hudi_blob=true
     val blobFieldIndex = structType.fields.zipWithIndex.find { case (field, _) =>
-      field.metadata.contains("hudi_blob") && field.metadata.getBoolean("hudi_blob")
+      field.metadata.contains(HoodieSchema.TYPE_METADATA_FIELD) &&
+        field.metadata.getString(HoodieSchema.TYPE_METADATA_FIELD).equalsIgnoreCase(HoodieSchemaType.BLOB.name)
     }.map(fieldAndIndex => (fieldAndIndex._2, fieldAndIndex._1.name))
 
     blobFieldIndex.getOrElse {

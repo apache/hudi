@@ -19,6 +19,7 @@
 
 package org.apache.hudi.blob
 
+import org.apache.hudi.SparkDatasetMixin
 import org.apache.hudi.blob.BlobTestHelpers._
 import org.apache.hudi.client.SparkRDDWriteClient
 import org.apache.hudi.common.model.{HoodieAvroIndexedRecord, HoodieFileFormat, HoodieKey, HoodieRecord, HoodieTableType}
@@ -50,7 +51,7 @@ import scala.collection.JavaConverters._
  *   <li>SQL read_blob() function integration</li>
  * </ul>
  */
-class TestBlobSupport extends HoodieClientTestBase {
+class TestBlobSupport extends HoodieClientTestBase with SparkDatasetMixin {
   val SCHEMA: HoodieSchema = HoodieSchema.createRecord("test_blobs", null, null, Arrays.asList(
     HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.STRING), null, null),
     HoodieSchemaField.of("value", HoodieSchema.create(HoodieSchemaType.INT), null, null),
@@ -106,8 +107,8 @@ class TestBlobSupport extends HoodieClientTestBase {
 
     rows.asScala.foreach { row =>
       val data = row.getStruct(row.fieldIndex("data"))
-      val reference = data.getStruct(data.fieldIndex("reference"))
-      val filePath = reference.getString(reference.fieldIndex("file"))
+      val reference = data.getStruct(data.fieldIndex(HoodieSchema.Blob.EXTERNAL_REFERENCE))
+      val filePath = reference.getString(reference.fieldIndex(HoodieSchema.Blob.EXTERNAL_REFERENCE_PATH))
       assertTrue(filePath.endsWith("file2.bin"))
     }
 
@@ -122,16 +123,19 @@ class TestBlobSupport extends HoodieClientTestBase {
       val id = s"id_$i"
       val key = new HoodieKey(id, "")
 
-      val fileReference = new GenericData.Record(
-        SCHEMA.getField("data").get.schema.getField("reference").get.getNonNullSchema.toAvroSchema)
-      fileReference.put("file", filePath)
-      fileReference.put("position", i * 100)
-      fileReference.put("length", 100)
-      fileReference.put("managed", false)
+      val dataSchema = SCHEMA.getField("data").get.schema
+      val fileReference = new GenericData.Record(dataSchema.getField(HoodieSchema.Blob.EXTERNAL_REFERENCE)
+        .get.getNonNullSchema.toAvroSchema)
+      fileReference.put(HoodieSchema.Blob.EXTERNAL_REFERENCE_PATH, filePath)
+      fileReference.put(HoodieSchema.Blob.EXTERNAL_REFERENCE_OFFSET, i * 100L)
+      fileReference.put(HoodieSchema.Blob.EXTERNAL_REFERENCE_LENGTH, 100L)
+      fileReference.put(HoodieSchema.Blob.EXTERNAL_REFERENCE_IS_MANAGED, false)
 
-      val blobRecord = new GenericData.Record(SCHEMA.getField("data").get.schema.toAvroSchema)
-      blobRecord.put("storage_type", "out_of_line")
-      blobRecord.put("reference", fileReference)
+
+      val blobRecord = new GenericData.Record(dataSchema.toAvroSchema)
+      blobRecord.put(HoodieSchema.Blob.TYPE, new GenericData.EnumSymbol(dataSchema.getField(HoodieSchema.Blob.TYPE)
+        .get.schema.toAvroSchema, HoodieSchema.Blob.OUT_OF_LINE))
+      blobRecord.put(HoodieSchema.Blob.EXTERNAL_REFERENCE, fileReference)
 
       val record = new GenericData.Record(SCHEMA.toAvroSchema)
       record.put("id", id)
