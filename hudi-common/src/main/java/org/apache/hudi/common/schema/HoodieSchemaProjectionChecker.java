@@ -97,6 +97,7 @@ class HoodieSchemaProjectionChecker {
     if (sourceSchema.getType() == targetSchema.getType()) {
       switch (sourceSchema.getType()) {
         case RECORD:
+        case BLOB:
           // For records, every target field must exist in source with compatible schema
           for (HoodieSchemaField targetField : targetSchema.getFields()) {
             Option<HoodieSchemaField> sourceFieldOpt = sourceSchema.getField(targetField.name());

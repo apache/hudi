@@ -1689,4 +1689,229 @@ public class TestHoodieSchema {
     // Verify the logical type name
     assertEquals("variant", instance1.getName());
   }
+
+  @Test
+  public void testCreateBlob() {
+    HoodieSchema.Blob blob = HoodieSchema.createBlob();
+
+    assertNotNull(blob);
+    assertEquals("blob", blob.getName());
+    assertEquals(HoodieSchemaType.BLOB, blob.getType());
+
+    // Verify storage_type field
+    Option<HoodieSchemaField> storageTypeOpt = blob.getField("type");
+    assertTrue(storageTypeOpt.isPresent());
+    HoodieSchemaField storageTypeField = storageTypeOpt.get();
+    assertEquals(HoodieSchemaType.ENUM, storageTypeField.schema().getType());
+    assertEquals(Arrays.asList("INLINE", "OUT_OF_LINE"), storageTypeField.schema().getEnumSymbols());
+    assertFalse(storageTypeField.schema().isNullable());
+
+    // Verify data field is nullable
+    Option<HoodieSchemaField> dataOpt = blob.getField("data");
+    assertTrue(dataOpt.isPresent());
+    HoodieSchemaField dataField = dataOpt.get();
+    assertTrue(dataField.schema().isNullable());
+    assertEquals(HoodieSchemaType.BYTES, dataField.schema().getNonNullType().getType());
+
+    // Verify reference field is nullable
+    Option<HoodieSchemaField> refOpt = blob.getField("reference");
+    assertTrue(refOpt.isPresent());
+    HoodieSchemaField refField = refOpt.get();
+    assertTrue(refField.schema().isNullable());
+    assertEquals(HoodieSchemaType.RECORD, refField.schema().getNonNullType().getType());
+
+    HoodieSchema refSchema = refOpt.get().schema().getNonNullType();
+    assertEquals(HoodieSchemaType.RECORD, refSchema.getType());
+
+    // Verify reference has all required fields
+    Option<HoodieSchemaField> externalPathOpt = refSchema.getField("external_path");
+    assertTrue(externalPathOpt.isPresent());
+    assertEquals(HoodieSchemaType.STRING, externalPathOpt.get().schema().getType());
+    assertFalse(externalPathOpt.get().schema().isNullable());
+
+    Option<HoodieSchemaField> offsetOpt = refSchema.getField("offset");
+    assertTrue(offsetOpt.isPresent());
+    assertEquals(HoodieSchemaType.LONG, offsetOpt.get().schema().getNonNullType().getType());
+    assertTrue(offsetOpt.get().schema().isNullable());
+
+    Option<HoodieSchemaField> lengthOpt = refSchema.getField("length");
+    assertTrue(lengthOpt.isPresent());
+    assertEquals(HoodieSchemaType.LONG, lengthOpt.get().schema().getNonNullType().getType());
+    assertTrue(lengthOpt.get().schema().isNullable());
+
+    Option<HoodieSchemaField> managedOpt = refSchema.getField("managed");
+    assertTrue(managedOpt.isPresent());
+    assertEquals(HoodieSchemaType.BOOLEAN, managedOpt.get().schema().getType());
+    assertFalse(managedOpt.get().schema().isNullable());
+  }
+
+  @Test
+  public void testBlobLogicalTypeDetection() {
+    HoodieSchema.Blob blob = HoodieSchema.createBlob();
+
+    // Verify logical type is set
+    Schema avroSchema = blob.toAvroSchema();
+    assertNotNull(avroSchema.getLogicalType());
+    assertEquals("blob", avroSchema.getLogicalType().getName());
+
+    // Verify it can be detected back
+    HoodieSchema reconstructed = HoodieSchema.fromAvroSchema(avroSchema);
+    assertInstanceOf(HoodieSchema.Blob.class, reconstructed);
+    assertEquals(HoodieSchemaType.BLOB, reconstructed.getType());
+  }
+
+  @Test
+  public void testBlobsAsRecordFields() {
+    HoodieSchema recordSchema = HoodieSchema.createRecord("test_record", null, null, Arrays.asList(
+        HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.INT)),
+        HoodieSchemaField.of("file_data", HoodieSchema.createBlob()),
+        HoodieSchemaField.of("image_data", HoodieSchema.createBlob())
+    ));
+
+    Option<HoodieSchemaField> blobFieldOpt = recordSchema.getField("file_data");
+    assertTrue(blobFieldOpt.isPresent());
+    HoodieSchemaField blobField = blobFieldOpt.get();
+    assertEquals(HoodieSchemaType.BLOB, blobField.schema().getType());
+
+    // Verify the blob field has proper structure
+    HoodieSchema blobSchema = blobField.schema();
+    assertInstanceOf(HoodieSchema.Blob.class, blobSchema);
+
+    // Validate the blob schema can be converted to string and back without losing the logical type
+    String recordJson = recordSchema.toString();
+    HoodieSchema parsedRecord = HoodieSchema.parse(recordJson);
+
+    Option<HoodieSchemaField> parsedFileDataFieldOpt = parsedRecord.getField("file_data");
+    assertTrue(parsedFileDataFieldOpt.isPresent());
+    HoodieSchemaField parsedFileDataField = parsedFileDataFieldOpt.get();
+    assertInstanceOf(HoodieSchema.Blob.class, parsedFileDataField.schema());
+    assertEquals(HoodieSchemaType.BLOB, parsedFileDataField.schema().getType());
+    assertSame(HoodieSchema.BlobLogicalType.blob(), parsedFileDataField.schema().toAvroSchema().getLogicalType());
+
+    Option<HoodieSchemaField> parsedImageDataFieldOpt = parsedRecord.getField("image_data");
+    assertTrue(parsedImageDataFieldOpt.isPresent());
+    HoodieSchemaField parsedImageDataField = parsedImageDataFieldOpt.get();
+    assertInstanceOf(HoodieSchema.Blob.class, parsedImageDataField.schema());
+    assertEquals(HoodieSchemaType.BLOB, parsedImageDataField.schema().getType());
+    assertSame(HoodieSchema.BlobLogicalType.blob(), parsedImageDataField.schema().toAvroSchema().getLogicalType());
+  }
+
+  private static final String BLOB_JSON = HoodieSchema.createBlob().toString();
+
+  @Test
+  public void testParseBlobFromJsonWithLogicalType() {
+    // JSON representation of a Blob schema
+    HoodieSchema parsedSchema = HoodieSchema.parse(BLOB_JSON);
+
+    assertInstanceOf(HoodieSchema.Blob.class, parsedSchema);
+    HoodieSchema.Blob parsedBlob = (HoodieSchema.Blob) parsedSchema;
+    assertEquals(HoodieSchemaType.BLOB, parsedBlob.getType());
+  }
+
+  private static HoodieSchema createRecordWithBlob() {
+    return HoodieSchema.createRecord("record", null, null,
+        Arrays.asList(HoodieSchemaField.of("field1", HoodieSchema.create(HoodieSchemaType.INT)), HoodieSchemaField.of("field2", HoodieSchema.createBlob())));
+  }
+
+  @Test
+  public void testContainsBlobTypeDirectBlob() {
+    HoodieSchema blob = HoodieSchema.createBlob();
+    assertTrue(blob.containsBlobType());
+  }
+
+  @Test
+  public void testContainsBlobTypeInUnion() {
+    HoodieSchema unionWithBlob = HoodieSchema.createUnion(
+        HoodieSchema.create(HoodieSchemaType.STRING),
+        HoodieSchema.createBlob()
+    );
+    assertTrue(unionWithBlob.containsBlobType());
+
+    HoodieSchema unionNonBlob = HoodieSchema.createUnion(
+        HoodieSchema.create(HoodieSchemaType.STRING),
+        HoodieSchema.create(HoodieSchemaType.INT)
+    );
+    assertFalse(unionNonBlob.containsBlobType());
+  }
+
+  @Test
+  public void testContainsBlobTypeNullable() {
+    HoodieSchema nullableBlob = HoodieSchema.createNullable(HoodieSchema.createBlob());
+    assertTrue(nullableBlob.containsBlobType());
+
+    HoodieSchema nestedNullableBlob = HoodieSchema.createRecord("record", null, null, Arrays.asList(
+        HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.INT)),
+        HoodieSchemaField.of("data", HoodieSchema.createNullable(HoodieSchema.createBlob()))
+    ));
+    assertTrue(nestedNullableBlob.containsBlobType());
+  }
+
+  @Test
+  public void testContainsBlobTypeRecordWithoutBlob() {
+    HoodieSchema schema = HoodieSchema.createRecord("test", null, null, Arrays.asList(
+        HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.INT)),
+        HoodieSchemaField.of("name", HoodieSchema.create(HoodieSchemaType.STRING))
+    ));
+    assertFalse(schema.containsBlobType());
+  }
+
+  @Test
+  public void testContainsBlobTypeInMaps() {
+    HoodieSchema mapWithBlob = HoodieSchema.createMap(HoodieSchema.createBlob());
+    assertTrue(mapWithBlob.containsBlobType());
+
+    HoodieSchema mapWithNestedBlob = HoodieSchema.createMap(HoodieSchema.createNullable(createRecordWithBlob()));
+    assertTrue(mapWithNestedBlob.containsBlobType());
+
+    HoodieSchema mapNonBlob = HoodieSchema.createMap(HoodieSchema.create(HoodieSchemaType.STRING));
+    assertFalse(mapNonBlob.containsBlobType());
+  }
+
+  @Test
+  public void testContainsBlobTypeInArrays() {
+    HoodieSchema arrayWithBlob = HoodieSchema.createArray(HoodieSchema.createBlob());
+    assertTrue(arrayWithBlob.containsBlobType());
+
+    HoodieSchema arrayWithNestedBlob = HoodieSchema.createArray(HoodieSchema.createNullable(createRecordWithBlob()));
+    assertTrue(arrayWithNestedBlob.containsBlobType());
+
+    HoodieSchema arrayNonBlob = HoodieSchema.createArray(HoodieSchema.create(HoodieSchemaType.STRING));
+    assertFalse(arrayNonBlob.containsBlobType());
+  }
+
+  @Test
+  public void testCreateVariantWithBlobTypedValueShouldFail() {
+    assertThrows(IllegalArgumentException.class, () -> HoodieSchema.createVariantShredded(HoodieSchema.createBlob()));
+    assertThrows(IllegalArgumentException.class, () -> HoodieSchema.createVariantShredded(createRecordWithBlob()));
+  }
+
+  @Test
+  public void testParseRecordWithVariantWithBlobTypedValueShouldFail() {
+    String schemaJson = "{\"type\":\"record\",\"name\":\"test\",\"fields\":["
+        + "{\"name\":\"data\",\"type\":{\"type\":\"record\",\"name\":\"variant\",\"logicalType\":\"variant\",\"fields\":["
+        + "{\"name\":\"metadata\",\"type\":\"bytes\"},"
+        + "{\"name\":\"value\",\"type\":\"bytes\"},"
+        + "{\"name\":\"typed_value\",\"type\":" + BLOB_JSON + "}"
+        + "]}}"
+        + "]}";
+    assertThrows(IllegalArgumentException.class, () -> HoodieSchema.parse(schemaJson).getField("data"));
+  }
+
+  @Test
+  public void testIsBlobField() {
+    // blobs, arrays with blob elements, and map with blob values should be detected as blob fields
+    assertTrue(HoodieSchema.createBlob().isBlobField());
+    assertTrue(HoodieSchema.createNullable(HoodieSchema.createBlob()).isBlobField());
+    assertTrue(HoodieSchema.createMap(HoodieSchema.createBlob()).isBlobField());
+    assertTrue(HoodieSchema.createNullable(HoodieSchema.createMap(HoodieSchema.createNullable(HoodieSchema.createBlob()))).isBlobField());
+    assertTrue(HoodieSchema.createArray(HoodieSchema.createBlob()).isBlobField());
+    assertTrue(HoodieSchema.createNullable(HoodieSchema.createArray(HoodieSchema.createNullable(HoodieSchema.createBlob()))).isBlobField());
+    // non-blob types should not be detected as blob fields
+    assertFalse(HoodieSchema.create(HoodieSchemaType.STRING).isBlobField());
+    // A record that does not contain a blob field should not be detected as a blob field itself
+    assertFalse(createRecordWithBlob().isBlobField());
+    // Similarly, arrays and maps with records as the element/value type should not be detected as blob fields
+    assertFalse(HoodieSchema.createArray(createRecordWithBlob()).isBlobField());
+    assertFalse(HoodieSchema.createMap(createRecordWithBlob()).isBlobField());
+  }
 }
