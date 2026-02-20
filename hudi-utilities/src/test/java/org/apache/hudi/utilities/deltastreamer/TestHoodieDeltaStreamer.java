@@ -3385,6 +3385,8 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
       props.setProperty(KinesisSourceConfig.KINESIS_STREAM_NAME.key(), streamName);
       props.setProperty(KinesisSourceConfig.KINESIS_REGION.key(), kinesisTestUtils.getRegion());
       props.setProperty(KinesisSourceConfig.KINESIS_ENDPOINT_URL.key(), kinesisTestUtils.getEndpointUrl());
+      props.setProperty(KinesisSourceConfig.KINESIS_ACCESS_KEY.key(), kinesisTestUtils.getAccessKey());
+      props.setProperty(KinesisSourceConfig.KINESIS_SECRET_KEY.key(), kinesisTestUtils.getSecretKey());
       props.setProperty(KinesisSourceConfig.KINESIS_STARTING_POSITION.key(), "TRIM_HORIZON");
       props.setProperty("hoodie.streamer.schemaprovider.source.schema.file", basePath + "/source_uber.avsc");
       props.setProperty("hoodie.streamer.schemaprovider.target.schema.file", basePath + "/target_uber.avsc");

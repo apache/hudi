@@ -38,6 +38,8 @@ public class KinesisReadConfig implements Serializable {
   private final String streamName;
   private final String region;
   private final String endpointUrl; // null if not set
+  private final String accessKey; // null if not set
+  private final String secretKey; // null if not set
   private final KinesisSourceConfig.KinesisStartingPosition startingPosition;
   private final boolean shouldAddOffsets;
   private final boolean enableDeaggregation;

@@ -28,6 +28,8 @@ import org.apache.hudi.utilities.ingestion.HoodieIngestionMetrics;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
+import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
+import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.kinesis.KinesisClient;
 import software.amazon.awssdk.services.kinesis.KinesisClientBuilder;
@@ -190,6 +192,12 @@ public class KinesisOffsetGen {
     KinesisClientBuilder builder = KinesisClient.builder().region(Region.of(region));
     if (endpointUrl.isPresent()) {
       builder = builder.endpointOverride(URI.create(endpointUrl.get()));
+    }
+    String accessKey = getStringWithAltKeys(props, KinesisSourceConfig.KINESIS_ACCESS_KEY, null);
+    String secretKey = getStringWithAltKeys(props, KinesisSourceConfig.KINESIS_SECRET_KEY, null);
+    if (accessKey != null && !accessKey.isEmpty() && secretKey != null && !secretKey.isEmpty()) {
+      builder = builder.credentialsProvider(
+          StaticCredentialsProvider.create(AwsBasicCredentials.create(accessKey, secretKey)));
     }
     return builder.build();
   }

@@ -63,6 +63,22 @@ public class KinesisSourceConfig extends HoodieConfig {
       .withDocumentation("Custom endpoint URL for Kinesis (e.g., for localstack). "
           + "If not set, uses the default AWS endpoint for the region.");
 
+  public static final ConfigProperty<String> KINESIS_ACCESS_KEY = ConfigProperty
+      .key(PREFIX + "access.key")
+      .noDefaultValue()
+      .withAlternatives(OLD_PREFIX + "access.key")
+      .markAdvanced()
+      .withDocumentation("AWS access key for Kinesis. Used when connecting to custom endpoints (e.g., LocalStack). "
+          + "If not set with endpoint, uses the default AWS credential chain.");
+
+  public static final ConfigProperty<String> KINESIS_SECRET_KEY = ConfigProperty
+      .key(PREFIX + "secret.key")
+      .noDefaultValue()
+      .withAlternatives(OLD_PREFIX + "secret.key")
+      .markAdvanced()
+      .withDocumentation("AWS secret key for Kinesis. Used when connecting to custom endpoints (e.g., LocalStack). "
+          + "If not set with endpoint, uses the default AWS credential chain.");
+
   public static final ConfigProperty<Long> MAX_EVENTS_FROM_KINESIS_SOURCE = ConfigProperty
       .key(STREAMER_CONFIG_PREFIX + "kinesis.source.maxEvents")
       .defaultValue(5000000L)

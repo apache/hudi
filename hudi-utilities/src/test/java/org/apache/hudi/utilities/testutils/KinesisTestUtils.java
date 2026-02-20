@@ -78,6 +78,20 @@ public class KinesisTestUtils {
     return localStack.getRegion();
   }
 
+  public String getAccessKey() {
+    if (localStack == null || !localStack.isRunning()) {
+      throw new IllegalStateException("LocalStack container is not running. Please start the container first.");
+    }
+    return localStack.getAccessKey();
+  }
+
+  public String getSecretKey() {
+    if (localStack == null || !localStack.isRunning()) {
+      throw new IllegalStateException("LocalStack container is not running. Please start the container first.");
+    }
+    return localStack.getSecretKey();
+  }
+
   public void createStream(String streamName) {
     createStream(streamName, 1);
   }

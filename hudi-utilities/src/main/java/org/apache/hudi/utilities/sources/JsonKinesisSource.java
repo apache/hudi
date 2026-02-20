@@ -48,6 +48,7 @@ import java.util.Map;
 import static org.apache.hudi.common.util.ConfigUtils.getBooleanWithAltKeys;
 import static org.apache.hudi.common.util.ConfigUtils.getIntWithAltKeys;
 import static org.apache.hudi.common.util.ConfigUtils.getLongWithAltKeys;
+import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
 
 /**
  * Source to read JSON data from AWS Kinesis Data Streams using Spark.
@@ -90,6 +91,8 @@ public class JsonKinesisSource extends KinesisSource<JavaRDD<String>> {
         offsetGen.getStreamName(),
         offsetGen.getRegion(),
         offsetGen.getEndpointUrl().orElse(null),
+        getStringWithAltKeys(props, KinesisSourceConfig.KINESIS_ACCESS_KEY, null),
+        getStringWithAltKeys(props, KinesisSourceConfig.KINESIS_SECRET_KEY, null),
         offsetGen.getStartingPosition(),
         shouldAddOffsets,
         getBooleanWithAltKeys(props, KinesisSourceConfig.KINESIS_ENABLE_DEAGGREGATION),
@@ -152,6 +155,13 @@ public class JsonKinesisSource extends KinesisSource<JavaRDD<String>> {
     if (config.getEndpointUrl() != null && !config.getEndpointUrl().isEmpty()) {
       builder = builder.endpointOverride(java.net.URI.create(config.getEndpointUrl()));
     }
+    if (config.getAccessKey() != null && !config.getAccessKey().isEmpty()
+        && config.getSecretKey() != null && !config.getSecretKey().isEmpty()) {
+      builder = builder.credentialsProvider(
+          software.amazon.awssdk.auth.credentials.StaticCredentialsProvider.create(
+              software.amazon.awssdk.auth.credentials.AwsBasicCredentials.create(
+                  config.getAccessKey(), config.getSecretKey())));
+    }
     return builder.build();
   }
 
@@ -208,10 +218,14 @@ public class JsonKinesisSource extends KinesisSource<JavaRDD<String>> {
       if (LOCALSTACK_END_SEQ_SENTINEL.equals(endSeq) && lastSeq != null && !lastSeq.isEmpty()) {
         endSeq = lastSeq;
       }
+      // Closed shard with 0 records on first read: use endSeq as lastSeq so we checkpoint "fully consumed"
+      // (lastSeq >= endSeq when shard expires).
+      if (lastSeq != null && lastSeq.isEmpty() && endSeq != null && !endSeq.isEmpty()) {
+        lastSeq = endSeq;
+      }
       String value = KinesisOffsetGen.CheckpointUtils.buildCheckpointValue(lastSeq, endSeq);
-      // Only include shards we've read from. Omit shards with 0 records: we cannot use the shard's
-      // startingSequenceNumber as lastSeq (AFTER_SEQUENCE_NUMBER would skip the first record when it arrives).
-      // On the next sync we'll read from TRIM_HORIZON again for omitted shards.
+      // Only include shards we've read from or closed shards we've exhausted. Omit open shards with 0 records:
+      // we cannot use the shard's startingSequenceNumber as lastSeq (AFTER_SEQUENCE_NUMBER would skip the first record).
       if (lastSeq != null && !lastSeq.isEmpty()) {
         fullCheckpoint.put(range.getShardId(), value);
       }
