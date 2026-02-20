@@ -224,11 +224,11 @@ class TestBlobCleaner extends HoodieClientTestBase {
         blobValue = createInlineBlob(schema, ("inline_data_" + commitTime + "_" + i).getBytes());
       } else if (i % 3 == 1) {
         // Managed external reference - should be cleaned when record is removed
-        String managedPath = basePath + "/.hoodie/blobs/" + commitTime + "_" + i + ".bin";
+        String managedPath = tempDir + "/blobs/" + commitTime + "_" + i + ".bin";
         blobValue = createBlob(schema, managedPath, 0L, 1024L, true);
       } else {
         // Unmanaged external reference - should NEVER be cleaned
-        String unmanagedPath = basePath + "/.hoodie/blobs/" + commitTime + "_" + i +  ".bin";
+        String unmanagedPath = tempDir + "/blobs/" + commitTime + "_" + i +  ".bin";
         blobValue = createBlob(schema, unmanagedPath, 0L, 2048L, false);
       }
 
@@ -245,7 +245,7 @@ class TestBlobCleaner extends HoodieClientTestBase {
   private GenericRecord createInlineBlob(HoodieSchema recordSchema, byte[] data) {
     HoodieSchema blobSchema = recordSchema.getField("file_data").get().getNonNullSchema();
     GenericRecord blob = new GenericData.Record(blobSchema.toAvroSchema());
-    blob.put(HoodieSchema.Blob.TYPE, getBlobType("INLINE"));
+    blob.put(HoodieSchema.Blob.TYPE, getBlobType(HoodieSchema.Blob.INLINE));
     blob.put(HoodieSchema.Blob.INLINE_DATA_FIELD, ByteBuffer.wrap(data));
     blob.put(HoodieSchema.Blob.EXTERNAL_REFERENCE, null);
     return blob;
@@ -266,7 +266,7 @@ class TestBlobCleaner extends HoodieClientTestBase {
     reference.put(HoodieSchema.Blob.EXTERNAL_REFERENCE_IS_MANAGED, managed);
 
     GenericRecord blob = new GenericData.Record(blobSchema.toAvroSchema());
-    blob.put(HoodieSchema.Blob.TYPE, getBlobType("OUT_OF_LINE"));
+    blob.put(HoodieSchema.Blob.TYPE, getBlobType(HoodieSchema.Blob.OUT_OF_LINE));
     blob.put(HoodieSchema.Blob.INLINE_DATA_FIELD, null);
     blob.put(HoodieSchema.Blob.EXTERNAL_REFERENCE, reference);
     return blob;
@@ -300,7 +300,7 @@ class TestBlobCleaner extends HoodieClientTestBase {
    * Only creates files for records where i % 3 == 1 (managed blobs).
    */
   private void createManagedBlobFiles(String commitTime, int numRecords) throws IOException {
-    StoragePath blobDir = new StoragePath(basePath, ".hoodie/blobs");
+    StoragePath blobDir = new StoragePath(tempDir.toString(), "blobs");
     if (!storage.exists(blobDir)) {
       storage.createDirectory(blobDir);
     }
@@ -328,7 +328,7 @@ class TestBlobCleaner extends HoodieClientTestBase {
    */
   private void verifyBlobFileCleanup(String commit1, String commit2, String commit3, String commit4)
       throws IOException {
-    StoragePath blobDir = new StoragePath(basePath, ".hoodie/blobs");
+    StoragePath blobDir = new StoragePath(tempDir.toString(), "blobs");
     // Check commit 1 managed blobs - should be DELETED (only i % 3 == 1)
     for (int i = 0; i < 10; i++) {
       if (i % 3 == 1) {
@@ -379,7 +379,7 @@ class TestBlobCleaner extends HoodieClientTestBase {
     }
   }
 
-  private static StoragePath getStoragePathForBlob(String commit2, StoragePath blobDir, int i) {
-    return new StoragePath(blobDir, commit2 + "_" + i + ".bin");
+  private static StoragePath getStoragePathForBlob(String commit, StoragePath blobDir, int i) {
+    return new StoragePath(blobDir, commit + "_" + i + ".bin");
   }
 }
