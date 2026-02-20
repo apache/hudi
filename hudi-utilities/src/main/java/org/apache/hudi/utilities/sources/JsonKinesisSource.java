@@ -126,6 +126,15 @@ public class JsonKinesisSource extends KinesisSource<JavaRDD<String>> {
 
     JavaRDD<String> recordRdd = fetchRdd.flatMap(r -> r.getRecords().iterator());
 
+    // Apply minimum partitions for downstream parallelism (similar to Kafka source)
+    long minPartitions = getLongWithAltKeys(props, KinesisSourceConfig.KINESIS_SOURCE_MIN_PARTITIONS);
+    if (minPartitions > 0 && minPartitions > shardRanges.length) {
+      int targetPartitions = (int) minPartitions;
+      log.info("Repartitioning from {} shards to {} partitions (minPartitions={})",
+          shardRanges.length, targetPartitions, minPartitions);
+      recordRdd = recordRdd.repartition(targetPartitions);
+    }
+
     // Collect fetch results to build checkpoint - this triggers execution
     List<ShardFetchResult> fetchResults = fetchRdd.collect();
     lastCheckpointData = buildCheckpointFromFetchResults(fetchResults);

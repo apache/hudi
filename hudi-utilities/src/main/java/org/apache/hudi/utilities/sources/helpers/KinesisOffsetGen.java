@@ -187,11 +187,13 @@ public class KinesisOffsetGen {
   /**
    * Get shard ranges to read, based on checkpoint and limits.
    */
-  public KinesisShardRange[] getNextShardRanges(Option<Checkpoint> lastCheckpoint, long sourceLimit,
-      HoodieIngestionMetrics metrics) {
+  public KinesisShardRange[] getNextShardRanges(Option<Checkpoint> lastCheckpoint,
+                                                long sourceLimit,
+                                                HoodieIngestionMetrics metrics) {
     long maxEvents = getLongWithAltKeys(props, KinesisSourceConfig.MAX_EVENTS_FROM_KINESIS_SOURCE);
     long numEvents = sourceLimit == Long.MAX_VALUE ? maxEvents : Math.min(sourceLimit, maxEvents);
-    getLongWithAltKeys(props, KinesisSourceConfig.KINESIS_SOURCE_MIN_PARTITIONS); // for config validation
+    long minPartitions = getLongWithAltKeys(props, KinesisSourceConfig.KINESIS_SOURCE_MIN_PARTITIONS);
+    log.info("getNextShardRanges set config {} to {}", KinesisSourceConfig.KINESIS_SOURCE_MIN_PARTITIONS.key(), minPartitions);
 
     try (KinesisClient client = createKinesisClient()) {
       List<Shard> shards = listShards(client);
@@ -239,10 +241,13 @@ public class KinesisOffsetGen {
         ranges.add(KinesisShardRange.of(shardId, startSeq));
       }
 
-      metrics.updateStreamerSourceParallelism(ranges.size());
+      int targetParallelism = minPartitions > 0
+          ? (int) Math.max(minPartitions, ranges.size())
+          : ranges.size();
+      metrics.updateStreamerSourceParallelism(targetParallelism);
 
-      log.info("About to read up to {} events from {} shards in stream {}",
-          numEvents, ranges.size(), streamName);
+      log.info("About to read up to {} events from {} shards in stream {} (target parallelism: {})",
+          numEvents, ranges.size(), streamName, targetParallelism);
       return ranges.toArray(new KinesisShardRange[0]);
     } catch (ResourceNotFoundException e) {
       throw new HoodieReadFromSourceException("Kinesis stream " + streamName + " not found", e);

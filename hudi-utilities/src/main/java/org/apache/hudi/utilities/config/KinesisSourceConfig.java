@@ -75,10 +75,10 @@ public class KinesisSourceConfig extends HoodieConfig {
       .defaultValue(0L)
       .withAlternatives(OLD_PREFIX + "minPartitions")
       .markAdvanced()
-      .withDocumentation("Desired minimum number of Spark partitions to read from Kinesis. "
+      .withDocumentation("Desired minimum number of Spark partitions when reading from Kinesis. "
           + "By default, Hudi has a 1-1 mapping of Kinesis shards to Spark partitions. "
-          + "If set to a value greater than the number of shards, large shards will be split. "
-          + "Use 0 for 1-1 mapping.");
+          + "If set to a value greater than the number of shards, the result RDD will be repartitioned "
+          + "to increase downstream parallelism. Use 0 for 1-1 mapping.");
 
   public static final ConfigProperty<Boolean> KINESIS_APPEND_OFFSETS = ConfigProperty
       .key(PREFIX + "append.offsets")
