@@ -122,6 +122,7 @@ import org.apache.hudi.utilities.streamer.NoNewDataTerminationStrategy;
 import org.apache.hudi.utilities.streamer.StreamSync;
 import org.apache.hudi.utilities.streamer.StreamerCheckpointUtils;
 import org.apache.hudi.utilities.config.KinesisSourceConfig;
+import org.apache.hudi.utilities.sources.helpers.KinesisOffsetGen;
 import org.apache.hudi.utilities.testutils.JdbcTestUtils;
 import org.apache.hudi.utilities.testutils.KinesisTestUtils;
 import org.apache.hudi.utilities.testutils.UtilitiesTestBase;
@@ -3232,6 +3233,109 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
       Dataset<Row> ds = sqlContext.read().format("org.apache.hudi").load(tableBasePath);
       assertEquals(totalRecords, ds.count());
       assertTrue(ds.filter("_row_key is not null").count() > 0);
+    }
+
+    @Test
+    public void testJsonKinesisAggregatedRecords() throws Exception {
+      String streamName = "test-kinesis-stream-agg-" + testNum;
+      kinesisTestUtils.createStream(streamName, 2);
+      HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator(System.nanoTime());
+      String[] jsonRecords = UtilitiesTestBase.Helpers.jsonifyRecords(
+          dataGenerator.generateInsertsAsPerSchema("000", 6, HoodieTestDataGenerator.TRIP_SCHEMA));
+      kinesisTestUtils.sendAggregatedRecords(streamName, jsonRecords);
+      prepareJsonKinesisDFSSource(PROPS_FILENAME_TEST_JSON_KINESIS, streamName);
+      String tableBasePath = basePath + "/test_json_kinesis_agg_table" + testNum;
+      HoodieDeltaStreamer deltaStreamer = new HoodieDeltaStreamer(
+          TestHelpers.makeConfig(tableBasePath, WriteOperationType.UPSERT, JsonKinesisSource.class.getName(),
+              Collections.emptyList(), PROPS_FILENAME_TEST_JSON_KINESIS, false,
+              true, 100000, false, null, null, "timestamp", null), jsc);
+      deltaStreamer.sync();
+      assertRecordCount(6, tableBasePath, sqlContext);
+      deltaStreamer.shutdownGracefully();
+      testNum++;
+    }
+
+    @Test
+    public void testJsonKinesisShardSplitCheckpoint() throws Exception {
+      String streamName = "test-kinesis-stream-split-" + testNum;
+      kinesisTestUtils.createStream(streamName, 2);
+      prepareJsonKinesisDFSFiles(10, false, streamName);
+      prepareJsonKinesisDFSSource(PROPS_FILENAME_TEST_JSON_KINESIS, streamName);
+      String tableBasePath = basePath + "/test_json_kinesis_split_table" + testNum;
+      HoodieDeltaStreamer deltaStreamer = new HoodieDeltaStreamer(
+          TestHelpers.makeConfig(tableBasePath, WriteOperationType.UPSERT, JsonKinesisSource.class.getName(),
+              Collections.emptyList(), PROPS_FILENAME_TEST_JSON_KINESIS, false,
+              true, 100000, false, null, null, "timestamp", null), jsc);
+      deltaStreamer.sync();
+      assertRecordCount(10, tableBasePath, sqlContext);
+      String checkpointAfterBatch1 = getCheckpointFromLatestCommit(tableBasePath);
+      assertNotNull(checkpointAfterBatch1);
+      assertTrue(checkpointAfterBatch1.startsWith(streamName + ","));
+      assertTrue(checkpointAfterBatch1.contains(":"), "Checkpoint should have shard:seq format");
+
+      kinesisTestUtils.updateShardCount(streamName, 4);
+      prepareJsonKinesisDFSFiles(5, false, streamName);
+      deltaStreamer.sync();
+      assertRecordCount(15, tableBasePath, sqlContext);
+      String checkpointAfterSplit = getCheckpointFromLatestCommit(tableBasePath);
+      assertNotNull(checkpointAfterSplit);
+      assertTrue(checkpointAfterSplit.startsWith(streamName + ","));
+      // Closed parent shards must have lastSeq|endSeq with endSeq <= lastSeq so we can detect
+      // "fully consumed" when parent expires. LocalStack returns Long.MAX_VALUE; we replace with lastSeq.
+      assertFalse(checkpointAfterSplit.contains("9223372036854775807"),
+          "Checkpoint should not contain Long.MAX_VALUE as endSeq (parent expiry would fail)");
+      int initialShardCount = KinesisOffsetGen.CheckpointUtils.strToOffsets(checkpointAfterBatch1).size();
+      int shardCountAfterSplit = KinesisOffsetGen.CheckpointUtils.strToOffsets(checkpointAfterSplit).size();
+      assertTrue(shardCountAfterSplit > initialShardCount,
+          "Checkpoint after split should have more shards (" + shardCountAfterSplit
+              + ") than initial (" + initialShardCount + ")");
+      deltaStreamer.shutdownGracefully();
+      testNum++;
+    }
+
+    @Test
+    public void testJsonKinesisShardMergeCheckpoint() throws Exception {
+      String streamName = "test-kinesis-stream-merge-" + testNum;
+      kinesisTestUtils.createStream(streamName, 4);
+      prepareJsonKinesisDFSFiles(8, false, streamName);
+      prepareJsonKinesisDFSSource(PROPS_FILENAME_TEST_JSON_KINESIS, streamName);
+      String tableBasePath = basePath + "/test_json_kinesis_merge_table" + testNum;
+      HoodieDeltaStreamer deltaStreamer = new HoodieDeltaStreamer(
+          TestHelpers.makeConfig(tableBasePath, WriteOperationType.UPSERT, JsonKinesisSource.class.getName(),
+              Collections.emptyList(), PROPS_FILENAME_TEST_JSON_KINESIS, false,
+              true, 100000, false, null, null, "timestamp", null), jsc);
+      deltaStreamer.sync();
+      assertRecordCount(8, tableBasePath, sqlContext);
+      String checkpointAfterBatch1 = getCheckpointFromLatestCommit(tableBasePath);
+      assertNotNull(checkpointAfterBatch1);
+
+      kinesisTestUtils.updateShardCount(streamName, 2);
+      prepareJsonKinesisDFSFiles(4, false, streamName);
+      deltaStreamer.sync();
+      assertRecordCount(12, tableBasePath, sqlContext);
+      String checkpointAfterMerge = getCheckpointFromLatestCommit(tableBasePath);
+      assertNotNull(checkpointAfterMerge);
+      assertTrue(checkpointAfterMerge.startsWith(streamName + ","));
+      int initialShardCount = KinesisOffsetGen.CheckpointUtils.strToOffsets(checkpointAfterBatch1).size();
+      int shardCountAfterMerge = KinesisOffsetGen.CheckpointUtils.strToOffsets(checkpointAfterMerge).size();
+      assertTrue(shardCountAfterMerge > initialShardCount,
+          "Checkpoint after merge should have more shards (" + shardCountAfterMerge
+              + ") than initial (" + initialShardCount + ")");
+      deltaStreamer.shutdownGracefully();
+      testNum++;
+    }
+
+    private String getCheckpointFromLatestCommit(String tableBasePath) throws IOException {
+      HoodieTableMetaClient meta = createMetaClient(jsc, tableBasePath);
+      HoodieTimeline timeline = meta.getActiveTimeline().getCommitsTimeline().filterCompletedInstants();
+      if (timeline.empty()) {
+        return null;
+      }
+      HoodieInstant lastInstant = timeline.lastInstant().get();
+      HoodieCommitMetadata commitMetadata = timeline.readCommitMetadata(lastInstant);
+      return meta.getTableConfig().getTableVersion().greaterThanOrEquals(HoodieTableVersion.EIGHT)
+          ? commitMetadata.getMetadata(STREAMER_CHECKPOINT_KEY_V2)
+          : commitMetadata.getMetadata(HoodieStreamer.CHECKPOINT_KEY);
     }
 
     private String getLatestCommitInstantTime(String tableBasePath) {

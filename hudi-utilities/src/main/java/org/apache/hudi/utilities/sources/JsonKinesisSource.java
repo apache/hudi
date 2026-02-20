@@ -191,6 +191,9 @@ public class JsonKinesisSource extends KinesisSource<JavaRDD<String>> {
     return checkpoint;
   }
 
+  /** LocalStack returns Long.MAX_VALUE for closed shards' endingSequenceNumber; real AWS returns actual value. */
+  private static final String LOCALSTACK_END_SEQ_SENTINEL = "9223372036854775807";
+
   @Override
   protected String createCheckpointFromBatch(JavaRDD<String> batch, KinesisOffsetGen.KinesisShardRange[] shardRanges) {
     // Build checkpoint: for each shard, use lastSeq from read (or startSeq if no records) and endSeq for closed shards
@@ -200,7 +203,15 @@ public class JsonKinesisSource extends KinesisSource<JavaRDD<String>> {
           ? lastCheckpointData.get(range.getShardId())
           : range.getStartingSequenceNumber().orElse("");
       String endSeq = range.getEndingSequenceNumber().orElse(null);
+      // LocalStack returns Long.MAX_VALUE for closed shards; use lastSeq as endSeq so we can detect
+      // "fully consumed" when the parent shard expires (lastSeq >= endSeq).
+      if (LOCALSTACK_END_SEQ_SENTINEL.equals(endSeq) && lastSeq != null && !lastSeq.isEmpty()) {
+        endSeq = lastSeq;
+      }
       String value = KinesisOffsetGen.CheckpointUtils.buildCheckpointValue(lastSeq, endSeq);
+      // Only include shards we've read from. Omit shards with 0 records: we cannot use the shard's
+      // startingSequenceNumber as lastSeq (AFTER_SEQUENCE_NUMBER would skip the first record when it arrives).
+      // On the next sync we'll read from TRIM_HORIZON again for omitted shards.
       if (lastSeq != null && !lastSeq.isEmpty()) {
         fullCheckpoint.put(range.getShardId(), value);
       }

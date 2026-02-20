@@ -18,6 +18,8 @@
 
 package org.apache.hudi.utilities.testutils;
 
+import com.amazonaws.kinesis.agg.AggRecord;
+import com.amazonaws.kinesis.agg.RecordAggregator;
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
 import software.amazon.awssdk.core.SdkBytes;
@@ -25,12 +27,15 @@ import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.kinesis.KinesisClient;
 import software.amazon.awssdk.services.kinesis.model.CreateStreamRequest;
 import software.amazon.awssdk.services.kinesis.model.DescribeStreamRequest;
-import software.amazon.awssdk.services.kinesis.model.StreamStatus;
 import software.amazon.awssdk.services.kinesis.model.PutRecordRequest;
+import software.amazon.awssdk.services.kinesis.model.ScalingType;
+import software.amazon.awssdk.services.kinesis.model.StreamStatus;
+import software.amazon.awssdk.services.kinesis.model.UpdateShardCountRequest;
 
 import org.testcontainers.containers.localstack.LocalStackContainer;
 import org.testcontainers.utility.DockerImageName;
 
+import java.nio.ByteBuffer;
 import java.net.URI;
 import java.util.List;
 
@@ -87,8 +92,11 @@ public class KinesisTestUtils {
   }
 
   private void waitForStreamActive(String streamName) {
+    waitForStreamActive(streamName, 30);
+  }
+
+  private void waitForStreamActive(String streamName, int maxAttempts) {
     try {
-      int maxAttempts = 30;
       for (int i = 0; i < maxAttempts; i++) {
         String status = kinesisClient.describeStream(
             DescribeStreamRequest.builder().streamName(streamName).build())
@@ -96,7 +104,7 @@ public class KinesisTestUtils {
         if (StreamStatus.ACTIVE.toString().equals(status)) {
           return;
         }
-        Thread.sleep(200);
+        Thread.sleep(500);
       }
       throw new RuntimeException("Stream " + streamName + " did not become ACTIVE in time");
     } catch (InterruptedException e) {
@@ -125,6 +133,49 @@ public class KinesisTestUtils {
               .data(SdkBytes.fromUtf8String(record))
               .build());
     }
+  }
+
+  /**
+   * Send KPL-aggregated records. Multiple user records are combined into one Kinesis record.
+   */
+  public void sendAggregatedRecords(String streamName, String[] userRecords) throws Exception {
+    RecordAggregator aggregator = new RecordAggregator();
+    for (String data : userRecords) {
+      AggRecord aggRecord = aggregator.addUserRecord("pk-" + System.nanoTime(), null, data.getBytes("UTF-8"));
+      if (aggRecord != null) {
+        putAggregatedRecord(streamName, aggRecord);
+      }
+    }
+    AggRecord remaining = aggregator.clearAndGet();
+    if (remaining != null && remaining.getNumUserRecords() > 0) {
+      putAggregatedRecord(streamName, remaining);
+    }
+  }
+
+  private void putAggregatedRecord(String streamName, AggRecord aggRecord) {
+    com.amazonaws.services.kinesis.model.PutRecordRequest v1Request = aggRecord.toPutRecordRequest(streamName);
+    ByteBuffer dataBuffer = v1Request.getData();
+    byte[] dataBytes = new byte[dataBuffer.remaining()];
+    dataBuffer.get(dataBytes);
+    kinesisClient.putRecord(
+        PutRecordRequest.builder()
+            .streamName(streamName)
+            .partitionKey(v1Request.getPartitionKey())
+            .data(SdkBytes.fromByteArray(dataBytes))
+            .build());
+  }
+
+  /**
+   * Update shard count (triggers split or merge). Waits for stream to become ACTIVE again.
+   */
+  public void updateShardCount(String streamName, int targetShardCount) throws InterruptedException {
+    kinesisClient.updateShardCount(
+        UpdateShardCountRequest.builder()
+            .streamName(streamName)
+            .targetShardCount(targetShardCount)
+            .scalingType(ScalingType.UNIFORM_SCALING)
+            .build());
+    waitForStreamActive(streamName, 60);
   }
 
   public void teardown() {

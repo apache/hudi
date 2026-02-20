@@ -549,6 +549,13 @@
       <artifactId>amazon-kinesis-deaggregator</artifactId>
       <version>1.0.3</version>
     </dependency>
+    <!-- KPL aggregation: for creating aggregated records in tests -->
+    <dependency>
+      <groupId>com.amazonaws</groupId>
+      <artifactId>amazon-kinesis-aggregator</artifactId>
+      <version>1.0.3</version>
+      <scope>test</scope>
+    </dependency>
 
     <!-- Hive - Test -->
     <dependency>
