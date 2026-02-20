@@ -68,8 +68,6 @@ import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
 @Getter
 public class KinesisOffsetGen {
 
-  private static final String METRIC_NAME_KINESIS_MESSAGE_DELAY = "kinesisMessageDelay";
-
   public static class CheckpointUtils {
     /**
      * Kinesis checkpoint pattern.
@@ -304,6 +302,11 @@ public class KinesisOffsetGen {
       }
 
       List<Record> records = response.records();
+      // No records returned: stop polling. nextShardIterator can be non-null when at LATEST with no new
+      // data; continuing would cause an infinite loop of empty GetRecords calls.
+      if (records.isEmpty()) {
+        break;
+      }
       for (Record r : records) {
         allRecords.add(r);
         lastSequenceNumber = r.sequenceNumber();

@@ -462,8 +462,8 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     String[] splitNames = propsFilename.split("\\.");
     String tableBasePath = basePath + "/" + splitNames[0];
     syncOnce(TestHelpers.makeConfig(tableBasePath, WriteOperationType.UPSERT,
-            Collections.singletonList(TripsWithDistanceTransformer.class.getName()),
-            propsFilename, false));
+        Collections.singletonList(TripsWithDistanceTransformer.class.getName()),
+        propsFilename, false));
     HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder()
         .setConf(HoodieTestUtils.getDefaultStorageConf()).setBasePath(tableBasePath).build();
     assertEquals(
@@ -2009,7 +2009,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
         // Schedule an indexing instant
         HoodieIndexer scheduleIndexingJob = new HoodieIndexer(jsc,
             buildIndexerConfig(tableBasePath, ds.getConfig().targetTableName, null, UtilHelpers.SCHEDULE, "RECORD_INDEX",
-            Arrays.asList(HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_ENABLE_PROP.key() + "=true", HoodieWriteConfig.MARKERS_TYPE.key() + "=DIRECT")));
+                Arrays.asList(HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_ENABLE_PROP.key() + "=true", HoodieWriteConfig.MARKERS_TYPE.key() + "=DIRECT")));
         scheduleIndexInstantTime = scheduleIndexingJob.doSchedule();
         TestHelpers.assertPendingIndexCommit(tableBasePath);
         LOG.info("Schedule indexing success, now build index with instant time " + scheduleIndexInstantTime.get());
@@ -3142,6 +3142,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     @Test
     public void testJsonKinesisDFSSource() throws Exception {
       String streamName = "test-kinesis-stream-" + testNum;
+      // Create stream with at least 2 shards to exercise multi-shard reading
       prepareJsonKinesisDFSFiles(JSON_KINESIS_NUM_RECORDS, true, streamName);
       prepareJsonKinesisDFSSource(PROPS_FILENAME_TEST_JSON_KINESIS, streamName);
       String tableBasePath = basePath + "/test_json_kinesis_table" + testNum;
@@ -3149,16 +3150,82 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
           TestHelpers.makeConfig(tableBasePath, WriteOperationType.UPSERT, JsonKinesisSource.class.getName(),
               Collections.emptyList(), PROPS_FILENAME_TEST_JSON_KINESIS, false,
               true, 100000, false, null, null, "timestamp", null), jsc);
+
+      // Track commit completion times for incremental queries
+      List<String> commitCompletionTimes = new ArrayList<>();
+
+      // Batch 1: initial ingestion
       deltaStreamer.sync();
       assertRecordCount(JSON_KINESIS_NUM_RECORDS, tableBasePath, sqlContext);
+      String commit1 = getLatestCommitInstantTime(tableBasePath);
+      commitCompletionTimes.add(getCommitCompletionTime(tableBasePath));
+      assertRecordsForCommit(tableBasePath, commit1, JSON_KINESIS_NUM_RECORDS);
 
       int totalRecords = JSON_KINESIS_NUM_RECORDS;
-      int records = 10;
-      totalRecords += records;
-      prepareJsonKinesisDFSFiles(records, false, streamName);
+      // Batch 2
+      int batch2Records = 10;
+      totalRecords += batch2Records;
+      prepareJsonKinesisDFSFiles(batch2Records, false, streamName);
       deltaStreamer.sync();
       assertRecordCount(totalRecords, tableBasePath, sqlContext);
+      String commit2 = getLatestCommitInstantTime(tableBasePath);
+      commitCompletionTimes.add(getCommitCompletionTime(tableBasePath));
+      assertRecordsForCommit(tableBasePath, commit2, batch2Records);
+
+      // Batch 3
+      int batch3Records = 8;
+      totalRecords += batch3Records;
+      prepareJsonKinesisDFSFiles(batch3Records, false, streamName);
+      deltaStreamer.sync();
+      assertRecordCount(totalRecords, tableBasePath, sqlContext);
+      String commit3 = getLatestCommitInstantTime(tableBasePath);
+      commitCompletionTimes.add(getCommitCompletionTime(tableBasePath));
+      assertRecordsForCommit(tableBasePath, commit3, batch3Records);
+
+      // Batch 4
+      int batch4Records = 7;
+      totalRecords += batch4Records;
+      prepareJsonKinesisDFSFiles(batch4Records, false, streamName);
+      deltaStreamer.sync();
+      assertRecordCount(totalRecords, tableBasePath, sqlContext);
+      String commit4 = getLatestCommitInstantTime(tableBasePath);
+      commitCompletionTimes.add(getCommitCompletionTime(tableBasePath));
+      assertRecordsForCommit(tableBasePath, commit4, batch4Records);
       deltaStreamer.shutdownGracefully();
+
+      // Incremental queries for a subset of commits
+      sqlContext.clearCache();
+      String c1 = commitCompletionTimes.get(0);
+      String c2 = commitCompletionTimes.get(1);
+      String c3 = commitCompletionTimes.get(2);
+      String c4 = commitCompletionTimes.get(3);
+
+      // Incremental: first commit only (batch 1)
+      Dataset<Row> incrBatch1 = sqlContext.read().format("org.apache.hudi")
+          .options(hudiOpts)
+          .option(DataSourceReadOptions.QUERY_TYPE().key(), DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL())
+          .option(DataSourceReadOptions.START_COMMIT().key(), "000")
+          .option(DataSourceReadOptions.END_COMMIT().key(), c1)
+          .load(tableBasePath);
+      assertEquals(JSON_KINESIS_NUM_RECORDS, incrBatch1.count(), "Incremental read for batch 1");
+
+      // Incremental: commits 2 and 3 (batches 2 + 3)
+      Dataset<Row> incrBatches2And3 = sqlContext.read().format("org.apache.hudi")
+          .options(hudiOpts)
+          .option(DataSourceReadOptions.QUERY_TYPE().key(), DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL())
+          .option(DataSourceReadOptions.START_COMMIT().key(), c1)
+          .option(DataSourceReadOptions.END_COMMIT().key(), c3)
+          .load(tableBasePath);
+      assertEquals(batch2Records + batch3Records, incrBatches2And3.count(), "Incremental read for batches 2 and 3");
+
+      // Incremental: commits 3 and 4 (batches 3 + 4)
+      Dataset<Row> incrBatches3And4 = sqlContext.read().format("org.apache.hudi")
+          .options(hudiOpts)
+          .option(DataSourceReadOptions.QUERY_TYPE().key(), DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL())
+          .option(DataSourceReadOptions.START_COMMIT().key(), c2)
+          .option(DataSourceReadOptions.END_COMMIT().key(), c4)
+          .load(tableBasePath);
+      assertEquals(batch3Records + batch4Records, incrBatches3And4.count(), "Incremental read for batches 3 and 4");
 
       // Verify data correctness: read back and check _row_key exists
       sqlContext.clearCache();
@@ -3167,13 +3234,34 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
       assertTrue(ds.filter("_row_key is not null").count() > 0);
     }
 
-    private void prepareJsonKinesisDFSFiles(int numRecords, boolean createStream, String streamName) {
-      prepareJsonKinesisDFSFiles(numRecords, createStream, streamName, HoodieTestDataGenerator.TRIP_SCHEMA, System.nanoTime());
+    private String getLatestCommitInstantTime(String tableBasePath) {
+      HoodieTableMetaClient metaClient = createMetaClient(jsc, tableBasePath);
+      HoodieTimeline timeline = metaClient.getCommitsTimeline().filterCompletedInstants();
+      return timeline.lastInstant().get().requestedTime();
     }
 
-    private void prepareJsonKinesisDFSFiles(int numRecords, boolean createStream, String streamName, String schemaStr, long seed) {
+    private String getCommitCompletionTime(String tableBasePath) {
+      HoodieTableMetaClient metaClient = createMetaClient(jsc, tableBasePath);
+      HoodieInstant instant = metaClient.getCommitsTimeline().filterCompletedInstants().lastInstant().get();
+      String completionTime = instant.getCompletionTime();
+      return (completionTime != null && !completionTime.isEmpty()) ? completionTime : instant.requestedTime();
+    }
+
+    private void assertRecordsForCommit(String tableBasePath, String commitTime, long expectedCount) {
+      sqlContext.clearCache();
+      long count = sqlContext.read().options(hudiOpts).format("org.apache.hudi").load(tableBasePath)
+          .filter(String.format("_hoodie_commit_time = '%s'", commitTime))
+          .count();
+      assertEquals(expectedCount, count, "Record count for commit " + commitTime);
+    }
+
+    private void prepareJsonKinesisDFSFiles(int numRecords, boolean createStream, String streamName) {
+      prepareJsonKinesisDFSFiles(numRecords, createStream, streamName, HoodieTestDataGenerator.TRIP_SCHEMA, System.nanoTime(), 2);
+    }
+
+    private void prepareJsonKinesisDFSFiles(int numRecords, boolean createStream, String streamName, String schemaStr, long seed, int shardCount) {
       if (createStream) {
-        kinesisTestUtils.createStream(streamName, 1);
+        kinesisTestUtils.createStream(streamName, shardCount);
       }
       HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator(seed);
       String[] jsonRecords = UtilitiesTestBase.Helpers.jsonifyRecords(
@@ -3546,9 +3634,9 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     String tableBasePath = basePath + "/test_csv_table" + testNum;
     String sourceOrderingField = (hasHeader || useSchemaProvider) ? "timestamp" : "_c0";
     syncOnce(TestHelpers.makeConfig(
-            tableBasePath, WriteOperationType.INSERT, CsvDFSSource.class.getName(),
-            transformerClassNames, PROPS_FILENAME_TEST_CSV, false,
-            useSchemaProvider, 1000, false, null, null, sourceOrderingField, null));
+        tableBasePath, WriteOperationType.INSERT, CsvDFSSource.class.getName(),
+        transformerClassNames, PROPS_FILENAME_TEST_CSV, false,
+        useSchemaProvider, 1000, false, null, null, sourceOrderingField, null));
     assertRecordCount(CSV_NUM_RECORDS, tableBasePath, sqlContext);
     testNum++;
   }
