@@ -1979,6 +1979,7 @@ public class HoodieSchema implements Serializable {
   public static class Blob extends HoodieSchema {
     private static final String DEFAULT_NAME = "blob";
     private static final List<Schema.Field> BLOB_FIELDS = createBlobFields();
+    private static final int REFERENCE_FIELD_COUNT = AvroSchemaUtils.getNonNullTypeFromUnion(BLOB_FIELDS.get(2).schema()).getFields().size();
 
     public static final String TYPE = "type";
     public static final String INLINE_DATA_FIELD = "data";
@@ -1995,15 +1996,7 @@ public class HoodieSchema implements Serializable {
     }
 
     public static int getReferenceFieldCount() {
-      return AvroSchemaUtils.getNonNullTypeFromUnion(BLOB_FIELDS.get(2).schema()).getFields().size();
-    }
-
-    public static int getBlobReferenceFieldCount() {
-      return 4;
-    }
-
-    public static int getBlobFieldCount() {
-      return 3;
+      return REFERENCE_FIELD_COUNT;
     }
 
     /**

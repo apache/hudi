@@ -79,6 +79,9 @@ trait SparkAdapter extends Serializable {
    */
   def injectScalarFunctions(extensions: SparkSessionExtensions): Unit
 
+  /**
+   * Inject planner strategies to SparkSessionExtensions for converting custom logical plans into physical plans.
+   */
   def injectPlannerStrategy(extensions: SparkSessionExtensions): Unit
 
   /**

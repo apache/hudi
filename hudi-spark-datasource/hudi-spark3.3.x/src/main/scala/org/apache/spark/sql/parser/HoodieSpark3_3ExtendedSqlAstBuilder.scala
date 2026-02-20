@@ -16,6 +16,7 @@
  */
 package org.apache.spark.sql.parser
 
+import org.apache.hudi.common.schema.{HoodieSchema, HoodieSchemaType}
 import org.apache.hudi.spark.sql.parser.{HoodieSqlBaseBaseVisitor, HoodieSqlBaseParser}
 import org.apache.hudi.spark.sql.parser.HoodieSqlBaseParser._
 
@@ -2690,17 +2691,20 @@ class HoodieSpark3_3ExtendedSqlAstBuilder(conf: SQLConf, delegate: ParserInterfa
 
     val dataType = typedVisit[DataType](ctx.dataType)
 
-    // Tag BLOB types with hudi_blob metadata by checking original type text
-    val typeText = ctx.dataType.getText.toLowerCase(Locale.ROOT)
-    if (typeText == "blob") {
-      builder.putBoolean(org.apache.hudi.common.schema.HoodieSchema.Blob.HUDI_BLOB, true)
-    }
+    addMetadataForType(ctx.dataType(), builder)
 
     StructField(
       name = colName.getText,
       dataType = dataType,
       nullable = NULL == null,
       metadata = builder.build())
+  }
+
+  private def addMetadataForType(dataType: HoodieSqlBaseParser.DataTypeContext, builder: MetadataBuilder): Unit = {
+    val typeText = dataType.getText
+    if (typeText.equalsIgnoreCase(HoodieSchemaType.BLOB.name())) {
+      builder.putString(HoodieSchema.TYPE_METADATA_FIELD, HoodieSchemaType.BLOB.name())
+    }
   }
 
   /**
@@ -2728,11 +2732,8 @@ class HoodieSpark3_3ExtendedSqlAstBuilder(conf: SQLConf, delegate: ParserInterfa
     Option(commentSpec()).map(visitCommentSpec).foreach {
       builder.putString("comment", _)
     }
-    // Tag BLOB types with hudi_blob metadata by checking original type text
-    val typeText = ctx.dataType.getText.toLowerCase(Locale.ROOT)
-    if (typeText == "blob") {
-      builder.putBoolean(org.apache.hudi.common.schema.HoodieSchema.Blob.HUDI_BLOB, true)
-    }
+    addMetadataForType(ctx.dataType(), builder)
+
     StructField(
       name = identifier.getText,
       dataType = typedVisit(dataType()),

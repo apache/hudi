@@ -183,7 +183,7 @@ class BatchedByteRangeReader(
 
         while (bufferedRows.hasNext && collected < lookaheadSize) {
           val row = bufferedRows.next()
-          val blobStruct = accessor.getStruct(row, structColIdx, HoodieSchema.Blob.getBlobFieldCount)
+          val blobStruct = accessor.getStruct(row, structColIdx, HoodieSchema.Blob.getFieldCount)
 
           // Dispatch based on storage_type (field 0)
           val storageType = accessor.getString(blobStruct, 0)
@@ -201,7 +201,7 @@ class BatchedByteRangeReader(
             )
           } else {
             // Case 2 or 3: Out-of-line — get reference struct (field 2)
-            val referenceStruct = accessor.getStruct(blobStruct, 2, HoodieSchema.Blob.getBlobReferenceFieldCount)
+            val referenceStruct = accessor.getStruct(blobStruct, 2, HoodieSchema.Blob.getReferenceFieldCount)
             val filePath = accessor.getString(referenceStruct, 0)
             val offsetIsNull = accessor.isNullAt(referenceStruct, 1)
             val lengthIsNull = accessor.isNullAt(referenceStruct, 2)

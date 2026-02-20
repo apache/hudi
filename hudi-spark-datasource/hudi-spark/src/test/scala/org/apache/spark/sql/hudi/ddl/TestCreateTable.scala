@@ -20,6 +20,7 @@ package org.apache.spark.sql.hudi.ddl
 import org.apache.hudi.DataSourceWriteOptions
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.common.model.{HoodieRecord, HoodieTableType, WriteOperationType}
+import org.apache.hudi.common.schema.{HoodieSchema, HoodieSchemaType}
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.util.PartitionPathEncodeUtils.escapePathName
 import org.apache.hudi.config.HoodieWriteConfig
@@ -1995,5 +1996,119 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
     spark.sql(dmlToWrite)
     HoodieSparkSqlTestBase.enableComplexKeygenValidation(spark, tableName)
     checkAnswer(query)(expectedRowsAfter: _*)
+  }
+
+  test("test create table with BLOB column") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      spark.sql(
+        s"""
+           |CREATE TABLE $tableName (
+           |  id BIGINT,
+           |  video BLOB COMMENT 'Product demonstration video'
+           |) USING hudi
+           |LOCATION '${tmp.getCanonicalPath}'
+           |TBLPROPERTIES (
+           |  primaryKey = 'id'
+           |)
+           """.stripMargin)
+
+      // Verify schema has hudi_blob metadata
+      val schema = spark.table(tableName).schema
+      val videoField = schema.find(_.name == "video").get
+      assertTrue(videoField.metadata.contains(HoodieSchema.TYPE_METADATA_FIELD))
+      assertEquals(HoodieSchemaType.BLOB.name(), videoField.metadata.getString(HoodieSchema.TYPE_METADATA_FIELD))
+      assertEquals("Product demonstration video", videoField.metadata.getString("comment"))
+
+      // Verify structure matches blob schema
+      assertTrue(videoField.dataType.isInstanceOf[StructType])
+      val blobStruct = videoField.dataType.asInstanceOf[StructType]
+      assertEquals(Seq("storage_type", "bytes", "reference"), blobStruct.fieldNames.toSeq)
+
+      // Verify field types
+      assertEquals(StringType, blobStruct("storage_type").dataType)
+      assertEquals(BinaryType, blobStruct("bytes").dataType)
+      assertTrue(blobStruct("reference").dataType.isInstanceOf[StructType])
+
+      val refStruct = blobStruct("reference").dataType.asInstanceOf[StructType]
+      assertEquals(Seq("file", "position", "length", "managed"), refStruct.fieldNames.toSeq)
+      assertEquals(StringType, refStruct("file").dataType)
+      assertEquals(LongType, refStruct("position").dataType)
+      assertEquals(LongType, refStruct("length").dataType)
+      assertEquals(BooleanType, refStruct("managed").dataType)
+    }
+  }
+
+  test("test create table with multiple BLOB columns") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      spark.sql(
+        s"""
+           |CREATE TABLE $tableName (
+           |  id BIGINT,
+           |  video BLOB,
+           |  thumbnail blob,
+           |  metadata MAP<STRING, STRING>,
+           |  audio BLOB NOT NULL
+           |) USING hudi
+           |LOCATION '${tmp.getCanonicalPath}'
+           |TBLPROPERTIES (
+           |  primaryKey = 'id'
+           |)
+           """.stripMargin)
+
+      val schema = spark.table(tableName).schema
+
+      // Verify all BLOB columns have the metadata
+      val blobColumns = Seq("video", "thumbnail", "audio")
+      blobColumns.foreach { colName =>
+        val field = schema.find(_.name == colName).get
+        assertTrue(field.metadata.contains(HoodieSchema.TYPE_METADATA_FIELD))
+        assertEquals(HoodieSchemaType.BLOB.name(), field.metadata.getString(HoodieSchema.TYPE_METADATA_FIELD))
+        assertTrue(field.dataType.isInstanceOf[StructType])
+
+        if (colName == "audio") {
+          assertFalse(field.nullable)
+        } else {
+          assertTrue(field.nullable)
+        }
+
+        val blobStruct = field.dataType.asInstanceOf[StructType]
+        assertEquals(Seq("storage_type", "bytes", "reference"), blobStruct.fieldNames.toSeq)
+      }
+    }
+  }
+
+  test("test BLOB in nested struct") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      spark.sql(
+        s"""
+           |CREATE TABLE $tableName (
+           |  id BIGINT,
+           |  media STRUCT<title: STRING, content: BLOB>
+           |) USING hudi
+           |LOCATION '${tmp.getCanonicalPath}'
+           |TBLPROPERTIES (
+           |  primaryKey = 'id'
+           |)
+           """.stripMargin)
+
+      val schema = spark.table(tableName).schema
+      val mediaField = schema.find(_.name == "media").get
+      assertTrue(mediaField.dataType.isInstanceOf[StructType])
+
+      val mediaStruct = mediaField.dataType.asInstanceOf[StructType]
+      val contentField = mediaStruct.find(_.name == "content").get
+
+      // Verify nested BLOB has metadata
+      assertTrue(contentField.metadata.contains(HoodieSchema.TYPE_METADATA_FIELD))
+      assertEquals(HoodieSchemaType.BLOB.name(), contentField.metadata.getString(HoodieSchema.TYPE_METADATA_FIELD))
+
+      // Verify structure
+      assertTrue(contentField.dataType.isInstanceOf[StructType])
+      val blobStruct = contentField.dataType.asInstanceOf[StructType]
+      assertEquals(Seq("storage_type", "bytes", "reference"), blobStruct.fieldNames.toSeq)
+    }
   }
 }

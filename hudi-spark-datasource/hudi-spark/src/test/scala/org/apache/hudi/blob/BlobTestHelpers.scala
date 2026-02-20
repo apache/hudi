@@ -19,7 +19,7 @@
 
 package org.apache.hudi.blob
 
-import org.apache.hudi.common.schema.HoodieSchema
+import org.apache.hudi.common.schema.{HoodieSchema, HoodieSchemaType}
 
 import org.apache.spark.sql.{Column, SparkSession}
 import org.apache.spark.sql.functions.{lit, struct}
@@ -32,7 +32,7 @@ import java.nio.file.{Files, Path}
 object BlobTestHelpers {
   def blobMetadata: Metadata = {
     new MetadataBuilder()
-      .putBoolean(HoodieSchema.Blob.HUDI_BLOB, true)
+      .putString(HoodieSchema.TYPE_METADATA_FIELD, HoodieSchemaType.BLOB.name())
       .build()
   }
 
