@@ -86,7 +86,7 @@ public interface DDLExecutor extends AutoCloseable {
   /**
    * Touches partitions for a given table. Updates partition metadata (e.g. last modified time)
    * in the metastore for partitions that had new data written but no schema or location change.
-   * Only invoked when {@code META_SYNC_CONDITIONAL_SYNC} is true.
+   * Only invoked when {@code META_SYNC_TOUCH_PARTITIONS_ENABLED} is true.
    *
    * @param tableName      The table name in the metastore.
    * @param touchPartitions List of partition paths (storage format) to touch.
