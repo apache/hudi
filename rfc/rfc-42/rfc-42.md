@@ -23,6 +23,7 @@
 - @hujincalrin
 - @stream2000
 - @YuweiXiao
+- @fengjian428
 
 ## Approvers
 
@@ -98,6 +99,40 @@ One can choose different hashing options according to their use case, e.g., `SIM
 
 When a dynamic resizing strategy is selected, the bucket number option (`BUCKET_INDEX_NUM_BUCKETS`) serves as an initial setup and requires no hyper-parameter tuning, as it will auto adjust in the course of data ingestion.
 
+**For splitting files**, a split point (i.e., hash ranges for the output buckets) should be decided:
+
+- A simple policy would be split in the range middle, but it may produce uneven data files.
+  In an extreme case, splitting may produce one file with all data and one file with no data or very little data. 
+  this policy also need to implement merge process for small files, the buckets will finally converge to a balanced distribution after multiple rounds of resizing processes.
+- Another policy is to find a split point that evenly dispatches records into children buckets.
+  It requires knowledge about the hash value distribution of the original buckets.
+  this policy doesn't need to implement merge process
+
+There are two **Bucket Resize&Writer&Reader** implementations base on different policy, and there is no different on Metadata implement between them
+we first introduce the implementation base on the first simple policy. but the second policy is necessary since control the file size not to exceed 
+a limitation is very important
+
+### Why control file size not too big is very important?
+File size too big is not a problem that can be simply handled by linearly increase process time. it will cause OOM issue in some cases.
+by given a certain record's avg size, the bigger the file size the more unique keys can exist in one file group
+The unique keys count in one update on COW table or the unique keys count in compact process when read from delta logs from one file group
+could also be bigger
+
+**compact process**
+![compact_process.png](compact_process.png)
+
+Let's take a look at the example above, Hudi will try to store all the records with unique key into one Memory Map, if exceed the memory limitation
+store some records into DiskMap only keep <Key, DiskMeta> in memory, in an extreme case, the DiskMap also can encounter OOM issue the DiskMetaMap is too big.
+this OOM issue is not just exist in writer/compact process, also will happen when user read MOR table with Presto/Spark/Flink as below graph described.
+
+**mor example**
+![mor_example.png](mor_example.png)
+
+once the File group with huge file exist, we can not guarantee writing/compact/read on next time, one executor/other engine's task can store all the keys in 
+one file group into memory. and distribute records in one File group on all endpoint to reduce memory usage is a very complicated and performance cost work
+
+so it is necessary to control the file size, there is no prerequisite on any other table services if using this policy to process/read the Hudi tables
+
 ### Hashing Metadata
 
 The hashing metadata will be persisted as files named as `<instant>.hashing_meta` for each partition as we manage hashing for each partition independently.
@@ -133,7 +168,9 @@ Only three operations will modify the hashing metadata:
 Though storing hashing metadata in the `.hoodie` path is a straightforward solution, it should be put into hudi's metadata table ultimately.
 And the clean service is no loger necessary.
 Old version hashing metadata will also be cleanup automatically since the metadata table itself is a hudi table.
-### Bucket Resizing (Splitting & Merging)
+
+### The Fisrt Policy (with resize process)
+#### Bucket Resizing (Splitting & Merging)
 
 Considering there is a semantic similarity between bucket resizing and clustering (i.e., re-organizing small data files), this proposal plans to integrate the resizing process as a subtask into the clustering service.
 The trigger condition for resizing directly depends on the file size, where small files will be merged and large files will be split.
@@ -154,7 +191,7 @@ Of course, a pluggable implementation will be kept for extensibility so that use
 All updates related to the hash metadata will be first recorded in the clustering plan, and then be reflected in partitions' hashing metadata when clustering finishes.
 The plan is generated and persisted in files during the scheduling process, which is protected by a table-level lock for a consistent table view.
 
-### Concurrent Writer & Reader
+#### Concurrent Writer & Reader
 
 Concurrent updates to file groups that are under clustering are not supported in Hudi, since records location change during the re-organizing.
 For example, a clustering process is scheduled to combine three parquet files A, B, C into two parquet files E, F with a more compact storage layout.
@@ -168,7 +205,7 @@ However, the record's new location can only be determined until the clustering f
 For tables using Bucket Index, the above conflicting condition can be avoided because record locations are calculated by the hash algorithm.
 So even before the clustering finishes, the writer can calculate record locations as long as it knows the latest hash algorithm (in our Consistent Hashing case, it is stored in the clustering plan).
 
-#### Dual write solution
+##### Dual write solution
 
 ![bucket resizing](bucket_resizing.png)
 
@@ -184,7 +221,7 @@ The default behaviour of a reader is:
 
 As the writer put incoming records in both new and old files, readers will always see the update-to-date data.
 
-#### Virtual log file solution
+##### Virtual log file solution
 
 ![bucket resizing using virtual log file](bucket_resizing_virtual_log_file.png)
 
@@ -194,6 +231,44 @@ It enables readers to see the latest completed writes by merging children log fi
 
 The virtual file solution avoids extra write workload and minimizes the impact of resizing on the write performance. 
 However, it adds some work on the read path in order to understand the virtual log file.
+
+### The Second Policy(Control file size)
+
+#### Resize bucket when dispatch records
+![dispatch_resize.png](dispatch_resize.png)
+
+##### How do we check if a bucket needs to resize during the writing process?
+
+There are two scenarios, If the incoming record_key exists in this bucket, this record won’t take effect on the record key’s count if avg record size not change, 
+if the incoming record_key does not exist, hence the new insert record, it will increase the record number in this bucket.
+So there are two solutions
+- Assume all new insert records. Let’s assume that 100% of records are new inserts, N is the number of limitations in one bucket, 
+if **new insert record count** * **avg size** + **exist record count** * **avg size** > File size limit, split this file group.
+in an extreme case all the incoming records are update records, then it will split two file's size is a quarter of the file size limitation
+we can guarantee file size won't exceed the limitation and won't smaller than a quarter of the limitation at all cases.
+- Each bucket has a bloom filter data to identify whether a record key exists or not
+The first solution is more lightweight, but the margin of error is big.
+The second solution maybe more accurate than the first one, but it also has the false positive issue.
+
+
+
+#### Resize process for COW
+Resize process on the cow table is quite simple:
+- Filter the records belonging to the sub bucket, hence scan records in the file group 1, if the key range match, then copy to sub bucket
+- Copy them and write them into sub bucket
+
+![img.png](cow_resize.png)
+
+#### Resize process for MOR
+##### Virtual file group 
+Resize process on the mor table is complicated since we can’t filter out and copy the records into sub bucket immediately. We bring a new concept ‘Virtual FileGroup’
+Each Virtual FG has a parent File group so we can filter out the correct data from the parent File group when doing compaction or data query
+
+![img.png](virtual_file_group.png)
+
+![img.png](mor_resize1.png)
+
+#### Extend Hash metadata 
 
 ### Performance
 
