@@ -102,7 +102,7 @@ parameters:
 variables:
   BUILD_PROFILES: '-Dscala-2.12 -Dspark3.5 -Dflink1.18'
   PLUGIN_OPTS: '-Dcheckstyle.skip=true -Drat.skip=true -ntp -B -V -Pwarn-log -Dorg.slf4j.simpleLogger.log.org.apache.maven.plugins.shade=warn -Dorg.slf4j.simpleLogger.log.org.apache.maven.plugins.dependency=warn'
-  MVN_OPTS_INSTALL: '-T 3 -Phudi-platform-service -DskipTests $(BUILD_PROFILES) $(PLUGIN_OPTS) -Dmaven.wagon.httpconnectionManager.ttlSeconds=25 -Dmaven.wagon.http.retryHandler.count=5'
+  MVN_OPTS_INSTALL: '-T 3 -Phudi-platform-service -DskipTests $(BUILD_PROFILES) $(PLUGIN_OPTS) -Dmaven.wagon.httpconnectionManager.ttlSeconds=25 -Dmaven.wagon.http.retryHandler.count=5 -Dorg.eclipse.jetty.LEVEL=WARN'
   MVN_OPTS_TEST: '-fae -Pwarn-log $(BUILD_PROFILES) $(PLUGIN_OPTS)'
   JAVA_MVN_TEST_FILTER: '-DwildcardSuites=skipScalaTests -Dsurefire.failIfNoSpecifiedTests=false'
   SCALA_MVN_TEST_FILTER: '-Dtest=skipJavaTests -Dsurefire.failIfNoSpecifiedTests=false'
