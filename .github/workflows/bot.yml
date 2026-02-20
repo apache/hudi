@@ -115,7 +115,6 @@ jobs:
           disable_search: true
           flags: spark-java-tests
           token: ${{ secrets.CODECOV_TOKEN }}
-          fail_ci_if_error: true
 
   test-spark-java-tests-part2:
     runs-on: ubuntu-latest
@@ -181,7 +180,6 @@ jobs:
           disable_search: true
           flags: spark-java-tests
           token: ${{ secrets.CODECOV_TOKEN }}
-          fail_ci_if_error: true
 
   test-spark-java-tests-part3:
     runs-on: ubuntu-latest
@@ -241,7 +239,6 @@ jobs:
           disable_search: true
           flags: spark-java-tests
           token: ${{ secrets.CODECOV_TOKEN }}
-          fail_ci_if_error: true
 
   test-spark-scala-dml-tests:
     runs-on: ubuntu-latest
@@ -301,7 +298,6 @@ jobs:
           disable_search: true
           flags: spark-scala-tests
           token: ${{ secrets.CODECOV_TOKEN }}
-          fail_ci_if_error: true
 
   test-spark-scala-other-tests:
     runs-on: ubuntu-latest
@@ -361,7 +357,6 @@ jobs:
           disable_search: true
           flags: spark-scala-tests
           token: ${{ secrets.CODECOV_TOKEN }}
-          fail_ci_if_error: true
 
   test-hudi-hadoop-mr-and-hudi-java-client:
     runs-on: ubuntu-latest
@@ -407,7 +402,6 @@ jobs:
           disable_search: true
           flags: hadoop-mr-java-client
           token: ${{ secrets.CODECOV_TOKEN }}
-          fail_ci_if_error: true
 
   test-spark-java17-java-tests-part1:
     runs-on: ubuntu-latest
@@ -951,7 +945,6 @@ jobs:
           disable_search: true
           flags: flink-tests
           token: ${{ secrets.CODECOV_TOKEN }}
-          fail_ci_if_error: true
 
   test-flink-2:
     runs-on: ubuntu-latest
@@ -999,7 +992,6 @@ jobs:
           disable_search: true
           flags: flink-tests
           token: ${{ secrets.CODECOV_TOKEN }}
-          fail_ci_if_error: true
 
   docker-java17-test:
     runs-on: ubuntu-latest
