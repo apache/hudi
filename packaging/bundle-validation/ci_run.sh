@@ -180,6 +180,12 @@ fi
 
 ls -l $TMP_JARS_DIR
 
+# Fail early if Spark bundle is missing (validate.sh requires it)
+if [ -z "$(ls $TMP_JARS_DIR/hudi-spark*.jar 2>/dev/null)" ]; then
+  echo "Error: Hudi Spark bundle jar not found in $TMP_JARS_DIR. Ensure the build produces packaging/hudi-spark-bundle/target/hudi-*-$HUDI_VERSION.jar and ci_run.sh copies it."
+  exit 1
+fi
+
 # Copy test dataset
 TMP_DATA_DIR=/tmp/data/$(date +%s)
 mkdir -p $TMP_DATA_DIR/stocks/data
