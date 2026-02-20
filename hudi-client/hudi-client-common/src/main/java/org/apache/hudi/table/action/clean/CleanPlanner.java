@@ -20,7 +20,12 @@ package org.apache.hudi.table.action.clean;
 
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieSavepointMetadata;
+import org.apache.hudi.common.config.HoodieReaderConfig;
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.engine.HoodieReaderContext;
+import org.apache.hudi.common.engine.ReaderContextFactory;
+import org.apache.hudi.common.engine.RecordContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.CleanFileInfo;
 import org.apache.hudi.common.model.CompactionOperation;
@@ -32,8 +37,14 @@ import org.apache.hudi.common.model.HoodieFileGroup;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaField;
+import org.apache.hudi.common.schema.HoodieSchemaUtils;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.read.HoodieFileGroupReader;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.timeline.InstantComparison;
 import org.apache.hudi.common.table.timeline.versioning.clean.CleanPlanV1MigrationHandler;
 import org.apache.hudi.common.table.timeline.versioning.clean.CleanPlanV2MigrationHandler;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
@@ -41,15 +52,20 @@ import org.apache.hudi.common.table.view.SyncableFileSystemView;
 import org.apache.hudi.common.util.CleanerUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.common.util.VisibleForTesting;
+import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieSavepointException;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
 
 import lombok.AccessLevel;
+import lombok.Builder;
 import lombok.Getter;
+import lombok.Value;
 import lombok.extern.slf4j.Slf4j;
 
 import java.io.IOException;
@@ -57,13 +73,17 @@ import java.io.Serializable;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.common.config.HoodieReaderConfig.REALTIME_SKIP_MERGE;
 import static org.apache.hudi.common.table.timeline.InstantComparison.GREATER_THAN;
 import static org.apache.hudi.common.table.timeline.InstantComparison.GREATER_THAN_OR_EQUALS;
 import static org.apache.hudi.common.table.timeline.InstantComparison.LESSER_THAN;
@@ -281,7 +301,7 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
    * policy is useful, if you are simply interested in querying the table, and you don't want too many versions for a
    * single file (i.e., run it with versionsRetained = 1)
    */
-  private Pair<Boolean, List<CleanFileInfo>> getFilesToCleanKeepingLatestVersions(String partitionPath) {
+  private Pair<Boolean, List<CleanFileInfo>> getFilesToCleanKeepingLatestVersions(String partitionPath, HoodieSchema schema) {
     log.info(
         "Cleaning {}, retaining latest {} file versions.",
         partitionPath,
@@ -293,9 +313,13 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
         .flatMap(this::getSavepointedDataFiles)
         .collect(Collectors.toList());
 
+    Option<HoodieSchema> blobSchemaOpt = getReducedBlobSchema(schema);
+    // Track retained and removed slices if blob cleanup is required
+    Option<List<FileSlice>> retainedFileSlices = blobSchemaOpt.map(s -> new ArrayList<>());
+    Option<List<FileSlice>> removedFileSlices = blobSchemaOpt.map(s -> new ArrayList<>());
     // In this scenario, we will assume that once replaced a file group automatically becomes eligible for cleaning completely
     // In other words, the file versions only apply to the active file groups.
-    deletePaths.addAll(getReplacedFilesEligibleToClean(savepointedFiles, partitionPath, Option.empty()));
+    deletePaths.addAll(getReplacedFilesEligibleToClean(savepointedFiles, partitionPath, Option.empty(), retainedFileSlices, removedFileSlices));
     boolean toDeletePartition = false;
     List<HoodieFileGroup> fileGroups = hoodieTable.getHoodieView().getAllFileGroupsStateless(partitionPath).collect(Collectors.toList());
     for (HoodieFileGroup fileGroup : fileGroups) {
@@ -312,7 +336,8 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
 
       while (fileSliceIterator.hasNext() && keepVersions > 0) {
         // Skip this most recent version
-        fileSliceIterator.next();
+        FileSlice nextSlice = fileSliceIterator.next();
+        retainedFileSlices.map(list -> list.add(nextSlice));
         keepVersions--;
       }
       // Delete the remaining files
@@ -320,11 +345,14 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
         FileSlice nextSlice = fileSliceIterator.next();
         if (isFileSliceExistInSavepointedFiles(nextSlice, savepointedFiles)) {
           // do not clean up a savepoint data file
-          continue;
+          retainedFileSlices.map(list -> list.add(nextSlice));
+        } else {
+          removedFileSlices.map(list -> list.add(nextSlice));
+          deletePaths.addAll(getCleanFileInfoForSlice(nextSlice));
         }
-        deletePaths.addAll(getCleanFileInfoForSlice(nextSlice));
       }
     }
+    deletePaths.addAll(getBlobFilesToRemove(hoodieTable, schema, blobSchemaOpt, retainedFileSlices, removedFileSlices));
     // if there are no valid file groups
     // and no pending data files under the partition [IMPORTANT],
     // mark it to be deleted
@@ -334,8 +362,8 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
     return Pair.of(toDeletePartition, deletePaths);
   }
 
-  private Pair<Boolean, List<CleanFileInfo>> getFilesToCleanKeepingLatestCommits(String partitionPath, Option<HoodieInstant> earliestCommitToRetain) {
-    return getFilesToCleanKeepingLatestCommits(partitionPath, config.getCleanerCommitsRetained(), earliestCommitToRetain, HoodieCleaningPolicy.KEEP_LATEST_COMMITS);
+  private Pair<Boolean, List<CleanFileInfo>> getFilesToCleanKeepingLatestCommits(String partitionPath, Option<HoodieInstant> earliestCommitToRetain, HoodieSchema schema) {
+    return getFilesToCleanKeepingLatestCommits(partitionPath, config.getCleanerCommitsRetained(), earliestCommitToRetain, HoodieCleaningPolicy.KEEP_LATEST_COMMITS, schema);
   }
 
   /**
@@ -356,7 +384,7 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
    *         and right is a list of {@link CleanFileInfo} about the files in the partition that needs to be deleted.
    */
   private Pair<Boolean, List<CleanFileInfo>> getFilesToCleanKeepingLatestCommits(String partitionPath,
-      int commitsRetained, Option<HoodieInstant> earliestCommitToRetain, HoodieCleaningPolicy policy) {
+      int commitsRetained, Option<HoodieInstant> earliestCommitToRetain, HoodieCleaningPolicy policy, HoodieSchema schema) {
     if (policy != HoodieCleaningPolicy.KEEP_LATEST_COMMITS && policy != HoodieCleaningPolicy.KEEP_LATEST_BY_HOURS) {
       throw new IllegalArgumentException("getFilesToCleanKeepingLatestCommits can only be used for KEEP_LATEST_COMMITS or KEEP_LATEST_BY_HOURS");
     }
@@ -371,9 +399,13 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
     // determine if we have enough commits, to start cleaning.
     boolean toDeletePartition = false;
     if (getCommitTimeline().countInstants() > commitsRetained) {
+      Option<HoodieSchema> blobSchemaOpt = getReducedBlobSchema(schema);
+      // Track retained and removed slices if blob cleanup is required
+      Option<List<FileSlice>> retainedFileSlices = blobSchemaOpt.map(s -> new ArrayList<>());
+      Option<List<FileSlice>> removedFileSlices = blobSchemaOpt.map(s -> new ArrayList<>());
       HoodieInstant earliestInstant = earliestCommitToRetain.get();
       // all replaced file groups before earliestCommitToRetain are eligible to clean
-      deletePaths.addAll(getReplacedFilesEligibleToClean(savepointedFiles, partitionPath, earliestCommitToRetain));
+      deletePaths.addAll(getReplacedFilesEligibleToClean(savepointedFiles, partitionPath, earliestCommitToRetain, retainedFileSlices, removedFileSlices));
       // add active files
       List<HoodieFileGroup> fileGroups = hoodieTable.getHoodieView().getAllFileGroupsStateless(partitionPath).collect(Collectors.toList());
       for (HoodieFileGroup fileGroup : fileGroups) {
@@ -394,6 +426,7 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
           String fileCommitTime = aSlice.getBaseInstantTime();
           if (isFileSliceExistInSavepointedFiles(aSlice, savepointedFiles)) {
             // do not clean up a savepoint data file
+            retainedFileSlices.map(list -> list.add(aSlice));
             continue;
           }
 
@@ -403,6 +436,7 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
           // still uses this file.
           if (fileCommitTime.equals(lastVersion) || fileCommitTime.equals(lastVersionBeforeEarliestCommitToRetain)) {
             // move on to the next file
+            retainedFileSlices.map(list -> list.add(aSlice));
             continue;
           }
 
@@ -420,9 +454,13 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
             // and normal log files for mor tables.
             deletePaths.addAll(aSlice.getLogFiles().map(lf -> new CleanFileInfo(lf.getPath().toString(), false))
                 .collect(Collectors.toList()));
+            removedFileSlices.map(list -> list.add(aSlice));
+          } else {
+            retainedFileSlices.map(list -> list.add(aSlice));
           }
         }
       }
+      deletePaths.addAll(getBlobFilesToRemove(hoodieTable, schema, blobSchemaOpt, retainedFileSlices, removedFileSlices));
       // if there are no valid file groups
       // and no pending data files under the partition [IMPORTANT],
       // and no subsequent replace commit after the earliest retained commit
@@ -468,11 +506,12 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
    * @param earliestCommitToRetain earliest commit to retain
    * @return list of files to clean
    */
-  private Pair<Boolean, List<CleanFileInfo>> getFilesToCleanKeepingLatestHours(String partitionPath, Option<HoodieInstant> earliestCommitToRetain) {
-    return getFilesToCleanKeepingLatestCommits(partitionPath, 0, earliestCommitToRetain, HoodieCleaningPolicy.KEEP_LATEST_BY_HOURS);
+  private Pair<Boolean, List<CleanFileInfo>> getFilesToCleanKeepingLatestHours(String partitionPath, Option<HoodieInstant> earliestCommitToRetain, HoodieSchema schema) {
+    return getFilesToCleanKeepingLatestCommits(partitionPath, 0, earliestCommitToRetain, HoodieCleaningPolicy.KEEP_LATEST_BY_HOURS, schema);
   }
 
-  private List<CleanFileInfo> getReplacedFilesEligibleToClean(List<String> savepointedFiles, String partitionPath, Option<HoodieInstant> earliestCommitToRetain) {
+  private List<CleanFileInfo> getReplacedFilesEligibleToClean(List<String> savepointedFiles, String partitionPath, Option<HoodieInstant> earliestCommitToRetain,
+                                                              Option<List<FileSlice>> retainedFileSlices, Option<List<FileSlice>> removedFileSlices) {
     final Stream<HoodieFileGroup> replacedGroups;
     if (earliestCommitToRetain.isPresent()) {
       replacedGroups = hoodieTable.getHoodieView().getReplacedFileGroupsBefore(earliestCommitToRetain.get().requestedTime(), partitionPath);
@@ -481,8 +520,15 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
     }
     return replacedGroups.flatMap(HoodieFileGroup::getAllFileSlices)
         // do not delete savepointed files  (archival will make sure corresponding replacecommit file is not deleted)
-        .filter(slice -> !isFileSliceExistInSavepointedFiles(slice, savepointedFiles))
-        .flatMap(slice -> getCleanFileInfoForSlice(slice).stream())
+        .flatMap(slice -> {
+          if (!isFileSliceExistInSavepointedFiles(slice, savepointedFiles)) {
+            removedFileSlices.map(list -> list.add(slice));
+            return getCleanFileInfoForSlice(slice).stream();
+          } else {
+            retainedFileSlices.map(list -> list.add(slice));
+            return Stream.empty();
+          }
+        })
         .collect(Collectors.toList());
   }
 
@@ -523,15 +569,15 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
   /**
    * Returns files to be cleaned for the given partitionPath based on cleaning policy.
    */
-  public Pair<Boolean, List<CleanFileInfo>> getDeletePaths(String partitionPath, Option<HoodieInstant> earliestCommitToRetain) {
+  public Pair<Boolean, List<CleanFileInfo>> getDeletePaths(String partitionPath, Option<HoodieInstant> earliestCommitToRetain, HoodieSchema schema) {
     HoodieCleaningPolicy policy = config.getCleanerPolicy();
     Pair<Boolean, List<CleanFileInfo>> deletePaths;
     if (policy == HoodieCleaningPolicy.KEEP_LATEST_COMMITS) {
-      deletePaths = getFilesToCleanKeepingLatestCommits(partitionPath, earliestCommitToRetain);
+      deletePaths = getFilesToCleanKeepingLatestCommits(partitionPath, earliestCommitToRetain, schema);
     } else if (policy == HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS) {
-      deletePaths = getFilesToCleanKeepingLatestVersions(partitionPath);
+      deletePaths = getFilesToCleanKeepingLatestVersions(partitionPath, schema);
     } else if (policy == HoodieCleaningPolicy.KEEP_LATEST_BY_HOURS) {
-      deletePaths = getFilesToCleanKeepingLatestHours(partitionPath, earliestCommitToRetain);
+      deletePaths = getFilesToCleanKeepingLatestHours(partitionPath, earliestCommitToRetain, schema);
     } else {
       throw new IllegalArgumentException("Unknown cleaning policy : " + policy.name());
     }
@@ -613,5 +659,300 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
 
   private boolean noSubsequentReplaceCommit(String earliestCommitToRetain, String partitionPath) {
     return !hoodieTable.getHoodieView().getReplacedFileGroupsAfterOrOn(earliestCommitToRetain, partitionPath).findAny().isPresent();
+  }
+
+  private <R> List<CleanFileInfo> getBlobFilesToRemove(HoodieTable table, HoodieSchema schema, Option<HoodieSchema> requestedSchema,
+                                                       Option<List<FileSlice>> retainedFileSlices, Option<List<FileSlice>> removedFileSlices) {
+    if (requestedSchema.isEmpty()) {
+      // no blob columns, no blob files to clean
+      return Collections.emptyList();
+    }
+    // Skip if there are no removed file slices
+    if (removedFileSlices.isEmpty()) {
+      return Collections.emptyList();
+    }
+    // Validate there is at least one completed commit
+    HoodieTableMetaClient metaClient = table.getMetaClient();
+    Option<String> latestCommitTimeOpt = metaClient.getActiveTimeline().lastInstant().map(HoodieInstant::requestedTime);
+    if (!latestCommitTimeOpt.isPresent()) {
+      // no commits or blob files to clean
+      return Collections.emptyList();
+    }
+    Map<HoodieFileGroupId, List<FileSlice>> retainedFileSlicesByFileGroupId = retainedFileSlices.orElseThrow(() -> new HoodieException("Retained file slices must be set"))
+        .stream().collect(Collectors.groupingBy(FileSlice::getFileGroupId));
+    Map<HoodieFileGroupId, List<FileSlice>> removedFileSlicesByFileGroupId = removedFileSlices.orElseThrow(() -> new HoodieException("Removed file slices must be set"))
+        .stream().collect(Collectors.groupingBy(FileSlice::getFileGroupId));
+
+    return getFileSliceComparisonGroups(retainedFileSlicesByFileGroupId, removedFileSlicesByFileGroupId).stream().flatMap(group -> {
+      HoodieReaderContext<R> readerContext = ((ReaderContextFactory<R>) table.getContext().getReaderContextFactory(metaClient)).getContext();
+      RecordContext<R> recordContext = readerContext.getRecordContext();
+      // Iterate through the removed file slices with skip merging to find all the blob files that are referenced by the removed file slices.
+      TypedProperties properties = TypedProperties.copy(config.getProps());
+      properties.put(HoodieReaderConfig.MERGE_TYPE.key(), REALTIME_SKIP_MERGE);
+
+      Set<String> managedBlobFilePaths = group.getRemovedFileSlices().stream()
+          .flatMap(fileSlice -> {
+            HoodieFileGroupReader<R> reader = getHoodieFileGroupReader(schema, fileSlice, readerContext, metaClient, latestCommitTimeOpt, requestedSchema.get(), properties);
+            Set<String> managedBlobFilePathsInSlice = new HashSet<>();
+            try (ClosableIterator<R> recordItr = reader.getClosableIterator()) {
+              while (recordItr.hasNext()) {
+                R record = recordItr.next();
+                managedBlobFilePathsInSlice.addAll(getManagedBlobPaths(schema, record, recordContext));
+              }
+            } catch (IOException e) {
+              throw new HoodieIOException("Error reading records from file slice: " + fileSlice, e);
+            }
+            return managedBlobFilePathsInSlice.stream();
+          })
+          .collect(Collectors.toSet());
+      if (managedBlobFilePaths.isEmpty()) {
+        // no blob files referenced by the removed file slices, skip
+        return Stream.empty();
+      }
+      // Then iterate through the retained file slices with skip merging to find all the blob files that are still referenced by the retained file slices.
+      group.getRetainedFileSlices().forEach(fileSlice -> {
+        HoodieFileGroupReader<R> reader = getHoodieFileGroupReader(schema, fileSlice, readerContext, metaClient, latestCommitTimeOpt, requestedSchema.get(), properties);
+        try (ClosableIterator<R> recordItr = reader.getClosableIterator()) {
+          while (recordItr.hasNext()) {
+            R record = recordItr.next();
+            getManagedBlobPaths(schema, record, recordContext).forEach(managedBlobFilePaths::remove);
+            if (managedBlobFilePaths.isEmpty()) {
+              // all blob files referenced by the removed file slices are still referenced by the retained file slices, skip
+              break;
+            }
+          }
+        } catch (IOException e) {
+          throw new HoodieIOException("Error reading records from file slice: " + fileSlice, e);
+        }
+      });
+
+      // The remaining blob file paths in managedBlobFilePaths are the ones that can be removed.
+      return managedBlobFilePaths.stream().map(path -> new CleanFileInfo(path, false));
+    }).collect(Collectors.toList());
+  }
+
+  private <R> HoodieFileGroupReader<R> getHoodieFileGroupReader(HoodieSchema schema, FileSlice fileSlice, HoodieReaderContext<R> readerContext, HoodieTableMetaClient metaClient,
+                                                                Option<String> latestCommitTimeOpt, HoodieSchema requestedSchema, TypedProperties props) {
+    return HoodieFileGroupReader.<R>newBuilder()
+        .withReaderContext(readerContext)
+        .withHoodieTableMetaClient(metaClient)
+        .withLatestCommitTime(latestCommitTimeOpt.get())
+        .withFileSlice(fileSlice)
+        .withDataSchema(schema)
+        .withRequestedSchema(requestedSchema)
+        .withProps(props)
+        .build();
+  }
+
+  // TODO: How does this work for tables with global index?
+  /**
+   * Cleaning blob files requires that we inspect the contents of the retained and removed file slices to find the blob file references that can be removed.
+   * To optimize the process, we limit the comparisons required with the following grouping logic:
+   * 1) If a removed file slice has a corresponding retained file slice in the same file group, we will compare the removed file slice with the retained file slice(s) in the same file group.
+   * 2) If a removed file slice does not have a corresponding retained file slice in the same file group, this implies that there is a replace or clustering commit. This requires comparing the
+   *    removed file slice with all retained file slices that were created after the removed file slice's latest instant time, as these are the only retained file slices
+   *    that could be part of a replace or clustering commit that removes these files from the active view of the table. All slices that fall into this case are put into the same comparison group to
+   *    avoid reading the same file multiple times.
+   * @param retainedFileSlicesByFileGroupId the map of retained file slices grouped by HoodieFileGroupId
+   * @param removedFileSlicesByFileGroupId the map of removed file slices grouped by HoodieFileGroupId
+   * @return the list of FileSliceComparisonGroup which contains the groups of file slices to compare for finding dereferenced blobs
+   */
+  @VisibleForTesting
+  static List<FileSliceComparisonGroup> getFileSliceComparisonGroups(Map<HoodieFileGroupId, List<FileSlice>> retainedFileSlicesByFileGroupId,
+                                                                     Map<HoodieFileGroupId, List<FileSlice>> removedFileSlicesByFileGroupId) {
+    List<FileSliceComparisonGroup> groupings = new ArrayList<>();
+    List<List<FileSlice>> removedFileSlicesWithoutRetainedSlices = new ArrayList<>();
+    removedFileSlicesByFileGroupId.keySet().forEach(fileGroupId -> {
+      List<FileSlice> removedSlices = removedFileSlicesByFileGroupId.get(fileGroupId);
+      List<FileSlice> retainedSlices = retainedFileSlicesByFileGroupId.get(fileGroupId);
+      if (retainedSlices == null) {
+        // This is due to replace commit or clustering so we must handle this case separately
+        removedFileSlicesWithoutRetainedSlices.add(removedSlices);
+      } else {
+        groupings.add(FileSliceComparisonGroup.builder().removedFileSlices(new HashSet<>(removedSlices)).retainedFileSlices(new HashSet<>(retainedSlices)).build());
+      }
+    });
+    if (!removedFileSlicesWithoutRetainedSlices.isEmpty()) {
+      // File slices that do not have a retained commit are due to replace commit or clustering, so we will compare them against all retained file slices created after the oldest removed file slice.
+      String instant = removedFileSlicesWithoutRetainedSlices.stream()
+          // for each file group we get the latest instant time
+          .map(fileSlices -> fileSlices.stream().map(FileSlice::getLatestInstantTime).reduce(InstantComparison::maxInstant)
+              .orElseThrow(() -> new HoodieException("File slices should have at least one file")))
+          .reduce(InstantComparison::minInstant).orElseThrow(() -> new HoodieException("There should be at least one file slice to remove"));
+      // find the file groups created after this instant and get the retained file slices for those file groups
+      Set<FileSlice> retainedFileSlicesRequiringComparison = retainedFileSlicesByFileGroupId.entrySet().stream()
+          .filter(entry -> entry.getValue().stream().allMatch(fileSlice -> compareTimestamps(fileSlice.getBaseInstantTime(), GREATER_THAN, instant)))
+          .flatMap(entry -> entry.getValue().stream())
+          .collect(Collectors.toSet());
+      Set<FileSlice> flattenedRemovedFileSlicesWithoutRetainedSlices = removedFileSlicesWithoutRetainedSlices.stream().flatMap(Collection::stream).collect(Collectors.toSet());
+      groupings.add(FileSliceComparisonGroup.builder().removedFileSlices(flattenedRemovedFileSlicesWithoutRetainedSlices).retainedFileSlices(retainedFileSlicesRequiringComparison).build());
+    }
+    return groupings;
+  }
+
+  @Value
+  @Builder
+  static class FileSliceComparisonGroup {
+    Set<FileSlice> retainedFileSlices;
+    Set<FileSlice> removedFileSlices;
+  }
+
+  /**
+   * Finds all the blob columns and returns a schema limited to these columns.
+   * This is used to read only the blob columns when finding the blob files to clean.
+   * @param schema the table's schema
+   * @return an option of the reduced schema containing only the blob columns or empty option if no blobs are found
+   */
+  private Option<HoodieSchema> getReducedBlobSchema(HoodieSchema schema) {
+    List<HoodieSchemaField> blobFields = new ArrayList<>();
+
+    // Traverse schema to find blob columns
+    for (HoodieSchemaField field : schema.getFields()) {
+      filterSchemaForBlobFields(field, blobFields);
+    }
+
+    // Create projection schema with only blob fields
+    return blobFields.isEmpty()
+        ? Option.empty()
+        : Option.of(HoodieSchema.createRecord(
+            schema.getName(),
+            schema.getNamespace().orElse(null),
+            schema.getDoc().orElse(null),
+            blobFields));
+  }
+
+  private void filterSchemaForBlobFields(HoodieSchemaField field,
+                                         List<HoodieSchemaField> blobFields) {
+    HoodieSchema fieldSchema = field.schema();
+    HoodieSchema nonNullSchema = fieldSchema.getNonNullType();
+
+    switch (nonNullSchema.getType()) {
+      case BLOB:
+        blobFields.add(HoodieSchemaUtils.createNewSchemaField(field));
+        break;
+      case RECORD:
+        // Recursively traverse nested record fields
+        List<HoodieSchemaField> nestedBlobFields = new ArrayList<>();
+        for (HoodieSchemaField nestedField : nonNullSchema.getFields()) {
+          filterSchemaForBlobFields(nestedField, nestedBlobFields);
+        }
+
+        // If any nested field contains blob, include this record field
+        if (!nestedBlobFields.isEmpty()) {
+          HoodieSchema nestedRecordSchema = HoodieSchema.createRecord(
+              nonNullSchema.getName(),
+              nonNullSchema.getNamespace().orElse(null),
+              nonNullSchema.getDoc().orElse(null),
+              nestedBlobFields);
+
+          HoodieSchema finalSchema = fieldSchema.isNullable()
+              ? HoodieSchema.createNullable(nestedRecordSchema)
+              : nestedRecordSchema;
+
+          blobFields.add(HoodieSchemaUtils.createNewSchemaField(
+              field.name(), finalSchema, field.doc().orElse(null), field.defaultVal().orElse(null)));
+        }
+        break;
+      case ARRAY:
+        // Check if array element type contains blob
+        HoodieSchema elementType = nonNullSchema.getElementType();
+        if (elementType.containsBlobType()) {
+          blobFields.add(HoodieSchemaUtils.createNewSchemaField(field));
+        }
+        break;
+      case MAP:
+        // Check if map value type contains blob
+        HoodieSchema valueType = nonNullSchema.getValueType();
+        if (valueType.containsBlobType()) {
+          blobFields.add(HoodieSchemaUtils.createNewSchemaField(field));
+        }
+        break;
+      default:
+        // No blob type, do nothing
+        break;
+    }
+  }
+
+  /**
+   * Finds the blob file paths referenced by a record. The schema is used to find all blob columns in the record.
+   * Any blob column that has an external reference with isManaged=true will be included in the result.
+   * @param schema the record schema
+   * @param record the record to inspect
+   * @param recordContext the record context to use for retrieving values from the record
+   * @return a list of managed blob file paths referenced at this path
+   * @param <R> the record type
+   */
+  @VisibleForTesting
+  <R> List<String> getManagedBlobPaths(HoodieSchema schema, R record, RecordContext<R> recordContext) {
+    List<String> managedPaths = new ArrayList<>();
+
+    for (int i = 0; i < schema.getFields().size(); i++) {
+      HoodieSchemaField field = schema.getFields().get(i);
+      HoodieSchema fieldSchema = field.schema().getNonNullType();
+      Object value = recordContext.getValue(record, schema, field.name());
+      managedPaths.addAll(getManagedBlobPathsForField(value, fieldSchema, recordContext));
+    }
+    return managedPaths;
+  }
+
+  private <R> List<String> getManagedBlobPathsForField(Object value, HoodieSchema fieldSchema, RecordContext<R> recordContext) {
+    if (value == null) {
+      return Collections.emptyList();
+    }
+    List<String> managedPaths = new ArrayList<>();
+    switch (fieldSchema.getType()) {
+      case BLOB:
+        // Process blob field
+        extractManagedPathFromBlob((R) value, fieldSchema, recordContext).ifPresent(managedPaths::add);
+        break;
+      case RECORD:
+        managedPaths.addAll(getManagedBlobPaths(fieldSchema, (R) value, recordContext));
+        break;
+      case ARRAY:
+        if (value instanceof Iterable) {
+          for (Object element : (Iterable<?>) value) {
+            if (element != null) {
+              managedPaths.addAll(getManagedBlobPathsForField(element, fieldSchema.getElementType().getNonNullType(), recordContext));
+            }
+          }
+        }
+        break;
+      case MAP:
+        if (value instanceof Map) {
+          for (Object entry : ((Map<?, ?>) value).values()) {
+            if (entry != null) {
+              managedPaths.addAll(getManagedBlobPathsForField(entry, fieldSchema.getValueType().getNonNullType(), recordContext));
+            }
+          }
+        }
+        break;
+      default:
+        // No blob type, skip
+    }
+    return managedPaths;
+  }
+
+  private <R> Option<String> extractManagedPathFromBlob(R blobRecord, HoodieSchema blobSchema, RecordContext<R> recordContext) {
+    // Handle null values
+    if (blobRecord == null) {
+      return Option.empty();
+    }
+
+    // Extract the "type" field to check if blob is OUT_OF_LINE
+    Object typeValue = recordContext.getValue(blobRecord, blobSchema, HoodieSchema.Blob.TYPE);
+    if (!"OUT_OF_LINE".equalsIgnoreCase(typeValue.toString())) {
+      // Inline blob or invalid type, no external file
+      return Option.empty();
+    }
+
+    // Check if this is a managed reference
+    boolean isManaged = (boolean) recordContext.getValue(blobRecord, blobSchema, HoodieSchema.Blob.EXTERNAL_REFERENCE + "." + HoodieSchema.Blob.EXTERNAL_REFERENCE_IS_MANAGED);
+    if (!isManaged) {
+      // Unmanaged blob, don't delete
+      return Option.empty();
+    }
+
+    String path = recordContext.getValue(blobRecord, blobSchema, HoodieSchema.Blob.EXTERNAL_REFERENCE + "." + HoodieSchema.Blob.EXTERNAL_REFERENCE_PATH).toString();
+    return Option.ofNullable(path);
   }
 }
