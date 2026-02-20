@@ -66,6 +66,8 @@ import org.apache.hudi.keygen.SimpleAvroKeyGenerator;
 import org.apache.hudi.metadata.FlinkHoodieBackedTableMetadataWriter;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.schema.FilebasedSchemaProvider;
+import org.apache.hudi.sink.FlinkCheckpointClient;
+import org.apache.hudi.sink.muttley.AthenaIngestionGateway;
 import org.apache.hudi.sink.transform.ChainedTransformer;
 import org.apache.hudi.sink.transform.Transformer;
 import org.apache.hudi.storage.HoodieStorage;
@@ -93,6 +95,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.model.HoodieFileFormat.HOODIE_LOG;
 import static org.apache.hudi.common.model.HoodieFileFormat.ORC;
@@ -111,6 +114,14 @@ public class StreamerUtil {
 
   public static final String FLINK_CHECKPOINT_ID = "flink_checkpoint_id";
   public static final String EMPTY_PARTITION_PATH = "";
+
+  // Kafka offset metadata constants - using Flink-specific keys with Spark-compatible format
+  public static final String HOODIE_METADATA_KEY = "HoodieMetadataKey";
+
+  // Constants for Kafka offset formatting
+  private static final String KAFKA_METADATA_PREFIX = "kafka_metadata";
+  private static final String URL_ENCODED_COLON = "%3A";
+  private static final String PARTITION_SEPARATOR = ";";
 
   public static TypedProperties appendKafkaProps(FlinkStreamerConfig config) {
     TypedProperties properties = getProps(config);
@@ -728,5 +739,226 @@ public class StreamerUtil {
         throw new HoodieException(String.format("Write failure occurs with hoodie key %s at Instant [%s] in append write function", entry.getKey(), currentInstant), entry.getValue());
       });
     }
+  }
+
+  /*
+   * Add Kafka offset metadata to the checkpoint metadata.
+   * Uses Flink-specific checkpoint key but same format as Spark for compatibility.
+   *
+   * @param conf Flink configuration
+   * @param checkpointCommitMetadata commit metadata map
+   * @param kafkaOffsetCheckpoint Kafka offset checkpoint string in Spark format: "HoodieMetadataKey" : "kafka_metadata%3Ahp-event-web%3A101:7583675434;kafka_metadata%3Ahp-event-web%3A222:7190059945;"
+   */
+  public static void addKafkaOffsetMetaData(
+          Configuration conf,
+          HashMap<String, String> checkpointCommitMetadata,
+          String kafkaOffsetCheckpoint) {
+    if (conf.get(FlinkOptions.WRITE_EXTRA_METADATA_ENABLED) && kafkaOffsetCheckpoint != null) {
+      checkpointCommitMetadata.put(HOODIE_METADATA_KEY, kafkaOffsetCheckpoint);
+    }
+  }
+
+  /**
+   * Extracts Kafka offsets from checkpoint response.
+   *
+   * @param checkpointInfo The checkpoint info from service
+   * @param checkpointId The checkpoint ID for logging
+   * @return Map of partition ID to offset, or null if no valid offsets found
+   */
+  private static Map<Integer, Long> extractKafkaOffsets(
+      AthenaIngestionGateway.CheckpointKafkaOffsetInfo checkpointInfo,
+      long checkpointId) {
+
+    List<AthenaIngestionGateway.CheckpointKafkaOffsetInfo.KafkaOffsetsInfo> kafkaOffsetsInfoList =
+        checkpointInfo.getKafkaOffsetsInfo();
+
+    if (kafkaOffsetsInfoList == null || kafkaOffsetsInfoList.isEmpty()) {
+      log.warn("No Kafka offset information found in checkpoint response");
+      return null;
+    }
+
+    // Verify we have exactly one topic
+    if (kafkaOffsetsInfoList.size() > 1) {
+      throw new IllegalStateException(
+          String.format("Expected exactly one topic in checkpoint response, but found %d topics",
+              kafkaOffsetsInfoList.size()));
+    }
+
+    // Get the single topic's offsets
+    AthenaIngestionGateway.CheckpointKafkaOffsetInfo.KafkaOffsetsInfo kafkaOffsetInfo =
+        kafkaOffsetsInfoList.get(0);
+
+    // Validate offset info structure
+    if (kafkaOffsetInfo.getOffsets() == null || kafkaOffsetInfo.getOffsets().getOffsets() == null) {
+      log.warn("Kafka offset info has null offsets for checkpointId={}", checkpointId);
+      return null;
+    }
+
+    Map<Integer, Long> partitionOffsets = kafkaOffsetInfo.getOffsets().getOffsets();
+
+    // Validate partition offsets
+    if (partitionOffsets.isEmpty()) {
+      log.warn("No partition offsets found for checkpointId={}", checkpointId);
+      return null;
+    }
+
+    // Validate offset values
+    for (Map.Entry<Integer, Long> entry : partitionOffsets.entrySet()) {
+      if (entry.getKey() < 0 || entry.getValue() < 0) {
+        log.error("Invalid partition ID {} for checkpointId={} or offset for offset={}",
+                entry.getKey(), checkpointId, entry.getValue());
+        return null;
+      }
+    }
+
+    return partitionOffsets;
+  }
+
+  /**
+   * Collects Kafka offset checkpoint from checkpoint service.
+   *
+   * <p>Important assumptions:
+   * <ul>
+   *   <li>Each Flink job processes only ONE Kafka topic</li>
+   *   <li>Each checkpoint ID is associated with exactly ONE topic</li>
+   *   <li>Each topic can have multiple partitions</li>
+   * </ul>
+   *
+   * <p>Fails open - if any error occurs, returns null and allows commit to proceed without Kafka offsets.
+   *
+   * @param conf             The Flink configuration
+   * @param checkpointId     The checkpoint ID
+   * @param checkpointClient The checkpoint client (nullable)
+   * @return Kafka offset checkpoint string in URL-encoded format for Hudi metadata,
+   * e.g., "kafka_metadata%3Atopic-name%3A0:100;kafka_metadata%3Atopic-name%3A1:200"
+   * where format is "kafka_metadata%3Atopic%3Apartition:offset" separated by semicolons.
+   * Returns null if not available or on error
+   * @throws IllegalStateException if more than one topic is found in the checkpoint response
+   */
+  public static String collectKafkaOffsetCheckpoint(Configuration conf, long checkpointId,
+                                                    FlinkCheckpointClient checkpointClient) {
+    // Extract topic and cluster names early
+    String topicName = conf.contains(FlinkOptions.KAFKA_TOPIC_NAME)
+        ? conf.get(FlinkOptions.KAFKA_TOPIC_NAME) : null;
+    String clusterName = conf.contains(FlinkOptions.SOURCE_KAFKA_CLUSTER)
+        ? conf.get(FlinkOptions.SOURCE_KAFKA_CLUSTER) : null;
+    Map<Integer, Long> partitionOffsets = null;
+
+    try {
+      // Validate checkpoint ID
+      if (checkpointId < 0) {
+        log.warn("Invalid checkpointId={}, must be non-negative", checkpointId);
+        return stringFy(topicName, clusterName, partitionOffsets);
+      }
+
+      // Check if required configurations are present
+      if (!conf.contains(FlinkOptions.DC) || !conf.contains(FlinkOptions.ENV)
+          || !conf.contains(FlinkOptions.JOB_NAME) || !conf.contains(FlinkOptions.KAFKA_TOPIC_NAME)) {
+        log.debug("Kafka offset collection skipped - required configurations not set");
+        return stringFy(topicName, clusterName, partitionOffsets);
+      }
+
+      // Extract configuration parameters
+      String dc = conf.get(FlinkOptions.DC);
+      String env = conf.get(FlinkOptions.ENV);
+      String jobName = conf.get(FlinkOptions.JOB_NAME);
+      String hadoopUser = conf.get(FlinkOptions.HADOOP_USER);
+      String sourceCluster = conf.get(FlinkOptions.SOURCE_KAFKA_CLUSTER);
+      String targetCluster = conf.get(FlinkOptions.TARGET_KAFKA_CLUSTER);
+      String athenaService = conf.get(FlinkOptions.ATHENA_SERVICE);
+      String callerService = conf.get(FlinkOptions.CALLER_SERVICE_NAME);
+      String topicId = conf.get(FlinkOptions.TOPIC_ID);
+      String serviceTier = conf.get(FlinkOptions.SERVICE_TIER);
+      String serviceName = conf.get(FlinkOptions.SERVICE_NAME);
+
+      log.info("Fetching Kafka offsets for checkpointId={}, topicId={}, dc={}, env={}, jobName={}",
+          checkpointId, topicId, dc, env, jobName);
+
+      // Create FlinkCheckpointClient if not provided
+      if (checkpointClient == null) {
+        checkpointClient = new FlinkCheckpointClient(callerService, athenaService);
+      }
+
+      // Build checkpoint request
+      FlinkCheckpointClient.CheckpointRequest request = FlinkCheckpointClient.CheckpointRequest.builder()
+          .dc(dc)
+          .env(env)
+          .checkpointId(checkpointId)
+          .jobName(jobName)
+          .hadoopUser(hadoopUser)
+          .sourceCluster(sourceCluster)
+          .targetCluster(targetCluster)
+          .checkpointLookback(0)
+          .topicOperatorIds(Collections.singletonMap(topicName, topicId))
+          .serviceTier(serviceTier)
+          .serviceName(serviceName)
+          .build();
+
+      // Fetch checkpoint info
+      Option<AthenaIngestionGateway.CheckpointKafkaOffsetInfo> checkpointInfo =
+          checkpointClient.getKafkaCheckpointsInfo(request);
+
+      if (checkpointInfo.isPresent()) {
+        AthenaIngestionGateway.CheckpointKafkaOffsetInfo offsetInfo = checkpointInfo.get();
+        log.info("Successfully retrieved checkpoint info: checkpointId={}, checkpointTimestamp={}",
+            offsetInfo.getCheckpointId(), offsetInfo.getCheckpointTimestamp());
+
+        // Extract offsets using helper method
+        partitionOffsets = extractKafkaOffsets(offsetInfo, checkpointId);
+      } else {
+        log.warn("No checkpoint info found for checkpointId={}", checkpointId);
+      }
+    } catch (Exception e) {
+      // Swallow the exception and log error - fail open to allow commit to proceed
+      log.error("Failed to collect Kafka offset checkpoint for checkpointId={}, proceeding without offsets",
+          checkpointId, e);
+    }
+
+    // Single return point - always return stringified result
+    String ret = stringFy(topicName, clusterName, partitionOffsets);
+    log.info("Kafka offset checkpoint for checkpointId={}: {}", checkpointId, ret);
+    return ret;
+  }
+
+  /**
+   * Converts Kafka topic and partition offsets to a URL-encoded string format with cluster metadata.
+   *
+   * @param topic The Kafka topic name
+   * @param cluster The Kafka cluster name
+   * @param offsetMap Map of partition ID to offset
+   * @return URL-encoded string containing both offset and cluster metadata,
+   *         or empty string if offsetMap is empty or topic is null/empty
+   */
+  public static String stringFy(String topic, String cluster, Map<Integer, Long> offsetMap) {
+    if (topic == null || topic.isEmpty()) {
+      log.warn("Topic name is null or empty in stringFy");
+      return "";
+    }
+
+    String offsets = "";
+
+    // Create offset entries if offsetMap is not null or empty
+    if (offsetMap != null && !offsetMap.isEmpty()) {
+      offsets = offsetMap.entrySet().stream()
+              .sorted(Map.Entry.comparingByKey())
+              .map(entry -> String.format("%s%s%s%s%d:%d",
+                      KAFKA_METADATA_PREFIX, URL_ENCODED_COLON,
+                      topic, URL_ENCODED_COLON,
+                      entry.getKey(), entry.getValue()))
+              .collect(Collectors.joining(PARTITION_SEPARATOR));
+    }
+
+    // Add cluster metadata if cluster name is provided
+    if (cluster != null && !cluster.isEmpty()) {
+      String clusterMetadata = String.format("%s%skafka_cluster%s%s%s:%s",
+              KAFKA_METADATA_PREFIX, URL_ENCODED_COLON,
+              URL_ENCODED_COLON, topic, URL_ENCODED_COLON, cluster);
+
+      // If we have offsets, append cluster metadata with separator
+      // Otherwise, return just the cluster metadata
+      return offsets.isEmpty() ? clusterMetadata : offsets + PARTITION_SEPARATOR + clusterMetadata;
+    }
+
+    return offsets;
   }
 }

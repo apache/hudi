@@ -1138,6 +1138,94 @@ public class FlinkOptions extends HoodieConfig {
       .withDescription("Maximum number of groups to create as part of ClusteringPlan. Increasing groups will increase parallelism, default is 30");
 
   // ------------------------------------------------------------------------
+  //  Kafka/Athena Checkpoint Options
+  // ------------------------------------------------------------------------
+
+  @AdvancedConfig
+  public static final ConfigOption<String> CALLER_SERVICE_NAME = ConfigOptions
+          .key("athena.caller.service.name")
+          .stringType()
+          .defaultValue("ingestion-rt")
+          .withDescription("Caller service name for Athena RPC headers");
+
+  @AdvancedConfig
+  public static final ConfigOption<String> ATHENA_SERVICE = ConfigOptions
+          .key("athena.service")
+          .stringType()
+          .defaultValue("athena-job-manager")
+          .withDescription("Athena service name (e.g., athena-job-manager or athena-job-manager-canary)");
+
+  @AdvancedConfig
+  public static final ConfigOption<String> DC = ConfigOptions
+          .key("athena.dc")
+          .stringType()
+          .noDefaultValue()
+          .withDescription("Data center for Athena checkpoint lookup");
+
+  @AdvancedConfig
+  public static final ConfigOption<String> ENV = ConfigOptions
+          .key("athena.env")
+          .stringType()
+          .noDefaultValue()
+          .withDescription("Environment for Athena checkpoint lookup");
+
+  @AdvancedConfig
+  public static final ConfigOption<String> JOB_NAME = ConfigOptions
+          .key("athena.job.name")
+          .stringType()
+          .noDefaultValue()
+          .withDescription("Flink job name for Athena checkpoint lookup");
+
+  @AdvancedConfig
+  public static final ConfigOption<String> HADOOP_USER = ConfigOptions
+          .key("athena.hadoop.user")
+          .stringType()
+          .noDefaultValue()
+          .withDescription("Hadoop user for Athena checkpoint lookup");
+
+  @AdvancedConfig
+  public static final ConfigOption<String> SOURCE_KAFKA_CLUSTER = ConfigOptions
+          .key("athena.source.kafka.cluster")
+          .stringType()
+          .noDefaultValue()
+          .withDescription("Source Kafka cluster name");
+
+  @AdvancedConfig
+  public static final ConfigOption<String> TARGET_KAFKA_CLUSTER = ConfigOptions
+          .key("athena.target.kafka.cluster")
+          .stringType()
+          .noDefaultValue()
+          .withDescription("Target Kafka cluster name");
+
+  @AdvancedConfig
+  public static final ConfigOption<String> TOPIC_ID = ConfigOptions
+          .key("athena.topic.id")
+          .stringType()
+          .noDefaultValue()
+          .withDescription("Complete topic ID for Athena checkpoint requests");
+
+  @AdvancedConfig
+  public static final ConfigOption<String> SERVICE_TIER = ConfigOptions
+          .key("athena.service.tier")
+          .stringType()
+          .defaultValue("DEFAULT")
+          .withDescription("Service tier for Athena checkpoint lookup (e.g., DEFAULT, CRITICAL)");
+
+  @AdvancedConfig
+  public static final ConfigOption<String> SERVICE_NAME = ConfigOptions
+          .key("athena.service.name")
+          .stringType()
+          .defaultValue("ingestion-rt")
+          .withDescription("Service name for Athena checkpoint lookup");
+
+  @AdvancedConfig
+  public static final ConfigOption<String> KAFKA_TOPIC_NAME = ConfigOptions
+          .key("kafka.topic.name")
+          .stringType()
+          .noDefaultValue()
+          .withDescription("Kafka topic name for storing topic metadata along with offsets");
+
+  // ------------------------------------------------------------------------
   //  Hive Sync Options
   // ------------------------------------------------------------------------
 
