@@ -33,6 +33,7 @@ import org.apache.spark.sql.execution.command._
 import org.apache.spark.sql.execution.datasources.{CreateTable, LogicalRelation}
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.{isMetaField, removeMetaFields}
 import org.apache.spark.sql.hudi.analysis.HoodieAnalysis.{sparkAdapter, MatchCreateIndex, MatchCreateTableLike, MatchDropIndex, MatchInsertIntoStatement, MatchMergeIntoTable, MatchRefreshIndex, MatchShowIndexes, ResolvesToHudiTable}
+import org.apache.spark.sql.hudi.blob.ReadBlobRule
 import org.apache.spark.sql.hudi.command._
 import org.apache.spark.sql.hudi.command.HoodieLeafRunnableCommand.stripMetaFieldAttributes
 import org.apache.spark.sql.hudi.command.InsertIntoHoodieTableCommand.alignQueryOutput
@@ -164,6 +165,8 @@ object HoodieAnalysis extends SparkAdapterSupport {
       "org.apache.spark.sql.hudi.analysis.Spark3HoodiePruneFileSourcePartitions"
     }
     rules += (spark => instantiateKlass(pruneFileSourcePartitionsClass, spark))
+
+    rules += (session => ReadBlobRule(session))
 
     rules.toSeq
   }

@@ -74,6 +74,17 @@ trait SparkAdapter extends Serializable {
   def injectTableFunctions(extensions: SparkSessionExtensions): Unit = {}
 
   /**
+   * Inject scalar functions into Spark SQL function registry.
+   * These functions can be used in SQL SELECT clauses.
+   */
+  def injectScalarFunctions(extensions: SparkSessionExtensions): Unit
+
+  /**
+   * Inject planner strategies to SparkSessionExtensions for converting custom logical plans into physical plans.
+   */
+  def injectPlannerStrategy(extensions: SparkSessionExtensions): Unit
+
+  /**
    * Returns an instance of [[HoodieCatalystExpressionUtils]] providing for common utils operating
    * on Catalyst [[Expression]]s
    */

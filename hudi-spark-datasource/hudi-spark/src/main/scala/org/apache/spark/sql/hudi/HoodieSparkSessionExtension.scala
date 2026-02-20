@@ -53,5 +53,7 @@ class HoodieSparkSessionExtension extends (SparkSessionExtensions => Unit)
     */
 
     sparkAdapter.injectTableFunctions(extensions)
+    sparkAdapter.injectScalarFunctions(extensions)
+    sparkAdapter.injectPlannerStrategy(extensions)
   }
 }

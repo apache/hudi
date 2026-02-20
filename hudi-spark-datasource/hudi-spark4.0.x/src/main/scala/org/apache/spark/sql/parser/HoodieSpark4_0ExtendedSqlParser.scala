@@ -137,7 +137,8 @@ class HoodieSpark4_0ExtendedSqlParser(session: SparkSession, delegate: ParserInt
       normalized.contains("create index") ||
       normalized.contains("drop index") ||
       normalized.contains("show indexes") ||
-      normalized.contains("refresh index")
+      normalized.contains("refresh index") ||
+      normalized.contains(" blob")
   }
 
   override def parseRoutineParam(sqlText: String): StructType = throw new UnsupportedOperationException()
