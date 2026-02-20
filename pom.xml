@@ -2078,6 +2078,7 @@
                   <goal>report</goal>
                 </goals>
                 <configuration>
+                  <dataFile>${project.build.directory}/jacoco-agent/${jacoco.agent.dest.filename}</dataFile>
                   <outputDirectory>${project.reporting.outputDirectory}/jacoco-ut</outputDirectory>
                 </configuration>
               </execution>
@@ -2125,6 +2126,7 @@
                   <goal>report</goal>
                 </goals>
                 <configuration>
+                  <dataFile>${project.build.directory}/jacoco-agent/${jacoco.agent.dest.filename}</dataFile>
                   <outputDirectory>${project.reporting.outputDirectory}/jacoco-ft</outputDirectory>
                 </configuration>
               </execution>
@@ -2172,6 +2174,7 @@
                   <goal>report</goal>
                 </goals>
                 <configuration>
+                  <dataFile>${project.build.directory}/jacoco-agent/${jacoco.agent.dest.filename}</dataFile>
                   <outputDirectory>${project.reporting.outputDirectory}/jacoco-ft</outputDirectory>
                 </configuration>
               </execution>
@@ -2219,6 +2222,7 @@
                   <goal>report</goal>
                 </goals>
                 <configuration>
+                  <dataFile>${project.build.directory}/jacoco-agent/${jacoco.agent.dest.filename}</dataFile>
                   <outputDirectory>${project.reporting.outputDirectory}/jacoco-ft</outputDirectory>
                 </configuration>
               </execution>
