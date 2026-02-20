@@ -21,13 +21,19 @@ package org.apache.hudi.common.util;
 import org.junit.jupiter.api.Test;
 
 import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
+import java.security.SecureRandom;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.Random;
 
+import static org.apache.hudi.common.util.StringUtils.concatenateWithThreshold;
+import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -36,6 +42,29 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 public class TestStringUtils {
 
   private static final String[] STRINGS = {"This", "is", "a", "test"};
+
+  private static final String CHARACTERS_FOR_RANDOM_GEN = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_/:";
+  private static final Random RANDOM = new SecureRandom();
+
+  private static String toHexString(byte[] bytes) {
+    StringBuilder sb = new StringBuilder(bytes.length * 2);
+    for (byte b : bytes) {
+      sb.append(String.format("%02x", b));
+    }
+    return sb.toString();
+  }
+
+  private static String generateRandomString(int length) {
+    if (length < 1) {
+      throw new IllegalArgumentException("Length must be greater than 0");
+    }
+    StringBuilder builder = new StringBuilder(length);
+    for (int i = 0; i < length; i++) {
+      int randomIndex = RANDOM.nextInt(CHARACTERS_FOR_RANDOM_GEN.length());
+      builder.append(CHARACTERS_FOR_RANDOM_GEN.charAt(randomIndex));
+    }
+    return new String(getUTF8Bytes(builder.toString()), StandardCharsets.UTF_8);
+  }
 
   @Test
   public void testStringJoinWithDelim() {
@@ -106,18 +135,64 @@ public class TestStringUtils {
     assertEquals(StringUtils.toHexString(str.getBytes()), toHexString(str.getBytes()));
   }
 
-  private static String toHexString(byte[] bytes) {
-    StringBuilder sb = new StringBuilder(bytes.length * 2);
-    for (byte b : bytes) {
-      sb.append(String.format("%02x", b));
-    }
-    return sb.toString();
-  }
-
   @Test
   public void testTruncate() {
     assertNull(StringUtils.truncate(null, 10, 10));
     assertEquals("http://use...ons/latest", StringUtils.truncate("http://username:password@myregistry.com:5000/versions/latest", 10, 10));
     assertEquals("http://abc.com", StringUtils.truncate("http://abc.com", 10, 10));
+  }
+
+  @Test
+  void testConcatenateWithinThreshold() {
+    String a = generateRandomString(1000); // 1000 bytes in UTF-8
+    String b = generateRandomString(1048); // 1048 bytes in UTF-8
+    int threshold = 2048;
+
+    // The total length of bytes of `a` + `b` exceeds the threshold
+    String result = StringUtils.concatenateWithThreshold(a, b, threshold);
+
+    // The resulting string should be exactly `threshold` bytes long
+    assertEquals(threshold, getUTF8Bytes(result).length);
+    assertEquals(a + b, result);
+
+    // Test case when a + b is within the threshold
+    String a2 = generateRandomString(900);
+    String b2 = generateRandomString(1000);
+    String result2 = concatenateWithThreshold(a2, b2, threshold);
+
+    // The resulting string should be `a2 + b2`
+    assertEquals(a2 + b2, result2);
+  }
+
+  @Test
+  void testConcatenateInvalidInput() {
+    // Test case when b alone exceeds the threshold
+    String a = generateRandomString(900);
+    String b = generateRandomString(3000); // 3000 bytes in UTF-8
+    Exception exception = assertThrows(IllegalArgumentException.class, () -> {
+      concatenateWithThreshold(a, b, 2048);
+    });
+
+    String expectedMessage = "Length of the Second string to concatenate exceeds the threshold (3000 > 2048)";
+    String actualMessage = exception.getMessage();
+
+    assertTrue(actualMessage.contains(expectedMessage));
+  }
+
+  @Test
+  void testConcatenateTruncateCase() {
+    // 'é' is 2 bytes
+    assertEquals("ad", concatenateWithThreshold("aé", "d", 3));
+    // Chinese chars are 3 bytes
+    assertEquals("世d", concatenateWithThreshold("世界", "d", 4));
+    assertEquals("ad", concatenateWithThreshold("ab", "d", 2));
+  }
+
+  @Test
+  void testGenerateInvalidRandomString() {
+    assertThrows(
+        IllegalArgumentException.class,
+        () -> generateRandomString(-1)
+    );
   }
 }

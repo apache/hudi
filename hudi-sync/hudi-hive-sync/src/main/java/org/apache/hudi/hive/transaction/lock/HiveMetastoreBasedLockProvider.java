@@ -43,6 +43,7 @@ import org.apache.thrift.TException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.Serializable;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -71,17 +72,17 @@ import static org.apache.hudi.common.lock.LockState.RELEASING;
  * using hive metastore APIs. Users need to have a HiveMetastore & Zookeeper cluster deployed to be able to use this lock.
  *
  */
-public class HiveMetastoreBasedLockProvider implements LockProvider<LockResponse> {
+public class HiveMetastoreBasedLockProvider implements LockProvider<LockResponse>, Serializable {
 
   private static final Logger LOG = LoggerFactory.getLogger(HiveMetastoreBasedLockProvider.class);
 
   private final String databaseName;
   private final String tableName;
   private final String hiveMetastoreUris;
-  private IMetaStoreClient hiveClient;
+  private transient IMetaStoreClient hiveClient;
   private volatile LockResponse lock = null;
   protected LockConfiguration lockConfiguration;
-  ExecutorService executor = Executors.newSingleThreadExecutor();
+  transient ExecutorService executor = Executors.newSingleThreadExecutor();
 
   public HiveMetastoreBasedLockProvider(final LockConfiguration lockConfiguration, final Configuration conf) {
     this(lockConfiguration);
