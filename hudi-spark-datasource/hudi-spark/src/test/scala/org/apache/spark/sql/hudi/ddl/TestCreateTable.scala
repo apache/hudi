@@ -2022,20 +2022,7 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
 
       // Verify structure matches blob schema
       assertTrue(videoField.dataType.isInstanceOf[StructType])
-      val blobStruct = videoField.dataType.asInstanceOf[StructType]
-      assertEquals(Seq("storage_type", "bytes", "reference"), blobStruct.fieldNames.toSeq)
-
-      // Verify field types
-      assertEquals(StringType, blobStruct("storage_type").dataType)
-      assertEquals(BinaryType, blobStruct("bytes").dataType)
-      assertTrue(blobStruct("reference").dataType.isInstanceOf[StructType])
-
-      val refStruct = blobStruct("reference").dataType.asInstanceOf[StructType]
-      assertEquals(Seq("file", "position", "length", "managed"), refStruct.fieldNames.toSeq)
-      assertEquals(StringType, refStruct("file").dataType)
-      assertEquals(LongType, refStruct("position").dataType)
-      assertEquals(LongType, refStruct("length").dataType)
-      assertEquals(BooleanType, refStruct("managed").dataType)
+      assertEquals(BlobType(), videoField.dataType)
     }
   }
 
@@ -2074,7 +2061,7 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
         }
 
         val blobStruct = field.dataType.asInstanceOf[StructType]
-        assertEquals(Seq("storage_type", "bytes", "reference"), blobStruct.fieldNames.toSeq)
+        assertEquals(BlobType(), blobStruct)
       }
     }
   }
@@ -2108,7 +2095,7 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
       // Verify structure
       assertTrue(contentField.dataType.isInstanceOf[StructType])
       val blobStruct = contentField.dataType.asInstanceOf[StructType]
-      assertEquals(Seq("storage_type", "bytes", "reference"), blobStruct.fieldNames.toSeq)
+      assertEquals(BlobType(), blobStruct)
     }
   }
 }
