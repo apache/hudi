@@ -42,7 +42,7 @@ import org.apache.hudi.hive.HiveSyncConfigHolder
 import org.apache.hudi.keygen.{ComplexKeyGenerator, CustomKeyGenerator, GlobalDeleteKeyGenerator, NonpartitionedKeyGenerator, SimpleKeyGenerator, TimestampBasedKeyGenerator}
 import org.apache.hudi.keygen.constant.{KeyGeneratorOptions, KeyGeneratorType}
 import org.apache.hudi.metrics.{Metrics, MetricsReporterType}
-import org.apache.hudi.storage.{StoragePath, StoragePathFilter}
+import org.apache.hudi.storage.{HoodieStorage, StoragePath, StoragePathFilter}
 import org.apache.hudi.table.HoodieSparkTable
 import org.apache.hudi.testutils.{DataSourceTestUtils, HoodieSparkClientTestBase}
 import org.apache.hudi.util.JFunction
@@ -2546,9 +2546,300 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
       writeToHudi(opt, firstUpdateDF, DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL)
     })
   }
+
+  @Test
+  def testNestedFieldPartition(): Unit = {
+    TestCOWDataSource.runNestedFieldPartitionTest(spark, basePath, storage, "COW")
+  }
 }
 
 object TestCOWDataSource {
+
+  /**
+   * Shared test logic for nested field partition (COW and MOR).
+   * Used by TestCOWDataSource.testNestedFieldPartition and TestMORDataSource.testNestedFieldPartition.
+   */
+  def runNestedFieldPartitionTest(spark: SparkSession, basePath: String, storage: HoodieStorage, tableType: String): Unit = {
+    // Define schema with nested_record containing level field
+    val nestedSchema = StructType(Seq(
+      StructField("nested_int", IntegerType, nullable = false),
+      StructField("level", StringType, nullable = false)
+    ))
+
+    val schema = StructType(Seq(
+      StructField("key", StringType, nullable = false),
+      StructField("ts", LongType, nullable = false),
+      StructField("level", StringType, nullable = false),
+      StructField("int_field", IntegerType, nullable = false),
+      StructField("string_field", StringType, nullable = true),
+      StructField("nested_record", nestedSchema, nullable = true)
+    ))
+
+    // Create test data where top-level 'level' and 'nested_record.level' have DIFFERENT values
+    // This helps verify we're correctly partitioning/filtering on the nested field
+    val recordsCommit1 = Seq(
+      Row("key1", 1L, "L1", 1, "str1", Row(10, "INFO")),
+      Row("key2", 2L, "L2", 2, "str2", Row(20, "ERROR")),
+      Row("key3", 3L, "L3", 3, "str3", Row(30, "INFO")),
+      Row("key4", 4L, "L4", 4, "str4", Row(40, "DEBUG")),
+      Row("key5", 5L, "L5", 5, "str5", Row(50, "INFO"))
+    )
+
+    val tableTypeOptVal = if (tableType == "MOR") {
+      DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL
+    } else {
+      DataSourceWriteOptions.COW_TABLE_TYPE_OPT_VAL
+    }
+
+    val baseWriteOpts = Map(
+      "hoodie.insert.shuffle.parallelism" -> "4",
+      "hoodie.upsert.shuffle.parallelism" -> "4",
+      DataSourceWriteOptions.RECORDKEY_FIELD.key -> "key",
+      DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "nested_record.level",
+      HoodieTableConfig.ORDERING_FIELDS.key -> "ts",
+      HoodieWriteConfig.TBL_NAME.key -> "test_nested_partition",
+      DataSourceWriteOptions.TABLE_TYPE.key -> tableTypeOptVal
+    )
+    val writeOpts = if (tableType == "MOR") {
+      baseWriteOpts + ("hoodie.compact.inline" -> "false")
+    } else {
+      baseWriteOpts
+    }
+
+    // Commit 1 - Initial insert
+    val inputDF1 = spark.createDataFrame(
+      spark.sparkContext.parallelize(recordsCommit1),
+      schema
+    )
+    inputDF1.write.format("hudi")
+      .options(writeOpts)
+      .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
+      .mode(SaveMode.Overwrite)
+      .save(basePath)
+    val commit1 = DataSourceTestUtils.latestCommitCompletionTime(storage, basePath)
+
+    // Commit 2 - Upsert: update key1 (int_field 1->100), insert key6 (INFO)
+    val recordsCommit2 = Seq(
+      Row("key1", 10L, "L1", 100, "str1", Row(10, "INFO")),
+      Row("key6", 6L, "L6", 6, "str6", Row(60, "INFO"))
+    )
+    val inputDF2 = spark.createDataFrame(
+      spark.sparkContext.parallelize(recordsCommit2),
+      schema
+    )
+    inputDF2.write.format("hudi")
+      .options(writeOpts)
+      .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL)
+      .mode(SaveMode.Append)
+      .save(basePath)
+    val commit2 = DataSourceTestUtils.latestCommitCompletionTime(storage, basePath)
+
+    // Commit 3 - Upsert: update key3 (int_field 3->300), insert key7 (INFO)
+    val recordsCommit3 = Seq(
+      Row("key3", 30L, "L3", 300, "str3", Row(30, "INFO")),
+      Row("key7", 7L, "L7", 7, "str7", Row(70, "INFO"))
+    )
+    val inputDF3 = spark.createDataFrame(
+      spark.sparkContext.parallelize(recordsCommit3),
+      schema
+    )
+    inputDF3.write.format("hudi")
+      .options(writeOpts)
+      .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL)
+      .mode(SaveMode.Append)
+      .save(basePath)
+    val commit3 = DataSourceTestUtils.latestCommitCompletionTime(storage, basePath)
+
+    // Verify partition structure - we should have 3 partitions: INFO, ERROR, DEBUG
+    val allPartitions = storage.listDirectEntries(new StoragePath(basePath))
+      .asScala.filter(_.isDirectory)
+      .map(_.getPath.getName)
+      .filterNot(_.startsWith("."))  // Filter out .hoodie and other hidden directories
+      .sorted
+    assertEquals(3, allPartitions.size, s"Expected 3 partitions for $tableType, but got: ${allPartitions.mkString(", ")}")
+    assertTrue(allPartitions.contains("INFO"), s"Missing INFO partition for $tableType")
+    assertTrue(allPartitions.contains("ERROR"), s"Missing ERROR partition for $tableType")
+    assertTrue(allPartitions.contains("DEBUG"), s"Missing DEBUG partition for $tableType")
+
+    // Snapshot read - filter on nested_record.level = 'INFO' (latest state: 5 records)
+    val snapshotDF = spark.read.format("hudi")
+      .load(basePath)
+      .filter("nested_record.level = 'INFO'")
+      .select("key", "ts", "level", "int_field", "string_field", "nested_record")
+      .orderBy("key")
+
+    // VERIFICATION 1: Check partition schema contains the nested field
+    val snapshotRelation = snapshotDF.queryExecution.optimizedPlan.collectFirst {
+      case lr: org.apache.spark.sql.execution.datasources.LogicalRelation => lr
+    }
+    assertTrue(snapshotRelation.isDefined, s"LogicalRelation should exist for $tableType")
+    val fileIndex = snapshotRelation.get.relation match {
+      case fsRelation: org.apache.spark.sql.execution.datasources.HadoopFsRelation =>
+        fsRelation.location.asInstanceOf[org.apache.hudi.HoodieFileIndex]
+      case baseRelation: org.apache.hudi.HoodieBaseRelation =>
+        baseRelation.fileIndex
+      case _ => null
+    }
+    assertTrue(fileIndex != null, s"FileIndex should be available for $tableType")
+    assertEquals(1, fileIndex.partitionSchema.fields.length,
+      s"Partition schema should have 1 field for $tableType")
+    assertEquals("nested_record.level", fileIndex.partitionSchema.fields(0).name,
+      s"Partition field should be 'nested_record.level' for $tableType")
+
+    // VERIFICATION 2: Check that predicates were pushed down to FileIndex
+    assertTrue(fileIndex.hasPredicatesPushedDown,
+      s"Partition predicates should be pushed down to FileIndex for $tableType")
+
+    // VERIFICATION 3: Verify partition pruning by checking the physical plan
+    // The physical plan should show that only specific files are being scanned
+    val physicalPlan = snapshotDF.queryExecution.executedPlan.toString()
+    assertTrue(physicalPlan.contains("Scan") || physicalPlan.contains("FileScan"),
+      s"Physical plan should contain scan operation for $tableType")
+
+    // Collect results to execute the query
+    val snapshotResults = snapshotDF.collect()
+    val expectedSnapshot = Array(
+      Row("key1", 10L, "L1", 100, "str1", Row(10, "INFO")),
+      Row("key3", 30L, "L3", 300, "str3", Row(30, "INFO")),
+      Row("key5", 5L, "L5", 5, "str5", Row(50, "INFO")),
+      Row("key6", 6L, "L6", 6, "str6", Row(60, "INFO")),
+      Row("key7", 7L, "L7", 7, "str7", Row(70, "INFO"))
+    )
+    assertEquals(expectedSnapshot.length, snapshotResults.length,
+      s"Snapshot (INFO) count mismatch for $tableType")
+    expectedSnapshot.zip(snapshotResults).foreach { case (expected, actual) =>
+      assertEquals(expected, actual)
+    }
+
+    // Time travel - as of commit1 (only initial 5 records; INFO = key1, key3, key5)
+    val timeTravelDF1 = spark.read.format("hudi")
+      .option(DataSourceReadOptions.TIME_TRAVEL_AS_OF_INSTANT.key, commit1)
+      .load(basePath)
+      .filter("nested_record.level = 'INFO'")
+      .select("key", "ts", "level", "int_field", "string_field", "nested_record")
+      .orderBy("key")
+
+    // VERIFICATION 4: Verify partition pruning works for time travel queries
+    // Check that the time travel query with partition filter returns correct results
+    val timeTravelCommit1 = timeTravelDF1.collect()
+    val expectedAfterCommit1 = Array(
+      Row("key1", 1L, "L1", 1, "str1", Row(10, "INFO")),
+      Row("key3", 3L, "L3", 3, "str3", Row(30, "INFO")),
+      Row("key5", 5L, "L5", 5, "str5", Row(50, "INFO"))
+    )
+    assertEquals(expectedAfterCommit1.length, timeTravelCommit1.length,
+      s"Time travel to commit1 (INFO) count mismatch for $tableType")
+    expectedAfterCommit1.zip(timeTravelCommit1).foreach { case (expected, actual) =>
+      assertEquals(expected, actual)
+    }
+
+    // Time travel - as of commit2 (after 2nd commit; INFO = key1 updated, key3, key5, key6)
+    val timeTravelCommit2 = spark.read.format("hudi")
+      .option(DataSourceReadOptions.TIME_TRAVEL_AS_OF_INSTANT.key, commit2)
+      .load(basePath)
+      .filter("nested_record.level = 'INFO'")
+      .select("key", "ts", "level", "int_field", "string_field", "nested_record")
+      .orderBy("key")
+      .collect()
+
+    val expectedAfterCommit2 = Array(
+      Row("key1", 10L, "L1", 100, "str1", Row(10, "INFO")),
+      Row("key3", 3L, "L3", 3, "str3", Row(30, "INFO")),
+      Row("key5", 5L, "L5", 5, "str5", Row(50, "INFO")),
+      Row("key6", 6L, "L6", 6, "str6", Row(60, "INFO"))
+    )
+    assertEquals(expectedAfterCommit2.length, timeTravelCommit2.length,
+      s"Time travel to commit2 (INFO) count mismatch for $tableType")
+    expectedAfterCommit2.zip(timeTravelCommit2).foreach { case (expected, actual) =>
+      assertEquals(expected, actual)
+    }
+
+    // Incremental query - from commit1 to commit2 (only key1 update and key6 insert; both INFO)
+    val incrementalDF1To2 = spark.read.format("hudi")
+      .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
+      .option(DataSourceReadOptions.START_COMMIT.key, commit1)
+      .option(DataSourceReadOptions.END_COMMIT.key, commit2)
+      .load(basePath)
+      .filter("nested_record.level = 'INFO'")
+      .select("key", "ts", "level", "int_field", "string_field", "nested_record")
+      .orderBy("key")
+
+    // VERIFICATION 6: Verify partition filtering works for incremental queries
+    // For incremental queries, the filter on nested_record.level should still limit scanned data
+    val incrementalPlan1To2 = incrementalDF1To2.queryExecution.executedPlan.toString()
+    // The plan should show filtering is happening
+    assertTrue(incrementalPlan1To2.contains("Filter") || incrementalPlan1To2.contains("Scan"),
+      s"Incremental query plan should show filtering for $tableType")
+
+    val incrementalCommit1To2 = incrementalDF1To2.collect()
+    val expectedInc1To2 = Array(
+      Row("key1", 10L, "L1", 100, "str1", Row(10, "INFO")),
+      Row("key6", 6L, "L6", 6, "str6", Row(60, "INFO"))
+    )
+    assertEquals(expectedInc1To2.length, incrementalCommit1To2.length,
+      s"Incremental (commit1->commit2, INFO) count mismatch for $tableType")
+    expectedInc1To2.zip(incrementalCommit1To2).foreach { case (expected, actual) =>
+      assertEquals(expected, actual)
+    }
+
+    // Incremental query - from commit2 to commit3 (only key3 update and key7 insert; both INFO)
+    val incrementalCommit2To3 = spark.read.format("hudi")
+      .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
+      .option(DataSourceReadOptions.START_COMMIT.key, commit2)
+      .option(DataSourceReadOptions.END_COMMIT.key, commit3)
+      .load(basePath)
+      .filter("nested_record.level = 'INFO'")
+      .select("key", "ts", "level", "int_field", "string_field", "nested_record")
+      .orderBy("key")
+      .collect()
+
+    val expectedInc2To3 = Array(
+      Row("key3", 30L, "L3", 300, "str3", Row(30, "INFO")),
+      Row("key7", 7L, "L7", 7, "str7", Row(70, "INFO"))
+    )
+    assertEquals(expectedInc2To3.length, incrementalCommit2To3.length,
+      s"Incremental (commit2->commit3, INFO) count mismatch for $tableType")
+    expectedInc2To3.zip(incrementalCommit2To3).foreach { case (expected, actual) =>
+      assertEquals(expected, actual)
+    }
+
+    // VERIFICATION 4: Test with different partition values to ensure filtering is working correctly
+    // Query for ERROR partition (should only return key2)
+    val errorPartitionDF = spark.read.format("hudi")
+      .load(basePath)
+      .filter("nested_record.level = 'ERROR'")
+      .select("key", "nested_record")
+
+    val errorResults = errorPartitionDF.collect()
+    assertEquals(1, errorResults.length, s"ERROR partition should have 1 record for $tableType")
+    assertEquals("key2", errorResults(0).getString(0),
+      s"ERROR partition should contain key2 for $tableType")
+
+    // VERIFICATION 5: Test with DEBUG partition
+    val debugPartitionDF = spark.read.format("hudi")
+      .load(basePath)
+      .filter("nested_record.level = 'DEBUG'")
+      .select("key", "nested_record")
+
+    val debugResults = debugPartitionDF.collect()
+    assertEquals(1, debugResults.length, s"DEBUG partition should have 1 record for $tableType")
+    assertEquals("key4", debugResults(0).getString(0),
+      s"DEBUG partition should contain key4 for $tableType")
+
+    // VERIFICATION 6: Verify that filtering on top-level 'level' field returns correct results
+    // This ensures we're correctly distinguishing between nested_record.level (partition) and level (data column)
+    val topLevelFilterDF = spark.read.format("hudi")
+      .load(basePath)
+      .filter("level = 'L1'")  // Filter on top-level 'level', not nested_record.level
+      .select("key", "level", "nested_record")
+
+    val topLevelResults = topLevelFilterDF.collect()
+    // Should return key1 which has level='L1' and is in INFO partition
+    assertEquals(1, topLevelResults.length, s"Top-level level='L1' should return 1 record for $tableType")
+    assertEquals("key1", topLevelResults(0).getString(0),
+      s"Top-level level='L1' should return key1 for $tableType")
+  }
+
   def convertColumnsToNullable(df: DataFrame, cols: String*): DataFrame = {
     cols.foldLeft(df) { (df, c) =>
       // NOTE: This is the trick to make Spark convert a non-null column "c" into a nullable

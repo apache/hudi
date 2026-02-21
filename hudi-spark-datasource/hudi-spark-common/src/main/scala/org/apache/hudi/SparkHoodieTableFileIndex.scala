@@ -42,7 +42,7 @@ import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.{expressions, InternalRow}
-import org.apache.spark.sql.catalyst.expressions.{AttributeReference, BasePredicate, BoundReference, EmptyRow, EqualTo, Expression, InterpretedPredicate, Literal}
+import org.apache.spark.sql.catalyst.expressions.{AttributeReference, BasePredicate, BoundReference, EmptyRow, EqualTo, Expression, GetStructField, InterpretedPredicate, Literal}
 import org.apache.spark.sql.catalyst.util.DateTimeUtils
 import org.apache.spark.sql.execution.datasources.{FileStatusCache, NoopCache}
 import org.apache.spark.sql.internal.SQLConf
@@ -134,8 +134,11 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
         val partitionFields: Array[StructField] = partitionColumns.get().map(column => StructField(column, StringType))
         StructType(partitionFields)
       } else {
+        // Use full partition path (e.g. "nested_record.level") as the partition column name so that
+        // data schema does not exclude a same-named top-level column (e.g. "level") when partition
+        // path is a nested field. Otherwise partition value would overwrite the data column on read.
         val partitionFields: Array[StructField] = partitionColumns.get().filter(column => nameFieldMap.contains(column))
-          .map(column => nameFieldMap.apply(column))
+          .map(column => StructField(column, nameFieldMap.apply(column).dataType))
 
         if (partitionFields.length != partitionColumns.get().length) {
           val isBootstrapTable = tableConfig.getBootstrapBasePath.isPresent
@@ -222,10 +225,16 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
   def listMatchingPartitionPaths(predicates: Seq[Expression]): Seq[PartitionPath] = {
     val resolve = spark.sessionState.analyzer.resolver
     val partitionColumnNames = getPartitionColumns
+    // Strip Spark's internal exprId suffix (e.g. #136) so nested_record#136 matches nested_record.level
+    def logicalRefName(ref: String): String = ref.replaceAll("#\\d+$", "")
     val partitionPruningPredicates = predicates.filter {
       _.references.map(_.name).forall { ref =>
-        // NOTE: We're leveraging Spark's resolver here to appropriately handle case-sensitivity
-        partitionColumnNames.exists(partCol => resolve(ref, partCol))
+        val logicalRef = logicalRefName(ref)
+        // NOTE: We're leveraging Spark's resolver here to appropriately handle case-sensitivity.
+        // For nested partition columns (e.g. nested_record.level), ref may be the struct root
+        // (e.g. nested_record#136); match when logicalRef equals partCol or is a prefix of partCol.
+        partitionColumnNames.exists(partCol =>
+          resolve(logicalRef, partCol) || partCol.startsWith(logicalRef + "."))
       }
     }
 
@@ -253,10 +262,26 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
       //       the whole table
       if (haveProperPartitionValues(partitionPaths.toSeq) && partitionSchema.nonEmpty) {
         val predicate = partitionPruningPredicates.reduce(expressions.And)
-        val transformedPredicate = predicate.transform {
+        val partitionFieldNames = partitionSchema.fieldNames
+        def getPartitionColumnPath(expr: Expression): Option[String] = expr match {
           case a: AttributeReference =>
-            val index = partitionSchema.indexWhere(a.name == _.name)
-            BoundReference(index, partitionSchema(index).dataType, nullable = true)
+            Some(a.name.replaceAll("#\\d+$", ""))
+          case GetStructField(child, _, Some(fieldName)) =>
+            getPartitionColumnPath(child).map(_ + "." + fieldName)
+          case _ => None
+        }
+        val transformedPredicate = predicate.transform {
+          case g @ GetStructField(_, _, Some(_)) =>
+            getPartitionColumnPath(g).flatMap { path =>
+              val idx = partitionFieldNames.indexOf(path)
+              if (idx >= 0) Some(BoundReference(idx, partitionSchema(idx).dataType, nullable = true))
+              else None
+            }.getOrElse(g)
+          case a: AttributeReference =>
+            val logicalName = a.name.replaceAll("#\\d+$", "")
+            val index = partitionSchema.indexWhere(sf => resolve(logicalName, sf.name))
+            if (index >= 0) BoundReference(index, partitionSchema(index).dataType, nullable = true)
+            else a
         }
         val boundPredicate: BasePredicate = try {
           // Try using 1-arg constructor via reflection
