@@ -19,18 +19,20 @@ package org.apache.hudi.functional
 
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.DefaultSparkRecordMerger
-import org.apache.hudi.common.model.HoodieTableType
+import org.apache.hudi.common.model.{HoodieFileFormat, HoodieTableType}
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.testutils.HoodieTestUtils
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.testutils.HoodieSparkClientTestBase
 
-import org.apache.spark.sql.{DataFrame, SaveMode, SparkSession}
+import org.apache.spark.sql.{DataFrame, Row, SaveMode, SparkSession}
 import org.junit.jupiter.api.{AfterEach, BeforeEach}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.junit.jupiter.api.condition.DisabledIfSystemProperty
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.EnumSource
+
+import java.util.concurrent.atomic.AtomicInteger
 
 import scala.collection.JavaConverters._
 
@@ -52,6 +54,21 @@ class TestLanceDataSource extends HoodieSparkClientTestBase {
   override def tearDown(): Unit = {
     super.tearDown()
     spark = null
+  }
+
+  private val tableId = new AtomicInteger(0)
+
+  private def generateTableName: String = {
+    s"lance_sql_${tableId.incrementAndGet()}"
+  }
+
+  private def checkAnswer(sql: String)(expects: Seq[Any]*): Unit = {
+    val result = spark.sql(sql).collect()
+    val expectedRows = expects.map(row => Row(row: _*)).toArray
+    assertEquals(expectedRows.length, result.length, "Row count mismatch")
+    expectedRows.zip(result).foreach { case (expected, actual) =>
+      assertEquals(expected, actual)
+    }
   }
 
   @ParameterizedTest
@@ -715,6 +732,106 @@ class TestLanceDataSource extends HoodieSparkClientTestBase {
 
     assertTrue(expectedDf.except(actual).isEmpty)
     assertTrue(actual.except(expectedDf).isEmpty)
+  }
+
+  @ParameterizedTest
+  @EnumSource(value = classOf[HoodieTableType])
+  def testBasicSqlInsertOperations(tableType: HoodieTableType): Unit = {
+    Seq(true, false).foreach { isPartitioned =>
+      val tableName = generateTableName
+      val tablePath = s"$basePath/$tableName"
+      testSqlInsertWithSubsetOfColumns(tableType, tableName, tablePath, isPartitioned)
+    }
+  }
+
+  private def testSqlInsertWithSubsetOfColumns(tableType: HoodieTableType,
+                                               tableName: String,
+                                               tablePath: String,
+                                               isPartitioned: Boolean): Unit = {
+    val createTablePartitionClause = if (isPartitioned) "partitioned by (dt)" else ""
+
+    // CREATE TABLE with Lance configuration
+    // Lance format requires Spark record merger for writing
+    spark.sql(s"""
+      create table $tableName (
+        id int,
+        dt string,
+        name string,
+        age int,
+        score double
+      ) using hudi
+      tblproperties (
+        hoodie.table.base.file.format = 'LANCE',
+        type = '${tableType.name()}',
+        primaryKey = 'id',
+        hoodie.datasource.write.record.merger.impls = '${classOf[DefaultSparkRecordMerger].getName}'
+      )
+      $createTablePartitionClause
+      location '$tablePath'
+    """.stripMargin)
+
+    // Test 1: INSERT with all columns in schema order
+    spark.sql(s"""
+      insert into $tableName (id, name, age, score, dt)
+      values (1, 'Alice', 30, 95.5, '2025-01-01'),
+             (2, 'Bob', 25, 87.3, '2025-01-02')
+    """.stripMargin)
+
+    checkAnswer(s"select id, name, age, score, dt from $tableName order by id")(
+      Seq(1, "Alice", 30, 95.5, "2025-01-01"),
+      Seq(2, "Bob", 25, 87.3, "2025-01-02")
+    )
+
+    // Test 2: INSERT with reordered columns
+    spark.sql(s"""
+      insert into $tableName (dt, name, id, age, score)
+      values ('2025-01-03', 'Charlie', 3, 35, 92.1)
+    """.stripMargin)
+
+    checkAnswer(s"select id, name, age, score, dt from $tableName order by id")(
+      Seq(1, "Alice", 30, 95.5, "2025-01-01"),
+      Seq(2, "Bob", 25, 87.3, "2025-01-02"),
+      Seq(3, "Charlie", 35, 92.1, "2025-01-03")
+    )
+
+    // Test 3: INSERT with subset of columns (null handling)
+    spark.sql(s"""
+      insert into $tableName (dt, age, name, id)
+      values ('2025-01-04', 40, 'Diana', 4)
+    """.stripMargin)
+
+    checkAnswer(s"select id, name, age, score, dt from $tableName order by id")(
+      Seq(1, "Alice", 30, 95.5, "2025-01-01"),
+      Seq(2, "Bob", 25, 87.3, "2025-01-02"),
+      Seq(3, "Charlie", 35, 92.1, "2025-01-03"),
+      Seq(4, "Diana", 40, null, "2025-01-04")
+    )
+
+    // Test 4: INSERT with static partition (only for partitioned tables)
+    if (isPartitioned) {
+      spark.sql(s"""
+        insert into $tableName partition(dt='2025-01-05') (age, id, name)
+        values (28, 5, 'Eve')
+      """.stripMargin)
+
+      checkAnswer(s"select id, name, age, score, dt from $tableName order by id")(
+        Seq(1, "Alice", 30, 95.5, "2025-01-01"),
+        Seq(2, "Bob", 25, 87.3, "2025-01-02"),
+        Seq(3, "Charlie", 35, 92.1, "2025-01-03"),
+        Seq(4, "Diana", 40, null, "2025-01-04"),
+        Seq(5, "Eve", 28, null, "2025-01-05")
+      )
+    }
+
+    // Verify Lance files were created
+    val metaClient = HoodieTableMetaClient.builder()
+      .setConf(HoodieTestUtils.getDefaultStorageConf)
+      .setBasePath(tablePath)
+      .build()
+
+    val baseFileFormat = metaClient.getTableConfig.getBaseFileFormat
+    assertEquals(HoodieFileFormat.LANCE, baseFileFormat,
+                 "Table should use Lance base file format")
   }
 
   private def createDataFrame(records: Seq[(Int, String, Int, Double)]) = {
