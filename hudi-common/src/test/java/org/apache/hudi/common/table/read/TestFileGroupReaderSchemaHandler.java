@@ -21,6 +21,7 @@ package org.apache.hudi.common.table.read;
 
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
@@ -232,7 +233,7 @@ public class TestFileGroupReaderSchemaHandler extends SchemaHandlerTestBase {
     when(hoodieTableConfig.getOrderingFieldsStr()).thenReturn(Option.of(setPrecombine ? preCombineField : StringUtils.EMPTY_STRING));
     when(hoodieTableConfig.getOrderingFields()).thenReturn(setPrecombine ? Collections.singletonList(preCombineField) : Collections.emptyList());
     when(hoodieTableConfig.getTableVersion()).thenReturn(tableVersion);
-    if (hoodieTableConfig.getTableVersion() == HoodieTableVersion.SIX) {
+    if (tableVersion.lesserThan(HoodieTableVersion.NINE)) {
       if (mergeMode == RecordMergeMode.EVENT_TIME_ORDERING) {
         when(hoodieTableConfig.getPayloadClass()).thenReturn(DefaultHoodieRecordPayload.class.getName());
       } else if (mergeMode == RecordMergeMode.COMMIT_TIME_ORDERING) {
@@ -263,7 +264,12 @@ public class TestFileGroupReaderSchemaHandler extends SchemaHandlerTestBase {
     if (addHoodieIsDeleted) {
       expectedFields.add(HoodieRecord.HOODIE_IS_DELETED_FIELD);
     }
-    HoodieSchema expectedSchema = ((mergeMode == RecordMergeMode.CUSTOM) && !isProjectionCompatible) ? dataSchema : SchemaTestUtil.getSchemaFromFields(expectedFields);
+    // For pre-v9 tables with null mergeMode, the effective merge mode is inferred from the payload class
+    RecordMergeMode effectiveMergeMode = mergeMode;
+    if (mergeMode == null && tableVersion.lesserThan(HoodieTableVersion.NINE)) {
+      effectiveMergeMode = HoodieTableConfig.inferRecordMergeModeFromPayloadClass(hoodieTableConfig.getPayloadClass());
+    }
+    HoodieSchema expectedSchema = ((effectiveMergeMode == RecordMergeMode.CUSTOM) && !isProjectionCompatible) ? dataSchema : SchemaTestUtil.getSchemaFromFields(expectedFields);
     when(recordMerger.getMandatoryFieldsForMerging(dataSchema, hoodieTableConfig, props)).thenReturn(expectedFields.toArray(new String[0]));
 
     DeleteContext deleteContext = new DeleteContext(props, dataSchema);
@@ -275,5 +281,46 @@ public class TestFileGroupReaderSchemaHandler extends SchemaHandlerTestBase {
         dataSchema, requestedSchema, Option.empty(), props, metaClient);
     HoodieSchema actualSchema = fileGroupReaderSchemaHandler.generateRequiredSchema(deleteContext);
     assertEquals(expectedSchema, actualSchema);
+  }
+
+  /**
+   * Tests that for a pre-v9 table (e.g., version 6) where getRecordMergeMode() returns null
+   * (because the property didn't exist), but the payload class is a custom one
+   * (like HoodieMetadataPayload), generateRequiredSchema correctly infers CUSTOM merge mode
+   * and returns the full table schema when the merger is not projection compatible.
+   */
+  @Test
+  public void testGenerateRequiredSchemaPreV9CustomPayloadInfersCustomMergeMode() {
+    HoodieReaderContext readerContext = mock(HoodieReaderContext.class);
+    when(readerContext.getInstantRange()).thenReturn(Option.empty());
+    when(readerContext.getHasBootstrapBaseFile()).thenReturn(false);
+    when(readerContext.getHasLogFiles()).thenReturn(true);
+    HoodieRecordMerger recordMerger = mock(HoodieRecordMerger.class);
+    when(readerContext.getRecordMerger()).thenReturn(Option.of(recordMerger));
+    when(recordMerger.isProjectionCompatible()).thenReturn(false);
+
+    // Simulate a version 6 table: getRecordMergeMode() returns null (property absent),
+    // payload class is a custom one that does not match any known payload classes.
+    when(hoodieTableConfig.getRecordMergeMode()).thenReturn(null);
+    when(hoodieTableConfig.getTableVersion()).thenReturn(HoodieTableVersion.SIX);
+    when(hoodieTableConfig.getPayloadClass()).thenReturn(OverwriteNonDefaultsWithLatestAvroPayload.class.getName());
+    when(hoodieTableConfig.getRecordMergeStrategyId()).thenReturn(null);
+    when(hoodieTableConfig.getOrderingFieldsStr()).thenReturn(Option.empty());
+    when(hoodieTableConfig.populateMetaFields()).thenReturn(true);
+
+    HoodieSchema dataSchema = SchemaTestUtil.getSchemaFromFields(Arrays.asList(
+        HoodieRecord.RECORD_KEY_METADATA_FIELD, HoodieRecord.PARTITION_PATH_METADATA_FIELD,
+        "colA", "colB"));
+    HoodieSchema requestedSchema = SchemaTestUtil.getSchemaFromFields(
+        Collections.singletonList(HoodieRecord.RECORD_KEY_METADATA_FIELD));
+
+    DeleteContext deleteContext = new DeleteContext(new TypedProperties(), dataSchema);
+    FileGroupReaderSchemaHandler schemaHandler = new FileGroupReaderSchemaHandler(readerContext,
+        dataSchema, requestedSchema, Option.empty(), new TypedProperties(), metaClient);
+    HoodieSchema actualSchema = schemaHandler.generateRequiredSchema(deleteContext);
+
+    // Since the inferred merge mode is CUSTOM and the merger is not projection compatible,
+    // the full table schema should be returned.
+    assertEquals(dataSchema, actualSchema);
   }
 }
