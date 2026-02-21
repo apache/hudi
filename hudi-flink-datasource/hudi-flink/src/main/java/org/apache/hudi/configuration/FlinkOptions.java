@@ -1306,6 +1306,25 @@ public class FlinkOptions extends HoodieConfig {
           .defaultValue(16)
           .withDescription("The thread number for lookup async.");
 
+  public static final ConfigOption<String> LOOKUP_JOIN_CACHE_TYPE =
+      key("lookup.join.cache.type")
+          .stringType()
+          .defaultValue("heap")
+          .withDescription("The storage backend for the lookup join cache. "
+              + "Possible values: 'heap' (default) stores all dimension-table rows in JVM heap memory "
+              + "(may cause OutOfMemoryError for large tables); "
+              + "'rocksdb' stores rows off-heap in an embedded RocksDB instance on local disk, "
+              + "which avoids OOM at the cost of additional serialization overhead.");
+
+  public static final ConfigOption<String> LOOKUP_JOIN_ROCKSDB_PATH =
+      key("lookup.join.rocksdb.path")
+          .stringType()
+          .defaultValue(System.getProperty("java.io.tmpdir") + "/hudi-lookup-rocksdb")
+          .withDescription("Local directory path for storing RocksDB data when "
+              + "'lookup.join.cache.type' is set to 'rocksdb'. "
+              + "Each task manager will create a unique subdirectory under this path. "
+              + "The directory is cleaned up when the lookup function is closed.");
+
   // -------------------------------------------------------------------------
   //  Utilities
   // -------------------------------------------------------------------------
