@@ -1677,4 +1677,12 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
       }
     });
   }
+
+  /**
+   * Creates a new instance of the write client with the same configuration. This is useful when creating new threads that
+   * run actions like async-table services against the same table since the clients are not inherently thread-safe.
+   * @return a new instance of the write client with the same configuration as the current instance.
+   * @param <S> the type of the write client
+   */
+  public abstract <S extends BaseHoodieWriteClient<T, I, K, O>> S createNewClient();
 }

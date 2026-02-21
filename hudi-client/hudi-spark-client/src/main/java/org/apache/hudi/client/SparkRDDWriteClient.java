@@ -424,6 +424,11 @@ public class SparkRDDWriteClient<T> extends
     SparkReleaseResources.releaseCachedData(context, config, basePath, instantTime);
   }
 
+  @Override
+  public SparkRDDWriteClient<T> createNewClient() {
+    return new SparkRDDWriteClient<>(context, HoodieWriteConfig.newBuilder().withProperties(config.getProps()).build());
+  }
+
   /**
    * Check if Spark speculative execution is enabled and block writes if the guardrail is enabled.
    * Speculative execution can lead to duplicate writes and data corruption.
