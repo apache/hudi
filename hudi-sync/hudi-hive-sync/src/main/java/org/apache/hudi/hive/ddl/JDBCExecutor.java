@@ -49,6 +49,15 @@ public class JDBCExecutor extends QueryBasedDDLExecutor {
 
   private Connection connection;
 
+  /**
+   * Returns the underlying JDBC connection for use by
+   * {@link JDBCBasedMetadataOperator} when the Thrift
+   * IMetaStoreClient is unavailable (e.g., HMS 4.x).
+   */
+  public Connection getConnection() {
+    return connection;
+  }
+
   public JDBCExecutor(HiveSyncConfig config) {
     super(config);
     Objects.requireNonNull(config.getStringOrDefault(HIVE_URL), "--jdbc-url option is required for jdbc sync mode");
