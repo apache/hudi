@@ -68,6 +68,7 @@ public class HiveSyncConfig extends HoodieSyncConfig {
   public static final ConfigProperty<Boolean> HIVE_SYNC_OMIT_METADATA_FIELDS = HiveSyncConfigHolder.HIVE_SYNC_OMIT_METADATA_FIELDS;
   public static final ConfigProperty<Integer> HIVE_BATCH_SYNC_PARTITION_NUM = HiveSyncConfigHolder.HIVE_BATCH_SYNC_PARTITION_NUM;
   public static final ConfigProperty<String> HIVE_SYNC_MODE = HiveSyncConfigHolder.HIVE_SYNC_MODE;
+  public static final ConfigProperty<Boolean> HIVE_SYNC_USE_SPARK_CATALOG = HiveSyncConfigHolder.HIVE_SYNC_USE_SPARK_CATALOG;
   public static final ConfigProperty<Boolean> HIVE_SYNC_BUCKET_SYNC = HiveSyncConfigHolder.HIVE_SYNC_BUCKET_SYNC;
   public static final ConfigProperty<String> HIVE_SYNC_BUCKET_SYNC_SPEC = HiveSyncConfigHolder.HIVE_SYNC_BUCKET_SYNC_SPEC;
   public static final ConfigProperty<String> HIVE_SYNC_COMMENT = HiveSyncConfigHolder.HIVE_SYNC_COMMENT;
@@ -145,6 +146,8 @@ public class HiveSyncConfig extends HoodieSyncConfig {
     public String metastoreUris;
     @Parameter(names = {"--sync-mode"}, description = "Mode to choose for Hive ops. Valid values are hms,glue,jdbc and hiveql")
     public String syncMode;
+    @Parameter(names = {"--use-spark-catalog"}, description = "Whether to use Spark catalog backed metastore client.")
+    public Boolean useSparkCatalog;
     @Parameter(names = {"--auto-create-database"}, description = "Auto create hive database")
     public Boolean autoCreateDatabase;
     @Parameter(names = {"--ignore-exceptions"}, description = "Ignore hive exceptions")
@@ -189,6 +192,7 @@ public class HiveSyncConfig extends HoodieSyncConfig {
       props.setPropertyIfNonNull(HIVE_URL.key(), jdbcUrl);
       props.setPropertyIfNonNull(HIVE_USE_JDBC.key(), useJdbc);
       props.setPropertyIfNonNull(HIVE_SYNC_MODE.key(), syncMode);
+      props.setPropertyIfNonNull(HIVE_SYNC_USE_SPARK_CATALOG.key(), useSparkCatalog);
       props.setPropertyIfNonNull(METASTORE_URIS.key(), metastoreUris);
       props.setPropertyIfNonNull(HIVE_AUTO_CREATE_DATABASE.key(), autoCreateDatabase);
       props.setPropertyIfNonNull(HIVE_IGNORE_EXCEPTIONS.key(), ignoreExceptions);

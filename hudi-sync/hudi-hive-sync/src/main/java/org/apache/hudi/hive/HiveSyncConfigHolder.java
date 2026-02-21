@@ -150,4 +150,10 @@ public class HiveSyncConfigHolder {
       .markAdvanced()
       .sinceVersion("0.13.0")
       .withDocumentation("Hive table synchronization strategy. Available option: RO, RT, ALL.");
+
+  public static final ConfigProperty<Boolean> HIVE_SYNC_USE_SPARK_CATALOG = ConfigProperty
+      .key("hoodie.datasource.hive_sync.use_spark_catalog")
+      .defaultValue(false)
+      .markAdvanced()
+      .withDocumentation("Use Spark catalog backed IMetaStoreClient implementation for hive sync.");
 }
