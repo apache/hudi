@@ -2679,10 +2679,10 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     assertTrue(props.containsKey(HoodieTableConfig.RECORD_MERGE_STRATEGY_ID.key()));
 
     //now create one more deltaStreamer instance and update payload class
-    cfg = TestHelpers.makeConfig(dataSetBasePath, WriteOperationType.BULK_INSERT,
+    cfg = TestHelpers.makeConfig(dataSetBasePath, WriteOperationType.UPSERT,
         Collections.singletonList(SqlQueryBasedTransformer.class.getName()), PROPS_FILENAME_TEST_SOURCE, false,
         true, true, DummyAvroPayload.class.getName(), null);
-    new HoodieDeltaStreamer(cfg, jsc, fs, hiveServer.getHiveConf());
+    HoodieDeltaStreamer ds =  new HoodieDeltaStreamer(cfg, jsc, fs, hiveServer.getHiveConf());
 
     props = new Properties();
     fs = HadoopFSUtils.getFs(cfg.targetBasePath, jsc.hadoopConfiguration());
@@ -2692,6 +2692,11 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
 
     //now using payload
     assertEquals(DummyAvroPayload.class.getName(), props.get(HoodieTableConfig.PAYLOAD_CLASS_NAME.key()));
+    ds.sync();
+    assertRecordCount(1450, dataSetBasePath, sqlContext);
+
+    assertEquals(450, sqlContext.read().options(hudiOpts).format("org.apache.hudi")
+        .load(dataSetBasePath).filter("driver = 'dummy_driver'").count());
   }
 
   private static Stream<Arguments> getArgumentsForFilterDupesWithPrecombineTest() {
@@ -4251,8 +4256,20 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
 
   public static class DummyAvroPayload extends OverwriteWithLatestAvroPayload {
 
+    public DummyAvroPayload(Option<GenericRecord> gr) {
+      super(gr);
+    }
+
     public DummyAvroPayload(GenericRecord gr, Comparable orderingVal) {
       super(gr, orderingVal);
+    }
+
+    @Override
+    public Option<IndexedRecord> combineAndGetUpdateValue(IndexedRecord currentValue, Schema schema) throws IOException {
+      return getInsertValue(schema).map(gr -> {
+        gr.put(schema.getField("driver").pos(), "dummy_driver");
+        return gr;
+      });
     }
   }
 
