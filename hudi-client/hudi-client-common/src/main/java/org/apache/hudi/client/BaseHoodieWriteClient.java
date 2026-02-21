@@ -38,6 +38,7 @@ import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.ActionType;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
+import org.apache.hudi.common.model.HoodiePreWriteCleanerPolicy;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieWriteStat;
@@ -1011,6 +1012,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
       // unclear what instant to use, since upgrade does have a given instant.
       executeUsingTxnManager(Option.empty(), () -> tryUpgrade(metaClient, Option.empty()));
     }
+    runPreWriteCleanerPolicy(metaClient);
     CleanerUtils.rollbackFailedWrites(config.getFailedWritesCleanPolicy(),
         HoodieTimeline.COMMIT_ACTION, () -> tableServiceClient.rollbackFailedWrites(metaClient));
 
@@ -1676,5 +1678,22 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
         throw new HoodieException(String.format("cannot find schema for current table: %s", config.getBasePath()));
       }
     });
+  }
+
+  private void runPreWriteCleanerPolicy(HoodieTableMetaClient metaClient) {
+    HoodiePreWriteCleanerPolicy policy = config.getPreWriteCleanerPolicy();
+    if (policy.isNone()) {
+      return;
+    }
+    switch (policy) {
+      case CLEAN:
+        tableServiceClient.clean(Option.empty(), true);
+        break;
+      case ROLLBACK_FAILED_WRITES:
+        tableServiceClient.rollbackFailedWrites(metaClient);
+        break;
+      default:
+        break;
+    }
   }
 }
