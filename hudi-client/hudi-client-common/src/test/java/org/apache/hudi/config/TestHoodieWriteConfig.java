@@ -35,6 +35,7 @@ import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.marker.MarkerType;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
+import org.apache.hudi.common.table.view.FileSystemViewStorageType;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.config.HoodieWriteConfig.Builder;
 import org.apache.hudi.index.HoodieIndex;
@@ -711,6 +712,49 @@ public class TestHoodieWriteConfig {
         - writeConfig.getViewStorageConfig().getMaxMemoryForPendingClusteringFileGroups()
         - writeConfig.getViewStorageConfig().getMaxMemoryForReplacedFileGroups(),
         writeConfig.getViewStorageConfig().getMaxMemoryForFileGroupMap());
+  }
+
+  @Test
+  public void testForceFileSystemViewFromSpillableDiskToMemoryWhenTimelineServerDisabled() {
+    // When timeline server is disabled, SPILLABLE_DISK is forced to MEMORY (unsafe when view is serialized to executors).
+    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder().withPath("/tmp")
+        .withEmbeddedTimelineServerEnabled(false)
+        .withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder()
+            .withStorageType(FileSystemViewStorageType.SPILLABLE_DISK)
+            .withSecondaryStorageType(FileSystemViewStorageType.SPILLABLE_DISK)
+            .build())
+        .build();
+    assertEquals(FileSystemViewStorageType.MEMORY,
+        writeConfig.getClientSpecifiedViewStorageConfig().getStorageType());
+    assertEquals(FileSystemViewStorageType.MEMORY,
+        writeConfig.getClientSpecifiedViewStorageConfig().getSecondaryStorageType());
+
+    Properties props = new Properties();
+    props.setProperty(HoodieWriteConfig.BASE_PATH.key(), "/tmp");
+    props.put(FileSystemViewStorageConfig.VIEW_TYPE.key(), FileSystemViewStorageType.SPILLABLE_DISK.name());
+    props.put(FileSystemViewStorageConfig.SECONDARY_VIEW_TYPE.key(), FileSystemViewStorageType.SPILLABLE_DISK.name());
+    props.put(HoodieWriteConfig.EMBEDDED_TIMELINE_SERVER_ENABLE.key(), "false");
+    writeConfig = HoodieWriteConfig.newBuilder().withPath("/tmp").withProperties(props).build();
+    assertEquals(FileSystemViewStorageType.MEMORY,
+        writeConfig.getClientSpecifiedViewStorageConfig().getStorageType());
+    assertEquals(FileSystemViewStorageType.MEMORY,
+        writeConfig.getClientSpecifiedViewStorageConfig().getSecondaryStorageType());
+  }
+
+  @Test
+  public void testKeepSpillableDiskWhenTimelineServerEnabled() {
+    // When timeline server is enabled, view cache lives on driver only, so SPILLABLE_DISK is safe.
+    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder().withPath("/tmp")
+        .withEmbeddedTimelineServerEnabled(true)
+        .withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder()
+            .withStorageType(FileSystemViewStorageType.SPILLABLE_DISK)
+            .withSecondaryStorageType(FileSystemViewStorageType.SPILLABLE_DISK)
+            .build())
+        .build();
+    assertEquals(FileSystemViewStorageType.SPILLABLE_DISK,
+        writeConfig.getClientSpecifiedViewStorageConfig().getStorageType());
+    assertEquals(FileSystemViewStorageType.SPILLABLE_DISK,
+        writeConfig.getClientSpecifiedViewStorageConfig().getSecondaryStorageType());
   }
 
   @Test

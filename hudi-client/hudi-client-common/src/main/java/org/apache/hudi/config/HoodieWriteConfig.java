@@ -1338,7 +1338,10 @@ public class HoodieWriteConfig extends HoodieConfig {
     this.engineType = engineType;
     this.consistencyGuardConfig = ConsistencyGuardConfig.newBuilder().fromProperties(newProps).build();
     this.fileSystemRetryConfig = FileSystemRetryConfig.newBuilder().fromProperties(newProps).build();
-    this.clientSpecifiedViewStorageConfig = FileSystemViewStorageConfig.newBuilder().fromProperties(newProps).build();
+    FileSystemViewStorageConfig rawViewConfig = FileSystemViewStorageConfig.newBuilder().fromProperties(newProps).build();
+    // SPILLABLE_DISK is not safe when view is serialized to executors. Force to MEMORY
+    // only when timeline server is disabled; with timeline server enabled the view lives on driver only.
+    this.clientSpecifiedViewStorageConfig = normalizeViewStorageConfigForSpillableDisk(rawViewConfig, newProps);
     this.viewStorageConfig = clientSpecifiedViewStorageConfig;
     this.hoodiePayloadConfig = HoodiePayloadConfig.newBuilder().fromProperties(newProps).build();
     this.metadataConfig = HoodieMetadataConfig.newBuilder().fromProperties(props).build();
@@ -2581,6 +2584,32 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public void resetViewStorageConfig() {
     this.setViewStorageConfig(getClientSpecifiedViewStorageConfig());
+  }
+
+  /**
+   * When timeline server is disabled, SPILLABLE_DISK is not safe for file system view because the view
+   * can be serialized to executors and data may be lost. Force to MEMORY in that case.
+   * When timeline server is enabled, the view cache lives on the driver only, so SPILLABLE_DISK is safe.
+   */
+  private static FileSystemViewStorageConfig normalizeViewStorageConfigForSpillableDisk(
+      FileSystemViewStorageConfig raw, Properties props) {
+    boolean timelineServerEnabled = Boolean.parseBoolean(
+        props.getProperty(EMBEDDED_TIMELINE_SERVER_ENABLE.key(), EMBEDDED_TIMELINE_SERVER_ENABLE.defaultValue()));
+    if (timelineServerEnabled) {
+      return raw;
+    }
+    if (raw.getStorageType() != FileSystemViewStorageType.SPILLABLE_DISK
+        && raw.getSecondaryStorageType() != FileSystemViewStorageType.SPILLABLE_DISK) {
+      return raw;
+    }
+    FileSystemViewStorageConfig.Builder builder = FileSystemViewStorageConfig.newBuilder().fromProperties(props);
+    if (raw.getStorageType() == FileSystemViewStorageType.SPILLABLE_DISK) {
+      builder.withStorageType(FileSystemViewStorageType.MEMORY);
+    }
+    if (raw.getSecondaryStorageType() == FileSystemViewStorageType.SPILLABLE_DISK) {
+      builder.withSecondaryStorageType(FileSystemViewStorageType.MEMORY);
+    }
+    return builder.build();
   }
 
   public HoodiePayloadConfig getPayloadConfig() {
