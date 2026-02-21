@@ -826,8 +826,8 @@ public class ITTestHoodieDataSource {
   }
 
   @ParameterizedTest
-  @MethodSource("tableTypeAndAsyncLookupParams")
-  void testLookupJoin(HoodieTableType tableType, boolean async) {
+  @MethodSource("tableTypeCacheTypeAndAsyncLookupParams")
+  void testLookupJoin(HoodieTableType tableType, String cacheType, boolean async) {
     TableEnvironment tableEnv = streamTableEnv;
     String hoodieTableDDL = sql("t1")
         .option(FlinkOptions.PATH, tempFile.getAbsolutePath() + "/t1")
@@ -850,7 +850,8 @@ public class ITTestHoodieDataSource {
 
     // Join two hudi tables with the same data
     String sql = "insert into t2 select b.* from t1_view o "
-        + "       join t1/*+ OPTIONS('lookup.join.cache.ttl'= '2 day', 'lookup.async'='" + async + "') */  "
+        + "       join t1/*+ OPTIONS('lookup.join.cache.ttl'='2 day', 'lookup.async'='" + async + "',"
+        + "       'lookup.join.cache.type'='" + cacheType + "') */  "
         + "       FOR SYSTEM_TIME AS OF o.proc_time AS b on o.uuid = b.uuid";
     execInsertSql(tableEnv, sql);
     List<Row> result = CollectionUtil.iterableToList(
@@ -870,14 +871,15 @@ public class ITTestHoodieDataSource {
   }
 
   @ParameterizedTest
-  @MethodSource("tableTypeAndAsyncLookupParams")
-  void testLookup(HoodieTableType tableType, boolean async) {
+  @MethodSource("tableTypeCacheTypeAndAsyncLookupParams")
+  void testLookup(HoodieTableType tableType, String cacheType, boolean async) {
     initTablesForLookupJoin(tableType);
     execInsertSql(streamTableEnv, "INSERT INTO DIM VALUES (1, 11, 111, 1111), (2, 22, 222, 2222)");
     execInsertSql(streamTableEnv, "INSERT INTO T VALUES (1), (2), (3)");
 
     String query = "SELECT T.i, D.j, D.k1, D.k2 FROM T LEFT JOIN DIM /*+ OPTIONS('lookup.async'='" + async
-        + "', 'lookup.join.cache.ttl'='1s') */ for system_time as of T.proctime AS D ON T.i = D.i";
+        + "', 'lookup.join.cache.type'='" + cacheType + "', 'lookup.join.cache.ttl'='1s') */"
+        + " for system_time as of T.proctime AS D ON T.i = D.i";
     List<Row> result = CollectionUtil.iterableToList(() -> streamTableEnv.executeSql(query).collect());
     assertThat(result).containsExactlyInAnyOrder(
         Row.of(1, 11, 111, 1111),
@@ -3188,12 +3190,16 @@ public class ITTestHoodieDataSource {
   /**
    * Return test params => (table type, async lookup).
    */
-  private static Stream<Arguments> tableTypeAndAsyncLookupParams() {
+  private static Stream<Arguments> tableTypeCacheTypeAndAsyncLookupParams() {
     Object[][] data = new Object[][] {
-        {HoodieTableType.COPY_ON_WRITE, false},
-        {HoodieTableType.COPY_ON_WRITE, true},
-        {HoodieTableType.MERGE_ON_READ, false},
-        {HoodieTableType.MERGE_ON_READ, true}
+        {HoodieTableType.COPY_ON_WRITE, "heap", false},
+        {HoodieTableType.COPY_ON_WRITE, "heap", true},
+        {HoodieTableType.MERGE_ON_READ, "heap", false},
+        {HoodieTableType.MERGE_ON_READ, "heap", true},
+        {HoodieTableType.COPY_ON_WRITE, "rocksdb", false},
+        {HoodieTableType.COPY_ON_WRITE, "rocksdb", true},
+        {HoodieTableType.MERGE_ON_READ, "rocksdb", false},
+        {HoodieTableType.MERGE_ON_READ, "rocksdb", true}
     };
     return Stream.of(data).map(Arguments::of);
   }
