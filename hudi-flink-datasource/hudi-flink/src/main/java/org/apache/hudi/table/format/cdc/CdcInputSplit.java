@@ -18,8 +18,12 @@
 
 package org.apache.hudi.table.format.cdc;
 
+import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.table.cdc.HoodieCDCFileSplit;
+import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.format.mor.MergeOnReadInputSplit;
 
 import lombok.Getter;
@@ -46,6 +50,26 @@ public class CdcInputSplit extends MergeOnReadInputSplit {
     super(splitNum, null, Option.empty(), "", tablePath,
         maxCompactionMemoryInBytes, "", null, fileId);
     this.changes = changes;
+  }
+
+  @Override
+  public String parsePartitionPath() {
+    if (changes == null || changes.length == 0) {
+      return "";
+    }
+
+    HoodieCDCFileSplit change = changes[0];
+    if (!CollectionUtils.isNullOrEmpty(change.getCdcFiles())) {
+      // cdc files were extracted from HoodieCommitMetadata,
+      // the path starts with relative partition path
+      return FSUtils.getRelativePartitionPath(new StoragePath(tablePath),
+          new StoragePath(tablePath, change.getCdcFiles().get(0)).getParent());
+    }
+
+    return change.getBeforeFileSlice()
+        .map(FileSlice::getPartitionPath)
+        .or(() -> change.getAfterFileSlice().map(FileSlice::getPartitionPath))
+        .orElse("");
   }
 
   @Override

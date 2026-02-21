@@ -18,23 +18,40 @@
 
 package org.apache.hudi.source.rebalance.partitioner;
 
+import org.apache.hudi.common.util.Functions;
+import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.common.util.hash.BucketIndexUtil;
+import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.index.bucket.BucketIdentifier;
+import org.apache.hudi.index.bucket.partition.NumBucketsFunction;
 
 import org.apache.flink.api.common.functions.Partitioner;
+import org.apache.flink.configuration.Configuration;
 
 /**
  * Partitioner for table with bucket index type.
  */
-public class StreamReadBucketIndexPartitioner implements Partitioner<String> {
+public class StreamReadBucketIndexPartitioner implements Partitioner<Pair<String, String>> {
 
   private final int parallelism;
+  private final NumBucketsFunction numBucketsFunction;
 
-  public StreamReadBucketIndexPartitioner(int parallelism) {
-    this.parallelism = parallelism;
+  private Functions.Function3<Integer, String, Integer, Integer> partitionIndexFunc;
+
+  public StreamReadBucketIndexPartitioner(Configuration conf) {
+    this.parallelism = conf.get(FlinkOptions.READ_TASKS);
+    this.numBucketsFunction = new NumBucketsFunction(conf.get(FlinkOptions.BUCKET_INDEX_PARTITION_EXPRESSIONS),
+        conf.get(FlinkOptions.BUCKET_INDEX_PARTITION_RULE), conf.get(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS));
   }
 
   @Override
-  public int partition(String fileName, int maxParallelism) {
-    return BucketIdentifier.bucketIdFromFileId(fileName) % parallelism;
+  public int partition(Pair<String, String> partitionPathAndFileId, int maxParallelism) {
+    if (this.partitionIndexFunc == null) {
+      this.partitionIndexFunc = BucketIndexUtil.getPartitionIndexFunc(parallelism);
+    }
+
+    int numBuckets = numBucketsFunction.getNumBuckets(partitionPathAndFileId.getLeft());
+    int curBucket = BucketIdentifier.bucketIdFromFileId(partitionPathAndFileId.getRight());
+    return this.partitionIndexFunc.apply(numBuckets, partitionPathAndFileId.getLeft(), curBucket);
   }
 }

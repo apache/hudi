@@ -18,8 +18,10 @@
 
 package org.apache.hudi.table.format.mor;
 
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.table.log.InstantRange;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.storage.StoragePath;
 
 import lombok.Getter;
 import lombok.Setter;
@@ -42,7 +44,7 @@ public class MergeOnReadInputSplit implements InputSplit {
   private final Option<String> basePath;
   private final Option<List<String>> logPaths;
   private final String latestCommit;
-  private final String tablePath;
+  protected final String tablePath;
   private final long maxCompactionMemoryInBytes;
   private final String mergeType;
   private final Option<InstantRange> instantRange;
@@ -85,6 +87,15 @@ public class MergeOnReadInputSplit implements InputSplit {
 
   public boolean isConsumed() {
     return this.consumed != NUM_NO_CONSUMPTION;
+  }
+
+  public String parsePartitionPath() {
+    if (!basePath.isPresent() && (!logPaths.isPresent() || logPaths.get().isEmpty())) {
+      return "";
+    }
+
+    String validFilePath = basePath.isPresent() ? basePath.get() : logPaths.get().get(0);
+    return FSUtils.getRelativePartitionPath(new StoragePath(tablePath), new StoragePath(validFilePath).getParent());
   }
 
   @Override

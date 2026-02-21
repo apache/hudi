@@ -223,6 +223,42 @@ public class ITTestHoodieDataSource {
   }
 
   @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  void testStreamReadMorTableWithChangelogInferMode(boolean partitioned) throws Exception {
+    streamTableEnv.getConfig().getConfiguration()
+        .setString("table.dynamic-table-options.enabled", "true");
+    // create filesystem table named source
+    String createSource = TestConfigurations.getFileSourceDDL("source");
+    streamTableEnv.executeSql(createSource);
+
+    TestConfigurations.Sql sql = sql("t1")
+        .option(FlinkOptions.PATH, tempFile.getAbsolutePath())
+        .options(getDefaultKeys())
+        .option(FlinkOptions.READ_AS_STREAMING, true)
+        .option(FlinkOptions.READ_CDC_FROM_CHANGELOG, false) // calculate the changes on the fly
+        .option(FlinkOptions.CDC_ENABLED, true) // enable change log
+        .option(FlinkOptions.INDEX_TYPE, "BUCKET") // bucket index
+        .option(FlinkOptions.TABLE_TYPE, MERGE_ON_READ); // mor table
+    String hoodieTableDDL = partitioned ? sql.end() : sql.noPartition().end();
+    streamTableEnv.executeSql(hoodieTableDDL);
+    String insertInto = "insert into t1 select * from source";
+    execInsertSql(streamTableEnv, insertInto);
+
+    String firstCommit = TestUtils.getFirstCompleteInstant(tempFile.getAbsolutePath());
+    List<Row> rows = execSelectSqlWithExpectedNum(streamTableEnv,
+        "select * from t1/*+options('read.start-commit'='" + firstCommit + "')*/", TestData.DATA_SET_SOURCE_INSERT.size());
+    assertRowsEquals(rows, TestData.DATA_SET_SOURCE_INSERT);
+
+    // insert another batch of data
+    execInsertSql(streamTableEnv, TestSQL.UPDATE_INSERT_T1);
+
+    String lastCommit = TestUtils.getLastCompleteInstant(tempFile.getAbsolutePath());
+    List<Row> rows2 = execSelectSqlWithExpectedNum(streamTableEnv,
+        "select * from t1 /*+options('read.start-commit'='" + lastCommit + "')*/", TestData.DATA_SET_SOURCE_CHANGELOG.size());
+    assertRowsEquals(rows2, TestData.DATA_SET_SOURCE_CHANGELOG);
+  }
+
+  @ParameterizedTest
   @EnumSource(value = HoodieTableType.class)
   void testStreamWriteAndRead(HoodieTableType tableType) throws Exception {
     // create filesystem table named source
@@ -694,6 +730,43 @@ public class ITTestHoodieDataSource {
     execInsertSql(streamTableEnv, insertInto);
     List<Row> rows = execSelectSqlWithExpectedNum(streamTableEnv, "select * from t1", TestData.DATA_SET_SOURCE_INSERT.size());
     assertRowsEquals(rows, TestData.DATA_SET_SOURCE_INSERT);
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  void testStreamReadMorTableWithBucketIndex(boolean partitioned) throws Exception {
+    // create filesystem table named source
+    String createSource = TestConfigurations.getFileSourceDDL("source");
+    String createSource2 = TestConfigurations.getFileSourceDDL("source2", "test_source_2.data");
+    streamTableEnv.executeSql(createSource);
+    streamTableEnv.executeSql(createSource2);
+
+    TestConfigurations.Sql t1 = sql("t1").option(FlinkOptions.PATH, tempFile.getAbsolutePath())
+        .option(FlinkOptions.READ_AS_STREAMING, true)
+        .option(FlinkOptions.READ_STREAMING_SKIP_COMPACT, false)
+        .option(FlinkOptions.TABLE_TYPE, MERGE_ON_READ)
+        .option(FlinkOptions.INDEX_TYPE, HoodieIndex.IndexType.BUCKET.name())
+        .option(HoodieWriteConfig.ALLOW_EMPTY_COMMIT.key(), false)
+        .option(FlinkOptions.COMPACTION_DELTA_COMMITS, 3);
+
+    String hoodieTableDDL = partitioned ? t1.end() : t1.noPartition().end();
+
+    streamTableEnv.executeSql(hoodieTableDDL);
+    String insertInto = "insert into t1 select * from source";
+    execInsertSql(streamTableEnv, insertInto);
+
+    // reading from the latest commit instance.
+    List<Row> rows = execSelectSqlWithExpectedNum(streamTableEnv, "select * from t1", TestData.DATA_SET_SOURCE_INSERT_LATEST_COMMIT.size());
+    assertRowsEquals(rows, TestData.DATA_SET_SOURCE_INSERT_LATEST_COMMIT);
+
+    // insert another batch of data with compaction
+    String insertInto2 = "insert into t1 select * from source2";
+    execInsertSql(streamTableEnv, insertInto2);
+
+    // reading from the earliest
+    List<Row> rows2 = execSelectSqlWithExpectedNum(streamTableEnv, "select * from t1 /*+options('read.start-commit'='earliest')*/",
+        TestData.DATA_SET_SOURCE_MERGED.size());
+    assertRowsEquals(rows2, TestData.DATA_SET_SOURCE_MERGED);
   }
 
   @ParameterizedTest

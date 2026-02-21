@@ -18,14 +18,15 @@
 
 package org.apache.hudi.source.rebalance.selector;
 
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.table.format.mor.MergeOnReadInputSplit;
 
 import org.apache.flink.api.java.functions.KeySelector;
 
-public class StreamReadBucketIndexKeySelector implements KeySelector<MergeOnReadInputSplit, String> {
+public class StreamReadBucketIndexKeySelector implements KeySelector<MergeOnReadInputSplit, Pair<String, String>> {
 
   @Override
-  public String getKey(MergeOnReadInputSplit mergeOnReadInputSplit) throws Exception {
-    return mergeOnReadInputSplit.getFileId();
+  public Pair<String, String> getKey(MergeOnReadInputSplit mergeOnReadInputSplit) throws Exception {
+    return Pair.of(mergeOnReadInputSplit.parsePartitionPath(), mergeOnReadInputSplit.getFileId());
   }
 }
