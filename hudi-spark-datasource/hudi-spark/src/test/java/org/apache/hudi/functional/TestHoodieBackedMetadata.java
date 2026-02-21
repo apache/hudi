@@ -1203,6 +1203,61 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     }
   }
 
+  /**
+   * Test the scenario where processAndCommit runs and inside commitInternal, rollbackFailedWrites runs
+   * (e.g. due to eager cleaner and a failed data-table instant that left an inflight deltacommit on MDT).
+   * That rollback reloads the MDT meta client. When we reach the check in update() we must use the refreshed
+   * timeline so we do not attempt to rollback an MDT deltacommit that was already rolled back (double rollback).
+   * This test creates real instant files on the data table and metadata table: one commit, then we delete the
+   * completed commit on the data table and create an inflight commit there (so the data table shows a failed instant),
+   * and we convert the MDT's completed deltacommit for that commit to inflight (simulating a failed write that left inflight on MDT).
+   * Then we roll back the data table commit. With EAGER, rollbackFailedWrites will clean the inflight on MDT
+   * during processAndCommit. The test verifies rollback completes successfully without double-rollback errors.
+   */
+  @Test
+  public void testRollbackMetadataWhenTargetInstantAlreadyRolledBackByEagerCleaner() throws Exception {
+    init(COPY_ON_WRITE, false);
+    // Use table version 6 so HoodieBackedTableMetadataWriterTableVersionSix is used
+    HoodieTableConfig tableConfig = metaClient.getTableConfig();
+    tableConfig.setTableVersion(HoodieTableVersion.SIX);
+    initMetaClient(COPY_ON_WRITE, tableConfig.getProps());
+
+    writeConfig = getWriteConfigBuilder(HoodieFailedWritesCleaningPolicy.EAGER, true, true, false)
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(true).build())
+        .withWriteTableVersion(6)
+        .build();
+    initWriteConfigAndMetatableWriter(writeConfig, true);
+
+    HoodieSparkEngineContext engineContext = new HoodieSparkEngineContext(jsc);
+    String commitTime = "0000001";
+    try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, writeConfig)) {
+      List<HoodieRecord> records = dataGen.generateInserts(commitTime, 20);
+      WriteClientTestUtils.startCommitWithTime(client, commitTime);
+      JavaRDD<WriteStatus> writeStatuses = client.insert(jsc.parallelize(records, 1), commitTime);
+      client.commit(commitTime, writeStatuses);
+    }
+
+    // On the data table, delete the completed commit and create inflight so it appears as a failed instant
+    deleteMetaFile(metaClient.getStorage(), basePath, commitTime, COMMIT_EXTENSION);
+    FileCreateUtilsLegacy.createInflightCommit(basePath, commitTime);
+
+    // Convert MDT's completed deltacommit for this commit to inflight (simulating failed write that left inflight on MDT)
+    String mdtBasePath = getMetadataTableBasePath(basePath);
+    deleteMetaFile(metaClient.getStorage(), mdtBasePath, commitTime, DELTA_COMMIT_EXTENSION);
+    FileCreateUtilsLegacy.createInflightDeltaCommit(mdtBasePath, commitTime, metaClient.getStorage());
+
+    // Roll back the data table commit. This triggers metadata writer update(). With EAGER, processAndCommit
+    // runs and rollbackFailedWrites will roll back the inflight deltacommit on MDT. The code must use the
+    // refreshed timeline afterward so we do not attempt to rollback again (double rollback).
+    try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, writeConfig)) {
+      assertDoesNotThrow(() -> client.rollback(commitTime));
+    }
+
+    // Do not call validateMetadata(testTable): after rolling back the only commit, the MDT correctly has no
+    // partition listing (that commit's metadata was rolled back), while the data table FS still has
+    // empty partition dirs, so partition-count validation would fail (expected 2 vs 0).
+  }
+
   @Test
   public void testMetadataRollbackDuringInit() throws Exception {
     HoodieTableType tableType = COPY_ON_WRITE;

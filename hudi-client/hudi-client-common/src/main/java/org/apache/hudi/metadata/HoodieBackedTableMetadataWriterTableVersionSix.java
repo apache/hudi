@@ -215,7 +215,7 @@ public abstract class HoodieBackedTableMetadataWriterTableVersionSix<I, O> exten
       processAndCommit(instantTime, () -> HoodieTableMetadataUtil.convertMetadataToRecords(engineContext, dataMetaClient, rollbackMetadata, instantTime));
 
       String rollbackInstantTime = createRollbackTimestamp(instantTime);
-      if (deltacommitsSinceCompaction.containsInstant(deltaCommitInstant)) {
+      if (metadataMetaClient.getActiveTimeline().containsInstant(deltaCommitInstant)) {
         LOG.info("Rolling back MDT deltacommit " + commitToRollbackInstantTime);
         if (!getWriteClient().rollback(commitToRollbackInstantTime, rollbackInstantTime)) {
           throw new HoodieMetadataException("Failed to rollback deltacommit at " + commitToRollbackInstantTime);
