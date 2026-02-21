@@ -18,6 +18,7 @@
 
 package org.apache.hudi.source.split;
 
+import org.apache.hudi.common.table.log.InstantRange;
 import org.apache.hudi.common.util.Option;
 
 import lombok.EqualsAndHashCode;
@@ -57,6 +58,8 @@ public class HoodieSourceSplit implements SourceSplit, Serializable {
   private final String mergeType;
   // latest commit time
   private final String latestCommit;
+  // instant range
+  private final Option<InstantRange> instantRange;
   // file id of file splice
   @Setter
   protected String fileId;
@@ -76,7 +79,8 @@ public class HoodieSourceSplit implements SourceSplit, Serializable {
       String partitionPath,
       String mergeType,
       String latestCommit,
-      String fileId) {
+      String fileId,
+      Option<InstantRange> instantRange) {
     this.splitNum = splitNum;
     this.basePath = Option.ofNullable(basePath);
     this.logPaths = logPaths;
@@ -86,6 +90,7 @@ public class HoodieSourceSplit implements SourceSplit, Serializable {
     this.latestCommit = latestCommit;
     this.fileId = fileId;
     this.fileOffset = 0;
+    this.instantRange = instantRange;
   }
 
   @Override

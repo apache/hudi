@@ -18,6 +18,7 @@
 
 package org.apache.hudi.source.split;
 
+import org.apache.hudi.common.table.log.InstantRange;
 import org.apache.hudi.common.util.Option;
 
 import org.junit.jupiter.api.Test;
@@ -50,7 +51,8 @@ public class TestHoodieSourceSplitSerializer {
         "/partition/path",
         "read_optimized",
         "19700101000000000",
-        "file-123"
+        "file-123",
+        Option.empty()
     );
 
     byte[] serialized = serializer.serialize(original);
@@ -81,7 +83,8 @@ public class TestHoodieSourceSplitSerializer {
         "/partition/path",
         "payload_combine",
         "19700101000000000",
-        "file-456"
+        "file-456",
+        Option.empty()
     );
 
     byte[] serialized = serializer.serialize(original);
@@ -103,7 +106,8 @@ public class TestHoodieSourceSplitSerializer {
         "/partition/path",
         "payload_combine",
         "19700101000000000",
-        "file-789"
+        "file-789",
+        Option.empty()
     );
 
     byte[] serialized = serializer.serialize(original);
@@ -127,7 +131,8 @@ public class TestHoodieSourceSplitSerializer {
         "/partition/path",
         "read_optimized",
         "19700101000000000",
-        "file-000"
+        "file-000",
+        Option.empty()
     );
 
     byte[] serialized = serializer.serialize(original);
@@ -148,7 +153,8 @@ public class TestHoodieSourceSplitSerializer {
         "/partition/path",
         "read_optimized",
         "19700101000000000",
-        "file-111"
+        "file-111",
+        Option.empty()
     );
 
     // Update position to simulate consumed state
@@ -173,7 +179,8 @@ public class TestHoodieSourceSplitSerializer {
         "/partition/path",
         "read_optimized",
         "19700101000000000",
-        "file-222"
+        "file-222",
+        Option.empty()
     );
 
     // Consume multiple times
@@ -204,7 +211,8 @@ public class TestHoodieSourceSplitSerializer {
         "/partition/year=2024/month=01/day=22",
         "payload_combine",
         "19700101000000000",
-        "complex-file-id-with-uuid-12345678"
+        "complex-file-id-with-uuid-12345678",
+        Option.empty()
     );
 
     original.updatePosition(10, 5000L);
@@ -239,7 +247,8 @@ public class TestHoodieSourceSplitSerializer {
         "/partition/path",
         "read_optimized",
         "19700101000000000",
-        "file-333"
+        "file-333",
+        Option.empty()
     );
 
     byte[] serialized1 = serializer.serialize(original);
@@ -259,7 +268,8 @@ public class TestHoodieSourceSplitSerializer {
         "/partition/path",
         "payload_combine",
         "19700101000000000",
-        "file-444"
+        "file-444",
+        Option.empty()
     );
 
     original.updatePosition(5, 200L);
@@ -273,9 +283,9 @@ public class TestHoodieSourceSplitSerializer {
 
   @Test
   public void testSerializeMultipleSplitsWithDifferentStates() throws IOException {
-    HoodieSourceSplit split1 = new HoodieSourceSplit(1, "base1", Option.empty(), "/t1", "/p1", "read_optimized", "19700101000000000","f1");
-    HoodieSourceSplit split2 = new HoodieSourceSplit(2, "base2", Option.of(Arrays.asList("log1")), "/t2", "/p2", "payload_combine", "19700101000000000","f2");
-    HoodieSourceSplit split3 = new HoodieSourceSplit(3, null, Option.of(Arrays.asList("log1", "log2", "log3")), "/t3", "/p3", "read_optimized", "19700101000000000","f3");
+    HoodieSourceSplit split1 = new HoodieSourceSplit(1, "base1", Option.empty(), "/t1", "/p1", "read_optimized", "19700101000000000","f1", Option.empty());
+    HoodieSourceSplit split2 = new HoodieSourceSplit(2, "base2", Option.of(Arrays.asList("log1")), "/t2", "/p2", "payload_combine", "19700101000000000","f2", Option.empty());
+    HoodieSourceSplit split3 = new HoodieSourceSplit(3, null, Option.of(Arrays.asList("log1", "log2", "log3")), "/t3", "/p3", "read_optimized", "19700101000000000","f3", Option.empty());
 
     split1.updatePosition(1, 10L);
     split2.consume();
@@ -304,7 +314,8 @@ public class TestHoodieSourceSplitSerializer {
         "/partition/path",
         "read_optimized",
         "19700101000000000",
-        "file-large"
+        "file-large",
+        Option.empty()
     );
 
     original.updatePosition(Integer.MAX_VALUE, Long.MAX_VALUE);
@@ -326,7 +337,8 @@ public class TestHoodieSourceSplitSerializer {
         "/partition/path",
         "read_optimized",
         "19700101000000000",
-        "file-zero"
+        "file-zero",
+        Option.empty()
     );
 
     original.updatePosition(0, 0L);
@@ -349,7 +361,8 @@ public class TestHoodieSourceSplitSerializer {
         "/partition/path",
         "read_optimized",
         "19700101000000000",
-        "file-negative"
+        "file-negative",
+        Option.empty()
     );
 
     byte[] serialized = serializer.serialize(original);
@@ -373,7 +386,8 @@ public class TestHoodieSourceSplitSerializer {
         longString.toString(),
         "read_optimized",
         "19700101000000000",
-        longString.toString()
+        longString.toString(),
+        Option.empty()
     );
 
     byte[] serialized = serializer.serialize(original);
@@ -395,7 +409,8 @@ public class TestHoodieSourceSplitSerializer {
         "/partition/with/\r\n/carriage/return",
         "read_optimized",
         "19700101000000000",
-        "file-id-with-unicode-字符-émojis-🎉"
+        "file-id-with-unicode-字符-émojis-🎉",
+        Option.empty()
     );
 
     byte[] serialized = serializer.serialize(original);
@@ -423,7 +438,8 @@ public class TestHoodieSourceSplitSerializer {
         "/partition/path",
         "payload_combine",
         "19700101000000000",
-        "file-many-logs"
+        "file-many-logs",
+        Option.empty()
     );
 
     byte[] serialized = serializer.serialize(original);
@@ -443,7 +459,8 @@ public class TestHoodieSourceSplitSerializer {
         "/partition/path",
         "read_optimized",
         "19700101000000000",
-        "file-roundtrip"
+        "file-roundtrip",
+        Option.empty()
     );
 
     original.updatePosition(5, 100L);
@@ -456,6 +473,177 @@ public class TestHoodieSourceSplitSerializer {
     }
 
     assertEquals(original, current);
+  }
+
+  @Test
+  public void testSerializeWithInstantRangeStartAndEnd() throws IOException {
+    InstantRange instantRange =
+        org.apache.hudi.common.table.log.InstantRange.builder()
+            .startInstant("20230101000000000")
+            .endInstant("20230131235959999")
+            .rangeType(org.apache.hudi.common.table.log.InstantRange.RangeType.OPEN_CLOSED)
+            .build();
+
+    HoodieSourceSplit original = new HoodieSourceSplit(
+        1,
+        "base-path",
+        Option.empty(),
+        "/table/path",
+        "/partition/path",
+        "read_optimized",
+        "19700101000000000",
+        "file-123",
+        Option.of(instantRange)
+    );
+
+    byte[] serialized = serializer.serialize(original);
+    HoodieSourceSplit deserialized = serializer.deserialize(serializer.getVersion(), serialized);
+
+    assertNotNull(deserialized);
+    assertTrue(deserialized.getInstantRange().isPresent());
+    assertTrue(deserialized.getInstantRange().get().getStartInstant().isPresent());
+    assertTrue(deserialized.getInstantRange().get().getEndInstant().isPresent());
+    assertEquals("20230101000000000", deserialized.getInstantRange().get().getStartInstant().get());
+    assertEquals("20230131235959999", deserialized.getInstantRange().get().getEndInstant().get());
+  }
+
+  @Test
+  public void testSerializeWithInstantRangeOnlyStart() throws IOException {
+    InstantRange instantRange =
+        org.apache.hudi.common.table.log.InstantRange.builder()
+            .startInstant("20230101000000000")
+            .rangeType(org.apache.hudi.common.table.log.InstantRange.RangeType.OPEN_CLOSED)
+            .nullableBoundary(true)
+            .build();
+
+    HoodieSourceSplit original = new HoodieSourceSplit(
+        2,
+        "base-path",
+        Option.of(Arrays.asList("log1")),
+        "/table/path",
+        "/partition/path",
+        "payload_combine",
+        "19700101000000000",
+        "file-456",
+        Option.of(instantRange)
+    );
+
+    byte[] serialized = serializer.serialize(original);
+    HoodieSourceSplit deserialized = serializer.deserialize(serializer.getVersion(), serialized);
+
+    assertNotNull(deserialized);
+    assertTrue(deserialized.getInstantRange().isPresent());
+    assertTrue(deserialized.getInstantRange().get().getStartInstant().isPresent());
+    assertFalse(deserialized.getInstantRange().get().getEndInstant().isPresent());
+    assertEquals("20230101000000000", deserialized.getInstantRange().get().getStartInstant().get());
+  }
+
+  @Test
+  public void testSerializeWithClosedClosedInstantRange() throws IOException {
+    InstantRange instantRange =
+        org.apache.hudi.common.table.log.InstantRange.builder()
+            .startInstant("20230101000000000")
+            .endInstant("20230131235959999")
+            .rangeType(org.apache.hudi.common.table.log.InstantRange.RangeType.CLOSED_CLOSED)
+            .build();
+
+    HoodieSourceSplit original = new HoodieSourceSplit(
+        4,
+        "base-path",
+        Option.of(Arrays.asList("log1", "log2", "log3")),
+        "/table/path",
+        "/partition/path",
+        "payload_combine",
+        "19700101000000000",
+        "file-range",
+        Option.of(instantRange)
+    );
+
+    byte[] serialized = serializer.serialize(original);
+    HoodieSourceSplit deserialized = serializer.deserialize(serializer.getVersion(), serialized);
+
+    assertNotNull(deserialized);
+    assertTrue(deserialized.getInstantRange().isPresent());
+    assertTrue(deserialized.getInstantRange().get().getStartInstant().isPresent());
+    assertTrue(deserialized.getInstantRange().get().getEndInstant().isPresent());
+    assertEquals("20230101000000000", deserialized.getInstantRange().get().getStartInstant().get());
+    assertEquals("20230131235959999", deserialized.getInstantRange().get().getEndInstant().get());
+  }
+
+  @Test
+  public void testSerializeWithInstantRangeAndConsumedState() throws IOException {
+    InstantRange instantRange =
+        org.apache.hudi.common.table.log.InstantRange.builder()
+            .startInstant("20230101000000000")
+            .endInstant("20230131235959999")
+            .rangeType(org.apache.hudi.common.table.log.InstantRange.RangeType.OPEN_CLOSED)
+            .build();
+
+    HoodieSourceSplit original = new HoodieSourceSplit(
+        5,
+        "base-path",
+        Option.empty(),
+        "/table/path",
+        "/partition/path",
+        "read_optimized",
+        "19700101000000000",
+        "file-consumed",
+        Option.of(instantRange)
+    );
+
+    original.updatePosition(10, 500L);
+
+    byte[] serialized = serializer.serialize(original);
+    HoodieSourceSplit deserialized = serializer.deserialize(serializer.getVersion(), serialized);
+
+    assertNotNull(deserialized);
+    assertTrue(deserialized.getInstantRange().isPresent());
+    assertEquals(10, deserialized.getFileOffset());
+    assertEquals(500L, deserialized.getConsumed());
+    assertEquals("20230101000000000", deserialized.getInstantRange().get().getStartInstant().get());
+    assertEquals("20230131235959999", deserialized.getInstantRange().get().getEndInstant().get());
+  }
+
+  @Test
+  public void testSerializeMultipleSplitsWithInstantRange() throws IOException {
+    InstantRange range1 =
+        org.apache.hudi.common.table.log.InstantRange.builder()
+            .startInstant("20230101000000000")
+            .endInstant("20230131235959999")
+            .rangeType(org.apache.hudi.common.table.log.InstantRange.RangeType.OPEN_CLOSED)
+            .build();
+
+    InstantRange range2 =
+        org.apache.hudi.common.table.log.InstantRange.builder()
+            .startInstant("20230201000000000")
+            .rangeType(org.apache.hudi.common.table.log.InstantRange.RangeType.CLOSED_CLOSED)
+            .nullableBoundary(true)
+            .build();
+
+    HoodieSourceSplit split1 = new HoodieSourceSplit(1, "base1", Option.empty(), "/t1", "/p1", "read_optimized", "19700101000000000", "f1", Option.of(range1));
+    HoodieSourceSplit split2 = new HoodieSourceSplit(2, "base2", Option.of(Arrays.asList("log1")), "/t2", "/p2", "payload_combine", "19700101000000000", "f2", Option.of(range2));
+    HoodieSourceSplit split3 = new HoodieSourceSplit(3, null, Option.of(Arrays.asList("log1", "log2")), "/t3", "/p3", "read_optimized", "19700101000000000", "f3", Option.empty());
+
+    byte[] serialized1 = serializer.serialize(split1);
+    byte[] serialized2 = serializer.serialize(split2);
+    byte[] serialized3 = serializer.serialize(split3);
+
+    HoodieSourceSplit deserialized1 = serializer.deserialize(serializer.getVersion(), serialized1);
+    HoodieSourceSplit deserialized2 = serializer.deserialize(serializer.getVersion(), serialized2);
+    HoodieSourceSplit deserialized3 = serializer.deserialize(serializer.getVersion(), serialized3);
+
+    // Verify split1
+    assertTrue(deserialized1.getInstantRange().isPresent());
+    assertEquals("20230101000000000", deserialized1.getInstantRange().get().getStartInstant().get());
+    assertEquals("20230131235959999", deserialized1.getInstantRange().get().getEndInstant().get());
+
+    // Verify split2
+    assertTrue(deserialized2.getInstantRange().isPresent());
+    assertEquals("20230201000000000", deserialized2.getInstantRange().get().getStartInstant().get());
+    assertFalse(deserialized2.getInstantRange().get().getEndInstant().isPresent());
+
+    // Verify split3
+    assertFalse(deserialized3.getInstantRange().isPresent());
   }
 }
 

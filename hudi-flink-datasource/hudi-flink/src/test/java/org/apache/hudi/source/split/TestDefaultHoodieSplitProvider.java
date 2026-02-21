@@ -638,7 +638,8 @@ public class TestDefaultHoodieSplitProvider {
         "/table/path/partition1",
         "read_optimized",
         "20260126034717000",
-        fileId
+        fileId,
+        Option.empty()
     );
   }
 
@@ -651,7 +652,8 @@ public class TestDefaultHoodieSplitProvider {
         "/table/path/partition1",
         "read_optimized",
         latestCommit,
-        "file" + splitNum
+        "file" + splitNum,
+        Option.empty()
     );
   }
 
@@ -664,7 +666,8 @@ public class TestDefaultHoodieSplitProvider {
         "/table/path/partition1",
         "read_optimized",
         "2026012603471700" + splitNum,
-        fileId
+        fileId,
+        Option.empty()
     );
   }
 }

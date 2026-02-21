@@ -18,15 +18,26 @@
 
 package org.apache.hudi.source.reader.function;
 
+import org.apache.flink.table.types.AtomicDataType;
 import org.apache.hudi.common.config.HoodieReaderConfig;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.internal.schema.InternalSchema;
+import org.apache.hudi.source.ExpressionPredicates;
 import org.apache.flink.configuration.Configuration;
+import org.apache.flink.table.expressions.FieldReferenceExpression;
+import org.apache.flink.table.expressions.ValueLiteralExpression;
+import org.apache.flink.table.types.logical.VarCharType;
+import org.apache.hudi.utils.TestConfigurations;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
+
+import java.io.File;
+import java.util.Collections;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -37,9 +48,13 @@ import static org.mockito.Mockito.when;
  * Test cases for {@link HoodieSplitReaderFunction}.
  */
 public class TestHoodieSplitReaderFunction {
+  @TempDir
+  File tempDir;
+
   private HoodieSchema tableSchema;
   private HoodieSchema requiredSchema;
   private HoodieTableMetaClient mockMetaClient;
+  private Configuration conf;
 
   @BeforeEach
   public void setUp() {
@@ -49,6 +64,7 @@ public class TestHoodieSplitReaderFunction {
     // Create mock schemas
     tableSchema = mock(HoodieSchema.class);
     requiredSchema = mock(HoodieSchema.class);
+    conf = TestConfigurations.getDefaultConf(tempDir.getAbsolutePath());
   }
 
   @Test
@@ -57,10 +73,13 @@ public class TestHoodieSplitReaderFunction {
     assertThrows(IllegalArgumentException.class, () -> {
       new HoodieSplitReaderFunction(
           mockMetaClient,
-          new Configuration(), null,  // null tableSchema should throw
+          conf,
+          null,  // null tableSchema should throw
           requiredSchema,
           "AVRO_PAYLOAD",
-          Option.empty()
+          Option.empty(),
+          Collections.emptyList(),
+              false
       );
     });
   }
@@ -71,11 +90,13 @@ public class TestHoodieSplitReaderFunction {
     assertThrows(IllegalArgumentException.class, () -> {
       new HoodieSplitReaderFunction(
           mockMetaClient,
-          new Configuration(),
+          conf,
           tableSchema,
           null,  // null requiredSchema should throw
           "AVRO_PAYLOAD",
-          Option.empty()
+          Option.empty(),
+          Collections.emptyList(),
+          false
       );
     });
   }
@@ -86,11 +107,13 @@ public class TestHoodieSplitReaderFunction {
     HoodieSplitReaderFunction function =
         new HoodieSplitReaderFunction(
             mockMetaClient,
-            new Configuration(),
+            conf,
             tableSchema,
             requiredSchema,
             "AVRO_PAYLOAD",
-            Option.empty()
+            Option.empty(),
+            Collections.emptyList(),
+            false
         );
 
     assertNotNull(function);
@@ -103,11 +126,13 @@ public class TestHoodieSplitReaderFunction {
     HoodieSplitReaderFunction function =
         new HoodieSplitReaderFunction(
             mockMetaClient,
-            new Configuration(),
+            conf,
             tableSchema,
             requiredSchema,
             "AVRO_PAYLOAD",
-            Option.of(internalSchema)
+            Option.of(internalSchema),
+            Collections.emptyList(),
+            false
         );
 
     assertNotNull(function);
@@ -118,11 +143,14 @@ public class TestHoodieSplitReaderFunction {
     HoodieSplitReaderFunction function =
         new HoodieSplitReaderFunction(
             mockMetaClient,
-            new Configuration(),
+            conf,
             tableSchema,
             requiredSchema,
             "AVRO_PAYLOAD",
-            Option.empty()
+            Option.empty(),
+            Collections.emptyList(),
+            false
+
         );
 
     // Close should not throw exception even when fileGroupReader is null
@@ -142,11 +170,13 @@ public class TestHoodieSplitReaderFunction {
       HoodieSplitReaderFunction function =
           new HoodieSplitReaderFunction(
               mockMetaClient,
-              new Configuration(),
+              conf,
               tableSchema,
               requiredSchema,
               mergeType,
-              Option.empty()
+              Option.empty(),
+              Collections.emptyList(),
+              false
           );
 
       assertNotNull(function);
@@ -158,11 +188,13 @@ public class TestHoodieSplitReaderFunction {
     HoodieSplitReaderFunction function =
         new HoodieSplitReaderFunction(
             mockMetaClient,
-            new Configuration(),
+            conf,
             tableSchema,
             requiredSchema,
             "AVRO_PAYLOAD",
-            Option.empty()
+            Option.empty(),
+            Collections.emptyList(),
+            false
         );
 
     // Multiple close calls should not throw exception
@@ -178,11 +210,13 @@ public class TestHoodieSplitReaderFunction {
     HoodieSplitReaderFunction function =
         new HoodieSplitReaderFunction(
             mockMetaClient,
-            new Configuration(),
+            conf,
             customTableSchema,
             customRequiredSchema,
             "AVRO_PAYLOAD",
-            Option.empty()
+            Option.empty(),
+            Collections.emptyList(),
+            false
         );
 
     assertNotNull(function);
@@ -197,11 +231,13 @@ public class TestHoodieSplitReaderFunction {
     HoodieSplitReaderFunction function1 =
         new HoodieSplitReaderFunction(
             mockMetaClient,
-            new Configuration(),
+            conf,
             tableSchema,
             requiredSchema,
             "AVRO_PAYLOAD",
-            Option.of(internalSchema1)
+            Option.of(internalSchema1),
+            Collections.emptyList(),
+            false
         );
     assertNotNull(function1);
 
@@ -209,11 +245,13 @@ public class TestHoodieSplitReaderFunction {
     HoodieSplitReaderFunction function2 =
         new HoodieSplitReaderFunction(
             mockMetaClient,
-            new Configuration(),
+            conf,
             tableSchema,
             requiredSchema,
             "AVRO_PAYLOAD",
-            Option.of(internalSchema2)
+            Option.of(internalSchema2),
+            Collections.emptyList(),
+            false
         );
     assertNotNull(function2);
 
@@ -221,28 +259,31 @@ public class TestHoodieSplitReaderFunction {
     HoodieSplitReaderFunction function3 =
         new HoodieSplitReaderFunction(
             mockMetaClient,
-            new Configuration(),
+            conf,
             tableSchema,
             requiredSchema,
             "AVRO_PAYLOAD",
-            Option.empty()
+            Option.empty(),
+            Collections.emptyList(),
+            false
         );
     assertNotNull(function3);
   }
 
   @Test
   public void testConfigurationIsStored() {
-    Configuration config = new Configuration();
-    config.setString("test.key", "test.value");
+    conf.setString("test.key", "test.value");
 
     HoodieSplitReaderFunction function =
         new HoodieSplitReaderFunction(
             mockMetaClient,
-            config,
+                conf,
             tableSchema,
             requiredSchema,
             "AVRO_PAYLOAD",
-            Option.empty()
+            Option.empty(),
+            Collections.emptyList(),
+            false
         );
 
     assertNotNull(function);
@@ -254,11 +295,70 @@ public class TestHoodieSplitReaderFunction {
     HoodieSplitReaderFunction function =
         new HoodieSplitReaderFunction(
             mockMetaClient,
-            new Configuration(),
+            conf,
             tableSchema,
             requiredSchema,
             "AVRO_PAYLOAD",
-            Option.empty()
+            Option.empty(),
+            Collections.emptyList(),
+            false
+        );
+
+    assertNotNull(function);
+  }
+
+  @Test
+  public void testConstructorWithEmitDeleteTrue() {
+    HoodieSplitReaderFunction function =
+        new HoodieSplitReaderFunction(
+            mockMetaClient,
+            conf,
+            tableSchema,
+            requiredSchema,
+            "AVRO_PAYLOAD",
+            Option.empty(),
+            Collections.emptyList(),
+            true
+        );
+
+    assertNotNull(function);
+  }
+
+  @Test
+  public void testConstructorWithPredicatesAndEmitDelete() {
+    ExpressionPredicates.Predicate predicate = ExpressionPredicates.NotEquals.getInstance()
+            .bindFieldReference(new FieldReferenceExpression("status", new AtomicDataType(new VarCharType(true, 10)), 0, 0))
+            .bindValueLiteral(new ValueLiteralExpression("deleted"));
+
+    List<ExpressionPredicates.Predicate> predicates = Collections.singletonList(predicate);
+
+    HoodieSplitReaderFunction function =
+            new HoodieSplitReaderFunction(
+                    mockMetaClient,
+                    conf,
+                    tableSchema,
+                    requiredSchema,
+                    "AVRO_PAYLOAD",
+                    Option.empty(),
+                    predicates,
+                    true
+            );
+
+    assertNotNull(function);
+  }
+
+  @Test
+  public void testConstructorWithEmitDeleteFalse() {
+    HoodieSplitReaderFunction function =
+        new HoodieSplitReaderFunction(
+            mockMetaClient,
+            conf,
+            tableSchema,
+            requiredSchema,
+            "AVRO_PAYLOAD",
+            Option.empty(),
+            Collections.emptyList(),
+            false
         );
 
     assertNotNull(function);

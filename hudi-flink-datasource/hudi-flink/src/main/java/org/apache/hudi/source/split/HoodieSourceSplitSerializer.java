@@ -18,6 +18,7 @@
 
 package org.apache.hudi.source.split;
 
+import org.apache.hudi.common.table.log.InstantRange;
 import org.apache.hudi.common.util.Option;
 
 import org.apache.flink.annotation.Internal;
@@ -82,6 +83,21 @@ public class HoodieSourceSplitSerializer implements SimpleVersionedSerializer<Ho
       // Serialize fileOffset
       out.writeInt(obj.getFileOffset());
 
+      // Serialize instant range (Option<InstantRange>)
+      out.writeBoolean(obj.getInstantRange().isPresent());
+      if (obj.getInstantRange().isPresent()) {
+        InstantRange instantRange = obj.getInstantRange().get();
+        out.writeBoolean(instantRange.getStartInstant().isPresent());
+        if (instantRange.getStartInstant().isPresent()) {
+          out.writeUTF(instantRange.getStartInstant().get());
+        }
+        out.writeBoolean(instantRange.getEndInstant().isPresent());
+        if (instantRange.getEndInstant().isPresent()) {
+          out.writeUTF(instantRange.getEndInstant().get());
+        }
+        out.writeUTF(InstantRange.getRangeType(instantRange).name());
+      }
+
       out.flush();
       return baos.toByteArray();
     }
@@ -129,6 +145,26 @@ public class HoodieSourceSplitSerializer implements SimpleVersionedSerializer<Ho
       // Deserialize fileOffset
       int fileOffset = in.readInt();
 
+      // Deserialize instantRange (Option<InstantRange>)
+      Option<InstantRange> instantRangeOption;
+      if (in.readBoolean()) {
+        InstantRange.Builder builder = InstantRange.builder();
+        // Deserialize startInstant
+        if (in.readBoolean()) {
+          builder.startInstant(in.readUTF());
+        }
+
+        // Deserialize endInstant
+        if (in.readBoolean()) {
+          builder.endInstant(in.readUTF());
+        }
+
+        builder.rangeType(InstantRange.RangeType.valueOf(in.readUTF()));
+        instantRangeOption = Option.of(builder.build());
+      } else {
+        instantRangeOption = Option.empty();
+      }
+
       // Create HoodieSourceSplit object
       HoodieSourceSplit split = new HoodieSourceSplit(
           splitNum,
@@ -138,7 +174,8 @@ public class HoodieSourceSplitSerializer implements SimpleVersionedSerializer<Ho
           partitionPath,
           mergeType,
           latestCommit,
-          fileId);
+          fileId,
+          instantRangeOption);
 
       // Update position to restore consumed and fileOffset
       split.updatePosition(fileOffset, consumed);

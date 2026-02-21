@@ -19,8 +19,6 @@
 package org.apache.hudi.source.reader.function;
 
 import org.apache.flink.configuration.Configuration;
-import org.apache.hudi.common.config.HoodieReaderConfig;
-import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieFileGroupId;
@@ -31,17 +29,23 @@ import org.apache.hudi.common.table.read.HoodieFileGroupReader;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
+import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.internal.schema.InternalSchema;
+import org.apache.hudi.source.ExpressionPredicates;
 import org.apache.hudi.source.reader.BatchRecords;
 import org.apache.hudi.source.reader.HoodieRecordWithPosition;
 import org.apache.hudi.source.split.HoodieSourceSplit;
 
 import org.apache.flink.connector.base.source.reader.RecordsWithSplitIds;
 import org.apache.flink.table.data.RowData;
-import org.apache.hudi.table.format.FlinkReaderContextFactory;
+import org.apache.hudi.table.format.FormatUtils;
+import org.apache.hudi.table.format.InternalSchemaManager;
+import org.apache.hudi.util.FlinkWriteClients;
+
 import java.io.IOException;
 import java.util.Collections;
+import java.util.List;
 import java.util.stream.Collectors;
 
 /**
@@ -51,8 +55,12 @@ public class HoodieSplitReaderFunction implements SplitReaderFunction<RowData> {
   private final HoodieTableMetaClient metaClient;
   private final HoodieSchema tableSchema;
   private final HoodieSchema requiredSchema;
+  private final Configuration configuration;
+  private final HoodieWriteConfig writeConfig;
   private final Option<InternalSchema> internalSchemaOption;
-  private final TypedProperties props;
+  private final String mergeType;
+  private final boolean emitDelete;
+  private final List<ExpressionPredicates.Predicate> predicates;
   private HoodieFileGroupReader<RowData> fileGroupReader;
 
   public HoodieSplitReaderFunction(
@@ -61,16 +69,21 @@ public class HoodieSplitReaderFunction implements SplitReaderFunction<RowData> {
       HoodieSchema tableSchema,
       HoodieSchema requiredSchema,
       String mergeType,
-      Option<InternalSchema> internalSchemaOption) {
+      Option<InternalSchema> internalSchemaOption,
+      List<ExpressionPredicates.Predicate> predicates,
+      boolean emitDelete) {
 
     ValidationUtils.checkArgument(tableSchema != null, "tableSchema can't be null");
     ValidationUtils.checkArgument(requiredSchema != null, "requiredSchema can't be null");
     this.metaClient = metaClient;
     this.tableSchema = tableSchema;
     this.requiredSchema = requiredSchema;
+    this.configuration = configuration;
+    this.writeConfig = FlinkWriteClients.getHoodieClientConfig(configuration);
     this.internalSchemaOption = internalSchemaOption;
-    this.props = new TypedProperties();
-    this.props.put(HoodieReaderConfig.MERGE_TYPE.key(), mergeType);
+    this.predicates = predicates;
+    this.mergeType = mergeType;
+    this.emitDelete = emitDelete;
     this.fileGroupReader = null;
   }
 
@@ -112,23 +125,18 @@ public class HoodieSplitReaderFunction implements SplitReaderFunction<RowData> {
         ).orElse(Collections.emptyList())
     );
 
-    FlinkReaderContextFactory readerContextFactory = new FlinkReaderContextFactory(metaClient);
-
-    // Build the file group reader
-    HoodieFileGroupReader.Builder<RowData> builder = HoodieFileGroupReader.<RowData>newBuilder()
-        .withReaderContext(readerContextFactory.getContext())
-        .withHoodieTableMetaClient(metaClient)
-        .withFileSlice(fileSlice)
-        .withProps(props)
-        .withShouldUseRecordPosition(true)
-        .withDataSchema(tableSchema)
-        .withRequestedSchema(requiredSchema);
-
-
-    if (internalSchemaOption.isPresent()) {
-      builder.withInternalSchema(internalSchemaOption);
-    }
-
-    return builder.build();
+    return FormatUtils.createFileGroupReader(
+      metaClient,
+      writeConfig,
+      InternalSchemaManager.get(metaClient.getStorageConf(), metaClient),
+      fileSlice,
+      tableSchema,
+      requiredSchema,
+      split.getLatestCommit(),
+      mergeType,
+      emitDelete,
+      predicates,
+      split.getInstantRange()
+    );
   }
 }

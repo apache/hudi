@@ -273,4 +273,18 @@ public abstract class InstantRange implements Serializable {
       }
     }
   }
+
+  public static RangeType getRangeType(InstantRange range) {
+    if (range instanceof OpenClosedRangeNullableBoundary || range instanceof OpenClosedRange) {
+      return RangeType.OPEN_CLOSED;
+    } else if (range instanceof ClosedClosedRangeNullableBoundary || range instanceof ClosedClosedRange) {
+      return RangeType.CLOSED_CLOSED;
+    } else if (range instanceof ExactMatchRange) {
+      return RangeType.EXACT_MATCH;
+    } else if (range instanceof CompositionRange) {
+      return RangeType.COMPOSITION;
+    } else {
+      throw new UnsupportedOperationException("Unsupported Instant Range type");
+    }
+  }
 }
