@@ -241,7 +241,8 @@ public class TimelineArchiverV2<T extends HoodieAvroPayload, I, K, O> implements
           .build();
       Option<HoodieInstant> qualifiedEarliestInstant =
           TimelineUtils.getEarliestInstantForMetadataArchival(
-              dataMetaClient.getActiveTimeline(), config.shouldArchiveBeyondSavepoint());
+              dataMetaClient.getActiveTimeline(), config.shouldArchiveBeyondSavepoint(),
+              TimelineUtils.getEarliestRetainedCommitFromLastClean(dataMetaClient));
 
       // Do not archive the instants after the earliest commit (COMMIT, DELTA_COMMIT, and
       // REPLACE_COMMIT only, considering non-savepoint commit only if enabling archive

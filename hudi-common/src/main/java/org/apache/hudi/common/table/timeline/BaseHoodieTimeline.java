@@ -549,6 +549,18 @@ public abstract class BaseHoodieTimeline implements HoodieTimeline {
     return this.firstNonSavepointCommit;
   }
 
+  @Override
+  public Option<HoodieInstant> findFirstSavepointedWrite() {
+    Option<HoodieInstant> firstSavePointInstantOption = getSavePointTimeline().firstInstant();
+    if (!firstSavePointInstantOption.isPresent()) {
+      return Option.empty();
+    }
+    HoodieInstant firstSavePoint = firstSavePointInstantOption.get();
+    return getWriteTimeline()
+        .filter(instant -> instant.requestedTime().equals(firstSavePoint.requestedTime()))
+        .firstInstant();
+  }
+
   public Option<HoodieInstant> getFirstNonSavepointCommitByCompletionTime() {
     if (this.firstNonSavepointCommitByCompletionTime == null) {
       synchronized (this) {

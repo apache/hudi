@@ -458,7 +458,7 @@ class TestTimelineUtils extends HoodieCommonTestHarness {
     assertEquals(
         Option.empty(),
         TimelineUtils.getEarliestInstantForMetadataArchival(
-            prepareActiveTimeline(new ArrayList<>()), false));
+            prepareActiveTimeline(new ArrayList<>()), false, Option.empty()));
 
     // Earlier request clean action before commits
     assertEquals(
@@ -471,9 +471,9 @@ class TestTimelineUtils extends HoodieCommonTestHarness {
                     new HoodieInstant(REQUESTED, CLEAN_ACTION, "003", InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR),
                     new HoodieInstant(COMPLETED, COMMIT_ACTION, "010", InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR),
                     new HoodieInstant(COMPLETED, REPLACE_COMMIT_ACTION, "011", InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR),
-                    new HoodieInstant(REQUESTED, CLUSTERING_ACTION, "012", InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR))), false));
+                    new HoodieInstant(REQUESTED, CLUSTERING_ACTION, "012", InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR))), false, Option.empty()));
 
-    // No inflight instants
+    // No inflight instants and no ECTR
     assertEquals(
         Option.of(new HoodieInstant(COMPLETED, COMMIT_ACTION, "010", InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR)),
         TimelineUtils.getEarliestInstantForMetadataArchival(
@@ -484,7 +484,31 @@ class TestTimelineUtils extends HoodieCommonTestHarness {
                     new HoodieInstant(COMPLETED, CLEAN_ACTION, "003", InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR),
                     new HoodieInstant(COMPLETED, COMMIT_ACTION, "010", InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR),
                     new HoodieInstant(COMPLETED, REPLACE_COMMIT_ACTION, "011", InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR),
-                    new HoodieInstant(REQUESTED, CLUSTERING_ACTION, "012", InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR))), false));
+                    new HoodieInstant(REQUESTED, CLUSTERING_ACTION, "012", InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR))), false, Option.empty()));
+
+    // No inflight instants and ECTR present
+    assertEquals(
+        Option.of(new HoodieInstant(COMPLETED, COMMIT_ACTION, "002", InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR)),
+        TimelineUtils.getEarliestInstantForMetadataArchival(
+            prepareActiveTimeline(
+                Arrays.asList(
+                    new HoodieInstant(COMPLETED, COMMIT_ACTION, "001", InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR),
+                    new HoodieInstant(COMPLETED, COMMIT_ACTION, "002", InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR),
+                    new HoodieInstant(COMPLETED, CLEAN_ACTION, "003", InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR),
+                    new HoodieInstant(COMPLETED, COMMIT_ACTION, "010", InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR))), false,
+            Option.of("002")));
+
+    // No inflight instants and ECTR present but earlier than / not in the active timeline
+    assertEquals(
+        Option.of(new HoodieInstant(COMPLETED, COMMIT_ACTION, "002", InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR)),
+        TimelineUtils.getEarliestInstantForMetadataArchival(
+            prepareActiveTimeline(
+                Arrays.asList(
+                    new HoodieInstant(COMPLETED, COMMIT_ACTION, "002", InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR),
+                    new HoodieInstant(COMPLETED, COMMIT_ACTION, "003", InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR),
+                    new HoodieInstant(COMPLETED, CLEAN_ACTION, "004", InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR),
+                    new HoodieInstant(COMPLETED, COMMIT_ACTION, "010", InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR))), false,
+            Option.of("001")));
 
     // Rollbacks only
     assertEquals(
@@ -494,7 +518,7 @@ class TestTimelineUtils extends HoodieCommonTestHarness {
                 Arrays.asList(
                     new HoodieInstant(COMPLETED, ROLLBACK_ACTION, "001", InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR),
                     new HoodieInstant(COMPLETED, ROLLBACK_ACTION, "002", InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR),
-                    new HoodieInstant(INFLIGHT, ROLLBACK_ACTION, "003", InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR))), false));
+                    new HoodieInstant(INFLIGHT, ROLLBACK_ACTION, "003", InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR))), false, Option.empty()));
 
     assertEquals(
         Option.empty(),
@@ -503,9 +527,9 @@ class TestTimelineUtils extends HoodieCommonTestHarness {
                 Arrays.asList(
                     new HoodieInstant(COMPLETED, ROLLBACK_ACTION, "001", InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR),
                     new HoodieInstant(COMPLETED, ROLLBACK_ACTION, "002", InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR),
-                    new HoodieInstant(COMPLETED, ROLLBACK_ACTION, "003", InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR))), false));
+                    new HoodieInstant(COMPLETED, ROLLBACK_ACTION, "003", InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR))), false, Option.empty()));
 
-    // With savepoints
+    // With savepoints but no ECTR from clean
     HoodieActiveTimeline timeline = prepareActiveTimeline(
         Arrays.asList(
             new HoodieInstant(COMPLETED, ROLLBACK_ACTION, "001", InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR),
@@ -515,10 +539,46 @@ class TestTimelineUtils extends HoodieCommonTestHarness {
             new HoodieInstant(COMPLETED, COMMIT_ACTION, "011", InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR)));
     assertEquals(
         Option.of(new HoodieInstant(COMPLETED, COMMIT_ACTION, "003", InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR)),
-        TimelineUtils.getEarliestInstantForMetadataArchival(timeline, false));
+        TimelineUtils.getEarliestInstantForMetadataArchival(timeline, false, Option.empty()));
     assertEquals(
-        Option.of(new HoodieInstant(COMPLETED, COMMIT_ACTION, "010", InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR)),
-        TimelineUtils.getEarliestInstantForMetadataArchival(timeline, true));
+        Option.of(new HoodieInstant(COMPLETED, COMMIT_ACTION, "003", InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR)),
+        TimelineUtils.getEarliestInstantForMetadataArchival(timeline, true, Option.empty()));
+
+    // With savepoints and clean's ECTR is earlier than all savepoints
+    // Expect that it should block on ECTR regardless of if archival beyond savepoint allowed
+    timeline = prepareActiveTimeline(
+        Arrays.asList(
+            new HoodieInstant(COMPLETED, ROLLBACK_ACTION, "001", InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR),
+            new HoodieInstant(COMPLETED, COMMIT_ACTION, "002", InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR),
+            new HoodieInstant(COMPLETED, COMMIT_ACTION, "003", InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR),
+            new HoodieInstant(COMPLETED, SAVEPOINT_ACTION, "003", InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR),
+            new HoodieInstant(COMPLETED, COMMIT_ACTION, "010", InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR),
+            new HoodieInstant(COMPLETED, COMMIT_ACTION, "011", InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR)));
+    assertEquals(
+        Option.of(new HoodieInstant(COMPLETED, COMMIT_ACTION, "002", InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR)),
+        TimelineUtils.getEarliestInstantForMetadataArchival(timeline, false, Option.of("002")));
+    assertEquals(
+        Option.of(new HoodieInstant(COMPLETED, COMMIT_ACTION, "002", InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR)),
+        TimelineUtils.getEarliestInstantForMetadataArchival(timeline, true, Option.of("002")));
+
+    // With savepoints and clean's ECTR is in between savepoints
+    // Then it should block on first savepoint or ECTR depending on if archival beyond savepoint is set
+    timeline = prepareActiveTimeline(
+        Arrays.asList(
+            new HoodieInstant(COMPLETED, ROLLBACK_ACTION, "001", InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR),
+            new HoodieInstant(COMPLETED, COMMIT_ACTION, "003", InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR),
+            new HoodieInstant(COMPLETED, SAVEPOINT_ACTION, "003", InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR),
+            new HoodieInstant(COMPLETED, COMMIT_ACTION, "004", InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR),
+            new HoodieInstant(COMPLETED, COMMIT_ACTION, "005", InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR),
+            new HoodieInstant(COMPLETED, SAVEPOINT_ACTION, "005", InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR),
+            new HoodieInstant(COMPLETED, COMMIT_ACTION, "010", InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR),
+            new HoodieInstant(COMPLETED, COMMIT_ACTION, "011", InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR)));
+    assertEquals(
+        Option.of(new HoodieInstant(COMPLETED, COMMIT_ACTION, "003", InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR)),
+        TimelineUtils.getEarliestInstantForMetadataArchival(timeline, false, Option.of("004")));
+    assertEquals(
+        Option.of(new HoodieInstant(COMPLETED, COMMIT_ACTION, "004", InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR)),
+        TimelineUtils.getEarliestInstantForMetadataArchival(timeline, true, Option.of("004")));
   }
 
   private HoodieActiveTimeline prepareActiveTimeline(
