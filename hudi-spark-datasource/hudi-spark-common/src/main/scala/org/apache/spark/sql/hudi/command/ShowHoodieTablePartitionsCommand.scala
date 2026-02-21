@@ -17,7 +17,7 @@
 
 package org.apache.spark.sql.hudi.command
 
-import org.apache.hudi.common.util.PartitionPathEncodeUtils
+import org.apache.hudi.common.util.{PartitionPathEncodeUtils, ValidationUtils}
 
 import org.apache.spark.sql.{Row, SparkSession}
 import org.apache.spark.sql.catalyst.TableIdentifier
@@ -44,18 +44,25 @@ case class ShowHoodieTablePartitionsCommand(
 
     val schemaOpt = hoodieCatalogTable.tableSchema
     val partitionColumnNamesOpt = hoodieCatalogTable.tableConfig.getPartitionFields
+    val useSlashSeparatedDatePartitioning = hoodieCatalogTable.tableConfig.getSlashSeparatedDatePartitioning
 
-    if (partitionColumnNamesOpt.isPresent && partitionColumnNamesOpt.get.nonEmpty && schemaOpt.nonEmpty) {
-      specOpt.map { spec =>
-        hoodieCatalogTable.getPartitionPaths.filter { partitionPath =>
-          val part = PartitioningUtils.parsePathFragment(partitionPath)
-          spec.forall { case (col, value) =>
-            PartitionPathEncodeUtils.escapePartitionValue(value) == part.getOrElse(col, null)
+      if (partitionColumnNamesOpt.isPresent && partitionColumnNamesOpt.get.nonEmpty && schemaOpt.nonEmpty) {
+        specOpt.map { spec =>
+            hoodieCatalogTable.getPartitionPaths.filter { partitionPath =>
+              val part = PartitioningUtils.parsePathFragment(partitionPath)
+              spec.forall { case (col, value) =>
+                PartitionPathEncodeUtils.escapePartitionValue(value) == part.getOrElse(col, null)
+              }
+            }
           }
-        }
-      }
-        .getOrElse(hoodieCatalogTable.getPartitionPaths)
-        .map(Row(_))
+          .getOrElse(hoodieCatalogTable.getPartitionPaths)
+          .map(partitionVal => if (useSlashSeparatedDatePartitioning) {
+            ValidationUtils.checkState(partitionColumnNamesOpt.get().length == 1,
+              "Only one partition field is allowed for SlashEncodedPartitioning")
+            Row(partitionColumnNamesOpt.get()(0) + "=" + partitionVal.replace('/', '-'))
+          } else {
+            Row(partitionVal)
+          })
     } else {
       Seq.empty[Row]
     }
