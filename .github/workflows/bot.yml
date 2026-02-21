@@ -209,7 +209,7 @@ jobs:
             -v /var/run/docker.sock:/var/run/docker.sock \
             -w /hudi \
             hudi-ci \
-            /bin/bash -c "mvn clean install -T 2 -D$SCALA_PROFILE -D$SPARK_PROFILE -D$FLINK_PROFILE -Phudi-platform-service -Pthrift-gen-source -DskipTests=true $MVN_ARGS"
+            /bin/bash -c "MAVEN_OPTS='-Xmx4g' mvn clean install -T 2 -D$SCALA_PROFILE -D$SPARK_PROFILE -D$FLINK_PROFILE -Phudi-platform-service -Pthrift-gen-source -DskipTests=true $MVN_ARGS"
       - name: UT - common and other modules
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
@@ -222,7 +222,7 @@ jobs:
             -v /var/run/docker.sock:/var/run/docker.sock \
             -w /hudi \
             hudi-ci \
-            /bin/bash -c "mvn test -Punit-tests -D$SCALA_PROFILE -D$SPARK_PROFILE -D$FLINK_PROFILE -fae -pl $JOB10_UT_MODULES $MVN_ARGS -Djacoco.skip=false"
+            /bin/bash -c "MAVEN_OPTS='-Xmx4g' mvn test -Punit-tests -D$SCALA_PROFILE -D$SPARK_PROFILE -D$FLINK_PROFILE -fae -pl $JOB10_UT_MODULES $MVN_ARGS -Djacoco.skip=false"
       - name: UT - hudi-utilities (non-TestHoodie)
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
@@ -235,7 +235,7 @@ jobs:
             -v /var/run/docker.sock:/var/run/docker.sock \
             -w /hudi \
             hudi-ci \
-            /bin/bash -c "mvn test -Punit-tests -D$SCALA_PROFILE -D$SPARK_PROFILE -D$FLINK_PROFILE -fae -Dtest='!TestHoodie*' -Dsurefire.failIfNoSpecifiedTests=false -pl hudi-utilities $MVN_ARGS -Djacoco.skip=false"
+            /bin/bash -c "MAVEN_OPTS='-Xmx4g' mvn test -Punit-tests -D$SCALA_PROFILE -D$SPARK_PROFILE -D$FLINK_PROFILE -fae -Dtest='!TestHoodie*' -Dsurefire.failIfNoSpecifiedTests=false -pl hudi-utilities $MVN_ARGS -Djacoco.skip=false"
       - name: FT - common and other modules
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
@@ -248,7 +248,7 @@ jobs:
             -v /var/run/docker.sock:/var/run/docker.sock \
             -w /hudi \
             hudi-ci \
-            /bin/bash -c "mvn test -Pfunctional-tests -D$SCALA_PROFILE -D$SPARK_PROFILE -D$FLINK_PROFILE -fae -pl $JOB10_FT_MODULES $MVN_ARGS -Djacoco.skip=false"
+            /bin/bash -c "MAVEN_OPTS='-Xmx4g' mvn test -Pfunctional-tests -D$SCALA_PROFILE -D$SPARK_PROFILE -D$FLINK_PROFILE -fae -pl $JOB10_FT_MODULES $MVN_ARGS -Djacoco.skip=false"
       - name: Generate merged coverage report
         if: always()
         run: ./scripts/jacoco/generate_merged_coverage_report.sh $GITHUB_WORKSPACE
