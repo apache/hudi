@@ -149,6 +149,15 @@ trait HoodieCatalystPlansUtils {
    */
   def failTableNotFound(tableName: String): Unit = {}
 
+  /**
+   * Throws an AnalysisException for unresolved query elements (columns/tables).
+   * Provides enhanced error guidance with version-specific exception formatting.
+   *
+   * @param unresolvedRefs List of unresolved reference names
+   * @param originalError  The original error message from Spark
+   */
+  def failUnresolvedQuery(unresolvedRefs: Seq[String], originalError: String): Nothing
+
   def createMITJoin(left: LogicalPlan, right: LogicalPlan, joinType: JoinType, condition: Option[Expression], hint: String): LogicalPlan
 
   /**
