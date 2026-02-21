@@ -719,6 +719,25 @@ public class FlinkOptions extends HoodieConfig {
           + "The order of entire written file is not guaranteed.");
 
   @AdvancedConfig
+  public static final ConfigOption<Boolean> WRITE_BUFFER_SORT_CONTINUOUS_ENABLED = ConfigOptions
+      .key("write.buffer.sort.continuous.enabled")
+      .booleanType()
+      .defaultValue(false) // default use batch sorting
+      .withDescription("Whether to use continuous sorting (TreeMap-based) instead of batch sorting. "
+          + "Continuous sorting provides O(log n) inserts and incremental draining, "
+          + "but has higher per-record overhead. Requires write.buffer.sort.enabled=true.");
+
+  @AdvancedConfig
+  public static final ConfigOption<Integer> WRITE_BUFFER_SORT_CONTINUOUS_DRAIN_SIZE = ConfigOptions
+      .key("write.buffer.sort.continuous.drain.size")
+      .intType()
+      .defaultValue(1) // default drain 1 record at a time
+      .withDescription("Number of records to drain each time the max capacity is reached when using continuous sorting. "
+          + "Default value of 1 provides smooth, incremental draining. "
+          + "Can be increased for batching if needed (e.g., 10, 100). "
+          + "Larger values reduce drain frequency but may cause latency spikes.");
+
+  @AdvancedConfig
   public static final ConfigOption<Long> WRITE_BUFFER_SIZE = ConfigOptions
       .key("write.buffer.size")
       .longType()
