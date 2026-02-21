@@ -43,4 +43,24 @@ class TestDataSourceOptions {
       HoodieTableConfig.DROP_PARTITION_COLUMNS.defaultValue(),
       DataSourceWriteOptions.DROP_PARTITION_COLUMNS.defaultValue())
   }
+
+  @Test
+  def testReadDefaultsSupportSparkHoodieConfigs(): Unit = {
+    val params = DataSourceOptionsHelper.parametersWithReadDefaults(Map(
+      "spark.hoodie.datasource.query.type" -> DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL
+    ))
+
+    assertEquals(DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL, params(DataSourceReadOptions.QUERY_TYPE.key))
+    assertTrue(!params.contains("spark.hoodie.datasource.query.type"))
+  }
+
+  @Test
+  def testReadDefaultsPreferHoodieOverSparkHoodieWhenBothSet(): Unit = {
+    val params = DataSourceOptionsHelper.parametersWithReadDefaults(Map(
+      "spark.hoodie.datasource.query.type" -> DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL,
+      "hoodie.datasource.query.type" -> DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL
+    ))
+
+    assertEquals(DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL, params(DataSourceReadOptions.QUERY_TYPE.key))
+  }
 }

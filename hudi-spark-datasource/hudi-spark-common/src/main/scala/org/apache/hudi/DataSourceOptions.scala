@@ -1076,7 +1076,18 @@ object DataSourceOptionsHelper {
   def parametersWithReadDefaults(parameters: Map[String, String]): Map[String, String] = {
     // First check if the ConfigUtils.IS_QUERY_AS_RO_TABLE has set by HiveSyncTool,
     // or else use query type from QUERY_TYPE.
-    val paramsWithGlobalProps = DFSPropertiesConfiguration.getGlobalProps.asScala.toMap ++ parameters
+    // Config precedence (low -> high):
+    // 1) global DFS props
+    // 2) spark.hoodie.* (normalized to hoodie.*)
+    // 3) hoodie.* / explicit data source options
+    // NOTE: If both spark.hoodie.X and hoodie.X are set, hoodie.X wins.
+    val normalizedSparkHoodieConfigs = parameters.collect {
+      case (key, value) if key.startsWith("spark.hoodie.") => (key.stripPrefix("spark."), value)
+    }
+    val paramsWithoutSparkHoodie = parameters.filterNot(_._1.startsWith("spark.hoodie."))
+    val paramsWithGlobalProps = DFSPropertiesConfiguration.getGlobalProps.asScala.toMap ++
+      normalizedSparkHoodieConfigs ++
+      paramsWithoutSparkHoodie
     val queryType = paramsWithGlobalProps.get(IS_QUERY_AS_RO_TABLE)
       .map(is => if (is.toBoolean) QUERY_TYPE_READ_OPTIMIZED_OPT_VAL else QUERY_TYPE_SNAPSHOT_OPT_VAL)
       .getOrElse(paramsWithGlobalProps.getOrElse(QUERY_TYPE.key, QUERY_TYPE.defaultValue()))
