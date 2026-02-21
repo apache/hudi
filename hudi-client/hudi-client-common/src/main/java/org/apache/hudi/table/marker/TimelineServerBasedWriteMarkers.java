@@ -43,6 +43,7 @@ import java.util.ConcurrentModificationException;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.table.marker.MarkerOperation.ALL_MARKERS_URL;
@@ -53,6 +54,7 @@ import static org.apache.hudi.common.table.marker.MarkerOperation.MARKERS_DIR_EX
 import static org.apache.hudi.common.table.marker.MarkerOperation.MARKER_BASEPATH_PARAM;
 import static org.apache.hudi.common.table.marker.MarkerOperation.MARKER_DIR_PATH_PARAM;
 import static org.apache.hudi.common.table.marker.MarkerOperation.MARKER_NAME_PARAM;
+import static org.apache.hudi.common.table.marker.MarkerOperation.MARKER_REQUEST_ID_PARAM;
 
 /**
  * Marker operations of using timeline server as a proxy to create and delete markers.
@@ -197,6 +199,7 @@ public class TimelineServerBasedWriteMarkers extends WriteMarkers {
     } else {
       paramsMap.put(MARKER_NAME_PARAM, partitionPath + "/" + markerFileName);
     }
+    paramsMap.put(MARKER_REQUEST_ID_PARAM, UUID.randomUUID().toString());
 
     if (initEarlyConflictDetectionConfigs) {
       paramsMap.put(MARKER_BASEPATH_PARAM, basePath);
