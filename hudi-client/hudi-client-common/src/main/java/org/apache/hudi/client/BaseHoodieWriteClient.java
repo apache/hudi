@@ -59,6 +59,7 @@ import org.apache.hudi.common.util.CleanerUtils;
 import org.apache.hudi.common.util.ClusteringUtils;
 import org.apache.hudi.common.util.CommitUtils;
 import org.apache.hudi.common.util.Functions;
+import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
@@ -267,7 +268,6 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
         extraPreCommitFunc.get().accept(table.getMetaClient(), metadata);
       }
       commit(table, commitActionType, instantTime, metadata, tableWriteStats, skipStreamingWritesToMetadataTable);
-      postCommit(table, metadata, instantTime, extraMetadata);
       log.info("Committed {}", instantTime);
     } catch (IOException e) {
       throw new HoodieCommitException("Failed to complete commit " + config.getBasePath() + " at time " + instantTime, e);
@@ -278,8 +278,23 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
 
     // trigger clean and archival.
     // Each internal call should ensure to lock if required.
-    mayBeCleanAndArchive(table);
-    runTableServicesInline(table, metadata, extraMetadata);
+    boolean postCommitStatus = true;
+    HoodieTimer postCommitTimer = HoodieTimer.start();
+    try {
+      postCommit(table, metadata, instantTime, extraMetadata);
+      mayBeCleanAndArchive(table);
+      runTableServicesInline(table, metadata, extraMetadata);
+    } catch (Exception e) {
+      postCommitStatus = false;
+      if (config.postCommitFailuresIngnored()) {
+        LOG.error("Ignoring exception in perform post commit processing", e);
+      } else {
+        throw e;
+      }
+    } finally {
+      long duration = postCommitTimer.endTimer();
+      metrics.updatePostCommitMetrics(postCommitStatus, duration);
+    }
 
     emitCommitMetrics(instantTime, metadata, commitActionType);
 
@@ -580,8 +595,22 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
             result.getWriteStats().get().size());
       }
 
-      postCommit(hoodieTable, result.getCommitMetadata().get(), instantTime, Option.empty());
-      mayBeCleanAndArchive(hoodieTable);
+      boolean postCommitStatus = true;
+      HoodieTimer postCommitTimer = HoodieTimer.start();
+      try {
+        postCommit(hoodieTable, result.getCommitMetadata().get(), instantTime, Option.empty());
+        mayBeCleanAndArchive(hoodieTable);
+      } catch (Exception e) {
+        postCommitStatus = false;
+        if (config.postCommitFailuresIngnored()) {
+          LOG.error("Ignoring exception in perform post commit processing", e);
+        } else {
+          throw e;
+        }
+      } finally {
+        long duration = postCommitTimer.endTimer();
+        metrics.updatePostCommitMetrics(postCommitStatus, duration);
+      }
 
       emitCommitMetrics(instantTime, result.getCommitMetadata().get(), hoodieTable.getMetaClient().getCommitActionType());
     }
@@ -598,7 +627,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    */
   protected void postCommit(HoodieTable table, HoodieCommitMetadata metadata, String instantTime, Option<Map<String, String>> extraMetadata) {
     try {
-      context.setJobStatus(this.getClass().getSimpleName(),"Cleaning up marker directories for commit " + instantTime + " in table "
+      context.setJobStatus(this.getClass().getSimpleName(), "Cleaning up marker directories for commit " + instantTime + " in table "
           + config.getTableName());
       // Delete the marker directory for the instant.
       WriteMarkersFactory.get(config.getMarkersType(), table, instantTime)

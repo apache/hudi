@@ -84,6 +84,7 @@ public class HoodieMetrics {
   public static final String PENDING_COMPACTION_INSTANT_COUNT_STR = "pendingCompactionInstantCount";
   public static final String PENDING_CLEAN_INSTANT_COUNT_STR = "pendingCleanInstantCount";
   public static final String PENDING_ROLLBACK_INSTANT_COUNT_STR = "pendingRollbackInstantCount";
+  public static final String POST_COMMIT_STR = "postCommit";
   public static final String SUCCESS_EXTENSION = ".success";
   public static final String FAILURE_EXTENSION = ".failure";
 
@@ -338,6 +339,13 @@ public class HoodieMetrics {
               DELETE_FILES_NUM_STR, numFilesDeleted));
       metrics.registerGauge(getMetricsName(HoodieTimeline.ROLLBACK_ACTION, DURATION_STR), durationInMs);
       metrics.registerGauge(getMetricsName(HoodieTimeline.ROLLBACK_ACTION, DELETE_FILES_NUM_STR), numFilesDeleted);
+    }
+  }
+
+  public void updatePostCommitMetrics(boolean status, long durationInMs) {
+    if (config.isMetricsOn()) {
+      metrics.registerGauge(getMetricsName(POST_COMMIT_STR, status ? SUCCESS_COUNTER : FAILURE_COUNTER), 1);
+      metrics.registerGauge(getMetricsName(POST_COMMIT_STR, DURATION_STR), durationInMs);
     }
   }
 
