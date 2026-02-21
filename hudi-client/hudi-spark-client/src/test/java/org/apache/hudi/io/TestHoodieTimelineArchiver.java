@@ -22,10 +22,12 @@ import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.avro.model.HoodieSavepointMetadata;
 import org.apache.hudi.client.BaseHoodieWriteClient;
+import org.apache.hudi.client.timeline.TimelineArchivers;
 import org.apache.hudi.client.WriteClientTestUtils;
 import org.apache.hudi.client.timeline.versioning.v2.LSMTimelineWriter;
 import org.apache.hudi.client.timeline.versioning.v2.TimelineArchiverV2;
 import org.apache.hudi.client.transaction.lock.InProcessLockProvider;
+import org.apache.hudi.client.utils.ArchivalMetrics;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
@@ -88,6 +90,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
+import java.lang.reflect.Field;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
@@ -138,7 +141,11 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.mock;
 
 @Slf4j
 public class TestHoodieTimelineArchiver extends HoodieSparkClientTestHarness {
@@ -2047,5 +2054,139 @@ public class TestHoodieTimelineArchiver extends HoodieSparkClientTestHarness {
       assertEquals(expectedInstant.getAction(), actualInstant.getAction());
       assertEquals(expectedInstant.getState(), actualInstant.getState());
     }
+  }
+
+  @Test
+  public void testArchiveWithOOMOnLargeCommitFile() throws Exception {
+    // Initialize table with archival config
+    HoodieWriteConfig writeConfig = initTestTableAndGetWriteConfig(false, 2, 3, 2);
+    writeConfig.setValue(HoodieArchivalConfig.COMMITS_ARCHIVAL_BATCH_SIZE, "20");
+
+    // Create commits that will be archived
+    for (int i = 1; i <= 10; i++) {
+      String commitTime = String.format("%08d", i);
+      testTable.doWriteOperation(commitTime, WriteOperationType.UPSERT, Collections.singletonList("p1"),
+          Collections.singletonList("p1"), 1);
+    }
+
+    // Create archiver
+    HoodieTable table = HoodieSparkTable.create(writeConfig, context, metaClient);
+    TimelineArchiverV2 archiver = (TimelineArchiverV2) TimelineArchivers.getInstance(
+        table.getMetaClient().getTimelineLayoutVersion(), writeConfig, table);
+
+    // Use reflection to inject a mock LSMTimelineWriter that throws OOM
+    LSMTimelineWriter mockWriter = mock(LSMTimelineWriter.class);
+    doThrow(new OutOfMemoryError("Simulated OOM")).when(mockWriter).write(any(), any(), any());
+
+    Field writerField = TimelineArchiverV2.class.getDeclaredField("timelineWriter");
+    writerField.setAccessible(true);
+    writerField.set(archiver, mockWriter);
+
+    // Verify that archival throws OOM
+    assertThrows(OutOfMemoryError.class, () -> archiver.archiveIfRequired(context));
+
+    // Verify that OOM metric is recorded
+    Map<String, Long> metrics = archiver.getMetrics();
+    assertEquals(1L, metrics.get(ArchivalMetrics.ARCHIVAL_OOM_FAILURE));
+
+    // Verify that commit metrics were recorded before OOM
+    assertTrue(metrics.containsKey(ArchivalMetrics.ARCHIVAL_NUM_ALL_COMMITS));
+  }
+
+  @Test
+  public void testArchivalMetricsWithMixedActionTypes() throws Exception {
+    // Initialize table with archival config: min=2, max=4
+    // This means archival will trigger when we have > 4 write commits and will archive down to 2
+    HoodieWriteConfig writeConfig = initTestTableAndGetWriteConfig(false, 2, 4, 2);
+
+    Map<String, Integer> cleanStats = new HashMap<>();
+    cleanStats.put("p1", 1);
+
+    // Create a mix of action types in a specific order:
+    // Timeline: C1, C2, C3, C4, CL5, CL6, RB7, RB8, RC9, RC10, C11, C12, C13, C14
+    // Where C=commit, CL=clean, RB=rollback, RC=replace_commit (cluster)
+
+    // Commits 1-4: regular write commits
+    for (int i = 1; i <= 4; i++) {
+      testTable.doWriteOperation(String.format("%08d", i), WriteOperationType.UPSERT,
+          i == 1 ? Collections.singletonList("p1") : Collections.emptyList(),
+          Collections.singletonList("p1"), 2);
+    }
+
+    // Commits 5-6: clean commits (will be archived along with commits before them)
+    testTable.doClean(String.format("%08d", 5), cleanStats, Collections.emptyMap());
+    testTable.doClean(String.format("%08d", 6), cleanStats, Collections.emptyMap());
+
+    // Commits 7-8: rollback commits
+    testTable.doWriteOperation(String.format("%08d", 7), WriteOperationType.UPSERT,
+        Collections.emptyList(), Collections.singletonList("p1"), 2);
+    testTable.doRollback(String.format("%08d", 7), String.format("%08d", 8));
+
+    // Commits 9-10: replace commits (clustering)
+    testTable.doCluster(String.format("%08d", 9), Collections.emptyMap(), Collections.singletonList("p1"), 2);
+    testTable.doCluster(String.format("%08d", 10), Collections.emptyMap(), Collections.singletonList("p1"), 2);
+
+    // Commits 11-14: more write commits to trigger archival
+    for (int i = 11; i <= 14; i++) {
+      testTable.doWriteOperation(String.format("%08d", i), WriteOperationType.UPSERT,
+          Collections.emptyList(), Collections.singletonList("p1"), 2);
+    }
+
+    // Get timeline before archival
+    metaClient.reloadActiveTimeline();
+    HoodieTimeline beforeArchival = metaClient.getActiveTimeline().getAllCommitsTimeline().filterCompletedInstants();
+    List<HoodieInstant> instantsBeforeArchival = beforeArchival.getInstants();
+
+    // Create archiver and trigger archival
+    HoodieTable table = HoodieSparkTable.create(writeConfig, context, metaClient);
+    TimelineArchiverV2 archiver = new TimelineArchiverV2(writeConfig, table);
+    int archivedCount = archiver.archiveIfRequired(context);
+
+    // Get timeline after archival
+    metaClient.reloadActiveTimeline();
+    HoodieTimeline afterArchival = metaClient.getActiveTimeline().getAllCommitsTimeline().filterCompletedInstants();
+    List<HoodieInstant> instantsAfterArchival = afterArchival.getInstants();
+
+    // Calculate what was actually archived
+    Set<HoodieInstant> afterSet = new HashSet<>(instantsAfterArchival);
+    List<HoodieInstant> archivedInstants = instantsBeforeArchival.stream()
+        .filter(instant -> !afterSet.contains(instant))
+        .collect(Collectors.toList());
+
+    // Count archived instants by action type
+    long expectedWriteCommits = archivedInstants.stream()
+        .filter(i -> i.getAction().equals(COMMIT_ACTION)
+            || i.getAction().equals(DELTA_COMMIT_ACTION)
+            || i.getAction().equals(REPLACE_COMMIT_ACTION))
+        .count();
+    long expectedCleanCommits = archivedInstants.stream()
+        .filter(i -> i.getAction().equals(CLEAN_ACTION))
+        .count();
+    long expectedRollbackCommits = archivedInstants.stream()
+        .filter(i -> i.getAction().equals(ROLLBACK_ACTION))
+        .count();
+    long expectedTotal = archivedInstants.size();
+
+    // Verify some instants were archived
+    assertTrue(archivedCount > 0, "Expected some instants to be archived");
+
+    // Verify metrics match actual archived counts
+    Map<String, Long> metrics = archiver.getMetrics();
+
+    assertEquals(expectedTotal, metrics.get(ArchivalMetrics.ARCHIVAL_NUM_ALL_COMMITS),
+        "Total archived commits metric should match");
+    assertEquals(expectedWriteCommits, metrics.get(ArchivalMetrics.ARCHIVAL_NUM_WRITE_COMMITS),
+        "Write commits metric should match");
+    assertEquals(expectedCleanCommits, metrics.get(ArchivalMetrics.ARCHIVAL_NUM_CLEAN_COMMITS),
+        "Clean commits metric should match");
+    assertEquals(expectedRollbackCommits, metrics.get(ArchivalMetrics.ARCHIVAL_NUM_ROLLBACK_COMMITS),
+        "Rollback commits metric should match");
+
+    // Verify the sum of individual action types equals total
+    assertEquals(expectedTotal, expectedWriteCommits + expectedCleanCommits + expectedRollbackCommits,
+        "Sum of action types should equal total archived");
+
+    // Verify archival status is success
+    assertEquals(1L, metrics.get(ArchivalMetrics.ARCHIVAL_STATUS), "Archival should succeed");
   }
 }
