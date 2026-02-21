@@ -176,6 +176,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
                                Option<EmbeddedTimelineService> timelineService,
                                SupportsUpgradeDowngrade upgradeDowngradeHelper) {
     super(context, writeConfig, timelineService);
+    config.setApplicationId(context.getApplicationId());
     this.index = createIndex(writeConfig);
     this.upgradeDowngradeHelper = upgradeDowngradeHelper;
     this.metrics.emitVersionMetrics();
@@ -190,6 +191,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
                         TransactionManager transactionManager,
                         TimeGenerator timeGenerator) {
     super(context, writeConfig, timelineService, transactionManager, timeGenerator);
+    config.setApplicationId(context.getApplicationId());
     this.index = createIndex(writeConfig);
     this.upgradeDowngradeHelper = upgradeDowngradeHelper;
     this.metrics.emitIndexTypeMetrics(config.getIndexType().ordinal());
