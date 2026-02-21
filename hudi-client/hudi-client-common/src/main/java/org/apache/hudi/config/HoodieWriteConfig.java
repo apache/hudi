@@ -1919,6 +1919,10 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getBooleanOrDefault(HoodieClusteringConfig.FILE_STITCHING_BINARY_COPY_SCHEMA_EVOLUTION_ENABLE);
   }
 
+  public boolean isClusteringPlanPartitionParallel() {
+    return getBoolean(HoodieClusteringConfig.PLAN_PARTITION_PARALLEL);
+  }
+
   public int getInlineClusterMaxCommits() {
     return getInt(HoodieClusteringConfig.INLINE_CLUSTERING_MAX_COMMITS);
   }

@@ -1033,6 +1033,21 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
         false, SqlQueryEqualityPreCommitValidator.class.getName(), COUNT_SQL_QUERY_FOR_VALIDATION, "");
   }
 
+  /**
+   * Tests clustering when {@code hoodie.clustering.plan.partition.parallel} is disabled (non-default).
+   * Ensures the code path that computes clustering groups on the driver serially (HoodieLocalEngineContext) is exercised.
+   */
+  @ParameterizedTest
+  @MethodSource("populateMetaFieldsParams")
+  public void testClusteringWithComputePlanPerPartitionParallelDisabled(boolean populateMetaFields) throws Exception {
+    initMetaClient(getPropertiesForKeyGen(populateMetaFields));
+    HoodieClusteringConfig clusteringConfig = createClusteringBuilder(true, 1)
+        .planPartitionParallel(false)
+        .build();
+    testInsertAndClustering(clusteringConfig, populateMetaFields, true,
+        false, SqlQueryEqualityPreCommitValidator.class.getName(), COUNT_SQL_QUERY_FOR_VALIDATION, "");
+  }
+
   @Test
   public void testAndValidateClusteringOutputFiles() throws IOException {
     testAndValidateClusteringOutputFiles(createBrokenClusteringClient(new HoodieException(CLUSTERING_FAILURE)), createClusteringBuilder(true, 2).build(), list2Rdd, rdd2List);
