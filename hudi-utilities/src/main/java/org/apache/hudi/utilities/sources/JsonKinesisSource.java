@@ -42,8 +42,10 @@ import software.amazon.awssdk.services.kinesis.model.Record;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import static org.apache.hudi.common.util.ConfigUtils.getBooleanWithAltKeys;
 import static org.apache.hudi.common.util.ConfigUtils.getIntWithAltKeys;
@@ -65,12 +67,25 @@ public class JsonKinesisSource extends KinesisSource<JavaRDD<String>> {
     private final List<String> records;
     private final String shardId;
     private final Option<String> lastSequenceNumber;
+    private final boolean reachedEndOfShard;
+  }
+
+  /** Metadata-only summary for checkpoint; avoids bringing records to driver. */
+  @AllArgsConstructor
+  @Getter
+  private static class ShardFetchSummary implements Serializable {
+    private final String shardId;
+    private final Option<String> lastSequenceNumber;
+    private final int recordCount;
+    private final boolean reachedEndOfShard;
   }
 
   /** Persisted fetch RDD - must be unpersisted in releaseResources to avoid memory leak. */
   private transient org.apache.spark.api.java.JavaRDD<ShardFetchResult> persistedFetchRdd;
   /** Record count from fetch, avoids redundant batch.count() Spark job. */
   private long lastRecordCount;
+  /** Shard IDs where the executor observed nextShardIterator==null (end-of-shard reached). */
+  private Set<String> shardsReachedEnd;
 
   public JsonKinesisSource(TypedProperties properties, JavaSparkContext sparkContext, SparkSession sparkSession,
                            SchemaProvider schemaProvider, HoodieIngestionMetrics metrics) {
@@ -100,6 +115,8 @@ public class JsonKinesisSource extends KinesisSource<JavaRDD<String>> {
         getLongWithAltKeys(props, KinesisSourceConfig.KINESIS_GET_RECORDS_INTERVAL_MS),
         shardRanges.length > 0 ? Math.max(1, getLongWithAltKeys(props, KinesisSourceConfig.MAX_EVENTS_FROM_KINESIS_SOURCE) / shardRanges.length) : Long.MAX_VALUE);
 
+    // Assume: number of closed shards is small.
+    // TODO: filter closed shards in which all records have been consumed.
     JavaRDD<ShardFetchResult> fetchRdd = sparkContext.parallelize(
         java.util.Arrays.asList(shardRanges), shardRanges.length)
         .mapPartitions(shardRangeIt -> {
@@ -120,7 +137,7 @@ public class JsonKinesisSource extends KinesisSource<JavaRDD<String>> {
                 }
               }
               results.add(new ShardFetchResult(recordStrings, range.getShardId(),
-                  readResult.getLastSequenceNumber()));
+                  readResult.getLastSequenceNumber(), readResult.isReachedEndOfShard()));
             }
           }
           return results.iterator();
@@ -141,10 +158,20 @@ public class JsonKinesisSource extends KinesisSource<JavaRDD<String>> {
       recordRdd = recordRdd.repartition(targetPartitions);
     }
 
-    // Collect fetch results to build checkpoint - this triggers execution
-    List<ShardFetchResult> fetchResults = fetchRdd.collect();
-    lastCheckpointData = buildCheckpointFromFetchResults(fetchResults);
-    lastRecordCount = fetchResults.stream().mapToLong(r -> r.getRecords().size()).sum();
+    // Collect only metadata (shardId, lastSeq, count, reachedEnd) to driver - not the records (avoids OOM)
+    List<ShardFetchSummary> summaries = fetchRdd
+        .map(r -> new ShardFetchSummary(r.getShardId(), r.getLastSequenceNumber(), r.getRecords().size(),
+            r.isReachedEndOfShard()))
+        .collect();
+    lastCheckpointData = buildCheckpointFromSummaries(summaries);
+    Set<String> reached = new HashSet<>();
+    for (ShardFetchSummary s : summaries) {
+      if (s.isReachedEndOfShard()) {
+        reached.add(s.getShardId());
+      }
+    }
+    shardsReachedEnd = reached;
+    lastRecordCount = summaries.stream().mapToLong(ShardFetchSummary::getRecordCount).sum();
 
     return recordRdd;
   }
@@ -191,11 +218,11 @@ public class JsonKinesisSource extends KinesisSource<JavaRDD<String>> {
     return dataStr;
   }
 
-  private Map<String, String> buildCheckpointFromFetchResults(List<ShardFetchResult> results) {
+  private Map<String, String> buildCheckpointFromSummaries(List<ShardFetchSummary> summaries) {
     Map<String, String> checkpoint = new HashMap<>();
-    for (ShardFetchResult r : results) {
-      if (r.getLastSequenceNumber().isPresent()) {
-        checkpoint.put(r.getShardId(), r.getLastSequenceNumber().get());
+    for (ShardFetchSummary s : summaries) {
+      if (s.getLastSequenceNumber().isPresent()) {
+        checkpoint.put(s.getShardId(), s.getLastSequenceNumber().get());
       }
     }
     return checkpoint;
@@ -209,17 +236,26 @@ public class JsonKinesisSource extends KinesisSource<JavaRDD<String>> {
     // Build checkpoint: for each shard, use lastSeq from read (or startSeq if no records) and endSeq for closed shards
     Map<String, String> fullCheckpoint = new HashMap<>();
     for (KinesisOffsetGen.KinesisShardRange range : shardRanges) {
+      // CASE 1: non-first read, open shard.
       String lastSeq = lastCheckpointData != null && lastCheckpointData.containsKey(range.getShardId())
           ? lastCheckpointData.get(range.getShardId())
           : range.getStartingSequenceNumber().orElse("");
       String endSeq = range.getEndingSequenceNumber().orElse(null);
+      // for test only
       // LocalStack returns Long.MAX_VALUE for closed shards; use lastSeq as endSeq so we can detect
       // "fully consumed" when the parent shard expires (lastSeq >= endSeq).
       if (LOCALSTACK_END_SEQ_SENTINEL.equals(endSeq) && lastSeq != null && !lastSeq.isEmpty()) {
         endSeq = lastSeq;
       }
-      // Closed shard with 0 records on first read: use endSeq as lastSeq so we checkpoint "fully consumed"
-      // (lastSeq >= endSeq when shard expires).
+      // CASE 2: The executor reached end-of-shard (nextShardIterator was null) but listShards had not yet
+      // reflected the shard close - a race between resharding and our listShards call. Record
+      // endSeq=lastSeq so that expiry detection works correctly when the shard later disappears.
+      if (endSeq == null && shardsReachedEnd != null && shardsReachedEnd.contains(range.getShardId())
+          && lastSeq != null && !lastSeq.isEmpty()) {
+        endSeq = lastSeq;
+      }
+      // CASE 3: Closed shard with 0 records on first read: use endSeq as lastSeq so checkpoint
+      // "fully consumed" (lastSeq >= endSeq when shard expires).
       if (lastSeq != null && lastSeq.isEmpty() && endSeq != null && !endSeq.isEmpty()) {
         lastSeq = endSeq;
       }
