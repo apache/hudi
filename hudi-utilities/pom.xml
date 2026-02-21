@@ -525,6 +525,11 @@
       <artifactId>kafka</artifactId>
       <scope>test</scope>
     </dependency>
+    <dependency>
+      <groupId>org.testcontainers</groupId>
+      <artifactId>localstack</artifactId>
+      <scope>test</scope>
+    </dependency>
 
     <!-- AWS Services -->
     <!-- https://mvnrepository.com/artifact/software.amazon.awssdk/aws-java-sdk-sqs -->
@@ -532,6 +537,24 @@
       <groupId>software.amazon.awssdk</groupId>
       <artifactId>sqs</artifactId>
       <version>${aws.sdk.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>software.amazon.awssdk</groupId>
+      <artifactId>kinesis</artifactId>
+      <version>${aws.sdk.version}</version>
+    </dependency>
+    <!-- KPL de-aggregation: extracts user records from Kinesis Producer Library aggregated records -->
+    <dependency>
+      <groupId>com.amazonaws</groupId>
+      <artifactId>amazon-kinesis-deaggregator</artifactId>
+      <version>1.0.3</version>
+    </dependency>
+    <!-- KPL aggregation: for creating aggregated records in tests -->
+    <dependency>
+      <groupId>com.amazonaws</groupId>
+      <artifactId>amazon-kinesis-aggregator</artifactId>
+      <version>1.0.3</version>
+      <scope>test</scope>
     </dependency>
 
     <!-- Hive - Test -->

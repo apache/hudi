@@ -152,6 +152,9 @@
                   <include>com.101tec:zkclient</include>
                   <include>org.apache.kafka:kafka-clients</include>
 
+                  <!-- AWS Kinesis SDK for JsonKinesisSource -->
+                  <include>software.amazon.awssdk:kinesis</include>
+
                   <include>org.apache.hive:hive-common</include>
                   <include>org.apache.hive:hive-service</include>
                   <include>org.apache.hive:hive-service-rpc</include>
