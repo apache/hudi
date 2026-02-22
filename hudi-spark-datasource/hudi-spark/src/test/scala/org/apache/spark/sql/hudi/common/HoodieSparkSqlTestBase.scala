@@ -59,7 +59,7 @@ class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
   org.apache.log4j.Logger.getRootLogger.setLevel(org.apache.log4j.Level.WARN)
   private val LOG = LoggerFactory.getLogger(getClass)
 
-  private lazy val sparkWareHouse = {
+  protected lazy val sparkWareHouse = {
     val dir = Utils.createTempDir()
     Utils.deleteRecursively(dir)
     dir
