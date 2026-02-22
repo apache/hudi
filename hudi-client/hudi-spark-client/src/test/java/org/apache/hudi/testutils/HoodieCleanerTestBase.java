@@ -155,24 +155,27 @@ public class HoodieCleanerTestBase extends HoodieClientTestBase {
     }
 
     Map<String, HoodieCleanStat> cleanStatMap = cleanMetadata1.getPartitionMetadata().values().stream()
-        .map(x -> new HoodieCleanStat.Builder().withPartitionPath(x.getPartitionPath())
-            .withFailedDeletes(x.getFailedDeleteFiles()).withSuccessfulDeletes(x.getSuccessDeleteFiles())
-            .withPolicy(HoodieCleaningPolicy.valueOf(x.getPolicy())).withDeletePathPattern(x.getDeletePathPatterns())
-            .withEarliestCommitRetained(Option.ofNullable(cleanMetadata1.getEarliestCommitToRetain() != null
-                ? INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.COMMIT_ACTION, "000")
-                : null))
+        .map(x -> HoodieCleanStat.builder()
+            .withPolicy(HoodieCleaningPolicy.valueOf(x.getPolicy()))
+            .withPartitionPath(x.getPartitionPath())
+            .withDeletePathPatterns(x.getDeletePathPatterns())
+            .withSuccessDeleteFiles(x.getSuccessDeleteFiles())
+            .withFailedDeleteFiles(x.getFailedDeleteFiles())
+            .withEarliestCommitToRetain(cleanMetadata1.getEarliestCommitToRetain() != null ? "000" : "")
             .build())
         .collect(Collectors.toMap(HoodieCleanStat::getPartitionPath, x -> x));
     cleanMetadata1.getBootstrapPartitionMetadata().values().forEach(x -> {
-      HoodieCleanStat s = cleanStatMap.get(x.getPartitionPath());
-      cleanStatMap.put(x.getPartitionPath(), new HoodieCleanStat.Builder().withPartitionPath(x.getPartitionPath())
-          .withFailedDeletes(s.getFailedDeleteFiles()).withSuccessfulDeletes(s.getSuccessDeleteFiles())
-          .withPolicy(HoodieCleaningPolicy.valueOf(x.getPolicy())).withDeletePathPattern(s.getDeletePathPatterns())
-          .withEarliestCommitRetained(Option.ofNullable(s.getEarliestCommitToRetain())
-              .map(y -> INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.COMMIT_ACTION, y)))
-          .withSuccessfulDeleteBootstrapBaseFiles(x.getSuccessDeleteFiles())
+      cleanStatMap.compute(x.getPartitionPath(), (k, s) -> HoodieCleanStat.builder()
+          .withPolicy(HoodieCleaningPolicy.valueOf(x.getPolicy()))
+          .withPartitionPath(x.getPartitionPath())
+          .withDeletePathPatterns(s.getDeletePathPatterns())
+          .withSuccessDeleteFiles(s.getSuccessDeleteFiles())
+          .withFailedDeleteFiles(s.getFailedDeleteFiles())
+          .withEarliestCommitToRetain(s.getEarliestCommitToRetain() != null ? s.getEarliestCommitToRetain() : "")
+          .withDeleteBootstrapBasePathPatterns(x.getDeletePathPatterns())
+          .withSuccessDeleteBootstrapBaseFiles(x.getSuccessDeleteFiles())
           .withFailedDeleteBootstrapBaseFiles(x.getFailedDeleteFiles())
-          .withDeleteBootstrapBasePathPatterns(x.getDeletePathPatterns()).build());
+          .build());
     });
     return new ArrayList<>(cleanStatMap.values());
   }

@@ -168,20 +168,18 @@ public class CleanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I, K,
           ? partitionCleanStatsMap.get(partitionPath)
           : new PartitionCleanStat(partitionPath);
       HoodieActionInstant actionInstant = cleanerPlan.getEarliestInstantToRetain();
-      return HoodieCleanStat.newBuilder().withPolicy(config.getCleanerPolicy()).withPartitionPath(partitionPath)
-          .withEarliestCommitRetained(Option.ofNullable(
-              actionInstant != null
-                  ? instantGenerator.createNewInstant(HoodieInstant.State.valueOf(actionInstant.getState()),
-                  actionInstant.getAction(), actionInstant.getTimestamp())
-                  : null))
+      return HoodieCleanStat.builder()
+          .withPolicy(config.getCleanerPolicy())
+          .withPartitionPath(partitionPath)
+          .withEarliestCommitToRetain(actionInstant != null ? actionInstant.getTimestamp() : "")
           .withLastCompletedCommitTimestamp(cleanerPlan.getLastCompletedCommitTimestamp())
-          .withDeletePathPattern(partitionCleanStat.deletePathPatterns())
-          .withSuccessfulDeletes(partitionCleanStat.successDeleteFiles())
-          .withFailedDeletes(partitionCleanStat.failedDeleteFiles())
+          .withDeletePathPatterns(partitionCleanStat.deletePathPatterns())
+          .withSuccessDeleteFiles(partitionCleanStat.successDeleteFiles())
+          .withFailedDeleteFiles(partitionCleanStat.failedDeleteFiles())
           .withDeleteBootstrapBasePathPatterns(partitionCleanStat.getDeleteBootstrapBasePathPatterns())
-          .withSuccessfulDeleteBootstrapBaseFiles(partitionCleanStat.getSuccessfulDeleteBootstrapBaseFiles())
+          .withSuccessDeleteBootstrapBaseFiles(partitionCleanStat.getSuccessfulDeleteBootstrapBaseFiles())
           .withFailedDeleteBootstrapBaseFiles(partitionCleanStat.getFailedDeleteBootstrapBaseFiles())
-          .isPartitionDeleted(partitionsToBeDeleted.contains(partitionPath))
+          .withIsPartitionDeleted(partitionsToBeDeleted.contains(partitionPath))
           .build();
     }).collect(Collectors.toList());
   }
