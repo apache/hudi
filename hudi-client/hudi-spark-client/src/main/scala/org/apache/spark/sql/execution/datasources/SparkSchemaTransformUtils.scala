@@ -19,10 +19,11 @@
 
 package org.apache.spark.sql.execution.datasources
 
+import org.apache.hudi.HoodieSparkUtils
 import org.apache.spark.sql.HoodieSchemaUtils
 import org.apache.spark.sql.catalyst.expressions.codegen.GenerateUnsafeProjection
 import org.apache.spark.sql.catalyst.expressions.{ArrayTransform, Attribute, AttributeReference, Cast, CreateNamedStruct, CreateStruct, Expression, GetStructField, LambdaFunction, Literal, MapEntries, MapFromEntries, NamedLambdaVariable, UnsafeProjection}
-import org.apache.spark.sql.types.{ArrayType, DataType, DateType, DecimalType, DoubleType, FloatType, IntegerType, LongType, MapType, StringType, StructField, StructType, TimestampNTZType}
+import org.apache.spark.sql.types._
 
 /**
  * Format-agnostic utilities for Spark schema transformations including NULL padding
@@ -353,7 +354,7 @@ object SparkSchemaTransformUtils {
       val requiredType = f.dataType
       if (fileStructMap.contains(f.name) && !isDataTypeEqual(requiredType, fileStructMap(f.name))) {
         val readerType = addMissingFields(requiredType, fileStructMap(f.name))
-        implicitTypeChangeInfo.put(new Integer(requiredSchema.fieldIndex(f.name)), org.apache.hudi.common.util.collection.Pair.of(requiredType, readerType))
+        implicitTypeChangeInfo.put(Integer.valueOf(requiredSchema.fieldIndex(f.name)), org.apache.hudi.common.util.collection.Pair.of(requiredType, readerType))
         StructField(f.name, readerType, f.nullable)
       } else {
         f
@@ -370,35 +371,43 @@ object SparkSchemaTransformUtils {
    * @param fileType Type from file schema
    * @return true if types are compatible for reading
    */
-  private def isDataTypeEqual(requiredType: DataType, fileType: DataType): Boolean = (requiredType, fileType) match {
-    case (requiredType, fileType) if requiredType == fileType => true
+  def isDataTypeEqual(requiredType: DataType, fileType: DataType): Boolean = {
+    // Check if adapter can handle this comparison (e.g., VariantType in Spark 4.0+)
+    val adapterResult = HoodieSparkUtils.sparkAdapter.isDataTypeEqualForParquet(requiredType, fileType)
+    if (adapterResult.isDefined) {
+      adapterResult.get
+    } else {
+      (requiredType, fileType) match {
+        case (requiredType, fileType) if requiredType == fileType => true
 
-    // prevent illegal cast - TimestampNTZ can be stored as Long in files
-    case (TimestampNTZType, LongType) => true
+        // prevent illegal cast
+        case (TimestampNTZType, LongType) => true
 
-    case (ArrayType(rt, _), ArrayType(ft, _)) =>
-      // Do not care about nullability as schema evolution require fields to be nullable
-      isDataTypeEqual(rt, ft)
+        case (ArrayType(rt, _), ArrayType(ft, _)) =>
+          // Do not care about nullability as schema evolution require fields to be nullable
+          isDataTypeEqual(rt, ft)
 
-    case (MapType(requiredKey, requiredValue, _), MapType(fileKey, fileValue, _)) =>
-      // Likewise, do not care about nullability as schema evolution require fields to be nullable
-      isDataTypeEqual(requiredKey, fileKey) && isDataTypeEqual(requiredValue, fileValue)
+        case (MapType(requiredKey, requiredValue, _), MapType(fileKey, fileValue, _)) =>
+          // Likewise, do not care about nullability as schema evolution require fields to be nullable
+          isDataTypeEqual(requiredKey, fileKey) && isDataTypeEqual(requiredValue, fileValue)
 
-    case (StructType(requiredFields), StructType(fileFields)) =>
-      // Find fields that are in requiredFields and fileFields as they might not be the same during add column + change column operations
-      val commonFieldNames = requiredFields.map(_.name) intersect fileFields.map(_.name)
+        case (StructType(requiredFields), StructType(fileFields)) =>
+          // Find fields that are in requiredFields and fileFields as they might not be the same during add column + change column operations
+          val commonFieldNames = requiredFields.map(_.name) intersect fileFields.map(_.name)
 
-      // Need to match by name instead of StructField as name will stay the same whilst type may change
-      val fileFilteredFields = fileFields.filter(f => commonFieldNames.contains(f.name)).sortWith(_.name < _.name)
-      val requiredFilteredFields = requiredFields.filter(f => commonFieldNames.contains(f.name)).sortWith(_.name < _.name)
+          // Need to match by name instead of StructField as name will stay the same whilst type may change
+          val fileFilteredFields = fileFields.filter(f => commonFieldNames.contains(f.name)).sortWith(_.name < _.name)
+          val requiredFilteredFields = requiredFields.filter(f => commonFieldNames.contains(f.name)).sortWith(_.name < _.name)
 
-      // Sorting ensures that the same field names are being compared for type differences
-      requiredFilteredFields.zip(fileFilteredFields).forall {
-        case (requiredField, fileFilteredField) =>
-          isDataTypeEqual(requiredField.dataType, fileFilteredField.dataType)
+          // Sorting ensures that the same field names are being compared for type differences
+          requiredFilteredFields.zip(fileFilteredFields).forall {
+            case (requiredField, fileFilteredField) =>
+              isDataTypeEqual(requiredField.dataType, fileFilteredField.dataType)
+          }
+
+        case _ => false
       }
-
-    case _ => false
+    }
   }
 
   /**

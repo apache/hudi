@@ -2054,9 +2054,13 @@ public class HoodieTableMetadataUtil {
   private static boolean isColumnTypeSupportedV2(HoodieSchema schema) {
     HoodieSchemaType type = schema.getType();
     // Check for precision and scale if the schema has a logical decimal type.
+    // VARIANT (unshredded) type is excluded because it stores semi-structured data as opaque binary blobs,
+    // making min/max statistics meaningless
+    // TODO: For shredded, we are able to store colstats, explore that: #17988
     return type != HoodieSchemaType.RECORD && type != HoodieSchemaType.MAP
         && type != HoodieSchemaType.ARRAY && type != HoodieSchemaType.ENUM
-        && type != HoodieSchemaType.BLOB;
+        && type != HoodieSchemaType.BLOB
+        && type != HoodieSchemaType.VARIANT;
   }
 
   public static Set<String> getInflightMetadataPartitions(HoodieTableConfig tableConfig) {

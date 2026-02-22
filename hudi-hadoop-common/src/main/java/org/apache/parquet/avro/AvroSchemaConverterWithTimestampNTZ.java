@@ -250,6 +250,10 @@ public class AvroSchemaConverterWithTimestampNTZ extends HoodieAvroParquetSchema
         break;
       case UNION:
         return convertUnion(fieldName, schema, repetition, schemaPath);
+      case VARIANT:
+        // Variant is represented as a record with value and metadata binary fields
+        // Convert the variant schema's fields to Parquet types
+        return new GroupType(repetition, fieldName, convertFields(schema.getFields(), schemaPath));
       default:
         throw new UnsupportedOperationException("Cannot convert Avro type " + type);
     }

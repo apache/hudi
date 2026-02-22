@@ -563,7 +563,8 @@ public class HoodieSchema implements Serializable {
         null
     );
 
-    List<HoodieSchemaField> fields = Arrays.asList(metadataField, valueField);
+    // IMPORTANT: Field order must match VariantVal(value, metadata) constructor
+    List<HoodieSchemaField> fields = Arrays.asList(valueField, metadataField);
 
     Schema recordSchema = Schema.createRecord(variantName, doc, namespace, false);
     List<Schema.Field> avroFields = fields.stream()
@@ -603,20 +604,21 @@ public class HoodieSchema implements Serializable {
 
     List<HoodieSchemaField> fields = new ArrayList<>();
 
-    // Create metadata field (required bytes)
-    fields.add(HoodieSchemaField.of(
-        Variant.VARIANT_METADATA_FIELD,
-        HoodieSchema.create(HoodieSchemaType.BYTES),
-        "Variant metadata component",
-        null
-    ));
-
-    // Create value field (nullable bytes for shredded)
+    // IMPORTANT: Field order must match VariantVal(value, metadata) constructor
+    // Create value field first (nullable bytes for shredded)
     fields.add(HoodieSchemaField.of(
         Variant.VARIANT_VALUE_FIELD,
         HoodieSchema.createNullable(HoodieSchemaType.BYTES),
         "Variant value component",
         NULL_VALUE
+    ));
+
+    // Create metadata field second (required bytes)
+    fields.add(HoodieSchemaField.of(
+        Variant.VARIANT_METADATA_FIELD,
+        HoodieSchema.create(HoodieSchemaType.BYTES),
+        "Variant metadata component",
+        null
     ));
 
     // Add typed_value field if provided
@@ -643,6 +645,112 @@ public class HoodieSchema implements Serializable {
 
   public static HoodieSchema.Blob createBlob() {
     return new HoodieSchema.Blob(Blob.DEFAULT_NAME);
+  }
+
+  /**
+   * Creates a shredded field struct per the Parquet variant shredding spec. The returned struct contains two nullable fields:
+   * <ul>
+   *   <li>{@code value}: nullable bytes (fallback binary representation)</li>
+   *   <li>{@code typed_value}: nullable type (the typed representation)</li>
+   * </ul>
+   *
+   * <p>Example output structure:
+   * <pre>
+   *   fieldName: struct
+   *     |-- value: binary (nullable)
+   *     |-- typed_value: &lt;fieldType&gt; (nullable)
+   * </pre></p>
+   *
+   * @param fieldName the name for the record (used as the Avro record name)
+   * @param fieldType the schema for the typed_value within this field
+   * @return a new HoodieSchema representing the shredded field struct
+   */
+  public static HoodieSchema createShreddedFieldStruct(String fieldName, HoodieSchema fieldType) {
+    ValidationUtils.checkArgument(fieldName != null && !fieldName.isEmpty(), "Field name cannot be null or empty");
+    ValidationUtils.checkArgument(fieldType != null, "Field type cannot be null");
+    List<HoodieSchemaField> fields = Arrays.asList(
+        HoodieSchemaField.of(
+            Variant.VARIANT_VALUE_FIELD,
+            HoodieSchema.createNullable(HoodieSchemaType.BYTES),
+            "Fallback binary representation",
+            NULL_VALUE
+        ),
+        HoodieSchemaField.of(
+            Variant.VARIANT_TYPED_VALUE_FIELD,
+            HoodieSchema.createNullable(fieldType),
+            "Typed value representation",
+            NULL_VALUE
+        )
+    );
+    return HoodieSchema.createRecord(fieldName, null, null, fields);
+  }
+
+  /**
+   * Creates a shredded Variant schema for an object type following the Parquet variant shredding spec. Each field in shreddedFields is wrapped in a struct with
+   * {@code {value: nullable binary, typed_value: nullable type}}.
+   *
+   * <p>Example usage:
+   * <pre>{@code
+   * Map<String, HoodieSchema> fields = new LinkedHashMap<>();
+   * fields.put("a", HoodieSchema.create(HoodieSchemaType.INT));
+   * fields.put("b", HoodieSchema.create(HoodieSchemaType.STRING));
+   * fields.put("c", HoodieSchema.createDecimal(15, 1));
+   * HoodieSchema.Variant variant = HoodieSchema.createVariantShreddedObject(fields);
+   * }</pre></p>
+   *
+   * <p>Produces the following structure:
+   * <pre>
+   * variant
+   *  |-- value: binary (nullable)
+   *  |-- metadata: binary
+   *  |-- typed_value: struct
+   *  |    |-- a: struct (nullable)
+   *  |    |    |-- value: binary (nullable)
+   *  |    |    |-- typed_value: integer (nullable)
+   *  |    |-- b: struct (nullable)
+   *  |    |    |-- value: binary (nullable)
+   *  |    |    |-- typed_value: string (nullable)
+   *  |    |-- c: struct (nullable)
+   *  |    |    |-- value: binary (nullable)
+   *  |    |    |-- typed_value: decimal(15,1) (nullable)
+   * </pre></p>
+   *
+   * @param shreddedFields Map of field names to their typed value schemas. Use LinkedHashMap for ordered fields.
+   * @return a new HoodieSchema.Variant with properly nested typed_value
+   */
+  public static HoodieSchema.Variant createVariantShreddedObject(Map<String, HoodieSchema> shreddedFields) {
+    return createVariantShreddedObject(null, null, null, shreddedFields);
+  }
+
+  /**
+   * Creates a shredded Variant schema for an object type with custom name, namespace, and documentation.
+   *
+   * @param name           the variant record name (can be null, defaults to "variant")
+   * @param namespace      the namespace (can be null)
+   * @param doc            the documentation (can be null)
+   * @param shreddedFields Map of field names to their typed value schemas. Use LinkedHashMap for ordered fields.
+   * @return a new HoodieSchema.Variant with properly nested typed_value
+   */
+  public static HoodieSchema.Variant createVariantShreddedObject(
+      String name, String namespace, String doc, Map<String, HoodieSchema> shreddedFields) {
+    ValidationUtils.checkArgument(shreddedFields != null && !shreddedFields.isEmpty(),
+        "Shredded fields cannot be null or empty");
+
+    // Build typed_value fields, each wrapped in the spec-compliant {value, typed_value} struct
+    List<HoodieSchemaField> typedValueFields = new ArrayList<>();
+    for (Map.Entry<String, HoodieSchema> entry : shreddedFields.entrySet()) {
+      HoodieSchema fieldStruct = createShreddedFieldStruct(entry.getKey(), entry.getValue());
+      typedValueFields.add(HoodieSchemaField.of(
+          entry.getKey(),
+          HoodieSchema.createNullable(fieldStruct),
+          null,
+          NULL_VALUE
+      ));
+    }
+
+    HoodieSchema typedValueSchema = HoodieSchema.createRecord(
+        Variant.VARIANT_TYPED_VALUE_FIELD, null, namespace, typedValueFields);
+    return createVariantShredded(name, namespace, doc, typedValueSchema);
   }
 
   /**
@@ -1907,6 +2015,60 @@ public class HoodieSchema implements Serializable {
      */
     public Option<HoodieSchema> getTypedValueField() {
       return typedValueSchema;
+    }
+
+    /**
+     * Returns the typed_value schema with plain (unwrapped) types suitable for Spark shredding utilities, i.e. essentially removing the `value` field
+     *
+     * <p>If the typed_value follows the variant shredding spec (each field is a struct with
+     * {@code {value: bytes, typed_value: <type>}}), this extracts only the inner typed_value types and returns a record schema containing just those plain types.</p>
+     *
+     * <p>If the typed_value is already in plain form (created with {@code createVariantShredded}),
+     * returns the schema as-is.</p>
+     *
+     * @return Option containing the plain typed_value schema, or Option.empty() if not present
+     */
+    public Option<HoodieSchema> getPlainTypedValueSchema() {
+      if (!typedValueSchema.isPresent()) {
+        return Option.empty();
+      }
+      HoodieSchema tvSchema = typedValueSchema.get();
+      if (tvSchema.getType() != HoodieSchemaType.RECORD) {
+        return typedValueSchema;
+      }
+
+      List<HoodieSchemaField> fields = tvSchema.getFields();
+      // Check if all fields follow the nested shredding pattern: each field is a record with {value, typed_value}
+      boolean isNestedForm = !fields.isEmpty() && fields.stream().allMatch(field -> {
+        HoodieSchema fieldSchema = field.schema();
+        if (fieldSchema.isNullable()) {
+          fieldSchema = fieldSchema.getNonNullType();
+        }
+        if (fieldSchema.getType() != HoodieSchemaType.RECORD) {
+          return false;
+        }
+        Option<HoodieSchemaField> valueSubField = fieldSchema.getField(VARIANT_VALUE_FIELD);
+        Option<HoodieSchemaField> typedValueSubField = fieldSchema.getField(VARIANT_TYPED_VALUE_FIELD);
+        return valueSubField.isPresent() && typedValueSubField.isPresent()
+            && fieldSchema.getFields().size() == 2;
+      });
+
+      if (!isNestedForm) {
+        return typedValueSchema;
+      }
+
+      // Extract the plain types from the nested form
+      List<HoodieSchemaField> plainFields = new ArrayList<>();
+      for (HoodieSchemaField field : fields) {
+        HoodieSchema fieldSchema = field.schema();
+        if (fieldSchema.isNullable()) {
+          fieldSchema = fieldSchema.getNonNullType();
+        }
+        HoodieSchema innerTypedValue = fieldSchema.getField(VARIANT_TYPED_VALUE_FIELD).get().schema();
+        plainFields.add(HoodieSchemaField.of(field.name(), innerTypedValue));
+      }
+      return Option.of(HoodieSchema.createRecord(
+          tvSchema.getAvroSchema().getName() + "_plain", null, null, plainFields));
     }
 
     @Override

@@ -159,7 +159,7 @@ public enum HoodieSchemaType {
         return DATE;
       } else if (logicalType == LogicalTypes.uuid()) {
         return UUID;
-      } else if (logicalType instanceof VariantLogicalType) {
+      } else if (logicalType == VariantLogicalType.variant()) {
         return VARIANT;
       } else if (logicalType == HoodieSchema.BlobLogicalType.blob()) {
         return BLOB;
