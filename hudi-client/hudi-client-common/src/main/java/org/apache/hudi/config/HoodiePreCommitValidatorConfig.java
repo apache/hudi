@@ -64,6 +64,25 @@ public class HoodiePreCommitValidatorConfig extends HoodieConfig {
           + "Expected result is included as part of query separated by '#'. Example query: 'query1#result1:query2#result2'"
           + "Note \\<TABLE_NAME\\> variable is expected to be present in query.");
 
+  public static final ConfigProperty<String> STREAMING_OFFSET_TOLERANCE_PERCENTAGE = ConfigProperty
+      .key("hoodie.precommit.validators.streaming.offset.tolerance.percentage")
+      .defaultValue("0.0")
+      .markAdvanced()
+      .withDocumentation("Tolerance percentage for streaming offset validation. "
+          + "The validator compares the offset difference (expected records from source) "
+          + "with actual records written. If the deviation exceeds this percentage, "
+          + "the commit is rejected (or warned, depending on warn-only mode). "
+          + "For upsert workloads with deduplication, set a higher tolerance. "
+          + "Default is 0.0 (strict mode, exact match required).");
+
+  public static final ConfigProperty<String> WARN_ONLY_MODE = ConfigProperty
+      .key("hoodie.precommit.validators.warn.only")
+      .defaultValue("false")
+      .markAdvanced()
+      .withDocumentation("When enabled, validation failures emit warnings instead of "
+          + "blocking the commit. Useful for monitoring data quality without "
+          + "impacting write availability. Default is false (validation failures block commits).");
+
   /**
    * Spark SQL queries to run on table before committing new data to validate state before and after commit.
    * Multiple queries separated by ';' delimiter are supported.
