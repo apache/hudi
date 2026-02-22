@@ -19,12 +19,14 @@
 package org.apache.hudi.table.functional;
 
 import org.apache.hudi.avro.model.HoodieFileStatus;
+import org.apache.hudi.client.WriteClientTestUtils;
 import org.apache.hudi.common.HoodieCleanStat;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.model.BootstrapFileMapping;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
+import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -38,6 +40,7 @@ import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieCleanConfig;
+import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.testutils.HoodieCleanerTestBase;
 
@@ -630,6 +633,189 @@ public class TestCleanPlanExecutor extends HoodieCleanerTestBase {
         assertTrue(testTable.baseFileExists(p2, commitInstant, file1P2), "p2 retained");
         assertTrue(testTable.baseFileExists(p2, commitInstant, file2P2), "p2 retained");
       }
+    } finally {
+      testTable.close();
+    }
+  }
+
+  /**
+   * Test canCleanBeSkipped returns true for MOR table when conditions are met.
+   * Verifies the optimization that skips clean when:
+   * - Table type is MOR
+   * - Last compaction completion time < Last clean requested time
+   * - No non-delta commits exist between compaction and clean
+   */
+  @Test
+  public void testCanCleanBeSkippedForMORTable() throws Exception {
+    HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath)
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder()
+            .withMetadataIndexColumnStats(false)
+            .build())
+        .withCleanConfig(HoodieCleanConfig.newBuilder()
+            .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS)
+            .retainFileVersions(1)
+            .build())
+        .withCompactionConfig(HoodieCompactionConfig.newBuilder()
+            .withInlineCompaction(false)
+            .build())
+        .build();
+
+    HoodieTableMetaClient metaClient = HoodieTestUtils.init(storageConf, basePath, HoodieTableType.MERGE_ON_READ);
+    HoodieTestTable testTable = HoodieMetadataTestTable.of(metaClient, getMetadataWriter(config), Option.of(context));
+    try {
+      String p0 = "2020/01/01";
+
+      // Create first delta commit
+      String newInstantTime = WriteClientTestUtils.createNewInstantTime();
+      String file1P0 = testTable.addDeltaCommit(newInstantTime).getFileIdsWithBaseFilesInPartitions(p0).get(p0);
+      Map<String, List<String>> part1ToFileId = Collections.unmodifiableMap(new HashMap<String, List<String>>() {
+        {
+          put(p0, CollectionUtils.createImmutableList(file1P0));
+        }
+      });
+      testTable = tearDownTestTableAndReinit(testTable, config);
+
+      // Create second delta commit
+      newInstantTime = WriteClientTestUtils.createNewInstantTime();
+      testTable.addDeltaCommit(newInstantTime)
+          .withBaseFilesInPartition(p0, file1P0).getLeft()
+          .withLogFile(p0, file1P0, 1);
+      testTable = tearDownTestTableAndReinit(testTable, config);
+
+      // Create a compaction commit (COMMIT action for MOR)
+      newInstantTime = WriteClientTestUtils.createNewInstantTime();
+      HoodieCommitMetadata compactionMetadata = generateCommitMetadata(newInstantTime, part1ToFileId);
+      testTable.addCommit(newInstantTime, Option.of(compactionMetadata));
+      testTable = tearDownTestTableAndReinit(testTable, config);
+
+      // Create another delta commit
+      newInstantTime = WriteClientTestUtils.createNewInstantTime();
+      testTable.addDeltaCommit(newInstantTime)
+          .withBaseFilesInPartition(p0, file1P0).getLeft()
+          .withLogFile(p0, file1P0, 2);
+      testTable = tearDownTestTableAndReinit(testTable, config);
+
+      // Create a clean
+      newInstantTime = WriteClientTestUtils.createNewInstantTime();
+      testTable.addClean(newInstantTime);
+      testTable = tearDownTestTableAndReinit(testTable, config);
+
+      // Create another delta commit
+      newInstantTime = WriteClientTestUtils.createNewInstantTime();
+      testTable.addDeltaCommit(newInstantTime)
+          .withBaseFilesInPartition(p0, file1P0).getLeft()
+          .withLogFile(p0, file1P0, 3);
+      testTable = tearDownTestTableAndReinit(testTable, config);
+
+      // Reload metaClient to get latest timeline
+      metaClient = HoodieTableMetaClient.reload(metaClient);
+
+      // Create CleanPlanner and use reflection to invoke canCleanBeSkipped
+      org.apache.hudi.table.HoodieSparkTable sparkTable = org.apache.hudi.table.HoodieSparkTable.create(config, context, metaClient);
+      org.apache.hudi.table.action.clean.CleanPlanner cleanPlanner =
+          new org.apache.hudi.table.action.clean.CleanPlanner(context, sparkTable, config);
+
+      // Use reflection to invoke the private canCleanBeSkipped method
+      java.lang.reflect.Method canCleanBeSkippedMethod =
+          org.apache.hudi.table.action.clean.CleanPlanner.class.getDeclaredMethod("canCleanBeSkipped");
+      canCleanBeSkippedMethod.setAccessible(true);
+      boolean result = (boolean) canCleanBeSkippedMethod.invoke(cleanPlanner);
+
+      // Verify canCleanBeSkipped returns true
+      assertTrue(result, "canCleanBeSkipped should return true when last compaction < last clean and no non-delta commits between them");
+
+      // Also verify that getPartitionPathsToClean returns empty list
+      java.lang.reflect.Method getPartitionPathsMethod =
+          org.apache.hudi.table.action.clean.CleanPlanner.class.getDeclaredMethod("getPartitionPathsToClean", Option.class);
+      getPartitionPathsMethod.setAccessible(true);
+      List<String> partitionPaths = (List<String>) getPartitionPathsMethod.invoke(cleanPlanner, Option.empty());
+
+      assertEquals(0, partitionPaths.size(), "getPartitionPathsToClean should return empty list when clean is skipped");
+
+      // Verify clean operation returns no clean stats
+      List<HoodieCleanStat> hoodieCleanStats = runCleaner(config);
+      assertEquals(0, hoodieCleanStats.size(), "Clean should be skipped - no partitions should be cleaned");
+    } finally {
+      testTable.close();
+    }
+  }
+
+  /**
+   * Test canCleanBeSkipped returns false when conditions are NOT met.
+   * Tests the scenario where clean should NOT be skipped:
+   * - When there are non-delta commits (replacecommit) after the last clean
+   */
+  @Test
+  public void testCanCleanBeSkippedReturnsFalseForMORTable() throws Exception {
+    HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath)
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder()
+            .withMetadataIndexColumnStats(false)
+            .build())
+        .withCleanConfig(HoodieCleanConfig.newBuilder()
+            .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS)
+            .retainFileVersions(1)
+            .build())
+        .withCompactionConfig(HoodieCompactionConfig.newBuilder()
+            .withInlineCompaction(false)
+            .build())
+        .build();
+
+    HoodieTableMetaClient metaClient = HoodieTestUtils.init(storageConf, basePath, HoodieTableType.MERGE_ON_READ);
+    HoodieTestTable testTable = HoodieMetadataTestTable.of(metaClient, getMetadataWriter(config), Option.of(context));
+    try {
+      String p0 = "2020/01/01";
+
+      // Create first delta commit
+      String newInstantTime = WriteClientTestUtils.createNewInstantTime();
+      String file1P0 = testTable.addDeltaCommit(newInstantTime).getFileIdsWithBaseFilesInPartitions(p0).get(p0);
+      Map<String, List<String>> part1ToFileId = Collections.unmodifiableMap(new HashMap<String, List<String>>() {
+        {
+          put(p0, CollectionUtils.createImmutableList(file1P0));
+        }
+      });
+      testTable = tearDownTestTableAndReinit(testTable, config);
+
+      // Create a compaction commit (COMMIT action for MOR)
+      newInstantTime = WriteClientTestUtils.createNewInstantTime();
+      HoodieCommitMetadata compactionMetadata = generateCommitMetadata(newInstantTime, part1ToFileId);
+      testTable.addCommit(newInstantTime, Option.of(compactionMetadata));
+      testTable = tearDownTestTableAndReinit(testTable, config);
+
+      // Create another delta commit
+      newInstantTime = WriteClientTestUtils.createNewInstantTime();
+      testTable.addDeltaCommit(newInstantTime)
+          .withBaseFilesInPartition(p0, file1P0).getLeft()
+          .withLogFile(p0, file1P0, 1);
+      testTable = tearDownTestTableAndReinit(testTable, config);
+
+      // Create a clean (after compaction)
+      newInstantTime = WriteClientTestUtils.createNewInstantTime();
+      testTable.addClean(newInstantTime);
+      testTable = tearDownTestTableAndReinit(testTable, config);
+
+      // Create a replace commit (non-delta commit after clean)
+      newInstantTime = WriteClientTestUtils.createNewInstantTime();
+      HoodieReplaceCommitMetadata replaceMetadata = new HoodieReplaceCommitMetadata();
+      replaceMetadata.setOperationType(WriteOperationType.CLUSTER);
+      testTable.addReplaceCommit(newInstantTime, Option.empty(), Option.empty(), replaceMetadata);
+      testTable = tearDownTestTableAndReinit(testTable, config);
+
+      // Reload metaClient to get latest timeline
+      metaClient = HoodieTableMetaClient.reload(metaClient);
+
+      // Create CleanPlanner and use reflection to invoke canCleanBeSkipped
+      org.apache.hudi.table.HoodieSparkTable sparkTable = org.apache.hudi.table.HoodieSparkTable.create(config, context, metaClient);
+      org.apache.hudi.table.action.clean.CleanPlanner cleanPlanner =
+          new org.apache.hudi.table.action.clean.CleanPlanner(context, sparkTable, config);
+
+      // Use reflection to invoke the private canCleanBeSkipped method
+      java.lang.reflect.Method canCleanBeSkippedMethod =
+          org.apache.hudi.table.action.clean.CleanPlanner.class.getDeclaredMethod("canCleanBeSkipped");
+      canCleanBeSkippedMethod.setAccessible(true);
+      boolean result = (boolean) canCleanBeSkippedMethod.invoke(cleanPlanner);
+
+      // Verify canCleanBeSkipped returns false because there's a REPLACE_COMMIT after the last clean
+      assertFalse(result, "canCleanBeSkipped should return false when there are non-delta commits after the last clean");
     } finally {
       testTable.close();
     }
