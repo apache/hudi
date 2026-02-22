@@ -131,12 +131,12 @@ public class TestHoodieCreateHandle extends HoodieCommonTestHarness {
 
   @Test
   public void testConstructorWithOverriddenSchema() {
-    HoodieSchema overridenSchema = HoodieSchema.parse(TRIP_FLATTENED_SCHEMA);
+    HoodieSchema overriddenSchema = HoodieSchema.parse(TRIP_FLATTENED_SCHEMA);
 
     HoodieCreateHandle handleWithOverridenSchema = new HoodieCreateHandle<>(
         writeConfig, TEST_INSTANT_TIME, hoodieTable, TEST_PARTITION_PATH,
-        TEST_FILE_ID, Option.of(overridenSchema), taskContextSupplier);
-    assertEquals(overridenSchema, handleWithOverridenSchema.writeSchema);
+        TEST_FILE_ID, Option.of(overriddenSchema), taskContextSupplier);
+    assertEquals(overriddenSchema, handleWithOverridenSchema.writeSchema);
   }
 
   @Test

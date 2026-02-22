@@ -387,7 +387,7 @@ public class TestHoodieDeltaStreamerSchemaEvolutionBase extends HoodieDeltaStrea
     }
 
     @Override
-    public JavaRDD<WriteStatus> upsert(String baseTableInstantTime, Option commitedInstantTime) {
+    public JavaRDD<WriteStatus> upsert(String baseTableInstantTime, Option committedInstantTime) {
       if (errorEvents.size() > 0) {
         if (errorTableInstantTime.isPresent()) {
           throw new IllegalStateException("Error table instant time should be empty before calling upsert");
@@ -419,7 +419,7 @@ public class TestHoodieDeltaStreamerSchemaEvolutionBase extends HoodieDeltaStrea
     }
 
     @Override
-    public boolean upsertAndCommit(String baseTableInstantTime, Option commitedInstantTime) {
+    public boolean upsertAndCommit(String baseTableInstantTime, Option committedInstantTime) {
       if (errorEvents.size() > 0) {
         JavaRDD errorsCombined = errorEvents.get(0);
         for (int i = 1; i < errorEvents.size(); i++) {
@@ -435,7 +435,7 @@ public class TestHoodieDeltaStreamerSchemaEvolutionBase extends HoodieDeltaStrea
     }
 
     @Override
-    public Option<JavaRDD<HoodieAvroIndexedRecord>> getErrorEvents(String baseTableInstantTime, Option commitedInstantTime) {
+    public Option<JavaRDD<HoodieAvroIndexedRecord>> getErrorEvents(String baseTableInstantTime, Option committedInstantTime) {
       return Option.empty();
     }
   }
