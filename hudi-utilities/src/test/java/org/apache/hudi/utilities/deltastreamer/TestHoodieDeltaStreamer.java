@@ -3697,6 +3697,12 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     testDeltaStreamerWithSpecifiedOperation(basePath + "/insert_overwrite_table", WriteOperationType.INSERT_OVERWRITE_TABLE, recordType);
   }
 
+  @ParameterizedTest
+  @EnumSource(value = HoodieRecordType.class, names = {"AVRO", "SPARK"})
+  public void testDelete(HoodieRecordType recordType) throws Exception {
+    testDeltaStreamerWithSpecifiedOperation(basePath + "/delete", WriteOperationType.DELETE, recordType);
+  }
+
   @Test
   public void testDeletePartitions() throws Exception {
     prepareParquetDFSFiles(PARQUET_NUM_RECORDS, PARQUET_SOURCE_ROOT);
@@ -3783,9 +3789,15 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
 
     cfg.sourceLimit = 1000;
     syncOnce(cfg);
-    assertRecordCount(950, tableBasePath, sqlContext);
-    assertDistanceCount(950, tableBasePath, sqlContext);
-    TestHelpers.assertCommitMetadata("00001", tableBasePath, 2);
+    if (operationType == WriteOperationType.DELETE) {
+      // Test Records Deleted
+      assertRecordCount(500, tableBasePath + "/*/*.parquet", sqlContext);
+      TestHelpers.assertCommitMetadata("00001", tableBasePath, 2);
+    } else {
+      assertRecordCount(950, tableBasePath, sqlContext);
+      assertDistanceCount(950, tableBasePath, sqlContext);
+      TestHelpers.assertCommitMetadata("00001", tableBasePath, 2);
+    }
     UtilitiesTestBase.Helpers.deleteFileFromDfs(fs, tableBasePath);
   }
 
