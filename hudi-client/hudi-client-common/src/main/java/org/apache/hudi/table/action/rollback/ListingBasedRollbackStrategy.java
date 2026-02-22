@@ -289,7 +289,8 @@ public class ListingBasedRollbackStrategy implements BaseRollbackPlanActionExecu
 
   private static String formatDeletePath(String path) {
     // strip scheme E.g: file:/var/folders
-    return path.substring(path.indexOf(":") + 1);
+    int colonIndex = path.indexOf(":");
+    return colonIndex == -1 ? path : path.substring(colonIndex + 1);
   }
 
   private List<StoragePath> listBaseFilesToBeDeleted(String commit,
