@@ -235,6 +235,10 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
     return MetadataPartitionType.getEnabledPartitions(metadataConfig, metaClient);
   }
 
+  protected HoodieTableMetaClient getMetadataMetaClient() {
+    return metadataMetaClient;
+  }
+
   private void mayBeReinitMetadataReader() {
     if (metadata == null || metadataMetaClient == null || metadata.getMetadataFileSystemView() == null) {
       initMetadataReader();
@@ -2132,10 +2136,10 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
   }
 
   protected void cleanIfNecessary(BaseHoodieWriteClient writeClient, String instantTime) {
-    Option<HoodieInstant> lastCompletedCompactionInstant = metadataMetaClient.getActiveTimeline()
+    Option<HoodieInstant> lastCompletedCompactionInstant = getMetadataMetaClient().getActiveTimeline()
         .getCommitAndReplaceTimeline().filterCompletedInstants().lastInstant();
     if (lastCompletedCompactionInstant.isPresent()
-        && metadataMetaClient.getActiveTimeline().filterCompletedInstants()
+        && getMetadataMetaClient().getActiveTimeline().filterCompletedInstants()
         .findInstantsAfter(lastCompletedCompactionInstant.get().requestedTime()).countInstants() < 3) {
       // do not clean the log files immediately after compaction to give some buffer time for metadata table reader,
       // because there is case that the reader has prepared for the log file readers already before the compaction completes

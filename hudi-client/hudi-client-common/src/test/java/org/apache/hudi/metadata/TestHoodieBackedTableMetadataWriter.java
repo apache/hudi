@@ -444,4 +444,81 @@ class TestHoodieBackedTableMetadataWriter {
     // Verify metrics are incremented when there's a failure
     verify(metrics, times(1)).incrementMetric(HoodieMetadataMetrics.PENDING_COMPACTIONS_FAILURES, 1);
   }
+
+  @Test
+  void testExecuteCleanWhenCleanInstantDoesNotExist() throws Exception {
+    // Create mocks
+    BaseHoodieWriteClient writeClient = mock(BaseHoodieWriteClient.class);
+    HoodieTableMetaClient metadataMetaClient = mock(HoodieTableMetaClient.class);
+    HoodieActiveTimeline activeTimeline = mock(HoodieActiveTimeline.class, RETURNS_DEEP_STUBS);
+
+    // Set up timeline to indicate clean instant doesn't exist
+    String instantTime = "20250101120000000";
+    String expectedCleanInstant = HoodieBackedTableMetadataWriterTableVersionSix.createCleanTimestamp(instantTime);
+    when(metadataMetaClient.getActiveTimeline()).thenReturn(activeTimeline);
+    when(activeTimeline.getCleanerTimeline().filterCompletedInstants().containsInstant(expectedCleanInstant)).thenReturn(false);
+
+    // Create a partial mock of HoodieBackedTableMetadataWriterTableVersionSix
+    HoodieBackedTableMetadataWriterTableVersionSix writer = mock(HoodieBackedTableMetadataWriterTableVersionSix.class);
+    when(writer.getMetadataMetaClient()).thenReturn(metadataMetaClient);
+
+    // Call the real executeClean method
+    doCallRealMethod().when(writer).executeClean(any(), any());
+
+    // Execute the clean
+    writer.executeClean(writeClient, instantTime);
+
+    // Verify that writeClient.clean() was called with the correct timestamp
+    verify(writeClient, times(1)).clean(expectedCleanInstant);
+  }
+
+  @Test
+  void testExecuteCleanWhenCleanInstantAlreadyExists() throws Exception {
+    // Create mocks
+    BaseHoodieWriteClient writeClient = mock(BaseHoodieWriteClient.class);
+    HoodieTableMetaClient metadataMetaClient = mock(HoodieTableMetaClient.class);
+    HoodieActiveTimeline activeTimeline = mock(HoodieActiveTimeline.class, RETURNS_DEEP_STUBS);
+
+    // Set up timeline to indicate clean instant already exists
+    String instantTime = "20250101120000000";
+    String expectedCleanInstant = HoodieBackedTableMetadataWriterTableVersionSix.createCleanTimestamp(instantTime);
+    when(metadataMetaClient.getActiveTimeline()).thenReturn(activeTimeline);
+    when(activeTimeline.getCleanerTimeline().filterCompletedInstants().containsInstant(expectedCleanInstant)).thenReturn(true);
+
+    // Create a partial mock of HoodieBackedTableMetadataWriterTableVersionSix
+    HoodieBackedTableMetadataWriterTableVersionSix writer = mock(HoodieBackedTableMetadataWriterTableVersionSix.class);
+    when(writer.getMetadataMetaClient()).thenReturn(metadataMetaClient);
+
+    // Call the real executeClean method
+    doCallRealMethod().when(writer).executeClean(any(), any());
+
+    // Execute the clean
+    writer.executeClean(writeClient, instantTime);
+
+    // Verify that writeClient.clean() was NOT called since the instant already exists
+    verify(writeClient, times(0)).clean(any());
+  }
+
+  @Test
+  void testCreateCleanTimestamp() {
+    // Test that createCleanTimestamp appends the correct suffix
+    String baseTimestamp = "20250101120000000";
+    String cleanTimestamp = HoodieBackedTableMetadataWriterTableVersionSix.createCleanTimestamp(baseTimestamp);
+
+    // The clean operation suffix should be "002"
+    String expectedTimestamp = baseTimestamp + "002";
+    assertEquals(expectedTimestamp, cleanTimestamp, "Clean timestamp should have the correct suffix appended");
+  }
+
+  @ParameterizedTest
+  @CsvSource({
+      "20250101120000000,20250101120000000002",
+      "20240615100530456,20240615100530456002",
+      "20231231235959999,20231231235959999002"
+  })
+  void testCreateCleanTimestampWithMultipleValues(String input, String expected) {
+    String result = HoodieBackedTableMetadataWriterTableVersionSix.createCleanTimestamp(input);
+    assertEquals(expected, result, "Clean timestamp should match expected format");
+  }
+
 }

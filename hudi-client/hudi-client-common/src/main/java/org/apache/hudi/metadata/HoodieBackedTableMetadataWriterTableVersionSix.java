@@ -30,6 +30,7 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.versioning.v1.InstantComparatorV1;
 import org.apache.hudi.common.util.CompactionUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieMetadataException;
@@ -286,7 +287,12 @@ public abstract class HoodieBackedTableMetadataWriterTableVersionSix<I, O> exten
 
   @Override
   protected void executeClean(BaseHoodieWriteClient writeClient, String instantTime) {
-    writeClient.clean(createCleanTimestamp(instantTime));
+    String cleanInstant = createCleanTimestamp(instantTime);
+    if (getMetadataMetaClient().getActiveTimeline().getCleanerTimeline().filterCompletedInstants().containsInstant(cleanInstant)) {
+      LOG.info(String.format("Clean with same %s time is already present in the timeline, hence skipping to clean", cleanInstant));
+    } else {
+      writeClient.clean(cleanInstant);
+    }
   }
 
   @Override
