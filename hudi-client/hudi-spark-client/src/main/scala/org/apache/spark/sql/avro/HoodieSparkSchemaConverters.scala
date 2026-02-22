@@ -18,28 +18,31 @@
 
 package org.apache.spark.sql.avro
 
-import org.apache.hudi.common.schema.HoodieSchema.TimePrecision
+import org.apache.hudi.SparkAdapterSupport
 import org.apache.hudi.common.schema.{HoodieJsonProperties, HoodieSchema, HoodieSchemaField, HoodieSchemaType}
+import org.apache.hudi.common.schema.HoodieSchema.TimePrecision
+
 import org.apache.spark.annotation.DeveloperApi
-import org.apache.spark.sql.types.Decimal.minBytesForPrecision
 import org.apache.spark.sql.types._
+import org.apache.spark.sql.types.Decimal.minBytesForPrecision
 
 import scala.collection.JavaConverters._
 
 /**
- * This object contains methods that are used to convert HoodieSchema to Spark SQL schemas and vice versa.
+ * Object containing methods to convert HoodieSchema to Spark SQL schemas and vice versa.
  *
  * This provides direct conversion between HoodieSchema and Spark DataType
  * without going through Avro Schema intermediary.
+ *
+ * Version-specific types (like VariantType in Spark >4.x) are handled via SparkAdapterSupport.
  *
  * NOTE: the package of this class is intentionally kept as "org.apache.spark.sql.avro" which is similar to the existing
  * Spark Avro connector's SchemaConverters.scala
  * (https://github.com/apache/spark/blob/master/connector/avro/src/main/scala/org/apache/spark/sql/avro/SchemaConverters.scala).
  * The reason for this is so that Spark 3.3 is able to access private spark sql type classes like TimestampNTZType.
  */
-
 @DeveloperApi
-object HoodieSparkSchemaConverters {
+object HoodieSparkSchemaConverters extends SparkAdapterSupport {
 
   /**
    * Internal wrapper for SQL data type and nullability.
@@ -124,7 +127,12 @@ object HoodieSparkSchemaConverters {
           HoodieSchema.createRecord(recordName, nameSpace, null, fields.asJava)
         }
 
-      case other => throw new IncompatibleSchemaException(s"Unexpected Spark DataType: $other")
+      // VARIANT type (Spark >4.x only), which will be handled via SparkAdapter
+      case other if sparkAdapter.isVariantType(other) =>
+        HoodieSchema.createVariant(recordName, nameSpace, null)
+
+      case other =>
+        throw new IncompatibleSchemaException(s"Unexpected Spark DataType: $other")
     }
 
     // Wrap with null union if nullable (and not already a union)
@@ -135,6 +143,9 @@ object HoodieSparkSchemaConverters {
     }
   }
 
+  /**
+   * Helper method to convert HoodieSchema to Catalyst DataType.
+   */
   private def toSqlTypeHelper(hoodieSchema: HoodieSchema, existingRecordNames: Set[String]): SchemaType = {
     hoodieSchema.getType match {
       // Primitive types
@@ -258,7 +269,16 @@ object HoodieSparkSchemaConverters {
           }
         }
 
-      case other => throw new IncompatibleSchemaException(s"Unsupported HoodieSchemaType: $other")
+      // VARIANT type (Spark >4.x only), which will be handled via SparkAdapter
+      // TODO: Check if internalSchema will throw any errors here: #18021
+      case HoodieSchemaType.VARIANT =>
+        sparkAdapter.getVariantDataType match {
+          case Some(variantType) => SchemaType(variantType, nullable = false)
+          case None => throw new IncompatibleSchemaException("VARIANT type is only supported in Spark 4.0+")
+        }
+
+      case other =>
+        throw new IncompatibleSchemaException(s"Unsupported HoodieSchemaType: $other")
     }
   }
 

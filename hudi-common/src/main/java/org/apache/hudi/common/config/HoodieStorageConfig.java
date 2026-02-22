@@ -168,6 +168,36 @@ public class HoodieStorageConfig extends HoodieConfig {
       .withDocumentation("Control whether to write bloom filter or not. Default true. "
           + "We can set to false in non bloom index cases for CPU resource saving.");
 
+  public static final ConfigProperty<Boolean> PARQUET_VARIANT_WRITE_SHREDDING_ENABLED = ConfigProperty
+      .key("hoodie.parquet.variant.write.shredding.enabled")
+      .defaultValue(true)
+      .sinceVersion("1.1.0")
+      .withDocumentation("Controls whether variant columns are written in shredded format. "
+          + "When enabled (default), variant columns with shredding information in the schema will be written "
+          + "in shredded format with typed_value columns. When disabled, variant columns are always written "
+          + "in unshredded format regardless of the schema. "
+          + "Equivalent to Spark's spark.sql.variant.writeShredding.enabled.");
+
+  public static final ConfigProperty<String> PARQUET_VARIANT_FORCE_SHREDDING_SCHEMA_FOR_TEST = ConfigProperty
+      .key("hoodie.parquet.variant.force.shredding.schema.for.test")
+      .noDefaultValue()
+      .markAdvanced()
+      .sinceVersion("1.1.0")
+      .withDocumentation("Forces a specific shredding schema for all variant columns, intended for testing. "
+          + "The value should be a DDL-format schema string (e.g., 'a int, b string, c decimal(15, 1)'). "
+          + "When set and write shredding is enabled, this schema overrides the schema-driven shredding "
+          + "configuration for all variant columns. "
+          + "Equivalent to Spark's spark.sql.variant.forceShreddingSchemaForTest.");
+
+  public static final ConfigProperty<Boolean> PARQUET_VARIANT_ALLOW_READING_SHREDDED = ConfigProperty
+      .key("hoodie.parquet.variant.allow.reading.shredded")
+      .defaultValue(true)
+      .sinceVersion("1.1.0")
+      .withDocumentation("Controls whether shredded variant data can be read. "
+          + "When enabled (default), the reader will reconstruct variant values from shredded components. "
+          + "When disabled, only unshredded variant data can be read. "
+          + "Equivalent to Spark's spark.sql.variant.allowReadingShredded.");
+
   public static final ConfigProperty<Boolean> WRITE_UTC_TIMEZONE = ConfigProperty
       .key("hoodie.parquet.write.utc-timezone.enabled")
       .defaultValue(true)
@@ -489,6 +519,21 @@ public class HoodieStorageConfig extends HoodieConfig {
 
     public Builder parquetBloomFilterEnable(boolean parquetBloomFilterEnable) {
       storageConfig.setValue(PARQUET_WITH_BLOOM_FILTER_ENABLED, String.valueOf(parquetBloomFilterEnable));
+      return this;
+    }
+
+    public Builder parquetVariantWriteShreddingEnabled(boolean enabled) {
+      storageConfig.setValue(PARQUET_VARIANT_WRITE_SHREDDING_ENABLED, String.valueOf(enabled));
+      return this;
+    }
+
+    public Builder parquetVariantForceShreddingSchemaForTest(String schemaString) {
+      storageConfig.setValue(PARQUET_VARIANT_FORCE_SHREDDING_SCHEMA_FOR_TEST, schemaString);
+      return this;
+    }
+
+    public Builder parquetVariantAllowReadingShredded(boolean allowed) {
+      storageConfig.setValue(PARQUET_VARIANT_ALLOW_READING_SHREDDED, String.valueOf(allowed));
       return this;
     }
 
