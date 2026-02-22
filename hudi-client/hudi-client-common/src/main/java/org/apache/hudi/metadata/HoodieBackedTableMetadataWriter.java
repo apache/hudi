@@ -2014,15 +2014,19 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
         return;
       }
       // Check and run clean operations.
-      cleanIfNecessary(writeClient, lastInstant.get().requestedTime());
+      if (dataWriteConfig.isAutoClean()) {
+        cleanIfNecessary(writeClient, lastInstant.get().requestedTime());
+      }
       // Do timeline validation before scheduling compaction/logCompaction operations.
       if (validateCompactionScheduling(inFlightInstantTimestamp, lastInstant.get().requestedTime())) {
         String latestDeltacommitTime = lastInstant.get().requestedTime();
         LOG.info("Latest deltacommit time found is {}, running compaction operations.", latestDeltacommitTime);
         compactIfNecessary(writeClient, Option.of(latestDeltacommitTime));
       }
-      writeClient.archive();
-      LOG.info("All the table services operations on MDT completed successfully");
+      if (dataWriteConfig.isAutoArchive()) {
+        writeClient.archive();
+      }
+      LOG.info("All the table services operations on metadata table completed successfully");
     } catch (Exception e) {
       LOG.error("Exception in running table services on metadata table", e);
       allTableServicesExecutedSuccessfullyOrSkipped = false;
