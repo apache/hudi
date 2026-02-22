@@ -65,12 +65,14 @@ public abstract class InstantRange implements Serializable {
 
   public abstract boolean isInRange(String instant);
 
+  public abstract RangeType getRangeType();
+
   @Override
   public String toString() {
     return "InstantRange{"
         + "startInstant='" + (startInstant.isEmpty() ? "-INF" : startInstant.get()) + '\''
         + ", endInstant='" + (endInstant.isEmpty() ? "+INF" : endInstant.get()) + '\''
-        + ", rangeType='" + this.getClass().getSimpleName() + '\''
+        + ", rangeType='" + this.getRangeType().name() + '\''
         + '}';
   }
 
@@ -107,6 +109,11 @@ public abstract class InstantRange implements Serializable {
               .orElse(true);
       return validAgainstStart && validAgainstEnd;
     }
+
+    @Override
+    public RangeType getRangeType() {
+      return RangeType.OPEN_CLOSED;
+    }
   }
 
   private static class OpenClosedRangeNullableBoundary extends InstantRange {
@@ -128,6 +135,11 @@ public abstract class InstantRange implements Serializable {
 
       return validAgainstStart && validAgainstEnd;
     }
+
+    @Override
+    public RangeType getRangeType() {
+      return RangeType.OPEN_CLOSED;
+    }
   }
 
   private static class ClosedClosedRange extends InstantRange {
@@ -143,6 +155,11 @@ public abstract class InstantRange implements Serializable {
               .map(e -> compareTimestamps(instant, LESSER_THAN_OR_EQUALS, e))
               .orElse(true);
       return validAgainstStart && validAgainstEnd;
+    }
+
+    @Override
+    public RangeType getRangeType() {
+      return RangeType.CLOSED_CLOSED;
     }
   }
 
@@ -164,6 +181,11 @@ public abstract class InstantRange implements Serializable {
               .orElse(true);
       return validAgainstStart && validAgainstEnd;
     }
+
+    @Override
+    public RangeType getRangeType() {
+      return RangeType.CLOSED_CLOSED;
+    }
   }
 
   /**
@@ -180,6 +202,11 @@ public abstract class InstantRange implements Serializable {
     @Override
     public boolean isInRange(String instant) {
       return this.instants.contains(instant);
+    }
+
+    @Override
+    public RangeType getRangeType() {
+      return RangeType.EXACT_MATCH;
     }
   }
 
@@ -202,6 +229,11 @@ public abstract class InstantRange implements Serializable {
         }
       }
       return false;
+    }
+
+    @Override
+    public RangeType getRangeType() {
+      return RangeType.COMPOSITION;
     }
   }
 
@@ -271,20 +303,6 @@ public abstract class InstantRange implements Serializable {
         default:
           throw new AssertionError();
       }
-    }
-  }
-
-  public static RangeType getRangeType(InstantRange range) {
-    if (range instanceof OpenClosedRangeNullableBoundary || range instanceof OpenClosedRange) {
-      return RangeType.OPEN_CLOSED;
-    } else if (range instanceof ClosedClosedRangeNullableBoundary || range instanceof ClosedClosedRange) {
-      return RangeType.CLOSED_CLOSED;
-    } else if (range instanceof ExactMatchRange) {
-      return RangeType.EXACT_MATCH;
-    } else if (range instanceof CompositionRange) {
-      return RangeType.COMPOSITION;
-    } else {
-      throw new UnsupportedOperationException("Unsupported Instant Range type");
     }
   }
 }

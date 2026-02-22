@@ -308,7 +308,6 @@ public class HoodieTableSource extends FileIndexReader implements
         tableSchema,
         HoodieSchemaConverter.convertToSchema(requiredRowType),
         conf.get(FlinkOptions.MERGE_TYPE),
-        Option.empty(),
         predicates,
         emitDelete
         );

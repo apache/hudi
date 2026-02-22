@@ -26,12 +26,10 @@ import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.read.HoodieFileGroupReader;
-import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
-import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.source.ExpressionPredicates;
 import org.apache.hudi.source.reader.BatchRecords;
 import org.apache.hudi.source.reader.HoodieRecordWithPosition;
@@ -57,7 +55,6 @@ public class HoodieSplitReaderFunction implements SplitReaderFunction<RowData> {
   private final HoodieSchema requiredSchema;
   private final Configuration configuration;
   private final HoodieWriteConfig writeConfig;
-  private final Option<InternalSchema> internalSchemaOption;
   private final String mergeType;
   private final boolean emitDelete;
   private final List<ExpressionPredicates.Predicate> predicates;
@@ -69,7 +66,6 @@ public class HoodieSplitReaderFunction implements SplitReaderFunction<RowData> {
       HoodieSchema tableSchema,
       HoodieSchema requiredSchema,
       String mergeType,
-      Option<InternalSchema> internalSchemaOption,
       List<ExpressionPredicates.Predicate> predicates,
       boolean emitDelete) {
 
@@ -80,7 +76,6 @@ public class HoodieSplitReaderFunction implements SplitReaderFunction<RowData> {
     this.requiredSchema = requiredSchema;
     this.configuration = configuration;
     this.writeConfig = FlinkWriteClients.getHoodieClientConfig(configuration);
-    this.internalSchemaOption = internalSchemaOption;
     this.predicates = predicates;
     this.mergeType = mergeType;
     this.emitDelete = emitDelete;

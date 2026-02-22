@@ -415,7 +415,6 @@ public class TestHoodieSource {
             schema, // schema will be resolved from table
             schema, // required schema
         conf.get(FlinkOptions.MERGE_TYPE),
-        org.apache.hudi.common.util.Option.empty(),
         Collections.emptyList(),
             false);
 

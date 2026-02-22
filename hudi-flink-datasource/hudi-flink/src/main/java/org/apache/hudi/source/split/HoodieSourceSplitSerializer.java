@@ -95,7 +95,7 @@ public class HoodieSourceSplitSerializer implements SimpleVersionedSerializer<Ho
         if (instantRange.getEndInstant().isPresent()) {
           out.writeUTF(instantRange.getEndInstant().get());
         }
-        out.writeUTF(InstantRange.getRangeType(instantRange).name());
+        out.writeUTF(instantRange.getRangeType().name());
       }
 
       out.flush();

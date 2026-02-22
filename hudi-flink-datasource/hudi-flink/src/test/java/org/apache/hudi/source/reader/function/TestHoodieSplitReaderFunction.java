@@ -23,7 +23,6 @@ import org.apache.hudi.common.config.HoodieReaderConfig;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.util.Option;
 import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.source.ExpressionPredicates;
 import org.apache.flink.configuration.Configuration;
@@ -77,7 +76,6 @@ public class TestHoodieSplitReaderFunction {
           null,  // null tableSchema should throw
           requiredSchema,
           "AVRO_PAYLOAD",
-          Option.empty(),
           Collections.emptyList(),
               false
       );
@@ -94,7 +92,6 @@ public class TestHoodieSplitReaderFunction {
           tableSchema,
           null,  // null requiredSchema should throw
           "AVRO_PAYLOAD",
-          Option.empty(),
           Collections.emptyList(),
           false
       );
@@ -111,7 +108,6 @@ public class TestHoodieSplitReaderFunction {
             tableSchema,
             requiredSchema,
             "AVRO_PAYLOAD",
-            Option.empty(),
             Collections.emptyList(),
             false
         );
@@ -130,7 +126,6 @@ public class TestHoodieSplitReaderFunction {
             tableSchema,
             requiredSchema,
             "AVRO_PAYLOAD",
-            Option.of(internalSchema),
             Collections.emptyList(),
             false
         );
@@ -147,7 +142,6 @@ public class TestHoodieSplitReaderFunction {
             tableSchema,
             requiredSchema,
             "AVRO_PAYLOAD",
-            Option.empty(),
             Collections.emptyList(),
             false
 
@@ -174,7 +168,6 @@ public class TestHoodieSplitReaderFunction {
               tableSchema,
               requiredSchema,
               mergeType,
-              Option.empty(),
               Collections.emptyList(),
               false
           );
@@ -192,7 +185,6 @@ public class TestHoodieSplitReaderFunction {
             tableSchema,
             requiredSchema,
             "AVRO_PAYLOAD",
-            Option.empty(),
             Collections.emptyList(),
             false
         );
@@ -214,7 +206,6 @@ public class TestHoodieSplitReaderFunction {
             customTableSchema,
             customRequiredSchema,
             "AVRO_PAYLOAD",
-            Option.empty(),
             Collections.emptyList(),
             false
         );
@@ -235,7 +226,6 @@ public class TestHoodieSplitReaderFunction {
             tableSchema,
             requiredSchema,
             "AVRO_PAYLOAD",
-            Option.of(internalSchema1),
             Collections.emptyList(),
             false
         );
@@ -249,7 +239,6 @@ public class TestHoodieSplitReaderFunction {
             tableSchema,
             requiredSchema,
             "AVRO_PAYLOAD",
-            Option.of(internalSchema2),
             Collections.emptyList(),
             false
         );
@@ -263,7 +252,6 @@ public class TestHoodieSplitReaderFunction {
             tableSchema,
             requiredSchema,
             "AVRO_PAYLOAD",
-            Option.empty(),
             Collections.emptyList(),
             false
         );
@@ -281,7 +269,6 @@ public class TestHoodieSplitReaderFunction {
             tableSchema,
             requiredSchema,
             "AVRO_PAYLOAD",
-            Option.empty(),
             Collections.emptyList(),
             false
         );
@@ -299,7 +286,6 @@ public class TestHoodieSplitReaderFunction {
             tableSchema,
             requiredSchema,
             "AVRO_PAYLOAD",
-            Option.empty(),
             Collections.emptyList(),
             false
         );
@@ -316,7 +302,6 @@ public class TestHoodieSplitReaderFunction {
             tableSchema,
             requiredSchema,
             "AVRO_PAYLOAD",
-            Option.empty(),
             Collections.emptyList(),
             true
         );
@@ -339,7 +324,6 @@ public class TestHoodieSplitReaderFunction {
                     tableSchema,
                     requiredSchema,
                     "AVRO_PAYLOAD",
-                    Option.empty(),
                     predicates,
                     true
             );
@@ -356,7 +340,6 @@ public class TestHoodieSplitReaderFunction {
             tableSchema,
             requiredSchema,
             "AVRO_PAYLOAD",
-            Option.empty(),
             Collections.emptyList(),
             false
         );
