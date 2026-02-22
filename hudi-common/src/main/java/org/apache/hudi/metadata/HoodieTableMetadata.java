@@ -32,6 +32,7 @@ import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.expression.Expression;
 import org.apache.hudi.internal.schema.Types;
 import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.StoragePathFilter;
 import org.apache.hudi.storage.StoragePathInfo;
 
 import org.slf4j.Logger;
@@ -155,6 +156,12 @@ public interface HoodieTableMetadata extends Serializable, AutoCloseable {
    */
   Map<String, List<StoragePathInfo>> getAllFilesInPartitions(Collection<String> partitionPaths)
       throws IOException;
+
+  default Map<String, List<StoragePathInfo>> getAllFilesInPartitions(Collection<String> partitionPaths,
+                                                                      Option<StoragePathFilter> pathFilterOption)
+      throws IOException {
+    return getAllFilesInPartitions(partitionPaths);
+  }
 
   /**
    * Get the bloom filter for the FileID from the metadata table.

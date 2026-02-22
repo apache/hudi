@@ -481,6 +481,13 @@ public class FSUtils {
   public static List<StoragePathInfo> getAllDataFilesInPartition(HoodieStorage storage,
                                                                  StoragePath partitionPath)
       throws IOException {
+    return getAllDataFilesInPartition(storage, partitionPath, Option.empty());
+  }
+
+  public static List<StoragePathInfo> getAllDataFilesInPartition(HoodieStorage storage,
+                                                                 StoragePath partitionPath,
+                                                                 Option<StoragePathFilter> pathFilterOption)
+      throws IOException {
     final Set<String> validFileExtensions = Arrays.stream(HoodieFileFormat.values())
         .map(HoodieFileFormat::getFileExtension).collect(Collectors.toCollection(HashSet::new));
     final String logFileExtension = HoodieFileFormat.HOODIE_LOG.getFileExtension();
@@ -488,7 +495,8 @@ public class FSUtils {
     try {
       return storage.listDirectEntries(partitionPath, path -> {
         String extension = FSUtils.getFileExtension(path.getName());
-        return validFileExtensions.contains(extension) || path.getName().contains(logFileExtension);
+        return (validFileExtensions.contains(extension) || path.getName().contains(logFileExtension))
+            && pathFilterOption.map(filter -> filter.accept(path)).orElse(true);
       }).stream().filter(StoragePathInfo::isFile).collect(Collectors.toList());
     } catch (FileNotFoundException ex) {
       // return empty FileStatus if partition does not exist already

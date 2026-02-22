@@ -25,6 +25,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.view.FileSystemViewManager;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
+import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.TableNotFoundException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
@@ -99,17 +100,17 @@ public class HoodieROTablePathFilter implements Configurable, PathFilter, Serial
 
   private transient HoodieLocalEngineContext engineContext;
 
-
   private transient HoodieStorage storage;
 
   public HoodieROTablePathFilter() {
-    this(new Configuration());
+    this(HadoopFSUtils.getStorageConf());
   }
 
-  public HoodieROTablePathFilter(Configuration conf) {
+  @VisibleForTesting
+  public HoodieROTablePathFilter(StorageConfiguration storageConf) {
     this.hoodiePathCache = new ConcurrentHashMap<>();
     this.nonHoodiePathCache = new HashSet<>();
-    this.conf = HadoopFSUtils.getStorageConfWithCopy(conf);
+    this.conf = storageConf;
     this.metaClientCache = new HashMap<>();
     this.completedTimelineCache =  new HashMap<>();
   }
@@ -117,7 +118,7 @@ public class HoodieROTablePathFilter implements Configurable, PathFilter, Serial
   /**
    * By passing metaClient and completedTimeline, we can sync the view seen from this class against HoodieFileIndex class
    */
-  public HoodieROTablePathFilter(Configuration conf,
+  public HoodieROTablePathFilter(StorageConfiguration conf,
                                  HoodieTableMetaClient metaClient,
                                  HoodieTimeline completedTimeline) {
     this(conf);
@@ -136,6 +137,10 @@ public class HoodieROTablePathFilter implements Configurable, PathFilter, Serial
       return path.getParent().getParent().getParent();
     }
     return null;
+  }
+
+  public boolean accept(StoragePath path) {
+    return accept(new Path(path.toString()));
   }
 
   @Override
