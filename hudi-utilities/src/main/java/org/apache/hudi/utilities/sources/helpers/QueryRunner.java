@@ -46,7 +46,7 @@ import static org.apache.hudi.hadoop.fs.HadoopFSUtils.getStorageConf;
 
 /**
  * This class is currently used only by s3 and gcs incr sources that supports size based batching
- * This class will fetch comitted files from the current commit to support size based batching.
+ * This class will fetch committed files from the current commit to support size based batching.
  */
 @Slf4j
 public class QueryRunner {
