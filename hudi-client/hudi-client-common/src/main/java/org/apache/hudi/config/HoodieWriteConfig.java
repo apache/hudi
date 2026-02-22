@@ -2669,6 +2669,10 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getBoolean(HoodieMetadataConfig.ENABLE_LOG_COMPACTION_ON_METADATA_TABLE);
   }
 
+  public boolean isAutoDeleteMdtPartitionsEnabled() {
+    return metadataConfig.isAutoDeletePartitionsEnabled();
+  }
+
   public int getGlobalRecordLevelIndexMinFileGroupCount() {
     return metadataConfig.getGlobalRecordLevelIndexMinFileGroupCount();
   }

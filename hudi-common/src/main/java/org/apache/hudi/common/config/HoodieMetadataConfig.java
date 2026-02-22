@@ -509,6 +509,18 @@ public final class HoodieMetadataConfig extends HoodieConfig {
           + "The index name either starts with or matches exactly can be one of the following: "
           + StringUtils.join(Arrays.stream(MetadataPartitionType.values()).map(MetadataPartitionType::getPartitionPath).collect(Collectors.toList()), ", "));
 
+  // Config to enable/disable automatic deletion of MDT partitions
+  public static final ConfigProperty<Boolean> AUTO_DELETE_PARTITIONS = ConfigProperty
+      .key(METADATA_PREFIX + ".auto.delete.partitions")
+      .defaultValue(true)
+      .markAdvanced()
+      .sinceVersion("1.2.0")
+      .withDocumentation("When enabled (default), metadata table partitions (indexes) that are disabled in the write config "
+          + "will be automatically deleted. When disabled, users must explicitly drop metadata partitions "
+          + "using the hudi-cli or DROP INDEX command. Disabling automatic deletion is recommended for production "
+          + "datasets with multiple writers to avoid accidental deletion of large metadata indexes due to "
+          + "misconfiguration.");
+
   // Range-based repartitioning configuration for metadata table lookups
   public static final ConfigProperty<Double> RANGE_REPARTITION_SAMPLING_FRACTION = ConfigProperty
       .key(METADATA_PREFIX + ".range.repartition.sampling.fraction")
@@ -908,6 +920,10 @@ public final class HoodieMetadataConfig extends HoodieConfig {
 
   public boolean shouldFailOnTableServiceFailures() {
     return getBooleanOrDefault(FAIL_ON_TABLE_SERVICE_FAILURES);
+  }
+
+  public boolean isAutoDeletePartitionsEnabled() {
+    return getBooleanOrDefault(AUTO_DELETE_PARTITIONS);
   }
 
   /**

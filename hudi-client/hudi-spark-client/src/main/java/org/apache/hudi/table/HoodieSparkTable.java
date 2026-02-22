@@ -28,17 +28,13 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.index.SparkHoodieIndexFactory;
-import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.metadata.SparkMetadataWriterFactory;
 
 import org.apache.spark.TaskContext;
 import org.apache.spark.TaskContext$;
-
-import java.io.IOException;
 
 public abstract class HoodieSparkTable<T>
     extends HoodieTable<T, HoodieData<HoodieRecord<T>>, HoodieData<HoodieKey>, HoodieData<WriteStatus>> {
@@ -101,7 +97,7 @@ public abstract class HoodieSparkTable<T>
     if (isMetadataTable()) {
       return Option.empty();
     }
-    if (config.isMetadataTableEnabled()) {
+    if (getMetaClient().getTableConfig().isMetadataTableAvailable() || config.isMetadataTableEnabled()) {
       // if any partition is deleted, we need to reload the metadata table writer so that new table configs are picked up
       // to reflect the delete mdt partitions.
       if (autoDetectAndDeleteMetadataPartitions) {
@@ -114,14 +110,9 @@ public abstract class HoodieSparkTable<T>
       HoodieTableMetadataWriter metadataWriter = streamingWrites
           ? SparkMetadataWriterFactory.createWithStreamingWrites(getContext().getStorageConf(), config, failedWritesCleaningPolicy, getContext(), Option.of(triggeringInstantTimestamp))
           : SparkMetadataWriterFactory.create(getContext().getStorageConf(), config, failedWritesCleaningPolicy, getContext(), Option.of(triggeringInstantTimestamp), metaClient.getTableConfig());
-      try {
-        if (isMetadataTableExists || metaClient.getStorage().exists(
-            HoodieTableMetadata.getMetadataTableBasePath(metaClient.getBasePath()))) {
-          isMetadataTableExists = true;
-          return Option.of(metadataWriter);
-        }
-      } catch (IOException e) {
-        throw new HoodieMetadataException("Checking existence of metadata table failed", e);
+      if (isMetadataTableExists || metadataWriter.isInitialized()) {
+        isMetadataTableExists = true;
+        return Option.of(metadataWriter);
       }
     } else {
       // if metadata is not enabled in the write config, we should try and delete it (if present)
