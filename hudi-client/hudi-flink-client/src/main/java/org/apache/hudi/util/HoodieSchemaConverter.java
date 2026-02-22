@@ -411,6 +411,8 @@ public class HoodieSchemaConverter {
         return convertRecord(hoodieSchema);
       case UNION:
         return convertUnion(hoodieSchema);
+      case VARIANT:
+        return convertVariant(hoodieSchema);
       default:
         throw new IllegalArgumentException("Unsupported HoodieSchemaType: " + type);
     }
@@ -548,6 +550,25 @@ public class HoodieSchemaConverter {
     }
 
     return nullable ? rawDataType.nullable() : rawDataType;
+  }
+
+  /**
+   * Converts a Variant schema to Flink's ROW type.
+   * Variant is represented as ROW<`value` BYTES, `metadata` BYTES> in Flink.
+   *
+   * @param schema HoodieSchema to convert (must be a VARIANT type)
+   * @return DataType representing the Variant as a ROW with binary fields
+   */
+  private static DataType convertVariant(HoodieSchema schema) {
+    if (schema.getType() != HoodieSchemaType.VARIANT) {
+      throw new IllegalStateException("Expected HoodieSchema.Variant but got: " + schema.getClass());
+    }
+
+    // Variant is stored as a struct with two binary fields: value and metadata
+    return DataTypes.ROW(
+        DataTypes.FIELD("value", DataTypes.BYTES().notNull()),
+        DataTypes.FIELD("metadata", DataTypes.BYTES().notNull())
+    ).notNull();
   }
 
   /**

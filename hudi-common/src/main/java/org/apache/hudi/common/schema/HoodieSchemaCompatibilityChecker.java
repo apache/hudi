@@ -298,6 +298,7 @@ public class HoodieSchemaCompatibilityChecker {
           case DATE:
           case STRING:
           case UUID:
+          case VARIANT:
             return result;
           case TIME:
             return result.mergedWith(checkTimeCompatibility(reader, writer, locations));
@@ -381,6 +382,8 @@ public class HoodieSchemaCompatibilityChecker {
           case ENUM:
             return result.mergedWith(typeMismatch(reader, writer, locations));
           case RECORD:
+            return result.mergedWith(typeMismatch(reader, writer, locations));
+          case VARIANT:
             return result.mergedWith(typeMismatch(reader, writer, locations));
           case UNION: {
             for (final HoodieSchema readerBranch : reader.getTypes()) {

@@ -27,7 +27,8 @@ import org.apache.hudi.common.util.JsonUtils
 import org.apache.hudi.spark.internal.ReflectUtil
 import org.apache.hudi.storage.StorageConfiguration
 
-import org.apache.parquet.schema.MessageType
+import org.apache.parquet.schema.{MessageType, PrimitiveType, Type, Types}
+import org.apache.parquet.schema.Type.Repetition
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.internal.Logging
 import org.apache.spark.rdd.RDD
@@ -36,7 +37,7 @@ import org.apache.spark.sql.FileFormatUtilsForFileGroupReader.applyFiltersToPlan
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.analysis.EliminateSubqueryAliases
 import org.apache.spark.sql.catalyst.catalog.CatalogTable
-import org.apache.spark.sql.catalyst.expressions.{Expression, InterpretedPredicate, Predicate}
+import org.apache.spark.sql.catalyst.expressions.{Expression, InterpretedPredicate, Predicate, SpecializedGetters}
 import org.apache.spark.sql.catalyst.parser.ParseException
 import org.apache.spark.sql.catalyst.planning.PhysicalOperation
 import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
@@ -45,18 +46,20 @@ import org.apache.spark.sql.catalyst.util.DateFormatter
 import org.apache.spark.sql.classic.ColumnConversions
 import org.apache.spark.sql.execution.{PartitionedFileUtil, QueryExecution, SQLExecution}
 import org.apache.spark.sql.execution.datasources._
-import org.apache.spark.sql.execution.datasources.parquet.{HoodieFormatTrait, ParquetFilters}
+import org.apache.spark.sql.execution.datasources.parquet.{HoodieFormatTrait, ParquetFilters, SparkShreddingUtils}
 import org.apache.spark.sql.hudi.SparkAdapter
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.sources.{BaseRelation, Filter}
-import org.apache.spark.sql.types.StructType
+import org.apache.spark.sql.types.{BinaryType, DataType, StructType, VariantType}
 import org.apache.spark.sql.vectorized.{ColumnarBatch, ColumnVector}
 import org.apache.spark.storage.StorageLevel
+import org.apache.spark.types.variant.Variant
 import org.apache.spark.unsafe.types.UTF8String
 
 import java.time.ZoneId
 import java.util.TimeZone
 import java.util.concurrent.ConcurrentHashMap
+import java.util.function.{BiConsumer, Consumer}
 
 import scala.collection.JavaConverters._
 
@@ -195,5 +198,104 @@ abstract class BaseSpark4Adapter extends SparkAdapter with Logging {
       storageConf.getInt(SQLConf.PARQUET_FILTER_PUSHDOWN_INFILTERTHRESHOLD.key, sqlConf.parquetFilterPushDownInFilterThreshold),
       storageConf.getBoolean(SQLConf.CASE_SENSITIVE.key, sqlConf.caseSensitiveAnalysis),
       getRebaseSpec("CORRECTED"))
+  }
+
+  override def getVariantDataType: Option[DataType] = {
+    Some(VariantType)
+  }
+
+  override def isDataTypeEqualForParquet(requiredType: DataType, fileType: DataType): Option[Boolean] = {
+    /**
+     * Checks if a StructType is the physical representation of VariantType in Parquet.
+     * VariantType is stored in Parquet as a struct with binary "value" and "metadata" fields.
+     * Supports both unshredded (2 fields) and shredded (3 fields with "typed_value") layouts.
+     */
+    def isVariantPhysicalSchema(structType: StructType): Boolean = {
+      val fieldMap = structType.fields.map(f => (f.name, f.dataType)).toMap
+      val hasRequiredFields = fieldMap.contains("value") && fieldMap.contains("metadata") &&
+        fieldMap("value") == BinaryType && fieldMap("metadata") == BinaryType
+      val isUnshredded = structType.fields.length == 2
+      val isShredded = structType.fields.length == 3 && fieldMap.contains("typed_value")
+      hasRequiredFields && (isUnshredded || isShredded)
+    }
+
+    // Handle VariantType comparisons
+    (requiredType, fileType) match {
+      case (_: VariantType, s: StructType) if isVariantPhysicalSchema(s) => Some(true)
+      case (s: StructType, _: VariantType) if isVariantPhysicalSchema(s) => Some(true)
+      case _ => None // Not a VariantType comparison, use default logic
+    }
+  }
+
+  override def isVariantType(dataType: DataType): Boolean = {
+    dataType.isInstanceOf[VariantType]
+  }
+
+  override def createVariantValueWriter(
+    dataType: DataType,
+    writeValue: Consumer[Array[Byte]],
+    writeMetadata: Consumer[Array[Byte]]
+  ): BiConsumer[SpecializedGetters, Integer] = {
+    if (!isVariantType(dataType)) {
+      throw new IllegalArgumentException(s"Expected VariantType but got $dataType")
+    }
+
+    (row: SpecializedGetters, ordinal: Integer) => {
+      val variant = row.getVariant(ordinal)
+      writeValue.accept(variant.getValue)
+      writeMetadata.accept(variant.getMetadata)
+    }
+  }
+
+  override def convertVariantFieldToParquetType(
+    dataType: DataType,
+    fieldName: String,
+    fieldSchema: HoodieSchema,
+    repetition: Repetition
+  ): Type = {
+    if (!isVariantType(dataType)) {
+      throw new IllegalArgumentException(s"Expected VariantType but got $dataType")
+    }
+
+    // Determine if this is a shredded variant
+    val isShredded = fieldSchema match {
+      case variant: HoodieSchema.Variant => variant.isShredded
+      case _ => false
+    }
+
+    // For shredded variants, the value field is OPTIONAL (nullable)
+    // For unshredded variants, the value field is REQUIRED
+    val valueRepetition = if (isShredded) Repetition.OPTIONAL else Repetition.REQUIRED
+
+    // VariantType is always stored in Parquet as a struct with separate value and metadata binary fields.
+    // This matches how the HoodieRowParquetWriteSupport writes variant data.
+    // Note: We intentionally omit 'typed_value' for shredded variants as this writer only accesses raw binary blobs.
+    Types.buildGroup(repetition)
+      .addField(Types.primitive(PrimitiveType.PrimitiveTypeName.BINARY, valueRepetition).named("value"))
+      .addField(Types.primitive(PrimitiveType.PrimitiveTypeName.BINARY, Repetition.REQUIRED).named("metadata"))
+      .named(fieldName)
+  }
+
+  override def isVariantShreddingStruct(structType: StructType): Boolean = {
+    SparkShreddingUtils.isVariantShreddingStruct(structType)
+  }
+
+  override def generateVariantWriteShreddingSchema(dataType: DataType, isTopLevel: Boolean, isObjectField: Boolean): StructType = {
+    SparkShreddingUtils.addWriteShreddingMetadata(
+      SparkShreddingUtils.variantShreddingSchema(dataType, isTopLevel, isObjectField))
+  }
+
+  override def createShreddedVariantWriter(
+    shreddedStructType: StructType,
+    writeStruct: Consumer[InternalRow]
+  ): BiConsumer[SpecializedGetters, Integer] = {
+    val variantShreddingSchema = SparkShreddingUtils.buildVariantSchema(shreddedStructType)
+
+    (row: SpecializedGetters, ordinal: Integer) => {
+      val variantVal = row.getVariant(ordinal)
+      val variant = new Variant(variantVal.getValue, variantVal.getMetadata)
+      val shreddedValues = SparkShreddingUtils.castShredded(variant, variantShreddingSchema)
+      writeStruct.accept(shreddedValues)
+    }
   }
 }

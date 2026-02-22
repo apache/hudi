@@ -34,12 +34,13 @@ import org.apache.hudi.keygen.{CustomAvroKeyGenerator, CustomKeyGenerator, Times
 import org.apache.hudi.storage.StoragePath
 
 import org.apache.spark.internal.Logging
-import org.apache.spark.sql.{SparkSession, SQLContext}
+import org.apache.spark.sql.{SQLContext, SparkSession}
 import org.apache.spark.sql.catalyst.analysis.Resolver
 import org.apache.spark.sql.catalyst.catalog.BucketSpec
 import org.apache.spark.sql.execution.datasources._
 import org.apache.spark.sql.execution.datasources.parquet.HoodieFileGroupReaderBasedFileFormat
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils
+import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.sources.Filter
 import org.apache.spark.sql.types.StructType
 
@@ -62,6 +63,18 @@ abstract class HoodieBaseHadoopFsRelationFactory(val sqlContext: SQLContext,
                                                  val schemaSpec: Option[StructType],
                                                  val isBootstrap: Boolean
                                                 ) extends SparkAdapterSupport with HoodieHadoopFsRelationFactory with Logging {
+  // Propagate Hudi's variant allow-reading-shredded config to Spark's SQLConf.
+  // ParquetToSparkSchemaConverter reads this from SQLConf.get(), so it must be set
+  // before query execution starts here during table resolution
+  if (HoodieSparkUtils.gteqSpark4_0) {
+    val sqlConf = sqlContext.sparkSession.sessionState.conf
+    val hoodieParquetAllowReadingShreddedConfKey = "hoodie.parquet.variant.allow.reading.shredded"
+    val allowReadingShredded = options.getOrElse(
+      hoodieParquetAllowReadingShreddedConfKey,
+      sqlConf.getConfString(hoodieParquetAllowReadingShreddedConfKey, "true"))
+    sqlConf.setConfString(SQLConf.VARIANT_ALLOW_READING_SHREDDED.key, allowReadingShredded)
+  }
+
   protected lazy val sparkSession: SparkSession = sqlContext.sparkSession
   protected lazy val optParams: Map[String, String] = options
 
