@@ -217,6 +217,14 @@ public class HoodieClusteringConfig extends HoodieConfig {
       .sinceVersion("0.14.0")
       .withDocumentation("Whether to generate clustering plan when there is only one file group involved, by default true");
 
+  public static final ConfigProperty<Boolean> EARLIER_INSTANTS_FIRST = ConfigProperty
+      .key("hoodie.clustering.earlier_instants_first")
+      .defaultValue(false)
+      .markAdvanced()
+      .sinceVersion("0.14.0")
+      .withDocumentation("When true, sort file slices by commit time (earlier first) then by file size when creating "
+          + "clustering groups so that older data files are clustered first (e.g. to reduce stitching lag). When false, sort by file size only.");
+
   public static final ConfigProperty<String> PLAN_STRATEGY_SORT_COLUMNS = ConfigProperty
       .key(CLUSTERING_STRATEGY_PARAM_PREFIX + "sort.columns")
       .noDefaultValue()
@@ -581,6 +589,11 @@ public class HoodieClusteringConfig extends HoodieConfig {
 
     public Builder withClusteringTargetFileMaxBytes(long targetFileSize) {
       clusteringConfig.setValue(PLAN_STRATEGY_TARGET_FILE_MAX_BYTES, String.valueOf(targetFileSize));
+      return this;
+    }
+
+    public Builder withEarlierInstantsFirst(Boolean earlierInstantsFirst) {
+      clusteringConfig.setValue(EARLIER_INSTANTS_FIRST, String.valueOf(earlierInstantsFirst));
       return this;
     }
 

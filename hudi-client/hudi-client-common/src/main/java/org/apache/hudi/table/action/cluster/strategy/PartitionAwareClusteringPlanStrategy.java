@@ -39,6 +39,7 @@ import lombok.extern.slf4j.Slf4j;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -67,11 +68,17 @@ public abstract class PartitionAwareClusteringPlanStrategy<T,I,K,O> extends Clus
     List<Pair<List<FileSlice>, Integer>> fileSliceGroups = new ArrayList<>();
     List<FileSlice> currentGroup = new ArrayList<>();
 
-    // Sort fileSlices before dividing, which makes dividing more compact
+    // Sort file slices by instant time (when earlier-instants-first) and size before dividing,
+    // so that older data files are clustered first and dividing is more compact
+    Comparator<FileSlice> sortedFileSlicesComparator = Comparator
+        .comparing((FileSlice fileSlice) -> fileSlice.getBaseFile()
+            .map(baseFile -> writeConfig.isEarlierInstantsFirst() ? baseFile.getCommitTime() : "").orElse(""))
+        .thenComparing(
+            (fileSlice -> fileSlice.getBaseFile()
+                .map(baseFile -> baseFile.getFileSize()).orElse(writeConfig.getParquetMaxFileSize())),
+            Comparator.reverseOrder());
     List<FileSlice> sortedFileSlices = new ArrayList<>(fileSlices);
-    sortedFileSlices.sort((o1, o2) -> (int)
-        ((o2.getBaseFile().isPresent() ? o2.getBaseFile().get().getFileSize() : writeConfig.getParquetMaxFileSize())
-            - (o1.getBaseFile().isPresent() ? o1.getBaseFile().get().getFileSize() : writeConfig.getParquetMaxFileSize())));
+    sortedFileSlices.sort(sortedFileSlicesComparator);
 
     long totalSizeSoFar = 0;
     boolean partialScheduled = false;
