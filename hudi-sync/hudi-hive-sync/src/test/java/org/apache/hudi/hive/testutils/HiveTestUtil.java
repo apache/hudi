@@ -187,11 +187,6 @@ public class HiveTestUtil {
 
   public static void clear() throws IOException, HiveException, MetaException {
     fileSystem.delete(new Path(basePath), true);
-    HoodieTableMetaClient.newTableBuilder()
-        .setTableType(HoodieTableType.COPY_ON_WRITE)
-        .setTableName(TABLE_NAME)
-        .setPayloadClass(HoodieAvroPayload.class)
-        .initTable(HadoopFSUtils.getStorageConfWithCopy(configuration), basePath);
 
     for (String tableName : createdTablesSet) {
       ddlExecutor.runSQL("drop table if exists " + tableName);
