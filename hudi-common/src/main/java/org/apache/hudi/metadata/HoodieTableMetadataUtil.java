@@ -2256,7 +2256,7 @@ public class HoodieTableMetadataUtil {
       log.debug("Metadata table partition {} not found at path {}", partitionPath, metadataTablePartitionPath);
       return null;
     } catch (Exception e) {
-      throw new HoodieMetadataException(String.format("Failed to check existence of MDT partition %s at path %s: ", partitionPath, metadataTablePartitionPath), e);
+      throw new HoodieMetadataException(String.format("Failed to check existence of MDT partition %s at path %s", partitionPath, metadataTablePartitionPath), e);
     }
 
     if (backup) {
