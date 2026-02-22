@@ -21,19 +21,21 @@ package org.apache.spark.sql.hudi
 import org.apache.hudi.{HoodiePartitionCDCFileGroupMapping, HoodiePartitionFileSliceMapping}
 import org.apache.hudi.client.model.HoodieInternalRow
 import org.apache.hudi.common.model.FileSlice
+import org.apache.hudi.common.schema.HoodieSchema
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.cdc.HoodieCDCFileSplit
 import org.apache.hudi.storage.StorageConfiguration
+
 import org.apache.hadoop.conf.Configuration
-import org.apache.hudi.common.schema.HoodieSchema
-import org.apache.parquet.schema.MessageType
+import org.apache.parquet.schema.{MessageType, Type}
+import org.apache.parquet.schema.Type.Repetition
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql._
 import org.apache.spark.sql.avro.{HoodieAvroDeserializer, HoodieAvroSerializer}
 import org.apache.spark.sql.catalyst.{InternalRow, TableIdentifier}
 import org.apache.spark.sql.catalyst.catalog.CatalogTable
-import org.apache.spark.sql.catalyst.expressions.{AttributeReference, Expression, InterpretedPredicate}
+import org.apache.spark.sql.catalyst.expressions.{AttributeReference, Expression, InterpretedPredicate, SpecializedGetters}
 import org.apache.spark.sql.catalyst.parser.{ParseException, ParserInterface}
 import org.apache.spark.sql.catalyst.plans.logical.{Command, LogicalPlan}
 import org.apache.spark.sql.catalyst.trees.Origin
@@ -46,11 +48,12 @@ import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.parser.HoodieExtendedParserInterface
 import org.apache.spark.sql.sources.{BaseRelation, Filter}
 import org.apache.spark.sql.types.{DataType, Metadata, StructType}
-import org.apache.spark.sql.vectorized.{ColumnVector, ColumnarBatch}
+import org.apache.spark.sql.vectorized.{ColumnarBatch, ColumnVector}
 import org.apache.spark.storage.StorageLevel
 import org.apache.spark.unsafe.types.UTF8String
 
 import java.util.{Locale, TimeZone}
+import java.util.function.{BiConsumer, Consumer}
 
 /**
  * Interface adapting discrepancies and incompatibilities between different Spark versions
@@ -374,4 +377,69 @@ trait SparkAdapter extends Serializable {
    * @return A streaming [[DataFrame]]
    */
   def createStreamingDataFrame(sqlContext: SQLContext, relation: HadoopFsRelation, requiredSchema: StructType): DataFrame
+
+  /**
+   * Gets the VariantType DataType if supported by this Spark version.
+   * Spark 3.x returns None (VariantType not supported).
+   * Spark 4.x returns Some(VariantType).
+   *
+   * @return Option[DataType] - Some(VariantType) for Spark 4.x, None for Spark 3.x
+   */
+  def getVariantDataType: Option[DataType]
+
+  /**
+   * Checks if two data types are equal for Parquet file format purposes.
+   * This handles version-specific types like VariantType (Spark 4.0+).
+   *
+   * Returns Some(true) if types are equal, Some(false) if not equal, or None if
+   * this adapter doesn't handle this specific type comparison (fallback to default logic).
+   *
+   * @param requiredType The required/expected data type
+   * @param fileType The data type from the file
+   * @return Option[Boolean] - Some(result) if handled by adapter, None otherwise
+   */
+  def isDataTypeEqualForParquet(requiredType: DataType, fileType: DataType): Option[Boolean]
+
+  /**
+   * Checks if the given DataType is a VariantType.
+   * Spark 3.x returns false, Spark 4.x checks for VariantType.
+   *
+   * @param dataType The data type to check
+   * @return true if it's a VariantType, false otherwise
+   */
+  def isVariantType(dataType: DataType): Boolean
+
+  /**
+   * Creates a ValueWriter function for VariantType if the data type is VariantType.
+   * Returns null for Spark 3.x or if the data type is not VariantType.
+   *
+   * The returned function accepts (SpecializedGetters, ordinal) and writes variant data.
+   *
+   * @param dataType The data type to create a writer for
+   * @param writeValue Function to write the variant value binary
+   * @param writeMetadata Function to write the variant metadata binary
+   * @return BiConsumer function or null
+   */
+  def createVariantValueWriter(
+    dataType: DataType,
+    writeValue: Consumer[Array[Byte]],
+    writeMetadata: Consumer[Array[Byte]]
+  ): BiConsumer[SpecializedGetters, Integer]
+
+  /**
+   * Converts a VariantType field to Parquet Type.
+   * Returns null for Spark 3.x or if the data type is not VariantType.
+   *
+   * @param dataType The data type to convert
+   * @param fieldName The field name
+   * @param fieldSchema The HoodieSchema for the field (to determine shredded vs unshredded)
+   * @param repetition The Parquet repetition type
+   * @return Parquet Type or null
+   */
+  def convertVariantFieldToParquetType(
+    dataType: DataType,
+    fieldName: String,
+    fieldSchema: HoodieSchema,
+    repetition: Repetition
+  ): Type
 }

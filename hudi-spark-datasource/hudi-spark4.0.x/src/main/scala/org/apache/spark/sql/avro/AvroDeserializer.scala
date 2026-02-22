@@ -32,7 +32,7 @@ import org.apache.spark.sql.catalyst.util.DateTimeConstants.MILLIS_PER_DAY
 import org.apache.spark.sql.execution.datasources.DataSourceUtils
 import org.apache.spark.sql.internal.LegacyBehaviorPolicy
 import org.apache.spark.sql.types._
-import org.apache.spark.unsafe.types.UTF8String
+import org.apache.spark.unsafe.types.{UTF8String, VariantVal}
 
 import java.math.BigDecimal
 import java.nio.ByteBuffer
@@ -217,6 +217,37 @@ private[sql] class AvroDeserializer(rootAvroType: Schema,
         val bigDecimal = decimalConversions.fromBytes(value.asInstanceOf[ByteBuffer], avroType, d)
         val decimal = createDecimal(bigDecimal, d.getPrecision, d.getScale)
         updater.setDecimal(ordinal, decimal)
+
+      case (RECORD, VariantType) if avroType.getProp("logicalType") == "variant" =>
+        // Validation & Pre-calculation with fail fast logic
+        val valueField = avroType.getField("value")
+        val metadataField = avroType.getField("metadata")
+
+        if (valueField == null || metadataField == null) {
+          throw new IncompatibleSchemaException(incompatibleMsg +
+            ": Variant logical type requires 'value' and 'metadata' fields")
+        }
+
+        val valueIdx = valueField.pos()
+        val metadataIdx = metadataField.pos()
+
+        // Variant types are stored as records with "value" and "metadata" binary fields
+        // Deserialize them back to VariantVal
+        (updater, ordinal, value) =>
+          val record = value.asInstanceOf[IndexedRecord]
+
+          val valueBuffer = record.get(valueIdx).asInstanceOf[ByteBuffer]
+          val valueBytes = new Array[Byte](valueBuffer.remaining)
+          valueBuffer.get(valueBytes)
+          valueBuffer.rewind()
+
+          val metadataBuffer = record.get(metadataIdx).asInstanceOf[ByteBuffer]
+          val metadataBytes = new Array[Byte](metadataBuffer.remaining)
+          metadataBuffer.get(metadataBytes)
+          metadataBuffer.rewind()
+
+          val variant = new VariantVal(valueBytes, metadataBytes)
+          updater.set(ordinal, variant)
 
       case (RECORD, st: StructType) =>
         // Avro datasource doesn't accept filters with nested attributes. See SPARK-32328.

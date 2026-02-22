@@ -1113,8 +1113,8 @@ public class TestHoodieSchema {
     // Verify fields
     List<HoodieSchemaField> fields = variantSchema.getFields();
     assertEquals(2, fields.size());
-    assertEquals("metadata", fields.get(0).name());
-    assertEquals("value", fields.get(1).name());
+    assertEquals("value", fields.get(0).name());
+    assertEquals("metadata", fields.get(1).name());
 
     // Verify field types
     assertEquals(HoodieSchemaType.BYTES, fields.get(0).schema().getType());
@@ -1156,12 +1156,12 @@ public class TestHoodieSchema {
     // Verify fields
     List<HoodieSchemaField> fields = variantSchema.getFields();
     assertEquals(3, fields.size());
-    assertEquals("metadata", fields.get(0).name());
-    assertEquals("value", fields.get(1).name());
+    assertEquals("value", fields.get(0).name());
+    assertEquals("metadata", fields.get(1).name());
     assertEquals("typed_value", fields.get(2).name());
 
     // Value field should be nullable for shredded
-    assertTrue(fields.get(1).schema().isNullable());
+    assertTrue(fields.get(0).schema().isNullable());
 
     // Verify typed_value schema
     HoodieSchema retrievedTypedValueSchema = variantSchema.getTypedValueField().get();
@@ -1179,11 +1179,11 @@ public class TestHoodieSchema {
     // Verify fields should have metadata and nullable value, but no typed_value
     List<HoodieSchemaField> fields = variantSchema.getFields();
     assertEquals(2, fields.size());
-    assertEquals("metadata", fields.get(0).name());
-    assertEquals("value", fields.get(1).name());
+    assertEquals("value", fields.get(0).name());
+    assertEquals("metadata", fields.get(1).name());
 
     // Value field should be nullable even without typed_value
-    assertTrue(fields.get(1).schema().isNullable());
+    assertTrue(fields.get(0).schema().isNullable());
   }
 
   @Test
