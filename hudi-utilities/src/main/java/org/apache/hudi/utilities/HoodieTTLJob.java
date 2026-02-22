@@ -31,10 +31,9 @@ import org.apache.hudi.exception.HoodieException;
 
 import com.beust.jcommander.JCommander;
 import com.beust.jcommander.Parameter;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.hadoop.fs.Path;
 import org.apache.spark.api.java.JavaSparkContext;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.Serializable;
 import java.util.ArrayList;
@@ -43,9 +42,9 @@ import java.util.List;
 /**
  * Utility class to run TTL management.
  */
+@Slf4j
 public class HoodieTTLJob {
 
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieTTLJob.class);
   private final Config cfg;
   private final TypedProperties props;
   private final JavaSparkContext jsc;
@@ -61,7 +60,7 @@ public class HoodieTTLJob {
     this.jsc = jsc;
     this.props = props;
     this.metaClient = metaClient;
-    LOG.info("Creating TTL job with configs : " + props.toString());
+    log.info("Creating TTL job with configs : {}", props.toString());
     // Disable async cleaning, will trigger synchronous cleaning manually.
     this.props.put(HoodieCleanConfig.ASYNC_CLEAN.key(), false);
     if (this.metaClient.getTableConfig().isMetadataTableAvailable()) {
@@ -129,7 +128,7 @@ public class HoodieTTLJob {
       SparkAdapterSupport$.MODULE$.sparkAdapter().stopSparkContext(jssc, exitCode);
     }
 
-    LOG.info("Hoodie TTL job ran successfully");
+    log.info("Hoodie TTL job ran successfully");
   }
 
 }

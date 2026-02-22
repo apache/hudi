@@ -23,14 +23,13 @@ import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.utilities.config.SqlTransformerConfig;
 import org.apache.hudi.utilities.exception.HoodieTransformExecutionException;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SparkSession;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.Scanner;
@@ -56,9 +55,8 @@ import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
  * <p>
  * SELECT * FROM tmp_personal_trips;
  */
+@Slf4j
 public class SqlFileBasedTransformer implements Transformer {
-
-  private static final Logger LOG = LoggerFactory.getLogger(SqlFileBasedTransformer.class);
 
   private static final String SRC_PATTERN = "<SRC>";
   private static final String TMP_TABLE = "HOODIE_SRC_TMP_TABLE_";
@@ -75,19 +73,19 @@ public class SqlFileBasedTransformer implements Transformer {
     final FileSystem fs = HadoopFSUtils.getFs(sqlFile, jsc.hadoopConfiguration(), true);
     // tmp table name doesn't like dashes
     final String tmpTable = TMP_TABLE.concat(UUID.randomUUID().toString().replace("-", "_"));
-    LOG.info("Registering tmp table: {}", tmpTable);
+    log.info("Registering tmp table: {}", tmpTable);
     rowDataset.createOrReplaceTempView(tmpTable);
 
     try (final Scanner scanner = new Scanner(fs.open(new Path(sqlFile)), "UTF-8")) {
       Dataset<Row> rows = null;
       // each sql statement is separated with semicolon hence set that as delimiter.
       scanner.useDelimiter(";");
-      LOG.info("SQL Query for transformation:");
+      log.info("SQL Query for transformation:");
       while (scanner.hasNext()) {
         String sqlStr = scanner.next();
         sqlStr = sqlStr.replaceAll(SRC_PATTERN, tmpTable).trim();
         if (!sqlStr.isEmpty()) {
-          LOG.info(sqlStr);
+          log.info(sqlStr);
           // overwrite the same dataset object until the last statement then return.
           rows = sparkSession.sql(sqlStr);
         }
