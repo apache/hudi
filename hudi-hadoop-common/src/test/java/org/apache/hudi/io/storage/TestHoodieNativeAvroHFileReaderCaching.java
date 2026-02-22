@@ -36,6 +36,7 @@ import org.apache.hudi.io.storage.hadoop.HoodieAvroHFileWriter;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
@@ -44,8 +45,6 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -61,9 +60,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+@Slf4j
 public class TestHoodieNativeAvroHFileReaderCaching {
-  private static final Logger LOG = LoggerFactory.getLogger(TestHoodieNativeAvroHFileReaderCaching.class);
-
   @TempDir
   public static Path tempDir;
 
@@ -82,7 +80,7 @@ public class TestHoodieNativeAvroHFileReaderCaching {
 
     // Write records with for realistic testing
     final int numRecords = 50_000;
-    LOG.debug("Creating HFile with {} records...", numRecords);
+    log.debug("Creating HFile with {} records...", numRecords);
 
     for (int i = 0; i < numRecords; i++) {
       String key = String.format("key_%08d", i);
@@ -105,14 +103,14 @@ public class TestHoodieNativeAvroHFileReaderCaching {
       MISSING_KEYS.add(missingKey);
     }
 
-    LOG.debug("HFile created with {} existing keys", EXISTING_KEYS.size());
-    LOG.debug("Generated {} missing keys for testing", MISSING_KEYS.size());
+    log.debug("HFile created with {} existing keys", EXISTING_KEYS.size());
+    log.debug("Generated {} missing keys for testing", MISSING_KEYS.size());
   }
 
   @Test
   @Disabled("Enable this for local performance tests")
   public void testBlockCachePerformanceOnRecordLevelIndex() throws Exception {
-    LOG.debug("\n=== HFile BlockCache Performance Test ===");
+    log.debug("\n=== HFile BlockCache Performance Test ===");
 
     // Test existing keys lookup performance
     testExistingKeysLookup();
@@ -120,11 +118,11 @@ public class TestHoodieNativeAvroHFileReaderCaching {
     // Test missing keys lookup performance 
     testMissingKeysLookup();
 
-    LOG.debug("================================================================\n");
+    log.debug("================================================================\n");
   }
 
   private void testExistingKeysLookup() throws Exception {
-    LOG.debug("\n--- Testing {} Existing Key Lookups ---", KEYS_TO_LOOKUP);
+    log.debug("\n--- Testing {} Existing Key Lookups ---", KEYS_TO_LOOKUP);
 
     // Select 10K random existing keys
     Collections.shuffle(EXISTING_KEYS, RANDOM);
@@ -140,7 +138,7 @@ public class TestHoodieNativeAvroHFileReaderCaching {
 
     double speedup = (double) noCacheTime / cacheTime;
 
-    LOG.debug("{} Existing Key Lookups:\n"
+    log.debug("{} Existing Key Lookups:\n"
         + "  - Without BlockCache: {} ms\n"
         + "  - With BlockCache: {} ms\n"
         + "  - Speedup: {}x\n"
@@ -150,7 +148,7 @@ public class TestHoodieNativeAvroHFileReaderCaching {
   }
 
   private void testMissingKeysLookup() throws Exception {
-    LOG.debug("\n--- Testing {} Missing Key Lookups ---", KEYS_TO_LOOKUP);
+    log.debug("\n--- Testing {} Missing Key Lookups ---", KEYS_TO_LOOKUP);
 
     // Use all 1k missing keys
     List<String> testKeys = new ArrayList<>(MISSING_KEYS);
@@ -166,7 +164,7 @@ public class TestHoodieNativeAvroHFileReaderCaching {
 
     double speedup = (double) noCacheTime / cacheTime;
 
-    LOG.debug("{} Existing Key Lookups:\n"
+    log.debug("{} Existing Key Lookups:\n"
         + "  - Without BlockCache: {} ms\n"
         + "  - With BlockCache: {} ms\n"
         + "  - Speedup: {}x\n"

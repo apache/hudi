@@ -27,7 +27,7 @@ import org.apache.hudi.testutils.HoodieClientTestBase
 import org.apache.spark.SparkException
 import org.apache.spark.sql.{DataFrame, Row, SparkSession}
 import org.apache.spark.sql.types._
-import org.junit.jupiter.api.{AfterEach, BeforeEach}
+import org.junit.jupiter.api.{AfterEach, Assertions, BeforeEach}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{CsvSource, ValueSource}
 
@@ -119,7 +119,7 @@ class TestAvroSchemaResolutionSupport extends HoodieClientTestBase with ScalaAss
         try {
           // convert int to string first before conversion to binary
           val initDF = prepDataFrame(df1, colInitType)
-          initDF.printSchema()
+          Assertions.assertNotNull(initDF.schema.toString())
           initDF.collect
 
           // recreate table
@@ -128,7 +128,7 @@ class TestAvroSchemaResolutionSupport extends HoodieClientTestBase with ScalaAss
           // perform avro supported casting
           var upsertDf = prepDataFrame(df2, colInitType)
           upsertDf = castColToX(a, colToCast, upsertDf)
-          upsertDf.schema.toString()
+          Assertions.assertNotNull(upsertDf.schema.toString())
           upsertDf.collect
 
           // upsert
@@ -137,7 +137,7 @@ class TestAvroSchemaResolutionSupport extends HoodieClientTestBase with ScalaAss
           // read out the table
           val readDf = spark.read.format("hudi")
             .load(tempRecordPath)
-          readDf.schema.toString()
+          Assertions.assertNotNull(readDf.schema.toString())
           readDf.collect
 
           assert(true)
