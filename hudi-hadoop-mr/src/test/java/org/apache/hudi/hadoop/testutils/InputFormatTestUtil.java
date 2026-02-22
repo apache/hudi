@@ -30,6 +30,7 @@ import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
+import org.apache.hudi.common.table.log.HoodieLogFormatWriter;
 import org.apache.hudi.common.table.log.block.HoodieAvroDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieCommandBlock;
 import org.apache.hudi.common.table.log.block.HoodieDataBlock;
@@ -371,10 +372,14 @@ public class InputFormatTestUtil {
                                                      int logVersion)
       throws InterruptedException, IOException {
     HoodieLogFormat.Writer writer =
-        HoodieLogFormat.newWriterBuilder().onParentPath(new StoragePath(partitionDir.getPath()))
-            .withFileId(fileId)
-            .withInstantTime(baseCommit).withStorage(storage).withLogVersion(logVersion)
-            .withFileExtension(HoodieLogFile.DELTA_EXTENSION).build();
+        HoodieLogFormatWriter.builder()
+            .withParentPath(new StoragePath(partitionDir.getPath()))
+            .withLogFileId(fileId)
+            .withInstantTime(baseCommit)
+            .withStorage(storage)
+            .withLogVersion(logVersion)
+            .withFileExtension(HoodieLogFile.DELTA_EXTENSION)
+            .build();
     // generate metadata
     Map<HoodieLogBlock.HeaderMetadataType, String> header = new HashMap<>();
     header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, newCommit);
@@ -406,8 +411,10 @@ public class InputFormatTestUtil {
                                                                HoodieLogBlock.HoodieLogBlockType logBlockType)
       throws InterruptedException, IOException {
     HoodieLogFormat.Writer writer =
-        HoodieLogFormat.newWriterBuilder().onParentPath(new StoragePath(partitionDir.getPath()))
-            .withFileExtension(HoodieLogFile.DELTA_EXTENSION).withFileId(fileId)
+        HoodieLogFormatWriter.builder()
+            .withParentPath(new StoragePath(partitionDir.getPath()))
+            .withFileExtension(HoodieLogFile.DELTA_EXTENSION)
+            .withLogFileId(fileId)
             .withLogVersion(logVersion)
             .withInstantTime(newCommit)
             .withStorage(storage)
@@ -444,8 +451,10 @@ public class InputFormatTestUtil {
                                                                    String oldCommit, int logVersion)
       throws InterruptedException, IOException {
     HoodieLogFormat.Writer writer =
-        HoodieLogFormat.newWriterBuilder().onParentPath(new StoragePath(partitionDir.getPath()))
-            .withFileExtension(HoodieLogFile.DELTA_EXTENSION).withFileId(fileId)
+        HoodieLogFormatWriter.builder()
+            .withParentPath(new StoragePath(partitionDir.getPath()))
+            .withFileExtension(HoodieLogFile.DELTA_EXTENSION)
+            .withLogFileId(fileId)
             .withInstantTime(baseCommit)
             .withLogVersion(logVersion).withStorage(storage).build();
 

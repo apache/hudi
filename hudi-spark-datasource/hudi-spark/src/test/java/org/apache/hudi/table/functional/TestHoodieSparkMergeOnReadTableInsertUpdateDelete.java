@@ -37,6 +37,7 @@ import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.AppendResult;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
+import org.apache.hudi.common.table.log.HoodieLogFormatWriter;
 import org.apache.hudi.common.table.log.LogFileCreationCallback;
 import org.apache.hudi.common.table.log.block.HoodieAvroDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieDataBlock;
@@ -394,14 +395,14 @@ public class TestHoodieSparkMergeOnReadTableInsertUpdateDelete extends SparkClie
 
       final WriteMarkers writeMarkers = WriteMarkersFactory.get(config.getMarkersType(),
           HoodieSparkTable.create(config, context()), newCommitTime);
-      HoodieLogFormat.Writer fakeLogWriter = HoodieLogFormat.newWriterBuilder()
-          .onParentPath(
+      HoodieLogFormat.Writer fakeLogWriter = HoodieLogFormatWriter.builder()
+          .withParentPath(
               FSUtils.constructAbsolutePath(config.getBasePath(),
                   correctWriteStat.getPartitionPath()))
-          .withFileId(correctWriteStat.getFileId())
+          .withLogFileId(correctWriteStat.getFileId())
           .withInstantTime(newCommitTime)
           .withLogVersion(correctLogFile.getLogVersion())
-          .withFileSize(0L)
+          .withFileLen(0L)
           .withSizeThreshold(config.getLogFileMaxSize()).withStorage(hoodieStorage())
           .withLogWriteToken(fakeToken)
           .withFileExtension(HoodieLogFile.DELTA_EXTENSION)
