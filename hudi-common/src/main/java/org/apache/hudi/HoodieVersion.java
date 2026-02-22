@@ -81,11 +81,14 @@ public final class HoodieVersion {
   }
 
   private static String getSubVersion(String version, int allowedDotCount) {
+    int index = version.indexOf('.');
     if (allowedDotCount == 1) {
-      int index = version.indexOf('.');
       return index == -1 ? version : version.substring(0, index);
     }
-    return getSubVersion(version.substring(version.indexOf('.') + 1), allowedDotCount - 1);
+    if (index == -1) {
+      return version;
+    }
+    return getSubVersion(version.substring(index + 1), allowedDotCount - 1);
   }
 
   protected static void setVersionOverride(String version) {
