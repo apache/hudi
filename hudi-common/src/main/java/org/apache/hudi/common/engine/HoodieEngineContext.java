@@ -123,6 +123,8 @@ public abstract class HoodieEngineContext {
 
   public abstract void cancelAllJobs();
 
+  public abstract Map<String, String> getInfo();
+
   /**
    * Aggregate the elements of each partition, and then the results for all the partitions, using given combine functions and a neutral "zero value".
    *

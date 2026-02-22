@@ -361,4 +361,18 @@ public class HoodieSparkEngineContext extends HoodieEngineContext {
                 new ConditionalRangePartitioner.CompositeKeyComparator<>())
             .mapToPair(e -> e._1));
   }
+
+  @Override
+  public Map<String, String> getInfo() {
+    Map<String, String> info = new HashMap<String, String>();
+    info.put("spark.application.id", javaSparkContext.sc().applicationId());
+    info.put("spark.user", javaSparkContext.sparkUser());
+    info.put("spark.master", javaSparkContext.master());
+    info.put("spark.application", javaSparkContext.appName());
+    info.put("spark.version", javaSparkContext.version());
+    info.put("spark.defaultParallelism", String.valueOf(javaSparkContext.defaultParallelism()));
+    info.put("spark.defaultMinPartitions", String.valueOf(javaSparkContext.defaultMinPartitions()));
+    info.put("spark.executor.instances", String.valueOf(javaSparkContext.getConf().get("spark.executor.instances", "")));
+    return info;
+  }
 }

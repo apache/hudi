@@ -50,6 +50,7 @@ import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.util.BinaryUtil;
 import org.apache.hudi.common.util.ConfigUtils;
+import org.apache.hudi.common.util.NetworkUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.StringUtils;
@@ -57,6 +58,7 @@ import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Triple;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.HoodieVersion;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.keygen.constant.KeyGeneratorType;
@@ -74,7 +76,6 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
-import java.time.Instant;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
@@ -493,10 +494,10 @@ public class HoodieTableConfig extends HoodieConfig {
     final String checksum;
     if (isValidChecksum(props)) {
       checksum = props.getProperty(TABLE_CHECKSUM.key());
-      props.store(outputStream, "Updated at " + Instant.now());
+      props.store(outputStream, getFileComment(props));
     } else {
       Properties propsWithChecksum = getOrderedPropertiesWithTableChecksum(props);
-      propsWithChecksum.store(outputStream, "Properties saved on " + Instant.now());
+      propsWithChecksum.store(outputStream, getFileComment(propsWithChecksum));
       checksum = propsWithChecksum.getProperty(TABLE_CHECKSUM.key());
       props.setProperty(TABLE_CHECKSUM.key(), checksum);
     }
@@ -1368,6 +1369,21 @@ public class HoodieTableConfig extends HoodieConfig {
   public Map<String, String> propsMap() {
     return props.entrySet().stream()
         .collect(Collectors.toMap(e -> String.valueOf(e.getKey()), e -> String.valueOf(e.getValue())));
+  }
+
+  public static String getFileComment(Properties props) {
+    final long ts = System.currentTimeMillis();
+    return String.format("Date=%s, ts=%d, host=%s, #properties=%d, hudi_version=%s",
+        new java.util.Date(ts), ts, NetworkUtils.getHostname(), props.size(), HoodieVersion.get());
+  }
+
+  public static String getFileComment(Properties props, Map<String, String> extraKeyValue) {
+    StringBuilder sb = new StringBuilder(getFileComment(props));
+    for (Map.Entry<String, String> entry : extraKeyValue.entrySet()) {
+      sb.append(String.format(", %s=%s", entry.getKey(), entry.getValue()));
+    }
+
+    return sb.toString();
   }
 
   /**
