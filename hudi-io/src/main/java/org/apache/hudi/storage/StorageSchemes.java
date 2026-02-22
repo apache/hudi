@@ -47,14 +47,14 @@ public enum StorageSchemes {
   S3("s3", true, null, "org.apache.hudi.aws.transaction.lock.S3StorageLockClient"),
   // Google Cloud Storage
   GCS("gs", true, null, "org.apache.hudi.gcp.transaction.lock.GCSStorageLockClient"),
-  // Azure WASB
-  WASB("wasb", null, null, null),
-  WASBS("wasbs", null, null, null),
+  // Azure WASB (Azure Blob Storage)
+  WASB("wasb", true, null, "org.apache.hudi.azure.transaction.lock.ADLSStorageLockClient"),
+  WASBS("wasbs", true, null, "org.apache.hudi.azure.transaction.lock.ADLSStorageLockClient"),
   // Azure ADLS
   ADL("adl", null, null, null),
   // Azure ADLS Gen2
-  ABFS("abfs", null, null, null),
-  ABFSS("abfss", null, null, null),
+  ABFS("abfs", true, null, "org.apache.hudi.azure.transaction.lock.ADLSStorageLockClient"),
+  ABFSS("abfss", true, null, "org.apache.hudi.azure.transaction.lock.ADLSStorageLockClient"),
   // Aliyun OSS
   OSS("oss", null, null, null),
   // ViewFS is just a layer on top of other file systems based on hadoop like HDFS.
