@@ -128,6 +128,7 @@ import org.apache.hudi.utilities.transform.SqlQueryBasedTransformer;
 import org.apache.hudi.utilities.transform.Transformer;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
@@ -157,8 +158,6 @@ import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -207,9 +206,8 @@ import static org.junit.jupiter.params.provider.Arguments.arguments;
 /**
  * Basic tests against {@link HoodieDeltaStreamer}, by issuing bulk_inserts, upserts, inserts. Check counts at the end.
  */
+@Slf4j
 public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
-
-  private static final Logger LOG = LoggerFactory.getLogger(TestHoodieDeltaStreamer.class);
 
   private void addRecordMerger(HoodieRecordType type, List<String> hoodieConfig) {
     if (type == HoodieRecordType.SPARK) {
@@ -434,7 +432,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
       deltaStreamer.sync();
     }, "Should error out when setting the key generator class property to an invalid value");
     // expected
-    LOG.warn("Expected error during getting the key generator", e);
+    log.warn("Expected error during getting the key generator", e);
     assertTrue(e.getMessage().contains("Unable to load class"));
   }
 
@@ -484,7 +482,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
       syncOnce(TestHelpers.makeConfig(basePath + "/not_a_table", WriteOperationType.BULK_INSERT));
     }, "Should error out when pointed out at a dir thats not a table");
     // expected
-    LOG.debug("Expected error during table creation", e);
+    log.debug("Expected error during table creation", e);
   }
 
   @ParameterizedTest
@@ -561,7 +559,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     cfg.targetBasePath = newDatasetBasePath;
     syncOnce(cfg);
     Dataset<Row> res = sqlContext.read().format("org.apache.hudi").load(newDatasetBasePath);
-    LOG.info("Schema : {}", res.schema());
+    log.info("Schema : {}", res.schema());
 
     assertRecordCount(1950, newDatasetBasePath, sqlContext);
     res.registerTempTable("bootstrapped");
@@ -1568,7 +1566,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
       try {
         ds.sync();
       } catch (Exception ex) {
-        LOG.warn("DS continuous job failed, hence not proceeding with condition check for " + jobId);
+        log.warn("DS continuous job failed, hence not proceeding with condition check for {}", jobId);
         throw new RuntimeException(ex.getMessage(), ex);
       }
     });
@@ -1966,19 +1964,19 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
             buildIndexerConfig(tableBasePath, ds.getConfig().targetTableName, null, UtilHelpers.SCHEDULE, "COLUMN_STATS"));
         scheduleIndexInstantTime = scheduleIndexingJob.doSchedule();
       } catch (Exception e) {
-        LOG.info("Schedule indexing failed", e);
+        log.info("Schedule indexing failed", e);
         return false;
       }
       if (scheduleIndexInstantTime.isPresent()) {
         TestHelpers.assertPendingIndexCommit(tableBasePath);
-        LOG.info("Schedule indexing success, now build index with instant time " + scheduleIndexInstantTime.get());
+        log.info("Schedule indexing success, now build index with instant time {}", scheduleIndexInstantTime.get());
         HoodieIndexer runIndexingJob = new HoodieIndexer(jsc,
             buildIndexerConfig(tableBasePath, ds.getConfig().targetTableName, scheduleIndexInstantTime.get(), UtilHelpers.EXECUTE, "COLUMN_STATS"));
         runIndexingJob.start(0);
-        LOG.info("Metadata indexing success");
+        log.info("Metadata indexing success");
         TestHelpers.assertCompletedIndexCommit(tableBasePath);
       } else {
-        LOG.warn("Metadata indexing failed");
+        log.warn("Metadata indexing failed");
       }
       return true;
     });
@@ -2006,7 +2004,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
             Arrays.asList(HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_ENABLE_PROP.key() + "=true", HoodieWriteConfig.MARKERS_TYPE.key() + "=DIRECT")));
         scheduleIndexInstantTime = scheduleIndexingJob.doSchedule();
         TestHelpers.assertPendingIndexCommit(tableBasePath);
-        LOG.info("Schedule indexing success, now build index with instant time " + scheduleIndexInstantTime.get());
+        log.info("Schedule indexing success, now build index with instant time {}", scheduleIndexInstantTime.get());
         // Wait for a pending commit before starting execution phase for the executor. This ensures that indexer waits for the commit to complete.
         TestHelpers.waitFor(() -> {
           HoodieTableMetaClient metaClient = HoodieTestUtils.createMetaClient(storage.getConf(), tableBasePath);
@@ -2017,7 +2015,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
             buildIndexerConfig(tableBasePath, ds.getConfig().targetTableName, scheduleIndexInstantTime.get(), UtilHelpers.EXECUTE, "RECORD_INDEX",
                 Arrays.asList(HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_ENABLE_PROP.key() + "=true", HoodieWriteConfig.MARKERS_TYPE.key() + "=DIRECT")));
         runIndexingJob.start(0);
-        LOG.info("Metadata indexing success");
+        log.info("Metadata indexing success");
         TestHelpers.assertCompletedIndexCommit(tableBasePath);
         // Assert no pending commits before indexing instant
         HoodieTableMetaClient metaClient = HoodieTestUtils.createMetaClient(storage.getConf(), tableBasePath);
@@ -2066,7 +2064,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
             buildIndexerConfig(tableBasePath, ds.getConfig().targetTableName, null, UtilHelpers.SCHEDULE, "RECORD_INDEX"));
         scheduleIndexInstantTime = scheduleIndexingJob.doSchedule();
         TestHelpers.assertPendingIndexCommit(tableBasePath);
-        LOG.info("Schedule indexing success, now build index with instant time " + scheduleIndexInstantTime.get());
+        log.info("Schedule indexing success, now build index with instant time {}", scheduleIndexInstantTime.get());
         // Wait for clustering instant to be scheduled before starting execution phase of the executor
         TestHelpers.waitFor(() -> {
           HoodieTableMetaClient metaClient = HoodieTestUtils.createMetaClient(storage, tableBasePath);
@@ -2083,7 +2081,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
           boolean res = JavaTestUtils.checkNestedExceptionContains(t, "Index catchup failed");
           assertTrue(res, "Indexing catchup task should have timed out");
         }
-        LOG.info("Metadata indexing timed out");
+        log.info("Metadata indexing timed out");
       } catch (Exception e) {
         fail("Indexing job should not have failed", e);
       }
@@ -2113,19 +2111,19 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
             initialHoodieClusteringJob(tableBasePath, null, true, null);
         scheduleClusteringInstantTime = scheduleClusteringJob.doSchedule();
       } catch (Exception e) {
-        LOG.warn("Schedule clustering failed", e);
+        log.warn("Schedule clustering failed", e);
         Assertions.fail("Schedule clustering failed", e);
       }
       if (scheduleClusteringInstantTime.isPresent()) {
-        LOG.info("Schedule clustering success, now cluster with instant time " + scheduleClusteringInstantTime.get());
+        log.info("Schedule clustering success, now cluster with instant time {}", scheduleClusteringInstantTime.get());
         HoodieClusteringJob.Config clusterClusteringConfig = buildHoodieClusteringUtilConfig(tableBasePath,
             shouldPassInClusteringInstantTime ? scheduleClusteringInstantTime.get() : null, false);
         HoodieClusteringJob clusterClusteringJob = new HoodieClusteringJob(jsc, clusterClusteringConfig);
         clusterClusteringJob.cluster(clusterClusteringConfig.retry);
         TestHelpers.assertAtLeastNReplaceCommits(1, tableBasePath);
-        LOG.info("Cluster success");
+        log.info("Cluster success");
       } else {
-        LOG.warn("Clustering execution failed");
+        log.warn("Clustering execution failed");
         Assertions.fail("Clustering execution failed");
       }
     } else {
@@ -2295,15 +2293,15 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
       try {
         int result = scheduleClusteringJob.cluster(0);
         if (result == 0) {
-          LOG.info("Cluster success");
+          log.info("Cluster success");
         } else {
-          LOG.warn("Cluster failed");
+          log.warn("Cluster failed");
           if (!runningMode.toLowerCase().equals(UtilHelpers.EXECUTE)) {
             return false;
           }
         }
       } catch (Exception e) {
-        LOG.warn("ScheduleAndExecute clustering failed", e);
+        log.warn("ScheduleAndExecute clustering failed", e);
         exception = e;
         if (!runningMode.equalsIgnoreCase(UtilHelpers.EXECUTE)) {
           return false;
@@ -2463,13 +2461,13 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
       try {
         int counter = 2;
         while (counter < 100) { // lets keep going. if the test times out, we will cancel the future within finally. So, safe to generate 100 batches.
-          LOG.info("Generating data for batch {}", counter);
+          log.info("Generating data for batch {}", counter);
           prepareParquetDFSFiles(100, PARQUET_SOURCE_ROOT, Integer.toString(counter) + ".parquet", false, null, null, makeDatesAmbiguous);
           counter++;
           Thread.sleep(2000);
         }
       } catch (Exception ex) {
-        LOG.warn("Input data generation failed", ex);
+        log.warn("Input data generation failed", ex);
         throw new RuntimeException(ex.getMessage(), ex);
       }
     });
@@ -2613,7 +2611,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     Exception e = assertThrows(HoodieException.class, () -> {
       syncOnce(new HoodieDeltaStreamer(cfg, jsc, fs, hiveServer.getHiveConf()));
     }, "Should error out when schema provider is not provided");
-    LOG.debug("Expected error during reading data from source ", e);
+    log.debug("Expected error during reading data from source ", e);
     assertTrue(e.getMessage().contains("Schema provider is required for this operation and for the source of interest. "
         + "Please set '--schemaprovider-class' in the top level HoodieStreamer config for the source of interest. "
         + "Based on the schema provider class chosen, additional configs might be required. "
@@ -2845,7 +2843,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     // Ensure it is empty
     HoodieCommitMetadata commitMetadata =
         mClient.getActiveTimeline().readCommitMetadata(newLastFinished);
-    LOG.info("New Commit Metadata={}", commitMetadata);
+    log.info("New Commit Metadata={}", commitMetadata);
     assertTrue(commitMetadata.getPartitionToWriteStats().isEmpty());
 
     // Try UPSERT with filterDupes true. Expect exception
@@ -3361,7 +3359,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
         try {
           fs.delete(entry.getPath());
         } catch (IOException e) {
-          LOG.warn("Failed to delete " + entry.getPath().toString(), e);
+          log.warn("Failed to delete: {}", entry.getPath().toString(), e);
         }
       });
     }
@@ -3537,7 +3535,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     Exception e = assertThrows(AnalysisException.class, () -> {
       testCsvDFSSource(false, '\t', false, Collections.singletonList(TripsWithDistanceTransformer.class.getName()));
     }, "Should error out when doing the transformation.");
-    LOG.debug("Expected error during transformation", e);
+    log.debug("Expected error during transformation", e);
     // First message for Spark 3.4 and above, second message for Spark 3.3, third message for Spark 3.2 and below
     assertTrue(
         e.getMessage().contains("[UNRESOLVED_COLUMN.WITH_SUGGESTION] A column or function parameter "
@@ -3892,9 +3890,9 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
         .build();
     Properties hoodieProps = new Properties();
     hoodieProps.load(fs.open(new Path(cfg.targetBasePath + "/.hoodie/hoodie.properties")));
-    LOG.info("old props: {}", hoodieProps);
+    log.info("old props: {}", hoodieProps);
     hoodieProps.put("hoodie.table.type", HoodieTableType.MERGE_ON_READ.name());
-    LOG.info("new props: {}", hoodieProps);
+    log.info("new props: {}", hoodieProps);
     StoragePath metaPathDir = new StoragePath(metaClient.getBasePath(), HoodieTableMetaClient.METAFOLDER_NAME);
     HoodieTableConfig.create(metaClient.getStorage(), metaPathDir, hoodieProps);
 
@@ -3963,9 +3961,9 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
         .build();
     Properties hoodieProps = new Properties();
     hoodieProps.load(fs.open(new Path(cfg.targetBasePath + "/.hoodie/hoodie.properties")));
-    LOG.info("old props: " + hoodieProps);
+    log.info("Old props: {}", hoodieProps);
     hoodieProps.put("hoodie.table.type", HoodieTableType.COPY_ON_WRITE.name());
-    LOG.info("new props: " + hoodieProps);
+    log.info("New props: {}", hoodieProps);
     StoragePath metaPathDir = new StoragePath(metaClient.getBasePath(), ".hoodie");
     HoodieTableConfig.create(metaClient.getStorage(), metaPathDir, hoodieProps);
 
@@ -4259,13 +4257,13 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
   /**
    * Return empty table.
    */
+  @Slf4j
   public static class DropAllTransformer implements Transformer {
-    private static final Logger LOG = LoggerFactory.getLogger(DropAllTransformer.class);
 
     @Override
     public Dataset apply(JavaSparkContext jsc, SparkSession sparkSession, Dataset<Row> rowDataset,
                          TypedProperties properties) {
-      LOG.info("DropAllTransformer called !!");
+      log.info("DropAllTransformer called !!");
       return sparkSession.createDataFrame(jsc.emptyRDD(), rowDataset.schema());
     }
   }

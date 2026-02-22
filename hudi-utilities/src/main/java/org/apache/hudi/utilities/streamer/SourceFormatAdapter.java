@@ -43,6 +43,8 @@ import org.apache.hudi.utilities.sources.helpers.RowConverter;
 import org.apache.hudi.utilities.sources.helpers.SanitizationUtils;
 
 import com.google.protobuf.Message;
+import lombok.AccessLevel;
+import lombok.Getter;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.sql.Column;
@@ -73,12 +75,15 @@ import static org.apache.hudi.utilities.streamer.BaseErrorTableWriter.ERROR_TABL
  */
 public class SourceFormatAdapter implements Closeable {
 
+  @Getter
   private final Source source;
   private boolean shouldSanitize = SANITIZE_SCHEMA_FIELD_NAMES.defaultValue();
 
   private  boolean wrapWithException = ROW_THROW_EXPLICIT_EXCEPTIONS.defaultValue();
+  @Getter(AccessLevel.PRIVATE)
   private String invalidCharMask = SCHEMA_FIELD_NAME_INVALID_CHAR_MASK.defaultValue();
 
+  @Getter(AccessLevel.PRIVATE)
   private boolean useJava8api = (boolean) SQLConf.DATETIME_JAVA8API_ENABLED().defaultValue().get();
 
 
@@ -111,18 +116,6 @@ public class SourceFormatAdapter implements Closeable {
   }
 
   /**
-   * Replacement mask for invalid characters encountered in avro names.
-   * @return sanitized value.
-   */
-  private String getInvalidCharMask() {
-    return invalidCharMask;
-  }
-
-  private boolean getUseJava8api() {
-    return useJava8api;
-  }
-
-  /**
    * transform input rdd of json string to generic records with support for adding error events to error table
    * @param inputBatch
    * @return
@@ -144,7 +137,7 @@ public class SourceFormatAdapter implements Closeable {
 
   private JavaRDD<Row> transformJsonToRowRdd(InputBatch<JavaRDD<String>> inputBatch) {
     MercifulJsonConverter.clearCache(inputBatch.getSchemaProvider().getSourceHoodieSchema().getFullName());
-    RowConverter convertor = new RowConverter(inputBatch.getSchemaProvider().getSourceHoodieSchema(), isFieldNameSanitizingEnabled(), getInvalidCharMask(), getUseJava8api());
+    RowConverter convertor = new RowConverter(inputBatch.getSchemaProvider().getSourceHoodieSchema(), isFieldNameSanitizingEnabled(), getInvalidCharMask(), isUseJava8api());
     return inputBatch.getBatch().map(rdd -> {
       if (errorTableWriter.isPresent()) {
         JavaRDD<Either<Row, String>> javaRDD = rdd.map(convertor::fromJsonToRowWithError);
@@ -315,10 +308,6 @@ public class SourceFormatAdapter implements Closeable {
       default:
         throw new IllegalArgumentException("Unknown source type (" + source.getSourceType() + ")");
     }
-  }
-
-  public Source getSource() {
-    return source;
   }
 
   @Override

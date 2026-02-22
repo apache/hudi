@@ -26,11 +26,10 @@ import org.apache.hudi.utilities.UtilHelpers;
 import org.apache.hudi.utilities.schema.JdbcbasedSchemaProvider;
 import org.apache.hudi.utilities.testutils.UtilitiesTestBase;
 
+import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.sql.Connection;
 import java.sql.DriverManager;
@@ -43,10 +42,10 @@ import static org.apache.hudi.utilities.testutils.JdbcTestUtils.JDBC_URL;
 import static org.apache.hudi.utilities.testutils.JdbcTestUtils.JDBC_USER;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
+@Slf4j
 @Tag("functional")
 public class TestJdbcbasedSchemaProvider extends SparkClientFunctionalTestHarness {
 
-  private static final Logger LOG = LoggerFactory.getLogger(TestJdbcbasedSchemaProvider.class);
   private static final TypedProperties PROPS = new TypedProperties();
 
   @BeforeAll
@@ -67,7 +66,7 @@ public class TestJdbcbasedSchemaProvider extends SparkClientFunctionalTestHarnes
       HoodieSchema sourceSchema = UtilHelpers.createSchemaProvider(JdbcbasedSchemaProvider.class.getName(), PROPS, jsc()).getSourceHoodieSchema();
       assertEquals(sourceSchema.toString().toUpperCase(), HoodieSchema.parse(UtilitiesTestBase.Helpers.readFile("streamer-config/source-jdbc.avsc")).toString().toUpperCase());
     } catch (HoodieException e) {
-      LOG.error("Failed to get connection through jdbc. ", e);
+      log.error("Failed to get connection through jdbc. ", e);
     }
   }
 

@@ -50,6 +50,7 @@ import org.apache.hudi.table.storage.HoodieStorageLayout;
 import org.apache.hudi.testutils.providers.SparkProvider;
 import org.apache.hudi.utilities.HoodieCompactor;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.hadoop.fs.Path;
 import org.apache.spark.HoodieSparkKryoRegistrar$;
 import org.apache.spark.SparkConf;
@@ -61,8 +62,6 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -79,9 +78,8 @@ import static org.apache.hudi.utilities.multitable.MultiTableServiceUtils.Consta
  * Tests for HoodieMultiTableServicesMain
  * @see HoodieMultiTableServicesMain
  */
+@Slf4j
 class TestHoodieMultiTableServicesMain extends HoodieCommonTestHarness implements SparkProvider {
-
-  private static final Logger LOG = LoggerFactory.getLogger(TestHoodieMultiTableServicesMain.class);
 
   protected boolean initialized = false;
 
@@ -155,10 +153,10 @@ class TestHoodieMultiTableServicesMain extends HoodieCommonTestHarness implement
     new Thread(() -> {
       try {
         Thread.sleep(10000);
-        LOG.info("Shutdown the table services");
+        log.info("Shutdown the table services");
         main.cancel();
       } catch (InterruptedException e) {
-        LOG.warn("InterruptedException: ", e);
+        log.warn("InterruptedException: ", e);
       }
     }).start();
     main.startServices();
@@ -193,10 +191,10 @@ class TestHoodieMultiTableServicesMain extends HoodieCommonTestHarness implement
     new Thread(() -> {
       try {
         Thread.sleep(10000);
-        LOG.info("Shutdown the table services");
+        log.info("Shutdown the table services");
         main.cancel();
       } catch (InterruptedException e) {
-        LOG.warn("InterruptedException: ", e);
+        log.warn("InterruptedException: ", e);
       }
     }).start();
     try {

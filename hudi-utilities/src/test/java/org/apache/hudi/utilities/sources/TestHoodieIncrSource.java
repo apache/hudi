@@ -67,6 +67,9 @@ import org.apache.hudi.utilities.streamer.HoodieStreamerMetrics;
 import org.apache.hudi.utilities.streamer.SourceProfile;
 import org.apache.hudi.utilities.streamer.SourceProfileSupplier;
 
+import lombok.AccessLevel;
+import lombok.AllArgsConstructor;
+import lombok.Getter;
 import org.apache.spark.SparkConf;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
@@ -1092,27 +1095,14 @@ public class TestHoodieIncrSource extends SparkClientFunctionalTestHarness {
     );
   }
 
+  @AllArgsConstructor
+  @Getter
   static class TestSourceProfile implements SourceProfile<Integer> {
 
     private final long maxSourceBytes;
     private final int sourcePartitions;
+    @Getter(AccessLevel.NONE)
     private final int numInstantsPerFetch;
-
-    public TestSourceProfile(long maxSourceBytes, int sourcePartitions, int numInstantsPerFetch) {
-      this.maxSourceBytes = maxSourceBytes;
-      this.sourcePartitions = sourcePartitions;
-      this.numInstantsPerFetch = numInstantsPerFetch;
-    }
-
-    @Override
-    public long getMaxSourceBytes() {
-      return maxSourceBytes;
-    }
-
-    @Override
-    public int getSourcePartitions() {
-      return sourcePartitions;
-    }
 
     @Override
     public Integer getSourceSpecificContext() {
@@ -1120,18 +1110,12 @@ public class TestHoodieIncrSource extends SparkClientFunctionalTestHarness {
     }
   }
 
+  @AllArgsConstructor
+  @Getter
   static class WriteResult {
+
     private HoodieInstant instant;
     private List<HoodieRecord> records;
-
-    WriteResult(HoodieInstant instant, List<HoodieRecord> records) {
-      this.instant = instant;
-      this.records = records;
-    }
-
-    public HoodieInstant getInstant() {
-      return instant;
-    }
 
     public String getInstantTime() {
       return instant.requestedTime();
@@ -1139,10 +1123,6 @@ public class TestHoodieIncrSource extends SparkClientFunctionalTestHarness {
 
     public String getCompletionTime() {
       return instant.getCompletionTime();
-    }
-
-    public List<HoodieRecord> getRecords() {
-      return records;
     }
   }
 }
