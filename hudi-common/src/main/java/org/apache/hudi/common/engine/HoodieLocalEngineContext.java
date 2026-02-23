@@ -189,7 +189,7 @@ public final class HoodieLocalEngineContext extends HoodieEngineContext {
   }
 
   @Override
-  public Map<String, String> getInfo() {
+  public Map<String, String> getEngineProperties() {
     return Collections.emptyMap();
   }
 

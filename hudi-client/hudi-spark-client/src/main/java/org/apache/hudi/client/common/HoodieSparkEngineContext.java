@@ -363,7 +363,7 @@ public class HoodieSparkEngineContext extends HoodieEngineContext {
   }
 
   @Override
-  public Map<String, String> getInfo() {
+  public Map<String, String> getEngineProperties() {
     Map<String, String> info = new HashMap<String, String>();
     info.put("spark.application.id", javaSparkContext.sc().applicationId());
     info.put("spark.user", javaSparkContext.sparkUser());

@@ -311,13 +311,42 @@ public abstract class BaseHoodieClient implements Serializable, AutoCloseable {
         && config.isMetadataStreamingWritesEnabled(table.getMetaClient().getTableConfig().getTableVersion());
   }
 
+  // Allowlist of key config properties to include in commit metadata
+  private static final String[] KEY_CONFIG_PROPERTIES = {
+      "hoodie.table.name",
+      "hoodie.table.type",
+      "hoodie.table.version",
+      "hoodie.datasource.write.operation",
+      "hoodie.datasource.write.recordkey.field",
+      "hoodie.datasource.write.partitionpath.field",
+      "hoodie.insert.shuffle.parallelism",
+      "hoodie.upsert.shuffle.parallelism",
+      "hoodie.bulkinsert.shuffle.parallelism",
+      "hoodie.delete.shuffle.parallelism",
+      "hoodie.write.concurrency.mode",
+      "hoodie.metadata.enable"
+  };
+
   protected Option<Map<String, String>> updateExtraMetadata(Option<Map<String, String>> extraMetadata) {
-    // Add write config, HUDI version and engine specific extra metadata
-    extraMetadata = extraMetadata.isPresent() ? extraMetadata : Option.of(new HashMap<String, String>());
-    extraMetadata.get().put("hudi.version", HoodieVersion.get());
-    extraMetadata.get().put("writeconfig", config.toString());
-    extraMetadata.get().put("engine", context.getClass().getSimpleName());
-    extraMetadata.get().putAll(context.getInfo());
-    return extraMetadata;
+    // Always create a new mutable HashMap to avoid UnsupportedOperationException with immutable maps
+    Map<String, String> newMetadata = new HashMap<String, String>();
+    if (extraMetadata.isPresent()) {
+      newMetadata.putAll(extraMetadata.get());
+    }
+
+    // Add HUDI version, engine info, and key config properties
+    newMetadata.put("hudi.version", HoodieVersion.get());
+    newMetadata.put("engine", context.getClass().getSimpleName());
+    newMetadata.putAll(context.getEngineProperties());
+
+    // Add only key config properties to avoid storing sensitive values and large config dumps
+    for (String key : KEY_CONFIG_PROPERTIES) {
+      String value = config.getString(key);
+      if (value != null && !value.isEmpty()) {
+        newMetadata.put("config." + key, value);
+      }
+    }
+
+    return Option.of(newMetadata);
   }
 }

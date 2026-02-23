@@ -234,7 +234,7 @@ public class HoodieFlinkEngineContext extends HoodieEngineContext {
   }
 
   @Override
-  public Map<String, String> getInfo() {
+  public Map<String, String> getEngineProperties() {
     return Collections.emptyMap();
   }
 
