@@ -621,6 +621,56 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
     }
   }
 
+  test("Test create table like after insert - reproduces issue #14107") {
+    // This test reproduces the bug where CREATE TABLE LIKE fails after data insertion
+    // because hoodie.query.as.ro.table property gets set during catalog sync
+    withTempDir { tmp =>
+      Seq("cow", "mor").foreach { tableType =>
+        withTable(generateTableName) { sourceTable =>
+          // Step 1: Create table
+          spark.sql(
+            s"""
+               |create table $sourceTable (
+               |  id int,
+               |  name string,
+               |  price double,
+               |  ts long
+               |) using hudi
+               | tblproperties (
+               |  primaryKey = 'id',
+               |  preCombineField = 'ts',
+               |  type = '$tableType'
+               | )
+               | location '${tmp.getCanonicalPath}/$sourceTable'""".stripMargin)
+
+          // Step 2: Insert data - this triggers catalog sync which sets hoodie.query.as.ro.table
+          spark.sql(
+            s"""
+               |insert into $sourceTable
+               |values (1, 'Alice', 100.0, 1000),
+               |       (2, 'Bob', 200.0, 2000)
+               |""".stripMargin)
+
+          // Step 3: CREATE TABLE LIKE should succeed even after insert
+          // Without the fix, this fails with "Creating ro/rt table need the existence of the base table"
+          withTable(generateTableName) { targetTable =>
+            spark.sql(
+              s"""
+                 |create table $targetTable
+                 |like $sourceTable
+                 |using hudi""".stripMargin)
+
+            val table = spark.sessionState.catalog.getTableMetadata(TableIdentifier(targetTable))
+            assertResult(targetTable)(table.identifier.table)
+            assertResult("hudi")(table.provider.get)
+            assertResult(tableType)(table.properties("type"))
+            assertResult("id")(table.properties("primaryKey"))
+          }
+        }
+      }
+    }
+  }
+
   test("Test Create Table As Select With Auto record key gen") {
     withTempDir { tmp =>
       // Create Non-Partitioned table
