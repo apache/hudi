@@ -20,6 +20,7 @@ package org.apache.hudi.client.utils;
 
 import org.apache.hudi.client.validator.PreWriteValidator;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.HoodieTimer;
@@ -51,13 +52,16 @@ public class PreWriteValidatorUtils {
    * @param writeOperationType The type of write operation
    * @param metaClient         The HoodieTableMetaClient
    * @param engineContext      The Hoodie engine context
+   * @param records            Iterable of records to be written, may be null
+   * @param <T>                The payload type of the records
    * @throws HoodieValidationException if any validation fails
    */
-  public static void runValidators(HoodieWriteConfig config,
-                                   String instantTime,
-                                   WriteOperationType writeOperationType,
-                                   HoodieTableMetaClient metaClient,
-                                   HoodieEngineContext engineContext) {
+  public static <T> void runValidators(HoodieWriteConfig config,
+                                       String instantTime,
+                                       WriteOperationType writeOperationType,
+                                       HoodieTableMetaClient metaClient,
+                                       HoodieEngineContext engineContext,
+                                       Iterable<HoodieRecord<T>> records) {
     String validatorClassNames = config.getPreWriteValidators();
 
     if (StringUtils.isNullOrEmpty(validatorClassNames)) {
@@ -75,7 +79,7 @@ public class PreWriteValidatorUtils {
     LOG.info("Running {} pre-write validators for instant {}", validators.size(), instantTime);
 
     List<String> failedValidators = validators.stream()
-        .filter(validator -> !runValidator(validator, instantTime, writeOperationType, metaClient, config, engineContext))
+        .filter(validator -> !runValidator(validator, instantTime, writeOperationType, metaClient, config, engineContext, records))
         .map(PreWriteValidator::getName)
         .collect(Collectors.toList());
 
@@ -94,18 +98,19 @@ public class PreWriteValidatorUtils {
    *
    * @return true if validation passed, false if validation failed
    */
-  private static boolean runValidator(PreWriteValidator validator,
-                                      String instantTime,
-                                      WriteOperationType writeOperationType,
-                                      HoodieTableMetaClient metaClient,
-                                      HoodieWriteConfig writeConfig,
-                                      HoodieEngineContext engineContext) {
+  private static <T> boolean runValidator(PreWriteValidator validator,
+                                          String instantTime,
+                                          WriteOperationType writeOperationType,
+                                          HoodieTableMetaClient metaClient,
+                                          HoodieWriteConfig writeConfig,
+                                          HoodieEngineContext engineContext,
+                                          Iterable<HoodieRecord<T>> records) {
     String validatorName = validator.getName();
     LOG.info("Running pre-write validator: {}", validatorName);
 
     try {
       HoodieTimer timer = HoodieTimer.start();
-      validator.validate(instantTime, writeOperationType, metaClient, writeConfig, engineContext);
+      validator.validate(instantTime, writeOperationType, metaClient, writeConfig, engineContext, records);
       long duration = timer.endTimer();
       LOG.info("Pre-write validator {} completed successfully in {} ms", validatorName, duration);
       return true;

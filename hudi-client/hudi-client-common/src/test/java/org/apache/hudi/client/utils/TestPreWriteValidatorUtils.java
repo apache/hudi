@@ -20,6 +20,7 @@ package org.apache.hudi.client.utils;
 
 import org.apache.hudi.client.validator.PreWriteValidator;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -46,7 +47,7 @@ public class TestPreWriteValidatorUtils {
     when(config.getPreWriteValidators()).thenReturn("");
 
     assertDoesNotThrow(() ->
-        PreWriteValidatorUtils.runValidators(config, "001", WriteOperationType.INSERT, metaClient, engineContext));
+        PreWriteValidatorUtils.runValidators(config, "001", WriteOperationType.INSERT, metaClient, engineContext, null));
   }
 
   @Test
@@ -58,7 +59,7 @@ public class TestPreWriteValidatorUtils {
     when(config.getPreWriteValidators()).thenReturn(null);
 
     assertDoesNotThrow(() ->
-        PreWriteValidatorUtils.runValidators(config, "001", WriteOperationType.INSERT, metaClient, engineContext));
+        PreWriteValidatorUtils.runValidators(config, "001", WriteOperationType.INSERT, metaClient, engineContext, null));
   }
 
   @Test
@@ -70,7 +71,7 @@ public class TestPreWriteValidatorUtils {
     when(config.getPreWriteValidators()).thenReturn(PassingPreWriteValidator.class.getName());
 
     assertDoesNotThrow(() ->
-        PreWriteValidatorUtils.runValidators(config, "001", WriteOperationType.INSERT, metaClient, engineContext));
+        PreWriteValidatorUtils.runValidators(config, "001", WriteOperationType.INSERT, metaClient, engineContext, null));
   }
 
   @Test
@@ -82,7 +83,7 @@ public class TestPreWriteValidatorUtils {
     when(config.getPreWriteValidators()).thenReturn(FailingPreWriteValidator.class.getName());
 
     assertThrows(HoodieValidationException.class, () ->
-        PreWriteValidatorUtils.runValidators(config, "001", WriteOperationType.INSERT, metaClient, engineContext));
+        PreWriteValidatorUtils.runValidators(config, "001", WriteOperationType.INSERT, metaClient, engineContext, null));
   }
 
   @Test
@@ -95,7 +96,7 @@ public class TestPreWriteValidatorUtils {
     when(config.getPreWriteValidators()).thenReturn(validators);
 
     assertDoesNotThrow(() ->
-        PreWriteValidatorUtils.runValidators(config, "001", WriteOperationType.INSERT, metaClient, engineContext));
+        PreWriteValidatorUtils.runValidators(config, "001", WriteOperationType.INSERT, metaClient, engineContext, null));
   }
 
   @Test
@@ -108,7 +109,7 @@ public class TestPreWriteValidatorUtils {
     when(config.getPreWriteValidators()).thenReturn(validators);
 
     assertThrows(HoodieValidationException.class, () ->
-        PreWriteValidatorUtils.runValidators(config, "001", WriteOperationType.INSERT, metaClient, engineContext));
+        PreWriteValidatorUtils.runValidators(config, "001", WriteOperationType.INSERT, metaClient, engineContext, null));
   }
 
   /**
@@ -116,11 +117,12 @@ public class TestPreWriteValidatorUtils {
    */
   public static class PassingPreWriteValidator implements PreWriteValidator {
     @Override
-    public void validate(String instantTime,
-                         WriteOperationType writeOperationType,
-                         HoodieTableMetaClient metaClient,
-                         HoodieWriteConfig writeConfig,
-                         HoodieEngineContext engineContext) throws HoodieValidationException {
+    public <T> void validate(String instantTime,
+                             WriteOperationType writeOperationType,
+                             HoodieTableMetaClient metaClient,
+                             HoodieWriteConfig writeConfig,
+                             HoodieEngineContext engineContext,
+                             Iterable<HoodieRecord<T>> records) throws HoodieValidationException {
       // Always passes - do nothing
     }
 
@@ -135,11 +137,12 @@ public class TestPreWriteValidatorUtils {
    */
   public static class FailingPreWriteValidator implements PreWriteValidator {
     @Override
-    public void validate(String instantTime,
-                         WriteOperationType writeOperationType,
-                         HoodieTableMetaClient metaClient,
-                         HoodieWriteConfig writeConfig,
-                         HoodieEngineContext engineContext) throws HoodieValidationException {
+    public <T> void validate(String instantTime,
+                             WriteOperationType writeOperationType,
+                             HoodieTableMetaClient metaClient,
+                             HoodieWriteConfig writeConfig,
+                             HoodieEngineContext engineContext,
+                             Iterable<HoodieRecord<T>> records) throws HoodieValidationException {
       throw new HoodieValidationException("Validation failed for testing");
     }
 

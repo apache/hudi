@@ -19,6 +19,7 @@
 package org.apache.hudi.client.validator;
 
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -32,9 +33,9 @@ import org.apache.hudi.exception.HoodieValidationException;
  * <p>Implementations can perform various validations such as:
  * <ul>
  *   <li>Schema compatibility checks</li>
+ *   <li>Data quality validations</li>
  *   <li>Permission validations</li>
  *   <li>Resource availability checks</li>
- *   <li>Service onboarding status verification</li>
  * </ul>
  */
 public interface PreWriteValidator {
@@ -43,18 +44,22 @@ public interface PreWriteValidator {
    * Validates the state before a write operation.
    * This method is called in the preWrite phase of the write client.
    *
-   * @param instantTime       The instant time for the write operation
+   * @param instantTime        The instant time for the write operation
    * @param writeOperationType The type of write operation being performed
-   * @param metaClient        The HoodieTableMetaClient for accessing table metadata
-   * @param writeConfig       The write configuration
-   * @param engineContext     The Hoodie engine context
+   * @param metaClient         The HoodieTableMetaClient for accessing table metadata
+   * @param writeConfig        The write configuration
+   * @param engineContext      The Hoodie engine context
+   * @param records            Iterable of records to be written, may be null for operations
+   *                           without input records (e.g., compact, cluster)
+   * @param <T>                The payload type of the records
    * @throws HoodieValidationException if validation fails and the write should not proceed
    */
-  void validate(String instantTime,
-                WriteOperationType writeOperationType,
-                HoodieTableMetaClient metaClient,
-                HoodieWriteConfig writeConfig,
-                HoodieEngineContext engineContext) throws HoodieValidationException;
+  <T> void validate(String instantTime,
+                    WriteOperationType writeOperationType,
+                    HoodieTableMetaClient metaClient,
+                    HoodieWriteConfig writeConfig,
+                    HoodieEngineContext engineContext,
+                    Iterable<HoodieRecord<T>> records) throws HoodieValidationException;
 
   /**
    * Returns a descriptive name for this validator.

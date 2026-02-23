@@ -40,6 +40,7 @@ import org.apache.hudi.common.model.ActionType;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieKey;
+import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.TableServiceType;
@@ -556,6 +557,18 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    */
   public void preWrite(String instantTime, WriteOperationType writeOperationType,
                        HoodieTableMetaClient metaClient) {
+    preWrite(instantTime, writeOperationType, metaClient, null);
+  }
+
+  /**
+   * Common method containing steps to be performed before write (upsert/insert/...) with records.
+   * @param instantTime
+   * @param writeOperationType
+   * @param metaClient
+   * @param records Iterable of records to be written, may be null
+   */
+  public void preWrite(String instantTime, WriteOperationType writeOperationType,
+                       HoodieTableMetaClient metaClient, Iterable<HoodieRecord<T>> records) {
     setOperationType(writeOperationType);
     this.lastCompletedTxnAndMetadata = txnManager.isLockRequired()
         ? TransactionUtils.getLastCompletedTxnInstantAndMetadata(metaClient) : Option.empty();
@@ -566,7 +579,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     tableServiceClient.startAsyncCleanerService(this);
     tableServiceClient.startAsyncArchiveService(this);
 
-    runPreWriteValidators(instantTime, writeOperationType, metaClient);
+    runPreWriteValidators(instantTime, writeOperationType, metaClient, records);
   }
 
   /**
@@ -577,10 +590,11 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    * @param instantTime        The instant time for the write operation
    * @param writeOperationType The type of write operation being performed
    * @param metaClient         The HoodieTableMetaClient for accessing table metadata
+   * @param records            Iterable of records to be written, may be null
    */
   protected void runPreWriteValidators(String instantTime, WriteOperationType writeOperationType,
-      HoodieTableMetaClient metaClient) {
-    PreWriteValidatorUtils.runValidators(config, instantTime, writeOperationType, metaClient, context);
+      HoodieTableMetaClient metaClient, Iterable<HoodieRecord<T>> records) {
+    PreWriteValidatorUtils.runValidators(config, instantTime, writeOperationType, metaClient, context, records);
   }
 
   /**
