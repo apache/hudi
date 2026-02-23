@@ -71,6 +71,9 @@ class TestSparkHoodieTableFileIndexHmsListing extends HoodieSparkSqlTestBase {
     spark.sql(s"INSERT INTO $tableName VALUES (2, 'a2', 20.0, 2000, '2023-01-02')")
     spark.sql(s"INSERT INTO $tableName VALUES (3, 'a3', 30.0, 3000, '2023-01-03')")
 
+    // Sync partitions to the catalog (Hudi doesn't automatically register partitions in the Spark catalog)
+    spark.sql(s"MSCK REPAIR TABLE $tableName")
+
     // Get the table path from the catalog
     val table = spark.sessionState.catalog.getTableMetadata(TableIdentifier(tableName))
     val tablePath = table.storage.properties("path")
@@ -199,6 +202,9 @@ class TestSparkHoodieTableFileIndexHmsListing extends HoodieSparkSqlTestBase {
     spark.sql(s"INSERT INTO $tableName VALUES (1, 'a1', 10.0, 1000, '2023-01-01')")
     spark.sql(s"INSERT INTO $tableName VALUES (2, 'a2', 20.0, 2000, '2023-01-02')")
 
+    // Sync partitions to the catalog
+    spark.sql(s"MSCK REPAIR TABLE $tableName")
+
     // Get the table path
     val table = spark.sessionState.catalog.getTableMetadata(TableIdentifier(tableName))
     val tablePath = table.storage.properties("path")
@@ -261,6 +267,9 @@ class TestSparkHoodieTableFileIndexHmsListing extends HoodieSparkSqlTestBase {
     spark.sql(s"INSERT INTO $tableName VALUES (1, 'a1', 10.0, 1000, '2023-01-01')")
     spark.sql(s"INSERT INTO $tableName VALUES (2, 'a2', 20.0, 2000, '2023-01-02')")
     spark.sql(s"INSERT INTO $tableName VALUES (3, 'a3', 30.0, 3000, '2023-01-03')")
+
+    // Sync partitions to the catalog
+    spark.sql(s"MSCK REPAIR TABLE $tableName")
 
     // Read with HMS listing enabled
     val df = spark.read.format("hudi")
