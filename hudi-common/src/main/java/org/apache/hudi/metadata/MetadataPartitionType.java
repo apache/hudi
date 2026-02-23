@@ -144,8 +144,8 @@ public enum MetadataPartitionType {
             String.format("Valid %s record expected for type: %s", SCHEMA_FIELD_ID_BLOOM_FILTER, MetadataPartitionType.BLOOM_FILTERS.getRecordType()));
       } else {
         payload.bloomFilterMetadata = new HoodieMetadataBloomFilter(
-            (String) bloomFilterRecord.get(BLOOM_FILTER_FIELD_TYPE),
-            (String) bloomFilterRecord.get(BLOOM_FILTER_FIELD_TIMESTAMP),
+            bloomFilterRecord.get(BLOOM_FILTER_FIELD_TYPE).toString(),
+            bloomFilterRecord.get(BLOOM_FILTER_FIELD_TIMESTAMP).toString(),
             (ByteBuffer) bloomFilterRecord.get(BLOOM_FILTER_FIELD_BLOOM_FILTER),
             (Boolean) bloomFilterRecord.get(BLOOM_FILTER_FIELD_IS_DELETED)
         );
