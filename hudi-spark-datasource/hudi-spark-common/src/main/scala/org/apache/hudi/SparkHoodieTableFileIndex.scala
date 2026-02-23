@@ -446,7 +446,8 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
 
   override protected def getPartitionPathFilter(activeTimeline: HoodieTimeline): org.apache.hudi.common.util.Option[org.apache.hudi.storage.StoragePathFilter] = {
     if (useROPathFilterForListing && !shouldIncludePendingCommits) {
-      val conf = HadoopFSUtils.getStorageConf(spark.sparkContext.hadoopConfiguration)
+      // Use getStorageConfWithCopy to avoid mutating the shared Spark session config
+      val conf = HadoopFSUtils.getStorageConfWithCopy(spark.sparkContext.hadoopConfiguration)
       if (specifiedQueryInstant.isDefined) {
         conf.set(HoodieCommonConfig.TIMESTAMP_AS_OF.key(), specifiedQueryInstant.get)
       }

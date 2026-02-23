@@ -228,7 +228,7 @@ object DataSourceReadOptions {
         " them (if possible).")
 
   val FILE_INDEX_LIST_FILE_STATUSES_USING_RO_PATH_FILTER: ConfigProperty[Boolean] =
-    ConfigProperty.key("hoodie.datasource.read.file.index.list.file.statuses.using.ro.path.filter")
+    ConfigProperty.key("hoodie.datasource.read.file.index.optimize.listing.using.path.filter")
       .defaultValue(false)
       .markAdvanced()
       .sinceVersion("1.2.0")
@@ -237,7 +237,7 @@ object DataSourceReadOptions {
         " is doing recursive calls to fetch the partition paths and the dataset has multiple versions" +
         " of the same file in the same partition and it could lead to Out of Memory on the driver if" +
         " the dataset is too large. Another important limitation is that this config should not be" +
-        " used if there are bootstrap files present in the file system")
+        " used if there are bootstrap files present in the file system. NOTE: Only works for COW tables with snapshot queries.")
 
   val INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN: ConfigProperty[String] = ConfigProperty
     .key("hoodie.datasource.read.incr.fallback.fulltablescan.enable")

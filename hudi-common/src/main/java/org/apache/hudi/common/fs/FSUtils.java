@@ -481,12 +481,12 @@ public class FSUtils {
   public static List<StoragePathInfo> getAllDataFilesInPartition(HoodieStorage storage,
                                                                  StoragePath partitionPath)
       throws IOException {
-    return getAllDataFilesInPartition(storage, partitionPath, Option.empty());
+    return getAllDataFilesInPartitionByPathFilter(storage, partitionPath, Option.empty());
   }
 
-  public static List<StoragePathInfo> getAllDataFilesInPartition(HoodieStorage storage,
-                                                                 StoragePath partitionPath,
-                                                                 Option<StoragePathFilter> pathFilterOption)
+  public static List<StoragePathInfo> getAllDataFilesInPartitionByPathFilter(HoodieStorage storage,
+                                                                             StoragePath partitionPath,
+                                                                             Option<StoragePathFilter> pathFilterOption)
       throws IOException {
     final Set<String> validFileExtensions = Arrays.stream(HoodieFileFormat.values())
         .map(HoodieFileFormat::getFileExtension).collect(Collectors.toCollection(HashSet::new));

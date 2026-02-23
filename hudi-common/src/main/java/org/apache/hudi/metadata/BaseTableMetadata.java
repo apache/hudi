@@ -150,11 +150,6 @@ public abstract class BaseTableMetadata extends AbstractHoodieTableMetadata {
   public Map<String, List<StoragePathInfo>> getAllFilesInPartitions(Collection<String> partitions,
                                                                     Option<StoragePathFilter> unused)
       throws IOException {
-    return getAllFilesInPartitions(partitions);
-  }
-
-  public Map<String, List<StoragePathInfo>> getAllFilesInPartitions(Collection<String> partitions)
-      throws IOException {
     ValidationUtils.checkArgument(isMetadataTableInitialized);
     if (partitions.isEmpty()) {
       return Collections.emptyMap();

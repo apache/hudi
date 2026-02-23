@@ -154,14 +154,13 @@ public interface HoodieTableMetadata extends Serializable, AutoCloseable {
    *
    * NOTE: Absolute partition paths are expected here
    */
-  Map<String, List<StoragePathInfo>> getAllFilesInPartitions(Collection<String> partitionPaths)
-      throws IOException;
-
-  default Map<String, List<StoragePathInfo>> getAllFilesInPartitions(Collection<String> partitionPaths,
-                                                                      Option<StoragePathFilter> pathFilterOption)
+  default Map<String, List<StoragePathInfo>> getAllFilesInPartitions(Collection<String> partitionPaths)
       throws IOException {
-    return getAllFilesInPartitions(partitionPaths);
+    return getAllFilesInPartitions(partitionPaths, Option.empty());
   }
+
+  Map<String, List<StoragePathInfo>> getAllFilesInPartitions(Collection<String> partitionPaths,
+                                                             Option<StoragePathFilter> pathFilterOption) throws IOException;
 
   /**
    * Get the bloom filter for the FileID from the metadata table.

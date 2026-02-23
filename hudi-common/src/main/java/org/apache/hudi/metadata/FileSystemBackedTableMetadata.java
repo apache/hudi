@@ -244,11 +244,6 @@ public class FileSystemBackedTableMetadata extends AbstractHoodieTableMetadata {
   }
 
   @Override
-  public Map<String, List<StoragePathInfo>> getAllFilesInPartitions(Collection<String> partitionPaths)
-      throws IOException {
-    return getAllFilesInPartitions(partitionPaths, Option.empty());
-  }
-
   public Map<String, List<StoragePathInfo>> getAllFilesInPartitions(Collection<String> partitionPaths,
                                                                     Option<StoragePathFilter> pathFilterOption)
       throws IOException {
@@ -267,7 +262,7 @@ public class FileSystemBackedTableMetadata extends AbstractHoodieTableMetadata {
             partitionPathStr -> {
               StoragePath partitionPath = new StoragePath(partitionPathStr);
               return Pair.of(partitionPathStr,
-                  FSUtils.getAllDataFilesInPartition(getStorage(), partitionPath, pathFilterOption));
+                  FSUtils.getAllDataFilesInPartitionByPathFilter(getStorage(), partitionPath, pathFilterOption));
             }, parallelism);
     engineContext.clearJobStatus();
 

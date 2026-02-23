@@ -29,6 +29,7 @@ import org.apache.hudi.common.model.BaseFile;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieTableQueryType;
+import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.serialization.HoodieFileSliceSerializer;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
@@ -286,28 +287,51 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
         metaClient.getTableConfig().getTableName(), queryInstant.map(instant -> instant).orElse("N/A"),
         timer.endTimer(), partitions.size());
 
-    if (useROPathFilterForListing && !shouldIncludePendingCommits) {
-      // Group files by partition path, then by file group ID
-      Map<String, PartitionPath> partitionsMap = new HashMap<>();
-      partitions.forEach(p -> partitionsMap.put(p.path, p));
-      Map<PartitionPath, List<FileSlice>> partitionToFileSlices = new HashMap<>();
-
-      for (StoragePathInfo pathInfo : allFiles) {
-        // Create FileSlice obj from StoragePathInfo.
-        String partitionPathStr = pathInfo.getPath().getParent().toString();
-        String relPartitionPath = FSUtils.getRelativePartitionPath(basePath, pathInfo.getPath().getParent());
-        HoodieBaseFile baseFile = new HoodieBaseFile(pathInfo);
-        FileSlice fileSlice = new FileSlice(partitionPathStr, baseFile.getCommitTime(), baseFile.getFileId());
-        fileSlice.setBaseFile(baseFile);
-
-        // Add the FileSlice to partitionToFileSlices
-        PartitionPath partitionPathObj = partitionsMap.get(relPartitionPath);
-        List<FileSlice> fileSlices = partitionToFileSlices.computeIfAbsent(partitionPathObj, k -> new ArrayList<>());
-        fileSlices.add(fileSlice);
-      }
-      return partitionToFileSlices;
+    // ROPathFilter optimization is only applicable for COW tables with snapshot queries
+    // For MOR tables, we need log files which are not returned by HoodieROTablePathFilter
+    if (useROPathFilterForListing
+        && !shouldIncludePendingCommits
+        && metaClient.getTableConfig().getTableType() == HoodieTableType.COPY_ON_WRITE) {
+      return generatePartitionFileSlicesPostROTablePathFilter(partitions, allFiles);
     }
     return filterFiles(partitions, activeTimeline, allFiles, queryInstant);
+  }
+
+  /**
+   * Generates FileSlices from the filtered files returned by ROPathFilter.
+   * This is a fast path that avoids constructing a full HoodieTableFileSystemView.
+   * Only applicable for COW tables since ROPathFilter only returns base files.
+   *
+   * @param partitions List of partitions to process
+   * @param allFiles   Files already filtered by ROPathFilter
+   * @return Map of PartitionPath to list of FileSlices
+   */
+  private Map<PartitionPath, List<FileSlice>> generatePartitionFileSlicesPostROTablePathFilter(
+      List<PartitionPath> partitions, List<StoragePathInfo> allFiles) {
+    // Group files by partition path, then by file group ID
+    Map<String, PartitionPath> partitionsMap = new HashMap<>();
+    partitions.forEach(p -> partitionsMap.put(p.path, p));
+    Map<PartitionPath, List<FileSlice>> partitionToFileSlices = new HashMap<>();
+
+    for (StoragePathInfo pathInfo : allFiles) {
+      // Create FileSlice obj from StoragePathInfo.
+      String relPartitionPath = FSUtils.getRelativePartitionPath(basePath, pathInfo.getPath().getParent());
+      HoodieBaseFile baseFile = new HoodieBaseFile(pathInfo);
+      // Use relative partition path for FileSlice - consistent with HoodieTableFileSystemView
+      FileSlice fileSlice = new FileSlice(relPartitionPath, baseFile.getCommitTime(), baseFile.getFileId());
+      fileSlice.setBaseFile(baseFile);
+
+      // Add the FileSlice to partitionToFileSlices
+      PartitionPath partitionPathObj = partitionsMap.get(relPartitionPath);
+      if (partitionPathObj != null) {
+        List<FileSlice> fileSlices = partitionToFileSlices.computeIfAbsent(partitionPathObj, k -> new ArrayList<>());
+        fileSlices.add(fileSlice);
+      } else {
+        log.warn("Could not find partition path object for relative path: {}. Skipping file: {}",
+            relPartitionPath, pathInfo.getPath());
+      }
+    }
+    return partitionToFileSlices;
   }
 
   private Map<PartitionPath, List<FileSlice>> filterFiles(List<PartitionPath> partitions,
