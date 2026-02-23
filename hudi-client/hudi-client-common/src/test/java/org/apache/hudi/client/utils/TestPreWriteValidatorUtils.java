@@ -113,6 +113,33 @@ public class TestPreWriteValidatorUtils {
         PreWriteValidatorUtils.runValidators(config, "001", WriteOperationType.INSERT, metaClient, engineContext, null));
   }
 
+  @Test
+  public void testRunValidatorsWithInvalidClassName() {
+    HoodieWriteConfig config = Mockito.mock(HoodieWriteConfig.class);
+    HoodieTableMetaClient metaClient = Mockito.mock(HoodieTableMetaClient.class);
+    HoodieEngineContext engineContext = Mockito.mock(HoodieEngineContext.class);
+
+    when(config.getPreWriteValidators()).thenReturn("com.invalid.NonExistentValidator");
+
+    // Should throw an exception when trying to load invalid class
+    assertThrows(Exception.class, () ->
+        PreWriteValidatorUtils.runValidators(config, "001", WriteOperationType.INSERT, metaClient, engineContext, null));
+  }
+
+  @Test
+  public void testRunValidatorsWithWhitespaceInClassNames() {
+    HoodieWriteConfig config = Mockito.mock(HoodieWriteConfig.class);
+    HoodieTableMetaClient metaClient = Mockito.mock(HoodieTableMetaClient.class);
+    HoodieEngineContext engineContext = Mockito.mock(HoodieEngineContext.class);
+
+    // Add whitespace around class names
+    String validators = "  " + PassingPreWriteValidator.class.getName() + " , " + PassingPreWriteValidator.class.getName() + "  ";
+    when(config.getPreWriteValidators()).thenReturn(validators);
+
+    assertDoesNotThrow(() ->
+        PreWriteValidatorUtils.runValidators(config, "001", WriteOperationType.INSERT, metaClient, engineContext, null));
+  }
+
   /**
    * A test validator that always passes.
    */
