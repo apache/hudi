@@ -336,7 +336,7 @@ public class HoodieTableConfig extends HoodieConfig {
       .withDocumentation("Key Generator type to determine key generator class");
 
   public static final ConfigProperty<String> PARTITION_VALUE_EXTRACTOR_CLASS = ConfigProperty
-      .key("hoodie.table.hive_sync.partition_extractor_class")
+      .key("hoodie.table.partition_value_extractor_class")
       .noDefaultValue()
       .withInferFunction(cfg -> {
         Option<String> partitionFieldsOpt = HoodieTableConfig.getPartitionFieldProp(cfg)

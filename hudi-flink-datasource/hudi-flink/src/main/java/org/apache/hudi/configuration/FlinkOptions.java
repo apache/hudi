@@ -41,7 +41,6 @@ import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.keygen.constant.KeyGeneratorType;
 import org.apache.hudi.sink.overwrite.PartitionOverwriteMode;
-import org.apache.hudi.sync.common.HoodieSyncConfig;
 import org.apache.hudi.table.action.cluster.ClusteringPlanPartitionFilterMode;
 import org.apache.hudi.util.ClientIds;
 
@@ -653,7 +652,7 @@ public class FlinkOptions extends HoodieConfig {
 
   @AdvancedConfig
   public static final ConfigOption<String> PARTITION_VALUE_EXTRACTOR = ConfigOptions
-      .key(HoodieSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS.key())
+      .key(HoodieTableConfig.PARTITION_VALUE_EXTRACTOR_CLASS.key())
       .stringType()
       .noDefaultValue()
       .withDescription("Partition value extractor class helps extract the partition value from partition paths");

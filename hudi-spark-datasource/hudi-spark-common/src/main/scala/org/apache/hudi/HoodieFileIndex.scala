@@ -528,11 +528,10 @@ object HoodieFileIndex extends Logging {
     }
 
     val usePartitionValueExtractorOnRead = getConfigValue(options, sqlConf,
-      DataSourceReadOptions.USE_PARTITION_VALUE_EXTRACTOR_ON_READ.key, null)
-    if (usePartitionValueExtractorOnRead != null) {
-      properties.setProperty(DataSourceReadOptions.USE_PARTITION_VALUE_EXTRACTOR_ON_READ.key,
-        usePartitionValueExtractorOnRead)
-    }
+      DataSourceReadOptions.USE_PARTITION_VALUE_EXTRACTOR_ON_READ.key,
+      DataSourceReadOptions.USE_PARTITION_VALUE_EXTRACTOR_ON_READ.defaultValue())
+    properties.setProperty(DataSourceReadOptions.USE_PARTITION_VALUE_EXTRACTOR_ON_READ.key,
+      usePartitionValueExtractorOnRead)
 
     if (tableConfig != null) {
       properties.setProperty(RECORDKEY_FIELD.key, tableConfig.getRecordKeyFields.orElse(Array.empty).mkString(","))

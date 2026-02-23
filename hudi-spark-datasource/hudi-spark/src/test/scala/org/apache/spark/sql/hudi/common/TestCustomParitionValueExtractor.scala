@@ -37,7 +37,7 @@ class TestCustomParitionValueExtractor extends HoodieSparkSqlTestBase {
       val tablePath = s"${tmp.getCanonicalPath}/$targetTable"
 
       // Enable partition value extractor on read
-      spark.conf.set("hoodie.datasource.read.partition.value.using.partion-value-extractor-class", "true")
+      spark.conf.set("hoodie.datasource.read.partition.value.extractor.enabled", "true")
 
       spark.sql(
         s"""
@@ -129,7 +129,7 @@ class TestCustomParitionValueExtractor extends HoodieSparkSqlTestBase {
       val tablePath = s"${tmp.getCanonicalPath}/$targetTable"
 
       // Enable partition value extractor on read
-      spark.conf.set("hoodie.datasource.read.partition.value.using.partion-value-extractor-class", "true")
+      spark.conf.set("hoodie.datasource.read.partition.value.extractor.enabled", "true")
 
       spark.sql(
         s"""
@@ -321,7 +321,7 @@ class TestCustomParitionValueExtractor extends HoodieSparkSqlTestBase {
       val tablePath = s"${tmp.getCanonicalPath}/$targetTable"
 
       // Enable partition value extractor on read
-      spark.conf.set("hoodie.datasource.read.partition.value.using.partion-value-extractor-class", "true")
+      spark.conf.set("hoodie.datasource.read.partition.value.extractor.enabled", "true")
 
       spark.sql(
         s"""
