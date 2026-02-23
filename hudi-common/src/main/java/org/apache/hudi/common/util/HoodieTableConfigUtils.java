@@ -21,6 +21,7 @@ import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.keygen.BaseKeyGenerator;
+import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 
 import java.util.Arrays;
 import java.util.stream.Collectors;
@@ -75,7 +76,7 @@ public class HoodieTableConfigUtils {
         ? partitionField.split(BaseKeyGenerator.CUSTOM_KEY_GENERATOR_SPLIT_REGEX)[0]
         : partitionField;
   }
-  
+
   /**
    * This function returns the hoodie.table.version from hoodie.properties file.
    */
@@ -83,5 +84,38 @@ public class HoodieTableConfigUtils {
     return HoodieConfig.contains(HoodieTableConfig.VERSION, config)
         ? HoodieTableVersion.fromVersionCode(config.getInt(HoodieTableConfig.VERSION))
         : HoodieTableConfig.VERSION.defaultValue();
+  }
+
+  /**
+   * Infers the appropriate PartitionValueExtractor class based on table configuration.
+   * This function determines the correct extractor based on the number of partition fields
+   * and partitioning style (Hive-style vs non-Hive-style).
+   *
+   * @param cfg HoodieConfig containing table configuration
+   * @return Option containing the inferred PartitionValueExtractor class name
+   */
+  public static Option<String> inferPartitionValueExtractorClass(HoodieConfig cfg) {
+    Option<String> partitionFieldsOpt = HoodieTableConfig.getPartitionFieldProp(cfg)
+        .or(() -> Option.ofNullable(cfg.getString(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME)));
+
+    if (!partitionFieldsOpt.isPresent()) {
+      return Option.of("org.apache.hudi.hive.NonPartitionedExtractor");
+    }
+    String partitionFields = partitionFieldsOpt.get();
+    if (StringUtils.nonEmpty(partitionFields)) {
+      int numOfPartFields = partitionFields.split(",").length;
+      if (numOfPartFields == 1) {
+        if (cfg.contains(KeyGeneratorOptions.HIVE_STYLE_PARTITIONING_ENABLE.key())
+            && cfg.getString(KeyGeneratorOptions.HIVE_STYLE_PARTITIONING_ENABLE.key()).equals("true")) {
+          return Option.of("org.apache.hudi.hive.HiveStylePartitionValueExtractor");
+        } else {
+          return Option.of("org.apache.hudi.hive.SinglePartPartitionValueExtractor");
+        }
+      } else {
+        return Option.of("org.apache.hudi.hive.MultiPartKeysValueExtractor");
+      }
+    } else {
+      return Option.of("org.apache.hudi.hive.NonPartitionedExtractor");
+    }
   }
 }

@@ -50,6 +50,7 @@ import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.util.BinaryUtil;
 import org.apache.hudi.common.util.ConfigUtils;
+import org.apache.hudi.common.util.HoodieTableConfigUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.StringUtils;
@@ -338,30 +339,7 @@ public class HoodieTableConfig extends HoodieConfig {
   public static final ConfigProperty<String> PARTITION_VALUE_EXTRACTOR_CLASS = ConfigProperty
       .key("hoodie.table.partition_value_extractor_class")
       .noDefaultValue()
-      .withInferFunction(cfg -> {
-        Option<String> partitionFieldsOpt = HoodieTableConfig.getPartitionFieldProp(cfg)
-            .or(() -> Option.ofNullable(cfg.getString(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME)));
-
-        if (!partitionFieldsOpt.isPresent()) {
-          return Option.of("org.apache.hudi.hive.NonPartitionedExtractor");
-        }
-        String partitionFields = partitionFieldsOpt.get();
-        if (StringUtils.nonEmpty(partitionFields)) {
-          int numOfPartFields = partitionFields.split(",").length;
-          if (numOfPartFields == 1) {
-            if (cfg.contains(KeyGeneratorOptions.HIVE_STYLE_PARTITIONING_ENABLE.key())
-                && cfg.getString(KeyGeneratorOptions.HIVE_STYLE_PARTITIONING_ENABLE.key()).equals("true")) {
-              return Option.of("org.apache.hudi.hive.HiveStylePartitionValueExtractor");
-            } else {
-              return Option.of("org.apache.hudi.hive.SinglePartPartitionValueExtractor");
-            }
-          } else {
-            return Option.of("org.apache.hudi.hive.MultiPartKeysValueExtractor");
-          }
-        } else {
-          return Option.of("org.apache.hudi.hive.NonPartitionedExtractor");
-        }
-      })
+      .withInferFunction(HoodieTableConfigUtils::inferPartitionValueExtractorClass)
       .markAdvanced()
       .withDocumentation("Class which implements PartitionValueExtractor to extract the partition values, "
           + "default is inferred based on partition configuration.");

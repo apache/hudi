@@ -26,6 +26,7 @@ import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.util.HadoopConfigUtils;
+import org.apache.hudi.common.util.HoodieTableConfigUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.metrics.HoodieMetricsConfig;
@@ -117,35 +118,7 @@ public class HoodieSyncConfig extends HoodieConfig {
   public static final ConfigProperty<String> META_SYNC_PARTITION_EXTRACTOR_CLASS = ConfigProperty
       .key("hoodie.datasource.hive_sync.partition_extractor_class")
       .defaultValue("org.apache.hudi.hive.MultiPartKeysValueExtractor")
-      .withInferFunction(cfg -> {
-        Option<String> partitionFieldsOpt;
-        if (StringUtils.nonEmpty(cfg.getString(META_SYNC_PARTITION_FIELDS))) {
-          partitionFieldsOpt = Option.ofNullable(cfg.getString(META_SYNC_PARTITION_FIELDS));
-        } else {
-          partitionFieldsOpt = HoodieTableConfig.getPartitionFieldProp(cfg)
-              .or(() -> Option.ofNullable(cfg.getString(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME)));
-        }
-
-        if (!partitionFieldsOpt.isPresent()) {
-          return Option.of("org.apache.hudi.hive.NonPartitionedExtractor");
-        }
-        String partitionFields = partitionFieldsOpt.get();
-        if (StringUtils.nonEmpty(partitionFields)) {
-          int numOfPartFields = partitionFields.split(",").length;
-          if (numOfPartFields == 1) {
-            if (cfg.contains(KeyGeneratorOptions.HIVE_STYLE_PARTITIONING_ENABLE.key())
-                && cfg.getString(KeyGeneratorOptions.HIVE_STYLE_PARTITIONING_ENABLE.key()).equals("true")) {
-              return Option.of("org.apache.hudi.hive.HiveStylePartitionValueExtractor");
-            } else {
-              return Option.of("org.apache.hudi.hive.SinglePartPartitionValueExtractor");
-            }
-          } else {
-            return Option.of("org.apache.hudi.hive.MultiPartKeysValueExtractor");
-          }
-        } else {
-          return Option.of("org.apache.hudi.hive.NonPartitionedExtractor");
-        }
-      })
+      .withInferFunction(HoodieTableConfigUtils::inferPartitionValueExtractorClass)
       .markAdvanced()
       .withDocumentation("Class which implements PartitionValueExtractor to extract the partition values, "
           + "default is inferred based on partition configuration.");
