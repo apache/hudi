@@ -117,7 +117,11 @@ public abstract class HoodieEngineContext {
 
   public abstract void cancelAllJobs();
 
-  public abstract Map<String, String> getInfo();
+  /**
+   * Returns engine-specific properties to be included in commit metadata for debugging.
+   * Implementations should only include safe, non-sensitive properties.
+   */
+  public abstract Map<String, String> getEngineProperties();
 
   /**
    * Returns the application id of the engine (e.g. Spark application id).

@@ -127,6 +127,9 @@ import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
         + " initializing a path as hoodie base path and never changes during the lifetime of a hoodie table.")
 public class HoodieTableConfig extends HoodieConfig {
 
+  // Cached hostname to avoid repeated synchronized network calls
+  private static volatile String cachedHostname = null;
+
   public static final String HOODIE_PROPERTIES_FILE = "hoodie.properties";
   public static final String HOODIE_PROPERTIES_FILE_BACKUP = "hoodie.properties.backup";
   public static final String HOODIE_WRITE_TABLE_NAME_KEY = "hoodie.datasource.write.table.name";
@@ -1386,19 +1389,30 @@ public class HoodieTableConfig extends HoodieConfig {
         .collect(Collectors.toMap(e -> String.valueOf(e.getKey()), e -> String.valueOf(e.getValue())));
   }
 
+  /**
+   * Returns the cached hostname, fetching it lazily on first call.
+   * Falls back to "unknown" if network resolution fails.
+   */
+  private static String getHostnameSafe() {
+    if (cachedHostname == null) {
+      synchronized (HoodieTableConfig.class) {
+        if (cachedHostname == null) {
+          try {
+            cachedHostname = NetworkUtils.getHostname();
+          } catch (Exception e) {
+            log.warn("Failed to resolve hostname, using 'unknown'", e);
+            cachedHostname = "unknown";
+          }
+        }
+      }
+    }
+    return cachedHostname;
+  }
+
   public static String getFileComment(Properties props) {
     final long ts = System.currentTimeMillis();
     return String.format("Date=%s, ts=%d, host=%s, #properties=%d, hudi_version=%s",
-        new java.util.Date(ts), ts, NetworkUtils.getHostname(), props.size(), HoodieVersion.get());
-  }
-
-  public static String getFileComment(Properties props, Map<String, String> extraKeyValue) {
-    StringBuilder sb = new StringBuilder(getFileComment(props));
-    for (Map.Entry<String, String> entry : extraKeyValue.entrySet()) {
-      sb.append(String.format(", %s=%s", entry.getKey(), entry.getValue()));
-    }
-
-    return sb.toString();
+        new java.util.Date(ts), ts, getHostnameSafe(), props.size(), HoodieVersion.get());
   }
 
   /**
