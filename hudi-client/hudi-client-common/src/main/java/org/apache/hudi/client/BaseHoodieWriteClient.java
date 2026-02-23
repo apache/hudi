@@ -31,6 +31,7 @@ import org.apache.hudi.callback.util.HoodieCommitCallbackFactory;
 import org.apache.hudi.client.embedded.EmbeddedTimelineService;
 import org.apache.hudi.client.heartbeat.HeartbeatUtils;
 import org.apache.hudi.client.transaction.TransactionManager;
+import org.apache.hudi.client.utils.PreWriteValidatorUtils;
 import org.apache.hudi.client.utils.TransactionUtils;
 import org.apache.hudi.common.HoodiePendingRollbackInfo;
 import org.apache.hudi.common.config.HoodieCommonConfig;
@@ -564,6 +565,22 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     tableServiceClient.setPendingInflightAndRequestedInstants(this.pendingInflightAndRequestedInstants);
     tableServiceClient.startAsyncCleanerService(this);
     tableServiceClient.startAsyncArchiveService(this);
+
+    runPreWriteValidators(instantTime, writeOperationType, metaClient);
+  }
+
+  /**
+   * Runs configured pre-write validators.
+   * Pre-write validators are invoked before the write operation to validate
+   * conditions that must be met before proceeding with the write.
+   *
+   * @param instantTime        The instant time for the write operation
+   * @param writeOperationType The type of write operation being performed
+   * @param metaClient         The HoodieTableMetaClient for accessing table metadata
+   */
+  protected void runPreWriteValidators(String instantTime, WriteOperationType writeOperationType,
+      HoodieTableMetaClient metaClient) {
+    PreWriteValidatorUtils.runValidators(config, instantTime, writeOperationType, metaClient, context);
   }
 
   /**
