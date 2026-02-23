@@ -30,9 +30,11 @@ import org.apache.hudi.common.table.timeline.versioning.v1.InstantComparatorV1;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.SerializationUtils;
+import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.config.HoodieLockConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.HoodieIndex;
+import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.table.storage.HoodieStorageLayout;
 
 import org.junit.jupiter.api.Test;
@@ -135,5 +137,55 @@ class TestHoodieTable extends HoodieCommonTestHarness {
         inflightInstant, getPendingRollbackInstantFunc, transactionManager);
     // Validate that function scheduleRollback is called.
     assertEquals(1, ((TestBaseHoodieTable) hoodieTable).getCountOfScheduleRollbackFunctionCalls());
+  }
+
+  @Test
+  void testMaybeDeleteMetadataTableSkipsWhenAutoDeleteDisabled() throws IOException {
+    initMetaClient();
+    // Create metadata table directory to simulate existing MDT
+    metaClient.getStorage().createDirectory(
+        HoodieTableMetadata.getMetadataTableBasePath(metaClient.getBasePath()));
+
+    HoodieMetadataConfig metadataConfig = HoodieMetadataConfig.newBuilder()
+        .enable(false) // MDT disabled in config
+        .withAutoDeletePartitions(false) // Auto-delete disabled
+        .build();
+
+    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder()
+        .withPath(basePath)
+        .withMetadataConfig(metadataConfig)
+        .build();
+
+    HoodieEngineContext context = mock(HoodieEngineContext.class);
+    HoodieTable hoodieTable = new TestBaseHoodieTable(writeConfig, context, metaClient);
+
+    // Call maybeDeleteMetadataTable - should be a no-op when auto-delete is disabled
+    hoodieTable.maybeDeleteMetadataTable();
+
+    // Verify MDT directory still exists since auto-delete is disabled
+    boolean mdtExists = metaClient.getStorage().exists(
+        HoodieTableMetadata.getMetadataTableBasePath(metaClient.getBasePath()));
+    assertTrue(mdtExists, "Metadata table should NOT be deleted when auto-delete is disabled");
+  }
+
+  @Test
+  void testDeleteMetadataIndexIfNecessarySkipsWhenAutoDeleteDisabled() throws IOException {
+    initMetaClient();
+    HoodieMetadataConfig metadataConfig = HoodieMetadataConfig.newBuilder()
+        .enable(true)
+        .withAutoDeletePartitions(false) // Auto-delete disabled
+        .build();
+
+    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder()
+        .withPath(basePath)
+        .withMetadataConfig(metadataConfig)
+        .build();
+
+    HoodieEngineContext context = mock(HoodieEngineContext.class);
+    HoodieTable hoodieTable = new TestBaseHoodieTable(writeConfig, context, metaClient);
+
+    // This should not throw and should be a no-op since auto-delete is disabled
+    hoodieTable.deleteMetadataIndexIfNecessary();
+    // If we reach here without exception, the test passes
   }
 }

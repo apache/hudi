@@ -509,7 +509,6 @@ public final class HoodieMetadataConfig extends HoodieConfig {
           + "The index name either starts with or matches exactly can be one of the following: "
           + StringUtils.join(Arrays.stream(MetadataPartitionType.values()).map(MetadataPartitionType::getPartitionPath).collect(Collectors.toList()), ", "));
 
-  // Config to enable/disable automatic deletion of MDT partitions
   public static final ConfigProperty<Boolean> AUTO_DELETE_PARTITIONS = ConfigProperty
       .key(METADATA_PREFIX + ".auto.delete.partitions")
       .defaultValue(true)
@@ -1245,6 +1244,11 @@ public final class HoodieMetadataConfig extends HoodieConfig {
 
     public Builder setFailOnTableServiceFailures(boolean failOnTableServiceFailures) {
       metadataConfig.setValue(FAIL_ON_TABLE_SERVICE_FAILURES, String.valueOf(failOnTableServiceFailures));
+      return this;
+    }
+
+    public Builder withAutoDeletePartitions(boolean autoDeletePartitions) {
+      metadataConfig.setValue(AUTO_DELETE_PARTITIONS, String.valueOf(autoDeletePartitions));
       return this;
     }
 
