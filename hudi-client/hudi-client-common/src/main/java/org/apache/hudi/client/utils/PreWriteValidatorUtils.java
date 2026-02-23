@@ -19,6 +19,7 @@
 package org.apache.hudi.client.utils;
 
 import org.apache.hudi.client.validator.PreWriteValidator;
+import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.WriteOperationType;
@@ -52,7 +53,7 @@ public class PreWriteValidatorUtils {
    * @param writeOperationType The type of write operation
    * @param metaClient         The HoodieTableMetaClient
    * @param engineContext      The Hoodie engine context
-   * @param records            Iterable of records to be written, may be null
+   * @param records            HoodieData of records to be written, may be null
    * @param <T>                The payload type of the records
    * @throws HoodieValidationException if any validation fails
    */
@@ -61,7 +62,7 @@ public class PreWriteValidatorUtils {
                                        WriteOperationType writeOperationType,
                                        HoodieTableMetaClient metaClient,
                                        HoodieEngineContext engineContext,
-                                       Iterable<HoodieRecord<T>> records) {
+                                       HoodieData<HoodieRecord<T>> records) {
     String validatorClassNames = config.getPreWriteValidators();
 
     if (StringUtils.isNullOrEmpty(validatorClassNames)) {
@@ -104,7 +105,7 @@ public class PreWriteValidatorUtils {
                                           HoodieTableMetaClient metaClient,
                                           HoodieWriteConfig writeConfig,
                                           HoodieEngineContext engineContext,
-                                          Iterable<HoodieRecord<T>> records) {
+                                          HoodieData<HoodieRecord<T>> records) {
     String validatorName = validator.getName();
     LOG.info("Running pre-write validator: {}", validatorName);
 

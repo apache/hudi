@@ -18,6 +18,7 @@
 
 package org.apache.hudi.client.validator;
 
+import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.WriteOperationType;
@@ -49,7 +50,7 @@ public interface PreWriteValidator {
    * @param metaClient         The HoodieTableMetaClient for accessing table metadata
    * @param writeConfig        The write configuration
    * @param engineContext      The Hoodie engine context
-   * @param records            Iterable of records to be written, may be null for operations
+   * @param records            HoodieData of records to be written, may be null for operations
    *                           without input records (e.g., compact, cluster)
    * @param <T>                The payload type of the records
    * @throws HoodieValidationException if validation fails and the write should not proceed
@@ -59,7 +60,7 @@ public interface PreWriteValidator {
                     HoodieTableMetaClient metaClient,
                     HoodieWriteConfig writeConfig,
                     HoodieEngineContext engineContext,
-                    Iterable<HoodieRecord<T>> records) throws HoodieValidationException;
+                    HoodieData<HoodieRecord<T>> records) throws HoodieValidationException;
 
   /**
    * Returns a descriptive name for this validator.

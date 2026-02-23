@@ -35,6 +35,7 @@ import org.apache.hudi.client.utils.PreWriteValidatorUtils;
 import org.apache.hudi.client.utils.TransactionUtils;
 import org.apache.hudi.common.HoodiePendingRollbackInfo;
 import org.apache.hudi.common.config.HoodieCommonConfig;
+import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.ActionType;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
@@ -565,10 +566,10 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    * @param instantTime
    * @param writeOperationType
    * @param metaClient
-   * @param records Iterable of records to be written, may be null
+   * @param records HoodieData of records to be written, may be null
    */
   public void preWrite(String instantTime, WriteOperationType writeOperationType,
-                       HoodieTableMetaClient metaClient, Iterable<HoodieRecord<T>> records) {
+                       HoodieTableMetaClient metaClient, HoodieData<HoodieRecord<T>> records) {
     setOperationType(writeOperationType);
     this.lastCompletedTxnAndMetadata = txnManager.isLockRequired()
         ? TransactionUtils.getLastCompletedTxnInstantAndMetadata(metaClient) : Option.empty();
@@ -590,10 +591,10 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    * @param instantTime        The instant time for the write operation
    * @param writeOperationType The type of write operation being performed
    * @param metaClient         The HoodieTableMetaClient for accessing table metadata
-   * @param records            Iterable of records to be written, may be null
+   * @param records            HoodieData of records to be written, may be null
    */
   protected void runPreWriteValidators(String instantTime, WriteOperationType writeOperationType,
-      HoodieTableMetaClient metaClient, Iterable<HoodieRecord<T>> records) {
+      HoodieTableMetaClient metaClient, HoodieData<HoodieRecord<T>> records) {
     PreWriteValidatorUtils.runValidators(config, instantTime, writeOperationType, metaClient, context, records);
   }
 

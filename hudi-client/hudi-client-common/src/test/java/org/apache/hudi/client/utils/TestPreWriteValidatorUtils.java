@@ -19,6 +19,7 @@
 package org.apache.hudi.client.utils;
 
 import org.apache.hudi.client.validator.PreWriteValidator;
+import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.WriteOperationType;
@@ -122,7 +123,7 @@ public class TestPreWriteValidatorUtils {
                              HoodieTableMetaClient metaClient,
                              HoodieWriteConfig writeConfig,
                              HoodieEngineContext engineContext,
-                             Iterable<HoodieRecord<T>> records) throws HoodieValidationException {
+                             HoodieData<HoodieRecord<T>> records) throws HoodieValidationException {
       // Always passes - do nothing
     }
 
@@ -142,7 +143,7 @@ public class TestPreWriteValidatorUtils {
                              HoodieTableMetaClient metaClient,
                              HoodieWriteConfig writeConfig,
                              HoodieEngineContext engineContext,
-                             Iterable<HoodieRecord<T>> records) throws HoodieValidationException {
+                             HoodieData<HoodieRecord<T>> records) throws HoodieValidationException {
       throw new HoodieValidationException("Validation failed for testing");
     }
 
