@@ -124,6 +124,12 @@ public abstract class HoodieEngineContext {
   public abstract void cancelAllJobs();
 
   /**
+   * Returns engine-specific properties to be included in commit metadata for debugging.
+   * Implementations should only include safe, non-sensitive properties.
+   */
+  public abstract Map<String, String> getEngineProperties();
+
+  /**
    * Aggregate the elements of each partition, and then the results for all the partitions, using given combine functions and a neutral "zero value".
    *
    * @param data

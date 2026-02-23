@@ -675,6 +675,8 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
       // so it is handled differently to avoid locking for planning.
       return scheduleCleaning(createTable(config, storageConf), providedInstantTime);
     }
+    // Only enrich metadata after early-return checks, when we're actually going to use it
+    extraMetadata = updateExtraMetadata(extraMetadata);
     txnManager.beginStateChange(Option.empty(), Option.empty());
     try {
       Option<String> option;

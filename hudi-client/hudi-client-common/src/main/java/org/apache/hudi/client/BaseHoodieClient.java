@@ -41,6 +41,7 @@ import org.apache.hudi.exception.HoodieCommitException;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieWriteConflictException;
+import org.apache.hudi.HoodieVersion;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.metrics.HoodieMetrics;
 import org.apache.hudi.storage.HoodieStorage;
@@ -55,7 +56,9 @@ import lombok.extern.slf4j.Slf4j;
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -306,5 +309,44 @@ public abstract class BaseHoodieClient implements Serializable, AutoCloseable {
   protected boolean isStreamingWriteToMetadataEnabled(HoodieTable table) {
     return config.isMetadataTableEnabled()
         && config.isMetadataStreamingWritesEnabled(table.getMetaClient().getTableConfig().getTableVersion());
+  }
+
+  // Allowlist of key config properties to include in commit metadata
+  private static final String[] KEY_CONFIG_PROPERTIES = {
+      "hoodie.table.name",
+      "hoodie.table.type",
+      "hoodie.table.version",
+      "hoodie.datasource.write.operation",
+      "hoodie.datasource.write.recordkey.field",
+      "hoodie.datasource.write.partitionpath.field",
+      "hoodie.insert.shuffle.parallelism",
+      "hoodie.upsert.shuffle.parallelism",
+      "hoodie.bulkinsert.shuffle.parallelism",
+      "hoodie.delete.shuffle.parallelism",
+      "hoodie.write.concurrency.mode",
+      "hoodie.metadata.enable"
+  };
+
+  protected Option<Map<String, String>> updateExtraMetadata(Option<Map<String, String>> extraMetadata) {
+    // Always create a new mutable HashMap to avoid UnsupportedOperationException with immutable maps
+    Map<String, String> newMetadata = new HashMap<String, String>();
+    if (extraMetadata.isPresent()) {
+      newMetadata.putAll(extraMetadata.get());
+    }
+
+    // Add HUDI version, engine info, and key config properties
+    newMetadata.put("hudi.version", HoodieVersion.get());
+    newMetadata.put("engine", context.getClass().getSimpleName());
+    newMetadata.putAll(context.getEngineProperties());
+
+    // Add only key config properties to avoid storing sensitive values and large config dumps
+    for (String key : KEY_CONFIG_PROPERTIES) {
+      String value = config.getString(key);
+      if (value != null && !value.isEmpty()) {
+        newMetadata.put("config." + key, value);
+      }
+    }
+
+    return Option.of(newMetadata);
   }
 }
