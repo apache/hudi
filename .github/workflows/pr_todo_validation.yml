@@ -1,0 +1,53 @@
+name: PR TODO Validation
+
+on:
+  pull_request:
+    types: [opened, edited, reopened, synchronize]
+    branches:
+      - master
+      - branch-0.x
+
+concurrency:
+  group: pr-todo-validation-${{ github.ref }}
+  cancel-in-progress: ${{ !contains(github.ref, 'master') && !contains(github.ref, 'branch-0.x') }}
+
+jobs:
+  validate-no-todos:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Extract JIRA issue from PR title
+        id: extract-jira
+        run: |
+          title="${{ github.event.pull_request.title }}"
+          echo "PR title: $title"
+          
+          # Extract HUDI-XXXX from title
+          if [[ "$title" =~ \[HUDI-([0-9]+)\] ]]; then
+            jira_id="HUDI-${BASH_REMATCH[1]}"
+            echo "jira_id=$jira_id" >> $GITHUB_OUTPUT
+            echo "Found JIRA ID: $jira_id"
+          else
+            echo "No JIRA ID found in title, skipping validation"
+            echo "jira_id=" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Search for TODO comments with JIRA ID
+        if: steps.extract-jira.outputs.jira_id != ''
+        run: |
+          jira_id="${{ steps.extract-jira.outputs.jira_id }}"
+          echo "Searching for TODO comments containing: $jira_id"
+          
+          # Search for TODO/FIXME/XXX comments containing the JIRA ID
+          # Exclude .git directory and common build/dependency directories
+          if grep -r -n -i --include="*.java" --include="*.scala" --include="*.py" --include="*.js" --include="*.ts" \
+            --exclude-dir=".git" --exclude-dir="target" --exclude-dir="build" --exclude-dir="node_modules" \
+            -E "(TODO|FIXME|XXX).*$jira_id" . ; then
+            echo "❌ Found TODO comments referencing $jira_id in the codebase"
+            echo "Please remove all TODO comments related to this issue before merging"
+            exit 1
+          else
+            echo "✅ No TODO comments found for $jira_id"
+          fi
