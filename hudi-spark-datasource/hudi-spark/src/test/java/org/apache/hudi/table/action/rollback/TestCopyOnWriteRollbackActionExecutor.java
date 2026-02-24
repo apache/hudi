@@ -380,7 +380,8 @@ public class TestCopyOnWriteRollbackActionExecutor extends HoodieClientRollbackT
     // we are using test table infra. So, col stats are not populated.
     HoodieTable table =
         this.getHoodieTable(metaClient, getConfigBuilder().withRollbackUsingMarkers(true).withRollbackBackupEnabled(true)
-            .withMetadataConfig(HoodieMetadataConfig.newBuilder().withMetadataIndexColumnStats(false).build())
+            .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(false)
+                .withMetadataIndexColumnStats(false).build())
             .build());
     HoodieInstant needRollBackInstant = HoodieTestUtils.getCompleteInstant(
         metaClient.getStorage(), metaClient.getTimelinePath(),
