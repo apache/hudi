@@ -137,7 +137,10 @@ class IncrementalRelationV1(val sqlContext: SQLContext,
         // if internalSchema is ready, dataSchema will contains skeletonSchema
         (dataSchema, iSchema)
       } else {
-        (StructType(skeletonSchema.fields ++ dataSchema.fields), InternalSchema.getEmptyInternalSchema)
+        // Append data schema fields to skeleton schema, but ignore any data fields which already exist in skeleton schema
+        val skeletonSchemaFieldNames = skeletonSchema.fields.map(f => f.name).toSet
+        val dataSchemaFields = dataSchema.fields.filter(f => !skeletonSchemaFieldNames.contains(f.name))
+        (StructType(skeletonSchema.fields ++ dataSchemaFields), InternalSchema.getEmptyInternalSchema)
       }
     }
   }
