@@ -100,6 +100,26 @@ public class CommitUtils {
     return commitMetadata;
   }
 
+  /**
+   * Merges engine-specific metadata (e.g., spark_application_id) with the provided extra metadata.
+   *
+   * @param extraMetadata the original extra metadata option
+   * @param engineMetadata the engine-specific metadata to merge
+   * @return merged metadata option, or original if engine metadata is empty
+   */
+  public static Option<Map<String, String>> mergeEngineMetadata(
+      Option<Map<String, String>> extraMetadata,
+      Map<String, String> engineMetadata) {
+    if (engineMetadata == null || engineMetadata.isEmpty()) {
+      return extraMetadata;
+    }
+    Map<String, String> merged = extraMetadata.isPresent()
+        ? new HashMap<>(extraMetadata.get())
+        : new HashMap<>();
+    merged.putAll(engineMetadata);
+    return Option.of(merged);
+  }
+
   private static HoodieCommitMetadata buildMetadataFromStats(List<HoodieWriteStat> writeStats,
                                                              Map<String, List<String>> partitionToReplaceFileIds,
                                                              String commitActionType,
