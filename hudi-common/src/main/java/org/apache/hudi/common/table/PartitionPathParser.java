@@ -183,6 +183,7 @@ public class PartitionPathParser {
    * @param hiveStyle    whether the table uses Hive-style partitioning ({@code key=value} directories)
    * @return list of partition paths in the format used by Hudi's file index
    * @throws IllegalArgumentException if any key in the spec is not a valid partition key,
+   *                                  or if any partition spec entry does not include all partition keys,
    *                                  or if a key-value pair does not follow {@code key=value} format
    */
   public static List<String> parseLookupPartitionPaths(String spec, List<String> partitionKeys, boolean hiveStyle) {
@@ -206,6 +207,10 @@ public class PartitionPathParser {
               "Unknown partition key '" + key + "' in lookup.partitions spec '" + spec + "'. Valid partition keys: " + partitionKeys);
         }
         kvMap.put(key, parts[1].trim());
+      }
+      if (partitionKeys.size() != kvMap.size()) {
+        throw new IllegalArgumentException(
+            "lookup.partitions spec entry '" + trimmed + "' does not include all partition keys: " + partitionKeys);
       }
       if (hiveStyle) {
         result.add(partitionKeys.stream()

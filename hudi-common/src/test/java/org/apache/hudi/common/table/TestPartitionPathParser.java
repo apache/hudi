@@ -154,6 +154,28 @@ class TestPartitionPathParser {
   }
 
   @Test
+  void testParseLookupPartitionPaths_insufficientKeys_throwsIllegalArgument() {
+    List<String> partitionKeys3 = Arrays.asList("dt", "region", "product");
+    IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
+        () -> PartitionPathParser.parseLookupPartitionPaths(
+            "dt=2024-01-01,region=foo,product=bar;dt=2026-02-24,region=ups", partitionKeys3, false));
+    assertTrue(ex.getMessage().contains("'dt=2026-02-24,region=ups' does not include"));
+    assertTrue(ex.getMessage().contains("[dt, region, product]"));
+
+    List<String> partitionKeys2 = Arrays.asList("dt", "region");
+    ex = assertThrows(IllegalArgumentException.class,
+        () -> PartitionPathParser.parseLookupPartitionPaths(
+            "region=foo;dt=2026-02-24,region=bar", partitionKeys2, true));
+    assertTrue(ex.getMessage().contains("'region=foo' does not include"));
+    assertTrue(ex.getMessage().contains("[dt, region]"));
+
+    ex = assertThrows(IllegalArgumentException.class,
+        () -> PartitionPathParser.parseLookupPartitionPaths(
+            "dt=2026-02-24", partitionKeys2, true));
+    assertTrue(ex.getMessage().contains("'dt=2026-02-24' does not include"));
+  }
+
+  @Test
   void testParseLookupPartitionPaths_missingEqualsSign_throwsIllegalArgument() {
     List<String> partitionKeys = Collections.singletonList("pt");
     IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
