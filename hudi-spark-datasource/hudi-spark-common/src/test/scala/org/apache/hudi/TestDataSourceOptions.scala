@@ -22,8 +22,9 @@ package org.apache.hudi
 import org.apache.hudi.common.config.{DFSPropertiesConfiguration, HoodieCommonConfig}
 import org.apache.hudi.common.table.HoodieTableConfig
 
+import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
-import org.junit.jupiter.api.{AfterEach, Test}
+import org.junit.jupiter.api.Test
 
 class TestDataSourceOptions {
   @Test
