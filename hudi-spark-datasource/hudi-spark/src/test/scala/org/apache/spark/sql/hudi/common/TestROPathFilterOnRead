@@ -263,4 +263,89 @@ class TestROPathFilterAdvanced extends HoodieSparkSqlTestBase {
       }
     }
   }
+
+  test("Test ROPathFilter with time travel queries") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      val tablePath = tmp.getCanonicalPath
+      spark.sql(
+        s"""
+           |create table $tableName (
+           |  id int,
+           |  name string,
+           |  price double,
+           |  ts long
+           |) using hudi
+           | location '$tablePath'
+           | tblproperties (
+           |  primaryKey ='id',
+           |  type = 'cow',
+           |  orderingFields = 'ts'
+           | )
+       """.stripMargin)
+
+      // Insert initial data (commit 1)
+      spark.sql(s"""insert into $tableName values(1, "v1_name1", 10.0, 1000)""")
+      spark.sql(s"""insert into $tableName values(2, "v1_name2", 20.0, 2000)""")
+      spark.sql(s"""insert into $tableName values(3, "v1_name3", 30.0, 3000)""")
+
+      // Get first commit timestamp
+      val commit1 = spark.sql(s"select distinct(_hoodie_commit_time) from $tableName").collect()(0).getString(0)
+
+      // Update data (commit 2)
+      spark.sql(s"""update $tableName set name = "v2_name1", price = 15.0 where id = 1""")
+      val commit2 = spark.sql(s"select distinct(_hoodie_commit_time) from $tableName where id = 1").collect()(0).getString(0)
+
+      // Update data again (commit 3)
+      spark.sql(s"""update $tableName set name = "v3_name2", price = 25.0 where id = 2""")
+      val commit3 = spark.sql(s"select distinct(_hoodie_commit_time) from $tableName where id = 2").collect()(0).getString(0)
+
+      // Delete a record (commit 4)
+      spark.sql(s"""delete from $tableName where id = 3""")
+
+      // Test current state with ROPathFilter
+      withSQLConf(s"spark.$RO_PATH_FILTER_OPT_KEY" -> "true") {
+        checkAnswer(s"select id, name, price, ts from $tableName order by id")(
+          Seq(1, "v2_name1", 15.0, 1000),
+          Seq(2, "v3_name2", 25.0, 2000)
+        )
+      }
+
+      // Test time travel to commit 1 with ROPathFilter
+      withSQLConf(s"spark.$RO_PATH_FILTER_OPT_KEY" -> "true") {
+        checkAnswer(s"select id, name, price, ts from $tableName timestamp as of '$commit1' order by id")(
+          Seq(1, "v1_name1", 10.0, 1000),
+          Seq(2, "v1_name2", 20.0, 2000),
+          Seq(3, "v1_name3", 30.0, 3000)
+        )
+      }
+
+      // Test time travel to commit 2 with ROPathFilter
+      withSQLConf(s"spark.$RO_PATH_FILTER_OPT_KEY" -> "true") {
+        checkAnswer(s"select id, name, price, ts from $tableName timestamp as of '$commit2' order by id")(
+          Seq(1, "v2_name1", 15.0, 1000),
+          Seq(2, "v1_name2", 20.0, 2000),
+          Seq(3, "v1_name3", 30.0, 3000)
+        )
+      }
+
+      // Test time travel to commit 3 with ROPathFilter
+      withSQLConf(s"spark.$RO_PATH_FILTER_OPT_KEY" -> "true") {
+        checkAnswer(s"select id, name, price, ts from $tableName timestamp as of '$commit3' order by id")(
+          Seq(1, "v2_name1", 15.0, 1000),
+          Seq(2, "v3_name2", 25.0, 2000),
+          Seq(3, "v1_name3", 30.0, 3000)
+        )
+      }
+
+      // Verify time travel returns same results with and without ROPathFilter
+      withSQLConf(s"spark.$RO_PATH_FILTER_OPT_KEY" -> "false") {
+        checkAnswer(s"select id, name, price, ts from $tableName timestamp as of '$commit1' order by id")(
+          Seq(1, "v1_name1", 10.0, 1000),
+          Seq(2, "v1_name2", 20.0, 2000),
+          Seq(3, "v1_name3", 30.0, 3000)
+        )
+      }
+    }
+  }
 }
