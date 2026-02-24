@@ -991,6 +991,10 @@ object DataSourceOptionsHelper {
 
   private val log = LoggerFactory.getLogger(DataSourceOptionsHelper.getClass)
 
+  // Prefix constants for config normalization
+  private val SPARK_HOODIE_PREFIX = "spark.hoodie."
+  private val SPARK_PREFIX = "spark."
+
   // put all the configs with alternatives here
   private val allConfigsWithAlternatives = List(
     DataSourceReadOptions.QUERY_TYPE,
@@ -1082,9 +1086,9 @@ object DataSourceOptionsHelper {
     // 3) hoodie.* / explicit data source options
     // NOTE: If both spark.hoodie.X and hoodie.X are set, hoodie.X wins.
     val normalizedSparkHoodieConfigs = parameters.collect {
-      case (key, value) if key.startsWith("spark.hoodie.") => (key.stripPrefix("spark."), value)
+      case (key, value) if key.startsWith(SPARK_HOODIE_PREFIX) => (key.stripPrefix(SPARK_PREFIX), value)
     }
-    val paramsWithoutSparkHoodie = parameters.filterNot(_._1.startsWith("spark.hoodie."))
+    val paramsWithoutSparkHoodie = parameters.filterNot(_._1.startsWith(SPARK_HOODIE_PREFIX))
     val paramsWithGlobalProps = DFSPropertiesConfiguration.getGlobalProps.asScala.toMap ++
       normalizedSparkHoodieConfigs ++
       paramsWithoutSparkHoodie
