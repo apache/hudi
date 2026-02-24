@@ -19,15 +19,14 @@
 package org.apache.hudi.common.table.log;
 
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 
 import java.io.Serializable;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
-import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.table.timeline.InstantComparison.GREATER_THAN;
 import static org.apache.hudi.common.table.timeline.InstantComparison.GREATER_THAN_OR_EQUALS;
@@ -94,7 +93,7 @@ public abstract class InstantRange implements Serializable {
     COMPOSITION
   }
 
-  private static class OpenClosedRange extends InstantRange {
+  public static class OpenClosedRange extends InstantRange {
 
     public OpenClosedRange(String startInstant, String endInstant) {
       super(Objects.requireNonNull(startInstant), endInstant);
@@ -116,11 +115,11 @@ public abstract class InstantRange implements Serializable {
     }
   }
 
-  private static class OpenClosedRangeNullableBoundary extends InstantRange {
+  public static class OpenClosedRangeNullableBoundary extends InstantRange {
 
     public OpenClosedRangeNullableBoundary(String startInstant, String endInstant) {
       super(startInstant, endInstant);
-      ValidationUtils.checkArgument(!startInstant.isEmpty() || !endInstant.isEmpty(),
+      ValidationUtils.checkArgument(!StringUtils.isNullOrEmpty(startInstant) || !StringUtils.isNullOrEmpty(endInstant),
           "At least one of start and end instants should be specified.");
     }
 
@@ -142,7 +141,7 @@ public abstract class InstantRange implements Serializable {
     }
   }
 
-  private static class ClosedClosedRange extends InstantRange {
+  public static class ClosedClosedRange extends InstantRange {
 
     public ClosedClosedRange(String startInstant, String endInstant) {
       super(Objects.requireNonNull(startInstant), endInstant);
@@ -163,11 +162,11 @@ public abstract class InstantRange implements Serializable {
     }
   }
 
-  private static class ClosedClosedRangeNullableBoundary extends InstantRange {
+  public static class ClosedClosedRangeNullableBoundary extends InstantRange {
 
     public ClosedClosedRangeNullableBoundary(String startInstant, String endInstant) {
       super(startInstant, endInstant);
-      ValidationUtils.checkArgument(!startInstant.isEmpty() || !endInstant.isEmpty(),
+      ValidationUtils.checkArgument(!StringUtils.isNullOrEmpty(startInstant) || !StringUtils.isNullOrEmpty(endInstant),
           "At least one of start and end instants should be specified.");
     }
 
@@ -191,7 +190,7 @@ public abstract class InstantRange implements Serializable {
   /**
    * Class to assist in checking if an instant is part of a set of instants.
    */
-  private static class ExactMatchRange extends InstantRange {
+  public static class ExactMatchRange extends InstantRange {
     Set<String> instants;
 
     public ExactMatchRange(Set<String> instants) {
@@ -208,32 +207,9 @@ public abstract class InstantRange implements Serializable {
     public RangeType getRangeType() {
       return RangeType.EXACT_MATCH;
     }
-  }
 
-  /**
-   * Composition of multiple instant ranges in disjunctive form.
-   */
-  private static class CompositionRange extends InstantRange {
-    List<InstantRange> instantRanges;
-
-    public CompositionRange(List<InstantRange> instantRanges) {
-      super(null, null);
-      this.instantRanges = Objects.requireNonNull(instantRanges, "Instant ranges should not be null");
-    }
-
-    @Override
-    public boolean isInRange(String instant) {
-      for (InstantRange range : instantRanges) {
-        if (range.isInRange(instant)) {
-          return true;
-        }
-      }
-      return false;
-    }
-
-    @Override
-    public RangeType getRangeType() {
-      return RangeType.COMPOSITION;
+    public Set<String> getInstants() {
+      return instants;
     }
   }
 
@@ -280,11 +256,6 @@ public abstract class InstantRange implements Serializable {
       return this;
     }
 
-    public Builder instantRanges(InstantRange... instantRanges) {
-      this.instantRanges = Arrays.stream(instantRanges).collect(Collectors.toList());
-      return this;
-    }
-
     public InstantRange build() {
       ValidationUtils.checkState(this.rangeType != null, "Range type is required");
       switch (rangeType) {
@@ -299,7 +270,7 @@ public abstract class InstantRange implements Serializable {
         case EXACT_MATCH:
           return new ExactMatchRange(this.explicitInstants);
         case COMPOSITION:
-          return new CompositionRange(this.instantRanges);
+          throw new UnsupportedOperationException("COMPOSITION range type is not supported.");
         default:
           throw new AssertionError();
       }
