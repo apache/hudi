@@ -68,4 +68,51 @@ public class TestHoodieStreamerMetrics {
     metrics.updateErrorTableCommitDuration(0L);
     assertNull(metrics.getMetrics());
   }
+
+  @Test
+  public void testEmitStreamerJobSuccessMetrics() {
+    HoodieMetricsConfig metricsConfig = HoodieMetricsConfig.newBuilder()
+        .on(true)
+        .withPath("/tmp/path3")
+        .withReporterType("INMEMORY")
+        .build();
+    HoodieStreamerMetrics metrics = new HoodieStreamerMetrics(
+        metricsConfig, HoodieStorageUtils.getStorage(getDefaultStorageConf()));
+    metrics.emitStreamerJobSuccessMetrics();
+    MetricRegistry registry = metrics.getMetrics().getRegistry();
+    assertEquals(1, registry.getGauges().size());
+    assertEquals(".deltastreamer.success", registry.getGauges().firstKey());
+    assertEquals(1, registry.getGauges().get(".deltastreamer.success").getValue());
+  }
+
+  @Test
+  public void testEmitStreamerJobFailedMetrics() {
+    HoodieMetricsConfig metricsConfig = HoodieMetricsConfig.newBuilder()
+        .on(true)
+        .withPath("/tmp/path4")
+        .withReporterType("INMEMORY")
+        .build();
+    HoodieStreamerMetrics metrics = new HoodieStreamerMetrics(
+        metricsConfig, HoodieStorageUtils.getStorage(getDefaultStorageConf()));
+    metrics.emitStreamerJobFailedMetrics();
+    MetricRegistry registry = metrics.getMetrics().getRegistry();
+    assertEquals(1, registry.getGauges().size());
+    assertEquals(".deltastreamer.failure", registry.getGauges().firstKey());
+    assertEquals(1, registry.getGauges().get(".deltastreamer.failure").getValue());
+  }
+
+  @Test
+  public void testEmitStreamerJobMetricsIfDisabled() {
+    HoodieMetricsConfig metricsConfig = HoodieMetricsConfig.newBuilder()
+        .on(false)
+        .withPath("/tmp/path5")
+        .withReporterType("INMEMORY")
+        .build();
+    HoodieStreamerMetrics metrics = new HoodieStreamerMetrics(
+        metricsConfig, HoodieStorageUtils.getStorage(getDefaultStorageConf()));
+    // Should not throw when metrics are disabled
+    metrics.emitStreamerJobSuccessMetrics();
+    metrics.emitStreamerJobFailedMetrics();
+    assertNull(metrics.getMetrics());
+  }
 }
