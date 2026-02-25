@@ -36,8 +36,7 @@ import org.apache.hudi.exception.{HoodieException, HoodieMetadataException}
 import org.apache.hudi.functional.TestRecordLevelIndex.TestPartitionedRecordLevelIndexTestCase
 import org.apache.hudi.index.HoodieIndex.IndexType.RECORD_LEVEL_INDEX
 import org.apache.hudi.index.record.HoodieRecordIndex
-import org.apache.hudi.metadata.{HoodieBackedTableMetadata, HoodieTableMetadataUtil, MetadataPartitionType}
-import org.apache.hudi.metadata.HoodieTableMetadata.getMetadataTableBasePath
+import org.apache.hudi.metadata.{HoodieBackedTableMetadata, HoodieTableMetadata, HoodieTableMetadataUtil, MetadataPartitionType}
 import org.apache.hudi.storage.{StoragePath, StoragePathInfo}
 import org.apache.hudi.table.action.compact.strategy.UnBoundedCompactionStrategy
 
@@ -107,7 +106,7 @@ class TestRecordLevelIndex extends RecordLevelIndexTestBase with SparkDatasetMix
     assertEquals(recordKeys.size(), getRecordIndexEntries(metadataBeforeRebootstrap, recordKeys, localDataGen.getPartitionPaths.toSeq).size,
       "Record index entries should match inserted records after first batch")
 
-    assertTrue(storage.exists(new StoragePath(getMetadataTableBasePath(basePath))),
+    assertTrue(storage.exists(new StoragePath(HoodieTableMetadata.getMetadataTableBasePath(basePath))),
       "Metadata table should exist before deletion")
 
     // Remove _hoodie_partition_metadata from one data partition.
@@ -116,7 +115,7 @@ class TestRecordLevelIndex extends RecordLevelIndexTestBase with SparkDatasetMix
     // Delete metadata table and force a full metadata rebootstrap.
     metaClient = HoodieTableMetaClient.reload(metaClient)
     HoodieTableMetadataUtil.deleteMetadataTable(metaClient, context, false)
-    assertFalse(storage.exists(new StoragePath(getMetadataTableBasePath(basePath))),
+    assertFalse(storage.exists(new StoragePath(HoodieTableMetadata.getMetadataTableBasePath(basePath))),
       "Metadata table should be removed before rebootstrap")
 
     // Rebootstrap should succeed even when one partition metadata file is missing.
@@ -125,7 +124,7 @@ class TestRecordLevelIndex extends RecordLevelIndexTestBase with SparkDatasetMix
     val metadataAfterRebootstrap = metadataWriter(writeConfig).getTableMetadata.asInstanceOf[HoodieBackedTableMetadata]
 
     // Verify the record_index partition is created after rebootstrap.
-    val recordIndexPath = new StoragePath(getMetadataTableBasePath(basePath), MetadataPartitionType.RECORD_INDEX.getPartitionPath)
+    val recordIndexPath = new StoragePath(HoodieTableMetadata.getMetadataTableBasePath(basePath), MetadataPartitionType.RECORD_INDEX.getPartitionPath)
     assertTrue(storage.exists(recordIndexPath),
       "Record index partition should exist after metadata rebootstrap")
 
