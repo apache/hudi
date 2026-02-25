@@ -308,8 +308,8 @@ public class CloudObjectsSelectorCommon {
     List<String> paths = cloudObjectMetadataDS
         .map((MapFunction<CloudObjectMetadata, String>) CloudObjectMetadata::getPath, Encoders.STRING())
         .collectAsList();
-    if (LOG.isDebugEnabled()) {
-      LOG.debug("Extracted distinct files " + paths.size() + " and some samples " + paths.stream().limit(10).collect(Collectors.toList()));
+    if (log.isDebugEnabled()) {
+      log.debug("Extracted distinct files " + paths.size() + " and some samples " + paths.stream().limit(10).collect(Collectors.toList()));
     }
     boolean isCommaSeparatedPathFormat = properties.getBoolean(SPARK_DATASOURCE_READER_COMMA_SEPARATED_PATH_FORMAT.key(), false);
 
