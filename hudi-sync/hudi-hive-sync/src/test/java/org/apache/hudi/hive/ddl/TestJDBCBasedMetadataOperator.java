@@ -27,6 +27,7 @@ import org.junit.jupiter.api.Test;
 
 import java.sql.Connection;
 import java.sql.ResultSet;
+import java.sql.ResultSetMetaData;
 import java.sql.Statement;
 import java.util.List;
 import java.util.Map;
@@ -102,8 +103,11 @@ class TestJDBCBasedMetadataOperator {
 
   @Test
   void testGetTableProperty() throws Exception {
+    ResultSetMetaData metaData = mock(ResultSetMetaData.class);
+    when(metaData.getColumnCount()).thenReturn(2);
     when(mockStatement.executeQuery(anyString())).thenReturn(mockResultSet);
     when(mockResultSet.next()).thenReturn(true);
+    when(mockResultSet.getMetaData()).thenReturn(metaData);
     when(mockResultSet.getString(2)).thenReturn("20260219");
 
     Option<String> value = operator.getTableProperty("my_table", "last_commit");
@@ -113,9 +117,11 @@ class TestJDBCBasedMetadataOperator {
 
   @Test
   void testGetTablePropertyMissing() throws Exception {
+    ResultSetMetaData metaData = mock(ResultSetMetaData.class);
+    when(metaData.getColumnCount()).thenReturn(1);
     when(mockStatement.executeQuery(anyString())).thenReturn(mockResultSet);
     when(mockResultSet.next()).thenReturn(true);
-    when(mockResultSet.getString(2)).thenReturn("Table my_table does not exist");
+    when(mockResultSet.getMetaData()).thenReturn(metaData);
 
     Option<String> value = operator.getTableProperty("my_table", "missing_key");
     assertFalse(value.isPresent());
@@ -172,5 +178,13 @@ class TestJDBCBasedMetadataOperator {
     operator.renameTable("old_name", "new_name");
     verify(mockStatement).execute(
         "ALTER TABLE `test_db`.`old_name` RENAME TO `test_db`.`new_name`");
+  }
+
+  @Test
+  void testUnsetTableProperty() throws Exception {
+    when(mockStatement.execute(anyString())).thenReturn(true);
+    operator.unsetTableProperty("my_table", "some_key");
+    verify(mockStatement).execute(
+        "ALTER TABLE `test_db`.`my_table` UNSET TBLPROPERTIES IF EXISTS ('some_key')");
   }
 }

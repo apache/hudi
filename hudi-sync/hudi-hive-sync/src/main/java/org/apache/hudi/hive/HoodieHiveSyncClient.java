@@ -93,6 +93,11 @@ public class HoodieHiveSyncClient extends HoodieSyncClient {
    * incompatible Thrift API (e.g., HMS 4.x renamed {@code get_table}
    * to {@code get_table_req}). Once set, all subsequent metadata
    * operations are routed through {@link #jdbcMetadataOperator}.
+   *
+   * <p>{@code volatile} is sufficient because this flag only transitions
+   * monotonically from {@code false} to {@code true}. No synchronized
+   * block is needed; in the worst-case race, two threads both detect
+   * incompatibility and log the warning, which is harmless.
    */
   private volatile boolean thriftIncompatible;
 
@@ -164,6 +169,10 @@ public class HoodieHiveSyncClient extends HoodieSyncClient {
               + " fallback for metadata operations: {}", cause.getMessage());
           thriftIncompatible = true;
         }
+        if (jdbcMetadataOperator == null) {
+          log.error("Thrift API incompatible with HMS but no JDBC fallback available. "
+              + "Consider using mode=jdbc with a valid jdbcUrl.");
+        }
         return jdbcMetadataOperator != null;
       }
       cause = cause.getCause();
@@ -203,6 +212,8 @@ public class HoodieHiveSyncClient extends HoodieSyncClient {
     }
 
     if (useJdbcFallback()) {
+      // setTableProperties throws HoodieHiveSyncException on failure,
+      // so reaching here means the DDL statement succeeded.
       jdbcMetadataOperator.setTableProperties(tableName, tableProperties);
       return true;
     }
@@ -324,9 +335,7 @@ public class HoodieHiveSyncClient extends HoodieSyncClient {
   @Override
   public List<Partition> getPartitionsFromList(String tableName, List<String> partitions) {
     if (useJdbcFallback()) {
-      // JDBC does not support partition filtering; return all and let caller filter
-      return jdbcMetadataOperator.getAllPartitions(
-          tableName, config.getString(META_SYNC_BASE_PATH));
+      return filterPartitionsFromJdbc(tableName, partitions);
     }
     String filter = null;
     try {
@@ -346,12 +355,20 @@ public class HoodieHiveSyncClient extends HoodieSyncClient {
           .collect(Collectors.toList());
     } catch (TException e) {
       if (detectThriftIncompatibility(e)) {
-        return jdbcMetadataOperator.getAllPartitions(
-            tableName, config.getString(META_SYNC_BASE_PATH));
+        return filterPartitionsFromJdbc(tableName, partitions);
       }
       throw new HoodieHiveSyncException("Failed to get partitions for table "
           + tableId(databaseName, tableName) + " with filter " + filter, e);
     }
+  }
+
+  private List<Partition> filterPartitionsFromJdbc(String tableName, List<String> partitions) {
+    List<Partition> allPartitions = jdbcMetadataOperator.getAllPartitions(
+        tableName, config.getString(META_SYNC_BASE_PATH));
+    return allPartitions.stream()
+        .filter(p -> partitions.stream().anyMatch(
+            spec -> p.getStorageLocation().endsWith(spec)))
+        .collect(Collectors.toList());
   }
 
   @Override
@@ -372,9 +389,8 @@ public class HoodieHiveSyncClient extends HoodieSyncClient {
       createTable(tableName, storageSchema, inputFormatClass, outputFormatClass, serdeClass, serdeProperties, tableProperties);
       return;
     }
+    String tempTableName = generateTempTableName(tableName);
     try {
-      // create temp table
-      String tempTableName = generateTempTableName(tableName);
       createTable(tempTableName, storageSchema, inputFormatClass, outputFormatClass, serdeClass, serdeProperties, tableProperties);
 
       // if create table is successful, drop the actual table
@@ -389,6 +405,10 @@ public class HoodieHiveSyncClient extends HoodieSyncClient {
         client.alter_table(databaseName, tempTableName, table);
       }
     } catch (Exception ex) {
+      if (detectThriftIncompatibility(ex)) {
+        jdbcMetadataOperator.renameTable(tempTableName, tableName);
+        return;
+      }
       throw new HoodieHiveSyncException("failed to create table " + tableId(databaseName, tableName), ex);
     }
   }
@@ -525,7 +545,7 @@ public class HoodieHiveSyncClient extends HoodieSyncClient {
 
   public void deleteLastReplicatedTimeStamp(String tableName) {
     if (useJdbcFallback()) {
-      log.warn("deleteLastReplicatedTimeStamp via JDBC is a no-op for {}", tableName);
+      jdbcMetadataOperator.unsetTableProperty(tableName, GLOBALLY_CONSISTENT_READ_TIMESTAMP);
       return;
     }
     try {
@@ -539,7 +559,7 @@ public class HoodieHiveSyncClient extends HoodieSyncClient {
       // this is ok the table doesn't even exist.
     } catch (Exception e) {
       if (detectThriftIncompatibility(e)) {
-        log.warn("deleteLastReplicatedTimeStamp via JDBC is a no-op for {}", tableName);
+        jdbcMetadataOperator.unsetTableProperty(tableName, GLOBALLY_CONSISTENT_READ_TIMESTAMP);
         return;
       }
       throw new HoodieHiveSyncException(
@@ -604,7 +624,7 @@ public class HoodieHiveSyncClient extends HoodieSyncClient {
       props.put(HOODIE_LAST_COMMIT_COMPLETION_TIME_SYNC, lastCompletionTime.get());
     }
     jdbcMetadataOperator.setTableProperties(tableName, props);
-    jdbcMetadataOperator.setTableLocation(tableName, basePath, ConfigUtils.TABLE_SERDE_PATH);
+    jdbcMetadataOperator.setTableLocation(tableName, basePath, Option.of(ConfigUtils.TABLE_SERDE_PATH));
   }
 
   @Override
