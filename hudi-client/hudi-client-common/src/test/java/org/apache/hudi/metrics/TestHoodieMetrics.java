@@ -48,7 +48,6 @@ import static org.apache.hudi.metrics.HoodieMetrics.COUNTER_METRIC_EXTENSION;
 import static org.apache.hudi.metrics.HoodieMetrics.FAILURE_COUNTER;
 import static org.apache.hudi.metrics.HoodieMetrics.SOURCE_READ_AND_INDEX_ACTION;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -339,6 +338,20 @@ public class TestHoodieMetrics {
     // Emit another failure and verify counter increments
     hoodieMetrics.emitRollbackFailure(exceptionType);
     assertEquals(2, metrics.getRegistry().getCounters().get(metricName).getCount());
+    assertEquals(2, metrics.getRegistry().getCounters().get(exceptionMetricName).getCount());
+
+    // Test with a different exception type
+    String differentExceptionType = "IOException";
+    hoodieMetrics.emitRollbackFailure(differentExceptionType);
+
+    // Verify the overall failure counter is incremented
+    assertEquals(3, metrics.getRegistry().getCounters().get(metricName).getCount());
+
+    // Verify a separate counter is incremented for this new exception type
+    String differentExceptionMetricName = hoodieMetrics.getMetricsName("rollback", differentExceptionType + COUNTER_METRIC_EXTENSION);
+    assertEquals(1, metrics.getRegistry().getCounters().get(differentExceptionMetricName).getCount());
+
+    // Verify the original exception type counter is unchanged
     assertEquals(2, metrics.getRegistry().getCounters().get(exceptionMetricName).getCount());
   }
 }
