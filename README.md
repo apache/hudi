@@ -106,7 +106,7 @@ mvn clean package -DskipTests
 # Start command
 spark-3.5.0-bin-hadoop3/bin/spark-shell \
   --jars `ls packaging/hudi-spark-bundle/target/hudi-spark3.5-bundle_2.12-*.*.*-SNAPSHOT.jar` \
-  --conf 'metspark.serializer=org.apache.spark.serializer.KryoSerializer' \
+  --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer' \
   --conf 'spark.sql.extensions=org.apache.spark.sql.hudi.HoodieSparkSessionExtension' \
   --conf 'spark.sql.catalog.spark_catalog=org.apache.spark.sql.hudi.catalog.HoodieCatalog' \
   --conf 'spark.kryo.registrator=org.apache.spark.HoodieSparkKryoRegistrar'
