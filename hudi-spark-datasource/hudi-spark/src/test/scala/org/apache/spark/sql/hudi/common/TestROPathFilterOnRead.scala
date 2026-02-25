@@ -284,10 +284,11 @@ class TestROPathFilterAdvanced extends HoodieSparkSqlTestBase {
            | )
        """.stripMargin)
 
-      // Insert initial data (commit 1)
-      spark.sql(s"""insert into $tableName values(1, "v1_name1", 10.0, 1000)""")
-      spark.sql(s"""insert into $tableName values(2, "v1_name2", 20.0, 2000)""")
-      spark.sql(s"""insert into $tableName values(3, "v1_name3", 30.0, 3000)""")
+      // Insert initial data (commit 1) - use single insert to ensure all records are in same commit
+      spark.sql(s"""insert into $tableName values
+                   |(1, "v1_name1", 10.0, 1000),
+                   |(2, "v1_name2", 20.0, 2000),
+                   |(3, "v1_name3", 30.0, 3000)""".stripMargin)
 
       // Get first commit timestamp
       val commit1 = spark.sql(s"select distinct(_hoodie_commit_time) from $tableName").collect()(0).getString(0)
