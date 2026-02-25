@@ -14,13 +14,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 dag_name: deltastreamer-async-clustering.yaml
-dag_rounds: 1
+dag_rounds: 6
 dag_intermittent_delay_mins: 1
 dag_content:
   first_bulk_insert:
     config:
       record_size: 1000
-      num_partitions_insert: 1
+      num_partitions_insert: 5
       repeat_count: 5
       num_records_insert: 1000
     type: BulkInsertNode
@@ -28,7 +28,7 @@ dag_content:
   second_bulk_insert:
     config:
       record_size: 1000
-      num_partitions_insert: 1
+      num_partitions_insert: 5
       repeat_count: 5
       num_records_insert: 1000
     deps: first_bulk_insert
@@ -36,7 +36,7 @@ dag_content:
   third_bulk_insert:
     config:
       record_size: 1000
-      num_partitions_insert: 1
+      num_partitions_insert: 5
       repeat_count: 5
       num_records_insert: 300
     deps: second_bulk_insert
