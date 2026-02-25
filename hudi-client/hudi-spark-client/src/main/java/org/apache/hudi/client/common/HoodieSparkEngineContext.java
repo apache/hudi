@@ -71,6 +71,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -92,7 +93,7 @@ public class HoodieSparkEngineContext extends HoodieEngineContext {
    * Map of all distributed registries created via getMetricRegistry().
    * This map is passed to Spark executors to make the registries available there.
    */
-  private static final Map<String, Registry> DISTRIBUTED_REGISTRY_MAP = new HashMap<>();
+  private static final Map<String, Registry> DISTRIBUTED_REGISTRY_MAP = new ConcurrentHashMap<>();
 
   public HoodieSparkEngineContext(JavaSparkContext jsc) {
     this(jsc, SQLContext.getOrCreate(jsc.sc()));
