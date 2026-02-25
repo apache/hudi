@@ -24,17 +24,17 @@ import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathFilter;
 
-public class HoodieROTableStoragePathFilter implements StoragePathFilter {
+public class HoodieLatestBaseFilesPathFilter implements StoragePathFilter {
 
   private HoodieROTablePathFilter roTablePathFilter;
 
-  public HoodieROTableStoragePathFilter(HoodieROTablePathFilter roTablePathFilter) {
+  public HoodieLatestBaseFilesPathFilter(HoodieROTablePathFilter roTablePathFilter) {
     this.roTablePathFilter = roTablePathFilter;
   }
 
-  public HoodieROTableStoragePathFilter(StorageConfiguration conf,
-                                        HoodieTableMetaClient metaClient,
-                                        HoodieTimeline completedTimeline) {
+  public HoodieLatestBaseFilesPathFilter(StorageConfiguration conf,
+                                         HoodieTableMetaClient metaClient,
+                                         HoodieTimeline completedTimeline) {
     roTablePathFilter = new HoodieROTablePathFilter(conf, metaClient, completedTimeline);
   }
 

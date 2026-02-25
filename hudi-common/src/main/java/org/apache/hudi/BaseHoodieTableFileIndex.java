@@ -112,7 +112,7 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
 
   protected final boolean shouldIncludePendingCommits;
   private final boolean shouldValidateInstant;
-  protected final boolean useROPathFilterForListing;
+  protected final boolean useLatestBaseFilesPathFilterForListing;
 
   // The `shouldListLazily` variable controls how we initialize/refresh the TableFileIndex:
   //  - non-lazy/eager listing (shouldListLazily=false):  all partitions and file slices will be loaded eagerly during initialization.
@@ -142,18 +142,18 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
   private transient HoodieTableMetadata tableMetadata = null;
 
   /**
-   * @param engineContext                Hudi engine-specific context
-   * @param metaClient                   Hudi table's meta-client
-   * @param configProperties             unifying configuration (in the form of generic properties)
-   * @param queryType                    target query type
-   * @param queryPaths                   target DFS paths being queried
-   * @param useROPathFilterForListing    memory optimization on the driver while fetching read optimized results
-   * @param specifiedQueryInstant        instant as of which table is being queried
-   * @param shouldIncludePendingCommits  flags whether file-index should exclude any pending operations
-   * @param shouldValidateInstant        flags to validate whether query instant is present in the timeline
-   * @param fileStatusCache              transient cache of fetched [[FileStatus]]es
-   * @param incrementalQueryStartTime          start completion time for incremental query (optional)
-   * @param incrementalQueryEndTime            end completion time for incremental query (optional)
+   * @param engineContext                                Hudi engine-specific context
+   * @param metaClient                                  Hudi table's meta-client
+   * @param configProperties                            unifying configuration (in the form of generic properties)
+   * @param queryType                                   target query type
+   * @param queryPaths                                  target DFS paths being queried
+   * @param useLatestBaseFilesPathFilterForListing      memory optimization on the driver while fetching read optimized results
+   * @param specifiedQueryInstant                       instant as of which table is being queried
+   * @param shouldIncludePendingCommits                 flags whether file-index should exclude any pending operations
+   * @param shouldValidateInstant                       flags to validate whether query instant is present in the timeline
+   * @param fileStatusCache                             transient cache of fetched [[FileStatus]]es
+   * @param incrementalQueryStartTime                   start completion time for incremental query (optional)
+   * @param incrementalQueryEndTime                     end completion time for incremental query (optional)
    */
   public BaseHoodieTableFileIndex(HoodieEngineContext engineContext,
                                   HoodieTableMetaClient metaClient,
@@ -161,7 +161,7 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
                                   HoodieTableQueryType queryType,
                                   List<StoragePath> queryPaths,
                                   Option<String> specifiedQueryInstant,
-                                  boolean useROPathFilterForListing,
+                                  boolean useLatestBaseFilesPathFilterForListing,
                                   boolean shouldIncludePendingCommits,
                                   boolean shouldValidateInstant,
                                   FileStatusCache fileStatusCache,
@@ -176,12 +176,12 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
         .fromProperties(configProperties)
         .enable(configProperties.getBoolean(ENABLE.key(), DEFAULT_METADATA_ENABLE_FOR_READERS)
             && HoodieTableMetadataUtil.isFilesPartitionAvailable(metaClient)
-            && !useROPathFilterForListing)
+            && !useLatestBaseFilesPathFilterForListing)
         .build();
 
     this.queryType = queryType;
     this.queryPaths = queryPaths;
-    this.useROPathFilterForListing = useROPathFilterForListing;
+    this.useLatestBaseFilesPathFilterForListing = useLatestBaseFilesPathFilterForListing;
     this.specifiedQueryInstant = specifiedQueryInstant;
     this.shouldIncludePendingCommits = shouldIncludePendingCommits;
     this.shouldValidateInstant = shouldValidateInstant;
@@ -284,14 +284,15 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
     HoodieTimer timer = HoodieTimer.start();
     List<StoragePathInfo> allFiles = listPartitionPathFiles(partitions, activeTimeline);
     log.info("On {} with query instant as {}, it took {}ms to list all files {} Hudi partitions",
-        metaClient.getTableConfig().getTableName(), queryInstant.map(instant -> instant).orElse("N/A"),
+        metaClient.getTableConfig().getTableName(), queryInstant.orElse("N/A"),
         timer.endTimer(), partitions.size());
 
     // ROPathFilter optimization is only applicable for COW tables with snapshot queries
-    // For MOR tables, we need log files which are not returned by HoodieROTablePathFilter
-    if (useROPathFilterForListing
+    // For MOR tables with READ_OPTIMIZED queries, we also only need base files
+    if (useLatestBaseFilesPathFilterForListing
         && !shouldIncludePendingCommits
-        && metaClient.getTableConfig().getTableType() == HoodieTableType.COPY_ON_WRITE) {
+        && (metaClient.getTableConfig().getTableType() == HoodieTableType.COPY_ON_WRITE
+            || queryType == HoodieTableQueryType.READ_OPTIMIZED)) {
       return generatePartitionFileSlicesPostROTablePathFilter(partitions, allFiles);
     }
     return filterFiles(partitions, activeTimeline, allFiles, queryInstant);

@@ -31,7 +31,7 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline
 import org.apache.hudi.common.util.ReflectionUtils
 import org.apache.hudi.common.util.ValidationUtils.checkState
 import org.apache.hudi.config.HoodieBootstrapConfig.DATA_QUERIES_ONLY
-import org.apache.hudi.hadoop.HoodieROTableStoragePathFilter
+import org.apache.hudi.hadoop.HoodieLatestBaseFilesPathFilter
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.internal.schema.Types.RecordType
 import org.apache.hudi.internal.schema.utils.Conversions
@@ -445,14 +445,14 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
     metaClient.getTableConfig.getUrlEncodePartitioning.toBoolean
 
   override protected def getPartitionPathFilter(activeTimeline: HoodieTimeline): org.apache.hudi.common.util.Option[org.apache.hudi.storage.StoragePathFilter] = {
-    if (useROPathFilterForListing && !shouldIncludePendingCommits) {
+    if (useLatestBaseFilesPathFilterForListing && !shouldIncludePendingCommits) {
       // Use getStorageConfWithCopy to avoid mutating the shared Spark session config
       val conf = HadoopFSUtils.getStorageConfWithCopy(spark.sparkContext.hadoopConfiguration)
       if (specifiedQueryInstant.isDefined) {
         conf.set(HoodieCommonConfig.TIMESTAMP_AS_OF.key(), specifiedQueryInstant.get)
       }
       org.apache.hudi.common.util.Option.of(
-        new HoodieROTableStoragePathFilter(conf, metaClient,
+        new HoodieLatestBaseFilesPathFilter(conf, metaClient,
           activeTimeline.filterCompletedInstantsOrRewriteTimeline()))
     } else {
       org.apache.hudi.common.util.Option.empty()
