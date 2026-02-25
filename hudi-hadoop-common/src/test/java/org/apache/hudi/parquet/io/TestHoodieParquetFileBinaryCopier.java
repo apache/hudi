@@ -21,7 +21,6 @@ package org.apache.hudi.parquet.io;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.util.HoodieFileMetadataMerger;
 
-import lombok.Value;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 import org.apache.parquet.HadoopReadOptions;
@@ -57,7 +56,6 @@ import org.apache.parquet.schema.OriginalType;
 import org.apache.parquet.schema.PrimitiveType;
 import org.apache.parquet.schema.Type;
 import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -206,7 +204,7 @@ public class TestHoodieParquetFileBinaryCopier {
     writer.close();
 
     List<ColumnDescriptor> columns = inputSchema.getColumns();
-    Assertions.assertEquals(2, columns.size());
+    assertEquals(2, columns.size());
     verifyColumnConvert(columns.get(0), writer::convertLegacy3LevelArray, false, "Name", "Name");
     verifyColumnConvert(columns.get(1), writer::convertLegacy3LevelArray, true, "Links.bag.array", "Links.list.element");
     verify(requiredSchema, CompressionCodecName.GZIP);
@@ -276,7 +274,7 @@ public class TestHoodieParquetFileBinaryCopier {
     writer.close();
 
     List<ColumnDescriptor> columns = inputSchema.getColumns();
-    Assertions.assertEquals(3, columns.size());
+    assertEquals(3, columns.size());
     verifyColumnConvert(columns.get(0), writer::convertLegacy3LevelArray, true, "Links.bag.array.bag.array", "Links.list.element.list.element");
     verifyColumnConvert(columns.get(1), writer::convertLegacy3LevelArray, false, "Map.key_value.key", "Map.key_value.key");
     verifyColumnConvert(columns.get(2), writer::convertLegacy3LevelArray, true, "Map.key_value.value.bag.array", "Map.key_value.value.list.element");
@@ -318,7 +316,7 @@ public class TestHoodieParquetFileBinaryCopier {
     writer.close();
 
     List<ColumnDescriptor> columns = inputSchema.getColumns();
-    Assertions.assertEquals(3, columns.size());
+    assertEquals(3, columns.size());
     verifyColumnConvert(columns.get(0), writer::convertLegacyMap, false, "Name", "Name");
     verifyColumnConvert(columns.get(1), writer::convertLegacyMap, true, "Map.map.key", "Map.key_value.key");
     verifyColumnConvert(columns.get(2), writer::convertLegacyMap, true, "Map.map.value", "Map.key_value.value");
@@ -392,7 +390,7 @@ public class TestHoodieParquetFileBinaryCopier {
     writer.binaryCopy(inputPaths, Collections.singletonList(outputPath), requiredSchema, true);
     writer.close();
     List<ColumnDescriptor> columns = inputSchema.getColumns();
-    Assertions.assertEquals(5, columns.size());
+    assertEquals(5, columns.size());
     verifyColumnConvert(columns.get(0), writer::convertLegacyMap, true, "Links.list.element.map.key", "Links.list.element.key_value.key");
     verifyColumnConvert(columns.get(1), writer::convertLegacyMap, true, "Links.list.element.map.value", "Links.list.element.key_value.value");
     verifyColumnConvert(columns.get(2), writer::convertLegacyMap, true, "Map.map.key", "Map.key_value.key");
@@ -436,7 +434,7 @@ public class TestHoodieParquetFileBinaryCopier {
     int recordsPerFile = 100;
 
     for (int i = 0; i < numFiles; i++) {
-      inputFiles.add(new TestHoodieParquetFileBinaryCopier.TestFileBuilder(conf, schema).withNumRecord(recordsPerFile).withCodec("GZIP").build());
+      inputFiles.add(new TestFileBuilder(conf, schema).withNumRecord(recordsPerFile).withCodec("GZIP").build());
     }
 
     // Run Binary Copier
@@ -455,7 +453,7 @@ public class TestHoodieParquetFileBinaryCopier {
   public void testSingleFileCorrectness() throws Exception {
     MessageType schema = createSchema();
 
-    inputFiles.add(new TestHoodieParquetFileBinaryCopier.TestFileBuilder(conf, schema).withNumRecord(50).build());
+    inputFiles.add(new TestFileBuilder(conf, schema).withNumRecord(50).build());
 
     try (HoodieParquetFileBinaryCopier copier = new HoodieParquetFileBinaryCopier(conf, CompressionCodecName.GZIP, new HoodieFileMetadataMerger())) {
       copier.binaryCopy(Collections.singletonList(new StoragePath(inputFiles.get(0).getFileName())), Collections.singletonList(new StoragePath(outputFile)), schema, true);
@@ -584,7 +582,7 @@ public class TestHoodieParquetFileBinaryCopier {
   /**
    * Verify the page index is correct.
    *
-   * @param columnIdxs the idx of column to be validated.
+   * @param requiredSchema the idx of column to be validated.
    */
   private void validatePageIndex(MessageType requiredSchema) throws Exception {
     ParquetMetadata outMetaData = getFileMetaData(outputFile);
@@ -908,10 +906,23 @@ public class TestHoodieParquetFileBinaryCopier {
     }
   }
 
-  @Value
+  // Replace Lombok @Value with explicit class so tests don't rely on Lombok
   public static class TestFile {
     private final String fileName;
     private final SimpleGroup[] fileContent;
+
+    public TestFile(String fileName, SimpleGroup[] fileContent) {
+      this.fileName = fileName;
+      this.fileContent = fileContent;
+    }
+
+    public String getFileName() {
+      return fileName;
+    }
+
+    public SimpleGroup[] getFileContent() {
+      return fileContent;
+    }
   }
 
   private void verifyColumnConvert(
@@ -931,3 +942,4 @@ public class TestHoodieParquetFileBinaryCopier {
     return Arrays.stream(path).collect(Collectors.joining("."));
   }
 }
+

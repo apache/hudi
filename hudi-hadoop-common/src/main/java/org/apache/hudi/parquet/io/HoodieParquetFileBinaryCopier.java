@@ -67,6 +67,108 @@ import java.util.concurrent.Executors;
  * 1) New footer with merged statistics
  * 2) Updated row group offsets
  * 3) Validated schema consistency
+ * # HoodieParquetFileBinaryCopier — Double-Buffer Prefetch Pipeline
+ * <p>
+ * ╔══════════════════════════════════════════════════════════════════════════════════╗
+ * ║          HoodieParquetFileBinaryCopier — Double-Buffer Prefetch Pipeline        ║
+ * ╚══════════════════════════════════════════════════════════════════════════════════╝
+ * <p>
+ * inputFiles (Queue)         Main Thread                  hudi-binary-copy-prefetch
+ * ┌──────────────┐                                               (daemon)
+ * │  file-1.pq   │
+ * │  file-2.pq   │
+ * │  file-3.pq   │
+ * │  file-4.pq   │
+ * └──────────────┘
+ * <p>
+ * ── binaryCopy() called ──────────────────────────────────────────────────────────
+ * <p>
+ * triggerPrefetch()         poll file-1 ──────────────────► FSDataInputStream
+ * nextFileToPrefetch = file-1           │
+ * nextBuffer ──────────────────────────►│ readFully()
+ * ▼
+ * [ nextBuffer ]
+ * ░░░░░░░░░░░░░  ← filling
+ * <p>
+ * initNextReader()          join() ◄─────────────────────────────────────── done
+ * ┌─────────────────────────────────────────────────────────────────────┐
+ * │  SWAP BUFFERS:                                                      │
+ * │    currentBuffer  ←  result.buffer  (was nextBuffer, now full)      │
+ * │    nextBuffer     ←  old currentBuffer  (now free)                  │
+ * └─────────────────────────────────────────────────────────────────────┘
+ * triggerPrefetch() ──────────────────► FSDataInputStream
+ * nextFileToPrefetch = file-2                │
+ * nextBuffer (free) ───────────────────►│ readFully()
+ * ▼
+ * reader = ByteArrayInputFile(currentBuffer)              [ nextBuffer ]
+ * ░░░░░░░░░░░░░  ← filling
+ * │
+ * │  PROCESS file-1 (CPU-bound)               I/O overlaps with CPU  ↑
+ * ▼
+ * ┌──────────────────────────┐
+ * │  for each row group:     │
+ * │   processBlocksFromReader│
+ * │      ┌─────────────────┐ │
+ * │      │ read row-group  │ │   ← single blockRead() into reusableBlockBuffer
+ * │      │ into memory     │ │     (avoids per-column S3 seeks)
+ * │      └────────┬────────┘ │
+ * │               │          │
+ * │      for each column:    │
+ * │        seek(colOffset)   │   ← ByteArraySeekableInputStream.seek()
+ * │        appendColumnChunk │   ← zero-copy from buffer to output
+ * │                          │
+ * └──────────────────────────┘
+ * │
+ * ▼
+ * initNextReader()          join() ◄─────────────────────────────────────── done
+ * ┌─────────────────────────────────────────────────────────────────────┐
+ * │  SWAP BUFFERS:                                                      │
+ * │    currentBuffer  ←  result.buffer  (file-2, now full)              │
+ * │    nextBuffer     ←  old currentBuffer  (file-1 data, now free)     │
+ * └─────────────────────────────────────────────────────────────────────┘
+ * triggerPrefetch() ──────────────────► FSDataInputStream
+ * nextFileToPrefetch = file-3                │
+ * nextBuffer (file-1 slot) ────────────►│ readFully()
+ * ▼
+ * reader = ByteArrayInputFile(currentBuffer)              [ nextBuffer ]
+ * ░░░░░░░░░░░░░  ← filling
+ * │
+ * │  PROCESS file-2 (CPU-bound)
+ * ▼
+ * ...  (pattern repeats)
+ * <p>
+ * <p>
+ * ── File too large (> 2 GB) fallback ─────────────────────────────────────────────
+ * <p>
+ * prefetch returns null ──► reader = HadoopInputFile (stream directly from S3)
+ * │
+ * ▼  processBlocksFromReader()
+ * read entire row-group span with blockRead()
+ * into reusableBlockBuffer  (single S3 GET per row group)
+ * then seek per-column within that buffer
+ * <p>
+ * <p>
+ * ── close() ──────────────────────────────────────────────────────────────────────
+ * <p>
+ * prefetchExecutor.shutdownNow()   ← interrupts any in-flight prefetch
+ * currentBuffer = null             ← release for GC
+ * nextBuffer    = null             ← release for GC
+ * super.close() → writer.end()     ← finalise Parquet footer
+ * <p>
+ * <p>
+ * ── Memory layout at steady state ────────────────────────────────────────────────
+ * <p>
+ * currentBuffer  [ file-N data ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░ ]
+ * ▲ main thread reads (via ByteArrayInputFile / ByteArraySeekableInputStream)
+ * <p>
+ * nextBuffer     [ file-N+1 data ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░ ]
+ * ▲ prefetch thread writes (FSDataInputStream.readFully)
+ * <p>
+ * reusableBlockBuffer [ current row-group span ░░░░░░░░░░░░░░░░░ ]
+ * ▲ main thread only — one row-group at a time from currentBuffer
+ * The two buffers are **never touched by the same party at the same time** — the swap
+ * only happens on the main thread after `join()` confirms the background write is
+ * complete, so there is no data race despite no explicit locking.
  */
 @Slf4j
 public class HoodieParquetFileBinaryCopier extends HoodieParquetBinaryCopyBase implements HoodieFileBinaryCopier {
@@ -135,7 +237,7 @@ public class HoodieParquetFileBinaryCopier extends HoodieParquetBinaryCopyBase i
         // This avoids double reading of data (once for PageReadStore, once for binary copy).
         // The processBlocksFromReader method handles null store by synthesizing masked columns
         // (like _hoodie_file_name) and using stream copy for others.
-        processBlocksFromReader(reader, null, block, createdBy);
+        processBlocksFromReader(reader, block, createdBy);
       }
       initNextReader();
     }
@@ -294,12 +396,12 @@ public class HoodieParquetFileBinaryCopier extends HoodieParquetBinaryCopyBase i
     }
 
     @Override
-    public long getLength() throws IOException {
+    public long getLength() {
       return length;
     }
 
     @Override
-    public SeekableInputStream newStream() throws IOException {
+    public SeekableInputStream newStream() {
       return new ByteArraySeekableInputStream(content, offset, length);
     }
   }
