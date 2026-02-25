@@ -232,7 +232,7 @@ object HoodieSparkUtils extends SparkAdapterSupport with SparkVersionsSupport wi
                                  usePartitionValueExtractorOnRead: Boolean): Array[Object] = {
     val keyGeneratorClass = KeyGeneratorType.getKeyGeneratorClassName(tableConfig)
     val timestampKeyGeneratorType = tableConfig.propsMap().get(TimestampKeyGeneratorConfig.TIMESTAMP_TYPE_FIELD.key())
-    val partitionValueExtractorClass = tableConfig.getPartitionValueExtractorClass
+    val partitionValueExtractorClass = tableConfig.getPartitionValueExtractorClass.orElse("")
 
     if (null != keyGeneratorClass
       && null != timestampKeyGeneratorType

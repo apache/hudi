@@ -1073,9 +1073,11 @@ object DataSourceOptionsHelper {
     if (!params.contains(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key()) && tableConfig.getKeyGeneratorClassName != null) {
       missingWriteConfigs ++= Map(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key() -> tableConfig.getKeyGeneratorClassName)
     }
-    if (!params.contains(DataSourceWriteOptions.PARTITION_VALUE_EXTRACTOR_CLASS.key()) &&
-        !StringUtils.isNullOrEmpty(tableConfig.getPartitionValueExtractorClass)) {
-      missingWriteConfigs ++= Map(DataSourceWriteOptions.PARTITION_VALUE_EXTRACTOR_CLASS.key() -> tableConfig.getPartitionValueExtractorClass)
+    if (!params.contains(DataSourceWriteOptions.PARTITION_VALUE_EXTRACTOR_CLASS.key())
+        && tableConfig.getPartitionValueExtractorClass.isPresent) {
+      missingWriteConfigs ++= Map(
+        DataSourceWriteOptions.PARTITION_VALUE_EXTRACTOR_CLASS.key() -> tableConfig.getPartitionValueExtractorClass.get()
+      )
     }
     if (!params.contains(HoodieWriteConfig.WRITE_PAYLOAD_CLASS_NAME.key()) && tableConfig.getPayloadClass != null) {
       missingWriteConfigs ++= Map(HoodieWriteConfig.WRITE_PAYLOAD_CLASS_NAME.key() -> tableConfig.getPayloadClass)

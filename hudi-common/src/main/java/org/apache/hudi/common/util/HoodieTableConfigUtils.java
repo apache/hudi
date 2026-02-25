@@ -27,7 +27,6 @@ import java.util.Arrays;
 import java.util.stream.Collectors;
 
 public class HoodieTableConfigUtils {
-
   /**
    * This function returns the partition fields joined by BaseKeyGenerator.FIELD_SEPARATOR. It will also
    * include the key generator partition type with the field. The key generator partition type is used for
@@ -97,10 +96,10 @@ public class HoodieTableConfigUtils {
   public static Option<String> inferPartitionValueExtractorClass(HoodieConfig cfg) {
     Option<String> partitionFieldsOpt = HoodieTableConfig.getPartitionFieldProp(cfg)
         .or(() -> Option.ofNullable(cfg.getString(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME)));
-
     if (!partitionFieldsOpt.isPresent()) {
-      return Option.of("org.apache.hudi.hive.NonPartitionedExtractor");
+      return Option.empty();
     }
+
     String partitionFields = partitionFieldsOpt.get();
     if (StringUtils.nonEmpty(partitionFields)) {
       int numOfPartFields = partitionFields.split(",").length;
@@ -108,6 +107,9 @@ public class HoodieTableConfigUtils {
         if (cfg.contains(KeyGeneratorOptions.HIVE_STYLE_PARTITIONING_ENABLE.key())
             && cfg.getString(KeyGeneratorOptions.HIVE_STYLE_PARTITIONING_ENABLE.key()).equals("true")) {
           return Option.of("org.apache.hudi.hive.HiveStylePartitionValueExtractor");
+        } else if (cfg.contains(KeyGeneratorOptions.SLASH_SEPARATED_DATE_PARTITIONING)
+            && cfg.getString(KeyGeneratorOptions.SLASH_SEPARATED_DATE_PARTITIONING).equals("true")) {
+          return Option.of("org.apache.hudi.hive.SlashEncodedDayPartitionValueExtractor");
         } else {
           return Option.of("org.apache.hudi.hive.SinglePartPartitionValueExtractor");
         }

@@ -1217,8 +1217,8 @@ public class HoodieTableConfig extends HoodieConfig {
     return KeyGeneratorType.getKeyGeneratorClassName(this);
   }
 
-  public String getPartitionValueExtractorClass() {
-    return getStringOrDefault(PARTITION_VALUE_EXTRACTOR_CLASS, "");
+  public Option<String> getPartitionValueExtractorClass() {
+    return Option.ofNullable(getString(PARTITION_VALUE_EXTRACTOR_CLASS));
   }
 
   public HoodieTimelineTimeZone getTimelineTimezone() {

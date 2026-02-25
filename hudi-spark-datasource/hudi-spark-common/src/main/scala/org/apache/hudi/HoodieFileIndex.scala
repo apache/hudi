@@ -536,7 +536,7 @@ object HoodieFileIndex extends Logging {
     if (tableConfig != null) {
       properties.setProperty(RECORDKEY_FIELD.key, tableConfig.getRecordKeyFields.orElse(Array.empty).mkString(","))
       properties.setProperty(PARTITIONPATH_FIELD.key, HoodieTableConfig.getPartitionFieldPropForKeyGenerator(tableConfig).orElse(""))
-      properties.setProperty(HoodieTableConfig.PARTITION_VALUE_EXTRACTOR_CLASS.key(), tableConfig.getPartitionValueExtractorClass)
+      properties.setProperty(HoodieTableConfig.PARTITION_VALUE_EXTRACTOR_CLASS.key(), tableConfig.getPartitionValueExtractorClass.orElse(""))
 
       // for simple bucket index, we need to set the INDEX_TYPE, BUCKET_INDEX_HASH_FIELD, BUCKET_INDEX_NUM_BUCKETS
       val database = getDatabaseName(tableConfig, spark.catalog.currentDatabase)

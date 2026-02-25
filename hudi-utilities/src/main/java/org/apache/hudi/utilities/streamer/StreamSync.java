@@ -453,8 +453,11 @@ public class StreamSync implements Serializable, Closeable {
       payloadClass = overridingMergeConfigs.get().getMiddle();
       mergeStrategyId = overridingMergeConfigs.get().getRight();
     }
-    String partitionValueExtractorClassName = props.getString(HoodieSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS.key(),
-        HoodieSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS.defaultValue());
+    String partitionValueExtractorClassName = props.getString(
+        DataSourceWriteOptions.PARTITION_VALUE_EXTRACTOR_CLASS().key(),
+        props.getString(
+            HoodieSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS.key(),
+            HoodieSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS.defaultValue()));
     return tableBuilder.setTableType(cfg.tableType)
         .setTableName(cfg.targetTableName)
         .setArchiveLogFolder(TIMELINE_HISTORY_PATH.defaultValue())
