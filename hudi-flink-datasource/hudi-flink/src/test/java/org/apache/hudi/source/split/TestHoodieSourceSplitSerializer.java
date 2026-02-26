@@ -23,6 +23,8 @@ import org.apache.hudi.common.util.Option;
 
 import org.junit.jupiter.api.Test;
 
+import java.io.ByteArrayOutputStream;
+import java.io.DataOutputStream;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -34,6 +36,7 @@ import java.util.Set;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -1098,6 +1101,78 @@ public class TestHoodieSourceSplitSerializer {
     assertFalse(deserialized4.getInstantRange().get().getStartInstant().isPresent());
     assertTrue(deserialized4.getInstantRange().get().getEndInstant().isPresent());
     assertEquals(InstantRange.RangeType.CLOSED_CLOSED, deserialized4.getInstantRange().get().getRangeType());
+  }
+
+  @Test
+  public void testSerializeThrowsExceptionForCompositionRange() {
+    // Create a composition range
+    InstantRange range1 = InstantRange.builder()
+        .startInstant("20230101000000000")
+        .endInstant("20230115235959999")
+        .rangeType(InstantRange.RangeType.OPEN_CLOSED)
+        .build();
+
+    InstantRange range2 = InstantRange.builder()
+        .startInstant("20230201000000000")
+        .endInstant("20230215235959999")
+        .rangeType(InstantRange.RangeType.OPEN_CLOSED)
+        .build();
+
+    InstantRange compositionRange = new InstantRange.CompositionRange(Arrays.asList(range1, range2));
+
+    HoodieSourceSplit split = new HoodieSourceSplit(
+        1,
+        "base-path",
+        Option.empty(),
+        "/table/path",
+        "/partition/path",
+        "read_optimized",
+        "20240101000000000",
+        "file1",
+        Option.of(compositionRange)
+    );
+
+    UnsupportedOperationException exception = assertThrows(
+        UnsupportedOperationException.class,
+        () -> serializer.serialize(split)
+    );
+
+    assertEquals("Composition Range is not supported.", exception.getMessage());
+  }
+
+  @Test
+  public void testDeserializeThrowsExceptionForCompositionRangeType() throws IOException {
+    // Manually create a byte array with COMPOSITION range type
+    ByteArrayOutputStream baos = new ByteArrayOutputStream();
+    DataOutputStream out = new DataOutputStream(baos);
+
+    // Serialize all fields except instant range
+    out.writeInt(1); // splitNum
+    out.writeBoolean(true); // basePath present
+    out.writeUTF("base-path");
+    out.writeBoolean(false); // logPaths not present
+    out.writeUTF("/table/path"); // tablePath
+    out.writeUTF("/partition/path"); // partitionPath
+    out.writeUTF("read_optimized"); // mergeType
+    out.writeUTF("20240101000000000"); // latestCommit
+    out.writeUTF("file1"); // fileId
+    out.writeLong(0L); // consumed
+    out.writeInt(0); // fileOffset
+
+    // Write instant range with COMPOSITION type
+    out.writeBoolean(true); // instantRange present
+    out.writeUTF("COMPOSITION"); // rangeType - this will trigger the exception
+
+    out.flush();
+    byte[] serialized = baos.toByteArray();
+    out.close();
+
+    UnsupportedOperationException exception = assertThrows(
+        UnsupportedOperationException.class,
+        () -> serializer.deserialize(serializer.getVersion(), serialized)
+    );
+
+    assertEquals("Composition Range is not supported.", exception.getMessage());
   }
 }
 

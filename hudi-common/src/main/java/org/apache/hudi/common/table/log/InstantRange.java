@@ -19,14 +19,15 @@
 package org.apache.hudi.common.table.log;
 
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 
 import java.io.Serializable;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.table.timeline.InstantComparison.GREATER_THAN;
 import static org.apache.hudi.common.table.timeline.InstantComparison.GREATER_THAN_OR_EQUALS;
@@ -39,12 +40,12 @@ import static org.apache.hudi.common.table.timeline.InstantComparison.compareTim
 public abstract class InstantRange implements Serializable {
   private static final long serialVersionUID = 1L;
 
-  protected final Option<String> startInstant;
-  protected final Option<String> endInstant;
+  protected final Option<String> startInstantOpt;
+  protected final Option<String> endInstantOpt;
 
   public InstantRange(String startInstant, String endInstant) {
-    this.startInstant = Option.ofNullable(startInstant);
-    this.endInstant = Option.ofNullable(endInstant);
+    this.startInstantOpt = Option.ofNullable(startInstant);
+    this.endInstantOpt = Option.ofNullable(endInstant);
   }
 
   /**
@@ -55,11 +56,11 @@ public abstract class InstantRange implements Serializable {
   }
 
   public Option<String> getStartInstant() {
-    return startInstant;
+    return startInstantOpt;
   }
 
   public Option<String> getEndInstant() {
-    return endInstant;
+    return endInstantOpt;
   }
 
   public abstract boolean isInRange(String instant);
@@ -69,8 +70,8 @@ public abstract class InstantRange implements Serializable {
   @Override
   public String toString() {
     return "InstantRange{"
-        + "startInstant='" + (startInstant.isEmpty() ? "-INF" : startInstant.get()) + '\''
-        + ", endInstant='" + (endInstant.isEmpty() ? "+INF" : endInstant.get()) + '\''
+        + "startInstant='" + (startInstantOpt.isEmpty() ? "-INF" : startInstantOpt.get()) + '\''
+        + ", endInstant='" + (endInstantOpt.isEmpty() ? "+INF" : endInstantOpt.get()) + '\''
         + ", rangeType='" + this.getRangeType().name() + '\''
         + '}';
   }
@@ -101,9 +102,9 @@ public abstract class InstantRange implements Serializable {
 
     @Override
     public boolean isInRange(String instant) {
-      boolean validAgainstStart = compareTimestamps(instant, GREATER_THAN, startInstant.get());
+      boolean validAgainstStart = compareTimestamps(instant, GREATER_THAN, startInstantOpt.get());
       // if there is an end instant, check against it, otherwise assume +INF and its always valid.
-      boolean validAgainstEnd = endInstant
+      boolean validAgainstEnd = endInstantOpt
               .map(e -> compareTimestamps(instant, LESSER_THAN_OR_EQUALS, e))
               .orElse(true);
       return validAgainstStart && validAgainstEnd;
@@ -119,16 +120,16 @@ public abstract class InstantRange implements Serializable {
 
     public OpenClosedRangeNullableBoundary(String startInstant, String endInstant) {
       super(startInstant, endInstant);
-      ValidationUtils.checkArgument(!StringUtils.isNullOrEmpty(startInstant) || !StringUtils.isNullOrEmpty(endInstant),
+      ValidationUtils.checkArgument(!startInstantOpt.isEmpty() || !endInstantOpt.isEmpty(),
           "At least one of start and end instants should be specified.");
     }
 
     @Override
     public boolean isInRange(String instant) {
-      boolean validAgainstStart = startInstant
+      boolean validAgainstStart = startInstantOpt
               .map(s -> compareTimestamps(instant, GREATER_THAN, s))
               .orElse(true);
-      boolean validAgainstEnd = endInstant
+      boolean validAgainstEnd = endInstantOpt
               .map(e -> compareTimestamps(instant, LESSER_THAN_OR_EQUALS, e))
               .orElse(true);
 
@@ -149,8 +150,8 @@ public abstract class InstantRange implements Serializable {
 
     @Override
     public boolean isInRange(String instant) {
-      boolean validAgainstStart = compareTimestamps(instant, GREATER_THAN_OR_EQUALS, startInstant.get());
-      boolean validAgainstEnd = endInstant
+      boolean validAgainstStart = compareTimestamps(instant, GREATER_THAN_OR_EQUALS, startInstantOpt.get());
+      boolean validAgainstEnd = endInstantOpt
               .map(e -> compareTimestamps(instant, LESSER_THAN_OR_EQUALS, e))
               .orElse(true);
       return validAgainstStart && validAgainstEnd;
@@ -166,16 +167,16 @@ public abstract class InstantRange implements Serializable {
 
     public ClosedClosedRangeNullableBoundary(String startInstant, String endInstant) {
       super(startInstant, endInstant);
-      ValidationUtils.checkArgument(!StringUtils.isNullOrEmpty(startInstant) || !StringUtils.isNullOrEmpty(endInstant),
+      ValidationUtils.checkArgument(!startInstantOpt.isEmpty() || !endInstantOpt.isEmpty(),
           "At least one of start and end instants should be specified.");
     }
 
     @Override
     public boolean isInRange(String instant) {
-      boolean validAgainstStart = startInstant
+      boolean validAgainstStart = startInstantOpt
               .map(s -> compareTimestamps(instant, GREATER_THAN_OR_EQUALS, s))
               .orElse(true);
-      boolean validAgainstEnd = endInstant
+      boolean validAgainstEnd = endInstantOpt
               .map(e -> compareTimestamps(instant, LESSER_THAN_OR_EQUALS, e))
               .orElse(true);
       return validAgainstStart && validAgainstEnd;
@@ -210,6 +211,33 @@ public abstract class InstantRange implements Serializable {
 
     public Set<String> getInstants() {
       return instants;
+    }
+  }
+
+  /**
+   * Composition of multiple instant ranges in disjunctive form.
+   */
+  public static class CompositionRange extends InstantRange {
+    List<InstantRange> instantRanges;
+
+    public CompositionRange(List<InstantRange> instantRanges) {
+      super(null, null);
+      this.instantRanges = Objects.requireNonNull(instantRanges, "Instant ranges should not be null");
+    }
+
+    @Override
+    public boolean isInRange(String instant) {
+      for (InstantRange range : instantRanges) {
+        if (range.isInRange(instant)) {
+          return true;
+        }
+      }
+      return false;
+    }
+
+    @Override
+    public RangeType getRangeType() {
+      return RangeType.COMPOSITION;
     }
   }
 
@@ -256,6 +284,11 @@ public abstract class InstantRange implements Serializable {
       return this;
     }
 
+    public Builder instantRanges(InstantRange... instantRanges) {
+      this.instantRanges = Arrays.stream(instantRanges).collect(Collectors.toList());
+      return this;
+    }
+
     public InstantRange build() {
       ValidationUtils.checkState(this.rangeType != null, "Range type is required");
       switch (rangeType) {
@@ -270,7 +303,7 @@ public abstract class InstantRange implements Serializable {
         case EXACT_MATCH:
           return new ExactMatchRange(this.explicitInstants);
         case COMPOSITION:
-          throw new UnsupportedOperationException("COMPOSITION range type is not supported.");
+          return new CompositionRange(this.instantRanges);
         default:
           throw new AssertionError();
       }

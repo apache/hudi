@@ -91,7 +91,9 @@ public class HoodieSourceSplitSerializer implements SimpleVersionedSerializer<Ho
         InstantRange instantRange = obj.getInstantRange().get();
         out.writeUTF(instantRange.getRangeType().name());
 
-        if (instantRange instanceof InstantRange.ClosedClosedRangeNullableBoundary
+        if (instantRange instanceof InstantRange.CompositionRange) {
+          throw new UnsupportedOperationException("Composition Range is not supported.");
+        } else if (instantRange instanceof InstantRange.ClosedClosedRangeNullableBoundary
                 || instantRange instanceof InstantRange.OpenClosedRangeNullableBoundary) {
           out.writeBoolean(true);
         } else {
@@ -168,6 +170,11 @@ public class HoodieSourceSplitSerializer implements SimpleVersionedSerializer<Ho
       if (in.readBoolean()) {
         InstantRange.Builder builder = InstantRange.builder();
         InstantRange.RangeType rangeType = InstantRange.RangeType.valueOf(in.readUTF());
+
+        if (rangeType.equals(InstantRange.RangeType.COMPOSITION)) {
+          throw new UnsupportedOperationException("Composition Range is not supported.");
+        }
+
         boolean nullableBoundary = in.readBoolean();
         builder.nullableBoundary(nullableBoundary);
 
