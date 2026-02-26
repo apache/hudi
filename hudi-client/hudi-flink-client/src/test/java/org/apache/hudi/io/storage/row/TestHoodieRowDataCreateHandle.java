@@ -32,6 +32,7 @@ import org.apache.flink.table.types.DataType;
 import org.apache.flink.table.types.logical.LogicalType;
 import org.apache.flink.table.types.logical.RowType;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
@@ -61,6 +62,11 @@ public class TestHoodieRowDataCreateHandle extends HoodieFlinkClientTestHarness 
     initPath();
     initFileSystem();
     initMetaClient();
+  }
+
+  @AfterEach
+  public void tearDown() throws Exception {
+    cleanupResources();
   }
 
   /**
@@ -274,6 +280,63 @@ public class TestHoodieRowDataCreateHandle extends HoodieFlinkClientTestHarness 
 
     // Verify min <= max
     assertTrue(minEventTime <= maxEventTime, "Min event time should be <= max event time");
+  }
+
+  @Test
+  public void testEventTimeExtractionWithBigintMillis() throws Exception {
+    // Schema with BIGINT event_time field (millis)
+    DataType dataType = DataTypes.ROW(
+        DataTypes.FIELD("uuid", DataTypes.VARCHAR(20)),
+        DataTypes.FIELD("name", DataTypes.VARCHAR(20)),
+        DataTypes.FIELD("age", DataTypes.INT()),
+        DataTypes.FIELD("event_time", DataTypes.BIGINT()),
+        DataTypes.FIELD("partition", DataTypes.VARCHAR(20))
+    ).notNull();
+    RowType baseRowType = (RowType) dataType.getLogicalType();
+    RowType rowTypeWithMetadata = addMetadataFields(baseRowType, false);
+
+    Properties props = new Properties();
+    props.setProperty(HoodiePayloadProps.PAYLOAD_EVENT_TIME_FIELD_PROP_KEY, "event_time");
+    HoodieWriteConfig config = HoodieWriteConfig.newBuilder()
+        .withPath(basePath)
+        .withProperties(props)
+        .withEmbeddedTimelineServerEnabled(false)
+        .build();
+
+    HoodieFlinkTable<?> table = HoodieFlinkTable.create(config, context, metaClient);
+
+    HoodieRowDataCreateHandle handle = new HoodieRowDataCreateHandle(
+        table, config, PARTITION_PATH, FILE_ID, INSTANT_TIME,
+        TASK_PARTITION_ID, TASK_ID, TASK_EPOCH_ID, rowTypeWithMetadata, false, false);
+
+    long eventTimeMillis1 = 1729512000000L;
+    long eventTimeMillis2 = 1729515600000L;
+
+    GenericRowData row1 = new GenericRowData(5);
+    row1.setField(0, StringData.fromString("id1"));
+    row1.setField(1, StringData.fromString("Alice"));
+    row1.setField(2, 25);
+    row1.setField(3, eventTimeMillis1);
+    row1.setField(4, StringData.fromString(PARTITION_PATH));
+
+    GenericRowData row2 = new GenericRowData(5);
+    row2.setField(0, StringData.fromString("id2"));
+    row2.setField(1, StringData.fromString("Bob"));
+    row2.setField(2, 30);
+    row2.setField(3, eventTimeMillis2);
+    row2.setField(4, StringData.fromString(PARTITION_PATH));
+
+    handle.write("id1", PARTITION_PATH, row1);
+    handle.write("id2", PARTITION_PATH, row2);
+
+    WriteStatus writeStatus = handle.close();
+    assertNotNull(writeStatus);
+    Long minEventTime = writeStatus.getStat().getMinEventTime();
+    Long maxEventTime = writeStatus.getStat().getMaxEventTime();
+    assertNotNull(minEventTime);
+    assertNotNull(maxEventTime);
+    assertEquals(eventTimeMillis1, minEventTime.longValue());
+    assertEquals(eventTimeMillis2, maxEventTime.longValue());
   }
 
   @Test

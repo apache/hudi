@@ -84,7 +84,7 @@ public class HoodieRowDataCreateHandle implements Serializable {
   private final HoodieTimer currTimer;
 
   // Event time tracking for min/max event time metrics (when hoodie.payload.event.time.field is set)
-  private final int eventTimeFieldIndex;
+  private final RowData.FieldGetter eventTimeFieldGetter;
 
   public HoodieRowDataCreateHandle(HoodieTable table, HoodieWriteConfig writeConfig, String partitionPath, String fileId,
                                    String instantTime, int taskPartitionId, long taskId, long taskEpochId,
@@ -103,7 +103,7 @@ public class HoodieRowDataCreateHandle implements Serializable {
     this.currTimer = HoodieTimer.start();
     this.storage = table.getStorage();
     this.path = makeNewPath(partitionPath);
-    this.eventTimeFieldIndex = initEventTimeFieldIndex(writeConfig, rowType);
+    this.eventTimeFieldGetter = initEventTimeFieldGetter(writeConfig, rowType);
 
     this.writeStatus = new WriteStatus(table.shouldTrackSuccessRecords(),
         writeConfig.getWriteStatusFailureFraction());
@@ -155,9 +155,9 @@ public class HoodieRowDataCreateHandle implements Serializable {
         rowData = record;
       }
       // Extract event time metadata when metadata is written (rowData matches rowType with event time field)
-      Option<Map<String, String>> recordMetadata = skipMetadataWrite
-          ? Option.empty()
-          : extractEventTimeMetadata(rowData);
+      Option<Map<String, String>> recordMetadata = !skipMetadataWrite
+          ? extractEventTimeMetadata(rowData)
+          : Option.empty();
       try {
         fileWriter.writeRow(recordKey, rowData);
         HoodieRecordDelegate recordDelegate = writeStatus.isTrackingSuccessfulWrites()
@@ -177,50 +177,49 @@ public class HoodieRowDataCreateHandle implements Serializable {
   }
 
   /**
-   * Initializes the event time field index from config (hoodie.payload.event.time.field).
-   * Only DOUBLE type is supported (epoch seconds). Returns -1 if not configured, not found, or wrong type.
+   * Initializes event time field getter from config (hoodie.payload.event.time.field).
+   * Supports DOUBLE and BIGINT only. Returns null if not configured, not found, or unsupported type.
    */
-  private static int initEventTimeFieldIndex(HoodieWriteConfig writeConfig, RowType rowType) {
+  private static RowData.FieldGetter initEventTimeFieldGetter(HoodieWriteConfig writeConfig, RowType rowType) {
     String eventTimeField = writeConfig.getPayloadConfig().getProps().getProperty(
         HoodiePayloadProps.PAYLOAD_EVENT_TIME_FIELD_PROP_KEY);
     if (eventTimeField == null || eventTimeField.isEmpty()) {
-      return -1;
+      return null;
     }
     for (int i = 0; i < rowType.getFieldCount(); i++) {
       if (rowType.getFieldNames().get(i).equals(eventTimeField)) {
         RowType.RowField field = rowType.getFields().get(i);
-        if (field.getType().getTypeRoot() == LogicalTypeRoot.DOUBLE) {
-          return i;
+        LogicalTypeRoot root = field.getType().getTypeRoot();
+        if (root == LogicalTypeRoot.DOUBLE || root == LogicalTypeRoot.BIGINT) {
+          return RowData.createFieldGetter(field.getType(), i);
         }
-        log.warn("Event time field '{}' has unsupported type {}. Only DOUBLE (epoch seconds) is supported. "
-            + "Event time metrics will be unavailable.", eventTimeField, field.getType().getTypeRoot());
-        return -1;
+        log.warn("Event time field '{}' has unsupported type {}. Only DOUBLE and BIGINT are supported. "
+            + "Event time metrics will be unavailable.", eventTimeField, root);
+        return null;
       }
     }
     log.warn("Event time field '{}' configured but not found in schema. Event time metrics will be unavailable.",
         eventTimeField);
-    return -1;
+    return null;
   }
 
   /**
-   * Extracts event time from rowData at eventTimeFieldIndex (DOUBLE epoch seconds -> millis).
-   * Returns metadata map for WriteStatus.markSuccess, or empty if unavailable.
+   * Extracts event time from rowData using the event time field getter.
+   * Value is converted to long then string (no unit interpretation); WriteStatus infers unit by string length.
    */
   private Option<Map<String, String>> extractEventTimeMetadata(RowData rowData) {
-    if (eventTimeFieldIndex < 0) {
+    if (eventTimeFieldGetter == null) {
       return Option.empty();
     }
     try {
-      if (rowData.isNullAt(eventTimeFieldIndex)) {
-        return Option.empty();
+      Object val = eventTimeFieldGetter.getFieldOrNull(rowData);
+      if (val instanceof Number) {
+        return Option.of(Collections.singletonMap(METADATA_EVENT_TIME_KEY, String.valueOf(((Number) val).longValue())));
       }
-      double eventTimeSeconds = rowData.getDouble(eventTimeFieldIndex);
-      long eventTimeMillis = (long) (eventTimeSeconds * 1000);
-      return Option.of(Collections.singletonMap(METADATA_EVENT_TIME_KEY, String.valueOf(eventTimeMillis)));
     } catch (Exception e) {
-      log.debug("Failed to extract event time at index {}", eventTimeFieldIndex, e);
-      return Option.empty();
+      log.debug("Failed to extract event time", e);
     }
+    return Option.empty();
   }
 
   /**
