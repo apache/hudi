@@ -233,6 +233,7 @@ class HoodieCatalogTable(val spark: SparkSession, var table: CatalogTable) exten
         .setDatabaseName(catalogDatabaseName)
         .setTableName(table.identifier.table)
         .setTableCreateSchema(schema.toString())
+        .setPartitionFields(partitionColumns)
         .initTable(storageConf, tableLocation)
     }
   }
