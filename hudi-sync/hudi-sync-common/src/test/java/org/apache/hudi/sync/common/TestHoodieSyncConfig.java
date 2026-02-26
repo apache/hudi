@@ -151,7 +151,7 @@ class TestHoodieSyncConfig {
     props6.setProperty(HoodieSyncConfig.META_SYNC_PARTITION_FIELDS.key(), "foo,bar");
     props6.setProperty(HoodieTableConfig.PARTITION_FIELDS.key(), "foo");
     HoodieSyncConfig config6 = new HoodieSyncConfig(props6, new Configuration());
-    assertEquals("org.apache.hudi.hive.MultiPartKeysValueExtractor",
+    assertEquals("org.apache.hudi.hive.SinglePartPartitionValueExtractor",
         config6.getStringOrDefault(META_SYNC_PARTITION_EXTRACTOR_CLASS),
         String.format("should infer from %s when explicitly configured",
             HoodieSyncConfig.META_SYNC_PARTITION_FIELDS.key()));
