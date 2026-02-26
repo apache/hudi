@@ -217,4 +217,12 @@ public class CloudSourceConfig extends HoodieConfig {
           + "Note: the per-read mergeSchema option is honored by Spark's native Parquet reader and by Spark's "
           + "native ORC reader (Spark 3.0+, default ORC impl since Spark 2.4). On older runtimes the option is "
           + "silently ignored.");
+
+  public static final ConfigProperty<Integer> EXISTS_CHECK_PARALLELISM = ConfigProperty
+      .key(STREAMER_CONFIG_PREFIX + "source.cloud.data.check.file.exists.parallelism")
+      .defaultValue(32)
+      .withAlternatives(DELTA_STREAMER_CONFIG_PREFIX + "source.cloud.data.check.file.exists.parallelism")
+      .markAdvanced()
+      .withDocumentation("Number of threads per Spark task for parallel cloud object existence checks. "
+          + "Each task uses a fixed thread pool of this size to issue HEAD requests concurrently.");
 }
