@@ -22,7 +22,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.metrics.FlinkStreamReadMetrics;
 import org.apache.hudi.source.HoodieScanContext;
-import org.apache.hudi.source.assign.HoodieSplitNumberAssigner;
+import org.apache.hudi.source.split.assign.HoodieSplitNumberAssigner;
 import org.apache.hudi.source.split.DefaultHoodieSplitProvider;
 import org.apache.hudi.source.split.HoodieContinuousSplitBatch;
 import org.apache.hudi.source.split.HoodieContinuousSplitDiscover;

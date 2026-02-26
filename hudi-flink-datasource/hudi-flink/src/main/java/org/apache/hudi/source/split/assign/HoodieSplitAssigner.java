@@ -16,26 +16,20 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.source.assign;
+package org.apache.hudi.source.split.assign;
 
-import org.apache.flink.configuration.Configuration;
-import org.apache.hudi.configuration.OptionsResolver;
+import org.apache.hudi.source.split.HoodieSourceSplit;
 
 /**
- * Factory class for creating {@link HoodieSplitAssigner}.
+ * Interface for assigning {@link HoodieSourceSplit} instances to task IDs.
  */
-public class HoodieSplitAssigners {
+public interface HoodieSplitAssigner {
 
-  public static HoodieSplitAssigner createHoodieSplitAssigner(
-          Configuration config,
-          int parallelism) {
-
-    if (OptionsResolver.isMorWithBucketIndexUpsert(config)) {
-      return new HoodieSplitBucketAssigner(parallelism);
-    } else if (OptionsResolver.isAppendMode(config)) {
-      return new HoodieSplitNumberAssigner(parallelism);
-    }
-
-    return new DefaultHoodieSplitAssigner(parallelism);
-  }
+  /**
+   * Assigns a split to a specific task ID.
+   *
+   * @param split the split to assign
+   * @return the task ID that should process this split
+   */
+  int assign(HoodieSourceSplit split);
 }

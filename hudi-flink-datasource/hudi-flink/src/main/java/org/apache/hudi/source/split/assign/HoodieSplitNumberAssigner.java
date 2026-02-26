@@ -16,20 +16,32 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.source.assign;
+package org.apache.hudi.source.split.assign;
 
 import org.apache.hudi.source.split.HoodieSourceSplit;
 
 /**
- * Interface for assigning {@link HoodieSourceSplit} instances to task IDs.
+ * Implementation of {@link HoodieSplitAssigner} that assigns Hoodie
+ * source splits to task IDs using round-robin distribution based on split number.
  */
-public interface HoodieSplitAssigner {
+public class HoodieSplitNumberAssigner implements HoodieSplitAssigner {
+  private final int parallelism;
 
   /**
-   * Assigns a split to a specific task ID.
+   * Creates a new HoodieSplitNumberAssigner.
    *
-   * @param split the split to assign
-   * @return the task ID that should process this split
+   * @param parallelism the number of parallel tasks (must be positive)
+   * @throws IllegalArgumentException if parallelism is less than or equal to 0
    */
-  int assign(HoodieSourceSplit split);
+  public HoodieSplitNumberAssigner(int parallelism) {
+    if (parallelism <= 0) {
+      throw new IllegalArgumentException("Parallelism must be positive, but was: " + parallelism);
+    }
+    this.parallelism = parallelism;
+  }
+
+  @Override
+  public int assign(HoodieSourceSplit split) {
+    return split.getSplitNum() % parallelism;
+  }
 }
