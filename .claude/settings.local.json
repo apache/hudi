@@ -1,0 +1,28 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(rm:*)",
+      "Bash(awk:*)",
+      "Bash(mvn-package:*)",
+      "Bash(java:*)",
+      "Bash(/usr/libexec/java_home:*)",
+      "Bash(export JAVA_HOME=/opt/homebrew/Cellar/openjdk@11/11.0.29/libexec/openjdk.jdk/Contents/Home)",
+      "Bash(gh pr create:*)",
+      "Bash(gh api:*)",
+      "Bash(cp:*)",
+      "Bash(gh pr edit:*)",
+      "Bash(gh pr diff:*)",
+      "Bash(gh pr comment:*)",
+      "Bash(gh pr checkout:*)",
+      "Bash(sort:*)",
+      "Bash(JAVA_HOME=/opt/homebrew/Cellar/openjdk@11/11.0.29/libexec/openjdk.jdk/Contents/Home mvn-package:*)",
+      "Bash(gh issue list:*)",
+      "Bash(gh issue view:*)",
+      "Bash(JAVA_HOME=/Library/Java/JavaVirtualMachines/openjdk-11.jdk/Contents/Home mvn package:*)",
+      "Bash(gh pr checks:*)",
+      "Bash(gh pr close:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

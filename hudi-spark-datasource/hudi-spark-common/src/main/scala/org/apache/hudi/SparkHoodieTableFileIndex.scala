@@ -23,11 +23,13 @@ import org.apache.hudi.HoodieConversionUtils.toJavaOption
 import org.apache.hudi.SparkHoodieTableFileIndex.{deduceQueryType, extractEqualityPredicatesLiteralValues, generateFieldMap, haveProperPartitionValues, shouldListLazily, shouldUsePartitionPathPrefixAnalysis, shouldValidatePartitionColumns}
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.config.TypedProperties
+import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.{FileSlice, HoodieTableQueryType}
 import org.apache.hudi.common.model.HoodieRecord.HOODIE_META_COLUMNS_WITH_OPERATION
 import org.apache.hudi.common.schema.HoodieSchema
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.util.ReflectionUtils
+import org.apache.hudi.common.util.StringUtils
 import org.apache.hudi.common.util.ValidationUtils.checkState
 import org.apache.hudi.config.HoodieBootstrapConfig.DATA_QUERIES_ONLY
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
@@ -52,7 +54,7 @@ import org.slf4j.LoggerFactory
 import javax.annotation.concurrent.NotThreadSafe
 
 import java.lang.reflect.{Array => JArray}
-import java.util.Collections
+import java.util.{Collections, List}
 
 import scala.collection.JavaConverters._
 import scala.language.implicitConversions
@@ -344,7 +346,7 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
     val hiveStylePartitioning = metaClient.getTableConfig.getHiveStylePartitioningEnable.toBoolean
     val urlEncodePartitioning = metaClient.getTableConfig.getUrlEncodePartitioning.toBoolean
 
-    val partitionTypesOption =if (hiveStylePartitioning && urlEncodePartitioning) {
+    val partitionTypesOption = if (hiveStylePartitioning && urlEncodePartitioning) {
       Try {
         SparkFilterHelper.convertDataType(partitionSchema).asInstanceOf[RecordType]
       } match {
@@ -439,6 +441,57 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
 
   private def arePartitionPathsUrlEncoded: Boolean =
     metaClient.getTableConfig.getUrlEncodePartitioning.toBoolean
+  /**
+   * List partition paths matching path prefixes from the Catalog.
+   *
+   * File Index implementations can override this method to fetch partition paths from the Catalog. This may be faster
+   * than listing all partition paths from the table metadata and filtering them. This is definitely faster than
+   * listing all partition paths from the file system when metadata table may not be enabled.
+   *
+   * Fetches all partition paths that are the sub-directories of the list of provided (relative) paths.
+   * <p>
+   * E.g., Table has partition 4 partitions:
+   * year=2022/month=08/day=30, year=2022/month=08/day=31, year=2022/month=07/day=03, year=2022/month=07/day=04
+   * The relative path "year=2022" returns all partitions, while the relative path
+   * "year=2022/month=07" returns only two partitions.
+   *
+   * @param relativePathPrefixes The prefixes to relative partition paths that must match
+   * @return list of matching partition paths from the catalog
+   */
+  override protected def getMatchingPartitionPathsFromCatalog(relativePathPrefixes: List[String]): List[String] = {
+    // Retrieve all the partition paths from the catalog
+    logInfo("Listing partition paths from the catalog using path prefixes " + relativePathPrefixes.toString)
+    val databaseName = metaClient.getTableConfig.getDatabaseName
+    val tableName = metaClient.getTableConfig.getTableName
+    val basePath = metaClient.getBasePath
+    val allPartitionPaths: Seq[String] = spark.sessionState.catalog.externalCatalog
+      .listPartitions(databaseName, tableName)
+      .map(tablePartition => {
+        val partitionStorageFullPath = new Path(tablePartition.location)
+        val relPartitionPathForFiltering = FSUtils.getRelativePartitionPath(basePath, new StoragePath(partitionStorageFullPath.toUri))
+        logDebug("Found partition path from catalog " + relPartitionPathForFiltering)
+        relPartitionPathForFiltering
+      })
+
+    if (relativePathPrefixes.isEmpty || relativePathPrefixes.stream.allMatch(StringUtils.isNullOrEmpty(_))) {
+      // Return all partitions if no prefix filter
+      allPartitionPaths.toList.asJava
+    } else {
+      // Filter partitions based on prefixes
+      val filteredPartitionPaths = allPartitionPaths.filter((relPartitionPath: String) =>
+        relativePathPrefixes.stream.anyMatch((relativePathPrefix: String) =>
+          StringUtils.isNullOrEmpty(relativePathPrefix)
+            || relPartitionPath == relativePathPrefix
+            || relPartitionPath.startsWith(relativePathPrefix + "/")
+        ))
+      filteredPartitionPaths.toList.asJava
+    }
+  }
+
+  override protected def isPartitionListingViaCatalogEnabled(): Boolean = {
+    configProperties.getBoolean(FILE_INDEX_PARTITION_LISTING_VIA_CATALOG.key, FILE_INDEX_PARTITION_LISTING_VIA_CATALOG.defaultValue()) &&
+      !metaClient.getTableConfig.isMetadataTableAvailable
+  }
 }
 
 object SparkHoodieTableFileIndex extends SparkAdapterSupport {
