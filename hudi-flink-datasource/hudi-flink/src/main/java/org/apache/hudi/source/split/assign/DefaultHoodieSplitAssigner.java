@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.source.assign;
+package org.apache.hudi.source.split.assign;
 
 import org.apache.flink.runtime.state.KeyGroupRangeAssignment;
 import org.apache.hudi.source.split.HoodieSourceSplit;

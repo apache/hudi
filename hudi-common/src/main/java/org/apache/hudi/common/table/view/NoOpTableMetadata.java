@@ -36,6 +36,7 @@ import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.metadata.RawKey;
 import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.StoragePathFilter;
 import org.apache.hudi.storage.StoragePathInfo;
 
 import java.io.IOException;
@@ -72,6 +73,11 @@ class NoOpTableMetadata implements HoodieTableMetadata {
 
   @Override
   public Map<String, List<StoragePathInfo>> getAllFilesInPartitions(Collection<String> partitionPaths) throws IOException {
+    throw new HoodieMetadataException("Unsupported operation: getAllFilesInPartitions!");
+  }
+
+  @Override
+  public Map<String, List<StoragePathInfo>> getAllFilesInPartitions(Collection<String> partitionPaths, Option<StoragePathFilter> pathFilterOption) throws IOException {
     throw new HoodieMetadataException("Unsupported operation: getAllFilesInPartitions!");
   }
 

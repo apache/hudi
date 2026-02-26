@@ -25,10 +25,10 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.testutils.HoodieTestTable;
 
-import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieTimeTravelException;
+import org.apache.hudi.storage.StorageConfiguration;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -51,7 +51,7 @@ public class TestHoodieROTablePathFilter extends HoodieCommonTestHarness {
   @BeforeEach
   public void setUp() throws Exception {
     initMetaClient();
-    pathFilter = new HoodieROTablePathFilter(metaClient.getStorageConf().unwrapAs(Configuration.class));
+    pathFilter = new HoodieROTablePathFilter(metaClient.getStorageConf());
     testTable = HoodieTestTable.of(metaClient);
   }
 
@@ -159,7 +159,7 @@ public class TestHoodieROTablePathFilter extends HoodieCommonTestHarness {
     validateTimestampAsOf(metaClient, commit001); // Should not throw
 
     // Test 3: HoodieROTablePathFilter with Configuration-only constructor
-    Configuration confWithAsOf = new Configuration(metaClient.getStorageConf().unwrapAs(Configuration.class));
+    StorageConfiguration confWithAsOf = metaClient.getStorageConf();
     confWithAsOf.set(HoodieCommonConfig.TIMESTAMP_AS_OF.key(), commit003);
 
     HoodieROTablePathFilter pathFilterWithAsOf = new HoodieROTablePathFilter(confWithAsOf);
@@ -208,14 +208,14 @@ public class TestHoodieROTablePathFilter extends HoodieCommonTestHarness {
 
     // Test 1: HoodieROTablePathFilter without TIMESTAMP_AS_OF should work (normal operation)
     HoodieROTablePathFilter filterWithoutAsOf = new HoodieROTablePathFilter(
-        metaClient.getStorageConf().unwrapAs(Configuration.class), metaClient,
+        metaClient.getStorageConf(), metaClient,
         metaClient.getActiveTimeline().filterCompletedInstants());
 
     assertTrue(filterWithoutAsOf.accept(file1Path), "File from commit001 should be accepted");
     assertTrue(filterWithoutAsOf.accept(file3Path), "File from commit003 should be accepted");
 
     // Test 2: HoodieROTablePathFilter with TIMESTAMP_AS_OF before inflight should work
-    Configuration confBeforeInflight = new Configuration(metaClient.getStorageConf().unwrapAs(Configuration.class));
+    StorageConfiguration confBeforeInflight = metaClient.getStorageConf();
     confBeforeInflight.set(HoodieCommonConfig.TIMESTAMP_AS_OF.key(), commit001);
 
     HoodieROTablePathFilter filterBeforeInflight = new HoodieROTablePathFilter(confBeforeInflight, metaClient,
@@ -224,7 +224,7 @@ public class TestHoodieROTablePathFilter extends HoodieCommonTestHarness {
     assertTrue(filterBeforeInflight.accept(file1Path), "File from commit001 should be accepted with as.of.instant=001");
 
     // Test 3: HoodieROTablePathFilter with TIMESTAMP_AS_OF after inflight should fail during accept()
-    Configuration confAfterInflight = new Configuration(metaClient.getStorageConf().unwrapAs(Configuration.class));
+    StorageConfiguration confAfterInflight = metaClient.getStorageConf();
     confAfterInflight.set(HoodieCommonConfig.TIMESTAMP_AS_OF.key(), commit003);
 
     HoodieROTablePathFilter filterAfterInflight = new HoodieROTablePathFilter(confAfterInflight, metaClient,
@@ -236,7 +236,7 @@ public class TestHoodieROTablePathFilter extends HoodieCommonTestHarness {
     }, "Calling accept() with as.of.instant=003 should fail due to inflight commit002");
 
     // Test 4: Configuration-only constructor with TIMESTAMP_AS_OF after inflight should fail during accept()
-    Configuration confOnlyAfterInflight = new Configuration(metaClient.getStorageConf().unwrapAs(Configuration.class));
+    StorageConfiguration confOnlyAfterInflight = metaClient.getStorageConf();
     confOnlyAfterInflight.set(HoodieCommonConfig.TIMESTAMP_AS_OF.key(), commit003);
 
     HoodieROTablePathFilter filterConfOnlyAfterInflight = new HoodieROTablePathFilter(confOnlyAfterInflight, metaClient,
@@ -278,7 +278,7 @@ public class TestHoodieROTablePathFilter extends HoodieCommonTestHarness {
     // when there are inflight commits that would cause validation to fail
 
     // Test 1: HoodieROTablePathFilter should work without as.of.instant even when inflight commits exist
-    Configuration confWithoutAsOf = new Configuration(metaClient.getStorageConf().unwrapAs(Configuration.class));
+    StorageConfiguration confWithoutAsOf = metaClient.getStorageConf();
     HoodieROTablePathFilter filterWithoutAsOf = new HoodieROTablePathFilter(confWithoutAsOf, metaClient,
         metaClient.getActiveTimeline().filterCompletedInstants());
 
