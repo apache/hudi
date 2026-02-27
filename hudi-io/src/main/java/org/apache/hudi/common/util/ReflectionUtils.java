@@ -208,6 +208,22 @@ public class ReflectionUtils {
   }
 
   /**
+   * Gets a method based on the method name and type of parameters through reflection.
+   *
+   * @param clazz          {@link Class} object
+   * @param methodName     method name
+   * @param parametersType type of parameters
+   * @return {@link Option} of the method if found; {@code Option.empty()} if not found or error out
+   */
+  public static Option<Method> getMethod(Class<?> clazz, String methodName, Class<?>... parametersType) {
+    try {
+      return Option.of(clazz.getMethod(methodName, parametersType));
+    } catch (Throwable e) {
+      return Option.empty();
+    }
+  }
+
+  /**
    * Checks if the given class with the name is a subclass of another class.
    *
    * @param aClazzName Class name.
