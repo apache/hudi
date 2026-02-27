@@ -267,7 +267,6 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
           architecture: x64
-          cache: maven
       - name: Quickstart Test
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
@@ -322,7 +321,6 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
           architecture: x64
-          cache: maven
       - name: Scala UT - Common & Spark
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
@@ -371,7 +369,6 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
           architecture: x64
-          cache: maven
       - name: Quickstart Test
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
@@ -426,7 +423,6 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
           architecture: x64
-          cache: maven
       - name: Scala UT - Common & Spark
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
