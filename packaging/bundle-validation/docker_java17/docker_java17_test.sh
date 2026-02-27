@@ -78,8 +78,16 @@ setup_hdfs () {
 
   echo "::warning::docker_test_java17.sh waiting for NameNode to start"
   NAMENODE_READY=0
+  NAMENODE_PID=""
+  if [ -f "$HADOOP_PID_DIR/hadoop-root-namenode.pid" ]; then
+    NAMENODE_PID=$(cat "$HADOOP_PID_DIR/hadoop-root-namenode.pid")
+  fi
   for i in $(seq 1 30); do
-    if bash $HADOOP_HOME/bin/hdfs dfsadmin -report >/dev/null 2>&1; then
+    if [ -n "$NAMENODE_PID" ] && ! kill -0 "$NAMENODE_PID" 2>/dev/null; then
+      echo "::error::docker_test_java17.sh NameNode process $NAMENODE_PID died"
+      break
+    fi
+    if timeout 15 bash $HADOOP_HOME/bin/hdfs dfsadmin -report >/dev/null 2>&1; then
       NAMENODE_READY=1
       break
     fi
@@ -87,6 +95,9 @@ setup_hdfs () {
   done
   if [ "$NAMENODE_READY" -ne 1 ]; then
     echo "::error::docker_test_java17.sh NameNode failed to start"
+    echo "::group::NameNode logs"
+    find "$HADOOP_HOME/logs" -name "hadoop-root-namenode*.log" -exec cat {} \; 2>/dev/null || echo "No NameNode logs found"
+    echo "::endgroup::"
     exit 1
   fi
 
@@ -114,7 +125,7 @@ setup_hdfs () {
 stop_hdfs() {
   use_default_java_runtime
   echo "::warning::docker_test_java17.sh stopping hadoop hdfs"
-  export HADOOP_PID_DIR=${HADOOP_PID_DIR:-$DOCKER_TEST_DIR/pid}
+  export HADOOP_PID_DIR=$DOCKER_TEST_DIR/pid
   bash $HADOOP_HOME/bin/hdfs --daemon stop datanode 2>/dev/null || true
   for i in 1 2 3; do
     export HADOOP_PID_DIR=$DOCKER_TEST_DIR/pid/$i
@@ -181,11 +192,6 @@ run_docker_tests() {
 # Execute tests
 ############################
 cd $DOCKER_TEST_DIR
-echo "yxchang: $(PATH)"
-export PATH=/usr/bin:$PATH
-whoami
-which ssh
-whoami
 
 echo "::warning::docker_test_java17.sh Building Hudi with Java 8"
 build_hudi_java8
