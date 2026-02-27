@@ -73,6 +73,12 @@ setup_hdfs () {
   mkdir -p $DOCKER_TEST_DIR/pid
   export HADOOP_PID_DIR=$DOCKER_TEST_DIR/pid
 
+  # JDK 8u272+ backported cgroup v2 support from JDK 11 but has a NPE bug (JDK-8278725)
+  # when running in Docker containers with cgroup v2 (used by GitHub Actions runners).
+  # Disable container support to avoid the NPE in CgroupV2Subsystem during MBeans init.
+  export HDFS_NAMENODE_OPTS="-XX:-UseContainerSupport $HDFS_NAMENODE_OPTS"
+  export HDFS_DATANODE_OPTS="-XX:-UseContainerSupport $HDFS_DATANODE_OPTS"
+
   bash $HADOOP_HOME/bin/hdfs namenode -format
   bash $HADOOP_HOME/bin/hdfs --daemon start namenode
 
