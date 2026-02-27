@@ -460,12 +460,17 @@ trait ProvidesHoodieConfig extends Logging {
       hiveSyncConfig.setValue(HoodieSyncConfig.META_SYNC_PARTITION_FIELDS, props.getString(HoodieSyncConfig.META_SYNC_PARTITION_FIELDS.key))
     }
     // If partition value extractor is present in params Object we can use it.
-    // If not we can trying inferring the partition extractor class name.
+    // Here as well it checks first for hoodie.datasource.hive_sync.partition_extractor_class and then
+    // for hoodie.datasource.partition_extractor_class config.
+    // If either of the above configs are not provided then we can try inferring the partition extractor class name.
     // Even if that fails, then we can assume it to be a NonPartitionExtractor.
     val inferredPartitionValueExtractorClass = HoodieTableConfigUtils.inferPartitionValueExtractorClass(tableConfig)
     if (props.containsKey(HoodieSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS.key())) {
       hiveSyncConfig.setValue(HoodieSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS.key(),
         props.getString(HoodieSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS.key()))
+    } else if (props.containsKey(DataSourceWriteOptions.PARTITION_EXTRACTOR_CLASS.key())) {
+      hiveSyncConfig.setValue(HoodieSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS.key(),
+        props.getString(DataSourceWriteOptions.PARTITION_EXTRACTOR_CLASS.key()))
     } else if (inferredPartitionValueExtractorClass.isPresent) {
       hiveSyncConfig.setValue(HoodieSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS.key(),
         inferredPartitionValueExtractorClass.get())
