@@ -38,7 +38,6 @@ public class TestPartitionFilterGenerator {
   @Test
   public void testPushDownFilters() {
     Properties props = new Properties();
-    props.put(HoodieSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS.key(), MultiPartKeysValueExtractor.class.getName());
     HiveSyncConfig config = new HiveSyncConfig(props);
     List<FieldSchema> partitionFieldSchemas = new ArrayList<>(4);
     partitionFieldSchemas.add(new FieldSchema("date", "date"));
@@ -85,7 +84,6 @@ public class TestPartitionFilterGenerator {
   @Test
   public void testPushDownFilterIfExceedLimit() {
     Properties props = new Properties();
-    props.put(HoodieSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS.key(), MultiPartKeysValueExtractor.class.getName());
     props.put(HIVE_SYNC_FILTER_PUSHDOWN_MAX_SIZE.key(), "0");
     HiveSyncConfig config = new HiveSyncConfig(props);
     List<FieldSchema> partitionFieldSchemas = new ArrayList<>(4);
