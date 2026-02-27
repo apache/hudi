@@ -19,6 +19,7 @@
 package org.apache.hudi.sync.common.util;
 
 import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaType;
 
 /**
  * Convert the Hoodie schema to spark schema' json string.
@@ -28,10 +29,14 @@ import org.apache.hudi.common.schema.HoodieSchema;
 public class SparkSchemaUtils {
 
   public static String convertToSparkSchemaJson(HoodieSchema schema) {
-    String fieldsJsonString = schema.getFields().stream().map(field ->
-            "{\"name\":\"" + field.name() + "\",\"type\":" + convertFieldType(field.getNonNullSchema())
-                + ",\"nullable\":" + field.isNullable() + ",\"metadata\":{}}")
-        .reduce((a, b) -> a + "," + b).orElse("");
+    String fieldsJsonString = schema.getFields().stream().map(field -> {
+      String metadata = "{}";
+      if (field.getNonNullSchema().isBlobField()) {
+        metadata = String.format("{\"%s\":\"%s\"}", HoodieSchema.TYPE_METADATA_FIELD, HoodieSchemaType.BLOB.name());
+      }
+      return "{\"name\":\"" + field.name() + "\",\"type\":" + convertFieldType(field.getNonNullSchema())
+                + ",\"nullable\":" + field.isNullable() + ",\"metadata\":" + metadata + "}";
+    }).reduce((a, b) -> a + "," + b).orElse("");
     return "{\"type\":\"struct\",\"fields\":[" + fieldsJsonString + "]}";
   }
 
@@ -81,6 +86,7 @@ public class SparkSchemaUtils {
             + ",\"valueType\":" + convertFieldType(valueType)
             + ",\"valueContainsNull\":" + valueOptional + "}";
       case RECORD:
+      case BLOB:
         return convertToSparkSchemaJson(fieldSchema);
       default:
         throw new UnsupportedOperationException("Cannot convert " + fieldSchema.getType() + " to spark sql type");

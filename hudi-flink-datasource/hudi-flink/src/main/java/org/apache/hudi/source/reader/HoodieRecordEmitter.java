@@ -22,11 +22,13 @@ import org.apache.flink.api.connector.source.SourceOutput;
 import org.apache.flink.connector.base.source.reader.RecordEmitter;
 import org.apache.hudi.source.split.HoodieSourceSplit;
 
+import java.io.Serializable;
+
 /**
  * Default Hoodie record emitter.
  * @param <T>
  */
-public class HoodieRecordEmitter<T> implements RecordEmitter<HoodieRecordWithPosition<T>, T, HoodieSourceSplit> {
+public class HoodieRecordEmitter<T> implements RecordEmitter<HoodieRecordWithPosition<T>, T, HoodieSourceSplit>, Serializable {
 
   @Override
   public void emitRecord(HoodieRecordWithPosition<T> record, SourceOutput<T> output, HoodieSourceSplit split) throws Exception {

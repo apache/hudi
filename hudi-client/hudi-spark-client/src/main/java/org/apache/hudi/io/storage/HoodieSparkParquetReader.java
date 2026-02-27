@@ -57,6 +57,7 @@ import org.apache.spark.sql.execution.datasources.parquet.ParquetToSparkSchemaCo
 import org.apache.spark.sql.execution.datasources.parquet.SparkBasicSchemaEvolution;
 import org.apache.spark.sql.internal.SQLConf;
 import org.apache.spark.sql.sources.Filter;
+import org.apache.spark.sql.types.Metadata;
 import org.apache.spark.sql.types.StructType;
 
 import java.io.IOException;
@@ -139,7 +140,7 @@ public class HoodieSparkParquetReader implements HoodieSparkFileReader {
    * If it is necessary to expand to push down more fields in the future, please consider the issue of schema evolution carefully
    */
   public ClosableIterator<UnsafeRow> getUnsafeRowIterator(HoodieSchema requestedSchema, List<Filter> readFilters) throws IOException {
-    HoodieSchema nonNullSchema = HoodieSchemaUtils.getNonNullTypeFromUnion(requestedSchema);
+    HoodieSchema nonNullSchema = requestedSchema.getNonNullType();
     StructType structSchema = HoodieInternalRowUtils.getCachedSchema(nonNullSchema);
     Option<MessageType> messageSchema = Option.of(getAvroSchemaConverter(storage.getConf().unwrapAs(Configuration.class)).convert(nonNullSchema));
     boolean enableTimestampFieldRepair = storage.getConf().getBoolean(ENABLE_LOGICAL_TIMESTAMP_REPAIR, true);
@@ -204,7 +205,7 @@ public class HoodieSparkParquetReader implements HoodieSparkFileReader {
       MessageType messageType = getFileSchema();
       StructType structType = getStructSchema();
       schemaOption = Option.of(HoodieSparkSchemaConverters.toHoodieType(
-          structType, true, messageType.getName(), StringUtils.EMPTY_STRING));
+          structType, true, messageType.getName(), StringUtils.EMPTY_STRING, Metadata.empty()));
     }
     return schemaOption.get();
   }

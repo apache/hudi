@@ -19,7 +19,7 @@
 package org.apache.hudi.source.enumerator;
 
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.source.assign.HoodieSplitNumberAssigner;
+import org.apache.hudi.source.split.assign.HoodieSplitNumberAssigner;
 import org.apache.hudi.source.split.DefaultHoodieSplitProvider;
 import org.apache.hudi.source.split.HoodieSourceSplit;
 import org.apache.hudi.source.split.SplitRequestEvent;
@@ -61,7 +61,7 @@ public class TestHoodieStaticSplitEnumerator {
   public void setUp() {
     context = new MockSplitEnumeratorContext();
     splitProvider = new DefaultHoodieSplitProvider(new HoodieSplitNumberAssigner(2));
-    enumerator = new HoodieStaticSplitEnumerator(context, splitProvider);
+    enumerator = new HoodieStaticSplitEnumerator("test-table", context, splitProvider);
 
     split1 = createTestSplit(1, "file1");
     split2 = createTestSplit(2, "file2");
@@ -228,7 +228,8 @@ public class TestHoodieStaticSplitEnumerator {
         "/table/path/partition1",
         "read_optimized",
         "19700101000000000",
-        fileId
+        fileId,
+        Option.empty()
     );
   }
 

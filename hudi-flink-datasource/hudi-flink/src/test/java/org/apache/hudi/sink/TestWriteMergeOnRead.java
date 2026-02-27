@@ -20,19 +20,32 @@ package org.apache.hudi.sink;
 
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.model.EventTimeAvroPayload;
+import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.model.HoodieWriteStat;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.util.StreamerUtil;
 import org.apache.hudi.utils.TestData;
 
 import org.apache.flink.configuration.Configuration;
+import org.apache.flink.table.data.RowData;
+import org.apache.flink.table.data.StringData;
+import org.apache.flink.table.data.TimestampData;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
+
+import static org.apache.hudi.utils.TestData.insertRow;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /**
  * Test cases for delta stream write.
@@ -251,6 +264,68 @@ public class TestWriteMergeOnRead extends TestWriteCopyOnWrite {
         // there should be 3 rows and 2 partitions
         .checkWrittenData(expected, 2)
         .end();
+  }
+
+  @Test
+  public void testInsertDuplicateRecordsWithCDCMode() throws Exception {
+    conf.set(FlinkOptions.WRITE_COMMIT_ACK_TIMEOUT, 10_000L);
+    conf.set(FlinkOptions.CDC_ENABLED, true);
+
+    Map<String, String> expected = new HashMap<>();
+    expected.put("par1", "[id1,par1,id1,Danny,23,1,par1]");
+
+    List<RowData> insertData = List.of(
+        insertRow(StringData.fromString("id1"), StringData.fromString("Danny"), 23,
+            TimestampData.fromEpochMillis(1), StringData.fromString("par1")));
+
+    TestHarness testHarness = preparePipeline()
+        .consume(insertData)
+        .checkpoint(1)
+        .allDataFlushed()
+        .handleEvents(1);
+
+    Thread t1 = new Thread(() -> {
+      try {
+        Thread.sleep(3000);
+        testHarness.checkpointComplete(1);
+        testHarness.checkWrittenData(expected, 1);
+      } catch (Exception e) {
+        throw new HoodieException(e);
+      }
+    });
+    t1.start();
+
+    testHarness
+        .consume(insertData)
+        .checkpoint(2)
+        .allDataFlushed();
+    t1.join();
+
+    testHarness.handleEvents(1)
+        .checkpointComplete(2)
+        .checkWrittenData(expected, 1)
+        .end();
+
+    // validate the metadata of the above two inserts, specifically the `prevCommit` in the write stat, the expected
+    // result should be:
+    // 1) the prev commit time for the first commit is itself.
+    // 2) the prev commit time for the second commit is the first instant time, which ensures the deterministic update sequence.
+    HoodieTableMetaClient metaClient = StreamerUtil.createMetaClient(conf);
+    List<HoodieInstant> completedDeltaInstants =
+        metaClient.reloadActiveTimeline().getDeltaCommitTimeline().filterCompletedInstants().getInstants();
+    assertEquals(2, completedDeltaInstants.size());
+    HoodieInstant firstInstant = completedDeltaInstants.get(0);
+    HoodieInstant secondInstant = completedDeltaInstants.get(1);
+    HoodieCommitMetadata firstCommitMetadata = metaClient.getActiveTimeline().readCommitMetadata(firstInstant);
+    HoodieCommitMetadata secondCommitMetadata = metaClient.getActiveTimeline().readCommitMetadata(secondInstant);
+
+    List<HoodieWriteStat> firstWriteStats = firstCommitMetadata.getWriteStats();
+    assertEquals(1, firstWriteStats.size());
+    assertEquals(firstInstant.requestedTime(), firstWriteStats.get(0).getPrevCommit());
+
+    List<HoodieWriteStat> secondWriteStats = secondCommitMetadata.getWriteStats();
+    assertEquals(1, secondWriteStats.size());
+    assertEquals(firstInstant.requestedTime(), secondWriteStats.get(0).getPrevCommit());
   }
 
   @Override

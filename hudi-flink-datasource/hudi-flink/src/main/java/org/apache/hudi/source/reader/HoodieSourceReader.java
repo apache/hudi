@@ -39,14 +39,14 @@ import java.util.Map;
  */
 public class HoodieSourceReader<T> extends
         SingleThreadMultiplexSourceReaderBase<HoodieRecordWithPosition<T>, T, HoodieSourceSplit, HoodieSourceSplit> {
-
   public HoodieSourceReader(
+          String tableName,
           RecordEmitter<HoodieRecordWithPosition<T>, T, HoodieSourceSplit> recordEmitter,
           Configuration config,
           SourceReaderContext context,
           SplitReaderFunction<T> readerFunction,
           SerializableComparator<HoodieSourceSplit> splitComparator) {
-    super(() -> new HoodieSourceSplitReader<>(context, readerFunction, splitComparator), recordEmitter, config, context);
+    super(() -> new HoodieSourceSplitReader<>(tableName, context, readerFunction, splitComparator), recordEmitter, config, context);
   }
 
   @Override

@@ -30,6 +30,7 @@ import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.view.HoodieTablePreCommitFileSystemView;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -135,19 +136,37 @@ public class SparkValidatorUtils {
         .collect(Collectors.toList());
 
     if (committedFiles.isEmpty()) {
-      try {
-        return sqlContext.createDataFrame(
-            sqlContext.emptyDataFrame().rdd(),
-            HoodieSchemaConversionUtils.convertHoodieSchemaToStructType(
-                new TableSchemaResolver(table.getMetaClient()).getTableSchema()));
-      } catch (Exception e) {
-        LOG.warn("Cannot get table schema from before state.", e);
-        LOG.warn("Using the schema from after state (current transaction) to create the empty Spark dataframe: {}", newStructTypeSchema);
-        return sqlContext.createDataFrame(
-            sqlContext.emptyDataFrame().rdd(), newStructTypeSchema);
-      }
+      return createEmptyDataFrameWithTableSchema(sqlContext, table, Option.of(newStructTypeSchema));
     }
     return readRecordsForBaseFiles(sqlContext, committedFiles, table);
+  }
+
+  /**
+   * Creates an empty DataFrame with table schema for use when there are no files to read.
+   * If table schema cannot be resolved and a fallback schema is provided, uses that schema;
+   * otherwise returns a schema-less empty DataFrame.
+   *
+   * @param sqlContext     Spark {@link SQLContext} instance.
+   * @param table          {@link HoodieTable} instance.
+   * @param fallbackSchema Optional schema to use when table schema cannot be resolved (e.g. after state schema); empty to return schema-less empty DataFrame.
+   * @return Empty DataFrame with table or fallback schema, or schema-less if no fallback.
+   */
+  private static Dataset<Row> createEmptyDataFrameWithTableSchema(SQLContext sqlContext,
+                                                                  HoodieTable table,
+                                                                  Option<StructType> fallbackSchema) {
+    try {
+      return sqlContext.createDataFrame(
+          sqlContext.emptyDataFrame().rdd(),
+          HoodieSchemaConversionUtils.convertHoodieSchemaToStructType(
+              new TableSchemaResolver(table.getMetaClient()).getTableSchema()));
+    } catch (Exception e) {
+      LOG.warn("Could not get table schema for empty DataFrame.", e);
+      if (fallbackSchema.isPresent()) {
+        LOG.warn("Using fallback schema to create the empty Spark DataFrame: {}", fallbackSchema.get());
+        return sqlContext.createDataFrame(sqlContext.emptyDataFrame().rdd(), fallbackSchema.get());
+      }
+      return sqlContext.emptyDataFrame();
+    }
   }
 
   /**
@@ -201,7 +220,9 @@ public class SparkValidatorUtils {
         .collect(Collectors.toList());
 
     if (newFiles.isEmpty()) {
-      return sqlContext.emptyDataFrame();
+      // Empty write: return empty DataFrame with table schema so validators that reference
+      // columns (e.g. _row_key) do not fail with AnalysisException "Column ... does not exist".
+      return createEmptyDataFrameWithTableSchema(sqlContext, table, Option.empty());
     }
 
     return readRecordsForBaseFiles(sqlContext, newFiles, table);

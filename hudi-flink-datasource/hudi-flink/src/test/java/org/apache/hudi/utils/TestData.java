@@ -576,6 +576,21 @@ public class TestData {
   public static void writeData(
       List<RowData> dataBuffer,
       Configuration conf) throws Exception {
+    writeData(dataBuffer, 0, conf);
+  }
+
+  /**
+   * Write a list of row data with Hoodie format base on the given configuration.
+   *
+   * @param dataBuffer    The data buffer to write
+   * @param numEagerFlush The number of eager flushing
+   * @param conf          The flink configuration
+   * @throws Exception if error occurs
+   */
+  public static void writeData(
+      List<RowData> dataBuffer,
+      int numEagerFlush,
+      Configuration conf) throws Exception {
     final TestFunctionWrapper<RowData> funcWrapper = getWritePipeline(conf.get(FlinkOptions.PATH), conf);
     funcWrapper.openFunction();
 
@@ -586,8 +601,10 @@ public class TestData {
     // this triggers the data write and event send
     funcWrapper.checkpointFunction(1);
 
-    final OperatorEvent nextEvent = funcWrapper.getNextEvent();
-    funcWrapper.getCoordinator().handleEventFromOperator(0, nextEvent);
+    for (int i = 0; i < numEagerFlush + 1; i++) {
+      final OperatorEvent nextEvent = funcWrapper.getNextEvent();
+      funcWrapper.getCoordinator().handleEventFromOperator(0, nextEvent);
+    }
     funcWrapper.checkpointComplete(1);
 
     funcWrapper.close();

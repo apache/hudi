@@ -553,7 +553,7 @@ public class TestHoodieWriteConfig {
       }
     });
 
-    // validate the the configured lock provider is honored by the TimeGeneratorConfig as well.
+    // validate the configured lock provider is honored by the TimeGeneratorConfig as well.
     assertEquals(NoopLockProvider.class.getName(), writeConfig.getTimeGeneratorConfig().getLockConfiguration().getConfig().getProperty(HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.key()));
 
     // if auto adjust lock config is enabled, for a single writer w/ all inline table services, InProcessLockProvider is overriden

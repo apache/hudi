@@ -183,7 +183,7 @@ class TestHoodieTableConfig extends HoodieCommonTestHarness {
     updatedProps.setProperty(HoodieTableConfig.ORDERING_FIELDS.key(), "new_field2");
     Set<String> propsToDelete = new HashSet<>();
     propsToDelete.add(HoodieTableConfig.PARTITION_FIELDS.key());
-    // delete a non existant property as well
+    // delete a non-existent property as well
     propsToDelete.add(HoodieTableConfig.RECORDKEY_FIELDS.key());
     HoodieTableConfig.updateAndDeleteProps(storage, metaPath, updatedProps, propsToDelete);
     config = new HoodieTableConfig(storage, metaPath);

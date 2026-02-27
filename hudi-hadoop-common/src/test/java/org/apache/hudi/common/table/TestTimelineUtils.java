@@ -25,6 +25,7 @@ import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.common.HoodieRollbackStat;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
+import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.WriteOperationType;
@@ -40,6 +41,7 @@ import org.apache.hudi.common.table.timeline.versioning.v2.InstantComparatorV2;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.storage.StoragePath;
 
 import org.junit.jupiter.api.AfterEach;
@@ -72,8 +74,10 @@ import static org.apache.hudi.common.table.timeline.HoodieTimeline.REPLACE_COMMI
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.ROLLBACK_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.SAVEPOINT_ACTION;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
@@ -292,6 +296,42 @@ class TestTimelineUtils extends HoodieCommonTestHarness {
     assertEquals(extraMetadataValue1, extraMetadataEntries.get("1").get());
     assertTrue(extraMetadataEntries.get("2").isPresent());
     assertEquals(newValueForMetadata, extraMetadataEntries.get("2").get());
+  }
+
+  @Test
+  void testGetExtraMetadataFromLatestAfterZeroByteOlderCommitFile() throws Exception {
+    String extraMetadataKey = "test_key";
+    String extraMetadataValue = "latest_value";
+    HoodieActiveTimeline activeTimeline = metaClient.getActiveTimeline();
+
+    // Commit 0 (to be corrupted later).
+    String ts0 = "0";
+    HoodieInstant instant0 = new HoodieInstant(REQUESTED, COMMIT_ACTION, ts0, InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR);
+    activeTimeline.createNewInstant(instant0);
+    instant0 = new HoodieInstant(INFLIGHT, COMMIT_ACTION, ts0, InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR);
+    activeTimeline.createNewInstant(instant0);
+    Map<String, String> extraMetadata = new HashMap<>();
+    extraMetadata.put(extraMetadataKey, extraMetadataValue);
+    HoodieInstant completedCommit = activeTimeline.saveAsComplete(instant0, getCommitMetadata(basePath, ts0, ts0, 2, extraMetadata));
+
+    // Replace commit 0 file with a zero-byte file.
+    metaClient.reloadActiveTimeline();
+    StoragePath commit0FilePath =
+        new StoragePath(metaClient.getTimelinePath(), metaClient.getInstantFileNameGenerator().getFileName(completedCommit));
+    assertTrue(metaClient.getStorage().deleteFile(commit0FilePath), "Failed to delete original commit file");
+    assertTrue(metaClient.getStorage().createNewFile(commit0FilePath), "Failed to create zero-byte commit file");
+
+    // Validate reading metadata from the zero-byte commit file does not fail.
+    HoodieInstant lastCommit = metaClient.reloadActiveTimeline().lastInstant().get();
+    HoodieCommitMetadata zeroByteCommitMetadata = assertDoesNotThrow(
+        () -> metaClient.reloadActiveTimeline().readCommitMetadata(lastCommit),
+        "Reading zero-byte commit file should not fail");
+    assertEquals(WriteOperationType.UNKNOWN, zeroByteCommitMetadata.getOperationType(),
+        "Zero-byte commit file should deserialize to empty commit metadata with UNKNOWN operation type");
+
+    // Check should fail.
+    assertThrows(HoodieIOException.class, () -> TimelineUtils
+        .getExtraMetadataFromLatest(metaClient, extraMetadataKey), "Completed commits should always be readable");
   }
 
   @Test

@@ -154,6 +154,7 @@ public class HoodieSchemaComparatorForSchemaEvolution {
 
     switch (s1.getType()) {
       case RECORD:
+      case BLOB:
         return recordSchemaEquals(s1, s2);
       case ENUM:
         return enumSchemaEquals(s1, s2);
@@ -190,6 +191,10 @@ public class HoodieSchemaComparatorForSchemaEvolution {
   }
 
   protected boolean validateRecord(HoodieSchema s1, HoodieSchema s2) {
+    // BLOB schemas are never error records, so skip the error check for BLOB
+    if (s1.getType() == HoodieSchemaType.BLOB) {
+      return true;
+    }
     return s1.isError() == s2.isError();
   }
 

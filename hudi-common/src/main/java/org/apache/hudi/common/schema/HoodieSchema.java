@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.schema;
 
+import org.apache.hudi.avro.AvroSchemaUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
@@ -42,6 +43,8 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.stream.Collectors;
+
+import static org.apache.hudi.avro.HoodieAvroUtils.createNewSchemaField;
 
 /**
  * Wrapper class for Avro Schema that provides Hudi-specific schema functionality
@@ -80,14 +83,18 @@ import java.util.stream.Collectors;
  * @since 1.2.0
  */
 public class HoodieSchema implements Serializable {
-
+  private static final long serialVersionUID = 1L;
   /**
    * Constant representing a null JSON value, equivalent to JsonProperties.NULL_VALUE.
    * This provides compatibility with Avro's JsonProperties while maintaining Hudi's API.
    */
   public static final Object NULL_VALUE = JsonProperties.NULL_VALUE;
   public static final HoodieSchema NULL_SCHEMA = HoodieSchema.create(HoodieSchemaType.NULL);
-  private static final long serialVersionUID = 1L;
+
+  /**
+   * Constant to use when attaching type metadata to external schema systems like Spark's StructType.
+   */
+  public static final String TYPE_METADATA_FIELD = "hudi_type";
 
   /**
    * Constants for Parquet-style accessor patterns used in nested MAP and ARRAY navigation.
@@ -115,6 +122,7 @@ public class HoodieSchema implements Serializable {
   // Register the Variant logical type with Avro
   static {
     LogicalTypes.register(VariantLogicalType.VARIANT_LOGICAL_TYPE_NAME, new VariantLogicalTypeFactory());
+    LogicalTypes.register(BlobLogicalType.BLOB_LOGICAL_TYPE_NAME, new BlobLogicalTypeFactory());
   }
 
   /**
@@ -163,6 +171,8 @@ public class HoodieSchema implements Serializable {
         return new HoodieSchema.Timestamp(avroSchema);
       } else if (logicalType == VariantLogicalType.variant()) {
         return new HoodieSchema.Variant(avroSchema);
+      } else if (logicalType == BlobLogicalType.blob()) {
+        return new HoodieSchema.Blob(avroSchema);
       }
     }
     return new HoodieSchema(avroSchema);
@@ -247,26 +257,24 @@ public class HoodieSchema implements Serializable {
 
     if (schema.getType() == HoodieSchemaType.UNION) {
       // Already a union, check if it contains null
-      List<Schema> unionTypes = inputAvroSchema.getTypes();
-      boolean hasNull = unionTypes.stream().anyMatch(s -> s.getType() == Schema.Type.NULL);
+      List<HoodieSchema> unionTypes = schema.getTypes();
+      boolean hasNull = unionTypes.stream().anyMatch(s -> s.getType() == HoodieSchemaType.NULL);
 
       if (hasNull) {
         return schema; // Already nullable
       }
 
       // Add null to existing union
-      List<Schema> newUnionTypes = new ArrayList<>(unionTypes.size() + 1);
-      newUnionTypes.add(Schema.create(Schema.Type.NULL));
+      List<HoodieSchema> newUnionTypes = new ArrayList<>(unionTypes.size() + 1);
+      newUnionTypes.add(NULL_SCHEMA);
       newUnionTypes.addAll(unionTypes);
-      Schema nullableSchema = Schema.createUnion(newUnionTypes);
-      return new HoodieSchema(nullableSchema);
+      return HoodieSchema.createUnion(newUnionTypes);
     } else {
       // Create new union with null
-      List<Schema> unionTypes = new ArrayList<>(2);
-      unionTypes.add(Schema.create(Schema.Type.NULL));
-      unionTypes.add(inputAvroSchema);
-      Schema nullableSchema = Schema.createUnion(unionTypes);
-      return new HoodieSchema(nullableSchema);
+      List<HoodieSchema> unionTypes = new ArrayList<>(2);
+      unionTypes.add(NULL_SCHEMA);
+      unionTypes.add(schema);
+      return HoodieSchema.createUnion(unionTypes);
     }
   }
 
@@ -590,6 +598,7 @@ public class HoodieSchema implements Serializable {
    * @return a new HoodieSchema.Variant representing a shredded variant
    */
   public static HoodieSchema.Variant createVariantShredded(String name, String namespace, String doc, HoodieSchema typedValueSchema) {
+    ValidationUtils.checkArgument(typedValueSchema == null || !typedValueSchema.containsBlobType(), "Typed value cannot be or contain a BLOB type");
     String variantName = (name != null && !name.isEmpty()) ? name : VariantLogicalType.VARIANT_LOGICAL_TYPE_NAME;
 
     List<HoodieSchemaField> fields = new ArrayList<>();
@@ -630,6 +639,10 @@ public class HoodieSchema implements Serializable {
     VariantLogicalType.variant().addToSchema(recordSchema);
 
     return new HoodieSchema.Variant(recordSchema);
+  }
+
+  public static HoodieSchema.Blob createBlob() {
+    return new HoodieSchema.Blob(Blob.DEFAULT_NAME);
   }
 
   /**
@@ -698,7 +711,7 @@ public class HoodieSchema implements Serializable {
    * @return true if this type can have fields (RECORD or VARIANT)
    */
   public boolean hasFields() {
-    return type == HoodieSchemaType.RECORD || type == HoodieSchemaType.VARIANT;
+    return type == HoodieSchemaType.RECORD || type == HoodieSchemaType.VARIANT || type == HoodieSchemaType.BLOB;
   }
 
   /**
@@ -912,7 +925,6 @@ public class HoodieSchema implements Serializable {
    * If this is a union schema, returns the non-null type. Otherwise, returns this schema.
    *
    * @return the non-null schema from a union or the current schema
-   * @throws IllegalStateException if the union has more than two types
    */
   public HoodieSchema getNonNullType() {
     if (type != HoodieSchemaType.UNION) {
@@ -920,10 +932,57 @@ public class HoodieSchema implements Serializable {
     }
 
     List<HoodieSchema> types = getTypes();
-    if (types.size() != 2) {
-      throw new IllegalStateException("Union schema has more than two types");
+    if (types.size() == 2) {
+      if (types.get(0).getType() == HoodieSchemaType.NULL) {
+        return types.get(1);
+      } else if (types.get(1).getType() == HoodieSchemaType.NULL) {
+        return types.get(0);
+      } else {
+        // This is a non-null union of types
+        return this;
+      }
     }
-    return types.get(0).getType() != HoodieSchemaType.NULL ? types.get(0) : types.get(1);
+    List<HoodieSchema> nonNullTypes = new ArrayList<>(types.size() - 1);
+    for (int i = 0; i < types.size(); i++) {
+      HoodieSchema schema = types.get(i);
+      if (schema.getType() != HoodieSchemaType.NULL) {
+        if (i == types.size() - 1 && nonNullTypes.size() == types.size() - 1) {
+          // Last type and all previous were non-null, return original schema
+          return this;
+        }
+        nonNullTypes.add(schema);
+      }
+    }
+    return HoodieSchema.createUnion(nonNullTypes);
+  }
+
+  boolean containsBlobType() {
+    if (getType() == HoodieSchemaType.BLOB) {
+      return true;
+    } else if (getType() == HoodieSchemaType.ARRAY) {
+      return getElementType().containsBlobType();
+    } else if (getType() == HoodieSchemaType.MAP) {
+      return getValueType().containsBlobType();
+    } else if (getType() == HoodieSchemaType.UNION) {
+      return getTypes().stream().anyMatch(HoodieSchema::containsBlobType);
+    } else if (hasFields()) {
+      return getFields().stream().anyMatch(field -> field.schema().containsBlobType());
+    }
+    return false;
+  }
+
+  /**
+   * A convenience method to check if the current field represents a blob type.
+   * This checks if the current schema is a BLOB or if it is an ARRAY or MAP whose element or value type is a BLOB, respectively.
+   * It does not check for BLOB types nested within unions or record fields.
+   * @return true if the current schema is a BLOB or an ARRAY/MAP of BLOBs, false otherwise
+   */
+  public boolean isBlobField() {
+    HoodieSchema nonNullSchema = getNonNullType();
+    HoodieSchemaType nonNullSchemaType = nonNullSchema.getType();
+    return nonNullSchemaType == HoodieSchemaType.BLOB
+        || (nonNullSchemaType == HoodieSchemaType.ARRAY && nonNullSchema.getElementType().getNonNullType().getType() == HoodieSchemaType.BLOB)
+        || (nonNullSchemaType == HoodieSchemaType.MAP && nonNullSchema.getValueType().getNonNullType().getType() == HoodieSchemaType.BLOB);
   }
 
   /**
@@ -1799,6 +1858,11 @@ public class HoodieSchema implements Serializable {
           // If not a union, it should at least be bytes (some shredded variants may have non-null value)
           throw new IllegalArgumentException("Shredded Variant value field must be BYTES or nullable BYTES, got: " + valueSchema.getType());
         }
+        Option.ofNullable(avroSchema.getField(Variant.VARIANT_TYPED_VALUE_FIELD)).ifPresent(field -> {
+          if (HoodieSchema.fromAvroSchema(field.schema()).containsBlobType()) {
+            throw new IllegalArgumentException("Variant typed_value field cannot be or contain a BLOB type");
+          }
+        });
       } else {
         // Unshredded: value must be non-nullable bytes
         if (valueSchema.getType() != Schema.Type.BYTES) {
@@ -1865,6 +1929,127 @@ public class HoodieSchema implements Serializable {
     @Override
     public int hashCode() {
       return Objects.hash(super.hashCode(), isShredded, typedValueSchema);
+    }
+  }
+
+  static class BlobLogicalType extends LogicalType {
+
+    private static final String BLOB_LOGICAL_TYPE_NAME = "blob";
+    // Eager initialization of singleton
+    private static final BlobLogicalType INSTANCE = new BlobLogicalType();
+
+    private BlobLogicalType() {
+      super(BlobLogicalType.BLOB_LOGICAL_TYPE_NAME);
+    }
+
+    public static BlobLogicalType blob() {
+      return INSTANCE;
+    }
+
+    @Override
+    public void validate(Schema schema) {
+      super.validate(schema);
+      if (schema.getType() != Schema.Type.RECORD) {
+        throw new IllegalArgumentException("Blob logical type can only be applied to RECORD schemas, got: " + schema.getType());
+      }
+      if (!schema.getFields().equals(HoodieSchema.Blob.BLOB_FIELDS)) {
+        throw new IllegalArgumentException("Blob logical type cannot be applied to schema: " + schema);
+      }
+    }
+  }
+
+  /**
+   * Factory for creating BlobLogicalType instances.
+   */
+  private static class BlobLogicalTypeFactory implements LogicalTypes.LogicalTypeFactory {
+    @Override
+    public LogicalType fromSchema(Schema schema) {
+      return BlobLogicalType.blob();
+    }
+
+    @Override
+    public String getTypeName() {
+      return BlobLogicalType.BLOB_LOGICAL_TYPE_NAME;
+    }
+  }
+
+  /**
+   * Blob types represent raw binary data. The data can be stored in-line as a byte array or out-of-line as a reference to a file or offset and length within that file.
+   */
+  public static class Blob extends HoodieSchema {
+    private static final String DEFAULT_NAME = "blob";
+    private static final List<Schema.Field> BLOB_FIELDS = createBlobFields();
+
+    public static final String TYPE = "type";
+    public static final String INLINE_DATA_FIELD = "data";
+    public static final String EXTERNAL_REFERENCE = "reference";
+    public static final String EXTERNAL_REFERENCE_PATH = "external_path";
+    // if offset is not specified, it is assumed to be 0 (start of file)
+    public static final String EXTERNAL_REFERENCE_OFFSET = "offset";
+    // if length is not specified, it is assumed to be the rest of the file starting from offset
+    public static final String EXTERNAL_REFERENCE_LENGTH = "length";
+    public static final String EXTERNAL_REFERENCE_IS_MANAGED = "managed";
+
+    public static int getFieldCount() {
+      return BLOB_FIELDS.size();
+    }
+
+    public static int getReferenceFieldCount() {
+      return AvroSchemaUtils.getNonNullTypeFromUnion(BLOB_FIELDS.get(2).schema()).getFields().size();
+    }
+
+    /**
+     * Creates a new HoodieSchema wrapping the given Avro schema.
+     *
+     * @param name Name for the blob schema
+     * @throws IllegalArgumentException if avroSchema is null or does not have a valid blob logical type
+     */
+    private Blob(String name) {
+      super(createSchema(name));
+    }
+
+    private Blob(Schema avroSchema) {
+      super(avroSchema);
+    }
+
+    @Override
+    public String getName() {
+      return "blob";
+    }
+
+    @Override
+    public HoodieSchemaType getType() {
+      return HoodieSchemaType.BLOB;
+    }
+
+    private static Schema createSchema(String name) {
+      Schema blobSchema = Schema.createRecord(name, null, null, false);
+      // each instance requires its own copy of the fields list
+      List<Schema.Field> fields = new ArrayList<>(BLOB_FIELDS.size());
+      for (Schema.Field field : BLOB_FIELDS) {
+        fields.add(createNewSchemaField(field));
+      }
+      blobSchema.setFields(fields);
+      BlobLogicalType.blob().addToSchema(blobSchema);
+      return blobSchema;
+    }
+
+    private static List<Schema.Field> createBlobFields() {
+      Schema bytesField = Schema.create(Schema.Type.BYTES);
+      Schema referenceField = Schema.createRecord(EXTERNAL_REFERENCE, null, null, false);
+      List<Schema.Field> referenceFields = Arrays.asList(
+          new Schema.Field(EXTERNAL_REFERENCE_PATH, Schema.create(Schema.Type.STRING), null, null),
+          new Schema.Field(EXTERNAL_REFERENCE_OFFSET, AvroSchemaUtils.createNullableSchema(Schema.create(Schema.Type.LONG)), null, null),
+          new Schema.Field(EXTERNAL_REFERENCE_LENGTH, AvroSchemaUtils.createNullableSchema(Schema.create(Schema.Type.LONG)), null, null),
+          new Schema.Field(EXTERNAL_REFERENCE_IS_MANAGED, Schema.create(Schema.Type.BOOLEAN), null, null)
+      );
+      referenceField.setFields(referenceFields);
+
+      return Arrays.asList(
+          new Schema.Field(TYPE, Schema.createEnum("blob_storage_type", null, null, Arrays.asList("INLINE", "OUT_OF_LINE")), null, null),
+          new Schema.Field(INLINE_DATA_FIELD, AvroSchemaUtils.createNullableSchema(bytesField), null, Schema.Field.NULL_DEFAULT_VALUE),
+          new Schema.Field(EXTERNAL_REFERENCE, AvroSchemaUtils.createNullableSchema(referenceField), null, Schema.Field.NULL_DEFAULT_VALUE)
+      );
     }
   }
 

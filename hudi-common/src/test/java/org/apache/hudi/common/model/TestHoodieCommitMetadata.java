@@ -127,7 +127,7 @@ public class TestHoodieCommitMetadata {
   }
 
   @Test
-  public void testGetFileSliceForFileGroupFromDeltaCommit() throws IOException {
+  public void testGetDependentFileSliceForFileGroupFromDeltaCommit() throws IOException {
     org.apache.hudi.avro.model.HoodieCommitMetadata commitMetadata = new org.apache.hudi.avro.model.HoodieCommitMetadata();
     org.apache.hudi.avro.model.HoodieWriteStat writeStat1 = createWriteStat("111", "111base", Arrays.asList("1.log", "2.log"));
     org.apache.hudi.avro.model.HoodieWriteStat writeStat2 = createWriteStat("111", "111base", Arrays.asList("3.log", "4.log"));
@@ -139,21 +139,41 @@ public class TestHoodieCommitMetadata {
     byte[] serializedCommitMetadata = TimelineMetadataUtils.serializeAvroMetadata(
         commitMetadata, org.apache.hudi.avro.model.HoodieCommitMetadata.class).get();
 
-    Option<Pair<String, List<String>>> result = HoodieCommitMetadata.getFileSliceForFileGroupFromDeltaCommit(
-        new ByteArrayInputStream(serializedCommitMetadata), new HoodieFileGroupId("partition1", "111"));
+    Option<Pair<String, List<String>>> result = HoodieCommitMetadata.getDependentFileSliceForFileGroupFromDeltaCommit(
+        new ByteArrayInputStream(serializedCommitMetadata), new HoodieFileGroupId("partition1", "111"), "4.log");
 
     assertTrue(result.isPresent());
     assertEquals("111base", result.get().getKey());
-    assertEquals(2, result.get().getValue().size());
+    assertEquals(1, result.get().getValue().size());
     assertEquals("3.log", result.get().getValue().get(0));
-    assertEquals("4.log", result.get().getValue().get(1));
 
-    result = HoodieCommitMetadata.getFileSliceForFileGroupFromDeltaCommit(
-        new ByteArrayInputStream(serializedCommitMetadata), new HoodieFileGroupId("partition1", "222"));
+    result = HoodieCommitMetadata.getDependentFileSliceForFileGroupFromDeltaCommit(
+        new ByteArrayInputStream(serializedCommitMetadata), new HoodieFileGroupId("partition1", "222"), "5.log");
     assertTrue(result.isPresent());
     assertTrue(result.get().getKey().isEmpty());
+    assertEquals(0, result.get().getValue().size());
+
+    org.apache.hudi.avro.model.HoodieWriteStat writeStat4 = createWriteStat("111", null, Arrays.asList("1.log"));
+    org.apache.hudi.avro.model.HoodieWriteStat writeStat5 = createWriteStat("111", null, Arrays.asList("2.log"));
+    partitionToWriteStatsMap = new HashMap<>();
+    // simulate the scenario like eager flushing of MOR ingestion in flink writer.
+    partitionToWriteStatsMap.put("partition1", Arrays.asList(writeStat4, writeStat5));
+    commitMetadata.setPartitionToWriteStats(partitionToWriteStatsMap);
+    serializedCommitMetadata = TimelineMetadataUtils.serializeAvroMetadata(
+        commitMetadata, org.apache.hudi.avro.model.HoodieCommitMetadata.class).get();
+
+    result = HoodieCommitMetadata.getDependentFileSliceForFileGroupFromDeltaCommit(
+        new ByteArrayInputStream(serializedCommitMetadata), new HoodieFileGroupId("partition1", "111"), "1.log");
+    assertTrue(result.isPresent());
+    assertEquals("", result.get().getKey());
+    assertEquals(0, result.get().getValue().size());
+
+    result = HoodieCommitMetadata.getDependentFileSliceForFileGroupFromDeltaCommit(
+        new ByteArrayInputStream(serializedCommitMetadata), new HoodieFileGroupId("partition1", "111"), "2.log");
+    assertTrue(result.isPresent());
+    assertEquals("", result.get().getKey());
     assertEquals(1, result.get().getValue().size());
-    assertEquals("5.log", result.get().getValue().get(0));
+    assertEquals("1.log", result.get().getValue().get(0));
   }
 
   @Test

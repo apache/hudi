@@ -22,7 +22,6 @@ package org.apache.hudi.keygen;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.schema.HoodieSchema;
-import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.testutils.SchemaTestUtil;
 import org.apache.hudi.exception.HoodieKeyGeneratorException;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
@@ -153,7 +152,7 @@ class TestTimestampBasedKeyGenerator {
     // timezone is GMT+8:00, createTime is BigDecimal
     BigDecimal decimal = new BigDecimal("1578283932000.0001");
     Conversions.DecimalConversion conversion = new Conversions.DecimalConversion();
-    HoodieSchema resolvedNullableSchema = HoodieSchemaUtils.getNonNullTypeFromUnion(schema.getField("createTimeDecimal").get().schema());
+    HoodieSchema resolvedNullableSchema = schema.getField("createTimeDecimal").get().getNonNullSchema();
     GenericFixed avroDecimal = conversion.toFixed(decimal, resolvedNullableSchema.toAvroSchema(), LogicalTypes.decimal(20, 4));
     baseRecord.put("createTimeDecimal", avroDecimal);
     properties = getBaseKeyConfig("createTimeDecimal", "EPOCHMILLISECONDS", "yyyy-MM-dd hh", "GMT+8:00", null);
@@ -223,8 +222,7 @@ class TestTimestampBasedKeyGenerator {
 
     // Timestamp field is in decimal type, with `EPOCHMICROSECONDS` timestamp type in the key generator
     decimal = new BigDecimal("1578283932123456.0001");
-    resolvedNullableSchema = HoodieSchemaUtils.getNonNullTypeFromUnion(
-        schema.getField("createTimeDecimal").get().schema());
+    resolvedNullableSchema = schema.getField("createTimeDecimal").get().getNonNullSchema();
     avroDecimal = conversion.toFixed(decimal, resolvedNullableSchema.toAvroSchema(), LogicalTypes.decimal(20, 4));
     baseRecord.put("createTimeDecimal", avroDecimal);
     properties = getBaseKeyConfig(

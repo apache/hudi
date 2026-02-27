@@ -18,6 +18,7 @@
 
 package org.apache.hudi.metrics;
 
+import org.apache.hudi.HoodieVersion;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -35,6 +36,7 @@ import com.codahale.metrics.Timer;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 
+import java.util.Map;
 import java.util.Set;
 
 import static org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator.MILLIS_INSTANT_TIMESTAMP_FORMAT_LENGTH;
@@ -374,6 +376,13 @@ public class HoodieMetrics {
       }
     }
   }
+  
+  public void updateArchivalMetrics(Map<String, Long> archivalMetrics) {
+    if (config.isMetricsOn()) {
+      log.info(String.format("Sending archival metrics %s", archivalMetrics));
+      archivalMetrics.forEach((metricName, metricValue) -> metrics.registerGauge(getMetricsName("archival", metricName), metricValue));
+    }
+  }
 
   public void updateFinalizeWriteMetrics(long durationInMs, long numFilesFinalized) {
     if (config.isMetricsOn()) {
@@ -566,6 +575,14 @@ public class HoodieMetrics {
   public void emitIndexTypeMetrics(int indexTypeOrdinal) {
     if (config.isMetricsOn()) {
       metrics.registerGauge(getMetricsName("index", "type"), indexTypeOrdinal);
+    }
+  }
+
+  public void emitVersionMetrics() {
+    if (config.isMetricsOn()) {
+      final String version = HoodieVersion.get();
+      metrics.registerGauge(getMetricsName("userName", System.getProperty("user.name")), 1);
+      metrics.registerGauge(getMetricsName("version", StringUtils.isNullOrEmpty(version) ? HoodieVersion.HOODIE_DEFAULT_VERSION : version), 1);
     }
   }
 

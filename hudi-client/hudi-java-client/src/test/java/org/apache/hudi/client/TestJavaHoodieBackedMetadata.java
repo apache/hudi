@@ -2504,11 +2504,11 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
 
       // 1 partition should be cleaned
       assertEquals(cleanMetadata.getPartitionMetadata().size(), 1);
-      // 1 file cleaned but was already deleted so will be a failed delete
+      // 1 file cleaned but was already deleted so will be counted as success (file not found = nothing to delete = success)
       assertEquals(
-          cleanMetadata.getPartitionMetadata().get(partition).getSuccessDeleteFiles().size(), 0);
+          cleanMetadata.getPartitionMetadata().get(partition).getSuccessDeleteFiles().size(), 1);
       assertEquals(
-          cleanMetadata.getPartitionMetadata().get(partition).getFailedDeleteFiles().size(), 1);
+          cleanMetadata.getPartitionMetadata().get(partition).getFailedDeleteFiles().size(), 0);
       assertEquals(
           cleanMetadata.getPartitionMetadata().get(partition).getDeletePathPatterns().size(), 1);
 

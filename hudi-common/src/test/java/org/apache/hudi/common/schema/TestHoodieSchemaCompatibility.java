@@ -725,4 +725,93 @@ public class TestHoodieSchemaCompatibility {
     assertTrue(HoodieSchemaCompatibility.isSchemaCompatible(schema, schema, false, true));
     assertTrue(HoodieSchemaCompatibility.isSchemaCompatible(schema, schema, false, false));
   }
+
+  @Test
+  public void testCompatibilityWithBlobFields() {
+    // Tests that BLOB compatibility follows RECORD rules
+    HoodieSchema writerBlob = HoodieSchema.createBlob();
+    HoodieSchema readerBlob = HoodieSchema.createBlob();
+
+    // Reader BLOB with all writer BLOB fields should be compatible
+    assertTrue(HoodieSchemaCompatibility.isSchemaCompatible(writerBlob, readerBlob, true, false));
+
+    // Same BLOB schemas are compatible both ways
+    assertTrue(HoodieSchemaCompatibility.isSchemaCompatible(readerBlob, writerBlob, true, false));
+
+    // Test BLOB in a record context
+    HoodieSchema writerSchema = HoodieSchema.createRecord("test", null, null, false,
+        Arrays.asList(
+            HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.INT), null, null),
+            HoodieSchemaField.of("blob_field", writerBlob, null, null)
+        ));
+
+    HoodieSchema readerSchema = HoodieSchema.createRecord("test", null, null, false,
+        Arrays.asList(
+            HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.INT), null, null),
+            HoodieSchemaField.of("blob_field", readerBlob, null, null)
+        ));
+
+    // Records containing BLOBs should be compatible
+    assertTrue(HoodieSchemaCompatibility.isSchemaCompatible(writerSchema, readerSchema, true, false));
+
+    // Test writer with extra fields (reader can ignore with projection allowed)
+    HoodieSchema writerWithExtraField = HoodieSchema.createRecord("test", null, null, false,
+        Arrays.asList(
+            HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.INT), null, null),
+            HoodieSchemaField.of("blob_field", writerBlob, null, null),
+            HoodieSchemaField.of("extra_field", HoodieSchema.createNullable(HoodieSchemaType.STRING), null, null)
+        ));
+
+    // Reader can ignore extra fields if projection is allowed
+    assertTrue(HoodieSchemaCompatibility.isSchemaCompatible(writerWithExtraField, readerSchema, true, true));
+
+    // Source with more fields projects to target with fewer fields
+    assertTrue(HoodieSchemaCompatibility.isStrictProjectionOf(writerWithExtraField, readerSchema));
+    assertTrue(HoodieSchemaCompatibility.isCompatibleProjectionOf(writerWithExtraField, readerSchema));
+    // Opposite should be false
+    assertFalse(HoodieSchemaCompatibility.isStrictProjectionOf(readerSchema, writerWithExtraField));
+  }
+
+  @Test
+  public void testBlobAreSchemasProjectionEquivalent() {
+    // Tests that BLOB projection equivalence works correctly
+    HoodieSchema blob1 = HoodieSchema.createBlob();
+    HoodieSchema blob2 = HoodieSchema.createBlob();
+
+    // Two BLOBs with same field structure are equivalent
+    assertTrue(HoodieSchemaCompatibility.areSchemasProjectionEquivalent(blob1, blob2));
+
+    // BLOB is equivalent to itself
+    assertTrue(HoodieSchemaCompatibility.areSchemasProjectionEquivalent(blob1, blob1));
+
+    // BLOBs in arrays are projection equivalent
+    HoodieSchema arrayBlob1 = HoodieSchema.createArray(blob1);
+    HoodieSchema arrayBlob2 = HoodieSchema.createArray(blob2);
+    arrayBlob1.addProp("prop1", "value1"); // prevent Objects.equals from returning true
+    assertTrue(HoodieSchemaCompatibility.areSchemasProjectionEquivalent(arrayBlob1, arrayBlob2));
+
+    // BLOBs in maps are projection equivalent
+    HoodieSchema mapBlob1 = HoodieSchema.createMap(blob1);
+    HoodieSchema mapBlob2 = HoodieSchema.createMap(blob2);
+    mapBlob1.addProp("prop1", "value1"); // prevent Objects.equals from returning true
+    assertTrue(HoodieSchemaCompatibility.areSchemasProjectionEquivalent(mapBlob1, mapBlob2));
+
+    // BLOB with nested BLOBs in a record structure
+    HoodieSchema recordWithBlob1 = HoodieSchema.createRecord("test", null, null, false,
+        Collections.singletonList(
+            HoodieSchemaField.of("nested_blob", blob1, null, null)
+        ));
+
+    HoodieSchema recordWithBlob2 = HoodieSchema.createRecord("test2", null, null, false,
+        Collections.singletonList(
+            HoodieSchemaField.of("nested_blob", blob2, null, null)
+        ));
+
+    // Records with BLOBs should be projection equivalent (names can differ)
+    assertTrue(HoodieSchemaCompatibility.areSchemasProjectionEquivalent(recordWithBlob1, recordWithBlob2));
+
+    // BLOB vs non-BLOB should not be equivalent
+    HoodieSchema stringSchema = HoodieSchema.create(HoodieSchemaType.STRING);
+    assertFalse(HoodieSchemaCompatibility.areSchemasProjectionEquivalent(blob1, stringSchema));
+  }
 }

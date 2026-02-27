@@ -283,7 +283,7 @@ public class HoodieTableMetadataUtil {
       targetFields.forEach(fieldNameFieldPair -> {
         String fieldName = fieldNameFieldPair.getKey();
         HoodieSchemaField field = fieldNameFieldPair.getValue();
-        HoodieSchema fieldSchema = HoodieSchemaUtils.getNonNullTypeFromUnion(field.schema());
+        HoodieSchema fieldSchema = field.schema().getNonNullType();
         ColumnStats colStats = allColumnStats.computeIfAbsent(fieldName, ignored -> new ColumnStats(getValueMetadata(fieldSchema, indexVersion)));
         Object fieldValue = collectColumnRangeFieldValue(record, colStats.valueMetadata, fieldName, fieldSchema, recordSchema, properties);
 
@@ -710,7 +710,7 @@ public class HoodieTableMetadataUtil {
    * @return true if the field is of type timestamp_millis, false otherwise
    */
   static boolean isTimestampMillisField(HoodieSchema fieldSchema) {
-    HoodieSchema nonNullableSchema = HoodieSchemaUtils.getNonNullTypeFromUnion(fieldSchema);
+    HoodieSchema nonNullableSchema = fieldSchema.getNonNullType();
     if (nonNullableSchema.getType() == HoodieSchemaType.TIMESTAMP) {
       HoodieSchema.Timestamp timestampSchema = (HoodieSchema.Timestamp) nonNullableSchema;
       return timestampSchema.getPrecision().equals(TimePrecision.MILLIS);
@@ -2047,14 +2047,16 @@ public class HoodieTableMetadataUtil {
     // HUDI-8585 will add support for BYTES and FIXED
     return type != HoodieSchemaType.RECORD && type != HoodieSchemaType.ARRAY && type != HoodieSchemaType.MAP
         && type != HoodieSchemaType.ENUM && type != HoodieSchemaType.BYTES && type != HoodieSchemaType.FIXED
-        && type != HoodieSchemaType.DECIMAL; // DECIMAL's underlying type is BYTES
+        && type != HoodieSchemaType.DECIMAL // DECIMAL's underlying type is BYTES
+        && type != HoodieSchemaType.BLOB;
   }
 
   private static boolean isColumnTypeSupportedV2(HoodieSchema schema) {
     HoodieSchemaType type = schema.getType();
     // Check for precision and scale if the schema has a logical decimal type.
     return type != HoodieSchemaType.RECORD && type != HoodieSchemaType.MAP
-        && type != HoodieSchemaType.ARRAY && type != HoodieSchemaType.ENUM;
+        && type != HoodieSchemaType.ARRAY && type != HoodieSchemaType.ENUM
+        && type != HoodieSchemaType.BLOB;
   }
 
   public static Set<String> getInflightMetadataPartitions(HoodieTableConfig tableConfig) {
@@ -2254,7 +2256,7 @@ public class HoodieTableMetadataUtil {
       log.debug("Metadata table partition {} not found at path {}", partitionPath, metadataTablePartitionPath);
       return null;
     } catch (Exception e) {
-      throw new HoodieMetadataException(String.format("Failed to check existence of MDT partition %s at path %s: ", partitionPath, metadataTablePartitionPath), e);
+      throw new HoodieMetadataException(String.format("Failed to check existence of MDT partition %s at path %s", partitionPath, metadataTablePartitionPath), e);
     }
 
     if (backup) {

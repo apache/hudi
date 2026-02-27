@@ -20,8 +20,6 @@ package org.apache.hudi.table;
 
 import org.apache.hudi.adapter.DataStreamScanProviderAdapter;
 import org.apache.hudi.adapter.InputFormatSourceFunctionAdapter;
-import org.apache.hudi.adapter.TableFunctionProviderAdapter;
-import org.apache.hudi.client.common.HoodieFlinkEngineContext;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieTableType;
@@ -34,7 +32,6 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.configuration.OptionsInference;
@@ -66,7 +63,6 @@ import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
 import org.apache.hudi.table.format.FilePathUtils;
-import org.apache.hudi.table.format.FlinkReaderContextFactory;
 import org.apache.hudi.table.format.InternalSchemaManager;
 import org.apache.hudi.table.format.cdc.CdcInputFormat;
 import org.apache.hudi.table.format.cow.CopyOnWriteInputFormat;
@@ -75,10 +71,10 @@ import org.apache.hudi.table.format.mor.MergeOnReadInputSplit;
 import org.apache.hudi.table.format.mor.MergeOnReadTableState;
 import org.apache.hudi.table.lookup.HoodieLookupFunction;
 import org.apache.hudi.table.lookup.HoodieLookupTableReader;
+import org.apache.hudi.table.lookup.LookupRuntimeProviderFactory;
 import org.apache.hudi.util.DataTypeUtils;
 import org.apache.hudi.util.ExpressionUtils;
 import org.apache.hudi.util.ChangelogModes;
-import org.apache.hudi.util.FlinkWriteClients;
 import org.apache.hudi.util.HoodieSchemaConverter;
 import org.apache.hudi.util.InputFormats;
 import org.apache.hudi.util.FileIndexReader;
@@ -129,6 +125,8 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
+import static org.apache.hudi.configuration.FlinkOptions.LOOKUP_ASYNC;
+import static org.apache.hudi.configuration.FlinkOptions.LOOKUP_ASYNC_THREAD_NUMBER;
 import static org.apache.hudi.configuration.FlinkOptions.LOOKUP_JOIN_CACHE_TTL;
 import static org.apache.hudi.configuration.HadoopConfigurations.getParquetConf;
 import static org.apache.hudi.util.ExpressionUtils.filterSimpleCallExpression;
@@ -260,6 +258,7 @@ public class HoodieTableSource extends FileIndexReader implements
       TypeInformation<RowData> typeInfo) {
     if (conf.get(FlinkOptions.READ_AS_STREAMING)) {
       StreamReadMonitoringFunction monitoringFunction = new StreamReadMonitoringFunction(
+              metaClient == null ? "" : metaClient.getTableConfig().getTableName(),
           conf, FilePathUtils.toFlinkPath(path), tableRowType, maxCompactionMemoryInBytes, partitionPruner);
       InputFormat<RowData, ?> inputFormat = getInputFormat(true);
       OneInputStreamOperatorFactory<MergeOnReadInputSplit, RowData> factory = StreamReadOperator.factory((MergeOnReadInputFormat) inputFormat);
@@ -300,18 +299,18 @@ public class HoodieTableSource extends FileIndexReader implements
     final RowType requiredRowType = (RowType) getProducedDataType().notNull().getLogicalType();
 
     HoodieScanContext context = createHoodieScanContext(rowType);
-    HoodieWriteConfig writeConfig = FlinkWriteClients.getHoodieClientConfig(conf, false, false);
-    HoodieFlinkEngineContext flinkEngineContext = new HoodieFlinkEngineContext(hadoopConf.unwrap());
-    HoodieFlinkTable<RowData> flinkTable = HoodieFlinkTable.create(writeConfig, flinkEngineContext);
-    FlinkReaderContextFactory readerContextFactory = new FlinkReaderContextFactory(metaClient);
+
+    final HoodieTableType tableType = HoodieTableType.valueOf(this.conf.get(FlinkOptions.TABLE_TYPE));
+    boolean emitDelete = tableType == HoodieTableType.MERGE_ON_READ;
     HoodieSplitReaderFunction splitReaderFunction = new HoodieSplitReaderFunction(
-        flinkTable,
-        readerContextFactory.getContext(),
+        metaClient,
         conf,
         tableSchema,
         HoodieSchemaConverter.convertToSchema(requiredRowType),
         conf.get(FlinkOptions.MERGE_TYPE),
-        Option.empty());
+        predicates,
+        emitDelete
+        );
     return new HoodieSource<>(context, splitReaderFunction, new HoodieSourceSplitComparator(), metaClient, new HoodieRecordEmitter<>());
   }
 
@@ -407,14 +406,16 @@ public class HoodieTableSource extends FileIndexReader implements
   @Override
   public LookupRuntimeProvider getLookupRuntimeProvider(LookupContext context) {
     Duration duration = conf.get(LOOKUP_JOIN_CACHE_TTL);
-    return TableFunctionProviderAdapter.of(
+    boolean asyncEnabled = conf.get(LOOKUP_ASYNC);
+    int asyncThreadNumber = conf.get(LOOKUP_ASYNC_THREAD_NUMBER);
+    return LookupRuntimeProviderFactory.create(
         new HoodieLookupFunction(
             new HoodieLookupTableReader(this::getBatchInputFormat, conf),
             (RowType) getProducedDataType().notNull().getLogicalType(),
             getLookupKeys(context.getKeys()),
             duration,
             conf
-        ));
+        ), asyncEnabled, asyncThreadNumber);
   }
 
   private DataType getProducedDataType() {

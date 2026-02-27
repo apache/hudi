@@ -527,6 +527,21 @@ object HoodieFileIndex extends Logging {
       properties.setProperty(DataSourceReadOptions.FILE_INDEX_LISTING_MODE_OVERRIDE.key, listingModeOverride)
     }
 
+    var pathFilterOptimizedListingEnabled = getConfigValue(options, sqlConf,
+      DataSourceReadOptions.FILE_INDEX_LIST_FILE_STATUSES_USING_RO_PATH_FILTER.key, null)
+    if (pathFilterOptimizedListingEnabled != null) {
+      properties.setProperty(DataSourceReadOptions.FILE_INDEX_LIST_FILE_STATUSES_USING_RO_PATH_FILTER.key,
+        pathFilterOptimizedListingEnabled)
+    } else {
+      // Also allow passing in the path filter config via Spark session conf for convenience
+      pathFilterOptimizedListingEnabled = getConfigValue(options, sqlConf,
+        "spark." + DataSourceReadOptions.FILE_INDEX_LIST_FILE_STATUSES_USING_RO_PATH_FILTER.key, null)
+      if (pathFilterOptimizedListingEnabled != null) {
+        properties.setProperty(DataSourceReadOptions.FILE_INDEX_LIST_FILE_STATUSES_USING_RO_PATH_FILTER.key,
+          pathFilterOptimizedListingEnabled)
+      }
+    }
+
     if (tableConfig != null) {
       properties.setProperty(RECORDKEY_FIELD.key, tableConfig.getRecordKeyFields.orElse(Array.empty).mkString(","))
       properties.setProperty(PARTITIONPATH_FIELD.key, HoodieTableConfig.getPartitionFieldPropForKeyGenerator(tableConfig).orElse(""))

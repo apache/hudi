@@ -42,6 +42,7 @@ import org.apache.hudi.expression.Predicates;
 import org.apache.hudi.internal.schema.Types;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.StoragePathFilter;
 import org.apache.hudi.storage.StoragePathInfo;
 
 import java.io.FileNotFoundException;
@@ -243,7 +244,8 @@ public class FileSystemBackedTableMetadata extends AbstractHoodieTableMetadata {
   }
 
   @Override
-  public Map<String, List<StoragePathInfo>> getAllFilesInPartitions(Collection<String> partitionPaths)
+  public Map<String, List<StoragePathInfo>> getAllFilesInPartitions(Collection<String> partitionPaths,
+                                                                    Option<StoragePathFilter> pathFilterOption)
       throws IOException {
     if (partitionPaths == null || partitionPaths.isEmpty()) {
       return Collections.emptyMap();
@@ -260,7 +262,7 @@ public class FileSystemBackedTableMetadata extends AbstractHoodieTableMetadata {
             partitionPathStr -> {
               StoragePath partitionPath = new StoragePath(partitionPathStr);
               return Pair.of(partitionPathStr,
-                  FSUtils.getAllDataFilesInPartition(getStorage(), partitionPath));
+                  FSUtils.getAllDataFilesInPartitionByPathFilter(getStorage(), partitionPath, pathFilterOption));
             }, parallelism);
     engineContext.clearJobStatus();
 

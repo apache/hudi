@@ -456,7 +456,7 @@ public class TestHoodieEnumeratorStateSerializer {
     splitStates.add(new HoodieSourceSplitState(split1, HoodieSourceSplitStatus.ASSIGNED));
 
     HoodieSourceSplit split2 = new HoodieSourceSplit(2, null,
-        Option.of(Arrays.asList("log1", "log2")), "/table", "/p2", "payload_combine", "", "file2");
+        Option.of(Arrays.asList("log1", "log2")), "/table", "/p2", "payload_combine", "", "file2", Option.empty());
     splitStates.add(new HoodieSourceSplitState(split2, HoodieSourceSplitStatus.UNASSIGNED));
 
     HoodieSourceSplit split3 = createTestSplit(3, "file3", "/p3");
@@ -491,7 +491,8 @@ public class TestHoodieEnumeratorStateSerializer {
         partitionPath,
         "read_optimized",
         "19700101000000000",
-        fileId
+        fileId,
+        Option.empty()
     );
   }
 }

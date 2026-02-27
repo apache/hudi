@@ -110,7 +110,8 @@ public abstract class FileIndexReader implements Serializable {
                 fileSlice.getPartitionPath(),
                 mergeType,
                 fileSlice.getLatestInstantTime(),
-                fileSlice.getFileId()))
+                fileSlice.getFileId(),
+                Option.empty()))
         .collect(Collectors.toList());
   }
 
@@ -146,7 +147,8 @@ public abstract class FileIndexReader implements Serializable {
               fileSlice.getPartitionPath(),
               mergeType,
               result.getRight(),
-              fileSlice.getFileId());
+              fileSlice.getFileId(),
+              Option.empty());
         })
         .collect(Collectors.toList());
   }

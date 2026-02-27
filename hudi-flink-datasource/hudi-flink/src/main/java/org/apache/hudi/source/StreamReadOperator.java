@@ -234,7 +234,7 @@ public class StreamReadOperator extends AbstractStreamOperator<RowData>
 
   private void registerMetrics() {
     MetricGroup metrics = getRuntimeContext().getMetricGroup();
-    readMetrics = new FlinkStreamReadMetrics(metrics);
+    readMetrics = new FlinkStreamReadMetrics(metrics, format.getTableName());
     readMetrics.registerMetrics();
   }
 

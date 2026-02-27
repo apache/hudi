@@ -29,8 +29,7 @@ import com.lmax.disruptor.TimeoutException;
 import com.lmax.disruptor.WaitStrategy;
 import com.lmax.disruptor.dsl.Disruptor;
 import com.lmax.disruptor.dsl.ProducerType;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
@@ -42,9 +41,8 @@ import java.util.function.Function;
  * @param <I> Input type.
  * @param <O> Transformed output type.
  */
+@Slf4j
 public class DisruptorMessageQueue<I, O> implements HoodieMessageQueue<I, O> {
-
-  private static final Logger LOG = LoggerFactory.getLogger(DisruptorMessageQueue.class);
 
   private final Disruptor<HoodieDisruptorEvent> queue;
   private final Function<I, O> transformFunction;
@@ -120,11 +118,11 @@ public class DisruptorMessageQueue<I, O> implements HoodieMessageQueue<I, O> {
         isStarted = false;
         if (Thread.currentThread().isInterrupted()) {
           // if current thread has been interrupted, we still give executor a chance to proceeding.
-          LOG.error("Disruptor Queue has been interrupted! Shutdown now.");
+          log.error("Disruptor Queue has been interrupted! Shutdown now.");
           try {
             queue.shutdown(TIMEOUT_WAITING_SECS, TimeUnit.SECONDS);
           } catch (TimeoutException e) {
-            LOG.error("Disruptor queue shutdown timeout: " + e);
+            log.error("Disruptor queue shutdown timeout: ", e);
             throw new HoodieException(e);
           }
           throw new HoodieException("Disruptor Queue has been interrupted! Shutdown now.");
@@ -143,7 +141,7 @@ public class DisruptorMessageQueue<I, O> implements HoodieMessageQueue<I, O> {
       try {
         consumer.consume(event.get());
       } catch (Exception e) {
-        LOG.error("Failed consuming records", e);
+        log.error("Failed consuming records", e);
         markAsFailed(e);
       }
     });
