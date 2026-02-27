@@ -522,7 +522,13 @@ object DataSourceWriteOptions {
 
   val KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED: ConfigProperty[String] = KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED
 
-  val PARTITION_VALUE_EXTRACTOR_CLASS: ConfigProperty[String] = HoodieSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS
+  val PARTITION_EXTRACTOR_CLASS: ConfigProperty[String] = ConfigProperty
+    .key("hoodie.datasource.partition_extractor_class")
+    .noDefaultValue()
+    .markAdvanced()
+    .sinceVersion("1.2.0")
+    .withDocumentation("PartitionValueExtractor implementation used by Spark datasource write/read paths " +
+      "to parse partition values from partition paths.")
 
   val ENABLE_ROW_WRITER: ConfigProperty[String] = ConfigProperty
     .key("hoodie.datasource.write.row.writer.enable")
@@ -1085,10 +1091,10 @@ object DataSourceOptionsHelper {
     if (!params.contains(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key()) && tableConfig.getKeyGeneratorClassName != null) {
       missingWriteConfigs ++= Map(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key() -> tableConfig.getKeyGeneratorClassName)
     }
-    if (!params.contains(DataSourceWriteOptions.PARTITION_VALUE_EXTRACTOR_CLASS.key())
-        && tableConfig.getPartitionValueExtractorClass.isPresent) {
+    if (!params.contains(DataSourceWriteOptions.PARTITION_EXTRACTOR_CLASS.key())
+        && tableConfig.getPartitionExtractorClass.isPresent) {
       missingWriteConfigs ++= Map(
-        DataSourceWriteOptions.PARTITION_VALUE_EXTRACTOR_CLASS.key() -> tableConfig.getPartitionValueExtractorClass.get()
+        DataSourceWriteOptions.PARTITION_EXTRACTOR_CLASS.key() -> tableConfig.getPartitionExtractorClass.get()
       )
     }
     if (!params.contains(HoodieWriteConfig.WRITE_PAYLOAD_CLASS_NAME.key()) && tableConfig.getPayloadClass != null) {

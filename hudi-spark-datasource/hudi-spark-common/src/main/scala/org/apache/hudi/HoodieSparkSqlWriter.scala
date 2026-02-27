@@ -292,7 +292,8 @@ class HoodieSparkSqlWriterInternal {
             hoodieConfig.getString(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME)
           else KeyGeneratorType.getKeyGeneratorClassName(hoodieConfig)
         val partitionValueExtractorClassName = hoodieConfig.getStringOrDefault(
-          DataSourceWriteOptions.PARTITION_VALUE_EXTRACTOR_CLASS.key(), null)
+          DataSourceWriteOptions.PARTITION_EXTRACTOR_CLASS.key(),
+          hoodieConfig.getStringOrDefault(HoodieSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS.key(), null))
         val tableFormat = hoodieConfig.getStringOrDefault(HoodieTableConfig.TABLE_FORMAT)
         HoodieTableMetaClient.newTableBuilder()
           .setTableType(tableType)
@@ -753,7 +754,7 @@ class HoodieSparkSqlWriterInternal {
         ))
         val tableFormat = hoodieConfig.getStringOrDefault(HoodieTableConfig.TABLE_FORMAT)
         val partitionValueExtractorClassName = hoodieConfig.getStringOrDefault(
-          DataSourceWriteOptions.PARTITION_VALUE_EXTRACTOR_CLASS.key(), null)
+          DataSourceWriteOptions.PARTITION_EXTRACTOR_CLASS.key(), null)
         HoodieTableMetaClient.newTableBuilder()
           .setTableType(HoodieTableType.valueOf(tableType))
           .setTableName(tableName)

@@ -652,7 +652,7 @@ public class FlinkOptions extends HoodieConfig {
 
   @AdvancedConfig
   public static final ConfigOption<String> PARTITION_VALUE_EXTRACTOR = ConfigOptions
-      .key(HoodieTableConfig.PARTITION_VALUE_EXTRACTOR_CLASS.key())
+      .key(HoodieTableConfig.PARTITION_EXTRACTOR_CLASS.key())
       .stringType()
       .noDefaultValue()
       .withDescription("Partition value extractor class helps extract the partition value from partition paths");

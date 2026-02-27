@@ -325,9 +325,9 @@ object HoodieWriterUtils {
         }
 
         // Validate partition value extractor
-        val currentPartitionValueExtractor = params.getOrElse(DataSourceWriteOptions.PARTITION_VALUE_EXTRACTOR_CLASS.key(), null)
+        val currentPartitionValueExtractor = params.getOrElse(DataSourceWriteOptions.PARTITION_EXTRACTOR_CLASS.key(), null)
         if (currentPartitionValueExtractor != null) {
-          val tableConfigPartitionValueExtractor = tableConfig.getString(HoodieTableConfig.PARTITION_VALUE_EXTRACTOR_CLASS)
+          val tableConfigPartitionValueExtractor = tableConfig.getString(HoodieTableConfig.PARTITION_EXTRACTOR_CLASS)
           if (tableConfigPartitionValueExtractor != null &&
             !currentPartitionValueExtractor.equals(tableConfigPartitionValueExtractor)) {
             diffConfigs.append(s"PartitionValueExtractor:\t$currentPartitionValueExtractor\t$tableConfigPartitionValueExtractor\n")

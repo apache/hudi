@@ -17,13 +17,13 @@
 
 package org.apache.spark.sql.hudi.common
 
+import org.apache.hudi.DataSourceWriteOptions
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.metadata.HoodieBackedTableMetadata
 import org.apache.hudi.storage.StoragePath
-import org.apache.hudi.sync.common.HoodieSyncConfig
 
 import org.junit.jupiter.api.Assertions.assertTrue
 
@@ -57,8 +57,7 @@ class TestCustomParitionValueExtractor extends HoodieSparkSqlTestBase {
            |  'hoodie.datasource.write.hive_style_partitioning'='false',
            |  'hoodie.datasource.write.keygenerator.class'='org.apache.spark.sql.hudi.common.MockSlashKeyGenerator',
            |  'hoodie.table.keygenerator.class'='org.apache.spark.sql.hudi.common.MockSlashKeyGenerator',
-           |  '${HoodieTableConfig.PARTITION_VALUE_EXTRACTOR_CLASS.key()}'='org.apache.spark.sql.hudi.common.MockSlashPartitionValueExtractor',
-           |  '${HoodieSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS.key()}'='org.apache.spark.sql.hudi.common.MockSlashPartitionValueExtractor'
+           |  '${DataSourceWriteOptions.PARTITION_EXTRACTOR_CLASS.key()}'='org.apache.spark.sql.hudi.common.MockSlashPartitionValueExtractor'
            | )
            | partitioned by (`datestr`, `country`, `state`, `city`)
            | location '$tablePath'
@@ -93,7 +92,7 @@ class TestCustomParitionValueExtractor extends HoodieSparkSqlTestBase {
         .build()
       val tableConfig = metaClient.getTableConfig
       val partitionExtractorClass = tableConfig.getProps.getProperty(
-        HoodieTableConfig.PARTITION_VALUE_EXTRACTOR_CLASS.key())
+        HoodieTableConfig.PARTITION_EXTRACTOR_CLASS.key())
       assertTrue(partitionExtractorClass == "org.apache.spark.sql.hudi.common.MockSlashPartitionValueExtractor",
         s"Table config should have custom partition value extractor class set to MockSlashPartitionValueExtractor, but got $partitionExtractorClass")
 
@@ -149,8 +148,7 @@ class TestCustomParitionValueExtractor extends HoodieSparkSqlTestBase {
            |  'hoodie.datasource.write.hive_style_partitioning'='false',
            |  'hoodie.datasource.write.keygenerator.class'='org.apache.spark.sql.hudi.common.MockSlashKeyGenerator',
            |  'hoodie.table.keygenerator.class'='org.apache.spark.sql.hudi.common.MockSlashKeyGenerator',
-           |  '${HoodieTableConfig.PARTITION_VALUE_EXTRACTOR_CLASS.key()}'='org.apache.spark.sql.hudi.common.MockSlashPartitionValueExtractor',
-           |  '${HoodieSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS.key()}'='org.apache.spark.sql.hudi.common.MockSlashPartitionValueExtractor'
+           |  '${DataSourceWriteOptions.PARTITION_EXTRACTOR_CLASS.key()}'='org.apache.spark.sql.hudi.common.MockSlashPartitionValueExtractor'
            | )
            | partitioned by (`datestr`, `country`, `state`, `city`)
            | location '$tablePath'
@@ -341,8 +339,7 @@ class TestCustomParitionValueExtractor extends HoodieSparkSqlTestBase {
            |  'hoodie.datasource.write.hive_style_partitioning'='false',
            |  'hoodie.datasource.write.keygenerator.class'='org.apache.spark.sql.hudi.common.MockSlashKeyGenerator',
            |  'hoodie.table.keygenerator.class'='org.apache.spark.sql.hudi.common.MockSlashKeyGenerator',
-           |  '${HoodieTableConfig.PARTITION_VALUE_EXTRACTOR_CLASS.key()}'='org.apache.spark.sql.hudi.common.MockSlashPartitionValueExtractor',
-           |  '${HoodieSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS.key()}'='org.apache.spark.sql.hudi.common.MockSlashPartitionValueExtractor',
+           |  '${DataSourceWriteOptions.PARTITION_EXTRACTOR_CLASS.key()}'='org.apache.spark.sql.hudi.common.MockSlashPartitionValueExtractor',
            |  'hoodie.datasource.write.partitionpath.urlencode'='true'
            | )
            | partitioned by (`datestr`, `country`, `state`, `city`)

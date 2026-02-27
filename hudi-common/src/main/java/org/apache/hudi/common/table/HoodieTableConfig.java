@@ -336,8 +336,8 @@ public class HoodieTableConfig extends HoodieConfig {
       .sinceVersion("1.0.0")
       .withDocumentation("Key Generator type to determine key generator class");
 
-  public static final ConfigProperty<String> PARTITION_VALUE_EXTRACTOR_CLASS = ConfigProperty
-      .key("hoodie.table.partition_value_extractor_class")
+  public static final ConfigProperty<String> PARTITION_EXTRACTOR_CLASS = ConfigProperty
+      .key("hoodie.table.partition_extractor_class")
       .noDefaultValue()
       .withInferFunction(HoodieTableConfigUtils::inferPartitionValueExtractorClass)
       .markAdvanced()
@@ -1217,8 +1217,8 @@ public class HoodieTableConfig extends HoodieConfig {
     return KeyGeneratorType.getKeyGeneratorClassName(this);
   }
 
-  public Option<String> getPartitionValueExtractorClass() {
-    return Option.ofNullable(getString(PARTITION_VALUE_EXTRACTOR_CLASS));
+  public Option<String> getPartitionExtractorClass() {
+    return Option.ofNullable(getString(PARTITION_EXTRACTOR_CLASS));
   }
 
   public HoodieTimelineTimeZone getTimelineTimezone() {
