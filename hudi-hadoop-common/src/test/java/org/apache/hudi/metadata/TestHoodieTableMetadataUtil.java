@@ -539,7 +539,9 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
     expected.add("seconds_since_epoch");
     expected.add("weight");
     expected.add("current_date");
+    expected.add("current_date_string");
     expected.add("current_ts");
+    expected.add("current_ts_seconds");
     expected.add("_hoodie_is_deleted");
     assertListEquality(expected, new ArrayList<>(HoodieTableMetadataUtil.getColumnsToIndex(tableConfig, metadataConfig,
         Lazy.eagerly(Option.of(HOODIE_SCHEMA)), false, V1).keySet()));
