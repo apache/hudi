@@ -283,14 +283,39 @@ public class TestFileGroupReaderSchemaHandler extends SchemaHandlerTestBase {
     assertEquals(expectedSchema, actualSchema);
   }
 
+  private static Stream<Arguments> testGenerateRequiredSchemaPreV9CustomPayloadParams() {
+    return Stream.of(
+        // OverwriteNonDefaultsWithLatestAvroPayload → infers CUSTOM merge mode
+        // → merger not projection compatible → full data schema returned
+        Arguments.of(
+            OverwriteNonDefaultsWithLatestAvroPayload.class.getName(),
+            null,
+            Arrays.asList(HoodieRecord.RECORD_KEY_METADATA_FIELD, HoodieRecord.PARTITION_PATH_METADATA_FIELD, "colA", "colB")),
+        // OverwriteWithLatestAvroPayload → infers COMMIT_TIME_ORDERING merge mode
+        // → not CUSTOM → requested schema returned as-is
+        Arguments.of(
+            OverwriteWithLatestAvroPayload.class.getName(),
+            null,
+            Collections.singletonList(HoodieRecord.RECORD_KEY_METADATA_FIELD)),
+        // null payload class + ordering field → infers EVENT_TIME_ORDERING merge mode
+        // → ordering field is appended to the requested schema
+        Arguments.of(
+            null,
+            "colA",
+            Arrays.asList(HoodieRecord.RECORD_KEY_METADATA_FIELD, "colA"))
+    );
+  }
+
   /**
    * Tests that for a pre-v9 table (e.g., version 6) where getRecordMergeMode() returns null
-   * (because the property didn't exist), but the payload class is a custom one
-   * (like HoodieMetadataPayload), generateRequiredSchema correctly infers CUSTOM merge mode
-   * and returns the full table schema when the merger is not projection compatible.
+   * (because the property didn't exist), generateRequiredSchema correctly infers the merge mode
+   * from the payload class and returns the appropriate schema.
    */
-  @Test
-  public void testGenerateRequiredSchemaPreV9CustomPayloadInfersCustomMergeMode() {
+  @ParameterizedTest
+  @MethodSource("testGenerateRequiredSchemaPreV9CustomPayloadParams")
+  public void testGenerateRequiredSchemaPreV9CustomPayload(String payloadClass,
+                                                           String orderingField,
+                                                           List<String> expectedFieldNames) {
     HoodieReaderContext readerContext = mock(HoodieReaderContext.class);
     when(readerContext.getInstantRange()).thenReturn(Option.empty());
     when(readerContext.getHasBootstrapBaseFile()).thenReturn(false);
@@ -299,28 +324,30 @@ public class TestFileGroupReaderSchemaHandler extends SchemaHandlerTestBase {
     when(readerContext.getRecordMerger()).thenReturn(Option.of(recordMerger));
     when(recordMerger.isProjectionCompatible()).thenReturn(false);
 
-    // Simulate a version 6 table: getRecordMergeMode() returns null (property absent),
-    // payload class is a custom one that does not match any known payload classes.
     when(hoodieTableConfig.getRecordMergeMode()).thenReturn(null);
     when(hoodieTableConfig.getTableVersion()).thenReturn(HoodieTableVersion.SIX);
-    when(hoodieTableConfig.getPayloadClass()).thenReturn(OverwriteNonDefaultsWithLatestAvroPayload.class.getName());
+    when(hoodieTableConfig.getPayloadClass()).thenReturn(payloadClass);
     when(hoodieTableConfig.getRecordMergeStrategyId()).thenReturn(null);
-    when(hoodieTableConfig.getOrderingFieldsStr()).thenReturn(Option.empty());
     when(hoodieTableConfig.populateMetaFields()).thenReturn(true);
+    if (orderingField != null) {
+      when(hoodieTableConfig.getOrderingFieldsStr()).thenReturn(Option.of(orderingField));
+      when(hoodieTableConfig.getOrderingFields()).thenReturn(Collections.singletonList(orderingField));
+    } else {
+      when(hoodieTableConfig.getOrderingFieldsStr()).thenReturn(Option.empty());
+    }
 
     HoodieSchema dataSchema = SchemaTestUtil.getSchemaFromFields(Arrays.asList(
         HoodieRecord.RECORD_KEY_METADATA_FIELD, HoodieRecord.PARTITION_PATH_METADATA_FIELD,
         "colA", "colB"));
     HoodieSchema requestedSchema = SchemaTestUtil.getSchemaFromFields(
         Collections.singletonList(HoodieRecord.RECORD_KEY_METADATA_FIELD));
+    HoodieSchema expectedSchema = SchemaTestUtil.getSchemaFromFields(expectedFieldNames);
 
     DeleteContext deleteContext = new DeleteContext(new TypedProperties(), dataSchema);
     FileGroupReaderSchemaHandler schemaHandler = new FileGroupReaderSchemaHandler(readerContext,
         dataSchema, requestedSchema, Option.empty(), new TypedProperties(), metaClient);
     HoodieSchema actualSchema = schemaHandler.generateRequiredSchema(deleteContext);
 
-    // Since the inferred merge mode is CUSTOM and the merger is not projection compatible,
-    // the full table schema should be returned.
-    assertEquals(dataSchema, actualSchema);
+    assertEquals(expectedSchema, actualSchema);
   }
 }
