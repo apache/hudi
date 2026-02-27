@@ -78,7 +78,15 @@ abstract class BaseSpark3Adapter extends SparkAdapter with Logging {
   }
 
   override def createInterpretedPredicate(e: Expression): InterpretedPredicate = {
-    Predicate.createInterpreted(e)
+    try {
+      Predicate.createInterpreted(e)
+    } catch {
+      case _: NoSuchMethodException | _: NoSuchMethodError | _: IllegalArgumentException =>
+        // Fallback: certain Spark runtimes (e.g. Databricks) use a 2-arg constructor
+        val clazz = classOf[InterpretedPredicate]
+        val ctor = clazz.getConstructor(classOf[Expression], classOf[Boolean])
+        ctor.newInstance(e, java.lang.Boolean.FALSE)
+    }
   }
 
   override def createRelation(sqlContext: SQLContext,

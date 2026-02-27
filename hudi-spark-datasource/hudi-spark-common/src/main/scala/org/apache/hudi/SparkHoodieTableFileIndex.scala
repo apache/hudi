@@ -40,7 +40,7 @@ import org.apache.hadoop.fs.{FileStatus, Path}
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.SparkSession
-import org.apache.spark.sql.catalyst.expressions.{AttributeReference, BoundReference, EmptyRow, EqualTo, Expression, InterpretedPredicate, Literal}
+import org.apache.spark.sql.catalyst.expressions.{AttributeReference, BoundReference, EmptyRow, EqualTo, Expression, Literal}
 import org.apache.spark.sql.catalyst.util.DateTimeUtils
 import org.apache.spark.sql.catalyst.{InternalRow, expressions}
 import org.apache.spark.sql.execution.datasources.{FileStatusCache, NoopCache}
@@ -246,7 +246,7 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
       //       the whole table
       if (haveProperPartitionValues(partitionPaths.toSeq) && partitionSchema.nonEmpty) {
         val predicate = partitionPruningPredicates.reduce(expressions.And)
-        val boundPredicate = InterpretedPredicate(predicate.transform {
+        val boundPredicate = sparkAdapter.createInterpretedPredicate(predicate.transform {
           case a: AttributeReference =>
             val index = partitionSchema.indexWhere(a.name == _.name)
             BoundReference(index, partitionSchema(index).dataType, nullable = true)
