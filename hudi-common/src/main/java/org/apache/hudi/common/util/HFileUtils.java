@@ -76,7 +76,8 @@ public class HFileUtils extends FileFormatUtils {
   public static CompressionCodec getHFileCompressionAlgorithm(Map<String, String> paramsMap) {
     String codecName = paramsMap.get(HFILE_COMPRESSION_ALGORITHM_NAME.key());
     if (StringUtils.isNullOrEmpty(codecName)) {
-      return CompressionCodec.GZIP;
+      // Use the default value from config instead of hardcoding GZIP
+      return CompressionCodec.findCodecByName(HFILE_COMPRESSION_ALGORITHM_NAME.defaultValue());
     }
     return CompressionCodec.findCodecByName(codecName);
   }
