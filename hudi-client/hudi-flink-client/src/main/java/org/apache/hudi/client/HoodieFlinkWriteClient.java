@@ -464,6 +464,21 @@ public class HoodieFlinkWriteClient<T>
     // flink performs metadata table bootstrap on the coordinator when it starts up.
   }
 
+  /**
+   * Marks the timeline loading as lazy for table init in write path.
+   *
+   * <p>The write client is local entry per-task and the table is initialized for each write,
+   * always make the timeline loading as lazy because there is no cross-network transmission
+   * so no gains for eager loading.
+   *
+   * <p>For append-only write path like pk-less table and log append for MOR table, the timeline loading is unnecessary
+   * and the metadata file listing cost could be saved.
+   */
+  @Override
+  protected boolean loadActiveTimelineOnTableInit() {
+    return false;
+  }
+
   public void completeTableService(
       TableServiceType tableServiceType,
       HoodieCommitMetadata metadata,
