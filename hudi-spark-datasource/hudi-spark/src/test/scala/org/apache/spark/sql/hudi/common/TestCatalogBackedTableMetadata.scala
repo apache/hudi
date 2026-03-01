@@ -61,21 +61,17 @@ class TestCatalogBackedTableMetadata extends HoodieSparkSqlTestBase {
            | location '$tablePath'
         """.stripMargin)
 
-      // Insert data across multiple partitions
-      import spark.implicits._
-      val df = Seq(
-        ("1", "a1", 1000L, "2024", "01", "01"),
-        ("2", "a2", 2000L, "2024", "01", "02"),
-        ("3", "a3", 3000L, "2024", "01", "03"),
-        ("4", "a4", 4000L, "2024", "02", "01"),
-        ("5", "a5", 5000L, "2024", "02", "02"),
-        ("6", "a6", 6000L, "2024", "03", "01")
-      ).toDF("id", "name", "ts", "year", "month", "day")
-
-      df.write
-        .format("hudi")
-        .mode("append")
-        .save(tablePath)
+      // Insert data across multiple partitions using SQL to ensure catalog is updated
+      spark.sql(
+        s"""
+           |INSERT INTO $targetTable VALUES
+           |  ('1', 'a1', 1000, '2024', '01', '01'),
+           |  ('2', 'a2', 2000, '2024', '01', '02'),
+           |  ('3', 'a3', 3000, '2024', '01', '03'),
+           |  ('4', 'a4', 4000, '2024', '02', '01'),
+           |  ('5', 'a5', 5000, '2024', '02', '02'),
+           |  ('6', 'a6', 6000, '2024', '03', '01')
+        """.stripMargin)
 
       // Verify metadata table is disabled
       val metaClient = HoodieTableMetaClient.builder()
