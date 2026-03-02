@@ -74,7 +74,6 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.time.ZonedDateTime;
-import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Base64;
@@ -155,9 +154,7 @@ public class HoodieTestDataGenerator implements AutoCloseable {
       + "{\"name\": \"weight\", \"type\": \"float\"},"
       + "{\"name\": \"nation\", \"type\": \"bytes\"},"
       + "{\"name\":\"current_date\",\"type\": {\"type\": \"int\", \"logicalType\": \"date\"}},"
-      + "{\"name\":\"current_date_string\",\"type\": {\"type\": \"string\"}},"
       + "{\"name\":\"current_ts\",\"type\": {\"type\": \"long\"}},"
-      + "{\"name\":\"current_ts_seconds\",\"type\": {\"type\": \"long\"}},"
       + "{\"name\":\"height\",\"type\":{\"type\":\"fixed\",\"name\":\"abc\",\"size\":5,\"logicalType\":\"decimal\",\"precision\":10,\"scale\":6}},";
 
   public static final String EXTENDED_LOGICAL_TYPES_SCHEMA_V6 = "{\"name\":\"ts_millis\",\"type\":{\"type\":\"long\",\"logicalType\":\"timestamp-millis\"}},"
@@ -590,9 +587,8 @@ public class HoodieTestDataGenerator implements AutoCloseable {
     Instant instant = Instant.ofEpochMilli(randomMillis);
     rec.put("current_date", makeDatesAmbiguous ? -1000000 :
         (int) LocalDateTime.ofInstant(instant, ZoneOffset.UTC).toLocalDate().toEpochDay());
-    rec.put("current_date_string", DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss").format(LocalDateTime.ofInstant(instant, ZoneOffset.UTC)));
     rec.put("current_ts", randomMillis);
-    rec.put("current_ts_seconds", TimeUnit.MILLISECONDS.toSeconds(randomMillis));
+
     BigDecimal bigDecimal = new BigDecimal(String.format(Locale.ENGLISH, "%5f", rand.nextFloat()));
     Schema decimalSchema = getEffectiveAvroSchema().getField("height").schema();
     Conversions.DecimalConversion decimalConversions = new Conversions.DecimalConversion();

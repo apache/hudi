@@ -49,7 +49,7 @@ import org.apache.hudi.util.JFunction
 
 import org.apache.hadoop.fs.FileSystem
 import org.apache.spark.sql.{DataFrame, DataFrameWriter, Dataset, Encoders, Row, SaveMode, SparkSession, SparkSessionExtensions}
-import org.apache.spark.sql.functions.{col, concat, lit, udf, when}
+import org.apache.spark.sql.functions.{col, concat, date_format, lit, udf, when}
 import org.apache.spark.sql.hudi.HoodieSparkSessionExtension
 import org.apache.spark.sql.types.{ArrayType, DataTypes, DateType, IntegerType, LongType, MapType, StringType, StructField, StructType, TimestampType}
 import org.joda.time.DateTime
@@ -1437,6 +1437,12 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
   def testSparkPartitionByWithTimestampBasedKeyGenerator(recordType: HoodieRecordType) {
     val (writeOpts, readOpts) = getWriterReaderOptsLessPartitionPath(recordType)
 
+    val records = recordsToStrings(dataGen.generateInserts("000", 100)).asScala.toList
+    val inputDF = spark.read.json(spark.sparkContext.parallelize(records, 2))
+      .withColumn("current_ts_seconds", (col("current_ts") / 1000).cast("long"))
+      .withColumn("current_date_string",
+        date_format((col("current_ts") / 1000).cast("timestamp"), "yyyy-MM-dd HH:mm:ss"))
+
     case class TimestampPartitionCase(
                                         partitionCol: String,
                                         tsType: String,
@@ -1446,13 +1452,17 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
                                       )
 
     def writeAndAssertPartition(testCase: TimestampPartitionCase): Unit = {
-      val writer = testCase.extraOpts.foldLeft(getDataFrameWriter(classOf[TimestampBasedKeyGenerator].getName, writeOpts)) {
+      val writer = testCase.extraOpts.foldLeft(
+        inputDF.write.format("hudi")
+          .options(writeOpts)
+          .option(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key, classOf[TimestampBasedKeyGenerator].getName)
+          .mode(SaveMode.Overwrite)
+      ) {
         case (w, (k, v)) => w.option(k, v)
       }
       writer.partitionBy(testCase.partitionCol)
         .option(TIMESTAMP_TYPE_FIELD.key, testCase.tsType)
         .option(TIMESTAMP_OUTPUT_DATE_FORMAT.key, testCase.outFmt)
-        .mode(SaveMode.Overwrite)
         .save(basePath)
       val readDF = spark.read.format("org.apache.hudi").options(readOpts).load(basePath)
       assertTrue(readDF.filter(col("_hoodie_partition_path") =!= testCase.expectedPartitionUdf(col(testCase.partitionCol))).count() == 0)
