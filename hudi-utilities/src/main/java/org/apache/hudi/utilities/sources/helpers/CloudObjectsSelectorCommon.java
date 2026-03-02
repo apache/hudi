@@ -66,6 +66,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.function.Function;
@@ -146,6 +147,12 @@ public class CloudObjectsSelectorCommon {
             .map(row -> CompletableFuture.supplyAsync(
                 () -> processRow(row, storageUrlSchemePrefix, storageConf, true), executor))
             .collect(Collectors.toList());
+        try {
+          CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
+        } catch (CompletionException e) {
+          throw new HoodieException("Failed during parallel cloud object existence check", e.getCause());
+        }
+        // All futures are complete — join() on already-completed futures returns immediately
         return futures.stream()
             .map(CompletableFuture::join)
             .filter(Option::isPresent)
