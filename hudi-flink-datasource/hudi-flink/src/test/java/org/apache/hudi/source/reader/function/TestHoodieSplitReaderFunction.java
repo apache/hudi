@@ -29,6 +29,7 @@ import org.apache.flink.configuration.Configuration;
 import org.apache.flink.table.expressions.FieldReferenceExpression;
 import org.apache.flink.table.expressions.ValueLiteralExpression;
 import org.apache.flink.table.types.logical.VarCharType;
+import org.apache.hudi.table.format.InternalSchemaManager;
 import org.apache.hudi.utils.TestConfigurations;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -53,11 +54,13 @@ public class TestHoodieSplitReaderFunction {
   private HoodieSchema tableSchema;
   private HoodieSchema requiredSchema;
   private HoodieTableMetaClient mockMetaClient;
+  private InternalSchemaManager mockInternalSchemaManager;
   private Configuration conf;
 
   @BeforeEach
   public void setUp() {
     mockMetaClient = mock(HoodieTableMetaClient.class);
+    mockInternalSchemaManager = mock(InternalSchemaManager.class);
     when(mockMetaClient.getTableType()).thenReturn(HoodieTableType.MERGE_ON_READ);
 
     // Create mock schemas
@@ -71,10 +74,10 @@ public class TestHoodieSplitReaderFunction {
     // Test that constructor requires non-null tableSchema
     assertThrows(IllegalArgumentException.class, () -> {
       new HoodieSplitReaderFunction(
-          mockMetaClient,
           conf,
           null,  // null tableSchema should throw
           requiredSchema,
+          mockInternalSchemaManager,
           "AVRO_PAYLOAD",
           Collections.emptyList(),
               false
@@ -87,11 +90,11 @@ public class TestHoodieSplitReaderFunction {
     // Test that constructor requires non-null requiredSchema
     assertThrows(IllegalArgumentException.class, () -> {
       new HoodieSplitReaderFunction(
-          mockMetaClient,
           conf,
           tableSchema,
           null,  // null requiredSchema should throw
-          "AVRO_PAYLOAD",
+          mockInternalSchemaManager,
+              "AVRO_PAYLOAD",
           Collections.emptyList(),
           false
       );
@@ -103,11 +106,11 @@ public class TestHoodieSplitReaderFunction {
     // Should not throw exception with valid parameters
     HoodieSplitReaderFunction function =
         new HoodieSplitReaderFunction(
-            mockMetaClient,
             conf,
             tableSchema,
             requiredSchema,
-            "AVRO_PAYLOAD",
+            mockInternalSchemaManager,
+                "AVRO_PAYLOAD",
             Collections.emptyList(),
             false
         );
@@ -121,11 +124,11 @@ public class TestHoodieSplitReaderFunction {
 
     HoodieSplitReaderFunction function =
         new HoodieSplitReaderFunction(
-            mockMetaClient,
             conf,
             tableSchema,
             requiredSchema,
-            "AVRO_PAYLOAD",
+            mockInternalSchemaManager,
+                "AVRO_PAYLOAD",
             Collections.emptyList(),
             false
         );
@@ -137,11 +140,11 @@ public class TestHoodieSplitReaderFunction {
   public void testClosedReaderIsNull() throws Exception {
     HoodieSplitReaderFunction function =
         new HoodieSplitReaderFunction(
-            mockMetaClient,
             conf,
             tableSchema,
             requiredSchema,
-            "AVRO_PAYLOAD",
+            mockInternalSchemaManager,
+                "AVRO_PAYLOAD",
             Collections.emptyList(),
             false
 
@@ -163,10 +166,11 @@ public class TestHoodieSplitReaderFunction {
     for (String mergeType : mergeTypes) {
       HoodieSplitReaderFunction function =
           new HoodieSplitReaderFunction(
-              mockMetaClient,
               conf,
               tableSchema,
               requiredSchema,
+              mockInternalSchemaManager,
+
               mergeType,
               Collections.emptyList(),
               false
@@ -180,10 +184,10 @@ public class TestHoodieSplitReaderFunction {
   public void testMultipleCloseCalls() throws Exception {
     HoodieSplitReaderFunction function =
         new HoodieSplitReaderFunction(
-            mockMetaClient,
             conf,
             tableSchema,
             requiredSchema,
+            mockInternalSchemaManager,
             "AVRO_PAYLOAD",
             Collections.emptyList(),
             false
@@ -201,11 +205,11 @@ public class TestHoodieSplitReaderFunction {
     HoodieSchema customRequiredSchema = mock(HoodieSchema.class);
     HoodieSplitReaderFunction function =
         new HoodieSplitReaderFunction(
-            mockMetaClient,
             conf,
             customTableSchema,
             customRequiredSchema,
-            "AVRO_PAYLOAD",
+            mockInternalSchemaManager,
+                "AVRO_PAYLOAD",
             Collections.emptyList(),
             false
         );
@@ -221,11 +225,11 @@ public class TestHoodieSplitReaderFunction {
     // Test with present internal schema
     HoodieSplitReaderFunction function1 =
         new HoodieSplitReaderFunction(
-            mockMetaClient,
             conf,
             tableSchema,
             requiredSchema,
-            "AVRO_PAYLOAD",
+            mockInternalSchemaManager,
+                "AVRO_PAYLOAD",
             Collections.emptyList(),
             false
         );
@@ -234,11 +238,11 @@ public class TestHoodieSplitReaderFunction {
     // Test with different internal schema
     HoodieSplitReaderFunction function2 =
         new HoodieSplitReaderFunction(
-            mockMetaClient,
             conf,
             tableSchema,
             requiredSchema,
-            "AVRO_PAYLOAD",
+            mockInternalSchemaManager,
+                "AVRO_PAYLOAD",
             Collections.emptyList(),
             false
         );
@@ -247,11 +251,12 @@ public class TestHoodieSplitReaderFunction {
     // Test with empty internal schema
     HoodieSplitReaderFunction function3 =
         new HoodieSplitReaderFunction(
-            mockMetaClient,
             conf,
             tableSchema,
             requiredSchema,
-            "AVRO_PAYLOAD",
+            mockInternalSchemaManager,
+
+                "AVRO_PAYLOAD",
             Collections.emptyList(),
             false
         );
@@ -264,11 +269,11 @@ public class TestHoodieSplitReaderFunction {
 
     HoodieSplitReaderFunction function =
         new HoodieSplitReaderFunction(
-            mockMetaClient,
-                conf,
+            conf,
             tableSchema,
             requiredSchema,
-            "AVRO_PAYLOAD",
+            mockInternalSchemaManager,
+                "AVRO_PAYLOAD",
             Collections.emptyList(),
             false
         );
@@ -281,11 +286,11 @@ public class TestHoodieSplitReaderFunction {
     // Verify that the read method returns CloseableIterator
     HoodieSplitReaderFunction function =
         new HoodieSplitReaderFunction(
-            mockMetaClient,
             conf,
             tableSchema,
             requiredSchema,
-            "AVRO_PAYLOAD",
+            mockInternalSchemaManager,
+                "AVRO_PAYLOAD",
             Collections.emptyList(),
             false
         );
@@ -297,11 +302,11 @@ public class TestHoodieSplitReaderFunction {
   public void testConstructorWithEmitDeleteTrue() {
     HoodieSplitReaderFunction function =
         new HoodieSplitReaderFunction(
-            mockMetaClient,
             conf,
             tableSchema,
             requiredSchema,
-            "AVRO_PAYLOAD",
+            mockInternalSchemaManager,
+                "AVRO_PAYLOAD",
             Collections.emptyList(),
             true
         );
@@ -319,10 +324,10 @@ public class TestHoodieSplitReaderFunction {
 
     HoodieSplitReaderFunction function =
             new HoodieSplitReaderFunction(
-                    mockMetaClient,
                     conf,
                     tableSchema,
                     requiredSchema,
+                    mockInternalSchemaManager,
                     "AVRO_PAYLOAD",
                     predicates,
                     true
@@ -335,15 +340,49 @@ public class TestHoodieSplitReaderFunction {
   public void testConstructorWithEmitDeleteFalse() {
     HoodieSplitReaderFunction function =
         new HoodieSplitReaderFunction(
-            mockMetaClient,
             conf,
             tableSchema,
             requiredSchema,
-            "AVRO_PAYLOAD",
+            mockInternalSchemaManager,
+                "AVRO_PAYLOAD",
             Collections.emptyList(),
             false
         );
 
     assertNotNull(function);
+  }
+
+  @Test
+  public void testConstructorValidatesInternalSchemaManager() {
+    // Test that constructor requires non-null InternalSchemaManager
+    assertThrows(IllegalArgumentException.class, () -> {
+      new HoodieSplitReaderFunction(
+          conf,
+          tableSchema,
+          requiredSchema,
+          null,  // null InternalSchemaManager should throw
+          "AVRO_PAYLOAD",
+          Collections.emptyList(),
+          false
+      );
+    });
+  }
+
+  @Test
+  public void testInternalSchemaManagerIsStored() {
+    InternalSchemaManager customManager = mock(InternalSchemaManager.class);
+
+    HoodieSplitReaderFunction function =
+        new HoodieSplitReaderFunction(
+            conf,
+            tableSchema,
+            requiredSchema,
+            customManager,
+            "AVRO_PAYLOAD",
+            Collections.emptyList(),
+            false
+        );
+
+    assertNotNull(function, "Function should be created with custom InternalSchemaManager");
   }
 }

@@ -153,7 +153,7 @@ public class HoodieSource<T> extends FileIndexReader implements Source<T, Hoodie
 
     if (scanContext.isStreaming()) {
       HoodieContinuousSplitDiscover discover = new DefaultHoodieSplitDiscover(
-          scanContext, metaClient);
+          scanContext);
 
       return new HoodieContinuousSplitEnumerator(
               tableName, enumContext, splitProvider, discover, scanContext,

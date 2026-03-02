@@ -29,6 +29,7 @@ import org.apache.hudi.common.table.read.HoodieFileGroupReader;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.source.ExpressionPredicates;
 import org.apache.hudi.source.reader.BatchRecords;
@@ -40,6 +41,7 @@ import org.apache.flink.table.data.RowData;
 import org.apache.hudi.table.format.FormatUtils;
 import org.apache.hudi.table.format.InternalSchemaManager;
 import org.apache.hudi.util.FlinkWriteClients;
+import org.apache.hudi.util.StreamerUtil;
 
 import java.io.IOException;
 import java.util.Collections;
@@ -50,10 +52,11 @@ import java.util.stream.Collectors;
  * Default reader function implementation for both MOR and COW tables.
  */
 public class HoodieSplitReaderFunction implements SplitReaderFunction<RowData> {
-  private final HoodieTableMetaClient metaClient;
   private final HoodieSchema tableSchema;
   private final HoodieSchema requiredSchema;
+  private final InternalSchemaManager internalSchemaManager;
   private final Configuration configuration;
+  private final org.apache.hadoop.conf.Configuration hadoopConf;
   private final HoodieWriteConfig writeConfig;
   private final String mergeType;
   private final boolean emitDelete;
@@ -61,20 +64,22 @@ public class HoodieSplitReaderFunction implements SplitReaderFunction<RowData> {
   private HoodieFileGroupReader<RowData> fileGroupReader;
 
   public HoodieSplitReaderFunction(
-      HoodieTableMetaClient metaClient,
       Configuration configuration,
       HoodieSchema tableSchema,
       HoodieSchema requiredSchema,
+      InternalSchemaManager internalSchemaManager,
       String mergeType,
       List<ExpressionPredicates.Predicate> predicates,
       boolean emitDelete) {
 
     ValidationUtils.checkArgument(tableSchema != null, "tableSchema can't be null");
     ValidationUtils.checkArgument(requiredSchema != null, "requiredSchema can't be null");
-    this.metaClient = metaClient;
+    ValidationUtils.checkArgument(internalSchemaManager != null, "internalSchemaManager can't be null");
     this.tableSchema = tableSchema;
     this.requiredSchema = requiredSchema;
+    this.internalSchemaManager = internalSchemaManager;
     this.configuration = configuration;
+    this.hadoopConf =  HadoopConfigurations.getHadoopConf(configuration);
     this.writeConfig = FlinkWriteClients.getHoodieClientConfig(configuration);
     this.predicates = predicates;
     this.mergeType = mergeType;
@@ -85,8 +90,10 @@ public class HoodieSplitReaderFunction implements SplitReaderFunction<RowData> {
   @Override
   public RecordsWithSplitIds<HoodieRecordWithPosition<RowData>> read(HoodieSourceSplit split) {
     final String splitId = split.splitId();
+    HoodieTableMetaClient metaClient = StreamerUtil.metaClientForReader(configuration, hadoopConf);
+
     try {
-      this.fileGroupReader = createFileGroupReader(split);
+      this.fileGroupReader = createFileGroupReader(split, metaClient);
       final ClosableIterator<RowData> recordIterator = fileGroupReader.getClosableIterator();
       BatchRecords<RowData> records = BatchRecords.forRecords(splitId, recordIterator, split.getFileOffset(), split.getConsumed());
       records.seek(split.getConsumed());
@@ -109,7 +116,7 @@ public class HoodieSplitReaderFunction implements SplitReaderFunction<RowData> {
    * @param split The source split to read
    * @return A {@link HoodieFileGroupReader} instance
    */
-  private HoodieFileGroupReader<RowData> createFileGroupReader(HoodieSourceSplit split) {
+  private HoodieFileGroupReader<RowData> createFileGroupReader(HoodieSourceSplit split, HoodieTableMetaClient metaClient) {
     // Create FileSlice from split information
     FileSlice fileSlice = new FileSlice(
         new HoodieFileGroupId(split.getPartitionPath(), split.getFileId()),
@@ -123,7 +130,7 @@ public class HoodieSplitReaderFunction implements SplitReaderFunction<RowData> {
     return FormatUtils.createFileGroupReader(
       metaClient,
       writeConfig,
-      InternalSchemaManager.get(metaClient.getStorageConf(), metaClient),
+      internalSchemaManager,
       fileSlice,
       tableSchema,
       requiredSchema,

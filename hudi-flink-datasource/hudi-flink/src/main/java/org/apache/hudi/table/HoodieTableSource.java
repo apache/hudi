@@ -299,14 +299,13 @@ public class HoodieTableSource extends FileIndexReader implements
     final RowType requiredRowType = (RowType) getProducedDataType().notNull().getLogicalType();
 
     HoodieScanContext context = createHoodieScanContext(rowType);
-
     final HoodieTableType tableType = HoodieTableType.valueOf(this.conf.get(FlinkOptions.TABLE_TYPE));
     boolean emitDelete = tableType == HoodieTableType.MERGE_ON_READ;
     HoodieSplitReaderFunction splitReaderFunction = new HoodieSplitReaderFunction(
-        metaClient,
         conf,
         tableSchema,
         HoodieSchemaConverter.convertToSchema(requiredRowType),
+        internalSchemaManager,
         conf.get(FlinkOptions.MERGE_TYPE),
         predicates,
         emitDelete
