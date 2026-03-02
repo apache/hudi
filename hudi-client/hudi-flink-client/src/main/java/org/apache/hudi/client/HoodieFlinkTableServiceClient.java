@@ -100,8 +100,6 @@ public class HoodieFlinkTableServiceClient<T> extends BaseHoodieTableServiceClie
         }
       }
       log.info("Compacted successfully on commit " + compactionCommitTime);
-    } catch (Exception e) {
-      throw e;
     } finally {
       this.heartbeatClient.stop(compactionCommitTime);
     }

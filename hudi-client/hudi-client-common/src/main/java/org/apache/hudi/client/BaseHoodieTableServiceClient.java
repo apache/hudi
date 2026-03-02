@@ -319,13 +319,7 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
       // Note that as long as all jobs for this table use this API for compact with auto-commit, then this alone should prevent
       // compact rollbacks from running concurrently to compact commits.
       txnManager.beginStateChange(Option.of(inflightInstant), txnManager.getLastCompletedTransactionOwner());
-      try {
-        if (!this.heartbeatClient.isHeartbeatExpired(compactionInstantTime)) {
-          throw new HoodieLockException("Cannot compact instant " + compactionInstantTime + " due to heartbeat by concurrent writer/job");
-        }
-      } catch (IOException e) {
-        throw new HoodieHeartbeatException("Error accessing heartbeat of instant to compact " + compactionInstantTime, e);
-      }
+      startExecutionHeartbeat(compactionInstantTime);
       if (!table.getMetaClient().reloadActiveTimeline().filterPendingCompactionTimeline().containsInstant(compactionInstantTime)) {
         throw new HoodieException("Requested compaction instant " + compactionInstantTime + " is not present as pending or already completed in the active timeline.");
       }
@@ -348,9 +342,8 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
       }
       return compactionWriteMetadata;
     } catch (Exception e) {
-      throw e;
-    } finally {
       this.heartbeatClient.stop(compactionInstantTime);
+      throw e;
     }
   }
 
@@ -415,8 +408,6 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
         );
       }
       log.info("Compacted successfully on commit {}", compactionCommitTime);
-    } catch (Exception e) {
-      throw e;
     } finally {
       this.heartbeatClient.stop(compactionCommitTime);
     }
@@ -1332,5 +1323,15 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
    */
   protected void releaseResources(String instantTime) {
     // do nothing here
+  }
+
+  private void startExecutionHeartbeat(String instantTime) {
+    try {
+      if (!this.heartbeatClient.isHeartbeatExpired(instantTime)) {
+        throw new HoodieLockException("Cannot execute instant " + instantTime + " due to heartbeat by concurrent writer/job");
+      }
+    } catch (IOException e) {
+      throw new HoodieHeartbeatException("Error accessing heartbeat of instant to execute " + instantTime, e);
+    }
   }
 }
