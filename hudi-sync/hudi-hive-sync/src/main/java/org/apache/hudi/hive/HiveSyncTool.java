@@ -43,6 +43,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hive.conf.HiveConf;
 
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -551,17 +552,13 @@ public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
       syncClient.dropPartitions(tableName, dropPartitions);
     }
 
-    boolean touchPartitionsChanged = false;
-    if (config.getBoolean(META_SYNC_TOUCH_PARTITIONS_ENABLED)) {
-      List<String> touchPartitions = filterPartitions(partitionEventList, PartitionEventType.TOUCH);
-      if (!touchPartitions.isEmpty()) {
-        log.info("Touch Partitions " + touchPartitions);
-        syncClient.touchPartitionsToTable(tableName, touchPartitions);
-        touchPartitionsChanged = true;
-      }
+    List<String> touchPartitions = config.getBoolean(META_SYNC_TOUCH_PARTITIONS_ENABLED) ? filterPartitions(partitionEventList, PartitionEventType.TOUCH) : Collections.emptyList();
+    if (!touchPartitions.isEmpty()) {
+      log.info("Touch Partitions " + touchPartitions);
+      syncClient.touchPartitionsToTable(tableName, touchPartitions);
     }
 
-    return !updatePartitions.isEmpty() || !newPartitions.isEmpty() || !dropPartitions.isEmpty() || touchPartitionsChanged;
+    return !updatePartitions.isEmpty() || !newPartitions.isEmpty() || !dropPartitions.isEmpty() || !touchPartitions.isEmpty();
   }
 
   private List<String> filterPartitions(List<PartitionEvent> events, PartitionEventType eventType) {

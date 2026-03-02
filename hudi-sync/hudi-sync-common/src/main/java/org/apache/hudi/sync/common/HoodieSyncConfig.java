@@ -207,7 +207,7 @@ public class HoodieSyncConfig extends HoodieConfig {
       .sinceVersion("1.2.0")
       .markAdvanced()
       .withDocumentation("If true, TOUCH partition events will be emitted during meta sync. "
-          + "TOUCH events indicate partitions that exist in both storage and metastore but have no changes.");
+          + "TOUCH events indicate partitions that exist in both storage and metastore, no schema or location change, but the partition has received data.");
 
   @Getter
   @Setter
