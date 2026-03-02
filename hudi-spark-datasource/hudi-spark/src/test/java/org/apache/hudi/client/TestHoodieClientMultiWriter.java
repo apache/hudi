@@ -1028,6 +1028,10 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
     assertTrue(writer1Succeeded.get() || writer2Succeeded.get(),
         "At least one writer should succeed in executing the compaction");
 
+    // Verify exactly one writer succeeded
+    assertTrue(writer1Succeeded.get() ^ writer2Succeeded.get(),
+        "Exactly one writer should succeed in executing the compaction");
+
     // Reload timeline and verify compaction is completed
     HoodieTimeline reloadedTimeline = metaClient.reloadActiveTimeline();
 
