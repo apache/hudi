@@ -35,6 +35,7 @@ import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.fs.ConsistencyGuardConfig;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
+import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieFileGroupId;
@@ -60,6 +61,7 @@ import org.apache.hudi.common.table.timeline.InstantGenerator;
 import org.apache.hudi.common.table.timeline.TimelineFactory;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
+import org.apache.hudi.common.table.view.TableFileSystemView;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestTable;
@@ -138,6 +140,7 @@ import static org.apache.hudi.config.HoodieClusteringConfig.SCHEDULE_INLINE_CLUS
 import static org.apache.hudi.testutils.Assertions.assertNoDupesWithinPartition;
 import static org.apache.hudi.testutils.Assertions.assertNoDuplicatesInPartition;
 import static org.apache.hudi.testutils.Assertions.assertNoWriteErrors;
+import static org.apache.hudi.testutils.Assertions.assertRecordCommits;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -291,6 +294,14 @@ public abstract class HoodieWriterClientTestHarness extends HoodieCommonTestHarn
   public interface Function2<R, T1, T2> {
 
     R apply(T1 v1, T2 v2) throws IOException;
+
+    default R applyUnchecked(T1 v1, T2 v2) {
+      try {
+        return apply(v1, v2);
+      } catch (IOException e) {
+        throw new RuntimeException(e);
+      }
+    }
   }
 
   @FunctionalInterface
@@ -1062,7 +1073,7 @@ public abstract class HoodieWriterClientTestHarness extends HoodieCommonTestHarn
     verifyClusteredFilesWithReplaceCommitMetadata(partitionPath);
   }
 
-  private void generateInsertsAndCommit(HoodieWriteConfig config, Function transformInputFn, Function transformOutputFn) {
+  protected void generateInsertsAndCommit(HoodieWriteConfig config, Function transformInputFn, Function transformOutputFn) {
     try (BaseHoodieWriteClient client = getHoodieWriteClient(config)) {
       String commitTime = client.startCommit();
       List<HoodieRecord> records = dataGen.generateInserts(commitTime, 200);
@@ -1515,5 +1526,50 @@ public abstract class HoodieWriterClientTestHarness extends HoodieCommonTestHarn
     assertEquals(0, timeline.getTimelineOfActions(CollectionUtils.createSet(CLEAN_ACTION)).countInstants());
     assertEquals(3, timeline.getCommitsTimeline().filterCompletedInstants().countInstants());
     service.shutdown();
+  }
+
+  protected Pair<Integer, Integer> getInsertsAndUpdatesBetweenTwoCommits(HoodieBaseFile file, FileFormatUtils fileUtils, Set<String> prevCommitKeys,
+                                                                       String newCommit) {
+    int numTotalInsertsNewCommit = 0;
+    int numTotalUpdatesInNewCommit = 0;
+    for (GenericRecord record : fileUtils.readAvroRecords(storage, new StoragePath(file.getPath()))) {
+      String recordKey = record.get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString();
+      String recordCommitTime = record.get(HoodieRecord.COMMIT_TIME_METADATA_FIELD).toString();
+      if (recordCommitTime.equals(newCommit)) {
+        if (prevCommitKeys.contains(recordKey)) {
+          prevCommitKeys.remove(recordKey);
+          numTotalUpdatesInNewCommit++;
+        } else {
+          numTotalInsertsNewCommit++;
+        }
+      }
+    }
+    return Pair.of(numTotalInsertsNewCommit, numTotalUpdatesInNewCommit);
+  }
+
+  protected void testAllKeysInPrevCommitUpdatedInNewCommit(HoodieTable table, FileFormatUtils fileUtils, Set<String> prevCommitKeys,
+                                                         Set<String> newCommitKeys, String exitingFile, String partitionPath, String prevCommit, String newCommit,
+                                                         int prevInsertSize) {
+    TableFileSystemView.BaseFileOnlyView fileSystemView = table.getBaseFileOnlyView();
+    List<HoodieBaseFile> files =
+        fileSystemView.getLatestBaseFilesBeforeOrOn(partitionPath, newCommit).collect(Collectors.toList());
+    int numTotalInsertsInCommit3 = 0;
+    int numTotalUpdatesInCommit3 = 0;
+    for (HoodieBaseFile file : files) {
+      if (file.getFileName().contains(exitingFile)) {
+        assertEquals(newCommit, file.getCommitTime(), "Existing file should be expanded");
+        Pair<Integer, Integer> insertsAndUpdates = getInsertsAndUpdatesBetweenTwoCommits(file, fileUtils, prevCommitKeys, newCommit);
+        numTotalInsertsInCommit3 += insertsAndUpdates.getLeft();
+        numTotalUpdatesInCommit3 += insertsAndUpdates.getRight();
+        assertEquals(0, prevCommitKeys.size(), "All keys added in " + prevCommit + " must be updated in " + newCommit + " correctly");
+      } else {
+        assertEquals(newCommit, file.getCommitTime(), "New file must be written for " + newCommit);
+        assertRecordCommits(storage, List.of(newCommit), fileUtils, basePath, file.getPath(), newCommitKeys);
+        List<GenericRecord> records = fileUtils.readAvroRecords(storage, new StoragePath(file.getPath()));
+        numTotalInsertsInCommit3 += records.size();
+      }
+    }
+    assertEquals(numTotalUpdatesInCommit3, prevInsertSize, "Total updates in " + newCommit + " must add up");
+    assertEquals(numTotalInsertsInCommit3, newCommitKeys.size(), "Total inserts " + newCommit + " must add up");
   }
 }

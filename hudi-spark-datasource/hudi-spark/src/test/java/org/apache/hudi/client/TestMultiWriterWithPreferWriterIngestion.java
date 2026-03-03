@@ -222,13 +222,13 @@ public class TestMultiWriterWithPreferWriterIngestion extends HoodieClientTestBa
     String instant2 = WriteClientTestUtils.createNewInstantTime();
     int numRecords = 100;
 
-    JavaRDD<WriteStatus> result1 = updateBatch(cfg, client1, instant2, instant1,
+    updateBatch(cfg, client1, instant2, instant1,
         Option.of(Arrays.asList(instant1)), "000", numRecords, SparkRDDWriteClient::upsert, false, false,
         numRecords, 200, 2, true, INSTANT_GENERATOR, true);
     // Start and finish another commit while the previous writer for commit 003 is running
     String instant3 = WriteClientTestUtils.createNewInstantTime();
     SparkRDDWriteClient client2 = getHoodieWriteClient(cfg);
-    JavaRDD<WriteStatus> result2 = updateBatch(cfg, client2, instant3, instant1,
+    updateBatch(cfg, client2, instant3, instant1,
         Option.of(Arrays.asList(instant1)), "000", numRecords, SparkRDDWriteClient::upsert, false, false,
         numRecords, 200, 2, INSTANT_GENERATOR);
 

@@ -35,6 +35,7 @@ import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.model.HoodieFileGroup;
+import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieTableType;
@@ -72,6 +73,7 @@ import org.apache.hudi.timeline.service.TimelineService;
 import org.apache.hudi.util.JFunction;
 import org.apache.hudi.utils.HoodieWriterClientTestHarness;
 
+import org.apache.avro.generic.GenericRecord;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
@@ -103,11 +105,16 @@ import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
 import scala.Tuple2;
+import scala.collection.JavaConverters;
 
+import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMMIT_ACTION;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.getDefaultStorageConf;
+import static org.apache.hudi.common.testutils.Transformations.randomSelectAsHoodieKeys;
 import static org.apache.hudi.common.util.CleanerUtils.convertCleanMetadata;
+import static org.apache.hudi.testutils.Assertions.assertFileExpansion;
 import static org.apache.hudi.testutils.Assertions.assertNoWriteErrors;
+import static org.apache.hudi.testutils.Assertions.assertRecordCountInFile;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertLinesMatch;
@@ -218,7 +225,8 @@ public abstract class HoodieSparkClientTestHarness extends HoodieWriterClientTes
     // NOTE: It's important to set Spark's `Tests.IS_TESTING` so that our tests are recognized
     //       as such by Spark
     System.setProperty("spark.testing", "true");
-    sparkSession.sparkContext().persistentRdds().foreach(rdd -> rdd._2.persist());
+    JavaConverters.mapAsJavaMapConverter(sparkSession.sparkContext().persistentRdds()).asJava()
+        .values().forEach(rdd -> rdd.persist());
   }
 
   /**
@@ -696,5 +704,51 @@ public abstract class HoodieSparkClientTestHarness extends HoodieWriterClientTes
 
   protected HoodieTableMetaClient createMetaClient(JavaSparkContext context, String basePath) {
     return HoodieClientTestUtils.createMetaClient(context, basePath);
+  }
+
+  protected Pair<List<WriteStatus>, List<HoodieKey>> generateKeysAndCommitDelete(SparkRDDWriteClient client, String instantTime, List<HoodieRecord> previousRecords,
+                                                                               int sizeToDelete, int expectedSatusSize) {
+
+    WriteClientTestUtils.startCommitWithTime(client, instantTime);
+    List<HoodieKey> hoodieKeysToDelete = randomSelectAsHoodieKeys(previousRecords, sizeToDelete);
+    JavaRDD<HoodieKey> deleteKeys = jsc.parallelize(hoodieKeysToDelete, 1);
+    List<WriteStatus> statusList = client.delete(deleteKeys, instantTime).collect();
+    client.commit(instantTime, jsc.parallelize(statusList), Option.empty(), COMMIT_ACTION, Collections.emptyMap(), Option.empty());
+    assertNoWriteErrors(statusList);
+    assertEquals(expectedSatusSize, statusList.size(), "Expected status size: " + expectedSatusSize + " for delete.");
+    return Pair.of(statusList, hoodieKeysToDelete);
+  }
+
+  /**
+   * Tests the deletion by calling delete api of the client
+   */
+  protected void testDeletes(SparkRDDWriteClient client, List<HoodieRecord> previousRecords, int sizeToDelete,
+                             String existingFile, String prevCommitTime, String newCommitTime, int expectedRecords, List<String> keys) {
+
+    Pair<List<WriteStatus>, List<HoodieKey>> deleteResult = generateKeysAndCommitDelete(client, newCommitTime, previousRecords, sizeToDelete, 1);
+    List<WriteStatus> statusList = deleteResult.getLeft();
+    assertFileExpansion(prevCommitTime, existingFile, statusList);
+    assertTheEntireDatasetHasAllRecordsStill(expectedRecords);
+    assertRecordCountInFile(expectedRecords, storage, metaClient, basePath, statusList.get(0).getStat().getPath());
+    StoragePath newFile = new StoragePath(basePath, statusList.get(0).getStat().getPath());
+    List<GenericRecord> records = getFileUtilsInstance(metaClient).readAvroRecords(storage, newFile);
+    for (GenericRecord record : records) {
+      String recordKey = record.get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString();
+      assertTrue(keys.contains(recordKey), "key expected to be part of " + newCommitTime);
+      assertFalse(deleteResult.getRight().contains(recordKey), "Key deleted");
+    }
+  }
+
+  protected void testMultipleOpsForSingleCommit(
+      SparkRDDWriteClient<HoodieRecord> client,
+      String instantTime,
+      List<Function2<JavaRDD<WriteStatus>, SparkRDDWriteClient, String>> operations) throws IOException {
+    WriteClientTestUtils.startCommitWithTime(client, instantTime);
+    JavaRDD<WriteStatus> writes = operations.stream()
+        .map(op -> op.applyUnchecked(client, instantTime))
+        .reduce(JavaRDD::union)
+        .orElseGet(() -> jsc.emptyRDD());
+    assertTrue(client.commit(instantTime, writes), "Commit should succeed");
+    assertTrue(testTable.commitExists(instantTime), "After explicit commit, commit file should be created");
   }
 }

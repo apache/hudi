@@ -208,7 +208,7 @@ public class TestHoodieReadClient extends HoodieClientTestBase {
       String initCommitTime = "000";
       int numRecords = 200;
       JavaRDD<WriteStatus> result = insertFirstBatch(hoodieWriteConfig, client, newCommitTime, initCommitTime,
-          numRecords, insertFn, isPrepped, true, numRecords, INSTANT_GENERATOR);
+          numRecords, insertFn, isPrepped, true, numRecords, INSTANT_GENERATOR).getKey();
       // Construct HoodieRecord from the WriteStatus but set HoodieKey, Data and HoodieRecordLocation accordingly
       // since they have been modified in the DAG
       JavaRDD<HoodieRecord> recordRDD =
@@ -226,7 +226,7 @@ public class TestHoodieReadClient extends HoodieClientTestBase {
       String commitTimeBetweenPrevAndNew = "002";
       result = updateBatch(hoodieWriteConfig, client, newCommitTime, prevCommitTime,
           Option.of(Arrays.asList(commitTimeBetweenPrevAndNew)), initCommitTime, numRecords, updateFn, isPrepped, true,
-          numRecords, 200, 2, INSTANT_GENERATOR);
+          numRecords, 200, 2, INSTANT_GENERATOR).getKey();
       recordRDD =
           jsc.parallelize(result.collect().stream().map(ws -> ws.getIndexStats().getWrittenRecordDelegates()).flatMap(Collection::stream)
               .map(recordDelegate -> new HoodieAvroRecord(recordDelegate.getHoodieKey(), null)).collect(Collectors.toList()), PARALLELISM);
