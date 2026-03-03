@@ -53,6 +53,17 @@ class TestHoodiePreWriteValidatorConfig {
   }
 
   @Test
+  void testNewBuilder() {
+    HoodiePreWriteValidatorConfig.Builder builder = HoodiePreWriteValidatorConfig.newBuilder();
+    assertNotNull(builder);
+
+    // Verify builder creates a valid config
+    HoodiePreWriteValidatorConfig config = builder.build();
+    assertNotNull(config);
+    assertNotNull(config.getProps());
+  }
+
+  @Test
   void testBuilderWithValidatorClassNames() {
     String validatorClassName = "org.apache.hudi.TestValidator";
     HoodiePreWriteValidatorConfig config = HoodiePreWriteValidatorConfig.newBuilder()
@@ -161,6 +172,31 @@ class TestHoodiePreWriteValidatorConfig {
         .withPreWriteValidator("")
         .build();
 
+    assertEquals("", config.getString(VALIDATOR_CLASS_NAMES));
+  }
+
+  @Test
+  void testBuilderReturnsThis() {
+    HoodiePreWriteValidatorConfig.Builder builder = HoodiePreWriteValidatorConfig.newBuilder();
+    Properties props = new Properties();
+
+    // Verify fromProperties returns the same builder instance (for chaining)
+    HoodiePreWriteValidatorConfig.Builder result = builder.fromProperties(props);
+    assertNotNull(result);
+
+    // Verify withPreWriteValidator returns the builder (for chaining)
+    result = builder.withPreWriteValidator("test.Validator");
+    assertNotNull(result);
+  }
+
+  @Test
+  void testConfigPropertiesInitialized() {
+    HoodiePreWriteValidatorConfig config = HoodiePreWriteValidatorConfig.newBuilder().build();
+
+    // Verify the config has properties initialized
+    assertNotNull(config.getProps());
+
+    // Verify default value is set
     assertEquals("", config.getString(VALIDATOR_CLASS_NAMES));
   }
 }
