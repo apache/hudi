@@ -853,6 +853,17 @@ public class StreamerUtil {
           currentCommitInstant.requestedTime(), previousCommitInstant.requestedTime()));
     }
 
+    // Warn about partitions present in previous but missing from current.
+    // A disappearing partition contributes 0 to the diff (no records consumed),
+    // but may indicate topic reconfiguration or consumer rebalance issues.
+    for (Integer partitionId : previousOffsets.keySet()) {
+      if (!currentOffsets.containsKey(partitionId)) {
+        log.warn("Partition {} exists in previous commit but not in current commit. "
+            + "This may indicate a topic reconfiguration or consumer rebalance. "
+            + "Previous offset for this partition was: {}", partitionId, previousOffsets.get(partitionId));
+      }
+    }
+
     // Calculate total difference across all partitions
     long totalDifference = 0L;
 
