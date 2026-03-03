@@ -26,7 +26,8 @@ import org.apache.hudi.common.table.log.InstantRange
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.internal.schema.InternalSchema
-import org.apache.hudi.{AvroConversionUtils, DataSourceReadOptions, HoodieDataSourceHelper, HoodieTableSchema}
+import org.apache.hudi.{AvroConversionUtils, DataSourceReadOptions, HoodieDataSourceHelper, HoodieSchemaUtils, HoodieTableSchema}
+
 import org.apache.spark.internal.Logging
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.catalyst.InternalRow
@@ -100,7 +101,8 @@ class CDCRelation(
       filters = Nil,
       options = options,
       hadoopConf = spark.sessionState.newHadoopConf(),
-      avroTableSchema = tableAvroSchema
+      avroTableSchema = tableAvroSchema,
+      hasTimestampMillisFieldInTableSchema = HoodieSchemaUtils.hasTimestampMillisField(tableAvroSchema)
     )
 
     val changes = cdcExtractor.extractCDCFileSplits().values().asScala.map { splits =>

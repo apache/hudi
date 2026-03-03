@@ -234,4 +234,18 @@ object HoodieSchemaUtils {
       (newSchema, isSchemaCompatible(tableSchema, newSchema))
     }
   }
+
+  /**
+   * Evaluates whether timestamp millis field is present in schema. This is required for repairing the schema.
+   *
+   * @param schema Avro schema to evaluate
+   * @return true if schema is null or schema contains timestamp millis field
+   */
+  def hasTimestampMillisField(schema: Schema): Boolean = {
+    if (schema == null) {
+      true
+    } else {
+      org.apache.hudi.avro.AvroSchemaUtils.hasTimestampMillisField(schema)
+    }
+  }
 }

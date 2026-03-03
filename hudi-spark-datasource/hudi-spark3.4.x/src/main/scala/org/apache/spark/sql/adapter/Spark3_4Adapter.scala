@@ -124,8 +124,8 @@ class Spark3_4Adapter extends BaseSpark3Adapter {
   override def createExtendedSparkParser(spark: SparkSession, delegate: ParserInterface): HoodieExtendedParserInterface =
     new HoodieSpark3_4ExtendedSqlParser(spark, delegate)
 
-  override def createLegacyHoodieParquetFileFormat(appendPartitionValues: Boolean, tableAvroSchema: Schema): Option[ParquetFileFormat] = {
-    Some(new Spark34LegacyHoodieParquetFileFormat(appendPartitionValues, tableAvroSchema))
+  override def createLegacyHoodieParquetFileFormat(appendPartitionValues: Boolean, tableAvroSchema: Schema, hasTimestampMillisFieldInTableSchema: Boolean): Option[ParquetFileFormat] = {
+    Some(new Spark34LegacyHoodieParquetFileFormat(appendPartitionValues, tableAvroSchema, hasTimestampMillisFieldInTableSchema))
   }
 
   override def createHoodieFileScanRDD(sparkSession: SparkSession,

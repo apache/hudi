@@ -20,7 +20,7 @@ package org.apache.spark.sql.execution.datasources.parquet
 
 import org.apache.avro.Schema
 import org.apache.hadoop.conf.Configuration
-import org.apache.hudi.{AvroConversionUtils, DataSourceReadOptions, SparkAdapterSupport}
+import org.apache.hudi.{AvroConversionUtils, DataSourceReadOptions, HoodieSchemaUtils, SparkAdapterSupport}
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.InternalRow
@@ -85,7 +85,8 @@ class LegacyHoodieParquetFileFormat extends ParquetFileFormat with SparkAdapterS
     getTableAvroSchemaFromConf(sparkSession.sessionState.newHadoopConf()) match {
       case Some(avroSchema) =>
         sparkAdapter
-          .createLegacyHoodieParquetFileFormat(true, avroSchema).get.supportBatch(sparkSession, schema)
+          .createLegacyHoodieParquetFileFormat(true, avroSchema, hasTimestampMillisFieldInTableSchema = HoodieSchemaUtils.hasTimestampMillisField(avroSchema))
+          .get.supportBatch(sparkSession, schema)
       case None =>
         // Table Avro schema not in hadoopConf (supportBatch does not receive options).
         // Do not use the passed-in schema for conversion - it can be wrong (canonicalized "none" names).
@@ -122,7 +123,7 @@ class LegacyHoodieParquetFileFormat extends ParquetFileFormat with SparkAdapterS
       }
 
     val delegateReader = sparkAdapter
-      .createLegacyHoodieParquetFileFormat(shouldExtractPartitionValuesFromPartitionPath, avroSchema).get
+      .createLegacyHoodieParquetFileFormat(shouldExtractPartitionValuesFromPartitionPath, avroSchema, HoodieSchemaUtils.hasTimestampMillisField(avroSchema)).get
       .buildReaderWithPartitionValues(sparkSession, dataSchema, partitionSchema, requiredSchema, filters, options, hadoopConf)
 
     val resultSchema = StructType(partitionSchema.fields ++ requiredSchema.fields)
