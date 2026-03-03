@@ -25,6 +25,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.HoodieTimer;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -34,8 +35,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.Arrays;
-import java.util.List;
-import java.util.stream.Collectors;
+import java.util.concurrent.CompletableFuture;
+import java.util.stream.Stream;
 
 /**
  * Utility class for running pre-write validators.
@@ -45,7 +46,7 @@ public class PreWriteValidatorUtils {
 
   /**
    * Run all configured pre-write validators.
-   * Validators are run sequentially, and if any validator fails,
+   * Validators are run asynchronously in parallel, and if any validator fails,
    * a HoodieValidationException is thrown.
    *
    * @param config             The write configuration
@@ -53,7 +54,8 @@ public class PreWriteValidatorUtils {
    * @param writeOperationType The type of write operation
    * @param metaClient         The HoodieTableMetaClient
    * @param engineContext      The Hoodie engine context
-   * @param records            HoodieData of records to be written, may be null
+   * @param recordsOpt         Option of HoodieData of records to be written, empty for operations
+   *                           without input records (e.g., compact, cluster, delete)
    * @param <T>                The payload type of the records
    * @throws HoodieValidationException if any validation fails
    */
@@ -62,7 +64,7 @@ public class PreWriteValidatorUtils {
                                        WriteOperationType writeOperationType,
                                        HoodieTableMetaClient metaClient,
                                        HoodieEngineContext engineContext,
-                                       HoodieData<HoodieRecord<T>> records) {
+                                       Option<HoodieData<HoodieRecord<T>>> recordsOpt) {
     String validatorClassNames = config.getPreWriteValidators();
 
     if (StringUtils.isNullOrEmpty(validatorClassNames)) {
@@ -71,56 +73,58 @@ public class PreWriteValidatorUtils {
     }
 
     HoodieTimer timer = HoodieTimer.start();
-    List<PreWriteValidator> validators = Arrays.stream(validatorClassNames.split(","))
+    Stream<PreWriteValidator> validators = Arrays.stream(validatorClassNames.split(","))
         .map(String::trim)
         .filter(className -> !className.isEmpty())
-        .map(className -> (PreWriteValidator) ReflectionUtils.loadClass(className))
-        .collect(Collectors.toList());
+        .map(className -> (PreWriteValidator) ReflectionUtils.loadClass(className));
 
-    LOG.info("Running {} pre-write validators for instant {}", validators.size(), instantTime);
+    LOG.info("Running pre-write validators for instant {}", instantTime);
 
-    List<String> failedValidators = validators.stream()
-        .filter(validator -> !runValidator(validator, instantTime, writeOperationType, metaClient, config, engineContext, records))
-        .map(PreWriteValidator::getName)
-        .collect(Collectors.toList());
+    boolean allSuccess = validators
+        .map(validator -> runValidatorAsync(validator, instantTime, writeOperationType, metaClient, config, engineContext, recordsOpt))
+        .map(CompletableFuture::join)
+        .reduce(true, Boolean::logicalAnd);
 
     long duration = timer.endTimer();
     LOG.info("Pre-write validation completed in {} ms", duration);
 
-    if (!failedValidators.isEmpty()) {
-      String failedMessage = String.join(", ", failedValidators);
-      throw new HoodieValidationException(
-          "Pre-write validation failed for validators: " + failedMessage);
+    if (allSuccess) {
+      LOG.info("All pre-write validations succeeded");
+    } else {
+      LOG.error("At least one pre-write validation failed");
+      throw new HoodieValidationException("At least one pre-write validation failed");
     }
   }
 
   /**
-   * Run a single validator.
+   * Run a single validator asynchronously in a separate thread pool for parallelism.
    *
-   * @return true if validation passed, false if validation failed
+   * @return CompletableFuture that resolves to true if validation passed, false if validation failed
    */
-  private static <T> boolean runValidator(PreWriteValidator validator,
-                                          String instantTime,
-                                          WriteOperationType writeOperationType,
-                                          HoodieTableMetaClient metaClient,
-                                          HoodieWriteConfig writeConfig,
-                                          HoodieEngineContext engineContext,
-                                          HoodieData<HoodieRecord<T>> records) {
-    String validatorName = validator.getName();
-    LOG.info("Running pre-write validator: {}", validatorName);
+  private static <T> CompletableFuture<Boolean> runValidatorAsync(PreWriteValidator validator,
+                                                                   String instantTime,
+                                                                   WriteOperationType writeOperationType,
+                                                                   HoodieTableMetaClient metaClient,
+                                                                   HoodieWriteConfig writeConfig,
+                                                                   HoodieEngineContext engineContext,
+                                                                   Option<HoodieData<HoodieRecord<T>>> recordsOpt) {
+    return CompletableFuture.supplyAsync(() -> {
+      String validatorName = validator.getName();
+      LOG.info("Running pre-write validator: {}", validatorName);
 
-    try {
-      HoodieTimer timer = HoodieTimer.start();
-      validator.validate(instantTime, writeOperationType, metaClient, writeConfig, engineContext, records);
-      long duration = timer.endTimer();
-      LOG.info("Pre-write validator {} completed successfully in {} ms", validatorName, duration);
-      return true;
-    } catch (HoodieValidationException e) {
-      LOG.error("Pre-write validation failed for validator {}: {}", validatorName, e.getMessage(), e);
-      return false;
-    } catch (Exception e) {
-      LOG.error("Unexpected error running pre-write validator {}: {}", validatorName, e.getMessage(), e);
-      return false;
-    }
+      try {
+        HoodieTimer timer = HoodieTimer.start();
+        validator.validate(instantTime, writeOperationType, metaClient, writeConfig, engineContext, recordsOpt);
+        long duration = timer.endTimer();
+        LOG.info("Pre-write validator {} completed successfully in {} ms", validatorName, duration);
+        return true;
+      } catch (HoodieValidationException e) {
+        LOG.error("Pre-write validation failed for validator {}: {}", validatorName, e.getMessage(), e);
+        return false;
+      } catch (Exception e) {
+        LOG.error("Unexpected error running pre-write validator {}: {}", validatorName, e.getMessage(), e);
+        return false;
+      }
+    });
   }
 }

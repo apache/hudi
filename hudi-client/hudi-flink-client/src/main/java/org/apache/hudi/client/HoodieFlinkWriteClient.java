@@ -234,7 +234,7 @@ public class HoodieFlinkWriteClient<T>
     HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> table =
         initTable(WriteOperationType.UPSERT, Option.ofNullable(instantTime));
     table.validateUpsertSchema();
-    preWrite(instantTime, WriteOperationType.UPSERT_PREPPED, table.getMetaClient(), HoodieListData.eager(preppedRecords));
+    preWrite(instantTime, WriteOperationType.UPSERT_PREPPED, table.getMetaClient(), Option.of(HoodieListData.eager(preppedRecords)));
     Map<String, List<HoodieRecord<T>>> preppedRecordsByFileId = preppedRecords.stream().parallel()
         .collect(Collectors.groupingBy(r -> r.getCurrentLocation().getFileId()));
     return preppedRecordsByFileId.values().stream().parallel().map(records -> {
@@ -318,7 +318,7 @@ public class HoodieFlinkWriteClient<T>
     HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> table =
         initTable(WriteOperationType.BULK_INSERT_PREPPED, Option.ofNullable(instantTime));
     table.validateInsertSchema();
-    preWrite(instantTime, WriteOperationType.BULK_INSERT_PREPPED, table.getMetaClient(), HoodieListData.eager(preppedRecords));
+    preWrite(instantTime, WriteOperationType.BULK_INSERT_PREPPED, table.getMetaClient(), Option.of(HoodieListData.eager(preppedRecords)));
     Map<String, List<HoodieRecord<T>>> preppedRecordsByFileId = preppedRecords.stream().parallel()
         .collect(Collectors.groupingBy(r -> r.getCurrentLocation().getFileId()));
     return preppedRecordsByFileId.values().stream().parallel().map(records -> {
@@ -345,7 +345,7 @@ public class HoodieFlinkWriteClient<T>
   public List<WriteStatus> deletePrepped(List<HoodieRecord<T>> preppedRecords, final String instantTime) {
     HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> table =
         initTable(WriteOperationType.DELETE_PREPPED, Option.ofNullable(instantTime));
-    preWrite(instantTime, WriteOperationType.DELETE_PREPPED, table.getMetaClient(), HoodieListData.eager(preppedRecords));
+    preWrite(instantTime, WriteOperationType.DELETE_PREPPED, table.getMetaClient(), Option.of(HoodieListData.eager(preppedRecords)));
     HoodieWriteMetadata<List<WriteStatus>> result = table.deletePrepped(context, instantTime, preppedRecords);
     return postWrite(result, instantTime, table);
   }
@@ -360,12 +360,12 @@ public class HoodieFlinkWriteClient<T>
 
   @Override
   public void preWrite(String instantTime, WriteOperationType writeOperationType, HoodieTableMetaClient metaClient) {
-    preWrite(instantTime, writeOperationType, metaClient, null);
+    preWrite(instantTime, writeOperationType, metaClient, Option.empty());
   }
 
   @Override
   public void preWrite(String instantTime, WriteOperationType writeOperationType,
-                       HoodieTableMetaClient metaClient, HoodieData<HoodieRecord<T>> records) {
+                       HoodieTableMetaClient metaClient, Option<HoodieData<HoodieRecord<T>>> recordsOpt) {
     setOperationType(writeOperationType);
     // Note: the code to read the commit metadata is not thread safe for JSON deserialization,
     // remove the table metadata sync
@@ -373,7 +373,7 @@ public class HoodieFlinkWriteClient<T>
     // remove the async cleaning
 
     // Run pre-write validators
-    runPreWriteValidators(instantTime, writeOperationType, metaClient, records);
+    runPreWriteValidators(instantTime, writeOperationType, metaClient, recordsOpt);
   }
 
   /**

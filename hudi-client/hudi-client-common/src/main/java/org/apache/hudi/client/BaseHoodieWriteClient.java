@@ -551,14 +551,14 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
   public abstract O deletePrepped(I preppedRecords, final String instantTime);
 
   /**
-   * Common method containing steps to be performed before write (upsert/insert/...
+   * Common method containing steps to be performed before write (upsert/insert/...)
    * @param instantTime
    * @param writeOperationType
    * @param metaClient
    */
   public void preWrite(String instantTime, WriteOperationType writeOperationType,
                        HoodieTableMetaClient metaClient) {
-    preWrite(instantTime, writeOperationType, metaClient, null);
+    preWrite(instantTime, writeOperationType, metaClient, Option.empty());
   }
 
   /**
@@ -566,10 +566,11 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    * @param instantTime
    * @param writeOperationType
    * @param metaClient
-   * @param records HoodieData of records to be written, may be null
+   * @param recordsOpt Option of HoodieData of records to be written, empty for operations
+   *                   without input records (e.g., compact, cluster, delete)
    */
   public void preWrite(String instantTime, WriteOperationType writeOperationType,
-                       HoodieTableMetaClient metaClient, HoodieData<HoodieRecord<T>> records) {
+                       HoodieTableMetaClient metaClient, Option<HoodieData<HoodieRecord<T>>> recordsOpt) {
     setOperationType(writeOperationType);
     this.lastCompletedTxnAndMetadata = txnManager.isLockRequired()
         ? TransactionUtils.getLastCompletedTxnInstantAndMetadata(metaClient) : Option.empty();
@@ -580,7 +581,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     tableServiceClient.startAsyncCleanerService(this);
     tableServiceClient.startAsyncArchiveService(this);
 
-    runPreWriteValidators(instantTime, writeOperationType, metaClient, records);
+    runPreWriteValidators(instantTime, writeOperationType, metaClient, recordsOpt);
   }
 
   /**
@@ -591,11 +592,12 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    * @param instantTime        The instant time for the write operation
    * @param writeOperationType The type of write operation being performed
    * @param metaClient         The HoodieTableMetaClient for accessing table metadata
-   * @param records            HoodieData of records to be written, may be null
+   * @param recordsOpt         Option of HoodieData of records to be written, empty for operations
+   *                           without input records (e.g., compact, cluster, delete)
    */
   protected void runPreWriteValidators(String instantTime, WriteOperationType writeOperationType,
-      HoodieTableMetaClient metaClient, HoodieData<HoodieRecord<T>> records) {
-    PreWriteValidatorUtils.runValidators(config, instantTime, writeOperationType, metaClient, context, records);
+      HoodieTableMetaClient metaClient, Option<HoodieData<HoodieRecord<T>>> recordsOpt) {
+    PreWriteValidatorUtils.runValidators(config, instantTime, writeOperationType, metaClient, context, recordsOpt);
   }
 
   /**

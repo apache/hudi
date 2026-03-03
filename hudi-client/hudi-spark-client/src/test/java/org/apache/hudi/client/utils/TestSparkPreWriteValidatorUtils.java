@@ -26,6 +26,7 @@ import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodiePreWriteValidatorConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieValidationException;
@@ -120,7 +121,7 @@ public class TestSparkPreWriteValidatorUtils extends HoodieClientTestBase {
                              HoodieTableMetaClient metaClient,
                              HoodieWriteConfig writeConfig,
                              HoodieEngineContext engineContext,
-                             HoodieData<HoodieRecord<T>> records) throws HoodieValidationException {
+                             Option<HoodieData<HoodieRecord<T>>> recordsOpt) throws HoodieValidationException {
       validateCalled = true;
       throw new HoodieValidationException("Intentional validation failure for testing");
     }
@@ -151,7 +152,7 @@ public class TestSparkPreWriteValidatorUtils extends HoodieClientTestBase {
                              HoodieTableMetaClient metaClient,
                              HoodieWriteConfig writeConfig,
                              HoodieEngineContext engineContext,
-                             HoodieData<HoodieRecord<T>> records) throws HoodieValidationException {
+                             Option<HoodieData<HoodieRecord<T>>> recordsOpt) throws HoodieValidationException {
       validateCalled = true;
     }
 
@@ -181,7 +182,7 @@ public class TestSparkPreWriteValidatorUtils extends HoodieClientTestBase {
                              HoodieTableMetaClient metaClient,
                              HoodieWriteConfig writeConfig,
                              HoodieEngineContext engineContext,
-                             HoodieData<HoodieRecord<T>> records) throws HoodieValidationException {
+                             Option<HoodieData<HoodieRecord<T>>> recordsOpt) throws HoodieValidationException {
       validateCalled = true;
     }
 
