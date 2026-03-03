@@ -70,7 +70,8 @@ import scala.collection.convert.ImplicitConversions.`collection AsScalaIterable`
  * </ol>
  */
 class Spark34LegacyHoodieParquetFileFormat(private val shouldAppendPartitionValues: Boolean,
-                                           private val avroTableSchema: Schema) extends ParquetFileFormat with Logging {
+                                           private val avroTableSchema: Schema,
+                                           private val hasTimestampMillisFieldInTableSchema: Boolean) extends ParquetFileFormat with Logging {
   private lazy val tableSchemaAsMessageType: HOption[MessageType] = {
     if (avroTableSchema == null) {
       HOption.empty()
@@ -79,11 +80,6 @@ class Spark34LegacyHoodieParquetFileFormat(private val shouldAppendPartitionValu
         ParquetTableSchemaResolver.convertAvroSchemaToParquet(avroTableSchema, new Configuration())
       )
     }
-  }
-  private lazy val hasTimestampMillisFieldInTableSchema = if (avroTableSchema == null) {
-    true
-  } else {
-    AvroSchemaRepair.hasTimestampMillisField(avroTableSchema)
   }
   private lazy val supportBatchWithTableSchema = !hasTimestampMillisFieldInTableSchema
 

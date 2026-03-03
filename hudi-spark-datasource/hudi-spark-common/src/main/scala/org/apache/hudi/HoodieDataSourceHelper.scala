@@ -53,8 +53,9 @@ object HoodieDataSourceHelper extends PredicateHelper with SparkAdapterSupport {
                                              options: Map[String, String],
                                              hadoopConf: Configuration,
                                              appendPartitionValues: Boolean = false,
-                                             avroTableSchema: Schema): PartitionedFile => Iterator[InternalRow] = {
-    val parquetFileFormat: ParquetFileFormat = sparkAdapter.createLegacyHoodieParquetFileFormat(appendPartitionValues, avroTableSchema).get
+                                             avroTableSchema: Schema,
+                                             hasTimestampMillisFieldInTableSchema: Boolean): PartitionedFile => Iterator[InternalRow] = {
+    val parquetFileFormat: ParquetFileFormat = sparkAdapter.createLegacyHoodieParquetFileFormat(appendPartitionValues, avroTableSchema, hasTimestampMillisFieldInTableSchema).get
     val readParquetFile: PartitionedFile => Iterator[Any] = parquetFileFormat.buildReaderWithPartitionValues(
       sparkSession = sparkSession,
       dataSchema = dataSchema,

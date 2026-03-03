@@ -44,7 +44,7 @@ import org.apache.hudi.hadoop.fs.HadoopFSUtils.convertToStoragePath
 import org.apache.hudi.internal.schema.InternalSchema
 import org.apache.hudi.internal.schema.convert.AvroInternalSchemaConverter
 import org.apache.hudi.internal.schema.utils.{InternalSchemaUtils, SerDeHelper}
-import org.apache.hudi.io.storage.{HoodieFileReader, HoodieSparkIOFactory, HoodieSparkParquetReader}
+import org.apache.hudi.io.storage.{HoodieFileReader, HoodieSparkIOFactory}
 import org.apache.hudi.metadata.HoodieTableMetadata
 import org.apache.hudi.storage.hadoop.HoodieHadoopStorage
 import org.apache.hudi.storage.{StoragePath, StoragePathInfo}
@@ -250,7 +250,7 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
         // We're delegating to Spark to append partition values to every row only in cases
         // when these corresponding partition-values are not persisted w/in the data file itself
         val parquetFileFormat = sparkAdapter.createLegacyHoodieParquetFileFormat(
-          shouldExtractPartitionValuesFromPartitionPath, tableAvroSchema).get
+          shouldExtractPartitionValuesFromPartitionPath, tableAvroSchema, hasTimestampMillisFieldInTableSchema = HoodieSchemaUtils.hasTimestampMillisField(tableAvroSchema)).get
         (parquetFileFormat, LegacyHoodieParquetFileFormat.FILE_FORMAT_ID)
     }
 
@@ -559,7 +559,8 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
             // We're delegating to Spark to append partition values to every row only in cases
             // when these corresponding partition-values are not persisted w/in the data file itself
             appendPartitionValues = shouldAppendPartitionValuesOverride.getOrElse(shouldExtractPartitionValuesFromPartitionPath),
-            tableAvroSchema
+            tableAvroSchema,
+            hasTimestampMillisFieldInTableSchema = HoodieSchemaUtils.hasTimestampMillisField(tableAvroSchema)
           )
           // Since partition values by default are omitted, and not persisted w/in data-files by Spark,
           // data-file readers (such as [[ParquetFileFormat]]) have to inject partition values while reading
