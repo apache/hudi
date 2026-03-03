@@ -1183,6 +1183,15 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
     assertFalse(finalPendingCompactionTimeline.containsInstant(compactionInstantTime),
         "Compaction instant should no longer be pending after recovery execution");
 
+    // Verify no inflight rollback instants remain
+    HoodieTimeline inflightRollbacks = finalTimeline.getRollbackTimeline().filterInflights();
+    assertEquals(0, inflightRollbacks.countInstants(),
+        "There should be no inflight rollback instants after recovery");
+
+    // Verify exactly 1 completed rollback instant (from rolling back writer1's failed compaction)
+    assertEquals(1, finalTimeline.getRollbackTimeline().filterCompletedInstants().countInstants(),
+        "There should be exactly 1 completed rollback instant from rolling back the failed compaction");
+
     // Clean up
     client2.close();
     FileIOUtils.deleteDirectory(new File(basePath));
