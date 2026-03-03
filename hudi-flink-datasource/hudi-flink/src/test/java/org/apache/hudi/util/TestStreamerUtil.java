@@ -30,8 +30,11 @@ import org.mockito.Mockito;
 import java.util.HashMap;
 import java.util.Map;
 
+import org.apache.hudi.exception.HoodieException;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
@@ -211,8 +214,8 @@ public class TestStreamerUtil {
 
   @Test
   public void testCalculateKafkaOffsetDifferenceNullInstants() {
-    long result = StreamerUtil.calculateKafkaOffsetDifference(null, null, null);
-    assertEquals(0L, result);
+    assertThrows(IllegalArgumentException.class, () ->
+        StreamerUtil.calculateKafkaOffsetDifference(null, null, null));
   }
 
   @Test
@@ -238,9 +241,8 @@ public class TestStreamerUtil {
       mockedTimelineUtils.when(() -> TimelineUtils.getCommitMetadata(previousInstant, mockTimeline))
           .thenReturn(previousMetadata);
 
-      long result = StreamerUtil.calculateKafkaOffsetDifference(currentInstant, previousInstant, mockTimeline);
-
-      assertEquals(0L, result);
+      assertThrows(HoodieException.class, () ->
+          StreamerUtil.calculateKafkaOffsetDifference(currentInstant, previousInstant, mockTimeline));
     }
   }
 
@@ -270,9 +272,8 @@ public class TestStreamerUtil {
       mockedTimelineUtils.when(() -> TimelineUtils.getCommitMetadata(previousInstant, mockTimeline))
           .thenReturn(previousMetadata);
 
-      long result = StreamerUtil.calculateKafkaOffsetDifference(currentInstant, previousInstant, mockTimeline);
-
-      assertEquals(0L, result);
+      assertThrows(HoodieException.class, () ->
+          StreamerUtil.calculateKafkaOffsetDifference(currentInstant, previousInstant, mockTimeline));
     }
   }
 }

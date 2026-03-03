@@ -753,9 +753,10 @@ public class StreamerUtil {
    *
    * @param kafkaOffsetString URL-encoded Kafka offset string in format:
    *        "kafka_metadata%3Atopic%3Apartition:offset;kafka_metadata%3Atopic%3Apartition:offset"
-   * @return Map of partition ID to offset, or empty map if parsing fails
+   * @return Map of partition ID to offset, or empty map if input is null/empty
+   * @throws HoodieException if parsing fails unexpectedly
    */
-  public static Map<Integer, Long> parseKafkaOffsets(final String kafkaOffsetString) {
+  static Map<Integer, Long> parseKafkaOffsets(final String kafkaOffsetString) {
     Map<Integer, Long> partitionOffsets = new HashMap<>();
 
     if (kafkaOffsetString == null || kafkaOffsetString.isEmpty()) {
@@ -801,7 +802,7 @@ public class StreamerUtil {
         }
       }
     } catch (Exception e) {
-      log.error("Failed to parse Kafka offset string: {}", kafkaOffsetString, e);
+      throw new HoodieException("Failed to parse Kafka offset string: " + kafkaOffsetString, e);
     }
 
     return partitionOffsets;
@@ -812,74 +813,72 @@ public class StreamerUtil {
    * The difference is: current commit's kafka offset minus previous commit's kafka offset
    * for each partition. All partition differences are summed together.
    *
+   * <p>Both commit instants must be present in the provided timeline. If a commit has been
+   * archived and is no longer in the active timeline, this method will fail.</p>
+   *
    * @param currentCommitInstant The current (newer) commit instant
    * @param previousCommitInstant The previous (older) commit instant
-   * @param timeline The timeline to read commit details from
-   * @return The total count of offset differences across all partitions, or 0 if calculation fails
+   * @param timeline The timeline to read commit details from (must contain both instants)
+   * @return The total count of offset differences across all partitions
+   * @throws IllegalArgumentException if any parameter is null
+   * @throws HoodieException if metadata extraction or parsing fails
    */
   public static long calculateKafkaOffsetDifference(
       final HoodieInstant currentCommitInstant,
       final HoodieInstant previousCommitInstant,
-      final HoodieTimeline timeline) {
+      final HoodieTimeline timeline) throws IOException {
 
     if (currentCommitInstant == null || previousCommitInstant == null || timeline == null) {
-      log.warn("Invalid input parameters for calculating Kafka offset difference");
-      return 0L;
+      throw new IllegalArgumentException(
+          "currentCommitInstant, previousCommitInstant, and timeline must not be null");
     }
 
-    try {
-      // Extract Kafka offset metadata from both commits
-      String currentOffsetString = extractKafkaOffsetMetadata(currentCommitInstant, timeline);
-      String previousOffsetString = extractKafkaOffsetMetadata(previousCommitInstant, timeline);
+    // Extract Kafka offset metadata from both commits
+    String currentOffsetString = extractKafkaOffsetMetadata(currentCommitInstant, timeline);
+    String previousOffsetString = extractKafkaOffsetMetadata(previousCommitInstant, timeline);
 
-      if (currentOffsetString == null || previousOffsetString == null) {
-        log.warn("Kafka offset metadata not found in one or both commits: current={}, previous={}",
-            currentCommitInstant.requestedTime(), previousCommitInstant.requestedTime());
-        return 0L;
-      }
-
-      // Parse offset strings into partition -> offset maps
-      Map<Integer, Long> currentOffsets = parseKafkaOffsets(currentOffsetString);
-      Map<Integer, Long> previousOffsets = parseKafkaOffsets(previousOffsetString);
-
-      if (currentOffsets.isEmpty() || previousOffsets.isEmpty()) {
-        log.warn("Failed to parse Kafka offsets from commits: current={}, previous={}",
-            currentCommitInstant.requestedTime(), previousCommitInstant.requestedTime());
-        return 0L;
-      }
-
-      // Calculate total difference across all partitions
-      long totalDifference = 0L;
-
-      for (Map.Entry<Integer, Long> currentEntry : currentOffsets.entrySet()) {
-        Integer partitionId = currentEntry.getKey();
-        Long currentOffset = currentEntry.getValue();
-        Long previousOffset = previousOffsets.get(partitionId);
-
-        // If partition doesn't exist in previous commit (new partition), use 0 as base
-        if (previousOffset == null) {
-          previousOffset = 0L;
-          log.debug("New partition {} detected, using 0 as previous offset baseline",
-              partitionId);
-        }
-
-        long difference = currentOffset - previousOffset;
-        totalDifference += difference;
-
-        log.debug("Partition {} offset difference: {} - {} = {}",
-            partitionId, currentOffset, previousOffset, difference);
-      }
-
-      log.info("Total Kafka offset difference between commits {} and {}: {}",
-          currentCommitInstant.requestedTime(), previousCommitInstant.requestedTime(),
-          totalDifference);
-
-      return totalDifference;
-
-    } catch (Exception e) {
-      log.error("Failed to calculate Kafka offset difference between commits {} and {}",
-          currentCommitInstant.requestedTime(), previousCommitInstant.requestedTime(), e);
-      return 0L;
+    if (currentOffsetString == null || previousOffsetString == null) {
+      throw new HoodieException(String.format(
+          "Kafka offset metadata not found in one or both commits: current=%s, previous=%s",
+          currentCommitInstant.requestedTime(), previousCommitInstant.requestedTime()));
     }
+
+    // Parse offset strings into partition -> offset maps
+    Map<Integer, Long> currentOffsets = parseKafkaOffsets(currentOffsetString);
+    Map<Integer, Long> previousOffsets = parseKafkaOffsets(previousOffsetString);
+
+    if (currentOffsets.isEmpty() || previousOffsets.isEmpty()) {
+      throw new HoodieException(String.format(
+          "Parsed Kafka offsets are empty for commits: current=%s, previous=%s",
+          currentCommitInstant.requestedTime(), previousCommitInstant.requestedTime()));
+    }
+
+    // Calculate total difference across all partitions
+    long totalDifference = 0L;
+
+    for (Map.Entry<Integer, Long> currentEntry : currentOffsets.entrySet()) {
+      Integer partitionId = currentEntry.getKey();
+      Long currentOffset = currentEntry.getValue();
+      Long previousOffset = previousOffsets.get(partitionId);
+
+      // If partition doesn't exist in previous commit (new partition), use 0 as base
+      if (previousOffset == null) {
+        previousOffset = 0L;
+        log.debug("New partition {} detected, using 0 as previous offset baseline",
+            partitionId);
+      }
+
+      long difference = currentOffset - previousOffset;
+      totalDifference += difference;
+
+      log.debug("Partition {} offset difference: {} - {} = {}",
+          partitionId, currentOffset, previousOffset, difference);
+    }
+
+    log.info("Total Kafka offset difference between commits {} and {}: {}",
+        currentCommitInstant.requestedTime(), previousCommitInstant.requestedTime(),
+        totalDifference);
+
+    return totalDifference;
   }
 }
