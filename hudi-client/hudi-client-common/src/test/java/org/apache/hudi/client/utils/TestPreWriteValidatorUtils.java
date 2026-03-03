@@ -380,14 +380,14 @@ public class TestPreWriteValidatorUtils {
    * A test validator that sleeps to test parallel execution.
    */
   public static class SlowValidator implements PreWriteValidator {
-    private static final AtomicInteger callCount = new AtomicInteger(0);
+    private static final AtomicInteger CALL_COUNT = new AtomicInteger(0);
 
     public static void reset() {
-      callCount.set(0);
+      CALL_COUNT.set(0);
     }
 
     public static int getCallCount() {
-      return callCount.get();
+      return CALL_COUNT.get();
     }
 
     @Override
@@ -397,7 +397,7 @@ public class TestPreWriteValidatorUtils {
                              HoodieWriteConfig writeConfig,
                              HoodieEngineContext engineContext,
                              Option<HoodieData<HoodieRecord<T>>> recordsOpt) throws HoodieValidationException {
-      callCount.incrementAndGet();
+      CALL_COUNT.incrementAndGet();
       try {
         Thread.sleep(100); // Sleep for 100ms
       } catch (InterruptedException e) {
