@@ -1145,89 +1145,89 @@ public class FlinkOptions extends HoodieConfig {
       .withDescription("Maximum number of groups to create as part of ClusteringPlan. Increasing groups will increase parallelism, default is 30");
 
   // ------------------------------------------------------------------------
-  //  Kafka/Athena Checkpoint Options
+  //  Kafka Offset Trace Options
   // ------------------------------------------------------------------------
 
   @AdvancedConfig
   public static final ConfigOption<String> CALLER_SERVICE_NAME = ConfigOptions
-          .key("athena.caller.service.name")
+          .key("kafka.offset.trace.caller.service.name")
           .stringType()
           .defaultValue("ingestion-rt")
-          .withDescription("Caller service name for Athena RPC headers");
+          .withDescription("Caller service name for checkpoint service RPC headers");
 
   @AdvancedConfig
   public static final ConfigOption<String> ATHENA_SERVICE = ConfigOptions
-          .key("athena.service")
+          .key("kafka.offset.trace.checkpoint.service")
           .stringType()
           .defaultValue("athena-job-manager")
-          .withDescription("Athena service name (e.g., athena-job-manager or athena-job-manager-canary)");
+          .withDescription("Checkpoint service name for offset lookup");
 
   @AdvancedConfig
   public static final ConfigOption<String> DC = ConfigOptions
-          .key("athena.dc")
+          .key("kafka.offset.trace.dc")
           .stringType()
           .noDefaultValue()
-          .withDescription("Data center for Athena checkpoint lookup");
+          .withDescription("Data center for checkpoint offset lookup");
 
   @AdvancedConfig
   public static final ConfigOption<String> ENV = ConfigOptions
-          .key("athena.env")
+          .key("kafka.offset.trace.env")
           .stringType()
           .noDefaultValue()
-          .withDescription("Environment for Athena checkpoint lookup");
+          .withDescription("Environment for checkpoint offset lookup");
 
   @AdvancedConfig
   public static final ConfigOption<String> JOB_NAME = ConfigOptions
-          .key("athena.job.name")
+          .key("kafka.offset.trace.job.name")
           .stringType()
           .noDefaultValue()
-          .withDescription("Flink job name for Athena checkpoint lookup");
+          .withDescription("Flink job name for checkpoint offset lookup");
 
   @AdvancedConfig
   public static final ConfigOption<String> HADOOP_USER = ConfigOptions
-          .key("athena.hadoop.user")
+          .key("kafka.offset.trace.hadoop.user")
           .stringType()
           .noDefaultValue()
-          .withDescription("Hadoop user for Athena checkpoint lookup");
+          .withDescription("Hadoop user for checkpoint offset lookup");
 
   @AdvancedConfig
   public static final ConfigOption<String> SOURCE_KAFKA_CLUSTER = ConfigOptions
-          .key("athena.source.kafka.cluster")
+          .key("kafka.offset.trace.source.cluster")
           .stringType()
           .noDefaultValue()
           .withDescription("Source Kafka cluster name");
 
   @AdvancedConfig
   public static final ConfigOption<String> TARGET_KAFKA_CLUSTER = ConfigOptions
-          .key("athena.target.kafka.cluster")
+          .key("kafka.offset.trace.target.cluster")
           .stringType()
           .noDefaultValue()
           .withDescription("Target Kafka cluster name");
 
   @AdvancedConfig
   public static final ConfigOption<String> TOPIC_ID = ConfigOptions
-          .key("athena.topic.id")
+          .key("kafka.offset.trace.topic.id")
           .stringType()
           .noDefaultValue()
-          .withDescription("Complete topic ID for Athena checkpoint requests");
+          .withDescription("Topic ID for checkpoint offset requests");
 
   @AdvancedConfig
   public static final ConfigOption<String> SERVICE_TIER = ConfigOptions
-          .key("athena.service.tier")
+          .key("kafka.offset.trace.service.tier")
           .stringType()
           .defaultValue("DEFAULT")
-          .withDescription("Service tier for Athena checkpoint lookup (e.g., DEFAULT, CRITICAL)");
+          .withDescription("Service tier for checkpoint offset lookup (e.g., DEFAULT, CRITICAL)");
 
   @AdvancedConfig
   public static final ConfigOption<String> SERVICE_NAME = ConfigOptions
-          .key("athena.service.name")
+          .key("kafka.offset.trace.service.name")
           .stringType()
           .defaultValue("ingestion-rt")
-          .withDescription("Service name for Athena checkpoint lookup");
+          .withDescription("Service name for checkpoint offset lookup");
 
   @AdvancedConfig
   public static final ConfigOption<String> KAFKA_TOPIC_NAME = ConfigOptions
-          .key("kafka.topic.name")
+          .key("kafka.offset.trace.topic.name")
           .stringType()
           .noDefaultValue()
           .withDescription("Kafka topic name for storing topic metadata along with offsets");

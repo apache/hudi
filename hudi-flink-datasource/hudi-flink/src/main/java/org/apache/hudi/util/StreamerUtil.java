@@ -741,19 +741,29 @@ public class StreamerUtil {
     }
   }
 
-  /*
+  /**
    * Add Kafka offset metadata to the checkpoint metadata.
    * Uses Flink-specific checkpoint key but same format as Spark for compatibility.
    *
+   * <p>The Kafka offset collection is lazy — it only triggers when
+   * {@code WRITE_EXTRA_METADATA_ENABLED} is true, avoiding unnecessary
+   * Kafka/checkpoint-service access when the feature is disabled.</p>
+   *
    * @param conf Flink configuration
    * @param checkpointCommitMetadata commit metadata map
-   * @param kafkaOffsetCheckpoint Kafka offset checkpoint string in Spark format: "HoodieMetadataKey" : "kafka_metadata%3Ahp-event-web%3A101:7583675434;kafka_metadata%3Ahp-event-web%3A222:7190059945;"
+   * @param checkpointId Flink checkpoint ID
+   * @param checkpointClient The checkpoint client (nullable, created internally if null)
    */
   public static void addKafkaOffsetMetaData(
           Configuration conf,
           HashMap<String, String> checkpointCommitMetadata,
-          String kafkaOffsetCheckpoint) {
-    if (conf.get(FlinkOptions.WRITE_EXTRA_METADATA_ENABLED) && kafkaOffsetCheckpoint != null) {
+          long checkpointId,
+          FlinkCheckpointClient checkpointClient) {
+    if (!conf.get(FlinkOptions.WRITE_EXTRA_METADATA_ENABLED)) {
+      return;
+    }
+    String kafkaOffsetCheckpoint = collectKafkaOffsetCheckpoint(conf, checkpointId, checkpointClient);
+    if (kafkaOffsetCheckpoint != null) {
       checkpointCommitMetadata.put(HOODIE_METADATA_KEY, kafkaOffsetCheckpoint);
     }
   }
@@ -851,10 +861,15 @@ public class StreamerUtil {
         return stringFy(topicName, clusterName, partitionOffsets);
       }
 
-      // Check if required configurations are present
+      // Check if all required configurations are present
       if (!conf.contains(FlinkOptions.DC) || !conf.contains(FlinkOptions.ENV)
-          || !conf.contains(FlinkOptions.JOB_NAME) || !conf.contains(FlinkOptions.KAFKA_TOPIC_NAME)) {
-        log.debug("Kafka offset collection skipped - required configurations not set");
+          || !conf.contains(FlinkOptions.JOB_NAME) || !conf.contains(FlinkOptions.KAFKA_TOPIC_NAME)
+          || !conf.contains(FlinkOptions.TOPIC_ID) || !conf.contains(FlinkOptions.HADOOP_USER)
+          || !conf.contains(FlinkOptions.SOURCE_KAFKA_CLUSTER)) {
+        log.debug("Kafka offset collection skipped - required configurations not set. "
+            + "Need: kafka.offset.trace.dc, kafka.offset.trace.env, kafka.offset.trace.job.name, "
+            + "kafka.offset.trace.topic.name, kafka.offset.trace.topic.id, "
+            + "kafka.offset.trace.hadoop.user, kafka.offset.trace.source.cluster");
         return stringFy(topicName, clusterName, partitionOffsets);
       }
 

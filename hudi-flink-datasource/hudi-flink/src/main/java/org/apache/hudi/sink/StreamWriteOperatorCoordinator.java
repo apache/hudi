@@ -622,8 +622,7 @@ public class StreamWriteOperatorCoordinator
     // commit and error logging
     HashMap<String, String> checkpointCommitMetadata = new HashMap<>();
     StreamerUtil.addFlinkCheckpointIdIntoMetaData(conf, checkpointCommitMetadata, checkpointId);
-    StreamerUtil.addKafkaOffsetMetaData(conf, checkpointCommitMetadata,
-        StreamerUtil.collectKafkaOffsetCheckpoint(conf, checkpointId, null));
+    StreamerUtil.addKafkaOffsetMetaData(conf, checkpointCommitMetadata, checkpointId, null);
     final Map<String, List<String>> partitionToReplacedFileIds = tableState.isOverwrite
         ? writeClient.getPartitionToReplacedFileIds(tableState.operationType, dataWriteResults)
         : Collections.emptyMap();
