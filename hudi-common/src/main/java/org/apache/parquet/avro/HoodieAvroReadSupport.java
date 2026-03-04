@@ -41,10 +41,12 @@ import java.util.Map;
 public class HoodieAvroReadSupport<T> extends AvroReadSupport<T> {
 
   private Option<MessageType> tableSchema;
+  private boolean hasTimestampMillisField;
 
-  public HoodieAvroReadSupport(GenericData model, Option<MessageType> tableSchema) {
+  public HoodieAvroReadSupport(GenericData model, Option<MessageType> tableSchema, boolean hasTimestampMillisField) {
     super(model);
     this.tableSchema = tableSchema;
+    this.hasTimestampMillisField = hasTimestampMillisField;
   }
 
   public HoodieAvroReadSupport() {
@@ -60,7 +62,12 @@ public class HoodieAvroReadSupport<T> extends AvroReadSupport<T> {
           "false", "support reading avro from non-legacy map/list in parquet file");
     }
     ReadContext readContext = super.init(configuration, keyValueMetaData, fileSchema);
-    MessageType requestedSchema = repairLogicalTypes(readContext.getRequestedSchema(), tableSchema);
+    MessageType requestedSchema;
+    if (hasTimestampMillisField) {
+      requestedSchema = repairLogicalTypes(readContext.getRequestedSchema(), tableSchema);
+    } else {
+      requestedSchema = readContext.getRequestedSchema();
+    }
     // support non-legacy map. Convert non-legacy map to legacy map
     // Because there is no AvroWriteSupport.WRITE_OLD_MAP_STRUCTURE
     // according to AvroWriteSupport.WRITE_OLD_LIST_STRUCTURE

@@ -18,15 +18,18 @@
 
 package org.apache.parquet.avro;
 
+import org.apache.hudi.avro.AvroSchemaUtils;
 import org.apache.hudi.common.util.Option;
 
+import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.specific.SpecificData;
 import org.apache.hadoop.fs.Path;
 import org.apache.parquet.hadoop.ParquetReader;
 import org.apache.parquet.hadoop.api.ReadSupport;
 import org.apache.parquet.io.InputFile;
-import org.apache.parquet.schema.MessageType;
+
+import static org.apache.parquet.avro.HoodieAvroParquetSchemaConverter.getAvroSchemaConverter;
 
 /**
  * Copy from org.apache.parquet.avro.AvroParquetReader.Builder.
@@ -38,7 +41,7 @@ public class HoodieAvroParquetReaderBuilder<T> extends ParquetReader.Builder<T> 
   private GenericData model = null;
   private boolean enableCompatibility = true;
   private boolean isReflect = true;
-  private Option<MessageType> tableSchema = Option.empty();
+  private Schema tableSchema = null;
 
   @Deprecated
   public HoodieAvroParquetReaderBuilder(Path path) {
@@ -71,8 +74,8 @@ public class HoodieAvroParquetReaderBuilder<T> extends ParquetReader.Builder<T> 
     return this;
   }
 
-  public HoodieAvroParquetReaderBuilder<T> withTableSchema(MessageType tableSchema) {
-    this.tableSchema = Option.of(tableSchema);
+  public HoodieAvroParquetReaderBuilder<T> withTableSchema(Schema tableSchema) {
+    this.tableSchema = tableSchema;
     return this;
   }
 
@@ -83,6 +86,7 @@ public class HoodieAvroParquetReaderBuilder<T> extends ParquetReader.Builder<T> 
     } else {
       conf.setBoolean(AvroReadSupport.AVRO_COMPATIBILITY, enableCompatibility);
     }
-    return new HoodieAvroReadSupport<>(model, tableSchema);
+    return new HoodieAvroReadSupport<>(model, Option.ofNullable(tableSchema).map(schema -> getAvroSchemaConverter(conf).convert(schema)),
+        tableSchema == null || AvroSchemaUtils.hasTimestampMillisField(tableSchema));
   }
 }
