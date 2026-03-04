@@ -187,6 +187,7 @@ public class RollbackHelperV1 extends RollbackHelper {
         metaClient.getTableConfig().getTableVersion().greaterThanOrEquals(HoodieTableVersion.EIGHT)
             ? rollbackRequests
             : groupSerializableRollbackRequestsBasedOnFileGroup(rollbackRequests);
+    final Map<String, Pair<Integer, String>> logVersionMap = preComputeLogVersions(processedRollbackRequests);
     final TaskContextSupplier taskContextSupplier = context.getTaskContextSupplier();
     return context.flatMap(processedRollbackRequests, (SerializableFunction<SerializableHoodieRollbackRequest, Stream<Pair<String, HoodieRollbackStat>>>) rollbackRequest -> {
       List<String> filesToBeDeleted = rollbackRequest.getFilesToBeDeleted();
@@ -197,7 +198,9 @@ public class RollbackHelperV1 extends RollbackHelper {
         return partitionToRollbackStats.stream();
       } else if (!rollbackRequest.getLogBlocksToBeDeleted().isEmpty()) {
         HoodieLogFormat.Writer writer = null;
-        final StoragePath filePath;
+        StoragePath filePath = null;
+        long fileSize = 0L;
+        boolean fileSizeCaptured = false;
         try {
           String partitionPath = rollbackRequest.getPartitionPath();
           String fileId = rollbackRequest.getFileId();
@@ -206,7 +209,7 @@ public class RollbackHelperV1 extends RollbackHelper {
           // Let's emit markers for rollback as well. markers are emitted under rollback instant time.
           WriteMarkers writeMarkers = WriteMarkersFactory.get(config.getMarkersType(), table, instantTime);
 
-          writer = HoodieLogFormat.newWriterBuilder()
+          HoodieLogFormat.WriterBuilder writerBuilder = HoodieLogFormat.newWriterBuilder()
               .onParentPath(FSUtils.constructAbsolutePath(metaClient.getBasePath(), partitionPath))
               .withFileId(fileId)
               .withLogWriteToken(CommonClientUtils.generateWriteToken(taskContextSupplier))
@@ -216,7 +219,16 @@ public class RollbackHelperV1 extends RollbackHelper {
               .withStorage(metaClient.getStorage())
               .withFileCreationCallback(getRollbackLogMarkerCallback(writeMarkers, partitionPath, fileId))
               .withTableVersion(tableVersion)
-              .withFileExtension(HoodieLogFile.DELTA_EXTENSION).build();
+              .withFileExtension(HoodieLogFile.DELTA_EXTENSION);
+
+          String logVersionKey = logVersionLookupKey(partitionPath, fileId, rollbackRequest.getLatestBaseInstant());
+          Pair<Integer, String> preComputedVersion = logVersionMap.get(logVersionKey);
+          if (preComputedVersion != null) {
+            writerBuilder.withLogVersion(preComputedVersion.getLeft())
+                .withLogWriteToken(preComputedVersion.getRight());
+          }
+
+          writer = writerBuilder.build();
 
           // generate metadata
           if (doDelete) {
@@ -224,6 +236,8 @@ public class RollbackHelperV1 extends RollbackHelper {
             // if update belongs to an existing log file
             // use the log file path from AppendResult in case the file handle may roll over
             filePath = writer.appendBlock(new HoodieCommandBlock(header)).logFile().getPath();
+            fileSize = writer.getCurrentSize();
+            fileSizeCaptured = true;
           } else {
             filePath = writer.getLogFile().getPath();
           }
@@ -239,13 +253,17 @@ public class RollbackHelperV1 extends RollbackHelper {
           }
         }
 
-        // This step is intentionally done after writer is closed. Guarantees that
-        // getFileStatus would reflect correct stats and FileNotFoundException is not thrown in
-        // cloud-storage : HUDI-168
-        Map<StoragePathInfo, Long> filesToNumBlocksRollback = Collections.singletonMap(
-            metaClient.getStorage().getPathInfo(Objects.requireNonNull(filePath)),
-            1L
-        );
+        Map<StoragePathInfo, Long> filesToNumBlocksRollback;
+        if (fileSizeCaptured) {
+          filesToNumBlocksRollback = Collections.singletonMap(
+              new StoragePathInfo(Objects.requireNonNull(filePath), fileSize, false, (short) 0, 0, 0), 1L);
+        } else {
+          // This step is intentionally done after writer is closed. Guarantees that
+          // getFileStatus would reflect correct stats and FileNotFoundException is not thrown in
+          // cloud-storage : HUDI-168
+          filesToNumBlocksRollback = Collections.singletonMap(
+              metaClient.getStorage().getPathInfo(Objects.requireNonNull(filePath)), 1L);
+        }
 
         // With listing based rollback, sometimes we only get the fileID of interest(so that we can add rollback command block) w/o the actual file name.
         // So, we want to ignore such invalid files from this list before we add it to the rollback stats.

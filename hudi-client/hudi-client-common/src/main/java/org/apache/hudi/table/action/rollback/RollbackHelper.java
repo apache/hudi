@@ -35,6 +35,7 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieRollbackException;
+import org.apache.hudi.exception.InvalidHoodiePathException;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.table.HoodieTable;
@@ -50,6 +51,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -124,6 +126,7 @@ public class RollbackHelper implements Serializable {
         metaClient.getTableConfig().getTableVersion().greaterThanOrEquals(HoodieTableVersion.EIGHT)
             ? rollbackRequests
             : groupSerializableRollbackRequestsBasedOnFileGroup(rollbackRequests);
+    final Map<String, Pair<Integer, String>> logVersionMap = preComputeLogVersions(processedRollbackRequests);
     final TaskContextSupplier taskContextSupplier = context.getTaskContextSupplier();
     return context.flatMap(processedRollbackRequests, (SerializableFunction<SerializableHoodieRollbackRequest, Stream<Pair<String, HoodieRollbackStat>>>) rollbackRequest -> {
       List<String> filesToBeDeleted = rollbackRequest.getFilesToBeDeleted();
@@ -132,12 +135,14 @@ public class RollbackHelper implements Serializable {
         return rollbackStats.stream().map(entry -> Pair.of(entry.getPartitionPath(), entry));
       } else if (!rollbackRequest.getLogBlocksToBeDeleted().isEmpty()) {
         HoodieLogFormat.Writer writer = null;
-        final StoragePath filePath;
+        StoragePath filePath = null;
+        long fileSize = 0L;
+        boolean fileSizeCaptured = false;
         try {
           String fileId = rollbackRequest.getFileId();
           HoodieTableVersion tableVersion = metaClient.getTableConfig().getTableVersion();
 
-          writer = HoodieLogFormat.newWriterBuilder()
+          HoodieLogFormat.WriterBuilder writerBuilder = HoodieLogFormat.newWriterBuilder()
               .onParentPath(FSUtils.constructAbsolutePath(metaClient.getBasePath(), rollbackRequest.getPartitionPath()))
               .withFileId(fileId)
               .withLogWriteToken(CommonClientUtils.generateWriteToken(taskContextSupplier))
@@ -146,7 +151,16 @@ public class RollbackHelper implements Serializable {
                   )
               .withStorage(metaClient.getStorage())
               .withTableVersion(tableVersion)
-              .withFileExtension(HoodieLogFile.DELTA_EXTENSION).build();
+              .withFileExtension(HoodieLogFile.DELTA_EXTENSION);
+
+          String logVersionKey = logVersionLookupKey(rollbackRequest.getPartitionPath(), fileId, rollbackRequest.getLatestBaseInstant());
+          Pair<Integer, String> preComputedVersion = logVersionMap.get(logVersionKey);
+          if (preComputedVersion != null) {
+            writerBuilder.withLogVersion(preComputedVersion.getLeft())
+                .withLogWriteToken(preComputedVersion.getRight());
+          }
+
+          writer = writerBuilder.build();
 
           // generate metadata
           if (doDelete) {
@@ -154,6 +168,8 @@ public class RollbackHelper implements Serializable {
             // if update belongs to an existing log file
             // use the log file path from AppendResult in case the file handle may roll over
             filePath = writer.appendBlock(new HoodieCommandBlock(header)).logFile().getPath();
+            fileSize = writer.getCurrentSize();
+            fileSizeCaptured = true;
           } else {
             filePath = writer.getLogFile().getPath();
           }
@@ -169,13 +185,17 @@ public class RollbackHelper implements Serializable {
           }
         }
 
-        // This step is intentionally done after writer is closed. Guarantees that
-        // getFileStatus would reflect correct stats and FileNotFoundException is not thrown in
-        // cloud-storage : HUDI-168
-        Map<StoragePathInfo, Long> filesToNumBlocksRollback = Collections.singletonMap(
-            metaClient.getStorage().getPathInfo(Objects.requireNonNull(filePath)),
-            1L
-        );
+        Map<StoragePathInfo, Long> filesToNumBlocksRollback;
+        if (fileSizeCaptured) {
+          filesToNumBlocksRollback = Collections.singletonMap(
+              new StoragePathInfo(Objects.requireNonNull(filePath), fileSize, false, (short) 0, 0, 0), 1L);
+        } else {
+          // This step is intentionally done after writer is closed. Guarantees that
+          // getFileStatus would reflect correct stats and FileNotFoundException is not thrown in
+          // cloud-storage : HUDI-168
+          filesToNumBlocksRollback = Collections.singletonMap(
+              metaClient.getStorage().getPathInfo(Objects.requireNonNull(filePath)), 1L);
+        }
 
         return Stream.of(
                 Pair.of(rollbackRequest.getPartitionPath(),
@@ -192,6 +212,60 @@ public class RollbackHelper implements Serializable {
                     .build()));
       }
     }, numPartitions);
+  }
+
+  protected static String logVersionLookupKey(String partitionPath, String fileId, String commitTime) {
+    return partitionPath + "|" + fileId + "|" + commitTime;
+  }
+
+  /**
+   * Pre-compute the latest log version for each (partition, fileId, deltaCommitTime) tuple
+   * by listing each unique partition directory once. This replaces N per-request listing
+   * calls (one per rollback request) with P per-partition listings (where P is much less than N).
+   */
+  protected Map<String, Pair<Integer, String>> preComputeLogVersions(
+      List<SerializableHoodieRollbackRequest> rollbackRequests) {
+    Set<String> relativePartitionPaths = rollbackRequests.stream()
+        .filter(req -> !req.getLogBlocksToBeDeleted().isEmpty())
+        .map(SerializableHoodieRollbackRequest::getPartitionPath)
+        .collect(Collectors.toSet());
+
+    if (relativePartitionPaths.isEmpty()) {
+      return Collections.emptyMap();
+    }
+
+    log.info("Pre-computing log versions for {} partition(s) to avoid per-request listStatus calls",
+        relativePartitionPaths.size());
+
+    Map<String, Pair<Integer, String>> logVersionMap = new HashMap<>();
+
+    for (String relPartPath : relativePartitionPaths) {
+      StoragePath absolutePartPath = FSUtils.constructAbsolutePath(metaClient.getBasePath(), relPartPath);
+      try {
+        List<StoragePathInfo> statuses = metaClient.getStorage().listDirectEntries(absolutePartPath,
+            path -> path.getName().contains(HoodieLogFile.DELTA_EXTENSION));
+
+        for (StoragePathInfo status : statuses) {
+          try {
+            HoodieLogFile logFile = new HoodieLogFile(status);
+            String key = logVersionLookupKey(relPartPath, logFile.getFileId(), logFile.getDeltaCommitTime());
+            Pair<Integer, String> existing = logVersionMap.get(key);
+            if (existing == null || logFile.getLogVersion() > existing.getLeft()) {
+              logVersionMap.put(key, Pair.of(logFile.getLogVersion(), logFile.getLogWriteToken()));
+            }
+          } catch (InvalidHoodiePathException e) {
+            log.warn("Skipping non-standard log file during pre-compute: {}", status.getPath(), e);
+          }
+        }
+      } catch (IOException e) {
+        log.warn("Failed to pre-compute log versions for partition {}, will fall back to per-request listing",
+            relPartPath, e);
+      }
+    }
+
+    log.info("Pre-computed log versions for {} file groups across {} partition(s)",
+        logVersionMap.size(), relativePartitionPaths.size());
+    return logVersionMap;
   }
 
   /**

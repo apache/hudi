@@ -48,6 +48,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.mockito.Mockito;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
@@ -55,6 +56,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -497,6 +499,82 @@ class TestRollbackHelper extends HoodieRollbackTestBase {
         }).reduce(Boolean::logicalAnd).get());
       }
     });
+  }
+
+  @Test
+  void testPreComputeLogVersionsListsOncePerPartition() throws Exception {
+    when(tableConfig.getTableVersion()).thenReturn(HoodieTableVersion.SIX);
+    String partition1 = "partition1";
+    String partition2 = "partition2";
+    String baseInstant = "001";
+
+    // fileId-001 in partition1 with three log file versions
+    createLogFilesToRollback(partition1, "fileId-001", baseInstant, IntStream.rangeClosed(1, 3), 10L);
+    // fileId-002 in partition1 with one log file version
+    createLogFilesToRollback(partition1, "fileId-002", baseInstant, IntStream.of(1), 10L);
+    // fileId-003 in partition2 with two log file versions
+    createLogFilesToRollback(partition2, "fileId-003", baseInstant, IntStream.rangeClosed(1, 2), 10L);
+
+    Map<String, Long> dummyLogBlocks = new HashMap<>();
+    dummyLogBlocks.put("dummyLogPath", 100L);
+
+    List<SerializableHoodieRollbackRequest> requests = new ArrayList<>();
+    requests.add(new SerializableHoodieRollbackRequest(
+        HoodieRollbackRequest.newBuilder()
+            .setPartitionPath(partition1).setFileId("fileId-001").setLatestBaseInstant(baseInstant)
+            .setFilesToBeDeleted(Collections.emptyList()).setLogBlocksToBeDeleted(dummyLogBlocks).build()));
+    requests.add(new SerializableHoodieRollbackRequest(
+        HoodieRollbackRequest.newBuilder()
+            .setPartitionPath(partition1).setFileId("fileId-002").setLatestBaseInstant(baseInstant)
+            .setFilesToBeDeleted(Collections.emptyList()).setLogBlocksToBeDeleted(dummyLogBlocks).build()));
+    requests.add(new SerializableHoodieRollbackRequest(
+        HoodieRollbackRequest.newBuilder()
+            .setPartitionPath(partition2).setFileId("fileId-003").setLatestBaseInstant(baseInstant)
+            .setFilesToBeDeleted(Collections.emptyList()).setLogBlocksToBeDeleted(dummyLogBlocks).build()));
+
+    HoodieStorage spiedStorage = Mockito.spy(storage);
+    when(metaClient.getStorage()).thenReturn(spiedStorage);
+
+    RollbackHelper helper = new RollbackHelper(table, config);
+    Map<String, Pair<Integer, String>> result = helper.preComputeLogVersions(requests);
+
+    // Two listing calls: one per partition (not one per log file)
+    Mockito.verify(spiedStorage, Mockito.times(2))
+        .listDirectEntries(Mockito.any(StoragePath.class), Mockito.any());
+
+    assertEquals(3, result.size());
+    assertEquals(3, (int) result.get(RollbackHelper.logVersionLookupKey(partition1, "fileId-001", baseInstant)).getLeft());
+    assertEquals(1, (int) result.get(RollbackHelper.logVersionLookupKey(partition1, "fileId-002", baseInstant)).getLeft());
+    assertEquals(2, (int) result.get(RollbackHelper.logVersionLookupKey(partition2, "fileId-003", baseInstant)).getLeft());
+  }
+
+  @Test
+  void testPreComputeLogVersionsEmptyWhenNoLogBlockRequests() throws Exception {
+    when(tableConfig.getTableVersion()).thenReturn(HoodieTableVersion.SIX);
+    String partition1 = "partition1";
+    String partition2 = "partition2";
+
+    List<SerializableHoodieRollbackRequest> requests = new ArrayList<>();
+    requests.add(new SerializableHoodieRollbackRequest(
+        HoodieRollbackRequest.newBuilder()
+            .setPartitionPath(partition1).setFileId("fileId-001").setLatestBaseInstant("001")
+            .setFilesToBeDeleted(Collections.singletonList("/some/file/to/delete"))
+            .setLogBlocksToBeDeleted(Collections.emptyMap()).build()));
+    requests.add(new SerializableHoodieRollbackRequest(
+        HoodieRollbackRequest.newBuilder()
+            .setPartitionPath(partition2).setFileId("fileId-002").setLatestBaseInstant("001")
+            .setFilesToBeDeleted(Collections.singletonList("/another/file"))
+            .setLogBlocksToBeDeleted(Collections.emptyMap()).build()));
+
+    HoodieStorage spiedStorage = Mockito.spy(storage);
+    when(metaClient.getStorage()).thenReturn(spiedStorage);
+
+    RollbackHelper helper = new RollbackHelper(table, config);
+    Map<String, Pair<Integer, String>> result = helper.preComputeLogVersions(requests);
+
+    assertTrue(result.isEmpty());
+    Mockito.verify(spiedStorage, Mockito.times(0))
+        .listDirectEntries(Mockito.any(StoragePath.class), Mockito.any());
   }
 }
 
