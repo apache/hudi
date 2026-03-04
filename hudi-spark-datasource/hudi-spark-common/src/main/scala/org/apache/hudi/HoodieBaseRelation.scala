@@ -111,12 +111,7 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
 
   protected def tableName: String = metaClient.getTableConfig.getTableName
 
-  protected lazy val conf: Configuration = {
-    val c = new Configuration(sqlContext.sparkContext.hadoopConfiguration)
-    c.set(HoodieFileReader.ENABLE_LOGICAL_TIMESTAMP_REPAIR,
-      AvroSchemaUtils.hasTimestampMillisField(tableAvroSchema).toString)
-    c
-  }
+  protected lazy val conf: Configuration = new Configuration(sqlContext.sparkContext.hadoopConfiguration)
   protected lazy val jobConf = new JobConf(conf)
 
   protected lazy val tableConfig: HoodieTableConfig = metaClient.getTableConfig

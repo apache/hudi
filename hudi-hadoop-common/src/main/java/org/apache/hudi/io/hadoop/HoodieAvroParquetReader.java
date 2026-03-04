@@ -53,7 +53,6 @@ import java.util.Set;
 
 import static org.apache.hudi.avro.AvroSchemaUtils.getRepairedSchema;
 import static org.apache.hudi.common.util.TypeUtils.unsafeCast;
-import static org.apache.parquet.avro.HoodieAvroParquetSchemaConverter.getAvroSchemaConverter;
 
 /**
  * {@link HoodieFileReader} implementation for parquet format.
@@ -185,7 +184,7 @@ public class HoodieAvroParquetReader extends HoodieAvroFileReader {
     }
     ParquetReader<IndexedRecord> reader =
         new HoodieAvroParquetReaderBuilder<IndexedRecord>(path)
-            .withTableSchema(getAvroSchemaConverter(hadoopConf).convert(schema))
+            .withTableSchema(schema)
             .withConf(hadoopConf)
             .set(AvroSchemaConverter.ADD_LIST_ELEMENT_RECORDS, hadoopConf.get(AvroSchemaConverter.ADD_LIST_ELEMENT_RECORDS))
             .set(ParquetInputFormat.STRICT_TYPE_CHECKING, hadoopConf.get(ParquetInputFormat.STRICT_TYPE_CHECKING))
