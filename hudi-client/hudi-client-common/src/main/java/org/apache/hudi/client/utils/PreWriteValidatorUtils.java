@@ -35,7 +35,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.Arrays;
+import java.util.List;
 import java.util.concurrent.CompletableFuture;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 /**
@@ -80,8 +82,13 @@ public class PreWriteValidatorUtils {
 
     LOG.info("Running pre-write validators for instant {}", instantTime);
 
-    boolean allSuccess = validators
+    // Collect all futures first to ensure parallel execution
+    List<CompletableFuture<Boolean>> futures = validators
         .map(validator -> runValidatorAsync(validator, instantTime, writeOperationType, metaClient, config, engineContext, recordsOpt))
+        .collect(Collectors.toList());
+
+    // Wait for all validators to complete
+    boolean allSuccess = futures.stream()
         .map(CompletableFuture::join)
         .reduce(true, Boolean::logicalAnd);
 
