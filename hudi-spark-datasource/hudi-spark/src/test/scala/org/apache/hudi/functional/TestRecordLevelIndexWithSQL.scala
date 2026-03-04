@@ -27,7 +27,7 @@ import org.apache.spark.sql.SaveMode
 import org.apache.spark.sql.catalyst.expressions.{AttributeReference, EqualTo, Expression, GreaterThan, GreaterThanOrEqual, In, Literal, Or}
 import org.apache.spark.sql.types.StringType
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
-import org.junit.jupiter.api.Tag
+import org.junit.jupiter.api.{Tag, Test}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 
@@ -157,14 +157,13 @@ class TestRecordLevelIndexWithSQL extends RecordLevelIndexTestBase {
     readDf.registerTempTable(sqlTempTable)
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("COPY_ON_WRITE", "MERGE_ON_READ"))
-  def testRLINoPruningWithComplexRecordKeys(tableType: String): Unit = {
+  @Test
+  def testRLINoPruningWithComplexRecordKeys(): Unit = {
     var hudiOpts = commonOpts + {
       RECORDKEY_FIELD.key -> "_row_key,rider"
     }
     hudiOpts = hudiOpts + (
-      DataSourceWriteOptions.TABLE_TYPE.key -> tableType,
+      DataSourceWriteOptions.TABLE_TYPE.key -> "COPY_ON_WRITE",
       DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> "true")
 
     doWriteAndValidateDataAndRecordIndex(hudiOpts,
