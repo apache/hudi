@@ -133,7 +133,15 @@ public class HoodieCDCFileSplit implements Serializable, Comparable<HoodieCDCFil
       // A deterministic ordering between splits from the same file group is required to infer row changes for readers.
       // beforeFileSlice` includes the log files already existed before the write of the log file in this split, which can be used as the
       // tie-breaker to preserve the relative order of multiple log files.
-      return Math.toIntExact(this.beforeFileSlice.get().getLogFiles().count() - o.getBeforeFileSlice().get().getLogFiles().count());
+      int thisLogFilesCount = this.beforeFileSlice
+              .map(fs -> Math.toIntExact(fs.getLogFiles().count()))
+              .orElse(0);
+
+      int otherLogFilesCount = o.getBeforeFileSlice()
+              .map(fs -> Math.toIntExact(fs.getLogFiles().count()))
+              .orElse(0);
+
+      return Integer.compare(thisLogFilesCount, otherLogFilesCount);
     }
     return cmpResult;
   }
