@@ -19,7 +19,7 @@
 
 package org.apache.spark.sql.hudi.catalog
 
-import org.apache.hudi.{DataSourceWriteOptions, SparkAdapterSupport}
+import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, SparkAdapterSupport}
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.table.HoodieTableMetaClient
@@ -47,6 +47,7 @@ import org.apache.spark.sql.hudi.analysis.HoodieSparkBaseAnalysis.HoodieV1OrV2Ta
 import org.apache.spark.sql.hudi.catalog.HoodieCatalog.{buildPartitionTransforms, isTablePartitioned}
 import org.apache.spark.sql.hudi.command._
 import org.apache.spark.sql.hudi.command.exception.HoodieAnalysisException
+import org.apache.spark.sql.hudi.v2.HoodieSparkV2Table
 import org.apache.spark.sql.types.{StructField, StructType}
 
 import java.net.URI
@@ -137,6 +138,9 @@ class HoodieCatalog extends DelegatingCatalogExtension
           catalogTable = Some(catalogTable),
           tableIdentifier = Some(ident.toString))
 
+        val v2ReadEnabled = spark.sessionState.conf.getConfString(
+          DataSourceReadOptions.USE_V2_READ.key,
+          DataSourceReadOptions.USE_V2_READ.defaultValue).toBoolean
         val schemaEvolutionEnabled = ProvidesHoodieConfig.isSchemaEvolutionEnabled(spark)
 
         // NOTE: PLEASE READ CAREFULLY
@@ -146,7 +150,12 @@ class HoodieCatalog extends DelegatingCatalogExtension
         // where V2 API have to be used. Currently only such use-case is using of Schema Evolution feature
         //
         // Check out HUDI-4178 for more details
-        if (schemaEvolutionEnabled) {
+        if (v2ReadEnabled) {
+          HoodieSparkV2Table(
+            spark = spark,
+            path = catalogTable.location.toString,
+            catalogTable = Some(catalogTable))
+        } else if (schemaEvolutionEnabled) {
           v2Table
         } else {
           v2Table.v1TableWrapper

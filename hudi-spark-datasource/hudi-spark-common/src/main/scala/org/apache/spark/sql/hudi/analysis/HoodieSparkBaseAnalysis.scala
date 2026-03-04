@@ -39,6 +39,7 @@ import org.apache.spark.sql.hudi.analysis.HoodieSparkBaseAnalysis.{HoodieV1OrV2T
 import org.apache.spark.sql.hudi.catalog.HoodieInternalV2Table
 import org.apache.spark.sql.hudi.command.{AlterHoodieTableDropPartitionCommand, ShowHoodieTablePartitionsCommand, TruncateHoodieTableCommand}
 import org.apache.spark.sql.hudi.command.exception.HoodieAnalysisException
+import org.apache.spark.sql.hudi.v2.HoodieSparkV2Table
 import org.apache.spark.sql.types.{ArrayType, DecimalType, DoubleType, FloatType, IntegerType, LongType}
 
 /**
@@ -431,6 +432,7 @@ object HoodieSparkBaseAnalysis extends SparkAdapterSupport {
     def unapply(table: Table): Option[CatalogTable] = table match {
       case V1Table(catalogTable) if sparkAdapter.isHoodieTable(catalogTable) => Some(catalogTable)
       case v2: HoodieInternalV2Table => v2.catalogTable
+      case v2: HoodieSparkV2Table => v2.catalogTable
       case _ => None
     }
   }
