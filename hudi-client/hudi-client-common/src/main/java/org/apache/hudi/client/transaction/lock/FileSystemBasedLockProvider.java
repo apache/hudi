@@ -91,7 +91,7 @@ public class FileSystemBasedLockProvider implements LockProvider<String>, Serial
     }
   }
 
-  public FileSystemBasedLockProvider(final LockConfiguration lockConfiguration, final StorageConfiguration<?> configuration, final HoodieLockMetrics lockMetrics) {
+  public FileSystemBasedLockProvider(final LockConfiguration lockConfiguration, final Configuration configuration, final HoodieLockMetrics lockMetrics) {
     this(lockConfiguration, configuration);
   }
 
