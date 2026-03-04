@@ -70,7 +70,7 @@ public class DataSourceInternalWriterHelper {
     this.writeClient.initTable(operationType, Option.of(instantTime));
 
     this.metaClient = HoodieTableMetaClient.builder().setConf(configuration).setBasePath(writeConfig.getBasePath()).build();
-    this.metaClient.validateTableProperties(writeConfig.getProps());
+    this.writeClient.validateTableProperties(this.metaClient.getTableConfig(), writeConfig.getProps());
     this.hoodieTable = HoodieSparkTable.create(writeConfig, new HoodieSparkEngineContext(new JavaSparkContext(sparkSession.sparkContext())), metaClient);
     this.writeClient.preWrite(instantTime, WriteOperationType.BULK_INSERT, metaClient);
   }
