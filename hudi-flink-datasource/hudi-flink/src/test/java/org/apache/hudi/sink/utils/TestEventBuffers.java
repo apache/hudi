@@ -31,6 +31,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -107,6 +108,46 @@ public class TestEventBuffers {
     } finally {
       executor.shutdownNow();
     }
+  }
+
+  @Test
+  void testAwaitWriterBootstrapEventReceivedWaitsUntilNotified() throws Exception {
+    Configuration conf = new Configuration();
+    conf.set(FlinkOptions.INDEX_TYPE, HoodieIndex.IndexType.GLOBAL_RECORD_LEVEL_INDEX.name());
+    conf.set(FlinkOptions.INDEX_BOOTSTRAP_ENABLED, true);
+    conf.set(FlinkOptions.WRITE_COMMIT_ACK_TIMEOUT, 5_000L);
+    conf.set(FlinkOptions.INDEX_WRITE_TASKS, 4);
+    EventBuffers eventBuffers = EventBuffers.getInstance(conf, 1);
+
+    ExecutorService executor = Executors.newSingleThreadExecutor();
+    try {
+      CompletableFuture<Void> waitingFuture1 = CompletableFuture.runAsync(
+          eventBuffers::awaitWriterBootstrapEventReceived, executor);
+      CompletableFuture<Void> waitingFuture2 = CompletableFuture.runAsync(
+          eventBuffers::awaitWriterBootstrapEventReceived, executor);
+
+      Thread.sleep(100);
+      assertFalse(waitingFuture1.isDone());
+      assertFalse(waitingFuture2.isDone());
+
+      eventBuffers.notifyWriterBootstrapEventReceived();
+
+      waitingFuture1.get(2, TimeUnit.SECONDS);
+      assertTrue(waitingFuture1.isDone());
+      waitingFuture2.get(2, TimeUnit.SECONDS);
+      assertTrue(waitingFuture2.isDone());
+    } finally {
+      executor.shutdownNow();
+    }
+  }
+
+  @Test
+  void testAwaitWriterBootstrapEventReceivedNoOpWithoutBootstrapGuard() {
+    Configuration conf = new Configuration();
+    conf.set(FlinkOptions.WRITE_COMMIT_ACK_TIMEOUT, 5_000L);
+    EventBuffers eventBuffers = EventBuffers.getInstance(conf, 1);
+
+    assertDoesNotThrow(eventBuffers::awaitWriterBootstrapEventReceived);
   }
 
   private static WriteMetadataEvent newWriteEvent(long checkpointId, String instant) {

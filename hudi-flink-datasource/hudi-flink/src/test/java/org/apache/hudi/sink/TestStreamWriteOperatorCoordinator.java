@@ -684,7 +684,7 @@ public class TestStreamWriteOperatorCoordinator {
     Thread t = new Thread(() -> {
       try {
         CompletableFuture<CoordinationResponse> responseFuture =
-            coordinator.handleCoordinationRequest(Correspondent.AwaitPendingInstantsRequest.getInstance(1));
+            coordinator.handleCoordinationRequest(Correspondent.AwaitPendingInstantsRequest.getInstance(false, 1));
         Correspondent.AwaitPendingInstantsResponse response =
             CoordinationResponseSerDe.unwrap(responseFuture.get());
         assertNotNull(response);

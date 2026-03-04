@@ -23,6 +23,7 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.sink.StreamWriteOperatorCoordinator;
 import org.apache.hudi.sink.buffer.MemorySegmentPoolFactory;
 import org.apache.hudi.sink.event.CommitAckEvent;
@@ -234,6 +235,7 @@ public abstract class AbstractStreamWriteFunction<I>
       if (isRestored) {
         HoodieTimeline pendingTimeline = this.metaClient.getActiveTimeline().filterPendingExcludingCompaction();
         // if the task is initially started, resend the pending event.
+        boolean bootstrapEventSent = false;
         for (WriteMetadataEvent event : this.writeMetadataState.get()) {
           // Must filter out the completed instants in case it is a partial failover,
           // the write status should not be accumulated in such case.
@@ -243,8 +245,14 @@ public abstract class AbstractStreamWriteFunction<I>
             // The checkpoint succeed but the meta does not commit,
             // re-commit the inflight instant
             sendWriteMetadataEvent(event);
+            bootstrapEventSent = true;
             log.info("Send uncommitted write metadata event to coordinator, task[{}].", taskID);
           }
+        }
+        // always send a bootstrap event to unblock RLI bootstrap.
+        if (!bootstrapEventSent && OptionsResolver.isRLIWithBootstrap(config)) {
+          sendWriteMetadataEvent(WriteMetadataEvent.emptyBootstrap(taskID, checkpointId, isMetadataTable));
+          log.info("Send empty bootstrap write metadata event to coordinator, task[{}].", taskID);
         }
       }
     } else {

@@ -58,4 +58,13 @@ public class MockCorrespondent extends Correspondent {
   public void sendWriteMetadataEvent(WriteMetadataEvent writeMetadataEvent) {
     this.coordinator.handleEventFromOperator(0, writeMetadataEvent);
   }
+
+  @Override
+  public void awaitPendingInstantsCommitted(boolean isTaskFailover, long checkpointId) {
+    try {
+      this.coordinator.handleCoordinationRequest(AwaitPendingInstantsRequest.getInstance(isTaskFailover, checkpointId)).get();
+    } catch (Exception e) {
+      throw new HoodieException("Error awaiting pending instants completion from coordinator", e);
+    }
+  }
 }

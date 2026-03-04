@@ -91,6 +91,23 @@ public class CommitGuard {
     }
   }
 
+  public void blockUntil(Supplier<Boolean> shouldBlock) {
+    lock.lock();
+    long nanos = TimeUnit.MILLISECONDS.toNanos(commitAckTimeout);
+    try {
+      while (shouldBlock.get()) {
+        if (nanos <= 0L) {
+          throw new HoodieException("Timeout(" + commitAckTimeout + "ms) while waiting for unblock signal.");
+        }
+        nanos = condition.awaitNanos(nanos);
+      }
+    } catch (InterruptedException e) {
+      throw new HoodieException("Blocking is interrupted.", e);
+    } finally {
+      lock.unlock();
+    }
+  }
+
   /**
    * Signals all waited threads which are waiting on the condition.
    */

@@ -616,6 +616,14 @@ public class TestWriteBase {
       return this;
     }
 
+    public TestHarness checkIndexNotLoaded(HoodieKey... keys) {
+      for (HoodieKey key : keys) {
+        assertFalse(this.pipeline.isKeyInState(key),
+            "Key: " + key + " assumes to not in the index state");
+      }
+      return this;
+    }
+
     public TestHarness assertBootstrapped() throws Exception {
       assertTrue(this.pipeline.isAlreadyBootstrap());
       return this;

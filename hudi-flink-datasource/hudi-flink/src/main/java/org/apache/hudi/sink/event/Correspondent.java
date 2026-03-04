@@ -103,10 +103,10 @@ public class Correspondent {
   /**
    * Requests coordinator to wait until all pending instants are committed if necessary.
    */
-  public void awaitPendingInstantsCommitted(long checkpointId) {
+  public void awaitPendingInstantsCommitted(boolean isTaskFailover, long checkpointId) {
     try {
       this.gateway.sendRequestToCoordinator(this.operatorID,
-          new SerializedValue<>(AwaitPendingInstantsRequest.getInstance(checkpointId))).get();
+          new SerializedValue<>(AwaitPendingInstantsRequest.getInstance(isTaskFailover, checkpointId))).get();
     } catch (Exception e) {
       throw new HoodieException("Error awaiting pending instants completion from coordinator", e);
     }
@@ -172,11 +172,11 @@ public class Correspondent {
   @AllArgsConstructor(access = AccessLevel.PRIVATE)
   @Getter
   public static class AwaitPendingInstantsRequest implements CoordinationRequest {
-
+    private final boolean isTaskFailover;
     private final long checkpointId;
 
-    public static AwaitPendingInstantsRequest getInstance(long checkpointId) {
-      return new AwaitPendingInstantsRequest(checkpointId);
+    public static AwaitPendingInstantsRequest getInstance(boolean isTaskFailover, long checkpointId) {
+      return new AwaitPendingInstantsRequest(isTaskFailover, checkpointId);
     }
   }
 

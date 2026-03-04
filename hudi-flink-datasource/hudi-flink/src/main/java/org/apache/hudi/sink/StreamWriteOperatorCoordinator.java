@@ -423,8 +423,13 @@ public class StreamWriteOperatorCoordinator
   private CompletableFuture<CoordinationResponse> handleAwaitPendingInstantsRequest(Correspondent.AwaitPendingInstantsRequest request) {
     CompletableFuture<CoordinationResponse> response = new CompletableFuture<>();
     instantRequestExecutor.execute(() -> {
-      // wait until receiving any bootstrap event.
-      eventBuffers.awaitPrevInstantsToComplete(request.getCheckpointId());
+      // 1. wait until receiving any bootstrap event when the job is started
+      if (!request.isTaskFailover()) {
+        eventBuffers.awaitWriterBootstrapEventReceived();
+      }
+      // 2. wait until all the previous instant committed successfully
+      // Note: when the case is job restart, the checkpoint id is -1, but we should wait for all pending instants to be committed.
+      eventBuffers.awaitPrevInstantsToComplete(request.isTaskFailover() ? request.getCheckpointId() : Long.MAX_VALUE);
       response.complete(CoordinationResponseSerDe.wrap(Correspondent.AwaitPendingInstantsResponse.getInstance()));
     }, "await pending instants to complete");
     return response;
@@ -555,10 +560,12 @@ public class StreamWriteOperatorCoordinator
   private void handleBootstrapEvent(WriteMetadataEvent event) {
     if (event.getInstantTime().equals(WriteMetadataEvent.BOOTSTRAP_INSTANT)) {
       this.eventBuffers.cleanLegacyEvents(event);
+      this.eventBuffers.notifyWriterBootstrapEventReceived();
       return;
     }
     EventBuffer eventBuffer = this.eventBuffers.getOrCreateBootstrapBuffer(event);
     eventBuffer.addBootstrapEvent(event);
+    this.eventBuffers.notifyWriterBootstrapEventReceived();
     if (eventBuffer.allBootstrapEventsReceived()) {
       // start to recommit the instant.
       recommitInstant(event.getCheckpointId(), event.getInstantTime(), eventBuffer);

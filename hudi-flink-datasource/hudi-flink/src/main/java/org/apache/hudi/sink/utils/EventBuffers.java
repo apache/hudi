@@ -49,14 +49,20 @@ public class EventBuffers implements Serializable {
   // {checkpointId -> (instant, data write events, index write events)}
   private final Map<Long, Pair<String, EventBuffer>> eventBuffers;
   private final Option<CommitGuard> commitGuardOption;
+  // Guard to blocking index bootstrap on job restart until the writer bootstrap event being received by coordinator.
+  private final Option<CommitGuard> writerBootstrapEventGuardOption;
+  // Commit guard to block index bootstrap on job restart until the previous instants being committed.
   private final Option<CommitGuard> indexBootstrapGuardOption;
   private final int dataWriteParallelism;
   private final int indexWriteParallelism;
+  // Whether any bootstrap event is received from any subtask of the writer
+  private volatile boolean writerBootstrapEventReceived;
 
   private EventBuffers(
       Map<Long, Pair<String, EventBuffer>> eventBuffers,
       Option<CommitGuard> commitGuardOption,
       Option<CommitGuard> indexBootstrapGuardOption,
+      Option<CommitGuard> writerBootstrapEventGuardOption,
       int dataWriteParallelism,
       int indexWriteParallelism) {
     this.eventBuffers = eventBuffers;
@@ -64,6 +70,8 @@ public class EventBuffers implements Serializable {
     this.dataWriteParallelism = dataWriteParallelism;
     this.indexWriteParallelism = indexWriteParallelism;
     this.indexBootstrapGuardOption = indexBootstrapGuardOption;
+    this.writerBootstrapEventGuardOption = writerBootstrapEventGuardOption;
+    this.writerBootstrapEventReceived = false;
   }
 
   public static EventBuffers getInstance(Configuration conf, int dataWriteParallelism) {
@@ -71,8 +79,10 @@ public class EventBuffers implements Serializable {
         ? Option.of(CommitGuard.create(conf.get(FlinkOptions.WRITE_COMMIT_ACK_TIMEOUT))) : Option.empty();
     final Option<CommitGuard> indexBootstrapGuardOption = OptionsResolver.isRLIWithBootstrap(conf)
         ? Option.of(CommitGuard.create(conf.get(FlinkOptions.WRITE_COMMIT_ACK_TIMEOUT))) : Option.empty();
+    final Option<CommitGuard> writerBootstrapEventGuardOption = OptionsResolver.isRLIWithBootstrap(conf)
+        ? Option.of(CommitGuard.create(conf.get(FlinkOptions.WRITE_COMMIT_ACK_TIMEOUT))) : Option.empty();
     final int indexWriteParallelism = OptionsResolver.indexWriteParallelism(conf);
-    return new EventBuffers(new ConcurrentSkipListMap<>(), commitGuardOpt, indexBootstrapGuardOption, dataWriteParallelism, indexWriteParallelism);
+    return new EventBuffers(new ConcurrentSkipListMap<>(), commitGuardOpt, indexBootstrapGuardOption, writerBootstrapEventGuardOption, dataWriteParallelism, indexWriteParallelism);
   }
 
   public EventBuffer addEventToBuffer(WriteMetadataEvent event) {
@@ -153,6 +163,17 @@ public class EventBuffers implements Serializable {
     if (!pendingInstants.isEmpty() && this.indexBootstrapGuardOption.isPresent()) {
       this.indexBootstrapGuardOption.get().blockFor(() -> getPendingInstantsBefore(checkpointId));
     }
+  }
+
+  public void awaitWriterBootstrapEventReceived() {
+    if (this.writerBootstrapEventGuardOption.isPresent() && !writerBootstrapEventReceived) {
+      this.writerBootstrapEventGuardOption.get().blockUntil(() -> !writerBootstrapEventReceived);
+    }
+  }
+
+  public void notifyWriterBootstrapEventReceived() {
+    this.writerBootstrapEventReceived = true;
+    this.writerBootstrapEventGuardOption.ifPresent(CommitGuard::unblock);
   }
 
   public void reset(long checkpointId) {

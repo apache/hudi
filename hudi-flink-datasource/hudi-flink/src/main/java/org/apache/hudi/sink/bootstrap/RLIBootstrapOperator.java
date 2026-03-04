@@ -33,6 +33,7 @@ import org.apache.hudi.sink.utils.OperatorIDGenerator;
 import org.apache.hudi.util.StreamerUtil;
 import org.apache.hudi.utils.RuntimeContextUtils;
 
+import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.flink.api.common.JobID;
 import org.apache.flink.api.common.state.ListState;
@@ -69,6 +70,7 @@ public class RLIBootstrapOperator
 
   private transient HoodieTableMetaClient metaClient;
   private transient HoodieBackedTableMetadata metadataTable;
+  @Setter
   private transient Correspondent correspondent;
   private transient long loadedCnt;
 
@@ -114,7 +116,7 @@ public class RLIBootstrapOperator
     if (context.isRestored()) {
       // Wait for pending instants being committed successfully before loading the record index
       log.info("Waiting for pending instants committed before RLI bootstrap.");
-      correspondent.awaitPendingInstantsCommitted(checkpointId);
+      correspondent.awaitPendingInstantsCommitted(attemptId > 0, checkpointId);
       log.info("All pending instants are completed, continue RLI bootstrap.");
     }
 
