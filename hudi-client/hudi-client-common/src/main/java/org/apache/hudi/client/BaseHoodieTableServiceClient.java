@@ -319,9 +319,11 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
       // Note that as long as all jobs for this table use this API for compact with auto-commit, then this alone should prevent
       // compact rollbacks from running concurrently to compact commits.
       txnManager.beginStateChange(Option.of(inflightInstant), txnManager.getLastCompletedTransactionOwner());
-      startExecutionHeartbeat(compactionInstantTime);
-      if (!table.getMetaClient().reloadActiveTimeline().filterPendingCompactionTimeline().containsInstant(compactionInstantTime)) {
-        throw new HoodieException("Requested compaction instant " + compactionInstantTime + " is not present as pending or already completed in the active timeline.");
+      if (config.getWriteConcurrencyMode().supportsMultiWriter()) {
+        validateHeartBeat(compactionInstantTime);
+        if (!table.getMetaClient().reloadActiveTimeline().filterPendingCompactionTimeline().containsInstant(compactionInstantTime)) {
+          throw new HoodieException("Requested compaction instant " + compactionInstantTime + " is not present as pending or already completed in the active timeline.");
+        }
       }
       this.heartbeatClient.start(compactionInstantTime);
     } finally {
@@ -1325,7 +1327,7 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
     // do nothing here
   }
 
-  private void startExecutionHeartbeat(String instantTime) {
+  private void validateHeartBeat(String instantTime) {
     try {
       if (!this.heartbeatClient.isHeartbeatExpired(instantTime)) {
         throw new HoodieLockException("Cannot execute instant " + instantTime + " due to heartbeat by concurrent writer/job");
