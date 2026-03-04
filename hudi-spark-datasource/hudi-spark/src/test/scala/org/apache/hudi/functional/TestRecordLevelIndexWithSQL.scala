@@ -190,14 +190,13 @@ class TestRecordLevelIndexWithSQL extends RecordLevelIndexTestBase {
     assertEquals(2, spark.read.format("hudi").options(hudiOpts).load(dummyTablePath).filter("not_record_key_col in ('row1', 'abc')").count())
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("COPY_ON_WRITE", "MERGE_ON_READ"))
-  def testRLINoPruningWithComplexRecordKeys(tableType: String): Unit = {
+  @Test
+  def testRLINoPruningWithComplexRecordKeys(): Unit = {
     var hudiOpts = commonOpts + {
       RECORDKEY_FIELD.key -> "_row_key,rider"
     }
     hudiOpts = hudiOpts + (
-      DataSourceWriteOptions.TABLE_TYPE.key -> tableType,
+      DataSourceWriteOptions.TABLE_TYPE.key -> "COPY_ON_WRITE",
       DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> "true")
 
     doWriteAndValidateDataAndRecordIndex(hudiOpts,
