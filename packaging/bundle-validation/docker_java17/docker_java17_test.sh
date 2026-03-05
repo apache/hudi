@@ -72,7 +72,6 @@ setup_hdfs () {
 
   mkdir -p $DOCKER_TEST_DIR/pid
   export HADOOP_PID_DIR=$DOCKER_TEST_DIR/pid
-  export HADOOP_NICENESS=0
 
   bash $HADOOP_HOME/bin/hdfs namenode -format
   bash $HADOOP_HOME/bin/hdfs --daemon start namenode
