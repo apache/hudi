@@ -23,11 +23,11 @@ import org.apache.hudi.common.util.ValidationUtils;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import okhttp3.Response;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
@@ -98,20 +98,19 @@ public class AthenaIngestionGateway extends FlinkHudiMuttleyClient {
         checkpointLookback);
     try {
       final String requestJson = OBJECT_MAPPER.writeValueAsString(getKafkaOffsetsRequest);
-      try (Response response = post(PATH_URL, requestJson, GET_KAFKA_OFFSETS_PROCEDURE)) {
-        String resultAsJson = response.body().string();
-        LOG.info("Get Kafka Offsets response: {} \nfor request: {}", resultAsJson, requestJson);
+      HttpResponse<String> response = post(PATH_URL, requestJson, GET_KAFKA_OFFSETS_PROCEDURE);
+      String resultAsJson = response.body();
+      LOG.info("Get Kafka Offsets response: {} \nfor request: {}", resultAsJson, requestJson);
 
-        final CheckpointKafkaOffsetInfoResponse checkpointKafkaResponse = OBJECT_MAPPER
-            .readValue(resultAsJson, CheckpointKafkaOffsetInfoResponse.class);
-        if (checkpointKafkaResponse != null && checkpointKafkaResponse.isValid()) {
-          return Option.of(checkpointKafkaResponse.kafkaOffsetsInfo);
-        } else {
-          LOG.warn(
-              "Empty kafka checkpoints info received for topic: {}, job: {}, "
-                  + "env: {}, request: {}, \nresponse: {}",
-              topicOperatorIds, jobName, env, requestJson, checkpointKafkaResponse);
-        }
+      final CheckpointKafkaOffsetInfoResponse checkpointKafkaResponse = OBJECT_MAPPER
+          .readValue(resultAsJson, CheckpointKafkaOffsetInfoResponse.class);
+      if (checkpointKafkaResponse != null && checkpointKafkaResponse.isValid()) {
+        return Option.of(checkpointKafkaResponse.kafkaOffsetsInfo);
+      } else {
+        LOG.warn(
+            "Empty kafka checkpoints info received for topic: {}, job: {}, "
+                + "env: {}, request: {}, \nresponse: {}",
+            topicOperatorIds, jobName, env, requestJson, checkpointKafkaResponse);
       }
     } catch (FlinkHudiMuttleyException | IOException e) {
       throw new IOException(String.format(

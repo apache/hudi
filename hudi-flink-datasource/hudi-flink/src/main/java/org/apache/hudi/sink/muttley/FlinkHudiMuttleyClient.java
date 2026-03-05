@@ -21,17 +21,14 @@ package org.apache.hudi.sink.muttley;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 
-import okhttp3.Interceptor;
-import okhttp3.MediaType;
-import okhttp3.OkHttpClient;
-import okhttp3.Request;
-import okhttp3.RequestBody;
-import okhttp3.Response;
-import okhttp3.ResponseBody;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.util.Collections;
 import java.util.HashMap;
@@ -51,140 +48,121 @@ public abstract class FlinkHudiMuttleyClient {
   public static final String RPC_ENCODING_KEY = "Rpc-Encoding";
   public static final String RPC_PROCEDURE_KEY = "Rpc-Procedure";
   public static final String RPC_ENCODING_DEFAULT = "json";
-  private static final MediaType JSON = MediaType.parse("application/json; charset=utf-8");
+  private static final String JSON_CONTENT_TYPE = "application/json; charset=utf-8";
   private static final int MAX_RETRIES = 3; // max retries (additional calls not counting first call) if failing
 
   private final String callerService;
   private final int port;
-  private final OkHttpClient client;
+  private final HttpClient client;
+  private final Duration readWriteTimeout;
+  private final Option<String> routingZone;
+  private final Option<String> servicePostfix;
 
   private FlinkHudiMuttleyClient(final String callerService, final int port,
                                  final Duration connectionTimeout, final Duration readWriteTimeout,
-                                 final Option<String> routingZone, final Option<OkHttpClient> clientOption,
+                                 final Option<String> routingZone,
                                  final Option<String> servicePostfix) {
     ValidationUtils.checkArgument(callerService != null && !callerService.isEmpty());
     ValidationUtils.checkArgument(routingZone != null);
-    ValidationUtils.checkArgument(clientOption != null);
     ValidationUtils.checkArgument(servicePostfix != null);
 
     this.callerService = callerService;
     this.port = port;
+    this.readWriteTimeout = readWriteTimeout;
+    this.routingZone = routingZone;
+    this.servicePostfix = servicePostfix;
 
-    // add an interceptor to add muttley headers to the calls
-    final Interceptor headerInterceptor = chain -> {
-      final Request.Builder requestBuilder = chain.request().newBuilder();
-      getMuttleyRequestHeaders(servicePostfix).forEach(requestBuilder::header);
-      if (routingZone.isPresent()) {
-        getMuttleyZoneRoutingHeaders(routingZone.get()).forEach(requestBuilder::header);
-      }
-      return chain.proceed(requestBuilder.build());
-    };
-
-    OkHttpClient baseClient = clientOption.orElse(new OkHttpClient());
-    this.client = baseClient.newBuilder()
-        .retryOnConnectionFailure(true)
+    this.client = HttpClient.newBuilder()
         .connectTimeout(connectionTimeout)
-        .readTimeout(readWriteTimeout)
-        .writeTimeout(readWriteTimeout)
-        .addInterceptor(headerInterceptor)
-        .addInterceptor(new RetryInterceptor(MAX_RETRIES))
         .build();
   }
 
   protected FlinkHudiMuttleyClient(final String callerService, final int port,
                                    final Duration connectionTimeout, final Duration readWriteTimeout) {
-    this(callerService, port, connectionTimeout, readWriteTimeout, Option.empty(), Option.empty(), Option.empty());
+    this(callerService, port, connectionTimeout, readWriteTimeout, Option.empty(), Option.empty());
   }
 
   protected String getUrl(final String path) {
     return String.format(URL, this.port, path);
   }
 
-  protected Response get(final String path) throws IOException, FlinkHudiMuttleyException {
+  protected HttpResponse<String> get(final String path) throws IOException, FlinkHudiMuttleyException {
     return this.process("GET", path, null);
   }
 
-  protected Response post(final String path, final String jsonPayload,
+  protected HttpResponse<String> post(final String path, final String jsonPayload,
                           final String rpcProcedure) throws IOException, FlinkHudiMuttleyException {
     return this.process("POST", path, jsonPayload, Option.of(rpcProcedure));
   }
 
-  protected Response put(final String path, final String jsonPayload)
+  protected HttpResponse<String> put(final String path, final String jsonPayload)
       throws IOException, FlinkHudiMuttleyException {
     return this.process("PUT", path, jsonPayload);
   }
 
-  protected Response delete(final String path)
+  protected HttpResponse<String> delete(final String path)
       throws IOException, FlinkHudiMuttleyException {
     return this.process("DELETE", path, null);
   }
 
-  private Response process(final String method,
+  private HttpResponse<String> process(final String method,
                            final String path,
                            final String jsonPayload) throws IOException, FlinkHudiMuttleyException {
     return process(method, path, jsonPayload, Option.empty());
   }
 
-  private Response process(final String method,
+  private HttpResponse<String> process(final String method,
                            final String path,
                            final String jsonPayload,
                            final Option<String> rpcProcedure)
       throws IOException, FlinkHudiMuttleyException {
-    return process(method, path, jsonPayload, rpcProcedure, Option.empty());
-  }
-
-  private Response process(final String method,
-                           final String path,
-                           final String jsonPayload,
-                           final Option<String> rpcProcedure,
-                           final Option<Map<String, String>> headersOptional) throws FlinkHudiMuttleyException, IOException {
     final String url = getUrl(path);
     LOG.info("MuttleyClient request - Method: {}, URL: {}, Path: {}, RPC Procedure: {}",
         method, url, path, rpcProcedure.orElse("none"));
     LOG.debug("Request payload: {}", jsonPayload);
 
-    final RequestBody body = jsonPayload == null ? null : RequestBody.create(jsonPayload, JSON);
-    final Request.Builder requestBuilder = new Request.Builder()
-        .url(url)
-        .method(method, body);
+    // Build request body
+    HttpRequest.BodyPublisher bodyPublisher = jsonPayload == null
+        ? HttpRequest.BodyPublishers.noBody()
+        : HttpRequest.BodyPublishers.ofString(jsonPayload);
+
+    HttpRequest.Builder requestBuilder = HttpRequest.newBuilder()
+        .uri(URI.create(url))
+        .timeout(readWriteTimeout)
+        .method(method, bodyPublisher);
+
+    if (jsonPayload != null) {
+      requestBuilder.header("Content-Type", JSON_CONTENT_TYPE);
+    }
+
+    // Add muttley headers
+    Map<String, String> muttleyHeaders = getMuttleyRequestHeaders(servicePostfix);
+    muttleyHeaders.forEach(requestBuilder::header);
+
+    // Add zone routing headers
+    if (routingZone.isPresent()) {
+      getMuttleyZoneRoutingHeaders(routingZone.get()).forEach(requestBuilder::header);
+    }
+
+    // Add RPC procedure headers
     if (rpcProcedure.isPresent()) {
-      requestBuilder.addHeader(RPC_PROCEDURE_KEY, rpcProcedure.get())
-          .addHeader(RPC_ENCODING_KEY, RPC_ENCODING_DEFAULT);
+      requestBuilder.header(RPC_PROCEDURE_KEY, rpcProcedure.get());
+      requestBuilder.header(RPC_ENCODING_KEY, RPC_ENCODING_DEFAULT);
     }
 
-    if (headersOptional.isPresent()) {
-      Map<String, String> headers = headersOptional.get();
-      for (String key : headers.keySet()) {
-        requestBuilder.addHeader(key, headers.get(key));
-      }
-    }
-
-    final Request request = requestBuilder.build();
+    final HttpRequest request = requestBuilder.build();
     LOG.info("Executing HTTP request with headers: {}", request.headers());
 
-    Response response;
-    try {
-      response = getClient().newCall(request).execute();
-      LOG.info("HTTP response received - Status code: {}, Successful: {}",
-          response.code(), response.isSuccessful());
-    } catch (IOException e) {
-      LOG.error("IOException during HTTP request execution: {}", e.getMessage(), e);
-      throw e;
-    }
+    // Execute with retry logic
+    HttpResponse<String> response = executeWithRetry(request);
 
-    if (response.isSuccessful()) {
+    int statusCode = response.statusCode();
+    if (statusCode >= 200 && statusCode < 300) {
       LOG.debug("Request successful, returning response");
       return response;
     }
 
-    final int statusCode = response.code();
-
-    String error;
-    try (ResponseBody responseBody = response.body()) {
-      error = new String(responseBody.bytes());
-    } catch (IOException ex) {
-      error = "Unable to get response body";
-    }
+    String error = response.body();
     final String message = String.format("Service %s responded %d with error %s",
         this.getService(), statusCode, error);
 
@@ -201,6 +179,35 @@ public abstract class FlinkHudiMuttleyClient {
     }
 
     throw new FlinkHudiMuttleyException(statusCode);
+  }
+
+  private HttpResponse<String> executeWithRetry(HttpRequest request) throws IOException {
+    int maxTries = MAX_RETRIES + 1;
+    HttpResponse<String> response = null;
+    int tryCount = 0;
+
+    do {
+      try {
+        response = client.send(request, HttpResponse.BodyHandlers.ofString());
+        if (response.statusCode() >= 200 && response.statusCode() < 300) {
+          LOG.info("HTTP response received - Status code: {}, Successful: true", response.statusCode());
+          return response;
+        }
+        LOG.info("HTTP response received - Status code: {}, Successful: false", response.statusCode());
+      } catch (InterruptedException e) {
+        Thread.currentThread().interrupt();
+        throw new IOException("HTTP request interrupted", e);
+      } catch (IOException e) {
+        LOG.error("IOException during HTTP request execution (attempt {}/{}): {}",
+            tryCount + 1, maxTries, e.getMessage(), e);
+        if (tryCount + 1 >= maxTries) {
+          throw e;
+        }
+      }
+      tryCount++;
+    } while (tryCount < maxTries);
+
+    return response;
   }
 
   private Map<String, String> getMuttleyZoneRoutingHeaders(final String zone) {
@@ -231,53 +238,9 @@ public abstract class FlinkHudiMuttleyClient {
     return callerService;
   }
 
-  public OkHttpClient getClient() {
+  public HttpClient getClient() {
     return client;
   }
 
   public abstract String getService();
-
-  private static class RetryInterceptor implements Interceptor {
-    private static final Logger LOG = LoggerFactory.getLogger(RetryInterceptor.class);
-
-    private final int maxTries;
-
-    public RetryInterceptor(int maxRetries) {
-      // maxTries = first call + maxRetries
-      this.maxTries = (maxRetries >= 0 ? maxRetries : 0) + 1;
-    }
-
-    @Override
-    public Response intercept(Chain chain) throws IOException {
-      Request request = chain.request();
-      Response response = null;
-      boolean responseOK = false;
-      int tryCount = 0;
-
-      do {
-        try {
-          response = chain.proceed(request);
-          responseOK = response == null ? false : response.isSuccessful();
-
-          // If the response is not successful, and we haven't exhausted all retries,
-          // close the response before trying again
-          if (!responseOK && tryCount < maxTries && response != null) {
-            response.close();
-            response = null;
-          }
-        } catch (Exception e) {
-          LOG.error("RetryInterceptor", "Request is not successful - " + tryCount, e);
-
-          // If it is Exception, we should throw it out to Flink runtime.
-          if (tryCount == maxTries) {
-            throw e;
-          }
-        } finally {
-          tryCount++;
-        }
-      } while (!responseOK && tryCount <= maxTries);
-
-      return response;
-    }
-  }
 }

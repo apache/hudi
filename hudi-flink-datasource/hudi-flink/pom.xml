@@ -335,13 +335,6 @@
             <artifactId>jackson-annotations</artifactId>
         </dependency>
 
-        <!-- OkHttp -->
-        <dependency>
-            <groupId>com.squareup.okhttp3</groupId>
-            <artifactId>okhttp</artifactId>
-            <version>4.9.3</version>
-        </dependency>
-
         <!-- Hive -->
         <dependency>
             <groupId>${hive.groupid}</groupId>
