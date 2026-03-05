@@ -21,24 +21,18 @@ package org.apache.hudi.utils;
 import org.apache.hudi.client.model.PartialUpdateFlinkRecordMerger;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.model.EventTimeAvroPayload;
-import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.model.PartialUpdateAvroPayload;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
-import org.apache.hudi.common.table.timeline.HoodieInstant;
-import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
-import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.io.util.FileIOUtils;
 import org.apache.hudi.common.util.collection.Triple;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.keygen.SimpleAvroKeyGenerator;
-import org.apache.hudi.util.KafkaOffsetParseUtils;
 import org.apache.hudi.util.StreamerUtil;
 
 import org.apache.flink.configuration.Configuration;
@@ -46,13 +40,10 @@ import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
-import org.mockito.MockedStatic;
-import org.mockito.Mockito;
 
 import java.io.File;
 import java.io.IOException;
 import java.util.HashMap;
-import java.util.Map;
 
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -63,9 +54,6 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
 
 /**
  * Test cases for {@link StreamerUtil}.
@@ -209,235 +197,6 @@ class TestStreamerUtil {
 
       fs.create(new Path(new Path(basePath, HoodieTableMetaClient.METAFOLDER_NAME), HoodieTableConfig.HOODIE_PROPERTIES_FILE));
       assertTrue(StreamerUtil.tableExists(basePath, HadoopConfigurations.getHadoopConf(conf)));
-    }
-  }
-
-  // ---- KafkaOffsetParseUtils tests ----
-
-  @Test
-  void testExtractKafkaOffsetMetadata() throws Exception {
-    HoodieInstant mockInstant = mock(HoodieInstant.class);
-    HoodieTimeline mockTimeline = mock(HoodieTimeline.class);
-    HoodieCommitMetadata mockCommitMetadata = mock(HoodieCommitMetadata.class);
-
-    Map<String, String> extraMetadata = new HashMap<>();
-    extraMetadata.put(KafkaOffsetParseUtils.HOODIE_METADATA_KEY, "kafka_metadata%3Atopic%3A0:100;kafka_metadata%3Atopic%3A1:200");
-
-    when(mockCommitMetadata.getExtraMetadata()).thenReturn(extraMetadata);
-
-    try (MockedStatic<TimelineUtils> mockedTimelineUtils = Mockito.mockStatic(TimelineUtils.class)) {
-      mockedTimelineUtils.when(() -> TimelineUtils.getCommitMetadata(any(HoodieInstant.class), any(HoodieTimeline.class)))
-          .thenReturn(mockCommitMetadata);
-
-      String result = KafkaOffsetParseUtils.extractKafkaOffsetMetadata(mockInstant, mockTimeline);
-      assertEquals("kafka_metadata%3Atopic%3A0:100;kafka_metadata%3Atopic%3A1:200", result);
-    }
-  }
-
-  @Test
-  void testExtractKafkaOffsetMetadataNotFound() throws Exception {
-    HoodieInstant mockInstant = mock(HoodieInstant.class);
-    HoodieTimeline mockTimeline = mock(HoodieTimeline.class);
-    HoodieCommitMetadata mockCommitMetadata = mock(HoodieCommitMetadata.class);
-
-    Map<String, String> extraMetadata = new HashMap<>();
-
-    when(mockCommitMetadata.getExtraMetadata()).thenReturn(extraMetadata);
-
-    try (MockedStatic<TimelineUtils> mockedTimelineUtils = Mockito.mockStatic(TimelineUtils.class)) {
-      mockedTimelineUtils.when(() -> TimelineUtils.getCommitMetadata(any(HoodieInstant.class), any(HoodieTimeline.class)))
-          .thenReturn(mockCommitMetadata);
-
-      String result = KafkaOffsetParseUtils.extractKafkaOffsetMetadata(mockInstant, mockTimeline);
-      assertNull(result);
-    }
-  }
-
-  @Test
-  void testParseKafkaOffsetsValidInput() {
-    String kafkaOffsetString = "kafka_metadata%3Atopic%3A0:100;kafka_metadata%3Atopic%3A1:200;kafka_metadata%3Atopic%3A2:300";
-
-    Map<Integer, Long> result = KafkaOffsetParseUtils.parseKafkaOffsets(kafkaOffsetString);
-
-    assertEquals(3, result.size());
-    assertEquals(100L, result.get(0));
-    assertEquals(200L, result.get(1));
-    assertEquals(300L, result.get(2));
-  }
-
-  @Test
-  void testParseKafkaOffsetsEmptyString() {
-    Map<Integer, Long> result = KafkaOffsetParseUtils.parseKafkaOffsets("");
-    assertTrue(result.isEmpty());
-  }
-
-  @Test
-  void testParseKafkaOffsetsNullString() {
-    Map<Integer, Long> result = KafkaOffsetParseUtils.parseKafkaOffsets(null);
-    assertTrue(result.isEmpty());
-  }
-
-  @Test
-  void testParseKafkaOffsetsWithClusterMetadata() {
-    String kafkaOffsetString = "kafka_metadata%3Atopic%3A0:100;kafka_cluster%3Atopicname%3Aclustername;kafka_metadata%3Atopic%3A1:200";
-
-    Map<Integer, Long> result = KafkaOffsetParseUtils.parseKafkaOffsets(kafkaOffsetString);
-
-    assertEquals(2, result.size());
-    assertEquals(100L, result.get(0));
-    assertEquals(200L, result.get(1));
-  }
-
-  @Test
-  void testParseKafkaOffsetsMalformedEntry() {
-    String kafkaOffsetString = "kafka_metadata%3Atopic%3A0:100;invalidentry;kafka_metadata%3Atopic%3A1:200";
-
-    Map<Integer, Long> result = KafkaOffsetParseUtils.parseKafkaOffsets(kafkaOffsetString);
-
-    assertEquals(2, result.size());
-    assertEquals(100L, result.get(0));
-    assertEquals(200L, result.get(1));
-  }
-
-  @Test
-  void testParseKafkaOffsetsInvalidNumber() {
-    String kafkaOffsetString = "kafka_metadata%3Atopic%3A0:100;kafka_metadata%3Atopic%3A1:notanumber;kafka_metadata%3Atopic%3A2:300";
-
-    Map<Integer, Long> result = KafkaOffsetParseUtils.parseKafkaOffsets(kafkaOffsetString);
-
-    assertEquals(2, result.size());
-    assertEquals(100L, result.get(0));
-    assertEquals(300L, result.get(2));
-  }
-
-  @Test
-  void testCalculateKafkaOffsetDifference() throws Exception {
-    HoodieInstant currentInstant = mock(HoodieInstant.class);
-    HoodieInstant previousInstant = mock(HoodieInstant.class);
-    HoodieTimeline mockTimeline = mock(HoodieTimeline.class);
-    HoodieCommitMetadata currentMetadata = mock(HoodieCommitMetadata.class);
-    HoodieCommitMetadata previousMetadata = mock(HoodieCommitMetadata.class);
-
-    when(currentInstant.requestedTime()).thenReturn("20250828120000");
-    when(previousInstant.requestedTime()).thenReturn("20250828110000");
-
-    Map<String, String> currentExtraMetadata = new HashMap<>();
-    currentExtraMetadata.put(KafkaOffsetParseUtils.HOODIE_METADATA_KEY, "kafka_metadata%3Atopic%3A0:150;kafka_metadata%3Atopic%3A1:250;kafka_metadata%3Atopic%3A2:350");
-
-    Map<String, String> previousExtraMetadata = new HashMap<>();
-    previousExtraMetadata.put(KafkaOffsetParseUtils.HOODIE_METADATA_KEY, "kafka_metadata%3Atopic%3A0:100;kafka_metadata%3Atopic%3A1:200;kafka_metadata%3Atopic%3A2:300");
-
-    when(currentMetadata.getExtraMetadata()).thenReturn(currentExtraMetadata);
-    when(previousMetadata.getExtraMetadata()).thenReturn(previousExtraMetadata);
-
-    try (MockedStatic<TimelineUtils> mockedTimelineUtils = Mockito.mockStatic(TimelineUtils.class)) {
-      mockedTimelineUtils.when(() -> TimelineUtils.getCommitMetadata(currentInstant, mockTimeline))
-          .thenReturn(currentMetadata);
-      mockedTimelineUtils.when(() -> TimelineUtils.getCommitMetadata(previousInstant, mockTimeline))
-          .thenReturn(previousMetadata);
-
-      long result = KafkaOffsetParseUtils.calculateKafkaOffsetDifference(currentInstant, previousInstant, mockTimeline);
-
-      // (150-100) + (250-200) + (350-300) = 50 + 50 + 50 = 150
-      assertEquals(150L, result);
-    }
-  }
-
-  @Test
-  void testCalculateKafkaOffsetDifferenceWithNewPartition() throws Exception {
-    HoodieInstant currentInstant = mock(HoodieInstant.class);
-    HoodieInstant previousInstant = mock(HoodieInstant.class);
-    HoodieTimeline mockTimeline = mock(HoodieTimeline.class);
-    HoodieCommitMetadata currentMetadata = mock(HoodieCommitMetadata.class);
-    HoodieCommitMetadata previousMetadata = mock(HoodieCommitMetadata.class);
-
-    when(currentInstant.requestedTime()).thenReturn("20250828120000");
-    when(previousInstant.requestedTime()).thenReturn("20250828110000");
-
-    Map<String, String> currentExtraMetadata = new HashMap<>();
-    currentExtraMetadata.put(KafkaOffsetParseUtils.HOODIE_METADATA_KEY, "kafka_metadata%3Atopic%3A0:150;kafka_metadata%3Atopic%3A1:250;kafka_metadata%3Atopic%3A2:100");
-
-    Map<String, String> previousExtraMetadata = new HashMap<>();
-    previousExtraMetadata.put(KafkaOffsetParseUtils.HOODIE_METADATA_KEY, "kafka_metadata%3Atopic%3A0:100;kafka_metadata%3Atopic%3A1:200");
-
-    when(currentMetadata.getExtraMetadata()).thenReturn(currentExtraMetadata);
-    when(previousMetadata.getExtraMetadata()).thenReturn(previousExtraMetadata);
-
-    try (MockedStatic<TimelineUtils> mockedTimelineUtils = Mockito.mockStatic(TimelineUtils.class)) {
-      mockedTimelineUtils.when(() -> TimelineUtils.getCommitMetadata(currentInstant, mockTimeline))
-          .thenReturn(currentMetadata);
-      mockedTimelineUtils.when(() -> TimelineUtils.getCommitMetadata(previousInstant, mockTimeline))
-          .thenReturn(previousMetadata);
-
-      long result = KafkaOffsetParseUtils.calculateKafkaOffsetDifference(currentInstant, previousInstant, mockTimeline);
-
-      // (150-100) + (250-200) + (100-0) = 50 + 50 + 100 = 200
-      assertEquals(200L, result);
-    }
-  }
-
-  @Test
-  void testCalculateKafkaOffsetDifferenceNullInstants() {
-    assertThrows(IllegalArgumentException.class, () ->
-        KafkaOffsetParseUtils.calculateKafkaOffsetDifference(null, null, null));
-  }
-
-  @Test
-  void testCalculateKafkaOffsetDifferenceNoMetadata() throws Exception {
-    HoodieInstant currentInstant = mock(HoodieInstant.class);
-    HoodieInstant previousInstant = mock(HoodieInstant.class);
-    HoodieTimeline mockTimeline = mock(HoodieTimeline.class);
-    HoodieCommitMetadata currentMetadata = mock(HoodieCommitMetadata.class);
-    HoodieCommitMetadata previousMetadata = mock(HoodieCommitMetadata.class);
-
-    when(currentInstant.requestedTime()).thenReturn("20250828120000");
-    when(previousInstant.requestedTime()).thenReturn("20250828110000");
-
-    Map<String, String> currentExtraMetadata = new HashMap<>();
-    Map<String, String> previousExtraMetadata = new HashMap<>();
-
-    when(currentMetadata.getExtraMetadata()).thenReturn(currentExtraMetadata);
-    when(previousMetadata.getExtraMetadata()).thenReturn(previousExtraMetadata);
-
-    try (MockedStatic<TimelineUtils> mockedTimelineUtils = Mockito.mockStatic(TimelineUtils.class)) {
-      mockedTimelineUtils.when(() -> TimelineUtils.getCommitMetadata(currentInstant, mockTimeline))
-          .thenReturn(currentMetadata);
-      mockedTimelineUtils.when(() -> TimelineUtils.getCommitMetadata(previousInstant, mockTimeline))
-          .thenReturn(previousMetadata);
-
-      assertThrows(HoodieException.class, () ->
-          KafkaOffsetParseUtils.calculateKafkaOffsetDifference(currentInstant, previousInstant, mockTimeline));
-    }
-  }
-
-  @Test
-  void testCalculateKafkaOffsetDifferenceEmptyOffsets() throws Exception {
-    HoodieInstant currentInstant = mock(HoodieInstant.class);
-    HoodieInstant previousInstant = mock(HoodieInstant.class);
-    HoodieTimeline mockTimeline = mock(HoodieTimeline.class);
-    HoodieCommitMetadata currentMetadata = mock(HoodieCommitMetadata.class);
-    HoodieCommitMetadata previousMetadata = mock(HoodieCommitMetadata.class);
-
-    when(currentInstant.requestedTime()).thenReturn("20250828120000");
-    when(previousInstant.requestedTime()).thenReturn("20250828110000");
-
-    Map<String, String> currentExtraMetadata = new HashMap<>();
-    currentExtraMetadata.put(KafkaOffsetParseUtils.HOODIE_METADATA_KEY, "");
-
-    Map<String, String> previousExtraMetadata = new HashMap<>();
-    previousExtraMetadata.put(KafkaOffsetParseUtils.HOODIE_METADATA_KEY, "");
-
-    when(currentMetadata.getExtraMetadata()).thenReturn(currentExtraMetadata);
-    when(previousMetadata.getExtraMetadata()).thenReturn(previousExtraMetadata);
-
-    try (MockedStatic<TimelineUtils> mockedTimelineUtils = Mockito.mockStatic(TimelineUtils.class)) {
-      mockedTimelineUtils.when(() -> TimelineUtils.getCommitMetadata(currentInstant, mockTimeline))
-          .thenReturn(currentMetadata);
-      mockedTimelineUtils.when(() -> TimelineUtils.getCommitMetadata(previousInstant, mockTimeline))
-          .thenReturn(previousMetadata);
-
-      assertThrows(HoodieException.class, () ->
-          KafkaOffsetParseUtils.calculateKafkaOffsetDifference(currentInstant, previousInstant, mockTimeline));
     }
   }
 }

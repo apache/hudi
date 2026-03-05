@@ -111,7 +111,7 @@ public class StreamerUtil {
 
   public static final String FLINK_CHECKPOINT_ID = "flink_checkpoint_id";
   public static final String EMPTY_PARTITION_PATH = "";
-
+  public static final String HOODIE_METADATA_KEY = "HoodieMetadataKey";
 
   public static TypedProperties appendKafkaProps(FlinkStreamerConfig config) {
     TypedProperties properties = getProps(config);
