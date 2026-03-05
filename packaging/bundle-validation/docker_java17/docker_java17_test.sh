@@ -75,16 +75,6 @@ setup_hdfs () {
 
   bash $HADOOP_HOME/bin/hdfs namenode -format
   bash $HADOOP_HOME/bin/hdfs --daemon start namenode
-  NAMENODE_START_EXIT_CODE=$?
-  if [ "$NAMENODE_START_EXIT_CODE" -ne 0 ]; then
-    echo "::error::docker_test_java17.sh NameNode start command failed with exit code $NAMENODE_START_EXIT_CODE"
-    echo "::error::docker_test_java17.sh Printing NameNode logs:"
-    cat $HADOOP_HOME/etc/hadoop/core-site.xml
-    cat $HADOOP_HOME/etc/hadoop/hdfs-site.xml
-    if [ -d "$HADOOP_HOME/logs" ]; then
-      find "$HADOOP_HOME/logs" -name "*namenode*.log" -type f -exec echo "=== {} ===" \; -exec cat {} \;
-    fi
-  fi
 
   echo "::warning::docker_test_java17.sh waiting for NameNode to start"
   NAMENODE_READY=0
@@ -97,10 +87,6 @@ setup_hdfs () {
   done
   if [ "$NAMENODE_READY" -ne 1 ]; then
     echo "::error::docker_test_java17.sh NameNode failed to start"
-    echo "::error::docker_test_java17.sh Printing NameNode logs:"
-    if [ -d "$HADOOP_HOME/logs" ]; then
-      find "$HADOOP_HOME/logs" -name "*namenode*.log" -type f -exec echo "=== {} ===" \; -exec cat {} \;
-    fi
     exit 1
   fi
 
