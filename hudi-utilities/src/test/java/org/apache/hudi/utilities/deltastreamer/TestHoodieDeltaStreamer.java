@@ -692,7 +692,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
   @Test
   public void testLogicalTypes() throws Exception {
     try {
-      String tableBasePath = basePath + "/testTimestampMillis";
+      String tableBasePath = basePath + "/testLogicalTypes";
       defaultSchemaProviderClassName = TestHoodieDeltaStreamerSchemaEvolutionBase.TestSchemaProvider.class.getName();
 
       if (HoodieSparkUtils.isSpark3_3()) {
