@@ -101,7 +101,9 @@ public class HoodieFlinkTableServiceClient<T> extends BaseHoodieTableServiceClie
       }
       log.info("Compacted successfully on commit " + compactionCommitTime);
     } finally {
-      this.heartbeatClient.stop(compactionCommitTime);
+      if (config.getWriteConcurrencyMode().supportsMultiWriter()) {
+        this.heartbeatClient.stop(compactionCommitTime);
+      }
     }
   }
 

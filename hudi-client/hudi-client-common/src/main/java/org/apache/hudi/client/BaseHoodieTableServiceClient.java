@@ -313,21 +313,21 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
   protected HoodieWriteMetadata<O> compact(HoodieTable<?, I, ?, T> table, String compactionInstantTime, boolean shouldComplete) {
     InstantGenerator instantGenerator = table.getMetaClient().getInstantGenerator();
     HoodieInstant inflightInstant = instantGenerator.getCompactionInflightInstant(compactionInstantTime);
-    try {
-      // Transaction serves to ensure only one compact job for this instant will start heartbeat, and any other concurrent
-      // compact job will abort if they attempt to execute compact before heartbeat expires
-      // Note that as long as all jobs for this table use this API for compact with auto-commit, then this alone should prevent
-      // compact rollbacks from running concurrently to compact commits.
-      txnManager.beginStateChange(Option.of(inflightInstant), txnManager.getLastCompletedTransactionOwner());
-      if (config.getWriteConcurrencyMode().supportsMultiWriter()) {
+    if (config.getWriteConcurrencyMode().supportsMultiWriter()) {
+      try {
+        // Transaction serves to ensure only one compact job for this instant will start heartbeat, and any other concurrent
+        // compact job will abort if they attempt to execute compact before heartbeat expires
+        // Note that as long as all jobs for this table use this API for compact with auto-commit, then this alone should prevent
+        // compact rollbacks from running concurrently to compact commits.
+        txnManager.beginStateChange(Option.of(inflightInstant), txnManager.getLastCompletedTransactionOwner());
         validateHeartBeat(compactionInstantTime);
         if (!table.getMetaClient().reloadActiveTimeline().filterPendingCompactionTimeline().containsInstant(compactionInstantTime)) {
           throw new HoodieException("Requested compaction instant " + compactionInstantTime + " is not present as pending or already completed in the active timeline.");
         }
+        this.heartbeatClient.start(compactionInstantTime);
+      } finally {
+        txnManager.endStateChange(Option.of(inflightInstant));
       }
-      this.heartbeatClient.start(compactionInstantTime);
-    } finally {
-      txnManager.endStateChange(Option.of(inflightInstant));
     }
     try {
       HoodieTimeline pendingCompactionTimeline = table.getActiveTimeline().filterPendingCompactionTimeline();
@@ -344,7 +344,9 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
       }
       return compactionWriteMetadata;
     } catch (Exception e) {
-      this.heartbeatClient.stop(compactionInstantTime);
+      if (config.getWriteConcurrencyMode().supportsMultiWriter()) {
+        this.heartbeatClient.stop(compactionInstantTime);
+      }
       throw e;
     }
   }
@@ -411,7 +413,9 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
       }
       log.info("Compacted successfully on commit {}", compactionCommitTime);
     } finally {
-      this.heartbeatClient.stop(compactionCommitTime);
+      if (config.getWriteConcurrencyMode().supportsMultiWriter()) {
+        this.heartbeatClient.stop(compactionCommitTime);
+      }
     }
   }
 
