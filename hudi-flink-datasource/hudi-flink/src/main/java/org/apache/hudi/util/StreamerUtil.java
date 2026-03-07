@@ -68,6 +68,8 @@ import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.schema.FilebasedSchemaProvider;
 import org.apache.hudi.sink.FlinkCheckpointClient;
 import org.apache.hudi.sink.muttley.AthenaIngestionGateway;
+
+import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.sink.transform.ChainedTransformer;
 import org.apache.hudi.sink.transform.Transformer;
 import org.apache.hudi.storage.HoodieStorage;
@@ -752,17 +754,15 @@ public class StreamerUtil {
    * @param conf Flink configuration
    * @param checkpointCommitMetadata commit metadata map
    * @param checkpointId Flink checkpoint ID
-   * @param checkpointClient The checkpoint client (nullable, created internally if null)
    */
   public static void addKafkaOffsetMetaData(
           Configuration conf,
           HashMap<String, String> checkpointCommitMetadata,
-          long checkpointId,
-          FlinkCheckpointClient checkpointClient) {
+          long checkpointId) {
     if (!conf.get(FlinkOptions.WRITE_EXTRA_METADATA_ENABLED)) {
       return;
     }
-    String kafkaOffsetCheckpoint = collectKafkaOffsetCheckpoint(conf, checkpointId, checkpointClient);
+    String kafkaOffsetCheckpoint = collectKafkaOffsetCheckpoint(conf, checkpointId);
     if (kafkaOffsetCheckpoint != null) {
       checkpointCommitMetadata.put(HOODIE_METADATA_KEY, kafkaOffsetCheckpoint);
     }
@@ -845,6 +845,11 @@ public class StreamerUtil {
    * Returns null if not available or on error
    * @throws IllegalStateException if more than one topic is found in the checkpoint response
    */
+  private static String collectKafkaOffsetCheckpoint(Configuration conf, long checkpointId) {
+    return collectKafkaOffsetCheckpoint(conf, checkpointId, null);
+  }
+
+  @VisibleForTesting
   public static String collectKafkaOffsetCheckpoint(Configuration conf, long checkpointId,
                                                     FlinkCheckpointClient checkpointClient) {
     // Extract topic and cluster names early
