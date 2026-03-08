@@ -296,14 +296,16 @@ public class ITTestHoodieDataSource {
     assertRowsEquals(rows, TestData.DATA_SET_SOURCE_MERGED);
   }
 
-  @Test
-  void testStreamWriteBatchRead() {
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  void testStreamWriteBatchRead(boolean useSourceV2) {
     // create filesystem table named source
     String createSource = TestConfigurations.getFileSourceDDL("source");
     streamTableEnv.executeSql(createSource);
 
     String hoodieTableDDL = sql("t1")
         .option(FlinkOptions.PATH, tempFile.getAbsolutePath())
+        .option(FlinkOptions.READ_SOURCE_V2_ENABLED, useSourceV2)
         .options(getDefaultKeys())
         .end();
     streamTableEnv.executeSql(hoodieTableDDL);
@@ -354,13 +356,15 @@ public class ITTestHoodieDataSource {
     }
   }
 
-  @Test
-  void testStreamWriteBatchReadOptimizedWithoutCompaction() {
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  void testStreamWriteBatchReadOptimizedWithoutCompaction(boolean useSourceV2) {
     String hoodieTableDDL = sql("t1")
         .option(FlinkOptions.PATH, tempFile.getAbsolutePath())
         .options(getDefaultKeys())
         .option(FlinkOptions.TABLE_TYPE, FlinkOptions.TABLE_TYPE_MERGE_ON_READ)
         .option(FlinkOptions.QUERY_TYPE, FlinkOptions.QUERY_TYPE_READ_OPTIMIZED)
+        .option(FlinkOptions.READ_SOURCE_V2_ENABLED, useSourceV2)
         .end();
     streamTableEnv.executeSql(hoodieTableDDL);
     final String insertInto = "insert into t1 values\n"
@@ -372,8 +376,9 @@ public class ITTestHoodieDataSource {
     assertTrue(rows.isEmpty());
   }
 
-  @Test
-  void testStreamWriteReadSkippingCompaction() throws Exception {
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  void testStreamWriteReadSkippingCompaction(boolean useSourceV2) throws Exception {
     // create filesystem table named source
     String createSource = TestConfigurations.getFileSourceDDL("source", 4);
     streamTableEnv.executeSql(createSource);
@@ -385,6 +390,7 @@ public class ITTestHoodieDataSource {
         .option(FlinkOptions.READ_AS_STREAMING, true)
         .option(FlinkOptions.COMPACTION_DELTA_COMMITS, 1)
         .option(FlinkOptions.COMPACTION_TASKS, 1)
+        .option(FlinkOptions.READ_SOURCE_V2_ENABLED, useSourceV2)
         .end();
     streamTableEnv.executeSql(hoodieTableDDL);
     String insertInto = "insert into t1 select * from source";
@@ -399,8 +405,9 @@ public class ITTestHoodieDataSource {
     assertRowsEquals(rows, TestData.DATA_SET_SOURCE_INSERT_LATEST_COMMIT);
   }
 
-  @Test
-  void testAppendWriteReadSkippingClustering() throws Exception {
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  void testAppendWriteReadSkippingClustering(boolean useSourceV2) throws Exception {
     // create filesystem table named source
     String createSource = TestConfigurations.getFileSourceDDL("source", 4);
     streamTableEnv.executeSql(createSource);
@@ -414,6 +421,7 @@ public class ITTestHoodieDataSource {
         .option(FlinkOptions.CLUSTERING_ASYNC_ENABLED, true)
         .option(FlinkOptions.CLUSTERING_DELTA_COMMITS, 1)
         .option(FlinkOptions.CLUSTERING_TASKS, 1)
+        .option(FlinkOptions.READ_SOURCE_V2_ENABLED, useSourceV2)
         .end();
     streamTableEnv.executeSql(hoodieTableDDL);
     String insertInto = "insert into t1 select * from source";
@@ -553,8 +561,8 @@ public class ITTestHoodieDataSource {
   }
 
   @ParameterizedTest
-  @MethodSource("tableTypeAndBooleanTrueFalseParams")
-  void testDataSkippingWithRecordLevelIndex(HoodieTableType tableType, boolean mdtCompactionEnabled) throws Exception {
+  @MethodSource("tableTypeAndSourceV2AndBooleanTrueFalseParams")
+  void testDataSkippingWithRecordLevelIndex(HoodieTableType tableType, boolean useSourceV2, boolean mdtCompactionEnabled) throws Exception {
     TableEnvironment tableEnv = batchTableEnv;
     String hoodieTableDDL = sql("t1")
         .option(FlinkOptions.PATH, tempFile.getAbsolutePath())
@@ -564,6 +572,7 @@ public class ITTestHoodieDataSource {
         .option(FlinkOptions.READ_DATA_SKIPPING_ENABLED, true)
         .option(FlinkOptions.TABLE_TYPE, tableType.name())
         .option(FlinkOptions.METADATA_COMPACTION_DELTA_COMMITS, mdtCompactionEnabled ? 1 : 10)
+        .option(FlinkOptions.READ_SOURCE_V2_ENABLED, useSourceV2)
         .end();
     tableEnv.executeSql(hoodieTableDDL);
     execInsertSql(tableEnv, TestSQL.INSERT_T1);
@@ -590,8 +599,8 @@ public class ITTestHoodieDataSource {
   }
 
   @ParameterizedTest
-  @MethodSource("tableTypeAndBooleanTrueFalseParams")
-  void testReadWithPartitionStatsPruning(HoodieTableType tableType, boolean hiveStylePartitioning) throws Exception {
+  @MethodSource("tableTypeAndSourceV2AndBooleanTrueFalseParams")
+  void testReadWithPartitionStatsPruning(HoodieTableType tableType, boolean useSourceV2, boolean hiveStylePartitioning) throws Exception {
     String hoodieTableDDL = sql("t1")
         .option(FlinkOptions.PATH, tempFile.getAbsolutePath())
         .options(getDefaultKeys())
@@ -601,6 +610,7 @@ public class ITTestHoodieDataSource {
         .option(FlinkOptions.READ_DATA_SKIPPING_ENABLED, true)
         .option(FlinkOptions.TABLE_TYPE, tableType)
         .option(FlinkOptions.HIVE_STYLE_PARTITIONING, hiveStylePartitioning)
+        .option(FlinkOptions.READ_SOURCE_V2_ENABLED, useSourceV2)
         .end();
     streamTableEnv.executeSql(hoodieTableDDL);
     Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
@@ -644,8 +654,8 @@ public class ITTestHoodieDataSource {
   }
 
   @ParameterizedTest
-  @MethodSource("tableTypeAndBooleanTrueFalseParams")
-  void testStreamReadFilterByPartition(HoodieTableType tableType, boolean hiveStylePartitioning) throws Exception {
+  @MethodSource("tableTypeAndSourceV2AndBooleanTrueFalseParams")
+  void testStreamReadFilterByPartition(HoodieTableType tableType, boolean useSourceV2, boolean hiveStylePartitioning) throws Exception {
     Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
     conf.set(FlinkOptions.TABLE_NAME, "t1");
     conf.set(FlinkOptions.RECORD_KEY_FIELD, "uuid");
@@ -664,6 +674,7 @@ public class ITTestHoodieDataSource {
         .option(FlinkOptions.READ_STREAMING_CHECK_INTERVAL, 2)
         .option(FlinkOptions.READ_STREAMING_SKIP_COMPACT, false)
         .option(FlinkOptions.HIVE_STYLE_PARTITIONING, hiveStylePartitioning)
+        .option(FlinkOptions.READ_SOURCE_V2_ENABLED, useSourceV2)
         .end();
     streamTableEnv.executeSql(hoodieTableDDL);
 
@@ -675,8 +686,9 @@ public class ITTestHoodieDataSource {
     assertRowsEquals(result, expected, true);
   }
 
-  @Test
-  void testStreamReadMorTableWithCompactionPlan() throws Exception {
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  void testStreamReadMorTableWithCompactionPlan(boolean useSourceV2) throws Exception {
     String createSource = TestConfigurations.getFileSourceDDL("source");
     streamTableEnv.executeSql(createSource);
 
@@ -691,6 +703,7 @@ public class ITTestHoodieDataSource {
         .option(FlinkOptions.COMPACTION_ASYNC_ENABLED, false)
         // generate compaction plan for each commit
         .option(FlinkOptions.COMPACTION_DELTA_COMMITS, 1)
+        .option(FlinkOptions.READ_SOURCE_V2_ENABLED, useSourceV2)
         .noPartition()
         .end();
     streamTableEnv.executeSql(hoodieTableDDL);
@@ -3189,6 +3202,23 @@ public class ITTestHoodieDataSource {
             {HoodieTableType.COPY_ON_WRITE, true},
             {HoodieTableType.MERGE_ON_READ, false},
             {HoodieTableType.MERGE_ON_READ, true}};
+    return Stream.of(data).map(Arguments::of);
+  }
+
+  /**
+   * Return test params => (HoodieTableType, true/false, true/fase).
+   */
+  private static Stream<Arguments> tableTypeAndSourceV2AndBooleanTrueFalseParams() {
+    Object[][] data =
+            new Object[][] {
+                    {HoodieTableType.COPY_ON_WRITE, false, false},
+                    {HoodieTableType.COPY_ON_WRITE, true, true},
+                    {HoodieTableType.MERGE_ON_READ, false, false},
+                    {HoodieTableType.MERGE_ON_READ, true, true},
+                    {HoodieTableType.COPY_ON_WRITE, false, true},
+                    {HoodieTableType.COPY_ON_WRITE, true, false},
+                    {HoodieTableType.MERGE_ON_READ, false, true},
+                    {HoodieTableType.MERGE_ON_READ, true, false}};
     return Stream.of(data).map(Arguments::of);
   }
 

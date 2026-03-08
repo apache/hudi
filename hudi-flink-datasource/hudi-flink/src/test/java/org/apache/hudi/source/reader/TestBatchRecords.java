@@ -139,14 +139,17 @@ public class TestBatchRecords {
   }
 
   @Test
-  public void testFinishedSplitsEmpty() {
+  public void testFinishedSplitsPrePopulated() {
     String splitId = "test-split-6";
     List<String> records = Arrays.asList("record1");
     ClosableIterator<String> iterator = createClosableIterator(records);
 
     BatchRecords<String> batchRecords = BatchRecords.forRecords(splitId, iterator, 0, 0L);
 
-    assertTrue(batchRecords.finishedSplits().isEmpty(), "Should have empty finished splits by default");
+    // finishedSplits is pre-populated at construction so that Flink's FetchTask signals
+    // split completion immediately, which is required to drive END_OF_INPUT for batch reads.
+    assertTrue(batchRecords.finishedSplits().contains(splitId),
+        "finishedSplits should be pre-populated with splitId");
   }
 
   @Test
@@ -334,7 +337,7 @@ public class TestBatchRecords {
   }
 
   @Test
-  public void testFinishedSplitsAddedAfterExhaustion() {
+  public void testFinishedSplitsPrePopulatedBeforeExhaustion() {
     String splitId = "test-split-18";
     List<String> records = Arrays.asList("record1");
     ClosableIterator<String> iterator = createClosableIterator(records);
@@ -342,13 +345,15 @@ public class TestBatchRecords {
     BatchRecords<String> batchRecords = BatchRecords.forRecords(splitId, iterator, 0, 0L);
     batchRecords.nextSplit();
 
-    assertTrue(batchRecords.finishedSplits().isEmpty());
+    // finishedSplits is pre-populated at construction — verified before reading any record.
+    assertTrue(batchRecords.finishedSplits().contains(splitId),
+        "finishedSplits should contain splitId immediately after construction");
 
-    // Read all records
+    // Read all records and exhaust the iterator.
     batchRecords.nextRecordFromSplit();
-
-    // After exhaustion, split should be added to finished splits
     assertNull(batchRecords.nextRecordFromSplit());
+
+    // Still present after exhaustion.
     assertTrue(batchRecords.finishedSplits().contains(splitId));
   }
 

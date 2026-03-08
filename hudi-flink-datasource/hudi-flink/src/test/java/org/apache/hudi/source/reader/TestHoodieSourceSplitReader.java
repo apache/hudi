@@ -238,6 +238,7 @@ public class TestHoodieSourceSplitReader {
     assertEquals(split, readerFunction.getLastReadSplit());
   }
 
+  @Test
   public void testReaderFunctionClosedOnReaderClose() throws Exception {
     TestSplitReaderFunction readerFunction = new TestSplitReaderFunction();
     HoodieSourceSplitReader<String> reader =

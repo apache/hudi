@@ -24,6 +24,7 @@ import org.apache.flink.connector.base.source.reader.RecordsWithSplitIds;
 import org.apache.flink.connector.base.source.reader.splitreader.SplitReader;
 import org.apache.flink.connector.base.source.reader.splitreader.SplitsAddition;
 import org.apache.flink.connector.base.source.reader.splitreader.SplitsChange;
+import org.apache.flink.util.CloseableIterator;
 import org.apache.hudi.metrics.FlinkStreamReadMetrics;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -43,42 +44,59 @@ import java.util.Queue;
 /**
  * The split reader of Hoodie source.
  *
+ * <p>Each call to {@link #fetch()} reads one split and returns it as a single
+ * {@link RecordsWithSplitIds} batch. Flink's {@code SourceReaderBase} is responsible for
+ * draining all records from the batch (via {@code nextRecordFromSplit()}) and marking
+ * the split finished (via {@code finishedSplits()}) before calling {@link #fetch()} again.
+ *
  * @param <T> record type
  */
 public class HoodieSourceSplitReader<T> implements SplitReader<HoodieRecordWithPosition<T>, HoodieSourceSplit> {
   private static final Logger LOG = LoggerFactory.getLogger(HoodieSourceSplitReader.class);
 
   private final SerializableComparator<HoodieSourceSplit> splitComparator;
-  private final SplitReaderFunction<T> readerFunction;
   private final Queue<HoodieSourceSplit> splits;
-  private final SourceReaderContext context;
   private final FlinkStreamReadMetrics readerMetrics;
-
-  private HoodieSourceSplit currentSplit;
+  private final BatchReader batchReader;
+  private transient HoodieSourceSplit currentSplit;
+  private transient CloseableIterator<RecordsWithSplitIds<HoodieRecordWithPosition<T>>> currentReader;
 
   public HoodieSourceSplitReader(
       String tableName,
       SourceReaderContext context,
       SplitReaderFunction<T> readerFunction,
       SerializableComparator<HoodieSourceSplit> splitComparator) {
-    this.context = context;
     this.splitComparator = splitComparator;
-    this.readerFunction = readerFunction;
     this.splits = new ArrayDeque<>();
+    this.batchReader = new DefaultBatchReader(readerFunction);
     this.readerMetrics = new FlinkStreamReadMetrics(context.metricGroup(), tableName);
     this.readerMetrics.registerMetrics();
   }
 
   @Override
   public RecordsWithSplitIds<HoodieRecordWithPosition<T>> fetch() throws IOException {
-    HoodieSourceSplit nextSplit = splits.poll();
-    if (nextSplit != null) {
-      currentSplit = nextSplit;
-      return readerFunction.read(currentSplit);
+    if (currentReader == null) {
+      HoodieSourceSplit nextSplit = splits.poll();
+      if (nextSplit != null) {
+        currentSplit = nextSplit;
+        currentReader = batchReader.read(nextSplit);
+      } else {
+        // return an empty result, which will lead to split fetch to be idle.
+        // SplitFetcherManager will then close idle fetcher.
+        return new RecordsBySplits<>(Collections.emptyMap(), Collections.emptySet());
+      }
+    }
+
+    if (currentReader != null && currentReader.hasNext()) {
+      // Because Iterator#next() doesn't support checked exception,
+      // we need to wrap and unwrap the checked IOException with UncheckedIOException
+      try {
+        return currentReader.next();
+      } catch (Exception e) {
+        throw new IOException(e.getCause());
+      }
     } else {
-      // return an empty result, which will lead to split fetch to be idle.
-      // SplitFetcherManager will then close idle fetcher.
-      return new RecordsBySplits<>(Collections.emptyMap(), Collections.emptySet());
+      return finishSplit();
     }
   }
 
@@ -105,15 +123,10 @@ public class HoodieSourceSplitReader<T> implements SplitReader<HoodieRecordWithP
     // Nothing to do
   }
 
-  @Override
-  public void close() throws Exception {
-    readerFunction.close();
-  }
-
   /**
    * SourceSplitReader only reads splits sequentially. When waiting for watermark alignment
    * the SourceOperator will stop processing and recycling the fetched batches. Based on this the
-   * `pauseOrResumeSplits` and the `wakeUp` are left empty.
+   * {@code pauseOrResumeSplits} and the {@code wakeUp} are left empty.
    * @param splitsToPause splits to pause
    * @param splitsToResume splits to resume
    */
@@ -121,5 +134,27 @@ public class HoodieSourceSplitReader<T> implements SplitReader<HoodieRecordWithP
   public void pauseOrResumeSplits(
       Collection<HoodieSourceSplit> splitsToPause,
       Collection<HoodieSourceSplit> splitsToResume) {
+  }
+
+  @Override
+  public void close() throws Exception {
+    batchReader.close();
+  }
+
+  private RecordsWithSplitIds<HoodieRecordWithPosition<T>> finishSplit() {
+    if (currentReader != null) {
+      try {
+        currentReader.close();
+      } catch (Exception e) {
+        LOG.warn("Failed to close currentReader", e);
+      }
+    }
+    currentReader = null;
+    if (currentSplit != null) {
+      String finishedSplitId = currentSplit.splitId();
+      currentSplit = null;
+      return BatchRecords.lastBatchRecords(finishedSplitId);
+    }
+    return new RecordsBySplits<>(Collections.emptyMap(), Collections.emptySet());
   }
 }
