@@ -51,6 +51,7 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hbase.HBaseConfiguration;
 import org.apache.hadoop.hbase.HBaseTestingUtility;
+import org.apache.hadoop.hbase.StartMiniClusterOption;
 import org.apache.hadoop.hbase.TableName;
 import org.apache.hadoop.hbase.client.Connection;
 import org.apache.hadoop.hbase.client.Get;
@@ -123,7 +124,7 @@ public class TestSparkHoodieHBaseIndex extends SparkClientFunctionalTestHarness 
     hbaseConfig.set(ZOOKEEPER_ZNODE_PARENT, "/hudi-hbase-test");
 
     utility = new HBaseTestingUtility(hbaseConfig);
-    utility.startMiniCluster();
+    utility.startMiniCluster(StartMiniClusterOption.builder().numDataNodes(2).build());
     hbaseConfig = utility.getConnection().getConfiguration();
     utility.createTable(TableName.valueOf(TABLE_NAME), Bytes.toBytes("_s"),2);
   }
