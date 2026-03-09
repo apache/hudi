@@ -160,7 +160,7 @@ stages:
             inputs:
               mavenPomFile: 'pom.xml'
               goals: 'test'
-              options: $(MVN_OPTS_TEST) -Pfunctional-tests -pl $(JOB2_MODULES)
+              options: $(MVN_OPTS_TEST) -pl $(JOB2_MODULES) -Dtest=TestSparkHoodieHBaseIndex -Dlog4j2.rootLogger.level=info -Dcheckstyle.skip
               publishJUnitResults: false
               jdkVersionOption: '1.8'
               mavenOptions: '-Xmx4g'
