@@ -107,8 +107,17 @@ class DefaultSource extends RelationProvider
       throw new HoodieException("Glob paths are not supported for read paths as of Hudi 1.2.0")
     }
 
+    val hoodieAndSparkHoodieSqlConfs = sqlContext.getAllConfs.filter {
+      case (key, _) => key.startsWith("hoodie.") || key.startsWith("spark.hoodie.")
+    }
     // Add default options for unspecified read options keys.
-    val parameters = DataSourceOptionsHelper.parametersWithReadDefaults(sqlContext.getAllConfs.filter(k => k._1.startsWith("hoodie.")) ++ optParams)
+    // Effective precedence (low -> high):
+    // 1) global DFS props
+    // 2) spark.hoodie.* SQL confs (normalized in parametersWithReadDefaults)
+    // 3) hoodie.* SQL confs
+    // 4) explicit DataFrame/DataSource options
+    val parameters = DataSourceOptionsHelper.parametersWithReadDefaults(
+      hoodieAndSparkHoodieSqlConfs ++ optParams)
 
     // Get the table base path
     val tablePath = DataSourceUtils.getTablePath(storage, Seq(new StoragePath(path.get)).asJava)
@@ -125,7 +134,9 @@ class DefaultSource extends RelationProvider
       parameters
     }
 
-    DefaultSource.createRelation(sqlContext, metaClient, schema, options.toMap)
+    val relation = DefaultSource.createRelation(sqlContext, metaClient, schema, options.toMap)
+    log.info(s"Created relation ${relation.getClass.getSimpleName} with ${options.size} resolved options")
+    relation
   }
 
   /**

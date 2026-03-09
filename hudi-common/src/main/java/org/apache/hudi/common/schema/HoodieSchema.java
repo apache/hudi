@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.schema;
 
+import org.apache.hudi.avro.AvroSchemaUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
@@ -34,14 +35,19 @@ import java.io.InputStream;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.io.Serializable;
+import java.nio.ByteOrder;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.stream.Collectors;
+
+import static org.apache.hudi.avro.HoodieAvroUtils.createNewSchemaField;
 
 /**
  * Wrapper class for Avro Schema that provides Hudi-specific schema functionality
@@ -80,6 +86,7 @@ import java.util.stream.Collectors;
  * @since 1.2.0
  */
 public class HoodieSchema implements Serializable {
+  private static final long serialVersionUID = 1L;
 
   /**
    * Constant representing a null JSON value, equivalent to JsonProperties.NULL_VALUE.
@@ -87,7 +94,92 @@ public class HoodieSchema implements Serializable {
    */
   public static final Object NULL_VALUE = JsonProperties.NULL_VALUE;
   public static final HoodieSchema NULL_SCHEMA = HoodieSchema.create(HoodieSchemaType.NULL);
-  private static final long serialVersionUID = 1L;
+  /**
+   * Constant to use when attaching type metadata to external schema systems like Spark's StructType.
+   * Stores a parameterized type string for custom Hudi logical types such as VECTOR and BLOB.
+   * Examples: "VECTOR(128)", "VECTOR(512, DOUBLE)", "BLOB".
+   */
+  public static final String TYPE_METADATA_FIELD = "hudi_type";
+
+  /**
+   * Parses a type descriptor string for custom Hudi logical types such as VECTOR and BLOB.
+   * Examples: "VECTOR(128)", "VECTOR(512, DOUBLE)", "BLOB".
+   * Throws for non-custom logical type names.
+   */
+  public static HoodieSchema parseTypeDescriptor(String descriptor) {
+    Pair<HoodieSchemaType, List<String>> parsedDescriptor = tokenizeTypeDescriptor(descriptor);
+    HoodieSchemaType type = parsedDescriptor.getLeft();
+    List<String> params = parsedDescriptor.getRight();
+    switch (type) {
+      case VECTOR:
+        if (params.isEmpty()) {
+          throw new IllegalArgumentException("VECTOR type descriptor must include a dimension parameter");
+        }
+        if (params.size() > 2) {
+          throw new IllegalArgumentException(
+              "VECTOR type descriptor supports at most 2 parameters: dimension and optional element type");
+        }
+        int dimension;
+        try {
+          dimension = Integer.parseInt(params.get(0));
+        } catch (NumberFormatException e) {
+          throw new IllegalArgumentException("Invalid VECTOR dimension: " + params.get(0), e);
+        }
+        Vector.VectorElementType elementType = params.size() > 1
+            ? Vector.VectorElementType.fromString(params.get(1))
+            : Vector.VectorElementType.FLOAT;
+        return createVector(dimension, elementType);
+      case BLOB:
+        if (!params.isEmpty()) {
+          throw new IllegalArgumentException(
+              "BLOB type descriptor does not support parameters, got: " + params);
+        }
+        return createBlob();
+      default:
+        throw new IllegalArgumentException(
+            "parseTypeDescriptor only supports custom logical types, got: " + type);
+    }
+  }
+
+  private static Pair<HoodieSchemaType, List<String>> tokenizeTypeDescriptor(String descriptor) {
+    ValidationUtils.checkArgument(descriptor != null && !descriptor.trim().isEmpty(),
+        "Type descriptor cannot be null or empty");
+    int parenStart = descriptor.indexOf('(');
+    String typeName;
+    List<String> params;
+    if (parenStart == -1) {
+      typeName = descriptor.trim();
+      params = Collections.emptyList();
+    } else {
+      if (!descriptor.endsWith(")")) {
+        throw new IllegalArgumentException("Malformed type descriptor, missing closing ')': " + descriptor);
+      }
+      typeName = descriptor.substring(0, parenStart).trim();
+      String paramStr = descriptor.substring(parenStart + 1, descriptor.length() - 1).trim();
+      if (paramStr.isEmpty()) {
+        params = Collections.emptyList();
+      } else {
+        params = Arrays.stream(paramStr.split(","))
+            .map(String::trim)
+            .collect(Collectors.toList());
+      }
+    }
+    HoodieSchemaType type;
+    try {
+      type = HoodieSchemaType.valueOf(typeName.toUpperCase(Locale.ROOT));
+    } catch (IllegalArgumentException e) {
+      throw new IllegalArgumentException("Unknown Hudi schema type: " + typeName, e);
+    }
+    if (!CUSTOM_LOGICAL_TYPES.contains(type)) {
+      throw new IllegalArgumentException(
+          "parseTypeDescriptor only supports custom logical types, got: " + type);
+    }
+    return Pair.of(type, params);
+  }
+
+  private static final Set<HoodieSchemaType> CUSTOM_LOGICAL_TYPES =
+      EnumSet.of(HoodieSchemaType.VECTOR, HoodieSchemaType.BLOB);
+
 
   /**
    * Constants for Parquet-style accessor patterns used in nested MAP and ARRAY navigation.
@@ -115,6 +207,8 @@ public class HoodieSchema implements Serializable {
   // Register the Variant logical type with Avro
   static {
     LogicalTypes.register(VariantLogicalType.VARIANT_LOGICAL_TYPE_NAME, new VariantLogicalTypeFactory());
+    LogicalTypes.register(BlobLogicalType.BLOB_LOGICAL_TYPE_NAME, new BlobLogicalTypeFactory());
+    LogicalTypes.register(VectorLogicalType.VECTOR_LOGICAL_TYPE_NAME, new VectorLogicalTypeFactory());
   }
 
   /**
@@ -163,6 +257,10 @@ public class HoodieSchema implements Serializable {
         return new HoodieSchema.Timestamp(avroSchema);
       } else if (logicalType == VariantLogicalType.variant()) {
         return new HoodieSchema.Variant(avroSchema);
+      } else if (logicalType == BlobLogicalType.blob()) {
+        return new HoodieSchema.Blob(avroSchema);
+      } else if (logicalType instanceof VectorLogicalType) {
+        return new HoodieSchema.Vector(avroSchema);
       }
     }
     return new HoodieSchema(avroSchema);
@@ -247,26 +345,24 @@ public class HoodieSchema implements Serializable {
 
     if (schema.getType() == HoodieSchemaType.UNION) {
       // Already a union, check if it contains null
-      List<Schema> unionTypes = inputAvroSchema.getTypes();
-      boolean hasNull = unionTypes.stream().anyMatch(s -> s.getType() == Schema.Type.NULL);
+      List<HoodieSchema> unionTypes = schema.getTypes();
+      boolean hasNull = unionTypes.stream().anyMatch(s -> s.getType() == HoodieSchemaType.NULL);
 
       if (hasNull) {
         return schema; // Already nullable
       }
 
       // Add null to existing union
-      List<Schema> newUnionTypes = new ArrayList<>(unionTypes.size() + 1);
-      newUnionTypes.add(Schema.create(Schema.Type.NULL));
+      List<HoodieSchema> newUnionTypes = new ArrayList<>(unionTypes.size() + 1);
+      newUnionTypes.add(NULL_SCHEMA);
       newUnionTypes.addAll(unionTypes);
-      Schema nullableSchema = Schema.createUnion(newUnionTypes);
-      return new HoodieSchema(nullableSchema);
+      return HoodieSchema.createUnion(newUnionTypes);
     } else {
       // Create new union with null
-      List<Schema> unionTypes = new ArrayList<>(2);
-      unionTypes.add(Schema.create(Schema.Type.NULL));
-      unionTypes.add(inputAvroSchema);
-      Schema nullableSchema = Schema.createUnion(unionTypes);
-      return new HoodieSchema(nullableSchema);
+      List<HoodieSchema> unionTypes = new ArrayList<>(2);
+      unionTypes.add(NULL_SCHEMA);
+      unionTypes.add(schema);
+      return HoodieSchema.createUnion(unionTypes);
     }
   }
 
@@ -590,6 +686,7 @@ public class HoodieSchema implements Serializable {
    * @return a new HoodieSchema.Variant representing a shredded variant
    */
   public static HoodieSchema.Variant createVariantShredded(String name, String namespace, String doc, HoodieSchema typedValueSchema) {
+    ValidationUtils.checkArgument(typedValueSchema == null || !typedValueSchema.containsBlobType(), "Typed value cannot be or contain a BLOB type");
     String variantName = (name != null && !name.isEmpty()) ? name : VariantLogicalType.VARIANT_LOGICAL_TYPE_NAME;
 
     List<HoodieSchemaField> fields = new ArrayList<>();
@@ -630,6 +727,66 @@ public class HoodieSchema implements Serializable {
     VariantLogicalType.variant().addToSchema(recordSchema);
 
     return new HoodieSchema.Variant(recordSchema);
+  }
+
+  public static HoodieSchema.Blob createBlob() {
+    return new HoodieSchema.Blob(Blob.DEFAULT_NAME);
+  }
+
+  /**
+   * Creates Vector schema with default name and specified dimension.
+   * Defaults to {@link Vector.VectorElementType#FLOAT} element type.
+   *
+   * <p>The generated FIXED type name encodes dimension and element type (e.g., {@code vector_float_128})
+   * to avoid Avro name collisions when multiple vector columns exist in the same record.</p>
+   *
+   * @param dimension vector dimension (must be > 0)
+   * @return new HoodieSchema.Vector
+   */
+  public static HoodieSchema.Vector createVector(int dimension) {
+    return createVector(dimension, Vector.VectorElementType.FLOAT);
+  }
+
+  /**
+   * Creates Vector schema with custom name and dimension.
+   * Defaults to {@link Vector.VectorElementType#FLOAT} element type.
+   *
+   * @param name FIXED type name (must not be null or empty)
+   * @param dimension vector dimension (must be > 0)
+   * @return new HoodieSchema.Vector
+   */
+  public static HoodieSchema.Vector createVector(String name, int dimension) {
+    return createVector(name, dimension, Vector.VectorElementType.FLOAT);
+  }
+
+  /**
+   * Creates Vector schema with custom dimension and element type.
+   *
+   * <p>The generated FIXED type name encodes dimension and element type (e.g., {@code vector_double_256})
+   * to avoid Avro name collisions when multiple vector columns exist in the same record.</p>
+   *
+   * @param dimension vector dimension (must be > 0)
+   * @param elementType element type (use {@link Vector.VectorElementType#FLOAT} or {@link Vector.VectorElementType#DOUBLE})
+   * @return new HoodieSchema.Vector
+   */
+  public static HoodieSchema.Vector createVector(int dimension, Vector.VectorElementType elementType) {
+    String vectorName = Vector.DEFAULT_NAME + "_" + elementType.name().toLowerCase() + "_" + dimension;
+    return createVector(vectorName, dimension, elementType);
+  }
+
+  /**
+   * Creates Vector schema with custom name, dimension, and element type.
+   *
+   * @param name FIXED type name (must not be null or empty)
+   * @param dimension vector dimension (must be > 0)
+   * @param elementType element type (use {@link Vector.VectorElementType#FLOAT} or {@link Vector.VectorElementType#DOUBLE})
+   * @return new HoodieSchema.Vector
+   */
+  public static HoodieSchema.Vector createVector(String name, int dimension, Vector.VectorElementType elementType) {
+    ValidationUtils.checkArgument(name != null && !name.isEmpty(),
+        () -> "Vector name must not be null or empty");
+    Schema vectorSchema = Vector.createSchema(name, dimension, elementType);
+    return new HoodieSchema.Vector(vectorSchema);
   }
 
   /**
@@ -698,7 +855,7 @@ public class HoodieSchema implements Serializable {
    * @return true if this type can have fields (RECORD or VARIANT)
    */
   public boolean hasFields() {
-    return type == HoodieSchemaType.RECORD || type == HoodieSchemaType.VARIANT;
+    return type == HoodieSchemaType.RECORD || type == HoodieSchemaType.VARIANT || type == HoodieSchemaType.BLOB;
   }
 
   /**
@@ -912,7 +1069,6 @@ public class HoodieSchema implements Serializable {
    * If this is a union schema, returns the non-null type. Otherwise, returns this schema.
    *
    * @return the non-null schema from a union or the current schema
-   * @throws IllegalStateException if the union has more than two types
    */
   public HoodieSchema getNonNullType() {
     if (type != HoodieSchemaType.UNION) {
@@ -920,10 +1076,57 @@ public class HoodieSchema implements Serializable {
     }
 
     List<HoodieSchema> types = getTypes();
-    if (types.size() != 2) {
-      throw new IllegalStateException("Union schema has more than two types");
+    if (types.size() == 2) {
+      if (types.get(0).getType() == HoodieSchemaType.NULL) {
+        return types.get(1);
+      } else if (types.get(1).getType() == HoodieSchemaType.NULL) {
+        return types.get(0);
+      } else {
+        // This is a non-null union of types
+        return this;
+      }
     }
-    return types.get(0).getType() != HoodieSchemaType.NULL ? types.get(0) : types.get(1);
+    List<HoodieSchema> nonNullTypes = new ArrayList<>(types.size() - 1);
+    for (int i = 0; i < types.size(); i++) {
+      HoodieSchema schema = types.get(i);
+      if (schema.getType() != HoodieSchemaType.NULL) {
+        if (i == types.size() - 1 && nonNullTypes.size() == types.size() - 1) {
+          // Last type and all previous were non-null, return original schema
+          return this;
+        }
+        nonNullTypes.add(schema);
+      }
+    }
+    return HoodieSchema.createUnion(nonNullTypes);
+  }
+
+  boolean containsBlobType() {
+    if (getType() == HoodieSchemaType.BLOB) {
+      return true;
+    } else if (getType() == HoodieSchemaType.ARRAY) {
+      return getElementType().containsBlobType();
+    } else if (getType() == HoodieSchemaType.MAP) {
+      return getValueType().containsBlobType();
+    } else if (getType() == HoodieSchemaType.UNION) {
+      return getTypes().stream().anyMatch(HoodieSchema::containsBlobType);
+    } else if (hasFields()) {
+      return getFields().stream().anyMatch(field -> field.schema().containsBlobType());
+    }
+    return false;
+  }
+
+  /**
+   * A convenience method to check if the current field represents a blob type.
+   * This checks if the current schema is a BLOB or if it is an ARRAY or MAP whose element or value type is a BLOB, respectively.
+   * It does not check for BLOB types nested within unions or record fields.
+   * @return true if the current schema is a BLOB or an ARRAY/MAP of BLOBs, false otherwise
+   */
+  public boolean isBlobField() {
+    HoodieSchema nonNullSchema = getNonNullType();
+    HoodieSchemaType nonNullSchemaType = nonNullSchema.getType();
+    return nonNullSchemaType == HoodieSchemaType.BLOB
+        || (nonNullSchemaType == HoodieSchemaType.ARRAY && nonNullSchema.getElementType().getNonNullType().getType() == HoodieSchemaType.BLOB)
+        || (nonNullSchemaType == HoodieSchemaType.MAP && nonNullSchema.getValueType().getNonNullType().getType() == HoodieSchemaType.BLOB);
   }
 
   /**
@@ -1492,6 +1695,241 @@ public class HoodieSchema implements Serializable {
     }
   }
 
+  /**
+   * Represents a fixed-dimension, typed-element vector stored as an Avro FIXED field.
+   *
+   * <p>Each element is serialized contiguously in little-endian byte order
+   * ({@link VectorLogicalType#VECTOR_BYTE_ORDER}).
+   *
+   * <p>Supported element types and their per-element byte sizes:
+   * <ul>
+   *   <li>{@link VectorElementType#FLOAT}  — 4 bytes (IEEE 754 single-precision)</li>
+   *   <li>{@link VectorElementType#DOUBLE} — 8 bytes (IEEE 754 double-precision)</li>
+   *   <li>{@link VectorElementType#INT8}   — 1 byte  (signed 8-bit integer)</li>
+   * </ul>
+   *
+   * <p>The total FIXED size is {@code dimension * elementType.getElementSize()} bytes.
+   */
+  public static class Vector extends HoodieSchema {
+    private static final String DEFAULT_NAME = "vector";
+
+    /**
+     * Enum representing vector element data types.
+     */
+    public enum VectorElementType {
+      FLOAT(4),
+      DOUBLE(8),
+      INT8(1);
+
+      private final int elementSize;
+
+      VectorElementType(int elementSize) {
+        this.elementSize = elementSize;
+      }
+
+      /**
+       * Returns the byte size of a single element.
+       *
+       * @return number of bytes per element
+       */
+      public int getElementSize() {
+        return elementSize;
+      }
+
+      /**
+       * Converts a string to VectorElementType enum.
+       *
+       * @param name the element type name (e.g., "FLOAT", "DOUBLE", "INT8")
+       * @return the corresponding enum value
+       * @throws IllegalArgumentException if name is unknown
+       */
+      public static VectorElementType fromString(String name) {
+        for (VectorElementType type : values()) {
+          if (type.name().equalsIgnoreCase(name)) {
+            return type;
+          }
+        }
+        throw new IllegalArgumentException("Unknown element type: " + name);
+      }
+    }
+
+    /**
+     * Enum representing the physical storage format backing a vector.
+     */
+    public enum StorageBacking {
+      FIXED_BYTES;
+
+      /**
+       * Converts a string to StorageBacking enum.
+       *
+       * @param name the storage backing name (e.g., "FIXED_BYTES")
+       * @return the corresponding enum value
+       * @throws IllegalArgumentException if name is unknown
+       */
+      public static StorageBacking fromString(String name) {
+        for (StorageBacking b : values()) {
+          if (b.name().equalsIgnoreCase(name)) {
+            return b;
+          }
+        }
+        throw new IllegalArgumentException("Unknown storage backing: " + name);
+      }
+    }
+
+    private final int dimension;
+    private final VectorElementType elementType;
+    private final StorageBacking storageBacking;
+
+    /**
+     * Creates Vector from pre-built schema (used by factory methods).
+     *
+     * @param avroSchema the Avro schema to wrap, must be a valid Vector schema
+     * @throws IllegalArgumentException if avroSchema is null or not a valid Vector schema
+     */
+    Vector(Schema avroSchema) {
+      super(avroSchema);
+
+      // Extract properties from LogicalType
+      LogicalType logicalType = avroSchema.getLogicalType();
+      if (!(logicalType instanceof VectorLogicalType)) {
+        throw new IllegalArgumentException(
+          "Schema must have VectorLogicalType, got: " + logicalType);
+      }
+
+      VectorLogicalType vectorLogicalType = (VectorLogicalType) logicalType;
+      this.dimension = vectorLogicalType.getDimension();
+      this.elementType = VectorElementType.fromString(vectorLogicalType.getElementType());
+      this.storageBacking = StorageBacking.fromString(vectorLogicalType.getStorageBacking());
+
+      // Validate schema structure
+      validateVectorSchema(avroSchema);
+    }
+
+    @Override
+    public String getName() {
+      return VectorLogicalType.VECTOR_LOGICAL_TYPE_NAME;
+    }
+
+    @Override
+    public HoodieSchemaType getType() {
+      return HoodieSchemaType.VECTOR;
+    }
+
+    /**
+     * Returns the type descriptor string for this vector, e.g. "VECTOR(128)" or "VECTOR(512, DOUBLE)".
+     * Default element type (FLOAT) is omitted.
+     */
+    public String toTypeDescriptor() {
+      if (getVectorElementType() == VectorElementType.FLOAT) {
+        return "VECTOR(" + getDimension() + ")";
+      }
+      return "VECTOR(" + getDimension() + ", " + getVectorElementType() + ")";
+    }
+
+    /**
+     * Creates vector schema with specified dimension and element type.
+     *
+     * @param name fixed type name (not null)
+     * @param dimension vector dimension (must be > 0)
+     * @param elementType element type (defaults to FLOAT if null)
+     * @return new Vector schema
+     */
+    private static Schema createSchema(String name, int dimension, VectorElementType elementType) {
+      ValidationUtils.checkArgument(dimension > 0,
+          () -> "Vector dimension must be positive: " + dimension);
+
+      // Validate elementType
+      VectorElementType resolvedElementType = elementType != null ? elementType : VectorElementType.FLOAT;
+
+      // Calculate fixed size: dimension × element size in bytes
+      int elementSize = resolvedElementType.getElementSize();
+      int fixedSize = dimension * elementSize;
+
+      // Create fixed Schema
+      Schema vectorSchema = Schema.createFixed(name, null, null, fixedSize);
+
+      // Apply logical type with properties directly to FIXED
+      VectorLogicalType vectorLogicalType = new VectorLogicalType(dimension, resolvedElementType.name(), StorageBacking.FIXED_BYTES.name());
+      vectorLogicalType.addToSchema(vectorSchema);
+
+      return vectorSchema;
+    }
+
+    /**
+     * Validates that the given Avro schema conforms to Vector specification.
+     *
+     * @param avroSchema the schema to validate
+     * @throws IllegalArgumentException if schema is invalid
+     */
+    private void validateVectorSchema(Schema avroSchema) {
+      // Verify FIXED size matches: dimension × elementSize
+      int expectedSize = dimension * elementType.getElementSize();
+      int actualSize = avroSchema.getFixedSize();
+      ValidationUtils.checkArgument(actualSize == expectedSize,
+          () -> "Vector FIXED size mismatch: expected " + expectedSize
+                + " bytes (dimension=" + dimension + " × elementSize="
+                + elementType.getElementSize() + "), got " + actualSize);
+    }
+
+    /**
+     * Returns the dimension of this vector.
+     *
+     * @return vector dimension (always > 0)
+     */
+    public int getDimension() {
+      return dimension;
+    }
+
+    /**
+     * Returns the element type of this vector.
+     *
+     * @return element type enum (e.g., {@link VectorElementType#FLOAT}, {@link VectorElementType#DOUBLE}, {@link VectorElementType#INT8})
+     */
+    public VectorElementType getVectorElementType() {
+      return elementType;
+    }
+
+    /**
+     * Returns the storage backing type.
+     *
+     * @return storage backing enum value
+     */
+    public StorageBacking getStorageBacking() {
+      return storageBacking;
+    }
+
+    /**
+     * Returns the size of the fixed bytes backing this vector.
+     *
+     * @return size in bytes (dimension × elementSize)
+     */
+    public int getFixedSize() {
+      return getAvroSchema().getFixedSize();
+    }
+
+    @Override
+    public boolean equals(Object o) {
+      if (this == o) {
+        return true;
+      }
+      if (o == null || getClass() != o.getClass()) {
+        return false;
+      }
+      if (!super.equals(o)) {
+        return false;
+      }
+      Vector vector = (Vector) o;
+      return dimension == vector.dimension
+          && Objects.equals(elementType, vector.elementType)
+          && Objects.equals(storageBacking, vector.storageBacking);
+    }
+
+    @Override
+    public int hashCode() {
+      return Objects.hash(super.hashCode(), dimension, elementType, storageBacking);
+    }
+  }
+
   public static class Timestamp extends HoodieSchema {
     private final boolean isUtcAdjusted;
     private final TimePrecision precision;
@@ -1660,6 +2098,96 @@ public class HoodieSchema implements Serializable {
     }
   }
 
+  public static class VectorLogicalType extends LogicalType {
+    private static final String VECTOR_LOGICAL_TYPE_NAME = "vector";
+    private static final String PROP_DIMENSION = "dimension";
+    private static final String PROP_ELEMENT_TYPE = "elementType";
+    private static final String PROP_STORAGE_BACKING = "storageBacking";
+
+    /**
+     * Byte order used for serializing/deserializing vector elements (FLOAT, DOUBLE, etc).
+     * Little-endian is chosen for compatibility with file formats.
+     */
+    public static final ByteOrder VECTOR_BYTE_ORDER = ByteOrder.LITTLE_ENDIAN;
+
+    private final int dimension;
+    private final String elementType;
+    private final String storageBacking;
+
+    public VectorLogicalType(int dimension, String elementType, String storageBacking) {
+      super(VectorLogicalType.VECTOR_LOGICAL_TYPE_NAME);
+      ValidationUtils.checkArgument(dimension > 0,
+          () -> "Vector dimension must be positive: " + dimension);
+      ValidationUtils.checkArgument(elementType != null && !elementType.isEmpty(),
+          () -> "Element type cannot be null or empty");
+      ValidationUtils.checkArgument(storageBacking != null && !storageBacking.isEmpty(),
+          () -> "Storage backing cannot be null or empty");
+
+      this.dimension = dimension;
+      this.elementType = elementType;
+      this.storageBacking = storageBacking;
+    }
+
+    public int getDimension() {
+      return dimension;
+    }
+
+    public String getElementType() {
+      return elementType;
+    }
+
+    public String getStorageBacking() {
+      return storageBacking;
+    }
+
+    @Override
+    public Schema addToSchema(Schema schema) {
+      super.addToSchema(schema);
+      schema.addProp(PROP_DIMENSION, dimension);
+      schema.addProp(PROP_ELEMENT_TYPE, elementType);
+      schema.addProp(PROP_STORAGE_BACKING, storageBacking);
+      return schema;
+    }
+  }
+
+  /**
+   * Factory for creating VectorLogicalType instances.
+   */
+  private static class VectorLogicalTypeFactory implements LogicalTypes.LogicalTypeFactory {
+    @Override
+    public LogicalType fromSchema(Schema schema) {
+      // Extract properties from schema, defensively handling string-serialized values
+      Object dimObj = schema.getObjectProp(VectorLogicalType.PROP_DIMENSION);
+      int dimension = 0;
+      if (dimObj != null) {
+        try {
+          dimension = Integer.parseInt(String.valueOf(dimObj));
+        } catch (NumberFormatException e) {
+          throw new IllegalArgumentException("Invalid vector dimension property: " + dimObj);
+        }
+      }
+      ValidationUtils.checkArgument(dimension > 0,
+          () -> "Missing or invalid 'dimension' property in vector schema");
+
+      String elementType = schema.getProp(VectorLogicalType.PROP_ELEMENT_TYPE);
+      if (elementType == null) {
+        elementType = Vector.VectorElementType.FLOAT.name();
+      }
+
+      String storageBacking = schema.getProp(VectorLogicalType.PROP_STORAGE_BACKING);
+      if (storageBacking == null) {
+        storageBacking = Vector.StorageBacking.FIXED_BYTES.name(); // default
+      }
+
+      return new VectorLogicalType(dimension, elementType, storageBacking);
+    }
+
+    @Override
+    public String getTypeName() {
+      return VectorLogicalType.VECTOR_LOGICAL_TYPE_NAME;
+    }
+  }
+
   /**
    * Factory for creating VariantLogicalType instances.
    */
@@ -1799,6 +2327,11 @@ public class HoodieSchema implements Serializable {
           // If not a union, it should at least be bytes (some shredded variants may have non-null value)
           throw new IllegalArgumentException("Shredded Variant value field must be BYTES or nullable BYTES, got: " + valueSchema.getType());
         }
+        Option.ofNullable(avroSchema.getField(Variant.VARIANT_TYPED_VALUE_FIELD)).ifPresent(field -> {
+          if (HoodieSchema.fromAvroSchema(field.schema()).containsBlobType()) {
+            throw new IllegalArgumentException("Variant typed_value field cannot be or contain a BLOB type");
+          }
+        });
       } else {
         // Unshredded: value must be non-nullable bytes
         if (valueSchema.getType() != Schema.Type.BYTES) {
@@ -1865,6 +2398,135 @@ public class HoodieSchema implements Serializable {
     @Override
     public int hashCode() {
       return Objects.hash(super.hashCode(), isShredded, typedValueSchema);
+    }
+  }
+
+  static class BlobLogicalType extends LogicalType {
+
+    private static final String BLOB_LOGICAL_TYPE_NAME = "blob";
+    // Eager initialization of singleton
+    private static final BlobLogicalType INSTANCE = new BlobLogicalType();
+
+    private BlobLogicalType() {
+      super(BlobLogicalType.BLOB_LOGICAL_TYPE_NAME);
+    }
+
+    public static BlobLogicalType blob() {
+      return INSTANCE;
+    }
+
+    @Override
+    public void validate(Schema schema) {
+      super.validate(schema);
+      if (schema.getType() != Schema.Type.RECORD) {
+        throw new IllegalArgumentException("Blob logical type can only be applied to RECORD schemas, got: " + schema.getType());
+      }
+      if (!schema.getFields().equals(HoodieSchema.Blob.BLOB_FIELDS)) {
+        throw new IllegalArgumentException("Blob logical type cannot be applied to schema: " + schema);
+      }
+    }
+  }
+
+  /**
+   * Factory for creating BlobLogicalType instances.
+   */
+  private static class BlobLogicalTypeFactory implements LogicalTypes.LogicalTypeFactory {
+    @Override
+    public LogicalType fromSchema(Schema schema) {
+      return BlobLogicalType.blob();
+    }
+
+    @Override
+    public String getTypeName() {
+      return BlobLogicalType.BLOB_LOGICAL_TYPE_NAME;
+    }
+  }
+
+  /**
+   * Blob types represent raw binary data. The data can be stored in-line as a byte array or out-of-line as a reference to a file or offset and length within that file.
+   */
+  public static class Blob extends HoodieSchema {
+    public static final String TYPE_DESCRIPTOR = "BLOB";
+    private static final String DEFAULT_NAME = "blob";
+    private static final List<Schema.Field> BLOB_FIELDS = createBlobFields();
+
+    public static final String TYPE = "type";
+    public static final String INLINE_DATA_FIELD = "data";
+    public static final String EXTERNAL_REFERENCE = "reference";
+    public static final String EXTERNAL_REFERENCE_PATH = "external_path";
+    // if offset is not specified, it is assumed to be 0 (start of file)
+    public static final String EXTERNAL_REFERENCE_OFFSET = "offset";
+    // if length is not specified, it is assumed to be the rest of the file starting from offset
+    public static final String EXTERNAL_REFERENCE_LENGTH = "length";
+    public static final String EXTERNAL_REFERENCE_IS_MANAGED = "managed";
+
+    public static int getFieldCount() {
+      return BLOB_FIELDS.size();
+    }
+
+    public static int getReferenceFieldCount() {
+      return AvroSchemaUtils.getNonNullTypeFromUnion(BLOB_FIELDS.get(2).schema()).getFields().size();
+    }
+
+    /**
+     * Creates a new HoodieSchema wrapping the given Avro schema.
+     *
+     * @param name Name for the blob schema
+     * @throws IllegalArgumentException if avroSchema is null or does not have a valid blob logical type
+     */
+    private Blob(String name) {
+      super(createSchema(name));
+    }
+
+    private Blob(Schema avroSchema) {
+      super(avroSchema);
+    }
+
+    @Override
+    public String getName() {
+      return "blob";
+    }
+
+    @Override
+    public HoodieSchemaType getType() {
+      return HoodieSchemaType.BLOB;
+    }
+
+    /**
+     * Returns the type descriptor string for Blob: "BLOB".
+     */
+    public String toTypeDescriptor() {
+      return TYPE_DESCRIPTOR;
+    }
+
+    private static Schema createSchema(String name) {
+      Schema blobSchema = Schema.createRecord(name, null, null, false);
+      // each instance requires its own copy of the fields list
+      List<Schema.Field> fields = new ArrayList<>(BLOB_FIELDS.size());
+      for (Schema.Field field : BLOB_FIELDS) {
+        fields.add(createNewSchemaField(field));
+      }
+      blobSchema.setFields(fields);
+      BlobLogicalType.blob().addToSchema(blobSchema);
+      return blobSchema;
+    }
+
+    private static List<Schema.Field> createBlobFields() {
+      Schema bytesField = Schema.create(Schema.Type.BYTES);
+      Schema referenceField = Schema.createRecord(EXTERNAL_REFERENCE, null, null, false);
+      List<Schema.Field> referenceFields = Arrays.asList(
+          new Schema.Field(EXTERNAL_REFERENCE_PATH, Schema.create(Schema.Type.STRING), null, null),
+          new Schema.Field(EXTERNAL_REFERENCE_OFFSET, AvroSchemaUtils.createNullableSchema(Schema.create(Schema.Type.LONG)), null, null),
+          new Schema.Field(EXTERNAL_REFERENCE_LENGTH, AvroSchemaUtils.createNullableSchema(Schema.create(Schema.Type.LONG)), null, null),
+          new Schema.Field(EXTERNAL_REFERENCE_IS_MANAGED, Schema.create(Schema.Type.BOOLEAN), null, null)
+      );
+      referenceField.setFields(referenceFields);
+
+      return Arrays.asList(
+          new Schema.Field(TYPE, Schema.createEnum("blob_storage_type", null, null, Arrays.asList("INLINE", "OUT_OF_LINE")), null, null),
+          new Schema.Field(INLINE_DATA_FIELD, AvroSchemaUtils.createNullableSchema(bytesField), null, Schema.Field.NULL_DEFAULT_VALUE),
+          new Schema.Field(EXTERNAL_REFERENCE, AvroSchemaUtils.createNullableSchema(referenceField), null, Schema.Field.NULL_DEFAULT_VALUE)
+      );
     }
   }
 

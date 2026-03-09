@@ -40,7 +40,7 @@ public class LogFileDTO {
   public static HoodieLogFile toHoodieLogFile(LogFileDTO dto) {
     StoragePathInfo pathInfo = FileStatusDTO.toStoragePathInfo(dto.fileStatus);
     HoodieLogFile logFile = (pathInfo == null) ? new HoodieLogFile(dto.pathStr) : new HoodieLogFile(pathInfo);
-    logFile.setFileLen(dto.fileLen);
+    logFile.setFileSize(dto.fileLen);
     return logFile;
   }
 

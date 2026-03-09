@@ -22,6 +22,7 @@ import org.apache.hudi.avro.model.HoodieClusteringGroup;
 import org.apache.hudi.avro.model.HoodieClusteringPlan;
 import org.apache.hudi.avro.model.HoodieClusteringStrategy;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.TableServiceType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -31,6 +32,7 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.IncrementalPartitionAwareStrategy;
+import org.apache.hudi.table.action.cluster.ClusteringFileSliceComparator;
 import org.apache.hudi.table.action.cluster.ClusteringPlanActionExecutor;
 import org.apache.hudi.table.action.cluster.ClusteringPlanPartitionFilter;
 import org.apache.hudi.util.Lazy;
@@ -39,6 +41,7 @@ import lombok.extern.slf4j.Slf4j;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -67,11 +70,9 @@ public abstract class PartitionAwareClusteringPlanStrategy<T,I,K,O> extends Clus
     List<Pair<List<FileSlice>, Integer>> fileSliceGroups = new ArrayList<>();
     List<FileSlice> currentGroup = new ArrayList<>();
 
-    // Sort fileSlices before dividing, which makes dividing more compact
+    Comparator<FileSlice> sortedFileSlicesComparator = ClusteringFileSliceComparator.buildComparator(writeConfig);
     List<FileSlice> sortedFileSlices = new ArrayList<>(fileSlices);
-    sortedFileSlices.sort((o1, o2) -> (int)
-        ((o2.getBaseFile().isPresent() ? o2.getBaseFile().get().getFileSize() : writeConfig.getParquetMaxFileSize())
-            - (o1.getBaseFile().isPresent() ? o1.getBaseFile().get().getFileSize() : writeConfig.getParquetMaxFileSize())));
+    sortedFileSlices.sort(sortedFileSlicesComparator);
 
     long totalSizeSoFar = 0;
     boolean partialScheduled = false;
@@ -116,6 +117,19 @@ public abstract class PartitionAwareClusteringPlanStrategy<T,I,K,O> extends Clus
             .setNumOutputFileGroups(fileSliceGroup.getRight())
             .setMetrics(buildMetrics(fileSliceGroup.getLeft()))
             .build()), partialScheduled);
+  }
+
+  /**
+   * Resolves the engine context to use for clustering plan generation.
+   * When {@code hoodie.clustering.plan.generation.use.local.engine.context} is enabled,
+   * returns a new {@link HoodieLocalEngineContext} to compute on the driver;
+   * otherwise returns the distributed engine context.
+   */
+  protected HoodieEngineContext resolveEngineContextForPlanGeneration() {
+    if (getWriteConfig().isClusteringPlanGenerationUseLocalEngineContext()) {
+      return new HoodieLocalEngineContext(getEngineContext().getStorageConf());
+    }
+    return getEngineContext();
   }
 
   /**
@@ -164,7 +178,9 @@ public abstract class PartitionAwareClusteringPlanStrategy<T,I,K,O> extends Clus
       return Option.empty();
     }
 
-    List<Pair<List<HoodieClusteringGroup>, String>> res = getEngineContext().map(partitionPaths, partitionPath -> {
+    final HoodieEngineContext engineContext = resolveEngineContextForPlanGeneration();
+
+    List<Pair<List<HoodieClusteringGroup>, String>> res = engineContext.map(partitionPaths, partitionPath -> {
       List<FileSlice> fileSlicesEligible = getFileSlicesEligibleForClustering(partitionPath).collect(Collectors.toList());
       Pair<Stream<HoodieClusteringGroup>, Boolean> groupPair = buildClusteringGroupsForPartition(partitionPath, fileSlicesEligible);
       List<HoodieClusteringGroup> clusteringGroupsPartition = groupPair.getLeft().collect(Collectors.toList());

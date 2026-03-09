@@ -34,7 +34,6 @@ public class HoodieCLIIntegrationTestBase extends HoodieCLIIntegrationTestHarnes
     initResources();
   }
 
-  @Override
   @AfterEach
   public void teardown() throws Exception {
     cleanupResources();

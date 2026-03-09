@@ -136,6 +136,12 @@ public class HoodieBloomIndex extends HoodieIndex<Object, Object> {
                                                                                     List<String> affectedPartitionPathList) {
     List<Pair<String, BloomIndexFileInfo>> fileInfoList = new ArrayList<>();
 
+    // Preload the partitions so that each parallel op does not have to perform listing.
+    // This is only needed when the embedded timeline server is not enabled, as TLS caches file listings.
+    if (!config.isEmbeddedTimelineServerEnabled()) {
+      affectedPartitionPathList.forEach(partition -> hoodieTable.getBaseFileOnlyView().getAllBaseFiles(partition));
+    }
+
     if (config.getBloomIndexPruneByRanges()) {
       // load column ranges from metadata index if column stats index is enabled and column_stats metadata partition is available
       if (config.getBloomIndexUseMetadata()

@@ -88,6 +88,11 @@ public class StreamReadMonitoringFunction
   private final long interval;
 
   /**
+   * Table to read from
+   */
+  private final String tableName;
+
+  /**
    * Flag saying whether the change log capture is enabled.
    */
   private final boolean cdcEnabled;
@@ -123,11 +128,13 @@ public class StreamReadMonitoringFunction
   private transient FlinkStreamReadMetrics readMetrics;
 
   public StreamReadMonitoringFunction(
+      String tableName,
       Configuration conf,
       Path path,
       RowType rowType,
       long maxCompactionMemoryInBytes,
       @Nullable PartitionPruners.PartitionPruner partitionPruner) {
+    this.tableName = tableName;
     this.conf = conf;
     this.path = path;
     this.interval = conf.get(FlinkOptions.READ_STREAMING_CHECK_INTERVAL);
@@ -326,7 +333,7 @@ public class StreamReadMonitoringFunction
 
   private void registerMetrics() {
     MetricGroup metrics = getRuntimeContext().getMetricGroup();
-    readMetrics = new FlinkStreamReadMetrics(metrics);
+    readMetrics = new FlinkStreamReadMetrics(metrics, tableName);
     readMetrics.registerMetrics();
   }
 

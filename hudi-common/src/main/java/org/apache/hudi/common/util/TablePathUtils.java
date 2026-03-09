@@ -24,17 +24,15 @@ import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.io.IOException;
 
 /**
  * Utils for table path.
  */
+@Slf4j
 public class TablePathUtils {
-
-  private static final Logger LOG = LoggerFactory.getLogger(TablePathUtils.class);
 
   private static boolean hasTableMetadataFolder(HoodieStorage storage, StoragePath path) {
     if (path == null) {
@@ -53,7 +51,7 @@ public class TablePathUtils {
   }
 
   public static Option<StoragePath> getTablePath(HoodieStorage storage, StoragePath path) throws HoodieException, IOException {
-    LOG.info("Getting table path from path : " + path);
+    log.info("Getting table path from path: {}", path);
 
     StoragePathInfo pathInfo = storage.getPathInfo(path);
     StoragePath directory =

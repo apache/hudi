@@ -20,7 +20,9 @@ package org.apache.hudi.source.split;
 
 import org.apache.hudi.common.util.Option;
 
-import org.apache.hudi.source.assign.HoodieSplitNumberAssigner;
+import org.apache.hudi.source.split.assign.HoodieSplitBucketAssigner;
+import org.apache.hudi.source.split.assign.HoodieSplitNumberAssigner;
+import org.apache.hudi.source.split.assign.DefaultHoodieSplitAssigner;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -123,7 +125,7 @@ public class TestDefaultHoodieSplitProvider {
 
     // Verify all states are UNASSIGNED
     for (HoodieSourceSplitState state : states) {
-      assertEquals(HoodieSourceSplitStatus.UNASSIGNED, state.status(),
+      assertEquals(HoodieSourceSplitStatus.UNASSIGNED, state.getStatus(),
           "All splits should have UNASSIGNED status");
     }
   }
@@ -140,8 +142,8 @@ public class TestDefaultHoodieSplitProvider {
     assertEquals(1, states.size(), "Should have 1 remaining split state");
 
     HoodieSourceSplitState state = states.iterator().next();
-    assertEquals(split2.splitId(), state.split().splitId(), "Remaining split should be split2");
-    assertEquals(HoodieSourceSplitStatus.UNASSIGNED, state.status(), "Split should be UNASSIGNED");
+    assertEquals(split2.splitId(), state.getSplit().splitId(), "Remaining split should be split2");
+    assertEquals(HoodieSourceSplitStatus.UNASSIGNED, state.getStatus(), "Split should be UNASSIGNED");
   }
 
   @Test
@@ -540,8 +542,8 @@ public class TestDefaultHoodieSplitProvider {
   @Test
   public void testGetNextWithDefaultAssigner() {
     // Test with DefaultHoodieSplitAssigner instead of NumberAssigner
-    org.apache.hudi.source.assign.DefaultHoodieSplitAssigner assigner =
-        new org.apache.hudi.source.assign.DefaultHoodieSplitAssigner(3);
+    DefaultHoodieSplitAssigner assigner =
+        new DefaultHoodieSplitAssigner(3);
     DefaultHoodieSplitProvider provider = new DefaultHoodieSplitProvider(assigner);
 
     List<HoodieSourceSplit> splits = new ArrayList<>();
@@ -561,8 +563,8 @@ public class TestDefaultHoodieSplitProvider {
   @Test
   public void testGetNextWithBucketAssigner() {
     // Test with HoodieSplitBucketAssigner
-    org.apache.hudi.source.assign.HoodieSplitBucketAssigner assigner =
-        new org.apache.hudi.source.assign.HoodieSplitBucketAssigner(4);
+    HoodieSplitBucketAssigner assigner =
+        new HoodieSplitBucketAssigner(4);
     DefaultHoodieSplitProvider provider = new DefaultHoodieSplitProvider(assigner);
 
     // Create splits with bucket-encoded file IDs
@@ -638,7 +640,8 @@ public class TestDefaultHoodieSplitProvider {
         "/table/path/partition1",
         "read_optimized",
         "20260126034717000",
-        fileId
+        fileId,
+        Option.empty()
     );
   }
 
@@ -651,7 +654,8 @@ public class TestDefaultHoodieSplitProvider {
         "/table/path/partition1",
         "read_optimized",
         latestCommit,
-        "file" + splitNum
+        "file" + splitNum,
+        Option.empty()
     );
   }
 
@@ -664,7 +668,8 @@ public class TestDefaultHoodieSplitProvider {
         "/table/path/partition1",
         "read_optimized",
         "2026012603471700" + splitNum,
-        fileId
+        fileId,
+        Option.empty()
     );
   }
 }

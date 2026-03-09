@@ -115,6 +115,9 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
   protected transient AsyncArchiveService asyncArchiveService;
 
   @Setter(AccessLevel.PROTECTED)
+  protected Option<Pair<HoodieInstant, Map<String, String>>> lastCompletedTxnAndMetadata = Option.empty();
+
+  @Setter(AccessLevel.PROTECTED)
   protected Set<String> pendingInflightAndRequestedInstants;
 
   protected BaseHoodieTableServiceClient(HoodieEngineContext context,
@@ -559,7 +562,8 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
     final HoodieInstant clusteringInstant = ClusteringUtils.getInflightClusteringInstant(clusteringCommitTime,
         table.getActiveTimeline(), table.getMetaClient().getInstantGenerator()).get();
     try {
-      this.txnManager.beginStateChange(Option.of(clusteringInstant), Option.empty());
+      this.txnManager.beginStateChange(Option.of(clusteringInstant),
+          lastCompletedTxnAndMetadata.isPresent() ? Option.of(lastCompletedTxnAndMetadata.get().getLeft()) : Option.empty());
 
       finalizeWrite(table, clusteringCommitTime, writeStats);
       // Only in some cases conflict resolution needs to be performed.
@@ -675,7 +679,10 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
       // so it is handled differently to avoid locking for planning.
       return scheduleCleaning(createTable(config, storageConf), providedInstantTime);
     }
-    txnManager.beginStateChange(Option.empty(), Option.empty());
+    Option<HoodieInstant> lastCompletedInstant = lastCompletedTxnAndMetadata.isPresent()
+        ? Option.of(lastCompletedTxnAndMetadata.get().getLeft())
+        : Option.empty();
+    txnManager.beginStateChange(Option.empty(), lastCompletedInstant);
     try {
       Option<String> option;
       HoodieTable<?, ?, ?, ?> table = createTable(config, storageConf);
@@ -890,9 +897,10 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
     }
     final Timer.Context timerContext = metrics.getArchiveCtx();
     int instantsToArchive = 0;
+    HoodieTimelineArchiver archiver = null;
     try {
       // We cannot have unbounded commit files. Archive commits if we have to archive.
-      HoodieTimelineArchiver archiver = TimelineArchivers.getInstance(table.getMetaClient().getTimelineLayoutVersion(), config, table);
+      archiver = TimelineArchivers.getInstance(table.getMetaClient().getTimelineLayoutVersion(), config, table);
       instantsToArchive = archiver.archiveIfRequired(context, true);
     } catch (IOException ioe) {
       throw new HoodieIOException("Failed to archive", ioe);
@@ -900,6 +908,10 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
       if (timerContext != null) {
         long durationMs = metrics.getDurationInMs(timerContext.stop());
         this.metrics.updateArchiveMetrics(durationMs, instantsToArchive);
+      }
+      // Emit additional archival metrics (OOM tracking, failure tracking, etc.)
+      if (archiver != null) {
+        this.metrics.updateArchivalMetrics(archiver.getMetrics());
       }
     }
   }
@@ -942,7 +954,7 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
       try {
         rollbackPlan = RollbackUtils.getRollbackPlan(metaClient, rollbackInstant);
       } catch (Exception e) {
-        if (rollbackInstant.isRequested()) {
+        if (!config.getWriteConcurrencyMode().supportsMultiWriter() && rollbackInstant.isRequested()) {
           log.warn("Fetching rollback plan failed for {}, deleting the plan since it's in REQUESTED state", rollbackInstant, e);
           try {
             metaClient.getActiveTimeline().deletePending(rollbackInstant);
@@ -1195,6 +1207,7 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
         throw new HoodieRollbackException("Failed to rollback " + config.getBasePath() + " commits " + commitInstantTime);
       }
     } catch (Exception e) {
+      metrics.emitRollbackFailure(e.getClass().getSimpleName());
       throw new HoodieRollbackException("Failed to rollback " + config.getBasePath() + " commits " + commitInstantTime, e);
     }
   }

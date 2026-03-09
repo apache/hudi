@@ -37,6 +37,8 @@ import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.config.HoodieWriteConfig;
+
+import static org.apache.hudi.config.HoodieWriteConfig.APPLICATION_ID;
 import org.apache.hudi.exception.HoodieCommitException;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
@@ -111,6 +113,7 @@ public abstract class BaseHoodieClient implements Serializable, AutoCloseable {
     this.context = context;
     this.basePath = clientConfig.getBasePath();
     this.config = clientConfig;
+    this.config.setValue(APPLICATION_ID, context.getApplicationId());
     this.timelineServer = timelineServer;
     shouldStopTimelineServer = !timelineServer.isPresent();
     this.heartbeatClient = new HoodieHeartbeatClient(storage, this.basePath,

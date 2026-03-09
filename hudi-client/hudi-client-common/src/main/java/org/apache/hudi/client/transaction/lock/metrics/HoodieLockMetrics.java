@@ -103,9 +103,9 @@ public class HoodieLockMetrics {
     if (registry.getMetrics().get(metricName) == null) {
       synchronized (REGISTRY_LOCK) {
         if (registry.getMetrics().get(metricName) == null) {
-          lockDuration = new Timer(new SlidingWindowReservoir(keepLastNtimes));
-          registry.register(metricName, lockDuration);
-          return lockDuration;
+          Timer timer = new Timer(new SlidingWindowReservoir(keepLastNtimes));
+          registry.register(metricName, timer);
+          return timer;
         }
       }
     }

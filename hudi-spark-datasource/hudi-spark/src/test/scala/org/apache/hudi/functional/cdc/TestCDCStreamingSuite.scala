@@ -166,7 +166,7 @@ class TestCDCStreamingSuite extends HoodieCDCTestBase with SparkAdapterSupport {
     assert(detailOutput1.where("country = 'US'").count() == 5)
     val ucTs1 = userToCountryMetaClient.reloadActiveTimeline().lastInstant.get.requestedTime
     val ucDdcData1 = cdcDataFrame(userToCountryTblPath, (ucTs1.toLong - 1).toString, null)
-    ucDdcData1.show(false)
+    ucDdcData1.collect()
     assertCDCOpCnt(ucDdcData1, 1, 2, 0)
 
     // check the final data of country_to_population_tbl for batch1
@@ -189,7 +189,7 @@ class TestCDCStreamingSuite extends HoodieCDCTestBase with SparkAdapterSupport {
     // check the change data about user_to_country_tbl for batch2
     val ts2 = userToCountryMetaClient.reloadActiveTimeline().lastInstant.get.requestedTime
     val cdcData2 = cdcDataFrame(userToCountryTblPath, (ts2.toLong - 1).toString, null)
-    cdcData2.show(false)
+    cdcData2.collect()
     assertCDCOpCnt(cdcData2, 2, 1, 0)
 
     // check the final data of country_to_population_tbl for batch2

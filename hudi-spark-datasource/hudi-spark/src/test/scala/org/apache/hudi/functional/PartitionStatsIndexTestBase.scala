@@ -93,7 +93,6 @@ class PartitionStatsIndexTestBase extends HoodieStatsIndexTestBase {
       .option(OPERATION.key, operation)
       .mode(saveMode)
       .save(basePath)
-    latestBatchDf.show(false)
     val deletedDf = calculateMergedDf(latestBatchDf, operation)
     deletedDf.cache()
     if (validate) {

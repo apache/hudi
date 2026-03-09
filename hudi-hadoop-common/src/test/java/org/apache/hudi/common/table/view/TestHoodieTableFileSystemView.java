@@ -927,7 +927,7 @@ public class TestHoodieTableFileSystemView extends HoodieCommonTestHarness {
       try (IndexWriter writer = new HFileBootstrapIndex(metaClient).createWriter(BOOTSTRAP_SOURCE_PATH)) {
         writer.begin();
         BootstrapFileMapping mapping = new BootstrapFileMapping(BOOTSTRAP_SOURCE_PATH, partitionPath,
-            partitionPath, srcFileStatus, fileId);
+            srcFileStatus, partitionPath, fileId);
         List<BootstrapFileMapping> b = new ArrayList<>();
         b.add(mapping);
         writer.appendNextPartition(partitionPath, b);

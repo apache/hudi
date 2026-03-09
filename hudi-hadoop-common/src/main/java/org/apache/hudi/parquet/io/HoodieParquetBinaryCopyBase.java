@@ -27,14 +27,11 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 import org.apache.parquet.bytes.BytesInput;
 import org.apache.parquet.column.ColumnDescriptor;
-import org.apache.parquet.column.ColumnReader;
 import org.apache.parquet.column.ColumnWriteStore;
 import org.apache.parquet.column.ColumnWriter;
 import org.apache.parquet.column.EncodingStats;
 import org.apache.parquet.column.ParquetProperties;
-import org.apache.parquet.column.impl.ColumnReadStoreImpl;
 import org.apache.parquet.column.page.DictionaryPage;
-import org.apache.parquet.column.page.PageReadStore;
 import org.apache.parquet.column.statistics.Statistics;
 import org.apache.parquet.column.values.bloomfilter.BloomFilter;
 import org.apache.parquet.compression.CompressionCodecFactory;
@@ -60,9 +57,6 @@ import org.apache.parquet.internal.column.columnindex.OffsetIndex;
 import org.apache.parquet.io.InvalidRecordException;
 import org.apache.parquet.io.ParquetEncodingException;
 import org.apache.parquet.io.api.Binary;
-import org.apache.parquet.io.api.Converter;
-import org.apache.parquet.io.api.GroupConverter;
-import org.apache.parquet.io.api.PrimitiveConverter;
 import org.apache.parquet.schema.GroupType;
 import org.apache.parquet.schema.MessageType;
 import org.apache.parquet.schema.PrimitiveType;
@@ -87,10 +81,10 @@ import static org.apache.parquet.schema.OriginalType.MAP;
 /**
  * Copy from parquet-hadoop 1.13.1 org.apache.parquet.hadoop.rewrite.ParquetRewriter
  * The reason we did not extends ParquetRewriter is
- *    1. we need to control copy operation at block level
- *    2. We need to handle schema evolution
- *    3. We need to combine file metas added by hudi, such as 'hoodie_min_record_key'/'hoodie_max_record_key'/'org.apache.hudi.bloomfilter'
- *    4. We need to overwrite column '_hoodie_file_name' with the output file name
+ * 1. we need to control copy operation at block level
+ * 2. We need to handle schema evolution
+ * 3. We need to combine file metas added by hudi, such as 'hoodie_min_record_key'/'hoodie_max_record_key'/'org.apache.hudi.bloomfilter'
+ * 4. We need to overwrite column '_hoodie_file_name' with the output file name
  */
 @Slf4j
 public abstract class HoodieParquetBinaryCopyBase implements Closeable {
@@ -101,6 +95,9 @@ public abstract class HoodieParquetBinaryCopyBase implements Closeable {
   private final int pageBufferSize = ParquetProperties.DEFAULT_PAGE_SIZE * 2;
 
   private final byte[] pageBuffer = new byte[pageBufferSize];
+
+  // Reusable buffer for reading entire row groups
+  private byte[] reusableBlockBuffer = null;
 
   private CompressionCodecName newCodecName = null;
 
@@ -118,14 +115,14 @@ public abstract class HoodieParquetBinaryCopyBase implements Closeable {
   protected MessageType requiredSchema = null;
 
   protected Configuration conf;
-  
+
   // Flag to control schema evolution behavior
   protected Boolean schemaEvolutionEnabled = null;
 
   public HoodieParquetBinaryCopyBase(Configuration conf) {
     this.conf = conf;
   }
-  
+
   public void setSchemaEvolutionEnabled(boolean enabled) {
     this.schemaEvolutionEnabled = enabled;
   }
@@ -138,15 +135,8 @@ public abstract class HoodieParquetBinaryCopyBase implements Closeable {
       this.requiredSchema = schema;
       this.newCodecName = newCodecName;
       ParquetFileWriter.Mode writerMode = ParquetFileWriter.Mode.CREATE;
-      writer = new ParquetFileWriter(
-          HadoopOutputFile.fromPath(outPutFile, conf),
-          schema,
-          writerMode,
-          DEFAULT_BLOCK_SIZE,
-          MAX_PADDING_SIZE_DEFAULT,
-          DEFAULT_COLUMN_INDEX_TRUNCATE_LENGTH,
-          DEFAULT_STATISTICS_TRUNCATE_LENGTH,
-          ParquetProperties.DEFAULT_PAGE_WRITE_CHECKSUM_ENABLED);
+      writer = new ParquetFileWriter(HadoopOutputFile.fromPath(outPutFile, conf), schema, writerMode, DEFAULT_BLOCK_SIZE, MAX_PADDING_SIZE_DEFAULT, DEFAULT_COLUMN_INDEX_TRUNCATE_LENGTH,
+          DEFAULT_STATISTICS_TRUNCATE_LENGTH, ParquetProperties.DEFAULT_PAGE_WRITE_CHECKSUM_ENABLED);
       writer.start();
       log.info("init writer ");
     } catch (Exception e) {
@@ -162,40 +152,64 @@ public abstract class HoodieParquetBinaryCopyBase implements Closeable {
     extraMetaData.remove("parquet.avro.schema");
     extraMetaData.remove("org.apache.spark.sql.parquet.row.metadata");
     writer.end(extraMetaData);
+    // Release the buffer
+    reusableBlockBuffer = null;
   }
 
   protected abstract Map<String, String> finalizeMetadata();
 
-  public void processBlocksFromReader(
-      CompressionConverter.TransParquetFileReader reader,
-      PageReadStore store,
-      BlockMetaData block,
-      String originalCreatedBy) throws IOException {
-    if (store == null) {
-      log.info("stores is empty");
-      return;
+  public void processBlocksFromReader(CompressionConverter.TransParquetFileReader reader, BlockMetaData block, String originalCreatedBy) throws IOException {
+
+    totalRecordsWritten += block.getRowCount();
+    Map<ColumnPath, ColumnDescriptor> descriptorsMap = requiredSchema.getColumns().stream().collect(Collectors.toMap(x -> ColumnPath.get(x.getPath()), x -> x));
+
+    writer.startBlock(block.getRowCount());
+    List<ColumnChunkMetaData> columnsInOrder = block.getColumns();
+
+    // Optimization: Read the entire block into memory to avoid multiple S3 requests
+    long minPos = Long.MAX_VALUE;
+    long maxPos = Long.MIN_VALUE;
+    for (ColumnChunkMetaData chunk : columnsInOrder) {
+      long start = chunk.getStartingPos();
+      // Check if dictionary page exists and is before the data pages
+      if (chunk.getDictionaryPageOffset() > 0 && chunk.getDictionaryPageOffset() < start) {
+        start = chunk.getDictionaryPageOffset();
+      }
+      minPos = Math.min(minPos, start);
+      maxPos = Math.max(maxPos, start + chunk.getTotalSize());
+    }
+    long length = maxPos - minPos;
+
+    ByteArraySeekableInputStream blockStream = null;
+    if (length < Integer.MAX_VALUE) {
+      try {
+        int requiredSize = (int) length;
+        if (reusableBlockBuffer == null || reusableBlockBuffer.length < requiredSize) {
+          // Allocate slightly more than needed to avoid frequent reallocations for small increments
+          // But cap it at some reasonable max if needed, though here we trust the row group size
+          int newSize = requiredSize + (requiredSize / 4); // 25% padding
+          // Ensure we don't overflow integer max value
+          if (newSize < 0) {
+            newSize = requiredSize;
+          }
+          reusableBlockBuffer = new byte[newSize];
+        }
+
+        reader.setStreamPosition(minPos);
+        reader.blockRead(reusableBlockBuffer, 0, requiredSize);
+        blockStream = new ByteArraySeekableInputStream(reusableBlockBuffer, minPos, requiredSize);
+      } catch (Exception e) {
+        log.warn("Failed to read block into memory, falling back to sequential reads", e);
+      }
     }
 
-    totalRecordsWritten += store.getRowCount();
-    ColumnReadStoreImpl crStore = new ColumnReadStoreImpl(
-        store,
-        new DummyGroupConverter(),
-        requiredSchema,
-        originalCreatedBy);
-    Map<ColumnPath, ColumnDescriptor> descriptorsMap = requiredSchema.getColumns()
-        .stream()
-        .collect(Collectors.toMap(x -> ColumnPath.get(x.getPath()), x -> x));
-
-    writer.startBlock(store.getRowCount());
-    List<ColumnChunkMetaData> columnsInOrder = block.getColumns();
     List<ColumnDescriptor> converted = new ArrayList<>();
 
     for (int i = 0; i < columnsInOrder.size(); i++) {
       ColumnChunkMetaData chunk = columnsInOrder.get(i);
       ColumnDescriptor descriptor = descriptorsMap.get(chunk.getPath());
       if (schemaEvolutionEnabled == null) {
-        throw new HoodieException("The variable 'schemaEvolutionEnabled' is supposed to be set in "
-                + "binaryCopy() before calling this method processBlocksFromReader");
+        throw new HoodieException("The variable 'schemaEvolutionEnabled' is supposed to be set in " + "binaryCopy() before calling this method processBlocksFromReader");
       }
 
       // resolve the conflict schema between avro parquet write support and spark native parquet write support
@@ -205,18 +219,9 @@ public abstract class HoodieParquetBinaryCopyBase implements Closeable {
         path = Arrays.copyOf(path, path.length);
         if (convertLegacy3LevelArray(path) || convertLegacyMap(path)) {
           ColumnPath newPath = ColumnPath.get(path);
-          ColumnChunkMetaData newChunk = ColumnChunkMetaData.get(
-              newPath,
-              chunk.getPrimitiveType(),
-              chunk.getCodec(),
-              chunk.getEncodingStats(),
-              chunk.getEncodings(),
-              chunk.getStatistics(),
-              chunk.getFirstDataPageOffset(),
-              chunk.getDictionaryPageOffset(),
-              chunk.getValueCount(),
-              chunk.getTotalSize(),
-              chunk.getTotalUncompressedSize());
+          ColumnChunkMetaData newChunk =
+              ColumnChunkMetaData.get(newPath, chunk.getPrimitiveType(), chunk.getCodec(), chunk.getEncodingStats(), chunk.getEncodings(), chunk.getStatistics(), chunk.getFirstDataPageOffset(),
+                  chunk.getDictionaryPageOffset(), chunk.getValueCount(), chunk.getTotalSize(), chunk.getTotalUncompressedSize());
           newChunk.setRowGroupOrdinal(chunk.getRowGroupOrdinal());
           newChunk.setBloomFilterOffset(chunk.getBloomFilterOffset());
           newChunk.setColumnIndexReference(chunk.getColumnIndexReference());
@@ -232,33 +237,27 @@ public abstract class HoodieParquetBinaryCopyBase implements Closeable {
         continue;
       }
 
-      reader.setStreamPosition(chunk.getStartingPos());
       CompressionCodecName newCodecName = this.newCodecName == null ? chunk.getCodec() : this.newCodecName;
 
       if (maskColumns != null && maskColumns.containsKey(chunk.getPath())) {
         // Check if this is NOT the FILENAME_METADATA_FIELD and schema evolution is disabled
         if (!chunk.getPath().toDotString().equals(HoodieRecord.FILENAME_METADATA_FIELD)) {
           if (!schemaEvolutionEnabled) {
-            throw new HoodieException("Column masking for '" + chunk.getPath().toDotString() 
-                + "' requires schema evolution to be enabled. "
+            throw new HoodieException("Column masking for '" + chunk.getPath().toDotString() + "' requires schema evolution to be enabled. "
                 + "Set 'hoodie.clustering.plan.strategy.binary.copy.schema.evolution.enable' to true.");
           }
         }
         // Mask column and compress it again.
         Binary maskValue = maskColumns.get(chunk.getPath());
         if (maskValue != null) {
-          maskColumn(
-              descriptor,
-              chunk,
-              crStore,
-              writer,
-              requiredSchema,
-              newCodecName,
-              maskValue);
+          maskColumn(descriptor, chunk, writer, requiredSchema, newCodecName, maskValue);
         }
       } else if (this.newCodecName != null && this.newCodecName != chunk.getCodec()) {
         // Translate compression and/or encryption
-        writer.startColumn(descriptor, crStore.getColumnReader(descriptor).getTotalValueCount(), newCodecName);
+        writer.startColumn(descriptor, chunk.getValueCount(), newCodecName);
+        // processChunk uses reader internally and will seek it.
+        // Since we read the block into memory, the reader's stream is at the end of the block.
+        // processChunk will seek it back, which is fine.
         processChunk(reader, chunk, newCodecName, false, originalCreatedBy);
         writer.endColumn();
       } else {
@@ -266,7 +265,23 @@ public abstract class HoodieParquetBinaryCopyBase implements Closeable {
         BloomFilter bloomFilter = reader.readBloomFilter(chunk);
         ColumnIndex columnIndex = reader.readColumnIndex(chunk);
         OffsetIndex offsetIndex = reader.readOffsetIndex(chunk);
-        writer.appendColumnChunk(descriptor, reader.getStream(), chunk, bloomFilter, columnIndex, offsetIndex);
+
+        // Calculate the correct start position (accounting for Dictionary Page)
+        long start = chunk.getStartingPos();
+        if (chunk.getDictionaryPageOffset() > 0 && chunk.getDictionaryPageOffset() < start) {
+          start = chunk.getDictionaryPageOffset();
+        }
+
+        org.apache.parquet.io.SeekableInputStream inputStream;
+        if (blockStream != null) {
+          blockStream.seek(start);
+          inputStream = blockStream;
+        } else {
+          reader.setStreamPosition(start);
+          inputStream = reader.getStream();
+        }
+
+        writer.appendColumnChunk(descriptor, inputStream, chunk, bloomFilter, columnIndex, offsetIndex);
       }
 
     }
@@ -275,40 +290,25 @@ public abstract class HoodieParquetBinaryCopyBase implements Closeable {
     ParquetMetadata meta = reader.getFooter();
     ColumnChunkMetaData columnChunkMetaData = columnsInOrder.get(0);
     EncodingStats encodingStats = columnChunkMetaData.getEncodingStats();
-    List<ColumnDescriptor> missedColumns = missedColumns(requiredSchema, meta.getFileMetaData().getSchema())
-        .stream()
-        .filter(c -> !converted.contains(c))
-        .collect(Collectors.toList());
-    
+    List<ColumnDescriptor> missedColumns = missedColumns(requiredSchema, meta.getFileMetaData().getSchema()).stream().filter(c -> !converted.contains(c)).collect(Collectors.toList());
+
     // If schema evolution is disabled and there are missing columns, throw an exception
     if (!schemaEvolutionEnabled && !missedColumns.isEmpty()) {
-      String missingColumnsStr = missedColumns.stream()
-          .map(c -> String.join(".", c.getPath()))
-          .collect(Collectors.joining(", "));
-      throw new HoodieException("Schema evolution is disabled but found missing columns in input file: " 
-          + missingColumnsStr + ". All input files must have the same schema when schema evolution is disabled.");
+      String missingColumnsStr = missedColumns.stream().map(c -> String.join(".", c.getPath())).collect(Collectors.joining(", "));
+      throw new HoodieException(
+          "Schema evolution is disabled but found missing columns in input file: " + missingColumnsStr + ". All input files must have the same schema when schema evolution is disabled.");
     }
-    
+
     for (ColumnDescriptor descriptor : missedColumns) {
-      addNullColumn(
-          descriptor,
-          store.getRowCount(),
-          encodingStats,
-          writer,
-          requiredSchema,
-          newCodecName);
+      addNullColumn(descriptor, block.getRowCount(), encodingStats, writer, requiredSchema, newCodecName);
     }
 
     writer.endBlock();
     numBlocksRewritten++;
   }
 
-  private void processChunk(
-      CompressionConverter.TransParquetFileReader reader,
-      ColumnChunkMetaData chunk,
-      CompressionCodecName newCodecName,
-      boolean encryptColumn,
-      String originalCreatedBy) throws IOException {
+  private void processChunk(CompressionConverter.TransParquetFileReader reader, ColumnChunkMetaData chunk, CompressionCodecName newCodecName, boolean encryptColumn, String originalCreatedBy)
+      throws IOException {
     CompressionCodecFactory codecFactory = HadoopCodecs.newFactory(0);
     CompressionCodecFactory.BytesInputDecompressor decompressor = null;
     CompressionCodecFactory.BytesInputCompressor compressor = null;
@@ -324,7 +324,6 @@ public abstract class HoodieParquetBinaryCopyBase implements Closeable {
     byte[] dictPageAAD = null;
     byte[] dataPageAAD = null;
     byte[] dictPageHeaderAAD = null;
-    byte[] dataPageHeaderAAD = null;
 
     ColumnIndex columnIndex = reader.readColumnIndex(chunk);
     OffsetIndex offsetIndex = reader.readOffsetIndex(chunk);
@@ -347,55 +346,23 @@ public abstract class HoodieParquetBinaryCopyBase implements Closeable {
           }
           //No quickUpdatePageAAD needed for dictionary page
           DictionaryPageHeader dictPageHeader = pageHeader.dictionary_page_header;
-          pageLoad = processPageLoad(reader,
-              true,
-              compressor,
-              decompressor,
-              pageHeader.getCompressed_page_size(),
-              pageHeader.getUncompressed_page_size(),
-              encryptColumn,
-              dataEncryptor,
-              dictPageAAD);
-          writer.writeDictionaryPage(new DictionaryPage(BytesInput.from(pageLoad),
-                  pageHeader.getUncompressed_page_size(),
-                  dictPageHeader.getNum_values(),
-                  converter.getEncoding(dictPageHeader.getEncoding())),
-              metaEncryptor,
+          pageLoad = processPageLoad(reader, true, compressor, decompressor, pageHeader.getCompressed_page_size(), pageHeader.getUncompressed_page_size(), encryptColumn, dataEncryptor, dictPageAAD);
+          writer.writeDictionaryPage(
+              new DictionaryPage(BytesInput.from(pageLoad), pageHeader.getUncompressed_page_size(), dictPageHeader.getNum_values(), converter.getEncoding(dictPageHeader.getEncoding())), metaEncryptor,
               dictPageHeaderAAD);
           break;
         case DATA_PAGE:
           DataPageHeader headerV1 = pageHeader.data_page_header;
-          pageLoad = processPageLoad(reader,
-              true,
-              compressor,
-              decompressor,
-              pageHeader.getCompressed_page_size(),
-              pageHeader.getUncompressed_page_size(),
-              encryptColumn,
-              dataEncryptor,
-              dataPageAAD);
-          statistics = convertStatistics(
-              originalCreatedBy, chunk.getPrimitiveType(), headerV1.getStatistics(), columnIndex, pageOrdinal, converter);
+          pageLoad = processPageLoad(reader, true, compressor, decompressor, pageHeader.getCompressed_page_size(), pageHeader.getUncompressed_page_size(), encryptColumn, dataEncryptor, dataPageAAD);
+          statistics = convertStatistics(originalCreatedBy, chunk.getPrimitiveType(), headerV1.getStatistics(), columnIndex, pageOrdinal, converter);
           readValues += headerV1.getNum_values();
           if (offsetIndex != null) {
-            long rowCount = 1 + offsetIndex.getLastRowIndex(
-                pageOrdinal, totalChunkValues) - offsetIndex.getFirstRowIndex(pageOrdinal);
-            writer.writeDataPage(toIntWithCheck(headerV1.getNum_values()),
-                pageHeader.getUncompressed_page_size(),
-                BytesInput.from(pageLoad),
-                statistics,
-                toIntWithCheck(rowCount),
-                converter.getEncoding(headerV1.getRepetition_level_encoding()),
-                converter.getEncoding(headerV1.getDefinition_level_encoding()),
-                converter.getEncoding(headerV1.getEncoding()));
+            long rowCount = 1 + offsetIndex.getLastRowIndex(pageOrdinal, totalChunkValues) - offsetIndex.getFirstRowIndex(pageOrdinal);
+            writer.writeDataPage(toIntWithCheck(headerV1.getNum_values()), pageHeader.getUncompressed_page_size(), BytesInput.from(pageLoad), statistics, toIntWithCheck(rowCount),
+                converter.getEncoding(headerV1.getRepetition_level_encoding()), converter.getEncoding(headerV1.getDefinition_level_encoding()), converter.getEncoding(headerV1.getEncoding()));
           } else {
-            writer.writeDataPage(toIntWithCheck(headerV1.getNum_values()),
-                pageHeader.getUncompressed_page_size(),
-                BytesInput.from(pageLoad),
-                statistics,
-                converter.getEncoding(headerV1.getRepetition_level_encoding()),
-                converter.getEncoding(headerV1.getDefinition_level_encoding()),
-                converter.getEncoding(headerV1.getEncoding()));
+            writer.writeDataPage(toIntWithCheck(headerV1.getNum_values()), pageHeader.getUncompressed_page_size(), BytesInput.from(pageLoad), statistics,
+                converter.getEncoding(headerV1.getRepetition_level_encoding()), converter.getEncoding(headerV1.getDefinition_level_encoding()), converter.getEncoding(headerV1.getEncoding()));
           }
           pageOrdinal++;
           break;
@@ -407,28 +374,11 @@ public abstract class HoodieParquetBinaryCopyBase implements Closeable {
           BytesInput dlLevels = readBlockAllocate(dlLength, reader);
           int payLoadLength = pageHeader.getCompressed_page_size() - rlLength - dlLength;
           int rawDataLength = pageHeader.getUncompressed_page_size() - rlLength - dlLength;
-          pageLoad = processPageLoad(
-              reader,
-              headerV2.is_compressed,
-              compressor,
-              decompressor,
-              payLoadLength,
-              rawDataLength,
-              encryptColumn,
-              dataEncryptor,
-              dataPageAAD);
-          statistics = convertStatistics(
-              originalCreatedBy, chunk.getPrimitiveType(), headerV2.getStatistics(), columnIndex, pageOrdinal, converter);
+          pageLoad = processPageLoad(reader, headerV2.is_compressed, compressor, decompressor, payLoadLength, rawDataLength, encryptColumn, dataEncryptor, dataPageAAD);
+          statistics = convertStatistics(originalCreatedBy, chunk.getPrimitiveType(), headerV2.getStatistics(), columnIndex, pageOrdinal, converter);
           readValues += headerV2.getNum_values();
-          writer.writeDataPageV2(headerV2.getNum_rows(),
-              headerV2.getNum_nulls(),
-              headerV2.getNum_values(),
-              rlLevels,
-              dlLevels,
-              converter.getEncoding(headerV2.getEncoding()),
-              BytesInput.from(pageLoad),
-              rawDataLength,
-              statistics);
+          writer.writeDataPageV2(headerV2.getNum_rows(), headerV2.getNum_nulls(), headerV2.getNum_values(), rlLevels, dlLevels, converter.getEncoding(headerV2.getEncoding()),
+              BytesInput.from(pageLoad), rawDataLength, statistics);
           pageOrdinal++;
           break;
         default:
@@ -438,24 +388,16 @@ public abstract class HoodieParquetBinaryCopyBase implements Closeable {
     }
   }
 
-  private Statistics convertStatistics(
-      String createdBy,
-      PrimitiveType type,
-      org.apache.parquet.format.Statistics pageStatistics,
-      ColumnIndex columnIndex,
-      int pageIndex,
-      ParquetMetadataConverter converter) throws IOException {
+  private Statistics convertStatistics(String createdBy, PrimitiveType type, org.apache.parquet.format.Statistics pageStatistics, ColumnIndex columnIndex, int pageIndex,
+                                       ParquetMetadataConverter converter) throws IOException {
     if (columnIndex != null) {
       if (columnIndex.getNullPages() == null) {
-        throw new IOException("columnIndex has null variable 'nullPages' which indicates corrupted data for type: "
-            + type.getName());
+        throw new IOException("columnIndex has null variable 'nullPages' which indicates corrupted data for type: " + type.getName());
       }
       if (pageIndex > columnIndex.getNullPages().size()) {
-        throw new IOException("There are more pages " + pageIndex + " found in the column than in the columnIndex "
-            + columnIndex.getNullPages().size());
+        throw new IOException("There are more pages " + pageIndex + " found in the column than in the columnIndex " + columnIndex.getNullPages().size());
       }
-      Statistics.Builder statsBuilder =
-          Statistics.getBuilderForReading(type);
+      Statistics.Builder statsBuilder = Statistics.getBuilderForReading(type);
       statsBuilder.withNumNulls(columnIndex.getNullCounts().get(pageIndex));
 
       if (!columnIndex.getNullPages().get(pageIndex)) {
@@ -470,16 +412,9 @@ public abstract class HoodieParquetBinaryCopyBase implements Closeable {
     }
   }
 
-  private byte[] processPageLoad(
-      CompressionConverter.TransParquetFileReader reader,
-      boolean isCompressed,
-      CompressionCodecFactory.BytesInputCompressor compressor,
-      CompressionCodecFactory.BytesInputDecompressor decompressor,
-      int payloadLength,
-      int rawDataLength,
-      boolean encrypt,
-      BlockCipher.Encryptor dataEncryptor,
-      byte[] add) throws IOException {
+  private byte[] processPageLoad(CompressionConverter.TransParquetFileReader reader, boolean isCompressed, CompressionCodecFactory.BytesInputCompressor compressor,
+                                 CompressionCodecFactory.BytesInputDecompressor decompressor, int payloadLength, int rawDataLength, boolean encrypt, BlockCipher.Encryptor dataEncryptor, byte[] add)
+      throws IOException {
     BytesInput data = readBlock(payloadLength, reader);
 
     // recompress page load
@@ -522,37 +457,29 @@ public abstract class HoodieParquetBinaryCopyBase implements Closeable {
     return (int) size;
   }
 
-  private void maskColumn(
-      ColumnDescriptor descriptor,
-      ColumnChunkMetaData chunk,
-      ColumnReadStoreImpl crStore,
-      ParquetFileWriter writer,
-      MessageType schema,
-      CompressionCodecName newCodecName,
-      Binary maskValue) throws IOException {
+  private void maskColumn(ColumnDescriptor descriptor, ColumnChunkMetaData chunk, ParquetFileWriter writer, MessageType schema, CompressionCodecName newCodecName,
+                          Binary maskValue) throws IOException {
 
     long totalChunkValues = chunk.getValueCount();
-    ColumnReader cReader = crStore.getColumnReader(descriptor);
 
-    ParquetProperties.WriterVersion writerVersion = chunk.getEncodingStats().usesV2Pages()
-        ? ParquetProperties.WriterVersion.PARQUET_2_0 : ParquetProperties.WriterVersion.PARQUET_1_0;
-    ParquetProperties props = ParquetProperties.builder()
-        .withWriterVersion(writerVersion)
-        .build();
+    ParquetProperties.WriterVersion writerVersion = chunk.getEncodingStats().usesV2Pages() ? ParquetProperties.WriterVersion.PARQUET_2_0 : ParquetProperties.WriterVersion.PARQUET_1_0;
+    ParquetProperties props = ParquetProperties.builder().withWriterVersion(writerVersion).build();
     CodecFactory codecFactory = new CodecFactory(new Configuration(), props.getPageSizeThreshold());
     CodecFactory.BytesCompressor compressor = codecFactory.getCompressor(newCodecName);
 
     // Create new schema that only has the current column
     MessageType newSchema = newSchema(schema, descriptor);
-    ColumnChunkPageWriteStore cPageStore = new ColumnChunkPageWriteStore(
-        compressor, newSchema, props.getAllocator(), props.getColumnIndexTruncateLength(),
-        props.getPageWriteChecksumEnabled(), null, numBlocksRewritten);
+    ColumnChunkPageWriteStore cPageStore =
+        new ColumnChunkPageWriteStore(compressor, newSchema, props.getAllocator(), props.getColumnIndexTruncateLength(), props.getPageWriteChecksumEnabled(), null, numBlocksRewritten);
     ColumnWriteStore cStore = props.newColumnWriteStore(newSchema, cPageStore);
     ColumnWriter cWriter = cStore.getColumnWriter(descriptor);
 
+    // For masked column, we assume it's present (DL = max) and not repeated (RL = 0)
+    // This is valid for _hoodie_file_name which is a top-level field.
+    int rlvl = 0;
+    int dlvl = descriptor.getMaxDefinitionLevel();
+
     for (int i = 0; i < totalChunkValues; i++) {
-      int rlvl = cReader.getCurrentRepetitionLevel();
-      int dlvl = cReader.getCurrentDefinitionLevel();
       cWriter.write(maskValue, rlvl, dlvl);
       cStore.endRecord();
     }
@@ -564,32 +491,18 @@ public abstract class HoodieParquetBinaryCopyBase implements Closeable {
     cWriter.close();
   }
 
-  private void addNullColumn(
-      ColumnDescriptor descriptor,
-      long totalChunkValues,
-      EncodingStats encodingStats,
-      ParquetFileWriter writer,
-      MessageType schema,
-      CompressionCodecName newCodecName) throws IOException {
+  private void addNullColumn(ColumnDescriptor descriptor, long totalChunkValues, EncodingStats encodingStats, ParquetFileWriter writer, MessageType schema, CompressionCodecName newCodecName)
+      throws IOException {
 
-    ParquetProperties.WriterVersion writerVersion = encodingStats.usesV2Pages()
-        ? ParquetProperties.WriterVersion.PARQUET_2_0 : ParquetProperties.WriterVersion.PARQUET_1_0;
-    ParquetProperties props = ParquetProperties.builder()
-        .withWriterVersion(writerVersion)
-        .build();
+    ParquetProperties.WriterVersion writerVersion = encodingStats.usesV2Pages() ? ParquetProperties.WriterVersion.PARQUET_2_0 : ParquetProperties.WriterVersion.PARQUET_1_0;
+    ParquetProperties props = ParquetProperties.builder().withWriterVersion(writerVersion).build();
     CodecFactory codecFactory = new CodecFactory(new Configuration(), props.getPageSizeThreshold());
     CodecFactory.BytesCompressor compressor = codecFactory.getCompressor(newCodecName);
 
     // Create new schema that only has the current column
     MessageType newSchema = newSchema(schema, descriptor);
-    ColumnChunkPageWriteStore cPageStore = new ColumnChunkPageWriteStore(
-        compressor,
-        newSchema,
-        props.getAllocator(),
-        props.getColumnIndexTruncateLength(),
-        props.getPageWriteChecksumEnabled(),
-        null,
-        numBlocksRewritten);
+    ColumnChunkPageWriteStore cPageStore =
+        new ColumnChunkPageWriteStore(compressor, newSchema, props.getAllocator(), props.getColumnIndexTruncateLength(), props.getPageWriteChecksumEnabled(), null, numBlocksRewritten);
     ColumnWriteStore cStore = props.newColumnWriteStore(newSchema, cPageStore);
     ColumnWriter cWriter = cStore.getColumnWriter(descriptor);
     int dMax = descriptor.getMaxDefinitionLevel();
@@ -600,8 +513,7 @@ public abstract class HoodieParquetBinaryCopyBase implements Closeable {
       if (dlvl == dMax) {
         // since we checked ether optional or repeated, dlvl should be > 0
         if (dlvl == 0) {
-          throw new IOException("definition level is detected to be 0 for column "
-              + Arrays.stream(descriptor.getPath()).collect(Collectors.joining(".")) + " to be nullified");
+          throw new IOException("definition level is detected to be 0 for column " + Arrays.stream(descriptor.getPath()).collect(Collectors.joining(".")) + " to be nullified");
         }
         // we just write one null for the whole list at the top level,
         // instead of nullify the elements in the list one by one
@@ -622,9 +534,7 @@ public abstract class HoodieParquetBinaryCopyBase implements Closeable {
   }
 
   private List<ColumnDescriptor> missedColumns(MessageType requiredSchema, MessageType fileSchema) {
-    return requiredSchema.getColumns().stream()
-        .filter(col -> !fileSchema.containsPath(col.getPath()))
-        .collect(Collectors.toList());
+    return requiredSchema.getColumns().stream().filter(col -> !fileSchema.containsPath(col.getPath())).collect(Collectors.toList());
   }
 
   private MessageType newSchema(MessageType schema, ColumnDescriptor descriptor) {
@@ -661,7 +571,7 @@ public abstract class HoodieParquetBinaryCopyBase implements Closeable {
       } else {
         Type tempField = extractField(field.asGroupType(), targetField);
         if (tempField != null) {
-          return new GroupType(candidate.getRepetition(),candidate.getName(),tempField);
+          return new GroupType(candidate.getRepetition(), candidate.getName(), tempField);
         }
       }
     }
@@ -672,7 +582,7 @@ public abstract class HoodieParquetBinaryCopyBase implements Closeable {
   @VisibleForTesting
   public boolean convertLegacy3LevelArray(String[] path) {
     boolean changed = false;
-    
+
     // For schema evolution, also check for legacy patterns even if the field doesn't exist in the schema
     for (int i = 0; i < path.length - 2; i++) {
       if ("bag".equals(path[i + 1]) && "array_element".equals(path[i + 2])) {
@@ -683,7 +593,7 @@ public abstract class HoodieParquetBinaryCopyBase implements Closeable {
         break;
       }
     }
-    
+
     if (!changed) {
       for (int i = 0; i < path.length; i++) {
         try {
@@ -721,27 +631,5 @@ public abstract class HoodieParquetBinaryCopyBase implements Closeable {
       }
     }
     return changed;
-  }
-
-  private static final class DummyGroupConverter extends GroupConverter {
-    @Override
-    public void start() {
-    }
-
-    @Override
-    public void end() {
-    }
-
-    @Override
-    public Converter getConverter(int fieldIndex) {
-      return new DummyConverter();
-    }
-  }
-
-  private static final class DummyConverter extends PrimitiveConverter {
-    @Override
-    public GroupConverter asGroupConverter() {
-      return new DummyGroupConverter();
-    }
   }
 }

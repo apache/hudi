@@ -19,7 +19,7 @@
 package org.apache.hudi.source.split;
 
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.source.assign.HoodieSplitAssigner;
+import org.apache.hudi.source.split.assign.HoodieSplitAssigner;
 
 import javax.annotation.Nullable;
 

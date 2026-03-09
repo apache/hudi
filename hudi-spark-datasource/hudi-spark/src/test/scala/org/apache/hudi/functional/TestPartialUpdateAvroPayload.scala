@@ -60,14 +60,6 @@ class TestPartialUpdateAvroPayload extends HoodieClientTestBase {
     initHoodieStorage()
   }
 
-  @AfterEach override def tearDown() = {
-    cleanupSparkContexts()
-    cleanupTestDataGenerator()
-    cleanupFileSystem()
-    FileSystem.closeAll()
-    System.gc()
-  }
-
   @ParameterizedTest
   @EnumSource(value = classOf[HoodieTableType])
   def testPartialUpdatesAvroPayloadPrecombine(hoodieTableType: HoodieTableType): Unit = {

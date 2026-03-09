@@ -31,14 +31,17 @@ import org.apache.hudi.callback.util.HoodieCommitCallbackFactory;
 import org.apache.hudi.client.embedded.EmbeddedTimelineService;
 import org.apache.hudi.client.heartbeat.HeartbeatUtils;
 import org.apache.hudi.client.transaction.TransactionManager;
+import org.apache.hudi.client.utils.PreWriteValidatorUtils;
 import org.apache.hudi.client.utils.TransactionUtils;
 import org.apache.hudi.common.HoodiePendingRollbackInfo;
 import org.apache.hudi.common.config.HoodieCommonConfig;
+import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.ActionType;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieKey;
+import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.TableServiceType;
@@ -178,6 +181,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     super(context, writeConfig, timelineService);
     this.index = createIndex(writeConfig);
     this.upgradeDowngradeHelper = upgradeDowngradeHelper;
+    this.metrics.emitVersionMetrics();
     this.metrics.emitIndexTypeMetrics(config.getIndexType().ordinal());
   }
 
@@ -547,21 +551,53 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
   public abstract O deletePrepped(I preppedRecords, final String instantTime);
 
   /**
-   * Common method containing steps to be performed before write (upsert/insert/...
+   * Common method containing steps to be performed before write (upsert/insert/...)
    * @param instantTime
    * @param writeOperationType
    * @param metaClient
    */
   public void preWrite(String instantTime, WriteOperationType writeOperationType,
                        HoodieTableMetaClient metaClient) {
+    preWrite(instantTime, writeOperationType, metaClient, Option.empty());
+  }
+
+  /**
+   * Common method containing steps to be performed before write (upsert/insert/...) with records.
+   * @param instantTime
+   * @param writeOperationType
+   * @param metaClient
+   * @param recordsOpt Option of HoodieData of records to be written, empty for operations
+   *                   without input records (e.g., compact, cluster, delete)
+   */
+  public void preWrite(String instantTime, WriteOperationType writeOperationType,
+                       HoodieTableMetaClient metaClient, Option<HoodieData<HoodieRecord<T>>> recordsOpt) {
     setOperationType(writeOperationType);
     this.lastCompletedTxnAndMetadata = txnManager.isLockRequired()
         ? TransactionUtils.getLastCompletedTxnInstantAndMetadata(metaClient) : Option.empty();
     this.pendingInflightAndRequestedInstants = TransactionUtils.getInflightAndRequestedInstants(metaClient);
     this.pendingInflightAndRequestedInstants.remove(instantTime);
+    tableServiceClient.setLastCompletedTxnAndMetadata(this.lastCompletedTxnAndMetadata);
     tableServiceClient.setPendingInflightAndRequestedInstants(this.pendingInflightAndRequestedInstants);
     tableServiceClient.startAsyncCleanerService(this);
     tableServiceClient.startAsyncArchiveService(this);
+
+    runPreWriteValidators(instantTime, writeOperationType, metaClient, recordsOpt);
+  }
+
+  /**
+   * Runs configured pre-write validators.
+   * Pre-write validators are invoked before the write operation to validate
+   * conditions that must be met before proceeding with the write.
+   *
+   * @param instantTime        The instant time for the write operation
+   * @param writeOperationType The type of write operation being performed
+   * @param metaClient         The HoodieTableMetaClient for accessing table metadata
+   * @param recordsOpt         Option of HoodieData of records to be written, empty for operations
+   *                           without input records (e.g., compact, cluster, delete)
+   */
+  protected void runPreWriteValidators(String instantTime, WriteOperationType writeOperationType,
+      HoodieTableMetaClient metaClient, Option<HoodieData<HoodieRecord<T>>> recordsOpt) {
+    PreWriteValidatorUtils.runValidators(config, instantTime, writeOperationType, metaClient, context, recordsOpt);
   }
 
   /**
@@ -1366,7 +1402,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    * </ul>
    */
   public final HoodieTable initTable(WriteOperationType operationType, Option<String> instantTime) {
-    HoodieTableMetaClient metaClient = createMetaClient(true);
+    HoodieTableMetaClient metaClient = createMetaClient(loadActiveTimelineOnTableInit());
     // Setup write schemas for deletes
     if (WriteOperationType.isDelete(operationType)) {
       setWriteSchemaForDeletes(metaClient);
@@ -1400,6 +1436,10 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     return table;
   }
 
+  protected boolean loadActiveTimelineOnTableInit() {
+    return true;
+  }
+
   public void validateAgainstTableProperties(HoodieTableConfig tableConfig, HoodieWriteConfig writeConfig) {
     // mismatch of table versions.
     CommonClientUtils.validateTableVersion(tableConfig, writeConfig);
@@ -1416,9 +1456,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
       if (StringUtils.isNullOrEmpty(keyGenClass)) {
         keyGenClass = "org.apache.hudi.keygen.SimpleKeyGenerator";
       }
-      if (!keyGenClass.equals("org.apache.hudi.keygen.SimpleKeyGenerator")
-          && !keyGenClass.equals("org.apache.hudi.keygen.NonpartitionedKeyGenerator")
-          && !keyGenClass.equals("org.apache.hudi.keygen.ComplexKeyGenerator")) {
+      if (!KeyGeneratorType.isKeyGenValidForDisabledMetaFields(keyGenClass)) {
         throw new HoodieException("Only simple, non-partitioned or complex key generator are supported when meta-fields are disabled. Used: " + keyGenClass);
       }
     }

@@ -93,10 +93,10 @@ public class KeyGenUtils {
   // When auto record key gen is enabled, our inference will be based on partition path only.
   static KeyGeneratorType inferKeyGeneratorTypeFromPartitionFields(String partitionFields) {
     if (!StringUtils.isNullOrEmpty(partitionFields)) {
-      String[] partitonFields = partitionFields.split(",");
-      if (partitonFields[0].contains(BaseKeyGenerator.CUSTOM_KEY_GENERATOR_SPLIT_REGEX)) {
+      String[] partitionFieldsArray = partitionFields.split(",");
+      if (partitionFieldsArray[0].contains(BaseKeyGenerator.CUSTOM_KEY_GENERATOR_SPLIT_REGEX)) {
         return KeyGeneratorType.CUSTOM;
-      } else if (partitonFields.length == 1) {
+      } else if (partitionFieldsArray.length == 1) {
         return KeyGeneratorType.SIMPLE;
       } else {
         return KeyGeneratorType.COMPLEX;

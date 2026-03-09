@@ -26,18 +26,31 @@ import org.apache.hudi.sync.common.util.SparkSchemaUtils;
 import org.apache.spark.sql.execution.SparkSqlParser;
 import org.apache.spark.sql.internal.SQLConf;
 import org.apache.spark.sql.types.ArrayType;
+import org.apache.spark.sql.types.BinaryType$;
+import org.apache.spark.sql.types.BooleanType$;
+import org.apache.spark.sql.types.DataTypes;
+import org.apache.spark.sql.types.DateType$;
+import org.apache.spark.sql.types.DoubleType$;
+import org.apache.spark.sql.types.FloatType$;
 import org.apache.spark.sql.types.IntegerType$;
+import org.apache.spark.sql.types.LongType$;
 import org.apache.spark.sql.types.MapType;
 import org.apache.spark.sql.types.Metadata;
 import org.apache.spark.sql.types.StringType$;
 import org.apache.spark.sql.types.StructField;
 import org.apache.spark.sql.types.StructType;
+import org.apache.spark.sql.types.TimestampNTZType$;
+import org.apache.spark.sql.types.TimestampType$;
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
 import java.util.Collections;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TestSparkSchemaUtils {
   private final SparkSqlParser parser = createSqlParser();
@@ -56,10 +69,29 @@ public class TestSparkSchemaUtils {
 
   @Test
   public void testConvertBasicTypes() {
-    StructType sparkSchema = parser.parseTableSchema(
-            "f0 int NOT NULL, f1 string NOT NULL, f2 bigint NOT NULL, f3 float, f4 double, f5 boolean, f6 binary, f7 binary NOT NULL,"
-                    + " f8 decimal(5,2) NOT NULL, f9 decimal(5,2), f10 timestamp, f11 timestamp NOT NULL, f12 timestamp_ntz NOT NULL, f13 timestamp_ntz,"
-                    + " f14 date NOT NULL, f15 int NOT NULL, f16 bigint NOT NULL, f17 string NOT NULL, f18 string");
+    // Build expected schema programmatically to avoid SQL parser limitations
+    // (timestamp_ntz is not supported by the SQL parser in Spark 3.3)
+    StructType sparkSchema = new StructType(new StructField[] {
+        new StructField("f0", IntegerType$.MODULE$, false, Metadata.empty()),
+        new StructField("f1", StringType$.MODULE$, false, Metadata.empty()),
+        new StructField("f2", LongType$.MODULE$, false, Metadata.empty()),
+        new StructField("f3", FloatType$.MODULE$, true, Metadata.empty()),
+        new StructField("f4", DoubleType$.MODULE$, true, Metadata.empty()),
+        new StructField("f5", BooleanType$.MODULE$, true, Metadata.empty()),
+        new StructField("f6", BinaryType$.MODULE$, true, Metadata.empty()),
+        new StructField("f7", BinaryType$.MODULE$, false, Metadata.empty()),
+        new StructField("f8", DataTypes.createDecimalType(5, 2), false, Metadata.empty()),
+        new StructField("f9", DataTypes.createDecimalType(5, 2), true, Metadata.empty()),
+        new StructField("f10", TimestampType$.MODULE$, true, Metadata.empty()),
+        new StructField("f11", TimestampType$.MODULE$, false, Metadata.empty()),
+        new StructField("f12", TimestampNTZType$.MODULE$, false, Metadata.empty()),
+        new StructField("f13", TimestampNTZType$.MODULE$, true, Metadata.empty()),
+        new StructField("f14", DateType$.MODULE$, false, Metadata.empty()),
+        new StructField("f15", IntegerType$.MODULE$, false, Metadata.empty()),
+        new StructField("f16", LongType$.MODULE$, false, Metadata.empty()),
+        new StructField("f17", StringType$.MODULE$, false, Metadata.empty()),
+        new StructField("f18", StringType$.MODULE$, true, Metadata.empty())
+    });
 
     HoodieSchema schemaWithSupportedTypes =
         HoodieSchema.createRecord("root", null, null, false, Arrays.asList(
@@ -125,5 +157,41 @@ public class TestSparkSchemaUtils {
     String sparkSchemaWithNullableJson = SparkSchemaUtils.convertToSparkSchemaJson(schemaWithNullable);
     StructType convertedSparkSchemaWithNullable = (StructType) StructType.fromJson(sparkSchemaWithNullableJson);
     assertEquals(sparkSchemaWithNullable.json(), convertedSparkSchemaWithNullable.json());
+  }
+
+  @Test
+  public void testConvertSchemaWithBlobField() {
+    // Tests that schema with BLOB field converts to Spark schema JSON correctly
+    // Create a simple record with 1 non-BLOB field and 1 BLOB field
+    HoodieSchema schema = HoodieSchema.createRecord("root", null, null, false, Arrays.asList(
+        HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.INT), null, null),
+        HoodieSchemaField.of("blob_data", HoodieSchema.createBlob(), null, null)
+    ));
+
+    // Convert to Spark JSON
+    String sparkJson = SparkSchemaUtils.convertToSparkSchemaJson(schema);
+
+    // Validate JSON is valid and parseable
+    assertNotNull(sparkJson);
+    assertFalse(sparkJson.isEmpty());
+
+    StructType sparkSchema = (StructType) StructType.fromJson(sparkJson);
+
+    // Verify basic structure: 2 fields
+    assertEquals(2, sparkSchema.fields().length);
+    assertEquals("id", sparkSchema.fields()[0].name());
+    assertEquals("blob_data", sparkSchema.fields()[1].name());
+
+    // Verify BLOB field converted to struct (not primitive)
+    assertInstanceOf(StructType.class, sparkSchema.fields()[1].dataType());
+
+    // Verify metadata attached to blob field
+    Metadata blobMetadata = sparkSchema.fields()[1].metadata();
+    assertTrue(blobMetadata.contains(HoodieSchema.TYPE_METADATA_FIELD));
+    assertEquals(HoodieSchemaType.BLOB.name(), blobMetadata.getString(HoodieSchema.TYPE_METADATA_FIELD));
+
+    // Verify BLOB structure has 3 fields (type, data, reference)
+    StructType blobStruct = (StructType) sparkSchema.fields()[1].dataType();
+    assertEquals(3, blobStruct.fields().length);
   }
 }

@@ -57,10 +57,10 @@ public class HoodieEnumeratorStateSerializer implements SimpleVersionedSerialize
       Collection<HoodieSourceSplitState> splitStates = obj.getPendingSplitStates();
       out.writeInt(splitStates.size());
       for (HoodieSourceSplitState splitState : splitStates) {
-        byte[] splitBytes = splitSerializer.serialize(splitState.split());
+        byte[] splitBytes = splitSerializer.serialize(splitState.getSplit());
         out.writeInt(splitBytes.length);
         out.write(splitBytes);
-        out.writeUTF(splitState.status().name());
+        out.writeUTF(splitState.getStatus().name());
       }
 
       // Serialize lastEnumeratedInstant

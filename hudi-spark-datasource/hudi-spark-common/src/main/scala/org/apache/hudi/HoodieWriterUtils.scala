@@ -323,6 +323,16 @@ object HoodieWriterUtils {
           && currentPartitionFields != tableConfigPartitionFields) {
           diffConfigs.append(s"PartitionPath:\t$currentPartitionFields\t$tableConfigPartitionFields\n")
         }
+
+        // Validate partition value extractor
+        val currentPartitionValueExtractor = params.getOrElse(DataSourceWriteOptions.PARTITION_EXTRACTOR_CLASS.key(), null)
+        if (currentPartitionValueExtractor != null) {
+          val tableConfigPartitionValueExtractor = tableConfig.getString(HoodieTableConfig.PARTITION_EXTRACTOR_CLASS)
+          if (tableConfigPartitionValueExtractor != null &&
+            !currentPartitionValueExtractor.equals(tableConfigPartitionValueExtractor)) {
+            diffConfigs.append(s"PartitionValueExtractor:\t$currentPartitionValueExtractor\t$tableConfigPartitionValueExtractor\n")
+          }
+        }
         // The value of `HoodieTableConfig.RECORD_MERGE_STRATEGY_ID` can be NULL or non-NULL.
         // The non-NULL value has been validated above in the regular code path.
         // Here we check the NULL case since if the value is NULL, the check is skipped above.

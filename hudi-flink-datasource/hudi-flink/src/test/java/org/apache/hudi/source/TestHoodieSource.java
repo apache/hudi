@@ -18,15 +18,14 @@
 
 package org.apache.hudi.source;
 
-import org.apache.hudi.client.common.HoodieFlinkEngineContext;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.PartitionPathEncodeUtils;
-import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.source.prune.ColumnStatsProbe;
 import org.apache.hudi.source.prune.PartitionPruners;
 import org.apache.hudi.source.reader.HoodieRecordEmitter;
@@ -35,9 +34,7 @@ import org.apache.hudi.source.split.HoodieSourceSplit;
 import org.apache.hudi.source.split.HoodieSourceSplitComparator;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
-import org.apache.hudi.table.HoodieFlinkTable;
-import org.apache.hudi.table.format.FlinkReaderContextFactory;
-import org.apache.hudi.util.FlinkWriteClients;
+import org.apache.hudi.table.format.InternalSchemaManager;
 import org.apache.hudi.util.HoodieSchemaConverter;
 import org.apache.hudi.utils.TestConfigurations;
 import org.apache.hudi.utils.TestData;
@@ -52,6 +49,7 @@ import org.apache.flink.table.expressions.ValueLiteralExpression;
 import org.apache.flink.table.functions.BuiltInFunctionDefinitions;
 import org.apache.flink.table.functions.FunctionIdentifier;
 import org.apache.flink.table.types.logical.RowType;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -398,7 +396,7 @@ public class TestHoodieSource {
       HoodieTableMetaClient metaClient,
       PartitionPruners.PartitionPruner partitionPruner) {
     RowType rowType = TestConfigurations.ROW_TYPE;
-    HoodieScanContext scanContext = new HoodieScanContext.Builder()
+    HoodieScanContext scanContext = HoodieScanContext.builder()
         .conf(conf)
         .path(tablePath)
         .rowType(rowType)
@@ -413,24 +411,16 @@ public class TestHoodieSource {
         .isStreaming(conf.get(FlinkOptions.READ_AS_STREAMING))
         .partitionPruner(partitionPruner)
         .build();
-
-    HoodieWriteConfig writeConfig = FlinkWriteClients.getHoodieClientConfig(conf, false, false);
-    HadoopStorageConfiguration hadoopConf = new HadoopStorageConfiguration(
-        (org.apache.hadoop.conf.Configuration) metaClient.getStorageConf().unwrap());
-    HoodieFlinkEngineContext flinkEngineContext = new HoodieFlinkEngineContext(hadoopConf.unwrap());
-    HoodieFlinkTable<RowData> flinkTable = HoodieFlinkTable.create(writeConfig, flinkEngineContext);
-    FlinkReaderContextFactory readerContextFactory = new FlinkReaderContextFactory(metaClient);
-
     HoodieSchema schema = HoodieSchemaConverter.convertToSchema(rowType);
-
+    HadoopStorageConfiguration hadoopConf = new HadoopStorageConfiguration(HadoopConfigurations.getHadoopConf(conf));
     HoodieSplitReaderFunction splitReaderFunction = new HoodieSplitReaderFunction(
-        flinkTable,
-        readerContextFactory.getContext(),
         conf,
-            schema, // schema will be resolved from table
-            schema, // required schema
+        schema, // schema will be resolved from table
+        schema, // required schema
+        InternalSchemaManager.get(hadoopConf, this.metaClient),
         conf.get(FlinkOptions.MERGE_TYPE),
-        org.apache.hudi.common.util.Option.empty());
+        Collections.emptyList(),
+            false);
 
     return new HoodieSource<>(
         scanContext,

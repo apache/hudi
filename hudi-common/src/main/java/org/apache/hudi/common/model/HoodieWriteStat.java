@@ -19,12 +19,17 @@
 package org.apache.hudi.common.model;
 
 import org.apache.hudi.common.table.read.HoodieReadStats;
-import org.apache.hudi.common.util.JsonUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.stats.HoodieColumnRangeMetadata;
 import org.apache.hudi.storage.StoragePath;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
+import lombok.AccessLevel;
+import lombok.EqualsAndHashCode;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
+import lombok.ToString;
 import org.apache.avro.reflect.AvroIgnore;
 
 import javax.annotation.Nullable;
@@ -36,6 +41,11 @@ import java.util.Map;
 /**
  * Statistics about a single Hoodie write operation.
  */
+@NoArgsConstructor
+@Getter
+@Setter
+@EqualsAndHashCode(onlyExplicitlyIncluded = true, callSuper = false)
+@ToString(callSuper = true)
 public class HoodieWriteStat extends HoodieReadStats {
 
   public static final String NULL_COMMIT = "null";
@@ -48,16 +58,19 @@ public class HoodieWriteStat extends HoodieReadStats {
   /**
    * Relative path to the file from the base path.
    */
+  @EqualsAndHashCode.Include
   private String path;
 
   /**
    * Relative CDC file path that store the CDC data and its size.
    */
+  @Getter(AccessLevel.NONE)
   private Map<String, Long> cdcStats;
 
   /**
    * The previous version of the file. (null if this is the first version. i.e insert)
    */
+  @EqualsAndHashCode.Include
   private String prevCommit;
 
   /**
@@ -105,18 +118,21 @@ public class HoodieWriteStat extends HoodieReadStats {
   /**
    * The earliest of incoming records' event times (Epoch ms) for calculating latency.
    */
+  @Setter(AccessLevel.NONE)
   @Nullable
   private Long minEventTime;
 
   /**
    * The latest of incoming records' event times (Epoch ms) for calculating freshness.
    */
+  @Setter(AccessLevel.NONE)
   @Nullable
   private Long maxEventTime;
 
   @Nullable
   private String prevBaseFile;
 
+  @Getter(AccessLevel.NONE)
   @Nullable
   private RuntimeStats runtimeStats;
 
@@ -124,117 +140,9 @@ public class HoodieWriteStat extends HoodieReadStats {
   @AvroIgnore
   private Option<Map<String, HoodieColumnRangeMetadata<Comparable>>> recordsStats = Option.empty();
 
-  public HoodieWriteStat() {
-    // called by jackson json lib
-  }
-
-  public void setFileId(String fileId) {
-    this.fileId = fileId;
-  }
-
-  public void setPath(String path) {
-    this.path = path;
-  }
-
-  public void setPrevCommit(String prevCommit) {
-    this.prevCommit = prevCommit;
-  }
-
-  public void setNumWrites(long numWrites) {
-    this.numWrites = numWrites;
-  }
-
-  public void setNumDeletes(long numDeletes) {
-    this.numDeletes = numDeletes;
-  }
-
-  public void setNumUpdateWrites(long numUpdateWrites) {
-    this.numUpdateWrites = numUpdateWrites;
-  }
-
-  public void setNumInserts(long numInserts) {
-    this.numInserts = numInserts;
-  }
-
-  public long getTotalWriteBytes() {
-    return totalWriteBytes;
-  }
-
-  public void setTotalWriteBytes(long totalWriteBytes) {
-    this.totalWriteBytes = totalWriteBytes;
-  }
-
-  public long getTotalWriteErrors() {
-    return totalWriteErrors;
-  }
-
-  public void setTotalWriteErrors(long totalWriteErrors) {
-    this.totalWriteErrors = totalWriteErrors;
-  }
-
-  public String getPrevCommit() {
-    return prevCommit;
-  }
-
-  public long getNumWrites() {
-    return numWrites;
-  }
-
-  public long getNumUpdateWrites() {
-    return numUpdateWrites;
-  }
-
-  public String getFileId() {
-    return fileId;
-  }
-
-  public String getPath() {
-    return path;
-  }
-
   @Nullable
   public Map<String, Long> getCdcStats() {
     return cdcStats;
-  }
-
-  public void setCdcStats(Map<String, Long> cdcStats) {
-    this.cdcStats = cdcStats;
-  }
-
-  public String getPartitionPath() {
-    return partitionPath;
-  }
-
-  public void setPartitionPath(String partitionPath) {
-    this.partitionPath = partitionPath;
-  }
-
-  public void setTempPath(String tempPath) {
-    this.tempPath = tempPath;
-  }
-
-  public String getTempPath() {
-    return this.tempPath;
-  }
-  
-  public long getFileSizeInBytes() {
-    return fileSizeInBytes;
-  }
-
-  public void setFileSizeInBytes(long fileSizeInBytes) {
-    this.fileSizeInBytes = fileSizeInBytes;
-  }
-
-  public String getPrevBaseFile() {
-    return prevBaseFile;
-  }
-
-  public void setPrevBaseFile(String prevBaseFile) {
-    this.prevBaseFile = prevBaseFile;
-  }
-
-  public Long getMinEventTime() {
-    return minEventTime;
   }
 
   public void setMinEventTime(Long minEventTime) {
@@ -243,10 +151,6 @@ public class HoodieWriteStat extends HoodieReadStats {
     } else {
       this.minEventTime = Math.min(minEventTime, this.minEventTime);
     }
-  }
-
-  public Long getMaxEventTime() {
-    return maxEventTime;
   }
 
   public void setMaxEventTime(Long maxEventTime) {
@@ -260,10 +164,6 @@ public class HoodieWriteStat extends HoodieReadStats {
   @Nullable
   public RuntimeStats getRuntimeStats() {
     return runtimeStats;
-  }
-
-  public void setRuntimeStats(@Nullable RuntimeStats runtimeStats) {
-    this.runtimeStats = runtimeStats;
   }
 
   /**
@@ -296,45 +196,11 @@ public class HoodieWriteStat extends HoodieReadStats {
     return recordsStats;
   }
 
-  @Override
-  public String toString() {
-    return "HoodieWriteStat{fileId='" + fileId + '\'' + ", path='" + path + '\'' + ", prevCommit='" + prevCommit
-        + '\'' + ", prevBaseFile=" + prevBaseFile + '\'' + ", numWrites=" + numWrites + ", numDeletes=" + numDeletes
-        + ", numUpdateWrites=" + numUpdateWrites + ", totalWriteBytes=" + totalWriteBytes + ", totalWriteErrors="
-        + totalWriteErrors + ", tempPath='" + tempPath + '\'' + ", cdcStats='" + JsonUtils.toString(cdcStats)
-        + '\'' + ", partitionPath='" + partitionPath + '\'' + ", totalLogRecords=" + totalLogRecords
-        + ", totalLogFilesCompacted=" + totalLogFilesCompacted + ", totalLogSizeCompacted=" + totalLogSizeCompacted
-        + ", totalUpdatedRecordsCompacted=" + totalUpdatedRecordsCompacted + ", totalLogBlocks=" + totalLogBlocks
-        + ", totalCorruptLogBlock=" + totalCorruptLogBlock + ", totalRollbackBlocks=" + totalRollbackBlocks + '}';
-  }
-
-  @Override
-  public boolean equals(Object o) {
-    if (this == o) {
-      return true;
-    }
-    if (o == null || getClass() != o.getClass()) {
-      return false;
-    }
-
-    HoodieWriteStat that = (HoodieWriteStat) o;
-    if (!path.equals(that.path)) {
-      return false;
-    }
-    return prevCommit.equals(that.prevCommit);
-
-  }
-
-  @Override
-  public int hashCode() {
-    int result = path.hashCode();
-    result = 31 * result + prevCommit.hashCode();
-    return result;
-  }
-
   /**
    * The runtime stats for writing operation.
    */
+  @Getter
+  @Setter
   public static class RuntimeStats implements Serializable {
     private static final long serialVersionUID = 1L;
 
@@ -352,30 +218,6 @@ public class HoodieWriteStat extends HoodieReadStats {
      * Total time taken by a Hoodie Insert to a file.
      */
     private long totalCreateTime;
-
-    public long getTotalScanTime() {
-      return totalScanTime;
-    }
-
-    public void setTotalScanTime(long totalScanTime) {
-      this.totalScanTime = totalScanTime;
-    }
-
-    public long getTotalUpsertTime() {
-      return totalUpsertTime;
-    }
-
-    public void setTotalUpsertTime(long totalUpsertTime) {
-      this.totalUpsertTime = totalUpsertTime;
-    }
-
-    public long getTotalCreateTime() {
-      return totalCreateTime;
-    }
-
-    public void setTotalCreateTime(long totalCreateTime) {
-      this.totalCreateTime = totalCreateTime;
-    }
   }
 
   private static Map<String, HoodieColumnRangeMetadata<Comparable>> mergeRecordsStats(

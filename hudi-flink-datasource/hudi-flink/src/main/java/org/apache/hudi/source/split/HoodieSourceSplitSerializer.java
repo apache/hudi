@@ -18,6 +18,7 @@
 
 package org.apache.hudi.source.split;
 
+import org.apache.hudi.common.table.log.InstantRange;
 import org.apache.hudi.common.util.Option;
 
 import org.apache.flink.annotation.Internal;
@@ -29,7 +30,9 @@ import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 /**
  * Serializer for Hoodie source split.
@@ -82,6 +85,39 @@ public class HoodieSourceSplitSerializer implements SimpleVersionedSerializer<Ho
       // Serialize fileOffset
       out.writeInt(obj.getFileOffset());
 
+      // Serialize instant range (Option<InstantRange>)
+      out.writeBoolean(obj.getInstantRange().isPresent());
+      if (obj.getInstantRange().isPresent()) {
+        InstantRange instantRange = obj.getInstantRange().get();
+        out.writeUTF(instantRange.getRangeType().name());
+
+        if (instantRange instanceof InstantRange.CompositionRange) {
+          throw new UnsupportedOperationException("Composition Range is not supported.");
+        } else if (instantRange instanceof InstantRange.ClosedClosedRangeNullableBoundary
+                || instantRange instanceof InstantRange.OpenClosedRangeNullableBoundary) {
+          out.writeBoolean(true);
+        } else {
+          out.writeBoolean(false);
+        }
+
+        out.writeBoolean(instantRange.getStartInstant().isPresent());
+        if (instantRange.getStartInstant().isPresent()) {
+          out.writeUTF(instantRange.getStartInstant().get());
+        }
+        out.writeBoolean(instantRange.getEndInstant().isPresent());
+        if (instantRange.getEndInstant().isPresent()) {
+          out.writeUTF(instantRange.getEndInstant().get());
+        }
+
+        if (instantRange.getRangeType().equals(InstantRange.RangeType.EXACT_MATCH)) {
+          InstantRange.ExactMatchRange exactMatchRange = (InstantRange.ExactMatchRange) instantRange;
+          out.writeInt(exactMatchRange.getInstants().size());
+          for (String instant : exactMatchRange.getInstants()) {
+            out.writeUTF(instant);
+          }
+        }
+      }
+
       out.flush();
       return baos.toByteArray();
     }
@@ -129,16 +165,55 @@ public class HoodieSourceSplitSerializer implements SimpleVersionedSerializer<Ho
       // Deserialize fileOffset
       int fileOffset = in.readInt();
 
+      // Deserialize instantRange (Option<InstantRange>)
+      Option<InstantRange> instantRangeOption;
+      if (in.readBoolean()) {
+        InstantRange.Builder builder = InstantRange.builder();
+        InstantRange.RangeType rangeType = InstantRange.RangeType.valueOf(in.readUTF());
+
+        if (rangeType.equals(InstantRange.RangeType.COMPOSITION)) {
+          throw new UnsupportedOperationException("Composition Range is not supported.");
+        }
+
+        boolean nullableBoundary = in.readBoolean();
+        builder.nullableBoundary(nullableBoundary);
+
+        // Deserialize startInstant
+        if (in.readBoolean()) {
+          builder.startInstant(in.readUTF());
+        }
+
+        // Deserialize endInstant
+        if (in.readBoolean()) {
+          builder.endInstant(in.readUTF());
+        }
+
+        if (rangeType.equals(InstantRange.RangeType.EXACT_MATCH)) {
+          Set<String> instants = new HashSet<>();
+          int size = in.readInt();
+          for (int i = 0; i < size; i++) {
+            instants.add(in.readUTF());
+          }
+          builder.explicitInstants(instants);
+        }
+
+        builder.rangeType(rangeType);
+        instantRangeOption = Option.of(builder.build());
+      } else {
+        instantRangeOption = Option.empty();
+      }
+
       // Create HoodieSourceSplit object
       HoodieSourceSplit split = new HoodieSourceSplit(
-          splitNum,
-          basePath,
-          logPaths,
-          tablePath,
-          partitionPath,
-          mergeType,
-          latestCommit,
-          fileId);
+              splitNum,
+              basePath,
+              logPaths,
+              tablePath,
+              partitionPath,
+              mergeType,
+              latestCommit,
+              fileId,
+              instantRangeOption);
 
       // Update position to restore consumed and fileOffset
       split.updatePosition(fileOffset, consumed);

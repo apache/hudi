@@ -22,7 +22,6 @@ package org.apache.hudi.stats;
 import org.apache.hudi.ParquetAdapter;
 import org.apache.hudi.avro.model.HoodieValueTypeInfo;
 import org.apache.hudi.common.schema.HoodieSchema;
-import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.metadata.HoodieIndexVersion;
 
@@ -240,7 +239,7 @@ public class ValueMetadata implements Serializable {
     if (fieldSchema == null) {
       throw new IllegalArgumentException("Field schema cannot be null");
     }
-    HoodieSchema valueSchema = HoodieSchemaUtils.getNonNullTypeFromUnion(fieldSchema);
+    HoodieSchema valueSchema = fieldSchema.getNonNullType();
     ValueType valueType = ValueType.fromSchema(valueSchema);
     if (valueType == ValueType.V1) {
       throw new IllegalArgumentException("Unsupported logical type for: " + valueSchema.getType());

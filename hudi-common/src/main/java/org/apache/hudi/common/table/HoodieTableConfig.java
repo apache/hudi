@@ -50,6 +50,7 @@ import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.util.BinaryUtil;
 import org.apache.hudi.common.util.ConfigUtils;
+import org.apache.hudi.common.util.HoodieTableConfigUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.StringUtils;
@@ -334,6 +335,14 @@ public class HoodieTableConfig extends HoodieConfig {
       .noDefaultValue()
       .sinceVersion("1.0.0")
       .withDocumentation("Key Generator type to determine key generator class");
+
+  public static final ConfigProperty<String> PARTITION_EXTRACTOR_CLASS = ConfigProperty
+      .key("hoodie.table.partition_extractor_class")
+      .noDefaultValue()
+      .withInferFunction(HoodieTableConfigUtils::inferPartitionValueExtractorClass)
+      .markAdvanced()
+      .withDocumentation("Class which implements PartitionValueExtractor to extract the partition values, "
+          + "default is inferred based on partition configuration.");
 
   // TODO: this has to be UTC. why is it not the default?
   public static final ConfigProperty<HoodieTimelineTimeZone> TIMELINE_TIMEZONE = ConfigProperty
@@ -1206,6 +1215,10 @@ public class HoodieTableConfig extends HoodieConfig {
 
   public String getKeyGeneratorClassName() {
     return KeyGeneratorType.getKeyGeneratorClassName(this);
+  }
+
+  public Option<String> getPartitionExtractorClass() {
+    return Option.ofNullable(getString(PARTITION_EXTRACTOR_CLASS));
   }
 
   public HoodieTimelineTimeZone getTimelineTimezone() {

@@ -29,8 +29,8 @@ import org.apache.flink.api.connector.source.SplitEnumeratorContext;
 public class HoodieStaticSplitEnumerator extends AbstractHoodieSplitEnumerator {
 
   public HoodieStaticSplitEnumerator(
-      SplitEnumeratorContext<HoodieSourceSplit> enumeratorContext, HoodieSplitProvider provider) {
-    super(enumeratorContext, provider);
+      String tableName, SplitEnumeratorContext<HoodieSourceSplit> enumeratorContext, HoodieSplitProvider provider) {
+    super(tableName, enumeratorContext, provider);
   }
 
   @Override

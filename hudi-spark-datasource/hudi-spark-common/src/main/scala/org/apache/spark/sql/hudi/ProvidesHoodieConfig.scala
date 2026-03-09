@@ -25,10 +25,10 @@ import org.apache.hudi.common.config.{DFSPropertiesConfiguration, HoodieCommonCo
 import org.apache.hudi.common.model.WriteOperationType
 import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.common.table.HoodieTableConfig.DATABASE_NAME
-import org.apache.hudi.common.util.{ConfigUtils, ReflectionUtils, StringUtils}
+import org.apache.hudi.common.util.{ConfigUtils, HoodieTableConfigUtils, ReflectionUtils, StringUtils}
 import org.apache.hudi.config.{HoodieIndexConfig, HoodieInternalConfig, HoodieWriteConfig}
 import org.apache.hudi.config.HoodieWriteConfig.TBL_NAME
-import org.apache.hudi.hive.{HiveSyncConfig, HiveSyncConfigHolder, MultiPartKeysValueExtractor}
+import org.apache.hudi.hive.{HiveSyncConfig, HiveSyncConfigHolder, NonPartitionedExtractor}
 import org.apache.hudi.hive.ddl.HiveSyncMode
 import org.apache.hudi.index.HoodieIndex
 import org.apache.hudi.index.HoodieIndex.BucketIndexEngineType
@@ -53,7 +53,6 @@ import org.slf4j.LoggerFactory
 
 import java.util.Locale
 
-import scala.collection.JavaConverters
 import scala.collection.JavaConverters._
 
 trait ProvidesHoodieConfig extends Logging {
@@ -460,7 +459,25 @@ trait ProvidesHoodieConfig extends Logging {
     if (props.get(HoodieSyncConfig.META_SYNC_PARTITION_FIELDS.key) != null) {
       hiveSyncConfig.setValue(HoodieSyncConfig.META_SYNC_PARTITION_FIELDS, props.getString(HoodieSyncConfig.META_SYNC_PARTITION_FIELDS.key))
     }
-    hiveSyncConfig.setDefaultValue(HoodieSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS, classOf[MultiPartKeysValueExtractor].getName)
+    // If partition value extractor is present in params Object we can use it.
+    // Here as well it checks first for hoodie.datasource.hive_sync.partition_extractor_class and then
+    // for hoodie.datasource.partition_extractor_class config.
+    // If either of the above configs are not provided then we can try inferring the partition extractor class name.
+    // Even if that fails, then we can assume it to be a NonPartitionExtractor.
+    val inferredPartitionValueExtractorClass = HoodieTableConfigUtils.inferPartitionValueExtractorClass(tableConfig)
+    if (props.containsKey(HoodieSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS.key())) {
+      hiveSyncConfig.setValue(HoodieSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS.key(),
+        props.getString(HoodieSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS.key()))
+    } else if (props.containsKey(DataSourceWriteOptions.PARTITION_EXTRACTOR_CLASS.key())) {
+      hiveSyncConfig.setValue(HoodieSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS.key(),
+        props.getString(DataSourceWriteOptions.PARTITION_EXTRACTOR_CLASS.key()))
+    } else if (inferredPartitionValueExtractorClass.isPresent) {
+      hiveSyncConfig.setValue(HoodieSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS.key(),
+        inferredPartitionValueExtractorClass.get())
+    } else {
+      hiveSyncConfig.setValue(HoodieSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS.key(), classOf[NonPartitionedExtractor].getName)
+    }
+
     // This is hardcoded to true to ensure consistency as Spark syncs TIMESTAMP types as TIMESTAMP by default
     // via Spark's externalCatalog API, which is used by AlterHoodieTableCommand.
     hiveSyncConfig.setDefaultValue(HiveSyncConfigHolder.HIVE_SUPPORT_TIMESTAMP_TYPE, "true")

@@ -70,8 +70,8 @@ class HoodieSchemaComparatorForRecordProjection extends HoodieSchemaComparatorFo
     }
 
     // Strip nullability before comparison
-    HoodieSchema nonNullS1 = HoodieSchemaUtils.getNonNullTypeFromUnion(s1);
-    HoodieSchema nonNullS2 = HoodieSchemaUtils.getNonNullTypeFromUnion(s2);
+    HoodieSchema nonNullS1 = s1.getNonNullType();
+    HoodieSchema nonNullS2 = s2.getNonNullType();
 
     return super.schemaEqualsInternal(nonNullS1, nonNullS2);
   }

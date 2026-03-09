@@ -317,7 +317,13 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
 
     int size = filesAdded.size() + filesDeleted.size();
     Map<String, HoodieMetadataFileInfo> fileInfo = new HashMap<>(size, 1);
-    filesAdded.forEach((fileName, fileSize) -> fileInfo.put(fileName, new HoodieMetadataFileInfo(fileSize, false)));
+    filesAdded.forEach((fileName, fileSize) -> {
+      // Assert that the file-size of the file being added is positive, since Hudi
+      // should not be creating empty files
+      checkState(fileSize > 0, "File name " + fileName
+          + ", is a 0 byte file. It does not have any contents");
+      fileInfo.put(fileName, new HoodieMetadataFileInfo(fileSize, false));
+    });
 
     filesDeleted.forEach(fileName -> fileInfo.put(fileName, DELETE_FILE_METADATA));
 
@@ -666,7 +672,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
           fileIndex = Integer.parseInt(fileId.substring(index + 1));
         }
       } catch (Exception e) {
-        throw new HoodieMetadataException(String.format("Invalid UUID or index: fileID=%s, partition=%s, instantTIme=%s",
+        throw new HoodieMetadataException(String.format("Invalid UUID or index: fileID=%s, partition=%s, instantTime=%s",
             fileId, partition, instantTime), e);
       }
 

@@ -47,7 +47,7 @@ public class RecordIndexMapper extends MetadataIndexMapper {
     List<HoodieRecord> allRecords = new ArrayList<>();
     for (HoodieRecordDelegate recordDelegate : writeStatus.getIndexStats().getWrittenRecordDelegates()) {
       if (!writeStatus.isErrored(recordDelegate.getHoodieKey())) {
-        if (recordDelegate.getIgnoreIndexUpdate()) {
+        if (recordDelegate.isIgnoreIndexUpdate()) {
           continue;
         }
         HoodieRecord hoodieRecord;

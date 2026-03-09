@@ -20,8 +20,7 @@ package org.apache.hudi.common.util.collection;
 
 import org.apache.hudi.io.util.FileIOUtils;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.io.File;
 import java.io.IOException;
@@ -40,9 +39,9 @@ import java.util.stream.Stream;
  * @param <T> The generic type of the keys
  * @param <R> The generic type of the values
  */
+@Slf4j
 public abstract class DiskMap<T extends Serializable, R> implements Map<T, R>, KeyFilteringIterable<T, R>, AutoCloseable {
 
-  private static final Logger LOG = LoggerFactory.getLogger(DiskMap.class);
   private static final String SUBFOLDER_PREFIX = "hudi";
   private final File diskMapPathFile;
   private transient Thread shutdownThread = null;
@@ -112,8 +111,9 @@ public abstract class DiskMap<T extends Serializable, R> implements Map<T, R>, K
   /**
    * Static cleaner class to avoid circular references in shutdown hooks
    */
+  @Slf4j
   private static class DiskMapCleaner {
-    private static final Logger CLEANER_LOG = LoggerFactory.getLogger(DiskMapCleaner.class);
+
     private static final Set<String> PATHS_TO_CLEAN = Collections.synchronizedSet(new HashSet<>());
     private static final Thread SHUTDOWN_HOOK;
 
@@ -155,7 +155,7 @@ public abstract class DiskMap<T extends Serializable, R> implements Map<T, R>, K
       try {
         FileIOUtils.deleteDirectory(new File(directoryPath));
       } catch (IOException exception) {
-        CLEANER_LOG.warn("Error while deleting the disk map directory={}", directoryPath, exception);
+        log.warn("Error while deleting the disk map directory={}", directoryPath, exception);
       }
     }
   }

@@ -201,6 +201,41 @@ public class HoodieCleanConfig extends HoodieConfig {
           + "table receives updates/deletes. Another reason to turn this on, would be to ensure data residing in bootstrap "
           + "base files are also physically deleted, to comply with data privacy enforcement processes.");
 
+  public static final ConfigProperty<Boolean> CLEAN_OPTIMIZE_USING_LOCAL_ENGINE_CONTEXT = ConfigProperty
+      .key("hoodie.clean.optimize.using.local.engine.context")
+      .defaultValue(true)
+      .markAdvanced()
+      .sinceVersion("1.2.0")
+      .withDocumentation("Optimizes clean planning by using local engine context (driver-only) for metadata tables and non-partitioned "
+          + "datasets. This allows handling OOM errors during clean planning by scaling only driver memory instead of all executor memory. "
+          + "Some datasets with large record_index partitions can cause OOM errors during file listing in clean planning. "
+          + "By using local engine context, file listing is performed on the driver, allowing targeted memory scaling. "
+          + "When enabled, both non-partitioned datasets and metadata tables use the driver for scheduling cleans.");
+
+  private static final String CLEAN_PARTITION_FILTER_REGEX_KEY = "hoodie.clean.partition.filter.regex";
+  private static final String CLEAN_PARTITION_FILTER_SELECTED_KEY = "hoodie.clean.partition.filter.selected";
+
+  public static final ConfigProperty<String> CLEAN_PARTITION_FILTER_REGEX = ConfigProperty
+      .key(CLEAN_PARTITION_FILTER_REGEX_KEY)
+      .noDefaultValue()
+      .withAlternatives("hoodie.cleaner.partition.filter.regex")
+      .markAdvanced()
+      .sinceVersion("1.2.0")
+      .withDocumentation("When incremental clean is disabled, this regex can be used to filter the partitions to be cleaned. "
+          + "Only partitions matching this regex pattern will be cleaned. "
+          + "This can be useful for very large tables to avoid OOM issues during cleaning. "
+          + "If both this config and " + CLEAN_PARTITION_FILTER_SELECTED_KEY + " are set, the selected partitions take precedence.");
+
+  public static final ConfigProperty<String> CLEAN_PARTITION_FILTER_SELECTED = ConfigProperty
+      .key(CLEAN_PARTITION_FILTER_SELECTED_KEY)
+      .noDefaultValue()
+      .withAlternatives("hoodie.cleaner.partition.filter.selected")
+      .markAdvanced()
+      .sinceVersion("1.2.0")
+      .withDocumentation("When incremental clean is disabled, this comma-separated list of partitions can be used to filter the partitions to be cleaned. "
+          + "Only the specified partitions will be cleaned. "
+          + "This can be useful for very large tables to avoid OOM issues during cleaning. "
+          + "If both this config and " + CLEAN_PARTITION_FILTER_REGEX_KEY + " are set, the selected partitions take precedence.");
 
   /** @deprecated Use {@link #CLEANER_POLICY} and its methods instead */
   @Deprecated
@@ -359,6 +394,11 @@ public class HoodieCleanConfig extends HoodieConfig {
 
     public HoodieCleanConfig.Builder withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy failedWritesPolicy) {
       cleanConfig.setValue(FAILED_WRITES_CLEANER_POLICY, failedWritesPolicy.name());
+      return this;
+    }
+
+    public HoodieCleanConfig.Builder withCleanOptimizationWithLocalEngineEnabled(Boolean cleanOptimizationWithLocalEngineEnabled) {
+      cleanConfig.setValue(CLEAN_OPTIMIZE_USING_LOCAL_ENGINE_CONTEXT, String.valueOf(cleanOptimizationWithLocalEngineEnabled));
       return this;
     }
 

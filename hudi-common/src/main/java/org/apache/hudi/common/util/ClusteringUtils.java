@@ -52,8 +52,7 @@ import org.apache.hudi.io.storage.HoodieIOFactory;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
@@ -71,9 +70,8 @@ import static org.apache.hudi.common.table.timeline.InstantComparison.compareTim
 /**
  * Helper class to generate clustering plan from metadata.
  */
+@Slf4j
 public class ClusteringUtils {
-
-  private static final Logger LOG = LoggerFactory.getLogger(ClusteringUtils.class);
 
   public static final String TOTAL_IO_READ_MB = "TOTAL_IO_READ_MB";
   public static final String TOTAL_LOG_FILE_SIZE = "TOTAL_LOG_FILES_SIZE";
@@ -303,7 +301,7 @@ public class ClusteringUtils {
       }
       throw new HoodieException("Error getting all file groups in pending clustering", e);
     }
-    LOG.info("Found " + resultMap.size() + " files in pending clustering operations");
+    log.info("Found {} files in pending clustering operations", resultMap.size());
     return resultMap;
   }
 

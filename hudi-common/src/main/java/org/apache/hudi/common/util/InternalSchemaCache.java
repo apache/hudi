@@ -43,8 +43,7 @@ import org.apache.hudi.storage.StoragePathInfo;
 
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -59,8 +58,9 @@ import java.util.stream.Collectors;
  * This is a Global cache; all threads in one container/executor share the same cache.
  * A map of (tablePath, HistorySchemas) is maintained.
  */
+@Slf4j
 public class InternalSchemaCache {
-  private static final Logger LOG = LoggerFactory.getLogger(InternalSchemaCache.class);
+
   // Use segment lock to reduce competition.
   // the lock size should be powers of 2 for better hash.
   private static final Object[] LOCK_LIST = new Object[16];
@@ -197,7 +197,7 @@ public class InternalSchemaCache {
         }
       } catch (Exception e1) {
         // swallow this exception.
-        LOG.warn("Cannot find internal schema from commit file {}. Falling back to parsing historical internal schema", candidateCommitFile);
+        log.warn("Cannot find internal schema from commit file {}. Falling back to parsing historical internal schema", candidateCommitFile);
       }
     }
     // step2:

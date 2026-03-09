@@ -26,6 +26,7 @@ import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.util.HadoopConfigUtils;
+import org.apache.hudi.common.util.HoodieTableConfigUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.metrics.HoodieMetricsConfig;
@@ -51,8 +52,6 @@ import static org.apache.hudi.common.config.HoodieCommonConfig.META_SYNC_BASE_PA
 import static org.apache.hudi.common.config.HoodieMetadataConfig.DEFAULT_METADATA_ENABLE_FOR_READERS;
 import static org.apache.hudi.common.table.HoodieTableConfig.BASE_FILE_FORMAT;
 import static org.apache.hudi.common.table.HoodieTableConfig.DATABASE_NAME;
-import static org.apache.hudi.common.table.HoodieTableConfig.SLASH_SEPARATED_DATE_PARTITIONING;
-import static org.apache.hudi.common.table.HoodieTableConfig.HIVE_STYLE_PARTITIONING_ENABLE;
 import static org.apache.hudi.common.table.HoodieTableConfig.HOODIE_TABLE_NAME_KEY;
 import static org.apache.hudi.common.table.HoodieTableConfig.HOODIE_WRITE_TABLE_NAME_KEY;
 import static org.apache.hudi.common.table.HoodieTableConfig.URL_ENCODE_PARTITIONING;
@@ -119,40 +118,10 @@ public class HoodieSyncConfig extends HoodieConfig {
   public static final ConfigProperty<String> META_SYNC_PARTITION_EXTRACTOR_CLASS = ConfigProperty
       .key("hoodie.datasource.hive_sync.partition_extractor_class")
       .defaultValue("org.apache.hudi.hive.MultiPartKeysValueExtractor")
-      .withInferFunction(cfg -> {
-        Option<String> partitionFieldsOpt;
-        if (StringUtils.nonEmpty(cfg.getString(META_SYNC_PARTITION_FIELDS))) {
-          partitionFieldsOpt = Option.ofNullable(cfg.getString(META_SYNC_PARTITION_FIELDS));
-        } else {
-          partitionFieldsOpt = HoodieTableConfig.getPartitionFieldProp(cfg)
-              .or(() -> Option.ofNullable(cfg.getString(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME)));
-        }
-        if (!partitionFieldsOpt.isPresent()) {
-          return Option.empty();
-        }
-        String partitionFields = partitionFieldsOpt.get();
-        if (StringUtils.nonEmpty(partitionFields)) {
-          int numOfPartFields = partitionFields.split(",").length;
-          if (numOfPartFields == 1) {
-            if (cfg.contains(HIVE_STYLE_PARTITIONING_ENABLE)
-                && cfg.getString(HIVE_STYLE_PARTITIONING_ENABLE).equals("true")) {
-              return Option.of("org.apache.hudi.hive.HiveStylePartitionValueExtractor");
-            } else if (cfg.contains(SLASH_SEPARATED_DATE_PARTITIONING)
-                && cfg.getString(SLASH_SEPARATED_DATE_PARTITIONING).equals("true")) {
-              return Option.of("org.apache.hudi.hive.SlashEncodedDayPartitionValueExtractor");
-            } else {
-              return Option.of("org.apache.hudi.hive.SinglePartPartitionValueExtractor");
-            }
-          } else {
-            return Option.of("org.apache.hudi.hive.MultiPartKeysValueExtractor");
-          }
-        } else {
-          return Option.of("org.apache.hudi.hive.NonPartitionedExtractor");
-        }
-      })
+      .withInferFunction(HoodieTableConfigUtils::inferPartitionValueExtractorClass)
       .markAdvanced()
       .withDocumentation("Class which implements PartitionValueExtractor to extract the partition values, "
-          + "default 'org.apache.hudi.hive.MultiPartKeysValueExtractor'.");
+          + "default is inferred based on partition configuration.");
 
   public static final ConfigProperty<Boolean> META_SYNC_DECODE_PARTITION = ConfigProperty
       .key("hoodie.meta.sync.decode_partition")

@@ -622,6 +622,7 @@ public class StreamWriteOperatorCoordinator
     // commit and error logging
     HashMap<String, String> checkpointCommitMetadata = new HashMap<>();
     StreamerUtil.addFlinkCheckpointIdIntoMetaData(conf, checkpointCommitMetadata, checkpointId);
+    StreamerUtil.addKafkaOffsetMetaData(conf, checkpointCommitMetadata, checkpointId);
     final Map<String, List<String>> partitionToReplacedFileIds = tableState.isOverwrite
         ? writeClient.getPartitionToReplacedFileIds(tableState.operationType, dataWriteResults)
         : Collections.emptyMap();
@@ -644,14 +645,14 @@ public class StreamWriteOperatorCoordinator
       log.error("The first 10 files with write errors:");
       dataWriteResults.stream().filter(WriteStatus::hasErrors).limit(10).forEach(ws -> {
         if (ws.getGlobalError() != null) {
-          log.error("Global error for partition path {} and fileID {}: {}",
+          log.error("Global error for partition path {} and fileID {}: ",
               ws.getPartitionPath(), ws.getFileId(), ws.getGlobalError());
         }
         if (!ws.getErrors().isEmpty()) {
           log.error("The first 100 records-level errors for partition path {} and fileID {}:",
               ws.getPartitionPath(), ws.getFileId());
           ws.getErrors().entrySet().stream().limit(100).forEach(entry ->
-              log.error("Error for key: {} and Exception: {}", entry.getKey(), entry.getValue().getMessage()));
+              log.error("Error for key {}: ", entry.getKey(), entry.getValue()));
         }
       });
     }

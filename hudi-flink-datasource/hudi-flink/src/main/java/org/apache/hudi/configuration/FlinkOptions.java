@@ -348,13 +348,6 @@ public class FlinkOptions extends HoodieConfig {
       .noDefaultValue()
       .withDescription("Source avro schema string, the parsed schema is used for deserialization");
 
-  @AdvancedConfig
-  public static final ConfigOption<Integer> SOURCE_READER_FETCH_BATCH_RECORD_COUNT =
-      ConfigOptions.key("source.fetch-batch-record-count")
-          .intType()
-          .defaultValue(2048)
-          .withDescription("The target number of records for Hoodie reader fetch batch.");
-
   public static final String QUERY_TYPE_SNAPSHOT = "snapshot";
   public static final String QUERY_TYPE_READ_OPTIMIZED = "read_optimized";
   public static final String QUERY_TYPE_INCREMENTAL = "incremental";
@@ -656,6 +649,13 @@ public class FlinkOptions extends HoodieConfig {
       .withDescription("Key generator type, that implements will extract the key out of incoming record. "
           + "**Note** This is being actively worked on. Please use "
           + "`hoodie.datasource.write.keygenerator.class` instead.");
+
+  @AdvancedConfig
+  public static final ConfigOption<String> PARTITION_VALUE_EXTRACTOR = ConfigOptions
+      .key(HoodieTableConfig.PARTITION_EXTRACTOR_CLASS.key())
+      .stringType()
+      .noDefaultValue()
+      .withDescription("Partition value extractor class helps extract the partition value from partition paths");
 
   public static final String PARTITION_FORMAT_HOUR = "yyyyMMddHH";
   public static final String PARTITION_FORMAT_DAY = "yyyyMMdd";
@@ -1145,6 +1145,94 @@ public class FlinkOptions extends HoodieConfig {
       .withDescription("Maximum number of groups to create as part of ClusteringPlan. Increasing groups will increase parallelism, default is 30");
 
   // ------------------------------------------------------------------------
+  //  Kafka Offset Trace Options
+  // ------------------------------------------------------------------------
+
+  @AdvancedConfig
+  public static final ConfigOption<String> CALLER_SERVICE_NAME = ConfigOptions
+          .key("kafka.offset.trace.caller.service.name")
+          .stringType()
+          .defaultValue("ingestion-rt")
+          .withDescription("Caller service name for checkpoint service RPC headers");
+
+  @AdvancedConfig
+  public static final ConfigOption<String> ATHENA_SERVICE = ConfigOptions
+          .key("kafka.offset.trace.checkpoint.service")
+          .stringType()
+          .defaultValue("athena-job-manager")
+          .withDescription("Checkpoint service name for offset lookup");
+
+  @AdvancedConfig
+  public static final ConfigOption<String> DC = ConfigOptions
+          .key("kafka.offset.trace.dc")
+          .stringType()
+          .noDefaultValue()
+          .withDescription("Data center for checkpoint offset lookup");
+
+  @AdvancedConfig
+  public static final ConfigOption<String> ENV = ConfigOptions
+          .key("kafka.offset.trace.env")
+          .stringType()
+          .noDefaultValue()
+          .withDescription("Environment for checkpoint offset lookup");
+
+  @AdvancedConfig
+  public static final ConfigOption<String> JOB_NAME = ConfigOptions
+          .key("kafka.offset.trace.job.name")
+          .stringType()
+          .noDefaultValue()
+          .withDescription("Flink job name for checkpoint offset lookup");
+
+  @AdvancedConfig
+  public static final ConfigOption<String> HADOOP_USER = ConfigOptions
+          .key("kafka.offset.trace.hadoop.user")
+          .stringType()
+          .noDefaultValue()
+          .withDescription("Hadoop user for checkpoint offset lookup");
+
+  @AdvancedConfig
+  public static final ConfigOption<String> SOURCE_KAFKA_CLUSTER = ConfigOptions
+          .key("kafka.offset.trace.source.cluster")
+          .stringType()
+          .noDefaultValue()
+          .withDescription("Source Kafka cluster name");
+
+  @AdvancedConfig
+  public static final ConfigOption<String> TARGET_KAFKA_CLUSTER = ConfigOptions
+          .key("kafka.offset.trace.target.cluster")
+          .stringType()
+          .noDefaultValue()
+          .withDescription("Target Kafka cluster name");
+
+  @AdvancedConfig
+  public static final ConfigOption<String> TOPIC_ID = ConfigOptions
+          .key("kafka.offset.trace.topic.id")
+          .stringType()
+          .noDefaultValue()
+          .withDescription("Topic ID for checkpoint offset requests");
+
+  @AdvancedConfig
+  public static final ConfigOption<String> SERVICE_TIER = ConfigOptions
+          .key("kafka.offset.trace.service.tier")
+          .stringType()
+          .defaultValue("DEFAULT")
+          .withDescription("Service tier for checkpoint offset lookup (e.g., DEFAULT, CRITICAL)");
+
+  @AdvancedConfig
+  public static final ConfigOption<String> SERVICE_NAME = ConfigOptions
+          .key("kafka.offset.trace.service.name")
+          .stringType()
+          .defaultValue("ingestion-rt")
+          .withDescription("Service name for checkpoint offset lookup");
+
+  @AdvancedConfig
+  public static final ConfigOption<String> KAFKA_TOPIC_NAME = ConfigOptions
+          .key("kafka.offset.trace.topic.name")
+          .stringType()
+          .noDefaultValue()
+          .withDescription("Kafka topic name for storing topic metadata along with offsets");
+
+  // ------------------------------------------------------------------------
   //  Hive Sync Options
   // ------------------------------------------------------------------------
 
@@ -1301,6 +1389,36 @@ public class FlinkOptions extends HoodieConfig {
           .withDescription(
               "The cache TTL (e.g. 10min) for the build table in lookup join.");
 
+  public static final ConfigOption<Boolean> LOOKUP_ASYNC =
+      key("lookup.async")
+          .booleanType()
+          .defaultValue(false)
+          .withDescription("Whether to enable async lookup join.");
+
+  public static final ConfigOption<Integer> LOOKUP_ASYNC_THREAD_NUMBER =
+      key("lookup.async-thread-number")
+          .intType()
+          .defaultValue(16)
+          .withDescription("The thread number for lookup async.");
+
+  public static final ConfigOption<String> LOOKUP_JOIN_CACHE_TYPE =
+      key("lookup.join.cache.type")
+          .stringType()
+          .defaultValue("heap")
+          .withDescription("The storage backend for the lookup join cache. "
+              + "Possible values: 'heap' (default) stores all dimension-table rows in JVM heap memory "
+              + "(may cause OutOfMemoryError for large tables); "
+              + "'rocksdb' stores rows off-heap in an embedded RocksDB instance on local disk, "
+              + "which avoids OOM at the cost of additional serialization overhead.");
+
+  public static final ConfigOption<String> LOOKUP_JOIN_ROCKSDB_PATH =
+      key("lookup.join.rocksdb.path")
+          .stringType()
+          .defaultValue(System.getProperty("java.io.tmpdir") + "/hudi-lookup-rocksdb")
+          .withDescription("Local directory path for storing RocksDB data when "
+              + "'lookup.join.cache.type' is set to 'rocksdb'. "
+              + "Each task manager will create a unique subdirectory under this path. "
+              + "The directory is cleaned up when the lookup function is closed.");
 
   // -------------------------------------------------------------------------
   //  Utilities

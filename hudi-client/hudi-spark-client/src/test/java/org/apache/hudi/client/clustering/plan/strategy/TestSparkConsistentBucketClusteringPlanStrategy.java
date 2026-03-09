@@ -200,7 +200,7 @@ public class TestSparkConsistentBucketClusteringPlanStrategy extends HoodieSpark
     long logFileSize = (totalLogFileSize + numLogFiles - 1) / Math.max(numLogFiles, 1);
     for (int i = 0; i < numLogFiles; ++i) {
       HoodieLogFile f = new HoodieLogFile(String.format(".%s_%s.log.%d", fileId, "12345678", i));
-      f.setFileLen(logFileSize);
+      f.setFileSize(logFileSize);
       fs.addLogFile(f);
     }
 

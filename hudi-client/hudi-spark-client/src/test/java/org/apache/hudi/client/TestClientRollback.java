@@ -25,9 +25,11 @@ import org.apache.hudi.avro.model.HoodieRollbackRequest;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieBaseFile;
+import org.apache.hudi.client.transaction.lock.InProcessLockProvider;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
+import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -42,6 +44,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
+import org.apache.hudi.config.HoodieLockConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieRollbackException;
 import org.apache.hudi.index.HoodieIndex;
@@ -691,13 +694,14 @@ public class TestClientRollback extends HoodieClientTestBase {
 
   private static Stream<Arguments> testRollbackWithRequestedRollbackPlanParams() {
     return Arrays.stream(new Boolean[][] {
-        {true, true}, {true, false}, {false, true}, {false, false},
+        {true, true, true}, {true, true, false}, {true, false, true}, {true, false, false},
+        {false, true, true}, {false, true, false}, {false, false, true}, {false, false, false},
     }).map(Arguments::of);
   }
 
   @ParameterizedTest
   @MethodSource("testRollbackWithRequestedRollbackPlanParams")
-  public void testRollbackWithRequestedRollbackPlan(boolean enableMetadataTable, boolean isRollbackPlanCorrupted) throws Exception {
+  public void testRollbackWithRequestedRollbackPlan(boolean enableMetadataTable, boolean isRollbackPlanCorrupted, boolean usingMultiwriter) throws Exception {
     // Let's create some commit files and base files
     final String p1 = "2022/04/05";
     final String p2 = "2022/04/06";
@@ -724,7 +728,7 @@ public class TestClientRollback extends HoodieClientTestBase {
       }
     };
 
-    HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath)
+    HoodieWriteConfig.Builder configBuilder = HoodieWriteConfig.newBuilder().withPath(basePath)
         .withRollbackUsingMarkers(false)
         .withMetadataConfig(
             HoodieMetadataConfig.newBuilder()
@@ -736,7 +740,18 @@ public class TestClientRollback extends HoodieClientTestBase {
         )
         .withCleanConfig(HoodieCleanConfig.newBuilder()
             .withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.LAZY).build())
-        .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.INMEMORY).build()).build();
+        .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.INMEMORY).build());
+
+    if (usingMultiwriter) {
+      configBuilder.withWriteConcurrencyMode(WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL)
+          .withLockConfig(HoodieLockConfig.newBuilder()
+              .withLockProvider(InProcessLockProvider.class)
+              .build());
+    } else {
+      configBuilder.withWriteConcurrencyMode(WriteConcurrencyMode.SINGLE_WRITER);
+    }
+
+    HoodieWriteConfig config = configBuilder.build();
 
     HoodieTableMetadataWriter metadataWriter = enableMetadataTable ? SparkHoodieBackedTableMetadataWriter.create(
         metaClient.getStorageConf(), config, context) : null;
@@ -778,15 +793,29 @@ public class TestClientRollback extends HoodieClientTestBase {
 
       metaClient.reloadActiveTimeline();
       List<HoodieInstant> rollbackInstants = metaClient.getActiveTimeline().getRollbackTimeline().getInstants();
-      // Corrupted requested rollback plan should be deleted before scheduling a new one
-      assertEquals(rollbackInstants.size(), 1);
-      HoodieInstant rollbackInstant = rollbackInstants.get(0);
-      assertTrue(rollbackInstant.isCompleted());
 
-      if (isRollbackPlanCorrupted) {
-        // Should create a new rollback instant
+      if (isRollbackPlanCorrupted && usingMultiwriter) {
+        // Multi-writer mode: corrupted plan is skipped (not deleted), new rollback created
+        // Results in 2 rollback instants: original corrupted REQUESTED + new COMPLETED
+        assertEquals(2, rollbackInstants.size());
+        HoodieInstant completedRollbackInstant = rollbackInstants.stream()
+            .filter(HoodieInstant::isCompleted)
+            .findFirst()
+            .orElseThrow(() -> new AssertionError("Expected a completed rollback instant"));
+        // New rollback instant should have different time
+        assertNotEquals(rollbackInstantTime, completedRollbackInstant.requestedTime());
+      } else if (isRollbackPlanCorrupted) {
+        // Single-writer mode: corrupted plan is deleted, new rollback created
+        assertEquals(1, rollbackInstants.size());
+        HoodieInstant rollbackInstant = rollbackInstants.get(0);
+        assertTrue(rollbackInstant.isCompleted());
+        // New rollback instant should have different time
         assertNotEquals(rollbackInstantTime, rollbackInstant.requestedTime());
       } else {
+        // Valid plan: reused in both single-writer and multi-writer modes
+        assertEquals(1, rollbackInstants.size());
+        HoodieInstant rollbackInstant = rollbackInstants.get(0);
+        assertTrue(rollbackInstant.isCompleted());
         // Should reuse the rollback instant
         assertEquals(rollbackInstantTime, rollbackInstant.requestedTime());
       }

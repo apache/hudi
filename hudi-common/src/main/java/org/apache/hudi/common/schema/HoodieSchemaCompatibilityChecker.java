@@ -115,7 +115,7 @@ public class HoodieSchemaCompatibilityChecker {
    * @return the writer field, if any does correspond, or None.
    */
   public static HoodieSchemaField lookupWriterField(final HoodieSchema writerSchema, final HoodieSchemaField readerField) {
-    assert (writerSchema.getType() == HoodieSchemaType.RECORD);
+    assert (writerSchema.hasFields());
     final List<HoodieSchemaField> writerFields = new ArrayList<>();
     writerSchema.getField(readerField.name()).ifPresent(writerFields::add);
     for (final String readerFieldAliasName : readerField.aliases()) {
@@ -316,6 +316,7 @@ public class HoodieSchemaCompatibilityChecker {
             result = result.mergedWith(checkSchemaNames(reader, writer, locations));
             return result.mergedWith(checkReaderEnumContainsAllWriterEnumSymbols(reader, writer, locations));
           case RECORD:
+          case BLOB:
             result = result.mergedWith(checkSchemaNames(reader, writer, locations));
             return result.mergedWith(checkReaderWriterRecordFields(reader, writer, locations));
           case UNION:

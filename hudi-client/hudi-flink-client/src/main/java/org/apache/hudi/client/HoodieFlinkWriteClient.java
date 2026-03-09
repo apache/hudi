@@ -234,7 +234,7 @@ public class HoodieFlinkWriteClient<T>
     HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> table =
         initTable(WriteOperationType.UPSERT, Option.ofNullable(instantTime));
     table.validateUpsertSchema();
-    preWrite(instantTime, WriteOperationType.UPSERT_PREPPED, table.getMetaClient());
+    preWrite(instantTime, WriteOperationType.UPSERT_PREPPED, table.getMetaClient(), Option.of(HoodieListData.eager(preppedRecords)));
     Map<String, List<HoodieRecord<T>>> preppedRecordsByFileId = preppedRecords.stream().parallel()
         .collect(Collectors.groupingBy(r -> r.getCurrentLocation().getFileId()));
     return preppedRecordsByFileId.values().stream().parallel().map(records -> {
@@ -318,7 +318,7 @@ public class HoodieFlinkWriteClient<T>
     HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> table =
         initTable(WriteOperationType.BULK_INSERT_PREPPED, Option.ofNullable(instantTime));
     table.validateInsertSchema();
-    preWrite(instantTime, WriteOperationType.BULK_INSERT_PREPPED, table.getMetaClient());
+    preWrite(instantTime, WriteOperationType.BULK_INSERT_PREPPED, table.getMetaClient(), Option.of(HoodieListData.eager(preppedRecords)));
     Map<String, List<HoodieRecord<T>>> preppedRecordsByFileId = preppedRecords.stream().parallel()
         .collect(Collectors.groupingBy(r -> r.getCurrentLocation().getFileId()));
     return preppedRecordsByFileId.values().stream().parallel().map(records -> {
@@ -345,7 +345,7 @@ public class HoodieFlinkWriteClient<T>
   public List<WriteStatus> deletePrepped(List<HoodieRecord<T>> preppedRecords, final String instantTime) {
     HoodieTable<T, List<HoodieRecord<T>>, List<HoodieKey>, List<WriteStatus>> table =
         initTable(WriteOperationType.DELETE_PREPPED, Option.ofNullable(instantTime));
-    preWrite(instantTime, WriteOperationType.DELETE_PREPPED, table.getMetaClient());
+    preWrite(instantTime, WriteOperationType.DELETE_PREPPED, table.getMetaClient(), Option.of(HoodieListData.eager(preppedRecords)));
     HoodieWriteMetadata<List<WriteStatus>> result = table.deletePrepped(context, instantTime, preppedRecords);
     return postWrite(result, instantTime, table);
   }
@@ -360,11 +360,20 @@ public class HoodieFlinkWriteClient<T>
 
   @Override
   public void preWrite(String instantTime, WriteOperationType writeOperationType, HoodieTableMetaClient metaClient) {
+    preWrite(instantTime, writeOperationType, metaClient, Option.empty());
+  }
+
+  @Override
+  public void preWrite(String instantTime, WriteOperationType writeOperationType,
+                       HoodieTableMetaClient metaClient, Option<HoodieData<HoodieRecord<T>>> recordsOpt) {
     setOperationType(writeOperationType);
     // Note: the code to read the commit metadata is not thread safe for JSON deserialization,
     // remove the table metadata sync
 
     // remove the async cleaning
+
+    // Run pre-write validators
+    runPreWriteValidators(instantTime, writeOperationType, metaClient, recordsOpt);
   }
 
   /**
@@ -462,6 +471,21 @@ public class HoodieFlinkWriteClient<T>
     // no need to execute the upgrade/downgrade on each write in streaming.
 
     // flink performs metadata table bootstrap on the coordinator when it starts up.
+  }
+
+  /**
+   * Marks the timeline loading as lazy for table init in write path.
+   *
+   * <p>The write client is local entry per-task and the table is initialized for each write,
+   * always make the timeline loading as lazy because there is no cross-network transmission
+   * so no gains for eager loading.
+   *
+   * <p>For append-only write path like pk-less table and log append for MOR table, the timeline loading is unnecessary
+   * and the metadata file listing cost could be saved.
+   */
+  @Override
+  protected boolean loadActiveTimelineOnTableInit() {
+    return false;
   }
 
   public void completeTableService(

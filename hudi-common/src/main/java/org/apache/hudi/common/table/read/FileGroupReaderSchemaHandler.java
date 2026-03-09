@@ -175,7 +175,17 @@ public class FileGroupReaderSchemaHandler<T> {
       return requestedSchema;
     }
 
-    if (hoodieTableConfig.getRecordMergeMode() == RecordMergeMode.CUSTOM) {
+    RecordMergeMode mergeMode = hoodieTableConfig.getRecordMergeMode();
+    if (hoodieTableConfig.getTableVersion().lesserThan(HoodieTableVersion.NINE)) {
+      Triple<RecordMergeMode, String, String> mergingConfigs = inferMergingConfigsForPreV9Table(
+          hoodieTableConfig.getRecordMergeMode(),
+          hoodieTableConfig.getPayloadClass(),
+          hoodieTableConfig.getRecordMergeStrategyId(),
+          hoodieTableConfig.getOrderingFieldsStr().orElse(null),
+          hoodieTableConfig.getTableVersion());
+      mergeMode = mergingConfigs.getLeft();
+    }
+    if (mergeMode == RecordMergeMode.CUSTOM) {
       if (!readerContext.getRecordMerger().get().isProjectionCompatible()) {
         return this.tableSchema;
       }
@@ -184,7 +194,7 @@ public class FileGroupReaderSchemaHandler<T> {
     List<HoodieSchemaField> addedFields = new ArrayList<>();
     for (String field : getMandatoryFieldsForMerging(
         hoodieTableConfig, this.properties, this.tableSchema, readerContext.getRecordMerger(),
-        deleteContext.hasBuiltInDeleteField(), deleteContext.getCustomDeleteMarkerKeyValue(), hasInstantRange)) {
+        deleteContext.hasBuiltInDeleteField(), deleteContext.getCustomDeleteMarkerKeyValue(), hasInstantRange, mergeMode)) {
       if (!findNestedField(requestedSchema, field).isPresent()) {
         addedFields.add(getField(this.tableSchema, field));
       }
@@ -203,18 +213,8 @@ public class FileGroupReaderSchemaHandler<T> {
                                                        Option<HoodieRecordMerger> recordMerger,
                                                        boolean hasBuiltInDelete,
                                                        Option<Pair<String, String>> customDeleteMarkerKeyAndValue,
-                                                       boolean hasInstantRange) {
-    RecordMergeMode mergeMode = cfg.getRecordMergeMode();
-    if (cfg.getTableVersion().lesserThan(HoodieTableVersion.NINE)) {
-      Triple<RecordMergeMode, String, String> mergingConfigs = inferMergingConfigsForPreV9Table(
-          cfg.getRecordMergeMode(),
-          cfg.getPayloadClass(),
-          cfg.getRecordMergeStrategyId(),
-          cfg.getOrderingFieldsStr().orElse(null),
-          cfg.getTableVersion());
-      mergeMode = mergingConfigs.getLeft();
-    }
-
+                                                       boolean hasInstantRange,
+                                                       RecordMergeMode mergeMode) {
     if (mergeMode == RecordMergeMode.CUSTOM) {
       return recordMerger.get().getMandatoryFieldsForMerging(tableSchema, cfg, props);
     }

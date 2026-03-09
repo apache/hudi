@@ -34,6 +34,7 @@ import org.apache.flink.table.types.logical.IntType;
 import org.apache.flink.table.types.logical.LocalZonedTimestampType;
 import org.apache.flink.table.types.logical.LogicalType;
 import org.apache.flink.table.types.logical.LogicalTypeFamily;
+import org.apache.flink.table.types.logical.LogicalTypeRoot;
 import org.apache.flink.table.types.logical.MapType;
 import org.apache.flink.table.types.logical.MultisetType;
 import org.apache.flink.table.types.logical.RowType;
@@ -41,6 +42,7 @@ import org.apache.flink.table.types.logical.TimeType;
 import org.apache.flink.table.types.logical.TimestampType;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -175,6 +177,13 @@ public class HoodieSchemaConverter {
 
       case ROW:
         RowType rowType = (RowType) logicalType;
+
+        // Check if this is a BLOB structure
+        if (isBlobStructure(rowType)) {
+          schema = HoodieSchema.createBlob();
+          break;
+        }
+
         List<String> fieldNames = rowType.getFieldNames();
 
         List<HoodieSchemaField> hoodieFields = new ArrayList<>();
@@ -253,6 +262,82 @@ public class HoodieSchemaConverter {
   }
 
   /**
+   * Detects if a Flink RowType represents a BLOB structure by validating it matches the schema defined in {@link HoodieSchema.Blob}.
+   */
+  private static boolean isBlobStructure(RowType rowType) {
+    // Validate: 3 fields with exact names
+    if (rowType.getFieldCount() != HoodieSchema.Blob.getFieldCount()) {
+      return false;
+    }
+    List<String> fieldNames = rowType.getFieldNames();
+    if (!fieldNames.equals(Arrays.asList(
+        HoodieSchema.Blob.TYPE,
+        HoodieSchema.Blob.INLINE_DATA_FIELD,
+        HoodieSchema.Blob.EXTERNAL_REFERENCE))) {
+      return false;
+    }
+
+    // Validate 'type' field: non-null STRING
+    LogicalType typeField = rowType.getTypeAt(0);
+    if (!isFamily(typeField, LogicalTypeFamily.CHARACTER_STRING) || typeField.isNullable()) {
+      return false;
+    }
+
+    // Validate 'data' field: nullable BYTES/VARBINARY
+    LogicalType dataField = rowType.getTypeAt(1);
+    if (dataField.getTypeRoot() != LogicalTypeRoot.BINARY && dataField.getTypeRoot() != LogicalTypeRoot.VARBINARY) {
+      return false;
+    }
+    if (!dataField.isNullable()) {
+      return false;
+    }
+
+    // Validate 'reference' field: nullable ROW
+    LogicalType referenceField = rowType.getTypeAt(2);
+    if (!referenceField.isNullable() || referenceField.getTypeRoot() != LogicalTypeRoot.ROW) {
+      return false;
+    }
+
+    // Validate reference sub-structure
+    RowType referenceRow = (RowType) referenceField;
+    if (referenceRow.getFieldCount() != HoodieSchema.Blob.getReferenceFieldCount()) {
+      return false;
+    }
+    List<String> refFieldNames = referenceRow.getFieldNames();
+    if (!refFieldNames.equals(Arrays.asList(
+        HoodieSchema.Blob.EXTERNAL_REFERENCE_PATH,
+        HoodieSchema.Blob.EXTERNAL_REFERENCE_OFFSET,
+        HoodieSchema.Blob.EXTERNAL_REFERENCE_LENGTH,
+        HoodieSchema.Blob.EXTERNAL_REFERENCE_IS_MANAGED))) {
+      return false;
+    }
+
+    // Validate reference sub-field types
+    // external_path: non-null STRING
+    if (!isFamily(referenceRow.getTypeAt(0), LogicalTypeFamily.CHARACTER_STRING)
+        || referenceRow.getTypeAt(0).isNullable()) {
+      return false;
+    }
+    // offset: nullable BIGINT
+    if (referenceRow.getTypeAt(1).getTypeRoot() != LogicalTypeRoot.BIGINT
+        || !referenceRow.getTypeAt(1).isNullable()) {
+      return false;
+    }
+    // length: nullable BIGINT
+    if (referenceRow.getTypeAt(2).getTypeRoot() != LogicalTypeRoot.BIGINT
+        || !referenceRow.getTypeAt(2).isNullable()) {
+      return false;
+    }
+    // managed: non-null BOOLEAN
+    if (referenceRow.getTypeAt(3).getTypeRoot() != LogicalTypeRoot.BOOLEAN
+        || referenceRow.getTypeAt(3).isNullable()) {
+      return false;
+    }
+
+    return true;
+  }
+
+  /**
    * Computes minimum bytes needed for decimal precision.
    * This ensures compatibility with Avro fixed-size decimal representation.
    */
@@ -316,6 +401,8 @@ public class HoodieSchemaConverter {
         return convertTimestamp(hoodieSchema);
       case UUID:
         return DataTypes.STRING().notNull();
+      case BLOB:
+        return createBlob();
       case ARRAY:
         return convertArray(hoodieSchema);
       case MAP:
@@ -378,6 +465,24 @@ public class HoodieSchemaConverter {
     HoodieSchema.Time timeSchema = (HoodieSchema.Time) schema;
     int flinkPrecision = (timeSchema.getPrecision() == HoodieSchema.TimePrecision.MILLIS) ? 3 : 6;
     return DataTypes.TIME(flinkPrecision).notNull();
+  }
+
+  private static DataType createBlob() {
+    // Create nested reference ROW type
+    DataType referenceType = DataTypes.ROW(
+        DataTypes.FIELD(HoodieSchema.Blob.EXTERNAL_REFERENCE_PATH, DataTypes.STRING().notNull()),
+        DataTypes.FIELD(HoodieSchema.Blob.EXTERNAL_REFERENCE_OFFSET, DataTypes.BIGINT().nullable()),
+        DataTypes.FIELD(HoodieSchema.Blob.EXTERNAL_REFERENCE_LENGTH, DataTypes.BIGINT().nullable()),
+        DataTypes.FIELD(HoodieSchema.Blob.EXTERNAL_REFERENCE_IS_MANAGED, DataTypes.BOOLEAN().notNull())
+    ).nullable();
+
+    // Create top-level BLOB ROW type
+    // Note: 'type' field is ENUM, converted to STRING in Flink
+    return DataTypes.ROW(
+        DataTypes.FIELD(HoodieSchema.Blob.TYPE, DataTypes.STRING().notNull()),
+        DataTypes.FIELD(HoodieSchema.Blob.INLINE_DATA_FIELD, DataTypes.BYTES().nullable()),
+        DataTypes.FIELD(HoodieSchema.Blob.EXTERNAL_REFERENCE, referenceType)
+    ).notNull();
   }
 
   private static DataType convertRecord(HoodieSchema schema) {

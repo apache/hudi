@@ -18,6 +18,7 @@
 package org.apache.hudi.common.util.collection;
 
 import lombok.Getter;
+import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
@@ -33,6 +34,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+@Slf4j
 public class TestClosableSortedDedupingIterator {
 
   @Test
@@ -231,32 +233,32 @@ public class TestClosableSortedDedupingIterator {
     List<String> elementsWithConsecutiveNulls = Arrays.asList("a", null, null, "b", null, null);
     ClosableSortedDedupingIterator<String> dedupingIterator = 
         new ClosableSortedDedupingIterator<>(elementsWithConsecutiveNulls.iterator());
-    
+
     // Debug: trace through each step
-    System.out.println("Input: " + elementsWithConsecutiveNulls);
-    
+    log.debug("Input: {}", elementsWithConsecutiveNulls);
+
     // First element
     assertTrue(dedupingIterator.hasNext());
     String first = dedupingIterator.next();
-    System.out.println("1. " + first);
+    log.debug("1. {}", first);
     assertEquals("a", first);
     
     // Second element
     assertTrue(dedupingIterator.hasNext());
     String second = dedupingIterator.next();
-    System.out.println("2. " + second);
+    log.debug("2. {}", second);
     assertNull(second);
     
     // Third element
     assertTrue(dedupingIterator.hasNext());
     String third = dedupingIterator.next();
-    System.out.println("3. " + third);
+    log.debug("3. {}", third);
     assertEquals("b", third);
     
     // Fourth element
     assertTrue(dedupingIterator.hasNext());
     String fourth = dedupingIterator.next();
-    System.out.println("4. " + fourth);
+    log.debug("4. {}", fourth);
     assertNull(fourth);
     
     // No more elements

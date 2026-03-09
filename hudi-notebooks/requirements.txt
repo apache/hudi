@@ -1,0 +1,6 @@
+jupyter
+pandas
+numpy
+boto3
+trino
+presto-python-client

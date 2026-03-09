@@ -138,6 +138,7 @@ object HoodieSchemaConversionUtils {
     try {
       HoodieSparkSchemaConverters.toHoodieType(structType, nullable, structName, recordNamespace)
     } catch {
+      case h: HoodieSchemaException => throw h
       case a: AvroRuntimeException => throw new HoodieSchemaException(a.getMessage, a)
       case e: Exception => throw new HoodieSchemaException(
         s"Failed to convert struct type to HoodieSchema: $structType", e)
