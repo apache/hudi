@@ -127,6 +127,7 @@ public class TestSparkHoodieHBaseIndex extends SparkClientFunctionalTestHarness 
 
     utility = new HBaseTestingUtility(hbaseConfig);
     utility.startMiniCluster(StartMiniClusterOption.builder().numDataNodes(2).build());
+    utility.getDFSCluster().waitActive();
     hbaseConfig = utility.getConnection().getConfiguration();
     utility.createTable(TableName.valueOf(TABLE_NAME), Bytes.toBytes("_s"),2);
   }
