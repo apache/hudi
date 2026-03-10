@@ -27,11 +27,11 @@ import org.apache.parquet.hadoop.metadata.CompressionCodecName;
 /**
  * ParquetConfig for datasource implementation with {@link org.apache.hudi.client.model.HoodieInternalRow}.
  */
-public class HoodieRowParquetConfig extends HoodieParquetConfig<HoodieRowParquetWriteSupport> {
+public class HoodieRowParquetConfig extends HoodieParquetConfig<HoodieParquetWriteSupport> {
 
-  public HoodieRowParquetConfig(HoodieRowParquetWriteSupport writeSupport, CompressionCodecName compressionCodecName,
-      int blockSize, int pageSize, long maxFileSize, Configuration hadoopConf,
-      double compressionRatio, boolean enableDictionary) {
+  public HoodieRowParquetConfig(HoodieParquetWriteSupport writeSupport, CompressionCodecName compressionCodecName,
+                                int blockSize, int pageSize, long maxFileSize, Configuration hadoopConf,
+                                double compressionRatio, boolean enableDictionary) {
     super(writeSupport, compressionCodecName, blockSize, pageSize, maxFileSize,
         new HadoopStorageConfiguration(hadoopConf), compressionRatio, enableDictionary);
   }

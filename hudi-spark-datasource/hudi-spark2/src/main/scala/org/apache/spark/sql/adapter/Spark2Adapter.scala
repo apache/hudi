@@ -43,7 +43,6 @@ import org.apache.spark.sql.execution.vectorized.MutableColumnarRow
 import org.apache.spark.sql.hudi.SparkAdapter
 import org.apache.spark.sql.hudi.parser.HoodieSpark2ExtendedSqlParser
 import org.apache.spark.sql.internal.SQLConf
-import org.apache.spark.sql.internal.SQLConf.LegacyBehaviorPolicy
 import org.apache.spark.sql.parser.HoodieExtendedParserInterface
 import org.apache.spark.sql.sources.{BaseRelation, Filter}
 import org.apache.spark.sql.types.{DataType, Metadata, MetadataBuilder, StructType}
@@ -241,16 +240,11 @@ class Spark2Adapter extends SparkAdapter {
     )
   }
 
-  def getDateTimeRebaseMode(): LegacyBehaviorPolicy.Value = {
-    LegacyBehaviorPolicy.withName(SQLConf.get.getConf(SQLConf.PARQUET_REBASE_MODE_IN_WRITE))
+  override def getDateTimeRebaseMode(): Object = {
+    null
   }
 
-  def isLegacyBehaviorPolicy(value: Object): Boolean = {
-    value == LegacyBehaviorPolicy.LEGACY
-  }
-
-  // Older Spark 3.x versions and Spark 2.x do not have TimestampNTZType
-  def isTimestampNTZType(dataType: DataType): Boolean = {
+  override def isLegacyBehaviorPolicy(value: Object): Boolean = {
     false
   }
 }

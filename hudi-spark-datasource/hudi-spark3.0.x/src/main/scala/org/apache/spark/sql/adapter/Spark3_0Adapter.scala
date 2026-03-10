@@ -126,15 +126,10 @@ class Spark3_0Adapter extends BaseSpark3Adapter {
   }
 
   def getDateTimeRebaseMode(): LegacyBehaviorPolicy.Value = {
-    LegacyBehaviorPolicy.withName(SQLConf.get.getConf(SQLConf.PARQUET_REBASE_MODE_IN_WRITE))
+    LegacyBehaviorPolicy.withName(SQLConf.get.getConf(SQLConf.LEGACY_PARQUET_REBASE_MODE_IN_WRITE))
   }
 
   def isLegacyBehaviorPolicy(value: Object): Boolean = {
     value == LegacyBehaviorPolicy.LEGACY
-  }
-
-  // Older Spark 3.x versions and Spark 2.x do not have TimestampNTZType
-  def isTimestampNTZType(dataType: DataType): Boolean = {
-    false
   }
 }
