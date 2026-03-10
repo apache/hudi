@@ -152,7 +152,7 @@ object HoodieCreateRecordUtils {
               avroRecWithoutMeta
             }
             val hoodieRecord = if (shouldCombine && !orderingFields.isEmpty) {
-              val orderingVal = createOrderingValue(orderingFields, avroRec, hoodieKey.getRecordKey,
+              val orderingVal = getOrderingValue(orderingFields, avroRec, hoodieKey.getRecordKey,
                 consistentLogicalTimestampEnabled, recordMergeMode, payloadClass)
               HoodieRecordUtils.createHoodieRecord(processedRecord, orderingVal, hoodieKey,
                 config.getPayloadClass, null, recordLocation, requiresPayload, isDelete)
@@ -283,17 +283,17 @@ object HoodieCreateRecordUtils {
   }
 
   /**
-   * Creates an OrderingValues object from the ordering fields of an Avro record.
+   * Gets the ordering value from the ordering fields of an Avro record.
    * For payload classes that don't require ordering (e.g., OverwriteWithLatestAvroPayload)
    * or COMMIT_TIME_ORDERING merge mode, null values are allowed and a default ordering value is used.
    * For other cases, throws IllegalArgumentException if any ordering field has a null value.
    */
-  private def createOrderingValue(orderingFields: java.util.List[String],
-                                  avroRec: GenericRecord,
-                                  recordKey: String,
-                                  consistentLogicalTimestampEnabled: Boolean,
-                                  recordMergeMode: RecordMergeMode,
-                                  payloadClass: String): OrderingValues = {
+  private def getOrderingValue(orderingFields: java.util.List[String],
+                               avroRec: GenericRecord,
+                               recordKey: String,
+                               consistentLogicalTimestampEnabled: Boolean,
+                               recordMergeMode: RecordMergeMode,
+                               payloadClass: String): Comparable[_] = {
     // Ordering values are not required for COMMIT_TIME_ORDERING or OverwriteWithLatestAvroPayload
     val requiresOrderingValue = recordMergeMode != RecordMergeMode.COMMIT_TIME_ORDERING &&
       !classOf[OverwriteWithLatestAvroPayload].getName.equals(payloadClass)
