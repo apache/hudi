@@ -3794,7 +3794,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     syncOnce(cfg);
     if (operationType == WriteOperationType.DELETE) {
       // Test Records Deleted
-      assertRecordCount(500, tableBasePath + "/*/*.parquet", sqlContext);
+      assertRecordCount(500, tableBasePath, sqlContext);
       TestHelpers.assertCommitMetadata("00001", tableBasePath, 2);
     } else {
       assertRecordCount(950, tableBasePath, sqlContext);
