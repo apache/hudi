@@ -18,6 +18,7 @@
 package org.apache.spark.sql.adapter
 
 import org.apache.avro.Schema
+import org.apache.parquet.schema.Type
 import org.apache.hudi.Spark33HoodieFileScanRDD
 import org.apache.spark.sql._
 import org.apache.spark.sql.avro._
@@ -30,7 +31,7 @@ import org.apache.spark.sql.catalyst.planning.PhysicalOperation
 import org.apache.spark.sql.catalyst.plans.logical._
 import org.apache.spark.sql.catalyst.util.METADATA_COL_ATTR_KEY
 import org.apache.spark.sql.connector.catalog.V2TableWithV1Fallback
-import org.apache.spark.sql.execution.datasources.parquet.{ParquetFileFormat, Spark33LegacyHoodieParquetFileFormat}
+import org.apache.spark.sql.execution.datasources.parquet.{ParquetFileFormat, ParquetUtils, Spark33LegacyHoodieParquetFileFormat}
 import org.apache.spark.sql.execution.datasources.v2.DataSourceV2Relation
 import org.apache.spark.sql.execution.datasources._
 import org.apache.spark.sql.hudi.analysis.TableValuedFunctions
@@ -140,4 +141,12 @@ class Spark3_3Adapter extends BaseSpark3Adapter {
     value == LegacyBehaviorPolicy.LEGACY
   }
 
+
+  override def applyFieldIdToType(parquetType: Type, structField: org.apache.spark.sql.types.StructField): Type = {
+    if (ParquetUtils.hasFieldId(structField)) {
+      parquetType.withId(ParquetUtils.getFieldId(structField))
+    } else {
+      parquetType
+    }
+  }
 }

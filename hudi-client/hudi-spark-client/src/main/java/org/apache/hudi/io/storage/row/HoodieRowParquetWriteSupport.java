@@ -50,7 +50,6 @@ import org.apache.spark.sql.catalyst.util.ArrayData;
 import org.apache.spark.sql.catalyst.util.DateTimeUtils;
 import org.apache.spark.sql.catalyst.util.MapData;
 import org.apache.spark.sql.execution.datasources.DataSourceUtils;
-import org.apache.spark.sql.execution.datasources.parquet.ParquetUtils;
 import org.apache.spark.sql.execution.datasources.parquet.ParquetWriteSupport;
 import org.apache.spark.sql.internal.SQLConf;
 import org.apache.spark.sql.types.ArrayType;
@@ -412,10 +411,7 @@ public class HoodieRowParquetWriteSupport extends WriteSupport<InternalRow> {
 
   private Type convertField(Schema avroFieldSchema, StructField structField) {
     Type type = convertField(avroFieldSchema, structField, structField.nullable() ? OPTIONAL : REQUIRED);
-    if (ParquetUtils.hasFieldId(structField)) {
-      return type.withId(ParquetUtils.getFieldId(structField));
-    }
-    return type;
+    return SparkAdapterSupport$.MODULE$.sparkAdapter().applyFieldIdToType(type, structField);
   }
 
   private Type convertField(Schema avroFieldSchema, StructField structField, Type.Repetition repetition) {

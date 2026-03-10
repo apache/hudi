@@ -33,6 +33,8 @@ import org.apache.spark.sql.execution.datasources.parquet.{ParquetFileFormat, Sp
 import org.apache.spark.sql.execution.datasources.v2.DataSourceV2Relation
 import org.apache.spark.sql.execution.datasources.{FilePartition, FileScanRDD, HoodieSpark30PartitionedFileUtils, HoodieSparkPartitionedFileUtils, PartitionedFile}
 import org.apache.spark.sql.hudi.SparkAdapter
+import org.apache.spark.sql.internal.SQLConf
+import org.apache.spark.sql.internal.SQLConf.LegacyBehaviorPolicy
 import org.apache.spark.sql.parser.{HoodieExtendedParserInterface, HoodieSpark3_0ExtendedSqlParser}
 import org.apache.spark.sql.types.{DataType, Metadata, MetadataBuilder, StructType}
 import org.apache.spark.sql.vectorized.ColumnarUtils
@@ -121,5 +123,18 @@ class Spark3_0Adapter extends BaseSpark3Adapter {
     case MEMORY_AND_DISK_SER_2 => "MEMORY_AND_DISK_SER_2"
     case OFF_HEAP => "OFF_HEAP"
     case _ => throw new IllegalArgumentException(s"Invalid StorageLevel: $level")
+  }
+
+  def getDateTimeRebaseMode(): LegacyBehaviorPolicy.Value = {
+    LegacyBehaviorPolicy.withName(SQLConf.get.getConf(SQLConf.PARQUET_REBASE_MODE_IN_WRITE))
+  }
+
+  def isLegacyBehaviorPolicy(value: Object): Boolean = {
+    value == LegacyBehaviorPolicy.LEGACY
+  }
+
+  // Older Spark 3.x versions and Spark 2.x do not have TimestampNTZType
+  def isTimestampNTZType(dataType: DataType): Boolean = {
+    false
   }
 }

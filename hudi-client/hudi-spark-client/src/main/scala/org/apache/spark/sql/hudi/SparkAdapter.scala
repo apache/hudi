@@ -23,7 +23,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.storage.{HoodieStorage, StoragePath}
 
 import org.apache.avro.Schema
-import org.apache.parquet.schema.MessageType
+import org.apache.parquet.schema.{MessageType, Type}
 import org.apache.spark.sql._
 import org.apache.spark.sql.avro.{HoodieAvroDeserializer, HoodieAvroSchemaConverters, HoodieAvroSerializer}
 import org.apache.spark.sql.catalyst.analysis.EliminateSubqueryAliases
@@ -39,7 +39,7 @@ import org.apache.spark.sql.execution.datasources.parquet.ParquetFileFormat
 import org.apache.spark.sql.parser.HoodieExtendedParserInterface
 import org.apache.spark.sql.sources.{BaseRelation, Filter}
 import org.apache.spark.sql.internal.SQLConf
-import org.apache.spark.sql.types.{DataType, Metadata, StructType}
+import org.apache.spark.sql.types.{DataType, Metadata, StructField, StructType}
 import org.apache.spark.sql.vectorized.{ColumnVector, ColumnarBatch}
 import org.apache.spark.storage.StorageLevel
 
@@ -253,4 +253,16 @@ trait SparkAdapter extends Serializable {
   def isLegacyBehaviorPolicy(value: Object): Boolean
 
   def isTimestampNTZType(dataType: DataType): Boolean
+
+  /**
+   * Applies field ID to a Parquet type if the StructField has field ID metadata.
+   * This is only supported in Spark 3.3+.
+   *
+   * @param parquetType the Parquet type to potentially apply field ID to
+   * @param structField the Spark StructField that may contain field ID metadata
+   * @return the Parquet type with field ID applied if available, otherwise the original type
+   */
+  def applyFieldIdToType(parquetType: Type, structField: StructField): Type = {
+    parquetType
+  }
 }

@@ -25,7 +25,7 @@ import org.apache.hudi.storage.HoodieStorage
 import org.apache.avro.Schema
 import org.apache.hadoop.conf.Configuration
 import org.apache.parquet.avro.HoodieAvroParquetSchemaConverter.getAvroSchemaConverter
-import org.apache.parquet.schema.{MessageType, SchemaRepair}
+import org.apache.parquet.schema.{MessageType, SchemaRepair, Type}
 import org.apache.spark.sql.avro._
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.analysis.EliminateSubqueryAliases
@@ -36,7 +36,7 @@ import org.apache.spark.sql.catalyst.planning.PhysicalOperation
 import org.apache.spark.sql.catalyst.plans.logical._
 import org.apache.spark.sql.catalyst.util.{METADATA_COL_ATTR_KEY, RebaseDateTime}
 import org.apache.spark.sql.connector.catalog.V2TableWithV1Fallback
-import org.apache.spark.sql.execution.datasources.parquet.{HoodieParquetReadSupport, ParquetFileFormat, ParquetReadSupport, ParquetToSparkSchemaConverter, Spark34LegacyHoodieParquetFileFormat, SparkBasicSchemaEvolution}
+import org.apache.spark.sql.execution.datasources.parquet.{HoodieParquetReadSupport, ParquetFileFormat, ParquetReadSupport, ParquetToSparkSchemaConverter, ParquetUtils, Spark34LegacyHoodieParquetFileFormat, SparkBasicSchemaEvolution}
 import org.apache.spark.sql.execution.datasources.v2.DataSourceV2Relation
 import org.apache.spark.sql.execution.datasources._
 import org.apache.spark.sql.hudi.analysis.TableValuedFunctions
@@ -189,5 +189,13 @@ class Spark3_4Adapter extends BaseSpark3Adapter {
 
   override def isTimestampNTZType(dataType: DataType): Boolean = {
     dataType == DataTypes.TimestampNTZType
+  }
+
+  override def applyFieldIdToType(parquetType: Type, structField: org.apache.spark.sql.types.StructField): Type = {
+    if (ParquetUtils.hasFieldId(structField)) {
+      parquetType.withId(ParquetUtils.getFieldId(structField))
+    } else {
+      parquetType
+    }
   }
 }
