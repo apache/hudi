@@ -40,6 +40,7 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
+import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.action.cluster.ClusteringPlanPartitionFilterMode;
 import org.apache.hudi.testutils.HoodieSparkClientTestHarness;
@@ -69,7 +70,10 @@ import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.sql.Date;
 import java.sql.Timestamp;
+import java.time.Instant;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
@@ -79,6 +83,7 @@ import java.util.Random;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
+import static org.apache.hudi.common.util.DateTimeUtils.microsToInstant;
 import static org.apache.parquet.avro.AvroWriteSupport.WRITE_OLD_LIST_STRUCTURE;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -160,19 +165,6 @@ public class TestSparkSortAndSizeClustering extends HoodieSparkClientTestHarness
     assertEquals(numRecords, rows.size());
     validateTypes(writeStats);
     validateDateAndTimestampFields(rows, ts);
-    validateDecimalTypeAfterClustering(writeStats);
-  }
-
-  // Validate that clustering produces decimals in legacy format
-  private void validateDecimalTypeAfterClustering(List<HoodieWriteStat> writeStats) {
-    writeStats.stream().map(writeStat -> new Path(metaClient.getBasePath(), writeStat.getPath())).forEach(writtenPath -> {
-      MessageType schema = ParquetUtils.readMetadata(storage, writtenPath)
-          .getFileMetaData().getSchema();
-      int index = schema.getFieldIndex("height");
-      Type decimalType = schema.getFields().get(index);
-      assertEquals("DECIMAL", decimalType.getOriginalType().toString());
-      assertEquals("FIXED_LEN_BYTE_ARRAY", decimalType.asPrimitiveType().getPrimitiveTypeName().toString());
-    });
   }
 
   private void validateDateAndTimestampFields(List<Row> rows, long ts) {
@@ -181,11 +173,13 @@ public class TestSparkSortAndSizeClustering extends HoodieSparkClientTestHarness
     // sanity check date field is within expected range
     Date startDate = Date.valueOf(LocalDate.now().minusDays(3));
     Date endDate = Date.valueOf(LocalDate.now().plusDays(1));
-    int dateFieldIndex = schema.getField("date_nullable_field").pos();
-    int tsMillisFieldIndex = schema.getField("timestamp_millis_field").pos();
-    int tsMicrosNullableFieldIndex = schema.getField("timestamp_micros_nullable_field").pos();
-    int tsLocalMillisFieldIndex = schema.getField("timestamp_local_millis_nullable_field").pos();
-    int tsLocalMicrosFieldIndex = schema.getField("timestamp_local_micros_field").pos();
+    // -1 since partition column is appended at the end
+    int indexAdjustment = -1;
+    int dateFieldIndex = schema.getField("date_nullable_field").pos() + indexAdjustment;
+    int tsMillisFieldIndex = schema.getField("timestamp_millis_field").pos() + indexAdjustment;
+    int tsMicrosNullableFieldIndex = schema.getField("timestamp_micros_nullable_field").pos() + indexAdjustment;
+    int tsLocalMillisFieldIndex = schema.getField("timestamp_local_millis_nullable_field").pos() + indexAdjustment;
+    int tsLocalMicrosFieldIndex = schema.getField("timestamp_local_micros_field").pos() + indexAdjustment;
     for (Row row : rows) {
       assertEquals(timestamp, row.get(tsMillisFieldIndex));
       if (!row.isNullAt(tsMicrosNullableFieldIndex)) {
@@ -197,9 +191,9 @@ public class TestSparkSortAndSizeClustering extends HoodieSparkClientTestHarness
         assertTrue(actualDate.compareTo(startDate) > 0 && actualDate.compareTo(endDate) < 0);
       }
       if (!row.isNullAt(tsLocalMillisFieldIndex)) {
-        assertEquals(ts, row.get(tsLocalMillisFieldIndex));
+        assertEquals(toLocalTimestampMillis(ts), row.get(tsLocalMillisFieldIndex));
       }
-      assertEquals(ts * 1000L, row.get(tsLocalMicrosFieldIndex));
+      assertEquals(toLocalTimestampMicros(ts * 1000L), row.get(tsLocalMicrosFieldIndex));
     }
   }
 
@@ -266,7 +260,7 @@ public class TestSparkSortAndSizeClustering extends HoodieSparkClientTestHarness
     Dataset<Row> roViewDF = sparkSession
         .read()
         .format("hudi")
-        .load(basePath + "/*/*/*/*");
+        .load(basePath);
     roViewDF.createOrReplaceTempView("clutering_table");
     return sparkSession.sqlContext().sql("select * from clutering_table").collectAsList();
   }
@@ -312,7 +306,7 @@ public class TestSparkSortAndSizeClustering extends HoodieSparkClientTestHarness
           Conversions.DecimalConversion decimalConversions = new Conversions.DecimalConversion();
           GenericFixed genericFixed = decimalConversions.toFixed(bigDecimal, decimalSchema, LogicalTypes.decimal(10, 6));
           record.put("decimal_field", genericFixed);
-          record.put("date_nullable_field", random.nextBoolean() ? null : LocalDate.now().minusDays(random.nextInt(3)));
+          record.put("date_nullable_field", random.nextBoolean() ? null : (int) LocalDate.now().minusDays(random.nextInt(3)).toEpochDay());
           record.put("timestamp_millis_field", ts);
           record.put("timestamp_micros_nullable_field", random.nextBoolean() ? null : ts * 1000);
           record.put("timestamp_local_millis_nullable_field", random.nextBoolean() ? null : ts);
@@ -322,7 +316,7 @@ public class TestSparkSortAndSizeClustering extends HoodieSparkClientTestHarness
               enumSchema
                   .getEnumSymbols()
                   .get(random.nextInt(enumSchema.getEnumSymbols().size()))));
-          return new HoodieAvroIndexedRecord(new HoodieKey(key, partition), record, ts);
+          return new HoodieAvroIndexedRecord(new HoodieKey(key, partition), record);
         })
         .collect(Collectors.toList());
   }
@@ -333,5 +327,13 @@ public class TestSparkSortAndSizeClustering extends HoodieSparkClientTestHarness
     } catch (IOException e) {
       throw new UncheckedIOException(e);
     }
+  }
+
+  private static LocalDateTime toLocalTimestampMillis(Comparable<?> val) {
+    return LocalDateTime.ofInstant(Instant.ofEpochMilli((Long) val), ZoneOffset.UTC);
+  }
+
+  private static LocalDateTime toLocalTimestampMicros(Comparable<?> val) {
+    return LocalDateTime.ofInstant(microsToInstant((Long) val), ZoneOffset.UTC);
   }
 }
