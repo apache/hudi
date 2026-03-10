@@ -78,14 +78,14 @@ public class CommitBasedClusteringPlanStrategy<T, I, K, O> extends PartitionAwar
   public Option<HoodieClusteringPlan> generateClusteringPlan() {
     // Get the active commit timeline from the table's meta client
     HoodieTableMetaClient metaClient = getHoodieTable().getMetaClient();
-    String lastCheckpoint = getWriteConfig().getClusteringLastCommit();
-    if (lastCheckpoint == null) {
-      LOG.error("last commit is not specified");
+    String earliestCommit = getWriteConfig().getClusteringEarliestCommitToCluster();
+    if (earliestCommit == null) {
+      LOG.error("earliest commit to cluster is not specified");
       return Option.empty();
     }
-    LOG.info("last commit is: " + lastCheckpoint);
+    LOG.info("Earliest commit to cluster (exclusive): " + earliestCommit);
 
-    HoodieTimeline commitTimeline = metaClient.getCommitsTimeline().findInstantsAfter(lastCheckpoint).filterCompletedInstants();
+    HoodieTimeline commitTimeline = metaClient.getCommitsTimeline().findInstantsAfter(earliestCommit).filterCompletedInstants();
     // For each completed commit, invoke getFileSlicesEligibleForCommitBasedClustering
     List<CommitFiles> commitFilesList = new ArrayList<>();
     List<String> replacedFileIds = new ArrayList<>();
@@ -136,6 +136,9 @@ public class CommitBasedClusteringPlanStrategy<T, I, K, O> extends PartitionAwar
 
     // For partitions that have not been processed, create clustering groups
     for (String partition : partitionToSize.keySet()) {
+      if (clusteringGroups.size() >= getWriteConfig().getClusteringMaxNumGroups()) {
+        break;
+      }
       if (partitionToSize.get(partition) > 0) {
         Pair<Stream<HoodieClusteringGroup>, Boolean> groupPair = buildClusteringGroupsForPartition(partition, partitionToFiles.get(partition));
         clusteringGroups.addAll(groupPair.getLeft().collect(Collectors.toList()));
@@ -200,10 +203,11 @@ public class CommitBasedClusteringPlanStrategy<T, I, K, O> extends PartitionAwar
   }
 
   /**
-   * Utility method to compute the total file size for a list of FileSlices.
+   * Utility method to compute the total file size for a list of FileSlices,
+   * including both base files and log files.
    *
    * @param fileSlices List of FileSlice objects
-   * @return Total size in bytes of all base files present in the list
+   * @return Total size in bytes of all files (base + log) present in the list
    */
   protected long getTotalFileSize(List<FileSlice> fileSlices) {
     long totalSize = 0L;
@@ -211,6 +215,7 @@ public class CommitBasedClusteringPlanStrategy<T, I, K, O> extends PartitionAwar
       if (fileSlice.getBaseFile().isPresent()) {
         totalSize += fileSlice.getBaseFile().get().getFileSize();
       }
+      totalSize += fileSlice.getLogFiles().mapToLong(logFile -> logFile.getFileSize()).sum();
     }
     return totalSize;
   }

@@ -468,7 +468,7 @@ public class TestCommitBasedClusteringPlanStrategy {
         .withClusteringExecutionStrategyClass(
             "org.apache.hudi.client.clustering.run.strategy.SparkSingleFileSortExecutionStrategy");
     if (withCheckpoint) {
-      clusteringConfigBuilder.withClusteringPlanLastCommit("20001201120000");
+      clusteringConfigBuilder.withClusteringPlanEarliestCommitToCluster("20001201120000");
     }
 
     HoodieClusteringConfig clusteringConfig = clusteringConfigBuilder.build();
