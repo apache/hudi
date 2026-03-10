@@ -42,7 +42,6 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
-import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.action.cluster.ClusteringPlanPartitionFilterMode;
 import org.apache.hudi.testutils.HoodieSparkClientTestHarness;
@@ -115,7 +114,7 @@ public class TestSparkSortAndSizeClustering extends HoodieSparkClientTestHarness
             .build())
         .withSchema(getSchema().toString())
         .build();
-    context.getStorageConf().set(WRITE_OLD_LIST_STRUCTURE, "false");
+    context.getHadoopConf().get().set(WRITE_OLD_LIST_STRUCTURE, "false");
 
     writeClient = getHoodieWriteClient(config);
   }
@@ -200,8 +199,8 @@ public class TestSparkSortAndSizeClustering extends HoodieSparkClientTestHarness
 
   // Validate that clustering produces decimals in legacy format and lists in newer format. Assert that the unit is correct on the timestamps
   private void validateTypes(List<HoodieWriteStat> writeStats) {
-    writeStats.stream().map(writeStat -> new StoragePath(metaClient.getBasePath(), writeStat.getPath())).forEach(writtenPath -> {
-      MessageType schema = ParquetUtils.readMetadata(storage, writtenPath)
+    writeStats.stream().map(writeStat -> new Path(metaClient.getBasePath(), writeStat.getPath())).forEach(writtenPath -> {
+      MessageType schema = ParquetUtils.readMetadata(hadoopConf, writtenPath)
           .getFileMetaData().getSchema();
       // validate decimal field
       int decimalFieldIndex = schema.getFieldIndex("decimal_field");

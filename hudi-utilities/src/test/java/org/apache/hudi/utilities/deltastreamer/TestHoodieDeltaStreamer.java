@@ -58,6 +58,7 @@ import org.apache.hudi.common.table.view.FileSystemViewManager;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
+import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieArchivalConfig;
@@ -136,6 +137,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.File;
 import java.io.IOException;
 import java.net.URI;
 import java.nio.file.Paths;
@@ -3437,6 +3439,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
           System.setProperty("spark.testing", propertyValue);
         }
       }
+      FileIOUtils.deleteDirectory(new File(new URI(basePath).getPath()));
     }
   }
 }
