@@ -98,11 +98,14 @@ public abstract class HoodieSparkTable<T>
       return Option.empty();
     }
     // We create a metadata writer if either:
-    // 1. isMetadataTableAvailable() - MDT exists on disk (based on table config), even if config.isMetadataTableEnabled() is false.
-    //    This ensures writers keep the MDT in sync when auto-delete is disabled (hoodie.metadata.auto.delete.partitions=false).
-    // 2. isMetadataTableEnabled() - MDT is explicitly enabled in write config.
-    // The auto-delete guard in maybeDeleteMetadataTable() handles the case when metadata is disabled but MDT exists.
-    if (getMetaClient().getTableConfig().isMetadataTableAvailable() || config.isMetadataTableEnabled()) {
+    // 1. isMetadataTableEnabled() - MDT is explicitly enabled in write config (normal flow).
+    // 2. isMetadataTableAvailable() AND auto-delete is disabled - MDT exists on disk (based on table config)
+    //    and auto-delete is disabled (hoodie.metadata.auto.delete.partitions=false). This ensures writers
+    //    keep the MDT in sync even when config.isMetadataTableEnabled() is false, preventing stale data.
+    //    When auto-delete is enabled (default), we fall through to maybeDeleteMetadataTable() which
+    //    handles cleanup of the MDT when metadata is disabled.
+    if (config.isMetadataTableEnabled()
+        || (getMetaClient().getTableConfig().isMetadataTableAvailable() && !config.isAutoDeleteMdtPartitionsEnabled())) {
       // if any partition is deleted, we need to reload the metadata table writer so that new table configs are picked up
       // to reflect the delete mdt partitions.
       if (autoDetectAndDeleteMetadataPartitions) {
