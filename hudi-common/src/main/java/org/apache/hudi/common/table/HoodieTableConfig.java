@@ -129,8 +129,6 @@ public class HoodieTableConfig extends HoodieConfig {
 
   public static final String HOODIE_PROPERTIES_FILE = "hoodie.properties";
   public static final String HOODIE_PROPERTIES_FILE_BACKUP = "hoodie.properties.backup";
-  // suffix to add at end for the config file while creating the temp properties file
-  private static final String TEMP_SUFFIX = ".temp";
   public static final String HOODIE_WRITE_TABLE_NAME_KEY = "hoodie.datasource.write.table.name";
   public static final String HOODIE_TABLE_NAME_KEY = "hoodie.table.name";
   public static final String PARTIAL_UPDATE_UNAVAILABLE_VALUE = "hoodie.write.partial.update.unavailable.value";
@@ -542,15 +540,13 @@ public class HoodieTableConfig extends HoodieConfig {
       // 3. delete the properties file, reads will go to the backup, until we are done.
       deleteFile(storage, cfgPath);
 
-      // 4. Upsert and save back, by writing to a temporary file and then renaming it
+      // 4. Upsert and save back.
       String checksum;
-      StoragePath tmpCfgPath = new StoragePath(cfgPath.toString() + TEMP_SUFFIX);
-      try (OutputStream out = storage.create(tmpCfgPath, true)) {
+      try (OutputStream out = storage.create(cfgPath, true)) {
         propsToUpdate.accept(props, modifyProps);
         propsToDelete.forEach(propToDelete -> props.remove(propToDelete));
-        checksum = storeProperties(props, out, tmpCfgPath);
+        checksum = storeProperties(props, out, cfgPath);
       }
-      storage.rename(tmpCfgPath, cfgPath);
       LOG.warn(String.format("%s modified to: %s (at %s)", cfgPath.getName(), props, cfgPath.getParent()));
 
       // 5. verify and remove backup.
