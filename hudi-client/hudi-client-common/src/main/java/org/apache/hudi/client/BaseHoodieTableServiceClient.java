@@ -313,7 +313,8 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
   protected HoodieWriteMetadata<O> compact(HoodieTable<?, I, ?, T> table, String compactionInstantTime, boolean shouldComplete) {
     InstantGenerator instantGenerator = table.getMetaClient().getInstantGenerator();
     HoodieInstant inflightInstant = instantGenerator.getCompactionInflightInstant(compactionInstantTime);
-    if (config.getWriteConcurrencyMode().supportsMultiWriter()) {
+    boolean isMultiWriter = config.getWriteConcurrencyMode().supportsMultiWriter();
+    if (isMultiWriter) {
       try {
         // Transaction serves to ensure only one compact job for this instant will start heartbeat, and any other concurrent
         // compact job will abort if they attempt to execute compact before heartbeat expires
@@ -344,7 +345,7 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
       }
       return compactionWriteMetadata;
     } catch (Exception e) {
-      if (config.getWriteConcurrencyMode().supportsMultiWriter()) {
+      if (isMultiWriter) {
         this.heartbeatClient.stop(compactionInstantTime);
       }
       throw e;
