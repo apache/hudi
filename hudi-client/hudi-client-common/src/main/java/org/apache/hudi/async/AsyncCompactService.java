@@ -55,7 +55,7 @@ public abstract class AsyncCompactService extends HoodieAsyncTableService {
   public AsyncCompactService(HoodieEngineContext context, BaseHoodieWriteClient client, boolean runInDaemonMode) {
     super(client.getConfig(), runInDaemonMode);
     this.context = context;
-    this.compactor = createCompactor(client);
+    this.compactor = createCompactor(client.createNewClient());
     this.maxConcurrentCompaction = 1;
   }
 
@@ -110,6 +110,12 @@ public abstract class AsyncCompactService extends HoodieAsyncTableService {
   }
 
   public synchronized void updateWriteClient(BaseHoodieWriteClient writeClient) {
-    this.compactor.updateWriteClient(writeClient);
+    this.compactor.updateWriteClient(writeClient.createNewClient());
+  }
+
+  @Override
+  public void shutdown(boolean force) {
+    super.shutdown(force);
+    compactor.close();
   }
 }

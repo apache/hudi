@@ -220,6 +220,11 @@ public class HoodieJavaWriteClient<T> extends
     initializeMetadataTable(instantTime, metaClient);
   }
 
+  @Override
+  public HoodieJavaWriteClient<T> createNewClient() {
+    return new HoodieJavaWriteClient<>(context, HoodieWriteConfig.newBuilder().withProperties(config.getProps()).build());
+  }
+
   /**
    * Initialize the metadata table if needed. Creating the metadata table writer
    * will trigger the initial bootstrapping from the data table.

@@ -25,7 +25,7 @@ import java.io.Serializable;
 /**
  * Client will run one round of clustering.
  */
-public abstract class BaseClusterer<T, I, K, O> implements Serializable {
+public abstract class BaseClusterer<T, I, K, O> implements Serializable, AutoCloseable {
 
   private static final long serialVersionUID = 1L;
 
@@ -48,5 +48,10 @@ public abstract class BaseClusterer<T, I, K, O> implements Serializable {
    */
   public void updateWriteClient(BaseHoodieWriteClient<T, I, K, O> writeClient) {
     this.clusteringClient = writeClient;
+  }
+
+  @Override
+  public void close() {
+    clusteringClient.close();
   }
 }
