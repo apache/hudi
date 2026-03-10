@@ -37,6 +37,7 @@ import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.CALLS_REAL_METHODS;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -225,12 +226,18 @@ class TestHoodieBackedTableMetadataWriterTableVersionSix {
   }
 
   private HoodieBackedTableMetadataWriterTableVersionSix<?, ?> createMockWriter(HoodieTableMetaClient dataMetaClient) throws Exception {
-    HoodieBackedTableMetadataWriterTableVersionSix<?, ?> writer = mock(HoodieBackedTableMetadataWriterTableVersionSix.class);
+    // Use CALLS_REAL_METHODS so that shouldInitializeFromFilesystem executes the real logic
+    HoodieBackedTableMetadataWriterTableVersionSix<?, ?> writer = mock(HoodieBackedTableMetadataWriterTableVersionSix.class, CALLS_REAL_METHODS);
 
     // Set the dataMetaClient field
     java.lang.reflect.Field dataMetaClientField = HoodieBackedTableMetadataWriter.class.getDeclaredField("dataMetaClient");
     dataMetaClientField.setAccessible(true);
     dataMetaClientField.set(writer, dataMetaClient);
+
+    // Set the metrics field to avoid NPE
+    java.lang.reflect.Field metricsField = HoodieBackedTableMetadataWriter.class.getDeclaredField("metrics");
+    metricsField.setAccessible(true);
+    metricsField.set(writer, Option.empty());
 
     return writer;
   }
@@ -238,11 +245,9 @@ class TestHoodieBackedTableMetadataWriterTableVersionSix {
   private boolean invokeShouldInitializeFromFilesystem(
       HoodieBackedTableMetadataWriterTableVersionSix<?, ?> writer,
       Set<String> pendingDataInstants,
-      Option<String> inflightInstantTimestamp) throws Exception {
-    java.lang.reflect.Method method = HoodieBackedTableMetadataWriterTableVersionSix.class.getDeclaredMethod(
-        "shouldInitializeFromFilesystem", Set.class, Option.class);
-    method.setAccessible(true);
-    return (boolean) method.invoke(writer, pendingDataInstants, inflightInstantTimestamp);
+      Option<String> inflightInstantTimestamp) {
+    // The test class is in the same package, so we can call the package-private method directly
+    return writer.shouldInitializeFromFilesystem(pendingDataInstants, inflightInstantTimestamp);
   }
 
   @SuppressWarnings("deprecation")
