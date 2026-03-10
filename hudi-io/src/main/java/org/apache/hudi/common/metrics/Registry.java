@@ -61,7 +61,7 @@ public interface Registry extends Serializable {
    * Extracts the registry name from a compound key.
    */
   static String getRegistryNameFromKey(String key) {
-    int separatorIndex = key.indexOf(KEY_SEPARATOR);
+    int separatorIndex = key.lastIndexOf(KEY_SEPARATOR);
     return separatorIndex >= 0 ? key.substring(separatorIndex + KEY_SEPARATOR.length()) : key;
   }
 
