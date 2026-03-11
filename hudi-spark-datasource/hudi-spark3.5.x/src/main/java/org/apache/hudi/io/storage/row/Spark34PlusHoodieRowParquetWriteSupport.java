@@ -104,7 +104,7 @@ import static org.apache.parquet.schema.Type.Repetition.REQUIRED;
  *   <li>Supports TimestampNTZ, DayTimeIntervalType, YearMonthIntervalType (Spark 3.4+ types)</li>
  * </ul>
  */
-public class Spark34PlusHoodieRowParquetWriteSupport extends HoodieWriteSupport {
+public class Spark34PlusHoodieRowParquetWriteSupport extends HoodieParquetWriteSupport {
 
   private static final Schema MAP_KEY_SCHEMA = Schema.create(Schema.Type.STRING);
   private static final String MAP_REPEATED_NAME = "key_value";
