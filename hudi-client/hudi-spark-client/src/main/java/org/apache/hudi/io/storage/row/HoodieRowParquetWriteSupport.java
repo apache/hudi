@@ -45,7 +45,6 @@ import org.apache.parquet.schema.LogicalTypeAnnotation;
 import org.apache.parquet.schema.MessageType;
 import org.apache.parquet.schema.Type;
 import org.apache.parquet.schema.Types;
-import org.apache.spark.sql.HoodieUTF8StringFactory;
 import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.sql.catalyst.expressions.SpecializedGetters;
 import org.apache.spark.sql.catalyst.util.ArrayData;
@@ -382,34 +381,6 @@ public class HoodieRowParquetWriteSupport extends WriteSupport<InternalRow> {
         }
       });
     };
-  }
-
-  private static class HoodieBloomFilterRowWriteSupport extends HoodieBloomFilterWriteSupport<UTF8String> {
-
-    private static final HoodieUTF8StringFactory UTF8STRING_FACTORY =
-        SparkAdapterSupport$.MODULE$.sparkAdapter().getUTF8StringFactory();
-
-    public HoodieBloomFilterRowWriteSupport(BloomFilter bloomFilter) {
-      super(bloomFilter);
-    }
-
-    @Override
-    protected int compareRecordKey(UTF8String a, UTF8String b) {
-      return UTF8STRING_FACTORY.wrapUTF8String(a).compareTo(UTF8STRING_FACTORY.wrapUTF8String(b));
-    }
-
-    @Override
-    protected byte[] getUTF8Bytes(UTF8String key) {
-      return key.getBytes();
-    }
-
-    @Override
-    protected UTF8String dereference(UTF8String key) {
-      // NOTE: [[clone]] is performed here (rather than [[copy]]) to only copy underlying buffer in
-      //       cases when [[UTF8String]] is pointing into a buffer storing the whole containing record,
-      //       and simply do a pass over when it holds a (immutable) buffer holding just the string
-      return key.clone();
-    }
   }
 
   public static HoodieRowParquetWriteSupport getHoodieRowParquetWriteSupport(Configuration conf, StructType structType,
