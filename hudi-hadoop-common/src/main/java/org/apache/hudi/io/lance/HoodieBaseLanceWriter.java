@@ -19,6 +19,8 @@
 
 package org.apache.hudi.io.lance;
 
+import org.apache.hudi.avro.HoodieBloomFilterWriteSupport;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.io.memory.HoodieArrowAllocator;
 import org.apache.hudi.storage.StoragePath;
@@ -34,6 +36,7 @@ import javax.annotation.concurrent.NotThreadSafe;
 
 import java.io.Closeable;
 import java.io.IOException;
+import java.util.Map;
 
 /**
  * Base class for Hudi Lance file writers supporting different record types.
@@ -43,6 +46,7 @@ import java.io.IOException;
  * - BufferAllocator management
  * - Record buffering and batch flushing
  * - File size checks
+ * - Bloom filter metadata writing
  *
  * Subclasses must implement type-specific conversion to Arrow format.
  *
@@ -62,6 +66,7 @@ public abstract class HoodieBaseLanceWriter<R> implements Closeable {
   private int currentBatchSize = 0;
   private VectorSchemaRoot root;
   private ArrowWriter<R> arrowWriter;
+  protected final Option<HoodieBloomFilterWriteSupport<?>> bloomFilterWriteSupportOpt;
 
   private LanceFileWriter writer;
 
@@ -70,12 +75,15 @@ public abstract class HoodieBaseLanceWriter<R> implements Closeable {
    *
    * @param path Path where Lance file will be written
    * @param batchSize Number of records to buffer before flushing to Lance
+   * @param bloomFilterWriteSupportOpt Optional bloom filter write support for record key tracking
    */
-  protected HoodieBaseLanceWriter(StoragePath path, int batchSize) {
+  protected HoodieBaseLanceWriter(StoragePath path, int batchSize,
+                                  Option<HoodieBloomFilterWriteSupport<?>> bloomFilterWriteSupportOpt) {
     this.path = path;
     this.allocator = HoodieArrowAllocator.newChildAllocator(
         getClass().getSimpleName() + "-data-" + path.getName(), LANCE_DATA_ALLOCATOR_SIZE);
     this.batchSize = batchSize;
+    this.bloomFilterWriteSupportOpt = bloomFilterWriteSupportOpt;
   }
 
   /**
@@ -154,6 +162,14 @@ public abstract class HoodieBaseLanceWriter<R> implements Closeable {
       }
     } catch (Exception e) {
       primaryException = e;
+    }
+
+    // Finalize and write bloom filter metadata
+    if (writer != null && bloomFilterWriteSupportOpt.isPresent()) {
+      Map<String, String> metadata = bloomFilterWriteSupportOpt.get().finalizeMetadata();
+      if (!metadata.isEmpty()) {
+        writer.addSchemaMetadata(metadata);
+      }
     }
 
     // Close Lance writer

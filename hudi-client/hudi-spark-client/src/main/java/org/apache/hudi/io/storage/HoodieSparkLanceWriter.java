@@ -18,10 +18,13 @@
 
 package org.apache.hudi.io.storage;
 
+import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.io.lance.HoodieBaseLanceWriter;
+import org.apache.hudi.io.storage.row.HoodieBloomFilterRowWriteSupport;
 import org.apache.hudi.io.storage.row.HoodieInternalRowFileWriter;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
@@ -49,8 +52,9 @@ import static org.apache.hudi.common.model.HoodieRecord.HoodieMetadataField.RECO
  *
  * This writer integrates with Hudi's storage I/O layer and supports:
  * - Hudi metadata field population
- * - Record key tracking (for bloom filters - TODO https://github.com/apache/hudi/issues/17664)
+ * - Record key tracking (for bloom filters)
  * - Sequence ID generation
+ * - Min/max record key tracking
  */
 public class HoodieSparkLanceWriter extends HoodieBaseLanceWriter<InternalRow>
     implements HoodieSparkFileWriter, HoodieInternalRowFileWriter {
@@ -73,15 +77,16 @@ public class HoodieSparkLanceWriter extends HoodieBaseLanceWriter<InternalRow>
    * @param taskContextSupplier Task context supplier for partition ID
    * @param storage HoodieStorage instance
    * @param populateMetaFields Whether to populate Hudi metadata fields
-   * @throws IOException if writer initialization fails
+   * @param bloomFilterOpt Optional bloom filter for record key tracking
    */
   public HoodieSparkLanceWriter(StoragePath file,
                                 StructType sparkSchema,
                                 String instantTime,
                                 TaskContextSupplier taskContextSupplier,
                                 HoodieStorage storage,
-                                boolean populateMetaFields) throws IOException {
-    super(file, DEFAULT_BATCH_SIZE);
+                                boolean populateMetaFields,
+                                Option<BloomFilter> bloomFilterOpt) {
+    super(file, DEFAULT_BATCH_SIZE, bloomFilterOpt.map(HoodieBloomFilterRowWriteSupport::new));
     this.sparkSchema = sparkSchema;
     this.arrowSchema = LanceArrowUtils.toArrowSchema(sparkSchema, DEFAULT_TIMEZONE, true, false);
     this.fileName = UTF8String.fromString(file.getName());
@@ -100,19 +105,20 @@ public class HoodieSparkLanceWriter extends HoodieBaseLanceWriter<InternalRow>
    * @param sparkSchema Spark schema for the data
    * @param taskContextSupplier Task context supplier for partition ID
    * @param storage HoodieStorage instance
-   * @throws IOException if writer initialization fails
    */
   public HoodieSparkLanceWriter(StoragePath file,
                                 StructType sparkSchema,
                                 TaskContextSupplier taskContextSupplier,
-                                HoodieStorage storage) throws IOException {
-    this(file, sparkSchema, null, taskContextSupplier, storage, false);
+                                HoodieStorage storage) {
+    this(file, sparkSchema, null, taskContextSupplier, storage, false, Option.empty());
   }
 
   @Override
   public void writeRowWithMetadata(HoodieKey key, InternalRow row) throws IOException {
     if (populateMetaFields) {
       UTF8String recordKey = UTF8String.fromString(key.getRecordKey());
+      bloomFilterWriteSupportOpt.ifPresent(bloomFilterWriteSupport ->
+          ((HoodieBloomFilterRowWriteSupport)bloomFilterWriteSupport).addKey(recordKey));
       updateRecordMetadata(row, recordKey, key.getPartitionPath(), getWrittenRecordCount());
       super.write(row);
     } else {
@@ -122,12 +128,15 @@ public class HoodieSparkLanceWriter extends HoodieBaseLanceWriter<InternalRow>
 
   @Override
   public void writeRow(String recordKey, InternalRow row) throws IOException {
+    bloomFilterWriteSupportOpt.ifPresent(bloomFilterWriteSupport ->
+        ((HoodieBloomFilterRowWriteSupport)bloomFilterWriteSupport).addKey(UTF8String.fromString(recordKey)));
     super.write(row);
   }
   
   @Override
   public void writeRow(UTF8String key, InternalRow row) throws IOException {
-    // Key reserved for future bloom filter support (https://github.com/apache/hudi/issues/17664)
+    bloomFilterWriteSupportOpt.ifPresent(bloomFilterWriteSupport ->
+        ((HoodieBloomFilterRowWriteSupport)bloomFilterWriteSupport).addKey(key));
     super.write(row);
   }
   

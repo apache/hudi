@@ -20,10 +20,13 @@ package org.apache.hudi.io.storage;
 
 import org.apache.hudi.HoodieSchemaConversionUtils;
 import org.apache.hudi.client.SparkTaskContextSupplier;
+import org.apache.hudi.common.bloom.BloomFilter;
+import org.apache.hudi.common.bloom.BloomFilterFactory;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.storage.HoodieStorage;
@@ -57,6 +60,7 @@ import java.util.List;
 import java.util.Set;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.common.bloom.BloomFilterTypeCode.SIMPLE;
 import static org.apache.hudi.io.storage.LanceTestUtils.createRow;
 import static org.apache.hudi.io.storage.LanceTestUtils.createRowWithMetaFields;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -75,12 +79,14 @@ public class TestHoodieSparkLanceReader {
   private HoodieStorage storage;
   private SparkTaskContextSupplier taskContextSupplier;
   private String instantTime;
+  private BloomFilter simpleBloomFilter;
 
   @BeforeEach
   public void setUp() throws IOException {
     storage = HoodieTestUtils.getStorage(tempDir.getAbsolutePath());
     taskContextSupplier = new SparkTaskContextSupplier();
     instantTime = "20251201120000000";
+    simpleBloomFilter = BloomFilterFactory.createBloomFilter(1000, 0.0001, 10000, SIMPLE.name());
   }
 
   @AfterEach
@@ -295,7 +301,7 @@ public class TestHoodieSparkLanceReader {
     StoragePath path = new StoragePath(tempDir.getAbsolutePath() + "/test_large.lance");
     int recordCount = 2500;
     try (HoodieSparkLanceWriter writer = new HoodieSparkLanceWriter(
-        path, schema, instantTime, taskContextSupplier, storage, false)) {
+        path, schema, instantTime, taskContextSupplier, storage, false, Option.of(simpleBloomFilter))) {
       for (int i = 0; i < recordCount; i++) {
         GenericInternalRow row = new GenericInternalRow(new Object[]{i, (long) i * 2});
         writer.writeRow("key" + i, row);
@@ -563,7 +569,7 @@ public class TestHoodieSparkLanceReader {
     
   private HoodieSparkLanceReader writeAndCreateReader(StoragePath path, StructType schema, List<InternalRow> rows, boolean populateMetaFields) throws IOException {
     try (HoodieSparkLanceWriter writer = new HoodieSparkLanceWriter(
-        path, schema, instantTime, taskContextSupplier, storage, populateMetaFields)) {
+        path, schema, instantTime, taskContextSupplier, storage, populateMetaFields, Option.of(simpleBloomFilter))) {
       for (int i = 0; i < rows.size(); i++) {
         HoodieKey key = new HoodieKey("key" + i, "default_partition");
         // Note writeRowWithMetadata implicitly handles case where populateMetaFields=false
@@ -589,7 +595,7 @@ public class TestHoodieSparkLanceReader {
     // Write Lance file with full schema
     StoragePath path = new StoragePath(tempDir.getAbsolutePath() + "/test_projection.lance");
     try (HoodieSparkLanceWriter writer = new HoodieSparkLanceWriter(
-        path, fullSchema, instantTime, taskContextSupplier, storage, false)) {
+        path, fullSchema, instantTime, taskContextSupplier, storage, false, Option.of(simpleBloomFilter))) {
       for (int i = 0; i < rows.size(); i++) {
         writer.writeRow("key" + i, rows.get(i));
       }
