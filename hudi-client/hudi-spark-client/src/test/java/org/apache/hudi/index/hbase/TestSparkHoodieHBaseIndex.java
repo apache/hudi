@@ -51,7 +51,6 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hbase.HBaseConfiguration;
 import org.apache.hadoop.hbase.HBaseTestingUtility;
-import org.apache.hadoop.hbase.StartMiniClusterOption;
 import org.apache.hadoop.hbase.TableName;
 import org.apache.hadoop.hbase.client.Connection;
 import org.apache.hadoop.hbase.client.Get;
@@ -59,7 +58,6 @@ import org.apache.hadoop.hbase.client.HTable;
 import org.apache.hadoop.hbase.client.Put;
 import org.apache.hadoop.hbase.client.Result;
 import org.apache.hadoop.hbase.util.Bytes;
-import org.apache.hadoop.hdfs.server.blockmanagement.AvailableSpaceBlockPlacementPolicy;
 import org.apache.spark.api.java.JavaRDD;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
@@ -123,11 +121,9 @@ public class TestSparkHoodieHBaseIndex extends SparkClientFunctionalTestHarness 
     System.setProperty("zookeeper.4lw.commands.whitelist", "*");
     hbaseConfig = HBaseConfiguration.create();
     hbaseConfig.set(ZOOKEEPER_ZNODE_PARENT, "/hudi-hbase-test");
-    hbaseConfig.set("dfs.block.replicator.classname", AvailableSpaceBlockPlacementPolicy.class.getCanonicalName());
 
     utility = new HBaseTestingUtility(hbaseConfig);
-    utility.startMiniCluster(StartMiniClusterOption.builder().numDataNodes(2).build());
-    utility.getDFSCluster().waitActive();
+    utility.startMiniCluster();
     hbaseConfig = utility.getConnection().getConfiguration();
     utility.createTable(TableName.valueOf(TABLE_NAME), Bytes.toBytes("_s"),2);
   }
