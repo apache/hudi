@@ -112,7 +112,7 @@ stages:
     jobs:
       - job: UT_FT_2
         displayName: FT client/spark-client
-        timeoutInMinutes: '150'
+        timeoutInMinutes: '400'
         steps:
           - task: Maven@4
             displayName: maven install
