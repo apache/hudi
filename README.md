@@ -101,7 +101,7 @@ Prerequisites for building Apache Hudi:
 ```
 # Checkout code and build
 git clone https://github.com/apache/hudi.git && cd hudi
-mvn clean package -DskipTests
+mvn clean package -DskipTests -Dspark3.5 -Dflink2.1
 
 # Start command
 spark-3.5.0-bin-hadoop3/bin/spark-shell \
@@ -149,10 +149,10 @@ mvn clean package -DskipTests -Dspark3.5 -Dscala-2.13 -pl packaging/hudi-spark-b
 For example,
 ```
 # Build against Spark 3.5.x
-mvn clean package -DskipTests
+mvn clean package -DskipTests -Dspark3.5 -Dflink1.20
 
 # Build against Spark 3.4.x
-mvn clean package -DskipTests -Dspark3.4
+mvn clean package -DskipTests -Dspark3.4 -Dflink1.20
 ```
 
 #### What about "spark-avro" module?
@@ -177,6 +177,9 @@ Refer to the table below for building with different Flink and Scala versions.
 
 For example,
 ```
+# Build against Flink 2.1.x
+mvn clean package -DskipTests -Dflink2.1
+ 
 # Build against Flink 1.17.x
 mvn clean package -DskipTests -Dflink1.17
 ```
