@@ -122,6 +122,12 @@ public class TestSparkHoodieHBaseIndex extends SparkClientFunctionalTestHarness 
     hbaseConfig = HBaseConfiguration.create();
     hbaseConfig.set(ZOOKEEPER_ZNODE_PARENT, "/hudi-hbase-test");
 
+    // Configure HDFS to reduce disk usage
+    hbaseConfig.set("dfs.replication", "1");
+    hbaseConfig.set("dfs.namenode.replication.min", "1");
+    hbaseConfig.setBoolean("dfs.client.block.write.replace-datanode-on-failure.enable", true);
+    hbaseConfig.set("dfs.client.block.write.replace-datanode-on-failure.policy", "NEVER");
+
     utility = new HBaseTestingUtility(hbaseConfig);
     utility.startMiniCluster();
     hbaseConfig = utility.getConnection().getConfiguration();
