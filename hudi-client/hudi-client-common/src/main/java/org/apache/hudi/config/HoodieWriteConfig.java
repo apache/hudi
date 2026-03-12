@@ -196,16 +196,15 @@ public class HoodieWriteConfig extends HoodieConfig {
       .defaultValue(false)
       .markAdvanced()
       .sinceVersion("0.14.2")
-      .supportedVersions("0.14.2", "0.15.1", "1.0.3", "1.1.0")
-      .withDocumentation("This config only takes effect for writing table version 8 and below. "
-          + "If set to false, the record key field name is encoded and prepended "
+      .supportedVersions("0.14.2")
+      .withDocumentation("If set to false, the record key field name is encoded and prepended "
           + "in the case where a single record key field is used in the complex key generator, "
           + "i.e., record keys stored in _hoodie_record_key meta field is in the format of "
           + "`<field_name>:<field_value>`, which conforms to the behavior "
           + "in 0.14.0 release and older. If set to true, the record key field name is not "
           + "encoded under the same case in the complex key generator, i.e., record keys stored "
           + "in _hoodie_record_key meta field is in the format of `<field_value>`, "
-          + "which conforms to the behavior in 0.14.1, 0.15.0, 1.0.0, 1.0.1, 1.0.2 releases.");
+          + "which conforms to the behavior in 0.14.1 release.");
 
   public static final ConfigProperty<Boolean> ENABLE_COMPLEX_KEYGEN_VALIDATION = ConfigProperty
       .key("hoodie.write.complex.keygen.validation.enable")
