@@ -70,8 +70,13 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestMethodOrder;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
+import java.io.BufferedReader;
+import java.io.File;
 import java.io.IOException;
+import java.io.InputStreamReader;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.LinkedList;
@@ -105,6 +110,7 @@ import static org.mockito.Mockito.when;
 @Tag("functional")
 public class TestSparkHoodieHBaseIndex extends SparkClientFunctionalTestHarness {
 
+  private static final Logger LOG = LoggerFactory.getLogger(TestSparkHoodieHBaseIndex.class);
   private static final String TABLE_NAME = "test_table";
   private static HBaseTestingUtility utility;
   private static Configuration hbaseConfig;
@@ -115,42 +121,238 @@ public class TestSparkHoodieHBaseIndex extends SparkClientFunctionalTestHarness 
   private HoodieSparkEngineContext context;
   private String basePath;
 
+  /**
+   * Logs disk space usage for all mounted filesystems.
+   */
+  private static void logDiskSpaceUsage(String context) {
+    LOG.info("==================== DISK SPACE CHECK: {} ====================", context);
+    File[] roots = File.listRoots();
+    for (File root : roots) {
+      long totalSpace = root.getTotalSpace();
+      long freeSpace = root.getFreeSpace();
+      long usableSpace = root.getUsableSpace();
+      long usedSpace = totalSpace - freeSpace;
+      double usedPercentage = totalSpace > 0 ? (usedSpace * 100.0 / totalSpace) : 0;
+
+      LOG.info("Filesystem: {}", root.getAbsolutePath());
+      LOG.info("  Total: {} GB", totalSpace / (1024.0 * 1024 * 1024));
+      LOG.info("  Used: {} GB ({} %)", usedSpace / (1024.0 * 1024 * 1024), String.format("%.2f", usedPercentage));
+      LOG.info("  Free: {} GB", freeSpace / (1024.0 * 1024 * 1024));
+      LOG.info("  Usable: {} GB", usableSpace / (1024.0 * 1024 * 1024));
+
+      if (usedPercentage > 95) {
+        LOG.warn("WARNING: Disk usage is critically high at {}%", String.format("%.2f", usedPercentage));
+      }
+    }
+    LOG.info("================================================================");
+  }
+
+  /**
+   * Logs the largest directories in the specified path using 'du' command.
+   */
+  private static void logLargestDirectories(String path, String context) {
+    LOG.info("==================== LARGEST DIRECTORIES: {} ====================", context);
+    try {
+      // Run du command to find largest directories
+      ProcessBuilder pb = new ProcessBuilder("bash", "-c",
+          "du -h -d 3 " + path + " 2>/dev/null | sort -h -r | head -n 20");
+      Process process = pb.start();
+
+      try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
+        String line;
+        LOG.info("Top 20 largest directories under {}:", path);
+        while ((line = reader.readLine()) != null) {
+          LOG.info("  {}", line);
+        }
+      }
+
+      process.waitFor();
+    } catch (Exception e) {
+      LOG.warn("Failed to get directory sizes for {}: {}", path, e.getMessage());
+    }
+    LOG.info("====================================================================");
+  }
+
+  /**
+   * Logs system temp directory usage.
+   */
+  private static void logTempDirUsage() {
+    String tmpDir = System.getProperty("java.io.tmpdir");
+    LOG.info("==================== TEMP DIRECTORY USAGE ====================");
+    LOG.info("Java temp dir: {}", tmpDir);
+
+    File tmpFile = new File(tmpDir);
+    if (tmpFile.exists() && tmpFile.isDirectory()) {
+      long totalSize = getDirectorySize(tmpFile);
+      LOG.info("Temp directory total size: {} GB", totalSize / (1024.0 * 1024 * 1024));
+
+      // List largest items in temp
+      File[] files = tmpFile.listFiles();
+      if (files != null) {
+        Arrays.stream(files)
+            .map(f -> new Object[] {f, f.isDirectory() ? getDirectorySize(f) : f.length()})
+            .sorted((a, b) -> Long.compare((Long) b[1], (Long) a[1]))
+            .limit(10)
+            .forEach(pair -> {
+              File f = (File) pair[0];
+              long size = (Long) pair[1];
+              LOG.info("  {} MB - {}", size / (1024 * 1024), f.getName());
+            });
+      }
+    }
+    LOG.info("==============================================================");
+  }
+
+  /**
+   * Recursively calculates directory size.
+   */
+  private static long getDirectorySize(File directory) {
+    long length = 0;
+    try {
+      File[] files = directory.listFiles();
+      if (files != null) {
+        for (File file : files) {
+          if (file.isFile()) {
+            length += file.length();
+          } else {
+            length += getDirectorySize(file);
+          }
+        }
+      }
+    } catch (Exception e) {
+      // Ignore permission errors, etc.
+    }
+    return length;
+  }
+
+  /**
+   * Logs HBase and HDFS data directories.
+   */
+  private static void logHBaseAndHDFSDirectories() {
+    LOG.info("==================== HBASE/HDFS DATA DIRECTORIES ====================");
+    if (utility != null) {
+      try {
+        File testDataDir = new File(utility.getDataTestDir().toString());
+        if (testDataDir.exists()) {
+          LOG.info("HBase test data dir: {}", testDataDir.getAbsolutePath());
+          LOG.info("HBase test data dir size: {} MB", getDirectorySize(testDataDir) / (1024 * 1024));
+        }
+
+        if (utility.getDFSCluster() != null) {
+          String baseDir = utility.getDFSCluster().getConfiguration(0).get("dfs.datanode.data.dir");
+          if (baseDir != null) {
+            File dfsDataDir = new File(baseDir);
+            if (dfsDataDir.exists()) {
+              LOG.info("HDFS data dir: {}", dfsDataDir.getAbsolutePath());
+              LOG.info("HDFS data dir size: {} MB", getDirectorySize(dfsDataDir) / (1024 * 1024));
+            }
+          }
+        }
+      } catch (Exception e) {
+        LOG.warn("Failed to get HBase/HDFS directory info: {}", e.getMessage());
+      }
+    }
+    LOG.info("=====================================================================");
+  }
+
   @BeforeAll
   public static void init() throws Exception {
+    // Log disk space BEFORE initialization
+    logDiskSpaceUsage("BEFORE INIT");
+    logTempDirUsage();
+    logLargestDirectories("/", "BEFORE INIT - /");
+    logLargestDirectories("/user", "BEFORE INIT - /");
+
     // Initialize HbaseMiniCluster
     System.setProperty("zookeeper.4lw.commands.whitelist", "*");
     hbaseConfig = HBaseConfiguration.create();
     hbaseConfig.set(ZOOKEEPER_ZNODE_PARENT, "/hudi-hbase-test");
 
+    // Configure HDFS to reduce disk usage
+    hbaseConfig.set("dfs.replication", "1");
+    hbaseConfig.set("dfs.namenode.replication.min", "1");
+    hbaseConfig.setBoolean("dfs.client.block.write.replace-datanode-on-failure.enable", true);
+    hbaseConfig.set("dfs.client.block.write.replace-datanode-on-failure.policy", "NEVER");
+
+    LOG.info("Starting HBase MiniCluster...");
     utility = new HBaseTestingUtility(hbaseConfig);
     utility.startMiniCluster();
     hbaseConfig = utility.getConnection().getConfiguration();
     utility.createTable(TableName.valueOf(TABLE_NAME), Bytes.toBytes("_s"),2);
+    System.setProperty("hadoop.root.logger", "DEBUG,console");
+
+    // Log disk space AFTER initialization
+    logDiskSpaceUsage("AFTER INIT");
+    logHBaseAndHDFSDirectories();
+    LOG.info("HBase MiniCluster started successfully");
+
+    // Check datanode status
+    if (utility.getDFSCluster() != null) {
+      LOG.info("Number of datanodes: {}", utility.getDFSCluster().getDataNodes().size());
+      LOG.info("DFS cluster active: {}", utility.getDFSCluster().isClusterUp());
+    }
   }
 
   @AfterAll
   public static void clean() throws Exception {
+    LOG.info("==================== FINAL CLEANUP START ====================");
+    logDiskSpaceUsage("BEFORE FINAL CLEANUP");
+    logHBaseAndHDFSDirectories();
+    logTempDirUsage();
+
+    LOG.info("Shutting down HBase MiniCluster...");
     utility.shutdownMiniHBaseCluster();
     utility.shutdownMiniDFSCluster();
     utility.shutdownMiniMapReduceCluster();
     // skip shutdownZkCluster due to localhost connection refused issue
     utility = null;
+
+    // Give time for cleanup
+    try {
+      Thread.sleep(2000);
+    } catch (InterruptedException e) {
+      Thread.currentThread().interrupt();
+    }
+
+    logDiskSpaceUsage("AFTER FINAL CLEANUP");
+    logLargestDirectories("/tmp", "AFTER FINAL CLEANUP - /tmp");
+    LOG.info("==================== FINAL CLEANUP COMPLETE ====================");
   }
 
   @BeforeEach
   public void setUp() throws Exception {
+    LOG.info("==================== SETUP START ====================");
+    logDiskSpaceUsage("BEFORE TEST");
+
     hadoopConf = jsc().hadoopConfiguration();
     hadoopConf.addResource(utility.getConfiguration());
     // reInit the context here to keep the hadoopConf the same with that in this class
     context = new HoodieSparkEngineContext(jsc());
     basePath = utility.getDataTestDirOnTestFS(TABLE_NAME).toString();
+    LOG.info("Test basePath: {}", basePath);
     metaClient = getHoodieMetaClient(hadoopConf, basePath);
     dataGen = new HoodieTestDataGenerator();
+
+    LOG.info("==================== SETUP COMPLETE ====================");
   }
 
   @AfterEach
   public void cleanUpTableData() throws IOException {
+    LOG.info("==================== CLEANUP START ====================");
+    logDiskSpaceUsage("BEFORE CLEANUP");
+    logHBaseAndHDFSDirectories();
+
     utility.cleanupDataTestDirOnTestFS(TABLE_NAME);
+
+    // Give filesystem time to cleanup
+    try {
+      Thread.sleep(1000);
+    } catch (InterruptedException e) {
+      Thread.currentThread().interrupt();
+    }
+
+    logDiskSpaceUsage("AFTER CLEANUP");
+    LOG.info("==================== CLEANUP COMPLETE ====================");
   }
 
   @ParameterizedTest
