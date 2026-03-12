@@ -122,6 +122,10 @@ public class HoodieSparkLanceWriter extends HoodieBaseLanceWriter<InternalRow>
       updateRecordMetadata(row, recordKey, key.getPartitionPath(), getWrittenRecordCount());
       super.write(row);
     } else {
+      bloomFilterWriteSupportOpt.ifPresent(bloomFilterWriteSupport -> {
+        UTF8String recordKey = UTF8String.fromString(key.getRecordKey());
+        ((HoodieBloomFilterRowWriteSupport)bloomFilterWriteSupport).addKey(recordKey);
+      });
       super.write(row);
     }
   }
