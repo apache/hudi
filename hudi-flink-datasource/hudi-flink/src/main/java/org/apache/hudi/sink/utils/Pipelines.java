@@ -176,10 +176,11 @@ public class Pipelines {
     }
 
     // main write operator with following dummy sink in the end
+    String opName = isBucketIndexType ? "bucket_bulk_insert" : "hoodie_bulk_insert_write";
     return dataStream
-        .transform(opName(isBucketIndexType ? "bucket_bulk_insert" : "hoodie_bulk_insert_write", conf),
+        .transform(opName(opName, conf),
             TypeInformation.of(RowData.class), BulkInsertWriteOperator.getFactory(conf, rowType))
-        .uid(opUID("bucket_bulk_insert", conf))
+        .uid(opUID(opName, conf))
         .setParallelism(PARALLELISM_VALUE);
   }
 
