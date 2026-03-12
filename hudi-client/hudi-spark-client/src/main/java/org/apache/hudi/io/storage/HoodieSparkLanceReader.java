@@ -20,6 +20,8 @@ package org.apache.hudi.io.storage;
 
 import org.apache.hudi.HoodieSchemaConversionUtils;
 import org.apache.hudi.common.bloom.BloomFilter;
+import org.apache.hudi.common.bloom.HoodieDynamicBoundedBloomFilter;
+import org.apache.hudi.common.bloom.SimpleBloomFilter;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieSparkRecord;
 import org.apache.hudi.common.schema.HoodieSchema;
@@ -32,6 +34,7 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.io.memory.HoodieArrowAllocator;
 import org.apache.hudi.storage.StoragePath;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.arrow.memory.BufferAllocator;
 import org.apache.arrow.vector.ipc.ArrowReader;
 import org.apache.arrow.vector.types.pojo.Schema;
@@ -46,13 +49,19 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
+import static org.apache.hudi.avro.HoodieBloomFilterWriteSupport.HOODIE_AVRO_BLOOM_FILTER_METADATA_KEY;
+import static org.apache.hudi.avro.HoodieBloomFilterWriteSupport.HOODIE_BLOOM_FILTER_TYPE_CODE;
+import static org.apache.hudi.avro.HoodieBloomFilterWriteSupport.HOODIE_MAX_RECORD_KEY_FOOTER;
+import static org.apache.hudi.avro.HoodieBloomFilterWriteSupport.HOODIE_MIN_RECORD_KEY_FOOTER;
 import static org.apache.hudi.common.util.TypeUtils.unsafeCast;
 
 /**
  * {@link HoodieSparkFileReader} implementation for Lance file format.
  */
+@Slf4j
 public class HoodieSparkLanceReader implements HoodieSparkFileReader {
   // Memory size for data read operations: 120MB
   public static final long LANCE_DATA_ALLOCATOR_SIZE = 120 * 1024 * 1024;
@@ -63,19 +72,51 @@ public class HoodieSparkLanceReader implements HoodieSparkFileReader {
   // number of rows to read
   private static final int DEFAULT_BATCH_SIZE = 512;
   private final StoragePath path;
+  private final BufferAllocator metadataAllocator;
+  private final LanceFileReader lanceMetadataReader;
+  private final Schema arrowSchema;
 
   public HoodieSparkLanceReader(StoragePath path) {
     this.path = path;
+    metadataAllocator = HoodieArrowAllocator.newChildAllocator(
+        getClass().getSimpleName() + "-metadata-" + path.getName(), LANCE_METADATA_ALLOCATOR_SIZE);
+    try {
+      lanceMetadataReader = LanceFileReader.open(path.toString(), metadataAllocator);
+      arrowSchema = lanceMetadataReader.schema();
+    } catch (IOException e) {
+      throw new HoodieException("Failed to create lanceMetadataReader: " + path, e);
+    }
   }
 
   @Override
   public String[] readMinMaxRecordKeys() {
-    throw new UnsupportedOperationException("Min/max record key tracking is not yet supported for Lance file format");
+    Map<String, String> metadata = arrowSchema.getCustomMetadata();
+    if (metadata != null && !metadata.isEmpty()) {
+      String minKey = metadata.get(HOODIE_MIN_RECORD_KEY_FOOTER);
+      String maxKey = metadata.get(HOODIE_MAX_RECORD_KEY_FOOTER);
+      if (minKey != null && maxKey != null) {
+        return new String[] { minKey, maxKey };
+      }
+    }
+    throw new HoodieException("Could not read min/max record key out of Lance file: " + path);
   }
 
   @Override
   public BloomFilter readBloomFilter() {
-    throw new UnsupportedOperationException("Bloom filter is not yet supported for Lance file format");
+    BloomFilter toReturn = null;
+    Map<String, String> metadata = arrowSchema.getCustomMetadata();
+    if (metadata != null && !metadata.isEmpty()) {
+      if (metadata.containsKey(HOODIE_AVRO_BLOOM_FILTER_METADATA_KEY)) {
+        String bloomSer = metadata.get(HOODIE_AVRO_BLOOM_FILTER_METADATA_KEY);
+        String filterType = metadata.get(HOODIE_BLOOM_FILTER_TYPE_CODE);
+        if (filterType != null && filterType.contains(HoodieDynamicBoundedBloomFilter.TYPE_CODE_PREFIX)) {
+          toReturn = new HoodieDynamicBoundedBloomFilter(bloomSer);
+        } else {
+          toReturn = new SimpleBloomFilter(bloomSer);
+        }
+      }
+    }
+    return toReturn;
   }
 
   @Override
@@ -159,10 +200,7 @@ public class HoodieSparkLanceReader implements HoodieSparkFileReader {
 
   @Override
   public HoodieSchema getSchema() {
-    try (BufferAllocator allocator = HoodieArrowAllocator.newChildAllocator(
-             getClass().getSimpleName() + "-metadata-" + path.getName(), LANCE_METADATA_ALLOCATOR_SIZE);
-         LanceFileReader reader = LanceFileReader.open(path.toString(), allocator)) {
-      Schema arrowSchema = reader.schema();
+    try {
       StructType structType = LanceArrowUtils.fromArrowSchema(arrowSchema);
       return HoodieSchemaConversionUtils.convertStructTypeToHoodieSchema(structType, "record", "", false);
     } catch (Exception e) {
@@ -172,15 +210,22 @@ public class HoodieSparkLanceReader implements HoodieSparkFileReader {
 
   @Override
   public void close() {
-    // noop as resources are managed by the LanceRecordIterator and not within this reader class.
+    if (metadataAllocator != null) {
+      metadataAllocator.close();
+    }
+    if (lanceMetadataReader != null) {
+      try {
+        lanceMetadataReader.close();
+      } catch (Exception e) {
+        log.warn("Error while closing metadataLanceReader: {}", e.getMessage());
+      }
+    }
   }
 
   @Override
   public long getTotalRecords() {
-    try (BufferAllocator allocator = HoodieArrowAllocator.newChildAllocator(
-             getClass().getSimpleName() + "-metadata-" + path.getName(), LANCE_METADATA_ALLOCATOR_SIZE);
-         LanceFileReader reader = LanceFileReader.open(path.toString(), allocator)) {
-      return reader.numRows();
+    try {
+      return lanceMetadataReader.numRows();
     } catch (Exception e) {
       throw new HoodieException("Failed to get row count from Lance file: " + path, e);
     }
