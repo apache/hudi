@@ -382,6 +382,109 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
     }
   }
 
+  /**
+   * Validates that when column stats index is initialized from an already-existing FILES partition
+   * (i.e. listAllPartitionsFromMDT is called), partition paths are stored as relative paths rather
+   * than absolute paths. Before the fix, absolute paths were passed to DirectoryInfo causing the
+   * column stats index to be keyed incorrectly, resulting in empty/missing stats.
+   */
+  @ParameterizedTest
+  @EnumSource(classOf[HoodieTableType])
+  def testColumnStatsIndexInitFromMDTUsesRelativePaths(tableType: HoodieTableType): Unit = {
+    // Step 1: Write data with metadata enabled but WITHOUT column stats.
+    // This initializes the FILES partition in MDT.
+    val metadataOnlyOpts = Map(
+      HoodieMetadataConfig.ENABLE.key -> "true",
+      HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key -> "false"
+    )
+
+    val commonOpts = Map(
+      "hoodie.insert.shuffle.parallelism" -> "4",
+      "hoodie.upsert.shuffle.parallelism" -> "4",
+      HoodieWriteConfig.TBL_NAME.key -> "hoodie_test",
+      DataSourceWriteOptions.TABLE_TYPE.key -> tableType.toString,
+      RECORDKEY_FIELD.key -> "c1",
+      PRECOMBINE_FIELD.key -> "c1",
+      HoodieTableConfig.POPULATE_META_FIELDS.key -> "true"
+    ) ++ metadataOnlyOpts
+
+    val sourceJSONTablePath = getClass.getClassLoader.getResource("index/colstats/input-table-json").toString
+    val inputDF = spark.read.schema(sourceTableSchema).json(sourceJSONTablePath)
+
+    inputDF
+      .sort("c1")
+      .repartition(4, new Column("c1"))
+      .write
+      .format("hudi")
+      .options(commonOpts)
+      .option(HoodieStorageConfig.PARQUET_MAX_FILE_SIZE.key, 10 * 1024)
+      .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
+      .mode(SaveMode.Overwrite)
+      .save(basePath)
+
+    metaClient = HoodieTableMetaClient.reload(metaClient)
+
+    // Step 2: Enable column stats and do another write. This triggers listAllPartitionsFromMDT
+    // (since FILES partition is already present) to bootstrap the column stats partition.
+    val metadataWithColStatsOpts = Map(
+      HoodieMetadataConfig.ENABLE.key -> "true",
+      HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key -> "true"
+    )
+
+    val commonOptsWithColStats = Map(
+      "hoodie.insert.shuffle.parallelism" -> "4",
+      "hoodie.upsert.shuffle.parallelism" -> "4",
+      HoodieWriteConfig.TBL_NAME.key -> "hoodie_test",
+      DataSourceWriteOptions.TABLE_TYPE.key -> tableType.toString,
+      RECORDKEY_FIELD.key -> "c1",
+      PRECOMBINE_FIELD.key -> "c1",
+      HoodieTableConfig.POPULATE_META_FIELDS.key -> "true"
+    ) ++ metadataWithColStatsOpts
+
+    val updateJSONTablePath = getClass.getClassLoader.getResource("index/colstats/another-input-table-json").toString
+    val updateDF = spark.read.schema(sourceTableSchema).json(updateJSONTablePath)
+
+    updateDF
+      .sort("c1")
+      .repartition(4, new Column("c1"))
+      .write
+      .format("hudi")
+      .options(commonOptsWithColStats)
+      .option(HoodieStorageConfig.PARQUET_MAX_FILE_SIZE.key, 10 * 1024)
+      .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
+      .mode(SaveMode.Append)
+      .save(basePath)
+
+    metaClient = HoodieTableMetaClient.reload(metaClient)
+
+    // Step 3: Validate that the column stats index was properly populated.
+    // If listAllPartitionsFromMDT used absolute paths, the column stats would be empty or
+    // would reference wrong keys, causing the transposed DF to be empty.
+    val metadataConfig = HoodieMetadataConfig.newBuilder()
+      .fromProperties(toProperties(metadataWithColStatsOpts))
+      .build()
+
+    val columnStatsIndex = new ColumnStatsIndexSupport(spark, sourceTableSchema, metadataConfig, metaClient)
+
+    columnStatsIndex.loadTransposed(sourceTableSchema.fieldNames.toSeq, shouldReadInMemory = true) { transposedDF =>
+      val rows = transposedDF.collect()
+      // Column stats index must be non-empty: if listAllPartitionsFromMDT used absolute paths,
+      // the DirectoryInfo would have a wrong relative path and column stats would not be
+      // properly indexed, resulting in an empty or corrupted index.
+      assertTrue(rows.length > 0,
+        "Column stats index must be non-empty after initialization via listAllPartitionsFromMDT. " +
+        "An empty result indicates that absolute partition paths were used instead of relative paths.")
+
+      // Verify that the file names in the index do NOT contain the base path (i.e., they are relative)
+      val fileNames = transposedDF.select("fileName").collect().map(_.getString(0))
+      fileNames.foreach { fileName =>
+        assertTrue(!fileName.startsWith(basePath),
+          s"fileName '$fileName' should be a relative path, not absolute. " +
+          s"This indicates the listAllPartitionsFromMDT bug where absolute paths were used.")
+      }
+    }
+  }
+
   @Test
   def testParquetMetadataRangeExtraction(): Unit = {
     val df = generateRandomDataFrame(spark)
