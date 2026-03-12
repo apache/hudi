@@ -35,13 +35,16 @@ import java.io.InputStream;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.io.Serializable;
+import java.nio.ByteOrder;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.avro.HoodieAvroUtils.createNewSchemaField;
@@ -84,17 +87,99 @@ import static org.apache.hudi.avro.HoodieAvroUtils.createNewSchemaField;
  */
 public class HoodieSchema implements Serializable {
   private static final long serialVersionUID = 1L;
+
   /**
    * Constant representing a null JSON value, equivalent to JsonProperties.NULL_VALUE.
    * This provides compatibility with Avro's JsonProperties while maintaining Hudi's API.
    */
   public static final Object NULL_VALUE = JsonProperties.NULL_VALUE;
   public static final HoodieSchema NULL_SCHEMA = HoodieSchema.create(HoodieSchemaType.NULL);
-
   /**
    * Constant to use when attaching type metadata to external schema systems like Spark's StructType.
+   * Stores a parameterized type string for custom Hudi logical types such as VECTOR and BLOB.
+   * Examples: "VECTOR(128)", "VECTOR(512, DOUBLE)", "BLOB".
    */
   public static final String TYPE_METADATA_FIELD = "hudi_type";
+
+  /**
+   * Parses a type descriptor string for custom Hudi logical types such as VECTOR and BLOB.
+   * Examples: "VECTOR(128)", "VECTOR(512, DOUBLE)", "BLOB".
+   * Throws for non-custom logical type names.
+   */
+  public static HoodieSchema parseTypeDescriptor(String descriptor) {
+    Pair<HoodieSchemaType, List<String>> parsedDescriptor = tokenizeTypeDescriptor(descriptor);
+    HoodieSchemaType type = parsedDescriptor.getLeft();
+    List<String> params = parsedDescriptor.getRight();
+    switch (type) {
+      case VECTOR:
+        if (params.isEmpty()) {
+          throw new IllegalArgumentException("VECTOR type descriptor must include a dimension parameter");
+        }
+        if (params.size() > 2) {
+          throw new IllegalArgumentException(
+              "VECTOR type descriptor supports at most 2 parameters: dimension and optional element type");
+        }
+        int dimension;
+        try {
+          dimension = Integer.parseInt(params.get(0));
+        } catch (NumberFormatException e) {
+          throw new IllegalArgumentException("Invalid VECTOR dimension: " + params.get(0), e);
+        }
+        Vector.VectorElementType elementType = params.size() > 1
+            ? Vector.VectorElementType.fromString(params.get(1))
+            : Vector.VectorElementType.FLOAT;
+        return createVector(dimension, elementType);
+      case BLOB:
+        if (!params.isEmpty()) {
+          throw new IllegalArgumentException(
+              "BLOB type descriptor does not support parameters, got: " + params);
+        }
+        return createBlob();
+      default:
+        throw new IllegalArgumentException(
+            "parseTypeDescriptor only supports custom logical types, got: " + type);
+    }
+  }
+
+  private static Pair<HoodieSchemaType, List<String>> tokenizeTypeDescriptor(String descriptor) {
+    ValidationUtils.checkArgument(descriptor != null && !descriptor.trim().isEmpty(),
+        "Type descriptor cannot be null or empty");
+    int parenStart = descriptor.indexOf('(');
+    String typeName;
+    List<String> params;
+    if (parenStart == -1) {
+      typeName = descriptor.trim();
+      params = Collections.emptyList();
+    } else {
+      if (!descriptor.endsWith(")")) {
+        throw new IllegalArgumentException("Malformed type descriptor, missing closing ')': " + descriptor);
+      }
+      typeName = descriptor.substring(0, parenStart).trim();
+      String paramStr = descriptor.substring(parenStart + 1, descriptor.length() - 1).trim();
+      if (paramStr.isEmpty()) {
+        params = Collections.emptyList();
+      } else {
+        params = Arrays.stream(paramStr.split(","))
+            .map(String::trim)
+            .collect(Collectors.toList());
+      }
+    }
+    HoodieSchemaType type;
+    try {
+      type = HoodieSchemaType.valueOf(typeName.toUpperCase(Locale.ROOT));
+    } catch (IllegalArgumentException e) {
+      throw new IllegalArgumentException("Unknown Hudi schema type: " + typeName, e);
+    }
+    if (!CUSTOM_LOGICAL_TYPES.contains(type)) {
+      throw new IllegalArgumentException(
+          "parseTypeDescriptor only supports custom logical types, got: " + type);
+    }
+    return Pair.of(type, params);
+  }
+
+  private static final Set<HoodieSchemaType> CUSTOM_LOGICAL_TYPES =
+      EnumSet.of(HoodieSchemaType.VECTOR, HoodieSchemaType.BLOB);
+
 
   /**
    * Constants for Parquet-style accessor patterns used in nested MAP and ARRAY navigation.
@@ -1610,6 +1695,21 @@ public class HoodieSchema implements Serializable {
     }
   }
 
+  /**
+   * Represents a fixed-dimension, typed-element vector stored as an Avro FIXED field.
+   *
+   * <p>Each element is serialized contiguously in little-endian byte order
+   * ({@link VectorLogicalType#VECTOR_BYTE_ORDER}).
+   *
+   * <p>Supported element types and their per-element byte sizes:
+   * <ul>
+   *   <li>{@link VectorElementType#FLOAT}  — 4 bytes (IEEE 754 single-precision)</li>
+   *   <li>{@link VectorElementType#DOUBLE} — 8 bytes (IEEE 754 double-precision)</li>
+   *   <li>{@link VectorElementType#INT8}   — 1 byte  (signed 8-bit integer)</li>
+   * </ul>
+   *
+   * <p>The total FIXED size is {@code dimension * elementType.getElementSize()} bytes.
+   */
   public static class Vector extends HoodieSchema {
     private static final String DEFAULT_NAME = "vector";
 
@@ -1713,6 +1813,17 @@ public class HoodieSchema implements Serializable {
     @Override
     public HoodieSchemaType getType() {
       return HoodieSchemaType.VECTOR;
+    }
+
+    /**
+     * Returns the type descriptor string for this vector, e.g. "VECTOR(128)" or "VECTOR(512, DOUBLE)".
+     * Default element type (FLOAT) is omitted.
+     */
+    public String toTypeDescriptor() {
+      if (getVectorElementType() == VectorElementType.FLOAT) {
+        return "VECTOR(" + getDimension() + ")";
+      }
+      return "VECTOR(" + getDimension() + ", " + getVectorElementType() + ")";
     }
 
     /**
@@ -1987,11 +2098,17 @@ public class HoodieSchema implements Serializable {
     }
   }
 
-  static class VectorLogicalType extends LogicalType {
+  public static class VectorLogicalType extends LogicalType {
     private static final String VECTOR_LOGICAL_TYPE_NAME = "vector";
     private static final String PROP_DIMENSION = "dimension";
     private static final String PROP_ELEMENT_TYPE = "elementType";
     private static final String PROP_STORAGE_BACKING = "storageBacking";
+
+    /**
+     * Byte order used for serializing/deserializing vector elements (FLOAT, DOUBLE, etc).
+     * Little-endian is chosen for compatibility with file formats.
+     */
+    public static final ByteOrder VECTOR_BYTE_ORDER = ByteOrder.LITTLE_ENDIAN;
 
     private final int dimension;
     private final String elementType;
@@ -2329,6 +2446,7 @@ public class HoodieSchema implements Serializable {
    * Blob types represent raw binary data. The data can be stored in-line as a byte array or out-of-line as a reference to a file or offset and length within that file.
    */
   public static class Blob extends HoodieSchema {
+    public static final String TYPE_DESCRIPTOR = "BLOB";
     private static final String DEFAULT_NAME = "blob";
     private static final List<Schema.Field> BLOB_FIELDS = createBlobFields();
 
@@ -2372,6 +2490,13 @@ public class HoodieSchema implements Serializable {
     @Override
     public HoodieSchemaType getType() {
       return HoodieSchemaType.BLOB;
+    }
+
+    /**
+     * Returns the type descriptor string for Blob: "BLOB".
+     */
+    public String toTypeDescriptor() {
+      return TYPE_DESCRIPTOR;
     }
 
     private static Schema createSchema(String name) {

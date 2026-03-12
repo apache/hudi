@@ -19,9 +19,10 @@ package org.apache.spark.sql.avro
 
 import org.apache.hudi.avro.model.HoodieMetadataColumnStats
 import org.apache.hudi.common.schema.{HoodieSchema, HoodieSchemaField, HoodieSchemaType}
+import org.apache.hudi.internal.schema.HoodieSchemaException
 
 import org.apache.avro.JsonProperties
-import org.apache.spark.sql.types.{DataTypes, MetadataBuilder, StructField, StructType}
+import org.apache.spark.sql.types.{ArrayType, DataTypes, FloatType, MetadataBuilder, StructField, StructType}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertThrows, assertTrue}
 import org.junit.jupiter.api.Test
 
@@ -179,6 +180,17 @@ class TestSchemaConverters {
     val nestedMapType = nestedField.schema.getValueType
     assertEquals(HoodieSchemaType.RECORD, nestedMapType.getType)
     assertEquals(HoodieSchemaType.BLOB, nestedMapType.getField("nested_blob").get.schema.getType)
+  }
+
+  @Test
+  def testVectorContainsNullThrows(): Unit = {
+    val metadata = new MetadataBuilder()
+      .putString(HoodieSchema.TYPE_METADATA_FIELD, "VECTOR(4)")
+      .build()
+    val sparkType = ArrayType(FloatType, containsNull = true)
+    assertThrows(classOf[HoodieSchemaException], () => {
+      HoodieSparkSchemaConverters.toHoodieType(sparkType, nullable = false, metadata = metadata)
+    })
   }
 
   /**

@@ -248,6 +248,10 @@ object HoodieSqlCommonUtils extends SparkAdapterSupport {
     opts.filterKeys(isHoodieConfigKey(_,
       opts.getOrElse(COMMIT_METADATA_KEYPREFIX.key, COMMIT_METADATA_KEYPREFIX.defaultValue()))).toMap
 
+  def extractSparkPrefixedHoodieConfigs(opts: Map[String, String]): Map[String, String] =
+    opts.filter { case (k, _) => k.startsWith("spark.hoodie.") }
+      .map { case (k, v) => (k.stripPrefix("spark."), v) }
+
   /**
    * Checks whether Spark is using Hive as Session's Catalog
    */

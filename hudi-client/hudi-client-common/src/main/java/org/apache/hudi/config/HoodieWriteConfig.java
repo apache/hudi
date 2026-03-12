@@ -42,6 +42,7 @@ import org.apache.hudi.common.fs.ConsistencyGuardConfig;
 import org.apache.hudi.common.fs.FileSystemRetryConfig;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
+import org.apache.hudi.common.model.HoodiePreWriteCleanerPolicy;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.HoodieRecordPayload;
@@ -938,6 +939,12 @@ public class HoodieWriteConfig extends HoodieConfig {
       .sinceVersion("")
       .withDocumentation("Flag to indicate whether to ignore any non exception error (e.g. write status error)."
           + "By default true for backward compatibility.");
+
+  public static final ConfigProperty<String> APPLICATION_ID = ConfigProperty
+      .key("hoodie.write.application.id")
+      .defaultValue("Unknown")
+      .markAdvanced()
+      .withDocumentation("Application identifier (e.g. Spark application id) used to populate lock metadata so lock holders can be identified.");
 
   /**
    * Config key with boolean value that indicates whether record being written during MERGE INTO Spark SQL
@@ -1964,6 +1971,10 @@ public class HoodieWriteConfig extends HoodieConfig {
         .valueOf(getString(HoodieCleanConfig.FAILED_WRITES_CLEANER_POLICY));
   }
 
+  public HoodiePreWriteCleanerPolicy getPreWriteCleanerPolicy() {
+    return HoodiePreWriteCleanerPolicy.fromString(getString(HoodieCleanConfig.PREWRITE_CLEANER_POLICY));
+  }
+
   public String getCompactionSpecifyPartitionPathRegex() {
     return getString(HoodieCompactionConfig.COMPACTION_SPECIFY_PARTITION_PATH_REGEX);
   }
@@ -2018,6 +2029,10 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public long getClusteringTargetFileMaxBytes() {
     return getLong(HoodieClusteringConfig.PLAN_STRATEGY_TARGET_FILE_MAX_BYTES);
+  }
+
+  public String getFileSlicesSortBy() {
+    return getString(HoodieClusteringConfig.PLAN_STRATEGY_FILE_SLICES_SORT_BY);
   }
 
   public int getTargetPartitionsForClustering() {
@@ -2724,6 +2739,10 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public String getLockHiveTableName() {
     return getString(HoodieLockConfig.HIVE_TABLE_NAME);
+  }
+
+  public String getApplicationId() {
+    return getStringOrDefault(APPLICATION_ID);
   }
 
   public ConflictResolutionStrategy getWriteConflictResolutionStrategy() {
@@ -3463,6 +3482,11 @@ public class HoodieWriteConfig extends HoodieConfig {
 
     public Builder withReleaseResourceEnabled(boolean enabled) {
       writeConfig.setValue(RELEASE_RESOURCE_ENABLE, Boolean.toString(enabled));
+      return this;
+    }
+
+    public Builder withApplicationId(String appId) {
+      writeConfig.setValue(APPLICATION_ID, appId);
       return this;
     }
 

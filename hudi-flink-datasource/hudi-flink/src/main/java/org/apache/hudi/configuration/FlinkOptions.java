@@ -1145,6 +1145,94 @@ public class FlinkOptions extends HoodieConfig {
       .withDescription("Maximum number of groups to create as part of ClusteringPlan. Increasing groups will increase parallelism, default is 30");
 
   // ------------------------------------------------------------------------
+  //  Kafka Offset Trace Options
+  // ------------------------------------------------------------------------
+
+  @AdvancedConfig
+  public static final ConfigOption<String> CALLER_SERVICE_NAME = ConfigOptions
+          .key("kafka.offset.trace.caller.service.name")
+          .stringType()
+          .defaultValue("ingestion-rt")
+          .withDescription("Caller service name for checkpoint service RPC headers");
+
+  @AdvancedConfig
+  public static final ConfigOption<String> ATHENA_SERVICE = ConfigOptions
+          .key("kafka.offset.trace.checkpoint.service")
+          .stringType()
+          .defaultValue("athena-job-manager")
+          .withDescription("Checkpoint service name for offset lookup");
+
+  @AdvancedConfig
+  public static final ConfigOption<String> DC = ConfigOptions
+          .key("kafka.offset.trace.dc")
+          .stringType()
+          .noDefaultValue()
+          .withDescription("Data center for checkpoint offset lookup");
+
+  @AdvancedConfig
+  public static final ConfigOption<String> ENV = ConfigOptions
+          .key("kafka.offset.trace.env")
+          .stringType()
+          .noDefaultValue()
+          .withDescription("Environment for checkpoint offset lookup");
+
+  @AdvancedConfig
+  public static final ConfigOption<String> JOB_NAME = ConfigOptions
+          .key("kafka.offset.trace.job.name")
+          .stringType()
+          .noDefaultValue()
+          .withDescription("Flink job name for checkpoint offset lookup");
+
+  @AdvancedConfig
+  public static final ConfigOption<String> HADOOP_USER = ConfigOptions
+          .key("kafka.offset.trace.hadoop.user")
+          .stringType()
+          .noDefaultValue()
+          .withDescription("Hadoop user for checkpoint offset lookup");
+
+  @AdvancedConfig
+  public static final ConfigOption<String> SOURCE_KAFKA_CLUSTER = ConfigOptions
+          .key("kafka.offset.trace.source.cluster")
+          .stringType()
+          .noDefaultValue()
+          .withDescription("Source Kafka cluster name");
+
+  @AdvancedConfig
+  public static final ConfigOption<String> TARGET_KAFKA_CLUSTER = ConfigOptions
+          .key("kafka.offset.trace.target.cluster")
+          .stringType()
+          .noDefaultValue()
+          .withDescription("Target Kafka cluster name");
+
+  @AdvancedConfig
+  public static final ConfigOption<String> TOPIC_ID = ConfigOptions
+          .key("kafka.offset.trace.topic.id")
+          .stringType()
+          .noDefaultValue()
+          .withDescription("Topic ID for checkpoint offset requests");
+
+  @AdvancedConfig
+  public static final ConfigOption<String> SERVICE_TIER = ConfigOptions
+          .key("kafka.offset.trace.service.tier")
+          .stringType()
+          .defaultValue("DEFAULT")
+          .withDescription("Service tier for checkpoint offset lookup (e.g., DEFAULT, CRITICAL)");
+
+  @AdvancedConfig
+  public static final ConfigOption<String> SERVICE_NAME = ConfigOptions
+          .key("kafka.offset.trace.service.name")
+          .stringType()
+          .defaultValue("ingestion-rt")
+          .withDescription("Service name for checkpoint offset lookup");
+
+  @AdvancedConfig
+  public static final ConfigOption<String> KAFKA_TOPIC_NAME = ConfigOptions
+          .key("kafka.offset.trace.topic.name")
+          .stringType()
+          .noDefaultValue()
+          .withDescription("Kafka topic name for storing topic metadata along with offsets");
+
+  // ------------------------------------------------------------------------
   //  Hive Sync Options
   // ------------------------------------------------------------------------
 

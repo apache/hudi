@@ -43,7 +43,7 @@ import org.apache.spark.sql.catalyst.expressions.{AttributeReference, EqualTo, L
 import org.apache.spark.sql.execution.datasources.FileStatusCache
 import org.apache.spark.sql.hive.HiveExternalCatalog
 import org.apache.spark.sql.hudi.HoodieOptionConfig.mapSqlOptionsToDataSourceWriteConfigs
-import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.{filterHoodieConfigs, isUsingHiveCatalog}
+import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.{extractSparkPrefixedHoodieConfigs, filterHoodieConfigs, isUsingHiveCatalog}
 import org.apache.spark.sql.hudi.ProvidesHoodieConfig.{buildOverridingOpts, buildOverridingOptsForDelete, combineOptions, getPartitionPathFieldWriteConfig}
 import org.apache.spark.sql.hudi.command.SqlKeyGenerator
 import org.apache.spark.sql.internal.SQLConf
@@ -515,18 +515,21 @@ object ProvidesHoodieConfig {
     // NOTE: Properties are merged in the following order of priority (first has the highest priority, last has the
     //       lowest, which is inverse to the ordering in the code):
     //          1. (Extra) Option overrides
-    //          2. Spark SQL configs
+    //          2. Spark SQL configs (hoodie.* keys)
+    //          2b. Spark SQL configs (spark.hoodie.* keys, normalized to hoodie.*)
     //          3. Persisted Hudi's Table configs
     //          4. Table's properties in Spark Catalog
     //          5. Global DFS properties
     //          6. (Feature-specific) Default values
+    val allConfs = sqlConf.getAllConfs
     filterNullValues(defaultOpts) ++
       DFSPropertiesConfiguration.getGlobalProps.asScala.toMap ++
       // NOTE: Catalog table provided t/h `TBLPROPERTIES` clause might contain Spark SQL specific
       //       properties that need to be mapped into Hudi's conventional ones
       mapSqlOptionsToDataSourceWriteConfigs(catalogTable.catalogProperties) ++
       tableConfig.getProps.asScala.toMap ++
-      filterHoodieConfigs(sqlConf.getAllConfs) ++
+      extractSparkPrefixedHoodieConfigs(allConfs) ++
+      filterHoodieConfigs(allConfs) ++
       filterNullValues(overridingOpts)
   }
 

@@ -324,6 +324,17 @@
             <artifactId>joda-time</artifactId>
             <version>2.5</version>
         </dependency>
+
+        <!-- Jackson -->
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-databind</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-annotations</artifactId>
+        </dependency>
+
         <!-- Hive -->
         <dependency>
             <groupId>${hive.groupid}</groupId>

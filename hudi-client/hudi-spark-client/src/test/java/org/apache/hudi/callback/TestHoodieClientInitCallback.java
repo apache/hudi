@@ -85,6 +85,7 @@ public class TestHoodieClientInitCallback {
 
     StorageConfiguration storageConfToReturn = getDefaultStorageConf();
     when(engineContext.getStorageConf()).thenReturn(storageConfToReturn);
+    when(engineContext.getApplicationId()).thenReturn("test-app-id");
   }
 
   @Test

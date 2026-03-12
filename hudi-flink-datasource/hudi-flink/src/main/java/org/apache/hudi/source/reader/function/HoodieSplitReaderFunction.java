@@ -56,12 +56,12 @@ public class HoodieSplitReaderFunction implements SplitReaderFunction<RowData> {
   private final HoodieSchema requiredSchema;
   private final InternalSchemaManager internalSchemaManager;
   private final Configuration configuration;
-  private final org.apache.hadoop.conf.Configuration hadoopConf;
   private final HoodieWriteConfig writeConfig;
   private final String mergeType;
   private final boolean emitDelete;
   private final List<ExpressionPredicates.Predicate> predicates;
-  private HoodieFileGroupReader<RowData> fileGroupReader;
+  private transient HoodieFileGroupReader<RowData> fileGroupReader;
+  private transient org.apache.hadoop.conf.Configuration hadoopConf;
 
   public HoodieSplitReaderFunction(
       Configuration configuration,
@@ -79,18 +79,16 @@ public class HoodieSplitReaderFunction implements SplitReaderFunction<RowData> {
     this.requiredSchema = requiredSchema;
     this.internalSchemaManager = internalSchemaManager;
     this.configuration = configuration;
-    this.hadoopConf =  HadoopConfigurations.getHadoopConf(configuration);
     this.writeConfig = FlinkWriteClients.getHoodieClientConfig(configuration);
     this.predicates = predicates;
     this.mergeType = mergeType;
     this.emitDelete = emitDelete;
-    this.fileGroupReader = null;
   }
 
   @Override
   public RecordsWithSplitIds<HoodieRecordWithPosition<RowData>> read(HoodieSourceSplit split) {
     final String splitId = split.splitId();
-    HoodieTableMetaClient metaClient = StreamerUtil.metaClientForReader(configuration, hadoopConf);
+    HoodieTableMetaClient metaClient = StreamerUtil.metaClientForReader(configuration, getHadoopConf());
 
     try {
       this.fileGroupReader = createFileGroupReader(split, metaClient);
@@ -140,5 +138,12 @@ public class HoodieSplitReaderFunction implements SplitReaderFunction<RowData> {
       predicates,
       split.getInstantRange()
     );
+  }
+
+  private org.apache.hadoop.conf.Configuration getHadoopConf() {
+    if (hadoopConf == null) {
+      hadoopConf = HadoopConfigurations.getHadoopConf(configuration);
+    }
+    return hadoopConf;
   }
 }

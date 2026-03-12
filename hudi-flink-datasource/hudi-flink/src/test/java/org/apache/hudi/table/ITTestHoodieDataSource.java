@@ -142,8 +142,8 @@ public class ITTestHoodieDataSource {
   File tempFile;
 
   @ParameterizedTest
-  @EnumSource(value = HoodieTableType.class)
-  void testStreamWriteAndReadFromSpecifiedCommit(HoodieTableType tableType) throws Exception {
+  @MethodSource("tableTypeAndBooleanTrueFalseParams")
+  void testStreamWriteAndReadFromSpecifiedCommit(HoodieTableType tableType, boolean useSourceV2) throws Exception {
     // create filesystem table named source
     String createSource = TestConfigurations.getFileSourceDDL("source");
     streamTableEnv.executeSql(createSource);
@@ -167,6 +167,7 @@ public class ITTestHoodieDataSource {
         .option(FlinkOptions.READ_STREAMING_SKIP_COMPACT, false)
         .option(FlinkOptions.TABLE_TYPE, tableType)
         .option(FlinkOptions.READ_START_COMMIT, firstCommit)
+        .option(FlinkOptions.READ_SOURCE_V2_ENABLED, useSourceV2)
         .end();
     streamTableEnv.executeSql(hoodieTableDDL);
     List<Row> rows = execSelectSqlWithExpectedNum(streamTableEnv, "select * from t1", TestData.DATA_SET_SOURCE_INSERT.size());
@@ -223,8 +224,8 @@ public class ITTestHoodieDataSource {
   }
 
   @ParameterizedTest
-  @EnumSource(value = HoodieTableType.class)
-  void testStreamWriteAndRead(HoodieTableType tableType) throws Exception {
+  @MethodSource("tableTypeAndBooleanTrueFalseParams")
+  void testStreamWriteAndRead(HoodieTableType tableType, boolean useSourceV2) throws Exception {
     // create filesystem table named source
     String createSource = TestConfigurations.getFileSourceDDL("source");
     streamTableEnv.executeSql(createSource);
@@ -236,7 +237,9 @@ public class ITTestHoodieDataSource {
         .option(FlinkOptions.READ_STREAMING_SKIP_COMPACT, false)
         .option(FlinkOptions.TABLE_TYPE, tableType)
         .option(HoodieWriteConfig.ALLOW_EMPTY_COMMIT.key(), false)
+        .option(FlinkOptions.READ_SOURCE_V2_ENABLED, useSourceV2)
         .end();
+
     streamTableEnv.executeSql(hoodieTableDDL);
     String insertInto = "insert into t1 select * from source";
     execInsertSql(streamTableEnv, insertInto);

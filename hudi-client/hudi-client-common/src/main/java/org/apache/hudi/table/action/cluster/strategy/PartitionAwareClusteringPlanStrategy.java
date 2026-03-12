@@ -32,6 +32,7 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.IncrementalPartitionAwareStrategy;
+import org.apache.hudi.table.action.cluster.ClusteringFileSliceComparator;
 import org.apache.hudi.table.action.cluster.ClusteringPlanActionExecutor;
 import org.apache.hudi.table.action.cluster.ClusteringPlanPartitionFilter;
 import org.apache.hudi.util.Lazy;
@@ -40,6 +41,7 @@ import lombok.extern.slf4j.Slf4j;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -68,11 +70,9 @@ public abstract class PartitionAwareClusteringPlanStrategy<T,I,K,O> extends Clus
     List<Pair<List<FileSlice>, Integer>> fileSliceGroups = new ArrayList<>();
     List<FileSlice> currentGroup = new ArrayList<>();
 
-    // Sort fileSlices before dividing, which makes dividing more compact
+    Comparator<FileSlice> sortedFileSlicesComparator = ClusteringFileSliceComparator.buildComparator(writeConfig);
     List<FileSlice> sortedFileSlices = new ArrayList<>(fileSlices);
-    sortedFileSlices.sort((o1, o2) -> (int)
-        ((o2.getBaseFile().isPresent() ? o2.getBaseFile().get().getFileSize() : writeConfig.getParquetMaxFileSize())
-            - (o1.getBaseFile().isPresent() ? o1.getBaseFile().get().getFileSize() : writeConfig.getParquetMaxFileSize())));
+    sortedFileSlices.sort(sortedFileSlicesComparator);
 
     long totalSizeSoFar = 0;
     boolean partialScheduled = false;
@@ -103,15 +103,23 @@ public abstract class PartitionAwareClusteringPlanStrategy<T,I,K,O> extends Clus
     }
 
     if (!currentGroup.isEmpty()) {
-      if (currentGroup.size() > 1 || writeConfig.shouldClusteringSingleGroup()) {
-        int numOutputGroups = getNumberOfOutputFileGroups(totalSizeSoFar, writeConfig.getClusteringTargetFileMaxBytes());
-        log.info("Adding final clustering group " + totalSizeSoFar + " max bytes: "
-            + writeConfig.getClusteringMaxBytesInGroup() + " num input slices: " + currentGroup.size() + " output groups: " + numOutputGroups);
-        fileSliceGroups.add(Pair.of(currentGroup, numOutputGroups));
-      }
+      int numOutputGroups = getNumberOfOutputFileGroups(totalSizeSoFar, writeConfig.getClusteringTargetFileMaxBytes());
+      log.info("Adding final clustering group " + totalSizeSoFar + " max bytes: "
+          + writeConfig.getClusteringMaxBytesInGroup() + " num input slices: " + currentGroup.size() + " output groups: " + numOutputGroups);
+      fileSliceGroups.add(Pair.of(currentGroup, numOutputGroups));
     }
 
-    return Pair.of(fileSliceGroups.stream().map(fileSliceGroup ->
+    return Pair.of(fileSliceGroups.stream().filter(fileSliceGroup -> {
+      if (fileSliceGroup.getLeft().size() > 1 || fileSliceGroup.getRight() > 1 || writeConfig.shouldClusteringSingleGroup()) {
+        return true;
+      }
+      FileSlice targetedFileSlice = fileSliceGroup.getLeft().get(0);
+      long size = targetedFileSlice.getBaseFile().isPresent() ? targetedFileSlice.getBaseFile().get().getFileSize() : writeConfig.getParquetMaxFileSize();
+      log.info(String.format("Removing clustering group due to input and output slices both being 1 and single group clustering is disabled."
+              + " Group stats: currentGroupSize= %s, maxBytesPerClusteringGroup= %s",
+          size, writeConfig.getClusteringMaxBytesInGroup()));
+      return false;
+    }).map(fileSliceGroup ->
         HoodieClusteringGroup.newBuilder()
             .setSlices(getFileSliceInfo(fileSliceGroup.getLeft()))
             .setNumOutputFileGroups(fileSliceGroup.getRight())
@@ -136,7 +144,10 @@ public abstract class PartitionAwareClusteringPlanStrategy<T,I,K,O> extends Clus
    * Return list of partition paths to be considered for clustering.
    */
   public Pair<List<String>, List<String>> filterPartitionPaths(HoodieWriteConfig writeConfig, List<String> partitions) {
-    return ClusteringPlanPartitionFilter.filter(partitions, getWriteConfig());
+    Pair<List<String>, List<String>> result = ClusteringPlanPartitionFilter.filter(partitions, getWriteConfig());
+    result.getLeft().sort(String::compareTo);
+    log.debug("Filtered to the following partitions after sorting: {}", result.getLeft());
+    return result;
   }
 
   @Override

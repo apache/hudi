@@ -443,7 +443,7 @@ public class ProtoConversionUtil {
           }
           // unsigned ints need to be casted to long
           if (tmpValue instanceof Integer) {
-            tmpValue = Integer.toUnsignedLong((Integer) tmpValue);
+            tmpValue = Long.valueOf((Integer) tmpValue);
           }
           return tmpValue;
         case MAP:

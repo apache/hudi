@@ -351,16 +351,7 @@ public class FileSystemBackedTableMetadata extends AbstractHoodieTableMetadata {
 
     for (Pair<String, StoragePath> partitionPair : partitionPathList) {
       StoragePath absolutePartitionPath = partitionPair.getRight();
-      try {
-        pathInfoMap.put(partitionPair, getStorage().listDirectEntries(absolutePartitionPath));
-      } catch (IOException e) {
-        if (!getStorage().exists(absolutePartitionPath)) {
-          pathInfoMap.put(partitionPair, Collections.emptyList());
-        } else {
-          // in case the partition path was created by another caller
-          pathInfoMap.put(partitionPair, getStorage().listDirectEntries(absolutePartitionPath));
-        }
-      }
+      pathInfoMap.put(partitionPair, getAllFilesInPartition(absolutePartitionPath));
     }
     return pathInfoMap;
   }

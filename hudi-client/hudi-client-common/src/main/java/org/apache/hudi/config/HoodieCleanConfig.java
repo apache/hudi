@@ -24,6 +24,7 @@ import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
+import org.apache.hudi.common.model.HoodiePreWriteCleanerPolicy;
 import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.table.action.clean.CleaningTriggerStrategy;
@@ -211,6 +212,12 @@ public class HoodieCleanConfig extends HoodieConfig {
           + "Some datasets with large record_index partitions can cause OOM errors during file listing in clean planning. "
           + "By using local engine context, file listing is performed on the driver, allowing targeted memory scaling. "
           + "When enabled, both non-partitioned datasets and metadata tables use the driver for scheduling cleans.");
+
+  public static final ConfigProperty<String> PREWRITE_CLEANER_POLICY = ConfigProperty
+      .key("hoodie.prewrite.cleaner.policy")
+      .defaultValue(HoodiePreWriteCleanerPolicy.NONE.name())
+      .sinceVersion("1.2.0")
+      .withDocumentation(HoodiePreWriteCleanerPolicy.class);
 
   private static final String CLEAN_PARTITION_FILTER_REGEX_KEY = "hoodie.clean.partition.filter.regex";
   private static final String CLEAN_PARTITION_FILTER_SELECTED_KEY = "hoodie.clean.partition.filter.selected";
@@ -402,9 +409,15 @@ public class HoodieCleanConfig extends HoodieConfig {
       return this;
     }
 
+    public HoodieCleanConfig.Builder withPreWriteCleanerPolicy(HoodiePreWriteCleanerPolicy preWriteCleanerPolicy) {
+      cleanConfig.setValue(PREWRITE_CLEANER_POLICY, preWriteCleanerPolicy.name());
+      return this;
+    }
+
     public HoodieCleanConfig build() {
       cleanConfig.setDefaults(HoodieCleanConfig.class.getName());
       HoodieCleaningPolicy.valueOf(cleanConfig.getString(CLEANER_POLICY));
+      HoodiePreWriteCleanerPolicy.fromString(cleanConfig.getString(PREWRITE_CLEANER_POLICY));
       return cleanConfig;
     }
   }

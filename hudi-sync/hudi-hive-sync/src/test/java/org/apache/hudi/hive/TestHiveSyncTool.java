@@ -116,6 +116,7 @@ import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_INCREMENTAL
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_PARTITION_FIELDS;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_TABLE_NAME;
+import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_TOUCH_PARTITIONS_ENABLED;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -163,6 +164,16 @@ public class TestHiveSyncTool {
       opts.add(new Object[] {mode, HoodieSyncTableStrategy.ALL});
       opts.add(new Object[] {mode, HoodieSyncTableStrategy.RO});
       opts.add(new Object[] {mode, HoodieSyncTableStrategy.RT});
+    }
+    return opts;
+  }
+
+  // syncMode, touchPartitionsEnabled
+  private static Iterable<Object[]> syncModeAndTouchPartitionsEnabled() {
+    List<Object[]> opts = new ArrayList<>();
+    for (Object mode : SYNC_MODES) {
+      opts.add(new Object[] {mode, true});
+      opts.add(new Object[] {mode, false});
     }
     return opts;
   }
@@ -375,9 +386,13 @@ public class TestHiveSyncTool {
     hivePartitions = hiveClient.getAllPartitions(HiveTestUtil.TABLE_NAME);
     List<String> writtenPartitionsSince = hiveClient.getWrittenPartitionsSince(Option.empty(), Option.empty());
     List<PartitionEvent> partitionEvents = hiveClient.getPartitionEvents(hivePartitions, writtenPartitionsSince, Collections.emptySet());
-    assertEquals(1, partitionEvents.size(), "There should be only one partition event");
-    assertEquals(PartitionEventType.UPDATE, partitionEvents.iterator().next().eventType,
-        "The one partition event must of type UPDATE");
+    assertEquals(1, partitionEvents.stream()
+        .filter(partitionEvent -> partitionEvent.eventType.equals(PartitionEventType.UPDATE)).count(),
+        "There should be only one update partition event");
+    // TOUCH events are not produced when META_SYNC_TOUCH_PARTITIONS_ENABLED is disabled (default)
+    assertEquals(0, partitionEvents.stream()
+        .filter(partitionEvent -> partitionEvent.eventType.equals(PartitionEventType.TOUCH)).count(),
+        "There should be zero touch partition events when touch partitions is disabled");
 
     // Add a partition that does not belong to the table, i.e., not in the same base path
     // This should not happen in production.  However, if this happens, when doing fallback
@@ -1462,6 +1477,71 @@ public class TestHiveSyncTool {
         "Table should have no partitions");
     assertEquals(instantTime4, hiveClient.getLastCommitTimeSynced(HiveTestUtil.TABLE_NAME).get(),
         "The last commit that was synced should be updated in the TBLPROPERTIES");
+  }
+
+  @ParameterizedTest
+  @MethodSource("syncModeAndTouchPartitionsEnabled")
+  public void testTouchPartition(String syncMode, boolean touchPartitionsEnabled) throws Exception {
+    hiveSyncProps.setProperty(HIVE_SYNC_MODE.key(), syncMode);
+    hiveSyncProps.setProperty(META_SYNC_TOUCH_PARTITIONS_ENABLED.key(), String.valueOf(touchPartitionsEnabled));
+    String instantTime = "100";
+    HiveTestUtil.createCOWTable(instantTime, 5, true);
+
+    HiveTestUtil.getCreatedTablesSet().add(HiveTestUtil.DB_NAME + "." + HiveTestUtil.TABLE_NAME);
+    reInitHiveSyncClient();
+    assertFalse(hiveClient.tableExists(HiveTestUtil.TABLE_NAME),
+            "Table " + HiveTestUtil.TABLE_NAME + " should not exist initially");
+    hiveSyncTool.syncHoodieTable();
+
+    // Reinitialize client after sync as the previous client was closed
+    reInitHiveSyncClient();
+    Option<String> lastCommitTimeSynced = hiveClient.getLastCommitTimeSynced(HiveTestUtil.TABLE_NAME);
+    Option<String> lastCommitCompletionTimeSynced = hiveClient.getLastCommitCompletionTimeSynced(HiveTestUtil.TABLE_NAME);
+    assertTrue(hiveClient.tableExists(HiveTestUtil.TABLE_NAME),
+            "Table " + HiveTestUtil.TABLE_NAME + " should exist after sync completes");
+    assertEquals(hiveClient.getMetastoreSchema(HiveTestUtil.TABLE_NAME).size(),
+            hiveClient.getStorageSchema().getFields().size() + getPartitionFieldSize(),
+            "Hive Schema should match the table schema + partition field");
+
+    List<Partition> partitions = hiveClient.getAllPartitions(HiveTestUtil.TABLE_NAME);
+    String partitionToTouch = getRelativePartitionPath(new Path(HiveTestUtil.basePath),
+        new Path(partitions.get(0).getStorageLocation()));
+
+    assertEquals(5, partitions.size(),
+            "Table partitions should match the number of partitions we wrote");
+    assertEquals(instantTime, hiveClient.getLastCommitTimeSynced(HiveTestUtil.TABLE_NAME).get(),
+            "The last commit that was synced should be updated in the TBLPROPERTIES");
+
+    // insert into existing partition (creates a touch event)
+    HiveTestUtil.addCOWPartition(partitionToTouch, true, true, "101");
+
+    // sync touch partition event
+    reInitHiveSyncClient();
+    hiveSyncTool.syncHoodieTable();
+
+    // Reinitialize client after sync as the previous client was closed
+    reInitHiveSyncClient();
+    List<Partition> hivePartitions = hiveClient.getAllPartitions(HiveTestUtil.TABLE_NAME);
+    List<String> writtenPartitionsSince = hiveClient.getWrittenPartitionsSince(lastCommitTimeSynced, lastCommitCompletionTimeSynced);
+    List<PartitionEvent> partitionEvents = hiveClient.getPartitionEvents(hivePartitions, writtenPartitionsSince, Collections.emptySet());
+    List<String> touchPartitionEvents = partitionEvents.stream()
+            .filter(s -> s.eventType == PartitionEventType.TOUCH)
+            .map(s -> s.storagePartition)
+            .collect(Collectors.toList());
+
+    if (touchPartitionsEnabled) {
+      // check touch partition event was detected
+      assertEquals(1, touchPartitionEvents.size(),
+              "There should be one touch partition event when touch partitions is enabled");
+    } else {
+      // check no touch partition events when disabled
+      assertEquals(0, touchPartitionEvents.size(),
+              "There should be no touch partition events when touch partitions is disabled");
+    }
+
+    // Verify last commit time was updated
+    assertEquals("101", hiveClient.getLastCommitTimeSynced(HiveTestUtil.TABLE_NAME).get(),
+            "Last commit time should be updated");
   }
 
   @ParameterizedTest

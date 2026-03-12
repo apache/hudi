@@ -32,6 +32,8 @@ import org.apache.hudi.common.model.HoodieFileGroup;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
+import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.versioning.clean.CleanPlanV1MigrationHandler;
@@ -241,6 +243,17 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
       } else {
         HoodieCommitMetadata commitMetadata =
             hoodieTable.getActiveTimeline().readCommitMetadata(instant);
+        WriteOperationType operationType = commitMetadata.getOperationType();
+        if ((WriteOperationType.isUpsert(operationType) || WriteOperationType.isInsertWithoutReplace(operationType))
+            && HoodieTimeline.COMMIT_ACTION.equals(instant.getAction())
+            && hoodieTable.getMetaClient().getTableType().equals(HoodieTableType.COPY_ON_WRITE)) {
+          // For COW upsert/insert, only check partitions where the write updated an existing file slice
+          // (leaving behind an older version to clean). Partitions with only new file slices have nothing to clean yet.
+          return commitMetadata.getWritePartitionPathsWithUpdatedFileGroups().stream();
+        }
+        // For MOR, small file handling during inserts can cause deltacommits to create new base files (file slices)
+        // in existing file groups, so their partitions must still be returned.
+        // TODO: filter MOR deltacommit operation types guaranteed to not create new file slices for existing file groups
         return commitMetadata.getPartitionToWriteStats().keySet().stream();
       }
     } catch (IOException e) {
