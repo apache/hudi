@@ -19,11 +19,11 @@
 package org.apache.hudi.sink.append;
 
 import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.sink.StreamWriteOperatorCoordinator;
 import org.apache.hudi.sink.buffer.BufferType;
-import org.apache.hudi.sink.buffer.MemorySegmentPoolFactory;
 import org.apache.hudi.sink.bulk.sort.SortOperatorGen;
 import org.apache.hudi.sink.utils.BufferUtils;
 import org.apache.hudi.util.MutableIteratorWrapperIterator;
@@ -41,6 +41,7 @@ import org.apache.flink.table.runtime.util.MemorySegmentPool;
 import org.apache.flink.table.types.logical.RowType;
 import org.apache.flink.util.Collector;
 
+import java.io.Closeable;
 import java.io.IOException;
 import java.util.Iterator;
 import java.util.List;
@@ -70,6 +71,7 @@ public class AppendWriteFunctionWithBIMBufferSort<T> extends AppendWriteFunction
   private final long writeBufferSize;
   private transient BinaryInMemorySortBuffer activeBuffer;
   private transient BinaryInMemorySortBuffer backgroundBuffer;
+  private transient MemorySegmentPool[] memorySegmentPools;
   private transient ExecutorService asyncWriteExecutor;
   private transient AtomicReference<CompletableFuture<Void>> asyncWriteTask;
   private transient AtomicBoolean isBackgroundBufferBeingProcessed;
@@ -89,14 +91,14 @@ public class AppendWriteFunctionWithBIMBufferSort<T> extends AppendWriteFunction
     SortCodeGenerator codeGenerator = sortOperatorGen.createSortCodeGenerator();
     GeneratedNormalizedKeyComputer keyComputer = codeGenerator.generateNormalizedKeyComputer("SortComputer");
     GeneratedRecordComparator recordComparator = codeGenerator.generateRecordComparator("SortComparator");
-    MemorySegmentPool[] pools = MemorySegmentPoolFactory.createMemorySegmentPools(config, 2);
+    this.memorySegmentPools = this.memorySegmentPoolFactory.createMemorySegmentPools(config, 2, () -> OptionsResolver.getWriteBufferSizeInBytes(config));
 
     this.activeBuffer = BufferUtils.createBuffer(rowType,
-        pools[0],
+        memorySegmentPools[0],
         keyComputer.newInstance(Thread.currentThread().getContextClassLoader()),
         recordComparator.newInstance(Thread.currentThread().getContextClassLoader()));
     this.backgroundBuffer = BufferUtils.createBuffer(rowType,
-        pools[1],
+        memorySegmentPools[1],
         keyComputer.newInstance(Thread.currentThread().getContextClassLoader()),
         recordComparator.newInstance(Thread.currentThread().getContextClassLoader()));
 
@@ -228,6 +230,13 @@ public class AppendWriteFunctionWithBIMBufferSort<T> extends AppendWriteFunction
     try {
       if (asyncWriteExecutor != null && !asyncWriteExecutor.isShutdown()) {
         asyncWriteExecutor.shutdown();
+      }
+      if (memorySegmentPools != null) {
+        for (MemorySegmentPool memorySegmentPool : memorySegmentPools) {
+          if (memorySegmentPool instanceof Closeable) {
+            ((Closeable) memorySegmentPool).close();
+          }
+        }
       }
     } finally {
       super.close();

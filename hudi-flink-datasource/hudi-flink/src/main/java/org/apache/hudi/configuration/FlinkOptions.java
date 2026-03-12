@@ -708,6 +708,13 @@ public class FlinkOptions extends HoodieConfig {
           + "it flushes the max size data bucket to avoid OOM, default 1GB");
 
   @AdvancedConfig
+  public static final ConfigOption<Boolean> WRITE_BUFFER_MANAGED_MEMORY_ENABLED = ConfigOptions
+      .key("write.buffer.managed.memory.enabled")
+      .booleanType()
+      .defaultValue(false)
+      .withDescription("Whether to use flink managed memory to build write buffers, false by default.");
+
+  @AdvancedConfig
   public static final ConfigOption<Boolean> WRITE_BUFFER_SORT_ENABLED = ConfigOptions
       .key("write.buffer.sort.enabled")
       .booleanType()

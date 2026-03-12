@@ -604,4 +604,20 @@ public class OptionsResolver {
   public static int indexWriteParallelism(Configuration conf) {
     return OptionsResolver.isStreamingIndexWriteEnabled(conf) ? conf.get(FlinkOptions.INDEX_WRITE_TASKS) : 0;
   }
+
+  /**
+   * Returns the write buffer size in bytes.
+   *
+   * @param conf the Flink configuration containing write memory settings
+   * @return the calculated write buffer size in bytes
+   */
+  public static long getWriteBufferSizeInBytes(Configuration conf) {
+    long mergeReaderMem = 100; // constant 100MB
+    long mergeMapMaxMem = conf.get(FlinkOptions.WRITE_MERGE_MAX_MEMORY);
+    long maxBufferSize = (long) ((conf.get(FlinkOptions.WRITE_TASK_MAX_SIZE) - mergeReaderMem - mergeMapMaxMem) * 1024 * 1024);
+    final String errMsg = String.format("'%s' should be at least greater than '%s' plus merge reader memory(constant 100MB now)",
+        FlinkOptions.WRITE_TASK_MAX_SIZE.key(), FlinkOptions.WRITE_MERGE_MAX_MEMORY.key());
+    ValidationUtils.checkState(maxBufferSize > 0, errMsg);
+    return maxBufferSize;
+  }
 }

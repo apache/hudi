@@ -29,6 +29,7 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.sink.StreamWriteFunction;
 import org.apache.hudi.sink.StreamWriteOperatorCoordinator;
 import org.apache.hudi.sink.bootstrap.BootstrapOperator;
+import org.apache.hudi.sink.buffer.MemorySegmentPoolFactory;
 import org.apache.hudi.sink.common.AbstractWriteFunction;
 import org.apache.hudi.sink.event.WriteMetadataEvent;
 import org.apache.hudi.sink.partitioner.BucketAssignFunction;
@@ -395,14 +396,16 @@ public class StreamWriteFunctionWrapper<I> implements TestFunctionWrapper<I> {
     writeFunction.setRuntimeContext(runtimeContext);
     writeFunction.setOperatorEventGateway(gateway);
     writeFunction.initializeState(this.stateInitializationContext);
-    writeFunction.open(conf);
+    writeFunction.setMemorySegmentPoolFactory(new MemorySegmentPoolFactory(null, null, -1));
     writeFunction.setCorrespondent(correspondent);
+    writeFunction.open(conf);
   }
 
   private void setupIndexWriteFunction() throws Exception {
     indexWriteFunction = new IndexWriteFunction(conf);
     indexWriteFunction.setRuntimeContext(runtimeContext);
     indexWriteFunction.setCorrespondent(correspondent);
+    indexWriteFunction.setMemorySegmentPoolFactory(new MemorySegmentPoolFactory(null, null, -1));
     indexWriteFunction.initializeState(this.indexStateInitializationContext);
     indexWriteFunction.open(conf);
   }

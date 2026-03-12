@@ -21,11 +21,11 @@ package org.apache.hudi.sink.append;
 import org.apache.hudi.common.util.queue.DisruptorMessageQueue;
 import org.apache.hudi.common.util.queue.HoodieConsumer;
 import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.sink.StreamWriteOperatorCoordinator;
 import org.apache.hudi.sink.buffer.BufferType;
-import org.apache.hudi.sink.buffer.MemorySegmentPoolFactory;
 import org.apache.hudi.sink.bulk.sort.SortOperatorGen;
 import org.apache.hudi.sink.utils.BufferUtils;
 import org.apache.hudi.util.MutableIteratorWrapperIterator;
@@ -43,6 +43,7 @@ import org.apache.flink.table.runtime.util.MemorySegmentPool;
 import org.apache.flink.table.types.logical.RowType;
 import org.apache.flink.util.Collector;
 
+import java.io.Closeable;
 import java.io.IOException;
 import java.util.Iterator;
 import java.util.List;
@@ -97,7 +98,7 @@ public class AppendWriteFunctionWithDisruptorBufferSort<T> extends AppendWriteFu
     SortCodeGenerator codeGenerator = sortOperatorGen.createSortCodeGenerator();
     this.keyComputer = codeGenerator.generateNormalizedKeyComputer("SortComputer");
     this.recordComparator = codeGenerator.generateRecordComparator("SortComparator");
-    this.memorySegmentPool = MemorySegmentPoolFactory.createMemorySegmentPool(config);
+    this.memorySegmentPool = this.memorySegmentPoolFactory.createMemorySegmentPool(config, () -> OptionsResolver.getWriteBufferSizeInBytes(config));
 
     initDisruptorBuffer();
 
@@ -195,6 +196,9 @@ public class AppendWriteFunctionWithDisruptorBufferSort<T> extends AppendWriteFu
     try {
       if (disruptorQueue != null) {
         disruptorQueue.close();
+      }
+      if (this.memorySegmentPool instanceof Closeable) {
+        ((Closeable) this.memorySegmentPool).close();
       }
     } finally {
       super.close();

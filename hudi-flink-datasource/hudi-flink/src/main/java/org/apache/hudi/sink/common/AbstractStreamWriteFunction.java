@@ -24,6 +24,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.sink.StreamWriteOperatorCoordinator;
+import org.apache.hudi.sink.buffer.MemorySegmentPoolFactory;
 import org.apache.hudi.sink.event.CommitAckEvent;
 import org.apache.hudi.sink.event.Correspondent;
 import org.apache.hudi.sink.event.WriteMetadataEvent;
@@ -64,6 +65,7 @@ public abstract class AbstractStreamWriteFunction<I>
   /**
    * Config options.
    */
+  @Getter
   protected final Configuration config;
 
   /**
@@ -97,6 +99,10 @@ public abstract class AbstractStreamWriteFunction<I>
   @Getter
   @Setter
   protected transient Correspondent correspondent;
+
+  @Getter
+  @Setter
+  protected transient MemorySegmentPoolFactory memorySegmentPoolFactory;
 
   /**
    * Gateway to send operator events to the operator coordinator.

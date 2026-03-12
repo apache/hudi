@@ -34,7 +34,6 @@ import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.metrics.FlinkStreamWriteMetrics;
-import org.apache.hudi.sink.buffer.MemorySegmentPoolFactory;
 import org.apache.hudi.sink.buffer.RowDataBucket;
 import org.apache.hudi.sink.buffer.TotalSizeTracer;
 import org.apache.hudi.sink.bulk.RowDataKeyGen;
@@ -60,6 +59,7 @@ import org.apache.flink.table.runtime.util.MemorySegmentPool;
 import org.apache.flink.table.types.logical.RowType;
 import org.apache.flink.util.Collector;
 
+import java.io.Closeable;
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
@@ -200,7 +200,7 @@ public class StreamWriteFunction extends AbstractStreamWriteFunction<HoodieFlink
 
   private void initBuffer() {
     this.buckets = new LinkedHashMap<>();
-    this.memorySegmentPool = MemorySegmentPoolFactory.createMemorySegmentPool(config);
+    this.memorySegmentPool = this.memorySegmentPoolFactory.createMemorySegmentPool(config, () -> OptionsResolver.getWriteBufferSizeInBytes(config));
   }
 
   private void initWriteFunction() {
@@ -464,6 +464,17 @@ public class StreamWriteFunction extends AbstractStreamWriteFunction<HoodieFlink
     MetricGroup metrics = getRuntimeContext().getMetricGroup();
     writeMetrics = new FlinkStreamWriteMetrics(metrics);
     writeMetrics.registerMetrics();
+  }
+
+  @Override
+  public void close() throws Exception {
+    try {
+      if (this.memorySegmentPool instanceof Closeable) {
+        ((Closeable) this.memorySegmentPool).close();
+      }
+    } finally {
+      super.close();
+    }
   }
 
   // -------------------------------------------------------------------------

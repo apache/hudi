@@ -22,12 +22,14 @@ import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.sink.StreamWriteOperatorCoordinator;
+import org.apache.hudi.sink.buffer.MemorySegmentPoolFactory;
 import org.apache.hudi.sink.common.AbstractWriteFunction;
 import org.apache.hudi.sink.event.Correspondent;
 import org.apache.hudi.sink.event.WriteMetadataEvent;
 import org.apache.hudi.util.FlinkWriteClients;
 import org.apache.hudi.utils.RuntimeContextUtils;
 
+import lombok.Getter;
 import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.flink.configuration.Configuration;
@@ -64,6 +66,7 @@ public class BulkInsertWriteFunction<I>
   /**
    * Config options.
    */
+  @Getter
   private final Configuration config;
 
   /**
@@ -120,6 +123,11 @@ public class BulkInsertWriteFunction<I>
     if (this.writeClient != null) {
       this.writeClient.close();
     }
+  }
+
+  @Override
+  public void setMemorySegmentPoolFactory(MemorySegmentPoolFactory memorySegmentPoolFactory) {
+    // do nothing
   }
 
   /**

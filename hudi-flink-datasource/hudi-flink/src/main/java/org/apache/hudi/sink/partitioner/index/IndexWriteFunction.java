@@ -26,7 +26,6 @@ import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
-import org.apache.hudi.sink.buffer.MemorySegmentPoolFactory;
 import org.apache.hudi.sink.common.AbstractStreamWriteFunction;
 import org.apache.hudi.sink.event.WriteMetadataEvent;
 import org.apache.hudi.sink.exception.MemoryPagesExhaustedException;
@@ -43,6 +42,7 @@ import org.apache.flink.table.runtime.operators.sort.BinaryInMemorySortBuffer;
 import org.apache.flink.table.runtime.util.MemorySegmentPool;
 import org.apache.flink.util.Collector;
 
+import java.io.Closeable;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -91,7 +91,9 @@ public class IndexWriteFunction extends AbstractStreamWriteFunction<RowData> {
   public void open(Configuration parameters) throws Exception {
     super.open(parameters);
     this.flinkTable = this.writeClient.getHoodieTable();
-    this.memorySegmentPool = MemorySegmentPoolFactory.createMemorySegmentPool(config, config.get(FlinkOptions.INDEX_RLI_WRITE_BUFFER_SIZE));
+    this.memorySegmentPool = this.memorySegmentPoolFactory.createMemorySegmentPool(
+        config,
+        () -> config.get(FlinkOptions.INDEX_RLI_WRITE_BUFFER_SIZE) * 1024 * 1024);
     this.indexDataBuffer = BufferUtils.createBuffer(IndexRowUtils.INDEX_ROW_TYPE, memorySegmentPool);
   }
 
@@ -196,7 +198,9 @@ public class IndexWriteFunction extends AbstractStreamWriteFunction<RowData> {
   @Override
   public void close() throws Exception {
     this.indexDataBuffer.dispose();
-    this.memorySegmentPool.freePages();
+    if (this.memorySegmentPool instanceof Closeable) {
+      ((Closeable) this.memorySegmentPool).close();
+    }
     super.close();
   }
 }
