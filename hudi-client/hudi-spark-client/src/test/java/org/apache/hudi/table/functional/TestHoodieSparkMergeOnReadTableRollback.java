@@ -95,7 +95,7 @@ import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-@Tag("functional")
+@Tag("functional-b")
 public class TestHoodieSparkMergeOnReadTableRollback extends TestHoodieSparkRollback {
 
   @ParameterizedTest

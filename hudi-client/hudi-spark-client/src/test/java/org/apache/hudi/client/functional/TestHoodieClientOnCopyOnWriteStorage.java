@@ -185,7 +185,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 @SuppressWarnings("unchecked")
-@Tag("functional")
+@Tag("functional-b")
 public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
 
   private static final String CLUSTERING_FAILURE = "CLUSTERING FAILURE";
