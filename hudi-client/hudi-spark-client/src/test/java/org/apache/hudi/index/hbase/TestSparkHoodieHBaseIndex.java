@@ -102,7 +102,7 @@ import static org.mockito.Mockito.when;
  * {@link MethodOrderer.Alphanumeric} to make sure the tests run in order. Please alter the order of tests running carefully.
  */
 @TestMethodOrder(MethodOrderer.Alphanumeric.class)
-@Tag("functional")
+@Tag("functional-b")
 public class TestSparkHoodieHBaseIndex extends SparkClientFunctionalTestHarness {
 
   private static final String TABLE_NAME = "test_table";

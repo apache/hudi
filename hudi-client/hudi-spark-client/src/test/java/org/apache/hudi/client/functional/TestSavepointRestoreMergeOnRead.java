@@ -46,7 +46,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * Test cases for MERGE_ON_READ table savepoint restore.
  */
-@Tag("functional")
+@Tag("functional-b")
 public class TestSavepointRestoreMergeOnRead extends HoodieClientTestBase {
 
   /**

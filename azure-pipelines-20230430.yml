@@ -167,6 +167,30 @@ stages:
           - script: |
               grep "testcase" */target/surefire-reports/*.xml */*/target/surefire-reports/*.xml | awk -F'"' ' { print $6,$4,$2 } ' | sort -nr | head -n 100
             displayName: Top 100 long-running testcases
+      - job: UT_FT_5
+        displayName: FT client/spark-client Long Running
+        timeoutInMinutes: '150'
+        steps:
+          - task: Maven@4
+            displayName: maven install
+            inputs:
+              mavenPomFile: 'pom.xml'
+              goals: 'clean install'
+              options: $(MVN_OPTS_INSTALL)
+              publishJUnitResults: false
+              jdkVersionOption: '1.8'
+          - task: Maven@4
+            displayName: FT client/spark-client Long Running
+            inputs:
+              mavenPomFile: 'pom.xml'
+              goals: 'test'
+              options: $(MVN_OPTS_TEST) -Pfunctional-tests-b -pl $(JOB2_MODULES)
+              publishJUnitResults: false
+              jdkVersionOption: '1.8'
+              mavenOptions: '-Xmx4g'
+          - script: |
+              grep "testcase" */target/surefire-reports/*.xml */*/target/surefire-reports/*.xml | awk -F'"' ' { print $6,$4,$2 } ' | sort -nr | head -n 100
+            displayName: Top 100 long-running testcases
       - job: UT_FT_3
         displayName: UT spark-datasource
         timeoutInMinutes: '240'

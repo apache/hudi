@@ -93,7 +93,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-@Tag("functional")
+@Tag("functional-b")
 public class TestHoodieIndex extends TestHoodieMetadataBase {
 
   private static Stream<Arguments> indexTypeParams() {

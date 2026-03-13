@@ -47,7 +47,7 @@ import static org.apache.hudi.testutils.HoodieClientTestUtils.countRecordsOption
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-@Tag("functional")
+@Tag("functional-b")
 public class TestHoodieSparkCopyOnWriteTableArchiveWithReplace extends SparkClientFunctionalTestHarness {
 
   @ParameterizedTest

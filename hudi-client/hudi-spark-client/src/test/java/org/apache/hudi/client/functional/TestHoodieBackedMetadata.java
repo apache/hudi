@@ -190,7 +190,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
-@Tag("functional")
+@Tag("functional-b")
 public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
 
   private static final Logger LOG = LoggerFactory.getLogger(TestHoodieBackedMetadata.class);
