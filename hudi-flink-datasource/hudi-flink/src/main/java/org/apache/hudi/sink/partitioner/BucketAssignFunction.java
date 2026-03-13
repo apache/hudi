@@ -236,6 +236,7 @@ public class BucketAssignFunction
 
   @Override
   public void close() throws Exception {
+    this.indexBackend.close();
     this.bucketAssigner.close();
   }
 }

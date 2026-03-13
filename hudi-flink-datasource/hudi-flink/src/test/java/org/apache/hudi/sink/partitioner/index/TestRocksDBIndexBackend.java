@@ -24,6 +24,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.File;
+import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -41,11 +42,11 @@ public class TestRocksDBIndexBackend {
     try (RocksDBIndexBackend rocksDBIndexBackend = new RocksDBIndexBackend(tempFile.getAbsolutePath())) {
       assertNull(rocksDBIndexBackend.get("id1"));
 
-      HoodieRecordGlobalLocation location1 = new HoodieRecordGlobalLocation("par1", "001", "file1");
+      HoodieRecordGlobalLocation location1 = new HoodieRecordGlobalLocation("par1", "001", UUID.randomUUID().toString());
       rocksDBIndexBackend.update("id1", location1);
       assertEquals(location1, rocksDBIndexBackend.get("id1"));
 
-      HoodieRecordGlobalLocation location2 = new HoodieRecordGlobalLocation("par2", "002", "file2");
+      HoodieRecordGlobalLocation location2 = new HoodieRecordGlobalLocation("par2", "002", UUID.randomUUID().toString());
       rocksDBIndexBackend.update("id2", location2);
       assertEquals(location2, rocksDBIndexBackend.get("id2"));
     }

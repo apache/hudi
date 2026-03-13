@@ -247,6 +247,24 @@ public class RocksDBDAO {
    * Perform single PUT on a column-family.
    *
    * @param columnFamilyName Column family name
+   * @param writeOptions Write options for put operation
+   * @param key Key
+   * @param value Payload
+   * @param <T> Type of Payload
+   */
+  public <T extends Serializable> void put(String columnFamilyName, WriteOptions writeOptions, String key, T value) {
+    try {
+      byte[] payload = serializePayload(columnFamilyName, value);
+      getRocksDB().put(managedHandlesMap.get(columnFamilyName), writeOptions, getUTF8Bytes(key), payload);
+    } catch (Exception e) {
+      throw new HoodieException(e);
+    }
+  }
+
+  /**
+   * Perform single PUT on a column-family.
+   *
+   * @param columnFamilyName Column family name
    * @param key Key
    * @param value Payload
    * @param <T> Type of Payload
