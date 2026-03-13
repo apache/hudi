@@ -19,6 +19,8 @@
 
 package org.apache.spark.sql.hudi.procedure
 
+import org.apache.hudi.config.HoodieWriteConfig
+
 class TestStatsProcedure extends HoodieSparkProcedureTestBase {
   test("Test Call stats_wa Procedure") {
     withTempDir { tmp =>
@@ -75,7 +77,8 @@ class TestStatsProcedure extends HoodieSparkProcedureTestBase {
            | location '$tablePath'
            | tblproperties (
            |  primaryKey = 'id',
-           |  preCombineField = 'ts'
+           |  preCombineField = 'ts',
+           |  ${HoodieWriteConfig.ENABLE_COMPLEX_KEYGEN_VALIDATION.key()} = 'false'
            | )
        """.stripMargin)
       // insert data to table

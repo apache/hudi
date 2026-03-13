@@ -18,6 +18,7 @@
 package org.apache.spark.sql.hudi
 
 import org.apache.hudi.common.config.HoodieMetadataConfig
+import org.apache.hudi.config.HoodieWriteConfig
 
 class TestPartitionPushDownWhenListingPaths extends HoodieSparkSqlTestBase {
 
@@ -45,7 +46,8 @@ class TestPartitionPushDownWhenListingPaths extends HoodieSparkSqlTestBase {
                  |  type = '$tableType',
                  |  preCombineField = 'ts',
                  |  hoodie.datasource.write.hive_style_partitioning = 'true',
-                 |  hoodie.datasource.write.partitionpath.urlencode = 'true'
+                 |  hoodie.datasource.write.partitionpath.urlencode = 'true',
+                 |  ${HoodieWriteConfig.ENABLE_COMPLEX_KEYGEN_VALIDATION.key()} = 'false'
                  | )
                  | PARTITIONED BY (date_par, country, hour, longValue)""".stripMargin)
             spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000, date '2023-02-27', 'ID', 1, 102345L)")

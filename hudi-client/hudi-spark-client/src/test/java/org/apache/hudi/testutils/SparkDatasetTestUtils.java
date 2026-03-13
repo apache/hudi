@@ -94,7 +94,7 @@ public class SparkDatasetTestUtils {
    * @param schema instance of {@link StructType} for which encoder is requested.
    * @return the encoder thus generated.
    */
-  private static ExpressionEncoder getEncoder(StructType schema) {
+  public static ExpressionEncoder getEncoder(StructType schema) {
     List<Attribute> attributes = JavaConversions.asJavaCollection(schema.toAttributes()).stream()
         .map(Attribute::toAttribute).collect(Collectors.toList());
     return RowEncoder.apply(schema)
@@ -191,7 +191,7 @@ public class SparkDatasetTestUtils {
         .withBulkInsertParallelism(2);
   }
 
-  private static InternalRow serializeRow(ExpressionEncoder encoder, Row row)
+  public static InternalRow serializeRow(ExpressionEncoder encoder, Row row)
       throws InvocationTargetException, IllegalAccessException, NoSuchMethodException, ClassNotFoundException {
     // TODO remove reflection if Spark 2.x support is dropped
     if (package$.MODULE$.SPARK_VERSION().startsWith("2.")) {
