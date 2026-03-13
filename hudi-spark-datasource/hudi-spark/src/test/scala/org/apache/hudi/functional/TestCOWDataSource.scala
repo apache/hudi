@@ -185,13 +185,14 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
     val inputDF1 = spark.read.json(spark.sparkContext.parallelize(records1, 2))
     val records2 = recordsToStrings(dataGen.generateInserts("000", 200)).toList
     val inputDF2 = spark.read.json(spark.sparkContext.parallelize(records2, 2))
-    // hard code the value for rider and fare so that we can verify the partitions paths with hudi
+    // hard code the value for rider and fare so that we can verify the partition paths with hudi
     val toInsertDf = inputDF1.withColumn("fare", lit(100)).withColumn("rider", lit("rider-123"))
       .union(inputDF2.withColumn("fare", lit(200)).withColumn("rider", lit("rider-456")))
 
     toInsertDf.write.partitionBy("fare", "rider").format("hudi")
       .options(commonOptsNoPreCombine)
       .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
+      .option(HoodieWriteConfig.ENABLE_COMPLEX_KEYGEN_VALIDATION.key(), "false")
       .mode(SaveMode.Overwrite)
       .save(basePath)
 
@@ -211,6 +212,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
     toInsertDf.write.partitionBy("fare", "rider").format("hudi")
       .options(commonOptsNoPreCombine)
       .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
+      .option(HoodieWriteConfig.ENABLE_COMPLEX_KEYGEN_VALIDATION.key(), "false")
       .mode(SaveMode.Append)
       .save(basePath)
 
@@ -218,6 +220,7 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
     toInsertDf.write.partitionBy("fare", "rider").format("hudi")
       .options(commonOptsNoPreCombine)
       .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
+      .option(HoodieWriteConfig.ENABLE_COMPLEX_KEYGEN_VALIDATION.key(), "false")
       .option(KEYGENERATOR_CLASS_NAME.key(), classOf[NonpartitionedKeyGenerator].getName)
       .mode(SaveMode.Overwrite)
       .save(basePath)
@@ -1021,10 +1024,16 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
   private def getDataFrameWriter(keyGenerator: String, opts: Map[String, String]): DataFrameWriter[Row] = {
     val records = recordsToStrings(dataGen.generateInserts("000", 100)).toList
     val inputDF = spark.read.json(spark.sparkContext.parallelize(records, 2))
-    inputDF.write.format("hudi")
+    val writer = inputDF.write.format("hudi")
       .options(opts)
       .option(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key, keyGenerator)
       .mode(SaveMode.Overwrite)
+    if (classOf[ComplexKeyGenerator].getCanonicalName.equals(keyGenerator)) {
+      // Disable complex key generator validation so that the writer can succeed
+      writer.option(HoodieWriteConfig.ENABLE_COMPLEX_KEYGEN_VALIDATION.key, "false")
+    } else {
+      writer
+    }
   }
 
   @ParameterizedTest
@@ -1759,7 +1768,8 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
       HoodieWriteConfig.KEYGENERATOR_CLASS_NAME.key() -> "org.apache.hudi.keygen.ComplexKeyGenerator",
       KeyGeneratorOptions.HIVE_STYLE_PARTITIONING_ENABLE.key() -> "true",
       HiveSyncConfigHolder.HIVE_SYNC_ENABLED.key() -> "false",
-      HoodieWriteConfig.RECORD_MERGER_IMPLS.key() -> "org.apache.hudi.HoodieSparkRecordMerger"
+      HoodieWriteConfig.RECORD_MERGER_IMPLS.key() -> "org.apache.hudi.HoodieSparkRecordMerger",
+      HoodieWriteConfig.ENABLE_COMPLEX_KEYGEN_VALIDATION.key() -> "false"
     )
     df1.write.format("hudi").options(hudiOptions).mode(SaveMode.Append).save(basePath)
 

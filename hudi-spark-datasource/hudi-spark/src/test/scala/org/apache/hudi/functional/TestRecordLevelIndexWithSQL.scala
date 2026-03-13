@@ -17,6 +17,7 @@
 
 package org.apache.hudi.functional
 
+import org.apache.hudi.DataSourceWriteOptions.RECORDKEY_FIELD
 import org.apache.hudi.common.model.{FileSlice, HoodieTableType}
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.metadata.HoodieMetadataFileSystemView
@@ -26,7 +27,7 @@ import org.apache.spark.sql.SaveMode
 import org.apache.spark.sql.catalyst.expressions.{AttributeReference, EqualTo, Expression, GreaterThan, GreaterThanOrEqual, In, Literal, Or}
 import org.apache.spark.sql.types.StringType
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
-import org.junit.jupiter.api.Tag
+import org.junit.jupiter.api.{Tag, Test}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 
@@ -154,5 +155,33 @@ class TestRecordLevelIndexWithSQL extends RecordLevelIndexTestBase {
   private def createTempTable(hudiOpts: Map[String, String]): Unit = {
     val readDf = spark.read.format("hudi").options(hudiOpts).load(basePath)
     readDf.registerTempTable(sqlTempTable)
+  }
+
+  @Test
+  def testRLINoPruningWithComplexRecordKeys(): Unit = {
+    var hudiOpts = commonOpts + {
+      RECORDKEY_FIELD.key -> "_row_key,rider"
+    }
+    hudiOpts = hudiOpts + (
+      DataSourceWriteOptions.TABLE_TYPE.key -> "COPY_ON_WRITE",
+      DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> "true")
+
+    doWriteAndValidateDataAndRecordIndex(hudiOpts,
+      operation = DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,
+      saveMode = SaveMode.Overwrite,
+      validate = false)
+    doWriteAndValidateDataAndRecordIndex(hudiOpts,
+      operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
+      saveMode = SaveMode.Append,
+      validate = false)
+
+    val indexOpts = hudiOpts + {"path" -> basePath}
+    metaClient = HoodieTableMetaClient.reload(metaClient)
+    val fileIndex = HoodieFileIndex(spark, metaClient, None, indexOpts, includeLogFiles = true)
+    // random data filter
+    val filteredPartitionDirectories = fileIndex.listFiles(Seq(), Seq(EqualTo(attribute("_row_key"), Literal("abc"))))
+    val filteredFilesCount = filteredPartitionDirectories.flatMap(s => s.files).size
+    // Assert no pruning with complex record keys
+    assertEquals(getLatestDataFilesCount(indexOpts, includeLogFiles = false), filteredFilesCount)
   }
 }
