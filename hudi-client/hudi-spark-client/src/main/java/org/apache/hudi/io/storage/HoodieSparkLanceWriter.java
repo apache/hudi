@@ -56,7 +56,7 @@ import static org.apache.hudi.common.model.HoodieRecord.HoodieMetadataField.RECO
  * - Sequence ID generation
  * - Min/max record key tracking
  */
-public class HoodieSparkLanceWriter extends HoodieBaseLanceWriter<InternalRow>
+public class HoodieSparkLanceWriter extends HoodieBaseLanceWriter<InternalRow, UTF8String>
     implements HoodieSparkFileWriter, HoodieInternalRowFileWriter {
 
   private static final String DEFAULT_TIMEZONE = "UTC";
@@ -117,30 +117,25 @@ public class HoodieSparkLanceWriter extends HoodieBaseLanceWriter<InternalRow>
   public void writeRowWithMetadata(HoodieKey key, InternalRow row) throws IOException {
     if (populateMetaFields) {
       UTF8String recordKey = UTF8String.fromString(key.getRecordKey());
-      bloomFilterWriteSupportOpt.ifPresent(bloomFilterWriteSupport ->
-          ((HoodieBloomFilterRowWriteSupport)bloomFilterWriteSupport).addKey(recordKey));
       updateRecordMetadata(row, recordKey, key.getPartitionPath(), getWrittenRecordCount());
-      super.write(row);
-    } else {
-      bloomFilterWriteSupportOpt.ifPresent(bloomFilterWriteSupport -> {
-        UTF8String recordKey = UTF8String.fromString(key.getRecordKey());
-        ((HoodieBloomFilterRowWriteSupport)bloomFilterWriteSupport).addKey(recordKey);
-      });
-      super.write(row);
     }
+    bloomFilterWriteSupportOpt.ifPresent(bloomFilterWriteSupport -> {
+      UTF8String recordKey = UTF8String.fromString(key.getRecordKey());
+      bloomFilterWriteSupport.addKey(recordKey);
+    });
+    super.write(row);
   }
 
   @Override
   public void writeRow(String recordKey, InternalRow row) throws IOException {
     bloomFilterWriteSupportOpt.ifPresent(bloomFilterWriteSupport ->
-        ((HoodieBloomFilterRowWriteSupport)bloomFilterWriteSupport).addKey(UTF8String.fromString(recordKey)));
+        bloomFilterWriteSupport.addKey(UTF8String.fromString(recordKey)));
     super.write(row);
   }
   
   @Override
   public void writeRow(UTF8String key, InternalRow row) throws IOException {
-    bloomFilterWriteSupportOpt.ifPresent(bloomFilterWriteSupport ->
-        ((HoodieBloomFilterRowWriteSupport)bloomFilterWriteSupport).addKey(key));
+    bloomFilterWriteSupportOpt.ifPresent(bloomFilterWriteSupport -> bloomFilterWriteSupport.addKey(key));
     super.write(row);
   }
   

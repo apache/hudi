@@ -53,7 +53,7 @@ import java.util.Map;
  * @param <R> The record type (e.g., GenericRecord, InternalRow)
  */
 @NotThreadSafe
-public abstract class HoodieBaseLanceWriter<R> implements Closeable {
+public abstract class HoodieBaseLanceWriter<R, K extends Comparable<K>> implements Closeable {
   /** Memory size for data write operations: 120MB */
   private static final long LANCE_DATA_ALLOCATOR_SIZE = 120 * 1024 * 1024L;
 
@@ -66,7 +66,7 @@ public abstract class HoodieBaseLanceWriter<R> implements Closeable {
   private int currentBatchSize = 0;
   private VectorSchemaRoot root;
   private ArrowWriter<R> arrowWriter;
-  protected final Option<HoodieBloomFilterWriteSupport<?>> bloomFilterWriteSupportOpt;
+  protected final Option<HoodieBloomFilterWriteSupport<K>> bloomFilterWriteSupportOpt;
 
   private LanceFileWriter writer;
 
@@ -78,7 +78,7 @@ public abstract class HoodieBaseLanceWriter<R> implements Closeable {
    * @param bloomFilterWriteSupportOpt Optional bloom filter write support for record key tracking
    */
   protected HoodieBaseLanceWriter(StoragePath path, int batchSize,
-                                  Option<HoodieBloomFilterWriteSupport<?>> bloomFilterWriteSupportOpt) {
+                                  Option<HoodieBloomFilterWriteSupport<K>> bloomFilterWriteSupportOpt) {
     this.path = path;
     this.allocator = HoodieArrowAllocator.newChildAllocator(
         getClass().getSimpleName() + "-data-" + path.getName(), LANCE_DATA_ALLOCATOR_SIZE);
@@ -160,16 +160,16 @@ public abstract class HoodieBaseLanceWriter<R> implements Closeable {
         root.setRowCount(0);
         writer.write(root);
       }
+
+      // Finalize and write bloom filter metadata
+      if (writer != null && bloomFilterWriteSupportOpt.isPresent()) {
+        Map<String, String> metadata = bloomFilterWriteSupportOpt.get().finalizeMetadata();
+        if (!metadata.isEmpty()) {
+          writer.addSchemaMetadata(metadata);
+        }
+      }
     } catch (Exception e) {
       primaryException = e;
-    }
-
-    // Finalize and write bloom filter metadata
-    if (writer != null && bloomFilterWriteSupportOpt.isPresent()) {
-      Map<String, String> metadata = bloomFilterWriteSupportOpt.get().finalizeMetadata();
-      if (!metadata.isEmpty()) {
-        writer.addSchemaMetadata(metadata);
-      }
     }
 
     // Close Lance writer
