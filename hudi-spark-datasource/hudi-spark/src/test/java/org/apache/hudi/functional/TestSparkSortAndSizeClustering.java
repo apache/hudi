@@ -121,12 +121,18 @@ public class TestSparkSortAndSizeClustering extends HoodieSparkClientTestHarness
 
   @Test
   public void testClusteringWithRDD() throws IOException {
-    writeAndClustering(false);
+    // Table schema has ts logical types.
+    if (HoodieSparkUtils.gteqSpark3_4()) {
+      writeAndClustering(false);
+    }
   }
 
   @Test
   public void testClusteringWithRow() throws IOException {
-    writeAndClustering(true);
+    // Table schema has ts logical types.
+    if (HoodieSparkUtils.gteqSpark3_4()) {
+      writeAndClustering(true);
+    }
   }
 
   public void writeAndClustering(boolean isRow) throws IOException {
