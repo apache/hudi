@@ -270,7 +270,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
       List<WriteStatus> writeStatuses = client.insert(jsc.parallelize(records, 1), commitTime).collect();
       assertNoWriteErrors(writeStatuses);
 
-      // Upsert
+      // Upsert - Testing
       commitTime = "0000002";
       client.startCommitWithTime(commitTime);
       records = dataGen.generateUniqueUpdates(commitTime, 10);
