@@ -164,19 +164,16 @@ object HoodieSparkSqlWriter {
     if ( writerSchema.isPresent) {
       writerSchemaStr = writerSchema.get().toString
     }
-    // Make opts mutable since it could be modified by tryOverrideParquetWriteLegacyFormatProperty
-    val optsWithoutSchema = mutable.Map() ++ hoodieConfig.getProps.toMap
-    val opts = if (writerSchema.isPresent) {
-      optsWithoutSchema ++ Map(HoodieWriteConfig.AVRO_SCHEMA_STRING.key -> writerSchemaStr)
-    } else {
-      optsWithoutSchema
-    }
-    // Apply legacy format override for small-precision decimals so Parquet files can be read by AvroParquetReader
+    // Explicitly type as mutable.Map[String,String] to trigger propertiesAsScalaMap implicit from JavaConversions
+    val optsMap = new java.util.HashMap[String, String]()
+    optsMap.putAll(mapAsJavaMap(hoodieConfig.getProps: mutable.Map[String, String]))
     if (writerSchema.isPresent) {
-      DataSourceUtils.tryOverrideParquetWriteLegacyFormatProperty(mapAsJavaMap(opts), convertAvroSchemaToStructType(writerSchema.get))
+      optsMap.put(HoodieWriteConfig.AVRO_SCHEMA_STRING.key, writerSchemaStr)
+      // Apply legacy format override for small-precision decimals so Parquet files can be read by AvroParquetReader
+      DataSourceUtils.tryOverrideParquetWriteLegacyFormatProperty(optsMap, convertAvroSchemaToStructType(writerSchema.get))
     }
 
-    DataSourceUtils.createHoodieConfig(writerSchemaStr, basePath, tblName, opts)
+    DataSourceUtils.createHoodieConfig(writerSchemaStr, basePath, tblName, optsMap)
   }
 }
 
@@ -462,11 +459,12 @@ class HoodieSparkSqlWriterInternal {
 
             // Create a HoodieWriteClient & issue the write.
             val client = hoodieWriteClient.getOrElse {
-              val finalOpts = mutable.Map() ++ (addSchemaEvolutionParameters(parameters, internalSchemaOpt, Some(writerSchema)) - HoodieWriteConfig.AUTO_COMMIT_ENABLE.key)
+              val finalOpts = new java.util.HashMap[String, String](
+                mapAsJavaMap(addSchemaEvolutionParameters(parameters, internalSchemaOpt, Some(writerSchema)) - HoodieWriteConfig.AUTO_COMMIT_ENABLE.key))
               // Apply legacy format override for small-precision decimals so Parquet files can be read by AvroParquetReader
-              DataSourceUtils.tryOverrideParquetWriteLegacyFormatProperty(mapAsJavaMap(finalOpts), convertAvroSchemaToStructType(writerSchema))
+              DataSourceUtils.tryOverrideParquetWriteLegacyFormatProperty(finalOpts, convertAvroSchemaToStructType(writerSchema))
               // TODO(HUDI-4772) proper writer-schema has to be specified here
-              DataSourceUtils.createHoodieClient(jsc, processedDataSchema.toString, path, tblName, mapAsJavaMap(finalOpts))
+              DataSourceUtils.createHoodieClient(jsc, processedDataSchema.toString, path, tblName, finalOpts)
             }
 
             if (isAsyncCompactionEnabled(client, tableConfig, parameters, jsc.hadoopConfiguration())) {

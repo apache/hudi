@@ -250,9 +250,5 @@ trait SparkAdapter extends Serializable {
     getCatalystPlanUtils.resolveOutputColumns(tableName, expected, query, byName, conf)
   }
 
-  def getDateTimeRebaseMode(): Object
-
-  def isLegacyBehaviorPolicy(value: Object): Boolean
-
   def isTimestampNTZType(dataType: DataType): Boolean
 }
