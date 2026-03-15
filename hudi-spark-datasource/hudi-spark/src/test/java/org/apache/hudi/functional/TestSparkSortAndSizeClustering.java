@@ -18,6 +18,7 @@
 
 package org.apache.hudi.functional;
 
+import org.apache.hudi.HoodieSparkUtils;
 import org.apache.hudi.avro.AvroSchemaUtils;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieClusteringGroup;
@@ -126,12 +127,18 @@ public class TestSparkSortAndSizeClustering extends HoodieSparkClientTestHarness
 
   @Test
   public void testClusteringWithRDD() throws IOException {
-    writeAndClustering(false);
+    // Table schema has ts logical types.
+    if (HoodieSparkUtils.gteqSpark3_4()) {
+      writeAndClustering(false);
+    }
   }
 
   @Test
   public void testClusteringWithRow() throws IOException {
-    writeAndClustering(true);
+    // Table schema has ts logical types.
+    if (HoodieSparkUtils.gteqSpark3_4()) {
+      writeAndClustering(true);
+    }
   }
 
   public void writeAndClustering(boolean isRow) throws IOException {
@@ -190,10 +197,13 @@ public class TestSparkSortAndSizeClustering extends HoodieSparkClientTestHarness
         Date actualDate = (Date) row.get(dateFieldIndex);
         assertTrue(actualDate.compareTo(startDate) > 0 && actualDate.compareTo(endDate) < 0);
       }
-      if (!row.isNullAt(tsLocalMillisFieldIndex)) {
-        assertEquals(toLocalTimestampMillis(ts), row.get(tsLocalMillisFieldIndex));
+      if (HoodieSparkUtils.gteqSpark3_4()) {
+        // Local timestamp support was added in Spark 3.4.0 using TIMESTAMP_NTZ data type
+        if (!row.isNullAt(tsLocalMillisFieldIndex)) {
+          assertEquals(toLocalTimestampMillis(ts), row.get(tsLocalMillisFieldIndex));
+        }
+        assertEquals(toLocalTimestampMicros(ts * 1000L), row.get(tsLocalMicrosFieldIndex));
       }
-      assertEquals(toLocalTimestampMicros(ts * 1000L), row.get(tsLocalMicrosFieldIndex));
     }
   }
 
