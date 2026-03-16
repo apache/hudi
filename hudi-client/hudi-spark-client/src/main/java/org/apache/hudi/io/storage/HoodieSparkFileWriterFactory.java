@@ -25,6 +25,7 @@ import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.io.storage.row.HoodieParquetWriteSupport;
 import org.apache.hudi.io.storage.row.HoodieRowParquetConfig;
 import org.apache.hudi.io.storage.row.HoodieRowParquetWriteSupport;
 
@@ -51,7 +52,7 @@ public class HoodieSparkFileWriterFactory extends HoodieFileWriterFactory {
     if (compressionCodecName.isEmpty()) {
       compressionCodecName = null;
     }
-    HoodieRowParquetWriteSupport writeSupport = new HoodieRowParquetWriteSupport(conf,
+    HoodieParquetWriteSupport writeSupport = HoodieRowParquetWriteSupport.getHoodieRowParquetWriteSupport(conf,
         HoodieInternalRowUtils.getCachedSchema(schema), filter,
         HoodieStorageConfig.newBuilder().fromProperties(config.getProps()).build());
     HoodieRowParquetConfig parquetConfig = new HoodieRowParquetConfig(writeSupport,
@@ -71,7 +72,7 @@ public class HoodieSparkFileWriterFactory extends HoodieFileWriterFactory {
       FSDataOutputStream outputStream, Configuration conf, HoodieConfig config, Schema schema) throws IOException {
     boolean enableBloomFilter = false;
     Option<BloomFilter> filter = enableBloomFilter ? Option.of(createBloomFilter(config)) : Option.empty();
-    HoodieRowParquetWriteSupport writeSupport = new HoodieRowParquetWriteSupport(conf,
+    HoodieParquetWriteSupport writeSupport = HoodieRowParquetWriteSupport.getHoodieRowParquetWriteSupport(conf,
         HoodieInternalRowUtils.getCachedSchema(schema), filter,
         HoodieStorageConfig.newBuilder().fromProperties(config.getProps()).build());
     String compressionCodecName = config.getStringOrDefault(HoodieStorageConfig.PARQUET_COMPRESSION_CODEC_NAME);

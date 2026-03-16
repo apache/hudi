@@ -18,19 +18,26 @@
 
 package org.apache.hudi.io.storage.row;
 
-import org.apache.hudi.io.storage.HoodieParquetConfig;
-
 import org.apache.hadoop.conf.Configuration;
-import org.apache.parquet.hadoop.metadata.CompressionCodecName;
+import org.apache.spark.sql.execution.datasources.parquet.ParquetWriteSupport;
+import org.apache.spark.unsafe.types.UTF8String;
 
 /**
- * ParquetConfig for datasource implementation with {@link org.apache.hudi.client.model.HoodieInternalRow}.
+ * Common abstract base class for Hudi's Parquet write support implementations.
+ * Extends Spark's ParquetWriteSupport and provides additional methods for
+ * Hadoop configuration access and bloom filter key addition.
  */
-public class HoodieRowParquetConfig extends HoodieParquetConfig<HoodieParquetWriteSupport> {
+public abstract class HoodieParquetWriteSupport extends ParquetWriteSupport {
 
-  public HoodieRowParquetConfig(HoodieParquetWriteSupport writeSupport, CompressionCodecName compressionCodecName,
-      int blockSize, int pageSize, long maxFileSize, Configuration hadoopConf,
-      double compressionRatio, boolean enableDictionary) {
-    super(writeSupport, compressionCodecName, blockSize, pageSize, maxFileSize, hadoopConf, compressionRatio, enableDictionary);
-  }
+  /**
+   * Get the Hadoop configuration used by this write support.
+   * @return Hadoop Configuration
+   */
+  public abstract Configuration getHadoopConf();
+
+  /**
+   * Add a record key to the bloom filter (if enabled).
+   * @param recordKey the record key to add
+   */
+  public abstract void add(UTF8String recordKey);
 }

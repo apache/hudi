@@ -251,4 +251,12 @@ trait SparkAdapter extends Serializable {
   }
 
   def isTimestampNTZType(dataType: DataType): Boolean
+
+  def getDateTimeRebaseMode(): Object = throw new UnsupportedOperationException("getDateTimeRebaseMode not supported on this Spark version")
+
+  def isLegacyBehaviorPolicy(value: Object): Boolean = throw new UnsupportedOperationException("isLegacyBehaviorPolicy not supported on this Spark version")
+
+  def applyFieldIdToType(parquetType: org.apache.parquet.schema.Type, structField: org.apache.spark.sql.types.StructField): org.apache.parquet.schema.Type = {
+    parquetType
+  }
 }
