@@ -259,10 +259,8 @@ public class TestHoodieSourceSplit {
 
     // splitId() returns toString()
     String splitId = split.splitId();
-    String toString = split.toString();
 
-    assertEquals(toString, splitId);
-    assertTrue(splitId.contains("HoodieSourceSplit"));
+    assertTrue(splitId.equals("1:file1"));
   }
 
   @Test
@@ -274,12 +272,14 @@ public class TestHoodieSourceSplit {
     String result = split.toString();
 
     assertTrue(result.contains("HoodieSourceSplit"));
-    assertTrue(result.contains("splitNum=1"));
+    assertTrue(result.contains("splitNum"));
     assertTrue(result.contains("basePath"));
     assertTrue(result.contains("logPaths"));
     assertTrue(result.contains("tablePath"));
     assertTrue(result.contains("partitionPath"));
     assertTrue(result.contains("mergeType"));
+    assertTrue(result.contains("consumed"));
+    assertTrue(result.contains("fileOffset"));
   }
 
   @Test

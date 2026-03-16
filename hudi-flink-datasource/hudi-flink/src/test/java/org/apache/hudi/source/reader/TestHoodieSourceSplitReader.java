@@ -104,25 +104,12 @@ public class TestHoodieSourceSplitReader {
         new SplitsAddition<>(Arrays.asList(split1, split2, split3));
     reader.handleSplitsChanges(splitsChange);
 
-    // Fetch first split
-    RecordsWithSplitIds<HoodieRecordWithPosition<String>> result1 = reader.fetch();
-    assertNotNull(result1);
-    assertEquals(split1.splitId(), result1.nextSplit());
-
-    // Fetch second split
-    RecordsWithSplitIds<HoodieRecordWithPosition<String>> result2 = reader.fetch();
-    assertNotNull(result2);
-    assertEquals(split2.splitId(), result2.nextSplit());
-
-    // Fetch third split
-    RecordsWithSplitIds<HoodieRecordWithPosition<String>> result3 = reader.fetch();
-    assertNotNull(result3);
-    assertEquals(split3.splitId(), result3.nextSplit());
-
-    // No more splits
-    RecordsWithSplitIds<HoodieRecordWithPosition<String>> result4 = reader.fetch();
-    assertNotNull(result4);
-    assertNull(result4.nextSplit());
+    // Each split produces a data batch followed by a finish-signal batch.
+    // fetchNextSplitId() skips finish-signal batches and returns the next split ID (or null).
+    assertEquals(split1.splitId(), fetchNextSplitId(reader));
+    assertEquals(split2.splitId(), fetchNextSplitId(reader));
+    assertEquals(split3.splitId(), fetchNextSplitId(reader));
+    assertNull(fetchNextSplitId(reader));
   }
 
   @Test
@@ -147,9 +134,9 @@ public class TestHoodieSourceSplitReader {
     reader.handleSplitsChanges(splitsChange);
 
     // Should fetch in reverse order due to comparator
-    assertEquals(split3.splitId(), reader.fetch().nextSplit());
-    assertEquals(split2.splitId(), reader.fetch().nextSplit());
-    assertEquals(split1.splitId(), reader.fetch().nextSplit());
+    assertEquals(split3.splitId(), fetchNextSplitId(reader));
+    assertEquals(split2.splitId(), fetchNextSplitId(reader));
+    assertEquals(split1.splitId(), fetchNextSplitId(reader));
   }
 
   @Test
@@ -170,10 +157,10 @@ public class TestHoodieSourceSplitReader {
     reader.handleSplitsChanges(new SplitsAddition<>(Arrays.asList(split2, split3)));
 
     // Verify all splits can be fetched
-    assertEquals(split1.splitId(), reader.fetch().nextSplit());
-    assertEquals(split2.splitId(), reader.fetch().nextSplit());
-    assertEquals(split3.splitId(), reader.fetch().nextSplit());
-    assertNull(reader.fetch().nextSplit());
+    assertEquals(split1.splitId(), fetchNextSplitId(reader));
+    assertEquals(split2.splitId(), fetchNextSplitId(reader));
+    assertEquals(split3.splitId(), fetchNextSplitId(reader));
+    assertNull(fetchNextSplitId(reader));
   }
 
   @Test
@@ -280,9 +267,9 @@ public class TestHoodieSourceSplitReader {
     reader.handleSplitsChanges(splitsChange);
 
     // Should fetch in insertion order: 3, 1, 2
-    assertEquals(split3.splitId(), reader.fetch().nextSplit());
-    assertEquals(split1.splitId(), reader.fetch().nextSplit());
-    assertEquals(split2.splitId(), reader.fetch().nextSplit());
+    assertEquals(split3.splitId(), fetchNextSplitId(reader));
+    assertEquals(split1.splitId(), fetchNextSplitId(reader));
+    assertEquals(split2.splitId(), fetchNextSplitId(reader));
   }
 
   @Test
@@ -301,6 +288,22 @@ public class TestHoodieSourceSplitReader {
     // Fetch first split
     reader.fetch();
     assertEquals(split1, readerFunction.getLastReadSplit());
+  }
+
+  /**
+   * Fetches the next batch that contains actual split data, skipping split-finish signal batches.
+   * Split-finish batches have non-empty {@code finishedSplits()} but no records.
+   * Returns null when there are truly no more splits.
+   */
+  private String fetchNextSplitId(HoodieSourceSplitReader<String> reader) throws IOException {
+    while (true) {
+      RecordsWithSplitIds<HoodieRecordWithPosition<String>> result = reader.fetch();
+      if (!result.finishedSplits().isEmpty()) {
+        // This is a split-finish signal batch; continue to get the next real batch.
+        continue;
+      }
+      return result.nextSplit();
+    }
   }
 
   /**

@@ -57,7 +57,7 @@ public class HoodieSourceSplitReader<T> implements SplitReader<HoodieRecordWithP
   private final SerializableComparator<HoodieSourceSplit> splitComparator;
   private final Queue<HoodieSourceSplit> splits;
   private final FlinkStreamReadMetrics readerMetrics;
-  private final BatchReader batchReader;
+  private final SplitReaderFunction<T> readerFunction;
   private transient HoodieSourceSplit currentSplit;
   private transient CloseableIterator<RecordsWithSplitIds<HoodieRecordWithPosition<T>>> currentReader;
 
@@ -68,35 +68,26 @@ public class HoodieSourceSplitReader<T> implements SplitReader<HoodieRecordWithP
       SerializableComparator<HoodieSourceSplit> splitComparator) {
     this.splitComparator = splitComparator;
     this.splits = new ArrayDeque<>();
-    this.batchReader = new DefaultBatchReader(readerFunction);
+    this.readerFunction = readerFunction;
     this.readerMetrics = new FlinkStreamReadMetrics(context.metricGroup(), tableName);
     this.readerMetrics.registerMetrics();
   }
 
   @Override
   public RecordsWithSplitIds<HoodieRecordWithPosition<T>> fetch() throws IOException {
-    if (currentReader == null) {
-      HoodieSourceSplit nextSplit = splits.poll();
-      if (nextSplit != null) {
-        currentSplit = nextSplit;
-        currentReader = batchReader.read(nextSplit);
-      } else {
-        // return an empty result, which will lead to split fetch to be idle.
-        // SplitFetcherManager will then close idle fetcher.
-        return new RecordsBySplits<>(Collections.emptyMap(), Collections.emptySet());
-      }
+    // finish current split.
+    if (currentSplit != null) {
+      return finishSplit();
     }
 
-    if (currentReader != null && currentReader.hasNext()) {
-      // Because Iterator#next() doesn't support checked exception,
-      // we need to wrap and unwrap the checked IOException with UncheckedIOException
-      try {
-        return currentReader.next();
-      } catch (Exception e) {
-        throw new IOException(e.getCause());
-      }
+    HoodieSourceSplit nextSplit = splits.poll();
+    if (nextSplit != null) {
+      currentSplit = nextSplit;
+      return readerFunction.read(nextSplit);
     } else {
-      return finishSplit();
+      // return an empty result, which will lead to split fetch to be idle.
+      // SplitFetcherManager will then close idle fetcher.
+      return new RecordsBySplits<>(Collections.emptyMap(), Collections.emptySet());
     }
   }
 
@@ -138,23 +129,12 @@ public class HoodieSourceSplitReader<T> implements SplitReader<HoodieRecordWithP
 
   @Override
   public void close() throws Exception {
-    batchReader.close();
+    readerFunction.close();
   }
 
   private RecordsWithSplitIds<HoodieRecordWithPosition<T>> finishSplit() {
-    if (currentReader != null) {
-      try {
-        currentReader.close();
-      } catch (Exception e) {
-        LOG.warn("Failed to close currentReader", e);
-      }
-    }
-    currentReader = null;
-    if (currentSplit != null) {
-      String finishedSplitId = currentSplit.splitId();
-      currentSplit = null;
-      return BatchRecords.lastBatchRecords(finishedSplitId);
-    }
-    return new RecordsBySplits<>(Collections.emptyMap(), Collections.emptySet());
+    RecordsWithSplitIds<HoodieRecordWithPosition<T>> records = BatchRecords.lastBatchRecords(currentSplit.splitId());
+    currentSplit = null;
+    return records;
   }
 }

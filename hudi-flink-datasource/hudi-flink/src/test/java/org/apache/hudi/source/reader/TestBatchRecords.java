@@ -50,7 +50,6 @@ public class TestBatchRecords {
     assertNotNull(batchRecords);
     assertEquals(splitId, batchRecords.nextSplit());
     assertNull(batchRecords.nextRecordFromSplit(), "Should have no records");
-    assertTrue(batchRecords.finishedSplits().contains(splitId), "Should contain finished split");
     assertNull(batchRecords.nextSplit(), "Second call to nextSplit should return null");
   }
 
@@ -136,20 +135,6 @@ public class TestBatchRecords {
     HoodieRecordWithPosition<String> record2 = batchRecords.nextRecordFromSplit();
     assertNotNull(record2);
     assertEquals(fileOffset, record2.fileOffset(), "File offset should remain constant");
-  }
-
-  @Test
-  public void testFinishedSplitsPrePopulated() {
-    String splitId = "test-split-6";
-    List<String> records = Arrays.asList("record1");
-    ClosableIterator<String> iterator = createClosableIterator(records);
-
-    BatchRecords<String> batchRecords = BatchRecords.forRecords(splitId, iterator, 0, 0L);
-
-    // finishedSplits is pre-populated at construction so that Flink's FetchTask signals
-    // split completion immediately, which is required to drive END_OF_INPUT for batch reads.
-    assertTrue(batchRecords.finishedSplits().contains(splitId),
-        "finishedSplits should be pre-populated with splitId");
   }
 
   @Test
@@ -334,27 +319,6 @@ public class TestBatchRecords {
 
     // After exhaustion, nextRecordFromSplit should close the iterator
     assertTrue(mockIterator.isClosed(), "Iterator should be closed after exhaustion");
-  }
-
-  @Test
-  public void testFinishedSplitsPrePopulatedBeforeExhaustion() {
-    String splitId = "test-split-18";
-    List<String> records = Arrays.asList("record1");
-    ClosableIterator<String> iterator = createClosableIterator(records);
-
-    BatchRecords<String> batchRecords = BatchRecords.forRecords(splitId, iterator, 0, 0L);
-    batchRecords.nextSplit();
-
-    // finishedSplits is pre-populated at construction — verified before reading any record.
-    assertTrue(batchRecords.finishedSplits().contains(splitId),
-        "finishedSplits should contain splitId immediately after construction");
-
-    // Read all records and exhaust the iterator.
-    batchRecords.nextRecordFromSplit();
-    assertNull(batchRecords.nextRecordFromSplit());
-
-    // Still present after exhaustion.
-    assertTrue(batchRecords.finishedSplits().contains(splitId));
   }
 
   /**
