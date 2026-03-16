@@ -712,12 +712,13 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
    * @return List consisting of {@code DirectoryInfo} for each partition found.
    */
   private List<DirectoryInfo> listAllPartitionsFromMDT(String initializationTime) throws IOException {
-    List<DirectoryInfo> dirinfoList = new LinkedList<>();
     List<String> allPartitionPaths = metadata.getAllPartitionPaths().stream()
         .map(partitionPath -> dataWriteConfig.getBasePath() + StoragePath.SEPARATOR_CHAR + partitionPath).collect(Collectors.toList());
     Map<String, List<StoragePathInfo>> partitionFileMap = metadata.getAllFilesInPartitions(allPartitionPaths);
+    List<DirectoryInfo> dirinfoList = new ArrayList<>(partitionFileMap.size());
     for (Map.Entry<String, List<StoragePathInfo>> entry : partitionFileMap.entrySet()) {
-      dirinfoList.add(new DirectoryInfo(entry.getKey(), entry.getValue(), initializationTime));
+      String relativeDirPath = FSUtils.getRelativePartitionPath(new StoragePath(dataWriteConfig.getBasePath()), new StoragePath(entry.getKey()));
+      dirinfoList.add(new DirectoryInfo(relativeDirPath, entry.getValue(), initializationTime));
     }
     return dirinfoList;
   }
