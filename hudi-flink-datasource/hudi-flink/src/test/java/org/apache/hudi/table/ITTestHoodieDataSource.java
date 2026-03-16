@@ -35,6 +35,7 @@ import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.index.bucket.partition.PartitionBucketIndexUtils;
 import org.apache.hudi.metadata.HoodieTableMetadata;
+import org.apache.hudi.sink.buffer.BufferMemoryType;
 import org.apache.hudi.sink.buffer.BufferType;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.catalog.HoodieCatalogTestUtils;
@@ -3086,7 +3087,7 @@ public class ITTestHoodieDataSource {
         .option(FlinkOptions.PATH, tempFile.getAbsolutePath())
         .options(getDefaultKeys())
         .option(FlinkOptions.TABLE_TYPE, tableType)
-        .option(FlinkOptions.WRITE_BUFFER_MANAGED_MEMORY_ENABLED, true)
+        .option(FlinkOptions.WRITE_BUFFER_MEMORY_TYPE, BufferMemoryType.MANAGED)
         .end();
     streamTableEnv.executeSql(hoodieTableDDL);
 
@@ -3110,7 +3111,7 @@ public class ITTestHoodieDataSource {
         .options(getDefaultKeys())
         .option(FlinkOptions.TABLE_TYPE, MERGE_ON_READ)
         .option(FlinkOptions.OPERATION, "insert")
-        .option(FlinkOptions.WRITE_BUFFER_MANAGED_MEMORY_ENABLED, true)
+        .option(FlinkOptions.WRITE_BUFFER_MEMORY_TYPE, BufferMemoryType.MANAGED)
         .option(FlinkOptions.WRITE_BUFFER_TYPE, bufferType.name())
         .end();
     streamTableEnv.executeSql(hoodieTableDDL);

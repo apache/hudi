@@ -579,7 +579,7 @@ public class Pipelines {
   }
 
   public static void declareManagedMemoryIfNecessary(Configuration conf, DataStream<?> dataStream, Supplier<Long> bufferSizeSupplier) {
-    if (conf.get(FlinkOptions.WRITE_BUFFER_MANAGED_MEMORY_ENABLED)) {
+    if (OptionsResolver.isManagedMemoryBufferEnabled(conf)) {
       ExecNodeUtil.setManagedMemoryWeight(dataStream.getTransformation(), bufferSizeSupplier.get());
     }
   }

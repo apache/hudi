@@ -41,6 +41,7 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.index.bucket.partition.PartitionBucketIndexUtils;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
+import org.apache.hudi.sink.buffer.BufferMemoryType;
 import org.apache.hudi.sink.overwrite.PartitionOverwriteMode;
 import org.apache.hudi.table.format.FilePathUtils;
 import org.apache.hudi.table.format.HoodieFlinkIOFactory;
@@ -619,5 +620,15 @@ public class OptionsResolver {
         FlinkOptions.WRITE_TASK_MAX_SIZE.key(), FlinkOptions.WRITE_MERGE_MAX_MEMORY.key());
     ValidationUtils.checkState(maxBufferSize > 0, errMsg);
     return maxBufferSize;
+  }
+
+  /**
+   * Whether the flink managed memory is used for the write buffer.
+   *
+   * @param conf the Flink configuration
+   * @return true if the flink managed memory is used for the write buffer.
+   */
+  public static boolean isManagedMemoryBufferEnabled(Configuration conf) {
+    return BufferMemoryType.MANAGED.name().equalsIgnoreCase(conf.get(FlinkOptions.WRITE_BUFFER_MEMORY_TYPE));
   }
 }
