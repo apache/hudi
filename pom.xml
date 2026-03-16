@@ -1850,7 +1850,7 @@
             <configuration combine.self="append">
               <skip>${skipUTs}</skip>
               <forkedProcessExitTimeoutInSeconds>120</forkedProcessExitTimeoutInSeconds>
-              <excludedGroups>functional</excludedGroups>
+              <excludedGroups>functional,functional-b</excludedGroups>
               <excludes>
                 <exclude>**/*FunctionalTestSuite.java</exclude>
                 <exclude>**/IT*.java</exclude>
