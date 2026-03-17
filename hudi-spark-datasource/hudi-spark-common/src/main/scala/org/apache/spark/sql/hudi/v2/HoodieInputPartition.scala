@@ -20,7 +20,15 @@ package org.apache.spark.sql.hudi.v2
 import org.apache.spark.sql.connector.read.InputPartition
 
 /**
- * Placeholder input partition for the DSv2 read path.
- * Not used in the initial stub (PR1) since the scan returns an empty partition list.
+ * Input partition for the DSv2 read path, representing a single base file to read.
+ *
+ * @param index           partition index
+ * @param baseFilePath    full path to the base (Parquet) file
+ * @param baseFileLength  file size in bytes
+ * @param partitionValues partition column values in Spark internal format (e.g. UTF8String),
+ *                        ordered to match the requiredPartitionSchema
  */
-case class HoodieInputPartition(index: Int) extends InputPartition
+case class HoodieInputPartition(index: Int,
+                                baseFilePath: String,
+                                baseFileLength: Long,
+                                partitionValues: Array[AnyRef]) extends InputPartition

@@ -34,12 +34,12 @@ import org.apache.spark.sql.util.CaseInsensitiveStringMap
 
 import java.util
 
-import scala.collection.JavaConverters.{mapAsJavaMapConverter, setAsJavaSetConverter}
+import scala.collection.JavaConverters.{mapAsJavaMapConverter, mapAsScalaMapConverter, setAsJavaSetConverter}
 
 /**
  * DSv2 table implementation for Hudi.
  *
- * Read path: returns a stub [[HoodieScanBuilder]] that produces correct schema but empty results.
+ * Read path: uses [[HoodieScanBuilder]] to build COW snapshot scans via [[HoodieFileIndex]].
  * Write path: falls back to DSv1 via [[V2TableWithV1Fallback]] and [[HoodieV1WriteBuilder]].
  *
  * Schema is resolved via [[HoodieCatalogTable]] (catalog path) or [[HoodieTableMetaClient]] (DataFrame path).
@@ -83,7 +83,10 @@ case class HoodieSparkV2Table(spark: SparkSession,
   }
 
   override def newScanBuilder(options: CaseInsensitiveStringMap): ScanBuilder = {
-    new HoodieScanBuilder(tableSchema)
+    val tableProps = properties().asScala.toMap
+    val scanOpts = options.asCaseSensitiveMap().asScala.toMap
+    val mergedOpts = tableProps ++ scanOpts
+    new HoodieScanBuilder(spark, metaClient, tableSchema, mergedOpts)
   }
 
   private def requireCatalogTable: HoodieCatalogTable =

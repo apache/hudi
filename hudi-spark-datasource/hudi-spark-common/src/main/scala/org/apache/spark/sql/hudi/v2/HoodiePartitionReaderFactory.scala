@@ -17,15 +17,29 @@
 
 package org.apache.spark.sql.hudi.v2
 
+import org.apache.spark.broadcast.Broadcast
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.connector.read.{InputPartition, PartitionReader, PartitionReaderFactory}
+import org.apache.spark.sql.execution.datasources.SparkColumnarFileReader
+import org.apache.spark.sql.types.StructType
+import org.apache.spark.util.SerializableConfiguration
 
 /**
- * Stub factory that creates [[HoodiePartitionReader]] instances.
+ * Factory that creates [[HoodiePartitionReader]] instances for DSv2 CoW snapshot reads.
  */
-class HoodiePartitionReaderFactory extends PartitionReaderFactory {
+class HoodiePartitionReaderFactory(broadcastReader: Broadcast[SparkColumnarFileReader],
+                                   broadcastConf: Broadcast[SerializableConfiguration],
+                                   readSchema: StructType,
+                                   requiredDataSchema: StructType,
+                                   requiredPartitionSchema: StructType) extends PartitionReaderFactory {
 
   override def createReader(partition: InputPartition): PartitionReader[InternalRow] = {
-    new HoodiePartitionReader
+    new HoodiePartitionReader(
+      partition.asInstanceOf[HoodieInputPartition],
+      broadcastReader,
+      broadcastConf,
+      readSchema,
+      requiredDataSchema,
+      requiredPartitionSchema)
   }
 }
