@@ -971,6 +971,23 @@ public class TestAvroSchemaConverter {
     }
   }
 
+  @Test
+  public void testVariantToParquetConversion() throws Exception {
+    // Create a record with a variant field
+    HoodieSchema variantSchema = HoodieSchema.createRecord("variantRecord", null, null, false,
+        Collections.singletonList(
+            HoodieSchemaField.of("v", HoodieSchema.createVariant(), null, null)));
+
+    String expectedParquet = "message variantRecord {\n"
+        + "  required group v {\n"
+        + "    required binary value;\n"
+        + "    required binary metadata;\n"
+        + "  }\n"
+        + "}\n";
+
+    testAvroToParquetConversion(variantSchema, expectedParquet);
+  }
+
   public static Configuration conf(String name, boolean value) {
     Configuration conf = new Configuration(false);
     conf.setBoolean(name, value);
