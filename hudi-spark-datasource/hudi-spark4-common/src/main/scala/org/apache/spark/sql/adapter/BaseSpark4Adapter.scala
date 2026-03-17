@@ -206,7 +206,7 @@ abstract class BaseSpark4Adapter extends SparkAdapter with Logging {
   override def isDataTypeEqualForPhysicalSchema(requiredType: DataType, fileType: DataType): Option[Boolean] = {
     /**
      * Checks if a StructType is the physical representation of VariantType in Parquet.
-     * VariantType is stored in Parquet as a struct with two binary fields: "value" and "metadata".
+     * VariantType is stored in Parquet as a struct with two binary fields: "metadata" and "value".
      */
     def isVariantPhysicalSchema(structType: StructType): Boolean = {
       if (structType.fields.length != 2) {
@@ -243,8 +243,8 @@ abstract class BaseSpark4Adapter extends SparkAdapter with Logging {
 
     (row: SpecializedGetters, ordinal: Integer) => {
       val variant = row.getVariant(ordinal)
-      writeValue.accept(variant.getValue)
       writeMetadata.accept(variant.getMetadata)
+      writeValue.accept(variant.getValue)
     }
   }
 
@@ -273,8 +273,8 @@ abstract class BaseSpark4Adapter extends SparkAdapter with Logging {
     // Note: We intentionally omit 'typed_value' for shredded variants as this writer only accesses raw binary blobs.
     // TODO: use `.as(LogicalTypeAnnotation.variantType())` after parquet-java version is bumped to 1.16.0
     Types.buildGroup(repetition)
-      .addField(Types.primitive(PrimitiveType.PrimitiveTypeName.BINARY, valueRepetition).named(HoodieSchema.Variant.VARIANT_VALUE_FIELD))
       .addField(Types.primitive(PrimitiveType.PrimitiveTypeName.BINARY, Repetition.REQUIRED).named(HoodieSchema.Variant.VARIANT_METADATA_FIELD))
+      .addField(Types.primitive(PrimitiveType.PrimitiveTypeName.BINARY, valueRepetition).named(HoodieSchema.Variant.VARIANT_VALUE_FIELD))
       .named(fieldName)
   }
 }

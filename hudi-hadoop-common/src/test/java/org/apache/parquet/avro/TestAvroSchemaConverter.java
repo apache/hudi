@@ -869,8 +869,8 @@ public class TestAvroSchemaConverter {
         schema,
         "message myrecord {\n"
             + "  required group myvariant {\n"
-            + "    required binary value;\n"
             + "    required binary metadata;\n"
+            + "    required binary value;\n"
             + "  }\n"
             + "}\n");
   }
@@ -884,8 +884,8 @@ public class TestAvroSchemaConverter {
         schema,
         "message myrecord {\n"
             + "  required group myvariant {\n"
-            + "    optional binary value;\n"
             + "    required binary metadata;\n"
+            + "    optional binary value;\n"
             + "    required int32 typed_value;\n"
             + "  }\n"
             + "}\n");
@@ -901,8 +901,8 @@ public class TestAvroSchemaConverter {
         schema,
         "message myrecord {\n"
             + "  optional group myvariant {\n"
-            + "    required binary value;\n"
             + "    required binary metadata;\n"
+            + "    required binary value;\n"
             + "  }\n"
             + "}\n");
   }

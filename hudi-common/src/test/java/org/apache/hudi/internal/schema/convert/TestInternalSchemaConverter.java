@@ -111,10 +111,10 @@ public class TestInternalSchemaConverter {
     Types.RecordType variantRecordType = (Types.RecordType) dataField.type();
     List<Types.Field> variantFields = variantRecordType.fields();
     assertEquals(2, variantFields.size());
-    assertEquals(HoodieSchema.Variant.VARIANT_VALUE_FIELD, variantFields.get(0).name());
-    assertEquals(HoodieSchema.Variant.VARIANT_METADATA_FIELD, variantFields.get(1).name());
-    assertEquals(InternalSchemaConverter.VARIANT_VALUE_FIELD_ID, variantFields.get(0).fieldId());
-    assertEquals(InternalSchemaConverter.VARIANT_METADATA_FIELD_ID, variantFields.get(1).fieldId());
+    assertEquals(HoodieSchema.Variant.VARIANT_METADATA_FIELD, variantFields.get(0).name());
+    assertEquals(HoodieSchema.Variant.VARIANT_VALUE_FIELD, variantFields.get(1).name());
+    assertEquals(InternalSchemaConverter.VARIANT_METADATA_FIELD_ID, variantFields.get(0).fieldId());
+    assertEquals(InternalSchemaConverter.VARIANT_VALUE_FIELD_ID, variantFields.get(1).fieldId());
     assertFalse(variantFields.get(0).isOptional());
     assertFalse(variantFields.get(1).isOptional());
     assertEquals(Type.TypeID.BINARY, variantFields.get(0).type().typeId());

@@ -680,14 +680,6 @@ public class HoodieSchema implements Serializable {
   public static HoodieSchema.Variant createVariant(String name, String namespace, String doc) {
     String variantName = (name != null && !name.isEmpty()) ? name : VariantLogicalType.VARIANT_LOGICAL_TYPE_NAME;
 
-    // Create value field (required bytes)
-    HoodieSchemaField valueField = HoodieSchemaField.of(
-        Variant.VARIANT_VALUE_FIELD,
-        HoodieSchema.create(HoodieSchemaType.BYTES),
-        "Variant value component",
-        null
-    );
-
     // Create metadata field (required bytes)
     HoodieSchemaField metadataField = HoodieSchemaField.of(
         Variant.VARIANT_METADATA_FIELD,
@@ -696,9 +688,17 @@ public class HoodieSchema implements Serializable {
         null
     );
 
-    // IMPORTANT: Field order is (value, metadata) to match Spark's VariantVal(value, metadata) constructor.
-    // The Parquet spec lists metadata first, but fields are accessed by name, not position.
-    List<HoodieSchemaField> fields = Arrays.asList(valueField, metadataField);
+    // Create value field (required bytes)
+    HoodieSchemaField valueField = HoodieSchemaField.of(
+        Variant.VARIANT_VALUE_FIELD,
+        HoodieSchema.create(HoodieSchemaType.BYTES),
+        "Variant value component",
+        null
+    );
+
+    // Field order is (metadata, value) to match the Parquet spec and Iceberg convention.
+    // Fields are accessed by name, not position.
+    List<HoodieSchemaField> fields = Arrays.asList(metadataField, valueField);
 
     Schema recordSchema = Schema.createRecord(variantName, doc, namespace, false);
     List<Schema.Field> avroFields = fields.stream()
@@ -738,22 +738,22 @@ public class HoodieSchema implements Serializable {
 
     List<HoodieSchemaField> fields = new ArrayList<>();
 
-    // IMPORTANT: Field order is (value, metadata) to match Spark's VariantVal(value, metadata) constructor.
-    // The Parquet spec lists metadata first, but fields are accessed by name, not position.
-    // Create value field first (nullable bytes for shredded)
-    fields.add(HoodieSchemaField.of(
-        Variant.VARIANT_VALUE_FIELD,
-        HoodieSchema.createNullable(HoodieSchemaType.BYTES),
-        "Variant value component",
-        NULL_VALUE
-    ));
-
-    // Create metadata field second (required bytes)
+    // Field order is (metadata, value) to match the Parquet spec and Iceberg convention.
+    // Fields are accessed by name, not position.
+    // Create metadata field first (required bytes)
     fields.add(HoodieSchemaField.of(
         Variant.VARIANT_METADATA_FIELD,
         HoodieSchema.create(HoodieSchemaType.BYTES),
         "Variant metadata component",
         null
+    ));
+
+    // Create value field second (nullable bytes for shredded)
+    fields.add(HoodieSchemaField.of(
+        Variant.VARIANT_VALUE_FIELD,
+        HoodieSchema.createNullable(HoodieSchemaType.BYTES),
+        "Variant value component",
+        NULL_VALUE
     ));
 
     // Add typed_value field if provided

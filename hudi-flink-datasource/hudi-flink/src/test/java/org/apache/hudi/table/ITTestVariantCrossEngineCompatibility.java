@@ -50,19 +50,19 @@ public class ITTestVariantCrossEngineCompatibility {
 
   /**
    * Helper method to verify that Flink can read Spark 4.0 Variant tables.
-   * Variant data is represented as ROW<value BYTES, metadata BYTES> in Flink.
+   * Variant data is represented as ROW<metadata BYTES, value BYTES> in Flink.
    */
   private void verifyFlinkCanReadSparkVariantTable(String tablePath, String tableType, String testDescription) throws Exception {
     TableEnvironment tableEnv = TestTableEnvs.getBatchTableEnv();
 
     // Create a Hudi table pointing to the Spark-written data
-    // In Flink, Variant is represented as ROW<value BYTES, metadata BYTES>
+    // In Flink, Variant is represented as ROW<metadata BYTES, value BYTES>
     // NOTE: value is a reserved keyword
     String createTableDdl = String.format(
         "CREATE TABLE variant_table ("
             + "  id INT,"
             + "  name STRING,"
-            + "  v ROW<`value` BYTES, metadata BYTES>,"
+            + "  v ROW<metadata BYTES, `value` BYTES>,"
             + "  ts BIGINT,"
             + "  PRIMARY KEY (id) NOT ENFORCED"
             + ") WITH ("
@@ -90,8 +90,8 @@ public class ITTestVariantCrossEngineCompatibility {
     Row variantRow = (Row) row.getField(2);
     assertNotNull(variantRow, "Variant column should not be null");
 
-    byte[] valueBytes = (byte[]) variantRow.getField(0);
-    byte[] metadataBytes = (byte[]) variantRow.getField(1);
+    byte[] metadataBytes = (byte[]) variantRow.getField(0);
+    byte[] valueBytes = (byte[]) variantRow.getField(1);
 
     // Expected byte values from Spark 4.0 Variant representation: {"updated": true, "new_field": 123}
     byte[] expectedValueBytes = new byte[]{0x02, 0x02, 0x01, 0x00, 0x01, 0x00, 0x03, 0x04, 0x0C, 0x7B};

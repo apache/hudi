@@ -287,14 +287,13 @@ public class HoodieRowParquetWriteSupport extends WriteSupport<InternalRow> {
       return (row, ordinal) -> recordConsumer.addBinary(
           Binary.fromReusedByteArray(row.getBinary(ordinal)));
     } else if (SparkAdapterSupport$.MODULE$.sparkAdapter().isVariantType(dataType)) {
-      // Maps VariantType to a Parquet group with 'value' and 'metadata' binary fields.
-      // Field order follows Spark's VariantVal(value, metadata) constructor; fields are accessed
-      // by name at the Parquet level, so this is compatible with the Parquet spec (which lists metadata first).
+      // Maps VariantType to a Parquet group with 'metadata' and 'value' binary fields.
+      // Field order follows the Parquet spec (metadata at index 0, value at index 1).
       // Note: We intentionally omit 'typed_value' for shredded variants as this writer only accesses raw binary blobs.
       BiConsumer<SpecializedGetters, Integer> variantWriter = SparkAdapterSupport$.MODULE$.sparkAdapter().createVariantValueWriter(
           dataType,
-          valueBytes -> consumeField(HoodieSchema.Variant.VARIANT_VALUE_FIELD, 0, () -> recordConsumer.addBinary(Binary.fromConstantByteArray(valueBytes))),
-          metadataBytes -> consumeField(HoodieSchema.Variant.VARIANT_METADATA_FIELD, 1, () -> recordConsumer.addBinary(Binary.fromConstantByteArray(metadataBytes)))
+          valueBytes -> consumeField(HoodieSchema.Variant.VARIANT_VALUE_FIELD, 1, () -> recordConsumer.addBinary(Binary.fromConstantByteArray(valueBytes))),
+          metadataBytes -> consumeField(HoodieSchema.Variant.VARIANT_METADATA_FIELD, 0, () -> recordConsumer.addBinary(Binary.fromConstantByteArray(metadataBytes)))
       );
       return (row, ordinal) -> {
         consumeGroup(() -> variantWriter.accept(row, ordinal));

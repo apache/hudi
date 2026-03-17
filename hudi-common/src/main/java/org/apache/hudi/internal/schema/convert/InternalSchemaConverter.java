@@ -361,10 +361,10 @@ public class InternalSchemaConverter {
         // Variant is represented as a RecordType with sentinel negative field IDs so the reverse
         // path can detect and reconstruct it
         List<Types.Field> variantFields = new ArrayList<>(2);
-        variantFields.add(Types.Field.get(VARIANT_VALUE_FIELD_ID, false,
-            HoodieSchema.Variant.VARIANT_VALUE_FIELD, Types.BinaryType.get(), "Variant value component"));
         variantFields.add(Types.Field.get(VARIANT_METADATA_FIELD_ID, false,
             HoodieSchema.Variant.VARIANT_METADATA_FIELD, Types.BinaryType.get(), "Variant metadata component"));
+        variantFields.add(Types.Field.get(VARIANT_VALUE_FIELD_ID, false,
+            HoodieSchema.Variant.VARIANT_VALUE_FIELD, Types.BinaryType.get(), "Variant value component"));
         return Types.RecordType.get(variantFields);
       default:
         throw new UnsupportedOperationException("Unsupported primitive type: " + schema.getType());

@@ -644,11 +644,11 @@ public class TestHoodieSchemaConverter {
     DataType dataType = HoodieSchemaConverter.convertToDataType(variantSchema);
     assertNotNull(dataType);
 
-    // Verify it's a ROW with value and metadata binary fields
+    // Verify it's a ROW with metadata and value binary fields
     RowType rowType = (RowType) dataType.getLogicalType();
     assertEquals(2, rowType.getFieldCount());
-    assertEquals("value", rowType.getFieldNames().get(0));
-    assertEquals("metadata", rowType.getFieldNames().get(1));
+    assertEquals("metadata", rowType.getFieldNames().get(0));
+    assertEquals("value", rowType.getFieldNames().get(1));
     assertInstanceOf(VarBinaryType.class, rowType.getTypeAt(0));
     assertInstanceOf(VarBinaryType.class, rowType.getTypeAt(1));
   }
@@ -670,11 +670,11 @@ public class TestHoodieSchemaConverter {
     assertEquals(2, result.getFieldCount());
     assertEquals("data", result.getFieldNames().get(1));
 
-    // Verify variant field is a ROW<value BYTES, metadata BYTES>
+    // Verify variant field is a ROW<metadata BYTES, value BYTES>
     RowType variantRowType = (RowType) result.getTypeAt(1);
     assertEquals(2, variantRowType.getFieldCount());
-    assertEquals("value", variantRowType.getFieldNames().get(0));
-    assertEquals("metadata", variantRowType.getFieldNames().get(1));
+    assertEquals("metadata", variantRowType.getFieldNames().get(0));
+    assertEquals("value", variantRowType.getFieldNames().get(1));
   }
 
   @Test

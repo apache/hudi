@@ -554,7 +554,7 @@ public class HoodieSchemaConverter {
 
   /**
    * Converts a Variant schema to Flink's ROW type.
-   * Variant is represented as ROW<`value` BYTES, `metadata` BYTES> in Flink.
+   * Variant is represented as ROW<`metadata` BYTES, `value` BYTES> in Flink.
    * // TODO: We are only supporting unshredded for now, support shredded in the future
    *
    * @param schema HoodieSchema to convert (must be a VARIANT type)
@@ -565,12 +565,11 @@ public class HoodieSchemaConverter {
       throw new IllegalStateException("Expected HoodieSchema.Variant but got: " + schema.getClass());
     }
 
-    // Variant is stored as a struct with two binary fields: value and metadata.
-    // Field order follows Spark's VariantVal(value, metadata) constructor convention.
-    // Parquet spec lists metadata first, but fields are accessed by name, not position.
+    // Variant is stored as a struct with two binary fields: metadata and value.
+    // Field order follows the Parquet spec and Iceberg convention (metadata first, value second).
     return DataTypes.ROW(
-        DataTypes.FIELD("value", DataTypes.BYTES().notNull()),
-        DataTypes.FIELD("metadata", DataTypes.BYTES().notNull())
+        DataTypes.FIELD("metadata", DataTypes.BYTES().notNull()),
+        DataTypes.FIELD("value", DataTypes.BYTES().notNull())
     ).notNull();
   }
 
