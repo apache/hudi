@@ -20,6 +20,7 @@ package org.apache.spark.sql.hudi.v2
 import org.apache.spark.broadcast.Broadcast
 import org.apache.spark.sql.connector.read.{Batch, InputPartition, PartitionReaderFactory, Scan}
 import org.apache.spark.sql.execution.datasources.SparkColumnarFileReader
+import org.apache.spark.sql.sources.Filter
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.util.SerializableConfiguration
 
@@ -31,9 +32,19 @@ class HoodieBatchScan(readSchema: StructType,
                       broadcastReader: Broadcast[SparkColumnarFileReader],
                       broadcastConf: Broadcast[SerializableConfiguration],
                       requiredDataSchema: StructType,
-                      requiredPartitionSchema: StructType) extends Scan with Batch {
+                      requiredPartitionSchema: StructType,
+                      pushedFilters: Array[Filter] = Array.empty) extends Scan with Batch {
 
   override def readSchema(): StructType = readSchema
+
+  override def description(): String = {
+    val filtersStr = if (pushedFilters.nonEmpty) {
+      s", PushedFilters: [${pushedFilters.mkString(", ")}]"
+    } else {
+      ", PushedFilters: []"
+    }
+    s"HoodieBatchScan${readSchema.catalogString}$filtersStr"
+  }
 
   override def toBatch: Batch = this
 
