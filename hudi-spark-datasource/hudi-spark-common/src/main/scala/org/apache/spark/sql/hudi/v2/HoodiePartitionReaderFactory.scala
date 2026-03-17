@@ -25,21 +25,24 @@ import org.apache.spark.sql.types.StructType
 import org.apache.spark.util.SerializableConfiguration
 
 /**
- * Factory that creates [[HoodiePartitionReader]] instances for DSv2 CoW snapshot reads.
+ * Factory that creates partition readers for COW snapshot reads.
  */
 class HoodiePartitionReaderFactory(broadcastReader: Broadcast[SparkColumnarFileReader],
                                    broadcastConf: Broadcast[SerializableConfiguration],
                                    readSchema: StructType,
                                    requiredDataSchema: StructType,
-                                   requiredPartitionSchema: StructType) extends PartitionReaderFactory {
+                                   requiredPartitionSchema: StructType,
+                                   pushedLimit: Option[Int] = None) extends PartitionReaderFactory {
 
   override def createReader(partition: InputPartition): PartitionReader[InternalRow] = {
+    val hoodiePart = partition.asInstanceOf[HoodieInputPartition]
     new HoodiePartitionReader(
-      partition.asInstanceOf[HoodieInputPartition],
+      hoodiePart,
       broadcastReader,
       broadcastConf,
       readSchema,
       requiredDataSchema,
-      requiredPartitionSchema)
+      requiredPartitionSchema,
+      pushedLimit)
   }
 }

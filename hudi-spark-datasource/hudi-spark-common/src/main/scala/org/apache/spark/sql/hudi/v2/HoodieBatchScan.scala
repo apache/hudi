@@ -18,14 +18,14 @@
 package org.apache.spark.sql.hudi.v2
 
 import org.apache.spark.broadcast.Broadcast
-import org.apache.spark.sql.connector.read.{Batch, InputPartition, PartitionReaderFactory, Scan}
+import org.apache.spark.sql.connector.read.{Batch, InputPartition, PartitionReaderFactory, Scan, Statistics, SupportsReportStatistics}
 import org.apache.spark.sql.execution.datasources.SparkColumnarFileReader
 import org.apache.spark.sql.sources.Filter
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.util.SerializableConfiguration
 
 /**
- * Batch scan for CoW snapshot reads via DSv2.
+ * Batch scan for snapshot reads via DSv2 (COW).
  */
 class HoodieBatchScan(readSchema: StructType,
                       inputPartitions: Array[InputPartition],
@@ -33,7 +33,8 @@ class HoodieBatchScan(readSchema: StructType,
                       broadcastConf: Broadcast[SerializableConfiguration],
                       requiredDataSchema: StructType,
                       requiredPartitionSchema: StructType,
-                      pushedFilters: Array[Filter] = Array.empty) extends Scan with Batch {
+                      pushedFilters: Array[Filter] = Array.empty,
+                      pushedLimit: Option[Int] = None) extends Scan with Batch with SupportsReportStatistics {
 
   override def readSchema(): StructType = readSchema
 
@@ -43,7 +44,8 @@ class HoodieBatchScan(readSchema: StructType,
     } else {
       ", PushedFilters: []"
     }
-    s"HoodieBatchScan${readSchema.catalogString}$filtersStr"
+    val limitStr = pushedLimit.map(l => s", PushedLimit: $l").getOrElse("")
+    s"HoodieBatchScan${readSchema.catalogString}$filtersStr$limitStr"
   }
 
   override def toBatch: Batch = this
@@ -56,6 +58,14 @@ class HoodieBatchScan(readSchema: StructType,
       broadcastConf,
       readSchema,
       requiredDataSchema,
-      requiredPartitionSchema)
+      requiredPartitionSchema,
+      pushedLimit)
+  }
+
+  override def estimateStatistics(): Statistics = {
+    val totalSize = inputPartitions.collect {
+      case p: HoodieInputPartition => p.baseFileLength
+    }.sum
+    new HoodieStatistics(totalSize)
   }
 }
