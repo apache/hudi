@@ -91,7 +91,7 @@ public class AppendWriteFunctionWithBIMBufferSort<T> extends AppendWriteFunction
     SortCodeGenerator codeGenerator = sortOperatorGen.createSortCodeGenerator();
     GeneratedNormalizedKeyComputer keyComputer = codeGenerator.generateNormalizedKeyComputer("SortComputer");
     GeneratedRecordComparator recordComparator = codeGenerator.generateRecordComparator("SortComparator");
-    this.memorySegmentPools = this.memorySegmentPoolFactory.createMemorySegmentPools(config, 2, () -> OptionsResolver.getWriteBufferSizeInBytes(config));
+    this.memorySegmentPools = this.memorySegmentPoolFactory.createMemorySegmentPools(config, 2, OptionsResolver.getWriteBufferSizeInBytes(config));
 
     this.activeBuffer = BufferUtils.createBuffer(rowType,
         memorySegmentPools[0],

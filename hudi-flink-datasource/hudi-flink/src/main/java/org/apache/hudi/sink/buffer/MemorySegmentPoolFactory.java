@@ -26,8 +26,6 @@ import org.apache.flink.runtime.memory.MemoryManager;
 import org.apache.flink.table.runtime.util.LazyMemorySegmentPool;
 import org.apache.flink.table.runtime.util.MemorySegmentPool;
 
-import java.util.function.Supplier;
-
 /**
  * Factory to create {@code MemorySegmentPool} instances.
  * <p>
@@ -48,8 +46,8 @@ public class MemorySegmentPoolFactory {
     this.managedMemorySize = managedMemorySize;
   }
 
-  public MemorySegmentPool createMemorySegmentPool(Configuration conf, Supplier<Long> heapSizeSupplier) {
-    return createMemorySegmentPools(conf, 1, heapSizeSupplier)[0];
+  public MemorySegmentPool createMemorySegmentPool(Configuration conf, long heapMemorySize) {
+    return createMemorySegmentPools(conf, 1, heapMemorySize)[0];
   }
 
   /**
@@ -59,20 +57,19 @@ public class MemorySegmentPoolFactory {
    * @param numPools number of pools to create
    * @return array of memory segment pools, each with size = totalSize / numPools
    */
-  public MemorySegmentPool[] createMemorySegmentPools(Configuration conf, int numPools, Supplier<Long> heapSizeSupplier) {
+  public MemorySegmentPool[] createMemorySegmentPools(Configuration conf, int numPools, long heapMemorySize) {
     if (memoryManager == null) {
-      return createHeapMemoryPools(conf, numPools, heapSizeSupplier);
+      return createHeapMemoryPools(conf, numPools, heapMemorySize);
     } else {
       return createManagedMemoryPools(numPools);
     }
   }
 
-  private MemorySegmentPool[] createHeapMemoryPools(Configuration conf, int numPools, Supplier<Long> heapSizeSupplier) {
+  private MemorySegmentPool[] createHeapMemoryPools(Configuration conf, int numPools, long heapMemorySize) {
     ValidationUtils.checkArgument(numPools > 0, "numPools must be positive");
-    long maxBufferSize = heapSizeSupplier.get();
-    ValidationUtils.checkArgument(maxBufferSize > 0, "Buffer size must be positive");
+    ValidationUtils.checkArgument(heapMemorySize > 0, "Buffer size must be positive");
     int pageSize = conf.get(FlinkOptions.WRITE_MEMORY_SEGMENT_PAGE_SIZE);
-    long poolSize = maxBufferSize / numPools;
+    long poolSize = heapMemorySize / numPools;
     MemorySegmentPool[] pools = new MemorySegmentPool[numPools];
     ValidationUtils.checkArgument(poolSize >= pageSize,
         String.format("The total size %s of memory pool should not be less than page size %s.", poolSize, pageSize));

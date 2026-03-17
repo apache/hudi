@@ -200,7 +200,7 @@ public class StreamWriteFunction extends AbstractStreamWriteFunction<HoodieFlink
 
   private void initBuffer() {
     this.buckets = new LinkedHashMap<>();
-    this.memorySegmentPool = this.memorySegmentPoolFactory.createMemorySegmentPool(config, () -> OptionsResolver.getWriteBufferSizeInBytes(config));
+    this.memorySegmentPool = this.memorySegmentPoolFactory.createMemorySegmentPool(config, OptionsResolver.getWriteBufferSizeInBytes(config));
   }
 
   private void initWriteFunction() {

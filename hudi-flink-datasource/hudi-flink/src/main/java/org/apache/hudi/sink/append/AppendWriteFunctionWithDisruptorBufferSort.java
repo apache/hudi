@@ -98,7 +98,7 @@ public class AppendWriteFunctionWithDisruptorBufferSort<T> extends AppendWriteFu
     SortCodeGenerator codeGenerator = sortOperatorGen.createSortCodeGenerator();
     this.keyComputer = codeGenerator.generateNormalizedKeyComputer("SortComputer");
     this.recordComparator = codeGenerator.generateRecordComparator("SortComparator");
-    this.memorySegmentPool = this.memorySegmentPoolFactory.createMemorySegmentPool(config, () -> OptionsResolver.getWriteBufferSizeInBytes(config));
+    this.memorySegmentPool = this.memorySegmentPoolFactory.createMemorySegmentPool(config, OptionsResolver.getWriteBufferSizeInBytes(config));
 
     initDisruptorBuffer();
 

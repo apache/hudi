@@ -18,10 +18,10 @@
 
 package org.apache.hudi.sink.common;
 
+import org.apache.hudi.adapter.Utils;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.sink.buffer.MemorySegmentPoolFactory;
 import org.apache.hudi.sink.event.Correspondent;
-import org.apache.hudi.utils.ManagedMemoryUtils;
 
 import org.apache.flink.runtime.operators.coordination.OperatorEvent;
 import org.apache.flink.runtime.operators.coordination.OperatorEventGateway;
@@ -55,7 +55,7 @@ public abstract class AbstractWriteOperator<I>
 
     MemorySegmentPoolFactory memoryPoolFactory =
         this.function.getConfig().get(FlinkOptions.WRITE_BUFFER_MANAGED_MEMORY_ENABLED)
-            ? new MemorySegmentPoolFactory(containingTask, containingTask.getEnvironment().getMemoryManager(), ManagedMemoryUtils.computeManagedMemory(this))
+            ? new MemorySegmentPoolFactory(containingTask, containingTask.getEnvironment().getMemoryManager(), Utils.computeManagedMemory(this))
             : new MemorySegmentPoolFactory(null, null, -1);
     this.function.setMemorySegmentPoolFactory(memoryPoolFactory);
   }

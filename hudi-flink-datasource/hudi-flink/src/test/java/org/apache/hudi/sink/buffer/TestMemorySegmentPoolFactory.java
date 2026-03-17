@@ -43,7 +43,7 @@ public class TestMemorySegmentPoolFactory {
     conf.set(FlinkOptions.WRITE_MEMORY_SEGMENT_PAGE_SIZE, 32 * 1024);
 
     MemorySegmentPoolFactory factory = new MemorySegmentPoolFactory(null, null, 0);
-    MemorySegmentPool pool = factory.createMemorySegmentPool(conf, () -> 1024 * 1024L);
+    MemorySegmentPool pool = factory.createMemorySegmentPool(conf, 1024 * 1024L);
 
     assertNotNull(pool);
     assertTrue(pool instanceof HeapMemorySegmentPool);
@@ -55,7 +55,7 @@ public class TestMemorySegmentPoolFactory {
     conf.set(FlinkOptions.WRITE_MEMORY_SEGMENT_PAGE_SIZE, 32 * 1024);
 
     MemorySegmentPoolFactory factory = new MemorySegmentPoolFactory(null, null, 0);
-    MemorySegmentPool[] pools = factory.createMemorySegmentPools(conf, 4, () -> 4 * 1024 * 1024L);
+    MemorySegmentPool[] pools = factory.createMemorySegmentPools(conf, 4, 4 * 1024 * 1024L);
 
     assertNotNull(pools);
     assertEquals(4, pools.length);
@@ -77,7 +77,7 @@ public class TestMemorySegmentPoolFactory {
     long managedMemorySize = 2 * 1024 * 1024L;
 
     MemorySegmentPoolFactory factory = new MemorySegmentPoolFactory(owner, memoryManager, managedMemorySize);
-    MemorySegmentPool pool = factory.createMemorySegmentPool(conf, () -> 1024 * 1024L);
+    MemorySegmentPool pool = factory.createMemorySegmentPool(conf, 1024 * 1024L);
 
     assertNotNull(pool);
     assertTrue(pool instanceof LazyMemorySegmentPool);
@@ -95,7 +95,7 @@ public class TestMemorySegmentPoolFactory {
     long managedMemorySize = 4 * 1024 * 1024L;
 
     MemorySegmentPoolFactory factory = new MemorySegmentPoolFactory(owner, memoryManager, managedMemorySize);
-    MemorySegmentPool[] pools = factory.createMemorySegmentPools(conf, 4, () -> 1024 * 1024L);
+    MemorySegmentPool[] pools = factory.createMemorySegmentPools(conf, 4, 1024 * 1024L);
 
     assertNotNull(pools);
     assertEquals(4, pools.length);

@@ -27,7 +27,10 @@ import org.apache.hudi.internal.schema.action.InternalSchemaChangeApplier;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.configuration.ReadableConfig;
 import org.apache.flink.runtime.io.disk.iomanager.IOManager;
+import org.apache.flink.core.memory.ManagedMemoryUseCase;
+import org.apache.flink.runtime.execution.Environment;
 import org.apache.flink.runtime.memory.MemoryManager;
+import org.apache.flink.streaming.api.operators.AbstractStreamOperator;
 import org.apache.flink.table.api.config.ExecutionConfigOptions;
 import org.apache.flink.table.catalog.Column;
 import org.apache.flink.table.catalog.ObjectIdentifier;
@@ -88,6 +91,29 @@ public class Utils {
       newSchema = applyTableChange(newSchema, tableChange, convertFunc);
     }
     return newSchema;
+  }
+
+  /**
+   * Computes the managed memory size available for the given stream operator.
+   * <p>
+   * This method retrieves the memory manager from the operator's execution environment
+   * and calculates the memory size allocated for the operator based on the configured
+   * managed memory fraction and the task manager's memory settings.
+   *
+   * @param operator the stream operator for which to compute managed memory
+   * @return the computed managed memory size in bytes
+   */
+  public static long computeManagedMemory(AbstractStreamOperator<?> operator) {
+    final Environment environment = operator.getContainingTask().getEnvironment();
+    return environment
+        .getMemoryManager()
+        .computeMemorySize(
+            operator.getOperatorConfig()
+                .getManagedMemoryFractionOperatorUseCaseOfSlot(
+                    ManagedMemoryUseCase.OPERATOR,
+                    environment.getJobConfiguration(),
+                    environment.getTaskManagerInfo().getConfiguration(),
+                    environment.getUserCodeClassLoader().asClassLoader()));
   }
 
   private static InternalSchema applyTableChange(InternalSchema oldSchema, TableChange change, Function<LogicalType, Type> convertFunc) {

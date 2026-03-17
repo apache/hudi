@@ -93,7 +93,7 @@ public class IndexWriteFunction extends AbstractStreamWriteFunction<RowData> {
     this.flinkTable = this.writeClient.getHoodieTable();
     this.memorySegmentPool = this.memorySegmentPoolFactory.createMemorySegmentPool(
         config,
-        () -> config.get(FlinkOptions.INDEX_RLI_WRITE_BUFFER_SIZE) * 1024 * 1024);
+        config.get(FlinkOptions.INDEX_RLI_WRITE_BUFFER_SIZE) * 1024 * 1024);
     this.indexDataBuffer = BufferUtils.createBuffer(IndexRowUtils.INDEX_ROW_TYPE, memorySegmentPool);
   }
 
