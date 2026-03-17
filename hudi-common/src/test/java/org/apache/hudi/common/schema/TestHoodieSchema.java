@@ -1433,8 +1433,8 @@ public class TestHoodieSchema {
     // Verify fields
     List<HoodieSchemaField> fields = variantSchema.getFields();
     assertEquals(2, fields.size());
-    assertEquals("value", fields.get(0).name());
-    assertEquals("metadata", fields.get(1).name());
+    assertEquals("metadata", fields.get(0).name());
+    assertEquals("value", fields.get(1).name());
 
     // Verify field types
     assertEquals(HoodieSchemaType.BYTES, fields.get(0).schema().getType());
@@ -1476,12 +1476,12 @@ public class TestHoodieSchema {
     // Verify fields
     List<HoodieSchemaField> fields = variantSchema.getFields();
     assertEquals(3, fields.size());
-    assertEquals("value", fields.get(0).name());
-    assertEquals("metadata", fields.get(1).name());
+    assertEquals("metadata", fields.get(0).name());
+    assertEquals("value", fields.get(1).name());
     assertEquals("typed_value", fields.get(2).name());
 
     // Value field should be nullable for shredded
-    assertTrue(fields.get(0).schema().isNullable());
+    assertTrue(fields.get(1).schema().isNullable());
 
     // Verify typed_value schema
     HoodieSchema retrievedTypedValueSchema = variantSchema.getTypedValueField().get();
@@ -1499,11 +1499,11 @@ public class TestHoodieSchema {
     // Verify fields should have metadata and nullable value, but no typed_value
     List<HoodieSchemaField> fields = variantSchema.getFields();
     assertEquals(2, fields.size());
-    assertEquals("value", fields.get(0).name());
-    assertEquals("metadata", fields.get(1).name());
+    assertEquals("metadata", fields.get(0).name());
+    assertEquals("value", fields.get(1).name());
 
     // Value field should be nullable even without typed_value
-    assertTrue(fields.get(0).schema().isNullable());
+    assertTrue(fields.get(1).schema().isNullable());
   }
 
   @Test
@@ -2087,15 +2087,15 @@ public class TestHoodieSchema {
     // Verify field order is (value, metadata) not (metadata, value)
     HoodieSchema.Variant variant = HoodieSchema.createVariant();
     List<HoodieSchemaField> fields = variant.getFields();
-    assertEquals("value", fields.get(0).name());
-    assertEquals("metadata", fields.get(1).name());
+    assertEquals("metadata", fields.get(0).name());
+    assertEquals("value", fields.get(1).name());
 
     // Same for shredded variant
     HoodieSchema.Variant shredded = HoodieSchema.createVariantShredded(
         HoodieSchema.create(HoodieSchemaType.STRING));
     List<HoodieSchemaField> shreddedFields = shredded.getFields();
-    assertEquals("value", shreddedFields.get(0).name());
-    assertEquals("metadata", shreddedFields.get(1).name());
+    assertEquals("metadata", shreddedFields.get(0).name());
+    assertEquals("value", shreddedFields.get(1).name());
     assertEquals("typed_value", shreddedFields.get(2).name());
   }
 

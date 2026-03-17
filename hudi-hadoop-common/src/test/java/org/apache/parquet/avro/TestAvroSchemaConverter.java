@@ -980,8 +980,8 @@ public class TestAvroSchemaConverter {
 
     String expectedParquet = "message variantRecord {\n"
         + "  required group v {\n"
-        + "    required binary value;\n"
         + "    required binary metadata;\n"
+        + "    required binary value;\n"
         + "  }\n"
         + "}\n";
 
