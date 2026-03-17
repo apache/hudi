@@ -20,7 +20,10 @@ package org.apache.spark.sql.hudi.v2
 import org.apache.hudi.HoodieFileIndex
 import org.apache.hudi.SparkAdapterSupport
 import org.apache.hudi.common.table.HoodieTableMetaClient
+
+import org.apache.spark.sql.HoodieCatalystExpressionUtils
 import org.apache.spark.sql.SparkSession
+import org.apache.spark.sql.catalyst.expressions.Expression
 import org.apache.spark.sql.connector.read.{InputPartition, Scan, ScanBuilder, SupportsPushDownFilters, SupportsPushDownRequiredColumns}
 import org.apache.spark.sql.execution.datasources.FileFormat
 import org.apache.spark.sql.sources.Filter
@@ -29,7 +32,7 @@ import org.apache.spark.util.SerializableConfiguration
 
 /**
  * Scan builder for DSv2 CoW snapshot reads.
- * Accepts column pruning; filter pushdown deferred to a later PR.
+ * Accepts column pruning and filter pushdown (partition pruning + data skipping).
  */
 class HoodieScanBuilder(spark: SparkSession,
                         metaClient: HoodieTableMetaClient,
@@ -40,22 +43,44 @@ class HoodieScanBuilder(spark: SparkSession,
   with SparkAdapterSupport {
 
   private var requiredSchema: StructType = tableSchema
+  private var _pushedFilters: Array[Filter] = Array.empty
+  private var partitionFilterExprs: Seq[Expression] = Seq.empty
+  private var dataFilterExprs: Seq[Expression] = Seq.empty
+
+  private lazy val fileIndex = HoodieFileIndex(spark, metaClient, None, options,
+    includeLogFiles = false, shouldEmbedFileSlices = false)
 
   override def pushFilters(filters: Array[Filter]): Array[Filter] = {
-    // All filters are returned as post-scan (none pushed down)
-    filters
+    val (pushed, postScan) = filters.partition { f =>
+      HoodieCatalystExpressionUtils.convertToCatalystExpression(f, tableSchema).isDefined
+    }
+
+    val expressions = pushed.flatMap(f =>
+      HoodieCatalystExpressionUtils.convertToCatalystExpression(f, tableSchema))
+
+    val (partFilters, datFilters) = HoodieCatalystExpressionUtils
+      .splitPartitionAndDataPredicates(spark, expressions, fileIndex.partitionSchema.fieldNames)
+
+    partitionFilterExprs = partFilters.toSeq
+    dataFilterExprs = datFilters.toSeq
+
+    _pushedFilters = pushed
+
+    // Data filters are only used for file-level skipping (via metadata indices),
+    // not for row-level filtering. Return them as postScan so Spark applies
+    // row-level filtering. Partition filters are fully handled by partition pruning.
+    val partFieldNames = fileIndex.partitionSchema.fieldNames.toSet
+    val dataFilterArr = pushed.filterNot(f => f.references.forall(partFieldNames.contains))
+    postScan ++ dataFilterArr
   }
 
-  override def pushedFilters(): Array[Filter] = Array.empty
+  override def pushedFilters(): Array[Filter] = _pushedFilters
 
   override def pruneColumns(requiredSchema: StructType): Unit = {
     this.requiredSchema = requiredSchema
   }
 
   override def build(): Scan = {
-    val fileIndex = HoodieFileIndex(spark, metaClient, None, options,
-      includeLogFiles = false, shouldEmbedFileSlices = false)
-
     val partFieldNames = fileIndex.partitionSchema.fieldNames.toSet
     val requiredDataSchema = StructType(requiredSchema.filterNot(f => partFieldNames.contains(f.name)))
     val requiredPartitionSchema = StructType(requiredSchema.filter(f => partFieldNames.contains(f.name)))
@@ -67,7 +92,7 @@ class HoodieScanBuilder(spark: SparkSession,
     val broadcastConf = spark.sparkContext.broadcast(new SerializableConfiguration(hadoopConf))
 
     val fullPartSchema = fileIndex.partitionSchema
-    val fileSlicesPerPartition = fileIndex.filterFileSlices(Seq.empty, Seq.empty)
+    val fileSlicesPerPartition = fileIndex.filterFileSlices(dataFilterExprs, partitionFilterExprs)
 
     val partitions = fileSlicesPerPartition.flatMap { case (partitionOpt, fileSlices) =>
       fileSlices.filter(fs => fs.getBaseFile.isPresent).map { fs =>
@@ -93,6 +118,7 @@ class HoodieScanBuilder(spark: SparkSession,
       broadcastReader,
       broadcastConf,
       requiredDataSchema,
-      requiredPartitionSchema)
+      requiredPartitionSchema,
+      _pushedFilters)
   }
 }
