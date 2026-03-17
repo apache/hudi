@@ -85,10 +85,10 @@ public class TestHoodieInternalRowParquetWriter extends HoodieSparkClientTestHar
     HoodieWriteConfig.Builder writeConfigBuilder =
         SparkDatasetTestUtils.getConfigBuilder(basePath, timelineServicePort);
 
-    HoodieRowParquetWriteSupport writeSupport = getWriteSupport(
+    HoodieParquetWriteSupport writeSupport = getWriteSupport(
         writeConfigBuilder, storageConf.unwrap(), parquetWriteLegacyFormatEnabled);
     HoodieWriteConfig cfg = writeConfigBuilder.build();
-    HoodieParquetConfig<HoodieRowParquetWriteSupport> parquetConfig = new HoodieParquetConfig<>(writeSupport,
+    HoodieParquetConfig<HoodieParquetWriteSupport> parquetConfig = new HoodieParquetConfig<>(writeSupport,
         CompressionCodecName.SNAPPY, cfg.getParquetBlockSize(), cfg.getParquetPageSize(), cfg.getParquetMaxFileSize(),
         new HadoopStorageConfiguration(writeSupport.getHadoopConf()), cfg.getParquetCompressionRatio(), cfg.parquetDictionaryEnabled());
 
@@ -126,7 +126,7 @@ public class TestHoodieInternalRowParquetWriter extends HoodieSparkClientTestHar
     });
   }
 
-  private HoodieRowParquetWriteSupport getWriteSupport(HoodieWriteConfig.Builder writeConfigBuilder, Configuration hadoopConf, boolean parquetWriteLegacyFormatEnabled) {
+  private HoodieParquetWriteSupport getWriteSupport(HoodieWriteConfig.Builder writeConfigBuilder, Configuration hadoopConf, boolean parquetWriteLegacyFormatEnabled) {
     writeConfigBuilder.withStorageConfig(HoodieStorageConfig.newBuilder().parquetWriteLegacyFormat(String.valueOf(parquetWriteLegacyFormatEnabled)).build());
     HoodieWriteConfig writeConfig = writeConfigBuilder.build();
     BloomFilter filter = BloomFilterFactory.createBloomFilter(

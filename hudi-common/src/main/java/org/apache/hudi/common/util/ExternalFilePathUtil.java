@@ -43,4 +43,25 @@ public class ExternalFilePathUtil {
   public static boolean isExternallyCreatedFile(String fileName) {
     return fileName.endsWith(EXTERNAL_FILE_SUFFIX);
   }
+
+  /**
+   * Removes the appended commit time and external file marker from the file path, returning the original file path.
+   *
+   * @param filePath The file path with commit time and external file marker appended
+   */
+  public static String removeCommitTimeAndExternalFileMarker(String filePath) {
+    if (!isExternallyCreatedFile(filePath)) {
+      return filePath;
+    }
+    // Remove the suffix
+    String pathWithoutSuffix = filePath.substring(0, filePath.length() - EXTERNAL_FILE_SUFFIX.length());
+    // Find the last underscore which separates the commit time
+    int lastUnderscoreIndex = pathWithoutSuffix.lastIndexOf('_');
+    if (lastUnderscoreIndex == -1) {
+      // No underscore found, return as is
+      return filePath;
+    }
+    // Return the path without the commit time and suffix
+    return pathWithoutSuffix.substring(0, lastUnderscoreIndex);
+  }
 }

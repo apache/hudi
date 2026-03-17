@@ -41,6 +41,8 @@ import java.util.Set;
  */
 public interface HoodieFileReader<T> extends AutoCloseable {
 
+  String ENABLE_LOGICAL_TIMESTAMP_REPAIR = "spark.hudi.logicalTimestampField.repair.enable";
+
   String[] readMinMaxRecordKeys();
 
   BloomFilter readBloomFilter();

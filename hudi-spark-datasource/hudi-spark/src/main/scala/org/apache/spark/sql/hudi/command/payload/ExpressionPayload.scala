@@ -23,12 +23,12 @@ import org.apache.avro.generic.{GenericData, GenericRecord, IndexedRecord}
 import org.apache.hudi.AvroConversionUtils.{convertAvroSchemaToStructType, convertStructTypeToAvroSchema}
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.SparkAdapterSupport.sparkAdapter
-import org.apache.hudi.avro.AvroSchemaUtils.{isNullable, resolveNullableSchema}
+import org.apache.hudi.avro.AvroSchemaUtils.{getNonNullTypeFromUnion, isNullable}
 import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.hudi.avro.HoodieAvroUtils.bytesToAvro
 import org.apache.hudi.common.model.{DefaultHoodieRecordPayload, HoodiePayloadProps, HoodieRecord}
+import org.apache.hudi.common.util.{BinaryUtil, Option => HOption, ValidationUtils}
 import org.apache.hudi.common.util.ValidationUtils.checkState
-import org.apache.hudi.common.util.{BinaryUtil, ValidationUtils, Option => HOption}
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.exception.HoodieException
 import org.apache.spark.internal.Logging
@@ -487,8 +487,8 @@ object ExpressionPayload {
         .zipWithIndex
         .foreach {
           case ((expectedField, targetField), idx) =>
-            val expectedFieldSchema = resolveNullableSchema(expectedField.schema())
-            val targetFieldSchema = resolveNullableSchema(targetField.schema())
+            val expectedFieldSchema = getNonNullTypeFromUnion(expectedField.schema())
+            val targetFieldSchema = getNonNullTypeFromUnion(targetField.schema())
 
             val equal = Objects.equals(expectedFieldSchema, targetFieldSchema)
             ValidationUtils.checkState(equal,

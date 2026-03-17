@@ -25,7 +25,7 @@ import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.HoodieConversionUtils.{toProperties, toScalaOption}
 import org.apache.hudi.HoodieSparkSqlWriter.StreamingWriteParams
 import org.apache.hudi.HoodieWriterUtils._
-import org.apache.hudi.avro.AvroSchemaUtils.resolveNullableSchema
+import org.apache.hudi.avro.AvroSchemaUtils.getNonNullTypeFromUnion
 import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.client.{HoodieWriteResult, SparkRDDWriteClient}
@@ -150,10 +150,9 @@ object HoodieSparkSqlWriter {
     } else {
       optsWithoutSchema
     }
-
+    // Apply legacy format override for small-precision decimals so Parquet files can be read by AvroParquetReader
     if (writerSchema.isPresent) {
-      // Auto set the value of "hoodie.parquet.writelegacyformat.enabled"
-      tryOverrideParquetWriteLegacyFormatProperty(opts.asJava, convertAvroSchemaToStructType(writerSchema.get))
+      DataSourceUtils.tryOverrideParquetWriteLegacyFormatProperty(opts.asJava, convertAvroSchemaToStructType(writerSchema.get))
     }
 
     DataSourceUtils.createHoodieConfig(writerSchemaStr, basePath, tblName, opts.asJava)
@@ -444,7 +443,9 @@ class HoodieSparkSqlWriterInternal {
 
             // Create a HoodieWriteClient & issue the write.
             val client = hoodieWriteClient.getOrElse {
-              val finalOpts = addSchemaEvolutionParameters(parameters, internalSchemaOpt, Some(writerSchema)) - HoodieWriteConfig.AUTO_COMMIT_ENABLE.key
+              val finalOpts = mutable.Map() ++ (addSchemaEvolutionParameters(parameters, internalSchemaOpt, Some(writerSchema)) - HoodieWriteConfig.AUTO_COMMIT_ENABLE.key)
+              // Apply legacy format override for small-precision decimals so Parquet files can be read by AvroParquetReader
+              DataSourceUtils.tryOverrideParquetWriteLegacyFormatProperty(finalOpts.asJava, convertAvroSchemaToStructType(writerSchema))
               // TODO(HUDI-4772) proper writer-schema has to be specified here
               DataSourceUtils.createHoodieClient(jsc, processedDataSchema.toString, path, tblName, finalOpts.asJava)
             }
@@ -878,7 +879,7 @@ class HoodieSparkSqlWriterInternal {
 
   def validateSchemaForHoodieIsDeleted(schema: Schema): Unit = {
     if (schema.getField(HoodieRecord.HOODIE_IS_DELETED_FIELD) != null &&
-      resolveNullableSchema(schema.getField(HoodieRecord.HOODIE_IS_DELETED_FIELD).schema()).getType != Schema.Type.BOOLEAN) {
+      getNonNullTypeFromUnion(schema.getField(HoodieRecord.HOODIE_IS_DELETED_FIELD).schema()).getType != Schema.Type.BOOLEAN) {
       throw new HoodieException(HoodieRecord.HOODIE_IS_DELETED_FIELD + " has to be BOOLEAN type. Passed in dataframe's schema has type "
         + schema.getField(HoodieRecord.HOODIE_IS_DELETED_FIELD).schema().getType)
     }

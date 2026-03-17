@@ -25,6 +25,7 @@ import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.io.storage.row.HoodieParquetWriteSupport;
 import org.apache.hudi.io.storage.row.HoodieRowParquetConfig;
 import org.apache.hudi.io.storage.row.HoodieRowParquetWriteSupport;
 import org.apache.hudi.storage.HoodieStorage;
@@ -57,7 +58,7 @@ public class HoodieSparkFileWriterFactory extends HoodieFileWriterFactory {
     if (compressionCodecName.isEmpty()) {
       compressionCodecName = null;
     }
-    HoodieRowParquetWriteSupport writeSupport = getHoodieRowParquetWriteSupport(storage.getConf(), schema,
+    HoodieParquetWriteSupport writeSupport = getHoodieRowParquetWriteSupport(storage.getConf(), schema,
         config, enableBloomFilter(populateMetaFields, config));
     HoodieRowParquetConfig parquetConfig = new HoodieRowParquetConfig(writeSupport,
         CompressionCodecName.fromConf(compressionCodecName),
@@ -75,7 +76,7 @@ public class HoodieSparkFileWriterFactory extends HoodieFileWriterFactory {
   protected HoodieFileWriter newParquetFileWriter(OutputStream outputStream, HoodieConfig config,
                                                   Schema schema) throws IOException {
     boolean enableBloomFilter = false;
-    HoodieRowParquetWriteSupport writeSupport = getHoodieRowParquetWriteSupport(storage.getConf(), schema, config, enableBloomFilter);
+    HoodieParquetWriteSupport writeSupport = getHoodieRowParquetWriteSupport(storage.getConf(), schema, config, enableBloomFilter);
     String compressionCodecName = config.getStringOrDefault(HoodieStorageConfig.PARQUET_COMPRESSION_CODEC_NAME);
     // Support PARQUET_COMPRESSION_CODEC_NAME is ""
     if (compressionCodecName.isEmpty()) {
@@ -104,8 +105,8 @@ public class HoodieSparkFileWriterFactory extends HoodieFileWriterFactory {
     throw new HoodieIOException("Not support write to Orc file");
   }
 
-  private static HoodieRowParquetWriteSupport getHoodieRowParquetWriteSupport(StorageConfiguration<?> conf, Schema schema,
-                                                                              HoodieConfig config, boolean enableBloomFilter) {
+  private static HoodieParquetWriteSupport getHoodieRowParquetWriteSupport(StorageConfiguration<?> conf, Schema schema,
+                                                                           HoodieConfig config, boolean enableBloomFilter) {
     Option<BloomFilter> filter = enableBloomFilter ? Option.of(createBloomFilter(config)) : Option.empty();
     StructType structType = HoodieInternalRowUtils.getCachedSchema(schema);
     return HoodieRowParquetWriteSupport.getHoodieRowParquetWriteSupport(conf.unwrapAs(Configuration.class), structType, filter, config);

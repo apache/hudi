@@ -77,6 +77,7 @@ import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.util.Lazy;
 
 import org.apache.avro.AvroTypeException;
+import org.apache.avro.LogicalType;
 import org.apache.avro.LogicalTypes;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
@@ -109,7 +110,7 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static java.util.stream.Collectors.toList;
-import static org.apache.hudi.avro.AvroSchemaUtils.resolveNullableSchema;
+import static org.apache.hudi.avro.AvroSchemaUtils.getNonNullTypeFromUnion;
 import static org.apache.hudi.avro.HoodieAvroUtils.addMetadataFields;
 import static org.apache.hudi.avro.HoodieAvroUtils.convertValueForSpecificDataTypes;
 import static org.apache.hudi.avro.HoodieAvroUtils.getNestedFieldSchemaFromWriteSchema;
@@ -218,11 +219,9 @@ public class HoodieTableMetadataUtil {
       // with the values from this record
       targetFields.forEach(field -> {
         ColumnStats colStats = allColumnStats.computeIfAbsent(field.name(), ignored -> new ColumnStats());
-
         GenericRecord genericRecord = (GenericRecord) record;
-
         final Object fieldVal = convertValueForSpecificDataTypes(field.schema(), genericRecord.get(field.name()), false);
-        final Schema fieldSchema = getNestedFieldSchemaFromWriteSchema(genericRecord.getSchema(), field.name());
+        final Schema fieldSchema = getNonNullTypeFromUnion(getNestedFieldSchemaFromWriteSchema(genericRecord.getSchema(), field.name()));
 
         colStats.valueCount++;
 
@@ -1123,16 +1122,45 @@ public class HoodieTableMetadataUtil {
     checkState(isColumnStatsIndexEnabled);
 
     if (!targetColumnsForColumnStatsIndex.isEmpty()) {
-      return targetColumnsForColumnStatsIndex;
+      // Filter out timestamp-millis columns from the explicitly specified columns
+      Option<Schema> writerSchemaOpt = lazyWriterSchemaOpt.get();
+      return writerSchemaOpt
+          .map(writerSchema ->
+              targetColumnsForColumnStatsIndex.stream()
+                  .filter(colName -> {
+                    Schema.Field field = writerSchema.getField(colName);
+                    return field != null && !isTimestampMillisField(field.schema());
+                  })
+                  .collect(Collectors.toList()))
+          .orElse(targetColumnsForColumnStatsIndex);
     }
 
     Option<Schema> writerSchemaOpt = lazyWriterSchemaOpt.get();
     return writerSchemaOpt
         .map(writerSchema ->
             writerSchema.getFields().stream()
+                .filter(field -> !isTimestampMillisField(field.schema()))
                 .map(Schema.Field::name)
                 .collect(Collectors.toList()))
         .orElse(Collections.emptyList());
+  }
+
+  /**
+   * Checks if a schema field is of type timestamp-millis.
+   *
+   * @param fieldSchema The schema of the field to check
+   * @return true if the field is of type timestamp-millis, false otherwise
+   */
+  private static boolean isTimestampMillisField(Schema fieldSchema) {
+    Schema nonNullableSchema = getNonNullTypeFromUnion(fieldSchema);
+    if (nonNullableSchema.getType() == Schema.Type.LONG) {
+      LogicalType logicalType = nonNullableSchema.getLogicalType();
+      if (logicalType != null) {
+        String logicalTypeName = logicalType.getName();
+        return logicalTypeName.equals("timestamp-millis");
+      }
+    }
+    return false;
   }
 
   private static Stream<HoodieRecord> translateWriteStatToColumnStats(HoodieWriteStat writeStat,
@@ -1253,7 +1281,7 @@ public class HoodieTableMetadataUtil {
     switch (schema.getType()) {
       case UNION:
         // TODO we need to handle unions in general case as well
-        return coerceToComparable(resolveNullableSchema(schema), val);
+        return coerceToComparable(getNonNullTypeFromUnion(schema), val);
 
       case FIXED:
       case BYTES:

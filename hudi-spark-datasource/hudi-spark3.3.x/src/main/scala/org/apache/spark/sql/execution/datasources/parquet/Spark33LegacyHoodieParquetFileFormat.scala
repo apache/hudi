@@ -353,9 +353,10 @@ class Spark33LegacyHoodieParquetFileFormat(private val shouldAppendPartitionValu
           DataSourceUtils.int96RebaseSpec(footerFileMetaData.getKeyValueMetaData.get, int96RebaseModeInRead)
           val datetimeRebaseSpec =
             DataSourceUtils.datetimeRebaseSpec(footerFileMetaData.getKeyValueMetaData.get, datetimeRebaseModeInRead)
-          new ParquetReadSupport(
+          new HoodieParquetReadSupport(
             convertTz,
             enableVectorizedReader = false,
+            enableTimestampFieldRepair = true,
             datetimeRebaseSpec,
             int96RebaseSpec)
         } else {

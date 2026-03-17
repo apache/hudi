@@ -41,7 +41,6 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 import org.apache.parquet.avro.AvroParquetReader;
 import org.apache.parquet.avro.AvroReadSupport;
-import org.apache.parquet.avro.AvroSchemaConverter;
 import org.apache.parquet.column.statistics.Statistics;
 import org.apache.parquet.hadoop.ParquetFileReader;
 import org.apache.parquet.hadoop.ParquetReader;
@@ -79,6 +78,7 @@ import static org.apache.hudi.common.config.HoodieStorageConfig.PARQUET_BLOCK_SI
 import static org.apache.hudi.common.config.HoodieStorageConfig.PARQUET_MAX_FILE_SIZE;
 import static org.apache.hudi.common.config.HoodieStorageConfig.PARQUET_PAGE_SIZE;
 import static org.apache.hudi.hadoop.fs.HadoopFSUtils.convertToStoragePath;
+import static org.apache.parquet.avro.HoodieAvroParquetSchemaConverter.getAvroSchemaConverter;
 
 /**
  * Utility functions involving with parquet.
@@ -254,7 +254,7 @@ public class ParquetUtils extends FileFormatUtils {
   @Override
   public Schema readAvroSchema(HoodieStorage storage, StoragePath filePath) {
     MessageType parquetSchema = readSchema(storage, filePath);
-    return new AvroSchemaConverter(storage.getConf().unwrapAs(Configuration.class)).convert(parquetSchema);
+    return getAvroSchemaConverter(storage.getConf().unwrapAs(Configuration.class)).convert(parquetSchema);
   }
 
   @Override
@@ -385,6 +385,7 @@ public class ParquetUtils extends FileFormatUtils {
     config.setValue(PARQUET_BLOCK_SIZE.key(), String.valueOf(ParquetWriter.DEFAULT_BLOCK_SIZE));
     config.setValue(PARQUET_PAGE_SIZE.key(), String.valueOf(ParquetWriter.DEFAULT_PAGE_SIZE));
     config.setValue(PARQUET_MAX_FILE_SIZE.key(), String.valueOf(1024 * 1024 * 1024));
+    config.setValue("hoodie.avro.schema", writerSchema.toString());
     HoodieRecord.HoodieRecordType recordType = records.iterator().next().getRecordType();
     HoodieFileWriter parquetWriter = null;
     try {

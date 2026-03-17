@@ -77,6 +77,8 @@ public class TestExternalPathHandling extends HoodieClientTestBase {
 
   private static final String FIELD_1 = "field1";
   private static final String FIELD_2 = "field2";
+  private static final String TEST_SCHEMA = "{\"type\":\"record\",\"name\":\"TestRecord\",\"namespace\":\"org.apache.hudi.test\","
+      + "\"fields\":[{\"name\":\"field1\",\"type\":\"int\"},{\"name\":\"field2\",\"type\":[\"null\",\"string\"],\"default\":null}]}";
   private HoodieWriteConfig writeConfig;
 
   @ParameterizedTest
@@ -89,6 +91,7 @@ public class TestExternalPathHandling extends HoodieClientTestBase {
         .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(INMEMORY).build())
         .withPath(metaClient.getBasePath())
         .withEmbeddedTimelineServerEnabled(false)
+        .withSchema(TEST_SCHEMA)
         .withMetadataConfig(HoodieMetadataConfig.newBuilder()
             .withMaxNumDeltaCommitsBeforeCompaction(2)
             .enable(true)
