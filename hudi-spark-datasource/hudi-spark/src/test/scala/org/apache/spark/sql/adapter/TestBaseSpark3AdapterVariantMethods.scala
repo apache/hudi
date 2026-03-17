@@ -21,11 +21,10 @@ import org.apache.hudi.HoodieSparkUtils
 import org.apache.hudi.SparkAdapterSupport
 import org.apache.hudi.common.schema.{HoodieSchema, HoodieSchemaType}
 
-import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertThrows, assertTrue}
+import org.apache.spark.sql.types.{IntegerType, StringType}
+import org.junit.jupiter.api.Assertions.{assertFalse, assertThrows, assertTrue}
 import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Test
-
-import org.apache.spark.sql.types.{IntegerType, StringType}
 
 /**
  * Tests for the variant-related methods in [[BaseSpark3Adapter]].
