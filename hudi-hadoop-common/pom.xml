@@ -64,6 +64,40 @@
         <groupId>org.jacoco</groupId>
         <artifactId>jacoco-maven-plugin</artifactId>
       </plugin>
+      <plugin>
+        <groupId>org.codehaus.mojo</groupId>
+        <artifactId>build-helper-maven-plugin</artifactId>
+        <version>3.5.0</version>
+        <executions>
+          <execution>
+            <id>add-spark34plus-avro-sources</id>
+            <phase>generate-sources</phase>
+            <goals>
+              <goal>add-source</goal>
+            </goals>
+            <configuration>
+              <skipAddSource>${spark33orEarlier}</skipAddSource>
+              <sources>
+                <source>src/avro/java</source>
+                <source>src/parquet/java</source>
+              </sources>
+            </configuration>
+          </execution>
+          <execution>
+            <id>add-spark34plus-parquet-test-sources</id>
+            <phase>generate-test-sources</phase>
+            <goals>
+              <goal>add-test-source</goal>
+            </goals>
+            <configuration>
+              <skipAddTestSource>${spark33orEarlier}</skipAddTestSource>
+              <sources>
+                <source>src/parquet/test/java</source>
+              </sources>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
     </plugins>
   </build>
 

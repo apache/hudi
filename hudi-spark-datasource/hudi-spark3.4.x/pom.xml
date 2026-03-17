@@ -243,6 +243,12 @@
       </exclusions>
     </dependency>
 
+    <!-- Parquet -->
+    <dependency>
+      <groupId>org.apache.parquet</groupId>
+      <artifactId>parquet-avro</artifactId>
+    </dependency>
+
     <!-- Hoodie Spark 3.x common  -->
     <dependency>
       <groupId>org.apache.hudi</groupId>
@@ -315,12 +321,6 @@
       <artifactId>spark-core_${scala.binary.version}</artifactId>
       <version>${spark3.version}</version>
       <classifier>tests</classifier>
-      <scope>test</scope>
-    </dependency>
-
-    <dependency>
-      <groupId>org.apache.parquet</groupId>
-      <artifactId>parquet-avro</artifactId>
       <scope>test</scope>
     </dependency>
 

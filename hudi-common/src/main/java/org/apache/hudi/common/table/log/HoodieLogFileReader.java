@@ -22,6 +22,7 @@ import org.apache.hudi.common.config.HoodieReaderConfig;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.avro.AvroSchemaUtils;
 import org.apache.hudi.common.table.log.block.HoodieAvroDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieCDCDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieCommandBlock;
@@ -38,6 +39,7 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.io.SeekableDataInputStream;
+import org.apache.hudi.io.storage.HoodieFileReader;
 import org.apache.hudi.io.util.IOUtils;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
@@ -81,6 +83,7 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
   private long lastReverseLogFilePosition;
   private final boolean reverseReader;
   private final boolean enableRecordLookups;
+  private final boolean enableLogicalTimestampFieldRepair;
   private boolean closed = false;
   private SeekableDataInputStream inputStream;
 
@@ -95,11 +98,15 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
 
   public HoodieLogFileReader(HoodieStorage storage, HoodieLogFile logFile, Schema readerSchema, int bufferSize, boolean reverseReader,
                              boolean enableRecordLookups, String keyField) throws IOException {
-    this(storage, logFile, readerSchema, bufferSize, reverseReader, enableRecordLookups, keyField, InternalSchema.getEmptyInternalSchema());
+    this(storage, logFile, readerSchema, bufferSize, reverseReader, enableRecordLookups, keyField,
+        InternalSchema.getEmptyInternalSchema(),
+        storage.getConf().getBoolean(HoodieFileReader.ENABLE_LOGICAL_TIMESTAMP_REPAIR,
+            () -> readerSchema != null && AvroSchemaUtils.hasTimestampMillisField(readerSchema)));
   }
 
   public HoodieLogFileReader(HoodieStorage storage, HoodieLogFile logFile, Schema readerSchema, int bufferSize, boolean reverseReader,
-                             boolean enableRecordLookups, String keyField, InternalSchema internalSchema) throws IOException {
+                             boolean enableRecordLookups, String keyField, InternalSchema internalSchema,
+                             boolean enableLogicalTimestampFieldRepair) throws IOException {
     this.storage = storage;
     // NOTE: We repackage {@code HoodieLogFile} here to make sure that the provided path
     //       is prefixed with an appropriate scheme given that we're not propagating the FS
@@ -113,6 +120,7 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
     this.enableRecordLookups = enableRecordLookups;
     this.keyField = keyField;
     this.internalSchema = internalSchema == null ? InternalSchema.getEmptyInternalSchema() : internalSchema;
+    this.enableLogicalTimestampFieldRepair = enableLogicalTimestampFieldRepair;
     if (this.reverseReader) {
       this.reverseLogFilePosition = this.lastReverseLogFilePosition = this.logFile.getFileSize();
     }
@@ -189,7 +197,7 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
           return HoodieAvroDataBlock.getBlock(content.get(), readerSchema, internalSchema);
         } else {
           return new HoodieAvroDataBlock(() -> getDataInputStream(storage, this.logFile, bufferSize), content, true, logBlockContentLoc,
-              getTargetReaderSchemaForBlock(), header, footer, keyField);
+              getTargetReaderSchemaForBlock(), header, footer, keyField, enableLogicalTimestampFieldRepair);
         }
 
       case HFILE_DATA_BLOCK:
