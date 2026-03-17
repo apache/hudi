@@ -115,14 +115,11 @@ public class HoodieSparkLanceWriter extends HoodieBaseLanceWriter<InternalRow, U
 
   @Override
   public void writeRowWithMetadata(HoodieKey key, InternalRow row) throws IOException {
+    UTF8String recordKey = UTF8String.fromString(key.getRecordKey());
+    bloomFilterWriteSupportOpt.ifPresent(bloomFilterWriteSupport -> bloomFilterWriteSupport.addKey(recordKey));
     if (populateMetaFields) {
-      UTF8String recordKey = UTF8String.fromString(key.getRecordKey());
       updateRecordMetadata(row, recordKey, key.getPartitionPath(), getWrittenRecordCount());
     }
-    bloomFilterWriteSupportOpt.ifPresent(bloomFilterWriteSupport -> {
-      UTF8String recordKey = UTF8String.fromString(key.getRecordKey());
-      bloomFilterWriteSupport.addKey(recordKey);
-    });
     super.write(row);
   }
 
