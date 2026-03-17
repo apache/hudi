@@ -33,7 +33,7 @@ import org.apache.spark.util.SerializableConfiguration
 import java.io.Closeable
 
 /**
- * Partition reader that reads rows from a single CoW base file using [[SparkColumnarFileReader]].
+ * Partition reader that reads rows from a single COW base file using [[SparkColumnarFileReader]].
  */
 class
 
@@ -42,16 +42,20 @@ HoodiePartitionReader(partition: HoodieInputPartition,
                             broadcastConf: Broadcast[SerializableConfiguration],
                             readSchema: StructType,
                             requiredDataSchema: StructType,
-                            requiredPartitionSchema: StructType)
+                            requiredPartitionSchema: StructType,
+                            pushedLimit: Option[Int] = None)
   extends PartitionReader[InternalRow] with SparkAdapterSupport {
 
   private var rawIterator: Iterator[InternalRow] = _
   private val iter: Iterator[InternalRow] = createIterator()
   private var current: InternalRow = _
+  private var rowCount: Int = 0
 
   override def next(): Boolean = {
-    if (iter.hasNext) {
+    val limitReached = pushedLimit.exists(rowCount >= _)
+    if (!limitReached && iter.hasNext) {
       current = iter.next()
+      rowCount += 1
       true
     } else {
       false

@@ -56,7 +56,7 @@ class HoodieDataSourceV2 extends TableProvider with DataSourceRegister with Crea
       throw new HoodieException("'path' cannot be null, missing 'path' from table properties")
     }
 
-    HoodieSparkV2Table(SparkSession.active, path)
+    HoodieSparkV2Table(SparkSession.active, path, options = options)
   }
 
   override def createRelation(sqlContext: SQLContext,
