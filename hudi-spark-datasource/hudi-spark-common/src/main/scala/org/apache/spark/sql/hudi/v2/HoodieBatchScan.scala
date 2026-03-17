@@ -17,20 +17,34 @@
 
 package org.apache.spark.sql.hudi.v2
 
+import org.apache.spark.broadcast.Broadcast
 import org.apache.spark.sql.connector.read.{Batch, InputPartition, PartitionReaderFactory, Scan}
+import org.apache.spark.sql.execution.datasources.SparkColumnarFileReader
 import org.apache.spark.sql.types.StructType
+import org.apache.spark.util.SerializableConfiguration
 
 /**
- * Stub batch scan that returns an empty partition list.
- * The read schema reflects any column pruning applied by the scan builder.
+ * Batch scan for CoW snapshot reads via DSv2.
  */
-class HoodieBatchScan(readSchema: StructType) extends Scan with Batch {
+class HoodieBatchScan(readSchema: StructType,
+                      inputPartitions: Array[InputPartition],
+                      broadcastReader: Broadcast[SparkColumnarFileReader],
+                      broadcastConf: Broadcast[SerializableConfiguration],
+                      requiredDataSchema: StructType,
+                      requiredPartitionSchema: StructType) extends Scan with Batch {
 
   override def readSchema(): StructType = readSchema
 
   override def toBatch: Batch = this
 
-  override def planInputPartitions(): Array[InputPartition] = Array.empty
+  override def planInputPartitions(): Array[InputPartition] = inputPartitions
 
-  override def createReaderFactory(): PartitionReaderFactory = new HoodiePartitionReaderFactory
+  override def createReaderFactory(): PartitionReaderFactory = {
+    new HoodiePartitionReaderFactory(
+      broadcastReader,
+      broadcastConf,
+      readSchema,
+      requiredDataSchema,
+      requiredPartitionSchema)
+  }
 }
