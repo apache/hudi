@@ -56,7 +56,7 @@ class HoodieParquetReadSupport(
     //  schema has [metadata, value] order (per spec), the positional mismatch causes
     //  MALFORMED_VARIANT. Workaround: reorder variant group fields to [value, metadata] in the
     //  requested schema. parquet-mr reconciles requested vs file schema by field name, so bytes
-    //  flow correctly.
+    //  flow correctly. This is tracked in issue #18334
     val reorderedSchema = HoodieParquetReadSupport.reorderVariantFields(trimmedParquetSchema)
     new ReadContext(reorderedSchema, readContext.getReadSupportMetadata)
   }
