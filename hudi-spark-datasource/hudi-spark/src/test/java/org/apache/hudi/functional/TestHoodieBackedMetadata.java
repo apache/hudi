@@ -418,6 +418,96 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
   }
 
   @Test
+  public void testAutoDeletePartitionsDisabledPreservesColumnStats() throws Exception {
+    initPath();
+    HoodieWriteConfig cfg = getConfigBuilder(TRIP_EXAMPLE_SCHEMA, HoodieIndex.IndexType.BLOOM, HoodieFailedWritesCleaningPolicy.EAGER)
+        .withParallelism(1, 1).withBulkInsertParallelism(1).withFinalizeWriteParallelism(1).withDeleteParallelism(1)
+        .withConsistencyGuardConfig(ConsistencyGuardConfig.newBuilder().withConsistencyCheckEnabled(true).build())
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder()
+            .enable(true)
+            .withMetadataIndexColumnStats(true)
+            .build())
+        .build();
+    init(COPY_ON_WRITE, Option.of(cfg), true, false, false);
+    HoodieSparkEngineContext engineContext = new HoodieSparkEngineContext(jsc);
+
+    // Step 1: Insert and upsert with column stats enabled
+    try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, cfg)) {
+      String commitTime = "0000001";
+      List<HoodieRecord> records = dataGen.generateInserts(commitTime, 20);
+      WriteClientTestUtils.startCommitWithTime(client, commitTime);
+      List<WriteStatus> statusList = client.insert(jsc.parallelize(records, 1), commitTime).collect();
+      assertTrue(client.commit(commitTime, jsc.parallelize(statusList)));
+      assertNoWriteErrors(statusList);
+
+      commitTime = "0000002";
+      WriteClientTestUtils.startCommitWithTime(client, commitTime);
+      records = dataGen.generateUniqueUpdates(commitTime, 10);
+      statusList = client.upsert(jsc.parallelize(records, 1), commitTime).collect();
+      assertTrue(client.commit(commitTime, jsc.parallelize(statusList)));
+      assertNoWriteErrors(statusList);
+      validateMetadata(client);
+    }
+
+    // Verify column_stats is present in table config
+    metaClient = HoodieTableMetaClient.reload(metaClient);
+    HoodieTableConfig tableConfig = metaClient.getTableConfig();
+    assertTrue(tableConfig.getMetadataPartitions().contains(COLUMN_STATS.getPartitionPath()));
+
+    // Step 2: Disable column stats but set auto.delete.partitions=false, then do an upsert
+    HoodieWriteConfig cfgWithAutoDeleteDisabled = HoodieWriteConfig.newBuilder()
+        .withProperties(cfg.getProps())
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder()
+            .withProperties(cfg.getMetadataConfig().getProps())
+            .withMetadataIndexColumnStats(false)
+            .withAutoDeletePartitions(false)
+            .build())
+        .build();
+
+    // Record the number of log files in column_stats partition before the upsert
+    HoodieTableMetaClient metadataMetaClient = HoodieTestUtils.createMetaClient(
+        storageConf, metadataTableBasePath);
+    HoodieTableFileSystemView fsViewBefore = HoodieTableFileSystemView.fileListingBasedFileSystemView(
+        engineContext, metadataMetaClient, metadataMetaClient.getActiveTimeline());
+    List<FileSlice> colStatsSlicesBefore = fsViewBefore
+        .getLatestFileSlices(COLUMN_STATS.getPartitionPath()).collect(Collectors.toList());
+    assertFalse(colStatsSlicesBefore.isEmpty(), "Column stats partition should have file slices before upsert");
+    long logFileCountBefore = colStatsSlicesBefore.get(0).getLogFiles().count();
+
+    try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, cfgWithAutoDeleteDisabled)) {
+      String commitTime = "0000003";
+      WriteClientTestUtils.startCommitWithTime(client, commitTime);
+      List<HoodieRecord> records = dataGen.generateUniqueUpdates(commitTime, 10);
+      List<WriteStatus> writeStatuses = client.upsert(jsc.parallelize(records, 1), commitTime).collect();
+      assertTrue(client.commit(commitTime, jsc.parallelize(writeStatuses)));
+      assertNoWriteErrors(writeStatuses);
+    }
+
+    // Step 3: Verify column_stats partition is NOT deleted from table config
+    metaClient = HoodieTableMetaClient.reload(metaClient);
+    tableConfig = metaClient.getTableConfig();
+    assertTrue(tableConfig.getMetadataPartitions().contains(COLUMN_STATS.getPartitionPath()),
+        "Column stats partition should NOT be deleted when auto-delete is disabled");
+
+    // Step 4: Verify column_stats partition received new log files (from HoodieCommitMetadata)
+    metadataMetaClient = HoodieTableMetaClient.reload(metadataMetaClient);
+    HoodieTableFileSystemView fsViewAfter = HoodieTableFileSystemView.fileListingBasedFileSystemView(
+        engineContext, metadataMetaClient, metadataMetaClient.getActiveTimeline());
+    List<FileSlice> colStatsSlicesAfter = fsViewAfter
+        .getLatestFileSlices(COLUMN_STATS.getPartitionPath()).collect(Collectors.toList());
+    assertFalse(colStatsSlicesAfter.isEmpty(), "Column stats partition should still have file slices after upsert");
+    long logFileCountAfter = colStatsSlicesAfter.get(0).getLogFiles().count();
+    assertTrue(logFileCountAfter > logFileCountBefore,
+        "Column stats partition should have received new log files after upsert. Before: "
+            + logFileCountBefore + ", After: " + logFileCountAfter);
+
+    // Step 5: Verify column stats log files contain valid column stats records
+    List<HoodieLogFile> colStatsLogFiles = colStatsSlicesAfter.get(0)
+        .getLogFiles().collect(Collectors.toList());
+    verifyMetadataColumnStatsRecords(storage, colStatsLogFiles);
+  }
+
+  @Test
   public void testTurnOffMetadataTableAfterEnable() throws Exception {
     init(COPY_ON_WRITE, true);
     String instant1 = "0000001";
