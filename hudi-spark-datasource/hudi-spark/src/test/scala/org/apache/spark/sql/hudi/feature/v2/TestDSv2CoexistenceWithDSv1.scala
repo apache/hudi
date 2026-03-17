@@ -115,14 +115,10 @@ class TestDSv2CoexistenceWithDSv1 extends SparkClientFunctionalTestHarness {
     writeTestData(path)
 
     val df = spark.read.format("hudi_v2").load(path)
-    // DSv2 stub returns empty results
-    assertEquals(0, df.count())
+    assertEquals(3, df.count())
 
-    // Schema should still be correct (contains at least the user columns)
-    val fieldNames = df.schema.fieldNames
-    assertTrue(fieldNames.contains("id"), s"Schema should contain 'id', got: ${fieldNames.mkString(", ")}")
-    assertTrue(fieldNames.contains("name"), s"Schema should contain 'name', got: ${fieldNames.mkString(", ")}")
-    assertTrue(fieldNames.contains("amount"), s"Schema should contain 'amount', got: ${fieldNames.mkString(", ")}")
+    val names = df.select("name").collect().map(_.getString(0)).sorted
+    assertEquals(Seq("Alice", "Bob", "Charlie"), names.toSeq)
 
     val plan = df.queryExecution.executedPlan.toString()
     assertTrue(containsBatchScan(plan),
@@ -134,9 +130,9 @@ class TestDSv2CoexistenceWithDSv1 extends SparkClientFunctionalTestHarness {
     val path = basePath() + "/v1_write_both_read"
     writeTestData(path)
 
-    // DSv2 read returns empty (stub)
+    // DSv2 read returns real data
     val v2Df = spark.read.format("hudi_v2").load(path)
-    assertEquals(0, v2Df.count())
+    assertEquals(3, v2Df.count())
 
     // DSv1 read still works after DSv2 read
     val df = spark.read.format("hudi").load(path)
@@ -153,14 +149,17 @@ class TestDSv2CoexistenceWithDSv1 extends SparkClientFunctionalTestHarness {
     writeTestData(path)
 
     val df = spark.read.format("hudi_v2").load(path)
-    // DSv2 stub returns empty results
-    assertEquals(0, df.count())
+    assertEquals(3, df.count())
 
     // Verify schema is correct
     val fieldNames = df.schema.fieldNames
     assertTrue(fieldNames.contains("id"), s"Schema should contain 'id', got: ${fieldNames.mkString(", ")}")
     assertTrue(fieldNames.contains("name"), s"Schema should contain 'name', got: ${fieldNames.mkString(", ")}")
     assertTrue(fieldNames.contains("amount"), s"Schema should contain 'amount', got: ${fieldNames.mkString(", ")}")
+
+    // Verify data values
+    val names = df.select("name").collect().map(_.getString(0)).sorted
+    assertEquals(Seq("Alice", "Bob", "Charlie"), names.toSeq)
 
     val plan = df.queryExecution.executedPlan.toString()
     assertTrue(containsBatchScan(plan),
@@ -205,7 +204,7 @@ class TestDSv2CoexistenceWithDSv1 extends SparkClientFunctionalTestHarness {
   }
 
   @Test
-  def testSqlConfigTrueUsesDSv2Stub(): Unit = {
+  def testSqlConfigTrueUsesDSv2(): Unit = {
     val tableName = "sql_v2_test"
     val tablePath = basePath() + "/" + tableName
     spark.sql(
@@ -228,12 +227,10 @@ class TestDSv2CoexistenceWithDSv1 extends SparkClientFunctionalTestHarness {
     spark.sessionState.conf.setConfString(DataSourceReadOptions.USE_V2_READ.key, "true")
     try {
       val df = spark.sql(s"SELECT * FROM $tableName")
-      // DSv2 stub returns empty
-      assertEquals(0, df.count())
+      assertEquals(3, df.count())
 
-      val fieldNames = df.schema.fieldNames
-      assertTrue(fieldNames.contains("id"), s"Schema should contain 'id', got: ${fieldNames.mkString(", ")}")
-      assertTrue(fieldNames.contains("name"), s"Schema should contain 'name', got: ${fieldNames.mkString(", ")}")
+      val names = df.select("name").collect().map(_.getString(0)).sorted
+      assertEquals(Seq("Alice", "Bob", "Charlie"), names.toSeq)
 
       val plan = df.queryExecution.executedPlan.toString()
       assertTrue(containsBatchScan(plan),
@@ -266,11 +263,11 @@ class TestDSv2CoexistenceWithDSv1 extends SparkClientFunctionalTestHarness {
     // Write with v1 (default)
     spark.sql(s"INSERT INTO $tableName VALUES (1, 'Alice', 100.0, 1), (2, 'Bob', 200.0, 2), (3, 'Charlie', 300.0, 3)")
 
-    // Read with v2 — stub returns empty
+    // Read with v2 — returns real data
     spark.sessionState.conf.setConfString(DataSourceReadOptions.USE_V2_READ.key, "true")
     try {
       val v2Df = spark.sql(s"SELECT * FROM $tableName")
-      assertEquals(0, v2Df.count())
+      assertEquals(3, v2Df.count())
 
       val v2Plan = v2Df.queryExecution.executedPlan.toString()
       assertTrue(containsBatchScan(v2Plan),
@@ -279,7 +276,7 @@ class TestDSv2CoexistenceWithDSv1 extends SparkClientFunctionalTestHarness {
       spark.sessionState.conf.unsetConf(DataSourceReadOptions.USE_V2_READ.key)
     }
 
-    // Switch back to v1 — should see real data
+    // Switch back to v1 — should also see real data
     spark.sessionState.conf.setConfString(DataSourceReadOptions.USE_V2_READ.key, "false")
     try {
       val v1Df = spark.sql(s"SELECT * FROM $tableName")
