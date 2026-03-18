@@ -441,23 +441,29 @@ trait ProvidesHoodieConfig extends Logging {
   def buildHiveSyncConfig(sparkSession: SparkSession,
                           hoodieCatalogTable: HoodieCatalogTable,
                           tableConfig: HoodieTableConfig,
-                          extraOptions: Map[String, String] = Map.empty): HiveSyncConfig = {
+                          extraOptions: Map[String, String] = Map.empty): HoodieSyncConfig = {
     val combinedOpts = combineOptions(hoodieCatalogTable, tableConfig, sparkSession.sessionState.conf,
       defaultOpts = Map.empty, overridingOpts = extraOptions)
     val props = toProperties(combinedOpts)
 
     // Enable the hive sync by default if spark have enable the hive metastore.
     val enableHive = isUsingHiveCatalog(sparkSession)
-    val hiveSyncConfig: HiveSyncConfig = new HiveSyncConfig(props)
-    hiveSyncConfig.setValue(HoodieSyncConfig.META_SYNC_ENABLED.key, enableHive.toString)
-    hiveSyncConfig.setValue(HiveSyncConfigHolder.HIVE_SYNC_ENABLED.key, enableHive.toString)
-    hiveSyncConfig.setValue(HiveSyncConfigHolder.HIVE_SYNC_MODE.key, props.getString(HiveSyncConfigHolder.HIVE_SYNC_MODE.key, HiveSyncMode.HMS.name()))
-    hiveSyncConfig.setValue(HoodieSyncConfig.META_SYNC_BASE_PATH, hoodieCatalogTable.tableLocation)
-    hiveSyncConfig.setValue(HoodieSyncConfig.META_SYNC_BASE_FILE_FORMAT, props.getString(HoodieSyncConfig.META_SYNC_BASE_FILE_FORMAT.key, HoodieSyncConfig.META_SYNC_BASE_FILE_FORMAT.defaultValue))
-    hiveSyncConfig.setValue(HoodieSyncConfig.META_SYNC_DATABASE_NAME, hoodieCatalogTable.table.identifier.database.getOrElse("default"))
-    hiveSyncConfig.setDefaultValue(HoodieSyncConfig.META_SYNC_TABLE_NAME, hoodieCatalogTable.table.identifier.table)
+    // Only instantiate HiveSyncConfig when Hive catalog is enabled, to avoid
+    // NoClassDefFoundError for HiveConf when Hive jars are not on the classpath.
+    val syncConfig: HoodieSyncConfig = if (enableHive) {
+      new HiveSyncConfig(props)
+    } else {
+      new HoodieSyncConfig(props)
+    }
+    syncConfig.setValue(HoodieSyncConfig.META_SYNC_ENABLED.key, enableHive.toString)
+    syncConfig.setValue(HiveSyncConfigHolder.HIVE_SYNC_ENABLED.key, enableHive.toString)
+    syncConfig.setValue(HiveSyncConfigHolder.HIVE_SYNC_MODE.key, props.getString(HiveSyncConfigHolder.HIVE_SYNC_MODE.key, HiveSyncMode.HMS.name()))
+    syncConfig.setValue(HoodieSyncConfig.META_SYNC_BASE_PATH, hoodieCatalogTable.tableLocation)
+    syncConfig.setValue(HoodieSyncConfig.META_SYNC_BASE_FILE_FORMAT, props.getString(HoodieSyncConfig.META_SYNC_BASE_FILE_FORMAT.key, HoodieSyncConfig.META_SYNC_BASE_FILE_FORMAT.defaultValue))
+    syncConfig.setValue(HoodieSyncConfig.META_SYNC_DATABASE_NAME, hoodieCatalogTable.table.identifier.database.getOrElse("default"))
+    syncConfig.setDefaultValue(HoodieSyncConfig.META_SYNC_TABLE_NAME, hoodieCatalogTable.table.identifier.table)
     if (props.get(HoodieSyncConfig.META_SYNC_PARTITION_FIELDS.key) != null) {
-      hiveSyncConfig.setValue(HoodieSyncConfig.META_SYNC_PARTITION_FIELDS, props.getString(HoodieSyncConfig.META_SYNC_PARTITION_FIELDS.key))
+      syncConfig.setValue(HoodieSyncConfig.META_SYNC_PARTITION_FIELDS, props.getString(HoodieSyncConfig.META_SYNC_PARTITION_FIELDS.key))
     }
     // If partition value extractor is present in params Object we can use it.
     // Here as well it checks first for hoodie.datasource.hive_sync.partition_extractor_class and then
@@ -466,29 +472,29 @@ trait ProvidesHoodieConfig extends Logging {
     // Even if that fails, then we can assume it to be a NonPartitionExtractor.
     val inferredPartitionValueExtractorClass = HoodieTableConfigUtils.inferPartitionValueExtractorClass(tableConfig)
     if (props.containsKey(HoodieSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS.key())) {
-      hiveSyncConfig.setValue(HoodieSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS.key(),
+      syncConfig.setValue(HoodieSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS.key(),
         props.getString(HoodieSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS.key()))
     } else if (props.containsKey(DataSourceWriteOptions.PARTITION_EXTRACTOR_CLASS.key())) {
-      hiveSyncConfig.setValue(HoodieSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS.key(),
+      syncConfig.setValue(HoodieSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS.key(),
         props.getString(DataSourceWriteOptions.PARTITION_EXTRACTOR_CLASS.key()))
     } else if (inferredPartitionValueExtractorClass.isPresent) {
-      hiveSyncConfig.setValue(HoodieSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS.key(),
+      syncConfig.setValue(HoodieSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS.key(),
         inferredPartitionValueExtractorClass.get())
     } else {
-      hiveSyncConfig.setValue(HoodieSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS.key(), classOf[NonPartitionedExtractor].getName)
+      syncConfig.setValue(HoodieSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS.key(), classOf[NonPartitionedExtractor].getName)
     }
 
     // This is hardcoded to true to ensure consistency as Spark syncs TIMESTAMP types as TIMESTAMP by default
     // via Spark's externalCatalog API, which is used by AlterHoodieTableCommand.
-    hiveSyncConfig.setDefaultValue(HiveSyncConfigHolder.HIVE_SUPPORT_TIMESTAMP_TYPE, "true")
-    if (hiveSyncConfig.useBucketSync())
-      hiveSyncConfig.setValue(HiveSyncConfigHolder.HIVE_SYNC_BUCKET_SYNC_SPEC,
+    syncConfig.setDefaultValue(HiveSyncConfigHolder.HIVE_SUPPORT_TIMESTAMP_TYPE, "true")
+    if (syncConfig.getBooleanOrDefault(HiveSyncConfigHolder.HIVE_SYNC_BUCKET_SYNC))
+      syncConfig.setValue(HiveSyncConfigHolder.HIVE_SYNC_BUCKET_SYNC_SPEC,
         HiveSyncConfig.getBucketSpec(props.getString(HoodieIndexConfig.BUCKET_INDEX_HASH_FIELD.key),
           props.getInteger(HoodieIndexConfig.BUCKET_INDEX_NUM_BUCKETS.key)))
     if (props.containsKey(HiveExternalCatalog.CREATED_SPARK_VERSION))
-      hiveSyncConfig.setValue(HoodieSyncConfig.META_SYNC_SPARK_VERSION,
+      syncConfig.setValue(HoodieSyncConfig.META_SYNC_SPARK_VERSION,
         props.getString(HiveExternalCatalog.CREATED_SPARK_VERSION))
-    hiveSyncConfig
+    syncConfig
   }
 }
 

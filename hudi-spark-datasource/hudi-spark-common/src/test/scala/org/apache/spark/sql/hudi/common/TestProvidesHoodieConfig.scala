@@ -22,8 +22,8 @@ package org.apache.spark.sql.hudi.common
 import org.apache.hudi.DataSourceWriteOptions
 import org.apache.hudi.common.config.TypedProperties
 import org.apache.hudi.common.table.HoodieTableConfig
-import org.apache.hudi.hive.HiveSyncConfig
 import org.apache.hudi.keygen.{ComplexKeyGenerator, CustomKeyGenerator}
+import org.apache.hudi.sync.common.HoodieSyncConfig
 
 import org.apache.spark.sql.{RuntimeConfig, SparkSession, SQLContext}
 import org.apache.spark.sql.catalyst.TableIdentifier
@@ -125,7 +125,7 @@ class TestProvidesHoodieConfig {
 
     val mockCmd = mock(classOf[ProvidesHoodieConfig])
     when(mockCmd.buildHiveSyncConfig(any(), any(), any(), any()))
-      .thenReturn(new HiveSyncConfig(new TypedProperties()))
+      .thenReturn(new HoodieSyncConfig(new TypedProperties()))
     when(mockCmd.getDropDupsConfig(any(), any())).thenReturn(Map.empty[String, String])
     when(mockCmd.buildHoodieInsertConfig(any(), any(), any(), any(), any(), any(), any()))
       .thenCallRealMethod()
