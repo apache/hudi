@@ -23,8 +23,10 @@ import org.apache.hudi.avro.model.HoodieClusteringPlan;
 import org.apache.hudi.avro.model.HoodieClusteringStrategy;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.FileSlice;
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
+import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -46,6 +48,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -111,6 +114,8 @@ public class CommitBasedClusteringPlanStrategy<T, I, K, O> extends PartitionAwar
         // Exclude file slices whose fileId is in replacedFileIds
         List<FileSlice> eligibleFileSlices = fileSlices.stream()
             .filter(fs -> !replacedFileIds.contains(fs.getFileId()))
+            .sorted(Comparator.comparingLong((FileSlice fs) ->
+                fs.getBaseFile().map(HoodieBaseFile::getFileSize).orElse(0L)).reversed())
             .collect(Collectors.toList());
         long totalSize = getTotalFileSize(eligibleFileSlices);
         if (partitionToSize.containsKey(partition)) {
@@ -203,11 +208,12 @@ public class CommitBasedClusteringPlanStrategy<T, I, K, O> extends PartitionAwar
   }
 
   /**
-   * Utility method to compute the total file size for a list of FileSlices,
-   * including both base files and log files.
+   * Utility method to compute the total base file size for a list of FileSlices.
+   * Only base file sizes are counted as log files typically contain updates
+   * and should not inflate the size estimate for clustering group formation.
    *
    * @param fileSlices List of FileSlice objects
-   * @return Total size in bytes of all files (base + log) present in the list
+   * @return Total size in bytes of all base files present in the list
    */
   protected long getTotalFileSize(List<FileSlice> fileSlices) {
     long totalSize = 0L;
@@ -215,7 +221,6 @@ public class CommitBasedClusteringPlanStrategy<T, I, K, O> extends PartitionAwar
       if (fileSlice.getBaseFile().isPresent()) {
         totalSize += fileSlice.getBaseFile().get().getFileSize();
       }
-      totalSize += fileSlice.getLogFiles().mapToLong(logFile -> logFile.getFileSize()).sum();
     }
     return totalSize;
   }
@@ -237,6 +242,7 @@ public class CommitBasedClusteringPlanStrategy<T, I, K, O> extends PartitionAwar
     HoodieCommitMetadata commitMetadata;
     // Read the commit metadata from the instant file
     if (instant.getAction().equals(HoodieTimeline.COMMIT_ACTION)
+        || instant.getAction().equals(HoodieTimeline.DELTA_COMMIT_ACTION)
         || instant.getAction().equals(HoodieTimeline.REPLACE_COMMIT_ACTION)) {
       try {
         commitMetadata = TimelineUtils.getCommitMetadata(instant, metaClient.getActiveTimeline());
@@ -266,26 +272,35 @@ public class CommitBasedClusteringPlanStrategy<T, I, K, O> extends PartitionAwar
 
     HoodieStorage storage = metaClient.getStorage();
     for (String partition : commitMetadata.getPartitionToWriteStats().keySet()) {
-      List<FileSlice> fileSlices = new ArrayList<>();
+      // Group write stats by fileId to construct proper FileSlices with both base and log files
+      Map<String, FileSlice> fileIdToFileSlice = new HashMap<>();
       List<HoodieWriteStat> writeStats = commitMetadata.getWriteStats(partition);
       for (HoodieWriteStat stat : writeStats) {
-        // Only consider base files (ignore log files for clustering)
-        String baseFilePath = stat.getPath();
-        if (baseFilePath != null) {
-          StoragePath path = new StoragePath(this.getWriteConfig().getBasePath(), baseFilePath);
-          StoragePathInfo pathInfo;
-          try {
-            pathInfo = storage.getPathInfo(path);
-          } catch (Exception e) {
-            LOG.error("Could not get PathInfo for base file path: " + path, e);
-            throw new HoodieException("Could not get PathInfo for base file path: " + path, e);
-          }
+        String filePath = stat.getPath();
+        if (filePath == null) {
+          continue;
+        }
+        StoragePath path = new StoragePath(this.getWriteConfig().getBasePath(), filePath);
+        StoragePathInfo pathInfo;
+        try {
+          pathInfo = storage.getPathInfo(path);
+        } catch (Exception e) {
+          LOG.error("Could not get PathInfo for file path: " + path, e);
+          throw new HoodieException("Could not get PathInfo for file path: " + path, e);
+        }
+
+        FileSlice fileSlice = fileIdToFileSlice.computeIfAbsent(stat.getFileId(),
+            fid -> new FileSlice(partition, instantTime, fid));
+
+        if (FSUtils.isLogFile(path)) {
+          HoodieLogFile logFile = new HoodieLogFile(pathInfo);
+          fileSlice.addLogFile(logFile);
+        } else {
           HoodieBaseFile baseFile = new HoodieBaseFile(pathInfo);
-          FileSlice fileSlice = new FileSlice(partition, instantTime, stat.getFileId());
           fileSlice.setBaseFile(baseFile);
-          fileSlices.add(fileSlice);
         }
       }
+      List<FileSlice> fileSlices = new ArrayList<>(fileIdToFileSlice.values());
       if (!fileSlices.isEmpty()) {
         partitionToFileSlices.put(partition, fileSlices);
       }

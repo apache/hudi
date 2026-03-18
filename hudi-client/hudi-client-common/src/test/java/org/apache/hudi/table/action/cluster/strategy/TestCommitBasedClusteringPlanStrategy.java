@@ -460,6 +460,153 @@ public class TestCommitBasedClusteringPlanStrategy {
     assertEquals(replaceInstant.requestedTime(), extraMetadata.get(CLUSTERING_COMMIT_CHECKPOINT_KEY));
   }
 
+  @Test
+  void testGenerateClusteringPlanWithDeltaCommit() throws IOException {
+    // Setup: Delta commit (MOR table) with base files and log files
+    when(hoodieTable.getMetaClient()).thenReturn(metaClient);
+    when(metaClient.getCommitsTimeline()).thenReturn(timeline);
+    when(metaClient.getActiveTimeline()).thenReturn(activeTimeline);
+    when(timeline.findInstantsAfter(anyString())).thenReturn(timeline);
+    when(timeline.filterCompletedInstants()).thenReturn(timeline);
+    when(metaClient.getStorage()).thenReturn(storage);
+
+    String fileId1 = "a9d3e0e8-89c2-4987-a692-5a61e99d4812";
+    String fileId2 = "b9d3e0e8-89c2-4987-a692-5a61e99d4812";
+    String commitTime = "20231201120000";
+
+    // Base files
+    String file1BasePath = "partition1/a9d3e0e8-89c2-4987-a692-5a61e99d4812-0_1064-11-65065_" + commitTime + ".parquet";
+    // Log file for fileId1
+    String file1LogPath = "partition1/.a9d3e0e8-89c2-4987-a692-5a61e99d4812_" + commitTime + ".log.1_1-0-1";
+    // fileId2 has only a log file (update-only delta commit)
+    String file2LogPath = "partition1/.b9d3e0e8-89c2-4987-a692-5a61e99d4812_" + commitTime + ".log.1_1-0-1";
+
+    // Mock storage for all file paths
+    List<String[]> fileInfos = new ArrayList<>();
+    fileInfos.add(new String[]{file1BasePath, "false"});
+    fileInfos.add(new String[]{file1LogPath, "true"});
+    fileInfos.add(new String[]{file2LogPath, "true"});
+    for (String[] fileInfo : fileInfos) {
+      StoragePath path = new StoragePath(this.writeConfig.getBasePath(), fileInfo[0]);
+      StoragePathInfo pathInfo = mock(StoragePathInfo.class);
+      when(storage.getPathInfo(path)).thenReturn(pathInfo);
+      when(pathInfo.getPath()).thenReturn(new StoragePath(fileInfo[0]));
+      when(pathInfo.getLength()).thenReturn(100L);
+    }
+
+    // Create a delta commit instant
+    HoodieInstant deltaCommitInstant = new HoodieInstant(HoodieInstant.State.COMPLETED,
+        HoodieTimeline.DELTA_COMMIT_ACTION, commitTime, InstantComparatorV1.REQUESTED_TIME_BASED_COMPARATOR);
+    List<HoodieInstant> instants = new ArrayList<>();
+    instants.add(deltaCommitInstant);
+    when(timeline.getInstants()).thenReturn(instants);
+
+    HoodieCommitMetadata commitMetadata = new HoodieCommitMetadata();
+    // Base file write stat for fileId1
+    HoodieWriteStat writeStat1 = new HoodieWriteStat();
+    writeStat1.setPath(file1BasePath);
+    writeStat1.setFileId(fileId1);
+    writeStat1.setPartitionPath("partition1");
+    commitMetadata.addWriteStat("partition1", writeStat1);
+    // Log file write stat for fileId1
+    HoodieWriteStat writeStat2 = new HoodieWriteStat();
+    writeStat2.setPath(file1LogPath);
+    writeStat2.setFileId(fileId1);
+    writeStat2.setPartitionPath("partition1");
+    commitMetadata.addWriteStat("partition1", writeStat2);
+    // Log file write stat for fileId2 (log-only)
+    HoodieWriteStat writeStat3 = new HoodieWriteStat();
+    writeStat3.setPath(file2LogPath);
+    writeStat3.setFileId(fileId2);
+    writeStat3.setPartitionPath("partition1");
+    commitMetadata.addWriteStat("partition1", writeStat3);
+
+    when(activeTimeline.readCommitMetadata(deltaCommitInstant)).thenReturn(commitMetadata);
+
+    Option<HoodieClusteringPlan> result = strategy.generateClusteringPlan();
+
+    assertNotNull(result);
+    assertTrue(result.isPresent());
+    HoodieClusteringPlan plan = result.get();
+    assertNotNull(plan);
+    // Should have 1 group with 2 file slices (fileId1 with base+log, fileId2 with log only)
+    assertEquals(1, plan.getInputGroups().size());
+    HoodieClusteringGroup inputGroup = plan.getInputGroups().get(0);
+    assertEquals(2, inputGroup.getSlices().size());
+
+    Map<String, String> extraMetadata = strategy.getExtraMetadata();
+    assertEquals(commitTime, extraMetadata.get(CLUSTERING_COMMIT_CHECKPOINT_KEY));
+  }
+
+  @Test
+  void testGenerateClusteringPlanWithMixedCommitAndDeltaCommit() throws IOException {
+    // Setup: Mix of COMMIT and DELTA_COMMIT (MOR table scenario)
+    when(hoodieTable.getMetaClient()).thenReturn(metaClient);
+    when(metaClient.getCommitsTimeline()).thenReturn(timeline);
+    when(metaClient.getActiveTimeline()).thenReturn(activeTimeline);
+    when(timeline.findInstantsAfter(anyString())).thenReturn(timeline);
+    when(timeline.filterCompletedInstants()).thenReturn(timeline);
+    when(metaClient.getStorage()).thenReturn(storage);
+
+    String fileId1 = "a9d3e0e8-89c2-4987-a692-5a61e99d4812";
+    String fileId2 = "b9d3e0e8-89c2-4987-a692-5a61e99d4812";
+    String commitTime1 = "20231201120000";
+    String commitTime2 = "20231201120001";
+
+    // Commit 1: regular commit with base file
+    String file1BasePath = "partition1/a9d3e0e8-89c2-4987-a692-5a61e99d4812-0_1064-11-65065_" + commitTime1 + ".parquet";
+    // Commit 2: delta commit with log file
+    String file2LogPath = "partition1/.b9d3e0e8-89c2-4987-a692-5a61e99d4812_" + commitTime2 + ".log.1_1-0-1";
+
+    for (String filePath : new String[]{file1BasePath, file2LogPath}) {
+      StoragePath path = new StoragePath(this.writeConfig.getBasePath(), filePath);
+      StoragePathInfo pathInfo = mock(StoragePathInfo.class);
+      when(storage.getPathInfo(path)).thenReturn(pathInfo);
+      when(pathInfo.getPath()).thenReturn(new StoragePath(filePath));
+      when(pathInfo.getLength()).thenReturn(100L);
+    }
+
+    HoodieInstant commitInstant = new HoodieInstant(HoodieInstant.State.COMPLETED,
+        HoodieTimeline.COMMIT_ACTION, commitTime1, InstantComparatorV1.REQUESTED_TIME_BASED_COMPARATOR);
+    HoodieInstant deltaCommitInstant = new HoodieInstant(HoodieInstant.State.COMPLETED,
+        HoodieTimeline.DELTA_COMMIT_ACTION, commitTime2, InstantComparatorV1.REQUESTED_TIME_BASED_COMPARATOR);
+    List<HoodieInstant> instants = new ArrayList<>();
+    instants.add(commitInstant);
+    instants.add(deltaCommitInstant);
+    when(timeline.getInstants()).thenReturn(instants);
+
+    // Commit metadata for regular commit
+    HoodieCommitMetadata commitMetadata1 = new HoodieCommitMetadata();
+    HoodieWriteStat writeStat1 = new HoodieWriteStat();
+    writeStat1.setPath(file1BasePath);
+    writeStat1.setFileId(fileId1);
+    writeStat1.setPartitionPath("partition1");
+    commitMetadata1.addWriteStat("partition1", writeStat1);
+    when(activeTimeline.readCommitMetadata(commitInstant)).thenReturn(commitMetadata1);
+
+    // Commit metadata for delta commit
+    HoodieCommitMetadata commitMetadata2 = new HoodieCommitMetadata();
+    HoodieWriteStat writeStat2 = new HoodieWriteStat();
+    writeStat2.setPath(file2LogPath);
+    writeStat2.setFileId(fileId2);
+    writeStat2.setPartitionPath("partition1");
+    commitMetadata2.addWriteStat("partition1", writeStat2);
+    when(activeTimeline.readCommitMetadata(deltaCommitInstant)).thenReturn(commitMetadata2);
+
+    Option<HoodieClusteringPlan> result = strategy.generateClusteringPlan();
+
+    assertNotNull(result);
+    assertTrue(result.isPresent());
+    HoodieClusteringPlan plan = result.get();
+    assertNotNull(plan);
+    assertEquals(1, plan.getInputGroups().size());
+    HoodieClusteringGroup inputGroup = plan.getInputGroups().get(0);
+    assertEquals(2, inputGroup.getSlices().size());
+
+    Map<String, String> extraMetadata = strategy.getExtraMetadata();
+    assertEquals(commitTime2, extraMetadata.get(CLUSTERING_COMMIT_CHECKPOINT_KEY));
+  }
+
   private void initializeClusteringPlanStrategy(boolean withCheckpoint) {
     // Create a real HoodieWriteConfig instead of mocking it
     HoodieClusteringConfig.Builder clusteringConfigBuilder = HoodieClusteringConfig.newBuilder()
