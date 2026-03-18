@@ -31,7 +31,7 @@ import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.{Expression, GenericInternalRow}
 import org.apache.spark.sql.connector.expressions.NamedReference
 import org.apache.spark.sql.connector.expressions.aggregate.{Aggregation, Count, CountStar, Max, Min}
-import org.apache.spark.sql.connector.read.{InputPartition, Scan, ScanBuilder, SupportsPushDownAggregates, SupportsPushDownFilters, SupportsPushDownLimit, SupportsPushDownRequiredColumns}
+import org.apache.spark.sql.connector.read.{InputPartition, Scan, ScanBuilder, SupportsPushDownAggregates, SupportsPushDownFilters, SupportsPushDownRequiredColumns}
 import org.apache.spark.sql.execution.datasources.FileFormat
 import org.apache.spark.sql.sources.Filter
 import org.apache.spark.sql.types.{BooleanType, ByteType, DataType, DoubleType, FloatType, IntegerType, LongType, ShortType, StringType, StructField, StructType}
@@ -50,7 +50,7 @@ class HoodieScanBuilder(spark: SparkSession,
                         options: Map[String, String]) extends ScanBuilder
   with SupportsPushDownFilters
   with SupportsPushDownRequiredColumns
-  with SupportsPushDownLimit
+  with PartialLimitPushDown
   with SupportsPushDownAggregates
   with SparkAdapterSupport {
 
@@ -101,8 +101,6 @@ class HoodieScanBuilder(spark: SparkSession,
     pushedLimit = Some(limit)
     true
   }
-
-  override def isPartiallyPushed(): Boolean = true
 
   override def pushAggregation(aggregation: Aggregation): Boolean = {
     if (aggregation.groupByExpressions().nonEmpty) {
