@@ -17,15 +17,14 @@
 
 package org.apache.spark.sql.hudi.feature.v2
 
-import org.apache.hudi.{DataSourceReadOptions, HoodieSparkUtils}
+import org.apache.hudi.DataSourceReadOptions
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness.getSparkSqlConf
 
 import org.apache.spark.SparkConf
 import org.apache.spark.sql.SaveMode
-import org.junit.jupiter.api.{BeforeEach, Tag, Test}
+import org.junit.jupiter.api.{Tag, Test}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
-import org.junit.jupiter.api.Assumptions.assumeTrue
 
 /**
  * Functional tests proving DSv2 and DSv1 coexistence.
@@ -38,12 +37,6 @@ import org.junit.jupiter.api.Assumptions.assumeTrue
 class TestDSv2CoexistenceWithDSv1 extends SparkClientFunctionalTestHarness {
 
   override def conf: SparkConf = conf(getSparkSqlConf)
-
-  @BeforeEach
-  def checkSparkVersion(): Unit = {
-    assumeTrue(HoodieSparkUtils.gteqSpark3_5,
-      "DSv2 read tests require Spark 3.5 or later")
-  }
 
   private def writeTestData(path: String): Unit = {
     val _spark = spark
