@@ -84,6 +84,7 @@ public class HoodieSparkLanceReader implements HoodieSparkFileReader {
       lanceMetadataReader = LanceFileReader.open(path.toString(), metadataAllocator);
       arrowSchema = lanceMetadataReader.schema();
     } catch (IOException e) {
+      metadataAllocator.close();
       throw new HoodieException("Failed to create lanceMetadataReader: " + path, e);
     }
   }
@@ -210,15 +211,15 @@ public class HoodieSparkLanceReader implements HoodieSparkFileReader {
 
   @Override
   public void close() {
-    if (metadataAllocator != null) {
-      metadataAllocator.close();
-    }
     if (lanceMetadataReader != null) {
       try {
         lanceMetadataReader.close();
       } catch (Exception e) {
         log.warn("Error while closing metadataLanceReader: {}", e.getMessage());
       }
+    }
+    if (metadataAllocator != null) {
+      metadataAllocator.close();
     }
   }
 

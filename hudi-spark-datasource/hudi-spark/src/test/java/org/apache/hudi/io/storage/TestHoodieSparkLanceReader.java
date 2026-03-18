@@ -649,7 +649,7 @@ public class TestHoodieSparkLanceReader {
     BloomFilter bloomFilter = reader.readBloomFilter();
     assertInstanceOf(clazz, bloomFilter);
     for (int i = 0; i < keyCount; i++) {
-      assertTrue(bloomFilter.mightContain("key" + (keyCount - 1)));
+      assertTrue(bloomFilter.mightContain("key" + i));
     }
     assertFalse(bloomFilter.mightContain("no_such_key"));
     String[] minMaxKeys = reader.readMinMaxRecordKeys();
