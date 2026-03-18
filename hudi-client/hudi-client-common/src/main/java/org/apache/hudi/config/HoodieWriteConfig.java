@@ -42,6 +42,7 @@ import org.apache.hudi.common.fs.ConsistencyGuardConfig;
 import org.apache.hudi.common.fs.FileSystemRetryConfig;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
+import org.apache.hudi.common.model.HoodiePreWriteCleanerPolicy;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.HoodieRecordPayload;
@@ -674,6 +675,16 @@ public class HoodieWriteConfig extends HoodieConfig {
       .markAdvanced()
       .withDocumentation("Number of heartbeat misses, before a writer is deemed not alive and all pending writes are aborted.");
 
+  public static final ConfigProperty<Boolean> CLUSTERING_BLOCK_FOR_PENDING_INGESTION = ConfigProperty
+      .key("hoodie.clustering.fail.on.pending.ingestion.during.conflict.resolution")
+      .defaultValue(false)
+      .markAdvanced()
+      .withDocumentation("Only applicable when \"hoodie.write.concurrency.mode\" is set to OCC or NBCC and the conflict "
+          + "resolution strategy (\"hoodie.write.conflict.resolution.strategy\") is set to "
+          + "PreferWriterConflictResolutionStrategy. When enabled, proactively prevents clustering from committing if "
+          + "there are any ongoing ingestion writes that have not transitioned from requested to inflight yet and have "
+          + "an active heartbeat, since ingestion may be targeting the same files and should have precedence.");
+
   public static final ConfigProperty<String> WRITE_CONCURRENCY_MODE = ConfigProperty
       .key("hoodie.write.concurrency.mode")
       .defaultValue(WriteConcurrencyMode.SINGLE_WRITER.name())
@@ -938,6 +949,12 @@ public class HoodieWriteConfig extends HoodieConfig {
       .sinceVersion("")
       .withDocumentation("Flag to indicate whether to ignore any non exception error (e.g. write status error)."
           + "By default true for backward compatibility.");
+
+  public static final ConfigProperty<String> APPLICATION_ID = ConfigProperty
+      .key("hoodie.write.application.id")
+      .defaultValue("Unknown")
+      .markAdvanced()
+      .withDocumentation("Application identifier (e.g. Spark application id) used to populate lock metadata so lock holders can be identified.");
 
   /**
    * Config key with boolean value that indicates whether record being written during MERGE INTO Spark SQL
@@ -1838,6 +1855,14 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getBoolean(HoodieCleanConfig.CLEANER_INCREMENTAL_MODE_ENABLE);
   }
 
+  public String getCleanerPartitionFilterRegex() {
+    return getString(HoodieCleanConfig.CLEAN_PARTITION_FILTER_REGEX);
+  }
+
+  public String getCleanerPartitionFilterSelected() {
+    return getString(HoodieCleanConfig.CLEAN_PARTITION_FILTER_SELECTED);
+  }
+
   public boolean inlineCompactionEnabled() {
     return getBoolean(HoodieCompactionConfig.INLINE_COMPACT);
   }
@@ -1919,6 +1944,10 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getBooleanOrDefault(HoodieClusteringConfig.FILE_STITCHING_BINARY_COPY_SCHEMA_EVOLUTION_ENABLE);
   }
 
+  public boolean isClusteringPlanGenerationUseLocalEngineContext() {
+    return getBoolean(HoodieClusteringConfig.PLAN_GENERATION_USE_LOCAL_ENGINE_CONTEXT);
+  }
+
   public int getInlineClusterMaxCommits() {
     return getInt(HoodieClusteringConfig.INLINE_CLUSTERING_MAX_COMMITS);
   }
@@ -1950,6 +1979,10 @@ public class HoodieWriteConfig extends HoodieConfig {
   public HoodieFailedWritesCleaningPolicy getFailedWritesCleanPolicy() {
     return HoodieFailedWritesCleaningPolicy
         .valueOf(getString(HoodieCleanConfig.FAILED_WRITES_CLEANER_POLICY));
+  }
+
+  public HoodiePreWriteCleanerPolicy getPreWriteCleanerPolicy() {
+    return HoodiePreWriteCleanerPolicy.fromString(getString(HoodieCleanConfig.PREWRITE_CLEANER_POLICY));
   }
 
   public String getCompactionSpecifyPartitionPathRegex() {
@@ -2006,6 +2039,10 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public long getClusteringTargetFileMaxBytes() {
     return getLong(HoodieClusteringConfig.PLAN_STRATEGY_TARGET_FILE_MAX_BYTES);
+  }
+
+  public String getFileSlicesSortBy() {
+    return getString(HoodieClusteringConfig.PLAN_STRATEGY_FILE_SLICES_SORT_BY);
   }
 
   public int getTargetPartitionsForClustering() {
@@ -2638,6 +2675,10 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getInt(CLIENT_HEARTBEAT_NUM_TOLERABLE_MISSES);
   }
 
+  public boolean isClusteringBlockForPendingIngestion() {
+    return getBooleanOrDefault(CLUSTERING_BLOCK_FOR_PENDING_INGESTION);
+  }
+
   /**
    * File listing metadata configs.
    */
@@ -2712,6 +2753,10 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public String getLockHiveTableName() {
     return getString(HoodieLockConfig.HIVE_TABLE_NAME);
+  }
+
+  public String getApplicationId() {
+    return getStringOrDefault(APPLICATION_ID);
   }
 
   public ConflictResolutionStrategy getWriteConflictResolutionStrategy() {
@@ -2796,6 +2841,10 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public String getPreCommitValidatorInequalitySqlQueries() {
     return getString(HoodiePreCommitValidatorConfig.INEQUALITY_SQL_QUERIES);
+  }
+
+  public String getPreWriteValidators() {
+    return getString(HoodiePreWriteValidatorConfig.VALIDATOR_CLASS_NAMES);
   }
 
   public boolean allowEmptyCommit() {
@@ -3420,6 +3469,11 @@ public class HoodieWriteConfig extends HoodieConfig {
       return this;
     }
 
+    public Builder withClusteringBlockForPendingIngestion(boolean enable) {
+      writeConfig.setValue(CLUSTERING_BLOCK_FOR_PENDING_INGESTION, String.valueOf(enable));
+      return this;
+    }
+
     public Builder withWriteConcurrencyMode(WriteConcurrencyMode concurrencyMode) {
       writeConfig.setValue(WRITE_CONCURRENCY_MODE, concurrencyMode.name());
       return this;
@@ -3447,6 +3501,11 @@ public class HoodieWriteConfig extends HoodieConfig {
 
     public Builder withReleaseResourceEnabled(boolean enabled) {
       writeConfig.setValue(RELEASE_RESOURCE_ENABLE, Boolean.toString(enabled));
+      return this;
+    }
+
+    public Builder withApplicationId(String appId) {
+      writeConfig.setValue(APPLICATION_ID, appId);
       return this;
     }
 

@@ -61,7 +61,10 @@ public class LockManager implements Serializable, AutoCloseable {
   public LockManager(HoodieWriteConfig writeConfig, HoodieStorage storage, TypedProperties lockProps) {
     this.writeConfig = writeConfig;
     this.storageConf = storage.getConf().newInstance();
-    this.lockConfiguration = new LockConfiguration(lockProps);
+    TypedProperties lockPropsWithAppId = new TypedProperties();
+    lockPropsWithAppId.putAll(lockProps);
+    lockPropsWithAppId.put(LockConfiguration.LOCK_HOLDER_APP_ID_KEY, writeConfig.getApplicationId());
+    this.lockConfiguration = new LockConfiguration(lockPropsWithAppId);
     maxRetries = lockConfiguration.getConfig().getInteger(LOCK_ACQUIRE_CLIENT_NUM_RETRIES_PROP_KEY,
         Integer.parseInt(HoodieLockConfig.LOCK_ACQUIRE_CLIENT_NUM_RETRIES.defaultValue()));
     maxWaitTimeInMs = lockConfiguration.getConfig().getLong(LOCK_ACQUIRE_CLIENT_RETRY_WAIT_TIME_IN_MILLIS_PROP_KEY,

@@ -24,6 +24,7 @@ import org.apache.hudi.client.BaseHoodieWriteClient;
 import org.apache.hudi.client.HoodieWriteResult;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.SparkTaskContextSupplier;
+import org.apache.hudi.client.heartbeat.HoodieHeartbeatClient;
 import org.apache.hudi.client.WriteClientTestUtils;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.clustering.plan.strategy.SparkSingleFileSortPlanStrategy;
@@ -62,6 +63,7 @@ import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.table.view.TableFileSystemView.BaseFileOnlyView;
 import org.apache.hudi.common.testutils.FileCreateUtilsLegacy;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
+import org.apache.hudi.common.testutils.HoodieTestTable;
 import org.apache.hudi.common.util.ClusteringUtils;
 import org.apache.hudi.common.util.FileFormatUtils;
 import org.apache.hudi.common.util.Option;
@@ -1033,6 +1035,20 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
         false, SqlQueryEqualityPreCommitValidator.class.getName(), COUNT_SQL_QUERY_FOR_VALIDATION, "");
   }
 
+  /**
+   * Tests clustering when {@code hoodie.clustering.plan.generation.use.local.engine.context} is enabled.
+   * Ensures the code path that computes clustering groups on the driver using HoodieLocalEngineContext is exercised.
+   */
+  @Test
+  public void testClusteringWithLocalEngineContextForPlanGeneration() throws Exception {
+    initMetaClient(getPropertiesForKeyGen(true));
+    HoodieClusteringConfig clusteringConfig = createClusteringBuilder(true, 1)
+        .useLocalEngineContextForPlanGeneration(true)
+        .build();
+    testInsertAndClustering(clusteringConfig, true, true,
+        false, SqlQueryEqualityPreCommitValidator.class.getName(), COUNT_SQL_QUERY_FOR_VALIDATION, "");
+  }
+
   @Test
   public void testAndValidateClusteringOutputFiles() throws IOException {
     testAndValidateClusteringOutputFiles(createBrokenClusteringClient(new HoodieException(CLUSTERING_FAILURE)), createClusteringBuilder(true, 2).build(), list2Rdd, rdd2List);
@@ -1877,6 +1893,66 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
         .setClusteringPlan(clusteringPlan).setOperationType(WriteOperationType.CLUSTER.name()).build();
     metaClient.getActiveTimeline().saveToPendingClusterCommit(clusteringInstant, requestedReplaceMetadata);
     return clusteringInstant;
+  }
+
+  /**
+   * Verifies that clustering fails with {@link HoodieWriteConflictException} when
+   * {@code hoodie.clustering.fail.on.pending.ingestion.during.conflict.resolution} is enabled
+   * and an ingestion .requested instant with an active heartbeat exists.
+   */
+  @Test
+  public void testClusteringFailsOnPendingIngestionRequestedInstant() throws Exception {
+    Properties properties = getDisabledRowWriterProperties();
+    properties.setProperty(FILESYSTEM_LOCK_PATH_PROP_KEY, basePath + "/.hoodie/.locks");
+    HoodieCleanConfig cleanConfig = createCleanConfig(HoodieFailedWritesCleaningPolicy.LAZY, false);
+
+    // Insert base data with a regular ingestion writer
+    HoodieWriteConfig insertWriteConfig = getConfigBuilder()
+        .withCleanConfig(cleanConfig)
+        .withLockConfig(createLockConfig(new PreferWriterConflictResolutionStrategy()))
+        .withWriteConcurrencyMode(WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL)
+        .withProperties(properties)
+        .build();
+    SparkRDDWriteClient client = getHoodieWriteClient(insertWriteConfig);
+
+    int numRecords = 200;
+    String firstCommit = WriteClientTestUtils.createNewInstantTime();
+    String partitionStr = HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH;
+    HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator(new String[] {partitionStr});
+    writeBatch(client, firstCommit, "000", Option.of(Arrays.asList("000")), "000",
+        numRecords, dataGenerator::generateInserts, SparkRDDWriteClient::insert, true, numRecords, numRecords,
+        1, INSTANT_GENERATOR);
+
+    // Simulate an ingestion writer that has created a .requested commit with an active heartbeat
+    String ingestionRequestedTime = WriteClientTestUtils.createNewInstantTime();
+    HoodieTestTable.of(metaClient).addRequestedCommit(ingestionRequestedTime);
+    HoodieHeartbeatClient heartbeatClient = new HoodieHeartbeatClient(
+        metaClient.getStorage(), metaClient.getBasePath().toString(),
+        (long) (1000 * 60), 5);
+    heartbeatClient.start(ingestionRequestedTime);
+
+    try {
+      // Schedule and execute clustering with blocking enabled — should fail during conflict
+      // resolution because it detects the active ingestion .requested instant
+      HoodieWriteConfig clusteringWriteConfig = getConfigBuilder()
+          .withCleanConfig(cleanConfig)
+          .withClusteringConfig(createClusteringBuilder(true, 1).build())
+          .withPreCommitValidatorConfig(createPreCommitValidatorConfig(numRecords))
+          .withLockConfig(createLockConfig(new PreferWriterConflictResolutionStrategy()))
+          .withWriteConcurrencyMode(WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL)
+          .withClusteringBlockForPendingIngestion(true)
+          .withProperties(properties)
+          .build();
+
+      SparkRDDWriteClient<?> clusteringWriteClient = getHoodieWriteClient(clusteringWriteConfig);
+      String clusteringCommitTime = clusteringWriteClient.scheduleClustering(Option.empty()).get();
+      HoodieClusteringException exception = assertThrows(HoodieClusteringException.class,
+          () -> clusteringWriteClient.cluster(clusteringCommitTime, true));
+      assertTrue(exception.getCause() instanceof HoodieWriteConflictException);
+    } finally {
+      heartbeatClient.stop(ingestionRequestedTime);
+      heartbeatClient.close();
+    }
   }
 
   public static class FailingPreCommitValidator<T extends HoodieRecordPayload, I, K, O extends HoodieData<WriteStatus>> extends SparkPreCommitValidator<T, I, K, O> {

@@ -19,8 +19,6 @@
 package org.apache.hudi.source.reader.function;
 
 import org.apache.flink.configuration.Configuration;
-import org.apache.hudi.common.config.HoodieReaderConfig;
-import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieFileGroupId;
@@ -28,57 +26,72 @@ import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.read.HoodieFileGroupReader;
-import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
+import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.exception.HoodieIOException;
-import org.apache.hudi.internal.schema.InternalSchema;
+import org.apache.hudi.source.ExpressionPredicates;
 import org.apache.hudi.source.reader.BatchRecords;
 import org.apache.hudi.source.reader.HoodieRecordWithPosition;
 import org.apache.hudi.source.split.HoodieSourceSplit;
 
 import org.apache.flink.connector.base.source.reader.RecordsWithSplitIds;
 import org.apache.flink.table.data.RowData;
-import org.apache.hudi.table.format.FlinkReaderContextFactory;
+import org.apache.hudi.table.format.FormatUtils;
+import org.apache.hudi.table.format.InternalSchemaManager;
+import org.apache.hudi.util.FlinkWriteClients;
+import org.apache.hudi.util.StreamerUtil;
+
 import java.io.IOException;
 import java.util.Collections;
+import java.util.List;
 import java.util.stream.Collectors;
 
 /**
  * Default reader function implementation for both MOR and COW tables.
  */
 public class HoodieSplitReaderFunction implements SplitReaderFunction<RowData> {
-  private final HoodieTableMetaClient metaClient;
   private final HoodieSchema tableSchema;
   private final HoodieSchema requiredSchema;
-  private final Option<InternalSchema> internalSchemaOption;
-  private final TypedProperties props;
-  private HoodieFileGroupReader<RowData> fileGroupReader;
+  private final InternalSchemaManager internalSchemaManager;
+  private final Configuration configuration;
+  private final HoodieWriteConfig writeConfig;
+  private final String mergeType;
+  private final boolean emitDelete;
+  private final List<ExpressionPredicates.Predicate> predicates;
+  private transient HoodieFileGroupReader<RowData> fileGroupReader;
+  private transient org.apache.hadoop.conf.Configuration hadoopConf;
 
   public HoodieSplitReaderFunction(
-      HoodieTableMetaClient metaClient,
       Configuration configuration,
       HoodieSchema tableSchema,
       HoodieSchema requiredSchema,
+      InternalSchemaManager internalSchemaManager,
       String mergeType,
-      Option<InternalSchema> internalSchemaOption) {
+      List<ExpressionPredicates.Predicate> predicates,
+      boolean emitDelete) {
 
     ValidationUtils.checkArgument(tableSchema != null, "tableSchema can't be null");
     ValidationUtils.checkArgument(requiredSchema != null, "requiredSchema can't be null");
-    this.metaClient = metaClient;
+    ValidationUtils.checkArgument(internalSchemaManager != null, "internalSchemaManager can't be null");
     this.tableSchema = tableSchema;
     this.requiredSchema = requiredSchema;
-    this.internalSchemaOption = internalSchemaOption;
-    this.props = new TypedProperties();
-    this.props.put(HoodieReaderConfig.MERGE_TYPE.key(), mergeType);
-    this.fileGroupReader = null;
+    this.internalSchemaManager = internalSchemaManager;
+    this.configuration = configuration;
+    this.writeConfig = FlinkWriteClients.getHoodieClientConfig(configuration);
+    this.predicates = predicates;
+    this.mergeType = mergeType;
+    this.emitDelete = emitDelete;
   }
 
   @Override
   public RecordsWithSplitIds<HoodieRecordWithPosition<RowData>> read(HoodieSourceSplit split) {
     final String splitId = split.splitId();
+    HoodieTableMetaClient metaClient = StreamerUtil.metaClientForReader(configuration, getHadoopConf());
+
     try {
-      this.fileGroupReader = createFileGroupReader(split);
+      this.fileGroupReader = createFileGroupReader(split, metaClient);
       final ClosableIterator<RowData> recordIterator = fileGroupReader.getClosableIterator();
       BatchRecords<RowData> records = BatchRecords.forRecords(splitId, recordIterator, split.getFileOffset(), split.getConsumed());
       records.seek(split.getConsumed());
@@ -101,7 +114,7 @@ public class HoodieSplitReaderFunction implements SplitReaderFunction<RowData> {
    * @param split The source split to read
    * @return A {@link HoodieFileGroupReader} instance
    */
-  private HoodieFileGroupReader<RowData> createFileGroupReader(HoodieSourceSplit split) {
+  private HoodieFileGroupReader<RowData> createFileGroupReader(HoodieSourceSplit split, HoodieTableMetaClient metaClient) {
     // Create FileSlice from split information
     FileSlice fileSlice = new FileSlice(
         new HoodieFileGroupId(split.getPartitionPath(), split.getFileId()),
@@ -112,23 +125,25 @@ public class HoodieSplitReaderFunction implements SplitReaderFunction<RowData> {
         ).orElse(Collections.emptyList())
     );
 
-    FlinkReaderContextFactory readerContextFactory = new FlinkReaderContextFactory(metaClient);
+    return FormatUtils.createFileGroupReader(
+      metaClient,
+      writeConfig,
+      internalSchemaManager,
+      fileSlice,
+      tableSchema,
+      requiredSchema,
+      split.getLatestCommit(),
+      mergeType,
+      emitDelete,
+      predicates,
+      split.getInstantRange()
+    );
+  }
 
-    // Build the file group reader
-    HoodieFileGroupReader.Builder<RowData> builder = HoodieFileGroupReader.<RowData>newBuilder()
-        .withReaderContext(readerContextFactory.getContext())
-        .withHoodieTableMetaClient(metaClient)
-        .withFileSlice(fileSlice)
-        .withProps(props)
-        .withShouldUseRecordPosition(true)
-        .withDataSchema(tableSchema)
-        .withRequestedSchema(requiredSchema);
-
-
-    if (internalSchemaOption.isPresent()) {
-      builder.withInternalSchema(internalSchemaOption);
+  private org.apache.hadoop.conf.Configuration getHadoopConf() {
+    if (hadoopConf == null) {
+      hadoopConf = HadoopConfigurations.getHadoopConf(configuration);
     }
-
-    return builder.build();
+    return hadoopConf;
   }
 }

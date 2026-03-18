@@ -314,7 +314,8 @@ public class TestHoodieSourceSplitReader {
         "/test/partition",
         "read_optimized",
         "19700101000000000",
-        fileId
+        fileId,
+        Option.empty()
     );
   }
 

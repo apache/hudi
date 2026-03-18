@@ -18,7 +18,7 @@
 package org.apache.spark.sql.hudi.common
 
 import org.apache.hudi.DataSourceReadOptions._
-import org.apache.hudi.common.config.DFSPropertiesConfiguration
+import org.apache.hudi.common.config.{DFSPropertiesConfiguration, HoodieMetadataConfig}
 import org.apache.hudi.common.model.HoodieTableType
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.testutils.HoodieTestUtils
@@ -101,6 +101,39 @@ class TestSqlConf extends HoodieSparkSqlTestBase with BeforeAndAfter {
       // check that schema evolution is enabled (from hudi-defaults.conf),
       // so no exception is thrown on alter table change column type
       spark.sql(s"alter table $tableName change column price price string")
+    }
+  }
+
+  test("Test spark.hoodie.* configs propagate to write path") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      val tablePath = tmp.getCanonicalPath
+
+      spark.sql(
+        s"""
+           |create table $tableName (
+           |  id int,
+           |  name string,
+           |  price double,
+           |  ts long
+           |) using hudi
+           | location '$tablePath'
+           | options (
+           |  primaryKey = 'id',
+           |  preCombineField = 'ts'
+           | )
+       """.stripMargin)
+
+      val metadataTablePath = s"$tablePath/${HoodieTableMetaClient.METADATA_TABLE_FOLDER_PATH}"
+
+      withSQLConf("spark." + HoodieMetadataConfig.ENABLE.key -> "false") {
+        spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000)")
+      }
+      assertResult(false)(existsPath(metadataTablePath))
+
+      checkAnswer(s"select id, name, price, ts from $tableName")(
+        Seq(1, "a1", 10.0, 1000)
+      )
     }
   }
 

@@ -825,7 +825,7 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
         .option("hoodie.datasource.read.end.instanttime", startTimeStamp)
         .option("hoodie.datasource.query.incremental.format", "cdc")
         .load(basePath)
-      result1.show(false)
+      result1.collect()
       assertCDCOpCnt(result1, 1, 0, 0)
       assertEquals(result1.count(), 1)
 
@@ -835,7 +835,7 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
         .option("hoodie.datasource.read.end.instanttime", latestTimeStamp)
         .option("hoodie.datasource.query.incremental.format", "cdc")
         .load(basePath)
-      result2.show(false)
+      result2.collect()
       assertCDCOpCnt(result2, 2, 1, 0)
       assertEquals(result2.count(), 3)
 
@@ -845,7 +845,7 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
         .option("hoodie.datasource.read.end.instanttime", latestTimeStamp)
         .option("hoodie.datasource.query.incremental.format", "cdc")
         .load(basePath)
-      result3.show(false)
+      result3.collect()
       assertCDCOpCnt(result3, 3, 1, 0)
       assertEquals(result3.count(), 4)
     }

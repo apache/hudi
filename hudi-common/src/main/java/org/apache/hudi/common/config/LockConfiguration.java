@@ -81,6 +81,8 @@ public class LockConfiguration implements Serializable {
 
   public static final String ZK_LOCK_KEY_PROP_KEY = ZOOKEEPER_BASED_LOCK_PROPERTY_PREFIX + "lock_key";
 
+  public static final String LOCK_HOLDER_APP_ID_KEY = LOCK_PREFIX + "app_id";
+
   /** @deprecated Use {@link #LOCK_ACQUIRE_RETRY_WAIT_TIME_IN_MILLIS_PROP_KEY} */
   @Deprecated
   public static final String LOCK_ACQUIRE_RETRY_WAIT_TIME_IN_MILLIS_PROP = LOCK_ACQUIRE_RETRY_WAIT_TIME_IN_MILLIS_PROP_KEY;

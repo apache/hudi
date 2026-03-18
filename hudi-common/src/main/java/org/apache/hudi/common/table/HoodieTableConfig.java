@@ -50,6 +50,7 @@ import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.util.BinaryUtil;
 import org.apache.hudi.common.util.ConfigUtils;
+import org.apache.hudi.common.util.HoodieTableConfigUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.StringUtils;
@@ -335,6 +336,14 @@ public class HoodieTableConfig extends HoodieConfig {
       .sinceVersion("1.0.0")
       .withDocumentation("Key Generator type to determine key generator class");
 
+  public static final ConfigProperty<String> PARTITION_EXTRACTOR_CLASS = ConfigProperty
+      .key("hoodie.table.partition_extractor_class")
+      .noDefaultValue()
+      .withInferFunction(HoodieTableConfigUtils::inferPartitionValueExtractorClass)
+      .markAdvanced()
+      .withDocumentation("Class which implements PartitionValueExtractor to extract the partition values, "
+          + "default is inferred based on partition configuration.");
+
   // TODO: this has to be UTC. why is it not the default?
   public static final ConfigProperty<HoodieTimelineTimeZone> TIMELINE_TIMEZONE = ConfigProperty
       .key("hoodie.table.timeline.timezone")
@@ -547,20 +556,24 @@ public class HoodieTableConfig extends HoodieConfig {
         propsToDelete.forEach(propToDelete -> props.remove(propToDelete));
         checksum = storeProperties(props, out, cfgPath);
       }
+      LOG.warn(String.format("%s modified to: %s (at %s)", cfgPath.getName(), props, cfgPath.getParent()));
 
-      // 4. verify and remove backup.
+      // 5. verify and remove backup.
       try (InputStream in = storage.open(cfgPath)) {
-        props.clear();
-        props.load(in);
-        if (!props.containsKey(TABLE_CHECKSUM.key()) || !props.getProperty(TABLE_CHECKSUM.key()).equals(checksum)) {
+        Properties verifyProps = new Properties();
+        verifyProps.load(in);
+        if (verifyProps.isEmpty() || verifyProps.size() != props.size()
+                || !verifyProps.containsKey(TABLE_CHECKSUM.key())
+                || !verifyProps.getProperty(TABLE_CHECKSUM.key()).equals(checksum)) {
           // delete the properties file and throw exception indicating update failure
           // subsequent writes will recover and update, reads will go to the backup until then
           deleteFile(storage, cfgPath);
-          throw new HoodieIOException("Checksum property missing or does not match.");
+          throw new HoodieIOException(String.format("Checksum property missing or properties do not match. %d vs %d",
+              props.size(), verifyProps.size()));
         }
       }
 
-      // 5. delete the backup properties file
+      // 6. delete the backup properties file
       deleteFile(storage, backupCfgPath);
     } catch (IOException e) {
       throw new HoodieIOException("Error updating table configs.", e);
@@ -1206,6 +1219,10 @@ public class HoodieTableConfig extends HoodieConfig {
 
   public String getKeyGeneratorClassName() {
     return KeyGeneratorType.getKeyGeneratorClassName(this);
+  }
+
+  public Option<String> getPartitionExtractorClass() {
+    return Option.ofNullable(getString(PARTITION_EXTRACTOR_CLASS));
   }
 
   public HoodieTimelineTimeZone getTimelineTimezone() {

@@ -20,11 +20,12 @@
 ## Proposers
 
 - @bvaradar
+- @rahil-c
 
 ## Approvers
 
 - @vinothchandar
-
+- @the-other-tim-brown
 
 ## Status
 
@@ -137,21 +138,13 @@ These are first-class types designed for modern AI/ML workloads.
 | SPARSE\_VECTOR(indices, values) | A sparse vector represented by indices and values. | Index, Value types |
 | TENSOR(element\_type, shape) | A multi-dimensional array (tensor). | Element type, shape |
 
-#### **3.7. Geospatial Types 🗺️**
+#### **3.6. Unstructured Data Types**
 
-These types are aligned with the Open Geospatial Consortium (OGC) standard and are designed for first-class integration with the **GeoArrow** extension for high-performance in-memory processing. The distinction between planar (**geometry**) and geodetic (**geography**) data is handled by the Coordinate Reference System (CRS) information stored as metadata with the schema.
+These types are designed for large binary objects such as images, videos, audio, and documents.
 
 | Logical Type | Description | Parameters |
 | :---- | :---- | :---- |
-| **GEOMETRY** | A generic container for a single geometry of any shape. | None |
-| **GEOGRAPHY** | A generic container for a single geodetic shape. | None |
-| **POINT** | An exact coordinate location. | dimensions: 'XY', 'XYZ', 'XYM', 'XYZM' |
-| **LINESTRING** | A sequence of two or more points connected by straight line segments. | dimensions: 'XY', 'XYZ', 'XYM', 'XYZM' |
-| **POLYGON** | A planar surface defined by one exterior ring and zero or more interior rings (holes). | dimensions: 'XY', 'XYZ', 'XYM', 'XYZM' |
-| **MULTIPOINT** | A collection of one or more points. | dimensions: 'XY', 'XYZ', 'XYM', 'XYZM' |
-| **MULTILINESTRING** | A collection of one or more LineStrings. | dimensions: 'XY', 'XYZ', 'XYM', 'XYZM' |
-| **MULTIPOLYGON** | A collection of one or more Polygons. | dimensions: 'XY', 'XYZ', 'XYM', 'XYZM' |
-| **GEOMETRY\_COLLECTION** | A collection of one or more geometry objects, which can be of different types. | dimensions: 'XY', 'XYZ', 'XYM', 'XYZM' |
+| BLOB | A binary large object for unstructured data (e.g., images, video, audio, documents). Physically represented as a record with a type discriminator, inline data bytes, and an external reference (path, offset, length, managed). | None |
 
 
 ### **Interoperability Mapping**
@@ -188,16 +181,8 @@ The following table defines the canonical mapping from the proposed logical type
 | MAP\<K,V\> | Map\<K,V\> | Group \+ MAP | map | MapType | MAP\<K,V\> |
 | **DICTIONARY\<K,V\>** | **Dictionary** | Parquet Type for V (w/ Dictionary Encoding) | Avro Type for V (e.g., string, long) | Spark Type for V (e.g., StringType) | Flink Type for V (e.g., STRING) |
 | VECTOR(FLOAT, d) | FixedSizeList\<Float32, d\> | FIXED\_LEN\_BYTE\_ARRAY or LIST | array\<float\> | ArrayType(FloatType) | ARRAY\<FLOAT\> |
-| **GEOMETRY** | **GeoArrow: WKB (in LargeBinary)** | BYTE\_ARRAY | bytes | BinaryType | BYTES |
-| **GEOGRAPHY** | **GeoArrow: WKB (in LargeBinary)** | BYTE\_ARRAY | bytes | BinaryType | BYTES |
-| **POINT** | **GeoArrow: Point (Struct layout)** | Group | record | StructType | ROW |
-| **LINESTRING** | **GeoArrow: LineString (List layout)** | Group \+ LIST | array of record | ArrayType(StructType) | ARRAY\<ROW\> |
-| **POLYGON** | **GeoArrow: Polygon (List layout)** | Group \+ LIST (nested) | array of array of record | ArrayType(ArrayType(StructType)) | ARRAY\<ARRAY\<ROW\>\> |
-| **MULTIPOINT** | **GeoArrow: MultiPoint (List layout)** | Group \+ LIST | array of record | ArrayType(StructType) | ARRAY\<ROW\> |
-| **MULTILINESTRING** | **GeoArrow: MultiLineString (List layout)** | Group \+ LIST (nested) | array of array of record | ArrayType(ArrayType(StructType)) | ARRAY\<ARRAY\<ROW\>\> |
-| **MULTIPOLYGON** | **GeoArrow: MultiPolygon (List layout)** | Group \+ LIST (nested) | array of array of array of record | ArrayType(ArrayType(ArrayType(StructType))) | ARRAY\<ARRAY\<ARRAY\<ROW\>\>\> |
-| **GEOMETRY\_COLLECTION** | **GeoArrow: Union or WKB** | Group (Union) or BYTE\_ARRAY | union or bytes | BinaryType | BYTES |
 | VARIANT | DenseUnion or LargeBinary | BYTE\_ARRAY \+ JSON | string or union | VariantType | JSON |
+| BLOB | Struct\<type, data, reference\> | Group (BLOB logical type) | record \+ blob logical type | StructType (w/ BLOB metadata) | ROW\<type STRING, data BYTES, reference ROW\> |
 
  
 ## Implementation
@@ -209,4 +194,5 @@ SQL Extensions needs to be added to define the table in a hudi type native way.
 
 TODO: There is an open question regarding the need to maintain type ids to track schema evolution and how it would interplay with NBCC. 
 
-The main implementation change would require replacing the Avro schema references with the new type system. 
+## Appendix
+For more details on type design considerations, please see the following: rfc-99/appendix.md

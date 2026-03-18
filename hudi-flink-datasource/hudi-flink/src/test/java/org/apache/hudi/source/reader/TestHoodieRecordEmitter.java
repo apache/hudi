@@ -208,7 +208,8 @@ public class TestHoodieRecordEmitter {
         "/test/partition",
         "read_optimized",
         "19700101000000000",
-        "file-1"
+        "file-1",
+            Option.empty()
     );
   }
 }

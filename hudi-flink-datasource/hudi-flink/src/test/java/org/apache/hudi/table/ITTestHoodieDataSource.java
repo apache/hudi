@@ -142,8 +142,8 @@ public class ITTestHoodieDataSource {
   File tempFile;
 
   @ParameterizedTest
-  @EnumSource(value = HoodieTableType.class)
-  void testStreamWriteAndReadFromSpecifiedCommit(HoodieTableType tableType) throws Exception {
+  @MethodSource("tableTypeAndBooleanTrueFalseParams")
+  void testStreamWriteAndReadFromSpecifiedCommit(HoodieTableType tableType, boolean useSourceV2) throws Exception {
     // create filesystem table named source
     String createSource = TestConfigurations.getFileSourceDDL("source");
     streamTableEnv.executeSql(createSource);
@@ -167,6 +167,7 @@ public class ITTestHoodieDataSource {
         .option(FlinkOptions.READ_STREAMING_SKIP_COMPACT, false)
         .option(FlinkOptions.TABLE_TYPE, tableType)
         .option(FlinkOptions.READ_START_COMMIT, firstCommit)
+        .option(FlinkOptions.READ_SOURCE_V2_ENABLED, useSourceV2)
         .end();
     streamTableEnv.executeSql(hoodieTableDDL);
     List<Row> rows = execSelectSqlWithExpectedNum(streamTableEnv, "select * from t1", TestData.DATA_SET_SOURCE_INSERT.size());
@@ -223,8 +224,8 @@ public class ITTestHoodieDataSource {
   }
 
   @ParameterizedTest
-  @EnumSource(value = HoodieTableType.class)
-  void testStreamWriteAndRead(HoodieTableType tableType) throws Exception {
+  @MethodSource("tableTypeAndBooleanTrueFalseParams")
+  void testStreamWriteAndRead(HoodieTableType tableType, boolean useSourceV2) throws Exception {
     // create filesystem table named source
     String createSource = TestConfigurations.getFileSourceDDL("source");
     streamTableEnv.executeSql(createSource);
@@ -236,7 +237,9 @@ public class ITTestHoodieDataSource {
         .option(FlinkOptions.READ_STREAMING_SKIP_COMPACT, false)
         .option(FlinkOptions.TABLE_TYPE, tableType)
         .option(HoodieWriteConfig.ALLOW_EMPTY_COMMIT.key(), false)
+        .option(FlinkOptions.READ_SOURCE_V2_ENABLED, useSourceV2)
         .end();
+
     streamTableEnv.executeSql(hoodieTableDDL);
     String insertInto = "insert into t1 select * from source";
     execInsertSql(streamTableEnv, insertInto);
@@ -826,8 +829,8 @@ public class ITTestHoodieDataSource {
   }
 
   @ParameterizedTest
-  @MethodSource("tableTypeAndAsyncLookupParams")
-  void testLookupJoin(HoodieTableType tableType, boolean async) {
+  @MethodSource("tableTypeCacheTypeAndAsyncLookupParams")
+  void testLookupJoin(HoodieTableType tableType, String cacheType, boolean async) {
     TableEnvironment tableEnv = streamTableEnv;
     String hoodieTableDDL = sql("t1")
         .option(FlinkOptions.PATH, tempFile.getAbsolutePath() + "/t1")
@@ -850,7 +853,8 @@ public class ITTestHoodieDataSource {
 
     // Join two hudi tables with the same data
     String sql = "insert into t2 select b.* from t1_view o "
-        + "       join t1/*+ OPTIONS('lookup.join.cache.ttl'= '2 day', 'lookup.async'='" + async + "') */  "
+        + "       join t1/*+ OPTIONS('lookup.join.cache.ttl'='2 day', 'lookup.async'='" + async + "',"
+        + "       'lookup.join.cache.type'='" + cacheType + "') */  "
         + "       FOR SYSTEM_TIME AS OF o.proc_time AS b on o.uuid = b.uuid";
     execInsertSql(tableEnv, sql);
     List<Row> result = CollectionUtil.iterableToList(
@@ -870,14 +874,15 @@ public class ITTestHoodieDataSource {
   }
 
   @ParameterizedTest
-  @MethodSource("tableTypeAndAsyncLookupParams")
-  void testLookup(HoodieTableType tableType, boolean async) {
+  @MethodSource("tableTypeCacheTypeAndAsyncLookupParams")
+  void testLookup(HoodieTableType tableType, String cacheType, boolean async) {
     initTablesForLookupJoin(tableType);
     execInsertSql(streamTableEnv, "INSERT INTO DIM VALUES (1, 11, 111, 1111), (2, 22, 222, 2222)");
     execInsertSql(streamTableEnv, "INSERT INTO T VALUES (1), (2), (3)");
 
     String query = "SELECT T.i, D.j, D.k1, D.k2 FROM T LEFT JOIN DIM /*+ OPTIONS('lookup.async'='" + async
-        + "', 'lookup.join.cache.ttl'='1s') */ for system_time as of T.proctime AS D ON T.i = D.i";
+        + "', 'lookup.join.cache.type'='" + cacheType + "', 'lookup.join.cache.ttl'='1s') */"
+        + " for system_time as of T.proctime AS D ON T.i = D.i";
     List<Row> result = CollectionUtil.iterableToList(() -> streamTableEnv.executeSql(query).collect());
     assertThat(result).containsExactlyInAnyOrder(
         Row.of(1, 11, 111, 1111),
@@ -3188,12 +3193,16 @@ public class ITTestHoodieDataSource {
   /**
    * Return test params => (table type, async lookup).
    */
-  private static Stream<Arguments> tableTypeAndAsyncLookupParams() {
+  private static Stream<Arguments> tableTypeCacheTypeAndAsyncLookupParams() {
     Object[][] data = new Object[][] {
-        {HoodieTableType.COPY_ON_WRITE, false},
-        {HoodieTableType.COPY_ON_WRITE, true},
-        {HoodieTableType.MERGE_ON_READ, false},
-        {HoodieTableType.MERGE_ON_READ, true}
+        {HoodieTableType.COPY_ON_WRITE, "heap", false},
+        {HoodieTableType.COPY_ON_WRITE, "heap", true},
+        {HoodieTableType.MERGE_ON_READ, "heap", false},
+        {HoodieTableType.MERGE_ON_READ, "heap", true},
+        {HoodieTableType.COPY_ON_WRITE, "rocksdb", false},
+        {HoodieTableType.COPY_ON_WRITE, "rocksdb", true},
+        {HoodieTableType.MERGE_ON_READ, "rocksdb", false},
+        {HoodieTableType.MERGE_ON_READ, "rocksdb", true}
     };
     return Stream.of(data).map(Arguments::of);
   }

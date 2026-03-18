@@ -74,7 +74,7 @@ class TestBaseHoodieTableFileIndex extends HoodieCommonTestHarness {
     public TestLocalIndex(HoodieEngineContext engineContext, HoodieTableMetaClient metaClient, TypedProperties configProperties, HoodieTableQueryType queryType,
                           List<StoragePath> queryPaths, Option<String> specifiedQueryInstant, boolean shouldIncludePendingCommits, boolean shouldValidateInstant,
                           FileStatusCache fileStatusCache, boolean shouldListLazily, Option<String> startCompletionTime, Option<String> endCompletionTime) {
-      super(engineContext, metaClient, configProperties, queryType, queryPaths, specifiedQueryInstant, shouldIncludePendingCommits, shouldValidateInstant, fileStatusCache, shouldListLazily,
+      super(engineContext, metaClient, configProperties, queryType, queryPaths, specifiedQueryInstant, false, shouldIncludePendingCommits, shouldValidateInstant, fileStatusCache, shouldListLazily,
           startCompletionTime, endCompletionTime);
     }
 

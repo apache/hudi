@@ -81,7 +81,7 @@ public class TransactionUtils {
       Option<HoodieSchema> newTableSchema = resolveSchemaConflictIfNeeded(table, config, lastCompletedTxnOwnerInstant, currentTxnOwnerInstant);
 
       Stream<HoodieInstant> instantStream = Stream.concat(resolutionStrategy.getCandidateInstants(
-              table.getMetaClient(), currentTxnOwnerInstant.get(), lastCompletedTxnOwnerInstant),
+              table.getMetaClient(), currentTxnOwnerInstant.get(), lastCompletedTxnOwnerInstant, Option.of(config)),
           completedInstantsDuringCurrentWriteOperation);
 
       final ConcurrentOperation thisOperation = new ConcurrentOperation(currentTxnOwnerInstant.get(), thisCommitMetadata.orElseGet(HoodieCommitMetadata::new));

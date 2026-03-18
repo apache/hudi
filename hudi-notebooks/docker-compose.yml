@@ -1,5 +1,3 @@
-#!/bin/bash
-
 #  Licensed to the Apache Software Foundation (ASF) under one
 #  or more contributor license agreements.  See the NOTICE file
 #  distributed with this work for additional information
@@ -108,7 +106,7 @@ services:
       - hive-metastore
       - minio
     ports:
-      - "8086:8080"   # Trino Web UI
+      - "8086:8080"   # Presto Web UI
     networks:
       - hudi-datalake
 

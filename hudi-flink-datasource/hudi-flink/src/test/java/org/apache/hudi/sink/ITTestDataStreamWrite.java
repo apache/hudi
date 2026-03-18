@@ -27,6 +27,7 @@ import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.ClusteringUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.configuration.OptionsInference;
@@ -93,6 +94,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 public class ITTestDataStreamWrite extends TestLogger {
 
   private static final Map<String, List<String>> EXPECTED = new HashMap<>();
+  private static final Map<String, List<String>> EXPECTED_KEYLESS = new HashMap<>();
   private static final Map<String, List<String>> EXPECTED_TRANSFORMER = new HashMap<>();
   private static final Map<String, List<String>> EXPECTED_CHAINED_TRANSFORMER = new HashMap<>();
 
@@ -101,6 +103,13 @@ public class ITTestDataStreamWrite extends TestLogger {
     EXPECTED.put("par2", Arrays.asList("id3,par2,id3,Julian,53,3000,par2", "id4,par2,id4,Fabian,31,4000,par2"));
     EXPECTED.put("par3", Arrays.asList("id5,par3,id5,Sophia,18,5000,par3", "id6,par3,id6,Emma,20,6000,par3"));
     EXPECTED.put("par4", Arrays.asList("id7,par4,id7,Bob,44,7000,par4", "id8,par4,id8,Han,56,8000,par4"));
+
+    // Expected data for keyless writes (without _hoodie_record_key and _hoodie_partition_path)
+    // Format: uuid,name,age,ts(as timestamp string from Timestamp.toString()),partition
+    EXPECTED_KEYLESS.put("par1", Arrays.asList("id1,Danny,23,1970-01-01 00:00:01.0,par1", "id2,Stephen,33,1970-01-01 00:00:02.0,par1"));
+    EXPECTED_KEYLESS.put("par2", Arrays.asList("id3,Julian,53,1970-01-01 00:00:03.0,par2", "id4,Fabian,31,1970-01-01 00:00:04.0,par2"));
+    EXPECTED_KEYLESS.put("par3", Arrays.asList("id5,Sophia,18,1970-01-01 00:00:05.0,par3", "id6,Emma,20,1970-01-01 00:00:06.0,par3"));
+    EXPECTED_KEYLESS.put("par4", Arrays.asList("id7,Bob,44,1970-01-01 00:00:07.0,par4", "id8,Han,56,1970-01-01 00:00:08.0,par4"));
 
     EXPECTED_TRANSFORMER.put("par1", Arrays.asList("id1,par1,id1,Danny,24,1000,par1", "id2,par1,id2,Stephen,34,2000,par1"));
     EXPECTED_TRANSFORMER.put("par2", Arrays.asList("id3,par2,id3,Julian,54,3000,par2", "id4,par2,id4,Fabian,32,4000,par2"));
@@ -403,8 +412,9 @@ public class ITTestDataStreamWrite extends TestLogger {
     TestData.assertRowDataEquals(result, TestData.dataSetInsert(5, 6));
   }
 
-  @Test
-  public void testHoodiePipelineBuilderSink() throws Exception {
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  public void testHoodiePipelineBuilderSink(boolean usePrimaryKey) throws Exception {
     StreamExecutionEnvironment execEnv = StreamExecutionEnvironment.getExecutionEnvironment();
     Map<String, String> options = new HashMap<>();
     execEnv.getConfig().disableObjectReuse();
@@ -435,14 +445,27 @@ public class ITTestDataStreamWrite extends TestLogger {
         .column("age int")
         .column("`ts` timestamp(3)")
         .column("`partition` string")
-        .pk("uuid")
         .partition("partition")
         .options(options);
+
+    if (usePrimaryKey) {
+      builder = builder.pk("uuid");
+    } else {
+      // For keyless writes, use insert operation and set RECORD_KEY_FIELD to empty string
+      builder = builder
+          .option(FlinkOptions.RECORD_KEY_FIELD.key(), "")
+          .option(FlinkOptions.OPERATION.key(), WriteOperationType.INSERT.value());
+    }
 
     builder.sink(dataStream, false);
 
     execute(execEnv, false, "Api_Sink_Test");
-    TestData.checkWrittenDataCOW(tempFile, EXPECTED);
+    if (usePrimaryKey) {
+      TestData.checkWrittenDataCOW(tempFile, EXPECTED);
+    } else {
+      // For keyless writes, verify data was written (record keys are auto-generated)
+      TestData.checkWrittenDataCOW(tempFile, EXPECTED_KEYLESS, TestData::filterOutVariablesWithoutHudiMetadata);
+    }
   }
 
   @Test

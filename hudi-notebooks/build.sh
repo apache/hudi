@@ -15,25 +15,33 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-set -eux
+set -euo pipefail
 
-export HUDI_VERSION=1.0.2
+export HUDI_VERSION=${HUDI_VERSION:-1.0.2}
 export HUDI_VERSION_TAG=${HUDI_VERSION}
-export SPARK_VERSION=3.5.7
-export HIVE_VERSION=3.1.3
+export SPARK_VERSION=${SPARK_VERSION:-3.4.4}
+export HIVE_VERSION=${HIVE_VERSION:-3.1.3}
 export HIVE_VERSION_TAG=${HIVE_VERSION}
-export TRINO_VERSION=477
+export TRINO_VERSION=${TRINO_VERSION:-477}
 export TRINO_VERSION_TAG=${TRINO_VERSION}
-export PRESTO_VERSION=0.296
+export PRESTO_VERSION=${PRESTO_VERSION:-0.296}
 export PRESTO_VERSION_TAG=${PRESTO_VERSION}
+export JAVA_VERSION=${JAVA_VERSION:-11}
+export SCALA_VERSION=${SCALA_VERSION:-2.12}
+export HADOOP_VERSION=${HADOOP_VERSION:-3.3.4}
+export AWS_SDK_VERSION=${AWS_SDK_VERSION:-1.12.772}
 
-SCRIPT_DIR=$(cd $(dirname $0); pwd)
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 
 echo "Building Spark Hudi Docker image using Spark version: $SPARK_VERSION and Hudi version: $HUDI_VERSION"
 
 docker build \
     --build-arg HUDI_VERSION="$HUDI_VERSION" \
     --build-arg SPARK_VERSION="$SPARK_VERSION" \
+    --build-arg JAVA_VERSION="$JAVA_VERSION" \
+    --build-arg SCALA_VERSION="$SCALA_VERSION" \
+    --build-arg HADOOP_VERSION="$HADOOP_VERSION" \
+    --build-arg AWS_SDK_VERSION="$AWS_SDK_VERSION" \
     -t apachehudi/spark-hudi:latest \
     -t apachehudi/spark-hudi:"$HUDI_VERSION_TAG" \
     -f "$SCRIPT_DIR"/Dockerfile.spark .

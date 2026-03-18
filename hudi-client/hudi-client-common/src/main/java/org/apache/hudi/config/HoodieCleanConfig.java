@@ -24,6 +24,7 @@ import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
+import org.apache.hudi.common.model.HoodiePreWriteCleanerPolicy;
 import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.table.action.clean.CleaningTriggerStrategy;
@@ -212,6 +213,37 @@ public class HoodieCleanConfig extends HoodieConfig {
           + "By using local engine context, file listing is performed on the driver, allowing targeted memory scaling. "
           + "When enabled, both non-partitioned datasets and metadata tables use the driver for scheduling cleans.");
 
+  public static final ConfigProperty<String> PREWRITE_CLEANER_POLICY = ConfigProperty
+      .key("hoodie.prewrite.cleaner.policy")
+      .defaultValue(HoodiePreWriteCleanerPolicy.NONE.name())
+      .sinceVersion("1.2.0")
+      .withDocumentation(HoodiePreWriteCleanerPolicy.class);
+
+  private static final String CLEAN_PARTITION_FILTER_REGEX_KEY = "hoodie.clean.partition.filter.regex";
+  private static final String CLEAN_PARTITION_FILTER_SELECTED_KEY = "hoodie.clean.partition.filter.selected";
+
+  public static final ConfigProperty<String> CLEAN_PARTITION_FILTER_REGEX = ConfigProperty
+      .key(CLEAN_PARTITION_FILTER_REGEX_KEY)
+      .noDefaultValue()
+      .withAlternatives("hoodie.cleaner.partition.filter.regex")
+      .markAdvanced()
+      .sinceVersion("1.2.0")
+      .withDocumentation("When incremental clean is disabled, this regex can be used to filter the partitions to be cleaned. "
+          + "Only partitions matching this regex pattern will be cleaned. "
+          + "This can be useful for very large tables to avoid OOM issues during cleaning. "
+          + "If both this config and " + CLEAN_PARTITION_FILTER_SELECTED_KEY + " are set, the selected partitions take precedence.");
+
+  public static final ConfigProperty<String> CLEAN_PARTITION_FILTER_SELECTED = ConfigProperty
+      .key(CLEAN_PARTITION_FILTER_SELECTED_KEY)
+      .noDefaultValue()
+      .withAlternatives("hoodie.cleaner.partition.filter.selected")
+      .markAdvanced()
+      .sinceVersion("1.2.0")
+      .withDocumentation("When incremental clean is disabled, this comma-separated list of partitions can be used to filter the partitions to be cleaned. "
+          + "Only the specified partitions will be cleaned. "
+          + "This can be useful for very large tables to avoid OOM issues during cleaning. "
+          + "If both this config and " + CLEAN_PARTITION_FILTER_REGEX_KEY + " are set, the selected partitions take precedence.");
+
   /** @deprecated Use {@link #CLEANER_POLICY} and its methods instead */
   @Deprecated
   public static final String CLEANER_POLICY_PROP = CLEANER_POLICY.key();
@@ -377,9 +409,15 @@ public class HoodieCleanConfig extends HoodieConfig {
       return this;
     }
 
+    public HoodieCleanConfig.Builder withPreWriteCleanerPolicy(HoodiePreWriteCleanerPolicy preWriteCleanerPolicy) {
+      cleanConfig.setValue(PREWRITE_CLEANER_POLICY, preWriteCleanerPolicy.name());
+      return this;
+    }
+
     public HoodieCleanConfig build() {
       cleanConfig.setDefaults(HoodieCleanConfig.class.getName());
       HoodieCleaningPolicy.valueOf(cleanConfig.getString(CLEANER_POLICY));
+      HoodiePreWriteCleanerPolicy.fromString(cleanConfig.getString(PREWRITE_CLEANER_POLICY));
       return cleanConfig;
     }
   }

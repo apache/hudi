@@ -227,6 +227,18 @@ object DataSourceReadOptions {
         " by carefully analyzing provided partition-column predicates and deducing corresponding partition-path prefix from " +
         " them (if possible).")
 
+  val FILE_INDEX_LIST_FILE_STATUSES_USING_RO_PATH_FILTER: ConfigProperty[Boolean] =
+    ConfigProperty.key("hoodie.datasource.read.file.index.optimize.listing.using.path.filter")
+      .defaultValue(false)
+      .markAdvanced()
+      .sinceVersion("1.2.0")
+      .withDocumentation("Controls whether file listing is done using the HoodieROTablePathFilter. " +
+        " This is mainly necessary when the metadata table is not enabled or corrupted and the job " +
+        " is doing recursive calls to fetch the partition paths and the dataset has multiple versions" +
+        " of the same file in the same partition and it could lead to Out of Memory on the driver if" +
+        " the dataset is too large. Another important limitation is that this config should not be" +
+        " used if there are bootstrap files present in the file system. NOTE: Only works for COW tables with snapshot queries.")
+
   val INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN: ConfigProperty[String] = ConfigProperty
     .key("hoodie.datasource.read.incr.fallback.fulltablescan.enable")
     .defaultValue("true")
@@ -277,6 +289,15 @@ object DataSourceReadOptions {
     .markAdvanced()
     .sinceVersion("1.1.0")
     .withDocumentation("Fully qualified class name of the catalog that is used by the Polaris spark client.")
+
+  val USE_PARTITION_VALUE_EXTRACTOR_ON_READ: ConfigProperty[String] = ConfigProperty
+    .key("hoodie.datasource.read.partition.value.extractor.enabled")
+    .defaultValue("false")
+    .markAdvanced()
+    .sinceVersion("1.2.0")
+    .withDocumentation("This config helps whether PartitionValueExtractor interface can be used" +
+      " for parsing partition values from partition path. When this config is enabled, it uses" +
+      " PartitionValueExtractor class value stored in the hoodie.properties file.")
 
   /** @deprecated Use {@link QUERY_TYPE} and its methods instead */
   @Deprecated
@@ -500,6 +521,14 @@ object DataSourceWriteOptions {
     .withDocumentation("Key generator class, that implements `org.apache.hudi.keygen.KeyGenerator`")
 
   val KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED: ConfigProperty[String] = KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED
+
+  val PARTITION_EXTRACTOR_CLASS: ConfigProperty[String] = ConfigProperty
+    .key("hoodie.datasource.partition_extractor_class")
+    .noDefaultValue()
+    .markAdvanced()
+    .sinceVersion("1.2.0")
+    .withDocumentation("PartitionValueExtractor implementation used by Spark datasource write/read paths " +
+      "to parse partition values from partition paths.")
 
   val ENABLE_ROW_WRITER: ConfigProperty[String] = ConfigProperty
     .key("hoodie.datasource.write.row.writer.enable")
@@ -991,6 +1020,10 @@ object DataSourceOptionsHelper {
 
   private val log = LoggerFactory.getLogger(DataSourceOptionsHelper.getClass)
 
+  // Prefix constants for config normalization
+  private val SPARK_HOODIE_PREFIX = "spark.hoodie."
+  private val SPARK_PREFIX = "spark."
+
   // put all the configs with alternatives here
   private val allConfigsWithAlternatives = List(
     DataSourceReadOptions.QUERY_TYPE,
@@ -1058,6 +1091,12 @@ object DataSourceOptionsHelper {
     if (!params.contains(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key()) && tableConfig.getKeyGeneratorClassName != null) {
       missingWriteConfigs ++= Map(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key() -> tableConfig.getKeyGeneratorClassName)
     }
+    if (!params.contains(DataSourceWriteOptions.PARTITION_EXTRACTOR_CLASS.key())
+        && tableConfig.getPartitionExtractorClass.isPresent) {
+      missingWriteConfigs ++= Map(
+        DataSourceWriteOptions.PARTITION_EXTRACTOR_CLASS.key() -> tableConfig.getPartitionExtractorClass.get()
+      )
+    }
     if (!params.contains(HoodieWriteConfig.WRITE_PAYLOAD_CLASS_NAME.key()) && tableConfig.getPayloadClass != null) {
       missingWriteConfigs ++= Map(HoodieWriteConfig.WRITE_PAYLOAD_CLASS_NAME.key() -> tableConfig.getPayloadClass)
     }
@@ -1076,7 +1115,18 @@ object DataSourceOptionsHelper {
   def parametersWithReadDefaults(parameters: Map[String, String]): Map[String, String] = {
     // First check if the ConfigUtils.IS_QUERY_AS_RO_TABLE has set by HiveSyncTool,
     // or else use query type from QUERY_TYPE.
-    val paramsWithGlobalProps = DFSPropertiesConfiguration.getGlobalProps.asScala.toMap ++ parameters
+    // Config precedence (low -> high):
+    // 1) global DFS props
+    // 2) spark.hoodie.* (normalized to hoodie.*)
+    // 3) hoodie.* / explicit data source options
+    // NOTE: If both spark.hoodie.X and hoodie.X are set, hoodie.X wins.
+    val normalizedSparkHoodieConfigs = parameters.collect {
+      case (key, value) if key.startsWith(SPARK_HOODIE_PREFIX) => (key.stripPrefix(SPARK_PREFIX), value)
+    }
+    val paramsWithoutSparkHoodie = parameters.filterNot(_._1.startsWith(SPARK_HOODIE_PREFIX))
+    val paramsWithGlobalProps = DFSPropertiesConfiguration.getGlobalProps.asScala.toMap ++
+      normalizedSparkHoodieConfigs ++
+      paramsWithoutSparkHoodie
     val queryType = paramsWithGlobalProps.get(IS_QUERY_AS_RO_TABLE)
       .map(is => if (is.toBoolean) QUERY_TYPE_READ_OPTIMIZED_OPT_VAL else QUERY_TYPE_SNAPSHOT_OPT_VAL)
       .getOrElse(paramsWithGlobalProps.getOrElse(QUERY_TYPE.key, QUERY_TYPE.defaultValue()))

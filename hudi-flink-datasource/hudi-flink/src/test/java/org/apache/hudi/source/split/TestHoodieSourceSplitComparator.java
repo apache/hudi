@@ -267,7 +267,8 @@ public class TestHoodieSourceSplitComparator {
         "/partition/path",
         "read_optimized",
         latestCommit,
-        "file-1"
+        "file-1",
+        Option.empty()
     );
   }
 }

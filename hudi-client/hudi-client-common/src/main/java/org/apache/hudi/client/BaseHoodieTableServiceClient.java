@@ -58,7 +58,9 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieClusteringException;
 import org.apache.hudi.exception.HoodieCompactionException;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.exception.HoodieHeartbeatException;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.exception.HoodieLockException;
 import org.apache.hudi.exception.HoodieLogCompactException;
 import org.apache.hudi.exception.HoodieRollbackException;
 import org.apache.hudi.metadata.HoodieTableMetadata;
@@ -113,6 +115,9 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
 
   protected transient AsyncCleanerService asyncCleanerService;
   protected transient AsyncArchiveService asyncArchiveService;
+
+  @Setter(AccessLevel.PROTECTED)
+  protected Option<Pair<HoodieInstant, Map<String, String>>> lastCompletedTxnAndMetadata = Option.empty();
 
   @Setter(AccessLevel.PROTECTED)
   protected Set<String> pendingInflightAndRequestedInstants;
@@ -306,21 +311,45 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
    * @return Collection of Write Status
    */
   protected HoodieWriteMetadata<O> compact(HoodieTable<?, I, ?, T> table, String compactionInstantTime, boolean shouldComplete) {
-    HoodieTimeline pendingCompactionTimeline = table.getActiveTimeline().filterPendingCompactionTimeline();
     InstantGenerator instantGenerator = table.getMetaClient().getInstantGenerator();
     HoodieInstant inflightInstant = instantGenerator.getCompactionInflightInstant(compactionInstantTime);
-    if (pendingCompactionTimeline.containsInstant(inflightInstant)) {
-      table.rollbackInflightCompaction(inflightInstant, commitToRollback -> getPendingRollbackInfo(table.getMetaClient(), commitToRollback, false), txnManager);
-      table.getMetaClient().reloadActiveTimeline();
+    boolean isMultiWriter = config.getWriteConcurrencyMode().supportsMultiWriter();
+    if (isMultiWriter) {
+      try {
+        // Transaction serves to ensure only one compact job for this instant will start heartbeat, and any other concurrent
+        // compact job will abort if they attempt to execute compact before heartbeat expires
+        // Note that as long as all jobs for this table use this API for compact with auto-commit, then this alone should prevent
+        // compact rollbacks from running concurrently to compact commits.
+        txnManager.beginStateChange(Option.of(inflightInstant), txnManager.getLastCompletedTransactionOwner());
+        validateHeartBeat(compactionInstantTime);
+        if (!table.getMetaClient().reloadActiveTimeline().filterPendingCompactionTimeline().containsInstant(compactionInstantTime)) {
+          throw new HoodieException("Requested compaction instant " + compactionInstantTime + " is not present as pending or already completed in the active timeline.");
+        }
+        this.heartbeatClient.start(compactionInstantTime);
+      } finally {
+        txnManager.endStateChange(Option.of(inflightInstant));
+      }
     }
-    compactionTimer = metrics.getCompactionCtx();
-    HoodieWriteMetadata<T> writeMetadata = table.compact(context, compactionInstantTime);
-    HoodieWriteMetadata<T> updatedWriteMetadata = partialUpdateTableMetadata(table, writeMetadata, compactionInstantTime, WriteOperationType.COMPACT);
-    HoodieWriteMetadata<O> compactionWriteMetadata = convertToOutputMetadata(updatedWriteMetadata);
-    if (shouldComplete) {
-      commitCompaction(compactionInstantTime, compactionWriteMetadata, Option.of(table));
+    try {
+      HoodieTimeline pendingCompactionTimeline = table.getActiveTimeline().filterPendingCompactionTimeline();
+      if (pendingCompactionTimeline.containsInstant(inflightInstant)) {
+        table.rollbackInflightCompaction(inflightInstant, commitToRollback -> getPendingRollbackInfo(table.getMetaClient(), commitToRollback, false), txnManager);
+        table.getMetaClient().reloadActiveTimeline();
+      }
+      compactionTimer = metrics.getCompactionCtx();
+      HoodieWriteMetadata<T> writeMetadata = table.compact(context, compactionInstantTime);
+      HoodieWriteMetadata<T> updatedWriteMetadata = partialUpdateTableMetadata(table, writeMetadata, compactionInstantTime, WriteOperationType.COMPACT);
+      HoodieWriteMetadata<O> compactionWriteMetadata = convertToOutputMetadata(updatedWriteMetadata);
+      if (shouldComplete) {
+        commitCompaction(compactionInstantTime, compactionWriteMetadata, Option.of(table));
+      }
+      return compactionWriteMetadata;
+    } catch (Exception e) {
+      if (isMultiWriter) {
+        this.heartbeatClient.stop(compactionInstantTime);
+      }
+      throw e;
     }
-    return compactionWriteMetadata;
   }
 
   /**
@@ -357,32 +386,38 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
    * Commit Compaction and track metrics.
    */
   protected void completeCompaction(HoodieCommitMetadata metadata, HoodieTable table, String compactionCommitTime, List<HoodieWriteStat> partialMetadataWriteStats) {
-    this.context.setJobStatus(this.getClass().getSimpleName(), "Collect compaction write status and commit compaction: " + config.getTableName());
-    List<HoodieWriteStat> writeStats = metadata.getWriteStats();
-    handleWriteErrors(writeStats, TableServiceType.COMPACT);
-    InstantGenerator instantGenerator = table.getMetaClient().getInstantGenerator();
-    final HoodieInstant compactionInstant = instantGenerator.getCompactionInflightInstant(compactionCommitTime);
     try {
-      this.txnManager.beginStateChange(Option.of(compactionInstant), Option.empty());
-      finalizeWrite(table, compactionCommitTime, writeStats);
-      // commit to data table after committing to metadata table.
-      writeToMetadataTable(table, compactionCommitTime, metadata, partialMetadataWriteStats);
-      log.info("Committing Compaction {}", compactionCommitTime);
-      CompactHelpers.getInstance().completeInflightCompaction(table, compactionCommitTime, metadata);
-      log.debug("Compaction {} finished with result: {}", compactionCommitTime, metadata);
+      this.context.setJobStatus(this.getClass().getSimpleName(), "Collect compaction write status and commit compaction: " + config.getTableName());
+      List<HoodieWriteStat> writeStats = metadata.getWriteStats();
+      handleWriteErrors(writeStats, TableServiceType.COMPACT);
+      InstantGenerator instantGenerator = table.getMetaClient().getInstantGenerator();
+      final HoodieInstant compactionInstant = instantGenerator.getCompactionInflightInstant(compactionCommitTime);
+      try {
+        this.txnManager.beginStateChange(Option.of(compactionInstant), Option.empty());
+        finalizeWrite(table, compactionCommitTime, writeStats);
+        // commit to data table after committing to metadata table.
+        writeToMetadataTable(table, compactionCommitTime, metadata, partialMetadataWriteStats);
+        log.info("Committing Compaction {}", compactionCommitTime);
+        CompactHelpers.getInstance().completeInflightCompaction(table, compactionCommitTime, metadata);
+        log.debug("Compaction {} finished with result: {}", compactionCommitTime, metadata);
+      } finally {
+        this.txnManager.endStateChange(Option.of(compactionInstant));
+        releaseResources(compactionCommitTime);
+      }
+      WriteMarkersFactory.get(config.getMarkersType(), table, compactionCommitTime)
+          .quietDeleteMarkerDir(context, config.getMarkersDeleteParallelism());
+      if (compactionTimer != null) {
+        long durationInMs = metrics.getDurationInMs(compactionTimer.stop());
+        TimelineUtils.parseDateFromInstantTimeSafely(compactionCommitTime).ifPresent(parsedInstant ->
+            metrics.updateCommitMetrics(parsedInstant.getTime(), durationInMs, metadata, COMPACTION_ACTION)
+        );
+      }
+      log.info("Compacted successfully on commit {}", compactionCommitTime);
     } finally {
-      this.txnManager.endStateChange(Option.of(compactionInstant));
-      releaseResources(compactionCommitTime);
+      if (config.getWriteConcurrencyMode().supportsMultiWriter()) {
+        this.heartbeatClient.stop(compactionCommitTime);
+      }
     }
-    WriteMarkersFactory.get(config.getMarkersType(), table, compactionCommitTime)
-        .quietDeleteMarkerDir(context, config.getMarkersDeleteParallelism());
-    if (compactionTimer != null) {
-      long durationInMs = metrics.getDurationInMs(compactionTimer.stop());
-      TimelineUtils.parseDateFromInstantTimeSafely(compactionCommitTime).ifPresent(parsedInstant ->
-          metrics.updateCommitMetrics(parsedInstant.getTime(), durationInMs, metadata, COMPACTION_ACTION)
-      );
-    }
-    log.info("Compacted successfully on commit {}", compactionCommitTime);
   }
 
   protected void writeToMetadataTable(HoodieTable table, String instantTime, HoodieCommitMetadata metadata, List<HoodieWriteStat> partialMetadataWriteStats) {
@@ -559,7 +594,8 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
     final HoodieInstant clusteringInstant = ClusteringUtils.getInflightClusteringInstant(clusteringCommitTime,
         table.getActiveTimeline(), table.getMetaClient().getInstantGenerator()).get();
     try {
-      this.txnManager.beginStateChange(Option.of(clusteringInstant), Option.empty());
+      this.txnManager.beginStateChange(Option.of(clusteringInstant),
+          lastCompletedTxnAndMetadata.isPresent() ? Option.of(lastCompletedTxnAndMetadata.get().getLeft()) : Option.empty());
 
       finalizeWrite(table, clusteringCommitTime, writeStats);
       // Only in some cases conflict resolution needs to be performed.
@@ -675,7 +711,10 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
       // so it is handled differently to avoid locking for planning.
       return scheduleCleaning(createTable(config, storageConf), providedInstantTime);
     }
-    txnManager.beginStateChange(Option.empty(), Option.empty());
+    Option<HoodieInstant> lastCompletedInstant = lastCompletedTxnAndMetadata.isPresent()
+        ? Option.of(lastCompletedTxnAndMetadata.get().getLeft())
+        : Option.empty();
+    txnManager.beginStateChange(Option.empty(), lastCompletedInstant);
     try {
       Option<String> option;
       HoodieTable<?, ?, ?, ?> table = createTable(config, storageConf);
@@ -890,9 +929,10 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
     }
     final Timer.Context timerContext = metrics.getArchiveCtx();
     int instantsToArchive = 0;
+    HoodieTimelineArchiver archiver = null;
     try {
       // We cannot have unbounded commit files. Archive commits if we have to archive.
-      HoodieTimelineArchiver archiver = TimelineArchivers.getInstance(table.getMetaClient().getTimelineLayoutVersion(), config, table);
+      archiver = TimelineArchivers.getInstance(table.getMetaClient().getTimelineLayoutVersion(), config, table);
       instantsToArchive = archiver.archiveIfRequired(context, true);
     } catch (IOException ioe) {
       throw new HoodieIOException("Failed to archive", ioe);
@@ -900,6 +940,10 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
       if (timerContext != null) {
         long durationMs = metrics.getDurationInMs(timerContext.stop());
         this.metrics.updateArchiveMetrics(durationMs, instantsToArchive);
+      }
+      // Emit additional archival metrics (OOM tracking, failure tracking, etc.)
+      if (archiver != null) {
+        this.metrics.updateArchivalMetrics(archiver.getMetrics());
       }
     }
   }
@@ -1195,6 +1239,7 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
         throw new HoodieRollbackException("Failed to rollback " + config.getBasePath() + " commits " + commitInstantTime);
       }
     } catch (Exception e) {
+      metrics.emitRollbackFailure(e.getClass().getSimpleName());
       throw new HoodieRollbackException("Failed to rollback " + config.getBasePath() + " commits " + commitInstantTime, e);
     }
   }
@@ -1285,5 +1330,15 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
    */
   protected void releaseResources(String instantTime) {
     // do nothing here
+  }
+
+  private void validateHeartBeat(String instantTime) {
+    try {
+      if (!this.heartbeatClient.isHeartbeatExpired(instantTime)) {
+        throw new HoodieLockException("Cannot execute instant " + instantTime + " due to heartbeat by concurrent writer/job");
+      }
+    } catch (IOException e) {
+      throw new HoodieHeartbeatException("Error accessing heartbeat of instant to execute " + instantTime, e);
+    }
   }
 }

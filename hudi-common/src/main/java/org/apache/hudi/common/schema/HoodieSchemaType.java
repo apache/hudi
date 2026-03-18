@@ -124,6 +124,8 @@ public enum HoodieSchemaType {
    */
   BLOB(Schema.Type.RECORD),
 
+  VECTOR(Schema.Type.FIXED),
+
   /**
    * Null type - represents the absence of a value
    */
@@ -163,6 +165,8 @@ public enum HoodieSchemaType {
         return VARIANT;
       } else if (logicalType == HoodieSchema.BlobLogicalType.blob()) {
         return BLOB;
+      } else if (logicalType instanceof HoodieSchema.VectorLogicalType) {
+        return VECTOR;
       }
     }
     switch (avroSchema.getType()) {
@@ -231,6 +235,7 @@ public enum HoodieSchemaType {
       case UNION:
       case VARIANT:
       case BLOB:
+      case VECTOR:
         return true;
       default:
         return false;

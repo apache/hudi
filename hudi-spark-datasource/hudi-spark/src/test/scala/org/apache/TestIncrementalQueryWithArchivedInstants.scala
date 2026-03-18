@@ -100,7 +100,7 @@ class TestIncrementalQueryWithArchivedInstants extends SparkClientFunctionalTest
           .option("hoodie.datasource.read.begin.instanttime", "0")
           .options(opt)
           .load(tblPath)
-          .show(false)
+          .collect()
       }
     })
   }

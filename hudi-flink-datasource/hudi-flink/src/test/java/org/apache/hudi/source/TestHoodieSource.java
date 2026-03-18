@@ -25,6 +25,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.PartitionPathEncodeUtils;
 import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.source.prune.ColumnStatsProbe;
 import org.apache.hudi.source.prune.PartitionPruners;
 import org.apache.hudi.source.reader.HoodieRecordEmitter;
@@ -32,6 +33,8 @@ import org.apache.hudi.source.reader.function.HoodieSplitReaderFunction;
 import org.apache.hudi.source.split.HoodieSourceSplit;
 import org.apache.hudi.source.split.HoodieSourceSplitComparator;
 import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
+import org.apache.hudi.table.format.InternalSchemaManager;
 import org.apache.hudi.util.HoodieSchemaConverter;
 import org.apache.hudi.utils.TestConfigurations;
 import org.apache.hudi.utils.TestData;
@@ -46,6 +49,7 @@ import org.apache.flink.table.expressions.ValueLiteralExpression;
 import org.apache.flink.table.functions.BuiltInFunctionDefinitions;
 import org.apache.flink.table.functions.FunctionIdentifier;
 import org.apache.flink.table.types.logical.RowType;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -408,13 +412,15 @@ public class TestHoodieSource {
         .partitionPruner(partitionPruner)
         .build();
     HoodieSchema schema = HoodieSchemaConverter.convertToSchema(rowType);
+    HadoopStorageConfiguration hadoopConf = new HadoopStorageConfiguration(HadoopConfigurations.getHadoopConf(conf));
     HoodieSplitReaderFunction splitReaderFunction = new HoodieSplitReaderFunction(
-        metaClient,
         conf,
-            schema, // schema will be resolved from table
-            schema, // required schema
+        schema, // schema will be resolved from table
+        schema, // required schema
+        InternalSchemaManager.get(hadoopConf, this.metaClient),
         conf.get(FlinkOptions.MERGE_TYPE),
-        org.apache.hudi.common.util.Option.empty());
+        Collections.emptyList(),
+            false);
 
     return new HoodieSource<>(
         scanContext,

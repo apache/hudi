@@ -118,9 +118,15 @@ public class ConcurrentOperation {
           break;
         case COMMIT_ACTION:
         case DELTA_COMMIT_ACTION:
-          this.mutatedPartitionAndFileIds = getPartitionAndFileIdWithoutSuffixFromSpecificRecord(this.metadataWrapper.getMetadataFromTimeline().getHoodieCommitMetadata()
-              .getPartitionToWriteStats());
-          this.operationType = WriteOperationType.fromValue(this.metadataWrapper.getMetadataFromTimeline().getHoodieCommitMetadata().getOperationType());
+          // Ingestion .requested instants may have empty plan files, so the deserialized
+          // commit metadata will be null. In that case we leave mutatedPartitionAndFileIds
+          // empty and operationType unset, since the write has not started yet.
+          org.apache.hudi.avro.model.HoodieCommitMetadata avroCommitMeta =
+              this.metadataWrapper.getMetadataFromTimeline().getHoodieCommitMetadata();
+          if (avroCommitMeta != null) {
+            this.mutatedPartitionAndFileIds = getPartitionAndFileIdWithoutSuffixFromSpecificRecord(avroCommitMeta.getPartitionToWriteStats());
+            this.operationType = WriteOperationType.fromValue(avroCommitMeta.getOperationType());
+          }
           break;
         case REPLACE_COMMIT_ACTION:
         case CLUSTERING_ACTION:

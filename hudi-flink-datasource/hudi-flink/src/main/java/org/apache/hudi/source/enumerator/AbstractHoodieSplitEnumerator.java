@@ -160,7 +160,8 @@ abstract class AbstractHoodieSplitEnumerator
         if (shouldWaitForMoreSplits()) {
           // for continuous split provider callback
           registerCallbackFromSplitProvider();
-          break;
+
+          // don't break here to make sure every reader get the chance of split assignment
         } else {
           // for static split provider
           log.info("No more splits available for subtask {}", awaitingSubtask);

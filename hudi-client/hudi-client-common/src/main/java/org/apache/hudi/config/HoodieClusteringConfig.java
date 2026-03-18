@@ -217,6 +217,17 @@ public class HoodieClusteringConfig extends HoodieConfig {
       .sinceVersion("0.14.0")
       .withDocumentation("Whether to generate clustering plan when there is only one file group involved, by default true");
 
+  public static final ConfigProperty<String> PLAN_STRATEGY_FILE_SLICES_SORT_BY = ConfigProperty
+      .key(CLUSTERING_STRATEGY_PARAM_PREFIX + "file.slices.sort.by")
+      .defaultValue("SIZE")
+      .markAdvanced()
+      .sinceVersion("1.2.0")
+      .withDocumentation("Comma-separated list of fields to sort file slices by when packing files together within a partition "
+          + "to create clustering groups. "
+          + "Available fields: INSTANT_TIME (sort by commit time ascending, so that older data files are clustered first), "
+          + "SIZE (sort by file size descending). For example, 'INSTANT_TIME,SIZE' sorts by commit time first then by size. "
+          + "Default 'SIZE' sorts by file size only.");
+
   public static final ConfigProperty<String> PLAN_STRATEGY_SORT_COLUMNS = ConfigProperty
       .key(CLUSTERING_STRATEGY_PARAM_PREFIX + "sort.columns")
       .noDefaultValue()
@@ -346,6 +357,16 @@ public class HoodieClusteringConfig extends HoodieConfig {
           + "Pending clustering will be rolled back ONLY IF there is conflict between incoming upsert and filegroup to be clustered. "
           + "Please exercise caution while setting this config, especially when clustering is done very frequently. This could lead to race condition in "
           + "rare scenarios, for example, when the clustering completes after instants are fetched but before rollback completed.");
+
+  public static final ConfigProperty<Boolean> PLAN_GENERATION_USE_LOCAL_ENGINE_CONTEXT = ConfigProperty
+      .key("hoodie.clustering.plan.generation.use.local.engine.context")
+      .defaultValue(false)
+      .sinceVersion("1.2.0")
+      .withDocumentation("When enabled, uses a local engine context (e.g., driver-side in Spark) instead of the distributed engine context "
+          + "to compute clustering groups for each partition during clustering plan generation. By default this is disabled, meaning the distributed "
+          + "engine context is used (e.g., with Spark, each partition's clustering groups are computed in a separate Spark task). "
+          + "Enable this for cases where there are guaranteed to only be a few partitions with many files in the clustering plan, "
+          + "and it would be more resource-efficient to compute locally on the driver rather than allocate executor resources.");
 
   public static final ConfigProperty<Boolean> FILE_STITCHING_BINARY_COPY_SCHEMA_EVOLUTION_ENABLE = ConfigProperty
       .key(CLUSTERING_STRATEGY_PARAM_PREFIX + "binary.copy.schema.evolution.enable")
@@ -584,6 +605,11 @@ public class HoodieClusteringConfig extends HoodieConfig {
       return this;
     }
 
+    public Builder withFileSlicesSortBy(String sortByFields) {
+      clusteringConfig.setValue(PLAN_STRATEGY_FILE_SLICES_SORT_BY, sortByFields);
+      return this;
+    }
+
     public Builder withInlineClustering(Boolean inlineClustering) {
       clusteringConfig.setValue(INLINE_CLUSTERING, String.valueOf(inlineClustering));
       return this;
@@ -627,6 +653,11 @@ public class HoodieClusteringConfig extends HoodieConfig {
 
     public Builder withFileStitchingBinaryCopySchemaEvolutionEnabled(Boolean enabled) {
       clusteringConfig.setValue(FILE_STITCHING_BINARY_COPY_SCHEMA_EVOLUTION_ENABLE, String.valueOf(enabled));
+      return this;
+    }
+
+    public Builder useLocalEngineContextForPlanGeneration(Boolean useLocal) {
+      clusteringConfig.setValue(PLAN_GENERATION_USE_LOCAL_ENGINE_CONTEXT, String.valueOf(useLocal));
       return this;
     }
 
