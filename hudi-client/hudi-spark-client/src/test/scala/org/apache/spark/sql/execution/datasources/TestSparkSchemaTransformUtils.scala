@@ -21,7 +21,7 @@ import org.apache.spark.sql.catalyst.expressions.GenericInternalRow
 import org.apache.spark.sql.catalyst.util.{ArrayBasedMapData, ArrayData}
 import org.apache.spark.sql.types._
 import org.apache.spark.unsafe.types.UTF8String
-import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 import org.junit.jupiter.api.Test
 
 class TestSparkSchemaTransformUtils {
@@ -415,5 +415,69 @@ class TestSparkSchemaTransformUtils {
     assertTrue(outputPerson.isNullAt(0),
       "fullName should be NULL - field 'fullName' doesn't exist in source schema (only 'firstName' exists)")
     assertEquals(30, outputPerson.getInt(1), "age should be 30")
+  }
+
+  @Test
+  def testIsDataTypeEqual_sameTypes(): Unit = {
+    assertTrue(SparkSchemaTransformUtils.isDataTypeEqual(StringType, StringType))
+    assertTrue(SparkSchemaTransformUtils.isDataTypeEqual(IntegerType, IntegerType))
+    assertTrue(SparkSchemaTransformUtils.isDataTypeEqual(LongType, LongType))
+  }
+
+  @Test
+  def testIsDataTypeEqual_differentPrimitiveTypes(): Unit = {
+    assertFalse(SparkSchemaTransformUtils.isDataTypeEqual(StringType, IntegerType))
+    assertFalse(SparkSchemaTransformUtils.isDataTypeEqual(DoubleType, BooleanType))
+  }
+
+  @Test
+  def testIsDataTypeEqual_timestampNTZAndLong(): Unit = {
+    assertTrue(SparkSchemaTransformUtils.isDataTypeEqual(TimestampNTZType, LongType))
+  }
+
+  @Test
+  def testIsDataTypeEqual_sameArrayTypes(): Unit = {
+    assertTrue(SparkSchemaTransformUtils.isDataTypeEqual(
+      ArrayType(IntegerType, containsNull = true),
+      ArrayType(IntegerType, containsNull = false)))
+  }
+
+  @Test
+  def testIsDataTypeEqual_differentArrayElementTypes(): Unit = {
+    assertFalse(SparkSchemaTransformUtils.isDataTypeEqual(
+      ArrayType(StringType), ArrayType(IntegerType)))
+  }
+
+  @Test
+  def testIsDataTypeEqual_sameMapTypes(): Unit = {
+    assertTrue(SparkSchemaTransformUtils.isDataTypeEqual(
+      MapType(StringType, IntegerType, valueContainsNull = true),
+      MapType(StringType, IntegerType, valueContainsNull = false)))
+  }
+
+  @Test
+  def testIsDataTypeEqual_differentMapKeyTypes(): Unit = {
+    assertFalse(SparkSchemaTransformUtils.isDataTypeEqual(
+      MapType(StringType, IntegerType), MapType(IntegerType, IntegerType)))
+  }
+
+  @Test
+  def testIsDataTypeEqual_differentMapValueTypes(): Unit = {
+    assertFalse(SparkSchemaTransformUtils.isDataTypeEqual(
+      MapType(StringType, IntegerType), MapType(StringType, DoubleType)))
+  }
+
+  @Test
+  def testIsDataTypeEqual_sameStructTypes(): Unit = {
+    assertTrue(SparkSchemaTransformUtils.isDataTypeEqual(
+      StructType(Seq(StructField("a", IntegerType), StructField("b", StringType))),
+      StructType(Seq(StructField("a", IntegerType), StructField("b", StringType)))))
+  }
+
+  @Test
+  def testIsDataTypeEqual_differentStructFieldTypes(): Unit = {
+    assertFalse(SparkSchemaTransformUtils.isDataTypeEqual(
+      StructType(Seq(StructField("a", IntegerType), StructField("b", StringType))),
+      StructType(Seq(StructField("a", IntegerType), StructField("b", DoubleType)))))
   }
 }
