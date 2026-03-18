@@ -220,4 +220,43 @@ class TestBaseSpark4AdapterVariantMethods extends SparkAdapterSupport {
     val valueField = groupType.getType("value")
     assertEquals(Repetition.REQUIRED, valueField.getRepetition)
   }
+
+  @Test
+  def testIsDataTypeEqualForPhysicalSchemaStructMissingMetadataField(): Unit = {
+    assumeTrue(HoodieSparkUtils.isSpark4, "Only applies to Spark 4.x")
+    val variantType = sparkAdapter.getVariantDataType.get
+    // Has "value" but not "metadata" — covers line 217 false branch
+    val struct = StructType(Seq(
+      StructField("value", BinaryType),
+      StructField("other", BinaryType)
+    ))
+    val result = sparkAdapter.isDataTypeEqualForPhysicalSchema(variantType, struct)
+    assertTrue(result.isEmpty, "Should return None when metadata field is missing")
+  }
+
+  @Test
+  def testIsDataTypeEqualForPhysicalSchemaStructWithWrongMetadataType(): Unit = {
+    assumeTrue(HoodieSparkUtils.isSpark4, "Only applies to Spark 4.x")
+    val variantType = sparkAdapter.getVariantDataType.get
+    // Both names correct, value is BinaryType, but metadata is StringType — covers line 219 false branch
+    val struct = StructType(Seq(
+      StructField("value", BinaryType),
+      StructField("metadata", StringType)
+    ))
+    val result = sparkAdapter.isDataTypeEqualForPhysicalSchema(variantType, struct)
+    assertTrue(result.isEmpty, "Should return None when metadata field has wrong type")
+  }
+
+  @Test
+  def testIsDataTypeEqualForPhysicalSchemaReversedWithInvalidStruct(): Unit = {
+    assumeTrue(HoodieSparkUtils.isSpark4, "Only applies to Spark 4.x")
+    val variantType = sparkAdapter.getVariantDataType.get
+    // Invalid struct as requiredType, VariantType as fileType — covers line 226 guard-false
+    val invalidStruct = StructType(Seq(
+      StructField("val", BinaryType),
+      StructField("meta", BinaryType)
+    ))
+    val result = sparkAdapter.isDataTypeEqualForPhysicalSchema(invalidStruct, variantType)
+    assertTrue(result.isEmpty, "Should return None when reversed struct doesn't match variant physical schema")
+  }
 }
