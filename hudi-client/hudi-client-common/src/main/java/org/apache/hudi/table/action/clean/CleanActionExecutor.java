@@ -18,6 +18,9 @@
 
 package org.apache.hudi.table.action.clean;
 
+import lombok.Builder;
+import lombok.Value;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.hudi.avro.model.HoodieActionInstant;
 import org.apache.hudi.avro.model.HoodieCleanFileInfo;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
@@ -25,6 +28,8 @@ import org.apache.hudi.avro.model.HoodieCleanerPlan;
 import org.apache.hudi.blob.BlobExtractor;
 import org.apache.hudi.client.transaction.TransactionManager;
 import org.apache.hudi.common.HoodieCleanStat;
+import org.apache.hudi.common.config.HoodieReaderConfig;
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.data.HoodiePairData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.engine.HoodieReaderContext;
@@ -34,9 +39,11 @@ import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.CleanFileInfo;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieFileGroup;
+import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
+import org.apache.hudi.common.table.read.HoodieFileGroupReader;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.CleanerUtils;
 import org.apache.hudi.common.util.HoodieTimer;
@@ -53,10 +60,6 @@ import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.BaseActionExecutor;
-
-import lombok.Builder;
-import lombok.Value;
-import lombok.extern.slf4j.Slf4j;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
@@ -319,7 +322,7 @@ public class CleanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I, K,
     TableSchemaResolver schemaResolver = new TableSchemaResolver(table.getMetaClient());
     HoodieSchema tableSchema;
     try {
-      tableSchema = schemaResolver.getTableSchema(false);
+      tableSchema = schemaResolver.getTableSchema(true);
     } catch (Exception e) {
       log.warn("Skipping blob cleanup, failed to read schema for table: {}", config.getTableName(), e);
       return;
@@ -375,10 +378,32 @@ public class CleanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I, K,
       RecordContext<R> recordContext = readerContext.getRecordContext();
       StoragePath path = new StoragePath(file);
       HoodieStorage storage = hoodieTableMetaClient.getStorage().newInstance(path, readerContext.getStorageConfiguration());
+      StoragePathInfo storagePathInfo = storage.getPathInfo(path);
+      Option<HoodieBaseFile> baseFileOption;
+      Stream<HoodieLogFile> logFiles;
+      if (FSUtils.isLogFile(path)) {
+        logFiles = Stream.of(new HoodieLogFile(storagePathInfo));
+        baseFileOption = Option.empty();
+      } else {
+        logFiles = Stream.empty();
+        baseFileOption = Option.of(new HoodieBaseFile(storagePathInfo));
+      }
+      TypedProperties props = TypedProperties.copy(config.getProps());
+      props.setProperty(HoodieReaderConfig.MERGE_TYPE.key(), HoodieReaderConfig.REALTIME_SKIP_MERGE);
+      HoodieFileGroupReader<R> reader = HoodieFileGroupReader.<R>newBuilder()
+              .withBaseFileOption(baseFileOption)
+              .withLogFiles(logFiles)
+              .withDataSchema(tableSchema)
+              .withRequestedSchema(blobSchema)
+              .withProps(props)
+              .withHoodieTableMetaClient(hoodieTableMetaClient)
+              .withLatestCommitTime(hoodieTableMetaClient.getActiveTimeline().getLatestCompletionTime().get())
+              .withReaderContext(readerContext)
+              .withPartitionPath(FSUtils.getRelativePartitionPath(hoodieTableMetaClient.getBasePath(), path))
+              .build();
       try {
-        StoragePathInfo storagePathInfo = storage.getPathInfo(path);
         BlobExtractor blobExtractor = BlobExtractor.getInstance();
-        return new CloseableMappingIterator<>(readerContext.getFileRecordIterator(storagePathInfo, 0, storagePathInfo.getLength(), tableSchema, blobSchema, storage),
+        return new CloseableMappingIterator<>(reader.getClosableIterator(),
             record -> blobExtractor.getManagedBlobPaths(blobSchema, record, recordContext));
       } catch (IOException e) {
         log.warn("Failed to access file at path: {}, skipping blob reference extraction for this file", path, e);
@@ -408,7 +433,9 @@ public class CleanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I, K,
       List<HoodieFileGroup> unmatchedFileGroups = new ArrayList<>();
       List<String> deletedFilePathsWithoutNewFileSlice = new ArrayList<>();
       AtomicReference<String> earliestBaseInstantTime = new AtomicReference<>(null);
-      table.getHoodieView().getAllFileGroups(partitionPath).forEach(fileGroup -> {
+      Stream<HoodieFileGroup> allFileGroupsForPartition = Stream.concat(table.getHoodieView().getAllReplacedFileGroups(partitionPath),
+              table.getHoodieView().getAllFileGroups(partitionPath));
+      allFileGroupsForPartition.forEach(fileGroup -> {
         if (removedFilesGroupedByFileGroup.containsKey(fileGroup.getFileGroupId().getFileId())) {
           Set<String> removedPaths = removedFilesGroupedByFileGroup.get(fileGroup.getFileGroupId().getFileId());
           Set<String> retainedPaths = new HashSet<>();

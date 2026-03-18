@@ -18,6 +18,9 @@
 
 package org.apache.hudi.table.action.clean;
 
+import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericData;
+import org.apache.avro.generic.GenericRecord;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
@@ -36,10 +39,6 @@ import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.testutils.HoodieClientTestBase;
-
-import org.apache.avro.Schema;
-import org.apache.avro.generic.GenericData;
-import org.apache.avro.generic.GenericRecord;
 import org.apache.spark.api.java.JavaRDD;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
@@ -54,7 +53,6 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.config.HoodieCompactionConfig.PARQUET_SMALL_FILE_LIMIT;
-import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -347,7 +345,11 @@ class TestBlobCleaner extends HoodieClientTestBase {
       if (i % 3 == 1) {
         StoragePath blobPath = getStoragePathForBlob(commit2, i);
         // only records 0-12 are updated
-        assertEquals(i >= 12, storage.exists(blobPath), "Managed and updated blob from commit2 should be removed: " + blobPath);
+        if (i >= 12) {
+          assertTrue(storage.exists(blobPath), "Blob is never updated after commit 2 and therefore shouldn't be removed: " + blobPath);
+        } else {
+          assertFalse(storage.exists(blobPath), "Managed and updated blob from commit2 should be removed: " + blobPath);
+        }
       } else if (i % 3 == 2) {
         // Unmanaged blobs should never be deleted
         StoragePath blobPath = getStoragePathForBlob(commit2, i);
