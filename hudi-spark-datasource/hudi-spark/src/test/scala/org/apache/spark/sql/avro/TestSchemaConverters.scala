@@ -17,6 +17,8 @@
 
 package org.apache.spark.sql.avro
 
+import org.apache.hudi.HoodieSparkUtils
+import org.apache.hudi.SparkAdapterSupport
 import org.apache.hudi.avro.model.HoodieMetadataColumnStats
 import org.apache.hudi.common.schema.{HoodieSchema, HoodieSchemaField, HoodieSchemaType}
 import org.apache.hudi.internal.schema.HoodieSchemaException
@@ -24,11 +26,12 @@ import org.apache.hudi.internal.schema.HoodieSchemaException
 import org.apache.avro.JsonProperties
 import org.apache.spark.sql.types.{ArrayType, DataTypes, FloatType, MetadataBuilder, StructField, StructType}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertThrows, assertTrue}
+import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Test
 
 import java.util
 
-class TestSchemaConverters {
+class TestSchemaConverters extends SparkAdapterSupport {
 
   @Test
   def testAvroUnionConversion(): Unit = {
@@ -191,6 +194,59 @@ class TestSchemaConverters {
     assertThrows(classOf[HoodieSchemaException], () => {
       HoodieSparkSchemaConverters.toHoodieType(sparkType, nullable = false, metadata = metadata)
     })
+  }
+
+  @Test
+  def testVariantToSqlTypeThrowsOnSpark3(): Unit = {
+    assumeTrue(HoodieSparkUtils.isSpark3, "Only applies to Spark 3.x")
+    val variantSchema = HoodieSchema.createVariant()
+    val exception = assertThrows(classOf[IncompatibleSchemaException], () => {
+      HoodieSparkSchemaConverters.toSqlType(variantSchema)
+    })
+    assertTrue(exception.getMessage.contains("VARIANT type is only supported in Spark 4.0+"))
+  }
+
+  @Test
+  def testVariantToSqlTypeOnSpark4(): Unit = {
+    assumeTrue(HoodieSparkUtils.gteqSpark4_0, "Only applies to Spark 4.x+")
+    val variantSchema = HoodieSchema.createVariant()
+    val (dataType, nullable) = HoodieSparkSchemaConverters.toSqlType(variantSchema)
+    assertEquals(sparkAdapter.getVariantDataType.get, dataType)
+    assertFalse(nullable)
+  }
+
+  @Test
+  def testVariantSparkToHoodieOnSpark4(): Unit = {
+    assumeTrue(HoodieSparkUtils.gteqSpark4_0, "Only applies to Spark 4.x+")
+    val variantDataType = sparkAdapter.getVariantDataType.get
+    val hoodieSchema = HoodieSparkSchemaConverters.toHoodieType(variantDataType)
+    assertEquals(HoodieSchemaType.VARIANT, hoodieSchema.getType)
+  }
+
+  @Test
+  def testVariantInRecordRoundTripOnSpark4(): Unit = {
+    assumeTrue(HoodieSparkUtils.gteqSpark4_0, "Only applies to Spark 4.x+")
+    val originalSchema = HoodieSchema.createRecord("variantRecord", "test", null, util.Arrays.asList(
+      HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.LONG)),
+      HoodieSchemaField.of("data", HoodieSchema.createVariant()),
+      HoodieSchemaField.of("nullable_data", HoodieSchema.createNullable(HoodieSchema.createVariant()))
+    ))
+
+    // Hudi -> Spark
+    val (sparkType, _) = HoodieSparkSchemaConverters.toSqlType(originalSchema)
+    val structType = sparkType.asInstanceOf[StructType]
+    val expectedVariantType = sparkAdapter.getVariantDataType.get
+    assertEquals(expectedVariantType, structType("data").dataType)
+    assertFalse(structType("data").nullable)
+    assertEquals(expectedVariantType, structType("nullable_data").dataType)
+    assertTrue(structType("nullable_data").nullable)
+
+    // Spark -> Hudi
+    val reconstructed = HoodieSparkSchemaConverters.toHoodieType(sparkType, recordName = "variantRecord", nameSpace = "test")
+    assertEquals(HoodieSchemaType.VARIANT, reconstructed.getField("data").get().schema().getType)
+    val nullableField = reconstructed.getField("nullable_data").get()
+    assertTrue(nullableField.schema().isNullable)
+    assertEquals(HoodieSchemaType.VARIANT, nullableField.schema().getNonNullType.getType)
   }
 
   /**
