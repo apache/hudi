@@ -71,7 +71,8 @@ class Spark3_5Adapter extends BaseSpark3Adapter {
   }
 
   def isHoodieTable(v2Table: V2TableWithV1Fallback): Boolean = {
-    v2Table.getClass.getName.contains("HoodieInternalV2Table")
+    val className = v2Table.getClass.getName
+    className.contains("HoodieInternalV2Table") || className.contains("HoodieSparkV2Table")
   }
 
   override def isColumnarBatchRow(r: InternalRow): Boolean = r.isInstanceOf[ColumnarBatchRow]
