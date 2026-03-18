@@ -83,8 +83,8 @@ public class HoodieSparkLanceReader implements HoodieSparkFileReader {
     try {
       lanceMetadataReader = LanceFileReader.open(path.toString(), metadataAllocator);
       arrowSchema = lanceMetadataReader.schema();
-    } catch (IOException e) {
-      metadataAllocator.close();
+    } catch (Exception e) {
+      close();
       throw new HoodieException("Failed to create lanceMetadataReader: " + path, e);
     }
   }
