@@ -25,6 +25,8 @@ import org.apache.spark.sql.catalyst.expressions.codegen.GenerateUnsafeProjectio
 import org.apache.spark.sql.catalyst.expressions.{ArrayTransform, Attribute, AttributeReference, Cast, CreateNamedStruct, CreateStruct, Expression, GetStructField, LambdaFunction, Literal, MapEntries, MapFromEntries, NamedLambdaVariable, UnsafeProjection}
 import org.apache.spark.sql.types.{ArrayType, DataType, DateType, DecimalType, DoubleType, FloatType, IntegerType, LongType, MapType, StringType, StructField, StructType, TimestampNTZType}
 
+import scala.util.Try
+
 /**
  * Format-agnostic utilities for Spark schema transformations including NULL padding
  * and recursive type casting with workarounds for unsafe conversions.
@@ -402,8 +404,12 @@ object SparkSchemaTransformUtils {
 
       case _ =>
         // Check if adapter can handle this comparison (e.g., VariantType in Spark 4.0+)
-        HoodieSparkUtils.sparkAdapter.isDataTypeEqualForPhysicalSchema(requiredType, fileType)
-          .getOrElse(false)
+        // Use Try to gracefully handle ClassNotFoundException when adapter module
+        // is not on the classpath (e.g., hudi-spark-client tests without hudi-spark3.5.x)
+        Try(
+          HoodieSparkUtils.sparkAdapter.isDataTypeEqualForPhysicalSchema(requiredType, fileType)
+            .getOrElse(false)
+        ).getOrElse(false)
     }
   }
 
