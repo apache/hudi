@@ -60,6 +60,8 @@ public class HoodieSparkLanceWriter extends HoodieBaseLanceWriter<InternalRow, U
     implements HoodieSparkFileWriter, HoodieInternalRowFileWriter {
 
   private static final String DEFAULT_TIMEZONE = "UTC";
+  private static final long MIN_RECORDS_FOR_SIZE_CHECK = 100L;
+  private static final long MAX_RECORDS_FOR_SIZE_CHECK = 10000L;
 
   private final StructType sparkSchema;
   private final Schema arrowSchema;
@@ -67,6 +69,8 @@ public class HoodieSparkLanceWriter extends HoodieBaseLanceWriter<InternalRow, U
   private final UTF8String instantTime;
   private final boolean populateMetaFields;
   private final Function<Long, String> seqIdGenerator;
+  private final long maxFileSize;
+  private long recordCountForNextSizeCheck = MIN_RECORDS_FOR_SIZE_CHECK;
 
   /**
    * Constructor for Spark Lance writer.
@@ -78,6 +82,8 @@ public class HoodieSparkLanceWriter extends HoodieBaseLanceWriter<InternalRow, U
    * @param storage HoodieStorage instance
    * @param populateMetaFields Whether to populate Hudi metadata fields
    * @param bloomFilterOpt Optional bloom filter for record key tracking
+   * @param maxFileSize Target maximum file size in bytes
+   * @throws IOException if writer initialization fails
    */
   public HoodieSparkLanceWriter(StoragePath file,
                                 StructType sparkSchema,
@@ -85,13 +91,15 @@ public class HoodieSparkLanceWriter extends HoodieBaseLanceWriter<InternalRow, U
                                 TaskContextSupplier taskContextSupplier,
                                 HoodieStorage storage,
                                 boolean populateMetaFields,
-                                Option<BloomFilter> bloomFilterOpt) {
+                                Option<BloomFilter> bloomFilterOpt,
+                                long maxFileSize) {
     super(file, DEFAULT_BATCH_SIZE, bloomFilterOpt.map(HoodieBloomFilterRowWriteSupport::new));
     this.sparkSchema = sparkSchema;
     this.arrowSchema = LanceArrowUtils.toArrowSchema(sparkSchema, DEFAULT_TIMEZONE, true, false);
     this.fileName = UTF8String.fromString(file.getName());
     this.instantTime = UTF8String.fromString(instantTime);
     this.populateMetaFields = populateMetaFields;
+    this.maxFileSize = maxFileSize;
     this.seqIdGenerator = recordIndex -> {
       Integer partitionId = taskContextSupplier.getPartitionIdSupplier().get();
       return HoodieRecord.generateSequenceId(instantTime, partitionId, recordIndex);
@@ -100,6 +108,7 @@ public class HoodieSparkLanceWriter extends HoodieBaseLanceWriter<InternalRow, U
 
   /**
    * Constructor for Spark Lance writer used for internal row writing with pre-embedded metadata.
+   * No file size limit is applied (maxFileSize defaults to {@link Long#MAX_VALUE}).
    *
    * @param file Path where Lance file will be written
    * @param sparkSchema Spark schema for the data
@@ -109,8 +118,55 @@ public class HoodieSparkLanceWriter extends HoodieBaseLanceWriter<InternalRow, U
   public HoodieSparkLanceWriter(StoragePath file,
                                 StructType sparkSchema,
                                 TaskContextSupplier taskContextSupplier,
-                                HoodieStorage storage) {
-    this(file, sparkSchema, null, taskContextSupplier, storage, false, Option.empty());
+                                HoodieStorage storage,
+                                long maxFileSize) {
+    this(file, sparkSchema, null, taskContextSupplier, storage, false, Option.empty(), maxFileSize);
+  }
+
+  /**
+   * Constructor for Spark Lance writer used for internal row writing with pre-embedded metadata
+   * and a configurable file size limit.
+   *
+   * @param file Path where Lance file will be written
+   * @param sparkSchema Spark schema for the data
+   * @param instantTime Instant time for the commit
+   * @param taskContextSupplier Task context supplier for partition ID
+   * @param storage HoodieStorage instance
+   * @param populateMetaFields Whether to populate Hudi metadata fields
+   * @param bloomFilterOpt Optional bloom filter for record key tracking
+   * @throws IOException if writer initialization fails
+   */
+  public HoodieSparkLanceWriter(StoragePath file,
+                                StructType sparkSchema,
+                                String instantTime,
+                                TaskContextSupplier taskContextSupplier,
+                                HoodieStorage storage,
+                                boolean populateMetaFields,
+                                Option<BloomFilter> bloomFilterOpt) {
+    this(file, sparkSchema, instantTime, taskContextSupplier, storage, populateMetaFields, bloomFilterOpt, Long.MAX_VALUE);
+  }
+
+  /**
+   * Constructor for Spark Lance writer used for internal row writing with pre-embedded metadata
+   * and a configurable file size limit.
+   *
+   * @param file Path where Lance file will be written
+   * @param sparkSchema Spark schema for the data
+   * @param instantTime Instant time for the commit
+   * @param taskContextSupplier Task context supplier for partition ID
+   * @param storage HoodieStorage instance
+   * @param populateMetaFields Whether to populate Hudi metadata fields
+   * @param maxFileSize Target maximum file size in bytes
+   * @throws IOException if writer initialization fails
+   */
+  public HoodieSparkLanceWriter(StoragePath file,
+                                StructType sparkSchema,
+                                String instantTime,
+                                TaskContextSupplier taskContextSupplier,
+                                HoodieStorage storage,
+                                boolean populateMetaFields,
+                                long maxFileSize) {
+    this(file, sparkSchema, instantTime, taskContextSupplier, storage, populateMetaFields, Option.empty(), maxFileSize);
   }
 
   @Override
@@ -147,13 +203,30 @@ public class HoodieSparkLanceWriter extends HoodieBaseLanceWriter<InternalRow, U
   }
 
   /**
-   * Check if writer can accept more records based on file size.
-   * Uses filesystem-based size checking (similar to ORC/HFile approach).
+   * Check if writer can accept more records based on estimated data size.
+   * Data size is approximated by accumulating Arrow buffer sizes across flushed batches,
+   * analogous to {@code ParquetWriter.getDataSize()}.
+   * The check is performed periodically (not on every record) and the interval adapts
+   * based on the observed average record size.
    *
-   * @return true if writer can accept more records, false if file size limit reached
+   * @return true if writer can accept more records, false if file size limit is reached
    */
   public boolean canWrite() {
-    //TODO https://github.com/apache/hudi/issues/17684
+    long writtenCount = getWrittenRecordCount();
+    if (writtenCount >= recordCountForNextSizeCheck) {
+      long dataSize = getDataSize();
+      // In extreme cases (e.g. all records same value, high compression ratio),
+      // dataSize may be 0; force avgRecordSize to at least 1 to avoid division by zero.
+      long avgRecordSize = Math.max(dataSize / writtenCount, 1);
+      // Return false when within ~2 records of the limit
+      if (dataSize > (maxFileSize - avgRecordSize * 2)) {
+        return false;
+      }
+      recordCountForNextSizeCheck = writtenCount + Math.min(
+          // Check at halfway between current position and the limit
+          Math.max(MIN_RECORDS_FOR_SIZE_CHECK, (maxFileSize / avgRecordSize - writtenCount) / 2),
+          MAX_RECORDS_FOR_SIZE_CHECK);
+    }
     return true;
   }
 

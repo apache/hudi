@@ -28,6 +28,7 @@ import org.apache.hudi.storage.StoragePath;
 import lombok.AccessLevel;
 import lombok.Getter;
 import org.apache.arrow.memory.BufferAllocator;
+import org.apache.arrow.vector.FieldVector;
 import org.apache.arrow.vector.VectorSchemaRoot;
 import org.apache.arrow.vector.types.pojo.Schema;
 import org.lance.file.LanceFileWriter;
@@ -63,6 +64,7 @@ public abstract class HoodieBaseLanceWriter<R, K extends Comparable<K>> implemen
   private final int batchSize;
   @Getter(value = AccessLevel.PROTECTED)
   private long writtenRecordCount = 0;
+  private long totalFlushedDataSize = 0;
   private int currentBatchSize = 0;
   private VectorSchemaRoot root;
   private ArrowWriter<R> arrowWriter;
@@ -215,6 +217,15 @@ public abstract class HoodieBaseLanceWriter<R, K extends Comparable<K>> implemen
   }
 
   /**
+   * Returns the total number of bytes accumulated across all flushed Arrow batches.
+   * Computed as the sum of each field vector's buffer size at flush time, providing
+   * an uncompressed estimate analogous to {@code ParquetWriter.getDataSize()}.
+   */
+  protected long getDataSize() {
+    return totalFlushedDataSize;
+  }
+
+  /**
    * Flush buffered records to Lance file.
    */
   private void flushBatch() throws IOException {
@@ -224,6 +235,11 @@ public abstract class HoodieBaseLanceWriter<R, K extends Comparable<K>> implemen
 
     // Finalize the arrow writer (sets row count on VectorSchemaRoot)
     arrowWriter.finishBatch();
+
+    // Accumulate the uncompressed Arrow buffer sizes for this batch
+    for (FieldVector vector : root.getFieldVectors()) {
+      totalFlushedDataSize += vector.getBufferSize();
+    }
 
     // Write VectorSchemaRoot to Lance file
     writer.write(root);

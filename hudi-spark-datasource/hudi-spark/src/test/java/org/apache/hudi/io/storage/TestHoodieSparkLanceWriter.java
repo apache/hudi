@@ -414,6 +414,92 @@ public class TestHoodieSparkLanceWriter {
     }
   }
 
+  /**
+   * canWrite() must return true before any records are written (written count is 0,
+   * below the initial check threshold of MIN_RECORDS_FOR_SIZE_CHECK=100).
+   */
+  @Test
+  public void testCanWriteTrueBeforeAnyWrite() throws Exception {
+    StructType schema = createSchemaWithoutMetaFields();
+    StoragePath path = new StoragePath(tempDir.getAbsolutePath() + "/test_canwrite_initial.lance");
+    try (HoodieSparkLanceWriter writer = new HoodieSparkLanceWriter(
+        path, schema, instantTime, taskContextSupplier, storage, false, Long.MAX_VALUE)) {
+      assertTrue(writer.canWrite(), "canWrite() must return true before any records are written");
+    }
+  }
+
+  /**
+   * canWrite() must always return true when maxFileSize is Long.MAX_VALUE,
+   * regardless of how many records are written and how many batch flushes occur.
+   */
+  @Test
+  public void testCanWriteAlwaysTrueWithNoLimit() throws Exception {
+    StructType schema = createSchemaWithoutMetaFields();
+    StoragePath path = new StoragePath(tempDir.getAbsolutePath() + "/test_canwrite_no_limit.lance");
+    // Write more than DEFAULT_BATCH_SIZE (1000) to trigger at least one batch flush
+    int recordCount = 1500;
+    try (HoodieSparkLanceWriter writer = new HoodieSparkLanceWriter(
+        path, schema, instantTime, taskContextSupplier, storage, false, Long.MAX_VALUE)) {
+      for (int i = 0; i < recordCount; i++) {
+        assertTrue(writer.canWrite(), "canWrite() should always be true when maxFileSize is unlimited");
+        writer.writeRow("key" + i, createRow(i, "User" + i, 20L + i));
+      }
+    }
+  }
+
+  /**
+   * canWrite() must return false once the cumulative Arrow buffer size of flushed batches
+   * exceeds maxFileSize. A tiny maxFileSize (100 bytes) is used so that a single flushed
+   * batch of 1000 records (≫ 100 bytes) is guaranteed to exceed the limit.
+   */
+  @Test
+  public void testCanWriteReturnsFalseAfterFileSizeLimitExceeded() throws Exception {
+    StructType schema = createSchemaWithoutMetaFields();
+    StoragePath path = new StoragePath(tempDir.getAbsolutePath() + "/test_canwrite_exceeded.lance");
+    // 100 bytes is far smaller than a single flushed batch of 1000 records
+    long tinyMaxFileSize = 100L;
+
+    try (HoodieSparkLanceWriter writer = new HoodieSparkLanceWriter(
+        path, schema, instantTime, taskContextSupplier, storage, false, tinyMaxFileSize)) {
+
+      assertTrue(writer.canWrite(), "canWrite() must be true before writing any records");
+
+      // Write exactly DEFAULT_BATCH_SIZE records to force the first batch flush
+      for (int i = 0; i < 1000; i++) {
+        writer.writeRow("key" + i, createRow(i, "User" + i, 20L + i));
+      }
+
+      // After the flush the accumulated data size >> tinyMaxFileSize, so canWrite() must be false
+      assertFalse(writer.canWrite(),
+          "canWrite() must return false after flushed data size exceeds maxFileSize");
+    }
+  }
+
+  /**
+   * A write loop that respects canWrite() must stop well before the artificial upper bound
+   * when maxFileSize is tiny, demonstrating that canWrite() correctly gates record writes.
+   */
+  @Test
+  public void testCanWriteStopsWriteLoop() throws Exception {
+    StructType schema = createSchemaWithoutMetaFields();
+    StoragePath path = new StoragePath(tempDir.getAbsolutePath() + "/test_canwrite_loop.lance");
+    long tinyMaxFileSize = 100L;
+    int maxAllowed = 5000;
+    int writtenCount = 0;
+
+    try (HoodieSparkLanceWriter writer = new HoodieSparkLanceWriter(
+        path, schema, instantTime, taskContextSupplier, storage, false, tinyMaxFileSize)) {
+      while (writer.canWrite() && writtenCount < maxAllowed) {
+        writer.writeRow("key" + writtenCount, createRow(writtenCount, "User" + writtenCount, 20L));
+        writtenCount++;
+      }
+    }
+
+    assertTrue(writtenCount > 0, "At least one record should have been written");
+    assertTrue(writtenCount < maxAllowed,
+        "Write loop must have been stopped by canWrite() before reaching the artificial ceiling");
+  }
+
   // Helper methods
 
   private StructType createSchemaWithMetaFields() {

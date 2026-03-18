@@ -21,6 +21,7 @@ package org.apache.hudi.io.storage.row;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.bloom.BloomFilterFactory;
 import org.apache.hudi.common.config.HoodieParquetConfig;
+import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.engine.LocalTaskContextSupplier;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.util.Option;
@@ -63,7 +64,8 @@ public class HoodieInternalRowFileWriterFactory {
     if (PARQUET.getFileExtension().equals(extension)) {
       return newParquetInternalRowFileWriter(path, hoodieTable, writeConfig, schema, tryInstantiateBloomFilter(writeConfig));
     } else if (LANCE.getFileExtension().equals(extension)) {
-      return newLanceInternalRowFileWriter(path, hoodieTable, schema);
+      long maxFileSize = writeConfig.getLongOrDefault(HoodieStorageConfig.LANCE_MAX_FILE_SIZE);
+      return newLanceInternalRowFileWriter(path, hoodieTable, schema, maxFileSize);
     }
     throw new UnsupportedOperationException(extension + " format not supported yet.");
   }
@@ -94,13 +96,15 @@ public class HoodieInternalRowFileWriterFactory {
 
   private static HoodieInternalRowFileWriter newLanceInternalRowFileWriter(StoragePath path,
                                                                            HoodieTable table,
-                                                                           StructType structType)
+                                                                           StructType structType,
+                                                                           long maxFileSize)
       throws IOException {
     return new HoodieSparkLanceWriter(
         path,
         structType,
         new LocalTaskContextSupplier(),
-        table.getStorage());
+        table.getStorage(),
+        maxFileSize);
   }
 
   private static Option<BloomFilter> tryInstantiateBloomFilter(HoodieWriteConfig writeConfig) {
