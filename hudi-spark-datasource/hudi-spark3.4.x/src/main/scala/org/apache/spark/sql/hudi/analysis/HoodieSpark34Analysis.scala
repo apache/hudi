@@ -27,15 +27,6 @@ import org.apache.spark.sql.execution.datasources.v2.DataSourceV2Relation
 import org.apache.spark.sql.hudi.ProvidesHoodieConfig
 import org.apache.spark.sql.hudi.catalog.HoodieInternalV2Table
 
-/**
- * NOTE: PLEASE READ CAREFULLY
- *
- * Since Hudi relations don't currently implement DS V2 Read API, we have to fallback to V1 here.
- * Such fallback will have considerable performance impact, therefore it's only performed in cases
- * where V2 API have to be used. Currently only such use-case is using of Schema Evolution feature
- *
- * Check out HUDI-4178 for more details
- */
 case class HoodieSpark34DataSourceV2ToV1Fallback(sparkSession: SparkSession) extends Rule[LogicalPlan]
   with ProvidesHoodieConfig {
 
