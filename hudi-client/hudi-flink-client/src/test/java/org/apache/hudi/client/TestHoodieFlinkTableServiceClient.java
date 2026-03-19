@@ -22,6 +22,7 @@ import org.apache.hudi.client.embedded.EmbeddedTimelineService;
 import org.apache.hudi.client.common.HoodieFlinkEngineContext;
 import org.apache.hudi.client.transaction.TransactionManager;
 import org.apache.hudi.client.transaction.lock.InProcessLockProvider;
+import org.apache.hudi.client.transaction.lock.LockManager;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
@@ -76,7 +77,9 @@ public class TestHoodieFlinkTableServiceClient extends HoodieFlinkClientTestHarn
     HoodieActiveTimeline activeTimeline = mock(HoodieActiveTimeline.class);
     HoodieTimeline inflightAndRequestedTimeline = mock(HoodieTimeline.class);
     when(table.getActiveTimeline()).thenReturn(activeTimeline);
-    when(table.getTxnManager()).thenReturn(Option.of(mock(TransactionManager.class)));
+    TransactionManager txnManager = mock(TransactionManager.class);
+    when(txnManager.getLockManager()).thenReturn(mock(LockManager.class));
+    when(table.getTxnManager()).thenReturn(Option.of(txnManager));
     when(activeTimeline.filterInflightsAndRequested()).thenReturn(inflightAndRequestedTimeline);
     when(inflightAndRequestedTimeline.lastInstant()).thenReturn(Option.empty());
 
