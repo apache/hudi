@@ -91,6 +91,8 @@ public class TestTransactionManager extends HoodieCommonTestHarness {
     transactionManager.endStateChange(newTxnOwnerInstant);
   }
 
+  // the txn manager lock is not reentrant
+  // since the txn manager is shared within the write client by different table services.
   @Test
   public void testSingleWriterNestedTransaction() {
     Option<HoodieInstant> lastCompletedInstant = getInstant("0000001");
@@ -100,7 +102,7 @@ public class TestTransactionManager extends HoodieCommonTestHarness {
     Option<HoodieInstant> lastCompletedInstant1 = getInstant("0000003");
     Option<HoodieInstant> newTxnOwnerInstant1 = getInstant("0000004");
 
-    assertDoesNotThrow(() -> transactionManager.beginStateChange(newTxnOwnerInstant1, lastCompletedInstant1));
+    assertThrows(HoodieLockException.class, () -> transactionManager.beginStateChange(newTxnOwnerInstant1, lastCompletedInstant1));
 
     transactionManager.endStateChange(newTxnOwnerInstant);
     assertDoesNotThrow(() -> {

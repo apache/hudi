@@ -266,7 +266,7 @@ public abstract class BaseRollbackActionExecutor<T, I, K, O> extends BaseActionE
   }
 
   protected void finishRollback(HoodieInstant inflightInstant, HoodieRollbackMetadata rollbackMetadata) throws HoodieIOException {
-    boolean enableLocking = (!skipLocking && !skipTimelinePublish);
+    boolean enableLocking = (!skipLocking || !skipTimelinePublish);
     try {
       if (enableLocking) {
         this.txnManager.beginStateChange(Option.of(inflightInstant), Option.empty());
