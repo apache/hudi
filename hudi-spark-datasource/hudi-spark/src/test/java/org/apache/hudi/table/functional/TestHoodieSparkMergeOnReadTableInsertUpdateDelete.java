@@ -142,7 +142,7 @@ public class TestHoodieSparkMergeOnReadTableInsertUpdateDelete extends SparkClie
       client.commitCompaction(compactionCommitTime, result, Option.empty());
       assertTrue(metaClient.reloadActiveTimeline().filterCompletedInstants().containsInstant(compactionCommitTime));
 
-      HoodieTable hoodieTable = HoodieSparkTable.create(cfg, context(), metaClient);
+      HoodieTable hoodieTable = HoodieSparkTable.createForReads(cfg, context(), metaClient);
       hoodieTable.getHoodieView().sync();
       List<StoragePathInfo> allFiles = listAllBaseFilesInPath(hoodieTable);
       HoodieTableFileSystemView tableView =
@@ -296,7 +296,7 @@ public class TestHoodieSparkMergeOnReadTableInsertUpdateDelete extends SparkClie
       client.commit(newCommitTime, jsc().parallelize(statuses));
       assertNoWriteErrors(statuses);
 
-      HoodieTable hoodieTable = HoodieSparkTable.create(cfg, context(), metaClient);
+      HoodieTable hoodieTable = HoodieSparkTable.createForReads(cfg, context(), metaClient);
 
       Option<HoodieInstant> deltaCommit = metaClient.getActiveTimeline().getDeltaCommitTimeline().firstInstant();
       assertTrue(deltaCommit.isPresent());
@@ -396,7 +396,7 @@ public class TestHoodieSparkMergeOnReadTableInsertUpdateDelete extends SparkClie
       final String fakeToken = generateFakeWriteToken(correctWriteToken);
 
       final WriteMarkers writeMarkers = WriteMarkersFactory.get(config.getMarkersType(),
-          HoodieSparkTable.create(config, context()), newCommitTime);
+          HoodieSparkTable.createForReads(config, context()), newCommitTime);
       HoodieLogFormat.Writer fakeLogWriter = HoodieLogFormatWriter.builder()
           .withParentPath(
               FSUtils.constructAbsolutePath(config.getBasePath(),
@@ -425,7 +425,7 @@ public class TestHoodieSparkMergeOnReadTableInsertUpdateDelete extends SparkClie
               path -> path.getName().equals(fakeAppendResult.logFile().getPath().getName())));
       writeClient.commit(newCommitTime, statuses);
 
-      HoodieTable table = HoodieSparkTable.create(config, context(), metaClient);
+      HoodieTable table = HoodieSparkTable.createForReads(config, context(), metaClient);
       table.getHoodieView().sync();
       TableFileSystemView.SliceView tableRTFileSystemView = table.getSliceView();
 

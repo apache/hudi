@@ -32,6 +32,7 @@ import org.apache.hudi.client.heartbeat.HoodieHeartbeatClient;
 import org.apache.hudi.client.heartbeat.WriterHeartbeatUtils;
 import org.apache.hudi.client.timeline.HoodieTimelineArchiver;
 import org.apache.hudi.client.timeline.TimelineArchivers;
+import org.apache.hudi.client.transaction.TransactionManager;
 import org.apache.hudi.common.HoodiePendingRollbackInfo;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.ActionType;
@@ -93,7 +94,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
-import java.util.function.BiFunction;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -130,8 +130,9 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
 
   protected BaseHoodieTableServiceClient(HoodieEngineContext context,
                                          HoodieWriteConfig clientConfig,
-                                         Option<EmbeddedTimelineService> timelineService) {
-    super(context, clientConfig, timelineService);
+                                         Option<EmbeddedTimelineService> timelineService,
+                                         TransactionManager transactionManager) {
+    super(context, clientConfig, timelineService, transactionManager);
   }
 
   protected void startAsyncCleanerService(BaseHoodieWriteClient writeClient) {
@@ -409,7 +410,7 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
         // commit to data table after committing to metadata table.
         writeToMetadataTable(table, compactionCommitTime, metadata, partialMetadataWriteStats);
         log.info("Committing Compaction {}", compactionCommitTime);
-        CompactHelpers.getInstance().completeInflightCompaction(table, compactionCommitTime, metadata);
+        CompactHelpers.getInstance().completeInflightCompaction(table, compactionCommitTime, metadata, txnManager.generateInstantTime());
         log.debug("Compaction {} finished with result: {}", compactionCommitTime, metadata);
       } finally {
         this.txnManager.endStateChange(Option.of(compactionInstant));
@@ -483,7 +484,7 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
       // commit to data table after committing to metadata table.
       writeToMetadataTable(table, logCompactionCommitTime, metadata, partialMetadataWriteStats);
       log.info("Committing Log Compaction {}", logCompactionCommitTime);
-      CompactHelpers.getInstance().completeInflightLogCompaction(table, logCompactionCommitTime, metadata);
+      CompactHelpers.getInstance().completeInflightLogCompaction(table, logCompactionCommitTime, metadata, txnManager.generateInstantTime());
       log.debug("Log Compaction {} finished with result {}", logCompactionCommitTime, metadata);
     } finally {
       this.txnManager.endStateChange(Option.of(logCompactionInstant));
@@ -623,7 +624,11 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
 
       log.info("Committing Clustering {} for table {}", clusteringCommitTime, table.getConfig().getBasePath());
 
-      ClusteringUtils.transitionClusteringOrReplaceInflightToComplete(false, clusteringInstant, replaceCommitMetadata, table.getActiveTimeline(),
+      ClusteringUtils.transitionClusteringOrReplaceInflightToComplete(
+          clusteringInstant,
+          replaceCommitMetadata,
+          table.getActiveTimeline(),
+          txnManager.generateInstantTime(),
           completedInstant -> table.getMetaClient().getTableFormat().commit(replaceCommitMetadata, completedInstant, table.getContext(), table.getMetaClient(), table.getViewManager()));
       log.debug("Clustering {} finished with result {}", clusteringCommitTime, replaceCommitMetadata);
     } catch (Exception e) {
@@ -732,21 +737,19 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
       return scheduleCleaning(createTable(config, storageConf), providedInstantTime);
     }
     // Only enrich metadata after early-return checks, when we're actually going to use it
-    extraMetadata = updateExtraMetadata(extraMetadata);
+    final Option<Map<String, String>> enrichedExtraMetadata = updateExtraMetadata(extraMetadata);
     Option<HoodieInstant> lastCompletedInstant = lastCompletedTxnAndMetadata.isPresent()
         ? Option.of(lastCompletedTxnAndMetadata.get().getLeft())
         : Option.empty();
-    txnManager.beginStateChange(Option.empty(), lastCompletedInstant);
-    try {
+    return txnManager.executeStateChangeWithInstant(providedInstantTime, lastCompletedInstant, instantTime -> {
       Option<String> option;
       HoodieTable<?, ?, ?, ?> table = createTable(config, storageConf);
-      String instantTime = providedInstantTime.orElseGet(() -> createNewInstantTime(false));
 
       switch (tableServiceType) {
         case CLUSTER:
           log.info("Scheduling clustering at instant time: {} for table {}", instantTime, config.getBasePath());
           Option<HoodieClusteringPlan> clusteringPlan = table
-              .scheduleClustering(context, instantTime, extraMetadata);
+              .scheduleClustering(context, instantTime, enrichedExtraMetadata);
           option = clusteringPlan.map(plan -> instantTime);
           if (option.isPresent() && config.isExpirationOfClusteringEnabled()) {
             heartbeatClient.start(instantTime);
@@ -756,13 +759,13 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
         case COMPACT:
           log.info("Scheduling compaction at instant time: {} for table {}", instantTime, config.getBasePath());
           Option<HoodieCompactionPlan> compactionPlan = table
-              .scheduleCompaction(context, instantTime, extraMetadata);
+              .scheduleCompaction(context, instantTime, enrichedExtraMetadata);
           option = compactionPlan.map(plan -> instantTime);
           break;
         case LOG_COMPACT:
           log.info("Scheduling log compaction at instant time: {} for table {}", instantTime, config.getBasePath());
           Option<HoodieCompactionPlan> logCompactionPlan = table
-              .scheduleLogCompaction(context, instantTime, extraMetadata);
+              .scheduleLogCompaction(context, instantTime, enrichedExtraMetadata);
           option = logCompactionPlan.map(plan -> instantTime);
           break;
         default:
@@ -775,30 +778,28 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
       }
 
       return option;
-    } finally {
-      txnManager.endStateChange(Option.empty());
-    }
+    });
   }
 
   HoodieInstant startDeletePartitionCommit(HoodieTableMetaClient metaClient) {
-    txnManager.beginStateChange(Option.empty(), Option.empty());
-    try {
-      String instantTime = createNewInstantTime(false);
+    return txnManager.executeStateChangeWithInstant(instantTime -> {
       HoodieInstant dropPartitionsInstant = metaClient.getInstantGenerator().createNewInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.REPLACE_COMMIT_ACTION, instantTime);
       HoodieRequestedReplaceMetadata requestedReplaceMetadata = HoodieRequestedReplaceMetadata.newBuilder()
           .setOperationType(WriteOperationType.DELETE_PARTITION.name()).setExtraMetadata(Collections.emptyMap()).build();
       metaClient.getActiveTimeline().saveToPendingReplaceCommit(dropPartitionsInstant, requestedReplaceMetadata);
       return dropPartitionsInstant;
-    } finally {
-      txnManager.endStateChange(Option.empty());
-    }
+    });
+  }
+
+  @FunctionalInterface
+  protected interface TriFunction<T, U, V, R> {
+    R apply(T t, U u, V v);
   }
 
   protected HoodieTable createTableAndValidate(HoodieWriteConfig config,
-                                               BiFunction<HoodieWriteConfig,
-                                               HoodieEngineContext, HoodieTable> createTableFn,
+                                               TriFunction<HoodieWriteConfig, HoodieEngineContext, TransactionManager, HoodieTable> createTableFn,
                                                boolean skipValidation) {
-    HoodieTable table = createTableFn.apply(config, context);
+    HoodieTable table = createTableFn.apply(config, context, txnManager);
     if (!skipValidation) {
       CommonClientUtils.validateTableVersion(table.getMetaClient().getTableConfig(), config);
     }
@@ -921,9 +922,7 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
   private Option<String> scheduleCleaning(HoodieTable<?, ?, ?, ?> table, Option<String> suppliedCleanInstant) {
     Option<HoodieCleanerPlan> cleanerPlan = table.createCleanerPlan(context, Option.empty());
     if (cleanerPlan.isPresent()) {
-      txnManager.beginStateChange(Option.empty(), Option.empty());
-      try {
-        String cleanInstantTime = suppliedCleanInstant.orElseGet(() -> createNewInstantTime(false));
+      return txnManager.executeStateChangeWithInstant(suppliedCleanInstant, cleanInstantTime -> {
         final HoodieInstant cleanInstant = table.getMetaClient().createNewInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.CLEAN_ACTION, cleanInstantTime);
         // Save to both aux and timeline folder
         table.getActiveTimeline().saveToCleanRequested(cleanInstant, cleanerPlan);
@@ -933,12 +932,7 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
           log.info("Delegate instant [{}] to table service manager", instantRange.get());
         }
         return Option.of(cleanInstantTime);
-      } catch (HoodieIOException e) {
-        log.error("Got exception when saving cleaner requested file", e);
-        throw e;
-      } finally {
-        txnManager.endStateChange(Option.empty());
-      }
+      });
     }
     return Option.empty();
   }
@@ -1277,34 +1271,23 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
         if (isMultiWriter && !acquireRollbackHeartbeatIfMultiWriter(table, rollbackInstantOpt)) {
           return false;
         }
-
-        try {
-          // Execute rollback — no lock held during this operation.
-
-          // There can be a case where the inflight rollback failed after the instant files
-          // are deleted for commitInstantTime, so that commitInstantOpt is empty as it is
-          // not present in the timeline.  In such a case, the hoodie instant instance
-          // is reconstructed to allow the rollback to be reattempted, and the deleteInstants
-          // is set to false since they are already deleted.
-          HoodieRollbackMetadata rollbackMetadata = commitInstantOpt.isPresent()
-              ? table.rollback(context, rollbackInstantOpt.get().requestedTime(), commitInstantOpt.get(), true, skipLocking)
-              : table.rollback(context, rollbackInstantOpt.get().requestedTime(), table.getMetaClient().createNewInstant(
-                  HoodieInstant.State.INFLIGHT, rollbackPlanOption.get().getInstantToRollback().getAction(), commitInstantTime),
-              false, skipLocking);
-          if (timerContext != null) {
-            long durationInMs = metrics.getDurationInMs(timerContext.stop());
-            metrics.updateRollbackMetrics(durationInMs, rollbackMetadata.getTotalFilesDeleted());
-          }
-          return true;
-        } finally {
-          if (isMultiWriter) {
-            try {
-              heartbeatClient.stop(rollbackInstantOpt.get().requestedTime());
-            } catch (Exception e) {
-              log.warn("Failed to stop heartbeat for rollback instant {}", rollbackInstantOpt.get().requestedTime(), e);
-            }
-          }
+        String rollbackInstantTime = rollbackInstantOpt.get().requestedTime();
+        // There can be a case where the inflight rollback failed after the instant files
+        // are deleted for commitInstantTime, so that commitInstantOpt is empty as it is
+        // not present in the timeline.  In such a case, the hoodie instant instance
+        // is reconstructed to allow the rollback to be reattempted, and the deleteInstants
+        // is set to false since they are already deleted.
+        // Execute rollback
+        HoodieRollbackMetadata rollbackMetadata = commitInstantOpt.isPresent()
+            ? table.rollback(context, rollbackInstantTime, commitInstantOpt.get(), true, skipLocking)
+            : table.rollback(context, rollbackInstantTime, table.getMetaClient().createNewInstant(
+                HoodieInstant.State.INFLIGHT, rollbackPlanOption.get().getInstantToRollback().getAction(), commitInstantTime),
+            false, skipLocking);
+        if (timerContext != null) {
+          long durationInMs = metrics.getDurationInMs(timerContext.stop());
+          metrics.updateRollbackMetrics(durationInMs, rollbackMetadata.getTotalFilesDeleted());
         }
+        return true;
       } else {
         throw new HoodieRollbackException("Failed to rollback " + config.getBasePath() + " commits " + commitInstantTime);
       }
@@ -1380,7 +1363,8 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
       }
       // Case 2b: no pending rollback exists — schedule one now.
       // Refresh commitInstantOpt from the reloaded timeline.
-      String newRollbackInstantTime = suppliedRollbackInstantTime.orElseGet(() -> createNewInstantTime(false));
+      String newRollbackInstantTime = suppliedRollbackInstantTime.orElseGet(() ->
+          txnManager.executeStateChangeWithInstant(instantTime -> instantTime));
       HoodieInstant rollbackInstant = new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.ROLLBACK_ACTION, newRollbackInstantTime,
           table.getMetaClient().getTimelineLayout().getInstantComparator().requestedTimeOrderedComparator());
       Option<HoodieRollbackPlan> rollbackPlan = table.scheduleRollback(context, newRollbackInstantTime, commitInstantOpt.get(),
@@ -1405,7 +1389,10 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
     if (instant.isPresent() && compareTimestamps(instant.get(), LESSER_THAN_OR_EQUALS,
         HoodieTimeline.FULL_BOOTSTRAP_INSTANT_TS)) {
       log.info("Found pending bootstrap instants. Rolling them back");
-      executeUsingTxnManager(Option.empty(), () -> table.rollbackBootstrap(context, createNewInstantTime(false)));
+      txnManager.executeStateChangeWithInstant(instantTime -> {
+        table.rollbackBootstrap(context, instantTime);
+        return null;
+      });
       log.info("Finished rolling back pending bootstrap");
     }
 

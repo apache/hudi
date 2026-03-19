@@ -19,6 +19,7 @@
 
 package org.apache.hudi.table.upgrade;
 
+import org.apache.hudi.client.transaction.TransactionManager;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -41,9 +42,9 @@ public class FourToFiveUpgradeHandler implements UpgradeHandler {
 
   @Override
   public UpgradeDowngrade.TableConfigChangeSet upgrade(HoodieWriteConfig config,
-                                                                         HoodieEngineContext context,
-                                                                         String instantTime,
-                                                                         SupportsUpgradeDowngrade upgradeDowngradeHelper) {
+                                                       HoodieEngineContext context,
+                                                       String instantTime,
+                                                       SupportsUpgradeDowngrade upgradeDowngradeHelper) {
     try {
       HoodieTable table = upgradeDowngradeHelper.getTable(config, context);
 
@@ -65,6 +66,7 @@ public class FourToFiveUpgradeHandler implements UpgradeHandler {
         throw new HoodieException(String.format("Old deprecated \"%s\" partition found in hudi table. This needs a migration step before we can upgrade ",
             DEPRECATED_DEFAULT_PARTITION_PATH));
       }
+      table.getTxnManager().ifPresent(obj -> ((TransactionManager) obj).close());
       return new UpgradeDowngrade.TableConfigChangeSet();
     } catch (IOException e) {
       log.error("Fetching file system instance failed", e);

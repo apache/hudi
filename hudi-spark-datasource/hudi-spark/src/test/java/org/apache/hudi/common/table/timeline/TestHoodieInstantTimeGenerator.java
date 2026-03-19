@@ -33,7 +33,6 @@ import java.util.concurrent.TimeUnit;
 import static org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator.MILLIS_INSTANT_TIME_FORMATTER;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -46,7 +45,7 @@ class TestHoodieInstantTimeGenerator {
     HoodieInstantTimeGenerator.setCommitTimeZone(HoodieTimelineTimeZone.UTC);
 
     TimeGenerator timeGenerator = mock(TimeGenerator.class);
-    when(timeGenerator.generateTime(anyBoolean())).thenAnswer(invocation -> System.currentTimeMillis());
+    when(timeGenerator.generateTime()).thenAnswer(invocation -> System.currentTimeMillis());
     // run for few iterations
     for (int j = 0; j < 5; j++) {
       instantTimesSoFar.clear();
@@ -55,7 +54,7 @@ class TestHoodieInstantTimeGenerator {
 
       // new instant that we generate below should be within few seconds apart compared to above time we generated. If not, the time zone is not honored
       for (int i = 0; i < 10; i++) {
-        String newInstantTime = HoodieInstantTimeGenerator.createNewInstantTime(false, timeGenerator, 0);
+        String newInstantTime = HoodieInstantTimeGenerator.createNewInstantTime(timeGenerator, 0);
         assertTrue(!instantTimesSoFar.contains(newInstantTime));
         instantTimesSoFar.add(newInstantTime);
         assertTrue((Long.parseLong(newInstantTime) - Long.parseLong(newCommitTimeInUTC)) < 60000L,

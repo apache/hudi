@@ -156,8 +156,7 @@ class TestShowTimelineTableProcedure extends HoodieSparkSqlTestBase {
           activeTimeline.createNewInstant(commitInflight)
           val compTime = completionTime.getOrElse(String.valueOf(timestamp.toLong + 1))
           val metadata = testTable.createCommitMetadata(timestamp, WriteOperationType.COMPACT, util.Arrays.asList("par1"), 10, false)
-          activeTimeline.saveAsComplete(false, commitInflight, org.apache.hudi.common.util.Option.of(metadata),
-            org.apache.hudi.common.util.Option.of(compTime))
+          activeTimeline.saveAsComplete(commitInflight, org.apache.hudi.common.util.Option.of(metadata), compTime)
         } else {
           val inflightInstant = INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.INFLIGHT, action, timestamp)
           activeTimeline.createNewInstant(inflightInstant)
@@ -181,8 +180,7 @@ class TestShowTimelineTableProcedure extends HoodieSparkSqlTestBase {
             case _ =>
               testTable.createCommitMetadata(timestamp, WriteOperationType.INSERT, util.Arrays.asList("par1"), 10, false)
           }
-          activeTimeline.saveAsComplete(false, inflightInstant, org.apache.hudi.common.util.Option.of(metadata),
-            org.apache.hudi.common.util.Option.of(compTime))
+          activeTimeline.saveAsComplete(inflightInstant, org.apache.hudi.common.util.Option.of(metadata), compTime)
         }
       case HoodieInstant.State.INFLIGHT =>
         val inflightInstant = INSTANT_GENERATOR.createNewInstant(state, action, timestamp)
@@ -289,8 +287,7 @@ class TestShowTimelineTableProcedure extends HoodieSparkSqlTestBase {
           activeTimeline.createNewInstant(commitInflight)
           val compTime = completionTime.getOrElse(String.valueOf(timestamp.toLong + 1))
           val metadata = testTable.createCommitMetadata(timestamp, WriteOperationType.COMPACT, util.Arrays.asList("par1"), 10, false)
-          activeTimeline.saveAsComplete(false, commitInflight, org.apache.hudi.common.util.Option.of(metadata),
-            org.apache.hudi.common.util.Option.of(compTime))
+          activeTimeline.saveAsComplete(commitInflight, org.apache.hudi.common.util.Option.of(metadata), compTime)
         } else {
           val inflightInstant = INSTANT_GENERATOR_V1.createNewInstant(HoodieInstant.State.INFLIGHT, action, timestamp)
           activeTimeline.createNewInstant(inflightInstant)
@@ -313,8 +310,7 @@ class TestShowTimelineTableProcedure extends HoodieSparkSqlTestBase {
             case _ =>
               testTable.createCommitMetadata(timestamp, WriteOperationType.INSERT, util.Arrays.asList("par1"), 10, false)
           }
-          activeTimeline.saveAsComplete(false, inflightInstant, org.apache.hudi.common.util.Option.of(metadata),
-            org.apache.hudi.common.util.Option.of(compTime))
+          activeTimeline.saveAsComplete(inflightInstant, org.apache.hudi.common.util.Option.of(metadata), compTime)
         }
       case HoodieInstant.State.INFLIGHT =>
         val inflightInstant = INSTANT_GENERATOR_V1.createNewInstant(state, action, timestamp)

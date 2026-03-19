@@ -197,8 +197,7 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
     this.storageConf = storageConf;
     this.metrics = Option.empty();
     this.dataMetaClient = HoodieTableMetaClient.builder().setConf(storageConf.newInstance())
-        .setBasePath(dataWriteConfig.getBasePath())
-        .setTimeGeneratorConfig(dataWriteConfig.getTimeGeneratorConfig()).build();
+        .setBasePath(dataWriteConfig.getBasePath()).build();
     this.enabledIndexerMap = IndexerFactory.getEnabledIndexerMap(engineContext, dataWriteConfig, dataMetaClient, engineIndexerSupport);
     this.engineIndexerSupport = engineIndexerSupport;
     if (writeConfig.isMetadataTableEnabled()) {
@@ -314,7 +313,7 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
         metadataMetaClient = HoodieTableMetaClient.builder()
             .setConf(storageConf.newInstance())
             .setBasePath(metadataWriteConfig.getBasePath())
-            .setTimeGeneratorConfig(dataWriteConfig.getTimeGeneratorConfig()).build();
+            .build();
         if (DEFAULT_METADATA_POPULATE_META_FIELDS != metadataMetaClient.getTableConfig().populateMetaFields()) {
           LOG.info("Re-initiating metadata table properties since populate meta fields have changed");
           metadataMetaClient = initializeMetaClient();
@@ -388,7 +387,7 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
       if (metadataMetaClient == null) {
         metadataMetaClient = HoodieTableMetaClient.builder()
             .setConf(storageConf.newInstance()).setBasePath(metadataWriteConfig.getBasePath())
-            .setTimeGeneratorConfig(dataWriteConfig.getTimeGeneratorConfig()).build();
+            .build();
       }
     }
 
@@ -573,7 +572,6 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
     // reconcile the meta client with time generator config.
     return HoodieTableMetaClient.builder()
         .setBasePath(metadataWriteConfig.getBasePath()).setConf(storageConf.newInstance())
-        .setTimeGeneratorConfig(dataWriteConfig.getTimeGeneratorConfig())
         .build();
   }
 
@@ -1217,19 +1215,23 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
       // We cannot create a deltaCommit at instantTime now because a future (rollback) block has already been written to the logFiles.
       // We need to choose a timestamp which would be a validInstantTime for MDT. This is either a commit timestamp completed on the dataset
       // or a new timestamp which we use for MDT clean, compaction etc.
-      String syncCommitTime = createRestoreInstantTime();
-      processAndCommit(syncCommitTime, () -> {
-        // build update records for Files And COLUMN_STATS partition.
-        List<MetadataPartitionType> indexPartitions = new ArrayList<>();
-        indexPartitions.add(FILES);
-        if (dataMetaClient.getTableConfig().getMetadataPartitions().contains(COLUMN_STATS.getPartitionPath())) {
-          indexPartitions.add(COLUMN_STATS);
-        }
-        return indexPartitions.stream().flatMap(indexPartition -> {
-          Indexer filesIndexer = this.enabledIndexerMap.get(indexPartition);
-          ValidationUtils.checkArgument(filesIndexer != null, indexPartition + " index should be enabled.");
-          return filesIndexer.buildRestore(IndexRestoreContext.of(syncCommitTime, partitionsToDelete, partitionFilesToAdd, partitionFilesToDelete)).stream();
-        }).collect(Collectors.toList());
+      writeClient.getTransactionManager().executeStateChangeWithInstant(metadataTableCommit -> {
+        String syncCommitTime = createRestoreTimestamp(metadataTableCommit);
+        processAndCommit(syncCommitTime, () -> {
+          List<MetadataPartitionType> indexPartitions = new ArrayList<>();
+          indexPartitions.add(FILES);
+          if (dataMetaClient.getTableConfig().getMetadataPartitions().contains(COLUMN_STATS.getPartitionPath())) {
+            indexPartitions.add(COLUMN_STATS);
+          }
+          return indexPartitions.stream().flatMap(indexPartition -> {
+            Indexer indexer = this.enabledIndexerMap.get(indexPartition);
+            ValidationUtils.checkArgument(indexer != null, indexPartition + " index should be enabled.");
+            return indexer.buildRestore(IndexRestoreContext.of(syncCommitTime, partitionsToDelete,
+                partitionFilesToAdd, partitionFilesToDelete)).stream();
+          }).collect(Collectors.toList());
+        });
+        // empty result
+        return Option.empty();
       });
       closeInternal();
     } catch (IOException e) {
@@ -1237,8 +1239,8 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
     }
   }
 
-  String createRestoreInstantTime() {
-    return writeClient.createNewInstantTime(false);
+  protected String createRestoreTimestamp(String instantTime) {
+    return instantTime;
   }
 
   /**
@@ -1622,33 +1624,31 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
    * 2. In multi-writer scenario, a parallel operation with a greater instantTime may have completed creating a
    * deltacommit.
    */
-  void compactIfNecessary(BaseHoodieWriteClient<?,I,?,O> writeClient, Option<String> latestDeltaCommitTimeOpt) {
+  void compactIfNecessary(final BaseHoodieWriteClient<?,I,?,O> writeClient, Option<String> latestDeltaCommitTimeOpt) {
     // IMPORTANT: Trigger compaction with max instant time that is smaller than(or equals) the earliest pending instant from DT.
     // The compaction planner will manage to filter out the log files that finished with greater completion time.
     // see BaseHoodieCompactionPlanGenerator.generateCompactionPlan for more details.
     HoodieTimeline metadataCompletedTimeline = metadataMetaClient.getActiveTimeline().filterCompletedInstants();
-    final String compactionInstantTime = dataMetaClient.reloadActiveTimeline()
+    final Option<String> restrictedCompactionInstantTimeOpt = dataMetaClient.reloadActiveTimeline()
         // The filtering strategy is kept in line with the rollback premise, if an instant is pending on DT but completed on MDT,
         // generates a compaction time smaller than it so that the instant could then been rolled back.
         .filterInflightsAndRequested().filter(instant -> metadataCompletedTimeline.containsInstant(instant.requestedTime())).firstInstant()
         // minus the pending instant time by 1 millisecond to avoid conflicts on the MDT.
-        .map(instant -> HoodieInstantTimeGenerator.instantTimeMinusMillis(instant.requestedTime(), 1L))
-        .orElse(writeClient.createNewInstantTime(false));
+        .map(instant -> HoodieInstantTimeGenerator.instantTimeMinusMillis(instant.requestedTime(), 1L));
 
     // we need to avoid checking compaction w/ same instant again.
     // let's say we trigger compaction after C5 in MDT and so compaction completes with C4001. but C5 crashed before completing in MDT.
     // and again w/ C6, we will re-attempt compaction at which point latest delta commit is C4 in MDT.
     // and so we try compaction w/ instant C4001. So, we can avoid compaction if we already have compaction w/ same instant time.
-    boolean skipCompactions = metadataMetaClient.getActiveTimeline().filterCompletedInstants().containsInstant(compactionInstantTime);
+    boolean skipCompactions = restrictedCompactionInstantTimeOpt.map(
+        compactionInstantTime -> metadataMetaClient.getActiveTimeline().filterCompletedInstants().containsInstant(compactionInstantTime)).orElse(false);
     try {
       if (skipCompactions) {
-        LOG.info("Compaction with same {} time is already present in the timeline.", compactionInstantTime);
-      } else if (writeClient.scheduleCompactionAtInstant(compactionInstantTime, Option.empty())) {
-        LOG.info("Compaction is scheduled for timestamp {}", compactionInstantTime);
-        if (shouldDelegateToTableServiceManager(metadataWriteConfig, ActionType.compaction)) {
-          LOG.info("Skipping execution of compaction on MDT as it is delegated to table service manager.");
-        } else {
-          writeClient.compact(compactionInstantTime, true);
+        LOG.info("Compaction with same {} time is already present in the timeline.", restrictedCompactionInstantTimeOpt.get());
+      } else {
+        Option<String> scheduledInstantTimeOpt = scheduleCompaction(writeClient, restrictedCompactionInstantTimeOpt);
+        if (scheduledInstantTimeOpt.isPresent()) {
+          writeClient.compact(scheduledInstantTimeOpt.get(), true);
         }
       }
     } catch (Exception e) {
@@ -1659,7 +1659,7 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
 
     try {
       if (skipCompactions) {
-        LOG.info("Compaction with same {} time is already present in the timeline.", compactionInstantTime);
+        LOG.info("Log Compaction with same {} time is already present in the timeline.", restrictedCompactionInstantTimeOpt.get());
       } else if (metadataWriteConfig.isLogCompactionEnabled()) {
         // Schedule and execute log compaction with new instant time.
         Option<String> scheduledLogCompaction = writeClient.scheduleLogCompaction(Option.empty());
@@ -1677,6 +1677,31 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
       LOG.error("Error in scheduling and executing logcompaction in metadata table", e);
       throw e;
     }
+  }
+
+  /**
+   * Schedules compaction with optional instant time,
+   * returns the instant time if a compaction plan is scheduled,
+   * otherwise returns empty.
+   *
+   * @param writeClient    The write client
+   * @param instantTimeOpt The given compaction instant
+   */
+  private Option<String> scheduleCompaction(final BaseHoodieWriteClient<?,I,?,O> writeClient, Option<String> instantTimeOpt) {
+    if (instantTimeOpt.isPresent()) {
+      String compactionInstant = instantTimeOpt.get();
+      if (writeClient.scheduleCompactionAtInstant(compactionInstant, Option.empty())) {
+        LOG.info("Compaction is scheduled for timestamp {}", compactionInstant);
+        return instantTimeOpt;
+      }
+    } else {
+      Option<String> scheduledInstantOpt = writeClient.scheduleCompaction(Option.empty());
+      if (scheduledInstantOpt.isPresent()) {
+        LOG.info("Compaction is scheduled for timestamp {}", scheduledInstantOpt.get());
+        return scheduledInstantOpt;
+      }
+    }
+    return Option.empty();
   }
 
   protected void cleanIfNecessary(BaseHoodieWriteClient writeClient, String instantTime) {

@@ -297,7 +297,7 @@ public class TestHoodieSparkRollback extends SparkClientFunctionalTestHarness {
   protected void recreateMarkerFile(HoodieWriteConfig cfg, String commitTime, WriteStatus writeStatus) throws IOException, InterruptedException {
     HoodieWriteStat writeStat = writeStatus.getStat();
     final WriteMarkers writeMarkers = WriteMarkersFactory.get(cfg.getMarkersType(),
-        HoodieSparkTable.create(cfg, context()), commitTime);
+        HoodieSparkTable.createForReads(cfg, context()), commitTime);
     if (writeStat instanceof HoodieDeltaWriteStat) {
       ((HoodieDeltaWriteStat) writeStat).getLogFiles().forEach(lf -> writeMarkers.create(writeStat.getPartitionPath(), lf, IOType.APPEND));
     } else {
@@ -307,7 +307,7 @@ public class TestHoodieSparkRollback extends SparkClientFunctionalTestHarness {
 
   protected void recreateMarkerFile(HoodieWriteConfig cfg, String commitTime, String partitionPath, String path) {
     final WriteMarkers writeMarkers = WriteMarkersFactory.get(cfg.getMarkersType(),
-        HoodieSparkTable.create(cfg, context()), commitTime);
+        HoodieSparkTable.createForReads(cfg, context()), commitTime);
     writeMarkers.create(partitionPath, new File(path).getName(), IOType.APPEND);
   }
 }

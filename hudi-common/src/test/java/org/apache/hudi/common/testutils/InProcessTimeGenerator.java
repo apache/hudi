@@ -32,7 +32,7 @@ import org.apache.hudi.common.table.timeline.TimeGenerators;
 public class InProcessTimeGenerator {
 
   private static final TimeGenerator TIME_GENERATOR = TimeGenerators.getTimeGenerator(
-      HoodieTimeGeneratorConfig.defaultConfig(""), HoodieTestUtils.getDefaultStorageConfWithDefaults());
+      HoodieTimeGeneratorConfig.defaultConfig(""));
 
   public static String createNewInstantTime() {
     return createNewInstantTime(0L);
@@ -40,6 +40,6 @@ public class InProcessTimeGenerator {
 
   public static String createNewInstantTime(long milliseconds) {
     // We don't lock here since many callers are in hudi-common, which doesn't contain InProcessLockProvider
-    return HoodieInstantTimeGenerator.createNewInstantTime(false, TIME_GENERATOR, milliseconds);
+    return HoodieInstantTimeGenerator.createNewInstantTime(TIME_GENERATOR, milliseconds);
   }
 }

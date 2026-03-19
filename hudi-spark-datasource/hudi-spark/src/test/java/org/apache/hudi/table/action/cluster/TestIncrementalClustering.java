@@ -102,16 +102,18 @@ public class TestIncrementalClustering extends SparkClientFunctionalTestHarness 
 
       String[] partitions2 = {TOMORROW};
       prepareBasicData(buildWriteConfig(true, new Properties(), maxClusteringGroup), partitions2);
-      HoodieSparkTable table = HoodieSparkTable.create(writeConfig, context());
-      ClusteringPlanActionExecutor executor =
-          new ClusteringPlanActionExecutor<>(context(), writeConfig, table, "9999999", Option.empty());
+      try (SparkRDDWriteClient writeClient = getHoodieWriteClient(writeConfig)) {
+        HoodieSparkTable table = HoodieSparkTable.create(writeConfig, context(), writeClient.getTransactionManager());
+        ClusteringPlanActionExecutor executor =
+            new ClusteringPlanActionExecutor<>(context(), writeConfig, table, "9999999", Option.empty());
 
-      List<String> incrementalPartitions = executor.getPartitions(ReflectionUtils.loadClass(
-          ClusteringPlanStrategy.checkAndGetClusteringPlanStrategy(writeConfig),
-          new Class<?>[] {HoodieTable.class, HoodieEngineContext.class, HoodieWriteConfig.class}, table, context(), writeConfig), TableServiceType.CLUSTER);
-      // fetch 2 missing partitions from last completed clustering plan as incremental partitions
-      // get 1 partitions from new commit as incremental partitions
-      assertEquals(3, incrementalPartitions.size());
+        List<String> incrementalPartitions = executor.getPartitions(ReflectionUtils.loadClass(
+            ClusteringPlanStrategy.checkAndGetClusteringPlanStrategy(writeConfig),
+            new Class<?>[] {HoodieTable.class, HoodieEngineContext.class, HoodieWriteConfig.class}, table, context(), writeConfig), TableServiceType.CLUSTER);
+        // fetch 2 missing partitions from last completed clustering plan as incremental partitions
+        // get 1 partitions from new commit as incremental partitions
+        assertEquals(3, incrementalPartitions.size());
+      }
     } else {
       assertNull(clusteringPlan.getMissingSchedulePartitions());
     }

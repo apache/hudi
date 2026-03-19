@@ -19,7 +19,9 @@
 package org.apache.hudi.util;
 
 import org.apache.hudi.client.common.HoodieFlinkEngineContext;
+import org.apache.hudi.client.transaction.TransactionManager;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.table.HoodieFlinkTable;
@@ -37,8 +39,9 @@ import static org.apache.hudi.configuration.HadoopConfigurations.getHadoopConf;
 @NoArgsConstructor(access = AccessLevel.PRIVATE)
 public class FlinkTables {
 
-  private static HoodieFlinkTable<?> createTableInternal(HoodieWriteConfig writeConfig, HoodieEngineContext context) {
-    HoodieFlinkTable<?> table = HoodieFlinkTable.create(writeConfig, context);
+  private static HoodieFlinkTable<?> createTableInternal(HoodieWriteConfig writeConfig, HoodieEngineContext context, Option<TransactionManager> txnManager) {
+    HoodieFlinkTable<?> table = txnManager.isPresent() ? HoodieFlinkTable.create(writeConfig, context, txnManager.get())
+        : HoodieFlinkTable.create(writeConfig, context);
     CommonClientUtils.validateTableVersion(table.getMetaClient().getTableConfig(), writeConfig);
     return table;
   }
@@ -53,7 +56,8 @@ public class FlinkTables {
         HadoopFSUtils.getStorageConf(getHadoopConf(conf)),
         new FlinkTaskContextSupplier(runtimeContext));
     HoodieWriteConfig writeConfig = FlinkWriteClients.getHoodieClientConfig(conf, true);
-    return createTableInternal(writeConfig, context);
+    // FIXME-vc: we need a txn manager here. for flink clustering/compaction.
+    return createTableInternal(writeConfig, context, Option.empty());
   }
 
   /**
@@ -68,7 +72,7 @@ public class FlinkTables {
     HoodieFlinkEngineContext context = new HoodieFlinkEngineContext(
         HadoopFSUtils.getStorageConfWithCopy(hadoopConf),
         new FlinkTaskContextSupplier(runtimeContext));
-    return createTableInternal(writeConfig, context);
+    return createTableInternal(writeConfig, context, Option.empty());
   }
 
   /**
@@ -78,6 +82,11 @@ public class FlinkTables {
    */
   public static HoodieFlinkTable<?> createTable(Configuration conf) {
     HoodieWriteConfig writeConfig = FlinkWriteClients.getHoodieClientConfig(conf, true, false);
-    return createTableInternal(writeConfig, HoodieFlinkEngineContext.DEFAULT);
+    return createTableInternal(writeConfig, HoodieFlinkEngineContext.DEFAULT, Option.empty());
+  }
+
+  public static HoodieFlinkTable<?> createTable(Configuration conf, TransactionManager txnManager) {
+    HoodieWriteConfig writeConfig = FlinkWriteClients.getHoodieClientConfig(conf, true, false);
+    return createTableInternal(writeConfig, HoodieFlinkEngineContext.DEFAULT, Option.of(txnManager));
   }
 }

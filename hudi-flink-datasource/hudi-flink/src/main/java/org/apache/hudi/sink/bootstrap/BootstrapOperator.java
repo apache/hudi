@@ -123,6 +123,7 @@ public class BootstrapOperator
     // is started in write coordinator which is started after bootstrap.
     this.writeConfig = FlinkWriteClients.getHoodieClientConfig(
         this.conf, false, !OptionsResolver.isIncrementalJobGraph(conf));
+    // FIXME-vc: this needs a pair of eyes to look at.
     this.hoodieTable = FlinkTables.createTable(writeConfig, hadoopConf, getRuntimeContext());
     this.metaClient = StreamerUtil.createMetaClient(conf, hadoopConf);
     this.internalSchemaManager = InternalSchemaManager.get(hoodieTable.getStorageConf(), metaClient);
