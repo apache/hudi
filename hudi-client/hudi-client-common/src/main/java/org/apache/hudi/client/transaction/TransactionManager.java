@@ -47,10 +47,8 @@ public class TransactionManager implements Serializable, AutoCloseable {
   @Getter
   protected final boolean isLockRequired;
   private final transient TimeGenerator timeGenerator;
-  /**
-   * This flag is only introduced to guard the usage context of method {@code #generateInstantTime}.
-   */
-  protected volatile boolean hasLock;
+  private volatile long lockHolderId; // lock holder ID
+  private int permits;                // allows for nested transaction
   protected Option<HoodieInstant> changeActionInstant = Option.empty();
   private Option<HoodieInstant> lastCompletedActionInstant = Option.empty();
 
@@ -66,13 +64,15 @@ public class TransactionManager implements Serializable, AutoCloseable {
     this.lockManager = lockManager;
     this.isLockRequired = isLockRequired;
     this.timeGenerator = timeGenerator;
+    this.lockHolderId = -1;
+    this.permits = 0;
   }
 
   /**
    * Caution: the invoker needs to ensure that API called within a lock context.
    */
   public String generateInstantTime() {
-    if (!hasLock && isLockRequired) {
+    if (lockHolderId < 0 && isLockRequired) {
       throw new HoodieLockException("Cannot create instant without acquiring a lock first.");
     }
     return HoodieInstantTimeGenerator.createNewInstantTime(timeGenerator, 0L);
@@ -158,7 +158,7 @@ public class TransactionManager implements Serializable, AutoCloseable {
   }
 
   /**
-   * Caution: the {@code hasLock} flag can not be used to skip the `#lock` eagerly,
+   * Caution: the {@code hasLock} flag can not be used to skip the `#lock` eagerly if the thread switches,
    * the corner case below can cause deadlock:
    *
    * <pre>
@@ -171,19 +171,36 @@ public class TransactionManager implements Serializable, AutoCloseable {
    * </pre>
    */
   private void acquireLock() {
+    if (lockHolderId > 0 && isLockHeldByCurrentThread()) {
+      LOG.info("{}: Lock already acquired, skipping lock acquisition.", this);
+      permits++;
+      return;
+    }
     lockManager.lock();
-    hasLock = true;
+    permits++;
+    this.lockHolderId = Thread.currentThread().getId();
     LOG.info("{}: Lock acquired for action instant {}", this, changeActionInstant);
   }
 
   /**
-   * Caution: the `hasLock` flag can not be used to skip the `#unlock` eagerly.
+   * Caution: the `hasLock` flag can not be used to skip the `#unlock` eagerly if the thread switches.
    * see the corner case of {@link #acquireLock()}.
    */
   private void releaseLock() {
-    lockManager.unlock();
-    hasLock = false;
-    LOG.info("{}: Lock released for action instant {}", this, changeActionInstant);
+    if (isLockHeldByCurrentThread()) {
+      --permits;
+      if (permits == 0) {
+        lockManager.unlock();
+        this.lockHolderId = -1;
+        LOG.info("{}: Lock released for action instant {}", this, changeActionInstant);
+      }
+    } else {
+      throw new HoodieLockException("No lock acquired before from the same thread, this is a bug");
+    }
+  }
+
+  private boolean isLockHeldByCurrentThread() {
+    return Thread.currentThread().getId() == lockHolderId;
   }
 
   /* this method remains `synchronized` without any deadlocks only because reset() is called
