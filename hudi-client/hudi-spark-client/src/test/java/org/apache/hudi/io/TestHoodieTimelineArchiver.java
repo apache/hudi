@@ -2083,7 +2083,8 @@ public class TestHoodieTimelineArchiver extends HoodieSparkClientTestHarness {
     }
 
     // Create archiver
-    HoodieTable table = HoodieSparkTable.createForReads(writeConfig, context, metaClient);
+    SparkRDDWriteClient writeClient = getHoodieWriteClient(writeConfig);
+    HoodieTable table = HoodieSparkTable.create(writeConfig, context, metaClient, Option.of(writeClient.getTransactionManager()));
     TimelineArchiverV2 archiver = (TimelineArchiverV2) TimelineArchivers.getInstance(
         table.getMetaClient().getTimelineLayoutVersion(), writeConfig, table);
 
@@ -2151,7 +2152,8 @@ public class TestHoodieTimelineArchiver extends HoodieSparkClientTestHarness {
     List<HoodieInstant> instantsBeforeArchival = beforeArchival.getInstants();
 
     // Create archiver and trigger archival
-    HoodieTable table = HoodieSparkTable.createForReads(writeConfig, context, metaClient);
+    SparkRDDWriteClient writeClient = getHoodieWriteClient(writeConfig);
+    HoodieTable table = HoodieSparkTable.create(writeConfig, context, metaClient, Option.of(writeClient.getTransactionManager()));
     TimelineArchiverV2 archiver = new TimelineArchiverV2(writeConfig, table);
     int archivedCount = archiver.archiveIfRequired(context);
 
