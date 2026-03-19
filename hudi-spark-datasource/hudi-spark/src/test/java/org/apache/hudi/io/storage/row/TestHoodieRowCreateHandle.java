@@ -82,7 +82,7 @@ public class TestHoodieRowCreateHandle extends HoodieSparkClientTestHarness {
         .withPopulateMetaFields(populateMetaFields)
         .build();
 
-    HoodieTable table = HoodieSparkTable.create(config, context, metaClient);
+    HoodieTable table = HoodieSparkTable.createForReads(config, context, metaClient);
     List<String> fileNames = new ArrayList<>();
     List<String> fileAbsPaths = new ArrayList<>();
 
@@ -125,7 +125,7 @@ public class TestHoodieRowCreateHandle extends HoodieSparkClientTestHarness {
     // init config and table
     HoodieWriteConfig cfg =
         SparkDatasetTestUtils.getConfigBuilder(basePath, timelineServicePort).build();
-    HoodieTable table = HoodieSparkTable.create(cfg, context, metaClient);
+    HoodieTable table = HoodieSparkTable.createForReads(cfg, context, metaClient);
     String partitionPath = HoodieTestDataGenerator.DEFAULT_PARTITION_PATHS[0];
 
     // init some args

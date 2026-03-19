@@ -230,7 +230,7 @@ public class TestHoodieMergeHandleWithSparkMerger extends SparkClientFunctionalT
   public void insertAndUpdate(HoodieWriteConfig writeConfig, int expectedRecordNum) throws Exception {
     // Check if the table type is correct.
     HoodieTableMetaClient reloadedMetaClient = HoodieTableMetaClient.reload(metaClient);
-    HoodieTable hoodieTable = HoodieSparkTable.create(writeConfig, context(), reloadedMetaClient);
+    HoodieTable hoodieTable = HoodieSparkTable.createForReads(writeConfig, context(), reloadedMetaClient);
     assertEquals(hoodieTable.getMetaClient().getTableType(), HoodieTableType.MERGE_ON_READ);
 
     // Write and read.

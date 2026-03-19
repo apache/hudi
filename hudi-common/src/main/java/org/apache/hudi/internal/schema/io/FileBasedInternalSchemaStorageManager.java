@@ -18,10 +18,10 @@
 
 package org.apache.hudi.internal.schema.io;
 
-import org.apache.hudi.common.config.HoodieTimeGeneratorConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
@@ -76,8 +76,6 @@ public class FileBasedInternalSchemaStorageManager extends AbstractInternalSchem
       metaClient = HoodieTableMetaClient.builder()
           .setBasePath(baseSchemaPath.getParent().getParent().toString())
           .setStorage(storage)
-          .setTimeGeneratorConfig(
-              HoodieTimeGeneratorConfig.defaultConfig(baseSchemaPath.getParent().getParent().toString()))
           .build();
     }
     return metaClient;
@@ -92,10 +90,10 @@ public class FileBasedInternalSchemaStorageManager extends AbstractInternalSchem
     byte[] writeContent = getUTF8Bytes(historySchemaStr);
     timeline.transitionRequestedToInflight(hoodieInstant, Option.empty());
     // TODO[HUDI-9094]: we should not write raw byte array directly.
-    timeline.saveAsComplete(false, metaClient.createNewInstant(
+    timeline.saveAsComplete(metaClient.createNewInstant(
         HoodieInstant.State.INFLIGHT, hoodieInstant.getAction(), hoodieInstant.requestedTime()),
-        Option.of(HoodieInstantWriter.convertByteArrayToWriter(writeContent)));
-    log.info("persist history schema success on commit time: {}", instantTime);
+        Option.of(HoodieInstantWriter.convertByteArrayToWriter(writeContent)), HoodieInstantTimeGenerator.getCurrentInstantTimeStr());
+    log.info("Persist history schema success on commit time: {}", instantTime);
   }
 
   private void cleanResidualFiles() {

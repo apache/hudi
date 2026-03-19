@@ -108,7 +108,7 @@ public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
     HoodieWriteConfig config = createWriteConfig(originalMetaClient, false);
 
     int numCompactionInstants = originalMetaClient.getActiveTimeline().filterCompletedOrMajorOrMinorCompactionInstants().countInstants();
-    HoodieTable table = HoodieSparkTable.create(config, context(), metaClient);
+    HoodieTable table = HoodieSparkTable.createForReads(config, context(), metaClient);
     UpgradeDowngradeUtils.rollbackFailedWritesAndCompact(table, context(), config, SparkUpgradeDowngradeHelper.getInstance(), true, originalVersion);
     originalMetaClient = HoodieTableMetaClient.reload(originalMetaClient);
     assertEquals(numCompactionInstants + 1, originalMetaClient.getActiveTimeline().filterCompletedOrMajorOrMinorCompactionInstants().countInstants());

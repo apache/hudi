@@ -22,10 +22,12 @@ import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.avro.model.HoodieSavepointMetadata;
 import org.apache.hudi.client.BaseHoodieWriteClient;
+import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.timeline.TimelineArchivers;
 import org.apache.hudi.client.WriteClientTestUtils;
 import org.apache.hudi.client.timeline.versioning.v2.LSMTimelineWriter;
 import org.apache.hudi.client.timeline.versioning.v2.TimelineArchiverV2;
+import org.apache.hudi.client.transaction.TransactionManager;
 import org.apache.hudi.client.transaction.lock.InProcessLockProvider;
 import org.apache.hudi.client.utils.ArchivalMetrics;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
@@ -284,7 +286,8 @@ public class TestHoodieTimelineArchiver extends HoodieSparkClientTestHarness {
         HoodieWriteConfig.newBuilder().withPath(basePath).withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA)
             .withParallelism(2, 2).forTable("test-trip-table").build();
     metaClient = HoodieTableMetaClient.reload(metaClient);
-    HoodieTable table = HoodieSparkTable.create(cfg, context, metaClient);
+    SparkRDDWriteClient writeClient = getHoodieWriteClient(cfg);
+    HoodieTable table = HoodieSparkTable.create(cfg, context, metaClient, Option.of(writeClient.getTransactionManager()));
     TimelineArchiverV2 archiver = new TimelineArchiverV2(cfg, table);
     int result = archiver.archiveIfRequired(context);
     assertEquals(0, result);
@@ -457,7 +460,7 @@ public class TestHoodieTimelineArchiver extends HoodieSparkClientTestHarness {
       metadataWriter.update(commitMeta, instantTime);
       metaClient.getActiveTimeline().saveAsComplete(
           INSTANT_GENERATOR.createNewInstant(State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, instantTime),
-          Option.of(commitMeta));
+          Option.of(commitMeta), HoodieInstantTimeGenerator.getCurrentInstantTimeStr());
     }
     metaClient = HoodieTableMetaClient.reload(metaClient);
     return INSTANT_GENERATOR.createNewInstant(
@@ -697,7 +700,7 @@ public class TestHoodieTimelineArchiver extends HoodieSparkClientTestHarness {
     }
 
     // do a single merge small archive files
-    HoodieTable table = HoodieSparkTable.create(writeConfig, context, metaClient);
+    HoodieTable table = HoodieSparkTable.createForReads(writeConfig, context, metaClient);
     LSMTimelineWriter timelineWriter = LSMTimelineWriter.getInstance(writeConfig, table);
     List<String> candidateFiles = LSMTimeline.latestSnapshotManifest(metaClient, metaClient.getArchivePath()).getFiles().stream()
         .sorted().map(HoodieLSMTimelineManifest.LSMFileEntry::getFileName).collect(Collectors.toList());
@@ -873,32 +876,34 @@ public class TestHoodieTimelineArchiver extends HoodieSparkClientTestHarness {
     final AtomicReference<String> lastInstant = new AtomicReference<>();
     IntStream.range(0, 2).forEach(index -> {
       completableFutureList.add(CompletableFuture.supplyAsync(() -> {
-        HoodieTable table = HoodieSparkTable.create(writeConfig, context, metaClient);
-        try {
-          // wait until 4 commits are available so that archival thread will have something to archive.
-          countDownLatch.await(30, TimeUnit.SECONDS);
-        } catch (InterruptedException e) {
-          throw new HoodieException("Should not have thrown InterruptedException ", e);
-        }
-        metaClient.reloadActiveTimeline();
-        while (!metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants().lastInstant().get().requestedTime().equals(lastInstant.get())
-            || metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants().countInstants() > 5) {
+        try (TransactionManager txnManager = new TransactionManager(writeConfig, metaClient.getStorage())) {
+          HoodieTable table = HoodieSparkTable.create(writeConfig, context, metaClient, Option.of(txnManager));
           try {
-            TimelineArchiverV2 archiver = new TimelineArchiverV2(writeConfig, table);
-            archiver.archiveIfRequired(context, true);
-            // if not for below sleep, both archiving threads acquires lock in quick succession and does not give space for main thread
-            // to complete the write operation when metadata table is enabled.
-            if (enableMetadata) {
-              Thread.sleep(2);
-            }
-          } catch (IOException e) {
-            throw new HoodieException("IOException thrown while archiving ", e);
+            // wait until 4 commits are available so that archival thread will have something to archive.
+            countDownLatch.await(30, TimeUnit.SECONDS);
           } catch (InterruptedException e) {
             throw new HoodieException("Should not have thrown InterruptedException ", e);
           }
-          table.getMetaClient().reloadActiveTimeline();
+          metaClient.reloadActiveTimeline();
+          while (!metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants().lastInstant().get().requestedTime().equals(lastInstant.get())
+              || metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants().countInstants() > 5) {
+            try {
+              TimelineArchiverV2 archiver = new TimelineArchiverV2(writeConfig, table);
+              archiver.archiveIfRequired(context, true);
+              // if not for below sleep, both archiving threads acquires lock in quick succession and does not give space for main thread
+              // to complete the write operation when metadata table is enabled.
+              if (enableMetadata) {
+                Thread.sleep(2);
+              }
+            } catch (IOException e) {
+              throw new HoodieException("IOException thrown while archiving ", e);
+            } catch (InterruptedException e) {
+              throw new HoodieException("Should not have thrown InterruptedException ", e);
+            }
+            table.getMetaClient().reloadActiveTimeline();
+          }
+          return true;
         }
-        return true;
       }, executors));
     });
 
@@ -1005,7 +1010,9 @@ public class TestHoodieTimelineArchiver extends HoodieSparkClientTestHarness {
     HoodieTestDataGenerator.createCommitFile(basePath, "103", storageConf);
     HoodieTestDataGenerator.createCommitFile(basePath, "104", storageConf);
     HoodieTestDataGenerator.createCommitFile(basePath, "105", storageConf);
-    HoodieTable table = HoodieSparkTable.create(cfg, context);
+
+    SparkRDDWriteClient writeClient = getHoodieWriteClient(cfg);
+    HoodieTable table = HoodieSparkTable.create(cfg, context, writeClient.getTransactionManager());
     TimelineArchiverV2 archiver = new TimelineArchiverV2(cfg, table);
 
     if (enableMetadataTable) {
@@ -1215,7 +1222,8 @@ public class TestHoodieTimelineArchiver extends HoodieSparkClientTestHarness {
       createCompactionCommitInMetadataTable(storageConf, basePath, "5");
     }
 
-    HoodieTable table = HoodieSparkTable.create(cfg, context, metaClient);
+    SparkRDDWriteClient writeClient = getHoodieWriteClient(cfg);
+    HoodieTable table = HoodieSparkTable.create(cfg, context, metaClient, Option.of(writeClient.getTransactionManager()));
     TimelineArchiverV2 archiver = new TimelineArchiverV2(cfg, table);
     archiver.archiveIfRequired(context);
     HoodieArchivedTimeline archivedTimeline = metaClient.getArchivedTimeline();
@@ -1459,7 +1467,8 @@ public class TestHoodieTimelineArchiver extends HoodieSparkClientTestHarness {
       createCompactionCommitInMetadataTable(storageConf, basePath, Integer.toString(99));
     }
 
-    HoodieTable table = HoodieSparkTable.create(cfg, context, metaClient);
+    SparkRDDWriteClient writeClient = getHoodieWriteClient(cfg);
+    HoodieTable table = HoodieSparkTable.create(cfg, context, metaClient, Option.of(writeClient.getTransactionManager()));
     TimelineArchiverV2 archiver = new TimelineArchiverV2(cfg, table);
 
     archiver.archiveIfRequired(context);
@@ -1701,7 +1710,8 @@ public class TestHoodieTimelineArchiver extends HoodieSparkClientTestHarness {
     assertEquals(expectedInstants.size(), timeline.countInstants(), "Loaded 14 commits and the count should match");
 
     // Run archival
-    HoodieTable table = HoodieSparkTable.create(cfg, context, metaClient);
+    SparkRDDWriteClient writeClient = getHoodieWriteClient(cfg);
+    HoodieTable table = HoodieSparkTable.create(cfg, context, metaClient, Option.of(writeClient.getTransactionManager()));
     TimelineArchiverV2 archiver = new TimelineArchiverV2(cfg, table);
     archiver.archiveIfRequired(context);
     expectedInstants.remove("1000");
@@ -1754,7 +1764,8 @@ public class TestHoodieTimelineArchiver extends HoodieSparkClientTestHarness {
       HoodieTestDataGenerator.createCommitFile(basePath, instantTime, storageConf);
     }
 
-    HoodieTable table = HoodieSparkTable.create(cfg, context, metaClient);
+    SparkRDDWriteClient writeClient = getHoodieWriteClient(cfg);
+    HoodieTable table = HoodieSparkTable.create(cfg, context, metaClient, Option.of(writeClient.getTransactionManager()));
     TimelineArchiverV2 archiver = new TimelineArchiverV2(cfg, table);
 
     HoodieTimeline timeline = metaClient.reloadActiveTimeline();
@@ -1913,7 +1924,8 @@ public class TestHoodieTimelineArchiver extends HoodieSparkClientTestHarness {
     for (int i = 0; i <= 5; i++) {
       testTable.doWriteOperation("10" + i, WriteOperationType.UPSERT, Arrays.asList("p1", "p2"), 1);
     }
-    HoodieTable table = HoodieSparkTable.create(writeConfig, context, metaClient);
+    SparkRDDWriteClient writeClient = getHoodieWriteClient(writeConfig);
+    HoodieTable table = HoodieSparkTable.create(writeConfig, context, metaClient, Option.of(writeClient.getTransactionManager()));
     TimelineArchiverV2 archiver = new TimelineArchiverV2(writeConfig, table);
 
     HoodieTimeline timeline = metaClient.getActiveTimeline().getWriteTimeline();
@@ -1929,7 +1941,7 @@ public class TestHoodieTimelineArchiver extends HoodieSparkClientTestHarness {
         + "be 5 instants (as instant times 101-103 .commit files should remain in timeline)");
     // Re-running archival again should archive and delete the 101.commit, 102.commit, and 103.commit instant files
     table.getMetaClient().reloadActiveTimeline();
-    table = HoodieSparkTable.create(writeConfig, context, metaClient);
+    table = HoodieSparkTable.create(writeConfig, context, metaClient, Option.of(writeClient.getTransactionManager()));
     archiver = new TimelineArchiverV2(writeConfig, table);
     assertTrue(archiver.archiveIfRequired(context) > 0);
     timeline = metaClient.getActiveTimeline().reload().getWriteTimeline();
@@ -1956,7 +1968,8 @@ public class TestHoodieTimelineArchiver extends HoodieSparkClientTestHarness {
         ? metaClient.getActiveTimeline().reload().getAllCommitsTimeline()
         : metaClient.getActiveTimeline().reload().getAllCommitsTimeline().filterCompletedInstants();
     List<HoodieInstant> originalCommits = timeline.getInstants();
-    HoodieTable table = HoodieSparkTable.create(writeConfig, context, metaClient);
+    SparkRDDWriteClient writeClient = getHoodieWriteClient(writeConfig);
+    HoodieTable table = HoodieSparkTable.create(writeConfig, context, metaClient, Option.of(writeClient.getTransactionManager()));
     TimelineArchiverV2 archiver = new TimelineArchiverV2(writeConfig, table);
     archiver.archiveIfRequired(context);
     timeline = includeIncompleteInstants
@@ -2070,7 +2083,7 @@ public class TestHoodieTimelineArchiver extends HoodieSparkClientTestHarness {
     }
 
     // Create archiver
-    HoodieTable table = HoodieSparkTable.create(writeConfig, context, metaClient);
+    HoodieTable table = HoodieSparkTable.createForReads(writeConfig, context, metaClient);
     TimelineArchiverV2 archiver = (TimelineArchiverV2) TimelineArchivers.getInstance(
         table.getMetaClient().getTimelineLayoutVersion(), writeConfig, table);
 
@@ -2138,7 +2151,7 @@ public class TestHoodieTimelineArchiver extends HoodieSparkClientTestHarness {
     List<HoodieInstant> instantsBeforeArchival = beforeArchival.getInstants();
 
     // Create archiver and trigger archival
-    HoodieTable table = HoodieSparkTable.create(writeConfig, context, metaClient);
+    HoodieTable table = HoodieSparkTable.createForReads(writeConfig, context, metaClient);
     TimelineArchiverV2 archiver = new TimelineArchiverV2(writeConfig, table);
     int archivedCount = archiver.archiveIfRequired(context);
 

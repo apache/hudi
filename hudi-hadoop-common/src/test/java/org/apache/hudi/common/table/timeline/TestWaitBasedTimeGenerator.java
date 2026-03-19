@@ -21,7 +21,6 @@ package org.apache.hudi.common.table.timeline;
 import org.apache.hudi.client.transaction.lock.InProcessLockProvider;
 import org.apache.hudi.common.config.HoodieTimeGeneratorConfig;
 import org.apache.hudi.common.config.LockConfiguration;
-import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.exception.HoodieLockException;
 import org.apache.hudi.storage.StorageConfiguration;
 
@@ -35,7 +34,6 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 
 public class TestWaitBasedTimeGenerator {
@@ -78,8 +76,6 @@ public class TestWaitBasedTimeGenerator {
   // Clock skew time
   private final long clockSkewTime = 20L;
 
-  private final StorageConfiguration<?> storageConf = HoodieTestUtils.getDefaultStorageConfWithDefaults();
-
   private HoodieTimeGeneratorConfig timeGeneratorConfig;
 
   @BeforeEach
@@ -112,70 +108,73 @@ public class TestWaitBasedTimeGenerator {
   @ParameterizedTest
   @ValueSource(booleans = {true, false})
   public void testSlowerThreadLaterAcquiredLock(boolean slowerThreadAcquiredLockLater) throws InterruptedException {
-    AtomicLong t1Timestamp = new AtomicLong(0L);
-    Thread t1 = new Thread(() -> {
-      try {
-        MockInProcessLockProvider.needToLockLater(!slowerThreadAcquiredLockLater);
-        TimeGenerator timeGenerator = TimeGenerators.getTimeGenerator(timeGeneratorConfig, storageConf);
-        t1Timestamp.set(timeGenerator.generateTime(false));
-      } catch (Exception e) {
-        throw new RuntimeException(e);
+    // Create separate configs for each thread to avoid cache interference
+    HoodieTimeGeneratorConfig tConfig = HoodieTimeGeneratorConfig.newBuilder()
+        .withPath("test_wait_based")
+        .withMaxExpectedClockSkewMs(25L)
+        .withTimeGeneratorType(TimeGeneratorType.WAIT_TO_ADJUST_SKEW)
+        .build();
+    final long timeoutMs = 10000;
+
+    try (MockInProcessLockProvider lockProvider = new MockInProcessLockProvider(new LockConfiguration(tConfig.getProps()), null)) {
+      AtomicLong t1Timestamp = new AtomicLong(0L);
+      Thread t1 = new Thread(() -> {
+        try {
+          MockInProcessLockProvider.needToLockLater(!slowerThreadAcquiredLockLater);
+          TimeGenerator timeGenerator = TimeGenerators.getTimeGenerator(tConfig);
+          Assertions.assertTrue(lockProvider.tryLock(timeoutMs, TimeUnit.MILLISECONDS));
+          t1Timestamp.set(timeGenerator.generateTime());
+          lockProvider.unlock();
+        } catch (Exception e) {
+          throw new RuntimeException(e);
+        }
+      });
+
+      AtomicLong t2Timestamp = new AtomicLong(0L);
+      Thread t2 = new Thread(() -> {
+        try {
+          MockInProcessLockProvider.needToLockLater(slowerThreadAcquiredLockLater);
+          TimeGenerator timeGenerator = TimeGenerators.getTimeGenerator(tConfig);
+          // Pretend t2 is slower 20ms than t1
+          Assertions.assertTrue(lockProvider.tryLock(timeoutMs, TimeUnit.MILLISECONDS));
+          t2Timestamp.set(timeGenerator.generateTime() - clockSkewTime);
+          lockProvider.unlock();
+        } catch (Exception e) {
+          throw new RuntimeException(e);
+        }
+      });
+      t1.start();
+      t2.start();
+
+      t1.join(timeoutMs);
+      t2.join(timeoutMs);
+
+      Assertions.assertTrue(t2Timestamp.get() != 0L);
+      Assertions.assertTrue(t1Timestamp.get() != 0L);
+
+      if (slowerThreadAcquiredLockLater) {
+        Assertions.assertTrue(t2Timestamp.get() > t1Timestamp.get());
+      } else {
+        Assertions.assertTrue(t2Timestamp.get() < t1Timestamp.get());
       }
-    });
-
-    AtomicLong t2Timestamp = new AtomicLong(0L);
-    Thread t2 = new Thread(() -> {
-      try {
-        MockInProcessLockProvider.needToLockLater(slowerThreadAcquiredLockLater);
-        TimeGenerator timeGenerator = TimeGenerators.getTimeGenerator(timeGeneratorConfig, storageConf);
-        // Pretend t2 is slower 20ms than t1
-        t2Timestamp.set(timeGenerator.generateTime(false) - clockSkewTime);
-      } catch (Exception e) {
-        throw new RuntimeException(e);
-      }
-    });
-    t1.start();
-    t2.start();
-
-    t1.join(60000);
-    t2.join(60000);
-
-    Assertions.assertTrue(t2Timestamp.get() != 0L);
-    Assertions.assertTrue(t1Timestamp.get() != 0L);
-
-    if (slowerThreadAcquiredLockLater) {
-      Assertions.assertTrue(t2Timestamp.get() > t1Timestamp.get());
-    } else {
-      Assertions.assertTrue(t2Timestamp.get() < t1Timestamp.get());
     }
   }
 
   @Test
-  public void testTimeGeneratorCache() {
-    HoodieTimeGeneratorConfig timeGeneratorConfigWithReuse = getWaitBasedTimeGenerator(true);
-    TimeGenerator timeGenerator1 = TimeGenerators.getTimeGenerator(timeGeneratorConfigWithReuse, storageConf);
-    TimeGenerator timeGenerator2 = TimeGenerators.getTimeGenerator(timeGeneratorConfigWithReuse, storageConf);
-    TimeGenerator timeGenerator3 = TimeGenerators.getTimeGenerator(timeGeneratorConfigWithReuse, storageConf);
-
-    assertEquals(timeGenerator1, timeGenerator2);
-    assertEquals(timeGenerator1, timeGenerator3);
-
+  public void testTimeGeneratorIsNotReused() {
     // disable reuse
-    HoodieTimeGeneratorConfig timeGeneratorConfigWithNoReuse = getWaitBasedTimeGenerator(false);
-    TimeGenerator timeGenerator4 = TimeGenerators.getTimeGenerator(timeGeneratorConfigWithNoReuse, storageConf);
-    assertNotEquals(timeGenerator1, timeGenerator4);
+    HoodieTimeGeneratorConfig timeGeneratorConfigWithNoReuse = getWaitBasedTimeGenerator();
+    TimeGenerator timeGenerator4 = TimeGenerators.getTimeGenerator(timeGeneratorConfigWithNoReuse);
     // how many ever times we call, we should get new time generator
-    TimeGenerator timeGenerator5 = TimeGenerators.getTimeGenerator(timeGeneratorConfigWithNoReuse, storageConf);
+    TimeGenerator timeGenerator5 = TimeGenerators.getTimeGenerator(timeGeneratorConfigWithNoReuse);
     assertNotEquals(timeGenerator4, timeGenerator5);
   }
 
-  private static HoodieTimeGeneratorConfig getWaitBasedTimeGenerator(boolean reuse) {
-    return HoodieTimeGeneratorConfig.newBuilder()
+  private static HoodieTimeGeneratorConfig getWaitBasedTimeGenerator() {
+    HoodieTimeGeneratorConfig.Builder builder = HoodieTimeGeneratorConfig.newBuilder()
         .withPath("test_wait_based")
         .withMaxExpectedClockSkewMs(25L)
-        .withReuseTimeGenerator(reuse)
-        .withTimeGeneratorType(TimeGeneratorType.WAIT_TO_ADJUST_SKEW)
-        .build();
+        .withTimeGeneratorType(TimeGeneratorType.WAIT_TO_ADJUST_SKEW);
+    return builder.build();
   }
-
 }

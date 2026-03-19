@@ -111,7 +111,7 @@ class TestHoodieSparkMergeOnReadTableClustering extends SparkClientFunctionalTes
         updateRecordsInMORTable(metaClient, records, client, cfg, newCommitTime, false);
       }
 
-      HoodieTable hoodieTable = HoodieSparkTable.create(cfg, context(), metaClient);
+      HoodieTable hoodieTable = HoodieSparkTable.createForReads(cfg, context(), metaClient);
       hoodieTable.getHoodieView().sync();
       List<StoragePathInfo> allFiles = listAllBaseFilesInPath(hoodieTable);
       totalFiles = allFiles.size();
@@ -124,7 +124,7 @@ class TestHoodieSparkMergeOnReadTableClustering extends SparkClientFunctionalTes
 
       String clusteringCommitTime = client.scheduleClustering(Option.empty()).get().toString();
       metaClient = HoodieTableMetaClient.reload(metaClient);
-      HoodieTable hoodieTable = HoodieSparkTable.create(cfg, context(), metaClient);
+      HoodieTable hoodieTable = HoodieSparkTable.createForReads(cfg, context(), metaClient);
       // verify all files are included in clustering plan.
       assertEquals(totalFiles,
           hoodieTable.getFileSystemView().getFileGroupsInPendingClustering().map(Pair::getLeft).count());
@@ -199,7 +199,7 @@ class TestHoodieSparkMergeOnReadTableClustering extends SparkClientFunctionalTes
         updateRecordsInMORTable(metaClient, records, client, cfg, newCommitTime, false);
       }
 
-      HoodieTable hoodieTable = HoodieSparkTable.create(cfg, context(), metaClient);
+      HoodieTable hoodieTable = HoodieSparkTable.createForReads(cfg, context(), metaClient);
       hoodieTable.getHoodieView().sync();
       List<StoragePathInfo> allBaseFiles = listAllBaseFilesInPath(hoodieTable);
       // expect 0 base files for each partition
@@ -210,7 +210,7 @@ class TestHoodieSparkMergeOnReadTableClustering extends SparkClientFunctionalTes
     try (SparkRDDWriteClient client = getHoodieWriteClient(cfgClusteringEnabled)) {
       String clusteringCommitTime = client.scheduleClustering(Option.empty()).get().toString();
       metaClient = HoodieTableMetaClient.reload(metaClient);
-      HoodieTable hoodieTable = HoodieSparkTable.create(cfg, context(), metaClient);
+      HoodieTable hoodieTable = HoodieSparkTable.createForReads(cfg, context(), metaClient);
       // verify log files are included in clustering plan for each partition.
       assertEquals(dataGen.getPartitionPaths().length, hoodieTable.getFileSystemView().getFileGroupsInPendingClustering().map(Pair::getLeft).count());
 
@@ -258,7 +258,7 @@ class TestHoodieSparkMergeOnReadTableClustering extends SparkClientFunctionalTes
 
     client.cluster(clusteringCommitTime, true);
     metaClient = HoodieTableMetaClient.reload(metaClient);
-    final HoodieTable clusteredTable = HoodieSparkTable.create(cfg, context(), metaClient);
+    final HoodieTable clusteredTable = HoodieSparkTable.createForReads(cfg, context(), metaClient);
     clusteredTable.getHoodieView().sync();
     Stream<HoodieBaseFile> dataFilesToRead = Arrays.stream(dataGen.getPartitionPaths())
         .flatMap(p -> clusteredTable.getBaseFileOnlyView().getLatestBaseFiles(p));

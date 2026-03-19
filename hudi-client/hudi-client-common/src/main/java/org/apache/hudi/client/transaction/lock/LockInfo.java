@@ -29,7 +29,6 @@ import java.util.ArrayList;
 
 @Getter
 public class LockInfo {
-
   @Setter
   private String lockCreateTime;
   @Setter

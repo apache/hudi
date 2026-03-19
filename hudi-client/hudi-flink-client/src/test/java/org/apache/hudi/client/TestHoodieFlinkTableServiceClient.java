@@ -20,6 +20,7 @@ package org.apache.hudi.client;
 
 import org.apache.hudi.client.embedded.EmbeddedTimelineService;
 import org.apache.hudi.client.common.HoodieFlinkEngineContext;
+import org.apache.hudi.client.transaction.TransactionManager;
 import org.apache.hudi.client.transaction.lock.InProcessLockProvider;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
@@ -75,6 +76,7 @@ public class TestHoodieFlinkTableServiceClient extends HoodieFlinkClientTestHarn
     HoodieActiveTimeline activeTimeline = mock(HoodieActiveTimeline.class);
     HoodieTimeline inflightAndRequestedTimeline = mock(HoodieTimeline.class);
     when(table.getActiveTimeline()).thenReturn(activeTimeline);
+    when(table.getTxnManager()).thenReturn(Option.of(mock(TransactionManager.class)));
     when(activeTimeline.filterInflightsAndRequested()).thenReturn(inflightAndRequestedTimeline);
     when(inflightAndRequestedTimeline.lastInstant()).thenReturn(Option.empty());
 
@@ -105,7 +107,7 @@ public class TestHoodieFlinkTableServiceClient extends HoodieFlinkClientTestHarn
                                                     HoodieWriteConfig clientConfig,
                                                     Option<EmbeddedTimelineService> timelineService,
                                                     HoodieTable mockedTable) {
-      super(context, clientConfig, timelineService);
+      super(context, clientConfig, timelineService, (TransactionManager) mockedTable.getTxnManager().get());
       this.mockedTable = mockedTable;
     }
 

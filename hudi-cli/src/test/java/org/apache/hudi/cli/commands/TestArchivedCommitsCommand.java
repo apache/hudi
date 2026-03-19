@@ -27,12 +27,14 @@ import org.apache.hudi.cli.testutils.HoodieTestCommitUtilities;
 import org.apache.hudi.cli.testutils.ShellEvaluationResultUtil;
 import org.apache.hudi.client.timeline.HoodieTimelineArchiver;
 import org.apache.hudi.client.timeline.versioning.v2.TimelineArchiverV2;
+import org.apache.hudi.client.transaction.TransactionManager;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieArchivalConfig;
 import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -109,9 +111,11 @@ public class TestArchivedCommitsCommand extends CLIFunctionalTestHarness {
     metaClient.getActiveTimeline().reload().getAllCommitsTimeline().filterCompletedInstants();
 
     // archive
-    HoodieSparkTable table = HoodieSparkTable.create(cfg, context(), metaClient);
-    HoodieTimelineArchiver archiver = new TimelineArchiverV2(cfg, table);
-    archiver.archiveIfRequired(context());
+    try (TransactionManager transactionManager = new TransactionManager(cfg, metaClient.getStorage())) {
+      HoodieSparkTable table = HoodieSparkTable.create(cfg, context(), metaClient, Option.of(transactionManager));
+      HoodieTimelineArchiver archiver = new TimelineArchiverV2(cfg, table);
+      archiver.archiveIfRequired(context());
+    }
   }
 
   /**

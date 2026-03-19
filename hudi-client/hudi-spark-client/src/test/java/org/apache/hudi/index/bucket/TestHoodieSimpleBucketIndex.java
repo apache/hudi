@@ -102,7 +102,7 @@ public class TestHoodieSimpleBucketIndex extends HoodieSparkClientTestHarness {
     JavaRDD<HoodieRecord<IndexedRecord>> recordRDD = jsc.parallelize(Arrays.asList(record1, record2, record3, record4));
 
     HoodieWriteConfig config = makeConfig();
-    HoodieTable table = HoodieSparkTable.create(config, context, metaClient);
+    HoodieTable table = HoodieSparkTable.createForReads(config, context, metaClient);
     HoodieSimpleBucketIndex bucketIndex = new HoodieSimpleBucketIndex(config);
     HoodieData<HoodieRecord<IndexedRecord>> taggedRecordRDD = bucketIndex.tagLocation(HoodieJavaRDD.of(recordRDD), context, table);
     assertFalse(taggedRecordRDD.collectAsList().stream().anyMatch(r -> r.isCurrentLocationKnown()));
@@ -120,7 +120,7 @@ public class TestHoodieSimpleBucketIndex extends HoodieSparkClientTestHarness {
     }
 
     taggedRecordRDD = bucketIndex.tagLocation(HoodieJavaRDD.of(recordRDD), context,
-        HoodieSparkTable.create(config, context, metaClient));
+        HoodieSparkTable.createForReads(config, context, metaClient));
     assertFalse(taggedRecordRDD.collectAsList().stream().filter(r -> r.isCurrentLocationKnown())
         .filter(r -> BucketIdentifier.bucketIdFromFileId(r.getCurrentLocation().getFileId())
             != getRecordBucketId(r)).findAny().isPresent());

@@ -28,7 +28,6 @@ import lombok.AccessLevel;
 import lombok.NoArgsConstructor;
 
 import java.util.Map;
-import java.util.function.Consumer;
 
 @NoArgsConstructor(access = AccessLevel.PRIVATE)
 public class WriteClientTestUtils {
@@ -47,19 +46,15 @@ public class WriteClientTestUtils {
   }
 
   public static String createNewInstantTime() {
-    return HoodieInstantTimeGenerator.createNewInstantTime(false, TestTimeGenerator.INSTANCE, 0);
+    return HoodieInstantTimeGenerator.createNewInstantTime(TestTimeGenerator.INSTANCE, 0);
   }
 
   private static class TestTimeGenerator implements TimeGenerator {
     private static final TimeGenerator INSTANCE = new TestTimeGenerator();
 
     @Override
-    public long generateTime(boolean skipLocking) {
+    public long generateTime() {
       return System.currentTimeMillis();
-    }
-
-    @Override
-    public void consumeTime(boolean skipLocking, Consumer<Long> func) {
     }
   }
 }

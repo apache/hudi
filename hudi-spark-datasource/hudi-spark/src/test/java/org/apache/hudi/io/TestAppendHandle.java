@@ -69,7 +69,6 @@ public class TestAppendHandle extends BaseTestHandle {
             .build())
         .build();
     config.setSchema(TRIP_EXAMPLE_SCHEMA);
-    HoodieTable table = HoodieSparkTable.create(config, context, metaClient);
 
     // one round per partition
     String partitionPath = HoodieTestDataGenerator.DEFAULT_PARTITION_PATHS[0];
@@ -83,7 +82,7 @@ public class TestAppendHandle extends BaseTestHandle {
     client.commit(instantTime, statuses, Option.empty(), COMMIT_ACTION, Collections.emptyMap(), Option.empty());
 
     metaClient = HoodieTableMetaClient.reload(metaClient);
-    table = (HoodieSparkCopyOnWriteTable) HoodieSparkCopyOnWriteTable.create(config, context, metaClient);
+    HoodieTable table = HoodieSparkCopyOnWriteTable.createForReads(config, context, metaClient);
     HoodieFileGroup fileGroup = table.getFileSystemView().getAllFileGroups(partitionPath).collect(Collectors.toList()).get(0);
     String fileId = fileGroup.getFileGroupId().getFileId();
 
@@ -94,7 +93,7 @@ public class TestAppendHandle extends BaseTestHandle {
     int numDeletes = generateDeleteRecords(records, dataGenerator, instantTime);
     assertTrue(numDeletes > 0);
     metaClient = HoodieTableMetaClient.reload(metaClient);
-    table = HoodieSparkTable.create(config, context, metaClient);
+    table = HoodieSparkTable.createForReads(config, context, metaClient);
     HoodieAppendHandle handle = new HoodieAppendHandle(config, instantTime, table, partitionPath, fileId, records.iterator(), new LocalTaskContextSupplier());
     Map<String, HoodieRecord> recordMap = new HashMap<>();
     for (int i = 0; i < records.size(); i++) {

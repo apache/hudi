@@ -309,11 +309,6 @@ public abstract class HoodieBackedTableMetadataWriterTableVersionSix<I, O> exten
     writeClient.clean(createCleanTimestamp(instantTime));
   }
 
-  @Override
-  String createRestoreInstantTime() {
-    return createRestoreTimestamp(getWriteClient().createNewInstantTime(false));
-  }
-
   /**
    * Create the timestamp for a compaction operation on the metadata table.
    */
@@ -336,7 +331,7 @@ public abstract class HoodieBackedTableMetadataWriterTableVersionSix<I, O> exten
     return timestamp + getCleanOperationSuffix();
   }
 
-  private String createRestoreTimestamp(String timestamp) {
+  protected String createRestoreTimestamp(String timestamp) {
     return timestamp + getRestoreOperationSuffix();
   }
 

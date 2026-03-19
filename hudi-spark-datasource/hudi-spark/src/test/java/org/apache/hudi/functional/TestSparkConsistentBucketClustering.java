@@ -147,7 +147,8 @@ public class TestSparkConsistentBucketClustering extends HoodieSparkClientTestHa
     writeClient.cluster(clusteringTime, true);
 
     metaClient = HoodieTableMetaClient.reload(metaClient);
-    final HoodieTable table = HoodieSparkTable.create(config, context, metaClient);
+    final HoodieTable table = HoodieSparkTable.createForReads(config, context, metaClient);
+
     Assertions.assertEquals(2000, readRecords().size());
 
     Arrays.stream(dataGen.getPartitionPaths()).forEach(p -> {
@@ -187,7 +188,7 @@ public class TestSparkConsistentBucketClustering extends HoodieSparkClientTestHa
     writeData(10, true);
     writeData(10, true);
     metaClient = HoodieTableMetaClient.reload(metaClient);
-    final HoodieTable table = HoodieSparkTable.create(config, context, metaClient);
+    final HoodieTable table = HoodieSparkTable.create(config, context, metaClient, Option.of(writeClient.getTransactionManager()));
     writeClient.clean();
     HoodieTimelineArchiver hoodieTimelineArchiver = new TimelineArchiverV2(writeClient.getConfig(), table);
     hoodieTimelineArchiver.archiveIfRequired(context);

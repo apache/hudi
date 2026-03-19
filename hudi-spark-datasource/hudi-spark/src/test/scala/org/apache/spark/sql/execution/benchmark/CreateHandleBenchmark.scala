@@ -146,7 +146,7 @@ object CreateHandleBenchmark extends HoodieBenchmarkBase {
 
       val engineContext = new HoodieLocalEngineContext(new HadoopStorageConfiguration(spark.sparkContext.hadoopConfiguration))
       val hoodieTable: HoodieTable[_, HoodieData[HoodieRecord[_]], HoodieData[HoodieKey], HoodieData[WriteStatus]] =
-        HoodieSparkTable.create(writeConfig, engineContext).asInstanceOf[HoodieTable[_, HoodieData[HoodieRecord[_]], HoodieData[HoodieKey], HoodieData[WriteStatus]]]
+        HoodieSparkTable.createForReads(writeConfig, engineContext).asInstanceOf[HoodieTable[_, HoodieData[HoodieRecord[_]], HoodieData[HoodieKey], HoodieData[WriteStatus]]]
       val createHandle = new HoodieCreateHandle(writeConfig, "000000001", hoodieTable, "", UUID.randomUUID().toString, new LocalTaskContextSupplier())
       avroRecords.forEach(record => {
         val newAvroRec = new HoodieAvroIndexedRecord(record.getKey, record.getData.asInstanceOf[IndexedRecord], 0L, record.getOperation)

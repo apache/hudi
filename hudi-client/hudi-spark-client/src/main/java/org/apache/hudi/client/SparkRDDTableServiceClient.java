@@ -19,6 +19,7 @@
 package org.apache.hudi.client;
 
 import org.apache.hudi.client.embedded.EmbeddedTimelineService;
+import org.apache.hudi.client.transaction.TransactionManager;
 import org.apache.hudi.client.utils.SparkReleaseResources;
 import org.apache.hudi.client.utils.SparkValidatorUtils;
 import org.apache.hudi.common.data.HoodieData;
@@ -49,16 +50,18 @@ public class SparkRDDTableServiceClient<T> extends BaseHoodieTableServiceClient<
   private final StreamingMetadataWriteHandler streamingMetadataWriteHandler;
   protected SparkRDDTableServiceClient(HoodieEngineContext context,
                                        HoodieWriteConfig clientConfig,
-                                       Option<EmbeddedTimelineService> timelineService) {
-    this(context, clientConfig, timelineService, new SparkStreamingMetadataWriteHandler());
+                                       Option<EmbeddedTimelineService> timelineService,
+                                       TransactionManager transactionManager) {
+    this(context, clientConfig, timelineService, transactionManager, new SparkStreamingMetadataWriteHandler());
   }
 
   @VisibleForTesting
   public SparkRDDTableServiceClient(HoodieEngineContext context,
-                                       HoodieWriteConfig clientConfig,
-                                       Option<EmbeddedTimelineService> timelineService,
-                                       StreamingMetadataWriteHandler streamingMetadataWriteHandler) {
-    super(context, clientConfig, timelineService);
+                                    HoodieWriteConfig clientConfig,
+                                    Option<EmbeddedTimelineService> timelineService,
+                                    TransactionManager transactionManager,
+                                    StreamingMetadataWriteHandler streamingMetadataWriteHandler) {
+    super(context, clientConfig, timelineService, transactionManager);
     this.streamingMetadataWriteHandler = streamingMetadataWriteHandler;
   }
 
@@ -126,7 +129,7 @@ public class SparkRDDTableServiceClient<T> extends BaseHoodieTableServiceClient<
 
   @Override
   protected HoodieTable<?, HoodieData<HoodieRecord<T>>, ?, HoodieData<WriteStatus>> createTable(HoodieWriteConfig config, StorageConfiguration<?> storageConf, boolean skipValidation) {
-    return createTableAndValidate(config, HoodieSparkTable::create, skipValidation);
+    return createTableAndValidate(config, (c, ctx, txn) -> HoodieSparkTable.create(c, ctx, txn), skipValidation);
   }
 
   @Override

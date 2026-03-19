@@ -80,7 +80,7 @@ class ShowFileStatusProcedure extends BaseProcedure
     validateFilter(filter, outputType)
     val metaClient = createMetaClient(jsc, basePath)
     val client = HoodieCLIUtils.createHoodieWriteClient(spark, basePath, Map.empty, tableName.asInstanceOf[Option[String]])
-    val table: HoodieSparkTable[String] = HoodieSparkTable.create(client.getConfig, client.getEngineContext)
+    val table: HoodieSparkTable[String] = HoodieSparkTable.createForReads(client.getConfig, client.getEngineContext)
 
     if (partition.isEmpty && table.isPartitioned) {
       throw new HoodieException(s"table $tableName is a partitioned table. Please specify the partition name where the current file is located.")
