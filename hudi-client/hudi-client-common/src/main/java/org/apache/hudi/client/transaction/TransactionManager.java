@@ -47,6 +47,9 @@ public class TransactionManager implements Serializable, AutoCloseable {
   @Getter
   protected final boolean isLockRequired;
   private final transient TimeGenerator timeGenerator;
+  /**
+   * This flag is only introduced to guard the usage context of method {@code #generateInstantTime}.
+   */
   protected volatile boolean hasLock;
   protected Option<HoodieInstant> changeActionInstant = Option.empty();
   private Option<HoodieInstant> lastCompletedActionInstant = Option.empty();
@@ -65,6 +68,9 @@ public class TransactionManager implements Serializable, AutoCloseable {
     this.timeGenerator = timeGenerator;
   }
 
+  /**
+   * Caution: the invoker needs to ensure that API called within a lock context.
+   */
   public String generateInstantTime() {
     if (!hasLock && isLockRequired) {
       throw new HoodieLockException("Cannot create instant without acquiring a lock first.");
@@ -151,25 +157,33 @@ public class TransactionManager implements Serializable, AutoCloseable {
     }
   }
 
+  /**
+   * Caution: the {@code hasLock} flag can not be used to skip the `#lock` eagerly,
+   * the corner case below can cause deadlock:
+   *
+   * <pre>
+   *   threadA => acquireLock(), {@code hasLock} setup as true and got the lock acquired;
+   *   threadB => acquireLock(), check the {@code hasLock} as true, returns early;
+   *   threadB => releaseLock(), set up the {@code hasLock} as false;
+   *   threadA => releaseLock(), detect the {@code hasLock} as false and returns early.
+   *
+   *   The lock held by threadA will never be released.
+   * </pre>
+   */
   private void acquireLock() {
-    if (hasLock) {
-      LOG.info("{}: Lock already acquired, skipping lock acquisition.", this);
-      return;
-    }
     lockManager.lock();
     hasLock = true;
     LOG.info("{}: Lock acquired for action instant {}", this, changeActionInstant);
   }
 
+  /**
+   * Caution: the `hasLock` flag can not be used to skip the `#unlock` eagerly.
+   * see the corner case of {@link #acquireLock()}.
+   */
   private void releaseLock() {
-    if (hasLock) {
-      // set the boolean first (reverse of above); to be in a safe critical section.
-      hasLock = false;
-      lockManager.unlock();
-      LOG.info("{}: Lock released for action instant {}", this, changeActionInstant);
-    } else {
-      LOG.info("{}: No lock acquired before, skipping lock release.", this);
-    }
+    lockManager.unlock();
+    hasLock = false;
+    LOG.info("{}: Lock released for action instant {}", this, changeActionInstant);
   }
 
   /* this method remains `synchronized` without any deadlocks only because reset() is called
