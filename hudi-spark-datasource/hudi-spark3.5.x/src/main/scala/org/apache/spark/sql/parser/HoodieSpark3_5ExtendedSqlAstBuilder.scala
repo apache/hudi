@@ -3307,7 +3307,7 @@ class HoodieSpark3_5ExtendedSqlAstBuilder(conf: SQLConf, delegate: ParserInterfa
     // partition transforms for BucketSpec was moved inside parser
     // https://issues.apache.org/jira/browse/SPARK-37923
     val partitioning =
-      partitionExpressions(partTransforms, partCols, ctx) ++ bucketSpec.map(_.asTransform)
+    partitionExpressions(partTransforms, partCols, ctx) ++ bucketSpec.map(_.asTransform)
     val tableSpec = TableSpec(properties, provider, options, location, comment,
       serdeInfo, external)
 

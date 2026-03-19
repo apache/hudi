@@ -2450,7 +2450,7 @@ class HoodieSpark3_3ExtendedSqlAstBuilder(conf: SQLConf, delegate: ParserInterfa
       // can be derived from INTERVAL '0-0' YEAR TO MONTH as well as from
       // INTERVAL '0 00:00:00' DAY TO SECOND.
       val fromUnit =
-        ctx.errorCapturingUnitToUnitInterval.body.from.getText.toLowerCase(Locale.ROOT)
+      ctx.errorCapturingUnitToUnitInterval.body.from.getText.toLowerCase(Locale.ROOT)
       val toUnit = ctx.errorCapturingUnitToUnitInterval.body.to.getText.toLowerCase(Locale.ROOT)
       if (toUnit == "month") {
         assert(calendarInterval.days == 0 && calendarInterval.microseconds == 0)
@@ -3319,8 +3319,8 @@ class HoodieSpark3_3ExtendedSqlAstBuilder(conf: SQLConf, delegate: ParserInterfa
           "Partition column types may not be specified in Create Table As Select (CTAS)",
           ctx)
 
-      // CreateTable / CreateTableAsSelect was migrated to v2 in Spark 3.3.0
-      // https://issues.apache.org/jira/browse/SPARK-36850
+        // CreateTable / CreateTableAsSelect was migrated to v2 in Spark 3.3.0
+        // https://issues.apache.org/jira/browse/SPARK-36850
       case Some(query) =>
         CreateTableAsSelect(
           UnresolvedDBObjectName(table, isNamespace = false),

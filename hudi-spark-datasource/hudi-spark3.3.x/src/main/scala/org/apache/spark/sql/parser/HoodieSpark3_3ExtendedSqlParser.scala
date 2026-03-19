@@ -134,8 +134,8 @@ class HoodieSpark3_3ExtendedSqlParser(session: SparkSession, delegate: ParserInt
 }
 
 /**
- * Fork from `org.apache.spark.sql.catalyst.parser.UpperCaseCharStream`.
- */
+  * Fork from `org.apache.spark.sql.catalyst.parser.UpperCaseCharStream`.
+  */
 class UpperCaseCharStream(wrapped: CodePointCharStream) extends CharStream {
   override def consume(): Unit = wrapped.consume
   override def getSourceName(): String = wrapped.getSourceName
