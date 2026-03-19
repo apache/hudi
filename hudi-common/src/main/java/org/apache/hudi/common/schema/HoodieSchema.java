@@ -2449,7 +2449,10 @@ public class HoodieSchema implements Serializable {
     public static final String TYPE_DESCRIPTOR = "BLOB";
     private static final String DEFAULT_NAME = "blob";
     private static final List<Schema.Field> BLOB_FIELDS = createBlobFields();
+    private static final int REFERENCE_FIELD_COUNT = AvroSchemaUtils.getNonNullTypeFromUnion(BLOB_FIELDS.get(2).schema()).getFields().size();
 
+    public static final String INLINE = "INLINE";
+    public static final String OUT_OF_LINE = "OUT_OF_LINE";
     public static final String TYPE = "type";
     public static final String INLINE_DATA_FIELD = "data";
     public static final String EXTERNAL_REFERENCE = "reference";
@@ -2465,7 +2468,7 @@ public class HoodieSchema implements Serializable {
     }
 
     public static int getReferenceFieldCount() {
-      return AvroSchemaUtils.getNonNullTypeFromUnion(BLOB_FIELDS.get(2).schema()).getFields().size();
+      return REFERENCE_FIELD_COUNT;
     }
 
     /**
@@ -2523,7 +2526,7 @@ public class HoodieSchema implements Serializable {
       referenceField.setFields(referenceFields);
 
       return Arrays.asList(
-          new Schema.Field(TYPE, Schema.createEnum("blob_storage_type", null, null, Arrays.asList("INLINE", "OUT_OF_LINE")), null, null),
+          new Schema.Field(TYPE, Schema.createEnum("blob_storage_type", null, null, Arrays.asList(INLINE, OUT_OF_LINE)), null, null),
           new Schema.Field(INLINE_DATA_FIELD, AvroSchemaUtils.createNullableSchema(bytesField), null, Schema.Field.NULL_DEFAULT_VALUE),
           new Schema.Field(EXTERNAL_REFERENCE, AvroSchemaUtils.createNullableSchema(referenceField), null, Schema.Field.NULL_DEFAULT_VALUE)
       );

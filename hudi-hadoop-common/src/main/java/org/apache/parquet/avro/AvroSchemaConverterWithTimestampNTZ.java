@@ -221,6 +221,7 @@ public class AvroSchemaConverterWithTimestampNTZ extends HoodieAvroParquetSchema
         }
         break;
       case RECORD:
+      case BLOB:
         return new GroupType(repetition, fieldName, convertFields(schema.getFields(), schemaPath));
       case ENUM:
         builder = Types.primitive(BINARY, repetition).as(enumType());
