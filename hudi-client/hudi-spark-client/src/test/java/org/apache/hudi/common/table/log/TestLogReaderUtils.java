@@ -23,7 +23,6 @@ import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.timeline.versioning.v2.TimelineArchiverV2;
 import org.apache.hudi.common.fs.FSUtils;
-import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
@@ -86,7 +85,7 @@ public class TestLogReaderUtils extends SparkClientFunctionalTestHarness {
       JavaRDD<HoodieRecord> writeRecords2 = jsc().parallelize(records2, 1);
       List<WriteStatus> statuses2 = client.upsert(writeRecords2, secondCommit).collect();
       assertNoWriteErrors(statuses2);
-      assertLogFilesProduced(metaClient, secondCommit);
+      assertLogFilesProduced(statuses2);
 
       // Third commit - more updates
       String thirdCommit = WriteClientTestUtils.createNewInstantTime();
@@ -95,7 +94,7 @@ public class TestLogReaderUtils extends SparkClientFunctionalTestHarness {
       JavaRDD<HoodieRecord> writeRecords3 = jsc().parallelize(records3, 1);
       List<WriteStatus> statuses3 = client.upsert(writeRecords3, thirdCommit).collect();
       assertNoWriteErrors(statuses3);
-      assertLogFilesProduced(metaClient, thirdCommit);
+      assertLogFilesProduced(statuses3);
 
       // Reload metaClient to get latest timeline
       metaClient = HoodieTableMetaClient.reload(metaClient);
@@ -208,7 +207,7 @@ public class TestLogReaderUtils extends SparkClientFunctionalTestHarness {
       JavaRDD<HoodieRecord> writeRecords2 = jsc().parallelize(records2, 1);
       List<WriteStatus> statuses2 = client.upsert(writeRecords2, secondCommit).collect();
       assertNoWriteErrors(statuses2);
-      assertLogFilesProduced(metaClient, secondCommit);
+      assertLogFilesProduced(statuses2);
 
       // Third through sixth commits - more updates to trigger archival
       String thirdCommit = WriteClientTestUtils.createNewInstantTime();
@@ -281,18 +280,9 @@ public class TestLogReaderUtils extends SparkClientFunctionalTestHarness {
     }
   }
 
-  private void assertLogFilesProduced(HoodieTableMetaClient metaClient, String commitTime) throws Exception {
-    HoodieTableMetaClient reloadedMetaClient = HoodieTableMetaClient.reload(metaClient);
-    HoodieCommitMetadata commitMetadata = reloadedMetaClient.getActiveTimeline()
-        .getCommitsTimeline()
-        .filterCompletedInstants()
-        .readCommitMetadata(reloadedMetaClient.getActiveTimeline()
-            .getCommitsTimeline()
-            .filterCompletedInstants()
-            .filter(instant -> instant.requestedTime().equals(commitTime))
-            .firstInstant().get());
-    assertTrue(commitMetadata.getWriteStats().stream()
-            .anyMatch(stat -> FSUtils.isLogFile(stat.getPath())),
+  private void assertLogFilesProduced(List<WriteStatus> statuses) {
+    assertTrue(statuses.stream()
+            .anyMatch(status -> FSUtils.isLogFile(status.getStat().getPath())),
         "Expected log files to be produced from upsert");
   }
 }
