@@ -133,6 +133,9 @@ public class RollbackHelper implements Serializable {
     }, numPartitions);
   }
 
+  /**
+   * Builds the lookup key for pre-computed log versions. Used by {@link RollbackHelperV1} for V6 rollback.
+   */
   protected static String logVersionLookupKey(String partitionPath, String fileId, String commitTime) {
     return partitionPath + "|" + fileId + "|" + commitTime;
   }
@@ -141,6 +144,8 @@ public class RollbackHelper implements Serializable {
    * Pre-compute the latest log version for each (partition, fileId, deltaCommitTime) tuple
    * by listing each unique partition directory once. This replaces N per-request listing
    * calls (one per rollback request) with P per-partition listings (where P is much less than N).
+   *
+   * <p>Used by {@link RollbackHelperV1} for V6 rollback where log blocks are appended.
    */
   protected Map<String, Pair<Integer, String>> preComputeLogVersions(
       List<SerializableHoodieRollbackRequest> rollbackRequests) {
@@ -222,6 +227,9 @@ public class RollbackHelper implements Serializable {
     }).collect(Collectors.toList());
   }
 
+  /**
+   * Generates the header for a rollback command block. Used by {@link RollbackHelperV1} for V6 rollback.
+   */
   protected Map<HoodieLogBlock.HeaderMetadataType, String> generateHeader(String commit) {
     // generate metadata
     Map<HoodieLogBlock.HeaderMetadataType, String> header = new HashMap<>(3);
