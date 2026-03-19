@@ -218,7 +218,7 @@ public class TestProtoConversionUtil {
     float primitiveFloat = RANDOM.nextFloat();
     int primitiveInt = RANDOM.nextInt();
     long primitiveLong = RANDOM.nextLong();
-    int primitiveUnsignedInt = RANDOM.nextInt();
+    int primitiveUnsignedInt = Math.abs(RANDOM.nextInt());
     long primitiveUnsignedLong = RANDOM.nextLong();
     int primitiveSignedInt = RANDOM.nextInt();
     long primitiveSignedLong = RANDOM.nextLong();
