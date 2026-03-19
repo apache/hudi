@@ -35,6 +35,7 @@ import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
+import org.apache.hudi.client.WriteClientTestUtils;
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness;
 
 import org.apache.spark.api.java.JavaRDD;
@@ -71,14 +72,16 @@ public class TestLogReaderUtils extends SparkClientFunctionalTestHarness {
 
     try (SparkRDDWriteClient client = getHoodieWriteClient(config)) {
       // First commit - insert data
-      String firstCommit = client.createNewInstantTime(true);
+      String firstCommit = WriteClientTestUtils.createNewInstantTime();
+      WriteClientTestUtils.startCommitWithTime(client, firstCommit);
       List<HoodieRecord> records1 = dataGen.generateInserts(firstCommit, 100);
       JavaRDD<HoodieRecord> writeRecords1 = jsc().parallelize(records1, 1);
       List<WriteStatus> statuses1 = client.insert(writeRecords1, firstCommit).collect();
       assertNoWriteErrors(statuses1);
 
       // Second commit - update data to create log files
-      String secondCommit = client.createNewInstantTime(true);
+      String secondCommit = WriteClientTestUtils.createNewInstantTime();
+      WriteClientTestUtils.startCommitWithTime(client, secondCommit);
       List<HoodieRecord> records2 = dataGen.generateUpdates(secondCommit, 50);
       JavaRDD<HoodieRecord> writeRecords2 = jsc().parallelize(records2, 1);
       List<WriteStatus> statuses2 = client.upsert(writeRecords2, secondCommit).collect();
@@ -86,7 +89,8 @@ public class TestLogReaderUtils extends SparkClientFunctionalTestHarness {
       assertLogFilesProduced(metaClient, secondCommit);
 
       // Third commit - more updates
-      String thirdCommit = client.createNewInstantTime(true);
+      String thirdCommit = WriteClientTestUtils.createNewInstantTime();
+      WriteClientTestUtils.startCommitWithTime(client, thirdCommit);
       List<HoodieRecord> records3 = dataGen.generateUpdates(thirdCommit, 30);
       JavaRDD<HoodieRecord> writeRecords3 = jsc().parallelize(records3, 1);
       List<WriteStatus> statuses3 = client.upsert(writeRecords3, thirdCommit).collect();
@@ -190,14 +194,16 @@ public class TestLogReaderUtils extends SparkClientFunctionalTestHarness {
 
     try (SparkRDDWriteClient client = getHoodieWriteClient(config)) {
       // First commit - insert data (creates base files)
-      String firstCommit = client.createNewInstantTime(true);
+      String firstCommit = WriteClientTestUtils.createNewInstantTime();
+      WriteClientTestUtils.startCommitWithTime(client, firstCommit);
       List<HoodieRecord> records1 = dataGen.generateInserts(firstCommit, 100);
       JavaRDD<HoodieRecord> writeRecords1 = jsc().parallelize(records1, 1);
       List<WriteStatus> statuses1 = client.insert(writeRecords1, firstCommit).collect();
       assertNoWriteErrors(statuses1);
 
       // Second commit - update data to create log files
-      String secondCommit = client.createNewInstantTime(true);
+      String secondCommit = WriteClientTestUtils.createNewInstantTime();
+      WriteClientTestUtils.startCommitWithTime(client, secondCommit);
       List<HoodieRecord> records2 = dataGen.generateUpdates(secondCommit, 50);
       JavaRDD<HoodieRecord> writeRecords2 = jsc().parallelize(records2, 1);
       List<WriteStatus> statuses2 = client.upsert(writeRecords2, secondCommit).collect();
@@ -205,19 +211,23 @@ public class TestLogReaderUtils extends SparkClientFunctionalTestHarness {
       assertLogFilesProduced(metaClient, secondCommit);
 
       // Third through sixth commits - more updates to trigger archival
-      String thirdCommit = client.createNewInstantTime(true);
+      String thirdCommit = WriteClientTestUtils.createNewInstantTime();
+      WriteClientTestUtils.startCommitWithTime(client, thirdCommit);
       List<WriteStatus> statuses3 = client.upsert(jsc().parallelize(dataGen.generateUpdates(thirdCommit, 30), 1), thirdCommit).collect();
       assertNoWriteErrors(statuses3);
 
-      String fourthCommit = client.createNewInstantTime(true);
+      String fourthCommit = WriteClientTestUtils.createNewInstantTime();
+      WriteClientTestUtils.startCommitWithTime(client, fourthCommit);
       List<WriteStatus> statuses4 = client.upsert(jsc().parallelize(dataGen.generateUpdates(fourthCommit, 20), 1), fourthCommit).collect();
       assertNoWriteErrors(statuses4);
 
-      String fifthCommit = client.createNewInstantTime(true);
+      String fifthCommit = WriteClientTestUtils.createNewInstantTime();
+      WriteClientTestUtils.startCommitWithTime(client, fifthCommit);
       List<WriteStatus> statuses5 = client.upsert(jsc().parallelize(dataGen.generateUpdates(fifthCommit, 20), 1), fifthCommit).collect();
       assertNoWriteErrors(statuses5);
 
-      String sixthCommit = client.createNewInstantTime(true);
+      String sixthCommit = WriteClientTestUtils.createNewInstantTime();
+      WriteClientTestUtils.startCommitWithTime(client, sixthCommit);
       List<WriteStatus> statuses6 = client.upsert(jsc().parallelize(dataGen.generateUpdates(sixthCommit, 20), 1), sixthCommit).collect();
       assertNoWriteErrors(statuses6);
 
