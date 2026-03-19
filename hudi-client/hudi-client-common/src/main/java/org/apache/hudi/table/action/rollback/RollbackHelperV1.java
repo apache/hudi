@@ -258,9 +258,8 @@ public class RollbackHelperV1 extends RollbackHelper {
           filesToNumBlocksRollback = Collections.singletonMap(
               new StoragePathInfo(Objects.requireNonNull(filePath), fileSize, false, (short) 0, 0, 0), 1L);
         } else {
-          // This step is intentionally done after writer is closed. Guarantees that
-          // getFileStatus would reflect correct stats and FileNotFoundException is not thrown in
-          // cloud-storage : HUDI-168
+          // No block was appended (doDelete=false), so file size was not
+          // captured in-memory. Fetch metadata from storage instead.
           filesToNumBlocksRollback = Collections.singletonMap(
               metaClient.getStorage().getPathInfo(Objects.requireNonNull(filePath)), 1L);
         }

@@ -21,25 +21,20 @@ package org.apache.hudi.table.action.rollback;
 import org.apache.hudi.avro.model.HoodieRollbackRequest;
 import org.apache.hudi.common.HoodieRollbackStat;
 import org.apache.hudi.common.engine.HoodieEngineContext;
-import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.function.SerializableFunction;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.HoodieTableVersion;
-import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.table.log.block.HoodieCommandBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
-import org.apache.hudi.exception.HoodieRollbackException;
 import org.apache.hudi.exception.InvalidHoodiePathException;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.table.HoodieTable;
-import org.apache.hudi.util.CommonClientUtils;
 
 import lombok.extern.slf4j.Slf4j;
 
@@ -50,12 +45,11 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import static org.apache.hudi.table.action.rollback.RollbackUtils.groupSerializableRollbackRequestsBasedOnFileGroup;
+import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
 
 /**
  * Contains common methods to be used across engines for rollback operation.
@@ -121,90 +115,15 @@ public class RollbackHelper implements Serializable {
                                                                     HoodieInstant instantToRollback,
                                                                     List<SerializableHoodieRollbackRequest> rollbackRequests,
                                                                     boolean doDelete, int numPartitions) {
-    // The rollback requests for append only exist in table version 6 and below which require groupBy
-    List<SerializableHoodieRollbackRequest> processedRollbackRequests =
-        metaClient.getTableConfig().getTableVersion().greaterThanOrEquals(HoodieTableVersion.EIGHT)
-            ? rollbackRequests
-            : groupSerializableRollbackRequestsBasedOnFileGroup(rollbackRequests);
-    final Map<String, Pair<Integer, String>> logVersionMap = preComputeLogVersions(processedRollbackRequests);
-    final TaskContextSupplier taskContextSupplier = context.getTaskContextSupplier();
-    return context.flatMap(processedRollbackRequests, (SerializableFunction<SerializableHoodieRollbackRequest, Stream<Pair<String, HoodieRollbackStat>>>) rollbackRequest -> {
+    return context.flatMap(rollbackRequests, (SerializableFunction<SerializableHoodieRollbackRequest, Stream<Pair<String, HoodieRollbackStat>>>) rollbackRequest -> {
       List<String> filesToBeDeleted = rollbackRequest.getFilesToBeDeleted();
       if (!filesToBeDeleted.isEmpty()) {
         List<HoodieRollbackStat> rollbackStats = deleteFiles(metaClient, filesToBeDeleted, doDelete);
         return rollbackStats.stream().map(entry -> Pair.of(entry.getPartitionPath(), entry));
-      } else if (!rollbackRequest.getLogBlocksToBeDeleted().isEmpty()) {
-        HoodieLogFormat.Writer writer = null;
-        StoragePath filePath = null;
-        long fileSize = 0L;
-        boolean fileSizeCaptured = false;
-        try {
-          String fileId = rollbackRequest.getFileId();
-          HoodieTableVersion tableVersion = metaClient.getTableConfig().getTableVersion();
-
-          HoodieLogFormat.WriterBuilder writerBuilder = HoodieLogFormat.newWriterBuilder()
-              .onParentPath(FSUtils.constructAbsolutePath(metaClient.getBasePath(), rollbackRequest.getPartitionPath()))
-              .withFileId(fileId)
-              .withLogWriteToken(CommonClientUtils.generateWriteToken(taskContextSupplier))
-              .withInstantTime(tableVersion.greaterThanOrEquals(HoodieTableVersion.EIGHT)
-                      ? instantToRollback.requestedTime() : rollbackRequest.getLatestBaseInstant()
-                  )
-              .withStorage(metaClient.getStorage())
-              .withTableVersion(tableVersion)
-              .withFileExtension(HoodieLogFile.DELTA_EXTENSION);
-
-          String logVersionKey = logVersionLookupKey(rollbackRequest.getPartitionPath(), fileId, rollbackRequest.getLatestBaseInstant());
-          Pair<Integer, String> preComputedVersion = logVersionMap.get(logVersionKey);
-          if (preComputedVersion != null) {
-            writerBuilder.withLogVersion(preComputedVersion.getLeft())
-                .withLogWriteToken(preComputedVersion.getRight());
-          }
-
-          writer = writerBuilder.build();
-
-          // generate metadata
-          if (doDelete) {
-            Map<HoodieLogBlock.HeaderMetadataType, String> header = generateHeader(instantToRollback.requestedTime());
-            // if update belongs to an existing log file
-            // use the log file path from AppendResult in case the file handle may roll over
-            filePath = writer.appendBlock(new HoodieCommandBlock(header)).logFile().getPath();
-            fileSize = writer.getCurrentSize();
-            fileSizeCaptured = true;
-          } else {
-            filePath = writer.getLogFile().getPath();
-          }
-        } catch (IOException | InterruptedException io) {
-          throw new HoodieRollbackException("Failed to rollback for instant " + instantToRollback, io);
-        } finally {
-          try {
-            if (writer != null) {
-              writer.close();
-            }
-          } catch (IOException io) {
-            throw new HoodieIOException("Error appending rollback block", io);
-          }
-        }
-
-        Map<StoragePathInfo, Long> filesToNumBlocksRollback;
-        if (fileSizeCaptured) {
-          filesToNumBlocksRollback = Collections.singletonMap(
-              new StoragePathInfo(Objects.requireNonNull(filePath), fileSize, false, (short) 0, 0, 0), 1L);
-        } else {
-          // This step is intentionally done after writer is closed. Guarantees that
-          // getFileStatus would reflect correct stats and FileNotFoundException is not thrown in
-          // cloud-storage : HUDI-168
-          filesToNumBlocksRollback = Collections.singletonMap(
-              metaClient.getStorage().getPathInfo(Objects.requireNonNull(filePath)), 1L);
-        }
-
-        return Stream.of(
-                Pair.of(rollbackRequest.getPartitionPath(),
-                    HoodieRollbackStat.newBuilder()
-                        .withPartitionPath(rollbackRequest.getPartitionPath())
-                        .withRollbackBlockAppendResults(filesToNumBlocksRollback)
-                        .build()));
       } else {
-        // no action needed.
+        checkArgument(rollbackRequest.getLogBlocksToBeDeleted().isEmpty(),
+            "V8+ rollback should not have logBlocksToBeDeleted, but found for partition: "
+                + rollbackRequest.getPartitionPath() + ", fileId: " + rollbackRequest.getFileId());
         return Stream.of(
             Pair.of(rollbackRequest.getPartitionPath(),
                 HoodieRollbackStat.newBuilder()
