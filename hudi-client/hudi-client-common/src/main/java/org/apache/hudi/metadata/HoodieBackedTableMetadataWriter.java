@@ -450,6 +450,12 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
       }
     }
 
+    // for a fresh table, lets defer RLI initialization
+    if (this.enabledPartitionTypes.contains(RECORD_INDEX) && dataMetaClient.getActiveTimeline().filterCompletedInstants().countInstants() == 0) {
+      this.enabledPartitionTypes.remove(RECORD_INDEX);
+      partitionsToInit.remove(RECORD_INDEX);
+    }
+
     Lazy<List<Pair<String, FileSlice>>> lazyLatestMergedPartitionFileSliceList = getLazyLatestMergedPartitionFileSliceList();
     for (MetadataPartitionType partitionType : partitionsToInit) {
       // Find the commit timestamp to use for this partition. Each initialization should use its own unique commit time.
