@@ -28,8 +28,6 @@ import org.apache.hudi.config.HoodiePreCommitValidatorConfig.ValidationFailurePo
 import org.apache.hudi.exception.HoodieValidationException;
 
 import lombok.extern.slf4j.Slf4j;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /**
  * Abstract base class for streaming offset validators.
