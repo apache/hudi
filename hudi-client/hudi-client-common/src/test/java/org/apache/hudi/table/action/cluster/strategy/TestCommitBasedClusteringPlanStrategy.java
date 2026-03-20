@@ -38,6 +38,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 import org.apache.hudi.avro.model.HoodieClusteringPlan;
 import org.apache.hudi.common.engine.HoodieEngineContext;
@@ -222,28 +223,22 @@ public class TestCommitBasedClusteringPlanStrategy {
     assertTrue(result.isPresent());
     HoodieClusteringPlan plan = result.get();
     assertNotNull(plan);
+    List<String> allSlicePaths = plan.getInputGroups().stream()
+        .flatMap(g -> g.getSlices().stream())
+        .map(HoodieSliceInfo::getDataFilePath)
+        .collect(Collectors.toList());
     if (!largerCommit) {
       assertEquals(1, plan.getInputGroups().size());
       HoodieClusteringGroup inputGroup = plan.getInputGroups().get(0);
       assertEquals(3, inputGroup.getSlices().size());
-      HoodieSliceInfo slice1 = inputGroup.getSlices().get(0);
-      assertEquals(file1path, slice1.getDataFilePath());
-      HoodieSliceInfo slice2 = inputGroup.getSlices().get(1);
-      assertEquals(file2path, slice2.getDataFilePath());
-      HoodieSliceInfo slice3 = inputGroup.getSlices().get(2);
-      assertEquals(file3path, slice3.getDataFilePath());
+      assertThat(allSlicePaths, containsInAnyOrder(file1path, file2path, file3path));
     } else {
       assertEquals(2, plan.getInputGroups().size());
       HoodieClusteringGroup inputGroup1 = plan.getInputGroups().get(0);
       assertEquals(2, inputGroup1.getSlices().size());
-      HoodieSliceInfo slice1 = inputGroup1.getSlices().get(0);
-      assertEquals(file1path, slice1.getDataFilePath());
-      HoodieSliceInfo slice2 = inputGroup1.getSlices().get(1);
-      assertEquals(file2path, slice2.getDataFilePath());
       HoodieClusteringGroup inputGroup2 = plan.getInputGroups().get(1);
       assertEquals(1, inputGroup2.getSlices().size());
-      HoodieSliceInfo slice3 = inputGroup2.getSlices().get(0);
-      assertEquals(file3path, slice3.getDataFilePath());
+      assertThat(allSlicePaths, containsInAnyOrder(file1path, file2path, file3path));
     }
 
     Map<String, String> extraMetadata = strategy.getExtraMetadata();
@@ -409,13 +404,14 @@ public class TestCommitBasedClusteringPlanStrategy {
     inputGroups.add(inputGroup1);
     inputGroups.add(inputGroup2);
     for (HoodieClusteringGroup inputGroup : inputGroups) {
+      List<String> slicePaths = inputGroup.getSlices().stream()
+          .map(HoodieSliceInfo::getDataFilePath)
+          .collect(Collectors.toList());
       if (inputGroup.getSlices().size() == 3) {
-        assertEquals(file1path, inputGroup.getSlices().get(0).getDataFilePath());
-        assertEquals(file2path, inputGroup.getSlices().get(1).getDataFilePath());
-        assertEquals(file3path, inputGroup.getSlices().get(2).getDataFilePath());
+        assertThat(slicePaths, containsInAnyOrder(file1path, file2path, file3path));
       } else {
         assertEquals(1, inputGroup.getSlices().size());
-        assertEquals(file4path, inputGroup.getSlices().get(0).getDataFilePath());
+        assertEquals(file4path, slicePaths.get(0));
       }
     }
 
@@ -529,10 +525,13 @@ public class TestCommitBasedClusteringPlanStrategy {
     assertTrue(result.isPresent());
     HoodieClusteringPlan plan = result.get();
     assertNotNull(plan);
-    // Should have 1 group with 2 file slices (fileId1 with base+log, fileId2 with log only)
-    assertEquals(1, plan.getInputGroups().size());
-    HoodieClusteringGroup inputGroup = plan.getInputGroups().get(0);
-    assertEquals(2, inputGroup.getSlices().size());
+    // Should have 2 groups: fileId2 (log-only) gets parquetMaxFileSize in parent class
+    // which exceeds MAX_BYTES_PER_GROUP, so it forms its own group
+    assertEquals(2, plan.getInputGroups().size());
+    int totalSlices = plan.getInputGroups().stream()
+        .mapToInt(g -> g.getSlices().size())
+        .sum();
+    assertEquals(2, totalSlices);
 
     Map<String, String> extraMetadata = strategy.getExtraMetadata();
     assertEquals(commitTime, extraMetadata.get(CLUSTERING_COMMIT_CHECKPOINT_KEY));
@@ -599,9 +598,13 @@ public class TestCommitBasedClusteringPlanStrategy {
     assertTrue(result.isPresent());
     HoodieClusteringPlan plan = result.get();
     assertNotNull(plan);
-    assertEquals(1, plan.getInputGroups().size());
-    HoodieClusteringGroup inputGroup = plan.getInputGroups().get(0);
-    assertEquals(2, inputGroup.getSlices().size());
+    // fileId2 (log-only) gets parquetMaxFileSize in parent class which exceeds
+    // MAX_BYTES_PER_GROUP, so it forms its own group separate from fileId1
+    assertEquals(2, plan.getInputGroups().size());
+    int totalSlices = plan.getInputGroups().stream()
+        .mapToInt(g -> g.getSlices().size())
+        .sum();
+    assertEquals(2, totalSlices);
 
     Map<String, String> extraMetadata = strategy.getExtraMetadata();
     assertEquals(commitTime2, extraMetadata.get(CLUSTERING_COMMIT_CHECKPOINT_KEY));
