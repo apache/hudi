@@ -26,6 +26,8 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodiePreCommitValidatorConfig;
 import org.apache.hudi.config.HoodiePreCommitValidatorConfig.ValidationFailurePolicy;
 import org.apache.hudi.exception.HoodieValidationException;
+
+import lombok.extern.slf4j.Slf4j;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -57,9 +59,8 @@ import org.slf4j.LoggerFactory;
  * - hoodie.precommit.validators.streaming.offset.tolerance.percentage (default: 0.0)
  * - hoodie.precommit.validators.failure.policy (default: FAIL)
  */
+@Slf4j
 public abstract class StreamingOffsetValidator extends BasePreCommitValidator {
-
-  private static final Logger LOG = LoggerFactory.getLogger(StreamingOffsetValidator.class);
 
   protected final String checkpointKey;
   protected final double tolerancePercentage;
@@ -92,21 +93,21 @@ public abstract class StreamingOffsetValidator extends BasePreCommitValidator {
   protected void validateWithMetadata(ValidationContext context) throws HoodieValidationException {
     // Skip validation for first commit (no previous checkpoint)
     if (context.isFirstCommit()) {
-      LOG.info("Skipping offset validation for first commit");
+      log.info("Skipping offset validation for first commit");
       return;
     }
 
     // Extract current checkpoint
     Option<String> currentCheckpointOpt = context.getExtraMetadata(checkpointKey);
     if (!currentCheckpointOpt.isPresent()) {
-      LOG.warn("Current checkpoint not found with key: {}. Skipping validation.", checkpointKey);
+      log.warn("Current checkpoint not found with key: {}. Skipping validation.", checkpointKey);
       return;
     }
     String currentCheckpoint = currentCheckpointOpt.get();
 
     // Validate current checkpoint format
     if (!CheckpointUtils.isValidCheckpointFormat(checkpointFormat, currentCheckpoint)) {
-      LOG.warn("Current checkpoint has invalid format: {}. Skipping validation.", currentCheckpoint);
+      log.warn("Current checkpoint has invalid format: {}. Skipping validation.", currentCheckpoint);
       return;
     }
 
@@ -115,14 +116,14 @@ public abstract class StreamingOffsetValidator extends BasePreCommitValidator {
         .flatMap(metadata -> Option.ofNullable(metadata.getMetadata(checkpointKey)));
 
     if (!previousCheckpointOpt.isPresent()) {
-      LOG.info("Previous checkpoint not found. May be first streaming commit. Skipping validation.");
+      log.info("Previous checkpoint not found. May be first streaming commit. Skipping validation.");
       return;
     }
     String previousCheckpoint = previousCheckpointOpt.get();
 
     // Validate previous checkpoint format
     if (!CheckpointUtils.isValidCheckpointFormat(checkpointFormat, previousCheckpoint)) {
-      LOG.warn("Previous checkpoint has invalid format: {}. Skipping validation.", previousCheckpoint);
+      log.warn("Previous checkpoint has invalid format: {}. Skipping validation.", previousCheckpoint);
       return;
     }
 
@@ -143,7 +144,7 @@ public abstract class StreamingOffsetValidator extends BasePreCommitValidator {
     // For empty commits (e.g., no new data from source), both offsetDiff and recordsWritten
     // can be zero. This is a valid scenario — skip validation to avoid false positives.
     if (offsetDifference == 0 && recordsWritten == 0) {
-      LOG.info("Empty commit detected (no offset change, no records written). Skipping offset validation.");
+      log.info("Empty commit detected (no offset change, no records written). Skipping offset validation.");
       return;
     }
 
@@ -177,12 +178,12 @@ public abstract class StreamingOffsetValidator extends BasePreCommitValidator {
           previousCheckpoint, currentCheckpoint);
 
       if (failurePolicy == ValidationFailurePolicy.WARN_LOG) {
-        LOG.warn(errorMsg + " (failure policy is WARN_LOG, commit will proceed)");
+        log.warn(errorMsg + " (failure policy is WARN_LOG, commit will proceed)");
       } else {
         throw new HoodieValidationException(errorMsg);
       }
     } else {
-      LOG.info("Offset validation passed. Offset diff: {}, Records: {}, Deviation: {}% (within {}%)",
+      log.info("Offset validation passed. Offset diff: {}, Records: {}, Deviation: {}% (within {}%)",
           offsetDiff, recordsWritten, String.format("%.2f", deviation), tolerancePercentage);
     }
   }

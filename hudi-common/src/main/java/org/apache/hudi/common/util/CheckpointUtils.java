@@ -19,8 +19,7 @@
 
 package org.apache.hudi.common.util;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -53,9 +52,8 @@ import java.util.Map;
  *   Used by: Kinesis sources (engine-agnostic)
  *   Note: To be implemented in Phase 4
  */
+@Slf4j
 public class CheckpointUtils {
-
-  private static final Logger LOG = LoggerFactory.getLogger(CheckpointUtils.class);
 
   /**
    * Supported checkpoint formats across engines and sources.
@@ -146,7 +144,7 @@ public class CheckpointUtils {
           // We cannot reliably determine how many records were processed since
           // the start offset of the new topic may not be 0. Log a warning and
           // skip this partition to avoid overcounting.
-          LOG.warn("Detected offset reset for partition {}. Previous offset: {}, current offset: {}. "
+          log.warn("Detected offset reset for partition {}. Previous offset: {}, current offset: {}. "
               + "Skipping partition from diff calculation to avoid overcounting.", partition, previousOffset, currentOffset);
         } else {
           totalDiff += diff;
@@ -155,7 +153,7 @@ public class CheckpointUtils {
         // New partition appeared. The start offset may not be 0 (e.g., compacted
         // topics), so counting from 0 would overcount. Log a warning and skip
         // this partition to avoid inflating the diff.
-        LOG.warn("New partition {} detected (not in previous checkpoint). "
+        log.warn("New partition {} detected (not in previous checkpoint). "
             + "Skipping partition from diff calculation (start offset unknown, "
             + "current offset: {}).", partition, currentOffset);
       }
