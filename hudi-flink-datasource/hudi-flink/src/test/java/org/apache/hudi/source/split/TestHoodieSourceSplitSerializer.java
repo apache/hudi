@@ -21,6 +21,9 @@ package org.apache.hudi.source.split;
 import org.apache.hudi.common.table.log.InstantRange;
 import org.apache.hudi.common.util.Option;
 
+import org.apache.hudi.common.table.cdc.HoodieCDCFileSplit;
+import org.apache.hudi.common.table.cdc.HoodieCDCInferenceCase;
+
 import org.junit.jupiter.api.Test;
 
 import java.io.ByteArrayOutputStream;
@@ -1174,5 +1177,147 @@ public class TestHoodieSourceSplitSerializer {
 
     assertEquals("Composition Range is not supported.", exception.getMessage());
   }
-}
 
+  // -------------------------------------------------------------------------
+  //  CDC split serialization tests
+  // -------------------------------------------------------------------------
+
+  @Test
+  public void testSerializeAndDeserializeCdcSplit() throws IOException {
+    HoodieCDCFileSplit change = new HoodieCDCFileSplit(
+        "20230101000000000", HoodieCDCInferenceCase.BASE_FILE_INSERT, "insert.parquet");
+    HoodieCdcSourceSplit original = new HoodieCdcSourceSplit(
+        10, "/table/path", 128 * 1024 * 1024L, "file-cdc",
+        new HoodieCDCFileSplit[]{change}, "read_optimized", "20230101000000000");
+
+    byte[] serialized = serializer.serialize(original);
+    assertNotNull(serialized);
+
+    HoodieSourceSplit deserialized = serializer.deserialize(serializer.getVersion(), serialized);
+
+    assertTrue(deserialized instanceof HoodieCdcSourceSplit,
+        "CDC split must deserialize as HoodieCdcSourceSplit");
+    HoodieCdcSourceSplit cdcDeserialized = (HoodieCdcSourceSplit) deserialized;
+    assertEquals(original.getSplitNum(), cdcDeserialized.getSplitNum());
+    assertEquals(original.getTablePath(), cdcDeserialized.getTablePath());
+    assertEquals(original.getFileId(), cdcDeserialized.getFileId());
+    assertEquals(original.getMaxCompactionMemoryInBytes(), cdcDeserialized.getMaxCompactionMemoryInBytes());
+    assertEquals(original.getMergeType(), cdcDeserialized.getMergeType());
+    assertEquals(original.getLatestCommit(), cdcDeserialized.getLatestCommit());
+    assertEquals(1, cdcDeserialized.getChanges().length);
+    assertEquals("20230101000000000", cdcDeserialized.getChanges()[0].getInstant());
+    assertEquals(HoodieCDCInferenceCase.BASE_FILE_INSERT, cdcDeserialized.getChanges()[0].getCdcInferCase());
+  }
+
+  @Test
+  public void testSerializeAndDeserializeCdcSplitWithEmptyChanges() throws IOException {
+    HoodieCdcSourceSplit original = new HoodieCdcSourceSplit(
+        11, "/warehouse/table", 256 * 1024 * 1024L, "file-empty-cdc",
+        new HoodieCDCFileSplit[0], "payload_combine", "20230201000000000");
+
+    byte[] serialized = serializer.serialize(original);
+    HoodieSourceSplit deserialized = serializer.deserialize(serializer.getVersion(), serialized);
+
+    assertTrue(deserialized instanceof HoodieCdcSourceSplit);
+    HoodieCdcSourceSplit cdcDeserialized = (HoodieCdcSourceSplit) deserialized;
+    assertEquals(0, cdcDeserialized.getChanges().length);
+    assertEquals("/warehouse/table", cdcDeserialized.getTablePath());
+    assertEquals(256 * 1024 * 1024L, cdcDeserialized.getMaxCompactionMemoryInBytes());
+  }
+
+  @Test
+  public void testSerializeAndDeserializeCdcSplitWithMultipleChanges() throws IOException {
+    HoodieCDCFileSplit insert = new HoodieCDCFileSplit(
+        "20230101000000000", HoodieCDCInferenceCase.BASE_FILE_INSERT, "insert.parquet");
+    HoodieCDCFileSplit delete = new HoodieCDCFileSplit(
+        "20230102000000000", HoodieCDCInferenceCase.BASE_FILE_DELETE, "delete.log");
+    HoodieCDCFileSplit logFile = new HoodieCDCFileSplit(
+        "20230103000000000", HoodieCDCInferenceCase.LOG_FILE, "cdc.log");
+    HoodieCDCFileSplit replace = new HoodieCDCFileSplit(
+        "20230104000000000", HoodieCDCInferenceCase.REPLACE_COMMIT, "replace.parquet");
+
+    HoodieCdcSourceSplit original = new HoodieCdcSourceSplit(
+        12, "/table", 64 * 1024 * 1024L, "file-multi-cdc",
+        new HoodieCDCFileSplit[]{insert, delete, logFile, replace},
+        "read_optimized", "20230104000000000");
+
+    byte[] serialized = serializer.serialize(original);
+    HoodieSourceSplit deserialized = serializer.deserialize(serializer.getVersion(), serialized);
+
+    assertTrue(deserialized instanceof HoodieCdcSourceSplit);
+    HoodieCdcSourceSplit cdcDeserialized = (HoodieCdcSourceSplit) deserialized;
+    assertEquals(4, cdcDeserialized.getChanges().length);
+    assertEquals("20230101000000000", cdcDeserialized.getChanges()[0].getInstant());
+    assertEquals(HoodieCDCInferenceCase.BASE_FILE_INSERT, cdcDeserialized.getChanges()[0].getCdcInferCase());
+    assertEquals("20230102000000000", cdcDeserialized.getChanges()[1].getInstant());
+    assertEquals(HoodieCDCInferenceCase.BASE_FILE_DELETE, cdcDeserialized.getChanges()[1].getCdcInferCase());
+    assertEquals("20230103000000000", cdcDeserialized.getChanges()[2].getInstant());
+    assertEquals(HoodieCDCInferenceCase.LOG_FILE, cdcDeserialized.getChanges()[2].getCdcInferCase());
+    assertEquals("20230104000000000", cdcDeserialized.getChanges()[3].getInstant());
+    assertEquals(HoodieCDCInferenceCase.REPLACE_COMMIT, cdcDeserialized.getChanges()[3].getCdcInferCase());
+  }
+
+  @Test
+  public void testSerializeAndDeserializeCdcSplitPreservesConsumedState() throws IOException {
+    HoodieCDCFileSplit change = new HoodieCDCFileSplit(
+        "20230101000000000", HoodieCDCInferenceCase.LOG_FILE, "cdc.log");
+    HoodieCdcSourceSplit original = new HoodieCdcSourceSplit(
+        13, "/table", 128 * 1024 * 1024L, "file-cdc-consumed",
+        new HoodieCDCFileSplit[]{change}, "read_optimized", "20230101000000000");
+
+    original.updatePosition(5, 200L);
+
+    byte[] serialized = serializer.serialize(original);
+    HoodieSourceSplit deserialized = serializer.deserialize(serializer.getVersion(), serialized);
+
+    assertTrue(deserialized instanceof HoodieCdcSourceSplit);
+    HoodieCdcSourceSplit cdcDeserialized = (HoodieCdcSourceSplit) deserialized;
+    assertEquals(5, cdcDeserialized.getFileOffset());
+    assertEquals(200L, cdcDeserialized.getConsumed());
+    assertTrue(cdcDeserialized.isConsumed());
+  }
+
+  @Test
+  public void testRoundTripCdcSplitMultipleTimes() throws IOException {
+    HoodieCDCFileSplit change1 = new HoodieCDCFileSplit(
+        "20230101000000000", HoodieCDCInferenceCase.BASE_FILE_INSERT, "insert.parquet");
+    HoodieCDCFileSplit change2 = new HoodieCDCFileSplit(
+        "20230102000000000", HoodieCDCInferenceCase.BASE_FILE_DELETE, "delete.log");
+
+    HoodieCdcSourceSplit original = new HoodieCdcSourceSplit(
+        14, "/roundtrip/table", 128 * 1024 * 1024L, "file-roundtrip-cdc",
+        new HoodieCDCFileSplit[]{change1, change2},
+        "read_optimized", "20230102000000000");
+
+    original.updatePosition(3, 50L);
+
+    HoodieSourceSplit current = original;
+    for (int i = 0; i < 5; i++) {
+      byte[] s = serializer.serialize(current);
+      current = serializer.deserialize(serializer.getVersion(), s);
+    }
+
+    assertTrue(current instanceof HoodieCdcSourceSplit);
+    HoodieCdcSourceSplit cdcCurrent = (HoodieCdcSourceSplit) current;
+    assertEquals(original.getSplitNum(), cdcCurrent.getSplitNum());
+    assertEquals(original.getTablePath(), cdcCurrent.getTablePath());
+    assertEquals(original.getFileId(), cdcCurrent.getFileId());
+    assertEquals(original.getMaxCompactionMemoryInBytes(), cdcCurrent.getMaxCompactionMemoryInBytes());
+    assertEquals(2, cdcCurrent.getChanges().length);
+    assertEquals(3, cdcCurrent.getFileOffset());
+    assertEquals(50L, cdcCurrent.getConsumed());
+  }
+
+  @Test
+  public void testRegularSplitDeserializesAsHoodieSourceSplitNotCdc() throws IOException {
+    HoodieSourceSplit original = new HoodieSourceSplit(
+        15, "base-path", Option.empty(), "/table/path", "/partition",
+        "read_optimized", "19700101000000000", "file-regular", Option.empty());
+
+    byte[] serialized = serializer.serialize(original);
+    HoodieSourceSplit deserialized = serializer.deserialize(serializer.getVersion(), serialized);
+
+    assertFalse(deserialized instanceof HoodieCdcSourceSplit,
+        "Regular split must not deserialize as HoodieCdcSourceSplit");
+  }
+}

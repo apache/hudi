@@ -53,7 +53,9 @@ import org.apache.hudi.source.prune.PartitionBucketIdFunc;
 import org.apache.hudi.source.prune.PartitionPruners;
 import org.apache.hudi.source.prune.PrimaryKeyPruners;
 import org.apache.hudi.source.reader.HoodieRecordEmitter;
+import org.apache.hudi.source.reader.function.HoodieCdcSplitReaderFunction;
 import org.apache.hudi.source.reader.function.HoodieSplitReaderFunction;
+import org.apache.hudi.source.reader.function.SplitReaderFunction;
 import org.apache.hudi.source.split.HoodieSourceSplitComparator;
 import org.apache.hudi.source.rebalance.partitioner.StreamReadAppendPartitioner;
 import org.apache.hudi.source.rebalance.partitioner.StreamReadBucketIndexPartitioner;
@@ -300,16 +302,28 @@ public class HoodieTableSource extends FileIndexReader implements
 
     HoodieScanContext context = createHoodieScanContext(rowType);
     final HoodieTableType tableType = HoodieTableType.valueOf(this.conf.get(FlinkOptions.TABLE_TYPE));
-    boolean emitDelete = tableType == HoodieTableType.MERGE_ON_READ;
-    HoodieSplitReaderFunction splitReaderFunction = new HoodieSplitReaderFunction(
-        conf,
-        tableSchema,
-        HoodieSchemaConverter.convertToSchema(requiredRowType),
-        internalSchemaManager,
-        conf.get(FlinkOptions.MERGE_TYPE),
-        predicates,
-        emitDelete
-        );
+    final SplitReaderFunction<RowData> splitReaderFunction;
+    if (conf.get(FlinkOptions.CDC_ENABLED)) {
+      List<DataType> fieldTypes = rowDataType.getChildren();
+      splitReaderFunction = new HoodieCdcSplitReaderFunction(
+          conf,
+          tableSchema,
+          HoodieSchemaConverter.convertToSchema(requiredRowType),
+          rowType,
+          requiredRowType,
+          internalSchemaManager,
+          fieldTypes);
+    } else {
+      boolean emitDelete = tableType == HoodieTableType.MERGE_ON_READ;
+      splitReaderFunction = new HoodieSplitReaderFunction(
+          conf,
+          tableSchema,
+          HoodieSchemaConverter.convertToSchema(requiredRowType),
+          internalSchemaManager,
+          conf.get(FlinkOptions.MERGE_TYPE),
+          predicates,
+          emitDelete);
+    }
     return new HoodieSource<>(context, splitReaderFunction, new HoodieSourceSplitComparator(), metaClient, new HoodieRecordEmitter<>());
   }
 

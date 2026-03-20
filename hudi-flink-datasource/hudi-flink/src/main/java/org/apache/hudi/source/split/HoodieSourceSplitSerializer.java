@@ -18,6 +18,7 @@
 
 package org.apache.hudi.source.split;
 
+import org.apache.hudi.common.table.cdc.HoodieCDCFileSplit;
 import org.apache.hudi.common.table.log.InstantRange;
 import org.apache.hudi.common.util.Option;
 
@@ -29,6 +30,8 @@ import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -118,6 +121,25 @@ public class HoodieSourceSplitSerializer implements SimpleVersionedSerializer<Ho
         }
       }
 
+      // Serialize CDC-specific fields if this is a HoodieCdcSourceSplit
+      boolean isCdcSplit = obj instanceof HoodieCdcSourceSplit;
+      out.writeBoolean(isCdcSplit);
+      if (isCdcSplit) {
+        HoodieCdcSourceSplit cdcSplit = (HoodieCdcSourceSplit) obj;
+        out.writeLong(cdcSplit.getMaxCompactionMemoryInBytes());
+        HoodieCDCFileSplit[] changes = cdcSplit.getChanges();
+        out.writeInt(changes.length);
+        for (HoodieCDCFileSplit change : changes) {
+          ByteArrayOutputStream changeBaos = new ByteArrayOutputStream();
+          try (ObjectOutputStream oos = new ObjectOutputStream(changeBaos)) {
+            oos.writeObject(change);
+          }
+          byte[] changeBytes = changeBaos.toByteArray();
+          out.writeInt(changeBytes.length);
+          out.write(changeBytes);
+        }
+      }
+
       out.flush();
       return baos.toByteArray();
     }
@@ -204,6 +226,27 @@ public class HoodieSourceSplitSerializer implements SimpleVersionedSerializer<Ho
       }
 
       // Create HoodieSourceSplit object
+      boolean isCdcSplit = in.readBoolean();
+      if (isCdcSplit) {
+        long maxCompactionMemoryInBytes = in.readLong();
+        int changesCount = in.readInt();
+        HoodieCDCFileSplit[] changes = new HoodieCDCFileSplit[changesCount];
+        for (int i = 0; i < changesCount; i++) {
+          int changeLen = in.readInt();
+          byte[] changeBytes = new byte[changeLen];
+          in.readFully(changeBytes);
+          try (ObjectInputStream ois = new ObjectInputStream(new ByteArrayInputStream(changeBytes))) {
+            changes[i] = (HoodieCDCFileSplit) ois.readObject();
+          } catch (ClassNotFoundException e) {
+            throw new IOException("Failed to deserialize HoodieCDCFileSplit", e);
+          }
+        }
+        HoodieCdcSourceSplit cdcSplit = new HoodieCdcSourceSplit(
+            splitNum, tablePath, maxCompactionMemoryInBytes, fileId, changes, mergeType, latestCommit);
+        cdcSplit.updatePosition(fileOffset, consumed);
+        return cdcSplit;
+      }
+
       HoodieSourceSplit split = new HoodieSourceSplit(
               splitNum,
               basePath,

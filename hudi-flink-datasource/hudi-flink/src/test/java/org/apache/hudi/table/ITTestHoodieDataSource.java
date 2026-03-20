@@ -189,8 +189,8 @@ public class ITTestHoodieDataSource {
   }
 
   @ParameterizedTest
-  @EnumSource(value = HoodieCDCSupplementalLoggingMode.class)
-  void testStreamReadFromSpecifiedCommitWithChangelog(HoodieCDCSupplementalLoggingMode mode) throws Exception {
+  @MethodSource("cdcSupplementalLoggingModeWithSourceV2")
+  void testStreamReadFromSpecifiedCommitWithChangelog(HoodieCDCSupplementalLoggingMode mode, boolean useSourceV2) throws Exception {
     streamTableEnv.getConfig().getConfiguration()
         .setString("table.dynamic-table-options.enabled", "true");
     // create filesystem table named source
@@ -204,6 +204,7 @@ public class ITTestHoodieDataSource {
         .option(FlinkOptions.READ_STREAMING_SKIP_COMPACT, false)
         .option(FlinkOptions.CDC_ENABLED, true)
         .option(FlinkOptions.SUPPLEMENTAL_LOGGING_MODE, mode.name())
+        .option(FlinkOptions.READ_SOURCE_V2_ENABLED, useSourceV2)
         .end();
     streamTableEnv.executeSql(hoodieTableDDL);
     String insertInto = "insert into t1 select * from source";
@@ -3213,6 +3214,18 @@ public class ITTestHoodieDataSource {
             {ExecMode.BATCH, true},
             {ExecMode.STREAM, false},
             {ExecMode.STREAM, true}};
+    return Stream.of(data).map(Arguments::of);
+  }
+
+  private static Stream<Arguments> cdcSupplementalLoggingModeWithSourceV2() {
+    Object[][] data =
+        new Object[][] {
+            {HoodieCDCSupplementalLoggingMode.DATA_BEFORE, false},
+            {HoodieCDCSupplementalLoggingMode.DATA_BEFORE, true},
+            {HoodieCDCSupplementalLoggingMode.DATA_BEFORE_AFTER, false},
+            {HoodieCDCSupplementalLoggingMode.DATA_BEFORE_AFTER, true},
+            {HoodieCDCSupplementalLoggingMode.OP_KEY_ONLY, false},
+            {HoodieCDCSupplementalLoggingMode.OP_KEY_ONLY, true}};
     return Stream.of(data).map(Arguments::of);
   }
 

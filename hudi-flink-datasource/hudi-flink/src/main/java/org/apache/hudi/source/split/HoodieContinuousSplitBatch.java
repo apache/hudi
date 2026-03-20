@@ -19,9 +19,11 @@
 package org.apache.hudi.source.split;
 
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.table.cdc.HoodieCDCFileSplit;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.source.IncrementalInputSplits;
 import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.table.format.cdc.CdcInputSplit;
 import org.apache.hudi.table.format.mor.MergeOnReadInputSplit;
 
 import lombok.Getter;
@@ -61,17 +63,34 @@ public class HoodieContinuousSplitBatch {
   }
 
   public static HoodieContinuousSplitBatch fromResult(IncrementalInputSplits.Result result) {
-    List<HoodieSourceSplit> splits = result.getInputSplits().stream().map(split ->
-        new HoodieSourceSplit(
+    List<HoodieSourceSplit> splits = result.getInputSplits().stream().map(split -> {
+      if (split instanceof CdcInputSplit) {
+        CdcInputSplit cdcSplit = (CdcInputSplit) split;
+        HoodieCDCFileSplit[] changes = cdcSplit.getChanges();
+        // CdcInputSplit does not carry a latestCommit; derive it from the last (largest instant)
+        // CDC file split, falling back to the batch end instant when the array is empty.
+        String latestCommit = changes.length > 0
+            ? changes[changes.length - 1].getInstant()
+            : result.getEndInstant();
+        return (HoodieSourceSplit) new HoodieCdcSourceSplit(
             HoodieSourceSplit.SPLIT_ID_GEN.incrementAndGet(),
-            split.getBasePath().orElse(null),
-            split.getLogPaths(), split.getTablePath(),
-            resolvePartitionPath(split), split.getMergeType(),
-            split.getLatestCommit(),
-            split.getFileId(),
-            split.getInstantRange()
-        )
-    ).collect(Collectors.toList());
+            cdcSplit.getTablePath(),
+            cdcSplit.getMaxCompactionMemoryInBytes(),
+            cdcSplit.getFileId(),
+            changes,
+            split.getMergeType(),
+            latestCommit);
+      }
+      return new HoodieSourceSplit(
+          HoodieSourceSplit.SPLIT_ID_GEN.incrementAndGet(),
+          split.getBasePath().orElse(null),
+          split.getLogPaths(), split.getTablePath(),
+          resolvePartitionPath(split), split.getMergeType(),
+          split.getLatestCommit(),
+          split.getFileId(),
+          split.getInstantRange()
+      );
+    }).collect(Collectors.toList());
 
     return new HoodieContinuousSplitBatch(splits, result.getEndInstant(), result.getOffset());
   }
