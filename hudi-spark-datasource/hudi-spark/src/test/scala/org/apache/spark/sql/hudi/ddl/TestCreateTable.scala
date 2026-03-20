@@ -2098,4 +2098,26 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
       assertEquals(BlobType(), blobStruct)
     }
   }
+
+  test("test create field with blob as name but not type") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      spark.sql(
+        s"""
+           |CREATE TABLE $tableName (
+           |  id BIGINT,
+           |  blob_path STRING
+           |) USING hudi
+           |LOCATION '${tmp.getCanonicalPath}'
+           |TBLPROPERTIES (
+           |  primaryKey = 'id'
+           |)
+           """.stripMargin)
+
+      // ensure that blob in the name does not cause any regressions in parsing
+      val schema = spark.table(tableName).schema
+      val blobPathField = schema.find(_.name == "blob_path").get
+      assertTrue(blobPathField.dataType.isInstanceOf[StringType])
+    }
+  }
 }

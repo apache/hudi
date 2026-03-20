@@ -30,13 +30,12 @@ import org.apache.spark.sql.avro.HoodieSparkSchemaConverters
  * stored inline (as bytes) or out-of-line (as a reference to a file location).
  */
 object BlobType {
+  val dataType: DataType = HoodieSparkSchemaConverters.toSqlType(HoodieSchema.createBlob())._1
 
   /**
    * Creates a StructType representing a {@link HoodieSchema.Blob}.
    *
    * @return StructType with blob structure
    */
-  def apply(): DataType = {
-    HoodieSparkSchemaConverters.toSqlType(HoodieSchema.createBlob())._1
-  }
+  def apply(): DataType = dataType
 }
