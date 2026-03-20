@@ -201,7 +201,7 @@ class TestHoodieBackedTableMetadataWriter {
       // Mock convertFilesToColumnStatsRecords to return empty HoodieData
       HoodieData<HoodieRecord> mockHoodieData = mock(HoodieData.class);
       mockedUtil.when(() -> HoodieTableMetadataUtil.convertFilesToColumnStatsRecords(
-              any(), any(), any(), any(), any(), anyInt(), anyInt(), any()))
+              any(), any(), any(), any(), anyInt(), anyInt(), any()))
           .thenReturn(mockHoodieData);
 
       Map<String, Map<String, Long>> partitionFilesToAdd = new HashMap<>();
@@ -223,7 +223,6 @@ class TestHoodieBackedTableMetadataWriter {
           eq(partitionFilesToDelete),
           eq(partitionFilesToAdd),
           eq(dataMetaClient),
-          eq(metadataConfig),
           eq(4),
           eq(1024),
           any()
@@ -246,7 +245,7 @@ class TestHoodieBackedTableMetadataWriter {
       // Mock convertFilesToColumnStatsRecords to return empty HoodieData
       HoodieData<HoodieRecord> mockHoodieData = mock(HoodieData.class);
       mockedUtil.when(() -> HoodieTableMetadataUtil.convertFilesToColumnStatsRecords(
-              any(), any(), any(), any(), any(), anyInt(), anyInt(), any()))
+              any(), any(), any(), any(), anyInt(), anyInt(), any()))
           .thenReturn(mockHoodieData);
 
       Map<String, Map<String, Long>> partitionFilesToAdd = new HashMap<>();
@@ -275,7 +274,6 @@ class TestHoodieBackedTableMetadataWriter {
           eq(partitionFilesToDelete),
           eq(partitionFilesToAdd),
           eq(dataMetaClient),
-          eq(metadataConfig),
           eq(4),
           eq(1024),
           any()

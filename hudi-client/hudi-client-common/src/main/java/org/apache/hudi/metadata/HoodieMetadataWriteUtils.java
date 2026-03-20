@@ -18,6 +18,7 @@
 
 package org.apache.hudi.metadata;
 
+import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieMetadataRecord;
 import org.apache.hudi.client.FailOnFirstErrorWriteStatus;
 import org.apache.hudi.client.transaction.lock.InProcessLockProvider;
@@ -73,6 +74,7 @@ import org.apache.hudi.config.metrics.HoodieMetricsM3Config;
 import org.apache.hudi.config.metrics.HoodieMetricsPrometheusConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieMetadataException;
+import org.apache.hudi.metadata.index.Indexer;
 import org.apache.hudi.stats.HoodieColumnRangeMetadata;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
@@ -106,6 +108,7 @@ import static org.apache.hudi.metadata.HoodieTableMetadata.METADATA_TABLE_NAME_S
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_PARTITION_STATS;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.convertMetadataToBloomFilterRecords;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.convertMetadataToColumnStatsRecords;
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.convertMetadataToExpressionIndexRecords;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.convertMetadataToFilesPartitionRecords;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.convertMetadataToPartitionStatsRecords;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.convertMetadataToRecordIndexRecords;
@@ -363,6 +366,41 @@ public class HoodieMetadataWriteUtils {
   }
 
   /**
+   * Convert the clean action to metadata records.
+   */
+  public static Map<String, HoodieData<HoodieRecord>> convertMetadataToRecords(HoodieEngineContext engineContext,
+                                                                               HoodieCleanMetadata cleanMetadata,
+                                                                               String instantTime,
+                                                                               HoodieTableMetaClient dataMetaClient,
+                                                                               HoodieMetadataConfig metadataConfig,
+                                                                               Map<MetadataPartitionType, Indexer> enabledIndexBuilderMap,
+                                                                               int bloomIndexParallelism,
+                                                                               Option<HoodieRecord.HoodieRecordType> recordTypeOpt) {
+    final Map<String, HoodieData<HoodieRecord>> partitionToRecordsMap = new HashMap<>();
+    final HoodieData<HoodieRecord> filesPartitionRecordsRDD = engineContext.parallelize(
+        convertMetadataToFilesPartitionRecords(cleanMetadata, instantTime), 1);
+    partitionToRecordsMap.put(MetadataPartitionType.FILES.getPartitionPath(), filesPartitionRecordsRDD);
+    if (enabledIndexBuilderMap.containsKey(MetadataPartitionType.BLOOM_FILTERS)) {
+      final HoodieData<HoodieRecord> metadataBloomFilterRecordsRDD =
+          convertMetadataToBloomFilterRecords(cleanMetadata, engineContext, instantTime, bloomIndexParallelism);
+      partitionToRecordsMap.put(MetadataPartitionType.BLOOM_FILTERS.getPartitionPath(), metadataBloomFilterRecordsRDD);
+    }
+
+    if (enabledIndexBuilderMap.containsKey(MetadataPartitionType.COLUMN_STATS)) {
+      final HoodieData<HoodieRecord> metadataColumnStatsRDD =
+          convertMetadataToColumnStatsRecords(cleanMetadata, engineContext,
+              dataMetaClient, metadataConfig, recordTypeOpt);
+      partitionToRecordsMap.put(MetadataPartitionType.COLUMN_STATS.getPartitionPath(), metadataColumnStatsRDD);
+    }
+    if (enabledIndexBuilderMap.containsKey(MetadataPartitionType.EXPRESSION_INDEX)) {
+      convertMetadataToExpressionIndexRecords(engineContext, cleanMetadata, instantTime, dataMetaClient, metadataConfig, bloomIndexParallelism, partitionToRecordsMap,
+          recordTypeOpt);
+    }
+
+    return partitionToRecordsMap;
+  }
+
+  /**
    * Convert commit action to metadata records for the enabled partition types.
    *
    * @param context                     - Engine context to use
@@ -370,12 +408,14 @@ public class HoodieMetadataWriteUtils {
    * @param commitMetadata              - Commit action metadata
    * @param instantTime                 - Action instant time
    * @param dataMetaClient              - HoodieTableMetaClient for data
-   * @param tableMetadata
+   * @param tableMetadata               - metadata table reader
    * @param metadataConfig              - HoodieMetadataConfig
    * @param enabledPartitionTypes       - Set of enabled MDT partitions to update
    * @param bloomFilterType             - Type of generated bloom filter records
    * @param bloomIndexParallelism       - Parallelism for bloom filter record generation
-   * @param enableOptimizeLogBlocksScan - flag used to enable scanInternalV2 for log blocks in data table
+   * @param writesFileIdEncoding        - file id encoding used while generating record index records
+   * @param engineType                  - execution engine type
+   * @param recordTypeOpt               - record type override for generated metadata records
    * @return Map of partition to metadata records for the commit action
    */
   public static Map<String, HoodieData<HoodieRecord>> convertMetadataToRecords(HoodieEngineContext context, HoodieWriteConfig dataWriteConfig, HoodieCommitMetadata commitMetadata,
@@ -555,8 +595,10 @@ public class HoodieMetadataWriteUtils {
     // Get the latest merged file slices based on the commited files part of the latest snapshot and the new files of the current commit metadata
     List<StoragePathInfo> consolidatedPathInfos = new ArrayList<>();
     partitionedWriteStat.forEach(
-        stat -> consolidatedPathInfos.add(
-            new StoragePathInfo(new StoragePath(dataMetaClient.getBasePath(), stat.getPath()), stat.getFileSizeInBytes(), false, (short) 0, 0, 0)));
+        stat -> {
+          StoragePathInfo pathInfo = new StoragePathInfo(new StoragePath(dataMetaClient.getBasePath(), stat.getPath()), stat.getFileSizeInBytes(), false, (short) 0, 0, 0);
+          consolidatedPathInfos.add(pathInfo);
+        });
     SyncableFileSystemView fileSystemViewForCommitedFiles =
         FileSystemViewManager.createViewManager(new HoodieLocalEngineContext(dataMetaClient.getStorageConf()),
             dataWriteConfig.getMetadataConfig(), dataWriteConfig.getViewStorageConfig(), dataWriteConfig.getCommonConfig(),

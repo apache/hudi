@@ -28,6 +28,7 @@ import org.apache.hudi.common.function.SerializableBiFunction;
 import org.apache.hudi.common.model.HoodieIndexDefinition;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.index.expression.HoodieExpressionIndex;
@@ -244,6 +245,12 @@ public enum MetadataPartitionType {
     }
 
     @Override
+    public boolean isMetadataPartitionSupported(HoodieTableMetaClient metaClient) {
+      // Partition stats is supported for partitioned tables only
+      return metaClient.getTableConfig().isTablePartitioned();
+    }
+
+    @Override
     public void constructMetadataPayload(HoodieMetadataPayload payload, GenericRecord record) {
       constructColumnStatsMetadataPayload(payload, record);
     }
@@ -368,6 +375,10 @@ public enum MetadataPartitionType {
     return metaClient.getTableConfig().isMetadataPartitionAvailable(this);
   }
 
+  public boolean isMetadataPartitionSupported(HoodieTableMetaClient metaClient) {
+    return true;
+  }
+
   MetadataPartitionType(final String partitionPath, final String fileIdPrefix, final int recordType) {
     this.partitionPath = partitionPath;
     this.fileIdPrefix = fileIdPrefix;
@@ -453,8 +464,25 @@ public enum MetadataPartitionType {
    */
   public static MetadataPartitionType[] getValidValues() {
     // ALL_PARTITIONS is just another record type in FILES partition
+    return getValidValues(HoodieTableVersion.current());
+  }
+
+  /**
+   * Returns the set of all valid metadata partition types. Prefer using this method over {@link #values()}.
+   */
+  public static MetadataPartitionType[] getValidValues(HoodieTableVersion tableVersion) {
+    if (tableVersion.greaterThanOrEquals(HoodieTableVersion.EIGHT)) {
+      // ALL_PARTITIONS is just another record type in FILES partition
+      return EnumSet.complementOf(EnumSet.of(
+          ALL_PARTITIONS)).toArray(new MetadataPartitionType[0]);
+    }
     return EnumSet.complementOf(EnumSet.of(
-        ALL_PARTITIONS)).toArray(new MetadataPartitionType[0]);
+            ALL_PARTITIONS))
+        .stream()
+        .filter(type -> type != SECONDARY_INDEX
+            && type != EXPRESSION_INDEX
+            && type != PARTITION_STATS)
+        .toArray(MetadataPartitionType[]::new);
   }
 
   /**
@@ -464,7 +492,7 @@ public enum MetadataPartitionType {
     if (!dataMetadataConfig.isEnabled()) {
       return Collections.emptyList();
     }
-    return Arrays.stream(getValidValues())
+    return Arrays.stream(getValidValues(metaClient.getTableConfig().getTableVersion()))
         .filter(partitionType -> partitionType.isMetadataPartitionEnabled(dataMetadataConfig, metaClient.getTableConfig()) || partitionType.isMetadataPartitionAvailable(metaClient))
         .collect(Collectors.toList());
   }
