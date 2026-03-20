@@ -124,6 +124,13 @@ public class HoodieJavaRDD<T> implements HoodieData<T> {
   }
 
   @Override
+  public long sum() {
+    return rddData
+        .map(obj -> (Long) obj)
+        .reduce(Long::sum);
+  }
+
+  @Override
   public int getNumPartitions() {
     return rddData.getNumPartitions();
   }

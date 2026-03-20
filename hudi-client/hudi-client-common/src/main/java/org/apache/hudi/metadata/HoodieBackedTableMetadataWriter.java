@@ -24,6 +24,7 @@ import org.apache.hudi.avro.model.HoodieIndexPlan;
 import org.apache.hudi.avro.model.HoodieRestoreMetadata;
 import org.apache.hudi.avro.model.HoodieRestorePlan;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
+import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.io.storage.HoodieAvroFileReader;
 import org.apache.hudi.client.BaseHoodieWriteClient;
 import org.apache.hudi.client.WriteStatus;
@@ -806,6 +807,26 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
       List<Pair<String, FileSlice>> latestMergedPartitionFileSliceList,
       int recordIndexMaxParallelism) {
     LOG.info("Initializing record index from {} file slices", latestMergedPartitionFileSliceList.size());
+
+    // Get min/max file group count bounds
+    Pair<Integer, Integer> bounds = getRLIFileGroupCountBounds();
+    int minFileGroupCount = bounds.getLeft();
+    int maxFileGroupCount = bounds.getRight();
+
+    int fileGroupCount;
+    // Use sampling-based estimation if min != max (dynamic sizing expected)
+    if (minFileGroupCount != maxFileGroupCount) {
+      // Estimate file group count using sampling (10% of file slices)
+      fileGroupCount = estimateFileGroupCountBySampling(latestMergedPartitionFileSliceList, 0.1,
+          minFileGroupCount, maxFileGroupCount);
+      LOG.info("Estimated {} file groups using sampling-based approach", fileGroupCount);
+    } else {
+      // User explicitly set min == max, use that value
+      fileGroupCount = minFileGroupCount;
+      LOG.info("Using user-configured file group count: {}", fileGroupCount);
+    }
+
+    // Now read ALL records for actual RLI initialization (no persistence needed)
     HoodieData<HoodieRecord> records = readRecordKeysFromFileSliceSnapshot(
         engineContext,
         latestMergedPartitionFileSliceList,
@@ -814,13 +835,16 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
         dataMetaClient,
         dataWriteConfig);
 
-    // Initialize the file groups
-    final int fileGroupCount = estimateFileGroupCount(records);
-    LOG.info("Initializing record index with {} file groups.", fileGroupCount);
+    LOG.info("Initializing record index with {} file groups", fileGroupCount);
     return Pair.of(fileGroupCount, records);
   }
 
-  private int estimateFileGroupCount(HoodieData<HoodieRecord> records) {
+  /**
+   * Gets the min and max file group count bounds for RLI based on configuration.
+   *
+   * @return Pair of (minFileGroupCount, maxFileGroupCount)
+   */
+  private Pair<Integer, Integer> getRLIFileGroupCountBounds() {
     int minFileGroupCount;
     int maxFileGroupCount;
     if (dataWriteConfig.isRecordLevelIndexEnabled()) {
@@ -830,12 +854,28 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
       minFileGroupCount = dataWriteConfig.getGlobalRecordLevelIndexMinFileGroupCount();
       maxFileGroupCount = dataWriteConfig.getGlobalRecordLevelIndexMaxFileGroupCount();
     }
-    Supplier<Long> recordCountSupplier = () -> {
-      records.persist("MEMORY_AND_DISK_SER");
-      long count = records.count();
-      LOG.info("Initializing record index with {} mappings", count);
-      return count;
-    };
+    return Pair.of(minFileGroupCount, maxFileGroupCount);
+  }
+
+  /**
+   * Estimates file group count based on sampled record count weighted by file slice sizes.
+   * Assumes caller has already verified that min != max file group count (dynamic sizing expected).
+   *
+   * @param partitionFileSliceList list of partition and file slice pairs to estimate from
+   * @param samplingFraction fraction of file slices to sample (e.g., 0.1 for 10%)
+   * @param minFileGroupCount minimum file group count
+   * @param maxFileGroupCount maximum file group count
+   * @return estimated file group count
+   */
+  private int estimateFileGroupCountBySampling(List<Pair<String, FileSlice>> partitionFileSliceList,
+                                                double samplingFraction,
+                                                int minFileGroupCount,
+                                                int maxFileGroupCount) {
+    // Use size-weighted sampling to estimate total record count
+    long estimatedRecordCount = estimateRecordCountBySizeWeightedSampling(partitionFileSliceList, samplingFraction);
+    LOG.info("Estimated total record count using size-weighted sampling: {}", estimatedRecordCount);
+
+    Supplier<Long> recordCountSupplier = () -> estimatedRecordCount;
     return HoodieTableMetadataUtil.estimateFileGroupCount(
         MetadataPartitionType.RECORD_INDEX,
         recordCountSupplier,
@@ -845,6 +885,195 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
         dataWriteConfig.getRecordIndexGrowthFactor(),
         dataWriteConfig.getRecordIndexMaxFileGroupSizeBytes()
     );
+  }
+
+  /**
+   * Estimates total record count using size-weighted sampling:
+   * 1. Sample a fraction of file slices and count their actual records (lightweight - no RLI record construction)
+   * 2. Calculate average records-per-byte ratio from samples
+   * 3. Use file sizes of ALL file slices to estimate total records
+   *
+   * If total file slices are below threshold, counts all file slices directly without sampling.
+   * Threshold: 50 for global RLI, 10 for partitioned RLI.
+   *
+   * @param partitionFileSliceList list of partition and file slice pairs
+   * @param samplingFraction fraction of file slices to sample
+   * @return estimated total record count
+   */
+  private long estimateRecordCountBySizeWeightedSampling(List<Pair<String, FileSlice>> partitionFileSliceList,
+                                                          double samplingFraction) {
+    if (partitionFileSliceList.isEmpty()) {
+      return 0L;
+    }
+
+    int totalFileSlices = partitionFileSliceList.size();
+
+    // Determine threshold based on RLI type
+    // Global RLI: higher threshold (50) since it's one big partition
+    // Partitioned RLI: lower threshold (10) since we process per partition
+    int samplingThreshold = dataWriteConfig.isRecordLevelIndexEnabled() ? 10 : 50;
+
+    // For small number of file slices, skip sampling and count all
+    if (totalFileSlices <= samplingThreshold) {
+      LOG.info("Total file slices ({}) <= threshold ({}), counting all file slices without sampling",
+          totalFileSlices, samplingThreshold);
+      Pair<Long, Long> countAndSize = countRecordsFromFileSlices(partitionFileSliceList);
+      return countAndSize.getLeft();
+    }
+
+    int sampleSize = Math.max(1, (int) Math.ceil(totalFileSlices * samplingFraction));
+
+    LOG.info("Sampling {} out of {} file slices ({:.1f}%) to estimate record count",
+        sampleSize, totalFileSlices, samplingFraction * 100);
+
+    // Sample file slices uniformly
+    List<Pair<String, FileSlice>> sampledFileSlices = sampleFileSlicesUniformly(partitionFileSliceList, sampleSize);
+
+    // Count records from sampled file slices (lightweight - just counting, no RLI record construction)
+    // Returns: (recordCount, actualSampledBaseFileSize) - only counts file slices with base files
+    Pair<Long, Long> countAndSize = countRecordsFromFileSlices(sampledFileSlices);
+    long sampledRecordCount = countAndSize.getLeft();
+    long actualSampledSize = countAndSize.getRight();
+
+    LOG.info("Counted {} records from {} bytes of actual sampled base files", sampledRecordCount, actualSampledSize);
+
+    if (actualSampledSize == 0) {
+      LOG.warn("No base files found in sampled file slices, returning 0 as estimate");
+      return 0L;
+    }
+
+    double recordsPerByte = (double) sampledRecordCount / actualSampledSize;
+    LOG.info("Calculated records-per-byte ratio: {:.6f}", recordsPerByte);
+
+    // Estimate total records using ALL file slice base file sizes
+    long totalBaseFileSize = partitionFileSliceList.stream()
+        .mapToLong(p -> getFileSliceSize(p.getValue()))
+        .sum();
+
+    long estimatedTotal = (long) Math.ceil(totalBaseFileSize * recordsPerByte);
+    LOG.info("Estimated total record count: {} based on {} total base file bytes", estimatedTotal, totalBaseFileSize);
+
+    return estimatedTotal;
+  }
+
+  /**
+   * Counts records from file slices without constructing RLI records.
+   * This is a lightweight operation used only for estimation purposes.
+   * For MOR tables, only reads from base files (not log files) for faster estimation.
+   *
+   * @param partitionFileSlicePairs list of partition and file slice pairs
+   * @return Pair of (total record count, total base file size actually sampled)
+   */
+  private <T> Pair<Long, Long> countRecordsFromFileSlices(List<Pair<String, FileSlice>> partitionFileSlicePairs) {
+    if (partitionFileSlicePairs.isEmpty()) {
+      return Pair.of(0L, 0L);
+    }
+
+    // Filter to only file slices with base files
+    List<Pair<String, FileSlice>> fileSlicesWithBaseFiles = partitionFileSlicePairs.stream()
+        .filter(p -> p.getValue().getBaseFile().isPresent())
+        .collect(Collectors.toList());
+
+    if (fileSlicesWithBaseFiles.isEmpty()) {
+      LOG.warn("No file slices with base files found for record count estimation");
+      return Pair.of(0L, 0L);
+    }
+
+    // Calculate total base file size for the file slices we're actually counting
+    long totalBaseFileSize = fileSlicesWithBaseFiles.stream()
+        .mapToLong(p -> getFileSliceSize(p.getValue()))
+        .sum();
+
+    Option<String> instantTime = dataMetaClient.getActiveTimeline().getCommitsTimeline()
+        .filterCompletedInstants()
+        .lastInstant()
+        .map(HoodieInstant::requestedTime);
+    if (!instantTime.isPresent()) {
+      return Pair.of(0L, 0L);
+    }
+
+    final int parallelism = Math.min(fileSlicesWithBaseFiles.size(),
+        dataWriteConfig.getMetadataConfig().getRecordIndexMaxParallelism());
+    ReaderContextFactory<T> readerContextFactory = engineContext.getReaderContextFactory(dataMetaClient);
+
+    // Parallel count operation - just iterate through base file records without constructing RLI records
+    // For MOR tables, we skip log files to keep estimation fast
+    long totalCount = engineContext.parallelize(fileSlicesWithBaseFiles, parallelism)
+        .map(partitionAndFileSlice -> {
+          final FileSlice fileSlice = partitionAndFileSlice.getValue();
+          final HoodieBaseFile baseFile = fileSlice.getBaseFile().get();
+          HoodieReaderContext<T> readerContext = readerContextFactory.getContext();
+
+          try {
+            // Create a file slice with only the base file (no log files) for faster counting
+            FileSlice baseFileOnlySlice = new FileSlice(fileSlice.getPartitionPath(),
+                fileSlice.getBaseInstantTime(), fileSlice.getFileId());
+            baseFileOnlySlice.setBaseFile(baseFile);
+
+            HoodieFileGroupReader<T> fileGroupReader = HoodieFileGroupReader.<T>newBuilder()
+                .withReaderContext(readerContext)
+                .withHoodieTableMetaClient(dataMetaClient)
+                .withFileSlice(baseFileOnlySlice)  // Base file only
+                .withLatestCommitTime(instantTime.get())
+                .withShouldUseRecordPosition(false)
+                .withProps(dataMetaClient.getTableConfig().getProps())
+                .build();
+            ClosableIterator closableIterator = fileGroupReader.getClosableKeyIterator();
+            // Just count records without materializing them
+            long count = 0;
+            while (closableIterator.hasNext()) {
+              closableIterator.next();
+              count++;
+            }
+            closableIterator.close();
+            fileGroupReader.close();
+            return count;
+          } catch (Exception e) {
+            LOG.warn("Failed to count records from file slice: " + fileSlice.getFileId(), e);
+            return 0L;
+          }
+        })
+        .sum();
+
+    return Pair.of(totalCount, totalBaseFileSize);
+  }
+
+  /**
+   * Gets the base file size of a file slice.
+   * For RLI initialization, we only consider base file size as that's where the record keys are stored.
+   *
+   * @param fileSlice the file slice
+   * @return base file size in bytes, or 0 if no base file present
+   */
+  private long getFileSliceSize(FileSlice fileSlice) {
+    if (fileSlice.getBaseFile().isPresent()) {
+      return fileSlice.getBaseFile().get().getFileSize();
+    }
+    return 0L;
+  }
+
+  /**
+   * Samples file slices uniformly from the given list.
+   *
+   * @param fileSliceList list of file slices to sample from
+   * @param sampleSize number of file slices to sample
+   * @return sampled list of file slices
+   */
+  private List<Pair<String, FileSlice>> sampleFileSlicesUniformly(List<Pair<String, FileSlice>> fileSliceList,
+                                                                    int sampleSize) {
+    if (sampleSize >= fileSliceList.size()) {
+      return fileSliceList;
+    }
+
+    List<Pair<String, FileSlice>> sampled = new ArrayList<>(sampleSize);
+    double step = (double) fileSliceList.size() / sampleSize;
+
+    for (int i = 0; i < sampleSize; i++) {
+      int index = (int) Math.floor(i * step);
+      sampled.add(fileSliceList.get(index));
+    }
+
+    return sampled;
   }
 
   /**

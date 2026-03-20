@@ -100,6 +100,65 @@ class TestHoodieListData {
   }
 
   @Test
+  public void testSumWithEagerSemantic() {
+    // Test with positive numbers
+    HoodieData<Long> listData = HoodieListData.eager(Arrays.asList(1L, 2L, 3L, 4L, 5L));
+    assertEquals(15L, listData.sum());
+
+    // Test with single element
+    listData = HoodieListData.eager(Collections.singletonList(42L));
+    assertEquals(42L, listData.sum());
+
+    // Test with zero
+    listData = HoodieListData.eager(Arrays.asList(0L, 0L, 0L));
+    assertEquals(0L, listData.sum());
+
+    // Test with negative numbers
+    listData = HoodieListData.eager(Arrays.asList(-5L, -10L, -15L));
+    assertEquals(-30L, listData.sum());
+
+    // Test with mixed positive and negative
+    listData = HoodieListData.eager(Arrays.asList(10L, -5L, 20L, -10L));
+    assertEquals(15L, listData.sum());
+
+    // Test with large numbers
+    listData = HoodieListData.eager(Arrays.asList(1000000L, 2000000L, 3000000L));
+    assertEquals(6000000L, listData.sum());
+  }
+
+  @Test
+  public void testSumWithLazySemantic() {
+    // Test with positive numbers
+    HoodieData<Long> listData = HoodieListData.lazy(Arrays.asList(1L, 2L, 3L, 4L, 5L));
+    assertEquals(15L, listData.sum());
+
+    // Test with single element
+    listData = HoodieListData.lazy(Collections.singletonList(100L));
+    assertEquals(100L, listData.sum());
+
+    // Test with zero
+    listData = HoodieListData.lazy(Arrays.asList(0L, 0L, 0L));
+    assertEquals(0L, listData.sum());
+
+    // Test with mixed positive and negative
+    listData = HoodieListData.lazy(Arrays.asList(50L, -25L, 75L, -50L));
+    assertEquals(50L, listData.sum());
+  }
+
+  @Test
+  public void testSumAfterTransformation() {
+    // Test sum after map operation
+    HoodieData<Integer> intData = HoodieListData.eager(Arrays.asList(1, 2, 3, 4, 5));
+    HoodieData<Long> longData = intData.map(i -> i.longValue() * 2);
+    assertEquals(30L, longData.sum());
+
+    // Test sum after filter operation
+    HoodieData<Long> filteredData = HoodieListData.lazy(Arrays.asList(1L, 2L, 3L, 4L, 5L, 6L, 7L, 8L, 9L, 10L))
+        .filter(x -> x % 2 == 0);
+    assertEquals(30L, filteredData.sum());
+  }
+
+  @Test
   void testCloseableIterator() {
     ClosableIterator<String> iterator = spy(ClosableIterator.wrap(Arrays.asList("value1", "value2").iterator()));
     HoodieData<String> listData = HoodieListData.lazy(iterator);

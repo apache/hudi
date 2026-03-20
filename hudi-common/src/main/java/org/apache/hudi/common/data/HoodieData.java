@@ -97,6 +97,16 @@ public interface HoodieData<T> extends Serializable {
   long count();
 
   /**
+   * Sums all Long elements in the collection.
+   * <p>
+   * NOTE: This is a terminal operation
+   *
+   * @return sum of all Long values in the collection
+   * @throws ClassCastException if elements are not of type Long
+   */
+  long sum();
+
+  /**
    * @return the number of data partitions in the engine-specific representation.
    */
   int getNumPartitions();

@@ -129,6 +129,63 @@ public class TestHoodieJavaRDD extends HoodieClientTestBase {
     assertTrue(TrackingCloseableIterator.isClosed(partition2));
   }
 
+  @Test
+  public void testSum() {
+    // Test with positive numbers
+    HoodieData<Long> rddData = HoodieJavaRDD.of(Arrays.asList(1L, 2L, 3L, 4L, 5L), context, 2);
+    assertEquals(15L, rddData.sum());
+
+    // Test with single element
+    rddData = HoodieJavaRDD.of(Collections.singletonList(42L), context, 1);
+    assertEquals(42L, rddData.sum());
+
+    // Test with zero
+    rddData = HoodieJavaRDD.of(Arrays.asList(0L, 0L, 0L), context, 2);
+    assertEquals(0L, rddData.sum());
+
+    // Test with negative numbers
+    rddData = HoodieJavaRDD.of(Arrays.asList(-5L, -10L, -15L), context, 2);
+    assertEquals(-30L, rddData.sum());
+
+    // Test with mixed positive and negative
+    rddData = HoodieJavaRDD.of(Arrays.asList(10L, -5L, 20L, -10L), context, 2);
+    assertEquals(15L, rddData.sum());
+
+    // Test with large numbers
+    rddData = HoodieJavaRDD.of(Arrays.asList(1000000L, 2000000L, 3000000L), context, 2);
+    assertEquals(6000000L, rddData.sum());
+  }
+
+  @Test
+  public void testSumWithMultiplePartitions() {
+    // Test with multiple partitions to ensure proper aggregation across partitions
+    HoodieData<Long> rddData = HoodieJavaRDD.of(
+        Arrays.asList(1L, 2L, 3L, 4L, 5L, 6L, 7L, 8L, 9L, 10L), context, 5);
+    assertEquals(55L, rddData.sum());
+    assertEquals(5, rddData.getNumPartitions());
+  }
+
+  @Test
+  public void testSumAfterTransformation() {
+    // Test sum after map operation
+    HoodieData<Integer> intData = HoodieJavaRDD.of(Arrays.asList(1, 2, 3, 4, 5), context, 2);
+    HoodieData<Long> longData = intData.map(i -> i.longValue() * 2);
+    assertEquals(30L, longData.sum());
+
+    // Test sum after filter operation
+    HoodieData<Long> filteredData = HoodieJavaRDD.of(
+        Arrays.asList(1L, 2L, 3L, 4L, 5L, 6L, 7L, 8L, 9L, 10L), context, 2)
+        .filter(x -> x % 2 == 0);
+    assertEquals(30L, filteredData.sum());
+
+    // Test sum after repartition
+    HoodieData<Long> repartitionedData = HoodieJavaRDD.of(
+        Arrays.asList(1L, 2L, 3L, 4L, 5L), context, 2)
+        .repartition(4);
+    assertEquals(15L, repartitionedData.sum());
+    assertEquals(4, repartitionedData.getNumPartitions());
+  }
+
   /**
    * Test unpersistWithDependencies on a DAG with multiple branches.
    *

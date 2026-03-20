@@ -239,6 +239,14 @@ public class HoodieListData<T> extends HoodieBaseListData<T> implements HoodieDa
   }
 
   @Override
+  public long sum() {
+    return asStream()
+        .map(obj -> (Long) obj)
+        .mapToLong(Long::longValue)
+        .sum();
+  }
+
+  @Override
   public int getNumPartitions() {
     return 1;
   }
