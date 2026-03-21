@@ -32,6 +32,7 @@ import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.exception.HoodieCatalogException;
 import org.apache.hudi.exception.HoodieMetadataException;
@@ -568,14 +569,14 @@ public class HoodieHiveCatalog extends AbstractCatalog {
       properties.put(HoodieIndexConfig.INDEX_TYPE.key(), properties.get(FlinkOptions.INDEX_TYPE.key()));
     }
     properties.remove(FlinkOptions.INDEX_TYPE.key());
-    if (hiveConf.get("hive.metastore.uris") != null) {
-      properties.put("hadoop.hive.metastore.uris", hiveConf.get("hive.metastore.uris"));
+    if (hiveConf.get(HiveConf.ConfVars.METASTOREURIS.varname) != null) {
+      properties.put(HadoopConfigurations.HADOOP_PREFIX + HiveConf.ConfVars.METASTOREURIS.varname, hiveConf.get(HiveConf.ConfVars.METASTOREURIS.varname));
     }
-    if (hiveConf.get("hive.metastore.sasl.enabled") != null) {
-      properties.put("hadoop.hive.metastore.sasl.enabled", hiveConf.get("hive.metastore.sasl.enabled"));
+    if (hiveConf.get(HiveConf.ConfVars.METASTORE_USE_THRIFT_SASL.varname) != null) {
+      properties.put(HadoopConfigurations.HADOOP_PREFIX + HiveConf.ConfVars.METASTORE_USE_THRIFT_SASL.varname, hiveConf.get(HiveConf.ConfVars.METASTORE_USE_THRIFT_SASL.varname));
     }
-    if (hiveConf.get("hive.metastore.kerberos.principle") != null) {
-      properties.put("hadoop.hive.metastore.kerberos.principle", hiveConf.get("hive.metastore.kerberos.principle"));
+    if (hiveConf.get(HiveConf.ConfVars.METASTORE_KERBEROS_PRINCIPAL.varname) != null) {
+      properties.put(HadoopConfigurations.HADOOP_PREFIX + HiveConf.ConfVars.METASTORE_KERBEROS_PRINCIPAL.varname, hiveConf.get(HiveConf.ConfVars.METASTORE_KERBEROS_PRINCIPAL.varname));
     }
 
     if (external) {
