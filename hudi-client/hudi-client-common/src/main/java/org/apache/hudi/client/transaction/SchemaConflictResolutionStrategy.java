@@ -64,7 +64,7 @@ public interface SchemaConflictResolutionStrategy {
             + "schema when transaction enters validation phase: %s tableSchemaAtTxnValidation, "
             + "schema the transaction tries to commit with: %s. lastCompletedTxnOwnerInstant is %s "
             + " and currTxnOwnerInstant is %s.",
-        tableSchemaAtTxnStart.isPresent() ? tableSchemaAtTxnStart : "Not exists as no commited txn at that time",
+        tableSchemaAtTxnStart.isPresent() ? tableSchemaAtTxnStart : "Not exists as no committed txn at that time",
         tableSchemaAtTxnValidation.isPresent() ? tableSchemaAtTxnValidation : "Not exists",
         writerSchemaOfTxn,
         lastCompletedTxnOwnerInstant.isPresent() ? lastCompletedTxnOwnerInstant : "Not exists",

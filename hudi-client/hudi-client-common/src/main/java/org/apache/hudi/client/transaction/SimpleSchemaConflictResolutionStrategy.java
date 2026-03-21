@@ -81,7 +81,7 @@ public class SimpleSchemaConflictResolutionStrategy implements SchemaConflictRes
         : null;
     // If lastCompletedInstantAtTxnValidation is null there are 2 possibilities:
     // - No committed txn at validation starts
-    // - [Almost impossible, so we ignore it] there is a commited txn, yet it is archived which cannot be found
+    // - [Almost impossible, so we ignore it] there is a committed txn, yet it is archived which cannot be found
     // in the active timeline.
     HoodieInstant lastCompletedInstantAtTxnValidation = schemaResolver.computeSchemaEvolutionTimelineInReverseOrder().findFirst().orElse(null);
     // Please refer to RFC 82 for details of the case numbers.
@@ -143,7 +143,7 @@ public class SimpleSchemaConflictResolutionStrategy implements SchemaConflictRes
 
     // Incompatible case 8: Initial table schema is S1, there is a concurrent txn evolves schema to S2,
     // current writer schema is S3.
-    // Before the curr txn started, there are commited txn, with optional txn that commited during the
+    // Before the curr txn started, there are committed txn, with optional txn that committed during the
     // read-write phase of the curr txn (they can lead to concurrently schema evolution along with the curr txn).
     // table schema: ----------------S1----------------------------S2-------------------------
     // txn 1(S1):     |validate & commit|

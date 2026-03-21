@@ -504,7 +504,7 @@ public class HoodieMetadataWriteUtils {
                 .filter(stats -> filesToFetchColumnStats.contains(stats.getFileName()))
                 .map(HoodieColumnRangeMetadata::fromColumnStats).collectAsList();
             // fileColumnMetadata already contains stats for the files from the current inflight commit.
-            // Here it adds the stats for the commited files part of the latest merged file slices
+            // Here it adds the stats for the committed files part of the latest merged file slices
             fileColumnMetadata.addAll(partitionColumnMetadata);
             return Pair.of(partitionName, fileColumnMetadata);
           });
@@ -552,16 +552,16 @@ public class HoodieMetadataWriteUtils {
                                                        Map<String, Set<String>> fileGroupIdsToReplaceMap,
                                                        List<String> colsToIndex,
                                                        HoodieIndexVersion partitionStatsIndexVersion) {
-    // Get the latest merged file slices based on the commited files part of the latest snapshot and the new files of the current commit metadata
+    // Get the latest merged file slices based on the committed files part of the latest snapshot and the new files of the current commit metadata
     List<StoragePathInfo> consolidatedPathInfos = new ArrayList<>();
     partitionedWriteStat.forEach(
         stat -> consolidatedPathInfos.add(
             new StoragePathInfo(new StoragePath(dataMetaClient.getBasePath(), stat.getPath()), stat.getFileSizeInBytes(), false, (short) 0, 0, 0)));
-    SyncableFileSystemView fileSystemViewForCommitedFiles =
+    SyncableFileSystemView fileSystemViewForCommittedFiles =
         FileSystemViewManager.createViewManager(new HoodieLocalEngineContext(dataMetaClient.getStorageConf()),
             dataWriteConfig.getMetadataConfig(), dataWriteConfig.getViewStorageConfig(), dataWriteConfig.getCommonConfig(),
             unused -> tableMetadata).getFileSystemView(dataMetaClient);
-    fileSystemViewForCommitedFiles.getLatestMergedFileSlicesBeforeOrOn(partitionName, maxInstantTime)
+    fileSystemViewForCommittedFiles.getLatestMergedFileSlicesBeforeOrOn(partitionName, maxInstantTime)
         .forEach(fileSlice -> {
           if (fileSlice.getBaseFile().isPresent()) {
             consolidatedPathInfos.add(getBaseFileStoragePathInfo(fileSlice.getBaseFile().get()));
