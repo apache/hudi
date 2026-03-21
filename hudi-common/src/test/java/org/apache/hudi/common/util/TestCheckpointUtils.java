@@ -199,10 +199,6 @@ public class TestCheckpointUtils {
 
   @Test
   public void testUnsupportedFormats() {
-    // Flink format not yet implemented (Phase 2)
-    assertThrows(UnsupportedOperationException.class, () ->
-        CheckpointUtils.parseCheckpoint(CheckpointFormat.FLINK_KAFKA, "anystring"));
-
     // Pulsar format not yet implemented (Phase 4)
     assertThrows(UnsupportedOperationException.class, () ->
         CheckpointUtils.parseCheckpoint(CheckpointFormat.PULSAR, "anystring"));
@@ -210,6 +206,17 @@ public class TestCheckpointUtils {
     // Kinesis format not yet implemented (Phase 4)
     assertThrows(UnsupportedOperationException.class, () ->
         CheckpointUtils.parseCheckpoint(CheckpointFormat.KINESIS, "anystring"));
+  }
+
+  @Test
+  public void testFlinkKafkaCheckpointParsing() {
+    // Flink Kafka format is now implemented (Phase 2)
+    Map<Integer, Long> result = CheckpointUtils.parseCheckpoint(
+        CheckpointFormat.FLINK_KAFKA,
+        "kafka_metadata%3Aevents%3A0:100;kafka_metadata%3Aevents%3A1:200");
+    assertEquals(2, result.size());
+    assertEquals(100L, result.get(0));
+    assertEquals(200L, result.get(1));
   }
 
   @Test
@@ -222,8 +229,17 @@ public class TestCheckpointUtils {
   public void testIsValidCheckpointFormatUnsupported() {
     // Unsupported formats should return false (caught internally)
     assertFalse(CheckpointUtils.isValidCheckpointFormat(
-        CheckpointFormat.FLINK_KAFKA, "anystring"));
-    assertFalse(CheckpointUtils.isValidCheckpointFormat(
         CheckpointFormat.CUSTOM, "anystring"));
+  }
+
+  @Test
+  public void testIsValidCheckpointFormatFlinkKafka() {
+    // Flink Kafka format is now supported (Phase 2)
+    assertTrue(CheckpointUtils.isValidCheckpointFormat(
+        CheckpointFormat.FLINK_KAFKA,
+        "kafka_metadata%3Aevents%3A0:100;kafka_metadata%3Aevents%3A1:200"));
+    // Invalid Flink checkpoint should return false
+    assertFalse(CheckpointUtils.isValidCheckpointFormat(
+        CheckpointFormat.FLINK_KAFKA, ""));
   }
 }
