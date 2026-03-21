@@ -70,7 +70,8 @@ public class HoodiePreCommitValidatorConfig extends HoodieConfig {
       .sinceVersion("1.2.0")
       .markAdvanced()
       .withDocumentation("Tolerance percentage for streaming offset validation "
-          + "(used by org.apache.hudi.client.validator.StreamingOffsetValidator). "
+          + "(used by org.apache.hudi.client.validator.StreamingOffsetValidator "
+          + "and org.apache.hudi.sink.validator.FlinkKafkaOffsetValidator). "
           + "The validator compares the offset difference (expected records from source) "
           + "with actual records written. If the deviation exceeds this percentage, "
           + "the commit is rejected or warned depending on the validation failure policy. "

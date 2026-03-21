@@ -37,10 +37,11 @@ import java.util.Map;
  *   {@code consumer.endOffsets()} or {@code consumer.offsetsForTimes()}, but the
  *   checkpoint string format is identical.
  *
- * - FLINK_KAFKA: Base64-encoded serialized Map (TopicPartition → Long)
- *   Example: "eyJ0b3BpY..." (base64)
- *   Used by: Flink streaming connector
- *   Note: Actual implementation requires Flink checkpoint deserialization (Phase 2)
+ * - FLINK_KAFKA: URL-encoded format with topic and partition offsets
+ *   Example: "kafka_metadata%3Aevents%3A0:100;kafka_metadata%3Aevents%3A1:200"
+ *   Format: "kafka_metadata%3A{topic}%3A{partition}:{offset}" separated by ";"
+ *   Used by: Flink streaming connector (stored in HoodieMetadataKey extraMetadata)
+ *   Note: Cluster metadata entries (kafka_metadata%3Akafka_cluster%3A...) are skipped
  *
  * - PULSAR: "partition:ledgerId:entryId,partition:ledgerId:entryId,..."
  *   Example: "0:123:45,1:234:56"
@@ -66,7 +67,10 @@ public class CheckpointUtils {
     /** HoodieStreamer (Spark) Kafka format: "topic,0:1000,1:2000" */
     SPARK_KAFKA,
 
-    /** Flink Kafka format: base64-encoded Map&lt;TopicPartition, Long&gt; */
+    /**
+     * Flink Kafka format: URL-encoded "kafka_metadata%3Atopic%3Apartition:offset" separated by ";".
+     * Cluster metadata entries (containing "kafka_cluster") are skipped during parsing.
+     */
     FLINK_KAFKA,
 
     /** Pulsar format: "0:123:45,1:234:56" (ledgerId:entryId). Engine-agnostic. */
@@ -92,9 +96,7 @@ public class CheckpointUtils {
       case SPARK_KAFKA:
         return parseSparkKafkaCheckpoint(checkpointStr);
       case FLINK_KAFKA:
-        throw new UnsupportedOperationException(
-            "Flink Kafka checkpoint parsing not yet implemented. "
-                + "This will be added in Phase 2 with Flink checkpoint deserialization support.");
+        return parseFlinkKafkaCheckpoint(checkpointStr);
       case PULSAR:
         throw new UnsupportedOperationException(
             "Pulsar checkpoint parsing not yet implemented. Planned for Phase 4.");
@@ -249,6 +251,74 @@ public class CheckpointUtils {
       } catch (NumberFormatException e) {
         throw new IllegalArgumentException(
             "Invalid number format in checkpoint: " + splits[i], e);
+      }
+    }
+
+    return offsetMap;
+  }
+
+  /**
+   * Parse Flink Kafka checkpoint.
+   * Format: "kafka_metadata%3Atopic%3Apartition:offset" entries separated by ";".
+   * Cluster metadata entries (containing "kafka_cluster") are skipped.
+   *
+   * <p>Example: "kafka_metadata%3Aevents%3A0:100;kafka_metadata%3Aevents%3A1:200
+   * ;kafka_metadata%3Akafka_cluster%3Aevents%3A:my-cluster"</p>
+   *
+   * <p>The URL-encoded colons (%3A) separate the prefix, topic, and partition:offset.
+   * The format is produced by {@code StreamerUtil.stringFy()} in hudi-flink.</p>
+   *
+   * <p>Parsing uses {@code lastIndexOf} to locate the partition and offset from the end
+   * of each entry, consistent with the production parser in
+   * {@code StreamerUtil.parseKafkaOffsets()}.</p>
+   *
+   * @param checkpointStr Checkpoint string
+   * @return Map of partition → offset (cluster metadata entries excluded)
+   * @throws IllegalArgumentException if format is invalid
+   */
+  private static Map<Integer, Long> parseFlinkKafkaCheckpoint(String checkpointStr) {
+    if (checkpointStr == null || checkpointStr.trim().isEmpty()) {
+      throw new IllegalArgumentException("Flink Kafka checkpoint string cannot be null or empty");
+    }
+
+    Map<Integer, Long> offsetMap = new HashMap<>();
+    String[] entries = checkpointStr.split(";");
+
+    for (String entry : entries) {
+      entry = entry.trim();
+      if (entry.isEmpty()) {
+        continue;
+      }
+
+      // Skip cluster metadata entries (e.g., kafka_metadata%3Akafka_cluster%3Atopic%3A:cluster)
+      if (!entry.contains(":") || entry.contains("kafka_cluster")) {
+        continue;
+      }
+
+      // Entry format: kafka_metadata%3Atopic%3Apartition:offset
+      // Find the last colon which separates partition:offset
+      int lastColonIndex = entry.lastIndexOf(':');
+      if (lastColonIndex == -1) {
+        continue;
+      }
+
+      String offsetStr = entry.substring(lastColonIndex + 1);
+      String beforeOffset = entry.substring(0, lastColonIndex);
+
+      // Find the partition number (everything after the last %3A)
+      int lastEncodedColonIndex = beforeOffset.lastIndexOf("%3A");
+      if (lastEncodedColonIndex == -1) {
+        continue;
+      }
+
+      String partitionStr = beforeOffset.substring(lastEncodedColonIndex + "%3A".length());
+
+      try {
+        int partition = Integer.parseInt(partitionStr);
+        long offset = Long.parseLong(offsetStr);
+        offsetMap.put(partition, offset);
+      } catch (NumberFormatException e) {
+        log.warn("Failed to parse partition ID or offset from entry: {}", entry, e);
       }
     }
 

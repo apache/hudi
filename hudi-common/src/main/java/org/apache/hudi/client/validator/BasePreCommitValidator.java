@@ -72,7 +72,7 @@ public abstract class BasePreCommitValidator {
    * @throws HoodieValidationException if validation fails
    */
   @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
-  protected void validateWithMetadata(ValidationContext context) throws HoodieValidationException {
+  public void validateWithMetadata(ValidationContext context) throws HoodieValidationException {
     // Default no-op implementation
     // Concrete validators override this to implement validation logic
   }

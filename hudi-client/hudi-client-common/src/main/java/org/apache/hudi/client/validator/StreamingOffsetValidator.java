@@ -88,7 +88,7 @@ public abstract class StreamingOffsetValidator extends BasePreCommitValidator {
   }
 
   @Override
-  protected void validateWithMetadata(ValidationContext context) throws HoodieValidationException {
+  public void validateWithMetadata(ValidationContext context) throws HoodieValidationException {
     // Skip validation for first commit (no previous checkpoint)
     if (context.isFirstCommit()) {
       log.info("Skipping offset validation for first commit");
