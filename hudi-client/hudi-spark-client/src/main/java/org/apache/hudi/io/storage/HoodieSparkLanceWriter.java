@@ -19,6 +19,7 @@
 package org.apache.hudi.io.storage;
 
 import org.apache.hudi.common.bloom.BloomFilter;
+import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -143,7 +144,8 @@ public class HoodieSparkLanceWriter extends HoodieBaseLanceWriter<InternalRow, U
                                 HoodieStorage storage,
                                 boolean populateMetaFields,
                                 Option<BloomFilter> bloomFilterOpt) {
-    this(file, sparkSchema, instantTime, taskContextSupplier, storage, populateMetaFields, bloomFilterOpt, Long.MAX_VALUE);
+    this(file, sparkSchema, instantTime, taskContextSupplier, storage, populateMetaFields, bloomFilterOpt,
+        Long.parseLong(HoodieStorageConfig.LANCE_MAX_FILE_SIZE.defaultValue()));
   }
 
   /**

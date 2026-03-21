@@ -84,7 +84,7 @@ public class HoodieStorageConfig extends HoodieConfig {
       .key("hoodie.lance.max.file.size")
       .defaultValue(String.valueOf(120 * 1024 * 1024))
       .markAdvanced()
-      .withDocumentation("Target size in bytes for Lance files produced by Hudi write phases.");
+      .withDocumentation("Target file size in bytes for Lance base files.");
 
   public static final ConfigProperty<Boolean> HFILE_WRITER_TO_ALLOW_DUPLICATES = ConfigProperty
       .key("hoodie.hfile.writes.allow.duplicates")
