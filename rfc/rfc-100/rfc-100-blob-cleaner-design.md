@@ -747,3 +747,31 @@ Closes the writer-cleaner race window. Independent of the three stages.
 - **[Problem Statement, Constraints & Requirements](rfc-100-blob-cleaner-problem.md)**
   -- Complete problem scope, all 13 constraints (C1-C13), all 10 requirements (R1-R10), 8
   illustrative failure mode examples, and open questions.
+
+### Why the MDT Secondary Index Maps to Record Keys (Not File Groups)
+
+Stage 2 uses a two-hop lookup: secondary index → record keys → record index → file group locations.
+This is not an artifact of this RFC — it is the fundamental design of Hudi's secondary index
+([RFC-77](../rfc-77/rfc-77.md)). The rationale:
+
+1. **Secondary keys are non-unique.** Unlike the record index (which maps unique record keys),
+   a secondary index is on arbitrary user columns (e.g., `city`, `status`) where many records
+   share the same value. The composite key format `{secondaryKey}${recordKey}` flattens this
+   non-unique mapping into unique tuples that fit the existing spillable/merge map infrastructure.
+
+2. **Record locations change independently of secondary key values.** Compaction, clustering,
+   and updates move records between file groups. The record index already maintains this mapping
+   correctly. A denormalized `secondary_key → file_group` mapping would duplicate that
+   maintenance burden and risk staleness.
+
+3. **Update handling requires tombstones on old values.** When a record's secondary key changes,
+   the old value may reside in a different file group in the SI partition than the new value.
+   The normalized design handles this with `old-secondary-key → (record-key, deleted)` tombstones,
+   which is simpler than tracking file group transitions directly.
+
+4. **Alternatives were evaluated and rejected.** RFC-77 considered direct `secondary_key →
+   file_group` mapping, Guava MultiMap, Chronicle Map, and separate spillable structures — all
+   rejected due to complexity, external dependencies, or maintenance cost.
+
+For this RFC, the two-hop cost is negligible: Step 1 (prefix scan) and Step 2 (record index lookup)
+are each a single batched HFile forward-scan, adding ~3-7s total for 2K candidates.
