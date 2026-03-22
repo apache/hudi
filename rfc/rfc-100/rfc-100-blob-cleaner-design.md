@@ -634,7 +634,7 @@ cleaning:
 |--------------------------|---------------------------------|----------------------------|--------------------------------|
 | Non-blob table           | Zero (`hasBlobColumns` gate)    | N/A                        | **Zero**                       |
 | Flow 1 (Hudi-created)    | ~6 Parquet reads per cleaned FG | Skipped                    | O(cleaned_FGs * slices_per_FG) |
-| Flow 2 (external, index) | ~6 Parquet reads per cleaned FG | O(candidates) amortized    | O(cleaned_FGs + candidates)    |
+| Flow 2 (external, index) | ~6 Parquet reads per cleaned FG | O(C * R_avg)               | O(cleaned_FGs + C * R_avg)     |
 | Flow 2 (external, scan)  | ~6 Parquet reads per cleaned FG | O(candidates * table_size) | Circuit breaker limits this    |
 
 ### Back-of-Envelope: Example 7 (50K FGs, 2K External Candidates)
