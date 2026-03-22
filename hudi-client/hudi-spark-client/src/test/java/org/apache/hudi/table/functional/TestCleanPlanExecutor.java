@@ -639,14 +639,14 @@ public class TestCleanPlanExecutor extends HoodieCleanerTestBase {
   }
 
   /**
-   * Test canCleanBeSkipped for MOR metadata table.
+   * Test canSkipClean for MOR metadata table.
    * Verifies the optimization that skips clean when:
    * - Table type is MOR
    * - Table is a metadata table
    * - Only delta commits exist after the last clean
    */
   @Test
-  public void testCanCleanBeSkippedForMetadataTable() throws Exception {
+  public void testCanSkipCleanForMetadataTable() throws Exception {
     // Initialize metadata table with MOR type
     String metadataTableBasePath = HoodieTableMetadata.getMetadataTableBasePath(basePath);
 
@@ -691,14 +691,14 @@ public class TestCleanPlanExecutor extends HoodieCleanerTestBase {
       org.apache.hudi.table.action.clean.CleanPlanner cleanPlanner =
           new org.apache.hudi.table.action.clean.CleanPlanner(context, sparkTable, config);
 
-      // Use reflection to invoke the private canCleanBeSkipped method
-      java.lang.reflect.Method canCleanBeSkippedMethod =
-          org.apache.hudi.table.action.clean.CleanPlanner.class.getDeclaredMethod("canCleanBeSkipped");
-      canCleanBeSkippedMethod.setAccessible(true);
-      boolean result = (boolean) canCleanBeSkippedMethod.invoke(cleanPlanner);
+      // Use reflection to invoke the private canSkipClean method
+      java.lang.reflect.Method canSkipCleanMethod =
+          org.apache.hudi.table.action.clean.CleanPlanner.class.getDeclaredMethod("canSkipClean");
+      canSkipCleanMethod.setAccessible(true);
+      boolean result = (boolean) canSkipCleanMethod.invoke(cleanPlanner);
 
-      // Verify canCleanBeSkipped returns true for metadata table with only delta commits after clean
-      assertTrue(result, "canCleanBeSkipped should return true for MOR metadata table with only delta commits after clean");
+      // Verify canSkipClean returns true for metadata table with only delta commits after clean
+      assertTrue(result, "canSkipClean should return true for MOR metadata table with only delta commits after clean");
 
       // Now add a non-delta commit (e.g., COMMIT from compaction) and verify it returns false
       String compactionCommit = WriteClientTestUtils.createNewInstantTime();
@@ -708,10 +708,10 @@ public class TestCleanPlanExecutor extends HoodieCleanerTestBase {
       sparkTable = org.apache.hudi.table.HoodieSparkTable.create(config, context, metadataMetaClient);
       cleanPlanner = new org.apache.hudi.table.action.clean.CleanPlanner(context, sparkTable, config);
 
-      result = (boolean) canCleanBeSkippedMethod.invoke(cleanPlanner);
+      result = (boolean) canSkipCleanMethod.invoke(cleanPlanner);
 
-      // Verify canCleanBeSkipped returns false when there's a non-delta commit after clean
-      assertFalse(result, "canCleanBeSkipped should return false when there are non-delta commits after the last clean");
+      // Verify canSkipClean returns false when there's a non-delta commit after clean
+      assertFalse(result, "canSkipClean should return false when there are non-delta commits after the last clean");
     } finally {
       testTable.close();
     }
