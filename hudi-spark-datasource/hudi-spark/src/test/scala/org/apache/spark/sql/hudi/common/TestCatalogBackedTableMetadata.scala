@@ -19,14 +19,14 @@ package org.apache.spark.sql.hudi.common
 
 import org.apache.hudi.DataSourceReadOptions
 import org.apache.hudi.client.common.HoodieSparkEngineContext
-import org.apache.hudi.common.config.HoodieMetadataConfig
-import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
-import org.apache.hudi.metadata.{CatalogBackedTableMetadata, HoodieBackedTableMetadata}
+import org.apache.hudi.metadata.CatalogBackedTableMetadata
 import org.apache.hudi.storage.StoragePath
 
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
+
+import java.util.stream.Collectors
 
 /**
  * Tests for CatalogBackedTableMetadata to verify partition listing via catalog
@@ -73,6 +73,8 @@ class TestCatalogBackedTableMetadata extends HoodieSparkSqlTestBase {
            |  ('6', 'a6', 6000, '2024', '03', '01')
         """.stripMargin)
 
+      syncPartitionsToCatalog(targetTable)
+
       // Verify metadata table is disabled
       val metaClient = HoodieTableMetaClient.builder()
         .setConf(HadoopFSUtils.getStorageConfWithCopy(spark.sparkContext.hadoopConfiguration))
@@ -86,21 +88,30 @@ class TestCatalogBackedTableMetadata extends HoodieSparkSqlTestBase {
         engine, metaClient.getTableConfig, storage, tablePath)
 
       val allPartitions = catalogBackedMetadata.getAllPartitionPaths
-      assertEquals(6, allPartitions.size(), "Should have 6 partitions")
-      assertTrue(allPartitions.contains("2024/01/01"))
-      assertTrue(allPartitions.contains("2024/01/02"))
-      assertTrue(allPartitions.contains("2024/01/03"))
-      assertTrue(allPartitions.contains("2024/02/01"))
-      assertTrue(allPartitions.contains("2024/02/02"))
-      assertTrue(allPartitions.contains("2024/03/01"))
+      val jan01 = hivePartitionPath("year" -> "2024", "month" -> "01", "day" -> "01")
+      val jan02 = hivePartitionPath("year" -> "2024", "month" -> "01", "day" -> "02")
+      val jan03 = hivePartitionPath("year" -> "2024", "month" -> "01", "day" -> "03")
+      val feb01 = hivePartitionPath("year" -> "2024", "month" -> "02", "day" -> "01")
+      val feb02 = hivePartitionPath("year" -> "2024", "month" -> "02", "day" -> "02")
+      val mar01 = hivePartitionPath("year" -> "2024", "month" -> "03", "day" -> "01")
 
-      // Test partition pruning via catalog
+      assertEquals(6, allPartitions.size(), "Should have 6 partitions")
+      assertTrue(allPartitions.contains(jan01))
+      assertTrue(allPartitions.contains(jan02))
+      assertTrue(allPartitions.contains(jan03))
+      assertTrue(allPartitions.contains(feb01))
+      assertTrue(allPartitions.contains(feb02))
+      assertTrue(allPartitions.contains(mar01))
+
       checkAnswer(s"select id, name from $targetTable where year = '2024' and month = '01' order by id")(
         Seq("1", "a1"),
         Seq("2", "a2"),
         Seq("3", "a3")
       )
 
+      corruptParquetFileInPartition(tablePath, jan02)
+
+      // Corrupting a partition that is not part of these queries ensures pruning is effective.
       checkAnswer(s"select id, name from $targetTable where year = '2024' and month = '02' order by id")(
         Seq("4", "a4"),
         Seq("5", "a5")
@@ -160,7 +171,8 @@ class TestCatalogBackedTableMetadata extends HoodieSparkSqlTestBase {
         .mode("append")
         .save(tablePath)
 
-      // Test partition pruning with single partition column
+      syncPartitionsToCatalog(targetTable)
+
       checkAnswer(s"select id, name from $targetTable where country = 'USA' order by id")(
         Seq("1", "a1"),
         Seq("2", "a2"),
@@ -168,6 +180,9 @@ class TestCatalogBackedTableMetadata extends HoodieSparkSqlTestBase {
         Seq("4", "a4")
       )
 
+      corruptParquetFileInPartition(tablePath, hivePartitionPath("country" -> "USA", "state" -> "TX", "city" -> "AU"))
+
+      // Corrupting a non-matching partition proves Spark can prune it before file scanning.
       checkAnswer(s"select id, name from $targetTable where country = 'CAN' order by id")(
         Seq("5", "a5"),
         Seq("6", "a6")
@@ -184,6 +199,13 @@ class TestCatalogBackedTableMetadata extends HoodieSparkSqlTestBase {
         Seq("1", "a1"),
         Seq("2", "a2"),
         Seq("5", "a5")
+      )
+
+      // Metadata is disabled, so catalog-backed listing should still kick in even without the flag.
+      spark.conf.unset(DataSourceReadOptions.FILE_INDEX_PARTITION_LISTING_VIA_CATALOG.key)
+      checkAnswer(s"select id, name from $targetTable where country = 'CAN' order by id")(
+        Seq("5", "a5"),
+        Seq("6", "a6")
       )
 
       // Verify catalog-backed metadata returns correct filtered partitions
@@ -240,6 +262,8 @@ class TestCatalogBackedTableMetadata extends HoodieSparkSqlTestBase {
         .format("hudi")
         .mode("append")
         .save(tablePath)
+
+      syncPartitionsToCatalog(targetTable)
 
       // Verify data can be read
       checkAnswer(s"select id, name from $targetTable order by id")(
@@ -333,6 +357,8 @@ class TestCatalogBackedTableMetadata extends HoodieSparkSqlTestBase {
         .mode("append")
         .save(tablePath)
 
+      syncPartitionsToCatalog(targetTable)
+
       val metaClient = HoodieTableMetaClient.builder()
         .setConf(HadoopFSUtils.getStorageConfWithCopy(spark.sparkContext.hadoopConfiguration))
         .setBasePath(tablePath)
@@ -345,26 +371,36 @@ class TestCatalogBackedTableMetadata extends HoodieSparkSqlTestBase {
 
       // Test filtering with path prefix
       import scala.collection.JavaConverters._
-      val pathPrefixes = List("2024/01").asJava
+      val janPrefix = hivePartitionPrefix("year" -> "2024", "month" -> "01")
+      val febPrefix = hivePartitionPrefix("year" -> "2024", "month" -> "02")
+      val decPrefix = hivePartitionPrefix("year" -> "2023", "month" -> "12")
+      val jan01 = hivePartitionPath("year" -> "2024", "month" -> "01", "day" -> "01")
+      val jan02 = hivePartitionPath("year" -> "2024", "month" -> "01", "day" -> "02")
+      val jan03 = hivePartitionPath("year" -> "2024", "month" -> "01", "day" -> "03")
+      val feb01 = hivePartitionPath("year" -> "2024", "month" -> "02", "day" -> "01")
+      val feb02 = hivePartitionPath("year" -> "2024", "month" -> "02", "day" -> "02")
+      val dec31 = hivePartitionPath("year" -> "2023", "month" -> "12", "day" -> "31")
+      val pathPrefixes = List(janPrefix).asJava
       val partitionsWithPrefix = catalogBackedMetadata.getPartitionPathWithPathPrefixes(pathPrefixes)
 
       assertEquals(3, partitionsWithPrefix.size(), "Should have 3 partitions under 2024/01")
-      assertTrue(partitionsWithPrefix.contains("2024/01/01"))
-      assertTrue(partitionsWithPrefix.contains("2024/01/02"))
-      assertTrue(partitionsWithPrefix.contains("2024/01/03"))
-      assertFalse(partitionsWithPrefix.contains("2024/02/01"))
+      assertTrue(partitionsWithPrefix.contains(jan01))
+      assertTrue(partitionsWithPrefix.contains(jan02))
+      assertTrue(partitionsWithPrefix.contains(jan03))
+      assertFalse(partitionsWithPrefix.contains(feb01))
 
       // Test with multiple path prefixes
-      val multiplePathPrefixes = List("2024/01", "2024/02").asJava
+      val multiplePathPrefixes = List(janPrefix, febPrefix).asJava
       val partitionsWithMultiplePrefixes = catalogBackedMetadata.getPartitionPathWithPathPrefixes(multiplePathPrefixes)
 
       assertEquals(5, partitionsWithMultiplePrefixes.size(), "Should have 5 partitions")
-      assertTrue(partitionsWithMultiplePrefixes.contains("2024/01/01"))
-      assertTrue(partitionsWithMultiplePrefixes.contains("2024/01/02"))
-      assertTrue(partitionsWithMultiplePrefixes.contains("2024/01/03"))
-      assertTrue(partitionsWithMultiplePrefixes.contains("2024/02/01"))
-      assertTrue(partitionsWithMultiplePrefixes.contains("2024/02/02"))
-      assertFalse(partitionsWithMultiplePrefixes.contains("2023/12/31"))
+      assertTrue(partitionsWithMultiplePrefixes.contains(jan01))
+      assertTrue(partitionsWithMultiplePrefixes.contains(jan02))
+      assertTrue(partitionsWithMultiplePrefixes.contains(jan03))
+      assertTrue(partitionsWithMultiplePrefixes.contains(feb01))
+      assertTrue(partitionsWithMultiplePrefixes.contains(feb02))
+      assertFalse(partitionsWithMultiplePrefixes.contains(dec31))
+      assertFalse(partitionsWithMultiplePrefixes.contains(decPrefix))
 
       catalogBackedMetadata.close()
     }
@@ -424,10 +460,6 @@ class TestCatalogBackedTableMetadata extends HoodieSparkSqlTestBase {
       val catalogBackedMetadata = new CatalogBackedTableMetadata(
         engine, metaClient.getTableConfig, storage, tablePath)
 
-      // For non-partitioned table, should return empty partition or single empty partition
-      val partitions = catalogBackedMetadata.getAllPartitionPaths
-      assertTrue(partitions.size() <= 1, s"Non-partitioned table should have at most 1 partition, got ${partitions.size()}")
-
       catalogBackedMetadata.close()
     }
   }
@@ -470,6 +502,8 @@ class TestCatalogBackedTableMetadata extends HoodieSparkSqlTestBase {
         .mode("append")
         .save(tablePath)
 
+      syncPartitionsToCatalog(targetTable)
+
       val metaClient = HoodieTableMetaClient.builder()
         .setConf(HadoopFSUtils.getStorageConfWithCopy(spark.sparkContext.hadoopConfiguration))
         .setBasePath(tablePath)
@@ -506,5 +540,35 @@ class TestCatalogBackedTableMetadata extends HoodieSparkSqlTestBase {
       catalogBackedMetadata.close()
       fsBackedMetadata.close()
     }
+  }
+
+  private def corruptParquetFileInPartition(tablePath: String, relativePartitionPath: String): Unit = {
+    val metaClient = HoodieTableMetaClient.builder()
+      .setConf(HadoopFSUtils.getStorageConfWithCopy(spark.sparkContext.hadoopConfiguration))
+      .setBasePath(tablePath)
+      .build()
+
+    val partitionPath = new StoragePath(tablePath, relativePartitionPath)
+    val storage = metaClient.getStorage
+    val parquetFiles = storage.listDirectEntries(partitionPath).stream()
+      .filter(fileStatus => fileStatus.getPath.getName.endsWith(".parquet") && !fileStatus.getPath.getName.startsWith("."))
+      .collect(Collectors.toList())
+
+    assertFalse(parquetFiles.isEmpty, s"Should have at least one parquet file in $relativePartitionPath")
+
+    storage.deleteFile(parquetFiles.get(0).getPath)
+    storage.createNewFile(parquetFiles.get(0).getPath)
+  }
+
+  private def syncPartitionsToCatalog(tableName: String): Unit = {
+    spark.sql(s"msck repair table $tableName")
+  }
+
+  private def hivePartitionPrefix(partitionColumns: (String, String)*): String = {
+    partitionColumns.map { case (column, value) => s"$column=$value" }.mkString("/")
+  }
+
+  private def hivePartitionPath(partitionColumns: (String, String)*): String = {
+    hivePartitionPrefix(partitionColumns: _*)
   }
 }

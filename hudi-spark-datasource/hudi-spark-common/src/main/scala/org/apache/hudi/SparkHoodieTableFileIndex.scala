@@ -129,7 +129,7 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
 
   lazy val isPartitionListingViaCatalogEnabled: Boolean = {
     configProperties.getBoolean(FILE_INDEX_PARTITION_LISTING_VIA_CATALOG.key,
-      FILE_INDEX_PARTITION_LISTING_VIA_CATALOG.defaultValue()) &&
+      FILE_INDEX_PARTITION_LISTING_VIA_CATALOG.defaultValue()) ||
       !metaClient.getTableConfig.isMetadataTableAvailable
   }
 

@@ -366,7 +366,7 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
     List<String> matchedPartitionPaths;
     try {
       matchedPartitionPaths = tableMetadata.getPartitionPathWithPathPrefixUsingFilterExpression(relativePartitionPaths,
-          partitionFields, partitionColumnPredicates);
+          partitionFields, partitionColumnPredicates, partitionPredicateExpressions);
     } catch (IOException e) {
       throw new HoodieIOException("Error fetching partition paths", e);
     }
