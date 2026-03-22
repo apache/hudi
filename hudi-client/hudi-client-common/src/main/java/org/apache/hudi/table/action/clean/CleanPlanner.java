@@ -157,7 +157,7 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
       case KEEP_LATEST_BY_HOURS:
         return getPartitionPathsForCleanByCommits(earliestRetainedInstant);
       case KEEP_LATEST_FILE_VERSIONS:
-        if (canCleanBeSkipped()) {
+        if (canSkipClean()) {
           return Collections.emptyList();
         }
         return getPartitionPathsForFullCleaning();
@@ -167,9 +167,10 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
   }
 
   /**
-   * Returns true if clean can be skipped for MOR metadata tables when only delta commits occurred after the last clean.
+   * Returns true if clean can be skipped for {@code KEEP_LATEST_FILE_VERSIONS} on the MOR metadata table
+   * when only completed delta commits occurred after the last clean.
    */
-  private boolean canCleanBeSkipped() {
+  private boolean canSkipClean() {
     if (!HoodieTableType.MERGE_ON_READ.equals(hoodieTable.getMetaClient().getTableType())
         || !hoodieTable.isMetadataTable()) {
       return false;
@@ -180,7 +181,7 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
       return false;
     }
 
-    // Check whether there are any other commits apart from deltacommits after last clean's requested time.
+    // Skip only when every completed write after the last clean is still a deltacommit.
     return activeTimeline.getWriteTimeline()
         .filterCompletedInstants()
         .filter(instant -> !instant.getAction().equals(HoodieTimeline.DELTA_COMMIT_ACTION))
