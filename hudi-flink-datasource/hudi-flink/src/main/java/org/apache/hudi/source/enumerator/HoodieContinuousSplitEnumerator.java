@@ -19,6 +19,7 @@
 package org.apache.hudi.source.enumerator;
 
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.source.HoodieScanContext;
 import org.apache.hudi.source.split.HoodieContinuousSplitBatch;
 import org.apache.hudi.source.split.HoodieContinuousSplitDiscover;
@@ -121,8 +122,14 @@ public class HoodieContinuousSplitEnumerator extends AbstractHoodieSplitEnumerat
           position.get().getIssuedOffset(),
           result.getOffset());
     }
-    position.set(HoodieEnumeratorPosition.of(result.getEndInstant(), result.getOffset()));
-    LOG.info("Update enumerator position to {}", position.get());
+    // Only advance position when there is a valid new offset from the analyzed commits.
+    // An empty/null offset means either no new commits were found or split discovery was paused
+    // due to too many pending splits. Preserving the current position ensures the next scan
+    // resumes from the correct point, which is required for READ_COMMITS_LIMIT to work correctly.
+    if (!StringUtils.isNullOrEmpty(result.getOffset())) {
+      position.set(HoodieEnumeratorPosition.of(result.getEndInstant(), result.getOffset()));
+      LOG.info("Update enumerator position to {}", position.get());
+    }
   }
 
 }
