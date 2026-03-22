@@ -39,6 +39,7 @@ import org.apache.hudi.metrics.Metrics;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness;
 
+import com.codahale.metrics.Counter;
 import com.codahale.metrics.Gauge;
 import com.codahale.metrics.MetricRegistry;
 import org.apache.avro.generic.GenericRecord;
@@ -349,7 +350,7 @@ class TestSparkRDDWriteClient extends SparkClientFunctionalTestHarness {
     // Test with post commit failures ignored
     HoodieWriteConfig configWithIgnore = getConfigBuilder(true)
         .withPath(metaClient.getBasePath())
-        .withIgnorePostCommitFailure(true)
+        .withCanIgnorePostCommitFailures(true)
         .withMetricsConfig(org.apache.hudi.config.metrics.HoodieMetricsConfig.newBuilder()
             .on(true)
             .withReporterType("INMEMORY")
@@ -382,20 +383,21 @@ class TestSparkRDDWriteClient extends SparkClientFunctionalTestHarness {
     String failureMetricName = clientWithIgnore.getMetrics().getMetricsName(POST_COMMIT_STR, FAILURE_COUNTER);
     String durationMetricName = clientWithIgnore.getMetrics().getMetricsName(POST_COMMIT_STR, DURATION_STR);
 
-    Gauge<Long> failureGauge = (Gauge<Long>) registry.getGauges().get(failureMetricName);
+    Counter failureCounter = registry.getCounters().get(failureMetricName);
     Gauge<Long> durationGauge = (Gauge<Long>) registry.getGauges().get(durationMetricName);
 
-    assertNotNull(failureGauge, "Failure metric should be registered");
-    assertEquals(1L, failureGauge.getValue(), "Failure count should be 1");
+    assertNotNull(failureCounter, "Failure metric should be registered");
+    assertEquals(1L, failureCounter.getCount(), "Failure count should be 1");
     assertNotNull(durationGauge, "Duration metric should be registered");
     assertTrue(durationGauge.getValue() >= 0, "Duration should be non-negative");
 
     clientWithIgnore.close();
+    metrics.shutdown();
 
     // Test with post commit failures NOT ignored (should throw exception)
     HoodieWriteConfig configWithoutIgnore = getConfigBuilder(true)
         .withPath(metaClient.getBasePath())
-        .withIgnorePostCommitFailure(false)
+        .withCanIgnorePostCommitFailures(false)
         .withMetricsConfig(org.apache.hudi.config.metrics.HoodieMetricsConfig.newBuilder()
             .on(true)
             .withReporterType("INMEMORY")
@@ -429,14 +431,15 @@ class TestSparkRDDWriteClient extends SparkClientFunctionalTestHarness {
     String failureMetricName2 = clientWithoutIgnore.getMetrics().getMetricsName(POST_COMMIT_STR, FAILURE_COUNTER);
     String durationMetricName2 = clientWithoutIgnore.getMetrics().getMetricsName(POST_COMMIT_STR, DURATION_STR);
 
-    Gauge<Long> failureGauge2 = (Gauge<Long>) registry2.getGauges().get(failureMetricName2);
+    Counter failureCounter2 = registry2.getCounters().get(failureMetricName2);
     Gauge<Long> durationGauge2 = (Gauge<Long>) registry2.getGauges().get(durationMetricName2);
 
-    assertNotNull(failureGauge2, "Failure metric should be registered for second test");
-    assertEquals(1L, failureGauge2.getValue(), "Failure count should be 1");
+    assertNotNull(failureCounter2, "Failure metric should be registered for second test");
+    assertEquals(1L, failureCounter2.getCount(), "Failure count should be 1");
     assertNotNull(durationGauge2, "Duration metric should be registered for second test");
     assertTrue(durationGauge2.getValue() >= 0, "Duration should be non-negative");
 
     clientWithoutIgnore.close();
+    metrics2.shutdown();
   }
 }

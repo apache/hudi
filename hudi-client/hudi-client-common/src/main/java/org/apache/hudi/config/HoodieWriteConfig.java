@@ -731,11 +731,12 @@ public class HoodieWriteConfig extends HoodieConfig {
       .markAdvanced()
       .withDocumentation("");
 
-  public static final ConfigProperty<String> POST_COMMIT_FAILURES_IGNORED = ConfigProperty
-      .key("hoodie.post.commit.failures.ignored")
-      .defaultValue("false")
-      .withDocumentation("When this config is true, any failures in the post commit operations will be"
-          + " ignored and does not kill the application.");
+  public static final ConfigProperty<Boolean> CAN_IGNORE_POST_COMMIT_FAILURES = ConfigProperty
+      .key("hoodie.write.can.ignore.post.commit.failures")
+      .defaultValue(false)
+      .withAlternatives("hoodie.post.commit.failures.ignored")
+      .withDocumentation("When this config is true, any failures in post-commit operations are"
+          + " ignored and do not kill the application.");
 
   public static final ConfigProperty<String> AVRO_EXTERNAL_SCHEMA_TRANSFORMATION_ENABLE = ConfigProperty
       .key(AVRO_SCHEMA_STRING.key() + ".external.transformation")
@@ -2810,8 +2811,8 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getBoolean(BLOCK_WRITES_ON_SPECULATIVE_EXECUTION);
   }
 
-  public Boolean postCommitFailuresIngnored() {
-    return getBoolean(POST_COMMIT_FAILURES_IGNORED);
+  public boolean canIgnorePostCommitFailures() {
+    return getBoolean(CAN_IGNORE_POST_COMMIT_FAILURES);
   }
 
   /**
@@ -3493,8 +3494,8 @@ public class HoodieWriteConfig extends HoodieConfig {
       return this;
     }
 
-    public Builder withIgnorePostCommitFailure(boolean postCommitFailureIgnored) {
-      writeConfig.setValue(POST_COMMIT_FAILURES_IGNORED, Boolean.toString(postCommitFailureIgnored));
+    public Builder withCanIgnorePostCommitFailures(boolean canIgnorePostCommitFailures) {
+      writeConfig.setValue(CAN_IGNORE_POST_COMMIT_FAILURES, String.valueOf(canIgnorePostCommitFailures));
       return this;
     }
 

@@ -148,6 +148,10 @@ public class HoodieMetrics {
   private Counter compactionRequestedCounter = null;
   private Counter compactionCompletedCounter = null;
   private Counter rollbackFailureCounter = null;
+  private Counter postCommitSuccessCounter = null;
+  private Counter postCommitFailureCounter = null;
+  private String postCommitSuccessCounterName = null;
+  private String postCommitFailureCounterName = null;
 
   public HoodieMetrics(HoodieWriteConfig config, HoodieStorage storage) {
     this.config = config;
@@ -175,6 +179,8 @@ public class HoodieMetrics {
       this.compactionRequestedCounterName = getMetricsName(HoodieTimeline.COMPACTION_ACTION, HoodieTimeline.REQUESTED_COMPACTION_SUFFIX + COUNTER_METRIC_EXTENSION);
       this.compactionCompletedCounterName = getMetricsName(HoodieTimeline.COMPACTION_ACTION, HoodieTimeline.COMPLETED_COMPACTION_SUFFIX + COUNTER_METRIC_EXTENSION);
       this.rollbackFailureCounterName = getMetricsName("rollback", FAILURE_COUNTER);
+      this.postCommitSuccessCounterName = getMetricsName(POST_COMMIT_STR, SUCCESS_COUNTER);
+      this.postCommitFailureCounterName = getMetricsName(POST_COMMIT_STR, FAILURE_COUNTER);
     }
   }
 
@@ -361,7 +367,13 @@ public class HoodieMetrics {
 
   public void updatePostCommitMetrics(boolean status, long durationInMs) {
     if (config.isMetricsOn()) {
-      metrics.registerGauge(getMetricsName(POST_COMMIT_STR, status ? SUCCESS_COUNTER : FAILURE_COUNTER), 1);
+      if (status) {
+        postCommitSuccessCounter = getCounter(postCommitSuccessCounter, postCommitSuccessCounterName);
+        postCommitSuccessCounter.inc();
+      } else {
+        postCommitFailureCounter = getCounter(postCommitFailureCounter, postCommitFailureCounterName);
+        postCommitFailureCounter.inc();
+      }
       metrics.registerGauge(getMetricsName(POST_COMMIT_STR, DURATION_STR), durationInMs);
     }
   }

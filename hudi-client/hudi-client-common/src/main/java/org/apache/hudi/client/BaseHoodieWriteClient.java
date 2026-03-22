@@ -290,8 +290,8 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
       runTableServicesInline(table, metadata, extraMetadata);
     } catch (Exception e) {
       postCommitStatus = false;
-      if (config.postCommitFailuresIngnored()) {
-        LOG.error("Ignoring exception in perform post commit processing", e);
+      if (config.canIgnorePostCommitFailures()) {
+        LOG.error("Ignoring exception during post-commit or inline table service processing", e);
       } else {
         throw e;
       }
@@ -638,8 +638,8 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
         mayBeCleanAndArchive(hoodieTable);
       } catch (Exception e) {
         postCommitStatus = false;
-        if (config.postCommitFailuresIngnored()) {
-          LOG.error("Ignoring exception in perform post commit processing", e);
+        if (config.canIgnorePostCommitFailures()) {
+          LOG.error("Ignoring exception during post-commit or inline table service processing", e);
         } else {
           throw e;
         }
