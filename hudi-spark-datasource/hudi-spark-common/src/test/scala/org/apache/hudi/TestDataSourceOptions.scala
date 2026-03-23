@@ -96,4 +96,3 @@ class TestDataSourceOptions {
     DFSPropertiesConfiguration.clearGlobalProps()
   }
 }
-
