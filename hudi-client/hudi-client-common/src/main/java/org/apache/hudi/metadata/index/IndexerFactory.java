@@ -47,7 +47,7 @@ public class IndexerFactory {
                                        HoodieEngineContext engineContext,
                                        HoodieWriteConfig dataTableWriteConfig,
                                        HoodieTableMetaClient dataTableMetaClient,
-                                       EngineIndexSupport engineIndexSupport) {
+                                       EngineIndexerSupport engineIndexerSupport) {
     switch (partitionType) {
       case FILES:
         return new FilesIndexer(engineContext, dataTableWriteConfig, dataTableMetaClient);
@@ -60,7 +60,7 @@ public class IndexerFactory {
             ? new PartitionedRecordIndexer(engineContext, dataTableWriteConfig, dataTableMetaClient)
             : new RecordIndexer(engineContext, dataTableWriteConfig, dataTableMetaClient);
       case EXPRESSION_INDEX:
-        return new ExpressionIndexer(engineContext, dataTableWriteConfig, dataTableMetaClient, engineIndexSupport);
+        return new ExpressionIndexer(engineContext, dataTableWriteConfig, dataTableMetaClient, engineIndexerSupport);
       case PARTITION_STATS:
         return new PartitionStatsIndexer(engineContext, dataTableWriteConfig, dataTableMetaClient);
       case SECONDARY_INDEX:
@@ -78,7 +78,7 @@ public class IndexerFactory {
       HoodieEngineContext engineContext,
       HoodieWriteConfig dataTableWriteConfig,
       HoodieTableMetaClient dataTableMetaClient,
-      EngineIndexSupport engineIndexSupport) {
+      EngineIndexerSupport engineIndexerSupport) {
     if (!dataTableWriteConfig.getMetadataConfig().isEnabled()) {
       return Collections.emptyMap();
     }
@@ -90,7 +90,7 @@ public class IndexerFactory {
         )
         .collect(Collectors.toMap(
             Function.identity(),
-            type -> IndexerFactory.createIndexer(type, engineContext, dataTableWriteConfig, dataTableMetaClient, engineIndexSupport))));
+            type -> IndexerFactory.createIndexer(type, engineContext, dataTableWriteConfig, dataTableMetaClient, engineIndexerSupport))));
   }
 
   /**

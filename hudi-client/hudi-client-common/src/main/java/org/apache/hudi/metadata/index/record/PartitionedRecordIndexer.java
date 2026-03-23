@@ -26,8 +26,8 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.core.index.record.HoodieRecordIndex;
 import org.apache.hudi.metadata.BucketizedMetadataTableFileGroupIndexParser;
 import org.apache.hudi.metadata.MetadataPartitionType;
-import org.apache.hudi.metadata.index.IndexInitializationContext;
 import org.apache.hudi.metadata.index.model.DataPartitionAndRecords;
+import org.apache.hudi.metadata.index.model.IndexInitializationContext;
 import org.apache.hudi.metadata.index.model.IndexInitializationPlan;
 import org.apache.hudi.metadata.model.FileSliceAndPartition;
 

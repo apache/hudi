@@ -24,8 +24,13 @@ import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.metadata.index.model.IndexPartitionAndRecords;
+import org.apache.hudi.metadata.index.model.IndexRestoreContext;
 
 import lombok.extern.slf4j.Slf4j;
+
+import java.util.Collections;
+import java.util.List;
 
 /**
  * Base implementation of {@link Indexer} that handles common metadata-partition bootstrap flow,
@@ -60,5 +65,10 @@ public abstract class BaseIndexer implements Indexer {
    */
   @Override
   public void postInitialization(HoodieTableMetaClient metadataMetaClient, HoodieData<HoodieRecord> records, int fileGroupCount, String relativePartitionPath) {
+  }
+
+  @Override
+  public List<IndexPartitionAndRecords> buildRestore(IndexRestoreContext context) {
+    return Collections.emptyList();
   }
 }

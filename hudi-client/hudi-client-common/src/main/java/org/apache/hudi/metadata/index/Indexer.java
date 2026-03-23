@@ -22,7 +22,12 @@ package org.apache.hudi.metadata.index;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.metadata.index.model.IndexCleanContext;
+import org.apache.hudi.metadata.index.model.IndexInitializationContext;
 import org.apache.hudi.metadata.index.model.IndexInitializationPlan;
+import org.apache.hudi.metadata.index.model.IndexPartitionAndRecords;
+import org.apache.hudi.metadata.index.model.IndexRestoreContext;
+import org.apache.hudi.metadata.index.model.IndexUpdateContext;
 
 import java.io.IOException;
 import java.util.List;
@@ -45,6 +50,36 @@ public interface Indexer {
    * @throws IOException upon IO error
    */
   List<IndexInitializationPlan> buildInitialization(IndexInitializationContext context) throws IOException;
+
+  /**
+   * Generates records for updating the index based on the commit metadata.
+   *
+   * @param context shared metadata index update context
+   * @return zero or more {@link IndexPartitionAndRecords} entries to be committed to metadata partitions.
+   * Returning an empty list means no index updates are required for this commit.
+   */
+  List<IndexPartitionAndRecords> buildUpdate(IndexUpdateContext context);
+
+  /**
+   * Generates records for cleaning index entries based on the clean metadata.
+   *
+   * @param context shared metadata index clean context
+   * @return zero or more {@link IndexPartitionAndRecords} entries to be committed to metadata partitions.
+   * Returning an empty list means no index cleanup is required for this clean action.
+   */
+  List<IndexPartitionAndRecords> buildClean(IndexCleanContext context);
+
+  /**
+   * Generates records for restoring index entries based on the restore metadata.
+   * <p>
+   * Implementations can emit records for files added back, files deleted, and partition deletions.
+   * The default implementation is a no-op and returns an empty list.
+   *
+   * @param context shared metadata index restore context
+   * @return zero or more {@link IndexPartitionAndRecords} entries to be committed to metadata partitions.
+   * Returning an empty list means no index restore updates are required.
+   */
+  List<IndexPartitionAndRecords> buildRestore(IndexRestoreContext context);
 
   /**
    * Hook invoked after the bootstrap bulk commit for an index partition succeeds.

@@ -18,16 +18,27 @@
 
 package org.apache.hudi.metadata.index.files;
 
+import org.apache.hudi.avro.model.HoodieCleanMetadata;
+import org.apache.hudi.common.data.HoodieAccumulator;
+import org.apache.hudi.common.data.HoodieAtomicLongAccumulator;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.metadata.HoodieMetadataPayload;
+import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.metadata.index.BaseIndexer;
-import org.apache.hudi.metadata.index.IndexInitializationContext;
+import org.apache.hudi.metadata.index.model.IndexCleanContext;
+import org.apache.hudi.metadata.index.model.IndexInitializationContext;
 import org.apache.hudi.metadata.index.model.IndexInitializationPlan;
+import org.apache.hudi.metadata.index.model.IndexPartitionAndRecords;
+import org.apache.hudi.metadata.index.model.IndexRestoreContext;
+import org.apache.hudi.metadata.index.model.IndexUpdateContext;
 import org.apache.hudi.metadata.model.FileInfo;
 
 import lombok.extern.slf4j.Slf4j;
@@ -35,6 +46,8 @@ import lombok.extern.slf4j.Slf4j;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -81,5 +94,160 @@ public class FilesIndexer extends BaseIndexer {
         });
 
     return Collections.singletonList(IndexInitializationPlan.of(fileGroupCount, FILES.getPartitionPath(), allPartitionsRecord.union(fileListRecords)));
+  }
+
+  @Override
+  public List<IndexPartitionAndRecords> buildUpdate(IndexUpdateContext context) {
+    final HoodieData<HoodieRecord> records = engineContext.parallelize(
+        convertMetadataToFilesPartitionRecords(context.commitMetadata(), context.instantTime()), 1);
+    return Collections.singletonList(IndexPartitionAndRecords.of(FILES.getPartitionPath(), records));
+  }
+
+  @Override
+  public List<IndexPartitionAndRecords> buildClean(IndexCleanContext context) {
+    final HoodieData<HoodieRecord> records = engineContext.parallelize(
+        convertMetadataToFilesPartitionRecords(context.cleanMetadata(), context.instantTime()), 1);
+    return Collections.singletonList(IndexPartitionAndRecords.of(FILES.getPartitionPath(), records));
+  }
+
+  @Override
+  public List<IndexPartitionAndRecords> buildRestore(IndexRestoreContext context) {
+    List<HoodieRecord> records = new LinkedList<>();
+    int[] fileDeleteCount = {0};
+    int[] filesAddedCount = {0};
+
+    context.filesAdded().forEach((partition, filesToAdd) -> {
+      filesAddedCount[0] += filesToAdd.size();
+      List<String> filesToDelete = context.filesDeleted().getOrDefault(partition, Collections.emptyList());
+      fileDeleteCount[0] += filesToDelete.size();
+      Map<String, Long> fileNameToSize = filesToAdd.stream().collect(Collectors.toMap(FileInfo::fileName, FileInfo::size));
+      HoodieRecord record = HoodieMetadataPayload.createPartitionFilesRecord(partition, fileNameToSize, filesToDelete);
+      records.add(record);
+    });
+
+    // there could be partitions which only has missing deleted files.
+    context.filesDeleted().forEach((partition, filesToDelete) -> {
+      if (!context.filesAdded().containsKey(partition)) {
+        fileDeleteCount[0] += filesToDelete.size();
+        HoodieRecord record = HoodieMetadataPayload.createPartitionFilesRecord(partition, Collections.emptyMap(), filesToDelete);
+        records.add(record);
+      }
+    });
+
+    if (!context.deletedPartitions().isEmpty()) {
+      // if there are partitions to be deleted, add them to delete list
+      records.add(HoodieMetadataPayload.createPartitionListRecord(context.deletedPartitions(), true));
+    }
+
+    log.info("Re-adding missing records at {} during Restore. #partitions_updated={}, #files_added={}, #files_deleted={}, #partitions_deleted={}",
+        context.instantTime(), records.size(), filesAddedCount[0], fileDeleteCount[0], context.deletedPartitions().size());
+    return Collections.singletonList(IndexPartitionAndRecords.of(MetadataPartitionType.FILES.getPartitionPath(), engineContext.parallelize(records, 1)));
+  }
+
+  // -------------------------------------------------------------------------
+  //  Utilities
+  // -------------------------------------------------------------------------
+
+  /**
+   * Finds all new files/partitions created as part of commit and creates metadata table records for them.
+   *
+   * @param commitMetadata - Commit action metadata
+   * @param instantTime    - Commit action instant time
+   * @return List of metadata table records
+   */
+  private static List<HoodieRecord> convertMetadataToFilesPartitionRecords(HoodieCommitMetadata commitMetadata,
+                                                                          String instantTime) {
+    List<HoodieRecord> records = new ArrayList<>(commitMetadata.getPartitionToWriteStats().size());
+
+    // Add record bearing added partitions list
+    List<String> partitionsAdded = getPartitionsAdded(commitMetadata);
+
+    records.add(HoodieMetadataPayload.createPartitionListRecord(partitionsAdded));
+
+    // Update files listing records for each individual partition
+    HoodieAccumulator newFileCount = HoodieAtomicLongAccumulator.create();
+    List<HoodieRecord<HoodieMetadataPayload>> updatedPartitionFilesRecords =
+        commitMetadata.getPartitionToWriteStats().entrySet()
+            .stream()
+            .map(entry -> {
+              String partitionStatName = entry.getKey();
+              List<HoodieWriteStat> writeStats = entry.getValue();
+
+              HashMap<String, Long> updatedFilesToSizesMapping = new HashMap<>(writeStats.size());
+              for (HoodieWriteStat stat : writeStats) {
+                String pathWithPartition = stat.getPath();
+                if (pathWithPartition == null) {
+                  // Empty partition
+                  log.warn("Unable to find path in write stat to update metadata table {}", stat);
+                  continue;
+                }
+
+                String fileName = FSUtils.getFileName(pathWithPartition, partitionStatName);
+
+                // Since write-stats are coming in no particular order, if the same
+                // file have previously been appended to w/in the txn, we simply pick max
+                // of the sizes as reported after every write, since file-sizes are
+                // monotonically increasing (ie file-size never goes down, unless deleted)
+                updatedFilesToSizesMapping.merge(fileName, stat.getFileSizeInBytes(), Math::max);
+
+                Map<String, Long> cdcPathAndSizes = stat.getCdcStats();
+                if (cdcPathAndSizes != null && !cdcPathAndSizes.isEmpty()) {
+                  cdcPathAndSizes.forEach((key, value) ->
+                      updatedFilesToSizesMapping.put(FSUtils.getFileName(key, partitionStatName), value));
+                }
+              }
+
+              newFileCount.add(updatedFilesToSizesMapping.size());
+              return HoodieMetadataPayload.createPartitionFilesRecord(partitionStatName, updatedFilesToSizesMapping,
+                  Collections.emptyList());
+            })
+            .collect(Collectors.toList());
+
+    records.addAll(updatedPartitionFilesRecords);
+
+    log.info("Updating at {} from Commit/{}. #partitions_updated={}, #files_added={}", instantTime, commitMetadata.getOperationType(),
+        records.size(), newFileCount.value());
+
+    return records;
+  }
+
+  /**
+   * Finds all files that were deleted as part of a clean and creates metadata table records for them.
+   *
+   * @param cleanMetadata
+   * @param instantTime
+   * @return a list of metadata table records
+   */
+  private static List<HoodieRecord> convertMetadataToFilesPartitionRecords(HoodieCleanMetadata cleanMetadata,
+                                                                          String instantTime) {
+    List<HoodieRecord> records = new LinkedList<>();
+    int[] fileDeleteCount = {0};
+    List<String> deletedPartitions = new ArrayList<>();
+    cleanMetadata.getPartitionMetadata().forEach((partitionName, partitionMetadata) -> {
+      boolean isPartitionDeleted = partitionMetadata.getIsPartitionDeleted();
+      // Files deleted from a partition
+      List<String> deletedFiles = partitionMetadata.getDeletePathPatterns();
+      records.add(HoodieMetadataPayload.createPartitionFilesRecord(partitionName, Collections.emptyMap(),
+          deletedFiles, isPartitionDeleted));
+      fileDeleteCount[0] += deletedFiles.size();
+      if (isPartitionDeleted) {
+        deletedPartitions.add(partitionName);
+      }
+    });
+
+    if (!deletedPartitions.isEmpty()) {
+      // if there are partitions to be deleted, add them to delete list
+      records.add(HoodieMetadataPayload.createPartitionListRecord(deletedPartitions, true));
+    }
+    log.info("Updating at {} from Clean. #partitions_updated={}, #files_deleted={}, #partitions_deleted={}",
+        instantTime, records.size(), fileDeleteCount[0], deletedPartitions.size());
+    return records;
+  }
+
+  private static List<String> getPartitionsAdded(HoodieCommitMetadata commitMetadata) {
+    return commitMetadata.getPartitionToWriteStats().keySet().stream()
+        // We need to make sure we properly handle case of non-partitioned tables
+        .map(HoodieTableMetadataUtil::getPartitionIdentifierForFilesPartition)
+        .collect(Collectors.toList());
   }
 }

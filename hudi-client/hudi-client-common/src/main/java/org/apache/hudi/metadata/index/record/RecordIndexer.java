@@ -24,8 +24,8 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.core.index.record.HoodieRecordIndex;
 import org.apache.hudi.metadata.MetadataPartitionType;
-import org.apache.hudi.metadata.index.IndexInitializationContext;
 import org.apache.hudi.metadata.index.model.DataPartitionAndRecords;
+import org.apache.hudi.metadata.index.model.IndexInitializationContext;
 import org.apache.hudi.metadata.index.model.IndexInitializationPlan;
 
 import lombok.extern.slf4j.Slf4j;

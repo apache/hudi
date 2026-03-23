@@ -17,31 +17,21 @@
  * under the License.
  */
 
-package org.apache.hudi.metadata.index;
+package org.apache.hudi.metadata.index.model;
 
-import org.apache.hudi.common.schema.HoodieSchema;
-import org.apache.hudi.common.util.Lazy;
-import org.apache.hudi.common.util.Option;
-import org.apache.hudi.metadata.model.FileInfo;
-import org.apache.hudi.metadata.model.FileSliceAndPartition;
+import org.apache.hudi.avro.model.HoodieCleanMetadata;
 
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.experimental.Accessors;
 
-import java.util.List;
-import java.util.Map;
-
 /**
- * Shared input context for metadata index initialization.
+ * Shared input context for cleaning metadata index entries.
  */
 @AllArgsConstructor(staticName = "of")
 @Getter
 @Accessors(fluent = true)
-public class IndexInitializationContext {
-  private final String dataInstantTime;
-  private final String metadataInstantTime;
-  private final Map<String, List<FileInfo>> allFiles;
-  private final Lazy<List<FileSliceAndPartition>> latestFileSlices;
-  private final Lazy<Option<HoodieSchema>> tableSchema;
+public class IndexCleanContext {
+  private final String instantTime;
+  private final HoodieCleanMetadata cleanMetadata;
 }

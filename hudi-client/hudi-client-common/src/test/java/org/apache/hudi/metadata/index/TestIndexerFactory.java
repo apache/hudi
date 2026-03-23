@@ -40,7 +40,7 @@ class TestIndexerFactory {
     when(metadataConfig.isEnabled()).thenReturn(false);
 
     Map<MetadataPartitionType, Indexer> enabled =
-        IndexerFactory.getEnabledIndexerMap(engineContext, writeConfig, mock(HoodieTableMetaClient.class), mock(EngineIndexSupport.class));
+        IndexerFactory.getEnabledIndexerMap(engineContext, writeConfig, mock(HoodieTableMetaClient.class), mock(EngineIndexerSupport.class));
     assertTrue(enabled.isEmpty());
   }
 
@@ -65,12 +65,12 @@ class TestIndexerFactory {
 
     when(writeConfig.isRecordLevelIndexEnabled()).thenReturn(false);
     Map<MetadataPartitionType, Indexer> globalIndexers =
-        IndexerFactory.getEnabledIndexerMap(engineContext, writeConfig, metaClient, mock(EngineIndexSupport.class));
+        IndexerFactory.getEnabledIndexerMap(engineContext, writeConfig, metaClient, mock(EngineIndexerSupport.class));
     assertInstanceOf(RecordIndexer.class, globalIndexers.get(MetadataPartitionType.RECORD_INDEX));
 
     when(writeConfig.isRecordLevelIndexEnabled()).thenReturn(true);
     Map<MetadataPartitionType, Indexer> partitionedIndexers =
-        IndexerFactory.getEnabledIndexerMap(engineContext, writeConfig, metaClient, mock(EngineIndexSupport.class));
+        IndexerFactory.getEnabledIndexerMap(engineContext, writeConfig, metaClient, mock(EngineIndexerSupport.class));
     assertInstanceOf(PartitionedRecordIndexer.class, partitionedIndexers.get(MetadataPartitionType.RECORD_INDEX));
   }
 
@@ -96,7 +96,7 @@ class TestIndexerFactory {
     when(tableConfig.isMetadataPartitionAvailable(any(MetadataPartitionType.class))).thenReturn(false);
 
     Map<MetadataPartitionType, Indexer> enabled =
-        IndexerFactory.getEnabledIndexerMap(engineContext, writeConfig, metaClient, mock(EngineIndexSupport.class));
+        IndexerFactory.getEnabledIndexerMap(engineContext, writeConfig, metaClient, mock(EngineIndexerSupport.class));
 
     assertFalse(enabled.containsKey(MetadataPartitionType.EXPRESSION_INDEX));
     assertFalse(enabled.containsKey(MetadataPartitionType.SECONDARY_INDEX));

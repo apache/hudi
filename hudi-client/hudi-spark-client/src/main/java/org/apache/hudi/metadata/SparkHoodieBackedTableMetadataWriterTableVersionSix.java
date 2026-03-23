@@ -39,7 +39,8 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.index.HoodieSparkIndexClient;
-import org.apache.hudi.metadata.index.UnsupportedEngineIndexSupport;
+import org.apache.hudi.metadata.index.UnsupportedEngineIndexerSupport;
+import org.apache.hudi.metadata.index.model.IndexPartitionAndRecords;
 import org.apache.hudi.metrics.DistributedRegistry;
 import org.apache.hudi.metrics.MetricsReporterType;
 import org.apache.hudi.storage.StorageConfiguration;
@@ -51,7 +52,6 @@ import org.slf4j.LoggerFactory;
 
 import java.util.Collections;
 import java.util.List;
-import java.util.Map;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy.EAGER;
@@ -89,7 +89,7 @@ public class SparkHoodieBackedTableMetadataWriterTableVersionSix extends HoodieB
                                        HoodieFailedWritesCleaningPolicy failedWritesCleaningPolicy,
                                        HoodieEngineContext engineContext,
                                        Option<String> inflightInstantTimestamp) {
-    super(hadoopConf, writeConfig, failedWritesCleaningPolicy, engineContext, new UnsupportedEngineIndexSupport(EngineType.SPARK), inflightInstantTimestamp);
+    super(hadoopConf, writeConfig, failedWritesCleaningPolicy, engineContext, new UnsupportedEngineIndexerSupport(EngineType.SPARK), inflightInstantTimestamp);
   }
 
   @Override
@@ -110,8 +110,8 @@ public class SparkHoodieBackedTableMetadataWriterTableVersionSix extends HoodieB
   }
 
   @Override
-  protected void commit(String instantTime, Map<String, HoodieData<HoodieRecord>> partitionRecordsMap) {
-    commitInternal(instantTime, partitionRecordsMap, false, Option.empty());
+  protected void commit(String instantTime, List<IndexPartitionAndRecords> partitionRecords) {
+    commitInternal(instantTime, partitionRecords, false, Option.empty());
   }
 
   @Override
@@ -155,7 +155,7 @@ public class SparkHoodieBackedTableMetadataWriterTableVersionSix extends HoodieB
       String instantTime, String partitionPath, HoodieData<HoodieRecord> records,
       MetadataTableFileGroupIndexParser indexParser) {
     SparkHoodieMetadataBulkInsertPartitioner partitioner = new SparkHoodieMetadataBulkInsertPartitioner(indexParser);
-    commitInternal(instantTime, Collections.singletonMap(partitionPath, records), true, Option.of(partitioner));
+    commitInternal(instantTime, Collections.singletonList(IndexPartitionAndRecords.of(partitionPath, records)), true, Option.of(partitioner));
   }
 
   @Override
