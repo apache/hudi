@@ -92,7 +92,7 @@ public class TestSparkRDDMetadataWriteClient extends HoodieClientTestBase {
             .withRecordIndexFileGroupCount(1, 1).withStreamingWriteEnabled(true).build()).build();
 
     // trigger end to end write to data table so that metadata table is also initialized.
-    initDataTableWithACommit(hoodieWriteConfig);
+    initDataTableWithTwoCommits(hoodieWriteConfig);
 
     // fetch metadata file slice info
     HoodieWriteConfig mdtWriteConfig = HoodieMetadataWriteUtils.createMetadataWriteConfig(hoodieWriteConfig, HoodieFailedWritesCleaningPolicy.EAGER,
@@ -149,10 +149,14 @@ public class TestSparkRDDMetadataWriteClient extends HoodieClientTestBase {
     readFromMetadataTableAndValidateRecords(metadataMetaClient, hoodieWriteConfig, filesPartitionExpectedRecordsMap, rliPartitionExpectedRecordsMap, commitTimeOfInterest);
   }
 
-  private void initDataTableWithACommit(HoodieWriteConfig hoodieWriteConfig) throws Exception {
+  private void initDataTableWithTwoCommits(HoodieWriteConfig hoodieWriteConfig) throws Exception {
     try (SparkRDDWriteClient client = getHoodieWriteClient(hoodieWriteConfig)) {
       final int numRecords = 100;
       String newCommitTime = WriteClientTestUtils.createNewInstantTime();
+      insertBatch(hoodieWriteConfig, client, newCommitTime, HoodieTimeline.INIT_INSTANT_TS, numRecords, SparkRDDWriteClient::insert,
+          false, true, numRecords, numRecords, 1, Option.empty(), INSTANT_GENERATOR);
+
+      newCommitTime = WriteClientTestUtils.createNewInstantTime();
       insertBatch(hoodieWriteConfig, client, newCommitTime, HoodieTimeline.INIT_INSTANT_TS, numRecords, SparkRDDWriteClient::insert,
           false, true, numRecords, numRecords, 1, Option.empty(), INSTANT_GENERATOR);
     }

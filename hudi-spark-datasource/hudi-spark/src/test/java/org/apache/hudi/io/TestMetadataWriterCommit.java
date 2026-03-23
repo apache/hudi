@@ -109,7 +109,7 @@ public class TestMetadataWriterCommit extends BaseTestHandle {
     HoodieBackedTableMetadataWriter mdtWriter = (HoodieBackedTableMetadataWriter) SparkMetadataWriterFactory.createWithStreamingWrites(storageConf, config,
         HoodieFailedWritesCleaningPolicy.LAZY, context, Option.empty());
     HoodieTableMetaClient mdtMetaClient = HoodieTableMetaClient.builder().setBasePath(metaClient.getMetaPath() + "/metadata").setConf(storageConf).build();
-    assertEquals(2, mdtMetaClient.getActiveTimeline().filterCompletedInstants().countInstants());
+    assertEquals(1, mdtMetaClient.getActiveTimeline().filterCompletedInstants().countInstants());
 
     // Create commit in MDT
     mdtWriter = (HoodieBackedTableMetadataWriter) SparkMetadataWriterFactory.createWithStreamingWrites(storageConf, config,
@@ -118,16 +118,27 @@ public class TestMetadataWriterCommit extends BaseTestHandle {
     HoodieData<WriteStatus> mdtWriteStatus = mdtWriter.streamWriteToMetadataPartitions(HoodieJavaRDD.of(Collections.singletonList(writeStatus), context, 1), instantTime);
     List<HoodieWriteStat> mdtWriteStats = mdtWriteStatus.collectAsList().stream().map(WriteStatus::getStat).collect(Collectors.toList());
     mdtWriter.completeStreamingCommit(instantTime, context, mdtWriteStats, commitMetadata);
-    // 3 bootstrap commits for 2 enabled partitions, 1 commit due to update
-    assertEquals(3, mdtMetaClient.reloadActiveTimeline().filterCompletedInstants().countInstants());
+    // Commit to data table timeline
+    metaClient.getActiveTimeline().createNewInstant(new org.apache.hudi.common.table.timeline.HoodieInstant(
+        org.apache.hudi.common.table.timeline.HoodieInstant.State.REQUESTED, COMMIT_ACTION, instantTime,
+        metaClient.getTimelineLayout().getInstantComparator().completionTimeOrderedComparator()));
+    metaClient.getActiveTimeline().transitionRequestedToInflight(new org.apache.hudi.common.table.timeline.HoodieInstant(
+        org.apache.hudi.common.table.timeline.HoodieInstant.State.REQUESTED, COMMIT_ACTION, instantTime,
+        metaClient.getTimelineLayout().getInstantComparator().completionTimeOrderedComparator()), Option.empty());
+    metaClient.getActiveTimeline().saveAsComplete(
+        new org.apache.hudi.common.table.timeline.HoodieInstant(org.apache.hudi.common.table.timeline.HoodieInstant.State.INFLIGHT,
+            COMMIT_ACTION, instantTime, metaClient.getTimelineLayout().getInstantComparator().completionTimeOrderedComparator()),
+        Option.of(commitMetadata));
+    // 2 bootstrap commits for 1 enabled partitions, 1 commit due to update
+    assertEquals(2, mdtMetaClient.reloadActiveTimeline().filterCompletedInstants().countInstants());
 
     // verify commit metadata
     HoodieCommitMetadata mdtCommitMetadata = mdtMetaClient.getActiveTimeline().readCommitMetadata(mdtMetaClient.getActiveTimeline().lastInstant().get());
-    // 2 partitions should be seen in the commit metadata - FILES and Record index
-    assertEquals(2, mdtCommitMetadata.getPartitionToWriteStats().size());
+    // 1 partition should be seen in the commit metadata - FILES. RLI will be deferred to 2nd commit.
+    assertEquals(1, mdtCommitMetadata.getPartitionToWriteStats().size());
     assertEquals(1, mdtCommitMetadata.getPartitionToWriteStats().get(FILES.getPartitionPath()).size());
-    assertEquals(10, mdtCommitMetadata.getPartitionToWriteStats().get(RECORD_INDEX.getPartitionPath()).size());
     assertFalse(mdtCommitMetadata.getPartitionToWriteStats().containsKey(COLUMN_STATS.getPartitionPath()));
+    assertFalse(mdtCommitMetadata.getPartitionToWriteStats().containsKey(RECORD_INDEX.getPartitionPath()));
 
     // Create commit in MDT with col stats enabled (partition stats is enabled with column stats)
     config.getMetadataConfig().setValue(HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS, "true");
