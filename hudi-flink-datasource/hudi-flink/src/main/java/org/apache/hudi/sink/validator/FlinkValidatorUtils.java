@@ -37,6 +37,7 @@ import org.apache.flink.configuration.Configuration;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 /**
@@ -60,14 +61,14 @@ public class FlinkValidatorUtils {
    * @param instant Commit instant time
    * @param allWriteStatus Write statuses from all operators
    * @param checkpointCommitMetadata Extra metadata being committed (contains checkpoint info)
-   * @param previousCommitMetadata Metadata from the previous completed commit
+   * @param previousCommitMetadataSupplier Supplier for metadata from the previous completed commit (lazily evaluated)
    * @throws HoodieValidationException if any validator fails with FAIL policy
    */
   public static void runValidators(Configuration conf,
                                    String instant,
                                    List<WriteStatus> allWriteStatus,
                                    Map<String, String> checkpointCommitMetadata,
-                                   Option<HoodieCommitMetadata> previousCommitMetadata) {
+                                   Supplier<Option<HoodieCommitMetadata>> previousCommitMetadataSupplier) {
     String validatorClassNames = conf.getString(
         HoodiePreCommitValidatorConfig.VALIDATOR_CLASS_NAMES.key(),
         HoodiePreCommitValidatorConfig.VALIDATOR_CLASS_NAMES.defaultValue());
@@ -75,6 +76,9 @@ public class FlinkValidatorUtils {
     if (StringUtils.isNullOrEmpty(validatorClassNames)) {
       return;
     }
+
+    // Fetch previous commit metadata only when validators are configured
+    Option<HoodieCommitMetadata> previousCommitMetadata = previousCommitMetadataSupplier.get();
 
     // Build ValidationContext from available data
     HoodieCommitMetadata currentMetadata = buildCommitMetadata(allWriteStatus, checkpointCommitMetadata);
@@ -89,8 +93,7 @@ public class FlinkValidatorUtils {
         previousCommitMetadata);
 
     // Build config properties for validators
-    TypedProperties props = new TypedProperties();
-    conf.toMap().forEach(props::setProperty);
+    TypedProperties props = TypedProperties.fromMap(conf.toMap());
 
     // Instantiate and run each validator
     List<String> classNames = Arrays.stream(validatorClassNames.split(","))

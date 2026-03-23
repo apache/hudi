@@ -20,11 +20,9 @@ package org.apache.hudi.sink;
 
 import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.client.WriteStatus;
-import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.CommitUtils;
 import org.apache.hudi.common.util.Option;
@@ -633,7 +631,7 @@ public class StreamWriteOperatorCoordinator
 
     // Run pre-commit validators (if configured) before finalizing the commit
     FlinkValidatorUtils.runValidators(conf, instant, allWriteStatus,
-        checkpointCommitMetadata, getPreviousCommitMetadata());
+        checkpointCommitMetadata, () -> StreamerUtil.getPreviousCommitMetadata(this.metaClient));
 
     boolean success = writeClient.commit(instant, allWriteStatus, Option.of(checkpointCommitMetadata),
         tableState.commitAction, partitionToReplacedFileIds);
@@ -664,26 +662,6 @@ public class StreamWriteOperatorCoordinator
         }
       });
     }
-  }
-
-  /**
-   * Get commit metadata from the last completed commit on the timeline.
-   * Used for pre-commit validation to compare current commit against previous.
-   */
-  private Option<HoodieCommitMetadata> getPreviousCommitMetadata() {
-    try {
-      HoodieTimeline completedTimeline = this.metaClient.reloadActiveTimeline()
-          .filterCompletedInstants();
-      Option<HoodieInstant> lastInstant =
-          completedTimeline.lastInstant();
-      if (lastInstant.isPresent()) {
-        return Option.of(completedTimeline.readCommitMetadata(lastInstant.get()));
-      }
-    } catch (Exception e) {
-      log.warn("Failed to read previous commit metadata for pre-commit validation. "
-          + "Validation will skip previous-commit checks.", e);
-    }
-    return Option.empty();
   }
 
   @VisibleForTesting

@@ -72,7 +72,7 @@ public class TestFlinkValidatorUtils {
 
     assertDoesNotThrow(() -> FlinkValidatorUtils.runValidators(
         conf, "20260320120000000", writeStatuses,
-        new HashMap<>(), Option.empty()));
+        new HashMap<>(), () -> Option.empty()));
   }
 
   @Test
@@ -83,7 +83,7 @@ public class TestFlinkValidatorUtils {
 
     assertDoesNotThrow(() -> FlinkValidatorUtils.runValidators(
         conf, "20260320120000000", writeStatuses,
-        new HashMap<>(), Option.empty()));
+        new HashMap<>(), () -> Option.empty()));
   }
 
   @Test
@@ -101,7 +101,7 @@ public class TestFlinkValidatorUtils {
 
     // First commit (no previous metadata) — validator should skip and pass
     assertDoesNotThrow(() -> FlinkValidatorUtils.runValidators(
-        conf, "20260320120000000", writeStatuses, extraMeta, Option.empty()));
+        conf, "20260320120000000", writeStatuses, extraMeta, () -> Option.empty()));
   }
 
   @Test
@@ -122,7 +122,7 @@ public class TestFlinkValidatorUtils {
         "kafka_metadata%3Aevents%3A0:100");
 
     assertDoesNotThrow(() -> FlinkValidatorUtils.runValidators(
-        conf, "20260320120000000", writeStatuses, extraMeta, Option.of(prevMeta)));
+        conf, "20260320120000000", writeStatuses, extraMeta, () -> Option.of(prevMeta)));
   }
 
   @Test
@@ -144,7 +144,7 @@ public class TestFlinkValidatorUtils {
 
     assertThrows(HoodieValidationException.class,
         () -> FlinkValidatorUtils.runValidators(
-            conf, "20260320120000000", writeStatuses, extraMeta, Option.of(prevMeta)));
+            conf, "20260320120000000", writeStatuses, extraMeta, () -> Option.of(prevMeta)));
   }
 
   @Test
@@ -154,7 +154,7 @@ public class TestFlinkValidatorUtils {
 
     assertThrows(HoodieValidationException.class,
         () -> FlinkValidatorUtils.runValidators(
-            conf, "20260320120000000", writeStatuses, new HashMap<>(), Option.empty()));
+            conf, "20260320120000000", writeStatuses, new HashMap<>(), () -> Option.empty()));
   }
 
   @Test
@@ -172,7 +172,7 @@ public class TestFlinkValidatorUtils {
         "kafka_metadata%3Aevents%3A0:100");
 
     assertDoesNotThrow(() -> FlinkValidatorUtils.runValidators(
-        conf, "20260320120000000", writeStatuses, extraMeta, Option.empty()));
+        conf, "20260320120000000", writeStatuses, extraMeta, () -> Option.empty()));
   }
 
   @Test
@@ -186,7 +186,7 @@ public class TestFlinkValidatorUtils {
     List<WriteStatus> writeStatuses = Collections.singletonList(buildWriteStatus("p1", 100, 0));
 
     assertDoesNotThrow(() -> FlinkValidatorUtils.runValidators(
-        conf, "20260320120000000", writeStatuses, new HashMap<>(), Option.empty()));
+        conf, "20260320120000000", writeStatuses, new HashMap<>(), () -> Option.empty()));
   }
 
   @Test
@@ -200,7 +200,7 @@ public class TestFlinkValidatorUtils {
 
     // null extraMetadata should be handled gracefully
     assertDoesNotThrow(() -> FlinkValidatorUtils.runValidators(
-        conf, "20260320120000000", writeStatuses, null, Option.empty()));
+        conf, "20260320120000000", writeStatuses, null, () -> Option.empty()));
   }
 
   @Test
@@ -225,7 +225,7 @@ public class TestFlinkValidatorUtils {
 
     // Offset diff = 100, records = 100 — should pass
     assertDoesNotThrow(() -> FlinkValidatorUtils.runValidators(
-        conf, "20260320120000000", writeStatuses, extraMeta, Option.of(prevMeta)));
+        conf, "20260320120000000", writeStatuses, extraMeta, () -> Option.of(prevMeta)));
   }
 
   @Test
@@ -246,7 +246,7 @@ public class TestFlinkValidatorUtils {
 
     // Both offset diff and records are 0 — should skip validation
     assertDoesNotThrow(() -> FlinkValidatorUtils.runValidators(
-        conf, "20260320120000000", writeStatuses, extraMeta, Option.of(prevMeta)));
+        conf, "20260320120000000", writeStatuses, extraMeta, () -> Option.of(prevMeta)));
   }
 
   @Test
@@ -262,7 +262,7 @@ public class TestFlinkValidatorUtils {
 
     HoodieValidationException ex = assertThrows(HoodieValidationException.class,
         () -> FlinkValidatorUtils.runValidators(
-            conf, "20260320120000000", writeStatuses, new HashMap<>(), Option.empty()));
+            conf, "20260320120000000", writeStatuses, new HashMap<>(), () -> Option.empty()));
     assertTrue(ex.getMessage().contains("FakeValidator"));
   }
 
@@ -285,6 +285,6 @@ public class TestFlinkValidatorUtils {
         "kafka_metadata%3Aevents%3A0:0");
 
     assertDoesNotThrow(() -> FlinkValidatorUtils.runValidators(
-        conf, "20260320120000000", writeStatuses, extraMeta, Option.of(prevMeta)));
+        conf, "20260320120000000", writeStatuses, extraMeta, () -> Option.of(prevMeta)));
   }
 }

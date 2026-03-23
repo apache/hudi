@@ -31,6 +31,7 @@ import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieTableType;
@@ -981,5 +982,28 @@ public class StreamerUtil {
     }
 
     return offsets;
+  }
+
+  /**
+   * Get commit metadata from the last completed write commit on the timeline.
+   * Used for pre-commit validation to compare current commit against previous.
+   *
+   * @param metaClient the table meta client
+   * @return the previous write commit metadata, or empty if none exists
+   */
+  public static Option<HoodieCommitMetadata> getPreviousCommitMetadata(HoodieTableMetaClient metaClient) {
+    try {
+      HoodieTimeline completedWriteTimeline = metaClient.reloadActiveTimeline()
+          .getWriteTimeline()
+          .filterCompletedInstants();
+      Option<HoodieInstant> lastInstant = completedWriteTimeline.lastInstant();
+      if (lastInstant.isPresent()) {
+        return Option.of(completedWriteTimeline.readCommitMetadata(lastInstant.get()));
+      }
+    } catch (Exception e) {
+      log.warn("Failed to read previous commit metadata for pre-commit validation. "
+          + "Validation will skip previous-commit checks.", e);
+    }
+    return Option.empty();
   }
 }
