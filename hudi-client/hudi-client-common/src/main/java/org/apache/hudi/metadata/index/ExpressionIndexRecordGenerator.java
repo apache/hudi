@@ -21,11 +21,13 @@ package org.apache.hudi.metadata.index;
 
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.EngineType;
+import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieIndexDefinition;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.metadata.model.FileInfoAndPartition;
+import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.storage.StorageConfiguration;
 
 import java.util.List;
@@ -49,7 +51,7 @@ public interface ExpressionIndexRecordGenerator {
    * @param instantTime     instant time
    * @return expression index records
    */
-  HoodieData<HoodieRecord> generate(
+  HoodieData<HoodieRecord> buildInitialization(
       List<FileInfoAndPartition> filesToIndex,
       HoodieIndexDefinition indexDefinition,
       HoodieTableMetaClient metaClient,
@@ -57,5 +59,26 @@ public interface ExpressionIndexRecordGenerator {
       HoodieSchema tableSchema,
       HoodieSchema readerSchema,
       StorageConfiguration<?> storageConf,
+      String instantTime);
+
+  /**
+   * Loads the file slices touched by the commit due to given instant time and returns
+   * the records for the expression index. This generates partition stat record updates
+   * along with EI column stat update records. Partition stat record updates are generated
+   * by reloading the affected partitions column range metadata from EI and then merging
+   * it with partition stat record from the updated data.
+   *
+   * @param dataTableMetaClient {@link HoodieTableMetaClient} for the data table
+   * @param tableMetadata       metadata table reader used to load existing index content
+   * @param commitMetadata      commit metadata
+   * @param indexPartition      metadata partition path for the expression index
+   * @param instantTime         completed data-table instant time being indexed
+   * @return expression index records to upsert into metadata table
+   */
+  HoodieData<HoodieRecord> buildUpdate(
+      HoodieTableMetaClient dataTableMetaClient,
+      HoodieTableMetadata tableMetadata,
+      HoodieCommitMetadata commitMetadata,
+      String indexPartition,
       String instantTime);
 }

@@ -19,12 +19,22 @@
 
 package org.apache.hudi.metadata.index.expression;
 
+import org.apache.hudi.avro.model.HoodieCleanMetadata;
+import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieIndexDefinition;
+import org.apache.hudi.common.model.HoodieIndexMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
+import org.apache.hudi.common.util.Option;
+import org.apache.hudi.metadata.HoodieBackedTableMetadata;
 import org.apache.hudi.metadata.index.ExpressionIndexRecordGenerator;
 import org.apache.hudi.metadata.model.FileInfo;
+import org.apache.hudi.metadata.index.bloomfilters.BloomFiltersIndexer;
+import org.apache.hudi.metadata.index.columnstats.ColumnStatsIndexer;
+import org.apache.hudi.metadata.index.model.IndexPartitionAndRecords;
 import org.apache.hudi.metadata.model.FileSliceAndPartition;
 import org.apache.hudi.metadata.model.FileInfoAndPartition;
 import org.apache.hudi.metadata.index.model.IndexPartitionInitialization;
@@ -46,10 +56,14 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_BLOOM_FILTERS;
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getExpressionIndexPartitionsToInit;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getProjectedSchemaForExpressionIndex;
 import static org.apache.hudi.metadata.MetadataPartitionType.EXPRESSION_INDEX;
+import static org.apache.hudi.metadata.MetadataPartitionType.fromPartitionPath;
 
 /**
  * Implementation of {@link MetadataPartitionType#EXPRESSION_INDEX} index
@@ -111,10 +125,69 @@ public class ExpressionIndexer extends BaseIndexer {
             .orElseThrow(() -> new HoodieMetadataException("Table schema is not available for expression index initialization"));
     HoodieSchema readerSchema = getProjectedSchemaForExpressionIndex(indexDefinition, dataTableMetaClient, tableSchema);
 
-    HoodieData<HoodieRecord> records = expressionIndexRecordGenerator.generate(
+    HoodieData<HoodieRecord> records = expressionIndexRecordGenerator.buildInitialization(
         filesToIndex, indexDefinition, dataTableMetaClient, parallelism,
         tableSchema, readerSchema, engineContext.getStorageConf(), dataTableInstantTime);
 
     return Collections.singletonList(IndexPartitionInitialization.of(fileGroupCount, indexName, records));
+  }
+
+  @Override
+  public List<IndexPartitionAndRecords> buildUpdate(String instantTime, HoodieBackedTableMetadata tableMetadata, Lazy<HoodieTableFileSystemView> lazyFileSystemView,
+                                                    HoodieCommitMetadata commitMetadata) {
+    if (!MetadataPartitionType.EXPRESSION_INDEX.isMetadataPartitionAvailable(dataTableMetaClient)) {
+      log.info("Don't need to update expression index, since no expression index is available");
+      return Collections.emptyList();
+    }
+    return dataTableMetaClient.getTableConfig().getMetadataPartitions()
+        .stream()
+        .filter(partition -> partition.startsWith(HoodieTableMetadataUtil.PARTITION_NAME_EXPRESSION_INDEX_PREFIX))
+        .map(partition -> {
+          HoodieData<HoodieRecord> expressionIndexRecords;
+          try {
+            expressionIndexRecords = expressionIndexRecordGenerator.buildUpdate(dataTableMetaClient, tableMetadata, commitMetadata, partition, instantTime);
+          } catch (Exception e) {
+            throw new HoodieMetadataException(String.format("Failed to get expression index updates for partition %s", partition), e);
+          }
+          return IndexPartitionAndRecords.of(partition, expressionIndexRecords);
+        }).collect(Collectors.toList());
+  }
+
+  @Override
+  public List<IndexPartitionAndRecords> buildClean(String instantTime, HoodieCleanMetadata cleanMetadata) {
+    Option<HoodieIndexMetadata> indexMetadata = dataTableMetaClient.getIndexMetadata();
+    if (indexMetadata.isEmpty()) {
+      throw new HoodieMetadataException("Expression index metadata not found");
+    }
+    List<IndexPartitionAndRecords> indexRecordsList = new ArrayList<>();
+    HoodieIndexMetadata metadata = indexMetadata.get();
+    Map<String, HoodieIndexDefinition> indexDefinitions = metadata.getIndexDefinitions();
+    if (indexDefinitions.isEmpty()) {
+      throw new HoodieMetadataException("Expression index metadata not found");
+    }
+    // iterate over each index definition and check:
+    // if it is an expression index using column_stats, then follow the same approach as column_stats
+    // if it is an expression index using bloom_filters, then follow the same approach as bloom_filters
+    // else throw an exception
+    for (Map.Entry<String, HoodieIndexDefinition> entry : indexDefinitions.entrySet()) {
+      String indexName = entry.getKey();
+      HoodieIndexDefinition indexDefinition = entry.getValue();
+      if (MetadataPartitionType.EXPRESSION_INDEX.equals(fromPartitionPath(indexDefinition.getIndexName()))) {
+        if (indexDefinition.getIndexType().equalsIgnoreCase(PARTITION_NAME_BLOOM_FILTERS)) {
+          indexRecordsList.add(IndexPartitionAndRecords.of(indexName,
+              BloomFiltersIndexer.convertMetadataToBloomFilterRecords(cleanMetadata, engineContext, instantTime, dataTableWriteConfig.getBloomIndexParallelism())));
+        } else if (indexDefinition.getIndexType().equalsIgnoreCase(PARTITION_NAME_COLUMN_STATS)) {
+          HoodieMetadataConfig modifiedMetadataConfig = HoodieMetadataConfig.newBuilder()
+              .withProperties(dataTableWriteConfig.getMetadataConfig().getProps())
+              .withColumnStatsIndexForColumns(String.join(",", indexDefinition.getSourceFields()))
+              .build();
+          indexRecordsList.add(IndexPartitionAndRecords.of(indexName, ColumnStatsIndexer.convertMetadataToColumnStatsRecords(
+              cleanMetadata, engineContext, dataTableMetaClient, modifiedMetadataConfig, Option.of(dataTableWriteConfig.getRecordMerger().getRecordType()))));
+        } else {
+          throw new HoodieMetadataException("Unsupported expression index type");
+        }
+      }
+    }
+    return indexRecordsList;
   }
 }

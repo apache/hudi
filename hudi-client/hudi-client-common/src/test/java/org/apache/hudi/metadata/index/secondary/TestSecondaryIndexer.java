@@ -5,15 +5,21 @@
 
 package org.apache.hudi.metadata.index.secondary;
 
+import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
+import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieIndexDefinition;
+import org.apache.hudi.common.model.HoodieIndexMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.metadata.HoodieBackedTableMetadata;
 import org.apache.hudi.metadata.HoodieMetadataPayload;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.metadata.index.model.IndexPartitionInitialization;
@@ -32,6 +38,7 @@ import java.util.Set;
 
 import static org.apache.hudi.common.testutils.HoodieTestUtils.getDefaultStorageConf;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyFloat;
@@ -100,6 +107,72 @@ class TestSecondaryIndexer {
       assertEquals(1, collected.size());
       assertEquals("p_sec", collected.get(0).getRecordKey());
     }
+  }
+
+  @Test
+  void testBuildUpdateReturnsEmptyWhenSecondaryIndexUnavailable() {
+    HoodieTableMetaClient metaClient = mock(HoodieTableMetaClient.class);
+    when(metaClient.getIndexMetadata()).thenReturn(org.apache.hudi.common.util.Option.empty());
+    ExposedSecondaryIndexer indexer = new ExposedSecondaryIndexer(
+        mock(HoodieEngineContext.class), mock(HoodieWriteConfig.class), metaClient);
+    assertTrue(indexer.buildUpdate(
+        "013",
+        mock(HoodieBackedTableMetadata.class),
+        Lazy.lazily(() -> mock(HoodieTableFileSystemView.class)),
+        new HoodieCommitMetadata()).isEmpty());
+  }
+
+  @Test
+  void testBuildUpdateThrowsForDeletePartitionOperation() {
+    HoodieEngineContext engineContext = mock(HoodieEngineContext.class);
+    HoodieWriteConfig writeConfig = mock(HoodieWriteConfig.class);
+    HoodieTableMetaClient metaClient = mock(HoodieTableMetaClient.class);
+    HoodieIndexMetadata indexMetadata = mock(HoodieIndexMetadata.class);
+    HoodieIndexDefinition indexDefinition = mock(HoodieIndexDefinition.class);
+
+    when(metaClient.getIndexMetadata()).thenReturn(org.apache.hudi.common.util.Option.of(indexMetadata));
+    when(indexMetadata.getIndexDefinitions()).thenReturn(Collections.singletonMap("secondary_index_idx", indexDefinition));
+    when(indexDefinition.getIndexName()).thenReturn("secondary_index_idx");
+
+    HoodieCommitMetadata commitMetadata = new HoodieCommitMetadata();
+    commitMetadata.setOperationType(WriteOperationType.DELETE_PARTITION);
+
+    ExposedSecondaryIndexer indexer = new ExposedSecondaryIndexer(engineContext, writeConfig, metaClient);
+    assertThrows(RuntimeException.class, () -> indexer.buildUpdate(
+        "014",
+        mock(HoodieBackedTableMetadata.class),
+        Lazy.lazily(() -> mock(HoodieTableFileSystemView.class)),
+        commitMetadata));
+  }
+
+  @Test
+  void testBuildUpdateForCompactReturnsEmpty() {
+    HoodieEngineContext engineContext = mock(HoodieEngineContext.class);
+    HoodieWriteConfig writeConfig = mock(HoodieWriteConfig.class);
+    HoodieTableMetaClient metaClient = mock(HoodieTableMetaClient.class);
+    HoodieIndexMetadata indexMetadata = mock(HoodieIndexMetadata.class);
+    HoodieIndexDefinition indexDefinition = mock(HoodieIndexDefinition.class);
+
+    when(metaClient.getIndexMetadata()).thenReturn(org.apache.hudi.common.util.Option.of(indexMetadata));
+    when(indexMetadata.getIndexDefinitions()).thenReturn(Collections.singletonMap("secondary_index_idx", indexDefinition));
+    when(indexDefinition.getIndexName()).thenReturn("secondary_index_idx");
+
+    HoodieCommitMetadata commitMetadata = new HoodieCommitMetadata();
+    commitMetadata.setOperationType(WriteOperationType.COMPACT);
+
+    ExposedSecondaryIndexer indexer = new ExposedSecondaryIndexer(engineContext, writeConfig, metaClient);
+    assertTrue(indexer.buildUpdate(
+        "015",
+        mock(HoodieBackedTableMetadata.class),
+        Lazy.lazily(() -> mock(HoodieTableFileSystemView.class)),
+        commitMetadata).isEmpty());
+  }
+
+  @Test
+  void testBuildCleanReturnsEmpty() {
+    ExposedSecondaryIndexer indexer = new ExposedSecondaryIndexer(
+        mock(HoodieEngineContext.class), mock(HoodieWriteConfig.class), mock(HoodieTableMetaClient.class));
+    assertTrue(indexer.buildClean("017", mock(HoodieCleanMetadata.class)).isEmpty());
   }
 
   private static class ExposedSecondaryIndexer extends SecondaryIndexer {

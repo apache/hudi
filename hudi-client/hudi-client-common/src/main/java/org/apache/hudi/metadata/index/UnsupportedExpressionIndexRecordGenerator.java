@@ -21,12 +21,14 @@ package org.apache.hudi.metadata.index;
 
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.EngineType;
+import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieIndexDefinition;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.exception.HoodieNotSupportedException;
+import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.model.FileInfoAndPartition;
 import org.apache.hudi.storage.StorageConfiguration;
 
@@ -50,7 +52,7 @@ public class UnsupportedExpressionIndexRecordGenerator implements ExpressionInde
   }
 
   @Override
-  public HoodieData<HoodieRecord> generate(
+  public HoodieData<HoodieRecord> buildInitialization(
       List<FileInfoAndPartition> filesToIndex,
       HoodieIndexDefinition indexDefinition,
       HoodieTableMetaClient metaClient,
@@ -61,6 +63,19 @@ public class UnsupportedExpressionIndexRecordGenerator implements ExpressionInde
       String instantTime) {
     if (metaClient.getTableConfig().getTableVersion().lesserThan(HoodieTableVersion.EIGHT)) {
       throw new HoodieNotSupportedException("Table version 7 and below does not support expression index");
+    }
+    throw new HoodieNotSupportedException(engineType + " engine does not support building expression index yet");
+  }
+
+  @Override
+  public HoodieData<HoodieRecord> buildUpdate(
+      HoodieTableMetaClient metaClient,
+      HoodieTableMetadata tableMetadata,
+      HoodieCommitMetadata commitMetadata,
+      String indexPartition,
+      String instantTime) {
+    if (metaClient.getTableConfig().getTableVersion().lesserThan(HoodieTableVersion.EIGHT)) {
+      throw new HoodieNotSupportedException("Table version 6 and below does not support expression index");
     }
     throw new HoodieNotSupportedException(engineType + " engine does not support building expression index yet");
   }

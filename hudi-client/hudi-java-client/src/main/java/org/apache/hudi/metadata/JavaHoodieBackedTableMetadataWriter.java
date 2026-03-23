@@ -33,12 +33,12 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.metadata.index.UnsupportedExpressionIndexRecordGenerator;
+import org.apache.hudi.metadata.index.model.IndexPartitionAndRecords;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.table.BulkInsertPartitioner;
 
 import java.util.Collections;
 import java.util.List;
-import java.util.Map;
 
 import static org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy.EAGER;
 
@@ -91,8 +91,8 @@ public class JavaHoodieBackedTableMetadataWriter extends HoodieBackedTableMetada
   }
 
   @Override
-  protected void commit(String instantTime, Map<String, HoodieData<HoodieRecord>> partitionRecordsMap) {
-    commitInternal(instantTime, partitionRecordsMap, false, Option.empty());
+  protected void commit(String instantTime, List<IndexPartitionAndRecords> partitionRecords) {
+    commitInternal(instantTime, partitionRecords, false, Option.empty());
   }
 
   @Override
@@ -107,7 +107,7 @@ public class JavaHoodieBackedTableMetadataWriter extends HoodieBackedTableMetada
 
   @Override
   protected void bulkCommit(String instantTime, String partitionPath, HoodieData<HoodieRecord> records, MetadataTableFileGroupIndexParser indexParser) {
-    commitInternal(instantTime, Collections.singletonMap(partitionPath, records), true, Option.of(new JavaHoodieMetadataBulkInsertPartitioner()));
+    commitInternal(instantTime, Collections.singletonList(IndexPartitionAndRecords.of(partitionPath, records)), true, Option.of(new JavaHoodieMetadataBulkInsertPartitioner()));
   }
 
   @Override
