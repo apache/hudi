@@ -485,7 +485,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     }).collect();
   }
 
-  private void performMergeValidationCheck(HoodieWriteConfig cfg, String instantTime, HoodieTable table,
+  private static void performMergeValidationCheck(HoodieWriteConfig cfg, String instantTime, HoodieTable table,
                                            String partitionPath, HoodieBaseFile baseFile,
                                            boolean expectCorruptedException) throws Exception {
     HoodieWriteMergeHandle handle = null;
