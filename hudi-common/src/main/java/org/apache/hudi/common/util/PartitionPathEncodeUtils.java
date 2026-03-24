@@ -56,6 +56,7 @@ public class PartitionPathEncodeUtils {
 
     charToEscapeFilename.set('_');
     charToEscapeFilename.set('-');
+    charToEscapeFilename.set('.');
   }
 
   static boolean needsEscaping(char c) {
