@@ -70,8 +70,9 @@ import org.apache.hudi.table.format.cdc.CdcInputFormat;
 import org.apache.hudi.table.format.mor.MergeOnReadInputSplit;
 import org.apache.hudi.util.AvroToRowDataConverters;
 import org.apache.hudi.util.FlinkWriteClients;
-import org.apache.hudi.util.RowDataProjection;
+import org.apache.hudi.util.HoodieSchemaConverter;
 import org.apache.hudi.util.StreamerUtil;
+import org.apache.hudi.util.RowDataProjection;
 
 import lombok.extern.slf4j.Slf4j;
 import org.apache.avro.generic.GenericRecord;
@@ -530,10 +531,8 @@ public class HoodieCdcSplitReaderFunction implements SplitReaderFunction<RowData
       this.tableSchema = tableSchema;
       this.maxCompactionMemoryInBytes = maxCompactionMemoryInBytes;
       this.imageManager = imageManager;
-      this.projection = requiredRowType.equals(tableSchema.getAvroSchema().getFields().size() == requiredRowType.getFieldCount()
-          ? requiredRowType : null)
-          ? null
-          : RowDataProjection.instance(requiredRowType, requiredPositions);
+      this.projection = HoodieSchemaConverter.convertToRowType(tableSchema).equals(requiredRowType)
+              ? null : RowDataProjection.instance(requiredRowType, requiredPositions);
       this.props = writeConfig.getProps();
       this.readerContext = new FlinkReaderContextFactory(metaClient).getContext();
       readerContext.initRecordMerger(props);
