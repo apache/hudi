@@ -66,7 +66,7 @@ public class HudiModule
         binder.bind(HudiTableProperties.class).in(Scopes.SINGLETON);
 
         binder.bind(ConnectorSplitManager.class).to(HudiSplitManager.class).in(Scopes.SINGLETON);
-        binder.bind(ConnectorPageSourceProvider.class).to(HudiPageSourceProvider.class).in(Scopes.SINGLETON);
+        binder.bind(ConnectorPageSourceProvider.class).to(HudiBenchmarkPageSourceProvider.class).in(Scopes.SINGLETON);
         binder.bind(ConnectorNodePartitioningProvider.class).to(HiveNodePartitioningProvider.class).in(Scopes.SINGLETON);
 
         configBinder(binder).bindConfig(ParquetReaderConfig.class);

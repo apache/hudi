@@ -226,7 +226,7 @@ public class MetadataBenchmarkingTool implements Closeable {
     @Parameter(names = {"--partition-filter", "-pf"}, description = "Partition filter predicate for querying (e.g., \"dt > '2020-01-01'\")")
     public String partitionFilter = "dt = '2025-01-01'";
 
-    @Parameter(names = {"--data-filter", "-pf"}, description = "data filter predicate for querying (e.g., \"age > 70\")")
+    @Parameter(names = {"--data-filter", "-df"}, description = "data filter predicate for querying (e.g., \"age > 70\")")
     public String dataFilters = "";
 
     @Parameter(names = {"--hoodie-conf"}, description = "Any configuration that can be set in the properties file "
@@ -408,6 +408,7 @@ public class MetadataBenchmarkingTool implements Closeable {
         .setTableName(tableName)
         .setPartitionFields(PARTITION_FIELDS)
         .setRecordKeyFields(RECORD_ID)
+        .setTableVersion(HoodieTableVersion.EIGHT)
         .initTable(engineContext.getStorageConf(), dataConfig.getBasePath());
   }
 
@@ -696,6 +697,7 @@ public class MetadataBenchmarkingTool implements Closeable {
     HoodieWriteConfig.Builder builder = HoodieWriteConfig.newBuilder().withPath(basePath)
         .withProperties(props)
         .forTable(TABLE_NAME)
+        .withWriteTableVersion(HoodieTableVersion.EIGHT.versionCode())
         .withMetadataConfig(HoodieMetadataConfig.newBuilder()
             .enable(true)
             .withMetadataIndexColumnStats(true)

@@ -477,6 +477,19 @@
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
             </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-dependency-plugin</artifactId>
+                <configuration>
+                    <ignoredUsedUndeclaredDependencies>
+                        <!-- jcommander is a transitive compile dep via hudi-hive-sync, used only in benchmarking tool -->
+                        <ignoredUsedUndeclaredDependency>com.beust:jcommander</ignoredUsedUndeclaredDependency>
+                    </ignoredUsedUndeclaredDependencies>
+                    <ignoredNonTestScopedDependencies>
+                        <ignoredNonTestScopedDependency>com.beust:jcommander</ignoredNonTestScopedDependency>
+                    </ignoredNonTestScopedDependencies>
+                </configuration>
+            </plugin>
         </plugins>
     </build>
 </project>

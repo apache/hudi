@@ -23,7 +23,6 @@ import io.trino.plugin.hive.parquet.ParquetReaderConfig;
 import io.trino.plugin.hudi.HudiConfig;
 import io.trino.plugin.hudi.HudiSessionProperties;
 import io.trino.plugin.hudi.query.index.HudiColumnStatsIndexSupport;
-import io.trino.plugin.hudi.storage.TrinoStorageConfiguration;
 import io.trino.spi.connector.ConnectorSession;
 import io.trino.spi.connector.SchemaTableName;
 import io.trino.spi.predicate.Domain;
@@ -32,6 +31,7 @@ import io.trino.spi.predicate.TupleDomain;
 import io.trino.spi.predicate.ValueSet;
 import io.trino.spi.type.Type;
 import io.trino.testing.TestingConnectorSession;
+import org.apache.hadoop.conf.Configuration;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
@@ -39,6 +39,7 @@ import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.metadata.HoodieTableMetadata;
+import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
 import org.apache.hudi.util.Lazy;
 
 import java.util.ArrayList;
@@ -47,9 +48,9 @@ import java.util.List;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
+import static io.trino.plugin.hudi.HudiUtil.getFileSystemView;
 import static io.trino.spi.type.BigintType.BIGINT;
 import static io.trino.spi.type.IntegerType.INTEGER;
-import static io.trino.plugin.hudi.HudiUtil.getFileSystemView;
 
 /**
  * Benchmarks the Trino column stats index (HudiColumnStatsIndexSupport) for file slice filtering.
@@ -86,18 +87,16 @@ public class TrinoBenchmarkingTool
 
         @Parameter(names = {"--filter", "-f"}, description = "Filter spec: col:RANGE:lo:hi or col:GT:val or col:LT:val or col:GTE:val or col:LTE:val or col:EQ:val. "
                 + "Examples: 'tenantID:RANGE:40000:50000', 'age:GT:70'. Repeat for multiple filters.")
-        public List<String> filters = ImmutableList.of("tenantID:RANGE:40000:50000");
+        public List<String> filters = new ArrayList<>(List.of("tenantID:RANGE:40000:50000"));
 
         @Parameter(names = {"--col-stats-wait-timeout-ms", "-timeout"}, description = "Timeout in ms for HudiColumnStatsIndexSupport async stats loading")
-        public long columnStatsWaitTimeoutMs = 1000;
+        public long columnStatsWaitTimeoutMs = 1000 * 10;
 
-        @Parameter(names = {"--timeout-sweep-ms"}, description = "Comma-separated list of timeouts to sweep (ms). Overrides --col-stats-wait-timeout-ms if set. "
-                + "Demonstrates trade-off: higher timeout = more files filtered (better skipping) but higher latency. "
-                + "Example: '100,500,1000,5000'")
+        @Parameter(names = "--timeout-sweep-ms", description = "Comma-separated list of timeouts to sweep (ms). Overrides --col-stats-wait-timeout-ms if set. Demonstrates trade-off: higher timeout = more files filtered (better skipping) but higher latency. Example: '100,500,1000,5000'")
         public String timeoutSweepMs = "";
 
         @Parameter(names = {"--warmup-runs", "-w"}, description = "Number of warm-up runs before measurement (discarded)")
-        public int warmupRuns = 3;
+        public int warmupRuns = 2;
 
         @Parameter(names = {"--measurement-runs", "-r"}, description = "Number of timed measurement runs")
         public int measurementRuns = 10;
@@ -106,7 +105,7 @@ public class TrinoBenchmarkingTool
         public boolean baseline = true;
 
         @Parameter(names = {"--help", "-h"}, help = true)
-        public boolean help = false;
+        public boolean help;
 
         public List<Long> getTimeoutsToRun()
         {
@@ -132,6 +131,7 @@ public class TrinoBenchmarkingTool
         final List<Long> perFileEvalTimesNs;
         final long heapUsedBeforeBytes;
         final long heapUsedAfterBytes;
+        final long totalFilterTimeNs;
 
         BenchmarkMetrics(long statsLoadAndFirstEvalNs, long totalFileSlices, long skippedFileSlices,
                 List<Long> perFileEvalTimesNs, long heapUsedBeforeBytes, long heapUsedAfterBytes)
@@ -142,6 +142,7 @@ public class TrinoBenchmarkingTool
             this.perFileEvalTimesNs = perFileEvalTimesNs;
             this.heapUsedBeforeBytes = heapUsedBeforeBytes;
             this.heapUsedAfterBytes = heapUsedAfterBytes;
+            this.totalFilterTimeNs = statsLoadAndFirstEvalNs + perFileEvalTimesNs.stream().mapToLong(Long::longValue).sum();
         }
 
         double skippingRatio()
@@ -157,7 +158,8 @@ public class TrinoBenchmarkingTool
         this.cfg = cfg;
     }
 
-    public static void main(String[] args) throws Exception
+    public static void main(String[] args)
+            throws Exception
     {
         Config cfg = new Config();
         JCommander cmd = JCommander.newBuilder().addObject(cfg).build();
@@ -171,7 +173,8 @@ public class TrinoBenchmarkingTool
         new TrinoBenchmarkingTool(cfg).run();
     }
 
-    public void run() throws Exception
+    public void run()
+            throws Exception
     {
         log.info("=== Trino Column Stats Index Benchmarking Tool ===");
         log.info("Table: %s", cfg.tableBasePath);
@@ -179,14 +182,14 @@ public class TrinoBenchmarkingTool
         log.info("Warm-up runs: %d, Measurement runs: %d", cfg.warmupRuns, cfg.measurementRuns);
 
         // Load metaClient once (shared across all runs)
-        TrinoStorageConfiguration storageConf = new TrinoStorageConfiguration();
+        HadoopStorageConfiguration storageConf = new HadoopStorageConfiguration(new Configuration());
         HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder()
                 .setConf(storageConf)
                 .setBasePath(cfg.tableBasePath)
                 .build();
 
         // Load tableMetadata once (shared across all runs)
-        HoodieEngineContext engineContext = new HoodieLocalEngineContext(metaClient.getStorage().getConf());
+        HoodieEngineContext engineContext = new HoodieLocalEngineContext(storageConf);
         HoodieMetadataConfig metadataConfig = HoodieMetadataConfig.newBuilder().enable(true).build();
         HoodieTableMetadata tableMetadata = HoodieTableMetadata.create(
                 engineContext, metaClient.getStorage(), metadataConfig, cfg.tableBasePath, true);
@@ -214,7 +217,7 @@ public class TrinoBenchmarkingTool
             log.info("\n--- Baseline (no column stats filtering) ---");
             runBenchmark("baseline", cfg.warmupRuns, cfg.measurementRuns, TupleDomain.all(),
                     schemaTableName, allSlices,
-                    () -> finalMetaClient, () -> finalTableMetadata, 0);
+                    () -> finalMetaClient, () -> finalTableMetadata, cfg.columnStatsWaitTimeoutMs);
         }
 
         // Run benchmark for each timeout value
@@ -326,18 +329,36 @@ public class TrinoBenchmarkingTool
         double avgSkipped = results.stream().mapToDouble(BenchmarkMetrics::skippingRatio).average().orElse(0);
         long avgSkippedCount = (long) results.stream().mapToLong(m -> m.skippedFileSlices).average().orElse(0);
 
+        // Total filter time (stats load + all per-file evals)
+        List<Long> totalFilterTimes = results.stream()
+                .map(m -> m.totalFilterTimeNs)
+                .sorted()
+                .collect(Collectors.toList());
+        long avgTotalFilterMs = (long) totalFilterTimes.stream().mapToLong(Long::longValue).average().orElse(0) / 1_000_000;
+        long minTotalFilterMs = totalFilterTimes.get(0) / 1_000_000;
+        long maxTotalFilterMs = totalFilterTimes.get(totalFilterTimes.size() - 1) / 1_000_000;
+        long p95TotalFilterMs = totalFilterTimes.get((int) (totalFilterTimes.size() * 0.95)) / 1_000_000;
+        long p99TotalFilterMs = totalFilterTimes.get((int) (totalFilterTimes.size() * 0.99)) / 1_000_000;
+
         // Memory
         long avgHeapDeltaMb = (long) results.stream()
                 .mapToLong(m -> m.heapUsedAfterBytes - m.heapUsedBeforeBytes)
                 .average().orElse(0) / (1024 * 1024);
 
-        log.info("[%s] Stats load (incl. first eval):  avg=%dms  min=%dms  max=%dms  p95=%dms  p99=%dms",
-                label, avgStatsLoadMs, minStatsLoadMs, maxStatsLoadMs, p95StatsLoadMs, p99StatsLoadMs);
-        log.info("[%s] Per-file eval (remaining files): avg=%dns  p95=%dns  p99=%dns",
-                label, avgPerFileNs, p95PerFileNs, p99PerFileNs);
-        log.info("[%s] Skipping ratio:                  avg=%.2f%%  (avg %d/%d file slices skipped)",
-                label, avgSkipped, avgSkippedCount, totalSlices);
-        log.info("[%s] Heap delta:                      avg=%dMB", label, avgHeapDeltaMb);
+        String separator = "=".repeat(70);
+        log.info(separator);
+        log.info("  TRINO BENCHMARK SUMMARY [%s]", label);
+        log.info(separator);
+        log.info("  Total filterFileSlices time:     avg=%dms  min=%dms  max=%dms  p95=%dms  p99=%dms",
+                avgTotalFilterMs, minTotalFilterMs, maxTotalFilterMs, p95TotalFilterMs, p99TotalFilterMs);
+        log.info("  Stats load (incl. first eval):  avg=%dms  min=%dms  max=%dms  p95=%dms  p99=%dms",
+                avgStatsLoadMs, minStatsLoadMs, maxStatsLoadMs, p95StatsLoadMs, p99StatsLoadMs);
+        log.info("  Per-file eval (remaining files): avg=%dns  p95=%dns  p99=%dns",
+                avgPerFileNs, p95PerFileNs, p99PerFileNs);
+        log.info("  Skipping ratio:                  avg=%.2f%%  (avg %d/%d file slices skipped)",
+                avgSkipped, avgSkippedCount, totalSlices);
+        log.info("  Heap delta:                      avg=%dMB", avgHeapDeltaMb);
+        log.info(separator);
     }
 
     /**
@@ -383,8 +404,9 @@ public class TrinoBenchmarkingTool
     }
 
     /**
-     * Builds a TupleDomain<String> predicate from a list of filter specs.
-     * Format: col:RANGE:lo:hi | col:GT:val | col:GTE:val | col:LT:val | col:LTE:val | col:EQ:val
+     * Builds a {@code TupleDomain<String>} predicate from a list of filter specs.
+     *
+     * <p>Format: col:RANGE:lo:hi | col:GT:val | col:GTE:val | col:LT:val | col:LTE:val | col:EQ:val
      */
     private TupleDomain<String> buildPredicate(List<String> filterSpecs)
     {
