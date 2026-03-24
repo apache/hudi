@@ -451,7 +451,8 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
     }
 
     // for a fresh table, lets defer RLI initialization
-    if (this.enabledPartitionTypes.contains(RECORD_INDEX) && dataMetaClient.getActiveTimeline().filterCompletedInstants().countInstants() == 0) {
+    if (dataWriteConfig.getMetadataConfig().shouldDeferRliInitForFreshTable() && this.enabledPartitionTypes.contains(RECORD_INDEX)
+        && dataMetaClient.getActiveTimeline().filterCompletedInstants().countInstants() == 0) {
       this.enabledPartitionTypes.remove(RECORD_INDEX);
       partitionsToInit.remove(RECORD_INDEX);
     }

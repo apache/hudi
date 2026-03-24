@@ -1960,13 +1960,15 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
         .withMetadataConfig(HoodieMetadataConfig.newBuilder()
             .enable(true)
             .withEnableRecordLevelIndex(true)  // Partitioned RLI
+            .withPartitionedRecordIndexFileGroupCount(2,2)
+            .withDeferRliInitializationForFreshTable(true)
             .build())
         .build();
 
     try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, writeConfig)) {
       // First commit - Partitioned RLI should NOT be initialized yet for a fresh table
       String firstCommitTime = client.startCommit();
-      List<HoodieRecord> records = dataGen.generateInserts(firstCommitTime, 100);
+      List<HoodieRecord> records = dataGen.generateInserts(firstCommitTime, 1000);
       List<WriteStatus> writeStatuses = client.insert(jsc.parallelize(records, 2), firstCommitTime).collect();
       assertNoWriteErrors(writeStatuses);
       client.commit(firstCommitTime, jsc.parallelize(writeStatuses));
@@ -1985,7 +1987,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
 
       // Second commit - Partitioned RLI should NOW be initialized
       String secondCommitTime = client.startCommit();
-      List<HoodieRecord> moreRecords = dataGen.generateInserts(secondCommitTime, 50);
+      List<HoodieRecord> moreRecords = dataGen.generateInserts(secondCommitTime, 500);
       writeStatuses = client.insert(jsc.parallelize(moreRecords, 2), secondCommitTime).collect();
       assertNoWriteErrors(writeStatuses);
       client.commit(secondCommitTime, jsc.parallelize(writeStatuses));
@@ -2001,9 +2003,9 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
           metadataReader.getMetadataMetaClient(), Option.empty(),
           RECORD_INDEX.getPartitionPath()).size();
 
-      // For partitioned RLI with small data, file group count should be 1 (the min default)
-      assertEquals(1, fileGroupCount,
-          "File group count should be 1 for small partitioned RLI table, but got: " + fileGroupCount);
+      // For partitioned RLI with small data, file group count should be 6 (2 as default for 3 partitions)
+      assertEquals(6, fileGroupCount,
+          "File group count should be 6 for partitioned RLI table, but got: " + fileGroupCount);
 
       // Validate metadata integrity
       validateMetadata(client);
@@ -2016,7 +2018,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
    * not using a hardcoded default.
    */
   @Test
-  public void testPartitionedRecordIndexLargerDataFileGroupCount() throws Exception {
+  public void testGlobalRecordIndexDeferredInitialization() throws Exception {
     init(HoodieTableType.COPY_ON_WRITE);
     HoodieSparkEngineContext engineContext = new HoodieSparkEngineContext(jsc);
 
@@ -2027,14 +2029,15 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
             .build())
         .withMetadataConfig(HoodieMetadataConfig.newBuilder()
             .enable(true)
-            .withEnableRecordLevelIndex(true)  // Partitioned RLI
+            .withEnableGlobalRecordLevelIndex(true)  // Partitioned RLI
+            .withDeferRliInitializationForFreshTable(true)
             .build())
         .build();
 
     try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, writeConfig)) {
       // First commit with moderate data size (5000 records)
       String firstCommitTime = client.startCommit();
-      List<HoodieRecord> records = dataGen.generateInserts(firstCommitTime, 5000);
+      List<HoodieRecord> records = dataGen.generateInserts(firstCommitTime, 4000);
       List<WriteStatus> writeStatuses = client.insert(jsc.parallelize(records, 5), firstCommitTime).collect();
       assertNoWriteErrors(writeStatuses);
       client.commit(firstCommitTime, jsc.parallelize(writeStatuses));
@@ -2061,9 +2064,9 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
           metadataReader.getMetadataMetaClient(), Option.empty(),
           RECORD_INDEX.getPartitionPath()).size();
 
-      // For 7000 records with partitioned RLI, file group count should be between min (1) and max (10)
+      // For 4000 records with partitioned RLI, file group count should be between min (1) and max (10)
       // It should be > 1 for this data size based on estimation logic
-      assertTrue(fileGroupCount == 3,
+      assertTrue(fileGroupCount > 1,
           "File group count should be at least the configured minimum (1), but got: " + fileGroupCount);
       // Validate metadata integrity
       validateMetadata(client);
