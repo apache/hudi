@@ -19,6 +19,7 @@
 package org.apache.hudi.sync.common.util;
 
 import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.schema.HoodieSchemaType;
 
 /**
@@ -30,14 +31,63 @@ public class SparkSchemaUtils {
 
   public static String convertToSparkSchemaJson(HoodieSchema schema) {
     String fieldsJsonString = schema.getFields().stream().map(field -> {
-      String metadata = "{}";
-      if (field.getNonNullSchema().isBlobField()) {
-        metadata = String.format("{\"%s\":\"%s\"}", HoodieSchema.TYPE_METADATA_FIELD, HoodieSchemaType.BLOB.name());
-      }
       return "{\"name\":\"" + field.name() + "\",\"type\":" + convertFieldType(field.getNonNullSchema())
-                + ",\"nullable\":" + field.isNullable() + ",\"metadata\":" + metadata + "}";
+                + ",\"nullable\":" + field.isNullable() + ",\"metadata\":" + toMetadataJson(field) + "}";
     }).reduce((a, b) -> a + "," + b).orElse("");
     return "{\"type\":\"struct\",\"fields\":[" + fieldsJsonString + "]}";
+  }
+
+  private static String toMetadataJson(HoodieSchemaField field) {
+    StringBuilder builder = new StringBuilder("{");
+    int idx = 0;
+    if (field.doc().isPresent() && !field.doc().get().isEmpty()) {
+      String doc = field.doc().get();
+      if (!doc.startsWith(HoodieSchemaField.METADATA_DOC_PREFIX)) {
+        idx++;
+        builder.append(String.format("\"%s\":\"%s\"", "comment", escapeJson(doc)));
+      }
+    }
+    if (field.getNonNullSchema().isBlobField()) {
+      if (idx > 0) {
+        builder.append(',');
+      }
+      builder.append(String.format("\"%s\":\"%s\"", HoodieSchema.TYPE_METADATA_FIELD, HoodieSchemaType.BLOB.name()));
+    }
+    builder.append("}");
+    return builder.toString();
+  }
+
+  private static String escapeJson(String value) {
+    StringBuilder escaped = new StringBuilder(value.length());
+    for (int i = 0; i < value.length(); i++) {
+      char c = value.charAt(i);
+      switch (c) {
+        case '\\':
+          escaped.append("\\\\");
+          break;
+        case '"':
+          escaped.append("\\\"");
+          break;
+        case '\b':
+          escaped.append("\\b");
+          break;
+        case '\f':
+          escaped.append("\\f");
+          break;
+        case '\n':
+          escaped.append("\\n");
+          break;
+        case '\r':
+          escaped.append("\\r");
+          break;
+        case '\t':
+          escaped.append("\\t");
+          break;
+        default:
+          escaped.append(c);
+      }
+    }
+    return escaped.toString();
   }
 
   private static String convertFieldType(HoodieSchema originalFieldSchema) {

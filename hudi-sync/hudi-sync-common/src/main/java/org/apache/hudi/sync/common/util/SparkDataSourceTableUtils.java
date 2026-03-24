@@ -33,8 +33,13 @@ import java.util.Map;
 public class SparkDataSourceTableUtils {
   /**
    * Get Spark Sql related table properties. This is used for spark datasource table.
-   * @param schema  The schema to write to the table.
-   * @return A new parameters added the spark's table properties.
+   *
+   * @param partitionNames List of partition field names
+   * @param sparkVersion Spark version
+   * @param schemaLengthThreshold Schema length threshold
+   * @param schema Hoodie schema with field docs
+   *
+   * @return Map of Spark table properties
    */
   public static Map<String, String> getSparkTableProperties(List<String> partitionNames, String sparkVersion,
                                                             int schemaLengthThreshold, HoodieSchema schema) {
