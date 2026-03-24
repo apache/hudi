@@ -25,9 +25,8 @@ import org.mockito.MockedStatic;
 import org.mockito.Mockito;
 
 import static org.apache.hudi.util.FlinkClientUtil.FLINK_HADOOP_CONFIG_PREFIX;
-import static org.mockito.ArgumentMatchers.anyString;
-
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.mockito.ArgumentMatchers.anyString;
 
 /**
  * Test cases for {@link FlinkClientUtil}

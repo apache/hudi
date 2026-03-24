@@ -18,9 +18,10 @@
 
 package org.apache.hudi.source.reader;
 
+import org.apache.hudi.source.split.HoodieSourceSplit;
+
 import org.apache.flink.api.connector.source.SourceOutput;
 import org.apache.flink.connector.base.source.reader.RecordEmitter;
-import org.apache.hudi.source.split.HoodieSourceSplit;
 
 import java.io.Serializable;
 

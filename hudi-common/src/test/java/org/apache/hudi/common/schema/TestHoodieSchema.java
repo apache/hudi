@@ -21,6 +21,7 @@ package org.apache.hudi.common.schema;
 import org.apache.hudi.common.schema.HoodieSchema.VariantLogicalType;
 import org.apache.hudi.common.schema.HoodieSchema.VectorLogicalType;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieAvroSchemaException;
 import org.apache.hudi.internal.schema.HoodieSchemaException;
 
@@ -31,8 +32,6 @@ import org.apache.avro.Schema;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
-
-import org.apache.hudi.common.util.collection.Pair;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;

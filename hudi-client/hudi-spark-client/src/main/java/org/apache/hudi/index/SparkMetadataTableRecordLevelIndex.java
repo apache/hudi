@@ -33,9 +33,9 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.data.HoodieJavaPairRDD;
 import org.apache.hudi.data.HoodieJavaRDD;
+import org.apache.hudi.metadata.BucketizedMetadataTableFileGroupIndexParser;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.metadata.MetadataPartitionType;
-import org.apache.hudi.metadata.BucketizedMetadataTableFileGroupIndexParser;
 import org.apache.hudi.table.HoodieTable;
 
 import org.apache.spark.api.java.JavaRDD;

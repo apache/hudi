@@ -26,10 +26,10 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodiePreCommitValidatorConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.testutils.HoodieClientTestBase;
-import org.junit.jupiter.api.Assertions;
-import org.junit.jupiter.api.Test;
 
 import org.apache.spark.api.java.JavaRDD;
+import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.Test;
 
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
 

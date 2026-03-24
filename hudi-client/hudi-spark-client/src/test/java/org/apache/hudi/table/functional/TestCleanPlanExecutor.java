@@ -20,8 +20,8 @@ package org.apache.hudi.table.functional;
 
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieFileStatus;
-import org.apache.hudi.client.WriteClientTestUtils;
 import org.apache.hudi.client.SparkRDDWriteClient;
+import org.apache.hudi.client.WriteClientTestUtils;
 import org.apache.hudi.common.HoodieCleanStat;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.model.BootstrapFileMapping;

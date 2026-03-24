@@ -38,7 +38,6 @@ import org.apache.hudi.common.table.read.DeleteContext;
 import org.apache.hudi.common.table.read.UpdateProcessor;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.DefaultSizeEstimator;
-import org.apache.hudi.io.util.FileIOUtils;
 import org.apache.hudi.common.util.InternalSchemaCache;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
@@ -49,6 +48,7 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.internal.schema.action.InternalSchemaMerger;
 import org.apache.hudi.internal.schema.convert.InternalSchemaConverter;
+import org.apache.hudi.io.util.FileIOUtils;
 
 import java.io.IOException;
 import java.io.Serializable;

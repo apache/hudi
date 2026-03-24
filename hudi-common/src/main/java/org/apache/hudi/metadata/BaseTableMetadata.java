@@ -42,8 +42,8 @@ import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
-import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.storage.StoragePathFilter;
+import org.apache.hudi.storage.StoragePathInfo;
 
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;

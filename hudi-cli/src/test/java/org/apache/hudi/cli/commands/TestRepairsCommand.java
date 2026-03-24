@@ -40,8 +40,8 @@ import org.apache.hudi.common.util.PartitionPathEncodeUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.keygen.SimpleKeyGenerator;
-import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.HoodieStorageUtils;
+import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.testutils.Assertions;
 
 import org.apache.avro.generic.GenericRecord;

@@ -33,8 +33,8 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.TableNotFoundException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.metadata.HoodieTableMetadata;
-import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.HoodieStorageUtils;
+import org.apache.hudi.storage.StorageConfiguration;
 
 import com.beust.jcommander.JCommander;
 import com.beust.jcommander.Parameter;

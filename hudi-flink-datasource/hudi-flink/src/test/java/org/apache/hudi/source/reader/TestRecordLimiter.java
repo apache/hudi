@@ -19,7 +19,6 @@
 package org.apache.hudi.source.reader;
 
 import org.apache.flink.connector.base.source.reader.RecordsWithSplitIds;
-
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;

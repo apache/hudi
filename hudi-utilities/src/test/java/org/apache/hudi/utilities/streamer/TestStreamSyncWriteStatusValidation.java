@@ -24,10 +24,11 @@ import org.apache.hudi.testutils.SparkClientFunctionalTestHarness;
 
 import org.apache.spark.api.java.JavaRDD;
 import org.junit.jupiter.api.Test;
-import scala.Tuple2;
 
 import java.util.ArrayList;
 import java.util.List;
+
+import scala.Tuple2;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 

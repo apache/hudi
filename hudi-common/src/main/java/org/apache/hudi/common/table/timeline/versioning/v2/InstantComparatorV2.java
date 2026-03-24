@@ -19,8 +19,8 @@
 package org.apache.hudi.common.table.timeline.versioning.v2;
 
 import org.apache.hudi.common.table.timeline.HoodieInstant;
-import org.apache.hudi.common.table.timeline.InstantComparator;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.timeline.InstantComparator;
 import org.apache.hudi.common.table.timeline.versioning.common.InstantComparators;
 
 import java.io.Serializable;

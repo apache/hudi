@@ -18,15 +18,10 @@
 
 package org.apache.hudi.source;
 
-import org.apache.flink.annotation.VisibleForTesting;
-import org.apache.flink.configuration.Configuration;
-import org.apache.flink.core.fs.Path;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
-import org.apache.hudi.source.split.assign.HoodieSplitAssigner;
-import org.apache.hudi.source.split.assign.HoodieSplitAssigners;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.source.enumerator.HoodieContinuousSplitEnumerator;
@@ -44,15 +39,20 @@ import org.apache.hudi.source.split.HoodieSourceSplitSerializer;
 import org.apache.hudi.source.split.HoodieSourceSplitState;
 import org.apache.hudi.source.split.HoodieSplitProvider;
 import org.apache.hudi.source.split.SerializableComparator;
+import org.apache.hudi.source.split.assign.HoodieSplitAssigner;
+import org.apache.hudi.source.split.assign.HoodieSplitAssigners;
+import org.apache.hudi.util.FileIndexReader;
 
+import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.api.connector.source.Boundedness;
 import org.apache.flink.api.connector.source.Source;
 import org.apache.flink.api.connector.source.SourceReader;
 import org.apache.flink.api.connector.source.SourceReaderContext;
 import org.apache.flink.api.connector.source.SplitEnumerator;
 import org.apache.flink.api.connector.source.SplitEnumeratorContext;
+import org.apache.flink.configuration.Configuration;
+import org.apache.flink.core.fs.Path;
 import org.apache.flink.core.io.SimpleVersionedSerializer;
-import org.apache.hudi.util.FileIndexReader;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

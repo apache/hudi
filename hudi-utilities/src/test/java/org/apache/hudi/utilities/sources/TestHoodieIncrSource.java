@@ -18,7 +18,6 @@
 
 package org.apache.hudi.utilities.sources;
 
-import com.codahale.metrics.MetricRegistry;
 import org.apache.hudi.BaseHoodieTableFileIndex;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteClientTestUtils;
@@ -67,6 +66,7 @@ import org.apache.hudi.utilities.streamer.HoodieStreamerMetrics;
 import org.apache.hudi.utilities.streamer.SourceProfile;
 import org.apache.hudi.utilities.streamer.SourceProfileSupplier;
 
+import com.codahale.metrics.MetricRegistry;
 import org.apache.spark.SparkConf;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;

@@ -20,10 +20,10 @@
 package org.apache.hudi.utilities.sources.helpers;
 
 import org.apache.hudi.common.schema.HoodieSchema;
-import org.apache.hudi.io.util.FileIOUtils;
 import org.apache.hudi.exception.HoodieAvroSchemaException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
+import org.apache.hudi.io.util.FileIOUtils;
 import org.apache.hudi.utilities.testutils.SanitizationTestUtils;
 
 import org.apache.hadoop.fs.FileSystem;

@@ -18,8 +18,9 @@
 
 package org.apache.hudi.source.split.assign;
 
-import org.apache.flink.runtime.state.KeyGroupRangeAssignment;
 import org.apache.hudi.source.split.HoodieSourceSplit;
+
+import org.apache.flink.runtime.state.KeyGroupRangeAssignment;
 
 /**
  * Default implementation of {@link HoodieSplitAssigner} that assigns Hoodie

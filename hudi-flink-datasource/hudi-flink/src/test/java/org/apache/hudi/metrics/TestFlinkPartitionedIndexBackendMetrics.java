@@ -20,7 +20,6 @@ package org.apache.hudi.metrics;
 
 import org.apache.flink.metrics.Histogram;
 import org.apache.flink.metrics.groups.UnregisteredMetricsGroup;
-
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 

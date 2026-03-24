@@ -18,7 +18,6 @@
 
 package org.apache.hudi.util;
 
-import org.apache.flink.configuration.Configuration;
 import org.apache.hudi.common.model.BaseFile;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieFileGroupId;
@@ -36,6 +35,8 @@ import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.table.format.FilePathUtils;
 import org.apache.hudi.table.format.mor.MergeOnReadInputSplit;
+
+import org.apache.flink.configuration.Configuration;
 
 import java.io.Serializable;
 import java.util.Collections;

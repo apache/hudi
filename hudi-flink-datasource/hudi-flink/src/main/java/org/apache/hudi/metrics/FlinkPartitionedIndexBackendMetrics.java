@@ -18,11 +18,12 @@
 
 package org.apache.hudi.metrics;
 
+import org.apache.hudi.common.util.VisibleForTesting;
+
 import com.codahale.metrics.SlidingWindowReservoir;
 import org.apache.flink.dropwizard.metrics.DropwizardHistogramWrapper;
 import org.apache.flink.metrics.Histogram;
 import org.apache.flink.metrics.MetricGroup;
-import org.apache.hudi.common.util.VisibleForTesting;
 
 /**
  * Metrics for the {@link org.apache.hudi.sink.partitioner.index.RecordLevelIndexBackend}.

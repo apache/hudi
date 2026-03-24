@@ -19,6 +19,7 @@
 package org.apache.hudi.sink.compact.handler;
 
 import org.apache.hudi.sink.compact.CompactionPlanEvent;
+
 import org.apache.flink.metrics.MetricGroup;
 import org.apache.flink.streaming.api.operators.Output;
 import org.apache.flink.streaming.runtime.streamrecord.StreamRecord;

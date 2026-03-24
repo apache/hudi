@@ -18,7 +18,6 @@
 
 package org.apache.hudi.source.reader.function;
 
-import org.apache.flink.configuration.Configuration;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieFileGroupId;
@@ -33,12 +32,13 @@ import org.apache.hudi.source.ExpressionPredicates;
 import org.apache.hudi.source.reader.BatchRecords;
 import org.apache.hudi.source.reader.HoodieRecordWithPosition;
 import org.apache.hudi.source.split.HoodieSourceSplit;
-
-import org.apache.flink.connector.base.source.reader.RecordsWithSplitIds;
-import org.apache.flink.table.data.RowData;
 import org.apache.hudi.table.format.FormatUtils;
 import org.apache.hudi.table.format.InternalSchemaManager;
 import org.apache.hudi.util.StreamerUtil;
+
+import org.apache.flink.configuration.Configuration;
+import org.apache.flink.connector.base.source.reader.RecordsWithSplitIds;
+import org.apache.flink.table.data.RowData;
 
 import java.io.IOException;
 import java.util.Collections;

@@ -18,7 +18,6 @@
 
 package org.apache.hudi.table.format.cdc;
 
-import lombok.Getter;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
@@ -28,6 +27,7 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.table.format.FormatUtils;
 import org.apache.hudi.table.format.mor.MergeOnReadInputSplit;
 
+import lombok.Getter;
 import org.apache.flink.core.memory.DataInputView;
 import org.apache.flink.core.memory.DataOutputView;
 import org.apache.flink.table.data.RowData;

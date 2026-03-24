@@ -18,20 +18,20 @@
 
 package org.apache.hudi.source.reader;
 
+import org.apache.hudi.common.util.Option;
+import org.apache.hudi.metrics.FlinkStreamReadMetrics;
+import org.apache.hudi.source.reader.function.SplitReaderFunction;
+import org.apache.hudi.source.split.HoodieSourceSplit;
+import org.apache.hudi.source.split.SerializableComparator;
+
 import org.apache.flink.api.connector.source.SourceReaderContext;
 import org.apache.flink.connector.base.source.reader.RecordsBySplits;
 import org.apache.flink.connector.base.source.reader.RecordsWithSplitIds;
 import org.apache.flink.connector.base.source.reader.splitreader.SplitReader;
 import org.apache.flink.connector.base.source.reader.splitreader.SplitsAddition;
 import org.apache.flink.connector.base.source.reader.splitreader.SplitsChange;
-import org.apache.hudi.common.util.Option;
-import org.apache.hudi.metrics.FlinkStreamReadMetrics;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import org.apache.hudi.source.reader.function.SplitReaderFunction;
-import org.apache.hudi.source.split.HoodieSourceSplit;
-import org.apache.hudi.source.split.SerializableComparator;
 
 import java.io.IOException;
 import java.util.ArrayDeque;

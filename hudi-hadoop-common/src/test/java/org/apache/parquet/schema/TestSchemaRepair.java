@@ -20,6 +20,7 @@
 package org.apache.parquet.schema;
 
 import org.apache.hudi.common.util.Option;
+
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;

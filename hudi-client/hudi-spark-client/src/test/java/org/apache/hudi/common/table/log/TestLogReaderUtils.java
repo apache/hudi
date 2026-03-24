@@ -20,6 +20,7 @@
 package org.apache.hudi.common.table.log;
 
 import org.apache.hudi.client.SparkRDDWriteClient;
+import org.apache.hudi.client.WriteClientTestUtils;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.timeline.versioning.v2.TimelineArchiverV2;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
@@ -38,7 +39,6 @@ import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
-import org.apache.hudi.client.WriteClientTestUtils;
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness;
 
 import org.apache.spark.api.java.JavaRDD;
