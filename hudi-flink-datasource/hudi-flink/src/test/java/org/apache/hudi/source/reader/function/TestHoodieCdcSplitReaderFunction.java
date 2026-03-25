@@ -39,7 +39,9 @@ import java.io.File;
 import java.util.ArrayList;
 import java.util.Collections;
 
-import static org.apache.hudi.utils.TestConfigurations.*;
+import static org.apache.hudi.utils.TestConfigurations.ROW_DATA_TYPE;
+import static org.apache.hudi.utils.TestConfigurations.ROW_TYPE;
+import static org.apache.hudi.utils.TestConfigurations.TABLE_SCHEMA;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.mock;
@@ -72,7 +74,9 @@ public class TestHoodieCdcSplitReaderFunction {
         conf,
         tableState,
         internalSchemaManager,
-        ROW_DATA_TYPE.getChildren());
+        ROW_DATA_TYPE.getChildren(),
+        Collections.emptyList(),
+            false);
   }
 
   // -------------------------------------------------------------------------
@@ -98,7 +102,9 @@ public class TestHoodieCdcSplitReaderFunction {
         conf,
         tableState,
         internalSchemaManager,
-        ROW_DATA_TYPE.getChildren());
+        ROW_DATA_TYPE.getChildren(),
+        Collections.emptyList(),
+            false);
 
     assertNotNull(function);
   }
@@ -109,7 +115,9 @@ public class TestHoodieCdcSplitReaderFunction {
         conf,
         tableState,
         internalSchemaManager,
-        Collections.emptyList());
+        Collections.emptyList(),
+        Collections.emptyList(),
+            false);
 
     assertNotNull(function);
   }

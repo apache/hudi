@@ -28,6 +28,7 @@ import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaCache;
 import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -55,6 +56,7 @@ import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
+import org.apache.hudi.source.ExpressionPredicates;
 import org.apache.hudi.source.reader.BatchRecords;
 import org.apache.hudi.source.reader.HoodieRecordWithPosition;
 import org.apache.hudi.source.split.HoodieCdcSourceSplit;
@@ -62,8 +64,9 @@ import org.apache.hudi.source.split.HoodieSourceSplit;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StoragePath;
-import org.apache.hudi.table.format.FlinkReaderContextFactory;
 import org.apache.hudi.table.format.FormatUtils;
+import org.apache.hudi.table.format.FilePathUtils;
+import org.apache.hudi.table.format.FlinkReaderContextFactory;
 import org.apache.hudi.table.format.InternalSchemaManager;
 import org.apache.hudi.table.format.RecordIterators;
 import org.apache.hudi.table.format.cdc.CdcInputFormat;
@@ -95,6 +98,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.TreeMap;
 import java.util.function.Function;
@@ -117,6 +121,8 @@ public class HoodieCdcSplitReaderFunction implements SplitReaderFunction<RowData
   private final InternalSchemaManager internalSchemaManager;
   private final List<DataType> fieldTypes;
   private final MergeOnReadTableState tableState;
+  private final boolean emitDelete;
+  private final List<ExpressionPredicates.Predicate> predicates;
   private transient HoodieTableMetaClient metaClient;
   private transient HoodieWriteConfig writeConfig;
   private transient org.apache.hadoop.conf.Configuration hadoopConf;
@@ -131,16 +137,22 @@ public class HoodieCdcSplitReaderFunction implements SplitReaderFunction<RowData
    * @param tableState            Merge on Read table state
    * @param internalSchemaManager Schema-evolution manager
    * @param fieldTypes            DataType list for all table fields (used for parquet reading)
+   * @param predicates            Predicates for push down
+   * @param emitDelete            Whether to emit delete
    */
   public HoodieCdcSplitReaderFunction(
       org.apache.flink.configuration.Configuration conf,
       MergeOnReadTableState tableState,
       InternalSchemaManager internalSchemaManager,
-      List<DataType> fieldTypes) {
+      List<DataType> fieldTypes,
+      List<ExpressionPredicates.Predicate> predicates,
+      boolean emitDelete) {
     this.conf = conf;
     this.tableState = tableState;
     this.internalSchemaManager = internalSchemaManager;
     this.fieldTypes = fieldTypes;
+    this.predicates = predicates;
+    this.emitDelete = emitDelete;
   }
 
   @Override
@@ -197,8 +209,8 @@ public class HoodieCdcSplitReaderFunction implements SplitReaderFunction<RowData
           HoodieSchema.parse(tableState.getRequiredSchema()),
           internalSchemaManager,
           conf.get(FlinkOptions.MERGE_TYPE),
-          Collections.emptyList(),
-          false);
+          predicates,
+          emitDelete);
     }
     return fallbackReaderFunction;
   }
@@ -283,13 +295,13 @@ public class HoodieCdcSplitReaderFunction implements SplitReaderFunction<RowData
   /** Reads the full-schema before/after image for a file slice (emitDelete=false). */
   private ClosableIterator<RowData> getFileSliceIterator(MergeOnReadInputSplit split) {
     FileSlice fileSlice = buildFileSlice(split);
-    final HoodieSchema tableSchema = HoodieSchema.parse(tableState.getTableSchema());
+    final HoodieSchema tableSchema = HoodieSchemaCache.intern(HoodieSchema.parse(tableState.getTableSchema()));
     try {
       HoodieFileGroupReader<RowData> reader = FormatUtils.createFileGroupReader(
           getMetaClient(), getWriteConfig(), internalSchemaManager, fileSlice,
           tableSchema, tableSchema, split.getLatestCommit(),
           FlinkOptions.REALTIME_PAYLOAD_COMBINE, false,
-          Collections.emptyList(), split.getInstantRange());
+          predicates, split.getInstantRange());
       return reader.getClosableIterator();
     } catch (IOException e) {
       throw new HoodieIOException("Failed to create file slice iterator for split: " + split, e);
@@ -299,13 +311,13 @@ public class HoodieCdcSplitReaderFunction implements SplitReaderFunction<RowData
   /** Reads a single log file and returns a typed {@link HoodieRecord} iterator (for LOG_FILE CDC inference). */
   private ClosableIterator<HoodieRecord<RowData>> getFileSliceHoodieRecordIterator(MergeOnReadInputSplit split) {
     FileSlice fileSlice = buildFileSlice(split);
-    final HoodieSchema tableSchema = HoodieSchema.parse(tableState.getTableSchema());
+    final HoodieSchema tableSchema = HoodieSchemaCache.intern(HoodieSchema.parse(tableState.getTableSchema()));
     try {
       HoodieFileGroupReader<RowData> reader = FormatUtils.createFileGroupReader(
           getMetaClient(), getWriteConfig(), internalSchemaManager, fileSlice,
           tableSchema, tableSchema, split.getLatestCommit(),
           FlinkOptions.REALTIME_PAYLOAD_COMBINE, true,
-          Collections.emptyList(), split.getInstantRange());
+          predicates, split.getInstantRange());
       return reader.getClosableHoodieRecordIterator();
     } catch (IOException e) {
       throw new HoodieIOException("Failed to create Hoodie record iterator for split: " + split, e);
@@ -316,6 +328,15 @@ public class HoodieCdcSplitReaderFunction implements SplitReaderFunction<RowData
   private ClosableIterator<RowData> getBaseFileIterator(String path) throws IOException {
     String[] fieldNames = tableState.getRowType().getFieldNames().toArray(new String[0]);
     DataType[] fieldTypesArray = fieldTypes.toArray(new DataType[0]);
+    LinkedHashMap<String, Object> partObjects = FilePathUtils.generatePartitionSpecs(
+            path,
+            tableState.getRowType().getFieldNames(),
+            fieldTypes,
+            conf.get(FlinkOptions.PARTITION_DEFAULT_NAME),
+            conf.get(FlinkOptions.PARTITION_PATH_FIELD),
+            conf.get(FlinkOptions.HIVE_STYLE_PARTITIONING)
+    );
+
     return RecordIterators.getParquetRecordIterator(
         internalSchemaManager,
         conf.get(FlinkOptions.READ_UTC_TIMEZONE),
@@ -323,13 +344,13 @@ public class HoodieCdcSplitReaderFunction implements SplitReaderFunction<RowData
         HadoopConfigurations.getParquetConf(conf, getHadoopConf()),
         fieldNames,
         fieldTypesArray,
-        Collections.emptyMap(),
+        partObjects,
         tableState.getRequiredPositions(),
         2048,
         new org.apache.flink.core.fs.Path(path),
         0,
         Long.MAX_VALUE,
-        Collections.emptyList());
+        predicates);
   }
 
   private static FileSlice buildFileSlice(MergeOnReadInputSplit split) {
