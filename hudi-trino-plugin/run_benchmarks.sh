@@ -16,30 +16,73 @@ set -euo pipefail
 # CONFIG — edit these before running
 # =============================================================================
 
-# Root of the hudi repo
+# Root of the hudi repo (auto-detected; override if needed)
 HUDI_REPO="$(cd "$(dirname "$0")/.." && pwd)"
 
-# Where to write/read the synthetic Hudi table
-TABLE_BASE_PATH="/tmp/hudi_bench_table"
+# Local path where the synthetic Hudi table will be written (bootstrap) or read from (skip bootstrap).
+TABLE_BASE_PATH="/tmp/hudi_bench_table_500K"
 
-NUM_FILES=10000                   # Total data files across all partitions
-NUM_COLS_TO_INDEX=2               # 1 = tenantID only; 2 = tenantID + age
-V2_FILE_SLICE_PROCESSING_MS=10    # simulated time (ms) spent processing each file slice
-V2_COL_STATS_TIMEOUT="2s"         # column_stats_wait_timeout session property
-V2_PARTITION_FILTER=true          # true = restrict query to datePartition = '2025-01-01'
+# Total stub parquet files to create across all partitions.
+NUM_FILES=500000
 
-SKIP_BOOTSTRAP=false              # Set to true to skip bootstrap and reuse an existing table
+# Number of columns to index in the column stats metadata partition.
+# 1 = tenantID only; 2 = tenantID + age. More columns → larger MDT, slower index build.
+NUM_COLS_TO_INDEX=1
 
-# --- Bootstrap (MetadataBenchmarkingTool) ---
-NUM_PARTITIONS=3                  # Date partitions (2025-01-01, 2025-01-02, …)
-COL_STATS_FG_COUNT=200            # File groups for the column_stats metadata partition
-SPARK_HOME="$HOME/Applications/spark-3.5.3-bin-hadoop3/"  # Path to Spark installation
+# Range of tenantID values distributed across files (tenantID min = 30000, max = 30000 + TENANT_ID_RANGE).
+# Wider range = more files survive the tenantID filter (lower pruning efficiency).
+TENANT_ID_RANGE=3000000
+
+# Simulated processing time per file-slice split in TrinoBenchmarkToolV2 (milliseconds).
+# Models the real cost of opening a Parquet footer per split. Higher = amplifies the speedup signal.
+FILE_SLICE_PROCESSING_MS=10
+
+# Trino session property: max time to wait for the column stats index lookup before falling back
+# to scanning all splits. Increase if the MDT read is timing out on large tables.
+COL_STATS_TIMEOUT="2s"
+
+# ----- Query filters (used by TrinoBenchmarkToolV2) -----
+# Data filter applied to a non-partition column to exercise column-stats pruning.
+# Passed as col/op/val to avoid single-quote stripping by Maven exec.args parsing.
+# op: EQ | GT | GTE | LT | LTE | RANGE  (RANGE: DATA_FILTER_VAL = "lo,hi")
+DATA_FILTER_COL="tenantID"
+DATA_FILTER_OP="EQ"
+DATA_FILTER_VAL="35000"
+
+# Partition pruning filter applied to the "dt" partition column (format: YYYY-MM-DD).
+# Passed as separate start/end args — Java builds the quoted SQL predicate internally.
+# Leave PARTITION_START empty to run without a partition filter.
+PARTITION_START="2025-01-01"
+PARTITION_END="2025-01-31"
+
+# Extra Hoodie config passed to MetadataBenchmarkingTool via --hoodie-conf.
+# Format: key=value. Repeat the variable (and the --hoodie-conf flag) for multiple configs.
+HOODIE_CONF="hoodie.metadata.file.cache.max.size.mb=200"
+
+# Set to true to skip the Spark bootstrap step and reuse the table already at TABLE_BASE_PATH.
+SKIP_BOOTSTRAP=false
+
+# ----- Bootstrap settings (MetadataBenchmarkingTool / Spark) -----
+
+# Number of date partitions to create (one per day starting 2025-01-01).
+# More partitions = finer partition pruning granularity but larger MDT FILES partition.
+NUM_PARTITIONS=365
+
+# Number of file groups for the column_stats metadata partition.
+# More file groups = more parallelism when reading MDT, but higher metadata overhead.
+COL_STATS_FG_COUNT=1
+
+# Path to a local Spark installation used to run MetadataBenchmarkingTool.
+SPARK_HOME="$HOME/Applications/spark-3.5.3-bin-hadoop3/"
 SPARK_MASTER="local[*]"
 
-# --- Trino query benchmarks (TrinoBenchmarkToolV2) ---
-V2_FILTERS="--filter tenantID:RANGE:40000:50000"  # col:RANGE:lo:hi | col:GT/GTE/LT/LTE/EQ:val
-V2_WARMUP_RUNS=2
-V2_MEASUREMENT_RUNS=5
+# ----- Trino benchmark settings (TrinoBenchmarkToolV2) -----
+
+# Warm-up query runs before measurement (results discarded). Lets the JIT and caches stabilise.
+WARMUP_RUNS=1
+
+# Number of timed query executions per scenario (col-stats ON and col-stats OFF).
+MEASUREMENT_RUNS=5
 
 # =============================================================================
 # Helpers
@@ -107,16 +150,22 @@ else
     log "   files=$NUM_FILES  partitions=$NUM_PARTITIONS  cols=$NUM_COLS_TO_INDEX  fg=$COL_STATS_FG_COUNT"
     log "==================================================================="
 
+    # Reference:
+    # spark-submit --class org.apache.hudi.utilities.benchmarking.MetadataBenchmarkingTool <bundle.jar> \
+    #   --mode BOOTSTRAP --table-base-path <path> --num-files-to-bootstrap <n> \
+    #   --num-partitions <n> --num-cols-to-index <n> --col-stats-file-group-count <n>
     "$SPARK_SUBMIT" \
         --class org.apache.hudi.utilities.benchmarking.MetadataBenchmarkingTool \
         --master "$SPARK_MASTER" \
         "$BUNDLE_JAR" \
         --mode BOOTSTRAP \
         --table-base-path "$TABLE_BASE_PATH" \
-        --num-files "$NUM_FILES" \
+        --num-files-to-bootstrap "$NUM_FILES" \
         --num-partitions "$NUM_PARTITIONS" \
         --num-cols-to-index "$NUM_COLS_TO_INDEX" \
-        --col-stats-file-group-count "$COL_STATS_FG_COUNT"
+        --col-stats-file-group-count "$COL_STATS_FG_COUNT" \
+        --tenant-id-range "$TENANT_ID_RANGE" \
+        --hoodie-conf "$HOODIE_CONF"
 
     log "Bootstrap complete."
 fi
@@ -127,18 +176,18 @@ fi
 
 log "==================================================================="
 log " TRINO QUERY BENCHMARK — table=$TABLE_BASE_PATH"
-log "   filters=$V2_FILTERS  timeout=$V2_COL_STATS_TIMEOUT"
-log "   warmup=$V2_WARMUP_RUNS  runs=$V2_MEASUREMENT_RUNS"
-log "   partition-filter=$V2_PARTITION_FILTER  file-slice-processing-ms=$V2_FILE_SLICE_PROCESSING_MS"
+log "   data-filter=$DATA_FILTER_COL:$DATA_FILTER_OP:$DATA_FILTER_VAL  partition=$PARTITION_START..$PARTITION_END  tenant-id-range=$TENANT_ID_RANGE"
+log "   timeout=$COL_STATS_TIMEOUT  warmup=$WARMUP_RUNS  runs=$MEASUREMENT_RUNS"
+log "   file-slice-processing-ms=$FILE_SLICE_PROCESSING_MS"
 log "==================================================================="
 
 V2_EXEC_ARGS="--table-base-path $TABLE_BASE_PATH"
-V2_EXEC_ARGS="$V2_EXEC_ARGS $V2_FILTERS"
-V2_EXEC_ARGS="$V2_EXEC_ARGS --col-stats-timeout $V2_COL_STATS_TIMEOUT"
-V2_EXEC_ARGS="$V2_EXEC_ARGS --warmup-runs $V2_WARMUP_RUNS"
-V2_EXEC_ARGS="$V2_EXEC_ARGS --measurement-runs $V2_MEASUREMENT_RUNS"
-V2_EXEC_ARGS="$V2_EXEC_ARGS --file-slice-processing-ms $V2_FILE_SLICE_PROCESSING_MS"
-[[ "$V2_PARTITION_FILTER" == "true" ]] && V2_EXEC_ARGS="$V2_EXEC_ARGS --partition-filter"
+[[ -n "$DATA_FILTER_COL" ]] && V2_EXEC_ARGS="$V2_EXEC_ARGS --data-filter-col $DATA_FILTER_COL --data-filter-op $DATA_FILTER_OP --data-filter-val $DATA_FILTER_VAL"
+[[ -n "$PARTITION_START" ]] && V2_EXEC_ARGS="$V2_EXEC_ARGS --partition-start $PARTITION_START --partition-end $PARTITION_END"
+V2_EXEC_ARGS="$V2_EXEC_ARGS --col-stats-timeout $COL_STATS_TIMEOUT"
+V2_EXEC_ARGS="$V2_EXEC_ARGS --warmup-runs $WARMUP_RUNS"
+V2_EXEC_ARGS="$V2_EXEC_ARGS --measurement-runs $MEASUREMENT_RUNS"
+V2_EXEC_ARGS="$V2_EXEC_ARGS --file-slice-processing-ms $FILE_SLICE_PROCESSING_MS"
 
 log "Compiling test classes..."
 (cd "$TRINO_PLUGIN_DIR" && JAVA_HOME="$JAVA_HOME_23" ./mvnw test-compile -q -Dcheckstyle.skip=true)

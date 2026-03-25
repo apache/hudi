@@ -93,9 +93,23 @@ public class TrinoBenchmarkToolV2
         @Parameter(names = {"--table-name", "-tn"}, description = "Table name (must match the name used during bootstrap)")
         public String tableName = "test_mdt_stats_tbl";
 
-        @Parameter(names = {"--filter", "-f"}, description = "Filter spec: col:RANGE:lo:hi | col:GT:val | col:GTE:val | col:LT:val | col:LTE:val | col:EQ:val. "
-                + "Repeat for multiple columns. Example: 'tenantID:RANGE:40000:50000'")
-        public List<String> filters = new ArrayList<>(List.of("tenantID:RANGE:40000:50000"));
+        // Data filter: col:op:val or col:op:lo:hi — same format as MetadataBenchmarkingTool.
+        // Using structured params (not raw SQL) avoids single-quote stripping by Maven exec.args.
+        @Parameter(names = {"--data-filter-col", "-dfc"}, description = "Column to filter on (e.g. tenantID, age)")
+        public String dataFilterCol = "";
+
+        @Parameter(names = {"--data-filter-op", "-dfo"}, description = "Comparison operator: EQ, GT, GTE, LT, LTE, RANGE")
+        public String dataFilterOp = "";
+
+        @Parameter(names = {"--data-filter-val", "-dfv"}, description = "Filter value (for RANGE supply lo,hi separated by comma)")
+        public String dataFilterVal = "";
+
+        // Partition filter: supply start/end date strings (YYYY-MM-DD); SQL quoting is handled internally.
+        @Parameter(names = {"--partition-start", "-ps"}, description = "Partition range start date, inclusive (e.g. 2025-01-01)")
+        public String partitionStart = "";
+
+        @Parameter(names = {"--partition-end", "-pe"}, description = "Partition range end date, inclusive (e.g. 2025-01-31)")
+        public String partitionEnd = "";
 
         @Parameter(names = {"--col-stats-timeout", "-cst"}, description = "Value for the hudi.column_stats_wait_timeout session property (e.g. '10s')")
         public String colStatsTimeout = "2s";
@@ -108,9 +122,6 @@ public class TrinoBenchmarkToolV2
 
         @Parameter(names = {"--file-slice-processing-ms", "-fspm"}, description = "Simulated time spent processing each file slice in milliseconds (sets HudiBenchmarkPageSourceProvider.SLEEP_MS)")
         public long fileSliceProcessingMs = 10;
-
-        @Parameter(names = {"--partition-filter", "-pf"}, description = "If enabled, adds a partition filter predicate to the query (default: datePartition = '2025-01-01')")
-        public boolean partitionFilter;
 
         @Parameter(names = {"--help", "-h"}, help = true)
         public boolean help;
@@ -141,12 +152,14 @@ public class TrinoBenchmarkToolV2
     public void run()
             throws Exception
     {
-        String sqlFilter = buildSqlFilter(cfg.filters);
+        String sqlFilter = buildDataFilter(cfg.dataFilterCol, cfg.dataFilterOp, cfg.dataFilterVal);
 
-        if (cfg.partitionFilter) {
-            String partitionFilterClause = "datePartition = '2025-01-01'";
-            sqlFilter = sqlFilter.isEmpty() ? partitionFilterClause : sqlFilter + " AND " + partitionFilterClause;
-            log.info("Partition filter enabled: %s", partitionFilterClause);
+        if (!cfg.partitionStart.isEmpty() && !cfg.partitionEnd.isEmpty()) {
+            String partitionFilter = cfg.partitionStart.equals(cfg.partitionEnd)
+                    ? "dt = '" + cfg.partitionStart + "'"
+                    : "dt >= '" + cfg.partitionStart + "' AND dt <= '" + cfg.partitionEnd + "'";
+            sqlFilter = sqlFilter.isEmpty() ? partitionFilter : sqlFilter + " AND " + partitionFilter;
+            log.info("Partition filter: %s", partitionFilter);
         }
 
         String sql = "SELECT COUNT(*) FROM hudi.tests." + cfg.tableName
@@ -215,33 +228,22 @@ public class TrinoBenchmarkToolV2
         }
     }
 
-    private String buildSqlFilter(List<String> filterSpecs)
+    private static String buildDataFilter(String col, String op, String val)
     {
-        return filterSpecs.stream()
-                .map(this::specToSql)
-                .collect(Collectors.joining(" AND "));
-    }
-
-    private String specToSql(String spec)
-    {
-        String[] parts = spec.split(":");
-        String col = parts[0];
-        String op = parts[1].toUpperCase();
-        switch (op) {
-            case "RANGE":
-                return col + " BETWEEN " + parts[2] + " AND " + parts[3];
-            case "GT":
-                return col + " > " + parts[2];
-            case "GTE":
-                return col + " >= " + parts[2];
-            case "LT":
-                return col + " < " + parts[2];
-            case "LTE":
-                return col + " <= " + parts[2];
-            case "EQ":
-                return col + " = " + parts[2];
-            default:
-                throw new IllegalArgumentException("Unknown filter op: " + op + " in spec: " + spec);
+        if (col.isEmpty() || op.isEmpty() || val.isEmpty()) {
+            return "";
+        }
+        switch (op.toUpperCase()) {
+            case "EQ": return col + " = " + val;
+            case "GT": return col + " > " + val;
+            case "GTE": return col + " >= " + val;
+            case "LT": return col + " < " + val;
+            case "LTE": return col + " <= " + val;
+            case "RANGE": {
+                String[] parts = val.split(",", 2);
+                return col + " BETWEEN " + parts[0].trim() + " AND " + parts[1].trim();
+            }
+            default: throw new IllegalArgumentException("Unknown data-filter-op: " + op);
         }
     }
 
@@ -308,7 +310,7 @@ public class TrinoBenchmarkToolV2
                 new Column("event_time", HIVE_STRING, Optional.empty(), Map.of()));
 
         private static final List<Column> PARTITION_COLUMNS = ImmutableList.of(
-                new Column("datePartition", HIVE_STRING, Optional.empty(), Map.of()));
+                new Column("dt", HIVE_STRING, Optional.empty(), Map.of()));
 
         private final String tableBasePath;
         private final String tableName;

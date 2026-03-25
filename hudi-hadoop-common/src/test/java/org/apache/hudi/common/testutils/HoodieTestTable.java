@@ -149,7 +149,7 @@ import static org.apache.hudi.common.util.StringUtils.EMPTY_STRING;
 @Slf4j
 public class HoodieTestTable implements AutoCloseable {
 
-  public static final String PHONY_TABLE_SCHEMA =
+  public static String PHONY_TABLE_SCHEMA =
       "{\"namespace\": \"org.apache.hudi.avro.model\", \"type\": \"record\", \"name\": \"PhonyRecord\", \"fields\": []}";
   private static final Random RANDOM = new Random();
 
