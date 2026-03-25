@@ -253,6 +253,23 @@
         <groupId>org.apache.rat</groupId>
         <artifactId>apache-rat-plugin</artifactId>
       </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-surefire-plugin</artifactId>
+        <configuration>
+          <!-- Exclude problematic tests that will be run separately -->
+          <excludes>
+            <exclude>**/TestSparkHoodieHBaseIndex.java</exclude>
+            <exclude>**/TestHoodieSparkMergeOnReadTableRollback.java</exclude>
+            <exclude>**/TestHoodieBackedMetadata.java</exclude>
+            <exclude>**/TestHoodieSparkCopyOnWriteTableArchiveWithReplace.java</exclude>
+            <exclude>**/TestHoodieClientOnCopyOnWriteStorage.java</exclude>
+            <exclude>**/TestSavepointRestoreMergeOnRead.java</exclude>
+            <exclude>**/TestHoodieIndex.java</exclude>
+            <exclude>**/TestConsistentBucketIndex.java</exclude>
+          </excludes>
+        </configuration>
+      </plugin>
     </plugins>
 
     <resources>
@@ -264,4 +281,31 @@
       </resource>
     </resources>
   </build>
+
+  <profiles>
+    <!-- Profile to run ONLY the isolated tests -->
+    <profile>
+      <id>isolated-tests</id>
+      <build>
+        <plugins>
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-surefire-plugin</artifactId>
+            <configuration combine.self="override">
+              <includes>
+                <include>**/TestSparkHoodieHBaseIndex.java</include>
+                <include>**/TestHoodieSparkMergeOnReadTableRollback.java</include>
+                <include>**/TestHoodieBackedMetadata.java</include>
+                <include>**/TestHoodieSparkCopyOnWriteTableArchiveWithReplace.java</include>
+                <include>**/TestHoodieClientOnCopyOnWriteStorage.java</include>
+                <include>**/TestSavepointRestoreMergeOnRead.java</include>
+                <include>**/TestHoodieIndex.java</include>
+                <include>**/TestConsistentBucketIndex.java</include>
+              </includes>
+            </configuration>
+          </plugin>
+        </plugins>
+      </build>
+    </profile>
+  </profiles>
 </project>
