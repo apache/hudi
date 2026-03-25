@@ -48,6 +48,7 @@ public class HoodieAvroParquetWriter
   private final String instantTime;
   private final TaskContextSupplier taskContextSupplier;
   private final boolean populateMetaFields;
+  private final boolean[] populateField;
   private final HoodieAvroWriteSupport writeSupport;
 
   @SuppressWarnings({"unchecked", "rawtypes"})
@@ -56,21 +57,39 @@ public class HoodieAvroParquetWriter
                                  String instantTime,
                                  TaskContextSupplier taskContextSupplier,
                                  boolean populateMetaFields) throws IOException {
+    this(file, parquetConfig, instantTime, taskContextSupplier, populateMetaFields, null);
+  }
+
+  @SuppressWarnings({"unchecked", "rawtypes"})
+  public HoodieAvroParquetWriter(StoragePath file,
+                                 HoodieParquetConfig<HoodieAvroWriteSupport> parquetConfig,
+                                 String instantTime,
+                                 TaskContextSupplier taskContextSupplier,
+                                 boolean populateMetaFields,
+                                 boolean[] populateField) throws IOException {
     super(file, (HoodieParquetConfig) parquetConfig);
     this.fileName = file.getName();
     this.writeSupport = parquetConfig.getWriteSupport();
     this.instantTime = instantTime;
     this.taskContextSupplier = taskContextSupplier;
     this.populateMetaFields = populateMetaFields;
+    this.populateField = populateField;
   }
 
   @Override
   public void writeAvroWithMetadata(HoodieKey key, IndexedRecord avroRecord) throws IOException {
     if (populateMetaFields) {
-      prepRecordWithMetadata(key, avroRecord, instantTime,
-          taskContextSupplier.getPartitionIdSupplier().get(), getWrittenRecordCount(), fileName);
+      if (populateField != null) {
+        prepRecordWithMetadata(key, avroRecord, instantTime,
+            taskContextSupplier.getPartitionIdSupplier().get(), getWrittenRecordCount(), fileName, populateField);
+      } else {
+        prepRecordWithMetadata(key, avroRecord, instantTime,
+            taskContextSupplier.getPartitionIdSupplier().get(), getWrittenRecordCount(), fileName);
+      }
       super.write(avroRecord);
-      writeSupport.add(key.getRecordKey());
+      if (populateField == null || populateField[2]) {
+        writeSupport.add(key.getRecordKey());
+      }
     } else {
       super.write(avroRecord);
     }
@@ -79,7 +98,7 @@ public class HoodieAvroParquetWriter
   @Override
   public void writeAvro(String key, IndexedRecord object) throws IOException {
     super.write(object);
-    if (populateMetaFields) {
+    if (populateMetaFields && (populateField == null || populateField[2])) {
       writeSupport.add(key);
     }
   }

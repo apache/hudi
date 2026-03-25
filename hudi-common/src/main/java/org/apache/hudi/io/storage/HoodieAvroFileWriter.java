@@ -56,4 +56,30 @@ public interface HoodieAvroFileWriter extends HoodieFileWriter {
     HoodieAvroUtils.addHoodieKeyToRecord((GenericRecord) avroRecord, key.getRecordKey(), key.getPartitionPath(), fileName);
     HoodieAvroUtils.addCommitMetadataToRecord((GenericRecord) avroRecord, instantTime, seqId);
   }
+
+  /**
+   * Selectively populates meta fields based on the provided boolean flags.
+   * Each flag corresponds to a meta field ordinal: [0]=commit_time, [1]=commit_seqno,
+   * [2]=record_key, [3]=partition_path, [4]=file_name.
+   */
+  default void prepRecordWithMetadata(HoodieKey key, IndexedRecord avroRecord, String instantTime,
+      Integer partitionId, long recordIndex, String fileName, boolean[] populateField) {
+    GenericRecord rec = (GenericRecord) avroRecord;
+    if (populateField[0]) {
+      rec.put(HoodieRecord.COMMIT_TIME_METADATA_FIELD, instantTime);
+    }
+    if (populateField[1]) {
+      String seqId = HoodieRecord.generateSequenceId(instantTime, partitionId, recordIndex);
+      rec.put(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD, seqId);
+    }
+    if (populateField[2]) {
+      rec.put(HoodieRecord.RECORD_KEY_METADATA_FIELD, key.getRecordKey());
+    }
+    if (populateField[3]) {
+      rec.put(HoodieRecord.PARTITION_PATH_METADATA_FIELD, key.getPartitionPath());
+    }
+    if (populateField[4]) {
+      rec.put(HoodieRecord.FILENAME_METADATA_FIELD, fileName);
+    }
+  }
 }

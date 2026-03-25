@@ -324,6 +324,16 @@ public class HoodieTableConfig extends HoodieConfig {
       .withDocumentation("When enabled, populates all meta fields. When disabled, no meta fields are populated "
           + "and incremental queries will not be functional. This is only meant to be used for append only/immutable data for batch processing");
 
+  public static final ConfigProperty<String> META_FIELDS_TO_EXCLUDE = ConfigProperty
+      .key("hoodie.meta.fields.to.exclude")
+      .noDefaultValue()
+      .markAdvanced()
+      .withDocumentation("Comma-separated list of Hudi meta field names to exclude from population. "
+          + "Excluded fields remain in the schema but are written as empty strings. "
+          + "Valid values: _hoodie_commit_time, _hoodie_commit_seqno, _hoodie_record_key, "
+          + "_hoodie_partition_path, _hoodie_file_name. Only effective when "
+          + "hoodie.populate.meta.fields is true.");
+
   public static final ConfigProperty<String> KEY_GENERATOR_CLASS_NAME = ConfigProperty
       .key("hoodie.table.keygenerator.class")
       .noDefaultValue()

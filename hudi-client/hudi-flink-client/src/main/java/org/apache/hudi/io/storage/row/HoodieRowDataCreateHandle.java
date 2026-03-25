@@ -77,6 +77,7 @@ public class HoodieRowDataCreateHandle implements Serializable {
   private final String fileId;
   private final boolean preserveHoodieMetadata;
   private final boolean skipMetadataWrite;
+  private final boolean[] populateField;
   private final HoodieStorage storage;
   protected final WriteStatus writeStatus;
   private final HoodieRecordLocation newRecordLocation;
@@ -100,6 +101,7 @@ public class HoodieRowDataCreateHandle implements Serializable {
     this.newRecordLocation = new HoodieRecordLocation(instantTime, fileId);
     this.preserveHoodieMetadata = preserveHoodieMetadata;
     this.skipMetadataWrite = skipMetadataWrite;
+    this.populateField = writeConfig.getMetaFieldPopulationFlags();
     this.currTimer = HoodieTimer.start();
     this.storage = table.getStorage();
     this.path = makeNewPath(partitionPath);
@@ -143,13 +145,17 @@ public class HoodieRowDataCreateHandle implements Serializable {
       String commitInstant;
       RowData rowData;
       if (!skipMetadataWrite) {
-        seqId = preserveHoodieMetadata
-            ? record.getString(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD_ORD).toString()
-            : HoodieRecord.generateSequenceId(instantTime, taskPartitionId, SEQGEN.getAndIncrement());
-        commitInstant = preserveHoodieMetadata
-            ? record.getString(HoodieRecord.COMMIT_TIME_METADATA_FIELD_ORD).toString()
-            : instantTime;
-        rowData = HoodieRowDataCreation.create(commitInstant, seqId, recordKey, partitionPath, path.getName(),
+        commitInstant = populateField[0]
+            ? (preserveHoodieMetadata ? record.getString(HoodieRecord.COMMIT_TIME_METADATA_FIELD_ORD).toString() : instantTime)
+            : null;
+        seqId = populateField[1]
+            ? (preserveHoodieMetadata ? record.getString(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD_ORD).toString()
+                : HoodieRecord.generateSequenceId(instantTime, taskPartitionId, SEQGEN.getAndIncrement()))
+            : null;
+        String effectiveRecordKey = populateField[2] ? recordKey : null;
+        String effectivePartitionPath = populateField[3] ? partitionPath : null;
+        String effectiveFileName = populateField[4] ? path.getName() : null;
+        rowData = HoodieRowDataCreation.create(commitInstant, seqId, effectiveRecordKey, effectivePartitionPath, effectiveFileName,
             record, writeConfig.allowOperationMetadataField(), preserveHoodieMetadata);
       } else {
         rowData = record;

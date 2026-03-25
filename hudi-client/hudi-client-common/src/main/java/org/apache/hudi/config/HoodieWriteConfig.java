@@ -45,6 +45,7 @@ import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodiePreWriteCleanerPolicy;
 import org.apache.hudi.common.model.HoodieFileFormat;
+import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieTableType;
@@ -104,6 +105,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -1772,6 +1774,43 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public boolean populateMetaFields() {
     return getBooleanOrDefault(HoodieTableConfig.POPULATE_META_FIELDS);
+  }
+
+  public Set<String> getMetaFieldsToExclude() {
+    String value = getString(HoodieTableConfig.META_FIELDS_TO_EXCLUDE);
+    if (value == null || value.trim().isEmpty()) {
+      return Collections.emptySet();
+    }
+    Set<String> excluded = new HashSet<>();
+    for (String field : value.split(",")) {
+      String trimmed = field.trim();
+      if (!trimmed.isEmpty()) {
+        excluded.add(trimmed);
+      }
+    }
+    return excluded;
+  }
+
+  /**
+   * Returns a boolean[5] indexed by meta field ordinal.
+   * true = populate this meta field, false = write empty string.
+   */
+  public boolean[] getMetaFieldPopulationFlags() {
+    boolean[] flags = new boolean[5];
+    if (!populateMetaFields()) {
+      return flags; // all false
+    }
+    Set<String> excluded = getMetaFieldsToExclude();
+    if (excluded.isEmpty()) {
+      Arrays.fill(flags, true);
+      return flags;
+    }
+    flags[0] = !excluded.contains(HoodieRecord.COMMIT_TIME_METADATA_FIELD);
+    flags[1] = !excluded.contains(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD);
+    flags[2] = !excluded.contains(HoodieRecord.RECORD_KEY_METADATA_FIELD);
+    flags[3] = !excluded.contains(HoodieRecord.PARTITION_PATH_METADATA_FIELD);
+    flags[4] = !excluded.contains(HoodieRecord.FILENAME_METADATA_FIELD);
+    return flags;
   }
 
   /**

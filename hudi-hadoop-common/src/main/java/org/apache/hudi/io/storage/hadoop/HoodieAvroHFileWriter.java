@@ -74,6 +74,7 @@ public class HoodieAvroHFileWriter
   private final String instantTime;
   private final TaskContextSupplier taskContextSupplier;
   private final boolean populateMetaFields;
+  private final boolean[] populateField;
   private final Option<HoodieSchemaField> keyFieldSchema;
   private HFileWriter writer;
   private String minRecordKey;
@@ -82,6 +83,12 @@ public class HoodieAvroHFileWriter
 
   public HoodieAvroHFileWriter(String instantTime, StoragePath file, HoodieHFileConfig hfileConfig, HoodieSchema schema,
                                TaskContextSupplier taskContextSupplier, boolean populateMetaFields) throws IOException {
+    this(instantTime, file, hfileConfig, schema, taskContextSupplier, populateMetaFields, null);
+  }
+
+  public HoodieAvroHFileWriter(String instantTime, StoragePath file, HoodieHFileConfig hfileConfig, HoodieSchema schema,
+                               TaskContextSupplier taskContextSupplier, boolean populateMetaFields,
+                               boolean[] populateField) throws IOException {
     Configuration conf = HadoopFSUtils.registerFileSystem(file, (Configuration) hfileConfig.getStorageConf().unwrap());
     this.file = HoodieWrapperFileSystem.convertToHoodiePath(file, conf);
     FileSystem fs = this.file.getFileSystem(conf);
@@ -98,6 +105,7 @@ public class HoodieAvroHFileWriter
     this.instantTime = instantTime;
     this.taskContextSupplier = taskContextSupplier;
     this.populateMetaFields = populateMetaFields;
+    this.populateField = populateField;
 
     HFileContext context = new HFileContext.Builder()
         .blockSize(hfileConfig.getBlockSize())
@@ -115,8 +123,13 @@ public class HoodieAvroHFileWriter
   @Override
   public void writeAvroWithMetadata(HoodieKey key, IndexedRecord avroRecord) throws IOException {
     if (populateMetaFields) {
-      prepRecordWithMetadata(key, avroRecord, instantTime,
-          taskContextSupplier.getPartitionIdSupplier().get(), RECORD_INDEX_COUNT.getAndIncrement(), file.getName());
+      if (populateField != null) {
+        prepRecordWithMetadata(key, avroRecord, instantTime,
+            taskContextSupplier.getPartitionIdSupplier().get(), RECORD_INDEX_COUNT.getAndIncrement(), file.getName(), populateField);
+      } else {
+        prepRecordWithMetadata(key, avroRecord, instantTime,
+            taskContextSupplier.getPartitionIdSupplier().get(), RECORD_INDEX_COUNT.getAndIncrement(), file.getName());
+      }
       writeAvro(key.getRecordKey(), avroRecord);
     } else {
       writeAvro(key.getRecordKey(), avroRecord);

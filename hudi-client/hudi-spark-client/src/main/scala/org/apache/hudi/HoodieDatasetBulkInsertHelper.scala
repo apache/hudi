@@ -110,11 +110,13 @@ object HoodieDatasetBulkInsertHelper
                 sparkKeyGenerator
               }
 
+          val populateField = config.getMetaFieldPopulationFlags
+
           iter.map { row =>
             // auto generate record keys if needed
             val metaFields = new Array[UTF8String](5)
-            metaFields(2) = keyGenerator.getRecordKey(row, schema)
-            metaFields(3) = keyGenerator.getPartitionPath(row, schema)
+            metaFields(2) = if (populateField(2)) keyGenerator.getRecordKey(row, schema) else null
+            metaFields(3) = if (populateField(3)) keyGenerator.getPartitionPath(row, schema) else null
             metaFields(0) = UTF8String.EMPTY_UTF8
             metaFields(1) = UTF8String.EMPTY_UTF8
             metaFields(4) = UTF8String.EMPTY_UTF8
