@@ -74,19 +74,29 @@ public class RocksDBDAO {
   @Getter(AccessLevel.PACKAGE)
   private final String rocksDBBasePath;
   private final transient ConcurrentHashMap<String, CustomSerializer<?>> columnFamilySerializers;
+  private transient WriteOptions defaultWriteOptions;
+  private final boolean disableWALForWrites;
   @Getter
   private long totalBytesWritten;
 
   public RocksDBDAO(String basePath, String rocksDBBasePath) {
-    this(basePath, rocksDBBasePath, new ConcurrentHashMap<>());
+    this(basePath, rocksDBBasePath, new ConcurrentHashMap<>(), false);
   }
 
   public RocksDBDAO(String basePath,
                     String rocksDBBasePath,
                     ConcurrentHashMap<String, CustomSerializer<?>> columnFamilySerializers) {
+    this(basePath, rocksDBBasePath, columnFamilySerializers, false);
+  }
+
+  public RocksDBDAO(String basePath,
+                    String rocksDBBasePath,
+                    ConcurrentHashMap<String, CustomSerializer<?>> columnFamilySerializers,
+                    boolean disableWAL) {
     this.rocksDBBasePath =
         String.format("%s/%s/%s", rocksDBBasePath, URI.create(basePath).getPath().replace(":","").replace("/", "_"), UUID.randomUUID());
     this.columnFamilySerializers = columnFamilySerializers;
+    this.disableWALForWrites = disableWAL;
     init();
     totalBytesWritten = 0L;
   }
@@ -133,6 +143,7 @@ public class RocksDBDAO {
       final List<ColumnFamilyHandle> managedHandles = new ArrayList<>(managedColumnFamilies.size());
       FileIOUtils.mkdir(new File(rocksDBBasePath));
       rocksDB = RocksDB.open(dbOptions, rocksDBBasePath, managedColumnFamilies, managedHandles);
+      defaultWriteOptions = new WriteOptions().setDisableWAL(disableWALForWrites);
 
       ValidationUtils.checkArgument(managedHandles.size() == managedColumnFamilies.size(),
           "Unexpected number of handles are returned");
@@ -182,7 +193,7 @@ public class RocksDBDAO {
   public void writeBatch(BatchHandler handler) {
     try (WriteBatch batch = new WriteBatch()) {
       handler.apply(batch);
-      getRocksDB().write(new WriteOptions(), batch);
+      getRocksDB().write(defaultWriteOptions, batch);
     } catch (RocksDBException re) {
       throw new HoodieException(re);
     }
@@ -237,25 +248,7 @@ public class RocksDBDAO {
   public <T extends Serializable> void put(String columnFamilyName, String key, T value) {
     try {
       byte[] payload = serializePayload(columnFamilyName, value);
-      getRocksDB().put(managedHandlesMap.get(columnFamilyName), getUTF8Bytes(key), payload);
-    } catch (Exception e) {
-      throw new HoodieException(e);
-    }
-  }
-
-  /**
-   * Perform single PUT on a column-family.
-   *
-   * @param columnFamilyName Column family name
-   * @param writeOptions Write options for put operation
-   * @param key Key
-   * @param value Payload
-   * @param <T> Type of Payload
-   */
-  public <T extends Serializable> void put(String columnFamilyName, WriteOptions writeOptions, String key, T value) {
-    try {
-      byte[] payload = serializePayload(columnFamilyName, value);
-      getRocksDB().put(managedHandlesMap.get(columnFamilyName), writeOptions, getUTF8Bytes(key), payload);
+      getRocksDB().put(managedHandlesMap.get(columnFamilyName), defaultWriteOptions, getUTF8Bytes(key), payload);
     } catch (Exception e) {
       throw new HoodieException(e);
     }
@@ -272,7 +265,7 @@ public class RocksDBDAO {
   public <K extends Serializable, T> void put(String columnFamilyName, K key, T value) {
     try {
       byte[] payload = serializePayload(columnFamilyName, value);
-      getRocksDB().put(managedHandlesMap.get(columnFamilyName), SerializationUtils.serialize(key), payload);
+      getRocksDB().put(managedHandlesMap.get(columnFamilyName), defaultWriteOptions, SerializationUtils.serialize(key), payload);
     } catch (Exception e) {
       throw new HoodieException(e);
     }
@@ -316,7 +309,7 @@ public class RocksDBDAO {
    */
   public void delete(String columnFamilyName, String key) {
     try {
-      getRocksDB().delete(managedHandlesMap.get(columnFamilyName), getUTF8Bytes(key));
+      getRocksDB().delete(managedHandlesMap.get(columnFamilyName), defaultWriteOptions, getUTF8Bytes(key));
     } catch (RocksDBException e) {
       throw new HoodieException(e);
     }
@@ -330,7 +323,7 @@ public class RocksDBDAO {
    */
   public <K extends Serializable> void delete(String columnFamilyName, K key) {
     try {
-      getRocksDB().delete(managedHandlesMap.get(columnFamilyName), SerializationUtils.serialize(key));
+      getRocksDB().delete(managedHandlesMap.get(columnFamilyName), defaultWriteOptions, SerializationUtils.serialize(key));
     } catch (Exception e) {
       throw new HoodieException(e);
     }
@@ -444,7 +437,7 @@ public class RocksDBDAO {
         // This will not delete the last entry
         getRocksDB().deleteRange(managedHandlesMap.get(columnFamilyName), getUTF8Bytes(firstEntry), getUTF8Bytes(lastEntry));
         // Delete the last entry
-        getRocksDB().delete(managedHandlesMap.get(columnFamilyName), getUTF8Bytes(lastEntry));
+        getRocksDB().delete(managedHandlesMap.get(columnFamilyName), defaultWriteOptions, getUTF8Bytes(lastEntry));
       } catch (RocksDBException e) {
         log.error("Got exception performing range delete");
         throw new HoodieException(e);
@@ -502,6 +495,9 @@ public class RocksDBDAO {
       managedHandlesMap.values().forEach(AbstractImmutableNativeReference::close);
       managedHandlesMap.clear();
       managedDescriptorMap.clear();
+      if (defaultWriteOptions != null) {
+        defaultWriteOptions.close();
+      }
       getRocksDB().close();
       try {
         FileIOUtils.deleteDirectory(new File(rocksDBBasePath));

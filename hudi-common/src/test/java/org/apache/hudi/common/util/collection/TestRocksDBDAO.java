@@ -24,6 +24,8 @@ import lombok.Value;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.File;
 import java.io.Serializable;
@@ -35,6 +37,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -306,6 +309,42 @@ public class TestRocksDBDAO {
     } finally {
       executor.shutdownNow();
     }
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  public void testDisableWalAtDaoLevel(boolean disableWAL) {
+    RocksDBDAO dbManager = new RocksDBDAO("/dummy/path/" + UUID.randomUUID(),
+        FileSystemViewStorageConfig.newBuilder().build().newBuilder().build().getRocksdbBasePath(),
+        new ConcurrentHashMap<>(),
+        disableWAL);
+
+    String family = "family_disable_wal";
+    dbManager.dropColumnFamily(family);
+    dbManager.addColumnFamily(family);
+
+    String key1 = "key1";
+    String key2 = "key2";
+    String key3 = "key3";
+    String value1 = "value1";
+    String value2 = "value2";
+    String value3 = "value3";
+
+    dbManager.put(family, key1, value1);
+    dbManager.writeBatch(batch -> {
+      dbManager.putInBatch(batch, family, key2, value2);
+      dbManager.putInBatch(batch, family, key3, value3);
+    });
+    dbManager.delete(family, key2);
+
+    assertEquals(value1, dbManager.get(family, key1));
+    assertNull(dbManager.get(family, key2));
+    assertEquals(value3, dbManager.get(family, key3));
+
+    File rocksDbDir = new File(dbManager.getRocksDBBasePath());
+    File[] walFiles = rocksDbDir.listFiles((dir, name) -> name.matches("\\d+\\.log"));
+    long walFileSize = walFiles == null ? 0 : Arrays.stream(walFiles).mapToLong(File::length).sum();
+    assertEquals(disableWAL, walFileSize == 0, "WAL log total size should be 0 when disableWAL=true");
   }
 
   /**

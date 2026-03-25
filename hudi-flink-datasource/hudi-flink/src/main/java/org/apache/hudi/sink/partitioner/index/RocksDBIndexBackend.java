@@ -22,8 +22,6 @@ import org.apache.hudi.common.model.HoodieRecordGlobalLocation;
 import org.apache.hudi.common.serialization.CustomSerializer;
 import org.apache.hudi.common.util.collection.RocksDBDAO;
 
-import org.rocksdb.WriteOptions;
-
 import java.io.IOException;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -35,16 +33,13 @@ public class RocksDBIndexBackend implements IndexBackend {
 
   private final RocksDBDAO rocksDBDAO;
 
-  private final WriteOptions writeOptions;
-
   public RocksDBIndexBackend(String rocksDbBasePath) {
     // Register custom serializer for HoodieRecordGlobalLocation to minimize storage overhead
     ConcurrentHashMap<String, CustomSerializer<?>> serializers = new ConcurrentHashMap<>();
     serializers.put(COLUMN_FAMILY, new RecordGlobalLocationSerializer());
 
-    this.rocksDBDAO = new RocksDBDAO("hudi-index-backend", rocksDbBasePath, serializers);
+    this.rocksDBDAO = new RocksDBDAO("hudi-index-backend", rocksDbBasePath, serializers, true);
     this.rocksDBDAO.addColumnFamily(COLUMN_FAMILY);
-    this.writeOptions = new WriteOptions().setDisableWAL(true);
   }
 
   @Override
@@ -54,15 +49,11 @@ public class RocksDBIndexBackend implements IndexBackend {
 
   @Override
   public void update(String recordKey, HoodieRecordGlobalLocation recordGlobalLocation) {
-    this.rocksDBDAO.put(COLUMN_FAMILY, writeOptions, recordKey, recordGlobalLocation);
+    this.rocksDBDAO.put(COLUMN_FAMILY, recordKey, recordGlobalLocation);
   }
 
   @Override
   public void close() throws IOException {
-    try {
-      this.writeOptions.close();
-    } finally {
-      this.rocksDBDAO.close();
-    }
+    this.rocksDBDAO.close();
   }
 }
