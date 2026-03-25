@@ -84,10 +84,22 @@ public class IndexerFactory {
     }
     return Collections.unmodifiableMap(Arrays.stream(MetadataPartitionType.getValidValues(dataTableMetaClient.getTableConfig().getTableVersion()))
         .filter(partitionType ->
-            partitionType.isMetadataPartitionEnabled(dataTableWriteConfig.getMetadataConfig(), dataTableMetaClient.getTableConfig())
+            (partitionType.isMetadataPartitionEnabled(dataTableWriteConfig.getMetadataConfig(), dataTableMetaClient.getTableConfig())
             || partitionType.isMetadataPartitionAvailable(dataTableMetaClient))
+            && !(partitionType == MetadataPartitionType.RECORD_INDEX && shouldDeferRecordIndexInit(dataTableWriteConfig, dataTableMetaClient))
+        )
         .collect(Collectors.toMap(
             Function.identity(),
             type -> IndexerFactory.getIndexer(type, engineContext, dataTableWriteConfig, dataTableMetaClient, expressionIndexRecordGenerator))));
+  }
+
+  /**
+   * Returns whether the initialization of record index should be deferred, true if the table is a fresh table.
+   */
+  private static boolean shouldDeferRecordIndexInit(
+      HoodieWriteConfig dataTableWriteConfig,
+      HoodieTableMetaClient dataTableMetaClient) {
+    return dataTableWriteConfig.getMetadataConfig().shouldDeferRliInitForFreshTable()
+        && dataTableMetaClient.getActiveTimeline().filterCompletedInstants().countInstants() == 0;
   }
 }
