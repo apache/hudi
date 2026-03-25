@@ -420,37 +420,75 @@ public class TestCommitBasedClusteringPlanStrategy {
   }
 
   @Test
-  void testGenerateClusteringPlanWithReplaceCommit() {
-    // Setup: Replace commit with replaced file IDs
+  void testGenerateClusteringPlanWithReplaceCommit() throws IOException {
+    // Setup: A regular commit writes 3 files, then a replace commit replaces one of them.
+    // The clustering plan should NOT include file groups that were replaced.
     when(hoodieTable.getMetaClient()).thenReturn(metaClient);
     when(metaClient.getCommitsTimeline()).thenReturn(timeline);
     when(metaClient.getActiveTimeline()).thenReturn(activeTimeline);
     when(timeline.findInstantsAfter(anyString())).thenReturn(timeline);
     when(timeline.filterCompletedInstants()).thenReturn(timeline);
+    when(metaClient.getStorage()).thenReturn(storage);
 
-    // Create a replace commit instant
-    HoodieInstant replaceInstant = new HoodieInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.REPLACE_COMMIT_ACTION, "20231201120000", InstantComparatorV1.REQUESTED_TIME_BASED_COMPARATOR);
+    String fileId1 = "a9d3e0e8-89c2-4987-a692-5a61e99d4812_0";
+    String fileId2 = "b9d3e0e8-89c2-4987-a692-5a61e99d4812_0";
+    String fileId3 = "c9d3e0e8-89c2-4987-a692-5a61e99d4812_0";
+    String file1path = "partition1/a9d3e0e8-89c2-4987-a692-5a61e99d4812-0_1064-11-65065_20231201120000.parquet";
+    String file2path = "partition1/b9d3e0e8-89c2-4987-a692-5a61e99d4812-0_1064-11-65065_20231201120000.parquet";
+    String file3path = "partition1/c9d3e0e8-89c2-4987-a692-5a61e99d4812-0_1064-11-65065_20231201120000.parquet";
+
+    for (String filePath : new String[]{file1path, file2path, file3path}) {
+      StoragePath path = new StoragePath(this.writeConfig.getBasePath(), filePath);
+      StoragePathInfo pathInfo = mock(StoragePathInfo.class);
+      when(storage.getPathInfo(path)).thenReturn(pathInfo);
+      when(pathInfo.getPath()).thenReturn(new StoragePath(filePath));
+      when(pathInfo.getLength()).thenReturn(100L);
+    }
+
+    // Commit 1: regular commit writes 3 files
+    HoodieInstant commitInstant = new HoodieInstant(HoodieInstant.State.COMPLETED,
+        HoodieTimeline.COMMIT_ACTION, "20231201120000", InstantComparatorV1.REQUESTED_TIME_BASED_COMPARATOR);
+    // Commit 2: replace commit that replaces fileId1
+    HoodieInstant replaceInstant = new HoodieInstant(HoodieInstant.State.COMPLETED,
+        HoodieTimeline.REPLACE_COMMIT_ACTION, "20231201120001", InstantComparatorV1.REQUESTED_TIME_BASED_COMPARATOR);
     List<HoodieInstant> instants = new ArrayList<>();
+    instants.add(commitInstant);
     instants.add(replaceInstant);
     when(timeline.getInstants()).thenReturn(instants);
 
-    // Mock replace commit metadata
-    HoodieReplaceCommitMetadata replaceCommitMetadata = new HoodieReplaceCommitMetadata();
-    HoodieWriteStat writeStat = new HoodieWriteStat();
-    writeStat.setPath("/path/to/file1.parquet");
-    writeStat.setPartitionPath("partition1");
-    replaceCommitMetadata.addWriteStat("partition1", writeStat);
-    replaceCommitMetadata.addReplaceFileId("partition1", "replaced_file1");
-    try {
-      when(activeTimeline.readReplaceCommitMetadata(replaceInstant)).thenReturn(replaceCommitMetadata);
-    } catch (Exception e) {
-      // Handle exception for testing
+    // Regular commit metadata with 3 files
+    HoodieCommitMetadata commitMetadata = new HoodieCommitMetadata();
+    for (String[] info : new String[][]{{file1path, fileId1}, {file2path, fileId2}, {file3path, fileId3}}) {
+      HoodieWriteStat writeStat = new HoodieWriteStat();
+      writeStat.setPath(info[0]);
+      writeStat.setFileId(info[1]);
+      writeStat.setPartitionPath("partition1");
+      commitMetadata.addWriteStat("partition1", writeStat);
     }
+    when(activeTimeline.readCommitMetadata(commitInstant)).thenReturn(commitMetadata);
+
+    // Replace commit metadata that replaces fileId1
+    HoodieReplaceCommitMetadata replaceCommitMetadata = new HoodieReplaceCommitMetadata();
+    replaceCommitMetadata.addReplaceFileId("partition1", fileId1);
+    when(activeTimeline.readReplaceCommitMetadata(replaceInstant)).thenReturn(replaceCommitMetadata);
 
     Option<HoodieClusteringPlan> result = strategy.generateClusteringPlan();
 
     assertNotNull(result);
-    assertFalse(result.isPresent());
+    assertTrue(result.isPresent());
+    HoodieClusteringPlan plan = result.get();
+    assertNotNull(plan);
+    assertEquals(1, plan.getInputGroups().size());
+    HoodieClusteringGroup inputGroup = plan.getInputGroups().get(0);
+    // Only fileId2 and fileId3 should be in the plan, fileId1 was replaced
+    assertEquals(2, inputGroup.getSlices().size());
+    List<String> clusteringFileIds = new ArrayList<>();
+    for (HoodieSliceInfo slice : inputGroup.getSlices()) {
+      clusteringFileIds.add(slice.getFileId());
+    }
+    assertFalse(clusteringFileIds.contains(fileId1), "Replaced file group should not be in clustering plan");
+    assertTrue(clusteringFileIds.contains(fileId2));
+    assertTrue(clusteringFileIds.contains(fileId3));
 
     Map<String, String> extraMetadata = strategy.getExtraMetadata();
     assertEquals(replaceInstant.requestedTime(), extraMetadata.get(CLUSTERING_COMMIT_CHECKPOINT_KEY));
@@ -608,78 +646,6 @@ public class TestCommitBasedClusteringPlanStrategy {
 
     Map<String, String> extraMetadata = strategy.getExtraMetadata();
     assertEquals(commitTime2, extraMetadata.get(CLUSTERING_COMMIT_CHECKPOINT_KEY));
-  }
-
-  @Test
-  void testGenerateClusteringPlanExcludesReplacedFileGroups() throws IOException {
-    // Setup: A regular commit writes files, then a replace commit replaces some of them.
-    // The clustering plan should NOT include file groups that were replaced.
-    when(hoodieTable.getMetaClient()).thenReturn(metaClient);
-    when(metaClient.getCommitsTimeline()).thenReturn(timeline);
-    when(metaClient.getActiveTimeline()).thenReturn(activeTimeline);
-    when(timeline.findInstantsAfter(anyString())).thenReturn(timeline);
-    when(timeline.filterCompletedInstants()).thenReturn(timeline);
-    when(metaClient.getStorage()).thenReturn(storage);
-
-    String fileId1 = "a9d3e0e8-89c2-4987-a692-5a61e99d4812_0";
-    String fileId2 = "b9d3e0e8-89c2-4987-a692-5a61e99d4812_0";
-    String fileId3 = "c9d3e0e8-89c2-4987-a692-5a61e99d4812_0";
-    String file1path = "partition1/a9d3e0e8-89c2-4987-a692-5a61e99d4812-0_1064-11-65065_20231201120000.parquet";
-    String file2path = "partition1/b9d3e0e8-89c2-4987-a692-5a61e99d4812-0_1064-11-65065_20231201120000.parquet";
-    String file3path = "partition1/c9d3e0e8-89c2-4987-a692-5a61e99d4812-0_1064-11-65065_20231201120000.parquet";
-
-    for (String filePath : new String[]{file1path, file2path, file3path}) {
-      StoragePath path = new StoragePath(this.writeConfig.getBasePath(), filePath);
-      StoragePathInfo pathInfo = mock(StoragePathInfo.class);
-      when(storage.getPathInfo(path)).thenReturn(pathInfo);
-      when(pathInfo.getPath()).thenReturn(new StoragePath(filePath));
-      when(pathInfo.getLength()).thenReturn(100L);
-    }
-
-    // Commit 1: regular commit writes 3 files
-    HoodieInstant commitInstant = new HoodieInstant(HoodieInstant.State.COMPLETED,
-        HoodieTimeline.COMMIT_ACTION, "20231201120000", InstantComparatorV1.REQUESTED_TIME_BASED_COMPARATOR);
-    // Commit 2: replace commit that replaces fileId1
-    HoodieInstant replaceInstant = new HoodieInstant(HoodieInstant.State.COMPLETED,
-        HoodieTimeline.REPLACE_COMMIT_ACTION, "20231201120001", InstantComparatorV1.REQUESTED_TIME_BASED_COMPARATOR);
-    List<HoodieInstant> instants = new ArrayList<>();
-    instants.add(commitInstant);
-    instants.add(replaceInstant);
-    when(timeline.getInstants()).thenReturn(instants);
-
-    // Regular commit metadata with 3 files
-    HoodieCommitMetadata commitMetadata = new HoodieCommitMetadata();
-    for (String[] info : new String[][]{{file1path, fileId1}, {file2path, fileId2}, {file3path, fileId3}}) {
-      HoodieWriteStat writeStat = new HoodieWriteStat();
-      writeStat.setPath(info[0]);
-      writeStat.setFileId(info[1]);
-      writeStat.setPartitionPath("partition1");
-      commitMetadata.addWriteStat("partition1", writeStat);
-    }
-    when(activeTimeline.readCommitMetadata(commitInstant)).thenReturn(commitMetadata);
-
-    // Replace commit metadata that replaces fileId1
-    HoodieReplaceCommitMetadata replaceCommitMetadata = new HoodieReplaceCommitMetadata();
-    replaceCommitMetadata.addReplaceFileId("partition1", fileId1);
-    when(activeTimeline.readReplaceCommitMetadata(replaceInstant)).thenReturn(replaceCommitMetadata);
-
-    Option<HoodieClusteringPlan> result = strategy.generateClusteringPlan();
-
-    assertNotNull(result);
-    assertTrue(result.isPresent());
-    HoodieClusteringPlan plan = result.get();
-    assertNotNull(plan);
-    assertEquals(1, plan.getInputGroups().size());
-    HoodieClusteringGroup inputGroup = plan.getInputGroups().get(0);
-    // Only fileId2 and fileId3 should be in the plan, fileId1 was replaced
-    assertEquals(2, inputGroup.getSlices().size());
-    List<String> clusteringFileIds = new ArrayList<>();
-    for (HoodieSliceInfo slice : inputGroup.getSlices()) {
-      clusteringFileIds.add(slice.getFileId());
-    }
-    assertFalse(clusteringFileIds.contains(fileId1), "Replaced file group should not be in clustering plan");
-    assertTrue(clusteringFileIds.contains(fileId2));
-    assertTrue(clusteringFileIds.contains(fileId3));
   }
 
   private void initializeClusteringPlanStrategy(boolean withCheckpoint) {
