@@ -1944,7 +1944,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
   /**
    * Test that partitioned RLI initialization is deferred for fresh tables.
    * Partitioned RLI should NOT be initialized on the first commit but should be initialized
-   * on the second commit with programmatically determined file group count (should be 1 for small tables).
+   * on the second commit with programmatically determined file group count.
    */
   @ParameterizedTest
   @EnumSource(HoodieTableType.class)
@@ -1955,12 +1955,12 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     // Config with partitioned record index enabled (not global)
     HoodieWriteConfig writeConfig = getWriteConfigBuilder(true, true, false)
         .withIndexConfig(HoodieIndexConfig.newBuilder()
-            .withIndexType(HoodieIndex.IndexType.RECORD_INDEX)
+            .withIndexType(HoodieIndex.IndexType.RECORD_LEVEL_INDEX)
             .build())
         .withMetadataConfig(HoodieMetadataConfig.newBuilder()
             .enable(true)
-            .withEnableRecordLevelIndex(true)  // Partitioned RLI
-            .withPartitionedRecordIndexFileGroupCount(2,2)
+            .withEnableRecordLevelIndex(true)
+            .withPartitionedRecordIndexFileGroupCount(1, 10)
             .withDeferRliInitializationForFreshTable(true)
             .build())
         .build();
@@ -1997,15 +1997,15 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
       assertTrue(metaClient.getTableConfig().isMetadataPartitionAvailable(RECORD_INDEX),
           "Partitioned RLI should be initialized after second commit");
 
-      // Verify file group count is 6 (2 for each data table partition and we have 3 partitions)
+      // Verify file group count is 3 (1 for each data table partition and we have 3 partitions)
       HoodieBackedTableMetadata metadataReader = (HoodieBackedTableMetadata) metadata(client, storage);
       int fileGroupCount = HoodieTableMetadataUtil.getPartitionLatestFileSlices(
           metadataReader.getMetadataMetaClient(), Option.empty(),
           RECORD_INDEX.getPartitionPath()).size();
 
-      // For partitioned RLI with small data, file group count should be 6 (2 as default for 3 partitions)
-      assertEquals(6, fileGroupCount,
-          "File group count should be 6 for partitioned RLI table, but got: " + fileGroupCount);
+      // For partitioned RLI with small data, file group count should be 3 (1 as default for 3 partitions)
+      assertEquals(3, fileGroupCount,
+          "File group count should be 3 for partitioned RLI table (1 per partition x 3 partitions), but got: " + fileGroupCount);
 
       // Validate metadata integrity
       validateMetadata(client);
@@ -2013,7 +2013,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
   }
 
   /**
-   * Test that partitioned RLI with larger data results in appropriate file group count.
+   * Test that global RLI with larger data results in appropriate file group count.
    * This validates that the file group count is determined programmatically based on data size,
    * not using a hardcoded default.
    */
@@ -2022,20 +2022,20 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     init(HoodieTableType.COPY_ON_WRITE);
     HoodieSparkEngineContext engineContext = new HoodieSparkEngineContext(jsc);
 
-    // Config with partitioned record index enabled
+    // Config with global record index enabled
     HoodieWriteConfig writeConfig = getWriteConfigBuilder(true, true, false)
         .withIndexConfig(HoodieIndexConfig.newBuilder()
             .withIndexType(HoodieIndex.IndexType.RECORD_INDEX)
             .build())
         .withMetadataConfig(HoodieMetadataConfig.newBuilder()
             .enable(true)
-            .withEnableGlobalRecordLevelIndex(true)  // Partitioned RLI
+            .withEnableGlobalRecordLevelIndex(true)
             .withDeferRliInitializationForFreshTable(true)
             .build())
         .build();
 
     try (SparkRDDWriteClient client = new SparkRDDWriteClient(engineContext, writeConfig)) {
-      // First commit with moderate data size (5000 records)
+      // First commit with moderate data size (4000 records)
       String firstCommitTime = client.startCommit();
       List<HoodieRecord> records = dataGen.generateInserts(firstCommitTime, 4000);
       List<WriteStatus> writeStatuses = client.insert(jsc.parallelize(records, 5), firstCommitTime).collect();
@@ -2045,7 +2045,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
       // Verify RLI is NOT initialized after first commit
       metaClient = HoodieTableMetaClient.reload(metaClient);
       assertFalse(metaClient.getTableConfig().isMetadataPartitionAvailable(RECORD_INDEX),
-          "Partitioned RLI should NOT be initialized on first commit");
+          "Global RLI should NOT be initialized on first commit");
 
       // Second commit to trigger RLI initialization
       String secondCommitTime = client.startCommit();
@@ -2054,7 +2054,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
       assertNoWriteErrors(writeStatuses);
       client.commit(secondCommitTime, jsc.parallelize(writeStatuses));
 
-      // Verify partitioned RLI is now initialized
+      // Verify global RLI is now initialized
       metaClient = HoodieTableMetaClient.reload(metaClient);
       assertTrue(metaClient.getTableConfig().isMetadataPartitionAvailable(RECORD_INDEX));
 
@@ -2064,10 +2064,10 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
           metadataReader.getMetadataMetaClient(), Option.empty(),
           RECORD_INDEX.getPartitionPath()).size();
 
-      // For 4000 records with partitioned RLI, file group count should be between min (1) and max (10)
-      // It should be > 1 for this data size based on estimation logic
-      assertTrue(fileGroupCount > 1 && fileGroupCount < writeConfig.getMetadataConfig().getGlobalRecordLevelIndexMaxFileGroupCount(),
-          "File group count should be at least the configured minimum (1), but got: " + fileGroupCount);
+      // For 4000 records with global RLI, file group count should be within configured bounds
+      int maxFileGroupCount = writeConfig.getMetadataConfig().getGlobalRecordLevelIndexMaxFileGroupCount();
+      assertTrue(fileGroupCount > 1 && fileGroupCount <= maxFileGroupCount,
+          "File group count should be between 1 and " + maxFileGroupCount + ", but got: " + fileGroupCount);
       // Validate metadata integrity
       validateMetadata(client);
     }
