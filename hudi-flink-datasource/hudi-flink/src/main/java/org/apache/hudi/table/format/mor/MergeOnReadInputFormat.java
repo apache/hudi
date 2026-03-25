@@ -71,7 +71,7 @@ public class MergeOnReadInputFormat
 
   protected transient org.apache.hadoop.conf.Configuration hadoopConf;
 
-  protected final MergeOnReadTableState tableState;
+  protected final MergeOnReadTableState<MergeOnReadInputSplit> tableState;
 
   /**
    * Uniform iterator view for the underneath records.

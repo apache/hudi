@@ -30,7 +30,7 @@ import java.util.List;
  * Statistics for merge on read table source.
  */
 @Getter
-public class MergeOnReadTableState implements Serializable {
+public class MergeOnReadTableState<T> implements Serializable {
 
   private static final long serialVersionUID = 1L;
 
@@ -38,7 +38,7 @@ public class MergeOnReadTableState implements Serializable {
   private final RowType requiredRowType;
   private final String tableSchema;
   private final String requiredSchema;
-  private final List<MergeOnReadInputSplit> inputSplits;
+  private final List<T> inputSplits;
   private final int operationPos;
 
   public MergeOnReadTableState(
@@ -46,7 +46,7 @@ public class MergeOnReadTableState implements Serializable {
       RowType requiredRowType,
       String tableSchema,
       String requiredSchema,
-      List<MergeOnReadInputSplit> inputSplits) {
+      List<T> inputSplits) {
     this.rowType = rowType;
     this.requiredRowType = requiredRowType;
     this.tableSchema = tableSchema;

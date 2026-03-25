@@ -255,7 +255,7 @@ public class TestStreamReadOperator {
     }
     final DataType rowDataType = HoodieSchemaConverter.convertToDataType(tableSchema);
     final RowType rowType = (RowType) rowDataType.getLogicalType();
-    final MergeOnReadTableState hoodieTableState = new MergeOnReadTableState(
+    final MergeOnReadTableState<MergeOnReadInputSplit> hoodieTableState = new MergeOnReadTableState(
         rowType,
         TestConfigurations.ROW_TYPE,
         tableSchema.toString(),

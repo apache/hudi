@@ -25,6 +25,8 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.source.split.HoodieCdcSourceSplit;
 import org.apache.hudi.source.split.HoodieSourceSplit;
 import org.apache.hudi.table.format.InternalSchemaManager;
+import org.apache.hudi.table.format.mor.MergeOnReadTableState;
+import org.apache.hudi.util.HoodieSchemaConverter;
 import org.apache.hudi.utils.TestConfigurations;
 
 import org.apache.flink.configuration.Configuration;
@@ -34,10 +36,10 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.File;
+import java.util.ArrayList;
 import java.util.Collections;
 
-import static org.apache.hudi.utils.TestConfigurations.ROW_DATA_TYPE;
-import static org.apache.hudi.utils.TestConfigurations.ROW_TYPE;
+import static org.apache.hudi.utils.TestConfigurations.*;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.mock;
@@ -54,6 +56,7 @@ public class TestHoodieCdcSplitReaderFunction {
   private HoodieSchema tableSchema;
   private HoodieSchema requiredSchema;
   private InternalSchemaManager internalSchemaManager;
+  private MergeOnReadTableState tableState;
 
   @BeforeEach
   public void setUp() {
@@ -61,15 +64,13 @@ public class TestHoodieCdcSplitReaderFunction {
     tableSchema = mock(HoodieSchema.class);
     requiredSchema = mock(HoodieSchema.class);
     internalSchemaManager = mock(InternalSchemaManager.class);
+    tableState = new MergeOnReadTableState(ROW_TYPE, ROW_TYPE, TABLE_SCHEMA.toString(), TABLE_SCHEMA.toString(), new ArrayList<>());
   }
 
   private HoodieCdcSplitReaderFunction createFunction() {
     return new HoodieCdcSplitReaderFunction(
         conf,
-        tableSchema,
-        requiredSchema,
-        ROW_TYPE,
-        ROW_TYPE,
+        tableState,
         internalSchemaManager,
         ROW_DATA_TYPE.getChildren());
   }
@@ -92,12 +93,10 @@ public class TestHoodieCdcSplitReaderFunction {
             .map(f -> new RowType.RowField(f.getName(), f.getType()))
             .collect(java.util.stream.Collectors.toList()));
 
+    tableState = new MergeOnReadTableState(ROW_TYPE, projectedRowType, TABLE_SCHEMA.toString(), HoodieSchemaConverter.convertToSchema(projectedRowType.copy()).toString(), new ArrayList<>());
     HoodieCdcSplitReaderFunction function = new HoodieCdcSplitReaderFunction(
         conf,
-        tableSchema,
-        requiredSchema,
-        ROW_TYPE,
-        projectedRowType,
+        tableState,
         internalSchemaManager,
         ROW_DATA_TYPE.getChildren());
 
@@ -108,10 +107,7 @@ public class TestHoodieCdcSplitReaderFunction {
   public void testConstructorWithEmptyFieldTypes() {
     HoodieCdcSplitReaderFunction function = new HoodieCdcSplitReaderFunction(
         conf,
-        tableSchema,
-        requiredSchema,
-        ROW_TYPE,
-        ROW_TYPE,
+        tableState,
         internalSchemaManager,
         Collections.emptyList());
 

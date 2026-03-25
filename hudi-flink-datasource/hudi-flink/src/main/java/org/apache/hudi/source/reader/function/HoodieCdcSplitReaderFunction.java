@@ -68,6 +68,7 @@ import org.apache.hudi.table.format.InternalSchemaManager;
 import org.apache.hudi.table.format.RecordIterators;
 import org.apache.hudi.table.format.cdc.CdcInputFormat;
 import org.apache.hudi.table.format.mor.MergeOnReadInputSplit;
+import org.apache.hudi.table.format.mor.MergeOnReadTableState;
 import org.apache.hudi.util.AvroToRowDataConverters;
 import org.apache.hudi.util.FlinkWriteClients;
 import org.apache.hudi.util.HoodieSchemaConverter;
@@ -113,14 +114,9 @@ import static org.apache.hudi.table.format.FormatUtils.buildAvroRecordBySchema;
 public class HoodieCdcSplitReaderFunction implements SplitReaderFunction<RowData> {
 
   private final org.apache.flink.configuration.Configuration conf;
-  private final HoodieSchema tableSchema;
-  private final HoodieSchema requiredSchema;
-  private final RowType rowType;
-  private final RowType requiredRowType;
-  private final int[] requiredPositions;
   private final InternalSchemaManager internalSchemaManager;
   private final List<DataType> fieldTypes;
-
+  private final MergeOnReadTableState tableState;
   private transient HoodieTableMetaClient metaClient;
   private transient HoodieWriteConfig writeConfig;
   private transient org.apache.hadoop.conf.Configuration hadoopConf;
@@ -132,27 +128,17 @@ public class HoodieCdcSplitReaderFunction implements SplitReaderFunction<RowData
    * Creates a CDC split reader function.
    *
    * @param conf                  Flink configuration
-   * @param tableSchema           Full Avro schema of the Hoodie table
-   * @param requiredSchema        Projected schema required by the query
-   * @param rowType               Full Flink {@link RowType} of the table
-   * @param requiredRowType       Projected Flink {@link RowType} required by the query
+   * @param tableState            Merge on Read table state
    * @param internalSchemaManager Schema-evolution manager
    * @param fieldTypes            DataType list for all table fields (used for parquet reading)
    */
   public HoodieCdcSplitReaderFunction(
       org.apache.flink.configuration.Configuration conf,
-      HoodieSchema tableSchema,
-      HoodieSchema requiredSchema,
-      RowType rowType,
-      RowType requiredRowType,
+      MergeOnReadTableState tableState,
       InternalSchemaManager internalSchemaManager,
       List<DataType> fieldTypes) {
     this.conf = conf;
-    this.tableSchema = tableSchema;
-    this.requiredSchema = requiredSchema;
-    this.rowType = rowType;
-    this.requiredRowType = requiredRowType;
-    this.requiredPositions = computeRequiredPositions(rowType, requiredRowType);
+    this.tableState = tableState;
     this.internalSchemaManager = internalSchemaManager;
     this.fieldTypes = fieldTypes;
   }
@@ -171,7 +157,7 @@ public class HoodieCdcSplitReaderFunction implements SplitReaderFunction<RowData
     HoodieTableMetaClient client = getMetaClient();
     HoodieWriteConfig wConfig = getWriteConfig();
 
-    ImageManager imageManager = new ImageManager(rowType, wConfig, this::getFileSliceIterator);
+    ImageManager imageManager = new ImageManager(tableState.getRowType(), wConfig, this::getFileSliceIterator);
 
     Function<HoodieCDCFileSplit, ClosableIterator<RowData>> recordIteratorFunc =
         cdcFileSplit -> createRecordIteratorSafe(
@@ -207,8 +193,8 @@ public class HoodieCdcSplitReaderFunction implements SplitReaderFunction<RowData
     if (fallbackReaderFunction == null) {
       fallbackReaderFunction = new HoodieSplitReaderFunction(
           conf,
-          tableSchema,
-          requiredSchema,
+          HoodieSchema.parse(tableState.getTableSchema()),
+          HoodieSchema.parse(tableState.getRequiredSchema()),
           internalSchemaManager,
           conf.get(FlinkOptions.MERGE_TYPE),
           Collections.emptyList(),
@@ -238,6 +224,9 @@ public class HoodieCdcSplitReaderFunction implements SplitReaderFunction<RowData
       HoodieCDCSupplementalLoggingMode mode,
       ImageManager imageManager,
       HoodieTableMetaClient client) throws IOException {
+
+    final HoodieSchema tableSchema = HoodieSchema.parse(tableState.getTableSchema());
+    final HoodieSchema requiredSchema = HoodieSchema.parse(tableState.getRequiredSchema());
     switch (fileSplit.getCdcInferCase()) {
       case BASE_FILE_INSERT: {
         ValidationUtils.checkState(fileSplit.getCdcFiles() != null && fileSplit.getCdcFiles().size() == 1,
@@ -250,7 +239,7 @@ public class HoodieCdcSplitReaderFunction implements SplitReaderFunction<RowData
             "Before file slice should exist for BASE_FILE_DELETE");
         FileSlice fileSlice = fileSplit.getBeforeFileSlice().get();
         MergeOnReadInputSplit inputSplit = CdcInputFormat.fileSlice2Split(tablePath, fileSlice, maxCompactionMemoryInBytes);
-        return new RemoveBaseFileIterator(requiredRowType, requiredPositions, getFileSliceIterator(inputSplit));
+        return new RemoveBaseFileIterator(tableState.getRequiredRowType(), tableState.getRequiredPositions(), getFileSliceIterator(inputSplit));
       }
       case AS_IS: {
         HoodieSchema dataSchema = HoodieSchemaUtils.removeMetadataFields(tableSchema);
@@ -258,14 +247,14 @@ public class HoodieCdcSplitReaderFunction implements SplitReaderFunction<RowData
         switch (mode) {
           case DATA_BEFORE_AFTER:
             return new BeforeAfterImageIterator(
-                getHadoopConf(), tablePath, tableSchema, requiredSchema, requiredRowType, cdcSchema, fileSplit);
+                getHadoopConf(), tablePath, tableSchema, requiredSchema, tableState.getRequiredRowType(), cdcSchema, fileSplit);
           case DATA_BEFORE:
             return new BeforeImageIterator(
-                conf, getHadoopConf(), tablePath, tableSchema, requiredSchema, requiredRowType,
+                conf, getHadoopConf(), tablePath, tableSchema, requiredSchema, tableState.getRequiredRowType(),
                 maxCompactionMemoryInBytes, cdcSchema, fileSplit, imageManager);
           case OP_KEY_ONLY:
             return new RecordKeyImageIterator(
-                conf, getHadoopConf(), tablePath, tableSchema, requiredSchema, requiredRowType,
+                conf, getHadoopConf(), tablePath, tableSchema, requiredSchema, tableState.getRequiredRowType(),
                 maxCompactionMemoryInBytes, cdcSchema, fileSplit, imageManager);
           default:
             throw new AssertionError("Unexpected CDC supplemental logging mode: " + mode);
@@ -278,12 +267,12 @@ public class HoodieCdcSplitReaderFunction implements SplitReaderFunction<RowData
         MergeOnReadInputSplit split = CdcInputFormat.singleLogFile2Split(tablePath, logFilePath, maxCompactionMemoryInBytes);
         ClosableIterator<HoodieRecord<RowData>> recordIterator = getFileSliceHoodieRecordIterator(split);
         return new DataLogFileIterator(
-            maxCompactionMemoryInBytes, imageManager, fileSplit, tableSchema, requiredRowType, requiredPositions,
+            maxCompactionMemoryInBytes, imageManager, fileSplit, tableSchema, tableState.getRequiredRowType(), tableState.getRequiredPositions(),
             recordIterator, client, getWriteConfig());
       }
       case REPLACE_COMMIT: {
         return new ReplaceCommitIterator(
-            conf, tablePath, requiredRowType, requiredPositions, maxCompactionMemoryInBytes,
+            conf, tablePath, tableState.getRequiredRowType(), tableState.getRequiredPositions(), maxCompactionMemoryInBytes,
             fileSplit, this::getFileSliceIterator);
       }
       default:
@@ -294,6 +283,7 @@ public class HoodieCdcSplitReaderFunction implements SplitReaderFunction<RowData
   /** Reads the full-schema before/after image for a file slice (emitDelete=false). */
   private ClosableIterator<RowData> getFileSliceIterator(MergeOnReadInputSplit split) {
     FileSlice fileSlice = buildFileSlice(split);
+    final HoodieSchema tableSchema = HoodieSchema.parse(tableState.getTableSchema());
     try {
       HoodieFileGroupReader<RowData> reader = FormatUtils.createFileGroupReader(
           getMetaClient(), getWriteConfig(), internalSchemaManager, fileSlice,
@@ -309,6 +299,7 @@ public class HoodieCdcSplitReaderFunction implements SplitReaderFunction<RowData
   /** Reads a single log file and returns a typed {@link HoodieRecord} iterator (for LOG_FILE CDC inference). */
   private ClosableIterator<HoodieRecord<RowData>> getFileSliceHoodieRecordIterator(MergeOnReadInputSplit split) {
     FileSlice fileSlice = buildFileSlice(split);
+    final HoodieSchema tableSchema = HoodieSchema.parse(tableState.getTableSchema());
     try {
       HoodieFileGroupReader<RowData> reader = FormatUtils.createFileGroupReader(
           getMetaClient(), getWriteConfig(), internalSchemaManager, fileSlice,
@@ -323,7 +314,7 @@ public class HoodieCdcSplitReaderFunction implements SplitReaderFunction<RowData
 
   /** Reads a parquet CDC base file returning required-schema records. */
   private ClosableIterator<RowData> getBaseFileIterator(String path) throws IOException {
-    String[] fieldNames = rowType.getFieldNames().toArray(new String[0]);
+    String[] fieldNames = tableState.getRowType().getFieldNames().toArray(new String[0]);
     DataType[] fieldTypesArray = fieldTypes.toArray(new DataType[0]);
     return RecordIterators.getParquetRecordIterator(
         internalSchemaManager,
@@ -333,7 +324,7 @@ public class HoodieCdcSplitReaderFunction implements SplitReaderFunction<RowData
         fieldNames,
         fieldTypesArray,
         Collections.emptyMap(),
-        requiredPositions,
+        tableState.getRequiredPositions(),
         2048,
         new org.apache.flink.core.fs.Path(path),
         0,
