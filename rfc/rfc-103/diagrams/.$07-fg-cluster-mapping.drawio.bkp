@@ -1,0 +1,132 @@
+<mxfile host="app.diagrams.net" type="device">
+  <diagram name="FG Cluster Mapping" id="fg-cluster-mapping">
+    <mxGraphModel dx="1422" dy="762" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1169" pageHeight="827" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+
+        <!-- Title -->
+        <mxCell id="title" value="File Group → Cluster Mapping: Two-Level Pruning" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;fontSize=16;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="60" y="20" width="1040" height="40" as="geometry" />
+        </mxCell>
+
+        <!-- ======================== TOP ROW: DATA STRUCTURES ======================== -->
+
+        <!-- fg_mapping.parquet -->
+        <mxCell id="fgmap" value="fg_mapping.parquet" style="rounded=1;fillColor=#d5e8d4;strokeColor=#82b366;strokeWidth=2;fontSize=13;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="60" y="80" width="240" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="fgmap-rows" value="C₀ → {FG1, FG3, FG7}&#xa;C₁ → {FG2, FG4}&#xa;C₂ → {FG1, FG2, FG9}&#xa;C₃ → {FG2, FG6}&#xa;..." style="text;html=1;fillColor=#f0fff0;strokeColor=#82b366;align=left;verticalAlign=top;fontSize=11;whiteSpace=wrap;rounded=1;spacingLeft=8;" vertex="1" parent="1">
+          <mxGeometry x="60" y="124" width="240" height="100" as="geometry" />
+        </mxCell>
+        <mxCell id="fgmap-size" value="K rows • ~1.6 MB • Fits in driver JVM" style="text;html=1;fillColor=none;strokeColor=none;align=center;fontSize=10;fontColor=#666;fontStyle=2;" vertex="1" parent="1">
+          <mxGeometry x="60" y="228" width="240" height="20" as="geometry" />
+        </mxCell>
+
+        <!-- assignments.parquet -->
+        <mxCell id="asgn" value="assignments.parquet" style="rounded=1;fillColor=#dae8fc;strokeColor=#6c8ebf;strokeWidth=2;fontSize=13;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="340" y="80" width="240" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="asgn-rows" value="(key1, C₀, FG1, p0)&#xa;(key2, C₂, FG1, p0)&#xa;(key3, C₀, FG3, p1)&#xa;(key4, C₁, FG2, p0)&#xa;... N rows total" style="text;html=1;fillColor=#eaf4ff;strokeColor=#6c8ebf;align=left;verticalAlign=top;fontSize=11;whiteSpace=wrap;rounded=1;spacingLeft=8;" vertex="1" parent="1">
+          <mxGeometry x="340" y="124" width="240" height="100" as="geometry" />
+        </mxCell>
+        <mxCell id="asgn-size" value="N rows • 56 GB @1B vecs • NOT read at query time" style="text;html=1;fillColor=none;strokeColor=none;align=center;fontSize=10;fontColor=#b85450;fontStyle=2;" vertex="1" parent="1">
+          <mxGeometry x="340" y="228" width="240" height="20" as="geometry" />
+        </mxCell>
+
+        <!-- derivation arrow -->
+        <mxCell id="derive-arr" value="GROUP BY cluster_id&#xa;collect_set(file_group_id)&#xa;[done at index build time]" style="edgeStyle=orthogonalEdgeStyle;strokeWidth=2;strokeColor=#555;fontStyle=2;fontSize=10;exitX=1;exitY=0.5;entryX=0;entryY=0.5;dashed=1;" edge="1" parent="1" source="asgn" target="fgmap">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- ======================== MIDDLE ROW: QUERY PRUNING FLOW ======================== -->
+
+        <!-- Level 1 box -->
+        <mxCell id="l1-bg" value="" style="rounded=1;fillColor=#fff8e1;strokeColor=#d6b656;strokeWidth=2;" vertex="1" parent="1">
+          <mxGeometry x="60" y="280" width="1040" height="200" as="geometry" />
+        </mxCell>
+        <mxCell id="l1-label" value="LEVEL 1 — File Group Pruning (Driver-side, using fg_mapping.parquet)" style="text;html=1;fillColor=#d6b656;fontColor=#333;strokeColor=none;align=center;fontSize=12;fontStyle=1;rounded=1;" vertex="1" parent="1">
+          <mxGeometry x="60" y="280" width="1040" height="28" as="geometry" />
+        </mxCell>
+
+        <!-- Query vec -->
+        <mxCell id="qvec" value="Query vector q&#xa;probe {C₀, C₂}" style="ellipse;fillColor=#f8cecc;strokeColor=#b85450;strokeWidth=2;fontSize=12;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="80" y="320" width="160" height="70" as="geometry" />
+        </mxCell>
+
+        <!-- fg_mapping lookup -->
+        <mxCell id="lookup" value="fg_mapping lookup:&#xa;C₀ → {FG1, FG3, FG7}&#xa;C₂ → {FG1, FG2, FG9}&#xa;Union → {FG1, FG2, FG3, FG7, FG9}" style="rounded=1;fillColor=#d5e8d4;strokeColor=#82b366;strokeWidth=2;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="290" y="315" width="260" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="arr-q-lu" style="edgeStyle=orthogonalEdgeStyle;strokeWidth=2;strokeColor=#333;" edge="1" parent="1" source="qvec" target="lookup">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- File group decision -->
+        <mxCell id="fglist" value="All File Groups: {FG1..FG12}" style="rounded=1;fillColor=#f5f5f5;strokeColor=#999;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="600" y="295" width="460" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="fg-read" value="READ: FG1, FG2, FG3, FG7, FG9" style="rounded=1;fillColor=#d5e8d4;strokeColor=#82b366;strokeWidth=2;fontSize=11;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="600" y="340" width="220" height="36" as="geometry" />
+        </mxCell>
+        <mxCell id="fg-skip" value="SKIP: FG4, FG5, FG6, FG8, FG10, FG11, FG12" style="rounded=1;fillColor=#f8cecc;strokeColor=#b85450;strokeWidth=2;fontSize=11;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="840" y="340" width="240" height="36" as="geometry" />
+        </mxCell>
+        <mxCell id="arr-lu-fg" style="edgeStyle=orthogonalEdgeStyle;strokeWidth=2;strokeColor=#82b366;" edge="1" parent="1" source="lookup" target="fg-read">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="arr-lu-skip" style="edgeStyle=orthogonalEdgeStyle;strokeWidth=2;strokeColor=#b85450;dashed=1;" edge="1" parent="1" source="lookup" target="fg-skip">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="prune-pct" value="58% of file groups pruned" style="text;html=1;fillColor=none;strokeColor=none;align=center;fontSize=11;fontStyle=1;fontColor=#b85450;" vertex="1" parent="1">
+          <mxGeometry x="840" y="385" width="240" height="20" as="geometry" />
+        </mxCell>
+
+        <!-- ======================== BOTTOM ROW: LEVEL 2 PRUNING ======================== -->
+
+        <mxCell id="l2-bg" value="" style="rounded=1;fillColor=#f3e8ff;strokeColor=#9673a6;strokeWidth=2;" vertex="1" parent="1">
+          <mxGeometry x="60" y="500" width="1040" height="200" as="geometry" />
+        </mxCell>
+        <mxCell id="l2-label" value="LEVEL 2 — Parquet Row Group Pruning (cluster_id min/max column statistics, within each surviving FG)" style="text;html=1;fillColor=#9673a6;fontColor=#fff;strokeColor=none;align=center;fontSize=12;fontStyle=1;rounded=1;" vertex="1" parent="1">
+          <mxGeometry x="60" y="500" width="1040" height="28" as="geometry" />
+        </mxCell>
+
+        <!-- FG1 row groups -->
+        <mxCell id="fg1-label" value="FG1 (10 Parquet row groups)" style="text;html=1;fillColor=none;strokeColor=none;align=left;fontSize=11;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="80" y="538" width="300" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="rg0" value="RG0: min=0 max=0 → READ" style="rounded=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="80" y="562" width="200" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="rg1" value="RG1: min=1 max=3 → SKIP" style="rounded=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="80" y="590" width="200" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="rg2" value="RG2: min=2 max=2 → READ" style="rounded=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="80" y="618" width="200" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="rg3" value="RG3: min=4 max=7 → SKIP" style="rounded=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="80" y="646" width="200" height="24" as="geometry" />
+        </mxCell>
+        <mxCell id="rg-dots" value="..." style="text;html=1;fillColor=none;strokeColor=none;align=left;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="80" y="674" width="200" height="20" as="geometry" />
+        </mxCell>
+
+        <!-- Pushdown predicate -->
+        <mxCell id="pushdown" value="Parquet pushdown predicate:&#xa;cluster_id IN (0, 2)&#xa;[injected by VectorAwareFileIndex]" style="rounded=1;fillColor=#e1d5e7;strokeColor=#9673a6;strokeWidth=2;fontSize=11;whiteSpace=wrap;" vertex="1" parent="1">
+          <mxGeometry x="340" y="550" width="260" height="80" as="geometry" />
+        </mxCell>
+
+        <!-- Span factor note -->
+        <mxCell id="span-note" value="Span factor S = avg clusters per file group&#xa;Low S → high pruning (good)&#xa;High S → pruning degrades (trigger clustering)&#xa;&#xa;Span factor tracked via fg_mapping.vector_count" style="rounded=1;fillColor=#fff8e1;strokeColor=#d6b656;strokeWidth=2;fontSize=11;whiteSpace=wrap;align=left;spacingLeft=8;" vertex="1" parent="1">
+          <mxGeometry x="660" y="540" width="400" height="100" as="geometry" />
+        </mxCell>
+
+        <!-- Pruning summary box -->
+        <mxCell id="summary" value="Combined I/O savings: Level 1 (FG pruning) × Level 2 (row group pruning)&#xa;Typical: 85–95% of data not read for P=10%, K=4096, low span factor" style="text;html=1;fillColor=#d5e8d4;strokeColor=#82b366;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=1;fontSize=12;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="200" y="720" width="760" height="50" as="geometry" />
+        </mxCell>
+
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
