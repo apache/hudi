@@ -22,19 +22,23 @@ package org.apache.hudi.metadata.model;
 import lombok.Getter;
 import lombok.experimental.Accessors;
 
+import java.io.Serializable;
+
 /**
  * Immutable descriptor for a file that should be scanned during index bootstrap.
  */
 @Getter
 @Accessors(fluent = true)
-public class FileInfoAndPartition {
+public class FileInfoAndPartition implements Serializable {
+  private static final long serialVersionUID = 1L;
+
   private final String partitionPath;
-  private final String name;
+  private final String path;
   private final long size;
 
-  private FileInfoAndPartition(String partitionPath, String name, long size) {
+  private FileInfoAndPartition(String partitionPath, String path, long size) {
     this.partitionPath = partitionPath;
-    this.name = name;
+    this.path = path;
     this.size = size;
   }
 

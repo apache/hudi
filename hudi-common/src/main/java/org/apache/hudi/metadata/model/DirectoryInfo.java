@@ -43,12 +43,13 @@ import static org.apache.hudi.common.table.timeline.InstantComparison.compareTim
 /**
  * A class which represents a directory and the files and directories inside it.
  * <p>
- * A {@code PartitionFileInfo} object saves the name of the partition and various properties requires of each file
+ * A {@code DirectoryInfo} object saves the name of the partition and various properties requires of each file
  * required for initializing the metadata table. Saving limited properties reduces the total memory footprint when
  * a very large number of files are present in the dataset being initialized.
  */
 @Getter
 public class DirectoryInfo implements Serializable {
+  private static final long serialVersionUID = 1L;
 
   // Relative path of the directory (relative to the base directory)
   private final String relativePath;

@@ -56,7 +56,7 @@ public class PartitionStatsIndexer extends BaseIndexer {
 
   @Override
   public List<IndexPartitionInitialization> buildInitialization(String dataTableInstantTime, String instantTimeForPartition, Map<String, List<FileInfo>> partitionToAllFilesMap,
-                                                                Lazy<List<FileSliceAndPartition>> lazyLatestMergedPartitionFileSliceList) throws IOException {
+                                                                Lazy<List<FileSliceAndPartition>> lazyPartitionFileSlices) throws IOException {
     // Partition stats index cannot be enabled for a non-partitioned table
     if (!dataTableMetaClient.getTableConfig().isTablePartitioned()) {
       return Collections.emptyList();
@@ -71,7 +71,7 @@ public class PartitionStatsIndexer extends BaseIndexer {
 
     Lazy<Option<HoodieSchema>> tableSchemaOpt = Lazy.lazily(() -> HoodieTableMetadataUtil.tryResolveSchemaForTable(dataTableMetaClient));
     HoodieData<HoodieRecord> records = HoodieTableMetadataUtil.convertFilesToPartitionStatsRecords(
-        engineContext, lazyLatestMergedPartitionFileSliceList.get(), dataTableWriteConfig.getMetadataConfig(),
+        engineContext, lazyPartitionFileSlices.get(), dataTableWriteConfig.getMetadataConfig(),
         dataTableMetaClient, tableSchemaOpt, Option.of(dataTableWriteConfig.getRecordMerger().getRecordType()));
     final int fileGroupCount = dataTableWriteConfig.getMetadataConfig().getPartitionStatsIndexFileGroupCount();
 

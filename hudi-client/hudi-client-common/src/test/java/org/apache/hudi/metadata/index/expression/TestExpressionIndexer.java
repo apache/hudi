@@ -21,7 +21,6 @@ import org.apache.hudi.metadata.HoodieMetadataPayload;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.metadata.index.ExpressionIndexRecordGenerator;
 import org.apache.hudi.metadata.index.model.IndexPartitionInitialization;
-import org.apache.hudi.metadata.model.FileInfo;
 import org.apache.hudi.metadata.model.FileSliceAndPartition;
 import org.apache.hudi.util.Lazy;
 
@@ -32,7 +31,6 @@ import java.io.IOException;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 
 import static org.apache.hudi.common.testutils.HoodieTestUtils.getDefaultStorageConf;
@@ -59,8 +57,8 @@ class TestExpressionIndexer {
       mockedUtil.when(() -> HoodieTableMetadataUtil.getExpressionIndexPartitionsToInit(any(), any(), any()))
           .thenReturn(Set.of("expr1", "expr2"));
 
-      ExposedExpressionIndexer indexer = new ExposedExpressionIndexer(engineContext, writeConfig, metaClient, mock(ExpressionIndexRecordGenerator.class));
-      List<IndexPartitionInitialization> result = indexer.callGetData("001", "002", Collections.emptyMap(), Lazy.lazily(Collections::emptyList));
+      ExpressionIndexer indexer = new ExpressionIndexer(engineContext, writeConfig, metaClient, mock(ExpressionIndexRecordGenerator.class));
+      List<IndexPartitionInitialization> result = indexer.buildInitialization("001", "002", Collections.emptyMap(), Lazy.lazily(Collections::emptyList));
       assertTrue(result.isEmpty());
     }
   }
@@ -98,27 +96,14 @@ class TestExpressionIndexer {
       mockedUtil.when(() -> HoodieTableMetadataUtil.tryResolveSchemaForTable(metaClient)).thenReturn(Option.of(tableSchema));
       mockedUtil.when(() -> HoodieTableMetadataUtil.getProjectedSchemaForExpressionIndex(definition, metaClient, tableSchema)).thenReturn(projectedSchema);
 
-      ExposedExpressionIndexer indexer = new ExposedExpressionIndexer(engineContext, writeConfig, metaClient, generator);
-      List<IndexPartitionInitialization> initializationList = indexer.callGetData("001", "002", new HashMap<>(), Lazy.lazily(() -> fileSlices));
+      ExpressionIndexer indexer = new ExpressionIndexer(engineContext, writeConfig, metaClient, generator);
+      List<IndexPartitionInitialization> initializationList = indexer.buildInitialization("001", "002", new HashMap<>(), Lazy.lazily(() -> fileSlices));
       assertEquals(1, initializationList.size());
 
       assertEquals("expr_idx", initializationList.get(0).indexPartitionName());
       List<HoodieRecord> collected = initializationList.get(0).dataPartitionAndRecords().get(0).indexRecords().collectAsList();
       assertEquals(1, collected.size());
       assertEquals("p_expr", collected.get(0).getRecordKey());
-    }
-  }
-
-  private static class ExposedExpressionIndexer extends ExpressionIndexer {
-    ExposedExpressionIndexer(HoodieEngineContext engineContext, HoodieWriteConfig dataTableWriteConfig,
-                             HoodieTableMetaClient dataTableMetaClient, ExpressionIndexRecordGenerator expressionIndexRecordGenerator) {
-      super(engineContext, dataTableWriteConfig, dataTableMetaClient, expressionIndexRecordGenerator);
-    }
-
-    List<IndexPartitionInitialization> callGetData(String dataTableInstantTime, String instantTimeForPartition,
-                                                   Map<String, List<FileInfo>> partitionIdToAllFilesMap,
-                                                   Lazy<List<FileSliceAndPartition>> lazyLatestMergedPartitionFileSliceList) throws IOException {
-      return buildInitialization(dataTableInstantTime, instantTimeForPartition, partitionIdToAllFilesMap, lazyLatestMergedPartitionFileSliceList);
     }
   }
 }

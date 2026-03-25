@@ -165,7 +165,7 @@ public class HoodieMetadataMetrics implements Serializable {
     gaugeOpt.ifPresent(gauge -> gauge.setValue(gauge.getValue() + value));
   }
 
-  protected void setMetric(String action, long value) {
+  public void setMetric(String action, long value) {
     metrics.registerGauge(action, value);
   }
 

@@ -47,7 +47,7 @@ import static org.apache.hudi.metadata.HoodieTableMetadataUtil.createRecordIndex
 import static org.apache.hudi.metadata.MetadataPartitionType.RECORD_INDEX;
 
 /**
- * Implementation of the global {@link MetadataPartitionType#RECORD_INDEX} index
+ * Implementation of the partitioned {@link MetadataPartitionType#RECORD_INDEX} index
  */
 @Slf4j
 public class PartitionedRecordIndexer extends BaseRecordIndexer {
@@ -58,17 +58,19 @@ public class PartitionedRecordIndexer extends BaseRecordIndexer {
 
   @Override
   public List<IndexPartitionInitialization> buildInitialization(String dataTableInstantTime, String instantTimeForPartition, Map<String, List<FileInfo>> partitionToAllFilesMap,
-                                                                Lazy<List<FileSliceAndPartition>> lazyLatestMergedPartitionFileSliceList) throws IOException {
+                                                                Lazy<List<FileSliceAndPartition>> lazyPartitionFileSlices) throws IOException {
     createRecordIndexDefinition(dataTableMetaClient, Collections.singletonMap(HoodieRecordIndex.IS_PARTITIONED_OPTION, "true"));
-    Map<String, List<FileSliceAndPartition>> partitionFileSlicePairsMap = lazyLatestMergedPartitionFileSliceList.get().stream()
+    Map<String, List<FileSliceAndPartition>> partitionFileSlicePairsMap = lazyPartitionFileSlices.get().stream()
         .collect(Collectors.groupingBy(FileSliceAndPartition::partitionPath));
     Map<String, DataPartitionAndRecords> fileGroupCountAndRecordsPairMap = new HashMap<>(partitionFileSlicePairsMap.size());
     int maxParallelismPerHudiPartition = partitionFileSlicePairsMap.isEmpty()
         ? 1 : Math.max(1, dataTableWriteConfig.getMetadataConfig().getRecordIndexMaxParallelism() / partitionFileSlicePairsMap.size());
     int totalFileGroupCount = 0;
-    for (String partition : partitionFileSlicePairsMap.keySet()) {
+    for (Map.Entry<String, List<FileSliceAndPartition>> entry: partitionFileSlicePairsMap.entrySet()) {
+      String partition = entry.getKey();
+      List<FileSliceAndPartition> fileSliceAndPartitions = entry.getValue();
       log.info("Initializing partitioned record index from data partition {}", partition);
-      DataPartitionAndRecords dataPartitionAndRecords = initializeRecordIndexPartition(partition, partitionFileSlicePairsMap.get(partition), maxParallelismPerHudiPartition);
+      DataPartitionAndRecords dataPartitionAndRecords = initializeRecordIndexPartition(partition, fileSliceAndPartitions, maxParallelismPerHudiPartition);
       fileGroupCountAndRecordsPairMap.put(partition, dataPartitionAndRecords);
       totalFileGroupCount += dataPartitionAndRecords.numFileGroups();
     }

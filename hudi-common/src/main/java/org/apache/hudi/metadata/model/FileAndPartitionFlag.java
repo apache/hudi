@@ -23,18 +23,22 @@ import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.experimental.Accessors;
 
+import java.io.Serializable;
+
 /**
  * Data class representing a file and partition with a flag.
  */
 @Getter
 @AllArgsConstructor
 @Accessors(fluent = true)
-public class FileAndPartitionFlag {
+public class FileAndPartitionFlag implements Serializable {
+  private static final long serialVersionUID = 1L;
+
   private final String partitionPath;
   private final String fileName;
-  private final boolean flag;
+  private final boolean isDeleted;
 
-  public static FileAndPartitionFlag of(String partition, String file, boolean flag) {
-    return new FileAndPartitionFlag(partition, file, flag);
+  public static FileAndPartitionFlag of(String partition, String file, boolean isDeleted) {
+    return new FileAndPartitionFlag(partition, file, isDeleted);
   }
 }

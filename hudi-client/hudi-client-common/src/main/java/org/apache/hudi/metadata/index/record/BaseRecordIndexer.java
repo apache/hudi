@@ -26,8 +26,10 @@ import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.engine.ReaderContextFactory;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieFileFormat;
+import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.io.storage.HoodieAvroFileReader;
 import org.apache.hudi.io.storage.HoodieIOFactory;
@@ -64,14 +66,13 @@ import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.schema.HoodieSchemaUtils.getRecordKeySchema;
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.RECORD_INDEX_AVERAGE_RECORD_SIZE;
 
 /**
- * Base implementation for record-index.
+ * Base implementation of {@link MetadataPartitionType#RECORD_INDEX} index.
  */
 @Slf4j
 public abstract class BaseRecordIndexer extends BaseIndexer {
-
-  private static final int RECORD_INDEX_AVERAGE_RECORD_SIZE = 48;
 
   protected BaseRecordIndexer(HoodieEngineContext engineContext, HoodieWriteConfig dataTableWriteConfig, HoodieTableMetaClient dataTableMetaClient) {
     super(engineContext, dataTableWriteConfig, dataTableMetaClient);
@@ -109,7 +110,7 @@ public abstract class BaseRecordIndexer extends BaseIndexer {
     if (dataTableWriteConfig.getMetadataConfig().isRecordIndexInitializationValidationEnabled()) {
       validateRecordIndex(records, fileGroupCount, metadataMetaClient);
     }
-    records.unpersist();
+    records.unpersistWithDependencies();
   }
 
   /**
@@ -160,7 +161,7 @@ public abstract class BaseRecordIndexer extends BaseIndexer {
     }
 
     int parallelism = Math.min(baseFilePaths.size(), dataTableWriteConfig.getMetadataConfig().getRecordIndexMaxParallelism());
-    StorageConfiguration<?> storageConfBroadcast = metadataMetaClient.getStorageConf();
+    StorageConfiguration<?> storageConf = metadataMetaClient.getStorageConf();
     HoodieFileFormat baseFileFormat = metadataMetaClient.getTableConfig().getBaseFileFormat();
 
     return engineContext.parallelize(baseFilePaths, parallelism)
@@ -169,7 +170,7 @@ public abstract class BaseRecordIndexer extends BaseIndexer {
           while (pathIterator.hasNext()) {
             StoragePath path = pathIterator.next();
             try {
-              HoodieStorage storage = HoodieStorageUtils.getStorage(path, storageConfBroadcast);
+              HoodieStorage storage = HoodieStorageUtils.getStorage(path, storageConf);
               HoodieConfig readerConfig = new HoodieConfig();
               HoodieAvroFileReader reader = (HoodieAvroFileReader) HoodieIOFactory.getIOFactory(storage)
                   .getReaderFactory(HoodieRecord.HoodieRecordType.AVRO)
@@ -194,7 +195,7 @@ public abstract class BaseRecordIndexer extends BaseIndexer {
   /**
    * Fetch record locations from FileSlice snapshot.
    *
-   * @param engineContext             context ot use.
+   * @param engineContext             context to use.
    * @param partitionFileSlicePairs   list of pairs of partition and file slice.
    * @param recordIndexMaxParallelism parallelism to use.
    * @param activeModule              active module of interest.
@@ -229,7 +230,7 @@ public abstract class BaseRecordIndexer extends BaseIndexer {
       final FileSlice fileSlice = partitionAndFileSlice.fileSlice();
       final String fileId = fileSlice.getFileId();
       HoodieReaderContext<T> readerContext = readerContextFactory.getContext();
-      HoodieSchema dataSchema = HoodieSchemaCache.intern(HoodieSchemaUtils.addMetadataFields(HoodieSchema.parse(dataWriteConfig.getWriteSchema()), dataWriteConfig.allowOperationMetadataField()));
+      HoodieSchema dataSchema = resolveDataSchemaForRLIBootstrap(metaClient, dataWriteConfig);
       HoodieSchema requestedSchema = metaClient.getTableConfig().populateMetaFields() ? getRecordKeySchema()
           : HoodieSchemaUtils.projectSchema(dataSchema, Arrays.asList(metaClient.getTableConfig().getRecordKeyFields().orElse(new String[0])));
       Option<InternalSchema> internalSchemaOption = SerDeHelper.fromJson(dataWriteConfig.getInternalSchema());
@@ -251,6 +252,27 @@ public abstract class BaseRecordIndexer extends BaseIndexer {
             baseFileInstantTime, 0);
       });
     });
+  }
+
+  /**
+   * Resolves the data schema (with metadata fields added) for use during record index bootstrap.
+   * When the write config does not carry a schema (e.g. table-service operations such as clean),
+   * falls back to resolving the schema from the table's commit history / data files.
+   */
+  private static HoodieSchema resolveDataSchemaForRLIBootstrap(HoodieTableMetaClient metaClient, HoodieWriteConfig dataWriteConfig) {
+    String writeSchemaStr = dataWriteConfig.getWriteSchema();
+    HoodieSchema rawSchema;
+    if (writeSchemaStr != null) {
+      rawSchema = HoodieSchema.parse(writeSchemaStr);
+    } else {
+      try {
+        rawSchema = new TableSchemaResolver(metaClient).getTableSchema(false);
+      } catch (Exception e) {
+        throw new HoodieException(
+            String.format("Could not resolve schema for table %s for record index bootstrap", metaClient.getBasePath()), e);
+      }
+    }
+    return HoodieSchemaCache.intern(HoodieSchemaUtils.addMetadataFields(rawSchema, dataWriteConfig.allowOperationMetadataField()));
   }
 
   protected int estimateFileGroupCount(HoodieData<HoodieRecord> records) {
