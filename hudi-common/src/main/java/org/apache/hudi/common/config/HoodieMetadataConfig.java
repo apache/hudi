@@ -372,12 +372,12 @@ public final class HoodieMetadataConfig extends HoodieConfig {
           + "file groups to create automatically. This helps account for growth in the number of records in the dataset.");
 
   public static final ConfigProperty<Boolean> DEFER_RLI_INIT_FOR_FRESH_TABLE = ConfigProperty
-      .key(METADATA_PREFIX + ".record.level.index.defer.for.fresh.table")
+      .key(METADATA_PREFIX + ".record.level.index.defer.init")
       .defaultValue(false)
       .markAdvanced()
       .sinceVersion("1.2.0")
       .withDocumentation("When enabled, defers RLI initialization to 2nd commit for a fresh table. This should help with determining the file group "
-          + "count dynamically for RLI index (global and partitioned RLI)");
+          + "count dynamically for Record Index (global and partitioned RLI)");
 
   public static final ConfigProperty<Integer> RECORD_INDEX_MAX_PARALLELISM = ConfigProperty
       .key(METADATA_PREFIX + ".max.init.parallelism")
