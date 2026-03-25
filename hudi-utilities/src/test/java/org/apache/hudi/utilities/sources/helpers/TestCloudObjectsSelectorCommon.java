@@ -23,23 +23,30 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.testutils.HoodieSparkClientTestHarness;
+import org.apache.hudi.utilities.config.CloudSourceConfig;
 import org.apache.hudi.utilities.schema.FilebasedSchemaProvider;
 
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.RowFactory;
+import org.apache.spark.sql.types.DataTypes;
+import org.apache.spark.sql.types.StructField;
 import org.apache.spark.sql.types.StructType;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 import java.io.FileInputStream;
 import java.io.IOException;
+import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 public class TestCloudObjectsSelectorCommon extends HoodieSparkClientTestHarness {
 
@@ -198,6 +205,107 @@ public class TestCloudObjectsSelectorCommon extends HoodieSparkClientTestHarness
     StructType expectedSchema = HoodieSchemaConversionUtils.convertHoodieSchemaToStructType(schema);
     // assert final output schema matches with the source schema
     Assertions.assertEquals(expectedSchema, result.get().schema(), "output dataset schema should match source schema");
+  }
+
+  @Test
+  void parquetMixedSchemasMergedByDefault(@TempDir Path tempDir) {
+    String p1 = tempDir.resolve("part1").toString();
+    String p2 = tempDir.resolve("part2").toString();
+
+    StructType schema1 = DataTypes.createStructType(Arrays.asList(
+        DataTypes.createStructField("id", DataTypes.IntegerType, true),
+        DataTypes.createStructField("b", DataTypes.StringType, true)));
+    sparkSession.createDataFrame(Collections.singletonList(RowFactory.create(1, "x")), schema1)
+        .write().parquet(p1);
+
+    StructType schema2 = DataTypes.createStructType(Arrays.asList(
+        DataTypes.createStructField("id", DataTypes.IntegerType, true),
+        DataTypes.createStructField("c", DataTypes.IntegerType, true)));
+    sparkSession.createDataFrame(Collections.singletonList(RowFactory.create(1, 99)), schema2)
+        .write().parquet(p2);
+
+    CloudObjectsSelectorCommon cloudObjectsSelectorCommon = new CloudObjectsSelectorCommon(new TypedProperties());
+    List<CloudObjectMetadata> input = Arrays.asList(
+        new CloudObjectMetadata(p1, 1L),
+        new CloudObjectMetadata(p2, 1L));
+    Option<Dataset<Row>> result = cloudObjectsSelectorCommon.loadAsDataset(sparkSession, input, "parquet", Option.empty(), 1);
+    Assertions.assertTrue(result.isPresent());
+    Assertions.assertEquals(2, result.get().count());
+    Set<String> colNames = Arrays.stream(result.get().schema().fields()).map(StructField::name).collect(Collectors.toSet());
+    Assertions.assertTrue(colNames.contains("b"));
+    Assertions.assertTrue(colNames.contains("c"));
+  }
+
+  /**
+   * With mergeSchema off, Spark does not union Parquet footers: it typically follows one file's schema
+   * (here {@code p1} is listed first). Columns only present in other files (e.g. {@code c} in {@code p2})
+   * are omitted from the scan—no exception, but data under those columns is dropped.
+   */
+  @Test
+  void parquetMixedSchemasDropExtraColumnsWhenMergeDisabled(@TempDir Path tempDir) {
+    String p1 = tempDir.resolve("part1").toString();
+    String p2 = tempDir.resolve("part2").toString();
+
+    StructType schema1 = DataTypes.createStructType(Arrays.asList(
+        DataTypes.createStructField("id", DataTypes.IntegerType, true),
+        DataTypes.createStructField("b", DataTypes.StringType, true)));
+    sparkSession.createDataFrame(Collections.singletonList(RowFactory.create(1, "x")), schema1)
+        .write().parquet(p1);
+
+    StructType schema2 = DataTypes.createStructType(Arrays.asList(
+        DataTypes.createStructField("id", DataTypes.IntegerType, true),
+        DataTypes.createStructField("c", DataTypes.IntegerType, true)));
+    sparkSession.createDataFrame(Collections.singletonList(RowFactory.create(2, 99)), schema2)
+        .write().parquet(p2);
+
+    TypedProperties props = new TypedProperties();
+    props.setProperty(CloudSourceConfig.CLOUD_INCREMENTAL_PARQUET_MERGE_SCHEMA.key(), "false");
+    CloudObjectsSelectorCommon cloudObjectsSelectorCommon = new CloudObjectsSelectorCommon(props);
+    List<CloudObjectMetadata> input = Arrays.asList(
+        new CloudObjectMetadata(p1, 1L),
+        new CloudObjectMetadata(p2, 1L));
+    Option<Dataset<Row>> result = cloudObjectsSelectorCommon.loadAsDataset(sparkSession, input, "parquet", Option.empty(), 1);
+    Assertions.assertTrue(result.isPresent());
+    Dataset<Row> ds = result.get();
+    Set<String> colNames = Arrays.stream(ds.schema().fields()).map(StructField::name).collect(Collectors.toSet());
+    Assertions.assertTrue(colNames.contains("id"));
+    Assertions.assertTrue(colNames.contains("b"));
+    Assertions.assertFalse(colNames.contains("c"), "column c from second file should be absent without mergeSchema");
+    Assertions.assertEquals(2, ds.count());
+    List<Row> rows = ds.collectAsList();
+    Row fromSecondFile = rows.stream().filter(r -> r.getInt(0) == 2).findFirst().orElseThrow();
+    Assertions.assertTrue(fromSecondFile.isNullAt(fromSecondFile.fieldIndex("b")));
+  }
+
+  @Test
+  void parquetSparkDatasourceOptionsMergeSchemaFalseDropsExtraColumns(@TempDir Path tempDir) {
+    String p1 = tempDir.resolve("part1").toString();
+    String p2 = tempDir.resolve("part2").toString();
+
+    StructType schema1 = DataTypes.createStructType(Arrays.asList(
+        DataTypes.createStructField("id", DataTypes.IntegerType, true),
+        DataTypes.createStructField("b", DataTypes.StringType, true)));
+    sparkSession.createDataFrame(Collections.singletonList(RowFactory.create(1, "x")), schema1)
+        .write().parquet(p1);
+
+    StructType schema2 = DataTypes.createStructType(Arrays.asList(
+        DataTypes.createStructField("id", DataTypes.IntegerType, true),
+        DataTypes.createStructField("c", DataTypes.IntegerType, true)));
+    sparkSession.createDataFrame(Collections.singletonList(RowFactory.create(2, 99)), schema2)
+        .write().parquet(p2);
+
+    TypedProperties props = new TypedProperties();
+    props.setProperty(CloudSourceConfig.SPARK_DATASOURCE_OPTIONS.key(), "{\"mergeSchema\":\"false\"}");
+    CloudObjectsSelectorCommon cloudObjectsSelectorCommon = new CloudObjectsSelectorCommon(props);
+    List<CloudObjectMetadata> input = Arrays.asList(
+        new CloudObjectMetadata(p1, 1L),
+        new CloudObjectMetadata(p2, 1L));
+    Option<Dataset<Row>> result = cloudObjectsSelectorCommon.loadAsDataset(sparkSession, input, "parquet", Option.empty(), 1);
+    Assertions.assertTrue(result.isPresent());
+    Dataset<Row> ds = result.get();
+    Set<String> colNames = Arrays.stream(ds.schema().fields()).map(StructField::name).collect(Collectors.toSet());
+    Assertions.assertFalse(colNames.contains("c"));
+    Assertions.assertEquals(2, ds.count());
   }
 
   @Test

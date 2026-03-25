@@ -71,6 +71,7 @@ import static org.apache.hudi.common.util.CollectionUtils.isNullOrEmpty;
 import static org.apache.hudi.common.util.ConfigUtils.containsConfigProperty;
 import static org.apache.hudi.common.util.ConfigUtils.getBooleanWithAltKeys;
 import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
+import static org.apache.hudi.utilities.config.CloudSourceConfig.CLOUD_INCREMENTAL_PARQUET_MERGE_SCHEMA;
 import static org.apache.hudi.utilities.config.CloudSourceConfig.CLOUD_DATAFILE_EXTENSION;
 import static org.apache.hudi.utilities.config.CloudSourceConfig.IGNORE_RELATIVE_PATH_PREFIX;
 import static org.apache.hudi.utilities.config.CloudSourceConfig.IGNORE_RELATIVE_PATH_SUBSTR;
@@ -281,7 +282,7 @@ public class CloudObjectsSelectorCommon {
     if (isNullOrEmpty(cloudObjectMetadata)) {
       return Option.empty();
     }
-    DataFrameReader reader = spark.read().format(fileFormat);
+    DataFrameReader reader = applyParquetMergeSchemaOption(spark.read().format(fileFormat), fileFormat);
     String datasourceOpts = getStringWithAltKeys(properties, CloudSourceConfig.SPARK_DATASOURCE_OPTIONS, true);
 
     StructType rowSchema = null;
@@ -544,6 +545,25 @@ public class CloudObjectsSelectorCommon {
     }
 
     return Option.empty();
+  }
+
+  /**
+   * Enables Spark Parquet {@code mergeSchema} for cloud object batches when configured, so heterogeneous Parquet
+   * files in one sync round share a merged struct type. Applied before user {@link CloudSourceConfig#SPARK_DATASOURCE_OPTIONS}
+   * so explicit reader options can override.
+   */
+  private DataFrameReader applyParquetMergeSchemaOption(DataFrameReader reader, String fileFormat) {
+    if (!isParquetFileFormat(fileFormat)) {
+      return reader;
+    }
+    if (!getBooleanWithAltKeys(properties, CLOUD_INCREMENTAL_PARQUET_MERGE_SCHEMA)) {
+      return reader;
+    }
+    return reader.option("mergeSchema", "true");
+  }
+
+  private static boolean isParquetFileFormat(String fileFormat) {
+    return fileFormat != null && "parquet".equalsIgnoreCase(fileFormat.trim());
   }
 
   public enum Type {
