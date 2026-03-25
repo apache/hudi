@@ -17,6 +17,7 @@
 
 package org.apache.hudi.functional
 
+import org.apache.hudi.DefaultSparkRecordMerger
 import org.apache.hudi.io.util.FileIOUtils
 
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
@@ -37,15 +38,22 @@ class TestSqlStatement extends HoodieSparkSqlTestBase {
   val STATE_FINISH_ALL = 12
 
   test("Test Sql Statements") {
-    Seq("cow", "mor").foreach { tableType =>
-      withTempDir { tmp =>
-        val params = Map(
-          "tableType" -> tableType,
-          "tmpDir" -> {
-            tmp.getCanonicalPath.replace('\\', '/')
-          }
-        )
-        execSqlFile("/sql-statements.sql", params)
+    Seq("parquet", "lance").foreach { baseFileFormat =>
+      Seq("cow", "mor").foreach { tableType =>
+        withTempDir { tmp =>
+          val params = Map(
+            "tableType" -> tableType,
+            "baseFileFormat" -> baseFileFormat,
+            "recordMergerImpl" -> (
+              if (baseFileFormat.equals("parquet")) "" else {
+                s"hoodie.write.record.merge.custom.implementation.classes = '${classOf[DefaultSparkRecordMerger].getName}',"
+              }),
+            "tmpDir" -> {
+              tmp.getCanonicalPath.replace('\\', '/')
+            }
+          )
+          execSqlFile("/sql-statements.sql", params)
+        }
       }
     }
   }

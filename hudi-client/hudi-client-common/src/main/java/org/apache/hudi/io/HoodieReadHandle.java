@@ -19,6 +19,8 @@
 package org.apache.hudi.io;
 
 import org.apache.hudi.common.model.HoodieBaseFile;
+import org.apache.hudi.common.model.HoodieFileFormat;
+import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -68,14 +70,16 @@ public abstract class HoodieReadHandle<T, I, K, O> extends HoodieIOHandle<T, I, 
   }
 
   protected HoodieFileReader createNewFileReader() throws IOException {
-    return HoodieIOFactory.getIOFactory(hoodieTable.getStorage())
-        .getReaderFactory(this.config.getRecordMerger().getRecordType())
-        .getFileReader(config, getLatestBaseFile().getStoragePath());
+    return createNewFileReader(getLatestBaseFile());
   }
 
   protected HoodieFileReader createNewFileReader(HoodieBaseFile hoodieBaseFile) throws IOException {
+    String ext = hoodieBaseFile.getStoragePath().getFileExtension();
+    HoodieRecord.HoodieRecordType recordType =
+        HoodieFileFormat.fromFileExtension(ext).requiresSparkRecordType()
+            ? HoodieRecord.HoodieRecordType.SPARK : this.config.getRecordMerger().getRecordType();
     return HoodieIOFactory.getIOFactory(hoodieTable.getStorage())
-        .getReaderFactory(this.config.getRecordMerger().getRecordType())
+        .getReaderFactory(recordType)
         .getFileReader(config, hoodieBaseFile.getStoragePath());
   }
 }

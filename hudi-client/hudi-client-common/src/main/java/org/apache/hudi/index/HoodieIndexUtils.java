@@ -30,10 +30,10 @@ import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieBaseFile;
+import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieIndexDefinition;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.model.HoodieRecordGlobalLocation;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieTableType;
@@ -251,8 +251,11 @@ public class HoodieIndexUtils {
       return Collections.emptyList();
     }
     log.info("Going to filter {} keys from file {}", candidateRecordKeys.size(), filePath);
+    HoodieRecord.HoodieRecordType recordType =
+        HoodieFileFormat.fromFileExtension(FSUtils.getFileExtension(filePath.toString())).requiresSparkRecordType()
+            ? HoodieRecord.HoodieRecordType.SPARK : HoodieRecord.HoodieRecordType.AVRO;
     try (HoodieFileReader fileReader = HoodieIOFactory.getIOFactory(storage)
-        .getReaderFactory(HoodieRecordType.AVRO)
+        .getReaderFactory(recordType)
         .getFileReader(DEFAULT_HUDI_CONFIG_FOR_READER, filePath)) {
       // Load all rowKeys from the file, to double-confirm
       HoodieTimer timer = HoodieTimer.start();
@@ -396,8 +399,21 @@ public class HoodieIndexUtils {
     }
 
     //record is inserted or updated
-    String partitionPath = inferPartitionPath(incoming, existing, writeSchemaWithMetaFields, keyGenerator, existingRecordContext, mergeResult);
-    HoodieRecord<R> result = existingRecordContext.constructHoodieRecord(mergeResult, partitionPath);
+    String partitionPath = inferPartitionPath(incoming, existing, writeSchemaWithMetaFields, keyGenerator,
+        existingRecordContext, mergeResult, incomingBufferedRecord, existingBufferedRecord, incomingRecordContext);
+    // When HoodieAvroRecordMerger creates a genuinely new BufferedRecord, it encodes the schema into
+    // incomingRecordContext. Re-encode into existingRecordContext so constructHoodieRecord (which uses
+    // existingRecordContext for the correct payload class) can resolve the schema for SPARK records.
+    BufferedRecord<R> mergeResultForConstruct = mergeResult;
+    if (mergeResult != incomingBufferedRecord && mergeResult != existingBufferedRecord) {
+      HoodieSchema mergedSchema = incomingRecordContext.getSchemaFromBufferRecord(mergeResult);
+      if (mergedSchema != null && existingRecordContext.getSchemaFromBufferRecord(mergeResult) == null) {
+        mergeResultForConstruct = BufferedRecords.fromEngineRecord(
+            mergeResult.getRecord(), mergeResult.getRecordKey(), mergedSchema,
+            existingRecordContext, Arrays.asList(orderingFieldNames), mergeResult.getHoodieOperation());
+      }
+    }
+    HoodieRecord<R> result = existingRecordContext.constructHoodieRecord(mergeResultForConstruct, partitionPath);
     HoodieRecord<R> withMeta = result.prependMetaFields(writeSchema, writeSchemaWithMetaFields,
         new MetadataValues().setRecordKey(incoming.getRecordKey()).setPartitionPath(partitionPath), properties);
     return Option.of(withMeta.wrapIntoHoodieRecordPayloadWithParams(writeSchemaWithMetaFields, properties, Option.empty(),
@@ -405,15 +421,29 @@ public class HoodieIndexUtils {
   }
 
   private static <R> String inferPartitionPath(HoodieRecord<R> incoming, HoodieRecord<R> existing, HoodieSchema recordSchema, BaseKeyGenerator keyGenerator,
-                                               RecordContext<R> recordContext, BufferedRecord<R> resultingBufferedRecord) {
-    R record = resultingBufferedRecord.getRecord();
-    if (record == incoming.getData()) {
+                                               RecordContext<R> existingRecordContext, BufferedRecord<R> resultingBufferedRecord,
+                                               BufferedRecord<R> incomingBufferedRecord, BufferedRecord<R> existingBufferedRecord,
+                                               RecordContext<R> incomingRecordContext) {
+    // Compare by BufferedRecord identity first: for payload-based records (e.g. ExpressionPayload),
+    // incoming.getData() is the payload object, not the InternalRow extracted from it, so data-identity
+    // checks would incorrectly fall through to the schema-based conversion path.
+    if (resultingBufferedRecord == incomingBufferedRecord || resultingBufferedRecord.getRecord() == incoming.getData()) {
       return incoming.getPartitionPath();
-    } else if (record == existing.getData()) {
+    } else if (resultingBufferedRecord == existingBufferedRecord || resultingBufferedRecord.getRecord() == existing.getData()) {
       return existing.getPartitionPath();
     } else {
-      // the merged record is not the same as either incoming or existing, so we need to compute the partition path
-      return keyGenerator.getPartitionPath(recordContext.convertToAvroRecord(record, recordSchema));
+      // The merged record is genuinely new (e.g. created by HoodieAvroRecordMerger.merge).
+      // Its InternalRow was produced and its schemaId was encoded by incomingRecordContext,
+      // so use incomingRecordContext with the record's actual schema (which may be the data schema,
+      // without meta fields) rather than existingRecordContext with writeSchemaWithMetaFields.
+      HoodieSchema actualSchema = incomingRecordContext.getSchemaFromBufferRecord(resultingBufferedRecord);
+      if (actualSchema == null) {
+        actualSchema = existingRecordContext.getSchemaFromBufferRecord(resultingBufferedRecord);
+      }
+      if (actualSchema == null) {
+        actualSchema = recordSchema;
+      }
+      return keyGenerator.getPartitionPath(incomingRecordContext.convertToAvroRecord(resultingBufferedRecord.getRecord(), actualSchema));
     }
   }
 
@@ -448,7 +478,8 @@ public class HoodieIndexUtils {
         // the record was deleted
         return Option.empty();
       }
-      String partitionPath = inferPartitionPath(incoming, existing, writeSchemaWithMetaFields, keyGenerator, existingRecordContext, mergeResult);
+      String partitionPath = inferPartitionPath(incoming, existing, writeSchemaWithMetaFields, keyGenerator,
+          existingRecordContext, mergeResult, incomingBufferedRecord, existingBufferedRecord, incomingRecordContext);
       if (config.isFileGroupReaderBasedMergeHandle() && HoodieRecordUtils.isPayloadClassDeprecated(ConfigUtils.getPayloadClass(properties))) {
         return Option.of(existingRecordContext.constructHoodieRecord(mergeResult, partitionPath));
       } else {
@@ -494,8 +525,11 @@ public class HoodieIndexUtils {
     RecordContext<R> incomingRecordContext = readerContext.getRecordContext();
     // Create a reader context for the existing records. In the case of merge-into commands, the incoming records
     // can be using an expression payload so here we rely on the table's configured payload class if it is required.
+    HoodieRecord.HoodieRecordType recordTypeForExistingRecords =
+        hoodieTable.getMetaClient().getTableConfig().getBaseFileFormat().requiresSparkRecordType()
+            ? HoodieRecord.HoodieRecordType.SPARK : config.getRecordMerger().getRecordType();
     ReaderContextFactory<R> readerContextFactoryForExistingRecords = (ReaderContextFactory<R>) hoodieTable.getContext()
-        .getReaderContextFactoryForWrite(hoodieTable.getMetaClient(), config.getRecordMerger().getRecordType(), hoodieTable.getMetaClient().getTableConfig().getProps());
+        .getReaderContextFactoryForWrite(hoodieTable.getMetaClient(), recordTypeForExistingRecords, hoodieTable.getMetaClient().getTableConfig().getProps());
     RecordContext<R> existingRecordContext = readerContextFactoryForExistingRecords.getContext().getRecordContext();
     // merged existing records with current locations being set
     HoodieSchema writerSchemaWithMetaFields = HoodieSchemaUtils.addMetadataFields(writerSchema, updatedConfig.allowOperationMetadataField());
@@ -581,8 +615,11 @@ public class HoodieIndexUtils {
     HoodiePairData<String, HoodieRecord<R>> keyAndIncomingRecords =
         incomingRecords.mapToPair(record -> Pair.of(record.getRecordKey(), record));
 
+    HoodieRecord.HoodieRecordType recordType =
+        table.getMetaClient().getTableConfig().getBaseFileFormat().requiresSparkRecordType()
+            ? HoodieRecord.HoodieRecordType.SPARK : config.getRecordMerger().getRecordType();
     ReaderContextFactory<R> readerContextFactory = (ReaderContextFactory<R>) table.getContext()
-        .getReaderContextFactoryForWrite(table.getMetaClient(), config.getRecordMerger().getRecordType(), config.getProps());
+        .getReaderContextFactoryForWrite(table.getMetaClient(), recordType, config.getProps());
     HoodieReaderContext<R> readerContext = readerContextFactory.getContext();
     readerContext.initRecordMergerForIngestion(config.getProps());
     TypedProperties properties = readerContext.getMergeProps(config.getProps());

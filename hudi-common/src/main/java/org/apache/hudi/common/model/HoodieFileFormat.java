@@ -74,6 +74,14 @@ public enum HoodieFileFormat {
     return extension;
   }
 
+  /**
+   * Returns true if this file format requires the SPARK record type for reading/writing.
+   * Lance only supports the Spark-native InternalRow representation, not Avro.
+   */
+  public boolean requiresSparkRecordType() {
+    return this == LANCE;
+  }
+
   public static HoodieFileFormat fromFileExtension(String extension) {
     for (HoodieFileFormat format : HoodieFileFormat.values()) {
       if (format.getFileExtension().equals(extension)) {

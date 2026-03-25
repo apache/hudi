@@ -64,10 +64,7 @@ public class HoodieInternalRowFileWriterFactory {
     if (PARQUET.getFileExtension().equals(extension)) {
       return newParquetInternalRowFileWriter(path, hoodieTable, writeConfig, schema, tryInstantiateBloomFilter(writeConfig));
     } else if (LANCE.getFileExtension().equals(extension)) {
-      long maxFileSize = writeConfig.getLongOrDefault(HoodieStorageConfig.LANCE_MAX_FILE_SIZE);
-      long allocatorSize = writeConfig.getLongOrDefault(HoodieStorageConfig.LANCE_WRITE_ALLOCATOR_SIZE_BYTES);
-      long flushByteWatermark = writeConfig.getLongOrDefault(HoodieStorageConfig.LANCE_WRITE_FLUSH_BYTE_WATERMARK);
-      return newLanceInternalRowFileWriter(path, hoodieTable, schema, maxFileSize, allocatorSize, flushByteWatermark);
+      return newLanceInternalRowFileWriter(path, hoodieTable, schema, writeConfig);
     }
     throw new UnsupportedOperationException(extension + " format not supported yet.");
   }
@@ -99,18 +96,18 @@ public class HoodieInternalRowFileWriterFactory {
   private static HoodieInternalRowFileWriter newLanceInternalRowFileWriter(StoragePath path,
                                                                            HoodieTable table,
                                                                            StructType structType,
-                                                                           long maxFileSize,
-                                                                           long allocatorSize,
-                                                                           long flushByteWatermark)
+                                                                           HoodieWriteConfig writeConfig)
       throws IOException {
     return HoodieSparkLanceWriter.builder()
         .file(path)
         .sparkSchema(structType)
         .taskContextSupplier(new LocalTaskContextSupplier())
         .storage(table.getStorage())
-        .maxFileSize(maxFileSize)
-        .allocatorSize(allocatorSize)
-        .flushByteWatermark(flushByteWatermark)
+        .populateMetaFields(writeConfig.populateMetaFields())
+        .maxFileSize(writeConfig.getLongOrDefault(HoodieStorageConfig.LANCE_MAX_FILE_SIZE))
+        .allocatorSize(writeConfig.getLongOrDefault(HoodieStorageConfig.LANCE_WRITE_ALLOCATOR_SIZE_BYTES))
+        .flushByteWatermark(writeConfig.getLongOrDefault(HoodieStorageConfig.LANCE_WRITE_FLUSH_BYTE_WATERMARK))
+        .bloomFilter(tryInstantiateBloomFilter(writeConfig))
         .build();
   }
 

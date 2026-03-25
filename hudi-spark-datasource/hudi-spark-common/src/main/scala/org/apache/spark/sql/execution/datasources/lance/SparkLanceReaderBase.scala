@@ -79,8 +79,21 @@ class SparkLanceReaderBase(enableVectorizedReader: Boolean) extends SparkColumna
     val filePath = file.filePath.toString
 
     if (requiredSchema.isEmpty && partitionSchema.isEmpty) {
-      // No columns requested - return empty iterator
-      Iterator.empty
+      // No column data needed (e.g. count() on a non-partitioned table). Open the Lance file to
+      // get the actual row count and return that many empty rows, so Spark computes the correct count.
+      val countAllocator = HoodieArrowAllocator.newChildAllocator(
+        getClass.getSimpleName + "-count-" + file.filePath, HoodieSparkLanceReader.LANCE_DATA_ALLOCATOR_SIZE)
+      try {
+        val lanceReader = LanceFileReader.open(file.filePath.toString, countAllocator)
+        try {
+          val rowCount = lanceReader.numRows()
+          Iterator.fill(rowCount.toInt)(InternalRow.empty)
+        } finally {
+          lanceReader.close()
+        }
+      } finally {
+        countAllocator.close()
+      }
     } else {
       // Track iterator for cleanup. Typed as ClosableIterator so we can swap in the
       // DESCRIPTOR-mode iterator when the user opts into that blob read mode.

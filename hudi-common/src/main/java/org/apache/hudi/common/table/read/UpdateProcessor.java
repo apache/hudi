@@ -24,6 +24,7 @@ import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
@@ -142,8 +143,13 @@ public interface UpdateProcessor<T> {
             return null;
           } else {
             HoodieSchema readerSchema = readerContext.getSchemaHandler().getRequestedSchema();
-            // If the record schema is different from the reader schema, rewrite the record using the payload methods to ensure consistency with legacy writer paths
-            hoodieRecord.rewriteRecordWithNewSchema(recordSchema, properties, readerSchema).toIndexedRecord(readerSchema, properties)
+            // Strip meta fields: the payload evaluates INSERT expressions against data fields only.
+            // Meta fields are populated separately by prependMetaFields/writeWithMetadata downstream,
+            // so rewriting to a schema that already includes meta fields would cause double-wrapping
+            // of meta fields in HoodieInternalRow, resulting in data fields being read from the
+            // inner meta positions (all null) instead of the actual data positions.
+            HoodieSchema dataSchema = HoodieSchemaUtils.removeMetadataFields(readerSchema);
+            hoodieRecord.rewriteRecordWithNewSchema(recordSchema, properties, dataSchema).toIndexedRecord(dataSchema, properties)
                 .ifPresent(rewrittenRecord -> mergedRecord.replaceRecord(readerContext.getRecordContext().convertAvroRecord(rewrittenRecord.getData())));
           }
         } catch (IOException e) {
