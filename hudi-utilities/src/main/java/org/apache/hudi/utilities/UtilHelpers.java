@@ -122,7 +122,7 @@ import java.util.stream.Collectors;
 import static org.apache.hudi.common.util.ConfigUtils.getBooleanWithAltKeys;
 import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
 import static org.apache.hudi.hadoop.fs.HadoopFSUtils.convertToStoragePath;
-import static org.apache.hudi.utilities.config.HoodieStreamerConfig.TRANSFORMED_ROW_NULLABLE;
+import static org.apache.hudi.utilities.config.HoodieStreamerConfig.SCHEMA_MAKE_COLUMNS_NULLABLE;
 
 /**
  * Bunch of helper methods.
@@ -636,7 +636,7 @@ public class UtilHelpers {
     StructType originalSchema = dataset.schema();
 
     // Should we make all columns nullable?
-    final boolean allColsNullable = getBooleanWithAltKeys(props, TRANSFORMED_ROW_NULLABLE);
+    final boolean allColsNullable = getBooleanWithAltKeys(props, SCHEMA_MAKE_COLUMNS_NULLABLE);
     return allColsNullable ? originalSchema.asNullable() : originalSchema;
   }
 

@@ -148,7 +148,7 @@ public class TestUtilHelpers {
 
       // Enable nullable config
       TypedProperties props = new TypedProperties();
-      props.setProperty(HoodieStreamerConfig.TRANSFORMED_ROW_NULLABLE.key(), "true");
+      props.setProperty(HoodieStreamerConfig.SCHEMA_MAKE_COLUMNS_NULLABLE.key(), "true");
 
       StructType resultSchema = UtilHelpers.extractSchemaFromDataset(ds, props);
 
@@ -195,7 +195,7 @@ public class TestUtilHelpers {
 
       // With the config enabled, all columns should become nullable
       TypedProperties propsEnabled = new TypedProperties();
-      propsEnabled.setProperty(HoodieStreamerConfig.TRANSFORMED_ROW_NULLABLE.key(), "true");
+      propsEnabled.setProperty(HoodieStreamerConfig.SCHEMA_MAKE_COLUMNS_NULLABLE.key(), "true");
       StructType resultEnabled = UtilHelpers.extractSchemaFromDataset(ds, propsEnabled);
       for (StructField field : resultEnabled.fields()) {
         assertTrue(field.nullable(), "Field " + field.name() + " should be nullable when config is enabled");
@@ -222,7 +222,7 @@ public class TestUtilHelpers {
 
       // Use the alternative (deprecated deltastreamer) key
       TypedProperties props = new TypedProperties();
-      props.setProperty("hoodie.deltastreamer.transformed.row.nullable", "true");
+      props.setProperty("hoodie.deltastreamer.schema.make.columns.nullable", "true");
 
       StructType resultSchema = UtilHelpers.extractSchemaFromDataset(ds, props);
 
