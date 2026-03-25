@@ -126,7 +126,6 @@ class TestBlobSupport extends HoodieClientTestBase with SparkDatasetMixin {
       fileReference.put(HoodieSchema.Blob.EXTERNAL_REFERENCE_LENGTH, 100L)
       fileReference.put(HoodieSchema.Blob.EXTERNAL_REFERENCE_IS_MANAGED, false)
 
-
       val blobRecord = new GenericData.Record(dataSchema.toAvroSchema)
       blobRecord.put(HoodieSchema.Blob.TYPE, new GenericData.EnumSymbol(dataSchema.getField(HoodieSchema.Blob.TYPE)
         .get.schema.toAvroSchema, HoodieSchema.Blob.OUT_OF_LINE))

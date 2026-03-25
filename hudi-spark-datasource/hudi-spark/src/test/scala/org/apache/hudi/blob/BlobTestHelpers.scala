@@ -20,8 +20,7 @@
 package org.apache.hudi.blob
 
 import org.apache.hudi.common.schema.{HoodieSchema, HoodieSchemaType}
-
-import org.apache.spark.sql.{Column, SparkSession}
+import org.apache.spark.sql.{Column, DataFrame, SparkSession}
 import org.apache.spark.sql.functions.{lit, struct}
 import org.apache.spark.sql.types._
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
@@ -120,7 +119,7 @@ object BlobTestHelpers {
    * @param df DataFrame to check
    * @param columnNames Variable number of column names
    */
-  def assertColumnsExist(df: org.apache.spark.sql.DataFrame, columnNames: String*): Unit = {
+  def assertColumnsExist(df: DataFrame, columnNames: String*): Unit = {
     columnNames.foreach { colName =>
       assertTrue(df.columns.contains(colName),
         s"DataFrame missing expected column: $colName. Available: ${df.columns.mkString(", ")}")
