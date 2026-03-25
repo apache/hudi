@@ -377,7 +377,7 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       .markAdvanced()
       .sinceVersion("1.2.0")
       .withDocumentation("When enabled, defers RLI initialization to 2nd commit for a fresh table. This should help with determining the file group "
-          + "count dynamically for RLI index (global and non non global RLI)");
+          + "count dynamically for RLI index (global and partitioned RLI)");
 
   public static final ConfigProperty<Integer> RECORD_INDEX_MAX_PARALLELISM = ConfigProperty
       .key(METADATA_PREFIX + ".max.init.parallelism")
@@ -688,7 +688,7 @@ public final class HoodieMetadataConfig extends HoodieConfig {
   }
 
   public boolean shouldDeferRliInitForFreshTable() {
-    return isEnabled() && getBooleanOrDefault(DEFER_RLI_INIT_FOR_FRESH_TABLE);
+    return getBooleanOrDefault(DEFER_RLI_INIT_FOR_FRESH_TABLE);
   }
 
   public List<String> getColumnsEnabledForColumnStatsIndex() {

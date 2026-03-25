@@ -1997,7 +1997,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
       assertTrue(metaClient.getTableConfig().isMetadataPartitionAvailable(RECORD_INDEX),
           "Partitioned RLI should be initialized after second commit");
 
-      // Verify file group count is 1 for small tables (150 records total)
+      // Verify file group count is 6 (2 for each data table partition and we have 3 partitions)
       HoodieBackedTableMetadata metadataReader = (HoodieBackedTableMetadata) metadata(client, storage);
       int fileGroupCount = HoodieTableMetadataUtil.getPartitionLatestFileSlices(
           metadataReader.getMetadataMetaClient(), Option.empty(),
@@ -2066,7 +2066,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
 
       // For 4000 records with partitioned RLI, file group count should be between min (1) and max (10)
       // It should be > 1 for this data size based on estimation logic
-      assertTrue(fileGroupCount > 1,
+      assertTrue(fileGroupCount > 1 && fileGroupCount < writeConfig.getMetadataConfig().getGlobalRecordLevelIndexMaxFileGroupCount(),
           "File group count should be at least the configured minimum (1), but got: " + fileGroupCount);
       // Validate metadata integrity
       validateMetadata(client);
