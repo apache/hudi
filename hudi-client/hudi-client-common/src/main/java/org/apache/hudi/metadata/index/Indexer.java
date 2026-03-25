@@ -43,10 +43,10 @@ public interface Indexer {
   /**
    * Generates records for initializing the index.
    *
-   * @param dataTableInstantTime                   instant time of the data table that the metadata table is initialized on
-   * @param instantTimeForPartition                instant time used for initializing a specific metadata partition
-   * @param partitionToAllFilesMap                 map of partition to files
-   * @param lazyLatestMergedPartitionFileSliceList lazily-evaluated list of file slices for the indexer that needs it
+   * @param dataTableInstantTime    instant time of the data table that the metadata table is initialized on
+   * @param instantTimeForPartition instant time used for initializing a specific metadata partition
+   * @param partitionToAllFilesMap  map of partition to files
+   * @param lazyPartitionFileSlices lazily evaluated list of file slices for the indexer that needs it
    * @return zero or more {@link IndexPartitionInitialization} entries to be initialized.
    * Returning an empty list means no metadata partition needs initialization in this invocation.
    * @throws IOException upon IO error
@@ -55,7 +55,7 @@ public interface Indexer {
       String dataTableInstantTime,
       String instantTimeForPartition,
       Map<String, List<FileInfo>> partitionToAllFilesMap,
-      Lazy<List<FileSliceAndPartition>> lazyLatestMergedPartitionFileSliceList) throws IOException;
+      Lazy<List<FileSliceAndPartition>> lazyPartitionFileSlices) throws IOException;
 
   /**
    * Hook invoked after the bootstrap bulk commit for an index partition succeeds.

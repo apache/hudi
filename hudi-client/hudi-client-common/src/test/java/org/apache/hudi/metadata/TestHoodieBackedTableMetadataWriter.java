@@ -25,9 +25,7 @@ import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
@@ -36,6 +34,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.metadata.model.FileInfo;
 import org.apache.hudi.storage.StorageConfiguration;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -47,6 +46,7 @@ import org.junit.jupiter.params.provider.MethodSource;
 import org.mockito.MockedStatic;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -56,7 +56,6 @@ import java.util.stream.Stream;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -67,7 +66,6 @@ import static org.mockito.Mockito.RETURNS_DEEP_STUBS;
 import static org.mockito.Mockito.doCallRealMethod;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.mockConstruction;
 import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -221,7 +219,7 @@ class TestHoodieBackedTableMetadataWriter {
 
   @Test
   void testConvertToColumnStatsRecordWithEmptyInputs() {
-    Map<String, Map<String, Long>> partitionFilesToAdd = new HashMap<>();
+    Map<String, List<FileInfo>> partitionFilesToAdd = new HashMap<>();
     Map<String, List<String>> partitionFilesToDelete = new HashMap<>();
 
     Map<String, HoodieData<HoodieRecord>> result =
@@ -239,9 +237,9 @@ class TestHoodieBackedTableMetadataWriter {
               any(), any(), any(), eq(false), any()))
           .thenReturn(emptyColumnsMap);
 
-      Map<String, Map<String, Long>> partitionFilesToAdd = new HashMap<>();
-      Map<String, Long> filesToAdd = new HashMap<>();
-      filesToAdd.put("file1.parquet", 1024L);
+      Map<String, List<FileInfo>> partitionFilesToAdd = new HashMap<>();
+      List<FileInfo> filesToAdd = new ArrayList<>();
+      filesToAdd.add(FileInfo.of("file1.parquet", 1024L));
       partitionFilesToAdd.put("partition1", filesToAdd);
       Map<String, List<String>> partitionFilesToDelete = new HashMap<>();
 
@@ -266,11 +264,11 @@ class TestHoodieBackedTableMetadataWriter {
       // Mock convertFilesToColumnStatsRecords to return empty HoodieData
       HoodieData<HoodieRecord> mockHoodieData = mock(HoodieData.class);
       mockedUtil.when(() -> HoodieTableMetadataUtil.convertFilesToColumnStatsRecords(
-              any(), any(), any(), any(), any(), anyInt(), anyInt(), any()))
+              any(), any(), any(), any(), anyInt(), anyInt(), any()))
           .thenReturn(mockHoodieData);
 
-      Map<String, Map<String, Long>> partitionFilesToAdd = new HashMap<>();
-      partitionFilesToAdd.put("partition1", new HashMap<>());
+      Map<String, List<FileInfo>> partitionFilesToAdd = new HashMap<>();
+      partitionFilesToAdd.put("partition1", Collections.emptyList());
       Map<String, List<String>> partitionFilesToDelete = new HashMap<>();
 
       Map<String, HoodieData<HoodieRecord>> result = HoodieBackedTableMetadataWriter.convertToColumnStatsRecord(
@@ -288,7 +286,6 @@ class TestHoodieBackedTableMetadataWriter {
           eq(partitionFilesToDelete),
           eq(partitionFilesToAdd),
           eq(dataMetaClient),
-          eq(metadataConfig),
           eq(4),
           eq(1024),
           any()
@@ -311,13 +308,13 @@ class TestHoodieBackedTableMetadataWriter {
       // Mock convertFilesToColumnStatsRecords to return empty HoodieData
       HoodieData<HoodieRecord> mockHoodieData = mock(HoodieData.class);
       mockedUtil.when(() -> HoodieTableMetadataUtil.convertFilesToColumnStatsRecords(
-              any(), any(), any(), any(), any(), anyInt(), anyInt(), any()))
+              any(), any(), any(), any(), anyInt(), anyInt(), any()))
           .thenReturn(mockHoodieData);
 
-      Map<String, Map<String, Long>> partitionFilesToAdd = new HashMap<>();
-      Map<String, Long> filesToAdd = new HashMap<>();
-      filesToAdd.put("file1.parquet", 1024L);
-      filesToAdd.put("file2.parquet", 2048L);
+      Map<String, List<FileInfo>> partitionFilesToAdd = new HashMap<>();
+      List<FileInfo> filesToAdd = new ArrayList<>();
+      filesToAdd.add(FileInfo.of("file1.parquet", 1024L));
+      filesToAdd.add(FileInfo.of("file2.parquet", 2048L));
       partitionFilesToAdd.put("partition1", filesToAdd);
 
       Map<String, List<String>> partitionFilesToDelete = new HashMap<>();
@@ -340,7 +337,6 @@ class TestHoodieBackedTableMetadataWriter {
           eq(partitionFilesToDelete),
           eq(partitionFilesToAdd),
           eq(dataMetaClient),
-          eq(metadataConfig),
           eq(4),
           eq(1024),
           any()
@@ -379,47 +375,6 @@ class TestHoodieBackedTableMetadataWriter {
     validateRollbackMethod.setAccessible(true);
 
     assertDoesNotThrow(() -> validateRollbackMethod.invoke(writer, instantToRollback));
-  }
-
-  // ---- resolveDataSchemaForRLIBootstrap tests ----
-
-  private static final String SIMPLE_SCHEMA_JSON =
-      "{\"type\":\"record\",\"name\":\"Test\",\"namespace\":\"test\","
-          + "\"fields\":[{\"name\":\"id\",\"type\":\"string\"}]}";
-
-  @Test
-  void resolveDataSchemaForRLIBootstrap_usesConfigSchemaWhenPresent() {
-    HoodieTableMetaClient metaClient = mock(HoodieTableMetaClient.class);
-    HoodieWriteConfig writeConfig = mock(HoodieWriteConfig.class);
-    when(writeConfig.getWriteSchema()).thenReturn(SIMPLE_SCHEMA_JSON);
-    when(writeConfig.allowOperationMetadataField()).thenReturn(false);
-
-    HoodieSchema result = HoodieBackedTableMetadataWriter.resolveDataSchemaForRLIBootstrap(metaClient, writeConfig);
-
-    assertNotNull(result);
-    // metadata fields (_hoodie_*) should have been prepended
-    assertTrue(result.getFields().stream().anyMatch(f -> f.name().startsWith("_hoodie_")));
-  }
-
-  @Test
-  void resolveDataSchemaForRLIBootstrap_fallsBackToTableSchemaResolverWhenNull() {
-    HoodieTableMetaClient metaClient = mock(HoodieTableMetaClient.class);
-    HoodieWriteConfig writeConfig = mock(HoodieWriteConfig.class);
-    when(writeConfig.getWriteSchema()).thenReturn(null);
-    when(writeConfig.allowOperationMetadataField()).thenReturn(false);
-
-    HoodieSchema tableSchema = HoodieSchema.parse(SIMPLE_SCHEMA_JSON);
-    try (org.mockito.MockedConstruction<TableSchemaResolver> mockedResolver =
-        mockConstruction(TableSchemaResolver.class,
-            (resolver, ctx) -> when(resolver.getTableSchema(false)).thenReturn(tableSchema))) {
-
-      HoodieSchema result = HoodieBackedTableMetadataWriter.resolveDataSchemaForRLIBootstrap(metaClient, writeConfig);
-
-      assertNotNull(result);
-      assertTrue(result.getFields().stream().anyMatch(f -> f.name().startsWith("_hoodie_")));
-      // exactly one TableSchemaResolver was constructed (with metaClient)
-      assertEquals(1, mockedResolver.constructed().size());
-    }
   }
 
   @SuppressWarnings("deprecation")

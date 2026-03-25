@@ -23,13 +23,17 @@ import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.experimental.Accessors;
 
+import java.io.Serializable;
+
 /**
  * Immutable descriptor for a file and its size.
  */
 @AllArgsConstructor
 @Getter
 @Accessors(fluent = true)
-public class FileInfo {
+public class FileInfo implements Serializable {
+  private static final long serialVersionUID = 1L;
+
   private final String fileName;
   private final long size;
 

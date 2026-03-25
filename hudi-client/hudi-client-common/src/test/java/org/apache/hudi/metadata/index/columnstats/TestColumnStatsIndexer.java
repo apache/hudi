@@ -20,7 +20,6 @@ import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.metadata.index.model.IndexPartitionInitialization;
 import org.apache.hudi.metadata.model.FileInfo;
-import org.apache.hudi.metadata.model.FileSliceAndPartition;
 import org.apache.hudi.util.Lazy;
 
 import org.junit.jupiter.api.Test;
@@ -56,8 +55,8 @@ class TestColumnStatsIndexer {
     when(metadataConfig.getColumnStatsIndexFileGroupCount()).thenReturn(2);
     when(engineContext.emptyHoodieData()).thenReturn((HoodieData) emptyData);
 
-    ExposedColumnStatsIndexer indexer = new ExposedColumnStatsIndexer(engineContext, writeConfig, metaClient);
-    List<IndexPartitionInitialization> initializationList = indexer.callGetData("001", "002", Collections.emptyMap(), Lazy.lazily(Collections::emptyList));
+    ColumnStatsIndexer indexer = new ColumnStatsIndexer(engineContext, writeConfig, metaClient);
+    List<IndexPartitionInitialization> initializationList = indexer.buildInitialization("001", "002", Collections.emptyMap(), Lazy.lazily(Collections::emptyList));
     assertEquals(1, initializationList.size());
 
     assertEquals(MetadataPartitionType.COLUMN_STATS.getPartitionPath(), initializationList.get(0).indexPartitionName());
@@ -98,26 +97,14 @@ class TestColumnStatsIndexer {
       mockedUtil.when(() -> HoodieTableMetadataUtil.convertFilesToColumnStatsRecords(any(), any(), any(), any(), anyInt(), anyInt(), any()))
           .thenReturn(records);
 
-      ExposedColumnStatsIndexer indexer = new ExposedColumnStatsIndexer(engineContext, writeConfig, metaClient);
-      List<IndexPartitionInitialization> initializationList = indexer.callGetData("001", "002", files, Lazy.lazily(Collections::emptyList));
+      ColumnStatsIndexer indexer = new ColumnStatsIndexer(engineContext, writeConfig, metaClient);
+      List<IndexPartitionInitialization> initializationList = indexer.buildInitialization("001", "002", files, Lazy.lazily(Collections::emptyList));
       assertEquals(1, initializationList.size());
 
       assertEquals(5, initializationList.get(0).totalFileGroups());
       List<HoodieRecord> collected = initializationList.get(0).dataPartitionAndRecords().get(0).indexRecords().collectAsList();
       assertEquals(1, collected.size());
       assertEquals("p_col", collected.get(0).getRecordKey());
-    }
-  }
-
-  private static class ExposedColumnStatsIndexer extends ColumnStatsIndexer {
-    ExposedColumnStatsIndexer(HoodieEngineContext engineContext, HoodieWriteConfig dataTableWriteConfig, HoodieTableMetaClient dataTableMetaClient) {
-      super(engineContext, dataTableWriteConfig, dataTableMetaClient);
-    }
-
-    List<IndexPartitionInitialization> callGetData(String dataTableInstantTime, String instantTimeForPartition,
-                                                   Map<String, List<FileInfo>> partitionIdToAllFilesMap,
-                                                   Lazy<List<FileSliceAndPartition>> lazyLatestMergedPartitionFileSliceList) throws IOException {
-      return buildInitialization(dataTableInstantTime, instantTimeForPartition, partitionIdToAllFilesMap, lazyLatestMergedPartitionFileSliceList);
     }
   }
 }

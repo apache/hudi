@@ -36,8 +36,6 @@ import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.metadata.model.FileInfoAndPartition;
 import org.apache.hudi.storage.StorageConfiguration;
 
-import lombok.extern.slf4j.Slf4j;
-
 import java.util.List;
 
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS;
@@ -45,7 +43,6 @@ import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_CO
 /**
  * Spark implementation of {@link ExpressionIndexRecordGenerator}.
  */
-@Slf4j
 public class SparkExpressionIndexRecordGenerator implements ExpressionIndexRecordGenerator {
   private final HoodieEngineContext engineContext;
   private final HoodieWriteConfig dataTableWriteConfig;

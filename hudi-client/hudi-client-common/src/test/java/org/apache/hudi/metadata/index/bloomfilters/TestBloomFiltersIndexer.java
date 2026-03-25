@@ -23,8 +23,6 @@ import org.apache.hudi.metadata.HoodieMetadataPayload;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.metadata.index.model.IndexPartitionInitialization;
-import org.apache.hudi.metadata.model.FileInfo;
-import org.apache.hudi.metadata.model.FileSliceAndPartition;
 import org.apache.hudi.util.Lazy;
 
 import org.junit.jupiter.api.Test;
@@ -33,7 +31,6 @@ import org.mockito.MockedStatic;
 import java.io.IOException;
 import java.util.Collections;
 import java.util.List;
-import java.util.Map;
 
 import static org.apache.hudi.common.testutils.HoodieTestUtils.getDefaultStorageConf;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -67,8 +64,9 @@ class TestBloomFiltersIndexer {
       mockedUtil.when(() -> HoodieTableMetadataUtil.convertFilesToBloomFilterRecords(any(), any(), any(), any(), any(), anyInt(), any()))
           .thenReturn(records);
 
-      ExposedBloomFiltersIndexer indexer = new ExposedBloomFiltersIndexer(engineContext, writeConfig, metaClient);
-      List<IndexPartitionInitialization> initializationList = indexer.callGetData("001", "002", Collections.emptyMap(), Lazy.lazily(Collections::emptyList));
+      BloomFiltersIndexer indexer = new BloomFiltersIndexer(engineContext, writeConfig, metaClient);
+      List<IndexPartitionInitialization> initializationList =
+          indexer.buildInitialization("001", "002", Collections.emptyMap(), Lazy.lazily(Collections::emptyList));
       assertEquals(1, initializationList.size());
 
       assertEquals(MetadataPartitionType.BLOOM_FILTERS.getPartitionPath(), initializationList.get(0).indexPartitionName());
@@ -76,18 +74,6 @@ class TestBloomFiltersIndexer {
       List<HoodieRecord> collected = initializationList.get(0).dataPartitionAndRecords().get(0).indexRecords().collectAsList();
       assertEquals(1, collected.size());
       assertEquals("p_bloom", collected.get(0).getRecordKey());
-    }
-  }
-
-  private static class ExposedBloomFiltersIndexer extends BloomFiltersIndexer {
-    ExposedBloomFiltersIndexer(HoodieEngineContext engineContext, HoodieWriteConfig dataTableWriteConfig, HoodieTableMetaClient dataTableMetaClient) {
-      super(engineContext, dataTableWriteConfig, dataTableMetaClient);
-    }
-
-    List<IndexPartitionInitialization> callGetData(String dataTableInstantTime, String instantTimeForPartition,
-                                                   Map<String, List<FileInfo>> partitionIdToAllFilesMap,
-                                                   Lazy<List<FileSliceAndPartition>> lazyLatestMergedPartitionFileSliceList) throws IOException {
-      return buildInitialization(dataTableInstantTime, instantTimeForPartition, partitionIdToAllFilesMap, lazyLatestMergedPartitionFileSliceList);
     }
   }
 }

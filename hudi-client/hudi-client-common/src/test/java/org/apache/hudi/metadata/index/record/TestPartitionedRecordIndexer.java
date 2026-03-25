@@ -16,6 +16,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.metadata.HoodieMetadataPayload;
+import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.metadata.index.model.DataPartitionAndRecords;
 import org.apache.hudi.metadata.index.model.IndexPartitionInitialization;
 import org.apache.hudi.metadata.model.FileSliceAndPartition;
@@ -70,10 +71,10 @@ class TestPartitionedRecordIndexer {
 
     ExposedPartitionedRecordIndexer indexer = new ExposedPartitionedRecordIndexer(engineContext, writeConfig, dataMetaClient, p1Init, p2Init);
 
-    try (MockedStatic<org.apache.hudi.metadata.HoodieTableMetadataUtil> mockedUtil = mockStatic(org.apache.hudi.metadata.HoodieTableMetadataUtil.class)) {
+    try (MockedStatic<HoodieTableMetadataUtil> mockedUtil = mockStatic(HoodieTableMetadataUtil.class)) {
       List<IndexPartitionInitialization> initializationList = indexer.buildInitialization("001", "002", Map.of(), Lazy.lazily(() -> input));
 
-      mockedUtil.verify(() -> org.apache.hudi.metadata.HoodieTableMetadataUtil.createRecordIndexDefinition(any(), any()));
+      mockedUtil.verify(() -> HoodieTableMetadataUtil.createRecordIndexDefinition(any(), any()));
       assertEquals(1, initializationList.size());
       assertEquals(2, initializationList.get(0).dataPartitionAndRecords().size());
       assertEquals(2, indexer.initializePartitionCalls);

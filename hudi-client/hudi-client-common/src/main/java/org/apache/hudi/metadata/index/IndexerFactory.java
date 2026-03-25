@@ -43,11 +43,11 @@ import java.util.stream.Collectors;
  * based on table and metadata configuration.
  */
 public class IndexerFactory {
-  private static Indexer getIndexer(MetadataPartitionType partitionType,
-                                   HoodieEngineContext engineContext,
-                                   HoodieWriteConfig dataTableWriteConfig,
-                                   HoodieTableMetaClient dataTableMetaClient,
-                                   ExpressionIndexRecordGenerator expressionIndexRecordGenerator) {
+  private static Indexer createIndexer(MetadataPartitionType partitionType,
+                                       HoodieEngineContext engineContext,
+                                       HoodieWriteConfig dataTableWriteConfig,
+                                       HoodieTableMetaClient dataTableMetaClient,
+                                       ExpressionIndexRecordGenerator expressionIndexRecordGenerator) {
     switch (partitionType) {
       case FILES:
         return new FilesIndexer(engineContext, dataTableWriteConfig, dataTableMetaClient);
@@ -84,10 +84,22 @@ public class IndexerFactory {
     }
     return Collections.unmodifiableMap(Arrays.stream(MetadataPartitionType.getValidValues(dataTableMetaClient.getTableConfig().getTableVersion()))
         .filter(partitionType ->
-            partitionType.isMetadataPartitionEnabled(dataTableWriteConfig.getMetadataConfig(), dataTableMetaClient.getTableConfig())
+            (partitionType.isMetadataPartitionEnabled(dataTableWriteConfig.getMetadataConfig(), dataTableMetaClient.getTableConfig())
             || partitionType.isMetadataPartitionAvailable(dataTableMetaClient))
+            && !(partitionType == MetadataPartitionType.RECORD_INDEX && shouldDeferRecordIndexInit(dataTableWriteConfig, dataTableMetaClient))
+        )
         .collect(Collectors.toMap(
             Function.identity(),
-            type -> IndexerFactory.getIndexer(type, engineContext, dataTableWriteConfig, dataTableMetaClient, expressionIndexRecordGenerator))));
+            type -> IndexerFactory.createIndexer(type, engineContext, dataTableWriteConfig, dataTableMetaClient, expressionIndexRecordGenerator))));
+  }
+
+  /**
+   * Returns whether the initialization of record index should be deferred, true if the table is a fresh table.
+   */
+  private static boolean shouldDeferRecordIndexInit(
+      HoodieWriteConfig dataTableWriteConfig,
+      HoodieTableMetaClient dataTableMetaClient) {
+    return dataTableWriteConfig.getMetadataConfig().shouldDeferRliInitForFreshTable()
+        && dataTableMetaClient.getActiveTimeline().filterCompletedInstants().countInstants() == 0;
   }
 }

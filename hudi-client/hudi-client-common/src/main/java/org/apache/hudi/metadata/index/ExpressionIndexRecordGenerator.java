@@ -39,7 +39,7 @@ public interface ExpressionIndexRecordGenerator {
   /**
    * Generates expression index records.
    *
-   * @param filesToIndex    triplet of partition, (file path, file size)
+   * @param filesToIndex    information for files to index, including partition, file path and file size
    * @param indexDefinition definition of the expression index
    * @param metaClient      {@link HoodieTableMetaClient} instance
    * @param parallelism     parallelism to use for engine operations
