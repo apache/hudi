@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.table.read;
 
+import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
@@ -31,7 +32,9 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.metadata.HoodieMetadataPayload;
 
+import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
+import org.apache.avro.generic.IndexedRecord;
 
 import java.io.IOException;
 import java.util.Properties;
@@ -137,23 +140,43 @@ public interface UpdateProcessor<T> {
         // special case for payloads when there is no previous record
         HoodieSchema recordSchema = readerContext.getRecordContext().decodeAvroSchema(mergedRecord.getSchemaId());
         GenericRecord record = readerContext.getRecordContext().convertToAvroRecord(mergedRecord.getRecord(), recordSchema);
-        HoodieAvroRecord hoodieRecord = new HoodieAvroRecord<>(null, HoodieRecordUtils.loadPayload(payloadClass, record, mergedRecord.getOrderingValue()));
-        try {
-          if (hoodieRecord.shouldIgnore(recordSchema, properties)) {
-            return null;
-          } else {
-            HoodieSchema readerSchema = readerContext.getSchemaHandler().getRequestedSchema();
-            // Strip meta fields: the payload evaluates INSERT expressions against data fields only.
-            // Meta fields are populated separately by prependMetaFields/writeWithMetadata downstream,
-            // so rewriting to a schema that already includes meta fields would cause double-wrapping
-            // of meta fields in HoodieInternalRow, resulting in data fields being read from the
-            // inner meta positions (all null) instead of the actual data positions.
-            HoodieSchema dataSchema = HoodieSchemaUtils.removeMetadataFields(readerSchema);
-            hoodieRecord.rewriteRecordWithNewSchema(recordSchema, properties, dataSchema).toIndexedRecord(dataSchema, properties)
-                .ifPresent(rewrittenRecord -> mergedRecord.replaceRecord(readerContext.getRecordContext().convertAvroRecord(rewrittenRecord.getData())));
+        Schema recordAvroSchema = recordSchema.toAvroSchema();
+
+        // If convertToAvroRecord returned a cached record with a different schema (e.g., from
+        // extractDataFromRecord caching for ExpressionPayload in the COW write path), the record
+        // is already in write-schema format with correctly evaluated expressions. Convert directly.
+        // Note: SENTINEL records have null schema and must go through the payload path for shouldIgnore.
+        if (record.getSchema() != null && !record.getSchema().equals(recordAvroSchema)) {
+          mergedRecord.replaceRecord(readerContext.getRecordContext().convertAvroRecord(record));
+        } else {
+          HoodieAvroRecord hoodieRecord = new HoodieAvroRecord<>(null, HoodieRecordUtils.loadPayload(payloadClass, record, mergedRecord.getOrderingValue()));
+          try {
+            if (hoodieRecord.shouldIgnore(recordSchema, properties)) {
+              return null;
+            }
+            // Evaluate the payload to get the insert value
+            Option<IndexedRecord> insertValueOpt = hoodieRecord.getData().getInsertValue(recordAvroSchema, properties);
+            if (insertValueOpt.isPresent()) {
+              GenericRecord insertRecord = (GenericRecord) insertValueOpt.get();
+              HoodieSchema readerSchema = readerContext.getSchemaHandler().getRequestedSchema();
+              GenericRecord finalRecord;
+              if (insertRecord.getSchema().equals(recordAvroSchema)) {
+                // Payload preserved the schema (e.g., OverwriteWithLatestAvroPayload).
+                // Rewrite to full reader schema including meta fields.
+                finalRecord = HoodieAvroUtils.rewriteRecordWithNewSchema(insertRecord, readerSchema.toAvroSchema());
+              } else {
+                // Payload transformed the schema (e.g., ExpressionPayload maps source→target fields).
+                // The result has different field names than recordSchema. Use data-only schema as
+                // the rewrite target to maintain arity consistency with BufferedRecord's schemaId,
+                // which is immutable and corresponds to the data-only recordSchema.
+                HoodieSchema dataSchema = HoodieSchemaUtils.removeMetadataFields(readerSchema);
+                finalRecord = HoodieAvroUtils.rewriteRecordWithNewSchema(insertRecord, dataSchema.toAvroSchema());
+              }
+              mergedRecord.replaceRecord(readerContext.getRecordContext().convertAvroRecord(finalRecord));
+            }
+          } catch (IOException e) {
+            throw new HoodieIOException("Error processing record with payload class: " + payloadClass, e);
           }
-        } catch (IOException e) {
-          throw new HoodieIOException("Error processing record with payload class: " + payloadClass, e);
         }
       }
       return super.handleNonDeletes(previousRecord, mergedRecord);
