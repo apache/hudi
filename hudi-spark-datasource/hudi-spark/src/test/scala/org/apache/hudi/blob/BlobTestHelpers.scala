@@ -20,6 +20,7 @@
 package org.apache.hudi.blob
 
 import org.apache.hudi.common.schema.{HoodieSchema, HoodieSchemaType}
+
 import org.apache.spark.sql.{Column, DataFrame, SparkSession}
 import org.apache.spark.sql.functions.{lit, struct}
 import org.apache.spark.sql.types._
