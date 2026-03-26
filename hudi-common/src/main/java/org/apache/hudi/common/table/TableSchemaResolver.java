@@ -310,11 +310,14 @@ public class TableSchemaResolver {
    */
   public Option<InternalSchema> getTableInternalSchemaFromCommitMetadata() {
     HoodieTimeline completedInstants = metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants();
-    HoodieTimeline timeline = completedInstants
+    // Walk backwards through timeline to find the first (most recent) instant that can update schema
+    // This avoids reading commit metadata for all instants
+    return Option.fromJavaOptional(completedInstants.getReverseOrderedInstants()
         .filter(instant -> { // consider only instants that can update/change schema.
           return WriteOperationType.canUpdateSchema(getCachedCommitMetadata(instant).getOperationType());
-        });
-    return timeline.lastInstant().flatMap(this::getTableInternalSchemaFromCommitMetadata);
+        })
+        .findFirst())
+        .flatMap(this::getTableInternalSchemaFromCommitMetadata);
   }
 
   /**
