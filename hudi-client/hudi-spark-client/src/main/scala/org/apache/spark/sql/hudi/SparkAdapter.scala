@@ -23,6 +23,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.storage.{HoodieStorage, StoragePath}
 
 import org.apache.avro.Schema
+import org.apache.hadoop.conf.Configuration
 import org.apache.parquet.schema.{MessageType, Type}
 import org.apache.spark.sql._
 import org.apache.spark.sql.avro.{HoodieAvroDeserializer, HoodieAvroSchemaConverters, HoodieAvroSerializer}
@@ -183,7 +184,8 @@ trait SparkAdapter extends Serializable {
   /**
    * Create instance of [[ParquetFileFormat]]
    */
-  def createLegacyHoodieParquetFileFormat(appendPartitionValues: Boolean, tableAvroSchema: Schema, hasTimestampMillisFieldInTableSchema: Boolean): Option[ParquetFileFormat]
+  def createLegacyHoodieParquetFileFormat(appendPartitionValues: Boolean, tableAvroSchema: Schema,
+                                          hasTimestampMillisFieldInTableSchema: Boolean, conf: Configuration): Option[ParquetFileFormat]
 
   def makeColumnarBatch(vectors: Array[ColumnVector], numRows: Int): ColumnarBatch
 

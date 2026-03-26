@@ -168,7 +168,8 @@ class Spark2Adapter extends SparkAdapter {
     partitions.toSeq
   }
 
-  override def createLegacyHoodieParquetFileFormat(appendPartitionValues: Boolean, tableAvroSchema: Schema, hasTimestampMillisFieldInTableSchema: Boolean): Option[ParquetFileFormat] = {
+  override def createLegacyHoodieParquetFileFormat(appendPartitionValues: Boolean, tableAvroSchema: Schema,
+                                                   hasTimestampMillisFieldInTableSchema: Boolean, conf: Configuration): Option[ParquetFileFormat] = {
     Some(new Spark24LegacyHoodieParquetFileFormat(appendPartitionValues))
   }
 

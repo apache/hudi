@@ -82,10 +82,11 @@ class LegacyHoodieParquetFileFormat extends ParquetFileFormat with SparkAdapterS
    * hadoopConf; if not set, we return false (disable batch).
    */
   override def supportBatch(sparkSession: SparkSession, schema: StructType): Boolean = {
-    getTableAvroSchemaFromConf(sparkSession.sessionState.newHadoopConf()) match {
+    val hadoopConf = sparkSession.sessionState.newHadoopConf()
+    getTableAvroSchemaFromConf(hadoopConf) match {
       case Some(avroSchema) =>
         sparkAdapter
-          .createLegacyHoodieParquetFileFormat(true, avroSchema, hasTimestampMillisFieldInTableSchema = HoodieSchemaUtils.hasTimestampMillisField(avroSchema))
+          .createLegacyHoodieParquetFileFormat(true, avroSchema, hasTimestampMillisFieldInTableSchema = HoodieSchemaUtils.hasTimestampMillisField(avroSchema), hadoopConf)
           .get.supportBatch(sparkSession, schema)
       case None =>
         // Table Avro schema not in hadoopConf (supportBatch does not receive options).
@@ -123,7 +124,7 @@ class LegacyHoodieParquetFileFormat extends ParquetFileFormat with SparkAdapterS
       }
 
     val delegateReader = sparkAdapter
-      .createLegacyHoodieParquetFileFormat(shouldExtractPartitionValuesFromPartitionPath, avroSchema, HoodieSchemaUtils.hasTimestampMillisField(avroSchema)).get
+      .createLegacyHoodieParquetFileFormat(shouldExtractPartitionValuesFromPartitionPath, avroSchema, HoodieSchemaUtils.hasTimestampMillisField(avroSchema), hadoopConf).get
       .buildReaderWithPartitionValues(sparkSession, dataSchema, partitionSchema, requiredSchema, filters, options, hadoopConf)
 
     val resultSchema = StructType(partitionSchema.fields ++ requiredSchema.fields)

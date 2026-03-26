@@ -98,7 +98,7 @@ class Spark3_5Adapter extends BaseSpark3Adapter {
     new HoodieSpark3_5ExtendedSqlParser(spark, delegate)
 
   override def createLegacyHoodieParquetFileFormat(appendPartitionValues: Boolean, tableSchema: Schema, hasTimestampMillisFieldInTableSchema: Boolean): Option[ParquetFileFormat] = {
-    Some(new Spark35LegacyHoodieParquetFileFormat(appendPartitionValues, tableSchema, hasTimestampMillisFieldInTableSchema))
+    Some(new Spark35LegacyHoodieParquetFileFormat(appendPartitionValues, tableSchema, hasTimestampMillisFieldInTableSchema, new SerializableConfiguration(conf)))
   }
 
   override def createHoodieFileScanRDD(sparkSession: SparkSession,

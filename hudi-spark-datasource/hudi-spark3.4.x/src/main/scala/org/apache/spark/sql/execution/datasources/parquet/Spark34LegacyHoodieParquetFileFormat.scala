@@ -71,17 +71,17 @@ import scala.collection.convert.ImplicitConversions.`collection AsScalaIterable`
  */
 class Spark34LegacyHoodieParquetFileFormat(private val shouldAppendPartitionValues: Boolean,
                                            private val avroTableSchema: Schema,
-                                           private val hasTimestampMillisFieldInTableSchema: Boolean) extends ParquetFileFormat with Logging {
+                                           private val hasTimestampMillisFieldInTableSchema: Boolean,
+                                           private val conf: SerializableConfiguration) extends ParquetFileFormat with Logging {
   private lazy val tableSchemaAsMessageType: HOption[MessageType] = {
     if (avroTableSchema == null) {
       HOption.empty()
     } else {
       HOption.ofNullable(
-        ParquetTableSchemaResolver.convertAvroSchemaToParquet(avroTableSchema, new Configuration())
+        ParquetTableSchemaResolver.convertAvroSchemaToParquet(avroTableSchema, conf.value)
       )
     }
   }
-  private lazy val supportBatchWithTableSchema = !hasTimestampMillisFieldInTableSchema
 
   def supportsColumnar(sparkSession: SparkSession, schema: StructType): Boolean = {
     val conf = sparkSession.sessionState.conf
@@ -90,14 +90,6 @@ class Spark34LegacyHoodieParquetFileFormat(private val shouldAppendPartitionValu
       conf.wholeStageEnabled && !WholeStageCodegenExec.isTooManyFields(conf, schema)
     requiredWholeStageCodegenSettings &&
       supportBatch(sparkSession, schema)
-  }
-
-  /**
-   * Returns whether the reader can return the rows as batch or not.
-   */
-  override def supportBatch(sparkSession: SparkSession, schema: StructType): Boolean = {
-    val conf = sparkSession.sessionState.conf
-    ParquetUtils.isBatchReadSupportedForSchema(conf, schema) && supportBatchWithTableSchema
   }
 
   override def buildReaderWithPartitionValues(sparkSession: SparkSession,
