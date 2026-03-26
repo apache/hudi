@@ -19,12 +19,14 @@
 
 package org.apache.spark.sql.hudi.feature
 
+import org.apache.hudi.HoodieSparkUtils
+
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
 import org.scalatest.Inspectors.forAll
 
 class TestQueryMergeOnReadOptimizedTable extends HoodieSparkSqlTestBase {
 
-  val baseFileFormats: List[String] = List("parquet", "lance")
+  val baseFileFormats: List[String] = if (HoodieSparkUtils.gteqSpark3_4) List("parquet", "lance") else List("parquet")
 
   forAll(baseFileFormats) { (baseFileFormat: String) =>
     test(s"Test Query Merge_On_Read Read_Optimized table - $baseFileFormat") {
