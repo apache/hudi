@@ -49,6 +49,7 @@ import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.io.CreateHandleFactory;
 import org.apache.hudi.io.HoodieWriteHandle;
 import org.apache.hudi.io.HoodieWriteMergeHandle;
+import org.apache.hudi.io.MergeContext;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.testutils.HoodieSparkClientTestHarness;
@@ -71,6 +72,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
@@ -159,7 +161,7 @@ public class TestUpdateSchemaEvolution extends HoodieSparkClientTestHarness impl
     jsc.parallelize(Arrays.asList(1)).map(x -> {
       Executable executable = () -> {
         HoodieWriteMergeHandle mergeHandle = new HoodieWriteMergeHandle(updateTable.getConfig(), "101", updateTable,
-            updateRecords.iterator(), updateRecords.get(0).getPartitionPath(), insertResult.getFileId(), supplier, Option.empty());
+            MergeContext.create(updateRecords.size(), (Iterator) updateRecords.iterator()), updateRecords.get(0).getPartitionPath(), insertResult.getFileId(), supplier, Option.empty());
         List<GenericRecord> oldRecords = HoodieIOFactory.getIOFactory(updateTable.getStorage())
             .getFileFormatUtils(updateTable.getBaseFileFormat())
             .readAvroRecords(updateTable.getStorage(),
@@ -337,7 +339,7 @@ public class TestUpdateSchemaEvolution extends HoodieSparkClientTestHarness impl
     HoodieSparkTable table = HoodieSparkTable.create(config, context);
     List<String> mergedFilePaths = jsc.parallelize(Arrays.asList(1)).map(x -> {
       HoodieWriteMergeHandle mergeHandle = new HoodieWriteMergeHandle(config, "101", table,
-          updateRecords.iterator(), updateRecords.get(0).getPartitionPath(), insertResult.getFileId(), supplier, Option.empty());
+          MergeContext.create(updateRecords.iterator()), updateRecords.get(0).getPartitionPath(), insertResult.getFileId(), supplier, Option.empty());
       // `doMerge` is the only entry point into HoodieMergeHelper: it reads the base file and feeds the handle
       mergeHandle.doMerge();
       return ((WriteStatus) mergeHandle.close().get(0)).getStat().getPath();

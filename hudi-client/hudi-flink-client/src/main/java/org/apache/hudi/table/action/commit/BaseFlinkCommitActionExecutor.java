@@ -167,13 +167,13 @@ public abstract class BaseFlinkCommitActionExecutor<T> extends
         // and append instead of UPDATE.
         return handleInsert(fileIdHint, recordItr);
       } else if (this.writeHandle instanceof HoodieWriteMergeHandle) {
-        return handleUpdate(partitionPath, fileIdHint, recordItr);
+        return handleUpdate(partitionPath, fileIdHint, -1L, recordItr);
       } else {
         switch (bucketType) {
           case INSERT:
             return handleInsert(fileIdHint, recordItr);
           case UPDATE:
-            return handleUpdate(partitionPath, fileIdHint, recordItr);
+            return handleUpdate(partitionPath, fileIdHint, -1L, recordItr);
           default:
             throw new AssertionError();
         }
@@ -187,6 +187,7 @@ public abstract class BaseFlinkCommitActionExecutor<T> extends
 
   @Override
   public Iterator<List<WriteStatus>> handleUpdate(String partitionPath, String fileId,
+                                                  long numUpdates,
                                                   Iterator<HoodieRecord<T>> recordItr)
       throws IOException {
     ValidationUtils.checkArgument(this.writeHandle instanceof HoodieMergeHandle,
