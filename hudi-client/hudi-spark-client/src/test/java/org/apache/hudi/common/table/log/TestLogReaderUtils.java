@@ -64,6 +64,7 @@ public class TestLogReaderUtils extends SparkClientFunctionalTestHarness {
         .withPath(basePath())
         .withCompactionConfig(HoodieCompactionConfig.newBuilder()
             .withInlineCompaction(false)
+            .compactionSmallFileSize(0)
             .build())
         .build();
 
@@ -183,6 +184,7 @@ public class TestLogReaderUtils extends SparkClientFunctionalTestHarness {
         .withPath(basePath())
         .withCompactionConfig(HoodieCompactionConfig.newBuilder()
             .withInlineCompaction(false)
+            .compactionSmallFileSize(0)
             .build())
         .withArchivalConfig(HoodieArchivalConfig.newBuilder()
             .archiveCommitsWith(2, 4)
