@@ -428,6 +428,25 @@ public class TestHoodieWriteConfig {
     return mapping;
   }
 
+  @Test
+  void testClusteringSmallFileFloorLimit() {
+    // Test default value via write config
+    HoodieWriteConfig defaultConfig = HoodieWriteConfig.newBuilder()
+        .withPath("/tmp")
+        .build();
+    assertEquals(0L, defaultConfig.getClusteringSmallFileFloorLimit());
+
+    // Test with explicit value via clustering config
+    long floorLimit = 1024 * 1024; // 1MB
+    HoodieWriteConfig configWithFloorLimit = HoodieWriteConfig.newBuilder()
+        .withPath("/tmp")
+        .withClusteringConfig(HoodieClusteringConfig.newBuilder()
+            .withClusteringPlanSmallFileFloorLimit(floorLimit)
+            .build())
+        .build();
+    assertEquals(floorLimit, configWithFloorLimit.getClusteringSmallFileFloorLimit());
+  }
+
   private void verifyConcurrencyControlRelatedConfigs(
       HoodieWriteConfig writeConfig, boolean expectedTableServicesEnabled,
       boolean expectedAnyTableServicesAsync,

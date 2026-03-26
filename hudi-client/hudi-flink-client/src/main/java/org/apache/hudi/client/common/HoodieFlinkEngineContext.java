@@ -36,6 +36,7 @@ import org.apache.hudi.common.util.Option;
 
 import org.apache.flink.api.common.functions.RuntimeContext;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
@@ -85,6 +86,13 @@ public class HoodieFlinkEngineContext extends HoodieEngineContext {
   @Override
   public <T> HoodieData<T> emptyHoodieData() {
     return HoodieListData.eager(Collections.emptyList());
+  }
+
+  @Override
+  public <T> HoodieData<T> union(List<HoodieData<T>> dataList) {
+    List<T> allData = new ArrayList<>();
+    dataList.forEach(entry -> allData.addAll(entry.collectAsList()));
+    return HoodieListData.eager(allData);
   }
 
   @Override

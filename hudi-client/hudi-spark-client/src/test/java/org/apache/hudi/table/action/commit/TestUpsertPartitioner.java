@@ -69,6 +69,7 @@ import static org.apache.hudi.common.testutils.HoodieTestUtils.generateFakeHoodi
 import static org.apache.hudi.common.testutils.SchemaTestUtil.getSchemaFromResource;
 import static org.apache.hudi.table.action.commit.UpsertPartitioner.averageBytesPerRecord;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
@@ -479,5 +480,33 @@ public class TestUpsertPartitioner extends HoodieClientTestBase {
   private HoodieWriteConfig.Builder makeHoodieClientConfigBuilder() {
     // Prepare the AvroParquetIO
     return HoodieWriteConfig.newBuilder().withPath(basePath).withSchema(SCHEMA.toString());
+  }
+
+  @Test
+  void testMapBasedSparkBucketInfoGetter() {
+    Map<Integer, BucketInfo> bucketInfoMap = new HashMap<>();
+    bucketInfoMap.put(1, new BucketInfo(BucketType.UPDATE, "bucket1", "partition1"));
+    bucketInfoMap.put(2, new BucketInfo(BucketType.UPDATE, "bucket2", "partition2"));
+    MapBasedSparkBucketInfoGetter getter = new MapBasedSparkBucketInfoGetter(bucketInfoMap);
+
+    assertEquals(new BucketInfo(BucketType.UPDATE, "bucket1", "partition1"), getter.getBucketInfo(1));
+    assertEquals(new BucketInfo(BucketType.UPDATE, "bucket2", "partition2"), getter.getBucketInfo(2));
+  }
+
+  @Test
+  void testInsertOverwriteBucketInfoGetter() {
+    BucketInfo insertInfo = new BucketInfo(BucketType.INSERT, "bucket1", "partition1");
+    BucketInfo updateInfo = new BucketInfo(BucketType.UPDATE, "bucket2", "partition2");
+    Map<Integer, BucketInfo> map = new HashMap<>();
+    map.put(0, insertInfo);
+    map.put(1, updateInfo);
+
+    InsertOverwriteBucketInfoGetter getter = new InsertOverwriteBucketInfoGetter(map);
+    BucketInfo result = getter.getBucketInfo(0);
+    assertEquals(insertInfo, result);
+    result = getter.getBucketInfo(1);
+    assertEquals(BucketType.INSERT, result.getBucketType());
+    assertEquals(updateInfo.getPartitionPath(), result.getPartitionPath());
+    assertNotEquals(updateInfo.getFileIdPrefix(), result.getFileIdPrefix());
   }
 }

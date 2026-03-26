@@ -190,4 +190,160 @@ public class TestDFSPropertiesConfiguration {
     assertEquals("BLOOM", DFSPropertiesConfiguration.getGlobalProps().get("hoodie.index.type"));
     assertEquals("true", DFSPropertiesConfiguration.getGlobalProps().get("hoodie.metadata.enable"));
   }
+
+  @Test
+  public void testDefaultConstructorHandlesIncludes() {
+    // Use default ctor (hadoopConfig should be non-null internally)
+    DFSPropertiesConfiguration cfg = new DFSPropertiesConfiguration();
+
+    // Should load t3.props (which includes t2.props → t1.props) without NPE
+    cfg.addPropsFromFile(new Path(dfsBasePath + "/t3.props"));
+    TypedProperties props = cfg.getProps();
+
+    // Values from t1, t2 and t3 should be resolved in order
+    assertEquals(123, props.getInteger("int.prop"));
+    assertEquals(243.4, props.getDouble("double.prop"), 0.001);
+    assertTrue(props.getBoolean("boolean.prop"));
+    assertEquals("t3.value", props.getString("string.prop"));
+    assertEquals(1354354354L, props.getLong("long.prop"));
+
+    // And a self-include still triggers the loop-detection
+    assertThrows(IllegalStateException.class, () -> {
+      cfg.addPropsFromFile(new Path(dfsBasePath + "/t4.props"));
+    });
+  }
+
+  @Test
+  public void testLazyInitializationWithFailureAndRetry() {
+    DFSPropertiesConfiguration.clearGlobalProps();
+
+    ENVIRONMENT_VARIABLES.clear(DFSPropertiesConfiguration.CONF_FILE_DIR_ENV_NAME);
+    TypedProperties props1 = DFSPropertiesConfiguration.getGlobalProps();
+    assertTrue(props1 != null);
+
+    String testPropsFilePath = new File("src/test/resources/external-config").getAbsolutePath();
+    ENVIRONMENT_VARIABLES.set(DFSPropertiesConfiguration.CONF_FILE_DIR_ENV_NAME, testPropsFilePath);
+
+    DFSPropertiesConfiguration.clearGlobalProps();
+    DFSPropertiesConfiguration.refreshGlobalProps();
+
+    TypedProperties props2 = DFSPropertiesConfiguration.getGlobalProps();
+    assertEquals(5, props2.size());
+    assertEquals("jdbc:hive2://localhost:10000", props2.get("hoodie.datasource.hive_sync.jdbcurl"));
+
+    DFSPropertiesConfiguration.clearGlobalProps();
+    TypedProperties props3 = DFSPropertiesConfiguration.getGlobalProps();
+    assertEquals(0, props3.size());
+  }
+
+  @Test
+  public void testClassInitializationNeverThrows() {
+    DFSPropertiesConfiguration.clearGlobalProps();
+    ENVIRONMENT_VARIABLES.set(DFSPropertiesConfiguration.CONF_FILE_DIR_ENV_NAME, "/this/path/does/not/exist/at/all");
+
+    try {
+      DFSPropertiesConfiguration.getGlobalProps();
+    } catch (HoodieIOException e) {
+      // Expected for non-existent path
+    }
+
+    // Verify class is not poisoned - instance methods still work
+    DFSPropertiesConfiguration cfg = new DFSPropertiesConfiguration();
+    cfg.addPropsFromFile(new Path(dfsBasePath + "/t1.props"));
+    TypedProperties props = cfg.getProps();
+    assertEquals(5, props.size());
+  }
+
+  @Test
+  public void testAddToGlobalProps() {
+    DFSPropertiesConfiguration.clearGlobalProps();
+
+    String testPropsFilePath = new File("src/test/resources/external-config").getAbsolutePath();
+    ENVIRONMENT_VARIABLES.set(DFSPropertiesConfiguration.CONF_FILE_DIR_ENV_NAME, testPropsFilePath);
+    DFSPropertiesConfiguration.refreshGlobalProps();
+
+    TypedProperties result = DFSPropertiesConfiguration.addToGlobalProps("test.key1", "test.value1");
+    assertEquals("test.value1", result.get("test.key1"));
+    assertEquals(6, result.size());
+
+    TypedProperties globals = DFSPropertiesConfiguration.getGlobalProps();
+    assertEquals("test.value1", globals.get("test.key1"));
+
+    DFSPropertiesConfiguration.addToGlobalProps("test.key2", "test.value2");
+    globals = DFSPropertiesConfiguration.getGlobalProps();
+    assertEquals("test.value1", globals.get("test.key1"));
+    assertEquals("test.value2", globals.get("test.key2"));
+    assertEquals(7, globals.size());
+
+    DFSPropertiesConfiguration.clearGlobalProps();
+    ENVIRONMENT_VARIABLES.clear(DFSPropertiesConfiguration.CONF_FILE_DIR_ENV_NAME);
+
+    result = DFSPropertiesConfiguration.addToGlobalProps("test.key3", "test.value3");
+    assertEquals("test.value3", result.get("test.key3"));
+    assertEquals(1, result.size());
+  }
+
+  @Test
+  public void testIncludeNonExistentFile() throws IOException {
+    // Create a properties file that includes a non-existent file
+    Path filePath = new Path(dfsBasePath + "/t5.props");
+    writePropertiesFile(filePath, new String[] {
+        "existing.prop=value1",
+        "include=" + dfsBasePath + "/non-existent-file.props",
+        "another.prop=value2"
+    });
+
+    // Should not throw an exception, but log a warning and continue
+    DFSPropertiesConfiguration cfg = new DFSPropertiesConfiguration(dfs.getConf(), filePath);
+    TypedProperties props = cfg.getProps();
+
+    // Properties before and after the non-existent include should still be loaded
+    assertEquals(2, props.size());
+    assertEquals("value1", props.getString("existing.prop"));
+    assertEquals("value2", props.getString("another.prop"));
+  }
+
+  @Test
+  public void testIncludeNonExistentRelativeFile() throws IOException {
+    // Create a properties file that includes a non-existent relative file
+    Path filePath = new Path(dfsBasePath + "/t6.props");
+    writePropertiesFile(filePath, new String[] {
+        "prop1=val1",
+        "include=non-existent-relative.props",
+        "prop2=val2"
+    });
+
+    // Should not throw an exception for non-existent relative includes
+    DFSPropertiesConfiguration cfg = new DFSPropertiesConfiguration(dfs.getConf(), filePath);
+    TypedProperties props = cfg.getProps();
+
+    // Properties before and after the non-existent include should still be loaded
+    assertEquals(2, props.size());
+    assertEquals("val1", props.getString("prop1"));
+    assertEquals("val2", props.getString("prop2"));
+  }
+
+  @Test
+  public void testMixedExistentAndNonExistentIncludes() throws IOException {
+    // Create a properties file with both existent and non-existent includes
+    Path filePath = new Path(dfsBasePath + "/t7.props");
+    writePropertiesFile(filePath, new String[] {
+        "base.prop=base_value",
+        "include=" + dfsBasePath + "/non-existent-1.props",
+        "include=" + dfsBasePath + "/t1.props",  // This exists
+        "include=" + dfsBasePath + "/non-existent-2.props",
+        "override.prop=override_value"
+    });
+
+    // Should load successfully, ignoring non-existent files
+    DFSPropertiesConfiguration cfg = new DFSPropertiesConfiguration(dfs.getConf(), filePath);
+    TypedProperties props = cfg.getProps();
+
+    // Should have properties from t1.props and the main file
+    assertEquals("base_value", props.getString("base.prop"));
+    assertEquals("override_value", props.getString("override.prop"));
+    assertEquals(123, props.getInteger("int.prop"));  // From t1.props
+    assertEquals("str", props.getString("string.prop"));  // From t1.props
+    assertTrue(props.getBoolean("boolean.prop"));  // From t1.props
+  }
 }

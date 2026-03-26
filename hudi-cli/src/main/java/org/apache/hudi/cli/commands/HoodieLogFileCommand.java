@@ -202,7 +202,7 @@ public class HoodieLogFileCommand implements CommandMarker {
       HoodieMergedLogRecordScanner scanner =
           HoodieMergedLogRecordScanner.newBuilder()
               .withFileSystem(fs)
-              .withBasePath(client.getBasePath())
+              .withMetaClient(client)
               .withLogFilePaths(logFilePaths)
               .withReaderSchema(readerSchema)
               .withLatestInstantTime(

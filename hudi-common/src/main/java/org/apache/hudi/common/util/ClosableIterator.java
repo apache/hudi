@@ -16,6 +16,7 @@
  * limitations under the License.
  */
 
+<<<<<<<< HEAD:hudi-common/src/main/java/org/apache/hudi/common/util/ClosableIterator.java
 package org.apache.hudi.common.util;
 
 import java.util.Iterator;
@@ -28,4 +29,25 @@ import java.util.Iterator;
 public interface ClosableIterator<R> extends Iterator<R>, AutoCloseable {
   @Override
   void close(); // override to not throw exception
+========
+package org.apache.hudi.client.transaction.lock.models;
+
+public enum LockUpsertResult {
+  // Lock was successfully created/updated with code 0
+  SUCCESS(0),
+  // Another process has modified the lock file (precondition failure) with code 1
+  ACQUIRED_BY_OTHERS(1),
+  // Unable to determine lock state due to transient errors with code 2
+  UNKNOWN_ERROR(2);
+
+  private final int code;
+
+  LockUpsertResult(int code) {
+    this.code = code;
+  }
+
+  public int getCode() {
+    return code;
+  }
+>>>>>>>> af8522af0c (Add gcp configs in schema registery provider):hudi-client/hudi-client-common/src/main/java/org/apache/hudi/client/transaction/lock/models/LockUpsertResult.java
 }

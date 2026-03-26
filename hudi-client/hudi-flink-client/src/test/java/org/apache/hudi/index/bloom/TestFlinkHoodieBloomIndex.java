@@ -47,8 +47,10 @@ import org.junit.jupiter.params.provider.MethodSource;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Stream;
 
 import static java.util.Arrays.asList;
@@ -236,12 +238,10 @@ public class TestFlinkHoodieBloomIndex extends HoodieFlinkClientTestHarness {
     assertFalse(filter.mightContain(record4.getRecordKey()));
 
     // Compare with file
-    List<String> uuids = asList(record1.getRecordKey(), record2.getRecordKey(), record3.getRecordKey(), record4.getRecordKey());
+    Set<String> uuids = new HashSet<>(asList(record1.getRecordKey(), record2.getRecordKey(), record3.getRecordKey(), record4.getRecordKey()));
 
-    HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath).build();
-    HoodieFlinkTable table = HoodieFlinkTable.create(config, context, metaClient);
-    List<String> results = HoodieIndexUtils.filterKeysFromFile(
-        new Path(java.nio.file.Paths.get(basePath, partition, filename).toString()), uuids, hadoopConf);
+    List<String> results = new ArrayList<>(HoodieIndexUtils.filterKeysFromFile(
+        new Path(java.nio.file.Paths.get(basePath, partition, filename).toString()), uuids, hadoopConf));
     assertEquals(results.size(), 2);
     assertTrue(results.get(0).equals("1eb5b87a-1feh-4edd-87b4-6ec96dc405a0")
         || results.get(1).equals("1eb5b87a-1feh-4edd-87b4-6ec96dc405a0"));

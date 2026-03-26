@@ -271,7 +271,7 @@ public class DFSHoodieDatasetInputReader extends DFSDeltaInputReader {
       // If there is no data file, fall back to reading log files
       HoodieMergedLogRecordScanner scanner = HoodieMergedLogRecordScanner.newBuilder()
           .withFileSystem(metaClient.getFs())
-          .withBasePath(metaClient.getBasePath())
+          .withMetaClient(metaClient)
           .withLogFilePaths(
               fileSlice.getLogFiles().map(l -> l.getPath().getName()).collect(Collectors.toList()))
           .withReaderSchema(new Schema.Parser().parse(schemaStr))

@@ -37,6 +37,7 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamerMetrics;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.schema.SchemaRegistryProvider;
+import org.apache.hudi.utilities.sources.KafkaSource;
 import org.apache.hudi.utilities.sources.RowSource;
 import org.apache.hudi.utilities.sources.helpers.AvroConvertor;
 import org.apache.hudi.utilities.sources.helpers.KafkaOffsetGen;
@@ -53,8 +54,6 @@ import org.apache.spark.sql.functions;
 import org.apache.spark.sql.types.DataTypes;
 import org.apache.spark.sql.types.StructField;
 import org.apache.spark.sql.types.StructType;
-import org.apache.spark.streaming.kafka010.KafkaUtils;
-import org.apache.spark.streaming.kafka010.LocationStrategies;
 import org.apache.spark.streaming.kafka010.OffsetRange;
 
 /**
@@ -150,12 +149,12 @@ public abstract class DebeziumSource extends RowSource {
     Dataset<Row> kafkaData;
     if (deserializerClassName.equals(StringDeserializer.class.getName())) {
       kafkaData = AvroConversionUtils.createDataFrame(
-          KafkaUtils.<String, String>createRDD(sparkContext, offsetGen.getKafkaParams(), offsetRanges, LocationStrategies.PreferConsistent())
-              .map(obj -> convertor.fromJson(obj.value()))
+          KafkaSource.createKafkaRDD(this.props, sparkContext, offsetGen, offsetRanges)
+              .map(obj -> convertor.fromJson((String) obj.value()))
               .rdd(), schemaStr, sparkSession);
     } else {
       kafkaData = AvroConversionUtils.createDataFrame(
-          KafkaUtils.createRDD(sparkContext, offsetGen.getKafkaParams(), offsetRanges, LocationStrategies.PreferConsistent())
+          KafkaSource.createKafkaRDD(this.props, sparkContext, offsetGen, offsetRanges)
               .map(obj -> (GenericRecord) obj.value())
               .rdd(), schemaStr, sparkSession);
     }

@@ -181,7 +181,7 @@ public abstract class JavaExecutionStrategy<T extends HoodieRecordPayload<T>>
         Schema readerSchema = HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(config.getSchema()));
         HoodieMergedLogRecordScanner scanner = HoodieMergedLogRecordScanner.newBuilder()
             .withFileSystem(table.getMetaClient().getFs())
-            .withBasePath(table.getMetaClient().getBasePath())
+            .withMetaClient(table.getMetaClient())
             .withLogFilePaths(clusteringOp.getDeltaFilePaths())
             .withReaderSchema(readerSchema)
             .withLatestInstantTime(instantTime)

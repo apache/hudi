@@ -74,7 +74,7 @@
                   <include>org.apache.hudi:hudi-datahub-sync</include>
                   <include>org.apache.parquet:parquet-avro</include>
 
-                  <include>io.acryl:datahub-client</include>
+                  <include>io.acryl:datahub-client-java8</include>
                   <include>com.beust:jcommander</include>
                   <include>commons-io:commons-io</include>
                   <include>org.apache.hbase:hbase-common</include>
@@ -209,6 +209,15 @@
                     <exclude>META-INF/services/javax.*</exclude>
                     <exclude>**/*.proto</exclude>
                     <exclude>hbase-webapps/**</exclude>
+                  </excludes>
+                </filter>
+                <filter>
+                  <artifact>io.acryl:datahub-client-java8</artifact>
+                  <includes>
+                    <include>**</include>
+                  </includes>
+                  <excludes>
+                    <exclude>org/apache/avro/**</exclude>
                   </excludes>
                 </filter>
               </filters>

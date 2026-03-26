@@ -31,6 +31,7 @@ import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
 import org.apache.hudi.common.table.log.block.HoodieAvroDataBlock;
@@ -203,9 +204,10 @@ public class TestHoodieLogFileCommand extends CLIFunctionalTestHarness {
     // get expected result of 10 records.
     List<String> logFilePaths = Arrays.stream(fs.globStatus(new Path(partitionPath + "/*")))
         .map(status -> status.getPath().toString()).collect(Collectors.toList());
+    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setBasePath(tablePath).setConf(hadoopConf()).build();
     HoodieMergedLogRecordScanner scanner = HoodieMergedLogRecordScanner.newBuilder()
         .withFileSystem(fs)
-        .withBasePath(tablePath)
+        .withMetaClient(metaClient)
         .withLogFilePaths(logFilePaths)
         .withReaderSchema(schema)
         .withLatestInstantTime(INSTANT_TIME)

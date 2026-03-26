@@ -181,7 +181,7 @@ public abstract class HoodieCompactor<T extends HoodieRecordPayload, I, K, O> im
         .collect(toList());
     HoodieMergedLogRecordScanner scanner = HoodieMergedLogRecordScanner.newBuilder()
         .withFileSystem(fs)
-        .withBasePath(metaClient.getBasePath())
+        .withMetaClient(metaClient)
         .withLogFilePaths(logFiles)
         .withReaderSchema(readerSchema)
         .withLatestInstantTime(maxInstantTime)

@@ -80,7 +80,7 @@ public class UpsertPartitioner<T extends HoodieRecordPayload<T>> extends SparkHo
   /**
    * Remembers what type each bucket is for later.
    */
-  private HashMap<Integer, BucketInfo> bucketInfoMap;
+  protected HashMap<Integer, BucketInfo> bucketInfoMap;
 
   protected final HoodieWriteConfig config;
 
@@ -308,8 +308,9 @@ public class UpsertPartitioner<T extends HoodieRecordPayload<T>> extends SparkHo
     return Collections.unmodifiableList(new ArrayList<>(bucketInfoMap.values()));
   }
 
-  public BucketInfo getBucketInfo(int bucketNumber) {
-    return bucketInfoMap.get(bucketNumber);
+  @Override
+  public SparkBucketInfoGetter getSparkBucketInfoGetter() {
+    return new MapBasedSparkBucketInfoGetter(bucketInfoMap);
   }
 
   public List<InsertBucketCumulativeWeightPair> getInsertBuckets(String partitionPath) {

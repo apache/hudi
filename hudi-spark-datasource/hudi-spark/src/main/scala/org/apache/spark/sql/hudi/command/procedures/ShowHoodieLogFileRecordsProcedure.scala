@@ -66,7 +66,7 @@ class ShowHoodieLogFileRecordsProcedure extends BaseProcedure with ProcedureBuil
       val schema = converter.convert(Objects.requireNonNull(TableSchemaResolver.readSchemaFromLogFile(fs, new Path(logFilePaths.last))))
       val scanner = HoodieMergedLogRecordScanner.newBuilder
         .withFileSystem(fs)
-        .withBasePath(basePath)
+        .withMetaClient(client)
         .withLogFilePaths(logFilePaths.asJava)
         .withReaderSchema(schema)
         .withLatestInstantTime(client.getActiveTimeline.getCommitTimeline.lastInstant.get.getTimestamp)

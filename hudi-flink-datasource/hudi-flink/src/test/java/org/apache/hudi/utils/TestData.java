@@ -760,7 +760,7 @@ public class TestData {
       String instant) {
     return HoodieMergedLogRecordScanner.newBuilder()
         .withFileSystem(fs)
-        .withBasePath(basePath)
+        .withMetaClient(HoodieTableMetaClient.builder().setBasePath(basePath).setConf(fs.getConf()).build())
         .withLogFilePaths(logPaths)
         .withReaderSchema(readSchema)
         .withLatestInstantTime(instant)

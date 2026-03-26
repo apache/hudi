@@ -21,6 +21,7 @@ package org.apache.hudi.table.action.commit;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.WorkloadProfile;
+
 import org.apache.spark.Partitioner;
 
 /**
@@ -46,5 +47,9 @@ public abstract class SparkHoodiePartitioner<T extends HoodieRecordPayload<T>> e
     return numPartitions();
   }
 
-  public abstract BucketInfo getBucketInfo(int bucketNumber);
+  public BucketInfo getBucketInfo(int bucketNumber) {
+    return getSparkBucketInfoGetter().getBucketInfo(bucketNumber);
+  }
+
+  public abstract SparkBucketInfoGetter getSparkBucketInfoGetter();
 }
