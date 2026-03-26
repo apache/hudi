@@ -19,18 +19,25 @@ package org.apache.hudi.functional
 
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.DefaultSparkRecordMerger
+import org.apache.hudi.common.config.{HoodieCommonConfig, HoodieMetadataConfig}
+import org.apache.hudi.common.engine.HoodieLocalEngineContext
 import org.apache.hudi.common.model.HoodieTableType
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
+import org.apache.hudi.common.table.view.{FileSystemViewManager, FileSystemViewStorageConfig}
 import org.apache.hudi.common.testutils.HoodieTestUtils
 import org.apache.hudi.config.HoodieWriteConfig
+import org.apache.hudi.io.storage.HoodieSparkLanceReader
+import org.apache.hudi.storage.StoragePath
 import org.apache.hudi.testutils.HoodieSparkClientTestBase
 
 import org.apache.spark.sql.{DataFrame, SaveMode, SparkSession}
 import org.junit.jupiter.api.{AfterEach, BeforeEach}
-import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertNotNull, assertTrue}
 import org.junit.jupiter.api.condition.DisabledIfSystemProperty
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.EnumSource
+
+import java.util.stream.Collectors
 
 import scala.collection.JavaConverters._
 
@@ -715,6 +722,66 @@ class TestLanceDataSource extends HoodieSparkClientTestBase {
 
     assertTrue(expectedDf.except(actual).isEmpty)
     assertTrue(actual.except(expectedDf).isEmpty)
+  }
+
+  @ParameterizedTest
+  @EnumSource(value = classOf[HoodieTableType])
+  def testBloomFilterAndMinMaxKeys(tableType: HoodieTableType): Unit = {
+    val tableName = s"test_lance_bloom_${tableType.name().toLowerCase}"
+    val tablePath = s"$basePath/$tableName"
+
+    val records = Seq(
+      (1, "Alice", 30, 95.5),
+      (2, "Bob", 25, 87.3),
+      (3, "Charlie", 35, 92.1)
+    )
+    val df = createDataFrame(records)
+
+    writeDataframe(tableType, tableName, tablePath, df, saveMode = SaveMode.Overwrite, operation = Some("insert"))
+
+    // Build MetaClient and FileSystemView to find lance base files
+    val metaClient = HoodieTableMetaClient.builder()
+      .setConf(HoodieTestUtils.getDefaultStorageConf)
+      .setBasePath(tablePath)
+      .build()
+
+    val engineContext = new HoodieLocalEngineContext(metaClient.getStorageConf)
+    val metadataConfig = HoodieMetadataConfig.newBuilder.build
+    val viewManager = FileSystemViewManager.createViewManager(
+      engineContext, metadataConfig, FileSystemViewStorageConfig.newBuilder.build,
+      HoodieCommonConfig.newBuilder.build,
+      (mc: HoodieTableMetaClient) => metaClient.getTableFormat
+        .getMetadataFactory.create(engineContext, mc.getStorage, metadataConfig, tablePath))
+    val fsView = viewManager.getFileSystemView(metaClient)
+
+    // Get all lance base files across all partitions
+    val baseFiles = fsView.getLatestBaseFiles("").collect(Collectors.toList[org.apache.hudi.common.model.HoodieBaseFile])
+    assertTrue(baseFiles.size() > 0, "Should have at least one base file")
+
+    baseFiles.asScala.foreach { baseFile =>
+      val reader = new HoodieSparkLanceReader(new StoragePath(baseFile.getPath))
+      try {
+        // Verify bloom filter
+        val bloomFilter = reader.readBloomFilter()
+        assertNotNull(bloomFilter, "Bloom filter should not be null")
+
+        // All written record keys should be present
+        // Record keys are the "id" field values as strings
+        Seq("1", "2", "3").foreach { key =>
+          assertTrue(bloomFilter.mightContain(key), s"Bloom filter should contain key $key")
+        }
+        // Non-existent key should (very likely) not be present
+        assertFalse(bloomFilter.mightContain("nonexistent_key"), "Bloom filter should not contain nonexistent key")
+
+        // Verify min/max record keys
+        val minMaxKeys = reader.readMinMaxRecordKeys()
+        assertEquals("1", minMaxKeys(0), "Min key should be '1'")
+        assertEquals("3", minMaxKeys(1), "Max key should be '3'")
+      } finally {
+        reader.close()
+      }
+    }
+    fsView.close()
   }
 
   private def createDataFrame(records: Seq[(Int, String, Int, Double)]) = {
