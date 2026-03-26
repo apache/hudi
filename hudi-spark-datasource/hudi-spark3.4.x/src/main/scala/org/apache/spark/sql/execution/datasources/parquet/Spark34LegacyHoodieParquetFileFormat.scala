@@ -82,6 +82,7 @@ class Spark34LegacyHoodieParquetFileFormat(private val shouldAppendPartitionValu
       )
     }
   }
+  private lazy val supportBatchWithTableSchema = !hasTimestampMillisFieldInTableSchema
 
   def supportsColumnar(sparkSession: SparkSession, schema: StructType): Boolean = {
     val conf = sparkSession.sessionState.conf
@@ -90,6 +91,14 @@ class Spark34LegacyHoodieParquetFileFormat(private val shouldAppendPartitionValu
       conf.wholeStageEnabled && !WholeStageCodegenExec.isTooManyFields(conf, schema)
     requiredWholeStageCodegenSettings &&
       supportBatch(sparkSession, schema)
+  }
+
+  /**
+   * Returns whether the reader can return the rows as batch or not.
+   */
+  override def supportBatch(sparkSession: SparkSession, schema: StructType): Boolean = {
+    val conf = sparkSession.sessionState.conf
+    ParquetUtils.isBatchReadSupportedForSchema(conf, schema) && supportBatchWithTableSchema
   }
 
   override def buildReaderWithPartitionValues(sparkSession: SparkSession,
