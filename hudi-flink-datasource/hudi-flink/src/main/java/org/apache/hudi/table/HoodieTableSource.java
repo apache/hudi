@@ -296,7 +296,7 @@ public class HoodieTableSource extends FileIndexReader implements
     ValidationUtils.checkState(hadoopConf != null, "Hadoop configuration must be initialized");
     ValidationUtils.checkState(conf != null, "Configuration must be initialized");
 
-    HoodieSchema tableSchema =  !tableDataExists() ? inferSchemaFromDdl() : getTableSchema();
+    HoodieSchema tableSchema = !tableDataExists() ? inferSchemaFromDdl() : getTableSchema();
     final DataType rowDataType = HoodieSchemaConverter.convertToDataType(tableSchema);
     final RowType rowType = (RowType) rowDataType.getLogicalType();
     final RowType requiredRowType = (RowType) getProducedDataType().notNull().getLogicalType();
@@ -304,12 +304,12 @@ public class HoodieTableSource extends FileIndexReader implements
     HoodieScanContext context = createHoodieScanContext(rowType);
     final HoodieTableType tableType = HoodieTableType.valueOf(this.conf.get(FlinkOptions.TABLE_TYPE));
     final SplitReaderFunction<RowData> splitReaderFunction;
-    final MergeOnReadTableState<HoodieSourceSplit> hoodieTableState = new MergeOnReadTableState(
+    final MergeOnReadTableState<HoodieSourceSplit> hoodieTableState = new MergeOnReadTableState<>(
             rowType,
             requiredRowType,
             tableSchema.toString(),
             HoodieSchemaConverter.convertToSchema(requiredRowType).toString(),
-            new ArrayList());
+            new ArrayList<>());
     boolean emitDelete = tableType == HoodieTableType.MERGE_ON_READ;
     if (conf.get(FlinkOptions.CDC_ENABLED)) {
       List<DataType> fieldTypes = rowDataType.getChildren();

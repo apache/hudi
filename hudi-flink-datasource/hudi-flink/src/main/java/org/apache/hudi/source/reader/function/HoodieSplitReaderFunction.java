@@ -29,7 +29,6 @@ import org.apache.hudi.common.table.read.HoodieFileGroupReader;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.source.ExpressionPredicates;
 import org.apache.hudi.source.reader.BatchRecords;
@@ -58,7 +57,6 @@ public class HoodieSplitReaderFunction extends AbstractSplitReaderFunction {
   private final HoodieWriteConfig writeConfig;
   private final String mergeType;
   private transient HoodieFileGroupReader<RowData> fileGroupReader;
-  private transient org.apache.hadoop.conf.Configuration hadoopConf;
 
   public HoodieSplitReaderFunction(
       Configuration configuration,
@@ -68,7 +66,7 @@ public class HoodieSplitReaderFunction extends AbstractSplitReaderFunction {
       String mergeType,
       List<ExpressionPredicates.Predicate> predicates,
       boolean emitDelete) {
-    this(configuration, tableSchema, requiredSchema, internalSchemaManager, mergeType, predicates, emitDelete, -1);
+    this(configuration, tableSchema, requiredSchema, internalSchemaManager, mergeType, predicates, emitDelete, NO_LIMIT);
   }
 
   public HoodieSplitReaderFunction(
@@ -97,6 +95,9 @@ public class HoodieSplitReaderFunction extends AbstractSplitReaderFunction {
     HoodieTableMetaClient metaClient = StreamerUtil.metaClientForReader(conf, getHadoopConf());
 
     try {
+      if (fileGroupReader != null) {
+        fileGroupReader.close();
+      }
       this.fileGroupReader = createFileGroupReader(split, metaClient);
       ClosableIterator<RowData> recordIterator = fileGroupReader.getClosableIterator();
       if (limit > 0) {
@@ -120,7 +121,8 @@ public class HoodieSplitReaderFunction extends AbstractSplitReaderFunction {
   /**
    * Creates a {@link HoodieFileGroupReader} for the given split.
    *
-   * @param split The source split to read
+   * @param split      The source split to read
+   * @param metaClient The table meta client for schema and config resolution
    * @return A {@link HoodieFileGroupReader} instance
    */
   private HoodieFileGroupReader<RowData> createFileGroupReader(HoodieSourceSplit split, HoodieTableMetaClient metaClient) {

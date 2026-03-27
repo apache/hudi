@@ -27,9 +27,17 @@ import org.apache.hudi.source.ExpressionPredicates;
 import java.util.List;
 
 /**
- * Abstract implementation of SplitReaderFunction.
+ * Abstract implementation of SplitReaderFunction with shared limit push-down and
+ * Hadoop configuration support.
+ *
+ * <p>Subclasses call {@link #limitIterator(ClosableIterator, long)} to cap the number of
+ * records returned per split. Use {@link #NO_LIMIT} as the sentinel when no limit is set.
  */
 public abstract class AbstractSplitReaderFunction implements SplitReaderFunction<RowData> {
+
+  /** Sentinel value indicating that no row limit has been pushed down. */
+  public static final long NO_LIMIT = -1L;
+
   protected final long limit;
   protected final Configuration conf;
   protected final List<ExpressionPredicates.Predicate> predicates;
@@ -37,10 +45,10 @@ public abstract class AbstractSplitReaderFunction implements SplitReaderFunction
   private transient org.apache.hadoop.conf.Configuration hadoopConf;
 
   public AbstractSplitReaderFunction(
-          Configuration conf,
-          List<ExpressionPredicates.Predicate> predicates,
-          long limit,
-          boolean emitDelete) {
+      Configuration conf,
+      List<ExpressionPredicates.Predicate> predicates,
+      long limit,
+      boolean emitDelete) {
     this.conf = conf;
     this.predicates = predicates;
     this.limit = limit;

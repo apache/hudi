@@ -122,7 +122,6 @@ public class HoodieCdcSplitReaderFunction extends AbstractSplitReaderFunction {
   private final MergeOnReadTableState tableState;
   private transient HoodieTableMetaClient metaClient;
   private transient HoodieWriteConfig writeConfig;
-  private transient org.apache.hadoop.conf.Configuration hadoopConf;
   private transient ClosableIterator<RowData> currentIterator;
   // Fallback reader for non-CDC splits (e.g. snapshot reads when read.start-commit='earliest')
   private transient HoodieSplitReaderFunction fallbackReaderFunction;
@@ -144,7 +143,7 @@ public class HoodieCdcSplitReaderFunction extends AbstractSplitReaderFunction {
       List<DataType> fieldTypes,
       List<ExpressionPredicates.Predicate> predicates,
       boolean emitDelete) {
-    this(conf, tableState, internalSchemaManager, fieldTypes, predicates, emitDelete, -1);
+    this(conf, tableState, internalSchemaManager, fieldTypes, predicates, emitDelete, NO_LIMIT);
   }
 
   public HoodieCdcSplitReaderFunction(
@@ -156,6 +155,8 @@ public class HoodieCdcSplitReaderFunction extends AbstractSplitReaderFunction {
       boolean emitDelete,
       long limit) {
     super(conf, predicates, limit, emitDelete);
+    ValidationUtils.checkArgument(tableState != null, "tableState can't be null");
+    ValidationUtils.checkArgument(internalSchemaManager != null, "internalSchemaManager can't be null");
     this.tableState = tableState;
     this.internalSchemaManager = internalSchemaManager;
     this.fieldTypes = fieldTypes;
