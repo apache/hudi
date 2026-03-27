@@ -272,8 +272,8 @@ public class TestSourceFormatAdapter {
 
     public TestSchemaProviderWithTransformation(StructType sourceStruct, StructType targetStruct) {
       super(null, null);
-      this.sourceSchema = HoodieSparkSchemaConverters.toHoodieType(sourceStruct, false, "source", "");
-      this.targetSchema = HoodieSparkSchemaConverters.toHoodieType(targetStruct, false, "target", "");
+      this.sourceSchema = HoodieSparkSchemaConverters.toHoodieType(sourceStruct, false, "source", "", Metadata.empty());
+      this.targetSchema = HoodieSparkSchemaConverters.toHoodieType(targetStruct, false, "target", "", Metadata.empty());
     }
 
     @Override
