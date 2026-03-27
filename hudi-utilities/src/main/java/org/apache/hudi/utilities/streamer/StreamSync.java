@@ -115,6 +115,7 @@ import org.apache.hudi.utilities.schema.SimpleSchemaProvider;
 import org.apache.hudi.utilities.sources.InputBatch;
 import org.apache.hudi.utilities.sources.Source;
 import org.apache.hudi.utilities.streamer.HoodieStreamer.Config;
+import org.apache.hudi.utilities.streamer.validator.SparkStreamerValidatorUtils;
 import org.apache.hudi.utilities.transform.Transformer;
 
 import com.codahale.metrics.Timer;
@@ -873,6 +874,10 @@ public class StreamSync implements Serializable, Closeable {
           cfg, errorTableWriter, errorTableWriteStatusRDDOpt, errorWriteFailureStrategy, isErrorTableWriteUnificationEnabled, writeClient, latestCommittedInstant,
           totalSuccessfulRecords);
       String commitActionType = CommitUtils.getCommitActionType(cfg.operation, HoodieTableType.valueOf(cfg.tableType));
+
+      // Run pre-commit streaming offset validators (if configured) before commit
+      SparkStreamerValidatorUtils.runValidators(props, instantTime, writeStatusRDD,
+          checkpointCommitMetadata, metaClient);
 
       boolean success = writeClient.commit(instantTime, writeStatusRDD, Option.of(checkpointCommitMetadata), commitActionType, partitionToReplacedFileIds, Option.empty(),
           Option.of(writeStatusValidator));
