@@ -217,12 +217,18 @@ public abstract class HoodieBaseLanceWriter<R, K extends Comparable<K>> implemen
   }
 
   /**
-   * Returns the total number of bytes accumulated across all flushed Arrow batches.
-   * Computed as the sum of each field vector's buffer size at flush time, providing
-   * an uncompressed estimate analogous to {@code ParquetWriter.getDataSize()}.
+   * Returns the estimated data size in bytes, including both flushed batches and
+   * the current in-progress batch. The in-progress batch size is derived from
+   * Arrow buffer capacities, which may slightly overestimate due to pre-allocation.
    */
   protected long getDataSize() {
-    return totalFlushedDataSize;
+    long currentBufferSize = 0;
+    if (root != null && currentBatchSize > 0) {
+      for (FieldVector vector : root.getFieldVectors()) {
+        currentBufferSize += vector.getBufferSize();
+      }
+    }
+    return totalFlushedDataSize + currentBufferSize;
   }
 
   /**

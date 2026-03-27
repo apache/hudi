@@ -32,6 +32,7 @@ import org.apache.hudi.storage.StoragePath;
 
 import com.lancedb.lance.spark.arrow.LanceArrowWriter;
 import lombok.AllArgsConstructor;
+import lombok.Builder;
 import org.apache.arrow.vector.VectorSchemaRoot;
 import org.apache.arrow.vector.types.pojo.Schema;
 import org.apache.spark.sql.catalyst.InternalRow;
@@ -74,26 +75,48 @@ public class HoodieSparkLanceWriter extends HoodieBaseLanceWriter<InternalRow, U
   private long recordCountForNextSizeCheck = MIN_RECORDS_FOR_SIZE_CHECK;
 
   /**
-   * Constructor for Spark Lance writer.
+   * Creates a new builder for constructing {@link HoodieSparkLanceWriter} instances.
    *
-   * @param file Path where Lance file will be written
-   * @param sparkSchema Spark schema for the data
-   * @param instantTime Instant time for the commit
-   * @param taskContextSupplier Task context supplier for partition ID
-   * @param storage HoodieStorage instance
-   * @param populateMetaFields Whether to populate Hudi metadata fields
-   * @param bloomFilterOpt Optional bloom filter for record key tracking
-   * @param maxFileSize Target maximum file size in bytes
-   * @throws IOException if writer initialization fails
+   * <p>Required parameters: {@code file}, {@code sparkSchema}, {@code taskContextSupplier}, {@code storage}.
+   * <p>Optional parameters with defaults:
+   * <ul>
+   *   <li>{@code instantTime} — defaults to {@code null}</li>
+   *   <li>{@code populateMetaFields} — defaults to {@code false}</li>
+   *   <li>{@code bloomFilterOpt} — defaults to {@link Option#empty()}</li>
+   *   <li>{@code maxFileSize} — defaults to {@link HoodieStorageConfig#LANCE_MAX_FILE_SIZE}</li>
+   * </ul>
    */
-  public HoodieSparkLanceWriter(StoragePath file,
-                                StructType sparkSchema,
-                                String instantTime,
-                                TaskContextSupplier taskContextSupplier,
-                                HoodieStorage storage,
-                                boolean populateMetaFields,
-                                Option<BloomFilter> bloomFilterOpt,
-                                long maxFileSize) {
+  @Builder(builderMethodName = "builder")
+  private static HoodieSparkLanceWriter create(
+      StoragePath file,
+      StructType sparkSchema,
+      String instantTime,
+      TaskContextSupplier taskContextSupplier,
+      HoodieStorage storage,
+      boolean populateMetaFields,
+      Option<BloomFilter> bloomFilterOpt,
+      long maxFileSize) {
+    return new HoodieSparkLanceWriter(file, sparkSchema, instantTime,
+        taskContextSupplier, storage, populateMetaFields, bloomFilterOpt, maxFileSize);
+  }
+
+  /**
+   * Manually declared builder class to provide default values for optional parameters.
+   * Lombok fills in the remaining builder methods.
+   */
+  public static class HoodieSparkLanceWriterBuilder {
+    private Option<BloomFilter> bloomFilterOpt = Option.empty();
+    private long maxFileSize = Long.parseLong(HoodieStorageConfig.LANCE_MAX_FILE_SIZE.defaultValue());
+  }
+
+  private HoodieSparkLanceWriter(StoragePath file,
+                                 StructType sparkSchema,
+                                 String instantTime,
+                                 TaskContextSupplier taskContextSupplier,
+                                 HoodieStorage storage,
+                                 boolean populateMetaFields,
+                                 Option<BloomFilter> bloomFilterOpt,
+                                 long maxFileSize) {
     super(file, DEFAULT_BATCH_SIZE, bloomFilterOpt.map(HoodieBloomFilterRowWriteSupport::new));
     this.sparkSchema = sparkSchema;
     this.arrowSchema = LanceArrowUtils.toArrowSchema(sparkSchema, DEFAULT_TIMEZONE, true, false);
@@ -105,70 +128,6 @@ public class HoodieSparkLanceWriter extends HoodieBaseLanceWriter<InternalRow, U
       Integer partitionId = taskContextSupplier.getPartitionIdSupplier().get();
       return HoodieRecord.generateSequenceId(instantTime, partitionId, recordIndex);
     };
-  }
-
-  /**
-   * Constructor for Spark Lance writer used for internal row writing with pre-embedded metadata.
-   * No file size limit is applied (maxFileSize defaults to {@link Long#MAX_VALUE}).
-   *
-   * @param file Path where Lance file will be written
-   * @param sparkSchema Spark schema for the data
-   * @param taskContextSupplier Task context supplier for partition ID
-   * @param storage HoodieStorage instance
-   */
-  public HoodieSparkLanceWriter(StoragePath file,
-                                StructType sparkSchema,
-                                TaskContextSupplier taskContextSupplier,
-                                HoodieStorage storage,
-                                long maxFileSize) {
-    this(file, sparkSchema, null, taskContextSupplier, storage, false, Option.empty(), maxFileSize);
-  }
-
-  /**
-   * Constructor for Spark Lance writer used for internal row writing with pre-embedded metadata
-   * and a configurable file size limit.
-   *
-   * @param file Path where Lance file will be written
-   * @param sparkSchema Spark schema for the data
-   * @param instantTime Instant time for the commit
-   * @param taskContextSupplier Task context supplier for partition ID
-   * @param storage HoodieStorage instance
-   * @param populateMetaFields Whether to populate Hudi metadata fields
-   * @param bloomFilterOpt Optional bloom filter for record key tracking
-   * @throws IOException if writer initialization fails
-   */
-  public HoodieSparkLanceWriter(StoragePath file,
-                                StructType sparkSchema,
-                                String instantTime,
-                                TaskContextSupplier taskContextSupplier,
-                                HoodieStorage storage,
-                                boolean populateMetaFields,
-                                Option<BloomFilter> bloomFilterOpt) {
-    this(file, sparkSchema, instantTime, taskContextSupplier, storage, populateMetaFields, bloomFilterOpt,
-        Long.parseLong(HoodieStorageConfig.LANCE_MAX_FILE_SIZE.defaultValue()));
-  }
-
-  /**
-   * Constructor for Spark Lance writer used for internal row writing with pre-embedded metadata
-   * and a configurable file size limit.
-   *
-   * @param file Path where Lance file will be written
-   * @param sparkSchema Spark schema for the data
-   * @param instantTime Instant time for the commit
-   * @param taskContextSupplier Task context supplier for partition ID
-   * @param storage HoodieStorage instance
-   * @param populateMetaFields Whether to populate Hudi metadata fields
-   * @param maxFileSize Target maximum file size in bytes
-   * @throws IOException if writer initialization fails
-   */
-  public HoodieSparkLanceWriter(StoragePath file,
-                                StructType sparkSchema,
-                                String instantTime,
-                                TaskContextSupplier taskContextSupplier,
-                                HoodieStorage storage,
-                                boolean populateMetaFields,
-                                long maxFileSize) {
-    this(file, sparkSchema, instantTime, taskContextSupplier, storage, populateMetaFields, Option.empty(), maxFileSize);
   }
 
   @Override

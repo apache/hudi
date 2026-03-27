@@ -305,8 +305,9 @@ public class TestHoodieSparkLanceReader {
     StoragePath path = new StoragePath(tempDir.getAbsolutePath() + "/test_large.lance");
     int recordCount = 2500;
     BloomFilter dynamicBloomFilter = BloomFilterFactory.createBloomFilter(1000, 0.0001, 10000, DYNAMIC_V0.name());
-    try (HoodieSparkLanceWriter writer = new HoodieSparkLanceWriter(
-        path, schema, instantTime, taskContextSupplier, storage, false, Option.of(dynamicBloomFilter))) {
+    try (HoodieSparkLanceWriter writer = HoodieSparkLanceWriter.builder()
+        .file(path).sparkSchema(schema).instantTime(instantTime).taskContextSupplier(taskContextSupplier)
+        .storage(storage).bloomFilterOpt(Option.of(dynamicBloomFilter)).build()) {
       for (int i = 0; i < recordCount; i++) {
         GenericInternalRow row = new GenericInternalRow(new Object[]{i, (long) i * 2});
         writer.writeRow("key" + i, row);
@@ -577,8 +578,9 @@ public class TestHoodieSparkLanceReader {
   }
     
   private HoodieSparkLanceReader writeAndCreateReader(StoragePath path, StructType schema, List<InternalRow> rows, boolean populateMetaFields) throws IOException {
-    try (HoodieSparkLanceWriter writer = new HoodieSparkLanceWriter(
-        path, schema, instantTime, taskContextSupplier, storage, populateMetaFields, Option.of(simpleBloomFilter))) {
+    try (HoodieSparkLanceWriter writer = HoodieSparkLanceWriter.builder()
+        .file(path).sparkSchema(schema).instantTime(instantTime).taskContextSupplier(taskContextSupplier)
+        .storage(storage).populateMetaFields(populateMetaFields).bloomFilterOpt(Option.of(simpleBloomFilter)).build()) {
       for (int i = 0; i < rows.size(); i++) {
         HoodieKey key = new HoodieKey("key" + i, "default_partition");
         // Note writeRowWithMetadata implicitly handles case where populateMetaFields=false
@@ -604,8 +606,9 @@ public class TestHoodieSparkLanceReader {
     // Write Lance file with full schema
     StoragePath path = new StoragePath(tempDir.getAbsolutePath() + "/test_projection.lance");
     BloomFilter dynamicBloom = BloomFilterFactory.createBloomFilter(1000, 0.0001, 10000, DYNAMIC_V0.name());
-    try (HoodieSparkLanceWriter writer = new HoodieSparkLanceWriter(
-        path, fullSchema, instantTime, taskContextSupplier, storage, false, Option.of(dynamicBloom))) {
+    try (HoodieSparkLanceWriter writer = HoodieSparkLanceWriter.builder()
+        .file(path).sparkSchema(fullSchema).instantTime(instantTime).taskContextSupplier(taskContextSupplier)
+        .storage(storage).bloomFilterOpt(Option.of(dynamicBloom)).build()) {
       for (int i = 0; i < rows.size(); i++) {
         writer.writeRow("key" + i, rows.get(i));
       }

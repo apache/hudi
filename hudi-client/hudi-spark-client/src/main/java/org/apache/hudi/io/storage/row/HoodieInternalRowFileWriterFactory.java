@@ -99,12 +99,13 @@ public class HoodieInternalRowFileWriterFactory {
                                                                            StructType structType,
                                                                            long maxFileSize)
       throws IOException {
-    return new HoodieSparkLanceWriter(
-        path,
-        structType,
-        new LocalTaskContextSupplier(),
-        table.getStorage(),
-        maxFileSize);
+    return HoodieSparkLanceWriter.builder()
+        .file(path)
+        .sparkSchema(structType)
+        .taskContextSupplier(new LocalTaskContextSupplier())
+        .storage(table.getStorage())
+        .maxFileSize(maxFileSize)
+        .build();
   }
 
   private static Option<BloomFilter> tryInstantiateBloomFilter(HoodieWriteConfig writeConfig) {
