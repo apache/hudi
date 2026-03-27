@@ -336,13 +336,35 @@ no UI-related routes are added.
 - **No frontend build pipeline.** No npm, webpack, or vite is introduced. The JS/CSS files are
   committed directly and served as-is.
 
+## Additional Features Delivered
+
+The following client-side enhancements were implemented alongside the core features described above.
+These are purely frontend additions — no new APIs, Java dependencies, or architectural changes were
+introduced beyond what is specified in this RFC.
+
+- **Bootstrap 5 + renderjson styling** — Replaces basic styling with Bootstrap 5 for layout and
+  renderjson for collapsible, syntax-highlighted JSON in the detail panel.
+- **Instant search and "Go to Now" button** — A search input that filters and focuses the timeline
+  on a specific instant by requested time, plus a button to jump to the latest instant.
+- **Summary statistics bar** — Displays counts of instants by state (completed, inflight, requested)
+  computed client-side from the loaded data.
+- **Filter controls (state + action)** — Dropdown filters for state and action type, implemented
+  using vis-timeline's `DataView` filtering. Allows users to isolate specific instant types.
+- **Color legend** — A visual legend mapping colors to instant states for quick reference.
+- **URL `?path=` persistence** — The basepath is stored in the URL query parameter, enabling
+  bookmarking and sharing of a specific table's timeline view.
+- **Keyboard navigation** — Left/right arrow keys to move between instants, Escape to close the
+  detail panel.
+- **Help modal** — Pressing `?` opens a modal listing all available keyboard shortcuts and UI
+  interactions.
+
 ## Future Improvements
 
 There are other features/improvements that we can add to the UI. For example:
 
-1. **Visualising incremental clean range** — When an incremental clean is performed, render a
-   translucent overlay spanning from `lastCompletedCommitTimestamp` to `earliestCommitToRetain`.
-   This would give operators an at-a-glance view of which instants are protected from cleaning and
+1. **Visualising incremental clean range** — A translucent overlay spanning from
+   `lastCompletedCommitTimestamp` to `earliestCommitToRetain` is rendered when clean metadata is
+   available, giving operators an at-a-glance view of which instants are protected from cleaning and
    which are eligible for removal.
 
 2. **Visualising partition/filegroup level write heatmap** — Within one or multiple instants, render
