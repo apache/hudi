@@ -131,9 +131,9 @@ class ColumnStatIndexTestBase extends HoodieSparkClientTestBase {
     val fsv = FileSystemViewManager.createInMemoryFileSystemView(new HoodieSparkEngineContext(jsc), metaClient, HoodieMetadataConfig.newBuilder().enable(false).build())
     fsv.loadAllPartitions()
     val filegroupList = fsv.getAllFileGroups.collect(Collectors.toList[HoodieFileGroup])
-    val baseFilesList = filegroupList.stream().flatMap(fileGroup => fileGroup.getAllBaseFiles).collect(Collectors.toList[HoodieBaseFile])
-    val baseFiles = baseFilesList.stream()
-      .map[StoragePath](baseFile => baseFile.getStoragePath).collect(Collectors.toList[StoragePath]).asScala
+    val baseFiles = filegroupList.asScala
+      .flatMap(fileGroup => fileGroup.getAllBaseFiles.iterator().asScala)
+      .map(baseFile => new StoragePath(baseFile.getPath))
 
     val baseFilesDf = spark.createDataFrame(
       baseFiles.flatMap(file => {
@@ -171,9 +171,10 @@ class ColumnStatIndexTestBase extends HoodieSparkClientTestBase {
     if (metaClient.getTableConfig.getTableType == HoodieTableType.COPY_ON_WRITE) {
       baseFilesDf // COW table
     } else {
-      val allLogFiles = filegroupList.stream().flatMap(fileGroup => fileGroup.getAllFileSlices)
-        .flatMap(fileSlice => fileSlice.getLogFiles)
-        .collect(Collectors.toList[HoodieLogFile])
+      val allLogFiles = filegroupList.asScala
+        .flatMap(fileGroup => fileGroup.getAllFileSlices.iterator().asScala)
+        .flatMap(fileSlice => fileSlice.getLogFiles.iterator().asScala)
+        .toList.asJava
       if (allLogFiles.isEmpty) {
         baseFilesDf // MOR table, but no log files.
       } else {
@@ -195,14 +196,14 @@ class ColumnStatIndexTestBase extends HoodieSparkClientTestBase {
                                         writerSchemaOpt: org.apache.hudi.common.util.Option[Schema],
                                         maxBufferSize: Integer,
                                         indexSchema: StructType): DataFrame = {
-    val colStatsEntries = logFiles.stream().map[org.apache.hudi.common.util.Option[Row]](logFile => {
+    val colStatsEntries = logFiles.asScala.map(logFile => {
       try {
         getColStatsFromLogFile(logFile.getPath.toString, latestCommit, columnsToIndex, datasetMetaClient, writerSchemaOpt, maxBufferSize)
       } catch {
         case e: Exception =>
           throw e
       }
-    }).filter(rowOpt => rowOpt.isPresent).map[Row](rowOpt => rowOpt.get()).collect(Collectors.toList[Row])
+    }).filter(rowOpt => rowOpt.isPresent).map(rowOpt => rowOpt.get()).toList.asJava
     spark.createDataFrame(colStatsEntries, indexSchema)
   }
 
