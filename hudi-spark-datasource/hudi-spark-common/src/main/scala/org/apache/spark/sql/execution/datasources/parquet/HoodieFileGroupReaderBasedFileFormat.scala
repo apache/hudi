@@ -272,6 +272,15 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
     } else {
       baseFileReader
     }
+    // For base-file-only reads (case _ branches), we use the vectorized reader for formats that support
+    // returning InternalRow even in vectorized mode (Parquet with returningBatch=false).
+    // Lance's vectorized reader always returns ColumnarBatch, so for MOR Lance tables (where
+    // supportReturningBatch=false and Spark expects InternalRow), we must use the non-vectorized reader.
+    val baseFileOnlyReader = if (isMOR && hoodieFileFormat == HoodieFileFormat.LANCE && !isMultipleBaseFileFormatsEnabled) {
+      fileGroupBaseFileReader
+    } else {
+      baseFileReader
+    }
 
     val broadcastedStorageConf = spark.sparkContext.broadcast(new SerializableConfiguration(augmentedStorageConf.unwrap()))
     val fileIndexProps: TypedProperties = HoodieFileIndex.getConfigProperties(spark, options, null)
@@ -326,7 +335,7 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
                 fixedPartitionIndexes)
 
             case _ =>
-              readBaseFile(file, fileGroupBaseFileReader.value, requestedStructType, remainingPartitionSchema, fixedPartitionIndexes,
+              readBaseFile(file, baseFileOnlyReader.value, requestedStructType, remainingPartitionSchema, fixedPartitionIndexes,
                 requiredSchema, partitionSchema, outputSchema, filters ++ requiredFilters, storageConf)
           }
         // CDC queries.
@@ -334,7 +343,7 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
           buildCDCRecordIterator(hoodiePartitionCDCFileGroupSliceMapping, fileGroupBaseFileReader.value, storageConf, fileIndexProps, requiredSchema, metaClient)
 
         case _ =>
-          readBaseFile(file, fileGroupBaseFileReader.value, requestedStructType, remainingPartitionSchema, fixedPartitionIndexes,
+          readBaseFile(file, baseFileOnlyReader.value, requestedStructType, remainingPartitionSchema, fixedPartitionIndexes,
             requiredSchema, partitionSchema, outputSchema, filters ++ requiredFilters, storageConf)
       }
       CloseableIteratorListener.addListener(iter)
