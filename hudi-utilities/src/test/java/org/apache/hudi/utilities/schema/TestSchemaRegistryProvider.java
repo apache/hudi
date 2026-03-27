@@ -24,13 +24,19 @@ import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.util.Option;
 
 import io.confluent.kafka.schemaregistry.ParsedSchema;
+import io.confluent.kafka.schemaregistry.client.CachedSchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.SchemaMetadata;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.rest.RestService;
 import org.junit.jupiter.api.Test;
+import org.mockito.MockedConstruction;
+import org.mockito.Mockito;
 
+import java.util.ArrayList;
 import java.util.Base64;
 import java.util.Collections;
+import java.util.List;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -148,6 +154,38 @@ class TestSchemaRegistryProvider {
     assertNotNull(actual);
     assertEquals(getExpectedSchema(), actual);
     verify(mockRestService, never()).setHttpHeaders(any());
+  }
+
+  @Test
+  public void testPublicConstructorForwardsConfigsToCachedSchemaRegistryClient() {
+    TypedProperties props = new TypedProperties();
+    props.put("hoodie.deltastreamer.schemaprovider.registry.url",
+        "http://localhost/subjects/test/versions/latest");
+    props.put("bearer.auth.credentials.source", "CUSTOM");
+    props.put("bearer.auth.custom.provider.class",
+        "com.example.GcpBearerAuthCredentialProvider");
+
+    List<Map<String, Object>> capturedConfigs = new ArrayList<>();
+    ParsedSchema mockParsedSchema = mock(ParsedSchema.class);
+    when(mockParsedSchema.canonicalString()).thenReturn(RAW_SCHEMA);
+
+    try (MockedConstruction<RestService> ignoredRest =
+             Mockito.mockConstruction(RestService.class);
+         MockedConstruction<CachedSchemaRegistryClient> ignored =
+             Mockito.mockConstruction(CachedSchemaRegistryClient.class, (mock, context) -> {
+               capturedConfigs.add((Map<String, Object>) context.arguments().get(3));
+               when(mock.getLatestSchemaMetadata(any())).thenReturn(new SchemaMetadata(1, 1, RAW_SCHEMA));
+               when(mock.parseSchema(any(), any(), any())).thenReturn(java.util.Optional.of(mockParsedSchema));
+             })) {
+
+      SchemaRegistryProvider provider = new SchemaRegistryProvider(props, null);
+      provider.fetchSchemaFromRegistry("http://localhost/subjects/test/versions/latest");
+
+      assertEquals(1, capturedConfigs.size());
+      assertEquals("CUSTOM", capturedConfigs.get(0).get("bearer.auth.credentials.source"));
+      assertEquals("com.example.GcpBearerAuthCredentialProvider",
+          capturedConfigs.get(0).get("bearer.auth.custom.provider.class"));
+    }
   }
 
   @Test

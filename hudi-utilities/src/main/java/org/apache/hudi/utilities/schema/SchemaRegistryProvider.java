@@ -66,7 +66,9 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Base64;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -121,8 +123,10 @@ public class SchemaRegistryProvider extends SchemaProvider {
         schemaConverter, new Class<?>[] {TypedProperties.class}, config))
         : Option.empty();
     this.restServiceProvider = RestService::new;
+    Map<String, Object> schemaRegistryConfigs = new HashMap<>();
+    config.forEach((k, v) -> schemaRegistryConfigs.put(k.toString(), v));
     this.registryClientProvider = restService -> new CachedSchemaRegistryClient(restService, 100,
-        Arrays.asList(new ProtobufSchemaProvider(), new JsonSchemaProvider(), new AvroSchemaProvider()), null, null);
+        Arrays.asList(new ProtobufSchemaProvider(), new JsonSchemaProvider(), new AvroSchemaProvider()), schemaRegistryConfigs, null);
   }
 
   @VisibleForTesting
