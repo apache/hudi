@@ -19,15 +19,15 @@ package org.apache.hudi.functional
 
 import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions}
 import org.apache.hudi.common.model.HoodieTableType
-import org.apache.hudi.common.table.HoodieTableConfig
+import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableVersion}
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.testutils.HoodieSparkClientTestBase
 
 import org.apache.spark.sql.{SaveMode, SparkSession}
 import org.junit.jupiter.api.{AfterEach, BeforeEach}
-import org.junit.jupiter.api.Assertions.{assertFalse, assertTrue}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.EnumSource
+import org.junit.jupiter.params.provider.{CsvSource, EnumSource}
 
 /**
  * Tests to validate column pruning optimization for incremental queries.
@@ -58,10 +58,14 @@ class TestIncrementalQueryColumnPruning extends HoodieSparkClientTestBase {
    * Core test to validate column pruning in incremental queries.
    * Creates a wide table and validates that selecting a subset of columns
    * results in fewer columns being returned.
+   * Tests both table versions 6 and 9 to ensure compatibility.
    */
   @ParameterizedTest
-  @EnumSource(value = classOf[HoodieTableType])
-  def testColumnPruningInIncrementalQuery(tableType: HoodieTableType): Unit = {
+  @CsvSource(Array(
+    "COPY_ON_WRITE,SIX", "COPY_ON_WRITE,NINE",
+    "MERGE_ON_READ,SIX", "MERGE_ON_READ,NINE"
+  ))
+  def testColumnPruningInIncrementalQuery(tableType: HoodieTableType, tableVersion: HoodieTableVersion): Unit = {
     val _spark = spark
     import _spark.implicits._
 
@@ -72,7 +76,9 @@ class TestIncrementalQueryColumnPruning extends HoodieSparkClientTestBase {
       DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "partition",
       HoodieTableConfig.ORDERING_FIELDS.key -> "timestamp",
       HoodieWriteConfig.TBL_NAME.key -> "hoodie_test",
-      DataSourceWriteOptions.TABLE_TYPE.key -> tableType.name()
+      DataSourceWriteOptions.TABLE_TYPE.key -> tableType.name(),
+      HoodieTableConfig.VERSION.key() -> tableVersion.versionCode().toString,
+      HoodieWriteConfig.WRITE_TABLE_VERSION.key() -> tableVersion.versionCode().toString
     )
 
     // Create a wide table with 10 columns (plus hoodie meta fields)
@@ -82,13 +88,18 @@ class TestIncrementalQueryColumnPruning extends HoodieSparkClientTestBase {
       ("key3", "p2", 1000L, "c1_v3", "c2_v3", "c3_v3", "c4_v3", "c5_v3", "c6_v3", "c7_v3")
     ).toDF("_row_key", "partition", "timestamp", "col1", "col2", "col3", "col4", "col5", "col6", "col7")
 
-    batch1.write.format("org.apache.hudi")
+    batch1.write.format("hudi")
       .options(commonOpts)
       .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
       .mode(SaveMode.Overwrite)
       .save(basePath)
 
     val hoodieMetaClient = createMetaClient(spark, basePath)
+    // Verify the table was created with the correct version
+    val actualTableVersion = hoodieMetaClient.getTableConfig.getTableVersion
+    assertEquals(tableVersion, actualTableVersion,
+      s"Table should be created with version ${tableVersion.versionCode()} but was ${actualTableVersion.versionCode()}")
+
     val commit1 = hoodieMetaClient.getCommitsTimeline.filterCompletedInstants().lastInstant().get().requestedTime
 
     // Second batch
@@ -107,7 +118,7 @@ class TestIncrementalQueryColumnPruning extends HoodieSparkClientTestBase {
     val commit2 = hoodieMetaClient.getCommitsTimeline.filterCompletedInstants().lastInstant().get().requestedTime
 
     // Test 1: Read all columns from incremental query
-    val fullDF = spark.read.format("org.apache.hudi")
+    val fullDF = spark.read.format("hudi")
       .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
       .option(DataSourceReadOptions.START_COMMIT.key, commit1)
       .load(basePath)
@@ -116,7 +127,7 @@ class TestIncrementalQueryColumnPruning extends HoodieSparkClientTestBase {
     assertTrue(fullColumnCount >= 10, s"Full DF should have at least 10 columns, has $fullColumnCount")
 
     // Test 2: Read with column pruning - select only 2 data columns
-    val prunedDF = spark.read.format("org.apache.hudi")
+    val prunedDF = spark.read.format("hudi")
       .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
       .option(DataSourceReadOptions.START_COMMIT.key, commit1)
       .load(basePath)
@@ -159,10 +170,14 @@ class TestIncrementalQueryColumnPruning extends HoodieSparkClientTestBase {
 
   /**
    * Test that validates selecting a single column works correctly.
+   * Tests both table versions 6 and 9 to ensure compatibility.
    */
   @ParameterizedTest
-  @EnumSource(value = classOf[HoodieTableType])
-  def testSingleColumnSelection(tableType: HoodieTableType): Unit = {
+  @CsvSource(Array(
+    "COPY_ON_WRITE,SIX", "COPY_ON_WRITE,NINE",
+    "MERGE_ON_READ,SIX", "MERGE_ON_READ,NINE"
+  ))
+  def testSingleColumnSelection(tableType: HoodieTableType, tableVersion: HoodieTableVersion): Unit = {
     val _spark = spark
     import _spark.implicits._
 
@@ -173,7 +188,9 @@ class TestIncrementalQueryColumnPruning extends HoodieSparkClientTestBase {
       DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "partition",
       HoodieTableConfig.ORDERING_FIELDS.key -> "timestamp",
       HoodieWriteConfig.TBL_NAME.key -> "hoodie_test",
-      DataSourceWriteOptions.TABLE_TYPE.key -> tableType.name()
+      DataSourceWriteOptions.TABLE_TYPE.key -> tableType.name(),
+      HoodieTableConfig.VERSION.key() -> tableVersion.versionCode().toString,
+      HoodieWriteConfig.WRITE_TABLE_VERSION.key() -> tableVersion.versionCode().toString
     )
 
     val data = Seq(
@@ -181,27 +198,32 @@ class TestIncrementalQueryColumnPruning extends HoodieSparkClientTestBase {
       ("key2", "p1", 1000L, "name2", 30, "city2")
     ).toDF("_row_key", "partition", "timestamp", "name", "age", "city")
 
-    data.write.format("org.apache.hudi")
+    data.write.format("hudi")
       .options(commonOpts)
       .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
       .mode(SaveMode.Overwrite)
       .save(basePath)
 
     val hoodieMetaClient = createMetaClient(spark, basePath)
+    // Verify the table was created with the correct version
+    val actualTableVersion = hoodieMetaClient.getTableConfig.getTableVersion
+    assertEquals(tableVersion, actualTableVersion,
+      s"Table should be created with version ${tableVersion.versionCode()} but was ${actualTableVersion.versionCode()}")
+
     val commit1 = hoodieMetaClient.getCommitsTimeline.filterCompletedInstants().lastInstant().get().requestedTime
 
     val data2 = Seq(
       ("key3", "p2", 2000L, "name3", 35, "city3")
     ).toDF("_row_key", "partition", "timestamp", "name", "age", "city")
 
-    data2.write.format("org.apache.hudi")
+    data2.write.format("hudi")
       .options(commonOpts)
       .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
       .mode(SaveMode.Append)
       .save(basePath)
 
     // Select only single column
-    val df = spark.read.format("org.apache.hudi")
+    val df = spark.read.format("hudi")
       .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
       .option(DataSourceReadOptions.START_COMMIT.key, commit1)
       .load(basePath)

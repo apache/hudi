@@ -17,7 +17,7 @@
 
 package org.apache.hudi.util
 
-import org.apache.hudi.common.model.HoodieRecord
+import org.apache.hudi.common.model.{HoodieRecord, HoodieTableType}
 import org.apache.hudi.common.table.HoodieTableMetaClient
 
 import org.apache.spark.sql.DataFrame
@@ -56,6 +56,21 @@ object IncrementalRelationUtil {
         }
       })
     }
+
+    // The precombine/ordering field is required for merge logic in MOR tables
+    if (tableConfig.getTableType == HoodieTableType.MERGE_ON_READ) {
+      val orderingFields = tableConfig.getOrderingFields
+      if (!orderingFields.isEmpty) {
+        orderingFields.forEach(col => {
+          if (!requiredColumns.contains(col)) {
+            val field = usedSchema.find(_.name == col)
+            if (field.isDefined) {
+              prunedSchema = prunedSchema.add(field.get)
+            }
+          }
+        })
+      }
+    }
     prunedSchema
   }
 
@@ -77,6 +92,18 @@ object IncrementalRelationUtil {
           updatedDF = updatedDF.toDF().drop(col)
         }
       })
+    }
+
+    // Also remove ordering fields if they are not part of the required columns (MOR tables only)
+    if (tableConfig.getTableType == HoodieTableType.MERGE_ON_READ) {
+      val orderingFields = tableConfig.getOrderingFields
+      if (!orderingFields.isEmpty) {
+        orderingFields.forEach(col => {
+          if (!requiredColumns.contains(col)) {
+            updatedDF = updatedDF.toDF().drop(col)
+          }
+        })
+      }
     }
     updatedDF
   }
