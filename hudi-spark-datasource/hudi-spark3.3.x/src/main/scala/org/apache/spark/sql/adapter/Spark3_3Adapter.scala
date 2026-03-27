@@ -34,20 +34,17 @@ import org.apache.spark.sql.catalyst.expressions.{AttributeReference, Expression
 import org.apache.spark.sql.catalyst.parser.ParserInterface
 import org.apache.spark.sql.catalyst.planning.PhysicalOperation
 import org.apache.spark.sql.catalyst.plans.logical._
-import org.apache.spark.sql.catalyst.util.{METADATA_COL_ATTR_KEY, RebaseDateTime}
+import org.apache.spark.sql.catalyst.util.RebaseDateTime
 import org.apache.spark.sql.connector.catalog.{V1Table, V2TableWithV1Fallback}
 import org.apache.spark.sql.execution.datasources._
 import org.apache.spark.sql.execution.datasources.orc.Spark33OrcReader
 import org.apache.spark.sql.execution.datasources.parquet.{ParquetFileFormat, ParquetFilters, Spark33LegacyHoodieParquetFileFormat, Spark33ParquetReader}
 import org.apache.spark.sql.execution.datasources.v2.DataSourceV2Relation
-import org.apache.spark.sql.hudi.analysis.TableValuedFunctions
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.internal.SQLConf.LegacyBehaviorPolicy
 import org.apache.spark.sql.parser.{HoodieExtendedParserInterface, HoodieSpark3_3ExtendedSqlParser}
-import org.apache.spark.sql.types.{DataType, Metadata, MetadataBuilder, StructType}
-import org.apache.spark.sql.vectorized.ColumnarBatchRow
+import org.apache.spark.sql.types.{DataType, StructType}
 import org.apache.spark.storage.StorageLevel
-import org.apache.spark.storage.StorageLevel._
 
 /**
  * Implementation of [[SparkAdapter]] for Spark 3.3.x branch
@@ -69,13 +66,6 @@ class Spark3_3Adapter extends BaseSpark3Adapter {
       }
     }
   }
-
-  override def isColumnarBatchRow(r: InternalRow): Boolean = r.isInstanceOf[ColumnarBatchRow]
-
-  def createCatalystMetadataForMetaField: Metadata =
-    new MetadataBuilder()
-      .putBoolean(METADATA_COL_ATTR_KEY, value = true)
-      .build()
 
   override def getCatalystPlanUtils: HoodieCatalystPlansUtils = HoodieSpark33CatalystPlanUtils
 
@@ -104,34 +94,6 @@ class Spark3_3Adapter extends BaseSpark3Adapter {
                                        readDataSchema: StructType,
                                        metadataColumns: Seq[AttributeReference] = Seq.empty): FileScanRDD = {
     new Spark33HoodieFileScanRDD(sparkSession, readFunction, filePartitions, readDataSchema, metadataColumns)
-  }
-
-  override def extractDeleteCondition(deleteFromTable: Command): Expression = {
-    deleteFromTable.asInstanceOf[DeleteFromTable].condition
-  }
-
-  override def injectTableFunctions(extensions: SparkSessionExtensions): Unit = {
-    TableValuedFunctions.funcs.foreach(extensions.injectTableFunction)
-  }
-
-  /**
-   * Converts instance of [[StorageLevel]] to a corresponding string
-   */
-  override def convertStorageLevelToString(level: StorageLevel): String = level match {
-    case NONE => "NONE"
-    case DISK_ONLY => "DISK_ONLY"
-    case DISK_ONLY_2 => "DISK_ONLY_2"
-    case DISK_ONLY_3 => "DISK_ONLY_3"
-    case MEMORY_ONLY => "MEMORY_ONLY"
-    case MEMORY_ONLY_2 => "MEMORY_ONLY_2"
-    case MEMORY_ONLY_SER => "MEMORY_ONLY_SER"
-    case MEMORY_ONLY_SER_2 => "MEMORY_ONLY_SER_2"
-    case MEMORY_AND_DISK => "MEMORY_AND_DISK"
-    case MEMORY_AND_DISK_2 => "MEMORY_AND_DISK_2"
-    case MEMORY_AND_DISK_SER => "MEMORY_AND_DISK_SER"
-    case MEMORY_AND_DISK_SER_2 => "MEMORY_AND_DISK_SER_2"
-    case OFF_HEAP => "OFF_HEAP"
-    case _ => throw new IllegalArgumentException(s"Invalid StorageLevel: $level")
   }
 
   /**

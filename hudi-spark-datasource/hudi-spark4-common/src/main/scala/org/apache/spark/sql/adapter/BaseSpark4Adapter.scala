@@ -31,7 +31,7 @@ import org.apache.parquet.schema.MessageType
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.internal.Logging
 import org.apache.spark.rdd.RDD
-import org.apache.spark.sql.{AnalysisException, Column, DataFrame, DataFrameUtil, ExpressionColumnNodeWrapper, HoodieUnsafeUtils, HoodieUTF8StringFactory, Spark4DataFrameUtil, Spark4HoodieUnsafeUtils, Spark4HoodieUTF8StringFactory, SparkSession, SQLContext}
+import org.apache.spark.sql.{AnalysisException, Column, DataFrame, DataFrameUtil, ExpressionColumnNodeWrapper, HoodieUnsafeUtils, HoodieUTF8StringFactory, Spark4DataFrameUtil, Spark4HoodieUnsafeUtils, Spark4HoodieUTF8StringFactory, SparkSession, SparkSessionExtensions, SQLContext}
 import org.apache.spark.sql.FileFormatUtilsForFileGroupReader.applyFiltersToPlan
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.analysis.EliminateSubqueryAliases
@@ -39,19 +39,21 @@ import org.apache.spark.sql.catalyst.catalog.CatalogTable
 import org.apache.spark.sql.catalyst.expressions.{Expression, InterpretedPredicate, Predicate}
 import org.apache.spark.sql.catalyst.parser.ParseException
 import org.apache.spark.sql.catalyst.planning.PhysicalOperation
-import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
+import org.apache.spark.sql.catalyst.plans.logical.{Command, DeleteFromTable, LogicalPlan}
 import org.apache.spark.sql.catalyst.trees.Origin
-import org.apache.spark.sql.catalyst.util.DateFormatter
+import org.apache.spark.sql.catalyst.util.{DateFormatter, METADATA_COL_ATTR_KEY}
 import org.apache.spark.sql.classic.ColumnConversions
 import org.apache.spark.sql.execution.{PartitionedFileUtil, QueryExecution, SQLExecution}
 import org.apache.spark.sql.execution.datasources._
 import org.apache.spark.sql.execution.datasources.parquet.{HoodieFormatTrait, ParquetFilters}
 import org.apache.spark.sql.hudi.SparkAdapter
+import org.apache.spark.sql.hudi.analysis.TableValuedFunctions
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.sources.{BaseRelation, Filter}
-import org.apache.spark.sql.types.StructType
-import org.apache.spark.sql.vectorized.{ColumnarBatch, ColumnVector}
+import org.apache.spark.sql.types.{Metadata, MetadataBuilder, StructType}
+import org.apache.spark.sql.vectorized.{ColumnarBatch, ColumnarBatchRow, ColumnVector}
 import org.apache.spark.storage.StorageLevel
+import org.apache.spark.storage.StorageLevel._
 import org.apache.spark.unsafe.types.UTF8String
 
 import java.time.ZoneId
@@ -110,7 +112,40 @@ abstract class BaseSpark4Adapter extends SparkAdapter with Logging {
     DefaultSource.createRelation(sqlContext, metaClient, dataSchema, parameters.asScala.toMap)
   }
 
-  override def convertStorageLevelToString(level: StorageLevel): String
+  override def isColumnarBatchRow(r: InternalRow): Boolean = r.isInstanceOf[ColumnarBatchRow]
+
+  override def createCatalystMetadataForMetaField: Metadata =
+    new MetadataBuilder()
+      .putBoolean(METADATA_COL_ATTR_KEY, value = true)
+      .build()
+
+  override def extractDeleteCondition(deleteFromTable: Command): Expression = {
+    deleteFromTable.asInstanceOf[DeleteFromTable].condition
+  }
+
+  override def injectTableFunctions(extensions: SparkSessionExtensions): Unit = {
+    TableValuedFunctions.funcs.foreach(extensions.injectTableFunction)
+  }
+
+  /**
+   * Converts instance of [[StorageLevel]] to a corresponding string
+   */
+  override def convertStorageLevelToString(level: StorageLevel): String = level match {
+    case NONE => "NONE"
+    case DISK_ONLY => "DISK_ONLY"
+    case DISK_ONLY_2 => "DISK_ONLY_2"
+    case DISK_ONLY_3 => "DISK_ONLY_3"
+    case MEMORY_ONLY => "MEMORY_ONLY"
+    case MEMORY_ONLY_2 => "MEMORY_ONLY_2"
+    case MEMORY_ONLY_SER => "MEMORY_ONLY_SER"
+    case MEMORY_ONLY_SER_2 => "MEMORY_ONLY_SER_2"
+    case MEMORY_AND_DISK => "MEMORY_AND_DISK"
+    case MEMORY_AND_DISK_2 => "MEMORY_AND_DISK_2"
+    case MEMORY_AND_DISK_SER => "MEMORY_AND_DISK_SER"
+    case MEMORY_AND_DISK_SER_2 => "MEMORY_AND_DISK_SER_2"
+    case OFF_HEAP => "OFF_HEAP"
+    case _ => throw new IllegalArgumentException(s"Invalid StorageLevel: $level")
+  }
 
   override def translateFilter(predicate: Expression,
                                supportNestedPredicatePushdown: Boolean = false): Option[Filter] = {
