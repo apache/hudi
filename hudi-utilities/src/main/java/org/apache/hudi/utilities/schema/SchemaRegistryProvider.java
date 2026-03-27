@@ -67,8 +67,10 @@ import java.util.Arrays;
 import java.util.Base64;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -85,6 +87,8 @@ public class SchemaRegistryProvider extends SchemaProvider {
   private static final Logger LOG = LoggerFactory.getLogger(SchemaRegistryProvider.class);
   private static final Pattern URL_PATTERN = Pattern.compile("(.*/)subjects/(.*)/versions/(.*)");
   private static final String LATEST = "latest";
+  private static final Set<String> SCHEMA_REGISTRY_CONFIG_PREFIXES = Collections.unmodifiableSet(
+      new HashSet<>(Arrays.asList("bearer.auth.", "basic.auth.", "schema.registry.")));
 
   /**
    * Configs supported.
@@ -123,8 +127,7 @@ public class SchemaRegistryProvider extends SchemaProvider {
         schemaConverter, new Class<?>[] {TypedProperties.class}, config))
         : Option.empty();
     this.restServiceProvider = RestService::new;
-    Map<String, Object> schemaRegistryConfigs = new HashMap<>();
-    config.forEach((k, v) -> schemaRegistryConfigs.put(k.toString(), v));
+    Map<String, Object> schemaRegistryConfigs = extractSchemaRegistryConfigs(config);
     this.registryClientProvider = restService -> new CachedSchemaRegistryClient(restService, 100,
         Arrays.asList(new ProtobufSchemaProvider(), new JsonSchemaProvider(), new AvroSchemaProvider()), schemaRegistryConfigs, null);
   }
@@ -150,6 +153,17 @@ public class SchemaRegistryProvider extends SchemaProvider {
      * @return avro schema string
      */
     String convert(ParsedSchema schema) throws IOException;
+  }
+
+  private static Map<String, Object> extractSchemaRegistryConfigs(TypedProperties config) {
+    Map<String, Object> schemaRegistryConfigs = new HashMap<>();
+    config.forEach((k, v) -> {
+      String key = k.toString();
+      if (v != null && SCHEMA_REGISTRY_CONFIG_PREFIXES.stream().anyMatch(key::startsWith)) {
+        schemaRegistryConfigs.put(key, v);
+      }
+    });
+    return schemaRegistryConfigs;
   }
 
   public Schema parseSchemaFromRegistry(String registryUrl) {
