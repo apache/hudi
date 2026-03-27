@@ -190,9 +190,14 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
     HoodieIndex.IndexType indexType = OptionsResolver.getIndexType(conf);
     if (indexType == HoodieIndex.IndexType.GLOBAL_RECORD_LEVEL_INDEX) {
       ValidationUtils.checkArgument(conf.get(FlinkOptions.METADATA_ENABLED),
-          "Metadata table should be enabled when index.type is GLOBAL_RECORD_LEVEL_INDEX.");
+          String.format("Metadata table should be enabled when %s is %s.", FlinkOptions.INDEX_TYPE.key(), HoodieIndex.IndexType.GLOBAL_RECORD_LEVEL_INDEX));
       ValidationUtils.checkArgument(conf.get(FlinkOptions.INDEX_GLOBAL_ENABLED),
-          "Partition level index updating is not supported for GLOBAL_RECORD_LEVEL_INDEX, please set 'index.global.enabled' = 'true'.");
+          String.format("Partition level index updating is not supported for GLOBAL_RECORD_LEVEL_INDEX, please set '%s' = 'true'.", FlinkOptions.INDEX_GLOBAL_ENABLED.key()));
+
+      boolean deferredRLI = Boolean.parseBoolean(conf.getString(
+          HoodieMetadataConfig.DEFER_RLI_INIT_FOR_FRESH_TABLE.key(), HoodieMetadataConfig.DEFER_RLI_INIT_FOR_FRESH_TABLE.defaultValue().toString()));
+      ValidationUtils.checkArgument(!deferredRLI,
+          String.format("Deferred RLI initialization is not supported for flink ingestion, please set '%s' = 'false'.", HoodieMetadataConfig.DEFER_RLI_INIT_FOR_FRESH_TABLE.key()));
     }
   }
 

@@ -18,6 +18,7 @@
 
 package org.apache.hudi.table;
 
+import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.EventTimeAvroPayload;
 import org.apache.hudi.common.schema.HoodieSchemaUtils;
@@ -226,6 +227,14 @@ public class TestHoodieTableFactory {
     this.conf.set(FlinkOptions.INDEX_GLOBAL_ENABLED, false);
     final MockContext sourceContext5 = MockContext.getInstance(this.conf, schema, "f2");
     assertThrows(IllegalArgumentException.class, () -> new HoodieTableFactory().createDynamicTableSink(sourceContext5));
+
+    // Valid deferred RLI initialization is not supported.
+    this.conf.set(FlinkOptions.INDEX_TYPE, "GLOBAL_RECORD_LEVEL_INDEX");
+    this.conf.set(FlinkOptions.METADATA_ENABLED, true);
+    this.conf.set(FlinkOptions.INDEX_GLOBAL_ENABLED, true);
+    this.conf.setString(HoodieMetadataConfig.DEFER_RLI_INIT_FOR_FRESH_TABLE.key(), "true");
+    final MockContext sourceContext6 = MockContext.getInstance(this.conf, schema, "f2");
+    assertThrows(IllegalArgumentException.class, () -> new HoodieTableFactory().createDynamicTableSink(sourceContext6));
   }
 
   @Test
