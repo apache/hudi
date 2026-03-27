@@ -51,15 +51,12 @@ import java.util.stream.Collectors;
 /**
  * Default reader function implementation for both MOR and COW tables.
  */
-public class HoodieSplitReaderFunction implements SplitReaderFunction<RowData> {
+public class HoodieSplitReaderFunction extends AbstractSplitReaderFunction {
   private final HoodieSchema tableSchema;
   private final HoodieSchema requiredSchema;
   private final InternalSchemaManager internalSchemaManager;
-  private final Configuration configuration;
   private final HoodieWriteConfig writeConfig;
   private final String mergeType;
-  private final boolean emitDelete;
-  private final List<ExpressionPredicates.Predicate> predicates;
   private transient HoodieFileGroupReader<RowData> fileGroupReader;
   private transient org.apache.hadoop.conf.Configuration hadoopConf;
 
@@ -71,28 +68,40 @@ public class HoodieSplitReaderFunction implements SplitReaderFunction<RowData> {
       String mergeType,
       List<ExpressionPredicates.Predicate> predicates,
       boolean emitDelete) {
+    this(configuration, tableSchema, requiredSchema, internalSchemaManager, mergeType, predicates, emitDelete, -1);
+  }
 
+  public HoodieSplitReaderFunction(
+      Configuration configuration,
+      HoodieSchema tableSchema,
+      HoodieSchema requiredSchema,
+      InternalSchemaManager internalSchemaManager,
+      String mergeType,
+      List<ExpressionPredicates.Predicate> predicates,
+      boolean emitDelete,
+      long limit) {
+    super(configuration, predicates, limit, emitDelete);
     ValidationUtils.checkArgument(tableSchema != null, "tableSchema can't be null");
     ValidationUtils.checkArgument(requiredSchema != null, "requiredSchema can't be null");
     ValidationUtils.checkArgument(internalSchemaManager != null, "internalSchemaManager can't be null");
     this.tableSchema = tableSchema;
     this.requiredSchema = requiredSchema;
     this.internalSchemaManager = internalSchemaManager;
-    this.configuration = configuration;
     this.writeConfig = FlinkWriteClients.getHoodieClientConfig(configuration);
-    this.predicates = predicates;
     this.mergeType = mergeType;
-    this.emitDelete = emitDelete;
   }
 
   @Override
   public RecordsWithSplitIds<HoodieRecordWithPosition<RowData>> read(HoodieSourceSplit split) {
     final String splitId = split.splitId();
-    HoodieTableMetaClient metaClient = StreamerUtil.metaClientForReader(configuration, getHadoopConf());
+    HoodieTableMetaClient metaClient = StreamerUtil.metaClientForReader(conf, getHadoopConf());
 
     try {
       this.fileGroupReader = createFileGroupReader(split, metaClient);
-      final ClosableIterator<RowData> recordIterator = fileGroupReader.getClosableIterator();
+      ClosableIterator<RowData> recordIterator = fileGroupReader.getClosableIterator();
+      if (limit > 0) {
+        recordIterator = limitIterator(recordIterator, limit);
+      }
       BatchRecords<RowData> records = BatchRecords.forRecords(splitId, recordIterator, split.getFileOffset(), split.getConsumed());
       records.seek(split.getConsumed());
       return records;
@@ -138,12 +147,5 @@ public class HoodieSplitReaderFunction implements SplitReaderFunction<RowData> {
       predicates,
       split.getInstantRange()
     );
-  }
-
-  private org.apache.hadoop.conf.Configuration getHadoopConf() {
-    if (hadoopConf == null) {
-      hadoopConf = HadoopConfigurations.getHadoopConf(configuration);
-    }
-    return hadoopConf;
   }
 }

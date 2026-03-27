@@ -3199,6 +3199,61 @@ public class ITTestHoodieDataSource {
     assertRowsEquals(result, TestData.DATA_SET_SOURCE_INSERT);
   }
 
+  @ParameterizedTest
+  @MethodSource("tableTypeAndBooleanTrueFalseParams")
+  void testBatchReadWithLimit(HoodieTableType tableType, boolean useSourceV2) {
+    TableEnvironment tableEnv = batchTableEnv;
+    String hoodieTableDDL = sql("t1")
+        .option(FlinkOptions.PATH, tempFile.getAbsolutePath())
+        .options(getDefaultKeys())
+        .option(FlinkOptions.TABLE_TYPE, tableType)
+        .option(FlinkOptions.READ_SOURCE_V2_ENABLED, useSourceV2)
+        .end();
+    tableEnv.executeSql(hoodieTableDDL);
+    execInsertSql(tableEnv, TestSQL.INSERT_T1);
+
+    // limit less than total records: only check the count since row ordering is not guaranteed
+    List<Row> result1 = CollectionUtil.iterableToList(
+        () -> tableEnv.sqlQuery("select * from t1 limit 3").execute().collect());
+    assertThat(result1).hasSize(3);
+
+    // limit equal to total records: all 8 rows should be returned
+    List<Row> result2 = CollectionUtil.iterableToList(
+        () -> tableEnv.sqlQuery("select * from t1 limit 8").execute().collect());
+    assertRowsEquals(result2, TestData.DATA_SET_SOURCE_INSERT);
+
+    // limit greater than total records: should return all rows without error
+    List<Row> result3 = CollectionUtil.iterableToList(
+        () -> tableEnv.sqlQuery("select * from t1 limit 100").execute().collect());
+    assertRowsEquals(result3, TestData.DATA_SET_SOURCE_INSERT);
+  }
+
+  @ParameterizedTest
+  @MethodSource("tableTypeAndBooleanTrueFalseParams")
+  void testBatchReadWithLimitAndFilter(HoodieTableType tableType, boolean useSourceV2) {
+    TableEnvironment tableEnv = batchTableEnv;
+    String hoodieTableDDL = sql("t1")
+        .option(FlinkOptions.PATH, tempFile.getAbsolutePath())
+        .options(getDefaultKeys())
+        .option(FlinkOptions.TABLE_TYPE, tableType)
+        .option(FlinkOptions.READ_SOURCE_V2_ENABLED, useSourceV2)
+        .end();
+    tableEnv.executeSql(hoodieTableDDL);
+    execInsertSql(tableEnv, TestSQL.INSERT_T1);
+
+    // limit with partition filter (par1 has 2 records: id1, id2); limit to 1
+    List<Row> result1 = CollectionUtil.iterableToList(
+        () -> tableEnv.sqlQuery("select * from t1 where `partition` = 'par1' limit 1").execute().collect());
+    assertThat(result1).hasSize(1);
+
+    // limit equal to the filtered result count (par4 has exactly 2 records: id7, id8)
+    List<Row> result2 = CollectionUtil.iterableToList(
+        () -> tableEnv.sqlQuery("select * from t1 where `partition` = 'par4' limit 2").execute().collect());
+    assertRowsEquals(result2, "["
+        + "+I[id7, Bob, 44, 1970-01-01T00:00:07, par4], "
+        + "+I[id8, Han, 56, 1970-01-01T00:00:08, par4]]");
+  }
+
   // -------------------------------------------------------------------------
   //  Utilities
   // -------------------------------------------------------------------------

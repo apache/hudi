@@ -166,6 +166,38 @@ public class TestHoodieCdcSplitReaderFunction {
   }
 
   // -------------------------------------------------------------------------
+  //  Limit push-down constructor tests
+  // -------------------------------------------------------------------------
+
+  @Test
+  public void testConstructorWithLimit() {
+    HoodieCdcSplitReaderFunction function = new HoodieCdcSplitReaderFunction(
+        conf,
+        tableState,
+        internalSchemaManager,
+        ROW_DATA_TYPE.getChildren(),
+        Collections.emptyList(),
+        false,
+        100L);
+
+    assertNotNull(function);
+  }
+
+  @Test
+  public void testConstructorWithLimitAndEmptyFieldTypes() {
+    HoodieCdcSplitReaderFunction function = new HoodieCdcSplitReaderFunction(
+        conf,
+        tableState,
+        internalSchemaManager,
+        Collections.emptyList(),
+        Collections.emptyList(),
+        false,
+        50L);
+
+    assertNotNull(function);
+  }
+
+  // -------------------------------------------------------------------------
   //  Integration: read() accepts a HoodieCdcSourceSplit (validation only)
   // -------------------------------------------------------------------------
 

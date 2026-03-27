@@ -115,14 +115,11 @@ import static org.apache.hudi.table.format.FormatUtils.buildAvroRecordBySchema;
  * {@link SplitReaderFunction} contract.
  */
 @Slf4j
-public class HoodieCdcSplitReaderFunction implements SplitReaderFunction<RowData> {
+public class HoodieCdcSplitReaderFunction extends AbstractSplitReaderFunction {
 
-  private final org.apache.flink.configuration.Configuration conf;
   private final InternalSchemaManager internalSchemaManager;
   private final List<DataType> fieldTypes;
   private final MergeOnReadTableState tableState;
-  private final boolean emitDelete;
-  private final List<ExpressionPredicates.Predicate> predicates;
   private transient HoodieTableMetaClient metaClient;
   private transient HoodieWriteConfig writeConfig;
   private transient org.apache.hadoop.conf.Configuration hadoopConf;
@@ -147,12 +144,21 @@ public class HoodieCdcSplitReaderFunction implements SplitReaderFunction<RowData
       List<DataType> fieldTypes,
       List<ExpressionPredicates.Predicate> predicates,
       boolean emitDelete) {
-    this.conf = conf;
+    this(conf, tableState, internalSchemaManager, fieldTypes, predicates, emitDelete, -1);
+  }
+
+  public HoodieCdcSplitReaderFunction(
+      org.apache.flink.configuration.Configuration conf,
+      MergeOnReadTableState tableState,
+      InternalSchemaManager internalSchemaManager,
+      List<DataType> fieldTypes,
+      List<ExpressionPredicates.Predicate> predicates,
+      boolean emitDelete,
+      long limit) {
+    super(conf, predicates, limit, emitDelete);
     this.tableState = tableState;
     this.internalSchemaManager = internalSchemaManager;
     this.fieldTypes = fieldTypes;
-    this.predicates = predicates;
-    this.emitDelete = emitDelete;
   }
 
   @Override
@@ -181,6 +187,9 @@ public class HoodieCdcSplitReaderFunction implements SplitReaderFunction<RowData
             client);
 
     currentIterator = new CdcFileSplitsIterator(cdcSplit.getChanges(), imageManager, recordIteratorFunc);
+    if (limit > 0) {
+      currentIterator = limitIterator(currentIterator, limit);
+    }
     BatchRecords<RowData> records = BatchRecords.forRecords(
         split.splitId(), currentIterator, split.getFileOffset(), split.getConsumed());
     records.seek(split.getConsumed());
@@ -210,7 +219,8 @@ public class HoodieCdcSplitReaderFunction implements SplitReaderFunction<RowData
           internalSchemaManager,
           conf.get(FlinkOptions.MERGE_TYPE),
           predicates,
-          emitDelete);
+          emitDelete,
+          limit);
     }
     return fallbackReaderFunction;
   }
@@ -383,13 +393,6 @@ public class HoodieCdcSplitReaderFunction implements SplitReaderFunction<RowData
       writeConfig = FlinkWriteClients.getHoodieClientConfig(conf);
     }
     return writeConfig;
-  }
-
-  private org.apache.hadoop.conf.Configuration getHadoopConf() {
-    if (hadoopConf == null) {
-      hadoopConf = HadoopConfigurations.getHadoopConf(conf);
-    }
-    return hadoopConf;
   }
 
   // -------------------------------------------------------------------------

@@ -319,7 +319,8 @@ public class HoodieTableSource extends FileIndexReader implements
           internalSchemaManager,
           fieldTypes,
           predicates,
-          emitDelete);
+          emitDelete,
+          this.limit);
     } else {
       splitReaderFunction = new HoodieSplitReaderFunction(
           conf,
@@ -328,7 +329,8 @@ public class HoodieTableSource extends FileIndexReader implements
           internalSchemaManager,
           conf.get(FlinkOptions.MERGE_TYPE),
           predicates,
-          emitDelete);
+          emitDelete,
+          this.limit);
     }
     return new HoodieSource<>(context, splitReaderFunction, new HoodieSourceSplitComparator(), metaClient, new HoodieRecordEmitter<>());
   }
