@@ -320,8 +320,10 @@ public Option<byte[]> getInstantDetails(HoodieInstant instant) {
     public void accept(String instantTime, GenericRecord record) {
       Option<HoodieInstant> instant = readCommit(instantTime, record, loadInstantDetails, null);
       if (instant.isPresent()) {
-        instantsInRange.computeIfAbsent(instant.get().requestedTime(), s -> new ArrayList<>())
-            .add(instant.get());
+        List<HoodieInstant> instantsForTime = instantsInRange.computeIfAbsent(instant.get().requestedTime(), s -> new ArrayList<>());
+        if (!instantsForTime.contains(instant.get())) {
+          instantsForTime.add(instant.get());
+        }
       }
     }
 
