@@ -49,7 +49,11 @@ public class ParquetReaderIterator<T> implements ClosableIterator<T> {
       if (this.next == null) {
         this.next = parquetReader.read();
       }
-      return this.next != null;
+      boolean hasNextRecord = this.next != null;
+      if (!hasNextRecord) {
+        close();
+      }
+      return hasNextRecord;
     } catch (Exception e) {
       FileIOUtils.closeQuietly(parquetReader);
       throw new HoodieException("unable to read next record from parquet file ", e);

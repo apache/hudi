@@ -61,6 +61,7 @@ public class TestParquetReaderIterator {
     when(reader.read()).thenReturn(1).thenReturn(null);
     ParquetReaderIterator<Integer> iterator = new ParquetReaderIterator<>(reader);
     // should return value even though hasNext() hasn't been called
+    assertTrue(iterator.hasNext());
     assertEquals(1, iterator.next());
     // no more entries to iterate on
     assertFalse(iterator.hasNext());
