@@ -73,7 +73,6 @@ import org.apache.hudi.table.format.cdc.CdcInputFormat;
 import org.apache.hudi.table.format.mor.MergeOnReadInputSplit;
 import org.apache.hudi.table.format.mor.MergeOnReadTableState;
 import org.apache.hudi.util.AvroToRowDataConverters;
-import org.apache.hudi.util.FlinkWriteClients;
 import org.apache.hudi.util.HoodieSchemaConverter;
 import org.apache.hudi.util.StreamerUtil;
 import org.apache.hudi.util.RowDataProjection;
@@ -117,11 +116,9 @@ import static org.apache.hudi.table.format.FormatUtils.buildAvroRecordBySchema;
 @Slf4j
 public class HoodieCdcSplitReaderFunction extends AbstractSplitReaderFunction {
 
-  private final InternalSchemaManager internalSchemaManager;
   private final List<DataType> fieldTypes;
   private final MergeOnReadTableState tableState;
   private transient HoodieTableMetaClient metaClient;
-  private transient HoodieWriteConfig writeConfig;
   private transient ClosableIterator<RowData> currentIterator;
   // Fallback reader for non-CDC splits (e.g. snapshot reads when read.start-commit='earliest')
   private transient HoodieSplitReaderFunction fallbackReaderFunction;
@@ -154,11 +151,10 @@ public class HoodieCdcSplitReaderFunction extends AbstractSplitReaderFunction {
       List<ExpressionPredicates.Predicate> predicates,
       boolean emitDelete,
       long limit) {
-    super(conf, predicates, limit, emitDelete);
+    super(conf, predicates, internalSchemaManager, limit, emitDelete);
     ValidationUtils.checkArgument(tableState != null, "tableState can't be null");
     ValidationUtils.checkArgument(internalSchemaManager != null, "internalSchemaManager can't be null");
     this.tableState = tableState;
-    this.internalSchemaManager = internalSchemaManager;
     this.fieldTypes = fieldTypes;
   }
 
@@ -387,13 +383,6 @@ public class HoodieCdcSplitReaderFunction extends AbstractSplitReaderFunction {
       metaClient = StreamerUtil.metaClientForReader(conf, getHadoopConf());
     }
     return metaClient;
-  }
-
-  private HoodieWriteConfig getWriteConfig() {
-    if (writeConfig == null) {
-      writeConfig = FlinkWriteClients.getHoodieClientConfig(conf);
-    }
-    return writeConfig;
   }
 
   // -------------------------------------------------------------------------

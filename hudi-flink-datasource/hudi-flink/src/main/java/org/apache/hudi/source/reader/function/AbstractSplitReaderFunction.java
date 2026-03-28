@@ -21,8 +21,11 @@ package org.apache.hudi.source.reader.function;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.table.data.RowData;
 import org.apache.hudi.common.util.collection.ClosableIterator;
+import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.source.ExpressionPredicates;
+import org.apache.hudi.table.format.InternalSchemaManager;
+import org.apache.hudi.util.FlinkWriteClients;
 
 import java.util.List;
 
@@ -40,17 +43,21 @@ public abstract class AbstractSplitReaderFunction implements SplitReaderFunction
 
   protected final long limit;
   protected final Configuration conf;
+  protected final InternalSchemaManager internalSchemaManager;
   protected final List<ExpressionPredicates.Predicate> predicates;
   protected final boolean emitDelete;
+  private transient HoodieWriteConfig writeConfig;
   private transient org.apache.hadoop.conf.Configuration hadoopConf;
 
   public AbstractSplitReaderFunction(
       Configuration conf,
       List<ExpressionPredicates.Predicate> predicates,
+      InternalSchemaManager internalSchemaManager,
       long limit,
       boolean emitDelete) {
     this.conf = conf;
     this.predicates = predicates;
+    this.internalSchemaManager = internalSchemaManager;
     this.limit = limit;
     this.emitDelete = emitDelete;
   }
@@ -78,6 +85,13 @@ public abstract class AbstractSplitReaderFunction implements SplitReaderFunction
         iterator.close();
       }
     };
+  }
+
+  protected HoodieWriteConfig getWriteConfig() {
+    if (writeConfig == null) {
+      writeConfig = FlinkWriteClients.getHoodieClientConfig(conf);
+    }
+    return writeConfig;
   }
 
   protected org.apache.hadoop.conf.Configuration getHadoopConf() {

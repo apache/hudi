@@ -73,7 +73,7 @@ public class TestAbstractSplitReaderFunction {
   private static class TestableFunction extends AbstractSplitReaderFunction {
 
     TestableFunction(Configuration conf, long limit) {
-      super(conf, Collections.emptyList(), limit, false);
+      super(conf, Collections.emptyList(), null, limit, false);
     }
 
     /** Delegate test access to the protected method. */

@@ -28,7 +28,6 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.read.HoodieFileGroupReader;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
-import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.source.ExpressionPredicates;
 import org.apache.hudi.source.reader.BatchRecords;
@@ -39,7 +38,6 @@ import org.apache.flink.connector.base.source.reader.RecordsWithSplitIds;
 import org.apache.flink.table.data.RowData;
 import org.apache.hudi.table.format.FormatUtils;
 import org.apache.hudi.table.format.InternalSchemaManager;
-import org.apache.hudi.util.FlinkWriteClients;
 import org.apache.hudi.util.StreamerUtil;
 
 import java.io.IOException;
@@ -53,8 +51,6 @@ import java.util.stream.Collectors;
 public class HoodieSplitReaderFunction extends AbstractSplitReaderFunction {
   private final HoodieSchema tableSchema;
   private final HoodieSchema requiredSchema;
-  private final InternalSchemaManager internalSchemaManager;
-  private final HoodieWriteConfig writeConfig;
   private final String mergeType;
   private transient HoodieFileGroupReader<RowData> fileGroupReader;
 
@@ -78,14 +74,12 @@ public class HoodieSplitReaderFunction extends AbstractSplitReaderFunction {
       List<ExpressionPredicates.Predicate> predicates,
       boolean emitDelete,
       long limit) {
-    super(configuration, predicates, limit, emitDelete);
+    super(configuration, predicates, internalSchemaManager, limit, emitDelete);
     ValidationUtils.checkArgument(tableSchema != null, "tableSchema can't be null");
     ValidationUtils.checkArgument(requiredSchema != null, "requiredSchema can't be null");
     ValidationUtils.checkArgument(internalSchemaManager != null, "internalSchemaManager can't be null");
     this.tableSchema = tableSchema;
     this.requiredSchema = requiredSchema;
-    this.internalSchemaManager = internalSchemaManager;
-    this.writeConfig = FlinkWriteClients.getHoodieClientConfig(configuration);
     this.mergeType = mergeType;
   }
 
@@ -138,7 +132,7 @@ public class HoodieSplitReaderFunction extends AbstractSplitReaderFunction {
 
     return FormatUtils.createFileGroupReader(
       metaClient,
-      writeConfig,
+      getWriteConfig(),
       internalSchemaManager,
       fileSlice,
       tableSchema,
