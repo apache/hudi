@@ -156,12 +156,16 @@ public class FileSystemBackedTableMetadata extends AbstractHoodieTableMetadata {
       needPushDownExpressions = false;
     }
 
+    int recursiveListingStep = 0;
     while (!pathsToList.isEmpty()) {
+      recursiveListingStep++;
       // TODO: Get the parallelism from HoodieWriteConfig
       int listingParallelism = Math.min(DEFAULT_LISTING_PARALLELISM, pathsToList.size());
+      String recursiveListingJobName =
+          String.format("%s recursive listing step %d", this.getClass().getSimpleName(), recursiveListingStep);
 
       // List all directories in parallel
-      engineContext.setJobStatus(this.getClass().getSimpleName(),
+      engineContext.setJobStatus(recursiveListingJobName,
           "Listing all partitions on " + this.tableName
               + " with prefix " + relativePathPrefix);
       // Need to use serializable file status here, see HUDI-5936
@@ -183,7 +187,8 @@ public class FileSystemBackedTableMetadata extends AbstractHoodieTableMetadata {
       if (!dirToFileListingPairs.isEmpty()) {
         // result below holds a list of pair. first entry in the pair optionally holds the deduced list of partitions.
         // and second entry holds optionally a directory path to be processed further.
-        engineContext.setJobStatus(this.getClass().getSimpleName(), "Processing listed partitions");
+        engineContext.setJobStatus(recursiveListingJobName,
+            "Processing recursively listed partitions on " + this.tableName);
         List<Pair<Option<String>, Option<StoragePath>>> result =
             engineContext.map(dirToFileListingPairs,
                 fileInfoPair -> {
