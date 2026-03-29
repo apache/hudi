@@ -354,7 +354,7 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
       writeStatus.getStat().setTotalCorruptLogBlock(readStats.getTotalCorruptLogBlock());
       writeStatus.getStat().setTotalRollbackBlocks(readStats.getTotalRollbackBlocks());
       if (compactionOperation.isPresent()) {
-        writeStatus.getStat().setTotalLogSizeCompacted(compactionOperation.get().getMetrics().get(CompactionStrategy.TOTAL_LOG_FILE_SIZE).longValue());
+        writeStatus.getStat().setTotalLogSizeCompacted(readStats.getTotalLogSizeCompacted());
       }
 
       if (writeStatus.getStat().getRuntimeStats() != null) {
