@@ -36,6 +36,7 @@ import java.util.Properties;
 
 import static org.apache.hudi.common.model.DefaultHoodieRecordPayload.DELETE_KEY;
 import static org.apache.hudi.common.model.DefaultHoodieRecordPayload.DELETE_MARKER;
+import static org.apache.hudi.common.model.HoodieRecord.SENTINEL;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -86,7 +87,7 @@ public class TestDefaultHoodieRecordPayload {
     assertEquals(record1, payload1.getInsertValue(schema, props).get());
     assertEquals(record2, payload2.getInsertValue(schema, props).get());
 
-    assertEquals(payload1.combineAndGetUpdateValue(record2, schema, props).get(), record2);
+    assertEquals(SENTINEL, payload1.combineAndGetUpdateValue(record2, schema, props).get());
     assertEquals(payload2.combineAndGetUpdateValue(record1, schema, props).get(), record2);
   }
 
@@ -116,7 +117,7 @@ public class TestDefaultHoodieRecordPayload {
     assertEquals(record1, payload1.getInsertValue(schema, props).get());
     assertFalse(payload2.getInsertValue(schema, props).isPresent());
 
-    assertEquals(payload1.combineAndGetUpdateValue(delRecord1, schema, props).get(), delRecord1);
+    assertEquals(SENTINEL, payload1.combineAndGetUpdateValue(delRecord1, schema, props).get());
     assertFalse(payload2.combineAndGetUpdateValue(record1, schema, props).isPresent());
   }
 
@@ -154,8 +155,8 @@ public class TestDefaultHoodieRecordPayload {
     assertFalse(deletePayload.getInsertValue(schema, props).isPresent());
     assertTrue(defaultDeletePayload.getInsertValue(schema, props).isPresent()); // if custom marker is present, should honor that irrespective of hoodie_is_deleted
 
-    assertEquals(delRecord, payload.combineAndGetUpdateValue(delRecord, schema, props).get());
-    assertEquals(defaultDeleteRecord, payload.combineAndGetUpdateValue(defaultDeleteRecord, schema, props).get());
+    assertEquals(SENTINEL, payload.combineAndGetUpdateValue(delRecord, schema, props).get());
+    assertEquals(SENTINEL, payload.combineAndGetUpdateValue(defaultDeleteRecord, schema, props).get());
     assertFalse(deletePayload.combineAndGetUpdateValue(record, schema, props).isPresent());
   }
 
@@ -272,8 +273,8 @@ public class TestDefaultHoodieRecordPayload {
         incomingPayload.combineAndGetUpdateValue(currentRecord, schema, props);
 
     assertTrue(result.isPresent(), "Result should be present");
-    assertEquals(currentRecord, result.get(),
-        "Current record should be kept when ordering values are equal and updateOnSameOrderingField is false");
+    assertEquals(SENTINEL, result.get(),
+        "Incoming record should be ignored when ordering values are equal and updateOnSameOrderingField is false");
   }
 
   @ParameterizedTest
@@ -325,7 +326,7 @@ public class TestDefaultHoodieRecordPayload {
         incomingPayload.combineAndGetUpdateValue(currentRecord, schema, props);
 
     assertTrue(result.isPresent(), "Result should be present");
-    assertEquals(currentRecord, result.get(), "Current record should be kept when incoming is older");
+    assertEquals(SENTINEL, result.get(), "Incoming record should be ignored when it is older");
   }
 
   @Test

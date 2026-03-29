@@ -39,6 +39,8 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+import static org.apache.hudi.common.model.HoodieRecord.SENTINEL;
+
 /**
  * Default payload.
  * {@link HoodieRecordPayload} impl that honors ordering field in both preCombine and combineAndGetUpdateValue.
@@ -82,7 +84,7 @@ public class DefaultHoodieRecordPayload extends OverwriteWithLatestAvroPayload {
     // Null check is needed here to support schema evolution. The record in storage may be from old schema where
     // the new ordering column might not be present and hence returns null.
     if (!needUpdatingPersistedRecord(currentValue, incomingRecord, properties)) {
-      return Option.of(currentValue);
+      return Option.of(SENTINEL);
     }
 
     if (!isDeleteComputed.getAndSet(true)) {
@@ -155,8 +157,8 @@ public class DefaultHoodieRecordPayload extends OverwriteWithLatestAvroPayload {
     /*
      * Combining strategy here returns currentValue on disk if incoming record is older.
      * The incoming record can be either a delete (sent as an upsert with _hoodie_is_deleted set to true)
-     * or an insert/update record. In any case, if it is older than the record in disk, the currentValue
-     * in disk is returned (to be rewritten with new commit time).
+     * or an insert/update record. In any case, if it is older than the record in disk, SENTINEL is sent
+     * so current value in disk is rewritten as it is without changing the _hoodie_commit_time field..
      *
      * NOTE: Deletes sent via EmptyHoodieRecordPayload and/or Delete operation type do not hit this code path
      * and need to be dealt with separately.
@@ -224,5 +226,10 @@ public class DefaultHoodieRecordPayload extends OverwriteWithLatestAvroPayload {
     if (isDeleteComputedValue) {
       isDefaultRecordPayloadDeleted = input.readBoolean();
     }
+  }
+
+  @Override
+  public boolean canProduceSentinel() {
+    return true;
   }
 }
