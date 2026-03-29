@@ -63,22 +63,22 @@ public interface HoodieAvroFileWriter extends HoodieFileWriter {
    * [2]=record_key, [3]=partition_path, [4]=file_name.
    */
   default void prepRecordWithMetadata(HoodieKey key, IndexedRecord avroRecord, String instantTime,
-      Integer partitionId, long recordIndex, String fileName, boolean[] populateField) {
+      Integer partitionId, long recordIndex, String fileName, boolean[] populateIndividualMetaFields) {
     GenericRecord rec = (GenericRecord) avroRecord;
-    if (populateField[0]) {
+    if (populateIndividualMetaFields[0]) {
       rec.put(HoodieRecord.COMMIT_TIME_METADATA_FIELD, instantTime);
     }
-    if (populateField[1]) {
+    if (populateIndividualMetaFields[1]) {
       String seqId = HoodieRecord.generateSequenceId(instantTime, partitionId, recordIndex);
       rec.put(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD, seqId);
     }
-    if (populateField[2]) {
+    if (populateIndividualMetaFields[2]) {
       rec.put(HoodieRecord.RECORD_KEY_METADATA_FIELD, key.getRecordKey());
     }
-    if (populateField[3]) {
+    if (populateIndividualMetaFields[3]) {
       rec.put(HoodieRecord.PARTITION_PATH_METADATA_FIELD, key.getPartitionPath());
     }
-    if (populateField[4]) {
+    if (populateIndividualMetaFields[4]) {
       rec.put(HoodieRecord.FILENAME_METADATA_FIELD, fileName);
     }
   }

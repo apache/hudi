@@ -753,6 +753,120 @@ public class TestHoodieWriteConfig {
     assertFalse(config.isMetadataStreamingWritesEnabled(HoodieTableVersion.EIGHT));
   }
 
+  @Test
+  public void testMetaFieldPopulationFlagsDefault() {
+    // Default: populateMetaFields=true, no exclusions => all flags true
+    HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath("/tmp").build();
+    boolean[] flags = config.getMetaFieldPopulationFlags();
+    assertEquals(5, flags.length);
+    for (int i = 0; i < 5; i++) {
+      assertTrue(flags[i], "Flag at index " + i + " should be true by default");
+    }
+  }
+
+  @Test
+  public void testMetaFieldPopulationFlagsWhenPopulateMetaFieldsDisabled() {
+    // populateMetaFields=false => all flags false regardless of exclusions
+    HoodieWriteConfig config = HoodieWriteConfig.newBuilder()
+        .withPath("/tmp")
+        .withPopulateMetaFields(false)
+        .build();
+    boolean[] flags = config.getMetaFieldPopulationFlags();
+    for (int i = 0; i < 5; i++) {
+      assertFalse(flags[i], "Flag at index " + i + " should be false when populateMetaFields=false");
+    }
+  }
+
+  @Test
+  public void testMetaFieldPopulationFlagsSelectiveExclusion() {
+    // Exclude record_key and partition_path only
+    HoodieWriteConfig config = HoodieWriteConfig.newBuilder()
+        .withPath("/tmp")
+        .withPopulateMetaFields(true)
+        .withMetaFieldsToExclude("_hoodie_record_key,_hoodie_partition_path")
+        .build();
+    boolean[] flags = config.getMetaFieldPopulationFlags();
+    assertTrue(flags[0], "commit_time should be populated");
+    assertTrue(flags[1], "commit_seqno should be populated");
+    assertFalse(flags[2], "record_key should be excluded");
+    assertFalse(flags[3], "partition_path should be excluded");
+    assertTrue(flags[4], "file_name should be populated");
+  }
+
+  @Test
+  public void testMetaFieldPopulationFlagsExcludeAll() {
+    // Exclude all 5 meta fields
+    HoodieWriteConfig config = HoodieWriteConfig.newBuilder()
+        .withPath("/tmp")
+        .withPopulateMetaFields(true)
+        .withMetaFieldsToExclude("_hoodie_commit_time,_hoodie_commit_seqno,_hoodie_record_key,_hoodie_partition_path,_hoodie_file_name")
+        .build();
+    boolean[] flags = config.getMetaFieldPopulationFlags();
+    for (int i = 0; i < 5; i++) {
+      assertFalse(flags[i], "Flag at index " + i + " should be false when all fields excluded");
+    }
+  }
+
+  @Test
+  public void testMetaFieldPopulationFlagsExcludeOnlyCommitTime() {
+    // Exclude only commit_time
+    HoodieWriteConfig config = HoodieWriteConfig.newBuilder()
+        .withPath("/tmp")
+        .withPopulateMetaFields(true)
+        .withMetaFieldsToExclude("_hoodie_commit_time")
+        .build();
+    boolean[] flags = config.getMetaFieldPopulationFlags();
+    assertFalse(flags[0], "commit_time should be excluded");
+    assertTrue(flags[1], "commit_seqno should be populated");
+    assertTrue(flags[2], "record_key should be populated");
+    assertTrue(flags[3], "partition_path should be populated");
+    assertTrue(flags[4], "file_name should be populated");
+  }
+
+  @Test
+  public void testMetaFieldPopulationFlagsWithWhitespace() {
+    // Ensure whitespace in config value is handled
+    HoodieWriteConfig config = HoodieWriteConfig.newBuilder()
+        .withPath("/tmp")
+        .withPopulateMetaFields(true)
+        .withMetaFieldsToExclude(" _hoodie_record_key , _hoodie_file_name ")
+        .build();
+    boolean[] flags = config.getMetaFieldPopulationFlags();
+    assertTrue(flags[0], "commit_time should be populated");
+    assertTrue(flags[1], "commit_seqno should be populated");
+    assertFalse(flags[2], "record_key should be excluded");
+    assertTrue(flags[3], "partition_path should be populated");
+    assertFalse(flags[4], "file_name should be excluded");
+  }
+
+  @Test
+  public void testMetaFieldPopulationFlagsWithInvalidFieldName() {
+    // Invalid field names are ignored - all valid fields remain populated
+    HoodieWriteConfig config = HoodieWriteConfig.newBuilder()
+        .withPath("/tmp")
+        .withPopulateMetaFields(true)
+        .withMetaFieldsToExclude("_hoodie_nonexistent_field")
+        .build();
+    boolean[] flags = config.getMetaFieldPopulationFlags();
+    for (int i = 0; i < 5; i++) {
+      assertTrue(flags[i], "Flag at index " + i + " should be true since only invalid field was excluded");
+    }
+  }
+
+  @Test
+  public void testMetaFieldPopulationFlagsEmptyExcludeList() {
+    // Empty exclude list => all flags true
+    HoodieWriteConfig config = HoodieWriteConfig.newBuilder()
+        .withPath("/tmp")
+        .withPopulateMetaFields(true)
+        .withMetaFieldsToExclude("")
+        .build();
+    boolean[] flags = config.getMetaFieldPopulationFlags();
+    for (int i = 0; i < 5; i++) {
+      assertTrue(flags[i], "Flag at index " + i + " should be true with empty exclude list");
+    }
+  }
+
   private HoodieWriteConfig createWriteConfig(Map<String, String> configs) {
     final Properties properties = new Properties();
     configs.forEach(properties::setProperty);

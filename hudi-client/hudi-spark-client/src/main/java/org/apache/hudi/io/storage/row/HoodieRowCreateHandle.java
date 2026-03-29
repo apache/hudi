@@ -67,7 +67,7 @@ public class HoodieRowCreateHandle implements Serializable {
   private final String fileId;
 
   private final boolean populateMetaFields;
-  private final boolean[] populateField;
+  private final boolean[] populateIndividualMetaFields;
 
   private final UTF8String fileName;
   private final UTF8String commitTime;
@@ -120,7 +120,7 @@ public class HoodieRowCreateHandle implements Serializable {
     this.path = makeNewPath(storage, partitionPath, fileName, writeConfig);
 
     this.populateMetaFields = writeConfig.populateMetaFields();
-    this.populateField = writeConfig.getMetaFieldPopulationFlags();
+    this.populateIndividualMetaFields = writeConfig.getMetaFieldPopulationFlags();
     this.fileName = UTF8String.fromString(path.getName());
     this.commitTime = UTF8String.fromString(instantTime);
     this.seqIdGenerator = (id) -> HoodieRecord.generateSequenceId(instantTime, taskPartitionId, id);
@@ -178,16 +178,16 @@ public class HoodieRowCreateHandle implements Serializable {
       //          over again)
       UTF8String[] metaFields = new UTF8String[5];
       UTF8String recordKey = row.getUTF8String(HoodieRecord.RECORD_KEY_META_FIELD_ORD);
-      metaFields[0] = populateField[0]
+      metaFields[0] = populateIndividualMetaFields[0]
           ? (shouldPreserveHoodieMetadata ? row.getUTF8String(HoodieRecord.COMMIT_TIME_METADATA_FIELD_ORD) : commitTime)
           : null;
-      metaFields[1] = populateField[1]
+      metaFields[1] = populateIndividualMetaFields[1]
           ? (shouldPreserveHoodieMetadata ? row.getUTF8String(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD_ORD)
               : UTF8String.fromString(seqIdGenerator.apply(GLOBAL_SEQ_NO.getAndIncrement())))
           : null;
-      metaFields[2] = populateField[2] ? recordKey : null;
-      metaFields[3] = populateField[3] ? row.getUTF8String(HoodieRecord.PARTITION_PATH_META_FIELD_ORD) : null;
-      metaFields[4] = populateField[4] ? fileName : null;
+      metaFields[2] = populateIndividualMetaFields[2] ? recordKey : null;
+      metaFields[3] = populateIndividualMetaFields[3] ? row.getUTF8String(HoodieRecord.PARTITION_PATH_META_FIELD_ORD) : null;
+      metaFields[4] = populateIndividualMetaFields[4] ? fileName : null;
       InternalRow updatedRow = SparkAdapterSupport$.MODULE$.sparkAdapter().createInternalRow(metaFields, row, true);
       try {
         fileWriter.writeRow(recordKey, updatedRow);

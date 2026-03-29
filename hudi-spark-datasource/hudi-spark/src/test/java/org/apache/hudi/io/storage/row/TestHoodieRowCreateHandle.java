@@ -116,6 +116,50 @@ public class TestHoodieRowCreateHandle extends HoodieSparkClientTestHarness {
     }
   }
 
+  @Test
+  public void testSelectiveMetaFieldPopulation() throws Exception {
+    // Exclude record_key, partition_path, and file_name but keep commit_time and commit_seqno
+    HoodieWriteConfig config = SparkDatasetTestUtils.getConfigBuilder(basePath, timelineServicePort)
+        .withPopulateMetaFields(true)
+        .withMetaFieldsToExclude("_hoodie_record_key,_hoodie_partition_path,_hoodie_file_name,_hoodie_commit_seqno")
+        .build();
+
+    HoodieTable table = HoodieSparkTable.create(config, context, metaClient);
+    String partitionPath = HoodieTestDataGenerator.DEFAULT_PARTITION_PATHS[0];
+    String fileId = UUID.randomUUID().toString();
+    String instantTime = "000";
+
+    HoodieRowCreateHandle handle = new HoodieRowCreateHandle(table, config, partitionPath, fileId, instantTime,
+        RANDOM.nextInt(100000), RANDOM.nextLong(), RANDOM.nextLong(), SparkDatasetTestUtils.STRUCT_TYPE);
+    int size = 10 + RANDOM.nextInt(100);
+    Dataset<Row> inputRows = SparkDatasetTestUtils.getRandomRows(sqlContext, size, partitionPath, false);
+
+    WriteStatus writeStatus = writeAndGetWriteStatus(inputRows, handle);
+
+    assertFalse(writeStatus.hasErrors());
+    assertEquals(size, writeStatus.getTotalRecords());
+
+    // Read back and verify selective population
+    Dataset<Row> result = sqlContext.read().parquet(basePath + "/" + writeStatus.getStat().getPath());
+    result.collectAsList().forEach(entry -> {
+      // commit_time should be populated (not excluded)
+      String commitTime = entry.getString(HoodieRecord.HOODIE_META_COLUMNS_NAME_TO_POS.get(HoodieRecord.COMMIT_TIME_METADATA_FIELD));
+      assertEquals(instantTime, commitTime);
+
+      // commit_seqno should be null (excluded)
+      assertTrue(entry.isNullAt(HoodieRecord.HOODIE_META_COLUMNS_NAME_TO_POS.get(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD)));
+
+      // record_key should be null (excluded)
+      assertTrue(entry.isNullAt(HoodieRecord.HOODIE_META_COLUMNS_NAME_TO_POS.get(HoodieRecord.RECORD_KEY_METADATA_FIELD)));
+
+      // partition_path should be null (excluded)
+      assertTrue(entry.isNullAt(HoodieRecord.HOODIE_META_COLUMNS_NAME_TO_POS.get(HoodieRecord.PARTITION_PATH_METADATA_FIELD)));
+
+      // file_name should be null (excluded)
+      assertTrue(entry.isNullAt(HoodieRecord.HOODIE_META_COLUMNS_NAME_TO_POS.get(HoodieRecord.FILENAME_METADATA_FIELD)));
+    });
+  }
+
   /**
    * Issue some corrupted or wrong schematized InternalRow after few valid InternalRows so that global error is thrown. write batch 1 of valid records write batch 2 of invalid records Global Error
    * should be thrown.

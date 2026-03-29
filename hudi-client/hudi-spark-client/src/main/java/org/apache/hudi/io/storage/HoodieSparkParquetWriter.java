@@ -44,7 +44,7 @@ public class HoodieSparkParquetWriter extends HoodieBaseParquetWriter<InternalRo
   private final UTF8String instantTime;
 
   private final boolean populateMetaFields;
-  private final boolean[] populateField;
+  private final boolean[] populateIndividualMetaFields;
 
   private final HoodieRowParquetWriteSupport writeSupport;
 
@@ -63,13 +63,13 @@ public class HoodieSparkParquetWriter extends HoodieBaseParquetWriter<InternalRo
                                   String instantTime,
                                   TaskContextSupplier taskContextSupplier,
                                   boolean populateMetaFields,
-                                  boolean[] populateField) throws IOException {
+                                  boolean[] populateIndividualMetaFields) throws IOException {
     super(file, parquetConfig);
     this.writeSupport = parquetConfig.getWriteSupport();
     this.fileName = UTF8String.fromString(file.getName());
     this.instantTime = UTF8String.fromString(instantTime);
     this.populateMetaFields = populateMetaFields;
-    this.populateField = populateField;
+    this.populateIndividualMetaFields = populateIndividualMetaFields;
     this.seqIdGenerator = recordIndex -> {
       Integer partitionId = taskContextSupplier.getPartitionIdSupplier().get();
       return HoodieRecord.generateSequenceId(instantTime, partitionId, recordIndex);
@@ -83,7 +83,7 @@ public class HoodieSparkParquetWriter extends HoodieBaseParquetWriter<InternalRo
       updateRecordMetadata(row, recordKey, key.getPartitionPath(), getWrittenRecordCount());
 
       super.write(row);
-      if (populateField == null || populateField[2]) {
+      if (populateIndividualMetaFields == null || populateIndividualMetaFields[2]) {
         writeSupport.add(recordKey);
       }
     } else {
@@ -94,7 +94,7 @@ public class HoodieSparkParquetWriter extends HoodieBaseParquetWriter<InternalRo
   @Override
   public void writeRow(String recordKey, InternalRow row) throws IOException {
     super.write(row);
-    if (populateMetaFields && (populateField == null || populateField[2])) {
+    if (populateMetaFields && (populateIndividualMetaFields == null || populateIndividualMetaFields[2])) {
       writeSupport.add(UTF8String.fromString(recordKey));
     }
   }
@@ -108,20 +108,20 @@ public class HoodieSparkParquetWriter extends HoodieBaseParquetWriter<InternalRo
                                       UTF8String recordKey,
                                       String partitionPath,
                                       long recordCount)  {
-    if (populateField != null) {
-      if (populateField[0]) {
+    if (populateIndividualMetaFields != null) {
+      if (populateIndividualMetaFields[0]) {
         row.update(COMMIT_TIME_METADATA_FIELD.ordinal(), instantTime);
       }
-      if (populateField[1]) {
+      if (populateIndividualMetaFields[1]) {
         row.update(COMMIT_SEQNO_METADATA_FIELD.ordinal(), UTF8String.fromString(seqIdGenerator.apply(recordCount)));
       }
-      if (populateField[2]) {
+      if (populateIndividualMetaFields[2]) {
         row.update(RECORD_KEY_METADATA_FIELD.ordinal(), recordKey);
       }
-      if (populateField[3]) {
+      if (populateIndividualMetaFields[3]) {
         row.update(PARTITION_PATH_METADATA_FIELD.ordinal(), UTF8String.fromString(partitionPath));
       }
-      if (populateField[4]) {
+      if (populateIndividualMetaFields[4]) {
         row.update(FILENAME_METADATA_FIELD.ordinal(), fileName);
       }
     } else {
