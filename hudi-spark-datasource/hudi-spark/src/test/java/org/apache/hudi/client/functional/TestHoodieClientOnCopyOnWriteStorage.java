@@ -766,7 +766,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     StoragePath completeRestoreFile = null;
     StoragePath backupCompletedRestoreFile = null;
     try (SparkRDDWriteClient client = getHoodieWriteClient(config)) {
-      insertBatch(config, client, "000", "001", 100, 2, 3, 100, BaseHoodieWriteClient::insert);
+      insertBatch(config, client, "001", "000", 100, 100, 2, 3, BaseHoodieWriteClient::insert);
 
       // inject a pending restore
       client.savepoint("001", "user1", "comment1");
@@ -794,7 +794,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
 
     // retrigger a new commit, should succeed.
     try (SparkRDDWriteClient client = getHoodieWriteClient(config)) {
-      insertBatch(config, client, "002", "003", 100, 2, 3, 200, BaseHoodieWriteClient::insert);
+      insertBatch(config, client, "003", "002", 100, 200, 2, 3, BaseHoodieWriteClient::insert);
     }
   }
 
@@ -841,8 +841,8 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     HoodieSparkCopyOnWriteTable table = (HoodieSparkCopyOnWriteTable) HoodieSparkTable.create(config, context, metaClient);
 
     //1. insert to generate 2 file group
-    HoodieTestWriteResult upsertResult = insertBatch(config, client, "000", "001", 600, 1, 2,
-        600, BaseHoodieWriteClient::upsert);
+    HoodieTestWriteResult upsertResult = insertBatch(config, client, "001", "000", 600, 600, 1,
+        2, BaseHoodieWriteClient::upsert);
     List<HoodieRecord> inserts1 = upsertResult.getRecords();
     List<String> fileGroupIds1 = table.getFileSystemView().getAllFileGroups(testPartitionPath)
         .map(fileGroup -> fileGroup.getFileGroupId().getFileId()).collect(Collectors.toList());
@@ -855,7 +855,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     createRequestedClusterInstant(this.metaClient, "002", fileSlices);
 
     // 3. insert one record with no updating reject exception, and not merge the small file, just generate a new file group
-    insertBatch(config, client, "002", "003", 1, 1, 1, 601, BaseHoodieWriteClient::upsert);
+    insertBatch(config, client, "003", "002", 1, 601, 1, 1, BaseHoodieWriteClient::upsert);
     List<String> fileGroupIds2 = table.getFileSystemView().getAllFileGroups(testPartitionPath)
         .map(fileGroup -> fileGroup.getFileGroupId().getFileId()).collect(Collectors.toList());
     assertEquals(3, fileGroupIds2.size());
@@ -871,7 +871,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     }, assertMsg);
 
     // 5. insert one record with no updating reject exception, will merge the small file
-    List<WriteStatus> statuses = insertBatch(config, client, "004", "005", 1, 1, 1, 602, BaseHoodieWriteClient::upsert).getStatuses();
+    List<WriteStatus> statuses = insertBatch(config, client, "005", "004", 1, 602, 1, 1, BaseHoodieWriteClient::upsert).getStatuses();
     fileGroupIds2.removeAll(fileGroupIds1);
     assertEquals(fileGroupIds2.get(0), statuses.get(0).getFileId());
     List<String> firstInsertFileGroupIds4 = table.getFileSystemView().getAllFileGroups(testPartitionPath)
