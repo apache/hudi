@@ -217,4 +217,139 @@ public class TestDefaultHoodieRecordPayload {
     payload.getInsertValue(schema, properties);
     payload.combineAndGetUpdateValue(record2, schema, properties);
   }
+
+  /**
+   * Test the new UPDATE_ON_SAME_PAYLOAD_ORDERING_FIELD configuration.
+   * When set to true (default), records with the same ordering value should update.
+   * When set to false, records with the same ordering value should NOT update.
+   */
+  @ParameterizedTest
+  @MethodSource("org.apache.hudi.common.testutils.OrderingFieldsTestUtils#configureOrderingFields")
+  public void testUpdateOnSameOrderingFieldTrue(String key) throws IOException {
+    OrderingFieldsTestUtils.setOrderingFieldsConfig(props, key, "ts");
+    props.setProperty(HoodiePayloadProps.UPDATE_ON_SAME_PAYLOAD_ORDERING_FIELD_PROP_KEY, "true");
+
+    GenericRecord currentRecord = new GenericData.Record(schema);
+    currentRecord.put("id", "1");
+    currentRecord.put("partition", "partition0");
+    currentRecord.put("ts", 100L);
+    currentRecord.put("_hoodie_is_deleted", false);
+
+    GenericRecord incomingRecord = new GenericData.Record(schema);
+    incomingRecord.put("id", "1");
+    incomingRecord.put("partition", "partition0");
+    incomingRecord.put("ts", 100L);
+    incomingRecord.put("_hoodie_is_deleted", false);
+
+    DefaultHoodieRecordPayload incomingPayload = new DefaultHoodieRecordPayload(incomingRecord, 100L);
+    Option<org.apache.avro.generic.IndexedRecord> result =
+        incomingPayload.combineAndGetUpdateValue(currentRecord, schema, props);
+
+    assertTrue(result.isPresent(), "Result should be present when updateOnSameOrderingField is true");
+    assertEquals(incomingRecord, result.get(), "Incoming record should be used when ordering values are equal");
+  }
+
+  @ParameterizedTest
+  @MethodSource("org.apache.hudi.common.testutils.OrderingFieldsTestUtils#configureOrderingFields")
+  public void testUpdateOnSameOrderingFieldFalse(String key) throws IOException {
+    OrderingFieldsTestUtils.setOrderingFieldsConfig(props, key, "ts");
+    props.setProperty(HoodiePayloadProps.UPDATE_ON_SAME_PAYLOAD_ORDERING_FIELD_PROP_KEY, "false");
+
+    GenericRecord currentRecord = new GenericData.Record(schema);
+    currentRecord.put("id", "1");
+    currentRecord.put("partition", "partition0");
+    currentRecord.put("ts", 100L);
+    currentRecord.put("_hoodie_is_deleted", false);
+
+    GenericRecord incomingRecord = new GenericData.Record(schema);
+    incomingRecord.put("id", "1");
+    incomingRecord.put("partition", "partition0");
+    incomingRecord.put("ts", 100L);
+    incomingRecord.put("_hoodie_is_deleted", false);
+
+    DefaultHoodieRecordPayload incomingPayload = new DefaultHoodieRecordPayload(incomingRecord, 100L);
+    Option<org.apache.avro.generic.IndexedRecord> result =
+        incomingPayload.combineAndGetUpdateValue(currentRecord, schema, props);
+
+    assertTrue(result.isPresent(), "Result should be present");
+    assertEquals(currentRecord, result.get(),
+        "Current record should be kept when ordering values are equal and updateOnSameOrderingField is false");
+  }
+
+  @ParameterizedTest
+  @MethodSource("org.apache.hudi.common.testutils.OrderingFieldsTestUtils#configureOrderingFields")
+  public void testUpdateOnSameOrderingFieldWithNewerIncoming(String key) throws IOException {
+    OrderingFieldsTestUtils.setOrderingFieldsConfig(props, key, "ts");
+    props.setProperty(HoodiePayloadProps.UPDATE_ON_SAME_PAYLOAD_ORDERING_FIELD_PROP_KEY, "false");
+
+    GenericRecord currentRecord = new GenericData.Record(schema);
+    currentRecord.put("id", "1");
+    currentRecord.put("partition", "partition0");
+    currentRecord.put("ts", 100L);
+    currentRecord.put("_hoodie_is_deleted", false);
+
+    GenericRecord incomingRecord = new GenericData.Record(schema);
+    incomingRecord.put("id", "1");
+    incomingRecord.put("partition", "partition0");
+    incomingRecord.put("ts", 200L);
+    incomingRecord.put("_hoodie_is_deleted", false);
+
+    DefaultHoodieRecordPayload incomingPayload = new DefaultHoodieRecordPayload(incomingRecord, 200L);
+    Option<org.apache.avro.generic.IndexedRecord> result =
+        incomingPayload.combineAndGetUpdateValue(currentRecord, schema, props);
+
+    assertTrue(result.isPresent(), "Result should be present");
+    assertEquals(incomingRecord, result.get(), "Incoming record should be used when it's newer");
+  }
+
+  @ParameterizedTest
+  @MethodSource("org.apache.hudi.common.testutils.OrderingFieldsTestUtils#configureOrderingFields")
+  public void testUpdateOnSameOrderingFieldWithOlderIncoming(String key) throws IOException {
+    OrderingFieldsTestUtils.setOrderingFieldsConfig(props, key, "ts");
+    props.setProperty(HoodiePayloadProps.UPDATE_ON_SAME_PAYLOAD_ORDERING_FIELD_PROP_KEY, "true");
+
+    GenericRecord currentRecord = new GenericData.Record(schema);
+    currentRecord.put("id", "1");
+    currentRecord.put("partition", "partition0");
+    currentRecord.put("ts", 200L);
+    currentRecord.put("_hoodie_is_deleted", false);
+
+    GenericRecord incomingRecord = new GenericData.Record(schema);
+    incomingRecord.put("id", "1");
+    incomingRecord.put("partition", "partition0");
+    incomingRecord.put("ts", 100L);
+    incomingRecord.put("_hoodie_is_deleted", false);
+
+    DefaultHoodieRecordPayload incomingPayload = new DefaultHoodieRecordPayload(incomingRecord, 100L);
+    Option<org.apache.avro.generic.IndexedRecord> result =
+        incomingPayload.combineAndGetUpdateValue(currentRecord, schema, props);
+
+    assertTrue(result.isPresent(), "Result should be present");
+    assertEquals(currentRecord, result.get(), "Current record should be kept when incoming is older");
+  }
+
+  @Test
+  public void testUpdateOnSameOrderingFieldDefaultBehavior() throws IOException {
+    props.remove(HoodiePayloadProps.UPDATE_ON_SAME_PAYLOAD_ORDERING_FIELD_PROP_KEY);
+    props.setProperty(HoodiePayloadProps.PAYLOAD_ORDERING_FIELD_PROP_KEY, "ts");
+
+    GenericRecord currentRecord = new GenericData.Record(schema);
+    currentRecord.put("id", "1");
+    currentRecord.put("partition", "partition0");
+    currentRecord.put("ts", 100L);
+    currentRecord.put("_hoodie_is_deleted", false);
+
+    GenericRecord incomingRecord = new GenericData.Record(schema);
+    incomingRecord.put("id", "1");
+    incomingRecord.put("partition", "partition0");
+    incomingRecord.put("ts", 100L);
+    incomingRecord.put("_hoodie_is_deleted", false);
+
+    DefaultHoodieRecordPayload incomingPayload = new DefaultHoodieRecordPayload(incomingRecord, 100L);
+    Option<org.apache.avro.generic.IndexedRecord> result =
+        incomingPayload.combineAndGetUpdateValue(currentRecord, schema, props);
+
+    assertTrue(result.isPresent(), "Result should be present");
+    assertEquals(incomingRecord, result.get(), "Default behavior should update on same ordering field");
+  }
 }

@@ -179,7 +179,32 @@ public class DefaultHoodieRecordPayload extends OverwriteWithLatestAvroPayload {
     if (incomingRecord.isEmpty() && OrderingValues.isDefault(incomingOrderingVal)) {
       return true;
     }
-    return persistedOrderingVal == null || persistedOrderingVal.compareTo(incomingOrderingVal) <= 0;
+    boolean updateOnSameOrderingField = Boolean.parseBoolean(properties.getProperty(
+        HoodiePayloadProps.UPDATE_ON_SAME_PAYLOAD_ORDERING_FIELD_PROP_KEY,
+        HoodiePayloadProps.DEFAULT_UPDATE_ON_SAME_PAYLOAD_ORDERING_FIELD_PROP_VALUE));
+    return compareOrderingVal(persistedOrderingVal, incomingOrderingVal, updateOnSameOrderingField);
+  }
+
+  /**
+   * Compares the ordering between persisted entry and input payload.
+   * If updateOnSameOrderingField is true, then incoming record is returned when payload ordering field is the same.
+   *
+   * @param persistedOrderingVal record present in Disk
+   * @param incomingOrderingVal record part of input payload
+   * @return true if the older record(persisted entry) is older than incoming record.
+   */
+  protected boolean compareOrderingVal(Comparable persistedOrderingVal, Comparable incomingOrderingVal,
+                                       boolean updateOnSameOrderingField) {
+    if (persistedOrderingVal == null) {
+      return true;
+    } else {
+      int compareVal = persistedOrderingVal.compareTo(incomingOrderingVal);
+      if (updateOnSameOrderingField) {
+        return compareVal <= 0;
+      } else {
+        return compareVal < 0;
+      }
+    }
   }
 
   @Override
