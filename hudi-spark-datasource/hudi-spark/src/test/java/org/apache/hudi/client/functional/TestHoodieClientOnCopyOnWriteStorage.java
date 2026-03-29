@@ -459,12 +459,6 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
         expectedStatusSize, numSlices, assertPartitionMetadata, writeFn, true, false);
   }
 
-  protected Object castInsertBatch(HoodieWriteConfig config, BaseHoodieWriteClient client, String prevCommitTime, String newCommitTime, int numRecordsInThisCommit,
-                                   int numSlices, int expectedStatusSize, int expectedTotalRecords, Function3<Object, BaseHoodieWriteClient, Object, String> writeFn) throws Exception {
-    return insertBatch(config, (SparkRDDWriteClient) client, newCommitTime, prevCommitTime, numRecordsInThisCommit, expectedTotalRecords, numSlices,
-        expectedStatusSize, writeFn);
-  }
-
   /**
    * Test Auto Commit behavior for HoodieWriteClient insert API.
    */
@@ -684,7 +678,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     String newCommitTime = "001";
     String initCommitTime = "000";
     int numRecords = 200;
-    castInsertFirstBatch(hoodieWriteConfig, client, newCommitTime, initCommitTime, numRecords, BaseHoodieWriteClient::insert,
+    insertFirstBatch(hoodieWriteConfig, client, newCommitTime, initCommitTime, numRecords, SparkRDDWriteClient::insert,
         false, true, numRecords, config.populateMetaFields(), INSTANT_GENERATOR);
 
     // Write 2 (updates)
@@ -692,8 +686,8 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     newCommitTime = "004";
     numRecords = 100;
     String commitTimeBetweenPrevAndNew = "002";
-    castUpdateBatch(hoodieWriteConfig, client, newCommitTime, prevCommitTime,
-        Option.of(Arrays.asList(commitTimeBetweenPrevAndNew)), initCommitTime, numRecords, BaseHoodieWriteClient::upsert, false, true,
+    updateBatch(hoodieWriteConfig, client, newCommitTime, prevCommitTime,
+        Option.of(Arrays.asList(commitTimeBetweenPrevAndNew)), initCommitTime, numRecords, SparkRDDWriteClient::upsert, false, true,
         numRecords, 200, 2, config.populateMetaFields(), INSTANT_GENERATOR);
 
     // Delete 1
@@ -701,7 +695,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     newCommitTime = "005";
     numRecords = 50;
 
-    castDeleteBatch(hoodieWriteConfig, client, newCommitTime, prevCommitTime,
+    deleteBatch(hoodieWriteConfig, client, newCommitTime, prevCommitTime,
         initCommitTime, numRecords, false, true,
         0, 150, config.populateMetaFields(), TIMELINE_FACTORY, INSTANT_GENERATOR);
 
@@ -772,7 +766,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     StoragePath completeRestoreFile = null;
     StoragePath backupCompletedRestoreFile = null;
     try (SparkRDDWriteClient client = getHoodieWriteClient(config)) {
-      castInsertBatch(config, client, "000", "001", 100, 2, 3, 100, BaseHoodieWriteClient::insert);
+      insertBatch(config, client, "000", "001", 100, 2, 3, 100, BaseHoodieWriteClient::insert);
 
       // inject a pending restore
       client.savepoint("001", "user1", "comment1");
@@ -800,7 +794,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
 
     // retrigger a new commit, should succeed.
     try (SparkRDDWriteClient client = getHoodieWriteClient(config)) {
-      castInsertBatch(config, client, "002", "003", 100, 2, 3, 200, BaseHoodieWriteClient::insert);
+      insertBatch(config, client, "002", "003", 100, 2, 3, 200, BaseHoodieWriteClient::insert);
     }
   }
 
@@ -847,7 +841,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     HoodieSparkCopyOnWriteTable table = (HoodieSparkCopyOnWriteTable) HoodieSparkTable.create(config, context, metaClient);
 
     //1. insert to generate 2 file group
-    HoodieTestWriteResult upsertResult = (HoodieTestWriteResult) castInsertBatch(config, client, "000", "001", 600, 1, 2,
+    HoodieTestWriteResult upsertResult = insertBatch(config, client, "000", "001", 600, 1, 2,
         600, BaseHoodieWriteClient::upsert);
     List<HoodieRecord> inserts1 = upsertResult.getRecords();
     List<String> fileGroupIds1 = table.getFileSystemView().getAllFileGroups(testPartitionPath)
@@ -861,7 +855,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     createRequestedClusterInstant(this.metaClient, "002", fileSlices);
 
     // 3. insert one record with no updating reject exception, and not merge the small file, just generate a new file group
-    castInsertBatch(config, client, "002", "003", 1, 1, 1, 601, BaseHoodieWriteClient::upsert);
+    insertBatch(config, client, "002", "003", 1, 1, 1, 601, BaseHoodieWriteClient::upsert);
     List<String> fileGroupIds2 = table.getFileSystemView().getAllFileGroups(testPartitionPath)
         .map(fileGroup -> fileGroup.getFileGroupId().getFileId()).collect(Collectors.toList());
     assertEquals(3, fileGroupIds2.size());
@@ -877,8 +871,7 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     }, assertMsg);
 
     // 5. insert one record with no updating reject exception, will merge the small file
-    List<WriteStatus> statuses = ((HoodieTestWriteResult)
-        castInsertBatch(config, client, "004", "005", 1, 1, 1, 602, BaseHoodieWriteClient::upsert)).getStatuses();
+    List<WriteStatus> statuses = insertBatch(config, client, "004", "005", 1, 1, 1, 602, BaseHoodieWriteClient::upsert).getStatuses();
     fileGroupIds2.removeAll(fileGroupIds1);
     assertEquals(fileGroupIds2.get(0), statuses.get(0).getFileId());
     List<String> firstInsertFileGroupIds4 = table.getFileSystemView().getAllFileGroups(testPartitionPath)
