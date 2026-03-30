@@ -20,8 +20,10 @@
 package org.apache.hudi.io.storage;
 
 import org.apache.hudi.common.config.HoodieMetadataConfig;
+import org.apache.hudi.common.config.HoodieReaderConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.io.SeekableDataInputStream;
+import org.apache.hudi.io.hfile.CachingHFileReaderImpl;
 import org.apache.hudi.io.hfile.HFileReader;
 import org.apache.hudi.io.hfile.HFileReaderImpl;
 import org.apache.hudi.storage.HoodieStorage;
@@ -70,6 +72,7 @@ class TestHFileReaderFactory {
   @BeforeEach
   void setUp() {
     properties = new TypedProperties();
+    properties.setProperty(HoodieReaderConfig.HFILE_BLOCK_CACHE_ENABLED.key(), "false");
   }
 
   @Test
@@ -201,7 +204,6 @@ class TestHFileReaderFactory {
   void testBuilder_WithoutPropertiesProvided_ShouldUseDefaultProperties() throws IOException {
     when(mockStorage.getPathInfo(mockPath)).thenReturn(mockPathInfo);
     when(mockPathInfo.getLength()).thenReturn(1024L);
-    when(mockStorage.openSeekable(mockPath, false)).thenReturn(mockInputStream);
 
     // Not providing properties, should use defaults
     HFileReaderFactory factory = HFileReaderFactory.builder()
@@ -211,5 +213,23 @@ class TestHFileReaderFactory {
 
     HFileReader result = factory.createHFileReader();
     assertNotNull(result);
+  }
+
+  @Test
+  void testCreateHFileReader_WithCachingEnabled_ShouldLazilyOpenStream() throws IOException {
+    properties.setProperty(HoodieReaderConfig.HFILE_BLOCK_CACHE_ENABLED.key(), "true");
+    when(mockStorage.getPathInfo(mockPath)).thenReturn(mockPathInfo);
+    when(mockPathInfo.getLength()).thenReturn(1024L);
+
+    HFileReaderFactory factory = HFileReaderFactory.builder()
+        .withStorage(mockStorage)
+        .withProps(properties)
+        .withPath(mockPath)
+        .build();
+
+    HFileReader reader = factory.createHFileReader();
+    assertInstanceOf(CachingHFileReaderImpl.class, reader);
+    verify(mockStorage, times(1)).getPathInfo(mockPath);
+    verify(mockStorage, never()).openSeekable(mockPath, false);
   }
 }

@@ -22,6 +22,7 @@ package org.apache.hudi.io.hfile;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.io.ByteArraySeekableDataInputStream;
 import org.apache.hudi.io.ByteBufferBackedInputStream;
+import org.apache.hudi.util.Lazy;
 
 import lombok.AllArgsConstructor;
 import lombok.Getter;
@@ -36,6 +37,7 @@ import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Function;
 import java.util.stream.Stream;
 
@@ -821,6 +823,19 @@ public class TestHFileReader {
       assertEquals(SEEK_TO_EOF, reader.seekTo(new UTF8StringKey("random")));
       assertFalse(reader.next());
     }
+  }
+
+  @Test
+  public void testCloseDoesNotInitializeLazyStream() throws IOException {
+    AtomicBoolean streamOpened = new AtomicBoolean(false);
+    HFileReaderImpl reader = new HFileReaderImpl(Lazy.lazily(() -> {
+      streamOpened.set(true);
+      return new ByteArraySeekableDataInputStream(new ByteBufferBackedInputStream(new byte[0]));
+    }), 0);
+
+    reader.close();
+
+    assertFalse(streamOpened.get());
   }
 
   @ParameterizedTest

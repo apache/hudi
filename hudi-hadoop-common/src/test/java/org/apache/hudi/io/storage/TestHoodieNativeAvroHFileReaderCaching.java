@@ -23,6 +23,7 @@ import org.apache.hudi.common.config.HoodieReaderConfig;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.TaskContextSupplier;
+import org.apache.hudi.common.engine.EngineProperty;
 import org.apache.hudi.common.model.EmptyHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
@@ -30,11 +31,18 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
+import org.apache.hudi.io.SeekableDataInputStream;
+import org.apache.hudi.io.hfile.CachingHFileReaderImpl;
+import org.apache.hudi.io.hfile.HFileReader;
+import org.apache.hudi.io.hfile.UTF8StringKey;
 import org.apache.hudi.io.hadoop.TestHoodieOrcReaderWriter;
 import org.apache.hudi.io.storage.hadoop.HoodieAvroHFileWriter;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.StoragePathFilter;
+import org.apache.hudi.storage.StoragePathInfo;
 
 import lombok.extern.slf4j.Slf4j;
 import org.apache.avro.Schema;
@@ -42,23 +50,30 @@ import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.net.URI;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Properties;
 import java.util.Random;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
 
 import static org.apache.hudi.common.testutils.SchemaTestUtil.getSchemaFromResource;
 import static org.apache.hudi.common.util.CollectionUtils.toStream;
+import static org.apache.hudi.io.storage.HoodieAvroHFileReaderImplBase.KEY_BLOOM_FILTER_META_BLOCK;
+import static org.apache.hudi.io.storage.HoodieAvroHFileReaderImplBase.SCHEMA_KEY;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
 
 @Slf4j
 public class TestHoodieNativeAvroHFileReaderCaching {
@@ -71,6 +86,11 @@ public class TestHoodieNativeAvroHFileReaderCaching {
   private static final List<String> EXISTING_KEYS = new ArrayList<>();
   private static final List<String> MISSING_KEYS = new ArrayList<>();
   private static HoodieStorage storage;
+
+  @BeforeEach
+  public void resetCaches() {
+    CachingHFileReaderImpl.resetGlobalCache();
+  }
 
   @BeforeAll
   public static void setup() throws Exception {
@@ -119,6 +139,88 @@ public class TestHoodieNativeAvroHFileReaderCaching {
     testMissingKeysLookup();
 
     log.debug("================================================================\n");
+  }
+
+  @Test
+  public void testMetadataInitializationDoesNotOpenStreamOnCacheHit() throws Exception {
+    StorageAccessCounter counter = new StorageAccessCounter();
+    HoodieStorage countingStorage = createCountingStorage(counter);
+    HFileReaderFactory readerFactory = createCachingReaderFactory(countingStorage);
+
+    try (HFileReader reader = readerFactory.createHFileReader()) {
+      assertTrue(reader.getMetaInfo(new UTF8StringKey(SCHEMA_KEY)).isPresent());
+    }
+    assertTrue(counter.getOpenCount() > 0, "Initial metadata load should open the HFile stream");
+
+    counter.reset();
+    try (HFileReader reader = readerFactory.createHFileReader()) {
+      assertTrue(reader.getMetaInfo(new UTF8StringKey(SCHEMA_KEY)).isPresent());
+    }
+
+    assertEquals(0, counter.getOpenCount(), "Metadata cache hit should not reopen the HFile stream");
+    assertEquals(0, counter.getReadCount(), "Metadata cache hit should not read from the HFile stream");
+  }
+
+  @Test
+  public void testInitializeMetadataDoesNotOpenStreamWhenLoadOnOpenBlocksCached() throws Exception {
+    StorageAccessCounter counter = new StorageAccessCounter();
+    HoodieStorage countingStorage = createCountingStorage(counter);
+    HFileReaderFactory readerFactory = createCachingReaderFactory(countingStorage);
+
+    try (HFileReader reader = readerFactory.createHFileReader()) {
+      reader.initializeMetadata();
+    }
+    assertTrue(counter.getOpenCount() > 0, "Initial metadata initialization should open the HFile stream");
+
+    counter.reset();
+    try (HFileReader reader = readerFactory.createHFileReader()) {
+      reader.initializeMetadata();
+    }
+
+    assertEquals(0, counter.getOpenCount(), "Cached load-on-open metadata should not reopen the HFile stream");
+    assertEquals(0, counter.getReadCount(), "Cached load-on-open metadata should not read from the HFile stream");
+  }
+
+  @Test
+  public void testDataBlockReadDoesNotOpenStreamOnFullCacheHit() throws Exception {
+    StorageAccessCounter counter = new StorageAccessCounter();
+    HoodieStorage countingStorage = createCountingStorage(counter);
+    HFileReaderFactory readerFactory = createCachingReaderFactory(countingStorage);
+
+    try (HFileReader reader = readerFactory.createHFileReader()) {
+      assertTrue(reader.seekTo());
+      assertTrue(reader.getKeyValue().isPresent());
+    }
+    assertTrue(counter.getOpenCount() > 0, "Initial data read should open the HFile stream");
+
+    counter.reset();
+    try (HFileReader reader = readerFactory.createHFileReader()) {
+      assertTrue(reader.seekTo());
+      assertTrue(reader.getKeyValue().isPresent());
+    }
+
+    assertEquals(0, counter.getOpenCount(), "Data block cache hit should not reopen the HFile stream");
+    assertEquals(0, counter.getReadCount(), "Data block cache hit should not read from the HFile stream");
+  }
+
+  @Test
+  public void testMetaBlockReadDoesNotOpenStreamOnCacheHit() throws Exception {
+    StorageAccessCounter counter = new StorageAccessCounter();
+    HoodieStorage countingStorage = createCountingStorage(counter);
+    HFileReaderFactory readerFactory = createCachingReaderFactory(countingStorage);
+
+    try (HFileReader reader = readerFactory.createHFileReader()) {
+      assertTrue(reader.getMetaBlock(KEY_BLOOM_FILTER_META_BLOCK).isPresent());
+    }
+    assertTrue(counter.getOpenCount() > 0, "Initial meta block read should open the HFile stream");
+
+    counter.reset();
+    try (HFileReader reader = readerFactory.createHFileReader()) {
+      assertTrue(reader.getMetaBlock(KEY_BLOOM_FILTER_META_BLOCK).isPresent());
+    }
+
+    assertEquals(0, counter.getOpenCount(), "Meta block cache hit should not reopen the HFile stream");
+    assertEquals(0, counter.getReadCount(), "Meta block cache hit should not read from the HFile stream");
   }
 
   private void testExistingKeysLookup() throws Exception {
@@ -230,14 +332,11 @@ public class TestHoodieNativeAvroHFileReaderCaching {
     HoodieStorage storage = HoodieTestUtils.getStorage(getFilePath());
     Properties props = new Properties();
     props.setProperty(HoodieTableConfig.POPULATE_META_FIELDS.key(), Boolean.toString(populateMetaFields));
-    TaskContextSupplier mockTaskContextSupplier = mock(TaskContextSupplier.class);
-    Supplier<Integer> partitionSupplier = mock(Supplier.class);
-    when(mockTaskContextSupplier.getPartitionIdSupplier()).thenReturn(partitionSupplier);
-    when(partitionSupplier.get()).thenReturn(10);
+    TaskContextSupplier taskContextSupplier = new FixedTaskContextSupplier();
 
     return (HoodieAvroHFileWriter) HoodieFileWriterFactory.getFileWriter(
         instantTime, getFilePath(), storage, HoodieStorageConfig.newBuilder().fromProperties(props).build(), HoodieSchema.fromAvroSchema(avroSchema),
-        mockTaskContextSupplier, HoodieRecord.HoodieRecordType.AVRO);
+        taskContextSupplier, HoodieRecord.HoodieRecordType.AVRO);
   }
 
   private static StoragePath getFilePath() {
@@ -257,5 +356,276 @@ public class TestHoodieNativeAvroHFileReaderCaching {
         .build();
     return HoodieNativeAvroHFileReader.builder()
         .readerFactory(readerFactory).path(getFilePath()).useBloomFilter(useBloomFilter).build();
+  }
+
+  private HFileReaderFactory createCachingReaderFactory(HoodieStorage storage) {
+    TypedProperties props = new TypedProperties();
+    props.setProperty(HoodieReaderConfig.HFILE_BLOCK_CACHE_ENABLED.key(), "true");
+    props.setProperty(HoodieReaderConfig.HFILE_BLOCK_CACHE_SIZE.key(), "100");
+
+    return HFileReaderFactory.builder()
+        .withStorage(storage)
+        .withPath(getFilePath())
+        .withProps(props)
+        .build();
+  }
+
+  private HoodieStorage createCountingStorage(StorageAccessCounter counter) throws IOException {
+    return new CountingHoodieStorage(storage, counter);
+  }
+
+  private static class StorageAccessCounter {
+    private final AtomicInteger openCount = new AtomicInteger();
+    private final AtomicInteger readCount = new AtomicInteger();
+
+    private void recordOpen() {
+      openCount.incrementAndGet();
+    }
+
+    private void recordRead() {
+      readCount.incrementAndGet();
+    }
+
+    private int getOpenCount() {
+      return openCount.get();
+    }
+
+    private int getReadCount() {
+      return readCount.get();
+    }
+
+    private void reset() {
+      openCount.set(0);
+      readCount.set(0);
+    }
+  }
+
+  private static class CountingSeekableDataInputStream extends SeekableDataInputStream {
+    private final SeekableDataInputStream delegate;
+
+    private CountingSeekableDataInputStream(SeekableDataInputStream delegate, StorageAccessCounter counter) {
+      super(new CountingInputStream(delegate, counter));
+      this.delegate = delegate;
+    }
+
+    @Override
+    public long getPos() throws IOException {
+      return delegate.getPos();
+    }
+
+    @Override
+    public void seek(long pos) throws IOException {
+      delegate.seek(pos);
+    }
+
+    @Override
+    public void close() throws IOException {
+      delegate.close();
+    }
+  }
+
+  private static class CountingInputStream extends InputStream {
+    private final SeekableDataInputStream delegate;
+    private final StorageAccessCounter counter;
+
+    private CountingInputStream(SeekableDataInputStream delegate, StorageAccessCounter counter) {
+      this.delegate = delegate;
+      this.counter = counter;
+    }
+
+    @Override
+    public int read() throws IOException {
+      int result = delegate.read();
+      if (result >= 0) {
+        counter.recordRead();
+      }
+      return result;
+    }
+
+    @Override
+    public int read(byte[] b, int off, int len) throws IOException {
+      int result = delegate.read(b, off, len);
+      if (result > 0) {
+        counter.recordRead();
+      }
+      return result;
+    }
+
+    @Override
+    public void close() throws IOException {
+      delegate.close();
+    }
+  }
+
+  private static class FixedTaskContextSupplier extends TaskContextSupplier {
+    private final Supplier<Integer> integerSupplier = () -> 10;
+    private final Supplier<Long> longSupplier = () -> 0L;
+
+    @Override
+    public Supplier<Integer> getPartitionIdSupplier() {
+      return integerSupplier;
+    }
+
+    @Override
+    public Supplier<Integer> getStageIdSupplier() {
+      return integerSupplier;
+    }
+
+    @Override
+    public Supplier<Long> getAttemptIdSupplier() {
+      return longSupplier;
+    }
+
+    @Override
+    public Option<String> getProperty(EngineProperty prop) {
+      return Option.empty();
+    }
+
+    @Override
+    public Supplier<Integer> getTaskAttemptNumberSupplier() {
+      return integerSupplier;
+    }
+
+    @Override
+    public Supplier<Integer> getStageAttemptNumberSupplier() {
+      return integerSupplier;
+    }
+  }
+
+  private static class CountingHoodieStorage extends HoodieStorage {
+    private final HoodieStorage delegate;
+    private final StorageAccessCounter counter;
+
+    private CountingHoodieStorage(HoodieStorage delegate, StorageAccessCounter counter) {
+      super(delegate.getConf());
+      this.delegate = delegate;
+      this.counter = counter;
+    }
+
+    @Override
+    public HoodieStorage newInstance(StoragePath path, org.apache.hudi.storage.StorageConfiguration<?> storageConf) {
+      return delegate.newInstance(path, storageConf);
+    }
+
+    @Override
+    public String getScheme() {
+      return delegate.getScheme();
+    }
+
+    @Override
+    public int getDefaultBlockSize(StoragePath path) {
+      return delegate.getDefaultBlockSize(path);
+    }
+
+    @Override
+    public int getDefaultBufferSize() {
+      return delegate.getDefaultBufferSize();
+    }
+
+    @Override
+    public short getDefaultReplication(StoragePath path) {
+      return delegate.getDefaultReplication(path);
+    }
+
+    @Override
+    public URI getUri() {
+      return delegate.getUri();
+    }
+
+    @Override
+    public OutputStream create(StoragePath path, boolean overwrite) throws IOException {
+      return delegate.create(path, overwrite);
+    }
+
+    @Override
+    public OutputStream create(StoragePath path, boolean overwrite, Integer bufferSize, Short replication, Long sizeThreshold) throws IOException {
+      return delegate.create(path, overwrite, bufferSize, replication, sizeThreshold);
+    }
+
+    @Override
+    public InputStream open(StoragePath path) throws IOException {
+      return delegate.open(path);
+    }
+
+    @Override
+    public SeekableDataInputStream openSeekable(StoragePath path, int bufferSize, boolean wrapStream) throws IOException {
+      counter.recordOpen();
+      return new CountingSeekableDataInputStream(delegate.openSeekable(path, bufferSize, wrapStream), counter);
+    }
+
+    @Override
+    public OutputStream append(StoragePath path) throws IOException {
+      return delegate.append(path);
+    }
+
+    @Override
+    public boolean exists(StoragePath path) throws IOException {
+      return delegate.exists(path);
+    }
+
+    @Override
+    public StoragePathInfo getPathInfo(StoragePath path) throws IOException {
+      return delegate.getPathInfo(path);
+    }
+
+    @Override
+    public boolean createDirectory(StoragePath path) throws IOException {
+      return delegate.createDirectory(path);
+    }
+
+    @Override
+    public List<StoragePathInfo> listDirectEntries(StoragePath path) throws IOException {
+      return delegate.listDirectEntries(path);
+    }
+
+    @Override
+    public List<StoragePathInfo> listFiles(StoragePath path) throws IOException {
+      return delegate.listFiles(path);
+    }
+
+    @Override
+    public List<StoragePathInfo> listDirectEntries(StoragePath path, StoragePathFilter filter) throws IOException {
+      return delegate.listDirectEntries(path, filter);
+    }
+
+    @Override
+    public void setModificationTime(StoragePath path, long modificationTimeInMillisEpoch) throws IOException {
+      delegate.setModificationTime(path, modificationTimeInMillisEpoch);
+    }
+
+    @Override
+    public List<StoragePathInfo> globEntries(StoragePath pathPattern, StoragePathFilter filter) throws IOException {
+      return delegate.globEntries(pathPattern, filter);
+    }
+
+    @Override
+    public boolean rename(StoragePath oldPath, StoragePath newPath) throws IOException {
+      return delegate.rename(oldPath, newPath);
+    }
+
+    @Override
+    public boolean deleteDirectory(StoragePath path) throws IOException {
+      return delegate.deleteDirectory(path);
+    }
+
+    @Override
+    public boolean deleteFile(StoragePath path) throws IOException {
+      return delegate.deleteFile(path);
+    }
+
+    @Override
+    public Object getFileSystem() {
+      return delegate.getFileSystem();
+    }
+
+    @Override
+    public HoodieStorage getRawStorage() {
+      return delegate.getRawStorage();
+    }
+
+    @Override
+    public void close() throws IOException {
+      delegate.close();
+    }
   }
 }

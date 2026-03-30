@@ -19,125 +19,218 @@
 
 package org.apache.hudi.io.hfile;
 
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.io.SeekableDataInputStream;
+import org.apache.hudi.util.Lazy;
 
+import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.Caffeine;
 import lombok.extern.slf4j.Slf4j;
 
 import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.time.Duration;
+import java.util.List;
+import java.util.concurrent.Callable;
 import java.util.concurrent.TimeUnit;
 
 /**
- * HFile reader implementation with integrated caching functionality. This extends BaseHFileReaderImpl and overrides the block instantiation method to add caching capabilities.
- * <p>
- * Uses a shared static cache across all instances to maximize cache hits when multiple readers access the same file.
+ * HFile reader implementation with integrated caching functionality.
+ * Uses shared caches across all instances to maximize cache hits when multiple readers access the same file.
  */
 @Slf4j
 public class CachingHFileReaderImpl extends HFileReaderImpl {
 
   private static volatile HFileBlockCache GLOBAL_BLOCK_CACHE;
-  // Store first config values to check against cache config
+  private static volatile Cache<String, HFileTrailer> GLOBAL_TRAILER_CACHE;
   private static volatile Integer INITIAL_CACHE_SIZE;
   private static volatile Integer INITIAL_CACHE_TTL;
   private static final Object CACHE_LOCK = new Object();
 
   private final String filePath;
 
-  public CachingHFileReaderImpl(SeekableDataInputStream stream, long fileSize, String filePath, int cacheSize, int cacheTtlMinutes) {
-    super(stream, fileSize);
+  public CachingHFileReaderImpl(Lazy<SeekableDataInputStream> lazyStream,
+                                long fileSize,
+                                String filePath,
+                                int cacheSize,
+                                int cacheTtlMinutes) {
+    super(lazyStream, fileSize);
     this.filePath = filePath;
-    // Initialize global cache with provided config (ignored if already initialized)
-    getGlobalCache(cacheSize, cacheTtlMinutes);
+    getGlobalBlockCache(cacheSize, cacheTtlMinutes);
+    getGlobalTrailerCache(cacheSize, cacheTtlMinutes);
   }
 
-  /**
-   * Gets or creates the global cache shared by all CachingHFileReaderImpl instances.
-   * Thread-safe singleton pattern with double-checked locking.
-   */
-  private static HFileBlockCache getGlobalCache(int cacheSize, int cacheTtlMinutes) {
-    if (GLOBAL_BLOCK_CACHE == null) {
-      synchronized (CACHE_LOCK) {
-        if (GLOBAL_BLOCK_CACHE == null) {
-          log.info("Initializing global HFileBlockCache with size: {}, TTL: {} minutes.",
-              cacheSize, cacheTtlMinutes);
-          // Store the config used for initialization
-          INITIAL_CACHE_SIZE = cacheSize;
-          INITIAL_CACHE_TTL = cacheTtlMinutes;
-          GLOBAL_BLOCK_CACHE = new HFileBlockCache(
-              cacheSize,
-              cacheTtlMinutes,
-              TimeUnit.MINUTES);
-        } else if (!INITIAL_CACHE_SIZE.equals(cacheSize) || !INITIAL_CACHE_TTL.equals(cacheTtlMinutes)) {
-          // Log a warning if a different config is provided after initialization
-          log.warn("HFile block cache is already initialized. The provided configuration is being ignored. "
-                  + "Existing config: [Size: {}, TTL: {} mins], Ignored config: [Size: {}, TTL: {} mins].",
-              INITIAL_CACHE_SIZE, INITIAL_CACHE_TTL,
-              cacheSize, cacheTtlMinutes);
-        }
-      }
+  @Override
+  public synchronized void initializeMetadata() throws IOException {
+    if (this.isMetadataInitialized) {
+      return;
     }
-    return GLOBAL_BLOCK_CACHE;
+
+    this.trailer = getOrLoadTrailer();
+    this.context = HFileContext.builder()
+        .compressionCodec(trailer.getCompressionCodec())
+        .build();
+
+    long rootIndexOffset = trailer.getLoadOnOpenDataOffset();
+    HFileRootIndexBlock rootDataIndexBlock =
+        getOrLoadMetadataBlock(rootIndexOffset, HFileBlockType.ROOT_INDEX, HFileRootIndexBlock.class);
+    this.dataBlockIndexEntryMap = readDataBlockIndex(
+        rootDataIndexBlock, trailer.getDataIndexCount(), trailer.getNumDataIndexLevels());
+
+    long metaRootIndexOffset = rootIndexOffset + rootDataIndexBlock.getOnDiskSizeWithHeader();
+    HFileRootIndexBlock metaRootIndexBlock =
+        getOrLoadMetadataBlock(metaRootIndexOffset, HFileBlockType.ROOT_INDEX, HFileRootIndexBlock.class);
+    this.metaBlockIndexEntryMap = metaRootIndexBlock.readBlockIndex(trailer.getMetaIndexCount(), true);
+
+    long fileInfoOffset = metaRootIndexOffset + metaRootIndexBlock.getOnDiskSizeWithHeader();
+    HFileFileInfoBlock fileInfoBlock =
+        getOrLoadMetadataBlock(fileInfoOffset, HFileBlockType.FILE_INFO, HFileFileInfoBlock.class);
+    this.fileInfo = fileInfoBlock.readFileInfo();
+    this.isMetadataInitialized = true;
+  }
+
+  @Override
+  public Option<ByteBuffer> getMetaBlock(String metaBlockName) throws IOException {
+    initializeMetadata();
+    BlockIndexEntry blockIndexEntry = metaBlockIndexEntryMap.get(new UTF8StringKey(metaBlockName));
+    if (blockIndexEntry == null) {
+      return Option.empty();
+    }
+    HFileMetaBlock block = getOrLoadBlock(
+        blockIndexEntry.getOffset(), blockIndexEntry.getSize(), HFileBlockType.META, HFileMetaBlock.class);
+    return Option.of(block.readContent());
   }
 
   @Override
   public HFileDataBlock instantiateHFileDataBlock(BlockIndexEntry blockToRead) throws IOException {
-    HFileBlockCache.BlockCacheKey cacheKey = new HFileBlockCache.BlockCacheKey(
-        filePath, blockToRead.getOffset(), blockToRead.getSize());
-
-    try {
-      HFileBlock block = GLOBAL_BLOCK_CACHE.getOrCompute(cacheKey, () -> super.instantiateHFileDataBlock(blockToRead));
-      return (HFileDataBlock) block;
-    } catch (IOException | RuntimeException e) {
-      throw e;
-    } catch (Exception e) {
-      throw new IOException("Failed to load HFile block", e);
-    }
+    return getOrLoadBlock(
+        blockToRead.getOffset(), blockToRead.getSize(), HFileBlockType.DATA, HFileDataBlock.class);
   }
 
   @Override
   public void close() throws IOException {
-    // NOTE: Do not clear the shared cache when closing individual readers
-    // The cache is shared across all instances
     super.close();
   }
 
-  /**
-   * Gets current cache size from the global cache.
-   *
-   * @return number of cached blocks
-   */
   public long getCacheSize() {
     return GLOBAL_BLOCK_CACHE != null ? GLOBAL_BLOCK_CACHE.size() : 0;
   }
 
-  /**
-   * Clears the global block cache.
-   */
   public void clearCache() {
     if (GLOBAL_BLOCK_CACHE != null) {
       GLOBAL_BLOCK_CACHE.clear();
     }
+    if (GLOBAL_TRAILER_CACHE != null) {
+      GLOBAL_TRAILER_CACHE.invalidateAll();
+    }
   }
 
-  /**
-   * Gets cache statistics for monitoring optimization effectiveness.
-   *
-   * @return string representation of cache statistics
-   */
   public String getCacheStats() {
-    return "HFileReader Cache Stats - Size: " + (GLOBAL_BLOCK_CACHE != null ? GLOBAL_BLOCK_CACHE.size() : 0);
+    long blockCacheSize = GLOBAL_BLOCK_CACHE != null ? GLOBAL_BLOCK_CACHE.size() : 0;
+    long trailerCacheSize = GLOBAL_TRAILER_CACHE != null ? GLOBAL_TRAILER_CACHE.estimatedSize() : 0;
+    return "HFileReader Cache Stats - Block Cache Size: " + blockCacheSize
+        + ", Trailer Cache Size: " + trailerCacheSize;
   }
 
-  /**
-   * Clears the global cache. Should only be used for testing.
-   */
   public static void resetGlobalCache() {
     synchronized (CACHE_LOCK) {
       if (GLOBAL_BLOCK_CACHE != null) {
         GLOBAL_BLOCK_CACHE.clear();
         GLOBAL_BLOCK_CACHE = null;
       }
+      if (GLOBAL_TRAILER_CACHE != null) {
+        GLOBAL_TRAILER_CACHE.invalidateAll();
+        GLOBAL_TRAILER_CACHE = null;
+      }
       INITIAL_CACHE_SIZE = null;
       INITIAL_CACHE_TTL = null;
+    }
+  }
+
+  private static HFileBlockCache getGlobalBlockCache(int cacheSize, int cacheTtlMinutes) {
+    if (GLOBAL_BLOCK_CACHE == null) {
+      synchronized (CACHE_LOCK) {
+        if (GLOBAL_BLOCK_CACHE == null) {
+          log.info("Initializing global HFileBlockCache with size: {}, TTL: {} minutes.",
+              cacheSize, cacheTtlMinutes);
+          INITIAL_CACHE_SIZE = cacheSize;
+          INITIAL_CACHE_TTL = cacheTtlMinutes;
+          GLOBAL_BLOCK_CACHE = new HFileBlockCache(cacheSize, cacheTtlMinutes, TimeUnit.MINUTES);
+        } else if (!INITIAL_CACHE_SIZE.equals(cacheSize) || !INITIAL_CACHE_TTL.equals(cacheTtlMinutes)) {
+          log.warn("HFile block cache is already initialized. The provided configuration is being ignored. "
+                  + "Existing config: [Size: {}, TTL: {} mins], Ignored config: [Size: {}, TTL: {} mins].",
+              INITIAL_CACHE_SIZE, INITIAL_CACHE_TTL, cacheSize, cacheTtlMinutes);
+        }
+      }
+    }
+    return GLOBAL_BLOCK_CACHE;
+  }
+
+  private static Cache<String, HFileTrailer> getGlobalTrailerCache(int cacheSize, int cacheTtlMinutes) {
+    if (GLOBAL_TRAILER_CACHE == null) {
+      synchronized (CACHE_LOCK) {
+        if (GLOBAL_TRAILER_CACHE == null) {
+          GLOBAL_TRAILER_CACHE = Caffeine.newBuilder()
+              .maximumSize(cacheSize)
+              .expireAfterAccess(Duration.ofMinutes(cacheTtlMinutes))
+              .build();
+        }
+      }
+    }
+    return GLOBAL_TRAILER_CACHE;
+  }
+
+  private HFileTrailer getOrLoadTrailer() throws IOException {
+    HFileTrailer cached = GLOBAL_TRAILER_CACHE.getIfPresent(filePath);
+    if (cached != null) {
+      return cached;
+    }
+
+    HFileTrailer loadedTrailer = readTrailer(lazyStream.get(), fileSize);
+    GLOBAL_TRAILER_CACHE.put(filePath, loadedTrailer);
+    return loadedTrailer;
+  }
+
+  private <T extends HFileBlock> T getOrLoadMetadataBlock(long offset,
+                                                          HFileBlockType expectedBlockType,
+                                                          Class<T> blockClass) throws IOException {
+    long loadOnOpenEndOffset = fileSize - HFileTrailer.getTrailerSize();
+    int size = Math.toIntExact(loadOnOpenEndOffset - offset);
+    return getOrLoadBlock(offset, size, expectedBlockType, blockClass);
+  }
+
+  @Override
+  protected List<BlockIndexEntry> readDataBlockIndexEntries(BlockIndexEntry indexEntry,
+                                                            HFileBlockType blockType) {
+    HFileLeafIndexBlock block = getOrLoadBlock(
+        indexEntry.getOffset(), indexEntry.getSize(), blockType, HFileLeafIndexBlock.class);
+    return block.readBlockIndex();
+  }
+
+  private <T extends HFileBlock> T getOrLoadBlock(long offset,
+                                                  int size,
+                                                  HFileBlockType expectedBlockType,
+                                                  Class<T> blockClass) {
+    HFileBlockCache.BlockCacheKey cacheKey = new HFileBlockCache.BlockCacheKey(filePath, offset);
+    HFileBlock block = GLOBAL_BLOCK_CACHE.getOrCompute(cacheKey, new BlockLoader(offset, size, expectedBlockType));
+    return blockClass.cast(block);
+  }
+
+  private class BlockLoader implements Callable<HFileBlock> {
+    private final long offset;
+    private final int size;
+    private final HFileBlockType expectedBlockType;
+
+    private BlockLoader(long offset, int size, HFileBlockType expectedBlockType) {
+      this.offset = offset;
+      this.size = size;
+      this.expectedBlockType = expectedBlockType;
+    }
+
+    @Override
+    public HFileBlock call() throws Exception {
+      HFileBlockReader blockReader = new HFileBlockReader(context, lazyStream.get(), offset, offset + size);
+      return blockReader.nextBlock(expectedBlockType);
     }
   }
 }
