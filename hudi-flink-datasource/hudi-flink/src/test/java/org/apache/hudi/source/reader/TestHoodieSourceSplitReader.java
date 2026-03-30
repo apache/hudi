@@ -37,6 +37,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -62,7 +63,7 @@ public class TestHoodieSourceSplitReader {
   public void testFetchWithNoSplits() throws IOException {
     TestSplitReaderFunction readerFunction = new TestSplitReaderFunction();
     HoodieSourceSplitReader<String> reader =
-        new HoodieSourceSplitReader<>(TABLE_NAME, readerContext, readerFunction, null);
+        new HoodieSourceSplitReader<>(TABLE_NAME, readerContext, readerFunction, null, -1L);
 
     RecordsWithSplitIds<HoodieRecordWithPosition<String>> result = reader.fetch();
 
@@ -76,7 +77,7 @@ public class TestHoodieSourceSplitReader {
     TestSplitReaderFunction readerFunction = new TestSplitReaderFunction(testData);
 
     HoodieSourceSplitReader<String> reader =
-        new HoodieSourceSplitReader<>(TABLE_NAME, readerContext, readerFunction, null);
+        new HoodieSourceSplitReader<>(TABLE_NAME, readerContext, readerFunction, null, -1L);
 
     HoodieSourceSplit split = createTestSplit(1, "file1");
     SplitsAddition<HoodieSourceSplit> splitsChange = new SplitsAddition<>(Collections.singletonList(split));
@@ -94,7 +95,7 @@ public class TestHoodieSourceSplitReader {
     TestSplitReaderFunction readerFunction = new TestSplitReaderFunction(testData);
 
     HoodieSourceSplitReader<String> reader =
-        new HoodieSourceSplitReader<>(TABLE_NAME, readerContext, readerFunction, null);
+        new HoodieSourceSplitReader<>(TABLE_NAME, readerContext, readerFunction, null, -1L);
 
     HoodieSourceSplit split1 = createTestSplit(1, "file1");
     HoodieSourceSplit split2 = createTestSplit(2, "file2");
@@ -122,7 +123,7 @@ public class TestHoodieSourceSplitReader {
         (s1, s2) -> s2.getFileId().compareTo(s1.getFileId());
 
     HoodieSourceSplitReader<String> reader =
-            new HoodieSourceSplitReader<>(TABLE_NAME, readerContext, readerFunction, comparator);
+            new HoodieSourceSplitReader<>(TABLE_NAME, readerContext, readerFunction, comparator, -1L);
 
     HoodieSourceSplit split1 = createTestSplit(1, "file1");
     HoodieSourceSplit split2 = createTestSplit(2, "file2");
@@ -145,7 +146,7 @@ public class TestHoodieSourceSplitReader {
     TestSplitReaderFunction readerFunction = new TestSplitReaderFunction(testData);
 
     HoodieSourceSplitReader<String> reader =
-            new HoodieSourceSplitReader<>(TABLE_NAME, readerContext, readerFunction, null);
+            new HoodieSourceSplitReader<>(TABLE_NAME, readerContext, readerFunction, null, -1L);
 
     // First batch
     HoodieSourceSplit split1 = createTestSplit(1, "file1");
@@ -167,7 +168,7 @@ public class TestHoodieSourceSplitReader {
   public void testClose() throws Exception {
     TestSplitReaderFunction readerFunction = new TestSplitReaderFunction();
     HoodieSourceSplitReader<String> reader =
-        new HoodieSourceSplitReader<>(TABLE_NAME, readerContext, readerFunction, null);
+        new HoodieSourceSplitReader<>(TABLE_NAME, readerContext, readerFunction, null, -1L);
 
     HoodieSourceSplit split = createTestSplit(1, "file1");
     reader.handleSplitsChanges(new SplitsAddition<>(Collections.singletonList(split)));
@@ -186,7 +187,7 @@ public class TestHoodieSourceSplitReader {
   public void testWakeUp() {
     TestSplitReaderFunction readerFunction = new TestSplitReaderFunction();
     HoodieSourceSplitReader<String> reader =
-        new HoodieSourceSplitReader<>(TABLE_NAME, readerContext, readerFunction, null);
+        new HoodieSourceSplitReader<>(TABLE_NAME, readerContext, readerFunction, null, -1L);
 
     // wakeUp is a no-op, should not throw any exception
     reader.wakeUp();
@@ -196,7 +197,7 @@ public class TestHoodieSourceSplitReader {
   public void testPauseOrResumeSplits() {
     TestSplitReaderFunction readerFunction = new TestSplitReaderFunction();
     HoodieSourceSplitReader<String> reader =
-        new HoodieSourceSplitReader<>(TABLE_NAME, readerContext, readerFunction, null);
+        new HoodieSourceSplitReader<>(TABLE_NAME, readerContext, readerFunction, null, -1L);
 
     HoodieSourceSplit split1 = createTestSplit(1, "file1");
     HoodieSourceSplit split2 = createTestSplit(2, "file2");
@@ -214,7 +215,7 @@ public class TestHoodieSourceSplitReader {
     TestSplitReaderFunction readerFunction = new TestSplitReaderFunction(testData);
 
     HoodieSourceSplitReader<String> reader =
-        new HoodieSourceSplitReader<>(TABLE_NAME, readerContext, readerFunction, null);
+        new HoodieSourceSplitReader<>(TABLE_NAME, readerContext, readerFunction, null, -1L);
 
     HoodieSourceSplit split = createTestSplit(1, "file1");
     reader.handleSplitsChanges(new SplitsAddition<>(Collections.singletonList(split)));
@@ -229,7 +230,7 @@ public class TestHoodieSourceSplitReader {
   public void testReaderFunctionClosedOnReaderClose() throws Exception {
     TestSplitReaderFunction readerFunction = new TestSplitReaderFunction();
     HoodieSourceSplitReader<String> reader =
-        new HoodieSourceSplitReader<>(TABLE_NAME, readerContext, readerFunction, null);
+        new HoodieSourceSplitReader<>(TABLE_NAME, readerContext, readerFunction, null, -1L);
 
     reader.close();
 
@@ -240,7 +241,7 @@ public class TestHoodieSourceSplitReader {
   public void testFetchEmptyResultWhenNoSplitsAdded() throws IOException {
     TestSplitReaderFunction readerFunction = new TestSplitReaderFunction();
     HoodieSourceSplitReader<String> reader =
-        new HoodieSourceSplitReader<>(TABLE_NAME, readerContext, readerFunction, null);
+        new HoodieSourceSplitReader<>(TABLE_NAME, readerContext, readerFunction, null, -1L);
 
     RecordsWithSplitIds<HoodieRecordWithPosition<String>> result = reader.fetch();
 
@@ -256,7 +257,7 @@ public class TestHoodieSourceSplitReader {
 
     // No comparator - should preserve insertion order
     HoodieSourceSplitReader<String> reader =
-        new HoodieSourceSplitReader<>(TABLE_NAME, readerContext, readerFunction, null);
+        new HoodieSourceSplitReader<>(TABLE_NAME, readerContext, readerFunction, null, -1L);
 
     HoodieSourceSplit split3 = createTestSplit(3, "file3");
     HoodieSourceSplit split1 = createTestSplit(1, "file1");
@@ -278,7 +279,7 @@ public class TestHoodieSourceSplitReader {
     TestSplitReaderFunction readerFunction = new TestSplitReaderFunction(testData);
 
     HoodieSourceSplitReader<String> reader =
-            new HoodieSourceSplitReader<>(TABLE_NAME, readerContext, readerFunction, null);
+            new HoodieSourceSplitReader<>(TABLE_NAME, readerContext, readerFunction, null, -1L);
 
     HoodieSourceSplit split1 = createTestSplit(1, "file1");
     HoodieSourceSplit split2 = createTestSplit(2, "file2");
@@ -288,6 +289,165 @@ public class TestHoodieSourceSplitReader {
     // Fetch first split
     reader.fetch();
     assertEquals(split1, readerFunction.getLastReadSplit());
+  }
+
+  // -------------------------------------------------------------------------
+  //  Limit push-down tests
+  // -------------------------------------------------------------------------
+
+  @Test
+  public void testLimitCapsRecordsFromSingleSplit() throws IOException {
+    List<String> testData = Arrays.asList("r1", "r2", "r3", "r4", "r5");
+    TestSplitReaderFunction readerFunction = new TestSplitReaderFunction(testData);
+
+    HoodieSourceSplitReader<String> reader =
+        new HoodieSourceSplitReader<>(TABLE_NAME, readerContext, readerFunction, null, 2L);
+
+    HoodieSourceSplit split = createTestSplit(1, "file1");
+    reader.handleSplitsChanges(new SplitsAddition<>(Collections.singletonList(split)));
+
+    // limitedRecords wrapper stops after 2 records even though the split has 5
+    RecordsWithSplitIds<HoodieRecordWithPosition<String>> batch = reader.fetch();
+    assertEquals(split.splitId(), batch.nextSplit());
+    assertEquals(2, drainRecordCount(batch));
+
+    // Next fetch emits the split-finish signal for split1
+    RecordsWithSplitIds<HoodieRecordWithPosition<String>> finishBatch = reader.fetch();
+    assertTrue(finishBatch.finishedSplits().contains(split.splitId()));
+
+    // Limit already satisfied; no more queued splits → empty drain batch
+    RecordsWithSplitIds<HoodieRecordWithPosition<String>> drainBatch = reader.fetch();
+    assertTrue(drainBatch.finishedSplits().isEmpty());
+    assertNull(drainBatch.nextSplit());
+  }
+
+  @Test
+  public void testLimitDrainsRemainingSplitsWhenLimitReached() throws IOException {
+    // split1 has 3 records; limit=2 means after reading split1's first 2 records,
+    // split2 must be drained immediately as finished (no records read).
+    List<String> testData = Arrays.asList("r1", "r2", "r3");
+    TestSplitReaderFunction readerFunction = new TestSplitReaderFunction(testData);
+
+    HoodieSourceSplitReader<String> reader =
+        new HoodieSourceSplitReader<>(TABLE_NAME, readerContext, readerFunction, null, 2L);
+
+    HoodieSourceSplit split1 = createTestSplit(1, "file1");
+    HoodieSourceSplit split2 = createTestSplit(2, "file2");
+    reader.handleSplitsChanges(new SplitsAddition<>(Arrays.asList(split1, split2)));
+
+    // Read split1 — limit stops after 2 records
+    RecordsWithSplitIds<HoodieRecordWithPosition<String>> batch = reader.fetch();
+    assertEquals(split1.splitId(), batch.nextSplit());
+    assertEquals(2, drainRecordCount(batch));
+
+    // Finish signal for split1
+    reader.fetch();
+
+    // Limit satisfied → split2 is drained as immediately finished (no records read)
+    RecordsWithSplitIds<HoodieRecordWithPosition<String>> drainBatch = reader.fetch();
+    assertTrue(drainBatch.finishedSplits().contains(split2.splitId()),
+        "split2 should be drained as finished once limit is reached");
+    assertNull(drainBatch.nextSplit());
+    // readerFunction.read() was called only once (for split1, never for split2)
+    assertEquals(1, readerFunction.getReadCount());
+  }
+
+  @Test
+  public void testLimitZeroDrainsAllSplitsImmediately() throws IOException {
+    TestSplitReaderFunction readerFunction = new TestSplitReaderFunction(Arrays.asList("r1", "r2"));
+
+    HoodieSourceSplitReader<String> reader =
+        new HoodieSourceSplitReader<>(TABLE_NAME, readerContext, readerFunction, null, 0L);
+
+    HoodieSourceSplit split1 = createTestSplit(1, "file1");
+    HoodieSourceSplit split2 = createTestSplit(2, "file2");
+    reader.handleSplitsChanges(new SplitsAddition<>(Arrays.asList(split1, split2)));
+
+    // limit=0 means totalReadCount(0) >= limit(0) on first fetch → drain everything
+    RecordsWithSplitIds<HoodieRecordWithPosition<String>> batch = reader.fetch();
+    Set<String> finished = batch.finishedSplits();
+    assertTrue(finished.contains(split1.splitId()));
+    assertTrue(finished.contains(split2.splitId()));
+    assertNull(batch.nextSplit());
+    // readerFunction.read() was never called
+    assertEquals(0, readerFunction.getReadCount());
+  }
+
+  @Test
+  public void testLimitExactlyMatchingTotalRecords() throws IOException {
+    // limit == number of records in the split → all records returned, no early cut
+    List<String> testData = Arrays.asList("r1", "r2", "r3");
+    TestSplitReaderFunction readerFunction = new TestSplitReaderFunction(testData);
+
+    HoodieSourceSplitReader<String> reader =
+        new HoodieSourceSplitReader<>(TABLE_NAME, readerContext, readerFunction, null, 3L);
+
+    HoodieSourceSplit split = createTestSplit(1, "file1");
+    reader.handleSplitsChanges(new SplitsAddition<>(Collections.singletonList(split)));
+
+    RecordsWithSplitIds<HoodieRecordWithPosition<String>> batch = reader.fetch();
+    assertEquals(split.splitId(), batch.nextSplit());
+    assertEquals(3, drainRecordCount(batch));
+
+    // Finish signal for split
+    RecordsWithSplitIds<HoodieRecordWithPosition<String>> finishBatch = reader.fetch();
+    assertTrue(finishBatch.finishedSplits().contains(split.splitId()));
+
+    // No more splits; drain returns empty result
+    RecordsWithSplitIds<HoodieRecordWithPosition<String>> drainBatch = reader.fetch();
+    assertTrue(drainBatch.finishedSplits().isEmpty());
+    assertNull(drainBatch.nextSplit());
+  }
+
+  @Test
+  public void testLimitSpanningMultipleSplits() throws IOException {
+    // limit=5; split1 produces 3 records (no cap), split2 produces 3 but only 2 more allowed
+    List<String> testData = Arrays.asList("r1", "r2", "r3");
+    TestSplitReaderFunction readerFunction = new TestSplitReaderFunction(testData);
+
+    HoodieSourceSplitReader<String> reader =
+        new HoodieSourceSplitReader<>(TABLE_NAME, readerContext, readerFunction, null, 5L);
+
+    HoodieSourceSplit split1 = createTestSplit(1, "file1");
+    HoodieSourceSplit split2 = createTestSplit(2, "file2");
+    reader.handleSplitsChanges(new SplitsAddition<>(Arrays.asList(split1, split2)));
+
+    // split1: 3 records, totalReadCount becomes 3 (still below 5)
+    RecordsWithSplitIds<HoodieRecordWithPosition<String>> batch1 = reader.fetch();
+    assertEquals(split1.splitId(), batch1.nextSplit());
+    assertEquals(3, drainRecordCount(batch1));
+
+    reader.fetch(); // finish signal for split1
+
+    // split2: limit caps at 2 more (3 remaining to reach 5)
+    RecordsWithSplitIds<HoodieRecordWithPosition<String>> batch2 = reader.fetch();
+    assertEquals(split2.splitId(), batch2.nextSplit());
+    assertEquals(2, drainRecordCount(batch2));
+
+    reader.fetch(); // finish signal for split2
+
+    // No more splits; drain returns empty result
+    RecordsWithSplitIds<HoodieRecordWithPosition<String>> last = reader.fetch();
+    assertTrue(last.finishedSplits().isEmpty());
+    assertNull(last.nextSplit());
+  }
+
+  @Test
+  public void testNoLimitSentinelReturnsAllRecords() throws IOException {
+    // NO_LIMIT (-1) must return all records without wrapping
+    List<String> testData = Arrays.asList("r1", "r2", "r3", "r4", "r5");
+    TestSplitReaderFunction readerFunction = new TestSplitReaderFunction(testData);
+
+    HoodieSourceSplitReader<String> reader =
+        new HoodieSourceSplitReader<>(TABLE_NAME, readerContext, readerFunction, null,
+            HoodieSourceSplitReader.NO_LIMIT);
+
+    HoodieSourceSplit split = createTestSplit(1, "file1");
+    reader.handleSplitsChanges(new SplitsAddition<>(Collections.singletonList(split)));
+
+    RecordsWithSplitIds<HoodieRecordWithPosition<String>> batch = reader.fetch();
+    assertEquals(split.splitId(), batch.nextSplit());
+    assertEquals(5, drainRecordCount(batch));
   }
 
   /**
@@ -304,6 +464,18 @@ public class TestHoodieSourceSplitReader {
       }
       return result.nextSplit();
     }
+  }
+
+  /**
+   * Drains all records from the current split in a batch, returning the count.
+   * Assumes {@code batch.nextSplit()} has already been called to position the batch.
+   */
+  private int drainRecordCount(RecordsWithSplitIds<HoodieRecordWithPosition<String>> batch) {
+    int count = 0;
+    while (batch.nextRecordFromSplit() != null) {
+      count++;
+    }
+    return count;
   }
 
   /**

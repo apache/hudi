@@ -62,19 +62,7 @@ public class HoodieSplitReaderFunction extends AbstractSplitReaderFunction {
       String mergeType,
       List<ExpressionPredicates.Predicate> predicates,
       boolean emitDelete) {
-    this(configuration, tableSchema, requiredSchema, internalSchemaManager, mergeType, predicates, emitDelete, NO_LIMIT);
-  }
-
-  public HoodieSplitReaderFunction(
-      Configuration configuration,
-      HoodieSchema tableSchema,
-      HoodieSchema requiredSchema,
-      InternalSchemaManager internalSchemaManager,
-      String mergeType,
-      List<ExpressionPredicates.Predicate> predicates,
-      boolean emitDelete,
-      long limit) {
-    super(configuration, predicates, internalSchemaManager, limit, emitDelete);
+    super(configuration, predicates, internalSchemaManager, emitDelete);
     ValidationUtils.checkArgument(tableSchema != null, "tableSchema can't be null");
     ValidationUtils.checkArgument(requiredSchema != null, "requiredSchema can't be null");
     ValidationUtils.checkArgument(internalSchemaManager != null, "internalSchemaManager can't be null");
@@ -89,14 +77,8 @@ public class HoodieSplitReaderFunction extends AbstractSplitReaderFunction {
     HoodieTableMetaClient metaClient = StreamerUtil.metaClientForReader(conf, getHadoopConf());
 
     try {
-      if (fileGroupReader != null) {
-        fileGroupReader.close();
-      }
       this.fileGroupReader = createFileGroupReader(split, metaClient);
       ClosableIterator<RowData> recordIterator = fileGroupReader.getClosableIterator();
-      if (limit > 0) {
-        recordIterator = limitIterator(recordIterator, limit);
-      }
       BatchRecords<RowData> records = BatchRecords.forRecords(splitId, recordIterator, split.getFileOffset(), split.getConsumed());
       records.seek(split.getConsumed());
       return records;

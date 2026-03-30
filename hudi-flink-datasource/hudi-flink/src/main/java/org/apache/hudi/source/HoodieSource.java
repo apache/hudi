@@ -129,7 +129,7 @@ public class HoodieSource<T> extends FileIndexReader implements Source<T, Hoodie
 
   @Override
   public SourceReader<T, HoodieSourceSplit> createReader(SourceReaderContext readerContext) throws Exception {
-    return new HoodieSourceReader<T>(tableName, recordEmitter, scanContext.getConf(), readerContext, readerFunction, splitComparator);
+    return new HoodieSourceReader<T>(tableName, recordEmitter, scanContext, readerContext, readerFunction, splitComparator);
   }
 
   private SplitEnumerator<HoodieSourceSplit, HoodieSplitEnumeratorState> createEnumerator(

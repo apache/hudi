@@ -60,6 +60,7 @@ public class HoodieScanContext implements Serializable {
   private final boolean isStreaming;
   // Partition pruner
   private final PartitionPruners.PartitionPruner partitionPruner;
+  private final long limit;
 
   public Duration getScanInterval() {
     return Duration.ofSeconds(conf.get(FlinkOptions.READ_STREAMING_CHECK_INTERVAL));

@@ -177,8 +177,7 @@ public class TestHoodieCdcSplitReaderFunction {
         internalSchemaManager,
         ROW_DATA_TYPE.getChildren(),
         Collections.emptyList(),
-        false,
-        100L);
+        false);
 
     assertNotNull(function);
   }
@@ -191,8 +190,7 @@ public class TestHoodieCdcSplitReaderFunction {
         internalSchemaManager,
         Collections.emptyList(),
         Collections.emptyList(),
-        false,
-        50L);
+        false);
 
     assertNotNull(function);
   }
@@ -205,7 +203,7 @@ public class TestHoodieCdcSplitReaderFunction {
         ROW_DATA_TYPE.getChildren(), Collections.emptyList(), false);
     HoodieCdcSplitReaderFunction explicitNoLimit = new HoodieCdcSplitReaderFunction(
         conf, tableState, internalSchemaManager,
-        ROW_DATA_TYPE.getChildren(), Collections.emptyList(), false, AbstractSplitReaderFunction.NO_LIMIT);
+        ROW_DATA_TYPE.getChildren(), Collections.emptyList(), false);
 
     assertNotNull(defaultLimit);
     assertNotNull(explicitNoLimit);
@@ -216,7 +214,7 @@ public class TestHoodieCdcSplitReaderFunction {
     // limit=0 is a valid constructor argument (limitIterator won't wrap since limit <= 0).
     HoodieCdcSplitReaderFunction function = new HoodieCdcSplitReaderFunction(
         conf, tableState, internalSchemaManager,
-        ROW_DATA_TYPE.getChildren(), Collections.emptyList(), false, 0L);
+        ROW_DATA_TYPE.getChildren(), Collections.emptyList(), false);
     assertNotNull(function);
   }
 

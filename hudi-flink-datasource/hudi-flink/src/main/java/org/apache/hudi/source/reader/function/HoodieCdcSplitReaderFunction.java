@@ -140,18 +140,7 @@ public class HoodieCdcSplitReaderFunction extends AbstractSplitReaderFunction {
       List<DataType> fieldTypes,
       List<ExpressionPredicates.Predicate> predicates,
       boolean emitDelete) {
-    this(conf, tableState, internalSchemaManager, fieldTypes, predicates, emitDelete, NO_LIMIT);
-  }
-
-  public HoodieCdcSplitReaderFunction(
-      org.apache.flink.configuration.Configuration conf,
-      MergeOnReadTableState tableState,
-      InternalSchemaManager internalSchemaManager,
-      List<DataType> fieldTypes,
-      List<ExpressionPredicates.Predicate> predicates,
-      boolean emitDelete,
-      long limit) {
-    super(conf, predicates, internalSchemaManager, limit, emitDelete);
+    super(conf, predicates, internalSchemaManager, emitDelete);
     ValidationUtils.checkArgument(tableState != null, "tableState can't be null");
     ValidationUtils.checkArgument(internalSchemaManager != null, "internalSchemaManager can't be null");
     this.tableState = tableState;
@@ -184,9 +173,6 @@ public class HoodieCdcSplitReaderFunction extends AbstractSplitReaderFunction {
             client);
 
     currentIterator = new CdcFileSplitsIterator(cdcSplit.getChanges(), imageManager, recordIteratorFunc);
-    if (limit > 0) {
-      currentIterator = limitIterator(currentIterator, limit);
-    }
     BatchRecords<RowData> records = BatchRecords.forRecords(
         split.splitId(), currentIterator, split.getFileOffset(), split.getConsumed());
     records.seek(split.getConsumed());
@@ -216,8 +202,7 @@ public class HoodieCdcSplitReaderFunction extends AbstractSplitReaderFunction {
           internalSchemaManager,
           conf.get(FlinkOptions.MERGE_TYPE),
           predicates,
-          emitDelete,
-          limit);
+          emitDelete);
     }
     return fallbackReaderFunction;
   }

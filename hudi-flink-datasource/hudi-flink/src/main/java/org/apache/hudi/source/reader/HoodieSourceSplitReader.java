@@ -38,8 +38,10 @@ import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Queue;
+import java.util.Set;
 
 /**
  * The split reader of Hoodie source.
@@ -54,10 +56,17 @@ import java.util.Queue;
 public class HoodieSourceSplitReader<T> implements SplitReader<HoodieRecordWithPosition<T>, HoodieSourceSplit> {
   private static final Logger LOG = LoggerFactory.getLogger(HoodieSourceSplitReader.class);
 
+  /** Sentinel value indicating that no row limit has been pushed down. */
+  public static final long NO_LIMIT = -1L;
+
   private final SerializableComparator<HoodieSourceSplit> splitComparator;
   private final Queue<HoodieSourceSplit> splits;
   private final FlinkStreamReadMetrics readerMetrics;
   private final SplitReaderFunction<T> readerFunction;
+  /** Total row limit pushed down from the planner; {@code NO_LIMIT} means unlimited. */
+  private final long limit;
+  /** Number of records emitted so far across all splits. */
+  private long totalReadCount = 0;
   private transient HoodieSourceSplit currentSplit;
   private transient CloseableIterator<RecordsWithSplitIds<HoodieRecordWithPosition<T>>> currentReader;
 
@@ -65,10 +74,12 @@ public class HoodieSourceSplitReader<T> implements SplitReader<HoodieRecordWithP
       String tableName,
       SourceReaderContext context,
       SplitReaderFunction<T> readerFunction,
-      SerializableComparator<HoodieSourceSplit> splitComparator) {
+      SerializableComparator<HoodieSourceSplit> splitComparator,
+      long limit) {
     this.splitComparator = splitComparator;
     this.splits = new ArrayDeque<>();
     this.readerFunction = readerFunction;
+    this.limit = limit;
     this.readerMetrics = new FlinkStreamReadMetrics(context.metricGroup(), tableName);
     this.readerMetrics.registerMetrics();
   }
@@ -80,10 +91,17 @@ public class HoodieSourceSplitReader<T> implements SplitReader<HoodieRecordWithP
       return finishSplit();
     }
 
+    // Limit already satisfied: drain any remaining locally-queued splits as immediately finished
+    // so that Flink's SourceReaderBase can reach end-of-input cleanly.
+    if (limit != NO_LIMIT && totalReadCount >= limit) {
+      return drainRemainingAsSplitsFinished();
+    }
+
     HoodieSourceSplit nextSplit = splits.poll();
     if (nextSplit != null) {
       currentSplit = nextSplit;
-      return readerFunction.read(nextSplit);
+      RecordsWithSplitIds<HoodieRecordWithPosition<T>> records = readerFunction.read(nextSplit);
+      return limit == NO_LIMIT ? records : limitedRecords(records);
     } else {
       // return an empty result, which will lead to split fetch to be idle.
       // SplitFetcherManager will then close idle fetcher.
@@ -136,5 +154,55 @@ public class HoodieSourceSplitReader<T> implements SplitReader<HoodieRecordWithP
     RecordsWithSplitIds<HoodieRecordWithPosition<T>> records = BatchRecords.lastBatchRecords(currentSplit.splitId());
     currentSplit = null;
     return records;
+  }
+
+  /**
+   * Wraps {@code records} so that each call to {@link RecordsWithSplitIds#nextRecordFromSplit()}
+   * increments {@link #totalReadCount} and returns {@code null} once the global limit is reached,
+   * causing Flink to treat the current split as exhausted.
+   */
+  private RecordsWithSplitIds<HoodieRecordWithPosition<T>> limitedRecords(
+      RecordsWithSplitIds<HoodieRecordWithPosition<T>> records) {
+    return new RecordsWithSplitIds<HoodieRecordWithPosition<T>>() {
+      @Override
+      public String nextSplit() {
+        return records.nextSplit();
+      }
+
+      @Override
+      public HoodieRecordWithPosition<T> nextRecordFromSplit() {
+        if (totalReadCount >= limit) {
+          return null;
+        }
+        HoodieRecordWithPosition<T> record = records.nextRecordFromSplit();
+        if (record != null) {
+          totalReadCount++;
+        }
+        return record;
+      }
+
+      @Override
+      public Set<String> finishedSplits() {
+        return records.finishedSplits();
+      }
+
+      @Override
+      public void recycle() {
+        records.recycle();
+      }
+    };
+  }
+
+  /**
+   * Returns a batch that immediately marks all locally-queued splits as finished, allowing
+   * Flink's SourceReaderBase to reach end-of-input without reading any more records.
+   */
+  private RecordsWithSplitIds<HoodieRecordWithPosition<T>> drainRemainingAsSplitsFinished() {
+    Set<String> finishedIds = new HashSet<>();
+    HoodieSourceSplit split;
+    while ((split = splits.poll()) != null) {
+      finishedIds.add(split.splitId());
+    }
+    return new RecordsBySplits<>(Collections.emptyMap(), finishedIds);
   }
 }

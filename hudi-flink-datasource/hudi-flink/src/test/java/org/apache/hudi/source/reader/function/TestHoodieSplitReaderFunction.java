@@ -39,7 +39,6 @@ import java.io.File;
 import java.util.Collections;
 import java.util.List;
 
-import static org.apache.hudi.source.reader.function.AbstractSplitReaderFunction.NO_LIMIT;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.mock;
@@ -388,11 +387,11 @@ public class TestHoodieSplitReaderFunction {
   }
 
   // -------------------------------------------------------------------------
-  //  Limit push-down constructor tests
+  //  Constructor tests (limit is now enforced in HoodieSourceSplitReader)
   // -------------------------------------------------------------------------
 
   @Test
-  public void testConstructorWithLimit() {
+  public void testConstructorWithEmitDelete() {
     HoodieSplitReaderFunction function =
         new HoodieSplitReaderFunction(
             conf,
@@ -401,15 +400,14 @@ public class TestHoodieSplitReaderFunction {
             mockInternalSchemaManager,
             "AVRO_PAYLOAD",
             Collections.emptyList(),
-            false,
-            100L
+            false
         );
 
     assertNotNull(function);
   }
 
   @Test
-  public void testConstructorWithLimitAndNullTableSchemaThrows() {
+  public void testConstructorWithNullTableSchemaThrows() {
     assertThrows(IllegalArgumentException.class, () ->
         new HoodieSplitReaderFunction(
             conf,
@@ -418,13 +416,12 @@ public class TestHoodieSplitReaderFunction {
             mockInternalSchemaManager,
             "AVRO_PAYLOAD",
             Collections.emptyList(),
-            false,
-            10L
+            false
         ));
   }
 
   @Test
-  public void testConstructorWithLimitAndNullRequiredSchemaThrows() {
+  public void testConstructorWithNullRequiredSchemaThrows() {
     assertThrows(IllegalArgumentException.class, () ->
         new HoodieSplitReaderFunction(
             conf,
@@ -433,35 +430,17 @@ public class TestHoodieSplitReaderFunction {
             mockInternalSchemaManager,
             "AVRO_PAYLOAD",
             Collections.emptyList(),
-            false,
-            10L
+            false
         ));
   }
 
   @Test
-  public void testDefaultConstructorUsesNoLimitSentinel() {
-    // The 7-arg constructor must delegate to the 8-arg one with limit=-1.
-    // Constructing both ways should succeed without error.
-    HoodieSplitReaderFunction defaultLimit =
-        new HoodieSplitReaderFunction(
-            conf, tableSchema, requiredSchema, mockInternalSchemaManager,
-            "AVRO_PAYLOAD", Collections.emptyList(), false);
-    HoodieSplitReaderFunction explicitNoLimit =
-        new HoodieSplitReaderFunction(
-            conf, tableSchema, requiredSchema, mockInternalSchemaManager,
-            "AVRO_PAYLOAD", Collections.emptyList(), false, NO_LIMIT);
-
-    assertNotNull(defaultLimit);
-    assertNotNull(explicitNoLimit);
-  }
-
-  @Test
-  public void testConstructorWithLimitZeroIsAccepted() {
-    // limit=0 is a valid constructor argument (no records will be returned).
+  public void testDefaultConstructor() {
     HoodieSplitReaderFunction function =
         new HoodieSplitReaderFunction(
             conf, tableSchema, requiredSchema, mockInternalSchemaManager,
-            "AVRO_PAYLOAD", Collections.emptyList(), false, 0L);
+            "AVRO_PAYLOAD", Collections.emptyList(), false);
+
     assertNotNull(function);
   }
 }
