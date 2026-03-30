@@ -68,9 +68,8 @@ public class HFileBlockCache {
    * @param key      the cache key
    * @param loader   callable to load the block if not in cache
    * @return cached or newly computed block
-   * @throws Exception if the loader throws an exception
    */
-  public HFileBlock getOrCompute(BlockCacheKey key, Callable<HFileBlock> loader) throws Exception {
+  public HFileBlock getOrCompute(BlockCacheKey key, Callable<HFileBlock> loader) {
     // Caffeine uses Function instead of Callable, so we need to wrap the Callable
     return cache.get(key, (k) -> {
       try {
@@ -112,12 +111,10 @@ public class HFileBlockCache {
 
     private final String fileIdentity;
     private final long offset;
-    private final int size;
 
-    public BlockCacheKey(String fileIdentity, long offset, int size) {
+    public BlockCacheKey(String fileIdentity, long offset) {
       this.fileIdentity = fileIdentity;
       this.offset = offset;
-      this.size = size;
     }
 
     @Override
@@ -131,7 +128,6 @@ public class HFileBlockCache {
 
       BlockCacheKey that = (BlockCacheKey) o;
       return offset == that.offset
-          && size == that.size
           && Objects.equals(fileIdentity, that.fileIdentity);
     }
 
@@ -139,7 +135,6 @@ public class HFileBlockCache {
     public int hashCode() {
       int result = fileIdentity != null ? fileIdentity.hashCode() : 0;
       result = 31 * result + (int) (offset ^ (offset >>> 32));
-      result = 31 * result + size;
       return result;
     }
 
@@ -148,7 +143,6 @@ public class HFileBlockCache {
       return "BlockCacheKey{"
           + "fileIdentity='" + fileIdentity + '\''
           + ", offset=" + offset
-          + ", size=" + size
           + '}';
     }
   }

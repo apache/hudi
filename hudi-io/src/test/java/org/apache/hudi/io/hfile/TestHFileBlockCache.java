@@ -43,12 +43,12 @@ public class TestHFileBlockCache {
     assertEquals(0, cache.size());
 
     // Test cache key
-    HFileBlockCache.BlockCacheKey key1 = new HFileBlockCache.BlockCacheKey(null, 100, 64);
-    HFileBlockCache.BlockCacheKey key2 = new HFileBlockCache.BlockCacheKey(null, 200, 64);
-    HFileBlockCache.BlockCacheKey key3 = new HFileBlockCache.BlockCacheKey(null, 300, 64);
+    HFileBlockCache.BlockCacheKey key1 = new HFileBlockCache.BlockCacheKey(null, 100);
+    HFileBlockCache.BlockCacheKey key2 = new HFileBlockCache.BlockCacheKey(null, 200);
+    HFileBlockCache.BlockCacheKey key3 = new HFileBlockCache.BlockCacheKey(null, 300);
 
     assertNotEquals(key1, key2);
-    assertEquals(new HFileBlockCache.BlockCacheKey(null,100, 64), key1);
+    assertEquals(new HFileBlockCache.BlockCacheKey(null, 100), key1);
 
     // Create test blocks using mock implementation with valid HFile block data
     HFileContext context = HFileContext.builder()
@@ -103,8 +103,8 @@ public class TestHFileBlockCache {
     AtomicInteger loaderExecutionCount = new AtomicInteger(0);
 
     // 0. Define keys and blocks for the test
-    HFileBlockCache.BlockCacheKey keyToCompute = new HFileBlockCache.BlockCacheKey("file-A", 1024, 128);
-    HFileBlockCache.BlockCacheKey preExistingKey = new HFileBlockCache.BlockCacheKey("file-B", 2048, 256);
+    HFileBlockCache.BlockCacheKey keyToCompute = new HFileBlockCache.BlockCacheKey("file-A", 1024);
+    HFileBlockCache.BlockCacheKey preExistingKey = new HFileBlockCache.BlockCacheKey("file-B", 2048);
 
     HFileContext context = HFileContext.builder().build();
     byte[] validBlockData = createValidHFileBlockData();
