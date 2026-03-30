@@ -94,7 +94,6 @@ import org.apache.hudi.table.storage.HoodieStorageLayout;
 import lombok.Getter;
 import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.orc.CompressionKind;
 
 import javax.annotation.concurrent.Immutable;
 
@@ -2443,10 +2442,6 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public int getOrcBlockSize() {
     return getInt(HoodieStorageConfig.ORC_BLOCK_SIZE);
-  }
-
-  public CompressionKind getOrcCompressionCodec() {
-    return CompressionKind.valueOf(getString(HoodieStorageConfig.ORC_COMPRESSION_CODEC_NAME));
   }
 
   /**
