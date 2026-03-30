@@ -289,15 +289,18 @@ candidate_paths = external_candidates.map(ref -> ref.path).distinct()
 // Step 1: Batched prefix scan on secondary index
 // Key format: escaped(external_path)$escaped(record_key)
 // Returns ALL record keys that reference each candidate path
+// Uses engine-context HoodieData (e.g., RDD on Spark) to distribute work
+// across executors -- candidate sets can be large (row-level blob refs).
+candidate_paths_data = engineContext.parallelize(candidate_paths)
 path_to_record_keys = mdtMetadata.readSecondaryIndexDataTableRecordKeysWithKeys(
-    HoodieListData.eager(candidate_paths), indexPartitionName)
+    candidate_paths_data, indexPartitionName)
     .groupBy(pair -> pair.getKey())
 
 // Step 2: Batch record index lookup -- ONE call for ALL record keys
 // Sorts keys internally, single sequential forward-scan through HFile.
 all_record_keys = path_to_record_keys.values().flatMap()
 all_locations = mdtMetadata.readRecordIndexLocations(
-    HoodieListData.eager(all_record_keys))             // -> Map<recordKey, (partition, fileId)>
+    all_record_keys)                                    // -> Map<recordKey, (partition, fileId)>
 
 // Step 3: In-memory resolution with short-circuit per candidate
 for path in candidate_paths:
@@ -659,7 +662,11 @@ cleaning:
 Per-FG blob ref sets: ~100MB peak (500K records * 100 bytes/ref for expired + retained). FGs are
 processed sequentially within each partition batch -- per-FG sets are computed and discarded, not
 accumulated. Only the output lists (`hudi_blob_deletes`, `external_candidates`) grow, containing
-only orphaned refs (much smaller). Peak heap: ~100MB * `cleanerParallelism` = 400MB-1.6GB.
+only orphaned refs (much smaller). Peak heap for Stage 1: ~100MB * `cleanerParallelism` = 400MB-1.6GB.
+
+Stage 2 output lists (`candidate_paths`, `all_record_keys`) can be large -- each cleaned FG may
+contribute row-level blob refs as candidates. These are backed by engine-context `HoodieData`
+(e.g., Spark RDD) and distributed across executors, avoiding driver memory pressure.
 
 ---
 

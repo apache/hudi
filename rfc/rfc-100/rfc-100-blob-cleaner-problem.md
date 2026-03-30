@@ -630,6 +630,74 @@ Why this matters:
   storage indefinitely.
 ```
 
+### Example 9: Why blobFilesToDelete must be in the plan -- writer-cleaner conflict resolution
+
+**Demonstrates:** C7, R1, R5 (extends Example 5, Scenario B)
+
+```
+Setup:
+  File Group FG-1 (partition users/alice):
+    Slice @t1 (expired): row1.blob_ref = (s3://ext/video.mp4, managed=true)
+    Slice @t3 (retained): row1.blob_ref = (s3://ext/photo.png, managed=true)
+    video.mp4 is locally orphaned in FG-1 (updated to photo.png at t3).
+    No other FG references video.mp4 at plan time.
+
+  File Group FG-2 (partition users/bob):
+    (exists, but does not reference video.mp4 yet)
+
+Approach A: blobFilesToDelete NOT in plan (execution-time computation)
+  t1: Cleaner plans at timeline fence T.
+      Plan = {filePathsToBeDeleted: [FG-1/@t1]}
+      No blob info written to plan. Plan goes to timeline as REQUESTED.
+
+  t2: Writer commits to FG-2, adds row2.blob_ref = (s3://ext/video.mp4).
+      Writer checks for conflicts: the clean plan on the timeline has no
+      blob info -- only filePathsToBeDeleted for FG-1. Writer is on FG-2.
+      No conflict detected. Writer succeeds.
+
+  t3: Cleaner transitions to INFLIGHT. Executor computes blob deletes:
+      Reads FG-1/@t1 -> expired_refs = {video.mp4}
+      Reads FG-1/@t3 -> retained_refs = {photo.png}
+      video.mp4 locally orphaned -> Stage 2 cross-FG check at fence T
+      -> does NOT see writer's commit at t2 -> globally orphaned -> DELETE
+
+  Result: FG-2 row2 now has a dangling reference to video.mp4.
+  Bob queries his data and gets a missing blob error. Data corruption.
+
+  Why it cannot be fixed: the blob delete decision existed only in the
+  executor's memory. There was no artifact on the timeline for the writer's
+  conflict resolution to check against. The cross-FG conflict was invisible.
+
+Approach B: blobFilesToDelete IN the plan (plan-time computation)
+  t1: Cleaner plans at timeline fence T.
+      Stage 1: video.mp4 locally orphaned in FG-1.
+      Stage 2: cross-FG check -> no other FG references video.mp4.
+      Plan = {filePathsToBeDeleted: [FG-1/@t1],
+              blobFilesToDelete: [s3://ext/video.mp4]}
+      Plan goes to timeline as REQUESTED.
+
+  t2: Writer commits to FG-2, adds row2.blob_ref = (s3://ext/video.mp4).
+      Writer's conflict resolution checks inflight/requested clean plan.
+      Sees blobFilesToDelete contains video.mp4 -- the same blob the
+      writer is referencing. CONFLICT DETECTED. Writer aborts and retries
+      after the clean cycle completes (or clean plan is rolled back).
+      -> Safe. The conflict is caught before corruption can occur.
+
+  Alternative: if the writer commits first (wins the race), the clean
+  plan's conflict resolution at INFLIGHT transition detects that a new
+  commit references a blob in blobFilesToDelete. Clean plan is invalidated
+  and re-planned in the next cycle, where it will see FG-2's reference
+  and retain video.mp4.
+
+Key insight:
+  Today, clean actions are not part of OCC conflict resolution
+  (TransactionUtils.getInflightAndRequestedInstants excludes CLEAN_ACTION,
+  and ConcurrentOperation.init throws for clean actions). Adding external
+  blob cleanup requires extending conflict resolution to check
+  blobFilesToDelete. This is only possible if the blob delete list is a
+  durable artifact on the timeline -- i.e., part of the plan.
+```
+
 ---
 
 ## 7. Open Questions
