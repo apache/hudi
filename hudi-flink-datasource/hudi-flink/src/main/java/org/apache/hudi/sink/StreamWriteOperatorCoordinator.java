@@ -228,18 +228,14 @@ public class StreamWriteOperatorCoordinator
       this.metaClient = initTableIfNotExists(this.conf);
       // the write client must create after the table creation
       this.writeClient = FlinkWriteClients.createWriteClient(conf);
+      this.writeClient.tryUpgrade(instant, this.metaClient);
+      initMetadataTable(this.writeClient);
 
-      // Create executors BEFORE the upgrade so that the heavy initialization
-      // (upgrade, metadata table init, event restoration) can run on the executor
-      // thread instead of the Pekko dispatcher thread. Running the upgrade
-      // synchronously on the dispatcher thread blocks heartbeat responses and
-      // causes the ResourceManager to disconnect the JobManager when upgrades
-      // take longer than the heartbeat timeout (e.g., LSM timeline migration
-      // with hundreds of archived actions).
-      //
-      // Since the executor is single-threaded and FIFO, submitting the
-      // initialization as the first task guarantees it completes before any
-      // event handling tasks that arrive via handleEventFromOperator().
+      if (tableState.scheduleMdtCompaction) {
+        this.metadataWriteClient = StreamerUtil.createMetadataWriteClient(writeClient);
+      }
+
+      // start the executor
       this.executor = NonThrownExecutor.builder(log)
           .threadFactory(getThreadFactory("meta-event-handle"))
           .exceptionHook((errMsg, t) -> this.context.failJob(new HoodieException(errMsg, t)))
@@ -248,17 +244,6 @@ public class StreamWriteOperatorCoordinator
           .threadFactory(getThreadFactory("instant-request"))
           .exceptionHook((errMsg, t) -> this.context.failJob(new HoodieException(errMsg, t)))
           .build();
-
-      // Run upgrade and post-upgrade initialization on the executor thread.
-      this.executor.execute(() -> {
-        this.writeClient.tryUpgrade(instant, this.metaClient);
-        initMetadataTable(this.writeClient);
-        if (tableState.scheduleMdtCompaction) {
-          this.metadataWriteClient = StreamerUtil.createMetadataWriteClient(writeClient);
-        }
-        restoreEvents();
-      }, "table upgrade and initialization");
-
       // start the executor if required
       if (tableState.syncHive) {
         initHiveSync();
@@ -267,6 +252,7 @@ public class StreamWriteOperatorCoordinator
       if (OptionsResolver.isMultiWriter(conf)) {
         initClientIds(conf);
       }
+      restoreEvents();
     } catch (Throwable throwable) {
       log.error("Failed to start operator coordinator.", throwable);
       context.failJob(throwable);
