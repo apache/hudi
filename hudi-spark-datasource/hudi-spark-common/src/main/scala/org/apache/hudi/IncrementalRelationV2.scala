@@ -129,13 +129,17 @@ class IncrementalRelationV2(val sqlContext: SQLContext,
   private val filters = optParams.getOrElse(DataSourceReadOptions.PUSH_DOWN_INCR_FILTERS.key,
     DataSourceReadOptions.PUSH_DOWN_INCR_FILTERS.defaultValue).split(",").filter(!_.isEmpty)
 
-  override def schema: StructType = usedSchema
+  override def schema: StructType = {
+    addCompletionTimeColumn(usedSchema)
+  }
 
   override def buildScan(): RDD[Row] = {
-    if (usedSchema == StructType(Nil)) {
+    if (schema == StructType(Nil)) {
       // if first commit in a table is an empty commit without schema, return empty RDD here
       sqlContext.sparkContext.emptyRDD[Row]
     } else {
+      val requestedToCompletionTimeMap = buildCompletionTimeMapping()
+      val broadcastTimeMap = sqlContext.sparkContext.broadcast(requestedToCompletionTimeMap)
       val regularFileIdToFullPath = mutable.HashMap[String, String]()
       var metaBootstrapFileIdToFullPath = mutable.HashMap[String, String]()
 
@@ -215,14 +219,14 @@ class IncrementalRelationV2(val sqlContext: SQLContext,
 
       val scanDf = if (fallbackToFullTableScan && startInstantArchived) {
         log.info(s"Falling back to full table scan as startInstantArchived: $startInstantArchived")
-        fullTableScanDataFrame(commitsToReturn)
+        fullTableScanDataFrame(commitsToReturn, broadcastTimeMap)
       } else {
         if (filteredRegularFullPaths.isEmpty && filteredMetaBootstrapFullPaths.isEmpty) {
-          sqlContext.createDataFrame(sqlContext.sparkContext.emptyRDD[Row], usedSchema)
+          sqlContext.createDataFrame(sqlContext.sparkContext.emptyRDD[Row], schema)
         } else {
           log.info("Additional Filters to be applied to incremental source are :" + filters.mkString("Array(", ", ", ")"))
 
-          var df: DataFrame = sqlContext.createDataFrame(sqlContext.sparkContext.emptyRDD[Row], usedSchema)
+          var df: DataFrame = sqlContext.createDataFrame(sqlContext.sparkContext.emptyRDD[Row], schema)
 
           var doFullTableScan = false
 
@@ -247,27 +251,30 @@ class IncrementalRelationV2(val sqlContext: SQLContext,
           }
 
           if (doFullTableScan) {
-            fullTableScanDataFrame(commitsToReturn)
+            fullTableScanDataFrame(commitsToReturn, broadcastTimeMap)
           } else {
             if (metaBootstrapFileIdToFullPath.nonEmpty) {
-              df = sqlContext.sparkSession.read
+              val bootstrapDF = sqlContext.sparkSession.read
                 .format("hudi_v1")
-                .schema(usedSchema)
+                .schema(schema)
                 .option(DataSourceReadOptions.READ_PATHS.key, filteredMetaBootstrapFullPaths.mkString(","))
                 // Setting time to the END_INSTANT_TIME, to avoid pathFilter filter out files incorrectly.
                 .option(DataSourceReadOptions.TIME_TRAVEL_AS_OF_INSTANT.key(), endInstantTime)
                 .load()
+              df = transformDataFrameWithCompletionTime(bootstrapDF, broadcastTimeMap)
             }
 
             if (regularFileIdToFullPath.nonEmpty) {
               try {
                 val commitTimesToReturn = commitsToReturn.map(_.requestedTime)
-                df = df.union(sqlContext.read.options(sOpts)
-                  .schema(usedSchema).format(formatClassName)
+                val baseDf = sqlContext.read.options(sOpts)
+                  .schema(schema).format(formatClassName)
                   // Setting time to the END_INSTANT_TIME, to avoid pathFilter filter out files incorrectly.
                   .option(DataSourceReadOptions.TIME_TRAVEL_AS_OF_INSTANT.key(), endInstantTime)
                   .load(filteredRegularFullPaths.toList: _*)
-                  .filter(col(HoodieRecord.COMMIT_TIME_METADATA_FIELD).isin(commitTimesToReturn: _*)))
+                  .filter(col(HoodieRecord.COMMIT_TIME_METADATA_FIELD).isin(commitTimesToReturn: _*))
+                val df_with_completion_time = transformDataFrameWithCompletionTime(baseDf, broadcastTimeMap)
+                df = df.union(df_with_completion_time)
               } catch {
                 case e: AnalysisException =>
                   if (e.getMessage.contains("Path does not exist")) {
@@ -286,16 +293,57 @@ class IncrementalRelationV2(val sqlContext: SQLContext,
     }
   }
 
-  private def fullTableScanDataFrame(commitsToFilter: List[HoodieInstant]): DataFrame = {
+  private def fullTableScanDataFrame(commitsToFilter: List[HoodieInstant],
+                                     broadcastTimeMap: org.apache.spark.broadcast.Broadcast[Map[String, String]]): DataFrame = {
     val commitTimesToFilter = commitsToFilter.map(_.requestedTime)
     val hudiDF = sqlContext.read
       .format("hudi_v1")
-      .schema(usedSchema)
+      .schema(schema)
       .load(basePath.toString)
       .filter(col(HoodieRecord.COMMIT_TIME_METADATA_FIELD).isin(commitTimesToFilter: _*))
 
-    // schema enforcement does not happen in above spark.read with hudi. hence selecting explicitly w/ right column order
-    val fieldNames = usedSchema.fieldNames
-    hudiDF.select(fieldNames.head, fieldNames.tail: _*)
+    val fieldNames = schema.fieldNames
+    val selectedDf = hudiDF.select(fieldNames.head, fieldNames.tail: _*)
+    val transformedRDD = addCompletionTimeColumn(selectedDf.rdd, broadcastTimeMap)
+    sqlContext.createDataFrame(transformedRDD, schema)
+  }
+
+  private def buildCompletionTimeMapping(): Map[String, String] = {
+    commitsToReturn.map { instant =>
+      val requestedTime = instant.requestedTime()
+      val completionTime = Option(instant.getCompletionTime).getOrElse(requestedTime)
+      requestedTime -> completionTime
+    }.toMap
+  }
+
+  private def transformDataFrameWithCompletionTime(df: DataFrame,
+                                                  broadcastMap: org.apache.spark.broadcast.Broadcast[Map[String, String]]): DataFrame = {
+    val transformedRDD = addCompletionTimeColumn(df.rdd, broadcastMap)
+    sqlContext.createDataFrame(transformedRDD, schema)
+  }
+
+  private def addCompletionTimeColumn(rdd: RDD[Row],
+                                    broadcastMap: org.apache.spark.broadcast.Broadcast[Map[String, String]]): RDD[Row] = {
+    val commitTimeFieldIndex = schema.fieldIndex(HoodieRecord.COMMIT_TIME_METADATA_FIELD)
+    val completionTimeFieldIndex = schema.fieldIndex("_hoodie_completion_time")
+    
+    rdd.map { row =>
+      val currentRequestedTime = row.getString(commitTimeFieldIndex)
+      val completionTime = broadcastMap.value.getOrElse(currentRequestedTime, currentRequestedTime)
+      val newValues = row.toSeq.zipWithIndex.map { case (value, index) =>
+        if (index == completionTimeFieldIndex) {
+          completionTime
+        } else {
+          value
+        }
+      }
+      Row.fromSeq(newValues)
+    }
+  }
+
+  private def addCompletionTimeColumn(baseSchema: StructType): StructType = {
+    import org.apache.spark.sql.types.{StringType, StructField}
+    val completionTimeField = StructField("_hoodie_completion_time", StringType, nullable = true)
+    StructType(baseSchema.fields :+ completionTimeField)
   }
 }
