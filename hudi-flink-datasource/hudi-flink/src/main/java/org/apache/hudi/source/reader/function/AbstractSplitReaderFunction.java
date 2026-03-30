@@ -25,7 +25,6 @@ import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.source.ExpressionPredicates;
 import org.apache.hudi.table.format.InternalSchemaManager;
 import org.apache.hudi.util.FlinkWriteClients;
-import org.apache.hudi.util.Lazy;
 
 import java.util.List;
 
@@ -38,8 +37,8 @@ public abstract class AbstractSplitReaderFunction implements SplitReaderFunction
   protected final InternalSchemaManager internalSchemaManager;
   protected final List<ExpressionPredicates.Predicate> predicates;
   protected final boolean emitDelete;
-  private transient Lazy<HoodieWriteConfig> writeConfig;
-  private transient Lazy<org.apache.hadoop.conf.Configuration> hadoopConf;
+  private transient HoodieWriteConfig writeConfig;
+  private transient org.apache.hadoop.conf.Configuration hadoopConf;
 
   public AbstractSplitReaderFunction(
       Configuration conf,
@@ -54,15 +53,15 @@ public abstract class AbstractSplitReaderFunction implements SplitReaderFunction
 
   protected HoodieWriteConfig getWriteConfig() {
     if (writeConfig == null) {
-      writeConfig = Lazy.lazily(() -> FlinkWriteClients.getHoodieClientConfig(conf));
+      writeConfig = FlinkWriteClients.getHoodieClientConfig(conf);
     }
-    return writeConfig.get();
+    return writeConfig;
   }
 
   protected org.apache.hadoop.conf.Configuration getHadoopConf() {
     if (hadoopConf == null) {
-      hadoopConf = Lazy.lazily(() -> HadoopConfigurations.getHadoopConf(conf));
+      hadoopConf = HadoopConfigurations.getHadoopConf(conf);
     }
-    return hadoopConf.get();
+    return hadoopConf;
   }
 }

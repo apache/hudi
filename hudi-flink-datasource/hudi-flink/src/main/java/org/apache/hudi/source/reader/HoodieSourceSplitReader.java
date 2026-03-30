@@ -24,7 +24,7 @@ import org.apache.flink.connector.base.source.reader.RecordsWithSplitIds;
 import org.apache.flink.connector.base.source.reader.splitreader.SplitReader;
 import org.apache.flink.connector.base.source.reader.splitreader.SplitsAddition;
 import org.apache.flink.connector.base.source.reader.splitreader.SplitsChange;
-import org.apache.flink.util.CloseableIterator;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.metrics.FlinkStreamReadMetrics;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -56,30 +56,23 @@ import java.util.Set;
 public class HoodieSourceSplitReader<T> implements SplitReader<HoodieRecordWithPosition<T>, HoodieSourceSplit> {
   private static final Logger LOG = LoggerFactory.getLogger(HoodieSourceSplitReader.class);
 
-  /** Sentinel value indicating that no row limit has been pushed down. */
-  public static final long NO_LIMIT = -1L;
-
   private final SerializableComparator<HoodieSourceSplit> splitComparator;
   private final Queue<HoodieSourceSplit> splits;
   private final FlinkStreamReadMetrics readerMetrics;
   private final SplitReaderFunction<T> readerFunction;
-  /** Total row limit pushed down from the planner; {@code NO_LIMIT} means unlimited. */
-  private final long limit;
-  /** Number of records emitted so far across all splits. */
-  private long totalReadCount = 0;
+  private final Option<RecordLimiter> recordLimiter;
   private transient HoodieSourceSplit currentSplit;
-  private transient CloseableIterator<RecordsWithSplitIds<HoodieRecordWithPosition<T>>> currentReader;
 
   public HoodieSourceSplitReader(
       String tableName,
       SourceReaderContext context,
       SplitReaderFunction<T> readerFunction,
       SerializableComparator<HoodieSourceSplit> splitComparator,
-      long limit) {
+      Option<RecordLimiter> recordLimiter) {
     this.splitComparator = splitComparator;
     this.splits = new ArrayDeque<>();
     this.readerFunction = readerFunction;
-    this.limit = limit;
+    this.recordLimiter = recordLimiter;
     this.readerMetrics = new FlinkStreamReadMetrics(context.metricGroup(), tableName);
     this.readerMetrics.registerMetrics();
   }
@@ -93,7 +86,7 @@ public class HoodieSourceSplitReader<T> implements SplitReader<HoodieRecordWithP
 
     // Limit already satisfied: drain any remaining locally-queued splits as immediately finished
     // so that Flink's SourceReaderBase can reach end-of-input cleanly.
-    if (limit != NO_LIMIT && totalReadCount >= limit) {
+    if (recordLimiter.map(RecordLimiter::isLimitReached).orElse(false)) {
       return drainRemainingAsSplitsFinished();
     }
 
@@ -101,7 +94,7 @@ public class HoodieSourceSplitReader<T> implements SplitReader<HoodieRecordWithP
     if (nextSplit != null) {
       currentSplit = nextSplit;
       RecordsWithSplitIds<HoodieRecordWithPosition<T>> records = readerFunction.read(nextSplit);
-      return limit == NO_LIMIT ? records : limitedRecords(records);
+      return recordLimiter.map(rl -> rl.wrap(records)).orElse(records);
     } else {
       // return an empty result, which will lead to split fetch to be idle.
       // SplitFetcherManager will then close idle fetcher.
@@ -154,43 +147,6 @@ public class HoodieSourceSplitReader<T> implements SplitReader<HoodieRecordWithP
     RecordsWithSplitIds<HoodieRecordWithPosition<T>> records = BatchRecords.lastBatchRecords(currentSplit.splitId());
     currentSplit = null;
     return records;
-  }
-
-  /**
-   * Wraps {@code records} so that each call to {@link RecordsWithSplitIds#nextRecordFromSplit()}
-   * increments {@link #totalReadCount} and returns {@code null} once the global limit is reached,
-   * causing Flink to treat the current split as exhausted.
-   */
-  private RecordsWithSplitIds<HoodieRecordWithPosition<T>> limitedRecords(
-      RecordsWithSplitIds<HoodieRecordWithPosition<T>> records) {
-    return new RecordsWithSplitIds<HoodieRecordWithPosition<T>>() {
-      @Override
-      public String nextSplit() {
-        return records.nextSplit();
-      }
-
-      @Override
-      public HoodieRecordWithPosition<T> nextRecordFromSplit() {
-        if (totalReadCount >= limit) {
-          return null;
-        }
-        HoodieRecordWithPosition<T> record = records.nextRecordFromSplit();
-        if (record != null) {
-          totalReadCount++;
-        }
-        return record;
-      }
-
-      @Override
-      public Set<String> finishedSplits() {
-        return records.finishedSplits();
-      }
-
-      @Override
-      public void recycle() {
-        records.recycle();
-      }
-    };
   }
 
   /**

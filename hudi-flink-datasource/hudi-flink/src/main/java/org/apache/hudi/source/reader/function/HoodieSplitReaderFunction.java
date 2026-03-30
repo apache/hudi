@@ -78,7 +78,7 @@ public class HoodieSplitReaderFunction extends AbstractSplitReaderFunction {
 
     try {
       this.fileGroupReader = createFileGroupReader(split, metaClient);
-      ClosableIterator<RowData> recordIterator = fileGroupReader.getClosableIterator();
+      final ClosableIterator<RowData> recordIterator = fileGroupReader.getClosableIterator();
       BatchRecords<RowData> records = BatchRecords.forRecords(splitId, recordIterator, split.getFileOffset(), split.getConsumed());
       records.seek(split.getConsumed());
       return records;

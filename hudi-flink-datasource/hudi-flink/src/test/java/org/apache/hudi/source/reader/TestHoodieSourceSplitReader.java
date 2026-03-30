@@ -63,7 +63,7 @@ public class TestHoodieSourceSplitReader {
   public void testFetchWithNoSplits() throws IOException {
     TestSplitReaderFunction readerFunction = new TestSplitReaderFunction();
     HoodieSourceSplitReader<String> reader =
-        new HoodieSourceSplitReader<>(TABLE_NAME, readerContext, readerFunction, null, -1L);
+        new HoodieSourceSplitReader<>(TABLE_NAME, readerContext, readerFunction, null, Option.empty());
 
     RecordsWithSplitIds<HoodieRecordWithPosition<String>> result = reader.fetch();
 
@@ -77,7 +77,7 @@ public class TestHoodieSourceSplitReader {
     TestSplitReaderFunction readerFunction = new TestSplitReaderFunction(testData);
 
     HoodieSourceSplitReader<String> reader =
-        new HoodieSourceSplitReader<>(TABLE_NAME, readerContext, readerFunction, null, -1L);
+        new HoodieSourceSplitReader<>(TABLE_NAME, readerContext, readerFunction, null, Option.empty());
 
     HoodieSourceSplit split = createTestSplit(1, "file1");
     SplitsAddition<HoodieSourceSplit> splitsChange = new SplitsAddition<>(Collections.singletonList(split));
@@ -95,7 +95,7 @@ public class TestHoodieSourceSplitReader {
     TestSplitReaderFunction readerFunction = new TestSplitReaderFunction(testData);
 
     HoodieSourceSplitReader<String> reader =
-        new HoodieSourceSplitReader<>(TABLE_NAME, readerContext, readerFunction, null, -1L);
+        new HoodieSourceSplitReader<>(TABLE_NAME, readerContext, readerFunction, null, Option.empty());
 
     HoodieSourceSplit split1 = createTestSplit(1, "file1");
     HoodieSourceSplit split2 = createTestSplit(2, "file2");
@@ -123,7 +123,7 @@ public class TestHoodieSourceSplitReader {
         (s1, s2) -> s2.getFileId().compareTo(s1.getFileId());
 
     HoodieSourceSplitReader<String> reader =
-            new HoodieSourceSplitReader<>(TABLE_NAME, readerContext, readerFunction, comparator, -1L);
+            new HoodieSourceSplitReader<>(TABLE_NAME, readerContext, readerFunction, comparator, Option.empty());
 
     HoodieSourceSplit split1 = createTestSplit(1, "file1");
     HoodieSourceSplit split2 = createTestSplit(2, "file2");
@@ -146,7 +146,7 @@ public class TestHoodieSourceSplitReader {
     TestSplitReaderFunction readerFunction = new TestSplitReaderFunction(testData);
 
     HoodieSourceSplitReader<String> reader =
-            new HoodieSourceSplitReader<>(TABLE_NAME, readerContext, readerFunction, null, -1L);
+            new HoodieSourceSplitReader<>(TABLE_NAME, readerContext, readerFunction, null, Option.empty());
 
     // First batch
     HoodieSourceSplit split1 = createTestSplit(1, "file1");
@@ -168,7 +168,7 @@ public class TestHoodieSourceSplitReader {
   public void testClose() throws Exception {
     TestSplitReaderFunction readerFunction = new TestSplitReaderFunction();
     HoodieSourceSplitReader<String> reader =
-        new HoodieSourceSplitReader<>(TABLE_NAME, readerContext, readerFunction, null, -1L);
+        new HoodieSourceSplitReader<>(TABLE_NAME, readerContext, readerFunction, null, Option.empty());
 
     HoodieSourceSplit split = createTestSplit(1, "file1");
     reader.handleSplitsChanges(new SplitsAddition<>(Collections.singletonList(split)));
@@ -187,7 +187,7 @@ public class TestHoodieSourceSplitReader {
   public void testWakeUp() {
     TestSplitReaderFunction readerFunction = new TestSplitReaderFunction();
     HoodieSourceSplitReader<String> reader =
-        new HoodieSourceSplitReader<>(TABLE_NAME, readerContext, readerFunction, null, -1L);
+        new HoodieSourceSplitReader<>(TABLE_NAME, readerContext, readerFunction, null, Option.empty());
 
     // wakeUp is a no-op, should not throw any exception
     reader.wakeUp();
@@ -197,7 +197,7 @@ public class TestHoodieSourceSplitReader {
   public void testPauseOrResumeSplits() {
     TestSplitReaderFunction readerFunction = new TestSplitReaderFunction();
     HoodieSourceSplitReader<String> reader =
-        new HoodieSourceSplitReader<>(TABLE_NAME, readerContext, readerFunction, null, -1L);
+        new HoodieSourceSplitReader<>(TABLE_NAME, readerContext, readerFunction, null, Option.empty());
 
     HoodieSourceSplit split1 = createTestSplit(1, "file1");
     HoodieSourceSplit split2 = createTestSplit(2, "file2");
@@ -215,7 +215,7 @@ public class TestHoodieSourceSplitReader {
     TestSplitReaderFunction readerFunction = new TestSplitReaderFunction(testData);
 
     HoodieSourceSplitReader<String> reader =
-        new HoodieSourceSplitReader<>(TABLE_NAME, readerContext, readerFunction, null, -1L);
+        new HoodieSourceSplitReader<>(TABLE_NAME, readerContext, readerFunction, null, Option.empty());
 
     HoodieSourceSplit split = createTestSplit(1, "file1");
     reader.handleSplitsChanges(new SplitsAddition<>(Collections.singletonList(split)));
@@ -230,7 +230,7 @@ public class TestHoodieSourceSplitReader {
   public void testReaderFunctionClosedOnReaderClose() throws Exception {
     TestSplitReaderFunction readerFunction = new TestSplitReaderFunction();
     HoodieSourceSplitReader<String> reader =
-        new HoodieSourceSplitReader<>(TABLE_NAME, readerContext, readerFunction, null, -1L);
+        new HoodieSourceSplitReader<>(TABLE_NAME, readerContext, readerFunction, null, Option.empty());
 
     reader.close();
 
@@ -241,7 +241,7 @@ public class TestHoodieSourceSplitReader {
   public void testFetchEmptyResultWhenNoSplitsAdded() throws IOException {
     TestSplitReaderFunction readerFunction = new TestSplitReaderFunction();
     HoodieSourceSplitReader<String> reader =
-        new HoodieSourceSplitReader<>(TABLE_NAME, readerContext, readerFunction, null, -1L);
+        new HoodieSourceSplitReader<>(TABLE_NAME, readerContext, readerFunction, null, Option.empty());
 
     RecordsWithSplitIds<HoodieRecordWithPosition<String>> result = reader.fetch();
 
@@ -257,7 +257,7 @@ public class TestHoodieSourceSplitReader {
 
     // No comparator - should preserve insertion order
     HoodieSourceSplitReader<String> reader =
-        new HoodieSourceSplitReader<>(TABLE_NAME, readerContext, readerFunction, null, -1L);
+        new HoodieSourceSplitReader<>(TABLE_NAME, readerContext, readerFunction, null, Option.empty());
 
     HoodieSourceSplit split3 = createTestSplit(3, "file3");
     HoodieSourceSplit split1 = createTestSplit(1, "file1");
@@ -279,7 +279,7 @@ public class TestHoodieSourceSplitReader {
     TestSplitReaderFunction readerFunction = new TestSplitReaderFunction(testData);
 
     HoodieSourceSplitReader<String> reader =
-            new HoodieSourceSplitReader<>(TABLE_NAME, readerContext, readerFunction, null, -1L);
+            new HoodieSourceSplitReader<>(TABLE_NAME, readerContext, readerFunction, null, Option.empty());
 
     HoodieSourceSplit split1 = createTestSplit(1, "file1");
     HoodieSourceSplit split2 = createTestSplit(2, "file2");
@@ -301,7 +301,7 @@ public class TestHoodieSourceSplitReader {
     TestSplitReaderFunction readerFunction = new TestSplitReaderFunction(testData);
 
     HoodieSourceSplitReader<String> reader =
-        new HoodieSourceSplitReader<>(TABLE_NAME, readerContext, readerFunction, null, 2L);
+        new HoodieSourceSplitReader<>(TABLE_NAME, readerContext, readerFunction, null, Option.of(new RecordLimiter(2L)));
 
     HoodieSourceSplit split = createTestSplit(1, "file1");
     reader.handleSplitsChanges(new SplitsAddition<>(Collections.singletonList(split)));
@@ -329,7 +329,7 @@ public class TestHoodieSourceSplitReader {
     TestSplitReaderFunction readerFunction = new TestSplitReaderFunction(testData);
 
     HoodieSourceSplitReader<String> reader =
-        new HoodieSourceSplitReader<>(TABLE_NAME, readerContext, readerFunction, null, 2L);
+        new HoodieSourceSplitReader<>(TABLE_NAME, readerContext, readerFunction, null, Option.of(new RecordLimiter(2L)));
 
     HoodieSourceSplit split1 = createTestSplit(1, "file1");
     HoodieSourceSplit split2 = createTestSplit(2, "file2");
@@ -357,7 +357,7 @@ public class TestHoodieSourceSplitReader {
     TestSplitReaderFunction readerFunction = new TestSplitReaderFunction(Arrays.asList("r1", "r2"));
 
     HoodieSourceSplitReader<String> reader =
-        new HoodieSourceSplitReader<>(TABLE_NAME, readerContext, readerFunction, null, 0L);
+        new HoodieSourceSplitReader<>(TABLE_NAME, readerContext, readerFunction, null, Option.of(new RecordLimiter(0L)));
 
     HoodieSourceSplit split1 = createTestSplit(1, "file1");
     HoodieSourceSplit split2 = createTestSplit(2, "file2");
@@ -380,7 +380,7 @@ public class TestHoodieSourceSplitReader {
     TestSplitReaderFunction readerFunction = new TestSplitReaderFunction(testData);
 
     HoodieSourceSplitReader<String> reader =
-        new HoodieSourceSplitReader<>(TABLE_NAME, readerContext, readerFunction, null, 3L);
+        new HoodieSourceSplitReader<>(TABLE_NAME, readerContext, readerFunction, null, Option.of(new RecordLimiter(3L)));
 
     HoodieSourceSplit split = createTestSplit(1, "file1");
     reader.handleSplitsChanges(new SplitsAddition<>(Collections.singletonList(split)));
@@ -406,7 +406,7 @@ public class TestHoodieSourceSplitReader {
     TestSplitReaderFunction readerFunction = new TestSplitReaderFunction(testData);
 
     HoodieSourceSplitReader<String> reader =
-        new HoodieSourceSplitReader<>(TABLE_NAME, readerContext, readerFunction, null, 5L);
+        new HoodieSourceSplitReader<>(TABLE_NAME, readerContext, readerFunction, null, Option.of(new RecordLimiter(5L)));
 
     HoodieSourceSplit split1 = createTestSplit(1, "file1");
     HoodieSourceSplit split2 = createTestSplit(2, "file2");
@@ -440,7 +440,7 @@ public class TestHoodieSourceSplitReader {
 
     HoodieSourceSplitReader<String> reader =
         new HoodieSourceSplitReader<>(TABLE_NAME, readerContext, readerFunction, null,
-            HoodieSourceSplitReader.NO_LIMIT);
+            Option.empty());
 
     HoodieSourceSplit split = createTestSplit(1, "file1");
     reader.handleSplitsChanges(new SplitsAddition<>(Collections.singletonList(split)));
