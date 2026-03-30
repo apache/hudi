@@ -182,7 +182,7 @@ class ColumnStatIndexTestBase extends HoodieSparkClientTestBase {
         val writerSchemaOpt = LogFileColStatsTestUtil.getSchemaForTable(metaClient)
         val latestCompletedCommit = metaClient.getActiveTimeline.getCommitsTimeline.filterCompletedInstants().lastInstant().get().getTimestamp
         baseFilesDf.union(getColStatsFromLogFiles(allLogFiles, latestCompletedCommit,
-          scala.collection.JavaConverters.seqAsJavaList(colsToGenerateStats),
+          colsToGenerateStats.asJava,
           metaClient,
           writerSchemaOpt: org.apache.hudi.common.util.Option[Schema],
           HoodieMetadataConfig.MAX_READER_BUFFER_SIZE_PROP.defaultValue(),

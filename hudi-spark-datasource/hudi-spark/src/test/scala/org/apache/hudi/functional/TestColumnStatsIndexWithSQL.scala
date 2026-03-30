@@ -215,10 +215,10 @@ class TestColumnStatsIndexWithSQL extends ColumnStatIndexTestBase {
       ""
     }
     doWriteAndValidateColumnStats(ColumnStatsTestParams(testCase, metadataOpts, commonOpts,
-      dataSourcePath = "index/colstats/another-input-table-json",
-      expectedColStatsSourcePath = "index/colstats/updated-column-stats-index-table.json",
-      operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
-      saveMode = SaveMode.Append))
+      dataSourcePath = "index/colstats/input-table-json",
+      expectedColStatsSourcePath = s"index/colstats/column-stats-index-table${filePostfix}.json",
+      operation = DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,
+      saveMode = SaveMode.Overwrite))
 
     doWriteAndValidateColumnStats(ColumnStatsTestParams(testCase, metadataOpts, commonOpts,
       dataSourcePath = "index/colstats/another-input-table-json",

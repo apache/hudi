@@ -48,7 +48,6 @@ import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{EnumSource, MethodSource, ValueSource}
 
 import scala.collection.JavaConverters._
-import scala.collection.convert.ImplicitConversions.`collection AsScalaIterable`
 
 @Tag("functional")
 class TestColumnStatsIndex extends ColumnStatIndexTestBase {
@@ -298,17 +297,17 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
     val lastCompletedCommit = metaClient.getActiveTimeline.getCommitsTimeline.filterCompletedInstants().lastInstant().get()
     if (tableType == HoodieTableType.MERGE_ON_READ) {
       val dataFiles = if (StringUtils.isNullOrEmpty(partitionCol)) {
-        metaClient.getStorage.listFiles(new StoragePath(metaClient.getBasePath, "/")).toSeq
+        metaClient.getStorage.listFiles(new StoragePath(metaClient.getBasePath, "/")).asScala.toSeq
       } else {
-        metaClient.getStorage.listFiles(new StoragePath(metaClient.getBasePath, "9")).toSeq
+        metaClient.getStorage.listFiles(new StoragePath(metaClient.getBasePath, "9")).asScala.toSeq
       }
       val logFileFileStatus = dataFiles.filter(fileStatus => fileStatus.getPath.getName.contains(".log")).head
       logFileName = logFileFileStatus.getPath.getName
     } else {
       val dataFiles = if (StringUtils.isNullOrEmpty(partitionCol)) {
-        metaClient.getStorage.listFiles(new StoragePath(metaClient.getBasePath.toString)).toSeq
+        metaClient.getStorage.listFiles(new StoragePath(metaClient.getBasePath.toString)).asScala.toSeq
       } else {
-        metaClient.getStorage.listFiles(new StoragePath(metaClient.getBasePath,  "9")).toSeq
+        metaClient.getStorage.listFiles(new StoragePath(metaClient.getBasePath,  "9")).asScala.toSeq
       }
       val baseFileFileStatus = dataFiles.filter(fileStatus => fileStatus.getPath.getName.contains(lastCompletedCommit.getTimestamp)).head
       baseFileName = baseFileFileStatus.getPath.getName
