@@ -556,13 +556,14 @@ class TestRollbackHelper extends HoodieRollbackTestBase {
     }
 
     StoragePath rollbackLogPath = new StoragePath(partitionStoragePath,
-        FileCreateUtils.logFileName(baseInstantTimeOfLogFiles, logFileId, 5));
+        FileCreateUtils.logFileName(baseInstantTimeOfLogFiles, logFileId, 4));
     List<Pair<String, HoodieRollbackStat>> expected = Collections.singletonList(
         Pair.of(partition,
             HoodieRollbackStat.newBuilder()
                 .withPartitionPath(partition)
                 .withRollbackBlockAppendResults(Collections.singletonMap(
                     storage.getPathInfo(rollbackLogPath), 1L))
+                .withLogFilesFromFailedCommit(logFilesToRollback)
                 .build()));
     assertRollbackStatsEquals(expected, rollbackStats);
   }
@@ -802,7 +803,7 @@ class TestRollbackHelper extends HoodieRollbackTestBase {
     }
 
     StoragePath rollbackLogPath = new StoragePath(partitionStoragePath,
-        FileCreateUtils.logFileName(baseInstantTimeOfLogFiles, logFileId, 5));
+        FileCreateUtils.logFileName(baseInstantTimeOfLogFiles, logFileId, 4));
     List<Pair<String, HoodieRollbackStat>> expected = Collections.singletonList(
         Pair.of(partition,
             HoodieRollbackStat.newBuilder()
