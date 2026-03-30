@@ -69,6 +69,7 @@ import static org.apache.hudi.io.storage.LanceTestUtils.createRowWithMetaFields;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -422,6 +423,20 @@ public class TestHoodieSparkLanceWriter {
       assertEquals(rows.size(), reader.numRows(), "Row count should match");
       assertEquals(3, reader.schema().getFields().size(), "Should have 3 top-level fields (id, name, address)");
     }
+  }
+
+  /**
+   * HoodieSparkLanceWriter constructor must throw IllegalArgumentException if maxFileSize <= 0
+   */
+  @Test
+  public void testMaxFileSizeValidation() {
+    StructType schema = createSchemaWithoutMetaFields();
+    StoragePath path = new StoragePath(tempDir.getAbsolutePath() + "/test_validation.lance");
+    IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
+        () -> HoodieSparkLanceWriter.builder()
+            .file(path).sparkSchema(schema).instantTime(instantTime).taskContextSupplier(taskContextSupplier)
+            .storage(storage).maxFileSize(0).build());
+    assertEquals("maxFileSize must be a positive number", ex.getMessage());
   }
 
   /**

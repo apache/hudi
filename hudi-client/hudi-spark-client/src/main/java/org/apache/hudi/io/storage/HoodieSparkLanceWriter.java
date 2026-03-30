@@ -48,6 +48,7 @@ import static org.apache.hudi.common.model.HoodieRecord.HoodieMetadataField.COMM
 import static org.apache.hudi.common.model.HoodieRecord.HoodieMetadataField.FILENAME_METADATA_FIELD;
 import static org.apache.hudi.common.model.HoodieRecord.HoodieMetadataField.PARTITION_PATH_METADATA_FIELD;
 import static org.apache.hudi.common.model.HoodieRecord.HoodieMetadataField.RECORD_KEY_METADATA_FIELD;
+import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
 
 /**
  * Spark Lance file writer implementing {@link HoodieSparkFileWriter} and {@link HoodieInternalRowFileWriter}.
@@ -96,6 +97,7 @@ public class HoodieSparkLanceWriter extends HoodieBaseLanceWriter<InternalRow, U
       boolean populateMetaFields,
       Option<BloomFilter> bloomFilterOpt,
       long maxFileSize) {
+    checkArgument(maxFileSize > 0, "maxFileSize must be a positive number");
     return new HoodieSparkLanceWriter(file, sparkSchema, instantTime,
         taskContextSupplier, storage, populateMetaFields, bloomFilterOpt, maxFileSize);
   }
