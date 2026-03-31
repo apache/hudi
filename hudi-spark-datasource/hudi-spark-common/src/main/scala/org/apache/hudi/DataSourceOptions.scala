@@ -36,6 +36,7 @@ import org.apache.hudi.sync.common.HoodieSyncConfig
 import org.apache.hudi.util.{JFunction, SparkConfigUtils}
 
 import org.apache.spark.sql.execution.datasources.{DataSourceUtils => SparkDataSourceUtils}
+import org.apache.spark.sql.hudi.HoodieSqlCommonUtils
 import org.slf4j.LoggerFactory
 
 import scala.collection.JavaConverters._
@@ -1131,9 +1132,17 @@ object DataSourceOptionsHelper {
       .map(is => if (is.toBoolean) QUERY_TYPE_READ_OPTIMIZED_OPT_VAL else QUERY_TYPE_SNAPSHOT_OPT_VAL)
       .getOrElse(paramsWithGlobalProps.getOrElse(QUERY_TYPE.key, QUERY_TYPE.defaultValue()))
 
-    Map(
-      QUERY_TYPE.key -> queryType
-    ) ++ translateConfigurations(paramsWithGlobalProps)
+    val translatedParams = translateConfigurations(paramsWithGlobalProps)
+
+    val startCommitKey = DataSourceReadOptions.START_COMMIT.key
+    val endCommitKey = DataSourceReadOptions.END_COMMIT.key
+    val normalizedStartCommit = translatedParams.get(startCommitKey)
+      .map(v => startCommitKey -> HoodieSqlCommonUtils.formatIncrementalInstant(v))
+    val normalizedEndCommit = translatedParams.get(endCommitKey)
+      .map(v => endCommitKey -> HoodieSqlCommonUtils.formatIncrementalInstant(v))
+
+    Map(QUERY_TYPE.key -> queryType) ++ translatedParams ++
+      normalizedStartCommit ++ normalizedEndCommit
   }
 
   def inferKeyGenClazz(props: TypedProperties): String = {
