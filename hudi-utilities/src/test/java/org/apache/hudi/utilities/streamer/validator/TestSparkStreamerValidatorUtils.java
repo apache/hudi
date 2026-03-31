@@ -23,6 +23,7 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieWriteStat;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.checkpoint.StreamerCheckpointV1;
 import org.apache.hudi.common.testutils.HoodieTestTable;
 import org.apache.hudi.common.util.Option;
@@ -52,9 +53,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * Tests for {@link SparkStreamerValidatorUtils}.
  *
- * <p>Uses a lightweight Spark context for JavaRDD creation. Tests validate the orchestration
- * logic (class loading, config passing, error handling) using first-commit scenarios
- * (no previous commit on timeline) to avoid needing a full HoodieTable setup.</p>
+ * <p>Uses a lightweight Spark context for JavaRDD creation. Tests cover orchestration logic
+ * (class loading, config passing, error handling) as well as end-to-end offset validation
+ * using a two-commit timeline to verify the real comparison path is exercised.</p>
  */
 public class TestSparkStreamerValidatorUtils {
 
@@ -104,7 +105,7 @@ public class TestSparkStreamerValidatorUtils {
     return jsc.parallelize(writeStatuses);
   }
 
-  private org.apache.hudi.common.table.HoodieTableMetaClient createMetaClient() throws IOException {
+  private HoodieTableMetaClient createMetaClient() throws IOException {
     return org.apache.hudi.common.testutils.HoodieTestUtils.init(
         tempDir.toAbsolutePath().toString());
   }
@@ -233,5 +234,46 @@ public class TestSparkStreamerValidatorUtils {
         () -> SparkStreamerValidatorUtils.runValidators(
             props, "20260320120000000", toRDD(writeStatuses), new HashMap<>(), createMetaClient()));
     assertTrue(ex.getMessage().contains("FakeValidator"));
+  }
+
+  @Test
+  public void testSecondCommitMatchingOffsetsPasses() throws Exception {
+    TypedProperties props = propsWithValidator(
+        "org.apache.hudi.utilities.streamer.validator.SparkKafkaOffsetValidator");
+
+    // Create table with a previous committed instant: offset 0 -> 500
+    HoodieTableMetaClient metaClient = createMetaClient();
+    HoodieCommitMetadata prevMeta = new HoodieCommitMetadata();
+    prevMeta.addMetadata(StreamerCheckpointV1.STREAMER_CHECKPOINT_KEY_V1, "events,0:500");
+    HoodieTestTable.of(metaClient).addCommit("20260320110000000", Option.of(prevMeta));
+
+    // Second commit: offset 500 -> 600, 100 records written — matches diff exactly
+    Map<String, String> extraMeta = new HashMap<>();
+    extraMeta.put(StreamerCheckpointV1.STREAMER_CHECKPOINT_KEY_V1, "events,0:600");
+    List<WriteStatus> writeStatuses = Collections.singletonList(buildWriteStatus("p1", 100, 0));
+
+    assertDoesNotThrow(() -> SparkStreamerValidatorUtils.runValidators(
+        props, "20260320120000000", toRDD(writeStatuses), extraMeta, metaClient));
+  }
+
+  @Test
+  public void testSecondCommitDataLossDetected() throws Exception {
+    TypedProperties props = propsWithValidator(
+        "org.apache.hudi.utilities.streamer.validator.SparkKafkaOffsetValidator");
+
+    // Create table with a previous committed instant: offset 0 -> 1000
+    HoodieTableMetaClient metaClient = createMetaClient();
+    HoodieCommitMetadata prevMeta = new HoodieCommitMetadata();
+    prevMeta.addMetadata(StreamerCheckpointV1.STREAMER_CHECKPOINT_KEY_V1, "events,0:1000");
+    HoodieTestTable.of(metaClient).addCommit("20260320110000000", Option.of(prevMeta));
+
+    // Second commit: offset 1000 -> 2000 (diff=1000) but only 500 records written — data loss
+    Map<String, String> extraMeta = new HashMap<>();
+    extraMeta.put(StreamerCheckpointV1.STREAMER_CHECKPOINT_KEY_V1, "events,0:2000");
+    List<WriteStatus> writeStatuses = Collections.singletonList(buildWriteStatus("p1", 500, 0));
+
+    assertThrows(HoodieValidationException.class,
+        () -> SparkStreamerValidatorUtils.runValidators(
+            props, "20260320120000000", toRDD(writeStatuses), extraMeta, metaClient));
   }
 }

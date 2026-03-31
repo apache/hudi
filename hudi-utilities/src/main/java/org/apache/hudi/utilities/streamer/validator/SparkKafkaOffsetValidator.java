@@ -43,6 +43,13 @@ import org.apache.hudi.common.util.CheckpointUtils.CheckpointFormat;
  *
  * <p>This validator is primarily intended for append-only ingestion from Kafka via HoodieStreamer.
  * For upsert workloads with deduplication, configure a higher tolerance or use WARN_LOG.</p>
+ *
+ * <p><b>Important:</b> This class extends {@link org.apache.hudi.client.validator.BasePreCommitValidator}
+ * and is invoked by {@link SparkStreamerValidatorUtils}, NOT by {@code SparkValidatorUtils}
+ * (which expects {@code SparkPreCommitValidator} with a different constructor signature).
+ * Listing this class in {@code hoodie.precommit.validators} while also using the standard
+ * Spark table write-path validators will cause an instantiation failure in {@code SparkValidatorUtils}.
+ * Use this validator exclusively with HoodieStreamer pipelines.</p>
  */
 public class SparkKafkaOffsetValidator extends StreamingOffsetValidator {
 

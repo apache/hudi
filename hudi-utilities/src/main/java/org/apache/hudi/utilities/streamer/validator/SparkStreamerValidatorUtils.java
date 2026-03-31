@@ -38,7 +38,6 @@ import org.apache.spark.api.java.JavaRDD;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.IOException;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
@@ -54,6 +53,15 @@ import java.util.stream.Collectors;
  *
  * <p>Called from {@code StreamSync.writeToSinkAndDoMetaSync()} before
  * the commit is finalized.</p>
+ *
+ * <p><b>Note on validator compatibility:</b> This utility uses a different instantiation
+ * mechanism than {@code SparkValidatorUtils} (used by the Spark table write path).
+ * {@code SparkValidatorUtils} expects validators implementing {@code SparkPreCommitValidator}
+ * with a {@code (HoodieSparkTable, HoodieEngineContext, HoodieWriteConfig)} constructor.
+ * Validators registered here (e.g. {@link SparkKafkaOffsetValidator}) extend
+ * {@link BasePreCommitValidator} with a {@code (TypedProperties)} constructor and
+ * are NOT compatible with {@code SparkValidatorUtils}. Do not mix them under the same
+ * {@code hoodie.precommit.validators} config if both paths are active.</p>
  */
 public class SparkStreamerValidatorUtils {
 
@@ -82,7 +90,8 @@ public class SparkStreamerValidatorUtils {
       return;
     }
 
-    // Collect write statuses and build context
+    // Cache the RDD to avoid recomputation when collecting write stats (prevents a second DAG evaluation)
+    writeStatusRDD.cache();
     List<WriteStatus> allWriteStatus = writeStatusRDD.collect();
     HoodieCommitMetadata currentMetadata = buildCommitMetadata(allWriteStatus, checkpointCommitMetadata);
     List<HoodieWriteStat> writeStats = allWriteStatus.stream()
@@ -124,9 +133,12 @@ public class SparkStreamerValidatorUtils {
   }
 
   /**
-   * Build HoodieCommitMetadata from write statuses and extra metadata.
-   * This constructs the metadata object that would be committed, giving
-   * validators access to the same data.
+   * Build a pre-commit snapshot of {@link HoodieCommitMetadata} from write statuses and extra metadata.
+   *
+   * <p>This is intentionally a partial/preview object used only for validation — it contains
+   * write stats and checkpoint extra-metadata, but omits fields that are not available before the
+   * commit (e.g. schema, operation type). Validators should treat this as a read-only snapshot
+   * of what will be committed, not a fully-constructed commit record.</p>
    */
   private static HoodieCommitMetadata buildCommitMetadata(
       List<WriteStatus> writeStatuses, Map<String, String> extraMetadata) {
