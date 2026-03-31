@@ -202,9 +202,6 @@ class TestHFileReaderFactory {
 
   @Test
   void testBuilder_WithoutPropertiesProvided_ShouldUseDefaultProperties() throws IOException {
-    when(mockStorage.getPathInfo(mockPath)).thenReturn(mockPathInfo);
-    when(mockPathInfo.getLength()).thenReturn(1024L);
-
     // Not providing properties, should use defaults
     HFileReaderFactory factory = HFileReaderFactory.builder()
         .withStorage(mockStorage)
@@ -218,8 +215,6 @@ class TestHFileReaderFactory {
   @Test
   void testCreateHFileReader_WithCachingEnabled_ShouldLazilyOpenStream() throws IOException {
     properties.setProperty(HoodieReaderConfig.HFILE_BLOCK_CACHE_ENABLED.key(), "true");
-    when(mockStorage.getPathInfo(mockPath)).thenReturn(mockPathInfo);
-    when(mockPathInfo.getLength()).thenReturn(1024L);
 
     HFileReaderFactory factory = HFileReaderFactory.builder()
         .withStorage(mockStorage)
@@ -229,7 +224,6 @@ class TestHFileReaderFactory {
 
     HFileReader reader = factory.createHFileReader();
     assertInstanceOf(CachingHFileReaderImpl.class, reader);
-    verify(mockStorage, times(1)).getPathInfo(mockPath);
     verify(mockStorage, never()).openSeekable(mockPath, false);
   }
 }

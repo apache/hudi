@@ -47,7 +47,7 @@ import static org.apache.hudi.io.hfile.HFileUtils.readMajorVersion;
 public class HFileReaderImpl implements HFileReader {
 
   protected final Lazy<SeekableDataInputStream> lazyStream;
-  protected final long fileSize;
+  protected final Lazy<Long> lazyFileSize;
 
   protected final HFileCursor cursor;
   protected boolean isMetadataInitialized = false;
@@ -61,12 +61,12 @@ public class HFileReaderImpl implements HFileReader {
   protected Option<HFileDataBlock> currentDataBlock;
 
   public HFileReaderImpl(SeekableDataInputStream stream, long fileSize) {
-    this(Lazy.eagerly(stream), fileSize);
+    this(Lazy.eagerly(stream), Lazy.eagerly(fileSize));
   }
 
-  public HFileReaderImpl(Lazy<SeekableDataInputStream> lazyStream, long fileSize) {
+  public HFileReaderImpl(Lazy<SeekableDataInputStream> lazyStream, Lazy<Long> lazyFileSize) {
     this.lazyStream = lazyStream;
-    this.fileSize = fileSize;
+    this.lazyFileSize = lazyFileSize;
     this.cursor = new HFileCursor();
     this.currentDataBlockEntry = Option.empty();
     this.currentDataBlock = Option.empty();
@@ -80,13 +80,13 @@ public class HFileReaderImpl implements HFileReader {
 
     // Read Trailer (serialized in Proto)
     SeekableDataInputStream stream = lazyStream.get();
-    this.trailer = readTrailer(stream, fileSize);
+    this.trailer = readTrailer(stream, lazyFileSize.get());
     this.context = HFileContext.builder()
         .compressionCodec(trailer.getCompressionCodec())
         .build();
     HFileBlockReader blockReader = new HFileBlockReader(
         context, stream, trailer.getLoadOnOpenDataOffset(),
-        fileSize - HFileTrailer.getTrailerSize());
+        lazyFileSize.get() - HFileTrailer.getTrailerSize());
     // Parse root data index block
     HFileRootIndexBlock rootDataIndexBlock =
         (HFileRootIndexBlock) blockReader.nextBlock(HFileBlockType.ROOT_INDEX);
