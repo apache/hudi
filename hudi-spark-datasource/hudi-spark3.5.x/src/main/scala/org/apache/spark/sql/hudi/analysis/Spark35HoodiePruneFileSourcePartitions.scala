@@ -15,14 +15,17 @@
  * limitations under the License.
  */
 
-import org.apache.hudi.SparkAdapterSupport.sparkAdapter
 import org.apache.hudi.{HoodieBaseRelation, HoodieFileIndex}
+import org.apache.hudi.SparkAdapterSupport.sparkAdapter
+
+import Spark35HoodiePruneFileSourcePartitions.{exprUtils, getPartitionFiltersAndDataFilters, rebuildPhysicalOperation}
+import Spark35HoodiePruneFileSourcePartitions.HoodieRelationMatcher
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.catalog.CatalogStatistics
 import org.apache.spark.sql.catalyst.expressions.{And, AttributeReference, AttributeSet, Expression, ExpressionSet, NamedExpression, PredicateHelper, SubqueryExpression}
 import org.apache.spark.sql.catalyst.planning.PhysicalOperation
-import org.apache.spark.sql.catalyst.plans.logical.statsEstimation.FilterEstimation
 import org.apache.spark.sql.catalyst.plans.logical.{Filter, LeafNode, LogicalPlan, Project}
+import org.apache.spark.sql.catalyst.plans.logical.statsEstimation.FilterEstimation
 import org.apache.spark.sql.catalyst.rules.Rule
 import org.apache.spark.sql.execution.datasources.{HadoopFsRelation, LogicalRelation}
 import org.apache.spark.sql.sources.BaseRelation
@@ -32,7 +35,7 @@ import org.apache.spark.sql.types.StructType
  * Prune the partitions of Hudi table based relations by the means of pushing down the
  * partition filters
  *
- * NOTE: [[Spark34HoodiePruneFileSourcePartitions]] is a replica in kind to Spark's [[PruneFileSourcePartitions]]
+ * NOTE: [[Spark35HoodiePruneFileSourcePartitions]] is a replica in kind to Spark's [[PruneFileSourcePartitions]]
  */
 case class Spark35HoodiePruneFileSourcePartitions(spark: SparkSession) extends Rule[LogicalPlan] {
 
@@ -74,7 +77,6 @@ case class Spark35HoodiePruneFileSourcePartitions(spark: SparkSession) extends R
         op
       }
   }
-
 }
 
 private object Spark35HoodiePruneFileSourcePartitions extends PredicateHelper {
