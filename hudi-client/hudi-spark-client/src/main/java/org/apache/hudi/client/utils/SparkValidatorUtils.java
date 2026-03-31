@@ -84,6 +84,21 @@ public class SparkValidatorUtils {
       Dataset<Row> beforeState = getRecordsFromCommittedFiles(sqlContext, partitionsModified, table, afterState.schema());
 
       Stream<SparkPreCommitValidator> validators = Arrays.stream(config.getPreCommitValidators().split(","))
+          .map(String::trim)
+          .filter(validatorClass -> {
+            try {
+              Class<?> clazz = Class.forName(validatorClass);
+              if (!SparkPreCommitValidator.class.isAssignableFrom(clazz)) {
+                LOG.warn("Skipping validator {} — it does not implement SparkPreCommitValidator. "
+                    + "If this is a streaming offset validator (e.g. SparkKafkaOffsetValidator), "
+                    + "it will be invoked by SparkStreamerValidatorUtils instead.", validatorClass);
+                return false;
+              }
+              return true;
+            } catch (ClassNotFoundException e) {
+              throw new HoodieValidationException("Cannot find validator class: " + validatorClass, e);
+            }
+          })
           .map(validatorClass -> ((SparkPreCommitValidator) ReflectionUtils.loadClass(validatorClass,
               new Class<?>[] {HoodieSparkTable.class, HoodieEngineContext.class, HoodieWriteConfig.class},
               table, context, config)));
