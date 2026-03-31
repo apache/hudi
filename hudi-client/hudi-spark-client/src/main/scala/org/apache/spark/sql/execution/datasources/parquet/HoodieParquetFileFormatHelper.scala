@@ -21,6 +21,7 @@ package org.apache.spark.sql.execution.datasources.parquet
 
 import org.apache.hadoop.conf.Configuration
 import org.apache.hudi.HoodieSparkUtils
+import org.apache.hudi.common.util.collection.Pair
 import org.apache.parquet.hadoop.metadata.FileMetaData
 import org.apache.parquet.schema.{MessageType, PrimitiveType, Types}
 import org.apache.parquet.schema.PrimitiveType.PrimitiveTypeName
@@ -33,7 +34,7 @@ object HoodieParquetFileFormatHelper {
 
   def buildImplicitSchemaChangeInfo(hadoopConf: Configuration,
                                     parquetFileMetaData: FileMetaData,
-                                    requiredSchema: StructType): (java.util.Map[Integer, org.apache.hudi.common.util.collection.Pair[DataType, DataType]], StructType) = {
+                                    requiredSchema: StructType): (java.util.Map[Integer, Pair[DataType, DataType]], StructType) = {
     val originalSchema = parquetFileMetaData.getSchema
 
     // Spark 3.3's ParquetToSparkSchemaConverter throws "Illegal Parquet type: FIXED_LEN_BYTE_ARRAY"
