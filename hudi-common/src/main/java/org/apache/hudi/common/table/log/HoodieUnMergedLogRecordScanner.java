@@ -83,7 +83,7 @@ public class HoodieUnMergedLogRecordScanner extends AbstractHoodieLogRecordReade
 
   @Override
   protected void processNextDeletedRecord(DeleteRecord deleteRecord) {
-    throw new IllegalStateException("Not expected to see delete records in this log-scan mode. Check Job Config");
+    // no - op
   }
 
   /**
