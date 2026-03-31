@@ -306,6 +306,13 @@ object HoodieSqlCommonUtils extends SparkAdapterSupport {
     HoodieTimeline.FULL_BOOTSTRAP_INSTANT_TS
   )
 
+  private def isLegacyZeroPrefixedInstant(instantValue: String): Boolean = {
+    instantValue.nonEmpty &&
+      instantValue.length < HoodieInstantTimeGenerator.SECS_INSTANT_ID_LENGTH &&
+      instantValue.startsWith("0") &&
+      isAllDigits(instantValue)
+  }
+
   /**
    * Validate and normalize an incremental query instant (begin or end).
    * Allows sentinel values like "earliest" and "000" to pass through unchanged,
@@ -314,7 +321,8 @@ object HoodieSqlCommonUtils extends SparkAdapterSupport {
    */
   def formatIncrementalInstant(instantValue: String): String = {
     if (INCREMENTAL_SENTINEL_VALUES.contains(instantValue.toLowerCase(Locale.ROOT))
-      || INCREMENTAL_SENTINEL_VALUES.contains(instantValue)) {
+      || INCREMENTAL_SENTINEL_VALUES.contains(instantValue)
+      || isLegacyZeroPrefixedInstant(instantValue)) {
       instantValue
     } else {
       formatQueryInstant(instantValue)

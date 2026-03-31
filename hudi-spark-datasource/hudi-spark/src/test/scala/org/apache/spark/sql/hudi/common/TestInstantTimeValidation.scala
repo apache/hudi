@@ -138,6 +138,13 @@ class TestInstantTimeValidation {
   }
 
   @Test
+  def testFormatIncrementalInstantPassesThroughLegacyZeroPrefixedInstants(): Unit = {
+    assertEquals("0", HoodieSqlCommonUtils.formatIncrementalInstant("0"))
+    assertEquals("001", HoodieSqlCommonUtils.formatIncrementalInstant("001"))
+    assertEquals("0000", HoodieSqlCommonUtils.formatIncrementalInstant("0000"))
+  }
+
+  @Test
   def testFormatIncrementalInstantPassesThroughBootstrapInstants(): Unit = {
     assertEquals(HoodieTimeline.INIT_INSTANT_TS,
       HoodieSqlCommonUtils.formatIncrementalInstant(HoodieTimeline.INIT_INSTANT_TS))
@@ -213,6 +220,16 @@ class TestInstantTimeValidation {
       DataSourceReadOptions.START_COMMIT.key -> "earliest"
     ))
     assertEquals("earliest", params(DataSourceReadOptions.START_COMMIT.key))
+  }
+
+  @Test
+  def testReadDefaultsAllowsLegacyZeroPrefixedInstants(): Unit = {
+    val params = DataSourceOptionsHelper.parametersWithReadDefaults(Map(
+      DataSourceReadOptions.START_COMMIT.key -> "0",
+      DataSourceReadOptions.END_COMMIT.key -> "001"
+    ))
+    assertEquals("0", params(DataSourceReadOptions.START_COMMIT.key))
+    assertEquals("001", params(DataSourceReadOptions.END_COMMIT.key))
   }
 
   @Test
