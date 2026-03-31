@@ -107,7 +107,7 @@ public class HoodieInternalRowFileWriterFactory {
         .maxFileSize(writeConfig.getLongOrDefault(HoodieStorageConfig.LANCE_MAX_FILE_SIZE))
         .allocatorSize(writeConfig.getLongOrDefault(HoodieStorageConfig.LANCE_WRITE_ALLOCATOR_SIZE_BYTES))
         .flushByteWatermark(writeConfig.getLongOrDefault(HoodieStorageConfig.LANCE_WRITE_FLUSH_BYTE_WATERMARK))
-        .bloomFilter(tryInstantiateBloomFilter(writeConfig))
+        .bloomFilterOpt(tryInstantiateBloomFilter(writeConfig))
         .build();
   }
 
