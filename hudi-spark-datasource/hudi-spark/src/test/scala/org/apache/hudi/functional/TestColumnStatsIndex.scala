@@ -309,7 +309,7 @@ class TestColumnStatsIndex extends ColumnStatIndexTestBase {
       } else {
         metaClient.getStorage.listFiles(new StoragePath(metaClient.getBasePath,  "9")).asScala.toSeq
       }
-      val baseFileFileStatus = dataFiles.filter(fileStatus => fileStatus.getPath.getName.contains(lastCompletedCommit.getTimestamp)).head
+      val baseFileFileStatus = dataFiles.filter(fileStatus => fileStatus.getPath.getName.endsWith(".parquet") && fileStatus.getPath.getName.contains(lastCompletedCommit.getTimestamp)).head
       baseFileName = baseFileFileStatus.getPath.getName
     }
 
