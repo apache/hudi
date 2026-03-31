@@ -19,11 +19,12 @@
 
 package org.apache.hudi.io.storage;
 
+import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.HoodieReaderConfig;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.engine.EngineProperty;
+import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.EmptyHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
@@ -38,16 +39,17 @@ import org.apache.hudi.core.io.storage.HoodieAvroHFileReaderImplBase;
 import org.apache.hudi.core.io.storage.HoodieFileWriterFactory;
 import org.apache.hudi.core.io.storage.HoodieNativeAvroHFileReader;
 import org.apache.hudi.io.SeekableDataInputStream;
+import org.apache.hudi.io.hadoop.TestHoodieOrcReaderWriter;
 import org.apache.hudi.io.hfile.CachingHFileReaderImpl;
 import org.apache.hudi.io.hfile.HFileReader;
 import org.apache.hudi.io.hfile.UTF8StringKey;
-import org.apache.hudi.io.hadoop.TestHoodieOrcReaderWriter;
 import org.apache.hudi.io.storage.hadoop.HoodieAvroHFileWriter;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathFilter;
 import org.apache.hudi.storage.StoragePathInfo;
 
+import com.github.benmanes.caffeine.cache.Cache;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
@@ -62,6 +64,7 @@ import org.junit.jupiter.api.io.TempDir;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.lang.reflect.Field;
 import java.net.URI;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -74,9 +77,10 @@ import java.util.function.Supplier;
 
 import static org.apache.hudi.common.testutils.SchemaTestUtil.getSchemaFromResource;
 import static org.apache.hudi.common.util.CollectionUtils.toStream;
-import static org.apache.hudi.io.storage.HoodieAvroHFileReaderImplBase.KEY_BLOOM_FILTER_META_BLOCK;
-import static org.apache.hudi.io.storage.HoodieAvroHFileReaderImplBase.SCHEMA_KEY;
+import static org.apache.hudi.core.io.storage.HoodieAvroHFileReaderImplBase.KEY_BLOOM_FILTER_META_BLOCK;
+import static org.apache.hudi.core.io.storage.HoodieAvroHFileReaderImplBase.SCHEMA_KEY;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @Slf4j
@@ -99,7 +103,8 @@ public class TestHoodieNativeAvroHFileReaderCaching {
   @BeforeAll
   public static void setup() throws Exception {
     storage = HoodieTestUtils.getStorage(getFilePath());
-    HoodieSchema avroSchema = getSchemaFromResource(TestHoodieOrcReaderWriter.class, "/exampleSchemaWithMetaFields.avsc");
+    HoodieSchema avroSchema = getSchemaFromResource(
+        TestHoodieOrcReaderWriter.class, "/exampleSchemaWithMetaFields.avsc");
     HoodieAvroHFileWriter writer = createWriter(avroSchema.toAvroSchema(), true);
 
     // Write records with for realistic testing
@@ -227,6 +232,28 @@ public class TestHoodieNativeAvroHFileReaderCaching {
     assertEquals(0, counter.getReadCount(), "Meta block cache hit should not read from the HFile stream");
   }
 
+  @Test
+  public void testInitializeMetadataReloadsLoadOnOpenDataAfterLoadOnOpenCacheCleared() throws Exception {
+    StorageAccessCounter counter = new StorageAccessCounter();
+    HoodieStorage countingStorage = createCountingStorage(counter);
+    HFileReaderFactory readerFactory = createCachingReaderFactory(countingStorage);
+
+    try (HFileReader reader = readerFactory.createHFileReader()) {
+      reader.initializeMetadata();
+    }
+    assertNotNull(getLoadOnOpenDataCacheEntry());
+    invalidateLoadOnOpenDataCacheEntry();
+
+    counter.reset();
+    try (HFileReader reader = readerFactory.createHFileReader()) {
+      reader.initializeMetadata();
+    }
+
+    assertTrue(counter.getOpenCount() > 0, "Clearing load-on-open cache should force stream reopen");
+    assertTrue(counter.getReadCount() > 0, "Clearing load-on-open cache should force stream reads");
+    assertNotNull(getLoadOnOpenDataCacheEntry());
+  }
+
   private void testExistingKeysLookup() throws Exception {
     log.debug("\n--- Testing {} Existing Key Lookups ---", KEYS_TO_LOOKUP);
 
@@ -339,15 +366,22 @@ public class TestHoodieNativeAvroHFileReaderCaching {
     TaskContextSupplier taskContextSupplier = new FixedTaskContextSupplier();
 
     return (HoodieAvroHFileWriter) HoodieFileWriterFactory.getFileWriter(
-        instantTime, getFilePath(), storage, HoodieStorageConfig.newBuilder().fromProperties(props).build(), HoodieSchema.fromAvroSchema(avroSchema),
-        taskContextSupplier, HoodieRecord.HoodieRecordType.AVRO);
+        instantTime,
+        getFilePath(),
+        storage,
+        HoodieStorageConfig.newBuilder().fromProperties(props).build(),
+        HoodieSchema.fromAvroSchema(avroSchema),
+        taskContextSupplier,
+        HoodieRecord.HoodieRecordType.AVRO);
   }
 
   private static StoragePath getFilePath() {
     return new StoragePath(tempDir.toString() + "/perf_test.hfile");
   }
 
-  private HoodieAvroHFileReaderImplBase createReader(HoodieStorage storage, boolean useBloomFilter, boolean enableCache) throws Exception {
+  private HoodieAvroHFileReaderImplBase createReader(HoodieStorage storage,
+                                                     boolean useBloomFilter,
+                                                     boolean enableCache) throws Exception {
     TypedProperties props = new TypedProperties();
     props.setProperty(HoodieReaderConfig.HFILE_BLOCK_CACHE_ENABLED.key(), String.valueOf(enableCache));
     // Use a cache that can hold 100 blocks
@@ -366,6 +400,8 @@ public class TestHoodieNativeAvroHFileReaderCaching {
     TypedProperties props = new TypedProperties();
     props.setProperty(HoodieReaderConfig.HFILE_BLOCK_CACHE_ENABLED.key(), "true");
     props.setProperty(HoodieReaderConfig.HFILE_BLOCK_CACHE_SIZE.key(), "100");
+    props.setProperty(HoodieReaderConfig.HFILE_INDEX_BLOCK_CACHE_SIZE.key(), "100");
+    props.setProperty(HoodieMetadataConfig.METADATA_FILE_CACHE_MAX_SIZE_MB.key(), "0");
 
     return HFileReaderFactory.builder()
         .withStorage(storage)
@@ -398,7 +434,7 @@ public class TestHoodieNativeAvroHFileReaderCaching {
       return readCount.get();
     }
 
-    private void reset() {
+    private synchronized void reset() {
       openCount.set(0);
       readCount.set(0);
     }
@@ -542,7 +578,11 @@ public class TestHoodieNativeAvroHFileReaderCaching {
     }
 
     @Override
-    public OutputStream create(StoragePath path, boolean overwrite, Integer bufferSize, Short replication, Long sizeThreshold) throws IOException {
+    public OutputStream create(StoragePath path,
+                               boolean overwrite,
+                               Integer bufferSize,
+                               Short replication,
+                               Long sizeThreshold) throws IOException {
       return delegate.create(path, overwrite, bufferSize, replication, sizeThreshold);
     }
 
@@ -552,7 +592,9 @@ public class TestHoodieNativeAvroHFileReaderCaching {
     }
 
     @Override
-    public SeekableDataInputStream openSeekable(StoragePath path, int bufferSize, boolean wrapStream) throws IOException {
+    public SeekableDataInputStream openSeekable(StoragePath path,
+                                                int bufferSize,
+                                                boolean wrapStream) throws IOException {
       counter.recordOpen();
       return new CountingSeekableDataInputStream(delegate.openSeekable(path, bufferSize, wrapStream), counter);
     }
@@ -630,6 +672,24 @@ public class TestHoodieNativeAvroHFileReaderCaching {
     @Override
     public void close() throws IOException {
       delegate.close();
+    }
+  }
+
+  @SuppressWarnings("unchecked")
+  private Object getLoadOnOpenDataCacheEntry() throws Exception {
+    Field cacheField = CachingHFileReaderImpl.class.getDeclaredField("GLOBAL_LOAD_ON_OPEN_DATA_CACHE");
+    cacheField.setAccessible(true);
+    Cache<String, Object> cache = (Cache<String, Object>) cacheField.get(null);
+    return cache == null ? null : cache.getIfPresent(getFilePath().toString());
+  }
+
+  @SuppressWarnings("unchecked")
+  private void invalidateLoadOnOpenDataCacheEntry() throws Exception {
+    Field cacheField = CachingHFileReaderImpl.class.getDeclaredField("GLOBAL_LOAD_ON_OPEN_DATA_CACHE");
+    cacheField.setAccessible(true);
+    Cache<String, Object> cache = (Cache<String, Object>) cacheField.get(null);
+    if (cache != null) {
+      cache.invalidate(getFilePath().toString());
     }
   }
 }

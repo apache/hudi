@@ -831,7 +831,7 @@ public class TestHFileReader {
     HFileReaderImpl reader = new HFileReaderImpl(Lazy.lazily(() -> {
       streamOpened.set(true);
       return new ByteArraySeekableDataInputStream(new ByteBufferBackedInputStream(new byte[0]));
-    }), 0);
+    }), Lazy.eagerly(0L));
 
     reader.close();
 
