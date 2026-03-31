@@ -20,6 +20,7 @@
 package org.apache.hudi.spark3.internal;
 
 import org.apache.hudi.DataSourceWriteOptions;
+import org.apache.hudi.HoodieSparkUtils;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.Option;
@@ -56,6 +57,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Unit tests {@link HoodieDataSourceInternalBatchWrite}.
+ * There is a separate test for Spark 3.4 in hudi-spark-datasource/hudi-spark3.4.x module
  */
 public class TestHoodieDataSourceInternalBatchWrite extends
     HoodieBulkInsertInternalWriterTestBase {
@@ -71,6 +73,10 @@ public class TestHoodieDataSourceInternalBatchWrite extends
   @ParameterizedTest
   @MethodSource("bulkInsertTypeParams")
   public void testDataSourceWriter(boolean populateMetaFields) throws Exception {
+    if (HoodieSparkUtils.isSpark3_4()) {
+      return;
+    }
+
     testDataSourceWriterInternal(Collections.emptyMap(), Collections.emptyMap(), populateMetaFields);
   }
 
@@ -127,6 +133,10 @@ public class TestHoodieDataSourceInternalBatchWrite extends
 
   @Test
   public void testDataSourceWriterExtraCommitMetadata() throws Exception {
+    if (HoodieSparkUtils.isSpark3_4()) {
+      return;
+    }
+
     String commitExtraMetaPrefix = "commit_extra_meta_";
     Map<String, String> extraMeta = new HashMap<>();
     extraMeta.put(DataSourceWriteOptions.COMMIT_METADATA_KEYPREFIX().key(), commitExtraMetaPrefix);
@@ -144,6 +154,10 @@ public class TestHoodieDataSourceInternalBatchWrite extends
 
   @Test
   public void testDataSourceWriterEmptyExtraCommitMetadata() throws Exception {
+    if (HoodieSparkUtils.isSpark3_4()) {
+      return;
+    }
+
     String commitExtraMetaPrefix = "commit_extra_meta_";
     Map<String, String> extraMeta = new HashMap<>();
     extraMeta.put(DataSourceWriteOptions.COMMIT_METADATA_KEYPREFIX().key(), commitExtraMetaPrefix);
@@ -157,6 +171,10 @@ public class TestHoodieDataSourceInternalBatchWrite extends
   @ParameterizedTest
   @MethodSource("bulkInsertTypeParams")
   public void testMultipleDataSourceWrites(boolean populateMetaFields) throws Exception {
+    if (HoodieSparkUtils.isSpark3_4()) {
+      return;
+    }
+
     // init config and table
     HoodieWriteConfig cfg = getWriteConfig(populateMetaFields);
     HoodieTable table = HoodieSparkTable.create(cfg, context, metaClient);
@@ -204,6 +222,10 @@ public class TestHoodieDataSourceInternalBatchWrite extends
   @ParameterizedTest
   @MethodSource("bulkInsertTypeParams")
   public void testLargeWrites(boolean populateMetaFields) throws Exception {
+    if (HoodieSparkUtils.isSpark3_4()) {
+      return;
+    }
+
     // init config and table
     HoodieWriteConfig cfg = getWriteConfig(populateMetaFields);
     HoodieTable table = HoodieSparkTable.create(cfg, context, metaClient);
@@ -256,6 +278,10 @@ public class TestHoodieDataSourceInternalBatchWrite extends
   @ParameterizedTest
   @MethodSource("bulkInsertTypeParams")
   public void testAbort(boolean populateMetaFields) throws Exception {
+    if (HoodieSparkUtils.isSpark3_4()) {
+      return;
+    }
+
     // init config and table
     HoodieWriteConfig cfg = getWriteConfig(populateMetaFields);
     HoodieTable table = HoodieSparkTable.create(cfg, context, metaClient);

@@ -19,6 +19,7 @@
 
 package org.apache.hudi.spark3.internal;
 
+import org.apache.hudi.HoodieSparkUtils;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -47,6 +48,7 @@ import static org.junit.jupiter.api.Assertions.fail;
 
 /**
  * Unit tests {@link HoodieBulkInsertDataInternalWriter}.
+ * There is a separate test for Spark 3.4 in hudi-spark-datasource/hudi-spark3.4.x module.
  */
 public class TestHoodieBulkInsertDataInternalWriter extends
     HoodieBulkInsertInternalWriterTestBase {
@@ -72,6 +74,10 @@ public class TestHoodieBulkInsertDataInternalWriter extends
   @ParameterizedTest
   @MethodSource("configParams")
   public void testDataInternalWriter(boolean sorted, boolean populateMetaFields) throws Exception {
+    if (HoodieSparkUtils.isSpark3_4()) {
+      return;
+    }
+
     // init config and table
     HoodieWriteConfig cfg = getWriteConfig(populateMetaFields);
     HoodieTable table = HoodieSparkTable.create(cfg, context, metaClient);
@@ -118,6 +124,10 @@ public class TestHoodieBulkInsertDataInternalWriter extends
    */
   @Test
   public void testGlobalFailure() throws Exception {
+    if (HoodieSparkUtils.isSpark3_4()) {
+      return;
+    }
+
     // init config and table
     HoodieWriteConfig cfg = getWriteConfig(true);
     HoodieTable table = HoodieSparkTable.create(cfg, context, metaClient);
