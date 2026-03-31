@@ -112,30 +112,44 @@ possible. Changes go into the existing `hudi-timeline-service` module, which con
 web-application that caches filesystem metadata of a Hudi table for job executors during
 tagging/writing.
 
-To use the Hudi Timeline UI, users just need to start the Timeline Server in **STANDALONE** mode,
-which is already supported.
+To use the Hudi Timeline UI, users can either start the Timeline Server in **STANDALONE** mode
+(which is already supported) or enable the UI on the **EMBEDDED** timeline server that runs within
+a Spark application's driver process (see [Configuration](#configuration)).
 
 The Hudi Timeline UI has two parts: the frontend and backend.
 
 ### Architecture
 
-The overall request flow is as follows:
+The timeline server can run standalone or embedded inside a Spark driver. In embedded mode, a tab
+in the Spark UI links directly to the Hudi Timeline UI.
 
-```
-┌─────────┐       HTTP        ┌──────────────────────────────────┐
-│ Browser │ <---------------> │     Javalin (Timeline Server)    │
-└─────────┘                   │                                  │
-                              │  /ui/*  --> Static Files         │
-                              │             (HTML, JS, CSS)      │
-                              │                                  │
-                              │  /v2/timeline/* --> UiHandler    │
-                              │        │                         │
-                              │        V                         │
-                              │  FileSystemViewManager           │
-                              │        │                         │
-                              │        V                         │
-                              │  HoodieTimeline / MetaClient     │
-                              └──────────────────────────────────┘
+```mermaid
+graph LR
+    Browser["Browser"]
+
+    subgraph Driver["Standalone / Spark Driver"]
+        subgraph TimelineServer["Javalin (Timeline Server)"]
+            Static["/ui/* - Static Files\n(HTML, JS, CSS)"]
+            API["/v2/timeline/* - UiHandler"]
+            FSVM["FileSystemViewManager"]
+            Meta["HoodieTimeline / MetaClient"]
+
+            API --> FSVM --> Meta
+        end
+
+        subgraph SparkUI["Spark UI (:4040) - embedded mode only"]
+            direction TB
+            SparkUIPad[ ] ~~~ Tabs["[Jobs] [Stages] ... [Hudi Timeline]"]
+        end
+
+        style SparkUIPad fill:none,stroke:none,color:none
+
+        Tabs -- "link" --> Static
+    end
+
+    Browser -- "HTTP" --> Static
+    Browser -- "HTTP" --> API
+    Browser -. "HTTP\n(embedded mode)" .-> SparkUI
 ```
 
 There are two categories of requests:
@@ -294,6 +308,8 @@ Proof of concept (PoC) snapshots:
 
 ## Configuration
 
+### Standalone Mode
+
 To start the Timeline Server in standalone mode with the UI enabled:
 
 ```shell
@@ -310,12 +326,96 @@ The `--enable-ui` flag controls whether the UI static files and `/v2/timeline/` 
 registered. When the flag is not set, the timeline server behaves exactly as it does today -
 no UI-related routes are added.
 
+### Embedded Mode (Spark-Shell / Spark Driver)
+
+When running Hudi inside a Spark application, the `EmbeddedTimelineService` already starts a
+timeline server within the driver process. The UI can be enabled on this embedded server by setting
+a Spark configuration property:
+
+```
+hoodie.embed.timeline.server.ui.enable = true
+```
+
+This property defaults to `false`. When set to `true`, the embedded timeline server registers the
+same UI routes and static file serving as the standalone mode.
+
+#### Starting from spark-shell
+
+```shell
+spark-shell \
+  --packages org.apache.hudi:hudi-spark3-bundle_2.12:1.2.0 \
+  --conf "hoodie.embed.timeline.server.ui.enable=true"
+```
+
+Once a write operation initializes the `EmbeddedTimelineService`, the UI becomes available at
+`http://<driver-host>:<embedded-server-port>/ui/`. The embedded server port is logged at startup
+and can also be retrieved from the Spark configuration via the
+`hoodie.embed.timeline.server.port` property.
+
+#### Starting from a Spark application (driver)
+
+Set the property programmatically on `HoodieWriteConfig` before creating the write client:
+
+```java
+HoodieWriteConfig config = HoodieWriteConfig.newBuilder()
+    .withPath(basePath)
+    .withEmbeddedTimelineServerEnabled(true)
+    .withEmbeddedTimelineServerUIEnabled(true)  // enables UI on embedded server
+    // ... other configs
+    .build();
+```
+
+The UI is available for the lifetime of the `EmbeddedTimelineService` - it starts when the write
+client initializes and stops when the client or `SparkContext` is closed.
+
+## Spark UI Tab Integration
+
+When the `EmbeddedTimelineService` starts with the UI enabled inside a Spark application, a
+"Hudi Timeline" tab is registered in the Spark web UI (typically at `http://localhost:4040`). This
+gives users a single place to discover and access the Hudi Timeline UI without needing to know the
+embedded server's port.
+
+### Approach
+
+A custom class extending Spark's `WebUITab` is added to the `hudi-spark-client` module. The tab
+contains a single `WebUIPage` that renders a link to the Hudi Timeline UI running on the embedded
+timeline server at `http://<driver-host>:<timeline-server-port>/ui/`.
+
+The link approach is chosen over embedding the UI in an iframe to avoid layout and scrolling issues
+within the Spark UI shell. Clicking the link opens the full Hudi Timeline UI in a new browser tab,
+providing the complete interactive experience.
+
+### Registration and Lifecycle
+
+```
+SparkContext starts
+  └─> EmbeddedTimelineService starts (with UI enabled)
+        └─> HudiTimelineTab registered via SparkUI.attachTab()
+
+SparkContext stops / write client closes
+  └─> EmbeddedTimelineService stops
+        └─> HudiTimelineTab detached via SparkUI.detachTab()
+```
+
+Registration happens in `EmbeddedTimelineService` after the embedded server has started
+successfully. The tab is detached during shutdown to ensure clean cleanup. If the Spark UI is not
+available (e.g., `spark.ui.enabled=false`), the tab registration is skipped silently.
+
+### Module Placement
+
+The Spark UI tab implementation lives in `hudi-spark-client`, not `hudi-timeline-service`, because
+it depends on Spark APIs (`WebUITab`, `WebUIPage`) which are not available in the timeline service
+module. The `EmbeddedTimelineService` (also in `hudi-client-common`) coordinates the registration
+by calling into the Spark-specific tab class when running with a `HoodieSparkEngineContext`.
+
 ## Dependency Impact
 
 - **Zero new Java compile-time dependencies.** The frontend uses Javalin's built-in static file
   serving; no template engine is added.
 - **vis-timeline JS/CSS:** ~300KB bundled as static resources under
   `src/main/resources/public/lib/vis-timeline/`.
+- **Spark UI tab:** Uses existing `spark-core` APIs (`WebUITab`, `WebUIPage`) which are already
+  provided dependencies in `hudi-spark-client`. No new JARs are added.
 - **No impact on Spark/Flink bundles.** `hudi-timeline-server-bundle` is a separate artifact;
   adding static resources does not affect engine-specific bundles.
 - **No frontend build pipeline.** No npm, webpack, or vite. The JS/CSS files are committed directly
