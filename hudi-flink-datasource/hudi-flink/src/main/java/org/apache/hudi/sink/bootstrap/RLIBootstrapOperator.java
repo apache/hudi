@@ -25,32 +25,19 @@ import org.apache.hudi.common.function.SerializableFunctionUnchecked;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieRecordGlobalLocation;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.metadata.HoodieBackedTableMetadata;
-import org.apache.hudi.sink.event.Correspondent;
-import org.apache.hudi.sink.utils.OperatorIDGenerator;
 import org.apache.hudi.util.StreamerUtil;
 import org.apache.hudi.utils.RuntimeContextUtils;
 
 import lombok.extern.slf4j.Slf4j;
-import org.apache.flink.api.common.JobID;
-import org.apache.flink.api.common.state.ListState;
-import org.apache.flink.api.common.state.ListStateDescriptor;
-import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.configuration.Configuration;
-import org.apache.flink.runtime.jobgraph.OperatorID;
 import org.apache.flink.runtime.state.StateInitializationContext;
-import org.apache.flink.runtime.state.StateSnapshotContext;
-import org.apache.flink.streaming.api.graph.StreamConfig;
-import org.apache.flink.streaming.api.operators.Output;
 import org.apache.flink.streaming.runtime.streamrecord.StreamRecord;
-import org.apache.flink.streaming.runtime.tasks.StreamTask;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
-import java.util.stream.StreamSupport;
 
 /**
  * Bootstrap operator that loads record level index (RLI) data from metadata table.
@@ -65,60 +52,17 @@ import java.util.stream.StreamSupport;
 public class RLIBootstrapOperator
     extends AbstractBootstrapOperator {
 
-  private final OperatorID dataWriteOperatorId;
-
-  private transient HoodieTableMetaClient metaClient;
   private transient HoodieBackedTableMetadata metadataTable;
-  private transient Correspondent correspondent;
   private transient long loadedCnt;
-
-  /**
-   * The last checkpoint id, starts from -1.
-   */
-  private long checkpointId = -1;
-
-  /**
-   * List state of the JobID.
-   */
-  private transient ListState<JobID> jobIdState;
 
   public RLIBootstrapOperator(Configuration conf) {
     super(conf);
-    String writeOperatorUid = conf.get(FlinkOptions.WRITE_OPERATOR_UID);
-    ValidationUtils.checkArgument(writeOperatorUid != null,
-        "Write operator UID should not be null when index is Record Level Index.");
-    this.dataWriteOperatorId = OperatorIDGenerator.fromUid(writeOperatorUid);
-  }
-
-  @Override
-  public void setup(StreamTask<?, ?> containingTask, StreamConfig config, Output<StreamRecord<HoodieFlinkInternalRow>> output) {
-    super.setup(containingTask, config, output);
-    this.correspondent = Correspondent.getInstance(dataWriteOperatorId,
-        getContainingTask().getEnvironment().getOperatorCoordinatorEventGateway());
   }
 
   @Override
   public void initializeState(StateInitializationContext context) throws Exception {
-    this.jobIdState = context.getOperatorStateStore().getListState(
-        new ListStateDescriptor<>(
-            "job-id-state",
-            TypeInformation.of(JobID.class)
-        ));
     loadedCnt = 0;
-
-    int attemptId = RuntimeContextUtils.getAttemptNumber(getRuntimeContext());
-    if (context.isRestored()) {
-      initCheckpointId(attemptId, context.getRestoredCheckpointId().orElse(-1L));
-    }
-
-    if (context.isRestored()) {
-      // Wait for pending instants being committed successfully before loading the record index
-      log.info("Waiting for pending instants committed before RLI bootstrap.");
-      correspondent.awaitPendingInstantsCommitted(checkpointId);
-      log.info("All pending instants are completed, continue RLI bootstrap.");
-    }
-
-    this.metaClient = StreamerUtil.createMetaClient(conf);
+    HoodieTableMetaClient metaClient = StreamerUtil.createMetaClient(conf);
     this.metadataTable = (HoodieBackedTableMetadata) metaClient.getTableFormat().getMetadataFactory().create(
         HoodieFlinkEngineContext.DEFAULT,
         metaClient.getStorage(),
@@ -126,15 +70,6 @@ public class RLIBootstrapOperator
         conf.get(FlinkOptions.PATH));
     // Load RLI records
     preLoadRLIRecords();
-  }
-
-  @Override
-  public void snapshotState(StateSnapshotContext context) throws Exception {
-    super.snapshotState(context);
-    // Reload the job ID state
-    reloadJobIdState();
-    // Update checkpoint id
-    this.checkpointId = context.getCheckpointId();
   }
 
   @Override
@@ -146,28 +81,6 @@ public class RLIBootstrapOperator
   // -------------------------------------------------------------------------
   //  Utilities
   // -------------------------------------------------------------------------
-
-  /**
-   * Reload the job id state as the current job id.
-   */
-  private void reloadJobIdState() throws Exception {
-    this.jobIdState.clear();
-    this.jobIdState.add(RuntimeContextUtils.getJobId(getRuntimeContext()));
-  }
-
-  private void initCheckpointId(int attemptId, long restoredCheckpointId) throws Exception {
-    if (attemptId <= 0) {
-      // returns early if the job/task is initially started.
-      return;
-    }
-    JobID currentJobId = RuntimeContextUtils.getJobId(getRuntimeContext());
-    if (StreamSupport.stream(this.jobIdState.get().spliterator(), false)
-        .noneMatch(currentJobId::equals)) {
-      // do not set up the checkpoint id if the state comes from the old job.
-      return;
-    }
-    this.checkpointId = restoredCheckpointId;
-  }
 
   private void preLoadRLIRecords() {
     int taskID = RuntimeContextUtils.getIndexOfThisSubtask(getRuntimeContext());

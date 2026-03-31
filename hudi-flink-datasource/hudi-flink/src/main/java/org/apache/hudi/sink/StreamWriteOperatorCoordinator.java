@@ -75,6 +75,7 @@ import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.ThreadFactory;
+import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -201,6 +202,19 @@ public class StreamWriteOperatorCoordinator
   private ClientIds clientIds;
 
   /**
+   * Whether {@link #start()} has completed for the current coordinator instance.
+   */
+  private transient boolean started;
+
+  /**
+   * Whether pending instants have been recommitted successfully during recovery.
+   *
+   * <p>When this flag is set for RLI bootstrap, {@link #triggerFailoverForRLIBootstrap()} forces a global
+   * failover so the bootstrap operator reloads the record level index from the recommitted timeline.
+   */
+  private transient boolean pendingInstantsRecommitted;
+
+  /**
    * Constructs a StreamingSinkOperatorCoordinator.
    *
    * @param conf    The config options
@@ -252,11 +266,12 @@ public class StreamWriteOperatorCoordinator
       if (OptionsResolver.isMultiWriter(conf)) {
         initClientIds(conf);
       }
-      restoreEvents();
+      restoreEvents(ckpId -> true);
     } catch (Throwable throwable) {
       log.error("Failed to start operator coordinator.", throwable);
       context.failJob(throwable);
     }
+    started = true;
   }
 
   @Override
@@ -326,7 +341,22 @@ public class StreamWriteOperatorCoordinator
   public void resetToCheckpoint(long checkpointID, byte[] checkpointData) {
     if (checkpointData != null) {
       initEventBufferIfNecessary();
-      this.eventBuffers.addEventsToBuffer(SerializationUtils.deserialize(checkpointData));
+      this.eventBuffers.clear();
+      Map<Long, Pair<String, ?>> events = SerializationUtils.deserialize(checkpointData);
+      Map<Long, Pair<String, ?>> filteredEvents = events.entrySet().stream()
+          .filter(entry -> entry.getKey() < checkpointID)
+          .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+      this.eventBuffers.addEventsToBuffer(filteredEvents);
+
+      // resetToCheckpoint() is called in two cases:
+      // 1. The job is restarted from state, start() will be called later.
+      // 2. The job is recovered from global failover. The coordinator is already started, and start() will not be called again.
+      if (started && OptionsResolver.isRLIWithBootstrap(conf)) {
+        this.executor.execute(() -> {
+          restoreEvents(ckpId -> true);
+          triggerFailoverForRLIBootstrap();
+        }, "Recommit pending instants on resetting to checkpoint: %s.", checkpointID);
+      }
     }
   }
 
@@ -364,8 +394,14 @@ public class StreamWriteOperatorCoordinator
   }
 
   @Override
-  public void subtaskReset(int i, long l) {
-    // no operation
+  public void subtaskReset(int i, long resetCkpId) {
+    // There exists pending instants waiting for recommiting.
+    if (OptionsResolver.isRLIWithBootstrap(conf) && !eventBuffers.getPendingInstantsBefore(resetCkpId).isEmpty()) {
+      executor.execute(() -> {
+        restoreEvents(ckpId -> ckpId < resetCkpId);
+        triggerFailoverForRLIBootstrap();
+      }, "Recommit pending instants on resetting subtask %s to checkpoint: %s.", i, resetCkpId);
+    }
   }
 
   @VisibleForTesting
@@ -390,9 +426,6 @@ public class StreamWriteOperatorCoordinator
     }
     if (request instanceof Correspondent.InflightInstantsRequest) {
       return handleInFlightInstantsRequest((Correspondent.InflightInstantsRequest) request);
-    }
-    if (request instanceof Correspondent.AwaitPendingInstantsRequest) {
-      return handleAwaitPendingInstantsRequest((Correspondent.AwaitPendingInstantsRequest) request);
     }
     throw new HoodieException("Unexpected coordination request type: " + request.getClass().getSimpleName());
   }
@@ -421,24 +454,14 @@ public class StreamWriteOperatorCoordinator
     return CompletableFuture.completedFuture(CoordinationResponseSerDe.wrap(coordinationResponse));
   }
 
-  private CompletableFuture<CoordinationResponse> handleAwaitPendingInstantsRequest(Correspondent.AwaitPendingInstantsRequest request) {
-    CompletableFuture<CoordinationResponse> response = new CompletableFuture<>();
-    instantRequestExecutor.execute(() -> {
-      // wait until receiving any bootstrap event.
-      eventBuffers.awaitPrevInstantsToComplete(request.getCheckpointId());
-      response.complete(CoordinationResponseSerDe.wrap(Correspondent.AwaitPendingInstantsResponse.getInstance()));
-    }, "await pending instants to complete");
-    return response;
-  }
-
   // -------------------------------------------------------------------------
   //  Utilities
   // -------------------------------------------------------------------------
 
-  private void restoreEvents() {
+  private void restoreEvents(Predicate<Long> ckpFilter) {
     if (this.eventBuffers.nonEmpty()) {
       final HoodieTimeline completedTimeline = this.metaClient.getActiveTimeline().filterCompletedInstants();
-      this.eventBuffers.getEventBufferStream()
+      this.eventBuffers.getEventBufferStream(ckpFilter)
           .forEach(entry -> recommitInstant(completedTimeline, entry.getKey(), entry.getValue().getLeft(), entry.getValue().getRight()));
       this.metaClient.reloadActiveTimeline();
     }
@@ -550,6 +573,10 @@ public class StreamWriteOperatorCoordinator
         writeClient.getHeartbeatClient().start(instant);
       }
       commitInstant(checkpointId, instant, bootstrapBuffer);
+      this.pendingInstantsRecommitted = true;
+    } else {
+      // clean the corresponding event buffer if the instant is already committed.
+      eventBuffers.reset(checkpointId);
     }
   }
 
@@ -563,7 +590,29 @@ public class StreamWriteOperatorCoordinator
     if (eventBuffer.allBootstrapEventsReceived()) {
       // start to recommit the instant.
       recommitInstant(event.getCheckpointId(), event.getInstantTime(), eventBuffer);
+      triggerFailoverForRLIBootstrap();
     }
+  }
+
+  /**
+   * Triggers a global failover for RLI bootstrap after pending instants are recommitted successfully.
+   *
+   * <p>This is used to make the RLI bootstrap operator reload the record level index completely after
+   * recovery. The hook is invoked in the following three recovery paths:
+   *
+   * <p>1. Job restart: {@link #handleBootstrapEvent(WriteMetadataEvent)}
+   *
+   * <p>2. Partial failover: {@link #subtaskReset(int, long)}
+   *
+   * <p>3. Global failover: {@link #resetToCheckpoint(long, byte[])}
+   */
+  private void triggerFailoverForRLIBootstrap() {
+    if (!pendingInstantsRecommitted || !OptionsResolver.isRLIWithBootstrap(conf)) {
+      return;
+    }
+    context.failJob(new HoodieException("There are pending instants recommitted on job restart,"
+        + "triggering a global failover so that RLI bootstrap operator can load the record level index completely."));
+    pendingInstantsRecommitted = false;
   }
 
   private void handleEndInputEvent(WriteMetadataEvent event) {
@@ -597,7 +646,7 @@ public class StreamWriteOperatorCoordinator
    */
   private boolean commitInstants(long checkpointId) {
     // use < instead of <= because the write metadata event sends the last known checkpoint id which is smaller than the current one.
-    List<Boolean> result = this.eventBuffers.getEventBufferStream().filter(entry -> entry.getKey() < checkpointId)
+    List<Boolean> result = this.eventBuffers.getEventBufferStream(ckpId -> ckpId < checkpointId)
         .map(entry -> commitInstant(entry.getKey(), entry.getValue().getLeft(), entry.getValue().getRight())).collect(Collectors.toList());
     return result.stream().anyMatch(i -> i);
   }
