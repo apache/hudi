@@ -357,7 +357,7 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
                       .collect(Collectors.toList())
           ));
     } finally {
-      log.info("On {} with query instant as {}, it took {}ms to filter {} files into file slices across {} partitions",
+      log.debug("On {} with query instant as {}, it took {}ms to filter {} files into file slices across {} partitions",
           metaClient.getTableConfig().getTableName(), queryInstant.orElse("N/A"), timer.endTimer(),
           allFiles.size(), partitions.size());
     }
@@ -375,7 +375,7 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
     } catch (IOException e) {
       throw new HoodieIOException("Error fetching partition paths", e);
     } finally {
-      log.info("On {}, it took {} ms to list partition paths with {} relativePartitionPaths and partition predicates",
+      log.debug("On {}, it took {} ms to list partition paths with {} relativePartitionPaths and partition predicates",
           metaClient.getTableConfig().getTableName(), timer.endTimer(), relativePartitionPaths.size());
     }
 
@@ -397,7 +397,7 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
           try {
             matchedPartitionPaths = tableMetadata.getPartitionPathWithPathPrefixes(relativePartitionPaths);
           } finally {
-            log.info("On {}, it took {} ms to list partition paths with {} relativePartitionPaths",
+            log.debug("On {}, it took {} ms to list partition paths with {} relativePartitionPaths",
                 metaClient.getTableConfig().getTableName(), timer.endTimer(), relativePartitionPaths.size());
           }
         }
@@ -490,6 +490,12 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
     Set<StoragePath> missingPartitionPaths =
         CollectionUtils.diffSet(partitionPaths, cachedPartitionPaths.keySet());
 
+    if (missingPartitionPaths.isEmpty()) {
+      return cachedPartitionPaths.values().stream()
+          .flatMap(Collection::stream)
+          .collect(Collectors.toList());
+    }
+
     // NOTE: We're constructing a mapping of absolute form of the partition-path into
     //       its relative one, such that we don't need to reconstruct these again later on
     Map<String, StoragePath> missingPartitionPathsMap = missingPartitionPaths.stream()
@@ -500,7 +506,7 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
 
     HoodieTimer timer = HoodieTimer.start();
     try {
-      log.info("On {}, out of {} partition paths, {} are missing from cache. Loading them.",
+      log.debug("On {}, out of {} partition paths, {} are missing from cache. Loading them.",
           metaClient.getTableConfig().getTableName(), partitionPaths.size(), missingPartitionPaths.size());
       Map<String, List<StoragePathInfo>> fetchedPartitionsMap;
       fetchedPartitionsMap = tableMetadata.getAllFilesInPartitions(
@@ -522,7 +528,7 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
     } catch (IOException e) {
       throw new HoodieIOException("On " + metaClient.getTableConfig().getTableName() + " Failed to list partition paths", e);
     } finally {
-      log.info("On {}, it took {} ms to fetch files for {} uncached partitions via getAllFilesInPartitions",
+      log.debug("On {}, it took {} ms to fetch files for {} uncached partitions via getAllFilesInPartitions",
           metaClient.getTableConfig().getTableName(), timer.endTimer(), missingPartitionPaths.size());
     }
   }
