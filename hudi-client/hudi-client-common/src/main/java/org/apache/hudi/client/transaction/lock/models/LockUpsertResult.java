@@ -29,7 +29,9 @@ public enum LockUpsertResult {
   // Another process has modified the lock file (precondition failure) with code 1
   ACQUIRED_BY_OTHERS(1),
   // Unable to determine lock state due to transient errors with code 2
-  UNKNOWN_ERROR(2);
+  UNKNOWN_ERROR(2),
+  // Request was throttled by the storage backend (e.g. HTTP 429) with code 3
+  THROTTLED(3);
 
   private final int code;
 }
