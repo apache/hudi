@@ -86,13 +86,13 @@ class TestBaseHoodieTableServiceClient extends HoodieCommonTestHarness {
       // mock rollback setup
       String newInstantTime = InProcessTimeGenerator.createNewInstantTime();
       HoodieTimeline pendingTimeline = new MockHoodieTimeline(Stream.empty(), Stream.of(newInstantTime));
-      when(mockMetaClient.getCommitsTimeline().filterPendingExcludingCompaction()).thenReturn(pendingTimeline);
+      when(mockMetaClient.getCommitsTimeline().filterPendingExcludingCompactionAndLogCompaction()).thenReturn(pendingTimeline);
       when(mockMetaClient.getActiveTimeline().filterPendingRollbackTimeline().getInstants()).thenReturn(Collections.emptyList());
       expectedRollbackInfo = Collections.singletonMap(newInstantTime, Option.empty());
       when(secondTable.getActiveTimeline()).thenReturn(timeline);
     } else {
       HoodieTimeline pendingTimeline = new MockHoodieTimeline(Stream.empty(), Stream.empty());
-      when(mockMetaClient.getCommitsTimeline().filterPendingExcludingCompaction()).thenReturn(pendingTimeline);
+      when(mockMetaClient.getCommitsTimeline().filterPendingExcludingCompactionAndLogCompaction()).thenReturn(pendingTimeline);
       when(mockMetaClient.getActiveTimeline().filterPendingRollbackTimeline().getInstants()).thenReturn(Collections.emptyList());
       expectedRollbackInfo = Collections.emptyMap();
       when(firstTable.getActiveTimeline()).thenReturn(timeline);
@@ -130,7 +130,7 @@ class TestBaseHoodieTableServiceClient extends HoodieCommonTestHarness {
     Map<String, Option<HoodiePendingRollbackInfo>> expectedRollbackInfo;
 
     HoodieTimeline pendingTimeline = new MockHoodieTimeline(Stream.empty(), Stream.empty());
-    when(mockMetaClient.getCommitsTimeline().filterPendingExcludingCompaction()).thenReturn(pendingTimeline);
+    when(mockMetaClient.getCommitsTimeline().filterPendingExcludingCompactionAndLogCompaction()).thenReturn(pendingTimeline);
     when(mockMetaClient.getActiveTimeline().filterPendingRollbackTimeline().getInstants()).thenReturn(Collections.emptyList());
     expectedRollbackInfo = Collections.emptyMap();
     when(firstTable.getActiveTimeline()).thenReturn(timeline);
@@ -167,7 +167,7 @@ class TestBaseHoodieTableServiceClient extends HoodieCommonTestHarness {
     Map<String, Option<HoodiePendingRollbackInfo>> expectedRollbackInfo;
 
     HoodieTimeline pendingTimeline = new MockHoodieTimeline(Stream.empty(), Stream.empty());
-    when(mockMetaClient.getCommitsTimeline().filterPendingExcludingCompaction()).thenReturn(pendingTimeline);
+    when(mockMetaClient.getCommitsTimeline().filterPendingExcludingCompactionAndLogCompaction()).thenReturn(pendingTimeline);
     when(mockMetaClient.getActiveTimeline().filterPendingRollbackTimeline().getInstants()).thenReturn(Collections.emptyList());
     expectedRollbackInfo = Collections.emptyMap();
     when(mockTable.getActiveTimeline()).thenReturn(timeline);
@@ -221,7 +221,7 @@ class TestBaseHoodieTableServiceClient extends HoodieCommonTestHarness {
     Map<String, Option<HoodiePendingRollbackInfo>> expectedRollbackInfo;
 
     HoodieTimeline pendingTimeline = new MockHoodieTimeline(Stream.empty(), Stream.empty());
-    when(mockMetaClient.getCommitsTimeline().filterPendingExcludingCompaction()).thenReturn(pendingTimeline);
+    when(mockMetaClient.getCommitsTimeline().filterPendingExcludingCompactionAndLogCompaction()).thenReturn(pendingTimeline);
     when(mockMetaClient.getActiveTimeline().filterPendingRollbackTimeline().getInstants()).thenReturn(Collections.emptyList());
     expectedRollbackInfo = Collections.emptyMap();
     when(mockTable.getActiveTimeline()).thenReturn(timeline);

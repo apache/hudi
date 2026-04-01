@@ -1296,6 +1296,196 @@ public class TestHoodieClientMultiWriter extends HoodieClientTestBase {
     FileIOUtils.deleteDirectory(new File(basePath));
   }
 
+  /**
+   * Test that when two writers attempt to execute the same log compaction plan concurrently,
+   * at least one will succeed and the other will fail due to heartbeat guard.
+   *
+   * This test uses a MOR table with multiwriter/optimistic concurrent control enabled.
+   */
+  @Test
+  public void testConcurrentLogCompactionExecutionOnSamePlan() throws Exception {
+    setUpMORTestTable();
+
+    Properties properties = new Properties();
+    properties.setProperty(FILESYSTEM_LOCK_PATH_PROP_KEY, basePath + "/.hoodie/.locks");
+    properties.setProperty(LockConfiguration.LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP_KEY, "3000");
+    properties.setProperty(LockConfiguration.LOCK_ACQUIRE_RETRY_WAIT_TIME_IN_MILLIS_PROP_KEY, "1000");
+    properties.setProperty(LockConfiguration.LOCK_ACQUIRE_NUM_RETRIES_PROP_KEY, "3");
+
+    HoodieWriteConfig.Builder writeConfigBuilder = getConfigBuilder()
+        .withHeartbeatIntervalInMs(60 * 1000)
+        .withCleanConfig(HoodieCleanConfig.newBuilder()
+            .withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.LAZY)
+            .withAutoClean(false).build())
+        .withArchivalConfig(HoodieArchivalConfig.newBuilder()
+            .withAutoArchive(false).build())
+        .withCompactionConfig(HoodieCompactionConfig.newBuilder()
+            .withInlineCompaction(false)
+            .withMaxNumDeltaCommitsBeforeCompaction(2)
+            .withLogCompactionBlocksThreshold(1).build())
+        .withEmbeddedTimelineServerEnabled(false)
+        .withMarkersType(MarkerType.DIRECT.name())
+        .withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder()
+            .withStorageType(FileSystemViewStorageType.MEMORY)
+            .withSecondaryStorageType(FileSystemViewStorageType.MEMORY).build())
+        .withWriteConcurrencyMode(WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL)
+        .withLockConfig(HoodieLockConfig.newBuilder()
+            .withLockProvider(InProcessLockProvider.class)
+            .withConflictResolutionStrategy(new SimpleConcurrentFileWritesConflictResolutionStrategy())
+            .build())
+        .withProperties(properties);
+
+    HoodieWriteConfig cfg = writeConfigBuilder.build();
+
+    SparkRDDWriteClient client = getHoodieWriteClient(cfg);
+    String firstCommitTime = WriteClientTestUtils.createNewInstantTime();
+    createCommitWithInserts(cfg, client, "000", firstCommitTime, 200);
+
+    String secondCommitTime = WriteClientTestUtils.createNewInstantTime();
+    createCommitWithUpserts(cfg, client, firstCommitTime, Option.empty(), secondCommitTime, 100);
+    String thirdCommitTime = WriteClientTestUtils.createNewInstantTime();
+    createCommitWithUpserts(cfg, client, secondCommitTime, Option.empty(), thirdCommitTime, 100);
+
+    Option<String> logCompactionInstantOpt = client.scheduleTableService(Option.empty(), Option.empty(), TableServiceType.LOG_COMPACT);
+    assertTrue(logCompactionInstantOpt.isPresent(), "Log compaction should be scheduled");
+    String logCompactionInstantTime = logCompactionInstantOpt.get();
+
+    HoodieTimeline pendingLogCompactionTimeline = metaClient.reloadActiveTimeline().filterPendingLogCompactionTimeline();
+    assertTrue(pendingLogCompactionTimeline.containsInstant(logCompactionInstantTime),
+        "Log compaction instant should be in pending state after scheduling");
+
+    final int threadCount = 2;
+    final ExecutorService executors = Executors.newFixedThreadPool(threadCount);
+    final CyclicBarrier cyclicBarrier = new CyclicBarrier(threadCount);
+    final AtomicBoolean writer1Succeeded = new AtomicBoolean(false);
+    final AtomicBoolean writer2Succeeded = new AtomicBoolean(false);
+
+    SparkRDDWriteClient client1 = getHoodieWriteClient(cfg);
+    SparkRDDWriteClient client2 = getHoodieWriteClient(cfg);
+
+    Future<?> future1 = executors.submit(() -> {
+      try {
+        cyclicBarrier.await();
+        client1.logCompact(logCompactionInstantTime, true);
+        writer1Succeeded.set(true);
+      } catch (Exception e) {
+        LOG.info("Writer 1 failed with exception: " + e.getMessage());
+        writer1Succeeded.set(false);
+      }
+    });
+
+    Future<?> future2 = executors.submit(() -> {
+      try {
+        cyclicBarrier.await();
+        client2.logCompact(logCompactionInstantTime, true);
+        writer2Succeeded.set(true);
+      } catch (Exception e) {
+        LOG.info("Writer 2 failed with exception: " + e.getMessage());
+        writer2Succeeded.set(false);
+      }
+    });
+
+    future1.get();
+    future2.get();
+
+    assertTrue(writer1Succeeded.get() || writer2Succeeded.get(),
+        "At least one writer should succeed in executing the log compaction");
+
+    assertTrue(writer1Succeeded.get() ^ writer2Succeeded.get(),
+        "Exactly one writer should succeed in executing the log compaction");
+
+    executors.shutdown();
+    client.close();
+    client1.close();
+    client2.close();
+    FileIOUtils.deleteDirectory(new File(basePath));
+  }
+
+  /**
+   * Test that when a writer starts log compaction but the log compaction instant is no longer in the
+   * active timeline (either already completed or removed), it should throw an appropriate error.
+   *
+   * This test uses a MOR table with multiwriter/optimistic concurrent control enabled.
+   */
+  @Test
+  public void testLogCompactionFailsWhenInstantNotInActiveTimeline() throws Exception {
+    setUpMORTestTable();
+
+    Properties properties = new Properties();
+    properties.setProperty(FILESYSTEM_LOCK_PATH_PROP_KEY, basePath + "/.hoodie/.locks");
+    properties.setProperty(LockConfiguration.LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP_KEY, "3000");
+    properties.setProperty(LockConfiguration.LOCK_ACQUIRE_RETRY_WAIT_TIME_IN_MILLIS_PROP_KEY, "1000");
+    properties.setProperty(LockConfiguration.LOCK_ACQUIRE_NUM_RETRIES_PROP_KEY, "3");
+
+    HoodieWriteConfig.Builder writeConfigBuilder = getConfigBuilder()
+        .withHeartbeatIntervalInMs(60 * 1000)
+        .withCleanConfig(HoodieCleanConfig.newBuilder()
+            .withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.LAZY)
+            .withAutoClean(false).build())
+        .withArchivalConfig(HoodieArchivalConfig.newBuilder()
+            .withAutoArchive(false).build())
+        .withCompactionConfig(HoodieCompactionConfig.newBuilder()
+            .withInlineCompaction(false)
+            .withMaxNumDeltaCommitsBeforeCompaction(2)
+            .withLogCompactionBlocksThreshold(1).build())
+        .withEmbeddedTimelineServerEnabled(false)
+        .withMarkersType(MarkerType.DIRECT.name())
+        .withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder()
+            .withStorageType(FileSystemViewStorageType.MEMORY)
+            .withSecondaryStorageType(FileSystemViewStorageType.MEMORY).build())
+        .withWriteConcurrencyMode(WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL)
+        .withLockConfig(HoodieLockConfig.newBuilder()
+            .withLockProvider(InProcessLockProvider.class)
+            .withConflictResolutionStrategy(new SimpleConcurrentFileWritesConflictResolutionStrategy())
+            .build())
+        .withProperties(properties);
+
+    HoodieWriteConfig cfg = writeConfigBuilder.build();
+
+    SparkRDDWriteClient client = getHoodieWriteClient(cfg);
+    String firstCommitTime = WriteClientTestUtils.createNewInstantTime();
+    createCommitWithInserts(cfg, client, "000", firstCommitTime, 200);
+
+    String secondCommitTime = WriteClientTestUtils.createNewInstantTime();
+    createCommitWithUpserts(cfg, client, firstCommitTime, Option.empty(), secondCommitTime, 100);
+    String thirdCommitTime = WriteClientTestUtils.createNewInstantTime();
+    createCommitWithUpserts(cfg, client, secondCommitTime, Option.empty(), thirdCommitTime, 100);
+
+    Option<String> logCompactionInstantOpt = client.scheduleTableService(Option.empty(), Option.empty(), TableServiceType.LOG_COMPACT);
+    assertTrue(logCompactionInstantOpt.isPresent(), "Log compaction should be scheduled");
+    String logCompactionInstantTime = logCompactionInstantOpt.get();
+    client.close();
+
+    HoodieTimeline pendingLogCompactionTimeline = metaClient.reloadActiveTimeline().filterPendingLogCompactionTimeline();
+    assertTrue(pendingLogCompactionTimeline.containsInstant(logCompactionInstantTime),
+        "Log compaction instant should be in pending state after scheduling");
+
+    HoodieInstant requestedInstant = metaClient.reloadActiveTimeline()
+        .filterPendingLogCompactionTimeline()
+        .getInstantsAsStream()
+        .filter(i -> i.requestedTime().equals(logCompactionInstantTime))
+        .findFirst()
+        .get();
+
+    metaClient.getActiveTimeline().deletePending(requestedInstant);
+
+    pendingLogCompactionTimeline = metaClient.reloadActiveTimeline().filterPendingLogCompactionTimeline();
+    assertFalse(pendingLogCompactionTimeline.containsInstant(logCompactionInstantTime),
+        "Log compaction instant should no longer be in pending timeline after deletion");
+
+    SparkRDDWriteClient client2 = getHoodieWriteClient(cfg);
+
+    HoodieException exception = assertThrows(HoodieException.class, () -> {
+      client2.logCompact(logCompactionInstantTime, true);
+    }, "Log compaction should throw an error when instant is not in active timeline");
+
+    assertTrue(exception.getMessage().contains("is not present as pending or already completed in the active timeline"),
+        "Exception message should indicate log compaction instant is not in active timeline. Actual: " + exception.getMessage());
+
+    client2.close();
+    FileIOUtils.deleteDirectory(new File(basePath));
+  }
+
   @ParameterizedTest
   @EnumSource(value = HoodieTableType.class, names = {"MERGE_ON_READ", "COPY_ON_WRITE"})
   public void testMultiWriterWithAsyncLazyCleanRollback(HoodieTableType tableType) throws Exception {

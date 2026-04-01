@@ -224,25 +224,46 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
           + "timestamp exists. Instant details %s", compactionInstantWithGreaterTimestamp.get()));
     }
 
-    HoodieTimeline pendingLogCompactionTimeline = table.getActiveTimeline().filterPendingLogCompactionTimeline();
     InstantGenerator instantGenerator = table.getMetaClient().getInstantGenerator();
     HoodieInstant inflightInstant = instantGenerator.getLogCompactionInflightInstant(logCompactionInstantTime);
-    if (pendingLogCompactionTimeline.containsInstant(inflightInstant)) {
-      log.info("Found Log compaction inflight file. Rolling back the commit and exiting.");
-      table.rollbackInflightLogCompaction(inflightInstant, commitToRollback -> getPendingRollbackInfo(table.getMetaClient(), commitToRollback, false), txnManager);
-      table.getMetaClient().reloadActiveTimeline();
-      throw new HoodieException("Execution is aborted since it found an Inflight logcompaction,"
-          + "log compaction plans are mutable plans, so reschedule another logcompaction.");
+    boolean isMultiWriter = config.getWriteConcurrencyMode().supportsMultiWriter();
+    if (isMultiWriter) {
+      try {
+        txnManager.beginStateChange(Option.of(inflightInstant), txnManager.getLastCompletedTransactionOwner());
+        validateHeartBeat(logCompactionInstantTime);
+        if (!table.getMetaClient().reloadActiveTimeline().filterPendingLogCompactionTimeline().containsInstant(logCompactionInstantTime)) {
+          throw new HoodieException("Requested log compaction instant " + logCompactionInstantTime
+              + " is not present as pending or already completed in the active timeline.");
+        }
+        this.heartbeatClient.start(logCompactionInstantTime);
+      } finally {
+        txnManager.endStateChange(Option.of(inflightInstant));
+      }
     }
-    logCompactionTimer = metrics.getLogCompactionCtx();
-    WriteMarkersFactory.get(config.getMarkersType(), table, logCompactionInstantTime);
-    HoodieWriteMetadata<T> writeMetadata = table.logCompact(context, logCompactionInstantTime);
-    HoodieWriteMetadata<T> updatedWriteMetadata = partialUpdateTableMetadata(table, writeMetadata, logCompactionInstantTime, WriteOperationType.LOG_COMPACT);
-    HoodieWriteMetadata<O> logCompactionMetadata = convertToOutputMetadata(updatedWriteMetadata);
-    if (shouldComplete) {
-      commitLogCompaction(logCompactionInstantTime, logCompactionMetadata, Option.of(table));
+    try {
+      HoodieTimeline pendingLogCompactionTimeline = table.getActiveTimeline().filterPendingLogCompactionTimeline();
+      if (pendingLogCompactionTimeline.containsInstant(inflightInstant)) {
+        log.info("Found Log compaction inflight file. Rolling back the commit and exiting.");
+        table.rollbackInflightLogCompaction(inflightInstant, commitToRollback -> getPendingRollbackInfo(table.getMetaClient(), commitToRollback, false), txnManager);
+        table.getMetaClient().reloadActiveTimeline();
+        throw new HoodieException("Execution is aborted since it found an Inflight logcompaction,"
+            + "log compaction plans are mutable plans, so reschedule another logcompaction.");
+      }
+      logCompactionTimer = metrics.getLogCompactionCtx();
+      WriteMarkersFactory.get(config.getMarkersType(), table, logCompactionInstantTime);
+      HoodieWriteMetadata<T> writeMetadata = table.logCompact(context, logCompactionInstantTime);
+      HoodieWriteMetadata<T> updatedWriteMetadata = partialUpdateTableMetadata(table, writeMetadata, logCompactionInstantTime, WriteOperationType.LOG_COMPACT);
+      HoodieWriteMetadata<O> logCompactionMetadata = convertToOutputMetadata(updatedWriteMetadata);
+      if (shouldComplete) {
+        commitLogCompaction(logCompactionInstantTime, logCompactionMetadata, Option.of(table));
+      }
+      return logCompactionMetadata;
+    } catch (Exception e) {
+      if (isMultiWriter) {
+        this.heartbeatClient.stop(logCompactionInstantTime);
+      }
+      throw e;
     }
-    return logCompactionMetadata;
   }
 
   /**
@@ -458,33 +479,39 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
    * Commit Log Compaction and track metrics.
    */
   protected void completeLogCompaction(HoodieCommitMetadata metadata, HoodieTable table, String logCompactionCommitTime, List<HoodieWriteStat> partialMetadataWriteStats) {
-    this.context.setJobStatus(this.getClass().getSimpleName(), "Collect log compaction write status and commit compaction");
-    List<HoodieWriteStat> writeStats = metadata.getWriteStats();
-    handleWriteErrors(writeStats, TableServiceType.LOG_COMPACT);
-    final HoodieInstant logCompactionInstant = table.getMetaClient().createNewInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.LOG_COMPACTION_ACTION,
-        logCompactionCommitTime);
     try {
-      this.txnManager.beginStateChange(Option.of(logCompactionInstant), Option.empty());
-      preCommit(metadata);
-      finalizeWrite(table, logCompactionCommitTime, writeStats);
-      // commit to data table after committing to metadata table.
-      writeToMetadataTable(table, logCompactionCommitTime, metadata, partialMetadataWriteStats);
-      log.info("Committing Log Compaction {}", logCompactionCommitTime);
-      CompactHelpers.getInstance().completeInflightLogCompaction(table, logCompactionCommitTime, metadata);
-      log.debug("Log Compaction {} finished with result {}", logCompactionCommitTime, metadata);
+      this.context.setJobStatus(this.getClass().getSimpleName(), "Collect log compaction write status and commit compaction");
+      List<HoodieWriteStat> writeStats = metadata.getWriteStats();
+      handleWriteErrors(writeStats, TableServiceType.LOG_COMPACT);
+      final HoodieInstant logCompactionInstant = table.getMetaClient().createNewInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.LOG_COMPACTION_ACTION,
+          logCompactionCommitTime);
+      try {
+        this.txnManager.beginStateChange(Option.of(logCompactionInstant), Option.empty());
+        preCommit(metadata);
+        finalizeWrite(table, logCompactionCommitTime, writeStats);
+        // commit to data table after committing to metadata table.
+        writeToMetadataTable(table, logCompactionCommitTime, metadata, partialMetadataWriteStats);
+        log.info("Committing Log Compaction {}", logCompactionCommitTime);
+        CompactHelpers.getInstance().completeInflightLogCompaction(table, logCompactionCommitTime, metadata);
+        log.debug("Log Compaction {} finished with result {}", logCompactionCommitTime, metadata);
+      } finally {
+        this.txnManager.endStateChange(Option.of(logCompactionInstant));
+        releaseResources(logCompactionCommitTime);
+      }
+      WriteMarkersFactory.get(config.getMarkersType(), table, logCompactionCommitTime)
+          .quietDeleteMarkerDir(context, config.getMarkersDeleteParallelism());
+      if (logCompactionTimer != null) {
+        long durationInMs = metrics.getDurationInMs(logCompactionTimer.stop());
+        TimelineUtils.parseDateFromInstantTimeSafely(logCompactionCommitTime).ifPresent(parsedInstant ->
+            metrics.updateCommitMetrics(parsedInstant.getTime(), durationInMs, metadata, HoodieActiveTimeline.LOG_COMPACTION_ACTION)
+        );
+      }
+      log.info("Log Compacted successfully on commit {}", logCompactionCommitTime);
     } finally {
-      this.txnManager.endStateChange(Option.of(logCompactionInstant));
-      releaseResources(logCompactionCommitTime);
+      if (config.getWriteConcurrencyMode().supportsMultiWriter()) {
+        this.heartbeatClient.stop(logCompactionCommitTime);
+      }
     }
-    WriteMarkersFactory.get(config.getMarkersType(), table, logCompactionCommitTime)
-        .quietDeleteMarkerDir(context, config.getMarkersDeleteParallelism());
-    if (logCompactionTimer != null) {
-      long durationInMs = metrics.getDurationInMs(logCompactionTimer.stop());
-      TimelineUtils.parseDateFromInstantTimeSafely(logCompactionCommitTime).ifPresent(parsedInstant ->
-          metrics.updateCommitMetrics(parsedInstant.getTime(), durationInMs, metadata, HoodieActiveTimeline.LOG_COMPACTION_ACTION)
-      );
-    }
-    log.info("Log Compacted successfully on commit {}", logCompactionCommitTime);
   }
 
   /**
@@ -949,13 +976,13 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
   }
 
   /**
-   * Get inflight timeline excluding compaction and clustering.
+   * Get inflight timeline excluding compaction, log compaction, and clustering.
    *
    * @param metaClient
    * @return
    */
   private HoodieTimeline getInflightTimelineExcludeCompactionAndClustering(HoodieTableMetaClient metaClient) {
-    HoodieTimeline inflightTimelineExcludingCompaction = metaClient.getCommitsTimeline().filterPendingExcludingCompaction();
+    HoodieTimeline inflightTimelineExcludingCompaction = metaClient.getCommitsTimeline().filterPendingExcludingCompactionAndLogCompaction();
     return inflightTimelineExcludingCompaction.filter(instant -> !ClusteringUtils.isClusteringInstant(
         inflightTimelineExcludingCompaction, instant, metaClient.getInstantGenerator()));
   }
