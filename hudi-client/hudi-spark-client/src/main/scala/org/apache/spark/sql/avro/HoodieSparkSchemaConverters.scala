@@ -82,7 +82,22 @@ object HoodieSparkSchemaConverters extends SparkAdapterSupport {
         }
         HoodieSchema.createDecimal(name, nameSpace, null, d.precision, d.scale, fixedSize)
 
-      // Complex types
+      // Complex types — array of vectors: ArrayType(ArrayType(FloatType)) with VECTOR metadata
+      case ArrayType(innerArrayType @ ArrayType(_, _), containsNull)
+          if metadata.contains(HoodieSchema.TYPE_METADATA_FIELD) &&
+            HoodieSchema.parseTypeDescriptor(metadata.getString(HoodieSchema.TYPE_METADATA_FIELD)).getType == HoodieSchemaType.VECTOR =>
+        // Reject unsupported deeper nesting: array<array<VECTOR>>, array<map<K, VECTOR>>
+        if (innerArrayType.elementType.isInstanceOf[ArrayType] || innerArrayType.elementType.isInstanceOf[MapType]) {
+          throw new HoodieSchemaException(
+            s"VECTOR field '$recordName' uses unsupported nesting. " +
+              s"Supported patterns: direct VECTOR, array<VECTOR>, map<K, VECTOR>.")
+        }
+        // Convert the inner ArrayType to a VECTOR, then wrap in ARRAY
+        val vectorSchema = toHoodieType(innerArrayType, false, recordName, nameSpace, metadata)
+        HoodieSchema.createArray(
+          if (containsNull) HoodieSchema.createNullable(vectorSchema) else vectorSchema)
+
+      // Direct vector: ArrayType(FloatType) with VECTOR metadata
       case ArrayType(elementSparkType, containsNull)
           if metadata.contains(HoodieSchema.TYPE_METADATA_FIELD) &&
             HoodieSchema.parseTypeDescriptor(metadata.getString(HoodieSchema.TYPE_METADATA_FIELD)).getType == HoodieSchemaType.VECTOR =>
@@ -109,6 +124,14 @@ object HoodieSparkSchemaConverters extends SparkAdapterSupport {
       case ArrayType(elementType, containsNull) =>
         val elementSchema = toHoodieType(elementType, containsNull, recordName, nameSpace, metadata)
         HoodieSchema.createArray(elementSchema)
+
+      // Map of vectors: MapType(StringType, ArrayType(FloatType)) with VECTOR metadata
+      case MapType(StringType, valueArrayType @ ArrayType(_, _), valueContainsNull)
+          if metadata.contains(HoodieSchema.TYPE_METADATA_FIELD) &&
+            HoodieSchema.parseTypeDescriptor(metadata.getString(HoodieSchema.TYPE_METADATA_FIELD)).getType == HoodieSchemaType.VECTOR =>
+        val vectorSchema = toHoodieType(valueArrayType, false, recordName, nameSpace, metadata)
+        HoodieSchema.createMap(
+          if (valueContainsNull) HoodieSchema.createNullable(vectorSchema) else vectorSchema)
 
       case MapType(StringType, valueType, valueContainsNull) =>
         val valueSchema = toHoodieType(valueType, valueContainsNull, recordName, nameSpace, metadata)
@@ -265,12 +288,14 @@ object HoodieSparkSchemaConverters extends SparkAdapterSupport {
       case HoodieSchemaType.ARRAY =>
         val elementSchema = hoodieSchema.getElementType
         val schemaType = toSqlTypeHelper(elementSchema, existingRecordNames)
-        SchemaType(ArrayType(schemaType.dataType, containsNull = schemaType.nullable), nullable = false)
+        // Propagate element metadata (e.g., VECTOR type descriptor) so it reaches the StructField
+        SchemaType(ArrayType(schemaType.dataType, containsNull = schemaType.nullable), nullable = false, schemaType.metadata)
 
       case HoodieSchemaType.MAP =>
         val valueSchema = hoodieSchema.getValueType
         val schemaType = toSqlTypeHelper(valueSchema, existingRecordNames)
-        SchemaType(MapType(StringType, schemaType.dataType, valueContainsNull = schemaType.nullable), nullable = false)
+        // Propagate value metadata (e.g., VECTOR type descriptor) so it reaches the StructField
+        SchemaType(MapType(StringType, schemaType.dataType, valueContainsNull = schemaType.nullable), nullable = false, schemaType.metadata)
 
       case HoodieSchemaType.UNION =>
         if (hoodieSchema.isNullable) {

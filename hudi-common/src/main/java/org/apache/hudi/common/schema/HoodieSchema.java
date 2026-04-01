@@ -220,6 +220,8 @@ public class HoodieSchema implements Serializable {
 
   /**
    * Builds the value string for {@link #PARQUET_VECTOR_COLUMNS_METADATA_KEY}.
+   * Recursively scans nested RECORD fields using dot-notation for nested paths
+   * (e.g., "metadata.embedding:VECTOR(128)").
    *
    * @param schema a HoodieSchema of type RECORD (or null)
    * @return comma-separated {@code colName:VECTOR(dim[,elemType])} entries, or empty string
@@ -229,19 +231,39 @@ public class HoodieSchema implements Serializable {
     if (schema == null || schema.isSchemaNull()) {
       return "";
     }
-    List<HoodieSchemaField> fields = schema.getFields();
     StringBuilder sb = new StringBuilder();
-    for (HoodieSchemaField field : fields) {
+    buildVectorColumnsMetadataValue(schema, "", sb);
+    return sb.toString();
+  }
+
+  private static void buildVectorColumnsMetadataValue(HoodieSchema schema, String prefix, StringBuilder sb) {
+    for (HoodieSchemaField field : schema.getFields()) {
       HoodieSchema fieldSchema = field.schema().getNonNullType();
-      if (fieldSchema.getType() == HoodieSchemaType.VECTOR) {
-        Vector vectorSchema = (Vector) fieldSchema;
+      String fullName = prefix.isEmpty() ? field.name() : prefix + "." + field.name();
+      appendVectorMetadata(fieldSchema, fullName, sb);
+    }
+  }
+
+  private static void appendVectorMetadata(HoodieSchema fieldSchema, String fullName, StringBuilder sb) {
+    switch (fieldSchema.getType()) {
+      case VECTOR:
         if (sb.length() > 0) {
           sb.append(',');
         }
-        sb.append(field.name()).append(':').append(vectorSchema.toTypeDescriptor());
-      }
+        sb.append(fullName).append(':').append(((Vector) fieldSchema).toTypeDescriptor());
+        break;
+      case RECORD:
+        buildVectorColumnsMetadataValue(fieldSchema, fullName, sb);
+        break;
+      case ARRAY:
+        appendVectorMetadata(fieldSchema.getElementType().getNonNullType(), fullName + "[]", sb);
+        break;
+      case MAP:
+        appendVectorMetadata(fieldSchema.getValueType().getNonNullType(), fullName + "{}", sb);
+        break;
+      default:
+        break;
     }
-    return sb.toString();
   }
 
   private Schema avroSchema;

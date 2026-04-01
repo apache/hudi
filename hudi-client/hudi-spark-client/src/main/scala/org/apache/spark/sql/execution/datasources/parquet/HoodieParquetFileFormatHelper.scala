@@ -23,7 +23,7 @@ import org.apache.hadoop.conf.Configuration
 import org.apache.hudi.HoodieSparkUtils
 import org.apache.hudi.common.util.collection.Pair
 import org.apache.parquet.hadoop.metadata.FileMetaData
-import org.apache.parquet.schema.{MessageType, PrimitiveType, Types}
+import org.apache.parquet.schema.{GroupType, MessageType, PrimitiveType, Type, Types}
 import org.apache.parquet.schema.PrimitiveType.PrimitiveTypeName
 import org.apache.spark.sql.execution.datasources.SparkSchemaTransformUtils
 import org.apache.spark.sql.types.{DataType, StructType}
@@ -53,17 +53,21 @@ object HoodieParquetFileFormatHelper {
   }
 
   /**
-   * Rewrites bare FIXED_LEN_BYTE_ARRAY columns (no logical type annotation) to BINARY.
+   * Recursively rewrites bare FIXED_LEN_BYTE_ARRAY columns (no logical type annotation) to BINARY.
    * Columns with annotations (e.g., DECIMAL, UUID) are left untouched.
+   * Recurses into GroupType (nested structs, lists, maps) to handle nested vectors.
    */
   private def rewriteFixedLenByteArrayToBinary(schema: MessageType): MessageType = {
-    val fields = schema.getFields.asScala.map {
-      case pt: PrimitiveType
-        if pt.getPrimitiveTypeName == PrimitiveTypeName.FIXED_LEN_BYTE_ARRAY
-          && pt.getLogicalTypeAnnotation == null =>
-        Types.primitive(PrimitiveTypeName.BINARY, pt.getRepetition).named(pt.getName)
-      case other => other
-    }
-    new MessageType(schema.getName, fields.asJava)
+    new MessageType(schema.getName, rewriteFields(schema.getFields.asScala.toSeq).asJava)
+  }
+
+  private def rewriteFields(fields: Seq[Type]): Seq[Type] = fields.map {
+    case pt: PrimitiveType
+      if pt.getPrimitiveTypeName == PrimitiveTypeName.FIXED_LEN_BYTE_ARRAY
+        && pt.getLogicalTypeAnnotation == null =>
+      Types.primitive(PrimitiveTypeName.BINARY, pt.getRepetition).named(pt.getName)
+    case gt: GroupType =>
+      gt.withNewFields(rewriteFields(gt.getFields.asScala.toSeq).asJava)
+    case other => other
   }
 }

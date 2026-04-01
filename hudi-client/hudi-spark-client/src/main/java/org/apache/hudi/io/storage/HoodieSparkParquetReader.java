@@ -64,9 +64,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
-import java.util.function.Function;
 
 import scala.Option$;
 
@@ -145,14 +143,14 @@ public class HoodieSparkParquetReader implements HoodieSparkFileReader {
     HoodieSchema nonNullSchema = requestedSchema.getNonNullType();
     StructType structSchema = HoodieInternalRowUtils.getCachedSchema(nonNullSchema);
 
-    // Detect vector columns: ordinal → Vector schema
-    Map<Integer, HoodieSchema.Vector> vectorColumnInfo = VectorConversionUtils.detectVectorColumns(nonNullSchema);
+    // Detect if any vector columns exist (at any nesting depth)
+    boolean hasVectors = VectorConversionUtils.hasVectorColumns(nonNullSchema);
 
     // For vector columns, replace ArrayType(FloatType) with BinaryType in the read schema
     // so SparkBasicSchemaEvolution sees matching types (file has FIXED_LEN_BYTE_ARRAY → BinaryType)
-    StructType readStructSchema = vectorColumnInfo.isEmpty()
-        ? structSchema
-        : VectorConversionUtils.replaceVectorColumnsWithBinary(structSchema, vectorColumnInfo);
+    StructType readStructSchema = hasVectors
+        ? VectorConversionUtils.replaceVectorColumnsWithBinary(structSchema)
+        : structSchema;
 
     Option<MessageType> messageSchema = Option.of(getAvroSchemaConverter(storage.getConf().unwrapAs(Configuration.class)).convert(nonNullSchema));
     boolean enableTimestampFieldRepair = storage.getConf().getBoolean(ENABLE_LOGICAL_TIMESTAMP_REPAIR, true);
@@ -197,11 +195,11 @@ public class HoodieSparkParquetReader implements HoodieSparkFileReader {
     ParquetReaderIterator<InternalRow> parquetReaderIterator = new ParquetReaderIterator<>(reader);
     CloseableMappingIterator<InternalRow, UnsafeRow> projectedIterator = new CloseableMappingIterator<>(parquetReaderIterator, projection::apply);
 
-    if (!vectorColumnInfo.isEmpty()) {
+    if (hasVectors) {
       // Post-process: convert binary VECTOR columns back to typed arrays
       UnsafeProjection vectorProjection = UnsafeProjection.create(structSchema);
-      Function<InternalRow, InternalRow> mapper =
-          VectorConversionUtils.buildRowMapper(readStructSchema, vectorColumnInfo, vectorProjection::apply);
+      java.util.function.Function<InternalRow, InternalRow> mapper =
+          VectorConversionUtils.buildRowMapper(readStructSchema, structSchema, vectorProjection::apply);
       CloseableMappingIterator<UnsafeRow, UnsafeRow> vectorIterator =
           new CloseableMappingIterator<>(projectedIterator, row -> (UnsafeRow) mapper.apply(row));
       readerIterators.add(vectorIterator);

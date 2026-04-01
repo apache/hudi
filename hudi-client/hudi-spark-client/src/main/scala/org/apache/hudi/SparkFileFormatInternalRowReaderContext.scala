@@ -40,7 +40,7 @@ import org.apache.spark.sql.execution.datasources.{PartitionedFile, SparkColumna
 import org.apache.spark.sql.execution.datasources.parquet.ParquetFileFormat
 import org.apache.spark.sql.hudi.SparkAdapter
 import org.apache.spark.sql.sources.Filter
-import org.apache.spark.sql.types.{ArrayType, ByteType, DoubleType, FloatType, LongType, MetadataBuilder, StructField, StructType}
+import org.apache.spark.sql.types.{LongType, MetadataBuilder, StructField, StructType}
 import org.apache.spark.sql.vectorized.{ColumnVector, ColumnarBatch}
 
 import scala.collection.JavaConverters._
@@ -83,9 +83,9 @@ class SparkFileFormatInternalRowReaderContext(baseFileReader: SparkColumnarFileR
 
     // Detect VECTOR columns and replace with BinaryType for the Parquet reader
     // (Parquet stores VECTOR as FIXED_LEN_BYTE_ARRAY which Spark maps to BinaryType)
-    val vectorColumnInfo = SparkFileFormatInternalRowReaderContext.detectVectorColumns(requiredSchema)
-    val parquetReadStructType = if (vectorColumnInfo.nonEmpty) {
-      SparkFileFormatInternalRowReaderContext.replaceVectorColumnsWithBinary(structType, vectorColumnInfo)
+    val hasVectors = VectorConversionUtils.hasVectorColumns(requiredSchema)
+    val parquetReadStructType = if (hasVectors) {
+      VectorConversionUtils.replaceVectorColumnsWithBinary(structType)
     } else {
       structType
     }
@@ -114,8 +114,8 @@ class SparkFileFormatInternalRowReaderContext(baseFileReader: SparkColumnarFileR
         readFilters, storage.getConf.asInstanceOf[StorageConfiguration[Configuration]], tableSchemaOpt))
 
       // Post-process: convert binary VECTOR columns back to typed arrays
-      if (vectorColumnInfo.nonEmpty) {
-        SparkFileFormatInternalRowReaderContext.wrapWithVectorConversion(rawIterator, vectorColumnInfo, readSchema)
+      if (hasVectors) {
+        SparkFileFormatInternalRowReaderContext.wrapWithVectorConversion(rawIterator, readSchema, structType)
       } else {
         rawIterator
       }
@@ -307,60 +307,18 @@ object SparkFileFormatInternalRowReaderContext {
   }
 
   /**
-   * Detects VECTOR columns from HoodieSchema.
-   * Delegates to [[VectorConversionUtils.detectVectorColumns]].
-   * @return Map of ordinal to Vector schema for VECTOR fields.
-   */
-  private[hudi] def detectVectorColumns(schema: HoodieSchema): Map[Int, HoodieSchema.Vector] = {
-    VectorConversionUtils.detectVectorColumns(schema).asScala.map { case (k, v) => (k.intValue(), v) }.toMap
-  }
-
-  /**
-   * Detects VECTOR columns from Spark StructType metadata.
-   * Delegates to [[VectorConversionUtils.detectVectorColumnsFromMetadata]].
-   * @return Map of ordinal to Vector schema for VECTOR fields.
-   */
-  def detectVectorColumnsFromMetadata(schema: StructType): Map[Int, HoodieSchema.Vector] = {
-    VectorConversionUtils.detectVectorColumnsFromMetadata(schema).asScala.map { case (k, v) => (k.intValue(), v) }.toMap
-  }
-
-  /**
-   * Replaces ArrayType with BinaryType for VECTOR columns so the Parquet reader
-   * can read FIXED_LEN_BYTE_ARRAY data without type mismatch.
-   * Delegates to [[VectorConversionUtils.replaceVectorColumnsWithBinary]].
-   */
-  def replaceVectorColumnsWithBinary(structType: StructType, vectorColumns: Map[Int, HoodieSchema.Vector]): StructType = {
-    val javaMap = vectorColumns.map { case (k, v) => (Integer.valueOf(k), v.asInstanceOf[AnyRef]) }.asJava
-    VectorConversionUtils.replaceVectorColumnsWithBinary(structType, javaMap)
-  }
-
-  /**
-   * Wraps an iterator to convert binary VECTOR columns back to typed arrays.
-   * Unpacks bytes from FIXED_LEN_BYTE_ARRAY into GenericArrayData using the canonical vector byte order.
+   * Wraps an iterator to convert binary VECTOR columns back to typed arrays at any nesting depth.
    * Uses UnsafeProjection to make a defensive copy of each row.
+   *
+   * @param readSchema   schema with BinaryType for vector columns (what Parquet returns)
+   * @param outputSchema schema with ArrayType for vector columns (what Spark expects)
    */
   private[hudi] def wrapWithVectorConversion(
       iterator: ClosableIterator[InternalRow],
-      vectorColumns: Map[Int, HoodieSchema.Vector],
-      readSchema: StructType): ClosableIterator[InternalRow] = {
-    val javaVectorCols: java.util.Map[Integer, HoodieSchema.Vector] =
-      vectorColumns.map { case (k, v) => (Integer.valueOf(k), v) }.asJava
-    // Build output schema: replace BinaryType with the correct ArrayType for vector columns
-    val outputFields = readSchema.fields.zipWithIndex.map { case (field, i) =>
-      vectorColumns.get(i) match {
-        case Some(vec) =>
-          val elemType = vec.getVectorElementType match {
-            case HoodieSchema.Vector.VectorElementType.FLOAT => FloatType
-            case HoodieSchema.Vector.VectorElementType.DOUBLE => DoubleType
-            case HoodieSchema.Vector.VectorElementType.INT8 => ByteType
-          }
-          field.copy(dataType = ArrayType(elemType, containsNull = false))
-        case None => field
-      }
-    }
-    val outputSchema = StructType(outputFields)
+      readSchema: StructType,
+      outputSchema: StructType): ClosableIterator[InternalRow] = {
     val projection = UnsafeProjection.create(outputSchema)
-    val mapper = VectorConversionUtils.buildRowMapper(readSchema, javaVectorCols, projection.apply(_))
+    val mapper = VectorConversionUtils.buildRowMapper(readSchema, outputSchema, projection.apply(_))
     new ClosableIterator[InternalRow] {
       override def hasNext: Boolean = iterator.hasNext
       override def next(): InternalRow = mapper.apply(iterator.next())
