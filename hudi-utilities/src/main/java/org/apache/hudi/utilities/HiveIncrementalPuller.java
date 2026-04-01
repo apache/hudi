@@ -20,10 +20,9 @@ package org.apache.hudi.utilities;
 
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
-import org.apache.hudi.io.util.FileIOUtils;
+import org.apache.hudi.common.util.FileIOUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.utilities.exception.HoodieIncrementalPullException;
 import org.apache.hudi.utilities.exception.HoodieIncrementalPullSQLException;
 
@@ -126,7 +125,29 @@ public class HiveIncrementalPuller {
     }
   }
 
+  private void validateIncrementalSQL() throws IOException {
+    String incrementalSQL;
+    try (Scanner scanner = new Scanner(new File(config.incrementalSQLFile))) {
+      incrementalSQL = scanner.useDelimiter("\\Z").next();
+    }
+    if (!incrementalSQL.contains(config.sourceDb + "." + config.sourceTable)) {
+      LOG.error("Incremental SQL does not have " + config.sourceDb + "." + config.sourceTable
+          + ", which means its pulling from a different table. Fencing this from happening.");
+      throw new HoodieIncrementalPullSQLException(
+          "Incremental SQL does not have " + config.sourceDb + "." + config.sourceTable);
+    }
+    if (!incrementalSQL.contains("`_hoodie_commit_time` > '%s'")) {
+      LOG.error("Incremental SQL : " + incrementalSQL
+          + " does not contain `_hoodie_commit_time` > '%s'. Please add "
+          + "this clause for incremental to work properly.");
+      throw new HoodieIncrementalPullSQLException(
+          "Incremental SQL does not have clause `_hoodie_commit_time` > '%s', which "
+              + "means its not pulling incrementally");
+    }
+  }
+
   public void saveDelta() throws IOException {
+    validateIncrementalSQL();
     Configuration conf = new Configuration();
     conf.set("fs.defaultFS",config.fsDefaultFs);
     FileSystem fs = FileSystem.get(conf);
@@ -183,7 +204,7 @@ public class HiveIncrementalPuller {
     }
   }
 
-  private void executeIncrementalSQL(String tempDbTable, String tempDbTablePath, Statement stmt)
+  void executeIncrementalSQL(String tempDbTable, String tempDbTablePath, Statement stmt)
       throws FileNotFoundException, SQLException {
     incrementalPullSQLTemplate.add("tempDbTable", tempDbTable);
     incrementalPullSQLTemplate.add("tempDbTablePath", tempDbTablePath);
@@ -195,21 +216,6 @@ public class HiveIncrementalPuller {
     try (Scanner scanner = new Scanner(new File(config.incrementalSQLFile))) {
       incrementalSQL = scanner.useDelimiter("\\Z").next();
     }
-    if (!incrementalSQL.contains(config.sourceDb + "." + config.sourceTable)) {
-      LOG.error("Incremental SQL does not have " + config.sourceDb + "." + config.sourceTable
-          + ", which means its pulling from a different table. Fencing this from happening.");
-      throw new HoodieIncrementalPullSQLException(
-          "Incremental SQL does not have " + config.sourceDb + "." + config.sourceTable);
-    }
-    if (!incrementalSQL.contains("`_hoodie_commit_time` > '%s'")) {
-      LOG.error("Incremental SQL : " + incrementalSQL
-          + " does not contain `_hoodie_commit_time` > '%s'. Please add "
-          + "this clause for incremental to work properly.");
-      throw new HoodieIncrementalPullSQLException(
-          "Incremental SQL does not have clause `_hoodie_commit_time` > '%s', which "
-              + "means its not pulling incrementally");
-    }
-
     incrementalPullSQLTemplate.add("incrementalSQL", String.format(incrementalSQL, config.fromCommitTime));
     String sql = incrementalPullSQLTemplate.render();
     // Check if the SQL is pulling from the right database
@@ -292,13 +298,12 @@ public class HiveIncrementalPuller {
     if (!fs.exists(new Path(targetDataPath)) || !fs.exists(new Path(targetDataPath + "/.hoodie"))) {
       return "0";
     }
-    HoodieTableMetaClient metadata = HoodieTableMetaClient.builder()
-        .setConf(HadoopFSUtils.getStorageConfWithCopy(fs.getConf())).setBasePath(targetDataPath).build();
+    HoodieTableMetaClient metadata = HoodieTableMetaClient.builder().setConf(fs.getConf()).setBasePath(targetDataPath).build();
 
     Option<HoodieInstant> lastCommit =
         metadata.getActiveTimeline().getCommitsTimeline().filterCompletedInstants().lastInstant();
     if (lastCommit.isPresent()) {
-      return lastCommit.get().requestedTime();
+      return lastCommit.get().getTimestamp();
     }
     return "0";
   }
@@ -326,15 +331,14 @@ public class HiveIncrementalPuller {
   }
 
   private String getLastCommitTimePulled(FileSystem fs, String sourceTableLocation) {
-    HoodieTableMetaClient metadata = HoodieTableMetaClient.builder()
-        .setConf(HadoopFSUtils.getStorageConfWithCopy(fs.getConf()))
-        .setBasePath(sourceTableLocation).build();
+    HoodieTableMetaClient metadata = HoodieTableMetaClient.builder().setConf(fs.getConf()).setBasePath(sourceTableLocation).build();
     List<String> commitsToSync = metadata.getActiveTimeline().getCommitsTimeline().filterCompletedInstants()
-        .findInstantsAfter(config.fromCommitTime, config.maxCommits).getInstantsAsStream().map(HoodieInstant::requestedTime)
+        .findInstantsAfter(config.fromCommitTime, config.maxCommits).getInstantsAsStream().map(HoodieInstant::getTimestamp)
         .collect(Collectors.toList());
     if (commitsToSync.isEmpty()) {
-      LOG.info("Nothing to sync. All commits in {} are {} and from commit time is {}", config.sourceTable, metadata.getActiveTimeline().getCommitsTimeline()
-          .filterCompletedInstants().getInstants(), config.fromCommitTime);
+      LOG.info("Nothing to sync. All commits in {} are {} and from commit time is {}", config.sourceTable,
+          metadata.getActiveTimeline().getCommitsTimeline().filterCompletedInstants().getInstants(),
+          config.fromCommitTime);
       return null;
     }
     LOG.info("Syncing commits {}", commitsToSync);
