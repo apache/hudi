@@ -57,7 +57,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Unit tests {@link HoodieDataSourceInternalBatchWrite}.
- * There is a separate test for Spark 3.4 in hudi-spark-datasource/hudi-spark3.4.x module
+ * There is a separate test for {@link HoodieDataSourceInternalBatchWrite} with Spark 3.4 in hudi-spark-datasource/hudi-spark3.4.x module
  */
 public class TestHoodieDataSourceInternalBatchWrite extends
     HoodieBulkInsertInternalWriterTestBase {

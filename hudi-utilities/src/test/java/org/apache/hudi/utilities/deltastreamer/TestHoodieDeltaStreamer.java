@@ -980,6 +980,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
         } finally {
           sparkSession.conf().set("spark.sql.session.timeZone", prevTimezone);
           sparkSession.conf().set("spark.sql.parquet.enableVectorizedReader", "true");
+          FileIOUtils.deleteDirectory(new File(new URI(dataPath).getPath()));
         }
       } catch (Exception e) {
         throw new RuntimeException(e);
@@ -3439,7 +3440,6 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
           System.setProperty("spark.testing", propertyValue);
         }
       }
-      FileIOUtils.deleteDirectory(new File(new URI(basePath).getPath()));
     }
   }
 }

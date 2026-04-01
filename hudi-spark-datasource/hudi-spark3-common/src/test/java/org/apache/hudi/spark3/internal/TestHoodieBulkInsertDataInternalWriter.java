@@ -48,7 +48,7 @@ import static org.junit.jupiter.api.Assertions.fail;
 
 /**
  * Unit tests {@link HoodieBulkInsertDataInternalWriter}.
- * There is a separate test for Spark 3.4 in hudi-spark-datasource/hudi-spark3.4.x module.
+ * There is a separate test for {@link HoodieBulkInsertDataInternalWriter} with Spark 3.4 in hudi-spark-datasource/hudi-spark3.4.x module.
  */
 public class TestHoodieBulkInsertDataInternalWriter extends
     HoodieBulkInsertInternalWriterTestBase {

@@ -140,6 +140,9 @@ public class Spark34PlusHoodieRowParquetWriteSupport extends HoodieParquetWriteS
             return null;
           }
           Schema parsedSchema = new Schema.Parser().parse(schemaString);
+          if (HoodieAvroUtils.getNullSchema().equals(parsedSchema)) {
+            return null;
+          }
           return HoodieAvroUtils.addMetadataFields(parsedSchema, config.getBooleanOrDefault(ALLOW_OPERATION_METADATA_FIELD));
         });
     ParquetWriteSupport.setSchema(structType, hadoopConf);
