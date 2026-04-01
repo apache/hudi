@@ -249,6 +249,12 @@ public class SevenToEightUpgradeHandler implements UpgradeHandler {
     }
   }
 
+  // Use a large batch size for migration to minimize the number of parquet files created
+  // on remote storage. Each write() call involves multiple remote storage operations (exists check,
+  // parquet write, manifest update). Using the default archival batch size (10) with hundreds of
+  // actions creates excessive I/O that significantly increases the total migration time.
+  private static final int MIGRATION_BATCH_SIZE = 500;
+
   static void upgradeToLSMTimeline(HoodieTable table, HoodieEngineContext engineContext, HoodieWriteConfig config) {
     table.getMetaClient().getTableConfig().getTimelineLayoutVersion().ifPresent(
         timelineLayoutVersion -> ValidationUtils.checkState(TimelineLayoutVersion.LAYOUT_VERSION_1.equals(timelineLayoutVersion),
@@ -257,15 +263,12 @@ public class SevenToEightUpgradeHandler implements UpgradeHandler {
       LegacyArchivedMetaEntryReader reader = new LegacyArchivedMetaEntryReader(table.getMetaClient());
       StoragePath archivePath = new StoragePath(table.getMetaClient().getMetaPath(), "timeline/history");
       LSMTimelineWriter lsmTimelineWriter = LSMTimelineWriter.getInstance(config, table, Option.of(archivePath));
-      int batchSize = config.getCommitArchivalBatchSize();
-      List<ActiveAction> activeActionsBatch = new ArrayList<>(batchSize);
+      List<ActiveAction> activeActionsBatch = new ArrayList<>(MIGRATION_BATCH_SIZE);
       try (ClosableIterator<ActiveAction> iterator = reader.getActiveActionsIterator()) {
         while (iterator.hasNext()) {
           activeActionsBatch.add(iterator.next());
-          // If the batch is full, write it to the LSM timeline
-          if (activeActionsBatch.size() == batchSize) {
+          if (activeActionsBatch.size() == MIGRATION_BATCH_SIZE) {
             lsmTimelineWriter.write(new ArrayList<>(activeActionsBatch), Option.empty(), Option.empty());
-            lsmTimelineWriter.compactAndClean(engineContext);
             activeActionsBatch.clear();
           }
         }
@@ -273,9 +276,11 @@ public class SevenToEightUpgradeHandler implements UpgradeHandler {
         // Write any remaining actions in the final batch
         if (!activeActionsBatch.isEmpty()) {
           lsmTimelineWriter.write(new ArrayList<>(activeActionsBatch), Option.empty(), Option.empty());
-          lsmTimelineWriter.compactAndClean(engineContext);
         }
       }
+      // Run compaction and clean once at the end instead of after every batch.
+      // Compaction after every small batch causes excessive I/O during migration.
+      lsmTimelineWriter.compactAndClean(engineContext);
     } catch (Exception e) {
       if (config.isFailOnTimelineArchivingEnabled()) {
         throw new HoodieException("Failed to upgrade to LSM timeline", e);

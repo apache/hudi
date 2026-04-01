@@ -196,6 +196,13 @@ public class StreamWriteOperatorCoordinator
   private transient TableState tableState;
 
   /**
+   * Future that completes when async initialization (upgrade, metadata table
+   * init, event restoration) finishes on the executor thread. Coordination
+   * requests are gated on this to prevent races with initialization.
+   */
+  private final CompletableFuture<Void> initFuture = new CompletableFuture<>();
+
+  /**
    * The client id heartbeats.
    */
   private ClientIds clientIds;
@@ -228,14 +235,8 @@ public class StreamWriteOperatorCoordinator
       this.metaClient = initTableIfNotExists(this.conf);
       // the write client must create after the table creation
       this.writeClient = FlinkWriteClients.createWriteClient(conf);
-      this.writeClient.tryUpgrade(instant, this.metaClient);
-      initMetadataTable(this.writeClient);
 
-      if (tableState.scheduleMdtCompaction) {
-        this.metadataWriteClient = StreamerUtil.createMetadataWriteClient(writeClient);
-      }
-
-      // start the executor
+      // Create executors before submitting the heavy initialization task.
       this.executor = NonThrownExecutor.builder(log)
           .threadFactory(getThreadFactory("meta-event-handle"))
           .exceptionHook((errMsg, t) -> this.context.failJob(new HoodieException(errMsg, t)))
@@ -244,15 +245,36 @@ public class StreamWriteOperatorCoordinator
           .threadFactory(getThreadFactory("instant-request"))
           .exceptionHook((errMsg, t) -> this.context.failJob(new HoodieException(errMsg, t)))
           .build();
-      // start the executor if required
-      if (tableState.syncHive) {
-        initHiveSync();
-      }
-      // start client id heartbeats for optimistic concurrency control
-      if (OptionsResolver.isMultiWriter(conf)) {
-        initClientIds(conf);
-      }
-      restoreEvents();
+
+      // Run upgrade, metadata table init, and event restoration on the executor
+      // thread instead of the Pekko dispatcher thread. Running these synchronously
+      // on the dispatcher thread blocks heartbeat responses when the operations
+      // involve heavy I/O (e.g., LSM timeline migration with hundreds of archived
+      // actions), causing the ResourceManager to disconnect the JobManager.
+      //
+      // Safety guarantees:
+      // - Events via handleEventFromOperator() are submitted to the same
+      //   single-threaded executor, so FIFO ordering ensures initialization
+      //   completes before any event processing.
+      // - Coordination requests via handleCoordinationRequest() run on the
+      //   separate instantRequestExecutor and are gated on initFuture to
+      //   prevent startInstant() from racing ahead of the upgrade.
+      this.executor.execute(() -> {
+        this.writeClient.tryUpgrade(instant, this.metaClient);
+        initMetadataTable(this.writeClient);
+        if (tableState.scheduleMdtCompaction) {
+          this.metadataWriteClient = StreamerUtil.createMetadataWriteClient(writeClient);
+        }
+        if (tableState.syncHive) {
+          initHiveSync();
+        }
+        if (OptionsResolver.isMultiWriter(conf)) {
+          initClientIds(conf);
+        }
+        restoreEvents();
+        initFuture.complete(null);
+      }, "table upgrade and initialization");
+
     } catch (Throwable throwable) {
       log.error("Failed to start operator coordinator.", throwable);
       context.failJob(throwable);
@@ -385,16 +407,23 @@ public class StreamWriteOperatorCoordinator
 
   @Override
   public CompletableFuture<CoordinationResponse> handleCoordinationRequest(CoordinationRequest request) {
-    if (request instanceof Correspondent.InstantTimeRequest) {
-      return handleInstantRequest((Correspondent.InstantTimeRequest) request);
-    }
-    if (request instanceof Correspondent.InflightInstantsRequest) {
-      return handleInFlightInstantsRequest((Correspondent.InflightInstantsRequest) request);
-    }
-    if (request instanceof Correspondent.AwaitPendingInstantsRequest) {
-      return handleAwaitPendingInstantsRequest((Correspondent.AwaitPendingInstantsRequest) request);
-    }
-    throw new HoodieException("Unexpected coordination request type: " + request.getClass().getSimpleName());
+    // Gate coordination requests on initialization completion. The upgrade,
+    // metadata table init, and event restoration run asynchronously on the
+    // executor thread (see start()). Coordination requests like startInstant()
+    // run on a separate instantRequestExecutor and must not race ahead of
+    // initialization — e.g., RecordIndexPartitioner depends on MDT init.
+    return initFuture.thenCompose(ignored -> {
+      if (request instanceof Correspondent.InstantTimeRequest) {
+        return handleInstantRequest((Correspondent.InstantTimeRequest) request);
+      }
+      if (request instanceof Correspondent.InflightInstantsRequest) {
+        return handleInFlightInstantsRequest((Correspondent.InflightInstantsRequest) request);
+      }
+      if (request instanceof Correspondent.AwaitPendingInstantsRequest) {
+        return handleAwaitPendingInstantsRequest((Correspondent.AwaitPendingInstantsRequest) request);
+      }
+      throw new HoodieException("Unexpected coordination request type: " + request.getClass().getSimpleName());
+    });
   }
 
   private CompletableFuture<CoordinationResponse> handleInstantRequest(Correspondent.InstantTimeRequest request) {
