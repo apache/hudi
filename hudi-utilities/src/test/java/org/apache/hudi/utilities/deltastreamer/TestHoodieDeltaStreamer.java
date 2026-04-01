@@ -805,6 +805,11 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
         Option<TypedProperties> propt = Option.of(properties);
 
         new HoodieStreamer(prepCfgForCowLogicalRepair(tableBasePath, "456"), jsc, propt).sync();
+        // Ensure files in batch 3 have a newer mtime than batch 2, since DFSSource uses mtime as checkpoint.
+        // Git does not preserve file modification times on checkout, so both files would otherwise have the same mtime.
+        File data3 = new File(getClass().getClassLoader().getResource("logical-repair/cow_write_updates/3/data.json").toURI());
+        File data2 = new File(getClass().getClassLoader().getResource("logical-repair/cow_write_updates/2/data.json").toURI());
+        data3.setLastModified(data2.lastModified() + 1000);
         inputDataPath = getClass().getClassLoader().getResource("logical-repair/cow_write_updates/3").toURI().toString();
         propt.get().setProperty("hoodie.streamer.source.dfs.root", inputDataPath);
         if ("CLUSTER".equals(operation)) {
