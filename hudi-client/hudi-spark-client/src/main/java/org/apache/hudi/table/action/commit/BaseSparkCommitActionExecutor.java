@@ -121,9 +121,13 @@ public abstract class BaseSparkCommitActionExecutor<T> extends
       return inputRecords;
     }
 
+    // Get file groups that will be replaced by this operation (for INSERT_OVERWRITE, etc.)
+    Set<HoodieFileGroupId> fileGroupsToBeReplaced = getFileGroupsBeingReplaced(inputRecords);
+
     UpdateStrategy<T, HoodieData<HoodieRecord<T>>> updateStrategy = (UpdateStrategy<T, HoodieData<HoodieRecord<T>>>) ReflectionUtils
-        .loadClass(config.getClusteringUpdatesStrategyClass(), new Class<?>[] {HoodieEngineContext.class, HoodieTable.class, Set.class},
-            this.context, table, fileGroupsInPendingClustering);
+        .loadClass(config.getClusteringUpdatesStrategyClass(),
+            new Class<?>[] {HoodieEngineContext.class, HoodieTable.class, Set.class, Set.class},
+            this.context, table, fileGroupsInPendingClustering, fileGroupsToBeReplaced);
     // For SparkAllowUpdateStrategy with rollback pending clustering as false, need not handle
     // the file group intersection between current ingestion and pending clustering file groups.
     // This will be handled at the conflict resolution strategy.
@@ -161,6 +165,18 @@ public abstract class BaseSparkCommitActionExecutor<T> extends
       table.getMetaClient().reloadActiveTimeline();
     }
     return recordsAndPendingClusteringFileGroups.getLeft();
+  }
+
+  /**
+   * Get the file groups that will be replaced by the current operation.
+   * This is relevant for INSERT_OVERWRITE, INSERT_OVERWRITE_TABLE, and DELETE_PARTITION operations.
+   *
+   * @param inputRecords the input records for the operation
+   * @return set of file group IDs that will be replaced
+   */
+  protected Set<HoodieFileGroupId> getFileGroupsBeingReplaced(HoodieData<HoodieRecord<T>> inputRecords) {
+    // Default implementation returns empty set. Subclasses should override as needed.
+    return Collections.emptySet();
   }
 
   @Override

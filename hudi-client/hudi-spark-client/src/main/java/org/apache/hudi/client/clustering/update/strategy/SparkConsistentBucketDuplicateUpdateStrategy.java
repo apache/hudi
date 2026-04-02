@@ -49,8 +49,10 @@ import static org.apache.hudi.index.HoodieIndexUtils.tagAsNewRecordIfNeeded;
  */
 public class SparkConsistentBucketDuplicateUpdateStrategy<T> extends UpdateStrategy<T, HoodieData<HoodieRecord<T>>> {
 
-  public SparkConsistentBucketDuplicateUpdateStrategy(HoodieEngineContext engineContext, HoodieTable table, Set<HoodieFileGroupId> fileGroupsInPendingClustering) {
-    super(engineContext, table, fileGroupsInPendingClustering);
+  public SparkConsistentBucketDuplicateUpdateStrategy(HoodieEngineContext engineContext, HoodieTable table,
+                                                       Set<HoodieFileGroupId> fileGroupsInPendingClustering,
+                                                       Set<HoodieFileGroupId> fileGroupsToBeReplaced) {
+    super(engineContext, table, fileGroupsInPendingClustering, fileGroupsToBeReplaced);
   }
 
   @Override
