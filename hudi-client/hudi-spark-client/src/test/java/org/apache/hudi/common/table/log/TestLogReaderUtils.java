@@ -186,25 +186,18 @@ public class TestLogReaderUtils extends SparkClientFunctionalTestHarness {
       assertNoWriteErrors(insertRdd.collect());
       client.commit(firstCommit, insertRdd);
 
-      // Second commit - upsert to create log files (this commit will be archived)
-      String secondCommit = "002";
-      WriteClientTestUtils.startCommitWithTime(client, secondCommit);
-      JavaRDD<WriteStatus> secondRdd = client.upsert(jsc().parallelize(dataGen.generateUpdates(secondCommit, 50), 1), secondCommit);
-      List<WriteStatus> secondStatuses = secondRdd.collect();
-      assertNoWriteErrors(secondStatuses);
-      assertLogFilesProduced(secondStatuses);
-      client.commit(secondCommit, secondRdd);
-
-      // Additional commits to trigger archival (003-006)
-      String[] additionalCommits = {"003", "004", "005", "006"};
-      for (String commitTime : additionalCommits) {
+      // Upsert commits to create log files and trigger archival (002-006)
+      String[] upsertCommits = {"002", "003", "004", "005", "006"};
+      for (String commitTime : upsertCommits) {
         WriteClientTestUtils.startCommitWithTime(client, commitTime);
         JavaRDD<WriteStatus> rdd = client.upsert(jsc().parallelize(dataGen.generateUpdates(commitTime, 20), 1), commitTime);
-        assertNoWriteErrors(rdd.collect());
+        List<WriteStatus> statuses = rdd.collect();
+        assertNoWriteErrors(statuses);
+        assertLogFilesProduced(statuses);
         client.commit(commitTime, rdd);
       }
 
-      String sixthCommit = additionalCommits[additionalCommits.length - 1];
+      String sixthCommit = upsertCommits[upsertCommits.length - 1];
 
       // Trigger archival
       metaClient = HoodieTableMetaClient.reload(metaClient);
@@ -212,7 +205,7 @@ public class TestLogReaderUtils extends SparkClientFunctionalTestHarness {
       new TimelineArchiverV2(config, table).archiveIfRequired(context());
       metaClient = HoodieTableMetaClient.reload(metaClient);
 
-      assertFalse(metaClient.getActiveTimeline().containsInstant(secondCommit),
+      assertFalse(metaClient.getActiveTimeline().containsInstant(upsertCommits[0]),
           "Second commit should be archived");
 
       HoodieTableFileSystemView fsView = HoodieTableFileSystemView.fileListingBasedFileSystemView(
