@@ -110,6 +110,31 @@ public class DisruptorMessageQueue<I, O> implements HoodieMessageQueue<I, O> {
   public void seal() {
   }
 
+  /**
+   * Waits until all published events have been consumed by the handler thread,
+   * without shutting down the disruptor. The handler thread remains alive after
+   * this method returns — this is critical when downstream components (e.g. GCS
+   * pipe) require the writing thread to stay alive during a subsequent flush.
+   *
+   * <p>Must only be called when no new events will be published (e.g. during
+   * Flink's {@code snapshotState} where {@code processElement} is guaranteed
+   * not to run concurrently).
+   */
+  public void waitUntilDrained(long timeoutMs) {
+    long start = System.currentTimeMillis();
+    while (!isEmpty()) {
+      if (throwable.get() != null) {
+        return;
+      }
+      if (System.currentTimeMillis() - start > timeoutMs) {
+        throw new HoodieException(
+            "Timed out waiting for disruptor queue to drain after "
+                + timeoutMs + "ms, remaining: " + size());
+      }
+      Thread.yield();
+    }
+  }
+
   @Override
   public void close() {
     synchronized (this) {
