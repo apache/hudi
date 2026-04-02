@@ -43,7 +43,7 @@ class CatalogBackedTableMetadata(engineContext: HoodieEngineContext,
                                  datasetBasePath: String) extends
   FileSystemBackedTableMetadata(engineContext, tableConfig, storage, datasetBasePath) with Logging {
 
-  private lazy val sparkSession = engineContext.asInstanceOf[HoodieSparkEngineContext].getSqlContext.sparkSession
+  private val sparkSession = engineContext.asInstanceOf[HoodieSparkEngineContext].getSqlContext.sparkSession
   private val catalogTableName = tableConfig.getTableName
   private lazy val catalogDatabaseName =
     if (StringUtils.isNullOrEmpty(tableConfig.getDatabaseName)) {

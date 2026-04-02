@@ -23,6 +23,7 @@ import org.apache.hudi.HoodieConversionUtils.toJavaOption
 import org.apache.hudi.SparkHoodieTableFileIndex.{deduceQueryType, extractEqualityPredicatesLiteralValues, generateFieldMap, haveProperPartitionValues, shouldListLazily, shouldUsePartitionPathPrefixAnalysis, shouldValidatePartitionColumns}
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.config.{HoodieCommonConfig, TypedProperties}
+import org.apache.hudi.common.engine.HoodieEngineContext
 import org.apache.hudi.common.model.{FileSlice, HoodieTableQueryType}
 import org.apache.hudi.common.model.HoodieRecord.HOODIE_META_COLUMNS_WITH_OPERATION
 import org.apache.hudi.common.schema.HoodieSchema
@@ -129,8 +130,8 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
 
   lazy val isPartitionListingViaCatalogEnabled: Boolean = {
     configProperties.getBoolean(FILE_INDEX_PARTITION_LISTING_VIA_CATALOG.key,
-      FILE_INDEX_PARTITION_LISTING_VIA_CATALOG.defaultValue()) ||
-      !metaClient.getTableConfig.isMetadataTableAvailable
+      FILE_INDEX_PARTITION_LISTING_VIA_CATALOG.defaultValue()) &&
+      !metaClient.isMetadataTable
   }
 
   /**
@@ -440,11 +441,11 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
       staticPartitionColumnValues.map(_._1): _*)
   }
 
-  override protected def createMetadataTable(): HoodieTableMetadata = {
+  override protected def createMetadataTable(engineContext: HoodieEngineContext): HoodieTableMetadata = {
     if (isPartitionListingViaCatalogEnabled) {
-      new CatalogBackedTableMetadata(getEngineContext, metaClient.getTableConfig, metaClient.getStorage, getBasePath.toString)
+      new CatalogBackedTableMetadata(engineContext, metaClient.getTableConfig, metaClient.getStorage, getBasePath.toString)
     } else {
-      super.createMetadataTable()
+      super.createMetadataTable(engineContext)
     }
   }
 

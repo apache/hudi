@@ -125,7 +125,6 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
   private final StoragePath basePath;
 
   private final HoodieTableMetaClient metaClient;
-  @Getter
   private final HoodieEngineContext engineContext;
   private final boolean isCompletionTimeBasedQuery;
 
@@ -513,7 +512,7 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
   private void doRefresh() {
     HoodieTimer timer = HoodieTimer.start();
 
-    resetTableMetadata(createMetadataTable());
+    resetTableMetadata(createMetadataTable(engineContext));
 
     // Make sure we reload active timeline
     metaClient.reloadActiveTimeline();
@@ -609,7 +608,7 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
     tableMetadata = newTableMetadata;
   }
 
-  protected HoodieTableMetadata createMetadataTable() {
+  protected HoodieTableMetadata createMetadataTable(HoodieEngineContext engineContext) {
     return metaClient.getTableFormat().getMetadataFactory()
         .create(engineContext, metaClient.getStorage(), metadataConfig, basePath.toString(), true);
   }
