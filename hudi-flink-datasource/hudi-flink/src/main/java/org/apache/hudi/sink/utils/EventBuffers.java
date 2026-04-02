@@ -37,7 +37,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentSkipListMap;
-import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -109,10 +108,6 @@ public class EventBuffers implements Serializable {
         .forEach(eventBuffer -> eventBuffer.resetBuffer(event));
   }
 
-  public void clear() {
-    this.eventBuffers.clear();
-  }
-
   /**
    * Returns the pair of instant time and event buffer.
    */
@@ -128,8 +123,8 @@ public class EventBuffers implements Serializable {
     return Option.ofNullable(this.eventBuffers.get(checkpointId)).map(Pair::getRight).orElse(null);
   }
 
-  public Stream<Map.Entry<Long, Pair<String, EventBuffer>>> getEventBufferStream(Predicate<Long> ckpFilter) {
-    return this.eventBuffers.entrySet().stream().filter(entry -> ckpFilter.test(entry.getKey()));
+  public Stream<Map.Entry<Long, Pair<String, EventBuffer>>> getEventBufferStream() {
+    return this.eventBuffers.entrySet().stream();
   }
 
   public HashMap<Long, String> getAllCheckpointIdAndInstants() {
