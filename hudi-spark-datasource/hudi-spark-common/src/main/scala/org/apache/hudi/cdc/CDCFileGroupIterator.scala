@@ -102,7 +102,7 @@ class CDCFileGroupIterator(split: HoodieCDCFileGroupSplit,
   private var isPartialMergeEnabled = false
   private var bufferedRecordMerger = getBufferedRecordMerger
   private def getBufferedRecordMerger: BufferedRecordMerger[InternalRow] = BufferedRecordMergerFactory.create(readerContext,
-    readerContext.getMergeMode, isPartialMergeEnabled, Option.of(recordMerger),
+    readerContext.getMergeMode, Option.of(recordMerger),
     payloadClass, schema, props, partialUpdateModeOpt)
 
   private lazy val storage = metaClient.getStorage

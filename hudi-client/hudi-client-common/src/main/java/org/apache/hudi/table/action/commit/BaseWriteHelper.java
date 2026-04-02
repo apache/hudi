@@ -118,7 +118,6 @@ public abstract class BaseWriteHelper<T, I, K, O, R> extends ParallelismHelper<I
     BufferedRecordMerger<T> bufferedRecordMerger = BufferedRecordMergerFactory.create(
         readerContext,
         readerContext.getMergeMode(),
-        false,
         readerContext.getRecordMerger().map(HoodieRecordUtils::mergerToPreCombineMode),
         Option.ofNullable(table.getConfig().getPayloadClass()),
         recordSchema,

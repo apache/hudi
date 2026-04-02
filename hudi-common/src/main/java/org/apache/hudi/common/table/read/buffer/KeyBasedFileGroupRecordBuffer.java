@@ -73,14 +73,13 @@ public class KeyBasedFileGroupRecordBuffer<T> extends FileGroupRecordBuffer<T> {
   public void processDataBlock(HoodieDataBlock dataBlock, Option<KeySpec> keySpecOpt) throws IOException {
     Pair<ClosableIterator<T>, HoodieSchema> recordsIteratorSchemaPair =
         getRecordsIterator(dataBlock, keySpecOpt);
-    if (dataBlock.containsPartialUpdates() && !enablePartialMerging) {
+    if (dataBlock.containsPartialUpdates() && partialUpdateModeOpt.isEmpty()) {
       // When a data block contains partial updates, subsequent record merging must always use
       // partial merging.
-      enablePartialMerging = true;
+      this.partialUpdateModeOpt = Option.of(PartialUpdateMode.KEEP_VALUES);
       bufferedRecordMerger = BufferedRecordMergerFactory.create(
           readerContext,
           recordMergeMode,
-          true,
           recordMerger,
           readerSchema,
           payloadClasses,
@@ -154,6 +153,6 @@ public class KeyBasedFileGroupRecordBuffer<T> extends FileGroupRecordBuffer<T> {
   }
 
   public boolean isPartialMergingEnabled() {
-    return enablePartialMerging;
+    return partialUpdateModeOpt.isPresent();
   }
 }

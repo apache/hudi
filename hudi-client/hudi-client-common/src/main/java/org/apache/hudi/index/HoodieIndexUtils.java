@@ -509,7 +509,6 @@ public class HoodieIndexUtils {
     BufferedRecordMerger<R> recordMerger = BufferedRecordMergerFactory.create(
         readerContext,
         readerContext.getMergeMode(),
-        false,
         readerContext.getRecordMerger(),
         writerSchema,
         Option.ofNullable(Pair.of(hoodieTable.getMetaClient().getTableConfig().getPayloadClass(), hoodieTable.getConfig().getPayloadClass())),
