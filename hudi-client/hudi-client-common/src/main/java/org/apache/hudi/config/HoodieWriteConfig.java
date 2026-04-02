@@ -299,6 +299,12 @@ public class HoodieWriteConfig extends HoodieConfig {
       .withDocumentation("Enables a more efficient mechanism for rollbacks based on the marker files generated "
           + "during the writes. Turned on by default.");
 
+  public static final ConfigProperty<String> ENABLE_EXCLUSIVE_ROLLBACK = ConfigProperty
+      .key("hoodie.rollback.enforce.single.rollback.instant")
+      .defaultValue("false")
+      .markAdvanced()
+      .withDocumentation("Enables exclusive rollback so that rollback plan is generated and executed by only one writer at a time");
+
   public static final ConfigProperty<String> FAIL_JOB_ON_DUPLICATE_DATA_FILE_DETECTION = ConfigProperty
       .key("hoodie.fail.job.on.duplicate.data.file.detection")
       .defaultValue("false")
@@ -1576,6 +1582,10 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public boolean shouldRollbackUsingMarkers() {
     return getBoolean(ROLLBACK_USING_MARKERS_ENABLE);
+  }
+
+  public boolean isExclusiveRollbackEnabled() {
+    return getBoolean(ENABLE_EXCLUSIVE_ROLLBACK) && getWriteConcurrencyMode().supportsMultiWriter();
   }
 
   public boolean enableComplexKeygenValidation() {
