@@ -21,14 +21,18 @@ package org.apache.hudi.table.format.cdc;
 import org.apache.hudi.client.model.HoodieFlinkRecord;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
-import org.apache.hudi.common.model.HoodieLogFile;
+import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.model.BaseFile;
+import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieOperation;
+import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.cdc.HoodieCDCFileSplit;
+import org.apache.hudi.common.table.cdc.HoodieCDCUtils;
 import org.apache.hudi.common.table.log.HoodieCDCLogRecordIterator;
 import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.table.read.BufferedRecordMerger;
@@ -43,6 +47,7 @@ import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.storage.HoodieStorage;
@@ -63,6 +68,7 @@ import org.apache.flink.types.RowKind;
 
 import java.io.IOException;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.function.Function;
@@ -608,7 +614,7 @@ public final class CdcIterators {
         Function<MergeOnReadInputSplit, ClosableIterator<RowData>> splitIteratorFunc) {
       ValidationUtils.checkState(fileSplit.getBeforeFileSlice().isPresent(),
           "Before file slice does not exist for instant: " + fileSplit.getInstant());
-      MergeOnReadInputSplit inputSplit = CdcInputFormat.fileSlice2Split(
+      MergeOnReadInputSplit inputSplit = fileSlice2Split(
           tablePath, fileSplit.getBeforeFileSlice().get(), maxCompactionMemoryInBytes);
       this.itr = splitIteratorFunc.apply(inputSplit);
       this.projection = RowDataProjection.instance(requiredRowType, requiredPositions);
@@ -630,5 +636,32 @@ public final class CdcIterators {
     public void close() {
       itr.close();
     }
+  }
+
+  // -------------------------------------------------------------------------
+  //  Utilities
+  // -------------------------------------------------------------------------
+
+  public static MergeOnReadInputSplit fileSlice2Split(
+          String tablePath,
+          FileSlice fileSlice,
+          long maxCompactionMemoryInBytes) {
+    Option<List<String>> logPaths = Option.ofNullable(fileSlice.getLogFiles()
+            .sorted(HoodieLogFile.getLogFileComparator())
+            .map(logFile -> logFile.getPath().toString())
+            // filter out the cdc logs
+            .filter(p -> !p.endsWith(HoodieCDCUtils.CDC_LOGFILE_SUFFIX))
+            .collect(Collectors.toList()));
+    String basePath = fileSlice.getBaseFile().map(BaseFile::getPath).orElse(null);
+    return new MergeOnReadInputSplit(0, basePath, logPaths, fileSlice.getLatestInstantTime(),
+            tablePath, maxCompactionMemoryInBytes, FlinkOptions.REALTIME_PAYLOAD_COMBINE, null,
+            fileSlice.getFileId(), fileSlice.getPartitionPath());
+  }
+
+  public static MergeOnReadInputSplit singleLogFile2Split(String tablePath, String filePath, long maxCompactionMemoryInBytes) {
+    return new MergeOnReadInputSplit(0, null, Option.of(Collections.singletonList(filePath)),
+            FSUtils.getDeltaCommitTimeFromLogPath(new StoragePath(filePath)), tablePath, maxCompactionMemoryInBytes,
+            FlinkOptions.REALTIME_PAYLOAD_COMBINE, null, FSUtils.getFileIdFromLogPath(new StoragePath(filePath)),
+            FSUtils.getRelativePartitionPath(new StoragePath(tablePath), new StoragePath(filePath).getParent()));
   }
 }

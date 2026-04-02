@@ -18,6 +18,7 @@
 
 package org.apache.hudi.table.format.cdc;
 
+import lombok.Getter;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
@@ -55,7 +56,7 @@ import static org.apache.hudi.hadoop.utils.HoodieInputFormatUtils.HOODIE_RECORD_
  * used for serialising {@link RowData} records into byte arrays.
  */
 public class CdcImageManager implements AutoCloseable {
-
+  @Getter
   private final HoodieWriteConfig writeConfig;
   private final RowDataSerializer serializer;
   private final Function<MergeOnReadInputSplit, ClosableIterator<RowData>> splitIteratorFunc;
@@ -69,10 +70,6 @@ public class CdcImageManager implements AutoCloseable {
     this.writeConfig = writeConfig;
     this.splitIteratorFunc = splitIteratorFunc;
     this.cache = new TreeMap<>();
-  }
-
-  public HoodieWriteConfig getWriteConfig() {
-    return writeConfig;
   }
 
   public ExternalSpillableMap<String, byte[]> getOrLoadImages(
@@ -95,7 +92,7 @@ public class CdcImageManager implements AutoCloseable {
   private ExternalSpillableMap<String, byte[]> loadImageRecords(
       long maxCompactionMemoryInBytes,
       FileSlice fileSlice) throws IOException {
-    MergeOnReadInputSplit inputSplit = CdcInputFormat.fileSlice2Split(
+    MergeOnReadInputSplit inputSplit = CdcIterators.fileSlice2Split(
         writeConfig.getBasePath(), fileSlice, maxCompactionMemoryInBytes);
     ExternalSpillableMap<String, byte[]> imageRecordsMap =
         FormatUtils.spillableMap(writeConfig, maxCompactionMemoryInBytes, getClass().getSimpleName());

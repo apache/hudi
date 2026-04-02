@@ -198,7 +198,7 @@ public class HoodieCdcSplitReaderFunction extends AbstractSplitReaderFunction {
       case BASE_FILE_DELETE: {
         ValidationUtils.checkState(fileSplit.getBeforeFileSlice().isPresent(),
             "Before file slice should exist for BASE_FILE_DELETE");
-        MergeOnReadInputSplit inputSplit = CdcInputFormat.fileSlice2Split(
+        MergeOnReadInputSplit inputSplit = CdcIterators.fileSlice2Split(
             tablePath, fileSplit.getBeforeFileSlice().get(), maxCompactionMemoryInBytes);
         return new CdcIterators.RemoveBaseFileIterator(
             tableState.getRequiredRowType(), tableState.getRequiredPositions(), getFileSliceIterator(inputSplit));
@@ -229,7 +229,7 @@ public class HoodieCdcSplitReaderFunction extends AbstractSplitReaderFunction {
         ValidationUtils.checkState(fileSplit.getCdcFiles() != null && fileSplit.getCdcFiles().size() == 1,
             "CDC file path should exist and be singleton for LOG_FILE");
         String logFilePath = new Path(tablePath, fileSplit.getCdcFiles().get(0)).toString();
-        MergeOnReadInputSplit split = CdcInputFormat.singleLogFile2Split(tablePath, logFilePath, maxCompactionMemoryInBytes);
+        MergeOnReadInputSplit split = CdcIterators.singleLogFile2Split(tablePath, logFilePath, maxCompactionMemoryInBytes);
         ClosableIterator<HoodieRecord<RowData>> recordIterator = getFileSliceHoodieRecordIterator(split);
         return new CdcIterators.DataLogFileIterator(
             maxCompactionMemoryInBytes, imageManager, fileSplit, tableSchema,

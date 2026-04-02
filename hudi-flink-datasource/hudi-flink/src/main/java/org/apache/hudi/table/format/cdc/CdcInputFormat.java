@@ -18,10 +18,7 @@
 
 package org.apache.hudi.table.format.cdc;
 
-import org.apache.hudi.common.fs.FSUtils;
-import org.apache.hudi.common.model.BaseFile;
 import org.apache.hudi.common.model.FileSlice;
-import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaCache;
@@ -30,14 +27,12 @@ import org.apache.hudi.common.table.cdc.HoodieCDCFileSplit;
 import org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode;
 import org.apache.hudi.common.table.cdc.HoodieCDCUtils;
 import org.apache.hudi.common.table.read.HoodieFileGroupReader;
-import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.source.ExpressionPredicates.Predicate;
-import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.format.InternalSchemaManager;
 import org.apache.hudi.table.format.mor.MergeOnReadInputFormat;
 import org.apache.hudi.table.format.mor.MergeOnReadInputSplit;
@@ -50,10 +45,8 @@ import org.apache.flink.table.types.DataType;
 import org.apache.hadoop.fs.Path;
 
 import java.io.IOException;
-import java.util.Collections;
 import java.util.List;
 import java.util.function.Function;
-import java.util.stream.Collectors;
 
 /**
  * The base InputFormat class to read Hoodie data set as change logs.
@@ -134,7 +127,7 @@ public class CdcInputFormat extends MergeOnReadInputFormat {
         ValidationUtils.checkState(fileSplit.getBeforeFileSlice().isPresent(),
             "Before file slice should exist");
         FileSlice fileSlice = fileSplit.getBeforeFileSlice().get();
-        MergeOnReadInputSplit inputSplit = fileSlice2Split(tablePath, fileSlice, maxCompactionMemoryInBytes);
+        MergeOnReadInputSplit inputSplit = CdcIterators.fileSlice2Split(tablePath, fileSlice, maxCompactionMemoryInBytes);
         return new CdcIterators.RemoveBaseFileIterator(
             tableState.getRequiredRowType(), tableState.getRequiredPositions(), getFileSliceIterator(inputSplit));
       case AS_IS: {
@@ -162,7 +155,7 @@ public class CdcInputFormat extends MergeOnReadInputFormat {
         ValidationUtils.checkState(fileSplit.getCdcFiles() != null && fileSplit.getCdcFiles().size() == 1,
             "CDC file path should exist and be singleton");
         String logFilepath = new Path(tablePath, fileSplit.getCdcFiles().get(0)).toString();
-        MergeOnReadInputSplit split = singleLogFile2Split(tablePath, logFilepath, maxCompactionMemoryInBytes);
+        MergeOnReadInputSplit split = CdcIterators.singleLogFile2Split(tablePath, logFilepath, maxCompactionMemoryInBytes);
         ClosableIterator<HoodieRecord<RowData>> recordIterator = getSplitRecordIterator(split);
         return new CdcIterators.DataLogFileIterator(
             maxCompactionMemoryInBytes, imageManager, fileSplit,
@@ -231,32 +224,5 @@ public class CdcInputFormat extends MergeOnReadInputFormat {
     public CdcInputFormat build() {
       return new CdcInputFormat(conf, tableState, fieldTypes, predicates, limit, emitDelete);
     }
-  }
-
-  // -------------------------------------------------------------------------
-  //  Utilities
-  // -------------------------------------------------------------------------
-
-  public static MergeOnReadInputSplit fileSlice2Split(
-      String tablePath,
-      FileSlice fileSlice,
-      long maxCompactionMemoryInBytes) {
-    Option<List<String>> logPaths = Option.ofNullable(fileSlice.getLogFiles()
-        .sorted(HoodieLogFile.getLogFileComparator())
-        .map(logFile -> logFile.getPath().toString())
-        // filter out the cdc logs
-        .filter(p -> !p.endsWith(HoodieCDCUtils.CDC_LOGFILE_SUFFIX))
-        .collect(Collectors.toList()));
-    String basePath = fileSlice.getBaseFile().map(BaseFile::getPath).orElse(null);
-    return new MergeOnReadInputSplit(0, basePath, logPaths, fileSlice.getLatestInstantTime(),
-        tablePath, maxCompactionMemoryInBytes, FlinkOptions.REALTIME_PAYLOAD_COMBINE, null,
-        fileSlice.getFileId(), fileSlice.getPartitionPath());
-  }
-
-  public static MergeOnReadInputSplit singleLogFile2Split(String tablePath, String filePath, long maxCompactionMemoryInBytes) {
-    return new MergeOnReadInputSplit(0, null, Option.of(Collections.singletonList(filePath)),
-        FSUtils.getDeltaCommitTimeFromLogPath(new StoragePath(filePath)), tablePath, maxCompactionMemoryInBytes,
-        FlinkOptions.REALTIME_PAYLOAD_COMBINE, null, FSUtils.getFileIdFromLogPath(new StoragePath(filePath)),
-        FSUtils.getRelativePartitionPath(new StoragePath(tablePath), new StoragePath(filePath).getParent()));
   }
 }
