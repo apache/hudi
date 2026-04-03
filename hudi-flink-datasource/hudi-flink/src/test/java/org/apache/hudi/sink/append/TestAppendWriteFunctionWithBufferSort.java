@@ -21,7 +21,6 @@ package org.apache.hudi.sink.append;
 import org.apache.hudi.common.util.queue.DisruptorMessageQueue;
 import org.apache.hudi.common.util.queue.HoodieConsumer;
 import org.apache.hudi.configuration.FlinkOptions;
-import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.sink.buffer.BufferType;
 
 import org.apache.flink.configuration.Configuration;
@@ -37,7 +36,6 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -106,7 +104,7 @@ public class TestAppendWriteFunctionWithBufferSort {
     });
     queue.start();
 
-    queue.waitUntilDrained(5000);
+    queue.waitUntilDrained();
     assertEquals(0, consumed.get());
     assertTrue(queue.isEmpty());
     queue.close();
@@ -135,7 +133,7 @@ public class TestAppendWriteFunctionWithBufferSort {
       queue.insertRecord("record-" + i);
     }
 
-    queue.waitUntilDrained(5000);
+    queue.waitUntilDrained();
     assertEquals(10, consumed.get());
     assertTrue(queue.isEmpty());
     queue.close();
@@ -161,21 +159,21 @@ public class TestAppendWriteFunctionWithBufferSort {
     queue.start();
 
     queue.insertRecord("record");
-    queue.waitUntilDrained(5000);
+    queue.waitUntilDrained();
 
     assertTrue(consumerThread.get().isAlive(),
         "Disruptor thread must remain alive after waitUntilDrained()");
 
     // Queue should still accept new records
     queue.insertRecord("record-after-drain");
-    queue.waitUntilDrained(5000);
+    queue.waitUntilDrained();
 
     queue.close();
   }
 
   @Test
   @Timeout(10)
-  public void testWaitUntilDrainedTimeout() {
+  public void testWaitUntilDrainedReturnsOnInterrupt() throws Exception {
     DisruptorMessageQueue<String, String> queue = new DisruptorMessageQueue<>(
         16, Function.identity(), "BLOCKING_WAIT", 1, null);
     CountDownLatch blockConsumer = new CountDownLatch(1);
@@ -192,14 +190,20 @@ public class TestAppendWriteFunctionWithBufferSort {
     });
     queue.start();
 
-    try {
-      queue.insertRecord("blocked-record");
-    } catch (Exception e) {
-      throw new RuntimeException(e);
-    }
+    queue.insertRecord("blocked-record");
 
-    assertThrows(HoodieException.class, () -> queue.waitUntilDrained(200),
-        "Should throw on timeout when queue cannot drain");
+    Thread caller = Thread.currentThread();
+    new Thread(() -> {
+      try {
+        Thread.sleep(200);
+      } catch (InterruptedException e) {
+        // ignored
+      }
+      caller.interrupt();
+    }).start();
+
+    queue.waitUntilDrained();
+    assertTrue(Thread.interrupted(), "Interrupt flag should be set");
 
     blockConsumer.countDown();
     queue.close();
@@ -226,7 +230,7 @@ public class TestAppendWriteFunctionWithBufferSort {
     queue.insertRecord("will-fail");
     Thread.sleep(100);
 
-    queue.waitUntilDrained(5000);
+    queue.waitUntilDrained();
     assertTrue(queue.getThrowable() != null, "Error should be recorded");
     queue.close();
   }

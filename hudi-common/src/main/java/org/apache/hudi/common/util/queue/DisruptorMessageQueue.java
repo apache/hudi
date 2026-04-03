@@ -33,6 +33,7 @@ import lombok.extern.slf4j.Slf4j;
 
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.locks.LockSupport;
 import java.util.function.Function;
 
 /**
@@ -119,19 +120,19 @@ public class DisruptorMessageQueue<I, O> implements HoodieMessageQueue<I, O> {
    * <p>Must only be called when no new events will be published (e.g. during
    * Flink's {@code snapshotState} where {@code processElement} is guaranteed
    * not to run concurrently).
+   *
+   * <p>The method returns early if the consumer has failed ({@link #getThrowable()})
+   * or the calling thread has been interrupted (e.g. by Flink's checkpoint timeout).
    */
-  public void waitUntilDrained(long timeoutMs) {
-    long start = System.currentTimeMillis();
+  public void waitUntilDrained() {
     while (!isEmpty()) {
       if (throwable.get() != null) {
         return;
       }
-      if (System.currentTimeMillis() - start > timeoutMs) {
-        throw new HoodieException(
-            "Timed out waiting for disruptor queue to drain after "
-                + timeoutMs + "ms, remaining: " + size());
+      if (Thread.currentThread().isInterrupted()) {
+        return;
       }
-      Thread.yield();
+      LockSupport.parkNanos(100_000);
     }
   }
 

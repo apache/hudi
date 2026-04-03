@@ -160,8 +160,6 @@ public class AppendWriteFunctionWithDisruptorBufferSort<T> extends AppendWriteFu
     super.endInput();
   }
 
-  private static final long DRAIN_TIMEOUT_MS = 30_000;
-
   /**
    * Waits for the disruptor thread to finish consuming all records in the ring
    * buffer, then flushes the remaining sort buffer into the Parquet writer.
@@ -174,7 +172,7 @@ public class AppendWriteFunctionWithDisruptorBufferSort<T> extends AppendWriteFu
    * throws "Pipe broken".
    */
   private void drainDisruptor() {
-    disruptorQueue.waitUntilDrained(DRAIN_TIMEOUT_MS);
+    disruptorQueue.waitUntilDrained();
     Throwable error = disruptorQueue.getThrowable();
     if (error != null) {
       throw new HoodieException("Error processing records in disruptor buffer", error);
