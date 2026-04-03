@@ -336,10 +336,10 @@ public abstract class BaseHoodieLogRecordReader<T> {
               if (rolledBackBlocks != null) {
                 numBlocksRolledBack += rolledBackBlocks.size();
               }
-              LOG.info("Reading a rollback block with instant {} and target instant {}",
+              LOG.debug("Reading a rollback block with instant {} and target instant {}",
                   instantTime, targetInstantForCommandBlock);
             } else {
-              LOG.info("Reading a command block with instant {} whose operation is not supported", instantTime);
+              LOG.error("Reading a command block with instant {} whose operation is not supported", instantTime);
               throw new UnsupportedOperationException("Command type not yet supported.");
             }
             break;
@@ -372,7 +372,7 @@ public abstract class BaseHoodieLogRecordReader<T> {
 
         // For compacted blocks COMPACTED_BLOCK_TIMES entry is present under its headers.
         if (firstBlock.getLogBlockHeader().containsKey(COMPACTED_BLOCK_TIMES)) {
-          LOG.info("For instant time {}, compacted block instants are {}",
+          LOG.debug("For instant time {}, compacted block instants are {}",
               instantTime, firstBlock.getLogBlockHeader().get(COMPACTED_BLOCK_TIMES));
           // When compacted blocks are seen update the blockTimeToCompactionBlockTimeMap.
           Arrays.stream(firstBlock.getLogBlockHeader().get(COMPACTED_BLOCK_TIMES).split(","))
