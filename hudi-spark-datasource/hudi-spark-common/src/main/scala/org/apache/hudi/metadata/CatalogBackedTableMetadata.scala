@@ -97,7 +97,7 @@ class CatalogBackedTableMetadata(engineContext: HoodieEngineContext,
     if (!isPartitionedTable) {
       util.Collections.emptyList()
     } else if (shouldUseCatalogPartitions) {
-      val partitionPredicateExpressionSeq = partitionPredicateExpressions.asScala.map(_.asInstanceOf[Expression])
+      val partitionPredicateExpressionSeq = partitionPredicateExpressions.asScala.map(_.asInstanceOf[Expression]).toSeq
       filterPartitionsBasedOnRelativePathPrefixes(relativePathPrefix,
         sparkSession.sessionState.catalog.externalCatalog
           .listPartitionsByFilter(catalogDatabaseName, catalogTableName, partitionPredicateExpressionSeq,
