@@ -43,6 +43,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -309,7 +310,7 @@ public Option<byte[]> getInstantDetails(HoodieInstant instant) {
    * Callback to read instant details.
    */
   public class InstantsLoader implements BiConsumer<String, GenericRecord> {
-    private final Map<String, List<HoodieInstant>> instantsInRange = new ConcurrentHashMap<>();
+    private final Map<String, Set<HoodieInstant>> instantsInRange = new ConcurrentHashMap<>();
     private final boolean loadInstantDetails;
 
     private InstantsLoader(boolean loadInstantDetails) {
@@ -320,14 +321,14 @@ public Option<byte[]> getInstantDetails(HoodieInstant instant) {
     public void accept(String instantTime, GenericRecord record) {
       Option<HoodieInstant> instant = readCommit(instantTime, record, loadInstantDetails, null);
       if (instant.isPresent()) {
-        List<HoodieInstant> instantsForTime = instantsInRange.computeIfAbsent(instant.get().requestedTime(), s -> new ArrayList<>());
+        Set<HoodieInstant> instantsForTime = instantsInRange.computeIfAbsent(instant.get().requestedTime(), s -> new HashSet<>());
         if (!instantsForTime.contains(instant.get())) {
           instantsForTime.add(instant.get());
         }
       }
     }
 
-    public Map<String, List<HoodieInstant>> getInstantsInRangeCollected() {
+    public Map<String, Set<HoodieInstant>> getInstantsInRangeCollected() {
       return instantsInRange;
     }
   }
