@@ -183,7 +183,10 @@ public class HiveIncrementalPuller {
     String storedAsClause = getStoredAsClause();
 
     incrementalPullSQLTemplate.add("storedAsClause", storedAsClause);
-    String incrementalSQL = new Scanner(new File(config.incrementalSQLFile)).useDelimiter("\\Z").next();
+    String incrementalSQL;
+    try (Scanner scanner = new Scanner(new File(config.incrementalSQLFile))) {
+      incrementalSQL = scanner.useDelimiter("\\Z").next();
+    }
     if (!incrementalSQL.contains(config.sourceDb + "." + config.sourceTable)) {
       LOG.error("Incremental SQL does not have " + config.sourceDb + "." + config.sourceTable
           + ", which means its pulling from a different table. Fencing this from happening.");
