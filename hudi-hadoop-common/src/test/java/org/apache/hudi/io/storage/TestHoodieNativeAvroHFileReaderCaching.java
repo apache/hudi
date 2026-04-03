@@ -37,6 +37,7 @@ import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.io.SeekableDataInputStream;
 import org.apache.hudi.io.hfile.CachingHFileReaderImpl;
 import org.apache.hudi.io.hfile.HFileReader;
+import org.apache.hudi.io.hfile.HFileReaderCacheManager;
 import org.apache.hudi.io.hfile.UTF8StringKey;
 import org.apache.hudi.io.hadoop.TestHoodieOrcReaderWriter;
 import org.apache.hudi.io.storage.hadoop.HoodieAvroHFileWriter;
@@ -248,6 +249,22 @@ public class TestHoodieNativeAvroHFileReaderCaching {
     assertTrue(counter.getOpenCount() > 0, "Clearing load-on-open cache should force stream reopen");
     assertTrue(counter.getReadCount() > 0, "Clearing load-on-open cache should force stream reads");
     assertNotNull(getLoadOnOpenDataCacheEntry());
+  }
+
+  @Test
+  public void testReadersShareSingleCacheManagerInstance() throws Exception {
+    HFileReaderFactory firstFactory = createCachingReaderFactory(storage);
+    HFileReaderFactory secondFactory = createCachingReaderFactory(storage);
+
+    try (HFileReader ignored = firstFactory.createHFileReader()) {
+      HFileReaderCacheManager firstManager = getCacheManagerInstance();
+      assertNotNull(firstManager, "Creating the first cached reader should initialize the cache manager");
+
+      try (HFileReader alsoIgnored = secondFactory.createHFileReader()) {
+        HFileReaderCacheManager secondManager = getCacheManagerInstance();
+        assertTrue(firstManager == secondManager, "Cached readers should share the same cache manager instance");
+      }
+    }
   }
 
   private void testExistingKeysLookup() throws Exception {
@@ -673,19 +690,37 @@ public class TestHoodieNativeAvroHFileReaderCaching {
 
   @SuppressWarnings("unchecked")
   private Object getLoadOnOpenDataCacheEntry() throws Exception {
-    Field cacheField = CachingHFileReaderImpl.class.getDeclaredField("GLOBAL_LOAD_ON_OPEN_DATA_CACHE");
+    Field cacheField = HFileReaderCacheManager.class.getDeclaredField("INSTANCE");
     cacheField.setAccessible(true);
-    Cache<String, Object> cache = (Cache<String, Object>) cacheField.get(null);
+    HFileReaderCacheManager manager = (HFileReaderCacheManager) cacheField.get(null);
+    if (manager == null) {
+      return null;
+    }
+    Field loadOnOpenCacheField = HFileReaderCacheManager.class.getDeclaredField("loadOnOpenDataCache");
+    loadOnOpenCacheField.setAccessible(true);
+    Cache<String, Object> cache = (Cache<String, Object>) loadOnOpenCacheField.get(manager);
     return cache == null ? null : cache.getIfPresent(getFilePath().toString());
   }
 
   @SuppressWarnings("unchecked")
   private void invalidateLoadOnOpenDataCacheEntry() throws Exception {
-    Field cacheField = CachingHFileReaderImpl.class.getDeclaredField("GLOBAL_LOAD_ON_OPEN_DATA_CACHE");
+    Field cacheField = HFileReaderCacheManager.class.getDeclaredField("INSTANCE");
     cacheField.setAccessible(true);
-    Cache<String, Object> cache = (Cache<String, Object>) cacheField.get(null);
+    HFileReaderCacheManager manager = (HFileReaderCacheManager) cacheField.get(null);
+    if (manager == null) {
+      return;
+    }
+    Field loadOnOpenCacheField = HFileReaderCacheManager.class.getDeclaredField("loadOnOpenDataCache");
+    loadOnOpenCacheField.setAccessible(true);
+    Cache<String, Object> cache = (Cache<String, Object>) loadOnOpenCacheField.get(manager);
     if (cache != null) {
       cache.invalidate(getFilePath().toString());
     }
+  }
+
+  private HFileReaderCacheManager getCacheManagerInstance() throws Exception {
+    Field instanceField = HFileReaderCacheManager.class.getDeclaredField("INSTANCE");
+    instanceField.setAccessible(true);
+    return (HFileReaderCacheManager) instanceField.get(null);
   }
 }

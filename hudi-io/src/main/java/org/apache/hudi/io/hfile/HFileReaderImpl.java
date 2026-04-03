@@ -386,7 +386,7 @@ public class HFileReaderImpl implements HFileReader {
       levels--;
     }
 
-    // (5) Now all entries are data block index entries. Put them into the map and return.
+    // (5) Now all entries are data block index entries. Put them into the map
     TreeMap<Key, BlockIndexEntry> blockIndexEntryMap = new TreeMap<>();
     for (int i = 0; i < indexEntryList.size(); i++) {
       Key key = indexEntryList.get(i).getFirstKey();

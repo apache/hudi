@@ -111,10 +111,12 @@ public class HFileBlockCache {
 
     private final String fileIdentity;
     private final long offset;
+    private final int size;
 
-    public BlockCacheKey(String fileIdentity, long offset) {
+    public BlockCacheKey(String fileIdentity, long offset, int size) {
       this.fileIdentity = fileIdentity;
       this.offset = offset;
+      this.size = size;
     }
 
     @Override
@@ -128,6 +130,7 @@ public class HFileBlockCache {
 
       BlockCacheKey that = (BlockCacheKey) o;
       return offset == that.offset
+          && size == that.size
           && Objects.equals(fileIdentity, that.fileIdentity);
     }
 
@@ -135,6 +138,7 @@ public class HFileBlockCache {
     public int hashCode() {
       int result = fileIdentity != null ? fileIdentity.hashCode() : 0;
       result = 31 * result + (int) (offset ^ (offset >>> 32));
+      result = 31 * result + size;
       return result;
     }
 
@@ -143,6 +147,7 @@ public class HFileBlockCache {
       return "BlockCacheKey{"
           + "fileIdentity='" + fileIdentity + '\''
           + ", offset=" + offset
+          + ", size=" + size
           + '}';
     }
   }
