@@ -161,7 +161,7 @@ class Spark34LegacyHoodieParquetFileFormat(private val shouldAppendPartitionValu
     val resultSchema = StructType(partitionSchema.fields ++ requiredSchema.fields)
     val sqlConf = sparkSession.sessionState.conf
     val enableOffHeapColumnVector = sqlConf.offHeapColumnVectorEnabled
-    val enableVectorizedReader: Boolean = supportsColumnar(sparkSession, resultSchema)
+    val enableVectorizedReader: Boolean = supportBatch(sparkSession, resultSchema)
     val enableRecordFilter: Boolean = sqlConf.parquetRecordFilterEnabled
     val timestampConversion: Boolean = sqlConf.isParquetINT96TimestampConversion
     val capacity = sqlConf.parquetVectorizedReaderBatchSize
