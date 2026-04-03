@@ -463,6 +463,64 @@ public class TestJsonKafkaSource extends BaseTestKafkaSource {
   }
 
   @Test
+  public void testSkipInvalidJsonRecordsInAvroFormat() {
+    final String topic = TEST_TOPIC_PREFIX + "testSkipInvalidJsonRecordsInAvroFormat";
+
+    testUtils.createTopic(topic, 2);
+    HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator();
+    testUtils.sendMessages(topic, jsonifyRecords(dataGenerator.generateInsertsAsPerSchema("000", 1000,
+        HoodieTestDataGenerator.SHORT_TRIP_SCHEMA)));
+    testUtils.sendMessages(topic, new String[] {"error_event1", "error_event2"});
+
+    TypedProperties props = createPropsForKafkaSource(topic, null, "earliest");
+    props.put(ENABLE_KAFKA_COMMIT_OFFSET.key(), "true");
+    props.put(HoodieStreamerConfig.SKIP_INVALID_JSON_RECORDS.key(), "true");
+
+    Source jsonSource = new JsonKafkaSource(props, jsc(), spark(), schemaProvider, metrics);
+    SourceFormatAdapter kafkaSource = new SourceFormatAdapter(jsonSource, Option.empty(), Option.of(props));
+    InputBatch<JavaRDD<GenericRecord>> fetch1 = kafkaSource.fetchNewDataInAvroFormat(Option.empty(), Long.MAX_VALUE);
+    assertEquals(1000, fetch1.getBatch().get().count());
+  }
+
+  @Test
+  public void testSkipInvalidJsonRecordsInRowFormat() {
+    final String topic = TEST_TOPIC_PREFIX + "testSkipInvalidJsonRecordsInRowFormat";
+
+    testUtils.createTopic(topic, 2);
+    sendJsonSafeMessagesToKafka(topic, 1000, 2);
+    testUtils.sendMessages(topic, new String[] {"error_event1", "error_event2"});
+
+    TypedProperties props = createPropsForKafkaSource(topic, null, "earliest");
+    props.put(ENABLE_KAFKA_COMMIT_OFFSET.key(), "true");
+    props.put(HoodieStreamerConfig.SKIP_INVALID_JSON_RECORDS.key(), "true");
+
+    Source jsonSource = new JsonKafkaSource(props, jsc(), spark(), schemaProvider, metrics);
+    SourceFormatAdapter kafkaSource = new SourceFormatAdapter(jsonSource, Option.empty(), Option.of(props));
+    InputBatch<Dataset<Row>> fetch1 = kafkaSource.fetchNewDataInRowFormat(Option.empty(), Long.MAX_VALUE);
+    assertEquals(1000, fetch1.getBatch().get().count());
+  }
+
+  @Test
+  public void testDefaultBehaviorCrashesOnInvalidJson() {
+    final String topic = TEST_TOPIC_PREFIX + "testDefaultBehaviorCrashesOnInvalidJson";
+
+    testUtils.createTopic(topic, 2);
+    HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator();
+    testUtils.sendMessages(topic, jsonifyRecords(dataGenerator.generateInsertsAsPerSchema("000", 10,
+        HoodieTestDataGenerator.SHORT_TRIP_SCHEMA)));
+    testUtils.sendMessages(topic, new String[] {"error_event1"});
+
+    TypedProperties props = createPropsForKafkaSource(topic, null, "earliest");
+    props.put(ENABLE_KAFKA_COMMIT_OFFSET.key(), "true");
+
+    Source jsonSource = new JsonKafkaSource(props, jsc(), spark(), schemaProvider, metrics);
+    SourceFormatAdapter kafkaSource = new SourceFormatAdapter(jsonSource, Option.empty(), Option.of(props));
+    InputBatch<JavaRDD<GenericRecord>> fetch1 = kafkaSource.fetchNewDataInAvroFormat(Option.empty(), Long.MAX_VALUE);
+    // Without skip config, counting records should throw due to invalid JSON
+    org.junit.jupiter.api.Assertions.assertThrows(Exception.class, () -> fetch1.getBatch().get().count());
+  }
+
+  @Test
   public void testAppendKafkaOffset() {
     final String topic = TEST_TOPIC_PREFIX + "testKafkaOffsetAppend";
     int numPartitions = 2;

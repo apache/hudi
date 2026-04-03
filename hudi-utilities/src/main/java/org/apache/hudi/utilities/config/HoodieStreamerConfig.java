@@ -140,6 +140,15 @@ public class HoodieStreamerConfig extends HoodieConfig {
       .sinceVersion("0.15.0")
       .withDocumentation("When enabled, the dataframe generated from reading source data is wrapped with an exception handler to explicitly surface exceptions.");
 
+  public static final ConfigProperty<Boolean> SKIP_INVALID_JSON_RECORDS = ConfigProperty
+      .key(STREAMER_CONFIG_PREFIX + "source.json.skip.invalid.records")
+      .defaultValue(false)
+      .markAdvanced()
+      .sinceVersion("1.2.0")
+      .withDocumentation("When enabled, invalid JSON records that fail deserialization are "
+          + "skipped instead of causing the pipeline to crash. Skipped records are logged "
+          + "at WARN level. This is a lightweight alternative to the error table for handling bad records.");
+
   public static final ConfigProperty<Boolean> SCHEMA_MAKE_COLUMNS_NULLABLE = ConfigProperty
       .key(STREAMER_CONFIG_PREFIX + "schema.make.columns.nullable")
       .defaultValue(false)

@@ -54,9 +54,14 @@ import org.apache.spark.sql.types.Metadata;
 import org.apache.spark.sql.types.StructField;
 import org.apache.spark.sql.types.StructType;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.io.Closeable;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
 import java.util.stream.Collectors;
 
 import scala.util.Either;
@@ -64,6 +69,7 @@ import scala.util.Either;
 import static org.apache.hudi.utilities.config.HoodieStreamerConfig.ROW_THROW_EXPLICIT_EXCEPTIONS;
 import static org.apache.hudi.utilities.config.HoodieStreamerConfig.SANITIZE_SCHEMA_FIELD_NAMES;
 import static org.apache.hudi.utilities.config.HoodieStreamerConfig.SCHEMA_FIELD_NAME_INVALID_CHAR_MASK;
+import static org.apache.hudi.utilities.config.HoodieStreamerConfig.SKIP_INVALID_JSON_RECORDS;
 import static org.apache.hudi.utilities.schema.RowBasedSchemaProvider.HOODIE_RECORD_NAMESPACE;
 import static org.apache.hudi.utilities.schema.RowBasedSchemaProvider.HOODIE_RECORD_STRUCT_NAME;
 import static org.apache.hudi.utilities.streamer.BaseErrorTableWriter.ERROR_TABLE_CURRUPT_RECORD_COL_NAME;
@@ -73,8 +79,11 @@ import static org.apache.hudi.utilities.streamer.BaseErrorTableWriter.ERROR_TABL
  */
 public class SourceFormatAdapter implements Closeable {
 
+  private static final Logger LOG = LoggerFactory.getLogger(SourceFormatAdapter.class);
+
   private final Source source;
   private boolean shouldSanitize = SANITIZE_SCHEMA_FIELD_NAMES.defaultValue();
+  private boolean skipInvalidJsonRecords = false;
 
   private  boolean wrapWithException = ROW_THROW_EXPLICIT_EXCEPTIONS.defaultValue();
   private String invalidCharMask = SCHEMA_FIELD_NAME_INVALID_CHAR_MASK.defaultValue();
@@ -95,6 +104,7 @@ public class SourceFormatAdapter implements Closeable {
       this.shouldSanitize = SanitizationUtils.shouldSanitize(props.get());
       this.invalidCharMask = SanitizationUtils.getInvalidCharMask(props.get());
       this.wrapWithException = ConfigUtils.getBooleanWithAltKeys(props.get(), ROW_THROW_EXPLICIT_EXCEPTIONS);
+      this.skipInvalidJsonRecords = ConfigUtils.getBooleanWithAltKeys(props.get(), SKIP_INVALID_JSON_RECORDS);
       this.useJava8api = (boolean) getSource().getSparkSession().conf().get(SQLConf.DATETIME_JAVA8API_ENABLED());
     }
     if (this.shouldSanitize && source.getSourceType() == Source.SourceType.PROTO) {
@@ -136,6 +146,21 @@ public class SourceFormatAdapter implements Closeable {
         errorTableWriter.get().addErrorEvents(javaRDD.filter(x -> x.isRight()).map(x ->
             new ErrorEvent<>(x.right().get(), ErrorEvent.ErrorReason.JSON_AVRO_DESERIALIZATION_FAILURE)));
         return javaRDD.filter(x -> x.isLeft()).map(x -> x.left().get());
+      } else if (skipInvalidJsonRecords) {
+        return rdd.map(convertor::fromJsonWithError).mapPartitions(iter -> {
+          List<GenericRecord> results = new ArrayList<>();
+          while (iter.hasNext()) {
+            Either<GenericRecord, String> either = iter.next();
+            if (either.isLeft()) {
+              results.add(either.left().get());
+            } else {
+              String badRecord = either.right().get();
+              LOG.warn("Skipping invalid JSON record during Avro conversion: {}",
+                  badRecord.length() > 1000 ? badRecord.substring(0, 1000) + "...[truncated]" : badRecord);
+            }
+          }
+          return results.iterator();
+        });
       } else {
         return rdd.map(convertor::fromJson);
       }
@@ -151,6 +176,21 @@ public class SourceFormatAdapter implements Closeable {
         errorTableWriter.get().addErrorEvents(javaRDD.filter(Either::isRight).map(x ->
             new ErrorEvent<>(x.right().get(), ErrorEvent.ErrorReason.JSON_ROW_DESERIALIZATION_FAILURE)));
         return javaRDD.filter(Either::isLeft).map(x -> x.left().get());
+      } else if (skipInvalidJsonRecords) {
+        return rdd.map(convertor::fromJsonToRowWithError).mapPartitions(iter -> {
+          List<Row> results = new ArrayList<>();
+          while (iter.hasNext()) {
+            Either<Row, String> either = iter.next();
+            if (either.isLeft()) {
+              results.add(either.left().get());
+            } else {
+              String badRecord = either.right().get();
+              LOG.warn("Skipping invalid JSON record during Row conversion: {}",
+                  badRecord.length() > 1000 ? badRecord.substring(0, 1000) + "...[truncated]" : badRecord);
+            }
+          }
+          return results.iterator();
+        });
       } else {
         return rdd.map(convertor::fromJson);
       }
@@ -293,6 +333,24 @@ public class SourceFormatAdapter implements Closeable {
           return new InputBatch<>(
               eventsDataset,
               r.getCheckpointForNextBatch(), r.getSchemaProvider());
+        } else if (skipInvalidJsonRecords) {
+          String corruptCol = "_corrupt_record";
+          StructType dataType = HoodieSchemaConversionUtils.convertHoodieSchemaToStructType(sourceSchema)
+              .add(new StructField(corruptCol, DataTypes.StringType, true, Metadata.empty()));
+          StructType nullableStruct = dataType.asNullable();
+          Option<Dataset<Row>> dataset = r.getBatch().map(rdd -> {
+            Dataset<Row> df = source.getSparkSession().read()
+                .option("columnNameOfCorruptRecord", corruptCol)
+                .schema(nullableStruct)
+                .option("mode", "PERMISSIVE")
+                .json(rdd);
+            long corruptCount = df.filter(new Column(corruptCol).isNotNull()).count();
+            if (corruptCount > 0) {
+              LOG.warn("Skipping {} invalid JSON record(s) during Row format ingestion", corruptCount);
+            }
+            return df.filter(new Column(corruptCol).isNull()).drop(corruptCol);
+          });
+          return new InputBatch<>(dataset, r.getCheckpointForNextBatch(), r.getSchemaProvider());
         } else {
           StructType dataType = HoodieSchemaConversionUtils.convertHoodieSchemaToStructType(sourceSchema);
           return new InputBatch<>(
