@@ -130,6 +130,7 @@ public class DisruptorMessageQueue<I, O> implements HoodieMessageQueue<I, O> {
         return;
       }
       if (Thread.currentThread().isInterrupted()) {
+        markAsFailed(new HoodieException("Interrupted while waiting for disruptor queue to drain"));
         return;
       }
       LockSupport.parkNanos(100_000);

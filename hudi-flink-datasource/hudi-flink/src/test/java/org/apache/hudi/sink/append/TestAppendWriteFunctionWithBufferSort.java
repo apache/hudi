@@ -204,6 +204,7 @@ public class TestAppendWriteFunctionWithBufferSort {
 
     queue.waitUntilDrained();
     assertTrue(Thread.interrupted(), "Interrupt flag should be set");
+    assertTrue(queue.getThrowable() != null, "Interruption should be recorded as failure");
 
     blockConsumer.countDown();
     queue.close();
