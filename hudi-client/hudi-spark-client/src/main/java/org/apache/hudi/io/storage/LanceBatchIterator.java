@@ -131,10 +131,11 @@ public class LanceBatchIterator implements Iterator<ColumnarBatch>, Closeable {
     IOException arrowException = null;
     Exception lanceException = null;
 
-    if (currentBatch != null) {
-      currentBatch.close();
-      currentBatch = null;
-    }
+    // Don't close currentBatch here: ColumnarBatch.close() would close the
+    // underlying Arrow FieldVectors through LanceArrowColumnVector, but they
+    // are owned by the ArrowReader (via VectorSchemaRoot) and will be closed
+    // when arrowReader.close() is called below.
+    currentBatch = null;
 
     if (arrowReader != null) {
       try {

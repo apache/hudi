@@ -115,10 +115,10 @@ public final class LanceRecordIterator implements ClosableIterator<UnsafeRow> {
       return true;
     }
 
-    if (currentBatch != null) {
-      currentBatch.close();
-      currentBatch = null;
-    }
+    // Release reference to previous batch (don't close — the underlying
+    // FieldVectors are reused by ArrowReader across loadNextBatch() calls,
+    // and closing would corrupt the cached LanceArrowColumnVector wrappers).
+    currentBatch = null;
 
     // Try to load next batch. Loop so zero-row batches (legitimately returned e.g. after
     // filter pushdown) don't silently terminate iteration and drop subsequent non-empty batches.

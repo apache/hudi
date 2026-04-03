@@ -29,6 +29,7 @@ import org.apache.hudi.io.memory.HoodieArrowAllocator
 import org.apache.hudi.io.storage.{BlobDescriptorTransform, HoodieSparkLanceReader, LanceBatchIterator, LanceRecordIterator, VectorConversionUtils}
 import org.apache.hudi.storage.StorageConfiguration
 
+import org.apache.arrow.vector.ipc.ArrowReader
 import org.apache.hadoop.conf.Configuration
 import org.apache.parquet.schema.MessageType
 import org.apache.spark.TaskContext
@@ -246,7 +247,7 @@ class SparkLanceReaderBase(enableVectorizedReader: Boolean) extends SparkColumna
   private def readBatch(file: PartitionedFile,
                         allocator: org.apache.arrow.memory.BufferAllocator,
                         lanceReader: LanceFileReader,
-                        arrowReader: org.apache.arrow.vector.ipc.ArrowReader,
+                        arrowReader: ArrowReader,
                         filePath: String,
                         requestSchema: StructType,
                         requiredSchema: StructType,
@@ -345,9 +346,8 @@ class SparkLanceReaderBase(enableVectorizedReader: Boolean) extends SparkColumna
 
       override def close(): Unit = {
         // Close null Arrow vectors and their allocator before batchIterator (which closes the data allocator)
-        nullColumnVectors.foreach { case (_, columnVector, arrowVector) =>
+        nullColumnVectors.foreach { case (_, columnVector, _) =>
           columnVector.close()
-          arrowVector.close()
         }
         if (nullAllocator != null) nullAllocator.close()
         batchIterator.close()

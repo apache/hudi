@@ -79,10 +79,6 @@ class TestLanceColumnarBatch extends HoodieSparkClientTestBase {
     spark = null
   }
 
-  // ---------------------------------------------------------------------------
-  // Helpers
-  // ---------------------------------------------------------------------------
-
   /**
    * Write a plain Lance file (no Hudi metadata fields) containing [[rows]] with [[schema]].
    * Returns the absolute path string of the written file.
@@ -92,9 +88,13 @@ class TestLanceColumnarBatch extends HoodieSparkClientTestBase {
     val path = new StoragePath(s"$basePath/$fileName")
     val storage = HoodieTestUtils.getStorage(basePath)
     try {
-      val writer = new HoodieSparkLanceWriter(
-        path, schema, "20240101120000000", new SparkTaskContextSupplier(),
-        storage, false, HOption.of(bloom))
+      val writer = HoodieSparkLanceWriter.builder
+        .file(path).sparkSchema(schema)
+        .instantTime("20240101120000000")
+        .taskContextSupplier(new SparkTaskContextSupplier())
+        .storage(storage)
+        .populateMetaFields(false)
+        .bloomFilterOpt(HOption.of(bloom)).build
       try {
         rows.zipWithIndex.foreach { case (row, i) => writer.writeRow("key" + i, row) }
       } finally {
