@@ -123,6 +123,10 @@
                   <shadedPattern>org.apache.hudi.org.apache.spark.sql.avro.</shadedPattern>
                 </relocation>
                 <relocation>
+                  <pattern>com.google.protobuf.</pattern>
+                  <shadedPattern>org.apache.hudi.com.google.protobuf.</shadedPattern>
+                </relocation>
+                <relocation>
                   <pattern>com.beust.jcommander.</pattern>
                   <shadedPattern>org.apache.hudi.com.beust.jcommander.</shadedPattern>
                 </relocation>
