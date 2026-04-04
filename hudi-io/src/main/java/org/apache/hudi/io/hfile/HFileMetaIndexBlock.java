@@ -24,6 +24,8 @@ import java.io.DataOutputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 
+import static org.apache.hudi.io.util.IOUtils.writeVarInt;
+
 public class HFileMetaIndexBlock extends HFileIndexBlock {
 
   private HFileMetaIndexBlock(HFileContext context) {
@@ -42,13 +44,9 @@ public class HFileMetaIndexBlock extends HFileIndexBlock {
         outputStream.writeLong(entry.getOffset());
         outputStream.writeInt(entry.getSize());
         // Key length.
-        try {
-          byte[] keyLength = getVariableLengthEncodedBytes(entry.getFirstKey().getLength());
-          outputStream.write(keyLength);
-        } catch (IOException e) {
-          throw new RuntimeException(
-              "Failed to serialize number: " + entry.getFirstKey().getLength());
-        }
+        // Use Hadoop WritableUtils VarInt encoding to match HBase's HFile format.
+        byte[] keyLength = writeVarInt(entry.getFirstKey().getLength());
+        outputStream.write(keyLength);
         // Note that: NO two-bytes for encoding key length.
         // Key.
         outputStream.write(entry.getFirstKey().getBytes());

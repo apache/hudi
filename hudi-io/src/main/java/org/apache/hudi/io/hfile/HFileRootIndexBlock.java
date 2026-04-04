@@ -35,6 +35,7 @@ import static org.apache.hudi.io.util.IOUtils.decodeVarLongSizeOnDisk;
 import static org.apache.hudi.io.util.IOUtils.readInt;
 import static org.apache.hudi.io.util.IOUtils.readLong;
 import static org.apache.hudi.io.util.IOUtils.readVarLong;
+import static org.apache.hudi.io.util.IOUtils.writeVarInt;
 
 /**
  * Represents a {@link HFileBlockType#ROOT_INDEX} block.
@@ -108,15 +109,11 @@ public class HFileRootIndexBlock extends HFileIndexBlock {
         outputStream.writeLong(entry.getOffset());
         outputStream.writeInt(entry.getSize());
 
-        // Key length + 2.
-        try {
-          byte[] keyLength = getVariableLengthEncodedBytes(
-              entry.getFirstKey().getLength() + SIZEOF_INT16);
-          outputStream.write(keyLength);
-        } catch (IOException e) {
-          throw new RuntimeException(
-              "Failed to serialize number: " + entry.getFirstKey().getLength() + SIZEOF_INT16);
-        }
+        // Key length + 2 (SIZEOF_INT16 for the 2-byte row key length prefix).
+        // Use Hadoop WritableUtils VarInt encoding to match HBase's HFile format.
+        byte[] keyLength = writeVarInt(
+            entry.getFirstKey().getLength() + SIZEOF_INT16);
+        outputStream.write(keyLength);
         // Key length.
         outputStream.writeShort((short) entry.getFirstKey().getLength());
         // Key.
