@@ -22,18 +22,20 @@ package org.apache.spark.sql.hudi.feature
 import org.apache.hudi.HoodieSparkUtils
 
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
-import org.scalatest.Inspectors.forAll
 
 class TestQueryMergeOnReadOptimizedTable extends HoodieSparkSqlTestBase {
 
   val baseFileFormats: List[String] = if (HoodieSparkUtils.gteqSpark3_4) List("parquet", "lance") else List("parquet")
 
-  forAll(baseFileFormats) { (baseFileFormat: String) =>
+  baseFileFormats.foreach { baseFileFormat =>
     test(s"Test Query Merge_On_Read Read_Optimized table - $baseFileFormat") {
       withTempDir { tmp =>
         val tableName = generateTableName
         val tablePath = s"${tmp.getCanonicalPath}/$tableName"
         // create table
+        // No explicit hoodie.write.record.merge.custom.implementation.classes needed:
+        // orderingFields='ts' triggers EVENT_TIME_ORDERING merge mode, which auto-selects
+        // DefaultSparkRecordMerger for lance (SPARK record type).
         spark.sql(
           s"""
              |create table $tableName (

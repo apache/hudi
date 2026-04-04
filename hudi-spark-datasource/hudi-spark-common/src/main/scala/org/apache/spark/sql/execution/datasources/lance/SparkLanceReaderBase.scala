@@ -86,8 +86,8 @@ class SparkLanceReaderBase(enableVectorizedReader: Boolean) extends SparkColumna
       try {
         val lanceReader = LanceFileReader.open(file.filePath.toString, countAllocator)
         try {
-          val rowCount = lanceReader.numRows()
-          Iterator.fill(rowCount.toInt)(InternalRow.empty)
+          val rowCount = Math.toIntExact(lanceReader.numRows())
+          Iterator.fill(rowCount)(InternalRow.empty)
         } finally {
           lanceReader.close()
         }

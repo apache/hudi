@@ -49,12 +49,9 @@ public class HoodieFileWriterFactory {
       String instantTime, StoragePath path, HoodieStorage storage, HoodieConfig config, HoodieSchema schema,
       TaskContextSupplier taskContextSupplier, HoodieRecordType recordType) throws IOException {
     final String extension = FSUtils.getFileExtension(path.getName());
-    HoodieRecordType fixedType;
-    try {
-      fixedType = HoodieFileFormat.fromFileExtension(extension).requiresSparkRecordType() ? HoodieRecordType.SPARK : recordType;
-    } catch (IllegalArgumentException e) {
-      fixedType = recordType;
-    }
+    HoodieFileFormat format = HoodieFileFormat.fromFileExtensionOrNull(extension);
+    HoodieRecordType fixedType = (format != null && format.requiresSparkRecordType())
+        ? HoodieRecordType.SPARK : recordType;
     HoodieFileWriterFactory factory = HoodieIOFactory.getIOFactory(storage).getWriterFactory(fixedType);
     return factory.getFileWriterByFormat(extension, instantTime, path, config, schema, taskContextSupplier);
   }

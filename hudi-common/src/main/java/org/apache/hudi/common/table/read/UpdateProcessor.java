@@ -145,7 +145,9 @@ public interface UpdateProcessor<T> {
         // If convertToAvroRecord returned a cached record with a different schema (e.g., from
         // extractDataFromRecord caching for ExpressionPayload in the COW write path), the record
         // is already in write-schema format with correctly evaluated expressions. Convert directly.
-        // Note: SENTINEL records have null schema and must go through the payload path for shouldIgnore.
+        // Note: SENTINEL records (used by ExpressionPayload to signal "skip this record") always
+        // have null schema (HoodieRecord.EmptyRecord.getSchema() returns null), so they cannot
+        // enter this branch and will always go through the payload path where shouldIgnore handles them.
         if (record.getSchema() != null && !record.getSchema().equals(recordAvroSchema)) {
           mergedRecord.replaceRecord(readerContext.getRecordContext().convertAvroRecord(record));
         } else {
@@ -173,6 +175,10 @@ public interface UpdateProcessor<T> {
                 finalRecord = HoodieAvroUtils.rewriteRecordWithNewSchema(insertRecord, dataSchema.toAvroSchema());
               }
               mergedRecord.replaceRecord(readerContext.getRecordContext().convertAvroRecord(finalRecord));
+            } else {
+              // Payload returned empty (e.g., soft-deleted record in DefaultHoodieRecordPayload).
+              // Suppress the record — do not emit it as an insert.
+              return null;
             }
           } catch (IOException e) {
             throw new HoodieIOException("Error processing record with payload class: " + payloadClass, e);

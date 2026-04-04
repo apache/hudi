@@ -91,6 +91,20 @@ public enum HoodieFileFormat {
     throw new IllegalArgumentException("Unknown file extension :" + extension);
   }
 
+  /**
+   * Returns the {@link HoodieFileFormat} matching the given file extension, or {@code null}
+   * if no match is found. Useful when the caller wants to handle unknown extensions without
+   * exception-based control flow.
+   */
+  public static HoodieFileFormat fromFileExtensionOrNull(String extension) {
+    for (HoodieFileFormat format : HoodieFileFormat.values()) {
+      if (format.getFileExtension().equals(extension)) {
+        return format;
+      }
+    }
+    return null;
+  }
+
   public static HoodieFileFormat getValue(String fileFormat) {
     if (StringUtils.isNullOrEmpty(fileFormat)) {
       return null;

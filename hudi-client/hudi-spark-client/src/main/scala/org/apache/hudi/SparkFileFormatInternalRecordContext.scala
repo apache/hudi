@@ -44,6 +44,17 @@ trait SparkFileFormatInternalRecordContext extends BaseSparkInternalRecordContex
   // getInsertValue result carries the data schema (no meta fields) while the BufferedRecord
   // stores writeSchemaWithMetaFields. Returning the original Avro record from convertToAvroRecord
   // lets ExpressionPayload.combineAndGetUpdateValue decode bytes with the correct data schema.
+  //
+  // IMPORTANT INVARIANT: The identity link between InternalRow and GenericRecord must survive
+  // from extractDataFromRecord (where the cache is populated) to convertToAvroRecord (where
+  // it is consumed via remove()). Any operation that replaces the InternalRow object in between
+  // — such as BufferedRecord.seal() (which calls InternalRow.copy()), replaceRecord(), or
+  // project() — would break this link and cause fallback to schema-based serialization.
+  //
+  // Current safety: In the MOR read path (UpdateProcessor.handleNonDeletes), convertToAvroRecord
+  // is called on the original InternalRow BEFORE seal() runs in super.handleNonDeletes().
+  // In the COW write path (HoodieIndexUtils.inferPartitionPath), convertToAvroRecord is similarly
+  // called before any record transformation.
   private val avroRecordByRow: java.util.IdentityHashMap[InternalRow, GenericRecord] =
     new java.util.IdentityHashMap[InternalRow, GenericRecord]()
 

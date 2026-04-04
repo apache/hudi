@@ -102,18 +102,22 @@ public class HoodieHFileRecordReader implements RecordReader<NullWritable, Array
 
   @Override
   public void close() throws IOException {
-    if (reader != null) {
-      reader.close();
-      reader = null;
-    }
+    // Close the iterator before the reader: the iterator holds references to
+    // resources owned by the reader, so closing the reader first may cause
+    // the iterator's close to fail or leak resources.
     if (recordIterator != null) {
       recordIterator.close();
       recordIterator = null;
+    }
+    if (reader != null) {
+      reader.close();
+      reader = null;
     }
   }
 
   @Override
   public float getProgress() throws IOException {
-    return 1.0f * count / reader.getTotalRecords();
+    return (reader == null || reader.getTotalRecords() == 0)
+        ? 0f : 1.0f * count / reader.getTotalRecords();
   }
 }
