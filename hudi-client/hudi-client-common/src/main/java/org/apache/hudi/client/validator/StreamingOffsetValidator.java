@@ -139,6 +139,10 @@ public abstract class StreamingOffsetValidator extends BasePreCommitValidator {
     long recordsWritten = context.getTotalInsertRecordsWritten()
         + context.getTotalUpdateRecordsWritten();
 
+    // Track write errors so callers can distinguish write-failure deviation (write errors > 0)
+    // from silent data loss (write errors == 0) when the validator fires.
+    long writeErrors = context.getTotalWriteErrors();
+
     // For empty commits (e.g., no new data from source), both offsetDiff and recordsWritten
     // can be zero. This is a valid scenario — skip validation to avoid false positives.
     if (offsetDifference == 0 && recordsWritten == 0) {
@@ -147,7 +151,7 @@ public abstract class StreamingOffsetValidator extends BasePreCommitValidator {
     }
 
     // Validate offset vs record consistency
-    validateOffsetConsistency(offsetDifference, recordsWritten,
+    validateOffsetConsistency(offsetDifference, recordsWritten, writeErrors,
         currentCheckpoint, previousCheckpoint);
   }
 
@@ -155,12 +159,13 @@ public abstract class StreamingOffsetValidator extends BasePreCommitValidator {
    * Validate that offset difference matches record count within tolerance.
    *
    * @param offsetDiff Expected records based on offset difference
-   * @param recordsWritten Actual records written
+   * @param recordsWritten Actual records written (inserts + updates)
+   * @param writeErrors Records that failed to write (tracked in write status errors)
    * @param currentCheckpoint Current checkpoint string (for error messages)
    * @param previousCheckpoint Previous checkpoint string (for error messages)
    * @throws HoodieValidationException if validation fails and policy is FAIL
    */
-  protected void validateOffsetConsistency(long offsetDiff, long recordsWritten,
+  protected void validateOffsetConsistency(long offsetDiff, long recordsWritten, long writeErrors,
                                             String currentCheckpoint, String previousCheckpoint)
       throws HoodieValidationException {
 
@@ -169,10 +174,13 @@ public abstract class StreamingOffsetValidator extends BasePreCommitValidator {
     if (deviation > tolerancePercentage) {
       String errorMsg = String.format(
           "Streaming offset validation failed. "
-              + "Offset difference: %d, Records written: %d, Deviation: %.2f%%, Tolerance: %.2f%%. "
-              + "This may indicate data loss or filtering. "
+              + "Offset difference: %d, Records written: %d, Write errors: %d, Deviation: %.2f%%, Tolerance: %.2f%%. "
+              + "%s"
               + "Previous checkpoint: %s, Current checkpoint: %s",
-          offsetDiff, recordsWritten, deviation, tolerancePercentage,
+          offsetDiff, recordsWritten, writeErrors, deviation, tolerancePercentage,
+          writeErrors > 0
+              ? "Non-zero write errors suggest records failed to write rather than silent data loss. "
+              : "This may indicate data loss or filtering. ",
           previousCheckpoint, currentCheckpoint);
 
       if (failurePolicy == ValidationFailurePolicy.WARN_LOG) {
@@ -181,8 +189,8 @@ public abstract class StreamingOffsetValidator extends BasePreCommitValidator {
         throw new HoodieValidationException(errorMsg);
       }
     } else {
-      log.info("Offset validation passed. Offset diff: {}, Records: {}, Deviation: {}% (within {}%)",
-          offsetDiff, recordsWritten, String.format("%.2f", deviation), tolerancePercentage);
+      log.info("Offset validation passed. Offset diff: {}, Records: {}, Write errors: {}, Deviation: {}% (within {}%)",
+          offsetDiff, recordsWritten, writeErrors, String.format("%.2f", deviation), tolerancePercentage);
     }
   }
 

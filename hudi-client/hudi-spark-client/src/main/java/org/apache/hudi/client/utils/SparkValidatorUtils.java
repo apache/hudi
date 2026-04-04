@@ -85,6 +85,7 @@ public class SparkValidatorUtils {
 
       Stream<SparkPreCommitValidator> validators = Arrays.stream(config.getPreCommitValidators().split(","))
           .map(String::trim)
+          .filter(s -> !s.isEmpty())
           .filter(validatorClass -> {
             try {
               Class<?> clazz = Class.forName(validatorClass);
