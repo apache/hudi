@@ -82,8 +82,7 @@ public class SqlFileBasedSource extends RowSource {
       Option<Checkpoint> lastCheckpoint, long sourceLimit) {
     Dataset<Row> rows = null;
     final FileSystem fs = HadoopFSUtils.getFs(sourceSqlFile, sparkContext.hadoopConfiguration(), true);
-    try {
-      final Scanner scanner = new Scanner(fs.open(new Path(sourceSqlFile)));
+    try (final Scanner scanner = new Scanner(fs.open(new Path(sourceSqlFile)))) {
       scanner.useDelimiter(";");
       while (scanner.hasNext()) {
         String sqlStr = scanner.next().trim();
