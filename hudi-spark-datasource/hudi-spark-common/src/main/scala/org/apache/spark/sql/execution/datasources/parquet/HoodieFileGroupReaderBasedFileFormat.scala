@@ -56,7 +56,7 @@ import org.apache.spark.sql.hudi.MultipleColumnarFileFormatReader
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.sources.Filter
 import org.apache.spark.sql.types.StructType
-import org.apache.spark.sql.vectorized.{ColumnarBatch, ColumnarBatchUtils}
+import org.apache.spark.sql.vectorized.{ColumnarBatch, ColumnarBatchUtils, LanceArrowColumnVector}
 import org.apache.spark.util.SerializableConfiguration
 
 import java.io.Closeable
@@ -186,9 +186,21 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
     if (hoodieFileFormat == HoodieFileFormat.LANCE && !isMultipleBaseFileFormatsEnabled) {
       // Lance uses LanceArrowColumnVector for data columns and OnHeapColumnVector for partition columns.
       // Spark uses vectorTypes to determine if columnar batch reading is supported.
-      val lanceVectorType = "org.apache.spark.sql.vectorized.LanceArrowColumnVector"
+      val lanceVectorType = classOf[LanceArrowColumnVector].getName
       val partitionVectorType = classOf[OnHeapColumnVector].getName
-      Some(Seq.fill(requiredSchema.length)(lanceVectorType) ++ Seq.fill(partitionSchema.length)(partitionVectorType))
+      val baseTypes = Seq.fill(requiredSchema.length)(lanceVectorType) ++ Seq.fill(partitionSchema.length)(partitionVectorType)
+      if (mandatoryFields.isEmpty) {
+        Some(baseTypes)
+      } else {
+        // mandatoryFields are partition columns read from the file — use LanceArrowColumnVector for them
+        Some(baseTypes.zipWithIndex.map { case (vt, i) =>
+          if (i >= requiredSchema.length && mandatoryFields.contains(partitionSchema.fields(i - requiredSchema.length).name)) {
+            lanceVectorType
+          } else {
+            vt
+          }
+        })
+      }
     } else {
       val originalVectorTypes = super.vectorTypes(requiredSchema, partitionSchema, sqlConf)
       if (mandatoryFields.isEmpty) {

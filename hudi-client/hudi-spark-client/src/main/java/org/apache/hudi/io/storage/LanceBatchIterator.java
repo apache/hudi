@@ -33,6 +33,7 @@ import java.io.Closeable;
 import java.io.IOException;
 import java.util.Iterator;
 import java.util.NoSuchElementException;
+import java.util.Objects;
 
 /**
  * Iterator that returns {@link ColumnarBatch} directly from Lance files without
@@ -73,9 +74,9 @@ public class LanceBatchIterator implements Iterator<ColumnarBatch>, Closeable {
                             LanceFileReader lanceReader,
                             ArrowReader arrowReader,
                             String path) {
-    this.allocator = allocator;
-    this.lanceReader = lanceReader;
-    this.arrowReader = arrowReader;
+    this.allocator = Objects.requireNonNull(allocator, "allocator must not be null");
+    this.lanceReader = Objects.requireNonNull(lanceReader, "lanceReader must not be null");
+    this.arrowReader = Objects.requireNonNull(arrowReader, "arrowReader must not be null");
     this.path = path;
   }
 
@@ -130,6 +131,7 @@ public class LanceBatchIterator implements Iterator<ColumnarBatch>, Closeable {
 
     IOException arrowException = null;
     Exception lanceException = null;
+    Exception allocatorException = null;
 
     // Don't close currentBatch here: ColumnarBatch.close() would close the
     // underlying Arrow FieldVectors through LanceArrowColumnVector, but they
@@ -137,27 +139,38 @@ public class LanceBatchIterator implements Iterator<ColumnarBatch>, Closeable {
     // when arrowReader.close() is called below.
     currentBatch = null;
 
-    if (arrowReader != null) {
-      try {
-        arrowReader.close();
-      } catch (IOException e) {
-        arrowException = e;
-      }
+    try {
+      arrowReader.close();
+    } catch (IOException e) {
+      arrowException = e;
     }
 
-    if (lanceReader != null) {
-      try {
-        lanceReader.close();
-      } catch (Exception e) {
-        lanceException = e;
-      }
+    try {
+      lanceReader.close();
+    } catch (Exception e) {
+      lanceException = e;
     }
 
-    if (allocator != null) {
+    try {
       allocator.close();
+    } catch (Exception e) {
+      allocatorException = e;
     }
 
+    // Propagate exceptions, attaching earlier ones as suppressed so nothing is silently lost.
+    if (allocatorException != null) {
+      if (arrowException != null) {
+        allocatorException.addSuppressed(arrowException);
+      }
+      if (lanceException != null) {
+        allocatorException.addSuppressed(lanceException);
+      }
+      throw new HoodieException("Failed to close Arrow allocator", allocatorException);
+    }
     if (arrowException != null) {
+      if (lanceException != null) {
+        arrowException.addSuppressed(lanceException);
+      }
       throw new HoodieIOException("Failed to close Arrow reader", arrowException);
     }
     if (lanceException != null) {
