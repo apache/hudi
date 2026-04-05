@@ -192,9 +192,9 @@ class TestHFileWriter {
     HFileContext context = new HFileContext.Builder().blockSize(100).build();
     String testFile = TEST_FILE;
     int numRecords = 10;
-    // Generate keys longer than 126 characters to trigger multi-byte protobuf varint encoding
+    // Generate keys longer than 126 characters to trigger multi-byte Hadoop VarInt encoding
     // in the root index block. The varint encodes (key_content_length + 2), so content >= 126
-    // produces a value >= 128 which requires 2+ bytes in protobuf varint format.
+    // produces a value >= 128 which requires 2+ bytes in Hadoop VarInt format.
     char[] chars = new char[200];
     Arrays.fill(chars, 'a');
     String longPrefix = new String(chars);
