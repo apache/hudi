@@ -84,6 +84,9 @@
                   <include>io.projectreactor:*</include>
                   <include>io.projectreactor.netty:*</include>
                   <include>org.reactivestreams:reactive-streams</include>
+                  <!-- Netty: bundled and shaded together with reactor-netty to avoid
+                       version conflicts with Spark's Netty on the classpath -->
+                  <include>io.netty:*</include>
 
                   <!-- Utils -->
                   <include>io.dropwizard.metrics:metrics-core</include>
@@ -109,6 +112,24 @@
                 <relocation>
                   <pattern>org.openjdk.jol.</pattern>
                   <shadedPattern>org.apache.hudi.org.openjdk.jol.</shadedPattern>
+                </relocation>
+                <!-- Shade Netty, Reactor, and Reactive Streams to avoid classpath
+                     conflicts with Spark's bundled Netty -->
+                <relocation>
+                  <pattern>io.netty.</pattern>
+                  <shadedPattern>org.apache.hudi.io.netty.</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>io.projectreactor.</pattern>
+                  <shadedPattern>org.apache.hudi.io.projectreactor.</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>reactor.</pattern>
+                  <shadedPattern>org.apache.hudi.reactor.</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>org.reactivestreams.</pattern>
+                  <shadedPattern>org.apache.hudi.org.reactivestreams.</shadedPattern>
                 </relocation>
               </relocations>
               <createDependencyReducedPom>false</createDependencyReducedPom>
