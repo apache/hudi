@@ -83,11 +83,7 @@ class TestSparkSqlCoreFlow extends HoodieSparkSqlTestBase {
       "MERGE_ON_READ|false|org.apache.hudi.keygen.NonpartitionedKeyGenerator|SIMPLE|lance",
       "MERGE_ON_READ|true|org.apache.hudi.keygen.NonpartitionedKeyGenerator|SIMPLE|lance"
     )
-    if (HoodieSparkUtils.gteqSpark3_4) {
-      allParams
-    } else {
-      allParams.filterNot(_.endsWith("|lance"))
-    }
+    withLanceIfSupported(allParams)
   }
 
   //extracts the params and runs each core flow test
@@ -241,7 +237,7 @@ class TestSparkSqlCoreFlow extends HoodieSparkSqlTestBase {
       tableType
     }
 
-    val recordMergerImpl = if (baseFileFormat.equals("lance")) {
+    val recordMergerImpl = if (baseFileFormat == "lance") {
       s"hoodie.write.record.merge.custom.implementation.classes = '${classOf[DefaultSparkRecordMerger].getName}',"
     } else {
       ""
@@ -510,11 +506,11 @@ class TestSparkSqlCoreFlow extends HoodieSparkSqlTestBase {
       "MERGE_ON_READ|bulk_insert|false|org.apache.hudi.keygen.NonpartitionedKeyGenerator|SIMPLE|lance",
       "MERGE_ON_READ|bulk_insert|true|org.apache.hudi.keygen.NonpartitionedKeyGenerator|SIMPLE|lance"
     )
-    if (HoodieSparkUtils.gteqSpark3_4) {
-      allParamsForImmutable
-    } else {
-      allParamsForImmutable.filterNot(_.endsWith("|lance"))
-    }
+    withLanceIfSupported(allParamsForImmutable)
+  }
+
+  private def withLanceIfSupported(params: List[String]): List[String] = {
+    if (HoodieSparkUtils.gteqSpark3_4) params else params.filterNot(_.endsWith("|lance"))
   }
 
   //extracts the params and runs each immutable user flow test

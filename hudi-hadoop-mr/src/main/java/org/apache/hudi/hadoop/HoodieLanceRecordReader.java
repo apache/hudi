@@ -60,7 +60,8 @@ public class HoodieLanceRecordReader implements RecordReader<NullWritable, Array
     StoragePath path = convertToStoragePath(fileSplit.getPath());
     StorageConfiguration<?> storageConf = HadoopFSUtils.getStorageConf(conf);
     HoodieConfig hoodieConfig = getReaderConfigs(storageConf);
-    reader = HoodieIOFactory.getIOFactory(HoodieStorageUtils.getStorage(path, storageConf)).getReaderFactory(HoodieRecord.HoodieRecordType.AVRO)
+    HoodieIOFactory ioFactory = HoodieIOFactory.getIOFactory(HoodieStorageUtils.getStorage(path, storageConf));
+    reader = ioFactory.getReaderFactory(HoodieRecord.HoodieRecordType.AVRO)
         .getFileReader(hoodieConfig, path, HoodieFileFormat.LANCE, Option.empty());
 
     schema = reader.getSchema();
@@ -96,7 +97,6 @@ public class HoodieLanceRecordReader implements RecordReader<NullWritable, Array
 
   @Override
   public long getPos() throws IOException {
-    // TODO Auto-generated method stub
     return 0;
   }
 

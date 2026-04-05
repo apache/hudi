@@ -50,9 +50,8 @@ public class HoodieFileWriterFactory {
       TaskContextSupplier taskContextSupplier, HoodieRecordType recordType) throws IOException {
     final String extension = FSUtils.getFileExtension(path.getName());
     HoodieFileFormat format = HoodieFileFormat.fromFileExtensionOrNull(extension);
-    HoodieRecordType fixedType = (format != null && format.requiresSparkRecordType())
-        ? HoodieRecordType.SPARK : recordType;
-    HoodieFileWriterFactory factory = HoodieIOFactory.getIOFactory(storage).getWriterFactory(fixedType);
+    HoodieRecordType resolvedRecordType = format != null ? format.resolveRecordType(recordType) : recordType;
+    HoodieFileWriterFactory factory = HoodieIOFactory.getIOFactory(storage).getWriterFactory(resolvedRecordType);
     return factory.getFileWriterByFormat(extension, instantTime, path, config, schema, taskContextSupplier);
   }
 

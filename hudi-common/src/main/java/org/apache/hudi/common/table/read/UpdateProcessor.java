@@ -149,6 +149,11 @@ public interface UpdateProcessor<T> {
         // have null schema (HoodieRecord.EmptyRecord.getSchema() returns null), so they cannot
         // enter this branch and will always go through the payload path where shouldIgnore handles them.
         if (record.getSchema() != null && !record.getSchema().equals(recordAvroSchema)) {
+          // NOTE: After replaceRecord(), mergedRecord.getSchemaId() still references the original schema.
+          // This is safe because the record is emitted immediately via super.handleNonDeletes() below,
+          // which calls seal() and produces the output row. The record is not spilled to disk (via
+          // toBinary()) between replaceRecord and emit in this single-record path. If this assumption
+          // changes, the schemaId must be updated after replaceRecord.
           mergedRecord.replaceRecord(readerContext.getRecordContext().convertAvroRecord(record));
         } else {
           HoodieAvroRecord hoodieRecord = new HoodieAvroRecord<>(null, HoodieRecordUtils.loadPayload(payloadClass, record, mergedRecord.getOrderingValue()));

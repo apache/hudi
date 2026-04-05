@@ -1277,8 +1277,8 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
   }
 
   public ReaderContextFactory<T> getReaderContextFactoryForWrite() {
-    HoodieRecord.HoodieRecordType recordType = metaClient.getTableConfig().getBaseFileFormat().requiresSparkRecordType()
-        ? HoodieRecord.HoodieRecordType.SPARK : config.getRecordMerger().getRecordType();
+    HoodieRecord.HoodieRecordType recordType =
+        metaClient.getTableConfig().getBaseFileFormat().resolveRecordType(config.getRecordMerger().getRecordType());
     // question: should we just return null when context is serialized as null? the mismatch reader context would throw anyway.
     return (ReaderContextFactory<T>) getContext().getReaderContextFactoryForWrite(metaClient, recordType, config.getProps());
   }

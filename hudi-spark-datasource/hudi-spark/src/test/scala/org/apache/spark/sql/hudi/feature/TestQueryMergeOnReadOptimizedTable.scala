@@ -19,7 +19,7 @@
 
 package org.apache.spark.sql.hudi.feature
 
-import org.apache.hudi.HoodieSparkUtils
+import org.apache.hudi.{DefaultSparkRecordMerger, HoodieSparkUtils}
 
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
 
@@ -32,10 +32,10 @@ class TestQueryMergeOnReadOptimizedTable extends HoodieSparkSqlTestBase {
       withTempDir { tmp =>
         val tableName = generateTableName
         val tablePath = s"${tmp.getCanonicalPath}/$tableName"
+        val recordMergerImpl = if (baseFileFormat == "parquet") "" else {
+          s"hoodie.write.record.merge.custom.implementation.classes = '${classOf[DefaultSparkRecordMerger].getName}',"
+        }
         // create table
-        // No explicit hoodie.write.record.merge.custom.implementation.classes needed:
-        // orderingFields='ts' triggers EVENT_TIME_ORDERING merge mode, which auto-selects
-        // DefaultSparkRecordMerger for lance (SPARK record type).
         spark.sql(
           s"""
              |create table $tableName (
@@ -51,7 +51,8 @@ class TestQueryMergeOnReadOptimizedTable extends HoodieSparkSqlTestBase {
              |  type = 'mor',
              |  primaryKey = 'id',
              |  orderingFields = 'ts',
-             |  hoodie.base.file.format = '$baseFileFormat'
+             |  $recordMergerImpl
+             |  hoodie.table.base.file.format = '$baseFileFormat'
              | )
          """.stripMargin)
         // insert data to table

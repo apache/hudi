@@ -55,6 +55,10 @@ trait SparkFileFormatInternalRecordContext extends BaseSparkInternalRecordContex
   // is called on the original InternalRow BEFORE seal() runs in super.handleNonDeletes().
   // In the COW write path (HoodieIndexUtils.inferPartitionPath), convertToAvroRecord is similarly
   // called before any record transformation.
+  // LIFECYCLE: Entries are added in extractDataFromRecord and removed in convertToAvroRecord.
+  // If a record is cached but never reaches convertToAvroRecord (e.g., SENTINEL records that
+  // are filtered out), the entry leaks. This is bounded because: (1) SENTINEL records are rare,
+  // and (2) this instance is scoped to a single FileGroup read and is GC'd afterwards.
   private val avroRecordByRow: java.util.IdentityHashMap[InternalRow, GenericRecord] =
     new java.util.IdentityHashMap[InternalRow, GenericRecord]()
 
@@ -132,6 +136,12 @@ trait SparkFileFormatInternalRecordContext extends BaseSparkInternalRecordContex
 }
 
 object SparkFileFormatInternalRecordContext {
+  // THREAD SAFETY NOTE: FIELD_ACCESSOR_INSTANCE is a static singleton used ONLY via
+  // HoodieSparkRecord.isDeleteRecord(), which calls getFieldVal/getSealedRecord but
+  // NEVER calls extractDataFromRecord or convertToAvroRecord. Therefore the singleton's
+  // avroRecordByRow cache is always empty, and no thread-safety or memory-leak concern
+  // applies. Per-task instances created via apply(tableConfig) are not shared across threads.
+  // If new call sites are added for the singleton, this invariant must be re-evaluated.
   private val FIELD_ACCESSOR_INSTANCE = SparkFileFormatInternalRecordContext.apply()
   def getFieldAccessorInstance: RecordContext[InternalRow] = FIELD_ACCESSOR_INSTANCE
   def apply(): SparkFileFormatInternalRecordContext = new BaseSparkInternalRecordContext() with SparkFileFormatInternalRecordContext

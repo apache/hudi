@@ -82,6 +82,14 @@ public enum HoodieFileFormat {
     return this == LANCE;
   }
 
+  /**
+   * Resolves the record type to use for this file format: returns SPARK if this format
+   * requires it, otherwise returns the given fallback type.
+   */
+  public HoodieRecord.HoodieRecordType resolveRecordType(HoodieRecord.HoodieRecordType fallback) {
+    return requiresSparkRecordType() ? HoodieRecord.HoodieRecordType.SPARK : fallback;
+  }
+
   public static HoodieFileFormat fromFileExtension(String extension) {
     for (HoodieFileFormat format : HoodieFileFormat.values()) {
       if (format.getFileExtension().equals(extension)) {

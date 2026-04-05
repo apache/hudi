@@ -43,13 +43,13 @@ class TestSqlStatement extends HoodieSparkSqlTestBase {
     baseFileFormats.foreach { baseFileFormat =>
       Seq("cow", "mor").foreach { tableType =>
         withTempDir { tmp =>
+          val recordMergerImpl = if (baseFileFormat == "parquet") "" else {
+            s"hoodie.write.record.merge.custom.implementation.classes = '${classOf[DefaultSparkRecordMerger].getName}',"
+          }
           val params = Map(
             "tableType" -> tableType,
             "baseFileFormat" -> baseFileFormat,
-            "recordMergerImpl" -> (
-              if (baseFileFormat.equals("parquet")) "" else {
-                s"hoodie.write.record.merge.custom.implementation.classes = '${classOf[DefaultSparkRecordMerger].getName}',"
-              }),
+            "recordMergerImpl" -> recordMergerImpl,
             "tmpDir" -> {
               tmp.getCanonicalPath.replace('\\', '/')
             }

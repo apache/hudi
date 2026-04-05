@@ -251,9 +251,10 @@ public class HoodieIndexUtils {
       return Collections.emptyList();
     }
     log.info("Going to filter {} keys from file {}", candidateRecordKeys.size(), filePath);
+    // TODO: The AVRO fallback here ignores the merger's configured type. This pre-dates the Lance PR
+    //  and should be addressed in a follow-up to respect the merger's record type for all formats.
     HoodieRecord.HoodieRecordType recordType =
-        HoodieFileFormat.fromFileExtension(FSUtils.getFileExtension(filePath.toString())).requiresSparkRecordType()
-            ? HoodieRecord.HoodieRecordType.SPARK : HoodieRecord.HoodieRecordType.AVRO;
+        HoodieFileFormat.fromFileExtension(FSUtils.getFileExtension(filePath.toString())).resolveRecordType(HoodieRecord.HoodieRecordType.AVRO);
     try (HoodieFileReader fileReader = HoodieIOFactory.getIOFactory(storage)
         .getReaderFactory(recordType)
         .getFileReader(DEFAULT_HUDI_CONFIG_FOR_READER, filePath)) {
@@ -526,8 +527,7 @@ public class HoodieIndexUtils {
     // Create a reader context for the existing records. In the case of merge-into commands, the incoming records
     // can be using an expression payload so here we rely on the table's configured payload class if it is required.
     HoodieRecord.HoodieRecordType recordTypeForExistingRecords =
-        hoodieTable.getMetaClient().getTableConfig().getBaseFileFormat().requiresSparkRecordType()
-            ? HoodieRecord.HoodieRecordType.SPARK : config.getRecordMerger().getRecordType();
+        hoodieTable.getMetaClient().getTableConfig().getBaseFileFormat().resolveRecordType(config.getRecordMerger().getRecordType());
     ReaderContextFactory<R> readerContextFactoryForExistingRecords = (ReaderContextFactory<R>) hoodieTable.getContext()
         .getReaderContextFactoryForWrite(hoodieTable.getMetaClient(), recordTypeForExistingRecords, hoodieTable.getMetaClient().getTableConfig().getProps());
     RecordContext<R> existingRecordContext = readerContextFactoryForExistingRecords.getContext().getRecordContext();
@@ -616,8 +616,7 @@ public class HoodieIndexUtils {
         incomingRecords.mapToPair(record -> Pair.of(record.getRecordKey(), record));
 
     HoodieRecord.HoodieRecordType recordType =
-        table.getMetaClient().getTableConfig().getBaseFileFormat().requiresSparkRecordType()
-            ? HoodieRecord.HoodieRecordType.SPARK : config.getRecordMerger().getRecordType();
+        table.getMetaClient().getTableConfig().getBaseFileFormat().resolveRecordType(config.getRecordMerger().getRecordType());
     ReaderContextFactory<R> readerContextFactory = (ReaderContextFactory<R>) table.getContext()
         .getReaderContextFactoryForWrite(table.getMetaClient(), recordType, config.getProps());
     HoodieReaderContext<R> readerContext = readerContextFactory.getContext();
