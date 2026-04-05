@@ -637,6 +637,14 @@ public class HoodieHiveCatalog extends AbstractCatalog {
     }
 
     HoodieFileFormat baseFileFormat = HoodieFileFormat.PARQUET;
+    String baseFileFormatStr = properties.get(HoodieTableConfig.BASE_FILE_FORMAT.key());
+    if (baseFileFormatStr != null) {
+      HoodieFileFormat configuredFormat = HoodieFileFormat.valueOf(baseFileFormatStr.toUpperCase());
+      if (configuredFormat == HoodieFileFormat.LANCE) {
+        throw new HoodieValidationException(HoodieFileFormat.LANCE_SPARK_ONLY_ERROR_MSG);
+      }
+      baseFileFormat = configuredFormat;
+    }
     //ignore uber input Format
     String inputFormatClassName = HoodieInputFormatUtils.getInputFormatClassName(baseFileFormat, useRealTimeInputFormat);
     String outputFormatClassName = HoodieInputFormatUtils.getOutputFormatClassName(baseFileFormat);

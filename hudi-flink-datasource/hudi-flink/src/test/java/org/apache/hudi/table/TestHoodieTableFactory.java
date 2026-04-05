@@ -21,6 +21,7 @@ package org.apache.hudi.table;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.EventTimeAvroPayload;
+import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.exception.HoodieValidationException;
@@ -744,6 +745,31 @@ public class TestHoodieTableFactory {
         (HoodieTableSink) new HoodieTableFactory().createDynamicTableSink(MockContext.getInstance(this.conf));
     Configuration conf2 = tableSink2.getConf();
     assertThat(conf2.get(FlinkOptions.PRE_COMBINE), is(false));
+  }
+
+  @Test
+  void testLanceFormatNotSupportedByFlink() {
+    // Lance base file format is only supported with the Spark engine.
+    // Both source and sink should reject it with a clear error message.
+    this.conf.setString("hoodie.table.base.file.format", "LANCE");
+    ResolvedSchema schema = SchemaBuilder.instance()
+        .field("f0", DataTypes.INT().notNull())
+        .field("f1", DataTypes.VARCHAR(20))
+        .field("f2", DataTypes.TIMESTAMP(3))
+        .field("ts", DataTypes.TIMESTAMP(3))
+        .primaryKey("f0")
+        .build();
+    final MockContext context = MockContext.getInstance(this.conf, schema, "f2");
+
+    // Source path should throw
+    HoodieValidationException sourceEx = assertThrows(HoodieValidationException.class,
+        () -> new HoodieTableFactory().createDynamicTableSource(context));
+    assertThat(sourceEx.getMessage(), is(HoodieFileFormat.LANCE_SPARK_ONLY_ERROR_MSG));
+
+    // Sink path should throw
+    HoodieValidationException sinkEx = assertThrows(HoodieValidationException.class,
+        () -> new HoodieTableFactory().createDynamicTableSink(context));
+    assertThat(sinkEx.getMessage(), is(HoodieFileFormat.LANCE_SPARK_ONLY_ERROR_MSG));
   }
 
   // -------------------------------------------------------------------------

@@ -28,6 +28,7 @@ import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.source.ExpressionPredicates;
 import org.apache.hudi.storage.StorageConfiguration;
+import org.apache.hudi.storage.StoragePath;
 
 import org.apache.flink.table.data.GenericRowData;
 import org.apache.flink.table.data.RowData;
@@ -43,6 +44,7 @@ import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -130,6 +132,14 @@ class TestFlinkRowDataReaderContext {
     assertEquals(5, result.getInt(0));
     assertTrue(result.isNullAt(1));
     assertTrue(result.getBoolean(2));
+  }
+
+  @Test
+  void testLanceFormatThrowsInGetFileRecordIterator() {
+    StoragePath lancePath = new StoragePath("/tmp/test-table/partition/file.lance");
+    UnsupportedOperationException ex = assertThrows(UnsupportedOperationException.class,
+        () -> readerContext.getFileRecordIterator(lancePath, 0, 100, SCHEMA, SCHEMA, null));
+    assertEquals(HoodieFileFormat.LANCE_SPARK_ONLY_ERROR_MSG, ex.getMessage());
   }
 
   private GenericRowData createBaseRow(int id, String name, boolean active) {
