@@ -15,7 +15,7 @@
   limitations under the License.
 -->
 
-# RFC-100 Part 2: Blob Cleanup for Unstructured Data
+# RFC-100 Part 2: External Blob Cleanup for Unstructured Data
 
 ## Proposers
 
@@ -23,7 +23,9 @@
 
 ## Approvers
 
-- (TBD)
+- @rahil-c
+- @vinothchandar
+- @yihua
 
 ## Status
 
@@ -35,15 +37,16 @@ Issue: <Link to GH feature issue>
 
 ## Abstract
 
-When Hudi cleans expired file slices, out-of-line blob files they reference may become orphaned --
-still consuming storage but unreachable by any query. This RFC extends the existing file slice
-cleaner to identify and delete these orphaned blob files safely and efficiently. The design uses a
-three-stage pipeline: (1) per-file-group set-difference to find locally-orphaned blobs, (2) an MDT
-secondary index lookup for cross-file-group verification of externally-referenced blobs, and (3)
-container file lifecycle resolution. For Hudi-created blobs, cleanup is essentially free -- structural
-path uniqueness eliminates cross-file-group concerns entirely. For user-provided external blobs,
-targeted index lookups scale with the number of candidates, not the table size. Tables without blob
-columns pay zero cost.
+When Hudi cleans expired file slices, external out-of-line blob files they reference may become
+orphaned -- still consuming storage but unreachable by any query. This RFC extends the existing file
+slice cleaner to identify and delete these orphaned blob files safely and efficiently. The design
+uses a two-stage pipeline: (1) per-file-group set-difference to find locally-orphaned blobs, and
+(2) cross-file-group verification via MDT secondary index lookup. Targeted index lookups scale with
+the number of candidates, not the table size. Tables without blob columns pay zero cost.
+
+This design focuses on **external blobs** -- the Phase 1 use case of RFC-100 where users have
+existing blob files in external storage (e.g., `s3://media-bucket/videos/`) and Hudi manages the
+*references* via the `BlobReference` schema, not the *storage layout*.
 
 ---
 
@@ -52,65 +55,54 @@ columns pay zero cost.
 ### Why Blob Cleanup Is Needed
 
 RFC-100 introduces out-of-line blob storage for unstructured data (images, video, documents). A
-record's `BlobReference` field points to an external blob file by `(path, offset, length)`. When
+record's `BlobReference` field points to an external blob file by `reference.external_path`. When
 the cleaner expires old file slices, the blob files they reference may no longer be needed -- but the
 existing cleaner has no concept of transitive references. It deletes file slices without considering
 the blob files they point to. Without blob cleanup, orphaned blobs accumulate indefinitely.
 
-### Two Blob Flows
+### External Blobs
 
-Blob cleanup must support two distinct entry flows with fundamentally different properties:
+Users have existing blob files in external storage (e.g., `s3://media-bucket/videos/`). Records
+reference these blobs directly by path. Hudi manages the *references*, not the *storage layout*.
+Cross-file-group sharing is common -- multiple records across different file groups can point to the
+same blob. Key properties:
 
-**Flow 1 -- Hudi-created blobs.** Blobs created by Hudi's write path, stored at
-`{table}/.hoodie/blobs/{partition}/{col}/{instant}/{blob_id}`. The commit instant in the path
-guarantees uniqueness (C11), and blobs are scoped to a single file group (P3). Cross-file-group
-sharing does not occur. This is the expected majority flow for Phase 3 workloads.
-
-**Flow 2 -- User-provided external blobs.** Users have existing blob files in external storage
-(e.g., `s3://media-bucket/videos/`). Records reference these blobs directly by path. Hudi manages
-the *references*, not the *storage layout*. Cross-file-group sharing is common -- multiple records
-across different file groups can point to the same blob. This is the expected primary flow for
-Phase 1 workloads.
-
-| Property                  | Flow 1 (Hudi-created)             | Flow 2 (External)                    |
-|---------------------------|-----------------------------------|--------------------------------------|
-| Path uniqueness           | Guaranteed (instant in path, C11) | Not guaranteed (user controls)       |
-| Cross-FG sharing          | Does not occur (FG-scoped)        | Common (multiple records, same blob) |
-| Writer/cleaner race       | Cannot occur (D2)                 | Can occur (D3)                       |
-| Per-FG cleanup sufficient | Yes                               | No -- cross-FG verification needed   |
+| Property                  | External blobs                               |
+|---------------------------|----------------------------------------------|
+| Path uniqueness           | Not guaranteed (user controls)               |
+| Cross-FG sharing          | Common (multiple records, same blob)         |
+| Writer/cleaner race       | Can occur (external paths outside MVCC)      |
+| Per-FG cleanup sufficient | No -- cross-FG verification needed           |
 
 ### Constraints and Requirements Reference
 
-Full descriptions and failure modes in [Appendix B](rfc-100-blob-cleaner-problem.md).
+Full descriptions and failure modes in [Problem Statement](rfc-100-blob-cleaner-problem.md).
 
-| ID  | Constraint                                      | Flow 1 | Flow 2 | Remarks                      |
-|-----|-------------------------------------------------|--------|--------|------------------------------|
-| C1  | Blob immutability (append-once, read-many)      | Y      | Y      |                              |
-| C2  | Delete-and-re-add same path                     | --     | Y      | Eliminated for Flow 1 by C11 |
-| C3  | Cross-file-group blob sharing                   | --     | Y      | Common for external blobs    |
-| C4  | Container files (`(offset, length)` ranges)     | Y      | Y      |                              |
-| C5  | MOR log updates shadow base file blob refs      | Y      | Y      |                              |
-| C6  | Existing cleaner is per-file-group scoped       | Y      | Y      |                              |
-| C7  | OCC is per-file-group                           | Y      | Y      | No global contention allowed |
-| C8  | Clustering moves blob refs between file groups  | Y      | Y      |                              |
-| C9  | Savepoints freeze file slices and blob refs     | Y      | Y      |                              |
-| C10 | Rollback can invalidate or resurrect references | Y      | Y      |                              |
-| C11 | Blob paths include commit instant               | Y      | --     | Eliminates C2, C3, C13       |
-| C12 | Archival removes commit metadata                | Y      | Y      |                              |
-| C13 | Cross-FG verification needed at scale           | --     | Y      |                              |
+| ID  | Constraint                                          | Remarks                          |
+|-----|-----------------------------------------------------|----------------------------------|
+| C1  | Blob immutability (append-once, read-many)          |                                  |
+| C2  | Delete-and-re-add same path                         | Real concern for external blobs  |
+| C3  | Cross-file-group blob sharing                       | Common for external blobs        |
+| C4  | MOR log updates shadow base file blob refs          |                                  |
+| C5  | Existing cleaner is per-file-group scoped           |                                  |
+| C6  | OCC is per-file-group                               | No global contention allowed     |
+| C7  | Replace commits move blob refs between file groups  | Clustering, insert_overwrite     |
+| C8  | Savepoints freeze file slices and blob refs         |                                  |
+| C9  | Rollback and restore can invalidate or resurrect    |                                  |
+| C10 | Archival removes commit metadata                    |                                  |
+| C11 | Cross-FG verification needed at scale               |                                  |
 
 | ID  | Requirement                                                      |
 |-----|------------------------------------------------------------------|
 | R1  | No premature deletion (hard invariant)                           |
 | R2  | No permanent orphans (bounded cleanup)                           |
-| R3  | Container awareness (range-level liveness)                       |
-| R4  | MOR correctness (over-retention acceptable, under-retention not) |
-| R5  | Concurrency safety (no global serialization)                     |
-| R6  | Scale proportional to work, not table size                       |
-| R7  | No cost for non-blob tables                                      |
-| R8  | All cleaning policies supported                                  |
-| R9  | Crash safety and idempotency                                     |
-| R10 | Observability (metrics for deleted, retained, reclaimed)         |
+| R3  | MOR correctness (over-retention acceptable, under-retention not) |
+| R4  | Concurrency safety (no global serialization)                     |
+| R5  | Scale proportional to work, not table size                       |
+| R6  | No cost for non-blob tables                                      |
+| R7  | All cleaning policies supported                                  |
+| R8  | Crash safety and idempotency                                     |
+| R9  | Observability (metrics for deleted, retained, reclaimed)         |
 
 ---
 
@@ -120,46 +112,28 @@ Full descriptions and failure modes in [Appendix B](rfc-100-blob-cleaner-problem
 
 Blob cleanup extends the existing `CleanPlanner` / `CleanActionExecutor` pipeline -- same timeline
 instant, same plan-execute-complete lifecycle, same crash recovery and OCC integration. A
-`hasBlobColumns()` check gates all blob logic so non-blob tables pay zero cost.
+`hasBlobColumns()` check gates all blob logic so non-blob tables pay near zero cost (schema scan 
+cost).
 
-The two flows have different cost structures, and the design keeps them separate. Flow 1
-(Hudi-created blobs) gets per-FG cleanup with no cross-FG overhead. Flow 2 (external blobs) gets
-targeted cross-FG verification via MDT secondary index. Dispatch is a string prefix check on the
-blob path.
+External blobs require cross-file-group verification because the same blob can be referenced from
+multiple file groups (C3, C11). The design uses targeted MDT secondary index lookups that scale
+with the number of candidates, not the table size.
 
-### Three-Stage Pipeline
+### Two-Stage Pipeline
 
-| Stage       | Scope                | Purpose                                                                          | When it runs                           |
-|-------------|----------------------|----------------------------------------------------------------------------------|----------------------------------------|
-| **Stage 1** | Per-file-group       | Collect expired/retained blob refs, compute set difference, dispatch by category | Always (for blob tables)               |
-| **Stage 2** | Cross-file-group     | Verify external blob candidates against MDT secondary index or fallback scan     | Only when external candidates exist    |
-| **Stage 3** | Container resolution | Determine delete vs. flag-for-compaction at the container level                  | Only when container blobs are involved |
-
-### Independent Implementability
-
-The three stages have clean input/output interfaces and can be implemented, tested, and shipped
-independently:
-
-| Stage   | Input                                                   | Output                                              |
-|---------|---------------------------------------------------------|-----------------------------------------------------|
-| Stage 1 | `FileGroupCleanResult` (expired + retained slices)      | `hudi_blob_deletes`, `external_candidates`          |
-| Stage 2 | `external_candidates`, `cleaned_fg_ids`                 | `external_deletes`                                  |
-| Stage 3 | `hudi_blob_deletes` + `external_deletes`, retained refs | `blob_files_to_delete`, `containers_for_compaction` |
-
-A shared foundation layer must land first (see [Rollout / Adoption Plan](#rollout--adoption-plan)), after which stages
-can proceed in any order.
+| Stage       | Scope            | Purpose                                                              | When it runs                 |
+|-------------|------------------|----------------------------------------------------------------------|------------------------------|
+| **Stage 1** | Per-file-group   | Collect expired/retained blob refs, compute set difference           | Always (for blob tables)     |
+| **Stage 2** | Cross-file-group | Verify candidates against MDT secondary index or fallback scan       | When local orphans exist     |
 
 ### Key Decisions
 
-| Decision            | Choice                                                  | Rationale                                                          |
-|---------------------|---------------------------------------------------------|--------------------------------------------------------------------|
-| Blob identity       | `(path, offset, length)` tuple                          | Handles containers (C4) and path reuse (C2) correctly              |
-| Cleanup scope       | Per-FG (Hudi blobs) + MDT index lookup (external blobs) | Aligns with OCC (C7) and existing cleaner (C6); scales for C13     |
-| Dispatch mechanism  | Path prefix check on blob path                          | Zero-cost classification; Hudi blobs match `.hoodie/blobs/` prefix |
-| Cross-FG mechanism  | MDT secondary index on `reference.external_path`        | Short-circuits on first non-cleaned FG ref; first-class for Flow 2 |
-| Write-path overhead | None (Flow 1); MDT index maintenance (Flow 2)           | Index maintained by existing MDT pipeline, not a new write cost    |
-| MOR strategy        | Over-retain (union of base + log refs)                  | Safe (C5, R4); cleaned after compaction                            |
-| Container strategy  | Tuple-level tracking; delete only when all ranges dead  | Correct (C4, R3); partial containers flagged for blob compaction   |
+| Decision            | Choice                                                  | Rationale                                                      |
+|---------------------|---------------------------------------------------------|----------------------------------------------------------------|
+| Blob identity       | `reference.external_path`                               | Path-based identity for external blobs                         |
+| Cleanup scope       | Per-FG candidate identification + cross-FG verification | Aligns with OCC (C6) and existing cleaner (C5); scales for C11 |
+| Cross-FG mechanism  | MDT secondary index on `reference.external_path`        | Short-circuits on first non-cleaned FG ref                     |
+| MOR strategy        | Over-retain (union of base + log refs)                  | Safe (C4, R3); cleaned after compaction                        |
 
 ```mermaid
 flowchart LR
@@ -172,35 +146,29 @@ flowchart LR
         subgraph CP["CleanPlanner (per-partition, per-FG)"]
             direction TB
             Policy["Policy method<br/>→ FileGroupCleanResult<br/>(expired + retained slices)"]
-            S1["<b>Stage 1</b><br/>Per-FG blob ref<br/>set difference + dispatch"]
+            S1["<b>Stage 1</b><br/>Per-FG blob ref<br/>set difference"]
             Policy --> S1
         end
 
         S1 --> S2["<b>Stage 2</b><br/>Cross-FG verification<br/>(MDT secondary index)"]
-        S1 -->|hudi_blob_deletes| S3
-        S2 -->|external_deletes| S3["<b>Stage 3</b><br/>Container lifecycle<br/>resolution"]
     end
 
     subgraph Plan["HoodieCleanerPlan"]
         FP["filePathsToBeDeleted<br/>(existing)"]
         BP["blobFilesToDelete<br/>(new)"]
-        CC["containersToCompact<br/>(new)"]
     end
 
-    S3 --> BP
-    S3 --> CC
+    S2 --> BP
     CP --> FP
 
     subgraph Execution["CleanActionExecutor.runClean()"]
         direction TB
         DF["Delete file slices<br/>(existing, parallel)"]
         DB["Delete blob files<br/>(new, parallel)"]
-        RC["Record containers<br/>for blob compaction"]
     end
 
     FP --> DF
     BP --> DB
-    CC --> RC
 ```
 
 ---
@@ -211,26 +179,25 @@ flowchart LR
 
 Stage 1 runs after the existing policy logic determines which file slices are expired and retained
 for a given file group. It collects blob refs from both sets and computes locally-orphaned blobs by
-set difference.
+set difference. All local orphans proceed to Stage 2 for cross-FG verification.
 
 ```
 Input:  A file group FG with expired_slices and retained_slices (from policy)
-Output: hudi_blob_deletes     -- blobs safe to delete immediately
-        external_candidates   -- external blobs needing cross-FG verification
+Output: local_orphan_candidates -- external blobs needing cross-FG verification
 
 for each file_group being cleaned:
 
     // Collect expired blob refs (base files + log files)
     // Must read log files: blob refs introduced and superseded within the log
     // chain before compaction would otherwise become permanent orphans.
-    expired_refs = Set<(path, offset, length)>()
+    expired_refs = Set<external_path>()
     for slice in expired_slices:
         for ref in extractBlobRefs(slice.baseFile):   // columnar projection
             if ref.type == OUT_OF_LINE and ref.managed == true:
-                expired_refs.add((ref.path, ref.offset, ref.length))
+                expired_refs.add(ref.external_path)
         for ref in extractBlobRefs(slice.logFiles):   // full record read
             if ref.type == OUT_OF_LINE and ref.managed == true:
-                expired_refs.add((ref.path, ref.offset, ref.length))
+                expired_refs.add(ref.external_path)
 
     if expired_refs is empty:
         continue                                       // no blob work for this FG
@@ -239,52 +206,47 @@ for each file_group being cleaned:
     // Cleaning is fenced on compaction: retained base files contain the merged
     // state. Log reads are unnecessary -- any shadowed base ref causes safe
     // over-retention, cleaned after the next compaction cycle.
-    retained_refs = Set<(path, offset, length)>()
+    retained_refs = Set<external_path>()
     for slice in retained_slices:
         for ref in extractBlobRefs(slice.baseFile):   // columnar projection only
             if ref.type == OUT_OF_LINE and ref.managed == true:
-                retained_refs.add((ref.path, ref.offset, ref.length))
+                retained_refs.add(ref.external_path)
 
     // Compute local orphans by set difference
     local_orphans = expired_refs - retained_refs
 
-    // Dispatch by blob category
-    for ref in local_orphans:
-        if ref.path starts with TABLE_PATH + "/.hoodie/blobs/":
-            hudi_blob_deletes.add(ref)             // P3: no cross-FG refs possible
-        else:
-            external_candidates.add(ref)           // C13: cross-FG refs are common
+    // All local orphans proceed to Stage 2 for cross-FG verification
+    all_local_orphans.addAll(local_orphans)
 ```
 
 **Correctness notes:**
 
-- **Hudi-created blobs:** If a blob ref appears in expired but not retained slices of the same FG,
-  it is globally orphaned -- Hudi blobs are FG-scoped (C11), so no cross-FG check is needed.
 - **MOR -- expired side reads base + logs:** Blob refs can be introduced and superseded entirely
-  within the log chain (e.g., `log@t2: row1→blob_B`, then `log@t3: row1→blob_C`). After
+  within the log chain (e.g., `log@t2: row1->blob_B`, then `log@t3: row1->blob_C`). After
   compaction, `blob_B` exists only in the expired log. Skipping logs would orphan it permanently.
 - **MOR -- retained side reads base only:** Cleaning is fenced on compaction, so retained base
   files contain the merged state. Shadowed base refs cause over-retention (safe), cleaned after
   the next compaction.
 - **Savepoints:** Inherited from existing cleaner -- savepointed slices stay in the retained set.
-- **Replaced FGs (clustering):** `retained_slices` is empty, so all blob refs become candidates.
-  Hudi blobs are safe to delete (clustering creates new blobs in the target FG). External blobs
-  flow to Stage 2 (clustering copies the pointer, so Stage 2 finds it in the target FG).
+- **Replaced FGs (replace commits):** `retained_slices` is empty, so all blob refs become
+  candidates. For external blobs, clustering copies the pointer to the target FG, so Stage 2
+  finds the reference in the target FG and retains the blob.
 
-### Stage 2: Cross-FG Verification (External Blobs)
+### Stage 2: Cross-File-Group Verification
 
-Stage 2 executes only when `external_candidates` is non-empty. For Flow 1 workloads (Hudi-created
-blobs only), this stage is skipped entirely.
+Stage 2 verifies each local orphan candidate against the global state to determine if the blob is
+still referenced by any active file slice outside the cleaned file groups. This is necessary because
+external blobs can be shared across file groups (C3, C11).
 
 #### Primary path: MDT secondary index
 
 When the MDT secondary index on `reference.external_path` is available and fully built:
 
 ```
-Input:  external_candidates, cleaned_fg_ids
-Output: external_deletes (confirmed globally orphaned)
+Input:  all_local_orphans, cleaned_fg_ids
+Output: blob_files_to_delete (confirmed globally orphaned)
 
-candidate_paths = external_candidates.map(ref -> ref.path).distinct()
+candidate_paths = all_local_orphans.distinct()
 
 // Step 1: Batched prefix scan on secondary index
 // Key format: escaped(external_path)$escaped(record_key)
@@ -307,7 +269,7 @@ for path in candidate_paths:
     record_keys = path_to_record_keys.getOrDefault(path, [])
 
     if record_keys is empty:
-        external_deletes.addAll(candidates for this path)  // globally orphaned
+        blob_files_to_delete.add(path)                  // globally orphaned
         continue
 
     found_live_reference = false
@@ -315,10 +277,10 @@ for path in candidate_paths:
         location = all_locations.get(rk)
         if location != null and location.fileId NOT in cleaned_fg_ids:
             found_live_reference = true
-            break                                           // short-circuit (in-memory)
+            break                                       // short-circuit (in-memory)
 
     if not found_live_reference:
-        external_deletes.addAll(candidates for this path)   // all refs in cleaned FGs
+        blob_files_to_delete.add(path)                  // all refs in cleaned FGs
 ```
 
 **Cost model.** Three steps: (1) batched prefix scan on secondary index, (2) batched record index
@@ -332,10 +294,7 @@ are each a single I/O pass; step 3 is pure hash set lookups.
 | 3. In-memory resolution   | Hash set checks (cleaned_fg_ids)              | ~0ms                           |
 
 *Estimates assume cloud object storage (S3/GCS/ADLS), ~10-100ms per-read latency, ~50-200 MB/s
-sequential throughput, 64-256KB HFile blocks. Step 1: a 250K-entry secondary index is ~50MB; a
-sorted scan for 2K prefixes reads ~200-500 blocks, dominated by HFile open (~100-200ms) plus
-sequential block reads with cold-cache latency overhead. Step 2: similar profile, fewer blocks
-hit relative to index size. Pending benchmarking.*
+sequential throughput, 64-256KB HFile blocks. Pending benchmarking.*
 
 **Index definition.** Uses the existing `HoodieIndexDefinition` mechanism with
 `sourceFields = ["<blob_col>", "reference", "external_path"]`. The nested field path is supported
@@ -355,12 +314,12 @@ a bottleneck on large tables. The operator is warned to enable the MDT secondary
 
 #### Decision matrix
 
-| Condition                   | Path used     | Cost                  | Suitable for                   |
-|-----------------------------|---------------|-----------------------|--------------------------------|
-| No external candidates      | Skip Stage 2  | Zero                  | Flow 1 workloads               |
-| MDT secondary index enabled | Index lookup  | O(candidates)         | Flow 2 at any scale            |
-| No index, few candidates    | Table scan    | O(candidates * table) | Small tables, few shared blobs |
-| No index, many candidates   | Circuit break | Zero (deferred)       | Large tables -- index required |
+| Condition                   | Path used     | Cost                  | Suitable for              |
+|-----------------------------|---------------|-----------------------|---------------------------|
+| No local orphan candidates  | Skip Stage 2  | Zero                  | No blob work this cycle   |
+| MDT secondary index enabled | Index lookup  | O(candidates)         | Any scale                 |
+| No index, few candidates    | Table scan    | O(candidates * table) | Small tables              |
+| No index, many candidates   | Circuit break | Zero (deferred)       | Large tables need index   |
 
 ```mermaid
 sequenceDiagram
@@ -393,51 +352,23 @@ sequenceDiagram
     end
 ```
 
-### Stage 3: Container File Lifecycle
-
-Container files pack multiple blobs at different `(offset, length)` ranges. A container can only be
-deleted when *all* ranges within it are unreferenced.
-
-```
-all_deletes = hudi_blob_deletes + external_deletes
-
-// Non-container blobs: each occupies an entire file -> delete directly
-for ref in all_deletes where ref.offset is null:
-    blob_files_to_delete.add(ref.path)
-
-// Container blobs: group by path, check for remaining live ranges
-for each container_path in container_range_deletes grouped by path:
-    dead_ranges = ranges being deleted for this container
-    live_ranges = retained refs (from Stage 1) + referenced refs (from Stage 2)
-
-    if live_ranges is empty:
-        blob_files_to_delete.add(container_path)           // entire container dead
-    else:
-        containers_for_compaction.add(container_path, dead_ranges)  // partial -> repack
-```
-
-For Hudi-created containers, all ranges belong to the same FG (instant in path scopes it to a
-single write), so retained refs from Stage 1 are sufficient -- no cross-FG check needed.
-
 ### Execution Flow
 
 ```
 1. CleanPlanActionExecutor.requestClean()
-   ├── hasBlobColumns(table)?                         // R7: zero-cost gate
+   ├── hasBlobColumns(table)?                         // R6: zero-cost gate
    ├── CleanPlanner: for each partition, for each file group:
    │     ├── Refactored policy method -> FileGroupCleanResult
    │     └── If hasBlobColumns: Stage 1 per FG
    ├── CleanPlanner: replaced file groups -> Stage 1
-   ├── If external_candidates non-empty: Stage 2
-   ├── Stage 3: container lifecycle resolution
-   ├── Build HoodieCleanerPlan (+ blobFilesToDelete, containersToCompact)
+   ├── If local orphan candidates non-empty: Stage 2
+   ├── Build HoodieCleanerPlan (+ blobFilesToDelete)
    └── Persist plan to timeline (REQUESTED state)
 
 2. CleanActionExecutor.runClean()
    ├── Transition to INFLIGHT
    ├── Delete file slices (existing, parallelized)
    ├── Delete blob files (new, same parallelized pattern)
-   ├── Record containers for blob compaction (metadata only)
    ├── Build HoodieCleanMetadata with blobCleanStats
    └── Transition to COMPLETED
 ```
@@ -452,8 +383,7 @@ sequenceDiagram
     Note over P: requestClean()
 
     P->>P: Stage 1: per-FG blob ref set difference
-    P->>P: Stage 2: MDT index lookup (if external candidates)
-    P->>P: Stage 3: container lifecycle resolution
+    P->>P: Stage 2: MDT index lookup (if candidates exist)
     P->>TL: Persist HoodieCleanerPlan
 
     Note over TL: REQUESTED
@@ -511,25 +441,23 @@ expired/retained classification logic.
 
 ### Replaced File Group Handling
 
-Replaced file groups (from clustering) are cleaned via `getReplacedFilesEligibleToClean()`. A
-parallel method `getReplacedFileGroupBlobCleanResults()` produces `FileGroupCleanResult` objects
-with `retainedSlices = empty` and `expiredSlices = all slices`. This feeds into Stage 1 identically
-to normal file groups.
+Replaced file groups (from clustering, insert_overwrite, insert_overwrite_table) are cleaned via
+`getReplacedFilesEligibleToClean()`. A parallel method `getReplacedFileGroupBlobCleanResults()`
+produces `FileGroupCleanResult` objects with `retainedSlices = empty` and
+`expiredSlices = all slices`. This feeds into Stage 1 identically to normal file groups.
 
 ### Schema Changes: HoodieCleanerPlan
 
-Two new nullable fields with null defaults (backward compatible):
+One new nullable field with null default (backward compatible):
 
-- **`blobFilesToDelete`**: `List<HoodieCleanBlobFileInfo>` -- blob files where all ranges are dead.
-  The executor deletes these.
-- **`containersToCompact`**: `List<HoodieCleanContainerInfo>` -- containers with mixed live/dead
-  ranges, including the dead `(offset, length)` ranges. Handed to the blob compaction service.
+- **`blobFilesToDelete`**: `List<HoodieCleanBlobFileInfo>` -- external blob files confirmed as
+  globally orphaned. The executor deletes these.
 
 ### Schema Changes: HoodieCleanMetadata
 
 A new nullable field `blobCleanStats` of type `HoodieBlobCleanStats`:
 
-- `totalBlobFilesDeleted`, `totalBlobFilesRetained`, `totalContainersFlaggedForCompaction`
+- `totalBlobFilesDeleted`, `totalBlobFilesRetained`
 - `totalBlobStorageReclaimed`
 - `deletedBlobFilePaths`, `failedBlobFilePaths`
 
@@ -542,27 +470,26 @@ blob cleanup logic. Requires making `containsBlobType()` public (one-line visibi
 
 ## Concurrency & Safety
 
-### Writer-Cleaner Race: Two-Sided Guard
+### Writer-Cleaner Race: Conflict Check
 
-**Hudi-created blobs (Flow 1): structurally impossible.** A new write creates new blob files with a
-new instant in the path (C11). An UPSERT carries forward blob refs from retained slices (already
-live). There is no mechanism for a writer to reference a Hudi-created blob that exists only in
-expired slices. No writer-side check is needed for Flow 1.
+Under Hudi's MVCC design, the cleaner and writers operate on non-overlapping file slices -- the
+cleaner never conflicts with writers on file slice operations. However, external blob files are
+**not** covered by MVCC: a writer's new file slice may reference an external blob that the cleaner
+is simultaneously evaluating for deletion.
 
-**External blobs (Flow 2): writer-side conflict check in `preCommit()`.** The gap between the
-cleaner's planning-time snapshot and its actual file deletion is closed by a commit-time conflict
-check:
+**Writer-side conflict check in `preCommit()`.** The gap between the cleaner's planning-time
+snapshot and its actual file deletion is closed by a commit-time conflict check:
 
 1. Writers track external managed blob paths in `HoodieWriteStat.externalBlobPaths` (in-memory
    collection, no additional I/O).
 2. At commit time (in `preCommit()`, under the existing transaction lock), the writer checks all
    three clean states -- COMPLETED, INFLIGHT, and REQUESTED -- because a REQUESTED plan can begin
-   executing at any moment (the REQUESTED→INFLIGHT transition doesn't acquire the transaction
+   executing at any moment (the REQUESTED->INFLIGHT transition doesn't acquire the transaction
    lock). It checks `deletedBlobFilePaths` (COMPLETED) and `blobFilesToDelete` (INFLIGHT/REQUESTED).
 3. If any overlap is found, the commit is rejected with `HoodieWriteConflictException` and the
    writer retries.
 
-Cost is zero for non-blob tables and Flow 1. For Flow 2: one timeline scan + 1-3 metadata reads.
+Cost is zero for non-blob tables. For external blobs: one timeline scan + 1-3 metadata reads.
 
 ```mermaid
 sequenceDiagram
@@ -605,14 +532,14 @@ sequenceDiagram
 
 | Operation                      | Concurrent with Blob Cleaner | Safety Mechanism                                          |
 |--------------------------------|------------------------------|-----------------------------------------------------------|
-| Regular write (INSERT/UPSERT)  | Safe                         | C11 path uniqueness (Flow 1); writer-side check (Flow 2)  |
+| Regular write (INSERT/UPSERT)  | Safe                         | Writer-side conflict check in preCommit()                 |
 | Compaction                     | Safe                         | `isFileSliceNeededForPendingMajorOrMinorCompaction`       |
-| Clustering                     | Safe                         | Replaced FG lifecycle; Stage 2 for external blobs         |
+| Clustering / insert_overwrite  | Safe                         | Replaced FG lifecycle; Stage 2 finds refs in target FG    |
 | Rollback                       | Safe                         | MOR over-retention; clean operates on post-rollback state |
-| Savepoint create/delete        | Safe                         | `isFileSliceExistInSavepointedFiles`                      |
+| Restore                        | Safe                         | Clean operates on post-restore state                      |
+| Savepoint create/delete        | Safe                         | Savepointed slices excluded from cleaning                 |
 | Archival                       | No interaction               | Blob cleaner reads file slices, not commit metadata       |
 | Another cleaner instance       | Safe                         | `TransactionManager`; `checkIfOtherWriterCommitted`       |
-| Blob compaction                | Safe                         | Independent lifecycle                                     |
 | MDT writes (index maintenance) | Safe                         | MDT commit atomicity                                      |
 
 ### Crash Recovery
@@ -624,7 +551,7 @@ cleaning:
 |-----------------------------------------|--------------------------------------------------------------------------------------------------------|
 | During planning (before plan persisted) | No REQUESTED instant on timeline. Cleaner starts fresh.                                                |
 | After plan persisted, before execution  | REQUESTED instant found; plan re-read and executed.                                                    |
-| During execution (partial deletes)      | INFLIGHT instant re-executed. Already-deleted files return FileNotFoundException → treated as success. |
+| During execution (partial deletes)      | INFLIGHT instant re-executed. Already-deleted files return FileNotFoundException -> treated as success. |
 | After execution, before COMPLETED       | INFLIGHT re-executed. All deletes are no-ops. Metadata written, instant transitions to COMPLETED.      |
 
 ---
@@ -633,14 +560,13 @@ cleaning:
 
 ### Cost Summary
 
-| Workload                 | Stage 1 cost                    | Stage 2 cost               | Total per cleanup cycle        |
-|--------------------------|---------------------------------|----------------------------|--------------------------------|
-| Non-blob table           | Zero (`hasBlobColumns` gate)    | N/A                        | **Zero**                       |
-| Flow 1 (Hudi-created)    | ~6 Parquet reads per cleaned FG | Skipped                    | O(cleaned_FGs * slices_per_FG) |
-| Flow 2 (external, index) | ~6 Parquet reads per cleaned FG | O(C * R_avg)               | O(cleaned_FGs + C * R_avg)     |
-| Flow 2 (external, scan)  | ~6 Parquet reads per cleaned FG | O(candidates * table_size) | Circuit breaker limits this    |
+| Workload                     | Stage 1 cost                    | Stage 2 cost               | Total per cleanup cycle        |
+|------------------------------|---------------------------------|----------------------------|--------------------------------|
+| Non-blob table               | Zero (`hasBlobColumns` gate)    | N/A                        | **Zero**                       |
+| External blobs (index)       | ~6 Parquet reads per cleaned FG | O(C * R_avg)               | O(cleaned_FGs + C * R_avg)     |
+| External blobs (scan)        | ~6 Parquet reads per cleaned FG | O(candidates * table_size) | Circuit breaker limits this    |
 
-### Back-of-Envelope: Example 7 (50K FGs, 2K External Candidates)
+### Back-of-Envelope: Example 6 (50K FGs, 2K External Candidates)
 
 | Parameter                           | Value     | Notes                                                |
 |-------------------------------------|-----------|------------------------------------------------------|
@@ -677,33 +603,25 @@ contribute row-level blob refs as candidates. These are backed by engine-context
 | `hoodie.cleaner.blob.enabled`                      | `true`  | Enable blob cleanup during clean action                                           |
 | `hoodie.cleaner.blob.dry.run`                      | `false` | Compute blob cleanup plan and log results but do not execute                      |
 | `hoodie.cleaner.blob.external.scan.parallelism`    | `10`    | Parallelism for Stage 2 fallback table scan                                       |
-| `hoodie.cleaner.blob.external.scan.max.candidates` | `1000`  | Circuit breaker for Stage 2 fallback scan; exceeding defers external blob cleanup |
-| `hoodie.metadata.index.secondary.column`           | (none)  | Set to `<blob_col>.reference.external_path` for Flow 2 cross-FG verification      |
+| `hoodie.cleaner.blob.external.scan.max.candidates` | `1000`  | Circuit breaker for Stage 2 fallback scan; exceeding defers blob cleanup          |
+| `hoodie.metadata.index.secondary.column`           | (none)  | Set to `<blob_col>.reference.external_path` for cross-FG verification             |
 
 ---
 
 ## Rollout / Adoption Plan
 
-Each stage can be implemented, tested, and shipped independently once the foundation layer is in
-place (see [Independent Implementability](#independent-implementability)).
-
 **Foundation (shared prerequisite).** `CleanPlanner` refactoring (policy methods return
-`FileGroupCleanResult`), `BlobRef` type, schema changes (nullable `blobFilesToDelete` and
-`containersToCompact` fields), and the `hasBlobColumns` zero-cost gate.
+`FileGroupCleanResult`), schema changes (nullable `blobFilesToDelete` field), and the
+`hasBlobColumns` zero-cost gate.
 
-**Stage 1 (per-FG cleanup).** Set-difference logic and dispatch by blob category. Produces
-`hudi_blob_deletes` (immediate) and `external_candidates` (for Stage 2).
+**Stage 1 (per-FG cleanup).** Set-difference logic. Produces local orphan candidates for Stage 2.
 
-**Stage 2 (cross-FG verification) -- priority.** Flow 2 (external blobs) is the primary initial
-use case -- cross-FG verification prevents premature deletion of shared blobs. Requires MDT +
-record index + secondary index on `reference.external_path` (P6). Includes fallback table scan
-with circuit breaker.
+**Stage 2 (cross-FG verification) -- priority.** External blobs are the primary initial use case --
+cross-FG verification prevents premature deletion of shared blobs. Requires MDT + record index +
+secondary index on `reference.external_path`. Includes fallback table scan with circuit breaker.
 
-**Stage 3 (container lifecycle).** Delete-entire-file vs. flag-for-compaction at the container
-level. Needed only when container files are used.
-
-**Writer-side conflict check.** `preCommit()` conflict check for Flow 2 concurrency safety.
-Closes the writer-cleaner race window. Independent of the three stages.
+**Writer-side conflict check.** `preCommit()` conflict check for concurrency safety. Closes the
+writer-cleaner race window. Independent of the two stages.
 
 ### Backward Compatibility
 
@@ -721,20 +639,16 @@ Closes the writer-cleaner race window. Independent of the three stages.
 
 - **Stage 1 set-difference:** Verify correct orphan identification for COW and MOR file groups,
   including MOR over-retention (shadowed base refs kept until post-compaction).
-- **Stage 1 dispatch:** Verify Hudi-created blobs route to `hudi_blob_deletes` and external blobs
-  route to `external_candidates`.
 - **Stage 2 index lookup:** Verify short-circuit behavior (stop after first live reference), empty
   results (globally orphaned), and batched prefix scans.
 - **Stage 2 fallback:** Verify table scan correctness and circuit breaker activation.
-- **Stage 3 container lifecycle:** Verify delete-all-dead vs. flag-for-compaction decisions.
 - **Writer-side conflict check:** Verify detection of conflicts with COMPLETED, INFLIGHT, and
   REQUESTED clean actions.
 
 ### Integration Tests
 
-- End-to-end clean cycle with Hudi-created blob table (COW and MOR).
-- End-to-end clean cycle with external blob table and MDT secondary index.
-- Clean cycle with replaced file groups (post-clustering).
+- End-to-end clean cycle with external blob table and MDT secondary index (COW and MOR).
+- Clean cycle with replaced file groups (post-clustering, post-insert_overwrite).
 
 ### Concurrency Tests
 
@@ -752,7 +666,7 @@ Closes the writer-cleaner race window. Independent of the three stages.
 ## Appendix
 
 - **[Problem Statement, Constraints & Requirements](rfc-100-blob-cleaner-problem.md)**
-  -- Complete problem scope, all 13 constraints (C1-C13), all 10 requirements (R1-R10), 8
+  -- Complete problem scope, all 11 constraints (C1-C11), all 9 requirements (R1-R9), 7
   illustrative failure mode examples, and open questions.
 
 ### Why the MDT Secondary Index Maps to Record Keys (Not File Groups)

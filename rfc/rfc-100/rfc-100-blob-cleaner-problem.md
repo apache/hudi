@@ -1,12 +1,33 @@
-# Blob Cleaner: Problem Statement
+<!--
+  Licensed to the Apache Software Foundation (ASF) under one or more
+  contributor license agreements.  See the NOTICE file distributed with
+  this work for additional information regarding copyright ownership.
+  The ASF licenses this file to You under the Apache License, Version 2.0
+  (the "License"); you may not use this file except in compliance with
+  the License.  You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing, software
+  distributed under the License is distributed on an "AS IS" BASIS,
+  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  See the License for the specific language governing permissions and
+  limitations under the License.
+-->
+
+# External Blob Cleaner: Problem Statement
 
 ## 1. Goal
 
-When old file slices are cleaned, out-of-line blob files they reference may become orphaned -- still
-consuming storage but unreachable by any query. The blob cleaner must identify and delete these
-unreferenced blob files without premature deletion (deleting a blob that is still referenced by a live
-record). This document defines the problem scope, design constraints, requirements, and illustrative
-failure modes. It contains no solution content.
+When old file slices are cleaned, external out-of-line blob files they reference may become orphaned
+-- still consuming storage but unreachable by any query. The blob cleaner must identify and delete
+these unreferenced blob files without premature deletion (deleting a blob that is still referenced by
+a live record). This document defines the problem scope, design constraints, requirements, and
+illustrative failure modes. It contains no solution content.
+
+This document focuses on **external blobs** -- the Phase 1 use case of RFC-100 where users have
+existing blob files in external storage (e.g., `s3://media-bucket/videos/`) and Hudi manages the
+*references* via the `BlobReference` schema, not the *storage layout*.
 
 ---
 
@@ -14,68 +35,58 @@ failure modes. It contains no solution content.
 
 ### In scope
 
-- Cleanup of **out-of-line blob files** when references to them exist only in expired (cleaned) file
-  slices.
+- Cleanup of **external out-of-line blob files** (referenced via `BlobReference.external_path`) when
+  references to them exist only in expired (cleaned) file slices.
 - All table types: **COW** and **MOR**.
 - All cleaning policies: `KEEP_LATEST_COMMITS`, `KEEP_LATEST_FILE_VERSIONS`,
   `KEEP_LATEST_BY_HOURS`.
-- Interaction with table services: **compaction**, **clustering**, **blob compaction**.
-- Interaction with timeline operations: **savepoints**, **rollback**, **archival**.
+- Interaction with table services: **compaction**, **clustering**.
+- Interaction with replace commits: **clustering**, **insert_overwrite**,
+  **insert_overwrite_table**.
+- Interaction with timeline operations: **savepoints**, **rollback**, **restore**, **archival**.
 - Single-writer and multi-writer (OCC) concurrency modes.
-- Both **Hudi-created blobs** (stored under `{table}/.hoodie/blobs/...`) and **user-provided
-  external blobs** (arbitrary paths).
 
-### Two entry flows
-
-Blob cleanup must support two distinct entry flows. These are not edge cases of each other --
-they are co-equal paths with different properties, different volumes, and different cleanup costs.
-
-**Flow 1: Path-dispatched (Hudi-created blobs).** Blobs created by Hudi's write path and stored
-under `{table}/.hoodie/blobs/{partition}/{col}/{instant}/{blob_id}`. The path structure guarantees
-uniqueness (C11), file-group scoping, and eliminates cross-FG sharing for normal writes. This is the
-expected majority flow for Phase 3 workloads.
-
-**Flow 2: Non-path-dispatched (user-provided external blobs).** Users have existing blob files in
-external storage (e.g., `s3://media-bucket/videos/`, a shared NFS mount, or any user-controlled
-path). Records reference these blobs directly by path. The user does **not** want to bootstrap --
-they do not want Hudi to copy, move, or reorganize the blob files into `.hoodie/blobs/`. Hudi
-manages the *references*, not the *storage layout*. This is the expected primary flow for Phase 1
-workloads and remains a supported flow in Phase 3.
-
-The non-path-dispatched flow has fundamentally different properties:
-
-| Property                  | Path-dispatched (Hudi-created)    | Non-path-dispatched (external)       |
-|---------------------------|-----------------------------------|--------------------------------------|
-| Path uniqueness           | Guaranteed (instant in path, C11) | Not guaranteed (user controls)       |
-| Cross-FG sharing          | Does not occur (FG-scoped)        | Common (multiple records, same blob) |
-| Writer/cleaner race       | Cannot occur (D2)                 | Can occur (D3)                       |
-| Delete-and-re-add (C2)    | Eliminated                        | Real concern                         |
-| Volume                    | Scales with writes                | Can be large from day one            |
-| Per-FG cleanup sufficient | Yes                               | No -- cross-FG verification needed   |
-
-Any solution that treats the non-path-dispatched flow as a rare edge case will fail at scale for
-Phase 1 workloads. The cleanup algorithm must be efficient for **both** flows independently, and
-must not impose the cost structure of one flow on the other.
+| Property                  | External blobs                               |
+|---------------------------|----------------------------------------------|
+| Path uniqueness           | Not guaranteed (user controls)               |
+| Cross-FG sharing          | Common (multiple records, same blob)         |
+| Writer/cleaner race       | Can occur (external paths outside MVCC)      |
+| Delete-and-re-add         | Real concern (user controls paths)           |
+| Per-FG cleanup sufficient | No -- cross-FG verification needed           |
 
 ### Out of scope
 
 - **Inline blobs.** Inline blob data lives inside the base/log file and is deleted when the file
   slice is cleaned. No additional cleanup needed.
-- **Blob compaction internals.** Blob compaction (repacking partially-live container files) is a
-  separate service. This document defines the interface point (when to hand off to blob compaction)
-  but not its internal design.
+- **Storing blob references in commit metadata.** Persisting blob reference sets within commit-level
+  metadata is an anti-pattern that does not scale and is not considered in this problem statement.
 - **Schema evolution.** Adding or removing blob columns does not change the cleanup problem.
 
 ### Stance on the `managed` flag
 
-The BlobReference schema includes a `managed` boolean field
-(`HoodieSchema.Blob.EXTERNAL_REFERENCE_IS_MANAGED`). The RFC states that only managed blobs are
-cleaned. This document acknowledges the flag and treats it as a **filter** -- unmanaged blobs are
-excluded from cleanup consideration. However, the cleanup design must be **correct regardless of the
-flag's value**. The flag selects *which* blobs enter the cleanup pipeline; it must not be used as a
-correctness lever within the pipeline itself. The flag may later serve as an optimization (skip
-cleanup work for unmanaged blobs), but the problem statement and any solution must not depend on it
-for safety.
+The `BlobReference` schema includes a `managed` boolean field (`reference.managed`). The RFC states
+that only managed blobs are cleaned. This document acknowledges the flag and treats it as a
+**filter** -- unmanaged blobs are excluded from cleanup consideration. However, the cleanup design
+must be **correct regardless of the flag's value**. The flag selects *which* blobs enter the cleanup
+pipeline; it must not be used as a correctness lever within the pipeline itself. The flag may later
+serve as an optimization (skip cleanup work for unmanaged blobs), but the problem statement and any
+solution must not depend on it for safety.
+
+**Managed-to-unmanaged transitions.** An external blob's `reference.managed` flag can change across
+writes. At time t1, a record references `s3://ext/video.mp4` with `managed=true`. At time t2, an
+update to the same record changes `managed` to `false` for the same path. The blob was managed in
+the expired slice but is unmanaged in the retained slice. The cleaner must decide: does the t1
+managed reference make the blob eligible for cleanup when t1 is expired, even though the t2
+reference says unmanaged?
+
+To safely handle this: If *any* retained reference to the same `external_path` exists (regardless of
+the `managed` flag), the blob must not be deleted. The `managed` flag filters which blob references
+*enter* the cleanup pipeline, but the liveness check must consider *all* references to a path, not
+just managed ones. A transition from managed to unmanaged is effectively the user saying "Hudi
+should stop managing this blob" -- the blob must survive the transition.
+
+The inverse case (unmanaged at t1, managed at t2) is straightforward: the blob is now managed and
+subject to cleanup when t2's file slice eventually expires.
 
 ---
 
@@ -94,23 +105,48 @@ Cleaning is a two-phase operation:
 
 ### Per-partition, per-file-group iteration
 
-`CleanPlanner.getDeletePaths(partitionPath, earliestCommitToRetain)` iterates file groups within a
-partition. For each file group, it compares file slices against the retention policy and produces a
-list of `CleanFileInfo` objects (file paths to delete). The cleaner has no concept of cross-file-group
-dependencies.
+The cleaner iterates file groups within a partition. For each file group, it compares file slices
+against the retention policy and produces a list of file paths to delete. The cleaner has no concept
+of cross-file-group dependencies.
 
 ### Savepoint awareness
 
 The cleaner collects all savepointed timestamps and their associated data files. File slices that
-overlap with savepointed files are excluded from cleaning
-(`isFileSliceExistInSavepointedFiles`). This preserves the savepoint invariant: a savepoint freezes a
-consistent snapshot including all data files it references.
+overlap with savepointed files are excluded from cleaning. This preserves the savepoint invariant: a
+savepoint freezes a consistent snapshot including all data files it references.
 
 ### OCC conflict resolution
 
-`SimpleConcurrentFileWritesConflictResolutionStrategy` resolves write-write conflicts at the
-`(partition, fileId)` granularity. There is no global serialization point. Concurrent writers to
-different file groups proceed without contention.
+Concurrent writer conflict resolution operates at the `(partition, fileId)` granularity. There is
+no global serialization point. Concurrent writers to different file groups proceed without
+contention.
+
+### MVCC: Cleaner does not conflict with writes
+
+Under Hudi's MVCC design, the cleaner and writers operate on non-overlapping sets of file slices.
+Writers create new file slices; the cleaner deletes old (expired) ones. The cleaner only targets
+file slices that are older than the retention boundary, which by definition are not being written to.
+Consequently, the cleaner never conflicts with concurrent writers in the existing design -- there is
+no write-clean contention on the same file slice.
+
+Blob cleanup must preserve this property: it must not introduce scenarios where the cleaner and a
+writer contend over the same blob file. However, external blob files are **not** covered by MVCC --
+a writer's new file slice may reference an external blob that the cleaner is simultaneously
+evaluating for deletion. This gap is a central problem for external blob cleanup.
+
+### Rollback vs. Restore
+
+Hudi has two distinct undo operations that affect blob liveness:
+
+1. **Rollback of an inflight commit:** Removes the effects of a single uncommitted write and reverts
+   the affected file groups to their previous state. Scope is limited to one commit.
+2. **Table restore to a savepoint:** Reverts the table to a prior consistent snapshot, potentially
+   undoing multiple committed writes. Scope can affect many file groups across many partitions.
+
+Blob cleanup must handle both: rollback may remove the sole reference to a blob (making it orphaned)
+or resurrect a previously-shadowed reference, while restore may revert the table to a state where
+different blob references are live. These are distinct failure modes with different scopes and are
+addressed separately in the constraints.
 
 ### Critical gap
 
@@ -131,38 +167,38 @@ any constraint leads to data corruption, premature deletion, or permanent orphan
 Once a blob file is written, its content never changes. Blob files are append-once, read-many. This
 means a blob file's identity is stable for its entire lifetime.
 
-*Source: RFC-100 blob cleaner design, general storage semantics.*
+*Source: RFC-100, general storage semantics.*
 
 ### C2: Delete-and-re-add same path
 
-A blob file can be deleted from storage and a new file created at the same path with different
-content. This is a real concern for user-provided external blobs (the user controls the path). For
-Hudi-created blobs, it is structurally eliminated by C11 (instant in path guarantees uniqueness).
+A blob file can be deleted from external storage and a new file created at the same path with
+different content. Since the user controls external blob paths, path reuse is a real concern. The
+cleanup algorithm must not assume that two references to the same `reference.external_path` at
+different times refer to the same physical content.
 
-*Source: RFC-100 blob cleaner design; alternatives analysis constraint C2.*
+**Concurrent writer caveat.** Consider two concurrent writers, A and B, both referencing external
+blob X at the same path. Writer A commits first. Later, the cleaner evaluates A's expired slice and
+marks blob X as a deletion candidate. Meanwhile, Writer B is still inflight and also references
+blob X. If the cleaner deletes blob X before Writer B commits, Writer B's commit creates a dangling
+reference. This race exists because external blob paths are not under Hudi's control -- unlike file
+slices, the cleaner cannot rely on MVCC guarantees for external blob files. Any cleanup solution
+must account for inflight writers that may reference the same external blob path being considered
+for deletion.
+
+*Source: RFC-100; external blob storage semantics.*
 
 ### C3: Cross-file-group blob sharing
 
-An out-of-line blob can be referenced by records in multiple file groups and multiple partitions. This
-is explicitly supported for user-provided external blobs: two records in different file groups can
-point to the same external file. For Hudi-created blobs, cross-FG sharing does not occur because the
-blob is created within a specific file group's storage scope (see C11). However, after clustering
-(C8), references to the same Hudi-created blob could temporarily exist in both the source and target
-file groups until the source is cleaned.
+An external blob can be referenced by records in multiple file groups and multiple partitions. This
+is explicitly supported: two records in different file groups can point to the same
+`reference.external_path`. Cross-file-group sharing is the **common case** for external blobs
+(e.g., a shared media library where a popular video appears in multiple user playlists across
+partitions). Any cleanup algorithm that assumes blobs are scoped to a single file group will produce
+premature deletions.
 
-*Source: RFC-100 lines 196-198 (Option 1 scans all active file slices); alternatives analysis F6.*
+*Source: RFC-100 lines 196-198 (Option 1 scans all active file slices).*
 
-### C4: Container files
-
-Multiple blobs can be packed into a single container file, distinguished by `(offset, length)` within
-the BlobReference. A container file can only be deleted when **all** byte ranges within it are
-unreferenced. If some ranges are orphaned but others are still live, the container cannot be deleted --
-it must be handed off to blob compaction for repacking.
-
-*Source: BlobReference schema fields `offset` and `length`; RFC-100 lines 164-165 (container config);
-alternatives analysis F1.*
-
-### C5: MOR log updates shadow base file blob refs
+### C4: MOR log updates shadow base file blob refs
 
 In MOR tables, a log file update to a record's blob reference supersedes the base file's blob
 reference for that record. The base file's blob ref appears live (it exists in an active file slice)
@@ -173,63 +209,78 @@ update is later rolled back.
 
 *Source: RFC-100 line 122 (merge mode determines which blob reference is returned); MOR semantics.*
 
-### C6: Existing cleaner is per-file-group scoped
+### C5: Existing cleaner is per-file-group scoped
 
-`CleanPlanner` iterates per `HoodieFileGroup` within each partition. It determines expired file slices
-within a single file group. There is no existing mechanism to evaluate cross-file-group dependencies
-during cleaning.
+The cleaner iterates per file group within each partition. It determines expired file slices within
+a single file group. There is no existing mechanism to evaluate cross-file-group dependencies during
+cleaning.
 
-*Source: `CleanPlanner.getDeletePaths()`, `CleanPlanner.getFilesToCleanKeepingLatestCommits()`;
-alternatives analysis F11.*
+*Source: `CleanPlanner.getDeletePaths()`, per-file-group iteration in
+`getFilesToCleanKeepingLatestCommits()`.*
 
-### C7: OCC is per-file-group (no global contention allowed)
+### C6: OCC is per-file-group (no global contention allowed)
 
-Concurrent writer conflict resolution operates at `(partition, fileId)` granularity. Any solution that
-introduces a global contention point (global counter, global lock, global bitmap) violates this
+Concurrent writer conflict resolution operates at `(partition, fileId)` granularity. Any solution
+that introduces a global contention point (global counter, global lock, global bitmap) violates this
 constraint and degrades write throughput under concurrency.
 
-*Source: `SimpleConcurrentFileWritesConflictResolutionStrategy`; alternatives analysis F12.*
+*Source: Concurrent writer conflict resolution strategy; per-file-group OCC semantics.*
 
-### C8: Clustering moves blob refs between file groups
+### C7: Replace commits move blob refs between file groups
 
-Clustering reads records from source file groups and rewrites them to target file groups. For
-Hudi-managed blobs, clustering creates **new** blob files in the target file group. For external
-blobs, clustering copies the pointer (same path, same offset/length) to the target file group. After
-clustering, the source file group's slices still reference the original blobs until those slices are
-cleaned. The target file group's slices reference either new blobs (Hudi-managed) or the same
-external blobs.
+Several operations produce `replacecommit` actions that replace one set of file groups with another:
 
-*Source: RFC-100 lines 212-214.*
+- **Clustering:** Reads records from source file groups and rewrites them to target file groups. For
+  external blobs, clustering copies the pointer (same `reference.external_path`) to the target file
+  group. After clustering, the source file group's slices still reference the original external
+  blobs until those slices are cleaned. The target file group's slices reference the same external
+  blobs.
 
-### C9: Savepoints freeze file slices and their blob refs
+- **insert_overwrite / insert_overwrite_table:** Replaces an entire partition (or table) with new
+  data. The replacement records may reference entirely different external blobs, or the same ones,
+  or a mix. The replaced file groups become eligible for cleaning after retention expires.
+
+In all replace commit scenarios, the key property is: after the replace, both the old (replaced) and
+new (replacement) file groups may reference the same external blob. The cleaner must not delete an
+external blob referenced by a replaced file group if the replacement file group (or any other active
+file group) still references it.
+
+For external blobs, the append-vs-replace distinction does not affect blob identity. The cleaner's
+question is always: "Is this `external_path` referenced by any active file slice anywhere in the
+table?" Whether the reference arrived via an append, an upsert, a clustering copy, or an
+insert_overwrite is irrelevant -- if any live reference exists, the blob must not be deleted.
+
+*Source: Hudi replace commit semantics; clustering and insert_overwrite operations.*
+
+### C8: Savepoints freeze file slices and their blob refs
 
 A savepoint preserves a consistent snapshot. File slices covered by a savepoint are excluded from
 cleaning. This means any blob referenced by a savepointed file slice must also be preserved, even if
 the blob would otherwise be considered orphaned. The cleaner already handles savepoint exclusion for
 file slices; blob cleanup must extend this guarantee to the blobs they reference.
 
-*Source: `CleanPlanner.savepointedTimestamps`, `isFileSliceExistInSavepointedFiles()`.*
+*Source: Savepoint handling in CleanPlanner.*
 
-### C10: Rollback can invalidate or resurrect references
+### C9: Rollback and restore can invalidate or resurrect references
 
-Rolling back a commit can remove file slices that were the sole reference to a blob (the blob becomes
-orphaned). Conversely, rolling back a commit that updated a record's blob reference can resurrect the
-previous reference (an older blob that appeared orphaned is now live again). Any blob cleanup solution
-must account for both directions.
+Two distinct undo operations affect blob liveness:
 
-*Source: Hudi rollback semantics; timeline management.*
+**Rollback of an inflight commit:** Can remove file slices that were the sole reference to a blob
+(the blob becomes orphaned). Conversely, rolling back a commit that updated a record's blob
+reference can resurrect the previous reference (an older blob that appeared orphaned is now live
+again).
 
-### C11: Hudi-created blob paths include instant (structurally unique)
+**Table restore to a savepoint:** Can undo multiple committed writes simultaneously. All blob
+references introduced after the restore point become orphaned. All blob references that were live at
+the restore point are resurrected. The scope is broader than single-commit rollback: it may affect
+many file groups across many partitions simultaneously.
 
-Hudi-created blob files are stored at
-`{table_path}/.hoodie/blobs/{partition}/{column_name}/{instant}/{blob_id}`. Because the commit
-instant is embedded in the path, two different writes always produce different blob paths. This
-eliminates the delete-and-re-add problem (C2) for Hudi-created blobs and means they are inherently
-scoped to a single file group's write context.
+Any blob cleanup solution must account for both directions (orphaning and resurrection) under both
+operations.
 
-*Source: RFC-100 line 170; alternatives analysis F3.*
+*Source: Hudi rollback and restore semantics; timeline management.*
 
-### C12: Archival removes commit metadata from active timeline
+### C10: Archival removes commit metadata from active timeline
 
 Hudi's archival process moves completed commits from the active timeline to the archived timeline.
 If blob cleanup depends on information in commit metadata (e.g., which blobs were written by a
@@ -237,18 +288,23 @@ commit), that information becomes unavailable after archival unless it is persis
 cleaner must either complete blob reference resolution before archival, or ensure the necessary
 information survives archival.
 
-*Source: Hudi archival semantics; `HoodieActiveTimeline` vs `HoodieArchivedTimeline`.*
+Note: Storing blob reference sets within commit metadata would compound this problem -- commit
+metadata grows with the number of blob references, and archival would either lose or have to
+specially preserve this information. This is an additional reason not to use commit metadata as the
+source of truth for blob reference liveness.
 
-### C13: Non-path-dispatched blobs require cross-FG verification at scale
+*Source: Hudi archival semantics.*
 
-For the non-path-dispatched flow (Flow 2), cross-file-group blob sharing (C3) is the **common
-case**, not an edge case. Users referencing external blobs (e.g., a shared media library) will
-frequently have multiple records across different file groups and partitions pointing to the same
-blob file. Any cleanup algorithm that treats cross-FG verification as a rare fallback will impose
-disproportionate cost on Flow 2 workloads. The cross-FG verification path must be designed for
-volume, not just correctness.
+### C11: External blobs require cross-file-group verification at scale
 
-*Source: Two entry flows (Section 2); C3; alternatives analysis D1, D3.*
+For external blobs, cross-file-group blob sharing (C3) is the **common case**, not an edge case.
+Users referencing external blobs (e.g., a shared media library) will frequently have multiple
+records across different file groups and partitions pointing to the same blob file. Any cleanup
+algorithm that treats cross-FG verification as a rare fallback will impose disproportionate cost on
+external blob workloads. The cross-FG verification path must be designed for volume, not just
+correctness.
+
+*Source: C3 (cross-FG sharing is common for external blobs).*
 
 ---
 
@@ -266,63 +322,52 @@ Every orphaned blob must eventually be cleaned. The number of cleanup cycles req
 orphan must be bounded (e.g., cleaned within N cleaner invocations after the last referencing file
 slice is expired). Unbounded accumulation of orphaned blobs wastes storage indefinitely.
 
-### R3: Container awareness (range-level liveness)
-
-Cleanup must track liveness at the `(path, offset, length)` tuple level, not just the path level.
-A container file may have some live ranges and some dead ranges. Only when all ranges are dead can the
-container file be deleted. Partially-dead containers should be flagged for blob compaction.
-
-### R4: MOR correctness
+### R3: MOR correctness
 
 For MOR tables, blob cleanup must be safe in the presence of log updates that shadow base file blob
 references. Over-retention (keeping a shadowed blob until post-compaction) is acceptable.
 Under-retention (prematurely deleting a blob whose reference appears shadowed but could be resurrected
 by rollback) is not.
 
-### R5: Concurrency safety (no global serialization)
+### R4: Concurrency safety (no global serialization)
 
 Blob cleanup must not introduce global contention points. Write throughput for tables with blobs must
-not degrade compared to tables without blobs under concurrent writers. Per-file-group scoping (C7)
+not degrade compared to tables without blobs under concurrent writers. Per-file-group scoping (C6)
 must be preserved.
 
-### R6: Scale proportional to work, not table size
+### R5: Scale proportional to work, not table size
 
-For path-dispatched blobs (Flow 1): the cost of blob cleanup must be proportional to the number of
-file groups being cleaned, not the total table size. A table with 100K file groups cleaning 1K of
-them must not scan all 100K file groups.
+Cross-FG verification is required for external blobs (C11), but the cost must be proportional to the
+number of **candidate blobs requiring verification**, not the total number of active file slices in
+the table. A table with 100K file groups where 50 external blob candidates need cross-FG
+verification must not scan all 100K file groups -- it must use targeted lookups or indexes to resolve
+those 50 candidates efficiently.
 
-For non-path-dispatched blobs (Flow 2): cross-FG verification is required (C13), but the cost must
-be proportional to the number of **candidate blobs requiring verification**, not the total number of
-active file slices in the table. A table with 100K file groups where 50 external blob candidates
-need cross-FG verification must not scan all 100K file groups -- it must use targeted lookups or
-indexes to resolve those 50 candidates efficiently.
-
-### R7: No cost for non-blob tables
+### R6: No cost for non-blob tables
 
 Tables without blob columns must pay zero additional cost. The blob cleanup path must not be entered
 if no blob columns exist. This includes no additional metadata, no additional timeline entries, and no
 additional I/O.
 
-### R8: All cleaning policies supported
+### R7: All cleaning policies supported
 
 Blob cleanup must work correctly under all three cleaning policies: `KEEP_LATEST_COMMITS`,
 `KEEP_LATEST_FILE_VERSIONS`, and `KEEP_LATEST_BY_HOURS`. The blob cleanup logic should be
 policy-agnostic -- it operates on the set of expired vs. retained file slices determined by the
 policy, not on the policy itself.
 
-### R9: Crash safety and idempotency
+### R8: Crash safety and idempotency
 
 If the cleaner crashes after planning but before completing all deletions, restarting must be safe.
 Blob deletions must be idempotent (deleting an already-deleted file is a no-op, not an error).
 The cleaner plan must include enough information to resume blob cleanup without re-reading expired
 file slices (which may no longer exist after a partial execution).
 
-### R10: Observability
+### R9: Observability
 
 Blob cleanup must report metrics: number of blob files deleted, number of blob files retained
-(over-retained due to MOR or containers), number of container files flagged for blob compaction,
-and total storage reclaimed. These metrics enable operators to understand blob storage growth and
-cleanup effectiveness.
+(over-retained due to MOR), and total storage reclaimed. These metrics enable operators to understand
+blob storage growth and cleanup effectiveness.
 
 ---
 
@@ -333,23 +378,23 @@ make the constraints and requirements concrete.
 
 ### Example 1: Cross-file-group sharing -- per-FG cleanup deletes shared blob
 
-**Demonstrates:** C3, C6, R1
+**Demonstrates:** C3, C5, R1
 
 ```
 Setup:
   Partition P1, File Group FG-1:
-    Slice @t1: row1.blob_ref = (s3://shared/video.mp4, 0, 10MB, managed=true)
+    Slice @t1: row1.blob_ref = {external_path: "s3://shared/video.mp4", managed: true}
 
   Partition P2, File Group FG-2:
-    Slice @t1: row2.blob_ref = (s3://shared/video.mp4, 0, 10MB, managed=true)
+    Slice @t1: row2.blob_ref = {external_path: "s3://shared/video.mp4", managed: true}
 
 Action:
   Cleaner expires FG-1's slice @t1 (no retained slices in FG-1).
 
 Per-FG cleanup (incorrect):
-  FG-1 expired refs = {(s3://shared/video.mp4, 0, 10MB)}
+  FG-1 expired refs = {"s3://shared/video.mp4"}
   FG-1 retained refs = {}
-  Orphaned within FG-1 = {(s3://shared/video.mp4, 0, 10MB)}
+  Orphaned within FG-1 = {"s3://shared/video.mp4"}
   -> DELETE s3://shared/video.mp4
 
 Result:
@@ -358,58 +403,27 @@ Result:
 
 Correct behavior:
   Before deleting, verify that no other active file slice in any file group
-  references (s3://shared/video.mp4, 0, 10MB). FG-2's active slice references
-  it, so the blob must be retained.
+  references s3://shared/video.mp4. FG-2's active slice references it, so
+  the blob must be retained.
 ```
 
-### Example 2: Container file partial liveness -- deleting container destroys live ranges
-
-**Demonstrates:** C4, R3
-
-```
-Setup:
-  File Group FG-1:
-    Slice @t1: row1.blob_ref = (container_A.bin, 0, 1MB, managed=true)
-    Slice @t2: row2.blob_ref = (container_A.bin, 1MB, 2MB, managed=true)
-
-Action:
-  Cleaner expires slice @t1, retains slice @t2.
-
-Path-level cleanup (incorrect):
-  Expired paths = {container_A.bin}
-  Retained paths = {container_A.bin}
-  container_A.bin is in both sets -> retain.
-  (This happens to be safe by accident, but only because the same path appears.)
-
-  Alternative scenario -- different slices, same container:
-    Slice @t1 in FG-1: row1.blob_ref = (container_A.bin, 0, 1MB)  -- expired
-    Slice @t1 in FG-2: row2.blob_ref = (container_A.bin, 1MB, 2MB)  -- retained
-
-  If FG-1 concludes container_A.bin is orphaned (no retained refs within FG-1):
-  -> DELETE container_A.bin
-  FG-2's live range at offset 1MB is destroyed.
-
-Correct behavior:
-  Track liveness at (path, offset, length). Only delete the container file when
-  ALL ranges are unreferenced. If some ranges are dead and others live, flag the
-  container for blob compaction instead of deleting it.
-```
-
-### Example 3: Delete-and-re-add -- path reuse causes identity confusion
+### Example 2: Delete-and-re-add -- path reuse causes identity confusion
 
 **Demonstrates:** C2, R1
 
 ```
 Setup:
-  At time t1: User writes row1.blob_ref = (s3://user/photo.jpg, managed=true)
+  At time t1: User writes row1 with
+    blob_ref = {external_path: "s3://user/photo.jpg", managed: true}
   At time t2: User deletes the file at s3://user/photo.jpg externally
-  At time t3: User writes row2.blob_ref = (s3://user/photo.jpg, managed=true)
-              (new file at same path, different content)
+  At time t3: User writes row2 with
+    blob_ref = {external_path: "s3://user/photo.jpg", managed: true}
+    (new file at same path, different content)
 
 Cleanup scenario:
   Cleaner expires slice @t1. Slice @t3 is retained.
-  Expired refs = {s3://user/photo.jpg}
-  Retained refs = {s3://user/photo.jpg}
+  Expired refs = {"s3://user/photo.jpg"}
+  Retained refs = {"s3://user/photo.jpg"}
   Same path in both sets -> retain. (Correct by coincidence.)
 
   But consider: if the cleaner had cached blob identity by path and assumed
@@ -421,36 +435,43 @@ Cleanup scenario:
   AGAIN (third incarnation), the cleaner's identity model must not confuse the
   three incarnations.
 
-Note: This problem does not arise for Hudi-created blobs (C11 -- instant in
-path guarantees each write produces a unique path).
+Concurrent writer scenario (C2 caveat):
+  Writer A commits at t1, referencing s3://user/photo.jpg (managed=true).
+  Writer B starts at t0, also referencing s3://user/photo.jpg (managed=true).
+  Cleaner expires A's slice at t1. B is still inflight.
+  Cleaner deletes s3://user/photo.jpg.
+  Writer B commits -> dangling reference. Data corruption.
+
+  This race is specific to external blobs: the cleaner cannot rely on MVCC
+  guarantees for external blob files that are outside Hudi's control.
 ```
 
-### Example 4: MOR log shadow -- base file ref appears live when superseded
+### Example 3: MOR log shadow -- base file ref appears live when superseded
 
-**Demonstrates:** C5, R4
+**Demonstrates:** C4, R3
 
 ```
 Setup (MOR table):
   File Group FG-1:
-    Base file @t1: row1.blob_ref = (blob_A.bin, managed=true)
-    Log file @t2: row1.blob_ref = (blob_B.bin, managed=true)  -- update
+    Base file @t1: row1.blob_ref = {external_path: "s3://ext/blob_A.bin", managed: true}
+    Log file @t2: row1.blob_ref = {external_path: "s3://ext/blob_B.bin", managed: true}
 
-  After merge: row1's effective blob_ref is blob_B.bin.
+  After merge: row1's effective blob_ref points to blob_B.bin.
   blob_A.bin is no longer referenced by any live record.
 
 Cleanup scenario (pre-compaction):
   Cleaner does not expire slice @t1 (it's retained).
   Reading blob refs from the retained slice:
-    Base @t1: {blob_A.bin}
-    Log @t2: {blob_B.bin}
-    Union: {blob_A.bin, blob_B.bin}
+    Base @t1: {"s3://ext/blob_A.bin"}
+    Log @t2: {"s3://ext/blob_B.bin"}
+    Union: {"s3://ext/blob_A.bin", "s3://ext/blob_B.bin"}
 
   blob_A.bin appears live (it's in the retained set) even though it's been
   superseded by the log update. This is over-retention -- safe but wasteful.
 
 After compaction:
-  Compacted base @t3: row1.blob_ref = (blob_B.bin, managed=true)
-  Now the only retained ref is {blob_B.bin}.
+  Compacted base @t3: row1.blob_ref = {external_path: "s3://ext/blob_B.bin", managed: true}
+  Now the only retained ref is {"s3://ext/blob_B.bin"}.
   blob_A.bin is no longer in any retained set -> eligible for deletion.
 
 Why over-retention is the correct default:
@@ -459,15 +480,21 @@ Why over-retention is the correct default:
   dangling reference. Over-retention prevents this.
 ```
 
-### Example 5: Writer-cleaner race -- three scenarios
+### Example 4: Writer-cleaner race -- three scenarios
 
-**Demonstrates:** C7, R1, R5
+**Demonstrates:** C6, R1, R4
 
 ```
 A writer and cleaner operate concurrently on the same table.
 
+Note: Under Hudi's MVCC design, the cleaner and writers operate on non-overlapping
+file slices -- the cleaner never conflicts with writers on file slice operations.
+However, external blob files are NOT covered by MVCC: a writer's new file slice may
+reference an external blob that the cleaner is simultaneously evaluating for deletion.
+The following scenarios illustrate this gap.
+
 Scenario A: Writer commits BEFORE cleaner's timeline fence
-  t1: Writer starts, references blob_X
+  t1: Writer starts, references blob_X (external)
   t2: Writer commits (blob_X is now in a retained slice)
   t3: Cleaner plans cleanup
   t4: Cleaner checks timeline fence -- sees writer's commit at t2
@@ -477,7 +504,7 @@ Scenario A: Writer commits BEFORE cleaner's timeline fence
 Scenario B: Writer commits AFTER cleaner's timeline fence, BEFORE delete
   t1: Cleaner plans cleanup, blob_X is a candidate for deletion
   t2: Cleaner checks timeline fence -- no new commits
-  t3: Writer commits, referencing blob_X
+  t3: Writer commits, referencing blob_X (external)
   t4: Cleaner deletes blob_X
   -> UNSAFE. The timeline fence did not see the writer's commit.
      blob_X is deleted, but the writer's new slice references it.
@@ -488,89 +515,83 @@ Scenario C: Writer commits AFTER cleaner deletes
   -> UNSAFE. The blob is already gone. The writer's commit creates a dangling
      reference.
 
-Note: Scenario B and C cannot occur for Hudi-created blobs (C11 + D2 from
-alternatives analysis: new writes always produce new paths, and UPSERT carries
-forward refs from retained slices). They are real concerns for user-provided
-external blobs where the user can reference any path.
+Scenarios B and C are real concerns for external blobs where the user can
+reference any path. Any solution must close this gap -- for example, via a
+writer-side conflict check at commit time.
 ```
 
-### Example 6: Clustering moves refs -- replaced FG appears to have no retained slices
+### Example 5: Replace commits move refs -- replaced FG appears to have no retained slices
 
-**Demonstrates:** C8, C3, R1
+**Demonstrates:** C7, C3, R1
 
 ```
 Setup:
   File Group FG-1:
-    Slice @t1: row1.blob_ref = (blob_A.bin, managed=true)
+    Slice @t1: row1.blob_ref = {external_path: "s3://ext/video.mp4", managed: true}
 
   Clustering at t2 rewrites FG-1's records to FG-2:
     File Group FG-2:
-      Slice @t2: row1.blob_ref = (blob_A_new.bin, managed=true)
-                 (Hudi-managed: new blob created in FG-2's scope)
+      Slice @t2: row1.blob_ref = {external_path: "s3://ext/video.mp4", managed: true}
+                 (external: pointer copied, same blob)
 
   FG-1 is now a replaced file group. Its slice @t1 is eligible for cleaning
   after the retention policy expires.
 
-Cleanup:
+Cleanup (incorrect per-FG only):
   Cleaner cleans FG-1's slice @t1.
-  Expired refs = {blob_A.bin}
+  Expired refs = {"s3://ext/video.mp4"}
   Retained refs within FG-1 = {} (FG-1 has no retained slices -- it's replaced)
-  blob_A.bin appears orphaned within FG-1 -> DELETE
+  s3://ext/video.mp4 appears orphaned within FG-1 -> DELETE
 
-  This is actually CORRECT for Hudi-managed blobs: clustering created a new
-  blob (blob_A_new.bin) in FG-2, so blob_A.bin is genuinely orphaned.
+  FG-2's live reference is destroyed. Data corruption.
 
-  BUT if the blob were an external user-provided blob (same path referenced
-  from both FG-1 and FG-2 after clustering):
-
-  File Group FG-2:
-    Slice @t2: row1.blob_ref = (s3://ext/video.mp4, managed=true)
-               (external: pointer copied, same blob)
-
-  FG-1's cleanup concludes s3://ext/video.mp4 is orphaned within FG-1.
-  Deleting it destroys FG-2's live reference.
+Alternative scenario -- insert_overwrite:
+  At t2, an insert_overwrite replaces partition P1 with new data in FG-3.
+  FG-3's records also reference s3://ext/video.mp4 (same external blob).
+  FG-1 is replaced. Same per-FG cleanup error: FG-1 concludes the blob is
+  orphaned, but FG-3 still references it.
 
 Correct behavior:
-  For Hudi-managed blobs, per-FG cleanup is safe because clustering always
-  creates new blob files in the target FG. For external blobs, a cross-FG
-  check is required before deletion.
+  For external blobs, a cross-FG check is required before deletion, regardless
+  of which replace commit type (clustering, insert_overwrite, insert_overwrite_table)
+  created the replacement. Per-FG cleanup alone is never sufficient for external blobs.
 ```
 
-### Example 7: Non-bootstrapped external blobs at scale -- cross-FG verification is the common path
+### Example 6: External blobs at scale -- cross-FG verification is the common path
 
-**Demonstrates:** C3, C13, R6 (Flow 2)
+**Demonstrates:** C3, C11, R5
 
 ```
 Setup:
   A media company stores 10M video files in s3://media-library/.
   They create a Hudi table with a blob column referencing these videos.
-  They do NOT bootstrap -- Hudi manages refs, not storage layout.
+  Hudi manages refs, not storage layout.
 
   The table has 50K file groups across 1K partitions.
   Many videos are referenced by multiple records (e.g., a popular video
   appears in multiple user playlists across different partitions).
 
   Partition users/alice, FG-101:
-    Slice @t1: row1.blob_ref = (s3://media-library/video_X.mp4, managed=true)
+    Slice @t1: row1.blob_ref = {external_path: "s3://media-library/video_X.mp4", managed: true}
 
   Partition users/bob, FG-202:
-    Slice @t1: row2.blob_ref = (s3://media-library/video_X.mp4, managed=true)
+    Slice @t1: row2.blob_ref = {external_path: "s3://media-library/video_X.mp4", managed: true}
 
   Partition users/carol, FG-303:
-    Slice @t1: row3.blob_ref = (s3://media-library/video_X.mp4, managed=true)
+    Slice @t1: row3.blob_ref = {external_path: "s3://media-library/video_X.mp4", managed: true}
 
 Action:
   Cleaner expires FG-101's slice @t1 (alice deleted her playlist entry).
 
 Naive per-FG cleanup (incorrect):
-  FG-101 expired refs = {(s3://media-library/video_X.mp4, 0, 50MB)}
+  FG-101 expired refs = {"s3://media-library/video_X.mp4"}
   FG-101 retained refs = {}
   Orphaned within FG-101 -> DELETE video_X.mp4
   Bob and Carol lose their video. Data corruption.
 
 Naive full-table scan (correct but expensive):
   To verify video_X.mp4 is safe to delete, scan ALL 50K file groups
-  for references. This is correct but violates R6 -- the cost is
+  for references. This is correct but violates R5 -- the cost is
   proportional to table size, not to the number of candidates.
 
 Scale concern:
@@ -587,39 +608,41 @@ Correct behavior:
   element, not a fallback path.
 ```
 
-### Example 8: MOR log-chain transient blob -- introduced and superseded within logs
+### Example 7: MOR log-chain transient blob -- introduced and superseded within logs
 
-**Demonstrates:** C5, R2
+**Demonstrates:** C4, R2
 
 ```
 Setup (MOR table):
   File Group FG-1:
-    Base file @t1: row1.blob_ref = (blob_A.bin, managed=true)
-    Log file @t2: row1.blob_ref = (blob_B.bin, managed=true)  -- update
-    Log file @t3: row1.blob_ref = (blob_C.bin, managed=true)  -- another update
+    Base file @t1: row1.blob_ref = {external_path: "s3://ext/blob_A.bin", managed: true}
+    Log file @t2: row1.blob_ref = {external_path: "s3://ext/blob_B.bin", managed: true}
+    Log file @t3: row1.blob_ref = {external_path: "s3://ext/blob_C.bin", managed: true}
 
-  After merge: row1's effective blob_ref is blob_C.bin.
+  After merge: row1's effective blob_ref points to blob_C.bin.
   blob_B.bin was introduced at t2 and superseded at t3 -- it exists ONLY in log @t2.
 
 After compaction @t4:
-  Compacted base @t4: row1.blob_ref = (blob_C.bin, managed=true)
+  Compacted base @t4: row1.blob_ref = {external_path: "s3://ext/blob_C.bin", managed: true}
   The pre-compaction slice (base @t1 + logs @t2, @t3) is now expired.
 
 Cleanup scenario:
   Cleaner expires the pre-compaction slice.
-  Retained slice = compacted base @t4, refs = {blob_C.bin}.
+  Retained slice = compacted base @t4, refs = {"s3://ext/blob_C.bin"}.
 
   If expired slice reads only the base file:
-    expired_refs = {blob_A.bin}  (from base @t1)
-    local_orphans = {blob_A.bin} - {blob_C.bin} = {blob_A.bin}
+    expired_refs = {"s3://ext/blob_A.bin"}  (from base @t1)
+    local_orphans = {"s3://ext/blob_A.bin"} - {"s3://ext/blob_C.bin"}
+                  = {"s3://ext/blob_A.bin"}
     blob_A.bin is correctly identified as orphaned.
     blob_B.bin is MISSED -- it exists only in expired log @t2.
     blob_B.bin becomes a permanent orphan (R2 violation).
 
   If expired slice reads base + log files:
-    expired_refs = {blob_A.bin, blob_B.bin, blob_C.bin}
-    local_orphans = {blob_A.bin, blob_B.bin, blob_C.bin} - {blob_C.bin}
-                  = {blob_A.bin, blob_B.bin}
+    expired_refs = {"s3://ext/blob_A.bin", "s3://ext/blob_B.bin", "s3://ext/blob_C.bin"}
+    local_orphans = {"s3://ext/blob_A.bin", "s3://ext/blob_B.bin", "s3://ext/blob_C.bin"}
+                    - {"s3://ext/blob_C.bin"}
+                  = {"s3://ext/blob_A.bin", "s3://ext/blob_B.bin"}
     Both orphaned blobs are correctly identified and deleted.
 
 Why this matters:
@@ -706,23 +729,24 @@ These questions must be answered by any solution design. They are not prescripti
 answers exist for each.
 
 **Q1: What is blob identity?**
-How does the cleanup algorithm identify a specific blob? By path alone? By the tuple
-`(path, offset, length)`? By `(path, generation/version)`? The identity model determines how
-deduplication, container handling, and delete-and-re-add (C2) are handled.
+How does the cleanup algorithm identify a specific blob? By `reference.external_path` alone? For
+external blobs where container files are out of scope, path-based identity may be sufficient. The
+identity model determines how deduplication and delete-and-re-add (C2) are handled.
 
 **Q2: Where is liveness computed?**
 Is the set of live blob references computed at write time (incremental), at clean time (batch), or
 some combination? Write-time computation amortizes cost but requires additional metadata storage.
-Clean-time computation avoids write overhead but may be expensive at scale.
+Clean-time computation avoids write overhead but may be expensive at scale. Note: storing liveness
+data within commit metadata is not a viable option -- it does not scale (see C10).
 
 **Q3: What is the unit of cleanup planning?**
 Does blob cleanup plan per-file-group (aligned with the existing cleaner), per-partition, or globally?
-Per-FG is naturally aligned with OCC (C7) but cannot handle cross-FG sharing (C3) without extension.
-Global planning handles cross-FG sharing but risks violating C7.
+Per-FG is naturally aligned with OCC (C6) but cannot handle cross-FG sharing (C3) without extension.
+Global planning handles cross-FG sharing but risks violating C6.
 
 **Q4: How does blob cleanup interact with archival?**
 If the cleanup algorithm depends on commit metadata to determine which blobs were written, what
-happens when those commits are archived (C12)? Must blob cleanup complete before archival? Must the
+happens when those commits are archived (C10)? Must blob cleanup complete before archival? Must the
 relevant metadata be persisted outside the active timeline?
 
 **Q5: Extension or separate service?**
@@ -736,10 +760,22 @@ Despite best efforts, what happens if a blob is prematurely deleted? Is there a 
 (query-time error surfacing)? Is there a recovery path (rebuild from an external source)? How does
 the system distinguish "blob correctly not present" from "blob incorrectly deleted"?
 
-**Q7: How does cross-FG verification scale for non-path-dispatched blobs?**
-For Flow 2 workloads where cross-FG sharing is common, what mechanism makes cross-FG verification
-efficient? Options include: an MDT index mapping blob paths to referencing file groups, predicate
-pushdown on the blob ref column during targeted scans, a reference count maintained at write time,
-or a bloom filter index. The chosen mechanism must satisfy R6 (cost proportional to candidates, not
-table size) and C7 (no global serialization). How does this mechanism interact with writes, and what
-is its maintenance cost?
+**Q7: How does cross-FG verification scale for external blobs?**
+For external blob workloads where cross-FG sharing is common, what mechanism makes cross-FG
+verification efficient? Options include: an MDT index mapping blob paths to referencing file groups,
+predicate pushdown on the blob ref column during targeted scans, a reference count maintained at
+write time, or a bloom filter index. The chosen mechanism must satisfy R5 (cost proportional to
+candidates, not table size) and C6 (no global serialization). How does this mechanism interact with
+writes, and what is its maintenance cost?
+
+**Q8: How should the cleaner handle managed-to-unmanaged transitions?**
+If a blob reference transitions from `reference.managed = true` to `reference.managed = false`
+across writes (or vice versa), what is the cleaner's behavior? Should the `managed` flag be
+evaluated at the time of the expired reference, the retained reference, or both? See the managed
+flag discussion in Section 2.
+
+**Q9: How does blob cleanup interact with table restore?**
+Table restore (as distinct from single-commit rollback) can undo multiple committed writes,
+potentially orphaning many blobs at once and resurrecting others. Does the cleaner need special
+handling for post-restore cleanup, or does the standard cleanup algorithm handle it naturally? What
+if a restore occurs after a cleaner run has already deleted blobs that the restored state references?
