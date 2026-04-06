@@ -260,23 +260,29 @@ public class StreamWriteOperatorCoordinator
       //   separate instantRequestExecutor and are gated on initFuture to
       //   prevent startInstant() from racing ahead of the upgrade.
       this.executor.execute(() -> {
-        this.writeClient.tryUpgrade(instant, this.metaClient);
-        initMetadataTable(this.writeClient);
-        if (tableState.scheduleMdtCompaction) {
-          this.metadataWriteClient = StreamerUtil.createMetadataWriteClient(writeClient);
+        try {
+          this.writeClient.tryUpgrade(instant, this.metaClient);
+          initMetadataTable(this.writeClient);
+          if (tableState.scheduleMdtCompaction) {
+            this.metadataWriteClient = StreamerUtil.createMetadataWriteClient(writeClient);
+          }
+          if (tableState.syncHive) {
+            initHiveSync();
+          }
+          if (OptionsResolver.isMultiWriter(conf)) {
+            initClientIds(conf);
+          }
+          restoreEvents();
+          initFuture.complete(null);
+        } catch (Throwable t) {
+          initFuture.completeExceptionally(t);
+          throw t;
         }
-        if (tableState.syncHive) {
-          initHiveSync();
-        }
-        if (OptionsResolver.isMultiWriter(conf)) {
-          initClientIds(conf);
-        }
-        restoreEvents();
-        initFuture.complete(null);
       }, "table upgrade and initialization");
 
     } catch (Throwable throwable) {
       log.error("Failed to start operator coordinator.", throwable);
+      initFuture.completeExceptionally(throwable);
       context.failJob(throwable);
     }
   }
