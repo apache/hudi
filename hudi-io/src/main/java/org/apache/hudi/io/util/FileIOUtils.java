@@ -97,6 +97,8 @@ public class FileIOUtils {
     try (BufferedReader bufferedReader = new BufferedReader(new InputStreamReader(input, StandardCharsets.UTF_8))) {
             return bufferedReader.lines().collect(Collectors.toList());
         } catch (IOException e) {
+          // Note: stream errors from lines().collect(...) surface as UncheckedIOException and bypass this block.
+          // This catch handles IOException from close() during try-with-resources teardown.
             throw new RuntimeException(e);
         }
     }
