@@ -221,6 +221,11 @@ public class RollbackHelperV1 extends RollbackHelper {
               .withTableVersion(tableVersion)
               .withFileExtension(HoodieLogFile.DELTA_EXTENSION);
 
+          // Supply the pre-computed latest log version and its write token so that
+          // WriterBuilder.build() skips the per-request FSUtils.getLatestLogVersion() listing.
+          // This produces the same result: build() would discover (N, T_existing), construct
+          // path (N, T_existing), find it exists, and roll over to N+1. Pre-computation
+          // feeds the same (N, T_existing), triggering the identical rollover in getOutputStream().
           String logVersionKey = logVersionLookupKey(partitionPath, fileId, rollbackRequest.getLatestBaseInstant());
           Pair<Integer, String> preComputedVersion = logVersionMap.get(logVersionKey);
           if (preComputedVersion != null) {
@@ -236,6 +241,8 @@ public class RollbackHelperV1 extends RollbackHelper {
             // if update belongs to an existing log file
             // use the log file path from AppendResult in case the file handle may roll over
             filePath = writer.appendBlock(new HoodieCommandBlock(header)).logFile().getPath();
+            // appendBlock() calls hsync() before returning, so the stream position
+            // matches the on-disk file size — no buffering or flush gap.
             fileSize = writer.getCurrentSize();
             fileSizeCaptured = true;
           } else {
