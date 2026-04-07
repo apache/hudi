@@ -228,7 +228,7 @@ public class TestHoodieTableFactory {
     final MockContext sourceContext5 = MockContext.getInstance(this.conf, schema, "f2");
     assertThrows(IllegalArgumentException.class, () -> new HoodieTableFactory().createDynamicTableSink(sourceContext5));
 
-    // Valid deferred RLI initialization is not supported.
+    // Deferred RLI initialization is not supported
     this.conf.set(FlinkOptions.INDEX_TYPE, "GLOBAL_RECORD_LEVEL_INDEX");
     this.conf.set(FlinkOptions.METADATA_ENABLED, true);
     this.conf.set(FlinkOptions.INDEX_GLOBAL_ENABLED, true);
