@@ -48,6 +48,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentSkipListSet;
 import java.util.function.BiConsumer;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -321,10 +322,8 @@ public Option<byte[]> getInstantDetails(HoodieInstant instant) {
     public void accept(String instantTime, GenericRecord record) {
       Option<HoodieInstant> instant = readCommit(instantTime, record, loadInstantDetails, null);
       if (instant.isPresent()) {
-        Set<HoodieInstant> instantsForTime = instantsInRange.computeIfAbsent(instant.get().requestedTime(), s -> new HashSet<>());
-        if (!instantsForTime.contains(instant.get())) {
-          instantsForTime.add(instant.get());
-        }
+        Set<HoodieInstant> instantsForTime = instantsInRange.computeIfAbsent(instant.get().requestedTime(), s -> ConcurrentHashMap.newKeySet());
+        instantsForTime.add(instant.get());
       }
     }
 
