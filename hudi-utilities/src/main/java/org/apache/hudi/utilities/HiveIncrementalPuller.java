@@ -188,7 +188,7 @@ public class HiveIncrementalPuller {
       incrementalSQL = sqlScanner.useDelimiter("\\Z").next();
     }
     if (!incrementalSQL.contains(config.sourceDb + "." + config.sourceTable)) {
-      LOG.error("Incremental SQL does nothave " + config.sourceDb + "." + config.sourceTable
+      LOG.error("Incremental SQL does not have " + config.sourceDb + "." + config.sourceTable
           + ", which means its pulling from a different table. Fencing this from happening.");
       throw new HoodieIncrementalPullSQLException(
           "Incremental SQL does not have " + config.sourceDb + "." + config.sourceTable);
