@@ -25,7 +25,6 @@ import org.apache.hudi.metadata.model.FileSliceAndPartition;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.metadata.index.model.IndexPartitionInitialization;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.metadata.HoodieMetadataPayload;
 import org.apache.hudi.metadata.MetadataPartitionType;
@@ -56,7 +55,7 @@ public class FilesIndexer extends BaseIndexer {
 
   @Override
   public List<IndexPartitionInitialization> buildInitialization(String dataTableInstantTime, String instantTimeForPartition, Map<String, List<FileInfo>> partitionToAllFilesMap,
-                                                                Lazy<List<FileSliceAndPartition>> lazyLatestMergedPartitionFileSliceList) throws IOException {
+                                                                Lazy<List<FileSliceAndPartition>> lazyPartitionFileSlices) throws IOException {
     // FILES partition uses a single file group
     final int fileGroupCount = 1;
 
@@ -81,7 +80,6 @@ public class FilesIndexer extends BaseIndexer {
           return HoodieMetadataPayload.createPartitionFilesRecord(
               partitionInfo.getKey(), fileNameToSizeMap, Collections.emptyList());
         });
-    ValidationUtils.checkState(fileListRecords.count() == partitions.size());
 
     return Collections.singletonList(IndexPartitionInitialization.of(fileGroupCount, FILES.getPartitionPath(), allPartitionsRecord.union(fileListRecords)));
   }

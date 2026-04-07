@@ -43,11 +43,11 @@ import java.util.stream.Collectors;
  * based on table and metadata configuration.
  */
 public class IndexerFactory {
-  private static Indexer getIndexer(MetadataPartitionType partitionType,
-                                   HoodieEngineContext engineContext,
-                                   HoodieWriteConfig dataTableWriteConfig,
-                                   HoodieTableMetaClient dataTableMetaClient,
-                                   ExpressionIndexRecordGenerator expressionIndexRecordGenerator) {
+  private static Indexer createIndexer(MetadataPartitionType partitionType,
+                                       HoodieEngineContext engineContext,
+                                       HoodieWriteConfig dataTableWriteConfig,
+                                       HoodieTableMetaClient dataTableMetaClient,
+                                       ExpressionIndexRecordGenerator expressionIndexRecordGenerator) {
     switch (partitionType) {
       case FILES:
         return new FilesIndexer(engineContext, dataTableWriteConfig, dataTableMetaClient);
@@ -90,7 +90,7 @@ public class IndexerFactory {
         )
         .collect(Collectors.toMap(
             Function.identity(),
-            type -> IndexerFactory.getIndexer(type, engineContext, dataTableWriteConfig, dataTableMetaClient, expressionIndexRecordGenerator))));
+            type -> IndexerFactory.createIndexer(type, engineContext, dataTableWriteConfig, dataTableMetaClient, expressionIndexRecordGenerator))));
   }
 
   /**

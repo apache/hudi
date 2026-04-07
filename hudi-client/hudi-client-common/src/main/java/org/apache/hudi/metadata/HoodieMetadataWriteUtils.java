@@ -401,26 +401,26 @@ public class HoodieMetadataWriteUtils {
                                                                                String instantTime,
                                                                                HoodieTableMetaClient dataMetaClient,
                                                                                HoodieMetadataConfig metadataConfig,
-                                                                               Map<MetadataPartitionType, Indexer> enabledIndexBuilderMap,
+                                                                               Map<MetadataPartitionType, Indexer> enabledIndexerMap,
                                                                                int bloomIndexParallelism,
                                                                                Option<HoodieRecord.HoodieRecordType> recordTypeOpt) {
     final Map<String, HoodieData<HoodieRecord>> partitionToRecordsMap = new HashMap<>();
     final HoodieData<HoodieRecord> filesPartitionRecordsRDD = engineContext.parallelize(
         convertMetadataToFilesPartitionRecords(cleanMetadata, instantTime), 1);
     partitionToRecordsMap.put(MetadataPartitionType.FILES.getPartitionPath(), filesPartitionRecordsRDD);
-    if (enabledIndexBuilderMap.containsKey(MetadataPartitionType.BLOOM_FILTERS)) {
+    if (enabledIndexerMap.containsKey(MetadataPartitionType.BLOOM_FILTERS)) {
       final HoodieData<HoodieRecord> metadataBloomFilterRecordsRDD =
           convertMetadataToBloomFilterRecords(cleanMetadata, engineContext, instantTime, bloomIndexParallelism);
       partitionToRecordsMap.put(MetadataPartitionType.BLOOM_FILTERS.getPartitionPath(), metadataBloomFilterRecordsRDD);
     }
 
-    if (enabledIndexBuilderMap.containsKey(MetadataPartitionType.COLUMN_STATS)) {
+    if (enabledIndexerMap.containsKey(MetadataPartitionType.COLUMN_STATS)) {
       final HoodieData<HoodieRecord> metadataColumnStatsRDD =
           convertMetadataToColumnStatsRecords(cleanMetadata, engineContext,
               dataMetaClient, metadataConfig, recordTypeOpt);
       partitionToRecordsMap.put(MetadataPartitionType.COLUMN_STATS.getPartitionPath(), metadataColumnStatsRDD);
     }
-    if (enabledIndexBuilderMap.containsKey(MetadataPartitionType.EXPRESSION_INDEX)) {
+    if (enabledIndexerMap.containsKey(MetadataPartitionType.EXPRESSION_INDEX)) {
       convertMetadataToExpressionIndexRecords(engineContext, cleanMetadata, instantTime, dataMetaClient, metadataConfig, bloomIndexParallelism, partitionToRecordsMap,
           recordTypeOpt);
     }

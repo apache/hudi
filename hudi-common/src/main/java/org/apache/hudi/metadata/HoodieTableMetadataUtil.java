@@ -208,6 +208,11 @@ public class HoodieTableMetadataUtil {
   public static final String PARTITION_NAME_SECONDARY_INDEX = "secondary_index";
   public static final String PARTITION_NAME_SECONDARY_INDEX_PREFIX = "secondary_index_";
 
+  // Average size of a record saved within the record index.
+  // Record index has a fixed size schema. This has been calculated based on experiments with default settings
+  // for block size (1MB), compression (GZ) and disabling the hudi metadata fields.
+  public static final int RECORD_INDEX_AVERAGE_RECORD_SIZE = 48;
+
   public static final Set<String> SUPPORTED_META_FIELDS_PARTITION_STATS = new HashSet<>(Arrays.asList(
       HoodieRecord.HoodieMetadataField.RECORD_KEY_METADATA_FIELD.getFieldName(),
       HoodieRecord.HoodieMetadataField.PARTITION_PATH_METADATA_FIELD.getFieldName(),
@@ -1184,7 +1189,7 @@ public class HoodieTableMetadataUtil {
       if (hasRollbackLogFiles) {
         partitionToAppendedFiles.putIfAbsent(partitionId, new ArrayList<>());
         Map<String, Long> currentFileToSize = partitionToAppendedFiles.get(partitionId).stream()
-            .collect(Collectors.toMap(FileInfoAndPartition::name, FileInfoAndPartition::size));
+            .collect(Collectors.toMap(FileInfoAndPartition::path, FileInfoAndPartition::size));
 
         // Extract appended file name from the absolute paths saved in getAppendFiles()
         pm.getRollbackLogFiles().forEach((path, size) -> {
@@ -1219,7 +1224,7 @@ public class HoodieTableMetadataUtil {
       Map<String, Long> filesAdded = Collections.emptyMap();
       if (partitionToAppendedFiles.containsKey(partitionName)) {
         filesAdded = partitionToAppendedFiles.remove(partitionName).stream()
-            .collect(Collectors.toMap(FileInfoAndPartition::name, FileInfoAndPartition::size));
+            .collect(Collectors.toMap(FileInfoAndPartition::path, FileInfoAndPartition::size));
       }
 
       HoodieRecord record = HoodieMetadataPayload.createPartitionFilesRecord(partitionName, filesAdded,
@@ -1230,7 +1235,7 @@ public class HoodieTableMetadataUtil {
     partitionToAppendedFiles.forEach((partitionName, appendedFiles) -> {
       final String partition = getPartitionIdentifierForFilesPartition(partitionName);
       fileChangeCount[1] += appendedFiles.size();
-      Map<String, Long> appendedFileMap = appendedFiles.stream().collect(Collectors.toMap(FileInfoAndPartition::name, FileInfoAndPartition::size));
+      Map<String, Long> appendedFileMap = appendedFiles.stream().collect(Collectors.toMap(FileInfoAndPartition::path, FileInfoAndPartition::size));
 
       // Validate that no appended file has been deleted
       checkState(
@@ -1286,7 +1291,7 @@ public class HoodieTableMetadataUtil {
     return engineContext.parallelize(partitionFileFlagTupleList, parallelism).flatMap(partitionFileFlagTuple -> {
       final String partitionName = partitionFileFlagTuple.partitionPath();
       final String filename = partitionFileFlagTuple.fileName();
-      final boolean isDeleted = partitionFileFlagTuple.flag();
+      final boolean isDeleted = partitionFileFlagTuple.isDeleted();
       if (!FSUtils.isBaseFile(new StoragePath(filename))) {
         log.info("Ignoring file {} as it is not a base file", filename);
         return Stream.<HoodieRecord>empty().iterator();
@@ -1335,7 +1340,7 @@ public class HoodieTableMetadataUtil {
     return engineContext.parallelize(partitionFileFlagTupleList, parallelism).flatMap(partitionFileFlagTuple -> {
       final String partitionPath = partitionFileFlagTuple.partitionPath();
       final String filename = partitionFileFlagTuple.fileName();
-      final boolean isDeleted = partitionFileFlagTuple.flag();
+      final boolean isDeleted = partitionFileFlagTuple.isDeleted();
       return getColumnStatsRecords(partitionPath, filename, dataMetaClient, columnsToIndex, isDeleted, maxReaderBufferSize).iterator();
     });
   }

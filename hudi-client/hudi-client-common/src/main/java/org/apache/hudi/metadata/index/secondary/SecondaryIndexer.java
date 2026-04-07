@@ -42,6 +42,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.RECORD_INDEX_AVERAGE_RECORD_SIZE;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getSecondaryIndexPartitionsToInit;
 import static org.apache.hudi.metadata.MetadataPartitionType.RECORD_INDEX;
 import static org.apache.hudi.metadata.MetadataPartitionType.SECONDARY_INDEX;
@@ -53,8 +54,6 @@ import static org.apache.hudi.metadata.SecondaryIndexRecordGenerationUtils.readS
 @Slf4j
 public class SecondaryIndexer extends BaseIndexer {
 
-  private static final int RECORD_INDEX_AVERAGE_RECORD_SIZE = 48;
-
   public SecondaryIndexer(
       HoodieEngineContext engineContext,
       HoodieWriteConfig dataTableWriteConfig,
@@ -64,7 +63,7 @@ public class SecondaryIndexer extends BaseIndexer {
 
   @Override
   public List<IndexPartitionInitialization> buildInitialization(String dataTableInstantTime, String instantTimeForPartition, Map<String, List<FileInfo>> partitionToAllFilesMap,
-                                                                Lazy<List<FileSliceAndPartition>> lazyLatestMergedPartitionFileSliceList) throws IOException {
+                                                                Lazy<List<FileSliceAndPartition>> lazyPartitionFileSlices) throws IOException {
     Set<String> secondaryIndexPartitionsToInit = getSecondaryIndexPartitionsToInit(SECONDARY_INDEX, dataTableWriteConfig.getMetadataConfig(), dataTableMetaClient);
     if (secondaryIndexPartitionsToInit.size() != 1) {
       if (secondaryIndexPartitionsToInit.size() > 1) {
@@ -77,7 +76,7 @@ public class SecondaryIndexer extends BaseIndexer {
     HoodieIndexDefinition indexDefinition = HoodieTableMetadataUtil.getHoodieIndexDefinition(indexName, dataTableMetaClient);
     ValidationUtils.checkState(indexDefinition != null, "Secondary Index definition is not present for index " + indexName);
 
-    List<FileSliceAndPartition> partitionFileSlicePairs = lazyLatestMergedPartitionFileSliceList.get();
+    List<FileSliceAndPartition> partitionFileSlicePairs = lazyPartitionFileSlices.get();
 
     int parallelism = Math.min(partitionFileSlicePairs.size(), dataTableWriteConfig.getMetadataConfig().getSecondaryIndexParallelism());
     HoodieData<HoodieRecord> records = readSecondaryKeysFromFileSlices(

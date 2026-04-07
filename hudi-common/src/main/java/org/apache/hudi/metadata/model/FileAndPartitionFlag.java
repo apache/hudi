@@ -32,9 +32,9 @@ import lombok.experimental.Accessors;
 public class FileAndPartitionFlag {
   private final String partitionPath;
   private final String fileName;
-  private final boolean flag;
+  private final boolean isDeleted;
 
-  public static FileAndPartitionFlag of(String partition, String file, boolean flag) {
-    return new FileAndPartitionFlag(partition, file, flag);
+  public static FileAndPartitionFlag of(String partition, String file, boolean isDeleted) {
+    return new FileAndPartitionFlag(partition, file, isDeleted);
   }
 }

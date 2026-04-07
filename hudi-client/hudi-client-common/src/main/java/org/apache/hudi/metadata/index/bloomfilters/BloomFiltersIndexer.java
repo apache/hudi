@@ -56,7 +56,7 @@ public class BloomFiltersIndexer extends BaseIndexer {
       String dataTableInstantTime,
       String instantTimeForPartition,
       Map<String, List<FileInfo>> partitionToAllFilesMap,
-      Lazy<List<FileSliceAndPartition>> lazyLatestMergedPartitionFileSliceList) throws IOException {
+      Lazy<List<FileSliceAndPartition>> lazyPartitionFileSlices) throws IOException {
     HoodieData<HoodieRecord> records = HoodieTableMetadataUtil.convertFilesToBloomFilterRecords(
         engineContext, Collections.emptyMap(), partitionToAllFilesMap, dataTableInstantTime, dataTableMetaClient,
         dataTableWriteConfig.getBloomIndexParallelism(), dataTableWriteConfig.getBloomFilterType());

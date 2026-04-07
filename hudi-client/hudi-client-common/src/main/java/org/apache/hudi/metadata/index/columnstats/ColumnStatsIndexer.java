@@ -52,7 +52,7 @@ import static org.apache.hudi.metadata.MetadataPartitionType.COLUMN_STATS;
  */
 @Slf4j
 public class ColumnStatsIndexer extends BaseIndexer {
-  private Lazy<List<String>> columnsToIndex;
+  private final Lazy<List<String>> columnsToIndex;
 
   public ColumnStatsIndexer(HoodieEngineContext engineContext,
                                HoodieWriteConfig dataTableWriteConfig,
@@ -74,14 +74,9 @@ public class ColumnStatsIndexer extends BaseIndexer {
       String dataTableInstantTime,
       String instantTimeForPartition,
       Map<String, List<FileInfo>> partitionToAllFilesMap,
-      Lazy<List<FileSliceAndPartition>> lazyLatestMergedPartitionFileSliceList) throws IOException {
+      Lazy<List<FileSliceAndPartition>> lazyPartitionFileSlices) throws IOException {
     final int fileGroupCount = dataTableWriteConfig.getMetadataConfig().getColumnStatsIndexFileGroupCount();
-    if (partitionToAllFilesMap.isEmpty()) {
-      this.columnsToIndex = Lazy.lazily(Collections::emptyList);
-      return Collections.singletonList(IndexPartitionInitialization.of(fileGroupCount, COLUMN_STATS.getPartitionPath(), engineContext.emptyHoodieData()));
-    }
-
-    if (columnsToIndex.get().isEmpty()) {
+    if (partitionToAllFilesMap.isEmpty() || columnsToIndex.get().isEmpty()) {
       return Collections.singletonList(IndexPartitionInitialization.of(fileGroupCount, COLUMN_STATS.getPartitionPath(), engineContext.emptyHoodieData()));
     }
 
@@ -104,7 +99,7 @@ public class ColumnStatsIndexer extends BaseIndexer {
         .withSourceFields(columnsToIndex.get())
         // Use the existing version if exists, otherwise fall back to the default version.
         .withVersion(existingIndexVersionOrDefault(PARTITION_NAME_COLUMN_STATS, dataTableMetaClient))
-        .withIndexOptions(Collections.EMPTY_MAP)
+        .withIndexOptions(Collections.emptyMap())
         .build();
     log.info("Registering or updating index: {} of type: {}", indexDefinition.getIndexName(), indexDefinition.getIndexType());
     register(dataTableMetaClient, indexDefinition);

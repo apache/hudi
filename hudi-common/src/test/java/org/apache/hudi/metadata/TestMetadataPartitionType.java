@@ -272,7 +272,7 @@ public class TestMetadataPartitionType {
 
   @Test
   public void testIndexNameWithoutPrefix() {
-    for (MetadataPartitionType partitionType : MetadataPartitionType.getValidValues()) {
+    for (MetadataPartitionType partitionType : MetadataPartitionType.getValidValues(HoodieTableVersion.current())) {
       String userIndexName = MetadataPartitionType.isExpressionOrSecondaryIndex(partitionType.getPartitionPath()) ? "idx" : "";
       HoodieIndexDefinition indexDefinition = createIndexDefinition(partitionType, userIndexName, partitionType.name(), null, null, null);
       assertEquals(partitionType.getIndexNameWithoutPrefix(indexDefinition), userIndexName);
@@ -314,7 +314,7 @@ public class TestMetadataPartitionType {
     assertThrows(IllegalArgumentException.class, () -> MetadataPartitionType.isExpressionOrSecondaryIndex("secondary_indexidx"),
         "No MetadataPartitionType for partition path: secondary_indexidx");
 
-    for (MetadataPartitionType partitionType : MetadataPartitionType.getValidValues()) {
+    for (MetadataPartitionType partitionType : MetadataPartitionType.getValidValues(HoodieTableVersion.current())) {
       if (partitionType != MetadataPartitionType.EXPRESSION_INDEX && partitionType != MetadataPartitionType.SECONDARY_INDEX) {
         assertFalse(MetadataPartitionType.isExpressionOrSecondaryIndex(partitionType.getPartitionPath()));
       }

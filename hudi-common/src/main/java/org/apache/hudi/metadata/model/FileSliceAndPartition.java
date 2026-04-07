@@ -23,7 +23,6 @@ import org.apache.hudi.common.model.FileSlice;
 import lombok.AllArgsConstructor;
 import lombok.ToString;
 import lombok.Getter;
-import lombok.Setter;
 import lombok.experimental.Accessors;
 
 /**
@@ -31,12 +30,11 @@ import lombok.experimental.Accessors;
  */
 @AllArgsConstructor
 @Getter
-@Setter
 @ToString
 @Accessors(fluent = true)
 public class FileSliceAndPartition {
-  private FileSlice fileSlice;
-  private String partitionPath;
+  private final FileSlice fileSlice;
+  private final String partitionPath;
 
   public static FileSliceAndPartition of(String partitionPath, FileSlice fileSlice) {
     return new FileSliceAndPartition(fileSlice, partitionPath);

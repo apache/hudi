@@ -74,7 +74,7 @@ public class ExpressionIndexer extends BaseIndexer {
       String dataTableInstantTime,
       String instantTimeForPartition,
       Map<String, List<FileInfo>> partitionToAllFilesMap,
-      Lazy<List<FileSliceAndPartition>> lazyLatestMergedPartitionFileSliceList) throws IOException {
+      Lazy<List<FileSliceAndPartition>> lazyPartitionFileSlices) throws IOException {
     Set<String> expressionIndexPartitionsToInit = getExpressionIndexPartitionsToInit(
         EXPRESSION_INDEX, dataTableWriteConfig.getMetadataConfig(), dataTableMetaClient);
     if (expressionIndexPartitionsToInit.size() != 1) {
@@ -89,7 +89,7 @@ public class ExpressionIndexer extends BaseIndexer {
     HoodieIndexDefinition indexDefinition = HoodieTableMetadataUtil.getHoodieIndexDefinition(indexName, dataTableMetaClient);
     ValidationUtils.checkState(indexDefinition != null, "Expression Index definition is not present for index " + indexName);
 
-    List<FileSliceAndPartition> partitionFileSlicePairs = lazyLatestMergedPartitionFileSliceList.get();
+    List<FileSliceAndPartition> partitionFileSlicePairs = lazyPartitionFileSlices.get();
     List<FileInfoAndPartition> filesToIndex = new ArrayList<>();
     partitionFileSlicePairs.forEach(fsp -> {
       if (fsp.fileSlice().getBaseFile().isPresent()) {
@@ -106,10 +106,9 @@ public class ExpressionIndexer extends BaseIndexer {
     }
 
     int parallelism = Math.min(filesToIndex.size(), dataTableWriteConfig.getMetadataConfig().getExpressionIndexParallelism());
-    Lazy<HoodieSchema> tableSchemaOpt = Lazy.lazily(() ->
+    HoodieSchema tableSchema =
         HoodieTableMetadataUtil.tryResolveSchemaForTable(dataTableMetaClient)
-            .orElseThrow(() -> new HoodieMetadataException("Table schema is not available for expression index initialization")));
-    HoodieSchema tableSchema = tableSchemaOpt.get();
+            .orElseThrow(() -> new HoodieMetadataException("Table schema is not available for expression index initialization"));
     HoodieSchema readerSchema = getProjectedSchemaForExpressionIndex(indexDefinition, dataTableMetaClient, tableSchema);
 
     HoodieData<HoodieRecord> records = expressionIndexRecordGenerator.generate(

@@ -323,7 +323,7 @@ public class SparkMetadataWriterUtils {
   private static Iterator<Row> getExpressionIndexRecordsIterator(HoodieReaderContext<InternalRow> readerContext, HoodieTableMetaClient metaClient,
                                                                  HoodieSchema tableSchema, HoodieSchema readerSchema, HoodieWriteConfig dataWriteConfig, FileInfoAndPartition entry) {
     String partition = entry.partitionPath();
-    String filePath = entry.name();
+    String filePath = entry.path();
     String relativeFilePath = FSUtils.getRelativePartitionPath(metaClient.getBasePath(), new StoragePath(filePath));
     long fileSize = entry.size();
     boolean isBaseFile = FSUtils.isBaseFile(new StoragePath(filePath.substring(filePath.lastIndexOf("/") + 1)));

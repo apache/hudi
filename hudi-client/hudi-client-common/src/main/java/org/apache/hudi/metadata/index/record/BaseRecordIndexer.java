@@ -64,14 +64,13 @@ import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.schema.HoodieSchemaUtils.getRecordKeySchema;
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.RECORD_INDEX_AVERAGE_RECORD_SIZE;
 
 /**
- * Base implementation for record-index.
+ * Base implementation of {@link MetadataPartitionType#RECORD_INDEX} index.
  */
 @Slf4j
 public abstract class BaseRecordIndexer extends BaseIndexer {
-
-  private static final int RECORD_INDEX_AVERAGE_RECORD_SIZE = 48;
 
   protected BaseRecordIndexer(HoodieEngineContext engineContext, HoodieWriteConfig dataTableWriteConfig, HoodieTableMetaClient dataTableMetaClient) {
     super(engineContext, dataTableWriteConfig, dataTableMetaClient);
@@ -160,7 +159,7 @@ public abstract class BaseRecordIndexer extends BaseIndexer {
     }
 
     int parallelism = Math.min(baseFilePaths.size(), dataTableWriteConfig.getMetadataConfig().getRecordIndexMaxParallelism());
-    StorageConfiguration<?> storageConfBroadcast = metadataMetaClient.getStorageConf();
+    StorageConfiguration<?> storageConf = metadataMetaClient.getStorageConf();
     HoodieFileFormat baseFileFormat = metadataMetaClient.getTableConfig().getBaseFileFormat();
 
     return engineContext.parallelize(baseFilePaths, parallelism)
@@ -169,7 +168,7 @@ public abstract class BaseRecordIndexer extends BaseIndexer {
           while (pathIterator.hasNext()) {
             StoragePath path = pathIterator.next();
             try {
-              HoodieStorage storage = HoodieStorageUtils.getStorage(path, storageConfBroadcast);
+              HoodieStorage storage = HoodieStorageUtils.getStorage(path, storageConf);
               HoodieConfig readerConfig = new HoodieConfig();
               HoodieAvroFileReader reader = (HoodieAvroFileReader) HoodieIOFactory.getIOFactory(storage)
                   .getReaderFactory(HoodieRecord.HoodieRecordType.AVRO)
@@ -194,7 +193,7 @@ public abstract class BaseRecordIndexer extends BaseIndexer {
   /**
    * Fetch record locations from FileSlice snapshot.
    *
-   * @param engineContext             context ot use.
+   * @param engineContext             context to use.
    * @param partitionFileSlicePairs   list of pairs of partition and file slice.
    * @param recordIndexMaxParallelism parallelism to use.
    * @param activeModule              active module of interest.

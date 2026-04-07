@@ -53,10 +53,10 @@ public class RecordIndexer extends BaseRecordIndexer {
 
   @Override
   public List<IndexPartitionInitialization> buildInitialization(String dataTableInstantTime, String instantTimeForPartition, Map<String, List<FileInfo>> partitionToAllFilesMap,
-                                                                Lazy<List<FileSliceAndPartition>> lazyLatestMergedPartitionFileSliceList) throws IOException {
+                                                                Lazy<List<FileSliceAndPartition>> lazyPartitionFileSlices) throws IOException {
     createRecordIndexDefinition(dataTableMetaClient, Collections.singletonMap(HoodieRecordIndex.IS_PARTITIONED_OPTION, "false"));
     DataPartitionAndRecords dataPartitionAndRecords = initializeRecordIndexPartition(
-        lazyLatestMergedPartitionFileSliceList.get(), dataTableWriteConfig.getMetadataConfig().getRecordIndexMaxParallelism());
+        lazyPartitionFileSlices.get(), dataTableWriteConfig.getMetadataConfig().getRecordIndexMaxParallelism());
     return Collections.singletonList(IndexPartitionInitialization.of(RECORD_INDEX.getPartitionPath(), dataPartitionAndRecords));
   }
 }

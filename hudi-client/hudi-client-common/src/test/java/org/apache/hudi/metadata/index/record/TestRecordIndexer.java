@@ -15,6 +15,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.metadata.HoodieMetadataPayload;
+import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.metadata.index.model.DataPartitionAndRecords;
 import org.apache.hudi.metadata.index.model.IndexPartitionInitialization;
 import org.apache.hudi.metadata.model.FileInfo;
@@ -56,11 +57,11 @@ class TestRecordIndexer {
     DataPartitionAndRecords init = new DataPartitionAndRecords(2, Option.empty(), records);
     ExposedRecordIndexer indexer = new ExposedRecordIndexer(engineContext, writeConfig, metaClient, init);
 
-    try (MockedStatic<org.apache.hudi.metadata.HoodieTableMetadataUtil> mockedUtil = mockStatic(org.apache.hudi.metadata.HoodieTableMetadataUtil.class)) {
+    try (MockedStatic<HoodieTableMetadataUtil> mockedUtil = mockStatic(HoodieTableMetadataUtil.class)) {
       List<IndexPartitionInitialization> result = indexer.callGetData("001", "002", Collections.emptyMap(), Lazy.lazily(Collections::emptyList));
       assertEquals(1, result.size());
       assertEquals(2, result.get(0).totalFileGroups());
-      mockedUtil.verify(() -> org.apache.hudi.metadata.HoodieTableMetadataUtil.createRecordIndexDefinition(any(), any()), times(1));
+      mockedUtil.verify(() -> HoodieTableMetadataUtil.createRecordIndexDefinition(any(), any()), times(1));
     }
   }
 
@@ -108,12 +109,12 @@ class TestRecordIndexer {
     ExposedRecordIndexer indexer = new ExposedRecordIndexer(
         engineContext, writeConfig, metaClient, new DataPartitionAndRecords(2, Option.empty(), records));
 
-    try (MockedStatic<org.apache.hudi.metadata.HoodieTableMetadataUtil> mockedUtil = mockStatic(org.apache.hudi.metadata.HoodieTableMetadataUtil.class)) {
+    try (MockedStatic<HoodieTableMetadataUtil> mockedUtil = mockStatic(HoodieTableMetadataUtil.class)) {
       List<IndexPartitionInitialization> result = indexer.callGetData("001", "002", Collections.emptyMap(), Lazy.lazily(Collections::emptyList));
       assertEquals(1, result.size());
       assertEquals(1, result.get(0).dataPartitionAndRecords().get(0).indexRecords().collectAsList().size());
       assertEquals("p_record", result.get(0).dataPartitionAndRecords().get(0).indexRecords().collectAsList().get(0).getRecordKey());
-      mockedUtil.verify(() -> org.apache.hudi.metadata.HoodieTableMetadataUtil.createRecordIndexDefinition(any(), any()), times(1));
+      mockedUtil.verify(() -> HoodieTableMetadataUtil.createRecordIndexDefinition(any(), any()), times(1));
     }
   }
 

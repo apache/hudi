@@ -964,7 +964,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
         assertEquals("0000003", completedReplaceInstant.get().requestedTime());
 
         final Map<String, MetadataPartitionType> metadataEnabledPartitionTypes = new HashMap<>();
-        metadataWriter.getEnabledIndexerMap().keySet().forEach(e -> metadataEnabledPartitionTypes.put(e.getPartitionPath(), e));
+        metadataWriter.getEnabledIndexerMap().keySet().forEach(partitionType -> metadataEnabledPartitionTypes.put(partitionType.getPartitionPath(), partitionType));
         HoodieTableFileSystemView fsView = HoodieTableFileSystemView.fileListingBasedFileSystemView(engineContext, metadataMetaClient, metadataMetaClient.getActiveTimeline());
         metadataTablePartitions.forEach(partition -> {
           List<FileSlice> latestSlices = fsView.getLatestFileSlices(partition).collect(Collectors.toList());
@@ -4088,12 +4088,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     // in the .hoodie folder.
     List<String> metadataTablePartitions = FSUtils.getAllPartitionPaths(engineContext, metadataMetaClient, false);
     // Secondary index is enabled by default but no MDT partition corresponding to it is available
-    final boolean isPartitionStatsEnabled;
-    if (!metadataWriter.getEnabledIndexerMap().containsKey(COLUMN_STATS)) {
-      isPartitionStatsEnabled = false;
-    } else {
-      isPartitionStatsEnabled = true;
-    }
+    final boolean isPartitionStatsEnabled = metadataWriter.getEnabledIndexerMap().containsKey(COLUMN_STATS);
     long enabledMDTPartitionsSize = metadataWriter.getEnabledIndexerMap().keySet().stream()
         .filter(partition -> !partition.equals(SECONDARY_INDEX))
         // Filter out partition stats if column stats is disabled since it does not get initialized in such a case
@@ -4102,7 +4097,7 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
     assertEquals(enabledMDTPartitionsSize, metadataTablePartitions.size());
 
     final Map<String, MetadataPartitionType> metadataEnabledPartitionTypes = new HashMap<>();
-    metadataWriter.getEnabledIndexerMap().keySet().forEach(e -> metadataEnabledPartitionTypes.put(e.getPartitionPath(), e));
+    metadataWriter.getEnabledIndexerMap().keySet().forEach(partitionType -> metadataEnabledPartitionTypes.put(partitionType.getPartitionPath(), partitionType));
 
     // Metadata table should automatically compact and clean
     // versions are +1 as autoclean / compaction happens end of commits

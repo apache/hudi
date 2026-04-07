@@ -29,12 +29,12 @@ import lombok.experimental.Accessors;
 @Accessors(fluent = true)
 public class FileInfoAndPartition {
   private final String partitionPath;
-  private final String name;
+  private final String path;
   private final long size;
 
-  private FileInfoAndPartition(String partitionPath, String name, long size) {
+  private FileInfoAndPartition(String partitionPath, String path, long size) {
     this.partitionPath = partitionPath;
-    this.name = name;
+    this.path = path;
     this.size = size;
   }
 
