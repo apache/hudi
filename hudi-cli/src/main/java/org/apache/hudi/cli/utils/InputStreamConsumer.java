@@ -39,7 +39,7 @@ public class InputStreamConsumer extends Thread {
   @Override
   public void run() {
     try (InputStreamReader isr = new InputStreamReader(is, StandardCharsets.UTF_8);
-             BufferedReader br = new BufferedReader(isr)) {)
+             BufferedReader br = new BufferedReader(isr)) {
       br.lines().forEach(log::info);
     } catch (Exception e) {
       log.warn("Error consuming input stream", e);
