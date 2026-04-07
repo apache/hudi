@@ -19,15 +19,10 @@
 package org.apache.hudi.sink.compact;
 
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
-import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.metrics.FlinkCompactionMetrics;
 import org.apache.hudi.sink.CleanFunction;
-import org.apache.hudi.sink.compact.handler.CompactCommitHandler;
-import org.apache.hudi.sink.compact.handler.MetadataCompactCommitHandler;
-import org.apache.hudi.util.FlinkWriteClients;
-import org.apache.hudi.util.Lazy;
-import org.apache.hudi.util.StreamerUtil;
+import org.apache.hudi.sink.compact.handler.CompositeCompactCommitHandler;
 
 import lombok.extern.slf4j.Slf4j;
 import org.apache.flink.configuration.Configuration;
@@ -52,9 +47,7 @@ public class CompactionCommitSink extends CleanFunction<CompactionCommitEvent> {
    */
   private final Configuration conf;
 
-  private transient Lazy<CompactCommitHandler> compactCommitHandler;
-
-  private transient Lazy<CompactCommitHandler> mdtCompactCommitHandler;
+  private transient CompositeCompactCommitHandler compactCommitHandler;
 
   /**
    * Compaction metrics.
@@ -69,9 +62,7 @@ public class CompactionCommitSink extends CleanFunction<CompactionCommitEvent> {
   @Override
   public void open(Configuration parameters) throws Exception {
     super.open(parameters);
-    HoodieFlinkWriteClient writeClient = FlinkWriteClients.createWriteClient(conf, getRuntimeContext());
-    this.compactCommitHandler = Lazy.lazily(() -> new CompactCommitHandler(conf, writeClient));
-    this.mdtCompactCommitHandler = Lazy.lazily(() -> new MetadataCompactCommitHandler(conf, StreamerUtil.createMetadataWriteClient(writeClient)));
+    this.compactCommitHandler = CompositeCompactCommitHandler.create(conf, getRuntimeContext());
     registerMetrics();
   }
 
@@ -85,22 +76,12 @@ public class CompactionCommitSink extends CleanFunction<CompactionCommitEvent> {
               + " is failed: {}, error record count: {}",
           instant, event.getTaskID(), event.isFailed(), getNumErrorRecords(event));
     }
-    if (event.isMetadataTable()) {
-      mdtCompactCommitHandler.get().commitIfNecessary(event, compactionMetrics);
-    } else {
-      compactCommitHandler.get().commitIfNecessary(event, compactionMetrics);
-    }
+    compactCommitHandler.commitIfNecessary(event, compactionMetrics);
   }
 
   @Override
   public void close() throws Exception {
-    if (compactCommitHandler.isInitialized()) {
-      compactCommitHandler.get().close();
-    }
-    if (mdtCompactCommitHandler.isInitialized()) {
-      mdtCompactCommitHandler.get().close();
-
-    }
+    compactCommitHandler.close();
     super.close();
   }
 

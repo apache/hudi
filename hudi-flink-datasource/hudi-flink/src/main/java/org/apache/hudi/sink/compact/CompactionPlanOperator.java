@@ -18,14 +18,8 @@
 
 package org.apache.hudi.sink.compact;
 
-import org.apache.hudi.client.HoodieFlinkWriteClient;
-import org.apache.hudi.common.util.Option;
-import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.metrics.FlinkCompactionMetrics;
-import org.apache.hudi.sink.compact.handler.CompactionPlanHandler;
-import org.apache.hudi.sink.compact.handler.MetadataCompactionPlanHandler;
-import org.apache.hudi.util.FlinkWriteClients;
-import org.apache.hudi.util.StreamerUtil;
+import org.apache.hudi.sink.compact.handler.CompositeCompactionPlanHandler;
 
 import lombok.extern.slf4j.Slf4j;
 import org.apache.flink.annotation.VisibleForTesting;
@@ -57,9 +51,7 @@ public class CompactionPlanOperator extends AbstractStreamOperator<CompactionPla
 
   private transient FlinkCompactionMetrics compactionMetrics;
 
-  private transient Option<CompactionPlanHandler> compactionPlanHandler;
-
-  private transient Option<CompactionPlanHandler> mdtCompactionPlanHandler;
+  private transient CompositeCompactionPlanHandler compactionPlanHandler;
 
   public CompactionPlanOperator(Configuration conf) {
     this.conf = conf;
@@ -69,17 +61,12 @@ public class CompactionPlanOperator extends AbstractStreamOperator<CompactionPla
   public void open() throws Exception {
     super.open();
     registerMetrics();
-    HoodieFlinkWriteClient writeClient = FlinkWriteClients.createWriteClient(conf, getRuntimeContext());
-    this.compactionPlanHandler = OptionsResolver.needsAsyncCompaction(conf)
-        ? Option.of(new CompactionPlanHandler(writeClient)) : Option.empty();
-    this.mdtCompactionPlanHandler = OptionsResolver.needsAsyncMetadataCompaction(conf)
-        ? Option.of(new MetadataCompactionPlanHandler(StreamerUtil.createMetadataWriteClient(writeClient))) : Option.empty();
+    this.compactionPlanHandler = CompositeCompactionPlanHandler.create(conf, getRuntimeContext());
 
     // when starting up, rolls back all the inflight compaction instants if there exists,
     // these instants are in priority for scheduling task because the compaction instants are
     // scheduled from earliest(FIFO sequence).
-    this.compactionPlanHandler.ifPresent(CompactionPlanHandler::rollbackCompaction);
-    this.mdtCompactionPlanHandler.ifPresent(CompactionPlanHandler::rollbackCompaction);
+    this.compactionPlanHandler.rollbackCompaction();
   }
 
   /**
@@ -109,10 +96,7 @@ public class CompactionPlanOperator extends AbstractStreamOperator<CompactionPla
   public void notifyCheckpointComplete(long checkpointId) {
     // comment out: do we really need the timeout rollback ?
     // CompactionUtil.rollbackEarliestCompaction(table, conf);
-    // schedule data table compaction if enabled
-    this.compactionPlanHandler.ifPresent(handler -> handler.collectCompactionOperations(checkpointId, compactionMetrics, output));
-    // Also schedule metadata table compaction if enabled
-    this.mdtCompactionPlanHandler.ifPresent(handler -> handler.collectCompactionOperations(checkpointId, compactionMetrics, output));
+    this.compactionPlanHandler.collectCompactionOperations(checkpointId, compactionMetrics, output);
   }
 
   @VisibleForTesting
@@ -122,8 +106,7 @@ public class CompactionPlanOperator extends AbstractStreamOperator<CompactionPla
 
   @Override
   public void close() throws Exception {
-    this.compactionPlanHandler.ifPresent(CompactionPlanHandler::close);
-    this.mdtCompactionPlanHandler.ifPresent(CompactionPlanHandler::close);
+    this.compactionPlanHandler.close();
     super.close();
   }
 
