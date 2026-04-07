@@ -23,17 +23,12 @@ import org.apache.hudi.common.HoodieRollbackStat;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.function.SerializableFunction;
-import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.log.block.HoodieCommandBlock;
-import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
-import org.apache.hudi.exception.InvalidHoodiePathException;
 import org.apache.hudi.storage.StoragePath;
-import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.table.HoodieTable;
 
 import lombok.extern.slf4j.Slf4j;
@@ -41,11 +36,7 @@ import lombok.extern.slf4j.Slf4j;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.Serializable;
-import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
-import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -134,65 +125,6 @@ public class RollbackHelper implements Serializable {
   }
 
   /**
-   * Builds the lookup key for pre-computed log versions. Used by {@link RollbackHelperV1} for V6 rollback.
-   */
-  protected static String logVersionLookupKey(String partitionPath, String fileId, String commitTime) {
-    return partitionPath + "|" + fileId + "|" + commitTime;
-  }
-
-  /**
-   * Pre-compute the latest log version for each (partition, fileId, deltaCommitTime) tuple
-   * by listing each unique partition directory once. This replaces N per-request listing
-   * calls (one per rollback request) with P per-partition listings (where P is much less than N).
-   *
-   * <p>Used by {@link RollbackHelperV1} for V6 rollback where log blocks are appended.
-   */
-  protected Map<String, Pair<Integer, String>> preComputeLogVersions(
-      List<SerializableHoodieRollbackRequest> rollbackRequests) {
-    Set<String> relativePartitionPaths = rollbackRequests.stream()
-        .filter(req -> !req.getLogBlocksToBeDeleted().isEmpty())
-        .map(SerializableHoodieRollbackRequest::getPartitionPath)
-        .collect(Collectors.toSet());
-
-    if (relativePartitionPaths.isEmpty()) {
-      return Collections.emptyMap();
-    }
-
-    log.info("Pre-computing log versions for {} partition(s) to avoid per-request listStatus calls",
-        relativePartitionPaths.size());
-
-    Map<String, Pair<Integer, String>> logVersionMap = new HashMap<>();
-
-    for (String relPartPath : relativePartitionPaths) {
-      StoragePath absolutePartPath = FSUtils.constructAbsolutePath(metaClient.getBasePath(), relPartPath);
-      try {
-        List<StoragePathInfo> statuses = metaClient.getStorage().listDirectEntries(absolutePartPath,
-            path -> path.getName().contains(HoodieLogFile.DELTA_EXTENSION));
-
-        for (StoragePathInfo status : statuses) {
-          try {
-            HoodieLogFile logFile = new HoodieLogFile(status);
-            String key = logVersionLookupKey(relPartPath, logFile.getFileId(), logFile.getDeltaCommitTime());
-            Pair<Integer, String> existing = logVersionMap.get(key);
-            if (existing == null || logFile.getLogVersion() > existing.getLeft()) {
-              logVersionMap.put(key, Pair.of(logFile.getLogVersion(), logFile.getLogWriteToken()));
-            }
-          } catch (InvalidHoodiePathException e) {
-            log.warn("Skipping non-standard log file during pre-compute: {}", status.getPath(), e);
-          }
-        }
-      } catch (IOException e) {
-        log.warn("Failed to pre-compute log versions for partition {}, will fall back to per-request listing",
-            relPartPath, e);
-      }
-    }
-
-    log.info("Pre-computed log versions for {} file groups across {} partition(s)",
-        logVersionMap.size(), relativePartitionPaths.size());
-    return logVersionMap;
-  }
-
-  /**
    * Common method used for cleaning out files during rollback.
    */
   protected List<HoodieRollbackStat> deleteFiles(HoodieTableMetaClient metaClient, List<String> filesToBeDeleted, boolean doDelete) throws IOException {
@@ -227,16 +159,4 @@ public class RollbackHelper implements Serializable {
     }).collect(Collectors.toList());
   }
 
-  /**
-   * Generates the header for a rollback command block. Used by {@link RollbackHelperV1} for V6 rollback.
-   */
-  protected Map<HoodieLogBlock.HeaderMetadataType, String> generateHeader(String commit) {
-    // generate metadata
-    Map<HoodieLogBlock.HeaderMetadataType, String> header = new HashMap<>(3);
-    header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, metaClient.getActiveTimeline().lastInstant().get().requestedTime());
-    header.put(HoodieLogBlock.HeaderMetadataType.TARGET_INSTANT_TIME, commit);
-    header.put(HoodieLogBlock.HeaderMetadataType.COMMAND_BLOCK_TYPE,
-        String.valueOf(HoodieCommandBlock.HoodieCommandBlockTypeEnum.ROLLBACK_BLOCK.ordinal()));
-    return header;
-  }
 }
