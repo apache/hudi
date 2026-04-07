@@ -18,6 +18,7 @@
 
 package org.apache.hudi.index;
 
+import org.apache.hudi.avro.AvroSchemaUtils;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.data.HoodieData;
@@ -241,8 +242,10 @@ public class HoodieIndexUtils {
         .filterCompletedInstants()
         .lastInstant()
         .map(HoodieInstant::getTimestamp);
+    Schema baseFileReaderSchema = HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(config.getWriteSchema()), config.allowOperationMetadataField());
+    boolean hasTimestampFields = baseFileReaderSchema != null && AvroSchemaUtils.hasTimestampMillisField(baseFileReaderSchema);
     return partitionLocations.flatMap(p
-        -> new HoodieMergedReadHandle(config, instantTime, hoodieTable, Pair.of(p.getPartitionPath(), p.getFileId()))
+        -> new HoodieMergedReadHandle(config, instantTime, hoodieTable, Pair.of(p.getPartitionPath(), p.getFileId()), baseFileReaderSchema, hasTimestampFields)
         .getMergedRecords().iterator());
   }
 
