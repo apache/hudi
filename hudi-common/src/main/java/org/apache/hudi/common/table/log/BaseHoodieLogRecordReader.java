@@ -250,6 +250,10 @@ public abstract class BaseHoodieLogRecordReader<T> {
       // Collect targetRollbackInstants, using which we can determine which blocks are invalid.
       Set<String> targetRollbackInstants = new HashSet<>();
 
+      // Track instants ignored due to instant range filtering.
+      Set<String> ignoredInstants = new HashSet<>();
+      int ignoredBlockCount = 0;
+
       // This holds block instant time to list of blocks. Note here the log blocks can be normal data blocks or compacted log blocks.
       Map<String, List<HoodieLogBlock>> instantToBlocksMap = new HashMap<>();
 
@@ -299,7 +303,8 @@ public abstract class BaseHoodieLogRecordReader<T> {
           }
           if (instantRange.isPresent() && !instantRange.get().isInRange(instantTime)) {
             // filter the log block by instant range
-            LOG.warn("Instant {} not in the range", instantTime);
+            ignoredInstants.add(instantTime);
+            ignoredBlockCount++;
             continue;
           }
         }
@@ -407,6 +412,9 @@ public abstract class BaseHoodieLogRecordReader<T> {
       Collections.reverse(validBlockInstants);
       LOG.debug("Number of applied rollback blocks {}", numBlocksRolledBack);
       LOG.info("Total valid instants found are {}. Instants are {}", validBlockInstants.size(), validBlockInstants);
+      if (ignoredBlockCount > 0) {
+        LOG.info("Ignored {} log blocks from {} instants not in the range: {}", ignoredBlockCount, ignoredInstants.size(), ignoredInstants);
+      }
       if (LOG.isDebugEnabled()) {
         LOG.debug("Final view of the Block time to compactionBlockMap {}", blockTimeToCompactionBlockTimeMap);
       }

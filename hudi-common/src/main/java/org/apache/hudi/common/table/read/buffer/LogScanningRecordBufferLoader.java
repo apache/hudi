@@ -55,7 +55,7 @@ abstract class LogScanningRecordBufferLoader {
       readStats.setTotalUpdatedRecordsCompacted(logRecordReader.getNumMergedRecordsInLog());
       readStats.setTotalLogFilesCompacted(logRecordReader.getTotalLogFiles());
       readStats.setTotalLogRecords(logRecordReader.getTotalLogRecords());
-      readStats.setTotalLogBlocks(logRecordReader.getTotalValidLogBlocks());
+      readStats.setTotalLogBlocks(logRecordReader.getTotalLogBlocks());
       readStats.setTotalValidLogBlocks(logRecordReader.getTotalValidLogBlocks());
       readStats.setTotalLogBlocksSize(logRecordReader.getTotalLogBlocksSize());
       readStats.setTotalLogBlocksScanTimeMs(logRecordReader.getBlocksScanDuration());
