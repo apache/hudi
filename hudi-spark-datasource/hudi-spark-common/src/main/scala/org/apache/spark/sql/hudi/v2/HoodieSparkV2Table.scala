@@ -18,6 +18,7 @@
 package org.apache.spark.sql.hudi.v2
 
 import org.apache.hudi.common.table.HoodieTableMetaClient
+import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
 
 import org.apache.spark.sql.SparkSession
@@ -73,9 +74,15 @@ case class HoodieSparkV2Table(spark: SparkSession,
 
   override def schema(): StructType = tableSchema
 
-  override def capabilities(): util.Set[TableCapability] = Set(
-    BATCH_READ, V1_BATCH_WRITE, OVERWRITE_BY_FILTER, TRUNCATE, ACCEPT_ANY_SCHEMA
-  ).asJava
+  override def capabilities(): util.Set[TableCapability] = {
+    val writeCaps =
+      if (hoodieCatalogTable.isDefined) {
+        Set(V1_BATCH_WRITE, OVERWRITE_BY_FILTER, TRUNCATE, ACCEPT_ANY_SCHEMA)
+      } else {
+        Set.empty[TableCapability]
+      }
+    (Set(BATCH_READ) ++ writeCaps).asJava
+  }
 
   override def properties(): util.Map[String, String] = hoodieCatalogTable match {
     case Some(hct) => hct.catalogProperties.asJava
@@ -85,7 +92,17 @@ case class HoodieSparkV2Table(spark: SparkSession,
   override def newScanBuilder(options: CaseInsensitiveStringMap): ScanBuilder = {
     val tableProps = properties().asScala.toMap
     val scanOpts = options.asCaseSensitiveMap().asScala.toMap
-    val mergedOpts = tableProps ++ scanOpts
+    val classOpts = this.options.asCaseSensitiveMap().asScala.toMap
+    // HoodieFileIndex.getQueryPaths requires "path". On the DataFrame-API path, Spark puts it in
+    // the class-level options map, not the scan-time one — promote it here.
+    val mergedOpts = Map("path" -> path) ++ classOpts ++ tableProps ++ scanOpts
+    if (!HoodieV2ReadSupport.isSupportedByDSv2(metaClient, mergedOpts, spark)) {
+      throw new HoodieException(
+        "DSv2 read path does not support this query configuration " +
+          "(MOR snapshot, non-Parquet base format, multiple base formats, " +
+          "incremental/CDC, or bootstrap table). " +
+          "Disable hoodie.datasource.read.use.v2 or use format(\"hudi\").")
+    }
     new HoodieScanBuilder(spark, metaClient, tableSchema, mergedOpts)
   }
 
