@@ -208,7 +208,7 @@ public class TestSparkClusteringCornerCases extends HoodieClientTestBase {
 
       // Verify clustering metadata shows data was written only for partition1
       HoodieReplaceCommitMetadata replaceCommitMetadata = HoodieReplaceCommitMetadata.fromBytes(
-          metaClient.getActiveTimeline().getInstantDetails(metaClient.getActiveTimeline().getLastClusteringInstant().get()).get(),
+          metaClient.getActiveTimeline().getInstantDetails(metaClient.getActiveTimeline().getLastClusterCommit().get()).get(),
           HoodieReplaceCommitMetadata.class
       );
       assertEquals(1, replaceCommitMetadata.getPartitionToWriteStats().size(),
