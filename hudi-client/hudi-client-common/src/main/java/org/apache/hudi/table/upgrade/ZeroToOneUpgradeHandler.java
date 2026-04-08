@@ -116,7 +116,7 @@ public class ZeroToOneUpgradeHandler implements UpgradeHandler {
     List<HoodieRollbackRequest> hoodieRollbackRequests =
         new ListingBasedRollbackStrategy(table, context, table.getConfig(), commitInstantOpt.get().requestedTime(), false)
             .getRollbackRequests(commitInstantOpt.get());
-    return RollbackHelperFactory.getRollBackHelper(table, table.getConfig())
+    return RollbackHelperFactory.getRollbackHelper(table, table.getConfig())
         .collectRollbackStats(context, commitInstantOpt.get(), hoodieRollbackRequests);
   }
 
