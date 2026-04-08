@@ -149,7 +149,8 @@ public class TestHiveSchemaUtil {
             HoodieSchemaField.of("time_micros_field", HoodieSchema.createTimeMicros()),
             HoodieSchemaField.of("decimal_field", HoodieSchema.createDecimal(10, 2)),
             HoodieSchemaField.of("uuid_field", HoodieSchema.create(HoodieSchemaType.UUID)),
-            HoodieSchemaField.of("vector_field", HoodieSchema.createVector(128))
+            HoodieSchemaField.of("vector_field", HoodieSchema.createVector(128)),
+            HoodieSchemaField.of("blob_field", HoodieSchema.createBlob())
         )
     );
 
@@ -174,6 +175,8 @@ public class TestHiveSchemaUtil {
     expected.put("`decimal_field`", "DECIMAL(10 , 2)");
     expected.put("`uuid_field`", "binary");
     expected.put("`vector_field`", "binary");
+    expected.put("`blob_field`",
+        "STRUCT< `type` : string, `data` : binary, `reference` : STRUCT< `external_path` : string, `offset` : bigint, `length` : bigint, `managed` : boolean>>");
     assertEquals(expected, actual);
   }
 }

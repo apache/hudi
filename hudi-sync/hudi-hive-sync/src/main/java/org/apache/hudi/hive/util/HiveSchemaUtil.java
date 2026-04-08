@@ -249,6 +249,7 @@ public class HiveSchemaUtil {
         HoodieSchema valueType = nonNullType.getValueType();
         return createHiveMap(convertField(keyType, supportTimestamp, doFormat), convertField(valueType, supportTimestamp, doFormat), doFormat);
       case RECORD:
+      case BLOB:
         return createHiveStruct(nonNullType.getFields(), supportTimestamp, doFormat);
       default:
         throw new UnsupportedOperationException("Cannot convert type " + nonNullType.getType());

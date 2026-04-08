@@ -282,6 +282,29 @@ public class TestBigQuerySchemaResolver {
   }
 
   @Test
+  void convertSchema_blobField() {
+    HoodieSchema input = HoodieSchema.createRecord("testRecord", null, null, false, Arrays.asList(
+        HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.INT)),
+        HoodieSchemaField.of("blob_data", HoodieSchema.createBlob())
+    ));
+
+    Field expectedBlobField = Field.newBuilder("blob_data", StandardSQLTypeName.STRUCT,
+        Field.newBuilder("type", StandardSQLTypeName.STRING).setMode(Field.Mode.REQUIRED).build(),
+        Field.newBuilder("data", StandardSQLTypeName.BYTES).setMode(Field.Mode.NULLABLE).build(),
+        Field.newBuilder("reference", StandardSQLTypeName.STRUCT,
+            Field.newBuilder("external_path", StandardSQLTypeName.STRING).setMode(Field.Mode.REQUIRED).build(),
+            Field.newBuilder("offset", StandardSQLTypeName.INT64).setMode(Field.Mode.NULLABLE).build(),
+            Field.newBuilder("length", StandardSQLTypeName.INT64).setMode(Field.Mode.NULLABLE).build(),
+            Field.newBuilder("managed", StandardSQLTypeName.BOOL).setMode(Field.Mode.REQUIRED).build())
+            .setMode(Field.Mode.NULLABLE).build())
+        .setMode(Field.Mode.REQUIRED).build();
+
+    Schema result = SCHEMA_RESOLVER.convertSchema(input);
+    Assertions.assertEquals(2, result.getFields().size());
+    Assertions.assertEquals(expectedBlobField, result.getFields().get(1));
+  }
+
+  @Test
   void convertSchema_vectorField() {
     HoodieSchema input = HoodieSchema.createRecord("testRecord", null, null, false, Arrays.asList(
         HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.INT)),
