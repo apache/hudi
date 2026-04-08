@@ -357,7 +357,7 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
                       .collect(Collectors.toList())
           ));
     } finally {
-      log.debug("On {} with query instant as {}, it took {}ms to filter {} files into file slices across {} partitions",
+      log.debug("On {} with query instant as {}, time spent in filterFiles attempt was {}ms for {} files across {} partitions",
           metaClient.getTableConfig().getTableName(), queryInstant.orElse("N/A"), timer.endTimer(),
           allFiles.size(), partitions.size());
     }
@@ -373,7 +373,7 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
       matchedPartitionPaths = tableMetadata.getPartitionPathWithPathPrefixUsingFilterExpression(relativePartitionPaths,
           partitionFields, partitionColumnPredicates, partitionPredicateExpressions);
     } catch (IOException e) {
-      throw new HoodieIOException("Error fetching partition paths", e);
+      throw new HoodieIOException("On " + metaClient.getTableConfig().getTableName() + " Error fetching partition paths", e);
     } finally {
       log.debug("On {}, it took {} ms to list partition paths with {} relativePartitionPaths and partition predicates",
           metaClient.getTableConfig().getTableName(), timer.endTimer(), relativePartitionPaths.size());
@@ -405,7 +405,7 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
         matchedPartitionPaths = Collections.singletonList(StringUtils.EMPTY_STRING);
       }
     } catch (IOException e) {
-      throw new HoodieIOException("Error fetching partition paths", e);
+      throw new HoodieIOException("On " + metaClient.getTableConfig().getTableName() + " Error fetching partition paths", e);
     }
 
     // Convert partition's path into partition descriptor
@@ -528,7 +528,7 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
     } catch (IOException e) {
       throw new HoodieIOException("On " + metaClient.getTableConfig().getTableName() + " Failed to list partition paths", e);
     } finally {
-      log.debug("On {}, it took {} ms to fetch files for {} uncached partitions via getAllFilesInPartitions",
+      log.debug("On {}, time spent attempting getAllFilesInPartitions was {} ms for {} uncached partitions",
           metaClient.getTableConfig().getTableName(), timer.endTimer(), missingPartitionPaths.size());
     }
   }
