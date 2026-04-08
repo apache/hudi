@@ -80,7 +80,6 @@ public class HoodieMergeHelper<T> extends BaseMergeHelper {
     HoodieBaseFile baseFile = mergeHandle.baseFileForMerge();
 
     HoodieRecord.HoodieRecordType recordType = table.getConfig().getRecordMerger().getRecordType();
-    AvroSchemaUtils.setLogicalTimestampRepairNeeded(table.getStorageConf());
     HoodieFileReader baseFileReader = HoodieIOFactory.getIOFactory(
             table.getStorage().newInstance(mergeHandle.getOldFilePath(), table.getStorageConf().newInstance()))
         .getReaderFactory(recordType)
