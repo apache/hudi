@@ -30,7 +30,9 @@ import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieLockConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.config.metrics.HoodieMetricsConfig;
+import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieLockException;
+import org.apache.hudi.exception.HoodieValidationException;
 import org.apache.hudi.metrics.MetricsReporterType;
 
 import org.junit.jupiter.api.Assertions;
@@ -40,6 +42,8 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
 
 import java.io.IOException;
+import java.lang.reflect.Field;
+import java.lang.reflect.Method;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -47,9 +51,13 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
 
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
+import static org.hamcrest.CoreMatchers.is;
+import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TestTransactionManager extends HoodieCommonTestHarness {
   HoodieWriteConfig writeConfig;
@@ -92,7 +100,7 @@ public class TestTransactionManager extends HoodieCommonTestHarness {
   }
 
   @Test
-  public void testSingleWriterNestedTransaction() {
+  public void testReentrancyForStateChange() {
     Option<HoodieInstant> lastCompletedInstant = getInstant("0000001");
     Option<HoodieInstant> newTxnOwnerInstant = getInstant("0000002");
     transactionManager.beginStateChange(newTxnOwnerInstant, lastCompletedInstant);
@@ -106,6 +114,49 @@ public class TestTransactionManager extends HoodieCommonTestHarness {
     assertDoesNotThrow(() -> {
       transactionManager.endStateChange(newTxnOwnerInstant1);
     });
+  }
+
+  @Test
+  public void testReentrancyForStateChangeWithInstant() {
+    String instantTime1 = "0000001";
+    String instantTime2 = "0000002";
+    transactionManager.executeStateChangeWithInstant(Option.of(instantTime1), instant1 -> {
+      assertDoesNotThrow(() -> {
+        transactionManager.executeStateChangeWithInstant(Option.of(instantTime2), instant2 -> instant2);
+      });
+      return instant1;
+    });
+  }
+
+  @Test
+  public void testLockAcquisitionAndReleaseForStateChangeWithInstant() throws NoSuchFieldException, IllegalAccessException {
+    String instantTime1 = "0000001";
+    assertDoesNotThrow(() -> {
+      transactionManager.executeStateChangeWithInstant(Option.of(instantTime1), instant1 -> {
+        validateLockAcquired();
+        return instant1;
+      });
+    });
+    validateLockReleased();
+  }
+
+  @Test
+  public void testLockBeenReleasedWhenActionThrows() throws NoSuchFieldException, IllegalAccessException {
+    String instantTime1 = "0000001";
+    assertThrows(HoodieIOException.class, () -> {
+      transactionManager.executeStateChangeWithInstant(Option.of(instantTime1), instant1 -> {
+        throw new HoodieIOException("intentional exception");
+      });
+    });
+    validateLockReleased();
+  }
+
+  @Test
+  public void testStateChangeExecutionWithOptionalInstant() {
+    String instant = transactionManager.executeStateChangeWithInstant(Option.empty(), instant1 -> instant1);
+    assertNotNull(instant, "A new instant time should be generated");
+    String reused = transactionManager.executeStateChangeWithInstant(Option.of(instant), instant2 -> instant2);
+    assertEquals(instant, reused, "The given instant time should be used");
   }
 
   @Test
@@ -151,6 +202,62 @@ public class TestTransactionManager extends HoodieCommonTestHarness {
       // should see the increment above if endStateChange(1) precedes beginStateChange(2)
       assertEquals(1, executionCounter.getAndIncrement());
       assertDoesNotThrow(() -> transactionManager.endStateChange(newTxnOwnerInstant2));
+      writer2Completed.set(true);
+    });
+    writer2.start();
+
+    // Let writer1 and writer2 wait at sync point
+    writer1.join();
+    writer2.join();
+
+    //Then: Make sure both writers actually completed good
+    Assertions.assertTrue(writer1Completed.get());
+    Assertions.assertTrue(writer2Completed.get());
+  }
+
+  @Test
+  public void testMultiWriterTransactionsForStateChangeExecutionWithInstant() throws InterruptedException {
+    final long awaitMaxTimeoutMs = 2000L;
+    final CountDownLatch latch = new CountDownLatch(1);
+    final AtomicInteger executionCounter = new AtomicInteger(0);
+    final AtomicBoolean writer1Completed = new AtomicBoolean(false);
+    final AtomicBoolean writer2Completed = new AtomicBoolean(false);
+
+    // Function to handle CountDownLatch.await with InterruptedException handling
+    Function<CountDownLatch, Void> awaitWithTimeout = l -> {
+      try {
+        l.await(awaitMaxTimeoutMs, TimeUnit.MILLISECONDS);
+        return null;
+      } catch (InterruptedException e) {
+        throw new RuntimeException(e);
+      }
+    };
+
+    Option<String> instant1 = Option.of("0000001");
+    Option<String> instant2 = Option.of("0000002");
+
+    // When: Let writer1 get the lock first, then wait for the second writer to also grab the lock
+    // to join the sync up point.
+    Thread writer1 = new Thread(() -> {
+      assertDoesNotThrow(() -> transactionManager.executeStateChangeWithInstant(instant1, instantTime1 -> {
+        // grab lock and allow writer 2 to be started; ensuring determinism for lock acquisition.
+        latch.countDown();
+        assertEquals(0, executionCounter.getAndIncrement());
+        return instantTime1;
+      }));
+      writer1Completed.set(true);
+    });
+    writer1.start();
+
+    // Writer2 will block on trying to acquire the lock
+    // and will eventually get the lock before the timeout.
+    Thread writer2 = new Thread(() -> {
+      awaitWithTimeout.apply(latch); // wait till writer 1 grabs lock.
+      assertDoesNotThrow(() -> transactionManager.executeStateChangeWithInstant(instant2, instantTime2 -> {
+        // should see the increment above if endStateChange(1) precedes beginStateChange(2)
+        assertEquals(1, executionCounter.getAndIncrement());
+        return instantTime2;
+      }));
       writer2Completed.set(true);
     });
     writer2.start();
@@ -240,7 +347,15 @@ public class TestTransactionManager extends HoodieCommonTestHarness {
   }
 
   @Test
-  public void testGenerateInstantTimeFailsWithoutLock() {
+  public void testGenerateInstantTimeFailsWithoutLock() throws InterruptedException {
+    assertThrows(HoodieLockException.class, () -> transactionManager.generateInstantTime());
+    Thread anotherThread = new Thread(() -> {
+      // acquires lock from another thread
+      transactionManager.beginStateChange();
+    });
+    anotherThread.start();
+    anotherThread.join();
+    // can not create instant time from current thread if there is no lock acquisition.
     assertThrows(HoodieLockException.class, () -> transactionManager.generateInstantTime());
   }
 
@@ -258,5 +373,27 @@ public class TestTransactionManager extends HoodieCommonTestHarness {
 
   private Option<HoodieInstant> getInstant(String timestamp) {
     return Option.of(INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.COMMIT_ACTION, timestamp));
+  }
+
+  private void validateLockAcquired() {
+    try {
+      Method method = transactionManager.getClass().getDeclaredMethod("isLockHeldByCurrentThread");
+      method.setAccessible(true);
+      boolean acquired = (boolean) method.invoke(transactionManager);
+      assertTrue(acquired, "The lock should be acquired");
+    } catch (Exception ex) {
+      throw new HoodieValidationException("Validate lock acquisition error", ex);
+    }
+  }
+
+  private void validateLockReleased() throws NoSuchFieldException, IllegalAccessException {
+    // validate permits
+    Field permits = transactionManager.getClass().getDeclaredField("permits");
+    permits.setAccessible(true);
+    assertThat(permits.get(transactionManager), is(0));
+    // validate lock holder
+    Field lockHolderId = transactionManager.getClass().getDeclaredField("lockHolderId");
+    lockHolderId.setAccessible(true);
+    assertThat(lockHolderId.get(transactionManager), is(-1L));
   }
 }

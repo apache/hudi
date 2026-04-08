@@ -268,7 +268,6 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
         extraPreCommitFunc.get().accept(table.getMetaClient(), metadata);
       }
       commit(table, commitActionType, instantTime, metadata, tableWriteStats, skipStreamingWritesToMetadataTable, txnManager.generateInstantTime());
-      postCommit(table, metadata, instantTime, extraMetadata);
       log.info("Committed {}", instantTime);
     } catch (IOException e) {
       throw new HoodieCommitException("Failed to complete commit " + config.getBasePath() + " at time " + instantTime, e);

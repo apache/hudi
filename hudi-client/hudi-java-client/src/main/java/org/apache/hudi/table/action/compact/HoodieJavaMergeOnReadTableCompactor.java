@@ -28,6 +28,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
 
@@ -49,6 +50,7 @@ public class HoodieJavaMergeOnReadTableCompactor<T>
     }
     HoodieInstant inflightInstant = table.getInstantGenerator().getCompactionInflightInstant(instantTime);
     if (pendingCompactionTimeline.containsInstant(inflightInstant)) {
+      ValidationUtils.checkState(table.getTxnManager().isPresent(), "The txn manager is not set up yet");
       TransactionManager transactionManager = (TransactionManager) table.getTxnManager().get();
       table.rollbackInflightCompaction(inflightInstant, transactionManager);
       table.getMetaClient().reloadActiveTimeline();

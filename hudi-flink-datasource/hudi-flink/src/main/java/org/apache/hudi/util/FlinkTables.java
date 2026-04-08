@@ -56,7 +56,6 @@ public class FlinkTables {
         HadoopFSUtils.getStorageConf(getHadoopConf(conf)),
         new FlinkTaskContextSupplier(runtimeContext));
     HoodieWriteConfig writeConfig = FlinkWriteClients.getHoodieClientConfig(conf, true);
-    // FIXME-vc: we need a txn manager here. for flink clustering/compaction.
     return createTableInternal(writeConfig, context, Option.empty());
   }
 

@@ -34,6 +34,7 @@ import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieRestoreException;
 import org.apache.hudi.exception.HoodieRollbackException;
+import org.apache.hudi.exception.HoodieValidationException;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.BaseActionExecutor;
 
@@ -62,7 +63,7 @@ public abstract class BaseRestoreActionExecutor<T, I, K, O> extends BaseActionEx
                                    String savepointToRestoreTimestamp) {
     super(context, config, table, instantTime);
     this.savepointToRestoreTimestamp = savepointToRestoreTimestamp;
-    this.txnManager = table.getTxnManager().get();
+    this.txnManager = table.getTxnManager().orElseThrow(() -> new HoodieValidationException("The txn manager is not set up yet"));
   }
 
   @Override
@@ -154,7 +155,6 @@ public abstract class BaseRestoreActionExecutor<T, I, K, O> extends BaseActionEx
     try {
       this.txnManager.beginStateChange(Option.of(restoreInflightInstant), Option.empty());
       writeTableMetadata(restoreMetadata);
-      // FIXME-vc: check this against master again..
       TableFormatCompletionAction formatCompletionAction = restoreCompletedInstant -> table.getMetaClient().getTableFormat()
           .restore(restoreCompletedInstant, table.getContext(), table.getMetaClient(), table.getViewManager());
       table.getActiveTimeline().saveAsComplete(restoreInflightInstant, Option.of(restoreMetadata), txnManager.generateInstantTime(), formatCompletionAction);

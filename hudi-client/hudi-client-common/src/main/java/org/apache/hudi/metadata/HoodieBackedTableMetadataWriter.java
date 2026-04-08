@@ -1771,6 +1771,7 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
         // empty result
         return Option.empty();
       });
+      closeInternal();
     } catch (IOException e) {
       throw new HoodieMetadataException("IOException during MDT restore sync", e);
     }

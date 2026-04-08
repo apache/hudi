@@ -35,6 +35,7 @@ import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIndexException;
 import org.apache.hudi.exception.HoodieMetadataException;
+import org.apache.hudi.exception.HoodieValidationException;
 import org.apache.hudi.metadata.HoodieMetadataMetrics;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.metadata.MetadataPartitionType;
@@ -96,7 +97,7 @@ public class RunIndexActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I,
 
   public RunIndexActionExecutor(HoodieEngineContext context, HoodieWriteConfig config, HoodieTable<T, I, K, O> table, String instantTime) {
     super(context, config, table, instantTime);
-    this.txnManager = table.getTxnManager().get();
+    this.txnManager = table.getTxnManager().orElseThrow(() -> new HoodieValidationException("The txn manager is not set up yet"));
     if (config.getMetadataConfig().isMetricsEnabled()) {
       this.metrics = Option.of(new HoodieMetadataMetrics(config.getMetricsConfig(), table.getStorage()));
     } else {

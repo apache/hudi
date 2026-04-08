@@ -53,6 +53,7 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieCommitException;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.exception.HoodieValidationException;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
@@ -104,7 +105,7 @@ public class TimelineArchiverV1<T extends HoodieAvroPayload, I, K, O> implements
     this.table = table;
     this.metaClient = table.getMetaClient();
     this.archiveFilePath = ArchivedTimelineV1.getArchiveLogPath(metaClient.getArchivePath());
-    this.txnManager = table.getTxnManager().get();
+    this.txnManager = table.getTxnManager().orElseThrow(() -> new HoodieValidationException("The txn manager is not set up yet"));
     Pair<Integer, Integer> minAndMaxInstants = getMinAndMaxInstantsToKeep(table, metaClient);
     this.minInstantsToKeep = minAndMaxInstants.getLeft();
     this.maxInstantsToKeep = minAndMaxInstants.getRight();

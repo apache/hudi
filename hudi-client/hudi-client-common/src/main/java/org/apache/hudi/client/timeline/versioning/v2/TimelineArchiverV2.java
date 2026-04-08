@@ -42,6 +42,7 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieLockException;
+import org.apache.hudi.exception.HoodieValidationException;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.compact.CompactionTriggerStrategy;
@@ -86,7 +87,7 @@ public class TimelineArchiverV2<T extends HoodieAvroPayload, I, K, O> implements
     this.config = config;
     this.table = table;
     this.metaClient = table.getMetaClient();
-    this.txnManager = table.getTxnManager().get();
+    this.txnManager = table.getTxnManager().orElseThrow(() -> new HoodieValidationException("The txn manager is not set up yet"));
     this.timelineWriter = LSMTimelineWriter.getInstance(config, table);
     Pair<Integer, Integer> minAndMaxInstants = getMinAndMaxInstantsToKeep(table, metaClient);
     this.minInstantsToKeep = minAndMaxInstants.getLeft();
