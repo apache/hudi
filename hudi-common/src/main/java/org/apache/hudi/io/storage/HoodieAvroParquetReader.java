@@ -18,6 +18,7 @@
 
 package org.apache.hudi.io.storage;
 
+import org.apache.hudi.avro.AvroSchemaUtils;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
@@ -162,7 +163,12 @@ public class HoodieAvroParquetReader extends HoodieAvroFileReaderBase {
     // NOTE: We have to set both Avro read-schema and projection schema to make
     //       sure that in case the file-schema is not equal to read-schema we'd still
     //       be able to read that file (in case projection is a proper one)
-    Schema repairedFileSchema = getRepairedSchema(getSchema(), schema);
+    Schema repairedFileSchema;
+    if (AvroSchemaUtils.isLogicalTimestampRepairNeeded(conf, true)) {
+      repairedFileSchema = getRepairedSchema(getSchema(), schema);
+    } else {
+      repairedFileSchema = schema;
+    }
     Option<Schema> promotedSchema = Option.empty();
     if (!renamedColumns.isPresent() || HoodieAvroUtils.recordNeedsRewriteForExtendedAvroTypePromotion(repairedFileSchema, schema)) {
       AvroReadSupport.setAvroReadSchema(conf, repairedFileSchema);
@@ -174,7 +180,8 @@ public class HoodieAvroParquetReader extends HoodieAvroFileReaderBase {
       AvroReadSupport.setRequestedProjection(conf, schema);
     }
     ParquetReader<IndexedRecord> reader =
-        new HoodieAvroParquetReaderBuilder<IndexedRecord>(path)
+        new HoodieAvroParquetReaderBuilder<IndexedRecord>(path,
+            AvroSchemaUtils.isLogicalTimestampRepairNeeded(conf, false) || schema == null || AvroSchemaUtils.hasTimestampMillisField(schema))
             .withTableSchema(schema)
             .withConf(conf)
             .set(AvroSchemaConverter.ADD_LIST_ELEMENT_RECORDS, conf.get(AvroSchemaConverter.ADD_LIST_ELEMENT_RECORDS))

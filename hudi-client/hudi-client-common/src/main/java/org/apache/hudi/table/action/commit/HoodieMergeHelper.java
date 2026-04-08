@@ -87,8 +87,12 @@ public class HoodieMergeHelper<T> extends BaseMergeHelper {
     HoodieFileReader bootstrapFileReader = null;
 
     Schema writerSchema = mergeHandle.getWriterSchemaWithMetaFields();
-    Schema readerSchema = AvroSchemaUtils.getRepairedSchema(baseFileReader.getSchema(), writerSchema);
-
+    Schema readerSchema;
+    if (AvroSchemaUtils.isLogicalTimestampRepairNeeded(table.getHadoopConf(), true)) {
+      readerSchema = AvroSchemaUtils.getRepairedSchema(baseFileReader.getSchema(), writerSchema);
+    } else {
+      readerSchema = baseFileReader.getSchema();
+    }
 
     // In case Advanced Schema Evolution is enabled we might need to rewrite currently
     // persisted records to adhere to an evolved schema

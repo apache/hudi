@@ -26,6 +26,7 @@ import org.apache.hudi.exception.SchemaCompatibilityException;
 import org.apache.avro.AvroRuntimeException;
 import org.apache.avro.Schema;
 import org.apache.avro.SchemaCompatibility;
+import org.apache.hadoop.conf.Configuration;
 
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
@@ -53,6 +54,8 @@ public class AvroSchemaUtils {
     }
     AVRO_SCHEMA_REPAIR_CLASS = clazz;
   }
+
+  private static final String NEEDS_LOGICAL_TIMSTAMP_REPAIR_KEY = "logical.timestamp.repair.required";
 
   private AvroSchemaUtils() {}
 
@@ -433,5 +436,19 @@ public class AvroSchemaUtils {
     } catch (NoSuchMethodException | IllegalAccessException | InvocationTargetException e) {
       return false;
     }
+  }
+
+  /**
+   * Sets logical timestamp repair needed key in conf to true
+   */
+  public static void setLogicalTimestampRepairNeeded(Configuration conf) {
+    conf.set(NEEDS_LOGICAL_TIMSTAMP_REPAIR_KEY, Boolean.TRUE.toString());
+  }
+
+  /**
+   * Returns true if logical timestamp repair needed key is set to true or if it is not present in config
+   */
+  public static boolean isLogicalTimestampRepairNeeded(Configuration conf, boolean defaultValue) {
+    return conf.getBoolean(NEEDS_LOGICAL_TIMSTAMP_REPAIR_KEY, defaultValue);
   }
 }

@@ -18,7 +18,6 @@
 
 package org.apache.parquet.avro;
 
-import org.apache.hudi.avro.AvroSchemaUtils;
 import org.apache.hudi.common.util.Option;
 
 import org.apache.avro.Schema;
@@ -41,11 +40,13 @@ public class HoodieAvroParquetReaderBuilder<T> extends ParquetReader.Builder<T> 
   private GenericData model = null;
   private boolean enableCompatibility = true;
   private boolean isReflect = true;
+  private boolean isLogicalTimestampRepairNeeded;
   private Schema tableSchema = null;
 
   @Deprecated
-  public HoodieAvroParquetReaderBuilder(Path path) {
+  public HoodieAvroParquetReaderBuilder(Path path, boolean isLogicalTimestampRepairNeeded) {
     super(path);
+    this.isLogicalTimestampRepairNeeded = isLogicalTimestampRepairNeeded;
   }
 
   public HoodieAvroParquetReaderBuilder(InputFile file) {
@@ -87,6 +88,6 @@ public class HoodieAvroParquetReaderBuilder<T> extends ParquetReader.Builder<T> 
       conf.setBoolean(AvroReadSupport.AVRO_COMPATIBILITY, enableCompatibility);
     }
     return new HoodieAvroReadSupport<>(model, Option.ofNullable(tableSchema).map(schema -> getAvroSchemaConverter(conf).convert(schema)),
-        tableSchema == null || AvroSchemaUtils.hasTimestampMillisField(tableSchema));
+        isLogicalTimestampRepairNeeded);
   }
 }
