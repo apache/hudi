@@ -101,7 +101,7 @@ public class ExpressionIndexer extends BaseIndexer {
     });
 
     int fileGroupCount = dataTableWriteConfig.getMetadataConfig().getExpressionIndexFileGroupCount();
-    if (partitionFileSlicePairs.isEmpty()) {
+    if (filesToIndex.isEmpty()) {
       return Collections.singletonList(IndexPartitionInitialization.of(fileGroupCount, indexName, engineContext.emptyHoodieData()));
     }
 

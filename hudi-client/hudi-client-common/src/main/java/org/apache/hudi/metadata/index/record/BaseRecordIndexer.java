@@ -108,7 +108,7 @@ public abstract class BaseRecordIndexer extends BaseIndexer {
     if (dataTableWriteConfig.getMetadataConfig().isRecordIndexInitializationValidationEnabled()) {
       validateRecordIndex(records, fileGroupCount, metadataMetaClient);
     }
-    records.unpersist();
+    records.unpersistWithDependencies();
   }
 
   /**

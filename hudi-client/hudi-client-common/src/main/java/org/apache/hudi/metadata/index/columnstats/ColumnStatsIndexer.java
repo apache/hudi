@@ -92,11 +92,12 @@ public class ColumnStatsIndexer extends BaseIndexer {
 
   @Override
   public void postInitialization(HoodieTableMetaClient metadataMetaClient, HoodieData<HoodieRecord> records, int fileGroupCount, String relativePartitionPath) {
+    List<String> indexColumns = records.isEmpty() ? Collections.emptyList() : columnsToIndex.get();
     HoodieIndexDefinition indexDefinition = HoodieIndexDefinition.newBuilder()
         .withIndexName(PARTITION_NAME_COLUMN_STATS)
         .withIndexType(PARTITION_NAME_COLUMN_STATS)
         .withIndexFunction(PARTITION_NAME_COLUMN_STATS)
-        .withSourceFields(columnsToIndex.get())
+        .withSourceFields(indexColumns)
         // Use the existing version if exists, otherwise fall back to the default version.
         .withVersion(existingIndexVersionOrDefault(PARTITION_NAME_COLUMN_STATS, dataTableMetaClient))
         .withIndexOptions(Collections.emptyMap())

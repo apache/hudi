@@ -284,7 +284,7 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
         Set<String> completedPartitions = dataMetaClient.getTableConfig().getMetadataPartitions();
         LOG.info("Async metadata indexing disabled and following partitions already initialized: {}", completedPartitions);
         this.enabledIndexerMap.entrySet().stream()
-            .filter(p -> !completedPartitions.contains(p.getKey().getPartitionPath()) && FILES != p.getKey())
+            .filter(e -> !completedPartitions.contains(e.getKey().getPartitionPath()) && FILES != e.getKey())
             .forEach(e -> indexerMapForPartitionsToInit.put(e.getKey(), e.getValue()));
       }
 
@@ -423,7 +423,6 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
     if (!filesPartitionAvailable) {
       initializeMetadataPartition(FILES, indexerMapForPartitionsToInit.get(FILES),
           dataTableInstantTime, partitionIdToAllFilesMap, lazyLatestMergedPartitionFileSliceList);
-      hasPartitionsStateChanged = true;
     }
 
     indexerMapForPartitionsToInit.entrySet().stream().filter(e -> e.getKey() != FILES).forEach(
@@ -433,7 +432,6 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
           } catch (IOException ex) {
             throw new HoodieMetadataException("Failed to initialize metadata partition: " + e.getKey(), ex);
           }
-          hasPartitionsStateChanged = true;
         });
     return true;
   }
@@ -488,6 +486,7 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
       LOG.error(errMsg, e);
       throw new HoodieMetadataException(errMsg, e);
     }
+    hasPartitionsStateChanged = true;
   }
 
   /**

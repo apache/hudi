@@ -25,6 +25,8 @@ import lombok.ToString;
 import lombok.Getter;
 import lombok.experimental.Accessors;
 
+import java.io.Serializable;
+
 /**
  * Holder for a {@link FileSlice} and its partition path.
  */
@@ -32,11 +34,13 @@ import lombok.experimental.Accessors;
 @Getter
 @ToString
 @Accessors(fluent = true)
-public class FileSliceAndPartition {
-  private final FileSlice fileSlice;
+public class FileSliceAndPartition implements Serializable {
+  private static final long serialVersionUID = 1L;
+
   private final String partitionPath;
+  private final FileSlice fileSlice;
 
   public static FileSliceAndPartition of(String partitionPath, FileSlice fileSlice) {
-    return new FileSliceAndPartition(fileSlice, partitionPath);
+    return new FileSliceAndPartition(partitionPath, fileSlice);
   }
 }

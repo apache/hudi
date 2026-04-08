@@ -49,6 +49,7 @@ import static org.apache.hudi.common.table.timeline.InstantComparison.compareTim
  */
 @Getter
 public class DirectoryInfo implements Serializable {
+  private static final long serialVersionUID = 1L;
 
   // Relative path of the directory (relative to the base directory)
   private final String relativePath;
