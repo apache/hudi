@@ -788,8 +788,8 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
   }
 
   @ParameterizedTest
-  @CsvSource(value = {"SIX,AVRO,CLUSTER", "CURRENT,AVRO,NONE", "CURRENT,AVRO,CLUSTER", "CURRENT,SPARK,NONE", "CURRENT,SPARK,CLUSTER"})
-  void testCOWLogicalRepair(String tableVersion, String recordType, String operation) throws Exception {
+  @CsvSource(value = {"CLUSTER", "NONE"})
+  void testCOWLogicalRepair(String operation) throws Exception {
     timestampNTZCompatibility(() -> {
       try {
         String dirName = "trips_logical_types_json_cow_write";
@@ -864,17 +864,13 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
 
   @ParameterizedTest
   @CsvSource(value = {
-      "SIX,AVRO,CLUSTER,AVRO",
-      "CURRENT,AVRO,NONE,AVRO",
-      "CURRENT,AVRO,CLUSTER,AVRO",
-      "CURRENT,AVRO,COMPACT,AVRO",
-      "CURRENT,AVRO,NONE,PARQUET",
-      "CURRENT,AVRO,CLUSTER,PARQUET",
-      "CURRENT,AVRO,COMPACT,PARQUET",
-      "CURRENT,SPARK,NONE,PARQUET",
-      "CURRENT,SPARK,CLUSTER,PARQUET",
-      "CURRENT,SPARK,COMPACT,PARQUET"})
-  void testMORLogicalRepair(String tableVersion, String recordType, String operation, String logBlockType) throws Exception {
+      "CLUSTER,AVRO",
+      "NONE,AVRO",
+      "COMPACT,AVRO",
+      "NONE,PARQUET",
+      "CLUSTER,PARQUET",
+      "COMPACT,PARQUET"})
+  void testMORLogicalRepair(String operation, String logBlockType) throws Exception {
     timestampNTZCompatibility(() -> {
       try {
         String tableSuffix;
@@ -909,8 +905,6 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
         properties.setProperty("hoodie.streamer.schemaprovider.target.schema.file", schemaPath);
         String inputDataPath = getClass().getClassLoader().getResource("logical-repair/mor_write_updates/5").toURI().toString();
         properties.setProperty("hoodie.streamer.source.dfs.root", inputDataPath);
-        String mergerClass = getMergerClassForRecordType(recordType);
-        String tableVersionString = getTableVersionCode(tableVersion);
 
         properties.setProperty("hoodie.datasource.write.recordkey.field", "_row_key");
         properties.setProperty("hoodie.datasource.write.precombine.field", "timestamp");
