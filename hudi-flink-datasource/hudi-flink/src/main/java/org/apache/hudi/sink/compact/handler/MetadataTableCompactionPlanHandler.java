@@ -45,7 +45,7 @@ import static java.util.stream.Collectors.toList;
 /**
  * Handler for scheduling compaction plans on Hudi metadata tables.
  *
- * <p>This handler extends {@link CompactionPlanHandler} to support metadata table specific
+ * <p>This handler extends {@link DataTableCompactionPlanHandler} to support metadata table specific
  * compaction operations, including:
  * <ul>
  *   <li>Compaction;</li>
@@ -57,13 +57,13 @@ import static java.util.stream.Collectors.toList;
  * plan is scheduled and log compaction is enabled, it collects the log compaction operations instead.
  * This ensures efficient file layout of metadata table storage.
  *
- * @see CompactionPlanHandler
+ * @see DataTableCompactionPlanHandler
  * @see CompactionPlanEvent
  */
 @Slf4j
-public class MetadataCompactionPlanHandler extends CompactionPlanHandler {
+public class MetadataTableCompactionPlanHandler extends DataTableCompactionPlanHandler {
 
-  public MetadataCompactionPlanHandler(HoodieFlinkWriteClient writeClient) {
+  public MetadataTableCompactionPlanHandler(HoodieFlinkWriteClient writeClient) {
     super(writeClient);
   }
 

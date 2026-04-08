@@ -18,18 +18,10 @@
 
 package org.apache.hudi.sink.compact.handler;
 
-import org.apache.hudi.client.HoodieFlinkWriteClient;
-import org.apache.hudi.common.util.Option;
 import org.apache.hudi.metrics.FlinkCompactionMetrics;
 import org.apache.hudi.sink.compact.CompactionCommitEvent;
 import org.apache.hudi.sink.compact.CompactionPlanEvent;
 import org.apache.hudi.sink.utils.NonThrownExecutor;
-import org.apache.hudi.util.FlinkWriteClients;
-import org.apache.hudi.util.Lazy;
-import org.apache.hudi.util.StreamerUtil;
-
-import org.apache.flink.api.common.functions.RuntimeContext;
-import org.apache.flink.configuration.Configuration;
 import org.apache.flink.util.Collector;
 
 import javax.annotation.Nullable;
@@ -37,33 +29,23 @@ import javax.annotation.Nullable;
 /**
  * Composite handler for compaction execution services of the data table and metadata table.
  */
-public class CompositeCompactHandler extends CompositeTableServiceHandler<Lazy<CompactHandler>> {
+public class CompositeCompactHandler extends CompositeTableServiceHandler<CompactHandler> implements CompactHandler {
 
-  CompositeCompactHandler(Option<Lazy<CompactHandler>> dataTableHandler, Option<Lazy<CompactHandler>> metadataTableHandler) {
+  CompositeCompactHandler(CompactHandler dataTableHandler, CompactHandler metadataTableHandler) {
     super(dataTableHandler, metadataTableHandler);
   }
 
-  public static CompositeCompactHandler create(Configuration conf, RuntimeContext runtimeContext, int taskId) {
-    HoodieFlinkWriteClient writeClient = FlinkWriteClients.createWriteClient(conf, runtimeContext);
-    return new CompositeCompactHandler(
-        Option.of(Lazy.lazily(() -> new CompactHandler(writeClient, taskId))),
-        Option.of(Lazy.lazily(() -> new MetadataCompactHandler(StreamerUtil.createMetadataWriteClient(writeClient), taskId))));
-  }
-
+  @Override
   public void compact(@Nullable NonThrownExecutor executor,
                       CompactionPlanEvent event,
                       Collector<CompactionCommitEvent> collector,
                       boolean needReloadMetaClient,
                       FlinkCompactionMetrics compactionMetrics) throws Exception {
-    getHandler(event.isMetadataTable()).get().compact(executor, event, collector, needReloadMetaClient, compactionMetrics);
+    getHandler(event.isMetadataTable()).compact(executor, event, collector, needReloadMetaClient, compactionMetrics);
   }
 
   @Override
   public void close() {
-    forEachHandler(lazyHandler -> {
-      if (lazyHandler.isInitialized()) {
-        lazyHandler.get().close();
-      }
-    });
+    forEachHandler(CompactHandler::close);
   }
 }

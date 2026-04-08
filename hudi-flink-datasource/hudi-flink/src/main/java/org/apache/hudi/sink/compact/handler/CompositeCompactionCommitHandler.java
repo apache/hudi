@@ -18,32 +18,26 @@
 
 package org.apache.hudi.sink.compact.handler;
 
-/**
- * Composite handler for async clean services of the data table and metadata table.
- */
-public class CompositeCleanHandler extends CompositeTableServiceHandler<CleanHandler> implements CleanHandler {
+import org.apache.hudi.metrics.FlinkCompactionMetrics;
+import org.apache.hudi.sink.compact.CompactionCommitEvent;
 
-  CompositeCleanHandler(CleanHandler dataTableHandler, CleanHandler metadataTableHandler) {
+/**
+ * Composite handler for compaction commit services of the data table and metadata table.
+ */
+public class CompositeCompactionCommitHandler extends CompositeTableServiceHandler<CompactionCommitHandler>
+    implements CompactionCommitHandler {
+
+  CompositeCompactionCommitHandler(CompactionCommitHandler dataTableHandler, CompactionCommitHandler metadataTableHandler) {
     super(dataTableHandler, metadataTableHandler);
   }
 
   @Override
-  public void clean() {
-    forEachHandler(CleanHandler::clean);
-  }
-
-  @Override
-  public void waitForCleaningFinish() {
-    forEachHandler(CleanHandler::waitForCleaningFinish);
-  }
-
-  @Override
-  public void startAsyncCleaning() {
-    forEachHandler(CleanHandler::startAsyncCleaning);
+  public void commitIfNecessary(CompactionCommitEvent event, FlinkCompactionMetrics compactionMetrics) {
+    getHandler(event.isMetadataTable()).commitIfNecessary(event, compactionMetrics);
   }
 
   @Override
   public void close() {
-    forEachHandler(CleanHandler::close);
+    forEachHandler(CompactionCommitHandler::close);
   }
 }

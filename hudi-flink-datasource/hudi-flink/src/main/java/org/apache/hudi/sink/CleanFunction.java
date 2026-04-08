@@ -21,7 +21,10 @@ package org.apache.hudi.sink;
 import org.apache.hudi.adapter.AbstractRichFunctionAdapter;
 import org.apache.hudi.adapter.SinkFunctionAdapter;
 import org.apache.hudi.client.HoodieFlinkWriteClient;
-import org.apache.hudi.sink.compact.handler.CompositeCleanHandler;
+import org.apache.hudi.common.util.Option;
+import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.sink.compact.handler.CleanHandler;
+import org.apache.hudi.sink.compact.handler.TableServiceHandlerFactory;
 import org.apache.hudi.util.FlinkWriteClients;
 
 import lombok.extern.slf4j.Slf4j;
@@ -46,7 +49,7 @@ public class CleanFunction<T> extends AbstractRichFunctionAdapter
 
   protected HoodieFlinkWriteClient writeClient;
 
-  private transient CompositeCleanHandler cleanHandler;
+  private transient Option<CleanHandler> cleanHandlerOpt;
 
   public CleanFunction(Configuration conf) {
     this.conf = conf;
@@ -56,19 +59,19 @@ public class CleanFunction<T> extends AbstractRichFunctionAdapter
   public void open(Configuration parameters) throws Exception {
     super.open(parameters);
     this.writeClient = FlinkWriteClients.createWriteClient(conf, getRuntimeContext());
-    this.cleanHandler = CompositeCleanHandler.create(conf, writeClient);
-
-    cleanHandler.clean();
+    this.cleanHandlerOpt = conf.get(FlinkOptions.CLEAN_ASYNC_ENABLED)
+        ? Option.of(TableServiceHandlerFactory.createCleanHandler(conf, writeClient)) : Option.empty();
+    this.cleanHandlerOpt.ifPresent(CleanHandler::clean);
   }
 
   @Override
   public void notifyCheckpointComplete(long l) throws Exception {
-    cleanHandler.waitForCleaningFinish();
+    this.cleanHandlerOpt.ifPresent(CleanHandler::waitForCleaningFinish);
   }
 
   @Override
   public void snapshotState(FunctionSnapshotContext context) throws Exception {
-    cleanHandler.startAsyncCleaning();
+    this.cleanHandlerOpt.ifPresent(CleanHandler::startAsyncCleaning);
   }
 
   @Override
@@ -78,6 +81,6 @@ public class CleanFunction<T> extends AbstractRichFunctionAdapter
 
   @Override
   public void close() throws Exception {
-    cleanHandler.close();
+    this.cleanHandlerOpt.ifPresent(CleanHandler::close);
   }
 }

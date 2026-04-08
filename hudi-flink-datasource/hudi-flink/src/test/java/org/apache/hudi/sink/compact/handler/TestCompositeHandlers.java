@@ -18,36 +18,46 @@
 
 package org.apache.hudi.sink.compact.handler;
 
+import org.apache.hudi.client.HoodieFlinkWriteClient;
+import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.index.HoodieIndex;
+import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.client.WriteStatus;
-import org.apache.hudi.common.util.Option;
 import org.apache.hudi.metrics.FlinkCompactionMetrics;
 import org.apache.hudi.sink.compact.CompactionCommitEvent;
 import org.apache.hudi.sink.compact.CompactionPlanEvent;
-import org.apache.hudi.util.Lazy;
+import org.apache.hudi.util.StreamerUtil;
+import org.apache.hudi.utils.TestConfigurations;
+import org.apache.hudi.utils.TestUtils;
+import org.apache.hudi.util.FlinkWriteClients;
 
+import org.apache.flink.configuration.Configuration;
 import org.apache.flink.streaming.api.operators.Output;
 import org.apache.flink.streaming.runtime.streamrecord.StreamRecord;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 import org.mockito.InOrder;
 
+import java.nio.file.Path;
 import java.util.Collections;
 
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.same;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
-import static org.mockito.Mockito.same;
 
 class TestCompositeHandlers {
 
+  @TempDir
+  Path tempDir;
+
   @Test
   void testCommitHandlerRoutesEventsToMatchingTableServiceHandler() {
-    CompactCommitHandler dataHandler = mock(CompactCommitHandler.class);
-    CompactCommitHandler metadataHandler = mock(CompactCommitHandler.class);
-    CompositeCompactCommitHandler handler = new CompositeCompactCommitHandler(
-        Option.of(Lazy.eagerly(dataHandler)),
-        Option.of(Lazy.eagerly(metadataHandler)));
+    CompactionCommitHandler dataHandler = mock(CompactionCommitHandler.class);
+    CompactionCommitHandler metadataHandler = mock(CompactionCommitHandler.class);
+    CompositeCompactionCommitHandler handler = new CompositeCompactionCommitHandler(dataHandler, metadataHandler);
     FlinkCompactionMetrics metrics = mock(FlinkCompactionMetrics.class);
     CompactionCommitEvent dataEvent =
         new CompactionCommitEvent("001", "file-1", Collections.<WriteStatus>emptyList(), 0, false, false);
@@ -63,9 +73,10 @@ class TestCompositeHandlers {
   }
 
   @Test
-  void testCleanHandlerBroadcastsLifecycleCallsToAvailableHandlersOnly() {
+  void testCleanHandlerBroadcastsLifecycleCallsToBothHandlers() {
     CleanHandler dataHandler = mock(CleanHandler.class);
-    CompositeCleanHandler handler = new CompositeCleanHandler(Option.of(dataHandler), Option.empty());
+    CleanHandler metadataHandler = mock(CleanHandler.class);
+    CompositeCleanHandler handler = new CompositeCleanHandler(dataHandler, metadataHandler);
 
     handler.clean();
     handler.startAsyncCleaning();
@@ -76,16 +87,19 @@ class TestCompositeHandlers {
     verify(dataHandler).startAsyncCleaning();
     verify(dataHandler).waitForCleaningFinish();
     verify(dataHandler).close();
-    verifyNoMoreInteractions(dataHandler);
+    verify(metadataHandler).clean();
+    verify(metadataHandler).startAsyncCleaning();
+    verify(metadataHandler).waitForCleaningFinish();
+    verify(metadataHandler).close();
+    verifyNoMoreInteractions(dataHandler, metadataHandler);
   }
 
   @Test
   @SuppressWarnings("unchecked")
   void testCompactionPlanHandlerPreservesDataThenMetadataBroadcastOrder() {
     CompactionPlanHandler dataHandler = mock(CompactionPlanHandler.class);
-    CompactionPlanHandler metadataHandler = mock(MetadataCompactionPlanHandler.class);
-    CompositeCompactionPlanHandler handler =
-        new CompositeCompactionPlanHandler(Option.of(dataHandler), Option.of(metadataHandler));
+    CompactionPlanHandler metadataHandler = mock(CompactionPlanHandler.class);
+    CompositeCompactionPlanHandler handler = new CompositeCompactionPlanHandler(dataHandler, metadataHandler);
     FlinkCompactionMetrics metrics = mock(FlinkCompactionMetrics.class);
     Output<StreamRecord<CompactionPlanEvent>> output = mock(Output.class);
 
@@ -99,18 +113,91 @@ class TestCompositeHandlers {
 
   @Test
   @SuppressWarnings("unchecked")
-  void testCompactionPlanHandlerSkipsMissingMetadataServiceHandler() {
-    CompactionPlanHandler dataHandler = mock(CompactionPlanHandler.class);
-    CompactionPlanHandler metadataHandler = mock(MetadataCompactionPlanHandler.class);
-    CompositeCompactionPlanHandler handler =
-        new CompositeCompactionPlanHandler(Option.of(dataHandler), Option.empty());
+  void testCompactHandlerRoutesEventsToMatchingTableServiceHandler() throws Exception {
+    CompactHandler dataHandler = mock(CompactHandler.class);
+    CompactHandler metadataHandler = mock(CompactHandler.class);
+    CompositeCompactHandler handler = new CompositeCompactHandler(dataHandler, metadataHandler);
     FlinkCompactionMetrics metrics = mock(FlinkCompactionMetrics.class);
-    Output<StreamRecord<CompactionPlanEvent>> output = mock(Output.class);
+    org.apache.flink.util.Collector<CompactionCommitEvent> collector = mock(org.apache.flink.util.Collector.class);
+    CompactionPlanEvent dataEvent = new CompactionPlanEvent("003", null, 0, false, false);
+    CompactionPlanEvent metadataEvent = new CompactionPlanEvent("004", null, 0, true, false);
 
-    handler.collectCompactionOperations(101L, metrics, output);
+    handler.compact(null, dataEvent, collector, false, metrics);
+    handler.compact(null, metadataEvent, collector, false, metrics);
 
-    verify(dataHandler).collectCompactionOperations(101L, metrics, output);
-    verify(metadataHandler, never()).collectCompactionOperations(101L, metrics, output);
-    verifyNoMoreInteractions(dataHandler, metadataHandler);
+    verify(dataHandler).compact(null, dataEvent, collector, false, metrics);
+    verify(metadataHandler).compact(null, metadataEvent, collector, false, metrics);
+    verifyNoMoreInteractions(dataHandler, metadataHandler, collector);
+  }
+
+  @Test
+  void testCompactionPlanHandlerFactoryReturnsSingleDataTableHandler() {
+    Configuration conf = newInitializedConf();
+    conf.set(FlinkOptions.TABLE_TYPE, FlinkOptions.TABLE_TYPE_MERGE_ON_READ);
+    conf.set(FlinkOptions.COMPACTION_ASYNC_ENABLED, true);
+
+    try (CompactionPlanHandler handler = TableServiceHandlerFactory.createCompactionPlanHandler(conf, TestUtils.getMockRuntimeContext())) {
+      assertInstanceOf(DataTableCompactionPlanHandler.class, handler);
+    }
+  }
+
+  @Test
+  void testCompactionPlanHandlerFactoryReturnsCompositeHandlerWhenMetadataCompactionEnabled() {
+    Configuration conf = newInitializedConf();
+    conf.set(FlinkOptions.TABLE_TYPE, FlinkOptions.TABLE_TYPE_MERGE_ON_READ);
+    conf.set(FlinkOptions.COMPACTION_ASYNC_ENABLED, true);
+    enableMetadataCompaction(conf);
+
+    try (CompactionPlanHandler handler = TableServiceHandlerFactory.createCompactionPlanHandler(conf, TestUtils.getMockRuntimeContext())) {
+      assertInstanceOf(CompositeCompactionPlanHandler.class, handler);
+    }
+  }
+
+  @Test
+  void testCompactionCommitHandlerFactoryReturnsSingleMetadataTableHandler() {
+    Configuration conf = newInitializedConf();
+    enableMetadataCompaction(conf);
+
+    try (CompactionCommitHandler handler = TableServiceHandlerFactory.createCompactionCommitHandler(conf, TestUtils.getMockRuntimeContext())) {
+      assertInstanceOf(MetadataTableCompactionCommitHandler.class, handler);
+    }
+  }
+
+  @Test
+  void testCleanHandlerFactoryReturnsCompositeHandlerWhenStreamingIndexEnabled() {
+    Configuration conf = newInitializedConf();
+    enableMetadataCompaction(conf);
+
+    try (HoodieFlinkWriteClient writeClient = FlinkWriteClients.createWriteClient(conf, TestUtils.getMockRuntimeContext())) {
+      CleanHandler handler = TableServiceHandlerFactory.createCleanHandler(conf, writeClient);
+      try {
+        assertInstanceOf(CompositeCleanHandler.class, handler);
+      } finally {
+        handler.close();
+      }
+    }
+  }
+
+  private Configuration newConf() {
+    return TestConfigurations.getDefaultConf(tempDir.toAbsolutePath().toString());
+  }
+
+  private Configuration newInitializedConf() {
+    Configuration conf = newConf();
+    try {
+      StreamerUtil.initTableIfNotExists(conf);
+      try (HoodieFlinkWriteClient ignored = FlinkWriteClients.createWriteClient(conf)) {
+        // creates view storage properties for subsequent client-side write clients
+      }
+    } catch (Exception e) {
+      throw new HoodieException(e);
+    }
+    return conf;
+  }
+
+  private void enableMetadataCompaction(Configuration conf) {
+    conf.set(FlinkOptions.METADATA_ENABLED, true);
+    conf.set(FlinkOptions.INDEX_TYPE, HoodieIndex.IndexType.GLOBAL_RECORD_LEVEL_INDEX.name());
+    conf.set(FlinkOptions.METADATA_COMPACTION_ASYNC_ENABLED, true);
   }
 }

@@ -21,7 +21,8 @@ package org.apache.hudi.sink.compact;
 import org.apache.hudi.adapter.MaskingOutputAdapter;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.metrics.FlinkCompactionMetrics;
-import org.apache.hudi.sink.compact.handler.CompositeCompactHandler;
+import org.apache.hudi.sink.compact.handler.CompactHandler;
+import org.apache.hudi.sink.compact.handler.TableServiceHandlerFactory;
 import org.apache.hudi.sink.utils.NonThrownExecutor;
 import org.apache.hudi.utils.RuntimeContextUtils;
 
@@ -71,7 +72,7 @@ public class CompactOperator extends TableStreamOperator<CompactionCommitEvent>
    */
   private transient String prevCompactInstant = "";
 
-  private transient CompositeCompactHandler compactHandler;
+  private transient CompactHandler compactHandler;
 
   public CompactOperator(Configuration conf) {
     this.conf = conf;
@@ -104,7 +105,7 @@ public class CompactOperator extends TableStreamOperator<CompactionCommitEvent>
       this.executor = NonThrownExecutor.builder(log).build();
     }
     this.collector = new StreamRecordCollector<>(output);
-    this.compactHandler = CompositeCompactHandler.create(conf, getRuntimeContext(), taskID);
+    this.compactHandler = TableServiceHandlerFactory.createCompactHandler(conf, getRuntimeContext(), taskID);
     registerMetrics();
   }
 

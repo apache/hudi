@@ -18,43 +18,27 @@
 
 package org.apache.hudi.sink.compact.handler;
 
-import org.apache.hudi.client.HoodieFlinkWriteClient;
-import org.apache.hudi.common.util.Option;
-import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.metrics.FlinkCompactionMetrics;
 import org.apache.hudi.sink.compact.CompactionPlanEvent;
-import org.apache.hudi.util.FlinkWriteClients;
-import org.apache.hudi.util.StreamerUtil;
-
-import org.apache.flink.api.common.functions.RuntimeContext;
-import org.apache.flink.configuration.Configuration;
 import org.apache.flink.streaming.api.operators.Output;
 import org.apache.flink.streaming.runtime.streamrecord.StreamRecord;
 
 /**
  * Composite handler for compaction plan services of the data table and metadata table.
  */
-public class CompositeCompactionPlanHandler extends CompositeTableServiceHandler<CompactionPlanHandler> {
+public class CompositeCompactionPlanHandler extends CompositeTableServiceHandler<CompactionPlanHandler>
+    implements CompactionPlanHandler {
 
-  CompositeCompactionPlanHandler(Option<CompactionPlanHandler> dataTableHandler, Option<CompactionPlanHandler> metadataTableHandler) {
+  CompositeCompactionPlanHandler(CompactionPlanHandler dataTableHandler, CompactionPlanHandler metadataTableHandler) {
     super(dataTableHandler, metadataTableHandler);
   }
 
-  public static CompositeCompactionPlanHandler create(Configuration conf, RuntimeContext runtimeContext) {
-    HoodieFlinkWriteClient writeClient = FlinkWriteClients.createWriteClient(conf, runtimeContext);
-    return new CompositeCompactionPlanHandler(
-        OptionsResolver.needsAsyncCompaction(conf)
-            ? Option.of(new CompactionPlanHandler(writeClient))
-            : Option.empty(),
-        OptionsResolver.needsAsyncMetadataCompaction(conf)
-            ? Option.of(new MetadataCompactionPlanHandler(StreamerUtil.createMetadataWriteClient(writeClient)))
-            : Option.empty());
-  }
-
+  @Override
   public void rollbackCompaction() {
     forEachHandler(CompactionPlanHandler::rollbackCompaction);
   }
 
+  @Override
   public void collectCompactionOperations(long checkpointId,
                                           FlinkCompactionMetrics compactionMetrics,
                                           Output<StreamRecord<CompactionPlanEvent>> output) {

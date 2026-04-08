@@ -22,7 +22,8 @@ import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.metrics.FlinkCompactionMetrics;
 import org.apache.hudi.sink.CleanFunction;
-import org.apache.hudi.sink.compact.handler.CompositeCompactCommitHandler;
+import org.apache.hudi.sink.compact.handler.CompactionCommitHandler;
+import org.apache.hudi.sink.compact.handler.TableServiceHandlerFactory;
 
 import lombok.extern.slf4j.Slf4j;
 import org.apache.flink.configuration.Configuration;
@@ -47,7 +48,7 @@ public class CompactionCommitSink extends CleanFunction<CompactionCommitEvent> {
    */
   private final Configuration conf;
 
-  private transient CompositeCompactCommitHandler compactCommitHandler;
+  private transient CompactionCommitHandler compactCommitHandler;
 
   /**
    * Compaction metrics.
@@ -62,7 +63,7 @@ public class CompactionCommitSink extends CleanFunction<CompactionCommitEvent> {
   @Override
   public void open(Configuration parameters) throws Exception {
     super.open(parameters);
-    this.compactCommitHandler = CompositeCompactCommitHandler.create(conf, getRuntimeContext());
+    this.compactCommitHandler = TableServiceHandlerFactory.createCompactionCommitHandler(conf, getRuntimeContext());
     registerMetrics();
   }
 

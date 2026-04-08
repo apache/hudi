@@ -39,7 +39,7 @@ import java.util.List;
 /**
  * Handler for committing compaction metadata to metadata table timeline.
  *
- * <p>This handler extends {@link CompactCommitHandler} to support metadata table specific
+ * <p>This handler extends {@link DataTableCompactionCommitHandler} to support metadata table specific
  * compaction commit actions, including:
  * <ul>
  *   <li>Retrieves compaction plans for both compaction and log compaction;</li>
@@ -52,12 +52,12 @@ import java.util.List;
  * the {@link CompactionCommitEvent#isLogCompaction()} flag, and triggers compaction completion or rollback
  * appropriately with the write client.
  *
- * @see CompactCommitHandler
+ * @see DataTableCompactionCommitHandler
  * @see CompactionCommitEvent
  */
-public class MetadataCompactCommitHandler extends CompactCommitHandler {
+public class MetadataTableCompactionCommitHandler extends DataTableCompactionCommitHandler {
 
-  public MetadataCompactCommitHandler(Configuration conf, HoodieFlinkWriteClient writeClient) {
+  public MetadataTableCompactionCommitHandler(Configuration conf, HoodieFlinkWriteClient writeClient) {
     super(conf, writeClient);
   }
 

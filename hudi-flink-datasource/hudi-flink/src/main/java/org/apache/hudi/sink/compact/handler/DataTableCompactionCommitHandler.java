@@ -35,7 +35,6 @@ import org.apache.hudi.util.CompactionUtil;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.flink.configuration.Configuration;
 
-import java.io.Closeable;
 import java.io.IOException;
 import java.util.Collection;
 import java.util.HashMap;
@@ -66,7 +65,7 @@ import java.util.stream.Collectors;
  * @see HoodieCompactionPlan
  */
 @Slf4j
-public class CompactCommitHandler implements Closeable {
+public class DataTableCompactionCommitHandler implements CompactionCommitHandler {
   protected final HoodieFlinkTable table;
   protected final HoodieFlinkWriteClient writeClient;
   protected final Configuration conf;
@@ -85,7 +84,7 @@ public class CompactCommitHandler implements Closeable {
    */
   protected transient Map<String, HoodieCompactionPlan> compactionPlanCache;
 
-  public CompactCommitHandler(Configuration conf, HoodieFlinkWriteClient writeClient) {
+  public DataTableCompactionCommitHandler(Configuration conf, HoodieFlinkWriteClient writeClient) {
     this.conf = conf;
     this.table = writeClient.getHoodieTable();
     this.writeClient = writeClient;
@@ -102,6 +101,7 @@ public class CompactCommitHandler implements Closeable {
    * @param event             The compaction commit event
    * @param compactionMetrics Metrics collector for tracking compaction progress
    */
+  @Override
   public void commitIfNecessary(CompactionCommitEvent event, FlinkCompactionMetrics compactionMetrics) {
     String instant = event.getInstant();
     commitBuffer.computeIfAbsent(instant, k -> new HashMap<>())

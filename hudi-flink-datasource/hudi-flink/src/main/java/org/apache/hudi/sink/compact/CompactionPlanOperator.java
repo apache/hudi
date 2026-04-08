@@ -19,7 +19,8 @@
 package org.apache.hudi.sink.compact;
 
 import org.apache.hudi.metrics.FlinkCompactionMetrics;
-import org.apache.hudi.sink.compact.handler.CompositeCompactionPlanHandler;
+import org.apache.hudi.sink.compact.handler.CompactionPlanHandler;
+import org.apache.hudi.sink.compact.handler.TableServiceHandlerFactory;
 
 import lombok.extern.slf4j.Slf4j;
 import org.apache.flink.annotation.VisibleForTesting;
@@ -51,7 +52,7 @@ public class CompactionPlanOperator extends AbstractStreamOperator<CompactionPla
 
   private transient FlinkCompactionMetrics compactionMetrics;
 
-  private transient CompositeCompactionPlanHandler compactionPlanHandler;
+  private transient CompactionPlanHandler compactionPlanHandler;
 
   public CompactionPlanOperator(Configuration conf) {
     this.conf = conf;
@@ -61,7 +62,7 @@ public class CompactionPlanOperator extends AbstractStreamOperator<CompactionPla
   public void open() throws Exception {
     super.open();
     registerMetrics();
-    this.compactionPlanHandler = CompositeCompactionPlanHandler.create(conf, getRuntimeContext());
+    this.compactionPlanHandler = TableServiceHandlerFactory.createCompactionPlanHandler(conf, getRuntimeContext());
 
     // when starting up, rolls back all the inflight compaction instants if there exists,
     // these instants are in priority for scheduling task because the compaction instants are

@@ -39,19 +39,19 @@ import java.util.List;
 /**
  * Handler for compaction operation execution on Hudi metadata tables.
  *
- * <p>This handler extends {@link CompactHandler} to support metadata table specific
+ * <p>This handler extends {@link DataTableCompactHandler} to support metadata table specific
  * compaction operations, covering compaction and log compaction.
  *
  * <p>The handler uses {@link AvroReaderContextFactory} to create reader contexts
  * for metadata table payloads, which differs from data table records(engine native).
  *
- * @see CompactHandler
+ * @see DataTableCompactHandler
  * @see CompactionPlanEvent
  * @see AvroReaderContextFactory
  */
-public class MetadataCompactHandler extends CompactHandler {
+public class MetadataTableCompactHandler extends DataTableCompactHandler {
 
-  public MetadataCompactHandler(HoodieFlinkWriteClient writeClient, int taskId) {
+  public MetadataTableCompactHandler(HoodieFlinkWriteClient writeClient, int taskId) {
     super(writeClient, taskId);
   }
 
