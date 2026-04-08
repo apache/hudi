@@ -76,6 +76,7 @@ public class ColumnStatsIndexer extends BaseIndexer {
       Map<String, List<FileInfo>> partitionToAllFilesMap,
       Lazy<List<FileSliceAndPartition>> lazyPartitionFileSlices) throws IOException {
     final int fileGroupCount = dataTableWriteConfig.getMetadataConfig().getColumnStatsIndexFileGroupCount();
+    // columnsToIndex can be empty if meta fields are disabled and cols to index is not explicitly overridden.
     if (partitionToAllFilesMap.isEmpty() || columnsToIndex.get().isEmpty()) {
       return Collections.singletonList(IndexPartitionInitialization.of(fileGroupCount, COLUMN_STATS.getPartitionPath(), engineContext.emptyHoodieData()));
     }

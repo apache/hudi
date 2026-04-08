@@ -83,7 +83,7 @@ class TestRecordIndexer {
     when(metadataConfig.isRecordIndexInitializationValidationEnabled()).thenReturn(false);
     indexer.callPost(metaClient, IndexPartitionInitialization.of(1, "record_index", records), "record_index");
     assertFalse(indexer.validateCalled);
-    verify(records, times(1)).unpersist();
+    verify(records, times(1)).unpersistWithDependencies();
 
     when(metadataConfig.isRecordIndexInitializationValidationEnabled()).thenReturn(true);
     indexer.callPost(metaClient, IndexPartitionInitialization.of(1, "record_index", records), "record_index");
