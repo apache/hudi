@@ -875,16 +875,21 @@ public class StreamSync implements Serializable, Closeable {
           totalSuccessfulRecords);
       String commitActionType = CommitUtils.getCommitActionType(cfg.operation, HoodieTableType.valueOf(cfg.tableType));
 
-      // Run pre-commit streaming offset validators (if configured) before commit.
-      // This is intentional: offset validation is a stronger guard than commitOnErrors —
-      // if offset deviation indicates potential data loss, the commit must be prevented
-      // regardless of the commitOnErrors policy. A HoodieValidationException here will
-      // propagate up and the commit will not be finalized in the timeline.
-      SparkStreamerValidatorUtils.runValidators(props, instantTime, writeStatusRDD,
+      // Cache the RDD so both validators (collect) and writeClient.commit() can use it
+      // without triggering a second DAG evaluation of the write operations.
+      writeStatusRDD.cache();
+      List<WriteStatus> writeStatuses = writeStatusRDD.collect();
+
+      // Run pre-commit streaming offset validators (if configured).
+      // Placement before writeClient.commit() is intentional: offset validation is a stronger
+      // guard than commitOnErrors — if offset deviation indicates potential data loss, the commit
+      // must be prevented regardless of the commitOnErrors policy.
+      SparkStreamerValidatorUtils.runValidators(props, instantTime, writeStatuses,
           checkpointCommitMetadata, metaClient);
 
       boolean success = writeClient.commit(instantTime, writeStatusRDD, Option.of(checkpointCommitMetadata), commitActionType, partitionToReplacedFileIds, Option.empty(),
           Option.of(writeStatusValidator));
+      writeStatusRDD.unpersist();
       releaseResourcesInvoked = true;
       if (success) {
         LOG.info("Commit " + instantTime + " successful!");

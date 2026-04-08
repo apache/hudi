@@ -35,7 +35,6 @@ import org.apache.hudi.config.HoodiePreCommitValidatorConfig;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieValidationException;
 
-import org.apache.spark.api.java.JavaRDD;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -43,6 +42,7 @@ import java.io.IOException;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.stream.Collectors;
 
 /**
@@ -72,16 +72,21 @@ public class SparkStreamerValidatorUtils {
   /**
    * Run all configured pre-commit validators.
    *
+   * <p>The caller is responsible for caching and unpersisting the source RDD if needed.
+   * This method accepts pre-collected write statuses to avoid a second DAG evaluation —
+   * the caller should cache the RDD, collect to this list, call this method, then pass
+   * the same RDD to {@code writeClient.commit()}, and unpersist after commit completes.</p>
+   *
    * @param props Configuration properties containing validator class names
-   * @param instant Commit instant time
-   * @param writeStatusRDD Write statuses from Spark write operations
+   * @param instantTime Commit instant time
+   * @param writeStatuses Pre-collected write statuses from Spark write operations
    * @param checkpointCommitMetadata Extra metadata being committed (contains checkpoint info)
    * @param metaClient Table meta client for timeline access and previous commit lookup
    * @throws HoodieValidationException if any validator fails with FAIL policy
    */
   public static void runValidators(TypedProperties props,
-                                   String instant,
-                                   JavaRDD<WriteStatus> writeStatusRDD,
+                                   String instantTime,
+                                   List<WriteStatus> writeStatuses,
                                    Map<String, String> checkpointCommitMetadata,
                                    HoodieTableMetaClient metaClient) {
     String validatorClassNames = props.getString(
@@ -92,50 +97,48 @@ public class SparkStreamerValidatorUtils {
       return;
     }
 
-    // Cache the RDD to avoid recomputation when collecting write stats (prevents a second DAG evaluation).
-    // Always unpersist in finally to prevent executor memory leaks.
-    writeStatusRDD.cache();
-    try {
-      List<WriteStatus> allWriteStatus = writeStatusRDD.collect();
-      HoodieCommitMetadata currentMetadata = buildCommitMetadata(allWriteStatus, checkpointCommitMetadata);
-      List<HoodieWriteStat> writeStats = allWriteStatus.stream()
-          .map(WriteStatus::getStat)
-          .collect(Collectors.toList());
+    HoodieCommitMetadata currentMetadata = buildCommitMetadata(writeStatuses, checkpointCommitMetadata);
+    List<HoodieWriteStat> writeStats = writeStatuses.stream()
+        .map(WriteStatus::getStat)
+        .filter(Objects::nonNull)
+        .collect(Collectors.toList());
 
-      // Load previous commit metadata from timeline
-      Option<HoodieCommitMetadata> previousCommitMetadata = loadPreviousCommitMetadata(metaClient);
+    Option<HoodieCommitMetadata> previousCommitMetadata = loadPreviousCommitMetadata(metaClient);
 
-      ValidationContext context = new SparkValidationContext(
-          instant,
-          Option.of(currentMetadata),
-          Option.of(writeStats),
-          previousCommitMetadata,
-          metaClient);
+    ValidationContext context = new SparkValidationContext(
+        instantTime,
+        Option.of(currentMetadata),
+        Option.of(writeStats),
+        previousCommitMetadata,
+        metaClient);
 
-      // Instantiate and run each validator
-      List<String> classNames = Arrays.stream(validatorClassNames.split(","))
-          .map(String::trim)
-          .filter(s -> !s.isEmpty())
-          .collect(Collectors.toList());
+    List<String> classNames = Arrays.stream(validatorClassNames.split(","))
+        .map(String::trim)
+        .filter(s -> !s.isEmpty())
+        .collect(Collectors.toList());
 
-      for (String className : classNames) {
-        try {
-          BasePreCommitValidator validator = (BasePreCommitValidator)
-              ReflectionUtils.loadClass(className, new Class<?>[] {TypedProperties.class}, props);
-          LOG.info("Running pre-commit validator: {} for instant: {}", className, instant);
-          validator.validateWithMetadata(context);
-          LOG.info("Pre-commit validator {} passed for instant: {}", className, instant);
-        } catch (HoodieValidationException e) {
-          LOG.error("Pre-commit validator {} failed for instant: {}", className, instant, e);
-          throw e;
-        } catch (Exception e) {
-          LOG.error("Failed to instantiate or run validator: {}", className, e);
-          throw new HoodieValidationException(
-              "Failed to run pre-commit validator: " + className, e);
+    for (String className : classNames) {
+      try {
+        Class<?> clazz = Class.forName(className);
+        if (!BasePreCommitValidator.class.isAssignableFrom(clazz)) {
+          LOG.warn("Skipping validator {} in HoodieStreamer path — it does not extend BasePreCommitValidator. "
+              + "If this is a SparkPreCommitValidator (e.g. SqlQueryEqualityPreCommitValidator), "
+              + "it must be invoked via SparkValidatorUtils in the standard Spark write path instead.", className);
+          continue;
         }
+        BasePreCommitValidator validator = (BasePreCommitValidator)
+            ReflectionUtils.loadClass(className, new Class<?>[] {TypedProperties.class}, props);
+        LOG.info("Running pre-commit validator: {} for instant: {}", className, instantTime);
+        validator.validateWithMetadata(context);
+        LOG.info("Pre-commit validator {} passed for instant: {}", className, instantTime);
+      } catch (HoodieValidationException e) {
+        LOG.error("Pre-commit validator {} failed for instant: {}", className, instantTime, e);
+        throw e;
+      } catch (Exception e) {
+        LOG.error("Failed to instantiate or run validator: {}", className, e);
+        throw new HoodieValidationException(
+            "Failed to run pre-commit validator: " + className, e);
       }
-    } finally {
-      writeStatusRDD.unpersist();
     }
   }
 
@@ -181,8 +184,6 @@ public class SparkStreamerValidatorUtils {
       }
     } catch (IOException e) {
       throw new HoodieIOException("Failed to load previous commit metadata", e);
-    } catch (Exception e) {
-      LOG.warn("Failed to load previous commit metadata, skipping previous commit comparison", e);
     }
     return Option.empty();
   }

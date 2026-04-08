@@ -31,7 +31,6 @@ import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.view.HoodieTablePreCommitFileSystemView;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieValidationException;
@@ -86,23 +85,25 @@ public class SparkValidatorUtils {
       Stream<SparkPreCommitValidator> validators = Arrays.stream(config.getPreCommitValidators().split(","))
           .map(String::trim)
           .filter(s -> !s.isEmpty())
-          .filter(validatorClass -> {
+          .flatMap(validatorClass -> {
             try {
               Class<?> clazz = Class.forName(validatorClass);
               if (!SparkPreCommitValidator.class.isAssignableFrom(clazz)) {
                 LOG.warn("Skipping validator {} — it does not implement SparkPreCommitValidator. "
                     + "If this is a streaming offset validator (e.g. SparkKafkaOffsetValidator), "
                     + "it will be invoked by SparkStreamerValidatorUtils instead.", validatorClass);
-                return false;
+                return Stream.empty();
               }
-              return true;
+              SparkPreCommitValidator validator = (SparkPreCommitValidator)
+                  clazz.getDeclaredConstructor(HoodieSparkTable.class, HoodieEngineContext.class, HoodieWriteConfig.class)
+                      .newInstance(table, context, config);
+              return Stream.of(validator);
             } catch (ClassNotFoundException e) {
               throw new HoodieValidationException("Cannot find validator class: " + validatorClass, e);
+            } catch (ReflectiveOperationException e) {
+              throw new HoodieValidationException("Failed to instantiate validator: " + validatorClass, e);
             }
-          })
-          .map(validatorClass -> ((SparkPreCommitValidator) ReflectionUtils.loadClass(validatorClass,
-              new Class<?>[] {HoodieSparkTable.class, HoodieEngineContext.class, HoodieWriteConfig.class},
-              table, context, config)));
+          });
 
       boolean allSuccess = validators.map(v -> runValidatorAsync(v, writeMetadata, beforeState, afterState, instantTime)).map(CompletableFuture::join)
           .reduce(true, Boolean::logicalAnd);

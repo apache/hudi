@@ -53,11 +53,6 @@ import org.apache.hudi.common.util.CheckpointUtils.CheckpointFormat;
  */
 public class SparkKafkaOffsetValidator extends StreamingOffsetValidator {
 
-  /**
-   * Create a Spark Kafka offset validator.
-   *
-   * @param config Validator configuration
-   */
   public SparkKafkaOffsetValidator(TypedProperties config) {
     super(config, StreamerCheckpointV1.STREAMER_CHECKPOINT_KEY_V1, CheckpointFormat.SPARK_KAFKA);
   }

@@ -26,15 +26,11 @@ import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.checkpoint.StreamerCheckpointV1;
 import org.apache.hudi.common.testutils.HoodieTestTable;
+import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodiePreCommitValidatorConfig;
 import org.apache.hudi.exception.HoodieValidationException;
 
-import org.apache.spark.SparkConf;
-import org.apache.spark.api.java.JavaRDD;
-import org.apache.spark.api.java.JavaSparkContext;
-import org.junit.jupiter.api.AfterAll;
-import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -53,34 +49,14 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * Tests for {@link SparkStreamerValidatorUtils}.
  *
- * <p>Uses a lightweight Spark context for JavaRDD creation. Tests cover orchestration logic
- * (class loading, config passing, error handling) as well as end-to-end offset validation
- * using a two-commit timeline to verify the real comparison path is exercised.</p>
+ * <p>Tests cover orchestration logic (class loading, config passing, error handling)
+ * as well as end-to-end offset validation using a two-commit timeline to verify
+ * the real comparison path is exercised.</p>
  */
 public class TestSparkStreamerValidatorUtils {
 
-  private static JavaSparkContext jsc;
-
   @TempDir
   Path tempDir;
-
-  @BeforeAll
-  public static void setUp() {
-    SparkConf conf = new SparkConf()
-        .setAppName("TestSparkStreamerValidatorUtils")
-        .setMaster("local[2]")
-        .set("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
-        .set("spark.sql.extensions", "org.apache.spark.sql.hudi.HoodieSparkSessionExtension");
-    jsc = new JavaSparkContext(conf);
-  }
-
-  @AfterAll
-  public static void tearDown() {
-    if (jsc != null) {
-      jsc.stop();
-      jsc = null;
-    }
-  }
 
   private static TypedProperties propsWithValidator(String validatorClassName) {
     TypedProperties props = new TypedProperties();
@@ -101,13 +77,8 @@ public class TestSparkStreamerValidatorUtils {
     return ws;
   }
 
-  private JavaRDD<WriteStatus> toRDD(List<WriteStatus> writeStatuses) {
-    return jsc.parallelize(writeStatuses);
-  }
-
   private HoodieTableMetaClient createMetaClient() throws IOException {
-    return org.apache.hudi.common.testutils.HoodieTestUtils.init(
-        tempDir.toAbsolutePath().toString());
+    return HoodieTestUtils.init(tempDir.toAbsolutePath().toString());
   }
 
   // ========== Tests ==========
@@ -118,7 +89,7 @@ public class TestSparkStreamerValidatorUtils {
     List<WriteStatus> writeStatuses = Collections.singletonList(buildWriteStatus("p1", 100, 0));
 
     assertDoesNotThrow(() -> SparkStreamerValidatorUtils.runValidators(
-        props, "20260320120000000", toRDD(writeStatuses),
+        props, "20260320120000000", writeStatuses,
         new HashMap<>(), createMetaClient()));
   }
 
@@ -129,7 +100,7 @@ public class TestSparkStreamerValidatorUtils {
     List<WriteStatus> writeStatuses = Collections.singletonList(buildWriteStatus("p1", 100, 0));
 
     assertDoesNotThrow(() -> SparkStreamerValidatorUtils.runValidators(
-        props, "20260320120000000", toRDD(writeStatuses),
+        props, "20260320120000000", writeStatuses,
         new HashMap<>(), createMetaClient()));
   }
 
@@ -144,7 +115,7 @@ public class TestSparkStreamerValidatorUtils {
 
     // First commit (no previous metadata on timeline) — validator should skip and pass
     assertDoesNotThrow(() -> SparkStreamerValidatorUtils.runValidators(
-        props, "20260320120000000", toRDD(writeStatuses), extraMeta, createMetaClient()));
+        props, "20260320120000000", writeStatuses, extraMeta, createMetaClient()));
   }
 
   @Test
@@ -154,7 +125,7 @@ public class TestSparkStreamerValidatorUtils {
 
     assertThrows(HoodieValidationException.class,
         () -> SparkStreamerValidatorUtils.runValidators(
-            props, "20260320120000000", toRDD(writeStatuses), new HashMap<>(), createMetaClient()));
+            props, "20260320120000000", writeStatuses, new HashMap<>(), createMetaClient()));
   }
 
   @Test
@@ -168,7 +139,7 @@ public class TestSparkStreamerValidatorUtils {
     extraMeta.put(StreamerCheckpointV1.STREAMER_CHECKPOINT_KEY_V1, "events,0:100");
 
     assertDoesNotThrow(() -> SparkStreamerValidatorUtils.runValidators(
-        props, "20260320120000000", toRDD(writeStatuses), extraMeta, createMetaClient()));
+        props, "20260320120000000", writeStatuses, extraMeta, createMetaClient()));
   }
 
   @Test
@@ -179,7 +150,7 @@ public class TestSparkStreamerValidatorUtils {
     List<WriteStatus> writeStatuses = Collections.singletonList(buildWriteStatus("p1", 100, 0));
 
     assertDoesNotThrow(() -> SparkStreamerValidatorUtils.runValidators(
-        props, "20260320120000000", toRDD(writeStatuses), new HashMap<>(), createMetaClient()));
+        props, "20260320120000000", writeStatuses, new HashMap<>(), createMetaClient()));
   }
 
   @Test
@@ -190,7 +161,7 @@ public class TestSparkStreamerValidatorUtils {
     List<WriteStatus> writeStatuses = Collections.singletonList(buildWriteStatus("p1", 100, 0));
 
     assertDoesNotThrow(() -> SparkStreamerValidatorUtils.runValidators(
-        props, "20260320120000000", toRDD(writeStatuses), null, createMetaClient()));
+        props, "20260320120000000", writeStatuses, null, createMetaClient()));
   }
 
   @Test
@@ -206,7 +177,7 @@ public class TestSparkStreamerValidatorUtils {
     extraMeta.put(StreamerCheckpointV1.STREAMER_CHECKPOINT_KEY_V1, "events,0:100");
 
     assertDoesNotThrow(() -> SparkStreamerValidatorUtils.runValidators(
-        props, "20260320120000000", toRDD(writeStatuses), extraMeta, createMetaClient()));
+        props, "20260320120000000", writeStatuses, extraMeta, createMetaClient()));
   }
 
   @Test
@@ -219,7 +190,7 @@ public class TestSparkStreamerValidatorUtils {
     extraMeta.put(StreamerCheckpointV1.STREAMER_CHECKPOINT_KEY_V1, "events,0:100");
 
     assertDoesNotThrow(() -> SparkStreamerValidatorUtils.runValidators(
-        props, "20260320120000000", toRDD(writeStatuses), extraMeta, createMetaClient()));
+        props, "20260320120000000", writeStatuses, extraMeta, createMetaClient()));
   }
 
   @Test
@@ -232,7 +203,7 @@ public class TestSparkStreamerValidatorUtils {
 
     HoodieValidationException ex = assertThrows(HoodieValidationException.class,
         () -> SparkStreamerValidatorUtils.runValidators(
-            props, "20260320120000000", toRDD(writeStatuses), new HashMap<>(), createMetaClient()));
+            props, "20260320120000000", writeStatuses, new HashMap<>(), createMetaClient()));
     assertTrue(ex.getMessage().contains("FakeValidator"));
   }
 
@@ -253,7 +224,7 @@ public class TestSparkStreamerValidatorUtils {
     List<WriteStatus> writeStatuses = Collections.singletonList(buildWriteStatus("p1", 100, 0));
 
     assertDoesNotThrow(() -> SparkStreamerValidatorUtils.runValidators(
-        props, "20260320120000000", toRDD(writeStatuses), extraMeta, metaClient));
+        props, "20260320120000000", writeStatuses, extraMeta, metaClient));
   }
 
   @Test
@@ -274,6 +245,6 @@ public class TestSparkStreamerValidatorUtils {
 
     assertThrows(HoodieValidationException.class,
         () -> SparkStreamerValidatorUtils.runValidators(
-            props, "20260320120000000", toRDD(writeStatuses), extraMeta, metaClient));
+            props, "20260320120000000", writeStatuses, extraMeta, metaClient));
   }
 }

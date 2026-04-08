@@ -113,16 +113,18 @@ public class SparkValidationContext implements ValidationContext {
   }
 
   /**
-   * Not directly supported. Use {@link #isFirstCommit()} or
-   * {@link #getPreviousCommitMetadata()} instead.
-   *
-   * @throws UnsupportedOperationException always
+   * Get the previous completed commit instant by querying the timeline.
+   * Returns {@link Option#empty()} if this is the first commit or metaClient is unavailable.
    */
   @Override
   public Option<HoodieInstant> getPreviousCommitInstant() {
-    throw new UnsupportedOperationException(
-        "getPreviousCommitInstant() is not available in HoodieStreamer pre-commit validation context. "
-            + "Use isFirstCommit() or getPreviousCommitMetadata() instead.");
+    if (metaClient == null) {
+      return Option.empty();
+    }
+    return metaClient.getActiveTimeline()
+        .getWriteTimeline()
+        .filterCompletedInstants()
+        .lastInstant();
   }
 
   @Override
