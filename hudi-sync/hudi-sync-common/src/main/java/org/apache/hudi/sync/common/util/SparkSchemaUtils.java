@@ -88,6 +88,7 @@ public class SparkSchemaUtils {
             + ",\"valueContainsNull\":" + valueOptional + "}";
       case RECORD:
       case BLOB:
+      case VARIANT:
         return convertToSparkSchemaJson(fieldSchema);
       default:
         throw new UnsupportedOperationException("Cannot convert " + fieldSchema.getType() + " to spark sql type");

@@ -155,6 +155,12 @@ public class TestHiveSchemaUtil {
             HoodieSchemaField.of("nested_blob_field", HoodieSchema.createRecord("media", null, null, false, Arrays.asList(
                 HoodieSchemaField.of("title", HoodieSchema.create(HoodieSchemaType.STRING)),
                 HoodieSchemaField.of("content", HoodieSchema.createBlob())
+            ))),
+            HoodieSchemaField.of("variant_field", HoodieSchema.createVariant()),
+            HoodieSchemaField.of("nullable_variant_field", HoodieSchema.createNullable(HoodieSchema.createVariant())),
+            HoodieSchemaField.of("nested_variant_field", HoodieSchema.createRecord("container", null, null, false, Arrays.asList(
+                HoodieSchemaField.of("title", HoodieSchema.create(HoodieSchemaType.STRING)),
+                HoodieSchemaField.of("variant_data", HoodieSchema.createVariant())
             )))
         )
     );
@@ -186,6 +192,10 @@ public class TestHiveSchemaUtil {
         "STRUCT< `type` : string, `data` : binary, `reference` : STRUCT< `external_path` : string, `offset` : bigint, `length` : bigint, `managed` : boolean>>");
     expected.put("`nested_blob_field`",
         "STRUCT< `title` : string, `content` : STRUCT< `type` : string, `data` : binary, `reference` : STRUCT< `external_path` : string, `offset` : bigint, `length` : bigint, `managed` : boolean>>>");
+    expected.put("`variant_field`", "STRUCT< `metadata` : binary, `value` : binary>");
+    expected.put("`nullable_variant_field`", "STRUCT< `metadata` : binary, `value` : binary>");
+    expected.put("`nested_variant_field`",
+        "STRUCT< `title` : string, `variant_data` : STRUCT< `metadata` : binary, `value` : binary>>");
     assertEquals(expected, actual);
   }
 }

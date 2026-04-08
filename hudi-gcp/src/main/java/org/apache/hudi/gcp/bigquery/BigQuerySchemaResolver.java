@@ -148,6 +148,7 @@ public class BigQuerySchemaResolver {
         break;
       case RECORD:
       case BLOB:
+      case VARIANT:
         return Field.newBuilder(name, StandardSQLTypeName.STRUCT,
             FieldList.of(getFields(fieldSchema))).setMode(fieldMode).build();
       case ARRAY:

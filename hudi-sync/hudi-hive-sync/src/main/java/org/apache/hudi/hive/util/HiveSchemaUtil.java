@@ -250,6 +250,7 @@ public class HiveSchemaUtil {
         return createHiveMap(convertField(keyType, supportTimestamp, doFormat), convertField(valueType, supportTimestamp, doFormat), doFormat);
       case RECORD:
       case BLOB:
+      case VARIANT:
         return createHiveStruct(nonNullType.getFields(), supportTimestamp, doFormat);
       default:
         throw new UnsupportedOperationException("Cannot convert type " + nonNullType.getType());

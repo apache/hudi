@@ -350,4 +350,54 @@ public class TestBigQuerySchemaResolver {
 
     Assertions.assertEquals(expected, SCHEMA_RESOLVER.convertSchema(input));
   }
+
+  @Test
+  void convertSchema_variantField() {
+    HoodieSchema input = HoodieSchema.createRecord("testRecord", null, null, false, Arrays.asList(
+        HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.INT)),
+        HoodieSchemaField.of("variant_data", HoodieSchema.createVariant())
+    ));
+
+    Field expectedVariantField = Field.newBuilder("variant_data", StandardSQLTypeName.STRUCT,
+        Field.newBuilder("metadata", StandardSQLTypeName.BYTES).setMode(Field.Mode.REQUIRED).build(),
+        Field.newBuilder("value", StandardSQLTypeName.BYTES).setMode(Field.Mode.REQUIRED).build())
+        .setMode(Field.Mode.REQUIRED).build();
+
+    Schema result = SCHEMA_RESOLVER.convertSchema(input);
+    Assertions.assertEquals(2, result.getFields().size());
+    Assertions.assertEquals(expectedVariantField, result.getFields().get(1));
+  }
+
+  @Test
+  void convertSchema_nullableVariantField() {
+    HoodieSchema input = HoodieSchema.createRecord("testRecord", null, null, false, Arrays.asList(
+        HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.INT)),
+        HoodieSchemaField.of("variant_data", HoodieSchema.createNullable(HoodieSchema.createVariant()))
+    ));
+
+    Schema result = SCHEMA_RESOLVER.convertSchema(input);
+    Field variantField = result.getFields().get(1);
+    Assertions.assertEquals(Field.Mode.NULLABLE, variantField.getMode());
+    Assertions.assertEquals(StandardSQLTypeName.STRUCT, variantField.getType().getStandardType());
+  }
+
+  @Test
+  void convertSchema_nestedVariantField() {
+    HoodieSchema inner = HoodieSchema.createRecord("container", null, null, false, Arrays.asList(
+        HoodieSchemaField.of("title", HoodieSchema.create(HoodieSchemaType.STRING)),
+        HoodieSchemaField.of("variant_data", HoodieSchema.createVariant())
+    ));
+    HoodieSchema input = HoodieSchema.createRecord("testRecord", null, null, false, Arrays.asList(
+        HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.INT)),
+        HoodieSchemaField.of("container", inner)
+    ));
+
+    Schema result = SCHEMA_RESOLVER.convertSchema(input);
+    Field containerField = result.getFields().get(1);
+    Assertions.assertEquals(StandardSQLTypeName.STRUCT, containerField.getType().getStandardType());
+    // Verify the nested "variant_data" sub-field is a STRUCT
+    Field variantField = containerField.getSubFields().stream()
+        .filter(f -> f.getName().equals("variant_data")).findFirst().get();
+    Assertions.assertEquals(StandardSQLTypeName.STRUCT, variantField.getType().getStandardType());
+  }
 }
