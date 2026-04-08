@@ -49,6 +49,7 @@ import org.apache.spark.sql.types.{DataType, Metadata, MetadataBuilder, StructTy
 import org.apache.spark.sql.vectorized.{ColumnVector, ColumnarBatch}
 import org.apache.spark.storage.StorageLevel
 import org.apache.spark.storage.StorageLevel._
+import org.apache.spark.util.SerializableConfiguration
 
 import java.time.ZoneId
 import java.util.TimeZone
@@ -168,7 +169,8 @@ class Spark2Adapter extends SparkAdapter {
     partitions.toSeq
   }
 
-  override def createLegacyHoodieParquetFileFormat(appendPartitionValues: Boolean, tableAvroSchema: Schema, hasTimestampMillisFieldInTableSchema: Boolean): Option[ParquetFileFormat] = {
+  override def createLegacyHoodieParquetFileFormat(appendPartitionValues: Boolean, tableAvroSchema: Schema,
+                                                   hasTimestampMillisFieldInTableSchema: Boolean, conf: Configuration): Option[ParquetFileFormat] = {
     Some(new Spark24LegacyHoodieParquetFileFormat(appendPartitionValues))
   }
 

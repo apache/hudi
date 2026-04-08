@@ -49,6 +49,7 @@ import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.internal.LegacyBehaviorPolicy
 import org.apache.spark.storage.StorageLevel
 import org.apache.spark.storage.StorageLevel._
+import org.apache.spark.util.SerializableConfiguration
 
 import java.time.ZoneId
 
@@ -97,8 +98,9 @@ class Spark3_5Adapter extends BaseSpark3Adapter {
   override def createExtendedSparkParser(spark: SparkSession, delegate: ParserInterface): HoodieExtendedParserInterface =
     new HoodieSpark3_5ExtendedSqlParser(spark, delegate)
 
-  override def createLegacyHoodieParquetFileFormat(appendPartitionValues: Boolean, tableSchema: Schema, hasTimestampMillisFieldInTableSchema: Boolean): Option[ParquetFileFormat] = {
-    Some(new Spark35LegacyHoodieParquetFileFormat(appendPartitionValues, tableSchema, hasTimestampMillisFieldInTableSchema))
+  override def createLegacyHoodieParquetFileFormat(appendPartitionValues: Boolean, tableSchema: Schema,
+                                                   hasTimestampMillisFieldInTableSchema: Boolean, conf: Configuration): Option[ParquetFileFormat] = {
+    Some(new Spark35LegacyHoodieParquetFileFormat(appendPartitionValues, tableSchema, hasTimestampMillisFieldInTableSchema, new SerializableConfiguration(conf)))
   }
 
   override def createHoodieFileScanRDD(sparkSession: SparkSession,

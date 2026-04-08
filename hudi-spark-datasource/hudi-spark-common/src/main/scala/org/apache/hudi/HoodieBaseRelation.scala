@@ -245,7 +245,8 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
         // We're delegating to Spark to append partition values to every row only in cases
         // when these corresponding partition-values are not persisted w/in the data file itself
         val parquetFileFormat = sparkAdapter.createLegacyHoodieParquetFileFormat(
-          shouldExtractPartitionValuesFromPartitionPath, tableAvroSchema, hasTimestampMillisFieldInTableSchema = HoodieSchemaUtils.hasTimestampMillisField(tableAvroSchema)).get
+          shouldExtractPartitionValuesFromPartitionPath, tableAvroSchema,
+          hasTimestampMillisFieldInTableSchema = HoodieSchemaUtils.hasTimestampMillisField(tableAvroSchema), conf).get
         (parquetFileFormat, LegacyHoodieParquetFileFormat.FILE_FORMAT_ID)
     }
 

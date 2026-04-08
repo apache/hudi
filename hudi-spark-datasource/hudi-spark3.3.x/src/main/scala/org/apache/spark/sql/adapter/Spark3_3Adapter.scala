@@ -19,6 +19,7 @@ package org.apache.spark.sql.adapter
 
 import org.apache.avro.Schema
 import org.apache.parquet.schema.Type
+import org.apache.hadoop.conf.Configuration
 import org.apache.hudi.Spark33HoodieFileScanRDD
 import org.apache.spark.sql._
 import org.apache.spark.sql.avro._
@@ -42,6 +43,7 @@ import org.apache.spark.sql.types.{DataType, DataTypes, Metadata, MetadataBuilde
 import org.apache.spark.sql.vectorized.ColumnarBatchRow
 import org.apache.spark.storage.StorageLevel
 import org.apache.spark.storage.StorageLevel._
+import org.apache.spark.util.SerializableConfiguration
 
 /**
  * Implementation of [[SparkAdapter]] for Spark 3.3.x branch
@@ -88,7 +90,8 @@ class Spark3_3Adapter extends BaseSpark3Adapter {
   override def createExtendedSparkParser(spark: SparkSession, delegate: ParserInterface): HoodieExtendedParserInterface =
     new HoodieSpark3_3ExtendedSqlParser(spark, delegate)
 
-  override def createLegacyHoodieParquetFileFormat(appendPartitionValues: Boolean, tableAvroSchema: Schema, hasTimestampMillisFieldInTableSchema: Boolean): Option[ParquetFileFormat] = {
+  override def createLegacyHoodieParquetFileFormat(appendPartitionValues: Boolean, tableAvroSchema: Schema,
+                                                   hasTimestampMillisFieldInTableSchema: Boolean, conf: Configuration): Option[ParquetFileFormat] = {
     Some(new Spark33LegacyHoodieParquetFileFormat(appendPartitionValues))
   }
 
