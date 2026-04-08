@@ -58,6 +58,22 @@ public abstract class HoodieSparkTable<T>
     return HoodieSparkTable.create(config, context, metaClient, Option.of(txnManager));
   }
 
+  public static <T> HoodieSparkTable<T> create(HoodieWriteConfig config, HoodieEngineContext context) {
+    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder()
+        .setConf(context.getStorageConf().newInstance())
+        .setBasePath(config.getBasePath())
+        .setLoadActiveTimelineOnLoad(true).setConsistencyGuardConfig(config.getConsistencyGuardConfig())
+        .setFileSystemRetryConfig(config.getFileSystemRetryConfig())
+        .setMetaserverConfig(config.getProps()).build();
+    return create(config, context, metaClient);
+  }
+
+  public static <T> HoodieSparkTable<T> create(HoodieWriteConfig config,
+                                               HoodieEngineContext context,
+                                               HoodieTableMetaClient metaClient) {
+    return create(config, context, metaClient, Option.of(new TransactionManager(config, metaClient.getStorage())));
+  }
+
   /**
    * Convenience method for read clients that don't need transaction management.
    */

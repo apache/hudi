@@ -17,13 +17,14 @@
 
 package org.apache.hudi.testutils;
 
-import lombok.extern.slf4j.Slf4j;
 import org.apache.spark.SparkContext;
 import org.apache.spark.rdd.RDD;
 import org.apache.spark.scheduler.SparkListener;
 import org.apache.spark.scheduler.SparkListenerUnpersistRDD;
 import org.apache.spark.sql.SparkSession;
 import org.apache.spark.storage.StorageLevel;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.HashSet;
 import java.util.Map;
@@ -36,8 +37,8 @@ import java.util.stream.Collectors;
  * This addresses the issue where RDD unpersist operations are asynchronous and may not be
  * immediately reflected when checking via SparkContext.getPersistentRDDs().
  */
-@Slf4j
 public class SparkRDDValidationUtils {
+  private static final Logger log = LoggerFactory.getLogger(SparkRDDValidationUtils.class);
   private static final int DEFAULT_TIMEOUT_SECONDS = 1;
 
   /**

@@ -21,6 +21,7 @@ package org.apache.hudi.table;
 
 import org.apache.hudi.avro.model.HoodieRollbackPlan;
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.client.transaction.TransactionManager;
 import org.apache.hudi.common.data.HoodieListData;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.model.HoodieKey;
@@ -92,7 +93,8 @@ class TestHoodieFlinkTableActionRouting extends HoodieFlinkClientTestHarness {
   @Test
   void testCopyOnWriteUnsupportedActionsFailFast() throws IOException {
     initMetaClient(HoodieTableType.COPY_ON_WRITE);
-    HoodieFlinkCopyOnWriteTable table = new HoodieFlinkCopyOnWriteTable(config(), context, metaClient);
+    HoodieFlinkCopyOnWriteTable table = new HoodieFlinkCopyOnWriteTable(config(), context, metaClient,
+        Option.of(new TransactionManager(config(), metaClient.getStorage())));
 
     assertUnsupported(() -> table.upsert(context, "001", Collections.emptyList()));
     assertUnsupported(() -> table.insert(context, "001", Collections.emptyList()));
@@ -112,7 +114,7 @@ class TestHoodieFlinkTableActionRouting extends HoodieFlinkClientTestHarness {
     assertUnsupported(() -> table.rollbackBootstrap(context, "001"));
     assertUnsupported(() -> table.scheduleIndexing(context, "001", Collections.emptyList(), Collections.emptyList()));
     assertUnsupported(() -> table.index(context, "001"));
-    assertUnsupported(() -> table.savepoint(context, "001", "user", "comment"));
+    assertUnsupported(() -> table.savepoint(context, "001", "002", "user", "comment"));
     assertUnsupported(() -> table.scheduleRestore(context, "002", "001"));
     assertUnsupported(() -> table.restore(context, "002", "001"));
   }
@@ -120,7 +122,8 @@ class TestHoodieFlinkTableActionRouting extends HoodieFlinkClientTestHarness {
   @Test
   void testCopyOnWriteRoutesSupportedPlanningActions() throws IOException {
     initMetaClient(HoodieTableType.COPY_ON_WRITE);
-    HoodieFlinkCopyOnWriteTable table = new HoodieFlinkCopyOnWriteTable(config(), context, metaClient);
+    HoodieFlinkCopyOnWriteTable table = new HoodieFlinkCopyOnWriteTable(config(), context, metaClient,
+        Option.of(new TransactionManager(config(), metaClient.getStorage())));
 
     try (MockedConstruction<ClusteringPlanActionExecutor> ignored = Mockito.mockConstruction(
         ClusteringPlanActionExecutor.class,
@@ -150,7 +153,8 @@ class TestHoodieFlinkTableActionRouting extends HoodieFlinkClientTestHarness {
   @Test
   void testCopyOnWriteRoutesWriteActionsAndCompactionInsert() throws IOException {
     initMetaClient(HoodieTableType.COPY_ON_WRITE);
-    HoodieFlinkCopyOnWriteTable table = new HoodieFlinkCopyOnWriteTable(config(), context, metaClient);
+    HoodieFlinkCopyOnWriteTable table = new HoodieFlinkCopyOnWriteTable(config(), context, metaClient,
+        Option.of(new TransactionManager(config(), metaClient.getStorage())));
     HoodieWriteHandle writeHandle = mock(HoodieWriteHandle.class);
     BucketInfo bucketInfo = new BucketInfo(BucketType.INSERT, "file-1", "partition");
 
@@ -178,7 +182,8 @@ class TestHoodieFlinkTableActionRouting extends HoodieFlinkClientTestHarness {
   @Test
   void testMergeOnReadValidatesHandlesAndRoutesScheduling() throws IOException {
     initMetaClient(HoodieTableType.MERGE_ON_READ);
-    HoodieFlinkMergeOnReadTable table = new HoodieFlinkMergeOnReadTable(config(), context, metaClient);
+    HoodieFlinkMergeOnReadTable table = new HoodieFlinkMergeOnReadTable(config(), context, metaClient,
+        Option.of(new TransactionManager(config(), metaClient.getStorage())));
     HoodieWriteHandle writeHandle = mock(HoodieWriteHandle.class);
     BucketInfo bucketInfo = new BucketInfo(BucketType.UPDATE, "file-1", "partition");
 
@@ -199,7 +204,8 @@ class TestHoodieFlinkTableActionRouting extends HoodieFlinkClientTestHarness {
   @Test
   void testMergeOnReadRoutesAppendAndCompactionActions() throws IOException {
     initMetaClient(HoodieTableType.MERGE_ON_READ);
-    HoodieFlinkMergeOnReadTable table = new HoodieFlinkMergeOnReadTable(config(), context, metaClient);
+    HoodieFlinkMergeOnReadTable table = new HoodieFlinkMergeOnReadTable(config(), context, metaClient,
+        Option.of(new TransactionManager(config(), metaClient.getStorage())));
     HoodieAppendHandle appendHandle = mock(HoodieAppendHandle.class);
     BucketInfo bucketInfo = new BucketInfo(BucketType.UPDATE, "file-1", "partition");
 

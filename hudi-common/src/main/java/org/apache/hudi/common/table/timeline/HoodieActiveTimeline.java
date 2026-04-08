@@ -77,6 +77,14 @@ public interface HoodieActiveTimeline extends HoodieTimeline {
    */
   <T> HoodieInstant saveAsComplete(HoodieInstant instant, Option<T> metadata, String completionTime);
 
+  default <T> HoodieInstant saveAsComplete(HoodieInstant instant, Option<T> metadata) {
+    return saveAsComplete(instant, metadata, HoodieInstantTimeGenerator.getCurrentInstantTimeStr());
+  }
+
+  default <T> HoodieInstant saveAsComplete(boolean shouldLock, HoodieInstant instant, Option<T> metadata) {
+    return saveAsComplete(instant, metadata);
+  }
+
   /**
    * Save Completed instant in active timeline with an optional completion time. For version 8 tables, completion times are generated just before wrapping up the commit and serialized as part of
    * completed commit metadata file.
@@ -210,6 +218,10 @@ public interface HoodieActiveTimeline extends HoodieTimeline {
    */
   HoodieInstant transitionCompactionInflightToComplete(HoodieInstant inflightInstant, HoodieCommitMetadata metadata, String completionInstant);
 
+  default HoodieInstant transitionCompactionInflightToComplete(boolean shouldLock, HoodieInstant inflightInstant, HoodieCommitMetadata metadata) {
+    return transitionCompactionInflightToComplete(inflightInstant, metadata, HoodieInstantTimeGenerator.getCurrentInstantTimeStr());
+  }
+
   /**
    * Transition Log Compaction State from inflight to Committed.
    *
@@ -219,6 +231,10 @@ public interface HoodieActiveTimeline extends HoodieTimeline {
    * @return commit instant
    */
   HoodieInstant transitionLogCompactionInflightToComplete(HoodieInstant inflightInstant, HoodieCommitMetadata metadata, String completionInstant);
+
+  default HoodieInstant transitionLogCompactionInflightToComplete(boolean shouldLock, HoodieInstant inflightInstant, HoodieCommitMetadata metadata) {
+    return transitionLogCompactionInflightToComplete(inflightInstant, metadata, HoodieInstantTimeGenerator.getCurrentInstantTimeStr());
+  }
 
   //-----------------------------------------------------------------
   //      END - COMPACTION RELATED META-DATA MANAGEMENT
@@ -233,6 +249,10 @@ public interface HoodieActiveTimeline extends HoodieTimeline {
    * @return commit instant
    */
   HoodieInstant transitionCleanInflightToComplete(HoodieInstant inflightInstant, Option<HoodieCleanMetadata> metadata, String completionInstant);
+
+  default HoodieInstant transitionCleanInflightToComplete(boolean shouldLock, HoodieInstant inflightInstant, Option<HoodieCleanMetadata> metadata) {
+    return transitionCleanInflightToComplete(inflightInstant, metadata, HoodieInstantTimeGenerator.getCurrentInstantTimeStr());
+  }
 
   HoodieInstant transitionCleanInflightToComplete(HoodieInstant inflightInstant, Option<HoodieCleanMetadata> metadata, String completionInstant,
                                                   TableFormatCompletionAction tableFormatCompletionAction);
@@ -254,6 +274,10 @@ public interface HoodieActiveTimeline extends HoodieTimeline {
    * @return commit instant
    */
   HoodieInstant transitionRollbackInflightToComplete(HoodieInstant inflightInstant, HoodieRollbackMetadata metadata, String completionInstant);
+
+  default HoodieInstant transitionRollbackInflightToComplete(boolean shouldLock, HoodieInstant inflightInstant, HoodieRollbackMetadata metadata) {
+    return transitionRollbackInflightToComplete(inflightInstant, metadata, HoodieInstantTimeGenerator.getCurrentInstantTimeStr());
+  }
 
   HoodieInstant transitionRollbackInflightToComplete(HoodieInstant inflightInstant, HoodieRollbackMetadata metadata, String completionInstant,
                                                      TableFormatCompletionAction tableFormatCompletionAction);
@@ -302,6 +326,10 @@ public interface HoodieActiveTimeline extends HoodieTimeline {
    */
   HoodieInstant transitionReplaceInflightToComplete(HoodieInstant inflightInstant, HoodieReplaceCommitMetadata metadata, String completionInstant);
 
+  default HoodieInstant transitionReplaceInflightToComplete(boolean shouldLock, HoodieInstant inflightInstant, HoodieReplaceCommitMetadata metadata) {
+    return transitionReplaceInflightToComplete(inflightInstant, metadata, HoodieInstantTimeGenerator.getCurrentInstantTimeStr());
+  }
+
   HoodieInstant transitionReplaceInflightToComplete(HoodieInstant inflightInstant, HoodieReplaceCommitMetadata metadata, String completionInstant,
                                                     TableFormatCompletionAction tableFormatCompletionAction);
 
@@ -314,6 +342,10 @@ public interface HoodieActiveTimeline extends HoodieTimeline {
    * @return commit instant
    */
   HoodieInstant transitionClusterInflightToComplete(HoodieInstant inflightInstant, HoodieReplaceCommitMetadata metadata, String completionInstant);
+
+  default HoodieInstant transitionClusterInflightToComplete(boolean shouldLock, HoodieInstant inflightInstant, HoodieReplaceCommitMetadata metadata) {
+    return transitionClusterInflightToComplete(inflightInstant, metadata, HoodieInstantTimeGenerator.getCurrentInstantTimeStr());
+  }
 
   HoodieInstant transitionClusterInflightToComplete(HoodieInstant inflightInstant, HoodieReplaceCommitMetadata metadata, String completionInstant,
                                                     TableFormatCompletionAction tableFormatCompletionAction);

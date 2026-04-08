@@ -42,13 +42,14 @@ import java.util.function.Function;
 public class TransactionManager implements Serializable, AutoCloseable {
 
   protected static final Logger LOG = LoggerFactory.getLogger(TransactionManager.class);
+  private static final long INVALID_THREAD_ID = -1;
   @Getter
   protected final LockManager lockManager;
   @Getter
   protected final boolean isLockRequired;
   private final transient TimeGenerator timeGenerator;
-  private volatile long lockHolderId; // lock holder ID
-  private int permits;                // allows for nested transaction
+  private volatile long lockHolderId;          // lock holder ID
+  private volatile int permits;                // allows for reentrancy
   protected Option<HoodieInstant> changeActionInstant = Option.empty();
   private Option<HoodieInstant> lastCompletedActionInstant = Option.empty();
 
@@ -64,7 +65,7 @@ public class TransactionManager implements Serializable, AutoCloseable {
     this.lockManager = lockManager;
     this.isLockRequired = isLockRequired;
     this.timeGenerator = timeGenerator;
-    this.lockHolderId = -1;
+    this.lockHolderId = INVALID_THREAD_ID;
     this.permits = 0;
   }
 
@@ -72,7 +73,7 @@ public class TransactionManager implements Serializable, AutoCloseable {
    * Caution: the invoker needs to ensure that API called within a lock context.
    */
   public String generateInstantTime() {
-    if (lockHolderId < 0 && isLockRequired) {
+    if (isLockRequired && !isLockHeldByCurrentThread()) {
       throw new HoodieLockException("Cannot create instant without acquiring a lock first.");
     }
     return HoodieInstantTimeGenerator.createNewInstantTime(timeGenerator, 0L);
@@ -111,8 +112,9 @@ public class TransactionManager implements Serializable, AutoCloseable {
     if (isLockRequired()) {
       acquireLock();
     }
-    String requestedInstant = providedInstantTime.orElseGet(() -> HoodieInstantTimeGenerator.createNewInstantTime(timeGenerator, 0L));
+    String requestedInstant = null;
     try {
+      requestedInstant = providedInstantTime.orElseGet(() -> HoodieInstantTimeGenerator.createNewInstantTime(timeGenerator, 0L));
       if (lastCompletedActionInstant.isEmpty()) {
         LOG.info("State change starting for {}", changeActionInstant);
       } else {
@@ -122,7 +124,9 @@ public class TransactionManager implements Serializable, AutoCloseable {
     } finally {
       if (isLockRequired()) {
         releaseLock();
-        LOG.info("State change ended for {}", requestedInstant);
+        if (requestedInstant != null) {
+          LOG.info("State change ended for {}", requestedInstant);
+        }
       }
     }
   }
@@ -171,7 +175,7 @@ public class TransactionManager implements Serializable, AutoCloseable {
    * </pre>
    */
   private void acquireLock() {
-    if (lockHolderId > 0 && isLockHeldByCurrentThread()) {
+    if (isLockHeldByCurrentThread()) {
       LOG.info("{}: Lock already acquired, skipping lock acquisition.", this);
       permits++;
       return;
@@ -189,9 +193,12 @@ public class TransactionManager implements Serializable, AutoCloseable {
   private void releaseLock() {
     if (isLockHeldByCurrentThread()) {
       --permits;
-      if (permits == 0) {
-        lockManager.unlock();
+      if (permits <= 0) {
         this.lockHolderId = -1;
+        // caution: all the variables changes must be in the front of the call to `#unlock`(the reverse order of the `#acquireLock`),
+        // so that the changes are guarded by the underneath lock
+        // to avoid other threads sneak in eagerly to make concurrent modifications.
+        lockManager.unlock();
         LOG.info("{}: Lock released for action instant {}", this, changeActionInstant);
       }
     } else {

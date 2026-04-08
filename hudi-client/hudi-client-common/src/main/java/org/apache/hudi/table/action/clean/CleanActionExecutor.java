@@ -37,6 +37,8 @@ import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.exception.HoodieValidationException;
+import org.apache.hudi.common.schema.internal.io.FileBasedInternalSchemaStorageManager;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
@@ -66,7 +68,7 @@ public class CleanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I, K,
 
   public CleanActionExecutor(HoodieEngineContext context, HoodieWriteConfig config, HoodieTable<T, I, K, O> table, String instantTime) {
     super(context, config, table, instantTime);
-    this.txnManager = table.getTxnManager().get();
+    this.txnManager = table.getTxnManager().orElseThrow(() -> new HoodieValidationException("The txn manager is not set up yet"));
   }
 
   /**
@@ -241,9 +243,8 @@ public class CleanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I, K,
       writeTableMetadata(metadata, inflightInstant.requestedTime());
       TableFormatCompletionAction formatCompletionAction = completedInstant -> table.getMetaClient().getTableFormat()
           .clean(metadata, completedInstant, table.getContext(), table.getMetaClient(), table.getViewManager());
-      HoodieInstant completedInstant = table.getActiveTimeline().transitionCleanInflightToComplete(inflightInstant, Option.of(metadata), txnManager.generateInstantTime());
-      // FIXME-vc: this is an one off..
-      formatCompletionAction.execute(completedInstant);
+      table.getActiveTimeline().transitionCleanInflightToComplete(inflightInstant, Option.of(metadata),
+          txnManager.generateInstantTime(), formatCompletionAction);
       log.info("Marked clean started on {} as complete", inflightInstant.requestedTime());
       return metadata;
     } finally {

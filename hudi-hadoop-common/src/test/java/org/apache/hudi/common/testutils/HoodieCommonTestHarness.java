@@ -52,11 +52,12 @@ import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
 
 import lombok.AccessLevel;
 import lombok.Setter;
-import lombok.extern.slf4j.Slf4j;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FSDataOutputStream;
 import org.junit.jupiter.api.io.TempDir;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.net.URI;
@@ -80,8 +81,9 @@ import static org.apache.hudi.common.config.HoodieStorageConfig.PARQUET_COMPRESS
 /**
  * The common hoodie test harness to provide the basic infrastructure.
  */
-@Slf4j
 public class HoodieCommonTestHarness {
+
+  protected static final Logger log = LoggerFactory.getLogger(HoodieCommonTestHarness.class);
 
   protected static final String BASE_FILE_EXTENSION = HoodieTableConfig.BASE_FILE_FORMAT.defaultValue().getFileExtension();
   protected static ScheduledThreadPoolExecutor scheduledThreadPoolExecutor = null;

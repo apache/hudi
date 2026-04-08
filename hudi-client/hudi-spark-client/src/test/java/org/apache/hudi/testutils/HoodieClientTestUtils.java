@@ -41,12 +41,11 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.storage.HoodieStorage;
-import org.apache.hudi.storage.HoodieStorageUtils;
+import org.apache.hudi.common.util.HoodieStorageUtils;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
 import org.apache.hudi.timeline.service.TimelineService;
 
-import lombok.extern.slf4j.Slf4j;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.spark.HoodieSparkKryoRegistrar;
@@ -57,6 +56,8 @@ import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SQLContext;
 import org.apache.spark.sql.SparkSession;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.lang.reflect.Field;
@@ -74,8 +75,9 @@ import static org.apache.hudi.testutils.GenericRecordValidationTestUtils.readHFi
 /**
  * Utility methods to aid testing inside the HoodieClient module.
  */
-@Slf4j
 public class HoodieClientTestUtils {
+
+  private static final Logger log = LoggerFactory.getLogger(HoodieClientTestUtils.class);
 
   /**
    * Returns a Spark config for this test.
