@@ -56,6 +56,7 @@ public class SparkSchemaUtils {
         return "\"string\"";
       case BYTES:
       case FIXED:
+      case VECTOR:
         return "\"binary\"";
       case DATE:
         return "\"date\"";

@@ -225,6 +225,7 @@ public class HiveSchemaUtil {
       case BYTES:
       case UUID:
       case FIXED:
+      case VECTOR:
         return BINARY_TYPE_NAME;
       case DATE:
         return "DATE";

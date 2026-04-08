@@ -280,4 +280,18 @@ public class TestBigQuerySchemaResolver {
     BigQuerySchemaResolver resolver = new BigQuerySchemaResolver(metaClient -> mockTableSchemaResolver);
     Assertions.assertEquals(PRIMITIVE_TYPES_BQ_SCHEMA, resolver.getTableSchema(mockMetaClient, Collections.emptyList()));
   }
+
+  @Test
+  void convertSchema_vectorField() {
+    HoodieSchema input = HoodieSchema.createRecord("testRecord", null, null, false, Arrays.asList(
+        HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.INT)),
+        HoodieSchemaField.of("embedding", HoodieSchema.createVector(128))
+    ));
+
+    Schema expected = Schema.of(
+        Field.newBuilder("id", StandardSQLTypeName.INT64).setMode(Field.Mode.REQUIRED).build(),
+        Field.newBuilder("embedding", StandardSQLTypeName.BYTES).setMode(Field.Mode.REQUIRED).build());
+
+    Assertions.assertEquals(expected, SCHEMA_RESOLVER.convertSchema(input));
+  }
 }

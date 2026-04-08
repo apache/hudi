@@ -35,6 +35,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TestHiveSchemaUtil {
@@ -148,7 +149,8 @@ public class TestHiveSchemaUtil {
             HoodieSchemaField.of("time_millis_field", HoodieSchema.createTimeMillis()),
             HoodieSchemaField.of("time_micros_field", HoodieSchema.createTimeMicros()),
             HoodieSchemaField.of("decimal_field", HoodieSchema.createDecimal(10, 2)),
-            HoodieSchemaField.of("uuid_field", HoodieSchema.create(HoodieSchemaType.UUID))
+            HoodieSchemaField.of("uuid_field", HoodieSchema.create(HoodieSchemaType.UUID)),
+            HoodieSchemaField.of("vector_field", HoodieSchema.createVector(128))
         )
     );
 
@@ -172,6 +174,18 @@ public class TestHiveSchemaUtil {
     expected.put("`time_micros_field`", "bigint");
     expected.put("`decimal_field`", "DECIMAL(10 , 2)");
     expected.put("`uuid_field`", "binary");
+    expected.put("`vector_field`", "binary");
     assertEquals(expected, actual);
+  }
+
+  @Test
+  void testVariantTypeConversion() {
+    HoodieSchema schema = HoodieSchema.createRecord("TestSchema", null, null,
+        Collections.singletonList(
+            HoodieSchemaField.of("variant_field", HoodieSchema.createVariant())));
+
+    UnsupportedOperationException ex = assertThrows(UnsupportedOperationException.class,
+        () -> HiveSchemaUtil.convertSchemaToHiveSchema(schema, true));
+    assertTrue(ex.getMessage().contains("VARIANT"));
   }
 }

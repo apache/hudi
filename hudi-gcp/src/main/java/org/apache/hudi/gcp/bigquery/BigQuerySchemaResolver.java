@@ -140,6 +140,7 @@ public class BigQuerySchemaResolver {
         break;
       case BYTES:
       case FIXED:
+      case VECTOR:
         standardSQLTypeName = StandardSQLTypeName.BYTES;
         break;
       case DECIMAL:
