@@ -875,9 +875,12 @@ public class StreamSync implements Serializable, Closeable {
           totalSuccessfulRecords);
       String commitActionType = CommitUtils.getCommitActionType(cfg.operation, HoodieTableType.valueOf(cfg.tableType));
 
-      // Cache the RDD so both validators (collect) and writeClient.commit() can use it
-      // without triggering a second DAG evaluation of the write operations.
-      writeStatusRDD.cache();
+      // Cache the RDD if not already persisted, so both validators (collect) and
+      // writeClient.commit() share the same materialized result without re-evaluation.
+      boolean weOwnCache = writeStatusRDD.getStorageLevel().equals(org.apache.spark.storage.StorageLevel.NONE());
+      if (weOwnCache) {
+        writeStatusRDD.cache();
+      }
       List<WriteStatus> writeStatuses = writeStatusRDD.collect();
 
       // Run pre-commit streaming offset validators (if configured).
@@ -889,7 +892,9 @@ public class StreamSync implements Serializable, Closeable {
 
       boolean success = writeClient.commit(instantTime, writeStatusRDD, Option.of(checkpointCommitMetadata), commitActionType, partitionToReplacedFileIds, Option.empty(),
           Option.of(writeStatusValidator));
-      writeStatusRDD.unpersist();
+      if (weOwnCache) {
+        writeStatusRDD.unpersist();
+      }
       releaseResourcesInvoked = true;
       if (success) {
         LOG.info("Commit " + instantTime + " successful!");
