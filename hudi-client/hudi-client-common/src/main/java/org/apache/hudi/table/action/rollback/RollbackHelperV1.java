@@ -125,7 +125,7 @@ public class RollbackHelperV1 extends RollbackHelper {
       StoragePath absolutePartPath = FSUtils.constructAbsolutePath(metaClient.getBasePath(), relPartPath);
       try {
         List<StoragePathInfo> statuses = metaClient.getStorage().listDirectEntries(absolutePartPath,
-            path -> path.getName().contains(HoodieLogFile.DELTA_EXTENSION));
+            path -> FSUtils.isLogFile(path.getName()));
 
         for (StoragePathInfo status : statuses) {
           try {
@@ -267,7 +267,7 @@ public class RollbackHelperV1 extends RollbackHelper {
     List<SerializableHoodieRollbackRequest> serializableRequests = rollbackRequests.stream()
         .map(SerializableHoodieRollbackRequest::new).collect(Collectors.toList());
     return context.reduceByKey(
-        maybeDeleteAndCollectStats(context, EMPTY_STRING, instantToRollback,
+        maybeDeleteAndCollectStats(context, instantToRollback.requestedTime(), instantToRollback,
             serializableRequests, false, parallelism),
         RollbackUtils::mergeRollbackStat, parallelism);
   }
@@ -362,7 +362,9 @@ public class RollbackHelperV1 extends RollbackHelper {
         // getFileStatus would reflect correct stats and FileNotFoundException is not thrown in
         // cloud-storage : HUDI-168
         Map<StoragePathInfo, Long> filesToNumBlocksRollback = Collections.singletonMap(
-            metaClient.getStorage().getPathInfo(Objects.requireNonNull(filePath)), 1L);
+            metaClient.getStorage().getPathInfo(Objects.requireNonNull(filePath)),
+            1L
+        );
 
         // With listing based rollback, sometimes we only get the fileID of interest(so that we can add rollback command block) w/o the actual file name.
         // So, we want to ignore such invalid files from this list before we add it to the rollback stats.
