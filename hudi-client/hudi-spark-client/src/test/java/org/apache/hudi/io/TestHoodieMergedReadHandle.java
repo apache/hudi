@@ -204,7 +204,7 @@ public class TestHoodieMergedReadHandle extends SparkClientFunctionalTestHarness
     Schema baseFileReaderSchema = HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(writeConfig.getWriteSchema()), writeConfig.allowOperationMetadataField());
     boolean hasTimestampFields = baseFileReaderSchema != null && AvroSchemaUtils.hasTimestampMillisField(baseFileReaderSchema);
     HoodieMergedReadHandle mergedReadHandle = new HoodieMergedReadHandle<>(writeConfig, Option.of(latestCommitTime), table, partitionPathAndFileIDPairs.get(0),
-        baseFileReaderSchema, hasTimestampFields);
+        hasTimestampFields);
     List<HoodieRecord> mergedRecords = mergedReadHandle.getMergedRecords();
     assertEquals(totalRecords, mergedRecords.size());
     List<HoodieRecord> sortedMergedRecords = mergedRecords.stream()

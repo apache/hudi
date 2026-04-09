@@ -589,7 +589,7 @@ public abstract class HoodieBackedTableMetadataWriter<I> implements HoodieTableM
       final String fileId = fileSlice.getFileId();
       Schema baseFileReaderSchema = HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(dataWriteConfig.getWriteSchema()), dataWriteConfig.allowOperationMetadataField());
       boolean hasTimestampFields = baseFileReaderSchema != null && AvroSchemaUtils.hasTimestampMillisField(baseFileReaderSchema);
-      return new HoodieMergedReadHandle(dataWriteConfig, instantTime, hoodieTable, Pair.of(partition, fileSlice.getFileId()), baseFileReaderSchema, hasTimestampFields, Option.of(fileSlice))
+      return new HoodieMergedReadHandle(dataWriteConfig, instantTime, hoodieTable, Pair.of(partition, fileSlice.getFileId()), hasTimestampFields, Option.of(fileSlice))
           .getMergedRecords().stream().map(record -> {
             HoodieRecord record1 = (HoodieRecord) record;
             return HoodieMetadataPayload.createRecordIndexUpdate(record1.getRecordKey(), partition, fileId,

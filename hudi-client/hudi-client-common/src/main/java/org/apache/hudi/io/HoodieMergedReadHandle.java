@@ -58,18 +58,17 @@ public class HoodieMergedReadHandle<T, I, K, O> extends HoodieReadHandle<T, I, K
 
   public HoodieMergedReadHandle(HoodieWriteConfig config, Option<String> instantTime,
                                 HoodieTable<T, I, K, O> hoodieTable, Pair<String, String> partitionPathFileIDPair,
-                                Schema baseFileReaderSchema, boolean hasTimestampFields) {
-    this(config, instantTime, hoodieTable, partitionPathFileIDPair, baseFileReaderSchema, hasTimestampFields, Option.empty());
+                                boolean hasTimestampFields) {
+    this(config, instantTime, hoodieTable, partitionPathFileIDPair, hasTimestampFields, Option.empty());
   }
 
   public HoodieMergedReadHandle(HoodieWriteConfig config, Option<String> instantTime,
                                 HoodieTable<T, I, K, O> hoodieTable, Pair<String, String> partitionPathFileIDPair,
-                                Schema baseFileReaderSchema, boolean hasTimestampFields,
-                                Option<FileSlice> fileSliceOption) {
+                                boolean hasTimestampFields, Option<FileSlice> fileSliceOption) {
     super(config, instantTime, hoodieTable, partitionPathFileIDPair);
     Schema orignalReaderSchema = HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(config.getSchema()), config.allowOperationMetadataField());
     // config.getSchema is not canonicalized, while config.getWriteSchema is canonicalized. So, we have to use the canonicalized schema to read the existing data.
-    this.baseFileReaderSchema = baseFileReaderSchema;
+    this.baseFileReaderSchema = HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(config.getWriteSchema()), config.allowOperationMetadataField());
     fileSliceOpt = fileSliceOption.isPresent() ? fileSliceOption : getLatestFileSlice();
     // Repair reader schema.
     // Assume writer schema should be correct. If not, no repair happens.

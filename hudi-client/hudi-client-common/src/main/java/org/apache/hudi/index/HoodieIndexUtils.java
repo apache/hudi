@@ -249,7 +249,7 @@ public class HoodieIndexUtils {
     boolean hasTimestampFields = AvroSchemaUtils.isLogicalTimestampRepairNeeded(hoodieTable.getStorageConf(),
         () -> baseFileReaderSchema != null && AvroSchemaUtils.hasTimestampMillisField(baseFileReaderSchema));
     return partitionLocations.flatMap(p
-        -> new HoodieMergedReadHandle(config, instantTime, hoodieTable, Pair.of(p.getKey(), p.getValue()), baseFileReaderSchema, hasTimestampFields)
+        -> new HoodieMergedReadHandle(config, instantTime, hoodieTable, Pair.of(p.getKey(), p.getValue()), hasTimestampFields)
         .getMergedRecords().iterator());
   }
 

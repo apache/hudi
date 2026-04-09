@@ -134,7 +134,9 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
     // Since we are using merge handle here, we can directly query the write schema from conf
     // Write handle provides an option to use overridden write schema as well which is not used by merge handle
     Schema writerSchema = HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(config.getWriteSchema()), config.allowOperationMetadataField());
-    AvroSchemaUtils.setLogicalTimestampRepairIfNotSet(table.getStorageConf(), () -> AvroSchemaUtils.hasTimestampMillisField(writerSchema));
+    if (!table.isMetadataTable()) {
+      AvroSchemaUtils.setLogicalTimestampRepairIfNotSet(table.getStorageConf(), () -> AvroSchemaUtils.hasTimestampMillisField(writerSchema));
+    }
     return context.parallelize(operations).map(operation -> compact(
         compactionHandler, metaClient, config, operation, compactionInstantTime, maxInstantTime, instantRange, taskContextSupplier, executionHelper))
         .flatMap(List::iterator);
