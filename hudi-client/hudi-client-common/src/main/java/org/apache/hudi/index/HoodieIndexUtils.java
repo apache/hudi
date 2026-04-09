@@ -243,7 +243,8 @@ public class HoodieIndexUtils {
         .lastInstant()
         .map(HoodieInstant::getTimestamp);
     Schema baseFileReaderSchema = HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(config.getWriteSchema()), config.allowOperationMetadataField());
-    boolean hasTimestampFields = AvroSchemaUtils.isLogicalTimestampRepairNeeded(hoodieTable.getHadoopConf(), () -> baseFileReaderSchema != null && AvroSchemaUtils.hasTimestampMillisField(baseFileReaderSchema));
+    boolean hasTimestampFields = AvroSchemaUtils.isLogicalTimestampRepairNeeded(hoodieTable.getHadoopConf(),
+        () -> baseFileReaderSchema != null && AvroSchemaUtils.hasTimestampMillisField(baseFileReaderSchema));
     return partitionLocations.flatMap(p
         -> new HoodieMergedReadHandle(config, instantTime, hoodieTable, Pair.of(p.getPartitionPath(), p.getFileId()), baseFileReaderSchema, hasTimestampFields)
         .getMergedRecords().iterator());
