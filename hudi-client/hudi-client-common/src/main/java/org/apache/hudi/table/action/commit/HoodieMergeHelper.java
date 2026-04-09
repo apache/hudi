@@ -88,7 +88,7 @@ public class HoodieMergeHelper<T> extends BaseMergeHelper {
 
     Schema writerSchema = mergeHandle.getWriterSchemaWithMetaFields();
     Schema readerSchema;
-    if (AvroSchemaUtils.isLogicalTimestampRepairNeeded(table.getHadoopConf(), true)) {
+    if (!table.isMetadataTable() && AvroSchemaUtils.isLogicalTimestampRepairNeeded(hadoopConf, true)) {
       readerSchema = AvroSchemaUtils.getRepairedSchema(baseFileReader.getSchema(), writerSchema);
     } else {
       readerSchema = baseFileReader.getSchema();

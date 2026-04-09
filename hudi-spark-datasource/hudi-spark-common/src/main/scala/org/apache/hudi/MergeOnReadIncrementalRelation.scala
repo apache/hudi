@@ -28,6 +28,7 @@ import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline}
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView
 import org.apache.hudi.common.util.StringUtils
 import org.apache.hudi.exception.HoodieException
+import org.apache.hudi.io.storage.HoodieFileReader
 import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils.{getWritePartitionPaths, listAffectedFilesForCommits}
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.SQLContext
@@ -77,6 +78,8 @@ case class MergeOnReadIncrementalRelation(override val sqlContext: SQLContext,
     val optionalFilters = filters
     val readers = createBaseFileReaders(tableSchema, requiredSchema, requestedColumns, requiredFilters, optionalFilters)
 
+    jobConf.set(HoodieFileReader.ENABLE_LOGICAL_TIMESTAMP_REPAIR,
+      java.lang.Boolean.toString(hasTimestampMillisFieldInTableSchema))
     new HoodieMergeOnReadRDD(
       sqlContext.sparkContext,
       config = jobConf,

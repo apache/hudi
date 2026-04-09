@@ -777,7 +777,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
   }
 
   @ParameterizedTest
-  @CsvSource(value = {"CLUSTER", "NONE"})
+  @CsvSource(value = {"CLUSTER","NONE"})
   void testCOWLogicalRepair(String operation) throws Throwable {
     timestampNTZCompatibility(() -> {
       try {
@@ -863,7 +863,8 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
       "COMPACT,AVRO",
       "NONE,PARQUET",
       "CLUSTER,PARQUET",
-      "COMPACT,PARQUET"})
+      "COMPACT,PARQUET"
+  })
   void testMORLogicalRepair(String operation, String logBlockType) throws Throwable {
     timestampNTZCompatibility(() -> {
       try {
