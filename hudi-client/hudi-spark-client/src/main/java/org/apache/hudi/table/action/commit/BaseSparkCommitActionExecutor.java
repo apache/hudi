@@ -264,7 +264,7 @@ public abstract class BaseSparkCommitActionExecutor<T> extends
           try {
             return AvroSchemaUtils.hasTimestampMillisField(schemaResolver.getTableAvroSchema());
           } catch (Exception e) {
-            throw new HoodieSchemaException("Failed to resolve schema", e);
+            return true;
           }
         });
       } catch (Exception e) {
