@@ -33,6 +33,7 @@ import org.apache.hudi.storage.StorageConfiguration;
 
 import org.apache.avro.Schema;
 import org.apache.avro.SchemaCompatibility;
+import org.apache.hadoop.conf.Configuration;
 
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
@@ -532,6 +533,15 @@ public class AvroSchemaUtils {
       return (Boolean) hasTimestampMillisFieldMethod.invoke(null, schema);
     } catch (NoSuchMethodException | IllegalAccessException | InvocationTargetException e) {
       return false;
+    }
+  }
+
+  /**
+   * Sets logical timestamp repair needed key in conf to true
+   */
+  public static void setLogicalTimestampRepairIfNotSet(Configuration conf, Supplier<Boolean> valueSupplier) {
+    if (conf.get(HoodieFileReader.ENABLE_LOGICAL_TIMESTAMP_REPAIR) == null) {
+      conf.set(HoodieFileReader.ENABLE_LOGICAL_TIMESTAMP_REPAIR, valueSupplier.get().toString());
     }
   }
 

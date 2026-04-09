@@ -264,7 +264,7 @@ public abstract class BaseSparkCommitActionExecutor<T> extends
     if (!table.isMetadataTable() && table.getMetaClient().getActiveTimeline().getCommitsTimeline().filterCompletedInstants().countInstants() > 0) {
       TableSchemaResolver schemaResolver = new TableSchemaResolver(table.getMetaClient());
       try {
-        AvroSchemaUtils.setLogicalTimestampRepairIfNotSet(table.getHadoopConf(), () -> {
+        AvroSchemaUtils.setLogicalTimestampRepairIfNotSet(table.getStorageConf(), () -> {
           try {
             return AvroSchemaUtils.hasTimestampMillisField(schemaResolver.getTableAvroSchema());
           } catch (Exception e) {

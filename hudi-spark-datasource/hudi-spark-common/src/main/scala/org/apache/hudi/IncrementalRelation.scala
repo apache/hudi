@@ -38,9 +38,10 @@ import org.apache.hudi.internal.schema.utils.SerDeHelper
 import org.apache.hudi.io.storage.HoodieFileReader
 import org.apache.hudi.storage.{HoodieStorageUtils, StoragePath}
 import org.apache.hudi.table.HoodieSparkTable
-
 import org.apache.avro.Schema
+import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.GlobPattern
+import org.apache.hudi.util.JFunction
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.execution.datasources.parquet.LegacyHoodieParquetFileFormat
@@ -213,7 +214,7 @@ class IncrementalRelation(val sqlContext: SQLContext,
         LegacyHoodieParquetFileFormat.setTableAvroSchemaInConf(
           sqlContext.sparkContext.hadoopConfiguration, tableAvroSchema)
         AvroSchemaUtils.setLogicalTimestampRepairIfNotSet(sqlContext.sparkContext.hadoopConfiguration,
-          () => AvroSchemaUtils.hasTimestampMillisField(tableAvroSchema))
+          JFunction.toJavaSupplier(() => AvroSchemaUtils.hasTimestampMillisField(tableAvroSchema).asInstanceOf[java.lang.Boolean]))
       }
       val formatClassName = metaClient.getTableConfig.getBaseFileFormat match {
         case HoodieFileFormat.PARQUET => LegacyHoodieParquetFileFormat.FILE_FORMAT_ID
