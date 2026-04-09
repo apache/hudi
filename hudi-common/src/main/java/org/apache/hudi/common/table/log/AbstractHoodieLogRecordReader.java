@@ -43,7 +43,6 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.internal.schema.action.InternalSchemaMerger;
 import org.apache.hudi.internal.schema.convert.AvroInternalSchemaConverter;
-import org.apache.hudi.io.storage.HoodieFileReader;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 
@@ -70,7 +69,6 @@ import java.util.stream.Collectors;
 import static org.apache.hudi.common.table.log.block.HoodieLogBlock.HeaderMetadataType.COMPACTED_BLOCK_TIMES;
 import static org.apache.hudi.common.table.log.block.HoodieLogBlock.HeaderMetadataType.INSTANT_TIME;
 import static org.apache.hudi.common.table.log.block.HoodieLogBlock.HeaderMetadataType.TARGET_INSTANT_TIME;
-import static org.apache.hudi.common.table.log.block.HoodieLogBlock.HoodieLogBlockType.COMMAND_BLOCK;
 import static org.apache.hudi.common.table.log.block.HoodieLogBlock.HoodieLogBlockType.CORRUPT_BLOCK;
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
 
@@ -186,8 +184,8 @@ public abstract class AbstractHoodieLogRecordReader {
     this.forceFullScan = forceFullScan;
     this.internalSchema = internalSchema == null ? InternalSchema.getEmptyInternalSchema() : internalSchema;
     this.enableOptimizedLogBlocksScan = enableOptimizedLogBlocksScan;
-    this.enableLogicalTimestampFieldRepair = !hoodieTableMetaClient.isMetadataTable() && storage.getConf().getBoolean(HoodieFileReader.ENABLE_LOGICAL_TIMESTAMP_REPAIR,
-        () -> readerSchema != null && AvroSchemaUtils.hasTimestampMillisField(readerSchema));
+    this.enableLogicalTimestampFieldRepair = !hoodieTableMetaClient.isMetadataTable() &&
+        AvroSchemaUtils.isLogicalTimestampRepairNeeded(storage.getConf(), () -> readerSchema != null && AvroSchemaUtils.hasTimestampMillisField(readerSchema));
 
     if (keyFieldOverride.isPresent()) {
       // NOTE: This branch specifically is leveraged handling Metadata Table

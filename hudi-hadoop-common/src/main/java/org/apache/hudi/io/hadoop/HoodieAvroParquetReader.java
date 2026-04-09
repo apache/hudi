@@ -174,7 +174,7 @@ public class HoodieAvroParquetReader extends HoodieAvroFileReader {
     //       be able to read that file (in case projection is a proper one)
     Configuration hadoopConf = storage.getConf().unwrapCopyAs(Configuration.class);
     Schema repairedFileSchema;
-    if (AvroSchemaUtils.isLogicalTimestampRepairNeeded(storage.getConf(), true)) {
+    if (AvroSchemaUtils.isLogicalTimestampRepairNeeded(storage.getConf(), () -> true)) {
       repairedFileSchema = getRepairedSchema(getSchema(), schema);
     } else {
       repairedFileSchema = schema;
@@ -190,7 +190,7 @@ public class HoodieAvroParquetReader extends HoodieAvroFileReader {
     }
     ParquetReader<IndexedRecord> reader =
         new HoodieAvroParquetReaderBuilder<IndexedRecord>(path,
-            AvroSchemaUtils.isLogicalTimestampRepairNeeded(storage.getConf(), false) || schema == null || AvroSchemaUtils.hasTimestampMillisField(schema))
+            AvroSchemaUtils.isLogicalTimestampRepairNeeded(storage.getConf(), () -> schema == null || AvroSchemaUtils.hasTimestampMillisField(schema)))
             .withTableSchema(schema)
             .withConf(hadoopConf)
             .set(AvroSchemaConverter.ADD_LIST_ELEMENT_RECORDS, hadoopConf.get(AvroSchemaConverter.ADD_LIST_ELEMENT_RECORDS))

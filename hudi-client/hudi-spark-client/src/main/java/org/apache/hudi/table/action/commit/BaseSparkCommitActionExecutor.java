@@ -49,10 +49,10 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.execution.SparkLazyInsertIterable;
 import org.apache.hudi.index.HoodieIndex;
+import org.apache.hudi.internal.schema.HoodieSchemaException;
 import org.apache.hudi.io.CreateHandleFactory;
 import org.apache.hudi.io.HoodieMergeHandle;
 import org.apache.hudi.io.HoodieMergeHandleFactory;
-import org.apache.hudi.io.storage.HoodieFileReader;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory;
 import org.apache.hudi.table.HoodieTable;
@@ -261,10 +261,16 @@ public abstract class BaseSparkCommitActionExecutor<T> extends
       partitionedRDD = mappedRDD.partitionBy(partitioner);
     }
 
-    if (!table.isMetadataTable() && table.getMetaClient().getActiveTimeline().filterCompletedInstants().countInstants() > 0) {
+    if (!table.isMetadataTable() && table.getMetaClient().getActiveTimeline().getCommitsTimeline().filterCompletedInstants().countInstants() > 0) {
       TableSchemaResolver schemaResolver = new TableSchemaResolver(table.getMetaClient());
       try {
-        table.getHadoopConf().set(HoodieFileReader.ENABLE_LOGICAL_TIMESTAMP_REPAIR, Boolean.toString(AvroSchemaUtils.hasTimestampMillisField(schemaResolver.getTableAvroSchema())));
+        AvroSchemaUtils.setLogicalTimestampRepairIfNotSet(table.getHadoopConf(), () -> {
+          try {
+            return AvroSchemaUtils.hasTimestampMillisField(schemaResolver.getTableAvroSchema());
+          } catch (Exception e) {
+            throw new HoodieSchemaException("Failed to resolve schema", e);
+          }
+        });
       } catch (Exception e) {
         throw new HoodieException("Failed to set logical ts related configs", e);
       }
