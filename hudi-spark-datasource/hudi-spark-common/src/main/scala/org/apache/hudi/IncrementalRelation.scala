@@ -18,6 +18,7 @@
 package org.apache.hudi
 
 import org.apache.avro.Schema
+import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.{GlobPattern, Path}
 import org.apache.hudi.avro.AvroSchemaUtils
 import org.apache.hudi.DataSourceReadOptions.INCREMENTAL_READ_SCHEMA_USE_END_INSTANTTIME
@@ -203,14 +204,14 @@ class IncrementalRelation(val sqlContext: SQLContext,
       // pass internalSchema to hadoopConf, so it can be used in executors.
       val validCommits = metaClient
         .getCommitsAndCompactionTimeline.filterCompletedInstants.getInstantsAsStream.toArray().map(_.asInstanceOf[HoodieInstant].getFileName).mkString(",")
-      sqlContext.sparkContext.hadoopConfiguration.set(SparkInternalSchemaConverter.HOODIE_QUERY_SCHEMA, SerDeHelper.toJson(internalSchema))
-      sqlContext.sparkContext.hadoopConfiguration.set(SparkInternalSchemaConverter.HOODIE_TABLE_PATH, metaClient.getBasePath)
-      sqlContext.sparkContext.hadoopConfiguration.set(SparkInternalSchemaConverter.HOODIE_VALID_COMMITS_LIST, validCommits)
+      val conf = new Configuration(sqlContext.sparkContext.hadoopConfiguration)
+      conf.set(SparkInternalSchemaConverter.HOODIE_QUERY_SCHEMA, SerDeHelper.toJson(internalSchema))
+      conf.set(SparkInternalSchemaConverter.HOODIE_TABLE_PATH, metaClient.getBasePath)
+      conf.set(SparkInternalSchemaConverter.HOODIE_VALID_COMMITS_LIST, validCommits)
       // Pass table Avro schema to hadoopConf so supportBatch() can find it (supportBatch does not receive options).
       if (tableAvroSchema.getType != Schema.Type.NULL) {
-        LegacyHoodieParquetFileFormat.setTableAvroSchemaInConf(
-          sqlContext.sparkContext.hadoopConfiguration, tableAvroSchema)
-        AvroSchemaUtils.setLogicalTimestampRepairIfNotSet(sqlContext.sparkContext.hadoopConfiguration,
+        LegacyHoodieParquetFileFormat.setTableAvroSchemaInConf(conf, tableAvroSchema)
+        AvroSchemaUtils.setLogicalTimestampRepairIfNotSet(conf,
           JFunction.toJavaSupplier(() => AvroSchemaUtils.hasTimestampMillisField(tableAvroSchema).asInstanceOf[java.lang.Boolean]))
       }
       val formatClassName = metaClient.getTableConfig.getBaseFileFormat match {
@@ -249,7 +250,7 @@ class IncrementalRelation(val sqlContext: SQLContext,
           var doFullTableScan = false
 
           if (fallbackToFullTableScan) {
-            val fs = basePath.getFileSystem(sqlContext.sparkContext.hadoopConfiguration);
+            val fs = basePath.getFileSystem(conf);
             val timer = HoodieTimer.start
 
             val allFilesToCheck = filteredMetaBootstrapFullPaths ++ filteredRegularFullPaths

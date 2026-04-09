@@ -777,8 +777,8 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
   }
 
   @ParameterizedTest
-  @CsvSource(value = {"CLUSTER","NONE"})
-  void testCOWLogicalRepair(String operation) throws Throwable {
+  @CsvSource(value = {"CLUSTER,AVRO", "NONE,AVRO", "CLUSTER,SPARK", "NONE,SPARK"})
+  void testCOWLogicalRepair(String operation, String recordType) throws Throwable {
     timestampNTZCompatibility(() -> {
       try {
         String dirName = "trips_logical_types_json_cow_write";
@@ -802,6 +802,11 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
         properties.setProperty("hoodie.metatata.enable", "true");
         properties.setProperty("hoodie.parquet.small.file.limit", "-1");
         properties.setProperty("hoodie.cleaner.commits.retained", "10");
+        if (recordType.equals("SPARK")) {
+          properties.setProperty(HoodieWriteConfig.RECORD_MERGER_IMPLS.key(), "org.apache.hudi.HoodieSparkRecordMerger");
+        } else {
+          properties.setProperty(HoodieWriteConfig.RECORD_MERGER_IMPLS.key(), "org.apache.hudi.common.model.HoodieAvroRecordMerger");
+        }
         Option<TypedProperties> propt = Option.of(properties);
 
         new HoodieStreamer(prepCfgForCowLogicalRepair(tableBasePath, "456"), jsc, propt).sync();

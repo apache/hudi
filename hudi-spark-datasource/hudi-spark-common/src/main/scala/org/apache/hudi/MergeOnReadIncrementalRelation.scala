@@ -81,7 +81,9 @@ case class MergeOnReadIncrementalRelation(override val sqlContext: SQLContext,
     val optionalFilters = filters
     val readers = createBaseFileReaders(tableSchema, requiredSchema, requestedColumns, requiredFilters, optionalFilters)
 
-    AvroSchemaUtils.setLogicalTimestampRepairIfNotSet(jobConf, JFunction.toJavaSupplier(() => hasTimestampMillisFieldInTableSchema.asInstanceOf[java.lang.Boolean]))
+    if (!metaClient.isMetadataTable) {
+      AvroSchemaUtils.setLogicalTimestampRepairIfNotSet(jobConf, JFunction.toJavaSupplier(() => hasTimestampMillisFieldInTableSchema.asInstanceOf[java.lang.Boolean]))
+    }
     new HoodieMergeOnReadRDD(
       sqlContext.sparkContext,
       config = jobConf,
