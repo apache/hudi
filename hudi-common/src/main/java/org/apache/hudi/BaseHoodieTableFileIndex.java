@@ -281,9 +281,10 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
 
     HoodieTimer timer = HoodieTimer.start();
     List<StoragePathInfo> allFiles = listPartitionPathFiles(partitions, activeTimeline);
+    long elapsedMs = timer.endTimer();
     log.info("On {} with query instant as {}, it took {}ms to list all files {} Hudi partitions",
         metaClient.getTableConfig().getTableName(), queryInstant.orElse("N/A"),
-        timer.endTimer(), partitions.size());
+        elapsedMs, partitions.size());
 
     // ROPathFilter optimization is only applicable for COW tables with snapshot queries
     // For MOR tables with READ_OPTIMIZED queries, we also only need base files
@@ -357,8 +358,9 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
                       .collect(Collectors.toList())
           ));
     } finally {
+      long elapsedMs = timer.endTimer();
       log.debug("On {} with query instant as {}, time spent in filterFiles attempt was {}ms for {} files across {} partitions",
-          metaClient.getTableConfig().getTableName(), queryInstant.orElse("N/A"), timer.endTimer(),
+          metaClient.getTableConfig().getTableName(), queryInstant.orElse("N/A"), elapsedMs,
           allFiles.size(), partitions.size());
     }
   }
@@ -375,8 +377,9 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
     } catch (IOException e) {
       throw new HoodieIOException("On " + metaClient.getTableConfig().getTableName() + " Error fetching partition paths", e);
     } finally {
-      log.debug("On {}, it took {} ms to list partition paths with {} relativePartitionPaths and partition predicates",
-          metaClient.getTableConfig().getTableName(), timer.endTimer(), relativePartitionPaths.size());
+      long elapsedMs = timer.endTimer();
+      log.debug("On {}, it took {} ms to list partition paths with {} relativePartitionPaths using partition predicate filtering",
+          metaClient.getTableConfig().getTableName(), elapsedMs, relativePartitionPaths.size());
     }
 
     // Convert partition's path into partition descriptor
@@ -397,8 +400,9 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
           try {
             matchedPartitionPaths = tableMetadata.getPartitionPathWithPathPrefixes(relativePartitionPaths);
           } finally {
+            long elapsedMs = timer.endTimer();
             log.debug("On {}, it took {} ms to list partition paths with {} relativePartitionPaths",
-                metaClient.getTableConfig().getTableName(), timer.endTimer(), relativePartitionPaths.size());
+                metaClient.getTableConfig().getTableName(), elapsedMs, relativePartitionPaths.size());
           }
         }
       } else {
@@ -528,8 +532,9 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
     } catch (IOException e) {
       throw new HoodieIOException("On " + metaClient.getTableConfig().getTableName() + " Failed to list partition paths", e);
     } finally {
+      long elapsedMs = timer.endTimer();
       log.debug("On {}, time spent attempting getAllFilesInPartitions was {} ms for {} uncached partitions",
-          metaClient.getTableConfig().getTableName(), timer.endTimer(), missingPartitionPaths.size());
+          metaClient.getTableConfig().getTableName(), elapsedMs, missingPartitionPaths.size());
     }
   }
 
@@ -567,7 +572,8 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
       ensurePreloadedPartitions(getAllQueryPartitionPaths());
     }
 
-    log.info("Refresh table {}, spent: {} ms", metaClient.getTableConfig().getTableName(), timer.endTimer());
+    long elapsedMs = timer.endTimer();
+    log.info("Refresh table {}, spent: {} ms", metaClient.getTableConfig().getTableName(), elapsedMs);
   }
 
   private void validate(HoodieTimeline activeTimeline, Option<String> queryInstant) {
