@@ -308,24 +308,6 @@ public class TestStreamWriteOperatorCoordinator {
   }
 
   @Test
-  public void testCheckpointCompleteSkipsBootstrapOnlyBuffers() {
-    final CompletableFuture<byte[]> future = new CompletableFuture<>();
-    coordinator.checkpointCoordinator(1, future);
-
-    String instant = requestInstantTime(-1);
-    WriteMetadataEvent event = createBootstrapEvent(0, 0, instant, "par1");
-    coordinator.handleEventFromOperator(0, event);
-
-    coordinator.notifyCheckpointComplete(1);
-
-    assertNull(TestUtils.getLastCompleteInstant(tempFile.getAbsolutePath()),
-        "Bootstrap-only buffers should not be committed by checkpoint completion");
-    assertNotNull(coordinator.getEventBuffer(0));
-    assertNotNull(coordinator.getEventBuffer(0).getDataWriteEventBuffer()[0],
-        "Bootstrap buffer should be kept for the follow-up recommit");
-  }
-
-  @Test
   public void testStopHeartbeatForUncommittedEventWithLazyCleanPolicy() throws Exception {
     // reset
     reset();

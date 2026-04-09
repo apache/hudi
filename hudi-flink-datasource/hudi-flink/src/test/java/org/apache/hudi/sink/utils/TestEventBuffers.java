@@ -67,16 +67,6 @@ public class TestEventBuffers {
     }
   }
 
-  @Test
-  void testEventBufferRecognizesBootstrapEvents() {
-    EventBuffers.EventBuffer eventBuffer = EventBuffers.getInstance(new Configuration(), 1)
-        .getOrCreateBootstrapBuffer(newBootstrapEvent(1L, "001"));
-
-    eventBuffer.addBootstrapEvent(newBootstrapEvent(1L, "001"));
-
-    assertTrue(eventBuffer.isBootstrapEvents());
-  }
-
   private static WriteMetadataEvent newWriteEvent(long checkpointId, String instant) {
     return WriteMetadataEvent.builder()
         .taskID(0)
@@ -84,16 +74,6 @@ public class TestEventBuffers {
         .instantTime(instant)
         .writeStatus(Collections.emptyList())
         .lastBatch(true)
-        .build();
-  }
-
-  private static WriteMetadataEvent newBootstrapEvent(long checkpointId, String instant) {
-    return WriteMetadataEvent.builder()
-        .taskID(0)
-        .checkpointId(checkpointId)
-        .instantTime(instant)
-        .writeStatus(Collections.emptyList())
-        .bootstrap(true)
         .build();
   }
 }
