@@ -39,6 +39,13 @@ class TestSqlConf extends HoodieSparkSqlTestBase with BeforeAndAfter {
     map.put(key, value)
   }
 
+  def unsetEnv(key: String): String = {
+    val field = System.getenv().getClass.getDeclaredField("m")
+    field.setAccessible(true)
+    val map = field.get(System.getenv()).asInstanceOf[java.util.Map[java.lang.String, java.lang.String]]
+    map.remove(key)
+  }
+
   test("Test Hudi Conf") {
     withTempDir { tmp =>
       val tableName = generateTableName
@@ -144,6 +151,7 @@ class TestSqlConf extends HoodieSparkSqlTestBase with BeforeAndAfter {
   }
 
   after {
+    unsetEnv(DFSPropertiesConfiguration.CONF_FILE_DIR_ENV_NAME)
     DFSPropertiesConfiguration.clearGlobalProps()
   }
 }
