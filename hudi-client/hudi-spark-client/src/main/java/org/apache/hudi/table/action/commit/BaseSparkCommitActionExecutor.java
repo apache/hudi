@@ -64,7 +64,6 @@ import org.apache.hudi.table.action.cluster.strategy.UpdateStrategy;
 import org.apache.spark.Partitioner;
 import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaRDD;
-import org.apache.spark.sql.HoodieSchemaUtils;
 import org.apache.spark.storage.StorageLevel;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
