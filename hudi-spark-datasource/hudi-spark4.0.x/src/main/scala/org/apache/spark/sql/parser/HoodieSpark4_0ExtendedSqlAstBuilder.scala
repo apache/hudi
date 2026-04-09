@@ -2593,7 +2593,7 @@ class HoodieSpark4_0ExtendedSqlAstBuilder(conf: SQLConf, delegate: ParserInterfa
    * Resolve/create a primitive type.
    */
   override def visitPrimitiveDataType(ctx: PrimitiveDataTypeContext): DataType = withOrigin(ctx) {
-    val dataType = ctx.identifier.getText.toLowerCase(Locale.ROOT)
+    val dataType = ctx.typeName.getText.toLowerCase(Locale.ROOT)
     (dataType, ctx.INTEGER_VALUE().asScala.toList) match {
       case ("boolean", Nil) => BooleanType
       case ("tinyint" | "byte", Nil) => ByteType
@@ -2612,6 +2612,17 @@ class HoodieSpark4_0ExtendedSqlAstBuilder(conf: SQLConf, delegate: ParserInterfa
       case ("varchar", length :: Nil) => VarcharType(length.getText.toInt)
       case ("binary", Nil) => BinaryType
       case ("blob", Nil) => BlobType()
+      case ("vector", dim :: Nil) =>
+        val dimension = dim.getText.toInt
+        val identParams = ctx.identifier().asScala.toList.drop(1) // skip type name
+        val elemTypeStr = if (identParams.nonEmpty) identParams.head.getText.toUpperCase(Locale.ROOT) else "FLOAT"
+        val sparkElemType = elemTypeStr match {
+          case "FLOAT" => FloatType
+          case "DOUBLE" => DoubleType
+          case "INT8" => ByteType
+          case other => throw new ParseException(s"Unsupported VECTOR element type: $other. Supported: FLOAT, DOUBLE, INT8", ctx)
+        }
+        ArrayType(sparkElemType, containsNull = false)
       case ("decimal" | "dec" | "numeric", Nil) => DecimalType.USER_DEFAULT
       case ("decimal" | "dec" | "numeric", precision :: Nil) =>
         DecimalType(precision.getText.toInt, 0)
@@ -2710,6 +2721,8 @@ class HoodieSpark4_0ExtendedSqlAstBuilder(conf: SQLConf, delegate: ParserInterfa
     val typeText = dataType.getText
     if (typeText.equalsIgnoreCase(HoodieSchemaType.BLOB.name())) {
       builder.putString(HoodieSchema.TYPE_METADATA_FIELD, HoodieSchemaType.BLOB.name())
+    } else if (typeText.toUpperCase(Locale.ROOT).startsWith("VECTOR(")) {
+      builder.putString(HoodieSchema.TYPE_METADATA_FIELD, typeText.toUpperCase(Locale.ROOT))
     }
   }
 

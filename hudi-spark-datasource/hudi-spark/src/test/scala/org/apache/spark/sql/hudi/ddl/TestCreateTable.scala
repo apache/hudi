@@ -2120,4 +2120,108 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
       assertTrue(blobPathField.dataType.isInstanceOf[StringType])
     }
   }
+
+  test("test create table with VECTOR column") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      spark.sql(
+        s"""
+           |CREATE TABLE $tableName (
+           |  id BIGINT,
+           |  embedding VECTOR(128) COMMENT 'document embedding'
+           |) USING hudi
+           |LOCATION '${tmp.getCanonicalPath}'
+           |TBLPROPERTIES (
+           |  primaryKey = 'id'
+           |)
+           """.stripMargin)
+
+      val schema = spark.table(tableName).schema
+      val embeddingField = schema.find(_.name == "embedding").get
+      assertTrue(embeddingField.metadata.contains(HoodieSchema.TYPE_METADATA_FIELD))
+      assertEquals("VECTOR(128)", embeddingField.metadata.getString(HoodieSchema.TYPE_METADATA_FIELD))
+      assertEquals("document embedding", embeddingField.metadata.getString("comment"))
+      assertEquals(ArrayType(FloatType, containsNull = false), embeddingField.dataType)
+    }
+  }
+
+  test("test create table with VECTOR column with element type") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      spark.sql(
+        s"""
+           |CREATE TABLE $tableName (
+           |  id BIGINT,
+           |  embedding VECTOR(64, DOUBLE)
+           |) USING hudi
+           |LOCATION '${tmp.getCanonicalPath}'
+           |TBLPROPERTIES (
+           |  primaryKey = 'id'
+           |)
+           """.stripMargin)
+
+      val schema = spark.table(tableName).schema
+      val embeddingField = schema.find(_.name == "embedding").get
+      assertTrue(embeddingField.metadata.contains(HoodieSchema.TYPE_METADATA_FIELD))
+      assertEquals("VECTOR(64,DOUBLE)", embeddingField.metadata.getString(HoodieSchema.TYPE_METADATA_FIELD))
+      assertEquals(ArrayType(DoubleType, containsNull = false), embeddingField.dataType)
+    }
+  }
+
+  test("test create table with multiple VECTOR columns") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      spark.sql(
+        s"""
+           |CREATE TABLE $tableName (
+           |  id BIGINT,
+           |  float_vec VECTOR(128),
+           |  double_vec VECTOR(64, DOUBLE),
+           |  int8_vec VECTOR(256, INT8) NOT NULL
+           |) USING hudi
+           |LOCATION '${tmp.getCanonicalPath}'
+           |TBLPROPERTIES (
+           |  primaryKey = 'id'
+           |)
+           """.stripMargin)
+
+      val schema = spark.table(tableName).schema
+
+      val floatVecField = schema.find(_.name == "float_vec").get
+      assertEquals("VECTOR(128)", floatVecField.metadata.getString(HoodieSchema.TYPE_METADATA_FIELD))
+      assertEquals(ArrayType(FloatType, containsNull = false), floatVecField.dataType)
+      assertTrue(floatVecField.nullable)
+
+      val doubleVecField = schema.find(_.name == "double_vec").get
+      assertEquals("VECTOR(64,DOUBLE)", doubleVecField.metadata.getString(HoodieSchema.TYPE_METADATA_FIELD))
+      assertEquals(ArrayType(DoubleType, containsNull = false), doubleVecField.dataType)
+
+      val int8VecField = schema.find(_.name == "int8_vec").get
+      assertEquals("VECTOR(256,INT8)", int8VecField.metadata.getString(HoodieSchema.TYPE_METADATA_FIELD))
+      assertEquals(ArrayType(ByteType, containsNull = false), int8VecField.dataType)
+      assertFalse(int8VecField.nullable)
+    }
+  }
+
+  test("test create table with VECTOR column case insensitive") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      spark.sql(
+        s"""
+           |CREATE TABLE $tableName (
+           |  id BIGINT,
+           |  embedding vector(128)
+           |) USING hudi
+           |LOCATION '${tmp.getCanonicalPath}'
+           |TBLPROPERTIES (
+           |  primaryKey = 'id'
+           |)
+           """.stripMargin)
+
+      val schema = spark.table(tableName).schema
+      val embeddingField = schema.find(_.name == "embedding").get
+      assertTrue(embeddingField.metadata.contains(HoodieSchema.TYPE_METADATA_FIELD))
+      assertEquals(ArrayType(FloatType, containsNull = false), embeddingField.dataType)
+    }
+  }
 }
