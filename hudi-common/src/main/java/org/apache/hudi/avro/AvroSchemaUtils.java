@@ -28,6 +28,7 @@ import org.apache.hudi.exception.SchemaCompatibilityException;
 import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.internal.schema.action.TableChanges;
 import org.apache.hudi.internal.schema.utils.SchemaChangeUtils;
+import org.apache.hudi.io.storage.HoodieFileReader;
 import org.apache.hudi.storage.StorageConfiguration;
 
 import org.apache.avro.Schema;
@@ -64,8 +65,6 @@ public class AvroSchemaUtils {
     }
     AVRO_SCHEMA_REPAIR_CLASS = clazz;
   }
-
-  private static final String NEEDS_LOGICAL_TIMSTAMP_REPAIR_KEY = "logical.timestamp.repair.required";
 
   private AvroSchemaUtils() {}
 
@@ -539,13 +538,13 @@ public class AvroSchemaUtils {
    * Sets logical timestamp repair needed key in conf to true
    */
   public static void setLogicalTimestampRepairNeeded(StorageConfiguration conf) {
-    conf.set(NEEDS_LOGICAL_TIMSTAMP_REPAIR_KEY, Boolean.TRUE.toString());
+    conf.set(HoodieFileReader.ENABLE_LOGICAL_TIMESTAMP_REPAIR, Boolean.TRUE.toString());
   }
 
   /**
    * Returns true if logical timestamp repair needed key is set to true or if it is not present in config
    */
   public static boolean isLogicalTimestampRepairNeeded(StorageConfiguration<?> storageConf, boolean defaultValue) {
-    return storageConf.getBoolean(NEEDS_LOGICAL_TIMSTAMP_REPAIR_KEY, defaultValue);
+    return storageConf.getBoolean(HoodieFileReader.ENABLE_LOGICAL_TIMESTAMP_REPAIR, defaultValue);
   }
 }

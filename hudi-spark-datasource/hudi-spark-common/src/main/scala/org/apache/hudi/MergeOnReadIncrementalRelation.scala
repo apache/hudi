@@ -17,7 +17,7 @@
 
 package org.apache.hudi
 
-import org.apache.hadoop.fs.{FileStatus, GlobPattern, Path}
+import org.apache.hadoop.fs.GlobPattern
 import org.apache.hudi.HoodieConversionUtils.toScalaOption
 import org.apache.hudi.HoodieSparkConfUtils.getHollowCommitHandling
 import org.apache.hudi.common.model.{FileSlice, HoodieRecord}
@@ -29,10 +29,9 @@ import org.apache.hudi.common.table.view.HoodieTableFileSystemView
 import org.apache.hudi.common.util.StringUtils
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils.listAffectedFilesForCommits
+import org.apache.hudi.io.storage.HoodieFileReader
 import org.apache.hudi.metadata.HoodieTableMetadataUtil.getWritePartitionPaths
 import org.apache.hudi.storage.StoragePathInfo
-
-import org.apache.hadoop.fs.GlobPattern
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.SQLContext
 import org.apache.spark.sql.catalyst.InternalRow
@@ -81,6 +80,8 @@ case class MergeOnReadIncrementalRelation(override val sqlContext: SQLContext,
     val optionalFilters = filters
     val readers = createBaseFileReaders(tableSchema, requiredSchema, requestedColumns, requiredFilters, optionalFilters)
 
+    jobConf.set(HoodieFileReader.ENABLE_LOGICAL_TIMESTAMP_REPAIR,
+      java.lang.Boolean.toString(hasTimestampMillisFieldInTableSchema))
     new HoodieMergeOnReadRDD(
       sqlContext.sparkContext,
       config = jobConf,

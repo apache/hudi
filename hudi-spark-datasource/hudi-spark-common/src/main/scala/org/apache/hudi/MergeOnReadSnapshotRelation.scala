@@ -24,6 +24,7 @@ import org.apache.hudi.HoodieConversionUtils.toScalaOption
 import org.apache.hudi.MergeOnReadSnapshotRelation.{createPartitionedFile, isProjectionCompatible}
 import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.hudi.common.model.{FileSlice, HoodieLogFile, OverwriteWithLatestAvroPayload}
+import org.apache.hudi.io.storage.HoodieFileReader
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.storage.StoragePath
 
@@ -115,6 +116,8 @@ abstract class BaseMergeOnReadSnapshotRelation(sqlContext: SQLContext,
     val optionalFilters = filters
     val readers = createBaseFileReaders(tableSchema, requiredSchema, requestedColumns, requiredFilters, optionalFilters)
 
+    jobConf.set(HoodieFileReader.ENABLE_LOGICAL_TIMESTAMP_REPAIR,
+      java.lang.Boolean.toString(hasTimestampMillisFieldInTableSchema))
     new HoodieMergeOnReadRDD(
       sqlContext.sparkContext,
       config = jobConf,

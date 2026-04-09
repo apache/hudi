@@ -18,6 +18,7 @@
 
 package org.apache.hudi.table.action.commit;
 
+import org.apache.hudi.avro.AvroSchemaUtils;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.clustering.update.strategy.SparkAllowUpdateStrategy;
 import org.apache.hudi.client.utils.SparkValidatorUtils;
@@ -31,6 +32,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
@@ -43,12 +45,14 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.data.HoodieJavaPairRDD;
 import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.exception.HoodieCommitException;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.execution.SparkLazyInsertIterable;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.io.CreateHandleFactory;
 import org.apache.hudi.io.HoodieMergeHandle;
 import org.apache.hudi.io.HoodieMergeHandleFactory;
+import org.apache.hudi.io.storage.HoodieFileReader;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory;
 import org.apache.hudi.table.HoodieTable;
@@ -60,6 +64,7 @@ import org.apache.hudi.table.action.cluster.strategy.UpdateStrategy;
 import org.apache.spark.Partitioner;
 import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaRDD;
+import org.apache.spark.sql.HoodieSchemaUtils;
 import org.apache.spark.storage.StorageLevel;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -256,6 +261,16 @@ public abstract class BaseSparkCommitActionExecutor<T> extends
       // Partition only
       partitionedRDD = mappedRDD.partitionBy(partitioner);
     }
+
+    if (!table.isMetadataTable() && table.getMetaClient().getActiveTimeline().filterCompletedInstants().countInstants() > 0) {
+      TableSchemaResolver schemaResolver = new TableSchemaResolver(table.getMetaClient());
+      try {
+        table.getHadoopConf().set(HoodieFileReader.ENABLE_LOGICAL_TIMESTAMP_REPAIR, Boolean.toString(AvroSchemaUtils.hasTimestampMillisField(schemaResolver.getTableAvroSchema())));
+      } catch (Exception e) {
+        throw new HoodieException("Failed to set logical ts related configs", e);
+      }
+    }
+
     return HoodieJavaRDD.of(partitionedRDD.map(Tuple2::_2).mapPartitionsWithIndex((partition, recordItr) -> {
       if (WriteOperationType.isChangingRecords(operationType)) {
         return handleUpsertPartition(instantTime, partition, recordItr, partitioner);

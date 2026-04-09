@@ -869,7 +869,8 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
       "COMPACT,AVRO",
       "NONE,PARQUET",
       "CLUSTER,PARQUET",
-      "COMPACT,PARQUET"})
+      "COMPACT,PARQUET"
+  })
   void testMORLogicalRepair(String operation, String logBlockType) throws Exception {
     timestampNTZCompatibility(() -> {
       try {
