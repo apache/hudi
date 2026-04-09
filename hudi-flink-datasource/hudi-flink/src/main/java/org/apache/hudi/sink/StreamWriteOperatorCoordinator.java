@@ -603,7 +603,8 @@ public class StreamWriteOperatorCoordinator
    */
   private boolean commitInstants(long checkpointId) {
     // use < instead of <= because the write metadata event sends the last known checkpoint id which is smaller than the current one.
-    List<Boolean> result = this.eventBuffers.getEventBufferStream().filter(entry -> entry.getKey() < checkpointId)
+    List<Boolean> result = this.eventBuffers.getEventBufferStream()
+        .filter(entry -> entry.getKey() < checkpointId && !entry.getValue().getRight().isBootstrapEvents())
         .map(entry -> commitInstant(entry.getKey(), entry.getValue().getLeft(), entry.getValue().getRight())).collect(Collectors.toList());
     return result.stream().anyMatch(i -> i);
   }

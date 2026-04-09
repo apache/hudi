@@ -232,6 +232,13 @@ public class EventBuffers implements Serializable {
     }
 
     /**
+     * Checks whether the buffer comes from job restart(bootstrap).
+     */
+    public boolean isBootstrapEvents() {
+      return Arrays.stream(dataWriteEventBuffer).anyMatch(event -> event != null && event.isBootstrap());
+    }
+
+    /**
      * Reset write metadata event according to the task id in the event.
      */
     public void resetBuffer(WriteMetadataEvent event) {
