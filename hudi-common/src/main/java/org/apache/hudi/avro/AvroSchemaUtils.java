@@ -36,6 +36,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 import java.util.function.BiFunction;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
@@ -440,14 +441,21 @@ public class AvroSchemaUtils {
   /**
    * Sets logical timestamp repair needed key in conf to true
    */
-  public static void setLogicalTimestampRepairNeeded(Configuration conf) {
-    conf.set(HoodieFileReader.ENABLE_LOGICAL_TIMESTAMP_REPAIR, Boolean.TRUE.toString());
+  public static void setLogicalTimestampRepairIfNotSet(Configuration conf, Supplier<Boolean> valueSupplier) {
+    if (conf.get(HoodieFileReader.ENABLE_LOGICAL_TIMESTAMP_REPAIR) == null) {
+      conf.set(HoodieFileReader.ENABLE_LOGICAL_TIMESTAMP_REPAIR, valueSupplier.get().toString());
+    }
   }
 
   /**
    * Returns true if logical timestamp repair needed key is set to true or if it is not present in config
    */
-  public static boolean isLogicalTimestampRepairNeeded(Configuration conf, boolean defaultValue) {
-    return conf.getBoolean(HoodieFileReader.ENABLE_LOGICAL_TIMESTAMP_REPAIR, defaultValue);
+  public static boolean isLogicalTimestampRepairNeeded(Configuration conf, Supplier<Boolean> defaultValueSupplier) {
+    String value = conf.get(HoodieFileReader.ENABLE_LOGICAL_TIMESTAMP_REPAIR);
+    if (StringUtils.isNullOrEmpty(value)) {
+      return defaultValueSupplier.get();
+    } else {
+      return Boolean.parseBoolean(value);
+    }
   }
 }

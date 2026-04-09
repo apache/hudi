@@ -164,7 +164,7 @@ public class HoodieAvroParquetReader extends HoodieAvroFileReaderBase {
     //       sure that in case the file-schema is not equal to read-schema we'd still
     //       be able to read that file (in case projection is a proper one)
     Schema repairedFileSchema;
-    if (AvroSchemaUtils.isLogicalTimestampRepairNeeded(conf, true)) {
+    if (AvroSchemaUtils.isLogicalTimestampRepairNeeded(conf, () -> true)) {
       repairedFileSchema = getRepairedSchema(getSchema(), schema);
     } else {
       repairedFileSchema = schema;
@@ -181,7 +181,7 @@ public class HoodieAvroParquetReader extends HoodieAvroFileReaderBase {
     }
     ParquetReader<IndexedRecord> reader =
         new HoodieAvroParquetReaderBuilder<IndexedRecord>(path,
-            AvroSchemaUtils.isLogicalTimestampRepairNeeded(conf, false) || schema == null || AvroSchemaUtils.hasTimestampMillisField(schema))
+            AvroSchemaUtils.isLogicalTimestampRepairNeeded(conf, () -> schema == null || AvroSchemaUtils.hasTimestampMillisField(schema)))
             .withTableSchema(schema)
             .withConf(conf)
             .set(AvroSchemaConverter.ADD_LIST_ELEMENT_RECORDS, conf.get(AvroSchemaConverter.ADD_LIST_ELEMENT_RECORDS))

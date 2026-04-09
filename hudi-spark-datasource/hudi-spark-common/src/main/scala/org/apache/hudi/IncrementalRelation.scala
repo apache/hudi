@@ -209,9 +209,8 @@ class IncrementalRelation(val sqlContext: SQLContext,
       if (tableAvroSchema.getType != Schema.Type.NULL) {
         LegacyHoodieParquetFileFormat.setTableAvroSchemaInConf(
           sqlContext.sparkContext.hadoopConfiguration, tableAvroSchema)
-        sqlContext.sparkContext.hadoopConfiguration.set(
-          HoodieFileReader.ENABLE_LOGICAL_TIMESTAMP_REPAIR,
-          AvroSchemaUtils.hasTimestampMillisField(tableAvroSchema).toString)
+        AvroSchemaUtils.setLogicalTimestampRepairIfNotSet(sqlContext.sparkContext.hadoopConfiguration,
+          () => AvroSchemaUtils.hasTimestampMillisField(tableAvroSchema))
       }
       val formatClassName = metaClient.getTableConfig.getBaseFileFormat match {
         case HoodieFileFormat.PARQUET => LegacyHoodieParquetFileFormat.FILE_FORMAT_ID
