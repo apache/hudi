@@ -18,8 +18,8 @@
 
 package org.apache.hudi.sink.compact.handler;
 
-import org.apache.hudi.metrics.FlinkCompactionMetrics;
 import org.apache.hudi.sink.compact.CompactionCommitEvent;
+import org.apache.flink.metrics.MetricGroup;
 
 /**
  * Composite handler for compaction commit services of the data table and metadata table.
@@ -32,8 +32,13 @@ public class CompositeCompactionCommitHandler extends CompositeTableServiceHandl
   }
 
   @Override
-  public void commitIfNecessary(CompactionCommitEvent event, FlinkCompactionMetrics compactionMetrics) {
-    getHandler(event.isMetadataTable()).commitIfNecessary(event, compactionMetrics);
+  public void registerMetrics(MetricGroup metricGroup) {
+    forEachHandler(compactionCommitHandler -> compactionCommitHandler.registerMetrics(metricGroup));
+  }
+
+  @Override
+  public void commitIfNecessary(CompactionCommitEvent event) {
+    getHandler(event.isMetadataTable()).commitIfNecessary(event);
   }
 
   @Override

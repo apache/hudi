@@ -18,8 +18,8 @@
 
 package org.apache.hudi.sink.compact.handler;
 
-import org.apache.hudi.metrics.FlinkCompactionMetrics;
 import org.apache.hudi.sink.compact.CompactionPlanEvent;
+import org.apache.flink.metrics.MetricGroup;
 import org.apache.flink.streaming.api.operators.Output;
 import org.apache.flink.streaming.runtime.streamrecord.StreamRecord;
 
@@ -39,10 +39,14 @@ public class CompositeCompactionPlanHandler extends CompositeTableServiceHandler
   }
 
   @Override
+  public void registerMetrics(MetricGroup metricGroup) {
+    forEachHandler(compactionPlanHandler -> compactionPlanHandler.registerMetrics(metricGroup));
+  }
+
+  @Override
   public void collectCompactionOperations(long checkpointId,
-                                          FlinkCompactionMetrics compactionMetrics,
                                           Output<StreamRecord<CompactionPlanEvent>> output) {
-    forEachHandler(compactionPlanHandler -> compactionPlanHandler.collectCompactionOperations(checkpointId, compactionMetrics, output));
+    forEachHandler(compactionPlanHandler -> compactionPlanHandler.collectCompactionOperations(checkpointId, output));
   }
 
   @Override

@@ -18,14 +18,12 @@
 
 package org.apache.hudi.sink.compact;
 
-import org.apache.hudi.metrics.FlinkCompactionMetrics;
 import org.apache.hudi.sink.compact.handler.CompactionPlanHandler;
 import org.apache.hudi.sink.compact.handler.TableServiceHandlerFactory;
 
 import lombok.extern.slf4j.Slf4j;
 import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.configuration.Configuration;
-import org.apache.flink.metrics.MetricGroup;
 import org.apache.flink.streaming.api.graph.StreamConfig;
 import org.apache.flink.streaming.api.operators.AbstractStreamOperator;
 import org.apache.flink.streaming.api.operators.BoundedOneInput;
@@ -50,8 +48,6 @@ public class CompactionPlanOperator extends AbstractStreamOperator<CompactionPla
    */
   private final Configuration conf;
 
-  private transient FlinkCompactionMetrics compactionMetrics;
-
   private transient CompactionPlanHandler compactionPlanHandler;
 
   public CompactionPlanOperator(Configuration conf) {
@@ -61,8 +57,8 @@ public class CompactionPlanOperator extends AbstractStreamOperator<CompactionPla
   @Override
   public void open() throws Exception {
     super.open();
-    registerMetrics();
     this.compactionPlanHandler = TableServiceHandlerFactory.createCompactionPlanHandler(conf, getRuntimeContext());
+    this.compactionPlanHandler.registerMetrics(getRuntimeContext().getMetricGroup());
 
     // when starting up, rolls back all the inflight compaction instants if there exists,
     // these instants are in priority for scheduling task because the compaction instants are
@@ -97,7 +93,7 @@ public class CompactionPlanOperator extends AbstractStreamOperator<CompactionPla
   public void notifyCheckpointComplete(long checkpointId) {
     // comment out: do we really need the timeout rollback ?
     // CompactionUtil.rollbackEarliestCompaction(table, conf);
-    this.compactionPlanHandler.collectCompactionOperations(checkpointId, compactionMetrics, output);
+    this.compactionPlanHandler.collectCompactionOperations(checkpointId, output);
   }
 
   @VisibleForTesting
@@ -115,11 +111,5 @@ public class CompactionPlanOperator extends AbstractStreamOperator<CompactionPla
   public void endInput() throws Exception {
     // Called when the input data ends, only used in batch mode.
     notifyCheckpointComplete(-1);
-  }
-
-  private void registerMetrics() {
-    MetricGroup metrics = getRuntimeContext().getMetricGroup();
-    compactionMetrics = new FlinkCompactionMetrics(metrics);
-    compactionMetrics.registerMetrics();
   }
 }

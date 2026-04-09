@@ -20,7 +20,6 @@ package org.apache.hudi.sink.compact;
 
 import org.apache.hudi.adapter.MaskingOutputAdapter;
 import org.apache.hudi.configuration.FlinkOptions;
-import org.apache.hudi.metrics.FlinkCompactionMetrics;
 import org.apache.hudi.sink.compact.handler.CompactHandler;
 import org.apache.hudi.sink.compact.handler.TableServiceHandlerFactory;
 import org.apache.hudi.sink.utils.NonThrownExecutor;
@@ -29,7 +28,6 @@ import org.apache.hudi.utils.RuntimeContextUtils;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.configuration.Configuration;
-import org.apache.flink.metrics.MetricGroup;
 import org.apache.flink.streaming.api.graph.StreamConfig;
 import org.apache.flink.streaming.api.operators.OneInputStreamOperator;
 import org.apache.flink.streaming.api.operators.Output;
@@ -61,11 +59,6 @@ public class CompactOperator extends TableStreamOperator<CompactionCommitEvent>
    * Output records collector.
    */
   private transient StreamRecordCollector<CompactionCommitEvent> collector;
-
-  /**
-   * Compaction metrics.
-   */
-  private transient FlinkCompactionMetrics compactionMetrics;
 
   /**
    * Previous compact instant time.
@@ -106,7 +99,7 @@ public class CompactOperator extends TableStreamOperator<CompactionCommitEvent>
     }
     this.collector = new StreamRecordCollector<>(output);
     this.compactHandler = TableServiceHandlerFactory.createCompactHandler(conf, getRuntimeContext(), taskID);
-    registerMetrics();
+    this.compactHandler.registerMetrics(getRuntimeContext().getMetricGroup());
   }
 
   @Override
@@ -116,7 +109,7 @@ public class CompactOperator extends TableStreamOperator<CompactionCommitEvent>
     boolean needReloadMetaClient = !instantTime.equals(prevCompactInstant);
     prevCompactInstant = instantTime;
 
-    compactHandler.compact(executor, event, collector, needReloadMetaClient, compactionMetrics);
+    compactHandler.compact(executor, event, collector, needReloadMetaClient);
   }
 
   @VisibleForTesting
@@ -135,11 +128,5 @@ public class CompactOperator extends TableStreamOperator<CompactionCommitEvent>
       this.executor.close();
     }
     compactHandler.close();
-  }
-
-  private void registerMetrics() {
-    MetricGroup metrics = getRuntimeContext().getMetricGroup();
-    compactionMetrics = new FlinkCompactionMetrics(metrics);
-    compactionMetrics.registerMetrics();
   }
 }

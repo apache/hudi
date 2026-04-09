@@ -18,9 +18,9 @@
 
 package org.apache.hudi.sink.compact.handler;
 
-import org.apache.hudi.metrics.FlinkCompactionMetrics;
 import org.apache.hudi.sink.compact.CompactionPlanEvent;
 
+import org.apache.flink.metrics.MetricGroup;
 import org.apache.flink.streaming.api.operators.Output;
 import org.apache.flink.streaming.runtime.streamrecord.StreamRecord;
 
@@ -36,11 +36,12 @@ import java.io.Closeable;
  * {@link CompactionPlanEvent}s, and rolling back inflight compaction instants during recovery.
  */
 public interface CompactionPlanHandler extends Closeable {
+  void registerMetrics(MetricGroup metricGroup);
+
   void rollbackCompaction();
 
   void collectCompactionOperations(
       long checkpointId,
-      FlinkCompactionMetrics compactionMetrics,
       Output<StreamRecord<CompactionPlanEvent>> output);
 
   @Override

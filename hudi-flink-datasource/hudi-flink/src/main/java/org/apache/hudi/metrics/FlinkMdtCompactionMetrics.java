@@ -16,29 +16,22 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.sink.compact.handler;
-
-import org.apache.hudi.sink.compact.CompactionCommitEvent;
+package org.apache.hudi.metrics;
 
 import org.apache.flink.metrics.MetricGroup;
 
-import java.io.Closeable;
-
 /**
- * Abstraction for compaction commit handling in the Flink compaction pipeline.
- *
- * <p>The interface hides whether commit coordination is performed by a single table-specific
- * implementation or by a composite handler that routes commit events for the data table and the
- * metadata table.
- *
- * <p>Implementations are responsible for buffering commit events, checking commit readiness, and
- * completing or rolling back compaction instants when necessary.
+ * Compaction metrics for metadata table services.
  */
-public interface CompactionCommitHandler extends Closeable {
-  void registerMetrics(MetricGroup metricGroup);
+public class FlinkMdtCompactionMetrics extends FlinkCompactionMetrics {
+  private static final String MDT_PREFIX = "mdt.";
 
-  void commitIfNecessary(CompactionCommitEvent event);
+  public FlinkMdtCompactionMetrics(MetricGroup metricGroup) {
+    super(metricGroup);
+  }
 
   @Override
-  void close();
+  protected String getMetricsName(String action, String metric) {
+    return MDT_PREFIX + super.getMetricsName(action, metric);
+  }
 }

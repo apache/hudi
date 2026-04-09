@@ -23,7 +23,6 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.client.WriteStatus;
-import org.apache.hudi.metrics.FlinkCompactionMetrics;
 import org.apache.hudi.sink.compact.CompactionCommitEvent;
 import org.apache.hudi.sink.compact.CompactionPlanEvent;
 import org.apache.hudi.util.StreamerUtil;
@@ -32,6 +31,7 @@ import org.apache.hudi.utils.TestUtils;
 import org.apache.hudi.util.FlinkWriteClients;
 
 import org.apache.flink.configuration.Configuration;
+import org.apache.flink.metrics.MetricGroup;
 import org.apache.flink.streaming.api.operators.Output;
 import org.apache.flink.streaming.runtime.streamrecord.StreamRecord;
 import org.junit.jupiter.api.Test;
@@ -58,17 +58,16 @@ class TestCompositeHandlers {
     CompactionCommitHandler dataHandler = mock(CompactionCommitHandler.class);
     CompactionCommitHandler metadataHandler = mock(CompactionCommitHandler.class);
     CompositeCompactionCommitHandler handler = new CompositeCompactionCommitHandler(dataHandler, metadataHandler);
-    FlinkCompactionMetrics metrics = mock(FlinkCompactionMetrics.class);
     CompactionCommitEvent dataEvent =
         new CompactionCommitEvent("001", "file-1", Collections.<WriteStatus>emptyList(), 0, false, false);
     CompactionCommitEvent metadataEvent =
         new CompactionCommitEvent("002", "file-2", Collections.<WriteStatus>emptyList(), 0, true, false);
 
-    handler.commitIfNecessary(dataEvent, metrics);
-    handler.commitIfNecessary(metadataEvent, metrics);
+    handler.commitIfNecessary(dataEvent);
+    handler.commitIfNecessary(metadataEvent);
 
-    verify(dataHandler).commitIfNecessary(same(dataEvent), same(metrics));
-    verify(metadataHandler).commitIfNecessary(same(metadataEvent), same(metrics));
+    verify(dataHandler).commitIfNecessary(same(dataEvent));
+    verify(metadataHandler).commitIfNecessary(same(metadataEvent));
     verifyNoMoreInteractions(dataHandler, metadataHandler);
   }
 
@@ -100,14 +99,13 @@ class TestCompositeHandlers {
     CompactionPlanHandler dataHandler = mock(CompactionPlanHandler.class);
     CompactionPlanHandler metadataHandler = mock(CompactionPlanHandler.class);
     CompositeCompactionPlanHandler handler = new CompositeCompactionPlanHandler(dataHandler, metadataHandler);
-    FlinkCompactionMetrics metrics = mock(FlinkCompactionMetrics.class);
     Output<StreamRecord<CompactionPlanEvent>> output = mock(Output.class);
 
-    handler.collectCompactionOperations(100L, metrics, output);
+    handler.collectCompactionOperations(100L, output);
 
     InOrder inOrder = inOrder(dataHandler, metadataHandler);
-    inOrder.verify(dataHandler).collectCompactionOperations(100L, metrics, output);
-    inOrder.verify(metadataHandler).collectCompactionOperations(100L, metrics, output);
+    inOrder.verify(dataHandler).collectCompactionOperations(100L, output);
+    inOrder.verify(metadataHandler).collectCompactionOperations(100L, output);
     verifyNoMoreInteractions(dataHandler, metadataHandler);
   }
 
@@ -117,17 +115,61 @@ class TestCompositeHandlers {
     CompactHandler dataHandler = mock(CompactHandler.class);
     CompactHandler metadataHandler = mock(CompactHandler.class);
     CompositeCompactHandler handler = new CompositeCompactHandler(dataHandler, metadataHandler);
-    FlinkCompactionMetrics metrics = mock(FlinkCompactionMetrics.class);
     org.apache.flink.util.Collector<CompactionCommitEvent> collector = mock(org.apache.flink.util.Collector.class);
     CompactionPlanEvent dataEvent = new CompactionPlanEvent("003", null, 0, false, false);
     CompactionPlanEvent metadataEvent = new CompactionPlanEvent("004", null, 0, true, false);
 
-    handler.compact(null, dataEvent, collector, false, metrics);
-    handler.compact(null, metadataEvent, collector, false, metrics);
+    handler.compact(null, dataEvent, collector, false);
+    handler.compact(null, metadataEvent, collector, false);
 
-    verify(dataHandler).compact(null, dataEvent, collector, false, metrics);
-    verify(metadataHandler).compact(null, metadataEvent, collector, false, metrics);
+    verify(dataHandler).compact(null, dataEvent, collector, false);
+    verify(metadataHandler).compact(null, metadataEvent, collector, false);
     verifyNoMoreInteractions(dataHandler, metadataHandler, collector);
+  }
+
+  @Test
+  void testCompactionPlanHandlerRegistersMetricsForBothHandlers() {
+    CompactionPlanHandler dataHandler = mock(CompactionPlanHandler.class);
+    CompactionPlanHandler metadataHandler = mock(CompactionPlanHandler.class);
+    CompositeCompactionPlanHandler handler = new CompositeCompactionPlanHandler(dataHandler, metadataHandler);
+    MetricGroup metricGroup = mock(MetricGroup.class);
+
+    handler.registerMetrics(metricGroup);
+
+    InOrder inOrder = inOrder(dataHandler, metadataHandler);
+    inOrder.verify(dataHandler).registerMetrics(same(metricGroup));
+    inOrder.verify(metadataHandler).registerMetrics(same(metricGroup));
+    verifyNoMoreInteractions(dataHandler, metadataHandler);
+  }
+
+  @Test
+  void testCompactHandlerRegistersMetricsForBothHandlers() {
+    CompactHandler dataHandler = mock(CompactHandler.class);
+    CompactHandler metadataHandler = mock(CompactHandler.class);
+    CompositeCompactHandler handler = new CompositeCompactHandler(dataHandler, metadataHandler);
+    MetricGroup metricGroup = mock(MetricGroup.class);
+
+    handler.registerMetrics(metricGroup);
+
+    InOrder inOrder = inOrder(dataHandler, metadataHandler);
+    inOrder.verify(dataHandler).registerMetrics(same(metricGroup));
+    inOrder.verify(metadataHandler).registerMetrics(same(metricGroup));
+    verifyNoMoreInteractions(dataHandler, metadataHandler);
+  }
+
+  @Test
+  void testCommitHandlerRegistersMetricsForBothHandlers() {
+    CompactionCommitHandler dataHandler = mock(CompactionCommitHandler.class);
+    CompactionCommitHandler metadataHandler = mock(CompactionCommitHandler.class);
+    CompositeCompactionCommitHandler handler = new CompositeCompactionCommitHandler(dataHandler, metadataHandler);
+    MetricGroup metricGroup = mock(MetricGroup.class);
+
+    handler.registerMetrics(metricGroup);
+
+    InOrder inOrder = inOrder(dataHandler, metadataHandler);
+    inOrder.verify(dataHandler).registerMetrics(same(metricGroup));
+    inOrder.verify(metadataHandler).registerMetrics(same(metricGroup));
+    verifyNoMoreInteractions(dataHandler, metadataHandler);
   }
 
   @Test

@@ -20,14 +20,12 @@ package org.apache.hudi.sink.compact;
 
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.client.WriteStatus;
-import org.apache.hudi.metrics.FlinkCompactionMetrics;
 import org.apache.hudi.sink.CleanFunction;
 import org.apache.hudi.sink.compact.handler.CompactionCommitHandler;
 import org.apache.hudi.sink.compact.handler.TableServiceHandlerFactory;
 
 import lombok.extern.slf4j.Slf4j;
 import org.apache.flink.configuration.Configuration;
-import org.apache.flink.metrics.MetricGroup;
 
 /**
  * Function to check and commit the compaction action.
@@ -50,11 +48,6 @@ public class CompactionCommitSink extends CleanFunction<CompactionCommitEvent> {
 
   private transient CompactionCommitHandler compactCommitHandler;
 
-  /**
-   * Compaction metrics.
-   */
-  private transient FlinkCompactionMetrics compactionMetrics;
-
   public CompactionCommitSink(Configuration conf) {
     super(conf);
     this.conf = conf;
@@ -64,7 +57,7 @@ public class CompactionCommitSink extends CleanFunction<CompactionCommitEvent> {
   public void open(Configuration parameters) throws Exception {
     super.open(parameters);
     this.compactCommitHandler = TableServiceHandlerFactory.createCompactionCommitHandler(conf, getRuntimeContext());
-    registerMetrics();
+    this.compactCommitHandler.registerMetrics(getRuntimeContext().getMetricGroup());
   }
 
   @Override
@@ -77,7 +70,7 @@ public class CompactionCommitSink extends CleanFunction<CompactionCommitEvent> {
               + " is failed: {}, error record count: {}",
           instant, event.getTaskID(), event.isFailed(), getNumErrorRecords(event));
     }
-    compactCommitHandler.commitIfNecessary(event, compactionMetrics);
+    compactCommitHandler.commitIfNecessary(event);
   }
 
   @Override
@@ -92,11 +85,5 @@ public class CompactionCommitSink extends CleanFunction<CompactionCommitEvent> {
     }
     return event.getWriteStatuses().stream()
         .map(WriteStatus::getTotalErrorRecords).reduce(Long::sum).orElse(0L);
-  }
-
-  private void registerMetrics() {
-    MetricGroup metrics = getRuntimeContext().getMetricGroup();
-    compactionMetrics = new FlinkCompactionMetrics(metrics);
-    compactionMetrics.registerMetrics();
   }
 }

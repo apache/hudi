@@ -18,10 +18,10 @@
 
 package org.apache.hudi.sink.compact.handler;
 
-import org.apache.hudi.metrics.FlinkCompactionMetrics;
 import org.apache.hudi.sink.compact.CompactionCommitEvent;
 import org.apache.hudi.sink.compact.CompactionPlanEvent;
 import org.apache.hudi.sink.utils.NonThrownExecutor;
+import org.apache.flink.metrics.MetricGroup;
 import org.apache.flink.util.Collector;
 
 import javax.annotation.Nullable;
@@ -36,12 +36,16 @@ public class CompositeCompactHandler extends CompositeTableServiceHandler<Compac
   }
 
   @Override
+  public void registerMetrics(MetricGroup metricGroup) {
+    forEachHandler(compactHandler -> compactHandler.registerMetrics(metricGroup));
+  }
+
+  @Override
   public void compact(@Nullable NonThrownExecutor executor,
                       CompactionPlanEvent event,
                       Collector<CompactionCommitEvent> collector,
-                      boolean needReloadMetaClient,
-                      FlinkCompactionMetrics compactionMetrics) throws Exception {
-    getHandler(event.isMetadataTable()).compact(executor, event, collector, needReloadMetaClient, compactionMetrics);
+                      boolean needReloadMetaClient) throws Exception {
+    getHandler(event.isMetadataTable()).compact(executor, event, collector, needReloadMetaClient);
   }
 
   @Override

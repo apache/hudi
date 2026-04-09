@@ -18,11 +18,11 @@
 
 package org.apache.hudi.sink.compact.handler;
 
-import org.apache.hudi.metrics.FlinkCompactionMetrics;
 import org.apache.hudi.sink.compact.CompactionCommitEvent;
 import org.apache.hudi.sink.compact.CompactionPlanEvent;
 import org.apache.hudi.sink.utils.NonThrownExecutor;
 
+import org.apache.flink.metrics.MetricGroup;
 import org.apache.flink.util.Collector;
 
 import javax.annotation.Nullable;
@@ -40,11 +40,12 @@ import java.io.Closeable;
  * corresponding {@link CompactionCommitEvent}s.
  */
 public interface CompactHandler extends Closeable {
+  void registerMetrics(MetricGroup metricGroup);
+
   void compact(@Nullable NonThrownExecutor executor,
                CompactionPlanEvent event,
                Collector<CompactionCommitEvent> collector,
-               boolean needReloadMetaClient,
-               FlinkCompactionMetrics compactionMetrics) throws Exception;
+               boolean needReloadMetaClient) throws Exception;
 
   @Override
   void close();

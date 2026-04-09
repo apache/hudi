@@ -35,6 +35,7 @@ import org.apache.hudi.table.format.InternalSchemaManager;
 import org.apache.hudi.util.CompactionUtil;
 
 import lombok.extern.slf4j.Slf4j;
+import org.apache.flink.metrics.MetricGroup;
 import org.apache.flink.util.Collector;
 
 import javax.annotation.Nullable;
@@ -66,6 +67,7 @@ public class DataTableCompactHandler implements CompactHandler {
   protected final HoodieFlinkTable table;
   protected final HoodieFlinkWriteClient writeClient;
   protected final int taskID;
+  protected transient FlinkCompactionMetrics compactionMetrics;
   /**
    * InternalSchema manager used for handling schema evolution.
    */
@@ -75,6 +77,12 @@ public class DataTableCompactHandler implements CompactHandler {
     this.table = writeClient.getHoodieTable();
     this.writeClient = writeClient;
     this.taskID = taskId;
+  }
+
+  @Override
+  public void registerMetrics(MetricGroup metricGroup) {
+    this.compactionMetrics = new FlinkCompactionMetrics(metricGroup);
+    this.compactionMetrics.registerMetrics();
   }
 
   /**
@@ -88,41 +96,37 @@ public class DataTableCompactHandler implements CompactHandler {
    * @param event                The compaction plan event containing operation details
    * @param collector            The collector for emitting compaction commit events
    * @param needReloadMetaClient Whether to reload the meta client before compaction
-   * @param compactionMetrics    Metrics collector for compaction operations
-   * @throws Exception           If compaction fails
+   * @throws Exception If compaction fails
    */
   @Override
   public void compact(@Nullable NonThrownExecutor executor,
                       CompactionPlanEvent event,
                       Collector<CompactionCommitEvent> collector,
-                      boolean needReloadMetaClient,
-                      FlinkCompactionMetrics compactionMetrics) throws Exception {
+                      boolean needReloadMetaClient) throws Exception {
     String instantTime = event.getCompactionInstantTime();
     if (executor != null) {
       executor.execute(
-          () -> doCompaction(event, collector, needReloadMetaClient, compactionMetrics),
+          () -> doCompaction(event, collector, needReloadMetaClient),
           (errMsg, t) -> collector.collect(createFailedCommitEvent(event)),
           "Execute compaction for instant %s from task %d", instantTime, taskID);
     } else {
       // executes the compaction task synchronously for batch mode.
       log.info("Execute compaction for instant {} from task {}", instantTime, taskID);
-      doCompaction(event, collector, needReloadMetaClient, compactionMetrics);
+      doCompaction(event, collector, needReloadMetaClient);
     }
   }
 
   /**
    * Performs the actual compaction operation.
    *
-   * @param event                The compaction plan event containing operation details
-   * @param collector            The collector for emitting compaction commit events
+   * @param event The compaction plan event containing operation details
+   * @param collector The collector for emitting compaction commit events
    * @param needReloadMetaClient Whether to reload the meta client before compaction
-   * @param compactionMetrics    Metrics collector for compaction operations
-   * @throws Exception           If compaction fails
+   * @throws Exception If compaction fails
    */
   protected void doCompaction(CompactionPlanEvent event,
                               Collector<CompactionCommitEvent> collector,
-                              boolean needReloadMetaClient,
-                              FlinkCompactionMetrics compactionMetrics) throws Exception {
+                              boolean needReloadMetaClient) throws Exception {
     compactionMetrics.startCompaction();
     HoodieFlinkMergeOnReadTableCompactor<?> compactor = new HoodieFlinkMergeOnReadTableCompactor<>();
     HoodieTableMetaClient metaClient = table.getMetaClient();

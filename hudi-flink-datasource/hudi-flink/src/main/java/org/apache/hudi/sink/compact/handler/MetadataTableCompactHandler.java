@@ -26,12 +26,13 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.InstantRange;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.metrics.FlinkCompactionMetrics;
+import org.apache.hudi.metrics.FlinkMdtCompactionMetrics;
 import org.apache.hudi.sink.compact.CompactionCommitEvent;
 import org.apache.hudi.sink.compact.CompactionPlanEvent;
 import org.apache.hudi.table.action.compact.CompactHelpers;
 import org.apache.hudi.table.action.compact.HoodieFlinkMergeOnReadTableCompactor;
 
+import org.apache.flink.metrics.MetricGroup;
 import org.apache.flink.util.Collector;
 
 import java.util.List;
@@ -53,6 +54,12 @@ public class MetadataTableCompactHandler extends DataTableCompactHandler {
 
   public MetadataTableCompactHandler(HoodieFlinkWriteClient writeClient, int taskId) {
     super(writeClient, taskId);
+  }
+
+  @Override
+  public void registerMetrics(MetricGroup metricGroup) {
+    this.compactionMetrics = new FlinkMdtCompactionMetrics(metricGroup);
+    this.compactionMetrics.registerMetrics();
   }
 
   /**
@@ -81,15 +88,13 @@ public class MetadataTableCompactHandler extends DataTableCompactHandler {
    * @param event                The compaction plan event containing the operation details
    * @param collector            Collector for emitting compaction commit events
    * @param needReloadMetaClient Whether the meta client needs to be reloaded
-   * @param compactionMetrics    Metrics collector for tracking compaction progress
    */
   @Override
   protected void doCompaction(CompactionPlanEvent event,
                               Collector<CompactionCommitEvent> collector,
-                              boolean needReloadMetaClient,
-                              FlinkCompactionMetrics compactionMetrics) throws Exception {
+                              boolean needReloadMetaClient) throws Exception {
     if (!event.isLogCompaction()) {
-      super.doCompaction(event, collector, needReloadMetaClient, compactionMetrics);
+      super.doCompaction(event, collector, needReloadMetaClient);
     } else {
       compactionMetrics.startCompaction();
       // Create a write client specifically for the metadata table

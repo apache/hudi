@@ -34,6 +34,7 @@ import org.apache.hudi.table.marker.WriteMarkersFactory;
 import org.apache.hudi.util.CompactionUtil;
 
 import lombok.extern.slf4j.Slf4j;
+import org.apache.flink.metrics.MetricGroup;
 import org.apache.flink.streaming.api.operators.Output;
 import org.apache.flink.streaming.runtime.streamrecord.StreamRecord;
 
@@ -65,6 +66,7 @@ import static java.util.stream.Collectors.toList;
 public class DataTableCompactionPlanHandler implements CompactionPlanHandler {
   protected final HoodieFlinkTable table;
   protected final HoodieFlinkWriteClient writeClient;
+  protected transient FlinkCompactionMetrics compactionMetrics;
 
   /**
    * Constructs a new DataTableCompactionPlanHandler.
@@ -76,24 +78,28 @@ public class DataTableCompactionPlanHandler implements CompactionPlanHandler {
     this.writeClient = writeClient;
   }
 
+  @Override
+  public void registerMetrics(MetricGroup metricGroup) {
+    this.compactionMetrics = new FlinkCompactionMetrics(metricGroup);
+    this.compactionMetrics.registerMetrics();
+  }
+
   /**
    * Retrieve the first pending compaction plan and distribute compaction operations to downstream tasks.
    *
-   * @param checkpointId      The Flink checkpoint ID
-   * @param compactionMetrics Metrics collector for compaction operations
-   * @param output            The output collector for emitting compaction plan events
+   * @param checkpointId The Flink checkpoint ID
+   * @param output       The output collector for emitting compaction plan events
    */
   @Override
   public void collectCompactionOperations(
       long checkpointId,
-      FlinkCompactionMetrics compactionMetrics,
       Output<StreamRecord<CompactionPlanEvent>> output) {
     HoodieTableMetaClient metaClient = table.getMetaClient();
     metaClient.reloadActiveTimeline();
 
     HoodieTimeline pendingCompactionTimeline = metaClient.getActiveTimeline().filterPendingCompactionTimeline();
     Option<Pair<String, HoodieCompactionPlan>> instantAndPlanOpt =
-        getCompactionPlan(metaClient, pendingCompactionTimeline, checkpointId, compactionMetrics, CompactionUtils::getCompactionPlan);
+        getCompactionPlan(metaClient, pendingCompactionTimeline, checkpointId, CompactionUtils::getCompactionPlan);
     if (instantAndPlanOpt.isEmpty()) {
       return;
     }
@@ -117,7 +123,6 @@ public class DataTableCompactionPlanHandler implements CompactionPlanHandler {
    * @param metaClient                The table meta client
    * @param pendingCompactionTimeline The timeline containing pending compaction instants
    * @param checkpointId              The Flink checkpoint ID
-   * @param compactionMetrics         Metrics collector for compaction operations
    * @param planGenerator             Function to generate the compaction plan from meta client and instant
    * @return an optional pair of instant time and compaction plan, empty if no valid plan exists
    */
@@ -125,14 +130,13 @@ public class DataTableCompactionPlanHandler implements CompactionPlanHandler {
       HoodieTableMetaClient metaClient,
       HoodieTimeline pendingCompactionTimeline,
       long checkpointId,
-      FlinkCompactionMetrics compactionMetrics,
       BiFunction<HoodieTableMetaClient, String, HoodieCompactionPlan> planGenerator) {
     // the first instant takes the highest priority.
     Option<HoodieInstant> firstRequested = pendingCompactionTimeline
         .filter(instant -> instant.getState() == HoodieInstant.State.REQUESTED).firstInstant();
     // record metrics
-    compactionMetrics.setFirstPendingCompactionInstant(firstRequested);
-    compactionMetrics.setPendingCompactionCount(pendingCompactionTimeline.countInstants());
+    this.compactionMetrics.setFirstPendingCompactionInstant(firstRequested);
+    this.compactionMetrics.setPendingCompactionCount(pendingCompactionTimeline.countInstants());
 
     if (firstRequested.isEmpty()) {
       log.info("No compaction plan for checkpoint {}", checkpointId);
