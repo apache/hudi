@@ -2163,7 +2163,7 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
       val schema = spark.table(tableName).schema
       val embeddingField = schema.find(_.name == "embedding").get
       assertTrue(embeddingField.metadata.contains(HoodieSchema.TYPE_METADATA_FIELD))
-      assertEquals("VECTOR(64,DOUBLE)", embeddingField.metadata.getString(HoodieSchema.TYPE_METADATA_FIELD))
+      assertEquals("VECTOR(64, DOUBLE)", embeddingField.metadata.getString(HoodieSchema.TYPE_METADATA_FIELD))
       assertEquals(ArrayType(DoubleType, containsNull = false), embeddingField.dataType)
     }
   }
@@ -2176,6 +2176,7 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
            |CREATE TABLE $tableName (
            |  id BIGINT,
            |  float_vec VECTOR(128),
+           |  float_vec_explicit VECTOR(128, FLOAT),
            |  double_vec VECTOR(64, DOUBLE),
            |  int8_vec VECTOR(256, INT8) NOT NULL
            |) USING hudi
@@ -2192,14 +2193,37 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
       assertEquals(ArrayType(FloatType, containsNull = false), floatVecField.dataType)
       assertTrue(floatVecField.nullable)
 
+      // VECTOR(128, FLOAT) should be normalized to the canonical form "VECTOR(128)"
+      val floatVecExplicitField = schema.find(_.name == "float_vec_explicit").get
+      assertEquals("VECTOR(128)", floatVecExplicitField.metadata.getString(HoodieSchema.TYPE_METADATA_FIELD))
+      assertEquals(ArrayType(FloatType, containsNull = false), floatVecExplicitField.dataType)
+
       val doubleVecField = schema.find(_.name == "double_vec").get
-      assertEquals("VECTOR(64,DOUBLE)", doubleVecField.metadata.getString(HoodieSchema.TYPE_METADATA_FIELD))
+      assertEquals("VECTOR(64, DOUBLE)", doubleVecField.metadata.getString(HoodieSchema.TYPE_METADATA_FIELD))
       assertEquals(ArrayType(DoubleType, containsNull = false), doubleVecField.dataType)
 
       val int8VecField = schema.find(_.name == "int8_vec").get
-      assertEquals("VECTOR(256,INT8)", int8VecField.metadata.getString(HoodieSchema.TYPE_METADATA_FIELD))
+      assertEquals("VECTOR(256, INT8)", int8VecField.metadata.getString(HoodieSchema.TYPE_METADATA_FIELD))
       assertEquals(ArrayType(ByteType, containsNull = false), int8VecField.dataType)
       assertFalse(int8VecField.nullable)
+    }
+  }
+
+  test("test create table with invalid VECTOR type surfaces ParseException") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      // Unsupported element type
+      checkExceptionContain(
+        s"""
+           |CREATE TABLE $tableName (
+           |  id BIGINT,
+           |  embedding VECTOR(128, BOOLEAN)
+           |) USING hudi
+           |LOCATION '${tmp.getCanonicalPath}'
+           |TBLPROPERTIES (
+           |  primaryKey = 'id'
+           |)
+           """.stripMargin)("Invalid VECTOR type")
     }
   }
 

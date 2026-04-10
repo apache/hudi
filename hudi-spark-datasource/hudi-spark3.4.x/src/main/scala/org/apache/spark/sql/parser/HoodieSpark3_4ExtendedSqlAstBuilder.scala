@@ -2609,15 +2609,19 @@ class HoodieSpark3_4ExtendedSqlAstBuilder(conf: SQLConf, delegate: ParserInterfa
       case ("varchar", length :: Nil) => VarcharType(length.getText.toInt)
       case ("binary", Nil) => BinaryType
       case ("blob", Nil) => BlobType()
-      case ("vector", dim :: Nil) =>
-        val dimension = dim.getText.toInt
-        val identParams = ctx.identifier().asScala.toList.drop(1) // skip type name
-        val elemTypeStr = if (identParams.nonEmpty) identParams.head.getText.toUpperCase(Locale.ROOT) else "FLOAT"
-        val sparkElemType = elemTypeStr match {
-          case "FLOAT" => FloatType
-          case "DOUBLE" => DoubleType
-          case "INT8" => ByteType
-          case other => throw new ParseException(s"Unsupported VECTOR element type: $other. Supported: FLOAT, DOUBLE, INT8", ctx)
+      case ("vector", _ :: _) =>
+        // Delegate validation to HoodieSchema.parseTypeDescriptor which handles dimension
+        // range checks, element type validation, and canonical normalization.
+        val vectorSchema = try {
+          HoodieSchema.parseTypeDescriptor(ctx.getText).asInstanceOf[HoodieSchema.Vector]
+        } catch {
+          case e: IllegalArgumentException =>
+            throw new ParseException(s"Invalid VECTOR type: ${e.getMessage}", ctx)
+        }
+        val sparkElemType = vectorSchema.getVectorElementType match {
+          case HoodieSchema.Vector.VectorElementType.FLOAT => FloatType
+          case HoodieSchema.Vector.VectorElementType.DOUBLE => DoubleType
+          case HoodieSchema.Vector.VectorElementType.INT8 => ByteType
         }
         ArrayType(sparkElemType, containsNull = false)
       case ("decimal" | "dec" | "numeric", Nil) => DecimalType.USER_DEFAULT
@@ -2716,10 +2720,13 @@ class HoodieSpark3_4ExtendedSqlAstBuilder(conf: SQLConf, delegate: ParserInterfa
 
   private def addMetadataForType(dataType: HoodieSqlBaseParser.DataTypeContext, builder: MetadataBuilder): Unit = {
     val typeText = dataType.getText
-    if (typeText.equalsIgnoreCase(HoodieSchemaType.BLOB.name())) {
+    val upperTypeText = typeText.toUpperCase(Locale.ROOT)
+    if (upperTypeText == HoodieSchemaType.BLOB.name()) {
       builder.putString(HoodieSchema.TYPE_METADATA_FIELD, HoodieSchemaType.BLOB.name())
-    } else if (typeText.toUpperCase(Locale.ROOT).startsWith("VECTOR(")) {
-      builder.putString(HoodieSchema.TYPE_METADATA_FIELD, typeText.toUpperCase(Locale.ROOT))
+    } else if (upperTypeText.startsWith("VECTOR(")) {
+      // Normalize to canonical form (e.g. "VECTOR(128,FLOAT)" -> "VECTOR(128)")
+      val vectorSchema = HoodieSchema.parseTypeDescriptor(typeText).asInstanceOf[HoodieSchema.Vector]
+      builder.putString(HoodieSchema.TYPE_METADATA_FIELD, vectorSchema.toTypeDescriptor)
     }
   }
 
