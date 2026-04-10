@@ -28,9 +28,12 @@ import org.apache.hudi.exception.SchemaCompatibilityException;
 import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.internal.schema.action.TableChanges;
 import org.apache.hudi.internal.schema.utils.SchemaChangeUtils;
+import org.apache.hudi.io.storage.HoodieFileReader;
+import org.apache.hudi.storage.StorageConfiguration;
 
 import org.apache.avro.Schema;
 import org.apache.avro.SchemaCompatibility;
+import org.apache.hadoop.conf.Configuration;
 
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
@@ -42,6 +45,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 import java.util.function.BiFunction;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.util.CollectionUtils.reduce;
@@ -529,6 +533,36 @@ public class AvroSchemaUtils {
       return (Boolean) hasTimestampMillisFieldMethod.invoke(null, schema);
     } catch (NoSuchMethodException | IllegalAccessException | InvocationTargetException e) {
       return false;
+    }
+  }
+
+  /**
+   * Sets logical timestamp repair needed key in conf to true
+   */
+  public static void setLogicalTimestampRepairIfNotSet(Configuration conf, Supplier<Boolean> valueSupplier) {
+    if (conf.get(HoodieFileReader.ENABLE_LOGICAL_TIMESTAMP_REPAIR) == null) {
+      conf.set(HoodieFileReader.ENABLE_LOGICAL_TIMESTAMP_REPAIR, valueSupplier.get().toString());
+    }
+  }
+
+  /**
+   * Sets logical timestamp repair needed key in conf to true
+   */
+  public static void setLogicalTimestampRepairIfNotSet(StorageConfiguration conf, Supplier<Boolean> valueSupplier) {
+    if (!conf.contains(HoodieFileReader.ENABLE_LOGICAL_TIMESTAMP_REPAIR)) {
+      conf.set(HoodieFileReader.ENABLE_LOGICAL_TIMESTAMP_REPAIR, valueSupplier.get().toString());
+    }
+  }
+
+  /**
+   * Returns true if logical timestamp repair needed key is set to true or if it is not present in config
+   */
+  public static boolean isLogicalTimestampRepairNeeded(StorageConfiguration conf, Supplier<Boolean> defaultValueSupplier) {
+    Option<String> valueOpt = conf.getString(HoodieFileReader.ENABLE_LOGICAL_TIMESTAMP_REPAIR);
+    if (valueOpt.isEmpty() || StringUtils.isNullOrEmpty(valueOpt.get())) {
+      return defaultValueSupplier.get();
+    } else {
+      return Boolean.parseBoolean(valueOpt.get());
     }
   }
 }

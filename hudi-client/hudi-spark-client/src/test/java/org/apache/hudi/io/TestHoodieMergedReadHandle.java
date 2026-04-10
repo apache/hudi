@@ -19,6 +19,8 @@
 
 package org.apache.hudi.io;
 
+import org.apache.hudi.avro.AvroSchemaUtils;
+import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.model.AWSDmsAvroPayload;
@@ -41,6 +43,7 @@ import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness;
 
+import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -198,7 +201,10 @@ public class TestHoodieMergedReadHandle extends SparkClientFunctionalTestHarness
         .collect(Collectors.toList());
     assertEquals(1, partitionPathAndFileIDPairs.size());
     String latestCommitTime = table.getActiveTimeline().lastInstant().get().getTimestamp();
-    HoodieMergedReadHandle mergedReadHandle = new HoodieMergedReadHandle<>(writeConfig, Option.of(latestCommitTime), table, partitionPathAndFileIDPairs.get(0));
+    Schema baseFileReaderSchema = HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(writeConfig.getWriteSchema()), writeConfig.allowOperationMetadataField());
+    boolean hasTimestampFields = baseFileReaderSchema != null && AvroSchemaUtils.hasTimestampMillisField(baseFileReaderSchema);
+    HoodieMergedReadHandle mergedReadHandle = new HoodieMergedReadHandle<>(writeConfig, Option.of(latestCommitTime), table, partitionPathAndFileIDPairs.get(0),
+        hasTimestampFields);
     List<HoodieRecord> mergedRecords = mergedReadHandle.getMergedRecords();
     assertEquals(totalRecords, mergedRecords.size());
     List<HoodieRecord> sortedMergedRecords = mergedRecords.stream()

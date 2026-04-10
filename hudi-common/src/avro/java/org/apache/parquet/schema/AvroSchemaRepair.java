@@ -22,6 +22,7 @@ package org.apache.parquet.schema;
 import org.apache.hudi.avro.AvroSchemaCache;
 import org.apache.hudi.avro.AvroSchemaUtils;
 import org.apache.hudi.avro.HoodieAvroUtils;
+import org.apache.hudi.exception.HoodieException;
 
 import org.apache.avro.LogicalType;
 import org.apache.avro.LogicalTypes;

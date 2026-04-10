@@ -56,26 +56,23 @@ public class HoodieMergedReadHandle<T, I, K, O> extends HoodieReadHandle<T, I, K
   protected final Schema baseFileReaderSchema;
   private final Option<FileSlice> fileSliceOpt;
 
-  public HoodieMergedReadHandle(HoodieWriteConfig config,
-                                Option<String> instantTime,
-                                HoodieTable<T, I, K, O> hoodieTable,
-                                Pair<String, String> partitionPathFileIDPair) {
-    this(config, instantTime, hoodieTable, partitionPathFileIDPair, Option.empty());
+  public HoodieMergedReadHandle(HoodieWriteConfig config, Option<String> instantTime,
+                                HoodieTable<T, I, K, O> hoodieTable, Pair<String, String> partitionPathFileIDPair,
+                                boolean hasTimestampFields) {
+    this(config, instantTime, hoodieTable, partitionPathFileIDPair, hasTimestampFields, Option.empty());
   }
 
-  public HoodieMergedReadHandle(HoodieWriteConfig config,
-                                Option<String> instantTime,
-                                HoodieTable<T, I, K, O> hoodieTable,
-                                Pair<String, String> partitionPathFileIDPair,
-                                Option<FileSlice> fileSliceOption) {
+  public HoodieMergedReadHandle(HoodieWriteConfig config, Option<String> instantTime,
+                                HoodieTable<T, I, K, O> hoodieTable, Pair<String, String> partitionPathFileIDPair,
+                                boolean hasTimestampFields, Option<FileSlice> fileSliceOption) {
     super(config, instantTime, hoodieTable, partitionPathFileIDPair);
     Schema orignalReaderSchema = HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(config.getSchema()), config.allowOperationMetadataField());
     // config.getSchema is not canonicalized, while config.getWriteSchema is canonicalized. So, we have to use the canonicalized schema to read the existing data.
-    baseFileReaderSchema = HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(config.getWriteSchema()), config.allowOperationMetadataField());
+    this.baseFileReaderSchema = HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(config.getWriteSchema()), config.allowOperationMetadataField());
     fileSliceOpt = fileSliceOption.isPresent() ? fileSliceOption : getLatestFileSlice();
     // Repair reader schema.
     // Assume writer schema should be correct. If not, no repair happens.
-    readerSchema = AvroSchemaUtils.getRepairedSchema(orignalReaderSchema, baseFileReaderSchema);
+    readerSchema = hasTimestampFields ? AvroSchemaUtils.getRepairedSchema(orignalReaderSchema, this.baseFileReaderSchema) : orignalReaderSchema;
   }
 
   public List<HoodieRecord<T>> getMergedRecords() {

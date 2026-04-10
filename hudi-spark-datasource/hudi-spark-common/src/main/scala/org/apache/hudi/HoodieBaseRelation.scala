@@ -116,6 +116,8 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
 
   protected lazy val tableConfig: HoodieTableConfig = metaClient.getTableConfig
 
+  protected lazy val hasTimestampMillisFieldInTableSchema: Boolean = HoodieSchemaUtils.hasTimestampMillisField(tableAvroSchema)
+
   protected lazy val basePath: Path = new Path(metaClient.getBasePath.toUri)
 
   // NOTE: Record key-field is assumed singular here due to the either of
@@ -245,7 +247,7 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
         // We're delegating to Spark to append partition values to every row only in cases
         // when these corresponding partition-values are not persisted w/in the data file itself
         val parquetFileFormat = sparkAdapter.createLegacyHoodieParquetFileFormat(
-          shouldExtractPartitionValuesFromPartitionPath, tableAvroSchema, hasTimestampMillisFieldInTableSchema = HoodieSchemaUtils.hasTimestampMillisField(tableAvroSchema)).get
+          shouldExtractPartitionValuesFromPartitionPath, tableAvroSchema, hasTimestampMillisFieldInTableSchema = hasTimestampMillisFieldInTableSchema).get
         (parquetFileFormat, LegacyHoodieParquetFileFormat.FILE_FORMAT_ID)
     }
 
@@ -555,7 +557,7 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
             // when these corresponding partition-values are not persisted w/in the data file itself
             appendPartitionValues = shouldAppendPartitionValuesOverride.getOrElse(shouldExtractPartitionValuesFromPartitionPath),
             tableAvroSchema,
-            hasTimestampMillisFieldInTableSchema = HoodieSchemaUtils.hasTimestampMillisField(tableAvroSchema)
+            hasTimestampMillisFieldInTableSchema = hasTimestampMillisFieldInTableSchema
           )
           // Since partition values by default are omitted, and not persisted w/in data-files by Spark,
           // data-file readers (such as [[ParquetFileFormat]]) have to inject partition values while reading
