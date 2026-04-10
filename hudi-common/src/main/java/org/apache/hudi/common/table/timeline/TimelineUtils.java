@@ -647,4 +647,28 @@ public class TimelineUtils {
     }
     return writerOption;
   }
+
+  public static Option<Pair<String, HoodieCommitMetadata>> getLatestInstantAndCommitMetadataWithValidCheckpointInfo(HoodieTimeline timeline,
+                                                                                                                    String... checkpointKeys) throws IOException {
+    return (Option<Pair<String, HoodieCommitMetadata>>) timeline.getReverseOrderedInstants().map(instant -> {
+      try {
+        HoodieCommitMetadata commitMetadata = HoodieCommitMetadata
+            .fromBytes(timeline.getInstantDetails(instant).get(), HoodieCommitMetadata.class);
+        boolean hasCheckpointMetadata = false;
+        for (String checkpointKey : checkpointKeys) {
+          if (!StringUtils.isNullOrEmpty(commitMetadata.getMetadata(checkpointKey))) {
+            hasCheckpointMetadata = true;
+            break;
+          }
+        }
+        if (hasCheckpointMetadata) {
+          return Option.of(Pair.of(instant.getTimestamp(), commitMetadata));
+        } else {
+          return Option.empty();
+        }
+      } catch (IOException e) {
+        throw new HoodieIOException("Failed to parse HoodieCommitMetadata for " + instant.toString(), e);
+      }
+    }).filter(Option::isPresent).findFirst().orElse(Option.empty());
+  }
 }
