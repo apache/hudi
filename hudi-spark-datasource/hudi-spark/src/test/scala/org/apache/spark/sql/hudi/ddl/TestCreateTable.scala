@@ -2209,6 +2209,45 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
     }
   }
 
+  test("test create table with INT8 VECTOR column") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      spark.sql(
+        s"""
+           |CREATE TABLE $tableName (
+           |  id BIGINT,
+           |  embedding VECTOR(256, INT8)
+           |) USING hudi
+           |LOCATION '${tmp.getCanonicalPath}'
+           |TBLPROPERTIES (
+           |  primaryKey = 'id'
+           |)
+           """.stripMargin)
+
+      val schema = spark.table(tableName).schema
+      val embeddingField = schema.find(_.name == "embedding").get
+      assertEquals("VECTOR(256, INT8)", embeddingField.metadata.getString(HoodieSchema.TYPE_METADATA_FIELD))
+      assertEquals(ArrayType(ByteType, containsNull = false), embeddingField.dataType)
+    }
+  }
+
+  test("test create table with VECTOR without dimension fails") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      checkExceptionContain(
+        s"""
+           |CREATE TABLE $tableName (
+           |  id BIGINT,
+           |  v VECTOR
+           |) USING hudi
+           |LOCATION '${tmp.getCanonicalPath}'
+           |TBLPROPERTIES (
+           |  primaryKey = 'id'
+           |)
+           """.stripMargin)("vector is not supported")
+    }
+  }
+
   test("test create table with invalid VECTOR type surfaces ParseException") {
     withTempDir { tmp =>
       val tableName = generateTableName

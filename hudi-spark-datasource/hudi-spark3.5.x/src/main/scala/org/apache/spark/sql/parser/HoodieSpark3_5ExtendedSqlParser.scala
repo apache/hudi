@@ -130,7 +130,7 @@ class HoodieSpark3_5ExtendedSqlParser(session: SparkSession, delegate: ParserInt
       normalized.contains("show indexes") ||
       normalized.contains("refresh index") ||
       normalized.contains(" blob") ||
-      normalized.contains(" vector(")
+      normalized.contains(" vector")
   }
 }
 
