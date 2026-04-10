@@ -118,7 +118,7 @@
     <junit.platform.version>1.14.1</junit.platform.version>
     <mockito.jupiter.version>5.21.0</mockito.jupiter.version>
     <log4j2.version>2.25.3</log4j2.version>
-    <slf4j.version>1.7.36</slf4j.version>
+    <slf4j.version>2.0.7</slf4j.version>
     <joda.version>2.9.9</joda.version>
     <hadoop.version>2.10.2</hadoop.version>
     <hive.groupid>org.apache.hive</hive.groupid>
