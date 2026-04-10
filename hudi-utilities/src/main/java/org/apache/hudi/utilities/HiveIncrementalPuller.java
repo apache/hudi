@@ -126,12 +126,12 @@ public class HiveIncrementalPuller {
     }
   }
 
-  public void saveDelta() throws IOException {
+    public void saveDelta() throws IOException {
     Configuration conf = new Configuration();
     conf.set("fs.defaultFS",config.fsDefaultFs);
     FileSystem fs = FileSystem.get(conf);
-    Statement stmt = null;
-    try {
+    Statement stmt = null
+  try 
       if (config.fromCommitTime == null) {
         config.fromCommitTime = inferCommitTime(fs);
         LOG.info("FromCommitTime inferred as " + config.fromCommitTime);
@@ -188,7 +188,7 @@ public class HiveIncrementalPuller {
       incrementalSQL = sqlScanner.useDelimiter("\\Z").next();
     }
     if (!incrementalSQL.contains(config.sourceDb + "." + config.sourceTable)) {
-      LOG.error("Incremental SQL does not have " + config.sourceDb + "." + config.sourceTable
+      LOG.error("Incremental SQL does not  have " + config.sourceDb + "." + config.sourceTable
           + ", which means its pulling from a different table. Fencing this from happening.");
       throw new HoodieIncrementalPullSQLException(
           "Incremental SQL does not have " + config.sourceDb + "." + config.sourceTable);
