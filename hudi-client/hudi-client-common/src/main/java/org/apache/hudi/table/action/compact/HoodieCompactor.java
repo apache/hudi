@@ -18,6 +18,7 @@
 
 package org.apache.hudi.table.action.compact;
 
+import org.apache.hudi.avro.AvroSchemaUtils;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.client.WriteStatus;
@@ -130,6 +131,12 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
     TaskContextSupplier taskContextSupplier = table.getTaskContextSupplier();
     // if this is a MDT, set up the instant range of log reader just like regular MDT snapshot reader.
     Option<InstantRange> instantRange = CompactHelpers.getInstance().getInstantRange(metaClient);
+    // Since we are using merge handle here, we can directly query the write schema from conf
+    // Write handle provides an option to use overridden write schema as well which is not used by merge handle
+    Schema writerSchema = HoodieAvroUtils.addMetadataFields(new Schema.Parser().parse(config.getWriteSchema()), config.allowOperationMetadataField());
+    if (!table.isMetadataTable()) {
+      AvroSchemaUtils.setLogicalTimestampRepairIfNotSet(table.getStorageConf(), () -> AvroSchemaUtils.hasTimestampMillisField(writerSchema));
+    }
     return context.parallelize(operations).map(operation -> compact(
         compactionHandler, metaClient, config, operation, compactionInstantTime, maxInstantTime, instantRange, taskContextSupplier, executionHelper))
         .flatMap(List::iterator);

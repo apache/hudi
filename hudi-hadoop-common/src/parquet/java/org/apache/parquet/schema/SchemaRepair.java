@@ -20,6 +20,7 @@
 package org.apache.parquet.schema;
 
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.exception.HoodieException;
 
 import java.util.ArrayList;
 import java.util.List;
