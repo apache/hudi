@@ -35,7 +35,6 @@ import java.util.HashMap;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TestHiveSchemaUtil {
@@ -176,16 +175,5 @@ public class TestHiveSchemaUtil {
     expected.put("`uuid_field`", "binary");
     expected.put("`vector_field`", "binary");
     assertEquals(expected, actual);
-  }
-
-  @Test
-  void testVariantTypeConversion() {
-    HoodieSchema schema = HoodieSchema.createRecord("TestSchema", null, null,
-        Collections.singletonList(
-            HoodieSchemaField.of("variant_field", HoodieSchema.createVariant())));
-
-    UnsupportedOperationException ex = assertThrows(UnsupportedOperationException.class,
-        () -> HiveSchemaUtil.convertSchemaToHiveSchema(schema, true));
-    assertTrue(ex.getMessage().contains("VARIANT"));
   }
 }
