@@ -649,6 +649,17 @@ public class TimelineUtils {
     return writerOption;
   }
 
+  /**
+   * Returns the latest reverse-ordered instant whose commit metadata contains at least one of the provided
+   * checkpoint metadata keys.
+   *
+   * @param timeline timeline to scan; expected to contain completed instants
+   * @param checkpointKeys checkpoint metadata keys to look for in commit metadata
+   * @return an {@link Option} containing a {@link Pair} of the matching instant's
+   *         {@link HoodieInstant#toString()} value and its
+   *         {@link HoodieCommitMetadata}; {@link Option#empty()} if no matching instant is found
+   * @throws IOException if reading commit metadata fails
+   */
   @SuppressWarnings("unchecked")
   public static Option<Pair<String, HoodieCommitMetadata>> getLatestInstantAndCommitMetadataWithValidCheckpointInfo(
       HoodieTimeline timeline, String... checkpointKeys) throws IOException {
@@ -657,7 +668,7 @@ public class TimelineUtils {
         HoodieCommitMetadata commitMetadata = timeline.readCommitMetadata(instant);
         boolean hasCheckpointMetadata = Arrays.stream(checkpointKeys)
             .anyMatch(key -> !StringUtils.isNullOrEmpty(commitMetadata.getMetadata(key)));
-        return hasCheckpointMetadata ? Option.of(Pair.of(instant.requestedTime(), commitMetadata)) : Option.empty();
+        return hasCheckpointMetadata ? Option.of(Pair.of(instant.toString(), commitMetadata)) : Option.empty();
       } catch (IOException e) {
         throw new HoodieIOException("Failed to parse HoodieCommitMetadata for " + instant.toString(), e);
       }
