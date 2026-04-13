@@ -305,6 +305,39 @@ public class TestBigQuerySchemaResolver {
   }
 
   @Test
+  void convertSchema_nullableBlobField() {
+    HoodieSchema input = HoodieSchema.createRecord("testRecord", null, null, false, Arrays.asList(
+        HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.INT)),
+        HoodieSchemaField.of("blob_data", HoodieSchema.createNullable(HoodieSchema.createBlob()))
+    ));
+
+    Schema result = SCHEMA_RESOLVER.convertSchema(input);
+    Field blobField = result.getFields().get(1);
+    Assertions.assertEquals(Field.Mode.NULLABLE, blobField.getMode());
+    Assertions.assertEquals(StandardSQLTypeName.STRUCT, blobField.getType().getStandardType());
+  }
+
+  @Test
+  void convertSchema_nestedBlobField() {
+    HoodieSchema inner = HoodieSchema.createRecord("media", null, null, false, Arrays.asList(
+        HoodieSchemaField.of("title", HoodieSchema.create(HoodieSchemaType.STRING)),
+        HoodieSchemaField.of("content", HoodieSchema.createBlob())
+    ));
+    HoodieSchema input = HoodieSchema.createRecord("testRecord", null, null, false, Arrays.asList(
+        HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.INT)),
+        HoodieSchemaField.of("media", inner)
+    ));
+
+    Schema result = SCHEMA_RESOLVER.convertSchema(input);
+    Field mediaField = result.getFields().get(1);
+    Assertions.assertEquals(StandardSQLTypeName.STRUCT, mediaField.getType().getStandardType());
+    // Verify the nested "content" sub-field is a STRUCT (BLOB)
+    Field contentField = mediaField.getSubFields().stream()
+        .filter(f -> f.getName().equals("content")).findFirst().get();
+    Assertions.assertEquals(StandardSQLTypeName.STRUCT, contentField.getType().getStandardType());
+  }
+
+  @Test
   void convertSchema_vectorField() {
     HoodieSchema input = HoodieSchema.createRecord("testRecord", null, null, false, Arrays.asList(
         HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.INT)),

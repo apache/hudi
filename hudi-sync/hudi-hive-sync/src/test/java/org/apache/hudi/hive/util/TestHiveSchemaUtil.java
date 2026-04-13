@@ -150,7 +150,12 @@ public class TestHiveSchemaUtil {
             HoodieSchemaField.of("decimal_field", HoodieSchema.createDecimal(10, 2)),
             HoodieSchemaField.of("uuid_field", HoodieSchema.create(HoodieSchemaType.UUID)),
             HoodieSchemaField.of("vector_field", HoodieSchema.createVector(128)),
-            HoodieSchemaField.of("blob_field", HoodieSchema.createBlob())
+            HoodieSchemaField.of("blob_field", HoodieSchema.createBlob()),
+            HoodieSchemaField.of("nullable_blob_field", HoodieSchema.createNullable(HoodieSchema.createBlob())),
+            HoodieSchemaField.of("nested_blob_field", HoodieSchema.createRecord("media", null, null, false, Arrays.asList(
+                HoodieSchemaField.of("title", HoodieSchema.create(HoodieSchemaType.STRING)),
+                HoodieSchemaField.of("content", HoodieSchema.createBlob())
+            )))
         )
     );
 
@@ -177,6 +182,10 @@ public class TestHiveSchemaUtil {
     expected.put("`vector_field`", "binary");
     expected.put("`blob_field`",
         "STRUCT< `type` : string, `data` : binary, `reference` : STRUCT< `external_path` : string, `offset` : bigint, `length` : bigint, `managed` : boolean>>");
+    expected.put("`nullable_blob_field`",
+        "STRUCT< `type` : string, `data` : binary, `reference` : STRUCT< `external_path` : string, `offset` : bigint, `length` : bigint, `managed` : boolean>>");
+    expected.put("`nested_blob_field`",
+        "STRUCT< `title` : string, `content` : STRUCT< `type` : string, `data` : binary, `reference` : STRUCT< `external_path` : string, `offset` : bigint, `length` : bigint, `managed` : boolean>>>");
     assertEquals(expected, actual);
   }
 }
