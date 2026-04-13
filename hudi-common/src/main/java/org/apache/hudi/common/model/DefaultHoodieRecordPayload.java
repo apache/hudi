@@ -193,7 +193,7 @@ public class DefaultHoodieRecordPayload extends OverwriteWithLatestAvroPayload {
    *
    * @param persistedOrderingVal record present in Disk
    * @param incomingOrderingVal record part of input payload
-   * @return true if the older record(persisted entry) is older than incoming record.
+   * @return true if the incoming record should replace the persisted record
    */
   protected boolean compareOrderingVal(Comparable persistedOrderingVal, Comparable incomingOrderingVal,
                                        boolean updateOnSameOrderingField) {
