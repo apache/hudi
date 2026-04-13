@@ -49,6 +49,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.text.ParseException;
 import java.util.AbstractMap;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Date;
@@ -648,24 +649,15 @@ public class TimelineUtils {
     return writerOption;
   }
 
-  public static Option<Pair<String, HoodieCommitMetadata>> getLatestInstantAndCommitMetadataWithValidCheckpointInfo(HoodieTimeline timeline,
-                                                                                                                    String... checkpointKeys) throws IOException {
+  @SuppressWarnings("unchecked")
+  public static Option<Pair<String, HoodieCommitMetadata>> getLatestInstantAndCommitMetadataWithValidCheckpointInfo(
+      HoodieTimeline timeline, String... checkpointKeys) throws IOException {
     return (Option<Pair<String, HoodieCommitMetadata>>) timeline.getReverseOrderedInstants().map(instant -> {
       try {
-        HoodieCommitMetadata commitMetadata = HoodieCommitMetadata
-            .fromBytes(timeline.getInstantDetails(instant).get(), HoodieCommitMetadata.class);
-        boolean hasCheckpointMetadata = false;
-        for (String checkpointKey : checkpointKeys) {
-          if (!StringUtils.isNullOrEmpty(commitMetadata.getMetadata(checkpointKey))) {
-            hasCheckpointMetadata = true;
-            break;
-          }
-        }
-        if (hasCheckpointMetadata) {
-          return Option.of(Pair.of(instant.getTimestamp(), commitMetadata));
-        } else {
-          return Option.empty();
-        }
+        HoodieCommitMetadata commitMetadata = timeline.readCommitMetadata(instant);
+        boolean hasCheckpointMetadata = Arrays.stream(checkpointKeys)
+            .anyMatch(key -> !StringUtils.isNullOrEmpty(commitMetadata.getMetadata(key)));
+        return hasCheckpointMetadata ? Option.of(Pair.of(instant.requestedTime(), commitMetadata)) : Option.empty();
       } catch (IOException e) {
         throw new HoodieIOException("Failed to parse HoodieCommitMetadata for " + instant.toString(), e);
       }
