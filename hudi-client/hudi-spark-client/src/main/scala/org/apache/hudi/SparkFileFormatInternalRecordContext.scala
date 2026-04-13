@@ -62,6 +62,11 @@ trait SparkFileFormatInternalRecordContext extends BaseSparkInternalRecordContex
   private val avroRecordByRow: java.util.IdentityHashMap[InternalRow, GenericRecord] =
     new java.util.IdentityHashMap[InternalRow, GenericRecord]()
 
+  // Single-shot flag set by convertToAvroRecord when it returned a cached record,
+  // consumed by consumeLastAvroRecordFromCache. Avoids relying on schema-inequality
+  // heuristics in downstream code (UpdateProcessor).
+  private var lastAvroFromCache: Boolean = false
+
   override def supportsParquetRowIndex: Boolean = {
     HoodieSparkUtils.gteqSpark3_5
   }
@@ -125,13 +130,21 @@ trait SparkFileFormatInternalRecordContext extends BaseSparkInternalRecordContex
     // by ExpressionPayload.combineAndGetUpdateValue (i.e., PAYLOAD_RECORD_AVRO_SCHEMA / data schema).
     val cached = avroRecordByRow.remove(record)
     if (cached != null) {
+      lastAvroFromCache = true
       return cached
     }
+    lastAvroFromCache = false
     val structType = HoodieInternalRowUtils.getCachedSchema(schema)
     val serializer = serializerMap.getOrElseUpdate(schema, {
       sparkAdapter.createAvroSerializer(structType, schema, schema.isNullable)
     })
     serializer.serialize(record).asInstanceOf[GenericRecord]
+  }
+
+  override def consumeLastAvroRecordFromCache(): Boolean = {
+    val flag = lastAvroFromCache
+    lastAvroFromCache = false
+    flag
   }
 }
 

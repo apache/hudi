@@ -142,13 +142,13 @@ public interface UpdateProcessor<T> {
         GenericRecord record = readerContext.getRecordContext().convertToAvroRecord(mergedRecord.getRecord(), recordSchema);
         Schema recordAvroSchema = recordSchema.toAvroSchema();
 
-        // If convertToAvroRecord returned a cached record with a different schema (e.g., from
-        // extractDataFromRecord caching for ExpressionPayload in the COW write path), the record
-        // is already in write-schema format with correctly evaluated expressions. Convert directly.
-        // Note: SENTINEL records (used by ExpressionPayload to signal "skip this record") always
-        // have null schema (HoodieRecord.EmptyRecord.getSchema() returns null), so they cannot
-        // enter this branch and will always go through the payload path where shouldIgnore handles them.
-        if (record.getSchema() != null && !record.getSchema().equals(recordAvroSchema)) {
+        // If convertToAvroRecord returned an Avro record previously cached by extractDataFromRecord
+        // (ExpressionPayload in the COW write path), the record is already in write-schema format
+        // with correctly evaluated expressions. Convert directly and skip the payload path.
+        // Using the explicit RecordContext flag instead of comparing schemas: schema inequality
+        // can also arise from legitimate reader/writer schema evolution, which is unrelated to
+        // the cache hit we want to detect here.
+        if (readerContext.getRecordContext().consumeLastAvroRecordFromCache()) {
           // NOTE: After replaceRecord(), mergedRecord.getSchemaId() still references the original schema.
           // This is safe because the record is emitted immediately via super.handleNonDeletes() below,
           // which calls seal() and produces the output row. The record is not spilled to disk (via

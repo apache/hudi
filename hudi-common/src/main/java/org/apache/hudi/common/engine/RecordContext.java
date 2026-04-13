@@ -245,6 +245,23 @@ public abstract class RecordContext<T> implements Serializable {
   public abstract GenericRecord convertToAvroRecord(T record, HoodieSchema schema);
 
   /**
+   * Reports whether the most recent {@link #convertToAvroRecord} call returned an Avro
+   * record produced upstream (e.g. cached by {@link #extractDataFromRecord} for
+   * ExpressionPayload) rather than one freshly serialized from the engine-native record.
+   *
+   * <p>This is an explicit signal intended to disambiguate the "came from cache" case from
+   * a legitimate schema-evolution skew between writer and reader schemas. Callers that need
+   * to branch on this distinction should invoke this method immediately after the
+   * corresponding {@code convertToAvroRecord} call; the flag is single-shot and resets on read.
+   *
+   * <p>Default implementation returns {@code false} for engines/contexts that do not
+   * maintain such a cache.
+   */
+  public boolean consumeLastAvroRecordFromCache() {
+    return false;
+  }
+
+  /**
    * Fills an empty row with record key fields and returns.
    *
    * <p>When `emitDelete` is true for FileGroup reader and payload for DELETE record is empty,

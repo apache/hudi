@@ -19,7 +19,7 @@
 
 package org.apache.spark.sql.hudi.feature
 
-import org.apache.hudi.{DefaultSparkRecordMerger, HoodieSparkUtils}
+import org.apache.hudi.HoodieSparkUtils
 
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
 
@@ -32,10 +32,6 @@ class TestQueryMergeOnReadOptimizedTable extends HoodieSparkSqlTestBase {
       withTempDir { tmp =>
         val tableName = generateTableName
         val tablePath = s"${tmp.getCanonicalPath}/$tableName"
-        val recordMergerImpl = if (baseFileFormat == "parquet") "" else {
-          s"hoodie.write.record.merge.custom.implementation.classes = '${classOf[DefaultSparkRecordMerger].getName}',"
-        }
-        // create table
         spark.sql(
           s"""
              |create table $tableName (
@@ -51,7 +47,6 @@ class TestQueryMergeOnReadOptimizedTable extends HoodieSparkSqlTestBase {
              |  type = 'mor',
              |  primaryKey = 'id',
              |  orderingFields = 'ts',
-             |  $recordMergerImpl
              |  hoodie.table.base.file.format = '$baseFileFormat'
              | )
          """.stripMargin)

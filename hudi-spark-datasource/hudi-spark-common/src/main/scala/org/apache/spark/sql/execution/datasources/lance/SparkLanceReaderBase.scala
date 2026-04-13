@@ -43,6 +43,7 @@ import org.apache.spark.sql.util.LanceArrowUtils
 import org.lance.file.{BlobReadMode, FileReadOptions, LanceFileReader}
 
 import java.io.IOException
+import java.util.NoSuchElementException
 
 import scala.collection.JavaConverters._
 
@@ -86,8 +87,18 @@ class SparkLanceReaderBase(enableVectorizedReader: Boolean) extends SparkColumna
       try {
         val lanceReader = LanceFileReader.open(file.filePath.toString, countAllocator)
         try {
-          val rowCount = Math.toIntExact(lanceReader.numRows())
-          Iterator.fill(rowCount)(InternalRow.empty)
+          val rowCount: Long = lanceReader.numRows()
+          // Lazy Long-backed iterator: Iterator.fill/take require Int, which caps at ~2.1B rows.
+          // This custom iterator counts with Long so the count(*) path is not bounded by Int.MaxValue.
+          new Iterator[InternalRow] {
+            private var remaining: Long = rowCount
+            override def hasNext: Boolean = remaining > 0L
+            override def next(): InternalRow = {
+              if (remaining <= 0L) throw new NoSuchElementException
+              remaining -= 1L
+              InternalRow.empty
+            }
+          }
         } finally {
           lanceReader.close()
         }
