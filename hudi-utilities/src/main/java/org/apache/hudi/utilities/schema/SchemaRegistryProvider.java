@@ -159,7 +159,7 @@ public class SchemaRegistryProvider extends SchemaProvider {
     Map<String, Object> schemaRegistryConfigs = new HashMap<>();
     config.forEach((k, v) -> {
       String key = k.toString();
-      if (v != null && SCHEMA_REGISTRY_CONFIG_PREFIXES.stream().anyMatch(key::startsWith)) {
+      if (SCHEMA_REGISTRY_CONFIG_PREFIXES.stream().anyMatch(key::startsWith)) {
         schemaRegistryConfigs.put(key, v);
       }
     });
