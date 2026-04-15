@@ -240,6 +240,17 @@ object DataSourceReadOptions {
         " the dataset is too large. Another important limitation is that this config should not be" +
         " used if there are bootstrap files present in the file system. NOTE: Only works for COW tables with snapshot queries.")
 
+  val FILE_INDEX_PARTITION_LISTING_VIA_CATALOG: ConfigProperty[Boolean] =
+    ConfigProperty.key("hoodie.datasource.read.file.index.list.partitions.from.catalog")
+      .defaultValue(false)
+      .markAdvanced()
+      .sinceVersion("1.2.0")
+      .withDocumentation("Controls whether partition listing is obtained from the catalog instead of listing " +
+        "the file system to avoid recursively listing of large number of directories. Enabling this can reduce " +
+        "large amount of listing calls and speed up the queries for very large tables. This is only necessary " +
+        "when MDT is not enabled on the dataset as otherwise the MDT can provide the partition listing faster " +
+        "and without any actual listing on the file system.")
+
   val INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN: ConfigProperty[String] = ConfigProperty
     .key("hoodie.datasource.read.incr.fallback.fulltablescan.enable")
     .defaultValue("true")

@@ -237,13 +237,7 @@ public class TestHoodieCdcSplitReaderFunction {
         1, tempDir.getAbsolutePath(), 128 * 1024 * 1024L, "file-cdc",
         EMPTY_PARTITION_PATH, changes, "read_optimized", "20230101000000000");
 
-    // The call should NOT throw IllegalArgumentException (type guard passes).
-    // It will throw some other exception when trying to do real I/O.
-    Exception ex = assertThrows(Exception.class, () -> function.read(cdcSplit));
-    assertNotNull(ex);
-    // Must not be an IllegalArgumentException (which the type guard throws)
-    if (ex instanceof IllegalArgumentException) {
-      throw new AssertionError("read() should not throw IllegalArgumentException for a CdcSourceSplit", ex);
-    }
+    // Should not throw exception
+    function.read(cdcSplit);
   }
 }

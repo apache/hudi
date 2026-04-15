@@ -19,21 +19,15 @@
 package org.apache.hudi.sink.compact;
 
 import org.apache.hudi.adapter.MaskingOutputAdapter;
-import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.configuration.FlinkOptions;
-import org.apache.hudi.metrics.FlinkCompactionMetrics;
 import org.apache.hudi.sink.compact.handler.CompactHandler;
-import org.apache.hudi.sink.compact.handler.MetadataCompactHandler;
+import org.apache.hudi.sink.compact.handler.TableServiceHandlerFactory;
 import org.apache.hudi.sink.utils.NonThrownExecutor;
-import org.apache.hudi.util.FlinkWriteClients;
-import org.apache.hudi.util.Lazy;
-import org.apache.hudi.util.StreamerUtil;
 import org.apache.hudi.utils.RuntimeContextUtils;
 
 import lombok.extern.slf4j.Slf4j;
 import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.configuration.Configuration;
-import org.apache.flink.metrics.MetricGroup;
 import org.apache.flink.streaming.api.graph.StreamConfig;
 import org.apache.flink.streaming.api.operators.OneInputStreamOperator;
 import org.apache.flink.streaming.api.operators.Output;
@@ -67,18 +61,11 @@ public class CompactOperator extends TableStreamOperator<CompactionCommitEvent>
   private transient StreamRecordCollector<CompactionCommitEvent> collector;
 
   /**
-   * Compaction metrics.
-   */
-  private transient FlinkCompactionMetrics compactionMetrics;
-
-  /**
    * Previous compact instant time.
    */
   private transient String prevCompactInstant = "";
 
-  private transient Lazy<CompactHandler> compactHandler;
-
-  private transient Lazy<CompactHandler> mdtCompactHandler;
+  private transient CompactHandler compactHandler;
 
   public CompactOperator(Configuration conf) {
     this.conf = conf;
@@ -106,15 +93,13 @@ public class CompactOperator extends TableStreamOperator<CompactionCommitEvent>
   public void open() throws Exception {
     // ID of current subtask
     int taskID = RuntimeContextUtils.getIndexOfThisSubtask(getRuntimeContext());
-    HoodieFlinkWriteClient writeClient = FlinkWriteClients.createWriteClient(conf, getRuntimeContext());
     if (conf.get(FlinkOptions.COMPACTION_OPERATION_EXECUTE_ASYNC_ENABLED)) {
       // executes compaction asynchronously.
       this.executor = NonThrownExecutor.builder(log).build();
     }
     this.collector = new StreamRecordCollector<>(output);
-    this.compactHandler = Lazy.lazily(() -> new CompactHandler(writeClient, taskID));
-    this.mdtCompactHandler = Lazy.lazily(() -> new MetadataCompactHandler(StreamerUtil.createMetadataWriteClient(writeClient), taskID));
-    registerMetrics();
+    this.compactHandler = TableServiceHandlerFactory.createCompactHandler(conf, getRuntimeContext(), taskID);
+    this.compactHandler.registerMetrics(getRuntimeContext().getMetricGroup());
   }
 
   @Override
@@ -124,11 +109,7 @@ public class CompactOperator extends TableStreamOperator<CompactionCommitEvent>
     boolean needReloadMetaClient = !instantTime.equals(prevCompactInstant);
     prevCompactInstant = instantTime;
 
-    if (event.isMetadataTable()) {
-      mdtCompactHandler.get().compact(executor, event, collector, needReloadMetaClient, compactionMetrics);
-    } else {
-      compactHandler.get().compact(executor, event, collector, needReloadMetaClient, compactionMetrics);
-    }
+    compactHandler.compact(executor, event, collector, needReloadMetaClient);
   }
 
   @VisibleForTesting
@@ -146,17 +127,6 @@ public class CompactOperator extends TableStreamOperator<CompactionCommitEvent>
     if (null != this.executor) {
       this.executor.close();
     }
-    if (compactHandler.isInitialized()) {
-      compactHandler.get().close();
-    }
-    if (mdtCompactHandler.isInitialized()) {
-      mdtCompactHandler.get().close();
-    }
-  }
-
-  private void registerMetrics() {
-    MetricGroup metrics = getRuntimeContext().getMetricGroup();
-    compactionMetrics = new FlinkCompactionMetrics(metrics);
-    compactionMetrics.registerMetrics();
+    compactHandler.close();
   }
 }

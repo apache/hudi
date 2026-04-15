@@ -185,6 +185,53 @@ class TestHFileWriter {
     }
   }
 
+  @Test
+  void testLongKeys() throws IOException {
+    // Test that HFile blocks with long keys (>= 126 chars) can be written and read correctly.
+    // This verifies the fix for the varint encoding mismatch in the root index block.
+    HFileContext context = new HFileContext.Builder().blockSize(100).build();
+    String testFile = TEST_FILE;
+    int numRecords = 10;
+    // Generate keys longer than 126 characters to trigger multi-byte Hadoop VarInt encoding
+    // in the root index block. The varint encodes (key_content_length + 2), so content >= 126
+    // produces a value >= 128 which requires 2+ bytes in Hadoop VarInt format.
+    char[] chars = new char[200];
+    Arrays.fill(chars, 'a');
+    String longPrefix = new String(chars);
+    try (DataOutputStream outputStream =
+             new DataOutputStream(Files.newOutputStream(Paths.get(testFile)));
+         HFileWriter writer = new HFileWriterImpl(context, outputStream)) {
+      for (int i = 0; i < numRecords; i++) {
+        String key = longPrefix + String.format("%04d", i);
+        writer.append(key, String.format("value%04d", i).getBytes());
+      }
+    }
+
+    // Validate that all records can be read back correctly.
+    try (FileChannel channel = FileChannel.open(Paths.get(testFile), StandardOpenOption.READ)) {
+      ByteBuffer buf = channel.map(FileChannel.MapMode.READ_ONLY, 0, channel.size());
+      SeekableDataInputStream inputStream =
+          new ByteArraySeekableDataInputStream(new ByteBufferBackedInputStream(buf));
+      HFileReaderImpl reader = new HFileReaderImpl(inputStream, channel.size());
+      reader.initializeMetadata();
+      assertEquals(numRecords, reader.getNumKeyValueEntries());
+      reader.seekTo();
+      for (int i = 0; i < numRecords; i++) {
+        KeyValue kv = reader.getKeyValue().get();
+        String expectedKey = longPrefix + String.format("%04d", i);
+        assertEquals(expectedKey, kv.getKey().getContentInString());
+        assertArrayEquals(
+            String.format("value%04d", i).getBytes(),
+            Arrays.copyOfRange(
+                kv.getBytes(),
+                kv.getValueOffset(),
+                kv.getValueOffset() + kv.getValueLength())
+        );
+        reader.next();
+      }
+    }
+  }
+
   private static void writeTestFile() throws Exception {
     try (
         DataOutputStream outputStream =

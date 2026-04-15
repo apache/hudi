@@ -194,4 +194,43 @@ public class TestSparkSchemaUtils {
     StructType blobStruct = (StructType) sparkSchema.fields()[1].dataType();
     assertEquals(3, blobStruct.fields().length);
   }
+
+  @Test
+  public void testConvertSchemaWithVectorField() {
+    HoodieSchema schema = HoodieSchema.createRecord("root", null, null, false, Arrays.asList(
+        HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.INT), null, null),
+        HoodieSchemaField.of("embedding", HoodieSchema.createVector(128), null, null)
+    ));
+
+    String sparkJson = SparkSchemaUtils.convertToSparkSchemaJson(schema);
+    assertNotNull(sparkJson);
+    assertFalse(sparkJson.isEmpty());
+
+    StructType sparkSchema = (StructType) StructType.fromJson(sparkJson);
+    assertEquals(2, sparkSchema.fields().length);
+    assertEquals("id", sparkSchema.fields()[0].name());
+    assertEquals("embedding", sparkSchema.fields()[1].name());
+    assertInstanceOf(BinaryType$.class, sparkSchema.fields()[1].dataType());
+  }
+
+  @Test
+  public void testConvertSchemaWithVariantField() {
+    HoodieSchema schema = HoodieSchema.createRecord("root", null, null, false, Arrays.asList(
+        HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.INT), null, null),
+        HoodieSchemaField.of("variant_data", HoodieSchema.createVariant(), null, null)
+    ));
+
+    String sparkJson = SparkSchemaUtils.convertToSparkSchemaJson(schema);
+    assertNotNull(sparkJson);
+    assertFalse(sparkJson.isEmpty());
+
+    StructType sparkSchema = (StructType) StructType.fromJson(sparkJson);
+    assertEquals(2, sparkSchema.fields().length);
+    assertEquals("id", sparkSchema.fields()[0].name());
+    assertEquals("variant_data", sparkSchema.fields()[1].name());
+    assertInstanceOf(StructType.class, sparkSchema.fields()[1].dataType());
+
+    StructType variantStruct = (StructType) sparkSchema.fields()[1].dataType();
+    assertEquals(2, variantStruct.fields().length);
+  }
 }

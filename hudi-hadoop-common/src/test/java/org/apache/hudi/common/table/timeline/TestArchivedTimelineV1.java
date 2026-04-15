@@ -488,6 +488,42 @@ public class TestArchivedTimelineV1 extends HoodieCommonTestHarness {
         "clean metadata for ts=31 must NOT be loaded");
   }
 
+  @Test
+  public void testReadArchivedTimelineWithLeftoverMergedArchiveFileDoesNotDuplicateInstants() throws Exception {
+    HoodieInstant commit01 = createInstantV1(COMPLETED, HoodieTimeline.COMMIT_ACTION, "01");
+    HoodieInstant commit03 = createInstantV1(COMPLETED, HoodieTimeline.COMMIT_ACTION, "03");
+    HoodieInstant commit05 = createInstantV1(COMPLETED, HoodieTimeline.COMMIT_ACTION, "05");
+
+    StoragePath archiveFilePath = ArchivedTimelineV1.getArchiveLogPath(metaClient.getArchivePath());
+    List<IndexedRecord> oldArchiveRecords = new ArrayList<>(Arrays.asList(
+        createArchivedMetaWrapper(commit01),
+        createArchivedMetaWrapper(commit03)));
+    try (HoodieLogFormat.Writer writer = buildWriter(archiveFilePath, 1)) {
+      writeArchiveLog(writer, oldArchiveRecords);
+    }
+
+    List<IndexedRecord> mergedArchiveRecords = new ArrayList<>(Arrays.asList(
+        createArchivedMetaWrapper(commit01),
+        createArchivedMetaWrapper(commit03),
+        createArchivedMetaWrapper(commit05)));
+    try (HoodieLogFormat.Writer writer = buildWriter(archiveFilePath, 2)) {
+      writeArchiveLog(writer, mergedArchiveRecords);
+    }
+
+    assertEquals(2, getArchiveLogFilePaths().size(), "test setup should leave original and merged archive files behind");
+
+    HoodieArchivedTimeline archivedTimeline = new ArchivedTimelineV1(metaClient);
+    List<HoodieInstant> loadedInstants = archivedTimeline.getInstants();
+    assertEquals(3, loadedInstants.size(), "leftover merged archive file should not cause duplicate instants");
+    assertEquals(Arrays.asList(commit01, commit03, commit05), loadedInstants,
+        "only unique completed instants should be loaded from archived timeline");
+
+    archivedTimeline.loadCompletedInstantDetailsInMemory();
+    assertTrue(archivedTimeline.getInstantDetails(commit01).isPresent(), "commit metadata for ts=01 must be loaded");
+    assertTrue(archivedTimeline.getInstantDetails(commit03).isPresent(), "commit metadata for ts=03 must be loaded");
+    assertTrue(archivedTimeline.getInstantDetails(commit05).isPresent(), "commit metadata for ts=05 must be loaded");
+  }
+
   private void readAndValidateArchivedFile(String path, HoodieStorage storage) throws IOException {
     try (HoodieLogFormat.Reader reader = HoodieLogFormat.newReader(
         storage, new HoodieLogFile(path), HoodieSchema.fromAvroSchema(HoodieArchivedMetaEntry.getClassSchema()))) {
@@ -801,6 +837,13 @@ public class TestArchivedTimelineV1 extends HoodieCommonTestHarness {
   private Writer buildWriter(StoragePath archiveFilePath) throws IOException {
     return HoodieLogFormat.newWriterBuilder().onParentPath(archiveFilePath.getParent())
         .withFileId(archiveFilePath.getName()).withFileExtension(HoodieArchivedLogFile.ARCHIVE_EXTENSION)
+        .withStorage(metaClient.getStorage()).withInstantTime("").build();
+  }
+
+  private Writer buildWriter(StoragePath archiveFilePath, int logVersion) throws IOException {
+    return HoodieLogFormat.newWriterBuilder().onParentPath(archiveFilePath.getParent())
+        .withFileId(archiveFilePath.getName()).withFileExtension(HoodieArchivedLogFile.ARCHIVE_EXTENSION)
+        .withLogVersion(logVersion)
         .withStorage(metaClient.getStorage()).withInstantTime("").build();
   }
 

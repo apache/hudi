@@ -18,6 +18,7 @@
 
 package org.apache.hudi.source.split;
 
+import org.apache.flink.configuration.Configuration;
 import org.apache.hudi.common.util.Option;
 
 import org.apache.hudi.source.split.assign.HoodieSplitBucketAssigner;
@@ -564,7 +565,7 @@ public class TestDefaultHoodieSplitProvider {
   public void testGetNextWithBucketAssigner() {
     // Test with HoodieSplitBucketAssigner
     HoodieSplitBucketAssigner assigner =
-        new HoodieSplitBucketAssigner(4);
+        new HoodieSplitBucketAssigner(4, new Configuration());
     DefaultHoodieSplitProvider provider = new DefaultHoodieSplitProvider(assigner);
 
     // Create splits with bucket-encoded file IDs

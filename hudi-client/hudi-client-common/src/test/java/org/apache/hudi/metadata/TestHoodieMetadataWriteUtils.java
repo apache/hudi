@@ -50,7 +50,7 @@ public class TestHoodieMetadataWriteUtils {
         HoodieTableVersion.SIX);
     assertEquals(HoodieFailedWritesCleaningPolicy.EAGER, metadataWriteConfig1.getFailedWritesCleanPolicy());
     assertEquals(HoodieCleaningPolicy.KEEP_LATEST_COMMITS, metadataWriteConfig1.getCleanerPolicy());
-    assertEquals(1, metadataWriteConfig1.getCleaningMaxCommits());
+    assertEquals(1, metadataWriteConfig1.getCleanTriggerMaxCommits());
     // default value already greater than data cleaner commits retained * 1.2
     assertEquals(HoodieMetadataConfig.DEFAULT_METADATA_CLEANER_COMMITS_RETAINED, metadataWriteConfig1.getCleanerCommitsRetained());
 
@@ -71,7 +71,7 @@ public class TestHoodieMetadataWriteUtils {
     assertEquals(HoodieCleaningPolicy.KEEP_LATEST_COMMITS, metadataWriteConfig2.getCleanerPolicy());
     // data cleaner commits retained * 1.2 is greater than default
     assertEquals(24, metadataWriteConfig2.getCleanerCommitsRetained());
-    assertEquals(10, metadataWriteConfig2.getCleaningMaxCommits());
+    assertEquals(10, metadataWriteConfig2.getCleanTriggerMaxCommits());
   }
 
   @Test

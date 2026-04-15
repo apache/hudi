@@ -665,9 +665,7 @@ class TestDataSourceDefaults extends ScalaAssertionSupport {
     assertEquals(laterOrderingVal, precombinedGR.get("favoriteIntNumber"))
 
     val earlierWithLater = earlierPayload.combineAndGetUpdateValue(laterRecord, schema.toAvroSchema, props)
-    val earlierwithLaterGR = earlierWithLater.get().asInstanceOf[GenericRecord]
-    assertEquals("field2", earlierwithLaterGR.get("field1").toString)
-    assertEquals(laterOrderingVal, earlierwithLaterGR.get("favoriteIntNumber"))
+    assertEquals(earlierWithLater.get(), org.apache.hudi.common.model.HoodieRecord.SENTINEL)
 
     val laterWithEarlier = laterPayload.combineAndGetUpdateValue(earlierRecord, schema.toAvroSchema, props)
     val laterWithEarlierGR = laterWithEarlier.get().asInstanceOf[GenericRecord]

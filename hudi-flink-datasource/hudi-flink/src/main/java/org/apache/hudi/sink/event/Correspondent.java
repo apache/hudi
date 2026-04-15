@@ -101,18 +101,6 @@ public class Correspondent {
   }
 
   /**
-   * Requests coordinator to wait until all pending instants are committed if necessary.
-   */
-  public void awaitPendingInstantsCommitted(long checkpointId) {
-    try {
-      this.gateway.sendRequestToCoordinator(this.operatorID,
-          new SerializedValue<>(AwaitPendingInstantsRequest.getInstance(checkpointId))).get();
-    } catch (Exception e) {
-      throw new HoodieException("Error awaiting pending instants completion from coordinator", e);
-    }
-  }
-
-  /**
    * A request for instant time with a given checkpoint id.
    */
   @AllArgsConstructor(access = AccessLevel.PRIVATE)
@@ -163,32 +151,6 @@ public class Correspondent {
 
     public static InflightInstantsResponse getInstance(HashMap<Long, String> inflightInstants) {
       return new InflightInstantsResponse(inflightInstants);
-    }
-  }
-
-  /**
-   * A request to wait until all pending instants are committed in the coordinator.
-   */
-  @AllArgsConstructor(access = AccessLevel.PRIVATE)
-  @Getter
-  public static class AwaitPendingInstantsRequest implements CoordinationRequest {
-
-    private final long checkpointId;
-
-    public static AwaitPendingInstantsRequest getInstance(long checkpointId) {
-      return new AwaitPendingInstantsRequest(checkpointId);
-    }
-  }
-
-  /**
-   * A response to indicate pending instants are all completed.
-   */
-  @AllArgsConstructor(access = AccessLevel.PRIVATE)
-  @Getter
-  public static class AwaitPendingInstantsResponse implements CoordinationResponse {
-
-    public static AwaitPendingInstantsResponse getInstance() {
-      return new AwaitPendingInstantsResponse();
     }
   }
 }

@@ -95,6 +95,8 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
   @Getter(AccessLevel.PACKAGE)
   private final List<String> savepointedTimestamps;
   private Option<HoodieInstant> earliestCommitToRetain = Option.empty();
+  private Option<HoodieInstant> lastCompletedClean = Option.empty();
+  private Option<HoodieCleanMetadata> lastCleanMetadata = Option.empty();
 
   public CleanPlanner(HoodieEngineContext context, HoodieTable<T, I, K, O> hoodieTable, HoodieWriteConfig config) {
     this.context = context;
@@ -202,9 +204,10 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
     }
 
     if (config.incrementalCleanerModeEnabled()) {
-      Option<HoodieInstant> lastClean = hoodieTable.getCleanTimeline().filterCompletedInstants().lastInstant();
+      Option<HoodieInstant> lastClean = lastCompletedClean.or(hoodieTable.getCleanTimeline().filterCompletedInstants().lastInstant());
       if (lastClean.isPresent()) {
-        HoodieCleanMetadata cleanMetadata = hoodieTable.getActiveTimeline().readCleanMetadata(lastClean.get());
+        HoodieCleanMetadata cleanMetadata = lastCleanMetadata.isPresent() ? lastCleanMetadata.get()
+            : hoodieTable.getActiveTimeline().readCleanMetadata(lastClean.get());
         if ((cleanMetadata.getEarliestCommitToRetain() != null)
                 && !cleanMetadata.getEarliestCommitToRetain().trim().isEmpty()
                 && !hoodieTable.getActiveTimeline().getCommitsTimeline().isBeforeTimelineStarts(cleanMetadata.getEarliestCommitToRetain())) {
@@ -617,13 +620,31 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
    */
   public Option<HoodieInstant> getEarliestCommitToRetain() {
     if (!earliestCommitToRetain.isPresent()) {
+      // Get the previous clean's earliest commit to retain, if available
+      Option<String> previousEarliestCommitToRetain = Option.empty();
+      lastCompletedClean = hoodieTable.getCleanTimeline().filterCompletedInstants().lastInstant();
+      if (lastCompletedClean.isPresent() && config.getMaxCommitsToClean() != Long.MAX_VALUE) {
+        try {
+          HoodieCleanMetadata cleanMetadata = hoodieTable.getActiveTimeline().readCleanMetadata(lastCompletedClean.get());
+          lastCleanMetadata = Option.of(cleanMetadata);
+          if (cleanMetadata.getEarliestCommitToRetain() != null
+              && !cleanMetadata.getEarliestCommitToRetain().trim().isEmpty()) {
+            previousEarliestCommitToRetain = Option.of(cleanMetadata.getEarliestCommitToRetain());
+          }
+        } catch (Exception e) {
+          log.warn("Failed to read previous clean metadata, proceeding without capping commits to clean", e);
+        }
+      }
+
       earliestCommitToRetain = CleanerUtils.getEarliestCommitToRetain(
           hoodieTable.getMetaClient().getActiveTimeline().getCommitsAndCompactionTimeline(),
           config.getCleanerPolicy(),
           config.getCleanerCommitsRetained(),
           Instant.now(),
           config.getCleanerHoursRetained(),
-          hoodieTable.getMetaClient().getTableConfig().getTimelineTimezone());
+          hoodieTable.getMetaClient().getTableConfig().getTimelineTimezone(),
+          previousEarliestCommitToRetain,
+          config.getMaxCommitsToClean());
     }
     return earliestCommitToRetain;
   }

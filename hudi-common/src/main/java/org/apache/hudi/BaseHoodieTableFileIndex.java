@@ -52,8 +52,6 @@ import org.apache.hudi.expression.Expression;
 import org.apache.hudi.internal.schema.Types;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
-import org.apache.hudi.metadata.TableMetadataFactory;
-import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 
@@ -362,11 +360,12 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
 
   protected List<PartitionPath> listPartitionPaths(List<String> relativePartitionPaths,
                                                    Types.RecordType partitionFields,
-                                                   Expression partitionColumnPredicates) {
+                                                   Expression partitionColumnPredicates,
+                                                   List<Object> partitionPredicateExpressions) {
     List<String> matchedPartitionPaths;
     try {
       matchedPartitionPaths = tableMetadata.getPartitionPathWithPathPrefixUsingFilterExpression(relativePartitionPaths,
-          partitionFields, partitionColumnPredicates);
+          partitionFields, partitionColumnPredicates, partitionPredicateExpressions);
     } catch (IOException e) {
       throw new HoodieIOException("Error fetching partition paths", e);
     }
@@ -513,7 +512,7 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
   private void doRefresh() {
     HoodieTimer timer = HoodieTimer.start();
 
-    resetTableMetadata(createMetadataTable(engineContext, metaClient.getStorage(), metaClient.getTableFormat().getMetadataFactory(), metadataConfig, basePath));
+    resetTableMetadata(createMetadataTable(engineContext));
 
     // Make sure we reload active timeline
     metaClient.reloadActiveTimeline();
@@ -609,16 +608,9 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
     tableMetadata = newTableMetadata;
   }
 
-  private static HoodieTableMetadata createMetadataTable(
-      HoodieEngineContext engineContext,
-      HoodieStorage storage,
-      TableMetadataFactory metadataFactory,
-      HoodieMetadataConfig metadataConfig,
-      StoragePath basePath
-  ) {
-    HoodieTableMetadata newTableMetadata = metadataFactory.create(
-        engineContext, storage, metadataConfig, basePath.toString(), true);
-    return newTableMetadata;
+  protected HoodieTableMetadata createMetadataTable(HoodieEngineContext engineContext) {
+    return metaClient.getTableFormat().getMetadataFactory()
+        .create(engineContext, metaClient.getStorage(), metadataConfig, basePath.toString(), true);
   }
 
   /**

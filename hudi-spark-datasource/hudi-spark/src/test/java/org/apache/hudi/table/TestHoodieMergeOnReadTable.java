@@ -523,7 +523,7 @@ public class TestHoodieMergeOnReadTable extends SparkClientFunctionalTestHarness
         HoodieWriteMetadata<JavaRDD<WriteStatus>> result = writeClient.logCompact(logCompactionInstantTime, true);
         HoodieCommitMetadata compactionMetadata = metaClient.getActiveTimeline().readCommitMetadata(metaClient.getActiveTimeline().reload().getCommitsAndCompactionTimeline().lastInstant().get());
         validateCommitMetadata(compactionMetadata, firstCommitTime, 80, 80, 0, 10);
-        validateLogCompactionMetadataHeaders(compactionMetadata, metaClient.getBasePath(), "102,101");
+        validateLogCompactionMetadataHeaders(compactionMetadata, metaClient.getBasePath(), "101,102");
 
         // Verify that recently written compacted data file has no log file
         metaClient = HoodieTableMetaClient.reload(metaClient);

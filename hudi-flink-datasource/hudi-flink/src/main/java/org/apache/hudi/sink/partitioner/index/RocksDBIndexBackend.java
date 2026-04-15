@@ -21,6 +21,12 @@ package org.apache.hudi.sink.partitioner.index;
 import org.apache.hudi.common.model.HoodieRecordGlobalLocation;
 import org.apache.hudi.common.serialization.CustomSerializer;
 import org.apache.hudi.common.util.collection.RocksDBDAO;
+import org.apache.hudi.metrics.FlinkRocksDBIndexMetrics;
+
+import lombok.extern.slf4j.Slf4j;
+import org.apache.flink.metrics.MetricGroup;
+import org.rocksdb.RocksDBException;
+import org.rocksdb.TickerType;
 
 import java.io.IOException;
 import java.util.concurrent.ConcurrentHashMap;
@@ -28,10 +34,12 @@ import java.util.concurrent.ConcurrentHashMap;
 /**
  * An implementation of {@link IndexBackend} based on RocksDB.
  */
+@Slf4j
 public class RocksDBIndexBackend implements IndexBackend {
   private static final String COLUMN_FAMILY = "index_cache";
 
   private final RocksDBDAO rocksDBDAO;
+  private transient FlinkRocksDBIndexMetrics rocksDBIndexMetrics;
 
   public RocksDBIndexBackend(String rocksDbBasePath) {
     // Register custom serializer for HoodieRecordGlobalLocation to minimize storage overhead
@@ -50,6 +58,36 @@ public class RocksDBIndexBackend implements IndexBackend {
   @Override
   public void update(String recordKey, HoodieRecordGlobalLocation recordGlobalLocation) {
     this.rocksDBDAO.put(COLUMN_FAMILY, recordKey, recordGlobalLocation);
+  }
+
+  @Override
+  public void registerMetrics(MetricGroup metricGroup) {
+    if (rocksDBIndexMetrics != null) {
+      return;
+    }
+    this.rocksDBIndexMetrics = new FlinkRocksDBIndexMetrics(metricGroup, this);
+    this.rocksDBIndexMetrics.registerMetrics();
+  }
+
+  public long getLongMetric(String property) {
+    try {
+      return this.rocksDBDAO.getLongProperty(property);
+    } catch (RocksDBException | RuntimeException e) {
+      log.debug("Failed to read RocksDB metric property {}", property, e);
+      return 0L;
+    }
+  }
+
+  public double getRatioMetric(TickerType hitTicker, TickerType missTicker) {
+    try {
+      long hits = this.rocksDBDAO.getTickerCount(hitTicker);
+      long misses = this.rocksDBDAO.getTickerCount(missTicker);
+      long total = hits + misses;
+      return total == 0 ? 0D : (double) hits / total;
+    } catch (RuntimeException e) {
+      log.debug("Failed to read RocksDB ticker metrics {} and {}", hitTicker, missTicker, e);
+      return 0D;
+    }
   }
 
   @Override

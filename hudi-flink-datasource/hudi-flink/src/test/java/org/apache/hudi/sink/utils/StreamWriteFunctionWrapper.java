@@ -28,8 +28,10 @@ import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.sink.StreamWriteFunction;
 import org.apache.hudi.sink.StreamWriteOperatorCoordinator;
+import org.apache.hudi.sink.bootstrap.AbstractBootstrapOperator;
 import org.apache.hudi.sink.bootstrap.BootstrapOperator;
 import org.apache.hudi.sink.buffer.MemorySegmentPoolFactory;
+import org.apache.hudi.sink.bootstrap.RLIBootstrapOperator;
 import org.apache.hudi.sink.common.AbstractWriteFunction;
 import org.apache.hudi.sink.event.WriteMetadataEvent;
 import org.apache.hudi.sink.partitioner.BucketAssignFunction;
@@ -59,6 +61,7 @@ import org.apache.flink.streaming.util.MockStreamTaskBuilder;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.types.logical.RowType;
 import org.apache.flink.util.Collector;
+import org.mockito.Mockito;
 
 import java.util.HashSet;
 import java.util.List;
@@ -66,7 +69,9 @@ import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
 
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -99,7 +104,7 @@ public class StreamWriteFunctionWrapper<I> implements TestFunctionWrapper<I> {
   /**
    * Function that load index in state.
    */
-  private BootstrapOperator bootstrapOperator;
+  private AbstractBootstrapOperator bootstrapOperator;
   /**
    * Function that assigns bucket ID.
    */
@@ -179,9 +184,12 @@ public class StreamWriteFunctionWrapper<I> implements TestFunctionWrapper<I> {
     bucketAssignerFunction.initializeState(this.stateInitializationContext);
 
     if (conf.get(FlinkOptions.INDEX_BOOTSTRAP_ENABLED)) {
-      bootstrapOperator = new BootstrapOperator(conf);
+      bootstrapOperator = isStreamingWriteIndexEnabled ? Mockito.spy(new RLIBootstrapOperator(conf)) : new BootstrapOperator(conf);
       CollectOutputAdapter<HoodieFlinkInternalRow> output = new CollectOutputAdapter<>();
       bootstrapOperator.setup(streamTask, streamConfig, output);
+      if (isStreamingWriteIndexEnabled) {
+        doReturn(runtimeContext).when(bootstrapOperator).getRuntimeContext();
+      }
       bootstrapOperator.initializeState(this.stateInitializationContext);
 
       Collector<HoodieFlinkInternalRow> collector = RecordsCollector.getInstance(rowType);
@@ -258,7 +266,7 @@ public class StreamWriteFunctionWrapper<I> implements TestFunctionWrapper<I> {
     // checkpoint the coordinator first
     checkpointCoordinator(checkpointId);
     if (conf.get(FlinkOptions.INDEX_BOOTSTRAP_ENABLED)) {
-      bootstrapOperator.snapshotState(null);
+      bootstrapOperator.snapshotState(new MockStateSnapshotContext(checkpointId));
     }
     bucketAssignerFunction.snapshotState(new MockFunctionSnapshotContext(checkpointId));
 
@@ -346,8 +354,12 @@ public class StreamWriteFunctionWrapper<I> implements TestFunctionWrapper<I> {
     coordinator.subtaskFailed(taskID, new RuntimeException("Dummy exception"));
     // reset the attempt number to simulate the task failover/retries
     this.runtimeContext.setAttemptNumber(attemptNumber);
+    this.bucketAssignFunctionContext.clear();
     setupWriteFunction();
     if (supportStreamingWriteIndex()) {
+      if (conf.get(FlinkOptions.INDEX_BOOTSTRAP_ENABLED)) {
+        setupIndexBootstrapFunction();
+      }
       setupIndexWriteFunction();
     }
   }
@@ -384,7 +396,10 @@ public class StreamWriteFunctionWrapper<I> implements TestFunctionWrapper<I> {
   }
 
   public boolean isAlreadyBootstrap() throws Exception {
-    return this.bootstrapOperator.isAlreadyBootstrap();
+    if (this.bootstrapOperator instanceof BootstrapOperator) {
+      return ((BootstrapOperator) this.bootstrapOperator).isAlreadyBootstrap();
+    }
+    return this.bootstrapOperator != null;
   }
 
   // -------------------------------------------------------------------------
@@ -410,6 +425,27 @@ public class StreamWriteFunctionWrapper<I> implements TestFunctionWrapper<I> {
     indexWriteFunction.open(conf);
   }
 
+  private void setupIndexBootstrapFunction() {
+    bootstrapOperator = Mockito.spy(new RLIBootstrapOperator(conf));
+    CollectOutputAdapter<HoodieFlinkInternalRow> output = new CollectOutputAdapter<>();
+    bootstrapOperator.setup(streamTask, streamConfig, output);
+    doReturn(runtimeContext).when(bootstrapOperator).getRuntimeContext();
+    try {
+      // may be blocked on pending instants committing in coordinator.
+      bootstrapOperator.initializeState(this.stateInitializationContext);
+
+      Collector<HoodieFlinkInternalRow> collector = RecordsCollector.getInstance(rowType);
+      for (HoodieFlinkInternalRow bootstrapRecord : output.getRecords()) {
+        stateInitializationContext.getKeyedStateStore().setCurrentKey(bootstrapRecord.getRecordKey());
+        when(context.getCurrentKey()).thenReturn(bootstrapRecord.getRecordKey());
+        bucketAssignerFunction.processElement(bootstrapRecord, context, collector);
+        bucketAssignFunctionContext.setCurrentKey(bootstrapRecord.getRecordKey());
+      }
+    } catch (Exception e) {
+      throw new CompletionException(e);
+    }
+  }
+
   // -------------------------------------------------------------------------
   //  Inner Class
   // -------------------------------------------------------------------------
@@ -423,6 +459,10 @@ public class StreamWriteFunctionWrapper<I> implements TestFunctionWrapper<I> {
 
     public boolean isKeyInState(String key) {
       return this.updateKeys.contains(key);
+    }
+
+    public void clear() {
+      this.updateKeys.clear();
     }
   }
 }

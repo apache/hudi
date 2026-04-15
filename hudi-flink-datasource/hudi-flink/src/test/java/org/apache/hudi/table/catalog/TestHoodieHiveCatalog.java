@@ -391,6 +391,19 @@ public class TestHoodieHiveCatalog extends BaseTestHoodieCatalog {
     assertThrows(HoodieCatalogException.class, () -> hoodieCatalog.createTable(tablePath, table, false));
   }
 
+  @Test
+  public void testLanceFormatNotSupportedByHiveCatalog() {
+    HashMap<String, String> properties = new HashMap<>();
+    properties.put(FactoryUtil.CONNECTOR.key(), "hudi");
+    properties.put(HoodieTableConfig.BASE_FILE_FORMAT.key(), "LANCE");
+    CatalogTable table = CatalogUtils.createCatalogTable(schema, Collections.emptyList(), properties, "lance table");
+    // createTable wraps the HoodieValidationException in a HoodieCatalogException
+    HoodieCatalogException ex = assertThrows(HoodieCatalogException.class,
+        () -> hoodieCatalog.createTable(tablePath, table, false));
+    assertThat(ex.getCause(), instanceOf(HoodieValidationException.class));
+    assertThat(ex.getCause().getMessage(), containsString("Lance base file format is currently only supported with the Spark engine"));
+  }
+
   @ParameterizedTest
   @ValueSource(booleans = {true, false})
   public void testDropTable(boolean external) throws TableAlreadyExistException, DatabaseNotExistException, TableNotExistException, IOException {

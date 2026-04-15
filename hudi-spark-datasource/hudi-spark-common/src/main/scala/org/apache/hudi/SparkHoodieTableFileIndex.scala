@@ -23,6 +23,7 @@ import org.apache.hudi.HoodieConversionUtils.toJavaOption
 import org.apache.hudi.SparkHoodieTableFileIndex.{deduceQueryType, extractEqualityPredicatesLiteralValues, generateFieldMap, haveProperPartitionValues, shouldListLazily, shouldUsePartitionPathPrefixAnalysis, shouldValidatePartitionColumns}
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.config.{HoodieCommonConfig, TypedProperties}
+import org.apache.hudi.common.engine.HoodieEngineContext
 import org.apache.hudi.common.model.{FileSlice, HoodieTableQueryType}
 import org.apache.hudi.common.model.HoodieRecord.HOODIE_META_COLUMNS_WITH_OPERATION
 import org.apache.hudi.common.schema.HoodieSchema
@@ -36,6 +37,7 @@ import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.internal.schema.Types.RecordType
 import org.apache.hudi.internal.schema.utils.Conversions
 import org.apache.hudi.keygen.{StringPartitionPathFormatter, TimestampBasedAvroKeyGenerator, TimestampBasedKeyGenerator}
+import org.apache.hudi.metadata.{CatalogBackedTableMetadata, HoodieTableMetadata}
 import org.apache.hudi.storage.{StoragePath, StoragePathInfo}
 import org.apache.hudi.util.JFunction
 
@@ -106,10 +108,10 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
    * Get the schema of the table.
    */
   lazy val schema: StructType = if (shouldFastBootstrap) {
-      StructType(rawStructSchema.fields.filterNot(f => HOODIE_META_COLUMNS_WITH_OPERATION.contains(f.name)))
-    } else {
-      rawStructSchema
-    }
+    StructType(rawStructSchema.fields.filterNot(f => HOODIE_META_COLUMNS_WITH_OPERATION.contains(f.name)))
+  } else {
+    rawStructSchema
+  }
 
   lazy val rawHoodieSchema: HoodieSchema = {
     val schemaUtil = new TableSchemaResolver(metaClient)
@@ -125,6 +127,12 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
   protected lazy val usePartitionValueExtractorOnRead = configProperties.getBoolean(
     DataSourceReadOptions.USE_PARTITION_VALUE_EXTRACTOR_ON_READ.key(),
     DataSourceReadOptions.USE_PARTITION_VALUE_EXTRACTOR_ON_READ.defaultValue().toBoolean)
+
+  lazy val isPartitionListingViaCatalogEnabled: Boolean = {
+    configProperties.getBoolean(FILE_INDEX_PARTITION_LISTING_VIA_CATALOG.key,
+      FILE_INDEX_PARTITION_LISTING_VIA_CATALOG.defaultValue()) &&
+      !metaClient.isMetadataTable
+  }
 
   /**
    * Get the partition schema from the hoodie.properties.
@@ -352,7 +360,7 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
     val hiveStylePartitioning = metaClient.getTableConfig.getHiveStylePartitioningEnable.toBoolean
     val urlEncodePartitioning = metaClient.getTableConfig.getUrlEncodePartitioning.toBoolean
 
-    val partitionTypesOption =if (hiveStylePartitioning && urlEncodePartitioning) {
+    val partitionTypesOption = if (hiveStylePartitioning && urlEncodePartitioning) {
       Try {
         SparkFilterHelper.convertDataType(partitionSchema).asInstanceOf[RecordType]
       } match {
@@ -375,7 +383,8 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
           partitionColumnPredicates.flatMap {
             expr => sparkAdapter.translateFilter(expr)
           })
-        listPartitionPaths(Collections.singletonList(""), partitionTypes, convertedFilters).asScala.toSeq
+        listPartitionPaths(Collections.singletonList(""), partitionTypes, convertedFilters,
+          partitionColumnPredicates.map(_.asInstanceOf[Object]).asJava).asScala.toSeq
       case (true, None) =>
         logDebug("Unable to compose relative partition path prefix from the predicates; falling back to fetching all partitions")
         getAllQueryPartitionPaths.asScala.toSeq
@@ -396,7 +405,8 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
               partitionColumnPredicates.flatMap {
                 expr => sparkAdapter.translateFilter(expr)
               })
-            listPartitionPaths(Seq(relativePartitionPathPrefix).asJava, partitionTypes, convertedFilters).asScala.toSeq
+            listPartitionPaths(Seq(relativePartitionPathPrefix).asJava, partitionTypes, convertedFilters,
+              partitionColumnPredicates.map(_.asInstanceOf[Object]).asJava).asScala.toSeq
           }.getOrElse {
             log.warn("Met incompatible issue when converting to hudi data type, rollback to list by prefix directly")
             listPartitionPaths(Seq(relativePartitionPathPrefix).asJava).asScala.toSeq
@@ -429,6 +439,14 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
 
     partitionPathFormatter.combine(staticPartitionColumnNames.asJava,
       staticPartitionColumnValues.map(_._1): _*)
+  }
+
+  override protected def createMetadataTable(engineContext: HoodieEngineContext): HoodieTableMetadata = {
+    if (isPartitionListingViaCatalogEnabled) {
+      new CatalogBackedTableMetadata(engineContext, metaClient.getTableConfig, metaClient.getStorage, getBasePath.toString)
+    } else {
+      super.createMetadataTable(engineContext)
+    }
   }
 
   /**
