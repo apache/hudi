@@ -404,18 +404,12 @@ public class HoodieIndexUtils {
     String partitionPath = inferPartitionPath(incoming, existing, writeSchemaWithMetaFields, keyGenerator,
         existingRecordContext, mergeResult, incomingBufferedRecord, existingBufferedRecord, incomingRecordContext);
     // When HoodieAvroRecordMerger creates a genuinely new BufferedRecord, it encodes the schema into
-    // incomingRecordContext. Re-encode into existingRecordContext so constructHoodieRecord (which uses
-    // existingRecordContext for the correct payload class) can resolve the schema for SPARK records.
-    BufferedRecord<R> mergeResultForConstruct = mergeResult;
-    if (mergeResult != incomingBufferedRecord && mergeResult != existingBufferedRecord) {
-      HoodieSchema mergedSchema = incomingRecordContext.getSchemaFromBufferRecord(mergeResult);
-      if (mergedSchema != null && existingRecordContext.getSchemaFromBufferRecord(mergeResult) == null) {
-        mergeResultForConstruct = BufferedRecords.fromEngineRecord(
-            mergeResult.getRecord(), mergeResult.getRecordKey(), mergedSchema,
-            existingRecordContext, Arrays.asList(orderingFieldNames), mergeResult.getHoodieOperation());
-      }
-    }
-    HoodieRecord<R> result = existingRecordContext.constructHoodieRecord(mergeResultForConstruct, partitionPath);
+    // incomingRecordContext. Use the schema-aware constructHoodieRecord overload so existingRecordContext
+    // can register the schema locally and resolve it for SPARK records.
+    HoodieSchema mergedSchema = incomingRecordContext.getSchemaFromBufferRecord(mergeResult);
+    HoodieRecord<R> result = mergedSchema != null
+        ? existingRecordContext.constructHoodieRecord(mergeResult, partitionPath, mergedSchema)
+        : existingRecordContext.constructHoodieRecord(mergeResult, partitionPath);
     HoodieRecord<R> withMeta = result.prependMetaFields(writeSchema, writeSchemaWithMetaFields,
         new MetadataValues().setRecordKey(incoming.getRecordKey()).setPartitionPath(partitionPath), properties);
     return Option.of(withMeta.wrapIntoHoodieRecordPayloadWithParams(writeSchemaWithMetaFields, properties, Option.empty(),
@@ -445,7 +439,7 @@ public class HoodieIndexUtils {
       if (actualSchema == null) {
         actualSchema = recordSchema;
       }
-      return keyGenerator.getPartitionPath(incomingRecordContext.convertToAvroRecord(resultingBufferedRecord.getRecord(), actualSchema));
+      return keyGenerator.getPartitionPath(incomingRecordContext.convertToAvroRecord(resultingBufferedRecord, actualSchema));
     }
   }
 

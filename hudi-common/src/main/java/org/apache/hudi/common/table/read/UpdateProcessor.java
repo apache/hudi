@@ -139,23 +139,27 @@ public interface UpdateProcessor<T> {
       if (previousRecord == null) {
         // special case for payloads when there is no previous record
         HoodieSchema recordSchema = readerContext.getRecordContext().decodeAvroSchema(mergedRecord.getSchemaId());
-        GenericRecord record = readerContext.getRecordContext().convertToAvroRecord(mergedRecord.getRecord(), recordSchema);
+        GenericRecord originalAvro = mergedRecord.getOriginalAvroRecord();
         Schema recordAvroSchema = recordSchema.toAvroSchema();
 
-        // If convertToAvroRecord returned an Avro record previously cached by extractDataFromRecord
-        // (ExpressionPayload in the COW write path), the record is already in write-schema format
-        // with correctly evaluated expressions. Convert directly and skip the payload path.
-        // Using the explicit RecordContext flag instead of comparing schemas: schema inequality
-        // can also arise from legitimate reader/writer schema evolution, which is unrelated to
-        // the cache hit we want to detect here.
-        if (readerContext.getRecordContext().consumeLastAvroRecordFromCache()) {
-          // NOTE: After replaceRecord(), mergedRecord.getSchemaId() still references the original schema.
+        // When the merged record carries an originalAvroRecord (populated by extractDataFromRecord
+        // for ExpressionPayload in the COW write path via ExtractedData), the record is already in
+        // write-schema format with correctly evaluated expressions. Convert directly and skip the
+        // payload path.
+        //
+        // NOTE: this branch bypasses shouldIgnore. That is safe today because the only payload that
+        // populates originalAvroRecord is ExpressionPayload, which never returns shouldIgnore=true.
+        // If a future payload starts producing an originalAvroRecord, it must add a shouldIgnore
+        // check here.
+        if (originalAvro != null) {
+          // After replaceRecord(), mergedRecord.getSchemaId() still references the original schema.
           // This is safe because the record is emitted immediately via super.handleNonDeletes() below,
-          // which calls seal() and produces the output row. The record is not spilled to disk (via
-          // toBinary()) between replaceRecord and emit in this single-record path. If this assumption
-          // changes, the schemaId must be updated after replaceRecord.
-          mergedRecord.replaceRecord(readerContext.getRecordContext().convertAvroRecord(record));
+          // which calls seal() and produces the output row — the record is not spilled to disk
+          // (via toBinary()) between replaceRecord and emit in this single-record path. If this
+          // assumption changes, the schemaId must be updated after replaceRecord.
+          mergedRecord.replaceRecord(readerContext.getRecordContext().convertAvroRecord(originalAvro));
         } else {
+          GenericRecord record = readerContext.getRecordContext().convertToAvroRecord(mergedRecord.getRecord(), recordSchema);
           HoodieAvroRecord hoodieRecord = new HoodieAvroRecord<>(null, HoodieRecordUtils.loadPayload(payloadClass, record, mergedRecord.getOrderingValue()));
           try {
             if (hoodieRecord.shouldIgnore(recordSchema, properties)) {

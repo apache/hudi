@@ -50,8 +50,8 @@ public class HoodiePreCombineAvroRecordMerger extends HoodieAvroRecordMerger {
 
   @SuppressWarnings("rawtypes, unchecked")
   private <T> BufferedRecord<T> preCombine(BufferedRecord<T> older, BufferedRecord<T> newer, RecordContext<T> recordContext, HoodieSchema newSchema, TypedProperties props) {
-    GenericRecord newerAvroRecord = recordContext.convertToAvroRecord(newer.getRecord(), recordContext.getSchemaFromBufferRecord(newer));
-    GenericRecord olderAvroRecord = recordContext.convertToAvroRecord(older.getRecord(), recordContext.getSchemaFromBufferRecord(older));
+    GenericRecord newerAvroRecord = recordContext.convertToAvroRecord(newer, recordContext.getSchemaFromBufferRecord(newer));
+    GenericRecord olderAvroRecord = recordContext.convertToAvroRecord(older, recordContext.getSchemaFromBufferRecord(older));
     HoodieRecordPayload newerPayload = HoodieRecordUtils.loadPayload(payloadClass, newerAvroRecord, newer.getOrderingValue());
     HoodieRecordPayload olderPayload = HoodieRecordUtils.loadPayload(payloadClass, olderAvroRecord, older.getOrderingValue());
     HoodieRecordPayload payload = newerPayload.preCombine(olderPayload, newSchema.toAvroSchema(), props);

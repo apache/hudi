@@ -1163,7 +1163,7 @@ public abstract class TestHoodieFileGroupReaderBase<T> {
     props.setProperty(HoodieTableConfig.ORDERING_FIELDS.key(), String.join(",", orderingFields));
     return records.stream()
         .map(record -> {
-          T data = readerContext.getRecordContext().extractDataFromRecord(record, schema, props);
+          T data = readerContext.getRecordContext().extractDataFromRecord(record, schema, props).getData();
           return new HoodieTestDataGenerator.RecordIdentifier(
               record.getRecordKey(),
               removeHiveStylePartition(record.getPartitionPath()),
