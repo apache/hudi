@@ -35,6 +35,8 @@ import org.apache.hadoop.conf.Configuration
 import org.apache.spark.sql.{DataFrame, SaveMode, SparkSession}
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.GenericInternalRow
+import org.apache.spark.sql.execution.SparkPlan
+import org.apache.spark.sql.execution.adaptive.{AdaptiveSparkPlanExec, QueryStageExec}
 import org.apache.spark.sql.execution.datasources.lance.SparkLanceReaderBase
 import org.apache.spark.sql.sources.Filter
 import org.apache.spark.sql.types._
@@ -157,21 +159,65 @@ class TestLanceColumnarBatch extends HoodieSparkClientTestBase {
     val iter = reader.read(pf, requiredSchema, partitionSchema, HOption.empty(), Seq.empty[Filter], storageConf)
       .asInstanceOf[Iterator[Any]]
 
-    while (iter.hasNext) {
-      iter.next() match {
-        case batch: ColumnarBatch =>
-          batchCount += 1
-          batch.rowIterator().asScala.foreach { row =>
-            rows += extractRow(row, requiredSchema)
-          }
+    try {
+      while (iter.hasNext) {
+        iter.next() match {
+          case batch: ColumnarBatch =>
+            batchCount += 1
+            batch.rowIterator().asScala.foreach { row =>
+              rows += extractRow(row, requiredSchema)
+            }
 
-        case row: InternalRow =>
-          rowCount += 1
-          rows += extractRow(row, requiredSchema)
+          case row: InternalRow =>
+            rowCount += 1
+            rows += extractRow(row, requiredSchema)
+        }
+      }
+    } finally {
+      // On the driver in unit tests TaskContext.get() is null, so the
+      // completion-listener cleanup path inside readBatch() never fires.
+      // Explicitly close to release Arrow allocators and file readers.
+      iter match {
+        case c: AutoCloseable => c.close()
+        case _ => // row path returns a plain Iterator
       }
     }
 
     (batchCount, rowCount, rows.toSeq)
+  }
+
+  /**
+   * Assert that the executed plan for `df` used a columnar (vectorized) scan and
+   * that the scan's `numOutputRows` SQLMetric is populated. This guards against a
+   * silent fallback to the row reader that would still produce correct output.
+   *
+   * The metric is lazy: the caller must have already forced execution (e.g. via
+   * `df.collect()`) before invoking this helper.
+   */
+  private def assertLanceVectorizedScan(df: DataFrame, expectedMinRows: Long): Unit = {
+    val rootPlan = df.queryExecution.executedPlan
+
+    def allNodes(p: SparkPlan): Seq[SparkPlan] = {
+      val hidden: Seq[SparkPlan] = p match {
+        case aqe: AdaptiveSparkPlanExec => allNodes(aqe.executedPlan)
+        case qs: QueryStageExec => allNodes(qs.plan)
+        case _ => Seq.empty
+      }
+      (p +: p.children.flatMap(allNodes)) ++ hidden
+    }
+
+    val nodes = allNodes(rootPlan)
+    val scanOpt = nodes.collectFirst {
+      case s: SparkPlan if s.supportsColumnar &&
+        (s.getClass.getSimpleName.contains("FileSourceScan") ||
+         s.getClass.getSimpleName.contains("BatchScan")) => s
+    }
+    assertTrue(scanOpt.isDefined,
+      s"Expected a columnar (supportsColumnar=true) scan node in executed plan, found none:\n${rootPlan.treeString}")
+    val scan = scanOpt.get
+    val numOutputRows = scan.metrics.get("numOutputRows").map(_.value).getOrElse(-1L)
+    assertTrue(numOutputRows >= expectedMinRows,
+      s"Columnar Lance scan produced $numOutputRows rows, expected >= $expectedMinRows; plan:\n${rootPlan.treeString}")
   }
 
   private val baseSchema: StructType = new StructType()
@@ -423,6 +469,8 @@ class TestLanceColumnarBatch extends HoodieSparkClientTestBase {
       assertEquals(ename, row.getAs[String]("name"))
       assertEquals(escore, row.getAs[Double]("score"), 1e-6)
     }
+
+    assertLanceVectorizedScan(actual, 3)
   }
 
   /**
@@ -476,6 +524,9 @@ class TestLanceColumnarBatch extends HoodieSparkClientTestBase {
     assertEquals("engineering", rows(2).getAs[String]("department"))
     assertEquals(4, rows(3).getAs[Int]("id"))
     assertEquals("sales", rows(3).getAs[String]("department"))
+
+    // Confirm the vectorized scan path was used for at least one of the scanned files.
+    assertLanceVectorizedScan(actual, 1)
   }
 
   /**
@@ -501,14 +552,18 @@ class TestLanceColumnarBatch extends HoodieSparkClientTestBase {
 
     spark.read.format("hudi").load(tablePath).createOrReplaceTempView(tableName)
 
-    val result = spark.sql(
+    val resultDf = spark.sql(
       s"SELECT id, name, age FROM $tableName WHERE age > 30 ORDER BY id"
-    ).collect()
+    )
+    val result = resultDf.collect()
 
     assertEquals(2, result.length, "Only Charlie (35) and Eve (32) satisfy age > 30")
     assertEquals(3, result(0).getAs[Int]("id"))
     assertEquals("Charlie", result(0).getAs[String]("name"))
     assertEquals(5, result(1).getAs[Int]("id"))
     assertEquals("Eve", result(1).getAs[String]("name"))
+
+    // `numOutputRows` on the scan reflects pre-filter rows; all 5 rows flow through the columnar scan.
+    assertLanceVectorizedScan(resultDf, 1)
   }
 }

@@ -312,6 +312,8 @@ class SparkLanceReaderBase(enableVectorizedReader: Boolean) extends SparkColumna
 
     // Map each source batch to a batch with the correct column layout.
     val mappedIterator = new Iterator[ColumnarBatch] with Closeable {
+      private[this] var closed = false
+
       override def hasNext: Boolean = batchIterator.hasNext()
 
       override def next(): ColumnarBatch = {
@@ -357,11 +359,15 @@ class SparkLanceReaderBase(enableVectorizedReader: Boolean) extends SparkColumna
       }
 
       override def close(): Unit = {
-        // Close null Arrow vectors and their allocator before batchIterator (which closes the data allocator)
-        nullColumnVectors.foreach(_.columnVector.close())
-        nullAllocator.foreach(_.close())
-        batchIterator.close()
-        partitionVectors.foreach(_.close())
+        // Idempotent: TaskContext listener and the outer CloseableIteratorListener may both call close().
+        if (!closed) {
+          closed = true
+          // Close null Arrow vectors and their allocator before batchIterator (which closes the data allocator)
+          nullColumnVectors.foreach(_.columnVector.close())
+          nullAllocator.foreach(_.close())
+          batchIterator.close()
+          partitionVectors.foreach(_.close())
+        }
       }
     }
 
