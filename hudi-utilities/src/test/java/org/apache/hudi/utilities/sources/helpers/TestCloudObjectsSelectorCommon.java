@@ -237,9 +237,9 @@ public class TestCloudObjectsSelectorCommon extends HoodieSparkClientTestHarness
   }
 
   /**
-   * With mergeSchema off, Spark does not union Parquet footers: it typically follows one file's schema
-   * (here {@code p1} is listed first). Columns only present in other files (e.g. {@code c} in {@code p2})
-   * are omitted from the scan—no exception, but data under those columns is dropped.
+   * With mergeSchema off, Spark picks one file's schema and ignores columns only present in other
+   * files. Which file is chosen is non-deterministic (depends on file-listing order), so we only
+   * assert the column count (2, not 3) and that {@code id} is always present.
    */
   @Test
   void parquetMixedSchemasDropExtraColumnsWhenMergeDisabled(@TempDir Path tempDir) {
@@ -268,13 +268,9 @@ public class TestCloudObjectsSelectorCommon extends HoodieSparkClientTestHarness
     Assertions.assertTrue(result.isPresent());
     Dataset<Row> ds = result.get();
     Set<String> colNames = Arrays.stream(ds.schema().fields()).map(StructField::name).collect(Collectors.toSet());
+    Assertions.assertEquals(2, colNames.size(), "without mergeSchema, only one file's schema should be used");
     Assertions.assertTrue(colNames.contains("id"));
-    Assertions.assertTrue(colNames.contains("b"));
-    Assertions.assertFalse(colNames.contains("c"), "column c from second file should be absent without mergeSchema");
     Assertions.assertEquals(2, ds.count());
-    List<Row> rows = ds.collectAsList();
-    Row fromSecondFile = rows.stream().filter(r -> r.getInt(0) == 2).findFirst().orElseThrow();
-    Assertions.assertTrue(fromSecondFile.isNullAt(fromSecondFile.fieldIndex("b")));
   }
 
   @Test
@@ -304,7 +300,8 @@ public class TestCloudObjectsSelectorCommon extends HoodieSparkClientTestHarness
     Assertions.assertTrue(result.isPresent());
     Dataset<Row> ds = result.get();
     Set<String> colNames = Arrays.stream(ds.schema().fields()).map(StructField::name).collect(Collectors.toSet());
-    Assertions.assertFalse(colNames.contains("c"));
+    Assertions.assertEquals(2, colNames.size(), "without mergeSchema, only one file's schema should be used");
+    Assertions.assertTrue(colNames.contains("id"));
     Assertions.assertEquals(2, ds.count());
   }
 
