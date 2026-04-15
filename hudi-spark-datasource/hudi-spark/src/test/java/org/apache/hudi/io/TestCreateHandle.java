@@ -66,7 +66,7 @@ public class TestCreateHandle extends BaseTestHandle {
             .build())
         .build();
 
-    HoodieTable table = HoodieSparkTable.create(config, context, metaClient);
+    HoodieTable table = HoodieSparkTable.createForReads(config, context, metaClient);
     HoodieTableMetadataWriter metadataWriter = SparkMetadataWriterFactory.create(storageConf, config, context, table.getMetaClient().getTableConfig());
     metadataWriter.close();
 
@@ -79,7 +79,7 @@ public class TestCreateHandle extends BaseTestHandle {
 
     config.setSchema(TRIP_EXAMPLE_SCHEMA);
     metaClient = HoodieTableMetaClient.reload(metaClient);
-    table = HoodieSparkTable.create(config, context, metaClient);
+    table = HoodieSparkTable.createForReads(config, context, metaClient);
     HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator(new String[] {partitionPath});
     Pair<WriteStatus, List<HoodieRecord>> statusListPair = createParquetFile(config, table, partitionPath, fileId, instantTime, dataGenerator);
     WriteStatus writeStatus = statusListPair.getLeft();

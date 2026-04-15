@@ -159,7 +159,7 @@ public class TestCleanerInsertAndCleanByCommits extends SparkClientFunctionalTes
 
         metaClient = HoodieTableMetaClient.reload(metaClient);
         validateFilesAfterCleaning(
-            HoodieSparkTable.create(cfg, context(), metaClient),
+            HoodieSparkTable.createForReads(cfg, context(), metaClient),
             commitWriteStatsMap,
             dataGen.getPartitionPaths());
       }

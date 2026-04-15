@@ -19,6 +19,7 @@
 
 package org.apache.hudi.table.upgrade;
 
+import org.apache.hudi.client.transaction.TransactionManager;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -41,12 +42,12 @@ public class FourToFiveUpgradeHandler implements UpgradeHandler {
 
   @Override
   public UpgradeDowngrade.TableConfigChangeSet upgrade(HoodieWriteConfig config,
-                                                                         HoodieEngineContext context,
-                                                                         String instantTime,
-                                                                         SupportsUpgradeDowngrade upgradeDowngradeHelper) {
+                                                       HoodieEngineContext context,
+                                                       String instantTime,
+                                                       SupportsUpgradeDowngrade upgradeDowngradeHelper) {
+    HoodieTable table = null;
     try {
-      HoodieTable table = upgradeDowngradeHelper.getTable(config, context);
-
+      table = upgradeDowngradeHelper.getTable(config, context);
       if (!config.doSkipDefaultPartitionValidation() && hasDefaultPartitionPath(config, table)) {
         log.error(String.format("\"%s\" partition detected. From 0.12, we are changing the default partition in hudi to \"%s\"."
                 + " Please read and write back the data in \"%s\" partition in hudi to new partition path \"%s\". \"\n"
@@ -69,6 +70,10 @@ public class FourToFiveUpgradeHandler implements UpgradeHandler {
     } catch (IOException e) {
       log.error("Fetching file system instance failed", e);
       throw new HoodieException("Fetching FileSystem instance failed ", e);
+    } finally {
+      if (table != null) {
+        table.getTxnManager().ifPresent(obj -> ((TransactionManager) obj).close());
+      }
     }
   }
 

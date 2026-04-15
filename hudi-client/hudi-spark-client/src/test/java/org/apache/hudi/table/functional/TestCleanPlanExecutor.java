@@ -687,7 +687,8 @@ public class TestCleanPlanExecutor extends HoodieCleanerTestBase {
       metadataMetaClient = HoodieTableMetaClient.reload(metadataMetaClient);
 
       // Create CleanPlanner on the metadata table
-      org.apache.hudi.table.HoodieSparkTable sparkTable = org.apache.hudi.table.HoodieSparkTable.create(config, context, metadataMetaClient);
+      org.apache.hudi.table.HoodieSparkTable sparkTable = org.apache.hudi.table.HoodieSparkTable.create(config, context, metadataMetaClient,
+          Option.of(getHoodieWriteClient(config).getTransactionManager()));
       org.apache.hudi.table.action.clean.CleanPlanner cleanPlanner =
           new org.apache.hudi.table.action.clean.CleanPlanner(context, sparkTable, config);
 
@@ -705,7 +706,7 @@ public class TestCleanPlanExecutor extends HoodieCleanerTestBase {
       testTable.addCommit(compactionCommit);
 
       metadataMetaClient = HoodieTableMetaClient.reload(metadataMetaClient);
-      sparkTable = org.apache.hudi.table.HoodieSparkTable.create(config, context, metadataMetaClient);
+      sparkTable = org.apache.hudi.table.HoodieSparkTable.create(config, context, metadataMetaClient, Option.of(getHoodieWriteClient(config).getTransactionManager()));
       cleanPlanner = new org.apache.hudi.table.action.clean.CleanPlanner(context, sparkTable, config);
 
       result = (boolean) canSkipCleanMethod.invoke(cleanPlanner);

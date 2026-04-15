@@ -269,14 +269,13 @@ object AlterTableCommand extends Logging {
     val metaClient = HoodieTableMetaClient.builder()
       .setBasePath(path)
       .setConf(HadoopFSUtils.getStorageConf(sparkSession.sessionState.newHadoopConf()))
-      .setTimeGeneratorConfig(client.getConfig.getTimeGeneratorConfig)
       .build()
 
     val commitActionType = CommitUtils.getCommitActionType(WriteOperationType.ALTER_SCHEMA, metaClient.getTableType)
     val instantTime = client.startCommit(commitActionType)
     client.setOperationType(WriteOperationType.ALTER_SCHEMA)
 
-    val hoodieTable = HoodieSparkTable.create(client.getConfig, client.getEngineContext)
+    val hoodieTable = HoodieSparkTable.createForReads(client.getConfig, client.getEngineContext)
     hoodieTable.validateSchema()
     val timeLine = hoodieTable.getActiveTimeline
     val instantGenerator = metaClient.getTimelineLayout.getInstantGenerator

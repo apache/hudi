@@ -458,7 +458,7 @@ public abstract class HoodieJavaClientTestHarness extends HoodieWriterClientTest
   }
 
   public HoodieJavaTable getHoodieTable(HoodieTableMetaClient metaClient, HoodieWriteConfig config) {
-    HoodieJavaTable table = HoodieJavaTable.create(config, context, metaClient);
+    HoodieJavaTable table = HoodieJavaTable.create(config, context);
     ((SyncableFileSystemView) (table.getSliceView())).reset();
     return table;
   }
@@ -840,7 +840,7 @@ public abstract class HoodieJavaClientTestHarness extends HoodieWriterClientTest
       final HoodieIndex index = JavaHoodieIndexFactory.createIndex(writeConfig);
       List<HoodieRecord> records = recordsGenFunction.apply(commit, numRecords);
       final HoodieTableMetaClient metaClient = HoodieTestUtils.createMetaClient(storageConf, basePath);
-      HoodieJavaTable table = HoodieJavaTable.create(writeConfig, context, metaClient);
+      HoodieJavaTable table = HoodieJavaTable.create(writeConfig, context);
       return tagLocation(index, context, records, table);
     };
   }
@@ -864,7 +864,7 @@ public abstract class HoodieJavaClientTestHarness extends HoodieWriterClientTest
       final HoodieIndex index = JavaHoodieIndexFactory.createIndex(writeConfig);
       List<HoodieRecord> records = recordsGenFunction.apply(commit, numRecords, partition);
       final HoodieTableMetaClient metaClient = HoodieTestUtils.createMetaClient(storageConf, basePath);
-      HoodieJavaTable table = HoodieJavaTable.create(writeConfig, context, metaClient);
+      HoodieJavaTable table = HoodieJavaTable.create(writeConfig, context);
       return tagLocation(index, context, records, table);
     };
   }
@@ -905,7 +905,7 @@ public abstract class HoodieJavaClientTestHarness extends HoodieWriterClientTest
       final HoodieIndex index = JavaHoodieIndexFactory.createIndex(writeConfig);
       List<HoodieKey> records = keyGenFunction.apply(numRecords);
       final HoodieTableMetaClient metaClient = HoodieTestUtils.createMetaClient(storageConf, basePath);
-      HoodieTable table = HoodieJavaTable.create(writeConfig, context, metaClient);
+      HoodieTable table = HoodieJavaTable.create(writeConfig, context);
       List<HoodieRecord> recordsToDelete = records.stream()
           .map(key -> new HoodieAvroRecord(key, new EmptyHoodieRecordPayload())).collect(Collectors.toList());
       List<HoodieRecord> taggedRecords = tagLocation(index, context, recordsToDelete, table);

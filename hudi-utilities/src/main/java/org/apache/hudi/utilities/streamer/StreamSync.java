@@ -37,7 +37,6 @@ import org.apache.hudi.commit.BaseDatasetBulkInsertCommitActionExecutor;
 import org.apache.hudi.commit.HoodieStreamerDatasetBulkInsertCommitActionExecutor;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.HoodieStorageConfig;
-import org.apache.hudi.common.config.HoodieTimeGeneratorConfig;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.data.HoodieData;
@@ -378,7 +377,6 @@ public class StreamSync implements Serializable, Closeable {
         HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder()
             .setConf(HadoopFSUtils.getStorageConfWithCopy(conf))
             .setBasePath(cfg.targetBasePath)
-            .setTimeGeneratorConfig(HoodieTimeGeneratorConfig.newBuilder().fromProperties(props).withPath(cfg.targetBasePath).build())
             .build();
         if (refreshTimeline) {
           switch (metaClient.getTableType()) {

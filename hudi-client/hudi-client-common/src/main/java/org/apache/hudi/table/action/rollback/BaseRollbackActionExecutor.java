@@ -41,6 +41,7 @@ import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieRollbackException;
+import org.apache.hudi.exception.HoodieValidationException;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
@@ -95,7 +96,7 @@ public abstract class BaseRollbackActionExecutor<T, I, K, O> extends BaseActionE
     this.deleteInstants = deleteInstants;
     this.skipTimelinePublish = skipTimelinePublish;
     this.skipLocking = skipLocking;
-    this.txnManager = new TransactionManager(config, table.getStorage());
+    this.txnManager = table.getTxnManager().orElseThrow(() -> new HoodieValidationException("The txn manager is not set up yet"));
   }
 
   /**
@@ -266,7 +267,7 @@ public abstract class BaseRollbackActionExecutor<T, I, K, O> extends BaseActionE
   }
 
   protected void finishRollback(HoodieInstant inflightInstant, HoodieRollbackMetadata rollbackMetadata) throws HoodieIOException {
-    boolean enableLocking = (!skipLocking && !skipTimelinePublish);
+    boolean enableLocking = (!skipLocking || !skipTimelinePublish);
     try {
       if (enableLocking) {
         this.txnManager.beginStateChange(Option.of(inflightInstant), Option.empty());
@@ -287,9 +288,9 @@ public abstract class BaseRollbackActionExecutor<T, I, K, O> extends BaseActionE
         // NOTE: no need to lock here, since !skipTimelinePublish is always true,
         // when skipLocking is false, txnManager above-mentioned should lock it.
         // when skipLocking is true, the caller should have already held the lock.
-        table.getActiveTimeline().transitionRollbackInflightToComplete(false, inflightInstant, rollbackMetadata,
+        table.getActiveTimeline().transitionRollbackInflightToComplete(inflightInstant, rollbackMetadata, txnManager.generateInstantTime(),
             completedInstant -> table.getMetaClient().getTableFormat().completedRollback(completedInstant, table.getContext(), table.getMetaClient(), table.getViewManager()));
-        log.info("Rollback of Commits " + rollbackMetadata.getCommitsRollback() + " is complete");
+        log.info("Rollback of Commits {} is complete", rollbackMetadata.getCommitsRollback());
       }
     } finally {
       if (enableLocking) {

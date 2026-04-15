@@ -29,6 +29,7 @@ import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieArchivalConfig;
 import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieCompactionConfig;
@@ -201,7 +202,7 @@ public class TestLogReaderUtils extends SparkClientFunctionalTestHarness {
 
       // Trigger archival
       metaClient = HoodieTableMetaClient.reload(metaClient);
-      HoodieTable table = HoodieSparkTable.create(config, context(), metaClient);
+      HoodieTable table = HoodieSparkTable.create(config, context(), metaClient, Option.of(client.getTransactionManager()));
       new TimelineArchiverV2(config, table).archiveIfRequired(context());
       metaClient = HoodieTableMetaClient.reload(metaClient);
 

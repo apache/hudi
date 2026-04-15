@@ -30,6 +30,7 @@ import org.apache.hudi.common.table.log.InstantRange;
 import org.apache.hudi.common.table.read.IncrementalQueryAnalyzer;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
@@ -182,8 +183,8 @@ public class TestIncrementalInputSplits extends HoodieCommonTestHarness {
             WriteOperationType.CLUSTER,
             "",
             HoodieTimeline.REPLACE_COMMIT_ACTION);
-    timelineMOR.transitionClusterInflightToComplete(true, INSTANT_GENERATOR.getClusteringCommitInflightInstant(commit3.requestedTime()),
-        (HoodieReplaceCommitMetadata) commitMetadata);
+    timelineMOR.transitionClusterInflightToComplete(INSTANT_GENERATOR.getClusteringCommitInflightInstant(commit3.requestedTime()),
+        (HoodieReplaceCommitMetadata) commitMetadata, HoodieInstantTimeGenerator.getCurrentInstantTimeStr());
     // commit4: insert overwrite
     HoodieInstant commit4 = INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.REPLACE_COMMIT_ACTION, "4");
     timelineMOR.createNewInstant(commit4);
@@ -195,8 +196,8 @@ public class TestIncrementalInputSplits extends HoodieCommonTestHarness {
             WriteOperationType.INSERT_OVERWRITE,
             "",
             HoodieTimeline.REPLACE_COMMIT_ACTION);
-    timelineMOR.transitionReplaceInflightToComplete(true, INSTANT_GENERATOR.getReplaceCommitInflightInstant(commit4.requestedTime()),
-        (HoodieReplaceCommitMetadata) commitMetadata);
+    timelineMOR.transitionReplaceInflightToComplete(INSTANT_GENERATOR.getReplaceCommitInflightInstant(commit4.requestedTime()),
+        (HoodieReplaceCommitMetadata) commitMetadata, HoodieInstantTimeGenerator.getCurrentInstantTimeStr());
     // commit5: insert overwrite table
     HoodieInstant commit5 = INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.REPLACE_COMMIT_ACTION, "5");
     timelineMOR.createNewInstant(commit5);
@@ -208,13 +209,13 @@ public class TestIncrementalInputSplits extends HoodieCommonTestHarness {
             WriteOperationType.INSERT_OVERWRITE_TABLE,
             "",
             HoodieTimeline.REPLACE_COMMIT_ACTION);
-    timelineMOR.transitionReplaceInflightToComplete(true, INSTANT_GENERATOR.getReplaceCommitInflightInstant(commit5.requestedTime()),
-        (HoodieReplaceCommitMetadata) commitMetadata);
+    timelineMOR.transitionReplaceInflightToComplete(INSTANT_GENERATOR.getReplaceCommitInflightInstant(commit5.requestedTime()),
+        (HoodieReplaceCommitMetadata) commitMetadata, HoodieInstantTimeGenerator.getCurrentInstantTimeStr());
     // commit6:  compaction
     HoodieInstant commit6 = INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.COMPACTION_ACTION, "6");
     timelineMOR.createNewInstant(commit6);
     commit6 = timelineMOR.transitionCompactionRequestedToInflight(commit6);
-    commit6 = timelineMOR.transitionCompactionInflightToComplete(false, commit6, new HoodieCommitMetadata());
+    commit6 = timelineMOR.transitionCompactionInflightToComplete(commit6, new HoodieCommitMetadata(), HoodieInstantTimeGenerator.getCurrentInstantTimeStr());
     timelineMOR.createCompleteInstant(commit6);
     timelineMOR = timelineMOR.reload();
 
@@ -260,9 +261,9 @@ public class TestIncrementalInputSplits extends HoodieCommonTestHarness {
             WriteOperationType.CLUSTER,
             "",
             HoodieTimeline.REPLACE_COMMIT_ACTION);
-    timelineCOW.transitionClusterInflightToComplete(true,
+    timelineCOW.transitionClusterInflightToComplete(
             INSTANT_GENERATOR.getClusteringCommitInflightInstant(commit3.requestedTime()),
-            (HoodieReplaceCommitMetadata) commitMetadata);
+            (HoodieReplaceCommitMetadata) commitMetadata, HoodieInstantTimeGenerator.getCurrentInstantTimeStr());
     // commit4: insert overwrite
     HoodieInstant commit4 = INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.REPLACE_COMMIT_ACTION, "4");
     timelineCOW.createNewInstant(commit4);
@@ -274,8 +275,8 @@ public class TestIncrementalInputSplits extends HoodieCommonTestHarness {
             WriteOperationType.INSERT_OVERWRITE,
             "",
             HoodieTimeline.REPLACE_COMMIT_ACTION);
-    timelineCOW.transitionReplaceInflightToComplete(true, INSTANT_GENERATOR.getReplaceCommitInflightInstant(commit4.requestedTime()),
-        (HoodieReplaceCommitMetadata) commitMetadata);
+    timelineCOW.transitionReplaceInflightToComplete(INSTANT_GENERATOR.getReplaceCommitInflightInstant(commit4.requestedTime()),
+        (HoodieReplaceCommitMetadata) commitMetadata, HoodieInstantTimeGenerator.getCurrentInstantTimeStr());
     // commit5: insert overwrite table
     HoodieInstant commit5 = INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.REPLACE_COMMIT_ACTION, "5");
     timelineCOW.createNewInstant(commit5);
@@ -287,8 +288,8 @@ public class TestIncrementalInputSplits extends HoodieCommonTestHarness {
             WriteOperationType.INSERT_OVERWRITE_TABLE,
             "",
             HoodieTimeline.REPLACE_COMMIT_ACTION);
-    timelineCOW.transitionReplaceInflightToComplete(true, INSTANT_GENERATOR.getReplaceCommitInflightInstant(commit5.requestedTime()),
-        (HoodieReplaceCommitMetadata) commitMetadata);
+    timelineCOW.transitionReplaceInflightToComplete(INSTANT_GENERATOR.getReplaceCommitInflightInstant(commit5.requestedTime()),
+        (HoodieReplaceCommitMetadata) commitMetadata, HoodieInstantTimeGenerator.getCurrentInstantTimeStr());
 
     timelineCOW = timelineCOW.reload();
 
