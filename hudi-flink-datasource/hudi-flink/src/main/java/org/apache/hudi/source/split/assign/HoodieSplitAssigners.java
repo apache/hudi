@@ -31,7 +31,7 @@ public class HoodieSplitAssigners {
           int parallelism) {
 
     if (OptionsResolver.isMorWithBucketIndexUpsert(config)) {
-      return new HoodieSplitBucketAssigner(parallelism);
+      return new HoodieSplitBucketAssigner(parallelism, config);
     } else if (OptionsResolver.isAppendMode(config)) {
       return new HoodieSplitNumberAssigner(parallelism);
     }

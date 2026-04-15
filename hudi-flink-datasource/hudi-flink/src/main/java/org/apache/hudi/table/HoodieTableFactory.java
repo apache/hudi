@@ -19,6 +19,7 @@
 package org.apache.hudi.table;
 
 import org.apache.hudi.common.config.HoodieMetadataConfig;
+import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.table.HoodieTableConfig;
@@ -85,6 +86,7 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
     StoragePath path = new StoragePath(conf.getOptional(FlinkOptions.PATH).orElseThrow(() ->
         new ValidationException("Option [path] should not be empty.")));
     setupTableOptions(conf.get(FlinkOptions.PATH), conf);
+    checkBaseFileFormat(conf);
     ResolvedSchema schema = context.getCatalogTable().getResolvedSchema();
     setupConfOptions(conf, context.getObjectIdentifier(), context.getCatalogTable(), schema);
     return new HoodieTableSource(
@@ -114,6 +116,11 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
   private void setupTableOptions(String basePath, Configuration conf) {
     StreamerUtil.getTableConfig(basePath, HadoopConfigurations.getHadoopConf(conf))
         .ifPresent(tableConfig -> {
+          // Guard: reject Lance from existing table config (hoodie.properties); checkBaseFileFormat() handles user-supplied config separately
+          if (tableConfig.contains(HoodieTableConfig.BASE_FILE_FORMAT)
+              && HoodieFileFormat.LANCE.name().equalsIgnoreCase(tableConfig.getString(HoodieTableConfig.BASE_FILE_FORMAT))) {
+            throw new HoodieValidationException(HoodieFileFormat.LANCE_SPARK_ONLY_ERROR_MSG);
+          }
           if (tableConfig.contains(HoodieTableConfig.RECORDKEY_FIELDS)
               && !conf.contains(FlinkOptions.RECORD_KEY_FIELD)) {
             conf.set(FlinkOptions.RECORD_KEY_FIELD, tableConfig.getString(HoodieTableConfig.RECORDKEY_FIELDS));
@@ -170,6 +177,7 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
    * @param schema The table schema
    */
   private void sanityCheck(Configuration conf, ResolvedSchema schema) {
+    checkBaseFileFormat(conf);
     checkTableType(conf);
     checkIndexType(conf);
 
@@ -190,9 +198,24 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
     HoodieIndex.IndexType indexType = OptionsResolver.getIndexType(conf);
     if (indexType == HoodieIndex.IndexType.GLOBAL_RECORD_LEVEL_INDEX) {
       ValidationUtils.checkArgument(conf.get(FlinkOptions.METADATA_ENABLED),
-          "Metadata table should be enabled when index.type is GLOBAL_RECORD_LEVEL_INDEX.");
+          String.format("Metadata table should be enabled when %s is %s.", FlinkOptions.INDEX_TYPE.key(), HoodieIndex.IndexType.GLOBAL_RECORD_LEVEL_INDEX));
       ValidationUtils.checkArgument(conf.get(FlinkOptions.INDEX_GLOBAL_ENABLED),
-          "Partition level index updating is not supported for GLOBAL_RECORD_LEVEL_INDEX, please set 'index.global.enabled' = 'true'.");
+          String.format("Partition level index updating is not supported for GLOBAL_RECORD_LEVEL_INDEX, please set '%s' = 'true'.", FlinkOptions.INDEX_GLOBAL_ENABLED.key()));
+
+      boolean deferredRLI = Boolean.parseBoolean(conf.getString(
+          HoodieMetadataConfig.DEFER_RLI_INIT_FOR_FRESH_TABLE.key(), HoodieMetadataConfig.DEFER_RLI_INIT_FOR_FRESH_TABLE.defaultValue().toString()));
+      ValidationUtils.checkArgument(!deferredRLI,
+          String.format("Deferred RLI initialization is not supported for flink ingestion, please set '%s' = 'false'.", HoodieMetadataConfig.DEFER_RLI_INIT_FOR_FRESH_TABLE.key()));
+    }
+  }
+
+  /**
+   * Validate the base file format. Lance is only supported with the Spark engine.
+   */
+  private void checkBaseFileFormat(Configuration conf) {
+    String baseFileFormat = conf.getString(HoodieTableConfig.BASE_FILE_FORMAT.key(), null);
+    if (baseFileFormat != null && HoodieFileFormat.LANCE.name().equalsIgnoreCase(baseFileFormat)) {
+      throw new HoodieValidationException(HoodieFileFormat.LANCE_SPARK_ONLY_ERROR_MSG);
     }
   }
 

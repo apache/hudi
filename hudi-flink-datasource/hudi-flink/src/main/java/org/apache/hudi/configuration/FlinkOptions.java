@@ -908,14 +908,6 @@ public class FlinkOptions extends HoodieConfig {
       .defaultValue(ClientIds.INIT_CLIENT_ID)
       .withDescription("Unique identifier used to distinguish different writer pipelines for concurrent mode");
 
-  // this is only for internal use
-  @AdvancedConfig
-  public static final ConfigOption<String> WRITE_OPERATOR_UID = ConfigOptions
-      .key("write.operator.uid")
-      .stringType()
-      .noDefaultValue()
-      .withDescription("The write operator uid used as the uid for hudi sink transformation.");
-
   // ------------------------------------------------------------------------
   //  Compaction Options
   // ------------------------------------------------------------------------

@@ -33,6 +33,7 @@ import lombok.extern.slf4j.Slf4j;
 
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.locks.LockSupport;
 import java.util.function.Function;
 
 /**
@@ -108,6 +109,32 @@ public class DisruptorMessageQueue<I, O> implements HoodieMessageQueue<I, O> {
 
   @Override
   public void seal() {
+  }
+
+  /**
+   * Waits until all published events have been consumed by the handler thread,
+   * without shutting down the disruptor. The handler thread remains alive after
+   * this method returns — this is critical when downstream components (e.g. GCS
+   * pipe) require the writing thread to stay alive during a subsequent flush.
+   *
+   * <p>Must only be called when no new events will be published (e.g. during
+   * Flink's {@code snapshotState} where {@code processElement} is guaranteed
+   * not to run concurrently).
+   *
+   * <p>The method returns early if the consumer has failed ({@link #getThrowable()})
+   * or the calling thread has been interrupted (e.g. by Flink's checkpoint timeout).
+   */
+  public void waitUntilDrained() {
+    while (!isEmpty()) {
+      if (throwable.get() != null) {
+        return;
+      }
+      if (Thread.currentThread().isInterrupted()) {
+        markAsFailed(new HoodieException("Interrupted while waiting for disruptor queue to drain"));
+        return;
+      }
+      LockSupport.parkNanos(100_000);
+    }
   }
 
   @Override

@@ -125,7 +125,8 @@ public class CleanerUtils {
 
   public static Option<HoodieInstant> getEarliestCommitToRetain(
       HoodieTimeline commitsTimeline, HoodieCleaningPolicy cleaningPolicy, int commitsRetained,
-      Instant latestInstant, int hoursRetained, HoodieTimelineTimeZone timeZone) {
+      Instant latestInstant, int hoursRetained, HoodieTimelineTimeZone timeZone,
+      Option<String> previousEarliestCommitToRetain, long maxCommitsToClean) {
     HoodieTimeline completedCommitsTimeline = commitsTimeline.filterCompletedInstants();
     Option<HoodieInstant> earliestCommitToRetain = Option.empty();
 
@@ -153,7 +154,70 @@ public class CleanerUtils {
       earliestCommitToRetain = Option.fromJavaOptional(completedCommitsTimeline.getInstantsAsStream().filter(i -> compareTimestamps(i.requestedTime(),
           GREATER_THAN_OR_EQUALS, earliestTimeToRetain)).findFirst());
     }
+
+    // Apply maxCommitsToClean cap if configured and applicable
+    if (earliestCommitToRetain.isPresent()
+        && (cleaningPolicy == HoodieCleaningPolicy.KEEP_LATEST_COMMITS || cleaningPolicy == HoodieCleaningPolicy.KEEP_LATEST_BY_HOURS)
+        && maxCommitsToClean != Long.MAX_VALUE
+        && previousEarliestCommitToRetain.isPresent()) {
+      earliestCommitToRetain = capCommitsToClean(completedCommitsTimeline, earliestCommitToRetain.get(),
+          previousEarliestCommitToRetain.get(), maxCommitsToClean);
+    }
+
     return earliestCommitToRetain;
+  }
+
+  /**
+   * Cap the number of commits to clean based on maxCommitsToClean configuration.
+   * This prevents cleaning too many commits in a single clean operation, which can cause
+   * performance issues or timeouts when there's a large backlog of commits to clean.
+   *
+   * <p>Algorithm: This method compares the number of commits that would be cleaned (those between
+   * previousEarliestCommitToRetain and calculatedEarliestCommitToRetain) against maxCommitsToClean.
+   * If the number exceeds the cap, it adjusts the earliest commit to retain such that only
+   * maxCommitsToClean commits are cleaned in this operation. The next clean will continue
+   * from where this one left off.
+   *
+   * <p>Example: If there are commits [0, 1, 2, ..., 99] and:
+   * <ul>
+   *   <li>calculatedEarliestCommitToRetain = commit 88 (would clean commits 0-87, keeping 88+)</li>
+   *   <li>previousEarliestCommitToRetain = commit 0 (last clean retained from commit 0 onwards)</li>
+   *   <li>maxCommitsToClean = 50</li>
+   * </ul>
+   * Then this method returns commit 50 as the new earliest to retain, meaning we only clean
+   * commits 0-49 in this operation. The next clean will use commit 50 as the previous earliest
+   * and can clean the remaining commits 50-87 (capped again if needed).
+   *
+   * @param completedCommitsTimeline Timeline of completed commits
+   * @param calculatedEarliestCommitToRetain The earliest commit to retain calculated by policy
+   * @param previousEarliestCommitToRetain The earliest commit to retain from previous clean
+   * @param maxCommitsToClean Maximum number of commits to clean in one operation
+   * @return Adjusted earliest commit to retain that respects the cap
+   */
+  private static Option<HoodieInstant> capCommitsToClean(HoodieTimeline completedCommitsTimeline,
+      HoodieInstant calculatedEarliestCommitToRetain, String previousEarliestCommitToRetain,
+      long maxCommitsToClean) {
+    // Get all commits before the calculated earliest commit to retain
+    HoodieTimeline commitsToClean = completedCommitsTimeline.findInstantsBefore(calculatedEarliestCommitToRetain.requestedTime());
+
+    // Filter to get only commits after (or equal to) the previous earliest commit to retain
+    List<HoodieInstant> commitsEligibleForCleaning = commitsToClean.getInstantsAsStream()
+        .filter(instant -> compareTimestamps(instant.requestedTime(), GREATER_THAN_OR_EQUALS, previousEarliestCommitToRetain))
+        .collect(Collectors.toList());
+
+    // If the number of commits to clean exceeds the cap, adjust the earliest commit to retain
+    if (commitsEligibleForCleaning.size() > maxCommitsToClean) {
+      // Clean only the oldest maxCommitsToClean commits (indices 0 to maxCommitsToClean-1)
+      // Return the commit at index maxCommitsToClean as the new earliest commit to retain
+      HoodieInstant cappedEarliestCommitToRetain = commitsEligibleForCleaning.get((int) maxCommitsToClean);
+      log.info("Capping commits to clean from {} to {}. Adjusted earliest commit to retain from {} to {}",
+          commitsEligibleForCleaning.size(), maxCommitsToClean,
+          calculatedEarliestCommitToRetain.requestedTime(), cappedEarliestCommitToRetain.requestedTime());
+      return Option.of(cappedEarliestCommitToRetain);
+    }
+
+    // No capping needed, return the original calculated value
+    return Option.of(calculatedEarliestCommitToRetain);
   }
 
   /**

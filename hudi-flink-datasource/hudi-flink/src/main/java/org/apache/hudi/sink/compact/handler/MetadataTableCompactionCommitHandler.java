@@ -26,12 +26,13 @@ import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.util.CompactionUtils;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.metrics.FlinkCompactionMetrics;
+import org.apache.hudi.metrics.FlinkMdtCompactionMetrics;
 import org.apache.hudi.sink.compact.CompactionCommitEvent;
 import org.apache.hudi.table.action.compact.CompactHelpers;
 import org.apache.hudi.util.CompactionUtil;
 
 import org.apache.flink.configuration.Configuration;
+import org.apache.flink.metrics.MetricGroup;
 
 import java.io.IOException;
 import java.util.List;
@@ -39,7 +40,7 @@ import java.util.List;
 /**
  * Handler for committing compaction metadata to metadata table timeline.
  *
- * <p>This handler extends {@link CompactCommitHandler} to support metadata table specific
+ * <p>This handler extends {@link DataTableCompactionCommitHandler} to support metadata table specific
  * compaction commit actions, including:
  * <ul>
  *   <li>Retrieves compaction plans for both compaction and log compaction;</li>
@@ -52,13 +53,19 @@ import java.util.List;
  * the {@link CompactionCommitEvent#isLogCompaction()} flag, and triggers compaction completion or rollback
  * appropriately with the write client.
  *
- * @see CompactCommitHandler
+ * @see DataTableCompactionCommitHandler
  * @see CompactionCommitEvent
  */
-public class MetadataCompactCommitHandler extends CompactCommitHandler {
+public class MetadataTableCompactionCommitHandler extends DataTableCompactionCommitHandler {
 
-  public MetadataCompactCommitHandler(Configuration conf, HoodieFlinkWriteClient writeClient) {
+  public MetadataTableCompactionCommitHandler(Configuration conf, HoodieFlinkWriteClient writeClient) {
     super(conf, writeClient);
+  }
+
+  @Override
+  public void registerMetrics(MetricGroup metricGroup) {
+    this.compactionMetrics = new FlinkMdtCompactionMetrics(metricGroup);
+    this.compactionMetrics.registerMetrics();
   }
 
   /**
@@ -68,17 +75,15 @@ public class MetadataCompactCommitHandler extends CompactCommitHandler {
    * and log compaction(minor compaction) for metadata tables. It creates appropriate metadata based on the
    * operation type and completes the compaction.
    *
-   * @param instant           The compaction instant time
-   * @param isLogCompaction   Whether the compaction is log compaction
-   * @param statuses          List of write statuses from all compaction operations
-   * @param compactionMetrics Metrics collector for tracking compaction progress
+   * @param instant         The compaction instant time
+   * @param isLogCompaction Whether the compaction is log compaction
+   * @param statuses        List of write statuses from all compaction operations
    */
   @Override
 
   protected void completeCompaction(String instant,
                                     boolean isLogCompaction,
-                                    List<WriteStatus> statuses,
-                                    FlinkCompactionMetrics compactionMetrics) throws IOException {
+                                    List<WriteStatus> statuses) throws IOException {
     WriteOperationType operationType = isLogCompaction ? WriteOperationType.LOG_COMPACT : WriteOperationType.COMPACT;
     HoodieCommitMetadata metadata = CompactHelpers.getInstance().createCompactionMetadata(
         table, instant, HoodieListData.eager(statuses), writeClient.getConfig().getSchema(), operationType);
@@ -90,8 +95,8 @@ public class MetadataCompactCommitHandler extends CompactCommitHandler {
       writeClient.completeCompaction(metadata, table, instant);
     }
 
-    compactionMetrics.updateCommitMetrics(instant, metadata);
-    compactionMetrics.markCompactionCompleted();
+    this.compactionMetrics.updateCommitMetrics(instant, metadata);
+    this.compactionMetrics.markCompactionCompleted();
   }
 
   /**

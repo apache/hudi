@@ -327,6 +327,13 @@ public class StreamWriteOperatorCoordinator
     if (checkpointData != null) {
       initEventBufferIfNecessary();
       this.eventBuffers.addEventsToBuffer(SerializationUtils.deserialize(checkpointData));
+      // resetToCheckpoint() is called in two cases:
+      // 1. The job is restarted from state, start() will be called later.
+      // 2. The job is recovered from global failover. The coordinator is already started, and start() will not be called again.
+      if (executor != null && tableState.isRLIWithBootstrap) {
+        // use sync execution here to make sure the recommitting finishes before RLI bootstrapping
+        this.executor.executeSync(this::restoreEvents, "Recommit pending instants on resetting to checkpoint: %s.", checkpointID);
+      }
     }
   }
 
@@ -364,8 +371,12 @@ public class StreamWriteOperatorCoordinator
   }
 
   @Override
-  public void subtaskReset(int i, long l) {
-    // no operation
+  public void subtaskReset(int i, long resetCkpId) {
+    // There exists pending instants waiting for recommiting.
+    if (tableState.isRLIWithBootstrap && !eventBuffers.getPendingInstantsBefore(resetCkpId).isEmpty()) {
+      // use sync execution here to make sure the recommitting finishes before RLI bootstrapping
+      executor.executeSync(() -> commitInstants(resetCkpId), "Recommit pending instants on resetting subtask %s to checkpoint: %s.", i, resetCkpId);
+    }
   }
 
   @VisibleForTesting
@@ -390,9 +401,6 @@ public class StreamWriteOperatorCoordinator
     }
     if (request instanceof Correspondent.InflightInstantsRequest) {
       return handleInFlightInstantsRequest((Correspondent.InflightInstantsRequest) request);
-    }
-    if (request instanceof Correspondent.AwaitPendingInstantsRequest) {
-      return handleAwaitPendingInstantsRequest((Correspondent.AwaitPendingInstantsRequest) request);
     }
     throw new HoodieException("Unexpected coordination request type: " + request.getClass().getSimpleName());
   }
@@ -419,16 +427,6 @@ public class StreamWriteOperatorCoordinator
   private CompletableFuture<CoordinationResponse> handleInFlightInstantsRequest(Correspondent.InflightInstantsRequest request) {
     CoordinationResponse coordinationResponse = Correspondent.InflightInstantsResponse.getInstance(eventBuffers.getAllCheckpointIdAndInstants());
     return CompletableFuture.completedFuture(CoordinationResponseSerDe.wrap(coordinationResponse));
-  }
-
-  private CompletableFuture<CoordinationResponse> handleAwaitPendingInstantsRequest(Correspondent.AwaitPendingInstantsRequest request) {
-    CompletableFuture<CoordinationResponse> response = new CompletableFuture<>();
-    instantRequestExecutor.execute(() -> {
-      // wait until receiving any bootstrap event.
-      eventBuffers.awaitPrevInstantsToComplete(request.getCheckpointId());
-      response.complete(CoordinationResponseSerDe.wrap(Correspondent.AwaitPendingInstantsResponse.getInstance()));
-    }, "await pending instants to complete");
-    return response;
   }
 
   // -------------------------------------------------------------------------
@@ -532,16 +530,16 @@ public class StreamWriteOperatorCoordinator
    * Recommits the last inflight instant if the write metadata checkpoint successfully
    * but was not committed due to some rare cases.
    */
-  private void recommitInstant(long checkpointId, String instant, EventBuffer bootstrapBuffer) {
+  private boolean recommitInstant(long checkpointId, String instant, EventBuffer bootstrapBuffer) {
     HoodieTimeline completedTimeline = this.metaClient.getActiveTimeline().filterCompletedInstants();
-    recommitInstant(completedTimeline, checkpointId, instant, bootstrapBuffer);
+    return recommitInstant(completedTimeline, checkpointId, instant, bootstrapBuffer);
   }
 
   /**
    * Recommits the last inflight instant if the write metadata checkpoint successfully
    * but was not committed due to some rare cases.
    */
-  private void recommitInstant(HoodieTimeline completedTimeline, long checkpointId, String instant, EventBuffer bootstrapBuffer) {
+  private boolean recommitInstant(HoodieTimeline completedTimeline, long checkpointId, String instant, EventBuffer bootstrapBuffer) {
     if (!completedTimeline.containsInstant(instant)) {
       log.info("Recommit instant {}", instant);
       // Recommit should start heartbeat for lazy failed writes clean policy to avoid aborting for heartbeat expired;
@@ -549,7 +547,11 @@ public class StreamWriteOperatorCoordinator
       if (writeClient.getConfig().getFailedWritesCleanPolicy().isLazy()) {
         writeClient.getHeartbeatClient().start(instant);
       }
-      commitInstant(checkpointId, instant, bootstrapBuffer);
+      return commitInstant(checkpointId, instant, bootstrapBuffer);
+    } else {
+      // clean the corresponding event buffer if the instant is already committed.
+      eventBuffers.reset(checkpointId);
+      return false;
     }
   }
 
@@ -562,7 +564,11 @@ public class StreamWriteOperatorCoordinator
     eventBuffer.addBootstrapEvent(event);
     if (eventBuffer.allBootstrapEventsReceived()) {
       // start to recommit the instant.
-      recommitInstant(event.getCheckpointId(), event.getInstantTime(), eventBuffer);
+      boolean committed = recommitInstant(event.getCheckpointId(), event.getInstantTime(), eventBuffer);
+      if (committed && tableState.isRLIWithBootstrap) {
+        context.failJob(new HoodieException("There are pending instants recommitted on job restart,"
+            + "triggering a global failover so that RLI bootstrap operator can load the record level index completely."));
+      }
     }
   }
 
@@ -753,6 +759,7 @@ public class StreamWriteOperatorCoordinator
     final boolean syncMetadata;
     final boolean isDeltaTimeCompaction;
     final boolean isStreamingIndexWriteEnabled;
+    final boolean isRLIWithBootstrap;
 
     private TableState(Configuration conf) {
       this.operationType = WriteOperationType.fromValue(conf.get(FlinkOptions.OPERATION));
@@ -766,6 +773,7 @@ public class StreamWriteOperatorCoordinator
       this.syncMetadata = conf.get(FlinkOptions.METADATA_ENABLED);
       this.isDeltaTimeCompaction = OptionsResolver.isDeltaTimeCompaction(conf);
       this.isStreamingIndexWriteEnabled = OptionsResolver.isStreamingIndexWriteEnabled(conf);
+      this.isRLIWithBootstrap = OptionsResolver.isRLIWithBootstrap(conf);
     }
 
     public static TableState create(Configuration conf) {

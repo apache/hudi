@@ -19,19 +19,13 @@
 package org.apache.hudi.sink.compact;
 
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
-import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.client.WriteStatus;
-import org.apache.hudi.metrics.FlinkCompactionMetrics;
 import org.apache.hudi.sink.CleanFunction;
-import org.apache.hudi.sink.compact.handler.CompactCommitHandler;
-import org.apache.hudi.sink.compact.handler.MetadataCompactCommitHandler;
-import org.apache.hudi.util.FlinkWriteClients;
-import org.apache.hudi.util.Lazy;
-import org.apache.hudi.util.StreamerUtil;
+import org.apache.hudi.sink.compact.handler.CompactionCommitHandler;
+import org.apache.hudi.sink.compact.handler.TableServiceHandlerFactory;
 
 import lombok.extern.slf4j.Slf4j;
 import org.apache.flink.configuration.Configuration;
-import org.apache.flink.metrics.MetricGroup;
 
 /**
  * Function to check and commit the compaction action.
@@ -52,14 +46,7 @@ public class CompactionCommitSink extends CleanFunction<CompactionCommitEvent> {
    */
   private final Configuration conf;
 
-  private transient Lazy<CompactCommitHandler> compactCommitHandler;
-
-  private transient Lazy<CompactCommitHandler> mdtCompactCommitHandler;
-
-  /**
-   * Compaction metrics.
-   */
-  private transient FlinkCompactionMetrics compactionMetrics;
+  private transient CompactionCommitHandler compactCommitHandler;
 
   public CompactionCommitSink(Configuration conf) {
     super(conf);
@@ -69,10 +56,8 @@ public class CompactionCommitSink extends CleanFunction<CompactionCommitEvent> {
   @Override
   public void open(Configuration parameters) throws Exception {
     super.open(parameters);
-    HoodieFlinkWriteClient writeClient = FlinkWriteClients.createWriteClient(conf, getRuntimeContext());
-    this.compactCommitHandler = Lazy.lazily(() -> new CompactCommitHandler(conf, writeClient));
-    this.mdtCompactCommitHandler = Lazy.lazily(() -> new MetadataCompactCommitHandler(conf, StreamerUtil.createMetadataWriteClient(writeClient)));
-    registerMetrics();
+    this.compactCommitHandler = TableServiceHandlerFactory.createCompactionCommitHandler(conf, getRuntimeContext());
+    this.compactCommitHandler.registerMetrics(getRuntimeContext().getMetricGroup());
   }
 
   @Override
@@ -85,22 +70,12 @@ public class CompactionCommitSink extends CleanFunction<CompactionCommitEvent> {
               + " is failed: {}, error record count: {}",
           instant, event.getTaskID(), event.isFailed(), getNumErrorRecords(event));
     }
-    if (event.isMetadataTable()) {
-      mdtCompactCommitHandler.get().commitIfNecessary(event, compactionMetrics);
-    } else {
-      compactCommitHandler.get().commitIfNecessary(event, compactionMetrics);
-    }
+    compactCommitHandler.commitIfNecessary(event);
   }
 
   @Override
   public void close() throws Exception {
-    if (compactCommitHandler.isInitialized()) {
-      compactCommitHandler.get().close();
-    }
-    if (mdtCompactCommitHandler.isInitialized()) {
-      mdtCompactCommitHandler.get().close();
-
-    }
+    compactCommitHandler.close();
     super.close();
   }
 
@@ -110,11 +85,5 @@ public class CompactionCommitSink extends CleanFunction<CompactionCommitEvent> {
     }
     return event.getWriteStatuses().stream()
         .map(WriteStatus::getTotalErrorRecords).reduce(Long::sum).orElse(0L);
-  }
-
-  private void registerMetrics() {
-    MetricGroup metrics = getRuntimeContext().getMetricGroup();
-    compactionMetrics = new FlinkCompactionMetrics(metrics);
-    compactionMetrics.registerMetrics();
   }
 }

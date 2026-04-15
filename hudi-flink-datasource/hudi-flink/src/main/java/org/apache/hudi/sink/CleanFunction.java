@@ -23,10 +23,9 @@ import org.apache.hudi.adapter.SinkFunctionAdapter;
 import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.configuration.FlinkOptions;
-import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.sink.compact.handler.CleanHandler;
+import org.apache.hudi.sink.compact.handler.TableServiceHandlerFactory;
 import org.apache.hudi.util.FlinkWriteClients;
-import org.apache.hudi.util.StreamerUtil;
 
 import lombok.extern.slf4j.Slf4j;
 import org.apache.flink.api.common.state.CheckpointListener;
@@ -50,11 +49,7 @@ public class CleanFunction<T> extends AbstractRichFunctionAdapter
 
   protected HoodieFlinkWriteClient writeClient;
 
-  // clean handler for data table
   private transient Option<CleanHandler> cleanHandlerOpt;
-
-  // clean handler for metadata table
-  private transient Option<CleanHandler> mdtCleanHandlerOpt;
 
   public CleanFunction(Configuration conf) {
     this.conf = conf;
@@ -64,29 +59,19 @@ public class CleanFunction<T> extends AbstractRichFunctionAdapter
   public void open(Configuration parameters) throws Exception {
     super.open(parameters);
     this.writeClient = FlinkWriteClients.createWriteClient(conf, getRuntimeContext());
-    if (conf.get(FlinkOptions.CLEAN_ASYNC_ENABLED)) {
-      this.cleanHandlerOpt = Option.of(new CleanHandler(writeClient));
-      this.mdtCleanHandlerOpt = OptionsResolver.isStreamingIndexWriteEnabled(conf)
-          ? Option.of(new CleanHandler(StreamerUtil.createMetadataWriteClient(writeClient))) : Option.empty();
-    } else {
-      this.cleanHandlerOpt = Option.empty();
-      this.mdtCleanHandlerOpt = Option.empty();
-    }
-
-    cleanHandlerOpt.ifPresent(CleanHandler::clean);
-    mdtCleanHandlerOpt.ifPresent(CleanHandler::clean);
+    this.cleanHandlerOpt = conf.get(FlinkOptions.CLEAN_ASYNC_ENABLED)
+        ? Option.of(TableServiceHandlerFactory.createCleanHandler(conf, writeClient)) : Option.empty();
+    this.cleanHandlerOpt.ifPresent(CleanHandler::clean);
   }
 
   @Override
   public void notifyCheckpointComplete(long l) throws Exception {
-    cleanHandlerOpt.ifPresent(CleanHandler::waitForCleaningFinish);
-    mdtCleanHandlerOpt.ifPresent(CleanHandler::waitForCleaningFinish);
+    this.cleanHandlerOpt.ifPresent(CleanHandler::waitForCleaningFinish);
   }
 
   @Override
   public void snapshotState(FunctionSnapshotContext context) throws Exception {
-    cleanHandlerOpt.ifPresent(CleanHandler::startAsyncCleaning);
-    mdtCleanHandlerOpt.ifPresent(CleanHandler::startAsyncCleaning);
+    this.cleanHandlerOpt.ifPresent(CleanHandler::startAsyncCleaning);
   }
 
   @Override
@@ -96,7 +81,6 @@ public class CleanFunction<T> extends AbstractRichFunctionAdapter
 
   @Override
   public void close() throws Exception {
-    cleanHandlerOpt.ifPresent(CleanHandler::close);
-    mdtCleanHandlerOpt.ifPresent(CleanHandler::close);
+    this.cleanHandlerOpt.ifPresent(CleanHandler::close);
   }
 }

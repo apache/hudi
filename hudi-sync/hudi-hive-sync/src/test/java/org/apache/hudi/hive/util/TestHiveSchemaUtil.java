@@ -148,7 +148,20 @@ public class TestHiveSchemaUtil {
             HoodieSchemaField.of("time_millis_field", HoodieSchema.createTimeMillis()),
             HoodieSchemaField.of("time_micros_field", HoodieSchema.createTimeMicros()),
             HoodieSchemaField.of("decimal_field", HoodieSchema.createDecimal(10, 2)),
-            HoodieSchemaField.of("uuid_field", HoodieSchema.create(HoodieSchemaType.UUID))
+            HoodieSchemaField.of("uuid_field", HoodieSchema.create(HoodieSchemaType.UUID)),
+            HoodieSchemaField.of("vector_field", HoodieSchema.createVector(128)),
+            HoodieSchemaField.of("blob_field", HoodieSchema.createBlob()),
+            HoodieSchemaField.of("nullable_blob_field", HoodieSchema.createNullable(HoodieSchema.createBlob())),
+            HoodieSchemaField.of("nested_blob_field", HoodieSchema.createRecord("media", null, null, false, Arrays.asList(
+                HoodieSchemaField.of("title", HoodieSchema.create(HoodieSchemaType.STRING)),
+                HoodieSchemaField.of("content", HoodieSchema.createBlob())
+            ))),
+            HoodieSchemaField.of("variant_field", HoodieSchema.createVariant()),
+            HoodieSchemaField.of("nullable_variant_field", HoodieSchema.createNullable(HoodieSchema.createVariant())),
+            HoodieSchemaField.of("nested_variant_field", HoodieSchema.createRecord("container", null, null, false, Arrays.asList(
+                HoodieSchemaField.of("title", HoodieSchema.create(HoodieSchemaType.STRING)),
+                HoodieSchemaField.of("variant_data", HoodieSchema.createVariant())
+            )))
         )
     );
 
@@ -172,6 +185,17 @@ public class TestHiveSchemaUtil {
     expected.put("`time_micros_field`", "bigint");
     expected.put("`decimal_field`", "DECIMAL(10 , 2)");
     expected.put("`uuid_field`", "binary");
+    expected.put("`vector_field`", "binary");
+    expected.put("`blob_field`",
+        "STRUCT< `type` : string, `data` : binary, `reference` : STRUCT< `external_path` : string, `offset` : bigint, `length` : bigint, `managed` : boolean>>");
+    expected.put("`nullable_blob_field`",
+        "STRUCT< `type` : string, `data` : binary, `reference` : STRUCT< `external_path` : string, `offset` : bigint, `length` : bigint, `managed` : boolean>>");
+    expected.put("`nested_blob_field`",
+        "STRUCT< `title` : string, `content` : STRUCT< `type` : string, `data` : binary, `reference` : STRUCT< `external_path` : string, `offset` : bigint, `length` : bigint, `managed` : boolean>>>");
+    expected.put("`variant_field`", "STRUCT< `metadata` : binary, `value` : binary>");
+    expected.put("`nullable_variant_field`", "STRUCT< `metadata` : binary, `value` : binary>");
+    expected.put("`nested_variant_field`",
+        "STRUCT< `title` : string, `variant_data` : STRUCT< `metadata` : binary, `value` : binary>>");
     assertEquals(expected, actual);
   }
 }

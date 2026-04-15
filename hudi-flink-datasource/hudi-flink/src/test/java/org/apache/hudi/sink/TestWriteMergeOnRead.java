@@ -18,9 +18,11 @@
 
 package org.apache.hudi.sink;
 
+import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.model.EventTimeAvroPayload;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
+import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -29,6 +31,7 @@ import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.util.StreamerUtil;
 import org.apache.hudi.utils.TestData;
 
@@ -255,6 +258,54 @@ public class TestWriteMergeOnRead extends TestWriteCopyOnWrite {
         // subtask will resend the write metadata event during initialize state
         // and coordinator will recommit data for ckp-2
         .assertNextEvent()
+        // insert another batch of data.
+        .consume(TestData.DATA_SET_PART4)
+        .checkpoint(3)
+        .assertNextEvent(1, "par2")
+        // write metadata will be committed for ckp-3
+        .checkpointComplete(3)
+        // there should be 3 rows and 2 partitions
+        .checkWrittenData(expected, 2)
+        .end();
+  }
+
+  @Test
+  public void testRecommitOnJobRestartTriggeringGlobalFailover() throws Exception {
+    conf.set(FlinkOptions.INDEX_TYPE, HoodieIndex.IndexType.GLOBAL_RECORD_LEVEL_INDEX.name());
+    conf.setString(HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_ENABLE_PROP.key(), "true");
+    conf.setString(HoodieMetadataConfig.STREAMING_WRITE_ENABLED.key(), "true");
+    conf.set(FlinkOptions.WRITE_COMMIT_ACK_TIMEOUT, 10_000L);
+    conf.set(FlinkOptions.INDEX_BOOTSTRAP_ENABLED, true);
+
+    Map<String, String> expected = new HashMap<>();
+    expected.put("par1", "[id1,par1,id1,Danny,23,1,par1]");
+    expected.put("par2", "[id3,par2,id3,Julian,53,3,par2, id4,par2,id4,Fabian,31,4,par2]");
+
+    TestHarness testHarness = preparePipeline(conf)
+        .consume(TestData.DATA_SET_PART1)
+        .emptyEventBuffer()
+        .checkpoint(1)
+        .assertNextEvent(1, "par1")
+        .consume(TestData.DATA_SET_PART3)
+        .checkpoint(2)
+        // both ckp-1 and ckp-2 are not committing
+        .assertNextEvent(1, "par2")
+        // then simulating restarting job manually, coordinator will reset to ckp-2
+        // and recommit write metadata for ckp-1
+        .restartCoordinator()
+        .subTaskFails(0, 0);
+
+    // global failover is not triggered now, since write metadata events from writer state are not recommitted.
+    testHarness.assertGlobalFailure(false);
+
+    testHarness.assertNextEvent();
+    // global failover is triggered now, since all the pending write metadata events are recommitted.
+    testHarness.assertGlobalFailure(true);
+
+    testHarness.subTaskFails(0, 0)
+        .checkIndexLoaded(
+            new HoodieKey("id1", "par1"),
+            new HoodieKey("id3", "par2"))
         // insert another batch of data.
         .consume(TestData.DATA_SET_PART4)
         .checkpoint(3)

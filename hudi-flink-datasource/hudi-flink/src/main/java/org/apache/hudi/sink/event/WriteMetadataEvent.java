@@ -122,6 +122,21 @@ public class WriteMetadataEvent implements OperatorEvent {
   }
 
   /**
+   * Merges this event with given {@link WriteMetadataEvent} {@code other} with rescaling.
+   * The events usually come from different tasks.
+   *
+   * @param other The event to be merged
+   */
+  public WriteMetadataEvent mergeWithRescale(WriteMetadataEvent other) {
+    // the instant time could be monotonically increasing
+    this.instantTime = other.instantTime;
+    // true if one of the event lastBatch is true
+    this.lastBatch |= other.lastBatch;
+    this.writeStatuses = mergeWriteStatuses(this.writeStatuses, other.writeStatuses);
+    return this;
+  }
+
+  /**
    * Returns whether the event is ready to commit.
    */
   public boolean isReady(String currentInstant) {

@@ -41,7 +41,6 @@ import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.internal.schema.utils.SerDeHelper;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
-import org.apache.hudi.table.action.compact.strategy.CompactionStrategy;
 
 import javax.annotation.concurrent.NotThreadSafe;
 
@@ -115,7 +114,7 @@ public class FileGroupReaderBasedAppendHandle<T, I, K, O> extends HoodieAppendHa
       writeStatus.getStat().setTotalLogBlocks(readStats.getTotalLogBlocks());
       writeStatus.getStat().setTotalCorruptLogBlock(readStats.getTotalCorruptLogBlock());
       writeStatus.getStat().setTotalRollbackBlocks(readStats.getTotalRollbackBlocks());
-      writeStatus.getStat().setTotalLogSizeCompacted(operation.getMetrics().get(CompactionStrategy.TOTAL_LOG_FILE_SIZE).longValue());
+      writeStatus.getStat().setTotalLogSizeCompacted(readStats.getTotalLogSizeCompacted());
 
       if (writeStatus.getStat().getRuntimeStats() != null) {
         writeStatus.getStat().getRuntimeStats().setTotalScanTime(readStats.getTotalLogReadTimeMs());

@@ -135,6 +135,13 @@ public interface HoodieTableMetadata extends Serializable, AutoCloseable {
                                                                    Types.RecordType partitionFields,
                                                                    Expression expression) throws IOException;
 
+  default List<String> getPartitionPathWithPathPrefixUsingFilterExpression(List<String> relativePathPrefixes,
+                                                                           Types.RecordType partitionFields,
+                                                                           Expression expression,
+                                                                           List<Object> partitionPredicateExpressions) throws IOException {
+    return getPartitionPathWithPathPrefixUsingFilterExpression(relativePathPrefixes, partitionFields, expression);
+  }
+
   /**
    * Fetches all partition paths that are the sub-directories of the list of provided (relative) paths.
    * <p>

@@ -18,7 +18,12 @@
 
 package org.apache.hudi.source.split.assign;
 
+import org.apache.flink.configuration.Configuration;
+import org.apache.hudi.common.util.Functions;
+import org.apache.hudi.common.util.hash.BucketIndexUtil;
+import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.index.bucket.BucketIdentifier;
+import org.apache.hudi.index.bucket.partition.NumBucketsFunction;
 import org.apache.hudi.source.split.HoodieSourceSplit;
 
 /**
@@ -26,24 +31,30 @@ import org.apache.hudi.source.split.HoodieSourceSplit;
  * source splits to task IDs using bucket index information for co-location.
  */
 public class HoodieSplitBucketAssigner implements HoodieSplitAssigner {
-  private final int parallelism;
+  private final NumBucketsFunction numBucketsFunction;
+  private Functions.Function3<Integer, String, Integer, Integer> partitionIndexFunc;
 
   /**
-   * Creates a new HoodieSplitBucketAssigner.
+   * Creates a new HoodieSplitBucketAssigner using bucket index configuration.
    *
    * @param parallelism the number of parallel tasks (must be positive)
+   * @param conf        Flink configuration containing bucket index settings
    * @throws IllegalArgumentException if parallelism is less than or equal to 0
    */
-  public HoodieSplitBucketAssigner(int parallelism) {
+  public HoodieSplitBucketAssigner(int parallelism, Configuration conf) {
     if (parallelism <= 0) {
       throw new IllegalArgumentException("Parallelism must be positive, but was: " + parallelism);
     }
-    this.parallelism = parallelism;
+    this.numBucketsFunction = new NumBucketsFunction(conf.get(FlinkOptions.BUCKET_INDEX_PARTITION_EXPRESSIONS),
+            conf.get(FlinkOptions.BUCKET_INDEX_PARTITION_RULE), conf.get(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS));
+    this.partitionIndexFunc = BucketIndexUtil.getPartitionIndexFunc(parallelism);
   }
 
   @Override
   public int assign(HoodieSourceSplit split) {
-    int bucketId = BucketIdentifier.bucketIdFromFileId(split.getFileId());
-    return bucketId % parallelism;
+
+    int curBucket = BucketIdentifier.bucketIdFromFileId(split.getFileId());
+    int numBuckets = numBucketsFunction.getNumBuckets(split.getPartitionPath());
+    return this.partitionIndexFunc.apply(numBuckets, split.getPartitionPath(), curBucket);
   }
 }

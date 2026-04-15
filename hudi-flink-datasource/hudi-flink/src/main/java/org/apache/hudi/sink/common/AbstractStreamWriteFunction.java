@@ -234,18 +234,20 @@ public abstract class AbstractStreamWriteFunction<I>
       if (isRestored) {
         HoodieTimeline pendingTimeline = this.metaClient.getActiveTimeline().filterPendingExcludingCompaction();
         // if the task is initially started, resend the pending event.
-        for (WriteMetadataEvent event : this.writeMetadataState.get()) {
-          // Must filter out the completed instants in case it is a partial failover,
-          // the write status should not be accumulated in such case.
-          if (pendingTimeline.containsInstant(event.getInstantTime())) {
-            // Reset taskID for event
-            event.setTaskID(taskID);
-            // The checkpoint succeed but the meta does not commit,
-            // re-commit the inflight instant
-            sendWriteMetadataEvent(event);
-            log.info("Send uncommitted write metadata event to coordinator, task[{}].", taskID);
-          }
-        }
+        StreamSupport.stream(this.writeMetadataState.get().spliterator(), false)
+            .reduce(WriteMetadataEvent::mergeWithRescale)
+            .ifPresent(metadataEvent -> {
+              // Must filter out the completed instants in case it is a partial failover,
+              // the write status should not be accumulated in such case.
+              if (pendingTimeline.containsInstant(metadataEvent.getInstantTime())) {
+                // Reset taskID for event
+                metadataEvent.setTaskID(taskID);
+                // The checkpoint succeed but the meta does not commit,
+                // re-commit the inflight instant
+                sendWriteMetadataEvent(metadataEvent);
+                log.info("Send uncommitted write metadata event to coordinator, task[{}].", taskID);
+              }
+            });
       }
     } else {
       // otherwise sends an empty bootstrap event instead.

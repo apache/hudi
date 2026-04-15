@@ -151,6 +151,42 @@ public class IOUtils {
   }
 
   /**
+   * Encodes an integer using Hadoop-compatible variable-length encoding
+   * (WritableUtils VarInt format) and returns the encoded bytes.
+   *
+   * <p>For values between -112 and 127 (inclusive), a single byte is used.
+   * For other values, the first byte indicates the number of following bytes
+   * and the sign, followed by the value in big-endian order.
+   *
+   * @param value the integer value to encode.
+   * @return the encoded byte array.
+   */
+  public static byte[] writeVarInt(int value) {
+    if (value >= -112 && value <= 127) {
+      return new byte[] {(byte) value};
+    }
+    long longValue = value;
+    int len = -112;
+    if (longValue < 0) {
+      longValue ^= -1L;
+      len = -120;
+    }
+    long tmp = longValue;
+    while (tmp != 0) {
+      tmp >>= 8;
+      len--;
+    }
+    int numBytes = (len < -120) ? -(len + 120) : -(len + 112);
+    byte[] result = new byte[1 + numBytes];
+    result[0] = (byte) len;
+    for (int idx = 0; idx < numBytes; idx++) {
+      int shiftBits = (numBytes - idx - 1) * 8;
+      result[1 + idx] = (byte) ((longValue >> shiftBits) & 0xFF);
+    }
+    return result;
+  }
+
+  /**
    * @param bytes  input byte array.
    * @param offset offset to start reading.
    * @param length length of bytes to copy.

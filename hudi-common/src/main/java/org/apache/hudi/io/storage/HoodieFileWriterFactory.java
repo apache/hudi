@@ -114,7 +114,7 @@ public class HoodieFileWriterFactory {
   protected HoodieFileWriter newLanceFileWriter(
       String instantTime, StoragePath path, HoodieConfig config, HoodieSchema schema,
       TaskContextSupplier taskContextSupplier) throws IOException {
-    throw new UnsupportedOperationException();
+    throw new UnsupportedOperationException(HoodieFileFormat.LANCE_SPARK_ONLY_ERROR_MSG);
   }
 
   public static BloomFilter createBloomFilter(HoodieConfig config) {

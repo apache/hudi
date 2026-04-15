@@ -50,7 +50,6 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.ClosableSortedDedupingIterator;
@@ -78,6 +77,7 @@ import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
+import org.apache.hudi.util.PartitionPathFilterUtil;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -217,15 +217,10 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
   @Override
   public List<String> getPartitionPathWithPathPrefixes(List<String> relativePathPrefixes) throws IOException {
     // TODO: consider skipping this method for non-partitioned table and simplify the checks
+    java.util.function.Predicate<String> relativePathPrefixesPredicate = PartitionPathFilterUtil
+        .relativePathPrefixPredicate(relativePathPrefixes);
     return getAllPartitionPaths().stream()
-        .filter(p -> relativePathPrefixes.stream().anyMatch(relativePathPrefix ->
-            // Partition paths stored in metadata table do not have the slash at the end.
-            // If the relativePathPrefix is empty, return all partition paths;
-            // else if the relative path prefix is the same as the path, this is an exact match;
-            // else, we need to make sure the path is a subdirectory of relativePathPrefix, by
-            // checking if the path starts with relativePathPrefix appended by a slash ("/").
-            StringUtils.isNullOrEmpty(relativePathPrefix)
-                || p.equals(relativePathPrefix) || p.startsWith(relativePathPrefix + "/")))
+        .filter(relativePathPrefixesPredicate)
         .collect(Collectors.toList());
   }
 
