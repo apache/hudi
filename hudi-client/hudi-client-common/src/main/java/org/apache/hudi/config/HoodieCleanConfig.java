@@ -127,6 +127,15 @@ public class HoodieCleanConfig extends HoodieConfig {
       .withDocumentation("When " + KEEP_LATEST_FILE_VERSIONS.name() + " cleaning policy is used, "
           + "the minimum number of file slices to retain in each file group, during cleaning.");
 
+  public static final ConfigProperty<String> MAX_COMMITS_TO_CLEAN = ConfigProperty
+      .key("hoodie.cleaner.max.commits.clean")
+      .defaultValue("200")
+      .withDocumentation("Max no. of instants to clean in a single clean call. This config is useful when clean is disabled or "
+          + "blocked from running for a while and enabled later. During that time, it can accumulate many commits to clean "
+          + "and run into memory issues. This config puts a cap on the no. of commits that can be cleaned. This is mainly applicable "
+          + "for incremental clean policy. To handle corner cases while reading we skip 1 commit before earliestCommitToRetain, "
+          + "so +1 will be added to maxInstantsToClean value. Set to -1 to disable.");
+
   public static final ConfigProperty<String> CLEAN_TRIGGER_STRATEGY = ConfigProperty
       .key("hoodie.clean.trigger.strategy")
       .defaultValue(CleaningTriggerStrategy.NUM_COMMITS.name())
@@ -376,6 +385,11 @@ public class HoodieCleanConfig extends HoodieConfig {
 
     public HoodieCleanConfig.Builder retainCommits(int commitsRetained) {
       cleanConfig.setValue(CLEANER_COMMITS_RETAINED, String.valueOf(commitsRetained));
+      return this;
+    }
+
+    public HoodieCleanConfig.Builder maxCommitsToClean(int maxCommitsToClean) {
+      cleanConfig.setValue(MAX_COMMITS_TO_CLEAN, String.valueOf(maxCommitsToClean));
       return this;
     }
 

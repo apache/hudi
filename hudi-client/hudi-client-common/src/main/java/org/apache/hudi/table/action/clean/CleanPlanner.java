@@ -70,6 +70,7 @@ import java.util.stream.Stream;
 import static org.apache.hudi.common.table.timeline.InstantComparison.GREATER_THAN;
 import static org.apache.hudi.common.table.timeline.InstantComparison.GREATER_THAN_OR_EQUALS;
 import static org.apache.hudi.common.table.timeline.InstantComparison.LESSER_THAN;
+import static org.apache.hudi.common.table.timeline.InstantComparison.LESSER_THAN_OR_EQUALS;
 import static org.apache.hudi.common.table.timeline.InstantComparison.compareTimestamps;
 
 /**
@@ -624,8 +625,64 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
           Instant.now(),
           config.getCleanerHoursRetained(),
           hoodieTable.getMetaClient().getTableConfig().getTimelineTimezone());
+      log.info("EarliestCommitToRetain is {} after CleanerUtils.getEarliestCommitToRetain",
+          earliestCommitToRetain.map(HoodieInstant::requestedTime).orElse("null"));
+      earliestCommitToRetain = getEarliestCommitToRetainConsideringSafety(earliestCommitToRetain);
+      log.info("EarliestCommitToRetain is {} after getEarliestCommitToRetainConsideringSafety",
+          earliestCommitToRetain.map(HoodieInstant::requestedTime).orElse("null"));
     }
     return earliestCommitToRetain;
+  }
+
+  /**
+   * Caps the number of instants to clean in a single clean call and ensures ordering of
+   * earliest commit to retain across cleans (ECTR must be monotonically increasing).
+   */
+  private Option<HoodieInstant> getEarliestCommitToRetainConsideringSafety(Option<HoodieInstant> earliestCommitToRetain) {
+    if (!earliestCommitToRetain.isPresent()) {
+      return earliestCommitToRetain;
+    }
+    try {
+      Option<HoodieInstant> lastClean = hoodieTable.getCleanTimeline().filterCompletedInstants().lastInstant();
+      String previousEarliestCommitToRetain;
+      if (lastClean.isPresent()) {
+        HoodieCleanMetadata cleanMetadata = hoodieTable.getActiveTimeline().readCleanMetadata(lastClean.get());
+        if (cleanMetadata == null || cleanMetadata.getEarliestCommitToRetain() == null) {
+          log.warn("Empty clean metadata found for {}", lastClean.get());
+          previousEarliestCommitToRetain = HoodieTimeline.INIT_INSTANT_TS;
+        } else {
+          previousEarliestCommitToRetain = cleanMetadata.getEarliestCommitToRetain();
+          if (!StringUtils.isNullOrEmpty(previousEarliestCommitToRetain)) {
+            if (compareTimestamps(earliestCommitToRetain.get().requestedTime(),
+                LESSER_THAN_OR_EQUALS,
+                previousEarliestCommitToRetain)) {
+              log.info("earliestCommitToRetain {} is less than or equal to previousEarliestCommitToRetain {}.",
+                  earliestCommitToRetain.get().requestedTime(), previousEarliestCommitToRetain);
+              return Option.empty();
+            }
+          }
+        }
+      } else {
+        previousEarliestCommitToRetain = HoodieTimeline.INIT_INSTANT_TS;
+      }
+      if (config.getMaxCommitsToClean() == -1) {
+        return earliestCommitToRetain;
+      }
+      int maxInstantsToClean = config.getMaxCommitsToClean() + 1;
+
+      Option<HoodieInstant> maxInstant = getCommitTimeline()
+          .findInstantsAfter(previousEarliestCommitToRetain, maxInstantsToClean + 1)
+          .lastInstant();
+      if (!maxInstant.isPresent()) {
+        return Option.empty();
+      }
+      return compareTimestamps(
+          earliestCommitToRetain.get().requestedTime(),
+          LESSER_THAN,
+          maxInstant.get().requestedTime()) ? earliestCommitToRetain : maxInstant;
+    } catch (IOException e) {
+      throw new HoodieIOException(e.getMessage(), e);
+    }
   }
 
   /**
