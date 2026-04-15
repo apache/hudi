@@ -1052,7 +1052,8 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
   }
 
   public boolean requireSortedRecords() {
-    return getBaseFileFormat() == HoodieFileFormat.HFILE;
+    return getBaseFileFormat() == HoodieFileFormat.HFILE
+        || config.getLayoutType() == HoodieStorageLayout.LayoutType.LSM_TREE;
   }
 
   public HoodieEngineContext getContext() {
