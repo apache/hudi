@@ -24,7 +24,7 @@ import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.IOType;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.exception.HoodieClusteringException;
 import org.apache.hudi.exception.HoodieInsertException;
 import org.apache.hudi.execution.FileMetadataWriteStatusConverter;
 import org.apache.hudi.storage.StoragePath;
@@ -73,7 +73,7 @@ public class ExternalFileClusteringWriteHandle<T extends HoodieRecordPayload, I,
   public List<WriteStatus> close() {
     try {
       if (!hoodieTable.getStorage().exists(path)) {
-        throw new HoodieIOException("Output file does not exist, transformation may not have been invoked: " + path);
+        throw new HoodieClusteringException("Output file does not exist, transformation may not have been invoked: " + path);
       }
 
       Map<String, Object> executionConfigs = new HashMap<>();
@@ -88,6 +88,8 @@ public class ExternalFileClusteringWriteHandle<T extends HoodieRecordPayload, I,
       return Collections.singletonList(writeStatus);
     } catch (IOException e) {
       throw new HoodieInsertException("Failed to close the ExternalFileClusteringWriteHandle for path " + path, e);
+    } finally {
+      markClosed();
     }
   }
 
@@ -101,7 +103,7 @@ public class ExternalFileClusteringWriteHandle<T extends HoodieRecordPayload, I,
    */
   protected WriteStatus generateWriteStatus(
       String outputFile, String partitionPath, Map<String, Object> executionConfigs) throws IOException {
-    return new FileMetadataWriteStatusConverter(hoodieTable, config).convert(outputFile, partitionPath, executionConfigs);
+    return new FileMetadataWriteStatusConverter<>(hoodieTable, config).convert(outputFile, partitionPath, executionConfigs);
   }
 
   @Override

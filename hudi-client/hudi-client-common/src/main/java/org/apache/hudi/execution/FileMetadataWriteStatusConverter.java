@@ -24,6 +24,7 @@ import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.util.ParquetUtils;
 import org.apache.hudi.common.util.ReflectionUtils;
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
@@ -61,7 +62,7 @@ public class FileMetadataWriteStatusConverter<T extends HoodieRecordPayload, I, 
                              Map<String, Object> executionConfigs) throws IOException {
     LOG.info("Creating write status for parquet file " + parquetFile);
     WriteStatus writeStatus = (WriteStatus) ReflectionUtils.loadClass(this.writeConfig.getWriteStatusClassName(),
-        !this.hoodieTable.getIndex().isImplicitWithStorage(), this.writeConfig.getWriteStatusFailureFraction());
+        this.hoodieTable.shouldTrackSuccessRecords(), this.writeConfig.getWriteStatusFailureFraction(), this.hoodieTable.isMetadataTable());
     StoragePath parquetFilePath = new StoragePath(parquetFile);
     writeStatus.setFileId(FSUtils.getFileId(parquetFilePath.getName()));
     writeStatus.setPartitionPath(partitionPath);
@@ -94,7 +95,9 @@ public class FileMetadataWriteStatusConverter<T extends HoodieRecordPayload, I, 
     stat.setFileId(writeStatus.getFileId());
     stat.setPartitionPath(writeStatus.getPartitionPath());
     stat.setPath(new StoragePath(writeConfig.getBasePath()), parquetFilePath);
-    stat.setPrevCommit(String.valueOf(executionConfigs.get(PREV_COMMIT)));
+    Object prevCommit = executionConfigs.get(PREV_COMMIT);
+    ValidationUtils.checkArgument(prevCommit != null, "prevCommit must be set in executionConfigs");
+    stat.setPrevCommit(prevCommit.toString());
 
     writeStatus.setStat(stat);
   }

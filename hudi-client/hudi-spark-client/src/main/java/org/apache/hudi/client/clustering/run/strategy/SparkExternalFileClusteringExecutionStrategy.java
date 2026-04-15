@@ -62,6 +62,10 @@ public abstract class SparkExternalFileClusteringExecutionStrategy<T extends Hoo
                                                         TaskContextSupplier taskContextSupplier,
                                                         String instantTime) {
     LOG.info("Starting clustering operation on input file ids.");
+    if (!preserveHoodieMetadata) {
+      throw new HoodieClusteringException(
+          "External file clustering strategy cannot rewrite Hudi metadata fields. preserveHoodieMetadata must be true.");
+    }
     List<ClusteringOperation> clusteringOperations = clusteringOps.getOperations();
     if (clusteringOperations.size() != 1) {
       throw new HoodieClusteringException("Expect only one clustering operation during rewrite: " + getClass().getName());
