@@ -87,7 +87,7 @@ public class HoodieLanceRecordReader implements RecordReader<NullWritable, Array
 
   @Override
   public NullWritable createKey() {
-    return null;
+    return NullWritable.get();
   }
 
   @Override

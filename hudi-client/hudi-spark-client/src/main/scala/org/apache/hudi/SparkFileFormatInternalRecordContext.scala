@@ -64,9 +64,12 @@ trait SparkFileFormatInternalRecordContext extends BaseSparkInternalRecordContex
       try {
         val avroRecordOpt = record.toIndexedRecord(schema, properties)
         if (avroRecordOpt.isPresent) {
-          val avroRecord = avroRecordOpt.get().getData.asInstanceOf[GenericRecord]
-          val row = convertAvroRecord(avroRecord)
-          val originalAvro = if (!avroRecord.getSchema.equals(schema.toAvroSchema)) avroRecord else null
+          val indexedRecord = avroRecordOpt.get().getData
+          val row = convertAvroRecord(indexedRecord)
+          val originalAvro = indexedRecord match {
+            case g: GenericRecord if !g.getSchema.equals(schema.toAvroSchema) => g
+            case _ => null
+          }
           ExtractedData.of(row, originalAvro)
         } else {
           ExtractedData.of(null.asInstanceOf[InternalRow])

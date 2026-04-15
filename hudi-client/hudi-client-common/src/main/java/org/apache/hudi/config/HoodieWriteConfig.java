@@ -3774,6 +3774,9 @@ public class HoodieWriteConfig extends HoodieConfig {
       if (format == null || !format.requiresSparkRecordType()) {
         return;
       }
+      if (engineType != EngineType.SPARK) {
+        throw new HoodieNotSupportedException(format + " base file format requires the SPARK engine");
+      }
       // Only inject when the user has not explicitly configured any merger class. A user who
       // knowingly picks a non-Spark merger for a Spark-only format will still fail fast at
       // write time — that's a deliberate choice, not a usability gap.

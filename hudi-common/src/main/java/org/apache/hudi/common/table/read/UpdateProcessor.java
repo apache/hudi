@@ -168,7 +168,7 @@ public interface UpdateProcessor<T> {
             // Evaluate the payload to get the insert value
             Option<IndexedRecord> insertValueOpt = hoodieRecord.getData().getInsertValue(recordAvroSchema, properties);
             if (insertValueOpt.isPresent()) {
-              GenericRecord insertRecord = (GenericRecord) insertValueOpt.get();
+              IndexedRecord insertRecord = insertValueOpt.get();
               HoodieSchema readerSchema = readerContext.getSchemaHandler().getRequestedSchema();
               GenericRecord finalRecord;
               if (insertRecord.getSchema().equals(recordAvroSchema)) {

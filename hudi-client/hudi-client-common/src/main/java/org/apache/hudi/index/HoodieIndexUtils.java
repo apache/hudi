@@ -254,8 +254,10 @@ public class HoodieIndexUtils {
     // TODO: The AVRO fallback here ignores the merger's configured type. This pre-dates
     //  the Lance PR and is tracked at https://github.com/apache/hudi/issues/18496 — respect the
     //  merger's record type for all formats.
-    HoodieRecord.HoodieRecordType recordType =
-        HoodieFileFormat.fromFileExtension(FSUtils.getFileExtension(filePath.toString())).resolveRecordType(HoodieRecord.HoodieRecordType.AVRO);
+    HoodieFileFormat format = HoodieFileFormat.fromFileExtensionOrNull(FSUtils.getFileExtension(filePath.toString()));
+    HoodieRecord.HoodieRecordType recordType = format != null
+        ? format.resolveRecordType(HoodieRecord.HoodieRecordType.AVRO)
+        : HoodieRecord.HoodieRecordType.AVRO;
     try (HoodieFileReader fileReader = HoodieIOFactory.getIOFactory(storage)
         .getReaderFactory(recordType)
         .getFileReader(DEFAULT_HUDI_CONFIG_FOR_READER, filePath)) {
