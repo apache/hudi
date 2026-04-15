@@ -605,8 +605,8 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
       finalizeWrite(table, clusteringCommitTime, writeStats);
       // Only in some cases conflict resolution needs to be performed.
       // So, check if preCommit method that does conflict resolution needs to be triggered.
-      if (isPreCommitRequired() || !config.getRollingMetadataKeys().isEmpty()) {
-        preCommit(replaceCommitMetadata, isPreCommitRequired());
+      if (isPreCommitConflictResolutionRequired() || !config.getRollingMetadataKeys().isEmpty()) {
+        preCommit(replaceCommitMetadata, isPreCommitConflictResolutionRequired());
       }
       // Update table's metadata (table)
       writeToMetadataTable(table, clusteringInstant.requestedTime(), replaceCommitMetadata, partialMetadataWriteStats);
@@ -1276,7 +1276,7 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
    *
    * @return boolean
    */
-  protected boolean isPreCommitRequired() {
+  protected boolean isPreCommitConflictResolutionRequired() {
     return this.config.getWriteConflictResolutionStrategy().isPreCommitRequired();
   }
 
