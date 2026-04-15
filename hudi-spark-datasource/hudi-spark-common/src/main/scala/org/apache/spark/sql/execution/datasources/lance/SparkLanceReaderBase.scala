@@ -294,6 +294,13 @@ class SparkLanceReaderBase(enableVectorizedReader: Boolean) extends SparkColumna
         }
       }.getOrElse(Array.empty)
 
+    // Direct-indexed lookup so the per-batch hot loop is O(1) instead of scanning nullColumnVectors.
+    val nullColumnByIndex: Array[NullColumnEntry] = {
+      val arr = new Array[NullColumnEntry](requiredSchema.length)
+      nullColumnVectors.foreach(e => arr(e.colIndex) = e)
+      arr
+    }
+
     // Pre-create partition column vectors (reused across batches, reset per batch)
     val hasPartitionColumns = partitionSchema.length > 0
     val partitionVectors: Array[WritableColumnVector] = if (hasPartitionColumns) {
@@ -328,9 +335,11 @@ class SparkLanceReaderBase(enableVectorizedReader: Boolean) extends SparkColumna
           if (columnMapping(i) >= 0) {
             vectors(i) = sourceBatch.column(columnMapping(i))
           } else {
-            // Find the pre-created null vector for this index
-            val entry = nullColumnVectors.find(_.colIndex == i)
-              .getOrElse(throw new IllegalStateException(s"No null vector pre-created for column index $i"))
+            // Direct-indexed lookup (O(1)) for the pre-created null vector for this column.
+            val entry = nullColumnByIndex(i)
+            if (entry == null) {
+              throw new IllegalStateException(s"No null vector pre-created for column index $i")
+            }
             // Adjust valueCount if batch size differs from allocated size
             if (numRows != entry.arrowVector.getValueCount) {
               entry.arrowVector.setValueCount(numRows)
@@ -460,7 +469,7 @@ class SparkLanceReaderBase(enableVectorizedReader: Boolean) extends SparkColumna
           case IntegerType | DateType =>
             val v = partitionValues.getInt(i)
             vector.putInts(0, numRows, v)
-          case LongType | TimestampType =>
+          case LongType | TimestampType | TimestampNTZType =>
             val v = partitionValues.getLong(i)
             vector.putLongs(0, numRows, v)
           case FloatType =>
