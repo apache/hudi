@@ -550,6 +550,13 @@ object HoodieFileIndex extends Logging {
       }
     }
 
+    var partitionListingViaCatalog = getConfigValue(options, sqlConf,
+      DataSourceReadOptions.FILE_INDEX_PARTITION_LISTING_VIA_CATALOG.key, null)
+    if (partitionListingViaCatalog != null) {
+      properties.setProperty(DataSourceReadOptions.FILE_INDEX_PARTITION_LISTING_VIA_CATALOG.key,
+        partitionListingViaCatalog)
+    }
+
     if (tableConfig != null) {
       properties.setProperty(RECORDKEY_FIELD.key, tableConfig.getRecordKeyFields.orElse(Array.empty).mkString(","))
       properties.setProperty(PARTITIONPATH_FIELD.key, HoodieTableConfig.getPartitionFieldPropForKeyGenerator(tableConfig).orElse(""))

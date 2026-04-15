@@ -49,30 +49,25 @@ public class EventBuffers implements Serializable {
   // {checkpointId -> (instant, data write events, index write events)}
   private final Map<Long, Pair<String, EventBuffer>> eventBuffers;
   private final Option<CommitGuard> commitGuardOption;
-  private final Option<CommitGuard> indexBootstrapGuardOption;
   private final int dataWriteParallelism;
   private final int indexWriteParallelism;
 
   private EventBuffers(
       Map<Long, Pair<String, EventBuffer>> eventBuffers,
       Option<CommitGuard> commitGuardOption,
-      Option<CommitGuard> indexBootstrapGuardOption,
       int dataWriteParallelism,
       int indexWriteParallelism) {
     this.eventBuffers = eventBuffers;
     this.commitGuardOption = commitGuardOption;
     this.dataWriteParallelism = dataWriteParallelism;
     this.indexWriteParallelism = indexWriteParallelism;
-    this.indexBootstrapGuardOption = indexBootstrapGuardOption;
   }
 
   public static EventBuffers getInstance(Configuration conf, int dataWriteParallelism) {
     final Option<CommitGuard> commitGuardOpt = OptionsResolver.isBlockingInstantGeneration(conf)
         ? Option.of(CommitGuard.create(conf.get(FlinkOptions.WRITE_COMMIT_ACK_TIMEOUT))) : Option.empty();
-    final Option<CommitGuard> indexBootstrapGuardOption = OptionsResolver.isRLIWithBootstrap(conf)
-        ? Option.of(CommitGuard.create(conf.get(FlinkOptions.WRITE_COMMIT_ACK_TIMEOUT))) : Option.empty();
     final int indexWriteParallelism = OptionsResolver.indexWriteParallelism(conf);
-    return new EventBuffers(new ConcurrentSkipListMap<>(), commitGuardOpt, indexBootstrapGuardOption, dataWriteParallelism, indexWriteParallelism);
+    return new EventBuffers(new ConcurrentSkipListMap<>(), commitGuardOpt, dataWriteParallelism, indexWriteParallelism);
   }
 
   public EventBuffer addEventToBuffer(WriteMetadataEvent event) {
@@ -148,17 +143,9 @@ public class EventBuffers implements Serializable {
     }
   }
 
-  public void awaitPrevInstantsToComplete(long checkpointId) {
-    List<String> pendingInstants = getPendingInstantsBefore(checkpointId);
-    if (!pendingInstants.isEmpty() && this.indexBootstrapGuardOption.isPresent()) {
-      this.indexBootstrapGuardOption.get().blockFor(() -> getPendingInstantsBefore(checkpointId));
-    }
-  }
-
   public void reset(long checkpointId) {
     this.eventBuffers.remove(checkpointId);
     this.commitGuardOption.ifPresent(CommitGuard::unblock);
-    this.indexBootstrapGuardOption.ifPresent(CommitGuard::unblock);
   }
 
   public boolean nonEmpty() {

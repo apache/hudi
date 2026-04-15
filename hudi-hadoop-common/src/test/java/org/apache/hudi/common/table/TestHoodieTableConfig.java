@@ -796,3 +796,4 @@ class TestHoodieTableConfig extends HoodieCommonTestHarness {
     assertEquals("Unsupported flow for table versions less than 9", ioException.getMessage().toString());
   }
 }
+

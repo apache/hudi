@@ -55,8 +55,14 @@ public class HoodieReadStats implements Serializable {
   protected long totalLogSizeCompacted;
   // Total number of records updated by a compaction operation
   protected long totalUpdatedRecordsCompacted;
-  // Total number of log blocks seen in a compaction operation
+  // Total number of valid log blocks seen in a compaction operation
   protected long totalLogBlocks;
+  // Total number of valid log blocks after rollback/compaction filtering
+  protected long totalValidLogBlocks;
+  // Total size of scanned log blocks on disk
+  protected long totalLogBlocksSize;
+  // Time spent scanning log blocks before merge
+  protected long totalLogBlocksScanTimeMs;
   // Total number of corrupt blocks seen in a compaction operation
   protected long totalCorruptLogBlock;
   // Total number of rollback blocks seen in a compaction operation

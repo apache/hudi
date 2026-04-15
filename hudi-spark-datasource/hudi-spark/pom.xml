@@ -272,6 +272,11 @@
 
     <dependency>
       <groupId>org.apache.spark</groupId>
+      <artifactId>spark-mllib-local_${scala.binary.version}</artifactId>
+    </dependency>
+
+    <dependency>
+      <groupId>org.apache.spark</groupId>
       <artifactId>spark-sql_${scala.binary.version}</artifactId>
       <classifier>tests</classifier>
       <scope>test</scope>

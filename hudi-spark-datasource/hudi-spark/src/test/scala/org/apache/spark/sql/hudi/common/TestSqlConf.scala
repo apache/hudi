@@ -32,11 +32,22 @@ import java.nio.file.{Files, Paths}
 
 class TestSqlConf extends HoodieSparkSqlTestBase with BeforeAndAfter {
 
+  // The backing mutable map field name inside java.util.Collections$unmodifiableMap,
+  // used to modify JVM environment variables at runtime via reflection
+  private val UNMODIFIABLE_MAP_FIELD = "m"
+
   def setEnv(key: String, value: String): String = {
-    val field = System.getenv().getClass.getDeclaredField("m")
+    val field = System.getenv().getClass.getDeclaredField(UNMODIFIABLE_MAP_FIELD)
     field.setAccessible(true)
     val map = field.get(System.getenv()).asInstanceOf[java.util.Map[java.lang.String, java.lang.String]]
     map.put(key, value)
+  }
+
+  def unsetEnv(key: String): String = {
+    val field = System.getenv().getClass.getDeclaredField(UNMODIFIABLE_MAP_FIELD)
+    field.setAccessible(true)
+    val map = field.get(System.getenv()).asInstanceOf[java.util.Map[java.lang.String, java.lang.String]]
+    map.remove(key)
   }
 
   test("Test Hudi Conf") {
@@ -144,6 +155,7 @@ class TestSqlConf extends HoodieSparkSqlTestBase with BeforeAndAfter {
   }
 
   after {
+    unsetEnv(DFSPropertiesConfiguration.CONF_FILE_DIR_ENV_NAME)
     DFSPropertiesConfiguration.clearGlobalProps()
   }
 }

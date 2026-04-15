@@ -27,12 +27,13 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.CompactionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.metrics.FlinkCompactionMetrics;
+import org.apache.hudi.metrics.FlinkMdtCompactionMetrics;
 import org.apache.hudi.sink.compact.CompactionPlanEvent;
 import org.apache.hudi.table.marker.WriteMarkersFactory;
 import org.apache.hudi.util.CompactionUtil;
 
 import lombok.extern.slf4j.Slf4j;
+import org.apache.flink.metrics.MetricGroup;
 import org.apache.flink.streaming.api.operators.Output;
 import org.apache.flink.streaming.runtime.streamrecord.StreamRecord;
 
@@ -45,7 +46,7 @@ import static java.util.stream.Collectors.toList;
 /**
  * Handler for scheduling compaction plans on Hudi metadata tables.
  *
- * <p>This handler extends {@link CompactionPlanHandler} to support metadata table specific
+ * <p>This handler extends {@link DataTableCompactionPlanHandler} to support metadata table specific
  * compaction operations, including:
  * <ul>
  *   <li>Compaction;</li>
@@ -57,14 +58,20 @@ import static java.util.stream.Collectors.toList;
  * plan is scheduled and log compaction is enabled, it collects the log compaction operations instead.
  * This ensures efficient file layout of metadata table storage.
  *
- * @see CompactionPlanHandler
+ * @see DataTableCompactionPlanHandler
  * @see CompactionPlanEvent
  */
 @Slf4j
-public class MetadataCompactionPlanHandler extends CompactionPlanHandler {
+public class MetadataTableCompactionPlanHandler extends DataTableCompactionPlanHandler {
 
-  public MetadataCompactionPlanHandler(HoodieFlinkWriteClient writeClient) {
+  public MetadataTableCompactionPlanHandler(HoodieFlinkWriteClient writeClient) {
     super(writeClient);
+  }
+
+  @Override
+  public void registerMetrics(MetricGroup metricGroup) {
+    this.compactionMetrics = new FlinkMdtCompactionMetrics(metricGroup);
+    this.compactionMetrics.registerMetrics();
   }
 
   /**
@@ -74,18 +81,17 @@ public class MetadataCompactionPlanHandler extends CompactionPlanHandler {
    * and log compaction(minor compaction) for metadata tables. It first attempts to collect compaction operations.
    * If no compaction plan is scheduled and log compaction is enabled, it collects the log compaction operations instead.
    *
-   * @param checkpointId      The Flink checkpoint ID triggering this scheduling
-   * @param compactionMetrics Metrics collector for tracking compaction progress
-   * @param output            Output stream for emitting compaction plan events
+   * @param checkpointId The Flink checkpoint ID triggering this scheduling
+   * @param output       Output stream for emitting compaction plan events
    */
   @Override
-  public void collectCompactionOperations(long checkpointId, FlinkCompactionMetrics compactionMetrics, Output<StreamRecord<CompactionPlanEvent>> output) {
+  public void collectCompactionOperations(long checkpointId, Output<StreamRecord<CompactionPlanEvent>> output) {
     HoodieTableMetaClient metaClient = table.getMetaClient();
     metaClient.reloadActiveTimeline();
     // retrieve compaction plan
     HoodieTimeline pendingCompactionTimeline = metaClient.getActiveTimeline().filterPendingCompactionTimeline();
     Option<Pair<String, HoodieCompactionPlan>> instantAndPlanOpt = getCompactionPlan(
-        metaClient, pendingCompactionTimeline, checkpointId, compactionMetrics, CompactionUtils::getCompactionPlan);
+        metaClient, pendingCompactionTimeline, checkpointId, CompactionUtils::getCompactionPlan);
     if (instantAndPlanOpt.isPresent()) {
       doCollectCompactionOperations(instantAndPlanOpt.get().getLeft(), instantAndPlanOpt.get().getRight(), output);
       return;
@@ -96,7 +102,7 @@ public class MetadataCompactionPlanHandler extends CompactionPlanHandler {
     // for log compaction
     HoodieTimeline pendingLogCompactionTimeline = metaClient.getActiveTimeline().filterPendingLogCompactionTimeline();
     instantAndPlanOpt = getCompactionPlan(
-        metaClient, pendingLogCompactionTimeline, checkpointId, compactionMetrics, CompactionUtils::getLogCompactionPlan);
+        metaClient, pendingLogCompactionTimeline, checkpointId, CompactionUtils::getLogCompactionPlan);
     if (instantAndPlanOpt.isPresent()) {
       doCollectLogCompactions(instantAndPlanOpt.get().getLeft(), instantAndPlanOpt.get().getRight(), output);
     }

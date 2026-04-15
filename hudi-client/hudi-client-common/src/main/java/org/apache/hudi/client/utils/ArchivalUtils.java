@@ -117,6 +117,8 @@ public class ArchivalUtils {
       int cleanerCommitsRetained, int cleanerHoursRetained) {
     Option<HoodieInstant> earliestCommitToRetain = Option.empty();
     try {
+      // For archival, we don't need to cap commits to clean, so pass empty previousEarliestCommitToRetain
+      // and Long.MAX_VALUE for maxCommitsToClean
       earliestCommitToRetain = CleanerUtils.getEarliestCommitToRetain(
           metaClient.getActiveTimeline().getCommitsTimeline(),
           cleanerPolicy,
@@ -125,7 +127,9 @@ public class ArchivalUtils {
               ? parseDateFromInstantTime(latestCommit.get().requestedTime()).toInstant()
               : Instant.now(),
           cleanerHoursRetained,
-          metaClient.getTableConfig().getTimelineTimezone());
+          metaClient.getTableConfig().getTimelineTimezone(),
+          Option.empty(),
+          Long.MAX_VALUE);
     } catch (ParseException e) {
       if (NOT_PARSABLE_TIMESTAMPS.stream().noneMatch(ts -> latestCommit.get().requestedTime().startsWith(ts))) {
         log.info("Error parsing instant time: {}", latestCommit.get().requestedTime());

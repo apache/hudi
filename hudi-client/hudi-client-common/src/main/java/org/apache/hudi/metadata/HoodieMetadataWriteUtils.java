@@ -165,7 +165,7 @@ public class HoodieMetadataWriteUtils {
         .withAutoClean(false)
         .withCleanerParallelism(MDT_DEFAULT_PARALLELISM)
         .withFailedWritesCleaningPolicy(failedWritesCleaningPolicy)
-        .withMaxCommitsBeforeCleaning(writeConfig.getCleaningMaxCommits())
+        .withMaxCommitsBeforeCleaning(writeConfig.getCleanTriggerMaxCommits())
         .withCleanOptimizationWithLocalEngineEnabled(
             writeConfig.isCleanOptimizationWithLocalEngineEnabled());
 
@@ -375,7 +375,6 @@ public class HoodieMetadataWriteUtils {
    * @param enabledPartitionTypes       - Set of enabled MDT partitions to update
    * @param bloomFilterType             - Type of generated bloom filter records
    * @param bloomIndexParallelism       - Parallelism for bloom filter record generation
-   * @param enableOptimizeLogBlocksScan - flag used to enable scanInternalV2 for log blocks in data table
    * @return Map of partition to metadata records for the commit action
    */
   public static Map<String, HoodieData<HoodieRecord>> convertMetadataToRecords(HoodieEngineContext context, HoodieWriteConfig dataWriteConfig, HoodieCommitMetadata commitMetadata,

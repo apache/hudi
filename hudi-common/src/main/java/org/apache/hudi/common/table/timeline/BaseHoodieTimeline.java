@@ -293,6 +293,17 @@ public abstract class BaseHoodieTimeline implements HoodieTimeline {
   }
 
   @Override
+  public HoodieTimeline findInstantsModifiedBeforeOrEqualsByCompletionTime(String instantTime) {
+    return factory.createDefaultTimeline(instants.stream()
+            // completed instants with completionTime <= instantTime or matching requestedTime,
+            // or pending instants with requestedTime <= instantTime
+            .filter(s -> (s.getCompletionTime() != null
+                    && (compareTimestamps(s.getCompletionTime(), LESSER_THAN_OR_EQUALS, instantTime) || s.requestedTime().equals(instantTime)))
+                || (s.getCompletionTime() == null && compareTimestamps(s.requestedTime(), LESSER_THAN_OR_EQUALS, instantTime))),
+        getInstantReader());
+  }
+
+  @Override
   public HoodieTimeline findInstantsAfter(String instantTime, int numCommits) {
     return factory.createDefaultTimeline(getInstantsAsStream()
             .filter(s -> compareTimestamps(s.requestedTime(), GREATER_THAN, instantTime)).limit(numCommits),

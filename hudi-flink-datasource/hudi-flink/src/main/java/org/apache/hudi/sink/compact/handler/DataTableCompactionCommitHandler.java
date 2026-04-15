@@ -34,8 +34,8 @@ import org.apache.hudi.util.CompactionUtil;
 
 import lombok.extern.slf4j.Slf4j;
 import org.apache.flink.configuration.Configuration;
+import org.apache.flink.metrics.MetricGroup;
 
-import java.io.Closeable;
 import java.io.IOException;
 import java.util.Collection;
 import java.util.HashMap;
@@ -66,10 +66,11 @@ import java.util.stream.Collectors;
  * @see HoodieCompactionPlan
  */
 @Slf4j
-public class CompactCommitHandler implements Closeable {
+public class DataTableCompactionCommitHandler implements CompactionCommitHandler {
   protected final HoodieFlinkTable table;
   protected final HoodieFlinkWriteClient writeClient;
   protected final Configuration conf;
+  protected transient FlinkCompactionMetrics compactionMetrics;
   /**
    * Buffer to collect the event from each compact task {@code CompactFunction}.
    *
@@ -85,12 +86,18 @@ public class CompactCommitHandler implements Closeable {
    */
   protected transient Map<String, HoodieCompactionPlan> compactionPlanCache;
 
-  public CompactCommitHandler(Configuration conf, HoodieFlinkWriteClient writeClient) {
+  public DataTableCompactionCommitHandler(Configuration conf, HoodieFlinkWriteClient writeClient) {
     this.conf = conf;
     this.table = writeClient.getHoodieTable();
     this.writeClient = writeClient;
     this.commitBuffer = new HashMap<>();
     this.compactionPlanCache = new HashMap<>();
+  }
+
+  @Override
+  public void registerMetrics(MetricGroup metricGroup) {
+    this.compactionMetrics = new FlinkCompactionMetrics(metricGroup);
+    this.compactionMetrics.registerMetrics();
   }
 
   /**
@@ -99,10 +106,10 @@ public class CompactCommitHandler implements Closeable {
    * <p>Condition to commit: the commit buffer has equal size with the compaction plan operations
    * and all the compact commit event {@link CompactionCommitEvent} has the same compaction instant time.
    *
-   * @param event             The compaction commit event
-   * @param compactionMetrics Metrics collector for tracking compaction progress
+   * @param event The compaction commit event
    */
-  public void commitIfNecessary(CompactionCommitEvent event, FlinkCompactionMetrics compactionMetrics) {
+  @Override
+  public void commitIfNecessary(CompactionCommitEvent event) {
     String instant = event.getInstant();
     commitBuffer.computeIfAbsent(instant, k -> new HashMap<>())
         .put(event.getFileId(), event);
@@ -123,17 +130,17 @@ public class CompactCommitHandler implements Closeable {
       } finally {
         // remove commitBuffer to avoid obsolete metadata commit
         reset(instant);
-        compactionMetrics.markCompactionRolledBack();
+        this.compactionMetrics.markCompactionRolledBack();
       }
       return;
     }
 
     try {
-      doCommit(instant, isLogCompaction, events, compactionMetrics);
+      doCommit(instant, isLogCompaction, events);
     } catch (Throwable throwable) {
       // make it fail-safe
       log.error("Error while committing compaction instant: {}", instant, throwable);
-      compactionMetrics.markCompactionRolledBack();
+      this.compactionMetrics.markCompactionRolledBack();
     } finally {
       // reset the status
       reset(instant);
@@ -147,18 +154,16 @@ public class CompactCommitHandler implements Closeable {
    * and either completes the compaction or rolls it back based on the error count and
    * configuration. If successful and cleaning is enabled, it triggers a cleaning operation.
    *
-   * @param instant           The compaction instant time
-   * @param isLogCompaction   Whether the compaction is log compaction
-   * @param events            All compaction commit events for this instant
-   * @param compactionMetrics Metrics collector for tracking compaction progress
-   * @throws IOException      If an I/O error occurs during commit
+   * @param instant         The compaction instant time
+   * @param isLogCompaction Whether the compaction is log compaction
+   * @param events          All compaction commit events for this instant
+   * @throws IOException    If an I/O error occurs during commit
    */
   @SuppressWarnings("unchecked")
   private void doCommit(
       String instant,
       boolean isLogCompaction,
-      Collection<CompactionCommitEvent> events,
-      FlinkCompactionMetrics compactionMetrics) throws IOException {
+      Collection<CompactionCommitEvent> events) throws IOException {
     List<WriteStatus> statuses = events.stream()
         .map(CompactionCommitEvent::getWriteStatuses)
         .flatMap(Collection::stream)
@@ -172,12 +177,12 @@ public class CompactCommitHandler implements Closeable {
           + "option '{}' is configured as false,"
           + "rolls back the compaction", numErrorRecords, instant, FlinkOptions.IGNORE_FAILED.key());
       rollbackCompaction(instant, isLogCompaction);
-      compactionMetrics.markCompactionRolledBack();
+      this.compactionMetrics.markCompactionRolledBack();
       return;
     }
 
     // complete the compaction
-    completeCompaction(instant, isLogCompaction, statuses, compactionMetrics);
+    completeCompaction(instant, isLogCompaction, statuses);
 
     // Whether to clean up the old log file when compaction
     if (!conf.get(FlinkOptions.CLEAN_ASYNC_ENABLED)) {
@@ -201,21 +206,19 @@ public class CompactCommitHandler implements Closeable {
    * <p>This method creates compaction metadata from the write statuses, commits the compaction
    * to the timeline, and updates compaction metrics.
    *
-   * @param instant           The compaction instant time
-   * @param isLogCompaction   Whether the compaction is log compaction
-   * @param statuses          List of write statuses from all compaction operations
-   * @param compactionMetrics Metrics collector for tracking compaction progress
-   * @throws IOException      If an I/O error occurs during completion
+   * @param instant The compaction instant time
+   * @param isLogCompaction Whether the compaction is log compaction
+   * @param statuses List of write statuses from all compaction operations
+   * @throws IOException If an I/O error occurs during completion
    */
   protected void completeCompaction(String instant,
                                     boolean isLogCompaction,
-                                    List<WriteStatus> statuses,
-                                    FlinkCompactionMetrics compactionMetrics) throws IOException {
+                                    List<WriteStatus> statuses) throws IOException {
     HoodieCommitMetadata metadata = CompactHelpers.getInstance().createCompactionMetadata(
         table, instant, HoodieListData.eager(statuses), writeClient.getConfig().getSchema());
     writeClient.completeCompaction(metadata, table, instant);
-    compactionMetrics.updateCommitMetrics(instant, metadata);
-    compactionMetrics.markCompactionCompleted();
+    this.compactionMetrics.updateCommitMetrics(instant, metadata);
+    this.compactionMetrics.markCompactionCompleted();
   }
 
   /**

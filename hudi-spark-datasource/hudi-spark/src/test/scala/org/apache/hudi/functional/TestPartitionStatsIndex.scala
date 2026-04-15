@@ -426,7 +426,7 @@ class TestPartitionStatsIndex extends PartitionStatsIndexTestBase {
     // Add more ingests and trigger a clean to remove files from first ingestion.
     val writeOpt = hudiOpts ++ Map(
       HoodieCleanConfig.AUTO_CLEAN.key -> "true",
-      HoodieCleanConfig.CLEAN_MAX_COMMITS.key -> "1",
+      HoodieCleanConfig.CLEAN_TRIGGER_MAX_COMMITS.key -> "1",
       HoodieCleanConfig.CLEANER_COMMITS_RETAINED.key -> "2")
     // Do three more ingestion to trigger clean operation.
     for (i <- 0 until 3) {

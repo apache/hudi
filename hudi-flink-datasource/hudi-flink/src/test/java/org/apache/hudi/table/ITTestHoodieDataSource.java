@@ -31,6 +31,7 @@ import org.apache.hudi.common.table.marker.MarkerType;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.index.bucket.partition.PartitionBucketIndexUtils;
@@ -1358,6 +1359,34 @@ public class ITTestHoodieDataSource {
 
     List<Row> rows2 = CollectionUtil.iteratorToList(batchTableEnv.executeSql("select * from t1").collect());
     assertRowsEquals(rows2, "[]");
+  }
+
+  @Test
+  void testLanceFormatRejectedByFlink() {
+    // Lance base file format is only supported with the Spark engine.
+    // Flink should reject it early with a clear error on both read and write paths.
+    String createLanceTable = sql("lance_t1")
+        .option(FlinkOptions.PATH, tempFile.getAbsolutePath())
+        .options(getDefaultKeys())
+        .option("hoodie.table.base.file.format", "LANCE")
+        .end();
+
+    // Creating the table itself succeeds (DDL is just metadata registration),
+    // but any attempt to read or write should fail.
+    // Flink wraps our HoodieValidationException in its own ValidationException.
+    batchTableEnv.executeSql(createLanceTable);
+
+    // Source (read) path should throw
+    ValidationException readEx = assertThrows(ValidationException.class,
+        () -> execSelectSql(batchTableEnv, "select * from lance_t1"),
+        "Lance format should be rejected when reading via Flink");
+    assertTrue(ExceptionUtils.findThrowableWithMessage(readEx, HoodieFileFormat.LANCE_SPARK_ONLY_ERROR_MSG).isPresent());
+
+    // Sink (write) path should throw
+    ValidationException writeEx = assertThrows(ValidationException.class,
+        () -> execInsertSql(batchTableEnv, "insert into lance_t1 values ('id1', 'Alice', 23, TIMESTAMP '1970-01-01 00:00:01', 'par1')"),
+        "Lance format should be rejected when writing via Flink");
+    assertTrue(ExceptionUtils.findThrowableWithMessage(writeEx, HoodieFileFormat.LANCE_SPARK_ONLY_ERROR_MSG).isPresent());
   }
 
   @ParameterizedTest

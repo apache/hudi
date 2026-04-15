@@ -286,9 +286,6 @@ public class Pipelines {
 
     if (conf.get(FlinkOptions.INDEX_BOOTSTRAP_ENABLED) || bounded) {
       boolean isRliBootstrap = OptionsResolver.isRecordLevelIndex(conf);
-      if (isRliBootstrap) {
-        conf.set(FlinkOptions.WRITE_OPERATOR_UID, Pipelines.opUID("stream_write", conf));
-      }
       dataStream1 = dataStream1
           .transform(
               "index_bootstrap",
@@ -407,9 +404,7 @@ public class Pipelines {
           throw new HoodieNotSupportedException("Unknown bucket index engine type: " + bucketIndexEngineType);
       }
     } else {
-      // if the index is RLI, the write operator UID will be pre-generated and set into the configuration.
-      String writeOperatorUid = conf.get(FlinkOptions.WRITE_OPERATOR_UID);
-      writeOperatorUid = writeOperatorUid == null ? opUID("stream_write", conf) : writeOperatorUid;
+      String writeOperatorUid = opUID("stream_write", conf);
       // uuid is used to generate operator id for the write operator, then the bucket assign operator can send
       // operator event to the coordinator of the write operator based on the operator id.
       // @see org.apache.flink.runtime.jobgraph.tasks.TaskOperatorEventGateway.

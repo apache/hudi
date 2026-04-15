@@ -133,7 +133,7 @@ public class HoodieCleanConfig extends HoodieConfig {
       .markAdvanced()
       .withDocumentation(CleaningTriggerStrategy.class);
 
-  public static final ConfigProperty<String> CLEAN_MAX_COMMITS = ConfigProperty
+  public static final ConfigProperty<String> CLEAN_TRIGGER_MAX_COMMITS = ConfigProperty
       .key("hoodie.clean.trigger.max.commits")
       .defaultValue("1")
       .withAlternatives("hoodie.clean.max.commits")
@@ -243,6 +243,13 @@ public class HoodieCleanConfig extends HoodieConfig {
           + "Only the specified partitions will be cleaned. "
           + "This can be useful for very large tables to avoid OOM issues during cleaning. "
           + "If both this config and " + CLEAN_PARTITION_FILTER_REGEX_KEY + " are set, the selected partitions take precedence.");
+
+  public static final ConfigProperty<Long> MAX_COMMITS_TO_CLEAN = ConfigProperty
+      .key("hoodie.clean.max.commits.to.clean")
+      .defaultValue(Long.MAX_VALUE)
+      .markAdvanced()
+      .withDocumentation("Maximum number of commits to clean in one clean commit. Applicable only when the clean policy is based on KEEP_LATEST_COMMITS or KEEP_LATEST_HOURS");
+
 
   /** @deprecated Use {@link #CLEANER_POLICY} and its methods instead */
   @Deprecated
@@ -360,7 +367,7 @@ public class HoodieCleanConfig extends HoodieConfig {
     }
 
     public HoodieCleanConfig.Builder withMaxCommitsBeforeCleaning(int maxCommitsBeforeCleaning) {
-      cleanConfig.setValue(CLEAN_MAX_COMMITS, String.valueOf(maxCommitsBeforeCleaning));
+      cleanConfig.setValue(CLEAN_TRIGGER_MAX_COMMITS, String.valueOf(maxCommitsBeforeCleaning));
       return this;
     }
 
@@ -414,10 +421,19 @@ public class HoodieCleanConfig extends HoodieConfig {
       return this;
     }
 
+    public HoodieCleanConfig.Builder withMaxCommitsToClean(long maxCommitsToClean) {
+      cleanConfig.setValue(MAX_COMMITS_TO_CLEAN, String.valueOf(maxCommitsToClean));
+      return this;
+    }
+
     public HoodieCleanConfig build() {
       cleanConfig.setDefaults(HoodieCleanConfig.class.getName());
       HoodieCleaningPolicy.valueOf(cleanConfig.getString(CLEANER_POLICY));
       HoodiePreWriteCleanerPolicy.fromString(cleanConfig.getString(PREWRITE_CLEANER_POLICY));
+      long maxCommitsToClean = cleanConfig.getLong(MAX_COMMITS_TO_CLEAN);
+      if (maxCommitsToClean < 1) {
+        throw new IllegalArgumentException(MAX_COMMITS_TO_CLEAN.key() + " must be >= 1, but was " + maxCommitsToClean);
+      }
       return cleanConfig;
     }
   }

@@ -26,12 +26,13 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.InstantRange;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.metrics.FlinkCompactionMetrics;
+import org.apache.hudi.metrics.FlinkMdtCompactionMetrics;
 import org.apache.hudi.sink.compact.CompactionCommitEvent;
 import org.apache.hudi.sink.compact.CompactionPlanEvent;
 import org.apache.hudi.table.action.compact.CompactHelpers;
 import org.apache.hudi.table.action.compact.HoodieFlinkMergeOnReadTableCompactor;
 
+import org.apache.flink.metrics.MetricGroup;
 import org.apache.flink.util.Collector;
 
 import java.util.List;
@@ -39,20 +40,26 @@ import java.util.List;
 /**
  * Handler for compaction operation execution on Hudi metadata tables.
  *
- * <p>This handler extends {@link CompactHandler} to support metadata table specific
+ * <p>This handler extends {@link DataTableCompactHandler} to support metadata table specific
  * compaction operations, covering compaction and log compaction.
  *
  * <p>The handler uses {@link AvroReaderContextFactory} to create reader contexts
  * for metadata table payloads, which differs from data table records(engine native).
  *
- * @see CompactHandler
+ * @see DataTableCompactHandler
  * @see CompactionPlanEvent
  * @see AvroReaderContextFactory
  */
-public class MetadataCompactHandler extends CompactHandler {
+public class MetadataTableCompactHandler extends DataTableCompactHandler {
 
-  public MetadataCompactHandler(HoodieFlinkWriteClient writeClient, int taskId) {
+  public MetadataTableCompactHandler(HoodieFlinkWriteClient writeClient, int taskId) {
     super(writeClient, taskId);
+  }
+
+  @Override
+  public void registerMetrics(MetricGroup metricGroup) {
+    this.compactionMetrics = new FlinkMdtCompactionMetrics(metricGroup);
+    this.compactionMetrics.registerMetrics();
   }
 
   /**
@@ -81,15 +88,13 @@ public class MetadataCompactHandler extends CompactHandler {
    * @param event                The compaction plan event containing the operation details
    * @param collector            Collector for emitting compaction commit events
    * @param needReloadMetaClient Whether the meta client needs to be reloaded
-   * @param compactionMetrics    Metrics collector for tracking compaction progress
    */
   @Override
   protected void doCompaction(CompactionPlanEvent event,
                               Collector<CompactionCommitEvent> collector,
-                              boolean needReloadMetaClient,
-                              FlinkCompactionMetrics compactionMetrics) throws Exception {
+                              boolean needReloadMetaClient) throws Exception {
     if (!event.isLogCompaction()) {
-      super.doCompaction(event, collector, needReloadMetaClient, compactionMetrics);
+      super.doCompaction(event, collector, needReloadMetaClient);
     } else {
       compactionMetrics.startCompaction();
       // Create a write client specifically for the metadata table

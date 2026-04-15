@@ -488,6 +488,11 @@ public interface HoodieTimeline extends HoodieInstantReader, Serializable {
   HoodieTimeline findInstantsModifiedAfterByCompletionTime(String instantTime);
 
   /**
+   * Create new timeline with all instants that were modified before or at the specified time.
+   */
+  HoodieTimeline findInstantsModifiedBeforeOrEqualsByCompletionTime(String instantTime);
+
+  /**
    * Create a new Timeline with all the instants after startTs.
    */
   HoodieTimeline findInstantsAfter(String instantTime, int numCommits);

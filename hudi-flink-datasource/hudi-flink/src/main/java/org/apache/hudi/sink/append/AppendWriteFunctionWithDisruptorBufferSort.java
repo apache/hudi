@@ -140,38 +140,44 @@ public class AppendWriteFunctionWithDisruptorBufferSort<T> extends AppendWriteFu
   @Override
   public void snapshotState() {
     try {
-      flushDisruptor();
-      reinitDisruptorAfterCheckpoint();
+      drainDisruptor();
     } catch (Exception e) {
       throw new HoodieException("Fail to flush data during snapshot state.", e);
     }
+    // Flush Parquet data to the underlying filesystem. The disruptor thread is
+    // still alive, so filesystem connectors that use PipedInputStream (e.g. GCS
+    // Hadoop connector) won't see a dead writeSide and throw "Pipe broken".
     super.snapshotState();
   }
 
   @Override
   public void endInput() {
     try {
-      flushDisruptor();
+      drainDisruptor();
     } catch (Exception e) {
       throw new HoodieException("Fail to flush data during endInput.", e);
     }
     super.endInput();
   }
 
-  private void flushDisruptor() {
-    disruptorQueue.close();
-    // Check if any errors occurred during event processing
+  /**
+   * Waits for the disruptor thread to finish consuming all records in the ring
+   * buffer, then flushes the remaining sort buffer into the Parquet writer.
+   *
+   * <p>Unlike the previous approach that called {@code disruptorQueue.close()}
+   * (which kills the disruptor thread), this keeps the thread alive. This is
+   * critical because some filesystem connectors (e.g. GCS Hadoop connector)
+   * use a {@code PipedInputStream} that checks {@code writeSide.isAlive()} —
+   * if the thread that last wrote to the pipe is dead, the upload thread
+   * throws "Pipe broken".
+   */
+  private void drainDisruptor() {
+    disruptorQueue.waitUntilDrained();
     Throwable error = disruptorQueue.getThrowable();
     if (error != null) {
       throw new HoodieException("Error processing records in disruptor buffer", error);
     }
     sortingConsumer.finish();
-  }
-
-  private void reinitDisruptorAfterCheckpoint() throws Exception {
-    // sortBuffer is reused - it's already reset after flush via sortAndSend()
-    // disruptorQueue cannot be reused once closed, so we create a new one
-    initDisruptorBuffer();
   }
 
   private void sortAndSend(BinaryInMemorySortBuffer buffer) throws IOException {

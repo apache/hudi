@@ -21,6 +21,8 @@ package org.apache.hudi.sink.partitioner.index;
 import org.apache.hudi.common.model.HoodieRecordGlobalLocation;
 import org.apache.hudi.sink.event.Correspondent;
 
+import org.apache.flink.metrics.MetricGroup;
+
 import java.io.Closeable;
 import java.io.IOException;
 
@@ -62,6 +64,15 @@ public interface IndexBackend extends Closeable {
    * @param completedCheckpointId The latest completed checkpoint id
    */
   default void onCheckpointComplete(Correspondent correspondent, long completedCheckpointId) {
+    // do nothing.
+  }
+
+  /**
+   * Registers metrics for this backend.
+   *
+   * @param metricGroup flink metric group
+   */
+  default void registerMetrics(MetricGroup metricGroup) {
     // do nothing.
   }
 }
