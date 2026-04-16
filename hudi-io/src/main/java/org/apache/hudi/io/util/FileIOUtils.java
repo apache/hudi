@@ -43,7 +43,6 @@ import java.io.PrintStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
@@ -95,13 +94,13 @@ public class FileIOUtils {
    */
   public static List<String> readAsUTFStringLines(InputStream input) {
     try (BufferedReader bufferedReader = new BufferedReader(new InputStreamReader(input, StandardCharsets.UTF_8))) {
-            return bufferedReader.lines().collect(Collectors.toList());
-        } catch (IOException e) {
-          // Note: stream errors from lines().collect(...) surface as UncheckedIOException and bypass this block.
-          // This catch handles IOException from close() during try-with-resources teardown.
-            throw new RuntimeException(e);
-        }
+      return bufferedReader.lines().collect(Collectors.toList());
+    } catch (IOException e) {
+      // Note: stream errors from lines().collect(...) surface as UncheckedIOException and bypass this block.
+      // This catch handles IOException from close() during try-with-resources teardown.
+      throw new RuntimeException(e);
     }
+  }
 
   public static void copy(InputStream inputStream, OutputStream outputStream) throws IOException {
     byte[] buffer = new byte[1024];
