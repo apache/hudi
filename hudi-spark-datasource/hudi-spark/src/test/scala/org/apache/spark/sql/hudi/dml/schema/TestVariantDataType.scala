@@ -20,11 +20,14 @@
 package org.apache.spark.sql.hudi.dml.schema
 
 import org.apache.hudi.HoodieSparkUtils
+import org.apache.hudi.common.schema.HoodieSchema
 import org.apache.hudi.common.testutils.HoodieTestUtils
 import org.apache.hudi.common.util.StringUtils
 import org.apache.hudi.internal.schema.HoodieSchemaException
 
+import org.apache.spark.sql.{Row, SaveMode}
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
+import org.apache.spark.sql.types._
 
 
 class TestVariantDataType extends HoodieSparkSqlTestBase {
@@ -88,6 +91,50 @@ class TestVariantDataType extends HoodieSparkSqlTestBase {
           Seq(1, "row1", "{\"new_field\":123,\"updated\":true}", 1000)
         )
       })
+    }
+  }
+
+  test("Test StructType with hudi_type=VARIANT metadata does not crash parseTypeDescriptor") {
+    // Regression test: a StructType field with hudi_type=VARIANT metadata in the DataFrame API
+    // used to crash in HoodieSparkSchemaConverters because the BLOB guard condition called
+    // parseTypeDescriptor() which threw for non-custom logical types like VARIANT.
+    assume(HoodieSparkUtils.gteqSpark4_0, "Variant type requires Spark 4.0 or higher")
+
+    withTempDir { tmp =>
+      val variantMetadata = new MetadataBuilder()
+        .putString(HoodieSchema.TYPE_METADATA_FIELD, "VARIANT")
+        .build()
+
+      val variantStruct = StructType(Seq(
+        StructField("metadata", BinaryType, nullable = false),
+        StructField("value", BinaryType, nullable = false)
+      ))
+
+      val schema = StructType(Seq(
+        StructField("id", LongType, nullable = false),
+        StructField("name", StringType),
+        StructField("variant_data", variantStruct, nullable = false, metadata = variantMetadata),
+        StructField("ts", LongType)
+      ))
+
+      val data = Seq(
+        Row(1L, "row1", Row(Array[Byte](1, 0), """{"key":"value1"}""".getBytes), 1000L)
+      )
+      val df = spark.createDataFrame(spark.sparkContext.parallelize(data), schema)
+
+      // This should NOT crash with "parseTypeDescriptor only supports custom logical types, got: VARIANT".
+      // The struct+metadata VARIANT is treated as a regular struct (the native VariantType path is separate).
+      df.write.format("hudi")
+        .option("hoodie.table.name", "variant_struct_test")
+        .option("hoodie.datasource.write.recordkey.field", "id")
+        .option("hoodie.datasource.write.precombine.field", "ts")
+        .mode(SaveMode.Overwrite)
+        .save(tmp.getCanonicalPath)
+
+      // Verify the data was written and can be read back
+      val readDf = spark.read.format("hudi").load(tmp.getCanonicalPath)
+      assert(readDf.count() == 1)
+      assert(readDf.select("id", "name").collect()(0).getLong(0) == 1L)
     }
   }
 

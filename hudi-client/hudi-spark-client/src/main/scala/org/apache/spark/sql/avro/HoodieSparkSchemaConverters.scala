@@ -103,6 +103,7 @@ object HoodieSparkSchemaConverters extends SparkAdapterSupport {
       // Complex types
       case ArrayType(elementSparkType, containsNull)
           if metadata.contains(HoodieSchema.TYPE_METADATA_FIELD) &&
+            HoodieSchema.isCustomLogicalTypeDescriptor(metadata.getString(HoodieSchema.TYPE_METADATA_FIELD)) &&
             HoodieSchema.parseTypeDescriptor(metadata.getString(HoodieSchema.TYPE_METADATA_FIELD)).getType == HoodieSchemaType.VECTOR =>
         if (depth > 1) {
           throw new HoodieSchemaException(
@@ -137,6 +138,7 @@ object HoodieSparkSchemaConverters extends SparkAdapterSupport {
         HoodieSchema.createMap(valueSchema)
 
       case blobStruct: StructType if metadata.contains(HoodieSchema.TYPE_METADATA_FIELD) &&
+        HoodieSchema.isCustomLogicalTypeDescriptor(metadata.getString(HoodieSchema.TYPE_METADATA_FIELD)) &&
         HoodieSchema.parseTypeDescriptor(metadata.getString(HoodieSchema.TYPE_METADATA_FIELD)).getType == HoodieSchemaType.BLOB =>
         // Validate blob structure before accepting
         validateBlobStructure(blobStruct)

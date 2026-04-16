@@ -190,6 +190,24 @@ public class HoodieSchema implements Serializable {
   private static final Set<HoodieSchemaType> CUSTOM_LOGICAL_TYPES =
       EnumSet.of(HoodieSchemaType.VECTOR, HoodieSchemaType.BLOB);
 
+  /**
+   * Returns true if the given descriptor string represents a custom logical type
+   * that can be parsed by {@link #parseTypeDescriptor(String)}.
+   * This is safe to call in pattern-match guards since it never throws.
+   */
+  public static boolean isCustomLogicalTypeDescriptor(String descriptor) {
+    if (descriptor == null || descriptor.trim().isEmpty()) {
+      return false;
+    }
+    int parenStart = descriptor.indexOf('(');
+    String typeName = (parenStart == -1) ? descriptor.trim() : descriptor.substring(0, parenStart).trim();
+    try {
+      HoodieSchemaType type = HoodieSchemaType.valueOf(typeName.toUpperCase(Locale.ROOT));
+      return CUSTOM_LOGICAL_TYPES.contains(type);
+    } catch (IllegalArgumentException e) {
+      return false;
+    }
+  }
 
   /**
    * Constants for Parquet-style accessor patterns used in nested MAP and ARRAY navigation.
