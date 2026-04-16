@@ -131,6 +131,7 @@ public class HiveIncrementalPuller {
     conf.set("fs.defaultFS",config.fsDefaultFs);
     FileSystem fs = FileSystem.get(conf);
     Statement stmt = null;
+    Connection conn = null;
     try {
       if (config.fromCommitTime == null) {
         config.fromCommitTime = inferCommitTime(fs);
@@ -145,7 +146,7 @@ public class HiveIncrementalPuller {
         lastCommitTime = config.fromCommitTime;
       }
 
-      Connection conn = getConnection();
+      conn = getConnection();
       stmt = conn.createStatement();
       // drop the temp table if exists
       String tempDbTable = config.tmpDb + "." + config.targetTable + "__" + config.sourceTable;
@@ -166,11 +167,21 @@ public class HiveIncrementalPuller {
       throw new IOException("Could not scan " + config.sourceTable + " incrementally", e);
     } finally {
       try {
-        if (stmt != null) {
+        if (stmt != null)  {
           stmt.close();
         }
       } catch (SQLException e) {
         LOG.error("Could not close the resultSet opened ", e);
+      }
+      try {
+        if (conn != null) {
+          conn.close();
+        }
+      } catch (SQLException e) {
+        LOG.error("Could not close the JDBC connection", e);
+      } finally {
+        this.connection = null;
+      }
       }
     }
   }
