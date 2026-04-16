@@ -125,6 +125,7 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
   private final StoragePath basePath;
 
   private final HoodieTableMetaClient metaClient;
+  private final String tableName;
   private final HoodieEngineContext engineContext;
   private final boolean isCompletionTimeBasedQuery;
 
@@ -190,6 +191,7 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
     this.basePath = metaClient.getBasePath();
 
     this.metaClient = metaClient;
+    this.tableName = metaClient.getTableConfig().getTableName();
     this.engineContext = engineContext;
     this.fileStatusCache = fileStatusCache;
     this.configProperties = configProperties;
@@ -282,9 +284,9 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
     HoodieTimer timer = HoodieTimer.start();
     List<StoragePathInfo> allFiles = listPartitionPathFiles(partitions, activeTimeline);
     long elapsedMs = timer.endTimer();
-    log.info("On {} with query instant as {}, it took {}ms to list all files {} Hudi partitions",
-        metaClient.getTableConfig().getTableName(), queryInstant.orElse("N/A"),
-        elapsedMs, partitions.size());
+    log.info("[table={}] HoodieFileIndex.listPartitionPathFiles took {} ms ({} partitions, queryInstant={})",
+        tableName, elapsedMs, partitions.size(),
+        queryInstant.orElse("N/A"));
 
     // ROPathFilter optimization is only applicable for COW tables with snapshot queries
     // For MOR tables with READ_OPTIMIZED queries, we also only need base files
@@ -359,9 +361,9 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
           ));
     } finally {
       long elapsedMs = timer.endTimer();
-      log.debug("On {} with query instant as {}, time spent in filterFiles attempt was {}ms for {} files across {} partitions",
-          metaClient.getTableConfig().getTableName(), queryInstant.orElse("N/A"), elapsedMs,
-          allFiles.size(), partitions.size());
+      log.debug("[table={}] HoodieFileIndex.filterFiles took {} ms ({} partitions, {} files, queryInstant={})",
+          tableName, elapsedMs,
+          partitions.size(), allFiles.size(), queryInstant.orElse("N/A"));
     }
   }
 
@@ -375,11 +377,11 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
       matchedPartitionPaths = tableMetadata.getPartitionPathWithPathPrefixUsingFilterExpression(relativePartitionPaths,
           partitionFields, partitionColumnPredicates, partitionPredicateExpressions);
     } catch (IOException e) {
-      throw new HoodieIOException("On " + metaClient.getTableConfig().getTableName() + " Error fetching partition paths", e);
+      throw new HoodieIOException("On " + tableName + " Error fetching partition paths", e);
     } finally {
       long elapsedMs = timer.endTimer();
-      log.debug("On {}, it took {} ms to list partition paths with {} relativePartitionPaths using partition predicate filtering",
-          metaClient.getTableConfig().getTableName(), elapsedMs, relativePartitionPaths.size());
+      log.debug("[table={}] HoodieFileIndex.listPartitionPaths took {} ms ({} partition paths, with predicate filtering)",
+          tableName, elapsedMs, relativePartitionPaths.size());
     }
 
     // Convert partition's path into partition descriptor
@@ -401,15 +403,15 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
             matchedPartitionPaths = tableMetadata.getPartitionPathWithPathPrefixes(relativePartitionPaths);
           } finally {
             long elapsedMs = timer.endTimer();
-            log.debug("On {}, it took {} ms to list partition paths with {} relativePartitionPaths",
-                metaClient.getTableConfig().getTableName(), elapsedMs, relativePartitionPaths.size());
+            log.debug("[table={}] HoodieFileIndex.listPartitionPaths took {} ms ({} partition paths)",
+                tableName, elapsedMs, relativePartitionPaths.size());
           }
         }
       } else {
         matchedPartitionPaths = Collections.singletonList(StringUtils.EMPTY_STRING);
       }
     } catch (IOException e) {
-      throw new HoodieIOException("On " + metaClient.getTableConfig().getTableName() + " Error fetching partition paths", e);
+      throw new HoodieIOException("On " + tableName + " Error fetching partition paths", e);
     }
 
     // Convert partition's path into partition descriptor
@@ -510,8 +512,8 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
 
     HoodieTimer timer = HoodieTimer.start();
     try {
-      log.debug("On {}, out of {} partition paths, {} are missing from cache. Loading them.",
-          metaClient.getTableConfig().getTableName(), partitionPaths.size(), missingPartitionPaths.size());
+      log.debug("[table={}] HoodieFileIndex.listPartitionPathFiles cache miss: {} of {} partitions uncached, loading them.",
+          tableName, missingPartitionPaths.size(), partitionPaths.size());
       Map<String, List<StoragePathInfo>> fetchedPartitionsMap;
       fetchedPartitionsMap = tableMetadata.getAllFilesInPartitions(
           missingPartitionPathsMap.keySet(), getPartitionPathFilter(activeTimeline));
@@ -530,11 +532,11 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
 
       return result;
     } catch (IOException e) {
-      throw new HoodieIOException("On " + metaClient.getTableConfig().getTableName() + " Failed to list partition paths", e);
+      throw new HoodieIOException("On " + tableName + " Failed to list partition paths", e);
     } finally {
       long elapsedMs = timer.endTimer();
-      log.debug("On {}, time spent attempting getAllFilesInPartitions was {} ms for {} uncached partitions",
-          metaClient.getTableConfig().getTableName(), elapsedMs, missingPartitionPaths.size());
+      log.debug("[table={}] HoodieFileIndex.getAllFilesInPartitions took {} ms ({} uncached partitions)",
+          tableName, elapsedMs, missingPartitionPaths.size());
     }
   }
 
@@ -573,7 +575,7 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
     }
 
     long elapsedMs = timer.endTimer();
-    log.info("Refresh table {}, spent: {} ms", metaClient.getTableConfig().getTableName(), elapsedMs);
+    log.info("[table={}] HoodieFileIndex.doRefresh took {} ms", tableName, elapsedMs);
   }
 
   private void validate(HoodieTimeline activeTimeline, Option<String> queryInstant) {
