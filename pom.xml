@@ -2485,6 +2485,11 @@
                         <exclude>*:*_2.11</exclude>
                         <exclude>*:*_2.12</exclude>
                       </excludes>
+                      <includes>
+                        <include>org.apache.flink:*_2.12</include>
+                        <include>org.scala-lang.modules:*_2.12</include>
+                        <include>com.twitter:*_2.12</include>
+                      </includes>
                     </bannedDependencies>
                   </rules>
                 </configuration>
