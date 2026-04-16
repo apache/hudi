@@ -35,7 +35,6 @@ import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 
 import java.io.BufferedReader;
-import java.io.File;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.net.URI;
@@ -258,7 +257,7 @@ public class DFSPropertiesConfiguration extends PropertiesConfig {
     if (StringUtils.isNullOrEmpty(URI.create(confDir).getScheme())) {
       confDir = "file://" + confDir;
     }
-    return Option.of(new StoragePath(confDir + File.separator + DEFAULT_PROPERTIES_FILE));
+    return Option.of(new StoragePath(confDir + "/" + DEFAULT_PROPERTIES_FILE));
   }
 
   private String[] splitProperty(String line) {
