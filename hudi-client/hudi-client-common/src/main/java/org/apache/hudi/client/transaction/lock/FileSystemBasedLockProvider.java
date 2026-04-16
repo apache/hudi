@@ -103,6 +103,12 @@ public class FileSystemBasedLockProvider implements LockProvider<String>, Serial
         storage.deleteFile(this.lockFile);
       } catch (IOException e) {
         throw new HoodieLockException(generateLogStatement(LockState.FAILED_TO_RELEASE), e);
+      } finally {
+        try {
+          storage.close();
+        } catch (IOException closeEx) {
+          log.warn("Failed to close HoodieStorage in FileSystemBasedLockProvider", closeEx);
+        }
       }
     }
   }
