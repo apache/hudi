@@ -182,7 +182,6 @@ public class HiveIncrementalPuller {
       } finally {
         this.connection = null;
       }
-      }
     }
   }
 
