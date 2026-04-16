@@ -102,7 +102,6 @@ public class FileIOUtils {
             throw new RuntimeException(e);
         }
     }
-  }
 
   public static void copy(InputStream inputStream, OutputStream outputStream) throws IOException {
     byte[] buffer = new byte[1024];
