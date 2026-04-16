@@ -26,8 +26,11 @@ import org.apache.hudi.common.util.StringUtils
 import org.apache.hudi.internal.schema.HoodieSchemaException
 
 import org.apache.spark.sql.{Row, SaveMode}
+import org.apache.spark.sql.catalyst.TableIdentifier
+import org.apache.spark.sql.catalyst.catalog.{CatalogStorageFormat, CatalogTable, CatalogTableType}
+import org.apache.spark.sql.hudi.command.CreateHoodieTableCommand
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
-import org.apache.spark.sql.types._
+import org.apache.spark.sql.types.{ArrayType, BinaryType, DataType, LongType, MapType, MetadataBuilder, StringType, StructField, StructType}
 
 
 class TestVariantDataType extends HoodieSparkSqlTestBase {
@@ -92,6 +95,93 @@ class TestVariantDataType extends HoodieSparkSqlTestBase {
         )
       })
     }
+  }
+
+  test("Test toHiveCompatibleSchema converts VariantType to physical struct") {
+    assume(HoodieSparkUtils.gteqSpark4_0, "Variant type requires Spark 4.0 or higher")
+
+    val variantType = DataType.fromDDL("variant")
+    val schema = StructType(Seq(
+      StructField("id", LongType, nullable = false),
+      StructField("name", StringType),
+      StructField("variant_col", variantType, nullable = true),
+      StructField("nested_struct", StructType(Seq(
+        StructField("inner_variant", variantType)
+      ))),
+      StructField("variant_array", ArrayType(variantType)),
+      StructField("variant_map", MapType(StringType, variantType)),
+      StructField("ts", LongType)
+    ))
+
+    val hiveSchema = CreateHoodieTableCommand.toHiveCompatibleSchema(schema)
+
+    // Non-variant fields should be unchanged
+    assert(hiveSchema("id").dataType == LongType)
+    assert(hiveSchema("name").dataType == StringType)
+    assert(hiveSchema("ts").dataType == LongType)
+
+    // Top-level variant should be converted with canonical (metadata, value) field order.
+    val variantStruct = assertVariantStruct(hiveSchema("variant_col").dataType)
+    assert(variantStruct.fields(0).name == HoodieSchema.Variant.VARIANT_METADATA_FIELD)
+    assert(variantStruct.fields(1).name == HoodieSchema.Variant.VARIANT_VALUE_FIELD)
+
+    // Variant nested inside a StructType should be converted recursively.
+    val nestedStruct = hiveSchema("nested_struct").dataType.asInstanceOf[StructType]
+    assertVariantStruct(nestedStruct("inner_variant").dataType)
+
+    // Variant as ArrayType element should be converted.
+    val arrayType = hiveSchema("variant_array").dataType.asInstanceOf[ArrayType]
+    assertVariantStruct(arrayType.elementType)
+
+    // Variant as MapType value should be converted.
+    val mapType = hiveSchema("variant_map").dataType.asInstanceOf[MapType]
+    assert(mapType.keyType == StringType)
+    assertVariantStruct(mapType.valueType)
+  }
+
+  private def assertVariantStruct(dataType: DataType): StructType = {
+    assert(dataType.isInstanceOf[StructType])
+    val structType = dataType.asInstanceOf[StructType]
+    assert(structType.length == 2)
+    assert(structType(HoodieSchema.Variant.VARIANT_METADATA_FIELD).dataType == BinaryType)
+    assert(structType(HoodieSchema.Variant.VARIANT_VALUE_FIELD).dataType == BinaryType)
+    structType
+  }
+
+  test("Test buildHiveCompatibleCatalogTable converts schema and merges properties") {
+    assume(HoodieSparkUtils.gteqSpark4_0, "Variant type requires Spark 4.0 or higher")
+
+    val variantType = DataType.fromDDL("variant")
+    val table = CatalogTable(
+      identifier = TableIdentifier("test_table", Some("default")),
+      tableType = CatalogTableType.MANAGED,
+      storage = CatalogStorageFormat.empty,
+      schema = StructType(Seq(
+        StructField("id", LongType, nullable = false),
+        StructField("variant_col", variantType, nullable = true)
+      )),
+      provider = Some("hudi"),
+      properties = Map("existing_key" -> "table_value", "shared_key" -> "table_value"))
+
+    val dataSourceProps = Map(
+      "spark.sql.sources.provider" -> "hudi",
+      "shared_key" -> "datasource_value")
+
+    val result = CreateHoodieTableCommand.buildHiveCompatibleCatalogTable(table, dataSourceProps)
+
+    // VariantType replaced with the canonical (metadata, value) struct.
+    assertVariantStruct(result.schema("variant_col").dataType)
+    // Non-variant columns preserved.
+    assert(result.schema("id").dataType == LongType)
+    // Existing-only table properties survive.
+    assert(result.properties("existing_key") == "table_value")
+    // dataSource-only keys are merged in.
+    assert(result.properties("spark.sql.sources.provider") == "hudi")
+    // On conflict, CatalogTable.properties wins over dataSourceProps (right-biased `++`).
+    assert(result.properties("shared_key") == "table_value")
+    // Identity/provider fields pass through unchanged.
+    assert(result.identifier == table.identifier)
+    assert(result.provider == table.provider)
   }
 
   test("Test StructType with hudi_type=VARIANT metadata is promoted to VARIANT logical type") {
