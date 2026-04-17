@@ -68,6 +68,7 @@ services:
       - "namenode"
     ports:
       - "8188:8188"
+      - "19888:19888"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://historyserver:8188"]
       interval: 30s

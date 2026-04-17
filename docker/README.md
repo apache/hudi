@@ -27,6 +27,19 @@ docker demo environment.
 The `/hoodie` folder contains all the configs for assembling necessary docker images. The name and repository of each
 docker image, e.g., `apachehudi/hudi-hadoop_2.8.4-trinobase_368`, is defined in the maven configuration file `pom.xml`.
 
+#### Base image by Java version
+
+`build_docker_images.sh` auto-selects one of the two supported base images from `--spark-version`: Spark 4.0+ picks
+`base_java17`, anything else picks `base_java11`.
+
+| Base module   | JDK     | Default Hadoop | Published repo suffix | Used for   |
+|---------------|---------|----------------|-----------------------|------------|
+| `base_java11` | Java 11 | 2.8.4          | `...-base-java11`     | Spark 3.x  |
+| `base_java17` | Java 17 | 3.4.0          | `...-base-java17`     | Spark 4.0+ |
+
+The legacy Java 8 `base` module under `/hoodie/hadoop/base` is retained for historical reference only; Spark 2.x is no
+longer supported and `build_docker_images.sh` never selects it.
+
 ### Docker compose config for the Demo - `/compose`
 
 The `/compose` folder contains the yaml file to compose the Docker environment for running Hudi Demo.

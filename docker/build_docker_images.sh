@@ -93,13 +93,35 @@ DOCKER_CONTEXT_DIR="hoodie/hadoop"
 
 # Select Java base image based on Spark version (Spark 4.0+ requires Java 17)
 SPARK_MAJOR=$(echo "$SPARK_VERSION" | cut -d. -f1)
-if [ "$SPARK_MAJOR" -ge 4 ] 2>/dev/null; then
+if ! [[ "$SPARK_MAJOR" =~ ^[0-9]+$ ]]; then
+  echo "Error: invalid SPARK_VERSION='$SPARK_VERSION'" >&2
+  exit 1
+fi
+if [ "$SPARK_MAJOR" -ge 4 ]; then
   BASE_IMAGE_DIR="base_java17"
   echo "Using Java 17 base image for Spark ${SPARK_VERSION}"
 else
   BASE_IMAGE_DIR="base_java11"
   echo "Using Java 11 base image for Spark ${SPARK_VERSION}"
 fi
+
+# Select hadoop-aws/aws-sdk versions based on Hadoop major.minor.
+# hadoop-aws must track the Hadoop version; mismatches break the S3A FS classpath.
+HADOOP_MAJOR_MINOR=$(echo "$HADOOP_VERSION" | cut -d. -f1,2)
+case "$HADOOP_MAJOR_MINOR" in
+  3.4)
+    HADOOP_AWS_VERSION="3.4.0"
+    AWS_SDK_VERSION="1.12.734"
+    ;;
+  3.3)
+    HADOOP_AWS_VERSION="3.3.4"
+    AWS_SDK_VERSION="1.12.734"
+    ;;
+  *)
+    HADOOP_AWS_VERSION="3.3.4"
+    AWS_SDK_VERSION="1.12.734"
+    ;;
+esac
 
 # List of images to build: "subdir|image_base_name"
 # Each entry: <subdir>|<image_base_name>
@@ -128,6 +150,8 @@ for IMAGE_CONFIG in "${DOCKER_IMAGES[@]}"; do
       --build-arg HADOOP_VERSION=${HADOOP_VERSION} \
       --build-arg SPARK_VERSION=${SPARK_VERSION} \
       --build-arg HIVE_VERSION=${HIVE_VERSION} \
+      --build-arg HADOOP_AWS_VERSION=${HADOOP_AWS_VERSION} \
+      --build-arg AWS_SDK_VERSION=${AWS_SDK_VERSION} \
       "$IMAGE_CONTEXT" -t "$TAG_LATEST" -t "$TAG_VERSIONED"; then
       echo "Error: Failed to build docker image for $IMAGE_CONTEXT"
       exit 1
@@ -137,6 +161,8 @@ for IMAGE_CONFIG in "${DOCKER_IMAGES[@]}"; do
       --build-arg HADOOP_VERSION=${HADOOP_VERSION} \
       --build-arg SPARK_VERSION=${SPARK_VERSION} \
       --build-arg HIVE_VERSION=${HIVE_VERSION} \
+      --build-arg HADOOP_AWS_VERSION=${HADOOP_AWS_VERSION} \
+      --build-arg AWS_SDK_VERSION=${AWS_SDK_VERSION} \
       "$IMAGE_CONTEXT" -t "$TAG_LATEST" -t "$TAG_VERSIONED"; then
       echo "Error: Failed to build docker image for $IMAGE_CONTEXT"
       exit 1
