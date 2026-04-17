@@ -79,7 +79,9 @@ ENV SPARK_BLOCKMGR_PORT 5003
 EXPOSE $SPARK_DRIVER_PORT $SPARK_UI_PORT $SPARK_BLOCKMGR_PORT
 
 # Without this spark-shell fails - Download if it is not already there in $SPARK_INSTALL
+ARG HADOOP_AWS_VERSION=3.3.4
+ARG AWS_SDK_VERSION=1.12.734
 RUN wget -nc -q -O "${SPARK_INSTALL}/jars/jersey-bundle-1.19.4.jar" "https://repo1.maven.org/maven2/com/sun/jersey/jersey-bundle/1.19.4/jersey-bundle-1.19.4.jar" && \
-    wget -O "${SPARK_INSTALL}/jars/hadoop-aws-3.3.4.jar" https://repo1.maven.org/maven2/org/apache/hadoop/hadoop-aws/3.3.4/hadoop-aws-3.3.4.jar && \
-    wget -O "${SPARK_INSTALL}/jars/aws-java-sdk-bundle-1.12.734.jar" https://repo1.maven.org/maven2/com/amazonaws/aws-java-sdk-bundle/1.12.734/aws-java-sdk-bundle-1.12.734.jar
+    wget -O "${SPARK_INSTALL}/jars/hadoop-aws-${HADOOP_AWS_VERSION}.jar" https://repo1.maven.org/maven2/org/apache/hadoop/hadoop-aws/${HADOOP_AWS_VERSION}/hadoop-aws-${HADOOP_AWS_VERSION}.jar && \
+    wget -O "${SPARK_INSTALL}/jars/aws-java-sdk-bundle-${AWS_SDK_VERSION}.jar" https://repo1.maven.org/maven2/com/amazonaws/aws-java-sdk-bundle/${AWS_SDK_VERSION}/aws-java-sdk-bundle-${AWS_SDK_VERSION}.jar
 

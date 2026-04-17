@@ -83,10 +83,21 @@ fi
 # Docker image tags
 LATEST_TAG="latest"
 DOCKER_CONTEXT_DIR="hoodie/hadoop"
+
+# Select Java base image based on Spark version (Spark 4.0+ requires Java 17)
+SPARK_MAJOR=$(echo "$SPARK_VERSION" | cut -d. -f1)
+if [ "$SPARK_MAJOR" -ge 4 ] 2>/dev/null; then
+  BASE_IMAGE_DIR="base_java17"
+  echo "Using Java 17 base image for Spark ${SPARK_VERSION}"
+else
+  BASE_IMAGE_DIR="base_java11"
+  echo "Using Java 11 base image for Spark ${SPARK_VERSION}"
+fi
+
 # List of images to build: "subdir|image_base_name"
 # Each entry: <subdir>|<image_base_name>
 DOCKER_IMAGES=(
-  "base_java11|apachehudi/hudi-hadoop_${HADOOP_VERSION}-base"
+  "${BASE_IMAGE_DIR}|apachehudi/hudi-hadoop_${HADOOP_VERSION}-base"
   "datanode|apachehudi/hudi-hadoop_${HADOOP_VERSION}-datanode"
   "historyserver|apachehudi/hudi-hadoop_${HADOOP_VERSION}-history"
   "hive_base|apachehudi/hudi-hadoop_${HADOOP_VERSION}-hive_${HIVE_VERSION}"

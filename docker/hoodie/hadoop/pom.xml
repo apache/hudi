@@ -29,6 +29,7 @@
   <modules>
     <module>base</module>
     <module>base_java11</module>
+    <module>base_java17</module>
     <module>namenode</module>
     <module>datanode</module>
     <module>historyserver</module>
