@@ -53,6 +53,7 @@ import com.azure.storage.blob.models.BlockBlobItem;
 import com.azure.storage.blob.options.BlobParallelUploadOptions;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
+import lombok.extern.slf4j.Slf4j;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -105,6 +106,7 @@ import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
  *   <li>{@code DefaultAzureCredential} — probing chain; see {@link org.apache.hudi.azure.credentials.AzureCredentialFactory}</li>
  * </ol>
  */
+@Slf4j
 @ThreadSafe
 public class AzureStorageLockClient implements StorageLockClient {
 
@@ -192,6 +194,9 @@ public class AzureStorageLockClient implements StorageLockClient {
     try {
       validityTimeoutSecs = getLongWithAltKeys(typedProps, StorageBasedLockConfig.VALIDITY_TIMEOUT_SECONDS);
     } catch (NumberFormatException e) {
+      log.warn("Invalid format for config '{}', falling back to default value {}",
+          StorageBasedLockConfig.VALIDITY_TIMEOUT_SECONDS.key(),
+          StorageBasedLockConfig.VALIDITY_TIMEOUT_SECONDS.defaultValue(), e);
       validityTimeoutSecs = StorageBasedLockConfig.VALIDITY_TIMEOUT_SECONDS.defaultValue();
     }
     long azureCallTimeoutSecs = Math.max(1, validityTimeoutSecs / 5);

@@ -27,6 +27,8 @@ import com.azure.identity.ManagedIdentityCredentialBuilder;
 
 import java.util.Properties;
 
+import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
+
 /**
  * Factory for resolving an Azure {@link TokenCredential} from Hudi properties.
  *
@@ -66,16 +68,16 @@ public class AzureCredentialFactory {
    */
   public static TokenCredential getAzureCredential(Properties props) {
     if (props != null) {
-      String miClientId = props.getProperty(AzureStorageLockConfig.AZURE_MANAGED_IDENTITY_CLIENT_ID.key());
+      String miClientId = getStringWithAltKeys(props, AzureStorageLockConfig.AZURE_MANAGED_IDENTITY_CLIENT_ID, true);
       if (miClientId != null && !miClientId.trim().isEmpty()) {
         return new ManagedIdentityCredentialBuilder()
             .clientId(miClientId)
             .build();
       }
 
-      String tenantId = props.getProperty(AzureStorageLockConfig.AZURE_CLIENT_TENANT_ID.key());
-      String clientId = props.getProperty(AzureStorageLockConfig.AZURE_CLIENT_ID.key());
-      String clientSecret = props.getProperty(AzureStorageLockConfig.AZURE_CLIENT_SECRET.key());
+      String tenantId = getStringWithAltKeys(props, AzureStorageLockConfig.AZURE_CLIENT_TENANT_ID, true);
+      String clientId = getStringWithAltKeys(props, AzureStorageLockConfig.AZURE_CLIENT_ID, true);
+      String clientSecret = getStringWithAltKeys(props, AzureStorageLockConfig.AZURE_CLIENT_SECRET, true);
       if (tenantId != null && !tenantId.trim().isEmpty()
           && clientId != null && !clientId.trim().isEmpty()
           && clientSecret != null && !clientSecret.trim().isEmpty()) {
