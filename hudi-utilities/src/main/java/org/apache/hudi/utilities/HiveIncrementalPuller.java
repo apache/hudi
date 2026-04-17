@@ -167,15 +167,16 @@ public class HiveIncrementalPuller {
       throw new IOException("Could not scan " + config.sourceTable + " incrementally", e);
     } finally {
       try {
-        if (stmt != null)  {
+        if (stmt != null) {
           stmt.close();
         }
       } catch (SQLException e) {
         LOG.error("Could not close the resultSet opened ", e);
       }
       try {
-        if (conn != null) {
-          conn.close();
+        Connection toClose = (conn != null) ? conn : this.connection;
+        if (toClose != null) {
+          toClose.close();
         }
       } catch (SQLException e) {
         LOG.error("Could not close the JDBC connection", e);
