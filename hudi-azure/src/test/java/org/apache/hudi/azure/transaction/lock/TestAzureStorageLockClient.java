@@ -35,6 +35,7 @@ import com.azure.storage.blob.BlobClient;
 import com.azure.storage.blob.BlobContainerClient;
 import com.azure.storage.blob.BlobServiceClient;
 import com.azure.storage.blob.models.BlobDownloadContentResponse;
+import com.azure.storage.blob.models.BlobErrorCode;
 import com.azure.storage.blob.models.BlobStorageException;
 import com.azure.storage.blob.models.BlockBlobItem;
 import com.azure.storage.blob.options.BlobParallelUploadOptions;
@@ -52,14 +53,19 @@ import java.util.Properties;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
@@ -350,6 +356,208 @@ public class TestAzureStorageLockClient {
     client.readObject("abfs://container@secondary.dfs.core.windows.net/path2", true);
 
     assertEquals(1, secondarySupplierInvocations.get());
+  }
+
+
+  @Test
+  void testTryUpsertLockFile_conflict409_returnsUnknownError() {
+    StorageLockData lockData = new StorageLockData(false, 999L, "owner");
+    StorageLockFile prevLockFile = new StorageLockFile(lockData, "\"some-etag-409\"");
+    BlobStorageException ex = mock(BlobStorageException.class);
+    when(ex.getStatusCode()).thenReturn(409);
+    when(mockBlobClient.uploadWithResponse(any(BlobParallelUploadOptions.class), isNull(), eq(Context.NONE))).thenThrow(ex);
+
+    Pair<LockUpsertResult, Option<StorageLockFile>> result =
+        lockClient.tryUpsertLockFile(lockData, Option.of(prevLockFile));
+
+    assertEquals(LockUpsertResult.UNKNOWN_ERROR, result.getLeft());
+    assertTrue(result.getRight().isEmpty());
+    verify(mockLogger).info(contains("Retriable conditional request conflict error"), eq(OWNER_ID), eq(LOCK_FILE_URI));
+  }
+
+  @Test
+  void testReadCurrentLockFile_rateLimit429_returnsUnknownError() {
+    BlobStorageException ex = mock(BlobStorageException.class);
+    when(ex.getStatusCode()).thenReturn(429);
+    when(mockBlobClient.downloadContentWithResponse(isNull(), isNull(), isNull(), eq(Context.NONE))).thenThrow(ex);
+
+    Pair<LockGetResult, Option<StorageLockFile>> result = lockClient.readCurrentLockFile();
+    assertEquals(LockGetResult.UNKNOWN_ERROR, result.getLeft());
+    assertTrue(result.getRight().isEmpty());
+    verify(mockLogger).warn(contains("Rate limit exceeded"), eq(OWNER_ID), eq(LOCK_FILE_URI));
+  }
+
+  @Test
+  void testReadCurrentLockFile_serverError500_returnsUnknownError() {
+    BlobStorageException ex = mock(BlobStorageException.class);
+    when(ex.getStatusCode()).thenReturn(500);
+    when(mockBlobClient.downloadContentWithResponse(isNull(), isNull(), isNull(), eq(Context.NONE))).thenThrow(ex);
+
+    Pair<LockGetResult, Option<StorageLockFile>> result = lockClient.readCurrentLockFile();
+    assertEquals(LockGetResult.UNKNOWN_ERROR, result.getLeft());
+    assertTrue(result.getRight().isEmpty());
+    verify(mockLogger).warn(contains("Azure returned internal server error code"), eq(OWNER_ID), eq(LOCK_FILE_URI), eq(ex));
+  }
+
+  @Test
+  void testReadCurrentLockFile_unexpectedError400_throws() {
+    BlobStorageException ex = mock(BlobStorageException.class);
+    when(ex.getStatusCode()).thenReturn(400);
+    when(mockBlobClient.downloadContentWithResponse(isNull(), isNull(), isNull(), eq(Context.NONE))).thenThrow(ex);
+
+    assertThrows(BlobStorageException.class, () -> lockClient.readCurrentLockFile());
+  }
+
+
+  @Test
+  void testReadObject_found_returnsContent() {
+    BlobServiceClient svc = mock(BlobServiceClient.class);
+    BlobContainerClient container = mock(BlobContainerClient.class);
+    BlobClient configBlobClient = mock(BlobClient.class);
+    when(svc.getBlobContainerClient(any(String.class))).thenReturn(container);
+    when(container.getBlobClient(any(String.class))).thenReturn(configBlobClient);
+
+    String expectedContent = "{\"key\":\"value\"}";
+    when(configBlobClient.exists()).thenReturn(true);
+    when(configBlobClient.downloadContent()).thenReturn(BinaryData.fromString(expectedContent));
+
+    AzureStorageLockClient client = new AzureStorageLockClient(
+        OWNER_ID, LOCK_FILE_URI, new Properties(),
+        (location) -> svc, mockLogger);
+
+    Option<String> result = client.readObject(
+        "abfs://container@account.dfs.core.windows.net/config.json", true);
+
+    assertTrue(result.isPresent());
+    assertEquals(expectedContent, result.get());
+  }
+
+  @Test
+  void testReadObject_notFound_returnsEmpty() {
+    BlobServiceClient svc = mock(BlobServiceClient.class);
+    BlobContainerClient container = mock(BlobContainerClient.class);
+    BlobClient configBlobClient = mock(BlobClient.class);
+    when(svc.getBlobContainerClient(any(String.class))).thenReturn(container);
+    when(container.getBlobClient(any(String.class))).thenReturn(configBlobClient);
+
+    when(configBlobClient.exists()).thenReturn(false);
+
+    AzureStorageLockClient client = new AzureStorageLockClient(
+        OWNER_ID, LOCK_FILE_URI, new Properties(),
+        (location) -> svc, mockLogger);
+
+    Option<String> result = client.readObject(
+        "abfs://container@account.dfs.core.windows.net/config.json", true);
+
+    assertFalse(result.isPresent());
+    verify(configBlobClient, never()).downloadContent();
+  }
+
+  @Test
+  void testReadObject_blobStorageException404_returnsEmpty() {
+    BlobServiceClient svc = mock(BlobServiceClient.class);
+    BlobContainerClient container = mock(BlobContainerClient.class);
+    BlobClient configBlobClient = mock(BlobClient.class);
+    when(svc.getBlobContainerClient(any(String.class))).thenReturn(container);
+    when(container.getBlobClient(any(String.class))).thenReturn(configBlobClient);
+
+    BlobStorageException ex = mock(BlobStorageException.class);
+    when(ex.getStatusCode()).thenReturn(404);
+    when(configBlobClient.downloadContent()).thenThrow(ex);
+
+    AzureStorageLockClient client = new AzureStorageLockClient(
+        OWNER_ID, LOCK_FILE_URI, new Properties(),
+        (location) -> svc, mockLogger);
+
+    Option<String> result = client.readObject(
+        "abfs://container@account.dfs.core.windows.net/config.json", false);
+
+    assertFalse(result.isPresent());
+  }
+
+  @Test
+  void testWriteObject_success() {
+    BlobServiceClient svc = mock(BlobServiceClient.class);
+    BlobContainerClient container = mock(BlobContainerClient.class);
+    BlobClient configBlobClient = mock(BlobClient.class);
+    when(svc.getBlobContainerClient(any(String.class))).thenReturn(container);
+    when(container.getBlobClient(any(String.class))).thenReturn(configBlobClient);
+
+    doNothing().when(configBlobClient).upload(any(BinaryData.class), anyBoolean());
+
+    AzureStorageLockClient client = new AzureStorageLockClient(
+        OWNER_ID, LOCK_FILE_URI, new Properties(),
+        (location) -> svc, mockLogger);
+
+    boolean result = client.writeObject(
+        "abfs://container@account.dfs.core.windows.net/audit.json", "test content");
+
+    assertTrue(result);
+    verify(configBlobClient).upload(any(BinaryData.class), eq(true));
+  }
+
+  @Test
+  void testWriteObject_failure() {
+    BlobServiceClient svc = mock(BlobServiceClient.class);
+    BlobContainerClient container = mock(BlobContainerClient.class);
+    BlobClient configBlobClient = mock(BlobClient.class);
+    when(svc.getBlobContainerClient(any(String.class))).thenReturn(container);
+    when(container.getBlobClient(any(String.class))).thenReturn(configBlobClient);
+
+    doThrow(new RuntimeException("Upload failed"))
+        .when(configBlobClient).upload(any(BinaryData.class), anyBoolean());
+
+    AzureStorageLockClient client = new AzureStorageLockClient(
+        OWNER_ID, LOCK_FILE_URI, new Properties(),
+        (location) -> svc, mockLogger);
+
+    boolean result = client.writeObject(
+        "abfs://container@account.dfs.core.windows.net/audit.json", "test content");
+
+    assertFalse(result);
+  }
+
+
+  @Test
+  void testInitializeWithAbfsUri() {
+    AzureStorageLockClient client = new AzureStorageLockClient(
+        OWNER_ID,
+        "abfss://container@account.dfs.core.windows.net/table/.hoodie/.locks/lock.json",
+        new Properties(),
+        (location) -> mockBlobServiceClient,
+        mockLogger);
+    assertNotNull(client);
+  }
+
+  @Test
+  void testInitializeWithWasbUri() {
+    AzureStorageLockClient client = new AzureStorageLockClient(
+        OWNER_ID,
+        "wasbs://container@account.blob.core.windows.net/table/.hoodie/.locks/lock.json",
+        new Properties(),
+        (location) -> mockBlobServiceClient,
+        mockLogger);
+    assertNotNull(client);
+  }
+
+  @Test
+  void testInitializeWithInvalidUri() {
+    assertThrows(Exception.class, () -> new AzureStorageLockClient(
+        OWNER_ID,
+        "not-a-valid-uri",
+        new Properties(),
+        (location) -> mockBlobServiceClient,
+        mockLogger));
+  }
+
+
+  private static BlobStorageException mockBlobStorageException(int statusCode, BlobErrorCode errorCode) {
+    BlobStorageException ex = mock(BlobStorageException.class);
+    when(ex.getStatusCode()).thenReturn(statusCode);
+    if (errorCode != null) {
+      org.mockito.Mockito.lenient().when(ex.getErrorCode()).thenReturn(errorCode);
+    }
+    return ex;
   }
 
   private static void assertRequestCondition(Object blobParallelUploadOptions, String expectedField, String expectedValue) throws Exception {
