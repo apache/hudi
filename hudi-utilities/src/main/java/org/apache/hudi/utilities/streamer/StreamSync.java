@@ -890,10 +890,14 @@ public class StreamSync implements Serializable, Closeable {
       SparkStreamerValidatorUtils.runValidators(props, instantTime, writeStatuses,
           checkpointCommitMetadata, metaClient);
 
-      boolean success = writeClient.commit(instantTime, writeStatusRDD, Option.of(checkpointCommitMetadata), commitActionType, partitionToReplacedFileIds, Option.empty(),
-          Option.of(writeStatusValidator));
-      if (weOwnCache) {
-        writeStatusRDD.unpersist();
+      boolean success;
+      try {
+        success = writeClient.commit(instantTime, writeStatusRDD, Option.of(checkpointCommitMetadata), commitActionType, partitionToReplacedFileIds, Option.empty(),
+            Option.of(writeStatusValidator));
+      } finally {
+        if (weOwnCache) {
+          writeStatusRDD.unpersist();
+        }
       }
       releaseResourcesInvoked = true;
       if (success) {
