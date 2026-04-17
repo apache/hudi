@@ -107,7 +107,7 @@ public class FileSystemBasedLockProvider implements LockProvider<String>, Serial
         try {
           storage.close();
         } catch (IOException closeEx) {
-          log.warn("Failed to close HoodieStorage in FileSystemBasedLockProvider", closeEx);
+          log.warn("Failed to close HoodieStorage", closeEx);
         }
       }
     }
