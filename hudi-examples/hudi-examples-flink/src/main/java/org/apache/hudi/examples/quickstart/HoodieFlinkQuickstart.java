@@ -226,8 +226,6 @@ public final class HoodieFlinkQuickstart {
   public List<Row> queryBatchData(String tablePath, String tableName, HoodieTableType tableType)
       throws InterruptedException, TableNotExistException {
     TableEnvironment batchEnv = getBatchTableEnv();
-    // READ_AS_STREAMING is omitted (defaults to false): Source V2 enumerates splits exactly once,
-    // making the job bounded.
     String batchTableDDL = sql(tableName)
         .option(FlinkOptions.PATH, tablePath)
         .option(FlinkOptions.RECORD_KEY_FIELD, "uuid")
@@ -305,8 +303,8 @@ public final class HoodieFlinkQuickstart {
     ObjectPath objectPath = new ObjectPath(tEnv.getCurrentDatabase(), sourceTable);
     String currentCatalog = tEnv.getCurrentCatalog();
     Catalog catalog = tEnv.getCatalog(currentCatalog).get();
-    ResolvedCatalogTable table = (ResolvedCatalogTable) catalog.getTable(objectPath);
-    ResolvedSchema schema = table.getResolvedSchema();
+    ResolvedCatalogTable resolvedTable = (ResolvedCatalogTable) catalog.getTable(objectPath);
+    ResolvedSchema schema = resolvedTable.getResolvedSchema();
     String sinkDDL = QuickstartConfigurations.getCollectSinkDDL("sink", schema);
     tEnv.executeSql("DROP TABLE IF EXISTS sink");
     tEnv.executeSql(sinkDDL);

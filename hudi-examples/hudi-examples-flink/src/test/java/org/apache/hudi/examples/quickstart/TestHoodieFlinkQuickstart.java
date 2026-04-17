@@ -40,9 +40,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
  * IT cases for Hoodie table source and sink.
  *
  * <p>Tests are parameterized over the table type (COW / MOR) and whether to use the FLIP-27
- * Source V2 reader ({@code useSourceV2}), giving four combinations in total.  When
- * {@code useSourceV2 = true}, the test additionally exercises the bounded batch-read path
- * ({@link HoodieFlinkQuickstart#queryBatchData}).
+ * Source V2 reader ({@code useSourceV2}), giving four combinations in total.
  */
 public class TestHoodieFlinkQuickstart extends AbstractTestBase {
   private final HoodieFlinkQuickstart flinkQuickstart = HoodieFlinkQuickstart.instance();
@@ -85,7 +83,7 @@ public class TestHoodieFlinkQuickstart extends AbstractTestBase {
     if (useSourceV2) {
       List<Row> batchRows = flinkQuickstart.queryBatchData(tempFile.getAbsolutePath(), "t1", tableType);
       // full table scan
-      assertEquals(batchRows.size(), 8);
+      assertEquals(8, batchRows.size());
     }
 
     // update data
