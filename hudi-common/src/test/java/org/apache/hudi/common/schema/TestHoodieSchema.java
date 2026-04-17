@@ -2855,6 +2855,25 @@ public class TestHoodieSchema {
   }
 
   @Test
+  public void testParseTypeDescriptorVariant() {
+    HoodieSchema parsed = HoodieSchema.parseTypeDescriptor("VARIANT");
+    assertEquals(HoodieSchemaType.VARIANT, parsed.getType());
+    assertInstanceOf(HoodieSchema.Variant.class, parsed);
+  }
+
+  @Test
+  public void testParseTypeDescriptorVariantCaseInsensitive() {
+    HoodieSchema parsed = HoodieSchema.parseTypeDescriptor("variant");
+    assertEquals(HoodieSchemaType.VARIANT, parsed.getType());
+  }
+
+  @Test
+  public void testParseTypeDescriptorVariantRejectsParameters() {
+    assertThrows(IllegalArgumentException.class, () -> HoodieSchema.parseTypeDescriptor("VARIANT(foo)"));
+    assertThrows(IllegalArgumentException.class, () -> HoodieSchema.parseTypeDescriptor("VARIANT(1, 2)"));
+  }
+
+  @Test
   public void testCreateArrayWithNullableVectorThrows() {
     HoodieSchema vectorSchema = HoodieSchema.createNullable(HoodieSchema.createVector(128));
     HoodieSchemaException ex = assertThrows(HoodieSchemaException.class,

@@ -98,8 +98,8 @@ public class HoodieSchema implements Serializable {
   public static final HoodieSchema NULL_SCHEMA = HoodieSchema.create(HoodieSchemaType.NULL);
   /**
    * Constant to use when attaching type metadata to external schema systems like Spark's StructType.
-   * Stores a parameterized type string for custom Hudi logical types such as VECTOR and BLOB.
-   * Examples: "VECTOR(128)", "VECTOR(512, DOUBLE)", "BLOB".
+   * Stores a parameterized type string for custom Hudi logical types such as VECTOR, BLOB, and VARIANT.
+   * Examples: "VECTOR(128)", "VECTOR(512, DOUBLE)", "BLOB", "VARIANT".
    */
   public static final String TYPE_METADATA_FIELD = "hudi_type";
 
@@ -109,8 +109,8 @@ public class HoodieSchema implements Serializable {
   public static final String VARIANT_TYPE_NAME = VariantLogicalType.VARIANT_LOGICAL_TYPE_NAME;
 
   /**
-   * Parses a type descriptor string for custom Hudi logical types such as VECTOR and BLOB.
-   * Examples: "VECTOR(128)", "VECTOR(512, DOUBLE)", "BLOB".
+   * Parses a type descriptor string for custom Hudi logical types such as VECTOR, BLOB, and VARIANT.
+   * Examples: "VECTOR(128)", "VECTOR(512, DOUBLE)", "BLOB", "VARIANT".
    * Throws for non-custom logical type names.
    */
   public static HoodieSchema parseTypeDescriptor(String descriptor) {
@@ -145,6 +145,12 @@ public class HoodieSchema implements Serializable {
               "BLOB type descriptor does not support parameters, got: " + params);
         }
         return createBlob();
+      case VARIANT:
+        if (!params.isEmpty()) {
+          throw new IllegalArgumentException(
+              "VARIANT type descriptor does not support parameters, got: " + params);
+        }
+        return createVariant();
       default:
         throw new IllegalArgumentException(
             "parseTypeDescriptor only supports custom logical types, got: " + type);
@@ -188,26 +194,7 @@ public class HoodieSchema implements Serializable {
   }
 
   private static final Set<HoodieSchemaType> CUSTOM_LOGICAL_TYPES =
-      EnumSet.of(HoodieSchemaType.VECTOR, HoodieSchemaType.BLOB);
-
-  /**
-   * Returns true if the given descriptor string represents a custom logical type
-   * that can be parsed by {@link #parseTypeDescriptor(String)}.
-   * This is safe to call in pattern-match guards since it never throws.
-   */
-  public static boolean isCustomLogicalTypeDescriptor(String descriptor) {
-    if (descriptor == null || descriptor.trim().isEmpty()) {
-      return false;
-    }
-    int parenStart = descriptor.indexOf('(');
-    String typeName = (parenStart == -1) ? descriptor.trim() : descriptor.substring(0, parenStart).trim();
-    try {
-      HoodieSchemaType type = HoodieSchemaType.valueOf(typeName.toUpperCase(Locale.ROOT));
-      return CUSTOM_LOGICAL_TYPES.contains(type);
-    } catch (IllegalArgumentException e) {
-      return false;
-    }
-  }
+      EnumSet.of(HoodieSchemaType.VECTOR, HoodieSchemaType.BLOB, HoodieSchemaType.VARIANT);
 
   /**
    * Constants for Parquet-style accessor patterns used in nested MAP and ARRAY navigation.

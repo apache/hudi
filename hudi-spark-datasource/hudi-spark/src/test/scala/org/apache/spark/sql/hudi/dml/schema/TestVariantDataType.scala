@@ -94,10 +94,9 @@ class TestVariantDataType extends HoodieSparkSqlTestBase {
     }
   }
 
-  test("Test StructType with hudi_type=VARIANT metadata does not crash parseTypeDescriptor") {
-    // Regression test: a StructType field with hudi_type=VARIANT metadata in the DataFrame API
-    // used to crash in HoodieSparkSchemaConverters because the BLOB guard condition called
-    // parseTypeDescriptor() which threw for non-custom logical types like VARIANT.
+  test("Test StructType with hudi_type=VARIANT metadata is promoted to VARIANT logical type") {
+    // A StructType field in the DataFrame API tagged with hudi_type=VARIANT is treated as a first-class
+    // VARIANT (like BLOB/VECTOR), not a plain struct. On Spark 4.0+ the column round-trips as native VariantType.
     assume(HoodieSparkUtils.gteqSpark4_0, "Variant type requires Spark 4.0 or higher")
 
     withTempDir { tmp =>
@@ -122,8 +121,6 @@ class TestVariantDataType extends HoodieSparkSqlTestBase {
       )
       val df = spark.createDataFrame(spark.sparkContext.parallelize(data), schema)
 
-      // This should NOT crash with "parseTypeDescriptor only supports custom logical types, got: VARIANT".
-      // The struct+metadata VARIANT is treated as a regular struct (the native VariantType path is separate).
       df.write.format("hudi")
         .option("hoodie.table.name", "variant_struct_test")
         .option("hoodie.datasource.write.recordkey.field", "id")
@@ -131,10 +128,49 @@ class TestVariantDataType extends HoodieSparkSqlTestBase {
         .mode(SaveMode.Overwrite)
         .save(tmp.getCanonicalPath)
 
-      // Verify the data was written and can be read back
       val readDf = spark.read.format("hudi").load(tmp.getCanonicalPath)
+      val readFieldType = readDf.schema("variant_data").dataType
+      assert(readFieldType.typeName == "variant",
+        s"variant_data should round-trip as native VariantType on Spark 4.0+, got $readFieldType")
       assert(readDf.count() == 1)
-      assert(readDf.select("id", "name").collect()(0).getLong(0) == 1L)
+    }
+  }
+
+  test("Test StructType with hudi_type=VARIANT metadata rejects malformed struct") {
+    assume(HoodieSparkUtils.gteqSpark4_0, "Variant type requires Spark 4.0 or higher")
+
+    withTempDir { tmp =>
+      val variantMetadata = new MetadataBuilder()
+        .putString(HoodieSchema.TYPE_METADATA_FIELD, "VARIANT")
+        .build()
+
+      // VARIANT structure must be {metadata: binary, value: binary}; a single string field is malformed.
+      val malformedVariantStruct = StructType(Seq(
+        StructField("wrong_field", StringType, nullable = false)
+      ))
+
+      val schema = StructType(Seq(
+        StructField("id", LongType, nullable = false),
+        StructField("variant_data", malformedVariantStruct, nullable = false, metadata = variantMetadata),
+        StructField("ts", LongType)
+      ))
+
+      val data = Seq(Row(1L, Row("oops"), 1000L))
+      val df = spark.createDataFrame(spark.sparkContext.parallelize(data), schema)
+
+      val ex = intercept[Exception] {
+        df.write.format("hudi")
+          .option("hoodie.table.name", "variant_malformed_test")
+          .option("hoodie.datasource.write.recordkey.field", "id")
+          .option("hoodie.datasource.write.precombine.field", "ts")
+          .mode(SaveMode.Overwrite)
+          .save(tmp.getCanonicalPath)
+      }
+      val causes = Iterator.iterate[Throwable](ex)(e => e.getCause).takeWhile(_ != null).toList
+      assert(causes.exists(c => c.isInstanceOf[IllegalArgumentException]
+        && c.getMessage != null
+        && c.getMessage.contains("Invalid variant schema structure")),
+        s"Expected IllegalArgumentException with 'Invalid variant schema structure', got: ${causes.map(_.getMessage)}")
     }
   }
 

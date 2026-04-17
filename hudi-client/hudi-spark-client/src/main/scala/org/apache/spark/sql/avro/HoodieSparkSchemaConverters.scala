@@ -103,7 +103,6 @@ object HoodieSparkSchemaConverters extends SparkAdapterSupport {
       // Complex types
       case ArrayType(elementSparkType, containsNull)
           if metadata.contains(HoodieSchema.TYPE_METADATA_FIELD) &&
-            HoodieSchema.isCustomLogicalTypeDescriptor(metadata.getString(HoodieSchema.TYPE_METADATA_FIELD)) &&
             HoodieSchema.parseTypeDescriptor(metadata.getString(HoodieSchema.TYPE_METADATA_FIELD)).getType == HoodieSchemaType.VECTOR =>
         if (depth > 1) {
           throw new HoodieSchemaException(
@@ -138,11 +137,16 @@ object HoodieSparkSchemaConverters extends SparkAdapterSupport {
         HoodieSchema.createMap(valueSchema)
 
       case blobStruct: StructType if metadata.contains(HoodieSchema.TYPE_METADATA_FIELD) &&
-        HoodieSchema.isCustomLogicalTypeDescriptor(metadata.getString(HoodieSchema.TYPE_METADATA_FIELD)) &&
         HoodieSchema.parseTypeDescriptor(metadata.getString(HoodieSchema.TYPE_METADATA_FIELD)).getType == HoodieSchemaType.BLOB =>
         // Validate blob structure before accepting
         validateBlobStructure(blobStruct)
         HoodieSchema.createBlob()
+
+      case variantStruct: StructType if metadata.contains(HoodieSchema.TYPE_METADATA_FIELD) &&
+        HoodieSchema.parseTypeDescriptor(metadata.getString(HoodieSchema.TYPE_METADATA_FIELD)).getType == HoodieSchemaType.VARIANT =>
+        validateVariantStructure(variantStruct)
+        HoodieSchema.createVariant(recordName, nameSpace, null)
+
       case st: StructType =>
         val childNameSpace = if (nameSpace != "") s"$nameSpace.$recordName" else recordName
 
@@ -354,6 +358,33 @@ object HoodieSparkSchemaConverters extends SparkAdapterSupport {
       throw new IllegalArgumentException(
         s"""Invalid blob schema structure. Expected schema:
            |${expectedBlobStructType.toDDL}
+           |Got schema:
+           |${structType.toDDL}""".stripMargin)
+    }
+  }
+
+  private lazy val expectedVariantStructType: StructType = {
+    val metadataField = StructField(HoodieSchema.Variant.VARIANT_METADATA_FIELD, BinaryType, nullable = false)
+    val valueField = StructField(HoodieSchema.Variant.VARIANT_VALUE_FIELD, BinaryType, nullable = false)
+    StructType(Seq(metadataField, valueField))
+  }
+
+  /**
+   * Validates that a StructType matches the expected unshredded variant schema
+   * (two non-null {@code BinaryType} fields: {@code metadata} and {@code value}).
+   *
+   * @param structType the StructType to validate
+   * @throws IllegalArgumentException if the structure does not match the expected variant schema
+   */
+  private def validateVariantStructure(structType: StructType): Unit = {
+    val fieldsByName = structType.fields.map(f => f.name -> f).toMap
+    val ok = structType.length == 2 &&
+      fieldsByName.get(HoodieSchema.Variant.VARIANT_METADATA_FIELD).exists(f => f.dataType == BinaryType && !f.nullable) &&
+      fieldsByName.get(HoodieSchema.Variant.VARIANT_VALUE_FIELD).exists(f => f.dataType == BinaryType && !f.nullable)
+    if (!ok) {
+      throw new IllegalArgumentException(
+        s"""Invalid variant schema structure. Expected schema:
+           |${expectedVariantStructType.toDDL}
            |Got schema:
            |${structType.toDDL}""".stripMargin)
     }
