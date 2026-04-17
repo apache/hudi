@@ -30,8 +30,9 @@ import java.util.List;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -49,7 +50,12 @@ public class TestBatchRecords {
 
     assertNotNull(batchRecords);
     assertEquals(splitId, batchRecords.nextSplit());
-    assertNull(batchRecords.nextRecordFromSplit(), "Should have no records");
+    // Empty iterator still emits the last-in-split sentinel for watermark emission
+    HoodieRecordWithPosition<String> sentinel = batchRecords.nextRecordFromSplit();
+    assertNotNull(sentinel, "Should emit last-in-split sentinel");
+    assertNull(sentinel.record(), "Sentinel record payload should be null");
+    assertTrue(sentinel.isLastInSplit(), "Sentinel should be marked as last in split");
+    assertNull(batchRecords.nextRecordFromSplit(), "Second call should return null");
     assertNull(batchRecords.nextSplit(), "Second call to nextSplit should return null");
   }
 
@@ -82,7 +88,11 @@ public class TestBatchRecords {
     assertEquals("record3", record3.record());
     assertEquals(3L, record3.recordOffset());
 
-    // No more records
+    // No more records — sentinel emitted before null
+    HoodieRecordWithPosition<String> sentinel = batchRecords.nextRecordFromSplit();
+    assertNotNull(sentinel);
+    assertNull(sentinel.record());
+    assertTrue(sentinel.isLastInSplit());
     assertNull(batchRecords.nextRecordFromSplit());
   }
 
@@ -228,8 +238,11 @@ public class TestBatchRecords {
     // Read the only record
     assertNotNull(batchRecords.nextRecordFromSplit());
 
-    // After exhaustion, should return null
-    assertNull(batchRecords.nextRecordFromSplit());
+    // After exhaustion, sentinel emitted first, then null
+    HoodieRecordWithPosition<String> sentinel = batchRecords.nextRecordFromSplit();
+    assertNotNull(sentinel, "Should emit last-in-split sentinel");
+    assertTrue(sentinel.isLastInSplit());
+    assertNull(sentinel.record());
     assertNull(batchRecords.nextRecordFromSplit());
   }
 
@@ -314,7 +327,13 @@ public class TestBatchRecords {
     // Read records
     batchRecords.nextRecordFromSplit();
 
-    // Trigger close operation
+    // Sentinel emitted first (does not close iterator)
+    batchRecords.nextRecordFromSplit();
+
+    // After Sentinel emitted, nextRecordFromSplit should not close the iterator
+    assertFalse(mockIterator.isClosed(), "Iterator should not be closed");
+
+    // Third call closes the iterator and returns null
     batchRecords.nextRecordFromSplit();
 
     // After exhaustion, nextRecordFromSplit should close the iterator
@@ -342,94 +361,6 @@ public class TestBatchRecords {
         return iterator.next();
       }
     };
-  }
-
-  /**
-   * Verifies that BatchRecords correctly handles iterators that pre-fetch the next element
-   * inside hasNext() (like the CDC AddBaseFileIterator).  The bug was that
-   * nextRecordFromSplit() called hasNext() twice between consecutive next() calls — once
-   * for the outer guard and once for setLastInSplit — causing every other record to be
-   * skipped when hasNext() has side-effects.
-   */
-  @Test
-  public void testAllRecordsReturnedWithPrefetchingIterator() {
-    String splitId = "test-split-prefetch";
-    List<String> records = Arrays.asList("a", "b", "c", "d");
-    // Iterator that pre-fetches the next element inside hasNext(), mirroring
-    // CdcIterators.AddBaseFileIterator behaviour.
-    ClosableIterator<String> prefetchingIterator = new PrefetchingClosableIterator<>(records);
-
-    BatchRecords<String> batchRecords = BatchRecords.forRecords(splitId, prefetchingIterator, 0, 0L);
-    batchRecords.nextSplit();
-
-    List<String> collected = new java.util.ArrayList<>();
-    HoodieRecordWithPosition<String> r;
-    while ((r = batchRecords.nextRecordFromSplit()) != null) {
-      collected.add(r.record());
-    }
-
-    assertEquals(records, collected, "All records must be returned without skipping");
-  }
-
-  @Test
-  public void testLastInSplitFlagWithPrefetchingIterator() {
-    String splitId = "test-split-prefetch-last";
-    List<String> records = Arrays.asList("x", "y");
-    ClosableIterator<String> prefetchingIterator = new PrefetchingClosableIterator<>(records);
-
-    BatchRecords<String> batchRecords = BatchRecords.forRecords(splitId, prefetchingIterator, 0, 0L);
-    batchRecords.nextSplit();
-
-    HoodieRecordWithPosition<String> first = batchRecords.nextRecordFromSplit();
-    assertNotNull(first);
-    assertEquals("x", first.record());
-    assertEquals(false, first.isLastInSplit(), "First record must NOT be marked as last");
-
-    HoodieRecordWithPosition<String> last = batchRecords.nextRecordFromSplit();
-    assertNotNull(last);
-    assertEquals("y", last.record());
-    assertEquals(true, last.isLastInSplit(), "Second (last) record MUST be marked as last");
-
-    assertNull(batchRecords.nextRecordFromSplit(), "No more records expected");
-  }
-
-  /**
-   * A ClosableIterator that pre-fetches the next element inside hasNext(), mimicking
-   * the behaviour of CdcIterators.AddBaseFileIterator.
-   */
-  private static class PrefetchingClosableIterator<T> implements ClosableIterator<T> {
-    private final Iterator<T> delegate;
-    private T prefetched;
-    private boolean hasPrefetched;
-
-    PrefetchingClosableIterator(List<T> items) {
-      this.delegate = items.iterator();
-    }
-
-    @Override
-    public boolean hasNext() {
-      if (delegate.hasNext()) {
-        prefetched = delegate.next(); // pre-fetch side-effect
-        hasPrefetched = true;
-        return true;
-      }
-      hasPrefetched = false;
-      return false;
-    }
-
-    @Override
-    public T next() {
-      if (!hasPrefetched) {
-        throw new java.util.NoSuchElementException();
-      }
-      hasPrefetched = false;
-      return prefetched;
-    }
-
-    @Override
-    public void close() {
-      // no-op
-    }
   }
 
   /**

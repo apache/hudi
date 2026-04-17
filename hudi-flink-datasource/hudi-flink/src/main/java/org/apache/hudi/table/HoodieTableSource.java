@@ -311,6 +311,7 @@ public class HoodieTableSource extends FileIndexReader implements
             HoodieSchemaConverter.convertToSchema(requiredRowType).toString(),
             new ArrayList<>());
     boolean emitDelete = tableType == HoodieTableType.MERGE_ON_READ;
+    boolean commitTimeWatermarkEnabled = conf.get(FlinkOptions.READ_COMMIT_TIME_WATERMARK_ENABLED);
     if (conf.get(FlinkOptions.CDC_ENABLED)) {
       List<DataType> fieldTypes = rowDataType.getChildren();
       splitReaderFunction = new HoodieCdcSplitReaderFunction(
@@ -330,7 +331,7 @@ public class HoodieTableSource extends FileIndexReader implements
           predicates,
           emitDelete);
     }
-    return new HoodieSource<>(context, splitReaderFunction, new HoodieSourceSplitComparator(), metaClient, new HoodieRecordEmitter<>());
+    return new HoodieSource<>(context, splitReaderFunction, new HoodieSourceSplitComparator(), metaClient, new HoodieRecordEmitter<>(commitTimeWatermarkEnabled));
   }
 
   /**

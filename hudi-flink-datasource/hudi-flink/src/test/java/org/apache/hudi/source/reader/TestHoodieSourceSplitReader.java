@@ -472,8 +472,11 @@ public class TestHoodieSourceSplitReader {
    */
   private int drainRecordCount(RecordsWithSplitIds<HoodieRecordWithPosition<String>> batch) {
     int count = 0;
-    while (batch.nextRecordFromSplit() != null) {
-      count++;
+    HoodieRecordWithPosition<String> item;
+    while ((item = batch.nextRecordFromSplit()) != null) {
+      if (!item.isLastInSplit()) {
+        count++;
+      }
     }
     return count;
   }

@@ -34,6 +34,7 @@ public class HoodieRecordWithPosition<T> {
     this.record = record;
     this.fileOffset = fileOffset;
     this.recordOffset = recordOffset;
+    this.lastInSplit = false;
   }
 
   public HoodieRecordWithPosition() {
@@ -59,6 +60,7 @@ public class HoodieRecordWithPosition<T> {
     this.record = newRecord;
     this.fileOffset = newFileOffset;
     this.recordOffset = newRecordOffset;
+    this.lastInSplit = false;
   }
 
   public boolean isLastInSplit() {
@@ -69,11 +71,19 @@ public class HoodieRecordWithPosition<T> {
     this.lastInSplit = lastInSplit;
   }
 
-  /** Sets the next record of a sequence. This increments the {@code recordOffset} by one. */
+  /**
+   * Sets the next record of a sequence. This increments the {@code recordOffset} by one if record is not null.
+   * Passing null marks this position as last-in-split.
+   **/
   public void record(T nextRecord) {
-    this.record = nextRecord;
     this.recordOffset++;
-    this.lastInSplit = false;
+    if (nextRecord != null) {
+      this.record = nextRecord;
+      this.lastInSplit = false;
+    } else {
+      this.record = null;
+      this.lastInSplit = true;
+    }
   }
 
   @Override

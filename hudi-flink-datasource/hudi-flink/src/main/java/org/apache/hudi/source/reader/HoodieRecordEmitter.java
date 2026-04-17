@@ -41,12 +41,22 @@ import java.text.ParseException;
  */
 public class HoodieRecordEmitter<T> implements RecordEmitter<HoodieRecordWithPosition<T>, T, HoodieSourceSplit>, Serializable {
   private static final Logger LOG = LoggerFactory.getLogger(HoodieRecordEmitter.class);
+  private final boolean commitTimeWatermarkEnabled;
+
+  public HoodieRecordEmitter(boolean commitTimeWatermarkEnabled) {
+    this.commitTimeWatermarkEnabled = commitTimeWatermarkEnabled;
+  }
 
   @Override
   public void emitRecord(HoodieRecordWithPosition<T> record, SourceOutput<T> output, HoodieSourceSplit split) throws Exception {
-    output.collect(record.record());
+    T data = record.record();
+    boolean isSentinel = data == null && record.isLastInSplit();
+    // Collect the record unless it is the null-data sentinel emitted at end-of-split.
+    if (!isSentinel) {
+      output.collect(data);
+    }
     split.updatePosition(record.fileOffset(), record.recordOffset());
-    if (record.isLastInSplit()) {
+    if (record.isLastInSplit() && commitTimeWatermarkEnabled) {
       emitSplitWatermark(output, split);
     }
   }
@@ -58,14 +68,16 @@ public class HoodieRecordEmitter<T> implements RecordEmitter<HoodieRecordWithPos
    */
   private void emitSplitWatermark(SourceOutput<T> output, HoodieSourceSplit split) {
     String latestCommit = split.getLatestCommit();
-    try {
-      long watermarkMs = HoodieInstantTimeGenerator.parseDateFromInstantTime(latestCommit).getTime();
-      output.emitWatermark(new Watermark(watermarkMs));
-      LOG.debug("Emitted split-end watermark {} ms for split {} (latestCommit={})",
-          watermarkMs, split.splitId(), latestCommit);
-    } catch (ParseException e) {
-      LOG.warn("Could not parse latestCommit '{}' as a watermark timestamp for split {}; "
-          + "no watermark emitted.", latestCommit, split.splitId(), e);
+    if (latestCommit != null) {
+      try {
+        long watermarkMs = HoodieInstantTimeGenerator.parseDateFromInstantTime(latestCommit).getTime();
+        output.emitWatermark(new Watermark(watermarkMs));
+        LOG.debug("Emitted split-end watermark {} ms for split {} (latestCommit={})",
+                watermarkMs, split.splitId(), latestCommit);
+      } catch (ParseException e) {
+        LOG.warn("Could not parse latestCommit '{}' as a watermark timestamp for split {}; "
+                + "no watermark emitted.", latestCommit, split.splitId(), e);
+      }
     }
   }
 }

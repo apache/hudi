@@ -18,6 +18,7 @@
 
 package org.apache.hudi.source.reader;
 
+import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.source.split.HoodieSourceSplit;
 
@@ -33,6 +34,7 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -49,7 +51,7 @@ public class TestHoodieRecordEmitter {
 
   @BeforeEach
   public void setUp() {
-    emitter = new HoodieRecordEmitter<>();
+    emitter = new HoodieRecordEmitter<>(true);
     mockOutput = mock(SourceOutput.class);
     mockSplit = createTestSplit();
   }
@@ -145,7 +147,7 @@ public class TestHoodieRecordEmitter {
 
   @Test
   public void testEmitRecordWithDifferentRecordTypes() throws Exception {
-    HoodieRecordEmitter<Integer> intEmitter = new HoodieRecordEmitter<>();
+    HoodieRecordEmitter<Integer> intEmitter = new HoodieRecordEmitter<>(false);
     SourceOutput<Integer> intOutput = mock(SourceOutput.class);
 
     HoodieRecordWithPosition<Integer> intRecord =
@@ -242,6 +244,134 @@ public class TestHoodieRecordEmitter {
     // Three records collected, but watermark emitted only once (for r3).
     verify(mockOutput, times(3)).collect(org.mockito.ArgumentMatchers.anyString());
     verify(mockOutput, times(1)).emitWatermark(org.mockito.ArgumentMatchers.any(Watermark.class));
+  }
+
+  // -------------------------------------------------------------------------
+  // Additional coverage tests
+  // -------------------------------------------------------------------------
+
+  @Test
+  public void testWatermarkNotEmittedWhenFlagDisabled() throws Exception {
+    HoodieRecordEmitter<String> noWatermarkEmitter = new HoodieRecordEmitter<>(false);
+    HoodieRecordWithPosition<String> lastRecord = new HoodieRecordWithPosition<>("last", 0, 5L);
+    lastRecord.setLastInSplit(true);
+
+    noWatermarkEmitter.emitRecord(lastRecord, mockOutput, mockSplit);
+
+    verify(mockOutput, times(1)).collect("last");
+    verify(mockOutput, never()).emitWatermark(org.mockito.ArgumentMatchers.any());
+  }
+
+  @Test
+  public void testWatermarkNotEmittedForUnparsableLatestCommit() throws Exception {
+    HoodieSourceSplit badCommitSplit = new HoodieSourceSplit(
+        2, "some-base", Option.of(Collections.emptyList()),
+        "/table", "/partition", "read_optimized",
+        "not-a-valid-instant", "file-2", Option.empty());
+
+    HoodieRecordWithPosition<String> lastRecord = new HoodieRecordWithPosition<>("last", 0, 0L);
+    lastRecord.setLastInSplit(true);
+
+    // Must not throw; ParseException is swallowed internally.
+    emitter.emitRecord(lastRecord, mockOutput, badCommitSplit);
+
+    verify(mockOutput, times(1)).collect("last");
+    verify(mockOutput, never()).emitWatermark(org.mockito.ArgumentMatchers.any());
+  }
+
+  @Test
+  public void testWatermarkTimestampMatchesLatestCommit() throws Exception {
+    long expectedWatermarkMs =
+        HoodieInstantTimeGenerator.parseDateFromInstantTime("19700101000000000").getTime();
+
+    HoodieRecordWithPosition<String> lastRecord = new HoodieRecordWithPosition<>("last", 0, 0L);
+    lastRecord.setLastInSplit(true);
+
+    emitter.emitRecord(lastRecord, mockOutput, mockSplit);
+
+    ArgumentCaptor<Watermark> captor = ArgumentCaptor.forClass(Watermark.class);
+    verify(mockOutput, times(1)).emitWatermark(captor.capture());
+    assertEquals(expectedWatermarkMs, captor.getValue().getTimestamp());
+  }
+
+  @Test
+  public void testHoodieRecordWithPositionNoArgConstructorAndSet() throws Exception {
+    HoodieRecordWithPosition<String> record = new HoodieRecordWithPosition<>();
+    record.set("set-record", 3, 42L);
+
+    emitter.emitRecord(record, mockOutput, mockSplit);
+
+    verify(mockOutput, times(1)).collect("set-record");
+    assertEquals(3, mockSplit.getFileOffset());
+    assertEquals(42L, mockSplit.getConsumed());
+  }
+
+  @Test
+  public void testEmitLastRecordBothCollectsAndEmitsWatermark() throws Exception {
+    HoodieRecordWithPosition<String> lastRecord =
+        new HoodieRecordWithPosition<>("only-record", 0, 1L);
+    lastRecord.setLastInSplit(true);
+
+    emitter.emitRecord(lastRecord, mockOutput, mockSplit);
+
+    verify(mockOutput, times(1)).collect("only-record");
+    verify(mockOutput, times(1)).emitWatermark(org.mockito.ArgumentMatchers.any(Watermark.class));
+    assertEquals(0, mockSplit.getFileOffset());
+    assertEquals(1L, mockSplit.getConsumed());
+  }
+
+  @Test
+  public void testWatermarkEmittedIndependentlyPerSplit() throws Exception {
+    HoodieSourceSplit split1 = createTestSplit();
+    HoodieSourceSplit split2 = new HoodieSourceSplit(
+        2, "base2", Option.of(Collections.emptyList()),
+        "/table2", "/partition2", "read_optimized",
+        "20210101000000000", "file-2", Option.empty());
+
+    HoodieRecordWithPosition<String> lastOfSplit1 = new HoodieRecordWithPosition<>("s1-last", 0, 1L);
+    lastOfSplit1.setLastInSplit(true);
+    HoodieRecordWithPosition<String> lastOfSplit2 = new HoodieRecordWithPosition<>("s2-last", 0, 2L);
+    lastOfSplit2.setLastInSplit(true);
+
+    emitter.emitRecord(lastOfSplit1, mockOutput, split1);
+    emitter.emitRecord(lastOfSplit2, mockOutput, split2);
+
+    verify(mockOutput, times(2)).collect(org.mockito.ArgumentMatchers.anyString());
+    verify(mockOutput, times(2)).emitWatermark(org.mockito.ArgumentMatchers.any(Watermark.class));
+  }
+
+  @Test
+  public void testRecordMethodIncreasesOffsetAndClearsLastInSplit() throws Exception {
+    HoodieRecordWithPosition<String> record = new HoodieRecordWithPosition<>("init", 0, 5L);
+    record.setLastInSplit(true);
+
+    // record() increments recordOffset by 1 and resets lastInSplit to false.
+    record.record("next");
+
+    emitter.emitRecord(record, mockOutput, mockSplit);
+
+    verify(mockOutput, times(1)).collect("next");
+    assertEquals(0, mockSplit.getFileOffset());
+    assertEquals(6L, mockSplit.getConsumed());
+    verify(mockOutput, never()).emitWatermark(org.mockito.ArgumentMatchers.any());
+  }
+
+  @Test
+  public void testEmitterIsSerializable() throws Exception {
+    byte[] bytes;
+    try (java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream();
+         java.io.ObjectOutputStream oos = new java.io.ObjectOutputStream(bos)) {
+      oos.writeObject(emitter);
+      bytes = bos.toByteArray();
+    }
+
+    HoodieRecordEmitter<?> deserialized;
+    try (java.io.ByteArrayInputStream bis = new java.io.ByteArrayInputStream(bytes);
+         java.io.ObjectInputStream ois = new java.io.ObjectInputStream(bis)) {
+      deserialized = (HoodieRecordEmitter<?>) ois.readObject();
+    }
+
+    assertNotNull(deserialized);
   }
 
   /**

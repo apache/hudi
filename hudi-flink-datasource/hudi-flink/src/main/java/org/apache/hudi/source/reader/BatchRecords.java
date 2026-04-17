@@ -41,14 +41,7 @@ public class BatchRecords<T> implements RecordsWithSplitIds<HoodieRecordWithPosi
 
   // point to current read position within the records list
   private int position;
-
-  // Cache the result of the post-next() hasNext() call so the next iteration's outer
-  // if-check can reuse it without calling hasNext() again.  Several CDC iterators
-  // (AddBaseFileIterator, DataLogFileIterator, BaseImageIterator) pre-fetch the next
-  // record inside hasNext(), so calling hasNext() twice between two next() calls would
-  // skip records.  The cache avoids the double-call.
-  private boolean hasNextCache;
-  private boolean hasNextCacheValid;
+  private boolean sentinelEmitted;
 
   BatchRecords(
       String splitId,
@@ -68,8 +61,6 @@ public class BatchRecords<T> implements RecordsWithSplitIds<HoodieRecordWithPosi
     this.recordAndPosition = new HoodieRecordWithPosition<>();
     this.recordAndPosition.set(null, fileOffset, startingRecordOffset);
     this.position = 0;
-    this.hasNextCache = false;
-    this.hasNextCacheValid = false;
   }
 
   @Nullable
@@ -88,23 +79,17 @@ public class BatchRecords<T> implements RecordsWithSplitIds<HoodieRecordWithPosi
   @Nullable
   @Override
   public HoodieRecordWithPosition<T> nextRecordFromSplit() {
-    // Use the cached hasNext() result from the previous iteration when available.
-    // Several CDC iterators pre-fetch the next record inside hasNext() (e.g.
-    // AddBaseFileIterator calls nested.next() there), so calling hasNext() twice
-    // between two next() calls would silently skip the pre-fetched record.
-    boolean moreRecords = hasNextCacheValid ? hasNextCache : recordIterator.hasNext();
-    hasNextCacheValid = false;
-
-    if (moreRecords) {
+    if (recordIterator.hasNext()) {
       recordAndPosition.record(recordIterator.next());
-      // Call hasNext() once and cache the result for the next iteration's outer check.
-      hasNextCache = recordIterator.hasNext();
-      hasNextCacheValid = true;
-      // Mark the last record in the split so the emitter can emit a split-end watermark.
-      recordAndPosition.setLastInSplit(!hasNextCache);
       position = position + 1;
       return recordAndPosition;
     } else {
+      if (!sentinelEmitted) {
+        recordAndPosition.record(null);
+        sentinelEmitted = true;
+        return recordAndPosition;
+      }
+
       recordIterator.close();
       return null;
     }
