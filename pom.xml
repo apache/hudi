@@ -39,6 +39,7 @@
     <module>hudi-cli</module>
     <module>hudi-client</module>
     <module>hudi-aws</module>
+    <module>hudi-azure</module>
     <module>hudi-gcp</module>
     <module>hudi-hadoop-common</module>
     <module>hudi-hadoop-mr</module>
