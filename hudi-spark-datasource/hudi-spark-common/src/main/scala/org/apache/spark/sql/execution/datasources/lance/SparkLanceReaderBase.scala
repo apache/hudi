@@ -371,11 +371,24 @@ class SparkLanceReaderBase(enableVectorizedReader: Boolean) extends SparkColumna
         // Idempotent: TaskContext listener and the outer CloseableIteratorListener may both call close().
         if (!closed) {
           closed = true
+          // Attempt every close; if one throws, keep going and surface the first error with the
+          // rest attached as suppressed, so one failure cannot strand Arrow/Lance resources.
+          var closeError: Exception = null
+          def closeSafely(f: => Unit): Unit = {
+            try {
+              f
+            } catch {
+              case e: Exception =>
+                if (closeError == null) closeError = e
+                else closeError.addSuppressed(e)
+            }
+          }
           // Close null Arrow vectors and their allocator before batchIterator (which closes the data allocator)
-          nullColumnVectors.foreach(_.columnVector.close())
-          nullAllocator.foreach(_.close())
-          batchIterator.close()
-          partitionVectors.foreach(_.close())
+          nullColumnVectors.foreach(v => closeSafely(v.columnVector.close()))
+          nullAllocator.foreach(a => closeSafely(a.close()))
+          closeSafely(batchIterator.close())
+          partitionVectors.foreach(v => closeSafely(v.close()))
+          if (closeError != null) throw closeError
         }
       }
     }
