@@ -20,12 +20,12 @@
 package org.apache.hudi.azure.transaction.lock;
 
 import org.apache.hudi.client.transaction.lock.models.LockGetResult;
-import org.apache.hudi.exception.HoodieLockException;
 import org.apache.hudi.client.transaction.lock.models.LockUpsertResult;
 import org.apache.hudi.client.transaction.lock.models.StorageLockData;
 import org.apache.hudi.client.transaction.lock.models.StorageLockFile;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.exception.HoodieLockException;
 
 import com.azure.core.http.HttpHeaders;
 import com.azure.core.http.rest.Response;
@@ -358,7 +358,6 @@ public class TestAzureStorageLockClient {
     assertEquals(1, secondarySupplierInvocations.get());
   }
 
-
   @Test
   void testTryUpsertLockFile_conflict409_returnsUnknownError() {
     StorageLockData lockData = new StorageLockData(false, 999L, "owner");
@@ -407,7 +406,6 @@ public class TestAzureStorageLockClient {
 
     assertThrows(BlobStorageException.class, () -> lockClient.readCurrentLockFile());
   }
-
 
   @Test
   void testReadObject_found_returnsContent() {
@@ -517,7 +515,6 @@ public class TestAzureStorageLockClient {
     assertFalse(result);
   }
 
-
   @Test
   void testInitializeWithAbfsUri() {
     AzureStorageLockClient client = new AzureStorageLockClient(
@@ -549,7 +546,6 @@ public class TestAzureStorageLockClient {
         (location) -> mockBlobServiceClient,
         mockLogger));
   }
-
 
   private static BlobStorageException mockBlobStorageException(int statusCode, BlobErrorCode errorCode) {
     BlobStorageException ex = mock(BlobStorageException.class);

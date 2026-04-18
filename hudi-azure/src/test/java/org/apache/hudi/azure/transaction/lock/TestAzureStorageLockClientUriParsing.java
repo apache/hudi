@@ -92,7 +92,6 @@ public class TestAzureStorageLockClientUriParsing {
     assertEquals(".hoodie/.locks/table_lock.json", l.getBlobPath());
   }
 
-
   @Test
   public void testParseUriWithSinglePathSegment() {
     String uri = "wasbs://container@account.blob.core.windows.net/file";
