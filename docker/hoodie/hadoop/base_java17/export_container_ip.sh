@@ -26,5 +26,5 @@ do
   fi 
 done
 
-echo "Container IP is set to : $ipAddr" >&2
-echo "$ipAddr"
+echo "Container IP is set to : $ipAddr"
+export MY_CONTAINER_IP=$ipAddr

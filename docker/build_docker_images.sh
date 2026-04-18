@@ -54,6 +54,7 @@ done
 if [ "$MULTI_ARCH" = true ]; then
   DOCKER_PLATFORM='linux/amd64,linux/arm64'
   echo "Building multi-arch images (amd64 + arm64)"
+  export BUILDX_EXPERIMENTAL=1
 else
   ARCHITECTURE=$(uname -m)
   case "$ARCHITECTURE" in
@@ -70,9 +71,8 @@ else
   esac
   export DOCKER_DEFAULT_PLATFORM="$DOCKER_PLATFORM"
 fi
-export BUILDX_EXPERIMENTAL=1
 # Get the directory of this script for relative paths
-SCRIPT_DIR=$(cd $(dirname "$0") && pwd)
+SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
 
 # Determine VERSION_TAG (command line arg or Maven project version)
 if [ -n "$VERSION_TAG_ARG" ]; then
@@ -124,7 +124,6 @@ case "$HADOOP_MAJOR_MINOR" in
 esac
 
 # List of images to build: "subdir|image_base_name"
-# Each entry: <subdir>|<image_base_name>
 DOCKER_IMAGES=(
   "${BASE_IMAGE_DIR}|apachehudi/hudi-hadoop_${HADOOP_VERSION}-base"
   "datanode|apachehudi/hudi-hadoop_${HADOOP_VERSION}-datanode"
@@ -136,6 +135,13 @@ DOCKER_IMAGES=(
   "sparkmaster|apachehudi/hudi-hadoop_${HADOOP_VERSION}-hive_${HIVE_VERSION}-sparkmaster_${SPARK_VERSION}"
   "sparkworker|apachehudi/hudi-hadoop_${HADOOP_VERSION}-hive_${HIVE_VERSION}-sparkworker_${SPARK_VERSION}"
 )
+# Select docker build command once (MULTI_ARCH doesn't change per image).
+if [ "$MULTI_ARCH" = true ]; then
+  DOCKER_BUILD_CMD=(docker buildx build --platform "$DOCKER_PLATFORM" --push)
+else
+  DOCKER_BUILD_CMD=(docker build)
+fi
+
 # Build each Docker image in the list
 for IMAGE_CONFIG in "${DOCKER_IMAGES[@]}"; do
   # Split config into subdir and image base name
@@ -145,28 +151,15 @@ for IMAGE_CONFIG in "${DOCKER_IMAGES[@]}"; do
   TAG_VERSIONED="$IMAGE_BASE:$VERSION_TAG"
   echo "Building $IMAGE_CONTEXT as $TAG_LATEST and $TAG_VERSIONED"
   # Build the Docker image with both latest and versioned tags
-  if [ "$MULTI_ARCH" = true ]; then
-    if ! docker buildx build --platform "$DOCKER_PLATFORM" --push \
-      --build-arg HADOOP_VERSION=${HADOOP_VERSION} \
-      --build-arg SPARK_VERSION=${SPARK_VERSION} \
-      --build-arg HIVE_VERSION=${HIVE_VERSION} \
-      --build-arg HADOOP_AWS_VERSION=${HADOOP_AWS_VERSION} \
-      --build-arg AWS_SDK_VERSION=${AWS_SDK_VERSION} \
-      "$IMAGE_CONTEXT" -t "$TAG_LATEST" -t "$TAG_VERSIONED"; then
-      echo "Error: Failed to build docker image for $IMAGE_CONTEXT"
-      exit 1
-    fi
-  else
-    if ! docker build \
-      --build-arg HADOOP_VERSION=${HADOOP_VERSION} \
-      --build-arg SPARK_VERSION=${SPARK_VERSION} \
-      --build-arg HIVE_VERSION=${HIVE_VERSION} \
-      --build-arg HADOOP_AWS_VERSION=${HADOOP_AWS_VERSION} \
-      --build-arg AWS_SDK_VERSION=${AWS_SDK_VERSION} \
-      "$IMAGE_CONTEXT" -t "$TAG_LATEST" -t "$TAG_VERSIONED"; then
-      echo "Error: Failed to build docker image for $IMAGE_CONTEXT"
-      exit 1
-    fi
+  if ! "${DOCKER_BUILD_CMD[@]}" \
+    --build-arg HADOOP_VERSION=${HADOOP_VERSION} \
+    --build-arg SPARK_VERSION=${SPARK_VERSION} \
+    --build-arg HIVE_VERSION=${HIVE_VERSION} \
+    --build-arg HADOOP_AWS_VERSION=${HADOOP_AWS_VERSION} \
+    --build-arg AWS_SDK_VERSION=${AWS_SDK_VERSION} \
+    "$IMAGE_CONTEXT" -t "$TAG_LATEST" -t "$TAG_VERSIONED"; then
+    echo "Error: Failed to build docker image for $IMAGE_CONTEXT"
+    exit 1
   fi
 done
 

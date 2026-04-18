@@ -29,13 +29,13 @@ docker image, e.g., `apachehudi/hudi-hadoop_2.8.4-trinobase_368`, is defined in 
 
 #### Base image by Java version
 
-`build_docker_images.sh` auto-selects one of the two supported base images from `--spark-version`: Spark 4.0+ picks
-`base_java17`, anything else picks `base_java11`.
+`build_docker_images.sh` auto-selects one of the two supported base images from `--spark-version`: Spark 3.x picks
+`base_java11`; Spark 4.0+ picks `base_java17`.
 
-| Base module   | JDK     | Default Hadoop | Published repo suffix | Used for   |
-|---------------|---------|----------------|-----------------------|------------|
-| `base_java11` | Java 11 | 2.8.4          | `...-base-java11`     | Spark 3.x  |
-| `base_java17` | Java 17 | 3.4.0          | `...-base`            | Spark 4.0+ |
+| Base module   | JDK     | Default Hadoop | Used for   |
+|---------------|---------|----------------|------------|
+| `base_java11` | Java 11 | 2.8.4          | Spark 3.x  |
+| `base_java17` | Java 17 | 3.4.0          | Spark 4.0+ |
 
 The legacy Java 8 `base` module under `/hoodie/hadoop/base` is retained for historical reference only; Spark 2.x is no
 longer supported and `build_docker_images.sh` never selects it.

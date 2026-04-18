@@ -74,11 +74,11 @@ if [ "$MULTIHOMED_NETWORK" = "1" ]; then
     # YARN
     addProperty /etc/hadoop/yarn-site.xml yarn.resourcemanager.bind-host 0.0.0.0
     addProperty /etc/hadoop/yarn-site.xml yarn.nodemanager.bind-host 0.0.0.0
+    addProperty /etc/hadoop/yarn-site.xml yarn.nodemanager.bind-host 0.0.0.0
     addProperty /etc/hadoop/yarn-site.xml yarn.timeline-service.bind-host 0.0.0.0
 
     # MAPRED
-    addProperty /etc/hadoop/mapred-site.xml mapreduce.jobhistory.address 0.0.0.0:10020
-    addProperty /etc/hadoop/mapred-site.xml mapreduce.jobhistory.webapp.address 0.0.0.0:19888
+    addProperty /etc/hadoop/mapred-site.xml yarn.nodemanager.bind-host 0.0.0.0
 fi
 
 if [ -n "$GANGLIA_HOST" ]; then
@@ -102,6 +102,6 @@ if [ -n "$GANGLIA_HOST" ]; then
 fi
 
 # Save Container IP in ENV variable
-export MY_CONTAINER_IP=$(/usr/bin/export_container_ip.sh | tail -n1)
+/usr/bin/export_container_ip.sh
 
 exec "$@"
