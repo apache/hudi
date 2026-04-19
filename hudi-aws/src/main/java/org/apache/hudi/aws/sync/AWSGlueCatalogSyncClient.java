@@ -29,7 +29,6 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.CustomizedThreadFactory;
 import org.apache.hudi.common.util.HoodieTimer;
-import org.apache.hudi.common.util.MapUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.GlueCatalogSyncClientConfig;
 import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils;
@@ -105,8 +104,8 @@ import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.fs.FSUtils.s3aToS3;
-import static org.apache.hudi.common.util.MapUtils.containsAll;
-import static org.apache.hudi.common.util.MapUtils.isNullOrEmpty;
+import static org.apache.hudi.common.util.CollectionUtils.containsAll;
+import static org.apache.hudi.common.util.CollectionUtils.isNullOrEmpty;
 import static org.apache.hudi.config.GlueCatalogSyncClientConfig.ALL_PARTITIONS_READ_PARALLELISM;
 import static org.apache.hudi.config.GlueCatalogSyncClientConfig.CHANGED_PARTITIONS_READ_PARALLELISM;
 import static org.apache.hudi.config.GlueCatalogSyncClientConfig.GLUE_METADATA_FILE_LISTING;
@@ -1016,7 +1015,7 @@ public class AWSGlueCatalogSyncClient extends HoodieSyncClient {
 
   @Override
   public boolean updateSerdeProperties(String tableName, Map<String, String> serdeProperties, boolean useRealtimeFormat) {
-    if (MapUtils.isNullOrEmpty(serdeProperties)) {
+    if (isNullOrEmpty(serdeProperties)) {
       return false;
     }
 

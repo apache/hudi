@@ -50,7 +50,7 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.util.CleanerUtils.SAVEPOINTED_TIMESTAMPS;
-import static org.apache.hudi.common.util.MapUtils.nonEmpty;
+import static org.apache.hudi.common.util.CollectionUtils.nonEmpty;
 
 @Slf4j
 public class CleanPlanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I, K, O, Option<HoodieCleanerPlan>> {

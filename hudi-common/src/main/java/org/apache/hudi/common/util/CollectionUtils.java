@@ -69,6 +69,14 @@ public class CollectionUtils {
     return !isNullOrEmpty(c);
   }
 
+  public static boolean nonEmpty(Map<?, ?> m) {
+    return !isNullOrEmpty(m);
+  }
+
+  public static boolean containsAll(Map<?, ?> m1, Map<?, ?> m2) {
+    return m1.entrySet().containsAll(m2.entrySet());
+  }
+
   /**
    * Reduces provided {@link Collection} using provided {@code reducer} applied to
    * every element of the collection like following

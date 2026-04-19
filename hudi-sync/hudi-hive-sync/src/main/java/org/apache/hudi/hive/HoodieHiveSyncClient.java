@@ -25,8 +25,8 @@ import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.ConfigUtils;
-import org.apache.hudi.common.util.MapUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.StringUtils;
@@ -233,7 +233,7 @@ public class HoodieHiveSyncClient extends HoodieSyncClient {
 
   @Override
   public boolean updateTableProperties(String tableName, Map<String, String> tableProperties) {
-    if (MapUtils.isNullOrEmpty(tableProperties)) {
+    if (CollectionUtils.isNullOrEmpty(tableProperties)) {
       return false;
     }
 
@@ -247,7 +247,7 @@ public class HoodieHiveSyncClient extends HoodieSyncClient {
     try {
       Table table = client.getTable(databaseName, tableName);
       Map<String, String> remoteTableProperties = table.getParameters();
-      if (MapUtils.containsAll(remoteTableProperties, tableProperties)) {
+      if (CollectionUtils.containsAll(remoteTableProperties, tableProperties)) {
         return false;
       }
 
@@ -268,7 +268,7 @@ public class HoodieHiveSyncClient extends HoodieSyncClient {
 
   @Override
   public boolean updateSerdeProperties(String tableName, Map<String, String> serdeProperties, boolean useRealtimeFormat) {
-    if (MapUtils.isNullOrEmpty(serdeProperties)) {
+    if (CollectionUtils.isNullOrEmpty(serdeProperties)) {
       return false;
     }
     if (useJdbcFallback()) {
@@ -289,7 +289,7 @@ public class HoodieHiveSyncClient extends HoodieSyncClient {
       } else {
         serdeInfoName = remoteSerdeInfo.getName();
         Map<String, String> remoteSerdeProperties = remoteSerdeInfo.getParameters();
-        shouldUpdate = !MapUtils.containsAll(remoteSerdeProperties, serdeProperties);
+        shouldUpdate = !CollectionUtils.containsAll(remoteSerdeProperties, serdeProperties);
       }
 
       // check if any change to input/output format
