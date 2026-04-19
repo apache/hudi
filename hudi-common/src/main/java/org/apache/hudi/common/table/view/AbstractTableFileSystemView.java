@@ -601,9 +601,12 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
    */
   private Stream<FileSlice> filterUncommittedFiles(FileSlice fileSlice, boolean includeEmptyFileSlice) {
     Option<HoodieBaseFile> committedBaseFile = fileSlice.getBaseFile().isPresent() && completionTimeQueryView.isCompleted(fileSlice.getBaseInstantTime()) ? fileSlice.getBaseFile() : Option.empty();
-    List<HoodieLogFile> committedLogFiles = fileSlice.getLogFiles().filter(logFile -> completionTimeQueryView.isCompleted(logFile.getDeltaCommitTime())).collect(Collectors.toList());
+    List<HoodieLogFile> allLogFiles = fileSlice.getLogFiles().collect(Collectors.toList());
+    List<HoodieLogFile> committedLogFiles = allLogFiles.stream()
+        .filter(logFile -> completionTimeQueryView.isCompleted(logFile.getDeltaCommitTime()))
+        .collect(Collectors.toList());
     if ((fileSlice.getBaseFile().isPresent() && !committedBaseFile.isPresent())
-        || committedLogFiles.size() != fileSlice.getLogFiles().count()) {
+        || committedLogFiles.size() != allLogFiles.size()) {
       LOG.debug("File Slice ({}) has uncommitted files.", fileSlice);
       // A file is filtered out of the file-slice if the corresponding
       // instant has not completed yet.
@@ -624,8 +627,11 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
    * @param fileSlice File Slice
    */
   private FileSlice filterUncommittedLogs(FileSlice fileSlice) {
-    List<HoodieLogFile> committedLogFiles = fileSlice.getLogFiles().filter(logFile -> completionTimeQueryView.isCompleted(logFile.getDeltaCommitTime())).collect(Collectors.toList());
-    if (committedLogFiles.size() != fileSlice.getLogFiles().count()) {
+    List<HoodieLogFile> allLogFiles = fileSlice.getLogFiles().collect(Collectors.toList());
+    List<HoodieLogFile> committedLogFiles = allLogFiles.stream()
+        .filter(logFile -> completionTimeQueryView.isCompleted(logFile.getDeltaCommitTime()))
+        .collect(Collectors.toList());
+    if (committedLogFiles.size() != allLogFiles.size()) {
       LOG.debug("File Slice ({}) has uncommitted log files.", fileSlice);
       // A file is filtered out of the file-slice if the corresponding
       // instant has not completed yet.
@@ -1628,7 +1634,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
    */
   private Option<FileSlice> fetchAllLogsMergedFileSlice(HoodieFileGroup fileGroup, String maxInstantTime) {
     List<FileSlice> fileSlices = fileGroup.getAllFileSlicesBeforeOn(maxInstantTime).collect(Collectors.toList());
-    if (fileSlices.size() == 0) {
+    if (fileSlices.isEmpty()) {
       return Option.empty();
     }
     if (fileSlices.size() == 1) {
