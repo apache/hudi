@@ -177,11 +177,7 @@ public class HoodieNativeAvroHFileReader extends HoodieAvroHFileReaderImplBase {
 
       @Override
       public void close() {
-        try {
-          reader.close();
-        } catch (IOException e) {
-          throw new HoodieIOException("Error closing the HFile reader", e);
-        }
+        closeReader(reader, "Error closing the HFile reader");
       }
     };
   }
@@ -345,6 +341,14 @@ public class HoodieNativeAvroHFileReader extends HoodieAvroHFileReaderImplBase {
     }
   }
 
+  private static void closeReader(HFileReader reader, String errorMessage) {
+    try {
+      reader.close();
+    } catch (IOException e) {
+      throw new HoodieIOException(errorMessage, e);
+    }
+  }
+
   private static class RecordIterator implements ClosableIterator<IndexedRecord> {
     private final HFileReader reader;
     private final GenericDatumReader<GenericRecord> datumReader;
@@ -399,11 +403,7 @@ public class HoodieNativeAvroHFileReader extends HoodieAvroHFileReaderImplBase {
 
     @Override
     public void close() {
-      try {
-        reader.close();
-      } catch (IOException e) {
-        throw new HoodieIOException("Error closing the HFile reader", e);
-      }
+      closeReader(reader, "Error closing the HFile reader");
     }
   }
 
@@ -476,11 +476,7 @@ public class HoodieNativeAvroHFileReader extends HoodieAvroHFileReaderImplBase {
 
     @Override
     public void close() {
-      try {
-        reader.close();
-      } catch (IOException e) {
-        throw new HoodieIOException("Error closing the HFile reader", e);
-      }
+      closeReader(reader, "Error closing the HFile reader");
     }
   }
 
@@ -538,11 +534,7 @@ public class HoodieNativeAvroHFileReader extends HoodieAvroHFileReaderImplBase {
 
     @Override
     public void close() {
-      try {
-        reader.close();
-      } catch (IOException e) {
-        throw new HoodieIOException("Error closing the HFile reader and scanner", e);
-      }
+      closeReader(reader, "Error closing the HFile reader and scanner");
     }
 
     private static Iterator<IndexedRecord> getRecordByKeyPrefixIteratorInternal(HFileReader reader,
