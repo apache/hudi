@@ -487,12 +487,10 @@ class SparkLanceReaderBase(enableVectorizedReader: Boolean) extends SparkColumna
             vector.putLongs(0, numRows, v)
           case FloatType =>
             val v = partitionValues.getFloat(i)
-            var j = 0
-            while (j < numRows) { vector.putFloat(j, v); j += 1 }
+            vector.putFloats(0, numRows, v)
           case DoubleType =>
             val v = partitionValues.getDouble(i)
-            var j = 0
-            while (j < numRows) { vector.putDouble(j, v); j += 1 }
+            vector.putDoubles(0, numRows, v)
           case StringType =>
             val v = partitionValues.getUTF8String(i)
             val bytes = v.getBytes
