@@ -111,7 +111,7 @@ public class CleanPlanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I
           .setEarliestInstantToRetain(new HoodieActionInstant(hoodieInstant.requestedTime(), hoodieInstant.getAction(), hoodieInstant.getState().name()))
           .setLastCompletedCommitTimestamp(planner.getLastCompletedCommitTimestamp());
     } else {
-      cleanBuilder.setPolicy(HoodieCleaningPolicy.KEEP_LATEST_COMMITS.name())
+      cleanBuilder.setPolicy(config.getCleanerPolicy().name())
           .setVersion(CleanPlanner.LATEST_CLEAN_PLAN_VERSION);
     }
     return cleanBuilder.build();
