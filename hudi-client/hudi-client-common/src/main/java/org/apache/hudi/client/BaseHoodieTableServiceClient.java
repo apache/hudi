@@ -1314,7 +1314,6 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
             return false;
           }
           // Take ownership: delete any stale heartbeat file and start emitting.
-          HeartbeatUtils.deleteHeartbeatFile(storage, basePath, rollbackInstantTimeOpt.get(), config);
           heartbeatClient.start(rollbackInstantTimeOpt.get());
           emittingHeartbeat = true;
         } finally {
