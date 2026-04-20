@@ -68,6 +68,23 @@ import java.util.stream.Collectors;
  *   <li><b>dry_run</b> — Shows which partitions and file groups would be affected.</li>
  * </ul>
  *
+ * <h3>Why a pre-commit validator instead of moving files in the tool?</h3>
+ *
+ * <p>A naive approach would be to first run {@code deletePartitions} in the tool, and then
+ * move the data files to the stash location as a separate step. However, this is unsafe:
+ * if the tool crashes or fails after {@code deletePartitions} succeeds but before the data
+ * is moved to the stash location, the data is at risk. Once the replace commit from
+ * {@code deletePartitions} lands on the timeline, the Hudi cleaner will eventually delete
+ * the physical data files for the replaced file groups based on its configured retention
+ * policy (e.g., retain last N commits). If the cleaner runs before the tool is retried,
+ * the data intended for stashing is permanently lost.
+ *
+ * <p>By using a {@link StashPartitionsPreCommitValidator}, the file move happens
+ * <b>before</b> the {@code deletePartitions} commit is finalized. If the move fails, the
+ * commit does not land, and the table remains in its original state — the cleaner has
+ * nothing to clean. This ensures that data is never in a state where it has been marked
+ * as deleted (via a replace commit) but has not yet been safely copied to the stash location.
+ *
  * <p>For restoring stashed partitions back into the Hudi table, use the standard
  * {@code insert_overwrite} write operation reading from the stash location.
  *
