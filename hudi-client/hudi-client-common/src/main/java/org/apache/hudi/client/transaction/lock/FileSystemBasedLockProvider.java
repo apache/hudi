@@ -105,6 +105,11 @@ public class FileSystemBasedLockProvider implements LockProvider<String>, Serial
         throw new HoodieLockException(generateLogStatement(LockState.FAILED_TO_RELEASE), e);
       } finally {
         try {
+          // HoodieHadoopStorage.close() is currently a no-op since Hadoop FileSystem
+          // instances are shared within the JVM process lifecycle and cannot be
+          // individually closed. This call is retained for HoodieStorage interface
+          // contract correctness and to support future storage backends that may
+          // implement close().
           storage.close();
         } catch (IOException closeEx) {
           log.warn("Failed to close HoodieStorage", closeEx);
