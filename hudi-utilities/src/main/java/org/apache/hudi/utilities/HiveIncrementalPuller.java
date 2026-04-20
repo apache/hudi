@@ -174,9 +174,8 @@ public class HiveIncrementalPuller {
         LOG.error("Could not close the resultSet opened ", e);
       }
       try {
-        Connection toClose = (conn != null) ? conn : this.connection;
-        if (toClose != null) {
-          toClose.close();
+        if (this.connection != null) {
+          this.connection.close();
         }
       } catch (SQLException e) {
         LOG.error("Could not close the JDBC connection", e);
