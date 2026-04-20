@@ -67,7 +67,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-import java.util.concurrent.TimeUnit;
 import java.util.stream.Stream;
 
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_COMPARATOR;
@@ -834,7 +833,7 @@ public class TestCleanPlanExecutor extends HoodieCleanerTestBase {
             .withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.EAGER)
             .withCleanBootstrapBaseFileEnabled(enableBootstrapSourceClean)
             .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_BY_HOURS).cleanerNumHoursRetained(2)
-            .withMaxDurationToCreateEmptyClean(TimeUnit.MINUTES.toMillis(60))
+            .withMaxIntervalToCreateEmptyCleanHours(1)
             .build())
         .build();
 
@@ -940,7 +939,7 @@ public class TestCleanPlanExecutor extends HoodieCleanerTestBase {
             .withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.EAGER)
             .withCleanBootstrapBaseFileEnabled(false)
             .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_BY_HOURS).cleanerNumHoursRetained(24)
-            .withMaxDurationToCreateEmptyClean(TimeUnit.MINUTES.toMillis(60))
+            .withMaxIntervalToCreateEmptyCleanHours(1)
             .build())
         .build();
 
@@ -991,7 +990,7 @@ public class TestCleanPlanExecutor extends HoodieCleanerTestBase {
               .withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.EAGER)
               .withCleanBootstrapBaseFileEnabled(false)
               .withCleanerPolicy(HoodieCleaningPolicy.KEEP_LATEST_BY_HOURS).cleanerNumHoursRetained(12)
-              .withMaxDurationToCreateEmptyClean(TimeUnit.MINUTES.toMillis(60))
+              .withMaxIntervalToCreateEmptyCleanHours(1)
               .build())
           .build();
 

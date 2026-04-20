@@ -250,8 +250,8 @@ public class HoodieCleanConfig extends HoodieConfig {
       .markAdvanced()
       .withDocumentation("Maximum number of commits to clean in one clean commit. Applicable only when the clean policy is based on KEEP_LATEST_COMMITS or KEEP_LATEST_HOURS");
 
-  public static final ConfigProperty<Long> MAX_DURATION_TO_CREATE_EMPTY_CLEAN_MS = ConfigProperty
-      .key("hoodie.write.empty.clean.create.duration.ms")
+  public static final ConfigProperty<Long> MAX_INTERVAL_TO_CREATE_EMPTY_CLEAN_HOURS = ConfigProperty
+      .key("hoodie.write.empty.clean.internval.hours")
       .defaultValue(-1L)
       .markAdvanced()
       .withDocumentation("In some cases empty clean commit needs to be created to ensure the clean planner "
@@ -436,8 +436,8 @@ public class HoodieCleanConfig extends HoodieConfig {
       return this;
     }
 
-    public HoodieCleanConfig.Builder withMaxDurationToCreateEmptyClean(long durationMs) {
-      cleanConfig.setValue(MAX_DURATION_TO_CREATE_EMPTY_CLEAN_MS, String.valueOf(durationMs));
+    public HoodieCleanConfig.Builder withMaxIntervalToCreateEmptyCleanHours(long durationHours) {
+      cleanConfig.setValue(MAX_INTERVAL_TO_CREATE_EMPTY_CLEAN_HOURS, String.valueOf(durationHours));
       return this;
     }
 
@@ -449,9 +449,9 @@ public class HoodieCleanConfig extends HoodieConfig {
       if (maxCommitsToClean < 1) {
         throw new IllegalArgumentException(MAX_COMMITS_TO_CLEAN.key() + " must be >= 1, but was " + maxCommitsToClean);
       }
-      long maxDurationMs = cleanConfig.getLong(MAX_DURATION_TO_CREATE_EMPTY_CLEAN_MS);
-      if (maxDurationMs == 0 || maxDurationMs <= -1) {
-        throw new IllegalArgumentException(MAX_DURATION_TO_CREATE_EMPTY_CLEAN_MS.key() + " must be >= 1, but was " + maxDurationMs);
+      long maxDurationHours = cleanConfig.getLong(MAX_INTERVAL_TO_CREATE_EMPTY_CLEAN_HOURS);
+      if (maxDurationHours == 0 || maxDurationHours < -1) {
+        throw new IllegalArgumentException(MAX_INTERVAL_TO_CREATE_EMPTY_CLEAN_HOURS.key() + " must be >= 1, but was " + maxDurationHours);
       }
       return cleanConfig;
     }

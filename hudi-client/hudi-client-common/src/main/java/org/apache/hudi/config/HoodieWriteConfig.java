@@ -1842,8 +1842,8 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getBoolean(HoodieCleanConfig.AUTO_CLEAN);
   }
 
-  public long maxDurationToCreateEmptyCleanMs() {
-    return getLong(HoodieCleanConfig.MAX_DURATION_TO_CREATE_EMPTY_CLEAN_MS);
+  public long maxIntervalToCreateEmptyCleanHours() {
+    return getLong(HoodieCleanConfig.MAX_INTERVAL_TO_CREATE_EMPTY_CLEAN_HOURS);
   }
 
   public boolean shouldArchiveBeyondSavepoint() {

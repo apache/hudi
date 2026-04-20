@@ -243,17 +243,19 @@ public class CleanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I, K,
 
   private static HoodieCleanMetadata createEmptyCleanMetadata(HoodieCleanerPlan cleanerPlan, HoodieInstant inflightInstant, long timeTakenMillis) {
     ValidationUtils.checkArgument(cleanerPlan.getEarliestInstantToRetain() != null, "For empty cleans, earliest instant to retain can never be null");
-    return HoodieCleanMetadata.newBuilder()
+    HoodieCleanMetadata.Builder cleanMetadataBuilder = HoodieCleanMetadata.newBuilder()
         .setStartCleanTime(inflightInstant.requestedTime())
         .setTimeTakenInMillis(timeTakenMillis)
         .setTotalFilesDeleted(0)
         .setLastCompletedCommitTimestamp(cleanerPlan.getLastCompletedCommitTimestamp())
-        .setEarliestCommitToRetain(cleanerPlan.getEarliestInstantToRetain().getTimestamp())
         .setVersion(CLEAN_METADATA_VERSION_2)
         .setPartitionMetadata(Collections.emptyMap())
         .setExtraMetadata(cleanerPlan.getExtraMetadata())
-        .setBootstrapPartitionMetadata(Collections.emptyMap())
-        .build();
+        .setBootstrapPartitionMetadata(Collections.emptyMap());
+    if (cleanerPlan.getEarliestInstantToRetain() != null) {
+      cleanMetadataBuilder.setEarliestCommitToRetain(cleanerPlan.getEarliestInstantToRetain().getTimestamp());
+    }
+    return cleanMetadataBuilder.build();
   }
 
   @Override

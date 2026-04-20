@@ -1740,8 +1740,14 @@ public class TestCleaner extends HoodieCleanerTestBase {
       table.getMetaClient().reloadActiveTimeline();
       // clean
       HoodieCleanMetadata cleanMetadata = table.clean(context, instantTime);
-      // check the cleaned files are empty
+      // validate all fields of the empty clean metadata
       assertTrue(cleanMetadata.getPartitionMetadata().isEmpty());
+      assertEquals(0, cleanMetadata.getTotalFilesDeleted());
+      assertEquals(hoodieInstant.requestedTime(), cleanMetadata.getEarliestCommitToRetain());
+      assertEquals(timeline.lastInstant().get().requestedTime(), cleanMetadata.getLastCompletedCommitTimestamp());
+      assertEquals(instantTime, cleanMetadata.getStartCleanTime());
+      assertTrue(cleanMetadata.getBootstrapPartitionMetadata().isEmpty());
+      assertTrue(cleanMetadata.getTimeTakenInMillis() >= 0);
     }
   }
 }
