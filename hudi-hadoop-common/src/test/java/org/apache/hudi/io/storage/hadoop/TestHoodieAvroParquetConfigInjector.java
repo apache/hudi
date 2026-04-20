@@ -22,13 +22,11 @@ import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.engine.LocalTaskContextSupplier;
 import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.testutils.DisableDictionaryInjector;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
-import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.io.HoodieParquetConfigInjector;
 import org.apache.hudi.io.storage.HoodieFileWriter;
 import org.apache.hudi.storage.HoodieStorage;
-import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 
 import org.apache.avro.generic.GenericRecord;
@@ -51,25 +49,12 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Tests for {@link HoodieParquetConfigInjector} functionality in {@link HoodieAvroFileWriterFactory}.
+ * Tests for {@link HoodieAvroParquetConfigInjector} functionality in {@link HoodieAvroFileWriterFactory}.
  */
 public class TestHoodieAvroParquetConfigInjector {
 
   @TempDir
   java.nio.file.Path tmpDir;
-
-  /**
-   * Test implementation that disables dictionary encoding.
-   */
-  public static class DisableDictionaryInjector implements HoodieParquetConfigInjector {
-    @Override
-    public Pair<StorageConfiguration, HoodieConfig> injectConfig(StoragePath path,
-                                                               StorageConfiguration storageConf,
-                                                               HoodieConfig hoodieConfig) {
-      hoodieConfig.setValue(HoodieStorageConfig.PARQUET_DICTIONARY_ENABLED, "false");
-      return Pair.of(storageConf, hoodieConfig);
-    }
-  }
 
   @Test
   public void testDisableDictionaryEncodingViaInjector() throws Exception {

@@ -24,10 +24,9 @@ import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.schema.HoodieSchema;
-import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.common.testutils.DisableDictionaryInjector;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.io.HoodieParquetConfigInjector;
-import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
@@ -105,20 +104,6 @@ public class TestHoodieParquetConfigInjector extends HoodieClientTestBase {
       mutableRows.add(new GenericInternalRow(values));
     }
     return mutableRows;
-  }
-
-  /**
-   * Test implementation that disables dictionary encoding.
-   */
-  public static class DisableDictionaryInjector implements HoodieParquetConfigInjector {
-    @Override
-    public Pair<StorageConfiguration, HoodieConfig> injectConfig(StoragePath path,
-                                                               StorageConfiguration storageConf,
-                                                               HoodieConfig hoodieConfig) {
-      // Modify the Hudi config to disable dictionary encoding
-      hoodieConfig.setValue(HoodieStorageConfig.PARQUET_DICTIONARY_ENABLED, "false");
-      return Pair.of(storageConf, hoodieConfig);
-    }
   }
 
   @Test

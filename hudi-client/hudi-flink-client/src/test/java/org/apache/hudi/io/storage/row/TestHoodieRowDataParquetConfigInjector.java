@@ -21,6 +21,7 @@ package org.apache.hudi.io.storage.row;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.engine.LocalTaskContextSupplier;
+import org.apache.hudi.common.testutils.DisableDictionaryInjector;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.io.HoodieParquetConfigInjector;
@@ -75,20 +76,6 @@ public class TestHoodieRowDataParquetConfigInjector extends HoodieFlinkClientTes
   }
 
   /**
-   * Test implementation that disables dictionary encoding.
-   */
-  public static class DisableDictionaryInjector implements HoodieParquetConfigInjector {
-    @Override
-    public Pair<StorageConfiguration, HoodieConfig> injectConfig(StoragePath path,
-                                                               StorageConfiguration storageConf,
-                                                               HoodieConfig hoodieConfig) {
-      // Modify the Hudi config to disable dictionary encoding
-      hoodieConfig.setValue(HoodieStorageConfig.PARQUET_DICTIONARY_ENABLED, "false");
-      return Pair.of(storageConf, hoodieConfig);
-    }
-  }
-
-  /**
    * Test implementation that modifies Hadoop configuration for Parquet bloom filters.
    */
   public static class ParquetBloomFilterInjector implements HoodieParquetConfigInjector {
@@ -132,7 +119,7 @@ public class TestHoodieRowDataParquetConfigInjector extends HoodieFlinkClientTes
     // Create writer and write some data
     HoodieRowDataFileWriterFactory factory = new HoodieRowDataFileWriterFactory(storage);
     HoodieFileWriter writer = factory.newParquetFileWriter(
-        instantTime, storage, parquetPath, config, rowType, new LocalTaskContextSupplier());
+        instantTime, parquetPath, config, rowType, new LocalTaskContextSupplier());
 
     assertTrue(writer instanceof HoodieRowDataParquetWriter);
 
@@ -189,7 +176,7 @@ public class TestHoodieRowDataParquetConfigInjector extends HoodieFlinkClientTes
     // Should throw an exception when trying to create the writer
     HoodieRowDataFileWriterFactory factory = new HoodieRowDataFileWriterFactory(storage);
     assertThrows(Exception.class, () -> {
-      factory.newParquetFileWriter(instantTime, storage, parquetPath, config, rowType, new LocalTaskContextSupplier());
+      factory.newParquetFileWriter(instantTime, parquetPath, config, rowType, new LocalTaskContextSupplier());
     });
   }
 
@@ -209,7 +196,7 @@ public class TestHoodieRowDataParquetConfigInjector extends HoodieFlinkClientTes
     // Create writer and write some data
     HoodieRowDataFileWriterFactory factory = new HoodieRowDataFileWriterFactory(storage);
     HoodieFileWriter writer = factory.newParquetFileWriter(
-        instantTime, storage, parquetPath, config, rowType, new LocalTaskContextSupplier());
+        instantTime, parquetPath, config, rowType, new LocalTaskContextSupplier());
 
     assertTrue(writer instanceof HoodieRowDataParquetWriter);
 

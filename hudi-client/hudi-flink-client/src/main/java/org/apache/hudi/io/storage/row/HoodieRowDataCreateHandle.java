@@ -294,6 +294,6 @@ public class HoodieRowDataCreateHandle implements Serializable {
       throws IOException {
     StoragePath storagePath = new StoragePath(path.toUri());
     return (HoodieRowDataFileWriter) new HoodieRowDataFileWriterFactory(hoodieTable.getStorage())
-        .newParquetFileWriter(instantTime, storage, storagePath, config, rowType, hoodieTable.getTaskContextSupplier());
+        .newParquetFileWriter(instantTime, storagePath, config, rowType, hoodieTable.getTaskContextSupplier());
   }
 }

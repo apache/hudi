@@ -98,7 +98,7 @@ public class HoodieRowDataFileWriterFactory extends HoodieFileWriterFactory {
       TaskContextSupplier taskContextSupplier) throws IOException {
     //TODO boundary to revisit in follow up to use HoodieSchema directly
     final RowType rowType = (RowType) RowDataQueryContexts.fromSchema(schema).getRowType().getLogicalType();
-    return newParquetFileWriter(instantTime, storage, storagePath, config, rowType, taskContextSupplier);
+    return newParquetFileWriter(instantTime, storagePath, config, rowType, taskContextSupplier);
   }
 
   /**
@@ -114,7 +114,6 @@ public class HoodieRowDataFileWriterFactory extends HoodieFileWriterFactory {
    */
   public HoodieFileWriter newParquetFileWriter(
       String instantTime,
-      HoodieStorage storage,
       StoragePath storagePath,
       HoodieConfig config,
       RowType rowType,
