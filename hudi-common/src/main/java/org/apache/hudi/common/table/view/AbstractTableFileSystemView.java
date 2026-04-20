@@ -601,12 +601,11 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
    */
   private Stream<FileSlice> filterUncommittedFiles(FileSlice fileSlice, boolean includeEmptyFileSlice) {
     Option<HoodieBaseFile> committedBaseFile = fileSlice.getBaseFile().isPresent() && completionTimeQueryView.isCompleted(fileSlice.getBaseInstantTime()) ? fileSlice.getBaseFile() : Option.empty();
-    List<HoodieLogFile> allLogFiles = fileSlice.getLogFiles().collect(Collectors.toList());
-    List<HoodieLogFile> committedLogFiles = allLogFiles.stream()
+    List<HoodieLogFile> committedLogFiles = fileSlice.getLogFiles()
         .filter(logFile -> completionTimeQueryView.isCompleted(logFile.getDeltaCommitTime()))
         .collect(Collectors.toList());
     if ((fileSlice.getBaseFile().isPresent() && !committedBaseFile.isPresent())
-        || committedLogFiles.size() != allLogFiles.size()) {
+        || committedLogFiles.size() != fileSlice.getLogFileCnt()) {
       LOG.debug("File Slice ({}) has uncommitted files.", fileSlice);
       // A file is filtered out of the file-slice if the corresponding
       // instant has not completed yet.
@@ -627,11 +626,10 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
    * @param fileSlice File Slice
    */
   private FileSlice filterUncommittedLogs(FileSlice fileSlice) {
-    List<HoodieLogFile> allLogFiles = fileSlice.getLogFiles().collect(Collectors.toList());
-    List<HoodieLogFile> committedLogFiles = allLogFiles.stream()
+    List<HoodieLogFile> committedLogFiles = fileSlice.getLogFiles()
         .filter(logFile -> completionTimeQueryView.isCompleted(logFile.getDeltaCommitTime()))
         .collect(Collectors.toList());
-    if (committedLogFiles.size() != allLogFiles.size()) {
+    if (committedLogFiles.size() != fileSlice.getLogFileCnt()) {
       LOG.debug("File Slice ({}) has uncommitted log files.", fileSlice);
       // A file is filtered out of the file-slice if the corresponding
       // instant has not completed yet.
