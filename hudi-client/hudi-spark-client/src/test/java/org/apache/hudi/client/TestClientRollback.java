@@ -1006,7 +1006,7 @@ public class TestClientRollback extends HoodieClientTestBase {
 
   private HoodieWriteConfig buildExclusiveRollbackMultiWriterConfig() {
     Properties props = new Properties();
-    props.setProperty(HoodieWriteConfig.ENABLE_EXCLUSIVE_ROLLBACK.key(), "true");
+    props.setProperty(HoodieWriteConfig.ROLLBACK_ENFORCE_SINGLE_INSTANT.key(), "true");
     return HoodieWriteConfig.newBuilder()
         .withPath(basePath)
         .withRollbackUsingMarkers(false)

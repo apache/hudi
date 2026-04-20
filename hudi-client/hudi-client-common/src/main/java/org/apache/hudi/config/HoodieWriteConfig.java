@@ -299,7 +299,7 @@ public class HoodieWriteConfig extends HoodieConfig {
       .withDocumentation("Enables a more efficient mechanism for rollbacks based on the marker files generated "
           + "during the writes. Turned on by default.");
 
-  public static final ConfigProperty<String> ENABLE_EXCLUSIVE_ROLLBACK = ConfigProperty
+  public static final ConfigProperty<String> ROLLBACK_ENFORCE_SINGLE_INSTANT = ConfigProperty
       .key("hoodie.rollback.enforce.single.rollback.instant")
       .defaultValue("false")
       .markAdvanced()
@@ -1584,8 +1584,8 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getBoolean(ROLLBACK_USING_MARKERS_ENABLE);
   }
 
-  public boolean isExclusiveRollbackEnabled() {
-    return getBoolean(ENABLE_EXCLUSIVE_ROLLBACK) && getWriteConcurrencyMode().supportsMultiWriter();
+  public boolean isEnforceSingleRollbackInstant() {
+    return getBoolean(ROLLBACK_ENFORCE_SINGLE_INSTANT) && getWriteConcurrencyMode().supportsMultiWriter();
   }
 
   public boolean enableComplexKeygenValidation() {
