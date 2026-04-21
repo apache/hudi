@@ -41,23 +41,10 @@ RUN echo "Installing Spark-version (${SPARK_VERSION})" \
       && rm spark-${SPARK_VERSION}-bin-hadoop${HADOOP_VERSION}.tgz \
       && cd /
 
-# Install build dependencies
-RUN apt-get update && apt-get install -y \
-    wget build-essential libncursesw5-dev \
-    libssl-dev libgdbm-dev libreadline-dev libbz2-dev \
-    libsqlite3-dev libffi-dev zlib1g-dev curl \
-    && cd /usr/src \
-    && wget https://www.python.org/ftp/python/3.10.14/Python-3.10.14.tgz \
-    && tar xzf Python-3.10.14.tgz \
-    && cd Python-3.10.14 \
-    && ./configure --enable-optimizations \
-    && make -j"$(nproc)" \
-    && make altinstall \
-    && ln -sf /usr/local/bin/python3.10 /usr/bin/python \
-    && ln -sf /usr/local/bin/python3.10 /usr/bin/python3 \
-    && curl -sS https://bootstrap.pypa.io/get-pip.py | python \
-    && pip install --upgrade pip \
-    && cd / && rm -rf /usr/src/Python-3.10.14* \
+# Install Python runtime from distro package (avoids ~400MB build toolchain)
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends python3-minimal python3-pip \
+    && ln -sf /usr/bin/python3 /usr/bin/python \
     && rm -rf /var/lib/apt/lists/*
 
 #Give permission to execute scripts
