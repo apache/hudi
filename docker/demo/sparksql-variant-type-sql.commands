@@ -28,17 +28,17 @@ spark.sql("""
   PARTITIONED BY (dt)
   LOCATION '/user/hive/warehouse/variant_test'
   TBLPROPERTIES (
-    primaryKey = 'id',
-    preCombineField = 'name',
-    hoodie.datasource.hive_sync.enable = 'true',
-    hoodie.datasource.hive_sync.database = 'default',
-    hoodie.datasource.hive_sync.table = 'variant_test',
-    hoodie.datasource.hive_sync.jdbcurl = 'jdbc:hive2://hiveserver:10000/',
-    hoodie.datasource.hive_sync.mode = 'hms',
-    hoodie.datasource.hive_sync.partition_fields = 'dt',
-    hoodie.datasource.hive_sync.partition_extractor_class = 'org.apache.hudi.hive.MultiPartKeysValueExtractor',
-    hoodie.datasource.hive_sync.username = 'hive',
-    hoodie.datasource.hive_sync.password = 'hive'
+    'primaryKey' = 'id',
+    'preCombineField' = 'name',
+    'hoodie.datasource.hive_sync.enable' = 'true',
+    'hoodie.datasource.hive_sync.database' = 'default',
+    'hoodie.datasource.hive_sync.table' = 'variant_test',
+    'hoodie.datasource.hive_sync.jdbcurl' = 'jdbc:hive2://hiveserver:10000/',
+    'hoodie.datasource.hive_sync.mode' = 'hms',
+    'hoodie.datasource.hive_sync.partition_fields' = 'dt',
+    'hoodie.datasource.hive_sync.partition_extractor_class' = 'org.apache.hudi.hive.MultiPartKeysValueExtractor',
+    'hoodie.datasource.hive_sync.username' = 'hive',
+    'hoodie.datasource.hive_sync.password' = 'hive'
   )
 """)
 

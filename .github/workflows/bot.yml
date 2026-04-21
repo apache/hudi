@@ -1254,7 +1254,7 @@ jobs:
   integration-tests-hive-sync:
     # Testcontainers-based E2E hive sync coverage for Hudi's custom logical types
     # (VECTOR, BLOB) and the Spark 4.0 VARIANT type. Runs ITTestCustomTypeHiveSync
-    # against a real Hive metastore on both a Spark 3.5.3 and Spark 4.0.1 stack.
+    # against a real Hive metastore on both a Spark 3.5.3 and Spark 4.0.2 stack.
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -1270,8 +1270,8 @@ jobs:
             scalaProfile: '-Dscala-2.13 -Dscala.binary.version=2.13'
             flinkProfile: 'flink1.20'
             jdkVersion: '17'
-            composePrefix: 'docker-compose_hadoop340_hive313_spark401'
-            sparkAdhocImage: 'apachehudi/hudi-hadoop_3.4.0-hive_3.1.3-sparkadhoc_4.0.1:latest'
+            composePrefix: 'docker-compose_hadoop340_hive2310_spark402'
+            sparkAdhocImage: 'apachehudi/hudi-hadoop_3.4.0-hive_2.3.10-sparkadhoc_4.0.2:latest'
     steps:
       - uses: actions/checkout@v5
       - name: Set up JDK ${{ matrix.jdkVersion }}
@@ -1292,7 +1292,7 @@ jobs:
         env:
           SPARK_ADHOC_IMAGE: ${{ matrix.sparkAdhocImage }}
         run: |
-          # Surface missing Spark 4.0.1 images before the 15-minute Maven install.
+          # Surface missing Spark 4.0.2 images before the 15-minute Maven install.
           # The remaining images in the compose stack are pulled by docker-compose at
           # test time.
           docker pull "$SPARK_ADHOC_IMAGE"

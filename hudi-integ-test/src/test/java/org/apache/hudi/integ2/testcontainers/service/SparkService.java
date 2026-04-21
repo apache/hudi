@@ -55,7 +55,12 @@ public class SparkService {
         .append(" --conf spark.sql.catalog.spark_catalog=org.apache.spark.sql.hudi.catalog.HoodieCatalog")
         .append(" --conf spark.sql.extensions=org.apache.spark.sql.hudi.HoodieSparkSessionExtension")
         .append(" --deploy-mode client --driver-memory 1G --executor-memory 1G --num-executors 1")
-        .append(" -i ").append(commandFile)
+        // Pipe via stdin instead of `-i`. With `-i`, Spark 4's REPL boots in
+        // dumb-terminal mode (`WARN jline: Unable to create a system terminal,
+        // creating a dumb terminal`) and silently runs the script — neither
+        // input echo nor exception traces reach stdout, so success markers and
+        // failures alike are invisible to assertStdOutContains.
+        .append(" < ").append(commandFile)
         .toString();
 
     return executor.executeCommandString(sparkShellCmd);

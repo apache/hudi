@@ -82,8 +82,6 @@ public class ITTestCustomTypeHiveSync extends ITTestBaseTestcontainers {
   // ---------- BLOB ----------
 
   @Test
-  @Disabled("FIXME: Blob hive-sync E2E (SQL path) currently fails on the testcontainers harness. "
-      + "Wiring is kept in place so the test can be re-enabled once the failure is root-caused.")
   public void testBlobTypeWithHiveSyncSQL() throws Exception {
     waitForHdfs();
     sparkAdhoc1.executeShellCommand("/bin/bash " + DEMO_CONTAINER_SCRIPT).expectToSucceed();
@@ -102,8 +100,6 @@ public class ITTestCustomTypeHiveSync extends ITTestBaseTestcontainers {
   }
 
   @Test
-  @Disabled("FIXME: Blob hive-sync E2E (DataFrame path) currently fails on the testcontainers harness. "
-      + "Wiring is kept in place so the test can be re-enabled once the failure is root-caused.")
   public void testBlobTypeWithHiveSyncDataFrameAPI() throws Exception {
     waitForHdfs();
     sparkAdhoc1.executeShellCommand("/bin/bash " + DEMO_CONTAINER_SCRIPT).expectToSucceed();

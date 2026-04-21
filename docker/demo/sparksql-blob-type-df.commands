@@ -20,9 +20,7 @@ import org.apache.spark.sql.types._
 import org.apache.spark.sql.{Row, SaveMode}
 
 // BLOB is a struct with fields: type (string), data (binary, nullable), reference (struct, nullable)
-val blobMetadata = new MetadataBuilder()
-  .putString("hudi_type", "BLOB")
-  .build()
+val blobMetadata = new MetadataBuilder().putString("hudi_type", "BLOB").build()
 
 val referenceType = StructType(Seq(
   StructField("external_path", StringType, nullable = false),
@@ -61,7 +59,7 @@ df.write.format("hudi")
   .option("hoodie.datasource.hive_sync.database", "default")
   .option("hoodie.datasource.hive_sync.table", "blob_test_df")
   .option("hoodie.datasource.hive_sync.jdbcurl", "jdbc:hive2://hiveserver:10000/")
-  .option("hoodie.datasource.hive_sync.mode", "hms")
+  .option("hoodie.datasource.hive_sync.mode", "jdbc")
   .option("hoodie.datasource.hive_sync.partition_fields", "dt")
   .option("hoodie.datasource.hive_sync.partition_extractor_class",
     "org.apache.hudi.hive.MultiPartKeysValueExtractor")

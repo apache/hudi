@@ -46,7 +46,7 @@ df.write.format("hudi")
   .option("hoodie.datasource.hive_sync.database", "default")
   .option("hoodie.datasource.hive_sync.table", "variant_test_df")
   .option("hoodie.datasource.hive_sync.jdbcurl", "jdbc:hive2://hiveserver:10000/")
-  .option("hoodie.datasource.hive_sync.mode", "hms")
+  .option("hoodie.datasource.hive_sync.mode", "jdbc")
   .option("hoodie.datasource.hive_sync.partition_fields", "dt")
   .option("hoodie.datasource.hive_sync.partition_extractor_class",
     "org.apache.hudi.hive.MultiPartKeysValueExtractor")
