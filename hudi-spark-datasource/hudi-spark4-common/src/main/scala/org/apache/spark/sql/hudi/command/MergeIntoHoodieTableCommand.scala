@@ -407,6 +407,15 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
    * expressions to the ExpressionPayload#getInsertValue.
    */
   private def executeUpsert(sourceDF: DataFrame, parameters: Map[String, String]): Unit = {
+    // Source data doesn't carry custom Hudi logical-type metadata (hudi_type, e.g. VECTOR/BLOB);
+    // restore it from the catalog schema so downstream Avro conversion emits the right branch.
+    val enrichedSourceSchema = HoodieSchemaConversionUtils.reattachCustomTypeMetadata(
+      sourceDF.schema,
+      hoodieCatalogTable.tableSchemaWithoutMetaFields,
+      sparkSession.sessionState.conf.caseSensitiveAnalysis)
+    val enrichedSourceDF = sparkAdapter.getUnsafeUtils.createDataFrameFromRDD(
+      sparkSession, sourceDF.queryExecution.toRdd, enrichedSourceSchema)
+
     val operation: String = getOperationType(parameters)
     // Append the table schema to the parameters. In the case of merge into, the schema of projectedJoinedDF
     // may be different from the target table, because the are transform logical in the update or
@@ -484,7 +493,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
     //  - Schema of the expected "joined" output of the [[sourceTable]] and [[targetTable]]
     writeParams ++= Seq(
       PAYLOAD_RECORD_AVRO_SCHEMA ->
-        HoodieSchemaUtils.removeMetadataFields(convertStructTypeToHoodieSchema(sourceDF.schema, "record", "")).toString,
+        HoodieSchemaUtils.removeMetadataFields(convertStructTypeToHoodieSchema(enrichedSourceDF.schema, "record", "")).toString,
       PAYLOAD_EXPECTED_COMBINED_SCHEMA -> encodeAsBase64String(toStructType(joinedExpectedOutput))
     )
 
@@ -495,7 +504,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
 
     val (structName, namespace) = HoodieSchemaConversionUtils.getRecordNameAndNamespace(hoodieCatalogTable.tableName)
     val schema = convertStructTypeToHoodieSchema(hoodieCatalogTable.tableSchema, structName, namespace)
-    val (success, commitInstantTime, _, _, _, _) = HoodieSparkSqlWriter.write(sparkSession.sqlContext, SaveMode.Append, writeParams, sourceDF,
+    val (success, commitInstantTime, _, _, _, _) = HoodieSparkSqlWriter.write(sparkSession.sqlContext, SaveMode.Append, writeParams, enrichedSourceDF,
       schemaFromCatalog = Option.apply(schema))
     if (!success) {
       throw new HoodieException("Merge into Hoodie table command failed")

@@ -492,4 +492,37 @@ class TestUpdateTable extends HoodieSparkSqlTestBase {
       }
     }
   }
+
+  test("Test UPDATE on VECTOR column preserves custom-type metadata") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      spark.sql(
+        s"""
+           |create table $tableName (
+           |  id bigint,
+           |  embedding VECTOR(3)
+           |) using hudi
+           | location '${tmp.getCanonicalPath}/$tableName'
+           | tblproperties (
+           |  type = 'cow',
+           |  primaryKey = 'id'
+           | )
+         """.stripMargin)
+
+      spark.sql(
+        s"""
+           |insert into $tableName values
+           |  (1, array(cast(0.1 as float), cast(0.2 as float), cast(0.3 as float)))
+           """.stripMargin)
+
+      // Assigning a VECTOR column goes through castIfNeeded; without the metadata
+      // re-attach it would fail schema compat with MISSING_UNION_BRANCH.
+      spark.sql(
+        s"""
+           |update $tableName
+           |set embedding = array(cast(0.9 as float), cast(0.8 as float), cast(0.7 as float))
+           |where id = 1
+           """.stripMargin)
+    }
+  }
 }

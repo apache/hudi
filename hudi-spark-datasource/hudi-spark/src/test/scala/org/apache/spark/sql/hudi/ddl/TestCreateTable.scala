@@ -2333,4 +2333,96 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
     val hiveSchema = CreateHoodieTableCommand.toHiveCompatibleSchema(schema)
     assertEquals(ArrayType(FloatType, containsNull = false), hiveSchema("floats").dataType)
   }
+
+  test("VECTOR column persists as VECTOR in Hudi tableCreateSchema and allows INSERT INTO") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      spark.sql(
+        s"""
+           |CREATE TABLE $tableName (
+           |  id BIGINT,
+           |  embedding VECTOR(3)
+           |) USING hudi
+           |LOCATION '${tmp.getCanonicalPath}'
+           |TBLPROPERTIES (
+           |  primaryKey = 'id'
+           |)
+           """.stripMargin)
+
+      val metaClient = createMetaClient(spark, tmp.getCanonicalPath)
+      val persistedOpt = metaClient.getTableConfig.getTableCreateSchema
+      assertTrue(persistedOpt.isPresent, "tableCreateSchema should be present")
+      val persisted = persistedOpt.get()
+      val embedding = persisted.getField("embedding").get().schema().getNonNullType()
+      assertEquals(HoodieSchemaType.VECTOR, embedding.getType)
+      assertEquals(3, embedding.asInstanceOf[HoodieSchema.Vector].getDimension)
+
+      spark.sql(s"""
+        INSERT INTO $tableName VALUES
+          (1, array(cast(0.1 as float), cast(0.2 as float), cast(0.3 as float))),
+          (2, array(cast(0.4 as float), cast(0.5 as float), cast(0.6 as float)))
+      """)
+    }
+  }
+
+  test("BLOB column persists as BLOB in Hudi tableCreateSchema and allows INSERT INTO") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      spark.sql(
+        s"""
+           |CREATE TABLE $tableName (
+           |  id BIGINT,
+           |  payload BLOB
+           |) USING hudi
+           |LOCATION '${tmp.getCanonicalPath}'
+           |TBLPROPERTIES (
+           |  primaryKey = 'id'
+           |)
+           """.stripMargin)
+
+      val metaClient = createMetaClient(spark, tmp.getCanonicalPath)
+      val persistedOpt = metaClient.getTableConfig.getTableCreateSchema
+      assertTrue(persistedOpt.isPresent, "tableCreateSchema should be present")
+      val persisted = persistedOpt.get()
+      val payload = persisted.getField("payload").get().schema().getNonNullType()
+      assertEquals(HoodieSchemaType.BLOB, payload.getType)
+
+      spark.sql(
+        s"""
+           |INSERT INTO $tableName VALUES
+           |  (1, named_struct(
+           |        'type', 'INLINE',
+           |        'data', cast(X'010203' as binary),
+           |        'reference', cast(null as struct<external_path:string,offset:bigint,length:bigint,managed:boolean>)))
+           """.stripMargin)
+    }
+  }
+
+  test("BLOB nested in struct persists and allows INSERT INTO") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      spark.sql(
+        s"""
+           |CREATE TABLE $tableName (
+           |  id BIGINT,
+           |  media STRUCT<title: STRING, content: BLOB>
+           |) USING hudi
+           |LOCATION '${tmp.getCanonicalPath}'
+           |TBLPROPERTIES (
+           |  primaryKey = 'id'
+           |)
+           """.stripMargin)
+
+      spark.sql(
+        s"""
+           |INSERT INTO $tableName VALUES
+           |  (1, named_struct(
+           |        'title', 'demo',
+           |        'content', named_struct(
+           |          'type', 'INLINE',
+           |          'data', cast(X'0a0b0c' as binary),
+           |          'reference', cast(null as struct<external_path:string,offset:bigint,length:bigint,managed:boolean>))))
+           """.stripMargin)
+    }
+  }
 }
