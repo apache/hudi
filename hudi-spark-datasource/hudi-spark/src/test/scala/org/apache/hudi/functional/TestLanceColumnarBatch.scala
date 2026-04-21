@@ -326,15 +326,22 @@ class TestLanceColumnarBatch extends HoodieSparkClientTestBase {
 
     val iter = reader.read(pf, requiredSchemaWithExtra, new StructType(), HOption.empty(),
       Seq.empty[Filter], storageConf).asInstanceOf[Iterator[Any]]
-    while (iter.hasNext) {
-      iter.next() match {
-        case batch: ColumnarBatch =>
-          batchesSeen += 1
-          batch.rowIterator().asScala.foreach { row =>
-            nullPadded += row.isNullAt(2)
-          }
+    try {
+      while (iter.hasNext) {
+        iter.next() match {
+          case batch: ColumnarBatch =>
+            batchesSeen += 1
+            batch.rowIterator().asScala.foreach { row =>
+              nullPadded += row.isNullAt(2)
+            }
+          case _ =>
+            fail("Vectorized path with null-padding must return ColumnarBatch")
+        }
+      }
+    } finally {
+      iter match {
+        case c: AutoCloseable => c.close()
         case _ =>
-          fail("Vectorized path with null-padding must return ColumnarBatch")
       }
     }
 
@@ -369,17 +376,24 @@ class TestLanceColumnarBatch extends HoodieSparkClientTestBase {
 
     val iter = reader.read(pf, baseSchema, partitionSchema, HOption.empty(),
       Seq.empty[Filter], storageConf).asInstanceOf[Iterator[Any]]
-    while (iter.hasNext) {
-      iter.next() match {
-        case batch: ColumnarBatch =>
-          batchesSeen += 1
-          assertEquals(baseSchema.size + partitionSchema.size, batch.numCols(),
-            "Batch column count must equal data + partition columns")
-          batch.rowIterator().asScala.foreach { row =>
-            depts += row.getUTF8String(baseSchema.size).toString
-          }
+    try {
+      while (iter.hasNext) {
+        iter.next() match {
+          case batch: ColumnarBatch =>
+            batchesSeen += 1
+            assertEquals(baseSchema.size + partitionSchema.size, batch.numCols(),
+              "Batch column count must equal data + partition columns")
+            batch.rowIterator().asScala.foreach { row =>
+              depts += row.getUTF8String(baseSchema.size).toString
+            }
+          case _ =>
+            fail("Vectorized path must return ColumnarBatch when partitionSchema is present")
+        }
+      }
+    } finally {
+      iter match {
+        case c: AutoCloseable => c.close()
         case _ =>
-          fail("Vectorized path must return ColumnarBatch when partitionSchema is present")
       }
     }
 

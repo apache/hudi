@@ -412,8 +412,6 @@ class SparkLanceReaderBase(enableVectorizedReader: Boolean) extends SparkColumna
                        partitionSchema: StructType,
                        implicitTypeChangeInfo: java.util.Map[Integer, HoodiePair[DataType, DataType]]): Iterator[InternalRow] = {
 
-    val baseIter: Iterator[InternalRow] = recordIterator.asScala
-
     // Create the following projections for schema evolution:
     // 1. Padding projection: add NULL for missing columns
     // 2. Casting projection: handle type conversions
@@ -433,21 +431,33 @@ class SparkLanceReaderBase(enableVectorizedReader: Boolean) extends SparkColumna
       def apply(row: InternalRow): UnsafeRow =
         castProj(paddingProj(row))
     }
-    val projectedIter = baseIter.map(projection.apply)
-
-    // Handle partition columns
-    if (partitionSchema.length == 0) {
-      // No partition columns - return rows directly
-      projectedIter
+    // Compose the per-row projection once. With partition columns, chain the
+    // JoinedRow/UnsafeProjection after the padding+cast projection.
+    val rowProjection: InternalRow => InternalRow = if (partitionSchema.length == 0) {
+      projection.apply
     } else {
-      // Create UnsafeProjection to convert JoinedRow to UnsafeRow
       val fullSchema = (requiredSchema.fields ++ partitionSchema.fields).map(f =>
         AttributeReference(f.name, f.dataType, f.nullable, f.metadata)())
       val unsafeProjection = GenerateUnsafeProjection.generate(fullSchema, fullSchema)
-
-      // Append partition values to each row using JoinedRow, then convert to UnsafeRow
       val joinedRow = new JoinedRow()
-      projectedIter.map(row => unsafeProjection(joinedRow(row, file.partitionValues)))
+      row => unsafeProjection(joinedRow(projection(row), file.partitionValues))
+    }
+
+    // Wrap in a Closeable iterator so driver/direct-reader callers (TaskContext.get()
+    // is null) have an explicit cleanup handle. close() is idempotent and safe to
+    // run alongside the TaskContext completion listener above, since
+    // LanceRecordIterator.close() is itself idempotent.
+    val src = recordIterator.asScala
+    new Iterator[InternalRow] with Closeable {
+      private[this] var closed = false
+      override def hasNext: Boolean = src.hasNext
+      override def next(): InternalRow = rowProjection(src.next())
+      override def close(): Unit = {
+        if (!closed) {
+          closed = true
+          recordIterator.close()
+        }
+      }
     }
   }
 
