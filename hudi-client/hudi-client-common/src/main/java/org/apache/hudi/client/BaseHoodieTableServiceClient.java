@@ -88,6 +88,7 @@ import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.util.Collections;
 
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -1249,91 +1250,37 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
           .filter(instant -> EQUALS.test(instant.requestedTime(), commitInstantTime))
           .findFirst());
 
+      if (commitInstantOpt.isEmpty()) {
+        log.error("Cannot find instant {} in the timeline of table {} for rollback", commitInstantTime, config.getBasePath());
+        return false;
+      }
+
       // ---- SCHEDULE PHASE ----
       // Determines which rollback plan to use and creates a new one if necessary.
-      Option<String> rollbackInstantTimeOpt;
-      Option<HoodieRollbackPlan> rollbackPlanOption;
-
-      if (pendingRollbackInfo.isPresent()) {
-        // Case 1: caller already resolved a pending rollback — re-use it without taking a lock.
-        rollbackInstantTimeOpt = Option.of(pendingRollbackInfo.get().getRollbackInstant().requestedTime());
-        rollbackPlanOption = Option.of(pendingRollbackInfo.get().getRollbackPlan());
-      } else {
-        // Case 2: no pending rollback supplied — reload the timeline under lock to get the latest view.
-        if (!skipLocking) {
-          txnManager.beginStateChange(Option.empty(), Option.empty());
-        }
-        try {
-          table.getMetaClient().reloadActiveTimeline();
-          Option<HoodiePendingRollbackInfo> pendingRollbackOpt = getPendingRollbackInfo(table.getMetaClient(), commitInstantTime);
-          if (pendingRollbackOpt.isPresent()) {
-            // Case 2a: a concurrent writer already scheduled the rollback — re-use it.
-            rollbackInstantTimeOpt = Option.of(pendingRollbackOpt.get().getRollbackInstant().requestedTime());
-            rollbackPlanOption = Option.of(pendingRollbackOpt.get().getRollbackPlan());
-          } else {
-            // Case 2b: no pending rollback exists — schedule one now.
-            // Refresh commitInstantOpt from the reloaded timeline.
-            commitInstantOpt = Option.fromJavaOptional(table.getActiveTimeline().getCommitsTimeline().getInstantsAsStream()
-                .filter(instant -> EQUALS.test(instant.requestedTime(), commitInstantTime))
-                .findFirst());
-            if (commitInstantOpt.isEmpty()) {
-              log.error("Cannot find instant {} in the timeline of table {} for rollback", commitInstantTime, config.getBasePath());
-              return false;
-            }
-            String newRollbackInstantTime = suppliedRollbackInstantTime.orElseGet(() -> createNewInstantTime(false));
-            rollbackInstantTimeOpt = Option.of(newRollbackInstantTime);
-            rollbackPlanOption = table.scheduleRollback(context, newRollbackInstantTime, commitInstantOpt.get(), false, config.shouldRollbackUsingMarkers(), false);
-          }
-        } finally {
-          if (!skipLocking) {
-            txnManager.endStateChange(Option.empty());
-          }
-        }
+      Option<Pair<HoodieInstant, Option<HoodieRollbackPlan>>> scheduleResult =
+          resolveOrScheduleRollback(table, commitInstantTime, commitInstantOpt, pendingRollbackInfo, suppliedRollbackInstantTime, skipLocking);
+      if (scheduleResult.isEmpty()) {
+        return false;
       }
+      Option<HoodieInstant> rollbackInstantOpt = Option.of(scheduleResult.get().getLeft());
+      Option<HoodieRollbackPlan> rollbackPlanOption = scheduleResult.get().getRight();
 
       // ---- EXECUTION PHASE ----
-      // For exclusive rollbacks, coordinate with concurrent writers via heartbeat before executing.
-      boolean emittingHeartbeat = false;
-      if (config.isEnforceSingleRollbackInstant()) {
-        if (!skipLocking) {
-          txnManager.beginStateChange(Option.empty(), Option.empty());
-        }
-        try {
-          // Validate heartbeat: if another writer is actively executing this rollback, move on.
-          if (!heartbeatClient.isHeartbeatExpired(rollbackInstantTimeOpt.get())) {
-            return false;
-          }
-          // Heartbeat absent or expired — confirm the pending rollback is still on the timeline
-          // (another writer may have already completed it).
-          table.getMetaClient().reloadActiveTimeline();
-          boolean hasPendingRollback = getPendingRollbackInfo(table.getMetaClient(), commitInstantTime).isPresent();
-          boolean commitStillPresent = table.getActiveTimeline().getCommitsTimeline().getInstantsAsStream()
-              .anyMatch(instant -> EQUALS.test(instant.requestedTime(), commitInstantTime));
-          if (!hasPendingRollback && !commitStillPresent) {
-            // Rollback was already completed by another writer.
-            return false;
-          }
-          // Take ownership: delete any stale heartbeat file and start emitting.
-          heartbeatClient.start(rollbackInstantTimeOpt.get());
-          emittingHeartbeat = true;
-        } finally {
-          if (!skipLocking) {
-            txnManager.endStateChange(Option.empty());
-          }
-        }
-      }
-
-      // Execute rollback — no lock held during this operation.
+      boolean isMultiWriter = config.getWriteConcurrencyMode().supportsMultiWriter();
       try {
         if (rollbackPlanOption.isPresent()) {
+          acquireRollbackHeartbeatIfMultiWriter(table, rollbackInstantOpt, isMultiWriter);
+
+          // Execute rollback — no lock held during this operation.
+
           // There can be a case where the inflight rollback failed after the instant files
           // are deleted for commitInstantTime, so that commitInstantOpt is empty as it is
           // not present in the timeline.  In such a case, the hoodie instant instance
           // is reconstructed to allow the rollback to be reattempted, and the deleteInstants
           // is set to false since they are already deleted.
           HoodieRollbackMetadata rollbackMetadata = commitInstantOpt.isPresent()
-              ? table.rollback(context, rollbackInstantTimeOpt.get(), commitInstantOpt.get(), true, skipLocking)
-              : table.rollback(context, rollbackInstantTimeOpt.get(), table.getMetaClient().createNewInstant(
+              ? table.rollback(context, rollbackInstantOpt.get().requestedTime(), commitInstantOpt.get(), true, skipLocking)
+              : table.rollback(context, rollbackInstantOpt.get().requestedTime(), table.getMetaClient().createNewInstant(
                   HoodieInstant.State.INFLIGHT, rollbackPlanOption.get().getInstantToRollback().getAction(), commitInstantTime),
               false, skipLocking);
           if (timerContext != null) {
@@ -1345,13 +1292,87 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
           throw new HoodieRollbackException("Failed to rollback " + config.getBasePath() + " commits " + commitInstantTime);
         }
       } finally {
-        if (config.isEnforceSingleRollbackInstant() && emittingHeartbeat) {
-          heartbeatClient.stop(rollbackInstantTimeOpt.get());
+        if (isMultiWriter) {
+          heartbeatClient.stop(rollbackInstantOpt.get().requestedTime());
         }
       }
     } catch (Exception e) {
       metrics.emitRollbackFailure(e.getClass().getSimpleName());
       throw new HoodieRollbackException("Failed to rollback " + config.getBasePath() + " commits " + commitInstantTime, e);
+    }
+  }
+
+  /**
+   * In multi-writer mode, acquires a heartbeat for the rollback instant under a transaction to ensure
+   * only one writer executes the rollback at a time. No-op if multi-writer is not enabled.
+   */
+  private void acquireRollbackHeartbeatIfMultiWriter(HoodieTable table, Option<HoodieInstant> rollbackInstantOpt, boolean isMultiWriter) {
+    if (!isMultiWriter) {
+      return;
+    }
+    try {
+      txnManager.beginStateChange(rollbackInstantOpt, txnManager.getLastCompletedTransactionOwner());
+      validateHeartBeat(rollbackInstantOpt.get().requestedTime());
+      if (!table.getMetaClient().reloadActiveTimeline().filterPendingRollbackTimeline().containsInstant(rollbackInstantOpt.get().requestedTime())) {
+        throw new HoodieException("Requested rollback instant " + rollbackInstantOpt.get().requestedTime()
+            + " is not present as pending or already completed in the active timeline.");
+      }
+      this.heartbeatClient.start(rollbackInstantOpt.get().requestedTime());
+    } finally {
+      txnManager.endStateChange(rollbackInstantOpt);
+    }
+  }
+
+  /**
+   * Resolves an existing pending rollback or schedules a new one for the given commit instant.
+   *
+   * @return Option containing the rollback instant and plan pair, or empty if the commit instant
+   *         is no longer present on the timeline (indicating no rollback is needed).
+   */
+  private Option<Pair<HoodieInstant, Option<HoodieRollbackPlan>>> resolveOrScheduleRollback(
+      HoodieTable table, String commitInstantTime, Option<HoodieInstant> commitInstantOpt,
+      Option<HoodiePendingRollbackInfo> pendingRollbackInfo, Option<String> suppliedRollbackInstantTime,
+      boolean skipLocking) {
+    if (pendingRollbackInfo.isPresent()) {
+      // Case 1: caller already resolved a pending rollback — re-use it without taking a lock.
+      return Option.of(Pair.of(pendingRollbackInfo.get().getRollbackInstant(),
+          Option.of(pendingRollbackInfo.get().getRollbackPlan())));
+    }
+
+    // Case 2: no pending rollback supplied — reload the timeline under lock to get the latest view.
+    if (!skipLocking) {
+      txnManager.beginStateChange(Option.empty(), Option.empty());
+    }
+    try {
+      if (config.isEnforceSingleRollbackInstant()) {
+        // if enforcing single rollback instant, we need to check if there is a pending rollback for the instant.
+        table.getMetaClient().reloadActiveTimeline();
+        Option<HoodiePendingRollbackInfo> pendingRollbackOpt = getPendingRollbackInfo(table.getMetaClient(), commitInstantTime);
+        if (pendingRollbackOpt.isPresent()) {
+          // Case 2a: a concurrent writer already scheduled the rollback — re-use it.
+          return Option.of(Pair.of(pendingRollbackOpt.get().getRollbackInstant(),
+              Option.of(pendingRollbackOpt.get().getRollbackPlan())));
+        }
+        commitInstantOpt = Option.fromJavaOptional(table.getActiveTimeline().getCommitsTimeline().getInstantsAsStream()
+            .filter(instant -> EQUALS.test(instant.requestedTime(), commitInstantTime))
+            .findFirst());
+        if (commitInstantOpt.isEmpty()) {
+          log.error("Cannot find instant {} in the timeline of table {} for rollback", commitInstantTime, config.getBasePath());
+          return Option.empty();
+        }
+      }
+      // Case 2b: no pending rollback exists — schedule one now.
+      // Refresh commitInstantOpt from the reloaded timeline.
+      String newRollbackInstantTime = suppliedRollbackInstantTime.orElseGet(() -> createNewInstantTime(false));
+      HoodieInstant rollbackInstant = new HoodieInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.ROLLBACK_ACTION, newRollbackInstantTime,
+          (Comparator<HoodieInstant>) table.getMetaClient().getTimelineLayout().getInstantComparator());
+      Option<HoodieRollbackPlan> rollbackPlan = table.scheduleRollback(context, newRollbackInstantTime, commitInstantOpt.get(),
+          false, config.shouldRollbackUsingMarkers(), false);
+      return Option.of(Pair.of(rollbackInstant, rollbackPlan));
+    } finally {
+      if (!skipLocking) {
+        txnManager.endStateChange(Option.empty());
+      }
     }
   }
 
