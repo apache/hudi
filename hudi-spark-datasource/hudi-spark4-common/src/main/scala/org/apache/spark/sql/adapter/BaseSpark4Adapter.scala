@@ -207,18 +207,19 @@ abstract class BaseSpark4Adapter extends SparkAdapter with Logging {
   override def isDataTypeEqualForPhysicalSchema(requiredType: DataType, fileType: DataType): Option[Boolean] = {
     /**
      * Checks if a StructType is the physical representation of VariantType in Parquet.
-     * VariantType is stored in Parquet as a struct with two binary fields: "metadata" and "value".
+     * VariantType is stored in Parquet as a struct with binary "metadata" and "value" fields.
+     * Supports both unshredded (2 fields) and shredded (3 fields with "typed_value") layouts.
      */
     def isVariantPhysicalSchema(structType: StructType): Boolean = {
-      if (structType.fields.length != 2) {
-        false
-      } else {
-        val fieldMap = structType.fields.map(f => (f.name, f.dataType)).toMap
-        fieldMap.contains(HoodieSchema.Variant.VARIANT_VALUE_FIELD) &&
-          fieldMap.contains(HoodieSchema.Variant.VARIANT_METADATA_FIELD) &&
-          fieldMap(HoodieSchema.Variant.VARIANT_VALUE_FIELD) == BinaryType &&
-          fieldMap(HoodieSchema.Variant.VARIANT_METADATA_FIELD) == BinaryType
-      }
+      val fieldMap = structType.fields.map(f => (f.name, f.dataType)).toMap
+      val hasRequiredFields = fieldMap.contains(HoodieSchema.Variant.VARIANT_VALUE_FIELD) &&
+        fieldMap.contains(HoodieSchema.Variant.VARIANT_METADATA_FIELD) &&
+        fieldMap(HoodieSchema.Variant.VARIANT_VALUE_FIELD) == BinaryType &&
+        fieldMap(HoodieSchema.Variant.VARIANT_METADATA_FIELD) == BinaryType
+      val isUnshredded = structType.fields.length == 2
+      val isShredded = structType.fields.length == 3 &&
+        fieldMap.contains(HoodieSchema.Variant.VARIANT_TYPED_VALUE_FIELD)
+      hasRequiredFields && (isUnshredded || isShredded)
     }
 
     // Handle VariantType comparisons
@@ -300,5 +301,30 @@ abstract class BaseSpark4Adapter extends SparkAdapter with Logging {
       val shreddedValues = SparkShreddingUtils.castShredded(variant, variantShreddingSchema)
       writeStruct.accept(shreddedValues)
     }
+  }
+
+  override def convertVariantToStruct(variantValue: Any, structType: StructType): InternalRow = {
+    import org.apache.spark.sql.catalyst.expressions.SpecificInternalRow
+    import org.apache.spark.unsafe.types.VariantVal
+
+    val variant = variantValue.asInstanceOf[VariantVal]
+    val valueIdx = structType.fieldIndex("value")
+    val metadataIdx = structType.fieldIndex("metadata")
+
+    val row = new SpecificInternalRow(structType)
+    row.update(valueIdx, variant.getValue)
+    row.update(metadataIdx, variant.getMetadata)
+    row
+  }
+
+  override def convertStructToVariant(structRow: InternalRow, structType: StructType): Any = {
+    import org.apache.spark.unsafe.types.VariantVal
+
+    val valueIdx = structType.fieldIndex("value")
+    val metadataIdx = structType.fieldIndex("metadata")
+
+    val valueBytes = structRow.getBinary(valueIdx)
+    val metadataBytes = structRow.getBinary(metadataIdx)
+    new VariantVal(valueBytes, metadataBytes)
   }
 }

@@ -62,6 +62,18 @@ abstract class HoodieBaseHadoopFsRelationFactory(val sqlContext: SQLContext,
                                                  val schemaSpec: Option[StructType],
                                                  val isBootstrap: Boolean
                                                 ) extends SparkAdapterSupport with HoodieHadoopFsRelationFactory with Logging {
+  // Propagate Hudi's variant allow-reading-shredded config to Spark's SQLConf.
+  // ParquetToSparkSchemaConverter reads this from SQLConf.get(), so it must be set
+  // before query execution starts here during table resolution
+  if (HoodieSparkUtils.gteqSpark4_0) {
+    val sqlConf = sqlContext.sparkSession.sessionState.conf
+    val hoodieParquetAllowReadingShreddedConfKey = "hoodie.parquet.variant.allow.reading.shredded"
+    val allowReadingShredded = options.getOrElse(
+      hoodieParquetAllowReadingShreddedConfKey,
+      sqlConf.getConfString(hoodieParquetAllowReadingShreddedConfKey, "true"))
+    sqlConf.setConfString("spark.sql.variant.allowReadingShredded", allowReadingShredded)
+  }
+
   protected lazy val sparkSession: SparkSession = sqlContext.sparkSession
   protected lazy val optParams: Map[String, String] = options
 

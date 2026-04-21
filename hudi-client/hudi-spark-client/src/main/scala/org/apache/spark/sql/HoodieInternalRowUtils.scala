@@ -22,6 +22,7 @@ import org.apache.hudi.avro.HoodieAvroUtils.{createFullName, toJavaDate}
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.common.schema.HoodieSchema
 import org.apache.hudi.HoodieSchemaConversionUtils.convertHoodieSchemaToStructType
+import org.apache.hudi.HoodieSparkUtils.sparkAdapter
 import org.apache.spark.sql.HoodieCatalystExpressionUtils.generateUnsafeProjection
 import org.apache.spark.sql.HoodieUnsafeRowUtils.{NestedFieldPath, composeNestedFieldPath}
 import org.apache.spark.sql.catalyst.expressions.{SpecificInternalRow, UnsafeArrayData, UnsafeProjection, UnsafeRow}
@@ -398,9 +399,45 @@ object HoodieInternalRowUtils {
         (fieldUpdater, ordinal, value) =>
           fieldUpdater.set(ordinal, CatalystTypeConverters.convertToCatalyst(java.sql.Date.valueOf(value.toString)))
 
+      // Handle conversion from VariantType to variant struct representation
+      case (newStructType: StructType, _) if sparkAdapter.isVariantType(prevDataType) && looksLikeVariantStruct(newStructType) =>
+        (fieldUpdater, ordinal, value) => {
+          if (value == null) {
+            fieldUpdater.setNullAt(ordinal)
+          } else {
+            val row = sparkAdapter.convertVariantToStruct(value, newStructType)
+            fieldUpdater.set(ordinal, row)
+          }
+        }
+
+      // Handle conversion from variant struct representation to VariantType
+      case (_, prevStructType: StructType) if sparkAdapter.isVariantType(newDataType) && looksLikeVariantStruct(prevStructType) =>
+        (fieldUpdater, ordinal, value) => {
+          if (value == null) {
+            fieldUpdater.setNullAt(ordinal)
+          } else {
+            val row = value.asInstanceOf[InternalRow]
+            val variant = sparkAdapter.convertStructToVariant(row, prevStructType)
+            fieldUpdater.set(ordinal, variant)
+          }
+        }
+
       case (_, _) =>
         throw new IllegalArgumentException(s"$prevDataType and $newDataType are incompatible")
     }
+  }
+
+  /**
+   * Checks if a StructType looks like a variant representation (has value and metadata binary fields).
+   * This is a structural check that doesn't rely on metadata, useful during schema reconciliation
+   * when toggling between shredded/unshredded formats or merging data with different representations.
+   */
+  private def looksLikeVariantStruct(structType: StructType): Boolean = {
+    structType.fields.length >= 2 &&
+      structType.fieldNames.contains("value") &&
+      structType.fieldNames.contains("metadata") &&
+      structType("value").dataType == BinaryType &&
+      structType("metadata").dataType == BinaryType
   }
 
   private def lookupRenamedField(newFieldName: String,

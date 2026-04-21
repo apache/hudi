@@ -111,7 +111,8 @@ object HoodieParquetReadSupport {
   }
 
   private def isVariantGroup(group: GroupType): Boolean = {
-    group.containsField("value") &&
+    group.getFieldCount == 2 &&
+      group.containsField("value") &&
       group.containsField("metadata") &&
       group.getType("value").isPrimitive &&
       group.getType("metadata").isPrimitive &&
