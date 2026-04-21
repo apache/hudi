@@ -129,6 +129,7 @@ import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SparkSession;
 import org.apache.spark.sql.types.StructType;
+import org.apache.spark.storage.StorageLevel;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -877,7 +878,7 @@ public class StreamSync implements Serializable, Closeable {
 
       // Cache the RDD if not already persisted, so both validators (collect) and
       // writeClient.commit() share the same materialized result without re-evaluation.
-      boolean weOwnCache = writeStatusRDD.getStorageLevel().equals(org.apache.spark.storage.StorageLevel.NONE());
+      boolean weOwnCache = writeStatusRDD.getStorageLevel().equals(StorageLevel.NONE());
       if (weOwnCache) {
         writeStatusRDD.cache();
       }
