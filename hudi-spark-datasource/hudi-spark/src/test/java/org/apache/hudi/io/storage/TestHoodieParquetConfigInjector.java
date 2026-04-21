@@ -19,7 +19,6 @@
 package org.apache.hudi.io.storage;
 
 import org.apache.hudi.client.SparkTaskContextSupplier;
-import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;

@@ -38,6 +38,7 @@ import org.apache.flink.table.data.StringData;
 import org.apache.flink.table.types.DataType;
 import org.apache.flink.table.types.logical.RowType;
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.Path;
 import org.apache.parquet.column.Encoding;
 import org.apache.parquet.hadoop.ParquetFileReader;
 import org.apache.parquet.hadoop.metadata.BlockMetaData;
@@ -140,7 +141,7 @@ public class TestHoodieRowDataParquetConfigInjector extends HoodieFlinkClientTes
 
     // Read parquet metadata and verify dictionary encoding is disabled
     Configuration hadoopConf = new Configuration();
-    org.apache.hadoop.fs.Path hadoopPath = new org.apache.hadoop.fs.Path(parquetPath.toUri());
+    Path hadoopPath = new Path(parquetPath.toUri());
     ParquetFileReader reader = ParquetFileReader.open(hadoopConf, hadoopPath);
     ParquetMetadata metadata = reader.getFooter();
     reader.close();
