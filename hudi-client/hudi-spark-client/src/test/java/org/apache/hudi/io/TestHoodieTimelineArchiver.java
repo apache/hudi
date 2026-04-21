@@ -18,6 +18,9 @@
 
 package org.apache.hudi.io;
 
+import org.apache.hudi.avro.model.HoodieActionInstant;
+import org.apache.hudi.avro.model.HoodieCleanMetadata;
+import org.apache.hudi.avro.model.HoodieCleanerPlan;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.avro.model.HoodieSavepointMetadata;
@@ -29,6 +32,7 @@ import org.apache.hudi.client.timeline.versioning.v2.LSMTimelineWriter;
 import org.apache.hudi.client.timeline.versioning.v2.TimelineArchiverV2;
 import org.apache.hudi.client.transaction.lock.InProcessLockProvider;
 import org.apache.hudi.client.utils.ArchivalMetrics;
+import org.apache.hudi.common.HoodieCleanStat;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
@@ -2208,342 +2212,134 @@ public class TestHoodieTimelineArchiver extends HoodieSparkClientTestHarness {
   }
 
   /**
-   * Tests archival blocking based on ECTR from last clean when config is enabled.
-   * Verifies that commits with timestamp >= ECTR are not archived.
+   * Tests archival behavior with ECTR blocking enabled vs disabled.
+   * When enabled: commits >= ECTR from last clean are not archived.
+   * When disabled: archival proceeds normally ignoring ECTR (backward compatible).
+   * Also validates that archival makes progress when ECTR is later than the archival window.
    */
-  @Test
-  public void testArchivalBlocksOnCleanECTRWhenEnabled() throws Exception {
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  public void testArchivalWithECTRBlocking(boolean blockArchivalOnCleanECTR) throws Exception {
     initTableToTestECTRBlock();
 
-    // Create config with ECTR blocking enabled
-    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder()
-        .withPath(basePath)
-        .withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA)
-        .withParallelism(2, 2)
-        .withArchivalConfig(HoodieArchivalConfig.newBuilder()
-            .archiveCommitsWith(2, 3)
-            .withBlockArchivalOnCleanECTR(true) // Enable ECTR blocking
-            .build())
-        .withCleanConfig(HoodieCleanConfig.newBuilder()
-            .retainCommits(1)
-            .build())
-        .withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder()
-            .withRemoteServerPort(timelineServicePort)
-            .build())
-        .withMetadataConfig(HoodieMetadataConfig.newBuilder()
-            .enable(false)
-            .build())
-        .forTable("test-trip-table")
-        .build();
-
+    HoodieWriteConfig writeConfig = buildECTRTestConfig(2, 3, blockArchivalOnCleanECTR);
     HoodieTestTable testTable = HoodieTestTable.of(metaClient);
 
-    // Create 5 commits: 00000001, 00000002, 00000003, 00000004, 00000005
+    // Given: 5 commits and a clean commit with ECTR pointing to commit 00000003
     for (int i = 1; i <= 5; i++) {
       testTable.addCommit(String.format("%08d", i));
     }
-
-    // Create a clean commit with ECTR pointing to commit 00000003
-    // This means commits 00000003 and later should not be archived
-    Map<String, Integer> cleanStats = new HashMap<>();
-    cleanStats.put("p1", 1);
-    cleanStats.put("p2", 1);
-
-    List<org.apache.hudi.common.HoodieCleanStat> cleanStatsList = new ArrayList<>();
-    cleanStatsList.add(new org.apache.hudi.common.HoodieCleanStat(
-        HoodieCleaningPolicy.KEEP_LATEST_COMMITS,
-        "p1",
-        Collections.emptyList(),
-        Collections.emptyList(),
-        Collections.emptyList(),
-        "00000003", // ECTR
-        "00000005"
-    ));
-    cleanStatsList.add(new org.apache.hudi.common.HoodieCleanStat(
-        HoodieCleaningPolicy.KEEP_LATEST_COMMITS,
-        "p2",
-        Collections.emptyList(),
-        Collections.emptyList(),
-        Collections.emptyList(),
-        "00000003", // ECTR
-        "00000005"
-    ));
-
-    org.apache.hudi.avro.model.HoodieCleanMetadata cleanMetadata =
-        CleanerUtils.convertCleanMetadata("00000006", Option.of(0L), cleanStatsList, Collections.emptyMap());
-    org.apache.hudi.avro.model.HoodieCleanerPlan cleanerPlan =
-        new org.apache.hudi.avro.model.HoodieCleanerPlan(
-            new org.apache.hudi.avro.model.HoodieActionInstant("00000003", CLEAN_ACTION, ""),
-            "", "", new HashMap<>(), CleanMetadataV2MigrationHandler.VERSION, new HashMap<>(), new ArrayList<>(), Collections.emptyMap());
-
-    testTable.addClean("00000006", cleanerPlan, cleanMetadata);
-
-    // Reload metaClient to pick up the clean commit
+    addCleanCommitWithECTR(testTable, "00000006", "00000003", "00000005");
     metaClient = HoodieTableMetaClient.reload(metaClient);
 
-    // Trigger archival
+    // When: trigger archival
     HoodieTable table = HoodieSparkTable.create(writeConfig, context, metaClient);
     TimelineArchiverV1 archiver = new TimelineArchiverV1(writeConfig, table);
     archiver.archiveIfRequired(context);
 
-    // Reload timeline and get active commits
+    // Then: verify archival behavior
     metaClient = HoodieTableMetaClient.reload(metaClient);
-    HoodieActiveTimeline activeTimeline = metaClient.getActiveTimeline();
-    List<HoodieInstant> activeCommits = activeTimeline.getCommitsTimeline().filterCompletedInstants().getInstants();
+    List<String> activeCommitTimes = getActiveCommitTimes();
 
-    // Verify that commits 00000003, 00000004, 00000005 are still in active timeline (not archived)
-    List<String> activeCommitTimes = activeCommits.stream()
-        .map(HoodieInstant::requestedTime)
-        .collect(Collectors.toList());
+    if (blockArchivalOnCleanECTR) {
+      // Commits >= ECTR should not be archived
+      assertTrue(activeCommitTimes.contains("00000003"), "Commit 00000003 (ECTR) should not be archived");
+      assertTrue(activeCommitTimes.contains("00000004"), "Commit 00000004 (after ECTR) should not be archived");
+      assertTrue(activeCommitTimes.contains("00000005"), "Commit 00000005 (after ECTR) should not be archived");
+    } else {
+      // ECTR is ignored; archival proceeds based on min/max archival commits only
+      assertFalse(activeCommitTimes.contains("00000003"),
+          "Commit 00000003 (ECTR) should be archived when ECTR blocking is disabled");
+      assertTrue(activeCommitTimes.contains("00000005"),
+          "Commit 00000005 should be retained (within min commits to keep)");
+    }
 
-    assertTrue(activeCommitTimes.contains("00000003"), "Commit 00000003 (ECTR) should not be archived");
-    assertTrue(activeCommitTimes.contains("00000004"), "Commit 00000004 (after ECTR) should not be archived");
-    assertTrue(activeCommitTimes.contains("00000005"), "Commit 00000005 (after ECTR) should not be archived");
+    if (blockArchivalOnCleanECTR) {
+      // Additional step: validate archival makes progress when ECTR is later than the archival window.
+      // Add more commits and a new clean with ECTR at 00000008, so commits before ECTR can be archived.
+      for (int i = 7; i <= 10; i++) {
+        testTable.addCommit(String.format("%08d", i));
+      }
+      addCleanCommitWithECTR(testTable, "00000011", "00000008", "00000010");
+      metaClient = HoodieTableMetaClient.reload(metaClient);
 
-    // Verify commits before ECTR may have been archived (00000001, 00000002)
-    // They could be archived or retained based on min/max archival settings
-    // But commits >= ECTR must be present
+      table = HoodieSparkTable.create(writeConfig, context, metaClient);
+      archiver = new TimelineArchiverV1(writeConfig, table);
+      archiver.archiveIfRequired(context);
 
-    
+      metaClient = HoodieTableMetaClient.reload(metaClient);
+      activeCommitTimes = getActiveCommitTimes();
+
+      // Commits before ECTR should be archived
+      for (int i = 1; i <= 7; i++) {
+        assertFalse(activeCommitTimes.contains(String.format("%08d", i)),
+            "Commit " + String.format("%08d", i) + " (before ECTR) should be archived");
+      }
+      // Commits >= ECTR should be retained
+      assertTrue(activeCommitTimes.contains("00000008"), "Commit 00000008 (ECTR) should not be archived");
+      assertTrue(activeCommitTimes.contains("00000009"), "Commit 00000009 (after ECTR) should not be archived");
+      assertTrue(activeCommitTimes.contains("00000010"), "Commit 00000010 (after ECTR) should not be archived");
+      assertEquals(3, activeCommitTimes.size(), "Exactly 3 commits (00000008-00000010) should remain active");
+    }
   }
 
   /**
-   * Tests that archival proceeds normally when config is disabled (default behavior).
-   * Verifies backward compatibility - existing behavior unchanged when ECTR blocking is off.
+   * Tests graceful handling when clean metadata is missing or has empty ECTR.
+   * Archival should continue normally in both cases.
    */
   @Test
-  public void testArchivalProceedsNormallyWhenECTRBlockingDisabled() throws Exception {
+  public void testArchivalContinuesWhenECTRIsAbsent() throws Exception {
     initTableToTestECTRBlock();
 
-    // Create config WITHOUT ECTR blocking (default is false)
-    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder()
-        .withPath(basePath)
-        .withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA)
-        .withParallelism(2, 2)
-        .withArchivalConfig(HoodieArchivalConfig.newBuilder()
-            .archiveCommitsWith(2, 3)
-            // Do not set withBlockArchivalOnCleanECTR - defaults to false
-            .build())
-        .withCleanConfig(HoodieCleanConfig.newBuilder()
-            .retainCommits(1)
-            .build())
-        .withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder()
-            .withRemoteServerPort(timelineServicePort)
-            .build())
-        .withMetadataConfig(HoodieMetadataConfig.newBuilder()
-            .enable(false)
-            .build())
-        .forTable("test-trip-table")
-        .build();
-
+    HoodieWriteConfig writeConfig = buildECTRTestConfig(2, 3, true);
     HoodieTestTable testTable = HoodieTestTable.of(metaClient);
 
-    // Create 6 commits: 00000001 through 00000006
+    // Step 1: No clean commit exists — archival should proceed without error
     for (int i = 1; i <= 6; i++) {
       testTable.addCommit(String.format("%08d", i));
     }
-
-    // Create a clean commit with ECTR pointing to commit 00000003
-    List<org.apache.hudi.common.HoodieCleanStat> cleanStatsList = new ArrayList<>();
-    cleanStatsList.add(new org.apache.hudi.common.HoodieCleanStat(
-        HoodieCleaningPolicy.KEEP_LATEST_COMMITS,
-        "p1",
-        Collections.emptyList(),
-        Collections.emptyList(),
-        Collections.emptyList(),
-        "00000003", // ECTR
-        "00000006"
-    ));
-
-    org.apache.hudi.avro.model.HoodieCleanMetadata cleanMetadata =
-        CleanerUtils.convertCleanMetadata("00000007", Option.of(0L), cleanStatsList, Collections.emptyMap());
-    org.apache.hudi.avro.model.HoodieCleanerPlan cleanerPlan =
-        new org.apache.hudi.avro.model.HoodieCleanerPlan(
-            new org.apache.hudi.avro.model.HoodieActionInstant("00000007", CLEAN_ACTION, ""),
-            "", "", new HashMap<>(), CleanMetadataV2MigrationHandler.VERSION, new HashMap<>(), new ArrayList<>(), Collections.emptyMap());
-
-    testTable.addClean("00000007", cleanerPlan, cleanMetadata);
-
-    // Reload metaClient
-    metaClient = HoodieTableMetaClient.reload(metaClient);
-    int commitsBeforeArchival = metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants().countInstants();
-
-    // Trigger archival
-    HoodieTable table = HoodieSparkTable.create(writeConfig, context, metaClient);
-    TimelineArchiverV1 archiver = new TimelineArchiverV1(writeConfig, table);
-    archiver.archiveIfRequired(context);
-
-    // Reload timeline
-    metaClient = HoodieTableMetaClient.reload(metaClient);
-    List<HoodieInstant> activeCommits = metaClient.getActiveTimeline().getCommitsTimeline()
-        .filterCompletedInstants().getInstants();
-    List<String> activeCommitTimes = activeCommits.stream()
-        .map(HoodieInstant::requestedTime)
-        .collect(Collectors.toList());
-
-    // With config disabled, archival should proceed based on min/max archival commits (2, 3)
-    // ignoring ECTR entirely. The commits timeline includes 6 data commits + 1 clean commit = 7 total.
-    // With min=2, archival archives up to 7-2=5 instants, leaving only the last 2 (00000006 + clean 00000007).
-    // The key assertion is that commit 00000003 (the ECTR) IS archived, proving the flag is off.
-    assertFalse(activeCommitTimes.contains("00000003"),
-        "Commit 00000003 (ECTR) should be archived when ECTR blocking is disabled");
-    assertTrue(activeCommitTimes.contains("00000006"),
-        "Commit 00000006 should be retained (within min commits to keep)");
-    assertEquals(2, activeCommits.size(),
-        "Only 2 instants should remain active (min commits to keep)");
-  }
-
-  /**
-   * Tests graceful handling when clean metadata is missing or cannot be read.
-   * Verifies archival continues normally without blocking when metadata read fails.
-   */
-  @Test
-  public void testArchivalContinuesWhenCleanMetadataIsMissing() throws Exception {
-    initTableToTestECTRBlock();
-
-    // Create config with ECTR blocking enabled
-    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder()
-        .withPath(basePath)
-        .withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA)
-        .withParallelism(2, 2)
-        .withArchivalConfig(HoodieArchivalConfig.newBuilder()
-            .archiveCommitsWith(2, 3)
-            .withBlockArchivalOnCleanECTR(true)
-            .build())
-        .withCleanConfig(HoodieCleanConfig.newBuilder()
-            .retainCommits(1)
-            .build())
-        .withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder()
-            .withRemoteServerPort(timelineServicePort)
-            .build())
-        .withMetadataConfig(HoodieMetadataConfig.newBuilder()
-            .enable(false)
-            .build())
-        .forTable("test-trip-table")
-        .build();
-
-    HoodieTestTable testTable = HoodieTestTable.of(metaClient);
-
-    // Create 6 commits
-    for (int i = 1; i <= 6; i++) {
-      testTable.addCommit(String.format("%08d", i));
-    }
-
-    // DO NOT create a clean commit - this simulates missing clean metadata
-
-    // Reload metaClient
     metaClient = HoodieTableMetaClient.reload(metaClient);
 
-    // Trigger archival - should not fail even though no clean metadata exists
     HoodieTable table = HoodieSparkTable.create(writeConfig, context, metaClient);
     TimelineArchiverV1 archiver = new TimelineArchiverV1(writeConfig, table);
 
-    // Should not throw exception
-    assertDoesNotThrow(() -> archiver.archiveIfRequired(context),
+    TimelineArchiverV1 finalArchiver = archiver;
+    assertDoesNotThrow(() -> finalArchiver.archiveIfRequired(context),
         "Archival should continue gracefully when clean metadata is missing");
 
-    // Verify some archival happened (based on min/max archival commits)
     metaClient = HoodieTableMetaClient.reload(metaClient);
-    int commitsAfterArchival = metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants().countInstants();
+    int commitsAfterFirstArchival = metaClient.getActiveTimeline().getCommitsTimeline()
+        .filterCompletedInstants().countInstants();
+    assertTrue(commitsAfterFirstArchival <= 3, "Archival should proceed when clean metadata is missing");
 
-    // With 6 commits and max_archival=3, some archival should occur
-    assertTrue(commitsAfterArchival <= 3, "Archival should proceed when clean metadata is missing");
-  }
-
-  /**
-   * Tests that clean commits with empty or null ECTR are handled gracefully.
-   * Verifies archival proceeds normally when ECTR is not set in clean metadata.
-   */
-  @Test
-  public void testArchivalHandlesEmptyECTRInCleanMetadata() throws Exception {
-    initTableToTestECTRBlock();
-
-    // Create config with ECTR blocking enabled
-    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder()
-        .withPath(basePath)
-        .withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA)
-        .withParallelism(2, 2)
-        .withArchivalConfig(HoodieArchivalConfig.newBuilder()
-            .archiveCommitsWith(2, 3)
-            .withBlockArchivalOnCleanECTR(true)
-            .build())
-        .withCleanConfig(HoodieCleanConfig.newBuilder()
-            .retainCommits(1)
-            .build())
-        .withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder()
-            .withRemoteServerPort(timelineServicePort)
-            .build())
-        .withMetadataConfig(HoodieMetadataConfig.newBuilder()
-            .enable(false)
-            .build())
-        .forTable("test-trip-table")
-        .build();
-
-    HoodieTestTable testTable = HoodieTestTable.of(metaClient);
-
-    // Create 6 commits
-    for (int i = 1; i <= 6; i++) {
+    // Step 2: Clean commit exists but with empty ECTR — archival should still proceed
+    for (int i = 7; i <= 12; i++) {
       testTable.addCommit(String.format("%08d", i));
     }
-
-    // Create a clean commit with EMPTY ECTR
-    List<org.apache.hudi.common.HoodieCleanStat> cleanStatsList = new ArrayList<>();
-    cleanStatsList.add(new org.apache.hudi.common.HoodieCleanStat(
-        HoodieCleaningPolicy.KEEP_LATEST_COMMITS,
-        "p1",
-        Collections.emptyList(),
-        Collections.emptyList(),
-        Collections.emptyList(),
-        "", // Empty ECTR
-        "00000006"
-    ));
-
-    org.apache.hudi.avro.model.HoodieCleanMetadata cleanMetadata =
-        CleanerUtils.convertCleanMetadata("00000007", Option.of(0L), cleanStatsList, Collections.emptyMap());
-    org.apache.hudi.avro.model.HoodieCleanerPlan cleanerPlan =
-        new org.apache.hudi.avro.model.HoodieCleanerPlan(
-            new org.apache.hudi.avro.model.HoodieActionInstant("00000007", CLEAN_ACTION, ""),
-            "", "", new HashMap<>(), CleanMetadataV2MigrationHandler.VERSION, new HashMap<>(), new ArrayList<>(), Collections.emptyMap());
-
-    testTable.addClean("00000007", cleanerPlan, cleanMetadata);
-
-    // Reload metaClient
+    addCleanCommitWithECTR(testTable, "00000013", "", "00000012");
     metaClient = HoodieTableMetaClient.reload(metaClient);
 
-    // Trigger archival - should not fail with empty ECTR
-    HoodieTable table = HoodieSparkTable.create(writeConfig, context, metaClient);
-    TimelineArchiverV1 archiver = new TimelineArchiverV1(writeConfig, table);
+    table = HoodieSparkTable.create(writeConfig, context, metaClient);
+    archiver = new TimelineArchiverV1(writeConfig, table);
 
-    assertDoesNotThrow(() -> archiver.archiveIfRequired(context),
+    TimelineArchiverV1 finalArchiver1 = archiver;
+    assertDoesNotThrow(() -> finalArchiver1.archiveIfRequired(context),
         "Archival should handle empty ECTR gracefully");
 
-    // Verify archival proceeded normally
     metaClient = HoodieTableMetaClient.reload(metaClient);
-    int commitsAfterArchival = metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants().countInstants();
-
-    assertTrue(commitsAfterArchival <= 3, "Archival should proceed normally with empty ECTR");
+    int commitsAfterSecondArchival = metaClient.getActiveTimeline().getCommitsTimeline()
+        .filterCompletedInstants().countInstants();
+    assertTrue(commitsAfterSecondArchival <= 3, "Archival should proceed normally with empty ECTR");
   }
 
-  /**
-   * Tests that archival can still make progress when ECTR is later than the archival window.
-   * This verifies the feature doesn't unnecessarily block archival when it's safe to proceed.
-   *
-   * Scenario: Create 10 commits, with ECTR pointing to commit 8. Archival should be able to
-   * archive commits 1-7 since they are before ECTR and outside the retention window.
-   */
-  @Test
-  public void testArchivalMakesProgressWhenECTRIsLaterThanArchivalWindow() throws Exception {
-    initTableToTestECTRBlock();
-
-    // Create config with ECTR blocking enabled
-    // Min commits to keep = 2, max commits to keep = 3
-    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder()
+  private HoodieWriteConfig buildECTRTestConfig(int minCommits, int maxCommits, boolean blockArchivalOnCleanECTR) {
+    return HoodieWriteConfig.newBuilder()
         .withPath(basePath)
         .withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA)
         .withParallelism(2, 2)
         .withArchivalConfig(HoodieArchivalConfig.newBuilder()
-            .archiveCommitsWith(2, 3)
-            .withBlockArchivalOnCleanECTR(true) // Enable ECTR blocking
+            .archiveCommitsWith(minCommits, maxCommits)
+            .withBlockArchivalOnCleanECTR(blockArchivalOnCleanECTR)
             .build())
         .withCleanConfig(HoodieCleanConfig.newBuilder()
             .retainCommits(1)
@@ -2556,180 +2352,71 @@ public class TestHoodieTimelineArchiver extends HoodieSparkClientTestHarness {
             .build())
         .forTable("test-trip-table")
         .build();
+  }
 
-    HoodieTestTable testTable = HoodieTestTable.of(metaClient);
-
-    // Create 10 commits: 00000001 through 00000010
-    for (int i = 1; i <= 10; i++) {
-      testTable.addCommit(String.format("%08d", i));
-    }
-
-    // Create a clean commit with ECTR pointing to commit 00000008
-    // This ECTR is later than what archival would retain based on min/max archival commits (2, 3)
-    // So archival should be able to archive commits 1-7, but not 8-10
-    List<org.apache.hudi.common.HoodieCleanStat> cleanStatsList = new ArrayList<>();
-    cleanStatsList.add(new org.apache.hudi.common.HoodieCleanStat(
+  private void addCleanCommitWithECTR(HoodieTestTable testTable, String cleanInstant, String ectr, String lastCompleted) throws Exception {
+    List<HoodieCleanStat> cleanStatsList = new ArrayList<>();
+    cleanStatsList.add(new HoodieCleanStat(
         HoodieCleaningPolicy.KEEP_LATEST_COMMITS,
         "p1",
         Collections.emptyList(),
         Collections.emptyList(),
         Collections.emptyList(),
-        "00000008", // ECTR - later than archival window
-        "00000010"
+        ectr,
+        lastCompleted
     ));
 
-    org.apache.hudi.avro.model.HoodieCleanMetadata cleanMetadata =
-        CleanerUtils.convertCleanMetadata("00000011", Option.of(0L), cleanStatsList, Collections.emptyMap());
-    org.apache.hudi.avro.model.HoodieCleanerPlan cleanerPlan =
-        new org.apache.hudi.avro.model.HoodieCleanerPlan(
-            new org.apache.hudi.avro.model.HoodieActionInstant("00000011", CLEAN_ACTION, ""),
+    HoodieCleanMetadata cleanMetadata =
+        CleanerUtils.convertCleanMetadata(cleanInstant, Option.of(0L), cleanStatsList, Collections.emptyMap());
+    HoodieCleanerPlan cleanerPlan =
+        new HoodieCleanerPlan(
+            new HoodieActionInstant(cleanInstant, CLEAN_ACTION, ""),
             "", "", new HashMap<>(), CleanMetadataV2MigrationHandler.VERSION, new HashMap<>(), new ArrayList<>(), Collections.emptyMap());
 
-    testTable.addClean("00000011", cleanerPlan, cleanMetadata);
+    testTable.addClean(cleanInstant, cleanerPlan, cleanMetadata);
+  }
 
-    // Reload metaClient
-    metaClient = HoodieTableMetaClient.reload(metaClient);
-    int commitsBeforeArchival = metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants().countInstants();
-
-    // Trigger archival
-    HoodieTable table = HoodieSparkTable.create(writeConfig, context, metaClient);
-    TimelineArchiverV1 archiver = new TimelineArchiverV1(writeConfig, table);
-    archiver.archiveIfRequired(context);
-
-    // Reload timeline and get active commits
-    metaClient = HoodieTableMetaClient.reload(metaClient);
-    HoodieActiveTimeline activeTimeline = metaClient.getActiveTimeline();
-    List<HoodieInstant> activeCommits = activeTimeline.getCommitsTimeline().filterCompletedInstants().getInstants();
-    int commitsAfterArchival = activeCommits.size();
-
-    // With 10 commits, min=2, max=3, and ECTR at 00000008:
-    // Archival can archive commits before ECTR, so 00000001-00000007 should be archived.
-    // Exactly 00000008-00000010 should remain active.
-    List<String> activeCommitTimes = activeCommits.stream()
+  private List<String> getActiveCommitTimes() {
+    return metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants().getInstants().stream()
         .map(HoodieInstant::requestedTime)
         .collect(Collectors.toList());
-
-    // Verify all commits before ECTR are archived
-    for (int i = 1; i <= 7; i++) {
-      assertFalse(activeCommitTimes.contains(String.format("%08d", i)),
-          "Commit " + String.format("%08d", i) + " (before ECTR) should be archived");
-    }
-
-    // Verify commits >= ECTR are retained
-    assertTrue(activeCommitTimes.contains("00000008"),
-        "Commit 00000008 (ECTR) should not be archived");
-    assertTrue(activeCommitTimes.contains("00000009"),
-        "Commit 00000009 (after ECTR) should not be archived");
-    assertTrue(activeCommitTimes.contains("00000010"),
-        "Commit 00000010 (after ECTR) should not be archived");
-    assertEquals(3, commitsAfterArchival,
-        "Exactly 3 commits (00000008-00000010) should remain active");
   }
 
   /**
-   * Tests archival blocking based on ECTR with TimelineArchiverV2 (LSM-based timeline) and table version 9.
-   * This validates that the ECTR blocking feature works correctly with the newer archival implementation.
-   *
-   * Table version 9 uses LAYOUT_VERSION_2 which employs LSM-based timeline storage.
-   * This test ensures TimelineArchiverV2 properly reads ECTR from clean metadata and blocks archival.
+   * Tests that TimelineArchiverV2 (LSM-based timeline, v9 tables) does NOT block archival on ECTR.
+   * ECTR blocking is only for v6 tables using TimelineArchiverV1.
    */
   @Test
   public void testArchivalBlocksOnCleanECTRWithTimelineArchiverV2AndVersion9() throws Exception {
     init();
-    // Create config with ECTR blocking enabled
-    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder()
-        .withPath(basePath)
-        .withSchema(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA)
-        .withParallelism(2, 2)
-        .withArchivalConfig(HoodieArchivalConfig.newBuilder()
-            .archiveCommitsWith(2, 3)
-            .withBlockArchivalOnCleanECTR(true) // Enable ECTR blocking
-            .build())
-        .withCleanConfig(HoodieCleanConfig.newBuilder()
-            .retainCommits(1)
-            .build())
-        .withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder()
-            .withRemoteServerPort(timelineServicePort)
-            .build())
-        .withMetadataConfig(HoodieMetadataConfig.newBuilder()
-            .enable(false)
-            .build())
-        .forTable("test-trip-table")
-        .build();
 
+    HoodieWriteConfig writeConfig = buildECTRTestConfig(2, 3, true);
     HoodieTestTable testTable = HoodieTestTable.of(metaClient);
 
-    // Create 5 commits: 00000001, 00000002, 00000003, 00000004, 00000005
+    // Given: 5 commits and a clean commit with ECTR at 00000003
     for (int i = 1; i <= 5; i++) {
       testTable.addCommit(String.format("%08d", i));
     }
-
-    // Create a clean commit with ECTR pointing to commit 00000003
-    // This means commits 00000003 and later should not be archived
-    List<org.apache.hudi.common.HoodieCleanStat> cleanStatsList = new ArrayList<>();
-    cleanStatsList.add(new org.apache.hudi.common.HoodieCleanStat(
-        HoodieCleaningPolicy.KEEP_LATEST_COMMITS,
-        "p1",
-        Collections.emptyList(),
-        Collections.emptyList(),
-        Collections.emptyList(),
-        "00000003", // ECTR
-        "00000005"
-    ));
-    cleanStatsList.add(new org.apache.hudi.common.HoodieCleanStat(
-        HoodieCleaningPolicy.KEEP_LATEST_COMMITS,
-        "p2",
-        Collections.emptyList(),
-        Collections.emptyList(),
-        Collections.emptyList(),
-        "00000003", // ECTR
-        "00000005"
-    ));
-
-    org.apache.hudi.avro.model.HoodieCleanMetadata cleanMetadata =
-        CleanerUtils.convertCleanMetadata("00000006", Option.of(0L), cleanStatsList, Collections.emptyMap());
-    org.apache.hudi.avro.model.HoodieCleanerPlan cleanerPlan =
-        new org.apache.hudi.avro.model.HoodieCleanerPlan(
-            new org.apache.hudi.avro.model.HoodieActionInstant("00000006", CLEAN_ACTION, ""),
-            "", "", new HashMap<>(), CleanMetadataV2MigrationHandler.VERSION, new HashMap<>(), new ArrayList<>(), Collections.emptyMap());
-
-    testTable.addClean("00000006", cleanerPlan, cleanMetadata);
-
-    // Reload metaClient to pick up the clean commit
+    addCleanCommitWithECTR(testTable, "00000006", "00000003", "00000005");
     metaClient = HoodieTableMetaClient.reload(metaClient);
 
-    // Verify table version is 9
     assertEquals(HoodieTableVersion.NINE, metaClient.getTableConfig().getTableVersion(),
         "Table should be version 9");
 
-    // Trigger archival using TimelineArchiverV2
+    // When: trigger archival using TimelineArchiverV2
     HoodieTable table = HoodieSparkTable.create(writeConfig, context, metaClient);
-
-    // TimelineArchiverV2 should be used for version 9
     TimelineArchiverV2 archiver = new TimelineArchiverV2(writeConfig, table);
     archiver.archiveIfRequired(context);
 
-    // Reload timeline and get active commits
+    // Then: TimelineArchiverV2 should NOT respect ECTR — commit 00000003 gets archived
     metaClient = HoodieTableMetaClient.reload(metaClient);
-    HoodieActiveTimeline activeTimeline = metaClient.getActiveTimeline();
-    List<HoodieInstant> activeCommits = activeTimeline.getCommitsTimeline().filterCompletedInstants().getInstants();
+    List<String> activeCommitTimes = getActiveCommitTimes();
 
-    // Verify that commits 00000003, 00000004, 00000005 are still in active timeline (not archived)
-    List<String> activeCommitTimes = activeCommits.stream()
-        .map(HoodieInstant::requestedTime)
-        .collect(Collectors.toList());
-
-    // Key assertion: TimelineArchiverV2 should not respect ECTR and archive commits >= ECTR
     assertFalse(activeCommitTimes.contains("00000003"),
         "TimelineArchiverV2: Commit 00000003 (ECTR) should be archived");
     assertTrue(activeCommitTimes.contains("00000004"),
         "TimelineArchiverV2: Commit 00000004 (after ECTR) should not be archived");
     assertTrue(activeCommitTimes.contains("00000005"),
         "TimelineArchiverV2: Commit 00000005 (after ECTR) should not be archived");
-
-    // Verify commits before ECTR may have been archived (00000001, 00000002)
-    // They could be archived or retained based on min/max archival settings
-    // But commits >= ECTR must be present - this is the critical check for TimelineArchiverV2
-    log.info("TimelineArchiverV2 with table version 9's archival does not block on ECTR: {}", "00000003");
   }
 }

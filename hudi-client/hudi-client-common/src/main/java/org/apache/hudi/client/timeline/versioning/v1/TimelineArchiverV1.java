@@ -20,6 +20,7 @@
 package org.apache.hudi.client.timeline.versioning.v1;
 
 import org.apache.hudi.avro.model.HoodieArchivedMetaEntry;
+import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.client.timeline.HoodieTimelineArchiver;
 import org.apache.hudi.client.transaction.TransactionManager;
 import org.apache.hudi.client.utils.ArchivalMetrics;
@@ -279,14 +280,14 @@ public class TimelineArchiverV1<T extends HoodieAvroPayload, I, K, O> implements
         Option<HoodieInstant> lastCleanInstant = table.getCleanTimeline().filterCompletedInstants().lastInstant();
         if (lastCleanInstant.isPresent()) {
           try {
-            org.apache.hudi.avro.model.HoodieCleanMetadata cleanMetadata =
+            HoodieCleanMetadata cleanMetadata =
                 table.getActiveTimeline().readCleanMetadata(lastCleanInstant.get());
             if (cleanMetadata.getEarliestCommitToRetain() != null
                 && !cleanMetadata.getEarliestCommitToRetain().trim().isEmpty()) {
               oldestInstantToRetainForClean = commitTimeline.findInstantsAfterOrEquals(
                   cleanMetadata.getEarliestCommitToRetain()).firstInstant();
-              log.info("Blocking archival based on ECTR {} from last clean {}",
-                  cleanMetadata.getEarliestCommitToRetain(), lastCleanInstant.get().requestedTime());
+              log.info("Blocking archival based on earliest commit to retain {} from last clean {}. Oldest to retain is {}",
+                  cleanMetadata.getEarliestCommitToRetain(), lastCleanInstant.get().requestedTime(), oldestInstantToRetainForClean.map(instant -> instant).orElse(null));
             }
           } catch (IOException e) {
             log.warn("Failed to read clean metadata for {}", lastCleanInstant.get(), e);

@@ -119,7 +119,11 @@ public class HoodieArchivalConfig extends HoodieConfig {
       .defaultValue(false)
       .markAdvanced()
       .sinceVersion("1.2.0")
-      .withDocumentation("If enabled, archival will block on latest ECTR from last known clean");
+      .withDocumentation("If enabled, archival will not archive commits beyond the Earliest Commit To Retain (ECTR) "
+          + "from the last completed clean. ECTR represents the oldest commit whose data files are still needed by "
+          + "the table and have not yet been cleaned up. Blocking archival at this point ensures that timeline metadata "
+          + "is not removed for commits whose data files still exist on storage, preventing inconsistencies between "
+          + "the timeline and the actual data.");
 
   /**
    * @deprecated Use {@link #MAX_COMMITS_TO_KEEP} and its methods instead
