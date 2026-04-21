@@ -20,6 +20,7 @@ package org.apache.hudi.client;
 
 import org.apache.hudi.avro.model.HoodieInstantInfo;
 import org.apache.hudi.avro.model.HoodieRestorePlan;
+import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackPlan;
 import org.apache.hudi.avro.model.HoodieRollbackRequest;
 import org.apache.hudi.client.heartbeat.HoodieHeartbeatClient;
@@ -37,6 +38,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.view.TableFileSystemView.BaseFileOnlyView;
+import org.apache.hudi.common.testutils.FileCreateUtils;
 import org.apache.hudi.common.testutils.FileCreateUtilsLegacy;
 import org.apache.hudi.common.testutils.HoodieMetadataTestTable;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
@@ -68,6 +70,10 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -1004,9 +1010,219 @@ public class TestClientRollback extends HoodieClientTestBase {
     }
   }
 
+  /**
+   * Test: config enabled, no pre-existing pending rollback, inflight commit exists.
+   * This is the "first writer to arrive" scenario — it schedules a fresh rollback plan under lock
+   * and then executes it (Case 2b in resolveOrScheduleRollback).
+   */
+  @Test
+  public void testAvoidDuplicateRollbackFirstWriterSchedulesNewPlan() throws Exception {
+    final String p1 = "2016/05/01";
+    final String p2 = "2016/05/02";
+    final String commitTime1 = "20160501010101";
+    final String commitTime2 = "20160502020601";
+    final String commitTime3 = "20160506030611";
+
+    Map<String, String> partitionAndFileId1 = new HashMap<String, String>() {
+      {
+        put(p1, "id11");
+        put(p2, "id12");
+      }
+    };
+    Map<String, String> partitionAndFileId2 = new HashMap<String, String>() {
+      {
+        put(p1, "id21");
+        put(p2, "id22");
+      }
+    };
+    Map<String, String> partitionAndFileId3 = new HashMap<String, String>() {
+      {
+        put(p1, "id31");
+        put(p2, "id32");
+      }
+    };
+
+    HoodieWriteConfig config = buildExclusiveRollbackMultiWriterConfig();
+    HoodieTestTable testTable = HoodieTestTable.of(metaClient);
+    testTable.withPartitionMetaFiles(p1, p2)
+        .addCommit(commitTime1).withBaseFilesInPartitions(partitionAndFileId1).getLeft()
+        .addCommit(commitTime2).withBaseFilesInPartitions(partitionAndFileId2).getLeft()
+        .addInflightCommit(commitTime3).withBaseFilesInPartitions(partitionAndFileId3);
+
+    // No pending rollback file exists — the writer must schedule one itself.
+    try (SparkRDDWriteClient client = getHoodieWriteClient(config)) {
+      boolean result = client.rollback(commitTime3);
+      assertTrue(result, "Rollback should succeed when first writer schedules a new plan");
+
+      // Verify the inflight commit and its data files are cleaned up
+      assertFalse(testTable.inflightCommitExists(commitTime3));
+      assertFalse(testTable.baseFilesExist(partitionAndFileId3, commitTime3));
+
+      // Verify earlier commits are unaffected
+      assertTrue(testTable.baseFilesExist(partitionAndFileId1, commitTime1));
+      assertTrue(testTable.baseFilesExist(partitionAndFileId2, commitTime2));
+
+      // Verify exactly one rollback instant was created and completed
+      metaClient.reloadActiveTimeline();
+      List<HoodieInstant> rollbackInstants = metaClient.getActiveTimeline().getRollbackTimeline().getInstants();
+      assertEquals(1, rollbackInstants.size());
+      assertTrue(rollbackInstants.get(0).isCompleted());
+    }
+  }
+
+  /**
+   * Test: another writer has already fully completed the rollback — the inflight commit is removed
+   * from the timeline and a completed rollback instant exists. With avoid-duplicate-plan enabled,
+   * resolveOrScheduleRollback reloads the timeline, finds the commit absent, and returns empty.
+   */
+  @Test
+  public void testAvoidDuplicateRollbackAlreadyCompletedByAnotherWriter() throws Exception {
+    final String p1 = "2016/05/01";
+    final String p2 = "2016/05/02";
+    final String commitTime1 = "20160501010101";
+    final String commitTime2 = "20160502020601";
+    final String commitTime3 = "20160506030611";
+    final String rollbackInstantTime = "20160506040611";
+
+    Map<String, String> partitionAndFileId1 = new HashMap<String, String>() {
+      {
+        put(p1, "id11");
+        put(p2, "id12");
+      }
+    };
+    Map<String, String> partitionAndFileId2 = new HashMap<String, String>() {
+      {
+        put(p1, "id21");
+        put(p2, "id22");
+      }
+    };
+
+    HoodieWriteConfig config = buildExclusiveRollbackMultiWriterConfig();
+    HoodieTestTable testTable = HoodieTestTable.of(metaClient);
+    testTable.withPartitionMetaFiles(p1, p2)
+        .addCommit(commitTime1).withBaseFilesInPartitions(partitionAndFileId1).getLeft()
+        .addCommit(commitTime2).withBaseFilesInPartitions(partitionAndFileId2);
+
+    // Simulate that another writer already completed the rollback of commitTime3:
+    // - The inflight commit for commitTime3 no longer exists on the timeline
+    // - A completed rollback instant exists for it
+    HoodieRollbackMetadata rollbackMetadata = new HoodieRollbackMetadata();
+    rollbackMetadata.setCommitsRollback(Collections.singletonList(commitTime3));
+    rollbackMetadata.setStartRollbackTime(rollbackInstantTime);
+    rollbackMetadata.setPartitionMetadata(new HashMap<>());
+    rollbackMetadata.setInstantsRollback(Collections.singletonList(
+        new HoodieInstantInfo(commitTime3, HoodieTimeline.COMMIT_ACTION)));
+    FileCreateUtils.createRequestedRollbackFile(metaClient, rollbackInstantTime);
+    FileCreateUtils.createInflightRollbackFile(metaClient, rollbackInstantTime);
+    FileCreateUtils.createRollbackFile(metaClient, rollbackInstantTime, rollbackMetadata, false);
+
+    try (SparkRDDWriteClient client = getHoodieWriteClient(config)) {
+      boolean result = client.rollback(commitTime3);
+      // commitTime3 is no longer on the timeline — the writer should detect this and skip
+      assertFalse(result, "Rollback should return false when already completed by another writer");
+
+      // Verify no additional rollback instants were created — only the pre-existing one
+      metaClient.reloadActiveTimeline();
+      List<HoodieInstant> completedRollbacks = metaClient.getActiveTimeline()
+          .getRollbackTimeline().filterCompletedInstants().getInstants();
+      assertEquals(1, completedRollbacks.size());
+      assertEquals(rollbackInstantTime, completedRollbacks.get(0).requestedTime());
+
+      // Verify earlier commits are unaffected
+      assertTrue(testTable.baseFilesExist(partitionAndFileId1, commitTime1));
+      assertTrue(testTable.baseFilesExist(partitionAndFileId2, commitTime2));
+    }
+  }
+
+  /**
+   * Test: two writers concurrently attempt to rollback the same inflight commit.
+   * With avoid-duplicate-plan enabled, exactly one rollback should succeed. The other writer
+   * should either reuse the pending plan and skip (due to active heartbeat) or find the
+   * rollback already completed.
+   */
+  @Test
+  public void testConcurrentWritersRollbackSameInflightCommit() throws Exception {
+    final String p1 = "2016/05/01";
+    final String p2 = "2016/05/02";
+    final String commitTime1 = "20160501010101";
+    final String commitTime2 = "20160502020601";
+    final String commitTime3 = "20160506030611";
+
+    Map<String, String> partitionAndFileId1 = new HashMap<String, String>() {
+      {
+        put(p1, "id11");
+        put(p2, "id12");
+      }
+    };
+    Map<String, String> partitionAndFileId2 = new HashMap<String, String>() {
+      {
+        put(p1, "id21");
+        put(p2, "id22");
+      }
+    };
+    Map<String, String> partitionAndFileId3 = new HashMap<String, String>() {
+      {
+        put(p1, "id31");
+        put(p2, "id32");
+      }
+    };
+
+    HoodieWriteConfig config = buildExclusiveRollbackMultiWriterConfig();
+    HoodieTestTable testTable = HoodieTestTable.of(metaClient);
+    testTable.withPartitionMetaFiles(p1, p2)
+        .addCommit(commitTime1).withBaseFilesInPartitions(partitionAndFileId1).getLeft()
+        .addCommit(commitTime2).withBaseFilesInPartitions(partitionAndFileId2).getLeft()
+        .addInflightCommit(commitTime3).withBaseFilesInPartitions(partitionAndFileId3);
+
+    // No pending rollback — both writers will race to schedule/execute one.
+    ExecutorService executor = Executors.newFixedThreadPool(2);
+    CountDownLatch startLatch = new CountDownLatch(1);
+
+    try {
+      Future<Boolean> writer1Future = executor.submit(() -> {
+        startLatch.await();
+        try (SparkRDDWriteClient client1 = getHoodieWriteClient(config)) {
+          return client1.rollback(commitTime3);
+        }
+      });
+
+      Future<Boolean> writer2Future = executor.submit(() -> {
+        startLatch.await();
+        try (SparkRDDWriteClient client2 = getHoodieWriteClient(config)) {
+          return client2.rollback(commitTime3);
+        }
+      });
+
+      // Release both writers simultaneously
+      startLatch.countDown();
+
+      boolean result1 = writer1Future.get();
+      boolean result2 = writer2Future.get();
+
+      // At least one writer must succeed; both must not fail with an exception
+      assertTrue(result1 || result2, "At least one writer should successfully execute the rollback");
+
+      // Verify the inflight commit is rolled back
+      assertFalse(testTable.inflightCommitExists(commitTime3));
+      assertFalse(testTable.baseFilesExist(partitionAndFileId3, commitTime3));
+
+      // Verify earlier commits are unaffected
+      assertTrue(testTable.baseFilesExist(partitionAndFileId1, commitTime1));
+      assertTrue(testTable.baseFilesExist(partitionAndFileId2, commitTime2));
+
+      // Verify there is exactly one completed rollback (no duplicates)
+      metaClient.reloadActiveTimeline();
+      List<HoodieInstant> completedRollbacks = metaClient.getActiveTimeline()
+          .getRollbackTimeline().filterCompletedInstants().getInstants();
+      assertEquals(1, completedRollbacks.size(), "Exactly one completed rollback should exist, not duplicates");
+    } finally {
+      executor.shutdownNow();
+    }
+  }
+
   private HoodieWriteConfig buildExclusiveRollbackMultiWriterConfig() {
     Properties props = new Properties();
-    props.setProperty(HoodieWriteConfig.ROLLBACK_ENFORCE_SINGLE_INSTANT.key(), "true");
+    props.setProperty(HoodieWriteConfig.ROLLBACK_AVOID_DUPLICATE_PLAN.key(), "true");
     return HoodieWriteConfig.newBuilder()
         .withPath(basePath)
         .withRollbackUsingMarkers(false)

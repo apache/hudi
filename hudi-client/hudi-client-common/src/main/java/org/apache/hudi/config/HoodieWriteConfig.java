@@ -299,11 +299,13 @@ public class HoodieWriteConfig extends HoodieConfig {
       .withDocumentation("Enables a more efficient mechanism for rollbacks based on the marker files generated "
           + "during the writes. Turned on by default.");
 
-  public static final ConfigProperty<String> ROLLBACK_ENFORCE_SINGLE_INSTANT = ConfigProperty
-      .key("hoodie.rollback.enforce.single.rollback.instant")
+  public static final ConfigProperty<String> ROLLBACK_AVOID_DUPLICATE_PLAN = ConfigProperty
+      .key("hoodie.rollback.avoid.duplicate.plan")
       .defaultValue("false")
       .markAdvanced()
-      .withDocumentation("Enables exclusive rollback so that rollback plan is generated and executed by only one writer at a time");
+      .withDocumentation("When enabled in multi-writer mode, before scheduling a new rollback plan, the writer reloads "
+          + "the timeline under lock to check if another writer already scheduled one for the same failed commit. "
+          + "This avoids duplicate rollback instants and uses heartbeats to ensure only one writer executes the rollback at a time.");
 
   public static final ConfigProperty<String> FAIL_JOB_ON_DUPLICATE_DATA_FILE_DETECTION = ConfigProperty
       .key("hoodie.fail.job.on.duplicate.data.file.detection")
@@ -1584,8 +1586,8 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getBoolean(ROLLBACK_USING_MARKERS_ENABLE);
   }
 
-  public boolean isEnforceSingleRollbackInstant() {
-    return getBoolean(ROLLBACK_ENFORCE_SINGLE_INSTANT) && getWriteConcurrencyMode().supportsMultiWriter();
+  public boolean shouldAvoidDuplicateRollbackPlan() {
+    return getBoolean(ROLLBACK_AVOID_DUPLICATE_PLAN) && getWriteConcurrencyMode().supportsMultiWriter();
   }
 
   public boolean enableComplexKeygenValidation() {

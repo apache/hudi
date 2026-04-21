@@ -1261,12 +1261,12 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
 
       // ---- EXECUTION PHASE ----
       boolean isMultiWriter = config.getWriteConcurrencyMode().supportsMultiWriter();
-      try {
-        if (rollbackPlanOption.isPresent()) {
-          if (isMultiWriter && !acquireRollbackHeartbeatIfMultiWriter(table, rollbackInstantOpt)) {
-            return false;
-          }
+      if (rollbackPlanOption.isPresent()) {
+        if (isMultiWriter && !acquireRollbackHeartbeatIfMultiWriter(table, rollbackInstantOpt)) {
+          return false;
+        }
 
+        try {
           // Execute rollback — no lock held during this operation.
 
           // There can be a case where the inflight rollback failed after the instant files
@@ -1284,13 +1284,17 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
             metrics.updateRollbackMetrics(durationInMs, rollbackMetadata.getTotalFilesDeleted());
           }
           return true;
-        } else {
-          throw new HoodieRollbackException("Failed to rollback " + config.getBasePath() + " commits " + commitInstantTime);
+        } finally {
+          if (isMultiWriter) {
+            try {
+              heartbeatClient.stop(rollbackInstantOpt.get().requestedTime());
+            } catch (Exception e) {
+              log.warn("Failed to stop heartbeat for rollback instant {}", rollbackInstantOpt.get().requestedTime(), e);
+            }
+          }
         }
-      } finally {
-        if (isMultiWriter) {
-          heartbeatClient.stop(rollbackInstantOpt.get().requestedTime());
-        }
+      } else {
+        throw new HoodieRollbackException("Failed to rollback " + config.getBasePath() + " commits " + commitInstantTime);
       }
     } catch (Exception e) {
       metrics.emitRollbackFailure(e.getClass().getSimpleName());
@@ -1308,12 +1312,12 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
     try {
       txnManager.beginStateChange(rollbackInstantOpt, txnManager.getLastCompletedTransactionOwner());
       if (!this.heartbeatClient.isHeartbeatExpired(rollbackInstantOpt.get().requestedTime())) {
+        LOG.error("Rollback heartbeat already exists for instant {}", rollbackInstantOpt.get().requestedTime());
         return false;
       }
       if (table.getMetaClient().reloadActiveTimeline().getRollbackTimeline().filterCompletedInstants().getInstantsAsStream()
           .anyMatch(instant -> EQUALS.test(instant.requestedTime(), rollbackInstantOpt.get().requestedTime()))) {
-        LOG.info("Requested rollback instant " + rollbackInstantOpt.get().requestedTime()
-            + " is already completed in the active timeline.");
+        LOG.info("Requested rollback instant {} is already completed in the active timeline", rollbackInstantOpt.get().requestedTime());
         return false;
       }
 
@@ -1345,8 +1349,8 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
       txnManager.beginStateChange(Option.empty(), Option.empty());
     }
     try {
-      if (config.isEnforceSingleRollbackInstant()) {
-        // if enforcing single rollback instant, we need to check if there is a pending rollback for the instant.
+      if (config.shouldAvoidDuplicateRollbackPlan()) {
+        // Check if another writer already scheduled a rollback for this instant to avoid duplicates.
         table.getMetaClient().reloadActiveTimeline();
         Option<HoodiePendingRollbackInfo> pendingRollbackOpt = getPendingRollbackInfo(table.getMetaClient(), commitInstantTime);
         if (pendingRollbackOpt.isPresent()) {
