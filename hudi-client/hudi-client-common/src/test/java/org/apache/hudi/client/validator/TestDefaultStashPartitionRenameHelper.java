@@ -65,7 +65,7 @@ public class TestDefaultStashPartitionRenameHelper {
 
   /**
    * Given: Source has files, target is empty.
-   * When: movePartitionFiles is called.
+   * When: stashPartitionFiles is called.
    * Then: All files are copied to target and deleted from source.
    */
   @Test
@@ -74,7 +74,7 @@ public class TestDefaultStashPartitionRenameHelper {
     createTestFile(sourcePath, "file2.parquet", "data2");
     createTestFile(sourcePath, "file3.parquet", "data3");
 
-    helper.movePartitionFiles(storage, sourcePath, targetPath);
+    helper.stashPartitionFiles(storage, sourcePath, targetPath);
 
     // Target should have all 3 files
     Set<String> targetFiles = getFileNames(targetPath);
@@ -90,7 +90,7 @@ public class TestDefaultStashPartitionRenameHelper {
 
   /**
    * Given: Source has files, target already has some of the same files (partial prior move).
-   * When: movePartitionFiles is called.
+   * When: stashPartitionFiles is called.
    * Then: Only missing files are copied to target, all source files are deleted.
    */
   @Test
@@ -104,7 +104,7 @@ public class TestDefaultStashPartitionRenameHelper {
     storage.createDirectory(targetPath);
     createTestFile(targetPath, "file1.parquet", "data1");
 
-    helper.movePartitionFiles(storage, sourcePath, targetPath);
+    helper.stashPartitionFiles(storage, sourcePath, targetPath);
 
     // Target should have all 3 files
     Set<String> targetFiles = getFileNames(targetPath);
@@ -120,7 +120,7 @@ public class TestDefaultStashPartitionRenameHelper {
 
   /**
    * Given: Source has files, target already has all the same files.
-   * When: movePartitionFiles is called.
+   * When: stashPartitionFiles is called.
    * Then: No copies happen, but source files are still deleted.
    */
   @Test
@@ -133,7 +133,7 @@ public class TestDefaultStashPartitionRenameHelper {
     createTestFile(targetPath, "file1.parquet", "data1");
     createTestFile(targetPath, "file2.parquet", "data2");
 
-    helper.movePartitionFiles(storage, sourcePath, targetPath);
+    helper.stashPartitionFiles(storage, sourcePath, targetPath);
 
     // Target still has 2 files
     assertEquals(2, getFileNames(targetPath).size());
@@ -144,14 +144,14 @@ public class TestDefaultStashPartitionRenameHelper {
 
   /**
    * Given: Source is empty.
-   * When: movePartitionFiles is called.
+   * When: stashPartitionFiles is called.
    * Then: No-op, target remains unchanged.
    */
   @Test
   public void testMoveFromEmptySourceIsNoOp() throws IOException {
     // Source is empty dir, target doesn't exist
 
-    helper.movePartitionFiles(storage, sourcePath, targetPath);
+    helper.stashPartitionFiles(storage, sourcePath, targetPath);
 
     // Target should not have been created (or if created, should be empty)
     assertFalse(storage.exists(targetPath) && !storage.listDirectEntries(targetPath).isEmpty(),
@@ -160,7 +160,7 @@ public class TestDefaultStashPartitionRenameHelper {
 
   /**
    * Given: Target directory does not exist.
-   * When: movePartitionFiles is called.
+   * When: stashPartitionFiles is called.
    * Then: Target directory is created and files are moved.
    */
   @Test
@@ -169,11 +169,62 @@ public class TestDefaultStashPartitionRenameHelper {
 
     assertFalse(storage.exists(targetPath), "Target should not exist before move");
 
-    helper.movePartitionFiles(storage, sourcePath, targetPath);
+    helper.stashPartitionFiles(storage, sourcePath, targetPath);
 
     assertTrue(storage.exists(targetPath), "Target should be created");
     assertEquals(1, getFileNames(targetPath).size());
     assertTrue(storage.listDirectEntries(sourcePath).isEmpty());
+  }
+
+  /**
+   * Given: Files were previously stashed to target.
+   * When: restorePartitionFiles is called.
+   * Then: All files are copied back from target to source, target is emptied.
+   */
+  @Test
+  public void testRestorePartitionFilesMovesFilesBack() throws IOException {
+    // Stash files first
+    createTestFile(sourcePath, "file1.parquet", "data1");
+    createTestFile(sourcePath, "file2.parquet", "data2");
+    helper.stashPartitionFiles(storage, sourcePath, targetPath);
+
+    // Source should be empty, target should have files
+    assertTrue(storage.listDirectEntries(sourcePath).isEmpty());
+    assertEquals(2, getFileNames(targetPath).size());
+
+    // Restore
+    helper.restorePartitionFiles(storage, targetPath, sourcePath);
+
+    // Source should have files back, target should be empty
+    Set<String> restoredFiles = getFileNames(sourcePath);
+    assertEquals(2, restoredFiles.size());
+    assertTrue(restoredFiles.contains("file1.parquet"));
+    assertTrue(restoredFiles.contains("file2.parquet"));
+    assertTrue(storage.listDirectEntries(targetPath).isEmpty());
+  }
+
+  /**
+   * Given: Files were partially restored (some already in source from prior attempt).
+   * When: restorePartitionFiles is called.
+   * Then: Only missing files are copied, all target files are deleted (idempotent).
+   */
+  @Test
+  public void testRestoreIsIdempotentWithPartialPriorRestore() throws IOException {
+    // Set up: target has 3 files, source already has 1 from prior partial restore
+    storage.createDirectory(targetPath);
+    createTestFile(targetPath, "file1.parquet", "data1");
+    createTestFile(targetPath, "file2.parquet", "data2");
+    createTestFile(targetPath, "file3.parquet", "data3");
+    createTestFile(sourcePath, "file1.parquet", "data1");
+
+    helper.restorePartitionFiles(storage, targetPath, sourcePath);
+
+    Set<String> restoredFiles = getFileNames(sourcePath);
+    assertEquals(3, restoredFiles.size());
+    assertTrue(restoredFiles.contains("file1.parquet"));
+    assertTrue(restoredFiles.contains("file2.parquet"));
+    assertTrue(restoredFiles.contains("file3.parquet"));
+    assertTrue(storage.listDirectEntries(targetPath).isEmpty());
   }
 
   // ---- Helper methods ----

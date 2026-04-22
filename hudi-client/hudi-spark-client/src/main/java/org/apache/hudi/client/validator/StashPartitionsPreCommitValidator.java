@@ -110,23 +110,37 @@ public class StashPartitionsPreCommitValidator<T, I, K, O extends HoodieData<Wri
   public void validate(String instantTime, HoodieWriteMetadata<O> writeResult,
                        Dataset<Row> before, Dataset<Row> after) throws HoodieValidationException {
     Set<String> partitionsAffected = new HashSet<>(writeResult.getPartitionToReplaceFileIds().keySet());
-    if (partitionsAffected.isEmpty()) {
-      // Fall back to write stats if partitionToReplaceFileIds is not populated
-      partitionsAffected = getPartitionsModified(writeResult);
-    }
     validateRecordsBeforeAndAfter(before, after, partitionsAffected);
   }
 
+  /**
+   * Moves partition files to the stash location before the replace commit lands.
+   *
+   * <p><b>Partial failure semantics:</b> if the move fails partway through the partition list
+   * (e.g., partition k succeeded but partition k+1 throws), the exception aborts the commit —
+   * but partitions 0..k have already had their files physically moved to the stash location.
+   * The on-disk layout is now partially mutated even though no commit landed. This validator
+   * does NOT attempt to roll back already-moved partitions on failure.
+   *
+   * <p>The {@code HoodieStashPartitionsTool} compensates for this via its pre-check, which
+   * detects partially stashed partitions and restores them before retrying. Callers using this
+   * validator outside the tool must perform their own recovery (restore files from stash back
+   * to source) before any subsequent write to the affected partitions.
+   */
   @Override
   protected void validateRecordsBeforeAndAfter(Dataset<Row> before,
                                                 Dataset<Row> after,
                                                 Set<String> partitionsAffected) {
-    // Guard: ensure RLI is not enabled
+    // Guard: ensure RLI and secondary index are not enabled
     HoodieMetadataConfig metadataConfig = getWriteConfig().getMetadataConfig();
     ValidationUtils.checkState(
         !metadataConfig.isRecordLevelIndexEnabled() && !metadataConfig.isGlobalRecordLevelIndexEnabled(),
         "StashPartitionsPreCommitValidator does not support tables with Record Level Index (RLI) enabled. "
             + "Disable RLI before using the stash partitions tool.");
+    ValidationUtils.checkState(
+        !metadataConfig.isSecondaryIndexEnabled(),
+        "StashPartitionsPreCommitValidator does not support tables with Secondary Index enabled. "
+            + "Disable secondary index before using the stash partitions tool.");
 
     // Read stash path from config
     String stashPath = getWriteConfig().getProps().getProperty(STASH_PATH_CONFIG);
@@ -153,7 +167,7 @@ public class StashPartitionsPreCommitValidator<T, I, K, O extends HoodieData<Wri
         }
 
         LOG.info("Moving partition {} files from {} to {}", partition, sourcePartitionPath, targetPartitionPath);
-        renameHelper.movePartitionFiles(storage, sourcePartitionPath, targetPartitionPath);
+        renameHelper.stashPartitionFiles(storage, sourcePartitionPath, targetPartitionPath);
         LOG.info("Successfully moved partition {} to stash location.", partition);
       } catch (IOException e) {
         LOG.error("Failed to stash partition {}", partition, e);

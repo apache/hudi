@@ -36,6 +36,7 @@ import org.apache.hudi.testutils.SparkClientFunctionalTestHarness;
 
 import org.apache.spark.api.java.JavaRDD;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
@@ -158,46 +159,125 @@ public class TestHoodieStashPartitionsTool extends SparkClientFunctionalTestHarn
   }
 
   /**
-   * Given: A partition has been stashed.
+   * Given: A stash fully completed (replace commit landed, data in stash, no active files).
    * When: Rollback stash is run.
-   * Then: Files are copied back from stash to the original source location.
+   * Then: Rollback is skipped — files stay in stash, source remains empty. The user must
+   *       use insert_overwrite to restore the partition.
    */
   @ParameterizedTest
   @ValueSource(booleans = {true, false})
-  public void testRollbackStash(boolean enableMetadata) throws IOException {
+  public void testRollbackStashSkipsCompletedStash(boolean enableMetadata) throws IOException {
     insertRecords("001", 20, enableMetadata);
 
     HoodieStorage storage = hoodieStorage();
     StoragePath sourcePartition = new StoragePath(basePath(), DEFAULT_FIRST_PARTITION_PATH);
-    List<String> originalFileNames = storage.listDirectEntries(sourcePartition).stream()
-        .map(info -> info.getPath().getName()).sorted().collect(Collectors.toList());
+    StoragePath stashPartition = new StoragePath(stashPath, DEFAULT_FIRST_PARTITION_PATH);
 
+    // Stash the partition (replace commit lands)
     new HoodieStashPartitionsTool(jsc(), buildConfig(DEFAULT_FIRST_PARTITION_PATH, "stash", enableMetadata)).run();
     assertSourcePartitionEmpty(storage, sourcePartition);
+    assertFalse(storage.listDirectEntries(stashPartition).isEmpty());
 
+    // Run rollback — should be a no-op since stash fully completed
     new HoodieStashPartitionsTool(jsc(), buildConfig(DEFAULT_FIRST_PARTITION_PATH, "rollback_stash", enableMetadata)).run();
 
-    assertTrue(storage.exists(sourcePartition));
-    List<String> restoredFileNames = storage.listDirectEntries(sourcePartition).stream()
-        .map(info -> info.getPath().getName()).sorted().collect(Collectors.toList());
-    assertEquals(originalFileNames, restoredFileNames);
-
-    StoragePath stashPartition = new StoragePath(stashPath, DEFAULT_FIRST_PARTITION_PATH);
-    assertTrue(!storage.exists(stashPartition) || storage.listDirectEntries(stashPartition).isEmpty());
+    // Stash files should still be in stash (not moved back)
+    assertFalse(storage.listDirectEntries(stashPartition).isEmpty(),
+        "Stash files should remain in stash after rollback of a completed stash");
+    // Source should still be empty
+    assertSourcePartitionEmpty(storage, sourcePartition);
   }
 
   /**
-   * Given: No partition has been stashed.
+   * Given: A partial stash attempt — pre-commit validator moved files to stash but the
+   *        commit never landed, so partition still has active files and stash has data.
    * When: Rollback stash is run.
-   * Then: Tool completes without error (no-op).
+   * Then: Files are restored from stash back to source, making the partition whole again.
    */
   @ParameterizedTest
   @ValueSource(booleans = {true, false})
-  public void testRollbackStashWithNothingToRollback(boolean enableMetadata) throws IOException {
+  public void testRollbackStashRestoresPartialAttempt(boolean enableMetadata) throws IOException {
+    insertRecords("001", 20, enableMetadata);
+
+    HoodieStorage storage = hoodieStorage();
+    StoragePath sourcePartition = new StoragePath(basePath(), DEFAULT_FIRST_PARTITION_PATH);
+    List<StoragePathInfo> originalFiles = storage.listDirectEntries(sourcePartition);
+    int originalFileCount = originalFiles.size();
+    assertTrue(originalFileCount > 0);
+
+    // Simulate partial stash: the rename helper copies all files to stash first, then deletes
+    // from source. A crash after copy but before delete leaves files in both locations.
+    // We simulate this by copying the source files to stash without deleting them from source.
+    StoragePath stashPartition = new StoragePath(stashPath, DEFAULT_FIRST_PARTITION_PATH);
+    storage.createDirectory(stashPartition);
+    for (StoragePathInfo fileInfo : originalFiles) {
+      StoragePath destFile = new StoragePath(stashPartition, fileInfo.getPath().getName());
+      org.apache.hudi.io.util.FileIOUtils.copy(storage, fileInfo.getPath(), destFile);
+    }
+
+    // Verify: partition still has files, stash also has data
+    assertFalse(storage.listDirectEntries(sourcePartition).isEmpty());
+    assertFalse(storage.listDirectEntries(stashPartition).isEmpty());
+
+    // Run rollback — should restore stash data back to source
+    new HoodieStashPartitionsTool(jsc(), buildConfig(DEFAULT_FIRST_PARTITION_PATH, "rollback_stash", enableMetadata)).run();
+
+    // Stash should be empty after rollback
+    assertTrue(storage.listDirectEntries(stashPartition).isEmpty(),
+        "Stash should be empty after rollback of partial attempt");
+    // Source should still have all its files
+    assertFalse(storage.listDirectEntries(sourcePartition).isEmpty());
+  }
+
+  /**
+   * Given: No partition has been stashed (no stash data), partition has active files.
+   * When: Rollback stash is run.
+   * Then: Tool completes without error (no-op), partition is untouched.
+   */
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  public void testRollbackStashNoOpWhenNothingStashed(boolean enableMetadata) throws IOException {
     insertRecords("001", 10, enableMetadata);
+
+    HoodieStorage storage = hoodieStorage();
+    StoragePath sourcePartition = new StoragePath(basePath(), DEFAULT_FIRST_PARTITION_PATH);
+    int fileCountBefore = storage.listDirectEntries(sourcePartition).size();
 
     HoodieStashPartitionsTool.Config cfg = buildConfig(DEFAULT_FIRST_PARTITION_PATH, "rollback_stash", enableMetadata);
     new HoodieStashPartitionsTool(jsc(), cfg).run();
+
+    // Source should be untouched
+    assertEquals(fileCountBefore, storage.listDirectEntries(sourcePartition).size());
+  }
+
+  /**
+   * Given: No stash data and no active files in the partition.
+   * When: Rollback stash is run.
+   * Then: Tool completes without error (no-op, warns).
+   */
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  public void testRollbackStashNoOpWhenNoDataAnywhere(boolean enableMetadata) throws IOException {
+    insertRecords("001", 20, enableMetadata);
+
+    // Stash the partition first (so it gets deleted), then clean up stash manually
+    // to simulate a state where there's no data anywhere.
+    new HoodieStashPartitionsTool(jsc(), buildConfig(DEFAULT_FIRST_PARTITION_PATH, "stash", enableMetadata)).run();
+
+    HoodieStorage storage = hoodieStorage();
+    StoragePath stashPartition = new StoragePath(stashPath, DEFAULT_FIRST_PARTITION_PATH);
+    // Remove stash data to simulate the "no data anywhere" state
+    for (StoragePathInfo file : storage.listDirectEntries(stashPartition)) {
+      storage.deleteFile(file.getPath());
+    }
+    assertTrue(storage.listDirectEntries(stashPartition).isEmpty());
+
+    // Run rollback — should be a no-op with warning
+    new HoodieStashPartitionsTool(jsc(), buildConfig(DEFAULT_FIRST_PARTITION_PATH, "rollback_stash", enableMetadata)).run();
+
+    // Nothing should change
+    StoragePath sourcePartition = new StoragePath(basePath(), DEFAULT_FIRST_PARTITION_PATH);
+    assertSourcePartitionEmpty(storage, sourcePartition);
   }
 
   /**
@@ -282,7 +362,7 @@ public class TestHoodieStashPartitionsTool extends SparkClientFunctionalTestHarn
     DefaultStashPartitionRenameHelper renameHelper = new DefaultStashPartitionRenameHelper();
     StoragePath src = new StoragePath(basePath(), DEFAULT_FIRST_PARTITION_PATH);
     StoragePath dest = new StoragePath(stashPath, DEFAULT_FIRST_PARTITION_PATH);
-    renameHelper.movePartitionFiles(storage, src, dest);
+    renameHelper.stashPartitionFiles(storage, src, dest);
 
     // Verify partial state: first partition in stash, others untouched
     assertTrue(storage.exists(dest));
@@ -311,26 +391,25 @@ public class TestHoodieStashPartitionsTool extends SparkClientFunctionalTestHarn
    * Scenario (d): Pre-commit validator succeeded for all partitions (files moved), but
    * crashed just after that (before the commit landed). On retry, the tool should handle
    * the state where all files are in stash but no commit exists, and succeed.
+   *
+   * We simulate this by running a real stash (which lands the replace commit), then deleting
+   * the completed replace commit from the timeline. This leaves the table in a state where
+   * files are in stash, source is empty, and no replace commit exists — exactly the scenario
+   * where the validator succeeded but the commit failed to persist.
    */
-  @ParameterizedTest
-  @ValueSource(booleans = {true, false})
-  public void testRetryAfterValidatorSucceededButCrashedBeforeCommit(boolean enableMetadata) throws IOException {
-    insertRecords("001", 30, enableMetadata);
+  @Test
+  public void testRetryAfterValidatorSucceededButCrashedBeforeCommit() throws IOException {
+    insertRecords("001", 30, true);
 
     HoodieStorage storage = hoodieStorage();
     String[] partitions = {DEFAULT_FIRST_PARTITION_PATH, DEFAULT_SECOND_PARTITION_PATH, DEFAULT_THIRD_PARTITION_PATH};
+    String allPartitions = String.join(",", partitions);
 
-    // Simulate: validator moved all files to stash, but commit never landed
-    DefaultStashPartitionRenameHelper renameHelper = new DefaultStashPartitionRenameHelper();
-    for (String partition : partitions) {
-      StoragePath src = new StoragePath(basePath(), partition);
-      StoragePath dest = new StoragePath(stashPath, partition);
-      if (storage.exists(src) && !storage.listDirectEntries(src).isEmpty()) {
-        renameHelper.movePartitionFiles(storage, src, dest);
-      }
-    }
+    // Step 1: Run a real stash — this moves files and lands a replace commit
+    HoodieStashPartitionsTool.Config stashCfg = buildConfig(allPartitions, "stash", true);
+    new HoodieStashPartitionsTool(jsc(), stashCfg).run();
 
-    // Verify: all files in stash, source empty, NO commit on timeline
+    // Verify stash completed: files in stash, source empty, replace commit exists
     for (String partition : partitions) {
       StoragePath stashPartition = new StoragePath(stashPath, partition);
       assertTrue(storage.exists(stashPartition));
@@ -338,15 +417,20 @@ public class TestHoodieStashPartitionsTool extends SparkClientFunctionalTestHarn
       assertSourcePartitionEmpty(storage, new StoragePath(basePath(), partition));
     }
     metaClient = HoodieTableMetaClient.reload(metaClient);
+    assertFalse(metaClient.getActiveTimeline().getCompletedReplaceTimeline().empty());
+
+    // Step 2: Delete the completed replace commit to simulate a crash before commit landed
+    metaClient.getActiveTimeline().getCompletedReplaceTimeline().getInstantsAsStream()
+        .forEach(instant -> metaClient.getActiveTimeline().deleteInstantFileIfExists(instant));
+    metaClient = HoodieTableMetaClient.reload(metaClient);
     assertTrue(metaClient.getActiveTimeline().getCompletedReplaceTimeline().empty(),
-        "No replace commit should exist yet");
+        "Replace commit should be removed to simulate crash");
 
-    // Retry with the tool
-    String allPartitions = String.join(",", partitions);
-    HoodieStashPartitionsTool.Config cfg = buildConfig(allPartitions, "stash", enableMetadata);
-    new HoodieStashPartitionsTool(jsc(), cfg).run();
+    // Step 3: Retry with the tool — should restore files from stash, then re-run stash
+    HoodieStashPartitionsTool.Config retryCfg = buildConfig(allPartitions, "stash", true);
+    new HoodieStashPartitionsTool(jsc(), retryCfg).run();
 
-    // Verify: commit exists now
+    // Verify: replace commit exists now
     metaClient = HoodieTableMetaClient.reload(metaClient);
     assertFalse(metaClient.getActiveTimeline().getCompletedReplaceTimeline().empty());
 

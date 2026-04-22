@@ -28,6 +28,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.util.Collections;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -47,7 +48,16 @@ public class DefaultStashPartitionRenameHelper implements StashPartitionRenameHe
   private static final Logger LOG = LoggerFactory.getLogger(DefaultStashPartitionRenameHelper.class);
 
   @Override
-  public void movePartitionFiles(HoodieStorage storage, StoragePath sourcePath, StoragePath targetPath) throws IOException {
+  public void stashPartitionFiles(HoodieStorage storage, StoragePath partitionPath, StoragePath stashPath) throws IOException {
+    moveFiles(storage, partitionPath, stashPath);
+  }
+
+  @Override
+  public void restorePartitionFiles(HoodieStorage storage, StoragePath stashPath, StoragePath partitionPath) throws IOException {
+    moveFiles(storage, stashPath, partitionPath);
+  }
+
+  private void moveFiles(HoodieStorage storage, StoragePath sourcePath, StoragePath targetPath) throws IOException {
     // Ensure target directory exists
     if (!storage.exists(targetPath)) {
       storage.createDirectory(targetPath);
@@ -83,7 +93,7 @@ public class DefaultStashPartitionRenameHelper implements StashPartitionRenameHe
 
   private Set<String> getExistingFileNames(HoodieStorage storage, StoragePath targetPath) throws IOException {
     if (!storage.exists(targetPath)) {
-      return java.util.Collections.emptySet();
+      return Collections.emptySet();
     }
     return storage.listDirectEntries(targetPath).stream()
         .map(info -> info.getPath().getName())

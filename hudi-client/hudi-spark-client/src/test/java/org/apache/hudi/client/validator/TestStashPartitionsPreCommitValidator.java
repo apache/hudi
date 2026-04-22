@@ -121,7 +121,7 @@ public class TestStashPartitionsPreCommitValidator extends HoodieClientTestBase 
           if (!storage.exists(sourcePartitionPath) || storage.listDirectEntries(sourcePartitionPath).isEmpty()) {
             continue;
           }
-          renameHelper.movePartitionFiles(storage, sourcePartitionPath, targetPartitionPath);
+          renameHelper.stashPartitionFiles(storage, sourcePartitionPath, targetPartitionPath);
           PARTITIONS_PROCESSED.incrementAndGet();
         } catch (IOException e) {
           throw new HoodieValidationException("Failed to move partition: " + partition, e);
@@ -348,7 +348,7 @@ public class TestStashPartitionsPreCommitValidator extends HoodieClientTestBase 
       StoragePath src = new StoragePath(basePath, partition);
       StoragePath dest = new StoragePath(stashPath, partition);
       if (storage.exists(src) && !storage.listDirectEntries(src).isEmpty()) {
-        renameHelper.movePartitionFiles(storage, src, dest);
+        renameHelper.stashPartitionFiles(storage, src, dest);
       }
     }
 
