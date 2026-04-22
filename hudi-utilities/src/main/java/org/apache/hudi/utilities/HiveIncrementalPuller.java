@@ -131,7 +131,6 @@ public class HiveIncrementalPuller {
     conf.set("fs.defaultFS",config.fsDefaultFs);
     FileSystem fs = FileSystem.get(conf);
     Statement stmt = null;
-    Connection conn = null;
     try {
       if (config.fromCommitTime == null) {
         config.fromCommitTime = inferCommitTime(fs);
@@ -146,8 +145,8 @@ public class HiveIncrementalPuller {
         lastCommitTime = config.fromCommitTime;
       }
 
-      conn = getConnection();
-      stmt = conn.createStatement();
+      getConnection();
+      stmt = this.connection.createStatement();
       // drop the temp table if exists
       String tempDbTable = config.tmpDb + "." + config.targetTable + "__" + config.sourceTable;
       String tempDbTablePath =
