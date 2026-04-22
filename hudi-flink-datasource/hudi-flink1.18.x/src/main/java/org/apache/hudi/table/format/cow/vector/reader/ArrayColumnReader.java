@@ -423,13 +423,13 @@ public class ArrayColumnReader extends BaseVectorizedColumnReader {
         switch (primitiveTypeName) {
           case INT32:
             lcv.child = new ParquetDecimalVector(new HeapIntVector(total));
-            ((HeapIntVector) ((ParquetDecimalVector) lcv.child).vector).reset();
+            ((HeapIntVector) ((ParquetDecimalVector) lcv.child).getVector()).reset();
             for (int i = 0; i < valueList.size(); i++) {
               if (valueList.get(i) == null) {
-                ((HeapIntVector) ((ParquetDecimalVector) lcv.child).vector)
+                ((HeapIntVector) ((ParquetDecimalVector) lcv.child).getVector())
                     .setNullAt(i);
               } else {
-                ((HeapIntVector) ((ParquetDecimalVector) lcv.child).vector)
+                ((HeapIntVector) ((ParquetDecimalVector) lcv.child).getVector())
                     .vector[i] =
                     ((List<Integer>) valueList).get(i);
               }
@@ -437,13 +437,13 @@ public class ArrayColumnReader extends BaseVectorizedColumnReader {
             break;
           case INT64:
             lcv.child = new ParquetDecimalVector(new HeapLongVector(total));
-            ((HeapLongVector) ((ParquetDecimalVector) lcv.child).vector).reset();
+            ((HeapLongVector) ((ParquetDecimalVector) lcv.child).getVector()).reset();
             for (int i = 0; i < valueList.size(); i++) {
               if (valueList.get(i) == null) {
-                ((HeapLongVector) ((ParquetDecimalVector) lcv.child).vector)
+                ((HeapLongVector) ((ParquetDecimalVector) lcv.child).getVector())
                     .setNullAt(i);
               } else {
-                ((HeapLongVector) ((ParquetDecimalVector) lcv.child).vector)
+                ((HeapLongVector) ((ParquetDecimalVector) lcv.child).getVector())
                     .vector[i] =
                     ((List<Long>) valueList).get(i);
               }
@@ -451,14 +451,14 @@ public class ArrayColumnReader extends BaseVectorizedColumnReader {
             break;
           default:
             lcv.child = new ParquetDecimalVector(new HeapBytesVector(total));
-            ((HeapBytesVector) ((ParquetDecimalVector) lcv.child).vector).reset();
+            ((HeapBytesVector) ((ParquetDecimalVector) lcv.child).getVector()).reset();
             for (int i = 0; i < valueList.size(); i++) {
               byte[] src = ((List<byte[]>) valueList).get(i);
               if (valueList.get(i) == null) {
-                ((HeapBytesVector) ((ParquetDecimalVector) lcv.child).vector)
+                ((HeapBytesVector) ((ParquetDecimalVector) lcv.child).getVector())
                     .setNullAt(i);
               } else {
-                ((HeapBytesVector) ((ParquetDecimalVector) lcv.child).vector)
+                ((HeapBytesVector) ((ParquetDecimalVector) lcv.child).getVector())
                     .appendBytes(i, src, 0, src.length);
               }
             }
