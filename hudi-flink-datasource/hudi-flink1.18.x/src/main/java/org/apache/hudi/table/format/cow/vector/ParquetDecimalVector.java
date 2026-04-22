@@ -7,7 +7,7 @@
  * "License"); you may not use this file except in compliance
  * with the License.  You may obtain a copy of the License at
  *
- *     http://www.apache.org/licenses/LICENSE-2.0
+ * http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -34,20 +34,8 @@ import org.apache.flink.table.data.columnar.vector.writable.WritableLongVector;
 import static org.apache.flink.util.Preconditions.checkArgument;
 
 /**
- * Parquet writes decimals as INT32, INT64, or BINARY/FIXED_LEN_BYTE_ARRAY depending on precision
- * (see {@link ParquetSchemaConverter#is32BitDecimal(int)} /
- * {@link ParquetSchemaConverter#is64BitDecimal(int)}). This class wraps the underlying vector and
- * exposes a {@link DecimalColumnVector} view on top whose {@link #getDecimal} dispatches on the
- * child's physical type, so small-precision decimals encoded as INT32/INT64 are no longer
- * mis-cast as bytes (see GH-18491).
- *
- * <p>In addition it implements {@link WritableLongVector}, {@link WritableIntVector}, and
- * {@link WritableBytesVector} by delegation so that column readers can write into a
- * {@code ParquetDecimalVector} without unwrapping to the child.
- *
- * <p>Synced with Apache Flink 2.1
- * ({@code org.apache.flink.formats.parquet.vector.ParquetDecimalVector}); replaces Hudi's
- * Flink-1.11-era read-only wrapper.
+ * Parquet write decimal as int32 and int64 and binary, this class wrap the real vector to provide
+ * {@link DecimalColumnVector} interface.
  */
 public class ParquetDecimalVector
     implements DecimalColumnVector, WritableLongVector, WritableIntVector, WritableBytesVector {
@@ -56,10 +44,6 @@ public class ParquetDecimalVector
 
   public ParquetDecimalVector(ColumnVector vector) {
     this.vector = vector;
-  }
-
-  public ColumnVector getVector() {
-    return vector;
   }
 
   @Override
@@ -77,6 +61,10 @@ public class ParquetDecimalVector
       return DecimalData.fromUnscaledBytes(
           ((BytesColumnVector) vector).getBytes(i).getBytes(), precision, scale);
     }
+  }
+
+  public ColumnVector getVector() {
+    return vector;
   }
 
   @Override
