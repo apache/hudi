@@ -1,0 +1,61 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+import org.apache.spark.sql.types._
+import org.apache.spark.sql.SaveMode
+
+// Create schema with VECTOR metadata + partition column
+val metadata = new MetadataBuilder()
+  .putString("hudi_type", "VECTOR(3)")
+  .build()
+val schema = StructType(Seq(
+  StructField("id", LongType, nullable = false),
+  StructField("name", StringType),
+  StructField("embedding", ArrayType(FloatType, containsNull = false), nullable = false, metadata = metadata),
+  StructField("dt", StringType)
+))
+
+// Create data with a 3-dim vector
+val data = Seq(
+  org.apache.spark.sql.Row(1L, "doc1", Seq(0.1f, 0.2f, 0.3f), "2024-01-01"),
+  org.apache.spark.sql.Row(2L, "doc2", Seq(0.4f, 0.5f, 0.6f), "2024-01-01")
+)
+val df = spark.createDataFrame(spark.sparkContext.parallelize(data), schema)
+
+// Write as Hudi COW partitioned table with Hive sync enabled
+df.write.format("hudi")
+  .option("hoodie.table.name", "vector_test_df")
+  .option("hoodie.datasource.write.recordkey.field", "id")
+  .option("hoodie.datasource.write.precombine.field", "name")
+  .option("hoodie.datasource.write.partitionpath.field", "dt")
+  .option("hoodie.datasource.hive_sync.enable", "true")
+  .option("hoodie.datasource.hive_sync.database", "default")
+  .option("hoodie.datasource.hive_sync.table", "vector_test_df")
+  .option("hoodie.datasource.hive_sync.jdbcurl", "jdbc:hive2://hiveserver:10000/")
+  .option("hoodie.datasource.hive_sync.mode", "hms")
+  .option("hoodie.datasource.hive_sync.partition_fields", "dt")
+  .option("hoodie.datasource.hive_sync.partition_extractor_class",
+    "org.apache.hudi.hive.MultiPartKeysValueExtractor")
+  .option("hoodie.datasource.hive_sync.username", "hive")
+  .option("hoodie.datasource.hive_sync.password", "hive")
+  .mode(SaveMode.Overwrite)
+  .save("/user/hive/warehouse/vector_test_df")
+
+// Verify table is readable via Spark
+spark.sql("select id, name, embedding, dt from vector_test_df").show(10, false)
+println("VECTOR_DF_TEST_SUCCESS")

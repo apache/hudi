@@ -1,0 +1,60 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+import org.apache.spark.sql.SaveMode
+
+// E2E test: VARIANT type with Hive sync via DataFrame API path.
+// Tests that the HiveSyncTool correctly maps VARIANT to struct<value:binary,metadata:binary> in Hive.
+
+// Create a DataFrame with native VariantType using parse_json()
+val df = spark.sql("""
+  SELECT
+    1L AS id,
+    'row1' AS name,
+    parse_json('{"key":"value1"}') AS variant_data,
+    '2024-01-01' AS dt
+  UNION ALL
+  SELECT
+    2L AS id,
+    'row2' AS name,
+    parse_json('{"key":"value2"}') AS variant_data,
+    '2024-01-01' AS dt
+""")
+
+// Write via DataFrame API with Hive sync options
+df.write.format("hudi")
+  .option("hoodie.table.name", "variant_test_df")
+  .option("hoodie.datasource.write.recordkey.field", "id")
+  .option("hoodie.datasource.write.precombine.field", "name")
+  .option("hoodie.datasource.write.partitionpath.field", "dt")
+  .option("hoodie.datasource.hive_sync.enable", "true")
+  .option("hoodie.datasource.hive_sync.database", "default")
+  .option("hoodie.datasource.hive_sync.table", "variant_test_df")
+  .option("hoodie.datasource.hive_sync.jdbcurl", "jdbc:hive2://hiveserver:10000/")
+  .option("hoodie.datasource.hive_sync.mode", "hms")
+  .option("hoodie.datasource.hive_sync.partition_fields", "dt")
+  .option("hoodie.datasource.hive_sync.partition_extractor_class",
+    "org.apache.hudi.hive.MultiPartKeysValueExtractor")
+  .option("hoodie.datasource.hive_sync.username", "hive")
+  .option("hoodie.datasource.hive_sync.password", "hive")
+  .mode(SaveMode.Overwrite)
+  .save("/user/hive/warehouse/variant_test_df")
+
+// Verify table is readable via Spark
+spark.sql("select id, name, cast(variant_data as string), dt from variant_test_df").show(10, false)
+println("VARIANT_DF_TEST_SUCCESS")

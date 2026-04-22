@@ -1251,6 +1251,71 @@ jobs:
           rm -f $GITHUB_WORKSPACE/$SPARK_ARCHIVE
           mvn verify $SCALA_PROFILE -D"$SPARK_PROFILE" -Pintegration-tests -pl !hudi-flink-datasource/hudi-flink $MVN_ARGS
 
+  integration-tests-hive-sync:
+    # Testcontainers-based E2E hive sync coverage for Hudi's custom logical types
+    # (VECTOR, BLOB) and the Spark 4.0 VARIANT type. Runs ITTestCustomTypeHiveSync
+    # against a real Hive metastore on both a Spark 3.5.3 and Spark 4.0.1 stack.
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - sparkProfile: 'spark3.5'
+            scalaProfile: '-Dscala-2.12 -Dscala.binary.version=2.12'
+            flinkProfile: 'flink1.20'
+            jdkVersion: '11'
+            composePrefix: 'docker-compose_hadoop284_hive2310_spark353'
+            sparkAdhocImage: 'apachehudi/hudi-hadoop_2.8.4-hive_2.3.10-sparkadhoc_3.5.3:latest'
+          - sparkProfile: 'spark4.0'
+            scalaProfile: '-Dscala-2.13 -Dscala.binary.version=2.13'
+            flinkProfile: 'flink1.20'
+            jdkVersion: '17'
+            composePrefix: 'docker-compose_hadoop340_hive313_spark401'
+            sparkAdhocImage: 'apachehudi/hudi-hadoop_3.4.0-hive_3.1.3-sparkadhoc_4.0.1:latest'
+    steps:
+      - uses: actions/checkout@v5
+      - name: Set up JDK ${{ matrix.jdkVersion }}
+        uses: actions/setup-java@v5
+        with:
+          java-version: ${{ matrix.jdkVersion }}
+          distribution: 'temurin'
+          architecture: x64
+          cache: maven
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /usr/local/lib/android
+          sudo rm -rf /opt/ghc
+          sudo rm -rf /usr/local/share/boost
+          docker system prune --all --force --volumes
+      - name: Pre-pull compose images (fails fast if not published)
+        env:
+          SPARK_ADHOC_IMAGE: ${{ matrix.sparkAdhocImage }}
+        run: |
+          # Surface missing Spark 4.0.1 images before the 15-minute Maven install.
+          # The remaining images in the compose stack are pulled by docker-compose at
+          # test time.
+          docker pull "$SPARK_ADHOC_IMAGE"
+      - name: Build and install Hudi artifacts
+        env:
+          SPARK_PROFILE: ${{ matrix.sparkProfile }}
+          FLINK_PROFILE: ${{ matrix.flinkProfile }}
+          SCALA_PROFILE: ${{ matrix.scalaProfile }}
+        run:
+          mvn clean install -T 2 $SCALA_PROFILE -D"$SPARK_PROFILE" -D"$FLINK_PROFILE" -Pintegration-tests -DskipTests=true -Ddocker.compose.skip=true $MVN_ARGS
+      - name: Run ITTestCustomTypeHiveSync
+        env:
+          SPARK_PROFILE: ${{ matrix.sparkProfile }}
+          SCALA_PROFILE: ${{ matrix.scalaProfile }}
+          COMPOSE_PREFIX: ${{ matrix.composePrefix }}
+        run: |
+          mvn verify $SCALA_PROFILE -D"$SPARK_PROFILE" -Pintegration-tests \
+            -pl hudi-integ-test \
+            -Ddocker.compose.skip=true \
+            -Dit.test=ITTestCustomTypeHiveSync \
+            -Dspark.docker.compose.prefix=$COMPOSE_PREFIX \
+            $MVN_ARGS
+
   build-spark-java17:
     runs-on: ubuntu-latest
     strategy:
