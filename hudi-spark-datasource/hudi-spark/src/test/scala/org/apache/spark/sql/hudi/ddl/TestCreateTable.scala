@@ -37,6 +37,7 @@ import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.catalog.{CatalogTableType, HoodieCatalogTable}
 import org.apache.spark.sql.functions.{col, concat, expr, lit}
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils
+import org.apache.spark.sql.hudi.command.CreateHoodieTableCommand
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase.{disableComplexKeygenValidation, getLastCommitMetadata}
 import org.apache.spark.sql.types._
@@ -2286,5 +2287,50 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
       assertTrue(embeddingField.metadata.contains(HoodieSchema.TYPE_METADATA_FIELD))
       assertEquals(ArrayType(FloatType, containsNull = false), embeddingField.dataType)
     }
+  }
+
+  test("toHiveCompatibleSchema rewrites VECTOR field to BinaryType and preserves metadata") {
+    // VECTOR's on-disk layout is Parquet fixed_len_byte_array (RFC-99); the HMS column must be
+    // BINARY so Hive-side Parquet reads match the physical type. The logical ArrayType(FloatType)
+    // view is preserved in spark.sql.sources.schema.* TBLPROPERTIES via the retained metadata.
+    val vectorMetadata = new MetadataBuilder()
+      .putString(HoodieSchema.TYPE_METADATA_FIELD, "VECTOR(3)")
+      .putString("comment", "embedding")
+      .build()
+
+    val schema = StructType(Seq(
+      StructField("id", LongType, nullable = false),
+      StructField("name", StringType),
+      StructField(
+        "embedding",
+        ArrayType(FloatType, containsNull = false),
+        nullable = true,
+        metadata = vectorMetadata),
+      StructField("dt", StringType)))
+
+    val hiveSchema = CreateHoodieTableCommand.toHiveCompatibleSchema(schema)
+
+    val embedding = hiveSchema("embedding")
+    assertEquals(BinaryType, embedding.dataType)
+    assertEquals("binary", embedding.dataType.catalogString)
+    assertTrue(embedding.metadata.contains(HoodieSchema.TYPE_METADATA_FIELD))
+    assertEquals("VECTOR(3)", embedding.metadata.getString(HoodieSchema.TYPE_METADATA_FIELD))
+    assertEquals("embedding", embedding.metadata.getString("comment"))
+
+    // Non-VECTOR fields must pass through unchanged.
+    assertEquals(LongType, hiveSchema("id").dataType)
+    assertEquals(StringType, hiveSchema("name").dataType)
+    assertEquals(StringType, hiveSchema("dt").dataType)
+  }
+
+  test("toHiveCompatibleSchema leaves plain ArrayType(FloatType) without VECTOR marker alone") {
+    // Guard against accidentally rewriting any ArrayType(FloatType). Only fields carrying the
+    // VECTOR descriptor in hudi_type metadata should be converted to BinaryType.
+    val schema = StructType(Seq(
+      StructField("id", LongType, nullable = false),
+      StructField("floats", ArrayType(FloatType, containsNull = false))))
+
+    val hiveSchema = CreateHoodieTableCommand.toHiveCompatibleSchema(schema)
+    assertEquals(ArrayType(FloatType, containsNull = false), hiveSchema("floats").dataType)
   }
 }

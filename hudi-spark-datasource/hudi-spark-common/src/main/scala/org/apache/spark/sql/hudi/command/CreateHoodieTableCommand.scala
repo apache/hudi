@@ -19,7 +19,7 @@ package org.apache.spark.sql.hudi.command
 
 import org.apache.hudi.{DataSourceWriteOptions, SparkAdapterSupport}
 import org.apache.hudi.common.model.HoodieTableType
-import org.apache.hudi.common.schema.HoodieSchema
+import org.apache.hudi.common.schema.{HoodieSchema, HoodieSchemaType}
 import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.common.util.ConfigUtils
 import org.apache.hudi.exception.{HoodieException, HoodieValidationException}
@@ -249,7 +249,13 @@ object CreateHoodieTableCommand extends SparkAdapterSupport {
 
   /**
    * Converts Spark DataTypes that Hive doesn't support to their physical representations.
-   * Currently handles VariantType (Spark 4.0+) -> `struct<metadata:binary, value:binary>`.
+   * Currently handles:
+   *   - VariantType (Spark 4.0+) -> `struct<metadata:binary, value:binary>`
+   *   - VECTOR (Hudi custom logical type, exposed in Spark as ArrayType with `hudi_type`
+   *     metadata) -> `BinaryType`, matching its on-disk fixed_len_byte_array layout
+   *     (RFC-99). Field metadata is preserved so the full logical schema is still
+   *     serialised into `spark.sql.sources.schema.*` TBLPROPERTIES by the caller.
+   *
    * Recurses into nested StructType, ArrayType, and MapType so variants embedded in
    * complex types (e.g. `STRUCT<a: VARIANT>`, `ARRAY<VARIANT>`, `MAP<STRING, VARIANT>`)
    * are also converted.
@@ -267,7 +273,13 @@ object CreateHoodieTableCommand extends SparkAdapterSupport {
         StructField(HoodieSchema.Variant.VARIANT_VALUE_FIELD, BinaryType, nullable = false)
       ))
     case st: StructType =>
-      StructType(st.fields.map(f => f.copy(dataType = toHiveCompatibleType(f.dataType))))
+      StructType(st.fields.map { f =>
+        if (isVectorField(f)) {
+          f.copy(dataType = BinaryType)
+        } else {
+          f.copy(dataType = toHiveCompatibleType(f.dataType))
+        }
+      })
     case at: ArrayType =>
       at.copy(elementType = toHiveCompatibleType(at.elementType))
     case mt: MapType =>
@@ -275,6 +287,15 @@ object CreateHoodieTableCommand extends SparkAdapterSupport {
         keyType = toHiveCompatibleType(mt.keyType),
         valueType = toHiveCompatibleType(mt.valueType))
     case other => other
+  }
+
+  private def isVectorField(field: StructField): Boolean = {
+    // Mirrors the detection pattern in HoodieSparkSchemaConverters.toHoodieTypeNested. The
+    // TYPE_METADATA_FIELD is documented to only hold custom-logical-type descriptors
+    // (VECTOR, BLOB, VARIANT), so parseTypeDescriptor is safe once the key is present.
+    field.metadata.contains(HoodieSchema.TYPE_METADATA_FIELD) &&
+      HoodieSchema.parseTypeDescriptor(
+        field.metadata.getString(HoodieSchema.TYPE_METADATA_FIELD)).getType == HoodieSchemaType.VECTOR
   }
 
   // This code is forked from org.apache.spark.sql.hive.HiveExternalCatalog#tableMetaToTableProps
