@@ -18,6 +18,7 @@ import io.trino.plugin.hudi.util.HudiAvroSerializer;
 import io.trino.plugin.hudi.util.SynthesizedColumnHandler;
 import io.trino.spi.Page;
 import io.trino.spi.connector.ConnectorPageSource;
+import io.trino.spi.connector.SourcePage;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericData.Record;
@@ -104,7 +105,8 @@ public class HudiTrinoReaderContext
                     }
 
                     // Get next page and reset currentPosition
-                    currentPage = pageSource.getNextPage();
+                    SourcePage sourcePage = pageSource.getNextSourcePage();
+                    currentPage = sourcePage != null ? sourcePage.getPage() : null;
                     currentPosition = 0;
 
                     // If no more pages are available
@@ -155,7 +157,14 @@ public class HudiTrinoReaderContext
     public Object getValue(IndexedRecord record, Schema schema, String fieldName)
     {
         if (colToPosMap.containsKey(fieldName)) {
-            return record.get(colToPosMap.get(fieldName));
+            Object value = record.get(colToPosMap.get(fieldName));
+            // Avro log file records have Utf8 string values, but Hudi's merge code
+            // (FileGroupRecordBuffer.merge) casts record keys to String directly.
+            // Convert Utf8 to String to avoid ClassCastException during merge.
+            if (value instanceof org.apache.avro.util.Utf8) {
+                return value.toString();
+            }
+            return value;
         }
         else {
             // record doesn't have the queried field, return null
