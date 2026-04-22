@@ -47,7 +47,7 @@ import org.apache.spark.sql.hudi.analysis.HoodieSparkBaseAnalysis.HoodieV1OrV2Ta
 import org.apache.spark.sql.hudi.catalog.HoodieCatalog.{buildPartitionTransforms, isTablePartitioned}
 import org.apache.spark.sql.hudi.command._
 import org.apache.spark.sql.hudi.command.exception.HoodieAnalysisException
-import org.apache.spark.sql.hudi.v2.HoodieSparkV2Table
+import org.apache.spark.sql.hudi.v2.{HoodieSparkV2Table, HoodieV2ReadSupport}
 import org.apache.spark.sql.types.{StructField, StructType}
 
 import java.net.URI
@@ -143,7 +143,15 @@ class HoodieCatalog extends DelegatingCatalogExtension
           DataSourceReadOptions.USE_V2_READ.defaultValue).toBoolean
         val schemaEvolutionEnabled = ProvidesHoodieConfig.isSchemaEvolutionEnabled(spark)
 
-        if (v2ReadEnabled) {
+        val dsv2Supported = v2ReadEnabled && {
+          val metaClient = HoodieTableMetaClient.builder()
+            .setBasePath(catalogTable.location.toString)
+            .setConf(HadoopFSUtils.getStorageConf(spark.sessionState.newHadoopConf))
+            .build()
+          HoodieV2ReadSupport.isSupportedByDSv2(metaClient, Map.empty, spark)
+        }
+
+        if (dsv2Supported) {
           HoodieSparkV2Table(
             spark = spark,
             path = catalogTable.location.toString,

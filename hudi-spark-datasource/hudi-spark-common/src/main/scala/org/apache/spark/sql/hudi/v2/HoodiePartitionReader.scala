@@ -19,6 +19,7 @@ package org.apache.spark.sql.hudi.v2
 
 import org.apache.hudi.SparkAdapterSupport
 import org.apache.hudi.common.util.{Option => HOption}
+import org.apache.hudi.internal.schema.InternalSchema
 import org.apache.hudi.storage.StoragePath
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration
 
@@ -27,6 +28,7 @@ import org.apache.spark.sql.HoodieCatalystExpressionUtils
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.connector.read.PartitionReader
 import org.apache.spark.sql.execution.datasources.SparkColumnarFileReader
+import org.apache.spark.sql.sources.Filter
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.util.SerializableConfiguration
 
@@ -35,14 +37,14 @@ import java.io.Closeable
 /**
  * Partition reader that reads rows from a single COW base file using [[SparkColumnarFileReader]].
  */
-class
-
-HoodiePartitionReader(partition: HoodieInputPartition,
+class HoodiePartitionReader(partition: HoodieInputPartition,
                             broadcastReader: Broadcast[SparkColumnarFileReader],
                             broadcastConf: Broadcast[SerializableConfiguration],
                             readSchema: StructType,
                             requiredDataSchema: StructType,
                             requiredPartitionSchema: StructType,
+                            internalSchemaOpt: HOption[InternalSchema] = HOption.empty(),
+                            pushedFilters: Array[Filter] = Array.empty,
                             pushedLimit: Option[Int] = None)
   extends PartitionReader[InternalRow] with SparkAdapterSupport {
 
@@ -80,7 +82,7 @@ HoodiePartitionReader(partition: HoodieInputPartition,
     val storageConf = new HadoopStorageConfiguration(broadcastConf.value.value)
     rawIterator = broadcastReader.value.read(
       pFile, requiredDataSchema, requiredPartitionSchema,
-      HOption.empty(), Seq.empty, storageConf)
+      internalSchemaOpt, pushedFilters.toSeq, storageConf)
 
     val readerOutputSchema = StructType(requiredDataSchema.fields ++ requiredPartitionSchema.fields)
     if (readerOutputSchema != readSchema) {

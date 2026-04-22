@@ -18,7 +18,9 @@
 package org.apache.spark.sql.hudi.v2
 
 import org.apache.hudi.{DataSourceWriteOptions, HoodieEmptyRelation, HoodieSparkSqlWriter}
-import org.apache.hudi.exception.HoodieException
+import org.apache.hudi.common.table.HoodieTableMetaClient
+import org.apache.hudi.exception.{HoodieException, TableNotFoundException}
+import org.apache.hudi.hadoop.fs.HadoopFSUtils
 
 import org.apache.spark.sql.{DataFrame, SaveMode, SparkSession, SQLContext}
 import org.apache.spark.sql.connector.catalog.{Table, TableProvider}
@@ -28,6 +30,8 @@ import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.util.CaseInsensitiveStringMap
 
 import java.util
+
+import scala.collection.JavaConverters._
 
 /**
  * DSv2 data source for Hudi, registered with short name "hudi_v2".
@@ -56,7 +60,29 @@ class HoodieDataSourceV2 extends TableProvider with DataSourceRegister with Crea
       throw new HoodieException("'path' cannot be null, missing 'path' from table properties")
     }
 
-    HoodieSparkV2Table(SparkSession.active, path, options = options)
+    val spark = SparkSession.active
+    // Writes to a new path have no table on disk yet; the gate only applies to reads against
+    // an existing table. Swallowing TableNotFoundException lets the V1-write fallback proceed.
+    val metaClientOpt: Option[HoodieTableMetaClient] = try {
+      Some(HoodieTableMetaClient.builder()
+        .setBasePath(path)
+        .setConf(HadoopFSUtils.getStorageConf(spark.sessionState.newHadoopConf))
+        .build())
+    } catch {
+      case _: TableNotFoundException => None
+    }
+
+    val optsMap = options.asCaseSensitiveMap().asScala.toMap
+    metaClientOpt.foreach { metaClient =>
+      if (!HoodieV2ReadSupport.isSupportedByDSv2(metaClient, optsMap, spark)) {
+        throw new HoodieException(
+          "format(\"hudi_v2\") does not support this query configuration " +
+            "(MOR snapshot, non-Parquet base format, multiple base formats, " +
+            "incremental/CDC, or bootstrap table). Use format(\"hudi\") instead.")
+      }
+    }
+
+    HoodieSparkV2Table(spark, path, options = options)
   }
 
   override def createRelation(sqlContext: SQLContext,
@@ -66,7 +92,10 @@ class HoodieDataSourceV2 extends TableProvider with DataSourceRegister with Crea
     try {
       if (optParams.get(DataSourceWriteOptions.OPERATION.key)
         .contains(DataSourceWriteOptions.BOOTSTRAP_OPERATION_OPT_VAL)) {
-        HoodieSparkSqlWriter.bootstrap(sqlContext, mode, optParams, df)
+        val success = HoodieSparkSqlWriter.bootstrap(sqlContext, mode, optParams, df)
+        if (!success) {
+          throw new HoodieException("Failed to bootstrap Hudi table")
+        }
       } else {
         val (success, _, _, _, _, _) = HoodieSparkSqlWriter.write(sqlContext, mode, optParams, df)
         if (!success) {

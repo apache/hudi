@@ -17,6 +17,9 @@
 
 package org.apache.spark.sql.hudi.v2
 
+import org.apache.hudi.common.util.{Option => HOption}
+import org.apache.hudi.internal.schema.InternalSchema
+
 import org.apache.spark.broadcast.Broadcast
 import org.apache.spark.sql.connector.read.{Batch, InputPartition, PartitionReaderFactory, Scan, Statistics, SupportsReportStatistics}
 import org.apache.spark.sql.execution.datasources.SparkColumnarFileReader
@@ -27,25 +30,22 @@ import org.apache.spark.util.SerializableConfiguration
 /**
  * Batch scan for snapshot reads via DSv2 (COW).
  */
-class HoodieBatchScan(readSchema: StructType,
+class HoodieBatchScan(outputSchema: StructType,
                       inputPartitions: Array[InputPartition],
                       broadcastReader: Broadcast[SparkColumnarFileReader],
                       broadcastConf: Broadcast[SerializableConfiguration],
                       requiredDataSchema: StructType,
                       requiredPartitionSchema: StructType,
+                      internalSchemaOpt: HOption[InternalSchema] = HOption.empty(),
                       pushedFilters: Array[Filter] = Array.empty,
                       pushedLimit: Option[Int] = None) extends Scan with Batch with SupportsReportStatistics {
 
-  override def readSchema(): StructType = readSchema
+  override def readSchema(): StructType = outputSchema
 
   override def description(): String = {
-    val filtersStr = if (pushedFilters.nonEmpty) {
-      s", PushedFilters: [${pushedFilters.mkString(", ")}]"
-    } else {
-      ", PushedFilters: []"
-    }
+    val filtersStr = s", PushedFilters: [${pushedFilters.mkString(", ")}]"
     val limitStr = pushedLimit.map(l => s", PushedLimit: $l").getOrElse("")
-    s"HoodieBatchScan${readSchema.catalogString}$filtersStr$limitStr"
+    s"HoodieBatchScan${outputSchema.catalogString}$filtersStr$limitStr"
   }
 
   override def toBatch: Batch = this
@@ -56,9 +56,11 @@ class HoodieBatchScan(readSchema: StructType,
     new HoodiePartitionReaderFactory(
       broadcastReader,
       broadcastConf,
-      readSchema,
+      outputSchema,
       requiredDataSchema,
       requiredPartitionSchema,
+      internalSchemaOpt,
+      pushedFilters,
       pushedLimit)
   }
 

@@ -24,7 +24,7 @@ import org.apache.hudi.testutils.SparkClientFunctionalTestHarness.getSparkSqlCon
 import org.apache.spark.SparkConf
 import org.apache.spark.sql.SaveMode
 import org.junit.jupiter.api.{Tag, Test}
-import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 
 /**
  * Functional tests for COW snapshot reading via the DSv2 path.
@@ -33,6 +33,10 @@ import org.junit.jupiter.api.Assertions.assertEquals
 class TestDSv2CowSnapshotRead extends SparkClientFunctionalTestHarness {
 
   override def conf: SparkConf = conf(getSparkSqlConf)
+
+  private def containsBatchScan(plan: String): Boolean = plan.contains("BatchScan")
+
+  private def containsFileScan(plan: String): Boolean = plan.contains("FileScan")
 
   @Test
   def testCowReadViaDataFrameApi(): Unit = {
@@ -59,44 +63,60 @@ class TestDSv2CowSnapshotRead extends SparkClientFunctionalTestHarness {
     val v1Names = spark.read.format("hudi").load(path)
       .select("name").collect().map(_.getString(0)).sorted
     assertEquals(v1Names.toSeq, names.toSeq)
+
+    val plan = df.queryExecution.executedPlan.toString()
+    assertTrue(containsBatchScan(plan),
+      s"DSv2 read should use BatchScan, but plan was:\n$plan")
   }
 
   @Test
   def testCowReadViaSqlCatalog(): Unit = {
     val tableName = "cow_sql_read"
     val tablePath = basePath() + "/" + tableName
-    spark.sql(
-      s"""CREATE TABLE $tableName (
-         |  id INT,
-         |  name STRING,
-         |  amount DOUBLE,
-         |  ts LONG
-         |) USING hudi
-         |TBLPROPERTIES (
-         |  type = 'cow',
-         |  primaryKey = 'id',
-         |  orderingFields = 'ts'
-         |)
-         |LOCATION '$tablePath'
-         """.stripMargin)
-
-    spark.sql(s"INSERT INTO $tableName VALUES (1, 'Alice', 100.0, 1), (2, 'Bob', 200.0, 2), (3, 'Charlie', 300.0, 3)")
-
-    spark.sessionState.conf.setConfString(DataSourceReadOptions.USE_V2_READ.key, "true")
+    val confKey = DataSourceReadOptions.USE_V2_READ.key
+    val prev = Option(spark.sessionState.conf.getConfString(confKey, null))
     try {
+      spark.sql(s"DROP TABLE IF EXISTS $tableName")
+      spark.sql(
+        s"""CREATE TABLE $tableName (
+           |  id INT,
+           |  name STRING,
+           |  amount DOUBLE,
+           |  ts LONG
+           |) USING hudi
+           |TBLPROPERTIES (
+           |  type = 'cow',
+           |  primaryKey = 'id',
+           |  orderingFields = 'ts'
+           |)
+           |LOCATION '$tablePath'
+           """.stripMargin)
+
+      spark.sql(s"INSERT INTO $tableName VALUES (1, 'Alice', 100.0, 1), (2, 'Bob', 200.0, 2), (3, 'Charlie', 300.0, 3)")
+
+      spark.sessionState.conf.setConfString(confKey, "true")
       val v2Df = spark.sql(s"SELECT * FROM $tableName")
       assertEquals(3, v2Df.count())
+      val v2Plan = v2Df.queryExecution.executedPlan.toString()
+      assertTrue(containsBatchScan(v2Plan),
+        s"With use.v2=true, should use BatchScan, but plan was:\n$v2Plan")
 
-      spark.sessionState.conf.setConfString(DataSourceReadOptions.USE_V2_READ.key, "false")
+      spark.sessionState.conf.setConfString(confKey, "false")
       val v1Df = spark.sql(s"SELECT * FROM $tableName")
       assertEquals(3, v1Df.count())
+      val v1Plan = v1Df.queryExecution.executedPlan.toString()
+      assertTrue(containsFileScan(v1Plan),
+        s"With use.v2=false, should use FileScan, but plan was:\n$v1Plan")
 
       // Compare values (exclude meta-fields from V1)
       val v2Names = v2Df.select("name").collect().map(_.getString(0)).sorted
       val v1Names = v1Df.select("name").collect().map(_.getString(0)).sorted
       assertEquals(v1Names.toSeq, v2Names.toSeq)
     } finally {
-      spark.sessionState.conf.unsetConf(DataSourceReadOptions.USE_V2_READ.key)
+      prev match {
+        case Some(v) => spark.sessionState.conf.setConfString(confKey, v)
+        case None => spark.sessionState.conf.unsetConf(confKey)
+      }
       spark.sql(s"DROP TABLE IF EXISTS $tableName")
     }
   }
@@ -122,6 +142,10 @@ class TestDSv2CowSnapshotRead extends SparkClientFunctionalTestHarness {
 
     val rows = df.collect().map(r => (r.getInt(0), r.getString(1))).sortBy(_._1)
     assertEquals(Seq((1, "Alice"), (2, "Bob"), (3, "Charlie")), rows.toSeq)
+
+    val plan = df.queryExecution.executedPlan.toString()
+    assertTrue(containsBatchScan(plan),
+      s"DSv2 read should use BatchScan, but plan was:\n$plan")
   }
 
   @Test
@@ -144,6 +168,10 @@ class TestDSv2CowSnapshotRead extends SparkClientFunctionalTestHarness {
 
     val ids = df.select("id").collect().map(_.getInt(0)).sorted
     assertEquals(Seq(1, 2), ids.toSeq)
+
+    val plan = df.queryExecution.executedPlan.toString()
+    assertTrue(containsBatchScan(plan),
+      s"DSv2 read should use BatchScan, but plan was:\n$plan")
   }
 
   @Test
@@ -170,6 +198,10 @@ class TestDSv2CowSnapshotRead extends SparkClientFunctionalTestHarness {
 
     val names = df.select("name").collect().map(_.getString(0)).sorted
     assertEquals(Seq("Alice", "Bob", "Charlie"), names.toSeq)
+
+    val plan = df.queryExecution.executedPlan.toString()
+    assertTrue(containsBatchScan(plan),
+      s"DSv2 read should use BatchScan, but plan was:\n$plan")
   }
 
   @Test
@@ -204,6 +236,10 @@ class TestDSv2CowSnapshotRead extends SparkClientFunctionalTestHarness {
     val rows = df.select("id", "name", "amount").collect()
       .map(r => (r.getInt(0), r.getString(1), r.getDouble(2))).sortBy(_._1)
     assertEquals(Seq((1, "Alice", 150.0), (2, "Bob", 200.0), (3, "Charlie", 300.0)), rows.toSeq)
+
+    val plan = df.queryExecution.executedPlan.toString()
+    assertTrue(containsBatchScan(plan),
+      s"DSv2 read should use BatchScan, but plan was:\n$plan")
   }
 
   @Test
@@ -227,6 +263,13 @@ class TestDSv2CowSnapshotRead extends SparkClientFunctionalTestHarness {
     val v1Rows = v1Df.collect().map(r => (r.getInt(0), r.getString(1), r.getDouble(2))).sortBy(_._1)
     val v2Rows = v2Df.collect().map(r => (r.getInt(0), r.getString(1), r.getDouble(2))).sortBy(_._1)
     assertEquals(v1Rows.toSeq, v2Rows.toSeq)
+
+    val v1Plan = v1Df.queryExecution.executedPlan.toString()
+    assertTrue(containsFileScan(v1Plan),
+      s"DSv1 read should use FileScan, but plan was:\n$v1Plan")
+    val v2Plan = v2Df.queryExecution.executedPlan.toString()
+    assertTrue(containsBatchScan(v2Plan),
+      s"DSv2 read should use BatchScan, but plan was:\n$v2Plan")
   }
 
   @Test
@@ -250,6 +293,10 @@ class TestDSv2CowSnapshotRead extends SparkClientFunctionalTestHarness {
 
     val countries = df.collect().map(_.getString(0)).sorted
     assertEquals(Seq("UK", "US", "US"), countries.toSeq)
+
+    val plan = df.queryExecution.executedPlan.toString()
+    assertTrue(containsBatchScan(plan),
+      s"DSv2 read should use BatchScan, but plan was:\n$plan")
   }
 
   @Test
@@ -285,5 +332,40 @@ class TestDSv2CowSnapshotRead extends SparkClientFunctionalTestHarness {
     assertEquals(2L, countsByCountry("US"))
     assertEquals(2L, countsByCountry("UK"))
     assertEquals(1L, countsByCountry("DE"))
+
+    val plan = df.queryExecution.executedPlan.toString()
+    assertTrue(containsBatchScan(plan),
+      s"DSv2 read should use BatchScan, but plan was:\n$plan")
+  }
+
+  @Test
+  def testDataFrameApiReadDoesNotTriggerV1Table(): Unit = {
+    // Proves that a DataFrame-API read (catalogTable = None) completes end-to-end
+    // through filter + projection analysis without dereferencing v1Table.
+    // Guards against regressions that would surface as IllegalStateException from
+    // HoodieSparkV2Table.requireCatalogTable.
+    val path = basePath() + "/cow_df_read_no_v1"
+    val _spark = spark
+    import _spark.implicits._
+
+    Seq((1, "Alice", 100.0), (2, "Bob", 200.0), (3, "Charlie", 300.0))
+      .toDF("id", "name", "amount")
+      .write.format("hudi")
+      .option("hoodie.table.name", "cow_df_read_no_v1")
+      .option("hoodie.datasource.write.recordkey.field", "id")
+      .option("hoodie.datasource.write.precombine.field", "amount")
+      .mode(SaveMode.Overwrite)
+      .save(path)
+
+    val df = spark.read.format("hudi_v2").load(path)
+      .filter($"amount" > 100.0)
+      .select("id", "name")
+    val rows = df.collect().map(r => (r.getInt(0), r.getString(1))).sortBy(_._1)
+    assertEquals(Seq((2, "Bob"), (3, "Charlie")), rows.toSeq)
+
+    val plan = df.queryExecution.executedPlan.toString()
+    assertTrue(containsBatchScan(plan),
+      s"DataFrame-API read should land on BatchScan without v1Table being called, " +
+        s"plan was:\n$plan")
   }
 }
