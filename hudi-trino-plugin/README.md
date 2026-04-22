@@ -7,7 +7,7 @@ A Trino connector for querying Apache Hudi tables. Supports both Copy-On-Write (
 | Component | Version |
 |-----------|---------|
 | Trino     | 480     |
-| Hudi      | 1.0.2   |
+| Hudi      | 1.1.1   |
 | JDK       | 25+     |
 
 ## Building
@@ -49,12 +49,12 @@ rm -f $PLUGIN_DIR/org.apache.hudi_hudi-io-1.1.1.jar
 # Copy custom plugin jar
 cp target/trino-hudi-480.jar $PLUGIN_DIR/io.trino_trino-hudi-480.jar
 
-# Copy Hudi 1.0.2 jars (from local Maven repository)
+# Copy Hudi 1.1.1 jars (from local Maven repository)
 M2=~/.m2/repository
-cp $M2/org/apache/hudi/hudi-common/1.0.2/hudi-common-1.0.2.jar         $PLUGIN_DIR/
-cp $M2/org/apache/hudi/hudi-io/1.0.2/hudi-io-1.0.2.jar                 $PLUGIN_DIR/
-cp $M2/org/apache/hudi/hudi-hive-sync/1.0.2/hudi-hive-sync-1.0.2.jar   $PLUGIN_DIR/
-cp $M2/org/apache/hudi/hudi-sync-common/1.0.2/hudi-sync-common-1.0.2.jar $PLUGIN_DIR/
+cp $M2/org/apache/hudi/hudi-common/1.1.1/hudi-common-1.1.1.jar         $PLUGIN_DIR/
+cp $M2/org/apache/hudi/hudi-io/1.1.1/hudi-io-1.1.1.jar                 $PLUGIN_DIR/
+cp $M2/org/apache/hudi/hudi-hive-sync/1.1.1/hudi-hive-sync-1.1.1.jar   $PLUGIN_DIR/
+cp $M2/org/apache/hudi/hudi-sync-common/1.1.1/hudi-sync-common-1.1.1.jar $PLUGIN_DIR/
 
 # Copy additional runtime dependencies not in stock Trino 480
 cp $M2/com/esotericsoftware/kryo/4.0.2/kryo-4.0.2.jar                   $PLUGIN_DIR/

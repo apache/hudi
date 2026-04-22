@@ -16,7 +16,7 @@
 
     <properties>
         <air.compiler.fail-warnings>true</air.compiler.fail-warnings>
-        <dep.hudi.version>1.0.2</dep.hudi.version>
+        <dep.hudi.version>1.1.1</dep.hudi.version>
     </properties>
 
     <dependencies>
@@ -169,6 +169,7 @@
             <groupId>org.apache.hudi</groupId>
             <artifactId>hudi-io</artifactId>
             <version>${dep.hudi.version}</version>
+            <classifier>shaded</classifier>
             <exclusions>
                 <exclusion>
                     <!-- Conflicts with org.lz4:lz4-java already on the classpath -->
@@ -253,7 +254,7 @@
         </dependency>
 
         <dependency>
-            <!-- Required at runtime by Hudi 1.0.2 (HoodieAvroUtils uses GraphLayout).
+            <!-- Required at runtime by Hudi (HoodieAvroUtils uses GraphLayout).
                  Was provided by Trino 472 but removed from Trino 480's classpath. -->
             <groupId>org.openjdk.jol</groupId>
             <artifactId>jol-core</artifactId>
@@ -512,6 +513,13 @@
                     </ignoredClassPatterns>
 
                     <ignoredDependencies>
+                        <!-- hudi-io:shaded is an uber-jar that physically bundles protobuf .proto resources
+                             inside the jar itself; these cannot be excluded as transitive dependencies -->
+                        <dependency>
+                            <groupId>org.apache.hudi</groupId>
+                            <artifactId>hudi-io</artifactId>
+                            <classifier>shaded</classifier>
+                        </dependency>
                         <!-- at.yawk.lz4:lz4-java (from trino-hive-formats) and org.lz4:lz4-java (from hudi-common)
                              are different group IDs providing the same net.jpountz.* package -->
                         <dependency>

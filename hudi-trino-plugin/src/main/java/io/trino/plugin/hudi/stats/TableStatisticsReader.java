@@ -24,7 +24,7 @@ import io.trino.spi.statistics.TableStatistics;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
-import org.apache.hudi.common.model.HoodieColumnRangeMetadata;
+import org.apache.hudi.stats.HoodieColumnRangeMetadata;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
@@ -75,7 +75,7 @@ public class TableStatisticsReader
                 .toList();
         Map<String, HoodieColumnRangeMetadata> columnStatsMap = getColumnStats(latestCommit, tableMetadata, fileSystemView, columnNames);
         if (columnStatsMap.isEmpty()) {
-            log.info("Unable to get column stats from metadata table for table, returning empty table statistics: %s",
+            log.warn("Unable to get column stats from metadata table for table, returning empty table statistics: %s",
                     metaClient.getBasePath());
             return TableStatistics.empty();
         }
@@ -113,6 +113,6 @@ public class TableStatisticsReader
                 .stream().flatMap(entry -> entry.getValue()
                         .map(baseFile -> Pair.of(entry.getKey(), baseFile.getFileName())))
                 .toList();
-        return tableMetadata.getColumnStats(filePaths, columnNames);
+        return tableMetadata.getColumnsRange(filePaths, columnNames);
     }
 }

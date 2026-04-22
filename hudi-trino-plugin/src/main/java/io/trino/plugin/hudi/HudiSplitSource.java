@@ -44,6 +44,7 @@ import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.HoodieTimer;
+import org.apache.hudi.metadata.HoodieBackedTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.util.Lazy;
 
@@ -104,7 +105,7 @@ public class HudiSplitSource
             HoodieTableMetaClient metaClient = tableHandle.getMetaClient();
             HoodieEngineContext engineContext = new HoodieLocalEngineContext(metaClient.getStorage().getConf());
 
-            HoodieTableMetadata tableMetadata = HoodieTableMetadata.create(
+            HoodieTableMetadata tableMetadata = new HoodieBackedTableMetadata(
                     engineContext,
                     tableHandle.getMetaClient().getStorage(), metadataConfig, metaClient.getBasePath().toString(), true);
             log.info("Loaded table metadata for table: %s in %s ms", tableHandle.getSchemaTableName(), timer.endTimer());
