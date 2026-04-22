@@ -178,9 +178,8 @@ public class HiveIncrementalPuller {
         }
       } catch (SQLException e) {
         LOG.error("Could not close the JDBC connection", e);
-      } finally {
-        this.connection = null;
       }
+      this.connection = null;
     }
   }
 
