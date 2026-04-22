@@ -92,6 +92,10 @@ class IncrementalRelationV1(val sqlContext: SQLContext,
     throw new HoodieException("Incremental queries are not supported when meta fields are disabled")
   }
 
+  if (metaClient.getTableConfig.isMetaFieldExcluded(HoodieRecord.COMMIT_TIME_METADATA_FIELD)) {
+    throw new HoodieException("Incremental queries are not supported when _hoodie_commit_time is excluded via hoodie.meta.fields.to.exclude")
+  }
+
   private val useEndInstantSchema = optParams.getOrElse(INCREMENTAL_READ_SCHEMA_USE_END_INSTANTTIME.key,
     INCREMENTAL_READ_SCHEMA_USE_END_INSTANTTIME.defaultValue).toBoolean
 

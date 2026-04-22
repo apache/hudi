@@ -23,6 +23,7 @@ import org.apache.hudi.avro.HoodieAvroWriteSupport;
 import org.apache.hudi.common.config.HoodieParquetConfig;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.HoodieKey;
+import org.apache.hudi.common.model.MetadataFieldsPopulation;
 import org.apache.hudi.io.hadoop.HoodieBaseParquetWriter;
 import org.apache.hudi.io.storage.HoodieAvroFileWriter;
 import org.apache.hudi.storage.StoragePath;
@@ -48,7 +49,7 @@ public class HoodieAvroParquetWriter
   private final String instantTime;
   private final TaskContextSupplier taskContextSupplier;
   private final boolean populateMetaFields;
-  private final boolean[] populateIndividualMetaFields;
+  private final MetadataFieldsPopulation populateIndividualMetaFields;
   private final HoodieAvroWriteSupport writeSupport;
 
   @SuppressWarnings({"unchecked", "rawtypes"})
@@ -57,7 +58,7 @@ public class HoodieAvroParquetWriter
                                  String instantTime,
                                  TaskContextSupplier taskContextSupplier,
                                  boolean populateMetaFields) throws IOException {
-    this(file, parquetConfig, instantTime, taskContextSupplier, populateMetaFields, null);
+    this(file, parquetConfig, instantTime, taskContextSupplier, populateMetaFields, MetadataFieldsPopulation.allPopulated());
   }
 
   @SuppressWarnings({"unchecked", "rawtypes"})
@@ -66,7 +67,7 @@ public class HoodieAvroParquetWriter
                                  String instantTime,
                                  TaskContextSupplier taskContextSupplier,
                                  boolean populateMetaFields,
-                                 boolean[] populateIndividualMetaFields) throws IOException {
+                                 MetadataFieldsPopulation populateIndividualMetaFields) throws IOException {
     super(file, (HoodieParquetConfig) parquetConfig);
     this.fileName = file.getName();
     this.writeSupport = parquetConfig.getWriteSupport();
@@ -79,15 +80,10 @@ public class HoodieAvroParquetWriter
   @Override
   public void writeAvroWithMetadata(HoodieKey key, IndexedRecord avroRecord) throws IOException {
     if (populateMetaFields) {
-      if (populateIndividualMetaFields != null) {
-        prepRecordWithMetadata(key, avroRecord, instantTime,
-            taskContextSupplier.getPartitionIdSupplier().get(), getWrittenRecordCount(), fileName, populateIndividualMetaFields);
-      } else {
-        prepRecordWithMetadata(key, avroRecord, instantTime,
-            taskContextSupplier.getPartitionIdSupplier().get(), getWrittenRecordCount(), fileName);
-      }
+      prepRecordWithMetadata(key, avroRecord, instantTime,
+          taskContextSupplier.getPartitionIdSupplier().get(), getWrittenRecordCount(), fileName, populateIndividualMetaFields);
       super.write(avroRecord);
-      if (populateIndividualMetaFields == null || populateIndividualMetaFields[2]) {
+      if (populateIndividualMetaFields.isRecordKeyPopulated()) {
         writeSupport.add(key.getRecordKey());
       }
     } else {
@@ -98,7 +94,7 @@ public class HoodieAvroParquetWriter
   @Override
   public void writeAvro(String key, IndexedRecord object) throws IOException {
     super.write(object);
-    if (populateMetaFields && (populateIndividualMetaFields == null || populateIndividualMetaFields[2])) {
+    if (populateMetaFields && populateIndividualMetaFields.isRecordKeyPopulated()) {
       writeSupport.add(key);
     }
   }

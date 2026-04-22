@@ -45,8 +45,8 @@ import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodiePreWriteCleanerPolicy;
 import org.apache.hudi.common.model.HoodieFileFormat;
-import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
+import org.apache.hudi.common.model.MetadataFieldsPopulation;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.WriteConcurrencyMode;
@@ -1792,25 +1792,15 @@ public class HoodieWriteConfig extends HoodieConfig {
   }
 
   /**
-   * Returns a boolean[5] indexed by meta field ordinal.
-   * true = populate this meta field, false = write empty string.
+   * Returns a {@link MetadataFieldsPopulation} indicating which individual meta fields
+   * should be populated during writes. When a field is not populated, it is written as null.
    */
-  public boolean[] getMetaFieldPopulationFlags() {
-    boolean[] flags = new boolean[5];
+  public MetadataFieldsPopulation getMetaFieldPopulationFlags() {
     if (!populateMetaFields()) {
-      return flags; // all false
+      return MetadataFieldsPopulation.nonePopulated();
     }
     Set<String> excluded = getMetaFieldsToExclude();
-    if (excluded.isEmpty()) {
-      Arrays.fill(flags, true);
-      return flags;
-    }
-    flags[0] = !excluded.contains(HoodieRecord.COMMIT_TIME_METADATA_FIELD);
-    flags[1] = !excluded.contains(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD);
-    flags[2] = !excluded.contains(HoodieRecord.RECORD_KEY_METADATA_FIELD);
-    flags[3] = !excluded.contains(HoodieRecord.PARTITION_PATH_METADATA_FIELD);
-    flags[4] = !excluded.contains(HoodieRecord.FILENAME_METADATA_FIELD);
-    return flags;
+    return MetadataFieldsPopulation.fromExcludedFields(excluded);
   }
 
   /**

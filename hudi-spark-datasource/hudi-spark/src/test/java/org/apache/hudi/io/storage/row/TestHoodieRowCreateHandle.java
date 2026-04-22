@@ -32,6 +32,10 @@ import org.apache.hudi.testutils.SparkDatasetTestUtils;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.catalyst.InternalRow;
+import org.apache.spark.sql.types.DataTypes;
+import org.apache.spark.sql.types.Metadata;
+import org.apache.spark.sql.types.StructField;
+import org.apache.spark.sql.types.StructType;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -129,8 +133,21 @@ public class TestHoodieRowCreateHandle extends HoodieSparkClientTestHarness {
     String fileId = UUID.randomUUID().toString();
     String instantTime = "000";
 
+    // Use schema with nullable meta fields (matches production behavior in HoodieSqlCommonUtils)
+    // since excluded meta fields are written as null
+    StructType nullableMetaSchema = new StructType(new StructField[] {
+        new StructField(HoodieRecord.COMMIT_TIME_METADATA_FIELD, DataTypes.StringType, true, Metadata.empty()),
+        new StructField(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD, DataTypes.StringType, true, Metadata.empty()),
+        new StructField(HoodieRecord.RECORD_KEY_METADATA_FIELD, DataTypes.StringType, true, Metadata.empty()),
+        new StructField(HoodieRecord.PARTITION_PATH_METADATA_FIELD, DataTypes.StringType, true, Metadata.empty()),
+        new StructField(HoodieRecord.FILENAME_METADATA_FIELD, DataTypes.StringType, true, Metadata.empty()),
+        new StructField(SparkDatasetTestUtils.RECORD_KEY_FIELD_NAME, DataTypes.StringType, false, Metadata.empty()),
+        new StructField(SparkDatasetTestUtils.PARTITION_PATH_FIELD_NAME, DataTypes.StringType, false, Metadata.empty()),
+        new StructField("randomInt", DataTypes.IntegerType, false, Metadata.empty()),
+        new StructField("randomLong", DataTypes.LongType, false, Metadata.empty())});
+
     HoodieRowCreateHandle handle = new HoodieRowCreateHandle(table, config, partitionPath, fileId, instantTime,
-        RANDOM.nextInt(100000), RANDOM.nextLong(), RANDOM.nextLong(), SparkDatasetTestUtils.STRUCT_TYPE);
+        RANDOM.nextInt(100000), RANDOM.nextLong(), RANDOM.nextLong(), nullableMetaSchema);
     int size = 10 + RANDOM.nextInt(100);
     Dataset<Row> inputRows = SparkDatasetTestUtils.getRandomRows(sqlContext, size, partitionPath, false);
 

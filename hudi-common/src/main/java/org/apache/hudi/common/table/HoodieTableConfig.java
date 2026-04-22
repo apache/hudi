@@ -329,7 +329,8 @@ public class HoodieTableConfig extends HoodieConfig {
       .noDefaultValue()
       .markAdvanced()
       .withDocumentation("Comma-separated list of Hudi meta field names to exclude from population. "
-          + "Excluded fields remain in the schema but are written as empty strings. "
+          + "Excluded fields remain in the schema but are written as null for optimal storage savings "
+          + "(nulls take zero data bytes in Parquet, stored only as bit flags in definition levels). "
           + "Valid values: _hoodie_commit_time, _hoodie_commit_seqno, _hoodie_record_key, "
           + "_hoodie_partition_path, _hoodie_file_name. Only effective when "
           + "hoodie.populate.meta.fields is true.");
@@ -1203,6 +1204,26 @@ public class HoodieTableConfig extends HoodieConfig {
    */
   public boolean populateMetaFields() {
     return Boolean.parseBoolean(getStringOrDefault(POPULATE_META_FIELDS));
+  }
+
+  /**
+   * Checks if a specific meta field is excluded from population via
+   * {@link #META_FIELDS_TO_EXCLUDE}.
+   *
+   * @param metaFieldName the meta field name to check (e.g. {@code _hoodie_commit_time})
+   * @return true if the field is in the exclusion list
+   */
+  public boolean isMetaFieldExcluded(String metaFieldName) {
+    String value = getString(META_FIELDS_TO_EXCLUDE);
+    if (value == null || value.trim().isEmpty()) {
+      return false;
+    }
+    for (String field : value.split(",")) {
+      if (field.trim().equals(metaFieldName)) {
+        return true;
+      }
+    }
+    return false;
   }
 
   /**

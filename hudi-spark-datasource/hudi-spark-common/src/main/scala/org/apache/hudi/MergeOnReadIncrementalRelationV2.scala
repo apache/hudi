@@ -260,6 +260,10 @@ trait HoodieIncrementalRelationV2Trait extends HoodieBaseRelation {
     if (!this.tableConfig.populateMetaFields()) {
       throw new HoodieException("Incremental queries are not supported when meta fields are disabled")
     }
+
+    if (this.tableConfig.isMetaFieldExcluded(HoodieRecord.COMMIT_TIME_METADATA_FIELD)) {
+      throw new HoodieException("Incremental queries are not supported when _hoodie_commit_time is excluded via hoodie.meta.fields.to.exclude")
+    }
   }
 
   protected def globPattern: String =

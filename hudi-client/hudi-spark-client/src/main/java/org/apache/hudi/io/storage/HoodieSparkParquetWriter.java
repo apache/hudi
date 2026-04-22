@@ -21,6 +21,7 @@ package org.apache.hudi.io.storage;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.MetadataFieldsPopulation;
 import org.apache.hudi.io.hadoop.HoodieBaseParquetWriter;
 import org.apache.hudi.io.storage.row.HoodieRowParquetConfig;
 import org.apache.hudi.io.storage.row.HoodieRowParquetWriteSupport;
@@ -44,7 +45,7 @@ public class HoodieSparkParquetWriter extends HoodieBaseParquetWriter<InternalRo
   private final UTF8String instantTime;
 
   private final boolean populateMetaFields;
-  private final boolean[] populateIndividualMetaFields;
+  private final MetadataFieldsPopulation populateIndividualMetaFields;
 
   private final HoodieRowParquetWriteSupport writeSupport;
 
@@ -55,7 +56,7 @@ public class HoodieSparkParquetWriter extends HoodieBaseParquetWriter<InternalRo
                                   String instantTime,
                                   TaskContextSupplier taskContextSupplier,
                                   boolean populateMetaFields) throws IOException {
-    this(file, parquetConfig, instantTime, taskContextSupplier, populateMetaFields, null);
+    this(file, parquetConfig, instantTime, taskContextSupplier, populateMetaFields, MetadataFieldsPopulation.allPopulated());
   }
 
   public HoodieSparkParquetWriter(StoragePath file,
@@ -63,7 +64,7 @@ public class HoodieSparkParquetWriter extends HoodieBaseParquetWriter<InternalRo
                                   String instantTime,
                                   TaskContextSupplier taskContextSupplier,
                                   boolean populateMetaFields,
-                                  boolean[] populateIndividualMetaFields) throws IOException {
+                                  MetadataFieldsPopulation populateIndividualMetaFields) throws IOException {
     super(file, parquetConfig);
     this.writeSupport = parquetConfig.getWriteSupport();
     this.fileName = UTF8String.fromString(file.getName());
@@ -83,7 +84,7 @@ public class HoodieSparkParquetWriter extends HoodieBaseParquetWriter<InternalRo
       updateRecordMetadata(row, recordKey, key.getPartitionPath(), getWrittenRecordCount());
 
       super.write(row);
-      if (populateIndividualMetaFields == null || populateIndividualMetaFields[2]) {
+      if (populateIndividualMetaFields.isRecordKeyPopulated()) {
         writeSupport.add(recordKey);
       }
     } else {
@@ -94,7 +95,7 @@ public class HoodieSparkParquetWriter extends HoodieBaseParquetWriter<InternalRo
   @Override
   public void writeRow(String recordKey, InternalRow row) throws IOException {
     super.write(row);
-    if (populateMetaFields && (populateIndividualMetaFields == null || populateIndividualMetaFields[2])) {
+    if (populateMetaFields && populateIndividualMetaFields.isRecordKeyPopulated()) {
       writeSupport.add(UTF8String.fromString(recordKey));
     }
   }
@@ -108,28 +109,31 @@ public class HoodieSparkParquetWriter extends HoodieBaseParquetWriter<InternalRo
                                       UTF8String recordKey,
                                       String partitionPath,
                                       long recordCount)  {
-    if (populateIndividualMetaFields != null) {
-      if (populateIndividualMetaFields[0]) {
-        row.update(COMMIT_TIME_METADATA_FIELD.ordinal(), instantTime);
-      }
-      if (populateIndividualMetaFields[1]) {
-        row.update(COMMIT_SEQNO_METADATA_FIELD.ordinal(), UTF8String.fromString(seqIdGenerator.apply(recordCount)));
-      }
-      if (populateIndividualMetaFields[2]) {
-        row.update(RECORD_KEY_METADATA_FIELD.ordinal(), recordKey);
-      }
-      if (populateIndividualMetaFields[3]) {
-        row.update(PARTITION_PATH_METADATA_FIELD.ordinal(), UTF8String.fromString(partitionPath));
-      }
-      if (populateIndividualMetaFields[4]) {
-        row.update(FILENAME_METADATA_FIELD.ordinal(), fileName);
-      }
-    } else {
+    if (populateIndividualMetaFields.isInstantTimePopulated()) {
       row.update(COMMIT_TIME_METADATA_FIELD.ordinal(), instantTime);
+    } else {
+      row.update(COMMIT_TIME_METADATA_FIELD.ordinal(), null);
+    }
+    if (populateIndividualMetaFields.isCommitSeqNoPopulated()) {
       row.update(COMMIT_SEQNO_METADATA_FIELD.ordinal(), UTF8String.fromString(seqIdGenerator.apply(recordCount)));
+    } else {
+      row.update(COMMIT_SEQNO_METADATA_FIELD.ordinal(), null);
+    }
+    if (populateIndividualMetaFields.isRecordKeyPopulated()) {
       row.update(RECORD_KEY_METADATA_FIELD.ordinal(), recordKey);
+    } else {
+      row.update(RECORD_KEY_METADATA_FIELD.ordinal(), null);
+    }
+    if (populateIndividualMetaFields.isPartitionPathPopulated()) {
+      // TODO set partition path in ctor
       row.update(PARTITION_PATH_METADATA_FIELD.ordinal(), UTF8String.fromString(partitionPath));
+    } else {
+      row.update(PARTITION_PATH_METADATA_FIELD.ordinal(), null);
+    }
+    if (populateIndividualMetaFields.isFileNamePopulated()) {
       row.update(FILENAME_METADATA_FIELD.ordinal(), fileName);
+    } else {
+      row.update(FILENAME_METADATA_FIELD.ordinal(), null);
     }
   }
 }

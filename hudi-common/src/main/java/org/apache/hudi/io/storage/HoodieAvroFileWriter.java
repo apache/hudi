@@ -21,6 +21,7 @@ package org.apache.hudi.io.storage;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.MetadataFieldsPopulation;
 
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
@@ -58,27 +59,26 @@ public interface HoodieAvroFileWriter extends HoodieFileWriter {
   }
 
   /**
-   * Selectively populates meta fields based on the provided boolean flags.
-   * Each flag corresponds to a meta field ordinal: [0]=commit_time, [1]=commit_seqno,
-   * [2]=record_key, [3]=partition_path, [4]=file_name.
+   * Selectively populates meta fields based on the provided {@link MetadataFieldsPopulation} flags.
+   * Fields that are not populated are left unchanged (typically null).
    */
   default void prepRecordWithMetadata(HoodieKey key, IndexedRecord avroRecord, String instantTime,
-      Integer partitionId, long recordIndex, String fileName, boolean[] populateIndividualMetaFields) {
+      Integer partitionId, long recordIndex, String fileName, MetadataFieldsPopulation populateFlags) {
     GenericRecord rec = (GenericRecord) avroRecord;
-    if (populateIndividualMetaFields[0]) {
+    if (populateFlags.isInstantTimePopulated()) {
       rec.put(HoodieRecord.COMMIT_TIME_METADATA_FIELD, instantTime);
     }
-    if (populateIndividualMetaFields[1]) {
+    if (populateFlags.isCommitSeqNoPopulated()) {
       String seqId = HoodieRecord.generateSequenceId(instantTime, partitionId, recordIndex);
       rec.put(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD, seqId);
     }
-    if (populateIndividualMetaFields[2]) {
+    if (populateFlags.isRecordKeyPopulated()) {
       rec.put(HoodieRecord.RECORD_KEY_METADATA_FIELD, key.getRecordKey());
     }
-    if (populateIndividualMetaFields[3]) {
+    if (populateFlags.isPartitionPathPopulated()) {
       rec.put(HoodieRecord.PARTITION_PATH_METADATA_FIELD, key.getPartitionPath());
     }
-    if (populateIndividualMetaFields[4]) {
+    if (populateFlags.isFileNamePopulated()) {
       rec.put(HoodieRecord.FILENAME_METADATA_FIELD, fileName);
     }
   }

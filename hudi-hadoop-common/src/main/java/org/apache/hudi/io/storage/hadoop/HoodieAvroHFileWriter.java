@@ -23,6 +23,7 @@ import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.HoodieKey;
+import org.apache.hudi.common.model.MetadataFieldsPopulation;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.util.Option;
@@ -74,7 +75,7 @@ public class HoodieAvroHFileWriter
   private final String instantTime;
   private final TaskContextSupplier taskContextSupplier;
   private final boolean populateMetaFields;
-  private final boolean[] populateIndividualMetaFields;
+  private final MetadataFieldsPopulation populateIndividualMetaFields;
   private final Option<HoodieSchemaField> keyFieldSchema;
   private HFileWriter writer;
   private String minRecordKey;
@@ -83,12 +84,12 @@ public class HoodieAvroHFileWriter
 
   public HoodieAvroHFileWriter(String instantTime, StoragePath file, HoodieHFileConfig hfileConfig, HoodieSchema schema,
                                TaskContextSupplier taskContextSupplier, boolean populateMetaFields) throws IOException {
-    this(instantTime, file, hfileConfig, schema, taskContextSupplier, populateMetaFields, null);
+    this(instantTime, file, hfileConfig, schema, taskContextSupplier, populateMetaFields, MetadataFieldsPopulation.allPopulated());
   }
 
   public HoodieAvroHFileWriter(String instantTime, StoragePath file, HoodieHFileConfig hfileConfig, HoodieSchema schema,
                                TaskContextSupplier taskContextSupplier, boolean populateMetaFields,
-                               boolean[] populateIndividualMetaFields) throws IOException {
+                               MetadataFieldsPopulation populateIndividualMetaFields) throws IOException {
     Configuration conf = HadoopFSUtils.registerFileSystem(file, (Configuration) hfileConfig.getStorageConf().unwrap());
     this.file = HoodieWrapperFileSystem.convertToHoodiePath(file, conf);
     FileSystem fs = this.file.getFileSystem(conf);
@@ -123,17 +124,10 @@ public class HoodieAvroHFileWriter
   @Override
   public void writeAvroWithMetadata(HoodieKey key, IndexedRecord avroRecord) throws IOException {
     if (populateMetaFields) {
-      if (populateIndividualMetaFields != null) {
-        prepRecordWithMetadata(key, avroRecord, instantTime,
-            taskContextSupplier.getPartitionIdSupplier().get(), RECORD_INDEX_COUNT.getAndIncrement(), file.getName(), populateIndividualMetaFields);
-      } else {
-        prepRecordWithMetadata(key, avroRecord, instantTime,
-            taskContextSupplier.getPartitionIdSupplier().get(), RECORD_INDEX_COUNT.getAndIncrement(), file.getName());
-      }
-      writeAvro(key.getRecordKey(), avroRecord);
-    } else {
-      writeAvro(key.getRecordKey(), avroRecord);
+      prepRecordWithMetadata(key, avroRecord, instantTime,
+          taskContextSupplier.getPartitionIdSupplier().get(), RECORD_INDEX_COUNT.getAndIncrement(), file.getName(), populateIndividualMetaFields);
     }
+    writeAvro(key.getRecordKey(), avroRecord);
   }
 
   @Override
