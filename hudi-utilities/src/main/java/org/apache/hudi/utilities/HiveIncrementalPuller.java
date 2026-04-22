@@ -146,7 +146,7 @@ public class HiveIncrementalPuller {
       }
 
       getConnection();
-      stmt = this.connection.createStatement();
+      stmt = getConnection().createStatement();
       // drop the temp table if exists
       String tempDbTable = config.tmpDb + "." + config.targetTable + "__" + config.sourceTable;
       String tempDbTablePath =
