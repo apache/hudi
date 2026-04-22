@@ -17,13 +17,20 @@
 
 package org.apache.spark.sql.hudi.v2
 
-import org.apache.hudi.{HoodieFileIndex, SparkAdapterSupport}
+import org.apache.hudi.{DataSourceReadOptions, HoodieBaseRelation, HoodieFileIndex, SparkAdapterSupport}
+import org.apache.hudi.client.utils.SparkInternalSchemaConverter
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.engine.HoodieLocalEngineContext
-import org.apache.hudi.common.table.HoodieTableMetaClient
+import org.apache.hudi.common.model.HoodieTableType.COPY_ON_WRITE
+import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
+import org.apache.hudi.common.table.timeline.TimelineLayout
+import org.apache.hudi.common.util.{Option => HOption}
 import org.apache.hudi.common.util.collection.Pair
+import org.apache.hudi.internal.schema.InternalSchema
+import org.apache.hudi.internal.schema.utils.SerDeHelper
 import org.apache.hudi.metadata.{HoodieBackedTableMetadata, MetadataPartitionType}
 import org.apache.hudi.stats.HoodieColumnRangeMetadata
+import org.apache.hudi.util.SparkConfigUtils
 
 import org.apache.spark.sql.HoodieCatalystExpressionUtils
 import org.apache.spark.sql.SparkSession
@@ -66,7 +73,7 @@ class HoodieScanBuilder(spark: SparkSession,
   private var pushedAggregation: Option[Aggregation] = None
   private var aggregateResult: Option[Array[InternalRow]] = None
 
-  private lazy val fileIndex = HoodieFileIndex(spark, metaClient, None, options,
+  private lazy val fileIndex = HoodieFileIndex(spark, metaClient, Some(tableSchema), options,
     includeLogFiles = false, shouldEmbedFileSlices = false)
 
   override def pushFilters(filters: Array[Filter]): Array[Filter] = {
@@ -83,12 +90,18 @@ class HoodieScanBuilder(spark: SparkSession,
     partitionFilterExprs = partFilters.toSeq
     dataFilterExprs = datFilters.toSeq
 
-    _pushedFilters = pushed
+    val partFieldNames = fileIndex.partitionSchema.fieldNames.toSet
+    // Partition filters are fully handled by partition pruning in filterFileSlices — the
+    // partition column is not in the base file, so forwarding them to the Parquet reader
+    // would filter all rows as null. Only pass data filters to the reader. Return those
+    // data filters to Spark so it re-applies them row-wise (Parquet only does row-group
+    // level pruning via these filters, not precise filtering).
+    val pushedDataFilters = pushed.filterNot(f => f.references.forall(partFieldNames.contains))
+
+    _pushedFilters = pushedDataFilters
     hasPostScanFilters = postScan.nonEmpty
 
-    val partFieldNames = fileIndex.partitionSchema.fieldNames.toSet
-    val dataFilterArr = pushed.filterNot(f => f.references.forall(partFieldNames.contains))
-    postScan ++ dataFilterArr
+    postScan ++ pushedDataFilters
   }
 
   override def pushedFilters(): Array[Filter] = _pushedFilters
@@ -112,8 +125,13 @@ class HoodieScanBuilder(spark: SparkSession,
       val allSupported = funcs.forall {
         case _: CountStar => true
         case c: Count => !c.isDistinct
-        case _: Min => true
-        case _: Max => true
+        // Parquet/Hudi column stats exclude NaN from min/max, but Spark SQL
+        // treats NaN as greater than any non-NaN value. Stats can't distinguish
+        // "all NaN" from "all null" (both surface as a null min/max), so skip
+        // MIN/MAX pushdown on float/double columns and let Spark compute from
+        // the scan.
+        case m: Min => !isFloatingPointColumn(m.column())
+        case m: Max => !isFloatingPointColumn(m.column())
         case _ => false
       }
       if (!allSupported) {
@@ -145,11 +163,22 @@ class HoodieScanBuilder(spark: SparkSession,
   }
 
   private def buildSnapshotScan(): Scan = {
+    // Invariant established by HoodieV2ReadSupport.isSupportedByDSv2:
+    // COW snapshot or MOR read_optimized only, Parquet only, single base-file format.
+    val queryType = SparkConfigUtils.getStringWithAltKeys(options, DataSourceReadOptions.QUERY_TYPE)
+    require(metaClient.getTableType == COPY_ON_WRITE ||
+              queryType == DataSourceReadOptions.QUERY_TYPE_READ_OPTIMIZED_OPT_VAL,
+            "HoodieScanBuilder supports COW snapshot or read_optimized only; " +
+              s"got tableType=${metaClient.getTableType}, queryType=$queryType")
+
     val partFieldNames = fileIndex.partitionSchema.fieldNames.toSet
     val requiredDataSchema = StructType(requiredSchema.filterNot(f => partFieldNames.contains(f.name)))
     val requiredPartitionSchema = StructType(requiredSchema.filter(f => partFieldNames.contains(f.name)))
 
     val hadoopConf = spark.sessionState.newHadoopConf()
+    val internalSchemaOpt = fetchInternalSchema()
+    embedInternalSchema(hadoopConf, internalSchemaOpt)
+
     val readerOptions = options + (FileFormat.OPTION_RETURNING_BATCH -> "false")
     val reader = sparkAdapter.createParquetFileReader(false, spark.sessionState.conf, readerOptions, hadoopConf)
     val broadcastReader = spark.sparkContext.broadcast(reader)
@@ -184,8 +213,37 @@ class HoodieScanBuilder(spark: SparkSession,
       broadcastConf,
       requiredDataSchema,
       requiredPartitionSchema,
+      internalSchemaOpt,
       _pushedFilters,
       pushedLimit)
+  }
+
+  private def fetchInternalSchema(): HOption[InternalSchema] = {
+    if (!HoodieBaseRelation.isSchemaEvolutionEnabledOnRead(options, spark)) {
+      HOption.empty[InternalSchema]()
+    } else {
+      try {
+        new TableSchemaResolver(metaClient).getTableInternalSchemaFromCommitMetadata
+      } catch {
+        case e: Exception =>
+          log.warn("Failed to fetch internal schema from commit metadata", e)
+          HOption.empty[InternalSchema]()
+      }
+    }
+  }
+
+  private def embedInternalSchema(conf: org.apache.hadoop.conf.Configuration,
+                                  internalSchemaOpt: HOption[InternalSchema]): Unit = {
+    if (internalSchemaOpt.isPresent) {
+      val internalSchema = internalSchemaOpt.get
+      val instantFileNameGenerator = TimelineLayout.fromVersion(metaClient.getTimelineLayoutVersion)
+        .getInstantFileNameGenerator
+      val validCommits = metaClient.getActiveTimeline.getInstants.iterator.asScala
+        .map(instant => instantFileNameGenerator.getFileName(instant)).mkString(",")
+      conf.set(SparkInternalSchemaConverter.HOODIE_QUERY_SCHEMA, SerDeHelper.toJson(internalSchema))
+      conf.set(SparkInternalSchemaConverter.HOODIE_TABLE_PATH, metaClient.getBasePath.toString)
+      conf.set(SparkInternalSchemaConverter.HOODIE_VALID_COMMITS_LIST, validCommits)
+    }
   }
 
   private def tryComputeAggregates(aggregation: Aggregation): Option[Array[InternalRow]] = {
@@ -238,9 +296,16 @@ class HoodieScanBuilder(spark: SparkSession,
     referencedColumnsOpt.flatMap { referencedColumns =>
       val distinctColumns = referencedColumns.distinct
 
-      // For CountStar, use the first table column to get total row count
+      // For CountStar, prefer a user-defined record key field that's present in the
+      // user schema: it's an original column from the table's first commit, so its
+      // column stats are complete even after schema evolution. Fall back to the
+      // first column for keyless tables or when the record key is meta-field-only.
       val countStarColumnOpt: Option[Option[String]] = if (aggFuncs.exists(_.isInstanceOf[CountStar])) {
-        if (tableSchema.nonEmpty) Some(Some(tableSchema.fields.head.name)) else None
+        val schemaNames = tableSchema.fields.map(_.name).toSet
+        val recordKeyFields = metaClient.getTableConfig.getRecordKeyFields.orElse(Array.empty[String])
+        recordKeyFields.find(schemaNames.contains)
+          .orElse(tableSchema.fields.headOption.map(_.name))
+          .map(Some(_))
       } else {
         Some(None)
       }
@@ -290,12 +355,12 @@ class HoodieScanBuilder(spark: SparkSession,
         val valuesOpt: Array[Option[Any]] = aggFuncs.map {
           case _: CountStar =>
             val stats = columnStats(countStarColumn.get)
-            Some(stats.map(s => s.getValueCount + s.getNullCount).sum: Any)
+            Some(stats.map(s => s.getValueCount).sum: Any)
 
           case c: Count =>
             extractColumnName(c.column()).map { colName =>
               val stats = columnStats(colName)
-              stats.map(_.getValueCount).sum: Any
+              stats.map(s => s.getValueCount - s.getNullCount).sum: Any
             }
 
           case m: Min =>
@@ -352,11 +417,11 @@ class HoodieScanBuilder(spark: SparkSession,
             val vs = sparkValues.map(_.asInstanceOf[Long])
             Some(if (isMin) vs.min else vs.max)
           case FloatType =>
-            val vs = sparkValues.map(_.asInstanceOf[Float])
-            Some(if (isMin) vs.min else vs.max)
+            val vs = sparkValues.map(_.asInstanceOf[Float]).filterNot(_.isNaN)
+            if (vs.isEmpty) None else Some(if (isMin) vs.min else vs.max)
           case DoubleType =>
-            val vs = sparkValues.map(_.asInstanceOf[Double])
-            Some(if (isMin) vs.min else vs.max)
+            val vs = sparkValues.map(_.asInstanceOf[Double]).filterNot(_.isNaN)
+            if (vs.isEmpty) None else Some(if (isMin) vs.min else vs.max)
           case StringType =>
             val vs = sparkValues.map(_.asInstanceOf[UTF8String])
             Some(vs.reduce((a, b) => if ((isMin && a.compareTo(b) <= 0) || (!isMin && a.compareTo(b) >= 0)) a else b))
@@ -406,6 +471,16 @@ class HoodieScanBuilder(spark: SparkSession,
         if (names.length == 1) Some(names.head) else None
       case _ => None
     }
+  }
+
+  private def isFloatingPointColumn(
+      expr: org.apache.spark.sql.connector.expressions.Expression): Boolean = {
+    extractColumnName(expr)
+      .flatMap(name => tableSchema.fields.find(_.name == name).map(_.dataType))
+      .exists {
+        case FloatType | DoubleType => true
+        case _ => false
+      }
   }
 
   private def convertToSparkValue(value: Any, dataType: DataType): Option[Any] = {

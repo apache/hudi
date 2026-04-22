@@ -19,6 +19,7 @@ package org.apache.spark.sql.hudi.catalog
 
 import org.apache.hudi.{HoodieSchemaConversionUtils, HoodieSparkSqlWriter}
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
+import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
 
 import org.apache.spark.sql.{DataFrame, SaveMode, SparkSession}
@@ -146,8 +147,11 @@ private[hudi] class HoodieV1WriteBuilder(writeOptions: CaseInsensitiveStringMap,
             .convertStructTypeToHoodieSchema(hoodieCatalogTable.tableSchema, structName, namespace)
 
           try {
-            HoodieSparkSqlWriter.write(spark.sqlContext, mode, config, alignedData,
+            val (success, _, _, _, _, _) = HoodieSparkSqlWriter.write(spark.sqlContext, mode, config, alignedData,
               schemaFromCatalog = Option(catalogSchema))
+            if (!success) {
+              throw new HoodieException("Failed to write to Hudi")
+            }
           } finally {
             HoodieSparkSqlWriter.cleanup()
           }

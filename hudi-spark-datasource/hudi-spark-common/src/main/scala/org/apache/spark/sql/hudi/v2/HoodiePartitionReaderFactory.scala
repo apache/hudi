@@ -17,10 +17,14 @@
 
 package org.apache.spark.sql.hudi.v2
 
+import org.apache.hudi.common.util.{Option => HOption}
+import org.apache.hudi.internal.schema.InternalSchema
+
 import org.apache.spark.broadcast.Broadcast
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.connector.read.{InputPartition, PartitionReader, PartitionReaderFactory}
 import org.apache.spark.sql.execution.datasources.SparkColumnarFileReader
+import org.apache.spark.sql.sources.Filter
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.util.SerializableConfiguration
 
@@ -32,6 +36,8 @@ class HoodiePartitionReaderFactory(broadcastReader: Broadcast[SparkColumnarFileR
                                    readSchema: StructType,
                                    requiredDataSchema: StructType,
                                    requiredPartitionSchema: StructType,
+                                   internalSchemaOpt: HOption[InternalSchema] = HOption.empty(),
+                                   pushedFilters: Array[Filter] = Array.empty,
                                    pushedLimit: Option[Int] = None) extends PartitionReaderFactory {
 
   override def createReader(partition: InputPartition): PartitionReader[InternalRow] = {
@@ -43,6 +49,8 @@ class HoodiePartitionReaderFactory(broadcastReader: Broadcast[SparkColumnarFileR
       readSchema,
       requiredDataSchema,
       requiredPartitionSchema,
+      internalSchemaOpt,
+      pushedFilters,
       pushedLimit)
   }
 }

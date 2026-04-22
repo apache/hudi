@@ -384,16 +384,21 @@ class TestDSv2CoexistenceWithDSv1 extends SparkClientFunctionalTestHarness {
 
     spark.sql(s"INSERT INTO $tableName VALUES (1, 'Alice', 100.0, 1)")
 
-    // With schema evolution enabled and v2 read disabled, the loadTable()
-    // should return HoodieInternalV2Table (schema evolution path), not V1Table.
-    // Verify via EXPLAIN that the plan uses BatchScan (V2 path), not FileScan (V1 path).
+    // With schema evolution enabled and v2 read disabled, loadTable() returns
+    // HoodieInternalV2Table. It does not implement SupportsRead, so reads fall back
+    // to V1 via V2TableWithV1Fallback and use HoodieFileGroupReaderBasedFileFormat —
+    // a Hudi-aware V1 FileScan, NOT DSv2 BatchScan.
     spark.sessionState.conf.setConfString("hoodie.schema.on.read.enable", "true")
     spark.sessionState.conf.setConfString(DataSourceReadOptions.USE_V2_READ.key, "false")
     try {
       val explainRows = spark.sql(s"EXPLAIN SELECT * FROM $tableName").collect()
       val plan = explainRows.map(_.getString(0)).mkString("\n")
-      assertTrue(containsBatchScan(plan),
-        s"Schema evolution path should use BatchScan (V2), but got:\n$plan")
+      assertTrue(containsFileScan(plan),
+        s"HoodieInternalV2Table should use V1 FileScan, but got:\n$plan")
+      assertTrue(plan.contains("HoodieFileGroupReaderBasedFileFormat") || plan.contains("HudiFileGroup"),
+        s"Plan should use Hudi-aware V1 file format, proving HoodieInternalV2Table was used:\n$plan")
+      assertTrue(!containsBatchScan(plan),
+        s"HoodieInternalV2Table should not produce a DSv2 BatchScan, but got:\n$plan")
 
       val df = spark.sql(s"SELECT * FROM $tableName")
       assertEquals(1, df.count())
