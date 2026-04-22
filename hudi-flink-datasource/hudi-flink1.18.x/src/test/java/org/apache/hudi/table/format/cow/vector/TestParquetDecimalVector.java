@@ -36,23 +36,13 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Unit tests for {@link ParquetDecimalVector}.
- *
- * <p>Primary target is the {@link ParquetDecimalVector#getDecimal} dispatch fixed in GH-18491:
- * small-precision decimals are physically encoded in Parquet as INT32 or INT64, not as bytes.
- * The pre-fix implementation unconditionally cast the child vector to
- * {@link org.apache.flink.table.data.columnar.vector.BytesColumnVector} and threw
- * {@link ClassCastException} at read time.
+ * Tests for {@link ParquetDecimalVector}.
  */
-class TestParquetDecimalVector {
-
-  // ---------------------------------------------------------------------------------------------
-  // getDecimal dispatch: INT32 / INT64 / BYTES
-  // ---------------------------------------------------------------------------------------------
+public class TestParquetDecimalVector {
 
   @Test
-  void getDecimalFromInt32VectorDecodesUnscaledLong() {
-    // precision <= 9 ⇒ ParquetSchemaConverter#is32BitDecimal(precision) == true
+  void testGetDecimalFromInt32Vector() {
+    // precision <= 9 => ParquetSchemaConverter.is32BitDecimal(precision) == true
     HeapIntVector intVector = new HeapIntVector(1);
     intVector.vector[0] = 12345;
     ParquetDecimalVector wrapped = new ParquetDecimalVector(intVector);
@@ -63,8 +53,8 @@ class TestParquetDecimalVector {
   }
 
   @Test
-  void getDecimalFromInt64VectorDecodesUnscaledLong() {
-    // 9 < precision <= 18 ⇒ ParquetSchemaConverter#is64BitDecimal(precision) == true
+  void testGetDecimalFromInt64Vector() {
+    // 9 < precision <= 18 => ParquetSchemaConverter.is64BitDecimal(precision) == true
     HeapLongVector longVector = new HeapLongVector(1);
     longVector.vector[0] = 1234567890123456L;
     ParquetDecimalVector wrapped = new ParquetDecimalVector(longVector);
@@ -75,8 +65,8 @@ class TestParquetDecimalVector {
   }
 
   @Test
-  void getDecimalFromBytesVectorDecodesUnscaledBytes() {
-    // precision > 18 ⇒ BINARY / FIXED_LEN_BYTE_ARRAY path
+  void testGetDecimalFromBytesVectorAtLargePrecision() {
+    // precision > 18 => BINARY / FIXED_LEN_BYTE_ARRAY path
     BigDecimal original = new BigDecimal("12345678901234567890.1234567890");
     byte[] unscaled = original.unscaledValue().toByteArray();
     HeapBytesVector bytesVector = new HeapBytesVector(1);
@@ -89,7 +79,7 @@ class TestParquetDecimalVector {
   }
 
   @Test
-  void getDecimalFallsBackToBytesWhenChildIsBytesEvenAtSmallPrecision() {
+  void testGetDecimalFromBytesVectorAtSmallPrecision() {
     // A Parquet file can legally encode a small-precision decimal as BINARY. In that case the
     // dispatch must fall through to the bytes branch rather than require an IntColumnVector.
     BigDecimal original = new BigDecimal("123.45");
@@ -104,21 +94,17 @@ class TestParquetDecimalVector {
   }
 
   @Test
-  void getDecimalOnUnsupportedVectorTypeThrows() {
+  void testGetDecimalThrowsOnUnsupportedVectorType() {
     // A large-precision request must have a bytes-backed child; any other writable child is an
-    // illegal combination and must be surfaced via Preconditions#checkArgument.
+    // illegal combination and must be surfaced via Preconditions.checkArgument.
     ColumnVector unsupported = new HeapShortVector(1);
     ParquetDecimalVector wrapped = new ParquetDecimalVector(unsupported);
 
     assertThrows(IllegalArgumentException.class, () -> wrapped.getDecimal(0, 30, 10));
   }
 
-  // ---------------------------------------------------------------------------------------------
-  // Null handling delegates to the child
-  // ---------------------------------------------------------------------------------------------
-
   @Test
-  void isNullAtDelegatesToChild() {
+  void testIsNullAtDelegatesToChild() {
     HeapIntVector intVector = new HeapIntVector(2);
     intVector.vector[0] = 1;
     intVector.setNullAt(1);
@@ -128,12 +114,8 @@ class TestParquetDecimalVector {
     assertTrue(wrapped.isNullAt(1));
   }
 
-  // ---------------------------------------------------------------------------------------------
-  // Writable delegation: the new WritableInt / WritableLong / WritableBytes contracts
-  // ---------------------------------------------------------------------------------------------
-
   @Test
-  void writableIntPathRoundTripsThroughWrapper() {
+  void testWritableIntRoundTrip() {
     HeapIntVector intVector = new HeapIntVector(1);
     ParquetDecimalVector wrapped = new ParquetDecimalVector(intVector);
 
@@ -144,7 +126,7 @@ class TestParquetDecimalVector {
   }
 
   @Test
-  void writableLongPathRoundTripsThroughWrapper() {
+  void testWritableLongRoundTrip() {
     HeapLongVector longVector = new HeapLongVector(1);
     ParquetDecimalVector wrapped = new ParquetDecimalVector(longVector);
 
@@ -155,7 +137,7 @@ class TestParquetDecimalVector {
   }
 
   @Test
-  void writableBytesPathRoundTripsThroughWrapper() {
+  void testWritableBytesRoundTrip() {
     HeapBytesVector bytesVector = new HeapBytesVector(1);
     ParquetDecimalVector wrapped = new ParquetDecimalVector(bytesVector);
     byte[] payload = new byte[] {0x01, 0x02, 0x03};
@@ -170,7 +152,7 @@ class TestParquetDecimalVector {
   }
 
   @Test
-  void resetDelegatesToChild() {
+  void testResetDelegatesToChild() {
     HeapIntVector intVector = new HeapIntVector(1);
     intVector.setNullAt(0);
     ParquetDecimalVector wrapped = new ParquetDecimalVector(intVector);
@@ -182,7 +164,7 @@ class TestParquetDecimalVector {
   }
 
   @Test
-  void fillWithNullsDelegatesToChild() {
+  void testFillWithNullsDelegatesToChild() {
     HeapIntVector intVector = new HeapIntVector(2);
     ParquetDecimalVector wrapped = new ParquetDecimalVector(intVector);
 
@@ -193,7 +175,7 @@ class TestParquetDecimalVector {
   }
 
   @Test
-  void setNullAtDelegatesToChild() {
+  void testSetNullAtDelegatesToChild() {
     HeapIntVector intVector = new HeapIntVector(2);
     ParquetDecimalVector wrapped = new ParquetDecimalVector(intVector);
 
