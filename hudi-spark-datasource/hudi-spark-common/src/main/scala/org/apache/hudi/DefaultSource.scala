@@ -161,7 +161,10 @@ class DefaultSource extends RelationProvider
                               df: DataFrame): BaseRelation = {
     try {
       if (optParams.get(OPERATION.key).contains(BOOTSTRAP_OPERATION_OPT_VAL)) {
-        HoodieSparkSqlWriter.bootstrap(sqlContext, mode, optParams, df)
+        val success = HoodieSparkSqlWriter.bootstrap(sqlContext, mode, optParams, df)
+        if (!success) {
+          throw new HoodieException("Failed to bootstrap Hudi table")
+        }
       } else {
         val (success, _, _, _, _, _) = HoodieSparkSqlWriter.write(sqlContext, mode, optParams, df)
         if (!success) {

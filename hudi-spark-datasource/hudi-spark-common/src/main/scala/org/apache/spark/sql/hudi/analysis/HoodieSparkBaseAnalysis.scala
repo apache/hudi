@@ -39,17 +39,8 @@ import org.apache.spark.sql.hudi.analysis.HoodieSparkBaseAnalysis.{HoodieV1OrV2T
 import org.apache.spark.sql.hudi.catalog.HoodieInternalV2Table
 import org.apache.spark.sql.hudi.command.{AlterHoodieTableDropPartitionCommand, ShowHoodieTablePartitionsCommand, TruncateHoodieTableCommand}
 import org.apache.spark.sql.hudi.command.exception.HoodieAnalysisException
+import org.apache.spark.sql.hudi.v2.HoodieSparkV2Table
 import org.apache.spark.sql.types.{ArrayType, DecimalType, DoubleType, FloatType, IntegerType, LongType}
-
-/**
- * NOTE: PLEASE READ CAREFULLY
- *
- * Since Hudi relations don't currently implement DS V2 Read API, we have to fallback to V1 here.
- * Such fallback will have considerable performance impact, therefore it's only performed in cases
- * where V2 API have to be used. Currently only such use-case is using of Schema Evolution feature
- *
- * Check out HUDI-4178 for more details
- */
 
 /**
  * Rule for resolve hoodie's extended syntax or rewrite some logical plan.
@@ -431,6 +422,7 @@ object HoodieSparkBaseAnalysis extends SparkAdapterSupport {
     def unapply(table: Table): Option[CatalogTable] = table match {
       case V1Table(catalogTable) if sparkAdapter.isHoodieTable(catalogTable) => Some(catalogTable)
       case v2: HoodieInternalV2Table => v2.catalogTable
+      case v2: HoodieSparkV2Table => v2.catalogTable
       case _ => None
     }
   }

@@ -17,7 +17,9 @@
 
 package org.apache.spark.sql.hudi.catalog
 
+import org.apache.hudi.{HoodieSchemaConversionUtils, HoodieSparkSqlWriter}
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
+import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
 
 import org.apache.spark.sql.{DataFrame, SaveMode, SparkSession}
@@ -34,7 +36,7 @@ import org.apache.spark.sql.util.CaseInsensitiveStringMap
 
 import java.util
 
-import scala.collection.JavaConverters.{mapAsJavaMapConverter, setAsJavaSetConverter}
+import scala.collection.JavaConverters.{mapAsJavaMapConverter, mapAsScalaMapConverter, setAsJavaSetConverter}
 
 case class HoodieInternalV2Table(spark: SparkSession,
                                  path: String,
@@ -87,9 +89,9 @@ case class HoodieInternalV2Table(spark: SparkSession,
 
 }
 
-private class HoodieV1WriteBuilder(writeOptions: CaseInsensitiveStringMap,
-                                   hoodieCatalogTable: HoodieCatalogTable,
-                                   spark: SparkSession)
+private[hudi] class HoodieV1WriteBuilder(writeOptions: CaseInsensitiveStringMap,
+                                         hoodieCatalogTable: HoodieCatalogTable,
+                                         spark: SparkSession)
   extends SupportsTruncate with SupportsOverwrite with ProvidesHoodieConfig {
 
   private var overwriteTable = false
@@ -115,11 +117,44 @@ private class HoodieV1WriteBuilder(writeOptions: CaseInsensitiveStringMap,
             SaveMode.Append
           }
 
-          data.write.format("org.apache.hudi")
-            .mode(mode)
-            .options(buildHoodieConfig(hoodieCatalogTable) ++
-              buildHoodieInsertConfig(hoodieCatalogTable, spark, overwritePartition, overwriteTable, Map.empty, Map.empty))
-            .save()
+          val writeOptsMap = writeOptions.asCaseSensitiveMap().asScala.toMap
+          val config = buildHoodieConfig(hoodieCatalogTable) ++
+            buildHoodieInsertConfig(hoodieCatalogTable, spark,
+              overwritePartition, overwriteTable, Map.empty, writeOptsMap) ++
+            writeOptsMap
+
+          // The V2-to-V1 fallback may receive a DataFrame with generic column names
+          // (e.g., col1, col2 from VALUES clause) and uncast types (e.g., DECIMAL literals
+          // for DOUBLE columns). Rename and cast columns to match the table's user schema.
+          val userSchema = hoodieCatalogTable.tableSchemaWithoutMetaFields
+          val alignedData = if (data.schema == userSchema) {
+            data
+          } else if (data.columns.length == userSchema.length) {
+            val columns = data.schema.fields.zip(userSchema.fields).map {
+              case (srcField, tgtField) =>
+                data.col(srcField.name).cast(tgtField.dataType).as(tgtField.name)
+            }
+            data.select(columns: _*)
+          } else {
+            data
+          }
+
+          // Pass the catalog schema so the V1 writer can properly reconcile the
+          // incoming schema with the full table schema (including meta-fields).
+          val (structName, namespace) =
+            HoodieSchemaConversionUtils.getRecordNameAndNamespace(hoodieCatalogTable.tableName)
+          val catalogSchema = HoodieSchemaConversionUtils
+            .convertStructTypeToHoodieSchema(hoodieCatalogTable.tableSchema, structName, namespace)
+
+          try {
+            val (success, _, _, _, _, _) = HoodieSparkSqlWriter.write(spark.sqlContext, mode, config, alignedData,
+              schemaFromCatalog = Option(catalogSchema))
+            if (!success) {
+              throw new HoodieException("Failed to write to Hudi")
+            }
+          } finally {
+            HoodieSparkSqlWriter.cleanup()
+          }
         }
       }
     }
