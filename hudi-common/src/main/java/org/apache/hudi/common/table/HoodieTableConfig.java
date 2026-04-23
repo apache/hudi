@@ -324,8 +324,8 @@ public class HoodieTableConfig extends HoodieConfig {
       .withDocumentation("When enabled, populates all meta fields. When disabled, no meta fields are populated "
           + "and incremental queries will not be functional. This is only meant to be used for append only/immutable data for batch processing");
 
-  public static final ConfigProperty<String> META_FIELDS_TO_EXCLUDE = ConfigProperty
-      .key("hoodie.meta.fields.to.exclude")
+  public static final ConfigProperty<String> META_FIELDS_EXCLUDE_LIST = ConfigProperty
+      .key("hoodie.table.meta.fields.exclude.list")
       .noDefaultValue()
       .markAdvanced()
       .withDocumentation("Comma-separated list of Hudi meta field names to exclude from population. "
@@ -1208,13 +1208,13 @@ public class HoodieTableConfig extends HoodieConfig {
 
   /**
    * Checks if a specific meta field is excluded from population via
-   * {@link #META_FIELDS_TO_EXCLUDE}.
+   * {@link #META_FIELDS_EXCLUDE_LIST}.
    *
    * @param metaFieldName the meta field name to check (e.g. {@code _hoodie_commit_time})
    * @return true if the field is in the exclusion list
    */
   public boolean isMetaFieldExcluded(String metaFieldName) {
-    String value = getString(META_FIELDS_TO_EXCLUDE);
+    String value = getString(META_FIELDS_EXCLUDE_LIST);
     if (value == null || value.trim().isEmpty()) {
       return false;
     }

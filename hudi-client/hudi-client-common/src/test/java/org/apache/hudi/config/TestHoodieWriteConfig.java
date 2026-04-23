@@ -887,13 +887,13 @@ public class TestHoodieWriteConfig {
 
     // Exclude commit_time only
     HoodieTableConfig configExcludeCommitTime = new HoodieTableConfig();
-    configExcludeCommitTime.setValue(HoodieTableConfig.META_FIELDS_TO_EXCLUDE, "_hoodie_commit_time");
+    configExcludeCommitTime.setValue(HoodieTableConfig.META_FIELDS_EXCLUDE_LIST, "_hoodie_commit_time");
     assertTrue(configExcludeCommitTime.isMetaFieldExcluded(HoodieRecord.COMMIT_TIME_METADATA_FIELD));
     assertFalse(configExcludeCommitTime.isMetaFieldExcluded(HoodieRecord.RECORD_KEY_METADATA_FIELD));
 
     // Exclude multiple fields
     HoodieTableConfig configExcludeMultiple = new HoodieTableConfig();
-    configExcludeMultiple.setValue(HoodieTableConfig.META_FIELDS_TO_EXCLUDE,
+    configExcludeMultiple.setValue(HoodieTableConfig.META_FIELDS_EXCLUDE_LIST,
         "_hoodie_record_key,_hoodie_partition_path");
     assertFalse(configExcludeMultiple.isMetaFieldExcluded(HoodieRecord.COMMIT_TIME_METADATA_FIELD));
     assertTrue(configExcludeMultiple.isMetaFieldExcluded(HoodieRecord.RECORD_KEY_METADATA_FIELD));
@@ -901,7 +901,7 @@ public class TestHoodieWriteConfig {
 
     // Whitespace handling
     HoodieTableConfig configWhitespace = new HoodieTableConfig();
-    configWhitespace.setValue(HoodieTableConfig.META_FIELDS_TO_EXCLUDE,
+    configWhitespace.setValue(HoodieTableConfig.META_FIELDS_EXCLUDE_LIST,
         " _hoodie_commit_time , _hoodie_file_name ");
     assertTrue(configWhitespace.isMetaFieldExcluded(HoodieRecord.COMMIT_TIME_METADATA_FIELD));
     assertTrue(configWhitespace.isMetaFieldExcluded(HoodieRecord.FILENAME_METADATA_FIELD));

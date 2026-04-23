@@ -272,7 +272,7 @@ trait HoodieIncrementalRelationV1Trait extends HoodieBaseRelation {
     }
 
     if (this.tableConfig.isMetaFieldExcluded(HoodieRecord.COMMIT_TIME_METADATA_FIELD)) {
-      throw new HoodieException("Incremental queries are not supported when _hoodie_commit_time is excluded via hoodie.meta.fields.to.exclude")
+      throw new HoodieException("Incremental queries are not supported when _hoodie_commit_time is excluded via hoodie.table.meta.fields.exclude.list")
     }
 
     if (hollowCommitHandling == USE_TRANSITION_TIME && fullTableScan) {

@@ -1777,7 +1777,7 @@ public class HoodieWriteConfig extends HoodieConfig {
   }
 
   private Set<String> getMetaFieldsToExclude() {
-    String value = getString(HoodieTableConfig.META_FIELDS_TO_EXCLUDE);
+    String value = getString(HoodieTableConfig.META_FIELDS_EXCLUDE_LIST);
     if (value == null || value.trim().isEmpty()) {
       return Collections.emptySet();
     }
@@ -3606,7 +3606,7 @@ public class HoodieWriteConfig extends HoodieConfig {
 
     public Builder withMetaFieldsToExclude(String metaFieldsToExclude) {
       if (!StringUtils.isNullOrEmpty(metaFieldsToExclude)) {
-        writeConfig.setValue(HoodieTableConfig.META_FIELDS_TO_EXCLUDE, metaFieldsToExclude);
+        writeConfig.setValue(HoodieTableConfig.META_FIELDS_EXCLUDE_LIST, metaFieldsToExclude);
       }
       return this;
     }
