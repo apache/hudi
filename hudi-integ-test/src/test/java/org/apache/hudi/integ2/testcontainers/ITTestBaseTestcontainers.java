@@ -67,7 +67,6 @@ public abstract class ITTestBaseTestcontainers implements ContainerProvider {
   // a different Spark version (e.g., "docker-compose_hadoop284_hive2310_spark353" for Spark 3.5.3).
   static final String COMPOSE_PREFIX_PROPERTY = "spark.docker.compose.prefix";
   static final String DEFAULT_COMPOSE_PREFIX = "docker-compose_hadoop340_hive2310_spark402";
-//  static final String DEFAULT_COMPOSE_PREFIX = "docker-compose_hadoop284_hive2310_spark353";
   // Token present in compose prefixes that run Spark 4.x (e.g. "...spark402"). Used to gate Spark 4+ only tests.
   private static final String SPARK_4_PREFIX_TOKEN = "spark4";
   private static final String COMPOSE_DIR = "../docker/compose/";
