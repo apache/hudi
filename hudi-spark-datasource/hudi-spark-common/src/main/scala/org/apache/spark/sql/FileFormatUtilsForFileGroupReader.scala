@@ -21,7 +21,7 @@ package org.apache.spark.sql
 import org.apache.hudi.{SparkAdapterSupport, SparkHoodieTableFileIndex}
 import org.apache.hudi.cdc.HoodieCDCFileIndex
 
-import org.apache.spark.sql.catalyst.expressions.{And, Attribute, Contains, EndsWith, EqualNullSafe, EqualTo, Expression, GreaterThan, GreaterThanOrEqual, In, IsNotNull, IsNull, LessThan, LessThanOrEqual, Literal, NamedExpression, Not, Or, StartsWith}
+import org.apache.spark.sql.catalyst.expressions.{And, Attribute, Contains, CreateArray, EndsWith, EqualNullSafe, EqualTo, Expression, GetArrayItem, GreaterThan, GreaterThanOrEqual, In, IsNotNull, IsNull, LessThan, LessThanOrEqual, Literal, Not, Or, StartsWith}
 import org.apache.spark.sql.catalyst.plans.logical.{Filter, LogicalPlan, Project}
 import org.apache.spark.sql.execution.datasources.HadoopFsRelation
 import org.apache.spark.sql.execution.datasources.parquet.{HoodieFormatTrait, ParquetFileFormat}
@@ -54,8 +54,8 @@ object FileFormatUtilsForFileGroupReader extends SparkAdapterSupport {
 
     def filterToExpression(
                             filter: sources.Filter,
-                            toRef: String => Option[NamedExpression]): Option[Expression] = {
-      def zipAttributeAndValue(name: String, value: Any): Option[(NamedExpression, Literal)] = {
+                            toRef: String => Option[Expression]): Option[Expression] = {
+      def zipAttributeAndValue(name: String, value: Any): Option[(Expression, Literal)] = {
         zip(toRef(name), toLiteral(value))
       }
 
@@ -112,9 +112,11 @@ object FileFormatUtilsForFileGroupReader extends SparkAdapterSupport {
       Try(Literal(value)).toOption
     }
 
-    def toRef(attr: String): Option[NamedExpression] = {
+    def toRef(attr: String): Option[Expression] = {
       tableSchema.getFieldIndex(attr).map { index =>
-        resolvedSchema(index)
+        // Required filters are applied above the Hudi file-group reader. Keep Spark from
+        // converting them back into Parquet pushed filters before metadata fields are materialized.
+        GetArrayItem(CreateArray(Seq(resolvedSchema(index))), Literal(0))
       }
     }
 

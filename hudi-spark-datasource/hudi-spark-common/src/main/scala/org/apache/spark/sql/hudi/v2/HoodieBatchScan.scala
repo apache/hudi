@@ -17,6 +17,7 @@
 
 package org.apache.spark.sql.hudi.v2
 
+import org.apache.hudi.common.schema.HoodieSchema
 import org.apache.hudi.common.util.{Option => HOption}
 import org.apache.hudi.internal.schema.InternalSchema
 
@@ -38,7 +39,9 @@ class HoodieBatchScan(outputSchema: StructType,
                       requiredPartitionSchema: StructType,
                       internalSchemaOpt: HOption[InternalSchema] = HOption.empty(),
                       pushedFilters: Array[Filter] = Array.empty,
-                      pushedLimit: Option[Int] = None) extends Scan with Batch with SupportsReportStatistics {
+                      pushedLimit: Option[Int] = None,
+                      tableAvroSchema: HOption[HoodieSchema] = HOption.empty())
+  extends Scan with Batch with SupportsReportStatistics {
 
   override def readSchema(): StructType = outputSchema
 
@@ -61,7 +64,8 @@ class HoodieBatchScan(outputSchema: StructType,
       requiredPartitionSchema,
       internalSchemaOpt,
       pushedFilters,
-      pushedLimit)
+      pushedLimit,
+      tableAvroSchema)
   }
 
   override def estimateStatistics(): Statistics = {

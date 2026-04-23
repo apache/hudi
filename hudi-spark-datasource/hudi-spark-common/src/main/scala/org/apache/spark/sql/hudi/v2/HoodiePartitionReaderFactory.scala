@@ -17,6 +17,7 @@
 
 package org.apache.spark.sql.hudi.v2
 
+import org.apache.hudi.common.schema.HoodieSchema
 import org.apache.hudi.common.util.{Option => HOption}
 import org.apache.hudi.internal.schema.InternalSchema
 
@@ -38,7 +39,9 @@ class HoodiePartitionReaderFactory(broadcastReader: Broadcast[SparkColumnarFileR
                                    requiredPartitionSchema: StructType,
                                    internalSchemaOpt: HOption[InternalSchema] = HOption.empty(),
                                    pushedFilters: Array[Filter] = Array.empty,
-                                   pushedLimit: Option[Int] = None) extends PartitionReaderFactory {
+                                   pushedLimit: Option[Int] = None,
+                                   tableAvroSchema: HOption[HoodieSchema] = HOption.empty())
+  extends PartitionReaderFactory {
 
   override def createReader(partition: InputPartition): PartitionReader[InternalRow] = {
     val hoodiePart = partition.asInstanceOf[HoodieInputPartition]
@@ -51,6 +54,7 @@ class HoodiePartitionReaderFactory(broadcastReader: Broadcast[SparkColumnarFileR
       requiredPartitionSchema,
       internalSchemaOpt,
       pushedFilters,
-      pushedLimit)
+      pushedLimit,
+      tableAvroSchema)
   }
 }

@@ -30,7 +30,7 @@ import org.apache.spark.sql.connector.catalog.TableCapability._
 import org.apache.spark.sql.connector.expressions.{FieldReference, IdentityTransform, Transform}
 import org.apache.spark.sql.connector.write._
 import org.apache.spark.sql.hudi.ProvidesHoodieConfig
-import org.apache.spark.sql.sources.{Filter, InsertableRelation}
+import org.apache.spark.sql.sources.InsertableRelation
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.util.CaseInsensitiveStringMap
 
@@ -66,7 +66,7 @@ case class HoodieInternalV2Table(spark: SparkSession,
   override def schema(): StructType = tableSchema
 
   override def capabilities(): util.Set[TableCapability] = Set(
-    BATCH_READ, V1_BATCH_WRITE, OVERWRITE_BY_FILTER, TRUNCATE, ACCEPT_ANY_SCHEMA
+    BATCH_READ, V1_BATCH_WRITE, TRUNCATE, ACCEPT_ANY_SCHEMA
   ).asJava
 
   override def properties(): util.Map[String, String] = {
@@ -92,18 +92,12 @@ case class HoodieInternalV2Table(spark: SparkSession,
 private[hudi] class HoodieV1WriteBuilder(writeOptions: CaseInsensitiveStringMap,
                                          hoodieCatalogTable: HoodieCatalogTable,
                                          spark: SparkSession)
-  extends SupportsTruncate with SupportsOverwrite with ProvidesHoodieConfig {
+  extends SupportsTruncate with ProvidesHoodieConfig {
 
   private var overwriteTable = false
-  private var overwritePartition = false
 
   override def truncate(): HoodieV1WriteBuilder = {
     overwriteTable = true
-    this
-  }
-
-  override def overwrite(filters: Array[Filter]): WriteBuilder = {
-    overwritePartition = true
     this
   }
 
@@ -111,7 +105,7 @@ private[hudi] class HoodieV1WriteBuilder(writeOptions: CaseInsensitiveStringMap,
     override def toInsertableRelation: InsertableRelation = {
       new InsertableRelation {
         override def insert(data: DataFrame, overwrite: Boolean): Unit = {
-          val mode = if (overwriteTable || overwritePartition) {
+          val mode = if (overwriteTable) {
             SaveMode.Overwrite
           } else {
             SaveMode.Append
@@ -120,7 +114,7 @@ private[hudi] class HoodieV1WriteBuilder(writeOptions: CaseInsensitiveStringMap,
           val writeOptsMap = writeOptions.asCaseSensitiveMap().asScala.toMap
           val config = buildHoodieConfig(hoodieCatalogTable) ++
             buildHoodieInsertConfig(hoodieCatalogTable, spark,
-              overwritePartition, overwriteTable, Map.empty, writeOptsMap) ++
+              isOverwritePartition = false, overwriteTable, Map.empty, writeOptsMap) ++
             writeOptsMap
 
           // The V2-to-V1 fallback may receive a DataFrame with generic column names

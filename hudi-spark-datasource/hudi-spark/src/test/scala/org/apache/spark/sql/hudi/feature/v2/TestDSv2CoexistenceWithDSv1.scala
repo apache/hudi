@@ -87,6 +87,36 @@ class TestDSv2CoexistenceWithDSv1 extends SparkClientFunctionalTestHarness {
     assertEquals(Array("Alice", "Bob", "Charlie").toSeq, names.toSeq)
   }
 
+  @Test
+  def testDSv2WriteToExistingMorTableFallsBackToV1(): Unit = {
+    val path = basePath() + "/v2_write_existing_mor"
+    val _spark = spark
+    import _spark.implicits._
+
+    // Create an existing MOR table first.
+    Seq((1, "Alice", 100.0, 1L)).toDF("id", "name", "amount", "ts")
+      .write.format("hudi")
+      .option("hoodie.table.name", "v2_write_existing_mor")
+      .option("hoodie.datasource.write.table.type", "MERGE_ON_READ")
+      .option("hoodie.datasource.write.recordkey.field", "id")
+      .option("hoodie.datasource.write.precombine.field", "ts")
+      .mode(SaveMode.Overwrite)
+      .save(path)
+
+    // A subsequent write via hudi_v2 must fall through to V1 createRelation instead of
+    // throwing at getTable — MOR is not DSv2-readable, but the V1 writer handles it.
+    Seq((2, "Bob", 200.0, 2L)).toDF("id", "name", "amount", "ts")
+      .write.format("hudi_v2")
+      .option("hoodie.table.name", "v2_write_existing_mor")
+      .option("hoodie.datasource.write.recordkey.field", "id")
+      .option("hoodie.datasource.write.precombine.field", "ts")
+      .mode(SaveMode.Append)
+      .save(path)
+
+    // Read back via DSv1 (MOR snapshot is not DSv2-readable).
+    assertEquals(2, spark.read.format("hudi").load(path).count())
+  }
+
   // ---- DataFrame API read tests ----
 
   @Test
@@ -407,20 +437,77 @@ class TestDSv2CoexistenceWithDSv1 extends SparkClientFunctionalTestHarness {
       spark.sessionState.conf.unsetConf(DataSourceReadOptions.USE_V2_READ.key)
     }
 
-    // With both schema evolution and v2 read enabled, the loadTable() should
-    // return HoodieSparkV2Table (DSv2 path takes precedence over schema evolution).
+    // With both schema evolution and v2 read enabled, schema evolution takes precedence:
+    // loadTable() returns HoodieInternalV2Table so the Spark3xResolveHudiAlterTableCommand
+    // rewrite rules keep matching DROP COLUMN / RENAME COLUMN, and reads fall back to the
+    // V1 schema-evolution-aware FileScan via V2TableWithV1Fallback.
     spark.sessionState.conf.setConfString("hoodie.schema.on.read.enable", "true")
     spark.sessionState.conf.setConfString(DataSourceReadOptions.USE_V2_READ.key, "true")
     try {
       val explainRows = spark.sql(s"EXPLAIN SELECT * FROM $tableName").collect()
       val plan = explainRows.map(_.getString(0)).mkString("\n")
-      assertTrue(containsBatchScan(plan),
-        s"V2 read with schema evolution should use BatchScan (V2), but got:\n$plan")
+      assertTrue(containsFileScan(plan),
+        s"Schema evolution should force V1 FileScan even with use.v2=true, got:\n$plan")
+      assertTrue(!containsBatchScan(plan),
+        s"Schema evolution should not produce a DSv2 BatchScan, got:\n$plan")
 
       val df = spark.sql(s"SELECT * FROM $tableName")
       assertEquals(1, df.count())
     } finally {
       spark.sessionState.conf.unsetConf("hoodie.schema.on.read.enable")
+      spark.sessionState.conf.unsetConf(DataSourceReadOptions.USE_V2_READ.key)
+      spark.sql(s"DROP TABLE IF EXISTS $tableName")
+    }
+  }
+
+  @Test
+  def testSchemaEvolutionDdlWithV2ReadEnabled(): Unit = {
+    val tableName = "schema_evol_v2_ddl"
+    val tablePath = basePath() + "/" + tableName
+
+    // Schema-on-read must be enabled before CREATE TABLE so the internal-schema
+    // bookkeeping is set up from the start. DROP COLUMN also needs
+    // auto.evolution.column.drop so Hudi's write-time schema validation accepts the
+    // removal.
+    spark.sessionState.conf.setConfString("hoodie.schema.on.read.enable", "true")
+    spark.sessionState.conf.setConfString(
+      "hoodie.datasource.write.schema.allow.auto.evolution.column.drop", "true")
+    spark.sessionState.conf.setConfString(DataSourceReadOptions.USE_V2_READ.key, "true")
+    try {
+      spark.sql(
+        s"""CREATE TABLE $tableName (
+           |  id INT,
+           |  name STRING,
+           |  amount DOUBLE,
+           |  ts LONG
+           |) USING hudi
+           |TBLPROPERTIES (
+           |  type = 'cow',
+           |  primaryKey = 'id',
+           |  preCombineField = 'ts'
+           |)
+           |LOCATION '$tablePath'
+           """.stripMargin)
+
+      spark.sql(s"INSERT INTO $tableName VALUES (1, 'Alice', 100.0, 1)")
+
+      // Both DROP COLUMN and RENAME COLUMN must still be rewritten to Hudi commands
+      // by Spark3xResolveHudiAlterTableCommand — which only matches HoodieInternalV2Table.
+      spark.sql(s"ALTER TABLE $tableName DROP COLUMN amount")
+      val afterDrop = spark.sql(s"DESCRIBE $tableName")
+        .select("col_name").collect().map(_.getString(0))
+      assertTrue(!afterDrop.contains("amount"),
+        s"DROP COLUMN should have removed 'amount', got: ${afterDrop.mkString(", ")}")
+
+      spark.sql(s"ALTER TABLE $tableName RENAME COLUMN name TO full_name")
+      val afterRename = spark.sql(s"DESCRIBE $tableName")
+        .select("col_name").collect().map(_.getString(0))
+      assertTrue(afterRename.contains("full_name"),
+        s"RENAME COLUMN should have renamed 'name' to 'full_name', got: ${afterRename.mkString(", ")}")
+    } finally {
+      spark.sessionState.conf.unsetConf("hoodie.schema.on.read.enable")
+      spark.sessionState.conf.unsetConf(
+        "hoodie.datasource.write.schema.allow.auto.evolution.column.drop")
       spark.sessionState.conf.unsetConf(DataSourceReadOptions.USE_V2_READ.key)
       spark.sql(s"DROP TABLE IF EXISTS $tableName")
     }

@@ -301,6 +301,9 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
             .getSparkPartitionedFileUtils.getPathFromPartitionedFile(file))
           fileSliceMapping.getSlice(fileGroupName) match {
             case Some(fileSlice) if !isCount && (requiredSchema.nonEmpty || fileSlice.getLogFiles.findAny().isPresent) =>
+              // Pass requiredFilters here so incremental commit-time pruning is enforced even
+              // when HoodieSparkSessionExtension is not configured and the analysis rule that
+              // wraps the scan with getRequiredFilters does not run.
               val readerContext = new SparkFileFormatInternalRowReaderContext(
                 fileGroupBaseFileReader.value, filters, requiredFilters, storageConf, metaClient.getTableConfig,
                 sparkRequiredSchema = Some(requiredSchema))

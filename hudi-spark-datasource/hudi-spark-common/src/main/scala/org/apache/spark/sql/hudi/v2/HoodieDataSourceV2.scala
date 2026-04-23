@@ -18,9 +18,7 @@
 package org.apache.spark.sql.hudi.v2
 
 import org.apache.hudi.{DataSourceWriteOptions, HoodieEmptyRelation, HoodieSparkSqlWriter}
-import org.apache.hudi.common.table.HoodieTableMetaClient
-import org.apache.hudi.exception.{HoodieException, TableNotFoundException}
-import org.apache.hudi.hadoop.fs.HadoopFSUtils
+import org.apache.hudi.exception.HoodieException
 
 import org.apache.spark.sql.{DataFrame, SaveMode, SparkSession, SQLContext}
 import org.apache.spark.sql.connector.catalog.{Table, TableProvider}
@@ -30,8 +28,6 @@ import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.util.CaseInsensitiveStringMap
 
 import java.util
-
-import scala.collection.JavaConverters._
 
 /**
  * DSv2 data source for Hudi, registered with short name "hudi_v2".
@@ -59,30 +55,10 @@ class HoodieDataSourceV2 extends TableProvider with DataSourceRegister with Crea
     if (path == null) {
       throw new HoodieException("'path' cannot be null, missing 'path' from table properties")
     }
-
-    val spark = SparkSession.active
-    // Writes to a new path have no table on disk yet; the gate only applies to reads against
-    // an existing table. Swallowing TableNotFoundException lets the V1-write fallback proceed.
-    val metaClientOpt: Option[HoodieTableMetaClient] = try {
-      Some(HoodieTableMetaClient.builder()
-        .setBasePath(path)
-        .setConf(HadoopFSUtils.getStorageConf(spark.sessionState.newHadoopConf))
-        .build())
-    } catch {
-      case _: TableNotFoundException => None
-    }
-
-    val optsMap = options.asCaseSensitiveMap().asScala.toMap
-    metaClientOpt.foreach { metaClient =>
-      if (!HoodieV2ReadSupport.isSupportedByDSv2(metaClient, optsMap, spark)) {
-        throw new HoodieException(
-          "format(\"hudi_v2\") does not support this query configuration " +
-            "(MOR snapshot, non-Parquet base format, multiple base formats, " +
-            "incremental/CDC, or bootstrap table). Use format(\"hudi\") instead.")
-      }
-    }
-
-    HoodieSparkV2Table(spark, path, options = options)
+    // Read-side supportability is enforced in HoodieSparkV2Table.newScanBuilder. Throwing
+    // here would also block the V1-write fallback for existing MOR/bootstrap/non-Parquet
+    // tables, since DataFrameWriter.save calls getTable before deciding V1 vs V2.
+    HoodieSparkV2Table(SparkSession.active, path, options = options)
   }
 
   override def createRelation(sqlContext: SQLContext,

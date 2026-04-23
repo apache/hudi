@@ -17,15 +17,17 @@
 
 package org.apache.spark.sql.hudi.v2
 
-import org.apache.hudi.{DataSourceReadOptions, HoodieBaseRelation, HoodieFileIndex, SparkAdapterSupport}
+import org.apache.hudi.{DataSourceReadOptions, HoodieBaseRelation, HoodieFileIndex, HoodieSparkUtils, SparkAdapterSupport}
 import org.apache.hudi.client.utils.SparkInternalSchemaConverter
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.engine.HoodieLocalEngineContext
 import org.apache.hudi.common.model.HoodieTableType.COPY_ON_WRITE
+import org.apache.hudi.common.schema.HoodieSchema
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.table.timeline.TimelineLayout
 import org.apache.hudi.common.util.{Option => HOption}
 import org.apache.hudi.common.util.collection.Pair
+import org.apache.hudi.config.HoodieBootstrapConfig
 import org.apache.hudi.internal.schema.InternalSchema
 import org.apache.hudi.internal.schema.utils.SerDeHelper
 import org.apache.hudi.metadata.{HoodieBackedTableMetadata, MetadataPartitionType}
@@ -40,6 +42,8 @@ import org.apache.spark.sql.connector.expressions.NamedReference
 import org.apache.spark.sql.connector.expressions.aggregate.{Aggregation, Count, CountStar, Max, Min}
 import org.apache.spark.sql.connector.read.{InputPartition, Scan, ScanBuilder, SupportsPushDownAggregates, SupportsPushDownFilters, SupportsPushDownRequiredColumns}
 import org.apache.spark.sql.execution.datasources.FileFormat
+import org.apache.spark.sql.hudi.HoodieSqlCommonUtils
+import org.apache.spark.sql.hudi.v2.HoodieScanBuilder.{CountStarColumn, CountStarNoColumn, CountStarWithColumn, NoCountStar}
 import org.apache.spark.sql.sources.Filter
 import org.apache.spark.sql.types.{BooleanType, ByteType, DataType, DoubleType, FloatType, IntegerType, LongType, ShortType, StringType, StructField, StructType}
 import org.apache.spark.unsafe.types.UTF8String
@@ -87,21 +91,36 @@ class HoodieScanBuilder(spark: SparkSession,
     val (partFilters, datFilters) = HoodieCatalystExpressionUtils
       .splitPartitionAndDataPredicates(spark, expressions, fileIndex.partitionSchema.fieldNames)
 
-    partitionFilterExprs = partFilters.toSeq
+    // Mirror DSv1's MergeOnReadSnapshotRelation.collectFileSplits: convert partition filters
+    // for TimestampBasedKeyGenerator before pruning. HoodieFileIndex only applies this
+    // conversion internally when shouldEmbedFileSlices=true; this scan builder sets it
+    // false, so without an explicit conversion `dt = '2024-01-01'` would be matched against
+    // formatted path values like "2024/01/01" and prune away the matching partition.
+    partitionFilterExprs = HoodieFileIndex
+      .convertFilterForTimestampKeyGenerator(metaClient, partFilters).toSeq
     dataFilterExprs = datFilters.toSeq
 
     val partFieldNames = fileIndex.partitionSchema.fieldNames.toSet
-    // Partition filters are fully handled by partition pruning in filterFileSlices — the
-    // partition column is not in the base file, so forwarding them to the Parquet reader
-    // would filter all rows as null. Only pass data filters to the reader. Return those
-    // data filters to Spark so it re-applies them row-wise (Parquet only does row-group
-    // level pruning via these filters, not precise filtering).
-    val pushedDataFilters = pushed.filterNot(f => f.references.forall(partFieldNames.contains))
+    // Split pushed filters into:
+    //   - pushedDataFilters (references only data columns): forwarded to Parquet for
+    //     row-group pruning AND returned so Spark re-applies them row-wise (Parquet stats
+    //     only prune row-groups).
+    //   - partitionReferencingFilters (references at least one partition column, including
+    //     partition-only and mixed filters): must NOT be forwarded to Parquet because the
+    //     partition column may be absent from the base file (drop_partition_columns) or,
+    //     when present, may hold a value that disagrees with the path-derived value —
+    //     e.g. for TimestampBased/Custom key generators where path = "2024/01/01" but the
+    //     stored column value is "2024-01-01 12:00:00". Row-group stats would then prune
+    //     row-groups containing matching rows. They MUST be returned so Spark re-applies
+    //     them row-wise; partition pruning narrows the file set but does not evaluate
+    //     predicates against actual column values.
+    val (pushedDataFilters, partitionReferencingFilters) = pushed.partition(f =>
+      f.references.nonEmpty && f.references.forall(r => !partFieldNames.contains(r)))
 
     _pushedFilters = pushedDataFilters
-    hasPostScanFilters = postScan.nonEmpty
+    hasPostScanFilters = postScan.nonEmpty || partitionReferencingFilters.nonEmpty
 
-    postScan ++ pushedDataFilters
+    postScan ++ partitionReferencingFilters ++ pushedDataFilters
   }
 
   override def pushedFilters(): Array[Filter] = _pushedFilters
@@ -111,8 +130,25 @@ class HoodieScanBuilder(spark: SparkSession,
   }
 
   override def pushLimit(limit: Int): Boolean = {
-    pushedLimit = Some(limit)
-    true
+    // Spark 3.3's planner does not honor SupportsPushDownLimit.isPartiallyPushed — any
+    // successful pushdown is treated as COMPLETE and the outer LocalLimit is dropped.
+    // HoodieBatchScan enforces the limit per input partition, so LIMIT N across multiple
+    // base files could over-return. Refuse pushdown on 3.3; on 3.4+, PartialLimitPushDown
+    // keeps the outer LocalLimit in place.
+    // Otherwise the pushdown is only safe when no filter is re-applied above the scan:
+    // _pushedFilters are returned to Spark for row-wise re-evaluation (Parquet only
+    // prunes row-groups via them), and hasPostScanFilters covers filters we couldn't
+    // convert. Capping rows in the reader before either runs would drop later matching
+    // rows — e.g. WHERE id > 3 LIMIT 1 could stop at a row with id = 1. Spark pushes
+    // filters before limits, so both flags are already populated here.
+    if (!HoodieSparkUtils.gteqSpark3_4) {
+      false
+    } else if (_pushedFilters.nonEmpty || hasPostScanFilters) {
+      false
+    } else {
+      pushedLimit = Some(limit)
+      true
+    }
   }
 
   override def pushAggregation(aggregation: Aggregation): Boolean = {
@@ -172,19 +208,66 @@ class HoodieScanBuilder(spark: SparkSession,
               s"got tableType=${metaClient.getTableType}, queryType=$queryType")
 
     val partFieldNames = fileIndex.partitionSchema.fieldNames.toSet
-    val requiredDataSchema = StructType(requiredSchema.filterNot(f => partFieldNames.contains(f.name)))
-    val requiredPartitionSchema = StructType(requiredSchema.filter(f => partFieldNames.contains(f.name)))
+    // Mirror DSv1's HoodieBaseRelation.shouldExtractPartitionValuesFromPartitionPath: only
+    // strip partition columns from the file schema and supply them from the parsed path
+    // when the table was written with drop_partition_columns, the user explicitly opted
+    // in via EXTRACT_PARTITION_VALUES_FROM_PARTITION_PATH, or the bootstrap fast-read
+    // path is requested. Otherwise partition columns are persisted in the base files and
+    // path-derived values would be wrong for timestamp/custom key generators or encoded
+    // partition paths. (Bootstrap is currently rejected by HoodieV2ReadSupport, but the
+    // gate is kept identical for parity.)
+    val shouldOmitPartitionColumns =
+      metaClient.getTableConfig.shouldDropPartitionColumns && partFieldNames.nonEmpty
+    val shouldExtractPartitionValueFromPath =
+      options.getOrElse(DataSourceReadOptions.EXTRACT_PARTITION_VALUES_FROM_PARTITION_PATH.key,
+        DataSourceReadOptions.EXTRACT_PARTITION_VALUES_FROM_PARTITION_PATH.defaultValue.toString).toBoolean
+    val shouldUseBootstrapFastRead =
+      options.getOrElse(HoodieBootstrapConfig.DATA_QUERIES_ONLY.key, "false").toBoolean
+    val extractPartitionValuesFromPartitionPath =
+      shouldOmitPartitionColumns || shouldExtractPartitionValueFromPath || shouldUseBootstrapFastRead
+
+    // When partition values are extracted from the path, the partition column types must come
+    // from the file index. TimestampBasedKeyGenerator (and similar) parse non-DATE_STRING
+    // partition path values as UTF8String/StringType, so fileIndex.partitionSchema is the only
+    // place that reflects what HoodieFileIndex puts into HoodieInputPartition.partitionValues.
+    // Building requiredPartitionSchema from requiredSchema would advertise the original
+    // Long/Timestamp type and feed string path values into the parquet partition reader,
+    // producing wrong values or runtime errors. If the file-index type differs from the
+    // requiredSchema type, reject — DSv2 cannot reconcile that mismatch without also rewriting
+    // HoodieSparkV2Table.schema(), which is out of scope here.
+    val fullPartSchema = fileIndex.partitionSchema
+    val (requiredDataSchema, requiredPartitionSchema) = if (extractPartitionValuesFromPartitionPath) {
+      val partFieldsByName = fullPartSchema.fields.map(f => f.name -> f).toMap
+      val partitionFieldsInRequired = requiredSchema.fields
+        .filter(f => partFieldNames.contains(f.name))
+        .map { f =>
+          val fileIdxField = partFieldsByName(f.name)
+          if (fileIdxField.dataType != f.dataType) {
+            throw new UnsupportedOperationException(
+              s"DSv2 read with extractPartitionValuesFromPartitionPath=true does not support " +
+                s"partition column '${f.name}' whose file-index type ${fileIdxField.dataType.simpleString} " +
+                s"differs from the table-schema type ${f.dataType.simpleString} (typical for " +
+                s"TimestampBasedKeyGenerator). Disable extractPartitionValuesFromPartitionPath, " +
+                s"unset hoodie.datasource.write.drop.partition.columns, or use the DSv1 reader.")
+          }
+          fileIdxField
+        }
+      (StructType(requiredSchema.filterNot(f => partFieldNames.contains(f.name))),
+        StructType(partitionFieldsInRequired))
+    } else {
+      (requiredSchema, StructType(Nil))
+    }
 
     val hadoopConf = spark.sessionState.newHadoopConf()
     val internalSchemaOpt = fetchInternalSchema()
     embedInternalSchema(hadoopConf, internalSchemaOpt)
+    val tableAvroSchemaOpt = fetchTableAvroSchema()
 
     val readerOptions = options + (FileFormat.OPTION_RETURNING_BATCH -> "false")
     val reader = sparkAdapter.createParquetFileReader(false, spark.sessionState.conf, readerOptions, hadoopConf)
     val broadcastReader = spark.sparkContext.broadcast(reader)
     val broadcastConf = spark.sparkContext.broadcast(new SerializableConfiguration(hadoopConf))
 
-    val fullPartSchema = fileIndex.partitionSchema
     val fileSlicesPerPartition = fileIndex.filterFileSlices(dataFilterExprs, partitionFilterExprs)
 
     val partitions = fileSlicesPerPartition.flatMap { case (partitionOpt, fileSlices) =>
@@ -215,7 +298,29 @@ class HoodieScanBuilder(spark: SparkSession,
       requiredPartitionSchema,
       internalSchemaOpt,
       _pushedFilters,
-      pushedLimit)
+      pushedLimit,
+      tableAvroSchemaOpt)
+  }
+
+  private def fetchTableAvroSchema(): HOption[HoodieSchema] = {
+    try {
+      val resolver = new TableSchemaResolver(metaClient)
+      // Mirror DSv1's HoodieHadoopFsRelationFactory and HoodieFileGroupReaderBasedFileFormat:
+      // resolve the Avro schema as of a time-travel instant when supplied so the Parquet
+      // SchemaRepair sees the column types that match the snapshot being read. Without this,
+      // SparkXXParquetReader cannot repair logical timestamp annotations and timestamp-millis
+      // columns surface as their physical long value.
+      val schema = options.get(DataSourceReadOptions.TIME_TRAVEL_AS_OF_INSTANT.key)
+        .map(HoodieSqlCommonUtils.formatQueryInstant) match {
+          case Some(ts) => resolver.getTableSchema(ts)
+          case None     => resolver.getTableSchema
+        }
+      HOption.ofNullable(schema)
+    } catch {
+      case e: Exception =>
+        log.warn("Failed to fetch table Avro schema for SchemaRepair", e)
+        HOption.empty[HoodieSchema]()
+    }
   }
 
   private def fetchInternalSchema(): HOption[InternalSchema] = {
@@ -223,7 +328,15 @@ class HoodieScanBuilder(spark: SparkSession,
       HOption.empty[InternalSchema]()
     } else {
       try {
-        new TableSchemaResolver(metaClient).getTableInternalSchemaFromCommitMetadata
+        val resolver = new TableSchemaResolver(metaClient)
+        // Mirror DSv1 (HoodieBaseRelation): when a time-travel instant is supplied, fetch
+        // the internal schema as of that instant so schema-evolved column IDs/types match
+        // the snapshot being read. Otherwise fall back to the latest internal schema.
+        options.get(DataSourceReadOptions.TIME_TRAVEL_AS_OF_INSTANT.key)
+          .map(HoodieSqlCommonUtils.formatQueryInstant) match {
+            case Some(ts) => resolver.getTableInternalSchemaFromCommitMetadata(ts)
+            case None     => resolver.getTableInternalSchemaFromCommitMetadata
+          }
       } catch {
         case e: Exception =>
           log.warn("Failed to fetch internal schema from commit metadata", e)
@@ -300,23 +413,31 @@ class HoodieScanBuilder(spark: SparkSession,
       // user schema: it's an original column from the table's first commit, so its
       // column stats are complete even after schema evolution. Fall back to the
       // first column for keyless tables or when the record key is meta-field-only.
-      val countStarColumnOpt: Option[Option[String]] = if (aggFuncs.exists(_.isInstanceOf[CountStar])) {
+      val countStarColumn: CountStarColumn = if (aggFuncs.exists(_.isInstanceOf[CountStar])) {
         val schemaNames = tableSchema.fields.map(_.name).toSet
         val recordKeyFields = metaClient.getTableConfig.getRecordKeyFields.orElse(Array.empty[String])
         recordKeyFields.find(schemaNames.contains)
-          .orElse(tableSchema.fields.headOption.map(_.name))
-          .map(Some(_))
+          .orElse(tableSchema.fields.headOption.map(_.name)) match {
+            case Some(name) => CountStarWithColumn(name)
+            case None       => CountStarNoColumn
+          }
       } else {
-        Some(None)
+        NoCountStar
       }
 
-      countStarColumnOpt.flatMap { countStarColumn =>
-        val allColumns = (distinctColumns ++ countStarColumn.toSeq).distinct
-        if (allColumns.isEmpty) {
-          None
-        } else {
-          queryAndComputeAggregates(aggFuncs, allColumns, countStarColumn, baseFiles)
-        }
+      countStarColumn match {
+        case CountStarNoColumn => None
+        case resolved =>
+          val countStarColOpt: Option[String] = resolved match {
+            case CountStarWithColumn(name) => Some(name)
+            case _                         => None
+          }
+          val allColumns = (distinctColumns ++ countStarColOpt.toSeq).distinct
+          if (allColumns.isEmpty) {
+            None
+          } else {
+            queryAndComputeAggregates(aggFuncs, allColumns, countStarColOpt, baseFiles)
+          }
       }
     }
   }
@@ -502,4 +623,11 @@ class HoodieScanBuilder(spark: SparkSession,
       case _: Exception => None
     }
   }
+}
+
+private[v2] object HoodieScanBuilder {
+  sealed trait CountStarColumn
+  case object NoCountStar extends CountStarColumn
+  case object CountStarNoColumn extends CountStarColumn
+  final case class CountStarWithColumn(name: String) extends CountStarColumn
 }

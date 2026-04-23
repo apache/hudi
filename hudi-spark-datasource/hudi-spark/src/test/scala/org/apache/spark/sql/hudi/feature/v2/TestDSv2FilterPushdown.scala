@@ -187,6 +187,36 @@ class TestDSv2FilterPushdown extends SparkClientFunctionalTestHarness {
   }
 
   @Test
+  def testMixedReferenceOrFilterNotForwardedToParquet(): Unit = {
+    val path = basePath() + "/filter_mixed_or"
+    writePartitionedData(path, "filter_mixed_or")
+
+    // country='US' OR id=2 references both a partition column and a data column.
+    // Forwarding it to Parquet would make the reader see country as null in base files
+    // and could prune row-groups that contain the id=2 row (which lives in the UK
+    // partition). Spark must re-apply the full predicate row-wise.
+    val filter = "country = 'US' OR id = 2"
+    val v2Df = spark.read.format("hudi_v2").load(path).filter(filter)
+      .select("id", "name", "country")
+    val v2Rows = v2Df.collect()
+      .map(r => (r.getInt(0), r.getString(1), r.getString(2))).sortBy(_._1).toSeq
+
+    val v1Df = spark.read.format("hudi").load(path).filter(filter)
+      .select("id", "name", "country")
+    val v1Rows = v1Df.collect()
+      .map(r => (r.getInt(0), r.getString(1), r.getString(2))).sortBy(_._1).toSeq
+
+    assertEquals(v1Rows, v2Rows)
+    assertEquals(3, v2Rows.length)
+    assertTrue(v2Rows.exists { case (id, _, country) => id == 2 && country == "UK" },
+      s"Expected id=2 (UK) row; got $v2Rows")
+
+    val plan = v2Df.queryExecution.executedPlan.toString()
+    assertTrue(containsBatchScan(plan),
+      s"DSv2 read should use BatchScan, but plan was:\n$plan")
+  }
+
+  @Test
   def testDsv1VsDsv2FilterResults(): Unit = {
     val path = basePath() + "/filter_v1_v2"
     writePartitionedData(path, "filter_v1_v2")

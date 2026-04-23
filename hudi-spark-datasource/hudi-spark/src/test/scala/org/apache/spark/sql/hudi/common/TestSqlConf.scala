@@ -115,6 +115,50 @@ class TestSqlConf extends HoodieSparkSqlTestBase with BeforeAndAfter {
     }
   }
 
+  test("Test Hudi Conf with DSv2 read enabled") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      val tablePath = tmp.getCanonicalPath
+      val partitionVal = "2021"
+      spark.sql(
+        s"""
+           |create table $tableName (
+           |  id int,
+           |  name string,
+           |  price double,
+           |  ts long,
+           |  year string
+           |) using hudi
+           | partitioned by (year)
+           | location '$tablePath'
+           | options (
+           |  primaryKey ='id',
+           |  orderingFields = 'ts'
+           | )
+       """.stripMargin)
+
+      spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000, $partitionVal)")
+
+      val metaClient = createMetaClient(spark, tablePath)
+      val commitCompletionTime1 = metaClient.getActiveTimeline.filterCompletedInstants()
+        .lastInstant().get().getCompletionTime
+
+      spark.sql(s"insert into $tableName values(2, 'a2', 10, 1000, $partitionVal)")
+
+      // Incremental read options come from hudi-defaults.conf via global DFS props.
+      // With use.v2=true the catalog gate must still resolve those global props and
+      // fall back to the DSv1 incremental relation rather than the DSv2 snapshot scan.
+      withSQLConf(USE_V2_READ.key -> "true") {
+        DFSPropertiesConfiguration.addToGlobalProps(QUERY_TYPE.key, QUERY_TYPE_INCREMENTAL_OPT_VAL)
+        DFSPropertiesConfiguration.addToGlobalProps(START_COMMIT.key, commitCompletionTime1)
+        spark.catalog.refreshTable(tableName)
+        checkAnswer(s"select id, name, price, ts, year from $tableName")(
+          Seq(2, "a2", 10.0, 1000, partitionVal)
+        )
+      }
+    }
+  }
+
   test("Test spark.hoodie.* configs propagate to write path") {
     withTempDir { tmp =>
       val tableName = generateTableName
