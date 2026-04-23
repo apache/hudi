@@ -43,12 +43,84 @@ spark.sql("""
   )
 """)
 
+// Seed two rows in dt='2024-01-01'. Use OUT_OF_LINE here so subsequent UPDATE/MERGE
+// can mutate to a different reference without changing the struct shape between ops
+// (avoids mixing INLINE and OUT_OF_LINE branches in a single test).
 spark.sql("""
   INSERT INTO blob_test VALUES
-    (1, 'file1', named_struct('type', 'INLINE', 'data', cast('hello world' as binary), 'reference', null), '2024-01-01'),
-    (2, 'file2', named_struct('type', 'INLINE', 'data', cast('test data' as binary), 'reference', null), '2024-01-01')
+    (1, 'file1', named_struct(
+                   'type', 'OUT_OF_LINE',
+                   'data', cast(null as binary),
+                   'reference', named_struct(
+                     'external_path', 'blobs/seed-1',
+                     'offset', 0L,
+                     'length', 11L,
+                     'managed', false)), '2024-01-01'),
+    (2, 'file2', named_struct(
+                   'type', 'OUT_OF_LINE',
+                   'data', cast(null as binary),
+                   'reference', named_struct(
+                     'external_path', 'blobs/seed-2',
+                     'offset', 0L,
+                     'length', 9L,
+                     'managed', false)), '2024-01-01')
 """)
-
-// Verify table is readable via Spark
 spark.sql("select id, name, blob_data.type, dt from blob_test").show(10, false)
+println("BLOB_SQL_INSERT_SUCCESS")
+
+// UPDATE exercises the BLOB metadata re-attach on the UPDATE write path.
+// Per RFC-100 external_path and managed are non-null.
+spark.sql("""
+  UPDATE blob_test
+  SET blob_data = named_struct(
+        'type', 'OUT_OF_LINE',
+        'data', cast(null as binary),
+        'reference', named_struct(
+          'external_path', 'blobs/updated-1',
+          'offset', 10L,
+          'length', 100L,
+          'managed', true)),
+      name = 'file1-updated'
+  WHERE id = 1
+""")
+spark.sql("select id, name, blob_data.reference.external_path from blob_test where id = 1").show(10, false)
+println("BLOB_SQL_UPDATE_SUCCESS")
+
+// MERGE exercises both MATCHED (UPDATE SET) and NOT MATCHED (INSERT of a new
+// row into a new partition dt='2024-01-02'). The USING CTE strips the hudi_type
+// metadata from the struct column, so this specifically validates the reattach
+// path for MERGE.
+spark.sql("""
+  MERGE INTO blob_test t
+  USING (
+    SELECT 2L AS id, 'file2-merged' AS name, named_struct(
+      'type', 'OUT_OF_LINE',
+      'data', cast(null as binary),
+      'reference', named_struct(
+        'external_path', 'blobs/merged-2',
+        'offset', 20L,
+        'length', 200L,
+        'managed', true)) AS blob_data, '2024-01-01' AS dt
+    UNION ALL
+    SELECT 3L AS id, 'file3' AS name, named_struct(
+      'type', 'OUT_OF_LINE',
+      'data', cast(null as binary),
+      'reference', named_struct(
+        'external_path', 'blobs/inserted-3',
+        'offset', 300L,
+        'length', 30L,
+        'managed', false)) AS blob_data, '2024-01-02' AS dt
+  ) s
+  ON t.id = s.id
+  WHEN MATCHED THEN UPDATE SET t.name = s.name, t.blob_data = s.blob_data
+  WHEN NOT MATCHED THEN INSERT (id, name, blob_data, dt) VALUES (s.id, s.name, s.blob_data, s.dt)
+""")
+spark.sql("select id, name, blob_data.reference.external_path, dt from blob_test order by id").show(10, false)
+println("BLOB_SQL_MERGE_SUCCESS")
+
+// DELETE the NOT MATCHED row we just inserted, returning to 2 rows total.
+spark.sql("DELETE FROM blob_test WHERE id = 3")
+spark.sql("select id, name, blob_data.type, dt from blob_test order by id").show(10, false)
+println("BLOB_SQL_DELETE_SUCCESS")
+
 println("BLOB_SQL_TEST_SUCCESS")

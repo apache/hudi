@@ -88,15 +88,26 @@ public class ITTestCustomTypeHiveSync extends ITTestBaseTestcontainers {
 
     sparkAdhoc1.executeSQLFile(SPARKSQL_BLOB_TYPE_SQL_COMMANDS)
         .expectToSucceed()
+        .assertStdOutContains("BLOB_SQL_INSERT_SUCCESS")
+        .assertStdOutContains("BLOB_SQL_UPDATE_SUCCESS")
+        .assertStdOutContains("BLOB_SQL_MERGE_SUCCESS")
+        .assertStdOutContains("BLOB_SQL_DELETE_SUCCESS")
         .assertStdOutContains("BLOB_SQL_TEST_SUCCESS");
 
     hive.execute("DESCRIBE default.blob_test")
         .expectToSucceed()
         .assertStdOutContains("blob_data");
 
+    // MERGE added dt=2024-01-02; DELETE removed the row but kept the partition metadata.
     hive.execute("SHOW PARTITIONS default.blob_test")
         .expectToSucceed()
-        .assertStdOutContains("dt=2024-01-01");
+        .assertStdOutContains("dt=2024-01-01")
+        .assertStdOutContains("dt=2024-01-02");
+
+    // Post-DELETE final row count is 2 (id=1 updated, id=2 merged; id=3 deleted).
+    hive.execute("SELECT concat('HIVE_COUNT=', count(*)) FROM default.blob_test")
+        .expectToSucceed()
+        .assertStdOutContains("HIVE_COUNT=2");
   }
 
   @Test
@@ -106,6 +117,9 @@ public class ITTestCustomTypeHiveSync extends ITTestBaseTestcontainers {
 
     sparkAdhoc1.executeSQLFile(SPARKSQL_BLOB_TYPE_DF_COMMANDS)
         .expectToSucceed()
+        .assertStdOutContains("BLOB_DF_INSERT_SUCCESS")
+        .assertStdOutContains("BLOB_DF_UPSERT_SUCCESS")
+        .assertStdOutContains("BLOB_DF_DELETE_SUCCESS")
         .assertStdOutContains("BLOB_DF_TEST_SUCCESS");
 
     hive.execute("DESCRIBE default.blob_test_df")
@@ -114,7 +128,12 @@ public class ITTestCustomTypeHiveSync extends ITTestBaseTestcontainers {
 
     hive.execute("SHOW PARTITIONS default.blob_test_df")
         .expectToSucceed()
-        .assertStdOutContains("dt=2024-01-01");
+        .assertStdOutContains("dt=2024-01-01")
+        .assertStdOutContains("dt=2024-01-02");
+
+    hive.execute("SELECT concat('HIVE_COUNT=', count(*)) FROM default.blob_test_df")
+        .expectToSucceed()
+        .assertStdOutContains("HIVE_COUNT=2");
   }
 
   // ---------- VARIANT (Spark 4.x only) ----------
@@ -127,6 +146,10 @@ public class ITTestCustomTypeHiveSync extends ITTestBaseTestcontainers {
 
     sparkAdhoc1.executeSQLFile(SPARKSQL_VARIANT_TYPE_SQL_COMMANDS)
         .expectToSucceed()
+        .assertStdOutContains("VARIANT_SQL_INSERT_SUCCESS")
+        .assertStdOutContains("VARIANT_SQL_UPDATE_SUCCESS")
+        .assertStdOutContains("VARIANT_SQL_MERGE_SUCCESS")
+        .assertStdOutContains("VARIANT_SQL_DELETE_SUCCESS")
         .assertStdOutContains("VARIANT_SQL_TEST_SUCCESS");
 
     hive.execute("DESCRIBE default.variant_test")
@@ -135,7 +158,14 @@ public class ITTestCustomTypeHiveSync extends ITTestBaseTestcontainers {
 
     hive.execute("SHOW PARTITIONS default.variant_test")
         .expectToSucceed()
-        .assertStdOutContains("dt=2024-01-01");
+        .assertStdOutContains("dt=2024-01-01")
+        .assertStdOutContains("dt=2024-01-02");
+
+    // count(*) does not deserialize the variant column, so it is safe even if
+    // the Hive serde can't project the variant payload.
+    hive.execute("SELECT concat('HIVE_COUNT=', count(*)) FROM default.variant_test")
+        .expectToSucceed()
+        .assertStdOutContains("HIVE_COUNT=2");
   }
 
   @Test
@@ -146,6 +176,9 @@ public class ITTestCustomTypeHiveSync extends ITTestBaseTestcontainers {
 
     sparkAdhoc1.executeSQLFile(SPARKSQL_VARIANT_TYPE_DF_COMMANDS)
         .expectToSucceed()
+        .assertStdOutContains("VARIANT_DF_INSERT_SUCCESS")
+        .assertStdOutContains("VARIANT_DF_UPSERT_SUCCESS")
+        .assertStdOutContains("VARIANT_DF_DELETE_SUCCESS")
         .assertStdOutContains("VARIANT_DF_TEST_SUCCESS");
 
     hive.execute("DESCRIBE default.variant_test_df")
@@ -154,7 +187,12 @@ public class ITTestCustomTypeHiveSync extends ITTestBaseTestcontainers {
 
     hive.execute("SHOW PARTITIONS default.variant_test_df")
         .expectToSucceed()
-        .assertStdOutContains("dt=2024-01-01");
+        .assertStdOutContains("dt=2024-01-01")
+        .assertStdOutContains("dt=2024-01-02");
+
+    hive.execute("SELECT concat('HIVE_COUNT=', count(*)) FROM default.variant_test_df")
+        .expectToSucceed()
+        .assertStdOutContains("HIVE_COUNT=2");
   }
 
   // ---------- VECTOR ----------
@@ -166,12 +204,25 @@ public class ITTestCustomTypeHiveSync extends ITTestBaseTestcontainers {
 
     sparkAdhoc1.executeSQLFile(SPARKSQL_VECTOR_TYPE_SQL_COMMANDS)
         .expectToSucceed()
+        .assertStdOutContains("VECTOR_SQL_INSERT_SUCCESS")
+        .assertStdOutContains("VECTOR_SQL_UPDATE_SUCCESS")
+        .assertStdOutContains("VECTOR_SQL_MERGE_SUCCESS")
+        .assertStdOutContains("VECTOR_SQL_DELETE_SUCCESS")
         .assertStdOutContains("VECTOR_SQL_TEST_SUCCESS");
 
     hive.execute("DESCRIBE default.vector_test")
         .expectToSucceed()
         .assertStdOutContains("embedding")
         .assertStdOutContains("binary");
+
+    hive.execute("SHOW PARTITIONS default.vector_test")
+        .expectToSucceed()
+        .assertStdOutContains("dt=2024-01-01")
+        .assertStdOutContains("dt=2024-01-02");
+
+    hive.execute("SELECT concat('HIVE_COUNT=', count(*)) FROM default.vector_test")
+        .expectToSucceed()
+        .assertStdOutContains("HIVE_COUNT=2");
   }
 
   @Test
@@ -181,6 +232,9 @@ public class ITTestCustomTypeHiveSync extends ITTestBaseTestcontainers {
 
     sparkAdhoc1.executeSQLFile(SPARKSQL_VECTOR_TYPE_DF_COMMANDS)
         .expectToSucceed()
+        .assertStdOutContains("VECTOR_DF_INSERT_SUCCESS")
+        .assertStdOutContains("VECTOR_DF_UPSERT_SUCCESS")
+        .assertStdOutContains("VECTOR_DF_DELETE_SUCCESS")
         .assertStdOutContains("VECTOR_DF_TEST_SUCCESS");
 
     hive.execute("DESCRIBE default.vector_test_df")
@@ -190,6 +244,11 @@ public class ITTestCustomTypeHiveSync extends ITTestBaseTestcontainers {
 
     hive.execute("SHOW PARTITIONS default.vector_test_df")
         .expectToSucceed()
-        .assertStdOutContains("dt=2024-01-01");
+        .assertStdOutContains("dt=2024-01-01")
+        .assertStdOutContains("dt=2024-01-02");
+
+    hive.execute("SELECT concat('HIVE_COUNT=', count(*)) FROM default.vector_test_df")
+        .expectToSucceed()
+        .assertStdOutContains("HIVE_COUNT=2");
   }
 }

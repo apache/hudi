@@ -17,10 +17,8 @@
  */
 
 // E2E test: VECTOR type with Hive sync via SQL CREATE TABLE path.
-// NOTE: The VECTOR(n) DDL parser lives on HUDI-18360 and is NOT yet on master.
-// Until that lands, this script will fail to parse; the corresponding test is
-// @Disabled. Once the parser is merged the test can be re-enabled without
-// changes to this file.
+// Runs the full INSERT -> UPDATE -> MERGE -> DELETE lifecycle to exercise
+// the custom-type metadata re-attach path on every write command.
 spark.sql("""
   CREATE TABLE vector_test (
     id LONG,
@@ -50,7 +48,43 @@ spark.sql("""
     (1, 'doc1', array(cast(0.1 as float), cast(0.2 as float), cast(0.3 as float)), '2024-01-01'),
     (2, 'doc2', array(cast(0.4 as float), cast(0.5 as float), cast(0.6 as float)), '2024-01-01')
 """)
+spark.sql("select id, name, embedding, dt from vector_test order by id").show(10, false)
+println("VECTOR_SQL_INSERT_SUCCESS")
 
-// Verify table is readable via Spark
-spark.sql("select id, name, embedding, dt from vector_test").show(10, false)
+// UPDATE goes through castIfNeeded on the VECTOR column; without the reattach
+// path it would fail schema compat with MISSING_UNION_BRANCH.
+spark.sql("""
+  UPDATE vector_test
+  SET embedding = array(cast(0.9 as float), cast(0.8 as float), cast(0.7 as float)),
+      name = 'doc1-updated'
+  WHERE id = 1
+""")
+spark.sql("select id, name, embedding from vector_test where id = 1").show(10, false)
+println("VECTOR_SQL_UPDATE_SUCCESS")
+
+// MERGE exercises both MATCHED (UPDATE) and NOT MATCHED (INSERT into new
+// partition dt='2024-01-02'). The USING CTE does not carry the hudi_type
+// marker, so this specifically exercises the reattach path for MERGE.
+spark.sql("""
+  MERGE INTO vector_test t
+  USING (
+    SELECT 2L AS id, 'doc2-merged' AS name,
+           array(cast(0.41 as float), cast(0.51 as float), cast(0.61 as float)) AS embedding,
+           '2024-01-01' AS dt
+    UNION ALL
+    SELECT 3L AS id, 'doc3' AS name,
+           array(cast(0.7 as float), cast(0.8 as float), cast(0.9 as float)) AS embedding,
+           '2024-01-02' AS dt
+  ) s
+  ON t.id = s.id
+  WHEN MATCHED THEN UPDATE SET t.name = s.name, t.embedding = s.embedding
+  WHEN NOT MATCHED THEN INSERT (id, name, embedding, dt) VALUES (s.id, s.name, s.embedding, s.dt)
+""")
+spark.sql("select id, name, embedding, dt from vector_test order by id").show(10, false)
+println("VECTOR_SQL_MERGE_SUCCESS")
+
+spark.sql("DELETE FROM vector_test WHERE id = 3")
+spark.sql("select id, name, dt from vector_test order by id").show(10, false)
+println("VECTOR_SQL_DELETE_SUCCESS")
+
 println("VECTOR_SQL_TEST_SUCCESS")

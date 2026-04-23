@@ -17,7 +17,7 @@
  */
 
 import org.apache.spark.sql.types._
-import org.apache.spark.sql.SaveMode
+import org.apache.spark.sql.{Row, SaveMode}
 
 // Create schema with VECTOR metadata + partition column
 val metadata = new MetadataBuilder().putString("hudi_type", "VECTOR(3)").build()
@@ -28,32 +28,63 @@ val schema = StructType(Seq(
   StructField("dt", StringType)
 ))
 
-// Create data with a 3-dim vector
-val data = Seq(
-  org.apache.spark.sql.Row(1L, "doc1", Seq(0.1f, 0.2f, 0.3f), "2024-01-01"),
-  org.apache.spark.sql.Row(2L, "doc2", Seq(0.4f, 0.5f, 0.6f), "2024-01-01")
+// Body is wrapped in { } so the spark-shell REPL keeps the chained .option(...)
+// calls attached to the def. Without braces, writer.format("hudi") on the first
+// body line parses as a complete expression, the REPL closes the def there, and
+// the remaining .option(...) lines get dot-applied to `sc` (SparkContext).
+def applyWriteOpts(writer: org.apache.spark.sql.DataFrameWriter[Row]): org.apache.spark.sql.DataFrameWriter[Row] = {
+  writer.format("hudi")
+    .option("hoodie.table.name", "vector_test_df")
+    .option("hoodie.datasource.write.recordkey.field", "id")
+    .option("hoodie.datasource.write.precombine.field", "name")
+    .option("hoodie.datasource.write.partitionpath.field", "dt")
+    .option("hoodie.datasource.hive_sync.enable", "true")
+    .option("hoodie.datasource.hive_sync.database", "default")
+    .option("hoodie.datasource.hive_sync.table", "vector_test_df")
+    .option("hoodie.datasource.hive_sync.jdbcurl", "jdbc:hive2://hiveserver:10000/")
+    .option("hoodie.datasource.hive_sync.mode", "jdbc")
+    .option("hoodie.datasource.hive_sync.partition_fields", "dt")
+    .option("hoodie.datasource.hive_sync.partition_extractor_class",
+      "org.apache.hudi.hive.MultiPartKeysValueExtractor")
+    .option("hoodie.datasource.hive_sync.username", "hive")
+    .option("hoodie.datasource.hive_sync.password", "hive")
+}
+
+// Seed two rows in dt='2024-01-01' via Overwrite.
+val seed = Seq(
+  Row(1L, "doc1", Seq(0.1f, 0.2f, 0.3f), "2024-01-01"),
+  Row(2L, "doc2", Seq(0.4f, 0.5f, 0.6f), "2024-01-01")
 )
-val df = spark.createDataFrame(spark.sparkContext.parallelize(data), schema)
+val seedDf = spark.createDataFrame(spark.sparkContext.parallelize(seed), schema)
+applyWriteOpts(seedDf.write).mode(SaveMode.Overwrite).save("/user/hive/warehouse/vector_test_df")
+spark.sql("select id, name, embedding, dt from vector_test_df order by id").show(10, false)
+println("VECTOR_DF_INSERT_SUCCESS")
 
-// Write as Hudi COW partitioned table with Hive sync enabled
-df.write.format("hudi")
-  .option("hoodie.table.name", "vector_test_df")
-  .option("hoodie.datasource.write.recordkey.field", "id")
-  .option("hoodie.datasource.write.precombine.field", "name")
-  .option("hoodie.datasource.write.partitionpath.field", "dt")
-  .option("hoodie.datasource.hive_sync.enable", "true")
-  .option("hoodie.datasource.hive_sync.database", "default")
-  .option("hoodie.datasource.hive_sync.table", "vector_test_df")
-  .option("hoodie.datasource.hive_sync.jdbcurl", "jdbc:hive2://hiveserver:10000/")
-  .option("hoodie.datasource.hive_sync.mode", "jdbc")
-  .option("hoodie.datasource.hive_sync.partition_fields", "dt")
-  .option("hoodie.datasource.hive_sync.partition_extractor_class",
-    "org.apache.hudi.hive.MultiPartKeysValueExtractor")
-  .option("hoodie.datasource.hive_sync.username", "hive")
-  .option("hoodie.datasource.hive_sync.password", "hive")
-  .mode(SaveMode.Overwrite)
+// Append-upsert: id=2 mutated, id=3 new in dt='2024-01-02'. New preCombine
+// value (doc2-updated) sorts strictly after the seed (doc2).
+val upsertRows = Seq(
+  Row(2L, "doc2-updated", Seq(0.41f, 0.51f, 0.61f), "2024-01-01"),
+  Row(3L, "doc3", Seq(0.7f, 0.8f, 0.9f), "2024-01-02")
+)
+val upsertDf = spark.createDataFrame(spark.sparkContext.parallelize(upsertRows), schema)
+applyWriteOpts(upsertDf.write)
+  .option("hoodie.datasource.write.operation", "upsert")
+  .mode(SaveMode.Append)
   .save("/user/hive/warehouse/vector_test_df")
+spark.sql("select id, name, embedding, dt from vector_test_df order by id").show(10, false)
+println("VECTOR_DF_UPSERT_SUCCESS")
 
-// Verify table is readable via Spark
-spark.sql("select id, name, embedding, dt from vector_test_df").show(10, false)
+// Delete id=3 via operation=delete. The DF still needs a schema-compatible
+// VECTOR payload (Hudi uses only the record key/partition for delete).
+val deleteRows = Seq(
+  Row(3L, "doc3", Seq(0.0f, 0.0f, 0.0f), "2024-01-02")
+)
+val deleteDf = spark.createDataFrame(spark.sparkContext.parallelize(deleteRows), schema)
+applyWriteOpts(deleteDf.write)
+  .option("hoodie.datasource.write.operation", "delete")
+  .mode(SaveMode.Append)
+  .save("/user/hive/warehouse/vector_test_df")
+spark.sql("select id, name, embedding, dt from vector_test_df order by id").show(10, false)
+println("VECTOR_DF_DELETE_SUCCESS")
+
 println("VECTOR_DF_TEST_SUCCESS")

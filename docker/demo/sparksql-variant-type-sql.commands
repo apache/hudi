@@ -47,7 +47,43 @@ spark.sql("""
     (1, 'row1', parse_json('{"key":"value1"}'), '2024-01-01'),
     (2, 'row2', parse_json('{"key":"value2"}'), '2024-01-01')
 """)
+spark.sql("select id, name, cast(variant_data as string), dt from variant_test order by id").show(10, false)
+println("VARIANT_SQL_INSERT_SUCCESS")
 
-// Verify table is readable via Spark
-spark.sql("select id, name, cast(variant_data as string), dt from variant_test").show(10, false)
+// UPDATE against a VariantType column. Hudi's V1 writer accepts VariantType
+// writes on Spark 4 (see fix f395eea4b4a9); UPDATE exercises the same writer
+// path with castIfNeeded applied to the assignment.
+spark.sql("""
+  UPDATE variant_test
+  SET variant_data = parse_json('{"key":"value1-updated"}'),
+      name = 'row1-updated'
+  WHERE id = 1
+""")
+spark.sql("select id, name, cast(variant_data as string) from variant_test where id = 1").show(10, false)
+println("VARIANT_SQL_UPDATE_SUCCESS")
+
+// MERGE exercises both MATCHED (UPDATE) and NOT MATCHED (INSERT into new
+// partition dt='2024-01-02').
+spark.sql("""
+  MERGE INTO variant_test t
+  USING (
+    SELECT 2L AS id, 'row2-merged' AS name,
+           parse_json('{"key":"value2-merged"}') AS variant_data,
+           '2024-01-01' AS dt
+    UNION ALL
+    SELECT 3L AS id, 'row3' AS name,
+           parse_json('{"key":"value3"}') AS variant_data,
+           '2024-01-02' AS dt
+  ) s
+  ON t.id = s.id
+  WHEN MATCHED THEN UPDATE SET t.name = s.name, t.variant_data = s.variant_data
+  WHEN NOT MATCHED THEN INSERT (id, name, variant_data, dt) VALUES (s.id, s.name, s.variant_data, s.dt)
+""")
+spark.sql("select id, name, cast(variant_data as string), dt from variant_test order by id").show(10, false)
+println("VARIANT_SQL_MERGE_SUCCESS")
+
+spark.sql("DELETE FROM variant_test WHERE id = 3")
+spark.sql("select id, name, cast(variant_data as string), dt from variant_test order by id").show(10, false)
+println("VARIANT_SQL_DELETE_SUCCESS")
+
 println("VARIANT_SQL_TEST_SUCCESS")
