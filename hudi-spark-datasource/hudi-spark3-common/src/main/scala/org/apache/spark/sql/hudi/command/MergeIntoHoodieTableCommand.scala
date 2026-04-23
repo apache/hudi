@@ -494,7 +494,8 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
     //  - Schema of the expected "joined" output of the [[sourceTable]] and [[targetTable]]
     writeParams ++= Seq(
       PAYLOAD_RECORD_AVRO_SCHEMA ->
-        HoodieSchemaUtils.removeMetadataFields(convertStructTypeToHoodieSchema(enrichedSourceDF.schema, "record", "")).toString,
+        HoodieSchemaUtils.removeMetadataFields(
+          HoodieSchemaConversionUtils.convertUserStructTypeToHoodieSchema(enrichedSourceDF.schema, "record", "")).toString,
       PAYLOAD_EXPECTED_COMBINED_SCHEMA -> encodeAsBase64String(toStructType(joinedExpectedOutput))
     )
 

@@ -97,12 +97,8 @@ class TestSchemaConverters extends SparkAdapterSupport {
       StructField(HoodieSchema.Blob.INLINE_DATA_FIELD, DataTypes.BinaryType, nullable = true)
     ))
 
-    val metadata = new MetadataBuilder()
-      .putString(HoodieSchema.TYPE_METADATA_FIELD, HoodieSchemaType.BLOB.name())
-      .build()
-
     val exception = assertThrows(classOf[IllegalArgumentException], () => {
-      HoodieSparkSchemaConverters.toHoodieType(invalidStruct, nullable = false, metadata = metadata)
+      HoodieSparkSchemaConverters.validateCustomTypeStructures(wrapBlob(invalidStruct))
     })
     assertTrue(exception.getMessage.startsWith("Invalid blob schema structure"))
   }
@@ -285,13 +281,23 @@ class TestSchemaConverters extends SparkAdapterSupport {
   }
 
   private def assertInvalidVariantSchema(invalidStruct: StructType): Unit = {
-    val metadata = new MetadataBuilder()
-      .putString(HoodieSchema.TYPE_METADATA_FIELD, HoodieSchemaType.VARIANT.name())
-      .build()
     val exception = assertThrows(classOf[IllegalArgumentException], () => {
-      HoodieSparkSchemaConverters.toHoodieType(invalidStruct, metadata = metadata)
+      HoodieSparkSchemaConverters.validateCustomTypeStructures(wrapVariant(invalidStruct))
     })
     assertTrue(exception.getMessage.startsWith("Invalid variant schema structure"))
+  }
+
+  private def wrapBlob(inner: StructType): StructType = wrapWithCustomType(inner, HoodieSchemaType.BLOB)
+
+  private def wrapVariant(inner: StructType): StructType = wrapWithCustomType(inner, HoodieSchemaType.VARIANT)
+
+  private def wrapWithCustomType(inner: StructType, customType: HoodieSchemaType): StructType = {
+    val fieldMetadata = new MetadataBuilder()
+      .putString(HoodieSchema.TYPE_METADATA_FIELD, customType.name())
+      .build()
+    new StructType(Array[StructField](
+      StructField("payload", inner, nullable = false, metadata = fieldMetadata)
+    ))
   }
 
   @Test

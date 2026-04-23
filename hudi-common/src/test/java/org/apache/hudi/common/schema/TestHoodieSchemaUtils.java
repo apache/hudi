@@ -847,6 +847,40 @@ public class TestHoodieSchemaUtils {
   }
 
   @Test
+  void testPruningPreservesBlobWhenRequiredIsPlainRecord() {
+    // Repro for nested-projection crash: when Spark prunes a nested field of a BLOB
+    // column, the Spark-side required schema loses the `blob` logical type and
+    // converts to a plain Avro RECORD. The data schema still carries
+    // HoodieSchemaType.BLOB from the file's on-disk logical type. The pruner must
+    // not throw "Data schema is not a record" on this mismatch; BLOB's inner layout
+    // is fixed by its LogicalType contract, so pass the data schema through.
+    HoodieSchema dataSchema = HoodieSchema.createRecord("test_record", null, null, Arrays.asList(
+        HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.LONG)),
+        HoodieSchemaField.of("payload", HoodieSchema.createBlob())
+    ));
+
+    // Required schema projects only `payload.reference.external_path`, mimicking
+    // what Spark's nested-schema pruning produces.
+    String requiredSchemaStr = "{ \"type\": \"record\", \"name\": \"test_record\", \"fields\": ["
+        + "{ \"name\": \"payload\", \"type\": { \"type\": \"record\", \"name\": \"payload\", \"fields\": ["
+        + "  { \"name\": \"reference\", \"type\": [\"null\", { \"type\": \"record\", \"name\": \"reference\", \"fields\": ["
+        + "    { \"name\": \"external_path\", \"type\": \"string\" }"
+        + "  ]}], \"default\": null }"
+        + "]}}"
+        + "]}";
+
+    HoodieSchema requiredSchema = HoodieSchema.parse(requiredSchemaStr);
+    HoodieSchema pruned = HoodieSchemaUtils.pruneDataSchema(dataSchema, requiredSchema, Collections.emptySet());
+
+    Option<HoodieSchemaField> prunedPayload = pruned.getField("payload");
+    assertTrue(prunedPayload.isPresent());
+    // BLOB's logical-type invariant forbids partial inner layouts, so the pruner
+    // must return the full BLOB schema untouched.
+    assertEquals(HoodieSchemaType.BLOB, prunedPayload.get().schema().getType());
+    assertInstanceOf(HoodieSchema.Blob.class, prunedPayload.get().schema());
+  }
+
+  @Test
   void testPruningPreserveNullable() {
     String dataSchemaStr = "{"
         + "\"type\": \"record\","

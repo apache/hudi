@@ -60,7 +60,7 @@ case class AlterHoodieTableAddColumnsCommand(tableId: TableIdentifier,
       val rearrangedSchema = hoodieCatalogTable.dataSchema ++ colsToAdd ++ hoodieCatalogTable.partitionSchema
       val newSqlSchema = StructType(rearrangedSchema)
       val (structName, nameSpace) = HoodieSchemaConversionUtils.getRecordNameAndNamespace(tableId.table)
-      val newSchema = HoodieSchemaConversionUtils.convertStructTypeToHoodieSchema(newSqlSchema, structName, nameSpace)
+      val newSchema = HoodieSchemaConversionUtils.convertUserStructTypeToHoodieSchema(newSqlSchema, structName, nameSpace)
 
       // Commit with new schema to change the table schema
       AlterHoodieTableAddColumnsCommand.commitWithSchema(newSchema, hoodieCatalogTable, sparkSession)

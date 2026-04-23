@@ -22,6 +22,7 @@ import org.apache.hudi.common.schema.{HoodieSchema, HoodieSchemaField, HoodieSch
 import org.apache.hudi.internal.schema.HoodieSchemaException
 
 import org.apache.avro.generic.GenericData
+import org.apache.spark.sql.avro.HoodieSparkSchemaConverters
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.util.{ArrayData, MapData}
 import org.apache.spark.sql.types._
@@ -967,12 +968,10 @@ class TestHoodieSchemaConversionUtils extends FunSuite with Matchers {
       .add("id", LongType, nullable = false)
       .add("payload", wrongOrderBlob, nullable = true, blobMetadata)
 
-    val ex = intercept[Exception] {
-      HoodieSchemaConversionUtils.convertStructTypeToHoodieSchema(
-        outerStruct, "WrongOrderBlobTest", "test")
+    val ex = intercept[IllegalArgumentException] {
+      HoodieSparkSchemaConverters.validateCustomTypeStructures(outerStruct)
     }
-    assert(ex.getMessage.contains("Invalid blob schema structure") ||
-      (ex.getCause != null && ex.getCause.getMessage.contains("Invalid blob schema structure")),
+    assert(ex.getMessage.startsWith("Invalid blob schema structure"),
       s"unexpected exception: ${ex.getMessage}")
   }
 

@@ -147,6 +147,26 @@ object HoodieSchemaConversionUtils {
   }
 
   /**
+   * Write-path entry: validates the user-supplied StructType's custom Hudi logical-type
+   * structures (BLOB / VARIANT) before converting to HoodieSchema.
+   *
+   * Use this at ingest boundaries where the StructType originates from user input
+   * (DataFrame.schema, MERGE source, ALTER TABLE new columns, etc.). Internal transforms
+   * and the read/prune path must keep using [[convertStructTypeToHoodieSchema]], which stays
+   * permissive so Spark's nested-schema pruning does not crash reads.
+   *
+   * @throws IllegalArgumentException if a field tagged hudi_type=BLOB/VARIANT has a
+   *                                  non-canonical inner shape
+   * @throws HoodieSchemaException    if conversion fails
+   */
+  def convertUserStructTypeToHoodieSchema(structType: StructType,
+                                          structName: String,
+                                          recordNamespace: String): HoodieSchema = {
+    HoodieSparkSchemaConverters.validateCustomTypeStructures(structType)
+    convertStructTypeToHoodieSchema(structType, structName, recordNamespace)
+  }
+
+  /**
    * Re-attach catalog metadata/nullability that Spark's write-path rewrites strip:
    *
    *   1. VECTOR/BLOB logical-type metadata - dropped by TableOutputResolver's Cast and
