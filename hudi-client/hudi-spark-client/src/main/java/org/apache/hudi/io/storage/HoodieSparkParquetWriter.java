@@ -45,7 +45,7 @@ public class HoodieSparkParquetWriter extends HoodieBaseParquetWriter<InternalRo
   private final UTF8String instantTime;
 
   private final boolean populateMetaFields;
-  private final MetadataFieldsPopulation populateIndividualMetaFields;
+  private final MetadataFieldsPopulation metaFieldPopulationFlags;
 
   private final HoodieRowParquetWriteSupport writeSupport;
 
@@ -64,13 +64,13 @@ public class HoodieSparkParquetWriter extends HoodieBaseParquetWriter<InternalRo
                                   String instantTime,
                                   TaskContextSupplier taskContextSupplier,
                                   boolean populateMetaFields,
-                                  MetadataFieldsPopulation populateIndividualMetaFields) throws IOException {
+                                  MetadataFieldsPopulation metaFieldPopulationFlags) throws IOException {
     super(file, parquetConfig);
     this.writeSupport = parquetConfig.getWriteSupport();
     this.fileName = UTF8String.fromString(file.getName());
     this.instantTime = UTF8String.fromString(instantTime);
     this.populateMetaFields = populateMetaFields;
-    this.populateIndividualMetaFields = populateIndividualMetaFields;
+    this.metaFieldPopulationFlags = metaFieldPopulationFlags;
     this.seqIdGenerator = recordIndex -> {
       Integer partitionId = taskContextSupplier.getPartitionIdSupplier().get();
       return HoodieRecord.generateSequenceId(instantTime, partitionId, recordIndex);
@@ -84,9 +84,7 @@ public class HoodieSparkParquetWriter extends HoodieBaseParquetWriter<InternalRo
       updateRecordMetadata(row, recordKey, key.getPartitionPath(), getWrittenRecordCount());
 
       super.write(row);
-      if (populateIndividualMetaFields.isRecordKeyPopulated()) {
-        writeSupport.add(recordKey);
-      }
+      writeSupport.add(recordKey);
     } else {
       super.write(row);
     }
@@ -95,7 +93,7 @@ public class HoodieSparkParquetWriter extends HoodieBaseParquetWriter<InternalRo
   @Override
   public void writeRow(String recordKey, InternalRow row) throws IOException {
     super.write(row);
-    if (populateMetaFields && populateIndividualMetaFields.isRecordKeyPopulated()) {
+    if (populateMetaFields) {
       writeSupport.add(UTF8String.fromString(recordKey));
     }
   }
@@ -109,28 +107,28 @@ public class HoodieSparkParquetWriter extends HoodieBaseParquetWriter<InternalRo
                                       UTF8String recordKey,
                                       String partitionPath,
                                       long recordCount)  {
-    if (populateIndividualMetaFields.isInstantTimePopulated()) {
+    if (metaFieldPopulationFlags.isInstantTimePopulated()) {
       row.update(COMMIT_TIME_METADATA_FIELD.ordinal(), instantTime);
     } else {
       row.update(COMMIT_TIME_METADATA_FIELD.ordinal(), null);
     }
-    if (populateIndividualMetaFields.isCommitSeqNoPopulated()) {
+    if (metaFieldPopulationFlags.isCommitSeqNoPopulated()) {
       row.update(COMMIT_SEQNO_METADATA_FIELD.ordinal(), UTF8String.fromString(seqIdGenerator.apply(recordCount)));
     } else {
       row.update(COMMIT_SEQNO_METADATA_FIELD.ordinal(), null);
     }
-    if (populateIndividualMetaFields.isRecordKeyPopulated()) {
+    if (metaFieldPopulationFlags.isRecordKeyPopulated()) {
       row.update(RECORD_KEY_METADATA_FIELD.ordinal(), recordKey);
     } else {
       row.update(RECORD_KEY_METADATA_FIELD.ordinal(), null);
     }
-    if (populateIndividualMetaFields.isPartitionPathPopulated()) {
+    if (metaFieldPopulationFlags.isPartitionPathPopulated()) {
       // TODO set partition path in ctor
       row.update(PARTITION_PATH_METADATA_FIELD.ordinal(), UTF8String.fromString(partitionPath));
     } else {
       row.update(PARTITION_PATH_METADATA_FIELD.ordinal(), null);
     }
-    if (populateIndividualMetaFields.isFileNamePopulated()) {
+    if (metaFieldPopulationFlags.isFileNamePopulated()) {
       row.update(FILENAME_METADATA_FIELD.ordinal(), fileName);
     } else {
       row.update(FILENAME_METADATA_FIELD.ordinal(), null);

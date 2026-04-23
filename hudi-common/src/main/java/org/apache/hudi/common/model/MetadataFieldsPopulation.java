@@ -74,7 +74,7 @@ public class MetadataFieldsPopulation implements Serializable {
    * @return MetadataFieldsPopulation with excluded fields marked as not populated
    */
   public static MetadataFieldsPopulation fromExcludedFields(Set<String> excluded) {
-    if (excluded.isEmpty()) {
+    if (excluded == null || excluded.isEmpty()) {
       return ALL_POPULATED;
     }
     List<String> metaColumns = HoodieRecord.HOODIE_META_COLUMNS;

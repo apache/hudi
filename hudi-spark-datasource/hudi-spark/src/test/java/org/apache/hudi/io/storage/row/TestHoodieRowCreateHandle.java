@@ -122,7 +122,7 @@ public class TestHoodieRowCreateHandle extends HoodieSparkClientTestHarness {
 
   @Test
   public void testSelectiveMetaFieldPopulation() throws Exception {
-    // Exclude record_key, partition_path, and file_name but keep commit_time and commit_seqno
+    // Exclude record_key, partition_path, file_name, and commit_seqno but keep commit_time
     HoodieWriteConfig config = SparkDatasetTestUtils.getConfigBuilder(basePath, timelineServicePort)
         .withPopulateMetaFields(true)
         .withMetaFieldsToExclude("_hoodie_record_key,_hoodie_partition_path,_hoodie_file_name,_hoodie_commit_seqno")

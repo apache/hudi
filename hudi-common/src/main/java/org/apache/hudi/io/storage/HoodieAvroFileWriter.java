@@ -60,26 +60,23 @@ public interface HoodieAvroFileWriter extends HoodieFileWriter {
 
   /**
    * Selectively populates meta fields based on the provided {@link MetadataFieldsPopulation} flags.
-   * Fields that are not populated are left unchanged (typically null).
+   * Fields that are not populated are explicitly set to null so that any pre-existing values on
+   * {@code avroRecord} are cleared and the on-disk output is deterministic.
    */
   default void prepRecordWithMetadata(HoodieKey key, IndexedRecord avroRecord, String instantTime,
       Integer partitionId, long recordIndex, String fileName, MetadataFieldsPopulation populateFlags) {
     GenericRecord rec = (GenericRecord) avroRecord;
-    if (populateFlags.isInstantTimePopulated()) {
-      rec.put(HoodieRecord.COMMIT_TIME_METADATA_FIELD, instantTime);
-    }
-    if (populateFlags.isCommitSeqNoPopulated()) {
-      String seqId = HoodieRecord.generateSequenceId(instantTime, partitionId, recordIndex);
-      rec.put(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD, seqId);
-    }
-    if (populateFlags.isRecordKeyPopulated()) {
-      rec.put(HoodieRecord.RECORD_KEY_METADATA_FIELD, key.getRecordKey());
-    }
-    if (populateFlags.isPartitionPathPopulated()) {
-      rec.put(HoodieRecord.PARTITION_PATH_METADATA_FIELD, key.getPartitionPath());
-    }
-    if (populateFlags.isFileNamePopulated()) {
-      rec.put(HoodieRecord.FILENAME_METADATA_FIELD, fileName);
-    }
+    rec.put(HoodieRecord.COMMIT_TIME_METADATA_FIELD,
+        populateFlags.isInstantTimePopulated() ? instantTime : null);
+    rec.put(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD,
+        populateFlags.isCommitSeqNoPopulated()
+            ? HoodieRecord.generateSequenceId(instantTime, partitionId, recordIndex)
+            : null);
+    rec.put(HoodieRecord.RECORD_KEY_METADATA_FIELD,
+        populateFlags.isRecordKeyPopulated() ? key.getRecordKey() : null);
+    rec.put(HoodieRecord.PARTITION_PATH_METADATA_FIELD,
+        populateFlags.isPartitionPathPopulated() ? key.getPartitionPath() : null);
+    rec.put(HoodieRecord.FILENAME_METADATA_FIELD,
+        populateFlags.isFileNamePopulated() ? fileName : null);
   }
 }

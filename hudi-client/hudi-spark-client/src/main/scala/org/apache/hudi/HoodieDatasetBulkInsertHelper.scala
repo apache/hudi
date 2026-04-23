@@ -110,16 +110,19 @@ object HoodieDatasetBulkInsertHelper
                 sparkKeyGenerator
               }
 
-          val populateIndividualMetaFields = config.getMetaFieldPopulationFlags
-
           iter.map { row =>
             // auto generate record keys if needed
             val metaFields = new Array[UTF8String](5)
-            metaFields(2) = if (populateIndividualMetaFields.isRecordKeyPopulated) keyGenerator.getRecordKey(row, schema) else null
-            metaFields(3) = if (populateIndividualMetaFields.isPartitionPathPopulated) keyGenerator.getPartitionPath(row, schema) else null
-            metaFields(0) = if (populateIndividualMetaFields.isInstantTimePopulated) UTF8String.EMPTY_UTF8 else null
-            metaFields(1) = if (populateIndividualMetaFields.isCommitSeqNoPopulated) UTF8String.EMPTY_UTF8 else null
-            metaFields(4) = if (populateIndividualMetaFields.isFileNamePopulated) UTF8String.EMPTY_UTF8 else null
+            // Always populate record_key and partition_path here so that downstream dedupe (which
+            // reads these fields) works correctly. The write handle (HoodieRowCreateHandle) will
+            // null these out at file-write time when they are excluded by metaFieldPopulationFlags.
+            metaFields(2) = keyGenerator.getRecordKey(row, schema)
+            metaFields(3) = keyGenerator.getPartitionPath(row, schema)
+            // commit_time, commit_seqno, and file_name are placeholders here; the write handle
+            // overwrites them with the actual values (or null when excluded).
+            metaFields(0) = UTF8String.EMPTY_UTF8
+            metaFields(1) = UTF8String.EMPTY_UTF8
+            metaFields(4) = UTF8String.EMPTY_UTF8
 
             // TODO use mutable row, avoid re-allocating
             sparkAdapter.createInternalRow(metaFields, row, false)
