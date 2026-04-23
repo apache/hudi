@@ -65,7 +65,6 @@ import java.util.concurrent.ConcurrentHashMap;
 
 import static org.apache.hudi.common.util.ConfigUtils.getBooleanWithAltKeys;
 import static org.apache.hudi.common.util.ConfigUtils.getIntWithAltKeys;
-import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 import static org.apache.hudi.utilities.config.ProtoClassBasedSchemaProviderConfig.PROTO_SCHEMA_MAX_RECURSION_DEPTH;
 import static org.apache.hudi.utilities.config.ProtoClassBasedSchemaProviderConfig.PROTO_SCHEMA_TIMESTAMPS_AS_RECORDS;
 import static org.apache.hudi.utilities.config.ProtoClassBasedSchemaProviderConfig.PROTO_SCHEMA_WRAPPED_PRIMITIVES_AS_RECORDS;
@@ -142,7 +141,7 @@ public class ProtoConversionUtil {
     private static final String OVERFLOW_BYTES_FIELD_NAME = "proto_bytes";
     private static final HoodieSchema RECURSION_OVERFLOW_SCHEMA = HoodieSchema.createRecord("recursion_overflow", null, "org.apache.hudi.proto", false,
         Arrays.asList(HoodieSchemaField.of(OVERFLOW_DESCRIPTOR_FIELD_NAME, STRING_SCHEMA, null, ""),
-            HoodieSchemaField.of(OVERFLOW_BYTES_FIELD_NAME, HoodieSchema.create(HoodieSchemaType.BYTES), null, getUTF8Bytes(""))));
+            HoodieSchemaField.of(OVERFLOW_BYTES_FIELD_NAME, HoodieSchema.create(HoodieSchemaType.BYTES), null, "")));
     // A cache of the proto class name paired with whether wrapped primitives should be flattened as the key and the generated avro schema as the value
     private static final Map<SchemaCacheKey, HoodieSchema> SCHEMA_CACHE = new ConcurrentHashMap<>();
     // A cache with a key as the pair target avro schema and the proto descriptor for the source and the value as an array of proto field descriptors where the order matches the avro ordering.
