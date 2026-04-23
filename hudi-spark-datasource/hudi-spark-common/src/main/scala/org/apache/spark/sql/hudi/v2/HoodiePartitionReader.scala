@@ -18,11 +18,15 @@
 package org.apache.spark.sql.hudi.v2
 
 import org.apache.hudi.SparkAdapterSupport
+import org.apache.hudi.common.schema.HoodieSchema
+import org.apache.hudi.common.table.ParquetTableSchemaResolver
 import org.apache.hudi.common.util.{Option => HOption}
 import org.apache.hudi.internal.schema.InternalSchema
 import org.apache.hudi.storage.StoragePath
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration
 
+import org.apache.hadoop.conf.Configuration
+import org.apache.parquet.schema.MessageType
 import org.apache.spark.broadcast.Broadcast
 import org.apache.spark.sql.HoodieCatalystExpressionUtils
 import org.apache.spark.sql.catalyst.InternalRow
@@ -45,7 +49,8 @@ class HoodiePartitionReader(partition: HoodieInputPartition,
                             requiredPartitionSchema: StructType,
                             internalSchemaOpt: HOption[InternalSchema] = HOption.empty(),
                             pushedFilters: Array[Filter] = Array.empty,
-                            pushedLimit: Option[Int] = None)
+                            pushedLimit: Option[Int] = None,
+                            tableAvroSchema: HOption[HoodieSchema] = HOption.empty())
   extends PartitionReader[InternalRow] with SparkAdapterSupport {
 
   private var rawIterator: Iterator[InternalRow] = _
@@ -80,9 +85,18 @@ class HoodiePartitionReader(partition: HoodieInputPartition,
       .createPartitionedFile(partValues, new StoragePath(partition.baseFilePath), 0L, partition.baseFileLength)
 
     val storageConf = new HadoopStorageConfiguration(broadcastConf.value.value)
+    // Convert the table Avro schema into a Parquet MessageType so SparkXXParquetReader can repair
+    // logical timestamp annotations (timestamp-millis) lost in older base files. Without this the
+    // reader would decode timestamp-millis columns as the underlying physical long value.
+    val tableSchemaOpt: HOption[MessageType] = if (tableAvroSchema.isPresent) {
+      HOption.ofNullable(
+        ParquetTableSchemaResolver.convertAvroSchemaToParquet(tableAvroSchema.get(), new Configuration()))
+    } else {
+      HOption.empty[MessageType]()
+    }
     rawIterator = broadcastReader.value.read(
       pFile, requiredDataSchema, requiredPartitionSchema,
-      internalSchemaOpt, pushedFilters.toSeq, storageConf)
+      internalSchemaOpt, pushedFilters.toSeq, storageConf, tableSchemaOpt)
 
     val readerOutputSchema = StructType(requiredDataSchema.fields ++ requiredPartitionSchema.fields)
     if (readerOutputSchema != readSchema) {

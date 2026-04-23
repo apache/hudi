@@ -143,21 +143,33 @@ class HoodieCatalog extends DelegatingCatalogExtension
           DataSourceReadOptions.USE_V2_READ.defaultValue).toBoolean
         val schemaEvolutionEnabled = ProvidesHoodieConfig.isSchemaEvolutionEnabled(spark)
 
+        // Built lazily so V1-only paths (schema evolution, gate disabled) skip filesystem
+        // probes. HoodieCatalogTable.metaClient is itself a lazy val, so construction is
+        // cheap until touched.
+        lazy val hct = HoodieCatalogTable(spark, catalogTable)
         val dsv2Supported = v2ReadEnabled && {
-          val metaClient = HoodieTableMetaClient.builder()
-            .setBasePath(catalogTable.location.toString)
-            .setConf(HadoopFSUtils.getStorageConf(spark.sessionState.newHadoopConf))
-            .build()
-          HoodieV2ReadSupport.isSupportedByDSv2(metaClient, Map.empty, spark)
+          // Resolve read options before the gate so that query.type / incremental format
+          // coming from SQL confs, spark.hoodie.*, hudi-defaults.conf, TBLPROPERTIES, and
+          // CREATE TABLE OPTIONS are honored when deciding V1 vs V2. catalogProperties
+          // already merges table.storage.properties (OPTIONS) and table.properties
+          // (TBLPROPERTIES), matching HoodieSparkV2Table.properties(); scan-time options
+          // are layered on top in HoodieSparkV2Table.newScanBuilder.
+          val resolvedOpts = HoodieV2ReadSupport.resolveReadOptions(spark, hct.catalogProperties)
+          HoodieV2ReadSupport.isSupportedByDSv2(hct.metaClient, resolvedOpts, spark)
         }
 
-        if (dsv2Supported) {
+        if (schemaEvolutionEnabled) {
+          // HoodieInternalV2Table keeps the Spark{33,34,35,40}ResolveHudiAlterTableCommand
+          // rewrite path working for DROP COLUMN / RENAME COLUMN etc. It does not implement
+          // SupportsRead, so reads fall back to the V1 schema-evolution-aware FileScan via
+          // V2TableWithV1Fallback.
+          v2Table
+        } else if (dsv2Supported) {
           HoodieSparkV2Table(
             spark = spark,
             path = catalogTable.location.toString,
-            catalogTable = Some(catalogTable))
-        } else if (schemaEvolutionEnabled) {
-          v2Table
+            catalogTable = Some(catalogTable),
+            preResolvedCatalogTable = Some(hct))
         } else {
           v2Table.v1TableWrapper
         }

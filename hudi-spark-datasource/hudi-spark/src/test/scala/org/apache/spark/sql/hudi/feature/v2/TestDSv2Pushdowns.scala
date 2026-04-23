@@ -17,13 +17,14 @@
 
 package org.apache.spark.sql.hudi.feature.v2
 
+import org.apache.hudi.HoodieSparkUtils
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness.getSparkSqlConf
 
 import org.apache.spark.SparkConf
 import org.apache.spark.sql.SaveMode
 import org.junit.jupiter.api.{Tag, Test}
-import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 
 /**
  * Functional tests for limit pushdown, statistics reporting, and aggregate pushdown via DSv2.
@@ -126,6 +127,46 @@ class TestDSv2Pushdowns extends SparkClientFunctionalTestHarness {
   }
 
   @Test
+  def testLimitWithDataFilter(): Unit = {
+    val path = basePath() + "/limit_data_filter"
+    writeTestData(path, "limit_data_filter", numRecords = 10)
+
+    // A data filter (id > 3) must NOT be combined with limit pushdown: Spark re-applies
+    // data filters above the scan, so capping rows in the partition reader could stop
+    // before any matching row surfaces.
+    val df = spark.read.format("hudi_v2").load(path)
+      .filter("id > 3")
+      .limit(1)
+    assertEquals(1, df.count())
+    val id = df.select("id").collect().head.getInt(0)
+    assertTrue(id > 3, s"Expected id > 3, got $id")
+
+    val plan = df.queryExecution.executedPlan.toString()
+    assertTrue(containsBatchScan(plan), s"Expected BatchScan in plan:\n$plan")
+    assertTrue(!plan.contains("PushedLimit"),
+      s"Limit must not be pushed when a data filter remains, plan was:\n$plan")
+  }
+
+  @Test
+  def testLimitWithMixedReferenceFilter(): Unit = {
+    val path = basePath() + "/limit_mixed_filter"
+    writePartitionedTestData(path, "limit_mixed_filter")
+
+    // country='US' OR id=2 is a mixed-reference filter that Spark must re-apply row-wise.
+    // Limit pushdown must be refused because the reader would otherwise cap rows before
+    // Spark filters them — matching rows could be dropped.
+    val df = spark.read.format("hudi_v2").load(path)
+      .filter("country = 'US' OR id = 2")
+      .limit(1)
+    assertEquals(1, df.count())
+
+    val plan = df.queryExecution.executedPlan.toString()
+    assertTrue(containsBatchScan(plan), s"Expected BatchScan in plan:\n$plan")
+    assertFalse(plan.contains("PushedLimit"),
+      s"Limit must not be pushed when a mixed-reference filter remains, plan was:\n$plan")
+  }
+
+  @Test
   def testLimitDsv1VsDsv2(): Unit = {
     val path = basePath() + "/limit_v1_v2"
     writeTestData(path, "limit_v1_v2", numRecords = 10)
@@ -166,7 +207,32 @@ class TestDSv2Pushdowns extends SparkClientFunctionalTestHarness {
     val df = spark.read.format("hudi_v2").load(path).limit(3)
     val plan = df.queryExecution.executedPlan.toString()
     assertTrue(containsBatchScan(plan), s"Expected BatchScan in plan:\n$plan")
-    assertTrue(plan.contains("PushedLimit"), s"Expected PushedLimit in plan:\n$plan")
+    // Spark 3.3's planner treats a successful limit pushdown as COMPLETE and drops the
+    // outer LocalLimit; HoodieScanBuilder only enforces limit per input partition, so
+    // we refuse pushdown on 3.3 for correctness. On 3.4+, PartialLimitPushDown keeps the
+    // outer LocalLimit in place, so pushdown is advertised.
+    if (HoodieSparkUtils.gteqSpark3_4) {
+      assertTrue(plan.contains("PushedLimit"), s"Expected PushedLimit in plan:\n$plan")
+    } else {
+      assertFalse(plan.contains("PushedLimit"),
+        s"Limit must not be pushed on Spark 3.3, plan was:\n$plan")
+    }
+  }
+
+  @Test
+  def testLimitAcrossMultipleBaseFilesReturnsExactly(): Unit = {
+    val path = basePath() + "/limit_multifile"
+    writePartitionedTestData(path, "limit_multifile")
+
+    // Partitioned data spans >=2 base files (one per country partition). LIMIT 4 must
+    // return exactly 4 rows regardless of Spark version; per-partition capping in the
+    // reader alone would over-return on Spark 3.3 without the pushdown refusal.
+    val df = spark.read.format("hudi_v2").load(path).limit(4)
+    assertEquals(4, df.count())
+
+    val plan = df.queryExecution.executedPlan.toString()
+    assertTrue(containsBatchScan(plan),
+      s"DSv2 read should use BatchScan, but plan was:\n$plan")
   }
 
   // ==========================================================================

@@ -17,7 +17,7 @@
 
 package org.apache.spark.sql.hudi.v2
 
-import org.apache.hudi.DataSourceReadOptions
+import org.apache.hudi.{DataSourceOptionsHelper, DataSourceReadOptions}
 import org.apache.hudi.common.model.HoodieFileFormat
 import org.apache.hudi.common.model.HoodieTableType.MERGE_ON_READ
 import org.apache.hudi.common.table.HoodieTableMetaClient
@@ -48,10 +48,10 @@ object HoodieV2ReadSupport {
     val isCdc = incrementalFormat == DataSourceReadOptions.INCREMENTAL_FORMAT_CDC_VAL
     val isMor = metaClient.getTableType == MERGE_ON_READ
 
-    // Comment #1: MOR snapshot needs log-file merging; only COW or read_optimized are base-file-only.
+    // MOR snapshot needs log-file merging; only COW or read_optimized are base-file-only.
     val baseFileOnlySemantics = !isMor || isReadOptimized
 
-    // Comment #2: the scan hard-codes the Parquet reader.
+    // The scan hard-codes the Parquet reader.
     val isParquetOnly =
       !tableConfig.isMultipleBaseFileFormatsEnabled &&
         tableConfig.getBaseFileFormat == HoodieFileFormat.PARQUET
@@ -60,5 +60,22 @@ object HoodieV2ReadSupport {
     val notBootstrap = !tableConfig.getBootstrapBasePath.isPresent
 
     baseFileOnlySemantics && isParquetOnly && notIncrementalOrCdc && notBootstrap
+  }
+
+  /**
+   * Resolves DSv2 read options the same way DSv1 does in `DefaultSource.createRelation`:
+   * merge `hoodie.*` / `spark.hoodie.*` SQL confs under the explicit options, then apply
+   * [[DataSourceOptionsHelper.parametersWithReadDefaults]] so global DFS props
+   * (`hudi-defaults.conf`), `spark.hoodie.*` normalization, legacy key translation, and
+   * instant-time normalization all take effect. Required so that toggling
+   * `hoodie.datasource.read.use.v2` does not change query semantics.
+   */
+  def resolveReadOptions(spark: SparkSession,
+                         explicitOptions: Map[String, String]): Map[String, String] = {
+    val hoodieAndSparkHoodieSqlConfs = spark.sessionState.conf.getAllConfs.filter {
+      case (key, _) => key.startsWith("hoodie.") || key.startsWith("spark.hoodie.")
+    }
+    DataSourceOptionsHelper.parametersWithReadDefaults(
+      hoodieAndSparkHoodieSqlConfs ++ explicitOptions)
   }
 }

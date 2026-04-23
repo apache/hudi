@@ -17,9 +17,11 @@
 
 package org.apache.spark.sql.hudi.v2
 
-import org.apache.hudi.common.table.HoodieTableMetaClient
+import org.apache.hudi.{DataSourceReadOptions, DataSourceUtils, HoodieSchemaConversionUtils}
+import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
+import org.apache.hudi.storage.{HoodieStorageUtils, StoragePath}
 
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.catalog.{CatalogTable, HoodieCatalogTable}
@@ -48,23 +50,63 @@ import scala.collection.JavaConverters.{mapAsJavaMapConverter, mapAsScalaMapConv
 case class HoodieSparkV2Table(spark: SparkSession,
                               path: String,
                               catalogTable: Option[CatalogTable] = None,
+                              preResolvedCatalogTable: Option[HoodieCatalogTable] = None,
                               options: CaseInsensitiveStringMap = CaseInsensitiveStringMap.empty())
   extends Table with SupportsRead with SupportsWrite with V2TableWithV1Fallback {
 
-  lazy val hoodieCatalogTable: Option[HoodieCatalogTable] = catalogTable.map { ct =>
-    HoodieCatalogTable(spark, ct)
+  lazy val hoodieCatalogTable: Option[HoodieCatalogTable] =
+    preResolvedCatalogTable.orElse(catalogTable.map(ct => HoodieCatalogTable(spark, ct)))
+
+  private lazy val metaClient: HoodieTableMetaClient = hoodieCatalogTable match {
+    case Some(hct) => hct.metaClient
+    case None =>
+      // Mirror DSv1 (DefaultSource.createRelation): when the user-supplied path points at
+      // a partition or sub-path of a Hudi table, walk up to the table base path before
+      // building the meta client; setBasePath on the partition path would fail to find
+      // .hoodie. The original `path` is preserved as the query path through the
+      // explicitOpts merge in newScanBuilder, so HoodieFileIndex still scopes the read
+      // correctly.
+      val storageConf = HadoopFSUtils.getStorageConf(spark.sessionState.newHadoopConf)
+      val storage = HoodieStorageUtils.getStorage(path, storageConf)
+      val basePath = DataSourceUtils.getTablePath(
+        storage, java.util.Collections.singletonList(new StoragePath(path)))
+      HoodieTableMetaClient.builder()
+        .setBasePath(basePath)
+        .setConf(storageConf)
+        .build()
   }
 
-  private lazy val metaClient: HoodieTableMetaClient = HoodieTableMetaClient.builder()
-    .setBasePath(path)
-    .setConf(HadoopFSUtils.getStorageConf(spark.sessionState.newHadoopConf))
-    .build()
+  private lazy val timeTravelInstant: Option[String] =
+    Option(options.get(DataSourceReadOptions.TIME_TRAVEL_AS_OF_INSTANT.key))
+      .map(HoodieSqlCommonUtils.formatQueryInstant)
 
-  private lazy val tableSchema: StructType = hoodieCatalogTable match {
-    case Some(hct) => hct.tableSchemaWithoutMetaFields
-    case None =>
-      HoodieSqlCommonUtils.getTableSqlSchema(metaClient, includeMetadataFields = false)
-        .getOrElse(new StructType())
+  private lazy val tableSchema: StructType = {
+    // Mirror DSv1 (HoodieBaseRelation): when populate.meta.fields=true (default), Hudi
+    // writes _hoodie_commit_time / _hoodie_record_key / etc. into every base file. Hiding
+    // them from the V2 schema breaks SELECT _hoodie_commit_time and joins on the meta
+    // record-key. With ACCEPT_ANY_SCHEMA + the V1 INSERT fallback rule (Hudi rewrites
+    // InsertIntoStatement → InsertIntoHoodieTableCommand, which realigns columns), DML
+    // continues to work; HoodieInternalV2Table already exposes the full schema this way.
+    val includeMetaFields = metaClient.getTableConfig.populateMetaFields()
+    timeTravelInstant match {
+      case Some(ts) =>
+        // Mirror DSv1 (HoodieBaseRelation): for time-travel reads, resolve the schema as
+        // of the requested instant so columns added later aren't exposed. Without this the
+        // scan would let Spark project columns that don't exist in the snapshot, producing
+        // schemas (and reads) that diverge from DSv1. Errors propagate so an unresolvable
+        // instant surfaces clearly rather than silently falling back to the latest schema.
+        val avroSchema = new TableSchemaResolver(metaClient).getTableSchema(ts)
+        HoodieSchemaConversionUtils.convertHoodieSchemaToStructType(avroSchema)
+      case None =>
+        hoodieCatalogTable match {
+          case Some(hct) =>
+            if (includeMetaFields) hct.tableSchema else hct.tableSchemaWithoutMetaFields
+          case None =>
+            HoodieSqlCommonUtils
+              .getTableSqlSchema(metaClient, includeMetadataFields = includeMetaFields)
+              .getOrElse(new StructType())
+        }
+    }
   }
 
   override def name(): String = hoodieCatalogTable match {
@@ -75,9 +117,13 @@ case class HoodieSparkV2Table(spark: SparkSession,
   override def schema(): StructType = tableSchema
 
   override def capabilities(): util.Set[TableCapability] = {
+    // OVERWRITE_BY_FILTER intentionally not advertised: HoodieV1WriteBuilder delegates to
+    // the V1 insert_overwrite/partition-overwrite path, which cannot honor arbitrary
+    // filter expressions. Advertising it would let df.writeTo(tbl).overwrite(expr)
+    // silently rewrite whole partitions instead of filtered rows.
     val writeCaps =
       if (hoodieCatalogTable.isDefined) {
-        Set(V1_BATCH_WRITE, OVERWRITE_BY_FILTER, TRUNCATE, ACCEPT_ANY_SCHEMA)
+        Set(V1_BATCH_WRITE, TRUNCATE, ACCEPT_ANY_SCHEMA)
       } else {
         Set.empty[TableCapability]
       }
@@ -90,12 +136,21 @@ case class HoodieSparkV2Table(spark: SparkSession,
   }
 
   override def newScanBuilder(options: CaseInsensitiveStringMap): ScanBuilder = {
-    val tableProps = properties().asScala.toMap
+    // Catalog tables persist a "path" TBLPROPERTY containing only the URI path component
+    // (no scheme/authority). Letting it through here would override the fully qualified
+    // location passed via the V2Table constructor and silently retarget the scan at the
+    // default filesystem (e.g. file:///table instead of s3://bucket/table). Drop it before
+    // merging so the constructor-supplied path always wins.
+    val tableProps = properties().asScala.toMap - "path"
     val scanOpts = options.asCaseSensitiveMap().asScala.toMap
-    val classOpts = this.options.asCaseSensitiveMap().asScala.toMap
+    val constructorOpts = this.options.asCaseSensitiveMap().asScala.toMap
     // HoodieFileIndex.getQueryPaths requires "path". On the DataFrame-API path, Spark puts it in
-    // the class-level options map, not the scan-time one — promote it here.
-    val mergedOpts = Map("path" -> path) ++ classOpts ++ tableProps ++ scanOpts
+    // the constructor options map, not the scan-time one — promote it here.
+    // Resolving through HoodieV2ReadSupport.resolveReadOptions layers session/global read
+    // defaults under the explicit options so DSv2 honors SQL confs and hudi-defaults.conf
+    // the same way DSv1 does.
+    val explicitOpts = Map("path" -> path) ++ constructorOpts ++ tableProps ++ scanOpts
+    val mergedOpts = HoodieV2ReadSupport.resolveReadOptions(spark, explicitOpts)
     if (!HoodieV2ReadSupport.isSupportedByDSv2(metaClient, mergedOpts, spark)) {
       throw new HoodieException(
         "DSv2 read path does not support this query configuration " +
