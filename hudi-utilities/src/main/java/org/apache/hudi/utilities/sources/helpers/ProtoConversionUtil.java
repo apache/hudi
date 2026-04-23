@@ -53,6 +53,7 @@ import org.apache.kafka.common.utils.CopyOnWriteMap;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -328,7 +329,9 @@ public class ProtoConversionUtil {
         case SFIXED64:
           return 0;
         case UINT64:
-          return DECIMAL_CONVERSION.toFixed(new BigDecimal(BigInteger.ZERO), fieldSchema.toAvroSchema(), fieldSchema.toAvroSchema().getLogicalType()).bytes();
+          return new String(
+              DECIMAL_CONVERSION.toFixed(new BigDecimal(BigInteger.ZERO), fieldSchema.toAvroSchema(), fieldSchema.toAvroSchema().getLogicalType()).bytes(),
+              StandardCharsets.ISO_8859_1);
         case STRING:
         case BYTES:
           return "";
