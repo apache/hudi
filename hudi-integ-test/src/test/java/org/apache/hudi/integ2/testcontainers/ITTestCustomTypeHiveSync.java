@@ -108,6 +108,13 @@ public class ITTestCustomTypeHiveSync extends ITTestBaseTestcontainers {
     hive.execute("SELECT concat('HIVE_COUNT=', count(*)) FROM default.blob_test")
         .expectToSucceed()
         .assertStdOutContains("HIVE_COUNT=2");
+
+    // Project a nested struct field through the Hive serde to verify the BLOB
+    // struct layout round-trips correctly (count() and DESCRIBE do not).
+    hive.execute(
+        "SELECT concat('BLOB_TYPE=', blob_data.type) FROM default.blob_test WHERE id = 1")
+        .expectToSucceed()
+        .assertStdOutContains("BLOB_TYPE=OUT_OF_LINE");
   }
 
   @Test
@@ -134,6 +141,13 @@ public class ITTestCustomTypeHiveSync extends ITTestBaseTestcontainers {
     hive.execute("SELECT concat('HIVE_COUNT=', count(*)) FROM default.blob_test_df")
         .expectToSucceed()
         .assertStdOutContains("HIVE_COUNT=2");
+
+    // DF path seed used the INLINE struct branch and id=1 is never mutated,
+    // so projecting blob_data.type through the Hive serde should return INLINE.
+    hive.execute(
+        "SELECT concat('BLOB_TYPE=', blob_data.type) FROM default.blob_test_df WHERE id = 1")
+        .expectToSucceed()
+        .assertStdOutContains("BLOB_TYPE=INLINE");
   }
 
   // ---------- VARIANT (Spark 4.x only) ----------
@@ -223,6 +237,15 @@ public class ITTestCustomTypeHiveSync extends ITTestBaseTestcontainers {
     hive.execute("SELECT concat('HIVE_COUNT=', count(*)) FROM default.vector_test")
         .expectToSucceed()
         .assertStdOutContains("HIVE_COUNT=2");
+
+    // VECTOR(3) is stored on disk as fixed_len_byte_array(12) and mapped to
+    // Hive BINARY (per RFC-99). length() on the binary column confirms the
+    // bytes round-trip through the Hive serde at the correct width: 3 floats
+    // x 4 bytes each = 12. Any flip to array<float> would return 3 instead.
+    hive.execute(
+        "SELECT concat('VEC_LEN=', length(embedding)) FROM default.vector_test WHERE id = 1")
+        .expectToSucceed()
+        .assertStdOutContains("VEC_LEN=12");
   }
 
   @Test
@@ -250,5 +273,10 @@ public class ITTestCustomTypeHiveSync extends ITTestBaseTestcontainers {
     hive.execute("SELECT concat('HIVE_COUNT=', count(*)) FROM default.vector_test_df")
         .expectToSucceed()
         .assertStdOutContains("HIVE_COUNT=2");
+
+    hive.execute(
+        "SELECT concat('VEC_LEN=', length(embedding)) FROM default.vector_test_df WHERE id = 1")
+        .expectToSucceed()
+        .assertStdOutContains("VEC_LEN=12");
   }
 }
