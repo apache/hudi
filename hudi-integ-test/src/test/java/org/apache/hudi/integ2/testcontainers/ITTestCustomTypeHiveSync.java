@@ -88,11 +88,11 @@ public class ITTestCustomTypeHiveSync extends ITTestBaseTestcontainers {
 
     sparkAdhoc1.executeSQLFile(SPARKSQL_BLOB_TYPE_SQL_COMMANDS)
         .expectToSucceed()
-        .assertStdOutContains("BLOB_SQL_INSERT_SUCCESS")
-        .assertStdOutContains("BLOB_SQL_UPDATE_SUCCESS")
-        .assertStdOutContains("BLOB_SQL_MERGE_SUCCESS")
-        .assertStdOutContains("BLOB_SQL_DELETE_SUCCESS")
-        .assertStdOutContains("BLOB_SQL_TEST_SUCCESS");
+        .assertStdOutContainsLine("BLOB_SQL_INSERT_SUCCESS")
+        .assertStdOutContainsLine("BLOB_SQL_UPDATE_SUCCESS")
+        .assertStdOutContainsLine("BLOB_SQL_MERGE_SUCCESS")
+        .assertStdOutContainsLine("BLOB_SQL_DELETE_SUCCESS")
+        .assertStdOutContainsLine("BLOB_SQL_TEST_SUCCESS");
 
     hive.execute("DESCRIBE default.blob_test")
         .expectToSucceed()
@@ -124,10 +124,10 @@ public class ITTestCustomTypeHiveSync extends ITTestBaseTestcontainers {
 
     sparkAdhoc1.executeSQLFile(SPARKSQL_BLOB_TYPE_DF_COMMANDS)
         .expectToSucceed()
-        .assertStdOutContains("BLOB_DF_INSERT_SUCCESS")
-        .assertStdOutContains("BLOB_DF_UPSERT_SUCCESS")
-        .assertStdOutContains("BLOB_DF_DELETE_SUCCESS")
-        .assertStdOutContains("BLOB_DF_TEST_SUCCESS");
+        .assertStdOutContainsLine("BLOB_DF_INSERT_SUCCESS")
+        .assertStdOutContainsLine("BLOB_DF_UPSERT_SUCCESS")
+        .assertStdOutContainsLine("BLOB_DF_DELETE_SUCCESS")
+        .assertStdOutContainsLine("BLOB_DF_TEST_SUCCESS");
 
     hive.execute("DESCRIBE default.blob_test_df")
         .expectToSucceed()
@@ -160,11 +160,11 @@ public class ITTestCustomTypeHiveSync extends ITTestBaseTestcontainers {
 
     sparkAdhoc1.executeSQLFile(SPARKSQL_VARIANT_TYPE_SQL_COMMANDS)
         .expectToSucceed()
-        .assertStdOutContains("VARIANT_SQL_INSERT_SUCCESS")
-        .assertStdOutContains("VARIANT_SQL_UPDATE_SUCCESS")
-        .assertStdOutContains("VARIANT_SQL_MERGE_SUCCESS")
-        .assertStdOutContains("VARIANT_SQL_DELETE_SUCCESS")
-        .assertStdOutContains("VARIANT_SQL_TEST_SUCCESS");
+        .assertStdOutContainsLine("VARIANT_SQL_INSERT_SUCCESS")
+        .assertStdOutContainsLine("VARIANT_SQL_UPDATE_SUCCESS")
+        .assertStdOutContainsLine("VARIANT_SQL_MERGE_SUCCESS")
+        .assertStdOutContainsLine("VARIANT_SQL_DELETE_SUCCESS")
+        .assertStdOutContainsLine("VARIANT_SQL_TEST_SUCCESS");
 
     hive.execute("DESCRIBE default.variant_test")
         .expectToSucceed()
@@ -190,10 +190,10 @@ public class ITTestCustomTypeHiveSync extends ITTestBaseTestcontainers {
 
     sparkAdhoc1.executeSQLFile(SPARKSQL_VARIANT_TYPE_DF_COMMANDS)
         .expectToSucceed()
-        .assertStdOutContains("VARIANT_DF_INSERT_SUCCESS")
-        .assertStdOutContains("VARIANT_DF_UPSERT_SUCCESS")
-        .assertStdOutContains("VARIANT_DF_DELETE_SUCCESS")
-        .assertStdOutContains("VARIANT_DF_TEST_SUCCESS");
+        .assertStdOutContainsLine("VARIANT_DF_INSERT_SUCCESS")
+        .assertStdOutContainsLine("VARIANT_DF_UPSERT_SUCCESS")
+        .assertStdOutContainsLine("VARIANT_DF_DELETE_SUCCESS")
+        .assertStdOutContainsLine("VARIANT_DF_TEST_SUCCESS");
 
     hive.execute("DESCRIBE default.variant_test_df")
         .expectToSucceed()
@@ -218,11 +218,11 @@ public class ITTestCustomTypeHiveSync extends ITTestBaseTestcontainers {
 
     sparkAdhoc1.executeSQLFile(SPARKSQL_VECTOR_TYPE_SQL_COMMANDS)
         .expectToSucceed()
-        .assertStdOutContains("VECTOR_SQL_INSERT_SUCCESS")
-        .assertStdOutContains("VECTOR_SQL_UPDATE_SUCCESS")
-        .assertStdOutContains("VECTOR_SQL_MERGE_SUCCESS")
-        .assertStdOutContains("VECTOR_SQL_DELETE_SUCCESS")
-        .assertStdOutContains("VECTOR_SQL_TEST_SUCCESS");
+        .assertStdOutContainsLine("VECTOR_SQL_INSERT_SUCCESS")
+        .assertStdOutContainsLine("VECTOR_SQL_UPDATE_SUCCESS")
+        .assertStdOutContainsLine("VECTOR_SQL_MERGE_SUCCESS")
+        .assertStdOutContainsLine("VECTOR_SQL_DELETE_SUCCESS")
+        .assertStdOutContainsLine("VECTOR_SQL_TEST_SUCCESS");
 
     hive.execute("DESCRIBE default.vector_test")
         .expectToSucceed()
@@ -255,10 +255,10 @@ public class ITTestCustomTypeHiveSync extends ITTestBaseTestcontainers {
 
     sparkAdhoc1.executeSQLFile(SPARKSQL_VECTOR_TYPE_DF_COMMANDS)
         .expectToSucceed()
-        .assertStdOutContains("VECTOR_DF_INSERT_SUCCESS")
-        .assertStdOutContains("VECTOR_DF_UPSERT_SUCCESS")
-        .assertStdOutContains("VECTOR_DF_DELETE_SUCCESS")
-        .assertStdOutContains("VECTOR_DF_TEST_SUCCESS");
+        .assertStdOutContainsLine("VECTOR_DF_INSERT_SUCCESS")
+        .assertStdOutContainsLine("VECTOR_DF_UPSERT_SUCCESS")
+        .assertStdOutContainsLine("VECTOR_DF_DELETE_SUCCESS")
+        .assertStdOutContainsLine("VECTOR_DF_TEST_SUCCESS");
 
     hive.execute("DESCRIBE default.vector_test_df")
         .expectToSucceed()

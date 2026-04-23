@@ -21,6 +21,8 @@ package org.apache.hudi.integ2.testcontainers.command;
 import lombok.AllArgsConstructor;
 import org.testcontainers.containers.Container;
 
+import java.util.regex.Pattern;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 
@@ -30,6 +32,14 @@ import static org.junit.jupiter.api.Assertions.assertNotEquals;
  */
 @AllArgsConstructor
 public class CommandResult {
+
+  // Spark 4.0 (Scala 2.13) spark-shell runs under a dumb terminal when stdin
+  // is piped from a file, which flushes the next `scala> ` prompt onto the
+  // same line as preceding async println output (e.g. `scala> MARKER`).
+  // Stripping one-or-more leading `scala>\s+` prefixes normalizes those lines
+  // back to the bare sentinel while leaving Spark 3.5 output (sentinel already
+  // on its own line) unchanged.
+  private static final Pattern REPL_PROMPT_PREFIX = Pattern.compile("^(scala>\\s+)+");
 
   private final String stdout;
   private final String stderr;
@@ -111,6 +121,42 @@ public class CommandResult {
     assertEquals(times, count,
         String.format("Expected to find substring '%s' %d times, but found %d. Full stdout: %s",
             expectedOutput, times, count, stdout));
+    return this;
+  }
+
+  /**
+   * Asserts that the standard output contains a line exactly equal to the expected value
+   * (after trimming and after stripping any leading {@code scala> } REPL prompt prefix),
+   * appearing exactly once. Use this for REPL sentinel markers emitted via
+   * {@code println(...)}. Handles both Scala 2.12's spark-shell echoing the input line
+   * back (Spark 3.5) and Scala 2.13's dumb-terminal mode prefixing sentinel output with
+   * {@code scala> } on the same line (Spark 4.0).
+   *
+   * @param expectedLine The exact line content to match (after trim and prompt strip).
+   * @return The same {@link CommandResult} instance for chaining assertions.
+   */
+  public CommandResult assertStdOutContainsLine(String expectedLine) {
+    return assertStdOutContainsLine(expectedLine, 1);
+  }
+
+  /**
+   * Asserts that the standard output contains a line exactly equal to the expected value
+   * (after trimming and after stripping any leading {@code scala> } REPL prompt prefix),
+   * appearing an exact number of times.
+   *
+   * @param expectedLine The exact line content to match (after trim and prompt strip).
+   * @param times The exact number of matching lines expected.
+   * @return The same {@link CommandResult} instance for chaining assertions.
+   */
+  public CommandResult assertStdOutContainsLine(String expectedLine, int times) {
+    String expected = expectedLine.trim();
+    long count = stdout.lines()
+        .map(line -> REPL_PROMPT_PREFIX.matcher(line).replaceFirst("").trim())
+        .filter(expected::equals)
+        .count();
+    assertEquals(times, count,
+        String.format("Expected line '%s' %d times, but found %d. Full stdout: %s",
+            expected, times, count, stdout));
     return this;
   }
 
