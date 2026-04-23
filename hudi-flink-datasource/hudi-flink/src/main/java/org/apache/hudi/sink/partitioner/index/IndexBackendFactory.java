@@ -59,7 +59,7 @@ public class IndexBackendFactory {
         return new FlinkStateIndexBackend(indexState);
       case GLOBAL_RECORD_LEVEL_INDEX:
         if (conf.get(FlinkOptions.INDEX_BOOTSTRAP_ENABLED)) {
-          return new RocksDBIndexBackend(conf.get(FlinkOptions.INDEX_BOOTSTRAP_ROCKSDB_PATH));
+          return new RocksDBIndexBackend(conf.get(FlinkOptions.INDEX_BOOTSTRAP_ROCKSDB_PATH), OptionsResolver.isPartitionedTable(conf));
         } else {
           ListState<JobID> jobIdState = context.getOperatorStateStore().getListState(
               new ListStateDescriptor<>(

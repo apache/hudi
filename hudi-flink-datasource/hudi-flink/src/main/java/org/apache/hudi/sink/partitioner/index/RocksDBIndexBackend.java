@@ -41,10 +41,12 @@ public class RocksDBIndexBackend implements IndexBackend {
   private final RocksDBDAO rocksDBDAO;
   private transient FlinkRocksDBIndexMetrics rocksDBIndexMetrics;
 
-  public RocksDBIndexBackend(String rocksDbBasePath) {
+  public RocksDBIndexBackend(String rocksDbBasePath, boolean isPartitionedTable) {
     // Register custom serializer for HoodieRecordGlobalLocation to minimize storage overhead
     ConcurrentHashMap<String, CustomSerializer<?>> serializers = new ConcurrentHashMap<>();
-    serializers.put(COLUMN_FAMILY, new RecordGlobalLocationSerializer());
+    serializers.put(COLUMN_FAMILY, isPartitionedTable
+        ? new CodedRecordGlobalLocationSerializer()
+        : new RecordGlobalLocationSerializer());
 
     this.rocksDBDAO = new RocksDBDAO("hudi-index-backend", rocksDbBasePath, serializers, true);
     this.rocksDBDAO.addColumnFamily(COLUMN_FAMILY);

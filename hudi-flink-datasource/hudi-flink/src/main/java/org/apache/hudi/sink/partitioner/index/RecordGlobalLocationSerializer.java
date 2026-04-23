@@ -42,8 +42,8 @@ public class RecordGlobalLocationSerializer implements CustomSerializer<HoodieRe
   // Typical size: 4(partitionLen) + ~30(partition) + 4(instantLen) + ~20(instant) + 8+8+4(UUID+index) ≈ 78 bytes
   private static final int INITIAL_BUFFER_SIZE = 128;
   // Reusable stream objects (single-threaded use only)
-  private final DataOutputSerializer outputSerializer = new DataOutputSerializer(INITIAL_BUFFER_SIZE);
-  private final DataInputDeserializer inputDeserializer = new DataInputDeserializer();
+  protected final DataOutputSerializer outputSerializer = new DataOutputSerializer(INITIAL_BUFFER_SIZE);
+  protected final DataInputDeserializer inputDeserializer = new DataInputDeserializer();
 
   @Override
   public byte[] serialize(HoodieRecordGlobalLocation location) throws IOException {
@@ -51,9 +51,7 @@ public class RecordGlobalLocationSerializer implements CustomSerializer<HoodieRe
     outputSerializer.clear();
 
     // Write partitionPath
-    byte[] partitionBytes = location.getPartitionPath().getBytes(StandardCharsets.UTF_8);
-    outputSerializer.writeInt(partitionBytes.length);
-    outputSerializer.write(partitionBytes);
+    writePartitionPath(location.getPartitionPath());
 
     // Write instantTime
     byte[] instantBytes = location.getInstantTime().getBytes(StandardCharsets.UTF_8);
@@ -87,10 +85,7 @@ public class RecordGlobalLocationSerializer implements CustomSerializer<HoodieRe
       inputDeserializer.setBuffer(bytes);
 
       // Read partitionPath
-      int partitionLen = inputDeserializer.readInt();
-      byte[] partitionBytes = new byte[partitionLen];
-      inputDeserializer.readFully(partitionBytes);
-      String partitionPath = new String(partitionBytes, StandardCharsets.UTF_8);
+      String partitionPath = readPartitionPath();
 
       // Read instantTime
       int instantLen = inputDeserializer.readInt();
@@ -112,5 +107,18 @@ public class RecordGlobalLocationSerializer implements CustomSerializer<HoodieRe
     } catch (IOException e) {
       throw new RuntimeException("Failed to deserialize HoodieRecordGlobalLocation", e);
     }
+  }
+
+  protected void writePartitionPath(String partitionPath) throws IOException {
+    byte[] partitionBytes = partitionPath.getBytes(StandardCharsets.UTF_8);
+    outputSerializer.writeInt(partitionBytes.length);
+    outputSerializer.write(partitionBytes);
+  }
+
+  protected String readPartitionPath() throws IOException {
+    int partitionLen = inputDeserializer.readInt();
+    byte[] partitionBytes = new byte[partitionLen];
+    inputDeserializer.readFully(partitionBytes);
+    return new String(partitionBytes, StandardCharsets.UTF_8);
   }
 }

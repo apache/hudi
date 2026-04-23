@@ -25,6 +25,8 @@ import org.apache.flink.metrics.Gauge;
 import org.apache.flink.metrics.MetricGroup;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.File;
 import java.util.HashMap;
@@ -48,16 +50,17 @@ public class TestRocksDBIndexBackend {
   @TempDir
   File tempFile;
 
-  @Test
-  void testGetAndUpdate() throws Exception {
-    try (RocksDBIndexBackend rocksDBIndexBackend = new RocksDBIndexBackend(tempFile.getAbsolutePath())) {
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  void testGetAndUpdate(boolean isPartitionedTable) throws Exception {
+    try (RocksDBIndexBackend rocksDBIndexBackend = new RocksDBIndexBackend(tempFile.getAbsolutePath(), isPartitionedTable)) {
       assertNull(rocksDBIndexBackend.get("id1"));
 
-      HoodieRecordGlobalLocation location1 = new HoodieRecordGlobalLocation("par1", "001", UUID.randomUUID().toString());
+      HoodieRecordGlobalLocation location1 = new HoodieRecordGlobalLocation(isPartitionedTable ? "par1" : "", "001", UUID.randomUUID().toString());
       rocksDBIndexBackend.update("id1", location1);
       assertEquals(location1, rocksDBIndexBackend.get("id1"));
 
-      HoodieRecordGlobalLocation location2 = new HoodieRecordGlobalLocation("par2", "002", UUID.randomUUID().toString());
+      HoodieRecordGlobalLocation location2 = new HoodieRecordGlobalLocation(isPartitionedTable ? "par2" : "", "002", UUID.randomUUID().toString());
       rocksDBIndexBackend.update("id2", location2);
       assertEquals(location2, rocksDBIndexBackend.get("id2"));
     }
@@ -65,7 +68,7 @@ public class TestRocksDBIndexBackend {
 
   @Test
   void testMetricsRegistrationAndSnapshot() throws Exception {
-    try (RocksDBIndexBackend rocksDBIndexBackend = new RocksDBIndexBackend(tempFile.getAbsolutePath())) {
+    try (RocksDBIndexBackend rocksDBIndexBackend = new RocksDBIndexBackend(tempFile.getAbsolutePath(), false)) {
       MetricGroup metricGroup = mock(MetricGroup.class);
       Map<String, Gauge<?>> gauges = new HashMap<>();
       doAnswer(invocation -> {
@@ -101,7 +104,7 @@ public class TestRocksDBIndexBackend {
 
   @Test
   void testMetricsReflectWritesReadsAndAutoFlush() throws Exception {
-    try (RocksDBIndexBackend rocksDBIndexBackend = new RocksDBIndexBackend(tempFile.getAbsolutePath())) {
+    try (RocksDBIndexBackend rocksDBIndexBackend = new RocksDBIndexBackend(tempFile.getAbsolutePath(), false)) {
       MetricGroup metricGroup = mock(MetricGroup.class);
       Map<String, Gauge<?>> gauges = new HashMap<>();
       doAnswer(invocation -> {
@@ -168,7 +171,7 @@ public class TestRocksDBIndexBackend {
       return gauge;
     }).when(metricGroup).gauge(anyString(), any(Gauge.class));
 
-    RocksDBIndexBackend rocksDBIndexBackend = new RocksDBIndexBackend(tempFile.getAbsolutePath());
+    RocksDBIndexBackend rocksDBIndexBackend = new RocksDBIndexBackend(tempFile.getAbsolutePath(), false);
     rocksDBIndexBackend.registerMetrics(metricGroup);
     rocksDBIndexBackend.close();
 
