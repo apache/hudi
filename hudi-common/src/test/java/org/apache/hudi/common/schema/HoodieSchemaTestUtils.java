@@ -67,4 +67,33 @@ public class HoodieSchemaTestUtils {
   public static HoodieSchema createNullableRecord(String name, HoodieSchemaField... fields) {
     return HoodieSchema.createNullable(HoodieSchema.createRecord(name, null, null, false, Arrays.asList(fields)));
   }
+
+  /**
+   * Mirrors the canonical BLOB field layout ({@link HoodieSchema.Blob}) but without the blob
+   * logicalType attached and with the {@code type} field as plain STRING rather than ENUM.
+   * Represents what the pre-fix SQL INSERT path committed when the BLOB StructField metadata
+   * was stripped by Spark's TableOutputResolver Cast.
+   */
+  public static HoodieSchema createPlainBlobRecord(String recordName) {
+    HoodieSchema reference = HoodieSchema.createRecord("reference", null, null, false, Arrays.asList(
+        HoodieSchemaField.of("external_path", HoodieSchema.create(HoodieSchemaType.STRING), null, null),
+        HoodieSchemaField.of("offset", HoodieSchema.createNullable(HoodieSchema.create(HoodieSchemaType.LONG)), null, null),
+        HoodieSchemaField.of("length", HoodieSchema.createNullable(HoodieSchema.create(HoodieSchemaType.LONG)), null, null),
+        HoodieSchemaField.of("managed", HoodieSchema.create(HoodieSchemaType.BOOLEAN), null, null)));
+    return HoodieSchema.createRecord(recordName, null, null, false, Arrays.asList(
+        HoodieSchemaField.of("type", HoodieSchema.create(HoodieSchemaType.STRING), null, null),
+        HoodieSchemaField.of("data", HoodieSchema.createNullable(HoodieSchema.create(HoodieSchemaType.BYTES)), null, JsonProperties.NULL_VALUE),
+        HoodieSchemaField.of("reference", HoodieSchema.createNullable(reference), null, JsonProperties.NULL_VALUE)));
+  }
+
+  /**
+   * Canonical VARIANT field layout without the variant logicalType attached. Represents a plain
+   * record that would fail to rewrite into a canonical VARIANT schema on the Hive read path
+   * before the BLOB/VARIANT dispatch fix.
+   */
+  public static HoodieSchema createPlainVariantRecord(String recordName) {
+    return HoodieSchema.createRecord(recordName, null, null, false, Arrays.asList(
+        HoodieSchemaField.of("metadata", HoodieSchema.create(HoodieSchemaType.BYTES), null, null),
+        HoodieSchemaField.of("value", HoodieSchema.create(HoodieSchemaType.BYTES), null, null)));
+  }
 }
