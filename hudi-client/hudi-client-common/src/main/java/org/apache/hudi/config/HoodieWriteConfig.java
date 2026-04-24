@@ -46,7 +46,6 @@ import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodiePreWriteCleanerPolicy;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieRecordMerger;
-import org.apache.hudi.common.model.HoodieMetaFieldFlags;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.WriteConcurrencyMode;
@@ -105,7 +104,6 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -1774,33 +1772,6 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public boolean populateMetaFields() {
     return getBooleanOrDefault(HoodieTableConfig.POPULATE_META_FIELDS);
-  }
-
-  private Set<String> getMetaFieldsToExclude() {
-    String value = getString(HoodieTableConfig.META_FIELDS_EXCLUDE_LIST);
-    if (value == null || value.trim().isEmpty()) {
-      return Collections.emptySet();
-    }
-    Set<String> excluded = new HashSet<>();
-    for (String field : value.split(",")) {
-      String trimmed = field.trim();
-      if (!trimmed.isEmpty()) {
-        excluded.add(trimmed);
-      }
-    }
-    return excluded;
-  }
-
-  /**
-   * Returns a {@link HoodieMetaFieldFlags} indicating which individual meta fields
-   * should be populated during writes. When a field is not populated, it is written as null.
-   */
-  public HoodieMetaFieldFlags getMetaFieldPopulationFlags() {
-    if (!populateMetaFields()) {
-      return HoodieMetaFieldFlags.nonePopulated();
-    }
-    Set<String> excluded = getMetaFieldsToExclude();
-    return HoodieMetaFieldFlags.fromExcludedFields(excluded);
   }
 
   /**
@@ -3601,13 +3572,6 @@ public class HoodieWriteConfig extends HoodieConfig {
 
     public Builder withPopulateMetaFields(boolean populateMetaFields) {
       writeConfig.setValue(HoodieTableConfig.POPULATE_META_FIELDS, Boolean.toString(populateMetaFields));
-      return this;
-    }
-
-    public Builder withMetaFieldsToExclude(String metaFieldsToExclude) {
-      if (!StringUtils.isNullOrEmpty(metaFieldsToExclude)) {
-        writeConfig.setValue(HoodieTableConfig.META_FIELDS_EXCLUDE_LIST, metaFieldsToExclude);
-      }
       return this;
     }
 

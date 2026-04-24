@@ -334,6 +334,7 @@ public class StreamerUtil {
           .setCDCEnabled(conf.get(FlinkOptions.CDC_ENABLED))
           .setCDCSupplementalLoggingMode(conf.get(FlinkOptions.SUPPLEMENTAL_LOGGING_MODE))
           .setPopulateMetaFields(OptionsResolver.isPopulateMetaFields(conf))
+          .setMetaFieldsExcludeList(conf.getString(HoodieTableConfig.META_FIELDS_EXCLUDE_LIST.key(), null))
           .initTable(HadoopFSUtils.getStorageConfWithCopy(hadoopConf), basePath);
       log.info("Table initialized under base path {}", basePath);
     } else {

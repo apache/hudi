@@ -33,6 +33,7 @@ import org.apache.hudi.common.model.BootstrapIndexType;
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.EventTimeAvroPayload;
 import org.apache.hudi.common.model.HoodieFileFormat;
+import org.apache.hudi.common.model.HoodieMetaFieldFlags;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.HoodieRecordPayload;
@@ -1224,6 +1225,31 @@ public class HoodieTableConfig extends HoodieConfig {
       }
     }
     return false;
+  }
+
+  /**
+   * Returns the {@link HoodieMetaFieldFlags} reflecting POPULATE_META_FIELDS and
+   * META_FIELDS_EXCLUDE_LIST as persisted on this table. This is the source of truth
+   * for both writers and readers - {@link HoodieMetaFieldFlags} should never be sourced
+   * from a writer-side config since the persisted table state is what determines on-disk
+   * meta-field availability across commits.
+   */
+  public HoodieMetaFieldFlags getMetaFieldPopulationFlags() {
+    if (!populateMetaFields()) {
+      return HoodieMetaFieldFlags.nonePopulated();
+    }
+    String value = getString(META_FIELDS_EXCLUDE_LIST);
+    if (value == null || value.trim().isEmpty()) {
+      return HoodieMetaFieldFlags.allPopulated();
+    }
+    Set<String> excluded = new HashSet<>();
+    for (String field : value.split(",")) {
+      String trimmed = field.trim();
+      if (!trimmed.isEmpty()) {
+        excluded.add(trimmed);
+      }
+    }
+    return HoodieMetaFieldFlags.fromExcludedFields(excluded);
   }
 
   /**

@@ -121,7 +121,7 @@ public class HoodieRowCreateHandle implements Serializable {
     this.path = makeNewPath(storage, partitionPath, fileName, writeConfig);
 
     this.populateMetaFields = writeConfig.populateMetaFields();
-    this.metaFieldPopulationFlags = writeConfig.getMetaFieldPopulationFlags();
+    this.metaFieldPopulationFlags = table.getMetaClient().getTableConfig().getMetaFieldPopulationFlags();
     this.fileName = UTF8String.fromString(path.getName());
     this.commitTime = UTF8String.fromString(instantTime);
     this.seqIdGenerator = (id) -> HoodieRecord.generateSequenceId(instantTime, taskPartitionId, id);

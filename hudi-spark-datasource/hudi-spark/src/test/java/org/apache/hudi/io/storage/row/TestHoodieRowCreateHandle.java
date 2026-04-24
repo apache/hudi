@@ -122,10 +122,14 @@ public class TestHoodieRowCreateHandle extends HoodieSparkClientTestHarness {
 
   @Test
   public void testSelectiveMetaFieldPopulation() throws Exception {
-    // Exclude record_key, partition_path, file_name, and commit_seqno but keep commit_time
+    // Exclude record_key, partition_path, file_name, and commit_seqno but keep commit_time.
+    // The exclusion list is a TABLE-level property (HoodieTableConfig.META_FIELDS_EXCLUDE_LIST),
+    // so we set it directly on the metaClient's tableConfig - that is where writers read it from.
+    metaClient.getTableConfig().setValue(
+        org.apache.hudi.common.table.HoodieTableConfig.META_FIELDS_EXCLUDE_LIST,
+        "_hoodie_record_key,_hoodie_partition_path,_hoodie_file_name,_hoodie_commit_seqno");
     HoodieWriteConfig config = SparkDatasetTestUtils.getConfigBuilder(basePath, timelineServicePort)
         .withPopulateMetaFields(true)
-        .withMetaFieldsToExclude("_hoodie_record_key,_hoodie_partition_path,_hoodie_file_name,_hoodie_commit_seqno")
         .build();
 
     HoodieTable table = HoodieSparkTable.create(config, context, metaClient);

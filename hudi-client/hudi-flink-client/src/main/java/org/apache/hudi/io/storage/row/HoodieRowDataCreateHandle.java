@@ -102,7 +102,7 @@ public class HoodieRowDataCreateHandle implements Serializable {
     this.newRecordLocation = new HoodieRecordLocation(instantTime, fileId);
     this.preserveHoodieMetadata = preserveHoodieMetadata;
     this.skipMetadataWrite = skipMetadataWrite;
-    this.metaFieldPopulationFlags = writeConfig.getMetaFieldPopulationFlags();
+    this.metaFieldPopulationFlags = table.getMetaClient().getTableConfig().getMetaFieldPopulationFlags();
     this.currTimer = HoodieTimer.start();
     this.storage = table.getStorage();
     this.path = makeNewPath(partitionPath);

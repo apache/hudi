@@ -211,6 +211,7 @@ public class BootstrapExecutor implements Serializable {
         .setTableFormat(props.getString(HoodieTableConfig.TABLE_FORMAT.key(), HoodieTableConfig.TABLE_FORMAT.defaultValue()))
         .setPopulateMetaFields(props.getBoolean(
             POPULATE_META_FIELDS.key(), POPULATE_META_FIELDS.defaultValue()))
+        .setMetaFieldsExcludeList(props.getString(HoodieTableConfig.META_FIELDS_EXCLUDE_LIST.key(), null))
         .setArchiveLogFolder(props.getString(
             TIMELINE_HISTORY_PATH.key(), TIMELINE_HISTORY_PATH.defaultValue()))
         .setPayloadClassName(cfg.payloadClassName)
