@@ -18,13 +18,12 @@
 
 package org.apache.hudi.integ2.testcontainers;
 
-import org.apache.hudi.common.util.CollectionUtils;
-
 import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestInstance;
 
-import java.util.List;
+import static org.apache.hudi.integ2.testcontainers.TestcontainersConfig.Paths;
 
 /**
  * End-to-end Hive sync coverage for Hudi's custom logical types (VECTOR, BLOB) and the
@@ -35,56 +34,57 @@ import java.util.List;
  *   - SQL CREATE TABLE (`*-sql.commands`) - table name `<type>_test`
  *   - DataFrame writer API (`*-df.commands`) - table name `<type>_test_df`
  */
+@TestInstance(TestInstance.Lifecycle.PER_CLASS)
 public class ITTestCustomTypeHiveSync extends ITTestBaseTestcontainers {
-
-  private static final String HOODIE_WS_ROOT = "/var/hoodie/ws";
 
   // BLOB
   private static final String BLOB_SQL_TEST_BASE_PATH = "/user/hive/warehouse/blob_test";
   private static final String BLOB_DF_TEST_BASE_PATH = "/user/hive/warehouse/blob_test_df";
-  private static final String SPARKSQL_BLOB_TYPE_SQL_COMMANDS = HOODIE_WS_ROOT + "/docker/demo/sparksql-blob-type-sql.commands";
-  private static final String SPARKSQL_BLOB_TYPE_DF_COMMANDS = HOODIE_WS_ROOT + "/docker/demo/sparksql-blob-type-df.commands";
+  private static final String SPARKSQL_BLOB_TYPE_SQL_COMMANDS = Paths.DEMO_DIR + "/sparksql-blob-type-sql.commands";
+  private static final String SPARKSQL_BLOB_TYPE_DF_COMMANDS = Paths.DEMO_DIR + "/sparksql-blob-type-df.commands";
 
   // VARIANT
   private static final String VARIANT_SQL_TEST_BASE_PATH = "/user/hive/warehouse/variant_test";
   private static final String VARIANT_DF_TEST_BASE_PATH = "/user/hive/warehouse/variant_test_df";
-  private static final String SPARKSQL_VARIANT_TYPE_SQL_COMMANDS = HOODIE_WS_ROOT + "/docker/demo/sparksql-variant-type-sql.commands";
-  private static final String SPARKSQL_VARIANT_TYPE_DF_COMMANDS = HOODIE_WS_ROOT + "/docker/demo/sparksql-variant-type-df.commands";
+  private static final String SPARKSQL_VARIANT_TYPE_SQL_COMMANDS = Paths.DEMO_DIR + "/sparksql-variant-type-sql.commands";
+  private static final String SPARKSQL_VARIANT_TYPE_DF_COMMANDS = Paths.DEMO_DIR + "/sparksql-variant-type-df.commands";
 
   // VECTOR
   private static final String VECTOR_SQL_TEST_BASE_PATH = "/user/hive/warehouse/vector_test";
   private static final String VECTOR_DF_TEST_BASE_PATH = "/user/hive/warehouse/vector_test_df";
-  private static final String SPARKSQL_VECTOR_TYPE_SQL_COMMANDS = HOODIE_WS_ROOT + "/docker/demo/sparksql-vector-type-sql.commands";
-  private static final String SPARKSQL_VECTOR_TYPE_DF_COMMANDS = HOODIE_WS_ROOT + "/docker/demo/sparksql-vector-type-df.commands";
+  private static final String SPARKSQL_VECTOR_TYPE_SQL_COMMANDS = Paths.DEMO_DIR + "/sparksql-vector-type-sql.commands";
+  private static final String SPARKSQL_VECTOR_TYPE_DF_COMMANDS = Paths.DEMO_DIR + "/sparksql-vector-type-df.commands";
 
-  private static final String DEMO_CONTAINER_SCRIPT = HOODIE_WS_ROOT + "/docker/demo/setup_demo_container.sh";
+  // All test paths cleaned in a single `hdfs dfs -rm -R -f` call; -f silently skips
+  // non-existent paths so tests that don't create every table don't fail teardown.
+  private static final String CLEANUP_PATHS_JOINED = String.join(" ",
+      BLOB_SQL_TEST_BASE_PATH, BLOB_DF_TEST_BASE_PATH,
+      VARIANT_SQL_TEST_BASE_PATH, VARIANT_DF_TEST_BASE_PATH,
+      VECTOR_SQL_TEST_BASE_PATH, VECTOR_DF_TEST_BASE_PATH);
 
-  @BeforeEach
-  public void setup() {
+  /**
+   * Run idempotent demo setup once per test class instead of once per @Test. The script
+   * (mkdir -p, cp, copyFromLocal -f, chmod +x) is safe to run a single time and saves
+   * one shell exec round-trip per test. Requires @TestInstance(PER_CLASS) so this method
+   * can be a non-static instance method that uses sparkAdhoc1.
+   */
+  @BeforeAll
+  public void setupOnce() throws Exception {
     initializeServices();
+    waitForHdfs();
+    sparkAdhoc1.executeShellCommand("/bin/bash " + Paths.DEMO_SETUP).expectToSucceed();
   }
 
   @AfterEach
   public void clean() throws Exception {
-    // Use -f to silently skip non-existent paths (not all tests create all tables).
-    final String hdfsCmd = "hdfs dfs -rm -R -f ";
-    List<String> tablePaths = CollectionUtils.createImmutableList(
-        BLOB_SQL_TEST_BASE_PATH, BLOB_DF_TEST_BASE_PATH,
-        VARIANT_SQL_TEST_BASE_PATH, VARIANT_DF_TEST_BASE_PATH,
-        VECTOR_SQL_TEST_BASE_PATH, VECTOR_DF_TEST_BASE_PATH);
-    for (String tablePath : tablePaths) {
-      sparkAdhoc1.executeShellCommand(hdfsCmd + tablePath)
-          .expectToSucceed();
-    }
+    sparkAdhoc1.executeShellCommand("hdfs dfs -rm -R -f " + CLEANUP_PATHS_JOINED)
+        .expectToSucceed();
   }
 
   // ---------- BLOB ----------
 
   @Test
   public void testBlobTypeWithHiveSyncSQL() throws Exception {
-    waitForHdfs();
-    sparkAdhoc1.executeShellCommand("/bin/bash " + DEMO_CONTAINER_SCRIPT).expectToSucceed();
-
     sparkAdhoc1.executeSQLFile(SPARKSQL_BLOB_TYPE_SQL_COMMANDS)
         .expectToSucceed()
         .assertStdOutContainsLine("BLOB_SQL_INSERT_SUCCESS")
@@ -118,9 +118,6 @@ public class ITTestCustomTypeHiveSync extends ITTestBaseTestcontainers {
 
   @Test
   public void testBlobTypeWithHiveSyncDataFrameAPI() throws Exception {
-    waitForHdfs();
-    sparkAdhoc1.executeShellCommand("/bin/bash " + DEMO_CONTAINER_SCRIPT).expectToSucceed();
-
     sparkAdhoc1.executeSQLFile(SPARKSQL_BLOB_TYPE_DF_COMMANDS)
         .expectToSucceed()
         .assertStdOutContainsLine("BLOB_DF_INSERT_SUCCESS")
@@ -154,9 +151,6 @@ public class ITTestCustomTypeHiveSync extends ITTestBaseTestcontainers {
   @Test
   public void testVariantTypeWithHiveSyncSQL() throws Exception {
     assumeSpark4Compose();
-    waitForHdfs();
-    sparkAdhoc1.executeShellCommand("/bin/bash " + DEMO_CONTAINER_SCRIPT).expectToSucceed();
-
     sparkAdhoc1.executeSQLFile(SPARKSQL_VARIANT_TYPE_SQL_COMMANDS)
         .expectToSucceed()
         .assertStdOutContainsLine("VARIANT_SQL_INSERT_SUCCESS")
@@ -184,9 +178,6 @@ public class ITTestCustomTypeHiveSync extends ITTestBaseTestcontainers {
   @Test
   public void testVariantTypeWithHiveSyncDataFrameAPI() throws Exception {
     assumeSpark4Compose();
-    waitForHdfs();
-    sparkAdhoc1.executeShellCommand("/bin/bash " + DEMO_CONTAINER_SCRIPT).expectToSucceed();
-
     sparkAdhoc1.executeSQLFile(SPARKSQL_VARIANT_TYPE_DF_COMMANDS)
         .expectToSucceed()
         .assertStdOutContainsLine("VARIANT_DF_INSERT_SUCCESS")
@@ -212,9 +203,6 @@ public class ITTestCustomTypeHiveSync extends ITTestBaseTestcontainers {
 
   @Test
   public void testVectorTypeWithHiveSyncSQL() throws Exception {
-    waitForHdfs();
-    sparkAdhoc1.executeShellCommand("/bin/bash " + DEMO_CONTAINER_SCRIPT).expectToSucceed();
-
     sparkAdhoc1.executeSQLFile(SPARKSQL_VECTOR_TYPE_SQL_COMMANDS)
         .expectToSucceed()
         .assertStdOutContainsLine("VECTOR_SQL_INSERT_SUCCESS")
@@ -249,9 +237,6 @@ public class ITTestCustomTypeHiveSync extends ITTestBaseTestcontainers {
 
   @Test
   public void testVectorTypeWithHiveSyncDataFrameAPI() throws Exception {
-    waitForHdfs();
-    sparkAdhoc1.executeShellCommand("/bin/bash " + DEMO_CONTAINER_SCRIPT).expectToSucceed();
-
     sparkAdhoc1.executeSQLFile(SPARKSQL_VECTOR_TYPE_DF_COMMANDS)
         .expectToSucceed()
         .assertStdOutContainsLine("VECTOR_DF_INSERT_SUCCESS")

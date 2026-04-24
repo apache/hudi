@@ -19,6 +19,7 @@
 package org.apache.hudi.integ2.testcontainers.service;
 
 import org.apache.hudi.integ2.testcontainers.ContainerProvider;
+import org.apache.hudi.integ2.testcontainers.TestcontainersConfig;
 import org.apache.hudi.integ2.testcontainers.command.CommandExecutor;
 import org.apache.hudi.integ2.testcontainers.command.CommandResult;
 
@@ -28,15 +29,6 @@ import org.apache.hudi.integ2.testcontainers.command.CommandResult;
  * including executing spark-shell commands.
  */
 public class SparkService {
-
-  // NOTE: Testcontainers renames and adds suffix to defined container names
-  // Container name
-  public static final String ADHOC_1 = "adhoc-1-1";
-  public static final String ADHOC_2 = "adhoc-2-1";
-
-  private static final String HADOOP_CONF_DIR = "/etc/hadoop";
-  private static final String HUDI_SPARK_BUNDLE =
-      "/var/hoodie/ws/docker/hoodie/hadoop/hive_base/target/hoodie-spark-bundle.jar";
 
   private final CommandExecutor executor;
 
@@ -49,8 +41,8 @@ public class SparkService {
    */
   public CommandResult executeSQLFile(String commandFile) throws Exception {
     String sparkShellCmd = new StringBuilder()
-        .append("spark-shell --jars ").append(HUDI_SPARK_BUNDLE)
-        .append(" --master local[2] --driver-class-path ").append(HADOOP_CONF_DIR)
+        .append("spark-shell --jars ").append(TestcontainersConfig.Paths.SPARK_BUNDLE)
+        .append(" --master local[2] --driver-class-path ").append(TestcontainersConfig.Paths.HADOOP_CONF_DIR)
         .append(" --conf spark.serializer=org.apache.spark.serializer.KryoSerializer")
         .append(" --conf spark.sql.catalog.spark_catalog=org.apache.spark.sql.hudi.catalog.HoodieCatalog")
         .append(" --conf spark.sql.extensions=org.apache.spark.sql.hudi.HoodieSparkSessionExtension")

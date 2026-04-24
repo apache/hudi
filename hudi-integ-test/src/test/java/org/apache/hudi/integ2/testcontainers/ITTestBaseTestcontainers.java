@@ -37,10 +37,11 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
-import java.time.Duration;
 
-import static org.apache.hudi.integ2.testcontainers.service.SparkService.ADHOC_1;
-import static org.apache.hudi.integ2.testcontainers.service.SparkService.ADHOC_2;
+import static org.apache.hudi.integ2.testcontainers.TestcontainersConfig.Containers;
+import static org.apache.hudi.integ2.testcontainers.TestcontainersConfig.Network;
+import static org.apache.hudi.integ2.testcontainers.TestcontainersConfig.SystemProps;
+import static org.apache.hudi.integ2.testcontainers.TestcontainersConfig.Timeouts;
 
 /**
  * Base test class for integration tests using Testcontainers with Docker Compose.
@@ -51,25 +52,6 @@ import static org.apache.hudi.integ2.testcontainers.service.SparkService.ADHOC_2
 @Slf4j
 @Testcontainers
 public abstract class ITTestBaseTestcontainers implements ContainerProvider {
-
-  // Constants for container names remain the same...
-  protected static final String NAMENODE_CONTAINER = "namenode";
-  protected static final String DATANODE_1_CONTAINER = "datanode1";
-  protected static final String HISTORY_SERVER_CONTAINER = "historyserver";
-  protected static final String HIVE_METASTORE_PGSQL_CONTAINER = "hive-metastore-postgresql";
-  protected static final String HIVE_METASTORE_CONTAINER = "hivemetastore";
-  protected static final String ZOOKEEPER_CONTAINER = "zookeeper";
-  protected static final String KAFKA_CONTAINER = "kafka";
-  protected static final String SPARK_MASTER_CONTAINER = "sparkmaster";
-  protected static final String SPARK_WORKER_1_CONTAINER = "sparkmaster";
-
-  // Default compose files for Spark 4.0.2. Override with -Dspark.docker.compose.prefix to use
-  // a different Spark version (e.g., "docker-compose_hadoop284_hive2310_spark353" for Spark 3.5.3).
-  static final String COMPOSE_PREFIX_PROPERTY = "spark.docker.compose.prefix";
-  static final String DEFAULT_COMPOSE_PREFIX = "docker-compose_hadoop340_hive2310_spark402";
-  // Token present in compose prefixes that run Spark 4.x (e.g. "...spark402"). Used to gate Spark 4+ only tests.
-  private static final String SPARK_4_PREFIX_TOKEN = "spark4";
-  private static final String COMPOSE_DIR = "../docker/compose/";
 
   protected static ComposeContainer environment;
 
@@ -87,12 +69,12 @@ public abstract class ITTestBaseTestcontainers implements ContainerProvider {
     log.info("Compose file: {}", composeFilePath);
     log.info("HUDI_WS: {}", hudiWorkspace);
 
-    final int sparkMasterServicePort = 8080;
     environment = new ComposeContainer(new File(composeFilePath))
         .withEnv("HUDI_WS", hudiWorkspace)
-        .withExposedService(SPARK_MASTER_CONTAINER, sparkMasterServicePort,
-            Wait.forListeningPort().forPorts(sparkMasterServicePort).withStartupTimeout(Duration.ofMinutes(5)))
-        .withStartupTimeout(Duration.ofMinutes(5));
+        .withExposedService(Containers.SPARK_MASTER, Network.SPARK_MASTER_WEB_UI_PORT,
+            Wait.forListeningPort().forPorts(Network.SPARK_MASTER_WEB_UI_PORT)
+                .withStartupTimeout(Timeouts.CONTAINER_STARTUP))
+        .withStartupTimeout(Timeouts.CONTAINER_STARTUP);
     environment.start();
 
     log.info("Docker Compose environment started successfully");
@@ -104,8 +86,8 @@ public abstract class ITTestBaseTestcontainers implements ContainerProvider {
    */
   protected void initializeServices() {
     this.hive = new HiveService(this);
-    this.sparkAdhoc1 = new SparkService(this, ADHOC_1);
-    this.sparkAdhoc2 = new SparkService(this, ADHOC_2);
+    this.sparkAdhoc1 = new SparkService(this, Containers.ADHOC_1);
+    this.sparkAdhoc2 = new SparkService(this, Containers.ADHOC_2);
   }
 
   /**
@@ -113,9 +95,9 @@ public abstract class ITTestBaseTestcontainers implements ContainerProvider {
    * Use for tests that rely on Spark 4.0+ only features (e.g. VARIANT type).
    */
   protected static void assumeSpark4Compose() {
-    String composePrefix = System.getProperty(COMPOSE_PREFIX_PROPERTY, DEFAULT_COMPOSE_PREFIX);
+    String composePrefix = System.getProperty(SystemProps.COMPOSE_PREFIX, SystemProps.DEFAULT_COMPOSE_PREFIX);
     Assumptions.assumeTrue(
-        composePrefix.contains(SPARK_4_PREFIX_TOKEN),
+        composePrefix.contains(SystemProps.SPARK_4_PREFIX_TOKEN),
         "Test requires a Spark 4.x compose stack; active prefix is '" + composePrefix + "'");
   }
 
@@ -124,19 +106,18 @@ public abstract class ITTestBaseTestcontainers implements ContainerProvider {
    * The namenode may take some time to start after Docker Compose reports containers as running.
    */
   protected void waitForHdfs() throws Exception {
-    final int maxRetries = 12;
-    final long retryIntervalMs = 10_000;
-    for (int i = 1; i <= maxRetries; i++) {
+    for (int i = 1; i <= Timeouts.HDFS_MAX_RETRIES; i++) {
       try {
         sparkAdhoc1.executeShellCommand("hdfs dfsadmin -safemode wait").expectToSucceed();
         log.info("HDFS namenode is ready");
         return;
       } catch (Throwable e) {
-        if (i == maxRetries) {
-          throw new RuntimeException("HDFS namenode did not become ready after " + maxRetries + " retries", e);
+        if (i == Timeouts.HDFS_MAX_RETRIES) {
+          throw new RuntimeException(
+              "HDFS namenode did not become ready after " + Timeouts.HDFS_MAX_RETRIES + " retries", e);
         }
-        log.info("Waiting for HDFS namenode to be ready (attempt {}/{})", i, maxRetries);
-        Thread.sleep(retryIntervalMs);
+        log.info("Waiting for HDFS namenode to be ready (attempt {}/{})", i, Timeouts.HDFS_MAX_RETRIES);
+        Thread.sleep(Timeouts.HDFS_RETRY_INTERVAL.toMillis());
       }
     }
   }
@@ -166,12 +147,13 @@ public abstract class ITTestBaseTestcontainers implements ContainerProvider {
     String projectDir = System.getProperty("user.dir");
     String os = System.getProperty("os.name").toLowerCase();
     String arch = System.getProperty("os.arch").toLowerCase();
-    String composePrefix = System.getProperty(COMPOSE_PREFIX_PROPERTY, DEFAULT_COMPOSE_PREFIX);
+    String composePrefix = System.getProperty(SystemProps.COMPOSE_PREFIX, SystemProps.DEFAULT_COMPOSE_PREFIX);
 
     // Determine which compose file to use based on OS and architecture
     boolean isMacArm64 = os.contains("mac") && arch.contains("aarch64");
     String archSuffix = isMacArm64 ? "_arm64" : "_amd64";
-    File dockerComposeFile = new File(projectDir, COMPOSE_DIR + composePrefix + archSuffix + ".yml");
+    File dockerComposeFile = new File(projectDir,
+        TestcontainersConfig.Paths.COMPOSE_DIR + composePrefix + archSuffix + ".yml");
     if (!dockerComposeFile.isFile() || !dockerComposeFile.exists()) {
       throw new HoodieException(String.format("%s does not exist", dockerComposeFile.getAbsolutePath()));
     }

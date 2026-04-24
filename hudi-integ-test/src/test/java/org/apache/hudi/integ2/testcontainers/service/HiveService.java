@@ -19,8 +19,12 @@
 package org.apache.hudi.integ2.testcontainers.service;
 
 import org.apache.hudi.integ2.testcontainers.ContainerProvider;
+import org.apache.hudi.integ2.testcontainers.TestcontainersConfig;
 import org.apache.hudi.integ2.testcontainers.command.CommandExecutor;
 import org.apache.hudi.integ2.testcontainers.command.CommandResult;
+
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * A service wrapper for the Hive container.
@@ -29,30 +33,41 @@ import org.apache.hudi.integ2.testcontainers.command.CommandResult;
  */
 public class HiveService {
 
-  // Container name
-  private static final String HIVESERVER = "hiveserver";
-
-  private static final String HIVE_SERVER_JDBC_URL = "jdbc:hive2://hiveserver:10000";
-  private static final String HUDI_HADOOP_BUNDLE =
-      "/var/hoodie/ws/docker/hoodie/hadoop/hive_base/target/hoodie-hadoop-mr-bundle.jar";
-
   private final CommandExecutor executor;
+  private final boolean verbose;
 
   public HiveService(ContainerProvider provider) {
-    this.executor = new CommandExecutor(provider.getContainer(HIVESERVER));
+    this(provider, Boolean.getBoolean(TestcontainersConfig.SystemProps.HIVE_VERBOSE));
+  }
+
+  /**
+   * Visible-for-tests overload so callers can toggle verbose mode without
+   * setting the system property at JVM start time.
+   */
+  public HiveService(ContainerProvider provider, boolean verbose) {
+    this.executor = new CommandExecutor(provider.getContainer(TestcontainersConfig.Containers.HIVESERVER));
+    this.verbose = verbose;
   }
 
   /**
    * Execute a Hive command and return the result.
    */
   public CommandResult execute(String hiveCommand) throws Exception {
-    String[] hiveCmd = {
-        "hive",
-        "--hiveconf", "hive.input.format=org.apache.hadoop.hive.ql.io.HiveInputFormat",
-        "--hiveconf", "hive.stats.autogather=false",
-        "-e", hiveCommand
-    };
-    return executor.executeCommand(hiveCmd);
+    List<String> hiveCmd = new ArrayList<>();
+    hiveCmd.add("hive");
+    hiveCmd.add("--hiveconf");
+    hiveCmd.add("hive.input.format=org.apache.hadoop.hive.ql.io.HiveInputFormat");
+    hiveCmd.add("--hiveconf");
+    hiveCmd.add("hive.stats.autogather=false");
+    if (verbose) {
+      for (String kv : TestcontainersConfig.VERBOSE_HIVECONFS) {
+        hiveCmd.add("--hiveconf");
+        hiveCmd.add(kv);
+      }
+    }
+    hiveCmd.add("-e");
+    hiveCmd.add(hiveCommand);
+    return executor.executeCommand(hiveCmd.toArray(new String[0]));
   }
 
   /**
@@ -77,10 +92,15 @@ public class HiveService {
    */
   public CommandResult executeFile(String commandFile, String additionalVar) throws Exception {
     StringBuilder hiveCmd = new StringBuilder()
-        .append("beeline -u ").append(HIVE_SERVER_JDBC_URL)
+        .append("beeline -u ").append(TestcontainersConfig.Network.HIVE_SERVER_JDBC_URL)
         .append(" --hiveconf hive.input.format=org.apache.hadoop.hive.ql.io.HiveInputFormat")
-        .append(" --hiveconf hive.stats.autogather=false")
-        .append(" --hivevar hudi.hadoop.bundle=").append(HUDI_HADOOP_BUNDLE);
+        .append(" --hiveconf hive.stats.autogather=false");
+    if (verbose) {
+      for (String kv : TestcontainersConfig.VERBOSE_HIVECONFS) {
+        hiveCmd.append(" --hiveconf ").append(kv);
+      }
+    }
+    hiveCmd.append(" --hivevar hudi.hadoop.bundle=").append(TestcontainersConfig.Paths.HADOOP_MR_BUNDLE);
 
     if (additionalVar != null) {
       hiveCmd.append(" --hivevar ").append(additionalVar);
