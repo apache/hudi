@@ -18,10 +18,21 @@
 
 package org.apache.hudi.hadoop;
 
+import org.apache.hudi.common.schema.HoodieProjectionMask;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaField;
+import org.apache.hudi.common.schema.HoodieSchemaTestUtils;
+import org.apache.hudi.common.schema.HoodieSchemaType;
+
+import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hive.serde2.typeinfo.TypeInfo;
 import org.apache.hadoop.hive.serde2.typeinfo.TypeInfoUtils;
 import org.junit.jupiter.api.Test;
 
+import java.util.Arrays;
+import java.util.OptionalInt;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -72,5 +83,86 @@ public class TestHoodieColumnProjectionUtils {
     String col11 = "uniontype<string,int,map<string,array<timestamp>>>";
     TypeInfo typeInfo11 = TypeInfoUtils.getTypeInfosFromTypeString(col11).get(0);
     assertTrue(HoodieColumnProjectionUtils.typeContainsTimestamp(typeInfo11));
+  }
+
+  @Test
+  void testBuildNestedProjectionMaskEmptyConfYieldsAll() {
+    HoodieSchema row = rowSchemaWithBlobColumn();
+    Configuration conf = new Configuration();
+    HoodieProjectionMask mask = HoodieColumnProjectionUtils.buildNestedProjectionMask(conf, row);
+    assertTrue(mask.isAll());
+  }
+
+  @Test
+  void testBuildNestedProjectionMaskTopLevelOnlyYieldsAll() {
+    // Top-level pruning never compacts; only nested paths produce a mask.
+    HoodieSchema row = rowSchemaWithBlobColumn();
+    Configuration conf = new Configuration();
+    conf.set(HoodieColumnProjectionUtils.READ_NESTED_COLUMN_PATH_CONF_STR, "blob_data,id");
+    HoodieProjectionMask mask = HoodieColumnProjectionUtils.buildNestedProjectionMask(conf, row);
+    assertTrue(mask.isAll());
+  }
+
+  @Test
+  void testBuildNestedProjectionMaskForBlobReferenceProjection() {
+    HoodieSchema row = rowSchemaWithBlobColumn();
+    Configuration conf = new Configuration();
+    conf.set(HoodieColumnProjectionUtils.READ_NESTED_COLUMN_PATH_CONF_STR, "blob_data.reference");
+    HoodieProjectionMask mask = HoodieColumnProjectionUtils.buildNestedProjectionMask(conf, row);
+
+    assertFalse(mask.isAll());
+    assertTrue(mask.isCanonicalAtThisLevel());
+    HoodieProjectionMask blobChild = mask.childOrAll("blob_data");
+    assertFalse(blobChild.isAll());
+    assertFalse(blobChild.isCanonicalAtThisLevel());
+    assertEquals(OptionalInt.of(0), blobChild.physicalIndexOf("reference"));
+    assertEquals(OptionalInt.empty(), blobChild.physicalIndexOf("type"));
+    assertEquals(OptionalInt.empty(), blobChild.physicalIndexOf("data"));
+    assertTrue(blobChild.childOrAll("reference").isAll());
+  }
+
+  @Test
+  void testBuildNestedProjectionMaskForExternalPathProjection() {
+    HoodieSchema row = rowSchemaWithBlobColumn();
+    Configuration conf = new Configuration();
+    conf.set(HoodieColumnProjectionUtils.READ_NESTED_COLUMN_PATH_CONF_STR, "blob_data.reference.external_path");
+    HoodieProjectionMask mask = HoodieColumnProjectionUtils.buildNestedProjectionMask(conf, row);
+
+    HoodieProjectionMask blobChild = mask.childOrAll("blob_data");
+    assertEquals(OptionalInt.of(0), blobChild.physicalIndexOf("reference"));
+    HoodieProjectionMask refChild = blobChild.childOrAll("reference");
+    assertFalse(refChild.isAll());
+    assertEquals(OptionalInt.of(0), refChild.physicalIndexOf("external_path"));
+    assertEquals(OptionalInt.empty(), refChild.physicalIndexOf("offset"));
+  }
+
+  @Test
+  void testBuildNestedProjectionMaskOrdersByDeclaredSchema() {
+    // Physical order follows the schema, not the conf-path order.
+    HoodieSchema row = rowSchemaWithBlobColumn();
+    Configuration conf = new Configuration();
+    conf.set(HoodieColumnProjectionUtils.READ_NESTED_COLUMN_PATH_CONF_STR, "blob_data.reference,blob_data.type");
+    HoodieProjectionMask mask = HoodieColumnProjectionUtils.buildNestedProjectionMask(conf, row);
+
+    HoodieProjectionMask blobChild = mask.childOrAll("blob_data");
+    assertEquals(OptionalInt.of(0), blobChild.physicalIndexOf("type"));
+    assertEquals(OptionalInt.of(1), blobChild.physicalIndexOf("reference"));
+  }
+
+  @Test
+  void testBuildNestedProjectionMaskCaseInsensitive() {
+    HoodieSchema row = rowSchemaWithBlobColumn();
+    Configuration conf = new Configuration();
+    conf.set(HoodieColumnProjectionUtils.READ_NESTED_COLUMN_PATH_CONF_STR, "BLOB_DATA.Reference.External_Path");
+    HoodieProjectionMask mask = HoodieColumnProjectionUtils.buildNestedProjectionMask(conf, row);
+
+    assertFalse(mask.childOrAll("blob_data").isAll());
+    assertEquals(OptionalInt.of(0), mask.childOrAll("blob_data").physicalIndexOf("reference"));
+  }
+
+  private static HoodieSchema rowSchemaWithBlobColumn() {
+    HoodieSchemaField idField = HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.LONG), null, null);
+    HoodieSchemaField blobField = HoodieSchemaField.of("blob_data", HoodieSchemaTestUtils.createPlainBlobRecord("blob_data"), null, null);
+    return HoodieSchema.createRecord("test_row", null, null, false, Arrays.asList(idField, blobField));
   }
 }
