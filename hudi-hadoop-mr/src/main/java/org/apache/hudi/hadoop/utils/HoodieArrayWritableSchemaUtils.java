@@ -304,6 +304,23 @@ public class HoodieArrayWritableSchemaUtils {
           }
         }
         break;
+      case VECTOR:
+        // Parquet stores VECTOR as a bare FIXED_LEN_BYTE_ARRAY without a logical-type
+        // annotation (see AvroSchemaConverterWithTimestampNTZ#convertField VECTOR branch),
+        // so Hive's Parquet reader reconstructs the Avro schema as plain FIXED named after
+        // the column. When Hudi then projects that record to the canonical VECTOR schema
+        // (fixed named vector_<elem>_<dim> with logicalType=vector), oldSchema.getType() is
+        // FIXED while newSchema.getType() is VECTOR. The byte layout is identical for
+        // StorageBacking.FIXED_BYTES as long as sizes match, so the rewrite is a pass-through.
+        if (oldSchema.getType() == HoodieSchemaType.FIXED
+            && newSchema instanceof HoodieSchema.Vector) {
+          HoodieSchema.Vector vector = (HoodieSchema.Vector) newSchema;
+          if (vector.getStorageBacking() == HoodieSchema.Vector.StorageBacking.FIXED_BYTES
+              && oldSchema.getFixedSize() == vector.getFixedSize()) {
+            return writable;
+          }
+        }
+        break;
       default:
     }
     throw new HoodieSchemaException(String.format("cannot support rewrite value for schema type: %s since the old schema type is: %s", newSchema, oldSchema));

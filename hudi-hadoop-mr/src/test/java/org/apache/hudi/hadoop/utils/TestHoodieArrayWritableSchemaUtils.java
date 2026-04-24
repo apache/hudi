@@ -314,6 +314,24 @@ public class TestHoodieArrayWritableSchemaUtils {
     validateRewriteWithAvro(oldWritable, oldSchema, result, decimalSchema);
   }
 
+  @Test
+  void testRewritePlainFixedToVectorPassesThrough() {
+    // Pins the fix for the Hive vector-read path. Parquet stores VECTOR as bare
+    // FIXED_LEN_BYTE_ARRAY (AvroSchemaConverterWithTimestampNTZ#convertField),
+    // so Hive's Parquet reader reconstructs the Avro schema as plain FIXED using
+    // the column name; Hudi then projects to the canonical VECTOR schema
+    // (vector_float_3, size 12, logicalType=vector). Sizes match and VECTOR's
+    // FIXED_BYTES backing is byte-identical, so the rewrite must pass through.
+    // Before the fix this threw "cannot support rewrite value for schema type".
+    HoodieSchema oldSchema = HoodieSchema.createFixed("embedding", null, null, 12);
+    HoodieSchema newSchema = HoodieSchema.createVector(3, HoodieSchema.Vector.VectorElementType.FLOAT);
+    BytesWritable bytes = new BytesWritable(new byte[12]);
+
+    Writable rewritten = HoodieArrayWritableSchemaUtils.rewritePrimaryType(bytes, oldSchema, newSchema);
+
+    assertSame(bytes, rewritten);
+  }
+
   private void validateRewriteWithAvro(
       Writable oldWritable,
       HoodieSchema oldSchema,
