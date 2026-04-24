@@ -470,13 +470,13 @@ class TestAvroConversionUtils extends FunSuite with Matchers {
       }
     """
 
-    val dateInputData = Seq(7, 365, 0)
+    val dateInputData = Seq(7, 365, 0) // one week, one year, epoch
     val schema = HoodieSchema.parse(dateSchema)
-    val convertor = AvroConversionUtils.createConverterToRow(schema, HoodieSchemaConversionUtils.convertHoodieSchemaToStructType(schema))
+    val converter = AvroConversionUtils.createConverterToRow(schema, HoodieSchemaConversionUtils.convertHoodieSchemaToStructType(schema))
 
     val dateOutputData = dateInputData.map(x => {
       val record = new GenericData.Record(schema.toAvroSchema) {{ put("date", x) }}
-      convertor(record).get(0)
+      converter(record).get(0)
     })
 
     assert(dateOutputData(0).toString === LocalDate.ofEpochDay(dateInputData(0)).toString)
