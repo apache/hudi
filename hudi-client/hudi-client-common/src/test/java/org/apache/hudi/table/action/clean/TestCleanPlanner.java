@@ -17,7 +17,7 @@
  * under the License.
  */
 
-package org.apache.hudi.table.action;
+package org.apache.hudi.table.action.clean;
 
 import org.apache.hudi.avro.model.HoodieActionInstant;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
@@ -53,7 +53,6 @@ import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.table.HoodieTable;
-import org.apache.hudi.table.action.clean.CleanPlanner;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.params.ParameterizedTest;

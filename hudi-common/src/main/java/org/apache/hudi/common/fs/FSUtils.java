@@ -156,7 +156,12 @@ public class FSUtils {
   }
 
   public static String getFileId(String fullFileName) {
-    return fullFileName.split("_", 2)[0];
+    String fileId = fullFileName.split("_", 2)[0];
+    // handle extracting filed IDs from log files
+    if (fileId.startsWith(".")) {
+      return fileId.substring(1);
+    }
+    return fileId;
   }
 
   /**

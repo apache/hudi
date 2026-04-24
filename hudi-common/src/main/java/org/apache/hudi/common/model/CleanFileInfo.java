@@ -35,7 +35,7 @@ import java.io.Serializable;
 public class CleanFileInfo implements Serializable {
 
   private final String filePath;
-  private final boolean isBootstrapBaseFile;
+  private final boolean isBootstrapBaseFile; // TODO: convert this to some enum so it covers blob files as well?
 
   public HoodieCleanFileInfo toHoodieFileCleanInfo() {
     return new HoodieCleanFileInfo(filePath, isBootstrapBaseFile);

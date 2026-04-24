@@ -18,18 +18,38 @@
 
 package org.apache.hudi.table.action.clean;
 
+import lombok.Builder;
+import lombok.Value;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.hudi.avro.model.HoodieActionInstant;
+import org.apache.hudi.avro.model.HoodieCleanFileInfo;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieCleanerPlan;
+import org.apache.hudi.blob.BlobExtractor;
 import org.apache.hudi.client.transaction.TransactionManager;
 import org.apache.hudi.common.HoodieCleanStat;
+import org.apache.hudi.common.config.HoodieReaderConfig;
+import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.data.HoodiePairData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.engine.HoodieReaderContext;
+import org.apache.hudi.common.engine.ReaderContextFactory;
+import org.apache.hudi.common.engine.RecordContext;
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.CleanFileInfo;
+import org.apache.hudi.common.model.HoodieBaseFile;
+import org.apache.hudi.common.model.HoodieFileGroup;
+import org.apache.hudi.common.model.HoodieLogFile;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.TableSchemaResolver;
+import org.apache.hudi.common.table.read.HoodieFileGroupReader;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.CleanerUtils;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.common.util.collection.CloseableMappingIterator;
 import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -37,21 +57,27 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.internal.schema.io.FileBasedInternalSchemaStorageManager;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.BaseActionExecutor;
-
-import lombok.extern.slf4j.Slf4j;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.common.table.timeline.InstantComparison.GREATER_THAN_OR_EQUALS;
+import static org.apache.hudi.common.table.timeline.InstantComparison.LESSER_THAN_OR_EQUALS;
+import static org.apache.hudi.common.table.timeline.InstantComparison.compareTimestamps;
 import static org.apache.hudi.common.util.StringUtils.isNullOrEmpty;
 
 @Slf4j
@@ -141,6 +167,8 @@ public class CleanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I, K,
 
     context.setJobStatus(this.getClass().getSimpleName(), "Perform cleaning of table: " + config.getTableName());
 
+    deleteBlobReferencesIfRequired(context, cleanerPlan);
+
     Stream<Pair<String, CleanFileInfo>> filesToBeDeletedPerPartition =
         cleanerPlan.getFilePathsToBeDeletedPerPartition().entrySet().stream()
             .flatMap(x -> x.getValue().stream().map(y -> new ImmutablePair<>(x.getKey(),
@@ -185,7 +213,6 @@ public class CleanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I, K,
           .build();
     }).collect(Collectors.toList());
   }
-
 
   /**
    * Executes the Cleaner plan stored in the instant metadata.
@@ -288,5 +315,196 @@ public class CleanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I, K,
       log.error("Failed to perform previous clean operation, instant: {}", hoodieInstant, e);
       throw e;
     }
+  }
+
+  private <R> void deleteBlobReferencesIfRequired(HoodieEngineContext context, HoodieCleanerPlan cleanerPlan) {
+    // check if the table schema has blob fields, if not exit early
+    TableSchemaResolver schemaResolver = new TableSchemaResolver(table.getMetaClient());
+    HoodieSchema tableSchema;
+    try {
+      tableSchema = schemaResolver.getTableSchema(true);
+    } catch (Exception e) {
+      log.warn("Skipping blob cleanup, failed to read schema for table: {}", config.getTableName(), e);
+      return;
+    }
+    BlobExtractor blobExtractor = BlobExtractor.getInstance();
+
+    // Only inspect the files for blob references if there are blob fields in the schema
+    blobExtractor.getReducedBlobSchema(tableSchema).ifPresent(blobSchema -> {
+      ReaderContextFactory<R> readerContextFactory = context.getReaderContextFactory(table.getMetaClient());
+      // Limit the search scope for blob references to the relevant files for the given file slice that is being removed
+      List<FileComparisonGroup> removedAndRetainedFiles = getBlobInspectionGroups(cleanerPlan);
+      long totalRemoved = removedAndRetainedFiles.stream().flatMap(fileComparisonGroup -> {
+        Set<String> removedFiles = fileComparisonGroup.getRemovedFilePaths();
+        Set<String> retainedFiles = fileComparisonGroup.getRetainedFilePaths();
+        HoodieTableMetaClient hoodieTableMetaClient = table.getMetaClient();
+        HoodiePairData<String, Boolean> removedReferences = getBlobReferencesFromFiles(removedFiles, readerContextFactory, hoodieTableMetaClient, tableSchema, blobSchema);
+        HoodiePairData<String, Boolean> retainedReferences = getBlobReferencesFromFiles(retainedFiles, readerContextFactory, hoodieTableMetaClient, tableSchema, blobSchema);
+        return removedReferences.leftOuterJoin(retainedReferences)
+            .filter((path, result) -> {
+              boolean hasRetainedReference = result.getRight().orElse(false);
+              return !hasRetainedReference;
+            })
+            .map(Pair::getLeft)
+            .mapPartitions(pathsToDelete -> {
+              HoodieStorage storage = hoodieTableMetaClient.getStorage();
+              long count = 0;
+              while (pathsToDelete.hasNext()) {
+                String path = pathsToDelete.next();
+                log.debug("Identified blob reference for deletion: {}", path);
+                try {
+                  storage.deleteFile(new StoragePath(path));
+                  count++;
+                } catch (IOException e) {
+                  log.warn("Failed to delete blob reference for path: {}", path, e);
+                }
+              }
+              return Collections.singletonList(count).iterator();
+            }, true)
+            .collectAsList().stream();
+      }).reduce(0L, Long::sum);
+      log.info("Deleted total {} blob references during clean operation", totalRemoved);
+    });
+
+  }
+
+  private <R> HoodiePairData<String, Boolean> getBlobReferencesFromFiles(Set<String> files,
+                                                                         ReaderContextFactory<R> readerContextFactory,
+                                                                         HoodieTableMetaClient hoodieTableMetaClient,
+                                                                         HoodieSchema tableSchema,
+                                                                         HoodieSchema blobSchema) {
+    return context.parallelize(new ArrayList<>(files), files.size()).flatMap(file -> {
+      HoodieReaderContext<R> readerContext = readerContextFactory.getContext();
+      RecordContext<R> recordContext = readerContext.getRecordContext();
+      StoragePath path = new StoragePath(file);
+      HoodieStorage storage = hoodieTableMetaClient.getStorage().newInstance(path, readerContext.getStorageConfiguration());
+      StoragePathInfo storagePathInfo = storage.getPathInfo(path);
+      Option<HoodieBaseFile> baseFileOption;
+      Stream<HoodieLogFile> logFiles;
+      if (FSUtils.isLogFile(path)) {
+        logFiles = Stream.of(new HoodieLogFile(storagePathInfo));
+        baseFileOption = Option.empty();
+      } else {
+        logFiles = Stream.empty();
+        baseFileOption = Option.of(new HoodieBaseFile(storagePathInfo));
+      }
+      TypedProperties props = TypedProperties.copy(config.getProps());
+      props.setProperty(HoodieReaderConfig.MERGE_TYPE.key(), HoodieReaderConfig.REALTIME_SKIP_MERGE);
+      HoodieFileGroupReader<R> reader = HoodieFileGroupReader.<R>newBuilder()
+              .withBaseFileOption(baseFileOption)
+              .withLogFiles(logFiles)
+              .withDataSchema(tableSchema)
+              .withRequestedSchema(blobSchema)
+              .withProps(props)
+              .withHoodieTableMetaClient(hoodieTableMetaClient)
+              .withLatestCommitTime(hoodieTableMetaClient.getActiveTimeline().getLatestCompletionTime().get())
+              .withReaderContext(readerContext)
+              .withPartitionPath(FSUtils.getRelativePartitionPath(hoodieTableMetaClient.getBasePath(), path))
+              .build();
+      try {
+        BlobExtractor blobExtractor = BlobExtractor.getInstance();
+        return new CloseableMappingIterator<>(reader.getClosableIterator(),
+            record -> blobExtractor.getManagedBlobPaths(blobSchema, record, recordContext));
+      } catch (IOException e) {
+        log.warn("Failed to access file at path: {}, skipping blob reference extraction for this file", path, e);
+        return Collections.emptyIterator();
+      }
+    }).flatMapToPair(paths -> paths.stream().map(path -> Pair.of(path, true)).iterator());
+  }
+
+  // TODO: How does this work for tables with global index?
+  /**
+   * Cleaning blob files requires that we inspect the contents of the retained and removed file slices to find the blob file references that can be removed.
+   * To optimize the process, we limit the comparisons required with the following grouping logic:
+   * 1) If a removed file slice has a corresponding retained file slice in the same file group, we will compare the removed file slice with the retained file slice(s) in the same file group.
+   * 2) If a removed file slice does not have a corresponding retained file slice in the same file group, this implies that there is a replace or clustering commit. This requires comparing the
+   *    removed file slice with all retained file slices that were created after the removed file slice's latest instant time, as these are the only retained file slices
+   *    that could be part of a replace or clustering commit that removes these files from the active view of the table. All slices that fall into this case are put into the same comparison group to
+   *    avoid reading the same file multiple times.
+   * @param cleanerPlan the cleaner plan containing the files to be removed
+   * @return the list of FileSliceComparisonGroup which contains the groups of file slices to compare for finding dereferenced blobs
+   */
+  List<FileComparisonGroup> getBlobInspectionGroups(HoodieCleanerPlan cleanerPlan) {
+    return cleanerPlan.getFilePathsToBeDeletedPerPartition().entrySet().stream().flatMap(entry -> {
+      String partitionPath = entry.getKey();
+      List<String> removedFiles = entry.getValue().stream().map(HoodieCleanFileInfo::getFilePath).collect(Collectors.toList());
+      Map<String, Set<String>> removedFilesGroupedByFileGroup = removedFiles.stream().collect(Collectors.groupingBy(path -> FSUtils.getFileId(new StoragePath(path).getName()), Collectors.toSet()));
+      Map<String, Set<String>> activeFilesGroupedByFileGroup = new HashMap<>();
+      List<HoodieFileGroup> unmatchedFileGroups = new ArrayList<>();
+      List<String> deletedFilePathsWithoutNewFileSlice = new ArrayList<>();
+      AtomicReference<String> earliestBaseInstantTime = new AtomicReference<>(null);
+      Stream<HoodieFileGroup> allFileGroupsForPartition = Stream.concat(table.getHoodieView().getAllReplacedFileGroups(partitionPath),
+              table.getHoodieView().getAllFileGroups(partitionPath));
+      allFileGroupsForPartition.forEach(fileGroup -> {
+        if (removedFilesGroupedByFileGroup.containsKey(fileGroup.getFileGroupId().getFileId())) {
+          Set<String> removedPaths = removedFilesGroupedByFileGroup.get(fileGroup.getFileGroupId().getFileId());
+          Set<String> retainedPaths = new HashSet<>();
+          // Only consider the slices present at the time of clean planning
+          fileGroup.getAllFileSlices().filter(slice -> compareTimestamps(slice.getBaseInstantTime(), LESSER_THAN_OR_EQUALS, instantTime)).forEach(fileSlice -> {
+            fileSlice.getBaseFile().ifPresent(baseFile -> {
+              String baseFilePath = baseFile.getPath();
+              if (!removedPaths.contains(baseFilePath)) {
+                retainedPaths.add(baseFilePath);
+              }
+              fileSlice.getLogFiles().forEach(logFile -> {
+                String logFilePath = logFile.getPath().toString();
+                if (!removedPaths.contains(logFilePath)) {
+                  retainedPaths.add(logFilePath);
+                }
+              });
+            });
+          });
+          if (!retainedPaths.isEmpty()) {
+            activeFilesGroupedByFileGroup.put(fileGroup.getFileGroupId().getFileId(), retainedPaths);
+          } else {
+            deletedFilePathsWithoutNewFileSlice.addAll(removedPaths);
+            fileGroup.getLatestFileSlice().ifPresent(latestSlice -> {
+              String latestInstantTime = latestSlice.getLatestInstantTime();
+              if (earliestBaseInstantTime.get() == null || compareTimestamps(latestInstantTime, LESSER_THAN_OR_EQUALS, earliestBaseInstantTime.get())) {
+                earliestBaseInstantTime.set(latestInstantTime);
+              }
+            });
+          }
+        } else {
+          unmatchedFileGroups.add(fileGroup);
+        }
+      });
+      // Cover case of file groups being removed
+      Stream<FileComparisonGroup> remainingFileComparisonGroupStream = Stream.empty();
+      if (!deletedFilePathsWithoutNewFileSlice.isEmpty()) {
+        List<String> pathsFromPotentialReplaceOrClusteringFileSlices = unmatchedFileGroups.stream()
+            .flatMap(fileGroup -> fileGroup.getAllFileSlices()
+                .filter(slice -> compareTimestamps(slice.getBaseInstantTime(), LESSER_THAN_OR_EQUALS, instantTime)
+                    && compareTimestamps(slice.getBaseInstantTime(), GREATER_THAN_OR_EQUALS, earliestBaseInstantTime.get()))
+                .flatMap(fileSlice -> Stream.concat(
+                    fileSlice.getBaseFile().map(HoodieBaseFile::getPath).map(Stream::of).orElseGet(Stream::empty),
+                    fileSlice.getLogFiles().map(logFile -> logFile.getPath().toString())
+                )))
+            .collect(Collectors.toList());
+        remainingFileComparisonGroupStream = Stream.of(FileComparisonGroup.builder()
+            .retainedFilePaths(new HashSet<>(pathsFromPotentialReplaceOrClusteringFileSlices))
+            .removedFilePaths(new HashSet<>(deletedFilePathsWithoutNewFileSlice))
+            .build());
+      }
+
+
+
+      return Stream.concat(remainingFileComparisonGroupStream, activeFilesGroupedByFileGroup.entrySet().stream().map(kv -> {
+        String fileId = kv.getKey();
+        Set<String> removedPaths = removedFilesGroupedByFileGroup.get(fileId);
+        Set<String> retainedPaths = kv.getValue();
+        return FileComparisonGroup.builder()
+            .retainedFilePaths(retainedPaths)
+            .removedFilePaths(removedPaths)
+            .build();
+      }));
+    }).collect(Collectors.toList());
+  }
+
+  @Value
+  @Builder
+  static class FileComparisonGroup {
+    Set<String> retainedFilePaths;
+    Set<String> removedFilePaths;
   }
 }
