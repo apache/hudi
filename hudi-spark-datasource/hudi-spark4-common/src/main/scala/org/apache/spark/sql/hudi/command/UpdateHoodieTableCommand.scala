@@ -63,10 +63,11 @@ case class UpdateHoodieTableCommand(ut: UpdateTable, query: LogicalPlan) extends
       buildHoodieConfig(catalogTable)
     }
 
-    val enrichedSchema = HoodieSchemaConversionUtils.reattachCustomTypeMetadata(
+    val enrichedSchema = HoodieSchemaConversionUtils.alignSchemaWithCatalog(
       plan.schema,
       catalogTable.tableSchemaWithoutMetaFields,
-      sparkSession.sessionState.conf.caseSensitiveAnalysis)
+      sparkSession.sessionState.conf.caseSensitiveAnalysis,
+      alignNullability = true)
     val df = sparkSession.internalCreateDataFrame(plan.execute(), enrichedSchema)
     val (success, commitInstantTime, _, _, _, _) = HoodieSparkSqlWriter.write(sparkSession.sqlContext, SaveMode.Append, config, df)
     if (success && commitInstantTime.isPresent) {

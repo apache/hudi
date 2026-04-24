@@ -24,8 +24,11 @@ import org.apache.hudi.common.schema.HoodieSchema.TimePrecision
 import org.apache.hudi.internal.schema.HoodieSchemaException
 
 import org.apache.spark.annotation.DeveloperApi
+import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types._
 import org.apache.spark.sql.types.Decimal.minBytesForPrecision
+
+import java.util.Locale
 
 import scala.collection.JavaConverters._
 
@@ -257,6 +260,7 @@ object HoodieSparkSchemaConverters extends SparkAdapterSupport {
         SchemaType(ArrayType(sparkElementType, containsNull = false), nullable = false, Some(metadata))
 
       case HoodieSchemaType.BLOB | HoodieSchemaType.RECORD =>
+        val isBlob = hoodieSchema.getType == HoodieSchemaType.BLOB
         val fullName = hoodieSchema.getFullName
         if (existingRecordNames.contains(fullName)) {
           throw new IncompatibleSchemaException(
@@ -278,10 +282,22 @@ object HoodieSparkSchemaConverters extends SparkAdapterSupport {
             metadataBuilder.putString(HoodieSchema.TYPE_METADATA_FIELD, HoodieSchema.Blob.TYPE_DESCRIPTOR)
           }
           val metadata = metadataBuilder.build()
-          StructField(f.name(), schemaType.dataType, schemaType.nullable, metadata)
+          // For BLOB: force nullable-everywhere at the Spark type layer. The RFC-100
+          // canonical schema declares `type`, `reference.external_path`, and
+          // `reference.managed` as strictly non-null, but that contract is conditional
+          // ("required when parent is present") and Spark's type system can't model it.
+          // Projecting BLOB as nullable-everywhere for Spark avoids downstream pain
+          // (Cast / TableOutputResolver / Cast.canCast rewrites); the on-disk physical
+          // schema stays RFC-100 compliant because the write path goes through
+          // HoodieSchema.Blob.createBlob(), which uses the canonical fields verbatim.
+          if (isBlob) {
+            StructField(f.name(), withAllFieldsNullable(schemaType.dataType), nullable = true, metadata)
+          } else {
+            StructField(f.name(), schemaType.dataType, schemaType.nullable, metadata)
+          }
         }
         // For BLOB types, propagate type metadata via SchemaType
-        val schemaTypeMetadata = if (hoodieSchema.getType == HoodieSchemaType.BLOB) {
+        val schemaTypeMetadata = if (isBlob) {
           Some(new MetadataBuilder()
             .putString(HoodieSchema.TYPE_METADATA_FIELD, hoodieSchema.asInstanceOf[HoodieSchema.Blob].toTypeDescriptor)
             .build())
@@ -350,17 +366,48 @@ object HoodieSparkSchemaConverters extends SparkAdapterSupport {
   /**
    * Validates that a StructType matches the expected blob schema structure defined in {@link HoodieSchema.Blob}.
    *
+   * Purely structural: compares field names and data types recursively, ignoring nullability.
+   * At the Spark type layer, BLOB is projected as nullable-everywhere by [[toSqlType]] (see the
+   * comment on the BLOB case there); nullability is therefore not part of the structural
+   * contract. The RFC-100 non-null invariants are enforced at the physical-schema write
+   * boundary by {@link HoodieSchema.Blob#createBlob}.
+   *
    * @param structType the StructType to validate
    * @throws IllegalArgumentException if the structure does not match the expected blob schema
    */
   private def validateBlobStructure(structType: StructType): Unit = {
-    if (!structType.equals(expectedBlobStructType)) {
+    if (!matchesStructure(structType, expectedBlobStructType, SQLConf.get.caseSensitiveAnalysis)) {
       throw new IllegalArgumentException(
         s"""Invalid blob schema structure. Expected schema:
            |${expectedBlobStructType.toDDL}
            |Got schema:
            |${structType.toDDL}""".stripMargin)
     }
+  }
+
+  private def matchesStructure(source: DataType, expected: DataType, caseSensitive: Boolean): Boolean =
+    (source, expected) match {
+      case (s: StructType, e: StructType) =>
+        s.length == e.length && s.fields.zip(e.fields).forall { case (sf, ef) =>
+          nameEquals(sf.name, ef.name, caseSensitive) &&
+            matchesStructure(sf.dataType, ef.dataType, caseSensitive)
+        }
+      case _ => source == expected
+    }
+
+  private def nameEquals(a: String, b: String, caseSensitive: Boolean): Boolean =
+    if (caseSensitive) a == b else a.equalsIgnoreCase(b)
+
+  private def withAllFieldsNullable(dataType: DataType): DataType = dataType match {
+    case s: StructType =>
+      StructType(s.fields.map(f => f.copy(
+        dataType = withAllFieldsNullable(f.dataType),
+        nullable = true)))
+    case ArrayType(elementType, _) =>
+      ArrayType(withAllFieldsNullable(elementType), containsNull = true)
+    case MapType(keyType, valueType, _) =>
+      MapType(keyType, withAllFieldsNullable(valueType), valueContainsNull = true)
+    case other => other
   }
 
   private lazy val expectedVariantStructType: StructType = {
@@ -373,14 +420,25 @@ object HoodieSparkSchemaConverters extends SparkAdapterSupport {
    * Validates that a StructType matches the expected unshredded variant schema
    * (two non-null {@code BinaryType} fields: {@code metadata} and {@code value}).
    *
+   * Note on nullability: unlike BLOB, VARIANT is not projected nullable-everywhere at the
+   * Spark type layer because the user-facing path is gated. Spark 3.x rejects VARIANT at
+   * schema resolution, and Spark 4.0+ exposes it as the native {@code VariantType} populated
+   * via {@code parse_json(...)}, never a user-supplied {@code named_struct}. The internal
+   * physical layout ({@code struct<metadata, value>} with non-null fields) only appears
+   * through {@link HoodieSparkSchemaConverters#toSqlType}, which produces the canonical
+   * non-null shape this validator expects.
+   *
    * @param structType the StructType to validate
    * @throws IllegalArgumentException if the structure does not match the expected variant schema
    */
   private def validateVariantStructure(structType: StructType): Unit = {
-    val fieldsByName = structType.fields.map(f => f.name -> f).toMap
+    val caseSensitive = SQLConf.get.caseSensitiveAnalysis
+    val key: String => String =
+      if (caseSensitive) identity else (_: String).toLowerCase(Locale.ROOT)
+    val fieldsByName = structType.fields.map(f => key(f.name) -> f).toMap
     val ok = structType.length == 2 &&
-      fieldsByName.get(HoodieSchema.Variant.VARIANT_METADATA_FIELD).exists(f => f.dataType == BinaryType && !f.nullable) &&
-      fieldsByName.get(HoodieSchema.Variant.VARIANT_VALUE_FIELD).exists(f => f.dataType == BinaryType && !f.nullable)
+      fieldsByName.get(key(HoodieSchema.Variant.VARIANT_METADATA_FIELD)).exists(f => f.dataType == BinaryType && !f.nullable) &&
+      fieldsByName.get(key(HoodieSchema.Variant.VARIANT_VALUE_FIELD)).exists(f => f.dataType == BinaryType && !f.nullable)
     if (!ok) {
       throw new IllegalArgumentException(
         s"""Invalid variant schema structure. Expected schema:

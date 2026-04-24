@@ -346,24 +346,26 @@ class TestSchemaConverters extends SparkAdapterSupport {
 
   /**
    * Validates the content of the blob fields to ensure the fields match our expectations.
+   *
+   * BLOB is projected as nullable-everywhere at the Spark type layer (see the BLOB case in
+   * HoodieSparkSchemaConverters.toSqlType). RFC-100 non-null invariants are enforced at the
+   * physical-schema write boundary via HoodieSchema.Blob#createBlob, not here.
+   *
    * @param dataType the StructType containing the blob fields to validate
    */
   private def validateBlobFields(dataType: StructType): Unit = {
-    // storage_type is a non-null string field
     val storageTypeField = dataType.fields.find(_.name == HoodieSchema.Blob.TYPE).get
     assertEquals(DataTypes.StringType, storageTypeField.dataType)
-    assertFalse(storageTypeField.nullable)
-    // data is a nullable binary field
+    assertTrue(storageTypeField.nullable)
     val dataField = dataType.fields.find(_.name == HoodieSchema.Blob.INLINE_DATA_FIELD).get
     assertEquals(DataTypes.BinaryType, dataField.dataType)
     assertTrue(dataField.nullable)
-    // reference is a nullable struct field
     val referenceField = dataType.fields.find(_.name == HoodieSchema.Blob.EXTERNAL_REFERENCE).get
     assertEquals(new StructType(Array[StructField](
-      StructField(HoodieSchema.Blob.EXTERNAL_REFERENCE_PATH, DataTypes.StringType, nullable = false),
+      StructField(HoodieSchema.Blob.EXTERNAL_REFERENCE_PATH, DataTypes.StringType, nullable = true),
       StructField(HoodieSchema.Blob.EXTERNAL_REFERENCE_OFFSET, DataTypes.LongType, nullable = true),
       StructField(HoodieSchema.Blob.EXTERNAL_REFERENCE_LENGTH, DataTypes.LongType, nullable = true),
-      StructField(HoodieSchema.Blob.EXTERNAL_REFERENCE_IS_MANAGED, DataTypes.BooleanType, nullable = false)
+      StructField(HoodieSchema.Blob.EXTERNAL_REFERENCE_IS_MANAGED, DataTypes.BooleanType, nullable = true)
     )), referenceField.dataType)
     assertTrue(referenceField.nullable)
   }

@@ -111,10 +111,11 @@ object InsertIntoHoodieTableCommand extends Logging with ProvidesHoodieConfig wi
     }
     val config = buildHoodieInsertConfig(catalogTable, sparkSession, isOverWritePartition, isOverWriteTable, partitionSpec, extraOptions, staticOverwritePartitionPathOpt)
 
-    val enrichedSchema = HoodieSchemaConversionUtils.reattachCustomTypeMetadata(
+    val enrichedSchema = HoodieSchemaConversionUtils.alignSchemaWithCatalog(
       query.schema,
       catalogTable.tableSchemaWithoutMetaFields,
-      sparkSession.sessionState.conf.caseSensitiveAnalysis)
+      sparkSession.sessionState.conf.caseSensitiveAnalysis,
+      alignNullability = true)
     val df = sparkSession.internalCreateDataFrame(query.execute(), enrichedSchema)
     val (structName, namespace) = HoodieSchemaConversionUtils.getRecordNameAndNamespace(catalogTable.tableName)
     val schema = convertStructTypeToHoodieSchema(catalogTable.tableSchema, structName, namespace)

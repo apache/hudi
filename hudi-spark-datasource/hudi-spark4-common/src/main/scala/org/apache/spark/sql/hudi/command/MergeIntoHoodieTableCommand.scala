@@ -409,10 +409,11 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
   private def executeUpsert(sourceDF: DataFrame, parameters: Map[String, String]): Unit = {
     // Source data doesn't carry custom Hudi logical-type metadata (hudi_type, e.g. VECTOR/BLOB);
     // restore it from the catalog schema so downstream Avro conversion emits the right branch.
-    val enrichedSourceSchema = HoodieSchemaConversionUtils.reattachCustomTypeMetadata(
+    val enrichedSourceSchema = HoodieSchemaConversionUtils.alignSchemaWithCatalog(
       sourceDF.schema,
       hoodieCatalogTable.tableSchemaWithoutMetaFields,
-      sparkSession.sessionState.conf.caseSensitiveAnalysis)
+      sparkSession.sessionState.conf.caseSensitiveAnalysis,
+      alignNullability = false)
     val enrichedSourceDF = sparkAdapter.getUnsafeUtils.createDataFrameFromRDD(
       sparkSession, sourceDF.queryExecution.toRdd, enrichedSourceSchema)
 

@@ -839,6 +839,143 @@ class TestHoodieSchemaConversionUtils extends FunSuite with Matchers {
     assert(parsedVector.getVectorElementType == HoodieSchema.Vector.VectorElementType.FLOAT)
   }
 
+  test("alignSchemaWithCatalog narrows nullability when alignNullability = true") {
+    val sourceSchema = new StructType()
+      .add("id", LongType, nullable = true)
+      .add("payload", new StructType()
+        .add("inner", StringType, nullable = true), nullable = true)
+      .add("items", ArrayType(new StructType()
+        .add("x", IntegerType, nullable = true), containsNull = true), nullable = true)
+      .add("lookup", MapType(StringType, new StructType()
+        .add("y", IntegerType, nullable = true), valueContainsNull = true), nullable = true)
+
+    val targetSchema = new StructType()
+      .add("id", LongType, nullable = false)
+      .add("payload", new StructType()
+        .add("inner", StringType, nullable = false), nullable = false)
+      .add("items", ArrayType(new StructType()
+        .add("x", IntegerType, nullable = false), containsNull = false), nullable = false)
+      .add("lookup", MapType(StringType, new StructType()
+        .add("y", IntegerType, nullable = false), valueContainsNull = false), nullable = false)
+
+    val aligned = HoodieSchemaConversionUtils.alignSchemaWithCatalog(
+      sourceSchema, targetSchema, caseSensitive = false, alignNullability = true)
+
+    assert(!aligned("id").nullable)
+    assert(!aligned("payload").nullable)
+    assert(!aligned("payload").dataType.asInstanceOf[StructType]("inner").nullable)
+    val itemsArray = aligned("items").dataType.asInstanceOf[ArrayType]
+    assert(!aligned("items").nullable && !itemsArray.containsNull)
+    assert(!itemsArray.elementType.asInstanceOf[StructType]("x").nullable)
+    val lookupMap = aligned("lookup").dataType.asInstanceOf[MapType]
+    assert(!aligned("lookup").nullable && !lookupMap.valueContainsNull)
+    assert(!lookupMap.valueType.asInstanceOf[StructType]("y").nullable)
+  }
+
+  test("alignSchemaWithCatalog preserves source nullability when alignNullability = false") {
+    val sourceSchema = new StructType()
+      .add("id", LongType, nullable = true)
+      .add("payload", new StructType()
+        .add("inner", StringType, nullable = true), nullable = true)
+      .add("items", ArrayType(new StructType()
+        .add("x", IntegerType, nullable = true), containsNull = true), nullable = true)
+      .add("lookup", MapType(StringType, new StructType()
+        .add("y", IntegerType, nullable = true), valueContainsNull = true), nullable = true)
+
+    val targetSchema = new StructType()
+      .add("id", LongType, nullable = false)
+      .add("payload", new StructType()
+        .add("inner", StringType, nullable = false), nullable = false)
+      .add("items", ArrayType(new StructType()
+        .add("x", IntegerType, nullable = false), containsNull = false), nullable = false)
+      .add("lookup", MapType(StringType, new StructType()
+        .add("y", IntegerType, nullable = false), valueContainsNull = false), nullable = false)
+
+    val aligned = HoodieSchemaConversionUtils.alignSchemaWithCatalog(
+      sourceSchema, targetSchema, caseSensitive = false, alignNullability = false)
+
+    assert(aligned("id").nullable)
+    assert(aligned("payload").nullable)
+    assert(aligned("payload").dataType.asInstanceOf[StructType]("inner").nullable)
+    val itemsArray = aligned("items").dataType.asInstanceOf[ArrayType]
+    assert(aligned("items").nullable && itemsArray.containsNull)
+    assert(itemsArray.elementType.asInstanceOf[StructType]("x").nullable)
+    val lookupMap = aligned("lookup").dataType.asInstanceOf[MapType]
+    assert(aligned("lookup").nullable && lookupMap.valueContainsNull)
+    assert(lookupMap.valueType.asInstanceOf[StructType]("y").nullable)
+  }
+
+  test("alignSchemaWithCatalog reattaches custom-type metadata regardless of alignNullability") {
+    val vectorMetadata = new MetadataBuilder()
+      .putString(HoodieSchema.TYPE_METADATA_FIELD, "VECTOR(4, FLOAT)")
+      .build()
+    val sourceSchema = new StructType()
+      .add("embedding", ArrayType(FloatType, containsNull = false), nullable = true)
+    val targetSchema = new StructType()
+      .add("embedding", ArrayType(FloatType, containsNull = false), nullable = false, vectorMetadata)
+
+    Seq(true, false).foreach { flag =>
+      val aligned = HoodieSchemaConversionUtils.alignSchemaWithCatalog(
+        sourceSchema, targetSchema, caseSensitive = false, alignNullability = flag)
+      assert(aligned("embedding").metadata.contains(HoodieSchema.TYPE_METADATA_FIELD),
+        s"metadata missing when alignNullability=$flag")
+      assertEquals("VECTOR(4, FLOAT)",
+        aligned("embedding").metadata.getString(HoodieSchema.TYPE_METADATA_FIELD))
+    }
+  }
+
+  test("BLOB structure validator accepts mixed-case field names under case-insensitive analysis") {
+    // Matches RFC-100 BLOB layout (type, data, reference) but with mixed-case field names.
+    // Under Spark's default case-insensitive analysis, this should validate successfully.
+    val referenceStruct = new StructType()
+      .add("External_Path", StringType, nullable = true)
+      .add("OFFSET", LongType, nullable = true)
+      .add("Length", LongType, nullable = true)
+      .add("managed", BooleanType, nullable = true)
+    val mixedCaseBlob = new StructType()
+      .add("TYPE", StringType, nullable = true)
+      .add("Data", BinaryType, nullable = true)
+      .add("REFERENCE", referenceStruct, nullable = true)
+    val blobMetadata = new MetadataBuilder()
+      .putString(HoodieSchema.TYPE_METADATA_FIELD, HoodieSchema.Blob.TYPE_DESCRIPTOR)
+      .build()
+    val outerStruct = new StructType()
+      .add("id", LongType, nullable = false)
+      .add("payload", mixedCaseBlob, nullable = true, blobMetadata)
+
+    val hoodieSchema = HoodieSchemaConversionUtils.convertStructTypeToHoodieSchema(
+      outerStruct, "MixedCaseBlobTest", "test")
+    val payload = hoodieSchema.getField("payload").get().schema().getNonNullType
+    assertEquals(HoodieSchemaType.BLOB, payload.getType)
+  }
+
+  test("BLOB structure validator rejects wrong field ordering even under case-insensitive analysis") {
+    // Correct field names but reversed ordering - matchesStructure is positional and must reject.
+    val referenceStruct = new StructType()
+      .add("external_path", StringType, nullable = true)
+      .add("offset", LongType, nullable = true)
+      .add("length", LongType, nullable = true)
+      .add("managed", BooleanType, nullable = true)
+    val wrongOrderBlob = new StructType()
+      .add("reference", referenceStruct, nullable = true)
+      .add("data", BinaryType, nullable = true)
+      .add("type", StringType, nullable = true)
+    val blobMetadata = new MetadataBuilder()
+      .putString(HoodieSchema.TYPE_METADATA_FIELD, HoodieSchema.Blob.TYPE_DESCRIPTOR)
+      .build()
+    val outerStruct = new StructType()
+      .add("id", LongType, nullable = false)
+      .add("payload", wrongOrderBlob, nullable = true, blobMetadata)
+
+    val ex = intercept[Exception] {
+      HoodieSchemaConversionUtils.convertStructTypeToHoodieSchema(
+        outerStruct, "WrongOrderBlobTest", "test")
+    }
+    assert(ex.getMessage.contains("Invalid blob schema structure") ||
+      (ex.getCause != null && ex.getCause.getMessage.contains("Invalid blob schema structure")),
+      s"unexpected exception: ${ex.getMessage}")
+  }
+
   test("test VECTOR element type mismatch throws error") {
     // Metadata says DOUBLE, but Spark array element type is Float
     val mismatchMetadata = new MetadataBuilder()
