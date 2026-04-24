@@ -533,6 +533,38 @@
 
   <profiles>
     <profile>
+      <id>integration-tests</id>
+      <!--
+        Tests under org.apache.hudi.integ2.** are testcontainers-based and manage
+        their own docker stack. The legacy `integration-tests` CI stage brings up
+        its own docker-compose demo in the same job, which collides on host ports
+        (e.g. zookeeper 2181). Exclude the integ2 package here so only the
+        dedicated `integration-tests-hive-sync` stage runs them (via -Dit.test=).
+      -->
+      <build>
+        <plugins>
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-failsafe-plugin</artifactId>
+            <configuration combine.self="override">
+              <skip>${skipITs}</skip>
+              <includes>
+                <include>**/IT*.java</include>
+              </includes>
+              <excludes>
+                <exclude>**/integ2/**</exclude>
+              </excludes>
+              <systemPropertyVariables>
+                <dynamodb-local.endpoint>${dynamodb-local.endpoint}</dynamodb-local.endpoint>
+                <log4j.configurationFile>${surefire-log4j.file}</log4j.configurationFile>
+              </systemPropertyVariables>
+              <useSystemClassLoader>false</useSystemClassLoader>
+            </configuration>
+          </plugin>
+        </plugins>
+      </build>
+    </profile>
+    <profile>
       <id>m1-mac</id>
       <properties>
         <dockerCompose.file>

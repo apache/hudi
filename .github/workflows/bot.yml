@@ -1309,8 +1309,11 @@ jobs:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
           COMPOSE_PREFIX: ${{ matrix.composePrefix }}
         run: |
+          # -DskipITs=false overrides the spark4.0 profile's skipITs=true default
+          # (see root pom.xml). Without it, failsafe skips all ITs on the spark4.0 matrix row.
           mvn verify $SCALA_PROFILE -D"$SPARK_PROFILE" -Pintegration-tests \
             -pl hudi-integ-test \
+            -DskipITs=false \
             -Ddocker.compose.skip=true \
             -Dit.test=ITTestCustomTypeHiveSync \
             -Dspark.docker.compose.prefix=$COMPOSE_PREFIX \
