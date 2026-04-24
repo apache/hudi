@@ -329,9 +329,11 @@ public abstract class BaseSparkCommitActionExecutor<T> extends
   protected void setCommitMetadata(HoodieWriteMetadata<HoodieData<WriteStatus>> result) {
     List<HoodieWriteStat> writeStats = result.getWriteStatuses().map(WriteStatus::getStat).collectAsList();
     result.setWriteStats(writeStats);
+    // Merge engine-specific metadata (e.g., spark_application_id) with extra metadata
+    Option<Map<String, String>> mergedMetadata = CommitUtils.mergeEngineMetadata(extraMetadata, context.getEngineCommitMetadata());
     result.setCommitMetadata(Option.of(CommitUtils.buildMetadata(writeStats,
         result.getPartitionToReplaceFileIds(),
-        extraMetadata, operationType, getSchemaToStoreInCommit(), getCommitActionType())));
+        mergedMetadata, operationType, getSchemaToStoreInCommit(), getCommitActionType())));
   }
 
   @Override

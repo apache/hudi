@@ -187,6 +187,57 @@ public class TestCommitUtils {
     assertEquals(HoodieActiveTimeline.COMMIT_ACTION, result);
   }
 
+  @Test
+  public void testMergeEngineMetadataWithNullEngineMetadata() {
+    Option<Map<String, String>> extraMetadata = Option.of(Collections.singletonMap("key1", "val1"));
+    Option<Map<String, String>> result = CommitUtils.mergeEngineMetadata(extraMetadata, null);
+    assertEquals(extraMetadata, result);
+  }
+
+  @Test
+  public void testMergeEngineMetadataWithEmptyEngineMetadata() {
+    Option<Map<String, String>> extraMetadata = Option.of(Collections.singletonMap("key1", "val1"));
+    Option<Map<String, String>> result = CommitUtils.mergeEngineMetadata(extraMetadata, Collections.emptyMap());
+    assertEquals(extraMetadata, result);
+  }
+
+  @Test
+  public void testMergeEngineMetadataWithExistingExtraMetadata() {
+    Map<String, String> extra = new HashMap<>();
+    extra.put("key1", "val1");
+    Map<String, String> engine = new HashMap<>();
+    engine.put("spark_application_id", "app-123");
+
+    Option<Map<String, String>> result = CommitUtils.mergeEngineMetadata(Option.of(extra), engine);
+    assertTrue(result.isPresent());
+    assertEquals("val1", result.get().get("key1"));
+    assertEquals("app-123", result.get().get("spark_application_id"));
+    assertEquals(2, result.get().size());
+  }
+
+  @Test
+  public void testMergeEngineMetadataWithEmptyExtraMetadata() {
+    Map<String, String> engine = new HashMap<>();
+    engine.put("spark_application_id", "app-123");
+
+    Option<Map<String, String>> result = CommitUtils.mergeEngineMetadata(Option.empty(), engine);
+    assertTrue(result.isPresent());
+    assertEquals("app-123", result.get().get("spark_application_id"));
+    assertEquals(1, result.get().size());
+  }
+
+  @Test
+  public void testMergeEngineMetadataOverwritesExistingKeys() {
+    Map<String, String> extra = new HashMap<>();
+    extra.put("spark_application_id", "old-app");
+    Map<String, String> engine = new HashMap<>();
+    engine.put("spark_application_id", "new-app");
+
+    Option<Map<String, String>> result = CommitUtils.mergeEngineMetadata(Option.of(extra), engine);
+    assertTrue(result.isPresent());
+    assertEquals("new-app", result.get().get("spark_application_id"));
+  }
+
   private HoodieWriteStat createWriteStat(String partition, String fileId) {
     HoodieWriteStat writeStat1 = new HoodieWriteStat();
     writeStat1.setPartitionPath(partition);
