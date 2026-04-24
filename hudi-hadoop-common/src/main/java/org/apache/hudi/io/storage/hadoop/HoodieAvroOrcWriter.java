@@ -76,11 +76,6 @@ public class HoodieAvroOrcWriter implements HoodieAvroFileWriter, Closeable {
   private String maxRecordKey;
 
   public HoodieAvroOrcWriter(String instantTime, StoragePath file, HoodieOrcConfig config, HoodieSchema schema,
-                             TaskContextSupplier taskContextSupplier) throws IOException {
-    this(instantTime, file, config, schema, taskContextSupplier, HoodieMetaFieldFlags.allPopulated());
-  }
-
-  public HoodieAvroOrcWriter(String instantTime, StoragePath file, HoodieOrcConfig config, HoodieSchema schema,
                              TaskContextSupplier taskContextSupplier, HoodieMetaFieldFlags metaFieldPopulationFlags) throws IOException {
 
     Configuration conf = HadoopFSUtils.registerFileSystem(file, config.getStorageConf().unwrapAs(Configuration.class));

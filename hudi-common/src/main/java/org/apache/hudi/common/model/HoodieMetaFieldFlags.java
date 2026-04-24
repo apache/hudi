@@ -18,7 +18,11 @@
 
 package org.apache.hudi.common.model;
 
+import org.apache.hudi.common.config.HoodieConfig;
+import org.apache.hudi.common.table.HoodieTableConfig;
+
 import java.io.Serializable;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
@@ -85,6 +89,31 @@ public class HoodieMetaFieldFlags implements Serializable {
         !excluded.contains(metaColumns.get(3)),
         !excluded.contains(metaColumns.get(4))
     );
+  }
+
+  /**
+   * Resolves the flags from a {@link HoodieConfig} (typically the merged write
+   * config or the table config). Reads {@link HoodieTableConfig#POPULATE_META_FIELDS}
+   * and {@link HoodieTableConfig#META_FIELDS_EXCLUDE_LIST}; the exclusion list is
+   * a comma-separated list of meta-field names with whitespace tolerated.
+   */
+  public static HoodieMetaFieldFlags fromConfig(HoodieConfig config) {
+    boolean populateMetaFields = config.getBooleanOrDefault(HoodieTableConfig.POPULATE_META_FIELDS);
+    if (!populateMetaFields) {
+      return NONE_POPULATED;
+    }
+    String value = config.getString(HoodieTableConfig.META_FIELDS_EXCLUDE_LIST);
+    if (value == null || value.trim().isEmpty()) {
+      return ALL_POPULATED;
+    }
+    Set<String> excluded = new HashSet<>();
+    for (String field : value.split(",")) {
+      String trimmed = field.trim();
+      if (!trimmed.isEmpty()) {
+        excluded.add(trimmed);
+      }
+    }
+    return fromExcludedFields(excluded);
   }
 
   public boolean isInstantTimePopulated() {

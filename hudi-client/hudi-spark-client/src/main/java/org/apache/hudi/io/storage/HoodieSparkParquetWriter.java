@@ -55,14 +55,6 @@ public class HoodieSparkParquetWriter extends HoodieBaseParquetWriter<InternalRo
                                   HoodieRowParquetConfig parquetConfig,
                                   String instantTime,
                                   TaskContextSupplier taskContextSupplier,
-                                  boolean populateMetaFields) throws IOException {
-    this(file, parquetConfig, instantTime, taskContextSupplier, populateMetaFields, HoodieMetaFieldFlags.allPopulated());
-  }
-
-  public HoodieSparkParquetWriter(StoragePath file,
-                                  HoodieRowParquetConfig parquetConfig,
-                                  String instantTime,
-                                  TaskContextSupplier taskContextSupplier,
                                   boolean populateMetaFields,
                                   HoodieMetaFieldFlags metaFieldPopulationFlags) throws IOException {
     super(file, parquetConfig);

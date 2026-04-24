@@ -1235,21 +1235,7 @@ public class HoodieTableConfig extends HoodieConfig {
    * meta-field availability across commits.
    */
   public HoodieMetaFieldFlags getMetaFieldPopulationFlags() {
-    if (!populateMetaFields()) {
-      return HoodieMetaFieldFlags.nonePopulated();
-    }
-    String value = getString(META_FIELDS_EXCLUDE_LIST);
-    if (value == null || value.trim().isEmpty()) {
-      return HoodieMetaFieldFlags.allPopulated();
-    }
-    Set<String> excluded = new HashSet<>();
-    for (String field : value.split(",")) {
-      String trimmed = field.trim();
-      if (!trimmed.isEmpty()) {
-        excluded.add(trimmed);
-      }
-    }
-    return HoodieMetaFieldFlags.fromExcludedFields(excluded);
+    return HoodieMetaFieldFlags.fromConfig(this);
   }
 
   /**

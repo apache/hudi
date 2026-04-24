@@ -277,7 +277,8 @@ public class TestSparkBinaryCopyClusteringAndValidationMeta extends HoodieClient
             true);
 
     HoodieAvroParquetWriter writer =
-        new HoodieAvroParquetWriter(filePath, parquetConfig, "001", new LocalTaskContextSupplier(), true);
+        new HoodieAvroParquetWriter(filePath, parquetConfig, "001", new LocalTaskContextSupplier(), true,
+            org.apache.hudi.common.model.HoodieMetaFieldFlags.allPopulated());
     writer.close();
     return filePath.toString();
   }

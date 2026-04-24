@@ -75,7 +75,8 @@ public class TestHoodieAvroParquetWriter {
     StoragePath filePath = new StoragePath(tmpDir.resolve("test.parquet").toAbsolutePath().toString());
 
     try (HoodieAvroParquetWriter writer =
-             new HoodieAvroParquetWriter(filePath, parquetConfig, "001", new LocalTaskContextSupplier(), true)) {
+             new HoodieAvroParquetWriter(filePath, parquetConfig, "001", new LocalTaskContextSupplier(), true,
+                 org.apache.hudi.common.model.HoodieMetaFieldFlags.allPopulated())) {
       for (GenericRecord record : records) {
         writer.writeAvro((String) record.get("_row_key"), record);
       }

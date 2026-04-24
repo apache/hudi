@@ -74,7 +74,8 @@ public class TestHoodieOrcReaderWriter extends TestHoodieReaderWriterBase {
     when(mockTaskContextSupplier.getPartitionIdSupplier()).thenReturn(partitionSupplier);
     when(partitionSupplier.get()).thenReturn(10);
     String instantTime = "000";
-    return new HoodieAvroOrcWriter(instantTime, getFilePath(), config, schema, mockTaskContextSupplier);
+    return new HoodieAvroOrcWriter(instantTime, getFilePath(), config, schema, mockTaskContextSupplier,
+        org.apache.hudi.common.model.HoodieMetaFieldFlags.allPopulated());
   }
 
   @Override

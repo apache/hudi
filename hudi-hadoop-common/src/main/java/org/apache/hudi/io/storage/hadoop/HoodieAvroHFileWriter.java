@@ -83,11 +83,6 @@ public class HoodieAvroHFileWriter
   private String prevRecordKey;
 
   public HoodieAvroHFileWriter(String instantTime, StoragePath file, HoodieHFileConfig hfileConfig, HoodieSchema schema,
-                               TaskContextSupplier taskContextSupplier, boolean populateMetaFields) throws IOException {
-    this(instantTime, file, hfileConfig, schema, taskContextSupplier, populateMetaFields, HoodieMetaFieldFlags.allPopulated());
-  }
-
-  public HoodieAvroHFileWriter(String instantTime, StoragePath file, HoodieHFileConfig hfileConfig, HoodieSchema schema,
                                TaskContextSupplier taskContextSupplier, boolean populateMetaFields,
                                HoodieMetaFieldFlags metaFieldPopulationFlags) throws IOException {
     Configuration conf = HadoopFSUtils.registerFileSystem(file, (Configuration) hfileConfig.getStorageConf().unwrap());

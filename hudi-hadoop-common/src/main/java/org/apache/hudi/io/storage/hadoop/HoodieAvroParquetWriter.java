@@ -57,15 +57,6 @@ public class HoodieAvroParquetWriter
                                  HoodieParquetConfig<HoodieAvroWriteSupport> parquetConfig,
                                  String instantTime,
                                  TaskContextSupplier taskContextSupplier,
-                                 boolean populateMetaFields) throws IOException {
-    this(file, parquetConfig, instantTime, taskContextSupplier, populateMetaFields, HoodieMetaFieldFlags.allPopulated());
-  }
-
-  @SuppressWarnings({"unchecked", "rawtypes"})
-  public HoodieAvroParquetWriter(StoragePath file,
-                                 HoodieParquetConfig<HoodieAvroWriteSupport> parquetConfig,
-                                 String instantTime,
-                                 TaskContextSupplier taskContextSupplier,
                                  boolean populateMetaFields,
                                  HoodieMetaFieldFlags metaFieldPopulationFlags) throws IOException {
     super(file, (HoodieParquetConfig) parquetConfig);
