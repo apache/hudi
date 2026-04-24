@@ -23,7 +23,7 @@ import org.apache.hudi.avro.HoodieAvroWriteSupport;
 import org.apache.hudi.common.config.HoodieParquetConfig;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.HoodieKey;
-import org.apache.hudi.common.model.MetadataFieldsPopulation;
+import org.apache.hudi.common.model.HoodieMetaFieldFlags;
 import org.apache.hudi.io.hadoop.HoodieBaseParquetWriter;
 import org.apache.hudi.io.storage.HoodieAvroFileWriter;
 import org.apache.hudi.storage.StoragePath;
@@ -49,7 +49,7 @@ public class HoodieAvroParquetWriter
   private final String instantTime;
   private final TaskContextSupplier taskContextSupplier;
   private final boolean populateMetaFields;
-  private final MetadataFieldsPopulation metaFieldPopulationFlags;
+  private final HoodieMetaFieldFlags metaFieldPopulationFlags;
   private final HoodieAvroWriteSupport writeSupport;
 
   @SuppressWarnings({"unchecked", "rawtypes"})
@@ -58,7 +58,7 @@ public class HoodieAvroParquetWriter
                                  String instantTime,
                                  TaskContextSupplier taskContextSupplier,
                                  boolean populateMetaFields) throws IOException {
-    this(file, parquetConfig, instantTime, taskContextSupplier, populateMetaFields, MetadataFieldsPopulation.allPopulated());
+    this(file, parquetConfig, instantTime, taskContextSupplier, populateMetaFields, HoodieMetaFieldFlags.allPopulated());
   }
 
   @SuppressWarnings({"unchecked", "rawtypes"})
@@ -67,7 +67,7 @@ public class HoodieAvroParquetWriter
                                  String instantTime,
                                  TaskContextSupplier taskContextSupplier,
                                  boolean populateMetaFields,
-                                 MetadataFieldsPopulation metaFieldPopulationFlags) throws IOException {
+                                 HoodieMetaFieldFlags metaFieldPopulationFlags) throws IOException {
     super(file, (HoodieParquetConfig) parquetConfig);
     this.fileName = file.getName();
     this.writeSupport = parquetConfig.getWriteSupport();

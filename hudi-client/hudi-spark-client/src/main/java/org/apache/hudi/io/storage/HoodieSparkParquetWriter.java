@@ -21,7 +21,7 @@ package org.apache.hudi.io.storage;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.MetadataFieldsPopulation;
+import org.apache.hudi.common.model.HoodieMetaFieldFlags;
 import org.apache.hudi.io.hadoop.HoodieBaseParquetWriter;
 import org.apache.hudi.io.storage.row.HoodieRowParquetConfig;
 import org.apache.hudi.io.storage.row.HoodieRowParquetWriteSupport;
@@ -45,7 +45,7 @@ public class HoodieSparkParquetWriter extends HoodieBaseParquetWriter<InternalRo
   private final UTF8String instantTime;
 
   private final boolean populateMetaFields;
-  private final MetadataFieldsPopulation metaFieldPopulationFlags;
+  private final HoodieMetaFieldFlags metaFieldPopulationFlags;
 
   private final HoodieRowParquetWriteSupport writeSupport;
 
@@ -56,7 +56,7 @@ public class HoodieSparkParquetWriter extends HoodieBaseParquetWriter<InternalRo
                                   String instantTime,
                                   TaskContextSupplier taskContextSupplier,
                                   boolean populateMetaFields) throws IOException {
-    this(file, parquetConfig, instantTime, taskContextSupplier, populateMetaFields, MetadataFieldsPopulation.allPopulated());
+    this(file, parquetConfig, instantTime, taskContextSupplier, populateMetaFields, HoodieMetaFieldFlags.allPopulated());
   }
 
   public HoodieSparkParquetWriter(StoragePath file,
@@ -64,7 +64,7 @@ public class HoodieSparkParquetWriter extends HoodieBaseParquetWriter<InternalRo
                                   String instantTime,
                                   TaskContextSupplier taskContextSupplier,
                                   boolean populateMetaFields,
-                                  MetadataFieldsPopulation metaFieldPopulationFlags) throws IOException {
+                                  HoodieMetaFieldFlags metaFieldPopulationFlags) throws IOException {
     super(file, parquetConfig);
     this.writeSupport = parquetConfig.getWriteSupport();
     this.fileName = UTF8String.fromString(file.getName());

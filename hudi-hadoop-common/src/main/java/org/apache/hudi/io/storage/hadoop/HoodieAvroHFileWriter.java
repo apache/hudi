@@ -23,7 +23,7 @@ import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.HoodieKey;
-import org.apache.hudi.common.model.MetadataFieldsPopulation;
+import org.apache.hudi.common.model.HoodieMetaFieldFlags;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.util.Option;
@@ -75,7 +75,7 @@ public class HoodieAvroHFileWriter
   private final String instantTime;
   private final TaskContextSupplier taskContextSupplier;
   private final boolean populateMetaFields;
-  private final MetadataFieldsPopulation metaFieldPopulationFlags;
+  private final HoodieMetaFieldFlags metaFieldPopulationFlags;
   private final Option<HoodieSchemaField> keyFieldSchema;
   private HFileWriter writer;
   private String minRecordKey;
@@ -84,12 +84,12 @@ public class HoodieAvroHFileWriter
 
   public HoodieAvroHFileWriter(String instantTime, StoragePath file, HoodieHFileConfig hfileConfig, HoodieSchema schema,
                                TaskContextSupplier taskContextSupplier, boolean populateMetaFields) throws IOException {
-    this(instantTime, file, hfileConfig, schema, taskContextSupplier, populateMetaFields, MetadataFieldsPopulation.allPopulated());
+    this(instantTime, file, hfileConfig, schema, taskContextSupplier, populateMetaFields, HoodieMetaFieldFlags.allPopulated());
   }
 
   public HoodieAvroHFileWriter(String instantTime, StoragePath file, HoodieHFileConfig hfileConfig, HoodieSchema schema,
                                TaskContextSupplier taskContextSupplier, boolean populateMetaFields,
-                               MetadataFieldsPopulation metaFieldPopulationFlags) throws IOException {
+                               HoodieMetaFieldFlags metaFieldPopulationFlags) throws IOException {
     Configuration conf = HadoopFSUtils.registerFileSystem(file, (Configuration) hfileConfig.getStorageConf().unwrap());
     this.file = HoodieWrapperFileSystem.convertToHoodiePath(file, conf);
     FileSystem fs = this.file.getFileSystem(conf);

@@ -28,7 +28,7 @@ import org.apache.hudi.common.model.HoodieRecordDelegate;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.IOType;
-import org.apache.hudi.common.model.MetadataFieldsPopulation;
+import org.apache.hudi.common.model.HoodieMetaFieldFlags;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
@@ -68,7 +68,7 @@ public class HoodieRowCreateHandle implements Serializable {
   private final String fileId;
 
   private final boolean populateMetaFields;
-  private final MetadataFieldsPopulation metaFieldPopulationFlags;
+  private final HoodieMetaFieldFlags metaFieldPopulationFlags;
 
   private final UTF8String fileName;
   private final UTF8String commitTime;

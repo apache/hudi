@@ -24,7 +24,7 @@ import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.bloom.HoodieDynamicBoundedBloomFilter;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.HoodieKey;
-import org.apache.hudi.common.model.MetadataFieldsPopulation;
+import org.apache.hudi.common.model.HoodieMetaFieldFlags;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.util.AvroOrcUtils;
@@ -71,17 +71,17 @@ public class HoodieAvroOrcWriter implements HoodieAvroFileWriter, Closeable {
   private final TaskContextSupplier taskContextSupplier;
 
   private final HoodieOrcConfig orcConfig;
-  private final MetadataFieldsPopulation metaFieldPopulationFlags;
+  private final HoodieMetaFieldFlags metaFieldPopulationFlags;
   private String minRecordKey;
   private String maxRecordKey;
 
   public HoodieAvroOrcWriter(String instantTime, StoragePath file, HoodieOrcConfig config, HoodieSchema schema,
                              TaskContextSupplier taskContextSupplier) throws IOException {
-    this(instantTime, file, config, schema, taskContextSupplier, MetadataFieldsPopulation.allPopulated());
+    this(instantTime, file, config, schema, taskContextSupplier, HoodieMetaFieldFlags.allPopulated());
   }
 
   public HoodieAvroOrcWriter(String instantTime, StoragePath file, HoodieOrcConfig config, HoodieSchema schema,
-                             TaskContextSupplier taskContextSupplier, MetadataFieldsPopulation metaFieldPopulationFlags) throws IOException {
+                             TaskContextSupplier taskContextSupplier, HoodieMetaFieldFlags metaFieldPopulationFlags) throws IOException {
 
     Configuration conf = HadoopFSUtils.registerFileSystem(file, config.getStorageConf().unwrapAs(Configuration.class));
     this.file = HoodieWrapperFileSystem.convertToHoodiePath(file, conf);

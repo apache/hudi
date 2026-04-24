@@ -21,7 +21,7 @@ package org.apache.hudi.io.storage;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.model.MetadataFieldsPopulation;
+import org.apache.hudi.common.model.HoodieMetaFieldFlags;
 
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
@@ -59,12 +59,12 @@ public interface HoodieAvroFileWriter extends HoodieFileWriter {
   }
 
   /**
-   * Selectively populates meta fields based on the provided {@link MetadataFieldsPopulation} flags.
+   * Selectively populates meta fields based on the provided {@link HoodieMetaFieldFlags} flags.
    * Fields that are not populated are explicitly set to null so that any pre-existing values on
    * {@code avroRecord} are cleared and the on-disk output is deterministic.
    */
   default void prepRecordWithMetadata(HoodieKey key, IndexedRecord avroRecord, String instantTime,
-      Integer partitionId, long recordIndex, String fileName, MetadataFieldsPopulation populateFlags) {
+      Integer partitionId, long recordIndex, String fileName, HoodieMetaFieldFlags populateFlags) {
     GenericRecord rec = (GenericRecord) avroRecord;
     rec.put(HoodieRecord.COMMIT_TIME_METADATA_FIELD,
         populateFlags.isInstantTimePopulated() ? instantTime : null);
