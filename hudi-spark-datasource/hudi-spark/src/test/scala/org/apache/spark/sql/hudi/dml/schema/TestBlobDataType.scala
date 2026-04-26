@@ -517,4 +517,112 @@ class TestBlobDataType extends HoodieSparkSqlTestBase {
         "Expected at least one .clean instant on the timeline after compaction")
     })
   }
+
+  /**
+   * INLINE BLOB column accepts the minimal `named_struct('type','INLINE','data', X'..')`
+   * literal at INSERT time, no `reference` field required. The writer pads the missing
+   * `reference` with null. Both the canonical 3-field literal and the minimal 2-field
+   * literal coexist in the same table.
+   */
+  test("Test Inline BLOB SQL insert accepts minimal named_struct") {
+    withRecordType()(withTempDir { tmp =>
+      val tablePath = new File(tmp, "hudi").getCanonicalPath
+      val tableName = generateTableName
+      spark.sql(
+        s"""
+           |create table $tableName (
+           |  id int,
+           |  data blob,
+           |  ts long
+           |) using hudi
+           | location '$tablePath'
+           | tblproperties (
+           |  primaryKey = 'id',
+           |  type = 'cow',
+           |  preCombineField = 'ts',
+           |  hoodie.index.type = 'INMEMORY'
+           | )
+       """.stripMargin)
+
+      val minimalLiteral =
+        """named_struct(
+          |  'type', 'INLINE',
+          |  'data', cast(X'AB' as binary)
+          |)""".stripMargin
+
+      // Minimal 2-field named_struct now writes successfully.
+      spark.sql(s"insert into $tableName values (1, $minimalLiteral, 1000)")
+      // Canonical 3-field literal still writes successfully.
+      spark.sql(s"insert into $tableName values (2, ${inlineBlobLiteral("CD")}, 1000)")
+
+      val bytesById = spark.sql(s"select id, read_blob(data) as bytes from $tableName order by id")
+        .collect().map(r => r.getInt(0) -> r.getAs[Array[Byte]]("bytes")).toMap
+      assertResult(2)(bytesById.size)
+      assert(bytesById(1).sameElements(Array(0xAB.toByte)))
+      assert(bytesById(2).sameElements(Array(0xCD.toByte)))
+
+      // Confirm structural shape: type=INLINE, data populated, reference null on both rows.
+      spark.sql(s"select id, data from $tableName order by id").collect().foreach { row =>
+        val blob = row.getStruct(1)
+        assertResult("INLINE")(blob.getString(blob.fieldIndex(HoodieSchema.Blob.TYPE)))
+        assert(!blob.isNullAt(blob.fieldIndex(HoodieSchema.Blob.INLINE_DATA_FIELD)))
+        assert(blob.isNullAt(blob.fieldIndex(HoodieSchema.Blob.EXTERNAL_REFERENCE)))
+      }
+    })
+  }
+
+  /**
+   * OUT_OF_LINE BLOB column accepts the minimal `named_struct('type','OUT_OF_LINE',
+   * 'reference', named_struct(...))` literal — no `data` field required. The writer
+   * pads the missing `data` with null.
+   */
+  test("Test OUT_OF_LINE BLOB SQL insert accepts minimal named_struct") {
+    withRecordType()(withTempDir { tmp =>
+      val tablePath = new File(tmp, "hudi").getCanonicalPath
+      val blobDir = new File(tmp, "blobs")
+      blobDir.mkdirs()
+      val file1 = BlobTestHelpers.createTestFile(blobDir.toPath, "min_ool.bin", 100)
+
+      val tableName = generateTableName
+      spark.sql(
+        s"""
+           |create table $tableName (
+           |  id int,
+           |  data blob,
+           |  ts long
+           |) using hudi
+           | location '$tablePath'
+           | tblproperties (
+           |  primaryKey = 'id',
+           |  type = 'cow',
+           |  preCombineField = 'ts',
+           |  hoodie.index.type = 'INMEMORY'
+           | )
+       """.stripMargin)
+
+      val minimalLiteral =
+        s"""named_struct(
+           |  'type', 'OUT_OF_LINE',
+           |  'reference', named_struct(
+           |    'external_path', '$file1',
+           |    'offset', cast(0 as bigint),
+           |    'length', cast(100 as bigint),
+           |    'managed', false
+           |  )
+           |)""".stripMargin
+
+      spark.sql(s"insert into $tableName values (1, $minimalLiteral, 1000)")
+
+      val bytes = spark.sql(s"select id, read_blob(data) as bytes from $tableName")
+        .collect().head.getAs[Array[Byte]]("bytes")
+      assertResult(100)(bytes.length)
+      BlobTestHelpers.assertBytesContent(bytes)
+
+      val blob = spark.sql(s"select data from $tableName").collect().head.getStruct(0)
+      assertResult("OUT_OF_LINE")(blob.getString(blob.fieldIndex(HoodieSchema.Blob.TYPE)))
+      // Padder filled `data` with null.
+      assert(blob.isNullAt(blob.fieldIndex(HoodieSchema.Blob.INLINE_DATA_FIELD)))
+      assert(!blob.isNullAt(blob.fieldIndex(HoodieSchema.Blob.EXTERNAL_REFERENCE)))
+    })
+  }
 }
