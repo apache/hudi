@@ -22,6 +22,7 @@ import org.apache.hudi.client.model.{HoodieInternalRow, Spark41HoodieInternalRow
 import org.apache.hudi.common.model.FileSlice
 import org.apache.hudi.common.schema.HoodieSchema
 import org.apache.hudi.common.table.cdc.HoodieCDCFileSplit
+import org.apache.hudi.io.storage.{Spark41VariantProjectedRow, VariantProjectedRow}
 
 import org.apache.hadoop.conf.Configuration
 import org.apache.spark.SparkEnv
@@ -31,7 +32,7 @@ import org.apache.spark.sql.avro._
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.analysis.{EliminateSubqueryAliases, ResolvedTable}
 import org.apache.spark.sql.catalyst.catalog.CatalogTable
-import org.apache.spark.sql.catalyst.expressions.{AttributeReference, Expression}
+import org.apache.spark.sql.catalyst.expressions.{AttributeReference, Expression, GenericInternalRow, SpecializedGetters}
 import org.apache.spark.sql.catalyst.parser.{ParseException, ParserInterface}
 import org.apache.spark.sql.catalyst.planning.PhysicalOperation
 import org.apache.spark.sql.catalyst.plans.logical._
@@ -54,6 +55,8 @@ import org.apache.spark.sql.vectorized.ColumnarBatchRow
 import org.apache.spark.storage.StorageLevel
 import org.apache.spark.storage.StorageLevel._
 import org.apache.spark.unsafe.types.UTF8String
+
+import java.util.function.BiConsumer
 
 import scala.jdk.CollectionConverters.MapHasAsScala
 
@@ -123,6 +126,14 @@ class Spark4_1Adapter extends BaseSpark4Adapter {
                                  sourceRow: InternalRow,
                                  sourceContainsMetaFields: Boolean): HoodieInternalRow = {
     new Spark41HoodieInternalRow(metaFields, sourceRow, sourceContainsMetaFields)
+  }
+
+  override def createVariantProjectedRow(
+    numFields: Int,
+    variantStructByOrdinal: Array[GenericInternalRow],
+    extractorByOrdinal: java.util.List[BiConsumer[SpecializedGetters, java.lang.Integer]]
+  ): VariantProjectedRow = {
+    new Spark41VariantProjectedRow(numFields, variantStructByOrdinal, extractorByOrdinal)
   }
 
   override def createPartitionCDCFileGroupMapping(partitionValues: InternalRow,

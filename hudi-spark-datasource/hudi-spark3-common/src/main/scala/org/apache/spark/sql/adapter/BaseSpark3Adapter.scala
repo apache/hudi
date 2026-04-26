@@ -24,6 +24,7 @@ import org.apache.hudi.common.schema.HoodieSchema
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.cdc.HoodieCDCFileSplit
 import org.apache.hudi.common.util.JsonUtils
+import org.apache.hudi.io.storage.VariantProjectedRow
 import org.apache.hudi.spark.internal.ReflectUtil
 
 import org.apache.parquet.schema.Type
@@ -36,7 +37,7 @@ import org.apache.spark.sql.FileFormatUtilsForFileGroupReader.applyFiltersToPlan
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.analysis.EliminateSubqueryAliases
 import org.apache.spark.sql.catalyst.catalog.CatalogTable
-import org.apache.spark.sql.catalyst.expressions.{Expression, InterpretedPredicate, Predicate, SpecializedGetters}
+import org.apache.spark.sql.catalyst.expressions.{Expression, GenericInternalRow, InterpretedPredicate, Predicate, SpecializedGetters}
 import org.apache.spark.sql.catalyst.parser.ParseException
 import org.apache.spark.sql.catalyst.planning.PhysicalOperation
 import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
@@ -201,6 +202,14 @@ abstract class BaseSpark3Adapter extends SparkAdapter with Logging {
     writeValue: Consumer[Array[Byte]],
     writeMetadata: Consumer[Array[Byte]]
   ): BiConsumer[SpecializedGetters, Integer] = {
+    throw new UnsupportedOperationException("Spark 3.x does not support VariantType")
+  }
+
+  override def createVariantProjectedRow(
+    numFields: Int,
+    variantStructByOrdinal: Array[GenericInternalRow],
+    extractorByOrdinal: java.util.List[BiConsumer[SpecializedGetters, java.lang.Integer]]
+  ): VariantProjectedRow = {
     throw new UnsupportedOperationException("Spark 3.x does not support VariantType")
   }
 

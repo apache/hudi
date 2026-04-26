@@ -18,12 +18,15 @@
 
 package org.apache.hudi.io.storage;
 
+import org.apache.hudi.SparkAdapterSupport$;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.exception.HoodieException;
 
 import org.apache.arrow.memory.BufferAllocator;
 import org.apache.arrow.vector.FieldVector;
 import org.apache.arrow.vector.VectorSchemaRoot;
+import org.apache.arrow.vector.complex.StructVector;
 import org.apache.arrow.vector.ipc.ArrowReader;
 import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.sql.catalyst.expressions.UnsafeProjection;
@@ -149,6 +152,33 @@ public final class LanceRecordIterator implements ClosableIterator<UnsafeRow> {
     return false;
   }
 
+  /**
+   * If the requested Spark field is {@code VariantType} and the matching Arrow vector is a
+   * struct, wrap it so Spark's positional {@link ColumnVector#getVariant(int)} reads
+   * {@code value} from {@code child(0)} and {@code metadata} from {@code child(1)}, while the
+   * Lance file keeps the parquet-variant spec on-disk order ({@code metadata}, {@code value}).
+   * Otherwise return a plain {@link LanceArrowColumnVector}.
+   */
+  private static ColumnVector wrapForVariantIfNeeded(StructField sparkField, FieldVector fv) {
+    if (!SparkAdapterSupport$.MODULE$.sparkAdapter().isVariantType(sparkField.dataType())
+        || !(fv instanceof StructVector)) {
+      return new LanceArrowColumnVector(fv);
+    }
+    StructVector sv = (StructVector) fv;
+    FieldVector valueFv = sv.getChild(HoodieSchema.Variant.VARIANT_VALUE_FIELD);
+    FieldVector metadataFv = sv.getChild(HoodieSchema.Variant.VARIANT_METADATA_FIELD);
+    if (valueFv == null || metadataFv == null) {
+      throw new HoodieException("Variant column '" + sparkField.name()
+          + "' is missing required child fields '" + HoodieSchema.Variant.VARIANT_VALUE_FIELD
+          + "' and/or '" + HoodieSchema.Variant.VARIANT_METADATA_FIELD + "'");
+    }
+    return new LanceVariantColumnVector(
+        sparkField.dataType(),
+        new LanceArrowColumnVector(fv),
+        new LanceArrowColumnVector(valueFv),
+        new LanceArrowColumnVector(metadataFv));
+  }
+
   @Override
   public UnsafeRow next() {
     if (!hasNext()) {
@@ -182,7 +212,7 @@ public final class LanceRecordIterator implements ClosableIterator<UnsafeRow> {
         throw new HoodieException("Lance batch missing expected column '" + name
             + "' for file: " + path + "; available columns: " + byName.keySet());
       }
-      columnVectors[i] = new LanceArrowColumnVector(fv);
+      columnVectors[i] = wrapForVariantIfNeeded(sparkFields[i], fv);
     }
     if (blobTransform != null) {
       blobTransform.init(columnVectors, sparkSchema);
