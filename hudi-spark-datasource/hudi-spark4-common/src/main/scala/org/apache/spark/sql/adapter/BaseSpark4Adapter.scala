@@ -21,6 +21,7 @@ import org.apache.hudi.{AvroConversionUtils, DefaultSource, HoodieSchemaConversi
 import org.apache.hudi.common.schema.HoodieSchema
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.util.JsonUtils
+import org.apache.hudi.io.storage.VariantProjectedRow
 import org.apache.hudi.spark.internal.ReflectUtil
 import org.apache.hudi.storage.StorageConfiguration
 
