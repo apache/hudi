@@ -1337,10 +1337,22 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
         if (!StringUtils.isNullOrEmpty(extraSchema)) {
           config.setSchema(commitMetadata.getExtraMetadata().get(SCHEMA_KEY));
         } else {
-          throw new HoodieIOException("Latest commit does not have any schema in commit metadata");
+          Option<Schema> tableCreateSchema = metaClient.getTableConfig().getTableCreateSchema();
+          if (tableCreateSchema.isPresent()) {
+            LOG.warn("Schema not found in commit metadata, using table create schema");
+            config.setSchema(tableCreateSchema.get().toString());
+          } else {
+            throw new HoodieIOException("Latest commit does not have any schema in commit metadata and table create schema is not available");
+          }
         }
       } else {
-        LOG.warn("None rows are deleted because the table is empty");
+        Option<Schema> tableCreateSchema = metaClient.getTableConfig().getTableCreateSchema();
+        if (tableCreateSchema.isPresent()) {
+          LOG.warn("No commit history found, using table create schema for delete operation");
+          config.setSchema(tableCreateSchema.get().toString());
+        } else {
+          LOG.warn("None rows are deleted because the table is empty and no schema available");
+        }
       }
     } catch (IOException e) {
       throw new HoodieIOException("IOException thrown while reading last commit metadata", e);
