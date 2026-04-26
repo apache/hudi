@@ -130,10 +130,14 @@ public class SparkReaderContextFactory implements ReaderContextFactory<InternalR
     SparkColumnarFileReader baseFileReader = baseFileReaderBroadcast.getValue();
     if (baseFileReader != null) {
       List<Filter> filters = Collections.emptyList();
+      // Use toList(): SparkFileFormatInternalRowReaderContext takes scala.collection.immutable.Seq
+      // (Scala's `Seq` type alias). Buffer.toSeq() returns scala.collection.Seq, which doesn't
+      // satisfy that bound and fails javac. Buffer.toList() returns scala.collection.immutable.List,
+      // which is a scala.collection.immutable.Seq.
       return new SparkFileFormatInternalRowReaderContext(
           baseFileReader,
-          JavaConverters.asScalaBufferConverter(filters).asScala().toSeq(),
-          JavaConverters.asScalaBufferConverter(filters).asScala().toSeq(),
+          JavaConverters.asScalaBufferConverter(filters).asScala().toList(),
+          JavaConverters.asScalaBufferConverter(filters).asScala().toList(),
           new HadoopStorageConfiguration(configurationBroadcast.getValue().value()),
           tableConfigBroadcast.getValue());
     } else {
