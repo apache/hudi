@@ -17,6 +17,7 @@
 
 package org.apache.hudi.functional
 
+import org.apache.hudi.DataSourceWriteOptions.RECORDKEY_FIELD
 import org.apache.hudi.common.model.{FileSlice, HoodieTableType}
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.metadata.HoodieMetadataFileSystemView
@@ -187,5 +188,33 @@ class TestRecordLevelIndexWithSQL extends RecordLevelIndexTestBase {
     spark.sql(s"insert into dummy_table values('row3', 'row1', 'p2')")
 
     assertEquals(2, spark.read.format("hudi").options(hudiOpts).load(dummyTablePath).filter("not_record_key_col in ('row1', 'abc')").count())
+  }
+
+  @Test
+  def testRLINoPruningWithComplexRecordKeys(): Unit = {
+    var hudiOpts = commonOpts + {
+      RECORDKEY_FIELD.key -> "_row_key,rider"
+    }
+    hudiOpts = hudiOpts + (
+      DataSourceWriteOptions.TABLE_TYPE.key -> "COPY_ON_WRITE",
+      DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> "true")
+
+    doWriteAndValidateDataAndRecordIndex(hudiOpts,
+      operation = DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,
+      saveMode = SaveMode.Overwrite,
+      validate = false)
+    doWriteAndValidateDataAndRecordIndex(hudiOpts,
+      operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
+      saveMode = SaveMode.Append,
+      validate = false)
+
+    val indexOpts = hudiOpts + {"path" -> basePath}
+    metaClient = HoodieTableMetaClient.reload(metaClient)
+    val fileIndex = HoodieFileIndex(spark, metaClient, None, indexOpts, includeLogFiles = true)
+    // random data filter
+    val filteredPartitionDirectories = fileIndex.listFiles(Seq(), Seq(EqualTo(attribute("_row_key"), Literal("abc"))))
+    val filteredFilesCount = filteredPartitionDirectories.flatMap(s => s.files).size
+    // Assert no pruning with complex record keys
+    assertEquals(getLatestDataFilesCount(indexOpts, includeLogFiles = false), filteredFilesCount)
   }
 }

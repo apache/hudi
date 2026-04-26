@@ -22,9 +22,13 @@ package org.apache.hudi.common.util;
 import org.apache.hudi.common.conflict.detection.DirectMarkerBasedDetectionStrategy;
 import org.apache.hudi.common.conflict.detection.EarlyConflictDetectionStrategy;
 import org.apache.hudi.common.conflict.detection.TimelineServerBasedDetectionStrategy;
+import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.StoragePathFilter;
 
 import org.junit.jupiter.api.Test;
 
+import static org.apache.hudi.common.util.ReflectionUtils.getMethod;
 import static org.apache.hudi.common.util.ReflectionUtils.isSubClass;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -41,5 +45,16 @@ public class TestReflectionUtils {
     assertTrue(isSubClass(subClassName2, EarlyConflictDetectionStrategy.class));
     assertTrue(isSubClass(subClassName2, TimelineServerBasedDetectionStrategy.class));
     assertFalse(isSubClass(subClassName2, DirectMarkerBasedDetectionStrategy.class));
+  }
+
+  @Test
+  void testGetMethod() {
+    assertTrue(getMethod(HoodieStorage.class, "getScheme").isPresent());
+    assertTrue(getMethod(HoodieStorage.class, "listFiles", StoragePath.class).isPresent());
+    assertTrue(getMethod(HoodieStorage.class,
+        "listDirectEntries", StoragePath.class, StoragePathFilter.class).isPresent());
+    assertFalse(getMethod(HoodieStorage.class,
+        "listDirectEntries", StoragePathFilter.class).isPresent());
+    assertFalse(getMethod(HoodieStorage.class, "nonExistentMethod").isPresent());
   }
 }

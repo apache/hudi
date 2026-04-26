@@ -122,7 +122,7 @@ public class SchemaEvolutionContext {
       return HoodieTableMetaClient.builder().setBasePath(tablePath.get().toString())
           .setConf(HadoopFSUtils.getStorageConfWithCopy(job)).build();
     } catch (Exception e) {
-      LOG.warn(String.format("Not a valid hoodie table, table path: %s", ((FileSplit)split).getPath()), e);
+      LOG.error(String.format("Not a valid hoodie table, table path: %s", ((FileSplit)split).getPath()), e);
       return null;
     }
   }
@@ -260,6 +260,9 @@ public class SchemaEvolutionContext {
       case DOUBLE:
       case DATE:
       case TIMESTAMP:
+      case TIMESTAMP_MILLIS:
+      case LOCAL_TIMESTAMP_MICROS:
+      case LOCAL_TIMESTAMP_MILLIS:
       case STRING:
       case UUID:
       case FIXED:
@@ -267,6 +270,7 @@ public class SchemaEvolutionContext {
       case DECIMAL:
         return typeInfo;
       case TIME:
+      case TIME_MILLIS:
         throw new UnsupportedOperationException(String.format("cannot convert %s type to hive", type));
       default:
         LOG.error(String.format("cannot convert unknown type: %s to Hive", type));

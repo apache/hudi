@@ -89,6 +89,10 @@ object HoodieProcedures {
       ,(ShowTablePropertiesProcedure.NAME, ShowTablePropertiesProcedure.builder)
       ,(HelpProcedure.NAME, HelpProcedure.builder)
       ,(ArchiveCommitsProcedure.NAME, ArchiveCommitsProcedure.builder)
+      ,(SetAuditLockProcedure.NAME, SetAuditLockProcedure.builder)
+      ,(ShowAuditLockStatusProcedure.NAME, ShowAuditLockStatusProcedure.builder)
+      ,(ValidateAuditLockProcedure.NAME, ValidateAuditLockProcedure.builder)
+      ,(CleanupAuditLockProcedure.NAME, CleanupAuditLockProcedure.builder)
     )
   }
 }

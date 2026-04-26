@@ -58,8 +58,8 @@ public class MetricsReporterFactory {
     MetricsReporterType type = metricsConfig.getMetricsReporterType();
     MetricsReporter reporter = null;
     if (type == null) {
-      LOG.warn(String.format("Metric creation failed. %s is not configured",
-          HoodieMetricsConfig.METRICS_REPORTER_TYPE_VALUE.key()));
+      LOG.warn("Metric creation failed. {} is not configured",
+          HoodieMetricsConfig.METRICS_REPORTER_TYPE_VALUE.key());
       return Option.empty();
     }
 

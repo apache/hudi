@@ -127,7 +127,7 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
           }
           if (tableConfig.contains(HoodieTableConfig.TYPE) && conf.contains(FlinkOptions.TABLE_TYPE)) {
             if (!tableConfig.getString(HoodieTableConfig.TYPE).equals(conf.get(FlinkOptions.TABLE_TYPE))) {
-              LOG.warn(
+              LOG.error(
                   String.format("Table type conflict : %s in %s and %s in table options. Fix the table type as to be in line with the hoodie.properties.",
                       tableConfig.getString(HoodieTableConfig.TYPE), HoodieTableConfig.HOODIE_PROPERTIES_FILE,
                       conf.get(FlinkOptions.TABLE_TYPE)));

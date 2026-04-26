@@ -220,7 +220,7 @@ public abstract class TestBootstrapReadBase extends HoodieSparkClientTestBase {
     assertEquals(0, df2.except(df1).count());
   }
 
-  protected void setupDirs()  {
+  protected void setupDirs(Map<String, String> overrideOpts)  {
     dataGen = new HoodieTestDataGenerator(dashPartitions ? dashPartitionPaths : slashPartitionPaths);
     Dataset<Row> inserts = generateTestInserts("000", nInserts);
     if (dashPartitions) {
@@ -240,6 +240,7 @@ public abstract class TestBootstrapReadBase extends HoodieSparkClientTestBase {
 
     inserts.write().format("hudi")
         .options(basicOptions())
+        .options(overrideOpts)
         .mode(SaveMode.Overwrite)
         .save(hudiBasePath);
   }

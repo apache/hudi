@@ -554,4 +554,21 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
 
     void invalidate();
   }
+
+  public static class NoopCache implements FileStatusCache {
+    @Override
+    public Option<List<StoragePathInfo>> get(StoragePath path) {
+      return Option.empty();
+    }
+
+    @Override
+    public void put(StoragePath path, List<StoragePathInfo> leafFiles) {
+      // no-op
+    }
+
+    @Override
+    public void invalidate() {
+      // no-op
+    }
+  }
 }

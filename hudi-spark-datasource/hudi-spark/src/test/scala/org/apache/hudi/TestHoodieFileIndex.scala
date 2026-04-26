@@ -43,20 +43,20 @@ import org.apache.hudi.storage.StoragePath
 import org.apache.hudi.testutils.HoodieSparkClientTestBase
 import org.apache.hudi.util.JFunction
 
+import org.apache.avro.Schema
 import org.apache.spark.sql._
 import org.apache.spark.sql.catalyst.expressions.{And, AttributeReference, EqualTo, GreaterThanOrEqual, LessThan, Literal}
 import org.apache.spark.sql.execution.datasources.{NoopCache, PartitionDirectory}
 import org.apache.spark.sql.functions.{lit, struct}
 import org.apache.spark.sql.hudi.HoodieSparkSessionExtension
 import org.apache.spark.sql.types.{IntegerType, StringType}
-import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 import org.junit.jupiter.api.{BeforeEach, Test}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{Arguments, CsvSource, MethodSource, ValueSource}
 
 import java.util.Properties
 import java.util.function.Consumer
-
 import scala.collection.JavaConverters._
 import scala.util.Random
 
@@ -122,6 +122,7 @@ class TestHoodieFileIndex extends HoodieSparkClientTestBase with ScalaAssertionS
       .option(TIMESTAMP_TYPE_FIELD.key, TimestampType.DATE_STRING.name())
       .option(TIMESTAMP_INPUT_DATE_FORMAT.key, "yyyy/MM/dd")
       .option(TIMESTAMP_OUTPUT_DATE_FORMAT.key, "yyyy-MM-dd")
+      .option(HoodieWriteConfig.ENABLE_COMPLEX_KEYGEN_VALIDATION.key(), "false")
       .mode(SaveMode.Overwrite)
 
     if (isNullOrEmpty(keyGenerator)) {
@@ -315,7 +316,8 @@ class TestHoodieFileIndex extends HoodieSparkClientTestBase with ScalaAssertionS
       RECORDKEY_FIELD.key -> "id",
       PRECOMBINE_FIELD.key -> "version",
       PARTITIONPATH_FIELD.key -> "dt,hh",
-      HoodieMetadataConfig.ENABLE.key -> useMetadataTable.toString
+      HoodieMetadataConfig.ENABLE.key -> useMetadataTable.toString,
+      HoodieWriteConfig.ENABLE_COMPLEX_KEYGEN_VALIDATION.key -> "false"
     )
 
     val readerOpts: Map[String, String] = queryOpts ++ Map(
@@ -458,7 +460,8 @@ class TestHoodieFileIndex extends HoodieSparkClientTestBase with ScalaAssertionS
       RECORDKEY_FIELD.key -> "id",
       PRECOMBINE_FIELD.key -> "version",
       PARTITIONPATH_FIELD.key -> partitionNames.mkString(","),
-      HoodieMetadataConfig.ENABLE.key -> useMetadataTable.toString
+      HoodieMetadataConfig.ENABLE.key -> useMetadataTable.toString,
+      HoodieWriteConfig.ENABLE_COMPLEX_KEYGEN_VALIDATION.key() -> "false"
     )
 
     val readerOpts: Map[String, String] = queryOpts ++ Map(
@@ -512,7 +515,8 @@ class TestHoodieFileIndex extends HoodieSparkClientTestBase with ScalaAssertionS
       DataSourceWriteOptions.OPERATION.key -> DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,
       RECORDKEY_FIELD.key -> "id",
       PRECOMBINE_FIELD.key -> "version",
-      PARTITIONPATH_FIELD.key -> "dt,hh"
+      PARTITIONPATH_FIELD.key -> "dt,hh",
+      HoodieWriteConfig.ENABLE_COMPLEX_KEYGEN_VALIDATION.key() -> "false"
     )
 
     val readerOpts: Map[String, String] = queryOpts ++ Map(
@@ -572,7 +576,8 @@ class TestHoodieFileIndex extends HoodieSparkClientTestBase with ScalaAssertionS
       HoodieMetadataConfig.ENABLE.key -> enableMetadataTable.toString,
       RECORDKEY_FIELD.key -> "id",
       PARTITIONPATH_FIELD.key -> "region_code,dt",
-      DataSourceWriteOptions.PRECOMBINE_FIELD.key -> "price"
+      DataSourceWriteOptions.PRECOMBINE_FIELD.key -> "price",
+      HoodieWriteConfig.ENABLE_COMPLEX_KEYGEN_VALIDATION.key() -> "false"
     )
 
     val readerOpts: Map[String, String] = queryOpts ++ Map(
@@ -786,6 +791,52 @@ class TestHoodieFileIndex extends HoodieSparkClientTestBase with ScalaAssertionS
         val filteredPartitions = fileIndex.listFiles(Seq(), Seq(dataFilter))
         assertEquals(1, filteredPartitions.head.files.length)
       }
+    }
+  }
+
+  @Test
+  def testGetTimestampMillisColumns(): Unit = {
+    if (HoodieSparkUtils.gteqSpark3_4) {
+      // RECORD with timestamp-millis and local-timestamp-millis -> both returned
+      val recordWithTimestampMillisSchema = new Schema.Parser().parse(
+        """
+          |{
+          |  "type": "record",
+          |  "name": "TestRecord",
+          |  "fields": [
+          |    {"name": "ts_millis", "type": {"type": "long", "logicalType": "timestamp-millis"}},
+          |    {"name": "ts_local_millis", "type": {"type": "long", "logicalType": "local-timestamp-millis"}},
+          |    {"name": "plain_long", "type": "long"},
+          |    {"name": "name", "type": "string"}
+          |  ]
+          |}
+          |""".stripMargin)
+      val resultWithTimestampMillis = HoodieFileIndex.getTimestampMillisColumns(recordWithTimestampMillisSchema)
+      assertEquals(2, resultWithTimestampMillis.size)
+      assertTrue(resultWithTimestampMillis.contains("ts_millis"))
+      assertTrue(resultWithTimestampMillis.contains("ts_local_millis"))
+      assertFalse(resultWithTimestampMillis.contains("plain_long"))
+      assertFalse(resultWithTimestampMillis.contains("name"))
+
+      // RECORD with only plain long and string -> empty set
+      val recordWithoutTimestampMillisSchema = new Schema.Parser().parse(
+        """
+          |{
+          |  "type": "record",
+          |  "name": "PlainRecord",
+          |  "fields": [
+          |    {"name": "id", "type": "long"},
+          |    {"name": "name", "type": "string"}
+          |  ]
+          |}
+          |""".stripMargin)
+      val resultPlain = HoodieFileIndex.getTimestampMillisColumns(recordWithoutTimestampMillisSchema)
+      assertTrue(resultPlain.isEmpty)
+
+      // Non-RECORD schema -> empty set
+      val stringSchema = Schema.create(Schema.Type.STRING)
+      val resultNonRecord = HoodieFileIndex.getTimestampMillisColumns(stringSchema)
+      assertTrue(resultNonRecord.isEmpty)
     }
   }
 

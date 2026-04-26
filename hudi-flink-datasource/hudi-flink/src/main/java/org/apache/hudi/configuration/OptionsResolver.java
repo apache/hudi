@@ -383,6 +383,14 @@ public class OptionsResolver {
         .equalsIgnoreCase(HoodieFailedWritesCleaningPolicy.LAZY.name());
   }
 
+  /**
+   * Returns whether complex keygen encodes single record key with field name.
+   */
+  public static boolean useComplexKeygenNewEncoding(Configuration conf) {
+    return Boolean.parseBoolean(conf.getString(HoodieWriteConfig.COMPLEX_KEYGEN_NEW_ENCODING.key(),
+        HoodieWriteConfig.COMPLEX_KEYGEN_NEW_ENCODING.defaultValue().toString()));
+  }
+
   // -------------------------------------------------------------------------
   //  Utilities
   // -------------------------------------------------------------------------

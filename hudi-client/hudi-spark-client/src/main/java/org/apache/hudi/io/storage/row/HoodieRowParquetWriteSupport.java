@@ -18,7 +18,7 @@
 
 package org.apache.hudi.io.storage.row;
 
-import org.apache.hadoop.conf.Configuration;
+import org.apache.hudi.HoodieSparkUtils;
 import org.apache.hudi.avro.HoodieBloomFilterWriteSupport;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.config.HoodieConfig;
@@ -26,8 +26,8 @@ import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 
+import org.apache.hadoop.conf.Configuration;
 import org.apache.parquet.hadoop.api.WriteSupport;
-import org.apache.spark.sql.execution.datasources.parquet.ParquetWriteSupport;
 import org.apache.spark.sql.types.StructType;
 import org.apache.spark.unsafe.types.UTF8String;
 
@@ -37,9 +37,10 @@ import java.util.Map;
 import static org.apache.hudi.common.config.HoodieStorageConfig.PARQUET_FIELD_ID_WRITE_ENABLED;
 
 /**
- * Hoodie Write Support for directly writing Row to Parquet.
+ * Hoodie Write Support for directly writing Row to Parquet. This is the legacy version for Spark 3.3 and earlier.
+ * For Spark 3.4+, use Spark34PlusHoodieRowParquetWriteSupport which has better logical type support.
  */
-public class HoodieRowParquetWriteSupport extends ParquetWriteSupport {
+public class HoodieRowParquetWriteSupport extends HoodieParquetWriteSupport {
 
   private final Configuration hadoopConf;
   private final Option<HoodieBloomFilterWriteSupport<UTF8String>> bloomFilterWriteSupportOpt;
@@ -55,6 +56,7 @@ public class HoodieRowParquetWriteSupport extends ParquetWriteSupport {
     this.bloomFilterWriteSupportOpt = bloomFilterOpt.map(HoodieBloomFilterRowWriteSupport::new);
   }
 
+  @Override
   public Configuration getHadoopConf() {
     return hadoopConf;
   }
@@ -68,6 +70,7 @@ public class HoodieRowParquetWriteSupport extends ParquetWriteSupport {
     return new WriteSupport.FinalizedWriteContext(extraMetadata);
   }
 
+  @Override
   public void add(UTF8String recordKey) {
     this.bloomFilterWriteSupportOpt.ifPresent(bloomFilterWriteSupport ->
         bloomFilterWriteSupport.addKey(recordKey));
@@ -92,12 +95,31 @@ public class HoodieRowParquetWriteSupport extends ParquetWriteSupport {
     }
   }
 
-  public static HoodieRowParquetWriteSupport getHoodieRowParquetWriteSupport(Configuration conf, StructType structType,
-                                                                             Option<BloomFilter> bloomFilterOpt, HoodieConfig config) {
-    return (HoodieRowParquetWriteSupport) ReflectionUtils.loadClass(
-        config.getStringOrDefault(HoodieStorageConfig.HOODIE_PARQUET_SPARK_ROW_WRITE_SUPPORT_CLASS),
+  /**
+   * Factory method that returns the appropriate HoodieParquetWriteSupport implementation
+   * based on Spark version. For Spark 3.4+, it returns Spark34PlusHoodieRowParquetWriteSupport
+   * which has better logical type handling. For Spark 3.3 and earlier, it returns the legacy version.
+   */
+  public static HoodieParquetWriteSupport getHoodieRowParquetWriteSupport(Configuration conf, StructType structType,
+                                                                          Option<BloomFilter> bloomFilterOpt, HoodieConfig config) {
+    // For Spark 3.4+, use the advanced version with better logical type support
+    if (HoodieSparkUtils.gteqSpark3_4()) {
+      return (HoodieParquetWriteSupport) ReflectionUtils.loadClass(
+          "org.apache.hudi.io.storage.row.Spark34PlusHoodieRowParquetWriteSupport",
+          new Class<?>[] {Configuration.class, StructType.class, Option.class, HoodieConfig.class},
+          conf, structType, bloomFilterOpt, config);
+    }
+
+    // For Spark 3.3 and earlier, use the legacy version (this class) or configured class
+    String className = config.getStringOrDefault(HoodieStorageConfig.HOODIE_PARQUET_SPARK_ROW_WRITE_SUPPORT_CLASS);
+    if (className.equals("org.apache.hudi.io.storage.row.Spark34PlusHoodieRowParquetWriteSupport")) {
+      // If config explicitly set to Spark34+ version but running on older Spark, fall back to legacy
+      className = "org.apache.hudi.io.storage.row.HoodieRowParquetWriteSupport";
+    }
+
+    return (HoodieParquetWriteSupport) ReflectionUtils.loadClass(
+        className,
         new Class<?>[] {Configuration.class, StructType.class, Option.class, HoodieConfig.class},
         conf, structType, bloomFilterOpt, config);
   }
-
 }

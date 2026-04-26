@@ -255,7 +255,7 @@ public class DirectWriteMarkers extends WriteMarkers {
     }
     try {
       if (checkIfExists && storage.exists(markerPath)) {
-        LOG.warn("Marker Path=" + markerPath + " already exists, cancel creation");
+        LOG.info("Marker Path={} already exists, cancel creation", markerPath);
         return Option.empty();
       }
       LOG.info("Creating Marker Path=" + markerPath);

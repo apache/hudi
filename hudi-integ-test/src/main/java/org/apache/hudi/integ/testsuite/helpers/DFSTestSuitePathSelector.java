@@ -38,6 +38,7 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Comparator;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -58,15 +59,14 @@ public class DFSTestSuitePathSelector extends DFSPathSelector {
   public Pair<Option<String>, String> getNextFilePathsAndMaxModificationTime(
       Option<String> lastCheckpointStr, long sourceLimit) {
 
-    Integer lastBatchId;
-    Integer nextBatchId;
+    Long lastBatchId;
+    Long nextBatchId;
     try {
-      if (lastCheckpointStr.isPresent()) {
-        lastBatchId = Integer.parseInt(lastCheckpointStr.get());
+      if (lastCheckpointStr.isPresent() && (lastBatchId = Long.parseLong(lastCheckpointStr.get())) != Long.MIN_VALUE) {
         nextBatchId = lastBatchId + 1;
       } else {
-        lastBatchId = 0;
-        nextBatchId = 1;
+        lastBatchId = 0L;
+        nextBatchId = 1L;
       }
 
       // obtain all eligible files for the batch
@@ -76,20 +76,22 @@ public class DFSTestSuitePathSelector extends DFSPathSelector {
       // Say input data is as follow input/1, input/2, input/5 since 3,4 was rolled back and 5 is new generated data
       // checkpoint from the latest commit metadata will be 2 since 3,4 has been rolled back. We need to set the
       // next batch id correctly as 5 instead of 3
+      final long fLastBatchId = lastBatchId;
       Option<String> correctBatchIdDueToRollback = Option.fromJavaOptional(Arrays.stream(fileStatuses)
           .map(f -> f.getPath().toString().split("/")[f.getPath().toString().split("/").length - 1])
-          .filter(bid1 -> Integer.parseInt(bid1) > lastBatchId)
-          .min((bid1, bid2) -> Integer.min(Integer.parseInt(bid1), Integer.parseInt(bid2))));
-      if (correctBatchIdDueToRollback.isPresent() && Integer.parseInt(correctBatchIdDueToRollback.get()) > nextBatchId) {
-        nextBatchId = Integer.parseInt(correctBatchIdDueToRollback.get());
+          .filter(bid1 -> Long.parseLong(bid1) > fLastBatchId)
+          .min(Comparator.comparingLong(Long::parseLong)));
+      if (correctBatchIdDueToRollback.isPresent() && Long.parseLong(correctBatchIdDueToRollback.get()) > nextBatchId) {
+        nextBatchId = Long.parseLong(correctBatchIdDueToRollback.get());
       }
       log.info("Using DFSTestSuitePathSelector, checkpoint: " + lastCheckpointStr + " sourceLimit: " + sourceLimit
           + " lastBatchId: " + lastBatchId + " nextBatchId: " + nextBatchId);
+      log.info("Using DFSTestSuitePathSelector, all input files: " + Arrays.toString(fileStatuses));
       for (FileStatus fileStatus : fileStatuses) {
         if (!fileStatus.isDirectory() || IGNORE_FILEPREFIX_LIST.stream()
             .anyMatch(pfx -> fileStatus.getPath().getName().startsWith(pfx))) {
           continue;
-        } else if (Integer.parseInt(fileStatus.getPath().getName()) > lastBatchId && Integer.parseInt(fileStatus.getPath()
+        } else if (Long.parseLong(fileStatus.getPath().getName()) > lastBatchId && Long.parseLong(fileStatus.getPath()
             .getName()) <= nextBatchId) {
           RemoteIterator<LocatedFileStatus> files = fs.listFiles(fileStatus.getPath(), true);
           while (files.hasNext()) {
@@ -98,6 +100,7 @@ public class DFSTestSuitePathSelector extends DFSPathSelector {
         }
       }
 
+      log.info("Using DFSTestSuitePathSelector, eligible files: " + eligibleFiles);
       // no data to readAvro
       if (eligibleFiles.size() == 0) {
         return new ImmutablePair<>(Option.empty(),
