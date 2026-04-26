@@ -492,6 +492,10 @@
               <shadedPattern>org.apache.hudi.com.fasterxml.jackson.module
               </shadedPattern>
             </relocation>
+            <relocation>
+              <pattern>org.apache.curator.</pattern>
+              <shadedPattern>org.apache.hudi.org.apache.curator.</shadedPattern>
+            </relocation>
           </relocations>
         </configuration>
       </plugin>
