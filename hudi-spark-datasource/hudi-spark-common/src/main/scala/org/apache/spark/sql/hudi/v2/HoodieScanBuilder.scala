@@ -17,7 +17,7 @@
 
 package org.apache.spark.sql.hudi.v2
 
-import org.apache.hudi.{DataSourceReadOptions, HoodieBaseRelation, HoodieFileIndex, HoodieSparkUtils, SparkAdapterSupport}
+import org.apache.hudi.{DataSourceReadOptions, HoodieBaseRelation, HoodieDataSourceHelper, HoodieFileIndex, HoodieSparkUtils, SparkAdapterSupport}
 import org.apache.hudi.client.utils.SparkInternalSchemaConverter
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.engine.HoodieLocalEngineContext
@@ -43,7 +43,7 @@ import org.apache.spark.sql.connector.expressions.aggregate.{Aggregation, Count,
 import org.apache.spark.sql.connector.read.{InputPartition, Scan, ScanBuilder, SupportsPushDownAggregates, SupportsPushDownFilters, SupportsPushDownRequiredColumns}
 import org.apache.spark.sql.execution.datasources.FileFormat
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils
-import org.apache.spark.sql.hudi.v2.HoodieScanBuilder.{CountStarColumn, CountStarNoColumn, CountStarWithColumn, NoCountStar}
+import org.apache.spark.sql.hudi.v2.HoodieScanBuilder.{CountStarAbsent, CountStarColumn, CountStarMissingTarget, CountStarWithColumn}
 import org.apache.spark.sql.sources.Filter
 import org.apache.spark.sql.types.{BooleanType, ByteType, DataType, DoubleType, FloatType, IntegerType, LongType, ShortType, StringType, StructField, StructType}
 import org.apache.spark.unsafe.types.UTF8String
@@ -61,7 +61,7 @@ class HoodieScanBuilder(spark: SparkSession,
                         options: Map[String, String]) extends ScanBuilder
   with SupportsPushDownFilters
   with SupportsPushDownRequiredColumns
-  with PartialLimitPushDown
+  with HoodiePartialLimitPushDown
   with SupportsPushDownAggregates
   with SparkAdapterSupport {
 
@@ -133,7 +133,7 @@ class HoodieScanBuilder(spark: SparkSession,
     // Spark 3.3's planner does not honor SupportsPushDownLimit.isPartiallyPushed — any
     // successful pushdown is treated as COMPLETE and the outer LocalLimit is dropped.
     // HoodieBatchScan enforces the limit per input partition, so LIMIT N across multiple
-    // base files could over-return. Refuse pushdown on 3.3; on 3.4+, PartialLimitPushDown
+    // base files could over-return. Refuse pushdown on 3.3; on 3.4+, HoodiePartialLimitPushDown
     // keeps the outer LocalLimit in place.
     // Otherwise the pushdown is only safe when no filter is re-applied above the scan:
     // _pushedFilters are returned to Spark for row-wise re-evaluation (Parquet only
@@ -270,10 +270,16 @@ class HoodieScanBuilder(spark: SparkSession,
 
     val fileSlicesPerPartition = fileIndex.filterFileSlices(dataFilterExprs, partitionFilterExprs)
 
+    // Mirror the DSv1 split path: break each base file into ranges of at most
+    // spark.sql.files.maxPartitionBytes so large files don't become single-task
+    // stragglers. DSv2 only supports COW + MOR read-optimized (see
+    // HoodieV2ReadSupport.isSupportedByDSv2), so log files never participate and
+    // splitting base files is always safe.
     val partitions = fileSlicesPerPartition.flatMap { case (partitionOpt, fileSlices) =>
-      fileSlices.filter(_.getBaseFile.isPresent).map { fs =>
-        val baseFilePath = fs.getBaseFile.get().getPath
-        val baseFileLength = fs.getBaseFile.get().getFileSize
+      fileSlices.filter(_.getBaseFile.isPresent).flatMap { fs =>
+        val baseFile = fs.getBaseFile.get()
+        val baseFilePath = baseFile.getPath
+        val baseFileLength = baseFile.getFileSize
         val allPartValues = partitionOpt.map(_.getValues).getOrElse(Array.empty[AnyRef])
 
         val partValues = if (requiredPartitionSchema.isEmpty) {
@@ -285,7 +291,9 @@ class HoodieScanBuilder(spark: SparkSession,
           }
         }
 
-        HoodieInputPartition(0, baseFilePath, baseFileLength, partValues)
+        HoodieDataSourceHelper.computeSplitRanges(spark, baseFileLength).map { case (start, length) =>
+          HoodieInputPartition(0, baseFilePath, start, length, partValues)
+        }
       }
     }.zipWithIndex.map { case (p, i) => p.copy(index = i) }.toArray[InputPartition]
 
@@ -419,14 +427,14 @@ class HoodieScanBuilder(spark: SparkSession,
         recordKeyFields.find(schemaNames.contains)
           .orElse(tableSchema.fields.headOption.map(_.name)) match {
             case Some(name) => CountStarWithColumn(name)
-            case None       => CountStarNoColumn
+            case None       => CountStarMissingTarget
           }
       } else {
-        NoCountStar
+        CountStarAbsent
       }
 
       countStarColumn match {
-        case CountStarNoColumn => None
+        case CountStarMissingTarget => None
         case resolved =>
           val countStarColOpt: Option[String] = resolved match {
             case CountStarWithColumn(name) => Some(name)
@@ -627,7 +635,7 @@ class HoodieScanBuilder(spark: SparkSession,
 
 private[v2] object HoodieScanBuilder {
   sealed trait CountStarColumn
-  case object NoCountStar extends CountStarColumn
-  case object CountStarNoColumn extends CountStarColumn
+  case object CountStarAbsent extends CountStarColumn
+  case object CountStarMissingTarget extends CountStarColumn
   final case class CountStarWithColumn(name: String) extends CountStarColumn
 }

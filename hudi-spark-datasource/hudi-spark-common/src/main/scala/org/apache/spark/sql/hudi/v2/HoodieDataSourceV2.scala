@@ -68,8 +68,11 @@ class HoodieDataSourceV2 extends TableProvider with DataSourceRegister with Crea
     try {
       if (optParams.get(DataSourceWriteOptions.OPERATION.key)
         .contains(DataSourceWriteOptions.BOOTSTRAP_OPERATION_OPT_VAL)) {
+        // bootstrap() returns false legitimately when mode == Ignore on an existing table
+        // (HoodieSparkSqlWriter.bootstrap "Ignoring & not performing actual writes"). Treat
+        // that as success — only flag a real failure when the mode wasn't Ignore.
         val success = HoodieSparkSqlWriter.bootstrap(sqlContext, mode, optParams, df)
-        if (!success) {
+        if (!success && mode != SaveMode.Ignore) {
           throw new HoodieException("Failed to bootstrap Hudi table")
         }
       } else {

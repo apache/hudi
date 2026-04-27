@@ -58,7 +58,7 @@ case class HoodieSparkV2Table(spark: SparkSession,
     preResolvedCatalogTable.orElse(catalogTable.map(ct => HoodieCatalogTable(spark, ct)))
 
   private lazy val metaClient: HoodieTableMetaClient = hoodieCatalogTable match {
-    case Some(hct) => hct.metaClient
+    case Some(hoodieCatalogTable) => hoodieCatalogTable.metaClient
     case None =>
       // Mirror DSv1 (DefaultSource.createRelation): when the user-supplied path points at
       // a partition or sub-path of a Hudi table, walk up to the table base path before
@@ -99,8 +99,8 @@ case class HoodieSparkV2Table(spark: SparkSession,
         HoodieSchemaConversionUtils.convertHoodieSchemaToStructType(avroSchema)
       case None =>
         hoodieCatalogTable match {
-          case Some(hct) =>
-            if (includeMetaFields) hct.tableSchema else hct.tableSchemaWithoutMetaFields
+          case Some(hoodieCatalogTable) =>
+            if (includeMetaFields) hoodieCatalogTable.tableSchema else hoodieCatalogTable.tableSchemaWithoutMetaFields
           case None =>
             HoodieSqlCommonUtils
               .getTableSqlSchema(metaClient, includeMetadataFields = includeMetaFields)
@@ -110,7 +110,7 @@ case class HoodieSparkV2Table(spark: SparkSession,
   }
 
   override def name(): String = hoodieCatalogTable match {
-    case Some(hct) => hct.table.identifier.unquotedString
+    case Some(hoodieCatalogTable) => hoodieCatalogTable.table.identifier.unquotedString
     case None => metaClient.getTableConfig.getTableName
   }
 
@@ -131,7 +131,7 @@ case class HoodieSparkV2Table(spark: SparkSession,
   }
 
   override def properties(): util.Map[String, String] = hoodieCatalogTable match {
-    case Some(hct) => hct.catalogProperties.asJava
+    case Some(hoodieCatalogTable) => hoodieCatalogTable.catalogProperties.asJava
     case None => java.util.Collections.emptyMap()
   }
 
@@ -151,7 +151,7 @@ case class HoodieSparkV2Table(spark: SparkSession,
     // the same way DSv1 does.
     val explicitOpts = Map("path" -> path) ++ constructorOpts ++ tableProps ++ scanOpts
     val mergedOpts = HoodieV2ReadSupport.resolveReadOptions(spark, explicitOpts)
-    if (!HoodieV2ReadSupport.isSupportedByDSv2(metaClient, mergedOpts, spark)) {
+    if (!HoodieV2ReadSupport.isSupportedByDSv2(metaClient, mergedOpts)) {
       throw new HoodieException(
         "DSv2 read path does not support this query configuration " +
           "(MOR snapshot, non-Parquet base format, multiple base formats, " +
@@ -176,8 +176,8 @@ case class HoodieSparkV2Table(spark: SparkSession,
   def v1TableWrapper: V1Table = V1Table(v1Table)
 
   override def partitioning(): Array[Transform] = hoodieCatalogTable match {
-    case Some(hct) =>
-      hct.partitionFields.map { col =>
+    case Some(hoodieCatalogTable) =>
+      hoodieCatalogTable.partitionFields.map { col =>
         new IdentityTransform(new FieldReference(Seq(col)))
       }.toArray
     case None => Array.empty

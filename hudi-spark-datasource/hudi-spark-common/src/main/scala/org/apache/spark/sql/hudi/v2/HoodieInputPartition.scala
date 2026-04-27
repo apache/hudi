@@ -20,15 +20,20 @@ package org.apache.spark.sql.hudi.v2
 import org.apache.spark.sql.connector.read.InputPartition
 
 /**
- * Input partition for the DSv2 read path, representing a single base file to read.
+ * Input partition for the DSv2 read path, representing a contiguous byte range of a
+ * single base file. Large files are sub-divided per `spark.sql.files.maxPartitionBytes`
+ * so executors can read distinct ranges in parallel; sum of `length` across all
+ * partitions produced from one base file equals the file size.
  *
  * @param index           partition index
  * @param baseFilePath    full path to the base (Parquet) file
- * @param baseFileLength  file size in bytes
+ * @param start           byte offset within the base file where this split begins
+ * @param length          byte length of this split (matches Spark's `PartitionedFile.length`)
  * @param partitionValues partition column values in Spark internal format (e.g. UTF8String),
  *                        ordered to match the requiredPartitionSchema
  */
 case class HoodieInputPartition(index: Int,
                                 baseFilePath: String,
-                                baseFileLength: Long,
+                                start: Long,
+                                length: Long,
                                 partitionValues: Array[AnyRef]) extends InputPartition

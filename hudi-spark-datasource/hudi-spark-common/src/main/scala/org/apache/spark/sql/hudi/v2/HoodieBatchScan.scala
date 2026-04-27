@@ -48,7 +48,7 @@ class HoodieBatchScan(outputSchema: StructType,
   override def description(): String = {
     val filtersStr = s", PushedFilters: [${pushedFilters.mkString(", ")}]"
     val limitStr = pushedLimit.map(l => s", PushedLimit: $l").getOrElse("")
-    s"HoodieBatchScan${outputSchema.catalogString}$filtersStr$limitStr"
+    s"HoodieBatchScan ${outputSchema.catalogString}$filtersStr$limitStr"
   }
 
   override def toBatch: Batch = this
@@ -69,8 +69,10 @@ class HoodieBatchScan(outputSchema: StructType,
   }
 
   override def estimateStatistics(): Statistics = {
+    // length is per-split; summing across all splits of one base file equals the
+    // file size, so the total remains a faithful byte-size estimate.
     val totalSize = inputPartitions.collect {
-      case p: HoodieInputPartition => p.baseFileLength
+      case p: HoodieInputPartition => p.length
     }.sum
     new HoodieStatistics(totalSize)
   }

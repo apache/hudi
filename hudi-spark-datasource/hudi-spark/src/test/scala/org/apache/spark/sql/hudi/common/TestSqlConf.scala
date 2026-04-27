@@ -159,6 +159,84 @@ class TestSqlConf extends HoodieSparkSqlTestBase with BeforeAndAfter {
     }
   }
 
+  test("Test DSv2 read enabled via TBLPROPERTIES") {
+    // Disable schema-on-read (which the test hudi-defaults.conf enables) so the
+    // catalog gate does not force the V1 schema-evolution fallback path.
+    withSQLConf("hoodie.schema.on.read.enable" -> "false") {
+      withTempDir { tmp =>
+        val tableName = generateTableName
+        val tablePath = tmp.getCanonicalPath
+        // SQL conf is left at default (false) for USE_V2_READ. With the catalog
+        // gate now resolving it from the same merged option set as other read
+        // options, setting it via TBLPROPERTIES alone must route reads through
+        // DSv2. type='cow' is required because the default MOR (set in
+        // hudi-defaults.conf) is not yet supported by the DSv2 snapshot scan.
+        spark.sql(
+          s"""
+             |create table $tableName (
+             |  id int, name string, price double, ts long
+             |) using hudi
+             | location '$tablePath'
+             | tblproperties (
+             |  type = 'cow',
+             |  primaryKey ='id',
+             |  orderingFields = 'ts',
+             |  '${USE_V2_READ.key}' = 'true'
+             | )
+         """.stripMargin)
+
+        spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000)")
+        spark.catalog.refreshTable(tableName)
+
+        val plan = spark.sql(s"select id, name, price, ts from $tableName")
+          .queryExecution.executedPlan.toString()
+        assert(plan.contains("BatchScan"),
+          s"USE_V2_READ from TBLPROPERTIES must enable DSv2 BatchScan, plan was:\n$plan")
+        checkAnswer(s"select id, name, price, ts from $tableName")(
+          Seq(1, "a1", 10.0, 1000)
+        )
+      }
+    }
+  }
+
+  test("Test DSv2 read enabled via hudi-defaults global props") {
+    withSQLConf("hoodie.schema.on.read.enable" -> "false") {
+      withTempDir { tmp =>
+        val tableName = generateTableName
+        val tablePath = tmp.getCanonicalPath
+        spark.sql(
+          s"""
+             |create table $tableName (
+             |  id int, name string, price double, ts long
+             |) using hudi
+             | location '$tablePath'
+             | tblproperties (
+             |  type = 'cow',
+             |  primaryKey ='id',
+             |  orderingFields = 'ts'
+             | )
+         """.stripMargin)
+
+        spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000)")
+
+        // hudi-defaults.conf is reachable via DFSPropertiesConfiguration.getGlobalProps,
+        // which resolveReadOptions merges into the gate's option set. With the SQL conf
+        // unset, this is the only path advertising USE_V2_READ — the gate must still
+        // pick it up.
+        DFSPropertiesConfiguration.addToGlobalProps(USE_V2_READ.key, "true")
+        spark.catalog.refreshTable(tableName)
+
+        val plan = spark.sql(s"select id, name, price, ts from $tableName")
+          .queryExecution.executedPlan.toString()
+        assert(plan.contains("BatchScan"),
+          s"USE_V2_READ from hudi-defaults.conf must enable DSv2 BatchScan, plan was:\n$plan")
+        checkAnswer(s"select id, name, price, ts from $tableName")(
+          Seq(1, "a1", 10.0, 1000)
+        )
+      }
+    }
+  }
+
   test("Test spark.hoodie.* configs propagate to write path") {
     withTempDir { tmp =>
       val tableName = generateTableName

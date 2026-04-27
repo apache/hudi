@@ -18,8 +18,8 @@
 package org.apache.spark.sql.hudi.feature.v2
 
 import org.apache.hudi.DataSourceReadOptions
-import org.apache.hudi.testutils.SparkClientFunctionalTestHarness
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness.getSparkSqlConf
+import org.apache.hudi.testutils.SparkClientFunctionalTestHarnessScala
 
 import org.apache.spark.SparkConf
 import org.apache.spark.sql.SaveMode
@@ -30,13 +30,9 @@ import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
  * Functional tests for filter pushdown (partition pruning + data filters) via the DSv2 path.
  */
 @Tag("functional")
-class TestDSv2FilterPushdown extends SparkClientFunctionalTestHarness {
+class TestDSv2FilterPushdown extends SparkClientFunctionalTestHarnessScala with DSv2PlanAssertions {
 
   override def conf: SparkConf = conf(getSparkSqlConf)
-
-  private def containsBatchScan(plan: String): Boolean = plan.contains("BatchScan")
-
-  private def containsFileScan(plan: String): Boolean = plan.contains("FileScan")
 
   private def writePartitionedData(path: String, tableName: String): Unit = {
     val _spark = spark
@@ -69,9 +65,7 @@ class TestDSv2FilterPushdown extends SparkClientFunctionalTestHarness {
     assertEquals(2, rows.length)
     assertEquals(Seq((1, "Alice", "US"), (3, "Charlie", "US")), rows.toSeq)
 
-    val plan = df.queryExecution.executedPlan.toString()
-    assertTrue(containsBatchScan(plan),
-      s"DSv2 read should use BatchScan, but plan was:\n$plan")
+    assertBatchScan(df)
   }
 
   @Test
@@ -79,7 +73,6 @@ class TestDSv2FilterPushdown extends SparkClientFunctionalTestHarness {
     val tableName = "filter_sql_prune"
     val tablePath = basePath() + "/" + tableName
     val confKey = DataSourceReadOptions.USE_V2_READ.key
-    val prev = Option(spark.sessionState.conf.getConfString(confKey, null))
     try {
       spark.sql(s"DROP TABLE IF EXISTS $tableName")
       spark.sql(
@@ -105,21 +98,16 @@ class TestDSv2FilterPushdown extends SparkClientFunctionalTestHarness {
            |(3, 'Charlie', 300.0, 'US')
            """.stripMargin)
 
-      spark.sessionState.conf.setConfString(confKey, "true")
-      val df = spark.sql(s"SELECT * FROM $tableName WHERE country = 'US'")
-      assertEquals(2, df.count())
+      withSQLConf(confKey -> "true") {
+        val df = spark.sql(s"SELECT * FROM $tableName WHERE country = 'US'")
+        assertEquals(2, df.count())
 
-      val names = df.select("name").collect().map(_.getString(0)).sorted
-      assertEquals(Seq("Alice", "Charlie"), names.toSeq)
+        val names = df.select("name").collect().map(_.getString(0)).sorted
+        assertEquals(Seq("Alice", "Charlie"), names.toSeq)
 
-      val plan = df.queryExecution.executedPlan.toString()
-      assertTrue(containsBatchScan(plan),
-        s"With use.v2=true, SQL read should use BatchScan, but plan was:\n$plan")
-    } finally {
-      prev match {
-        case Some(v) => spark.sessionState.conf.setConfString(confKey, v)
-        case None => spark.sessionState.conf.unsetConf(confKey)
+        assertBatchScan(df)
       }
+    } finally {
       spark.sql(s"DROP TABLE IF EXISTS $tableName")
     }
   }
@@ -151,9 +139,7 @@ class TestDSv2FilterPushdown extends SparkClientFunctionalTestHarness {
     assertEquals(2, rows.length)
     assertEquals(Seq((4, "Diana"), (5, "Eve")), rows.toSeq)
 
-    val plan = df.queryExecution.executedPlan.toString()
-    assertTrue(containsBatchScan(plan),
-      s"DSv2 read should use BatchScan, but plan was:\n$plan")
+    assertBatchScan(df)
   }
 
   @Test
@@ -169,9 +155,7 @@ class TestDSv2FilterPushdown extends SparkClientFunctionalTestHarness {
     assertEquals(1, rows.length)
     assertEquals((1, "Alice", "US"), rows.head)
 
-    val plan = df.queryExecution.executedPlan.toString()
-    assertTrue(containsBatchScan(plan),
-      s"DSv2 read should use BatchScan, but plan was:\n$plan")
+    assertBatchScan(df)
   }
 
   @Test
@@ -180,8 +164,8 @@ class TestDSv2FilterPushdown extends SparkClientFunctionalTestHarness {
     writePartitionedData(path, "filter_explain")
 
     val df = spark.read.format("hudi_v2").load(path).filter("country = 'US'")
+    assertBatchScan(df)
     val plan = df.queryExecution.executedPlan.toString()
-    assertTrue(containsBatchScan(plan), s"Expected BatchScan in plan:\n$plan")
     assertTrue(plan.contains("PushedFilters"), s"Expected PushedFilters in plan:\n$plan")
     assertTrue(plan.contains("country"), s"Expected 'country' in pushed filters:\n$plan")
   }
@@ -211,9 +195,7 @@ class TestDSv2FilterPushdown extends SparkClientFunctionalTestHarness {
     assertTrue(v2Rows.exists { case (id, _, country) => id == 2 && country == "UK" },
       s"Expected id=2 (UK) row; got $v2Rows")
 
-    val plan = v2Df.queryExecution.executedPlan.toString()
-    assertTrue(containsBatchScan(plan),
-      s"DSv2 read should use BatchScan, but plan was:\n$plan")
+    assertBatchScan(v2Df)
   }
 
   @Test
@@ -235,12 +217,8 @@ class TestDSv2FilterPushdown extends SparkClientFunctionalTestHarness {
     assertEquals(v1Rows.toSeq, v2Rows.toSeq)
     assertEquals(2, v2Rows.length)
 
-    val v1Plan = v1Df.queryExecution.executedPlan.toString()
-    assertTrue(containsFileScan(v1Plan),
-      s"DSv1 read should use FileScan, but plan was:\n$v1Plan")
-    val v2Plan = v2Df.queryExecution.executedPlan.toString()
-    assertTrue(containsBatchScan(v2Plan),
-      s"DSv2 read should use BatchScan, but plan was:\n$v2Plan")
+    assertFileScan(v1Df)
+    assertBatchScan(v2Df)
   }
 
   @Test
@@ -254,9 +232,7 @@ class TestDSv2FilterPushdown extends SparkClientFunctionalTestHarness {
     val countries = df.select("country").distinct().collect().map(_.getString(0)).sorted
     assertEquals(Seq("FR", "UK", "US"), countries.toSeq)
 
-    val plan = df.queryExecution.executedPlan.toString()
-    assertTrue(containsBatchScan(plan),
-      s"DSv2 read should use BatchScan, but plan was:\n$plan")
+    assertBatchScan(df)
   }
 
   @Test
@@ -270,9 +246,7 @@ class TestDSv2FilterPushdown extends SparkClientFunctionalTestHarness {
     val countries = df.select("country").distinct().collect().map(_.getString(0)).sorted
     assertEquals(Seq("UK", "US"), countries.toSeq)
 
-    val plan = df.queryExecution.executedPlan.toString()
-    assertTrue(containsBatchScan(plan),
-      s"DSv2 read should use BatchScan, but plan was:\n$plan")
+    assertBatchScan(df)
   }
 
   @Test
@@ -300,8 +274,6 @@ class TestDSv2FilterPushdown extends SparkClientFunctionalTestHarness {
     val ids = df.select("id").collect().map(_.getInt(0)).sorted
     assertEquals(Seq(2, 4), ids.toSeq)
 
-    val plan = df.queryExecution.executedPlan.toString()
-    assertTrue(containsBatchScan(plan),
-      s"DSv2 read should use BatchScan, but plan was:\n$plan")
+    assertBatchScan(df)
   }
 }
