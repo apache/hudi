@@ -35,8 +35,7 @@ import org.apache.spark.sql.SparkSession
 object HoodieV2ReadSupport {
 
   def isSupportedByDSv2(metaClient: HoodieTableMetaClient,
-                        options: Map[String, String],
-                        spark: SparkSession): Boolean = {
+                        options: Map[String, String]): Boolean = {
     val tableConfig = metaClient.getTableConfig
     val queryType = SparkConfigUtils.getStringWithAltKeys(options, DataSourceReadOptions.QUERY_TYPE)
     val incrementalFormat = options.getOrElse(
@@ -56,10 +55,9 @@ object HoodieV2ReadSupport {
       !tableConfig.isMultipleBaseFileFormatsEnabled &&
         tableConfig.getBaseFileFormat == HoodieFileFormat.PARQUET
 
-    val notIncrementalOrCdc = !isIncremental && !isCdc
-    val notBootstrap = !tableConfig.getBootstrapBasePath.isPresent
-
-    baseFileOnlySemantics && isParquetOnly && notIncrementalOrCdc && notBootstrap
+    baseFileOnlySemantics && isParquetOnly &&
+      !isIncremental && !isCdc &&
+      !tableConfig.getBootstrapBasePath.isPresent
   }
 
   /**

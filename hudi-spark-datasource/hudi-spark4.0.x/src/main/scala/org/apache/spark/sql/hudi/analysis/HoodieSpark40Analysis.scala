@@ -76,10 +76,10 @@ case class HoodieSpark40DataSourceV2ToV1Fallback(sparkSession: SparkSession) ext
   }
 
   private def convertToV1(rv2: DataSourceV2Relation, v2Table: HoodieSparkV2Table) = {
-    val hct = v2Table.hoodieCatalogTable.get
+    val hoodieCatalogTable = v2Table.hoodieCatalogTable.get
     val catalogTable = v2Table.catalogTable.map(_ => v2Table.v1Table)
     val relation = new DefaultSource().createRelation(sparkSession.sqlContext,
-      buildHoodieConfig(hct), hct.tableSchema)
+      buildHoodieConfig(hoodieCatalogTable), hoodieCatalogTable.tableSchema)
 
     LogicalRelation(relation, rv2.output, catalogTable, isStreaming = false, Option.empty)
   }

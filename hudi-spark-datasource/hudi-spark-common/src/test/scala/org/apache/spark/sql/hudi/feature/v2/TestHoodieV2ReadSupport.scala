@@ -22,7 +22,6 @@ import org.apache.hudi.common.model.{HoodieFileFormat, HoodieTableType}
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.util.{Option => HOption}
 
-import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.hudi.v2.HoodieV2ReadSupport
 import org.junit.jupiter.api.Assertions.{assertFalse, assertTrue}
 import org.junit.jupiter.api.Test
@@ -48,18 +47,16 @@ class TestHoodieV2ReadSupport {
     metaClient
   }
 
-  private def spark: SparkSession = null // unused by current gate logic
-
   @Test
   def testCowWithDefaultsIsSupported(): Unit = {
     val metaClient = mockMetaClient(HoodieTableType.COPY_ON_WRITE)
-    assertTrue(HoodieV2ReadSupport.isSupportedByDSv2(metaClient, Map.empty, spark))
+    assertTrue(HoodieV2ReadSupport.isSupportedByDSv2(metaClient, Map.empty))
   }
 
   @Test
   def testMorSnapshotIsNotSupported(): Unit = {
     val metaClient = mockMetaClient(HoodieTableType.MERGE_ON_READ)
-    assertFalse(HoodieV2ReadSupport.isSupportedByDSv2(metaClient, Map.empty, spark))
+    assertFalse(HoodieV2ReadSupport.isSupportedByDSv2(metaClient, Map.empty))
   }
 
   @Test
@@ -67,19 +64,19 @@ class TestHoodieV2ReadSupport {
     val metaClient = mockMetaClient(HoodieTableType.MERGE_ON_READ)
     val opts = Map(DataSourceReadOptions.QUERY_TYPE.key ->
       DataSourceReadOptions.QUERY_TYPE_READ_OPTIMIZED_OPT_VAL)
-    assertTrue(HoodieV2ReadSupport.isSupportedByDSv2(metaClient, opts, spark))
+    assertTrue(HoodieV2ReadSupport.isSupportedByDSv2(metaClient, opts))
   }
 
   @Test
   def testOrcBaseFormatIsNotSupported(): Unit = {
     val metaClient = mockMetaClient(HoodieTableType.COPY_ON_WRITE, baseFileFormat = HoodieFileFormat.ORC)
-    assertFalse(HoodieV2ReadSupport.isSupportedByDSv2(metaClient, Map.empty, spark))
+    assertFalse(HoodieV2ReadSupport.isSupportedByDSv2(metaClient, Map.empty))
   }
 
   @Test
   def testMultipleBaseFormatsIsNotSupported(): Unit = {
     val metaClient = mockMetaClient(HoodieTableType.COPY_ON_WRITE, multipleBaseFileFormats = true)
-    assertFalse(HoodieV2ReadSupport.isSupportedByDSv2(metaClient, Map.empty, spark))
+    assertFalse(HoodieV2ReadSupport.isSupportedByDSv2(metaClient, Map.empty))
   }
 
   @Test
@@ -87,7 +84,7 @@ class TestHoodieV2ReadSupport {
     val metaClient = mockMetaClient(HoodieTableType.COPY_ON_WRITE)
     val opts = Map(DataSourceReadOptions.QUERY_TYPE.key ->
       DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
-    assertFalse(HoodieV2ReadSupport.isSupportedByDSv2(metaClient, opts, spark))
+    assertFalse(HoodieV2ReadSupport.isSupportedByDSv2(metaClient, opts))
   }
 
   @Test
@@ -95,7 +92,7 @@ class TestHoodieV2ReadSupport {
     val metaClient = mockMetaClient(HoodieTableType.COPY_ON_WRITE)
     val opts = Map(DataSourceReadOptions.INCREMENTAL_FORMAT.key ->
       DataSourceReadOptions.INCREMENTAL_FORMAT_CDC_VAL)
-    assertFalse(HoodieV2ReadSupport.isSupportedByDSv2(metaClient, opts, spark))
+    assertFalse(HoodieV2ReadSupport.isSupportedByDSv2(metaClient, opts))
   }
 
   @Test
@@ -103,6 +100,6 @@ class TestHoodieV2ReadSupport {
     val metaClient = mockMetaClient(
       HoodieTableType.COPY_ON_WRITE,
       bootstrapBasePath = HOption.of("/tmp/bootstrap"))
-    assertFalse(HoodieV2ReadSupport.isSupportedByDSv2(metaClient, Map.empty, spark))
+    assertFalse(HoodieV2ReadSupport.isSupportedByDSv2(metaClient, Map.empty))
   }
 }

@@ -30,19 +30,9 @@ import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
  * Functional tests for limit pushdown, statistics reporting, and aggregate pushdown via DSv2.
  */
 @Tag("functional")
-class TestDSv2Pushdowns extends SparkClientFunctionalTestHarness {
+class TestDSv2Pushdowns extends SparkClientFunctionalTestHarness with DSv2PlanAssertions {
 
   override def conf: SparkConf = conf(getSparkSqlConf)
-
-  private def containsBatchScan(plan: String): Boolean = plan.contains("BatchScan")
-
-  private def containsFileScan(plan: String): Boolean = plan.contains("FileScan")
-
-  // A fully pushed-down aggregate (e.g. COUNT(*) from column stats) materializes as
-  // Spark's LocalTableScan (via HoodieLocalScan/LocalScan), so accept either form as
-  // a DSv2 indicator in tests that may exercise aggregate pushdown.
-  private def containsDsv2Scan(plan: String): Boolean =
-    plan.contains("BatchScan") || plan.contains("LocalTableScan")
 
   private def writeTestData(path: String, tableName: String, numRecords: Int = 10): Unit = {
     val _spark = spark
@@ -90,9 +80,7 @@ class TestDSv2Pushdowns extends SparkClientFunctionalTestHarness {
     val df = spark.read.format("hudi_v2").load(path).limit(3)
     assertEquals(3, df.count())
 
-    val plan = df.queryExecution.executedPlan.toString()
-    assertTrue(containsBatchScan(plan),
-      s"DSv2 read should use BatchScan, but plan was:\n$plan")
+    assertBatchScan(df)
   }
 
   @Test
@@ -103,9 +91,7 @@ class TestDSv2Pushdowns extends SparkClientFunctionalTestHarness {
     val df = spark.read.format("hudi_v2").load(path).limit(100)
     assertEquals(5, df.count())
 
-    val plan = df.queryExecution.executedPlan.toString()
-    assertTrue(containsBatchScan(plan),
-      s"DSv2 read should use BatchScan, but plan was:\n$plan")
+    assertBatchScan(df)
   }
 
   @Test
@@ -121,9 +107,7 @@ class TestDSv2Pushdowns extends SparkClientFunctionalTestHarness {
     val country = df.select("country").collect().head.getString(0)
     assertEquals("US", country)
 
-    val plan = df.queryExecution.executedPlan.toString()
-    assertTrue(containsBatchScan(plan),
-      s"DSv2 read should use BatchScan, but plan was:\n$plan")
+    assertBatchScan(df)
   }
 
   @Test
@@ -141,9 +125,9 @@ class TestDSv2Pushdowns extends SparkClientFunctionalTestHarness {
     val id = df.select("id").collect().head.getInt(0)
     assertTrue(id > 3, s"Expected id > 3, got $id")
 
+    assertBatchScan(df)
     val plan = df.queryExecution.executedPlan.toString()
-    assertTrue(containsBatchScan(plan), s"Expected BatchScan in plan:\n$plan")
-    assertTrue(!plan.contains("PushedLimit"),
+    assertFalse(plan.contains("PushedLimit"),
       s"Limit must not be pushed when a data filter remains, plan was:\n$plan")
   }
 
@@ -160,8 +144,8 @@ class TestDSv2Pushdowns extends SparkClientFunctionalTestHarness {
       .limit(1)
     assertEquals(1, df.count())
 
+    assertBatchScan(df)
     val plan = df.queryExecution.executedPlan.toString()
-    assertTrue(containsBatchScan(plan), s"Expected BatchScan in plan:\n$plan")
     assertFalse(plan.contains("PushedLimit"),
       s"Limit must not be pushed when a mixed-reference filter remains, plan was:\n$plan")
   }
@@ -178,12 +162,8 @@ class TestDSv2Pushdowns extends SparkClientFunctionalTestHarness {
     assertEquals(v1Count, v2Count)
     assertEquals(5, v2Count)
 
-    val v1Plan = v1Df.queryExecution.executedPlan.toString()
-    assertTrue(containsFileScan(v1Plan),
-      s"DSv1 read should use FileScan, but plan was:\n$v1Plan")
-    val v2Plan = v2Df.queryExecution.executedPlan.toString()
-    assertTrue(containsBatchScan(v2Plan),
-      s"DSv2 read should use BatchScan, but plan was:\n$v2Plan")
+    assertFileScan(v1Df)
+    assertBatchScan(v2Df)
   }
 
   @Test
@@ -194,9 +174,7 @@ class TestDSv2Pushdowns extends SparkClientFunctionalTestHarness {
     val df = spark.read.format("hudi_v2").load(path).limit(1)
     assertEquals(1, df.count())
 
-    val plan = df.queryExecution.executedPlan.toString()
-    assertTrue(containsBatchScan(plan),
-      s"DSv2 read should use BatchScan, but plan was:\n$plan")
+    assertBatchScan(df)
   }
 
   @Test
@@ -205,11 +183,11 @@ class TestDSv2Pushdowns extends SparkClientFunctionalTestHarness {
     writeTestData(path, "limit_explain", numRecords = 5)
 
     val df = spark.read.format("hudi_v2").load(path).limit(3)
+    assertBatchScan(df)
     val plan = df.queryExecution.executedPlan.toString()
-    assertTrue(containsBatchScan(plan), s"Expected BatchScan in plan:\n$plan")
     // Spark 3.3's planner treats a successful limit pushdown as COMPLETE and drops the
     // outer LocalLimit; HoodieScanBuilder only enforces limit per input partition, so
-    // we refuse pushdown on 3.3 for correctness. On 3.4+, PartialLimitPushDown keeps the
+    // we refuse pushdown on 3.3 for correctness. On 3.4+, HoodiePartialLimitPushDown keeps the
     // outer LocalLimit in place, so pushdown is advertised.
     if (HoodieSparkUtils.gteqSpark3_4) {
       assertTrue(plan.contains("PushedLimit"), s"Expected PushedLimit in plan:\n$plan")
@@ -230,9 +208,7 @@ class TestDSv2Pushdowns extends SparkClientFunctionalTestHarness {
     val df = spark.read.format("hudi_v2").load(path).limit(4)
     assertEquals(4, df.count())
 
-    val plan = df.queryExecution.executedPlan.toString()
-    assertTrue(containsBatchScan(plan),
-      s"DSv2 read should use BatchScan, but plan was:\n$plan")
+    assertBatchScan(df)
   }
 
   // ==========================================================================
@@ -245,14 +221,11 @@ class TestDSv2Pushdowns extends SparkClientFunctionalTestHarness {
     writeTestData(path, "stats_size", numRecords = 10)
 
     val df = spark.read.format("hudi_v2").load(path)
-    val plan = df.queryExecution.optimizedPlan
-    val stats = plan.stats
+    val stats = df.queryExecution.optimizedPlan.stats
 
     assertTrue(stats.sizeInBytes > 0, s"Expected positive sizeInBytes, got: ${stats.sizeInBytes}")
 
-    val executedPlan = df.queryExecution.executedPlan.toString()
-    assertTrue(containsBatchScan(executedPlan),
-      s"DSv2 read should use BatchScan, but plan was:\n$executedPlan")
+    assertBatchScan(df)
   }
 
   @Test
@@ -277,14 +250,11 @@ class TestDSv2Pushdowns extends SparkClientFunctionalTestHarness {
     assertEquals(0L, count, "Expected zero rows for no-match filter")
 
     // Statistics should still reflect the underlying file sizes
-    val plan = df.queryExecution.optimizedPlan
-    val stats = plan.stats
+    val stats = df.queryExecution.optimizedPlan.stats
     assertTrue(stats.sizeInBytes >= 0,
       s"Expected non-negative sizeInBytes, got: ${stats.sizeInBytes}")
 
-    val executedPlan = df.queryExecution.executedPlan.toString()
-    assertTrue(containsBatchScan(executedPlan),
-      s"DSv2 read should use BatchScan, but plan was:\n$executedPlan")
+    assertBatchScan(df)
   }
 
   // ==========================================================================
@@ -304,9 +274,7 @@ class TestDSv2Pushdowns extends SparkClientFunctionalTestHarness {
 
     // count(*) may fully push down via column stats (LocalTableScan) or fall back
     // to a regular DSv2 scan (BatchScan). DSv1 would surface FileScan instead.
-    val plan = df.queryExecution.executedPlan.toString()
-    assertTrue(containsDsv2Scan(plan) && !containsFileScan(plan),
-      s"DSv2 read should use BatchScan or LocalTableScan, but plan was:\n$plan")
+    assertDsv2ReadPath(df)
   }
 
   @Test
@@ -320,13 +288,9 @@ class TestDSv2Pushdowns extends SparkClientFunctionalTestHarness {
     val v2Count = v2Df.collect().head.getLong(0)
     assertEquals(v1Count, v2Count)
 
-    val v1Plan = v1Df.queryExecution.executedPlan.toString()
-    assertTrue(containsFileScan(v1Plan),
-      s"DSv1 read should use FileScan, but plan was:\n$v1Plan")
+    assertFileScan(v1Df)
     // DSv2 count(*) may fully push down via stats (LocalTableScan) or fall back to BatchScan.
-    val v2Plan = v2Df.queryExecution.executedPlan.toString()
-    assertTrue(containsDsv2Scan(v2Plan) && !containsFileScan(v2Plan),
-      s"DSv2 read should use BatchScan or LocalTableScan, but plan was:\n$v2Plan")
+    assertDsv2ReadPath(v2Df)
   }
 
   @Test
@@ -341,9 +305,7 @@ class TestDSv2Pushdowns extends SparkClientFunctionalTestHarness {
     assertEquals(100.0, row.getDouble(0))
     assertEquals(500.0, row.getDouble(1))
 
-    val plan = df.queryExecution.executedPlan.toString()
-    assertTrue(containsBatchScan(plan),
-      s"DSv2 read should use BatchScan, but plan was:\n$plan")
+    assertBatchScan(df)
   }
 
   @Test
@@ -362,9 +324,7 @@ class TestDSv2Pushdowns extends SparkClientFunctionalTestHarness {
     assertEquals("US", rows(2)._1)
     assertEquals(3, rows(2)._2)
 
-    val plan = df.queryExecution.executedPlan.toString()
-    assertTrue(containsBatchScan(plan),
-      s"DSv2 read should use BatchScan, but plan was:\n$plan")
+    assertBatchScan(df)
   }
 
   @Test
@@ -380,8 +340,6 @@ class TestDSv2Pushdowns extends SparkClientFunctionalTestHarness {
 
     // count(*) with partition-only filter may fully push down via stats (LocalTableScan)
     // or fall back to a regular DSv2 scan (BatchScan). Either is valid DSv2; FileScan isn't.
-    val plan = df.queryExecution.executedPlan.toString()
-    assertTrue(containsDsv2Scan(plan) && !containsFileScan(plan),
-      s"DSv2 read should use BatchScan or LocalTableScan, but plan was:\n$plan")
+    assertDsv2ReadPath(df)
   }
 }

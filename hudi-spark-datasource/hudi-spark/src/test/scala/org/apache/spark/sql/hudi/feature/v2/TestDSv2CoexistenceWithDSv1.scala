@@ -34,7 +34,7 @@ import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
  * [[org.apache.spark.sql.hudi.catalog.HoodieCatalog.loadTable]] -> [[HoodieSparkV2Table]].
  */
 @Tag("functional")
-class TestDSv2CoexistenceWithDSv1 extends SparkClientFunctionalTestHarness {
+class TestDSv2CoexistenceWithDSv1 extends SparkClientFunctionalTestHarness with DSv2PlanAssertions {
 
   override def conf: SparkConf = conf(getSparkSqlConf)
 
@@ -54,10 +54,6 @@ class TestDSv2CoexistenceWithDSv1 extends SparkClientFunctionalTestHarness {
       .mode(SaveMode.Overwrite)
       .save(path)
   }
-
-  private def containsBatchScan(plan: String): Boolean = plan.contains("BatchScan")
-
-  private def containsFileScan(plan: String): Boolean = plan.contains("FileScan")
 
   // ---- DataFrame API write tests ----
 
@@ -127,9 +123,7 @@ class TestDSv2CoexistenceWithDSv1 extends SparkClientFunctionalTestHarness {
     val df = spark.read.format("hudi").load(path)
     assertEquals(3, df.count())
 
-    val plan = df.queryExecution.executedPlan.toString()
-    assertTrue(containsFileScan(plan),
-      s"DSv1 read should use FileScan, but plan was:\n$plan")
+    assertFileScan(df)
   }
 
   @Test
@@ -143,9 +137,7 @@ class TestDSv2CoexistenceWithDSv1 extends SparkClientFunctionalTestHarness {
     val names = df.select("name").collect().map(_.getString(0)).sorted
     assertEquals(Seq("Alice", "Bob", "Charlie"), names.toSeq)
 
-    val plan = df.queryExecution.executedPlan.toString()
-    assertTrue(containsBatchScan(plan),
-      s"DSv2 read should use BatchScan, but plan was:\n$plan")
+    assertBatchScan(df)
   }
 
   @Test
@@ -161,9 +153,7 @@ class TestDSv2CoexistenceWithDSv1 extends SparkClientFunctionalTestHarness {
     val df = spark.read.format("hudi").load(path)
     assertEquals(3, df.count())
 
-    val plan = df.queryExecution.executedPlan.toString()
-    assertTrue(containsFileScan(plan),
-      s"DSv1 read should use FileScan, but plan was:\n$plan")
+    assertFileScan(df)
   }
 
   @Test
@@ -184,9 +174,7 @@ class TestDSv2CoexistenceWithDSv1 extends SparkClientFunctionalTestHarness {
     val names = df.select("name").collect().map(_.getString(0)).sorted
     assertEquals(Seq("Alice", "Bob", "Charlie"), names.toSeq)
 
-    val plan = df.queryExecution.executedPlan.toString()
-    assertTrue(containsBatchScan(plan),
-      s"DSv2 read should use BatchScan, but plan was:\n$plan")
+    assertBatchScan(df)
   }
 
   // ---- SQL/Catalog tests ----
@@ -217,9 +205,7 @@ class TestDSv2CoexistenceWithDSv1 extends SparkClientFunctionalTestHarness {
       val df = spark.sql(s"SELECT * FROM $tableName")
       assertEquals(3, df.count())
 
-      val plan = df.queryExecution.executedPlan.toString()
-      assertTrue(containsFileScan(plan),
-        s"With use.v2=false, should use FileScan, but plan was:\n$plan")
+      assertFileScan(df)
     } finally {
       spark.sessionState.conf.unsetConf(DataSourceReadOptions.USE_V2_READ.key)
       spark.sql(s"DROP TABLE IF EXISTS $tableName")
@@ -255,9 +241,7 @@ class TestDSv2CoexistenceWithDSv1 extends SparkClientFunctionalTestHarness {
       val names = df.select("name").collect().map(_.getString(0)).sorted
       assertEquals(Seq("Alice", "Bob", "Charlie"), names.toSeq)
 
-      val plan = df.queryExecution.executedPlan.toString()
-      assertTrue(containsBatchScan(plan),
-        s"With use.v2=true, should use BatchScan, but plan was:\n$plan")
+      assertBatchScan(df)
     } finally {
       spark.sessionState.conf.unsetConf(DataSourceReadOptions.USE_V2_READ.key)
       spark.sql(s"DROP TABLE IF EXISTS $tableName")
@@ -292,9 +276,7 @@ class TestDSv2CoexistenceWithDSv1 extends SparkClientFunctionalTestHarness {
       val v2Df = spark.sql(s"SELECT * FROM $tableName")
       assertEquals(3, v2Df.count())
 
-      val v2Plan = v2Df.queryExecution.executedPlan.toString()
-      assertTrue(containsBatchScan(v2Plan),
-        s"V2 read should use BatchScan, but plan was:\n$v2Plan")
+      assertBatchScan(v2Df)
     } finally {
       spark.sessionState.conf.unsetConf(DataSourceReadOptions.USE_V2_READ.key)
     }
@@ -305,9 +287,7 @@ class TestDSv2CoexistenceWithDSv1 extends SparkClientFunctionalTestHarness {
       val v1Df = spark.sql(s"SELECT * FROM $tableName")
       assertEquals(3, v1Df.count())
 
-      val v1Plan = v1Df.queryExecution.executedPlan.toString()
-      assertTrue(containsFileScan(v1Plan),
-        s"V1 read should use FileScan, but plan was:\n$v1Plan")
+      assertFileScan(v1Df)
     } finally {
       spark.sessionState.conf.unsetConf(DataSourceReadOptions.USE_V2_READ.key)
       spark.sql(s"DROP TABLE IF EXISTS $tableName")

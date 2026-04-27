@@ -138,24 +138,25 @@ class HoodieCatalog extends DelegatingCatalogExtension
           catalogTable = Some(catalogTable),
           tableIdentifier = Some(ident.toString))
 
-        val v2ReadEnabled = spark.sessionState.conf.getConfString(
-          DataSourceReadOptions.USE_V2_READ.key,
-          DataSourceReadOptions.USE_V2_READ.defaultValue).toBoolean
         val schemaEvolutionEnabled = ProvidesHoodieConfig.isSchemaEvolutionEnabled(spark)
 
-        // Built lazily so V1-only paths (schema evolution, gate disabled) skip filesystem
-        // probes. HoodieCatalogTable.metaClient is itself a lazy val, so construction is
-        // cheap until touched.
-        lazy val hct = HoodieCatalogTable(spark, catalogTable)
-        val dsv2Supported = v2ReadEnabled && {
-          // Resolve read options before the gate so that query.type / incremental format
-          // coming from SQL confs, spark.hoodie.*, hudi-defaults.conf, TBLPROPERTIES, and
-          // CREATE TABLE OPTIONS are honored when deciding V1 vs V2. catalogProperties
-          // already merges table.storage.properties (OPTIONS) and table.properties
-          // (TBLPROPERTIES), matching HoodieSparkV2Table.properties(); scan-time options
-          // are layered on top in HoodieSparkV2Table.newScanBuilder.
-          val resolvedOpts = HoodieV2ReadSupport.resolveReadOptions(spark, hct.catalogProperties)
-          HoodieV2ReadSupport.isSupportedByDSv2(hct.metaClient, resolvedOpts, spark)
+        // hoodieCatalogTable construction is cheap; HoodieCatalogTable.metaClient is itself
+        // a lazy val so the filesystem probe only fires when the gate actually consults it.
+        // Skipped entirely when schemaEvolutionEnabled forces the V1 fallback.
+        lazy val hoodieCatalogTable = HoodieCatalogTable(spark, catalogTable)
+        val dsv2Supported = !schemaEvolutionEnabled && {
+          // Resolve read options before the gate so that USE_V2_READ, query.type,
+          // incremental format, etc. coming from SQL confs, spark.hoodie.*,
+          // hudi-defaults.conf, TBLPROPERTIES, and CREATE TABLE OPTIONS are all honored
+          // when deciding V1 vs V2. catalogProperties already merges
+          // table.storage.properties (OPTIONS) and table.properties (TBLPROPERTIES),
+          // matching HoodieSparkV2Table.properties(); scan-time options are layered on
+          // top in HoodieSparkV2Table.newScanBuilder.
+          val resolvedOpts = HoodieV2ReadSupport.resolveReadOptions(spark, hoodieCatalogTable.catalogProperties)
+          val v2ReadEnabled = resolvedOpts.getOrElse(
+            DataSourceReadOptions.USE_V2_READ.key,
+            DataSourceReadOptions.USE_V2_READ.defaultValue).toBoolean
+          v2ReadEnabled && HoodieV2ReadSupport.isSupportedByDSv2(hoodieCatalogTable.metaClient, resolvedOpts)
         }
 
         if (schemaEvolutionEnabled) {
@@ -169,7 +170,7 @@ class HoodieCatalog extends DelegatingCatalogExtension
             spark = spark,
             path = catalogTable.location.toString,
             catalogTable = Some(catalogTable),
-            preResolvedCatalogTable = Some(hct))
+            preResolvedCatalogTable = Some(hoodieCatalogTable))
         } else {
           v2Table.v1TableWrapper
         }

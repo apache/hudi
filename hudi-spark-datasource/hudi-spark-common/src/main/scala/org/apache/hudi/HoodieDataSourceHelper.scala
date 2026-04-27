@@ -77,12 +77,25 @@ object HoodieDataSourceHelper extends PredicateHelper with SparkAdapterSupport {
                  file: StoragePathInfo,
                  partitionValues: InternalRow): Seq[PartitionedFile] = {
     val filePath = file.getPath
-    val maxSplitBytes = sparkSession.sessionState.conf.filesMaxPartitionBytes
-    (0L until file.getLength by maxSplitBytes).map { offset =>
-      val remaining = file.getLength - offset
-      val size = if (remaining > maxSplitBytes) maxSplitBytes else remaining
+    computeSplitRanges(sparkSession, file.getLength).map { case (offset, size) =>
       sparkAdapter.getSparkPartitionedFileUtils.createPartitionedFile(
         partitionValues, filePath, offset, size)
+    }
+  }
+
+  /**
+   * Splits a file of `fileLength` bytes into `(start, length)` ranges of at most
+   * `spark.sql.files.maxPartitionBytes`. Shared by the DSv1 split path
+   * ([[splitFiles]]) and the DSv2 partition planner so both honor the same Spark
+   * config and produce identical task boundaries.
+   */
+  def computeSplitRanges(sparkSession: SparkSession,
+                         fileLength: Long): Seq[(Long, Long)] = {
+    val maxSplitBytes = sparkSession.sessionState.conf.filesMaxPartitionBytes
+    (0L until fileLength by maxSplitBytes).map { offset =>
+      val remaining = fileLength - offset
+      val size = if (remaining > maxSplitBytes) maxSplitBytes else remaining
+      (offset, size)
     }
   }
 

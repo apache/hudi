@@ -30,13 +30,9 @@ import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
  * Functional tests for COW snapshot reading via the DSv2 path.
  */
 @Tag("functional")
-class TestDSv2CowSnapshotRead extends SparkClientFunctionalTestHarness {
+class TestDSv2CowSnapshotRead extends SparkClientFunctionalTestHarness with DSv2PlanAssertions {
 
   override def conf: SparkConf = conf(getSparkSqlConf)
-
-  private def containsBatchScan(plan: String): Boolean = plan.contains("BatchScan")
-
-  private def containsFileScan(plan: String): Boolean = plan.contains("FileScan")
 
   @Test
   def testCowReadViaDataFrameApi(): Unit = {
@@ -64,9 +60,7 @@ class TestDSv2CowSnapshotRead extends SparkClientFunctionalTestHarness {
       .select("name").collect().map(_.getString(0)).sorted
     assertEquals(v1Names.toSeq, names.toSeq)
 
-    val plan = df.queryExecution.executedPlan.toString()
-    assertTrue(containsBatchScan(plan),
-      s"DSv2 read should use BatchScan, but plan was:\n$plan")
+    assertBatchScan(df)
   }
 
   @Test
@@ -97,16 +91,12 @@ class TestDSv2CowSnapshotRead extends SparkClientFunctionalTestHarness {
       spark.sessionState.conf.setConfString(confKey, "true")
       val v2Df = spark.sql(s"SELECT * FROM $tableName")
       assertEquals(3, v2Df.count())
-      val v2Plan = v2Df.queryExecution.executedPlan.toString()
-      assertTrue(containsBatchScan(v2Plan),
-        s"With use.v2=true, should use BatchScan, but plan was:\n$v2Plan")
+      assertBatchScan(v2Df)
 
       spark.sessionState.conf.setConfString(confKey, "false")
       val v1Df = spark.sql(s"SELECT * FROM $tableName")
       assertEquals(3, v1Df.count())
-      val v1Plan = v1Df.queryExecution.executedPlan.toString()
-      assertTrue(containsFileScan(v1Plan),
-        s"With use.v2=false, should use FileScan, but plan was:\n$v1Plan")
+      assertFileScan(v1Df)
 
       // Compare values (exclude meta-fields from V1)
       val v2Names = v2Df.select("name").collect().map(_.getString(0)).sorted
@@ -143,9 +133,7 @@ class TestDSv2CowSnapshotRead extends SparkClientFunctionalTestHarness {
     val rows = df.collect().map(r => (r.getInt(0), r.getString(1))).sortBy(_._1)
     assertEquals(Seq((1, "Alice"), (2, "Bob"), (3, "Charlie")), rows.toSeq)
 
-    val plan = df.queryExecution.executedPlan.toString()
-    assertTrue(containsBatchScan(plan),
-      s"DSv2 read should use BatchScan, but plan was:\n$plan")
+    assertBatchScan(df)
   }
 
   @Test
@@ -169,9 +157,7 @@ class TestDSv2CowSnapshotRead extends SparkClientFunctionalTestHarness {
     val ids = df.select("id").collect().map(_.getInt(0)).sorted
     assertEquals(Seq(1, 2), ids.toSeq)
 
-    val plan = df.queryExecution.executedPlan.toString()
-    assertTrue(containsBatchScan(plan),
-      s"DSv2 read should use BatchScan, but plan was:\n$plan")
+    assertBatchScan(df)
   }
 
   @Test
@@ -199,9 +185,7 @@ class TestDSv2CowSnapshotRead extends SparkClientFunctionalTestHarness {
     val names = df.select("name").collect().map(_.getString(0)).sorted
     assertEquals(Seq("Alice", "Bob", "Charlie"), names.toSeq)
 
-    val plan = df.queryExecution.executedPlan.toString()
-    assertTrue(containsBatchScan(plan),
-      s"DSv2 read should use BatchScan, but plan was:\n$plan")
+    assertBatchScan(df)
   }
 
   @Test
@@ -237,9 +221,7 @@ class TestDSv2CowSnapshotRead extends SparkClientFunctionalTestHarness {
       .map(r => (r.getInt(0), r.getString(1), r.getDouble(2))).sortBy(_._1)
     assertEquals(Seq((1, "Alice", 150.0), (2, "Bob", 200.0), (3, "Charlie", 300.0)), rows.toSeq)
 
-    val plan = df.queryExecution.executedPlan.toString()
-    assertTrue(containsBatchScan(plan),
-      s"DSv2 read should use BatchScan, but plan was:\n$plan")
+    assertBatchScan(df)
   }
 
   @Test
@@ -264,12 +246,8 @@ class TestDSv2CowSnapshotRead extends SparkClientFunctionalTestHarness {
     val v2Rows = v2Df.collect().map(r => (r.getInt(0), r.getString(1), r.getDouble(2))).sortBy(_._1)
     assertEquals(v1Rows.toSeq, v2Rows.toSeq)
 
-    val v1Plan = v1Df.queryExecution.executedPlan.toString()
-    assertTrue(containsFileScan(v1Plan),
-      s"DSv1 read should use FileScan, but plan was:\n$v1Plan")
-    val v2Plan = v2Df.queryExecution.executedPlan.toString()
-    assertTrue(containsBatchScan(v2Plan),
-      s"DSv2 read should use BatchScan, but plan was:\n$v2Plan")
+    assertFileScan(v1Df)
+    assertBatchScan(v2Df)
   }
 
   @Test
@@ -294,9 +272,7 @@ class TestDSv2CowSnapshotRead extends SparkClientFunctionalTestHarness {
     val countries = df.collect().map(_.getString(0)).sorted
     assertEquals(Seq("UK", "US", "US"), countries.toSeq)
 
-    val plan = df.queryExecution.executedPlan.toString()
-    assertTrue(containsBatchScan(plan),
-      s"DSv2 read should use BatchScan, but plan was:\n$plan")
+    assertBatchScan(df)
   }
 
   @Test
@@ -333,9 +309,49 @@ class TestDSv2CowSnapshotRead extends SparkClientFunctionalTestHarness {
     assertEquals(2L, countsByCountry("UK"))
     assertEquals(1L, countsByCountry("DE"))
 
-    val plan = df.queryExecution.executedPlan.toString()
-    assertTrue(containsBatchScan(plan),
-      s"DSv2 read should use BatchScan, but plan was:\n$plan")
+    assertBatchScan(df)
+  }
+
+  @Test
+  def testLargeBaseFileIsSplitForParallelism(): Unit = {
+    val path = basePath() + "/cow_split_large"
+    val _spark = spark
+    import _spark.implicits._
+
+    // Write enough rows that the resulting Parquet file is comfortably larger than the
+    // tiny maxPartitionBytes set below, guaranteeing the V2 planner emits more than
+    // one input partition for a single base file.
+    (1 to 5000).map(i => (i, s"name_$i", i * 1.5))
+      .toDF("id", "name", "amount")
+      .repartition(1)
+      .write.format("hudi")
+      .option("hoodie.table.name", "cow_split_large")
+      .option("hoodie.datasource.write.recordkey.field", "id")
+      .option("hoodie.datasource.write.precombine.field", "amount")
+      .mode(SaveMode.Overwrite)
+      .save(path)
+
+    val maxBytesKey = "spark.sql.files.maxPartitionBytes"
+    val prevMax = Option(spark.sessionState.conf.getConfString(maxBytesKey, null))
+    try {
+      spark.sessionState.conf.setConfString(maxBytesKey, "1024")
+      val df = spark.read.format("hudi_v2").load(path)
+      val numPartitions = df.rdd.getNumPartitions
+
+      assertBatchScan(df)
+      assertTrue(numPartitions > 1,
+        s"Large base file should split into multiple input partitions, got $numPartitions")
+
+      // Row set must be unchanged across split boundaries — Spark's Parquet reader
+      // assigns each row group to the split owning its midpoint, so no rows are
+      // duplicated or dropped at the boundary.
+      assertEquals(5000L, df.count())
+    } finally {
+      prevMax match {
+        case Some(v) => spark.sessionState.conf.setConfString(maxBytesKey, v)
+        case None => spark.sessionState.conf.unsetConf(maxBytesKey)
+      }
+    }
   }
 
   @Test
@@ -363,9 +379,6 @@ class TestDSv2CowSnapshotRead extends SparkClientFunctionalTestHarness {
     val rows = df.collect().map(r => (r.getInt(0), r.getString(1))).sortBy(_._1)
     assertEquals(Seq((2, "Bob"), (3, "Charlie")), rows.toSeq)
 
-    val plan = df.queryExecution.executedPlan.toString()
-    assertTrue(containsBatchScan(plan),
-      s"DataFrame-API read should land on BatchScan without v1Table being called, " +
-        s"plan was:\n$plan")
+    assertBatchScan(df)
   }
 }

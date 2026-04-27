@@ -30,7 +30,7 @@ import org.apache.spark.sql.connector.read.SupportsPushDownLimit;
  * When {@code isPartiallyPushed()} returns true, Spark adds a final LocalLimit on top of the
  * scan, which is necessary because Hudi's limit pushdown is best-effort (per-partition).
  */
-public interface PartialLimitPushDown extends SupportsPushDownLimit {
+public interface HoodiePartialLimitPushDown extends SupportsPushDownLimit {
   default boolean isPartiallyPushed() {
     return true;
   }
