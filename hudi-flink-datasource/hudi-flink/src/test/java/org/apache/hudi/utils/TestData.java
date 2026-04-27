@@ -360,6 +360,7 @@ public class TestData {
   public static List<RowData> DATA_SET_PART4 = Collections.singletonList(
       insertRow(StringData.fromString("id4"), StringData.fromString("Fabian"), 31,
           TimestampData.fromEpochMillis(4), StringData.fromString("par2")));
+
   public static List<RowData> DATA_SET_SINGLE_DELETE = Collections.singletonList(
       deleteRow(StringData.fromString("id1"), StringData.fromString("Danny"), 23,
           TimestampData.fromEpochMillis(5), StringData.fromString("par1")));

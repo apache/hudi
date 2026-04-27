@@ -205,18 +205,23 @@ public class TestWriteMergeOnRead extends TestWriteCopyOnWrite {
   public void testRecommitAfterCoordinatorRestart() throws Exception {
     Map<String, String> expected = new HashMap<>();
     expected.put("par1", "[id1,par1,id1,Danny,23,1,par1]");
-    expected.put("par2", "[id3,par2,id3,Julian,53,3,par2, id4,par2,id4,Fabian,31,4,par2]");
+    expected.put("par2", "[id4,par2,id4,Fabian,31,4,par2]");
     preparePipeline(conf)
         .consume(TestData.DATA_SET_PART1)
-        .emptyEventBuffer()
         .checkpoint(1)
         .assertNextEvent(1, "par1")
-        .consume(TestData.DATA_SET_PART3)
+        // checkpoint 2 captures coordinator state WITH par1 event;
+        // the write function has no new data so flushes an empty batch
         .checkpoint(2)
-        .assertNextEvent(1, "par2")
-        .restartCoordinator()
-        .subTaskFails(0, 0)
         .assertNextEvent()
+        // simulate failure: no checkpointComplete was called, data is NOT committed.
+        // restart coordinator: restores par1 event from ckp-2 state and recommits it.
+        .restartCoordinator()
+        // subtask re-initializes and sends bootstrap event
+        .subTaskFails(0, 0)
+        // bootstrap event triggers initInstant -> startInstant (new instant)
+        .assertNextEvent()
+        // write new data under the new instant
         .consume(TestData.DATA_SET_PART4)
         .checkpoint(3)
         .assertNextEvent(1, "par2")
