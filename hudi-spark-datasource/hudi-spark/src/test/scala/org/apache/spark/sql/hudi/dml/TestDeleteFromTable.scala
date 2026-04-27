@@ -82,4 +82,30 @@ class TestDeleteFromTable extends HoodieSparkSqlTestBase {
       }
     })
   }
+  test("Test deleting from twice on empty table") {
+    val databaseName = "hudi_database"
+    spark.sql(s"create database if not exists $databaseName")
+    spark.sql(s"use $databaseName")
+
+    val tableName = generateTableName
+    // Create a managed table
+    spark.sql(
+      s"""
+         | create table $tableName (
+         |  id int,
+         |  name string,
+         |  price double,
+         |  ts long
+         | ) using hudi
+         | tblproperties (
+         |   hoodie.database.name = "databaseName",
+         |   hoodie.table.name = "tableName",
+         |   primaryKey = 'id',
+         |   preCombineField = 'ts',
+         |   hoodie.datasource.write.operation = 'upsert'
+         | )
+       """.stripMargin)
+    spark.sql(s"DELETE FROM $tableName WHERE name = 'a2'")
+    spark.sql(s"DELETE FROM $tableName WHERE name = 'a3'")
+  }
 }
