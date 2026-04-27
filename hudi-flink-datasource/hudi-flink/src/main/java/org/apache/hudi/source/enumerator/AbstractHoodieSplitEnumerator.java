@@ -29,6 +29,7 @@ import org.apache.flink.api.connector.source.SourceEvent;
 import org.apache.flink.api.connector.source.SplitEnumerator;
 import org.apache.flink.api.connector.source.SplitEnumeratorContext;
 import org.apache.flink.api.connector.source.SupportsHandleExecutionAttemptSourceEvent;
+import org.apache.flink.metrics.groups.UnregisteredMetricsGroup;
 
 import javax.annotation.Nullable;
 
@@ -71,13 +72,16 @@ abstract class AbstractHoodieSplitEnumerator
     this.readersAwaitingSplit = new LinkedHashMap<>();
     this.availableFuture = new AtomicReference<>();
     this.splitProvider = splitProvider;
-    this.enumeratorContext
-        .metricGroup()
-        // This number may not capture the entire backlog due to split discovery throttling to avoid
-        // excessive memory footprint. Some pending splits may not have been discovered yet.
-        .setUnassignedSplitsGauge(() -> Long.valueOf(splitProvider.pendingSplitCount()));
-    this.enumeratorMetrics = new FlinkStreamReadMetrics(enumeratorContext.metricGroup(), tableName);
-    enumeratorMetrics.registerMetrics();
+    if (this.enumeratorContext.metricGroup() != null) {
+      // This number may not capture the entire backlog due to split discovery throttling to avoid
+      // excessive memory footprint. Some pending splits may not have been discovered yet.
+      this.enumeratorContext.metricGroup().setUnassignedSplitsGauge(() -> (long) splitProvider.pendingSplitCount());
+      this.enumeratorMetrics = new FlinkStreamReadMetrics(this.enumeratorContext.metricGroup(), tableName);
+    } else {
+      // The metrics group returned from enumeratorContext is null in Flink 1.17.
+      this.enumeratorMetrics = new FlinkStreamReadMetrics(UnregisteredMetricsGroup.createSplitEnumeratorMetricGroup(), tableName);
+    }
+    this.enumeratorMetrics.registerMetrics();
   }
 
   @Override

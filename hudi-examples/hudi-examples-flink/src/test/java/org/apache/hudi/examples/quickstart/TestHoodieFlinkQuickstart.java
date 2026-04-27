@@ -33,8 +33,6 @@ import java.util.List;
 import java.util.stream.Stream;
 
 import static org.apache.hudi.examples.quickstart.TestQuickstartData.assertRowsEquals;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-
 
 /**
  * IT cases for Hoodie table source and sink.
@@ -78,13 +76,6 @@ public class TestHoodieFlinkQuickstart extends AbstractTestBase {
     // streaming query (continuous read)
     List<Row> rows1 = flinkQuickstart.queryData();
     assertRowsEquals(rows1, TestQuickstartData.DATA_SET_SOURCE_INSERT_LATEST_COMMIT);
-
-    // bounded batch query via Source V2
-    if (useSourceV2) {
-      List<Row> batchRows = flinkQuickstart.queryBatchData(tempFile.getAbsolutePath(), "t1", tableType);
-      // full table scan
-      assertEquals(8, batchRows.size());
-    }
 
     // update data
     List<Row> rows2 = flinkQuickstart.updateData();

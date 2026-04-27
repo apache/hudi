@@ -57,7 +57,7 @@ import static org.apache.hudi.examples.quickstart.utils.QuickstartConfigurations
 public final class HoodieFlinkQuickstart {
   private EnvironmentSettings settings = null;
   @Getter
-  private TableEnvironment streamTableEnv = null;
+  private TableEnvironment tableEnvironment = null;
 
   private String tableName;
 
@@ -73,8 +73,6 @@ public final class HoodieFlinkQuickstart {
    * <p>When {@code useSourceV2} is {@code true} (default: {@code false}), the Hudi table is
    * registered with {@code read.source-v2.enabled = true}, which activates the FLIP-27
    * {@link org.apache.hudi.source.HoodieSource} for both streaming and batch reads.
-   * An additional bounded batch-read step ({@link #queryBatchData}) is executed to demonstrate
-   * the {@link org.apache.hudi.source.enumerator.HoodieStaticSplitEnumerator} path.
    */
   public static void main(String[] args) throws TableNotExistException, InterruptedException {
     if (args.length < 3) {
@@ -101,17 +99,12 @@ public final class HoodieFlinkQuickstart {
     // streaming query (continuous read)
     flinkQuickstart.queryData();
 
-    if (useSourceV2) {
-      // Source V2 also supports a bounded batch read via HoodieStaticSplitEnumerator
-      flinkQuickstart.queryBatchData(tablePath, tableName, tableType);
-    }
-
     // update data
     flinkQuickstart.updateData();
   }
 
   public void initEnv() {
-    if (this.streamTableEnv == null) {
+    if (tableEnvironment == null) {
       settings = EnvironmentSettings.newInstance().build();
       TableEnvironment streamTableEnv = TableEnvironmentImpl.create(settings);
       streamTableEnv.getConfig().getConfiguration()
@@ -121,7 +114,7 @@ public final class HoodieFlinkQuickstart {
       // configure not to retry after failure
       execConf.setString("restart-strategy", "fixed-delay");
       execConf.setString("restart-strategy.fixed-delay.attempts", "0");
-      this.streamTableEnv = streamTableEnv;
+      this.tableEnvironment = streamTableEnv;
     }
   }
 
@@ -150,14 +143,6 @@ public final class HoodieFlinkQuickstart {
   }
 
   /**
-   * Creates the Hudi streaming table without Source V2 (legacy SourceFunction path).
-   */
-  public void createHudiTable(String tablePath, String tableName,
-                              HoodieTableType tableType) {
-    createHudiTable(tablePath, tableName, tableType, false);
-  }
-
-  /**
    * Creates a Hudi streaming table, optionally enabling the FLIP-27 Source V2 reader.
    *
    * <p>When {@code useSourceV2} is {@code true}, {@code read.source-v2.enabled} is added to the
@@ -181,66 +166,35 @@ public final class HoodieFlinkQuickstart {
         .option(FlinkOptions.ORDERING_FIELDS, "ts")
         .option(FlinkOptions.READ_AS_STREAMING, true)
         .option(FlinkOptions.TABLE_TYPE, tableType)
+        .option(FlinkOptions.READ_SOURCE_V2_ENABLED, useSourceV2)
         .option(HoodieWriteConfig.ALLOW_EMPTY_COMMIT.key(), false);
 
-    if (useSourceV2) {
-      sqlBuilder.option(FlinkOptions.READ_SOURCE_V2_ENABLED, true);
-    }
-
-    streamTableEnv.executeSql(sqlBuilder.end());
+    tableEnvironment.executeSql(sqlBuilder.end());
   }
 
   public void createFileSource() {
     // create filesystem table named source
     String createSource = QuickstartConfigurations.getFileSourceDDL("source");
-    streamTableEnv.executeSql(createSource);
+    tableEnvironment.executeSql(createSource);
   }
 
   @Nonnull List<Row> insertData() throws InterruptedException, TableNotExistException {
     // insert data
     String insertInto = String.format("insert into %s select * from source", tableName);
-    execInsertSql(streamTableEnv, insertInto);
+    execInsertSql(tableEnvironment, insertInto);
     return queryData();
   }
 
   List<Row> queryData() throws InterruptedException, TableNotExistException {
     // query data
     // reading from the latest commit instance.
-    return execSelectSql(streamTableEnv, String.format("select * from %s", tableName), 10);
-  }
-
-  /**
-   * Reads the Hudi table in bounded batch mode via Source V2.
-   *
-   * <p>Creates a separate batch {@link TableEnvironment} where {@code READ_AS_STREAMING} is not
-   * set (defaults to {@code false}), causing {@link org.apache.hudi.source.HoodieSource} to use
-   * {@link org.apache.hudi.source.enumerator.HoodieStaticSplitEnumerator}: a bounded, one-shot
-   * snapshot read that enumerates all current file splits exactly once.  The Flink job finishes
-   * naturally once all splits are consumed, in contrast to the streaming counterpart which monitors
-   * for new commits indefinitely.
-   *
-   * @param tablePath storage path of the Hudi table written in the streaming phase
-   * @param tableName logical table name to register in the batch environment
-   * @param tableType COPY_ON_WRITE or MERGE_ON_READ
-   */
-  public List<Row> queryBatchData(String tablePath, String tableName, HoodieTableType tableType)
-      throws InterruptedException, TableNotExistException {
-    TableEnvironment batchEnv = getBatchTableEnv();
-    String batchTableDDL = sql(tableName)
-        .option(FlinkOptions.PATH, tablePath)
-        .option(FlinkOptions.RECORD_KEY_FIELD, "uuid")
-        .option(FlinkOptions.ORDERING_FIELDS, "ts")
-        .option(FlinkOptions.TABLE_TYPE, tableType)
-        .option(FlinkOptions.READ_SOURCE_V2_ENABLED, true)
-        .end();
-    batchEnv.executeSql(batchTableDDL);
-    return execBatchSelectSql(batchEnv, String.format("select * from %s", tableName), tableName);
+    return execSelectSql(tableEnvironment, String.format("select * from %s", tableName), 10);
   }
 
   @Nonnull List<Row> updateData() throws InterruptedException, TableNotExistException {
     // update data
     String insertInto = String.format("insert into %s select * from source", tableName);
-    execInsertSql(getStreamTableEnv(), insertInto);
+    execInsertSql(tableEnvironment, insertInto);
     return queryData();
   }
 
@@ -284,36 +238,6 @@ public final class HoodieFlinkQuickstart {
     // wait for the timeout then cancels the job
     TimeUnit.SECONDS.sleep(timeout);
     tableResult.getJobClient().ifPresent(JobClient::cancel);
-    tEnv.executeSql("DROP TABLE IF EXISTS sink");
-    return CollectSinkTableFactory.RESULT.values().stream()
-        .flatMap(Collection::stream)
-        .collect(Collectors.toList());
-  }
-
-  /**
-   * Executes a bounded SELECT query via the collect sink and awaits natural job completion.
-   *
-   * <p>Unlike {@link #execSelectSql(TableEnvironment, String, long)} which sleeps for a fixed
-   * timeout and then cancels the job, this method calls {@link TableResult#await()} so it returns
-   * as soon as the Flink job finishes consuming all splits – suitable for bounded batch queries
-   * where the job has a definite end.
-   */
-  public static List<Row> execBatchSelectSql(TableEnvironment tEnv, String select, String sourceTable)
-      throws InterruptedException, TableNotExistException {
-    ObjectPath objectPath = new ObjectPath(tEnv.getCurrentDatabase(), sourceTable);
-    String currentCatalog = tEnv.getCurrentCatalog();
-    Catalog catalog = tEnv.getCatalog(currentCatalog).get();
-    ResolvedCatalogTable resolvedTable = (ResolvedCatalogTable) catalog.getTable(objectPath);
-    ResolvedSchema schema = resolvedTable.getResolvedSchema();
-    String sinkDDL = QuickstartConfigurations.getCollectSinkDDL("sink", schema);
-    tEnv.executeSql("DROP TABLE IF EXISTS sink");
-    tEnv.executeSql(sinkDDL);
-    TableResult tableResult = tEnv.executeSql("insert into sink " + select);
-    try {
-      tableResult.await();
-    } catch (ExecutionException ex) {
-      // ignored
-    }
     tEnv.executeSql("DROP TABLE IF EXISTS sink");
     return CollectSinkTableFactory.RESULT.values().stream()
         .flatMap(Collection::stream)
