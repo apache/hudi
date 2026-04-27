@@ -28,6 +28,7 @@ import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 
 import lombok.Getter;
+import lombok.extern.slf4j.Slf4j;
 
 import java.io.Serializable;
 import java.util.ArrayList;
@@ -48,6 +49,7 @@ import static org.apache.hudi.common.table.timeline.InstantComparison.compareTim
  * a very large number of files are present in the dataset being initialized.
  */
 @Getter
+@Slf4j
 public class DirectoryInfo implements Serializable {
   private static final long serialVersionUID = 1L;
 
@@ -59,9 +61,10 @@ public class DirectoryInfo implements Serializable {
   private final List<StoragePath> subDirectories = new ArrayList<>();
   // Is this a hoodie partition
   private boolean isHoodiePartition = false;
+  private int zeroSizeFileCount = 0;
 
   public DirectoryInfo(String relativePath, List<StoragePathInfo> pathInfos, String maxInstantTime, Set<String> pendingDataInstants) {
-    this(relativePath, pathInfos, maxInstantTime, pendingDataInstants, true);
+    this(relativePath, pathInfos, maxInstantTime, pendingDataInstants, true, false);
   }
 
   /**
@@ -69,6 +72,11 @@ public class DirectoryInfo implements Serializable {
    */
   public DirectoryInfo(String relativePath, List<StoragePathInfo> pathInfos, String maxInstantTime, Set<String> pendingDataInstants,
                        boolean validateHoodiePartitions) {
+    this(relativePath, pathInfos, maxInstantTime, pendingDataInstants, validateHoodiePartitions, false);
+  }
+
+  public DirectoryInfo(String relativePath, List<StoragePathInfo> pathInfos, String maxInstantTime, Set<String> pendingDataInstants,
+                       boolean validateHoodiePartitions, boolean skipZeroSizeFiles) {
     this.relativePath = relativePath;
 
     // Pre-allocate with the maximum length possible
@@ -89,7 +97,12 @@ public class DirectoryInfo implements Serializable {
         String dataFileCommitTime = FSUtils.getCommitTime(pathInfo.getPath().getName());
         // Limit the file listings to files which were created by successful commits before the maxInstant time.
         if (!pendingDataInstants.contains(dataFileCommitTime) && compareTimestamps(dataFileCommitTime, LESSER_THAN_OR_EQUALS, maxInstantTime)) {
-          filenameToSizeMap.put(pathInfo.getPath().getName(), pathInfo.getLength());
+          if (pathInfo.getLength() > 0 || !skipZeroSizeFiles) {
+            filenameToSizeMap.put(pathInfo.getPath().getName(), pathInfo.getLength());
+          } else {
+            log.warn("Skipping zero-size data file during MDT bootstrap: {}", pathInfo.getPath());
+            zeroSizeFileCount++;
+          }
         }
       }
     }
