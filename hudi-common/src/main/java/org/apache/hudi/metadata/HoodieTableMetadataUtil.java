@@ -3100,6 +3100,7 @@ public class HoodieTableMetadataUtil {
     private final List<StoragePath> subDirectories = new ArrayList<>();
     // Is this a hoodie partition
     private boolean isHoodiePartition = false;
+    private int zeroSizeFileCount = 0;
 
     public DirectoryInfo(String relativePath, List<StoragePathInfo> pathInfos, String maxInstantTime, Set<String> pendingDataInstants) {
       this(relativePath, pathInfos, maxInstantTime, pendingDataInstants, true);
@@ -3130,10 +3131,19 @@ public class HoodieTableMetadataUtil {
           String dataFileCommitTime = FSUtils.getCommitTime(pathInfo.getPath().getName());
           // Limit the file listings to files which were created by successful commits before the maxInstant time.
           if (!pendingDataInstants.contains(dataFileCommitTime) && compareTimestamps(dataFileCommitTime, LESSER_THAN_OR_EQUALS, maxInstantTime)) {
-            filenameToSizeMap.put(pathInfo.getPath().getName(), pathInfo.getLength());
+            if (pathInfo.getLength() > 0) {
+              filenameToSizeMap.put(pathInfo.getPath().getName(), pathInfo.getLength());
+            } else {
+              log.warn("Skipping zero-size data file during MDT bootstrap: {}", pathInfo.getPath());
+              zeroSizeFileCount++;
+            }
           }
         }
       }
+    }
+
+    public int getZeroSizeFileCount() {
+      return zeroSizeFileCount;
     }
   }
 
