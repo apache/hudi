@@ -209,7 +209,7 @@ jobs:
             -v /var/run/docker.sock:/var/run/docker.sock \
             -w /hudi \
             hudi-ci \
-            /bin/bash -c "MAVEN_OPTS='-Xmx4g' mvn clean install -T 2 -D$SCALA_PROFILE -D$SPARK_PROFILE -D$FLINK_PROFILE -Phudi-platform-service -Pthrift-gen-source -Dmaven.test.skip=true -Ddocker.skip=true -Dcheckstyle.skip=true -Drat.skip=true $MVN_ARGS"
+            /bin/bash -c "MAVEN_OPTS='-Xmx4g' mvn clean install -T 2 -D$SCALA_PROFILE -D$SPARK_PROFILE -D$FLINK_PROFILE -Phudi-platform-service -Pthrift-gen-source -Dmaven.test.skip=true -DskipDocker=true -Dcheckstyle.skip=true -Drat.skip=true $MVN_ARGS"
       - name: UT - common and other modules
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
