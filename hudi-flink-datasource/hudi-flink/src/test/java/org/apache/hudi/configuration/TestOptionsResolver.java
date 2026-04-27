@@ -20,6 +20,7 @@ package org.apache.hudi.configuration;
 
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.WriteConcurrencyMode;
+import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.HoodieIndex;
@@ -50,6 +51,24 @@ public class TestOptionsResolver {
     // set lowercase index
     conf.set(FlinkOptions.INDEX_TYPE, "bloom");
     assertEquals(HoodieIndex.IndexType.BLOOM, OptionsResolver.getIndexType(conf));
+  }
+
+  @Test
+  void testRecordLevelIndexStreamingWrite() {
+    Configuration conf = getConf();
+    conf.set(FlinkOptions.METADATA_ENABLED, true);
+    conf.set(FlinkOptions.INDEX_TYPE, HoodieIndex.IndexType.RECORD_LEVEL_INDEX.name());
+
+    assertTrue(OptionsResolver.isRecordLevelIndex(conf));
+    assertTrue(OptionsResolver.isStreamingIndexWriteEnabled(conf));
+
+    conf.set(FlinkOptions.OPERATION, WriteOperationType.INSERT_OVERWRITE.value());
+    assertFalse(OptionsResolver.isStreamingIndexWriteEnabled(conf));
+
+    conf.set(FlinkOptions.OPERATION, WriteOperationType.UPSERT.value());
+    conf.set(FlinkOptions.INDEX_TYPE, HoodieIndex.IndexType.BUCKET.name());
+    assertFalse(OptionsResolver.isRecordLevelIndex(conf));
+    assertFalse(OptionsResolver.isStreamingIndexWriteEnabled(conf));
   }
 
   @Test

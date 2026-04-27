@@ -445,6 +445,14 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
       if (!conf.contains(FlinkOptions.INDEX_RLI_WRITE_BUFFER_SIZE)) {
         conf.set(FlinkOptions.INDEX_RLI_WRITE_BUFFER_SIZE, OptionsResolver.getWriteBufferSizeInBytes(conf) / 1024 / 1024 / 4);
       }
+    } else if (indexType == HoodieIndex.IndexType.RECORD_LEVEL_INDEX) {
+      conf.setString(HoodieMetadataConfig.RECORD_LEVEL_INDEX_ENABLE_PROP.key(), "true");
+      conf.set(FlinkOptions.INDEX_GLOBAL_ENABLED, false);
+      conf.setString(HoodieMetadataConfig.STREAMING_WRITE_ENABLED.key(), "true");
+      conf.set(FlinkOptions.INDEX_BOOTSTRAP_ENABLED, false);
+      if (!conf.contains(FlinkOptions.INDEX_RLI_WRITE_BUFFER_SIZE)) {
+        conf.set(FlinkOptions.INDEX_RLI_WRITE_BUFFER_SIZE, OptionsResolver.getWriteBufferSizeInBytes(conf) / 1024 / 1024 / 4);
+      }
     } else {
       conf.setString(HoodieMetadataConfig.STREAMING_WRITE_ENABLED.key(), "false");
     }

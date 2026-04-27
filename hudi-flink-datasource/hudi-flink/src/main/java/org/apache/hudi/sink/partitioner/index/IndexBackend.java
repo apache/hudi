@@ -18,35 +18,16 @@
 
 package org.apache.hudi.sink.partitioner.index;
 
-import org.apache.hudi.common.model.HoodieRecordGlobalLocation;
 import org.apache.hudi.sink.event.Correspondent;
 
 import org.apache.flink.metrics.MetricGroup;
 
 import java.io.Closeable;
-import java.io.IOException;
 
 /**
- * An interface that provides an abstraction for managing record location mappings in the index system.
- * It serves as the backend for storing and retrieving the location of records identified by their unique keys.
+ * An interface that provides common lifecycle hooks for index backends.
  */
 public interface IndexBackend extends Closeable {
-
-  /**
-   * Retrieves the global location of a record based on its key.
-   *
-   * @param recordKey the unique key identifying the record
-   * @return the global location of the record, or null if the record is not found in the index
-   */
-  HoodieRecordGlobalLocation get(String recordKey) throws IOException;
-
-  /**
-   * Updates the global location of a record in the index.
-   *
-   * @param recordKey the unique key identifying the record
-   * @param recordGlobalLocation the new global location of the record
-   */
-  void update(String recordKey, HoodieRecordGlobalLocation recordGlobalLocation) throws IOException;
 
   /**
    * Listener method called when the bucket assign operator finishes the checkpoint with {@code checkpointId}.

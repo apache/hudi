@@ -39,10 +39,21 @@ import org.apache.flink.runtime.state.FunctionInitializationContext;
 import java.util.stream.StreamSupport;
 
 /**
- * Factory to create an {@link IndexBackend} based on the configured index type.
+ * Factory to create a {@link GlobalIndexBackend} based on the configured index type.
  */
 public class IndexBackendFactory {
-  public static IndexBackend create(Configuration conf, FunctionInitializationContext context, RuntimeContext runtimeContext) throws Exception {
+  /**
+   * Creates the global index backend used by the legacy bucket assign function.
+   *
+   * <p>Flink state index stores locations in keyed state. Global RLI either uses the bootstrap
+   * RocksDB cache or a metadata-table-backed backend with checkpoint-aware cache eviction.
+   *
+   * @param conf Flink write configuration
+   * @param context Flink function initialization context
+   * @param runtimeContext Flink runtime context for job and attempt metadata
+   * @return global index backend for record-key lookups
+   */
+  public static GlobalIndexBackend create(Configuration conf, FunctionInitializationContext context, RuntimeContext runtimeContext) throws Exception {
     HoodieIndex.IndexType indexType = OptionsResolver.getIndexType(conf);
     switch (indexType) {
       case FLINK_STATE:
@@ -74,7 +85,7 @@ public class IndexBackendFactory {
           // set the jobId state with current job id.
           jobIdState.clear();
           jobIdState.add(RuntimeContextUtils.getJobId(runtimeContext));
-          return new RecordLevelIndexBackend(conf, initCheckpointId);
+          return new GlobalRecordLevelIndexBackend(conf, initCheckpointId);
         }
       default:
         throw new UnsupportedOperationException("Index type " + indexType + " is not supported for bucket assigning yet.");
