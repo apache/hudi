@@ -895,4 +895,120 @@ class TestHoodieSchemaConversionUtils extends FunSuite with Matchers {
   private def checkNull(left: Any, right: Any): Boolean = {
     (left == null && right != null) || (left != null && right == null)
   }
+
+  // ==========================================================
+  // Tests for alignSchemaMetadataFromCatalog
+  //
+  // Spark's INSERT INTO column resolution drops user-defined StructField
+  // metadata and can tighten/loosen nullability. For Hudi's BLOB and
+  // VECTOR logical types — whose detection depends on `hudi_type`
+  // metadata — this means df.schema arrives at the writer without the
+  // information needed to produce a logical-typed Avro schema.
+  // alignSchemaMetadataFromCatalog re-stamps both metadata and
+  // nullability from the catalog StructType onto the source StructType.
+  // ==========================================================
+
+  private val HUDI_TYPE = "hudi_type"
+
+  private def metaWithHudiType(value: String): Metadata =
+    new MetadataBuilder().putString(HUDI_TYPE, value).build()
+
+  /** Construct a plain (no logical-type metadata) BLOB-shaped struct. */
+  private def blobInnerStruct: StructType = new StructType()
+    .add("type", StringType, nullable = false)
+    .add("data", BinaryType, nullable = true)
+    .add("reference", new StructType()
+      .add("external_path", StringType, nullable = false)
+      .add("offset", LongType, nullable = true)
+      .add("length", LongType, nullable = true)
+      .add("managed", BooleanType, nullable = false),
+      nullable = true)
+
+  test("alignSchemaMetadataFromCatalog stamps BLOB metadata onto source field") {
+    val source = new StructType()
+      .add("payload", blobInnerStruct, nullable = true)
+    val catalog = new StructType()
+      .add(StructField("payload", blobInnerStruct, nullable = true, metaWithHudiType("BLOB")))
+
+    val aligned = HoodieSchemaConversionUtils.alignSchemaMetadataFromCatalog(source, catalog)
+    val payload = aligned.fields.find(_.name == "payload").get
+    assertEquals("BLOB", payload.metadata.getString(HUDI_TYPE))
+  }
+
+  test("alignSchemaMetadataFromCatalog stamps VECTOR metadata onto source field") {
+    val source = new StructType()
+      .add("emb", ArrayType(FloatType, containsNull = false), nullable = true)
+    val catalog = new StructType()
+      .add(StructField("emb", ArrayType(FloatType, containsNull = false),
+        nullable = true, metaWithHudiType("VECTOR(3)")))
+
+    val aligned = HoodieSchemaConversionUtils.alignSchemaMetadataFromCatalog(source, catalog)
+    val emb = aligned.fields.find(_.name == "emb").get
+    assertEquals("VECTOR(3)", emb.metadata.getString(HUDI_TYPE))
+  }
+
+  test("alignSchemaMetadataFromCatalog widens source nullability when catalog is nullable") {
+    val source = new StructType().add(StructField("id", IntegerType, nullable = false))
+    val catalog = new StructType().add(StructField("id", IntegerType, nullable = true))
+
+    val aligned = HoodieSchemaConversionUtils.alignSchemaMetadataFromCatalog(source, catalog)
+    val id = aligned.fields.find(_.name == "id").get
+    assertEquals(true, id.nullable)
+  }
+
+  test("alignSchemaMetadataFromCatalog narrows source nullability when catalog is non-null") {
+    val source = new StructType().add(StructField("pk", LongType, nullable = true))
+    val catalog = new StructType().add(StructField("pk", LongType, nullable = false))
+
+    val aligned = HoodieSchemaConversionUtils.alignSchemaMetadataFromCatalog(source, catalog)
+    val pk = aligned.fields.find(_.name == "pk").get
+    assertEquals(false, pk.nullable)
+  }
+
+  test("alignSchemaMetadataFromCatalog recurses into nested structs") {
+    // Source: media: STRUCT<title, content: STRUCT<...>> — content has empty metadata.
+    val sourceContent = blobInnerStruct
+    val sourceMedia = new StructType()
+      .add("title", StringType, nullable = false)
+      .add("content", sourceContent, nullable = true)
+    val source = new StructType().add("media", sourceMedia, nullable = true)
+
+    // Catalog: same shape, but media.content carries hudi_type=BLOB.
+    val catalogMedia = new StructType()
+      .add("title", StringType, nullable = false)
+      .add(StructField("content", sourceContent, nullable = true, metaWithHudiType("BLOB")))
+    val catalog = new StructType().add("media", catalogMedia, nullable = true)
+
+    val aligned = HoodieSchemaConversionUtils.alignSchemaMetadataFromCatalog(source, catalog)
+    val mediaField = aligned.fields.find(_.name == "media").get
+    val mediaStruct = mediaField.dataType.asInstanceOf[StructType]
+    val contentField = mediaStruct.fields.find(_.name == "content").get
+    assertEquals("BLOB", contentField.metadata.getString(HUDI_TYPE))
+  }
+
+  test("alignSchemaMetadataFromCatalog passes fields through when catalog has no match") {
+    val source = new StructType()
+      .add(StructField("bonus", StringType, nullable = false, metaWithHudiType("PLACEHOLDER")))
+    val catalog = new StructType().add(StructField("other", StringType, nullable = true))
+
+    val aligned = HoodieSchemaConversionUtils.alignSchemaMetadataFromCatalog(source, catalog)
+    val bonus = aligned.fields.find(_.name == "bonus").get
+    // bonus is unchanged: original metadata + nullability preserved.
+    assertEquals("PLACEHOLDER", bonus.metadata.getString(HUDI_TYPE))
+    assertEquals(false, bonus.nullable)
+  }
+
+  test("alignSchemaMetadataFromCatalog preserves source metadata when catalog metadata is empty") {
+    val sourceMeta = new MetadataBuilder().putString("comment", "x").build()
+    val source = new StructType()
+      .add(StructField("tag", StringType, nullable = true, sourceMeta))
+    // Catalog field with same name but no metadata.
+    val catalog = new StructType()
+      .add(StructField("tag", StringType, nullable = true, Metadata.empty))
+
+    val aligned = HoodieSchemaConversionUtils.alignSchemaMetadataFromCatalog(source, catalog)
+    val tag = aligned.fields.find(_.name == "tag").get
+    // Source's `comment` metadata is preserved (we don't blow it away with empty).
+    assertEquals("x", tag.metadata.getString("comment"))
+  }
 }

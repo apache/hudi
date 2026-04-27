@@ -146,6 +146,66 @@ object HoodieSchemaConversionUtils {
   }
 
   /**
+   * Re-attaches per-field StructField.metadata from a catalog-derived
+   * StructType onto a source StructType, matched by field name.
+   *
+   * Spark's INSERT INTO column resolution drops user-defined StructField
+   * metadata when projecting the SELECT output against the target table's
+   * schema. For Hudi's BLOB and VECTOR logical types — whose detection
+   * depends on the `hudi_type` metadata key — this means downstream
+   * conversion via `convertStructTypeToHoodieSchema` produces a plain
+   * Avro record / array instead of the logical-typed equivalent, and the
+   * write fails with `SchemaBackwardsCompatibilityException:
+   * MISSING_UNION_BRANCH`.
+   *
+   * Scoping rules:
+   *   - For a catalog field carrying `hudi_type` (BLOB / VECTOR / VARIANT),
+   *     the catalog defines the canonical Avro union shape. Both metadata
+   *     and nullability are re-stamped, and nested structs are recursed so
+   *     inner-field nullability matches the layout the logical-type
+   *     validator expects.
+   *   - For ordinary fields, only metadata is re-stamped. Nullability is
+   *     left untouched and we do NOT recurse — Spark's TableOutputResolver
+   *     already produced an Avro-compatible shape, and forcing the catalog's
+   *     nullability across unrelated columns shifts their Avro union layout
+   *     and breaks readers (surfacing as `Malformed data. Length is negative`
+   *     in Avro deserialization across MergeInto / partial-update paths).
+   *
+   * @param sourceSchema  the StructType whose metadata may have been stripped
+   *                      (typically `df.schema` from an INSERT plan)
+   * @param catalogSchema a StructType carrying authoritative
+   *                      StructField.metadata (typically derived from the
+   *                      Hudi catalog HoodieSchema)
+   * @return a StructType matching `sourceSchema`'s field shape but with
+   *         metadata re-stamped from `catalogSchema` where matching, and
+   *         nullability re-stamped only for logical-type fields
+   */
+  def alignSchemaMetadataFromCatalog(sourceSchema: StructType,
+                                     catalogSchema: StructType): StructType = {
+    val byName = catalogSchema.fields.map(f => f.name -> f).toMap
+    val aligned = sourceSchema.fields.map { src =>
+      byName.get(src.name) match {
+        case Some(cat) =>
+          val newMetadata =
+            if (cat.metadata != org.apache.spark.sql.types.Metadata.empty) cat.metadata
+            else src.metadata
+          val isLogical = cat.metadata.contains("hudi_type")
+          if (isLogical) {
+            val newDataType = (src.dataType, cat.dataType) match {
+              case (s: StructType, c: StructType) => alignSchemaMetadataFromCatalog(s, c)
+              case _ => src.dataType
+            }
+            src.copy(dataType = newDataType, nullable = cat.nullable, metadata = newMetadata)
+          } else {
+            src.copy(metadata = newMetadata)
+          }
+        case None => src
+      }
+    }
+    StructType(aligned)
+  }
+
+  /**
    * Recursively aligns the nullable property of Spark schema fields with HoodieSchema.
    *
    * @param sourceSchema Source Spark StructType to align

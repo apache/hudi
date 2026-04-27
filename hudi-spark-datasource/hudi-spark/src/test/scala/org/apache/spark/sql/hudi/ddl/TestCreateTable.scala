@@ -2333,4 +2333,111 @@ class TestCreateTable extends HoodieSparkSqlTestBase {
     val hiveSchema = CreateHoodieTableCommand.toHiveCompatibleSchema(schema)
     assertEquals(ArrayType(FloatType, containsNull = false), hiveSchema("floats").dataType)
   }
+
+  test("CREATE TABLE with BLOB + VECTOR persists logical types and allows INSERT INTO SELECT") {
+    // Reproduces the SchemaBackwardsCompatibilityException seen in the
+    // hudi_sql_vector_blob_demo.py demo:
+    //
+    //   org.apache.hudi.exception.SchemaBackwardsCompatibilityException:
+    //     {MISSING_UNION_BRANCH: reader union lacking writer type: BLOB ...,
+    //      MISSING_UNION_BRANCH: reader union lacking writer type: VECTOR ...}
+    //
+    // Root cause: the Spark-StructType -> Avro converter used at CREATE TABLE
+    // time persists BLOB / VECTOR fields as plain Avro records / arrays
+    // (no logicalType annotation). At INSERT time the writer-side schema
+    // correctly emits the BLOB / VECTOR Avro logical types, the schema
+    // compatibility check sees the table-side branch missing, and the write
+    // aborts.
+    //
+    // Existing CREATE TABLE BLOB / VECTOR tests assert against the Spark-side
+    // StructField.metadata only, which round-trips fine via Spark's catalog.
+    // This test asserts the persisted Avro table-create-schema and exercises
+    // an end-to-end INSERT INTO ... SELECT FROM <view>, which is the shape
+    // that surfaces the bug.
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      val sourceView = s"${tableName}_source"
+
+      // Source — bytes + array, plain Spark types, NO Hudi metadata. The
+      // logical types must come exclusively from the target table's DDL.
+      spark.sql(
+        s"""
+           |CREATE TEMPORARY VIEW $sourceView AS
+           |SELECT 1 AS id,
+           |       'first'                                          AS name,
+           |       cast(X'010203' as binary)                        AS bytes_raw,
+           |       array(cast(0.1 as float),
+           |             cast(0.2 as float),
+           |             cast(0.3 as float))                        AS emb_raw
+           |""".stripMargin)
+
+      // Target — BLOB + VECTOR(3) declared natively via Hudi-extended SQL.
+      // The DefaultSparkRecordMerger TBLPROPERTY mirrors the demo and flips
+      // the writer factory to the SPARK record type whose schema-extraction
+      // path emits the logical-typed Avro (i.e. exposes the asymmetry).
+      spark.sql(
+        s"""
+           |CREATE TABLE $tableName (
+           |  id      INT,
+           |  name    STRING,
+           |  payload BLOB,
+           |  emb     VECTOR(3)
+           |) USING hudi
+           |LOCATION '${tmp.getCanonicalPath}'
+           |TBLPROPERTIES (
+           |  primaryKey = 'id',
+           |  preCombineField = 'id',
+           |  type = 'cow',
+           |  'hoodie.write.record.merge.custom.implementation.classes' =
+           |      'org.apache.hudi.DefaultSparkRecordMerger'
+           |)
+           |""".stripMargin)
+
+      // Assert the persisted Avro schema carries the BLOB / VECTOR logical
+      // types BEFORE we attempt the INSERT. This isolates "schema
+      // persistence is wrong" from "INSERT path is wrong" — if these
+      // assertions fail, the INSERT will too.
+      val metaClient = createMetaClient(spark, tmp.getCanonicalPath)
+      val persisted = metaClient.getTableConfig.getTableCreateSchema.get()
+      val payloadField = persisted.getField("payload").get().schema().getNonNullType()
+      val embField = persisted.getField("emb").get().schema().getNonNullType()
+      assertEquals(HoodieSchemaType.BLOB, payloadField.getType,
+        "Persisted Avro schema for `payload` must be a BLOB logical type")
+      assertEquals(HoodieSchemaType.VECTOR, embField.getType,
+        "Persisted Avro schema for `emb` must be a VECTOR logical type")
+
+      // Now the INSERT INTO ... SELECT path. Currently fails with
+      // SchemaBackwardsCompatibilityException. Once the converter fix lands,
+      // this should succeed.
+      spark.sql(
+        s"""
+           |INSERT INTO $tableName
+           |SELECT id, name,
+           |       named_struct(
+           |         'type',      'INLINE',
+           |         'data',      bytes_raw,
+           |         'reference', cast(null as struct<external_path:string,
+           |                                          offset:bigint,
+           |                                          length:bigint,
+           |                                          managed:boolean>)
+           |       ) AS payload,
+           |       emb_raw AS emb
+           |FROM $sourceView
+           |""".stripMargin)
+
+      // Verify the row round-trips end-to-end.
+      val rows = spark.sql(
+        s"""SELECT id, name,
+           |       length(payload.data) AS bytes_len,
+           |       size(emb)            AS emb_len
+           |FROM $tableName""".stripMargin
+      ).collect()
+
+      assertEquals(1, rows.length)
+      assertEquals(1, rows.head.getInt(0))
+      assertEquals("first", rows.head.getString(1))
+      assertEquals(3, rows.head.getInt(2))    // bytes_raw was X'010203'
+      assertEquals(3, rows.head.getInt(3))    // 3-D vector
+    }
+  }
 }

@@ -350,16 +350,38 @@ object HoodieSparkSchemaConverters extends SparkAdapterSupport {
   /**
    * Validates that a StructType matches the expected blob schema structure defined in {@link HoodieSchema.Blob}.
    *
+   * Compares structurally (field names, positions, data types, recursing into nested
+   * structs) but does NOT require nullability to match. Spark's INSERT INTO resolution
+   * can change a field's nullability based on the source's nullability — e.g. a BINARY
+   * field whose source expression is non-null gets resolved as `nullable=false` even if
+   * the target's catalog declares it as `nullable=true`. The on-disk Avro side enforces
+   * its own non-null invariants via {@link HoodieSchema.Blob} regardless of what the
+   * Spark layer chose, so the validator only needs to confirm the structural shape.
+   *
    * @param structType the StructType to validate
    * @throws IllegalArgumentException if the structure does not match the expected blob schema
    */
   private def validateBlobStructure(structType: StructType): Unit = {
-    if (!structType.equals(expectedBlobStructType)) {
+    if (!matchesStructureIgnoringNullability(structType, expectedBlobStructType)) {
       throw new IllegalArgumentException(
         s"""Invalid blob schema structure. Expected schema:
            |${expectedBlobStructType.toDDL}
            |Got schema:
            |${structType.toDDL}""".stripMargin)
+    }
+  }
+
+  private def matchesStructureIgnoringNullability(actual: StructType, expected: StructType): Boolean = {
+    if (actual.fields.length != expected.fields.length) return false
+    actual.fields.zip(expected.fields).forall { case (a, e) =>
+      a.name == e.name && matchesDataTypeIgnoringNullability(a.dataType, e.dataType)
+    }
+  }
+
+  private def matchesDataTypeIgnoringNullability(actual: DataType, expected: DataType): Boolean = {
+    (actual, expected) match {
+      case (a: StructType, e: StructType) => matchesStructureIgnoringNullability(a, e)
+      case (a, e) => a == e
     }
   }
 

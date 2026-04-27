@@ -368,7 +368,29 @@ class HoodieSparkSqlWriterInternal {
         (s.getName, toScalaOption(s.getNamespace).orNull))
         .getOrElse(getRecordNameAndNamespace(tblName))
 
-      val sourceSchema = convertStructTypeToHoodieSchema(df.schema, avroRecordName, avroRecordNamespace)
+      // Spark's INSERT INTO column resolution drops user-defined StructField metadata
+      // when projecting the SELECT output against the target table's schema. For Hudi's
+      // BLOB and VECTOR logical types — whose detection depends on the `hudi_type`
+      // metadata key — this means df.schema arrives without the metadata that the
+      // converter needs, and the conversion produces a plain Avro record / array
+      // instead of the logical-typed equivalent. The schema compatibility check then
+      // fails with `SchemaBackwardsCompatibilityException: MISSING_UNION_BRANCH`.
+      //
+      // When the SQL command provides a catalog-derived schema (schemaFromCatalog),
+      // re-stamp the missing StructField metadata onto df.schema before conversion.
+      // For direct DataFrame writers that don't pass schemaFromCatalog, this is a
+      // no-op and the original behavior is preserved.
+      val alignedDfSchema = schemaFromCatalog match {
+        case Some(catalog) =>
+          val catalogStructType = HoodieSchemaConversionUtils.convertHoodieSchemaToStructType(catalog)
+          // Strip Hudi meta fields from the catalog StructType — df.schema doesn't have them.
+          val catalogDataFields = catalogStructType.fields
+            .filterNot(f => HoodieRecord.HOODIE_META_COLUMNS.contains(f.name))
+          HoodieSchemaConversionUtils.alignSchemaMetadataFromCatalog(
+            df.schema, StructType(catalogDataFields))
+        case None => df.schema
+      }
+      val sourceSchema = convertStructTypeToHoodieSchema(alignedDfSchema, avroRecordName, avroRecordNamespace)
       val internalSchemaOpt = HoodieSchemaUtils.getLatestTableInternalSchema(hoodieConfig, tableMetaClient).orElse {
         // In case we need to reconcile the schema and schema evolution is enabled,
         // we will force-apply schema evolution to the writer's schema
