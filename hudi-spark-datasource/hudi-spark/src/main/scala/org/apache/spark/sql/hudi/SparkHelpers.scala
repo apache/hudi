@@ -47,7 +47,9 @@ object SparkHelpers {
                               storage: HoodieStorage,
                               sourceFile: StoragePath,
                               destinationFile: StoragePath,
-                              keysToSkip: Set[String]) {
+                              keysToSkip: Set[String],
+                              hoodieMetaFieldFlags: HoodieMetaFieldFlags = HoodieMetaFieldFlags.allPopulated(),
+                              populateMetaFields: Boolean = true) {
     val sourceRecords = HoodieIOFactory.getIOFactory(storage)
       .getFileFormatUtils(HoodieFileFormat.PARQUET)
       .readAvroRecords(storage, sourceFile).asScala
@@ -71,7 +73,8 @@ object SparkHelpers {
     // Add current classLoad for config, if not will throw classNotFound of 'HoodieWrapperFileSystem'.
     conf.unwrap().setClassLoader(Thread.currentThread.getContextClassLoader)
 
-    val writer = new HoodieAvroParquetWriter(destinationFile, parquetConfig, instantTime, new SparkTaskContextSupplier(), true, HoodieMetaFieldFlags.allPopulated())
+    val writer = new HoodieAvroParquetWriter(destinationFile, parquetConfig, instantTime, new SparkTaskContextSupplier(),
+      populateMetaFields, hoodieMetaFieldFlags)
     for (rec <- sourceRecords) {
       val key: String = rec.get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString
       if (!keysToSkip.contains(key)) {

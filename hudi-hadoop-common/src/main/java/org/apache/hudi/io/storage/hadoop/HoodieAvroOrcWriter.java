@@ -50,6 +50,7 @@ import java.io.Closeable;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.List;
+import java.util.Objects;
 import java.util.concurrent.atomic.AtomicLong;
 
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
@@ -71,12 +72,12 @@ public class HoodieAvroOrcWriter implements HoodieAvroFileWriter, Closeable {
   private final TaskContextSupplier taskContextSupplier;
 
   private final HoodieOrcConfig orcConfig;
-  private final HoodieMetaFieldFlags metaFieldPopulationFlags;
+  private final HoodieMetaFieldFlags hoodieMetaFieldFlags;
   private String minRecordKey;
   private String maxRecordKey;
 
   public HoodieAvroOrcWriter(String instantTime, StoragePath file, HoodieOrcConfig config, HoodieSchema schema,
-                             TaskContextSupplier taskContextSupplier, HoodieMetaFieldFlags metaFieldPopulationFlags) throws IOException {
+                             TaskContextSupplier taskContextSupplier, HoodieMetaFieldFlags hoodieMetaFieldFlags) throws IOException {
 
     Configuration conf = HadoopFSUtils.registerFileSystem(file, config.getStorageConf().unwrapAs(Configuration.class));
     this.file = HoodieWrapperFileSystem.convertToHoodiePath(file, conf);
@@ -85,7 +86,7 @@ public class HoodieAvroOrcWriter implements HoodieAvroFileWriter, Closeable {
     this.wrapperFs = this.isWrapperFileSystem ? Option.of((HoodieWrapperFileSystem) fs) : Option.empty();
     this.instantTime = instantTime;
     this.taskContextSupplier = taskContextSupplier;
-    this.metaFieldPopulationFlags = metaFieldPopulationFlags;
+    this.hoodieMetaFieldFlags = Objects.requireNonNull(hoodieMetaFieldFlags, "hoodieMetaFieldFlags must not be null");
 
     this.schema = schema;
     final TypeDescription orcSchema = AvroOrcUtils.createOrcSchema(this.schema);
@@ -107,7 +108,7 @@ public class HoodieAvroOrcWriter implements HoodieAvroFileWriter, Closeable {
   @Override
   public void writeAvroWithMetadata(HoodieKey key, IndexedRecord avroRecord) throws IOException {
     prepRecordWithMetadata(key, avroRecord, instantTime,
-        taskContextSupplier.getPartitionIdSupplier().get(), RECORD_INDEX.getAndIncrement(), file.getName(), metaFieldPopulationFlags);
+        taskContextSupplier.getPartitionIdSupplier().get(), RECORD_INDEX.getAndIncrement(), file.getName(), hoodieMetaFieldFlags);
     writeAvro(key.getRecordKey(), avroRecord);
   }
 

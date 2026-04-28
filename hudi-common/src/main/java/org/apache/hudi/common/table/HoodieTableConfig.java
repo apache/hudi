@@ -1215,16 +1215,8 @@ public class HoodieTableConfig extends HoodieConfig {
    * @return true if the field is in the exclusion list
    */
   public boolean isMetaFieldExcluded(String metaFieldName) {
-    String value = getString(META_FIELDS_EXCLUDE_LIST);
-    if (value == null || value.trim().isEmpty()) {
-      return false;
-    }
-    for (String field : value.split(",")) {
-      if (field.trim().equals(metaFieldName)) {
-        return true;
-      }
-    }
-    return false;
+    return HoodieMetaFieldFlags.parseExcludeList(getString(META_FIELDS_EXCLUDE_LIST))
+        .contains(metaFieldName);
   }
 
   /**
@@ -1234,7 +1226,7 @@ public class HoodieTableConfig extends HoodieConfig {
    * from a writer-side config since the persisted table state is what determines on-disk
    * meta-field availability across commits.
    */
-  public HoodieMetaFieldFlags getMetaFieldPopulationFlags() {
+  public HoodieMetaFieldFlags getHoodieMetaFieldFlags() {
     return HoodieMetaFieldFlags.fromConfig(this);
   }
 

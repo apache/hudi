@@ -66,17 +66,12 @@ public interface HoodieAvroFileWriter extends HoodieFileWriter {
   default void prepRecordWithMetadata(HoodieKey key, IndexedRecord avroRecord, String instantTime,
       Integer partitionId, long recordIndex, String fileName, HoodieMetaFieldFlags populateFlags) {
     GenericRecord rec = (GenericRecord) avroRecord;
-    rec.put(HoodieRecord.COMMIT_TIME_METADATA_FIELD,
-        populateFlags.isInstantTimePopulated() ? instantTime : null);
-    rec.put(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD,
-        populateFlags.isCommitSeqNoPopulated()
-            ? HoodieRecord.generateSequenceId(instantTime, partitionId, recordIndex)
-            : null);
-    rec.put(HoodieRecord.RECORD_KEY_METADATA_FIELD,
-        populateFlags.isRecordKeyPopulated() ? key.getRecordKey() : null);
-    rec.put(HoodieRecord.PARTITION_PATH_METADATA_FIELD,
-        populateFlags.isPartitionPathPopulated() ? key.getPartitionPath() : null);
-    rec.put(HoodieRecord.FILENAME_METADATA_FIELD,
-        populateFlags.isFileNamePopulated() ? fileName : null);
+    String seqId = populateFlags.isCommitSeqNoPopulated()
+        ? HoodieRecord.generateSequenceId(instantTime, partitionId, recordIndex) : null;
+    rec.put(HoodieRecord.COMMIT_TIME_METADATA_FIELD, populateFlags.getCommitTime(instantTime));
+    rec.put(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD, seqId);
+    rec.put(HoodieRecord.RECORD_KEY_METADATA_FIELD, populateFlags.getRecordKey(key.getRecordKey()));
+    rec.put(HoodieRecord.PARTITION_PATH_METADATA_FIELD, populateFlags.getPartitionPath(key.getPartitionPath()));
+    rec.put(HoodieRecord.FILENAME_METADATA_FIELD, populateFlags.getFileName(fileName));
   }
 }

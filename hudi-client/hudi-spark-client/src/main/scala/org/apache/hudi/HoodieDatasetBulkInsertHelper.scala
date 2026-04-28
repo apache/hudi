@@ -115,7 +115,7 @@ object HoodieDatasetBulkInsertHelper
             val metaFields = new Array[UTF8String](5)
             // Always populate record_key and partition_path here so that downstream dedupe (which
             // reads these fields) works correctly. The write handle (HoodieRowCreateHandle) will
-            // null these out at file-write time when they are excluded by metaFieldPopulationFlags.
+            // null these out at file-write time when they are excluded by hoodieMetaFieldFlags.
             metaFields(2) = keyGenerator.getRecordKey(row, schema)
             metaFields(3) = keyGenerator.getPartitionPath(row, schema)
             // commit_time, commit_seqno, and file_name are placeholders here; the write handle

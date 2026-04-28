@@ -32,6 +32,7 @@ import org.apache.spark.unsafe.types.UTF8String;
 
 import java.io.IOException;
 import java.util.function.Function;
+import java.util.Objects;
 
 import static org.apache.hudi.common.model.HoodieRecord.HoodieMetadataField.COMMIT_SEQNO_METADATA_FIELD;
 import static org.apache.hudi.common.model.HoodieRecord.HoodieMetadataField.COMMIT_TIME_METADATA_FIELD;
@@ -45,7 +46,7 @@ public class HoodieSparkParquetWriter extends HoodieBaseParquetWriter<InternalRo
   private final UTF8String instantTime;
 
   private final boolean populateMetaFields;
-  private final HoodieMetaFieldFlags metaFieldPopulationFlags;
+  private final HoodieMetaFieldFlags hoodieMetaFieldFlags;
 
   private final HoodieRowParquetWriteSupport writeSupport;
 
@@ -56,13 +57,13 @@ public class HoodieSparkParquetWriter extends HoodieBaseParquetWriter<InternalRo
                                   String instantTime,
                                   TaskContextSupplier taskContextSupplier,
                                   boolean populateMetaFields,
-                                  HoodieMetaFieldFlags metaFieldPopulationFlags) throws IOException {
+                                  HoodieMetaFieldFlags hoodieMetaFieldFlags) throws IOException {
     super(file, parquetConfig);
     this.writeSupport = parquetConfig.getWriteSupport();
     this.fileName = UTF8String.fromString(file.getName());
     this.instantTime = UTF8String.fromString(instantTime);
     this.populateMetaFields = populateMetaFields;
-    this.metaFieldPopulationFlags = metaFieldPopulationFlags;
+    this.hoodieMetaFieldFlags = Objects.requireNonNull(hoodieMetaFieldFlags, "hoodieMetaFieldFlags must not be null");
     this.seqIdGenerator = recordIndex -> {
       Integer partitionId = taskContextSupplier.getPartitionIdSupplier().get();
       return HoodieRecord.generateSequenceId(instantTime, partitionId, recordIndex);
@@ -99,31 +100,14 @@ public class HoodieSparkParquetWriter extends HoodieBaseParquetWriter<InternalRo
                                       UTF8String recordKey,
                                       String partitionPath,
                                       long recordCount)  {
-    if (metaFieldPopulationFlags.isInstantTimePopulated()) {
-      row.update(COMMIT_TIME_METADATA_FIELD.ordinal(), instantTime);
-    } else {
-      row.update(COMMIT_TIME_METADATA_FIELD.ordinal(), null);
-    }
-    if (metaFieldPopulationFlags.isCommitSeqNoPopulated()) {
-      row.update(COMMIT_SEQNO_METADATA_FIELD.ordinal(), UTF8String.fromString(seqIdGenerator.apply(recordCount)));
-    } else {
-      row.update(COMMIT_SEQNO_METADATA_FIELD.ordinal(), null);
-    }
-    if (metaFieldPopulationFlags.isRecordKeyPopulated()) {
-      row.update(RECORD_KEY_METADATA_FIELD.ordinal(), recordKey);
-    } else {
-      row.update(RECORD_KEY_METADATA_FIELD.ordinal(), null);
-    }
-    if (metaFieldPopulationFlags.isPartitionPathPopulated()) {
-      // TODO set partition path in ctor
-      row.update(PARTITION_PATH_METADATA_FIELD.ordinal(), UTF8String.fromString(partitionPath));
-    } else {
-      row.update(PARTITION_PATH_METADATA_FIELD.ordinal(), null);
-    }
-    if (metaFieldPopulationFlags.isFileNamePopulated()) {
-      row.update(FILENAME_METADATA_FIELD.ordinal(), fileName);
-    } else {
-      row.update(FILENAME_METADATA_FIELD.ordinal(), null);
-    }
+    UTF8String seqId = hoodieMetaFieldFlags.isCommitSeqNoPopulated()
+        ? UTF8String.fromString(seqIdGenerator.apply(recordCount)) : null;
+    UTF8String partitionPathUtf8 = hoodieMetaFieldFlags.isPartitionPathPopulated()
+        ? UTF8String.fromString(partitionPath) : null;
+    row.update(COMMIT_TIME_METADATA_FIELD.ordinal(), hoodieMetaFieldFlags.isCommitTimePopulated() ? instantTime : null);
+    row.update(COMMIT_SEQNO_METADATA_FIELD.ordinal(), seqId);
+    row.update(RECORD_KEY_METADATA_FIELD.ordinal(), hoodieMetaFieldFlags.isRecordKeyPopulated() ? recordKey : null);
+    row.update(PARTITION_PATH_METADATA_FIELD.ordinal(), partitionPathUtf8);
+    row.update(FILENAME_METADATA_FIELD.ordinal(), hoodieMetaFieldFlags.isFileNamePopulated() ? fileName : null);
   }
 }

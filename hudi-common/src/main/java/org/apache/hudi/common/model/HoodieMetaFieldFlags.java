@@ -23,7 +23,6 @@ import org.apache.hudi.common.table.HoodieTableConfig;
 
 import java.io.Serializable;
 import java.util.HashSet;
-import java.util.List;
 import java.util.Set;
 
 /**
@@ -40,16 +39,16 @@ public class HoodieMetaFieldFlags implements Serializable {
   private static final HoodieMetaFieldFlags ALL_POPULATED = new HoodieMetaFieldFlags(true, true, true, true, true);
   private static final HoodieMetaFieldFlags NONE_POPULATED = new HoodieMetaFieldFlags(false, false, false, false, false);
 
-  private final boolean instantTimePopulated;
+  private final boolean commitTimePopulated;
   private final boolean commitSeqNoPopulated;
   private final boolean recordKeyPopulated;
   private final boolean partitionPathPopulated;
   private final boolean fileNamePopulated;
 
-  private HoodieMetaFieldFlags(boolean instantTimePopulated, boolean commitSeqNoPopulated,
+  private HoodieMetaFieldFlags(boolean commitTimePopulated, boolean commitSeqNoPopulated,
                                boolean recordKeyPopulated, boolean partitionPathPopulated,
                                boolean fileNamePopulated) {
-    this.instantTimePopulated = instantTimePopulated;
+    this.commitTimePopulated = commitTimePopulated;
     this.commitSeqNoPopulated = commitSeqNoPopulated;
     this.recordKeyPopulated = recordKeyPopulated;
     this.partitionPathPopulated = partitionPathPopulated;
@@ -71,23 +70,31 @@ public class HoodieMetaFieldFlags implements Serializable {
   }
 
   /**
-   * Creates an instance from a set of excluded field names, using the standard
-   * {@link HoodieRecord#HOODIE_META_COLUMNS} ordering.
+   * Creates an instance from a set of excluded field names.
    *
    * @param excluded set of meta field names to exclude (e.g. "_hoodie_record_key")
    * @return HoodieMetaFieldFlags with excluded fields marked as not populated
+   * @throws IllegalArgumentException if {@code excluded} contains names that are not in
+   *         {@link HoodieRecord#HOODIE_META_COLUMNS}, so configuration typos fail fast
+   *         rather than being silently ignored.
    */
   public static HoodieMetaFieldFlags fromExcludedFields(Set<String> excluded) {
     if (excluded == null || excluded.isEmpty()) {
       return ALL_POPULATED;
     }
-    List<String> metaColumns = HoodieRecord.HOODIE_META_COLUMNS;
+    Set<String> unknown = new HashSet<>(excluded);
+    unknown.removeAll(HoodieRecord.HOODIE_META_COLUMNS);
+    if (!unknown.isEmpty()) {
+      throw new IllegalArgumentException(
+          "Unknown meta field name(s) in exclusion list: " + unknown
+              + ". Valid names are: " + HoodieRecord.HOODIE_META_COLUMNS);
+    }
     return new HoodieMetaFieldFlags(
-        !excluded.contains(metaColumns.get(0)),
-        !excluded.contains(metaColumns.get(1)),
-        !excluded.contains(metaColumns.get(2)),
-        !excluded.contains(metaColumns.get(3)),
-        !excluded.contains(metaColumns.get(4))
+        !excluded.contains(HoodieRecord.COMMIT_TIME_METADATA_FIELD),
+        !excluded.contains(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD),
+        !excluded.contains(HoodieRecord.RECORD_KEY_METADATA_FIELD),
+        !excluded.contains(HoodieRecord.PARTITION_PATH_METADATA_FIELD),
+        !excluded.contains(HoodieRecord.FILENAME_METADATA_FIELD)
     );
   }
 
@@ -102,22 +109,32 @@ public class HoodieMetaFieldFlags implements Serializable {
     if (!populateMetaFields) {
       return NONE_POPULATED;
     }
-    String value = config.getString(HoodieTableConfig.META_FIELDS_EXCLUDE_LIST);
-    if (value == null || value.trim().isEmpty()) {
-      return ALL_POPULATED;
-    }
+    Set<String> excluded = parseExcludeList(config.getString(HoodieTableConfig.META_FIELDS_EXCLUDE_LIST));
+    return fromExcludedFields(excluded);
+  }
+
+  /**
+   * Parses a comma-separated meta-field exclusion list into a set of trimmed names.
+   * Returns an empty set for null or blank input. Used as the single parsing point
+   * for {@link HoodieTableConfig#META_FIELDS_EXCLUDE_LIST} so callers do not duplicate
+   * split/trim logic.
+   */
+  public static Set<String> parseExcludeList(String value) {
     Set<String> excluded = new HashSet<>();
+    if (value == null || value.trim().isEmpty()) {
+      return excluded;
+    }
     for (String field : value.split(",")) {
       String trimmed = field.trim();
       if (!trimmed.isEmpty()) {
         excluded.add(trimmed);
       }
     }
-    return fromExcludedFields(excluded);
+    return excluded;
   }
 
-  public boolean isInstantTimePopulated() {
-    return instantTimePopulated;
+  public boolean isCommitTimePopulated() {
+    return commitTimePopulated;
   }
 
   public boolean isCommitSeqNoPopulated() {
@@ -134,5 +151,50 @@ public class HoodieMetaFieldFlags implements Serializable {
 
   public boolean isFileNamePopulated() {
     return fileNamePopulated;
+  }
+
+  /**
+   * @return true if at least one of the 5 meta fields is populated. Equivalent to the
+   *         long-standing {@code populateMetaFields} cardinal switch: false only when
+   *         meta fields are entirely disabled (or every field is in the exclusion list).
+   */
+  public boolean isAnyPopulated() {
+    return commitTimePopulated || commitSeqNoPopulated || recordKeyPopulated
+        || partitionPathPopulated || fileNamePopulated;
+  }
+
+  /**
+   * @return {@code commitTime} if {@link #isCommitTimePopulated()}, else {@code null}.
+   */
+  public String getCommitTime(String commitTime) {
+    return commitTimePopulated ? commitTime : null;
+  }
+
+  /**
+   * @return {@code commitSeqNo} if {@link #isCommitSeqNoPopulated()}, else {@code null}.
+   */
+  public String getCommitSeqNo(String commitSeqNo) {
+    return commitSeqNoPopulated ? commitSeqNo : null;
+  }
+
+  /**
+   * @return {@code recordKey} if {@link #isRecordKeyPopulated()}, else {@code null}.
+   */
+  public String getRecordKey(String recordKey) {
+    return recordKeyPopulated ? recordKey : null;
+  }
+
+  /**
+   * @return {@code partitionPath} if {@link #isPartitionPathPopulated()}, else {@code null}.
+   */
+  public String getPartitionPath(String partitionPath) {
+    return partitionPathPopulated ? partitionPath : null;
+  }
+
+  /**
+   * @return {@code fileName} if {@link #isFileNamePopulated()}, else {@code null}.
+   */
+  public String getFileName(String fileName) {
+    return fileNamePopulated ? fileName : null;
   }
 }

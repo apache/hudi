@@ -33,6 +33,7 @@ import org.apache.avro.generic.IndexedRecord;
 import javax.annotation.concurrent.NotThreadSafe;
 
 import java.io.IOException;
+import java.util.Objects;
 
 /**
  * HoodieParquetWriter extends the ParquetWriter to help limit the size of underlying file. Provides a way to check if
@@ -49,7 +50,7 @@ public class HoodieAvroParquetWriter
   private final String instantTime;
   private final TaskContextSupplier taskContextSupplier;
   private final boolean populateMetaFields;
-  private final HoodieMetaFieldFlags metaFieldPopulationFlags;
+  private final HoodieMetaFieldFlags hoodieMetaFieldFlags;
   private final HoodieAvroWriteSupport writeSupport;
 
   @SuppressWarnings({"unchecked", "rawtypes"})
@@ -58,21 +59,21 @@ public class HoodieAvroParquetWriter
                                  String instantTime,
                                  TaskContextSupplier taskContextSupplier,
                                  boolean populateMetaFields,
-                                 HoodieMetaFieldFlags metaFieldPopulationFlags) throws IOException {
+                                 HoodieMetaFieldFlags hoodieMetaFieldFlags) throws IOException {
     super(file, (HoodieParquetConfig) parquetConfig);
     this.fileName = file.getName();
     this.writeSupport = parquetConfig.getWriteSupport();
     this.instantTime = instantTime;
     this.taskContextSupplier = taskContextSupplier;
     this.populateMetaFields = populateMetaFields;
-    this.metaFieldPopulationFlags = metaFieldPopulationFlags;
+    this.hoodieMetaFieldFlags = Objects.requireNonNull(hoodieMetaFieldFlags, "hoodieMetaFieldFlags must not be null");
   }
 
   @Override
   public void writeAvroWithMetadata(HoodieKey key, IndexedRecord avroRecord) throws IOException {
     if (populateMetaFields) {
       prepRecordWithMetadata(key, avroRecord, instantTime,
-          taskContextSupplier.getPartitionIdSupplier().get(), getWrittenRecordCount(), fileName, metaFieldPopulationFlags);
+          taskContextSupplier.getPartitionIdSupplier().get(), getWrittenRecordCount(), fileName, hoodieMetaFieldFlags);
       super.write(avroRecord);
       writeSupport.add(key.getRecordKey());
     } else {

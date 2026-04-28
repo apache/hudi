@@ -78,7 +78,7 @@ public class HoodieRowDataCreateHandle implements Serializable {
   private final String fileId;
   private final boolean preserveHoodieMetadata;
   private final boolean skipMetadataWrite;
-  private final HoodieMetaFieldFlags metaFieldPopulationFlags;
+  private final HoodieMetaFieldFlags hoodieMetaFieldFlags;
   private final HoodieStorage storage;
   protected final WriteStatus writeStatus;
   private final HoodieRecordLocation newRecordLocation;
@@ -102,7 +102,7 @@ public class HoodieRowDataCreateHandle implements Serializable {
     this.newRecordLocation = new HoodieRecordLocation(instantTime, fileId);
     this.preserveHoodieMetadata = preserveHoodieMetadata;
     this.skipMetadataWrite = skipMetadataWrite;
-    this.metaFieldPopulationFlags = table.getMetaClient().getTableConfig().getMetaFieldPopulationFlags();
+    this.hoodieMetaFieldFlags = table.getMetaClient().getTableConfig().getHoodieMetaFieldFlags();
     this.currTimer = HoodieTimer.start();
     this.storage = table.getStorage();
     this.path = makeNewPath(partitionPath);
@@ -146,7 +146,7 @@ public class HoodieRowDataCreateHandle implements Serializable {
       String commitInstant;
       RowData rowData;
       if (!skipMetadataWrite) {
-        if (metaFieldPopulationFlags.isInstantTimePopulated()) {
+        if (hoodieMetaFieldFlags.isCommitTimePopulated()) {
           if (preserveHoodieMetadata && !record.isNullAt(HoodieRecord.COMMIT_TIME_METADATA_FIELD_ORD)) {
             commitInstant = record.getString(HoodieRecord.COMMIT_TIME_METADATA_FIELD_ORD).toString();
           } else {
@@ -155,7 +155,7 @@ public class HoodieRowDataCreateHandle implements Serializable {
         } else {
           commitInstant = null;
         }
-        if (metaFieldPopulationFlags.isCommitSeqNoPopulated()) {
+        if (hoodieMetaFieldFlags.isCommitSeqNoPopulated()) {
           if (preserveHoodieMetadata && !record.isNullAt(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD_ORD)) {
             seqId = record.getString(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD_ORD).toString();
           } else {
@@ -164,9 +164,9 @@ public class HoodieRowDataCreateHandle implements Serializable {
         } else {
           seqId = null;
         }
-        String effectiveRecordKey = metaFieldPopulationFlags.isRecordKeyPopulated() ? recordKey : null;
-        String effectivePartitionPath = metaFieldPopulationFlags.isPartitionPathPopulated() ? partitionPath : null;
-        String effectiveFileName = metaFieldPopulationFlags.isFileNamePopulated() ? path.getName() : null;
+        String effectiveRecordKey = hoodieMetaFieldFlags.isRecordKeyPopulated() ? recordKey : null;
+        String effectivePartitionPath = hoodieMetaFieldFlags.isPartitionPathPopulated() ? partitionPath : null;
+        String effectiveFileName = hoodieMetaFieldFlags.isFileNamePopulated() ? path.getName() : null;
         rowData = HoodieRowDataCreation.create(commitInstant, seqId, effectiveRecordKey, effectivePartitionPath, effectiveFileName,
             record, writeConfig.allowOperationMetadataField(), preserveHoodieMetadata);
       } else {
