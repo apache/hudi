@@ -168,7 +168,13 @@ object InsertIntoHoodieTableCommand extends Logging with ProvidesHoodieConfig wi
     //       since such columns wouldn't be otherwise specified w/in the query itself and therefore couldn't be matched
     //       positionally for example
     val expectedQueryColumns = catalogTable.tableSchemaWithoutMetaFields.filterNot(f => staticPartitionValues.contains(f.name))
-    val coercedQueryOutput = coerceQueryOutputColumns(StructType(expectedQueryColumns), cleanedQuery, catalogTable, conf)
+    // Canonicalize partial BLOB struct expressions before TableOutputResolver runs,
+    // so OUT_OF_LINE-style `{type, reference}` literals (which Spark's positional
+    // struct check would otherwise reject for not aligning with the canonical
+    // `{type, data, reference}` layout) are accepted on the SQL ingest path.
+    val canonicalizedQuery = InsertBlobCanonicalizer.padPartialBlobsAgainstTarget(
+      cleanedQuery, StructType(expectedQueryColumns))
+    val coercedQueryOutput = coerceQueryOutputColumns(StructType(expectedQueryColumns), canonicalizedQuery, catalogTable, conf)
     // After potential reshaping validate that the output of the query conforms to the table's schema
     validate(removeMetaFields(coercedQueryOutput.schema), partitionsSpec, catalogTable)
 

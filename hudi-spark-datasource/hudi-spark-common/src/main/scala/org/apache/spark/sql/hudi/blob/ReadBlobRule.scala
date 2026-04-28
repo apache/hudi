@@ -19,9 +19,8 @@
 
 package org.apache.spark.sql.hudi.blob
 
-import org.apache.spark.sql.AnalysisException
 import org.apache.spark.sql.SparkSession
-import org.apache.spark.sql.catalyst.expressions.{Alias, Attribute, AttributeReference, Expression, ExprId, NamedExpression}
+import org.apache.spark.sql.catalyst.expressions.{Alias, Attribute, AttributeReference, Expression, NamedExpression}
 import org.apache.spark.sql.catalyst.plans.logical.{Filter, LogicalPlan, Project}
 import org.apache.spark.sql.catalyst.rules.Rule
 import org.apache.spark.sql.types.{DataType, StructType}
@@ -35,7 +34,14 @@ import scala.collection.mutable.ArrayBuffer
  * Replaces [[ReadBlobExpression]] markers with [[BatchedBlobRead]] nodes
  * that read blob data during physical execution.
  *
+ * Supports both top-level column references and nested expressions that
+ * resolve to a BlobType struct (e.g. `read_blob(parent.payload)` or
+ * `read_blob(arr[0])`). Non-attribute sources are lifted to a synthetic
+ * top-level alias via an injected `Project` so the downstream
+ * [[BatchedBlobRead]] always sees a plain top-level attribute.
+ *
  * Example: `SELECT id, read_blob(image_data) FROM table`
+ * Example: `SELECT id, read_blob(doc.payload) FROM table`
  *
  * @param spark SparkSession for accessing configuration
  */
@@ -46,34 +52,29 @@ case class ReadBlobRule(spark: SparkSession) extends Rule[LogicalPlan] {
       if containsReadBlobExpression(projectList)
         && containsReadBlobInExpression(condition)
         && !child.isInstanceOf[BatchedBlobRead] =>
-      val projectBlobCols = extractAllBlobColumns(projectList)
-      val filterBlobCols = extractBlobColumnsFromExpression(condition)
-      val blobColumns = (projectBlobCols ++ filterBlobCols)
-        .foldLeft((mutable.LinkedHashSet.empty[ExprId], ArrayBuffer.empty[AttributeReference])) {
-          case ((seen, acc), a) if seen.add(a.exprId) => (seen, acc += a)
-          case ((seen, acc), _) => (seen, acc)
-        }._2.toSeq
-      val (wrappedPlan, blobToDataAttr) = wrapWithBlobReads(blobColumns, child)
-      val newCondition = replaceReadBlobExpression(condition, blobToDataAttr)
-      val newProjectList = transformNamedExpressions(projectList, blobToDataAttr)
+      val sources = dedupBlobSources(
+        extractAllBlobSourceExprs(projectList) ++ extractBlobSourceExprsFromExpression(condition))
+      val (wrappedPlan, sourceToDataAttr) = wrapWithBlobReads(sources, child)
+      val newCondition = replaceReadBlobExpression(condition, sourceToDataAttr)
+      val newProjectList = transformNamedExpressions(projectList, sourceToDataAttr)
       Project(newProjectList, Filter(newCondition, wrappedPlan))
 
     case Filter(condition, child)
       if containsReadBlobInExpression(condition)
         && !child.isInstanceOf[BatchedBlobRead] =>
 
-      val blobColumns = extractBlobColumnsFromExpression(condition)
-      val (wrappedPlan, blobToDataAttr) = wrapWithBlobReads(blobColumns, child)
-      val newCondition = replaceReadBlobExpression(condition, blobToDataAttr)
+      val sources = extractBlobSourceExprsFromExpression(condition)
+      val (wrappedPlan, sourceToDataAttr) = wrapWithBlobReads(sources, child)
+      val newCondition = replaceReadBlobExpression(condition, sourceToDataAttr)
       Project(child.output, Filter(newCondition, wrappedPlan))
 
     case Project(projectList, child)
       if containsReadBlobExpression(projectList)
         && !child.isInstanceOf[BatchedBlobRead] =>
 
-      val blobColumns = extractAllBlobColumns(projectList)
-      val (wrappedPlan, blobToDataAttr) = wrapWithBlobReads(blobColumns, child)
-      val newProjectList = transformNamedExpressions(projectList, blobToDataAttr)
+      val sources = extractAllBlobSourceExprs(projectList)
+      val (wrappedPlan, sourceToDataAttr) = wrapWithBlobReads(sources, child)
+      val newProjectList = transformNamedExpressions(projectList, sourceToDataAttr)
       Project(newProjectList, wrappedPlan)
 
     case node if containsReadBlobInAnyExpression(node) =>
@@ -86,39 +87,72 @@ case class ReadBlobRule(spark: SparkSession) extends Rule[LogicalPlan] {
     plan.expressions.exists(containsReadBlobInExpression)
   }
 
+  /**
+   * Wraps `child` with one [[BatchedBlobRead]] per distinct blob source expression.
+   * Non-attribute sources are first projected to a synthetic top-level alias so the
+   * downstream nodes can address them as plain top-level attributes.
+   *
+   * @return the augmented plan plus a mapping from each source expression's
+   *         canonicalized form to the [[BatchedBlobRead.dataAttr]] that should
+   *         replace the corresponding `read_blob()` call.
+   */
   private def wrapWithBlobReads(
-      blobColumns: Seq[AttributeReference],
-      child: LogicalPlan): (LogicalPlan, Map[ExprId, Attribute]) = {
-    if (blobColumns.isEmpty) {
+      sources: Seq[Expression],
+      child: LogicalPlan): (LogicalPlan, Map[Expression, Attribute]) = {
+    if (sources.isEmpty) {
       throw new IllegalStateException("read_blob() found but no valid blob column reference extracted.")
     }
-    blobColumns.foldLeft((child: LogicalPlan, Map.empty[ExprId, Attribute])) {
-      case ((currentPlan, mapping), blobAttr) =>
-        // Type compatibility check (early fail for non-struct columns)
-        blobAttr.dataType match {
-          case struct: StructType if DataType.equalsIgnoreCaseAndNullability(struct, org.apache.spark.sql.types.BlobType.dataType) =>
-            // Valid blob column
-          case _ =>
-            throw new IllegalArgumentException(
-              s"Blob column '${blobAttr.name}' must be compatible with BlobType (type, data, reference struct), found: ${blobAttr.dataType}")
-        }
-        val blobRead = BatchedBlobRead(currentPlan, blobAttr)
-        (blobRead, mapping + (blobAttr.exprId -> blobRead.dataAttr))
-    }
-  }
 
-  private def extractBlobColumnsFromExpression(expr: Expression): Seq[AttributeReference] = {
-    val seen = mutable.LinkedHashSet.empty[ExprId]
-    val result = ArrayBuffer.empty[AttributeReference]
-    collectBlobColumns(expr, seen, result)
-    result.toSeq
+    // Per source: either reuse an existing top-level AttributeReference, or synthesize a
+    // fresh Alias that we will project onto the plan to lift the nested expression into a
+    // top-level attribute. We keep the original source expression so we can key the final
+    // mapping by its canonicalized form.
+    case class Binding(source: Expression, blobAttr: AttributeReference, lift: Option[Alias])
+    val bindings: Seq[Binding] = sources.map {
+      case attr: AttributeReference =>
+        Binding(attr, attr, None)
+      case other =>
+        // Deterministic alias name from the canonicalized form so identical nested
+        // sub-trees (e.g. across SELECT and WHERE) get the same alias name.
+        val aliasName = s"_blob_src_${Integer.toHexString(other.canonicalized.hashCode())}"
+        val alias = Alias(other, aliasName)()
+        Binding(other, alias.toAttribute.asInstanceOf[AttributeReference], Some(alias))
+    }
+
+    // Type-compatibility check: every blob source must resolve to a BlobType struct.
+    bindings.foreach { b =>
+      b.blobAttr.dataType match {
+        case struct: StructType
+          if DataType.equalsIgnoreCaseAndNullability(struct, org.apache.spark.sql.types.BlobType.dataType) =>
+          // Valid blob source.
+        case _ =>
+          throw new IllegalArgumentException(
+            s"Blob source '${b.source}' must be compatible with BlobType (type, data, reference struct), " +
+              s"found: ${b.blobAttr.dataType}")
+      }
+    }
+
+    // Inject the synthetic Project once if any source needed lifting.
+    val lifts = bindings.flatMap(_.lift)
+    val planWithLifts: LogicalPlan = if (lifts.isEmpty) child
+      else Project(child.output ++ lifts, child)
+
+    // Stack one BatchedBlobRead per distinct blob source.
+    val (finalPlan, mapping) = bindings.foldLeft(
+      (planWithLifts, Map.empty[Expression, Attribute])) {
+      case ((currentPlan, acc), b) =>
+        val blobRead = BatchedBlobRead(currentPlan, b.blobAttr)
+        (blobRead, acc + (b.source.canonicalized -> blobRead.dataAttr))
+    }
+
+    (finalPlan, mapping)
   }
 
   /**
    * Check if any expression in the project list contains a ReadBlobExpression.
    */
   private def containsReadBlobExpression(projectList: Seq[Expression]): Boolean = {
-    projectList.exists(expr => containsReadBlobInExpression(expr))
+    projectList.exists(containsReadBlobInExpression)
   }
 
   private def containsReadBlobInExpression(expr: Expression): Boolean = {
@@ -128,46 +162,69 @@ case class ReadBlobRule(spark: SparkSession) extends Rule[LogicalPlan] {
     }
   }
 
-  private def extractAllBlobColumns(expressions: Seq[Expression]): Seq[AttributeReference] = {
-    val seen = mutable.LinkedHashSet.empty[ExprId]
-    val result = ArrayBuffer.empty[AttributeReference]
-    expressions.foreach(collectBlobColumns(_, seen, result))
+  private def extractAllBlobSourceExprs(expressions: Seq[Expression]): Seq[Expression] = {
+    val seen = mutable.LinkedHashSet.empty[Expression]
+    val result = ArrayBuffer.empty[Expression]
+    expressions.foreach(collectBlobSources(_, seen, result))
     result.toSeq
   }
 
-  private def collectBlobColumns(
+  private def extractBlobSourceExprsFromExpression(expr: Expression): Seq[Expression] = {
+    val seen = mutable.LinkedHashSet.empty[Expression]
+    val result = ArrayBuffer.empty[Expression]
+    collectBlobSources(expr, seen, result)
+    result.toSeq
+  }
+
+  /**
+   * Walks `expr` collecting the inner expression of every `ReadBlobExpression`.
+   * Dedup is by canonicalized form so identical sub-trees only produce one
+   * [[BatchedBlobRead]] each.
+   */
+  private def collectBlobSources(
       expr: Expression,
-      seen: mutable.Set[ExprId],
-      result: ArrayBuffer[AttributeReference]): Unit = expr match {
-    case ReadBlobExpression(attr: AttributeReference) =>
-      if (seen.add(attr.exprId)) result += attr
+      seen: mutable.Set[Expression],
+      result: ArrayBuffer[Expression]): Unit = expr match {
+    case ReadBlobExpression(inner) =>
+      if (seen.add(inner.canonicalized)) result += inner
     case other =>
-      other.children.foreach(collectBlobColumns(_, seen, result))
+      other.children.foreach(collectBlobSources(_, seen, result))
+  }
+
+  /**
+   * Dedup two source-expression lists (e.g. from a Project + Filter) by canonicalized
+   * form, preserving first-seen order.
+   */
+  private def dedupBlobSources(sources: Seq[Expression]): Seq[Expression] = {
+    val seen = mutable.LinkedHashSet.empty[Expression]
+    val result = ArrayBuffer.empty[Expression]
+    sources.foreach { s =>
+      if (seen.add(s.canonicalized)) result += s
+    }
+    result.toSeq
   }
 
   private def transformNamedExpressions(
       expressions: Seq[NamedExpression],
-      blobToDataAttr: Map[ExprId, Attribute]): Seq[NamedExpression] = {
+      sourceToDataAttr: Map[Expression, Attribute]): Seq[NamedExpression] = {
     expressions.map {
       case alias @ Alias(childExpr, name) =>
-        val rewritten = replaceReadBlobExpression(childExpr, blobToDataAttr)
+        val rewritten = replaceReadBlobExpression(childExpr, sourceToDataAttr)
         Alias(rewritten, name)(alias.exprId, alias.qualifier, alias.explicitMetadata)
       case attr: AttributeReference => attr
       case other =>
-        replaceReadBlobExpression(other, blobToDataAttr).asInstanceOf[NamedExpression]
+        replaceReadBlobExpression(other, sourceToDataAttr).asInstanceOf[NamedExpression]
     }
   }
 
   private def replaceReadBlobExpression(
       expr: Expression,
-      blobToDataAttr: Map[ExprId, Attribute]): Expression = expr match {
-    case ReadBlobExpression(attr: AttributeReference) =>
-      blobToDataAttr.getOrElse(attr.exprId, throw new IllegalArgumentException(
-        s"read_blob() called on column '${attr.name}' (exprId=${attr.exprId}) which was not registered for blob reading. " +
-        s"Available blob columns: ${blobToDataAttr.keys.mkString(", ")}"))
-    case ReadBlobExpression(_) =>
-      throw new IllegalStateException("read_blob() must be called on a direct column reference")
+      sourceToDataAttr: Map[Expression, Attribute]): Expression = expr match {
+    case ReadBlobExpression(inner) =>
+      sourceToDataAttr.getOrElse(inner.canonicalized, throw new IllegalArgumentException(
+        s"read_blob() called on expression '$inner' which was not registered for blob reading. " +
+        s"Available blob sources: ${sourceToDataAttr.keys.mkString(", ")}"))
     case other =>
-      other.mapChildren(replaceReadBlobExpression(_, blobToDataAttr))
+      other.mapChildren(replaceReadBlobExpression(_, sourceToDataAttr))
   }
 }
