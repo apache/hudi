@@ -110,7 +110,7 @@ object SparkFilterHelper {
       Types.FloatType.get()
     case DoubleType =>
       Types.DoubleType.get()
-    case StringType | CharType(_) | VarcharType(_) =>
+    case StringType | (_: CharType) | (_: VarcharType) =>
       Types.StringType.get()
     case DateType =>
       Types.DateType.get()
