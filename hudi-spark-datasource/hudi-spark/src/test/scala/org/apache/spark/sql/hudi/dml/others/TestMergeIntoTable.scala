@@ -1786,7 +1786,7 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
          """.stripMargin)
       spark.sql(s"insert into $sourceTable values(1, 'a1', 10, 1000)")
       val nonExistentTable = "hudi_test_table"
-      val exception = intercept[org.apache.spark.sql.AnalysisException] {
+      val exception = intercept[Exception] {
         spark.sql(
           s"""
              | MERGE INTO $nonExistentTable AS target
@@ -1798,8 +1798,12 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
              | WHEN NOT MATCHED THEN INSERT *
          """.stripMargin)
       }
-      assert(exception.getMessage.contains("TABLE_OR_VIEW_NOT_FOUND") ||
-        exception.getMessage.contains("Table or view not found"),
+      val errorMsg = exception match {
+        case e: org.apache.spark.sql.AnalysisException => e.getMessage
+        case e => Option(e.getCause).map(_.getMessage).getOrElse(e.getMessage)
+      }
+      assert(errorMsg.contains("TABLE_OR_VIEW_NOT_FOUND") ||
+        errorMsg.contains("Table or view not found"),
         s"Expected TABLE_OR_VIEW_NOT_FOUND error but got: ${exception.getMessage}")
     }
   }
