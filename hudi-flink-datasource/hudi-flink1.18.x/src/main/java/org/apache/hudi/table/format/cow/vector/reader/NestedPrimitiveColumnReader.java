@@ -157,10 +157,10 @@ public class NestedPrimitiveColumnReader implements ColumnReader<WritableColumnV
     }
   }
 
-  // This won't call, will actually call readAndNewVector
+  // Not invoked directly; callers use readAndNewVector instead.
   @Override
   public void readToVector(int readNumber, WritableColumnVector vector) throws IOException {
-    throw new UnsupportedOperationException("This function should no be called.");
+    throw new UnsupportedOperationException("This function should not be called.");
   }
 
   public WritableColumnVector readAndNewVector(int readNumber, WritableColumnVector vector)
