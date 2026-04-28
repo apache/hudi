@@ -147,7 +147,10 @@ public class BulkInsertDataInternalWriterHelper {
           }
           idx += 1;
         }
-        InternalRow newRow = InternalRow.fromSeq(JavaScalaConverters.convertJavaListToScalaSeq(newCols));
+        // convertJavaListToScalaList yields scala.collection.immutable.List, which satisfies
+        // the immutable.Seq bound on InternalRow.fromSeq; convertJavaListToScalaSeq returns
+        // the wider scala.collection.Seq.
+        InternalRow newRow = InternalRow.fromSeq(JavaScalaConverters.convertJavaListToScalaList(newCols));
         handle.write(newRow);
       } else {
         handle.write(row);
