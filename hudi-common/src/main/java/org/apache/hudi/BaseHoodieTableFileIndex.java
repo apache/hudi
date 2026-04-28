@@ -314,6 +314,11 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
     Map<String, PartitionPath> partitionsMap = new HashMap<>();
     partitions.forEach(p -> partitionsMap.put(p.path, p));
     Map<PartitionPath, List<FileSlice>> partitionToFileSlices = new HashMap<>();
+    // Pre-populate so partitions with no files still appear in the result map.
+    // Without this, the caller's Collectors.toMap(identity, cache::get) NPEs on empty partitions
+    // because cache.get returns null and toMap rejects null values. This matches the contract
+    // already honored by filterFiles, which iterates over partitions rather than over files.
+    partitions.forEach(p -> partitionToFileSlices.put(p, new ArrayList<>()));
 
     for (StoragePathInfo pathInfo : allFiles) {
       // Create FileSlice obj from StoragePathInfo.
