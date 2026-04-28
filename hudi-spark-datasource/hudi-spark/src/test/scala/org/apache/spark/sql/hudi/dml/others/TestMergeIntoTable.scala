@@ -1798,12 +1798,9 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
              | WHEN NOT MATCHED THEN INSERT *
          """.stripMargin)
       }
-      val errorMsg = exception match {
-        case e: org.apache.spark.sql.AnalysisException => e.getMessage
-        case e => Option(e.getCause).map(_.getMessage).getOrElse(e.getMessage)
-      }
-      assert(errorMsg.contains("TABLE_OR_VIEW_NOT_FOUND") ||
-        errorMsg.contains("Table or view not found"),
+      val fullMsg = exception.getMessage + Option(exception.getCause).map(_.getMessage).getOrElse("")
+      assert(fullMsg.contains("TABLE_OR_VIEW_NOT_FOUND") ||
+        fullMsg.contains("Table or view not found"),
         s"Expected TABLE_OR_VIEW_NOT_FOUND error but got: ${exception.getMessage}")
     }
   }
