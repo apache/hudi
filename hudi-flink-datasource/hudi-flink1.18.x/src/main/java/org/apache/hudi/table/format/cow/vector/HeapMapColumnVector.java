@@ -20,6 +20,7 @@ package org.apache.hudi.table.format.cow.vector;
 
 import lombok.Getter;
 import org.apache.flink.table.data.MapData;
+import org.apache.flink.table.data.columnar.vector.ColumnVector;
 import org.apache.flink.table.data.columnar.vector.MapColumnVector;
 import org.apache.flink.table.data.columnar.vector.heap.AbstractHeapVector;
 import org.apache.flink.table.data.columnar.vector.writable.WritableColumnVector;
@@ -31,14 +32,72 @@ public class HeapMapColumnVector extends AbstractHeapVector
     implements WritableColumnVector, MapColumnVector {
 
   @Getter
-  private final WritableColumnVector keys;
+  private WritableColumnVector keys;
   @Getter
-  private final WritableColumnVector values;
+  private WritableColumnVector values;
+
+  // ---------------------------------------------------------------------------------------------
+  // Flink 2.1 Dremel-style state. Populated by {@link
+  // org.apache.hudi.table.format.cow.vector.reader.NestedColumnReader} (FLINK-35702 port). The
+  // legacy {@link #getMap(int)} implementation below continues to use {@code ColumnarGroupMapData}
+  // — wiring it through these offsets/lengths happens in a follow-up PR that switches the read
+  // path. Left here so the new readers can compile against the additive surface.
+  // ---------------------------------------------------------------------------------------------
+  private long[] offsets;
+  private long[] lengths;
+  private int size;
 
   public HeapMapColumnVector(int len, WritableColumnVector keys, WritableColumnVector values) {
     super(len);
+    this.offsets = new long[len];
+    this.lengths = new long[len];
     this.keys = keys;
     this.values = values;
+  }
+
+  public long[] getOffsets() {
+    return offsets;
+  }
+
+  public void setOffsets(long[] offsets) {
+    this.offsets = offsets;
+  }
+
+  public long[] getLengths() {
+    return lengths;
+  }
+
+  public void setLengths(long[] lengths) {
+    this.lengths = lengths;
+  }
+
+  public int getSize() {
+    return size;
+  }
+
+  public void setSize(int size) {
+    this.size = size;
+  }
+
+  public void setKeys(WritableColumnVector keys) {
+    this.keys = keys;
+  }
+
+  public void setValues(WritableColumnVector values) {
+    this.values = values;
+  }
+
+  /**
+   * Returns the keys child vector typed as {@link ColumnVector}, matching the Flink 2.1 contract
+   * consumed by {@code NestedColumnReader}. Functionally equivalent to {@link #getKeys()}.
+   */
+  public ColumnVector getKeyColumnVector() {
+    return keys;
+  }
+
+  /** Counterpart of {@link #getKeyColumnVector()} for the values child vector. */
+  public ColumnVector getValueColumnVector() {
+    return values;
   }
 
   @Override
