@@ -403,15 +403,8 @@ public class HoodieIndexUtils {
     }
 
     //record is inserted or updated
-    String partitionPath = inferPartitionPath(incoming, existing, writeSchemaWithMetaFields, keyGenerator,
-        existingRecordContext, mergeResult, incomingBufferedRecord, existingBufferedRecord, incomingRecordContext);
-    // When HoodieAvroRecordMerger creates a genuinely new BufferedRecord, it encodes the schema into
-    // incomingRecordContext. Use the schema-aware constructHoodieRecord overload so existingRecordContext
-    // can register the schema locally and resolve it for SPARK records.
-    HoodieSchema mergedSchema = incomingRecordContext.getSchemaFromBufferRecord(mergeResult);
-    HoodieRecord<R> result = mergedSchema != null
-        ? existingRecordContext.constructHoodieRecord(mergeResult, partitionPath, mergedSchema)
-        : existingRecordContext.constructHoodieRecord(mergeResult, partitionPath);
+    String partitionPath = inferPartitionPath(incoming, existing, writeSchemaWithMetaFields, keyGenerator, existingRecordContext, mergeResult);
+    HoodieRecord<R> result = existingRecordContext.constructHoodieRecord(mergeResult, partitionPath);
     HoodieRecord<R> withMeta = result.prependMetaFields(writeSchema, writeSchemaWithMetaFields,
         new MetadataValues().setRecordKey(incoming.getRecordKey()).setPartitionPath(partitionPath), properties);
     return Option.of(withMeta.wrapIntoHoodieRecordPayloadWithParams(writeSchemaWithMetaFields, properties, Option.empty(),
@@ -419,29 +412,15 @@ public class HoodieIndexUtils {
   }
 
   private static <R> String inferPartitionPath(HoodieRecord<R> incoming, HoodieRecord<R> existing, HoodieSchema recordSchema, BaseKeyGenerator keyGenerator,
-                                               RecordContext<R> existingRecordContext, BufferedRecord<R> resultingBufferedRecord,
-                                               BufferedRecord<R> incomingBufferedRecord, BufferedRecord<R> existingBufferedRecord,
-                                               RecordContext<R> incomingRecordContext) {
-    // Compare by BufferedRecord identity first: for payload-based records (e.g. ExpressionPayload),
-    // incoming.getData() is the payload object, not the InternalRow extracted from it, so data-identity
-    // checks would incorrectly fall through to the schema-based conversion path.
-    if (resultingBufferedRecord == incomingBufferedRecord || resultingBufferedRecord.getRecord() == incoming.getData()) {
+                                               RecordContext<R> recordContext, BufferedRecord<R> resultingBufferedRecord) {
+    R record = resultingBufferedRecord.getRecord();
+    if (record == incoming.getData()) {
       return incoming.getPartitionPath();
-    } else if (resultingBufferedRecord == existingBufferedRecord || resultingBufferedRecord.getRecord() == existing.getData()) {
+    } else if (record == existing.getData()) {
       return existing.getPartitionPath();
     } else {
-      // The merged record is genuinely new (e.g. created by HoodieAvroRecordMerger.merge).
-      // Its InternalRow was produced and its schemaId was encoded by incomingRecordContext,
-      // so use incomingRecordContext with the record's actual schema (which may be the data schema,
-      // without meta fields) rather than existingRecordContext with writeSchemaWithMetaFields.
-      HoodieSchema actualSchema = incomingRecordContext.getSchemaFromBufferRecord(resultingBufferedRecord);
-      if (actualSchema == null) {
-        actualSchema = existingRecordContext.getSchemaFromBufferRecord(resultingBufferedRecord);
-      }
-      if (actualSchema == null) {
-        actualSchema = recordSchema;
-      }
-      return keyGenerator.getPartitionPath(incomingRecordContext.convertToAvroRecord(resultingBufferedRecord, actualSchema));
+      // the merged record is not the same as either incoming or existing, so we need to compute the partition path
+      return keyGenerator.getPartitionPath(recordContext.convertToAvroRecord(record, recordSchema));
     }
   }
 
@@ -476,8 +455,7 @@ public class HoodieIndexUtils {
         // the record was deleted
         return Option.empty();
       }
-      String partitionPath = inferPartitionPath(incoming, existing, writeSchemaWithMetaFields, keyGenerator,
-          existingRecordContext, mergeResult, incomingBufferedRecord, existingBufferedRecord, incomingRecordContext);
+      String partitionPath = inferPartitionPath(incoming, existing, writeSchemaWithMetaFields, keyGenerator, existingRecordContext, mergeResult);
       if (config.isFileGroupReaderBasedMergeHandle() && HoodieRecordUtils.isPayloadClassDeprecated(ConfigUtils.getPayloadClass(properties))) {
         return Option.of(existingRecordContext.constructHoodieRecord(mergeResult, partitionPath));
       } else {

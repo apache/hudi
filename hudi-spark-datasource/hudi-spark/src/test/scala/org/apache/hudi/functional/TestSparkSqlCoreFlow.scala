@@ -66,13 +66,10 @@ class TestSparkSqlCoreFlow extends HoodieSparkSqlTestBase {
       "MERGE_ON_READ|true|org.apache.hudi.keygen.NonpartitionedKeyGenerator|BLOOM|parquet",
       "MERGE_ON_READ|false|org.apache.hudi.keygen.NonpartitionedKeyGenerator|SIMPLE|parquet",
       "MERGE_ON_READ|true|org.apache.hudi.keygen.NonpartitionedKeyGenerator|SIMPLE|parquet",
-      // Representative Lance subset: COW/MOR x partitioned/non-partitioned x global/local index.
-      // Lance format is orthogonal to keygen/index/metadata — full cartesian adds ~60 runs with
-      // minimal extra signal. Edge cases belong in TestLanceDataSource.
-      "COPY_ON_WRITE|true|org.apache.hudi.keygen.SimpleKeyGenerator|GLOBAL_BLOOM|lance",
-      "COPY_ON_WRITE|false|org.apache.hudi.keygen.NonpartitionedKeyGenerator|SIMPLE|lance",
-      "MERGE_ON_READ|true|org.apache.hudi.keygen.SimpleKeyGenerator|GLOBAL_BLOOM|lance",
-      "MERGE_ON_READ|false|org.apache.hudi.keygen.NonpartitionedKeyGenerator|SIMPLE|lance"
+      // Lance coverage in this PR is intentionally narrow: COW + non-global index + base upsert.
+      // MOR, GLOBAL_BLOOM, and partition-path-update paths are deferred to follow-up PRs so the
+      // initial Lance integration can be reviewed and benchmarked in isolation.
+      "COPY_ON_WRITE|false|org.apache.hudi.keygen.NonpartitionedKeyGenerator|SIMPLE|lance"
     )
     withLanceIfSupported(allParams)
   }
@@ -456,16 +453,11 @@ class TestSparkSqlCoreFlow extends HoodieSparkSqlTestBase {
       "MERGE_ON_READ|bulk_insert|false|org.apache.hudi.keygen.NonpartitionedKeyGenerator|BLOOM|parquet",
       "MERGE_ON_READ|bulk_insert|true|org.apache.hudi.keygen.NonpartitionedKeyGenerator|BLOOM|parquet",
       "MERGE_ON_READ|bulk_insert|false|org.apache.hudi.keygen.NonpartitionedKeyGenerator|SIMPLE|parquet",
-      "MERGE_ON_READ|bulk_insert|true|org.apache.hudi.keygen.NonpartitionedKeyGenerator|SIMPLE|parquet",
-      // Representative Lance subset: COW/MOR x insert/bulk_insert x partitioned/non-partitioned.
-      // Keeps coverage of write-operation axis (which was the motivation for this list) while
-      // avoiding a 32-row cartesian over keygen/index/metadata dimensions.
-      "COPY_ON_WRITE|insert|true|org.apache.hudi.keygen.SimpleKeyGenerator|GLOBAL_BLOOM|lance",
-      "MERGE_ON_READ|insert|false|org.apache.hudi.keygen.NonpartitionedKeyGenerator|SIMPLE|lance",
-      "COPY_ON_WRITE|bulk_insert|true|org.apache.hudi.keygen.SimpleKeyGenerator|GLOBAL_BLOOM|lance",
-      "MERGE_ON_READ|bulk_insert|false|org.apache.hudi.keygen.NonpartitionedKeyGenerator|SIMPLE|lance"
+      "MERGE_ON_READ|bulk_insert|true|org.apache.hudi.keygen.NonpartitionedKeyGenerator|SIMPLE|parquet"
     )
-    withLanceIfSupported(allParamsForImmutable)
+    // Lance immutable-write parameterization is dropped from this PR; the strict scope is
+    // COW + base upserts only, which lives in `params` above.
+    allParamsForImmutable
   }
 
   private def withLanceIfSupported(params: List[String]): List[String] = {

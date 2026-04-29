@@ -3767,10 +3767,17 @@ public class HoodieWriteConfig extends HoodieConfig {
     /**
      * When the table's base file format requires SPARK record type (e.g. Lance) but the user
      * has not configured a Spark-compatible record merger, inject
-     * {@link #DEFAULT_SPARK_RECORD_MERGER_CLASS} into {@link HoodieWriteConfig#RECORD_MERGE_IMPL_CLASSES}
-     * so every downstream consumer — write handles, file readers, and metadata writers — observes
-     * a SPARK-typed merger consistently. This removes the usability gap where users had to set
-     * the merger override manually for every Lance table.
+     * {@link #DEFAULT_SPARK_RECORD_MERGER_CLASS} into {@link HoodieWriteConfig#RECORD_MERGE_IMPL_CLASSES}.
+     *
+     * <p>The injection runs for every merge mode (not just {@link RecordMergeMode#CUSTOM}) because
+     * the Hudi write path resolves the engine-side record type from
+     * {@code config.getRecordMerger().getRecordType()} when picking a {@code HoodieFileWriter}.
+     * For Lance, that resolution must yield {@code SPARK}; otherwise the writer falls back to
+     * the AVRO path and writes throw
+     * {@code ClassCastException: SerializableIndexedRecord cannot be cast to InternalRow}.
+     * On the read side, {@code COMMIT_TIME} and {@code EVENT_TIME} hardcode their merger
+     * instances in {@code BaseSparkInternalRowReaderContext.getRecordMerger}, so the value
+     * populated here is harmless for those modes and only takes effect under {@code CUSTOM}.
      */
     private void autoSelectSparkRecordMergerForBaseFileFormat() {
       HoodieFileFormat tableLevel = HoodieFileFormat.getValue(writeConfig.getString(HoodieTableConfig.BASE_FILE_FORMAT.key()));

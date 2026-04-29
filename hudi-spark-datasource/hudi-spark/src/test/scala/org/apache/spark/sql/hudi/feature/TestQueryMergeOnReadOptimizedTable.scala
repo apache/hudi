@@ -19,70 +19,63 @@
 
 package org.apache.spark.sql.hudi.feature
 
-import org.apache.hudi.HoodieSparkUtils
-
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
 
 class TestQueryMergeOnReadOptimizedTable extends HoodieSparkSqlTestBase {
+  test("Test Query Merge_On_Read Read_Optimized table") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      val tablePath = s"${tmp.getCanonicalPath}/$tableName"
+      // create table
+      spark.sql(
+        s"""
+           |create table $tableName (
+           |  id int,
+           |  name string,
+           |  price double,
+           |  ts long,
+           |  partition long
+           |) using hudi
+           | partitioned by (partition)
+           | location '$tablePath'
+           | tblproperties (
+           |  type = 'mor',
+           |  primaryKey = 'id',
+           |  orderingFields = 'ts'
+           | )
+       """.stripMargin)
+      // insert data to table
+      withSQLConf("hoodie.parquet.max.file.size" -> "10000") {
+        spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000, 1000)")
+        spark.sql(s"insert into $tableName values(2, 'a2', 10, 1000, 1000)")
+        spark.sql(s"insert into $tableName values(3, 'a3', 10, 1000, 1000)")
+        spark.sql(s"insert into $tableName values(4, 'a4', 10, 1000, 1000)")
+        spark.sql(s"update $tableName set price = 11 where id = 1")
+        spark.sql(s"update $tableName set price = 21 where id = 2")
+        spark.sql(s"update $tableName set price = 31 where id = 3")
+        spark.sql(s"update $tableName set price = 41 where id = 4")
 
-  val baseFileFormats: List[String] = if (HoodieSparkUtils.gteqSpark3_4) List("parquet", "lance") else List("parquet")
+        // expect that all complete parquet files can be scanned
+        assertQueryResult(4, tablePath)
 
-  baseFileFormats.foreach { baseFileFormat =>
-    test(s"Test Query Merge_On_Read Read_Optimized table - $baseFileFormat") {
-      withTempDir { tmp =>
-        val tableName = generateTableName
-        val tablePath = s"${tmp.getCanonicalPath}/$tableName"
-        spark.sql(
-          s"""
-             |create table $tableName (
-             |  id int,
-             |  name string,
-             |  price double,
-             |  ts long,
-             |  partition long
-             |) using hudi
-             | partitioned by (partition)
-             | location '$tablePath'
-             | tblproperties (
-             |  type = 'mor',
-             |  primaryKey = 'id',
-             |  orderingFields = 'ts',
-             |  hoodie.table.base.file.format = '$baseFileFormat'
-             | )
-         """.stripMargin)
-        // insert data to table
-        withSQLConf("hoodie.parquet.max.file.size" -> "10000") {
-          spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000, 1000)")
-          spark.sql(s"insert into $tableName values(2, 'a2', 10, 1000, 1000)")
-          spark.sql(s"insert into $tableName values(3, 'a3', 10, 1000, 1000)")
-          spark.sql(s"insert into $tableName values(4, 'a4', 10, 1000, 1000)")
-          spark.sql(s"update $tableName set price = 11 where id = 1")
-          spark.sql(s"update $tableName set price = 21 where id = 2")
-          spark.sql(s"update $tableName set price = 31 where id = 3")
-          spark.sql(s"update $tableName set price = 41 where id = 4")
+        // async schedule compaction job
+        spark.sql(s"call run_compaction(op => 'schedule', table => '$tableName')")
+          .collect()
 
-          // expect that all complete base files can be scanned
-          assertQueryResult(4, tablePath)
+        // expect that all complete parquet files can be scanned with a pending compaction job
+        assertQueryResult(4, tablePath)
 
-          // async schedule compaction job
-          spark.sql(s"call run_compaction(op => 'schedule', table => '$tableName')")
-            .collect()
+        spark.sql(s"insert into $tableName values(5, 'a5', 10, 1000, 1000)")
 
-          // expect that all complete base files can be scanned with a pending compaction job
-          assertQueryResult(4, tablePath)
+        // expect that all complete parquet files can be scanned with a pending compaction job
+        assertQueryResult(5, tablePath)
 
-          spark.sql(s"insert into $tableName values(5, 'a5', 10, 1000, 1000)")
+        // async run compaction job
+        spark.sql(s"call run_compaction(op => 'run', table => '$tableName')")
+          .collect()
 
-          // expect that all complete base files can be scanned with a pending compaction job
-          assertQueryResult(5, tablePath)
-
-          // async run compaction job
-          spark.sql(s"call run_compaction(op => 'run', table => '$tableName')")
-            .collect()
-
-          // assert that all complete base files can be scanned after compaction
-          assertQueryResult(5, tablePath)
-        }
+        // assert that all complete parquet files can be scanned after compaction
+        assertQueryResult(5, tablePath)
       }
     }
   }
