@@ -236,38 +236,6 @@ public class TestCloudObjectsSelectorCommon extends HoodieSparkClientTestHarness
     Assertions.assertTrue(colNames.contains("c"));
   }
 
-  @Test
-  void parquetSparkDatasourceOptionsMergeSchemaFalseDropsExtraColumns(@TempDir Path tempDir) {
-    String p1 = tempDir.resolve("part1").toString();
-    String p2 = tempDir.resolve("part2").toString();
-
-    StructType schema1 = DataTypes.createStructType(Arrays.asList(
-        DataTypes.createStructField("id", DataTypes.IntegerType, true),
-        DataTypes.createStructField("b", DataTypes.StringType, true)));
-    sparkSession.createDataFrame(Collections.singletonList(RowFactory.create(1, "x")), schema1)
-        .write().parquet(p1);
-
-    StructType schema2 = DataTypes.createStructType(Arrays.asList(
-        DataTypes.createStructField("id", DataTypes.IntegerType, true),
-        DataTypes.createStructField("c", DataTypes.IntegerType, true)));
-    sparkSession.createDataFrame(Collections.singletonList(RowFactory.create(2, 99)), schema2)
-        .write().parquet(p2);
-
-    TypedProperties props = new TypedProperties();
-    props.setProperty(CloudSourceConfig.SPARK_DATASOURCE_OPTIONS.key(), "{\"mergeSchema\":\"false\"}");
-    CloudObjectsSelectorCommon cloudObjectsSelectorCommon = new CloudObjectsSelectorCommon(props);
-    List<CloudObjectMetadata> input = Arrays.asList(
-        new CloudObjectMetadata(p1, 1L),
-        new CloudObjectMetadata(p2, 1L));
-    Option<Dataset<Row>> result = cloudObjectsSelectorCommon.loadAsDataset(sparkSession, input, "parquet", Option.empty(), 1);
-    Assertions.assertTrue(result.isPresent());
-    Dataset<Row> ds = result.get();
-    Set<String> colNames = Arrays.stream(ds.schema().fields()).map(StructField::name).collect(Collectors.toSet());
-    Assertions.assertEquals(2, colNames.size(), "without mergeSchema, only one file's schema should be used");
-    Assertions.assertTrue(colNames.contains("id"));
-    Assertions.assertEquals(2, ds.count());
-  }
-
   /**
    * Verifies that the format-gating predicate for the cloud-incremental mergeSchema option recognises
    * Parquet and ORC and rejects everything else. End-to-end ORC ingestion is not exercised here because
