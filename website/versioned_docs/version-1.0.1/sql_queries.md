@@ -317,7 +317,7 @@ FROM hudi_table_changes(
 ```
 
 :::note
-Incremental queries are currently not supported for Merge-On-Read (MOR) tables with partial updates
+Incremental queries are currently not supported for Merge-On-Read (MOR) tables with partial updates.
 :::
 
 :::info Incremental vs CDC Queries
