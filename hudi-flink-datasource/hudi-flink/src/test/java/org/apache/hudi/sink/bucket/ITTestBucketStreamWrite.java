@@ -18,30 +18,43 @@
 
 package org.apache.hudi.sink.bucket;
 
+import org.apache.hudi.client.common.HoodieFlinkEngineContext;
+import org.apache.hudi.common.config.HoodieMetadataConfig;
+import org.apache.hudi.common.data.HoodieListData;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
+import org.apache.hudi.common.model.HoodieRecordGlobalLocation;
 import org.apache.hudi.common.model.IOType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.testutils.FileCreateUtilsLegacy;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
+import org.apache.hudi.common.util.HoodieDataUtils;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.index.HoodieIndex.IndexType;
+import org.apache.hudi.metadata.HoodieTableMetadata;
+import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.util.StreamerUtil;
 import org.apache.hudi.utils.FlinkMiniCluster;
 import org.apache.hudi.utils.TestConfigurations;
 import org.apache.hudi.utils.TestData;
 import org.apache.hudi.utils.TestSQL;
 
+import org.apache.flink.configuration.Configuration;
 import org.apache.flink.table.api.EnvironmentSettings;
 import org.apache.flink.table.api.TableEnvironment;
 import org.apache.flink.table.api.internal.TableEnvironmentImpl;
+import org.apache.flink.types.Row;
+import org.apache.flink.util.CollectionUtil;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.File;
@@ -54,10 +67,12 @@ import java.util.Map;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FILE_NAME_GENERATOR;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertLinesMatch;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Integration test cases for {@link BucketStreamWriteFunction}.
@@ -79,6 +94,16 @@ public class ITTestBucketStreamWrite {
       EXPECTED.put(entry.getKey(), "[" + value + "]");
     }
   }
+
+  private static final List<String> EXPECTED_ROWS = Arrays.asList(
+      "id1,Danny,23,1970-01-01T00:00:01,par1",
+      "id2,Stephen,33,1970-01-01T00:00:02,par1",
+      "id3,Julian,53,1970-01-01T00:00:03,par2",
+      "id4,Fabian,31,1970-01-01T00:00:04,par2",
+      "id5,Sophia,18,1970-01-01T00:00:05,par3",
+      "id6,Emma,20,1970-01-01T00:00:06,par3",
+      "id7,Bob,44,1970-01-01T00:00:07,par4",
+      "id8,Han,56,1970-01-01T00:00:08,par4");
 
   @TempDir
   File tempFile;
@@ -111,6 +136,28 @@ public class ITTestBucketStreamWrite {
     } else {
       TestData.checkWrittenDataMOR(tempFile, EXPECTED, 4);
     }
+  }
+
+  @ParameterizedTest
+  @CsvSource({"true,true", "false,true", "true,false", "false,false"})
+  public void testBucketWriteWithPartitionedRLI(boolean isCow, boolean partitionedTable) throws Exception {
+    String tablePath = tempFile.getAbsolutePath();
+    Map<String, String> customOptions = new HashMap<>();
+    customOptions.put(HoodieMetadataConfig.RECORD_LEVEL_INDEX_ENABLE_PROP.key(), "true");
+    doWrite(tablePath, isCow, 2, customOptions, partitionedTable);
+    checkWrittenData(tablePath, isCow);
+
+    // do another write to trigger lazy bootstrap of rli index backend.
+    doWrite(tablePath, isCow, 2, customOptions, partitionedTable);
+    checkWrittenData(tablePath, isCow);
+
+    assertRecordIndexMetadataPartitionExists(tablePath);
+    String expectedPartitionPath = partitionedTable ? "par1" : "";
+    Map<String, HoodieRecordGlobalLocation> locationMap = getRecordKeyIndex(
+        tablePath, isCow, Arrays.asList("id1", "id2"), Option.of(expectedPartitionPath));
+    assertEquals(2, locationMap.size());
+    assertTrue(locationMap.values().stream()
+        .allMatch(location -> location.getPartitionPath().equals(expectedPartitionPath)));
   }
 
   @ParameterizedTest
@@ -159,11 +206,69 @@ public class ITTestBucketStreamWrite {
     });
   }
 
+  private static void assertRecordIndexMetadataPartitionExists(String tablePath) {
+    org.apache.hadoop.conf.Configuration hadoopConf = new org.apache.hadoop.conf.Configuration();
+    String mdtBasePath = HoodieTableMetadata.getMetadataTableBasePath(tablePath);
+    assertTrue(StreamerUtil.tableExists(mdtBasePath, hadoopConf),
+        "Metadata table should exist for table with simple bucket RLI stream write");
+    assertTrue(StreamerUtil.partitionExists(mdtBasePath, MetadataPartitionType.RECORD_INDEX.getPartitionPath(), hadoopConf),
+        "RECORD_INDEX partition should exist for table with simple bucket RLI stream write");
+  }
+
+  private static void checkWrittenData(String tablePath, boolean isCow) {
+    EnvironmentSettings settings = EnvironmentSettings.newInstance().inBatchMode().build();
+    TableEnvironment tableEnv = TableEnvironmentImpl.create(settings);
+    Map<String, String> options = new HashMap<>();
+    options.put(FlinkOptions.PATH.key(), tablePath);
+    options.put(FlinkOptions.TABLE_TYPE.key(),
+        isCow ? FlinkOptions.TABLE_TYPE_COPY_ON_WRITE : FlinkOptions.TABLE_TYPE_MERGE_ON_READ);
+    options.put(FlinkOptions.INDEX_TYPE.key(), IndexType.BUCKET.name());
+    tableEnv.executeSql(TestConfigurations.getCreateHoodieTableDDL("t1", options, false, "partition"));
+
+    List<String> actual = CollectionUtil.iterableToList(() -> tableEnv.sqlQuery("select * from t1").execute().collect())
+        .stream()
+        .map(ITTestBucketStreamWrite::formatDataRow)
+        .sorted()
+        .collect(Collectors.toList());
+    assertEquals(EXPECTED_ROWS, actual);
+  }
+
+  private static String formatDataRow(Row row) {
+    return IntStream.range(0, row.getArity()).mapToObj(i -> row.getField(i).toString()).collect(Collectors.joining(","));
+  }
+
+  private static Map<String, HoodieRecordGlobalLocation> getRecordKeyIndex(
+      String tablePath, boolean isCow, List<String> keys, Option<String> dataPartition) {
+    HoodieTableMetaClient metaClient = HoodieTestUtils.createMetaClient(tablePath);
+    Configuration conf = TestConfigurations.getDefaultConf(metaClient.getBasePath().toString());
+    conf.set(FlinkOptions.TABLE_TYPE, isCow ? FlinkOptions.TABLE_TYPE_COPY_ON_WRITE : FlinkOptions.TABLE_TYPE_MERGE_ON_READ);
+    try (HoodieTableMetadata metadataTable = metaClient.getTableFormat().getMetadataFactory().create(
+        HoodieFlinkEngineContext.DEFAULT,
+        metaClient.getStorage(),
+        StreamerUtil.metadataConfig(conf),
+        conf.get(FlinkOptions.PATH))) {
+      return HoodieDataUtils.dedupeAndCollectAsMap(
+          metadataTable.readRecordIndexLocationsWithKeys(HoodieListData.eager(keys), dataPartition));
+    } catch (Exception e) {
+      throw new RuntimeException(e);
+    }
+  }
+
   private static void doWrite(String path, boolean isCow, int bucketNum) throws ExecutionException, InterruptedException {
     doWrite(path, isCow, bucketNum, null);
   }
 
   private static void doWrite(String path, boolean isCow, int bucketNum, Map<String, String> customOptions)
+      throws InterruptedException, ExecutionException {
+    doWrite(path, isCow, bucketNum, customOptions, true);
+  }
+
+  private static void doWrite(
+      String path,
+      boolean isCow,
+      int bucketNum,
+      Map<String, String> customOptions,
+      boolean partitionedTable)
       throws InterruptedException, ExecutionException {
     EnvironmentSettings settings = EnvironmentSettings.newInstance().inBatchMode().build();
     TableEnvironment tableEnv = TableEnvironmentImpl.create(settings);
@@ -180,7 +285,8 @@ public class ITTestBucketStreamWrite {
     options.put(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS.key(), String.valueOf(bucketNum));
 
     // create hoodie table and perform writes
-    String hoodieTableDDL = TestConfigurations.getCreateHoodieTableDDL("t1", options);
+    String hoodieTableDDL = TestConfigurations.getCreateHoodieTableDDL(
+        "t1", options, partitionedTable, "partition");
     tableEnv.executeSql(hoodieTableDDL);
     tableEnv.executeSql(TestSQL.INSERT_T1).await();
 

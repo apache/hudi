@@ -20,88 +20,90 @@ package org.apache.hudi.sink.partitioner;
 
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.model.HoodieKey;
+import org.apache.hudi.common.util.hash.BucketIndexUtil;
+import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.index.HoodieIndex;
+import org.apache.hudi.metadata.HoodieTableMetadataUtil;
+import org.apache.hudi.util.StreamerUtil;
 import org.apache.hudi.utils.TestConfigurations;
-import org.apache.hudi.utils.TestData;
 
 import org.apache.flink.configuration.Configuration;
-import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.File;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Test cases for {@link RecordIndexPartitioner}.
+ * Test cases for partitioned record level index routing in {@link RecordIndexPartitioner}.
  */
 public class TestRecordIndexPartitioner {
-
-  private static RecordIndexPartitioner partitioner;
+  private static final int FILE_GROUP_COUNT = 3;
+  private static final int NUM_PARTITIONS = 4;
 
   @TempDir
-  static File tempFile;
+  File tempFile;
 
-  @BeforeAll
-  public static void beforeAll() throws Exception {
-    final String basePath = tempFile.getAbsolutePath();
-    Configuration conf = TestConfigurations.getDefaultConf(basePath);
-    conf.setString(HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_ENABLE_PROP.key(), "true");
-    TestData.writeData(TestData.DATA_SET_INSERT, conf);
-    partitioner = new RecordIndexPartitioner(conf);
+  @Test
+  void testNewPartitionUsesMinFileGroupCount() throws Exception {
+    RecordIndexPartitioner partitioner = newPartitioner();
+    String recordKey = "record_key";
+
+    assertEquals(
+        expectedPartition(recordKey, "par1"),
+        partitioner.partition(new HoodieKey(recordKey, "par1"), NUM_PARTITIONS));
+    assertEquals(
+        expectedPartition(recordKey, "par2"),
+        partitioner.partition(new HoodieKey(recordKey, "par2"), NUM_PARTITIONS));
   }
 
   @Test
-  void testPartitionMethod() {
-    // Test partitioning with different record keys
-    HoodieKey key1 = new HoodieKey("record_key_1", "partition_path");
-    HoodieKey key2 = new HoodieKey("record_key_2", "partition_path");
-    HoodieKey key3 = new HoodieKey("another_record_key", "partition_path");
-    
-    int numPartitions = 10;
-    
-    // Test that partitioning works consistently
-    int partition1 = partitioner.partition(key1, numPartitions);
-    int partition2 = partitioner.partition(key2, numPartitions);
-    int partition3 = partitioner.partition(key3, numPartitions);
-    
-    // Each partition should be within the range [0, numPartitions)
-    assertTrue(partition1 >= 0 && partition1 < numPartitions);
-    assertTrue(partition2 >= 0 && partition2 < numPartitions);
-    assertTrue(partition3 >= 0 && partition3 < numPartitions);
-    
-    // Same key should always map to the same partition
-    assertEquals(partitioner.partition(key1, numPartitions), partitioner.partition(key1, numPartitions));
-  }
-
-  @Test
-  void testPartitionConsistency() {
+  void testPartitionConsistency() throws Exception {
+    RecordIndexPartitioner partitioner = newPartitioner();
     HoodieKey key = new HoodieKey("consistent_test_key", "partition_path");
-    int numPartitions = 5;
-    
-    // Test that the same key always maps to the same partition
-    int expectedPartition = partitioner.partition(key, numPartitions);
+
+    int expectedPartition = partitioner.partition(key, NUM_PARTITIONS);
     for (int i = 0; i < 10; i++) {
-      assertEquals(expectedPartition, partitioner.partition(key, numPartitions));
+      assertEquals(expectedPartition, partitioner.partition(key, NUM_PARTITIONS));
     }
   }
 
   @Test
-  void testEdgeCaseSinglePartition() {
-    HoodieKey key = new HoodieKey("any_key", "partition_path");
-    int numPartitions = 1; // Single partition
-    
-    // With single partition, everything should go to partition 0
-    assertEquals(0, partitioner.partition(key, numPartitions));
+  void testPartitionWithinRange() throws Exception {
+    RecordIndexPartitioner partitioner = newPartitioner();
+
+    int partition1 = partitioner.partition(new HoodieKey("record_key", "par1"), NUM_PARTITIONS);
+    int partition2 = partitioner.partition(new HoodieKey("record_key", "par2"), NUM_PARTITIONS);
+    int partition3 = partitioner.partition(new HoodieKey("record_key", "par3"), NUM_PARTITIONS);
+
+    assertTrue(partition1 >= 0 && partition1 < NUM_PARTITIONS);
+    assertTrue(partition2 >= 0 && partition2 < NUM_PARTITIONS);
+    assertTrue(partition3 >= 0 && partition3 < NUM_PARTITIONS);
+
+    assertNotEquals(partition1, partition2);
+    assertNotEquals(partition1, partition3);
   }
 
   @Test
-  void testLargeNumberOfPartitions() {
-    HoodieKey key = new HoodieKey("test_key_for_large_partition", "partition_path");
-    int numPartitions = 100; // Large number of partitions
-    
-    int partition = partitioner.partition(key, numPartitions);
-    assertTrue(partition >= 0 && partition < numPartitions);
+  void testSinglePartition() throws Exception {
+    RecordIndexPartitioner partitioner = newPartitioner();
+
+    assertEquals(0, partitioner.partition(new HoodieKey("any_key", "par1"), 1));
+  }
+
+  private RecordIndexPartitioner newPartitioner() throws Exception {
+    Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    conf.set(FlinkOptions.INDEX_TYPE, HoodieIndex.IndexType.RECORD_LEVEL_INDEX.name());
+    conf.setString(HoodieMetadataConfig.RECORD_LEVEL_INDEX_MIN_FILE_GROUP_COUNT_PROP.key(), String.valueOf(FILE_GROUP_COUNT));
+    StreamerUtil.initTableIfNotExists(conf);
+    return new RecordIndexPartitioner(conf);
+  }
+
+  private int expectedPartition(String recordKey, String partitionPath) {
+    int recordIndexFileGroup = HoodieTableMetadataUtil.mapRecordKeyToFileGroupIndex(recordKey, FILE_GROUP_COUNT);
+    return BucketIndexUtil.getPartitionIndexFunc(NUM_PARTITIONS).apply(FILE_GROUP_COUNT, partitionPath, recordIndexFileGroup);
   }
 }

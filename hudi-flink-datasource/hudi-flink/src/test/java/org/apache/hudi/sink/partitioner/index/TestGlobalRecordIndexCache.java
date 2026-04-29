@@ -44,18 +44,18 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.when;
 
 /**
- * Test cases for {@link RecordIndexCache}.
+ * Test cases for {@link GlobalRecordIndexCache}.
  */
-public class TestRecordIndexCache {
+public class TestGlobalRecordIndexCache {
   @TempDir
   File tempDir;
-  private RecordIndexCache cache;
+  private GlobalRecordIndexCache cache;
 
   @BeforeEach
   void setUp() {
     Configuration conf = TestConfigurations.getDefaultConf(tempDir.getAbsolutePath());
     conf.set(FlinkOptions.INDEX_RLI_CACHE_SIZE, 100L); // 100MB cache size
-    this.cache = new RecordIndexCache(conf, 1L);
+    this.cache = new GlobalRecordIndexCache(conf, 1L);
   }
 
   @AfterEach
@@ -155,7 +155,7 @@ public class TestRecordIndexCache {
   void testMarkAsEvictable() {
     Configuration conf = TestConfigurations.getDefaultConf(tempDir.getAbsolutePath());
     conf.set(FlinkOptions.INDEX_RLI_CACHE_SIZE, 1L); // 100MB cache size
-    cache = new RecordIndexCache(conf, 1L);
+    cache = new GlobalRecordIndexCache(conf, 1L);
 
     HoodieRecordGlobalLocation location1 = new HoodieRecordGlobalLocation("partition1", "1001", "file_id1");
     HoodieRecordGlobalLocation location2 = new HoodieRecordGlobalLocation("partition2", "1002", "file_id2");
@@ -233,7 +233,7 @@ public class TestRecordIndexCache {
     Configuration conf = TestConfigurations.getDefaultConf(tempDir.getAbsolutePath());
     conf.set(FlinkOptions.INDEX_RLI_CACHE_SIZE, 1L); // 1MB cache size to force spilling
 
-    try (RecordIndexCache smallCache = new RecordIndexCache(conf, 1L)) {
+    try (GlobalRecordIndexCache smallCache = new GlobalRecordIndexCache(conf, 1L)) {
       String recordKeyPrefix = "key";
       List<HoodieRecordGlobalLocation> locations = new ArrayList<>();
       for (int i = 0; i < 5000; i++) {
@@ -260,7 +260,7 @@ public class TestRecordIndexCache {
     Configuration conf = TestConfigurations.getDefaultConf(tempDir.getAbsolutePath());
     conf.set(FlinkOptions.INDEX_RLI_CACHE_SIZE, 1L); // 1MB cache size to force spilling
 
-    try (RecordIndexCache smallCache = new RecordIndexCache(conf, 1L)) {
+    try (GlobalRecordIndexCache smallCache = new GlobalRecordIndexCache(conf, 1L)) {
       // Add records to multiple checkpoints
       String recordKeyPrefix = "key";
       for (int i = 0; i < 5000; i++) {
@@ -341,7 +341,7 @@ public class TestRecordIndexCache {
     cache.getCaches().put(2L, spilledMap);
     cache.getCaches().put(1L, inMemoryMap);
 
-    long expected = (long) ((800L / RecordIndexCache.FACTOR_FOR_MEMORY_SIZE_OF_SPILLED_MAP) + 500L) / 2;
+    long expected = (long) ((800L / GlobalRecordIndexCache.FACTOR_FOR_MEMORY_SIZE_OF_SPILLED_MAP) + 500L) / 2;
     assertEquals(expected, cache.inferMemorySizeForCache());
   }
 }

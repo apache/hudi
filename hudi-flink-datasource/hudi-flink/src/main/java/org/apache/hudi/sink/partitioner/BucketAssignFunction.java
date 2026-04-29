@@ -31,7 +31,7 @@ import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.sink.event.Correspondent;
-import org.apache.hudi.sink.partitioner.index.IndexBackend;
+import org.apache.hudi.sink.partitioner.index.GlobalIndexBackend;
 import org.apache.hudi.sink.partitioner.index.IndexBackendFactory;
 import org.apache.hudi.table.action.commit.BucketInfo;
 import org.apache.hudi.util.FlinkTaskContextSupplier;
@@ -84,7 +84,7 @@ public class BucketAssignFunction
    * </ul>
    */
   @Getter
-  private transient IndexBackend indexBackend;
+  private transient GlobalIndexBackend indexBackend;
 
   /**
    * Bucket assigner to assign new bucket IDs or reuse existing ones.

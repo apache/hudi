@@ -20,20 +20,26 @@ package org.apache.hudi.sink.bucket;
 
 import org.apache.hudi.client.model.HoodieFlinkInternalRow;
 import org.apache.hudi.common.util.Functions;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.hash.BucketIndexUtil;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.index.bucket.BucketIdentifier;
 import org.apache.hudi.index.bucket.partition.NumBucketsFunction;
 import org.apache.hudi.sink.StreamWriteFunction;
+import org.apache.hudi.sink.partitioner.index.IndexRowUtils;
+import org.apache.hudi.sink.partitioner.index.RecordLevelIndexBackend;
 import org.apache.hudi.utils.RuntimeContextUtils;
 
 import lombok.extern.slf4j.Slf4j;
+import org.apache.flink.api.common.state.CheckpointListener;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.runtime.state.FunctionInitializationContext;
+import org.apache.flink.runtime.state.FunctionSnapshotContext;
 import org.apache.flink.streaming.api.functions.ProcessFunction;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.types.logical.RowType;
+import org.apache.flink.types.RowKind;
 import org.apache.flink.util.Collector;
 
 import java.io.IOException;
@@ -50,9 +56,7 @@ import java.util.Set;
  * The index is local because different partition paths have separate items in the index.
  */
 @Slf4j
-public class BucketStreamWriteFunction extends StreamWriteFunction {
-
-  private int parallelism;
+public class BucketStreamWriteFunction extends StreamWriteFunction implements CheckpointListener {
 
   private String indexKeyFields;
 
@@ -85,6 +89,8 @@ public class BucketStreamWriteFunction extends StreamWriteFunction {
    */
   private boolean isInsertOverwrite;
 
+  private transient Option<RecordLevelIndexBackend> recordLevelIndexBackendOpt;
+
   /**
    * Constructs a BucketStreamWriteFunction.
    *
@@ -100,13 +106,19 @@ public class BucketStreamWriteFunction extends StreamWriteFunction {
     this.indexKeyFields = OptionsResolver.getIndexKeyField(config);
     this.isNonBlockingConcurrencyControl = OptionsResolver.isNonBlockingConcurrencyControl(config);
     this.taskID = RuntimeContextUtils.getIndexOfThisSubtask(getRuntimeContext());
-    this.parallelism = RuntimeContextUtils.getNumberOfParallelSubtasks(getRuntimeContext());
+    int parallelism = RuntimeContextUtils.getNumberOfParallelSubtasks(getRuntimeContext());
     this.bucketIndex = new HashMap<>();
     this.incBucketIndex = new HashSet<>();
     this.partitionIndexFunc = BucketIndexUtil.getPartitionIndexFunc(parallelism);
     this.isInsertOverwrite = OptionsResolver.isInsertOverwrite(config);
     this.numBucketsFunction = new NumBucketsFunction(config.get(FlinkOptions.BUCKET_INDEX_PARTITION_EXPRESSIONS),
         config.get(FlinkOptions.BUCKET_INDEX_PARTITION_RULE), config.get(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS));
+    if (OptionsResolver.isStreamingIndexWriteEnabled(config)) {
+      this.recordLevelIndexBackendOpt = Option.of(new RecordLevelIndexBackend(config, (partitionPath, recordKey, fileId) ->
+          isBucketToLoad(BucketIdentifier.bucketIdFromFileId(fileId), partitionPath)));
+    } else {
+      this.recordLevelIndexBackendOpt = Option.empty();
+    }
   }
 
   @Override
@@ -121,11 +133,37 @@ public class BucketStreamWriteFunction extends StreamWriteFunction {
   }
 
   @Override
+  public void snapshotState(FunctionSnapshotContext context) throws Exception {
+    super.snapshotState(context);
+    this.recordLevelIndexBackendOpt.ifPresent(recordLevelIndexBackend ->
+        recordLevelIndexBackend.onCheckpoint(context.getCheckpointId()));
+  }
+
+  @Override
   public void processElement(HoodieFlinkInternalRow record,
                              ProcessFunction<HoodieFlinkInternalRow, RowData>.Context context,
                              Collector<RowData> collector) throws Exception {
     defineRecordLocation(record);
+    processRecordIndex(record, collector);
     bufferRecord(record);
+  }
+
+  private void processRecordIndex(HoodieFlinkInternalRow record, Collector<RowData> collector) {
+    if (!recordLevelIndexBackendOpt.isPresent() || !shouldEmitRecordIndex(record)) {
+      return;
+    }
+    RecordLevelIndexBackend recordLevelIndexBackend = recordLevelIndexBackendOpt.get();
+    String fileId = recordLevelIndexBackend.get(record.getPartitionPath(), record.getRecordKey());
+    if (fileId == null) {
+      recordLevelIndexBackend.update(record.getPartitionPath(), record.getRecordKey(), record.getFileId());
+      record.setOperationType("I");
+      collector.collect(IndexRowUtils.createRecordIndexRow(record));
+    }
+  }
+
+  private boolean shouldEmitRecordIndex(HoodieFlinkInternalRow record) {
+    RowKind rowKind = record.getRowData().getRowKind();
+    return rowKind != RowKind.DELETE && rowKind != RowKind.UPDATE_BEFORE;
   }
 
   private void defineRecordLocation(HoodieFlinkInternalRow record) {
@@ -191,5 +229,22 @@ public class BucketStreamWriteFunction extends StreamWriteFunction {
       }
     });
     bucketIndex.put(partition, bucketToFileIDMap);
+  }
+
+  @Override
+  public void notifyCheckpointComplete(long checkpointId) {
+    this.recordLevelIndexBackendOpt.ifPresent(recordLevelIndexBackend ->
+        recordLevelIndexBackend.onCheckpointComplete(this.correspondent, checkpointId));
+  }
+
+  @Override
+  public void close() throws Exception {
+    try {
+      if (this.recordLevelIndexBackendOpt.isPresent()) {
+        this.recordLevelIndexBackendOpt.get().close();
+      }
+    } finally {
+      super.close();
+    }
   }
 }

@@ -23,6 +23,7 @@ import org.apache.hudi.client.transaction.BucketIndexConcurrentFileWritesConflic
 import org.apache.hudi.client.transaction.ConflictResolutionStrategy;
 import org.apache.hudi.client.transaction.SimpleConcurrentFileWritesConflictResolutionStrategy;
 import org.apache.hudi.common.config.HoodieCommonConfig;
+import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
@@ -200,13 +201,13 @@ public class OptionsResolver {
   /**
    * Returns whether {@link org.apache.hudi.sink.partitioner.MinibatchBucketAssignFunction} should be used for bucket assigning.
    */
-  public static boolean isRecordLevelIndex(Configuration conf) {
+  public static boolean isGlobalRecordLevelIndex(Configuration conf) {
     HoodieIndex.IndexType indexType = OptionsResolver.getIndexType(conf);
     return indexType == HoodieIndex.IndexType.GLOBAL_RECORD_LEVEL_INDEX;
   }
 
   public static boolean isRLIWithBootstrap(Configuration conf) {
-    return isRecordLevelIndex(conf) && conf.get(FlinkOptions.INDEX_BOOTSTRAP_ENABLED);
+    return isGlobalRecordLevelIndex(conf) && conf.get(FlinkOptions.INDEX_BOOTSTRAP_ENABLED);
   }
 
   /**
@@ -233,6 +234,16 @@ public class OptionsResolver {
    */
   public static boolean isSimpleBucketIndexType(Configuration conf) {
     return isBucketIndexType(conf) && getBucketEngineType(conf).equals(HoodieIndex.BucketIndexEngineType.SIMPLE);
+  }
+
+  /**
+   * Returns whether simple bucket index additionally streams partitioned RLI records.
+   */
+  public static boolean isSimpleBucketIndexWithRecordLevelIndex(Configuration conf) {
+    return isSimpleBucketIndexType(conf)
+        && Boolean.parseBoolean(conf.getString(
+        HoodieMetadataConfig.RECORD_LEVEL_INDEX_ENABLE_PROP.key(),
+        HoodieMetadataConfig.RECORD_LEVEL_INDEX_ENABLE_PROP.defaultValue().toString()));
   }
 
   /**
@@ -459,7 +470,8 @@ public class OptionsResolver {
    */
   public static boolean isStreamingIndexWriteEnabled(Configuration conf) {
     return conf.get(FlinkOptions.METADATA_ENABLED)
-        && OptionsResolver.getIndexType(conf) == HoodieIndex.IndexType.GLOBAL_RECORD_LEVEL_INDEX
+        && (OptionsResolver.getIndexType(conf) == HoodieIndex.IndexType.GLOBAL_RECORD_LEVEL_INDEX
+        || OptionsResolver.isSimpleBucketIndexWithRecordLevelIndex(conf))
         && WriteOperationType.streamingWritesToMetadataSupported(WriteOperationType.fromValue(conf.get(FlinkOptions.OPERATION)));
   }
 

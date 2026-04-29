@@ -171,11 +171,17 @@ public class IndexWriteFunction extends AbstractStreamWriteFunction<RowData> {
     Map<String, HoodieRecord> keyAndRecordMap = new LinkedHashMap<>();
     while (rowItr.hasNext()) {
       RowData indexRow = rowItr.next();
-      String recordKey = IndexRowUtils.getRecordKey(indexRow);
-      keyAndRecordMap.put(recordKey, IndexRowUtils.convertToHoodieRecord(this.currentInstant, indexRow, writeConfig));
+      keyAndRecordMap.put(getDedupKey(indexRow, writeConfig), IndexRowUtils.convertToHoodieRecord(this.currentInstant, indexRow, writeConfig));
       dataPartitions.add(IndexRowUtils.getPartition(indexRow));
     }
     return Pair.of(new ArrayList<>(keyAndRecordMap.values()), dataPartitions);
+  }
+
+  private String getDedupKey(RowData indexRow, HoodieWriteConfig writeConfig) {
+    String recordKey = IndexRowUtils.getRecordKey(indexRow);
+    return writeConfig.isRecordLevelIndexEnabled()
+        ? IndexRowUtils.getPartition(indexRow) + "/" + recordKey
+        : recordKey;
   }
 
   @Override

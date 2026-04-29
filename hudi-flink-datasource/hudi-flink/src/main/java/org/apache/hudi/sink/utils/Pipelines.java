@@ -56,6 +56,7 @@ import org.apache.hudi.sink.compact.CompactionPlanEvent;
 import org.apache.hudi.sink.compact.CompactionPlanOperator;
 import org.apache.hudi.sink.partitioner.BucketAssignFunction;
 import org.apache.hudi.sink.partitioner.BucketIndexPartitioner;
+import org.apache.hudi.sink.partitioner.GlobalRecordIndexPartitioner;
 import org.apache.hudi.sink.partitioner.MiniBatchBucketAssignOperator;
 import org.apache.hudi.sink.partitioner.RecordIndexPartitioner;
 import org.apache.hudi.sink.partitioner.index.IndexRowUtils;
@@ -285,7 +286,7 @@ public class Pipelines {
     DataStream<HoodieFlinkInternalRow> dataStream1 = rowDataToHoodieRecord(conf, rowType, dataStream);
 
     if (conf.get(FlinkOptions.INDEX_BOOTSTRAP_ENABLED) || bounded) {
-      boolean isRliBootstrap = OptionsResolver.isRecordLevelIndex(conf);
+      boolean isRliBootstrap = OptionsResolver.isGlobalRecordLevelIndex(conf);
       dataStream1 = dataStream1
           .transform(
               "index_bootstrap",
@@ -364,6 +365,8 @@ public class Pipelines {
       switch (bucketIndexEngineType) {
         case SIMPLE:
           String indexKeyFields = OptionsResolver.getIndexKeyField(conf);
+          String writeOperatorUid = opUID("bucket_write", conf);
+          boolean isStreamingIndexWriteEnabled = OptionsResolver.isStreamingIndexWriteEnabled(conf);
           // [HUDI-9036] BucketIndexPartitioner is also used in bulk insert mode,
           // keep use of HoodieKey here in partitionCustom for now
           BucketIndexPartitioner<HoodieKey> partitioner = new BucketIndexPartitioner<>(conf, indexKeyFields);
@@ -373,12 +376,12 @@ public class Pipelines {
                   record -> new HoodieKey(record.getRecordKey(), record.getPartitionPath()))
               .transform(
                   opName("bucket_write", conf),
-                  TypeInformation.of(RowData.class),
+                  isStreamingIndexWriteEnabled ? InternalTypeInfo.of(IndexRowUtils.INDEX_ROW_TYPE) : TypeInformation.of(RowData.class),
                   BucketStreamWriteOperator.getFactory(conf, rowType))
-              .uid(opUID("bucket_write", conf))
+              .uid(writeOperatorUid)
               .setParallelism(conf.get(FlinkOptions.WRITE_TASKS));
           declareManagedMemoryIfNecessary(conf, bucketWriteStream, () -> OptionsResolver.getWriteBufferSizeInBytes(conf));
-          return bucketWriteStream;
+          return isStreamingIndexWriteEnabled ? createIndexWriteStream(bucketWriteStream, conf, writeOperatorUid) : bucketWriteStream;
         case CONSISTENT_HASHING:
           if (OptionsResolver.isInsertOverwrite(conf)) {
             // TODO support insert overwrite for consistent bucket index
@@ -421,22 +424,39 @@ public class Pipelines {
               .uid(writeOperatorUid)
               .setParallelism(conf.get(FlinkOptions.WRITE_TASKS));
       declareManagedMemoryIfNecessary(conf, writeDatastream, () -> OptionsResolver.getWriteBufferSizeInBytes(conf));
-      if (isStreamingIndexWriteEnabled) {
-        // index writing pipeline
-        SingleOutputStreamOperator<RowData> indexWriteDatastream = writeDatastream
-            .partitionCustom(new RecordIndexPartitioner(conf), IndexRowUtils::getHoodieKey)
-            .transform(
-                opName("index_write", conf),
-                TypeInformation.of(RowData.class),
-                new IndexWriteOperator(conf, OperatorIDGenerator.fromUid(writeOperatorUid)))
-            .uid(opUID("index_write", conf))
-            .setParallelism(conf.get(FlinkOptions.INDEX_WRITE_TASKS));
-        declareManagedMemoryIfNecessary(conf, indexWriteDatastream, () -> conf.get(FlinkOptions.INDEX_RLI_WRITE_BUFFER_SIZE) * 1024L * 1024L);
-        return indexWriteDatastream;
-      } else {
-        return writeDatastream;
-      }
+      return isStreamingIndexWriteEnabled ? createIndexWriteStream(writeDatastream, conf, writeOperatorUid) : writeDatastream;
     }
+  }
+
+  /**
+   * Creates the streaming index write pipeline that persists emitted RLI rows into the metadata table.
+   *
+   * <p>The upstream data write operator emits only index rows when streaming index write is enabled.
+   * This method repartitions those rows so each metadata record-index file group is handled by one
+   * index write task. Global RLI routes by record key only, while partitioned RLI routes by data
+   * partition and record key to match the metadata table file-group assignment.
+   *
+   * <p>The index writer coordinates with the same data-write coordinator instant, so the upstream
+   * write operator uid is used to derive the coordinator operator id.
+   *
+   * @param dataStream       the stream of index rows emitted by the data write operator
+   * @param conf             the Flink write configuration
+   * @param writeOperatorUid uid of the upstream data write operator
+   * @return the index write stream
+   */
+  private static SingleOutputStreamOperator<RowData> createIndexWriteStream(
+      SingleOutputStreamOperator<RowData> dataStream, Configuration conf, String writeOperatorUid) {
+    Partitioner<HoodieKey> partitioner = OptionsResolver.isGlobalRecordLevelIndex(conf) ? new GlobalRecordIndexPartitioner(conf) : new RecordIndexPartitioner(conf);
+    SingleOutputStreamOperator<RowData> indexWriteDatastream = dataStream
+        .partitionCustom(partitioner, IndexRowUtils::getHoodieKey)
+        .transform(
+            opName("index_write", conf),
+            TypeInformation.of(RowData.class),
+            new IndexWriteOperator(conf, OperatorIDGenerator.fromUid(writeOperatorUid)))
+        .uid(opUID("index_write", conf))
+        .setParallelism(conf.get(FlinkOptions.INDEX_WRITE_TASKS));
+    declareManagedMemoryIfNecessary(conf, indexWriteDatastream, () -> conf.get(FlinkOptions.INDEX_RLI_WRITE_BUFFER_SIZE) * 1024L * 1024L);
+    return indexWriteDatastream;
   }
 
   /**
@@ -450,9 +470,9 @@ public class Pipelines {
   private static DataStream<HoodieFlinkInternalRow> createBucketAssignStream(
       DataStream<HoodieFlinkInternalRow> inputStream, Configuration conf, RowType rowType, String writeOperatorUid) {
     String assignerOperatorName = "bucket_assigner";
-    if (OptionsResolver.isRecordLevelIndex(conf) && !conf.get(FlinkOptions.INDEX_BOOTSTRAP_ENABLED)) {
+    if (OptionsResolver.isGlobalRecordLevelIndex(conf) && !conf.get(FlinkOptions.INDEX_BOOTSTRAP_ENABLED)) {
       return inputStream
-          .partitionCustom(new RecordIndexPartitioner(conf), row -> new HoodieKey(row.getRecordKey(), row.getPartitionPath()))
+          .partitionCustom(new GlobalRecordIndexPartitioner(conf), row -> new HoodieKey(row.getRecordKey(), row.getPartitionPath()))
           .transform(
               assignerOperatorName,
               new HoodieFlinkInternalRowTypeInfo(rowType),

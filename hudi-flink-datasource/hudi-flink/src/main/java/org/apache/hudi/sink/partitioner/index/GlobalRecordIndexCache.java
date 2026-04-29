@@ -27,6 +27,7 @@ import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.sink.utils.PeriodicActionExecutor;
 import org.apache.hudi.util.FlinkWriteClients;
 
 import lombok.Getter;
@@ -45,7 +46,7 @@ import java.util.TreeMap;
  * todo: use map backed by flink managed memory.
  */
 @Slf4j
-public class RecordIndexCache implements Closeable {
+public class GlobalRecordIndexCache implements Closeable {
   @VisibleForTesting
   @Getter
   private final TreeMap<Long, ExternalSpillableMap<String, HoodieRecordGlobalLocation>> caches;
@@ -55,12 +56,7 @@ public class RecordIndexCache implements Closeable {
   private final long maxCacheSizeInBytes;
   // the minimum checkpoint id retained in the cache.
   private long minRetainedCheckpointId;
-  private long recordCnt = 0;
-
-  /**
-   * Step size to check the total memory size of the cache.
-   */
-  private static final int NUMBER_OF_RECORDS_TO_CHECK_MEMORY_SIZE = 1000;
+  private final PeriodicActionExecutor memoryCheckExecutor = new PeriodicActionExecutor();
 
   /**
    * Factor for estimating the real size of memory used by a spilled map.
@@ -68,7 +64,7 @@ public class RecordIndexCache implements Closeable {
   @VisibleForTesting
   public static final double FACTOR_FOR_MEMORY_SIZE_OF_SPILLED_MAP = 0.8;
 
-  public RecordIndexCache(Configuration conf, long initCheckpointId) {
+  public GlobalRecordIndexCache(Configuration conf, long initCheckpointId) {
     this.caches = new TreeMap<>(Comparator.reverseOrder());
     this.writeConfig = FlinkWriteClients.getHoodieClientConfig(conf, false, false);
     this.maxCacheSizeInBytes = conf.get(FlinkOptions.INDEX_RLI_CACHE_SIZE) * 1024 * 1024;
@@ -163,10 +159,7 @@ public class RecordIndexCache implements Closeable {
     // get the cache with the largest checkpoint ID (first entry in the reverse-ordered TreeMap).
     caches.firstEntry().getValue().put(recordKey, recordGlobalLocation);
 
-    if ((++recordCnt) % NUMBER_OF_RECORDS_TO_CHECK_MEMORY_SIZE == 0) {
-      cleanIfNecessary(0L);
-      recordCnt = 0;
-    }
+    memoryCheckExecutor.runIfNecessary(() -> cleanIfNecessary(0L));
   }
 
   /**

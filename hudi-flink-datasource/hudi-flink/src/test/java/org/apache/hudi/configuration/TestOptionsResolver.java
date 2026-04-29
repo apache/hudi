@@ -18,6 +18,7 @@
 
 package org.apache.hudi.configuration;
 
+import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.config.HoodieCleanConfig;
@@ -50,6 +51,20 @@ public class TestOptionsResolver {
     // set lowercase index
     conf.set(FlinkOptions.INDEX_TYPE, "bloom");
     assertEquals(HoodieIndex.IndexType.BLOOM, OptionsResolver.getIndexType(conf));
+  }
+
+  @Test
+  void testSimpleBucketRecordLevelIndexStreamingWrite() {
+    Configuration conf = getConf();
+    conf.set(FlinkOptions.METADATA_ENABLED, true);
+    conf.set(FlinkOptions.INDEX_TYPE, HoodieIndex.IndexType.BUCKET.name());
+
+    assertFalse(OptionsResolver.isSimpleBucketIndexWithRecordLevelIndex(conf));
+    assertFalse(OptionsResolver.isStreamingIndexWriteEnabled(conf));
+
+    conf.setString(HoodieMetadataConfig.RECORD_LEVEL_INDEX_ENABLE_PROP.key(), "true");
+    assertTrue(OptionsResolver.isSimpleBucketIndexWithRecordLevelIndex(conf));
+    assertTrue(OptionsResolver.isStreamingIndexWriteEnabled(conf));
   }
 
   @Test
