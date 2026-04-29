@@ -83,7 +83,8 @@ class SparkLanceReaderBase(enableVectorizedReader: Boolean) extends SparkColumna
       // No column data needed (e.g. count() on a non-partitioned table). Open the Lance file to
       // get the actual row count and return that many empty rows, so Spark computes the correct count.
       val countAllocator = HoodieArrowAllocator.newChildAllocator(
-        getClass.getSimpleName + "-count-" + file.filePath, HoodieSparkLanceReader.LANCE_DATA_ALLOCATOR_SIZE)
+        getClass.getSimpleName + "-count-" + file.filePath,
+        HoodieStorageConfig.LANCE_READ_ALLOCATOR_SIZE_BYTES.defaultValue().toLong)
       try {
         val lanceReader = LanceFileReader.open(file.filePath.toString, countAllocator)
         try {
