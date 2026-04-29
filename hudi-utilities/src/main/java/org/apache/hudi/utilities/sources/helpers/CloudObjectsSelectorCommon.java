@@ -71,7 +71,7 @@ import static org.apache.hudi.common.util.CollectionUtils.isNullOrEmpty;
 import static org.apache.hudi.common.util.ConfigUtils.containsConfigProperty;
 import static org.apache.hudi.common.util.ConfigUtils.getBooleanWithAltKeys;
 import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
-import static org.apache.hudi.utilities.config.CloudSourceConfig.CLOUD_INCREMENTAL_PARQUET_MERGE_SCHEMA;
+import static org.apache.hudi.utilities.config.CloudSourceConfig.CLOUD_INCREMENTAL_MERGE_SCHEMA;
 import static org.apache.hudi.utilities.config.CloudSourceConfig.CLOUD_DATAFILE_EXTENSION;
 import static org.apache.hudi.utilities.config.CloudSourceConfig.IGNORE_RELATIVE_PATH_PREFIX;
 import static org.apache.hudi.utilities.config.CloudSourceConfig.IGNORE_RELATIVE_PATH_SUBSTR;
@@ -282,7 +282,7 @@ public class CloudObjectsSelectorCommon {
     if (isNullOrEmpty(cloudObjectMetadata)) {
       return Option.empty();
     }
-    DataFrameReader reader = applyParquetMergeSchemaOption(spark.read().format(fileFormat), fileFormat);
+    DataFrameReader reader = applyMergeSchemaOption(spark.read().format(fileFormat), fileFormat);
     String datasourceOpts = getStringWithAltKeys(properties, CloudSourceConfig.SPARK_DATASOURCE_OPTIONS, true);
 
     StructType rowSchema = null;
@@ -548,22 +548,30 @@ public class CloudObjectsSelectorCommon {
   }
 
   /**
-   * Enables Spark Parquet {@code mergeSchema} for cloud object batches when configured, so heterogeneous Parquet
-   * files in one sync round share a merged struct type. Applied before user {@link CloudSourceConfig#SPARK_DATASOURCE_OPTIONS}
-   * so explicit reader options can override.
+   * Enables Spark {@code mergeSchema} for cloud object batches of Parquet or ORC files when configured, so
+   * heterogeneous files in one sync round share a merged struct type. Applied before user
+   * {@link CloudSourceConfig#SPARK_DATASOURCE_OPTIONS} so explicit reader options can override.
+   *
+   * <p>Spark's native Parquet reader honors {@code mergeSchema} on all supported versions. Spark's native ORC
+   * reader honors it on Spark 3.0+ (the native ORC impl is the default since Spark 2.4); on older runtimes the
+   * option is silently ignored, which is harmless.
    */
-  private DataFrameReader applyParquetMergeSchemaOption(DataFrameReader reader, String fileFormat) {
-    if (!isParquetFileFormat(fileFormat)) {
+  private DataFrameReader applyMergeSchemaOption(DataFrameReader reader, String fileFormat) {
+    if (!isParquetOrOrcFileFormat(fileFormat)) {
       return reader;
     }
-    if (!getBooleanWithAltKeys(properties, CLOUD_INCREMENTAL_PARQUET_MERGE_SCHEMA)) {
+    if (!getBooleanWithAltKeys(properties, CLOUD_INCREMENTAL_MERGE_SCHEMA)) {
       return reader;
     }
     return reader.option("mergeSchema", "true");
   }
 
-  private static boolean isParquetFileFormat(String fileFormat) {
-    return fileFormat != null && "parquet".equalsIgnoreCase(fileFormat.trim());
+  private static boolean isParquetOrOrcFileFormat(String fileFormat) {
+    if (fileFormat == null) {
+      return false;
+    }
+    String f = fileFormat.trim();
+    return "parquet".equalsIgnoreCase(f) || "orc".equalsIgnoreCase(f);
   }
 
   public enum Type {
