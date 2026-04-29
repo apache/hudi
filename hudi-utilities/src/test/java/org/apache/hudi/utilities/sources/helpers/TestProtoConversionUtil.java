@@ -199,6 +199,28 @@ public class TestProtoConversionUtil {
     Assertions.assertEquals(expected, actual);
   }
 
+  @Test
+  void uint64FieldDefaultIsAvroFixedValidatorCompatible() {
+    // Regression for Avro 1.12's tightened Schema.validateDefault for FIXED:
+    // a byte[] default gets base64-encoded ("AAAAAAAAAAAA", 12 chars) and is
+    // rejected because length != fixed size (9). The default must be a String
+    // of length == size (ISO-8859-1 of the raw bytes). Round-tripping the
+    // generated schema through JSON exercises the validator on parse.
+    ProtoConversionUtil.SchemaConfig schemaConfig = new ProtoConversionUtil.SchemaConfig(true, 1, true);
+    HoodieSchema schema = ProtoConversionUtil.getSchemaForMessageClass(Sample.class, schemaConfig);
+
+    Schema reparsed = new Schema.Parser().parse(schema.toAvroSchema().toString());
+    Schema.Field field = reparsed.getField(PRIMITIVE_UNSIGNED_LONG_FIELD_NAME);
+    Assertions.assertNotNull(field);
+    Assertions.assertTrue(field.hasDefaultValue());
+
+    GenericFixed decoded = (GenericFixed) GenericData.get().getDefaultValue(field);
+    Assertions.assertEquals(9, decoded.bytes().length);
+    Assertions.assertEquals(
+        BigInteger.ZERO,
+        DECIMAL_CONVERSION.fromFixed(decoded, field.schema(), field.schema().getLogicalType()).toBigInteger());
+  }
+
   private void assertUnsignedLongCorrectness(Schema fieldSchema, long expectedValue, GenericFixed actual) {
     BigDecimal actualPrimitiveUnsignedLong = DECIMAL_CONVERSION.fromFixed(actual, fieldSchema,
         fieldSchema.getLogicalType());
