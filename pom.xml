@@ -229,6 +229,7 @@
     <disruptor.version>3.4.2</disruptor.version>
     <antlr.version>4.8</antlr.version>
     <aws.sdk.version>2.29.52</aws.sdk.version>
+    <aws.sdk.v1.version>1.12.797</aws.sdk.v1.version>
     <proto.version>3.25.5</proto.version>
     <protoc.version>3.25.5</protoc.version>
     <dynamodb.lockclient.version>1.2.0</dynamodb.lockclient.version>
@@ -779,6 +780,18 @@
 
   <dependencyManagement>
     <dependencies>
+      <!-- AWS v1 SDK BOM. Pins all com.amazonaws:aws-java-sdk-* artifacts to a single
+           version. Without this, transitive deps (notably aws-lambda-java-events 1.1.0
+           via amazon-kinesis-deaggregator) declare AWS SDK ranges like [1.10.5,), which
+           force Maven to walk every published patch version during resolution. -->
+      <dependency>
+        <groupId>com.amazonaws</groupId>
+        <artifactId>aws-java-sdk-bom</artifactId>
+        <version>${aws.sdk.v1.version}</version>
+        <type>pom</type>
+        <scope>import</scope>
+      </dependency>
+
       <!-- Scala -->
       <dependency>
         <groupId>org.scala-lang.modules</groupId>
