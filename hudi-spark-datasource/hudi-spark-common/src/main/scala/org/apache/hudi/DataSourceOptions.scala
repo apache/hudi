@@ -35,6 +35,7 @@ import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory.{getKeyGene
 import org.apache.hudi.sync.common.HoodieSyncConfig
 import org.apache.hudi.util.{JFunction, SparkConfigUtils}
 
+import org.apache.spark.sql.SQLContext
 import org.apache.spark.sql.execution.datasources.{DataSourceUtils => SparkDataSourceUtils}
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils
 import org.slf4j.LoggerFactory
@@ -1036,6 +1037,36 @@ object DataSourceOptionsHelper {
   private val SPARK_HOODIE_PREFIX = "spark.hoodie."
   private val SPARK_PREFIX = "spark."
 
+  /**
+   * Collects `hoodie.*` and `spark.hoodie.*` configs from the SparkConf and merges them
+   * with explicit DataFrame options. Explicit options win over SparkConf.
+   *
+   * Use this from both read and write entry points so SparkConf-level Hudi configs are
+   * forwarded consistently. Without this, only the read path picks up SparkConf, and
+   * write/hive_sync configs set via `--conf spark.hoodie.X=Y` are silently dropped.
+   */
+  def collectHoodieAndSparkHoodieConfs(sqlContext: SQLContext,
+                                       optParams: Map[String, String]): Map[String, String] = {
+    val sparkConfs = sqlContext.getAllConfs.filter {
+      case (key, _) => key.startsWith("hoodie.") || key.startsWith(SPARK_HOODIE_PREFIX)
+    }
+    sparkConfs ++ optParams
+  }
+
+  /**
+   * Strips the `spark.` prefix from `spark.hoodie.*` keys so downstream code only sees
+   * canonical `hoodie.*` keys. If both `spark.hoodie.X` and `hoodie.X` are present, the
+   * latter wins (explicit options/configs override the SparkConf-prefixed form).
+   */
+  def normalizeSparkHoodiePrefix(parameters: Map[String, String]): Map[String, String] = {
+    val normalized = parameters.collect {
+      case (key, value) if key.startsWith(SPARK_HOODIE_PREFIX) =>
+        (key.stripPrefix(SPARK_PREFIX), value)
+    }
+    val nonSparkHoodie = parameters.filterNot(_._1.startsWith(SPARK_HOODIE_PREFIX))
+    normalized ++ nonSparkHoodie
+  }
+
   // put all the configs with alternatives here
   private val allConfigsWithAlternatives = List(
     DataSourceReadOptions.QUERY_TYPE,
@@ -1132,13 +1163,8 @@ object DataSourceOptionsHelper {
     // 2) spark.hoodie.* (normalized to hoodie.*)
     // 3) hoodie.* / explicit data source options
     // NOTE: If both spark.hoodie.X and hoodie.X are set, hoodie.X wins.
-    val normalizedSparkHoodieConfigs = parameters.collect {
-      case (key, value) if key.startsWith(SPARK_HOODIE_PREFIX) => (key.stripPrefix(SPARK_PREFIX), value)
-    }
-    val paramsWithoutSparkHoodie = parameters.filterNot(_._1.startsWith(SPARK_HOODIE_PREFIX))
-    val paramsWithGlobalProps = DFSPropertiesConfiguration.getGlobalProps.asScala.toMap ++
-      normalizedSparkHoodieConfigs ++
-      paramsWithoutSparkHoodie
+    val normalized = normalizeSparkHoodiePrefix(parameters)
+    val paramsWithGlobalProps = DFSPropertiesConfiguration.getGlobalProps.asScala.toMap ++ normalized
     val queryType = paramsWithGlobalProps.get(IS_QUERY_AS_RO_TABLE)
       .map(is => if (is.toBoolean) QUERY_TYPE_READ_OPTIMIZED_OPT_VAL else QUERY_TYPE_SNAPSHOT_OPT_VAL)
       .getOrElse(paramsWithGlobalProps.getOrElse(QUERY_TYPE.key, QUERY_TYPE.defaultValue()))
