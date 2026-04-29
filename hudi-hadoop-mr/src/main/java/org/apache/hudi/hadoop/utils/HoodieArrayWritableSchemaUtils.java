@@ -80,6 +80,9 @@ public class HoodieArrayWritableSchemaUtils {
 
   private static Writable rewriteRecordWithNewSchemaInternal(Writable writable, HoodieSchema oldSchema, HoodieSchema newSchema, Map<String, String> renameCols, Deque<String> fieldNames) {
     switch (newSchema.getType()) {
+      // BLOB/VARIANT are physically records; share the RECORD field-by-name rewrite.
+      case BLOB:
+      case VARIANT:
       case RECORD:
         if (!(writable instanceof ArrayWritable)) {
           throw new SchemaCompatibilityException(String.format("Cannot rewrite %s as a record", writable.getClass().getName()));
