@@ -566,7 +566,8 @@ public class CloudObjectsSelectorCommon {
     return reader.option("mergeSchema", "true");
   }
 
-  private static boolean isParquetOrOrcFileFormat(String fileFormat) {
+  // Package-private for unit testing — see TestCloudObjectsSelectorCommon.
+  static boolean isParquetOrOrcFileFormat(String fileFormat) {
     if (fileFormat == null) {
       return false;
     }
