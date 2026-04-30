@@ -152,7 +152,11 @@ class SparkCatalogMetaStoreClient(syncConfig: HiveSyncConfig)
   override def isLocalMetaStore(): Boolean = unsupported[Boolean]()
   override def reconnect(): Unit = unsupported[Unit]()
   override def close(): Unit = unsupported[Unit]()
-  override def setMetaConf(arg0: String, arg1: String): Unit = unsupported[Unit]()
+  // setMetaConf is no-op: HoodieHiveSyncClient.setMetaConf forwards
+  // hive.metastore.callerContext.* values to the metastore for audit/tracing. With Spark's
+  // external catalog there is no remote HMS to forward to, so accept the call silently
+  // instead of breaking sync clients that exercise the standard IMetaStoreClient contract.
+  override def setMetaConf(arg0: String, arg1: String): Unit = {}
   override def getMetaConf(arg0: String): String = unsupported[String]()
   override def getDatabases(arg0: String): java.util.List[String] = unsupported[java.util.List[String]]()
   override def getAllDatabases(): java.util.List[String] = unsupported[java.util.List[String]]()
