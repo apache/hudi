@@ -95,16 +95,18 @@ DOCKER_CONTEXT_DIR="hoodie/hadoop"
 SPARK_MAJOR=$(echo "$SPARK_VERSION" | cut -d. -f1)
 if [ "$SPARK_MAJOR" -ge 4 ] 2>/dev/null; then
   BASE_IMAGE_DIR="base_java17"
+  BASE_JAVA_TAG="java17"
   echo "Using Java 17 base image for Spark ${SPARK_VERSION}"
 else
   BASE_IMAGE_DIR="base_java11"
+  BASE_JAVA_TAG="java11"
   echo "Using Java 11 base image for Spark ${SPARK_VERSION}"
 fi
 
 # List of images to build: "subdir|image_base_name"
 # Each entry: <subdir>|<image_base_name>
 DOCKER_IMAGES=(
-  "${BASE_IMAGE_DIR}|apachehudi/hudi-hadoop_${HADOOP_VERSION}-base"
+  "${BASE_IMAGE_DIR}|apachehudi/hudi-hadoop_${HADOOP_VERSION}-base-${BASE_JAVA_TAG}"
   "datanode|apachehudi/hudi-hadoop_${HADOOP_VERSION}-datanode"
   "historyserver|apachehudi/hudi-hadoop_${HADOOP_VERSION}-history"
   "hive_base|apachehudi/hudi-hadoop_${HADOOP_VERSION}-hive_${HIVE_VERSION}"
@@ -128,6 +130,7 @@ for IMAGE_CONFIG in "${DOCKER_IMAGES[@]}"; do
       --build-arg HADOOP_VERSION=${HADOOP_VERSION} \
       --build-arg SPARK_VERSION=${SPARK_VERSION} \
       --build-arg HIVE_VERSION=${HIVE_VERSION} \
+      --build-arg BASE_IMAGE_TAG=${BASE_JAVA_TAG} \
       "$IMAGE_CONTEXT" -t "$TAG_LATEST" -t "$TAG_VERSIONED"; then
       echo "Error: Failed to build docker image for $IMAGE_CONTEXT"
       exit 1
@@ -137,6 +140,7 @@ for IMAGE_CONFIG in "${DOCKER_IMAGES[@]}"; do
       --build-arg HADOOP_VERSION=${HADOOP_VERSION} \
       --build-arg SPARK_VERSION=${SPARK_VERSION} \
       --build-arg HIVE_VERSION=${HIVE_VERSION} \
+      --build-arg BASE_IMAGE_TAG=${BASE_JAVA_TAG} \
       "$IMAGE_CONTEXT" -t "$TAG_LATEST" -t "$TAG_VERSIONED"; then
       echo "Error: Failed to build docker image for $IMAGE_CONTEXT"
       exit 1
