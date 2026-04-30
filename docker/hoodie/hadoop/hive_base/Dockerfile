@@ -18,16 +18,16 @@
 ARG HADOOP_VERSION=3.3.4 
 FROM apachehudi/hudi-hadoop_${HADOOP_VERSION}-base:latest
 
-ENV HIVE_HOME /opt/hive
-ENV PATH $HIVE_HOME/bin:$PATH
-ENV HADOOP_HOME /opt/hadoop-$HADOOP_VERSION
+ENV HIVE_HOME=/opt/hive
+ENV PATH=$HIVE_HOME/bin:$PATH
+ENV HADOOP_HOME=/opt/hadoop-$HADOOP_VERSION
 
 WORKDIR /opt
 
 ARG HIVE_VERSION=3.1.3
 ARG HIVE_URL=https://archive.apache.org/dist/hive/hive-$HIVE_VERSION/apache-hive-$HIVE_VERSION-bin.tar.gz
-ENV HIVE_VERSION ${HIVE_VERSION}
-ENV HIVE_URL ${HIVE_URL}
+ENV HIVE_VERSION=${HIVE_VERSION}
+ENV HIVE_URL=${HIVE_URL}
 
 #Install Hive MySQL, PostgreSQL JDBC
 RUN echo "Hive URL is :${HIVE_URL}" && wget ${HIVE_URL} -O hive.tar.gz && \
@@ -61,9 +61,9 @@ RUN chmod +x /usr/local/bin/startup.sh
 COPY entrypoint.sh /usr/local/bin/
 RUN chmod +x /usr/local/bin/entrypoint.sh
 
-ENV PATH $HIVE_HOME/bin/:$PATH
+ENV PATH=$HIVE_HOME/bin/:$PATH
 # NOTE: This is the only battle-proven method to inject jars into Hive CLI
 ENV AUX_CLASSPATH=file://${HUDI_HADOOP_BUNDLE}
 
 ENTRYPOINT ["entrypoint.sh"]
-CMD startup.sh
+CMD ["startup.sh"]

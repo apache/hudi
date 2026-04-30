@@ -34,7 +34,8 @@ RUN wget https://repo1.maven.org/maven2/org/openlabtesting/leveldbjni/leveldbjni
 ENV LD_LIBRARY_PATH="/usr/lib"
 ENV JAVA_LIBRARY_PATH="/usr/lib"
 
-ENV HADOOP_HISTORY_PORT ${HADOOP_HISTORY_PORT}
+ARG HADOOP_HISTORY_PORT
+ENV HADOOP_HISTORY_PORT=${HADOOP_HISTORY_PORT}
 
 ENV YARN_CONF_yarn_timeline___service_leveldb___timeline___store_path=/hadoop/yarn/timeline
 RUN mkdir -p /hadoop/yarn/timeline

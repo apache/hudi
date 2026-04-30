@@ -24,15 +24,15 @@ FROM apachehudi/hudi-hadoop_${HADOOP_VERSION}-base:latest as hadoop-base
 
 ARG PRESTO_VERSION=0.271
 
-ENV PRESTO_VERSION       ${PRESTO_VERSION}
-ENV PRESTO_HOME          /opt/presto-server-${PRESTO_VERSION}
-ENV PRESTO_CONF_DIR      ${PRESTO_HOME}/etc
-ENV PRESTO_LOG_DIR       /var/log/presto
-ENV PRESTO_JVM_MAX_HEAP  2G
-ENV PRESTO_QUERY_MAX_MEMORY          1GB
-ENV PRESTO_QUERY_MAX_MEMORY_PER_NODE 512MB
-ENV PRESTO_DISCOVERY_URI  http://presto-coordinator-1:8090
-ENV PATH        $PATH:${PRESTO_HOME}/bin
+ENV PRESTO_VERSION=${PRESTO_VERSION}
+ENV PRESTO_HOME=/opt/presto-server-${PRESTO_VERSION}
+ENV PRESTO_CONF_DIR=${PRESTO_HOME}/etc
+ENV PRESTO_LOG_DIR=/var/log/presto
+ENV PRESTO_JVM_MAX_HEAP=2G
+ENV PRESTO_QUERY_MAX_MEMORY=1GB
+ENV PRESTO_QUERY_MAX_MEMORY_PER_NODE=512MB
+ENV PRESTO_DISCOVERY_URI=http://presto-coordinator-1:8090
+ENV PATH=$PATH:${PRESTO_HOME}/bin
 
 RUN set -x \
     && DEBIAN_FRONTEND=noninteractive apt-get -yq update \
@@ -77,7 +77,7 @@ COPY lib/*  /usr/local/lib/
 RUN chmod +x /usr/local/bin/entrypoint.sh
 
 ADD target/ /var/hoodie/ws/docker/hoodie/hadoop/prestobase/target/
-ENV HUDI_PRESTO_BUNDLE /var/hoodie/ws/docker/hoodie/hadoop/prestobase/target/hudi-presto-bundle.jar
+ENV HUDI_PRESTO_BUNDLE=/var/hoodie/ws/docker/hoodie/hadoop/prestobase/target/hudi-presto-bundle.jar
 RUN  cp ${HUDI_PRESTO_BUNDLE} ${PRESTO_HOME}/plugin/hive-hadoop2/
 # TODO: the latest master of Presto relies on hudi-presto-bundle, while current Presto releases
 # rely on hudi-common and hudi-hadoop-mr 0.9.0, which are pulled in plugin/hive-hadoop2/ in the
