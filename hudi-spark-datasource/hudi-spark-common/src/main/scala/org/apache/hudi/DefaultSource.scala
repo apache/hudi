@@ -134,7 +134,19 @@ class DefaultSource extends RelationProvider
       parameters
     }
 
-    val relation = DefaultSource.createRelation(sqlContext, metaClient, schema, options.toMap)
+    // Spark's DataSource.resolveRelation() invokes this 3-arg overload directly via the
+    // SchemaRelationProvider path when a user-supplied schema is present (e.g.
+    // spark.read.schema(...).load(path)). The 2-arg overload catches
+    // HoodieSchemaNotFoundException and returns an EmptyRelation, but that catch is bypassed
+    // on this path, so we mirror the same handling here. Preserve the caller-supplied schema
+    // so subsequent query analysis (e.g. column resolution in WHERE clauses) sees the
+    // HMS-known columns even though the on-disk table is schemaless.
+    val relation = try {
+      DefaultSource.createRelation(sqlContext, metaClient, schema, options.toMap)
+    } catch {
+      case _: HoodieSchemaNotFoundException =>
+        new EmptyRelation(sqlContext, Option(schema).getOrElse(new StructType()))
+    }
     log.info(s"Created relation ${relation.getClass.getSimpleName} with ${options.size} resolved options")
     relation
   }
