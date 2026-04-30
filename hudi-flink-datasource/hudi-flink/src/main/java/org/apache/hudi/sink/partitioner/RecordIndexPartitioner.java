@@ -44,8 +44,12 @@ import java.util.Map;
  * index write subtasks from writing the same record index file group, thereby effectively
  * reducing the number of small files.
  *
- * <p>The partitioner first spreads data partitions across downstream tasks, then maps
- * record keys to the subtask for the selected record-index file group.
+ * <p>Partitioned RLI stores record-index file groups under the corresponding data table
+ * partition. Since RLI file groups for different data partitions can have the same bucket id,
+ * shuffling only by bucket id only would route those equally numbered buckets to the same
+ * downstream task and can easily cause data skew. Therefore an index row must be routed by
+ * its data partition first, then by the record-key hash within that partition's RLI file
+ * group range.
  */
 public class RecordIndexPartitioner implements Partitioner<HoodieKey> {
   private final Configuration conf;

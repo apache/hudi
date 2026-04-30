@@ -1479,7 +1479,7 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
    */
   protected Pair<List<HoodieFileGroupId>, HoodieData<HoodieRecord>> tagRecordsWithLocationForStreamingWrites(HoodieData<HoodieRecord> untaggedRecords,
                                                                                                              Set<String> enabledMetadataPartitions) {
-    // no need to tag of the incoming records is empty.
+    // no need to tag if the incoming records is empty.
     if (untaggedRecords instanceof HoodieListData && untaggedRecords.isEmpty()) {
       return Pair.of(Collections.emptyList(), untaggedRecords);
     }

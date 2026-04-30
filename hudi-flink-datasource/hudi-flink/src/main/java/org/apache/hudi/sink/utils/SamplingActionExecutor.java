@@ -21,22 +21,22 @@ package org.apache.hudi.sink.utils;
 /**
  * Executes an action after a fixed number of record updates.
  */
-public class PeriodicActionExecutor {
+public class SamplingActionExecutor {
   static final int DEFAULT_RECORD_INTERVAL = 1000;
 
-  private final int interval;
+  private final int stepSize;
   private long recordCnt;
 
-  public PeriodicActionExecutor() {
+  public SamplingActionExecutor() {
     this(DEFAULT_RECORD_INTERVAL);
   }
 
-  public PeriodicActionExecutor(int interval) {
-    this.interval = interval;
+  public SamplingActionExecutor(int stepSize) {
+    this.stepSize = stepSize;
   }
 
   public void runIfNecessary(Runnable action) {
-    if ((++recordCnt) % interval == 0) {
+    if ((++recordCnt) % stepSize == 0) {
       action.run();
       recordCnt = 0L;
     }

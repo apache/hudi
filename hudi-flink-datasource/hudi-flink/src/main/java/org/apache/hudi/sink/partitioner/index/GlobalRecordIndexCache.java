@@ -27,7 +27,7 @@ import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
-import org.apache.hudi.sink.utils.PeriodicActionExecutor;
+import org.apache.hudi.sink.utils.SamplingActionExecutor;
 import org.apache.hudi.util.FlinkWriteClients;
 
 import lombok.Getter;
@@ -56,7 +56,7 @@ public class GlobalRecordIndexCache implements Closeable {
   private final long maxCacheSizeInBytes;
   // the minimum checkpoint id retained in the cache.
   private long minRetainedCheckpointId;
-  private final PeriodicActionExecutor memoryCheckExecutor = new PeriodicActionExecutor();
+  private final SamplingActionExecutor memoryCheckExecutor = new SamplingActionExecutor();
 
   /**
    * Factor for estimating the real size of memory used by a spilled map.

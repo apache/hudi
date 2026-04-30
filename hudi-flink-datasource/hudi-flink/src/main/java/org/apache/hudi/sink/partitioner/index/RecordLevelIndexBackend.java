@@ -37,7 +37,7 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.sink.event.Correspondent;
-import org.apache.hudi.sink.utils.PeriodicActionExecutor;
+import org.apache.hudi.sink.utils.SamplingActionExecutor;
 import org.apache.hudi.util.FlinkWriteClients;
 import org.apache.hudi.util.StreamerUtil;
 
@@ -81,7 +81,7 @@ public class RecordLevelIndexBackend implements PartitionedIndexBackend {
   private final Map<String, BucketCache> partitionBucketCaches = new LinkedHashMap<>(16, 0.75f, true);
   private long currentCheckpointId = -1L;
   private long minRetainedCheckpointId = Long.MIN_VALUE;
-  private final PeriodicActionExecutor memoryCheckExecutor = new PeriodicActionExecutor();
+  private final SamplingActionExecutor memoryCheckExecutor = new SamplingActionExecutor();
 
   /**
    * Creates a partitioned RLI backend with custom ownership filtering.
@@ -270,6 +270,8 @@ public class RecordLevelIndexBackend implements PartitionedIndexBackend {
         }
       }
       if (!cleaned) {
+        // All remaining partition caches are either protected or too recent to evict safely.
+        // Returning avoids retrying the same scan without making progress.
         return;
       }
     }
@@ -391,6 +393,8 @@ public class RecordLevelIndexBackend implements PartitionedIndexBackend {
     @Override
     public void close() {
       this.recordKeyToFileGroupIdCode.close();
+      this.fileGroupIdToDictId.clear();
+      this.dictIdToFileGroupId.clear();
     }
   }
 }
