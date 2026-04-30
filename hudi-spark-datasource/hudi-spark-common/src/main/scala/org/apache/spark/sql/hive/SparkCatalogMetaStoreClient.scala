@@ -302,6 +302,14 @@ class SparkCatalogMetaStoreClient(syncConfig: HiveSyncConfig)
     val dataFields = cols.map(fs => StructField(fs.getName, CatalystSqlParser.parseDataType(fs.getType), nullable = true, Metadata.empty))
     val partitionFields = partCols.map(fs => StructField(fs.getName, CatalystSqlParser.parseDataType(fs.getType), nullable = true, Metadata.empty))
 
+    // Strip "spark.sql.*" properties before handing off to Spark's external catalog.
+    // HiveExternalCatalog.alterTable / createTable rejects such keys ("Cannot persist ...
+    // table property keys may not start with 'spark.sql.'") because they are reserved for
+    // Spark's internal use (provider, schema parts, create version). Spark re-derives and
+    // writes these from the CatalogTable itself, so dropping them on the way in is safe.
+    val tableProperties = Option(table.getParameters).map(_.asScala.toMap).getOrElse(Map.empty)
+      .filterNot { case (k, _) => k.startsWith("spark.sql.") }
+
     CatalogTable(
       identifier = TableIdentifier(tbl, Some(db)),
       tableType = if ("EXTERNAL_TABLE".equalsIgnoreCase(table.getTableType)) CatalogTableType.EXTERNAL else CatalogTableType.MANAGED,
@@ -315,7 +323,7 @@ class SparkCatalogMetaStoreClient(syncConfig: HiveSyncConfig)
       schema = StructType(dataFields ++ partitionFields),
       provider = Some("hudi"),
       partitionColumnNames = partCols.map(_.getName),
-      properties = Option(table.getParameters).map(_.asScala.toMap).getOrElse(Map.empty))
+      properties = tableProperties)
   }
 
   private def fromCatalogTable(table: CatalogTable): Table = {
