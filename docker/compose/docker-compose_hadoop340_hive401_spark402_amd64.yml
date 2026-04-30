@@ -79,11 +79,15 @@ services:
       - historyserver:/hadoop/yarn/timeline
 
   hive-metastore-postgresql:
-    image: bde2020/hive-metastore-postgresql:3.1.0
-    volumes:
-      - hive-metastore-postgresql:/var/lib/postgresql
+    image: postgres:13
     hostname: hive-metastore-postgresql
     container_name: hive-metastore-postgresql
+    environment:
+      - POSTGRES_USER=hive
+      - POSTGRES_PASSWORD=hive
+      - POSTGRES_DB=metastore
+    volumes:
+      - hive-metastore-postgresql:/var/lib/postgresql/data
 
   hivemetastore:
     image: apachehudi/hudi-hadoop_3.4.0-hive_4.0.1:latest
@@ -97,7 +101,7 @@ services:
     command:
       - /bin/bash
       - -c
-      - "/opt/hive/bin/schematool -dbType postgres -upgradeSchema -verbose -userName postgres -passWord postgres || true; /opt/hive/bin/hive --service metastore"
+      - "/opt/hive/bin/schematool -dbType postgres -initSchema -verbose -userName hive -passWord hive || true; /opt/hive/bin/hive --service metastore"
     environment:
       - "SERVICE_PRECONDITION=namenode:9870 hive-metastore-postgresql:5432"
     ports:
