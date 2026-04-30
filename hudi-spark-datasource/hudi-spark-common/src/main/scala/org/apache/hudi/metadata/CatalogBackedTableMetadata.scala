@@ -29,6 +29,8 @@ import org.apache.hudi.util.PartitionPathFilterUtil
 
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.catalyst.TableIdentifier
+import org.apache.spark.sql.catalyst.analysis.{NoSuchDatabaseException, NoSuchTableException}
+import org.apache.spark.sql.catalyst.catalog.CatalogTable
 import org.apache.spark.sql.catalyst.catalog.CatalogTablePartition
 import org.apache.spark.sql.catalyst.expressions.Expression
 import org.apache.spark.sql.internal.SQLConf
@@ -52,19 +54,35 @@ class CatalogBackedTableMetadata(engineContext: HoodieEngineContext,
       tableConfig.getDatabaseName
     }
   private lazy val tableIdentifier = TableIdentifier(catalogTableName, Some(catalogDatabaseName))
-  private lazy val catalogTable = sparkSession.sessionState.catalog.getTableMetadata(tableIdentifier)
 
-  private def isPartitionedTable: Boolean = {
-    catalogTable.partitionColumnNames.nonEmpty
+  // Lookup the table in Spark's session catalog. If the table isn't registered there
+  // (e.g. spark.read.format("hudi").load(path) on a path created via HoodieTableMetaClient
+  // without a CREATE TABLE), return None and the override methods below fall through to
+  // the parent FileSystemBackedTableMetadata implementation.
+  private lazy val catalogTable: Option[CatalogTable] = {
+    try {
+      Some(sparkSession.sessionState.catalog.getTableMetadata(tableIdentifier))
+    } catch {
+      case _: NoSuchTableException | _: NoSuchDatabaseException =>
+        logWarning(s"Table $tableIdentifier not found in Spark session catalog; falling " +
+          s"back to filesystem-backed partition listing for $datasetBasePath. To suppress " +
+          "this fallback, register the table or set " +
+          "hoodie.datasource.read.file.index.list.partitions.from.catalog=false.")
+        None
+    }
   }
 
-  private def shouldUseCatalogPartitions: Boolean = {
-    isPartitionedTable && catalogTable.tracksPartitionsInCatalog
-  }
+  private def isPartitionedTable: Boolean =
+    catalogTable.exists(_.partitionColumnNames.nonEmpty)
+
+  private def shouldUseCatalogPartitions: Boolean =
+    catalogTable.exists(t => t.partitionColumnNames.nonEmpty && t.tracksPartitionsInCatalog)
 
   override def getAllPartitionPaths():
   util.List[String] =
-    if (!isPartitionedTable) {
+    if (catalogTable.isEmpty) {
+      super.getAllPartitionPaths()
+    } else if (!isPartitionedTable) {
       util.Collections.emptyList()
     } else if (shouldUseCatalogPartitions) {
       sparkSession.sessionState.catalog.externalCatalog
@@ -79,7 +97,9 @@ class CatalogBackedTableMetadata(engineContext: HoodieEngineContext,
 
   override def getPartitionPathWithPathPrefixes(relativePathPrefixes: util.List[String]):
   util.List[String] =
-    if (!isPartitionedTable) {
+    if (catalogTable.isEmpty) {
+      super.getPartitionPathWithPathPrefixes(relativePathPrefixes)
+    } else if (!isPartitionedTable) {
       util.Collections.emptyList()
     } else if (shouldUseCatalogPartitions) {
       filterPartitionsBasedOnRelativePathPrefixes(relativePathPrefixes,
@@ -94,7 +114,9 @@ class CatalogBackedTableMetadata(engineContext: HoodieEngineContext,
                                                                    pushedExpr: org.apache.hudi.expression.Expression,
                                                                    partitionPredicateExpressions: util.List[Object]):
   util.List[String] = {
-    if (!isPartitionedTable) {
+    if (catalogTable.isEmpty) {
+      super.getPartitionPathWithPathPrefixUsingFilterExpression(relativePathPrefix, partitionFields, pushedExpr)
+    } else if (!isPartitionedTable) {
       util.Collections.emptyList()
     } else if (shouldUseCatalogPartitions) {
       val partitionPredicateExpressionSeq = partitionPredicateExpressions.asScala.map(_.asInstanceOf[Expression]).toSeq
