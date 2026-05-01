@@ -199,9 +199,8 @@ abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordBuffer<T
       } else {
         blockRecordsIterator = dataBlock.getEngineRecordIterator(readerContext);
       }
-      Pair<Function<T, T>, HoodieSchema> schemaTransformerWithEvolvedSchema = getSchemaTransformerWithEvolvedSchema(dataBlock);
-      return Pair.of(new CloseableMappingIterator<>(
-          blockRecordsIterator, schemaTransformerWithEvolvedSchema.getLeft()), schemaTransformerWithEvolvedSchema.getRight());
+      Pair<Function<T, T>, HoodieSchema> projected = getProjectedTransformer(dataBlock);
+      return Pair.of(new CloseableMappingIterator<>(blockRecordsIterator, projected.getLeft()), projected.getRight());
     } catch (IOException e) {
       throw new HoodieIOException("Failed to deser records from log files ", e);
     }
@@ -279,6 +278,33 @@ abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordBuffer<T
 
     HoodieSchema evolvedSchema = schemaEvolutionTransformerOpt.map(Pair::getRight).orElseGet(dataBlock::getSchema);
     return Pair.of(transformer, evolvedSchema);
+  }
+
+  /**
+   * Combines the schema-evolution transformer with the engine's optional log-block record
+   * projection. When the engine provides a projection (currently only Spark 4.1's
+   * PushVariantIntoScan path), it is composed *after* the evolution transformer.
+   *
+   * <p>The returned schema is the evolved data-block schema, not {@code readerSchema}: the
+   * Spark 4.1 projector rewrites variant fields in place but preserves every other field of
+   * the data-block schema, including the merger metadata columns ({@code _hoodie_record_key},
+   * {@code _tmp_metadata_row_index}) that the merger needs to look records up by ordinal.
+   * Returning {@code readerSchema} (the bare projected required schema) would tell the buffer
+   * the records are 4 fields wide while the actual rows still carry the metadata columns,
+   * causing the merger to read off the end of the row.
+   *
+   * <p>Composition order: schema-evolution first, then variant projection. Reasoning: the
+   * evolution transformer rewrites the on-disk Avro/Hudi schema into the shape the engine
+   * projector was built against; reversing the order would feed a not-yet-evolved row to the
+   * projector and corrupt field ordinals.
+   */
+  protected Pair<Function<T, T>, HoodieSchema> getProjectedTransformer(HoodieDataBlock dataBlock) {
+    Pair<Function<T, T>, HoodieSchema> evolved = getSchemaTransformerWithEvolvedSchema(dataBlock);
+    Option<Function<T, T>> logProjOpt = readerContext.getLogBlockRecordProjection(evolved.getRight());
+    if (!logProjOpt.isPresent()) {
+      return evolved;
+    }
+    return Pair.of(evolved.getLeft().andThen(logProjOpt.get()), evolved.getRight());
   }
 
   private static class LogRecordIterator<T> implements ClosableIterator<BufferedRecord<T>> {

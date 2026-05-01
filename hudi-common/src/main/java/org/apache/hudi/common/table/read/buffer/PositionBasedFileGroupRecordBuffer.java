@@ -126,7 +126,7 @@ public class PositionBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupReco
           partialUpdateModeOpt);
     }
 
-    Pair<Function<T, T>, HoodieSchema> schemaTransformerWithEvolvedSchema = getSchemaTransformerWithEvolvedSchema(dataBlock);
+    Pair<Function<T, T>, HoodieSchema> schemaTransformerWithEvolvedSchema = getProjectedTransformer(dataBlock);
 
     HoodieSchema schema = HoodieSchemaCache.intern(schemaTransformerWithEvolvedSchema.getRight());
 

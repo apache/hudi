@@ -56,6 +56,7 @@ import org.apache.hudi.storage.StoragePathInfo;
 import java.io.IOException;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Function;
 
 import static org.apache.hudi.common.config.HoodieReaderConfig.RECORD_MERGE_IMPL_CLASSES_DEPRECATED_WRITE_CONFIG_KEY;
 import static org.apache.hudi.common.config.HoodieReaderConfig.RECORD_MERGE_IMPL_CLASSES_WRITE_CONFIG_KEY;
@@ -382,6 +383,23 @@ public abstract class HoodieReaderContext<T> {
                                                             ClosableIterator<T> dataFileIterator,
                                                             HoodieSchema dataRequiredSchema,
                                                             List<Pair<String, Object>> requiredPartitionFieldAndValues);
+
+  /**
+   * Per-row transformer applied to records emerging from a log data block before they reach the
+   * merger. Engines that need to align log-block records to a projected required schema (e.g.
+   * Spark 4.1's PushVariantIntoScan, which projects variant columns into a synthetic struct shape
+   * at scan time) override this; the default is no projection.
+   *
+   * <p>When this returns a non-empty {@link Option}, the produced records must match the required
+   * (projected) schema, and {@code FileGroupRecordBuffer} will use that required schema as the
+   * downstream {@code BufferedRecords} schema in place of {@code dataBlock.getSchema()}.
+   *
+   * @param dataBlockSchema the schema actually carried by the log data block
+   * @return per-row transformer; {@code Option.empty()} means no projection is needed
+   */
+  public Option<Function<T, T>> getLogBlockRecordProjection(HoodieSchema dataBlockSchema) {
+    return Option.empty();
+  }
 
   public Option<Pair<String, String>> getPayloadClasses(TypedProperties props) {
     return getRecordMerger().map(merger -> {
