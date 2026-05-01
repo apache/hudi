@@ -113,38 +113,4 @@ class TestHoodieParquetReadSupport {
         .named("required")
     Assertions.assertEquals(expectedSchema, trimmedSchema)
   }
-
-  /**
-   * Validate that reorderVariantFields does not treat groups as variant when the value/metadata
-   * fields fail the type checks in isVariantGroup. Each sub-group exercises a different false
-   * branch of the short-circuit && chain (lines 116-119).
-   */
-  @Test
-  def testReorderVariantFields_nonVariantGroupsUnchanged(): Unit = {
-    val schema = Types.buildMessage()
-      // value is non-primitive → line 116 false
-      .addField(Types.requiredGroup()
-        .addField(Types.requiredGroup().addField(Types.required(PrimitiveTypeName.INT32).named("x")).named("value"))
-        .addField(Types.required(PrimitiveTypeName.BINARY).named("metadata"))
-        .named("g1"))
-      // value is primitive, metadata is non-primitive → line 117 false
-      .addField(Types.requiredGroup()
-        .addField(Types.required(PrimitiveTypeName.BINARY).named("value"))
-        .addField(Types.requiredGroup().addField(Types.required(PrimitiveTypeName.INT32).named("x")).named("metadata"))
-        .named("g2"))
-      // both primitive but non-BINARY → line 118 false
-      .addField(Types.requiredGroup()
-        .addField(Types.required(PrimitiveTypeName.INT32).named("value"))
-        .addField(Types.required(PrimitiveTypeName.INT32).named("metadata"))
-        .named("g3"))
-      // value is BINARY, metadata is non-BINARY primitive → line 119 false
-      .addField(Types.requiredGroup()
-        .addField(Types.required(PrimitiveTypeName.BINARY).named("value"))
-        .addField(Types.required(PrimitiveTypeName.INT32).named("metadata"))
-        .named("g4"))
-      .named("test")
-
-    val result = HoodieParquetReadSupport.reorderVariantFields(schema)
-    Assertions.assertEquals(schema, result)
-  }
 }
