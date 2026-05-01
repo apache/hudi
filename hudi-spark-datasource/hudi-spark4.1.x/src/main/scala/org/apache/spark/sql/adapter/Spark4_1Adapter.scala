@@ -31,11 +31,13 @@ import org.apache.spark.sql.avro._
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.analysis.{EliminateSubqueryAliases, ResolvedTable}
 import org.apache.spark.sql.catalyst.catalog.CatalogTable
-import org.apache.spark.sql.catalyst.expressions.{AttributeReference, Expression}
+import org.apache.spark.sql.catalyst.expressions.{AttributeReference, BoundReference, CreateNamedStruct, Expression, Literal, UnsafeProjection}
+import org.apache.spark.sql.catalyst.expressions.variant.VariantGet
 import org.apache.spark.sql.catalyst.parser.{ParseException, ParserInterface}
 import org.apache.spark.sql.catalyst.planning.PhysicalOperation
 import org.apache.spark.sql.catalyst.plans.logical._
 import org.apache.spark.sql.catalyst.trees.Origin
+import org.apache.spark.sql.catalyst.types.DataTypeUtils
 import org.apache.spark.sql.catalyst.util.{METADATA_COL_ATTR_KEY, RebaseDateTime}
 import org.apache.spark.sql.connector.catalog.{V1Table, V2TableWithV1Fallback}
 import org.apache.spark.sql.execution.datasources._
@@ -249,6 +251,58 @@ class Spark4_1Adapter extends BaseSpark4Adapter {
   override def getRebaseSpec(policy: String): RebaseDateTime.RebaseSpec = {
     RebaseDateTime.RebaseSpec(LegacyBehaviorPolicy.withName(policy))
   }
+
+  override def isVariantProjectionStruct(structType: StructType): Boolean = {
+    VariantMetadata.isVariantStruct(structType)
+  }
+
+  override def buildVariantProjector(sparkDataSchema: StructType,
+                                     sparkRequiredSchema: StructType): Option[InternalRow => InternalRow] = {
+    // Quick check: any required field a variant projection struct?
+    if (!sparkRequiredSchema.fields.exists(f => VariantMetadata.isVariantStruct(f.dataType))) {
+      None
+    } else {
+      // For each required-schema field, build either a passthrough BoundReference (non-variant)
+      // or a CreateNamedStruct of VariantGet expressions (variant projection).
+      val exprs: Array[Expression] = sparkRequiredSchema.fields.zipWithIndex.map { case (rf, _) =>
+        rf.dataType match {
+          case projectedStruct: StructType if VariantMetadata.isVariantStruct(projectedStruct) =>
+            val dataIdx = sparkDataSchema.fieldIndex(rf.name)
+            val dataField = sparkDataSchema.fields(dataIdx)
+            // We only handle the case where the data column is VariantType — i.e., the table's
+            // stored shape for `v` is a real variant. (If it weren't, PushVariantIntoScan
+            // wouldn't have produced this projection.)
+            require(isVariantType(dataField.dataType),
+              s"Expected VariantType for field '${rf.name}' in data schema, got ${dataField.dataType}")
+            val variantRef: Expression = BoundReference(dataIdx, dataField.dataType, dataField.nullable)
+            val childExprs: Seq[Expression] = projectedStruct.fields.toSeq.flatMap { child =>
+              val vm = VariantMetadata.fromMetadata(child.metadata)
+              val pathLit = Literal(UTF8String.fromString(vm.path), DataTypes.StringType)
+              val tz: Option[String] = Option(vm.timeZoneId)
+              val variantGet: Expression = VariantGet(variantRef, pathLit, child.dataType, vm.failOnError, tz)
+              Seq(Literal(UTF8String.fromString(child.name), DataTypes.StringType), variantGet)
+            }
+            CreateNamedStruct(childExprs)
+          case _ =>
+            val dataIdx = sparkDataSchema.fieldIndex(rf.name)
+            val dataField = sparkDataSchema.fields(dataIdx)
+            BoundReference(dataIdx, dataField.dataType, dataField.nullable)
+        }
+      }
+
+      val projection = UnsafeProjection.create(exprs.toIndexedSeq, DataTypeUtils.toAttributes(sparkDataSchema))
+      Some(row => projection(row))
+    }
+  }
+
+  // NOTE: We previously overrode `applyVariantLogicalType` to apply
+  // `LogicalTypeAnnotation.variantType((byte) 1)` (matching Spark's own
+  // SparkToParquetSchemaConverter on parquet 1.16.0). It compiles, but the resulting
+  // `VARIANT(1)`-annotated group is incompatible with Hudi's Java Avro reader path
+  // (HoodieAvroParquetReader → AvroSchemaConverterWithTimestampNTZ) used for MOR merge updates,
+  // and triggers downstream JVM crashes during variant binary copies. Until Hudi's Avro reader
+  // path understands the annotation (or migrates to the Spark reader), keep the unannotated
+  // 2-binary-field group from BaseSpark4Adapter so writes are readable by every internal path.
 
   override def createMemoryStream[T: Encoder](id: Int, sparkSession: SparkSession): HoodieMemoryStream[T] = {
     // In Spark 4.1, MemoryStream is in org.apache.spark.sql.execution.streaming.runtime package

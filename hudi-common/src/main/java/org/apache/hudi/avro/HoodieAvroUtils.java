@@ -57,6 +57,8 @@ import org.apache.avro.io.EncoderFactory;
 import org.apache.avro.io.JsonEncoder;
 import org.apache.avro.specific.SpecificData;
 import org.apache.avro.specific.SpecificRecordBase;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import javax.annotation.Nullable;
 
@@ -101,6 +103,8 @@ import static org.apache.hudi.common.util.ValidationUtils.checkState;
  * Helper class to do common stuff across Avro.
  */
 public class HoodieAvroUtils {
+
+  private static final Logger LOG = LoggerFactory.getLogger(HoodieAvroUtils.class);
 
   public static final String AVRO_VERSION = Schema.class.getPackage().getImplementationVersion();
 
@@ -261,7 +265,12 @@ public class HoodieAvroUtils {
    * @return a new Schema.Field with properly formatted default value for Avro 1.12.0+ compatibility
    */
   public static Schema.Field createNewSchemaField(String name, Schema schema, String doc, Object defaultValue) {
-    return new Schema.Field(name, schema, doc, convertDefaultValueForAvroCompatibility(defaultValue));
+    try {
+      return new Schema.Field(name, schema, doc, convertDefaultValueForAvroCompatibility(defaultValue));
+    } catch (RuntimeException e) {
+      LOG.error("Failed to create Avro Schema.Field name='{}' schema={} doc='{}'", name, schema, doc, e);
+      throw e;
+    }
   }
 
   /**
@@ -285,7 +294,12 @@ public class HoodieAvroUtils {
    * @return a new Schema.Field with properly formatted default value for Avro 1.12.0+ compatibility
    */
   public static Schema.Field createNewSchemaField(String name, Schema schema, String doc, Object defaultValue, Order order) {
-    return new Schema.Field(name, schema, doc, convertDefaultValueForAvroCompatibility(defaultValue), order);
+    try {
+      return new Schema.Field(name, schema, doc, convertDefaultValueForAvroCompatibility(defaultValue), order);
+    } catch (RuntimeException e) {
+      LOG.error("Failed to create Avro Schema.Field name='{}' schema={} doc='{}' order={}", name, schema, doc, order, e);
+      throw e;
+    }
   }
 
   private static Schema removeFields(Schema schema, Set<String> fieldsToRemove) {

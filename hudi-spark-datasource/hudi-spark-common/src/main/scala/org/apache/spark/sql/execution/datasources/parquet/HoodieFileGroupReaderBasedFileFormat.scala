@@ -151,6 +151,15 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
       supportVectorizedRead = false
       supportReturningBatch = false
       false
+    } else if (schema.fields.exists(f => f.dataType.isInstanceOf[StructType]
+        && sparkAdapter.isVariantProjectionStruct(f.dataType.asInstanceOf[StructType]))) {
+      // Spark 4.1's PushVariantIntoScan rewrites a variant column to a struct of pushed-down
+      // extractions. The Spark vectorized parquet reader treats this as a nested type change
+      // (data column is VariantType, required is a struct) and refuses to read in vectorized
+      // mode (ParquetSchemaEvolutionUtils throws). Force row-based reading on this path.
+      supportVectorizedRead = false
+      supportReturningBatch = false
+      false
     } else {
       val conf = sparkSession.sessionState.conf
       val parquetBatchSupported = ParquetUtils.isBatchReadSupportedForSchema(conf, schema) && supportBatchWithTableSchema
@@ -233,6 +242,10 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
                                               filters: Seq[Filter],
                                               options: Map[String, String],
                                               hadoopConf: Configuration): PartitionedFile => Iterator[InternalRow] = {
+    logInfo(s"buildReaderWithPartitionValues entry: tableName=$sanitizedTableName, " +
+      s"dataStructType=${dataStructType.simpleString}, " +
+      s"requiredSchema=${requiredSchema.simpleString}, " +
+      s"partitionSchema=${partitionSchema.simpleString}")
     val outputSchema = StructType(requiredSchema.fields ++ partitionSchema.fields)
     val isCount = requiredSchema.isEmpty && !isMOR && !isIncremental
     val augmentedStorageConf = new HadoopStorageConfiguration(hadoopConf).getInline
@@ -251,8 +264,12 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
     exclusionFields.add("op")
     partitionSchema.fields.foreach(f => exclusionFields.add(f.name))
     val requestedStructType = StructType(requiredSchema.fields ++ partitionSchema.fields.filter(f => mandatoryFields.contains(f.name)))
+    logInfo(s"Converting requested struct to Hoodie schema: tableName=$sanitizedTableName, " +
+      s"fields=${requestedStructType.fieldNames.mkString("[", ",", "]")}")
     val requestedSchema = HoodieSchemaUtils.pruneDataSchema(schema, HoodieSchemaConversionUtils.convertStructTypeToHoodieSchema(requestedStructType, sanitizedTableName), exclusionFields)
     val dataStructTypeWithMandatoryPartitionFields = StructType(dataStructType.fields ++ partitionSchema.fields.filter(f => mandatoryFields.contains(f.name)))
+    logInfo(s"Converting data struct to Hoodie schema: tableName=$sanitizedTableName, " +
+      s"fields=${dataStructTypeWithMandatoryPartitionFields.fieldNames.mkString("[", ",", "]")}")
     val dataSchema = HoodieSchemaUtils.pruneDataSchema(schema, HoodieSchemaConversionUtils.convertStructTypeToHoodieSchema(dataStructTypeWithMandatoryPartitionFields, sanitizedTableName), exclusionFields)
 
     spark.sessionState.conf.setConfString("spark.sql.parquet.enableVectorizedReader", supportVectorizedRead.toString)
@@ -286,7 +303,9 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
             .getSparkPartitionedFileUtils.getPathFromPartitionedFile(file))
           fileSliceMapping.getSlice(fileGroupName) match {
             case Some(fileSlice) if !isCount && (requiredSchema.nonEmpty || fileSlice.getLogFiles.findAny().isPresent) =>
-              val readerContext = new SparkFileFormatInternalRowReaderContext(fileGroupBaseFileReader.value, filters, requiredFilters, storageConf, metaClient.getTableConfig)
+              val readerContext = new SparkFileFormatInternalRowReaderContext(
+                fileGroupBaseFileReader.value, filters, requiredFilters, storageConf, metaClient.getTableConfig,
+                sparkDataSchema = Some(dataStructType), sparkRequiredSchema = Some(requiredSchema))
               readerContext.setEnableLogicalTimestampFieldRepair(storageConf.getBoolean(ENABLE_LOGICAL_TIMESTAMP_REPAIR, true))
               val props = metaClient.getTableConfig.getProps
               options.foreach(kv => props.setProperty(kv._1, kv._2))

@@ -28,7 +28,7 @@ import org.apache.hudi.common.schema.{HoodieSchema, HoodieSchemaUtils}
 import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.common.table.read.buffer.PositionBasedFileGroupRecordBuffer.ROW_INDEX_TEMPORARY_COLUMN_NAME
 import org.apache.hudi.common.util.ValidationUtils.checkState
-import org.apache.hudi.common.util.collection.{CachingIterator, ClosableIterator, Pair => HPair}
+import org.apache.hudi.common.util.collection.{CachingIterator, ClosableIterator, CloseableMappingIterator, Pair => HPair}
 import org.apache.hudi.io.storage.{HoodieSparkFileReaderFactory, HoodieSparkParquetReader, VectorConversionUtils}
 import org.apache.hudi.storage.{HoodieStorage, StorageConfiguration, StoragePath}
 import org.apache.hudi.util.CloseableInternalRowIterator
@@ -61,13 +61,36 @@ class SparkFileFormatInternalRowReaderContext(baseFileReader: SparkColumnarFileR
                                               filters: Seq[Filter],
                                               requiredFilters: Seq[Filter],
                                               storageConfiguration: StorageConfiguration[_],
-                                              tableConfig: HoodieTableConfig)
+                                              tableConfig: HoodieTableConfig,
+                                              sparkDataSchema: Option[StructType] = None,
+                                              sparkRequiredSchema: Option[StructType] = None)
   extends BaseSparkInternalRowReaderContext(storageConfiguration, tableConfig, SparkFileFormatInternalRecordContext.apply(tableConfig)) {
+
+  // Java-friendly auxiliary constructor (Scala default args don't generate matching Java overloads).
+  def this(baseFileReader: SparkColumnarFileReader,
+           filters: Seq[Filter],
+           requiredFilters: Seq[Filter],
+           storageConfiguration: StorageConfiguration[_],
+           tableConfig: HoodieTableConfig) =
+    this(baseFileReader, filters, requiredFilters, storageConfiguration, tableConfig, None, None)
+
   lazy val sparkAdapter: SparkAdapter = SparkAdapterSupport.sparkAdapter
   private lazy val recordKeyFields = Option(tableConfig.getRecordKeyFields.orElse(null)).map(_.map(_.toLowerCase).toSet).getOrElse(Set.empty)
   private lazy val bootstrapSafeFilters: Seq[Filter] = filters.filter(filterIsSafeForBootstrap) ++ requiredFilters
   private lazy val morFilters = filters.filter(filterIsSafeForPrimaryKey(_, recordKeyFields)) ++ requiredFilters
   private lazy val allFilters = filters ++ requiredFilters
+
+  // Per Spark 4.1's PushVariantIntoScan: when the Catalyst-rewritten required schema contains
+  // variant projection structs (each child carries VariantMetadata), we need to align log-file
+  // rows (which carry the full variant) to the projected struct shape before they reach the
+  // merger. Base files use parquet-mr's native variant projection via the Spark required schema
+  // we'll prefer below. Returns None on Spark <4.1 or for non-variant queries (fast path).
+  private lazy val variantLogProjector: Option[InternalRow => InternalRow] =
+    for {
+      d <- sparkDataSchema
+      r <- sparkRequiredSchema
+      p <- sparkAdapter.buildVariantProjector(d, r)
+    } yield p
 
   override def getFileRecordIterator(filePath: StoragePath,
                                      start: Long,
@@ -79,7 +102,10 @@ class SparkFileFormatInternalRowReaderContext(baseFileReader: SparkColumnarFileR
     if (hasRowIndexField) {
       assert(getRecordContext.supportsParquetRowIndex())
     }
-    val structType = HoodieInternalRowUtils.getCachedSchema(requiredSchema)
+    // Prefer the original Spark required schema when present (carries Spark 4.1
+    // VariantMetadata that parquet-mr needs to do variant projection natively); fall back
+    // to the HoodieSchema-derived StructType otherwise.
+    val structType = sparkRequiredSchema.getOrElse(HoodieInternalRowUtils.getCachedSchema(requiredSchema))
 
     // Parquet stores VECTOR as FIXED_LEN_BYTE_ARRAY, so the reader needs BinaryType
     // and we decode back to ArrayType below. Lance returns ArrayType natively, so skip
@@ -100,8 +126,15 @@ class SparkFileFormatInternalRowReaderContext(baseFileReader: SparkColumnarFileR
     val (readSchema, readFilters) = getSchemaAndFiltersForRead(parquetReadStructType, hasRowIndexField)
     if (FSUtils.isLogFile(filePath)) {
       // NOTE: now only primary key based filtering is supported for log files
-      new HoodieSparkFileReaderFactory(storage).newParquetFileReader(filePath)
-        .asInstanceOf[HoodieSparkParquetReader].getUnsafeRowIterator(requiredSchema, readFilters.asJava).asInstanceOf[ClosableIterator[InternalRow]]
+      val rawLogIter = new HoodieSparkFileReaderFactory(storage).newParquetFileReader(filePath)
+        .asInstanceOf[HoodieSparkParquetReader].getUnsafeRowIterator(requiredSchema, readFilters.asJava)
+        .asInstanceOf[ClosableIterator[InternalRow]]
+      // Spark 4.1 PushVariantIntoScan: log records carry the full variant; project per-row
+      // to the requested struct shape so they align with the base file's already-projected rows.
+      variantLogProjector match {
+        case Some(project) => SparkFileFormatInternalRowReaderContext.mappedClosable(rawLogIter, project)
+        case None => rawLogIter
+      }
     } else {
       // partition value is empty because the spark parquet reader will append the partition columns to
       // each row if they are given. That is the only usage of the partition values in the reader.
@@ -274,6 +307,12 @@ class SparkFileFormatInternalRowReaderContext(baseFileReader: SparkColumnarFileR
 }
 
 object SparkFileFormatInternalRowReaderContext {
+  /** Wrap a closable iterator with a per-row transform, preserving close semantics. */
+  def mappedClosable(it: ClosableIterator[InternalRow],
+                     transform: InternalRow => InternalRow): ClosableIterator[InternalRow] = {
+    new CloseableMappingIterator[InternalRow, InternalRow](it, (r: InternalRow) => transform(r))
+  }
+
   // From "namedExpressions.scala": Used to construct to record position field metadata.
   private val FILE_SOURCE_GENERATED_METADATA_COL_ATTR_KEY = "__file_source_generated_metadata_col"
   private val FILE_SOURCE_METADATA_COL_ATTR_KEY = "__file_source_metadata_col"

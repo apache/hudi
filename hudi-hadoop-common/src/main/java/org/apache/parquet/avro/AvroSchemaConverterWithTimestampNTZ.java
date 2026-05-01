@@ -478,7 +478,14 @@ public class AvroSchemaConverterWithTimestampNTZ extends HoodieAvroParquetSchema
           public java.util.Optional<HoodieSchema> visit(LogicalTypeAnnotation.EnumLogicalTypeAnnotation enumLogicalType) {
             return java.util.Optional.of(HoodieSchema.create(HoodieSchemaType.STRING));
           }
-        }).orElseThrow(() -> new UnsupportedOperationException("Cannot convert Parquet type " + parquetType));
+        }).orElseGet(() ->
+          // The visitor has no handler for newer logical type annotations (e.g., parquet 1.16.0+'s
+          // VariantLogicalTypeAnnotation, which is not available on the default parquet version
+          // hudi-hadoop-common compiles against). When the group still has fields, fall back to
+          // treating it as a record — this is the right thing for the variant binary group
+          // (`metadata`, `value`) we write, since Hudi reads variant columns through the record
+          // path elsewhere.
+          convertFields(parquetGroupType.getName(), parquetGroupType.getFields(), names));
       } else {
         // if no original type then it's a record
         return convertFields(parquetGroupType.getName(), parquetGroupType.getFields(), names);

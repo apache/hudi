@@ -467,6 +467,28 @@ trait SparkAdapter extends Serializable {
   def isVariantShreddingStruct(structType: StructType): Boolean
 
   /**
+   * Checks if a StructType is the result of Spark 4.1's PushVariantIntoScan rewriting — i.e.,
+   * every child field carries `VariantMetadata` describing a pushed-down variant extraction.
+   *
+   * Returns false on Spark versions earlier than 4.1 (the rewriting only happens there).
+   */
+  def isVariantProjectionStruct(structType: StructType): Boolean = false
+
+  /**
+   * If `sparkRequiredSchema` contains any field that's a Spark 4.1 variant projection struct
+   * (i.e., the same-named field in `sparkDataSchema` is `VariantType`), returns a row
+   * transformer that takes an InternalRow in the data-schema shape (with full variants) and
+   * produces an InternalRow in the required-schema shape (with each variant column projected
+   * to its requested struct via VariantGet).
+   *
+   * Used on the MOR log-file path: log records carry the full variant on disk, but the merger
+   * expects rows aligned to the post-PushVariantIntoScan required schema. Returns None when
+   * there's nothing to project (cheap fast-path for Spark < 4.1 and for non-variant queries).
+   */
+  def buildVariantProjector(sparkDataSchema: StructType,
+                            sparkRequiredSchema: StructType): Option[InternalRow => InternalRow] = None
+
+  /**
    * Generates a shredded Variant schema and marks it with write shredding metadata.
    *
    * For Spark 4.x, this uses SparkShreddingUtils to generate the schema and add metadata.

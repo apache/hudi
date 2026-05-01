@@ -38,10 +38,14 @@ import org.scalatest.{Canceled, Outcome}
 
 class TestVariantDataType extends HoodieSparkSqlTestBase {
 
-  // TODO(#18605): Re-enable after fixing JVM SIGSEGV crash on Spark 4.1
+  // TODO(#18605): Re-enable on Spark 4.1 once the JVM SIGBUS during shuffle of variant
+  //  UnsafeRows in the MERGE INTO path is resolved. Read paths (post-insert/update/delete
+  //  selects via cast(v as string)) and the schema conversion for Spark 4.1's
+  //  PushVariantIntoScan rewriting are working — the remaining blocker is purely the
+  //  merge-into shuffle crash.
   override def withFixture(test: NoArgTest): Outcome = {
     if (HoodieSparkUtils.gteqSpark4_1) {
-      Canceled("Disabled on Spark 4.1 due to JVM SIGSEGV crash in variant data type tests")
+      Canceled("Disabled on Spark 4.1 due to JVM SIGBUS in MERGE INTO shuffle (#18605)")
     } else {
       super.withFixture(test)
     }

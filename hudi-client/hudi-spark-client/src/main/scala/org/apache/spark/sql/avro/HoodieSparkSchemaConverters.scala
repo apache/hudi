@@ -27,6 +27,7 @@ import org.apache.spark.annotation.DeveloperApi
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types._
 import org.apache.spark.sql.types.Decimal.minBytesForPrecision
+import org.slf4j.{Logger, LoggerFactory}
 
 import java.util.Locale
 
@@ -47,6 +48,8 @@ import scala.collection.JavaConverters._
  */
 @DeveloperApi
 object HoodieSparkSchemaConverters extends SparkAdapterSupport {
+
+  private val LOG: Logger = LoggerFactory.getLogger(getClass)
 
   /**
    * Internal wrapper for SQL data type and nullability.
@@ -190,8 +193,26 @@ object HoodieSparkSchemaConverters extends SparkAdapterSupport {
         isCanonicalVariantStruct(variantStruct) =>
         HoodieSchema.createVariant(recordName, nameSpace, null)
 
+      // Spark 4.1's PushVariantIntoScan rule rewrites a Variant column on the read schema to a
+      // struct of pushed-down extractions (each child carries VariantMetadata). The Spark
+      // requiredSchema with this metadata still flows through to parquet-mr unchanged, which does
+      // the projection natively. For Hudi's internal HoodieSchema we represent it as a regular
+      // unshredded Variant — the schema handler/merger then aligns with the table's stored
+      // `v: Variant` data schema, and the projected struct shape is preserved by Spark's parquet
+      // reader at row-construction time.
+      case projectedVariant: StructType if sparkAdapter.isVariantProjectionStruct(projectedVariant) =>
+        HoodieSchema.createVariant(recordName, nameSpace, null)
+
       case st: StructType =>
         val childNameSpace = if (nameSpace != "") s"$nameSpace.$recordName" else recordName
+        val typeMetaTag = if (metadata.contains(HoodieSchema.TYPE_METADATA_FIELD)) {
+          metadata.getString(HoodieSchema.TYPE_METADATA_FIELD)
+        } else "<none>"
+        LOG.warn(
+          s"toHoodieTypeNested entering generic StructType branch: depth=$depth, " +
+            s"recordName=$recordName, nameSpace=$nameSpace, typeMetaTag=$typeMetaTag, " +
+            s"isVariantType=${sparkAdapter.isVariantType(st)}, " +
+            s"fields=${st.fields.map(f => s"${f.name}:${f.dataType.simpleString}").mkString("[", ",", "]")}")
 
         // Check if this might be a union (using heuristic like Avro converter)
         if (canBeUnion(st)) {
