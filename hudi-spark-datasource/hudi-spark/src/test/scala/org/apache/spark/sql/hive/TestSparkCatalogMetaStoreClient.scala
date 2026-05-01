@@ -177,6 +177,32 @@ class TestSparkCatalogMetaStoreClient extends FunSuite with BeforeAndAfterAll {
     }
   }
 
+  test("createTable accepts EXTERNAL=TRUE parameter (mirrors HMSDDLExecutor behavior)") {
+    withTempDir { tmp =>
+      val client = newClient()
+      val databaseName = generateName("db")
+      val tableName = generateName("tbl")
+
+      client.createDatabase(new Database(databaseName, "test database", new File(tmp, databaseName).toURI.toString, new util.HashMap[String, String]()))
+
+      // Hudi's HMSDDLExecutor.createTable sets BOTH `tableType=EXTERNAL_TABLE` and
+      // `parameters[EXTERNAL]=TRUE` on the Hive Table object. Spark's
+      // HiveExternalCatalog.verifyTableProperties rejects "EXTERNAL" as a property key
+      // unless we strip it in toCatalogTable. This test mirrors that real-world shape.
+      val createdTable = newTable(
+        databaseName,
+        tableName,
+        new File(tmp, tableName).toURI.toString,
+        Seq("id" -> "int", "name" -> "string"),
+        Seq("dt" -> "string"),
+        Map("EXTERNAL" -> "TRUE", "comment" -> "v1"))
+
+      client.createTable(createdTable)
+      assertTrue(client.tableExists(databaseName, tableName))
+      assertEquals("v1", client.getTable(databaseName, tableName).getParameters.get("comment"))
+    }
+  }
+
   private def newClient(): SparkCatalogMetaStoreClient = {
     SparkSession.setActiveSession(spark)
     SparkSession.setDefaultSession(spark)

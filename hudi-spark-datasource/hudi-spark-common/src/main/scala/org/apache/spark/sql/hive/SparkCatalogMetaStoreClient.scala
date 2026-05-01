@@ -311,8 +311,15 @@ class SparkCatalogMetaStoreClient(syncConfig: HiveSyncConfig)
     // table property keys may not start with 'spark.sql.'") because they are reserved for
     // Spark's internal use (provider, schema parts, create version). Spark re-derives and
     // writes these from the CatalogTable itself, so dropping them on the way in is safe.
+    //
+    // Also strip "EXTERNAL". HMSDDLExecutor.createTable sets both
+    // `tableType=EXTERNAL_TABLE` and `parameters[EXTERNAL]=TRUE`. Spark's
+    // HiveExternalCatalog.verifyTableProperties rejects "EXTERNAL" as a property key
+    // ("Cannot set or change the preserved property key: 'EXTERNAL'") because it controls
+    // table type via CatalogTableType instead. The tableType field below already encodes
+    // that information, so dropping the property is safe.
     val tableProperties = Option(table.getParameters).map(_.asScala.toMap).getOrElse(Map.empty)
-      .filterNot { case (k, _) => k.startsWith("spark.sql.") }
+      .filterNot { case (k, _) => k.startsWith("spark.sql.") || k == "EXTERNAL" }
 
     CatalogTable(
       identifier = TableIdentifier(tbl, Some(db)),
