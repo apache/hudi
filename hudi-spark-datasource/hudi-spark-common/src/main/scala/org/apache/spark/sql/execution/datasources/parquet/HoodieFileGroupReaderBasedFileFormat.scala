@@ -160,6 +160,17 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
       supportVectorizedRead = false
       supportReturningBatch = false
       false
+    } else if (schema.fields.exists(f => sparkAdapter.isVariantType(f.dataType))) {
+      // #18605: Spark 4.1's vectorized parquet reader path produces UnsafeRow encodings for
+      // VariantType columns that crash during shuffle copy under Hudi's pipeline (JVM SIGBUS
+      // in StubRoutines::forward_copy_longs / UnsafeRow.copy when the row is sampled by
+      // RangePartitioner). Force row-based reading; row-based reads route through Spark's
+      // ParquetReadSupport which materializes VariantType correctly via
+      // ParquetUnshreddedVariantConverter. Restoring vectorized perf needs a separate fix to
+      // how Hudi's pipeline encodes variant columns into UnsafeRow.
+      supportVectorizedRead = false
+      supportReturningBatch = false
+      false
     } else {
       val conf = sparkSession.sessionState.conf
       val parquetBatchSupported = ParquetUtils.isBatchReadSupportedForSchema(conf, schema) && supportBatchWithTableSchema
