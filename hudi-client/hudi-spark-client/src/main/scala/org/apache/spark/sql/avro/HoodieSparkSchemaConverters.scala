@@ -18,7 +18,7 @@
 
 package org.apache.spark.sql.avro
 
-import org.apache.hudi.SparkAdapterSupport
+import org.apache.hudi.{HoodieSparkUtils, SparkAdapterSupport}
 import org.apache.hudi.common.schema.{HoodieJsonProperties, HoodieSchema, HoodieSchemaField, HoodieSchemaType}
 import org.apache.hudi.common.schema.HoodieSchema.TimePrecision
 import org.apache.hudi.internal.schema.HoodieSchemaException
@@ -27,7 +27,6 @@ import org.apache.spark.annotation.DeveloperApi
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types._
 import org.apache.spark.sql.types.Decimal.minBytesForPrecision
-import org.slf4j.{Logger, LoggerFactory}
 
 import java.util.Locale
 
@@ -48,8 +47,6 @@ import scala.collection.JavaConverters._
  */
 @DeveloperApi
 object HoodieSparkSchemaConverters extends SparkAdapterSupport {
-
-  private val LOG: Logger = LoggerFactory.getLogger(getClass)
 
   /**
    * Internal wrapper for SQL data type and nullability.
@@ -200,19 +197,11 @@ object HoodieSparkSchemaConverters extends SparkAdapterSupport {
       // unshredded Variant — the schema handler/merger then aligns with the table's stored
       // `v: Variant` data schema, and the projected struct shape is preserved by Spark's parquet
       // reader at row-construction time.
-      case projectedVariant: StructType if sparkAdapter.isVariantProjectionStruct(projectedVariant) =>
+      case projectedVariant: StructType if isSparkVariantProjectionStruct(projectedVariant) =>
         HoodieSchema.createVariant(recordName, nameSpace, null)
 
       case st: StructType =>
         val childNameSpace = if (nameSpace != "") s"$nameSpace.$recordName" else recordName
-        val typeMetaTag = if (metadata.contains(HoodieSchema.TYPE_METADATA_FIELD)) {
-          metadata.getString(HoodieSchema.TYPE_METADATA_FIELD)
-        } else "<none>"
-        LOG.warn(
-          s"toHoodieTypeNested entering generic StructType branch: depth=$depth, " +
-            s"recordName=$recordName, nameSpace=$nameSpace, typeMetaTag=$typeMetaTag, " +
-            s"isVariantType=${sparkAdapter.isVariantType(st)}, " +
-            s"fields=${st.fields.map(f => s"${f.name}:${f.dataType.simpleString}").mkString("[", ",", "]")}")
 
         // Check if this might be a union (using heuristic like Avro converter)
         if (canBeUnion(st)) {
@@ -533,6 +522,27 @@ object HoodieSparkSchemaConverters extends SparkAdapterSupport {
       st.forall { f =>
         f.name.matches("member\\d+") && f.nullable
       }
+  }
+
+  /**
+   * Detects a Spark 4.1 PushVariantIntoScan-projected struct. The check defers to the
+   * version-specific SparkAdapter, but most schemas can be cleared without that detour:
+   *
+   *   1. Spark < 4.1 — PushVariantIntoScan does not exist.
+   *   2. No field carries any non-empty Spark Metadata — the projection always tags every
+   *      field with VariantMetadata, so an empty-metadata struct is definitively not one.
+   *
+   * Both short-circuits matter for shared-module unit tests (e.g. `hudi-spark-common`'s
+   * `TestHoodieSparkSchemaUtils`) whose runtime classpath does not include any
+   * `SparkXAdapter`: forcing `SparkAdapterSupport.sparkAdapter` to resolve there raises
+   * `ClassNotFoundException` on every StructType conversion. The try/catch is a
+   * belt-and-suspenders fallback for any other environment that hits the same gap.
+   */
+  private def isSparkVariantProjectionStruct(st: StructType): Boolean = {
+    if (!HoodieSparkUtils.gteqSpark4_1) return false
+    if (!st.fields.exists(_.metadata != Metadata.empty)) return false
+    try sparkAdapter.isVariantProjectionStruct(st)
+    catch { case _: NoClassDefFoundError | _: ClassNotFoundException => false }
   }
 
   private def sparkTypeForVectorElementType(
