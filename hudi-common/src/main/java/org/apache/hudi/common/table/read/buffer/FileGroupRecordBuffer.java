@@ -199,8 +199,8 @@ abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordBuffer<T
       } else {
         blockRecordsIterator = dataBlock.getEngineRecordIterator(readerContext);
       }
-      Pair<Function<T, T>, HoodieSchema> projected = getProjectedTransformer(dataBlock);
-      return Pair.of(new CloseableMappingIterator<>(blockRecordsIterator, projected.getLeft()), projected.getRight());
+      Pair<Function<T, T>, HoodieSchema> projectedTransformer = getProjectedTransformer(dataBlock);
+      return Pair.of(new CloseableMappingIterator<>(blockRecordsIterator, projectedTransformer.getLeft()), projectedTransformer.getRight());
     } catch (IOException e) {
       throw new HoodieIOException("Failed to deser records from log files ", e);
     }
