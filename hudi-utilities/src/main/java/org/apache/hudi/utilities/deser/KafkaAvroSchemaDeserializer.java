@@ -26,6 +26,7 @@ import io.confluent.kafka.serializers.KafkaAvroDeserializer;
 import lombok.NoArgsConstructor;
 import org.apache.avro.Schema;
 import org.apache.kafka.common.errors.SerializationException;
+import org.apache.kafka.common.header.Headers;
 
 import java.util.Map;
 import java.util.Map.Entry;
@@ -55,6 +56,21 @@ public class KafkaAvroSchemaDeserializer extends KafkaAvroDeserializer {
     } catch (Throwable e) {
       throw new HoodieException(e);
     }
+  }
+
+  @Override
+  public Object deserialize(String s, byte[] bytes) {
+    return this.deserialize(s, false, bytes, sourceSchema);
+  }
+
+  @Override
+  public Object deserialize(String s, byte[] bytes, Schema readerSchema) {
+    return this.deserialize(s, false, bytes, sourceSchema);
+  }
+
+  @Override
+  public Object deserialize(String topic, Headers headers, byte[] bytes) {
+    return super.deserialize(topic, false, bytes, sourceSchema);
   }
 
   /**
