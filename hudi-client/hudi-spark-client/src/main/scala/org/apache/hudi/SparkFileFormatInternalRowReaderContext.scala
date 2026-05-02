@@ -84,6 +84,18 @@ class SparkFileFormatInternalRowReaderContext(baseFileReader: SparkColumnarFileR
   private lazy val morFilters = filters.filter(filterIsSafeForPrimaryKey(_, recordKeyFields)) ++ requiredFilters
   private lazy val allFilters = filters ++ requiredFilters
 
+  // For each field of `target`, replace its dataType with the matching field's projected
+  // variant struct from `source` (when present). Non-matching fields pass through.
+  private def overlayVariantProjections(target: StructType, source: StructType): StructType = {
+    StructType(target.fields.map { f =>
+      SparkFileFormatInternalRowReaderContext.findFieldByName(source, f.name).map(_.dataType) match {
+        case Some(projStruct: StructType) if sparkAdapter.isVariantProjectionStruct(projStruct) =>
+          f.copy(dataType = projStruct)
+        case _ => f
+      }
+    })
+  }
+
   // Aligns log-block records with the PushVariantIntoScan-projected variant shape before
   // they reach the merger. Preserves merger metadata cols (_hoodie_record_key,
   // _tmp_metadata_row_index) which the merger reads by ordinal — projecting down to the
@@ -99,14 +111,7 @@ class SparkFileFormatInternalRowReaderContext(baseFileReader: SparkColumnarFileR
     }
     val req = sparkRequiredSchema.get
     val dataStruct = HoodieInternalRowUtils.getCachedSchema(dataBlockSchema)
-    val targetFields = dataStruct.fields.map { df =>
-      SparkFileFormatInternalRowReaderContext.findFieldByName(req, df.name).map(_.dataType) match {
-        case Some(projStruct: StructType) if sparkAdapter.isVariantProjectionStruct(projStruct) =>
-          df.copy(dataType = projStruct)
-        case _ => df
-      }
-    }
-    val targetStruct = StructType(targetFields)
+    val targetStruct = overlayVariantProjections(dataStruct, req)
     sparkAdapter.buildVariantProjector(dataStruct, targetStruct) match {
       case Some(p) => HOption.of(new JFunction[InternalRow, InternalRow] {
         // .copy() because the buffer stores rows into ExternalSpillableMap and
@@ -132,15 +137,7 @@ class SparkFileFormatInternalRowReaderContext(baseFileReader: SparkColumnarFileR
     // so parquet-mr's PushVariantIntoScan kicks in (HoodieSchema collapses the projected
     // struct back to VariantType, dropping the VariantMetadata parquet-mr looks for).
     val structType = sparkRequiredSchema match {
-      case Some(sparkReq) =>
-        val augmentedStruct = HoodieInternalRowUtils.getCachedSchema(requiredSchema)
-        StructType(augmentedStruct.fields.map { f =>
-          SparkFileFormatInternalRowReaderContext.findFieldByName(sparkReq, f.name).map(_.dataType) match {
-            case Some(projStruct: StructType) if sparkAdapter.isVariantProjectionStruct(projStruct) =>
-              f.copy(dataType = projStruct)
-            case _ => f
-          }
-        })
+      case Some(sparkReq) => overlayVariantProjections(HoodieInternalRowUtils.getCachedSchema(requiredSchema), sparkReq)
       case None => HoodieInternalRowUtils.getCachedSchema(requiredSchema)
     }
 
