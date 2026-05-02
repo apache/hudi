@@ -23,6 +23,7 @@ import org.apache.hudi.storage.StorageConfiguration
 
 import org.apache.hadoop.conf.Configuration
 import org.apache.parquet.schema.MessageType
+import org.apache.spark.SparkEnv
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.sql._
 import org.apache.spark.sql.avro._
@@ -193,7 +194,21 @@ class Spark3_5Adapter extends BaseSpark3Adapter {
   }
 
   override def getDateTimeRebaseMode(): LegacyBehaviorPolicy.Value = {
-    LegacyBehaviorPolicy.withName(SQLConf.get.getConf(SQLConf.PARQUET_REBASE_MODE_IN_WRITE))
+    // Resolution order:
+    //   1. SQLConf override (so `spark.conf.set(...)` on the SparkSession takes
+    //      effect on the driver and inside Spark SQL execution contexts).
+    //   2. SparkConf (SparkEnv.get.conf) — broadcast to every executor at
+    //      startup, so user-set `spark.sql.parquet.datetimeRebaseModeInWrite`
+    //      is honored on executor tasks outside a SQL execution context (e.g.
+    //      compaction dispatched via vanilla
+    //      `JavaSparkContext.parallelize(...).map(...)`).
+    //   3. The ConfigEntry's own default.
+    val fromSqlConf = Option(SQLConf.get.getConf(SQLConf.PARQUET_REBASE_MODE_IN_WRITE, null))
+    val fromSparkConf = Option(SparkEnv.get)
+      .flatMap(env => Option(env.conf.get(SQLConf.PARQUET_REBASE_MODE_IN_WRITE.key, null)))
+    LegacyBehaviorPolicy.withName(
+      fromSqlConf.orElse(fromSparkConf)
+        .getOrElse(SQLConf.get.getConf(SQLConf.PARQUET_REBASE_MODE_IN_WRITE)))
   }
 
   override def isLegacyBehaviorPolicy(value: Object): Boolean = {
