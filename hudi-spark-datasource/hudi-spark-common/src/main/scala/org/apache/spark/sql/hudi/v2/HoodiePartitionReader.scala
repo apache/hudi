@@ -53,7 +53,7 @@ class HoodiePartitionReader(partition: HoodieInputPartition,
                             tableAvroSchema: HOption[HoodieSchema] = HOption.empty())
   extends PartitionReader[InternalRow] with SparkAdapterSupport {
 
-  private val (rawIterator, projectedIter): (Iterator[InternalRow], Iterator[InternalRow]) = createIterator()
+  private val (rawIter, projectedIter): (Iterator[InternalRow], Iterator[InternalRow]) = createIterators()
   private var current: InternalRow = _
   private var rowCount: Int = 0
 
@@ -71,13 +71,13 @@ class HoodiePartitionReader(partition: HoodieInputPartition,
   override def get(): InternalRow = current
 
   override def close(): Unit = {
-    rawIterator match {
+    rawIter match {
       case c: Closeable => c.close()
       case _ =>
     }
   }
 
-  private def createIterator(): (Iterator[InternalRow], Iterator[InternalRow]) = {
+  private def createIterators(): (Iterator[InternalRow], Iterator[InternalRow]) = {
     val partValues = InternalRow.fromSeq(partition.partitionValues.toSeq)
 
     val pFile = sparkAdapter.getSparkPartitionedFileUtils

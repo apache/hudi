@@ -18,6 +18,7 @@
 package org.apache.spark.sql.hudi.feature.v2
 
 import org.apache.hudi.DataSourceReadOptions
+import org.apache.hudi.common.config.HoodieCommonConfig
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness.getSparkSqlConf
@@ -45,6 +46,8 @@ class TestDSv2SchemaEvolution extends SparkClientFunctionalTestHarnessScala with
 
   override def conf: SparkConf = conf(getSparkSqlConf)
 
+  private val schemaEvolKey = HoodieCommonConfig.SCHEMA_EVOLUTION_ENABLE.key
+
   private def explainPlan(sql: String): String =
     spark.sql(s"EXPLAIN $sql").collect().map(_.getString(0)).mkString("\n")
 
@@ -53,7 +56,6 @@ class TestDSv2SchemaEvolution extends SparkClientFunctionalTestHarnessScala with
     val tableName = "cow_schema_evol_add_col"
     val tablePath = basePath() + "/" + tableName
     val useV2Key = DataSourceReadOptions.USE_V2_READ.key
-    val schemaEvolKey = "hoodie.schema.on.read.enable"
     try {
       withSQLConf(schemaEvolKey -> "true") {
         spark.sql(s"DROP TABLE IF EXISTS $tableName")
@@ -103,7 +105,6 @@ class TestDSv2SchemaEvolution extends SparkClientFunctionalTestHarnessScala with
     val tableName = "cow_schema_evol_type_promo"
     val tablePath = basePath() + "/" + tableName
     val useV2Key = DataSourceReadOptions.USE_V2_READ.key
-    val schemaEvolKey = "hoodie.schema.on.read.enable"
     try {
       withSQLConf(
         schemaEvolKey -> "true",
@@ -160,7 +161,6 @@ class TestDSv2SchemaEvolution extends SparkClientFunctionalTestHarnessScala with
   def testSchemaEvolvedReadViaHudiV2DataFrameApi(): Unit = {
     val tableName = "cow_schema_evol_df_api"
     val tablePath = basePath() + "/" + tableName
-    val schemaEvolKey = "hoodie.schema.on.read.enable"
     try {
       withSQLConf(schemaEvolKey -> "true") {
         spark.sql(s"DROP TABLE IF EXISTS $tableName")
@@ -208,7 +208,6 @@ class TestDSv2SchemaEvolution extends SparkClientFunctionalTestHarnessScala with
     // evolution snapshots.
     val tableName = "cow_schema_evol_time_travel"
     val tablePath = basePath() + "/" + tableName
-    val schemaEvolKey = "hoodie.schema.on.read.enable"
     try {
       withSQLConf(schemaEvolKey -> "true") {
         spark.sql(s"DROP TABLE IF EXISTS $tableName")
