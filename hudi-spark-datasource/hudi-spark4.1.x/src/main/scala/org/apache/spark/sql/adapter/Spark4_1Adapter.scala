@@ -24,6 +24,7 @@ import org.apache.hudi.common.schema.HoodieSchema
 import org.apache.hudi.common.table.cdc.HoodieCDCFileSplit
 
 import org.apache.hadoop.conf.Configuration
+import org.apache.parquet.schema.{GroupType, LogicalTypeAnnotation, Types}
 import org.apache.spark.SparkEnv
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.sql._
@@ -298,12 +299,11 @@ class Spark4_1Adapter extends BaseSpark4Adapter {
     }
   }
 
-  // We intentionally don't override applyVariantLogicalType to apply
-  // LogicalTypeAnnotation.variantType((byte) 1) here (parquet 1.16+ /
-  // SparkToParquetSchemaConverter style). AvroSchemaConverterWithTimestampNTZ now tolerates
-  // unknown annotations via record-conversion fallback, but writing the annotated group has
-  // not been validated end-to-end through MOR merge updates. Keep the unannotated
-  // 2-binary-field group from BaseSpark4Adapter until that is verified.
+  // Apply LogicalTypeAnnotation.variantType((byte) 1) to the variant group, matching parquet 1.16+'s
+  // SparkToParquetSchemaConverter convention.
+  override protected def applyVariantLogicalType(builder: Types.GroupBuilder[GroupType]): Types.GroupBuilder[GroupType] = {
+    builder.as(LogicalTypeAnnotation.variantType(1.toByte))
+  }
 
   override def createMemoryStream[T: Encoder](id: Int, sparkSession: SparkSession): HoodieMemoryStream[T] = {
     // In Spark 4.1, MemoryStream is in org.apache.spark.sql.execution.streaming.runtime package
