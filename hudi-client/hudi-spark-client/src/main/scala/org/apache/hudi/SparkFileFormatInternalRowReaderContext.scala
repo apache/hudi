@@ -84,17 +84,10 @@ class SparkFileFormatInternalRowReaderContext(baseFileReader: SparkColumnarFileR
   private lazy val morFilters = filters.filter(filterIsSafeForPrimaryKey(_, recordKeyFields)) ++ requiredFilters
   private lazy val allFilters = filters ++ requiredFilters
 
-  // Engine-neutral hook used by FileGroupRecordBuffer to align log-block records with the
-  // PushVariantIntoScan-projected variant shape before they reach the merger.
-  //
-  // The data block carries v as a real VariantType plus Hudi's merger metadata columns
-  // (_hoodie_record_key for key-based merge, _tmp_metadata_row_index for position-based).
-  // The downstream merger reads those metadata columns by ordinal to look records up. So the
-  // projector must preserve every field of the data-block schema and only rewrite variant
-  // fields into their PushVariantIntoScan struct shape — projecting down to the bare required
-  // schema (id,name,v,ts) drops _hoodie_record_key / _tmp_metadata_row_index and the merger
-  // then reads garbage offsets, surfacing as a SIGBUS-translated InternalError in
-  // FileScanRDD.hasNext during the next shuffle's RangePartitioner sample.
+  // Aligns log-block records with the PushVariantIntoScan-projected variant shape before
+  // they reach the merger. Preserves merger metadata cols (_hoodie_record_key,
+  // _tmp_metadata_row_index) which the merger reads by ordinal — projecting down to the
+  // bare required schema would drop them and the merger would read garbage offsets.
   override def getLogBlockRecordProjection(
       dataBlockSchema: HoodieSchema): HOption[JFunction[InternalRow, InternalRow]] = {
     val needsProjection = sparkRequiredSchema.exists(_.fields.exists(f => f.dataType match {
@@ -106,9 +99,6 @@ class SparkFileFormatInternalRowReaderContext(baseFileReader: SparkColumnarFileR
     }
     val req = sparkRequiredSchema.get
     val dataStruct = HoodieInternalRowUtils.getCachedSchema(dataBlockSchema)
-    // Build the projector's target schema from dataStruct, replacing each variant field with
-    // the PushVariantIntoScan-projected struct shape from the required schema. Non-variant
-    // fields (including merger metadata cols absent from the required schema) pass through.
     val targetFields = dataStruct.fields.map { df =>
       SparkFileFormatInternalRowReaderContext.findFieldByName(req, df.name).map(_.dataType) match {
         case Some(projStruct: StructType) if sparkAdapter.isVariantProjectionStruct(projStruct) =>
@@ -119,9 +109,8 @@ class SparkFileFormatInternalRowReaderContext(baseFileReader: SparkColumnarFileR
     val targetStruct = StructType(targetFields)
     sparkAdapter.buildVariantProjector(dataStruct, targetStruct) match {
       case Some(p) => HOption.of(new JFunction[InternalRow, InternalRow] {
-        // buildVariantProjector returns an UnsafeProjection whose `apply` reuses a single
-        // UnsafeRow buffer. The merge path stores these rows into ExternalSpillableMap, so we
-        // must copy before the next invocation overwrites the buffer.
+        // .copy() because the buffer stores rows into ExternalSpillableMap and
+        // UnsafeProjection reuses a single output buffer.
         override def apply(r: InternalRow): InternalRow = p(r).copy()
       })
       case None => HOption.empty[JFunction[InternalRow, InternalRow]]()
@@ -138,18 +127,10 @@ class SparkFileFormatInternalRowReaderContext(baseFileReader: SparkColumnarFileR
     if (hasRowIndexField) {
       assert(getRecordContext.supportsParquetRowIndex())
     }
-    // The function-arg requiredSchema is the engine's *augmented* required schema — Hudi's
-    // schema handler has already added the merger's metadata columns (_hoodie_record_key for
-    // key-based merge, _tmp_metadata_row_index for position-based) to the user-requested
-    // fields. Start from that so the parquet read includes those columns (the merger needs
-    // them to extract record keys / positions from base rows).
-    //
-    // Then overlay variant projection metadata from sparkRequiredSchema: when Spark 4.1's
-    // PushVariantIntoScan rewrote a variant column into struct<0:..> with VariantMetadata,
-    // parquet-mr can do that projection natively — but only if the field carries the
-    // VariantMetadata. The augmented HoodieSchema-derived struct loses that metadata
-    // (HoodieSparkSchemaConverters collapses the projected struct back to VariantType), so
-    // we copy the projected struct shape from sparkRequiredSchema where it exists.
+    // Use the engine's augmented requiredSchema (includes merger metadata cols the merger
+    // reads from base rows), but overlay the projected variant shape from sparkRequiredSchema
+    // so parquet-mr's PushVariantIntoScan kicks in (HoodieSchema collapses the projected
+    // struct back to VariantType, dropping the VariantMetadata parquet-mr looks for).
     val structType = sparkRequiredSchema match {
       case Some(sparkReq) =>
         val augmentedStruct = HoodieInternalRowUtils.getCachedSchema(requiredSchema)
@@ -182,9 +163,7 @@ class SparkFileFormatInternalRowReaderContext(baseFileReader: SparkColumnarFileR
     val (readSchema, readFilters) = getSchemaAndFiltersForRead(parquetReadStructType, hasRowIndexField)
     if (FSUtils.isLogFile(filePath)) {
       // NOTE: now only primary key based filtering is supported for log files
-      // Records come out with v as VARIANT (the parquet log block's native shape). Variant
-      // alignment to PushVariantIntoScan's projected struct shape happens later in the
-      // FileGroupRecordBuffer via getLogBlockRecordProjection.
+      // Variant alignment happens later via getLogBlockRecordProjection in the merge buffer.
       new HoodieSparkFileReaderFactory(storage).newParquetFileReader(filePath)
         .asInstanceOf[HoodieSparkParquetReader].getUnsafeRowIterator(requiredSchema, readFilters.asJava)
         .asInstanceOf[ClosableIterator[InternalRow]]
@@ -360,12 +339,7 @@ class SparkFileFormatInternalRowReaderContext(baseFileReader: SparkColumnarFileR
 }
 
 object SparkFileFormatInternalRowReaderContext {
-  /**
-   * Look up a field by name on a Spark StructType, honoring the session's
-   * `spark.sql.caseSensitive` setting. Used when overlaying variant projection metadata from
-   * the Spark required schema onto the Hudi-derived data schema, where the two schemas may
-   * have arrived through different name-resolution paths.
-   */
+  /** Look up a field by name, honoring `spark.sql.caseSensitive`. */
   private[hudi] def findFieldByName(schema: StructType, name: String): Option[StructField] = {
     if (SQLConf.get.caseSensitiveAnalysis) {
       schema.fields.find(_.name == name)

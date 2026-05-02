@@ -187,11 +187,8 @@ public class HoodieSparkParquetReader implements HoodieSparkFileReader {
                 String.valueOf(storage.getConf().getBoolean(SQLConf.PARQUET_RECORD_FILTER_ENABLED().key(), sqlConf.parquetRecordFilterEnabled())));
           });
     }
-    // Build the ReadSupport via the SparkAdapter so version-specific subclasses (e.g.
-    // Spark40HoodieParquetReadSupport, which reorders variant group fields to [value, metadata]
-    // for Spark 4.0's ParquetUnshreddedVariantConverter) are picked up. Constructing the base
-    // class directly here would skip the variant reorder and produce MALFORMED_VARIANT for
-    // parquet log blocks containing variant columns on Spark 4.0.
+    // Via SparkAdapter so Spark 4.0 picks up its variant-reordering ReadSupport subclass
+    // (#18334); constructing the base class here would MALFORMED_VARIANT on Spark 4.0.
     HoodieParquetReadSupport readSupport = SparkAdapterSupport$.MODULE$.sparkAdapter().createParquetReadSupport(
         Option$.MODULE$.empty(), true, true,
         rebaseDateSpec,

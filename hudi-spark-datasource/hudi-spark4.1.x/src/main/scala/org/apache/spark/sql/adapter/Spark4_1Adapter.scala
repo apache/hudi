@@ -262,11 +262,8 @@ class Spark4_1Adapter extends BaseSpark4Adapter {
     if (!sparkRequiredSchema.fields.exists(f => VariantMetadata.isVariantStruct(f.dataType))) {
       None
     } else {
-      // Resolve required-schema field name to (index, field) in sparkDataSchema. Both schemas
-      // come from the same source (PushVariantIntoScan output overlaid on the data-block
-      // schema), so a missing field is a programming error in the caller, surface it with
-      // both schemas in the message rather than the bare IllegalArgumentException
-      // sparkDataSchema.fieldIndex would throw.
+      // Surface mismatched schemas with both field lists rather than Spark's bare
+      // IllegalArgumentException from fieldIndex.
       def lookupDataField(name: String): (Int, StructField) = {
         val idx = sparkDataSchema.getFieldIndex(name).getOrElse(
           throw new IllegalStateException(
@@ -275,15 +272,10 @@ class Spark4_1Adapter extends BaseSpark4Adapter {
               s"data=${sparkDataSchema.fieldNames.mkString("[", ",", "]")}"))
         (idx, sparkDataSchema.fields(idx))
       }
-      // For each required-schema field, build either a passthrough BoundReference (non-variant)
-      // or a CreateNamedStruct of VariantGet expressions (variant projection).
       val exprs: Array[Expression] = sparkRequiredSchema.fields.map { rf =>
         rf.dataType match {
           case projectedStruct: StructType if VariantMetadata.isVariantStruct(projectedStruct) =>
             val (dataIdx, dataField) = lookupDataField(rf.name)
-            // We only handle the case where the data column is VariantType — i.e., the table's
-            // stored shape for `v` is a real variant. (If it weren't, PushVariantIntoScan
-            // wouldn't have produced this projection.)
             require(isVariantType(dataField.dataType),
               s"Expected VariantType for field '${rf.name}' in data schema, got ${dataField.dataType}")
             val variantRef: Expression = BoundReference(dataIdx, dataField.dataType, dataField.nullable)
@@ -306,14 +298,12 @@ class Spark4_1Adapter extends BaseSpark4Adapter {
     }
   }
 
-  // NOTE: We previously overrode `applyVariantLogicalType` to apply
-  // `LogicalTypeAnnotation.variantType((byte) 1)` (matching Spark's own
-  // SparkToParquetSchemaConverter on parquet 1.16.0). It compiles, but the resulting
-  // `VARIANT(1)`-annotated group is incompatible with Hudi's Java Avro reader path
-  // (HoodieAvroParquetReader → AvroSchemaConverterWithTimestampNTZ) used for MOR merge updates,
-  // and triggers downstream JVM crashes during variant binary copies. Until Hudi's Avro reader
-  // path understands the annotation (or migrates to the Spark reader), keep the unannotated
-  // 2-binary-field group from BaseSpark4Adapter so writes are readable by every internal path.
+  // We intentionally don't override applyVariantLogicalType to apply
+  // LogicalTypeAnnotation.variantType((byte) 1) here (parquet 1.16+ /
+  // SparkToParquetSchemaConverter style). AvroSchemaConverterWithTimestampNTZ now tolerates
+  // unknown annotations via record-conversion fallback, but writing the annotated group has
+  // not been validated end-to-end through MOR merge updates. Keep the unannotated
+  // 2-binary-field group from BaseSpark4Adapter until that is verified.
 
   override def createMemoryStream[T: Encoder](id: Int, sparkSession: SparkSession): HoodieMemoryStream[T] = {
     // In Spark 4.1, MemoryStream is in org.apache.spark.sql.execution.streaming.runtime package

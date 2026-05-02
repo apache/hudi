@@ -243,12 +243,8 @@ trait SparkAdapter extends Serializable {
                             hadoopConf: Configuration): Option[SparkColumnarFileReader]
 
   /**
-   * Builds the [[HoodieParquetReadSupport]] used by parquet-mr to materialize Spark
-   * [[org.apache.spark.sql.catalyst.InternalRow]]s. Spark 4.0 must override this to return its
-   * variant-aware subclass which reorders variant group fields to [value, metadata] — the order
-   * Spark 4.0's ParquetUnshreddedVariantConverter indexes its converters array against. Without
-   * the reorder the converters consume each other's bytes and Variant.<init> raises
-   * MALFORMED_VARIANT during read.
+   * Build the [[HoodieParquetReadSupport]] for a parquet read. Spark 4.0 overrides to return
+   * its variant-aware subclass (variant group field reorder for the positional converter).
    */
   def createParquetReadSupport(convertTz: Option[java.time.ZoneId],
                                enableVectorizedReader: Boolean,

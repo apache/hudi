@@ -281,28 +281,14 @@ abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordBuffer<T
   }
 
   /**
-   * Combines the schema-evolution transformer with the engine's optional log-block record
-   * projection. When the engine provides a projection (currently only Spark 4.1's
-   * PushVariantIntoScan path), it is composed *after* the evolution transformer.
+   * Composes schema evolution then the engine's optional log-block record projection
+   * (currently only Spark 4.1's PushVariantIntoScan). Returns the evolved data-block schema
+   * — the projector preserves field shape, only rewriting variant fields, so merger
+   * metadata cols (read by ordinal) stay intact.
    *
-   * <p>The returned schema is the evolved data-block schema, not {@code readerSchema}: the
-   * Spark 4.1 projector rewrites variant fields in place but preserves every other field of
-   * the data-block schema, including the merger metadata columns ({@code _hoodie_record_key},
-   * {@code _tmp_metadata_row_index}) that the merger needs to look records up by ordinal.
-   * Returning {@code readerSchema} (the bare projected required schema) would tell the buffer
-   * the records are 4 fields wide while the actual rows still carry the metadata columns,
-   * causing the merger to read off the end of the row.
-   *
-   * <p>Composition order: schema-evolution first, then variant projection. Reasoning: the
-   * evolution transformer rewrites the on-disk Avro/Hudi schema into the shape the engine
-   * projector was built against; reversing the order would feed a not-yet-evolved row to the
-   * projector and corrupt field ordinals.
-   *
-   * <p>Skip the projection when a custom payload class is configured: {@code PayloadUpdateProcessor}
-   * round-trips the row through {@code convertToAvroRecord(record, recordSchema)} and the schema
-   * still describes variant fields as {@code VariantType}, so feeding it a row whose variant
-   * column has been rewritten into the projected struct shape would corrupt the avro record.
-   * Standard mergers only touch metadata cols by ordinal and are unaffected.
+   * <p>Skipped when a custom payload class is configured: {@code PayloadUpdateProcessor}
+   * round-trips through {@code convertToAvroRecord} against a schema that still types
+   * variant fields as {@code VariantType}, which would mis-decode rewritten rows.
    */
   protected Pair<Function<T, T>, HoodieSchema> getProjectedTransformer(HoodieDataBlock dataBlock) {
     Pair<Function<T, T>, HoodieSchema> evolved = getSchemaTransformerWithEvolvedSchema(dataBlock);

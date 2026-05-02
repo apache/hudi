@@ -385,17 +385,9 @@ public abstract class HoodieReaderContext<T> {
                                                             List<Pair<String, Object>> requiredPartitionFieldAndValues);
 
   /**
-   * Per-row transformer applied to records emerging from a log data block before they reach the
-   * merger. Engines that need to align log-block records to a projected required schema (e.g.
-   * Spark 4.1's PushVariantIntoScan, which projects variant columns into a synthetic struct shape
-   * at scan time) override this; the default is no projection.
-   *
-   * <p>When this returns a non-empty {@link Option}, the produced records must match the required
-   * (projected) schema, and {@code FileGroupRecordBuffer} will use that required schema as the
-   * downstream {@code BufferedRecords} schema in place of {@code dataBlock.getSchema()}.
-   *
-   * @param dataBlockSchema the schema actually carried by the log data block
-   * @return per-row transformer; {@code Option.empty()} means no projection is needed
+   * Optional per-row transformer applied to log-block records before they reach the merger.
+   * Engines override this to align records with a projected read schema (e.g. Spark 4.1's
+   * PushVariantIntoScan). Default is no projection.
    */
   public Option<Function<T, T>> getLogBlockRecordProjection(HoodieSchema dataBlockSchema) {
     return Option.empty();

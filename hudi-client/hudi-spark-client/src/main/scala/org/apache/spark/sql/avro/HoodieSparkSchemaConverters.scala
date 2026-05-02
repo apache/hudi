@@ -190,13 +190,9 @@ object HoodieSparkSchemaConverters extends SparkAdapterSupport {
         isCanonicalVariantStruct(variantStruct) =>
         HoodieSchema.createVariant(recordName, nameSpace, null)
 
-      // Spark 4.1's PushVariantIntoScan rule rewrites a Variant column on the read schema to a
-      // struct of pushed-down extractions (each child carries VariantMetadata). The Spark
-      // requiredSchema with this metadata still flows through to parquet-mr unchanged, which does
-      // the projection natively. For Hudi's internal HoodieSchema we represent it as a regular
-      // unshredded Variant — the schema handler/merger then aligns with the table's stored
-      // `v: Variant` data schema, and the projected struct shape is preserved by Spark's parquet
-      // reader at row-construction time.
+      // PushVariantIntoScan (Spark 4.1+) rewrites Variant to a struct of extractions; map
+      // it back to a regular HoodieSchema Variant. parquet-mr does the projection natively
+      // from the Spark required schema's VariantMetadata.
       case projectedVariant: StructType if isSparkVariantProjectionStruct(projectedVariant) =>
         HoodieSchema.createVariant(recordName, nameSpace, null)
 
@@ -525,18 +521,9 @@ object HoodieSparkSchemaConverters extends SparkAdapterSupport {
   }
 
   /**
-   * Detects a Spark 4.1 PushVariantIntoScan-projected struct. The check defers to the
-   * version-specific SparkAdapter, but most schemas can be cleared without that detour:
-   *
-   *   1. Spark < 4.1 — PushVariantIntoScan does not exist.
-   *   2. No field carries any non-empty Spark Metadata — the projection always tags every
-   *      field with VariantMetadata, so an empty-metadata struct is definitively not one.
-   *
-   * Both short-circuits matter for shared-module unit tests (e.g. `hudi-spark-common`'s
-   * `TestHoodieSparkSchemaUtils`) whose runtime classpath does not include any
-   * `SparkXAdapter`: forcing `SparkAdapterSupport.sparkAdapter` to resolve there raises
-   * `ClassNotFoundException` on every StructType conversion. The try/catch is a
-   * belt-and-suspenders fallback for any other environment that hits the same gap.
+   * Detects a Spark 4.1 PushVariantIntoScan-projected struct. Short-circuits before consulting
+   * the version-specific SparkAdapter so shared-module unit tests (whose classpath lacks any
+   * SparkXAdapter) don't trigger an adapter-load failure on plain StructType conversions.
    */
   private def isSparkVariantProjectionStruct(st: StructType): Boolean = {
     if (!HoodieSparkUtils.gteqSpark4_1) return false
