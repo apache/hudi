@@ -195,6 +195,18 @@ class Spark4_0Adapter extends BaseSpark4Adapter {
     Spark40ParquetReader.build(vectorized, sqlConf, options, hadoopConf)
   }
 
+  override def createParquetReadSupport(convertTz: Option[java.time.ZoneId],
+                                        enableVectorizedReader: Boolean,
+                                        enableTimestampFieldRepair: Boolean,
+                                        datetimeRebaseSpec: org.apache.spark.sql.catalyst.util.RebaseDateTime.RebaseSpec,
+                                        int96RebaseSpec: org.apache.spark.sql.catalyst.util.RebaseDateTime.RebaseSpec,
+                                        tableSchemaOpt: org.apache.hudi.common.util.Option[org.apache.parquet.schema.MessageType])
+      : org.apache.spark.sql.execution.datasources.parquet.HoodieParquetReadSupport = {
+    new org.apache.spark.sql.execution.datasources.parquet.Spark40HoodieParquetReadSupport(
+      convertTz, enableVectorizedReader, enableTimestampFieldRepair,
+      datetimeRebaseSpec, int96RebaseSpec, tableSchemaOpt)
+  }
+
   /**
    * TODO
    *

@@ -43,7 +43,7 @@ import org.apache.spark.sql.catalyst.util.DateFormatter
 import org.apache.spark.sql.catalyst.util.RebaseDateTime.RebaseSpec
 import org.apache.spark.sql.execution.QueryExecution
 import org.apache.spark.sql.execution.datasources._
-import org.apache.spark.sql.execution.datasources.parquet.{ParquetFileFormat, ParquetFilters}
+import org.apache.spark.sql.execution.datasources.parquet.{HoodieParquetReadSupport, ParquetFileFormat, ParquetFilters}
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.parser.HoodieExtendedParserInterface
 import org.apache.spark.sql.sources.{BaseRelation, Filter}
@@ -241,6 +241,25 @@ trait SparkAdapter extends Serializable {
                             sqlConf: SQLConf,
                             options: Map[String, String],
                             hadoopConf: Configuration): Option[SparkColumnarFileReader]
+
+  /**
+   * Builds the [[HoodieParquetReadSupport]] used by parquet-mr to materialize Spark
+   * [[org.apache.spark.sql.catalyst.InternalRow]]s. Spark 4.0 must override this to return its
+   * variant-aware subclass which reorders variant group fields to [value, metadata] — the order
+   * Spark 4.0's ParquetUnshreddedVariantConverter indexes its converters array against. Without
+   * the reorder the converters consume each other's bytes and Variant.<init> raises
+   * MALFORMED_VARIANT during read.
+   */
+  def createParquetReadSupport(convertTz: Option[java.time.ZoneId],
+                               enableVectorizedReader: Boolean,
+                               enableTimestampFieldRepair: Boolean,
+                               datetimeRebaseSpec: org.apache.spark.sql.catalyst.util.RebaseDateTime.RebaseSpec,
+                               int96RebaseSpec: org.apache.spark.sql.catalyst.util.RebaseDateTime.RebaseSpec,
+                               tableSchemaOpt: org.apache.hudi.common.util.Option[org.apache.parquet.schema.MessageType])
+      : HoodieParquetReadSupport = {
+    new HoodieParquetReadSupport(convertTz, enableVectorizedReader, enableTimestampFieldRepair,
+      datetimeRebaseSpec, int96RebaseSpec, tableSchemaOpt)
+  }
 
   /**
    * use new qe execute

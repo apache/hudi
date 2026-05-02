@@ -329,7 +329,13 @@ class Spark40LegacyHoodieParquetFileFormat(private val shouldAppendPartitionValu
         }
       } else {
         logDebug(s"Falling back to parquet-mr")
-        val readSupport = new HoodieParquetReadSupport(
+        // Use the Spark 4.0 subclass: it overrides init to reorder variant group fields to
+        // [value, metadata] so Spark 4.0's ParquetUnshreddedVariantConverter (which indexes its
+        // converters array by position assuming that order) reads the correct bytes for each
+        // converter. The base HoodieParquetReadSupport no longer applies this reorder (#18334
+        // moved it into the version-specific subclass), so wiring the base class here would
+        // produce MALFORMED_VARIANT for variant columns.
+        val readSupport = new Spark40HoodieParquetReadSupport(
           convertTz,
           enableVectorizedReader = false,
           enableTimestampFieldRepair = true,
