@@ -297,9 +297,18 @@ abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordBuffer<T
    * evolution transformer rewrites the on-disk Avro/Hudi schema into the shape the engine
    * projector was built against; reversing the order would feed a not-yet-evolved row to the
    * projector and corrupt field ordinals.
+   *
+   * <p>Skip the projection when a custom payload class is configured: {@code PayloadUpdateProcessor}
+   * round-trips the row through {@code convertToAvroRecord(record, recordSchema)} and the schema
+   * still describes variant fields as {@code VariantType}, so feeding it a row whose variant
+   * column has been rewritten into the projected struct shape would corrupt the avro record.
+   * Standard mergers only touch metadata cols by ordinal and are unaffected.
    */
   protected Pair<Function<T, T>, HoodieSchema> getProjectedTransformer(HoodieDataBlock dataBlock) {
     Pair<Function<T, T>, HoodieSchema> evolved = getSchemaTransformerWithEvolvedSchema(dataBlock);
+    if (payloadClasses.isPresent()) {
+      return evolved;
+    }
     Option<Function<T, T>> logProjOpt = readerContext.getLogBlockRecordProjection(evolved.getRight());
     if (!logProjOpt.isPresent()) {
       return evolved;

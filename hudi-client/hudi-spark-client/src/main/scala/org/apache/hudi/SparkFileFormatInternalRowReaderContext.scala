@@ -29,7 +29,7 @@ import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.common.table.read.buffer.PositionBasedFileGroupRecordBuffer.ROW_INDEX_TEMPORARY_COLUMN_NAME
 import org.apache.hudi.common.util.{Option => HOption}
 import org.apache.hudi.common.util.ValidationUtils.checkState
-import org.apache.hudi.common.util.collection.{CachingIterator, ClosableIterator, CloseableMappingIterator, Pair => HPair}
+import org.apache.hudi.common.util.collection.{CachingIterator, ClosableIterator, Pair => HPair}
 import org.apache.hudi.io.storage.{HoodieSparkFileReaderFactory, HoodieSparkParquetReader, VectorConversionUtils}
 import org.apache.hudi.storage.{HoodieStorage, StorageConfiguration, StoragePath}
 import org.apache.hudi.util.CloseableInternalRowIterator
@@ -39,6 +39,7 @@ import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.{JoinedRow, UnsafeProjection}
 import org.apache.spark.sql.execution.datasources.{PartitionedFile, SparkColumnarFileReader}
 import org.apache.spark.sql.execution.datasources.parquet.ParquetFileFormat
+import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.hudi.SparkAdapter
 import org.apache.spark.sql.sources.Filter
 import org.apache.spark.sql.types.{ArrayType, ByteType, DoubleType, FloatType, LongType, MetadataBuilder, StructField, StructType}
@@ -109,8 +110,7 @@ class SparkFileFormatInternalRowReaderContext(baseFileReader: SparkColumnarFileR
     // the PushVariantIntoScan-projected struct shape from the required schema. Non-variant
     // fields (including merger metadata cols absent from the required schema) pass through.
     val targetFields = dataStruct.fields.map { df =>
-      val reqField = req.fields.find(_.name == df.name)
-      reqField.map(_.dataType) match {
+      SparkFileFormatInternalRowReaderContext.findFieldByName(req, df.name).map(_.dataType) match {
         case Some(projStruct: StructType) if sparkAdapter.isVariantProjectionStruct(projStruct) =>
           df.copy(dataType = projStruct)
         case _ => df
@@ -154,7 +154,7 @@ class SparkFileFormatInternalRowReaderContext(baseFileReader: SparkColumnarFileR
       case Some(sparkReq) =>
         val augmentedStruct = HoodieInternalRowUtils.getCachedSchema(requiredSchema)
         StructType(augmentedStruct.fields.map { f =>
-          sparkReq.fields.find(_.name == f.name).map(_.dataType) match {
+          SparkFileFormatInternalRowReaderContext.findFieldByName(sparkReq, f.name).map(_.dataType) match {
             case Some(projStruct: StructType) if sparkAdapter.isVariantProjectionStruct(projStruct) =>
               f.copy(dataType = projStruct)
             case _ => f
@@ -360,10 +360,18 @@ class SparkFileFormatInternalRowReaderContext(baseFileReader: SparkColumnarFileR
 }
 
 object SparkFileFormatInternalRowReaderContext {
-  /** Wrap a closable iterator with a per-row transform, preserving close semantics. */
-  def mappedClosable(it: ClosableIterator[InternalRow],
-                     transform: InternalRow => InternalRow): ClosableIterator[InternalRow] = {
-    new CloseableMappingIterator[InternalRow, InternalRow](it, (r: InternalRow) => transform(r))
+  /**
+   * Look up a field by name on a Spark StructType, honoring the session's
+   * `spark.sql.caseSensitive` setting. Used when overlaying variant projection metadata from
+   * the Spark required schema onto the Hudi-derived data schema, where the two schemas may
+   * have arrived through different name-resolution paths.
+   */
+  private[hudi] def findFieldByName(schema: StructType, name: String): Option[StructField] = {
+    if (SQLConf.get.caseSensitiveAnalysis) {
+      schema.fields.find(_.name == name)
+    } else {
+      schema.fields.find(_.name.equalsIgnoreCase(name))
+    }
   }
 
   // From "namedExpressions.scala": Used to construct to record position field metadata.

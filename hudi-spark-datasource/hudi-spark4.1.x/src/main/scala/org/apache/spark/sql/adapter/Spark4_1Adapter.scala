@@ -51,7 +51,7 @@ import org.apache.spark.sql.hudi.analysis.TableValuedFunctions
 import org.apache.spark.sql.hudi.blob.{BatchedBlobReaderStrategy, ScalarFunctions}
 import org.apache.spark.sql.internal.{LegacyBehaviorPolicy, SQLConf}
 import org.apache.spark.sql.parser.{HoodieExtendedParserInterface, HoodieSpark4_1ExtendedSqlParser}
-import org.apache.spark.sql.types.{DataType, DataTypes, Metadata, MetadataBuilder, StructType}
+import org.apache.spark.sql.types.{DataType, DataTypes, Metadata, MetadataBuilder, StructField, StructType}
 import org.apache.spark.sql.vectorized.ColumnarBatchRow
 import org.apache.spark.storage.StorageLevel
 import org.apache.spark.storage.StorageLevel._
@@ -262,13 +262,25 @@ class Spark4_1Adapter extends BaseSpark4Adapter {
     if (!sparkRequiredSchema.fields.exists(f => VariantMetadata.isVariantStruct(f.dataType))) {
       None
     } else {
+      // Resolve required-schema field name to (index, field) in sparkDataSchema. Both schemas
+      // come from the same source (PushVariantIntoScan output overlaid on the data-block
+      // schema), so a missing field is a programming error in the caller, surface it with
+      // both schemas in the message rather than the bare IllegalArgumentException
+      // sparkDataSchema.fieldIndex would throw.
+      def lookupDataField(name: String): (Int, StructField) = {
+        val idx = sparkDataSchema.getFieldIndex(name).getOrElse(
+          throw new IllegalStateException(
+            s"Required field '$name' is absent from sparkDataSchema; " +
+              s"required=${sparkRequiredSchema.fieldNames.mkString("[", ",", "]")}, " +
+              s"data=${sparkDataSchema.fieldNames.mkString("[", ",", "]")}"))
+        (idx, sparkDataSchema.fields(idx))
+      }
       // For each required-schema field, build either a passthrough BoundReference (non-variant)
       // or a CreateNamedStruct of VariantGet expressions (variant projection).
-      val exprs: Array[Expression] = sparkRequiredSchema.fields.zipWithIndex.map { case (rf, _) =>
+      val exprs: Array[Expression] = sparkRequiredSchema.fields.map { rf =>
         rf.dataType match {
           case projectedStruct: StructType if VariantMetadata.isVariantStruct(projectedStruct) =>
-            val dataIdx = sparkDataSchema.fieldIndex(rf.name)
-            val dataField = sparkDataSchema.fields(dataIdx)
+            val (dataIdx, dataField) = lookupDataField(rf.name)
             // We only handle the case where the data column is VariantType — i.e., the table's
             // stored shape for `v` is a real variant. (If it weren't, PushVariantIntoScan
             // wouldn't have produced this projection.)
@@ -284,8 +296,7 @@ class Spark4_1Adapter extends BaseSpark4Adapter {
             }
             CreateNamedStruct(childExprs)
           case _ =>
-            val dataIdx = sparkDataSchema.fieldIndex(rf.name)
-            val dataField = sparkDataSchema.fields(dataIdx)
+            val (dataIdx, dataField) = lookupDataField(rf.name)
             BoundReference(dataIdx, dataField.dataType, dataField.nullable)
         }
       }

@@ -160,7 +160,7 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
       supportVectorizedRead = false
       supportReturningBatch = false
       false
-    } else if (schema.fields.exists(f => sparkAdapter.isVariantType(f.dataType))) {
+    } else if (HoodieSparkUtils.gteqSpark4_1 && schema.fields.exists(f => sparkAdapter.isVariantType(f.dataType))) {
       // #18605: Spark 4.1's vectorized parquet reader path produces UnsafeRow encodings for
       // VariantType columns that crash during shuffle copy under Hudi's pipeline (JVM SIGBUS
       // in StubRoutines::forward_copy_longs / UnsafeRow.copy when the row is sampled by
@@ -168,6 +168,10 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
       // ParquetReadSupport which materializes VariantType correctly via
       // ParquetUnshreddedVariantConverter. Restoring vectorized perf needs a separate fix to
       // how Hudi's pipeline encodes variant columns into UnsafeRow.
+      //
+      // Gated on Spark 4.1+: Spark 4.0's vectorized variant path reads correctly under Hudi
+      // (variant byte ordering is handled by Spark40HoodieParquetReadSupport in the row-based
+      // path; the vectorized path doesn't have the same UnsafeRow shuffle-copy issue).
       supportVectorizedRead = false
       supportReturningBatch = false
       false
@@ -193,7 +197,7 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
       }
       supportVectorizedRead = !isIncremental && !isBootstrap && supportBatch
       supportReturningBatch = !isMOR && supportVectorizedRead
-      logInfo(s"supportReturningBatch: $supportReturningBatch, supportVectorizedRead: $supportVectorizedRead, isIncremental: $isIncremental, " +
+      logDebug(s"supportReturningBatch: $supportReturningBatch, supportVectorizedRead: $supportVectorizedRead, isIncremental: $isIncremental, " +
         s"isBootstrap: $isBootstrap, superSupportBatch: $supportBatch")
       supportReturningBatch
     }
@@ -242,7 +246,7 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
     val superSplitable = super.isSplitable(sparkSession, options, path)
     val isLance = hoodieFileFormat == HoodieFileFormat.LANCE
     val splitable = !isMOR && !isIncremental && !isBootstrap && !isLance && superSplitable
-    logInfo(s"isSplitable: $splitable, super.isSplitable: $superSplitable, isMOR: $isMOR, isIncremental: $isIncremental, isBootstrap: $isBootstrap")
+    logDebug(s"isSplitable: $splitable, super.isSplitable: $superSplitable, isMOR: $isMOR, isIncremental: $isIncremental, isBootstrap: $isBootstrap")
     splitable
   }
 
@@ -253,10 +257,6 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
                                               filters: Seq[Filter],
                                               options: Map[String, String],
                                               hadoopConf: Configuration): PartitionedFile => Iterator[InternalRow] = {
-    logInfo(s"buildReaderWithPartitionValues entry: tableName=$sanitizedTableName, " +
-      s"dataStructType=${dataStructType.simpleString}, " +
-      s"requiredSchema=${requiredSchema.simpleString}, " +
-      s"partitionSchema=${partitionSchema.simpleString}")
     val outputSchema = StructType(requiredSchema.fields ++ partitionSchema.fields)
     val isCount = requiredSchema.isEmpty && !isMOR && !isIncremental
     val augmentedStorageConf = new HadoopStorageConfiguration(hadoopConf).getInline
@@ -275,12 +275,8 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
     exclusionFields.add("op")
     partitionSchema.fields.foreach(f => exclusionFields.add(f.name))
     val requestedStructType = StructType(requiredSchema.fields ++ partitionSchema.fields.filter(f => mandatoryFields.contains(f.name)))
-    logInfo(s"Converting requested struct to Hoodie schema: tableName=$sanitizedTableName, " +
-      s"fields=${requestedStructType.fieldNames.mkString("[", ",", "]")}")
     val requestedSchema = HoodieSchemaUtils.pruneDataSchema(schema, HoodieSchemaConversionUtils.convertStructTypeToHoodieSchema(requestedStructType, sanitizedTableName), exclusionFields)
     val dataStructTypeWithMandatoryPartitionFields = StructType(dataStructType.fields ++ partitionSchema.fields.filter(f => mandatoryFields.contains(f.name)))
-    logInfo(s"Converting data struct to Hoodie schema: tableName=$sanitizedTableName, " +
-      s"fields=${dataStructTypeWithMandatoryPartitionFields.fieldNames.mkString("[", ",", "]")}")
     val dataSchema = HoodieSchemaUtils.pruneDataSchema(schema, HoodieSchemaConversionUtils.convertStructTypeToHoodieSchema(dataStructTypeWithMandatoryPartitionFields, sanitizedTableName), exclusionFields)
 
     spark.sessionState.conf.setConfString("spark.sql.parquet.enableVectorizedReader", supportVectorizedRead.toString)
