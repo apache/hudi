@@ -20,6 +20,8 @@
 package org.apache.spark.sql.execution.datasources
 
 import org.apache.hadoop.conf.Configuration
+import org.apache.hudi.common.schema.HoodieSchema
+import org.apache.hudi.common.schema.evolution.HoodieSchemaInternalSchemaBridge
 import org.apache.hudi.common.util
 import org.apache.hudi.internal.schema.InternalSchema
 import org.apache.hudi.storage.StorageConfiguration
@@ -48,4 +50,26 @@ trait SparkColumnarFileReader extends Serializable {
            filters: Seq[Filter],
            storageConf: StorageConfiguration[Configuration],
            tableSchemaOpt: util.Option[MessageType] = util.Option.empty()): Iterator[InternalRow]
+
+  /**
+   * HoodieSchema-shaped twin of [[read]]. Default implementation bridges via
+   * [[HoodieSchemaInternalSchemaBridge]] and delegates to the legacy [[read]] —
+   * concrete readers (parquet/orc/lance) don't need to override. Once Phase 5
+   * rewrites the abstract [[read]] on pure HoodieSchema, this default
+   * delegation collapses into the implementation.
+   */
+  def readWithEvolutionSchema(file: PartitionedFile,
+                              requiredSchema: StructType,
+                              partitionSchema: StructType,
+                              evolutionSchemaOpt: util.Option[HoodieSchema],
+                              filters: Seq[Filter],
+                              storageConf: StorageConfiguration[Configuration],
+                              tableSchemaOpt: util.Option[MessageType] = util.Option.empty()): Iterator[InternalRow] = {
+    val asInternal: util.Option[InternalSchema] = if (evolutionSchemaOpt.isPresent) {
+      util.Option.of(HoodieSchemaInternalSchemaBridge.toInternalSchema(evolutionSchemaOpt.get()))
+    } else {
+      util.Option.empty()
+    }
+    read(file, requiredSchema, partitionSchema, asInternal, filters, storageConf, tableSchemaOpt)
+  }
 }
