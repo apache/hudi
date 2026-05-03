@@ -1638,15 +1638,25 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    * @param positionType col position change type. now support three change types: first/after/before
    */
   public void addColumn(String colName, HoodieSchema schema, String doc, String position, TableChange.ColumnPositionChange.ColumnPositionType positionType) {
-    Pair<InternalSchema, HoodieTableMetaClient> pair = getInternalSchemaAndMetaClient();
-    HoodieSchema current = HoodieSchemaInternalSchemaBridge.toHoodieSchema(pair.getLeft(), schema.getFullName());
-    HoodieSchema evolved = new HoodieSchemaChangeApplier(current)
-        .applyAddChange(colName, schema, doc, position, ColumnPositionType.valueOf(positionType.name()));
-    commitTableChange(HoodieSchemaInternalSchemaBridge.toInternalSchema(evolved), pair.getRight());
+    addColumn(colName, schema, doc, position, ColumnPositionType.valueOf(positionType.name()));
   }
 
   public void addColumn(String colName, HoodieSchema schema) {
     addColumn(colName, schema, null, "", TableChange.ColumnPositionChange.ColumnPositionType.NO_OPERATION);
+  }
+
+  /**
+   * HoodieSchema-shaped overload of {@link #addColumn(String, HoodieSchema, String, String,
+   * TableChange.ColumnPositionChange.ColumnPositionType)} that takes the new
+   * {@link ColumnPositionType} enum directly. Same semantics; lets callers stay off
+   * the legacy {@code TableChange} type.
+   */
+  public void addColumn(String colName, HoodieSchema schema, String doc, String position, ColumnPositionType positionType) {
+    Pair<HoodieSchema, HoodieTableMetaClient> pair = getEvolutionSchemaAndMetaClient();
+    HoodieSchema current = pair.getLeft();
+    HoodieSchema evolved = new HoodieSchemaChangeApplier(current)
+        .applyAddChange(colName, schema, doc, position, positionType);
+    commitTableChange(evolved, pair.getRight());
   }
 
   /**
@@ -1655,10 +1665,9 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    * @param colNames col name to be deleted. if we want to delete col from a nested filed, the fullName should be specified
    */
   public void deleteColumns(String... colNames) {
-    Pair<InternalSchema, HoodieTableMetaClient> pair = getInternalSchemaAndMetaClient();
-    HoodieSchema current = HoodieSchemaInternalSchemaBridge.toHoodieSchema(pair.getLeft(), config.getTableName());
-    HoodieSchema evolved = new HoodieSchemaChangeApplier(current).applyDeleteChange(colNames);
-    commitTableChange(HoodieSchemaInternalSchemaBridge.toInternalSchema(evolved), pair.getRight());
+    Pair<HoodieSchema, HoodieTableMetaClient> pair = getEvolutionSchemaAndMetaClient();
+    HoodieSchema evolved = new HoodieSchemaChangeApplier(pair.getLeft()).applyDeleteChange(colNames);
+    commitTableChange(evolved, pair.getRight());
   }
 
   /**
@@ -1668,10 +1677,9 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    * @param newName new name for current col. no need to specify fullName.
    */
   public void renameColumn(String colName, String newName) {
-    Pair<InternalSchema, HoodieTableMetaClient> pair = getInternalSchemaAndMetaClient();
-    HoodieSchema current = HoodieSchemaInternalSchemaBridge.toHoodieSchema(pair.getLeft(), config.getTableName());
-    HoodieSchema evolved = new HoodieSchemaChangeApplier(current).applyRenameChange(colName, newName);
-    commitTableChange(HoodieSchemaInternalSchemaBridge.toInternalSchema(evolved), pair.getRight());
+    Pair<HoodieSchema, HoodieTableMetaClient> pair = getEvolutionSchemaAndMetaClient();
+    HoodieSchema evolved = new HoodieSchemaChangeApplier(pair.getLeft()).applyRenameChange(colName, newName);
+    commitTableChange(evolved, pair.getRight());
   }
 
   /**
@@ -1681,10 +1689,9 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    * @param nullable .
    */
   public void updateColumnNullability(String colName, boolean nullable) {
-    Pair<InternalSchema, HoodieTableMetaClient> pair = getInternalSchemaAndMetaClient();
-    HoodieSchema current = HoodieSchemaInternalSchemaBridge.toHoodieSchema(pair.getLeft(), config.getTableName());
-    HoodieSchema evolved = new HoodieSchemaChangeApplier(current).applyColumnNullabilityChange(colName, nullable);
-    commitTableChange(HoodieSchemaInternalSchemaBridge.toInternalSchema(evolved), pair.getRight());
+    Pair<HoodieSchema, HoodieTableMetaClient> pair = getEvolutionSchemaAndMetaClient();
+    HoodieSchema evolved = new HoodieSchemaChangeApplier(pair.getLeft()).applyColumnNullabilityChange(colName, nullable);
+    commitTableChange(evolved, pair.getRight());
   }
 
   /**
@@ -1696,13 +1703,20 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    * @param newType .
    */
   public void updateColumnType(String colName, Type newType) {
-    Pair<InternalSchema, HoodieTableMetaClient> pair = getInternalSchemaAndMetaClient();
-    HoodieSchema current = HoodieSchemaInternalSchemaBridge.toHoodieSchema(pair.getLeft(), config.getTableName());
-    // Convert legacy Type -> HoodieSchema for the façade. The legacy converter is the
-    // simplest bridge here; once the public API takes HoodieSchema directly, drop this.
-    HoodieSchema newTypeSchema = InternalSchemaConverter.convert(newType, "type");
-    HoodieSchema evolved = new HoodieSchemaChangeApplier(current).applyColumnTypeChange(colName, newTypeSchema);
-    commitTableChange(HoodieSchemaInternalSchemaBridge.toInternalSchema(evolved), pair.getRight());
+    // Delegate to the HoodieSchema-shaped overload by converting the legacy Type
+    // to a HoodieSchema (must be primitive, same constraint as the legacy variant).
+    updateColumnType(colName, InternalSchemaConverter.convert(newType, "type"));
+  }
+
+  /**
+   * HoodieSchema-shaped overload of {@link #updateColumnType(String, Type)}. Lets
+   * callers express the target type directly as a {@link HoodieSchema} (must be a
+   * primitive type — same constraint as the legacy variant).
+   */
+  public void updateColumnType(String colName, HoodieSchema newType) {
+    Pair<HoodieSchema, HoodieTableMetaClient> pair = getEvolutionSchemaAndMetaClient();
+    HoodieSchema evolved = new HoodieSchemaChangeApplier(pair.getLeft()).applyColumnTypeChange(colName, newType);
+    commitTableChange(evolved, pair.getRight());
   }
 
   /**
@@ -1712,10 +1726,9 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    * @param doc     .
    */
   public void updateColumnComment(String colName, String doc) {
-    Pair<InternalSchema, HoodieTableMetaClient> pair = getInternalSchemaAndMetaClient();
-    HoodieSchema current = HoodieSchemaInternalSchemaBridge.toHoodieSchema(pair.getLeft(), config.getTableName());
-    HoodieSchema evolved = new HoodieSchemaChangeApplier(current).applyColumnCommentChange(colName, doc);
-    commitTableChange(HoodieSchemaInternalSchemaBridge.toInternalSchema(evolved), pair.getRight());
+    Pair<HoodieSchema, HoodieTableMetaClient> pair = getEvolutionSchemaAndMetaClient();
+    HoodieSchema evolved = new HoodieSchemaChangeApplier(pair.getLeft()).applyColumnCommentChange(colName, doc);
+    commitTableChange(evolved, pair.getRight());
   }
 
   /**
@@ -1729,12 +1742,22 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     if (colName == null || orderType == null || referColName == null) {
       return;
     }
-    //get internalSchema
-    Pair<InternalSchema, HoodieTableMetaClient> pair = getInternalSchemaAndMetaClient();
-    HoodieSchema current = HoodieSchemaInternalSchemaBridge.toHoodieSchema(pair.getLeft(), config.getTableName());
-    HoodieSchema evolved = new HoodieSchemaChangeApplier(current)
-        .applyReOrderColPositionChange(colName, referColName, ColumnPositionType.valueOf(orderType.name()));
-    commitTableChange(HoodieSchemaInternalSchemaBridge.toInternalSchema(evolved), pair.getRight());
+    reOrderColPosition(colName, referColName, ColumnPositionType.valueOf(orderType.name()));
+  }
+
+  /**
+   * HoodieSchema-shaped overload of {@link #reOrderColPosition(String, String,
+   * TableChange.ColumnPositionChange.ColumnPositionType)}. Takes the new
+   * {@link ColumnPositionType} enum directly.
+   */
+  public void reOrderColPosition(String colName, String referColName, ColumnPositionType orderType) {
+    if (colName == null || orderType == null || referColName == null) {
+      return;
+    }
+    Pair<HoodieSchema, HoodieTableMetaClient> pair = getEvolutionSchemaAndMetaClient();
+    HoodieSchema evolved = new HoodieSchemaChangeApplier(pair.getLeft())
+        .applyReOrderColPositionChange(colName, referColName, orderType);
+    commitTableChange(evolved, pair.getRight());
   }
 
   public Pair<InternalSchema, HoodieTableMetaClient> getInternalSchemaAndMetaClient() {
@@ -1743,10 +1766,30 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     return Pair.of(getInternalSchema(schemaUtil), metaClient);
   }
 
-  public void commitTableChange(InternalSchema newSchema, HoodieTableMetaClient metaClient) {
+  /**
+   * HoodieSchema-shaped twin of {@link #getInternalSchemaAndMetaClient}. Resolves the
+   * table's evolution schema (or assigns fresh ids to the data schema as a fallback)
+   * and pairs it with a fresh metaClient.
+   */
+  public Pair<HoodieSchema, HoodieTableMetaClient> getEvolutionSchemaAndMetaClient() {
+    HoodieTableMetaClient metaClient = createMetaClient(true);
     TableSchemaResolver schemaUtil = new TableSchemaResolver(metaClient);
+    return Pair.of(getEvolutionSchema(schemaUtil), metaClient);
+  }
+
+  public void commitTableChange(InternalSchema newSchema, HoodieTableMetaClient metaClient) {
     HoodieSchema newEvolutionSchema = HoodieSchemaInternalSchemaBridge.toHoodieSchema(
         newSchema, HoodieSchemaUtils.getRecordQualifiedName(config.getTableName()));
+    commitTableChange(newEvolutionSchema, metaClient);
+  }
+
+  /**
+   * HoodieSchema-shaped overload of {@link #commitTableChange(InternalSchema,
+   * HoodieTableMetaClient)}. Persists the post-DDL evolution schema to commit
+   * metadata and the history file. Wire format unchanged.
+   */
+  public void commitTableChange(HoodieSchema newEvolutionSchema, HoodieTableMetaClient metaClient) {
+    TableSchemaResolver schemaUtil = new TableSchemaResolver(metaClient);
     String historySchemaStr = schemaUtil.getTableHistorySchemaStrFromCommitMetadata().orElseGet(
         () -> HoodieSchemaSerDe.inheritHistory(getEvolutionSchema(schemaUtil), ""));
     String commitActionType = CommitUtils.getCommitActionType(WriteOperationType.ALTER_SCHEMA, metaClient.getTableType());
