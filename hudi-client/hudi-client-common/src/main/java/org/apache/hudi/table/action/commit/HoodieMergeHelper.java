@@ -23,20 +23,19 @@ import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaCompatibility;
+import org.apache.hudi.common.schema.evolution.HoodieSchemaEvolutionUtils;
+import org.apache.hudi.common.schema.evolution.HoodieSchemaHistoryCache;
+import org.apache.hudi.common.schema.evolution.HoodieSchemaInternalSchemaBridge;
+import org.apache.hudi.common.schema.evolution.HoodieSchemaMerger;
+import org.apache.hudi.common.schema.evolution.HoodieSchemaSerDe;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
-import org.apache.hudi.common.util.InternalSchemaCache;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.queue.HoodieExecutor;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.internal.schema.InternalSchema;
-import org.apache.hudi.internal.schema.action.InternalSchemaMerger;
-import org.apache.hudi.internal.schema.convert.InternalSchemaConverter;
-import org.apache.hudi.internal.schema.utils.AvroSchemaEvolutionUtils;
 import org.apache.hudi.internal.schema.utils.InternalSchemaUtils;
-import org.apache.hudi.internal.schema.utils.SerDeHelper;
 import org.apache.hudi.io.HoodieWriteMergeHandle;
 import org.apache.hudi.io.storage.HoodieFileReader;
 import org.apache.hudi.io.storage.HoodieIOFactory;
@@ -166,23 +165,23 @@ public class HoodieMergeHelper<T> extends BaseMergeHelper {
                                                                                          HoodieBaseFile baseFile,
                                                                                          HoodieWriteConfig writeConfig,
                                                                                          HoodieTableMetaClient metaClient) {
-    Option<InternalSchema> querySchemaOpt = SerDeHelper.fromJson(writeConfig.getInternalSchema());
+    Option<HoodieSchema> querySchemaOpt = HoodieSchemaSerDe.fromJson(writeConfig.getInternalSchema());
     // TODO support bootstrap
     if (querySchemaOpt.isPresent() && !baseFile.getBootstrapBaseFile().isPresent()) {
       // check implicitly add columns, and position reorder(spark sql may change cols order)
-      InternalSchema querySchema = AvroSchemaEvolutionUtils.reconcileSchema(writerSchema.toAvroSchema(),
+      HoodieSchema querySchema = HoodieSchemaEvolutionUtils.reconcileSchema(writerSchema,
           querySchemaOpt.get(), writeConfig.getBooleanOrDefault(HoodieCommonConfig.SET_NULL_FOR_MISSING_COLUMNS));
       long commitInstantTime = Long.parseLong(baseFile.getCommitTime());
-      InternalSchema fileSchema = InternalSchemaCache.getInternalSchemaByVersionId(commitInstantTime, metaClient);
-      if (fileSchema.isEmptySchema() && writeConfig.getBoolean(HoodieCommonConfig.RECONCILE_SCHEMA)) {
+      HoodieSchema fileSchema = HoodieSchemaHistoryCache.getSchemaByVersionId(commitInstantTime, metaClient);
+      if ((fileSchema == null || fileSchema.isEmptySchema()) && writeConfig.getBoolean(HoodieCommonConfig.RECONCILE_SCHEMA)) {
         TableSchemaResolver tableSchemaResolver = new TableSchemaResolver(metaClient);
         try {
-          fileSchema = InternalSchemaConverter.convert(tableSchemaResolver.getTableSchema(true));
+          fileSchema = tableSchemaResolver.getTableSchema(true);
         } catch (Exception e) {
           throw new HoodieException(String.format("Failed to get InternalSchema for given versionId: %s", commitInstantTime), e);
         }
       }
-      final InternalSchema writeInternalSchema = fileSchema;
+      final HoodieSchema writeInternalSchema = fileSchema;
       List<String> colNamesFromQuerySchema = querySchema.getAllColsFullName();
       List<String> colNamesFromWriteSchema = writeInternalSchema.getAllColsFullName();
       List<String> sameCols = colNamesFromWriteSchema.stream()
@@ -196,14 +195,17 @@ public class HoodieMergeHelper<T> extends BaseMergeHelper {
                 && Objects.equals(writeInternalSchema.findType(writerSchemaFieldId), querySchema.findType(querySchemaFieldId));
           })
           .collect(Collectors.toList());
-      InternalSchema mergedSchema = new InternalSchemaMerger(writeInternalSchema, querySchema,
+      HoodieSchema newWriterSchema = new HoodieSchemaMerger(writeInternalSchema, querySchema,
           true, false, false).mergeSchema();
-      HoodieSchema newWriterSchema = InternalSchemaConverter.convert(mergedSchema, writerSchema.getFullName());
-      HoodieSchema writeSchemaFromFile = InternalSchemaConverter.convert(writeInternalSchema, newWriterSchema.getFullName());
+      HoodieSchema writeSchemaFromFile = writeInternalSchema;
       boolean needToReWriteRecord = sameCols.size() != colNamesFromWriteSchema.size() || HoodieSchemaCompatibility.areSchemasCompatible(newWriterSchema,
               writeSchemaFromFile);
       if (needToReWriteRecord) {
-        Map<String, String> renameCols = InternalSchemaUtils.collectRenameCols(writeInternalSchema, querySchema);
+        // Rename-column collection still uses the legacy utility. Bridge at the boundary
+        // until a HoodieSchema-shaped collectRenameCols exists.
+        Map<String, String> renameCols = InternalSchemaUtils.collectRenameCols(
+            HoodieSchemaInternalSchemaBridge.toInternalSchema(writeInternalSchema),
+            HoodieSchemaInternalSchemaBridge.toInternalSchema(querySchema));
         return Option.of(record -> {
           return record.rewriteRecordWithNewSchema(
               recordSchema,
