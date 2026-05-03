@@ -107,6 +107,33 @@ object HoodieSchemaUtils {
   }
 
   /**
+   * HoodieSchema-shaped twin of [[getLatestTableInternalSchema]]. Returns the
+   * schema-on-read evolution [[HoodieSchema]] for the table — carrying field ids
+   * and version metadata — or [[None]] when schema-on-read is disabled, no schema
+   * is in commit metadata, or any read error occurs (matching the legacy semantic
+   * of swallowing read failures rather than propagating them).
+   */
+  def getLatestTableEvolutionSchema(config: HoodieConfig,
+                                    tableMetaClient: HoodieTableMetaClient): Option[HoodieSchema] = {
+    getLatestTableEvolutionSchema(config.getProps, tableMetaClient)
+  }
+
+  def getLatestTableEvolutionSchema(props: Properties,
+                                    tableMetaClient: HoodieTableMetaClient): Option[HoodieSchema] = {
+    if (!ConfigUtils.getBooleanWithAltKeys(props, DataSourceReadOptions.SCHEMA_EVOLUTION_ENABLED)) {
+      None
+    } else {
+      try {
+        val tableSchemaResolver = new TableSchemaResolver(tableMetaClient)
+        val schemaOpt = tableSchemaResolver.getTableEvolutionSchemaFromCommitMetadata
+        if (schemaOpt.isPresent) Some(schemaOpt.get()) else None
+      } catch {
+        case _: Exception => None
+      }
+    }
+  }
+
+  /**
    * Deduces writer's schema based on
    * <ul>
    *   <li>Source's schema</li>

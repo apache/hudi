@@ -1,0 +1,94 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package org.apache.hudi.common.schema.evolution;
+
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.internal.schema.InternalSchema;
+import org.apache.hudi.internal.schema.utils.AvroSchemaEvolutionUtils;
+
+/**
+ * HoodieSchema-shaped façade for write-path schema evolution: reconciling an
+ * incoming write schema against the table's current schema, including missing
+ * columns, added columns, type promotions, and nullability adjustments.
+ *
+ * <p>Mirrors the two entry points of {@link AvroSchemaEvolutionUtils} but consumes
+ * and produces {@link HoodieSchema} so callers can stay off direct
+ * {@code InternalSchema} usage. During the InternalSchema → HoodieSchema migration
+ * this delegates to the legacy implementation via
+ * {@link HoodieSchemaInternalSchemaBridge}, which preserves field ids end-to-end.
+ * Phase 5 rewrites the implementation in pure HoodieSchema terms behind this stable
+ * interface.</p>
+ */
+public final class HoodieSchemaEvolutionUtils {
+
+  private HoodieSchemaEvolutionUtils() {
+  }
+
+  /**
+   * Reconciles an incoming write schema against the existing table schema, adding
+   * any new columns, promoting types where allowed, and (optionally) marking
+   * missing columns as nullable.
+   *
+   * <p>Semantics match {@link AvroSchemaEvolutionUtils#reconcileSchema(org.apache.avro.Schema, InternalSchema, boolean)}:
+   * the incoming schema is assumed to have <i>missing</i> columns rather than
+   * <i>deleted</i> columns. Renames and explicit deletes are not inferred here —
+   * those are handled by the explicit DDL path through
+   * {@link HoodieSchemaChangeApplier}.</p>
+   *
+   * @param incomingSchema             incoming write schema
+   * @param oldTableSchema             current table schema (with field ids)
+   * @param makeMissingFieldsNullable  when true, table fields absent from the
+   *                                   incoming schema are marked nullable in the
+   *                                   reconciled result
+   * @return reconciled HoodieSchema with field ids preserved on unchanged columns
+   */
+  public static HoodieSchema reconcileSchema(HoodieSchema incomingSchema,
+                                             HoodieSchema oldTableSchema,
+                                             boolean makeMissingFieldsNullable) {
+    InternalSchema oldInternal = HoodieSchemaInternalSchemaBridge.toInternalSchema(oldTableSchema);
+    InternalSchema reconciled = AvroSchemaEvolutionUtils.reconcileSchema(
+        incomingSchema.getAvroSchema(), oldInternal, makeMissingFieldsNullable);
+    return HoodieSchemaInternalSchemaBridge.toHoodieSchema(reconciled, oldTableSchema.getFullName());
+  }
+
+  /**
+   * Reconciles nullability and type-promotion requirements between a source
+   * (incoming) schema and a target (existing) schema, adjusting the source to be
+   * in line with the target's nullability and promotable types.
+   *
+   * <p>Semantics match
+   * {@link AvroSchemaEvolutionUtils#reconcileSchemaRequirements(org.apache.avro.Schema, org.apache.avro.Schema, boolean)}.
+   * If {@code shouldReorderColumns} is true, the source's fields are ordered to match
+   * the target's positional layout, preserving inter-commit field ordering.</p>
+   *
+   * @param sourceSchema         incoming source schema to be reconciled
+   * @param targetSchema         target schema to reconcile against
+   * @param shouldReorderColumns if true, fields in the result follow the target's order
+   * @return source-shaped HoodieSchema with nullability and types reconciled
+   */
+  public static HoodieSchema reconcileSchemaRequirements(HoodieSchema sourceSchema,
+                                                         HoodieSchema targetSchema,
+                                                         boolean shouldReorderColumns) {
+    org.apache.avro.Schema reconciled = AvroSchemaEvolutionUtils.reconcileSchemaRequirements(
+        sourceSchema == null ? null : sourceSchema.getAvroSchema(),
+        targetSchema == null ? null : targetSchema.getAvroSchema(),
+        shouldReorderColumns);
+    return HoodieSchema.fromAvroSchema(reconciled);
+  }
+}

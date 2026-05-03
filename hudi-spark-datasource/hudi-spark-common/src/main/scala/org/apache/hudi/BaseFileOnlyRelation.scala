@@ -92,7 +92,7 @@ case class BaseFileOnlyRelation(override val sqlContext: SQLContext,
       options = optParams,
       // NOTE: We have to fork the Hadoop Config here as Spark will be modifying it
       //       to configure Parquet reader appropriately
-      hadoopConf = embedInternalSchema(new Configuration(conf), requiredSchema.internalSchema)
+      hadoopConf = embedEvolutionSchema(new Configuration(conf), requiredSchema.evolutionSchema)
     )
 
     // NOTE: In some case schema of the reader's output (reader's schema) might not match the schema expected by the caller.

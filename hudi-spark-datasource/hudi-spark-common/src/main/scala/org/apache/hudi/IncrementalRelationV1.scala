@@ -24,17 +24,16 @@ import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.client.utils.SparkInternalSchemaConverter
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.{HoodieCommitMetadata, HoodieFileFormat, HoodieRecord}
-import org.apache.hudi.common.schema.HoodieSchemaType
+import org.apache.hudi.common.schema.{HoodieSchema, HoodieSchemaType}
+import org.apache.hudi.common.schema.evolution.{HoodieSchemaHistoryCache, HoodieSchemaSerDe}
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline}
 import org.apache.hudi.common.table.timeline.TimelineUtils.{handleHollowCommitIfNeeded, HollowCommitHandling}
 import org.apache.hudi.common.table.timeline.TimelineUtils.HollowCommitHandling.USE_TRANSITION_TIME
-import org.apache.hudi.common.util.{HoodieTimer, InternalSchemaCache}
+import org.apache.hudi.common.util.HoodieTimer
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.exception.{HoodieException, HoodieIncrementalPathNotFoundException}
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
-import org.apache.hudi.internal.schema.InternalSchema
-import org.apache.hudi.internal.schema.utils.SerDeHelper
 import org.apache.hudi.storage.{HoodieStorageUtils, StoragePath}
 import org.apache.hudi.table.HoodieSparkTable
 import org.apache.hudi.util.IncrementalRelationUtil
@@ -115,12 +114,12 @@ class IncrementalRelationV1(val sqlContext: SQLContext,
   val (usedSchema, internalSchema) = {
     log.info("Inferring schema..")
     val schemaResolver = new TableSchemaResolver(metaClient)
-    val iSchema: InternalSchema = if (!isSchemaEvolutionEnabledOnRead(optParams, sqlContext.sparkSession)) {
-      InternalSchema.getEmptyInternalSchema
+    val iSchema: HoodieSchema = if (!isSchemaEvolutionEnabledOnRead(optParams, sqlContext.sparkSession)) {
+      HoodieSchema.empty()
     } else if (useEndInstantSchema && !commitsToReturn.isEmpty) {
-      InternalSchemaCache.searchSchemaAndCache(commitsToReturn.last.requestedTime.toLong, metaClient)
+      HoodieSchemaHistoryCache.searchSchemaAndCache(commitsToReturn.last.requestedTime.toLong, metaClient)
     } else {
-      schemaResolver.getTableInternalSchemaFromCommitMetadata.orElse(null)
+      schemaResolver.getTableEvolutionSchemaFromCommitMetadata.orElse(null)
     }
 
     val tableSchema = if (useEndInstantSchema && iSchema.isEmptySchema) {
@@ -131,7 +130,7 @@ class IncrementalRelationV1(val sqlContext: SQLContext,
     }
     if (tableSchema.getType == HoodieSchemaType.NULL) {
       // if there is only one commit in the table and is an empty commit without schema, return empty RDD here
-      (StructType(Nil), InternalSchema.getEmptyInternalSchema)
+      (StructType(Nil), HoodieSchema.empty())
     } else {
       val dataSchema = HoodieSchemaConversionUtils.convertHoodieSchemaToStructType(tableSchema)
       if (iSchema != null && !iSchema.isEmptySchema) {
@@ -141,7 +140,7 @@ class IncrementalRelationV1(val sqlContext: SQLContext,
         // Append data schema fields to skeleton schema, but ignore any data fields which already exist in skeleton schema
         val skeletonSchemaFieldNames = skeletonSchema.fields.map(f => f.name).toSet
         val dataSchemaFields = dataSchema.fields.filter(f => !skeletonSchemaFieldNames.contains(f.name))
-        (StructType(skeletonSchema.fields ++ dataSchemaFields), InternalSchema.getEmptyInternalSchema)
+        (StructType(skeletonSchema.fields ++ dataSchemaFields), HoodieSchema.empty())
       }
     }
   }
@@ -209,7 +208,7 @@ class IncrementalRelationV1(val sqlContext: SQLContext,
       val validCommits = metaClient
         .getCommitsAndCompactionTimeline.filterCompletedInstants.getInstantsAsStream.toArray()
         .map(e => fileNameGenerator.getFileName(e.asInstanceOf[HoodieInstant])).mkString(",")
-      sqlContext.sparkContext.hadoopConfiguration.set(SparkInternalSchemaConverter.HOODIE_QUERY_SCHEMA, SerDeHelper.toJson(internalSchema))
+      sqlContext.sparkContext.hadoopConfiguration.set(SparkInternalSchemaConverter.HOODIE_QUERY_SCHEMA, HoodieSchemaSerDe.toJson(internalSchema))
       sqlContext.sparkContext.hadoopConfiguration.set(SparkInternalSchemaConverter.HOODIE_TABLE_PATH, metaClient.getBasePath.toString)
       sqlContext.sparkContext.hadoopConfiguration.set(SparkInternalSchemaConverter.HOODIE_VALID_COMMITS_LIST, validCommits)
       val formatClassName = metaClient.getTableConfig.getBaseFileFormat match {

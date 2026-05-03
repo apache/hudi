@@ -519,7 +519,7 @@ class CDCFileGroupIterator(split: HoodieCDCFileGroupSplit,
       .withFileSlice(fileSlice)
       .withDataSchema(schema)
       .withRequestedSchema(schema)
-      .withInternalSchema(toJavaOption(originTableSchema.internalSchema))
+      .withEvolutionSchema(toJavaOption(originTableSchema.evolutionSchema))
       .withProps(readerProperties)
       .withLatestCommitTime(split.changes.last.getInstant)
       .build()

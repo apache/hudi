@@ -29,6 +29,7 @@ import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaField;
+import org.apache.hudi.common.schema.evolution.HoodieSchemaInternalSchemaBridge;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.PartitionPathParser;
@@ -433,6 +434,19 @@ public final class HoodieFileGroupReader<T> implements Closeable {
 
     public Builder<T> withInternalSchema(Option<InternalSchema> internalSchemaOpt) {
       this.internalSchemaOpt = internalSchemaOpt;
+      return this;
+    }
+
+    /**
+     * HoodieSchema-shaped twin of {@link #withInternalSchema(Option)}. The reader
+     * still operates on {@link InternalSchema} internally during the migration —
+     * this builder method converts via {@link HoodieSchemaInternalSchemaBridge}
+     * so callers can supply a {@link HoodieSchema} carrying field ids and stay off
+     * the legacy type. Once Phase 5 rewrites the reader on pure HoodieSchema, the
+     * legacy {@code withInternalSchema} method goes away.
+     */
+    public Builder<T> withEvolutionSchema(Option<HoodieSchema> evolutionSchemaOpt) {
+      this.internalSchemaOpt = evolutionSchemaOpt.map(HoodieSchemaInternalSchemaBridge::toInternalSchema);
       return this;
     }
 

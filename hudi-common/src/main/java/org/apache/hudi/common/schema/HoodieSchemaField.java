@@ -237,6 +237,20 @@ public class HoodieSchemaField implements Serializable {
   }
 
   /**
+   * Returns the column id assigned to this field, or -1 if no id has been assigned yet.
+   * Backed by the {@code field-id} Avro custom property
+   * (Iceberg/Parquet convention) that survives Avro schema serialization round trips.
+   * Replaces {@code Types.Field#fieldId} from InternalSchema.
+   */
+  public int fieldId() {
+    Object raw = avroField.getObjectProp(HoodieSchema.FIELD_ID_PROP);
+    if (raw instanceof Number) {
+      return ((Number) raw).intValue();
+    }
+    return -1;
+  }
+
+  /**
    * Adds a custom property to this field.
    *
    * @param key   the property key

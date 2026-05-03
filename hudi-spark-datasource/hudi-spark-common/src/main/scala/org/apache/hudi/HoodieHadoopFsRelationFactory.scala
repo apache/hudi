@@ -24,6 +24,7 @@ import org.apache.hudi.cdc.HoodieCDCFileIndex
 import org.apache.hudi.common.config.HoodieReaderConfig
 import org.apache.hudi.common.model.HoodieRecord
 import org.apache.hudi.common.schema.HoodieSchema
+import org.apache.hudi.common.schema.evolution.HoodieSchemaInternalSchemaBridge
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.table.log.InstantRange.RangeType
 import org.apache.hudi.common.table.timeline.HoodieTimeline
@@ -238,7 +239,8 @@ abstract class HoodieBaseHadoopFsRelationFactory(val sqlContext: SQLContext,
   override def buildFileFormat(): FileFormat = {
     val tableConfig = metaClient.getTableConfig
     new HoodieFileGroupReaderBasedFileFormat(basePath.toString,
-      HoodieTableSchema(tableStructSchema, tableSchema, internalSchemaOpt),
+      HoodieTableSchema(tableStructSchema, tableSchema, internalSchemaOpt,
+        internalSchemaOpt.map(is => HoodieSchemaInternalSchemaBridge.toHoodieSchema(is, tableConfig.getTableName))),
       tableConfig.getTableName, queryTimestamp.get, getMandatoryFields, isMOR, isBootstrap,
       isIncremental, validCommits, shouldUseRecordPosition, getRequiredFilters,
       tableConfig.isMultipleBaseFileFormatsEnabled, tableConfig.getBaseFileFormat)

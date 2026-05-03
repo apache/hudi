@@ -16,14 +16,12 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.internal.schema;
-
-import org.apache.hudi.exception.HoodieException;
+package org.apache.hudi.exception;
 
 /**
- * Exception thrown for Hoodie schema convert failures. The root of the exception hierarchy.
- * Hoodie Write/Read clients will throw this exception if any of its operations fail. This is a runtime (unchecked)
- * exception.
+ * Exception thrown for Hoodie schema convert failures. The root of the schema
+ * exception hierarchy. Hoodie Write/Read clients will throw this exception if any
+ * of their operations fail. This is a runtime (unchecked) exception.
  */
 public class HoodieSchemaException extends HoodieException {
   public HoodieSchemaException() {

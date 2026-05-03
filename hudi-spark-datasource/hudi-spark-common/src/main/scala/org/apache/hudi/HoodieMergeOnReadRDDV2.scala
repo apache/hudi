@@ -181,7 +181,7 @@ class HoodieMergeOnReadRDDV2(@transient sc: SparkContext,
             .withProps(properties)
             .withDataSchema(tableSchema.schema)
             .withRequestedSchema(requestedSchema)
-            .withInternalSchema(HOption.ofNullable(tableSchema.internalSchema.orNull))
+            .withEvolutionSchema(HOption.ofNullable(tableSchema.evolutionSchema.orNull))
             .build()
           convertAvroToRowIterator(fileGroupReader.getClosableIterator, requestedSchema)
         } else {
@@ -197,7 +197,7 @@ class HoodieMergeOnReadRDDV2(@transient sc: SparkContext,
             .withProps(properties)
             .withDataSchema(tableSchema.schema)
             .withRequestedSchema(requiredSchema.schema)
-            .withInternalSchema(HOption.ofNullable(tableSchema.internalSchema.orNull))
+            .withEvolutionSchema(HOption.ofNullable(tableSchema.evolutionSchema.orNull))
             .build()
           convertCloseableIterator(fileGroupReader.getClosableIterator)
         }

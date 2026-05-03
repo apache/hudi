@@ -19,7 +19,7 @@
 package org.apache.hudi.internal.schema.action;
 
 import org.apache.hudi.exception.SchemaCompatibilityException;
-import org.apache.hudi.internal.schema.HoodieSchemaException;
+import org.apache.hudi.exception.HoodieSchemaException;
 import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.internal.schema.InternalSchemaBuilder;
 import org.apache.hudi.internal.schema.Type;
