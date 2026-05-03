@@ -22,6 +22,10 @@ import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.internal.schema.utils.AvroSchemaEvolutionUtils;
 
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
+
 /**
  * HoodieSchema-shaped façade for write-path schema evolution: reconciling an
  * incoming write schema against the table's current schema, including missing
@@ -90,5 +94,31 @@ public final class HoodieSchemaEvolutionUtils {
         targetSchema == null ? null : targetSchema.getAvroSchema(),
         shouldReorderColumns);
     return HoodieSchema.fromAvroSchema(reconciled);
+  }
+
+  /**
+   * Collects renamed columns between two schemas — fields whose column id is the
+   * same but whose full name has changed. The resulting map is keyed by the new
+   * (target) full name and valued by the leaf-name of the old (source) full name,
+   * matching the wire shape consumed by record rewriters.
+   *
+   * <p>HoodieSchema-shaped replacement for
+   * {@link org.apache.hudi.internal.schema.utils.InternalSchemaUtils#collectRenameCols}.</p>
+   */
+  public static Map<String, String> collectRenameCols(HoodieSchema oldSchema, HoodieSchema newSchema) {
+    List<String> colNamesFromWriteSchema = oldSchema.getAllColsFullName();
+    return colNamesFromWriteSchema.stream()
+        .filter(f -> {
+          int fieldIdFromWriteSchema = oldSchema.findIdByName(f);
+          // Find columns that share an id but use a different name in the new schema.
+          return newSchema.getAllIds().contains(fieldIdFromWriteSchema)
+              && !newSchema.findFullName(fieldIdFromWriteSchema).equalsIgnoreCase(f);
+        })
+        .collect(Collectors.toMap(
+            e -> newSchema.findFullName(oldSchema.findIdByName(e)),
+            e -> {
+              int lastDotIndex = e.lastIndexOf(".");
+              return e.substring(lastDotIndex == -1 ? 0 : lastDotIndex + 1);
+            }));
   }
 }

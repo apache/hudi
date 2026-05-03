@@ -25,7 +25,6 @@ import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaCompatibility;
 import org.apache.hudi.common.schema.evolution.HoodieSchemaEvolutionUtils;
 import org.apache.hudi.common.schema.evolution.HoodieSchemaHistoryCache;
-import org.apache.hudi.common.schema.evolution.HoodieSchemaInternalSchemaBridge;
 import org.apache.hudi.common.schema.evolution.HoodieSchemaMerger;
 import org.apache.hudi.common.schema.evolution.HoodieSchemaSerDe;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -35,7 +34,6 @@ import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.queue.HoodieExecutor;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.internal.schema.utils.InternalSchemaUtils;
 import org.apache.hudi.io.HoodieWriteMergeHandle;
 import org.apache.hudi.io.storage.HoodieFileReader;
 import org.apache.hudi.io.storage.HoodieIOFactory;
@@ -201,11 +199,7 @@ public class HoodieMergeHelper<T> extends BaseMergeHelper {
       boolean needToReWriteRecord = sameCols.size() != colNamesFromWriteSchema.size() || HoodieSchemaCompatibility.areSchemasCompatible(newWriterSchema,
               writeSchemaFromFile);
       if (needToReWriteRecord) {
-        // Rename-column collection still uses the legacy utility. Bridge at the boundary
-        // until a HoodieSchema-shaped collectRenameCols exists.
-        Map<String, String> renameCols = InternalSchemaUtils.collectRenameCols(
-            HoodieSchemaInternalSchemaBridge.toInternalSchema(writeInternalSchema),
-            HoodieSchemaInternalSchemaBridge.toInternalSchema(querySchema));
+        Map<String, String> renameCols = HoodieSchemaEvolutionUtils.collectRenameCols(writeInternalSchema, querySchema);
         return Option.of(record -> {
           return record.rewriteRecordWithNewSchema(
               recordSchema,
