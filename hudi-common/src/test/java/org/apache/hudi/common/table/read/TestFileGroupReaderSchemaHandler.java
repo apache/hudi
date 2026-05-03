@@ -126,7 +126,10 @@ public class TestFileGroupReaderSchemaHandler extends SchemaHandlerTestBase {
       StoragePath filePath = new StoragePath("/2023-01-01/" + FSUtils.makeBaseFileName(instantTime, "1-0-1", UUID.randomUUID().toString(), HoodieFileFormat.PARQUET.getFileExtension()));
       Pair<HoodieSchema, Map<String, String>> requiredSchemaAndRenamedFields = schemaHandler.getRequiredSchemaForFileAndRenamedColumns(filePath);
       assertEquals(Collections.singletonMap("timestamp", "ts"), requiredSchemaAndRenamedFields.getRight());
-      assertEquals(requestedSchema, requiredSchemaAndRenamedFields.getLeft());
+      // Post-migration the merged schema preserves field-ids via the bridge
+      // round-trip; the assertion still checks the structural shape so we
+      // compare modulo the field-id custom property.
+      assertEquals(requestedSchema, stripFieldIds(requiredSchemaAndRenamedFields.getLeft()));
     }
   }
 
@@ -349,5 +352,14 @@ public class TestFileGroupReaderSchemaHandler extends SchemaHandlerTestBase {
     HoodieSchema actualSchema = schemaHandler.generateRequiredSchema(deleteContext);
 
     assertEquals(expectedSchema, actualSchema);
+  }
+
+  /**
+   * Returns a copy of {@code schema} with all {@code field-id} custom Avro
+   * properties stripped. Lets tests assert structural equality against fixtures
+   * that don't carry field ids without depending on the bridge's id assignment.
+   */
+  private static HoodieSchema stripFieldIds(HoodieSchema schema) {
+    return HoodieSchema.parse(schema.toAvroSchema().toString().replaceAll(",\"field-id\":\\d+", ""));
   }
 }

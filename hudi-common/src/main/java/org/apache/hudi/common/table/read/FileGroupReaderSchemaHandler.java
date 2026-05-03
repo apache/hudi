@@ -28,17 +28,18 @@ import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaCache;
 import org.apache.hudi.common.schema.HoodieSchemaField;
+import org.apache.hudi.common.schema.evolution.HoodieSchemaHistoryCache;
+import org.apache.hudi.common.schema.evolution.HoodieSchemaInternalSchemaBridge;
+import org.apache.hudi.common.schema.evolution.HoodieSchemaMerger;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.read.buffer.PositionBasedFileGroupRecordBuffer;
-import org.apache.hudi.common.util.InternalSchemaCache;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.common.util.collection.Triple;
 import org.apache.hudi.internal.schema.InternalSchema;
-import org.apache.hudi.internal.schema.action.InternalSchemaMerger;
 import org.apache.hudi.internal.schema.convert.InternalSchemaConverter;
 import org.apache.hudi.storage.StoragePath;
 
@@ -136,11 +137,12 @@ public class FileGroupReaderSchemaHandler<T> {
       return Pair.of(requiredSchema, Collections.emptyMap());
     }
     long commitInstantTime = Long.parseLong(FSUtils.getCommitTime(path.getName()));
-    InternalSchema fileSchema = InternalSchemaCache.searchSchemaAndCache(commitInstantTime, metaClient);
-    Pair<InternalSchema, Map<String, String>> mergedInternalSchema = new InternalSchemaMerger(fileSchema, internalSchema,
+    HoodieSchema fileSchema = HoodieSchemaHistoryCache.searchSchemaAndCache(commitInstantTime, metaClient);
+    HoodieSchema currentEvolutionSchema = HoodieSchemaInternalSchemaBridge.toHoodieSchema(internalSchema, requiredSchema.getFullName());
+    Pair<HoodieSchema, Map<String, String>> mergedEvolutionSchema = new HoodieSchemaMerger(fileSchema, currentEvolutionSchema,
         true, false, false).mergeSchemaGetRenamed();
-    HoodieSchema mergedAvroSchema = HoodieSchemaCache.intern(InternalSchemaConverter.convert(mergedInternalSchema.getLeft(), requiredSchema.getFullName()));
-    return Pair.of(mergedAvroSchema, mergedInternalSchema.getRight());
+    HoodieSchema mergedAvroSchema = HoodieSchemaCache.intern(mergedEvolutionSchema.getLeft());
+    return Pair.of(mergedAvroSchema, mergedEvolutionSchema.getRight());
   }
 
   private InternalSchema pruneInternalSchema(HoodieSchema requiredSchema, Option<InternalSchema> internalSchemaOption) {
