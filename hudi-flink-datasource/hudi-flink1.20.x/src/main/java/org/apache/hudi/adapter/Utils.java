@@ -21,7 +21,7 @@ package org.apache.hudi.adapter;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.internal.schema.InternalSchema;
-import org.apache.hudi.internal.schema.Type;
+import org.apache.hudi.common.schema.types.Type;
 import org.apache.hudi.internal.schema.action.InternalSchemaChangeApplier;
 
 import org.apache.flink.configuration.Configuration;

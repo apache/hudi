@@ -18,8 +18,8 @@
 
 package org.apache.hudi.expression;
 
-import org.apache.hudi.internal.schema.Type;
-import org.apache.hudi.internal.schema.Types;
+import org.apache.hudi.common.schema.types.Type;
+import org.apache.hudi.common.schema.types.Types;
 
 /**
  * An expression that returns a Boolean value.

@@ -86,7 +86,7 @@ import org.apache.hudi.exception.HoodieRollbackException;
 import org.apache.hudi.exception.HoodieSavepointException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.internal.schema.InternalSchema;
-import org.apache.hudi.internal.schema.Type;
+import org.apache.hudi.common.schema.types.Type;
 import org.apache.hudi.internal.schema.action.TableChange;
 import org.apache.hudi.internal.schema.convert.InternalSchemaConverter;
 import org.apache.hudi.keygen.constant.KeyGeneratorType;

@@ -22,8 +22,8 @@ import org.apache.hudi.exception.SchemaCompatibilityException;
 import org.apache.hudi.exception.HoodieSchemaException;
 import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.internal.schema.InternalSchemaBuilder;
-import org.apache.hudi.internal.schema.Type;
-import org.apache.hudi.internal.schema.Types;
+import org.apache.hudi.common.schema.types.Type;
+import org.apache.hudi.common.schema.types.Types;
 import org.apache.hudi.internal.schema.utils.SchemaChangeUtils;
 
 import lombok.Getter;

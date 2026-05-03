@@ -224,8 +224,8 @@ class TestTableSchemaResolver {
     insertMetadata.setOperationType(org.apache.hudi.common.model.WriteOperationType.INSERT);
     // Create a valid InternalSchema
     org.apache.hudi.internal.schema.InternalSchema internalSchema = new org.apache.hudi.internal.schema.InternalSchema(
-        org.apache.hudi.internal.schema.Types.RecordType.get(
-            org.apache.hudi.internal.schema.Types.Field.get(0, false, "id", org.apache.hudi.internal.schema.Types.IntType.get())));
+        org.apache.hudi.common.schema.types.Types.RecordType.get(
+            org.apache.hudi.common.schema.types.Types.Field.get(0, false, "id", org.apache.hudi.common.schema.types.Types.IntType.get())));
     insertMetadata.addMetadata(org.apache.hudi.internal.schema.utils.SerDeHelper.LATEST_SCHEMA,
         org.apache.hudi.internal.schema.utils.SerDeHelper.toJson(internalSchema));
 
@@ -307,8 +307,8 @@ class TestTableSchemaResolver {
     insertMetadata1.setOperationType(org.apache.hudi.common.model.WriteOperationType.INSERT);
     // Create a valid InternalSchema
     org.apache.hudi.internal.schema.InternalSchema internalSchema = new org.apache.hudi.internal.schema.InternalSchema(
-        org.apache.hudi.internal.schema.Types.RecordType.get(
-            org.apache.hudi.internal.schema.Types.Field.get(0, false, "id", org.apache.hudi.internal.schema.Types.IntType.get())));
+        org.apache.hudi.common.schema.types.Types.RecordType.get(
+            org.apache.hudi.common.schema.types.Types.Field.get(0, false, "id", org.apache.hudi.common.schema.types.Types.IntType.get())));
     insertMetadata1.addMetadata(org.apache.hudi.internal.schema.utils.SerDeHelper.LATEST_SCHEMA,
         org.apache.hudi.internal.schema.utils.SerDeHelper.toJson(internalSchema));
 

@@ -27,8 +27,8 @@ import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.exception.HoodieNullSchemaTypeException;
 import org.apache.hudi.exception.HoodieSchemaException;
 import org.apache.hudi.internal.schema.InternalSchema;
-import org.apache.hudi.internal.schema.Type;
-import org.apache.hudi.internal.schema.Types;
+import org.apache.hudi.common.schema.types.Type;
+import org.apache.hudi.common.schema.types.Types;
 import org.apache.hudi.internal.schema.utils.InternalSchemaUtils;
 
 import java.util.ArrayList;
@@ -435,7 +435,7 @@ public class InternalSchemaConverter {
    * @param type a hudi type.
    * @param cache use to cache intermediate convert result to save cost.
    * @param recordName auto-generated record name used as a fallback, in case
-   * {@link org.apache.hudi.internal.schema.Types.RecordType} doesn't bear original record-name
+   * {@link org.apache.hudi.common.schema.types.Types.RecordType} doesn't bear original record-name
    * @return a HoodieSchema match this type
    */
   private static HoodieSchema visitInternalSchemaToBuildHoodieSchema(Type type, Map<Type, HoodieSchema> cache, String recordName) {

@@ -16,11 +16,11 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.internal.schema;
+package org.apache.hudi.common.schema.types;
 
 import org.apache.hudi.common.schema.HoodieSchema;
-import org.apache.hudi.internal.schema.Type.NestedType;
-import org.apache.hudi.internal.schema.Type.PrimitiveType;
+import org.apache.hudi.common.schema.types.Type.NestedType;
+import org.apache.hudi.common.schema.types.Type.PrimitiveType;
 
 import lombok.AccessLevel;
 import lombok.Getter;

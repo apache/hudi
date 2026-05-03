@@ -19,7 +19,7 @@
 package org.apache.hudi.internal.schema.action;
 
 import org.apache.hudi.internal.schema.InternalSchema;
-import org.apache.hudi.internal.schema.Type;
+import org.apache.hudi.common.schema.types.Type;
 import org.apache.hudi.internal.schema.utils.SchemaChangeUtils;
 
 import java.util.Arrays;

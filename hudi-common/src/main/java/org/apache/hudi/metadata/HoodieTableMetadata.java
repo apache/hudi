@@ -31,7 +31,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.expression.Expression;
-import org.apache.hudi.internal.schema.Types;
+import org.apache.hudi.common.schema.types.Types;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathFilter;
 import org.apache.hudi.storage.StoragePathInfo;

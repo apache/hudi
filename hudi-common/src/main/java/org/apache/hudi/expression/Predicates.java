@@ -18,7 +18,7 @@
 
 package org.apache.hudi.expression;
 
-import org.apache.hudi.internal.schema.Type;
+import org.apache.hudi.common.schema.types.Type;
 
 import lombok.Getter;
 

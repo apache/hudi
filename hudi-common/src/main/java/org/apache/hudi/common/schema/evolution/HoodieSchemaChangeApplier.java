@@ -20,7 +20,7 @@ package org.apache.hudi.common.schema.evolution;
 
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.internal.schema.InternalSchema;
-import org.apache.hudi.internal.schema.Type;
+import org.apache.hudi.common.schema.types.Type;
 import org.apache.hudi.internal.schema.action.InternalSchemaChangeApplier;
 import org.apache.hudi.internal.schema.convert.InternalSchemaConverter;
 

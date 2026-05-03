@@ -20,9 +20,9 @@ package org.apache.hudi.internal.schema.action;
 
 import org.apache.hudi.exception.HoodieSchemaException;
 import org.apache.hudi.internal.schema.InternalSchema;
-import org.apache.hudi.internal.schema.Type;
-import org.apache.hudi.internal.schema.Types;
-import org.apache.hudi.internal.schema.Types.StringType;
+import org.apache.hudi.common.schema.types.Type;
+import org.apache.hudi.common.schema.types.Types;
+import org.apache.hudi.common.schema.types.Types.StringType;
 import org.apache.hudi.internal.schema.action.TableChange.ColumnPositionChange.ColumnPositionType;
 import org.apache.hudi.internal.schema.utils.SchemaChangeUtils;
 

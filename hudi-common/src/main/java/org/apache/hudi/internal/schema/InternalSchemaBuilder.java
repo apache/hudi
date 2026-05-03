@@ -18,6 +18,8 @@
 
 package org.apache.hudi.internal.schema;
 
+import org.apache.hudi.common.schema.types.Type;
+import org.apache.hudi.common.schema.types.Types;
 import org.apache.hudi.internal.schema.visitor.InternalSchemaVisitor;
 import org.apache.hudi.internal.schema.visitor.NameToIDVisitor;
 import org.apache.hudi.internal.schema.visitor.NameToPositionVisitor;
