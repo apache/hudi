@@ -125,6 +125,20 @@ public class FileGroupReaderSchemaHandler<T> {
     this.metaClient = metaClient;
   }
 
+  /**
+   * HoodieSchema-shaped twin of {@link #getInternalSchemaOpt()}. Returns the same
+   * evolution schema as a {@link HoodieSchema} (with field ids preserved) so callers
+   * don't need to invoke {@link HoodieSchemaInternalSchemaBridge} themselves. Empty
+   * when schema-on-read is disabled or nothing was supplied at construction.
+   */
+  public Option<HoodieSchema> getEvolutionSchemaOpt() {
+    if (!internalSchemaOpt.isPresent() || internalSchemaOpt.get().isEmptySchema()) {
+      return Option.empty();
+    }
+    return Option.of(HoodieSchemaInternalSchemaBridge.toHoodieSchema(
+        internalSchemaOpt.get(), requiredSchema.getFullName()));
+  }
+
   public Option<UnaryOperator<T>> getOutputConverter() {
     if (!areSchemasProjectionEquivalent(requiredSchema, requestedSchema)) {
       return Option.of(readerContext.getRecordContext().projectRecord(requiredSchema, requestedSchema));

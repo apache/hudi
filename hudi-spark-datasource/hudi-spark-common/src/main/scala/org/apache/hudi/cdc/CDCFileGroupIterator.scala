@@ -30,7 +30,6 @@ import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.{FileSlice, HoodieLogFile, HoodieRecordMerger}
 import org.apache.hudi.common.model.HoodieRecordMerger.PAYLOAD_BASED_MERGE_STRATEGY_UUID
 import org.apache.hudi.common.schema.{HoodieSchema, HoodieSchemaUtils}
-import org.apache.hudi.common.schema.evolution.HoodieSchemaInternalSchemaBridge
 import org.apache.hudi.common.serialization.DefaultSerializer
 import org.apache.hudi.common.table.{HoodieTableMetaClient, PartialUpdateMode}
 import org.apache.hudi.common.table.cdc.{HoodieCDCFileSplit, HoodieCDCUtils}
@@ -414,8 +413,8 @@ class CDCFileGroupIterator(split: HoodieCDCFileGroupSplit,
 
           val pf = sparkPartitionedFileUtils.createPartitionedFile(
             InternalRow.empty, absCDCPath, 0, fileStatus.getLength)
-          recordIter = baseFileReader.read(pf, originTableSchema.structTypeSchema, new StructType(),
-            toJavaOption(originTableSchema.evolutionSchema.map(HoodieSchemaInternalSchemaBridge.toInternalSchema)),
+          recordIter = baseFileReader.readWithEvolutionSchema(pf, originTableSchema.structTypeSchema, new StructType(),
+            toJavaOption(originTableSchema.evolutionSchema),
             Seq.empty, conf, tableSchemaOpt)
             .map(record => BufferedRecords.fromEngineRecord(record, schema, readerContext.getRecordContext, orderingFieldNames, false))
         case BASE_FILE_DELETE =>
