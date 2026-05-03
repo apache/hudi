@@ -766,10 +766,14 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
   }
 
   private def pruneInternalSchema(hoodieTableSchema: HoodieTableSchema, prunedStructSchema: StructType): Option[InternalSchema] = {
-    if (hoodieTableSchema.internalSchema.isEmpty || hoodieTableSchema.internalSchema.get.isEmptySchema) {
+    if (hoodieTableSchema.evolutionSchema.isEmpty || hoodieTableSchema.evolutionSchema.get.isEmptySchema) {
       Option.empty[InternalSchema]
     } else {
-      Some(InternalSchemaUtils.pruneInternalSchema(hoodieTableSchema.internalSchema.get,
+      // Read from the HoodieSchema-shaped field, convert at the boundary for the
+      // legacy pruner. Once a HoodieSchema-shaped pruning utility exists this can
+      // return Option[HoodieSchema] directly.
+      val internal = HoodieSchemaInternalSchemaBridge.toInternalSchema(hoodieTableSchema.evolutionSchema.get)
+      Some(InternalSchemaUtils.pruneInternalSchema(internal,
         prunedStructSchema.fields.map(_.name).toList.asJava))
     }
   }

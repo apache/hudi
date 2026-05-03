@@ -26,6 +26,7 @@ import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.HoodieFileFormat
 import org.apache.hudi.common.schema.HoodieSchema
 import org.apache.hudi.common.schema.HoodieSchemaUtils
+import org.apache.hudi.common.schema.evolution.HoodieSchemaInternalSchemaBridge
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, ParquetTableSchemaResolver}
 import org.apache.hudi.common.table.read.HoodieFileGroupReader
 import org.apache.hudi.common.util.{Option => HOption}
@@ -205,10 +206,12 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
     }
   }
 
-  private lazy val internalSchemaOpt: HOption[InternalSchema] = if (tableSchema.internalSchema.isEmpty) {
+  private lazy val internalSchemaOpt: HOption[InternalSchema] = if (tableSchema.evolutionSchema.isEmpty) {
     HOption.empty()
   } else {
-    HOption.of(tableSchema.internalSchema.get)
+    // Read from the HoodieSchema-shaped field; convert at the boundary because the
+    // downstream parquet reader still consumes Option<InternalSchema>.
+    HOption.of(HoodieSchemaInternalSchemaBridge.toInternalSchema(tableSchema.evolutionSchema.get))
   }
 
   override def isSplitable(sparkSession: SparkSession,
