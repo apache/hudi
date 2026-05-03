@@ -25,6 +25,9 @@ import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaCache;
+import org.apache.hudi.common.schema.evolution.HoodieSchemaHistoryCache;
+import org.apache.hudi.common.schema.evolution.HoodieSchemaInternalSchemaBridge;
+import org.apache.hudi.common.schema.evolution.HoodieSchemaMerger;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.PartialUpdateMode;
 import org.apache.hudi.common.table.log.KeySpec;
@@ -39,7 +42,6 @@ import org.apache.hudi.common.table.read.UpdateProcessor;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.DefaultSizeEstimator;
 import org.apache.hudi.io.util.FileIOUtils;
-import org.apache.hudi.common.util.InternalSchemaCache;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.CloseableMappingIterator;
@@ -47,8 +49,6 @@ import org.apache.hudi.common.util.collection.ExternalSpillableMap;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.internal.schema.InternalSchema;
-import org.apache.hudi.internal.schema.action.InternalSchemaMerger;
-import org.apache.hudi.internal.schema.convert.InternalSchemaConverter;
 
 import java.io.IOException;
 import java.io.Serializable;
@@ -223,16 +223,17 @@ abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordBuffer<T
     }
 
     long currentInstantTime = Long.parseLong(dataBlock.getLogBlockHeader().get(INSTANT_TIME));
-    InternalSchema fileSchema = InternalSchemaCache.searchSchemaAndCache(currentInstantTime, hoodieTableMetaClient);
-    Pair<InternalSchema, Map<String, String>> mergedInternalSchema = new InternalSchemaMerger(fileSchema, internalSchema,
+    HoodieSchema fileSchema = HoodieSchemaHistoryCache.searchSchemaAndCache(currentInstantTime, hoodieTableMetaClient);
+    HoodieSchema currentEvolutionSchema = HoodieSchemaInternalSchemaBridge.toHoodieSchema(internalSchema, readerSchema.getFullName());
+    Pair<HoodieSchema, Map<String, String>> mergedEvolutionSchema = new HoodieSchemaMerger(fileSchema, currentEvolutionSchema,
         true, false, false).mergeSchemaGetRenamed();
-    HoodieSchema mergedAvroSchema = HoodieSchema.fromAvroSchema(InternalSchemaConverter.convert(mergedInternalSchema.getLeft(), readerSchema.getFullName()).getAvroSchema());
+    HoodieSchema mergedAvroSchema = mergedEvolutionSchema.getLeft();
     // `mergedAvroSchema` maybe not equal with `readerSchema`, case: drop a column `f_x`, and then add a new column with same name `f_x`,
     // then the new added column in `mergedAvroSchema` will have a suffix: `f_xsuffix`, distinguished from the original column `f_x`, see
     // InternalSchemaMerger#buildRecordType() for details.
     // Delete and add a field with the same name, reads should not return previously inserted datum of dropped field of the same name,
     // so we use `mergedAvroSchema` as the target schema for record projecting.
-    return Option.of(Pair.of(readerContext.getRecordContext().projectRecord(dataBlock.getSchema(), mergedAvroSchema, mergedInternalSchema.getRight()), mergedAvroSchema));
+    return Option.of(Pair.of(readerContext.getRecordContext().projectRecord(dataBlock.getSchema(), mergedAvroSchema, mergedEvolutionSchema.getRight()), mergedAvroSchema));
   }
 
   protected boolean hasNextBaseRecord(T baseRecord, BufferedRecord<T> logRecordInfo) throws IOException {
