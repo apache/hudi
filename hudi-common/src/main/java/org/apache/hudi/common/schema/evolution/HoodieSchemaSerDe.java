@@ -94,6 +94,20 @@ public final class HoodieSchemaSerDe {
   }
 
   /**
+   * Variant of {@link #fromJson(String)} that lets the caller fix the record name
+   * on the resulting HoodieSchema. Equivalent to the legacy
+   * {@code SerDeHelper.fromJson(...).map(is -> InternalSchemaConverter.convert(is, recordName))}
+   * pattern, collapsed into a single call.
+   */
+  public static Option<HoodieSchema> fromJson(String json, String recordName) {
+    Option<InternalSchema> internal = SerDeHelper.fromJson(json);
+    if (!internal.isPresent()) {
+      return Option.empty();
+    }
+    return Option.of(HoodieSchemaInternalSchemaBridge.toHoodieSchema(internal.get(), recordName));
+  }
+
+  /**
    * Parses the history-schemas JSON layout (array of versioned schemas) and
    * returns them keyed by {@code version_id}. Field ids are preserved on each
    * returned HoodieSchema so the resulting map is directly usable by the
