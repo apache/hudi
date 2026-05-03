@@ -135,6 +135,25 @@ public final class HoodieSchemaSerDe {
         HoodieSchemaInternalSchemaBridge.toInternalSchema(newSchema), oldHistoryJson);
   }
 
+  /**
+   * Resolves the schema-history entry that applies to a given version id — exact
+   * match if present, else the largest entry strictly less than {@code versionId},
+   * else {@code null}. HoodieSchema-shaped replacement for
+   * {@link org.apache.hudi.internal.schema.utils.InternalSchemaUtils#searchSchema}.
+   *
+   * <p>Note: legacy returned {@code InternalSchema.getEmptyInternalSchema()} on
+   * miss; this returns {@code null} so callers can choose their own empty
+   * sentinel via {@link HoodieSchema#empty()}. Most callers null-check + fall
+   * back, so the change is benign.</p>
+   */
+  public static HoodieSchema searchSchema(long versionId, java.util.TreeMap<Long, HoodieSchema> history) {
+    if (history.containsKey(versionId)) {
+      return history.get(versionId);
+    }
+    java.util.SortedMap<Long, HoodieSchema> headMap = history.headMap(versionId);
+    return headMap.isEmpty() ? null : headMap.get(headMap.lastKey());
+  }
+
   private static String defaultRecordName(InternalSchema internalSchema) {
     if (internalSchema == null || internalSchema.getRecord() == null) {
       return "hoodieSchema";
