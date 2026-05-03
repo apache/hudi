@@ -50,6 +50,8 @@ import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaIdAssigner;
 import org.apache.hudi.common.schema.HoodieSchemaUtils;
+import org.apache.hudi.common.schema.evolution.ColumnPositionType;
+import org.apache.hudi.common.schema.evolution.HoodieSchemaChangeApplier;
 import org.apache.hudi.common.schema.evolution.HoodieSchemaEvolutionUtils;
 import org.apache.hudi.common.schema.evolution.HoodieSchemaHistoryStorageManager;
 import org.apache.hudi.common.schema.evolution.HoodieSchemaInternalSchemaBridge;
@@ -85,7 +87,6 @@ import org.apache.hudi.exception.HoodieSavepointException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.internal.schema.Type;
-import org.apache.hudi.internal.schema.action.InternalSchemaChangeApplier;
 import org.apache.hudi.internal.schema.action.TableChange;
 import org.apache.hudi.internal.schema.convert.InternalSchemaConverter;
 import org.apache.hudi.keygen.constant.KeyGeneratorType;
@@ -1638,9 +1639,10 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    */
   public void addColumn(String colName, HoodieSchema schema, String doc, String position, TableChange.ColumnPositionChange.ColumnPositionType positionType) {
     Pair<InternalSchema, HoodieTableMetaClient> pair = getInternalSchemaAndMetaClient();
-    InternalSchema newSchema = new InternalSchemaChangeApplier(pair.getLeft())
-        .applyAddChange(colName, InternalSchemaConverter.convertToField(schema), doc, position, positionType);
-    commitTableChange(newSchema, pair.getRight());
+    HoodieSchema current = HoodieSchemaInternalSchemaBridge.toHoodieSchema(pair.getLeft(), schema.getFullName());
+    HoodieSchema evolved = new HoodieSchemaChangeApplier(current)
+        .applyAddChange(colName, schema, doc, position, ColumnPositionType.valueOf(positionType.name()));
+    commitTableChange(HoodieSchemaInternalSchemaBridge.toInternalSchema(evolved), pair.getRight());
   }
 
   public void addColumn(String colName, HoodieSchema schema) {
@@ -1654,8 +1656,9 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    */
   public void deleteColumns(String... colNames) {
     Pair<InternalSchema, HoodieTableMetaClient> pair = getInternalSchemaAndMetaClient();
-    InternalSchema newSchema = new InternalSchemaChangeApplier(pair.getLeft()).applyDeleteChange(colNames);
-    commitTableChange(newSchema, pair.getRight());
+    HoodieSchema current = HoodieSchemaInternalSchemaBridge.toHoodieSchema(pair.getLeft(), config.getTableName());
+    HoodieSchema evolved = new HoodieSchemaChangeApplier(current).applyDeleteChange(colNames);
+    commitTableChange(HoodieSchemaInternalSchemaBridge.toInternalSchema(evolved), pair.getRight());
   }
 
   /**
@@ -1666,8 +1669,9 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    */
   public void renameColumn(String colName, String newName) {
     Pair<InternalSchema, HoodieTableMetaClient> pair = getInternalSchemaAndMetaClient();
-    InternalSchema newSchema = new InternalSchemaChangeApplier(pair.getLeft()).applyRenameChange(colName, newName);
-    commitTableChange(newSchema, pair.getRight());
+    HoodieSchema current = HoodieSchemaInternalSchemaBridge.toHoodieSchema(pair.getLeft(), config.getTableName());
+    HoodieSchema evolved = new HoodieSchemaChangeApplier(current).applyRenameChange(colName, newName);
+    commitTableChange(HoodieSchemaInternalSchemaBridge.toInternalSchema(evolved), pair.getRight());
   }
 
   /**
@@ -1678,8 +1682,9 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    */
   public void updateColumnNullability(String colName, boolean nullable) {
     Pair<InternalSchema, HoodieTableMetaClient> pair = getInternalSchemaAndMetaClient();
-    InternalSchema newSchema = new InternalSchemaChangeApplier(pair.getLeft()).applyColumnNullabilityChange(colName, nullable);
-    commitTableChange(newSchema, pair.getRight());
+    HoodieSchema current = HoodieSchemaInternalSchemaBridge.toHoodieSchema(pair.getLeft(), config.getTableName());
+    HoodieSchema evolved = new HoodieSchemaChangeApplier(current).applyColumnNullabilityChange(colName, nullable);
+    commitTableChange(HoodieSchemaInternalSchemaBridge.toInternalSchema(evolved), pair.getRight());
   }
 
   /**
@@ -1692,8 +1697,12 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    */
   public void updateColumnType(String colName, Type newType) {
     Pair<InternalSchema, HoodieTableMetaClient> pair = getInternalSchemaAndMetaClient();
-    InternalSchema newSchema = new InternalSchemaChangeApplier(pair.getLeft()).applyColumnTypeChange(colName, newType);
-    commitTableChange(newSchema, pair.getRight());
+    HoodieSchema current = HoodieSchemaInternalSchemaBridge.toHoodieSchema(pair.getLeft(), config.getTableName());
+    // Convert legacy Type -> HoodieSchema for the façade. The legacy converter is the
+    // simplest bridge here; once the public API takes HoodieSchema directly, drop this.
+    HoodieSchema newTypeSchema = InternalSchemaConverter.convert(newType, "type");
+    HoodieSchema evolved = new HoodieSchemaChangeApplier(current).applyColumnTypeChange(colName, newTypeSchema);
+    commitTableChange(HoodieSchemaInternalSchemaBridge.toInternalSchema(evolved), pair.getRight());
   }
 
   /**
@@ -1704,8 +1713,9 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    */
   public void updateColumnComment(String colName, String doc) {
     Pair<InternalSchema, HoodieTableMetaClient> pair = getInternalSchemaAndMetaClient();
-    InternalSchema newSchema = new InternalSchemaChangeApplier(pair.getLeft()).applyColumnCommentChange(colName, doc);
-    commitTableChange(newSchema, pair.getRight());
+    HoodieSchema current = HoodieSchemaInternalSchemaBridge.toHoodieSchema(pair.getLeft(), config.getTableName());
+    HoodieSchema evolved = new HoodieSchemaChangeApplier(current).applyColumnCommentChange(colName, doc);
+    commitTableChange(HoodieSchemaInternalSchemaBridge.toInternalSchema(evolved), pair.getRight());
   }
 
   /**
@@ -1721,9 +1731,10 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     }
     //get internalSchema
     Pair<InternalSchema, HoodieTableMetaClient> pair = getInternalSchemaAndMetaClient();
-    InternalSchema newSchema = new InternalSchemaChangeApplier(pair.getLeft())
-        .applyReOrderColPositionChange(colName, referColName, orderType);
-    commitTableChange(newSchema, pair.getRight());
+    HoodieSchema current = HoodieSchemaInternalSchemaBridge.toHoodieSchema(pair.getLeft(), config.getTableName());
+    HoodieSchema evolved = new HoodieSchemaChangeApplier(current)
+        .applyReOrderColPositionChange(colName, referColName, ColumnPositionType.valueOf(orderType.name()));
+    commitTableChange(HoodieSchemaInternalSchemaBridge.toInternalSchema(evolved), pair.getRight());
   }
 
   public Pair<InternalSchema, HoodieTableMetaClient> getInternalSchemaAndMetaClient() {
