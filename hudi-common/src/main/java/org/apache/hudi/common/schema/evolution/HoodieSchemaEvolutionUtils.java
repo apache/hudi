@@ -20,6 +20,7 @@ package org.apache.hudi.common.schema.evolution;
 
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.internal.schema.InternalSchema;
+import org.apache.hudi.internal.schema.convert.InternalSchemaConverter;
 import org.apache.hudi.internal.schema.utils.AvroSchemaEvolutionUtils;
 
 import java.util.List;
@@ -72,6 +73,22 @@ public final class HoodieSchemaEvolutionUtils {
   }
 
   /**
+   * Avro-only sibling of {@link #reconcileSchema(HoodieSchema, HoodieSchema, boolean)}
+   * that does <em>not</em> route through the InternalSchema bridge — field ids are
+   * neither read from the inputs nor stamped on the output. Use this from the
+   * write-path's structural reconciliation (e.g. {@code deduceWriterSchema}) where
+   * carrying ids over from the table's evolution-schema would leak them into
+   * commit metadata and Parquet writes that historically didn't include them.
+   */
+  public static HoodieSchema reconcileSchemaStructural(HoodieSchema incomingSchema,
+                                                       HoodieSchema oldTableSchema,
+                                                       boolean makeMissingFieldsNullable) {
+    org.apache.avro.Schema reconciled = AvroSchemaEvolutionUtils.reconcileSchema(
+        incomingSchema.getAvroSchema(), oldTableSchema.getAvroSchema(), makeMissingFieldsNullable);
+    return HoodieSchema.fromAvroSchema(reconciled);
+  }
+
+  /**
    * Reconciles nullability and type-promotion requirements between a source
    * (incoming) schema and a target (existing) schema, adjusting the source to be
    * in line with the target's nullability and promotable types.
@@ -105,6 +122,17 @@ public final class HoodieSchemaEvolutionUtils {
    * <p>HoodieSchema-shaped replacement for
    * {@link org.apache.hudi.internal.schema.utils.InternalSchemaUtils#collectRenameCols}.</p>
    */
+  /**
+   * Normalizes union ordering so {@code null} sits first within nullable union
+   * branches, matching the ordering Hudi has historically written to disk. Returns
+   * {@code HoodieSchema.NULL_SCHEMA} for a {@code null} input and the schema
+   * unchanged for non-record types. Wraps the legacy
+   * {@code InternalSchemaConverter.fixNullOrdering} during the migration.
+   */
+  public static HoodieSchema fixNullOrdering(HoodieSchema schema) {
+    return InternalSchemaConverter.fixNullOrdering(schema);
+  }
+
   public static Map<String, String> collectRenameCols(HoodieSchema oldSchema, HoodieSchema newSchema) {
     List<String> colNamesFromWriteSchema = oldSchema.getAllColsFullName();
     return colNamesFromWriteSchema.stream()
