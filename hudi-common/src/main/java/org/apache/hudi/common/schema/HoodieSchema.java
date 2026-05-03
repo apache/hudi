@@ -1427,6 +1427,43 @@ public class HoodieSchema implements Serializable {
   }
 
   /**
+   * Returns the {@link HoodieSchema} (the type) of the field/element/key/value at
+   * column id {@code id}, or null if no such id exists. Replaces
+   * {@code InternalSchema.findType(int)}.
+   *
+   * <p>The returned schema is the type schema as it sits inside its parent — for
+   * an optional record field, that's the {@code [null, X]} union; for a map value
+   * type, the value sub-schema; for an array element type, the element sub-schema.
+   * Two HoodieSchemas returned by this method compare equal iff their underlying
+   * Avro schemas compare equal (structural equality).</p>
+   */
+  public HoodieSchema findType(int id) {
+    return index().idToSchema().get(id);
+  }
+
+  /**
+   * Returns the {@link HoodieSchema} of the field at the given dot-separated
+   * full name, or null if no such field exists. Equivalent to
+   * {@code InternalSchema.findType(String)}.
+   */
+  public HoodieSchema findType(String fullName) {
+    int id = findIdByName(fullName);
+    return id < 0 ? null : findType(id);
+  }
+
+  /**
+   * Returns the dot-separated full names of every column in this schema (record
+   * fields, array elements, map keys / values). Replaces
+   * {@code InternalSchema#getAllColsFullName()}.
+   *
+   * <p>Order matches the depth-first traversal order used by {@link HoodieSchemaIndex},
+   * which is the same order InternalSchema produced.</p>
+   */
+  public java.util.List<String> getAllColsFullName() {
+    return new java.util.ArrayList<>(index().nameToId().keySet());
+  }
+
+  /**
    * Returns a mapping from full field name to depth-first traversal position. Used during
    * ingest reconciliation to preserve declared field order. Replaces
    * InternalSchema#getNameToPosition.

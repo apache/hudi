@@ -56,15 +56,18 @@ public final class HoodieSchemaIndex {
   private final Map<Integer, String> idToName;
   private final Map<String, Integer> nameToId;
   private final Map<String, Integer> nameToPosition;
+  private final Map<Integer, HoodieSchema> idToSchema;
   private final int maxColumnIdSeen;
 
   private HoodieSchemaIndex(Map<Integer, String> idToName,
                             Map<String, Integer> nameToId,
                             Map<String, Integer> nameToPosition,
+                            Map<Integer, HoodieSchema> idToSchema,
                             int maxColumnIdSeen) {
     this.idToName = Collections.unmodifiableMap(idToName);
     this.nameToId = Collections.unmodifiableMap(nameToId);
     this.nameToPosition = Collections.unmodifiableMap(nameToPosition);
+    this.idToSchema = Collections.unmodifiableMap(idToSchema);
     this.maxColumnIdSeen = maxColumnIdSeen;
   }
 
@@ -72,11 +75,12 @@ public final class HoodieSchemaIndex {
     Map<Integer, String> idToName = new HashMap<>();
     Map<String, Integer> nameToId = new LinkedHashMap<>();
     Map<String, Integer> nameToPosition = new LinkedHashMap<>();
+    Map<Integer, HoodieSchema> idToSchema = new HashMap<>();
     int[] maxColumnId = {-1};
     int[] position = {0};
     Deque<String> path = new ArrayDeque<>();
-    walk(schema, path, idToName, nameToId, nameToPosition, maxColumnId, position);
-    return new HoodieSchemaIndex(idToName, nameToId, nameToPosition, maxColumnId[0]);
+    walk(schema, path, idToName, nameToId, nameToPosition, idToSchema, maxColumnId, position);
+    return new HoodieSchemaIndex(idToName, nameToId, nameToPosition, idToSchema, maxColumnId[0]);
   }
 
   public Map<Integer, String> idToName() {
@@ -91,6 +95,15 @@ public final class HoodieSchemaIndex {
     return nameToPosition;
   }
 
+  /**
+   * Returns the HoodieSchema (the type) of the field/element/key/value at column id
+   * {@code id}, or null if no such id exists. Equivalent to
+   * {@link org.apache.hudi.internal.schema.InternalSchema#findType(int)}.
+   */
+  public Map<Integer, HoodieSchema> idToSchema() {
+    return idToSchema;
+  }
+
   public int maxColumnIdSeen() {
     return maxColumnIdSeen;
   }
@@ -100,6 +113,7 @@ public final class HoodieSchemaIndex {
                            Map<Integer, String> idToName,
                            Map<String, Integer> nameToId,
                            Map<String, Integer> nameToPosition,
+                           Map<Integer, HoodieSchema> idToSchema,
                            int[] maxColumnId,
                            int[] position) {
     HoodieSchema effective = schema.isNullable() ? schema.getNonNullType() : schema;
@@ -108,10 +122,10 @@ public final class HoodieSchemaIndex {
         for (HoodieSchemaField field : effective.getFields()) {
           int id = readIntProp(field.getAvroField().getObjectProp(FIELD_ID_PROP), -1);
           String fullName = createFullName(field.name(), path);
-          recordEntry(fullName, id, position, nameToId, idToName, nameToPosition, maxColumnId);
+          recordEntry(fullName, id, field.schema(), position, nameToId, idToName, nameToPosition, idToSchema, maxColumnId);
           path.push(field.name());
           try {
-            walk(field.schema(), path, idToName, nameToId, nameToPosition, maxColumnId, position);
+            walk(field.schema(), path, idToName, nameToId, nameToPosition, idToSchema, maxColumnId, position);
           } finally {
             path.pop();
           }
@@ -121,10 +135,10 @@ public final class HoodieSchemaIndex {
         Schema arrAvro = effective.getAvroSchema();
         int elementId = readIntProp(arrAvro.getObjectProp(ELEMENT_ID_PROP), -1);
         String fullName = createFullName(ARRAY_ELEMENT, path);
-        recordEntry(fullName, elementId, position, nameToId, idToName, nameToPosition, maxColumnId);
+        recordEntry(fullName, elementId, effective.getElementType(), position, nameToId, idToName, nameToPosition, idToSchema, maxColumnId);
         path.push(ARRAY_ELEMENT);
         try {
-          walk(effective.getElementType(), path, idToName, nameToId, nameToPosition, maxColumnId, position);
+          walk(effective.getElementType(), path, idToName, nameToId, nameToPosition, idToSchema, maxColumnId, position);
         } finally {
           path.pop();
         }
@@ -136,11 +150,13 @@ public final class HoodieSchemaIndex {
         int valueId = readIntProp(mapAvro.getObjectProp(VALUE_ID_PROP), -1);
         String keyName = createFullName(MAP_KEY, path);
         String valueName = createFullName(MAP_VALUE, path);
-        recordEntry(keyName, keyId, position, nameToId, idToName, nameToPosition, maxColumnId);
-        recordEntry(valueName, valueId, position, nameToId, idToName, nameToPosition, maxColumnId);
+        recordEntry(keyName, keyId, HoodieSchema.create(HoodieSchemaType.STRING),
+            position, nameToId, idToName, nameToPosition, idToSchema, maxColumnId);
+        recordEntry(valueName, valueId, effective.getValueType(),
+            position, nameToId, idToName, nameToPosition, idToSchema, maxColumnId);
         path.push(MAP_VALUE);
         try {
-          walk(effective.getValueType(), path, idToName, nameToId, nameToPosition, maxColumnId, position);
+          walk(effective.getValueType(), path, idToName, nameToId, nameToPosition, idToSchema, maxColumnId, position);
         } finally {
           path.pop();
         }
@@ -153,15 +169,18 @@ public final class HoodieSchemaIndex {
 
   private static void recordEntry(String fullName,
                                   int id,
+                                  HoodieSchema schema,
                                   int[] position,
                                   Map<String, Integer> nameToId,
                                   Map<Integer, String> idToName,
                                   Map<String, Integer> nameToPosition,
+                                  Map<Integer, HoodieSchema> idToSchema,
                                   int[] maxColumnId) {
     nameToPosition.put(fullName, position[0]++);
     if (id >= 0) {
       nameToId.put(fullName, id);
       idToName.put(id, fullName);
+      idToSchema.put(id, schema);
       if (id > maxColumnId[0]) {
         maxColumnId[0] = id;
       }

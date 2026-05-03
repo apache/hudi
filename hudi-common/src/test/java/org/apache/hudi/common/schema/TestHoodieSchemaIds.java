@@ -198,4 +198,33 @@ public class TestHoodieSchemaIds {
     assertTrue(schema.getAllIds().isEmpty());
     assertTrue(schema.getNameToPosition().isEmpty());
   }
+
+  @Test
+  public void findTypeAndGetAllColsFullName() {
+    HoodieSchema schema = buildNestedRecord();
+    HoodieSchemaIdAssigner.assign(schema, 0);
+    schema.invalidateIdIndex();
+
+    // findType by id resolves to the schema sitting at that addressable position.
+    // For record fields it's the field's schema (potentially nullable), so equality
+    // is structural via Avro.
+    assertEquals(HoodieSchema.create(HoodieSchemaType.INT), schema.findType(0)); // a
+    assertEquals(HoodieSchema.create(HoodieSchemaType.INT), schema.findType(2)); // nested.x
+    assertEquals(HoodieSchema.create(HoodieSchemaType.STRING), schema.findType(3)); // nested.y
+
+    // Same lookup via full name.
+    assertEquals(HoodieSchema.create(HoodieSchemaType.STRING), schema.findType("nested.y"));
+
+    // Unknown id / name return null.
+    assertEquals(null, schema.findType(99));
+    assertEquals(null, schema.findType("does.not.exist"));
+
+    // getAllColsFullName covers every addressable position.
+    java.util.List<String> names = schema.getAllColsFullName();
+    assertTrue(names.contains("a"));
+    assertTrue(names.contains("nested"));
+    assertTrue(names.contains("nested.x"));
+    assertTrue(names.contains("nested.y"));
+    assertEquals(4, names.size());
+  }
 }
