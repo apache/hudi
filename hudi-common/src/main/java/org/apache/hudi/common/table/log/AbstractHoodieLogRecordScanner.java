@@ -26,6 +26,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.evolution.HoodieSchemaInternalSchemaBridge;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
@@ -710,6 +711,18 @@ public abstract class AbstractHoodieLogRecordScanner {
     public abstract Builder withReaderSchema(HoodieSchema schema);
 
     public abstract Builder withInternalSchema(InternalSchema internalSchema);
+
+    /**
+     * HoodieSchema-shaped twin of {@link #withInternalSchema(InternalSchema)}. Default
+     * implementation bridges via {@link HoodieSchemaInternalSchemaBridge} so subclasses
+     * don't need to override; once Phase 5 rewrites the scanner on pure HoodieSchema
+     * the legacy method goes away.
+     */
+    public Builder withEvolutionSchema(HoodieSchema evolutionSchema) {
+      return withInternalSchema(evolutionSchema == null
+          ? null
+          : HoodieSchemaInternalSchemaBridge.toInternalSchema(evolutionSchema));
+    }
 
     public abstract Builder withLatestInstantTime(String latestInstantTime);
 
