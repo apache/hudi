@@ -28,6 +28,7 @@ import org.apache.hudi.common.model.HoodieAvroRecordMerger;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.evolution.HoodieSchemaInternalSchemaBridge;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner;
 import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.table.read.BufferedRecords;
@@ -39,7 +40,6 @@ import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.hadoop.utils.HiveAvroSerializer;
 import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils;
 import org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils;
-import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.storage.HoodieStorageUtils;
 
 import org.apache.avro.generic.GenericRecord;
@@ -113,7 +113,9 @@ public class RealtimeCompactedRecordReader extends AbstractRealtimeRecordReader
         .withDiskMapType(jobConf.getEnum(HoodieCommonConfig.SPILLABLE_DISK_MAP_TYPE.key(), HoodieCommonConfig.SPILLABLE_DISK_MAP_TYPE.defaultValue()))
         .withBitCaskDiskMapCompressionEnabled(jobConf.getBoolean(HoodieCommonConfig.DISK_MAP_BITCASK_COMPRESSION_ENABLED.key(),
             HoodieCommonConfig.DISK_MAP_BITCASK_COMPRESSION_ENABLED.defaultValue()))
-        .withInternalSchema(schemaEvolutionContext.internalSchemaOption.orElse(InternalSchema.getEmptyInternalSchema()))
+        .withEvolutionSchema(schemaEvolutionContext.internalSchemaOption.isPresent()
+            ? HoodieSchemaInternalSchemaBridge.toHoodieSchema(schemaEvolutionContext.internalSchemaOption.get(), "schema")
+            : HoodieSchema.empty())
         .build();
   }
 
