@@ -1745,12 +1745,13 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
 
   public void commitTableChange(InternalSchema newSchema, HoodieTableMetaClient metaClient) {
     TableSchemaResolver schemaUtil = new TableSchemaResolver(metaClient);
+    HoodieSchema newEvolutionSchema = HoodieSchemaInternalSchemaBridge.toHoodieSchema(
+        newSchema, HoodieSchemaUtils.getRecordQualifiedName(config.getTableName()));
     String historySchemaStr = schemaUtil.getTableHistorySchemaStrFromCommitMetadata().orElseGet(
-        () -> SerDeHelper.inheritSchemas(getInternalSchema(schemaUtil), ""));
-    HoodieSchema schema = InternalSchemaConverter.convert(newSchema, HoodieSchemaUtils.getRecordQualifiedName(config.getTableName()));
+        () -> HoodieSchemaSerDe.inheritHistory(getEvolutionSchema(schemaUtil), ""));
     String commitActionType = CommitUtils.getCommitActionType(WriteOperationType.ALTER_SCHEMA, metaClient.getTableType());
     String instantTime = startCommit(commitActionType, metaClient);
-    config.setSchema(schema.toString());
+    config.setSchema(newEvolutionSchema.toString());
     HoodieActiveTimeline timeLine = metaClient.getActiveTimeline();
     HoodieInstant requested = metaClient.createNewInstant(State.REQUESTED, commitActionType, instantTime);
     HoodieCommitMetadata metadata = new HoodieCommitMetadata();
@@ -1760,11 +1761,12 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     } catch (HoodieIOException io) {
       throw new HoodieCommitException("Failed to commit " + instantTime + " unable to save inflight metadata ", io);
     }
+    newEvolutionSchema.setSchemaId(Long.parseLong(instantTime));
     Map<String, String> extraMeta = new HashMap<>();
-    extraMeta.put(SerDeHelper.LATEST_SCHEMA, SerDeHelper.toJson(newSchema.setSchemaId(Long.parseLong(instantTime))));
+    extraMeta.put(HoodieSchemaSerDe.LATEST_SCHEMA, HoodieSchemaSerDe.toJson(newEvolutionSchema));
     // try to save history schemas
-    FileBasedInternalSchemaStorageManager schemasManager = new FileBasedInternalSchemaStorageManager(metaClient);
-    schemasManager.persistHistorySchemaStr(instantTime, SerDeHelper.inheritSchemas(newSchema, historySchemaStr));
+    HoodieSchemaHistoryStorageManager schemasManager = new HoodieSchemaHistoryStorageManager(metaClient);
+    schemasManager.persistHistorySchemaStr(instantTime, HoodieSchemaSerDe.inheritHistory(newEvolutionSchema, historySchemaStr));
     commitStats(instantTime, Collections.emptyList(), Option.of(extraMeta), commitActionType);
   }
 
@@ -1772,6 +1774,25 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     return schemaUtil.getTableInternalSchemaFromCommitMetadata().orElseGet(() -> {
       try {
         return InternalSchemaConverter.convert(schemaUtil.getTableSchema());
+      } catch (Exception e) {
+        throw new HoodieException(String.format("cannot find schema for current table: %s", config.getBasePath()));
+      }
+    });
+  }
+
+  /**
+   * HoodieSchema-shaped twin of {@link #getInternalSchema}: returns the table's
+   * evolution schema, or assigns fresh ids to the table's data schema as a fallback.
+   * Mirrors the legacy fall-through path through {@code InternalSchemaConverter.convert}
+   * which mints fresh ids when no evolution schema exists.
+   */
+  private HoodieSchema getEvolutionSchema(TableSchemaResolver schemaUtil) {
+    return schemaUtil.getTableEvolutionSchemaFromCommitMetadata().orElseGet(() -> {
+      try {
+        HoodieSchema fresh = HoodieSchema.fromAvroSchema(schemaUtil.getTableSchema().toAvroSchema());
+        HoodieSchemaIdAssigner.assignFresh(fresh);
+        fresh.invalidateIdIndex();
+        return fresh;
       } catch (Exception e) {
         throw new HoodieException(String.format("cannot find schema for current table: %s", config.getBasePath()));
       }
