@@ -37,6 +37,7 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaUtils;
+import org.apache.hudi.common.schema.evolution.HoodieSchemaSerDe;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.read.HoodieFileGroupReader;
@@ -55,8 +56,6 @@ import org.apache.hudi.execution.bulkinsert.RDDCustomColumnsSortPartitioner;
 import org.apache.hudi.execution.bulkinsert.RDDSpatialCurveSortPartitioner;
 import org.apache.hudi.execution.bulkinsert.RowCustomColumnsSortPartitioner;
 import org.apache.hudi.execution.bulkinsert.RowSpatialCurveSortPartitioner;
-import org.apache.hudi.internal.schema.InternalSchema;
-import org.apache.hudi.internal.schema.utils.SerDeHelper;
 import org.apache.hudi.io.IOUtils;
 import org.apache.hudi.table.BulkInsertPartitioner;
 import org.apache.hudi.table.HoodieTable;
@@ -312,10 +311,10 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
       public Iterator<InternalRow> call(ClusteringOperation clusteringOperation) throws Exception {
         FileSlice fileSlice = clusteringOperationToFileSlice(basePath, clusteringOperation);
         // instantiate other supporting cast
-        Option<InternalSchema> internalSchemaOption = SerDeHelper.fromJson(internalSchemaStr);
+        Option<HoodieSchema> evolutionSchemaOption = HoodieSchemaSerDe.fromJson(internalSchemaStr);
 
         // instantiate FG reader
-        HoodieFileGroupReader<InternalRow> fileGroupReader = getFileGroupReader(metaClient, fileSlice, tableSchemaWithMetaFields, internalSchemaOption,
+        HoodieFileGroupReader<InternalRow> fileGroupReader = getFileGroupReader(metaClient, fileSlice, tableSchemaWithMetaFields, evolutionSchemaOption,
             readerContextFactory, instantTime, readerProperties, usePosition);
         // read records from the FG reader
         return CloseableIteratorListener.addListener(fileGroupReader.getClosableIterator());
