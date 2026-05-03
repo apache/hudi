@@ -43,7 +43,6 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.OrderingValues;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
 import org.apache.hudi.exception.HoodieIOException;
-import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 
@@ -108,13 +107,13 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordScanner
                                          boolean isBitCaskDiskMapCompressionEnabled,
                                          boolean withOperationField, boolean forceFullScan,
                                          Option<String> partitionName,
-                                         InternalSchema internalSchema,
+                                         HoodieSchema evolutionSchema,
                                          Option<String> keyFieldOverride,
                                          HoodieRecordMerger recordMerger,
                                          Option<HoodieTableMetaClient> hoodieTableMetaClientOption,
                                          boolean allowInflightInstants) {
     super(storage, basePath, logFilePaths, readerSchema, latestInstantTime, reverseReader, bufferSize,
-        instantRange, withOperationField, forceFullScan, partitionName, internalSchema, keyFieldOverride, recordMerger,
+        instantRange, withOperationField, forceFullScan, partitionName, evolutionSchema, keyFieldOverride, recordMerger,
         hoodieTableMetaClientOption);
     try {
       this.maxMemorySizeInBytes = maxMemorySizeInBytes;
@@ -342,7 +341,7 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordScanner
     private String basePath;
     private List<String> logFilePaths;
     private HoodieSchema readerSchema;
-    private InternalSchema internalSchema = InternalSchema.getEmptyInternalSchema();
+    private HoodieSchema evolutionSchema = HoodieSchema.empty();
     private String latestInstantTime;
     private boolean reverseReader;
     private int bufferSize;
@@ -440,8 +439,8 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordScanner
     }
 
     @Override
-    public Builder withInternalSchema(InternalSchema internalSchema) {
-      this.internalSchema = internalSchema;
+    public Builder withEvolutionSchema(HoodieSchema evolutionSchema) {
+      this.evolutionSchema = evolutionSchema;
       return this;
     }
 
@@ -495,7 +494,7 @@ public class HoodieMergedLogRecordScanner extends AbstractHoodieLogRecordScanner
           latestInstantTime, maxMemorySizeInBytes, reverseReader,
           bufferSize, spillableMapBasePath, instantRange,
           diskMapType, isBitCaskDiskMapCompressionEnabled, withOperationField, forceFullScan,
-          Option.ofNullable(partitionName), internalSchema, Option.ofNullable(keyFieldOverride), recordMerger,
+          Option.ofNullable(partitionName), evolutionSchema, Option.ofNullable(keyFieldOverride), recordMerger,
           Option.ofNullable(hoodieTableMetaClient), allowInflightInstants);
     }
   }

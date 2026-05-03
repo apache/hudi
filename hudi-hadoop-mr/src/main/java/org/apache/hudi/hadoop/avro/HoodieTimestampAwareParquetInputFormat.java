@@ -20,7 +20,6 @@ package org.apache.hudi.hadoop.avro;
 
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.internal.schema.InternalSchema;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.io.ArrayWritable;
@@ -37,12 +36,12 @@ import java.io.IOException;
  * we need to handle timestamp types separately based on the parquet-avro approach.
  */
 public class HoodieTimestampAwareParquetInputFormat extends ParquetInputFormat<ArrayWritable> {
-  private final Option<InternalSchema> internalSchemaOption;
+  private final Option<HoodieSchema> evolutionSchemaOption;
   private final Option<HoodieSchema> dataSchema;
 
-  public HoodieTimestampAwareParquetInputFormat(Option<InternalSchema> internalSchemaOption, Option<HoodieSchema> dataSchema) {
+  public HoodieTimestampAwareParquetInputFormat(Option<HoodieSchema> evolutionSchemaOption, Option<HoodieSchema> dataSchema) {
     super();
-    this.internalSchemaOption = internalSchemaOption;
+    this.evolutionSchemaOption = evolutionSchemaOption;
     this.dataSchema = dataSchema;
   }
 
@@ -51,6 +50,6 @@ public class HoodieTimestampAwareParquetInputFormat extends ParquetInputFormat<A
       InputSplit inputSplit,
       TaskAttemptContext taskAttemptContext) throws IOException {
     Configuration conf = ContextUtil.getConfiguration(taskAttemptContext);
-    return new HoodieAvroParquetReader(inputSplit, conf, internalSchemaOption, dataSchema);
+    return new HoodieAvroParquetReader(inputSplit, conf, evolutionSchemaOption, dataSchema);
   }
 }

@@ -21,6 +21,7 @@ package org.apache.hudi.hadoop;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaField;
+import org.apache.hudi.common.schema.evolution.HoodieSchemaInternalSchemaBridge;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.util.InternalSchemaCache;
@@ -97,6 +98,18 @@ public class SchemaEvolutionContext {
   private final JobConf job;
   private final HoodieTableMetaClient metaClient;
   public Option<InternalSchema> internalSchemaOption;
+
+  /**
+   * HoodieSchema-shaped view of {@link #internalSchemaOption}, materialised lazily via
+   * {@link HoodieSchemaInternalSchemaBridge}. Callers that don't need the legacy
+   * {@code Types.*} algebra should consume this instead.
+   */
+  public Option<HoodieSchema> getEvolutionSchemaOption(String recordName) {
+    if (internalSchemaOption == null || !internalSchemaOption.isPresent()) {
+      return Option.empty();
+    }
+    return Option.of(HoodieSchemaInternalSchemaBridge.toHoodieSchema(internalSchemaOption.get(), recordName));
+  }
 
   public SchemaEvolutionContext(InputSplit split, JobConf job) throws IOException {
     this(split, job, Option.empty());
