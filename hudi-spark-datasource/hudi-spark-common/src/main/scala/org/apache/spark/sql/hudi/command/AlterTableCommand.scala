@@ -27,7 +27,7 @@ import org.apache.hudi.common.util.{CommitUtils, Option}
 import org.apache.hudi.config.{HoodieArchivalConfig, HoodieCleanConfig}
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.internal.schema.InternalSchema
-import org.apache.hudi.internal.schema.action.TableChange.ColumnChangeID
+import org.apache.hudi.common.schema.evolution.ColumnChangeID
 import org.apache.hudi.internal.schema.action.TableChanges
 import org.apache.hudi.internal.schema.convert.InternalSchemaConverter
 import org.apache.hudi.internal.schema.io.FileBasedInternalSchemaStorageManager
