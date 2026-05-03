@@ -220,7 +220,8 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
     // This will enable us to take advantage of spark's file splitting capability.
     // For overly large single files, we can use multiple concurrent tasks to read them, thereby reducing the overall job reading time consumption
     val superSplitable = super.isSplitable(sparkSession, options, path)
-    val splitable = !isMOR && !isIncremental && !isBootstrap && superSplitable
+    val isLance = hoodieFileFormat == HoodieFileFormat.LANCE
+    val splitable = !isMOR && !isIncremental && !isBootstrap && !isLance && superSplitable
     logInfo(s"isSplitable: $splitable, super.isSplitable: $superSplitable, isMOR: $isMOR, isIncremental: $isIncremental, isBootstrap: $isBootstrap")
     splitable
   }

@@ -112,6 +112,7 @@ class TestLanceDataSource extends HoodieSparkClientTestBase {
 
     val actual = readDf.select("id", "name", "age", "score")
 
+    assertEquals(expectedDf.collect().length, actual.collect().length, "Row count mismatch - possible duplicates")
     assertTrue(expectedDf.except(actual).isEmpty)
     assertTrue(actual.except(expectedDf).isEmpty)
   }
@@ -1447,6 +1448,29 @@ class TestLanceDataSource extends HoodieSparkClientTestBase {
             s"Lance field $fieldName in $path should be FixedSizeList but was $other")
       }
     }
+  }
+
+  @ParameterizedTest
+  @EnumSource(value = classOf[HoodieTableType])
+  def testLanceReadNoDuplicateRows(tableType: HoodieTableType): Unit = {
+    val tableName = s"test_lance_no_dup_${tableType.name().toLowerCase}"
+    val tablePath = s"$basePath/$tableName"
+
+    val records = (1 to 100).map(i => (i, s"name_$i", 20 + i, i * 1.1))
+    val inputDf = createDataFrame(records)
+
+    writeDataframe(tableType, tableName, tablePath, inputDf, saveMode = SaveMode.Overwrite)
+
+    val readDf = spark.read.format("hudi").load(tablePath)
+    val actual = readDf.select("id", "name", "age", "score")
+    // Use collect().length instead of count() — Spark's count optimization pushes down an
+    // empty schema which SparkLanceReaderBase short-circuits to Iterator.empty (separate bug).
+    val total = actual.collect().length
+    val distinct = actual.select("id").distinct().count()
+    assertEquals(100, total, "Lance read should not produce duplicate rows")
+    assertEquals(100, distinct, "All record keys should be unique")
+    assertTrue(inputDf.except(actual).isEmpty)
+    assertTrue(actual.except(inputDf).isEmpty)
   }
 
   private def createDataFrame(records: Seq[(Int, String, Int, Double)]) = {
