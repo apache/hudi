@@ -21,17 +21,16 @@ import org.apache.hudi.{DataSourceUtils, HoodieWriterUtils}
 import org.apache.hudi.client.utils.SparkInternalSchemaConverter
 import org.apache.hudi.common.model.{HoodieCommitMetadata, HoodieFailedWritesCleaningPolicy, WriteOperationType}
 import org.apache.hudi.common.schema.{HoodieSchema, HoodieSchemaUtils}
+import org.apache.hudi.common.schema.evolution.{ColumnChangeID, HoodieSchemaHistoryStorageManager, HoodieSchemaInternalSchemaBridge, HoodieSchemaSerDe}
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.table.timeline.HoodieInstant.State
 import org.apache.hudi.common.util.{CommitUtils, Option}
 import org.apache.hudi.config.{HoodieArchivalConfig, HoodieCleanConfig}
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.internal.schema.InternalSchema
-import org.apache.hudi.common.schema.evolution.ColumnChangeID
 import org.apache.hudi.internal.schema.action.TableChanges
 import org.apache.hudi.internal.schema.convert.InternalSchemaConverter
-import org.apache.hudi.internal.schema.io.FileBasedInternalSchemaStorageManager
-import org.apache.hudi.internal.schema.utils.{SchemaChangeUtils, SerDeHelper}
+import org.apache.hudi.internal.schema.utils.SchemaChangeUtils
 import org.apache.hudi.table.HoodieSparkTable
 
 import org.apache.hadoop.conf.Configuration
@@ -75,7 +74,7 @@ case class AlterTableCommand(table: CatalogTable, changes: Seq[TableChange], cha
     val (oldSchema, historySchema) = getInternalSchemaAndHistorySchemaStr(sparkSession)
     val newSchema = applyAddAction2Schema(sparkSession, applyDeleteAction2Schema(sparkSession, oldSchema, deleteChanges), addChanges)
     val verifiedHistorySchema = if (historySchema == null || historySchema.isEmpty) {
-      SerDeHelper.inheritSchemas(oldSchema, "")
+      HoodieSchemaSerDe.inheritHistory(HoodieSchemaInternalSchemaBridge.toHoodieSchema(oldSchema, "schema"), "")
     } else {
       historySchema
     }
@@ -122,7 +121,7 @@ case class AlterTableCommand(table: CatalogTable, changes: Seq[TableChange], cha
     val (oldSchema, historySchema) = getInternalSchemaAndHistorySchemaStr(sparkSession)
     val newSchema = applyAddAction2Schema(sparkSession, oldSchema, changes.map(_.asInstanceOf[AddColumn]))
     val verifiedHistorySchema = if (historySchema == null || historySchema.isEmpty) {
-      SerDeHelper.inheritSchemas(oldSchema, "")
+      HoodieSchemaSerDe.inheritHistory(HoodieSchemaInternalSchemaBridge.toHoodieSchema(oldSchema, "schema"), "")
     } else {
       historySchema
     }
@@ -134,7 +133,7 @@ case class AlterTableCommand(table: CatalogTable, changes: Seq[TableChange], cha
     val (oldSchema, historySchema) = getInternalSchemaAndHistorySchemaStr(sparkSession)
     val newSchema = applyDeleteAction2Schema(sparkSession, oldSchema, changes.map(_.asInstanceOf[DeleteColumn]))
     val verifiedHistorySchema = if (historySchema == null || historySchema.isEmpty) {
-      SerDeHelper.inheritSchemas(oldSchema, "")
+      HoodieSchemaSerDe.inheritHistory(HoodieSchemaInternalSchemaBridge.toHoodieSchema(oldSchema, "schema"), "")
     } else {
       historySchema
     }
@@ -173,7 +172,7 @@ case class AlterTableCommand(table: CatalogTable, changes: Seq[TableChange], cha
     }
     val newSchema = SchemaChangeUtils.applyTableChanges2Schema(oldSchema, updateChange)
     val verifiedHistorySchema = if (historySchema == null || historySchema.isEmpty) {
-      SerDeHelper.inheritSchemas(oldSchema, "")
+      HoodieSchemaSerDe.inheritHistory(HoodieSchemaInternalSchemaBridge.toHoodieSchema(oldSchema, "schema"), "")
     } else {
       historySchema
     }
@@ -250,7 +249,9 @@ object AlterTableCommand extends Logging {
     * @param sparkSession The spark session.
     */
   def commitWithSchema(internalSchema: InternalSchema, historySchemaStr: String, table: CatalogTable, sparkSession: SparkSession): Unit = {
-    val schema = InternalSchemaConverter.convert(internalSchema, HoodieSchemaUtils.getRecordQualifiedName(table.identifier.table))
+    val evolutionSchema = HoodieSchemaInternalSchemaBridge.toHoodieSchema(
+      internalSchema, HoodieSchemaUtils.getRecordQualifiedName(table.identifier.table))
+    val schema = evolutionSchema
     val path = getTableLocation(table, sparkSession)
     val jsc = new JavaSparkContext(sparkSession.sparkContext)
     val client = DataSourceUtils.createHoodieClient(
@@ -285,9 +286,10 @@ object AlterTableCommand extends Logging {
     metadata.setOperationType(WriteOperationType.ALTER_SCHEMA)
     timeLine.transitionRequestedToInflight(requested, Option.of(metadata))
     val extraMeta = new util.HashMap[String, String]()
-    extraMeta.put(SerDeHelper.LATEST_SCHEMA, SerDeHelper.toJson(internalSchema.setSchemaId(instantTime.toLong)))
-    val schemaManager = new FileBasedInternalSchemaStorageManager(metaClient)
-    schemaManager.persistHistorySchemaStr(instantTime, SerDeHelper.inheritSchemas(internalSchema, historySchemaStr))
+    evolutionSchema.setSchemaId(instantTime.toLong)
+    extraMeta.put(HoodieSchemaSerDe.LATEST_SCHEMA, HoodieSchemaSerDe.toJson(evolutionSchema))
+    val schemaManager = new HoodieSchemaHistoryStorageManager(metaClient)
+    schemaManager.persistHistorySchemaStr(instantTime, HoodieSchemaSerDe.inheritHistory(evolutionSchema, historySchemaStr))
     client.commit(instantTime, jsc.emptyRDD, Option.of(extraMeta))
     val existRoTable = sparkSession.catalog.tableExists(table.identifier.unquotedString + "_ro")
     val existRtTable = sparkSession.catalog.tableExists(table.identifier.unquotedString + "_rt")
