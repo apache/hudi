@@ -52,6 +52,7 @@ import org.apache.hudi.common.model.debezium.MySqlDebeziumAvroPayload;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaCompatibility;
 import org.apache.hudi.common.schema.HoodieSchemaType;
+import org.apache.hudi.common.schema.evolution.HoodieSchemaInternalSchemaBridge;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
@@ -801,9 +802,13 @@ public class StreamSync implements Serializable, Closeable {
   @VisibleForTesting
   SchemaProvider getDeducedSchemaProvider(HoodieSchema incomingSchema, SchemaProvider sourceSchemaProvider, HoodieTableMetaClient metaClient) {
     Option<HoodieSchema> latestTableSchemaOpt = UtilHelpers.getLatestTableSchema(hoodieSparkContext.jsc(), storage, cfg.targetBasePath, metaClient);
+    // Use the new HoodieSchema-shaped evolution method, then bridge to InternalSchema
+    // for deduceWriterSchema which still consumes Option<InternalSchema>. Once
+    // deduceWriterSchema's signature migrates, the bridge call goes away.
     Option<InternalSchema> internalSchemaOpt = HoodieConversionUtils.toJavaOption(
-        HoodieSchemaUtils.getLatestTableInternalSchema(
-            HoodieStreamer.Config.getProps(conf, cfg), metaClient));
+        HoodieSchemaUtils.getLatestTableEvolutionSchema(
+            HoodieStreamer.Config.getProps(conf, cfg), metaClient))
+        .map(HoodieSchemaInternalSchemaBridge::toInternalSchema);
     // Deduce proper target (writer's) schema for the input dataset, reconciling its
     // schema w/ the table's one
 
