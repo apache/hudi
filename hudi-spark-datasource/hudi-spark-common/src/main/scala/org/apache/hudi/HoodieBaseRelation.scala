@@ -75,18 +75,12 @@ import scala.util.{Failure, Success, Try}
 trait HoodieFileSplit {}
 
 /**
- * Carrier for the schemas a Hudi relation needs at read time.
- *
- * <p>The {@code internalSchema} field is the legacy schema-on-read evolution
- * representation; {@code evolutionSchema} is its HoodieSchema-shaped equivalent
- * carrying the same field ids and version metadata. Both are populated from the
- * same source during the migration so consumers can swap one at a time. Once all
- * readers have migrated to {@code evolutionSchema}, the legacy field is removed
- * (Phase 5).</p>
+ * Carrier for the schemas a Hudi relation needs at read time. The
+ * {@code evolutionSchema} field carries schema-on-read field ids and version
+ * metadata when schema evolution is enabled.
  */
 case class HoodieTableSchema(structTypeSchema: StructType,
                              schema: HoodieSchema,
-                             internalSchema: Option[InternalSchema] = None,
                              evolutionSchema: Option[HoodieSchema] = None)
 
 case class HoodieTableState(tablePath: String,
@@ -381,9 +375,9 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
 
     val fileSplits = collectFileSplits(partitionFilters, dataFilters)
 
-    val schema = HoodieTableSchema(tableStructSchema, tableSchema, internalSchemaOpt, toEvolutionSchema(internalSchemaOpt))
+    val schema = HoodieTableSchema(tableStructSchema, tableSchema, toEvolutionSchema(internalSchemaOpt))
     val requiredSchema = HoodieTableSchema(requiredStructSchema, requiredProjectedSchema,
-      Some(requiredInternalSchema), toEvolutionSchema(Some(requiredInternalSchema)))
+      toEvolutionSchema(Some(requiredInternalSchema)))
 
     if (fileSplits.isEmpty) {
       sparkSession.sparkContext.emptyRDD
@@ -755,10 +749,10 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
 
       (partitionSchema,
         HoodieTableSchema(prunedDataStructSchema,
-          convertToHoodieSchema(prunedDataStructSchema, tableName), prunedDataInternalSchema,
+          convertToHoodieSchema(prunedDataStructSchema, tableName),
           toEvolutionSchema(prunedDataInternalSchema)),
         HoodieTableSchema(prunedRequiredStructSchema,
-          convertToHoodieSchema(prunedRequiredStructSchema, tableName), prunedRequiredInternalSchema,
+          convertToHoodieSchema(prunedRequiredStructSchema, tableName),
           toEvolutionSchema(prunedRequiredInternalSchema)))
     } else {
       (StructType(Nil), tableSchema, requiredSchema)

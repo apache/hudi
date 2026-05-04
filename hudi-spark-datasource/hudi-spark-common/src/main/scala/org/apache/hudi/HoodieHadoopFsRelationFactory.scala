@@ -239,7 +239,7 @@ abstract class HoodieBaseHadoopFsRelationFactory(val sqlContext: SQLContext,
   override def buildFileFormat(): FileFormat = {
     val tableConfig = metaClient.getTableConfig
     new HoodieFileGroupReaderBasedFileFormat(basePath.toString,
-      HoodieTableSchema(tableStructSchema, tableSchema, internalSchemaOpt,
+      HoodieTableSchema(tableStructSchema, tableSchema,
         internalSchemaOpt.map(is => HoodieSchemaInternalSchemaBridge.toHoodieSchema(is, tableConfig.getTableName))),
       tableConfig.getTableName, queryTimestamp.get, getMandatoryFields, isMOR, isBootstrap,
       isIncremental, validCommits, shouldUseRecordPosition, getRequiredFilters,

@@ -20,7 +20,6 @@ package org.apache.hudi.cdc
 
 import org.apache.hudi.HoodieTableSchema
 import org.apache.hudi.common.schema.HoodieSchema
-import org.apache.hudi.internal.schema.InternalSchema
 
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.util.{ArrayBasedMapData, ArrayData}
@@ -176,13 +175,13 @@ class TestInternalRowToJsonStringConverter {
         |{"name": "uuid", "type": "int"},
         |{"name": "name", "type": "string"}
         |]}""".stripMargin
-    HoodieTableSchema(structTypeSchema, HoodieSchema.parse(avroSchemaStr), Option.empty[InternalSchema])
+    HoodieTableSchema(structTypeSchema, HoodieSchema.parse(avroSchemaStr))
   }
 
   private def emptyHoodieTableSchema: HoodieTableSchema = {
     val structTypeSchema = new StructType()
     val avroSchemaStr = """{"type": "record", "name": "test", "fields": []}"""
-    HoodieTableSchema(structTypeSchema, HoodieSchema.parse(avroSchemaStr), Option.empty[InternalSchema])
+    HoodieTableSchema(structTypeSchema, HoodieSchema.parse(avroSchemaStr))
   }
 
   private def arraySchema: HoodieTableSchema = {
@@ -196,7 +195,7 @@ class TestInternalRowToJsonStringConverter {
         |{"name": "name", "type": "string"},
         |{"name": "numbers", "type": {"type": "array", "items": "int"}}
         |]}""".stripMargin
-    HoodieTableSchema(structTypeSchema, HoodieSchema.parse(avroSchemaStr), Option.empty[InternalSchema])
+    HoodieTableSchema(structTypeSchema, HoodieSchema.parse(avroSchemaStr))
   }
 
   private def mapSchema: HoodieTableSchema = {
@@ -210,7 +209,7 @@ class TestInternalRowToJsonStringConverter {
         |{"name": "name", "type": "string"},
         |{"name": "properties", "type": {"type": "map", "values": "string"}}
         |]}""".stripMargin
-    HoodieTableSchema(structTypeSchema, HoodieSchema.parse(avroSchemaStr), Option.empty[InternalSchema])
+    HoodieTableSchema(structTypeSchema, HoodieSchema.parse(avroSchemaStr))
   }
 
   private def structSchema: HoodieTableSchema = {
@@ -232,7 +231,7 @@ class TestInternalRowToJsonStringConverter {
         |  ]
         |}}
         |]}""".stripMargin
-    HoodieTableSchema(structTypeSchema, HoodieSchema.parse(avroSchemaStr), Option.empty[InternalSchema])
+    HoodieTableSchema(structTypeSchema, HoodieSchema.parse(avroSchemaStr))
   }
 
   private def nestedSchema: HoodieTableSchema = {
@@ -257,7 +256,7 @@ class TestInternalRowToJsonStringConverter {
         |  }
         |}}
         |]}""".stripMargin
-    HoodieTableSchema(structTypeSchema, HoodieSchema.parse(avroSchemaStr), Option.empty[InternalSchema])
+    HoodieTableSchema(structTypeSchema, HoodieSchema.parse(avroSchemaStr))
   }
 
   private def arrayWithNullsSchema: HoodieTableSchema = {
@@ -271,7 +270,7 @@ class TestInternalRowToJsonStringConverter {
         |{"name": "name", "type": "string"},
         |{"name": "numbers", "type": {"type": "array", "items": "int"}}
         |]}""".stripMargin
-    HoodieTableSchema(structTypeSchema, HoodieSchema.parse(avroSchemaStr), Option.empty[InternalSchema])
+    HoodieTableSchema(structTypeSchema, HoodieSchema.parse(avroSchemaStr))
   }
 
   private def mapWithNullsSchema: HoodieTableSchema = {
@@ -285,7 +284,7 @@ class TestInternalRowToJsonStringConverter {
         |{"name": "name", "type": "string"},
         |{"name": "properties", "type": {"type": "map", "values": "string"}}
         |]}""".stripMargin
-    HoodieTableSchema(structTypeSchema, HoodieSchema.parse(avroSchemaStr), Option.empty[InternalSchema])
+    HoodieTableSchema(structTypeSchema, HoodieSchema.parse(avroSchemaStr))
   }
 
   private def emptyArraySchema: HoodieTableSchema = {
@@ -299,7 +298,7 @@ class TestInternalRowToJsonStringConverter {
         |{"name": "name", "type": "string"},
         |{"name": "numbers", "type": {"type": "array", "items": "int"}}
         |]}""".stripMargin
-    HoodieTableSchema(structTypeSchema, HoodieSchema.parse(avroSchemaStr), Option.empty[InternalSchema])
+    HoodieTableSchema(structTypeSchema, HoodieSchema.parse(avroSchemaStr))
   }
 
   private def emptyMapSchema: HoodieTableSchema = {
@@ -313,7 +312,7 @@ class TestInternalRowToJsonStringConverter {
         |{"name": "name", "type": "string"},
         |{"name": "properties", "type": {"type": "map", "values": "string"}}
         |]}""".stripMargin
-    HoodieTableSchema(structTypeSchema, HoodieSchema.parse(avroSchemaStr), Option.empty[InternalSchema])
+    HoodieTableSchema(structTypeSchema, HoodieSchema.parse(avroSchemaStr))
   }
 
   private def arrayConverter: InternalRowToJsonStringConverter = new InternalRowToJsonStringConverter(arraySchema.structTypeSchema)
