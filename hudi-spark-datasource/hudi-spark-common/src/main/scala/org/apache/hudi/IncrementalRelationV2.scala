@@ -96,7 +96,7 @@ class IncrementalRelationV2(val sqlContext: SQLContext,
 
   // use schema from a file produced in the end/latest instant
 
-  val (usedSchema, internalSchema) = {
+  val (usedSchema, evolutionSchema) = {
     log.info("Inferring schema..")
     val schemaResolver = new TableSchemaResolver(metaClient)
     val iSchema : HoodieSchema = if (!isSchemaEvolutionEnabledOnRead(optParams, sqlContext.sparkSession)) {
@@ -119,7 +119,7 @@ class IncrementalRelationV2(val sqlContext: SQLContext,
     } else {
       val dataSchema = HoodieSchemaConversionUtils.convertHoodieSchemaToStructType(tableSchema)
       if (iSchema != null && !iSchema.isEmptySchema) {
-        // if internalSchema is ready, dataSchema will contains skeletonSchema
+        // if evolutionSchema is ready, dataSchema will contains skeletonSchema
         (dataSchema, iSchema)
       } else {
         // Append data schema fields to skeleton schema, but ignore any data fields which already exist in skeleton schema
@@ -188,11 +188,11 @@ class IncrementalRelationV2(val sqlContext: SQLContext,
           (regularFileIdToFullPath.values, metaBootstrapFileIdToFullPath.values)
         }
       }
-      // pass internalSchema to hadoopConf, so it can be used in executors.
+      // pass evolutionSchema to hadoopConf, so it can be used in executors.
       val instantFileNameGenerator = metaClient.getTimelineLayout.getInstantFileNameGenerator;
       val validCommits = metaClient
         .getCommitsAndCompactionTimeline.filterCompletedInstants.getInstantsAsStream.toArray().map(a => instantFileNameGenerator.getFileName(a.asInstanceOf[HoodieInstant])).mkString(",")
-      sqlContext.sparkContext.hadoopConfiguration.set(SparkInternalSchemaConverter.HOODIE_QUERY_SCHEMA, HoodieSchemaSerDe.toJson(internalSchema))
+      sqlContext.sparkContext.hadoopConfiguration.set(SparkInternalSchemaConverter.HOODIE_QUERY_SCHEMA, HoodieSchemaSerDe.toJson(evolutionSchema))
       sqlContext.sparkContext.hadoopConfiguration.set(SparkInternalSchemaConverter.HOODIE_TABLE_PATH, metaClient.getBasePath.toString)
       sqlContext.sparkContext.hadoopConfiguration.set(SparkInternalSchemaConverter.HOODIE_VALID_COMMITS_LIST, validCommits)
       val formatClassName = metaClient.getTableConfig.getBaseFileFormat match {
