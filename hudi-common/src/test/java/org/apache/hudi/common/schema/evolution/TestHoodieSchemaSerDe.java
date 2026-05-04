@@ -123,7 +123,7 @@ public class TestHoodieSchemaSerDe {
     HoodieSchema v2 = sampleSchema(200L);
 
     String historyJson = HoodieSchemaSerDe.toJsonHistory(Arrays.asList(v1, v2));
-    TreeMap<Long, HoodieSchema> parsed = HoodieSchemaSerDe.parseHistorySchemas(historyJson);
+    TreeMap<Long, HoodieSchema> parsed = HoodieSchemaSerDe.fromJsonHistory(historyJson);
 
     assertEquals(2, parsed.size());
     assertTrue(parsed.containsKey(100L));
@@ -141,7 +141,7 @@ public class TestHoodieSchemaSerDe {
     HoodieSchema v2 = sampleSchema(200L);
     String mergedHistory = HoodieSchemaSerDe.inheritHistory(v2, firstHistory);
 
-    TreeMap<Long, HoodieSchema> parsed = HoodieSchemaSerDe.parseHistorySchemas(mergedHistory);
+    TreeMap<Long, HoodieSchema> parsed = HoodieSchemaSerDe.fromJsonHistory(mergedHistory);
     assertEquals(2, parsed.size());
     assertTrue(parsed.containsKey(100L));
     assertTrue(parsed.containsKey(200L));

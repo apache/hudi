@@ -330,7 +330,7 @@ public class TestHoodieSchemaUtils {
   private static HoodieSchema deduceWriterSchema(HoodieSchema incomingSchema, HoodieSchema latestTableSchema, Boolean addNull) {
     TYPED_PROPERTIES.setProperty(HoodieCommonConfig.SET_NULL_FOR_MISSING_COLUMNS.key(), addNull.toString());
 
-    return HoodieSchemaUtils.deduceWriterSchemaWithEvolution(
+    return HoodieSchemaUtils.deduceWriterSchema(
         incomingSchema,
         Option.ofNullable(latestTableSchema),
         Option.empty(),

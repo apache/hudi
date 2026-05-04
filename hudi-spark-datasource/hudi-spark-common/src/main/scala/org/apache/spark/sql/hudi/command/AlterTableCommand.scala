@@ -20,12 +20,15 @@ package org.apache.spark.sql.hudi.command
 import org.apache.hudi.{DataSourceUtils, HoodieSchemaConversionUtils, HoodieWriterUtils}
 import org.apache.hudi.common.model.{HoodieCommitMetadata, HoodieFailedWritesCleaningPolicy, WriteOperationType}
 import org.apache.hudi.common.schema.HoodieSchema
-import org.apache.hudi.common.schema.evolution.{ColumnChangeID, ColumnPositionType, HoodieSchemaChangeApplier, HoodieSchemaHistoryStorageManager, HoodieSchemaSerDe}
+import org.apache.hudi.common.schema.evolution.{ColumnChangeID, ColumnPositionType, HoodieSchemaChangeApplier, HoodieSchemaHistoryStorageManager, HoodieSchemaInternalSchemaBridge, HoodieSchemaSerDe}
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.table.timeline.HoodieInstant.State
 import org.apache.hudi.common.util.{CommitUtils, Option}
 import org.apache.hudi.config.{HoodieArchivalConfig, HoodieCleanConfig}
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
+import org.apache.hudi.internal.schema.action.TableChanges
+import org.apache.hudi.internal.schema.convert.InternalSchemaConverter
+import org.apache.hudi.internal.schema.utils.SchemaChangeUtils
 import org.apache.hudi.table.HoodieSparkTable
 
 import org.apache.hadoop.conf.Configuration
@@ -127,38 +130,46 @@ case class AlterTableCommand(table: CatalogTable, changes: Seq[TableChange], cha
 
   def applyUpdateAction(sparkSession: SparkSession): Unit = {
     val (oldSchema, historySchema) = getEvolutionSchemaAndHistorySchemaStr(sparkSession)
-    var cur = oldSchema
-    changes.foreach { change =>
-      val applier = new HoodieSchemaChangeApplier(cur)
-      cur = change match {
-        case updateType: TableChange.UpdateColumnType =>
-          val newType = HoodieSchemaConversionUtils.convertStructTypeToHoodieSchema(updateType.newDataType(), updateType.fieldNames().last)
-          applier.applyColumnTypeChange(updateType.fieldNames().mkString("."), newType)
-        case updateComment: TableChange.UpdateColumnComment =>
-          applier.applyColumnCommentChange(updateComment.fieldNames().mkString("."), updateComment.newComment())
-        case updateName: TableChange.RenameColumn =>
-          val originalColName = updateName.fieldNames().mkString(".")
-          checkSchemaChange(Seq(originalColName), table)
-          applier.applyRenameChange(originalColName, updateName.newName())
-        case updateNullAbility: TableChange.UpdateColumnNullability =>
-          applier.applyColumnNullabilityChange(updateNullAbility.fieldNames().mkString("."), updateNullAbility.nullable())
-        case updatePosition: TableChange.UpdateColumnPosition =>
-          val names = updatePosition.fieldNames()
-          val parentName = AlterTableCommand.getParentName(names)
-          val fullName = names.mkString(".")
-          updatePosition.position() match {
-            case after: TableChange.After =>
-              val refCol = if (parentName.isEmpty) after.column() else parentName + "." + after.column()
-              applier.applyReOrderColPositionChange(fullName, refCol, ColumnPositionType.AFTER)
-            case _: TableChange.First =>
-              applier.applyReOrderColPositionChange(fullName, "", ColumnPositionType.FIRST)
-            case _ => cur
-          }
-        case _ => cur
-      }
+    // Accumulate all per-column updates into a single ColumnUpdateChange resolved against
+    // the original schema. This preserves the legacy batch semantics where multiple
+    // changes targeting the same field id (e.g. RENAME a→b combined with UPDATE a TYPE int)
+    // both find the field by its original name; if we built a fresh applier per change
+    // the second would resolve against the post-rename schema and fail.
+    val oldInternal = HoodieSchemaInternalSchemaBridge.toInternalSchema(oldSchema)
+    val updateChange = TableChanges.ColumnUpdateChange.get(oldInternal)
+    changes.foreach {
+      case updateType: TableChange.UpdateColumnType =>
+        val newType = HoodieSchemaConversionUtils.convertStructTypeToHoodieSchema(
+          updateType.newDataType(), updateType.fieldNames().last)
+        updateChange.updateColumnType(updateType.fieldNames().mkString("."),
+          InternalSchemaConverter.convertToField(newType))
+      case updateComment: TableChange.UpdateColumnComment =>
+        updateChange.updateColumnComment(updateComment.fieldNames().mkString("."), updateComment.newComment())
+      case updateName: TableChange.RenameColumn =>
+        val originalColName = updateName.fieldNames().mkString(".")
+        checkSchemaChange(Seq(originalColName), table)
+        updateChange.renameColumn(originalColName, updateName.newName())
+      case updateNullAbility: TableChange.UpdateColumnNullability =>
+        updateChange.updateColumnNullability(
+          updateNullAbility.fieldNames().mkString("."), updateNullAbility.nullable())
+      case updatePosition: TableChange.UpdateColumnPosition =>
+        val names = updatePosition.fieldNames()
+        val parentName = AlterTableCommand.getParentName(names)
+        val fullName = names.mkString(".")
+        updatePosition.position() match {
+          case after: TableChange.After =>
+            val refCol = if (parentName.isEmpty) after.column() else parentName + "." + after.column()
+            updateChange.addPositionChange(fullName, refCol, "after")
+          case _: TableChange.First =>
+            updateChange.addPositionChange(fullName, "", "first")
+          case _ =>
+        }
+      case _ =>
     }
+    val newInternal = SchemaChangeUtils.applyTableChanges2Schema(oldInternal, updateChange)
+    val newSchema = HoodieSchemaInternalSchemaBridge.toHoodieSchema(newInternal, oldSchema.getFullName)
     val verifiedHistorySchema = inheritedHistory(oldSchema, historySchema)
-    AlterTableCommand.commitWithSchema(cur, verifiedHistorySchema, table, sparkSession)
+    AlterTableCommand.commitWithSchema(newSchema, verifiedHistorySchema, table, sparkSession)
     logInfo("column update finished")
   }
 

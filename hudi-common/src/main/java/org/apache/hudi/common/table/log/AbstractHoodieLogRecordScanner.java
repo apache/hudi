@@ -679,8 +679,10 @@ public abstract class AbstractHoodieLogRecordScanner {
 
     long currentInstantTime = Long.parseLong(dataBlock.getLogBlockHeader().get(INSTANT_TIME));
     HoodieSchema fileSchema = HoodieSchemaHistoryCache.searchSchemaAndCache(currentInstantTime, hoodieTableMetaClient);
+    // Preserve the readerSchema's record name on the merged result, matching the
+    // legacy InternalSchemaConverter.convert(merged, readerSchema.getFullName()) call.
     HoodieSchema mergedAvroSchema = new HoodieSchemaMerger(fileSchema, evolutionSchema,
-        true, false).mergeSchema();
+        true, false).mergeSchema(readerSchema.getFullName());
 
     return Option.of(Pair.of((record) -> {
       return record.rewriteRecordWithNewSchema(

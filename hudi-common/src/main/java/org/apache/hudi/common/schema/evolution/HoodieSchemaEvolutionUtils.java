@@ -119,15 +119,6 @@ public final class HoodieSchemaEvolutionUtils {
   }
 
   /**
-   * Collects renamed columns between two schemas — fields whose column id is the
-   * same but whose full name has changed. The resulting map is keyed by the new
-   * (target) full name and valued by the leaf-name of the old (source) full name,
-   * matching the wire shape consumed by record rewriters.
-   *
-   * <p>HoodieSchema-shaped replacement for
-   * {@link org.apache.hudi.internal.schema.utils.InternalSchemaUtils#collectRenameCols}.</p>
-   */
-  /**
    * Normalizes union ordering so {@code null} sits first within nullable union
    * branches, matching the ordering Hudi has historically written to disk. Returns
    * {@code HoodieSchema.NULL_SCHEMA} for a {@code null} input and the schema
@@ -206,6 +197,15 @@ public final class HoodieSchemaEvolutionUtils {
     return name.equals(fileName) ? name : fileName;
   }
 
+  /**
+   * Collects renamed columns between two schemas — fields whose column id is the
+   * same but whose full name has changed. The resulting map is keyed by the new
+   * (target) full name and valued by the leaf-name of the old (source) full name,
+   * matching the wire shape consumed by record rewriters.
+   *
+   * <p>HoodieSchema-shaped replacement for
+   * {@link org.apache.hudi.internal.schema.utils.InternalSchemaUtils#collectRenameCols}.</p>
+   */
   public static Map<String, String> collectRenameCols(HoodieSchema oldSchema, HoodieSchema newSchema) {
     List<String> colNamesFromWriteSchema = oldSchema.getAllColsFullName();
     return colNamesFromWriteSchema.stream()

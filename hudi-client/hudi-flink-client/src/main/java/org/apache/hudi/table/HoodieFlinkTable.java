@@ -69,7 +69,7 @@ public abstract class HoodieFlinkTable<T>
                                                HoodieEngineContext context,
                                                HoodieTableMetaClient metaClient) {
     if (config.getSchemaEvolutionEnable()) {
-      setLatestInternalSchema(config, metaClient);
+      setLatestEvolutionSchema(config, metaClient);
     }
     final HoodieFlinkTable<T> hoodieFlinkTable;
     switch (metaClient.getTableType()) {
@@ -124,7 +124,7 @@ public abstract class HoodieFlinkTable<T>
     }
   }
 
-  private static void setLatestInternalSchema(HoodieWriteConfig config, HoodieTableMetaClient metaClient) {
+  private static void setLatestEvolutionSchema(HoodieWriteConfig config, HoodieTableMetaClient metaClient) {
     Option<HoodieSchema> evolutionSchema = new TableSchemaResolver(metaClient).getTableEvolutionSchemaFromCommitMetadata();
     if (evolutionSchema.isPresent()) {
       config.setInternalSchemaString(HoodieSchemaSerDe.toJson(evolutionSchema.get()));

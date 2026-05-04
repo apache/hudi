@@ -58,6 +58,10 @@ public final class HoodieSchemaIdAssigner {
     visit(schema, nextId);
     int maxId = nextId[0] - 1;
     schema.setMaxColumnId(maxId);
+    // Field/element/key/value ids were stamped onto the underlying Avro
+    // Schema/Field directly (bypassing HoodieSchema.addProp's invalidation), so
+    // any cached HoodieSchemaIndex on this schema is now stale.
+    schema.invalidateIdIndex();
     return maxId;
   }
 

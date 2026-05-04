@@ -23,7 +23,7 @@ import org.apache.hudi.HoodieSparkSqlWriter.{CANONICALIZE_SCHEMA, SQL_MERGE_INTO
 import org.apache.hudi.common.config.{HoodieCommonConfig, HoodieConfig, TypedProperties}
 import org.apache.hudi.common.model.HoodieRecord
 import org.apache.hudi.common.schema.{HoodieSchema, HoodieSchemaCompatibility, HoodieSchemaUtils => HoodieCommonSchemaUtils}
-import org.apache.hudi.common.schema.evolution.HoodieSchemaEvolutionUtils
+import org.apache.hudi.common.schema.evolution.{HoodieSchemaEvolutionUtils, HoodieSchemaInternalSchemaBridge}
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.util.ConfigUtils
 import org.apache.hudi.config.HoodieWriteConfig
@@ -99,7 +99,7 @@ object HoodieSchemaUtils {
    * Deduces writer's schema from source schema, the table's latest Avro schema, and
    * the table's schema-on-read evolution schema (if any).
    */
-  def deduceWriterSchemaWithEvolution(sourceSchema: HoodieSchema,
+  def deduceWriterSchema(sourceSchema: HoodieSchema,
                                       latestTableSchemaOpt: Option[HoodieSchema],
                                       tableEvolutionSchemaOpt: Option[HoodieSchema],
                                       opts: Map[String, String]): HoodieSchema = {
@@ -191,7 +191,13 @@ object HoodieSchemaUtils {
         // Apply schema evolution, by auto-merging write schema and read schema
         val setNullForMissingColumns = opts.getOrElse(HoodieCommonConfig.SET_NULL_FOR_MISSING_COLUMNS.key(),
           HoodieCommonConfig.SET_NULL_FOR_MISSING_COLUMNS.defaultValue()).toBoolean
-        val evolvedSchema = HoodieSchemaEvolutionUtils.reconcileSchemaStructural(canonicalizedSourceSchema, tableEvolutionSchema, setNullForMissingColumns)
+        // Preserve the latest table schema's record name on the reconciled writer schema,
+        // matching the legacy InternalSchemaConverter.convert(merged, latestTableSchema.getFullName).
+        // tableEvolutionSchema may carry a different record name than the data schema and we
+        // don't want that leaking into commit metadata / parquet writes.
+        val reconciled = HoodieSchemaEvolutionUtils.reconcileSchemaStructural(canonicalizedSourceSchema, tableEvolutionSchema, setNullForMissingColumns)
+        val evolvedSchema = if (reconciled.getFullName == latestTableSchema.getFullName) reconciled
+          else HoodieSchemaInternalSchemaBridge.withRecordName(reconciled, latestTableSchema.getFullName)
         val shouldRemoveMetaDataFromEvolutionSchema = sourceSchema.getFields.asScala.filter(f => f.name().equalsIgnoreCase(HoodieRecord.RECORD_KEY_METADATA_FIELD)).isEmpty
         if (shouldRemoveMetaDataFromEvolutionSchema) HoodieCommonSchemaUtils.removeMetadataFields(evolvedSchema) else evolvedSchema
 
@@ -221,16 +227,16 @@ object HoodieSchemaUtils {
   }
 
   /**
-   * Java-friendly overload of [[deduceWriterSchemaWithEvolution]] — Java callers
+   * Java-friendly overload of [[deduceWriterSchema]] — Java callers
    * receive Hudi's [[org.apache.hudi.common.util.Option]] from helpers like
    * [[UtilHelpers.getLatestTableSchema]] and [[TypedProperties]] from configs,
    * not Scala's [[Option]] / [[Map]].
    */
-  def deduceWriterSchemaWithEvolution(sourceSchema: HoodieSchema,
+  def deduceWriterSchema(sourceSchema: HoodieSchema,
                                       latestTableSchemaOpt: org.apache.hudi.common.util.Option[HoodieSchema],
                                       tableEvolutionSchemaOpt: org.apache.hudi.common.util.Option[HoodieSchema],
                                       props: TypedProperties): HoodieSchema = {
-    deduceWriterSchemaWithEvolution(sourceSchema,
+    deduceWriterSchema(sourceSchema,
       HoodieConversionUtils.toScalaOption(latestTableSchemaOpt),
       HoodieConversionUtils.toScalaOption(tableEvolutionSchemaOpt),
       HoodieConversionUtils.fromProperties(props))

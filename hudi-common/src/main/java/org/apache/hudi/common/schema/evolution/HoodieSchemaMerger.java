@@ -71,11 +71,22 @@ public class HoodieSchemaMerger {
   /**
    * Produces the merged read schema. Field ids carry through from the query schema;
    * column names and types follow the {@code useCol*FromFileSchema} flags set at
-   * construction time.
+   * construction time. The result is named after the query schema; callers that
+   * need a different record name should use {@link #mergeSchema(String)}.
    */
   public HoodieSchema mergeSchema() {
+    return mergeSchema(querySchema.getFullName());
+  }
+
+  /**
+   * Same as {@link #mergeSchema()} but stamps the result with {@code recordName}.
+   * Lets callers preserve the source schema's record name through the merge —
+   * legacy {@code InternalSchemaMerger} flows often used the file/reader schema's
+   * full name rather than the query schema's.
+   */
+  public HoodieSchema mergeSchema(String recordName) {
     InternalSchema merged = delegate.mergeSchema();
-    return HoodieSchemaInternalSchemaBridge.toHoodieSchema(merged, querySchema.getFullName());
+    return HoodieSchemaInternalSchemaBridge.toHoodieSchema(merged, recordName);
   }
 
   /**
@@ -84,9 +95,17 @@ public class HoodieSchemaMerger {
    * can project correctly across renames.
    */
   public Pair<HoodieSchema, Map<String, String>> mergeSchemaGetRenamed() {
+    return mergeSchemaGetRenamed(querySchema.getFullName());
+  }
+
+  /**
+   * {@link #mergeSchemaGetRenamed()} variant that lets the caller fix the record
+   * name on the merged schema.
+   */
+  public Pair<HoodieSchema, Map<String, String>> mergeSchemaGetRenamed(String recordName) {
     Pair<InternalSchema, Map<String, String>> result = delegate.mergeSchemaGetRenamed();
     HoodieSchema mergedSchema = HoodieSchemaInternalSchemaBridge.toHoodieSchema(
-        result.getLeft(), querySchema.getFullName());
+        result.getLeft(), recordName);
     return Pair.of(mergedSchema, result.getRight());
   }
 

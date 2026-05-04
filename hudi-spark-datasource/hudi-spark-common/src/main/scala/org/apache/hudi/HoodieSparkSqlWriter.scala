@@ -459,7 +459,7 @@ class HoodieSparkSqlWriterInternal {
             // NOTE: Target writer's schema is deduced based on
             //         - Source's schema
             //         - Existing table's schema (including its Hudi's [[InternalSchema]] representation)
-            val writerSchema = HoodieSchemaUtils.deduceWriterSchemaWithEvolution(
+            val writerSchema = HoodieSchemaUtils.deduceWriterSchema(
               sourceSchema,
               latestTableSchemaOpt,
               evolutionSchemaOpt,

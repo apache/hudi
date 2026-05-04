@@ -364,13 +364,12 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
           // so the evolution layer has something concrete to reason about.
           HoodieSchema fresh = HoodieSchema.fromAvroSchema(schema.toAvroSchema());
           HoodieSchemaIdAssigner.assignFresh(fresh);
-          fresh.invalidateIdIndex();
           return fresh;
         });
         evolutionSchema.setSchemaId(Long.parseLong(instantTime));
       } else {
         evolutionSchema = HoodieSchemaSerDe.searchSchema(Long.parseLong(instantTime),
-            HoodieSchemaSerDe.parseHistorySchemas(historySchemaStr));
+            HoodieSchemaSerDe.fromJsonHistory(historySchemaStr));
         if (evolutionSchema == null) {
           evolutionSchema = HoodieSchema.empty();
         }
@@ -1767,7 +1766,6 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
       try {
         HoodieSchema fresh = HoodieSchema.fromAvroSchema(schemaUtil.getTableSchema().toAvroSchema());
         HoodieSchemaIdAssigner.assignFresh(fresh);
-        fresh.invalidateIdIndex();
         return fresh;
       } catch (Exception e) {
         throw new HoodieException(String.format("cannot find schema for current table: %s", config.getBasePath()));

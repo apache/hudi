@@ -64,7 +64,12 @@ public class HoodieAvroParquetReader extends RecordReader<Void, ArrayWritable> {
 
       if (evolutionSchemaOption.isPresent()) {
         // do schema reconciliation in case there exists read column which is not in the file schema.
-        baseSchema = new HoodieSchemaMerger(baseSchema, evolutionSchemaOption.get(), true, true).mergeSchema();
+        // Preserve the file schema's record name on the merged result, matching the legacy
+        // InternalSchemaConverter.convert(merged, baseSchema.getFullName()) behavior — the
+        // hardcoded "schema" name from getEvolutionSchemaOption("schema") would otherwise leak
+        // through.
+        baseSchema = new HoodieSchemaMerger(baseSchema, evolutionSchemaOption.get(), true, true)
+            .mergeSchema(baseSchema.getFullName());
       }
 
       // if exists read columns, we need to filter columns.

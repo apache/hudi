@@ -113,7 +113,7 @@ public final class HoodieSchemaSerDe {
    * returned HoodieSchema so the resulting map is directly usable by the
    * read/merge path.
    */
-  public static TreeMap<Long, HoodieSchema> parseHistorySchemas(String json) {
+  public static TreeMap<Long, HoodieSchema> fromJsonHistory(String json) {
     TreeMap<Long, InternalSchema> internals = SerDeHelper.parseSchemas(json);
     TreeMap<Long, HoodieSchema> out = new TreeMap<>();
     for (Long versionId : internals.keySet()) {

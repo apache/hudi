@@ -806,7 +806,7 @@ public class StreamSync implements Serializable, Closeable {
     // Deduce proper target (writer's) schema for the input dataset, reconciling its
     // schema w/ the table's one
 
-    HoodieSchema targetSchema = HoodieSchemaUtils.deduceWriterSchemaWithEvolution(
+    HoodieSchema targetSchema = HoodieSchemaUtils.deduceWriterSchema(
             incomingSchema == null ? HoodieSchema.create(HoodieSchemaType.NULL) : org.apache.hudi.common.schema.HoodieSchemaUtils.removeMetadataFields(incomingSchema),
             latestTableSchemaOpt,
             evolutionSchemaOpt,

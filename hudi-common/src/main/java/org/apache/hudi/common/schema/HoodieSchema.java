@@ -331,7 +331,9 @@ public class HoodieSchema implements Serializable {
   private int explicitMaxColumnId = -1;
   private transient List<HoodieSchemaField> fields;
   private transient Map<String, HoodieSchemaField> fieldMap;
-  private transient HoodieSchemaIndex idIndex;
+  // volatile so threads observing an instance shared via HoodieSchemaCache.intern()
+  // see a fully-constructed HoodieSchemaIndex (no torn reads on publication).
+  private transient volatile HoodieSchemaIndex idIndex;
 
   // Register the Variant logical type with Avro
   static {
@@ -1366,11 +1368,19 @@ public class HoodieSchema implements Serializable {
   }
 
   /**
-   * Returns true if this schema is the "empty" sentinel — i.e. has no schema id
-   * assigned. Replaces {@code InternalSchema#isEmptySchema()}.
+   * Returns true if this schema is the "empty" sentinel — i.e. a record with
+   * no fields (the {@link #empty()} placeholder). Replaces
+   * {@code InternalSchema#isEmptySchema()}.
+   *
+   * <p>Note: the legacy {@code InternalSchema.isEmptySchema()} keyed off
+   * {@code versionId < 0}, which was effectively a no-fields check (only the
+   * EMPTY_SCHEMA singleton ever had a negative version id). We mirror the
+   * structural intent here so any HoodieSchema built via {@code parse()} /
+   * {@code fromAvroSchema()} / {@code createRecord()} without a subsequent
+   * {@link #setSchemaId(long)} is not mis-classified as empty.</p>
    */
   public boolean isEmptySchema() {
-    return schemaId < 0;
+    return type != HoodieSchemaType.RECORD || avroSchema.getFields().isEmpty();
   }
 
   /**

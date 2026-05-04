@@ -664,8 +664,7 @@ public final class HoodieSchemaUtils {
       newSchema.addProp(prop.getKey(), prop.getValue());
     }
     // Preserve schema-on-read meta (version id and max column id) so callers that
-    // copy a HoodieSchema through this helper don't silently reset them to -1, which
-    // would make the result look like an "empty" sentinel to {@link HoodieSchema#isEmptySchema()}.
+    // copy a HoodieSchema through this helper don't silently reset them.
     if (schema.schemaId() >= 0) {
       newSchema.setSchemaId(schema.schemaId());
     }

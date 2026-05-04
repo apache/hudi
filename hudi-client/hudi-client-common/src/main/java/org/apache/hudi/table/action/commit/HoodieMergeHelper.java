@@ -179,27 +179,27 @@ public class HoodieMergeHelper<T> extends BaseMergeHelper {
           throw new HoodieException(String.format("Failed to get InternalSchema for given versionId: %s", commitInstantTime), e);
         }
       }
-      final HoodieSchema writeInternalSchema = fileSchema;
+      final HoodieSchema fileWriteSchema = fileSchema;
       List<String> colNamesFromQuerySchema = querySchema.getAllColsFullName();
-      List<String> colNamesFromWriteSchema = writeInternalSchema.getAllColsFullName();
+      List<String> colNamesFromWriteSchema = fileWriteSchema.getAllColsFullName();
       List<String> sameCols = colNamesFromWriteSchema.stream()
           .filter(f -> {
-            int writerSchemaFieldId = writeInternalSchema.findIdByName(f);
+            int writerSchemaFieldId = fileWriteSchema.findIdByName(f);
             int querySchemaFieldId = querySchema.findIdByName(f);
 
             return colNamesFromQuerySchema.contains(f)
                 && writerSchemaFieldId == querySchemaFieldId
                 && writerSchemaFieldId != -1
-                && Objects.equals(writeInternalSchema.findType(writerSchemaFieldId), querySchema.findType(querySchemaFieldId));
+                && Objects.equals(fileWriteSchema.findType(writerSchemaFieldId), querySchema.findType(querySchemaFieldId));
           })
           .collect(Collectors.toList());
-      HoodieSchema newWriterSchema = new HoodieSchemaMerger(writeInternalSchema, querySchema,
+      HoodieSchema newWriterSchema = new HoodieSchemaMerger(fileWriteSchema, querySchema,
           true, false, false).mergeSchema();
-      HoodieSchema writeSchemaFromFile = writeInternalSchema;
+      HoodieSchema writeSchemaFromFile = fileWriteSchema;
       boolean needToReWriteRecord = sameCols.size() != colNamesFromWriteSchema.size() || HoodieSchemaCompatibility.areSchemasCompatible(newWriterSchema,
               writeSchemaFromFile);
       if (needToReWriteRecord) {
-        Map<String, String> renameCols = HoodieSchemaEvolutionUtils.collectRenameCols(writeInternalSchema, querySchema);
+        Map<String, String> renameCols = HoodieSchemaEvolutionUtils.collectRenameCols(fileWriteSchema, querySchema);
         return Option.of(record -> {
           return record.rewriteRecordWithNewSchema(
               recordSchema,

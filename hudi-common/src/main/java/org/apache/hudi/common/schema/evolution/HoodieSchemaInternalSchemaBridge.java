@@ -70,13 +70,7 @@ public final class HoodieSchemaInternalSchemaBridge {
    * {@link InternalSchemaConverter#convert(HoodieSchema)} which mints fresh ids.</p>
    */
   public static InternalSchema toInternalSchema(HoodieSchema hoodieSchema) {
-    // Short-circuit only on the genuine empty sentinel — a record with no fields.
-    // {@link HoodieSchema#isEmptySchema()} is schemaId-based and would mis-classify
-    // any freshly-built HoodieSchema (default schemaId=-1) as empty, even when it
-    // carries real fields, causing the round-trip to silently lose them.
-    if (hoodieSchema == null
-        || hoodieSchema.getType() != HoodieSchemaType.RECORD
-        || hoodieSchema.getFields().isEmpty()) {
+    if (hoodieSchema == null || hoodieSchema.isEmptySchema()) {
       return InternalSchema.getEmptyInternalSchema();
     }
     // Take the structurally-correct InternalSchema produced by the existing converter,
@@ -174,6 +168,9 @@ public final class HoodieSchemaInternalSchemaBridge {
    * version id and max column id are also propagated.
    */
   public static HoodieSchema toHoodieSchema(InternalSchema internalSchema, String recordName) {
+    if (internalSchema == null || internalSchema.isEmptySchema()) {
+      return HoodieSchema.empty();
+    }
     HoodieSchema hoodieSchema = InternalSchemaConverter.convert(internalSchema, recordName);
     stampIds(hoodieSchema, internalSchema.getRecord());
     hoodieSchema.setSchemaId(internalSchema.schemaId());
@@ -227,7 +224,8 @@ public final class HoodieSchemaInternalSchemaBridge {
         for (int i = 0; i < record.fields().size(); i++) {
           Types.Field internalField = record.fields().get(i);
           HoodieSchemaField hoodieField = effective.getFields().get(i);
-          hoodieField.getAvroField().addProp(HoodieSchema.FIELD_ID_PROP, internalField.fieldId());
+          stampPropIfAbsent(hoodieField.getAvroField()::getObjectProp,
+              hoodieField.getAvroField()::addProp, HoodieSchema.FIELD_ID_PROP, internalField.fieldId());
           stampIds(hoodieField.schema(), internalField.type());
         }
         return;
@@ -237,7 +235,7 @@ public final class HoodieSchemaInternalSchemaBridge {
         if (effective.getType() != HoodieSchemaType.ARRAY) {
           return;
         }
-        effective.getAvroSchema().addProp(HoodieSchema.ELEMENT_ID_PROP, array.elementId());
+        stampPropIfAbsent(effective.getAvroSchema()::getObjectProp, effective.getAvroSchema()::addProp, HoodieSchema.ELEMENT_ID_PROP, array.elementId());
         stampIds(effective.getElementType(), array.elementType());
         return;
       }
@@ -246,13 +244,39 @@ public final class HoodieSchemaInternalSchemaBridge {
         if (effective.getType() != HoodieSchemaType.MAP) {
           return;
         }
-        effective.getAvroSchema().addProp(HoodieSchema.KEY_ID_PROP, map.keyId());
-        effective.getAvroSchema().addProp(HoodieSchema.VALUE_ID_PROP, map.valueId());
+        stampPropIfAbsent(effective.getAvroSchema()::getObjectProp, effective.getAvroSchema()::addProp, HoodieSchema.KEY_ID_PROP, map.keyId());
+        stampPropIfAbsent(effective.getAvroSchema()::getObjectProp, effective.getAvroSchema()::addProp, HoodieSchema.VALUE_ID_PROP, map.valueId());
         stampIds(effective.getValueType(), map.valueType());
         return;
       }
       default:
         // primitives have no addressable child id
     }
+  }
+
+  /**
+   * Stamps {@code value} under {@code key} only if no value is already present, since
+   * Avro's JsonProperties is set-once and would throw on a second {@code addProp}.
+   * The same HoodieSchema instance can be reached more than once when an
+   * InternalSchema's {@link Types.RecordType} is shared across paths (the
+   * InternalSchemaConverter caches by Type identity), so this guard makes
+   * {@link #stampIds} idempotent. Mismatched re-stamps surface as a hard failure
+   * since the field-id is the schema's identity and a divergence here means
+   * upstream corruption.
+   */
+  private static void stampPropIfAbsent(java.util.function.Function<String, Object> getter,
+                                        java.util.function.BiConsumer<String, Object> setter,
+                                        String key,
+                                        int value) {
+    Object existing = getter.apply(key);
+    if (existing == null) {
+      setter.accept(key, value);
+      return;
+    }
+    if (existing instanceof Number && ((Number) existing).intValue() == value) {
+      return;
+    }
+    throw new IllegalStateException(String.format(
+        "Refusing to overwrite %s on shared schema: existing=%s new=%d", key, existing, value));
   }
 }

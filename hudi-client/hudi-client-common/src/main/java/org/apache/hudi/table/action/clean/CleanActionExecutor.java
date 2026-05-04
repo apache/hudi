@@ -267,8 +267,8 @@ public class CleanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I, K,
     if (pendingCleanInstants.size() > 0) {
       // try to clean old history schema.
       try {
-        HoodieSchemaHistoryStorageManager fss = new HoodieSchemaHistoryStorageManager(table.getMetaClient());
-        fss.cleanOldFiles(pendingCleanInstants.stream().map(is -> is.requestedTime()).collect(Collectors.toList()));
+        HoodieSchemaHistoryStorageManager historyStorageManager = new HoodieSchemaHistoryStorageManager(table.getMetaClient());
+        historyStorageManager.cleanOldFiles(pendingCleanInstants.stream().map(is -> is.requestedTime()).collect(Collectors.toList()));
       } catch (Exception e) {
         // we should not affect original clean logic. Swallow exception and log.
         log.warn("failed to clean old history schema");

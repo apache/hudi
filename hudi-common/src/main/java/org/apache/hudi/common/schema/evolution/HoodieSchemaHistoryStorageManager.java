@@ -72,8 +72,8 @@ public class HoodieSchemaHistoryStorageManager {
    * Removes schema-history files whose instant times are not in the valid-commits
    * set. Safety mechanism for archival cleanup.
    */
-  public void cleanOldFiles(List<String> validateCommits) {
-    delegate.cleanOldFiles(validateCommits);
+  public void cleanOldFiles(List<String> validCommits) {
+    delegate.cleanOldFiles(validCommits);
   }
 
   /**
