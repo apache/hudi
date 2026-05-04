@@ -53,24 +53,4 @@ public enum ColumnChangeID {
     }
   }
 
-  /**
-   * Converts to the legacy {@code TableChange.ColumnChangeID} for callers that
-   * still interop with {@code TableChanges} directly. Removed in Phase 5 along
-   * with the legacy {@code internal.schema} package.
-   */
-  public org.apache.hudi.common.schema.evolution.legacy.action.TableChange.ColumnChangeID toLegacy() {
-    switch (this) {
-      case ADD:
-        return org.apache.hudi.common.schema.evolution.legacy.action.TableChange.ColumnChangeID.ADD;
-      case UPDATE:
-        return org.apache.hudi.common.schema.evolution.legacy.action.TableChange.ColumnChangeID.UPDATE;
-      case DELETE:
-        return org.apache.hudi.common.schema.evolution.legacy.action.TableChange.ColumnChangeID.DELETE;
-      case PROPERTY_CHANGE:
-        return org.apache.hudi.common.schema.evolution.legacy.action.TableChange.ColumnChangeID.PROPERTY_CHANGE;
-      case REPLACE:
-      default:
-        return org.apache.hudi.common.schema.evolution.legacy.action.TableChange.ColumnChangeID.REPLACE;
-    }
-  }
 }
