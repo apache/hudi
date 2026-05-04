@@ -51,11 +51,10 @@ import java.util.regex.Pattern;
  *
  * <p>The on-disk format is a hard backward-compatibility boundary: the
  * {@code latest_schema} blob in commit metadata and the {@code .hoodie/.schema/}
- * history files have been written by the legacy
- * {@code org.apache.hudi.common.schema.evolution.legacy.utils.SerDeHelper}
- * since this feature shipped, and old tables must remain readable. This class
- * emits the same JSON layout byte-for-byte and parses every shape the legacy
- * could parse, including:
+ * history files have been written by the legacy {@code SerDeHelper} since this
+ * feature shipped, and old tables must remain readable. This class emits the
+ * same JSON layout byte-for-byte and parses every shape the legacy could
+ * parse, including:
  *
  * <ul>
  *   <li>Top-level record with {@code max_column_id} / {@code version_id} /

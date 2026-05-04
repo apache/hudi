@@ -30,11 +30,12 @@ import static org.apache.hudi.common.schema.HoodieSchema.VALUE_ID_PROP;
  * sub-schema (record fields, array elements, map keys and values), writing the result
  * onto the underlying Avro {@link Schema}/{@link Schema.Field} as custom JSON properties.
  *
- * <p>The traversal order mirrors {@link org.apache.hudi.common.schema.evolution.legacy.InternalSchemaBuilder}
- * (record fields in declared order; array element id assigned before recursing into the
- * element type; map key id then value id assigned before recursing into the value type)
- * so id assignments are stable across the InternalSchema → HoodieSchema migration and
- * round-tripping a previously-IDed InternalSchema through HoodieSchema produces the same
+ * <p>The traversal order is fixed: record fields in declared order; array element id
+ * assigned before recursing into the element type; map key id then value id assigned
+ * before recursing into the value type. This ordering matches the legacy
+ * InternalSchemaBuilder so id assignments stay stable across the
+ * InternalSchema → HoodieSchema migration and round-tripping a previously-IDed
+ * InternalSchema through HoodieSchema produces the same
  * id mapping.</p>
  *
  * <p>Existing ids are preserved: if a node already has an id property, this assigner uses

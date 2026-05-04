@@ -36,16 +36,13 @@ import static org.apache.hudi.common.schema.HoodieSchema.VALUE_ID_PROP;
 /**
  * Lazily-computed id ↔ full-name ↔ position indices for a {@link HoodieSchema}.
  *
- * <p>This is the HoodieSchema-side replacement for the four transient maps that
- * {@link org.apache.hudi.common.schema.evolution.legacy.InternalSchema} maintains
- * (idToField / nameToId / idToName / nameToPosition). It walks the HoodieSchema once
- * and reads {@code field-id} / {@code element-id} / {@code key-id} / {@code value-id}
- * Avro custom properties to populate the maps.</p>
+ * <p>Walks the HoodieSchema once and reads {@code field-id} / {@code element-id}
+ * / {@code key-id} / {@code value-id} Avro custom properties to populate four
+ * maps (idToField / nameToId / idToName / nameToPosition).</p>
  *
  * <p>"Full name" is dot-joined from the root, with array elements addressed as
- * {@code parent.element} and map keys / values as {@code parent.key} / {@code parent.value},
- * mirroring the convention already in use across the codebase
- * ({@link org.apache.hudi.common.schema.evolution.legacy.utils.InternalSchemaUtils#createFullName}).</p>
+ * {@code parent.element} and map keys / values as {@code parent.key} /
+ * {@code parent.value}.</p>
  */
 public final class HoodieSchemaIndex {
 
@@ -97,8 +94,7 @@ public final class HoodieSchemaIndex {
 
   /**
    * Returns the HoodieSchema (the type) of the field/element/key/value at column id
-   * {@code id}, or null if no such id exists. Equivalent to
-   * {@link org.apache.hudi.common.schema.evolution.legacy.InternalSchema#findType(int)}.
+   * {@code id}, or null if no such id exists.
    */
   public Map<Integer, HoodieSchema> idToSchema() {
     return idToSchema;
