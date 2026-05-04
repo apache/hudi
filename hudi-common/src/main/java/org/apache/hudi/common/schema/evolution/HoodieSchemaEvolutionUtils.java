@@ -19,15 +19,17 @@
 package org.apache.hudi.common.schema.evolution;
 
 import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.schema.types.Type;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.internal.schema.convert.InternalSchemaConverter;
 import org.apache.hudi.internal.schema.utils.AvroSchemaEvolutionUtils;
-import org.apache.hudi.internal.schema.utils.InternalSchemaUtils;
 
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
@@ -140,13 +142,48 @@ public final class HoodieSchemaEvolutionUtils {
    * Collects top-level columns whose primitive type differs between two schemas,
    * keyed by the column's index in {@code schema}. The pair holds (newType,
    * oldType) so callers can build a cast plan from {@code oldType} to
-   * {@code newType}. HoodieSchema-shaped replacement for
+   * {@code newType}. HoodieSchema-direct replacement for
    * {@link InternalSchemaUtils#collectTypeChangedCols(InternalSchema, InternalSchema)}.
+   *
+   * <p>Walks ids on the HoodieSchema accessors directly; only converts to
+   * {@link Type} at the result construction (callers expect Type pairs for the
+   * cast-plan downstream).</p>
    */
   public static Map<Integer, Pair<Type, Type>> collectTypeChangedCols(HoodieSchema schema, HoodieSchema oldSchema) {
-    return InternalSchemaUtils.collectTypeChangedCols(
-        HoodieSchemaInternalSchemaBridge.toInternalSchema(schema),
-        HoodieSchemaInternalSchemaBridge.toInternalSchema(oldSchema));
+    Set<Integer> ids = schema.getAllIds();
+    Set<Integer> otherIds = oldSchema.getAllIds();
+    Map<Integer, Pair<Type, Type>> result = new HashMap<>();
+    List<Integer> topLevelIds = schema.getFields().stream()
+        .map(HoodieSchemaField::fieldId).collect(Collectors.toList());
+    for (Integer id : ids) {
+      if (!otherIds.contains(id)) {
+        continue;
+      }
+      HoodieSchema thisType = schema.findType(id);
+      HoodieSchema otherType = oldSchema.findType(id);
+      if (thisType.equals(otherType)) {
+        continue;
+      }
+      String[] fieldNameParts = schema.findFullName(id).split("\\.");
+      String[] otherFieldNameParts = oldSchema.findFullName(id).split("\\.");
+      if (fieldNameParts.length != otherFieldNameParts.length) {
+        continue;
+      }
+      String parentName = fieldNameParts[0];
+      String otherParentName = otherFieldNameParts[0];
+      int parentId = schema.findIdByName(parentName);
+      if (parentId != oldSchema.findIdByName(otherParentName)) {
+        continue;
+      }
+      int position = topLevelIds.indexOf(parentId);
+      if (position < 0 || result.containsKey(position)) {
+        continue;
+      }
+      result.put(position, Pair.of(
+          InternalSchemaConverter.convertToField(schema.findType(parentName)),
+          InternalSchemaConverter.convertToField(oldSchema.findType(otherParentName))));
+    }
+    return result;
   }
 
   /**
