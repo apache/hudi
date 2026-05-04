@@ -21,6 +21,7 @@ package org.apache.hudi.common.schema.evolution;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaField;
+import org.apache.hudi.common.schema.HoodieSchemaIdAssigner;
 import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.common.schema.evolution.legacy.InternalSchema;
 import org.apache.hudi.common.schema.evolution.legacy.action.TableChanges;
@@ -35,10 +36,12 @@ import org.apache.avro.Schema;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.stream.Collectors;
@@ -51,11 +54,12 @@ import static org.apache.hudi.common.schema.evolution.legacy.convert.InternalSch
  * incoming write schema against the table's current schema, including missing
  * columns, added columns, type promotions, and nullability adjustments.
  *
- * <p>The reconciliation algorithm is preserved verbatim from the prior
- * {@code AvroSchemaEvolutionUtils} (now subsumed) — the underlying
- * {@code TableChanges} + {@code SchemaChangeUtils} still operate on
- * {@link InternalSchema}, and the bridge converts at the
- * {@link HoodieSchema} boundary.
+ * <p>Production callers go through {@link #reconcileSchema(HoodieSchema, HoodieSchema, boolean)},
+ * which walks HoodieSchema directly via {@link HoodieSchemaChangeApplier}
+ * (see {@code reconcileHoodieSchemaDirect}). The legacy {@code TableChanges}
+ * + {@code SchemaChangeUtils} machinery is still on the {@link InternalSchema}-typed
+ * test-surface entries; those will move once the test suite migrates off
+ * {@link InternalSchema} fixtures.
  */
 public final class HoodieSchemaEvolutionUtils {
 
@@ -91,9 +95,7 @@ public final class HoodieSchemaEvolutionUtils {
   public static HoodieSchema reconcileSchema(HoodieSchema incomingSchema,
                                              HoodieSchema oldTableSchema,
                                              boolean makeMissingFieldsNullable) {
-    InternalSchema oldInternal = HoodieSchemaInternalSchemaBridge.toInternalSchema(oldTableSchema);
-    InternalSchema reconciled = reconcileInternal(incomingSchema.getAvroSchema(), oldInternal, makeMissingFieldsNullable);
-    return HoodieSchemaInternalSchemaBridge.toHoodieSchema(reconciled, oldTableSchema.getFullName());
+    return reconcileHoodieSchemaDirect(incomingSchema, oldTableSchema, makeMissingFieldsNullable);
   }
 
   /**
@@ -503,5 +505,191 @@ public final class HoodieSchemaEvolutionUtils {
         reconcileInternal(incomingSchema, convert(HoodieSchema.fromAvroSchema(oldTableSchema)), makeMissingFieldsNullable),
         oldTableSchema.getFullName())
         .toAvroSchema();
+  }
+
+  // -------------------------------------------------------------------------
+  // HoodieSchema-direct reconciliation. Walks {@link HoodieSchema} via the
+  // applier surface for adds, type promotions, and nullability flips. The
+  // legacy {@code TableChanges} + {@code SchemaChangeUtils} machinery is not
+  // on this path. Production callers route here via the public
+  // {@link #reconcileSchema(HoodieSchema, HoodieSchema, boolean)} entry.
+  // -------------------------------------------------------------------------
+
+  private static HoodieSchema reconcileHoodieSchemaDirect(HoodieSchema incomingSchema,
+                                                          HoodieSchema oldTableSchema,
+                                                          boolean makeMissingFieldsNullable) {
+    if (incomingSchema.getType() == HoodieSchemaType.NULL) {
+      return oldTableSchema;
+    }
+
+    // Deep-copy incoming so id stamping doesn't mutate the caller's schema, and
+    // the underlying Avro Schema.Field instances are independent of the source
+    // (Schema.Field can't be re-parented to a second record).
+    HoodieSchema incoming = HoodieSchema.parse(incomingSchema.toAvroSchema().toString());
+    HoodieSchemaIdAssigner.assignFresh(incoming);
+
+    List<String> oldNames = oldTableSchema.getAllColsFullName();
+    List<String> incomingNames = incoming.getAllColsFullName();
+    Set<String> oldNameSet = new HashSet<>(oldNames);
+    Set<String> incomingNameSet = new HashSet<>(incomingNames);
+
+    List<String> newNames = incomingNames.stream()
+        .filter(n -> !oldNameSet.contains(n))
+        .collect(Collectors.toList());
+    List<String> missingNames = oldNames.stream()
+        .filter(n -> !incomingNameSet.contains(n))
+        .collect(Collectors.toList());
+    List<String> typeChangeNames = incomingNames.stream()
+        .filter(n -> oldNameSet.contains(n) && !typesEqualIgnoringIds(incoming.findType(n), oldTableSchema.findType(n)))
+        .collect(Collectors.toList());
+
+    if (newNames.isEmpty() && missingNames.isEmpty() && typeChangeNames.isEmpty()
+        && oldNames.size() == incomingNames.size()) {
+      return oldTableSchema;
+    }
+
+    // Filter redundant adds — keep only top-level new fields. Children of new
+    // parents are added implicitly when the parent's struct/array/map is
+    // adopted. Mirrors the legacy filter at the same point in reconcileInternal.
+    Set<String> newNameSet = new HashSet<>(newNames);
+    List<String> finalAdds = new ArrayList<>();
+    for (String name : newNames) {
+      String parent = parentOf(name);
+      if (!parent.isEmpty() && newNameSet.contains(parent)) {
+        continue;
+      }
+      finalAdds.add(name);
+    }
+
+    HoodieSchema afterAdds = oldTableSchema;
+    for (String name : finalAdds) {
+      String parent = parentOf(name);
+      // Strip ids from the colType so the sub-tree's stamped ids don't
+      // collide with old's ids when adopted into the rebuilt parent record.
+      // assignFresh after the add round mints fresh ids for the now-id-less
+      // sub-tree.
+      HoodieSchema colType = stripIds(incoming.findType(name));
+
+      int incomingIdx = incomingNames.indexOf(name);
+      Optional<String> inferPosition = incomingNames.stream()
+          .filter(c -> parentOf(c).equals(parent)
+              && incomingNames.indexOf(c) > incomingIdx
+              && oldTableSchema.findIdByName(c) > 0)
+          .min(Comparator.comparingInt(oldTableSchema::findIdByName));
+
+      String posCol = inferPosition.orElse(null);
+      ColumnPositionType posType = posCol != null ? ColumnPositionType.BEFORE : ColumnPositionType.NO_OPERATION;
+      afterAdds = new HoodieSchemaChangeApplier(afterAdds).applyAddChange(name, colType, null, posCol, posType);
+    }
+    // Mint fresh ids on any newly-adopted struct / array / map sub-trees.
+    HoodieSchemaIdAssigner.assignFresh(afterAdds);
+
+    HoodieSchema evolved = afterAdds;
+    for (String col : typeChangeNames) {
+      HoodieSchema newType = incoming.findType(col);
+      if (!isNestedType(newType)) {
+        evolved = new HoodieSchemaChangeApplier(evolved).applyColumnTypeChange(col, newType);
+      }
+    }
+
+    if (makeMissingFieldsNullable) {
+      // For a parent that's missing on the incoming side, only mark the parent
+      // nullable; descendants are unreachable at decode time so flipping them
+      // individually is wasted work and would produce surprising commits.
+      Set<String> visited = new HashSet<>();
+      List<String> sortedMissing = missingNames.stream().sorted().collect(Collectors.toList());
+      for (String col : sortedMissing) {
+        if (META_FIELD_NAMES.contains(col)) {
+          continue;
+        }
+        String parent = parentOf(col);
+        if (!visited.contains(parent)) {
+          evolved = new HoodieSchemaChangeApplier(evolved).applyColumnNullabilityChange(col, true);
+        }
+        visited.add(col);
+      }
+    }
+
+    if (structurallyEqual(evolved, oldTableSchema)) {
+      return oldTableSchema;
+    }
+    return evolved;
+  }
+
+  private static String parentOf(String fullName) {
+    int dot = fullName.lastIndexOf('.');
+    return dot < 0 ? "" : fullName.substring(0, dot);
+  }
+
+  private static boolean isNestedType(HoodieSchema schema) {
+    HoodieSchema effective = schema.isNullable() ? schema.getNonNullType() : schema;
+    HoodieSchemaType t = effective.getType();
+    return t == HoodieSchemaType.RECORD || t == HoodieSchemaType.ARRAY || t == HoodieSchemaType.MAP;
+  }
+
+  /**
+   * True when {@code a} and {@code b} have equivalent Avro type structure,
+   * ignoring custom props (so {@code field-id} / {@code element-id} /
+   * {@code key-id} / {@code value-id} differences don't surface as type
+   * mismatches).
+   */
+  private static boolean typesEqualIgnoringIds(HoodieSchema a, HoodieSchema b) {
+    return a != null && b != null && a.getAvroSchema().equals(b.getAvroSchema());
+  }
+
+  private static boolean structurallyEqual(HoodieSchema a, HoodieSchema b) {
+    return a.getAvroSchema().equals(b.getAvroSchema());
+  }
+
+  /**
+   * Returns a fresh HoodieSchema tree mirroring {@code source} but with all
+   * id custom props removed. The rebuild walks every node; primitives are
+   * copied by reference (HoodieSchema treats them as value types), but
+   * RECORD / ARRAY / MAP / UNION nodes are reconstructed so {@code field-id}
+   * / {@code element-id} / {@code key-id} / {@code value-id} can be dropped
+   * without mutating the source.
+   *
+   * <p>Used by reconciliation when adopting an incoming sub-tree into the
+   * existing schema: stripping the sub-tree's ids first prevents collisions
+   * with the existing schema's id population, and a follow-up
+   * {@link HoodieSchemaIdAssigner#assignFresh} mints fresh ids for the
+   * newly-adopted nodes.
+   */
+  private static HoodieSchema stripIds(HoodieSchema source) {
+    return rebuildStripped(source);
+  }
+
+  private static HoodieSchema rebuildStripped(HoodieSchema source) {
+    switch (source.getType()) {
+      case UNION: {
+        List<HoodieSchema> rewritten = new ArrayList<>(source.getTypes().size());
+        for (HoodieSchema branch : source.getTypes()) {
+          rewritten.add(rebuildStripped(branch));
+        }
+        return HoodieSchema.createUnion(rewritten);
+      }
+      case RECORD: {
+        List<HoodieSchemaField> newFields = new ArrayList<>(source.getFields().size());
+        for (HoodieSchemaField field : source.getFields()) {
+          HoodieSchema newSubSchema = rebuildStripped(field.schema());
+          HoodieSchemaField rebuilt = HoodieSchemaField.of(
+              field.name(), newSubSchema, field.doc().orElse(null), field.defaultVal().orElse(null));
+          for (Map.Entry<String, Object> e : field.getObjectProps().entrySet()) {
+            if (!HoodieSchema.FIELD_ID_PROP.equals(e.getKey())) {
+              rebuilt.addProp(e.getKey(), e.getValue());
+            }
+          }
+          newFields.add(rebuilt);
+        }
+        return HoodieSchema.createRecord(source.getName(), source.getNamespace().orElse(null),
+            source.getDoc().orElse(null), newFields);
+      }
+      case ARRAY:
+        return HoodieSchema.createArray(rebuildStripped(source.getElementType()));
+      case MAP:
+        return HoodieSchema.createMap(rebuildStripped(source.getValueType()));
+      default:
+        return source;
+    }
   }
 }
