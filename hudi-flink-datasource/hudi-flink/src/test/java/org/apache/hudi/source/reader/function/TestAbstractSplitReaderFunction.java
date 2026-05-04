@@ -29,7 +29,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.source.ExpressionPredicates;
 import org.apache.hudi.source.reader.HoodieRecordWithPosition;
 import org.apache.hudi.source.split.HoodieSourceSplit;
-import org.apache.hudi.table.format.InternalSchemaManager;
+import org.apache.hudi.table.format.SchemaEvolutionManager;
 import org.apache.hudi.utils.TestConfigurations;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -56,12 +56,12 @@ public class TestAbstractSplitReaderFunction {
   File tempDir;
 
   private Configuration conf;
-  private InternalSchemaManager mockInternalSchemaManager;
+  private SchemaEvolutionManager mockSchemaEvolutionManager;
 
   @BeforeEach
   public void setUp() {
     conf = TestConfigurations.getDefaultConf(tempDir.getAbsolutePath());
-    mockInternalSchemaManager = mock(InternalSchemaManager.class);
+    mockSchemaEvolutionManager = mock(SchemaEvolutionManager.class);
   }
 
   // -----------------------------------------------------------------------
@@ -78,9 +78,9 @@ public class TestAbstractSplitReaderFunction {
     MinimalSplitReaderFunction(
         Configuration conf,
         List<ExpressionPredicates.Predicate> predicates,
-        InternalSchemaManager internalSchemaManager,
+        SchemaEvolutionManager schemaEvolutionManager,
         boolean emitDelete) {
-      super(conf, predicates, internalSchemaManager, emitDelete);
+      super(conf, predicates, schemaEvolutionManager, emitDelete);
     }
 
     @Override
@@ -102,7 +102,7 @@ public class TestAbstractSplitReaderFunction {
   }
 
   private MinimalSplitReaderFunction create(boolean emitDelete, List<ExpressionPredicates.Predicate> predicates) {
-    return new MinimalSplitReaderFunction(conf, predicates, mockInternalSchemaManager, emitDelete);
+    return new MinimalSplitReaderFunction(conf, predicates, mockSchemaEvolutionManager, emitDelete);
   }
 
   // -----------------------------------------------------------------------
@@ -116,10 +116,10 @@ public class TestAbstractSplitReaderFunction {
   }
 
   @Test
-  public void testConstructorStoresInternalSchemaManager() {
+  public void testConstructorStoresSchemaEvolutionManager() {
     MinimalSplitReaderFunction fn = create(false, Collections.emptyList());
-    assertSame(mockInternalSchemaManager, fn.internalSchemaManager,
-        "internalSchemaManager field must be the exact reference passed to the constructor");
+    assertSame(mockSchemaEvolutionManager, fn.schemaEvolutionManager,
+        "schemaEvolutionManager field must be the exact reference passed to the constructor");
   }
 
   @Test

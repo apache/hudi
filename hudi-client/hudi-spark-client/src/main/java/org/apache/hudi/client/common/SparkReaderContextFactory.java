@@ -22,7 +22,7 @@ import org.apache.hudi.HoodieSchemaConversionUtils;
 import org.apache.hudi.HoodieSparkUtils;
 import org.apache.hudi.SparkAdapterSupport$;
 import org.apache.hudi.SparkFileFormatInternalRowReaderContext;
-import org.apache.hudi.client.utils.SparkInternalSchemaConverter;
+import org.apache.hudi.client.utils.SparkSchemaEvolutionConverter;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.engine.ReaderContextFactory;
 import org.apache.hudi.common.model.HoodieFileFormat;
@@ -179,8 +179,8 @@ public class SparkReaderContextFactory implements ReaderContextFactory<InternalR
     Map<String, String> configs = new HashMap<>();
     if (evolutionSchemaOpt.isPresent()) {
       List<String> instantFiles = timeline.getInstants().stream().map(fileNameGenerator::getFileName).collect(Collectors.toList());
-      configs.put(SparkInternalSchemaConverter.HOODIE_VALID_COMMITS_LIST, String.join(",", instantFiles));
-      configs.put(SparkInternalSchemaConverter.HOODIE_TABLE_PATH, basePath);
+      configs.put(SparkSchemaEvolutionConverter.HOODIE_VALID_COMMITS_LIST, String.join(",", instantFiles));
+      configs.put(SparkSchemaEvolutionConverter.HOODIE_TABLE_PATH, basePath);
     }
     return configs;
   }

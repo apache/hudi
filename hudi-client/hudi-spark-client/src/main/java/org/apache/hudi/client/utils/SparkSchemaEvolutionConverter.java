@@ -77,7 +77,7 @@ import java.util.stream.Collectors;
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 
 @NoArgsConstructor(access = AccessLevel.PRIVATE)
-public class SparkInternalSchemaConverter {
+public class SparkSchemaEvolutionConverter {
 
   public static final String HOODIE_QUERY_SCHEMA = "hoodie.schema.internal.querySchema";
   public static final String HOODIE_TABLE_PATH = "hoodie.tablePath";

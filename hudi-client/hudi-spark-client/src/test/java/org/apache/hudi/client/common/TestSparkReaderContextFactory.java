@@ -19,7 +19,7 @@
 package org.apache.hudi.client.common;
 
 import org.apache.hudi.HoodieSparkUtils;
-import org.apache.hudi.client.utils.SparkInternalSchemaConverter;
+import org.apache.hudi.client.utils.SparkSchemaEvolutionConverter;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.model.ActionType;
 import org.apache.hudi.common.table.HoodieTableConfig;
@@ -116,9 +116,9 @@ class TestSparkReaderContextFactory extends HoodieClientTestBase {
 
     assertEquals(
         "0001_0005.deltacommit,0002_0006.deltacommit,0003_0007.commit",
-        createdConfig.get(SparkInternalSchemaConverter.HOODIE_VALID_COMMITS_LIST));
+        createdConfig.get(SparkSchemaEvolutionConverter.HOODIE_VALID_COMMITS_LIST));
     assertEquals(
         basePath,
-        createdConfig.get(SparkInternalSchemaConverter.HOODIE_TABLE_PATH));
+        createdConfig.get(SparkSchemaEvolutionConverter.HOODIE_TABLE_PATH));
   }
 }

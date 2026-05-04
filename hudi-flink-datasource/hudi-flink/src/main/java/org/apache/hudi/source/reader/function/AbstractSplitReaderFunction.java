@@ -23,7 +23,7 @@ import org.apache.flink.table.data.RowData;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.source.ExpressionPredicates;
-import org.apache.hudi.table.format.InternalSchemaManager;
+import org.apache.hudi.table.format.SchemaEvolutionManager;
 import org.apache.hudi.util.FlinkWriteClients;
 
 import java.util.List;
@@ -34,7 +34,7 @@ import java.util.List;
 public abstract class AbstractSplitReaderFunction implements SplitReaderFunction<RowData> {
 
   protected final Configuration conf;
-  protected final InternalSchemaManager internalSchemaManager;
+  protected final SchemaEvolutionManager schemaEvolutionManager;
   protected final List<ExpressionPredicates.Predicate> predicates;
   protected final boolean emitDelete;
   private transient HoodieWriteConfig writeConfig;
@@ -43,11 +43,11 @@ public abstract class AbstractSplitReaderFunction implements SplitReaderFunction
   public AbstractSplitReaderFunction(
       Configuration conf,
       List<ExpressionPredicates.Predicate> predicates,
-      InternalSchemaManager internalSchemaManager,
+      SchemaEvolutionManager schemaEvolutionManager,
       boolean emitDelete) {
     this.conf = conf;
     this.predicates = predicates;
-    this.internalSchemaManager = internalSchemaManager;
+    this.schemaEvolutionManager = schemaEvolutionManager;
     this.emitDelete = emitDelete;
   }
 

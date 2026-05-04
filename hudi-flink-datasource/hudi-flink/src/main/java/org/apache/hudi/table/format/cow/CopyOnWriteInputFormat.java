@@ -22,7 +22,7 @@ import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.source.ExpressionPredicates.Predicate;
 import org.apache.hudi.table.format.FilePathUtils;
-import org.apache.hudi.table.format.InternalSchemaManager;
+import org.apache.hudi.table.format.SchemaEvolutionManager;
 import org.apache.hudi.table.format.RecordIterators;
 
 import lombok.extern.slf4j.Slf4j;
@@ -85,7 +85,7 @@ public class CopyOnWriteInputFormat extends FileInputFormat<RowData> {
    */
   private FilePathFilter localFilesFilter = new GlobFilePathFilter();
 
-  private final InternalSchemaManager internalSchemaManager;
+  private final SchemaEvolutionManager schemaEvolutionManager;
 
   public CopyOnWriteInputFormat(
       Path[] paths,
@@ -99,7 +99,7 @@ public class CopyOnWriteInputFormat extends FileInputFormat<RowData> {
       long limit,
       Configuration conf,
       boolean utcTimestamp,
-      InternalSchemaManager internalSchemaManager) {
+      SchemaEvolutionManager schemaEvolutionManager) {
     super.setFilePaths(paths);
     this.predicates = predicates;
     this.limit = limit;
@@ -111,7 +111,7 @@ public class CopyOnWriteInputFormat extends FileInputFormat<RowData> {
     this.selectedFields = selectedFields;
     this.conf = new SerializableConfiguration(conf);
     this.utcTimestamp = utcTimestamp;
-    this.internalSchemaManager = internalSchemaManager;
+    this.schemaEvolutionManager = schemaEvolutionManager;
   }
 
   @Override
@@ -126,7 +126,7 @@ public class CopyOnWriteInputFormat extends FileInputFormat<RowData> {
     );
 
     this.itr = RecordIterators.getParquetRecordIterator(
-        internalSchemaManager,
+        schemaEvolutionManager,
         utcTimestamp,
         true,
         conf.conf(),

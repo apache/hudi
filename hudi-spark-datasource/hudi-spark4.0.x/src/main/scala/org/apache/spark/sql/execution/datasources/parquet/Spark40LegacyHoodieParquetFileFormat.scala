@@ -18,7 +18,7 @@
 package org.apache.spark.sql.execution.datasources.parquet
 
 import org.apache.hudi.HoodieSchemaConversionUtils
-import org.apache.hudi.client.utils.SparkInternalSchemaConverter
+import org.apache.hudi.client.utils.SparkSchemaEvolutionConverter
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.schema.HoodieSchema
 import org.apache.hudi.common.schema.evolution.{HoodieSchemaEvolutionUtils, HoodieSchemaHistoryCache, HoodieSchemaMerger, HoodieSchemaSerDe}
@@ -118,13 +118,13 @@ class Spark40LegacyHoodieParquetFileFormat(private val shouldAppendPartitionValu
     )
     hadoopConf.setBoolean(SQLConf.PARQUET_INFER_TIMESTAMP_NTZ_ENABLED.key, sparkSession.sessionState.conf.parquetInferTimestampNTZEnabled)
     hadoopConf.setBoolean(SQLConf.LEGACY_PARQUET_NANOS_AS_LONG.key, sparkSession.sessionState.conf.legacyParquetNanosAsLong)
-    val internalSchemaStr = hadoopConf.get(SparkInternalSchemaConverter.HOODIE_QUERY_SCHEMA)
+    val internalSchemaStr = hadoopConf.get(SparkSchemaEvolutionConverter.HOODIE_QUERY_SCHEMA)
     // For Spark DataSource v1, there's no Physical Plan projection/schema pruning w/in Spark itself,
     // therefore it's safe to do schema projection here
     if (!isNullOrEmpty(internalSchemaStr)) {
       val prunedInternalSchemaStr =
         pruneInternalSchema(internalSchemaStr, requiredSchema)
-      hadoopConf.set(SparkInternalSchemaConverter.HOODIE_QUERY_SCHEMA, prunedInternalSchemaStr)
+      hadoopConf.set(SparkSchemaEvolutionConverter.HOODIE_QUERY_SCHEMA, prunedInternalSchemaStr)
     }
 
     val broadcastedHadoopConf =
@@ -166,16 +166,16 @@ class Spark40LegacyHoodieParquetFileFormat(private val shouldAppendPartitionValu
       val sharedConf = broadcastedHadoopConf.value.value
 
       // Fetch internal schema
-      val internalSchemaStr = sharedConf.get(SparkInternalSchemaConverter.HOODIE_QUERY_SCHEMA)
+      val internalSchemaStr = sharedConf.get(SparkSchemaEvolutionConverter.HOODIE_QUERY_SCHEMA)
       // Internal schema has to be pruned at this point
       val querySchemaOption = HoodieSchemaSerDe.fromJson(internalSchemaStr)
 
       var shouldUseInternalSchema = !isNullOrEmpty(internalSchemaStr) && querySchemaOption.isPresent
 
-      val tablePath = sharedConf.get(SparkInternalSchemaConverter.HOODIE_TABLE_PATH)
+      val tablePath = sharedConf.get(SparkSchemaEvolutionConverter.HOODIE_TABLE_PATH)
       val fileSchema = if (shouldUseInternalSchema) {
         val commitInstantTime = FSUtils.getCommitTime(filePath.getName).toLong;
-        val validCommits = sharedConf.get(SparkInternalSchemaConverter.HOODIE_VALID_COMMITS_LIST)
+        val validCommits = sharedConf.get(SparkSchemaEvolutionConverter.HOODIE_VALID_COMMITS_LIST)
         val storage = HoodieStorageUtils.getStorage(tablePath, HadoopFSUtils.getStorageConf(sharedConf))
         //TODO: HARDCODED TIMELINE OBJECT
         val layout = TimelineLayout.fromVersion(TimelineLayoutVersion.CURR_LAYOUT_VERSION)
@@ -244,7 +244,7 @@ class Spark40LegacyHoodieParquetFileFormat(private val shouldAppendPartitionValu
 
         hadoopAttemptConf.set(ParquetReadSupport.SPARK_ROW_REQUESTED_SCHEMA, mergedSchema.json)
 
-        SparkInternalSchemaConverter.collectTypeChangedCols(querySchemaOption.get(), mergedInternalSchema)
+        SparkSchemaEvolutionConverter.collectTypeChangedCols(querySchemaOption.get(), mergedInternalSchema)
       } else {
         val (implicitTypeChangeInfo, sparkRequestSchema) = HoodieParquetFileFormatHelper.buildImplicitSchemaChangeInfo(hadoopAttemptConf, footerFileMetaData, requiredSchema)
         if (!implicitTypeChangeInfo.isEmpty) {
@@ -394,7 +394,7 @@ object Spark40LegacyHoodieParquetFileFormat {
   def pruneInternalSchema(internalSchemaStr: String, requiredSchema: StructType): String = {
     val querySchemaOption = HoodieSchemaSerDe.fromJson(internalSchemaStr)
     if (querySchemaOption.isPresent && requiredSchema.nonEmpty) {
-      val prunedSchema = SparkInternalSchemaConverter.convertAndPruneStructTypeToHoodieSchema(requiredSchema, querySchemaOption.get())
+      val prunedSchema = SparkSchemaEvolutionConverter.convertAndPruneStructTypeToHoodieSchema(requiredSchema, querySchemaOption.get())
       HoodieSchemaSerDe.toJson(prunedSchema)
     } else {
       internalSchemaStr

@@ -24,7 +24,7 @@ import org.apache.hudi.common.table.cdc.HoodieCDCInferenceCase;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.source.split.HoodieCdcSourceSplit;
 import org.apache.hudi.source.split.HoodieSourceSplit;
-import org.apache.hudi.table.format.InternalSchemaManager;
+import org.apache.hudi.table.format.SchemaEvolutionManager;
 import org.apache.hudi.table.format.mor.MergeOnReadTableState;
 import org.apache.hudi.util.HoodieSchemaConverter;
 import org.apache.hudi.utils.TestConfigurations;
@@ -58,7 +58,7 @@ public class TestHoodieCdcSplitReaderFunction {
   private Configuration conf;
   private HoodieSchema tableSchema;
   private HoodieSchema requiredSchema;
-  private InternalSchemaManager internalSchemaManager;
+  private SchemaEvolutionManager schemaEvolutionManager;
   private MergeOnReadTableState tableState;
 
   @BeforeEach
@@ -66,7 +66,7 @@ public class TestHoodieCdcSplitReaderFunction {
     conf = TestConfigurations.getDefaultConf(tempDir.getAbsolutePath());
     tableSchema = mock(HoodieSchema.class);
     requiredSchema = mock(HoodieSchema.class);
-    internalSchemaManager = mock(InternalSchemaManager.class);
+    schemaEvolutionManager = mock(SchemaEvolutionManager.class);
     tableState = new MergeOnReadTableState(ROW_TYPE, ROW_TYPE, TABLE_SCHEMA.toString(), TABLE_SCHEMA.toString(), new ArrayList<>());
   }
 
@@ -74,7 +74,7 @@ public class TestHoodieCdcSplitReaderFunction {
     return new HoodieCdcSplitReaderFunction(
         conf,
         tableState,
-        internalSchemaManager,
+        schemaEvolutionManager,
         ROW_DATA_TYPE.getChildren(),
         Collections.emptyList(),
             false);
@@ -102,7 +102,7 @@ public class TestHoodieCdcSplitReaderFunction {
     HoodieCdcSplitReaderFunction function = new HoodieCdcSplitReaderFunction(
         conf,
         tableState,
-        internalSchemaManager,
+        schemaEvolutionManager,
         ROW_DATA_TYPE.getChildren(),
         Collections.emptyList(),
             false);
@@ -115,7 +115,7 @@ public class TestHoodieCdcSplitReaderFunction {
     HoodieCdcSplitReaderFunction function = new HoodieCdcSplitReaderFunction(
         conf,
         tableState,
-        internalSchemaManager,
+        schemaEvolutionManager,
         Collections.emptyList(),
         Collections.emptyList(),
             false);
@@ -174,7 +174,7 @@ public class TestHoodieCdcSplitReaderFunction {
     HoodieCdcSplitReaderFunction function = new HoodieCdcSplitReaderFunction(
         conf,
         tableState,
-        internalSchemaManager,
+        schemaEvolutionManager,
         ROW_DATA_TYPE.getChildren(),
         Collections.emptyList(),
         false);
@@ -187,7 +187,7 @@ public class TestHoodieCdcSplitReaderFunction {
     HoodieCdcSplitReaderFunction function = new HoodieCdcSplitReaderFunction(
         conf,
         tableState,
-        internalSchemaManager,
+        schemaEvolutionManager,
         Collections.emptyList(),
         Collections.emptyList(),
         false);
@@ -199,10 +199,10 @@ public class TestHoodieCdcSplitReaderFunction {
   public void testDefaultConstructorUsesNoLimitSentinel() {
     // 6-arg constructor must delegate to 7-arg with limit=-1, both should succeed.
     HoodieCdcSplitReaderFunction defaultLimit = new HoodieCdcSplitReaderFunction(
-        conf, tableState, internalSchemaManager,
+        conf, tableState, schemaEvolutionManager,
         ROW_DATA_TYPE.getChildren(), Collections.emptyList(), false);
     HoodieCdcSplitReaderFunction explicitNoLimit = new HoodieCdcSplitReaderFunction(
-        conf, tableState, internalSchemaManager,
+        conf, tableState, schemaEvolutionManager,
         ROW_DATA_TYPE.getChildren(), Collections.emptyList(), false);
 
     assertNotNull(defaultLimit);
@@ -213,7 +213,7 @@ public class TestHoodieCdcSplitReaderFunction {
   public void testConstructorWithLimitZeroIsAccepted() {
     // limit=0 is a valid constructor argument (limitIterator won't wrap since limit <= 0).
     HoodieCdcSplitReaderFunction function = new HoodieCdcSplitReaderFunction(
-        conf, tableState, internalSchemaManager,
+        conf, tableState, schemaEvolutionManager,
         ROW_DATA_TYPE.getChildren(), Collections.emptyList(), false);
     assertNotNull(function);
   }

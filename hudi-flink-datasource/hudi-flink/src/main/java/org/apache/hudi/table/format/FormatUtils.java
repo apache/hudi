@@ -96,7 +96,7 @@ public class FormatUtils {
    *
    * @param metaClient            Hoodie metadata client
    * @param writeConfig           Hoodie write configuration
-   * @param internalSchemaManager Internal schema manager
+   * @param schemaEvolutionManager Internal schema manager
    * @param fileSlice             The file slice
    * @param tableSchema           The schema of table
    * @param requiredSchema        The required query schema
@@ -111,7 +111,7 @@ public class FormatUtils {
   public static HoodieFileGroupReader<RowData> createFileGroupReader(
       HoodieTableMetaClient metaClient,
       HoodieWriteConfig writeConfig,
-      InternalSchemaManager internalSchemaManager,
+      SchemaEvolutionManager schemaEvolutionManager,
       FileSlice fileSlice,
       HoodieSchema tableSchema,
       HoodieSchema requiredSchema,
@@ -124,7 +124,7 @@ public class FormatUtils {
     final FlinkRowDataReaderContext readerContext =
         new FlinkRowDataReaderContext(
             metaClient.getStorageConf(),
-            () -> internalSchemaManager,
+            () -> schemaEvolutionManager,
             predicates,
             metaClient.getTableConfig(),
             instantRangeOption);
@@ -139,9 +139,9 @@ public class FormatUtils {
         .withFileSlice(fileSlice)
         .withDataSchema(tableSchema)
         .withRequestedSchema(requiredSchema)
-        .withEvolutionSchema(internalSchemaManager.getQuerySchema() == null
+        .withEvolutionSchema(schemaEvolutionManager.getQuerySchema() == null
             ? Option.empty()
-            : Option.of(internalSchemaManager.getQuerySchema()))
+            : Option.of(schemaEvolutionManager.getQuerySchema()))
         .withProps(typedProps)
         .withShouldUseRecordPosition(false)
         .withEmitDelete(emitDelete)

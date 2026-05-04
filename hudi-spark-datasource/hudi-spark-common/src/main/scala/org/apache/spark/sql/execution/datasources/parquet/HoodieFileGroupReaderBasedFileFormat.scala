@@ -20,7 +20,7 @@ package org.apache.spark.sql.execution.datasources.parquet
 import org.apache.hudi.{HoodieFileIndex, HoodiePartitionCDCFileGroupMapping, HoodiePartitionFileSliceMapping, HoodieSchemaConversionUtils, HoodieSparkUtils, HoodieTableSchema, SparkAdapterSupport, SparkFileFormatInternalRowReaderContext}
 import org.apache.hudi.cdc.{CDCFileGroupIterator, HoodieCDCFileGroupSplit, HoodieCDCFileIndex}
 import org.apache.hudi.client.common.HoodieSparkEngineContext
-import org.apache.hudi.client.utils.SparkInternalSchemaConverter
+import org.apache.hudi.client.utils.SparkSchemaEvolutionConverter
 import org.apache.hudi.common.config.{HoodieMemoryConfig, TypedProperties}
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.HoodieFileFormat
@@ -355,8 +355,8 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
 
   private def setSchemaEvolutionConfigs(conf: StorageConfiguration[Configuration]): Unit = {
     if (evolutionSchemaOpt.isPresent) {
-      conf.set(SparkInternalSchemaConverter.HOODIE_TABLE_PATH, tablePath)
-      conf.set(SparkInternalSchemaConverter.HOODIE_VALID_COMMITS_LIST, validCommits)
+      conf.set(SparkSchemaEvolutionConverter.HOODIE_TABLE_PATH, tablePath)
+      conf.set(SparkSchemaEvolutionConverter.HOODIE_VALID_COMMITS_LIST, validCommits)
     }
   }
 

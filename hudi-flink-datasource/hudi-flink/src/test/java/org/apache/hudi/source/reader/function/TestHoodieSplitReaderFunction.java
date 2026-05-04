@@ -28,7 +28,7 @@ import org.apache.flink.configuration.Configuration;
 import org.apache.flink.table.expressions.FieldReferenceExpression;
 import org.apache.flink.table.expressions.ValueLiteralExpression;
 import org.apache.flink.table.types.logical.VarCharType;
-import org.apache.hudi.table.format.InternalSchemaManager;
+import org.apache.hudi.table.format.SchemaEvolutionManager;
 import org.apache.hudi.utils.TestConfigurations;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -53,13 +53,13 @@ public class TestHoodieSplitReaderFunction {
   private HoodieSchema tableSchema;
   private HoodieSchema requiredSchema;
   private HoodieTableMetaClient mockMetaClient;
-  private InternalSchemaManager mockInternalSchemaManager;
+  private SchemaEvolutionManager mockSchemaEvolutionManager;
   private Configuration conf;
 
   @BeforeEach
   public void setUp() {
     mockMetaClient = mock(HoodieTableMetaClient.class);
-    mockInternalSchemaManager = mock(InternalSchemaManager.class);
+    mockSchemaEvolutionManager = mock(SchemaEvolutionManager.class);
     when(mockMetaClient.getTableType()).thenReturn(HoodieTableType.MERGE_ON_READ);
 
     // Create mock schemas
@@ -76,7 +76,7 @@ public class TestHoodieSplitReaderFunction {
           conf,
           null,  // null tableSchema should throw
           requiredSchema,
-          mockInternalSchemaManager,
+          mockSchemaEvolutionManager,
           "AVRO_PAYLOAD",
           Collections.emptyList(),
               false
@@ -92,7 +92,7 @@ public class TestHoodieSplitReaderFunction {
           conf,
           tableSchema,
           null,  // null requiredSchema should throw
-          mockInternalSchemaManager,
+          mockSchemaEvolutionManager,
               "AVRO_PAYLOAD",
           Collections.emptyList(),
           false
@@ -108,7 +108,7 @@ public class TestHoodieSplitReaderFunction {
             conf,
             tableSchema,
             requiredSchema,
-            mockInternalSchemaManager,
+            mockSchemaEvolutionManager,
                 "AVRO_PAYLOAD",
             Collections.emptyList(),
             false
@@ -124,7 +124,7 @@ public class TestHoodieSplitReaderFunction {
             conf,
             tableSchema,
             requiredSchema,
-            mockInternalSchemaManager,
+            mockSchemaEvolutionManager,
                 "AVRO_PAYLOAD",
             Collections.emptyList(),
             false
@@ -140,7 +140,7 @@ public class TestHoodieSplitReaderFunction {
             conf,
             tableSchema,
             requiredSchema,
-            mockInternalSchemaManager,
+            mockSchemaEvolutionManager,
                 "AVRO_PAYLOAD",
             Collections.emptyList(),
             false
@@ -166,7 +166,7 @@ public class TestHoodieSplitReaderFunction {
               conf,
               tableSchema,
               requiredSchema,
-              mockInternalSchemaManager,
+              mockSchemaEvolutionManager,
 
               mergeType,
               Collections.emptyList(),
@@ -184,7 +184,7 @@ public class TestHoodieSplitReaderFunction {
             conf,
             tableSchema,
             requiredSchema,
-            mockInternalSchemaManager,
+            mockSchemaEvolutionManager,
             "AVRO_PAYLOAD",
             Collections.emptyList(),
             false
@@ -205,7 +205,7 @@ public class TestHoodieSplitReaderFunction {
             conf,
             customTableSchema,
             customRequiredSchema,
-            mockInternalSchemaManager,
+            mockSchemaEvolutionManager,
                 "AVRO_PAYLOAD",
             Collections.emptyList(),
             false
@@ -222,7 +222,7 @@ public class TestHoodieSplitReaderFunction {
             conf,
             tableSchema,
             requiredSchema,
-            mockInternalSchemaManager,
+            mockSchemaEvolutionManager,
                 "AVRO_PAYLOAD",
             Collections.emptyList(),
             false
@@ -235,7 +235,7 @@ public class TestHoodieSplitReaderFunction {
             conf,
             tableSchema,
             requiredSchema,
-            mockInternalSchemaManager,
+            mockSchemaEvolutionManager,
                 "AVRO_PAYLOAD",
             Collections.emptyList(),
             false
@@ -248,7 +248,7 @@ public class TestHoodieSplitReaderFunction {
             conf,
             tableSchema,
             requiredSchema,
-            mockInternalSchemaManager,
+            mockSchemaEvolutionManager,
 
                 "AVRO_PAYLOAD",
             Collections.emptyList(),
@@ -266,7 +266,7 @@ public class TestHoodieSplitReaderFunction {
             conf,
             tableSchema,
             requiredSchema,
-            mockInternalSchemaManager,
+            mockSchemaEvolutionManager,
                 "AVRO_PAYLOAD",
             Collections.emptyList(),
             false
@@ -283,7 +283,7 @@ public class TestHoodieSplitReaderFunction {
             conf,
             tableSchema,
             requiredSchema,
-            mockInternalSchemaManager,
+            mockSchemaEvolutionManager,
                 "AVRO_PAYLOAD",
             Collections.emptyList(),
             false
@@ -299,7 +299,7 @@ public class TestHoodieSplitReaderFunction {
             conf,
             tableSchema,
             requiredSchema,
-            mockInternalSchemaManager,
+            mockSchemaEvolutionManager,
                 "AVRO_PAYLOAD",
             Collections.emptyList(),
             true
@@ -321,7 +321,7 @@ public class TestHoodieSplitReaderFunction {
                     conf,
                     tableSchema,
                     requiredSchema,
-                    mockInternalSchemaManager,
+                    mockSchemaEvolutionManager,
                     "AVRO_PAYLOAD",
                     predicates,
                     true
@@ -337,7 +337,7 @@ public class TestHoodieSplitReaderFunction {
             conf,
             tableSchema,
             requiredSchema,
-            mockInternalSchemaManager,
+            mockSchemaEvolutionManager,
                 "AVRO_PAYLOAD",
             Collections.emptyList(),
             false
@@ -347,14 +347,14 @@ public class TestHoodieSplitReaderFunction {
   }
 
   @Test
-  public void testConstructorValidatesInternalSchemaManager() {
-    // Test that constructor requires non-null InternalSchemaManager
+  public void testConstructorValidatesSchemaEvolutionManager() {
+    // Test that constructor requires non-null SchemaEvolutionManager
     assertThrows(IllegalArgumentException.class, () -> {
       new HoodieSplitReaderFunction(
           conf,
           tableSchema,
           requiredSchema,
-          null,  // null InternalSchemaManager should throw
+          null,  // null SchemaEvolutionManager should throw
           "AVRO_PAYLOAD",
           Collections.emptyList(),
           false
@@ -363,8 +363,8 @@ public class TestHoodieSplitReaderFunction {
   }
 
   @Test
-  public void testInternalSchemaManagerIsStored() {
-    InternalSchemaManager customManager = mock(InternalSchemaManager.class);
+  public void testSchemaEvolutionManagerIsStored() {
+    SchemaEvolutionManager customManager = mock(SchemaEvolutionManager.class);
 
     HoodieSplitReaderFunction function =
         new HoodieSplitReaderFunction(
@@ -377,7 +377,7 @@ public class TestHoodieSplitReaderFunction {
             false
         );
 
-    assertNotNull(function, "Function should be created with custom InternalSchemaManager");
+    assertNotNull(function, "Function should be created with custom SchemaEvolutionManager");
   }
 
   // -------------------------------------------------------------------------
@@ -391,7 +391,7 @@ public class TestHoodieSplitReaderFunction {
             conf,
             tableSchema,
             requiredSchema,
-            mockInternalSchemaManager,
+            mockSchemaEvolutionManager,
             "AVRO_PAYLOAD",
             Collections.emptyList(),
             false
@@ -407,7 +407,7 @@ public class TestHoodieSplitReaderFunction {
             conf,
             null,
             requiredSchema,
-            mockInternalSchemaManager,
+            mockSchemaEvolutionManager,
             "AVRO_PAYLOAD",
             Collections.emptyList(),
             false
@@ -421,7 +421,7 @@ public class TestHoodieSplitReaderFunction {
             conf,
             tableSchema,
             null,
-            mockInternalSchemaManager,
+            mockSchemaEvolutionManager,
             "AVRO_PAYLOAD",
             Collections.emptyList(),
             false
@@ -432,7 +432,7 @@ public class TestHoodieSplitReaderFunction {
   public void testDefaultConstructor() {
     HoodieSplitReaderFunction function =
         new HoodieSplitReaderFunction(
-            conf, tableSchema, requiredSchema, mockInternalSchemaManager,
+            conf, tableSchema, requiredSchema, mockSchemaEvolutionManager,
             "AVRO_PAYLOAD", Collections.emptyList(), false);
 
     assertNotNull(function);

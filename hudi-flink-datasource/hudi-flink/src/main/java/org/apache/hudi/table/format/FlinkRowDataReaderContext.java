@@ -74,16 +74,16 @@ public class FlinkRowDataReaderContext extends HoodieReaderContext<RowData> {
   private final Lazy<List<ExpressionPredicates.Predicate>> lazyBootstrapSafeFilters;
   private final Lazy<List<ExpressionPredicates.Predicate>> lazyMorSafeFilters;
   private final Lazy<List<String>> lazyRecordKeys;
-  private final Supplier<InternalSchemaManager> internalSchemaManager;
+  private final Supplier<SchemaEvolutionManager> schemaEvolutionManager;
 
   public FlinkRowDataReaderContext(
       StorageConfiguration<?> storageConfiguration,
-      Supplier<InternalSchemaManager> internalSchemaManager,
+      Supplier<SchemaEvolutionManager> schemaEvolutionManager,
       List<ExpressionPredicates.Predicate> allPredicates,
       HoodieTableConfig tableConfig,
       Option<InstantRange> instantRangeOpt) {
     super(storageConfiguration, tableConfig, instantRangeOpt, Option.empty(), new FlinkRecordContext(tableConfig, storageConfiguration));
-    this.internalSchemaManager = internalSchemaManager;
+    this.schemaEvolutionManager = schemaEvolutionManager;
     this.allPredicates = allPredicates;
     this.lazyBootstrapSafeFilters = Lazy.lazily(() -> allPredicates.stream().filter(this::filterIsSafeForBootstrap).collect(Collectors.toList()));
     this.lazyMorSafeFilters = Lazy.lazily(() -> allPredicates.stream().filter(this::filterIsSafeForMorMerging).collect(Collectors.toList()));
@@ -103,7 +103,7 @@ public class FlinkRowDataReaderContext extends HoodieReaderContext<RowData> {
     }
     boolean isLogFile = FSUtils.isLogFile(filePath);
     // disable schema evolution in fileReader if it's log file, since schema evolution for log file is handled in `FileGroupRecordBuffer`
-    InternalSchemaManager schemaManager = isLogFile ? InternalSchemaManager.DISABLED : internalSchemaManager.get();
+    SchemaEvolutionManager schemaManager = isLogFile ? SchemaEvolutionManager.DISABLED : schemaEvolutionManager.get();
 
     HoodieRowDataParquetReader rowDataParquetReader =
         (HoodieRowDataParquetReader) HoodieIOFactory.getIOFactory(storage)

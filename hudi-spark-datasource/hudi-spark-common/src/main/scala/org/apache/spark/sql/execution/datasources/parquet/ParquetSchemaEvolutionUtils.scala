@@ -18,7 +18,7 @@
 package org.apache.spark.sql.execution.datasources.parquet
 
 import org.apache.hudi.{HoodieSchemaConversionUtils, SparkAdapterSupport}
-import org.apache.hudi.client.utils.SparkInternalSchemaConverter
+import org.apache.hudi.client.utils.SparkSchemaEvolutionConverter
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.schema.HoodieSchema
 import org.apache.hudi.common.schema.evolution.{HoodieSchemaEvolutionUtils, HoodieSchemaHistoryCache, HoodieSchemaMerger}
@@ -55,11 +55,11 @@ class ParquetSchemaEvolutionUtils(sharedConf: Configuration,
 
   private lazy val schemaUtils: HoodieSchemaUtils = sparkAdapter.getSchemaUtils
 
-  private lazy val tablePath: String = sharedConf.get(SparkInternalSchemaConverter.HOODIE_TABLE_PATH)
+  private lazy val tablePath: String = sharedConf.get(SparkSchemaEvolutionConverter.HOODIE_TABLE_PATH)
   private lazy val fileSchema: HoodieSchema = if (shouldUseInternalSchema) {
     val commitInstantTime = FSUtils.getCommitTime(filePath.getName).toLong
     //TODO: HARDCODED TIMELINE OBJECT
-    val validCommits = sharedConf.get(SparkInternalSchemaConverter.HOODIE_VALID_COMMITS_LIST)
+    val validCommits = sharedConf.get(SparkSchemaEvolutionConverter.HOODIE_VALID_COMMITS_LIST)
     val layout = TimelineLayout.fromVersion(TimelineLayoutVersion.CURR_LAYOUT_VERSION)
     HoodieSchemaHistoryCache.getSchemaByVersionId(commitInstantTime, tablePath,
       HoodieStorageUtils.getStorage(tablePath, HadoopFSUtils.getStorageConf(sharedConf)), if (validCommits == null) "" else validCommits, layout)
@@ -139,7 +139,7 @@ class ParquetSchemaEvolutionUtils(sharedConf: Configuration,
 
       hadoopAttemptConf.set(ParquetReadSupport.SPARK_ROW_REQUESTED_SCHEMA, mergedStructType.json)
 
-      SparkInternalSchemaConverter.collectTypeChangedCols(querySchemaOption.get(), mergedSchema)
+      SparkSchemaEvolutionConverter.collectTypeChangedCols(querySchemaOption.get(), mergedSchema)
     } else {
       val (implicitTypeChangeInfo, sparkRequestSchema) = HoodieParquetFileFormatHelper.buildImplicitSchemaChangeInfo(hadoopAttemptConf, footerFileMetaData, requiredSchema)
       if (!implicitTypeChangeInfo.isEmpty) {
@@ -196,7 +196,7 @@ class ParquetSchemaEvolutionUtils(sharedConf: Configuration,
 object ParquetSchemaEvolutionUtils {
   def pruneEvolutionSchema(evolutionSchemaOpt: util.Option[HoodieSchema], requiredSchema: StructType): util.Option[HoodieSchema] = {
     if (evolutionSchemaOpt.isPresent && requiredSchema.nonEmpty) {
-      util.Option.of(SparkInternalSchemaConverter.convertAndPruneStructTypeToHoodieSchema(requiredSchema, evolutionSchemaOpt.get()))
+      util.Option.of(SparkSchemaEvolutionConverter.convertAndPruneStructTypeToHoodieSchema(requiredSchema, evolutionSchemaOpt.get()))
     } else {
       evolutionSchemaOpt
     }

@@ -17,7 +17,7 @@
 
 package org.apache.spark.sql.execution.datasources.parquet;
 
-import org.apache.hudi.client.utils.SparkInternalSchemaConverter;
+import org.apache.hudi.client.utils.SparkSchemaEvolutionConverter;
 import org.apache.hudi.common.util.collection.Pair;
 
 import org.apache.spark.memory.MemoryMode;
@@ -107,7 +107,7 @@ public class HoodieVectorizedParquetRecordReader extends VectorizedParquetRecord
     ColumnarBatch currentColumnBatch = super.resultBatch();
     boolean changed = false;
     for (Map.Entry<Integer, Pair<DataType, DataType>> entry : typeChangeInfos.entrySet()) {
-      boolean rewrite = SparkInternalSchemaConverter
+      boolean rewrite = SparkSchemaEvolutionConverter
           .convertColumnVectorType((WritableColumnVector) currentColumnBatch.column(entry.getKey()),
               idToColumnVectors.get(entry.getKey()), currentColumnBatch.numRows());
       if (rewrite) {

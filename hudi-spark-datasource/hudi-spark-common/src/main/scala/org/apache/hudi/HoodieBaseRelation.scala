@@ -20,7 +20,7 @@ package org.apache.hudi
 import org.apache.hudi.HoodieBaseRelation.{convertToHoodieSchema, createHFileReader, isSchemaEvolutionEnabledOnRead, metaFieldNames, projectSchema, sparkAdapter, BaseFileReader}
 import org.apache.hudi.HoodieConversionUtils.toScalaOption
 import org.apache.hudi.avro.HoodieAvroUtils
-import org.apache.hudi.client.utils.SparkInternalSchemaConverter
+import org.apache.hudi.client.utils.SparkSchemaEvolutionConverter
 import org.apache.hudi.common.config.{ConfigProperty, HoodieMetadataConfig}
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.fs.FSUtils.getRelativePartitionPath
@@ -682,9 +682,9 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
       val instantFileNameGenerator = TimelineLayout.fromVersion(timeline.getTimelineLayoutVersion).getInstantFileNameGenerator
       val validCommits = timeline.getInstants.iterator.asScala.map(instant => instantFileNameGenerator.getFileName(instant)).mkString(",")
 
-      conf.set(SparkInternalSchemaConverter.HOODIE_QUERY_SCHEMA, querySchemaString)
-      conf.set(SparkInternalSchemaConverter.HOODIE_TABLE_PATH, metaClient.getBasePath.toString)
-      conf.set(SparkInternalSchemaConverter.HOODIE_VALID_COMMITS_LIST, validCommits)
+      conf.set(SparkSchemaEvolutionConverter.HOODIE_QUERY_SCHEMA, querySchemaString)
+      conf.set(SparkSchemaEvolutionConverter.HOODIE_TABLE_PATH, metaClient.getBasePath.toString)
+      conf.set(SparkSchemaEvolutionConverter.HOODIE_VALID_COMMITS_LIST, validCommits)
     }
     conf
   }
@@ -727,7 +727,7 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
     if (hoodieTableSchema.evolutionSchema.isEmpty || hoodieTableSchema.evolutionSchema.get.isEmptySchema) {
       Option.empty[HoodieSchema]
     } else {
-      Some(SparkInternalSchemaConverter.convertAndPruneStructTypeToHoodieSchema(
+      Some(SparkSchemaEvolutionConverter.convertAndPruneStructTypeToHoodieSchema(
         prunedStructSchema, hoodieTableSchema.evolutionSchema.get))
     }
   }

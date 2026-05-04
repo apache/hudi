@@ -34,7 +34,7 @@ import java.util.function.Supplier;
  */
 public class FlinkReaderContextFactory implements ReaderContextFactory<RowData> {
   private final HoodieTableMetaClient metaClient;
-  private InternalSchemaManager internalSchemaManager;
+  private SchemaEvolutionManager schemaEvolutionManager;
 
   public FlinkReaderContextFactory(HoodieTableMetaClient metaClient) {
     this.metaClient = metaClient;
@@ -42,15 +42,15 @@ public class FlinkReaderContextFactory implements ReaderContextFactory<RowData> 
 
   @Override
   public HoodieReaderContext<RowData> getContext() {
-    Supplier<InternalSchemaManager> internalSchemaManagerSupplier = () -> {
-      // CAUTION: instantiate internalSchemaManager lazily here since it may not be needed for FG reader,
-      // e.g., schema evolution for log files in FG reader do not use internalSchemaManager.
-      if (internalSchemaManager == null) {
-        internalSchemaManager = InternalSchemaManager.get(metaClient.getStorageConf(), metaClient);
+    Supplier<SchemaEvolutionManager> schemaEvolutionManagerSupplier = () -> {
+      // CAUTION: instantiate schemaEvolutionManager lazily here since it may not be needed for FG reader,
+      // e.g., schema evolution for log files in FG reader do not use schemaEvolutionManager.
+      if (schemaEvolutionManager == null) {
+        schemaEvolutionManager = SchemaEvolutionManager.get(metaClient.getStorageConf(), metaClient);
       }
-      return internalSchemaManager;
+      return schemaEvolutionManager;
     };
     return new FlinkRowDataReaderContext(
-        metaClient.getStorageConf(), internalSchemaManagerSupplier, Collections.emptyList(), metaClient.getTableConfig(), Option.empty());
+        metaClient.getStorageConf(), schemaEvolutionManagerSupplier, Collections.emptyList(), metaClient.getTableConfig(), Option.empty());
   }
 }

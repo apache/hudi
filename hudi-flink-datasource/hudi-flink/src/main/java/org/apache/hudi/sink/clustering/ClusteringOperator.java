@@ -52,7 +52,7 @@ import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieFlinkTable;
 import org.apache.hudi.table.format.FormatUtils;
 import org.apache.hudi.table.format.HoodieRowDataParquetReader;
-import org.apache.hudi.table.format.InternalSchemaManager;
+import org.apache.hudi.table.format.SchemaEvolutionManager;
 import org.apache.hudi.util.DataTypeUtils;
 import org.apache.hudi.util.FlinkTaskContextSupplier;
 import org.apache.hudi.util.FlinkWriteClients;
@@ -294,7 +294,7 @@ public class ClusteringOperator extends TableStreamOperator<ClusteringCommitEven
         Option.ofNullable(clusterOperation.getDataFilePath()).map(HoodieBaseFile::new).orElse(null),
         clusterOperation.getDeltaFilePaths().stream().map(HoodieLogFile::new).collect(Collectors.toList()));
 
-    HoodieFileGroupReader<RowData> fileGroupReader = FormatUtils.createFileGroupReader(table.getMetaClient(), writeConfig, InternalSchemaManager.DISABLED,
+    HoodieFileGroupReader<RowData> fileGroupReader = FormatUtils.createFileGroupReader(table.getMetaClient(), writeConfig, SchemaEvolutionManager.DISABLED,
         fileSlice, schema, readerSchema, instantTime, FlinkOptions.REALTIME_PAYLOAD_COMBINE, false, Collections.emptyList(), Option.empty());
     return fileGroupReader.getClosableIterator();
   }

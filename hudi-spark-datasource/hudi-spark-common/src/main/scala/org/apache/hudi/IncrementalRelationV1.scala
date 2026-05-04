@@ -21,7 +21,7 @@ import org.apache.hudi.DataSourceReadOptions.INCREMENTAL_READ_SCHEMA_USE_END_INS
 import org.apache.hudi.HoodieBaseRelation.isSchemaEvolutionEnabledOnRead
 import org.apache.hudi.HoodieSparkConfUtils.getHollowCommitHandling
 import org.apache.hudi.client.common.HoodieSparkEngineContext
-import org.apache.hudi.client.utils.SparkInternalSchemaConverter
+import org.apache.hudi.client.utils.SparkSchemaEvolutionConverter
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.{HoodieCommitMetadata, HoodieFileFormat, HoodieRecord}
 import org.apache.hudi.common.schema.{HoodieSchema, HoodieSchemaType}
@@ -208,9 +208,9 @@ class IncrementalRelationV1(val sqlContext: SQLContext,
       val validCommits = metaClient
         .getCommitsAndCompactionTimeline.filterCompletedInstants.getInstantsAsStream.toArray()
         .map(e => fileNameGenerator.getFileName(e.asInstanceOf[HoodieInstant])).mkString(",")
-      sqlContext.sparkContext.hadoopConfiguration.set(SparkInternalSchemaConverter.HOODIE_QUERY_SCHEMA, HoodieSchemaSerDe.toJson(evolutionSchema))
-      sqlContext.sparkContext.hadoopConfiguration.set(SparkInternalSchemaConverter.HOODIE_TABLE_PATH, metaClient.getBasePath.toString)
-      sqlContext.sparkContext.hadoopConfiguration.set(SparkInternalSchemaConverter.HOODIE_VALID_COMMITS_LIST, validCommits)
+      sqlContext.sparkContext.hadoopConfiguration.set(SparkSchemaEvolutionConverter.HOODIE_QUERY_SCHEMA, HoodieSchemaSerDe.toJson(evolutionSchema))
+      sqlContext.sparkContext.hadoopConfiguration.set(SparkSchemaEvolutionConverter.HOODIE_TABLE_PATH, metaClient.getBasePath.toString)
+      sqlContext.sparkContext.hadoopConfiguration.set(SparkSchemaEvolutionConverter.HOODIE_VALID_COMMITS_LIST, validCommits)
       val formatClassName = metaClient.getTableConfig.getBaseFileFormat match {
         case HoodieFileFormat.PARQUET => LegacyHoodieParquetFileFormat.FILE_FORMAT_ID
         case HoodieFileFormat.ORC => "orc"

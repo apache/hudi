@@ -38,7 +38,7 @@ import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.format.FormatUtils;
-import org.apache.hudi.table.format.InternalSchemaManager;
+import org.apache.hudi.table.format.SchemaEvolutionManager;
 import org.apache.hudi.util.FlinkTables;
 import org.apache.hudi.util.FlinkWriteClients;
 import org.apache.hudi.util.StreamerUtil;
@@ -85,7 +85,7 @@ public class BootstrapOperator
 
   private transient ListState<String> instantState;
   private transient HoodieTableMetaClient metaClient;
-  private transient InternalSchemaManager internalSchemaManager;
+  private transient SchemaEvolutionManager schemaEvolutionManager;
 
   private final Pattern pattern;
   private String lastInstantTime;
@@ -125,7 +125,7 @@ public class BootstrapOperator
         this.conf, false, !OptionsResolver.isIncrementalJobGraph(conf));
     this.hoodieTable = FlinkTables.createTable(writeConfig, hadoopConf, getRuntimeContext());
     this.metaClient = StreamerUtil.createMetaClient(conf, hadoopConf);
-    this.internalSchemaManager = InternalSchemaManager.get(hoodieTable.getStorageConf(), metaClient);
+    this.schemaEvolutionManager = SchemaEvolutionManager.get(hoodieTable.getStorageConf(), metaClient);
 
     preLoadIndexRecords();
   }
@@ -212,7 +212,7 @@ public class BootstrapOperator
         .filter(logFile -> isValidFile(logFile.getPathInfo()))
         .forEach(scanFileSlice::addLogFile);
 
-    HoodieFileGroupReader<RowData> fileGroupReader = FormatUtils.createFileGroupReader(metaClient, writeConfig, internalSchemaManager, scanFileSlice,
+    HoodieFileGroupReader<RowData> fileGroupReader = FormatUtils.createFileGroupReader(metaClient, writeConfig, schemaEvolutionManager, scanFileSlice,
         tableSchema, tableSchema, scanFileSlice.getLatestInstantTime(), FlinkOptions.REALTIME_PAYLOAD_COMBINE, true, Collections.emptyList(), Option.empty());
     return fileGroupReader.getClosableKeyIterator();
   }

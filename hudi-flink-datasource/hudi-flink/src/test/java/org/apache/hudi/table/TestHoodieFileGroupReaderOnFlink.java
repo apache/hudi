@@ -46,7 +46,7 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
 import org.apache.hudi.table.format.FlinkRowDataReaderContext;
-import org.apache.hudi.table.format.InternalSchemaManager;
+import org.apache.hudi.table.format.SchemaEvolutionManager;
 import org.apache.hudi.util.AvroToRowDataConverters;
 import org.apache.hudi.util.HoodieSchemaConverter;
 import org.apache.hudi.util.RowDataQueryContexts;
@@ -113,7 +113,7 @@ public class TestHoodieFileGroupReaderOnFlink extends TestHoodieFileGroupReaderB
       HoodieTableMetaClient metaClient) {
     return new FlinkRowDataReaderContext(
         storageConf,
-        () -> InternalSchemaManager.DISABLED,
+        () -> SchemaEvolutionManager.DISABLED,
         Collections.emptyList(),
         metaClient.getTableConfig(),
         instantRangeOpt);
@@ -205,7 +205,7 @@ public class TestHoodieFileGroupReaderOnFlink extends TestHoodieFileGroupReaderB
     HoodieTableConfig tableConfig = Mockito.mock(HoodieTableConfig.class);
     when(tableConfig.populateMetaFields()).thenReturn(true);
     FlinkRowDataReaderContext readerContext =
-        new FlinkRowDataReaderContext(getStorageConf(), () -> InternalSchemaManager.DISABLED, Collections.emptyList(), tableConfig, Option.empty());
+        new FlinkRowDataReaderContext(getStorageConf(), () -> SchemaEvolutionManager.DISABLED, Collections.emptyList(), tableConfig, Option.empty());
     HoodieSchema schema = HoodieSchema.createRecord("test", null, null,
         Arrays.asList(
             HoodieSchemaField.of("field1", HoodieSchema.create(HoodieSchemaType.STRING)),
@@ -222,7 +222,7 @@ public class TestHoodieFileGroupReaderOnFlink extends TestHoodieFileGroupReaderB
     HoodieTableConfig tableConfig = Mockito.mock(HoodieTableConfig.class);
     when(tableConfig.populateMetaFields()).thenReturn(true);
     FlinkRowDataReaderContext readerContext =
-        new FlinkRowDataReaderContext(getStorageConf(), () -> InternalSchemaManager.DISABLED, Collections.emptyList(), tableConfig, Option.empty());
+        new FlinkRowDataReaderContext(getStorageConf(), () -> SchemaEvolutionManager.DISABLED, Collections.emptyList(), tableConfig, Option.empty());
     HoodieSchema schema = HoodieSchema.createRecord("test", null, null,
         Arrays.asList(
             HoodieSchemaField.of(HoodieRecord.RECORD_KEY_METADATA_FIELD, HoodieSchema.create(HoodieSchemaType.STRING)),
@@ -239,7 +239,7 @@ public class TestHoodieFileGroupReaderOnFlink extends TestHoodieFileGroupReaderB
     when(tableConfig.populateMetaFields()).thenReturn(false);
     when(tableConfig.getRecordKeyFields()).thenReturn(Option.of(new String[] {"field1"}));
     FlinkRowDataReaderContext readerContext =
-        new FlinkRowDataReaderContext(getStorageConf(), () -> InternalSchemaManager.DISABLED, Collections.emptyList(), tableConfig, Option.empty());
+        new FlinkRowDataReaderContext(getStorageConf(), () -> SchemaEvolutionManager.DISABLED, Collections.emptyList(), tableConfig, Option.empty());
     HoodieSchema schema = HoodieSchema.createRecord("test", null, null,
         Arrays.asList(
             HoodieSchemaField.of("field1", HoodieSchema.create(HoodieSchemaType.STRING)),
@@ -256,7 +256,7 @@ public class TestHoodieFileGroupReaderOnFlink extends TestHoodieFileGroupReaderB
     when(tableConfig.populateMetaFields()).thenReturn(false);
     when(tableConfig.getRecordKeyFields()).thenReturn(Option.of(new String[] {"field1", "field2"}));
     FlinkRowDataReaderContext readerContext =
-        new FlinkRowDataReaderContext(getStorageConf(), () -> InternalSchemaManager.DISABLED, Collections.emptyList(), tableConfig, Option.empty());
+        new FlinkRowDataReaderContext(getStorageConf(), () -> SchemaEvolutionManager.DISABLED, Collections.emptyList(), tableConfig, Option.empty());
 
     HoodieSchema schema = HoodieSchema.createRecord("test", null, null,
         Arrays.asList(

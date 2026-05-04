@@ -34,7 +34,7 @@ import org.apache.hudi.source.split.HoodieSourceSplit;
 import org.apache.hudi.source.split.HoodieSourceSplitComparator;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
-import org.apache.hudi.table.format.InternalSchemaManager;
+import org.apache.hudi.table.format.SchemaEvolutionManager;
 import org.apache.hudi.util.HoodieSchemaConverter;
 import org.apache.hudi.utils.TestConfigurations;
 import org.apache.hudi.utils.TestData;
@@ -417,7 +417,7 @@ public class TestHoodieSource {
         conf,
         schema, // schema will be resolved from table
         schema, // required schema
-        InternalSchemaManager.get(hadoopConf, this.metaClient),
+        SchemaEvolutionManager.get(hadoopConf, this.metaClient),
         conf.get(FlinkOptions.MERGE_TYPE),
         Collections.emptyList(),
             false);

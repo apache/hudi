@@ -37,7 +37,7 @@ import org.apache.hudi.source.split.HoodieSourceSplit;
 import org.apache.flink.connector.base.source.reader.RecordsWithSplitIds;
 import org.apache.flink.table.data.RowData;
 import org.apache.hudi.table.format.FormatUtils;
-import org.apache.hudi.table.format.InternalSchemaManager;
+import org.apache.hudi.table.format.SchemaEvolutionManager;
 import org.apache.hudi.util.StreamerUtil;
 
 import java.io.IOException;
@@ -58,14 +58,14 @@ public class HoodieSplitReaderFunction extends AbstractSplitReaderFunction {
       Configuration configuration,
       HoodieSchema tableSchema,
       HoodieSchema requiredSchema,
-      InternalSchemaManager internalSchemaManager,
+      SchemaEvolutionManager schemaEvolutionManager,
       String mergeType,
       List<ExpressionPredicates.Predicate> predicates,
       boolean emitDelete) {
-    super(configuration, predicates, internalSchemaManager, emitDelete);
+    super(configuration, predicates, schemaEvolutionManager, emitDelete);
     ValidationUtils.checkArgument(tableSchema != null, "tableSchema can't be null");
     ValidationUtils.checkArgument(requiredSchema != null, "requiredSchema can't be null");
-    ValidationUtils.checkArgument(internalSchemaManager != null, "internalSchemaManager can't be null");
+    ValidationUtils.checkArgument(schemaEvolutionManager != null, "schemaEvolutionManager can't be null");
     this.tableSchema = tableSchema;
     this.requiredSchema = requiredSchema;
     this.mergeType = mergeType;
@@ -115,7 +115,7 @@ public class HoodieSplitReaderFunction extends AbstractSplitReaderFunction {
     return FormatUtils.createFileGroupReader(
       metaClient,
       getWriteConfig(),
-      internalSchemaManager,
+      schemaEvolutionManager,
       fileSlice,
       tableSchema,
       requiredSchema,

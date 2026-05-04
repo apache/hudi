@@ -245,7 +245,7 @@ public class TypeConverters {
 
       case ROW: {
         if (from == ROW) {
-          // Assumption: InternalSchemaManager should produce a cast that is of the same size
+          // Assumption: SchemaEvolutionManager should produce a cast that is of the same size
           try {
             // note: HoodieSchemaMerger guarantees that the schema to be read fromType is orientated in the same order as toType
             // hence, we can match types by position as it is guaranteed that it is referencing the same field

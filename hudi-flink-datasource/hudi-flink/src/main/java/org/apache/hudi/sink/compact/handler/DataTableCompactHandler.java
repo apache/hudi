@@ -31,7 +31,7 @@ import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.table.HoodieFlinkTable;
 import org.apache.hudi.table.action.compact.HoodieFlinkMergeOnReadTableCompactor;
 import org.apache.hudi.table.format.FlinkRowDataReaderContext;
-import org.apache.hudi.table.format.InternalSchemaManager;
+import org.apache.hudi.table.format.SchemaEvolutionManager;
 import org.apache.hudi.util.CompactionUtil;
 
 import lombok.extern.slf4j.Slf4j;
@@ -71,7 +71,7 @@ public class DataTableCompactHandler implements CompactHandler {
   /**
    * Schema-on-read evolution manager used for handling schema evolution.
    */
-  private transient InternalSchemaManager internalSchemaManager;
+  private transient SchemaEvolutionManager schemaEvolutionManager;
 
   public DataTableCompactHandler(HoodieFlinkWriteClient writeClient, int taskId) {
     this.table = writeClient.getHoodieTable();
@@ -179,18 +179,18 @@ public class DataTableCompactHandler implements CompactHandler {
    */
   protected HoodieReaderContext<?> createReaderContext(boolean needReloadMetaClient) {
     HoodieTableMetaClient metaClient = table.getMetaClient();
-    // CAUTION: InternalSchemaManager will scan timeline, reusing the meta client so that the timeline is updated.
-    // Instantiate internalSchemaManager lazily here since it may not be needed for FG reader, e.g., schema evolution
-    // for log files in FG reader do not use internalSchemaManager.
-    Supplier<InternalSchemaManager> internalSchemaManagerSupplier = () -> {
-      if (internalSchemaManager == null || needReloadMetaClient) {
-        internalSchemaManager = InternalSchemaManager.get(metaClient.getStorageConf(), metaClient);
+    // CAUTION: SchemaEvolutionManager will scan timeline, reusing the meta client so that the timeline is updated.
+    // Instantiate schemaEvolutionManager lazily here since it may not be needed for FG reader, e.g., schema evolution
+    // for log files in FG reader do not use schemaEvolutionManager.
+    Supplier<SchemaEvolutionManager> schemaEvolutionManagerSupplier = () -> {
+      if (schemaEvolutionManager == null || needReloadMetaClient) {
+        schemaEvolutionManager = SchemaEvolutionManager.get(metaClient.getStorageConf(), metaClient);
       }
-      return internalSchemaManager;
+      return schemaEvolutionManager;
     };
     // initialize storage conf lazily.
     StorageConfiguration<?> readerConf = writeClient.getEngineContext().getStorageConf();
-    return new FlinkRowDataReaderContext(readerConf, internalSchemaManagerSupplier, Collections.emptyList(), metaClient.getTableConfig(), Option.empty());
+    return new FlinkRowDataReaderContext(readerConf, schemaEvolutionManagerSupplier, Collections.emptyList(), metaClient.getTableConfig(), Option.empty());
   }
 
   /**

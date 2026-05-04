@@ -35,7 +35,7 @@ import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.source.ExpressionPredicates.Predicate;
 import org.apache.hudi.table.format.FilePathUtils;
 import org.apache.hudi.table.format.FormatUtils;
-import org.apache.hudi.table.format.InternalSchemaManager;
+import org.apache.hudi.table.format.SchemaEvolutionManager;
 import org.apache.hudi.table.format.RecordIterators;
 import org.apache.hudi.util.FlinkWriteClients;
 import org.apache.hudi.util.StreamerUtil;
@@ -126,7 +126,7 @@ public class MergeOnReadInputFormat
   @Getter
   private boolean closed = true;
 
-  protected final InternalSchemaManager internalSchemaManager;
+  protected final SchemaEvolutionManager schemaEvolutionManager;
 
   /**
    * The table metadata client
@@ -145,7 +145,7 @@ public class MergeOnReadInputFormat
       List<Predicate> predicates,
       long limit,
       boolean emitDelete,
-      InternalSchemaManager internalSchemaManager) {
+      SchemaEvolutionManager schemaEvolutionManager) {
     this.conf = conf;
     this.tableState = tableState;
     this.fieldNames = tableState.getRowType().getFieldNames();
@@ -156,7 +156,7 @@ public class MergeOnReadInputFormat
     this.predicates = predicates;
     this.limit = limit;
     this.emitDelete = emitDelete;
-    this.internalSchemaManager = internalSchemaManager;
+    this.schemaEvolutionManager = schemaEvolutionManager;
   }
 
   /**
@@ -280,7 +280,7 @@ public class MergeOnReadInputFormat
     );
 
     return RecordIterators.getParquetRecordIterator(
-        internalSchemaManager,
+        schemaEvolutionManager,
         this.conf.get(FlinkOptions.READ_UTC_TIMEZONE),
         true,
         HadoopConfigurations.getParquetConf(this.conf, hadoopConf),
@@ -340,7 +340,7 @@ public class MergeOnReadInputFormat
         "",
         split.getBasePath().map(HoodieBaseFile::new).orElse(null),
         split.getLogPaths().map(logFiles -> logFiles.stream().map(HoodieLogFile::new).collect(Collectors.toList())).orElse(Collections.emptyList()));
-    return FormatUtils.createFileGroupReader(metaClient, writeConfig, internalSchemaManager, fileSlice,
+    return FormatUtils.createFileGroupReader(metaClient, writeConfig, schemaEvolutionManager, fileSlice,
         tableSchema, requiredSchema, split.getLatestCommit(), mergeType, emitDelete, predicates, split.getInstantRange());
   }
 
@@ -358,7 +358,7 @@ public class MergeOnReadInputFormat
     protected List<Predicate> predicates;
     protected long limit = -1;
     protected boolean emitDelete = false;
-    protected InternalSchemaManager internalSchemaManager = InternalSchemaManager.DISABLED;
+    protected SchemaEvolutionManager schemaEvolutionManager = SchemaEvolutionManager.DISABLED;
 
     public Builder config(Configuration conf) {
       this.conf = conf;
@@ -390,14 +390,14 @@ public class MergeOnReadInputFormat
       return this;
     }
 
-    public Builder internalSchemaManager(InternalSchemaManager internalSchemaManager) {
-      this.internalSchemaManager = internalSchemaManager;
+    public Builder schemaEvolutionManager(SchemaEvolutionManager schemaEvolutionManager) {
+      this.schemaEvolutionManager = schemaEvolutionManager;
       return this;
     }
 
     public MergeOnReadInputFormat build() {
       return new MergeOnReadInputFormat(conf, tableState,
-          fieldTypes, predicates, limit, emitDelete, internalSchemaManager);
+          fieldTypes, predicates, limit, emitDelete, schemaEvolutionManager);
     }
   }
 

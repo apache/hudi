@@ -60,7 +60,7 @@ public abstract class RecordIterators {
 
   public static ClosableIterator<RowData> getParquetRecordIterator(
       StorageConfiguration<?> conf,
-      InternalSchemaManager internalSchemaManager,
+      SchemaEvolutionManager schemaEvolutionManager,
       DataType dataType,
       HoodieSchema requestedSchema,
       StoragePath path,
@@ -75,7 +75,7 @@ public abstract class RecordIterators {
         FlinkOptions.READ_UTC_TIMEZONE.key(), FlinkOptions.READ_UTC_TIMEZONE.defaultValue());
     LinkedHashMap<String, Object> partitionSpec = getPartitionSpec(conf, path, fieldNames, fieldTypes);
     return RecordIterators.getParquetRecordIterator(
-        internalSchemaManager,
+        schemaEvolutionManager,
         useUTCTimeStamp,
         true,
         conf.unwrapAs(Configuration.class),
@@ -91,7 +91,7 @@ public abstract class RecordIterators {
   }
 
   public static ClosableIterator<RowData> getParquetRecordIterator(
-      InternalSchemaManager internalSchemaManager,
+      SchemaEvolutionManager schemaEvolutionManager,
       boolean utcTimestamp,
       boolean caseSensitive,
       Configuration conf,
@@ -113,7 +113,7 @@ public abstract class RecordIterators {
     }
     UnboundRecordFilter recordFilter = getUnboundRecordFilterInstance(conf);
 
-    HoodieSchema mergeSchema = internalSchemaManager.getMergeSchema(getFileName(path));
+    HoodieSchema mergeSchema = schemaEvolutionManager.getMergeSchema(getFileName(path));
     if (mergeSchema.isEmptySchema()) {
       return new ParquetSplitRecordIterator(
           ParquetSplitReaderUtil.genPartColumnarRowReader(
@@ -131,14 +131,14 @@ public abstract class RecordIterators {
               filterPredicate,
               recordFilter));
     } else {
-      CastMap castMap = internalSchemaManager.getCastMap(mergeSchema, fieldNames, fieldTypes, selectedFields);
+      CastMap castMap = schemaEvolutionManager.getCastMap(mergeSchema, fieldNames, fieldTypes, selectedFields);
       Option<RowDataProjection> castProjection = castMap.toRowDataProjection(selectedFields);
       ClosableIterator<RowData> itr = new ParquetSplitRecordIterator(
           ParquetSplitReaderUtil.genPartColumnarRowReader(
               utcTimestamp,
               caseSensitive,
               conf,
-              internalSchemaManager.getMergeFieldNames(mergeSchema, fieldNames), // the reconciled field names
+              schemaEvolutionManager.getMergeFieldNames(mergeSchema, fieldNames), // the reconciled field names
               castMap.getFileFieldTypes(),                                     // the reconciled field types
               partitionSpec,
               selectedFields,

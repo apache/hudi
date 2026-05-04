@@ -55,11 +55,11 @@ import java.util.stream.IntStream;
  * If field is renamed in queried schema, its old name will be returned, which is relevant at the provided time.
  * If type of field is changed, its old type will be returned, and projection will be created that will convert the old type to the queried one.
  */
-public class InternalSchemaManager implements Serializable {
+public class SchemaEvolutionManager implements Serializable {
 
   private static final long serialVersionUID = 1L;
 
-  public static final InternalSchemaManager DISABLED = new InternalSchemaManager(null, HoodieSchema.empty(), null, null,
+  public static final SchemaEvolutionManager DISABLED = new SchemaEvolutionManager(null, HoodieSchema.empty(), null, null,
       TimelineLayout.fromVersion(TimelineLayoutVersion.CURR_LAYOUT_VERSION), null);
 
   @Getter
@@ -70,7 +70,7 @@ public class InternalSchemaManager implements Serializable {
   private final HoodieTableConfig tableConfig;
   private final StorageConfiguration<?> storageConf;
 
-  public static InternalSchemaManager get(StorageConfiguration<?> conf, HoodieTableMetaClient metaClient) {
+  public static SchemaEvolutionManager get(StorageConfiguration<?> conf, HoodieTableMetaClient metaClient) {
     if (!isSchemaEvolutionEnabled(conf)) {
       return DISABLED;
     }
@@ -86,10 +86,10 @@ public class InternalSchemaManager implements Serializable {
         .getInstantsAsStream()
         .map(factory::getFileName)
         .collect(Collectors.joining(","));
-    return new InternalSchemaManager(conf, evolutionSchema.get(), validCommits, metaClient.getBasePath().toString(), metaClient.getTimelineLayout(), metaClient.getTableConfig());
+    return new SchemaEvolutionManager(conf, evolutionSchema.get(), validCommits, metaClient.getBasePath().toString(), metaClient.getTimelineLayout(), metaClient.getTableConfig());
   }
 
-  public InternalSchemaManager(StorageConfiguration<?> storageConf, HoodieSchema querySchema, String validCommits, String tablePath,
+  public SchemaEvolutionManager(StorageConfiguration<?> storageConf, HoodieSchema querySchema, String validCommits, String tablePath,
                                TimelineLayout layout, HoodieTableConfig tableConfig) {
     this.storageConf = storageConf;
     this.querySchema = querySchema;
