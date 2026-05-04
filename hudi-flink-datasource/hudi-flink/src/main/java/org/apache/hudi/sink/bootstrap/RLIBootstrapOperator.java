@@ -27,6 +27,7 @@ import org.apache.hudi.common.model.HoodieRecordGlobalLocation;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.metadata.HoodieBackedTableMetadata;
+import org.apache.hudi.metrics.FlinkMetricsUtils;
 import org.apache.hudi.util.StreamerUtil;
 import org.apache.hudi.utils.RuntimeContextUtils;
 
@@ -62,14 +63,12 @@ public class RLIBootstrapOperator
   @Override
   public void initializeState(StateInitializationContext context) throws Exception {
     loadedCnt = 0;
-    HoodieTableMetaClient metaClient = StreamerUtil.createMetaClient(conf);
-    this.metadataTable = (HoodieBackedTableMetadata) metaClient.getTableFormat().getMetadataFactory().create(
-        HoodieFlinkEngineContext.DEFAULT,
-        metaClient.getStorage(),
-        StreamerUtil.metadataConfig(conf),
-        conf.get(FlinkOptions.PATH));
+    HoodieTableMetaClient metaClient = createMetaClient();
+    this.metadataTable = createMetadataTable(metaClient);
+
     // Load RLI records
     preLoadRLIRecords();
+    FlinkMetricsUtils.registerMetadataTableMetrics(metadataTable, getMetricGroup());
   }
 
   @Override
@@ -81,6 +80,18 @@ public class RLIBootstrapOperator
   // -------------------------------------------------------------------------
   //  Utilities
   // -------------------------------------------------------------------------
+
+  protected HoodieTableMetaClient createMetaClient() {
+    return StreamerUtil.createMetaClient(conf);
+  }
+
+  protected HoodieBackedTableMetadata createMetadataTable(HoodieTableMetaClient metaClient) {
+    return (HoodieBackedTableMetadata) metaClient.getTableFormat().getMetadataFactory().create(
+        HoodieFlinkEngineContext.DEFAULT,
+        metaClient.getStorage(),
+        StreamerUtil.metadataConfig(conf),
+        conf.get(FlinkOptions.PATH));
+  }
 
   private void preLoadRLIRecords() {
     int taskID = RuntimeContextUtils.getIndexOfThisSubtask(getRuntimeContext());

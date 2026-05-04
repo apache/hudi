@@ -67,6 +67,7 @@ import java.util.stream.Collectors;
 public abstract class BaseTableMetadata extends AbstractHoodieTableMetadata {
 
   protected final HoodieTableMetaClient dataMetaClient;
+  @Getter
   protected final Option<HoodieMetadataMetrics> metrics;
   @Getter
   protected final HoodieMetadataConfig metadataConfig;

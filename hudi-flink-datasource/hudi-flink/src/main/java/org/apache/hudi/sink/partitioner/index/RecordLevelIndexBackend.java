@@ -18,6 +18,7 @@
 
 package org.apache.hudi.sink.partitioner.index;
 
+import org.apache.flink.metrics.MetricGroup;
 import org.apache.hudi.client.common.HoodieFlinkEngineContext;
 import org.apache.hudi.common.data.HoodieListData;
 import org.apache.hudi.common.data.HoodiePairData;
@@ -28,7 +29,9 @@ import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.metadata.HoodieBackedTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadata;
+import org.apache.hudi.metrics.FlinkMetricsUtils;
 import org.apache.hudi.sink.event.Correspondent;
 import org.apache.hudi.util.StreamerUtil;
 
@@ -138,6 +141,13 @@ public class RecordLevelIndexBackend implements MinibatchIndexBackend {
       this.metadataTable.close();
     } catch (Exception e) {
       throw new HoodieException("Exception happened during close metadata table.", e);
+    }
+  }
+
+  @Override
+  public void registerMetrics(MetricGroup metricGroup) {
+    if (metadataTable instanceof HoodieBackedTableMetadata) {
+      FlinkMetricsUtils.registerMetadataTableMetrics((HoodieBackedTableMetadata) metadataTable, metricGroup);
     }
   }
 }
