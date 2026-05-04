@@ -41,7 +41,6 @@ import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.hadoop.fs.HadoopFSUtils.convertToStoragePath
-import org.apache.hudi.internal.schema.utils.InternalSchemaUtils
 import org.apache.hudi.io.storage.HoodieSparkIOFactory
 import org.apache.hudi.metadata.HoodieTableMetadata
 import org.apache.hudi.storage.{HoodieStorageUtils, StoragePath, StoragePathInfo}
@@ -810,11 +809,8 @@ object HoodieBaseRelation extends SparkAdapterSupport {
     tableSchema match {
       case Right(evolutionSchema) =>
         checkState(!evolutionSchema.isEmptySchema)
-        // Prune by leaf-name via the legacy pruner at the bridge, then bring the result
-        // back as a HoodieSchema named "schema" for parity with the legacy converter output.
-        val internalSchema = HoodieSchemaInternalSchemaBridge.toInternalSchema(evolutionSchema)
-        val prunedInternalSchema = InternalSchemaUtils.pruneInternalSchema(internalSchema, requiredColumns.toList.asJava)
-        val prunedEvolutionSchema = HoodieSchemaInternalSchemaBridge.toHoodieSchema(prunedInternalSchema, "schema")
+        val prunedEvolutionSchema = HoodieSchemaInternalSchemaBridge.pruneByLeafNames(
+          evolutionSchema, requiredColumns.toList.asJava)
         val requiredStructSchema = HoodieSchemaConversionUtils.convertHoodieSchemaToStructType(prunedEvolutionSchema)
 
         (prunedEvolutionSchema, requiredStructSchema, Some(prunedEvolutionSchema))

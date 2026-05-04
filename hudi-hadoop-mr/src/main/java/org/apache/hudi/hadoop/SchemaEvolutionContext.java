@@ -212,10 +212,8 @@ public class SchemaEvolutionContext {
       List<String> requiredColumns = getRequireColumn(job);
       HoodieSchema writerSchema = HoodieSchemaInternalSchemaBridge.toHoodieSchema(
           HoodieSchemaInternalSchemaBridge.toInternalSchema(evolutionSchemaOption.get()), tableSchema.getName());
-      HoodieSchema prunedEvolutionSchema = HoodieSchemaInternalSchemaBridge.toHoodieSchema(
-          org.apache.hudi.internal.schema.utils.InternalSchemaUtils.pruneInternalSchema(
-              HoodieSchemaInternalSchemaBridge.toInternalSchema(evolutionSchemaOption.get()), requiredColumns),
-          tableSchema.getName());
+      HoodieSchema prunedEvolutionSchema = HoodieSchemaInternalSchemaBridge.pruneByLeafNames(
+          evolutionSchemaOption.get(), requiredColumns);
       // Add partitioning fields to writer schema for resulting row to contain null values for these fields
       String partitionFields = job.get(hive_metastoreConstants.META_TABLE_PARTITION_COLUMNS, "");
       List<String> partitioningFields = !partitionFields.isEmpty() ? Arrays.stream(partitionFields.split("/")).collect(Collectors.toList())
@@ -248,10 +246,8 @@ public class SchemaEvolutionContext {
       boolean disableSchemaEvolution =
           requiredColumns.isEmpty() || (requiredColumns.size() == 1 && requiredColumns.get(0).isEmpty());
       if (!disableSchemaEvolution) {
-        HoodieSchema querySchema = HoodieSchemaInternalSchemaBridge.toHoodieSchema(
-            org.apache.hudi.internal.schema.utils.InternalSchemaUtils.pruneInternalSchema(
-                HoodieSchemaInternalSchemaBridge.toInternalSchema(evolutionSchemaOption.get()), requiredColumns),
-            evolutionSchemaOption.get().getFullName());
+        HoodieSchema querySchema = HoodieSchemaInternalSchemaBridge.pruneByLeafNames(
+            evolutionSchemaOption.get(), requiredColumns);
         long commitTime = Long.parseLong(FSUtils.getCommitTime(finalPath.getName()));
         HoodieSchema fileSchema = HoodieSchemaHistoryCache.searchSchemaAndCache(commitTime, metaClient);
         HoodieSchema mergedSchema = new HoodieSchemaMerger(fileSchema, querySchema, true, true).mergeSchema();

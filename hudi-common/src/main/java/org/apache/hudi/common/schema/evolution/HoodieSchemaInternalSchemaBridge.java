@@ -21,10 +21,11 @@ package org.apache.hudi.common.schema.evolution;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.schema.HoodieSchemaType;
-import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.common.schema.types.Type;
 import org.apache.hudi.common.schema.types.Types;
+import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.internal.schema.convert.InternalSchemaConverter;
+import org.apache.hudi.internal.schema.utils.InternalSchemaUtils;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -178,6 +179,19 @@ public final class HoodieSchemaInternalSchemaBridge {
     hoodieSchema.setMaxColumnId(internalSchema.getMaxColumnId());
     hoodieSchema.invalidateIdIndex();
     return hoodieSchema;
+  }
+
+  /**
+   * Prunes {@code source} to the supplied leaf-name list, preserving field ids.
+   * The returned HoodieSchema's record name is taken from {@code source}.
+   *
+   * <p>Single entry point for the bridge round-trip pattern that several call
+   * sites had open-coded: bridge to {@link InternalSchema}, prune via
+   * {@link InternalSchemaUtils#pruneInternalSchema}, then bridge back.</p>
+   */
+  public static HoodieSchema pruneByLeafNames(HoodieSchema source, List<String> leafNames) {
+    InternalSchema pruned = InternalSchemaUtils.pruneInternalSchema(toInternalSchema(source), leafNames);
+    return toHoodieSchema(pruned, source.getFullName());
   }
 
   private static void stampIds(HoodieSchema hoodieSchema, Type type) {

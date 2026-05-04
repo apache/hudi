@@ -24,7 +24,6 @@ import org.apache.hudi.common.schema.evolution.HoodieSchemaInternalSchemaBridge;
 import org.apache.hudi.common.schema.types.Type;
 import org.apache.hudi.common.schema.types.Types;
 import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.internal.schema.utils.InternalSchemaUtils;
 
 import lombok.AccessLevel;
@@ -156,10 +155,7 @@ public class SparkInternalSchemaConverter {
    * and assigned fallback ids by the underlying pruner.
    */
   public static HoodieSchema convertAndPruneStructTypeToHoodieSchema(StructType sparkSchema, HoodieSchema originSchema) {
-    List<String> pruneNames = collectColNamesFromSparkStruct(sparkSchema);
-    InternalSchema pruned = InternalSchemaUtils.pruneInternalSchema(
-        HoodieSchemaInternalSchemaBridge.toInternalSchema(originSchema), pruneNames);
-    return HoodieSchemaInternalSchemaBridge.toHoodieSchema(pruned, originSchema.getFullName());
+    return HoodieSchemaInternalSchemaBridge.pruneByLeafNames(originSchema, collectColNamesFromSparkStruct(sparkSchema));
   }
 
   /**
