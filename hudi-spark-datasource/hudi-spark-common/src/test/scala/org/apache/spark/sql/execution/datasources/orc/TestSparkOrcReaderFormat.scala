@@ -53,7 +53,7 @@ class TestSparkOrcReaderFormat extends OrcFileFormat with SparkAdapterSupport {
 
     (file: PartitionedFile) => {
       //code inside the lambda will run on the executor
-      reader.read(file, requiredSchema, partitionSchema, util.Option.empty(), filters,
+      reader.readWithEvolutionSchema(file, requiredSchema, partitionSchema, util.Option.empty(), filters,
         HadoopFSUtils.getStorageConf(broadcastedHadoopConf.value.value))
     }
   }
