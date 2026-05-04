@@ -21,6 +21,7 @@ package org.apache.hudi.common.schema.evolution;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaField;
+import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.common.schema.evolution.legacy.InternalSchema;
 import org.apache.hudi.common.schema.evolution.legacy.action.TableChanges;
 import org.apache.hudi.common.schema.evolution.legacy.action.TableChangesHelper;
@@ -216,12 +217,115 @@ public final class HoodieSchemaEvolutionUtils {
 
   /**
    * Normalizes union ordering so {@code null} sits first within nullable union
-   * branches, matching the ordering Hudi has historically written to disk. Returns
-   * {@code HoodieSchema.NULL_SCHEMA} for a {@code null} input and the schema
-   * unchanged for non-record types.
+   * branches, matching the ordering Hudi has historically written to disk.
+   * Walks the HoodieSchema directly: every union has its null branches
+   * promoted to the front (preserving relative order of the rest), and the
+   * walker recurses into records / arrays / maps. element-id, key-id, and
+   * value-id custom props are preserved on rebuilt array / map sub-trees;
+   * field-id and other field props are preserved when records are rebuilt.
+   *
+   * <p>Returns {@code HoodieSchema.NULL_SCHEMA} for a {@code null} input and
+   * the schema unchanged for the {@code NULL} type.
    */
   public static HoodieSchema fixNullOrdering(HoodieSchema schema) {
-    return InternalSchemaConverter.fixNullOrdering(schema);
+    if (schema == null) {
+      return HoodieSchema.NULL_SCHEMA;
+    }
+    if (schema.getType() == HoodieSchemaType.NULL) {
+      return schema;
+    }
+    HoodieSchema rewritten = rewriteNullFirst(schema);
+    // Forward schema-level metadata that the walker doesn't track (it operates
+    // on the type tree). The applier and SerDe round-trip these.
+    if (schema.schemaId() >= 0) {
+      rewritten.setSchemaId(schema.schemaId());
+    }
+    if (schema.maxColumnId() >= 0) {
+      rewritten.setMaxColumnId(schema.maxColumnId());
+    }
+    rewritten.invalidateIdIndex();
+    return rewritten;
+  }
+
+  /**
+   * Recursively rebuilds {@code schema} so that every union has its null
+   * branches first. Pure-tree rewrite — the caller is responsible for
+   * forwarding schema-level metadata (schemaId, maxColumnId) on the root.
+   */
+  private static HoodieSchema rewriteNullFirst(HoodieSchema schema) {
+    switch (schema.getType()) {
+      case UNION: {
+        List<HoodieSchema> originalBranches = schema.getTypes();
+        List<HoodieSchema> rewrittenBranches = new ArrayList<>(originalBranches.size());
+        for (HoodieSchema branch : originalBranches) {
+          rewrittenBranches.add(rewriteNullFirst(branch));
+        }
+        boolean hasNull = false;
+        for (HoodieSchema branch : rewrittenBranches) {
+          if (branch.getType() == HoodieSchemaType.NULL) {
+            hasNull = true;
+            break;
+          }
+        }
+        if (!hasNull) {
+          // No null branch, no reordering needed; only return new instance if
+          // any inner branch was actually rebuilt.
+          return rewrittenBranches.equals(originalBranches) ? schema : HoodieSchema.createUnion(rewrittenBranches);
+        }
+        // Promote null branches to the front, preserving relative order of
+        // both null and non-null branches.
+        List<HoodieSchema> reordered = new ArrayList<>(rewrittenBranches.size());
+        for (HoodieSchema branch : rewrittenBranches) {
+          if (branch.getType() == HoodieSchemaType.NULL) {
+            reordered.add(branch);
+          }
+        }
+        for (HoodieSchema branch : rewrittenBranches) {
+          if (branch.getType() != HoodieSchemaType.NULL) {
+            reordered.add(branch);
+          }
+        }
+        return HoodieSchema.createUnion(reordered);
+      }
+      case RECORD: {
+        List<HoodieSchemaField> newFields = new ArrayList<>(schema.getFields().size());
+        for (HoodieSchemaField field : schema.getFields()) {
+          HoodieSchema newSubSchema = rewriteNullFirst(field.schema());
+          HoodieSchemaField rebuilt = HoodieSchemaField.of(
+              field.name(), newSubSchema, field.doc().orElse(null), field.defaultVal().orElse(null));
+          for (Map.Entry<String, Object> e : field.getObjectProps().entrySet()) {
+            rebuilt.addProp(e.getKey(), e.getValue());
+          }
+          newFields.add(rebuilt);
+        }
+        return HoodieSchema.createRecord(schema.getName(), schema.getNamespace().orElse(null),
+            schema.getDoc().orElse(null), newFields);
+      }
+      case ARRAY: {
+        HoodieSchema newElement = rewriteNullFirst(schema.getElementType());
+        Object eIdRaw = schema.getAvroSchema().getObjectProp(HoodieSchema.ELEMENT_ID_PROP);
+        HoodieSchema arr = HoodieSchema.createArray(newElement);
+        if (eIdRaw instanceof Number) {
+          arr.getAvroSchema().addProp(HoodieSchema.ELEMENT_ID_PROP, ((Number) eIdRaw).intValue());
+        }
+        return arr;
+      }
+      case MAP: {
+        HoodieSchema newValue = rewriteNullFirst(schema.getValueType());
+        Object kIdRaw = schema.getAvroSchema().getObjectProp(HoodieSchema.KEY_ID_PROP);
+        Object vIdRaw = schema.getAvroSchema().getObjectProp(HoodieSchema.VALUE_ID_PROP);
+        HoodieSchema map = HoodieSchema.createMap(newValue);
+        if (kIdRaw instanceof Number) {
+          map.getAvroSchema().addProp(HoodieSchema.KEY_ID_PROP, ((Number) kIdRaw).intValue());
+        }
+        if (vIdRaw instanceof Number) {
+          map.getAvroSchema().addProp(HoodieSchema.VALUE_ID_PROP, ((Number) vIdRaw).intValue());
+        }
+        return map;
+      }
+      default:
+        return schema;
+    }
   }
 
   /**

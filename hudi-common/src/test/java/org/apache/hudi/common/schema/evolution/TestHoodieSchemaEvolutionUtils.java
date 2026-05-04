@@ -255,14 +255,14 @@ public class TestHoodieSchemaEvolutionUtils {
   public void testFixNullOrdering() {
     HoodieSchema schema = SchemaTestUtil.getSchemaFromResource(TestHoodieSchemaEvolutionUtils.class, "/nullWrong.avsc");
     HoodieSchema expectedSchema = SchemaTestUtil.getSchemaFromResource(TestHoodieSchemaEvolutionUtils.class, "/nullRight.avsc");
-    Assertions.assertEquals(expectedSchema, InternalSchemaConverter.fixNullOrdering(schema));
-    Assertions.assertEquals(expectedSchema, InternalSchemaConverter.fixNullOrdering(expectedSchema));
+    Assertions.assertEquals(expectedSchema, HoodieSchemaEvolutionUtils.fixNullOrdering(schema));
+    Assertions.assertEquals(expectedSchema, HoodieSchemaEvolutionUtils.fixNullOrdering(expectedSchema));
   }
 
   @Test
   public void testFixNullOrderingSameSchemaCheck() {
     HoodieSchema schema = SchemaTestUtil.getSchemaFromResource(TestHoodieSchemaEvolutionUtils.class, "/source_evolved.avsc");
-    Assertions.assertEquals(schema, InternalSchemaConverter.fixNullOrdering(schema));
+    Assertions.assertEquals(schema, HoodieSchemaEvolutionUtils.fixNullOrdering(schema));
   }
 
   public enum Enum {
@@ -542,8 +542,7 @@ public class TestHoodieSchemaEvolutionUtils {
         + "{\"name\":\"d1\",\"type\":[\"null\",{\"type\":\"int\",\"logicalType\":\"date\"}],\"default\":null},"
         + "{\"name\":\"d2\",\"type\":[\"null\",{\"type\":\"int\",\"logicalType\":\"date\"}],\"default\":null}]}");
 
-    HoodieSchema simpleReconcileSchema = InternalSchemaConverter.convert(HoodieSchemaEvolutionUtils
-        .reconcileSchema(incomingSchema.getAvroSchema(), InternalSchemaConverter.convert(schema), false), "schemaNameFallback");
+    HoodieSchema simpleReconcileSchema = HoodieSchemaEvolutionUtils.reconcileSchema(incomingSchema, schema, false);
     Assertions.assertEquals(simpleCheckSchema, simpleReconcileSchema);
   }
 
@@ -562,11 +561,14 @@ public class TestHoodieSchemaEvolutionUtils {
         HoodieSchemaField.of("b", HoodieSchema.createNullable(HoodieSchema.create(HoodieSchemaType.INT)), null, HoodieJsonProperties.NULL_VALUE),
         HoodieSchemaField.of("c", HoodieSchema.createNullable(HoodieSchema.create(HoodieSchemaType.LONG)), null, HoodieJsonProperties.NULL_VALUE));
 
-    InternalSchema oldInternalSchema = InternalSchemaConverter.convert(oldSchema);
-    // set a non-default schema id for old table schema, e.g., 2.
-    oldInternalSchema.setSchemaId(2);
-    InternalSchema evolvedSchema = HoodieSchemaEvolutionUtils.reconcileSchema(incomingSchema.getAvroSchema(), oldInternalSchema, false);
-    // the evolved schema should be the old table schema, since there is no type change at all.
-    Assertions.assertEquals(oldInternalSchema, evolvedSchema);
+    // Stamp fresh ids on old so the no-op short-circuit can compare against
+    // a schema with a known schemaId. Set schemaId=2 to verify it round-trips
+    // through the no-op path.
+    HoodieSchemaIdAssigner.assignFresh(oldSchema);
+    oldSchema.setSchemaId(2);
+    HoodieSchema evolvedSchema = HoodieSchemaEvolutionUtils.reconcileSchema(incomingSchema, oldSchema, false);
+    // No type change, no missing columns to flip → the entry returns
+    // oldSchema unchanged (same instance).
+    Assertions.assertSame(oldSchema, evolvedSchema);
   }
 }
