@@ -72,8 +72,11 @@ public class HoodieSchemaChangeApplier {
 
     int newId = nextColumnId(latestSchema);
     HoodieSchema effectiveType = colType.isNullable() ? colType.getNonNullType() : colType;
+    // Added columns are always nullable, so stamp NULL_VALUE as the default to
+    // match Avro's [null, T] convention (the legacy convert() back leg did this
+    // automatically; the applier produces it explicitly).
     HoodieSchemaField newField = HoodieSchemaField.of(
-        leafName, HoodieSchema.createNullable(effectiveType), doc, null);
+        leafName, HoodieSchema.createNullable(effectiveType), doc, HoodieSchema.NULL_VALUE);
     newField.addProp(HoodieSchema.FIELD_ID_PROP, newId);
     String refLeaf = (position != null && !position.isEmpty()) ? leafOf(position) : null;
 
@@ -314,10 +317,18 @@ public class HoodieSchemaChangeApplier {
   /**
    * Builds a new HoodieSchemaField with the supplied {@code name} / {@code schema}
    * / {@code doc} but inheriting {@code field-id} and any other custom Avro
-   * properties from {@code source}. Default value and order are preserved.
+   * properties from {@code source}. The default value is inherited; when the
+   * rebuilt schema is nullable and the source has no explicit default, stamp
+   * {@code default: null} (mirrors the legacy InternalSchema → HoodieSchema
+   * convert() back leg, which auto-stamped null defaults on every nullable
+   * field).
    */
   private static HoodieSchemaField rebuildField(HoodieSchemaField source, String name, HoodieSchema schema, String doc) {
-    HoodieSchemaField rebuilt = HoodieSchemaField.of(name, schema, doc, source.defaultVal().orElse(null));
+    Object existingDefault = source.defaultVal().orElse(null);
+    Object effectiveDefault = (existingDefault == null && schema.isNullable())
+        ? HoodieSchema.NULL_VALUE
+        : existingDefault;
+    HoodieSchemaField rebuilt = HoodieSchemaField.of(name, schema, doc, effectiveDefault);
     for (Map.Entry<String, Object> e : source.getObjectProps().entrySet()) {
       rebuilt.addProp(e.getKey(), e.getValue());
     }

@@ -107,8 +107,16 @@ public final class HoodieSchemaEvolutionUtils {
   public static HoodieSchema reconcileSchemaStructural(HoodieSchema incomingSchema,
                                                        HoodieSchema oldTableSchema,
                                                        boolean makeMissingFieldsNullable) {
-    HoodieSchema reconciled = reconcileHoodieSchemaDirect(
-        stripIds(incomingSchema), stripIds(oldTableSchema), makeMissingFieldsNullable);
+    // reconcileHoodieSchemaDirect assumes oldTableSchema has ids stamped (its
+    // diff loop calls getAllColsFullName / findIdByName / findType, all
+    // id-keyed). Deep-copy + assign fresh ids on a working copy so structural
+    // callers — whose inputs may have no ids at all — get a correct diff.
+    // Incoming is already deep-copied + id-stamped inside the inner method.
+    HoodieSchema oldFresh = HoodieSchema.parse(oldTableSchema.toAvroSchema().toString());
+    HoodieSchemaIdAssigner.assignFresh(oldFresh);
+    HoodieSchema reconciled = reconcileHoodieSchemaDirect(incomingSchema, oldFresh, makeMissingFieldsNullable);
+    // Strip ids from the result — this entry's contract is "ids are not
+    // stamped on the output".
     return stripIds(reconciled);
   }
 
@@ -139,11 +147,21 @@ public final class HoodieSchemaEvolutionUtils {
       return targetSchema;
     }
 
-    HoodieSchema source = shouldReorderColumns
-        ? reorderToTargetLayout(sourceSchema, targetSchema.nameToPosition())
-        : sourceSchema;
+    // Deep-copy + assignFresh on both inputs so the diff loop's id-keyed
+    // accessors (getAllColsFullName / findType / findIdByName) work on
+    // schemas that came in without any stamped ids — Spark write paths
+    // call this with structural Avro schemas. Mirrors the same pattern
+    // used by reconcileSchemaStructural.
+    HoodieSchema sourceFresh = HoodieSchema.parse(sourceSchema.toAvroSchema().toString());
+    HoodieSchemaIdAssigner.assignFresh(sourceFresh);
+    HoodieSchema targetFresh = HoodieSchema.parse(targetSchema.toAvroSchema().toString());
+    HoodieSchemaIdAssigner.assignFresh(targetFresh);
 
-    Set<String> targetNames = new HashSet<>(targetSchema.getAllColsFullName());
+    HoodieSchema source = shouldReorderColumns
+        ? reorderToTargetLayout(sourceFresh, targetFresh.getNameToPosition())
+        : sourceFresh;
+
+    Set<String> targetNames = new HashSet<>(targetFresh.getAllColsFullName());
     List<String> nullableUpdates = new ArrayList<>();
     List<Pair<String, HoodieSchema>> typeUpdates = new ArrayList<>();
     for (String field : source.getAllColsFullName()) {
@@ -151,7 +169,7 @@ public final class HoodieSchemaEvolutionUtils {
         continue;
       }
       HoodieSchema sourceFieldType = source.findType(field);
-      HoodieSchema targetFieldType = targetSchema.findType(field);
+      HoodieSchema targetFieldType = targetFresh.findType(field);
       if (sourceFieldType.isNullable() != targetFieldType.isNullable()) {
         nullableUpdates.add(field);
       }
@@ -162,20 +180,43 @@ public final class HoodieSchemaEvolutionUtils {
 
     if (nullableUpdates.isEmpty() && typeUpdates.isEmpty()) {
       // Match the legacy "no updates" branch: re-emit through the canonicalizer
-      // so union ordering is consistent.
-      return fixNullOrdering(source);
+      // so union ordering is consistent. Strip the ids we stamped above —
+      // the legacy entry returned id-less Avro schemas.
+      return stripIds(fixNullOrdering(source));
+    }
+
+    // Group type updates by top-level parent and apply the change wholesale
+    // using target's full type at that parent. The applier's path walker
+    // doesn't understand "element" / "value" as terminal segments — they're
+    // descent directions for arrays / maps, not field names — so a path like
+    // "arrayField.element" can't be applied directly. Replacing the whole
+    // top-level field is equivalent for reconciliation: target's type at the
+    // parent already encodes every leaf type change under it.
+    java.util.LinkedHashSet<String> topLevelTypeChanged = new java.util.LinkedHashSet<>();
+    for (Pair<String, HoodieSchema> u : typeUpdates) {
+      int dot = u.getLeft().indexOf('.');
+      topLevelTypeChanged.add(dot < 0 ? u.getLeft() : u.getLeft().substring(0, dot));
     }
 
     HoodieSchema result = source;
     for (String field : nullableUpdates) {
+      // Same path-walker limitation: skip leaf paths into arrays / maps.
+      // The applier supports descent into nested records, which is the only
+      // multi-segment shape it can resolve to a HoodieSchemaField.
+      if (field.contains(".element") || field.contains(".value")) {
+        continue;
+      }
       // Legacy hard-codes nullable=true even when target is required; preserved
       // verbatim to avoid behavior change.
       result = new HoodieSchemaChangeApplier(result).applyColumnNullabilityChange(field, true);
     }
-    for (Pair<String, HoodieSchema> u : typeUpdates) {
-      result = new HoodieSchemaChangeApplier(result).applyColumnTypeChange(u.getLeft(), u.getRight());
+    for (String topLevel : topLevelTypeChanged) {
+      HoodieSchema newType = targetFresh.findType(topLevel);
+      result = new HoodieSchemaChangeApplier(result).applyColumnTypeChange(topLevel, newType);
     }
-    return result;
+    // Strip the ids stamped on inputs above — the legacy entry returned
+    // id-less Avro schemas.
+    return stripIds(result);
   }
 
   /**
