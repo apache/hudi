@@ -22,6 +22,9 @@ import org.apache.hudi.adapter.Utils;
 import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.common.model.PartitionBucketIndexHashingConfig;
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.evolution.HoodieSchemaInternalSchemaBridge;
+import org.apache.hudi.common.schema.types.Type;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.StringUtils;
@@ -30,7 +33,6 @@ import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.exception.HoodieCatalogException;
 import org.apache.hudi.internal.schema.InternalSchema;
-import org.apache.hudi.common.schema.types.Type;
 import org.apache.hudi.internal.schema.convert.InternalSchemaConverter;
 import org.apache.hudi.util.FlinkWriteClients;
 import org.apache.hudi.util.HoodieSchemaConverter;
@@ -231,13 +233,15 @@ public class HoodieCatalogUtil {
     if (!tableChanges.isEmpty()) {
       CatalogBaseTable oldTable = catalog.getTable(tablePath);
       HoodieFlinkWriteClient<?> writeClient = createWriteClient(tablePath, oldTable, hadoopConf, inferTablePathFunc);
-      Pair<InternalSchema, HoodieTableMetaClient> pair = writeClient.getInternalSchemaAndMetaClient();
-      InternalSchema oldSchema = pair.getLeft();
+      Pair<HoodieSchema, HoodieTableMetaClient> pair = writeClient.getEvolutionSchemaAndMetaClient();
+      HoodieSchema oldEvolutionSchema = pair.getLeft();
+      InternalSchema oldSchema = HoodieSchemaInternalSchemaBridge.toInternalSchema(oldEvolutionSchema);
       Function<LogicalType, Type> convertFunc = (LogicalType logicalType) -> InternalSchemaConverter.convertToField(HoodieSchemaConverter.convertToSchema(logicalType));
       InternalSchema newSchema = Utils.applyTableChange(oldSchema, tableChanges, convertFunc);
       if (!oldSchema.equals(newSchema)) {
+        HoodieSchema newEvolutionSchema = HoodieSchemaInternalSchemaBridge.toHoodieSchema(newSchema, oldEvolutionSchema.getFullName());
         writeClient.setOperationType(WriteOperationType.ALTER_SCHEMA);
-        writeClient.commitTableChange(newSchema, pair.getRight());
+        writeClient.commitTableChange(newEvolutionSchema, pair.getRight());
       }
     }
     postAlterTableFunc.accept(tablePath, newTable);
