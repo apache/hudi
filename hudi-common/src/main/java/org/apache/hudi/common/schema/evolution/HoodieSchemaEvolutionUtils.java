@@ -147,16 +147,6 @@ public final class HoodieSchemaEvolutionUtils {
   }
 
   /**
-   * Avro-only entry point retained for the legacy-test surface. Public callers
-   * should prefer {@link #reconcileSchemaStructural}.
-   */
-  public static Schema reconcileSchema(Schema incomingSchema,
-                                       Schema oldTableSchema,
-                                       boolean makeMissingFieldsNullable) {
-    return reconcileAvroSchema(incomingSchema, oldTableSchema, makeMissingFieldsNullable);
-  }
-
-  /**
    * Avro-only requirements-reconciliation entry point retained for the
    * legacy-test surface and any internal caller that still hands around
    * Avro {@link Schema}. Public callers should prefer
@@ -291,8 +281,17 @@ public final class HoodieSchemaEvolutionUtils {
         List<HoodieSchemaField> newFields = new ArrayList<>(schema.getFields().size());
         for (HoodieSchemaField field : schema.getFields()) {
           HoodieSchema newSubSchema = rewriteNullFirst(field.schema());
+          // Mirror the legacy InternalSchema → HoodieSchema convert(): every
+          // nullable field gains a {@code default: null}, even if the source
+          // field had no explicit default. Required fields keep their existing
+          // default (or none).
+          Object existingDefault = field.defaultVal().orElse(null);
+          Object effectiveDefault = existingDefault;
+          if (existingDefault == null && newSubSchema.isNullable()) {
+            effectiveDefault = HoodieSchema.NULL_VALUE;
+          }
           HoodieSchemaField rebuilt = HoodieSchemaField.of(
-              field.name(), newSubSchema, field.doc().orElse(null), field.defaultVal().orElse(null));
+              field.name(), newSubSchema, field.doc().orElse(null), effectiveDefault);
           for (Map.Entry<String, Object> e : field.getObjectProps().entrySet()) {
             rebuilt.addProp(e.getKey(), e.getValue());
           }
