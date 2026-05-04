@@ -52,7 +52,6 @@ import org.apache.hudi.common.model.debezium.MySqlDebeziumAvroPayload;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaCompatibility;
 import org.apache.hudi.common.schema.HoodieSchemaType;
-import org.apache.hudi.common.schema.evolution.HoodieSchemaInternalSchemaBridge;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
@@ -85,7 +84,6 @@ import org.apache.hudi.exception.HoodieValidationException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.HiveSyncTool;
-import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.keygen.KeyGenUtils;
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory;
 import org.apache.hudi.metrics.HoodieMetrics;
@@ -802,20 +800,16 @@ public class StreamSync implements Serializable, Closeable {
   @VisibleForTesting
   SchemaProvider getDeducedSchemaProvider(HoodieSchema incomingSchema, SchemaProvider sourceSchemaProvider, HoodieTableMetaClient metaClient) {
     Option<HoodieSchema> latestTableSchemaOpt = UtilHelpers.getLatestTableSchema(hoodieSparkContext.jsc(), storage, cfg.targetBasePath, metaClient);
-    // Use the new HoodieSchema-shaped evolution method, then bridge to InternalSchema
-    // for deduceWriterSchema which still consumes Option<InternalSchema>. Once
-    // deduceWriterSchema's signature migrates, the bridge call goes away.
-    Option<InternalSchema> internalSchemaOpt = HoodieConversionUtils.toJavaOption(
+    Option<HoodieSchema> evolutionSchemaOpt = HoodieConversionUtils.toJavaOption(
         HoodieSchemaUtils.getLatestTableEvolutionSchema(
-            HoodieStreamer.Config.getProps(conf, cfg), metaClient))
-        .map(HoodieSchemaInternalSchemaBridge::toInternalSchema);
+            HoodieStreamer.Config.getProps(conf, cfg), metaClient));
     // Deduce proper target (writer's) schema for the input dataset, reconciling its
     // schema w/ the table's one
 
-    HoodieSchema targetSchema = HoodieSchemaUtils.deduceWriterSchema(
+    HoodieSchema targetSchema = HoodieSchemaUtils.deduceWriterSchemaWithEvolution(
             incomingSchema == null ? HoodieSchema.create(HoodieSchemaType.NULL) : org.apache.hudi.common.schema.HoodieSchemaUtils.removeMetadataFields(incomingSchema),
             latestTableSchemaOpt,
-            internalSchemaOpt,
+            evolutionSchemaOpt,
             props);
 
     // Override schema provider with the reconciled target schema
