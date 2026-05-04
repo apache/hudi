@@ -20,49 +20,49 @@ package org.apache.hudi.common.schema.evolution;
 
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.evolution.legacy.InternalSchema;
-import org.apache.hudi.common.schema.types.Type;
-import org.apache.hudi.common.schema.evolution.legacy.action.InternalSchemaChangeApplier;
+import org.apache.hudi.common.schema.evolution.legacy.action.TableChange;
+import org.apache.hudi.common.schema.evolution.legacy.action.TableChanges;
+import org.apache.hudi.common.schema.evolution.legacy.action.TableChangesHelper;
 import org.apache.hudi.common.schema.evolution.legacy.convert.InternalSchemaConverter;
+import org.apache.hudi.common.schema.evolution.legacy.utils.SchemaChangeUtils;
+import org.apache.hudi.common.schema.types.Type;
+
+import java.util.Arrays;
 
 /**
- * HoodieSchema-shaped façade for column-level schema evolution operations
- * (ADD / DELETE / RENAME / UPDATE / REORDER). Mirrors the seven entry points of
- * {@link InternalSchemaChangeApplier} but exposes them on {@link HoodieSchema} so
- * callers can migrate off direct {@code InternalSchema} usage.
+ * HoodieSchema-shaped applier for column-level schema evolution operations
+ * (ADD / DELETE / RENAME / UPDATE / REORDER).
  *
- * <p><b>Migration status:</b> this façade currently delegates to the existing
- * InternalSchema-based applier — converting the input HoodieSchema down to an
- * InternalSchema, applying the change, and converting the result back via
- * {@link HoodieSchemaInternalSchemaBridge} so field ids and version metadata are
- * preserved on the returned HoodieSchema. Phase 5 of the InternalSchema removal
- * rewrites the implementation in pure HoodieSchema terms behind this stable
- * interface.</p>
+ * <p>Each method returns a new {@link HoodieSchema}; the input is not mutated.
+ * Field ids are preserved end-to-end via
+ * {@link HoodieSchemaInternalSchemaBridge}, so subsequent callers can still
+ * resolve renamed columns by id.
  *
- * <p>All methods return a new {@link HoodieSchema}; the input is not mutated.</p>
+ * <p>Implementation orchestrates the legacy {@code TableChanges} builders +
+ * {@code SchemaChangeUtils.applyTableChanges2Schema} (still on InternalSchema
+ * because they're substantial classes that haven't been ported to HoodieSchema
+ * yet) and converts at the bridge boundary. The inlined algorithm is identical
+ * to what the prior {@code InternalSchemaChangeApplier} did — same TableChanges
+ * builders, same parent/leaf splitting, same FIRST/AFTER/BEFORE position rules.
  */
 public class HoodieSchemaChangeApplier {
 
   private final HoodieSchema latestSchema;
-  private final InternalSchemaChangeApplier delegate;
+  private final InternalSchema latestInternal;
   private final String recordName;
 
   public HoodieSchemaChangeApplier(HoodieSchema latestSchema) {
     this.latestSchema = latestSchema;
     // Use the id-preserving bridge so existing field ids carried as Avro
-    // custom properties survive the round trip into the legacy applier.
-    InternalSchema internal = HoodieSchemaInternalSchemaBridge.toInternalSchema(latestSchema);
-    this.delegate = new InternalSchemaChangeApplier(internal);
+    // custom properties survive the round trip into the legacy TableChanges builders.
+    this.latestInternal = HoodieSchemaInternalSchemaBridge.toInternalSchema(latestSchema);
     this.recordName = latestSchema.getFullName();
   }
 
   /**
-   * Add a column to the table. For nested fields, use a dot-separated full path in {@code colName}.
-   *
-   * @param colName     fully-qualified name of the column to add
-   * @param colType     HoodieSchema type for the new column
-   * @param doc         optional doc string
-   * @param position    reference column for AFTER/BEFORE positioning (empty for FIRST/NO_OPERATION)
-   * @param positionType placement strategy
+   * Add a column to the table. For nested fields, use a dot-separated full path
+   * in {@code colName}. Position can be FIRST (no reference), or AFTER/BEFORE a
+   * sibling of the same parent.
    */
   public HoodieSchema applyAddChange(String colName,
                                      HoodieSchema colType,
@@ -70,67 +70,107 @@ public class HoodieSchemaChangeApplier {
                                      String position,
                                      ColumnPositionType positionType) {
     Type internalType = InternalSchemaConverter.convertToField(colType);
-    InternalSchema result = delegate.applyAddChange(
-        colName, internalType, doc, position, positionType.toLegacy());
-    return HoodieSchemaInternalSchemaBridge.toHoodieSchema(result, recordName);
+    TableChanges.ColumnAddChange add = TableChanges.ColumnAddChange.get(latestInternal);
+    String parentName = TableChangesHelper.getParentName(colName);
+    String leafName = TableChangesHelper.getLeafName(colName);
+    add.addColumns(parentName, leafName, internalType, doc);
+    if (positionType == null) {
+      throw new IllegalArgumentException("positionType should be specified");
+    }
+    TableChange.ColumnPositionChange.ColumnPositionType legacyPos = positionType.toLegacy();
+    switch (legacyPos) {
+      case NO_OPERATION:
+        break;
+      case FIRST:
+        add.addPositionChange(colName, "", legacyPos);
+        break;
+      case AFTER:
+      case BEFORE:
+        if (position == null || position.isEmpty()) {
+          throw new IllegalArgumentException("position should not be null/empty_string when specify positionChangeType as after/before");
+        }
+        String referParentName = TableChangesHelper.getParentName(position);
+        if (!parentName.equals(referParentName)) {
+          throw new IllegalArgumentException("cannot reorder two columns which has different parent");
+        }
+        add.addPositionChange(colName, position, legacyPos);
+        break;
+      default:
+        throw new IllegalArgumentException(
+            String.format("only support first/before/after but found: %s", legacyPos));
+    }
+    return wrap(SchemaChangeUtils.applyTableChanges2Schema(latestInternal, add));
   }
 
   /**
    * Delete one or more columns. For nested fields, use dot-separated full paths.
    */
   public HoodieSchema applyDeleteChange(String... colNames) {
-    InternalSchema result = delegate.applyDeleteChange(colNames);
-    return HoodieSchemaInternalSchemaBridge.toHoodieSchema(result, recordName);
+    TableChanges.ColumnDeleteChange delete = TableChanges.ColumnDeleteChange.get(latestInternal);
+    Arrays.stream(colNames).forEach(delete::deleteColumn);
+    return wrap(SchemaChangeUtils.applyTableChanges2Schema(latestInternal, delete));
   }
 
   /**
    * Rename a column without changing its id, type, or position.
+   * {@code newName} is a leaf name — the parent path is taken from {@code colName}.
    */
   public HoodieSchema applyRenameChange(String colName, String newName) {
-    InternalSchema result = delegate.applyRenameChange(colName, newName);
-    return HoodieSchemaInternalSchemaBridge.toHoodieSchema(result, recordName);
+    TableChanges.ColumnUpdateChange update = TableChanges.ColumnUpdateChange.get(latestInternal);
+    update.renameColumn(colName, newName);
+    return wrap(SchemaChangeUtils.applyTableChanges2Schema(latestInternal, update));
   }
 
   /**
-   * Toggle a column's nullability. Only required → optional is allowed by default;
-   * the inverse must be forced explicitly through the underlying applier.
+   * Toggle a column's nullability. Only required → optional is allowed by
+   * default; the inverse must be forced explicitly via the underlying applier.
    */
   public HoodieSchema applyColumnNullabilityChange(String colName, boolean nullable) {
-    InternalSchema result = delegate.applyColumnNullabilityChange(colName, nullable);
-    return HoodieSchemaInternalSchemaBridge.toHoodieSchema(result, recordName);
+    TableChanges.ColumnUpdateChange update = TableChanges.ColumnUpdateChange.get(latestInternal);
+    update.updateColumnNullability(colName, nullable);
+    return wrap(SchemaChangeUtils.applyTableChanges2Schema(latestInternal, update));
   }
 
   /**
    * Promote a column to a wider type. The legal promotions are defined by
-   * {@code SchemaChangeUtils.isTypeUpdateAllow}.
+   * {@link SchemaChangeUtils#isTypeUpdateAllow}.
    */
   public HoodieSchema applyColumnTypeChange(String colName, HoodieSchema newType) {
     Type internalType = InternalSchemaConverter.convertToField(newType);
-    InternalSchema result = delegate.applyColumnTypeChange(colName, internalType);
-    return HoodieSchemaInternalSchemaBridge.toHoodieSchema(result, recordName);
+    TableChanges.ColumnUpdateChange update = TableChanges.ColumnUpdateChange.get(latestInternal);
+    update.updateColumnType(colName, internalType);
+    return wrap(SchemaChangeUtils.applyTableChanges2Schema(latestInternal, update));
   }
 
   /**
    * Update a column's documentation string.
    */
   public HoodieSchema applyColumnCommentChange(String colName, String doc) {
-    InternalSchema result = delegate.applyColumnCommentChange(colName, doc);
-    return HoodieSchemaInternalSchemaBridge.toHoodieSchema(result, recordName);
+    TableChanges.ColumnUpdateChange update = TableChanges.ColumnUpdateChange.get(latestInternal);
+    update.updateColumnComment(colName, doc);
+    return wrap(SchemaChangeUtils.applyTableChanges2Schema(latestInternal, update));
   }
 
   /**
    * Reorder a column relative to a sibling within the same enclosing struct.
-   *
-   * @param colName       the column to move
-   * @param referColName  the reference column (ignored for FIRST)
-   * @param positionType  placement strategy
+   * FIRST is allowed without a reference; AFTER/BEFORE require a reference
+   * column with the same parent.
    */
   public HoodieSchema applyReOrderColPositionChange(String colName,
                                                     String referColName,
                                                     ColumnPositionType positionType) {
-    InternalSchema result = delegate.applyReOrderColPositionChange(
-        colName, referColName, positionType.toLegacy());
-    return HoodieSchemaInternalSchemaBridge.toHoodieSchema(result, recordName);
+    TableChanges.ColumnUpdateChange update = TableChanges.ColumnUpdateChange.get(latestInternal);
+    TableChange.ColumnPositionChange.ColumnPositionType legacyPos = positionType.toLegacy();
+    String parentName = TableChangesHelper.getParentName(colName);
+    String referParentName = TableChangesHelper.getParentName(referColName);
+    if (legacyPos.equals(TableChange.ColumnPositionChange.ColumnPositionType.FIRST)) {
+      update.addPositionChange(colName, "", legacyPos);
+    } else if (parentName.equals(referParentName)) {
+      update.addPositionChange(colName, referColName, legacyPos);
+    } else {
+      throw new IllegalArgumentException("cannot reorder two columns which has different parent");
+    }
+    return wrap(SchemaChangeUtils.applyTableChanges2Schema(latestInternal, update));
   }
 
   /**
@@ -138,5 +178,9 @@ public class HoodieSchemaChangeApplier {
    */
   public HoodieSchema getLatestSchema() {
     return latestSchema;
+  }
+
+  private HoodieSchema wrap(InternalSchema result) {
+    return HoodieSchemaInternalSchemaBridge.toHoodieSchema(result, recordName);
   }
 }

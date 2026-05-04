@@ -288,6 +288,11 @@ public class TestTableChanges {
     Assertions.assertEquals(expectedRecordType, newSchema.getRecord());
   }
 
+  // The previous helpers went through the legacy InternalSchemaChangeApplier,
+  // which has been subsumed into HoodieSchemaChangeApplier. The inline
+  // implementations below preserve the test's exercise of the TableChanges
+  // builder + SchemaChangeUtils path without the applier intermediary.
+
   private static InternalSchema addOperationForSchemaChangeApplier(
       InternalSchema schema,
       String colName,
@@ -295,8 +300,32 @@ public class TestTableChanges {
       String doc,
       String position,
       TableChange.ColumnPositionChange.ColumnPositionType positionType) {
-    InternalSchemaChangeApplier applier = new InternalSchemaChangeApplier(schema);
-    return applier.applyAddChange(colName, colType, doc, position, positionType);
+    TableChanges.ColumnAddChange add = TableChanges.ColumnAddChange.get(schema);
+    String parentName = TableChangesHelper.getParentName(colName);
+    String leafName = TableChangesHelper.getLeafName(colName);
+    add.addColumns(parentName, leafName, colType, doc);
+    switch (positionType) {
+      case NO_OPERATION:
+        break;
+      case FIRST:
+        add.addPositionChange(colName, "", positionType);
+        break;
+      case AFTER:
+      case BEFORE:
+        if (position == null || position.isEmpty()) {
+          throw new IllegalArgumentException("position should not be null/empty_string when specify positionChangeType as after/before");
+        }
+        String referParentName = TableChangesHelper.getParentName(position);
+        if (!parentName.equals(referParentName)) {
+          throw new IllegalArgumentException("cannot reorder two columns which has different parent");
+        }
+        add.addPositionChange(colName, position, positionType);
+        break;
+      default:
+        throw new IllegalArgumentException(
+            String.format("only support first/before/after but found: %s", positionType));
+    }
+    return SchemaChangeUtils.applyTableChanges2Schema(schema, add);
   }
 
   private static InternalSchema reOrderOperationForSchemaChangeApplier(
@@ -304,8 +333,17 @@ public class TestTableChanges {
       String colName,
       String position,
       TableChange.ColumnPositionChange.ColumnPositionType positionType) {
-    InternalSchemaChangeApplier applier = new InternalSchemaChangeApplier(schema);
-    return applier.applyReOrderColPositionChange(colName, position, positionType);
+    TableChanges.ColumnUpdateChange update = TableChanges.ColumnUpdateChange.get(schema);
+    String parentName = TableChangesHelper.getParentName(colName);
+    String referParentName = TableChangesHelper.getParentName(position);
+    if (positionType.equals(TableChange.ColumnPositionChange.ColumnPositionType.FIRST)) {
+      update.addPositionChange(colName, "", positionType);
+    } else if (parentName.equals(referParentName)) {
+      update.addPositionChange(colName, position, positionType);
+    } else {
+      throw new IllegalArgumentException("cannot reorder two columns which has different parent");
+    }
+    return SchemaChangeUtils.applyTableChanges2Schema(schema, update);
   }
 
   private static InternalSchema addOperationForSchemaChangeApplier(
