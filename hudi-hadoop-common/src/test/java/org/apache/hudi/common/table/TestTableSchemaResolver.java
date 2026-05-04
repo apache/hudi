@@ -241,7 +241,7 @@ class TestTableSchemaResolver {
     when(timeline.readCommitMetadata(clusterInstant)).thenReturn(clusterMetadata);
 
     // When: Get internal schema from commit metadata
-    Option<org.apache.hudi.internal.schema.InternalSchema> result = schemaResolver.getTableInternalSchemaFromCommitMetadata();
+    Option<org.apache.hudi.common.schema.HoodieSchema> result = schemaResolver.getTableEvolutionSchemaFromCommitMetadata();
 
     // Then: Should find the insert instant (002) which is the most recent schema-updating operation
     assertTrue(result.isPresent());
@@ -269,7 +269,7 @@ class TestTableSchemaResolver {
     when(timeline.readCommitMetadata(clusterInstant)).thenReturn(clusterMetadata);
 
     // When: Get internal schema from commit metadata
-    Option<org.apache.hudi.internal.schema.InternalSchema> result = schemaResolver.getTableInternalSchemaFromCommitMetadata();
+    Option<org.apache.hudi.common.schema.HoodieSchema> result = schemaResolver.getTableEvolutionSchemaFromCommitMetadata();
 
     // Then: Should return empty since no schema-updating operations exist
     assertTrue(result.isEmpty());
@@ -286,7 +286,7 @@ class TestTableSchemaResolver {
     when(timeline.getReverseOrderedInstants()).thenReturn(Stream.empty());
 
     // When: Get internal schema from commit metadata
-    Option<org.apache.hudi.internal.schema.InternalSchema> result = schemaResolver.getTableInternalSchemaFromCommitMetadata();
+    Option<org.apache.hudi.common.schema.HoodieSchema> result = schemaResolver.getTableEvolutionSchemaFromCommitMetadata();
 
     // Then: Should return empty for empty timeline
     assertTrue(result.isEmpty());
@@ -324,7 +324,7 @@ class TestTableSchemaResolver {
     // Should not call readCommitMetadata for insertInstant3 due to findFirst() short-circuit
 
     // When: Get internal schema from commit metadata
-    Option<org.apache.hudi.internal.schema.InternalSchema> result = schemaResolver.getTableInternalSchemaFromCommitMetadata();
+    Option<org.apache.hudi.common.schema.HoodieSchema> result = schemaResolver.getTableEvolutionSchemaFromCommitMetadata();
 
     // Then: Should find the first (most recent) schema-updating operation and stop
     assertTrue(result.isPresent());
