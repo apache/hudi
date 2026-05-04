@@ -42,9 +42,7 @@ import org.apache.hudi.exception.HoodieSchemaNotFoundException;
 import org.apache.hudi.exception.InvalidTableException;
 import org.apache.hudi.exception.HoodieSchemaException;
 import org.apache.hudi.common.schema.evolution.HoodieSchemaSerDe;
-import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.internal.schema.io.FileBasedInternalSchemaStorageManager;
-import org.apache.hudi.internal.schema.utils.SerDeHelper;
 import org.apache.hudi.io.storage.HoodieIOFactory;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
@@ -305,27 +303,6 @@ public class TableSchemaResolver {
   }
 
   /**
-   * Gets the InternalSchema for a hoodie table from the HoodieCommitMetadata of the instant.
-   *
-   * @return InternalSchema for this table
-   * @deprecated migrate callers to {@link #getTableEvolutionSchemaFromCommitMetadata()},
-   *     which returns a {@link HoodieSchema} carrying the same field ids and version metadata.
-   *     Slated for removal once the {@code internal.schema} package goes away (Phase 5).
-   */
-  @Deprecated
-  public Option<InternalSchema> getTableInternalSchemaFromCommitMetadata() {
-    HoodieTimeline completedInstants = metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants();
-    // Walk backwards through timeline to find the first (most recent) instant that can update schema
-    // This avoids reading commit metadata for all instants
-    return Option.fromJavaOptional(completedInstants.getReverseOrderedInstants()
-        .filter(instant -> { // consider only instants that can update/change schema.
-          return WriteOperationType.canUpdateSchema(getCachedCommitMetadata(instant).getOperationType());
-        })
-        .findFirst())
-        .flatMap(this::getTableInternalSchemaFromCommitMetadata);
-  }
-
-  /**
    * Gets the schema-on-read evolution {@link HoodieSchema} for a hoodie table from
    * the latest schema-changing instant in the active timeline. The returned schema
    * carries field ids and a version id, distinguishing it from
@@ -343,21 +320,6 @@ public class TableSchemaResolver {
   }
 
   /**
-   * Gets the InternalSchema for a hoodie table from the HoodieCommitMetadata of the instant.
-   *
-   * @return InternalSchema for this table
-   * @deprecated migrate callers to {@link #getTableEvolutionSchemaFromCommitMetadata(String)}.
-   *     Slated for removal once the {@code internal.schema} package goes away (Phase 5).
-   */
-  @Deprecated
-  public Option<InternalSchema> getTableInternalSchemaFromCommitMetadata(String timestamp) {
-    HoodieTimeline timeline = metaClient.getActiveTimeline().getCommitsTimeline()
-        .filterCompletedInstants()
-        .findInstantsBeforeOrEquals(timestamp);
-    return timeline.lastInstant().flatMap(this::getTableInternalSchemaFromCommitMetadata);
-  }
-
-  /**
    * Gets the schema-on-read evolution {@link HoodieSchema} for a hoodie table at
    * (or before) the given instant timestamp.
    *
@@ -368,25 +330,6 @@ public class TableSchemaResolver {
         .filterCompletedInstants()
         .findInstantsBeforeOrEquals(timestamp);
     return timeline.lastInstant().flatMap(this::getTableEvolutionSchemaFromCommitMetadata);
-  }
-
-  /**
-   * Gets the InternalSchema for a hoodie table from the HoodieCommitMetadata of the instant.
-   *
-   * @return InternalSchema for this table
-   */
-  private Option<InternalSchema> getTableInternalSchemaFromCommitMetadata(HoodieInstant instant) {
-    try {
-      HoodieCommitMetadata metadata = getCachedCommitMetadata(instant);
-      String latestInternalSchemaStr = metadata.getMetadata(SerDeHelper.LATEST_SCHEMA);
-      if (latestInternalSchemaStr != null) {
-        return SerDeHelper.fromJson(latestInternalSchemaStr);
-      } else {
-        return Option.empty();
-      }
-    } catch (Exception e) {
-      throw new HoodieException("Failed to read schema from commit metadata", e);
-    }
   }
 
   /**

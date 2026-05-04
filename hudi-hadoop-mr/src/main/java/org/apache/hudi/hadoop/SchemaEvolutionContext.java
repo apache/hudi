@@ -134,7 +134,8 @@ public class SchemaEvolutionContext {
         SerDeHelper::fromJson);
     if (internalSchemaOpt == null) {
       // the code path should only be invoked in tests.
-      return new TableSchemaResolver(this.metaClient).getTableInternalSchemaFromCommitMetadata();
+      return new TableSchemaResolver(this.metaClient).getTableEvolutionSchemaFromCommitMetadata()
+          .map(HoodieSchemaInternalSchemaBridge::toInternalSchema);
     }
     return internalSchemaOpt;
   }
