@@ -25,7 +25,6 @@ import org.apache.hudi.common.schema.types.Type;
 import org.apache.hudi.common.schema.types.Types;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.internal.schema.InternalSchema;
-import org.apache.hudi.internal.schema.action.InternalSchemaMerger;
 import org.apache.hudi.internal.schema.utils.InternalSchemaUtils;
 
 import lombok.AccessLevel;
@@ -152,27 +151,14 @@ public class SparkInternalSchemaConverter {
   }
 
   /**
-   * Convert Spark schema to Hudi internal schema, and prune fields.
-   * Fields without IDs are kept and assigned fallback IDs.
-   *
-   * @param sparkSchema a pruned spark schema
-   * @param originSchema a internal schema for hoodie table
-   * @return a pruned internal schema for the provided spark schema
-   */
-  public static InternalSchema convertAndPruneStructTypeToInternalSchema(StructType sparkSchema, InternalSchema originSchema) {
-    List<String> pruneNames = collectColNamesFromSparkStruct(sparkSchema);
-    return InternalSchemaUtils.pruneInternalSchema(originSchema, pruneNames);
-  }
-
-  /**
-   * HoodieSchema-shaped twin of
-   * {@link #convertAndPruneStructTypeToInternalSchema(StructType, InternalSchema)}.
-   * Bridges through the legacy pruner so the leaf-name selection rules stay
-   * byte-identical across the migration.
+   * Convert Spark schema to Hudi {@link HoodieSchema}, prune fields by leaf-name,
+   * and preserve field ids from {@code originSchema}. Fields without ids are kept
+   * and assigned fallback ids by the underlying pruner.
    */
   public static HoodieSchema convertAndPruneStructTypeToHoodieSchema(StructType sparkSchema, HoodieSchema originSchema) {
-    InternalSchema pruned = convertAndPruneStructTypeToInternalSchema(
-        sparkSchema, HoodieSchemaInternalSchemaBridge.toInternalSchema(originSchema));
+    List<String> pruneNames = collectColNamesFromSparkStruct(sparkSchema);
+    InternalSchema pruned = InternalSchemaUtils.pruneInternalSchema(
+        HoodieSchemaInternalSchemaBridge.toInternalSchema(originSchema), pruneNames);
     return HoodieSchemaInternalSchemaBridge.toHoodieSchema(pruned, originSchema.getFullName());
   }
 
@@ -231,23 +217,10 @@ public class SparkInternalSchemaConverter {
     }
   }
 
-  public static StructType mergeSchema(InternalSchema fileSchema, InternalSchema querySchema) {
-    InternalSchema schema = new InternalSchemaMerger(fileSchema, querySchema, true, true).mergeSchema();
-    return constructSparkSchemaFromInternalSchema(schema);
-  }
-
-  public static Map<Integer, Pair<DataType, DataType>> collectTypeChangedCols(InternalSchema schema, InternalSchema other) {
-    return InternalSchemaUtils
-        .collectTypeChangedCols(schema, other)
-        .entrySet()
-        .stream()
-        .collect(Collectors.toMap(e -> e.getKey(), e -> Pair.of(constructSparkSchemaFromType(e.getValue().getLeft()), constructSparkSchemaFromType(e.getValue().getRight()))));
-  }
-
   /**
-   * HoodieSchema-shaped twin of
-   * {@link #collectTypeChangedCols(InternalSchema, InternalSchema)}. Returns the
-   * Spark-typed cast plan keyed by the column's index in {@code schema}.
+   * Returns a Spark-typed cast plan (oldType -&gt; newType) keyed by the column's
+   * index in {@code schema}. Used by the schema-on-read read path to wire up
+   * implicit promotion casts at row time.
    */
   public static Map<Integer, Pair<DataType, DataType>> collectTypeChangedCols(HoodieSchema schema, HoodieSchema other) {
     return HoodieSchemaEvolutionUtils
@@ -255,10 +228,6 @@ public class SparkInternalSchemaConverter {
         .entrySet()
         .stream()
         .collect(Collectors.toMap(e -> e.getKey(), e -> Pair.of(constructSparkSchemaFromType(e.getValue().getLeft()), constructSparkSchemaFromType(e.getValue().getRight()))));
-  }
-
-  public static StructType constructSparkSchemaFromInternalSchema(InternalSchema schema) {
-    return (StructType) constructSparkSchemaFromType(schema.getRecord());
   }
 
   private static DataType constructSparkSchemaFromType(Type type) {
