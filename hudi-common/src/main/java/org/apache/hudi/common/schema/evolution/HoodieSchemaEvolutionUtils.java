@@ -100,19 +100,18 @@ public final class HoodieSchemaEvolutionUtils {
   }
 
   /**
-   * Avro-only sibling of {@link #reconcileSchema(HoodieSchema, HoodieSchema, boolean)}
-   * that does <em>not</em> route through the InternalSchema bridge — field ids are
-   * neither read from the inputs nor stamped on the output. Use this from the
-   * write-path's structural reconciliation (e.g. {@code deduceWriterSchema}) where
-   * carrying ids over from the table's evolution-schema would leak them into
-   * commit metadata and Parquet writes that historically didn't include them.
+   * Sibling of {@link #reconcileSchema(HoodieSchema, HoodieSchema, boolean)}
+   * for the structural reconciliation use case (e.g. {@code deduceWriterSchema}):
+   * field ids are stripped from both inputs and result, so id-carrying
+   * evolution schemas don't leak ids into commit metadata or Parquet writes
+   * that historically didn't include them.
    */
   public static HoodieSchema reconcileSchemaStructural(HoodieSchema incomingSchema,
                                                        HoodieSchema oldTableSchema,
                                                        boolean makeMissingFieldsNullable) {
-    Schema reconciled = reconcileAvroSchema(
-        incomingSchema.getAvroSchema(), oldTableSchema.getAvroSchema(), makeMissingFieldsNullable);
-    return HoodieSchema.fromAvroSchema(reconciled);
+    HoodieSchema reconciled = reconcileHoodieSchemaDirect(
+        stripIds(incomingSchema), stripIds(oldTableSchema), makeMissingFieldsNullable);
+    return stripIds(reconciled);
   }
 
   /**
@@ -550,13 +549,6 @@ public final class HoodieSchemaEvolutionUtils {
       return oldTableSchema;
     }
     return evolved;
-  }
-
-  private static Schema reconcileAvroSchema(Schema incomingSchema, Schema oldTableSchema, boolean makeMissingFieldsNullable) {
-    return convert(
-        reconcileInternal(incomingSchema, convert(HoodieSchema.fromAvroSchema(oldTableSchema)), makeMissingFieldsNullable),
-        oldTableSchema.getFullName())
-        .toAvroSchema();
   }
 
   // -------------------------------------------------------------------------
