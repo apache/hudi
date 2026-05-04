@@ -74,7 +74,7 @@ class TestShowFileStatusProcedure extends HoodieSparkProcedureTestBase {
 
             val fs = new Path(basePath).getFileSystem(spark.sessionState.newHadoopConf())
             val client = HoodieCLIUtils.createHoodieWriteClient(spark, basePath, Map.empty, Option(tableName))
-            val metaClient: HoodieTableMetaClient = client.getInternalSchemaAndMetaClient.getRight
+            val metaClient: HoodieTableMetaClient = client.getEvolutionSchemaAndMetaClient.getRight
 
             spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000, 1000)")
             val firstCleanedDataFile = getAllDataFile(fs, basePath, Option.apply(partition)).toStream.filter(f => !f.startsWith(".")).head
@@ -186,7 +186,7 @@ class TestShowFileStatusProcedure extends HoodieSparkProcedureTestBase {
 
             val fs = new Path(basePath).getFileSystem(spark.sessionState.newHadoopConf())
             val client = HoodieCLIUtils.createHoodieWriteClient(spark, basePath, Map.empty, Option(tableName))
-            val metaClient: HoodieTableMetaClient = client.getInternalSchemaAndMetaClient.getRight
+            val metaClient: HoodieTableMetaClient = client.getEvolutionSchemaAndMetaClient.getRight
 
             spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000, 1000)")
             val firstCleanedDataFile = getAllDataFile(fs, basePath, partition).toStream.filter(f => !f.startsWith(".")).head

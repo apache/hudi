@@ -85,7 +85,6 @@ import org.apache.hudi.exception.HoodieRestoreException;
 import org.apache.hudi.exception.HoodieRollbackException;
 import org.apache.hudi.exception.HoodieSavepointException;
 import org.apache.hudi.index.HoodieIndex;
-import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.common.schema.types.Type;
 import org.apache.hudi.internal.schema.action.TableChange;
 import org.apache.hudi.internal.schema.convert.InternalSchemaConverter;
@@ -1760,16 +1759,9 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     commitTableChange(evolved, pair.getRight());
   }
 
-  public Pair<InternalSchema, HoodieTableMetaClient> getInternalSchemaAndMetaClient() {
-    HoodieTableMetaClient metaClient = createMetaClient(true);
-    TableSchemaResolver schemaUtil = new TableSchemaResolver(metaClient);
-    return Pair.of(getInternalSchema(schemaUtil), metaClient);
-  }
-
   /**
-   * HoodieSchema-shaped twin of {@link #getInternalSchemaAndMetaClient}. Resolves the
-   * table's evolution schema (or assigns fresh ids to the data schema as a fallback)
-   * and pairs it with a fresh metaClient.
+   * Resolves the table's evolution schema (or assigns fresh ids to the data schema
+   * as a fallback) and pairs it with a fresh metaClient.
    */
   public Pair<HoodieSchema, HoodieTableMetaClient> getEvolutionSchemaAndMetaClient() {
     HoodieTableMetaClient metaClient = createMetaClient(true);
@@ -1777,16 +1769,8 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     return Pair.of(getEvolutionSchema(schemaUtil), metaClient);
   }
 
-  public void commitTableChange(InternalSchema newSchema, HoodieTableMetaClient metaClient) {
-    HoodieSchema newEvolutionSchema = HoodieSchemaInternalSchemaBridge.toHoodieSchema(
-        newSchema, HoodieSchemaUtils.getRecordQualifiedName(config.getTableName()));
-    commitTableChange(newEvolutionSchema, metaClient);
-  }
-
   /**
-   * HoodieSchema-shaped overload of {@link #commitTableChange(InternalSchema,
-   * HoodieTableMetaClient)}. Persists the post-DDL evolution schema to commit
-   * metadata and the history file. Wire format unchanged.
+   * Persists the post-DDL evolution schema to commit metadata and the history file.
    */
   public void commitTableChange(HoodieSchema newEvolutionSchema, HoodieTableMetaClient metaClient) {
     TableSchemaResolver schemaUtil = new TableSchemaResolver(metaClient);
@@ -1813,21 +1797,9 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     commitStats(instantTime, Collections.emptyList(), Option.of(extraMeta), commitActionType);
   }
 
-  private InternalSchema getInternalSchema(TableSchemaResolver schemaUtil) {
-    return schemaUtil.getTableInternalSchemaFromCommitMetadata().orElseGet(() -> {
-      try {
-        return InternalSchemaConverter.convert(schemaUtil.getTableSchema());
-      } catch (Exception e) {
-        throw new HoodieException(String.format("cannot find schema for current table: %s", config.getBasePath()));
-      }
-    });
-  }
-
   /**
-   * HoodieSchema-shaped twin of {@link #getInternalSchema}: returns the table's
-   * evolution schema, or assigns fresh ids to the table's data schema as a fallback.
-   * Mirrors the legacy fall-through path through {@code InternalSchemaConverter.convert}
-   * which mints fresh ids when no evolution schema exists.
+   * Returns the table's evolution schema, or assigns fresh ids to the table's data
+   * schema as a fallback (mints fresh ids when no evolution schema exists).
    */
   private HoodieSchema getEvolutionSchema(TableSchemaResolver schemaUtil) {
     return schemaUtil.getTableEvolutionSchemaFromCommitMetadata().orElseGet(() -> {
