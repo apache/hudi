@@ -192,8 +192,8 @@ object HoodieSchemaUtils {
         val setNullForMissingColumns = opts.getOrElse(HoodieCommonConfig.SET_NULL_FOR_MISSING_COLUMNS.key(),
           HoodieCommonConfig.SET_NULL_FOR_MISSING_COLUMNS.defaultValue()).toBoolean
         val evolvedSchema = HoodieSchemaEvolutionUtils.reconcileSchemaStructural(canonicalizedSourceSchema, tableEvolutionSchema, setNullForMissingColumns)
-        val shouldRemoveMetaDataFromInternalSchema = sourceSchema.getFields.asScala.filter(f => f.name().equalsIgnoreCase(HoodieRecord.RECORD_KEY_METADATA_FIELD)).isEmpty
-        if (shouldRemoveMetaDataFromInternalSchema) HoodieCommonSchemaUtils.removeMetadataFields(evolvedSchema) else evolvedSchema
+        val shouldRemoveMetaDataFromEvolutionSchema = sourceSchema.getFields.asScala.filter(f => f.name().equalsIgnoreCase(HoodieRecord.RECORD_KEY_METADATA_FIELD)).isEmpty
+        if (shouldRemoveMetaDataFromEvolutionSchema) HoodieCommonSchemaUtils.removeMetadataFields(evolvedSchema) else evolvedSchema
 
       case None =>
         // In case schema reconciliation is enabled we will employ (legacy) reconciliation
