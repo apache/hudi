@@ -459,8 +459,6 @@ public final class HoodieSchemaSerDe {
         HoodieSchema elementType = parseType(node.get(ELEMENT), contextName + "_element");
         HoodieSchema effectiveElement = elementOptional ? HoodieSchema.createNullable(elementType) : elementType;
         HoodieSchema arr = HoodieSchema.createArray(effectiveElement);
-        // Stamp the element id on the array's underlying schema so the bridge's
-        // toInternalSchema path picks it up via getObjectProp(ELEMENT_ID_PROP).
         arr.getAvroSchema().addProp(HoodieSchema.ELEMENT_ID_PROP, elementId);
         return arr;
       }

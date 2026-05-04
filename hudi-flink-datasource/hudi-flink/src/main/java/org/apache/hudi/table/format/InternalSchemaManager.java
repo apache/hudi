@@ -194,8 +194,6 @@ public class InternalSchemaManager implements Serializable {
    * @param mergeSchema InternalSchema representation of mergeSchema (prioritise use of fileSchemaType) that is used for reading base parquet files
    * @param queryFieldNames array containing the columns of a Hudi Flink table
    * @return String array containing column names corresponding to the column names found in the mergeSchema
-   *
-   * @see InternalSchemaUtils#collectRenameCols(InternalSchema, InternalSchema)
    */
   String[] getMergeFieldNames(HoodieSchema mergeSchema, String[] queryFieldNames) {
     Preconditions.checkArgument(!querySchema.isEmptySchema(), "querySchema cannot be empty");
