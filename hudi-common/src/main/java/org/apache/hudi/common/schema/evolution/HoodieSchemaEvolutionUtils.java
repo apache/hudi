@@ -26,9 +26,7 @@ import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.common.schema.evolution.legacy.InternalSchema;
 import org.apache.hudi.common.schema.evolution.legacy.action.TableChanges;
 import org.apache.hudi.common.schema.evolution.legacy.action.TableChangesHelper;
-import org.apache.hudi.common.schema.evolution.legacy.convert.InternalSchemaConverter;
 import org.apache.hudi.common.schema.evolution.legacy.utils.SchemaChangeUtils;
-import org.apache.hudi.common.schema.types.Type;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieNullSchemaTypeException;
 
@@ -36,7 +34,6 @@ import org.apache.avro.Schema;
 
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -406,15 +403,14 @@ public final class HoodieSchemaEvolutionUtils {
   /**
    * Collects top-level columns whose primitive type differs between two schemas,
    * keyed by the column's index in {@code schema}. The pair holds (newType,
-   * oldType) so callers can build a cast plan from {@code oldType} to
-   * {@code newType}. Walks ids on the HoodieSchema accessors directly; only
-   * converts to {@link Type} at the result construction (callers expect Type
-   * pairs for the cast-plan downstream).
+   * oldType) — both the parent's full HoodieSchema — so callers can build a
+   * cast plan from {@code oldType} to {@code newType}. Walks ids on the
+   * HoodieSchema accessors directly.
    */
-  public static Map<Integer, Pair<Type, Type>> collectTypeChangedCols(HoodieSchema schema, HoodieSchema oldSchema) {
+  public static Map<Integer, Pair<HoodieSchema, HoodieSchema>> collectTypeChangedCols(HoodieSchema schema, HoodieSchema oldSchema) {
     Set<Integer> ids = schema.getAllIds();
     Set<Integer> otherIds = oldSchema.getAllIds();
-    Map<Integer, Pair<Type, Type>> result = new HashMap<>();
+    Map<Integer, Pair<HoodieSchema, HoodieSchema>> result = new HashMap<>();
     List<Integer> topLevelIds = schema.getFields().stream()
         .map(HoodieSchemaField::fieldId).collect(Collectors.toList());
     for (Integer id : ids) {
@@ -442,8 +438,8 @@ public final class HoodieSchemaEvolutionUtils {
         continue;
       }
       result.put(position, Pair.of(
-          InternalSchemaConverter.convertToField(schema.findType(parentName)),
-          InternalSchemaConverter.convertToField(oldSchema.findType(otherParentName))));
+          schema.findType(parentName),
+          oldSchema.findType(otherParentName)));
     }
     return result;
   }

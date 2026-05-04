@@ -25,7 +25,6 @@ import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.schema.evolution.HoodieSchemaEvolutionUtils;
 import org.apache.hudi.common.schema.evolution.HoodieSchemaHistoryCache;
 import org.apache.hudi.common.schema.evolution.HoodieSchemaMerger;
-import org.apache.hudi.common.schema.types.Type;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
@@ -210,7 +209,10 @@ public class InternalSchemaManager implements Serializable {
   }
 
   private Map<Integer, Integer> getPosProxy(HoodieSchema mergeSchema, String[] queryFieldNames) {
-    Map<Integer, Pair<Type, Type>> changedCols = HoodieSchemaEvolutionUtils.collectTypeChangedCols(querySchema, mergeSchema);
+    // Only the position keys are consumed; the (newType, oldType) pair from
+    // collectTypeChangedCols is unused on the Flink path.
+    Map<Integer, Pair<HoodieSchema, HoodieSchema>> changedCols =
+        HoodieSchemaEvolutionUtils.collectTypeChangedCols(querySchema, mergeSchema);
     HashMap<Integer, Integer> posProxy = new HashMap<>(changedCols.size());
     List<String> fieldNameList = Arrays.asList(queryFieldNames);
     List<HoodieSchemaField> columns = querySchema.getFields();

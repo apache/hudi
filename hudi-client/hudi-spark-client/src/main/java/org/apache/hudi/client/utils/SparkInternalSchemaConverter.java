@@ -229,7 +229,11 @@ public class SparkInternalSchemaConverter {
         .collectTypeChangedCols(schema, other)
         .entrySet()
         .stream()
-        .collect(Collectors.toMap(e -> e.getKey(), e -> Pair.of(constructSparkSchemaFromType(e.getValue().getLeft()), constructSparkSchemaFromType(e.getValue().getRight()))));
+        .collect(Collectors.toMap(
+            e -> e.getKey(),
+            e -> Pair.of(
+                org.apache.hudi.HoodieSchemaConversionUtils.convertHoodieSchemaToDataType(e.getValue().getLeft()),
+                org.apache.hudi.HoodieSchemaConversionUtils.convertHoodieSchemaToDataType(e.getValue().getRight()))));
   }
 
   private static DataType constructSparkSchemaFromType(Type type) {
