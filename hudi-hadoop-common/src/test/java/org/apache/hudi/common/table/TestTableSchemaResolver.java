@@ -224,8 +224,12 @@ class TestTableSchemaResolver {
     HoodieCommitMetadata insertMetadata = new HoodieCommitMetadata();
     insertMetadata.setOperationType(org.apache.hudi.common.model.WriteOperationType.INSERT);
     // Build a non-empty HoodieSchema fixture and serialize via HoodieSchemaSerDe.
+    // schemaId must be non-negative or HoodieSchemaSerDe.toJson treats the
+    // schema as the empty sentinel and writes "" — which fromJson then parses
+    // back as Option.empty(), defeating this test.
     HoodieSchema evolutionSchema = HoodieSchema.createRecord("schema", null, null, false,
         Collections.singletonList(HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.INT))));
+    evolutionSchema.setSchemaId(0);
     insertMetadata.addMetadata(
         org.apache.hudi.common.schema.evolution.HoodieSchemaSerDe.LATEST_SCHEMA,
         org.apache.hudi.common.schema.evolution.HoodieSchemaSerDe.toJson(evolutionSchema));
@@ -307,8 +311,12 @@ class TestTableSchemaResolver {
     HoodieCommitMetadata insertMetadata1 = new HoodieCommitMetadata();
     insertMetadata1.setOperationType(org.apache.hudi.common.model.WriteOperationType.INSERT);
     // Build a non-empty HoodieSchema fixture and serialize via HoodieSchemaSerDe.
+    // schemaId must be non-negative or HoodieSchemaSerDe.toJson treats the
+    // schema as the empty sentinel and writes "" — which fromJson then parses
+    // back as Option.empty(), defeating this test.
     HoodieSchema evolutionSchema1 = HoodieSchema.createRecord("schema", null, null, false,
         Collections.singletonList(HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.INT))));
+    evolutionSchema1.setSchemaId(0);
     insertMetadata1.addMetadata(
         org.apache.hudi.common.schema.evolution.HoodieSchemaSerDe.LATEST_SCHEMA,
         org.apache.hudi.common.schema.evolution.HoodieSchemaSerDe.toJson(evolutionSchema1));
