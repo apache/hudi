@@ -161,7 +161,7 @@ public class HoodieParquetInputFormat extends HoodieParquetInputFormatBase {
 
     LOG.debug("EMPLOYING DEFAULT RECORD READER - {}", split);
 
-    return getRecordReaderInternal(split, job, reporter, schemaEvolutionContext.getEvolutionSchemaOption("schema"));
+    return getRecordReaderInternal(split, job, reporter, schemaEvolutionContext.getEvolutionSchemaOption());
   }
 
   private RecordReader<NullWritable, ArrayWritable> getRecordReaderInternal(InputSplit split,

@@ -21,10 +21,15 @@ package org.apache.hudi.hadoop;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaField;
+import org.apache.hudi.common.schema.evolution.HoodieSchemaEvolutionUtils;
+import org.apache.hudi.common.schema.evolution.HoodieSchemaHistoryCache;
 import org.apache.hudi.common.schema.evolution.HoodieSchemaInternalSchemaBridge;
+import org.apache.hudi.common.schema.evolution.HoodieSchemaMerger;
+import org.apache.hudi.common.schema.evolution.HoodieSchemaSerDe;
+import org.apache.hudi.common.schema.types.Type;
+import org.apache.hudi.common.schema.types.Types;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
-import org.apache.hudi.common.util.InternalSchemaCache;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.TablePathUtils;
@@ -35,13 +40,6 @@ import org.apache.hudi.hadoop.hive.HoodieCombineHiveInputFormat;
 import org.apache.hudi.hadoop.realtime.AbstractRealtimeRecordReader;
 import org.apache.hudi.hadoop.realtime.RealtimeSplit;
 import org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils;
-import org.apache.hudi.internal.schema.InternalSchema;
-import org.apache.hudi.common.schema.types.Type;
-import org.apache.hudi.common.schema.types.Types;
-import org.apache.hudi.internal.schema.action.InternalSchemaMerger;
-import org.apache.hudi.internal.schema.convert.InternalSchemaConverter;
-import org.apache.hudi.internal.schema.utils.InternalSchemaUtils;
-import org.apache.hudi.internal.schema.utils.SerDeHelper;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.HoodieStorageUtils;
@@ -97,18 +95,14 @@ public class SchemaEvolutionContext {
   private final InputSplit split;
   private final JobConf job;
   private final HoodieTableMetaClient metaClient;
-  public Option<InternalSchema> internalSchemaOption;
+  private Option<HoodieSchema> evolutionSchemaOption;
 
   /**
-   * HoodieSchema-shaped view of {@link #internalSchemaOption}, materialised lazily via
-   * {@link HoodieSchemaInternalSchemaBridge}. Callers that don't need the legacy
-   * {@code Types.*} algebra should consume this instead.
+   * Returns the schema-on-read evolution schema, or empty when schema-on-read
+   * is disabled or no schema is available.
    */
-  public Option<HoodieSchema> getEvolutionSchemaOption(String recordName) {
-    if (internalSchemaOption == null || !internalSchemaOption.isPresent()) {
-      return Option.empty();
-    }
-    return Option.of(HoodieSchemaInternalSchemaBridge.toHoodieSchema(internalSchemaOption.get(), recordName));
+  public Option<HoodieSchema> getEvolutionSchemaOption() {
+    return evolutionSchemaOption == null ? Option.empty() : evolutionSchemaOption;
   }
 
   public SchemaEvolutionContext(InputSplit split, JobConf job) throws IOException {
@@ -120,24 +114,23 @@ public class SchemaEvolutionContext {
     this.job = job;
     if (!job.getBoolean(HIVE_EVOLUTION_ENABLE, true)) {
       LOG.info("Schema evolution is disabled for split: {}", split);
-      internalSchemaOption = Option.empty();
+      evolutionSchemaOption = Option.empty();
       this.metaClient = null;
       return;
     }
     this.metaClient = metaClientOption.isPresent() ? metaClientOption.get() : setUpHoodieTableMetaClient();
-    this.internalSchemaOption = getInternalSchemaFromCache();
+    this.evolutionSchemaOption = getEvolutionSchemaFromCache();
   }
 
-  public Option<InternalSchema> getInternalSchemaFromCache() throws IOException {
-    Option<InternalSchema> internalSchemaOpt = getCachedData(
+  public Option<HoodieSchema> getEvolutionSchemaFromCache() throws IOException {
+    Option<HoodieSchema> schemaOpt = getCachedData(
         HoodieCombineHiveInputFormat.INTERNAL_SCHEMA_CACHE_KEY_PREFIX,
-        SerDeHelper::fromJson);
-    if (internalSchemaOpt == null) {
+        HoodieSchemaSerDe::fromJson);
+    if (schemaOpt == null) {
       // the code path should only be invoked in tests.
-      return new TableSchemaResolver(this.metaClient).getTableEvolutionSchemaFromCommitMetadata()
-          .map(HoodieSchemaInternalSchemaBridge::toInternalSchema);
+      return new TableSchemaResolver(this.metaClient).getTableEvolutionSchemaFromCommitMetadata();
     }
-    return internalSchemaOpt;
+    return schemaOpt;
   }
 
   public HoodieSchema getSchemaFromCache() throws Exception {
@@ -214,26 +207,28 @@ public class SchemaEvolutionContext {
       LOG.warn("Expected realtime split for mor table. Found split: {}", split);
       return;
     }
-    if (internalSchemaOption.isPresent()) {
+    if (evolutionSchemaOption.isPresent()) {
       HoodieSchema tableSchema = getSchemaFromCache();
       List<String> requiredColumns = getRequireColumn(job);
-      InternalSchema prunedInternalSchema = InternalSchemaUtils.pruneInternalSchema(internalSchemaOption.get(),
-          requiredColumns);
+      HoodieSchema writerSchema = HoodieSchemaInternalSchemaBridge.toHoodieSchema(
+          HoodieSchemaInternalSchemaBridge.toInternalSchema(evolutionSchemaOption.get()), tableSchema.getName());
+      HoodieSchema prunedEvolutionSchema = HoodieSchemaInternalSchemaBridge.toHoodieSchema(
+          org.apache.hudi.internal.schema.utils.InternalSchemaUtils.pruneInternalSchema(
+              HoodieSchemaInternalSchemaBridge.toInternalSchema(evolutionSchemaOption.get()), requiredColumns),
+          tableSchema.getName());
       // Add partitioning fields to writer schema for resulting row to contain null values for these fields
       String partitionFields = job.get(hive_metastoreConstants.META_TABLE_PARTITION_COLUMNS, "");
       List<String> partitioningFields = !partitionFields.isEmpty() ? Arrays.stream(partitionFields.split("/")).collect(Collectors.toList())
           : new ArrayList<>();
-      HoodieSchema writerSchema = InternalSchemaConverter.convert(internalSchemaOption.get(), tableSchema.getName());
       writerSchema = HoodieRealtimeRecordReaderUtils.addPartitionFields(writerSchema, partitioningFields);
       Map<String, HoodieSchemaField> schemaFieldsMap = HoodieRealtimeRecordReaderUtils.getNameToFieldMap(writerSchema);
       // we should get HoodieParquetInputFormat#HIVE_TMP_COLUMNS,since serdeConstants#LIST_COLUMNS maybe change by HoodieParquetInputFormat#setColumnNameList
       HoodieSchema hiveSchema = realtimeRecordReader.constructHiveOrderedSchema(writerSchema, schemaFieldsMap, job.get(HIVE_TMP_COLUMNS));
-      HoodieSchema readerSchema = InternalSchemaConverter.convert(prunedInternalSchema, tableSchema.getName());
       // setUp evolution schema
       realtimeRecordReader.setWriterSchema(writerSchema);
-      realtimeRecordReader.setReaderSchema(readerSchema);
+      realtimeRecordReader.setReaderSchema(prunedEvolutionSchema);
       realtimeRecordReader.setHiveSchema(hiveSchema);
-      internalSchemaOption = Option.of(prunedInternalSchema);
+      evolutionSchemaOption = Option.of(prunedEvolutionSchema);
       RealtimeSplit realtimeSplit = (RealtimeSplit) split;
       LOG.info("About to read compacted logs {} for base split {}, projecting cols {}",
           realtimeSplit.getDeltaLogPaths(), realtimeSplit.getPath(), requiredColumns);
@@ -244,23 +239,25 @@ public class SchemaEvolutionContext {
    * Do schema evolution for ParquetFormat.
    */
   public void doEvolutionForParquetFormat() {
-    if (internalSchemaOption.isPresent()) {
+    if (evolutionSchemaOption.isPresent()) {
       // reading hoodie schema evolution table
       job.setBoolean(HIVE_EVOLUTION_ENABLE, true);
       Path finalPath = ((FileSplit) split).getPath();
-      InternalSchema prunedSchema;
       List<String> requiredColumns = getRequireColumn(job);
       // No need trigger schema evolution for count(*)/count(1) operation
       boolean disableSchemaEvolution =
           requiredColumns.isEmpty() || (requiredColumns.size() == 1 && requiredColumns.get(0).isEmpty());
       if (!disableSchemaEvolution) {
-        prunedSchema = InternalSchemaUtils.pruneInternalSchema(internalSchemaOption.get(), requiredColumns);
-        InternalSchema querySchema = prunedSchema;
+        HoodieSchema querySchema = HoodieSchemaInternalSchemaBridge.toHoodieSchema(
+            org.apache.hudi.internal.schema.utils.InternalSchemaUtils.pruneInternalSchema(
+                HoodieSchemaInternalSchemaBridge.toInternalSchema(evolutionSchemaOption.get()), requiredColumns),
+            evolutionSchemaOption.get().getFullName());
         long commitTime = Long.parseLong(FSUtils.getCommitTime(finalPath.getName()));
-        InternalSchema fileSchema = InternalSchemaCache.searchSchemaAndCache(commitTime, metaClient);
-        InternalSchema mergedInternalSchema = new InternalSchemaMerger(fileSchema, querySchema, true,
-            true).mergeSchema();
-        List<Types.Field> fields = mergedInternalSchema.columns();
+        HoodieSchema fileSchema = HoodieSchemaHistoryCache.searchSchemaAndCache(commitTime, metaClient);
+        HoodieSchema mergedSchema = new HoodieSchemaMerger(fileSchema, querySchema, true, true).mergeSchema();
+        // Extract Types.Field columns via the bridge — setColumnNameList/setColumnTypeList
+        // walk the relocated common.schema.types tree to derive Hive type strings.
+        List<Types.Field> fields = HoodieSchemaInternalSchemaBridge.toInternalSchema(mergedSchema).columns();
         setColumnNameList(job, fields);
         setColumnTypeList(job, fields);
         pushDownFilter(job, querySchema, fileSchema);
@@ -367,7 +364,7 @@ public class SchemaEvolutionContext {
     return typeInfo;
   }
 
-  private void pushDownFilter(JobConf job, InternalSchema querySchema, InternalSchema fileSchema) {
+  private void pushDownFilter(JobConf job, HoodieSchema querySchema, HoodieSchema fileSchema) {
     String filterExprSerialized = job.get(TableScanDesc.FILTER_EXPR_CONF_STR);
     if (filterExprSerialized != null) {
       ExprNodeGenericFuncDesc filterExpr = SerializationUtilities.deserializeExpression(filterExprSerialized);
@@ -379,7 +376,7 @@ public class SchemaEvolutionContext {
           ExprNodeDesc expr = exprNodes.poll();
           if (expr instanceof ExprNodeColumnDesc) {
             String oldColumn = ((ExprNodeColumnDesc) expr).getColumn();
-            String newColumn = InternalSchemaUtils.reBuildFilterName(oldColumn, fileSchema, querySchema);
+            String newColumn = HoodieSchemaEvolutionUtils.reBuildFilterName(oldColumn, fileSchema, querySchema);
             ((ExprNodeColumnDesc) expr).setColumn(newColumn);
           }
           List<ExprNodeDesc> children = expr.getChildren();

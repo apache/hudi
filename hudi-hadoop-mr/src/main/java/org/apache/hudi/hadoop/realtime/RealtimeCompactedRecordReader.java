@@ -112,7 +112,7 @@ public class RealtimeCompactedRecordReader extends AbstractRealtimeRecordReader
         .withDiskMapType(jobConf.getEnum(HoodieCommonConfig.SPILLABLE_DISK_MAP_TYPE.key(), HoodieCommonConfig.SPILLABLE_DISK_MAP_TYPE.defaultValue()))
         .withBitCaskDiskMapCompressionEnabled(jobConf.getBoolean(HoodieCommonConfig.DISK_MAP_BITCASK_COMPRESSION_ENABLED.key(),
             HoodieCommonConfig.DISK_MAP_BITCASK_COMPRESSION_ENABLED.defaultValue()))
-        .withEvolutionSchema(schemaEvolutionContext.getEvolutionSchemaOption("schema").orElse(HoodieSchema.empty()))
+        .withEvolutionSchema(schemaEvolutionContext.getEvolutionSchemaOption().orElse(HoodieSchema.empty()))
         .build();
   }
 
