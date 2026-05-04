@@ -35,7 +35,7 @@ import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.common.schema.evolution.legacy.convert.InternalSchemaConverter;
-import org.apache.hudi.common.schema.evolution.legacy.io.FileBasedInternalSchemaStorageManager;
+import org.apache.hudi.common.schema.evolution.HoodieSchemaHistoryStorageManager;
 import org.apache.hudi.common.schema.evolution.legacy.utils.InternalSchemaUtils;
 import org.apache.hudi.common.schema.evolution.legacy.utils.SerDeHelper;
 import org.apache.hudi.storage.HoodieStorage;
@@ -107,7 +107,7 @@ public class InternalSchemaCache {
 
   private static TreeMap<Long, InternalSchema> getHistoricalSchemas(HoodieTableMetaClient metaClient) {
     TreeMap<Long, InternalSchema> result = new TreeMap<>();
-    FileBasedInternalSchemaStorageManager schemasManager = new FileBasedInternalSchemaStorageManager(metaClient);
+    HoodieSchemaHistoryStorageManager schemasManager = new HoodieSchemaHistoryStorageManager(metaClient);
     String historySchemaStr = schemasManager.getHistorySchemaStr();
     if (!StringUtils.isNullOrEmpty(historySchemaStr)) {
       result = SerDeHelper.parseSchemas(historySchemaStr);
@@ -202,10 +202,10 @@ public class InternalSchemaCache {
       }
     }
     // step2:
-    FileBasedInternalSchemaStorageManager fileBasedInternalSchemaStorageManager =
-        new FileBasedInternalSchemaStorageManager(storage, new StoragePath(tablePath));
+    HoodieSchemaHistoryStorageManager historyStorageManager =
+        new HoodieSchemaHistoryStorageManager(storage, new StoragePath(tablePath));
     String latestHistorySchema =
-        fileBasedInternalSchemaStorageManager.getHistorySchemaStrByGivenValidCommits(validateCommitList);
+        historyStorageManager.getHistorySchemaStrByGivenValidCommits(validateCommitList);
     if (latestHistorySchema.isEmpty()) {
       return InternalSchema.getEmptyInternalSchema();
     }
