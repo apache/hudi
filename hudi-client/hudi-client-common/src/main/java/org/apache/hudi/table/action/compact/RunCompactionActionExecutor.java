@@ -85,7 +85,7 @@ public class RunCompactionActionExecutor<T> extends
           ? CompactionUtils.getCompactionPlan(table.getMetaClient(), instantTime)
           : CompactionUtils.getLogCompactionPlan(table.getMetaClient(), instantTime);
 
-      // try to load internalSchema to support schema Evolution
+      // try to load the evolution schema to support schema-on-read
       HoodieWriteConfig configCopy = config;
       Pair<Option<String>, Option<String>> schemaPair = HoodieSchemaHistoryCache
           .getInternalSchemaAndAvroSchemaForClusteringAndCompaction(table.getMetaClient(), instantTime);

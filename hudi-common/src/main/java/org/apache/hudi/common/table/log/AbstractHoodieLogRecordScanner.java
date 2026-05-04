@@ -665,8 +665,8 @@ public abstract class AbstractHoodieLogRecordScanner {
   /**
    * Get final Read Schema for support evolution.
    * step1: find the fileSchema for current dataBlock.
-   * step2: determine whether fileSchema is compatible with the final read internalSchema.
-   * step3: merge fileSchema and read internalSchema to produce final read schema.
+   * step2: determine whether fileSchema is compatible with the final read evolution schema.
+   * step3: merge fileSchema and read evolution schema to produce final read schema.
    *
    * @param dataBlock current processed block
    * @return final read schema.

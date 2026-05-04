@@ -170,7 +170,7 @@ case class AlterTableCommand(table: CatalogTable, changes: Seq[TableChange], cha
     }
   }
 
-  // to do support unset default value to columns, and apply them to internalSchema
+  // to do support unset default value to columns, and apply them to the evolution schema
   def applyPropertyUnset(sparkSession: SparkSession): Unit = {
     val catalog = sparkSession.sessionState.catalog
     val propKeys = changes.map(_.asInstanceOf[RemoveProperty]).map(_.property())
@@ -187,7 +187,7 @@ case class AlterTableCommand(table: CatalogTable, changes: Seq[TableChange], cha
     logInfo("table properties change finished")
   }
 
-  // to do support set default value to columns, and apply them to internalSchema
+  // to do support set default value to columns, and apply them to the evolution schema
   def applyPropertySet(sparkSession: SparkSession): Unit = {
     val catalog = sparkSession.sessionState.catalog
     val properties = changes.map(_.asInstanceOf[SetProperty]).map(f => f.property -> f.value).toMap
