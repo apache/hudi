@@ -21,6 +21,7 @@ package org.apache.hudi.common.schema.evolution;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.schema.HoodieSchemaType;
+import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.schema.types.Type;
 import org.apache.hudi.common.schema.types.Types;
 import org.apache.hudi.internal.schema.InternalSchema;
@@ -199,8 +200,8 @@ public final class HoodieSchemaInternalSchemaBridge {
    * field ids. Returns a HoodieSchema named after {@code requiredSchema}.
    */
   public static HoodieSchema pruneByRequiredSchema(HoodieSchema source, HoodieSchema requiredSchema) {
-    InternalSchema pruned = InternalSchemaConverter.pruneHoodieSchemaToInternalSchema(
-        requiredSchema, toInternalSchema(source));
+    InternalSchema pruned = InternalSchemaUtils.pruneInternalSchema(
+        toInternalSchema(source), HoodieSchemaUtils.collectLeafNames(requiredSchema));
     return toHoodieSchema(pruned, requiredSchema.getFullName());
   }
 

@@ -37,6 +37,8 @@ import java.math.MathContext;
 import java.math.RoundingMode;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Deque;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -71,6 +73,70 @@ public final class HoodieSchemaUtils {
   // Private constructor to prevent instantiation
   private HoodieSchemaUtils() {
     throw new UnsupportedOperationException("Utility class cannot be instantiated");
+  }
+
+  /**
+   * Returns the dot-joined full names of every leaf in {@code schema} — primitives
+   * encountered while walking record fields, array elements, and map values. Order
+   * matches a depth-first record traversal. Used by the prune-by-name path on
+   * {@link org.apache.hudi.common.schema.evolution.HoodieSchemaInternalSchemaBridge}.
+   */
+  public static List<String> collectLeafNames(HoodieSchema schema) {
+    List<String> result = new ArrayList<>();
+    collectLeafNames(schema, new LinkedList<>(), result);
+    return result;
+  }
+
+  private static void collectLeafNames(HoodieSchema schema, Deque<String> visited, List<String> out) {
+    switch (schema.getType()) {
+      case RECORD:
+        for (HoodieSchemaField f : schema.getFields()) {
+          visited.push(f.name());
+          collectLeafNames(f.schema(), visited, out);
+          visited.pop();
+          recordIfLeaf(f.schema(), f.name(), visited, out);
+        }
+        return;
+      case UNION:
+        collectLeafNames(schema.getNonNullType(), visited, out);
+        return;
+      case ARRAY:
+        visited.push("element");
+        collectLeafNames(schema.getElementType(), visited, out);
+        visited.pop();
+        recordIfLeaf(schema.getElementType(), "element", visited, out);
+        return;
+      case MAP:
+        recordIfLeaf(HoodieSchemaType.STRING, "key", visited, out);
+        visited.push("value");
+        collectLeafNames(schema.getValueType(), visited, out);
+        visited.pop();
+        recordIfLeaf(schema.getValueType(), "value", visited, out);
+        return;
+      default:
+    }
+  }
+
+  private static void recordIfLeaf(HoodieSchema schema, String name, Deque<String> visited, List<String> out) {
+    recordIfLeaf(schema.getNonNullType().getType(), name, visited, out);
+  }
+
+  private static void recordIfLeaf(HoodieSchemaType type, String name, Deque<String> visited, List<String> out) {
+    switch (type) {
+      case RECORD:
+      case ARRAY:
+      case MAP:
+        return;
+      default:
+        if (visited.isEmpty()) {
+          out.add(name);
+          return;
+        }
+        StringBuilder sb = new StringBuilder();
+        visited.descendingIterator().forEachRemaining(p -> sb.append(p).append('.'));
+        sb.append(name);
+        out.add(sb.toString());
+    }
   }
 
   /**
