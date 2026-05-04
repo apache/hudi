@@ -99,72 +99,23 @@ public class InternalSchemaConverter {
   }
 
   public static InternalSchema pruneHoodieSchemaToInternalSchema(HoodieSchema schema, InternalSchema originSchema) {
-    List<String> pruneNames = collectColNamesFromSchema(schema);
-    return InternalSchemaUtils.pruneInternalSchema(originSchema, pruneNames);
+    return InternalSchemaUtils.pruneInternalSchema(originSchema,
+        org.apache.hudi.common.schema.HoodieSchemaUtils.collectLeafNames(schema));
   }
 
   /**
    * Collect all the leaf nodes names.
+   *
+   * <p>Delegates to {@link org.apache.hudi.common.schema.HoodieSchemaUtils#collectLeafNames}
+   * — the HoodieSchema-direct walker that moved out of internal.schema in the
+   * Phase 5 ramp-up. Kept here for {@link TestInternalSchemaConverter} visibility.</p>
    *
    * @param schema a HoodieSchema.
    * @return leaf nodes full names.
    */
   @VisibleForTesting
   static List<String> collectColNamesFromSchema(HoodieSchema schema) {
-    List<String> result = new ArrayList<>();
-    Deque<String> visited = new LinkedList<>();
-    collectColNamesFromSchema(schema, visited, result);
-    return result;
-  }
-
-  private static void collectColNamesFromSchema(HoodieSchema schema, Deque<String> visited, List<String> resultSet) {
-    switch (schema.getType()) {
-      case RECORD:
-        List<HoodieSchemaField> fields = schema.getFields();
-        for (HoodieSchemaField f : fields) {
-          visited.push(f.name());
-          collectColNamesFromSchema(f.schema(), visited, resultSet);
-          visited.pop();
-          addFullNameIfLeafNode(f.schema(), f.name(), visited, resultSet);
-        }
-        return;
-
-      case UNION:
-        collectColNamesFromSchema(schema.getNonNullType(), visited, resultSet);
-        return;
-
-      case ARRAY:
-        visited.push("element");
-        collectColNamesFromSchema(schema.getElementType(), visited, resultSet);
-        visited.pop();
-        addFullNameIfLeafNode(schema.getElementType(), "element", visited, resultSet);
-        return;
-
-      case MAP:
-        addFullNameIfLeafNode(HoodieSchemaType.STRING, "key", visited, resultSet);
-        visited.push("value");
-        collectColNamesFromSchema(schema.getValueType(), visited, resultSet);
-        visited.pop();
-        addFullNameIfLeafNode(schema.getValueType(), "value", visited, resultSet);
-        return;
-
-      default:
-    }
-  }
-
-  private static void addFullNameIfLeafNode(HoodieSchema schema, String name, Deque<String> visited, List<String> resultSet) {
-    addFullNameIfLeafNode(schema.getNonNullType().getType(), name, visited, resultSet);
-  }
-
-  private static void addFullNameIfLeafNode(HoodieSchemaType type, String name, Deque<String> visited, List<String> resultSet) {
-    switch (type) {
-      case RECORD:
-      case ARRAY:
-      case MAP:
-        return;
-      default:
-        resultSet.add(InternalSchemaUtils.createFullName(name, visited));
-    }
+    return org.apache.hudi.common.schema.HoodieSchemaUtils.collectLeafNames(schema);
   }
 
   /**
