@@ -116,17 +116,16 @@ public class Utils {
                     environment.getUserCodeClassLoader().asClassLoader()));
   }
 
-  private static InternalSchema applyTableChange(InternalSchema oldSchema, TableChange change, Function<LogicalType, Type> convertFunc) {
-    InternalSchemaChangeApplier changeApplier = new InternalSchemaChangeApplier(oldSchema);
+  private static HoodieSchema applyTableChange(HoodieSchema oldSchema, TableChange change, Function<LogicalType, HoodieSchema> convertFunc) {
+    HoodieSchemaChangeApplier changeApplier = new HoodieSchemaChangeApplier(oldSchema);
     if (change instanceof TableChange.AddColumn) {
       if (((TableChange.AddColumn) change).getColumn().isPhysical()) {
         TableChange.AddColumn add = (TableChange.AddColumn) change;
         Column column = add.getColumn();
         String colName = column.getName();
-        Type colType = convertFunc.apply(column.getDataType().getLogicalType());
+        HoodieSchema colType = convertFunc.apply(column.getDataType().getLogicalType());
         String comment = column.getComment().orElse(null);
-        Pair<org.apache.hudi.internal.schema.action.TableChange.ColumnPositionChange.ColumnPositionType, String> colPositionPair =
-            parseColumnPosition(add.getPosition());
+        Pair<ColumnPositionType, String> colPositionPair = parseColumnPosition(add.getPosition());
         return changeApplier.applyAddChange(
             colName, colType, comment, colPositionPair.getRight(), colPositionPair.getLeft());
       } else {
@@ -143,13 +142,12 @@ public class Utils {
     } else if (change instanceof TableChange.ModifyPhysicalColumnType) {
       TableChange.ModifyPhysicalColumnType modify = (TableChange.ModifyPhysicalColumnType) change;
       String colName = modify.getOldColumn().getName();
-      Type newColType = convertFunc.apply(modify.getNewType().getLogicalType());
+      HoodieSchema newColType = convertFunc.apply(modify.getNewType().getLogicalType());
       return changeApplier.applyColumnTypeChange(colName, newColType);
     } else if (change instanceof TableChange.ModifyColumnPosition) {
       TableChange.ModifyColumnPosition modify = (TableChange.ModifyColumnPosition) change;
       String colName = modify.getOldColumn().getName();
-      Pair<org.apache.hudi.internal.schema.action.TableChange.ColumnPositionChange.ColumnPositionType, String> colPositionPair =
-          parseColumnPosition(modify.getNewPosition());
+      Pair<ColumnPositionType, String> colPositionPair = parseColumnPosition(modify.getNewPosition());
       return changeApplier.applyReOrderColPositionChange(
           colName, colPositionPair.getRight(), colPositionPair.getLeft());
     } else if (change instanceof TableChange.ModifyColumnComment) {
@@ -164,8 +162,8 @@ public class Utils {
     }
   }
 
-  private static Pair<org.apache.hudi.internal.schema.action.TableChange.ColumnPositionChange.ColumnPositionType, String> parseColumnPosition(TableChange.ColumnPosition colPosition) {
-    org.apache.hudi.internal.schema.action.TableChange.ColumnPositionChange.ColumnPositionType positionType;
+  private static Pair<ColumnPositionType, String> parseColumnPosition(TableChange.ColumnPosition colPosition) {
+    ColumnPositionType positionType;
     String position = "";
     if (colPosition instanceof TableChange.First) {
       positionType = FIRST;
