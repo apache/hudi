@@ -49,11 +49,16 @@ To build the Docker demo images directly with the script, run it from under `<HU
 ./build_docker_images.sh
 ```
 
-You can override the Hadoop, Spark, and Hive versions from the command line. Use one of the supported version
-combinations under `docker/compose` when doing so.
+You can override the Hadoop, Spark, and Hive versions from the command line. If you plan to use `setup_demo.sh`,
+build the image set matching the default compose files first. For other flows, use one of the supported version
+combinations under `docker/compose`.
 
 ```shell
-# For example, to build the image set used by
+# Matches setup_demo.sh and
+# docker-compose_hadoop334_hive313_spark353_{amd64,arm64}.yml
+./build_docker_images.sh --hadoop-version 3.3.4 --spark-version 3.5.3 --hive-version 3.1.3
+
+# Another supported combination is
 # docker-compose_hadoop340_hive313_spark401_{amd64,arm64}.yml
 ./build_docker_images.sh --hadoop-version 3.4.0 --spark-version 4.0.1 --hive-version 3.1.3
 ```
