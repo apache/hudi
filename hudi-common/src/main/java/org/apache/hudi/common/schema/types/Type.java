@@ -91,7 +91,12 @@ public interface Type extends Serializable {
 
   static TypeID fromValue(String value) {
     try {
-      return TypeID.valueOf(value.toUpperCase(Locale.ROOT));
+      // Accept both hyphenated and underscored forms. The {@code toString()} of
+      // hyphenated time/timestamp variants (e.g. "time-millis", "timestamp-millis",
+      // "local-timestamp-micros") is what the JSON SerDe emits to disk, while the
+      // enum constants use underscores; without this normalization the wire format
+      // produced by the serializer can't be parsed back.
+      return TypeID.valueOf(value.toUpperCase(Locale.ROOT).replace('-', '_'));
     } catch (IllegalArgumentException e) {
       throw new IllegalArgumentException(String.format("Invalid value of Type: %s", value));
     }
