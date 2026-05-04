@@ -37,6 +37,7 @@ import org.apache.avro.Schema;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -45,7 +46,6 @@ import java.util.Set;
 import java.util.TreeMap;
 import java.util.stream.Collectors;
 
-import static org.apache.hudi.common.util.CollectionUtils.reduce;
 import static org.apache.hudi.common.schema.evolution.legacy.convert.InternalSchemaConverter.convert;
 
 /**
@@ -128,11 +128,54 @@ public final class HoodieSchemaEvolutionUtils {
   public static HoodieSchema reconcileSchemaRequirements(HoodieSchema sourceSchema,
                                                          HoodieSchema targetSchema,
                                                          boolean shouldReorderColumns) {
-    Schema reconciled = reconcileSchemaRequirements(
-        sourceSchema == null ? null : sourceSchema.getAvroSchema(),
-        targetSchema == null ? null : targetSchema.getAvroSchema(),
-        shouldReorderColumns);
-    return HoodieSchema.fromAvroSchema(reconciled);
+    if (targetSchema == null
+        || targetSchema.getType() == HoodieSchemaType.NULL
+        || targetSchema.getFields().isEmpty()) {
+      return sourceSchema;
+    }
+    if (sourceSchema == null
+        || sourceSchema.getType() == HoodieSchemaType.NULL
+        || sourceSchema.getFields().isEmpty()) {
+      return targetSchema;
+    }
+
+    HoodieSchema source = shouldReorderColumns
+        ? reorderToTargetLayout(sourceSchema, targetSchema.nameToPosition())
+        : sourceSchema;
+
+    Set<String> targetNames = new HashSet<>(targetSchema.getAllColsFullName());
+    List<String> nullableUpdates = new ArrayList<>();
+    List<Pair<String, HoodieSchema>> typeUpdates = new ArrayList<>();
+    for (String field : source.getAllColsFullName()) {
+      if (!targetNames.contains(field)) {
+        continue;
+      }
+      HoodieSchema sourceFieldType = source.findType(field);
+      HoodieSchema targetFieldType = targetSchema.findType(field);
+      if (sourceFieldType.isNullable() != targetFieldType.isNullable()) {
+        nullableUpdates.add(field);
+      }
+      if (shouldPromoteHoodieType(sourceFieldType, targetFieldType)) {
+        typeUpdates.add(Pair.of(field, targetFieldType));
+      }
+    }
+
+    if (nullableUpdates.isEmpty() && typeUpdates.isEmpty()) {
+      // Match the legacy "no updates" branch: re-emit through the canonicalizer
+      // so union ordering is consistent.
+      return fixNullOrdering(source);
+    }
+
+    HoodieSchema result = source;
+    for (String field : nullableUpdates) {
+      // Legacy hard-codes nullable=true even when target is required; preserved
+      // verbatim to avoid behavior change.
+      result = new HoodieSchemaChangeApplier(result).applyColumnNullabilityChange(field, true);
+    }
+    for (Pair<String, HoodieSchema> u : typeUpdates) {
+      result = new HoodieSchemaChangeApplier(result).applyColumnTypeChange(u.getLeft(), u.getRight());
+    }
+    return result;
   }
 
   /**
@@ -144,61 +187,6 @@ public final class HoodieSchemaEvolutionUtils {
                                                 InternalSchema oldTableSchema,
                                                 boolean makeMissingFieldsNullable) {
     return reconcileInternal(incomingSchema, oldTableSchema, makeMissingFieldsNullable);
-  }
-
-  /**
-   * Avro-only requirements-reconciliation entry point retained for the
-   * legacy-test surface and any internal caller that still hands around
-   * Avro {@link Schema}. Public callers should prefer
-   * {@link #reconcileSchemaRequirements(HoodieSchema, HoodieSchema, boolean)}.
-   */
-  public static Schema reconcileSchemaRequirements(Schema sourceSchema,
-                                                   Schema targetSchema,
-                                                   boolean shouldReorderColumns) {
-    if (targetSchema.getType() == Schema.Type.NULL || targetSchema.getFields().isEmpty()) {
-      return sourceSchema;
-    }
-    if (sourceSchema == null || sourceSchema.getType() == Schema.Type.NULL || sourceSchema.getFields().isEmpty()) {
-      return targetSchema;
-    }
-    InternalSchema targetInternal = convert(HoodieSchema.fromAvroSchema(targetSchema));
-    // Preserve field-id assignment ordering with the target when reorder is requested
-    // — that's what keeps inter-commit field positions stable.
-    InternalSchema sourceInternal = convert(HoodieSchema.fromAvroSchema(sourceSchema),
-        shouldReorderColumns ? targetInternal.getNameToPosition() : Collections.emptyMap());
-
-    List<String> colNamesSource = sourceInternal.getAllColsFullName();
-    List<String> colNamesTarget = targetInternal.getAllColsFullName();
-
-    List<String> nullableUpdates = new ArrayList<>();
-    List<String> typeUpdates = new ArrayList<>();
-    colNamesSource.forEach(field -> {
-      if (colNamesTarget.contains(field)
-          && sourceInternal.findField(field).isOptional() != targetInternal.findField(field).isOptional()) {
-        nullableUpdates.add(field);
-      }
-      if (colNamesTarget.contains(field)
-          && SchemaChangeUtils.shouldPromoteType(sourceInternal.findType(field), targetInternal.findType(field))) {
-        typeUpdates.add(field);
-      }
-    });
-
-    if (nullableUpdates.isEmpty() && typeUpdates.isEmpty()) {
-      // No updates — but still re-emit through the converter so union ordering is canonicalized.
-      return convert(sourceInternal, sourceSchema.getFullName()).toAvroSchema();
-    }
-
-    TableChanges.ColumnUpdateChange schemaChange = TableChanges.ColumnUpdateChange.get(sourceInternal);
-    if (!nullableUpdates.isEmpty()) {
-      schemaChange = reduce(nullableUpdates, schemaChange,
-          (change, field) -> change.updateColumnNullability(field, true));
-    }
-    if (!typeUpdates.isEmpty()) {
-      schemaChange = reduce(typeUpdates, schemaChange,
-          (change, field) -> change.updateColumnType(field, targetInternal.findType(field)));
-    }
-    return convert(SchemaChangeUtils.applyTableChanges2Schema(sourceInternal, schemaChange),
-        sourceSchema.getFullName()).toAvroSchema();
   }
 
   // -------------------------------------------------------------------------
@@ -751,5 +739,132 @@ public final class HoodieSchemaEvolutionUtils {
       default:
         return source;
     }
+  }
+
+  // -------------------------------------------------------------------------
+  // Helpers for reconcileSchemaRequirements: type-promotion check and a
+  // record-tree walker that reorders source's record fields to match target's
+  // positional layout (with names absent from target landing at the end).
+  // -------------------------------------------------------------------------
+
+  /**
+   * Mirrors legacy {@code SchemaChangeUtils.shouldPromoteType}: true when src
+   * is a primitive that can be widened into dst. Nested types and equal types
+   * return false.
+   */
+  private static boolean shouldPromoteHoodieType(HoodieSchema src, HoodieSchema dst) {
+    HoodieSchema srcEffective = src.isNullable() ? src.getNonNullType() : src;
+    HoodieSchema dstEffective = dst.isNullable() ? dst.getNonNullType() : dst;
+    if (srcEffective.getAvroSchema().equals(dstEffective.getAvroSchema())) {
+      return false;
+    }
+    if (isNestedType(srcEffective) || isNestedType(dstEffective)) {
+      return false;
+    }
+    HoodieSchemaType srcT = srcEffective.getType();
+    HoodieSchemaType dstT = dstEffective.getType();
+    switch (srcT) {
+      case INT:
+        return dstT == HoodieSchemaType.LONG || dstT == HoodieSchemaType.FLOAT
+            || dstT == HoodieSchemaType.DOUBLE || dstT == HoodieSchemaType.STRING
+            || dstT == HoodieSchemaType.DECIMAL;
+      case LONG:
+        return dstT == HoodieSchemaType.FLOAT || dstT == HoodieSchemaType.DOUBLE
+            || dstT == HoodieSchemaType.STRING || dstT == HoodieSchemaType.DECIMAL;
+      case FLOAT:
+        return dstT == HoodieSchemaType.DOUBLE || dstT == HoodieSchemaType.STRING
+            || dstT == HoodieSchemaType.DECIMAL;
+      case DOUBLE:
+        return dstT == HoodieSchemaType.STRING || dstT == HoodieSchemaType.DECIMAL;
+      case DATE:
+      case BYTES:
+        return dstT == HoodieSchemaType.STRING;
+      case DECIMAL:
+        if (dstT == HoodieSchemaType.STRING) {
+          return true;
+        }
+        if (dstT != HoodieSchemaType.DECIMAL) {
+          return false;
+        }
+        return isDecimalPromotion((HoodieSchema.Decimal) srcEffective, (HoodieSchema.Decimal) dstEffective);
+      case STRING:
+        return dstT == HoodieSchemaType.DATE
+            || dstT == HoodieSchemaType.DECIMAL
+            || dstT == HoodieSchemaType.BYTES;
+      default:
+        return false;
+    }
+  }
+
+  /**
+   * Decimal-to-decimal widening matching legacy
+   * {@code Types.DecimalBase.isWiderThan} + the {@code precision >= && scale ==}
+   * fallback in {@code isDecimalUpdateAllowInternalBase}.
+   */
+  private static boolean isDecimalPromotion(HoodieSchema.Decimal src, HoodieSchema.Decimal dst) {
+    if (dst.getScale() == src.getScale() && dst.getPrecision() >= src.getPrecision()) {
+      return true;
+    }
+    return (dst.getPrecision() - dst.getScale()) >= (src.getPrecision() - src.getScale())
+        && dst.getScale() > src.getScale();
+  }
+
+  /**
+   * Returns a fresh HoodieSchema mirroring {@code source} but with each
+   * record's fields reordered to match {@code targetPositions}. Fields whose
+   * full name isn't in target land at the end. Recurses into nested records,
+   * arrays (under "element" segment), and maps (under "value" segment).
+   */
+  private static HoodieSchema reorderToTargetLayout(HoodieSchema source, Map<String, Integer> targetPositions) {
+    return reorderInner(source, "", targetPositions);
+  }
+
+  private static HoodieSchema reorderInner(HoodieSchema source, String pathPrefix, Map<String, Integer> targetPositions) {
+    HoodieSchema effective = source.isNullable() ? source.getNonNullType() : source;
+    HoodieSchema rebuilt;
+    switch (effective.getType()) {
+      case RECORD: {
+        List<HoodieSchemaField> sorted = new ArrayList<>(effective.getFields());
+        sorted.sort(Comparator.comparingInt(f -> targetPositions.getOrDefault(pathPrefix + f.name(), Integer.MAX_VALUE)));
+        List<HoodieSchemaField> newFields = new ArrayList<>(sorted.size());
+        for (HoodieSchemaField f : sorted) {
+          HoodieSchema newSub = reorderInner(f.schema(), pathPrefix + f.name() + ".", targetPositions);
+          HoodieSchemaField rb = HoodieSchemaField.of(
+              f.name(), newSub, f.doc().orElse(null), f.defaultVal().orElse(null));
+          for (Map.Entry<String, Object> e : f.getObjectProps().entrySet()) {
+            rb.addProp(e.getKey(), e.getValue());
+          }
+          newFields.add(rb);
+        }
+        rebuilt = HoodieSchema.createRecord(effective.getName(), effective.getNamespace().orElse(null),
+            effective.getDoc().orElse(null), newFields);
+        break;
+      }
+      case ARRAY: {
+        HoodieSchema newElement = reorderInner(effective.getElementType(), pathPrefix + "element.", targetPositions);
+        rebuilt = HoodieSchema.createArray(newElement);
+        Object eId = effective.getAvroSchema().getObjectProp(HoodieSchema.ELEMENT_ID_PROP);
+        if (eId instanceof Number) {
+          rebuilt.getAvroSchema().addProp(HoodieSchema.ELEMENT_ID_PROP, ((Number) eId).intValue());
+        }
+        break;
+      }
+      case MAP: {
+        HoodieSchema newValue = reorderInner(effective.getValueType(), pathPrefix + "value.", targetPositions);
+        rebuilt = HoodieSchema.createMap(newValue);
+        Object kId = effective.getAvroSchema().getObjectProp(HoodieSchema.KEY_ID_PROP);
+        Object vId = effective.getAvroSchema().getObjectProp(HoodieSchema.VALUE_ID_PROP);
+        if (kId instanceof Number) {
+          rebuilt.getAvroSchema().addProp(HoodieSchema.KEY_ID_PROP, ((Number) kId).intValue());
+        }
+        if (vId instanceof Number) {
+          rebuilt.getAvroSchema().addProp(HoodieSchema.VALUE_ID_PROP, ((Number) vId).intValue());
+        }
+        break;
+      }
+      default:
+        return source;
+    }
+    return source.isNullable() ? HoodieSchema.createNullable(rebuilt) : rebuilt;
   }
 }
