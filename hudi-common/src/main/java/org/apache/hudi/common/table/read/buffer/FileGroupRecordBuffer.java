@@ -26,7 +26,6 @@ import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaCache;
 import org.apache.hudi.common.schema.evolution.HoodieSchemaHistoryCache;
-import org.apache.hudi.common.schema.evolution.HoodieSchemaInternalSchemaBridge;
 import org.apache.hudi.common.schema.evolution.HoodieSchemaMerger;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.PartialUpdateMode;
@@ -48,7 +47,6 @@ import org.apache.hudi.common.util.collection.CloseableMappingIterator;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieIOException;
-import org.apache.hudi.internal.schema.InternalSchema;
 
 import java.io.IOException;
 import java.io.Serializable;
@@ -84,7 +82,7 @@ abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordBuffer<T
   protected Iterator<BufferedRecord<T>> logRecordIterator;
   protected BufferedRecord<T> nextRecord;
   protected boolean enablePartialMerging = false;
-  protected InternalSchema internalSchema;
+  protected Option<HoodieSchema> evolutionSchemaOpt;
   protected HoodieTableMetaClient hoodieTableMetaClient;
   protected BufferedRecordMerger<T> bufferedRecordMerger;
   protected long totalLogRecords = 0;
@@ -106,7 +104,7 @@ abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordBuffer<T
     this.orderingFieldNames = orderingFieldNames;
     // Ensure that ordering field is populated for mergers and legacy payloads
     this.props = ConfigUtils.supplementOrderingFields(props, orderingFieldNames);
-    this.internalSchema = readerContext.getSchemaHandler().getInternalSchema();
+    this.evolutionSchemaOpt = readerContext.getSchemaHandler().getEvolutionSchemaOpt();
     this.hoodieTableMetaClient = hoodieTableMetaClient;
     String spillableMapBasePath = props.getString(SPILLABLE_MAP_BASE_PATH.key(), FileIOUtils.getDefaultSpillableMapBasePath());
     try {
@@ -210,22 +208,21 @@ abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordBuffer<T
   /**
    * Get final Read Schema for support evolution.
    * step1: find the fileSchema for current dataBlock.
-   * step2: determine whether fileSchema is compatible with the final read internalSchema.
-   * step3: merge fileSchema and read internalSchema to produce final read schema.
+   * step2: determine whether fileSchema is compatible with the read evolution schema.
+   * step3: merge fileSchema and read evolution schema to produce final read schema.
    *
    * @param dataBlock current processed block
    * @return final read schema.
    */
   protected Option<Pair<Function<T, T>, HoodieSchema>> composeEvolvedSchemaTransformer(
       HoodieDataBlock dataBlock) {
-    if (internalSchema.isEmptySchema()) {
+    if (!evolutionSchemaOpt.isPresent()) {
       return Option.empty();
     }
 
     long currentInstantTime = Long.parseLong(dataBlock.getLogBlockHeader().get(INSTANT_TIME));
     HoodieSchema fileSchema = HoodieSchemaHistoryCache.searchSchemaAndCache(currentInstantTime, hoodieTableMetaClient);
-    HoodieSchema currentEvolutionSchema = HoodieSchemaInternalSchemaBridge.toHoodieSchema(internalSchema, readerSchema.getFullName());
-    Pair<HoodieSchema, Map<String, String>> mergedEvolutionSchema = new HoodieSchemaMerger(fileSchema, currentEvolutionSchema,
+    Pair<HoodieSchema, Map<String, String>> mergedEvolutionSchema = new HoodieSchemaMerger(fileSchema, evolutionSchemaOpt.get(),
         true, false, false).mergeSchemaGetRenamed();
     HoodieSchema mergedAvroSchema = mergedEvolutionSchema.getLeft();
     // `mergedAvroSchema` maybe not equal with `readerSchema`, case: drop a column `f_x`, and then add a new column with same name `f_x`,

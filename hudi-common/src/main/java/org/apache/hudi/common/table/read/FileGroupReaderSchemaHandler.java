@@ -91,10 +91,8 @@ public class FileGroupReaderSchemaHandler<T> {
   @Getter
   protected HoodieSchema schemaForUpdates;
 
-  @Getter
   protected final InternalSchema internalSchema;
 
-  @Getter
   protected final Option<InternalSchema> internalSchemaOpt;
 
   protected final HoodieTableConfig hoodieTableConfig;
