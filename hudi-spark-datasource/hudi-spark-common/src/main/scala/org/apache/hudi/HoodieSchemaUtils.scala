@@ -23,12 +23,11 @@ import org.apache.hudi.HoodieSparkSqlWriter.{CANONICALIZE_SCHEMA, SQL_MERGE_INTO
 import org.apache.hudi.common.config.{HoodieCommonConfig, HoodieConfig, TypedProperties}
 import org.apache.hudi.common.model.HoodieRecord
 import org.apache.hudi.common.schema.{HoodieSchema, HoodieSchemaCompatibility, HoodieSchemaUtils => HoodieCommonSchemaUtils}
-import org.apache.hudi.common.schema.evolution.{HoodieSchemaEvolutionUtils, HoodieSchemaInternalSchemaBridge}
+import org.apache.hudi.common.schema.evolution.HoodieSchemaEvolutionUtils
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.util.ConfigUtils
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.exception.{HoodieException, SchemaCompatibilityException}
-import org.apache.hudi.internal.schema.InternalSchema
 
 import org.apache.spark.sql.types.StructField
 import org.apache.spark.sql.types.StructType
@@ -71,45 +70,10 @@ object HoodieSchemaUtils {
   }
 
   /**
-   * get latest internalSchema from table
-   *
-   * @param config          instance of {@link HoodieConfig}
-   * @param tableMetaClient instance of HoodieTableMetaClient
-   * @return Option of InternalSchema. Will always be empty if schema on read is disabled
-   */
-  def getLatestTableInternalSchema(config: HoodieConfig,
-                                   tableMetaClient: HoodieTableMetaClient): Option[InternalSchema] = {
-    getLatestTableInternalSchema(config.getProps, tableMetaClient)
-  }
-
-  /**
-   * get latest internalSchema from table
-   *
-   * @param props           instance of {@link Properties}
-   * @param tableMetaClient instance of HoodieTableMetaClient
-   * @return Option of InternalSchema. Will always be empty if schema on read is disabled
-   */
-  def getLatestTableInternalSchema(props: Properties,
-                                   tableMetaClient: HoodieTableMetaClient): Option[InternalSchema] = {
-    if (!ConfigUtils.getBooleanWithAltKeys(props, DataSourceReadOptions.SCHEMA_EVOLUTION_ENABLED)) {
-      None
-    } else {
-      try {
-        val tableSchemaResolver = new TableSchemaResolver(tableMetaClient)
-        val internalSchemaOpt = tableSchemaResolver.getTableInternalSchemaFromCommitMetadata
-        if (internalSchemaOpt.isPresent) Some(internalSchemaOpt.get()) else None
-      } catch {
-        case _: Exception => None
-      }
-    }
-  }
-
-  /**
-   * HoodieSchema-shaped twin of [[getLatestTableInternalSchema]]. Returns the
-   * schema-on-read evolution [[HoodieSchema]] for the table — carrying field ids
-   * and version metadata — or [[None]] when schema-on-read is disabled, no schema
-   * is in commit metadata, or any read error occurs (matching the legacy semantic
-   * of swallowing read failures rather than propagating them).
+   * Returns the schema-on-read evolution [[HoodieSchema]] for the table — carrying
+   * field ids and version metadata — or [[None]] when schema-on-read is disabled,
+   * no schema is in commit metadata, or any read error occurs (read failures are
+   * swallowed rather than propagated).
    */
   def getLatestTableEvolutionSchema(config: HoodieConfig,
                                     tableMetaClient: HoodieTableMetaClient): Option[HoodieSchema] = {
@@ -132,27 +96,8 @@ object HoodieSchemaUtils {
   }
 
   /**
-   * Deduces writer's schema based on
-   * <ul>
-   *   <li>Source's schema</li>
-   *   <li>Target table's schema (including Hudi's [[InternalSchema]] representation)</li>
-   * </ul>
-   */
-  def deduceWriterSchema(sourceSchema: HoodieSchema,
-                         latestTableSchemaOpt: Option[HoodieSchema],
-                         internalSchemaOpt: Option[InternalSchema],
-                         opts: Map[String, String]): HoodieSchema = {
-    deduceWriterSchemaWithEvolution(sourceSchema, latestTableSchemaOpt,
-      internalSchemaOpt.map(s => HoodieSchemaInternalSchemaBridge.toHoodieSchema(s,
-        latestTableSchemaOpt.map(_.getFullName).getOrElse(sourceSchema.getFullName))),
-      opts)
-  }
-
-  /**
-   * HoodieSchema-shaped twin of [[deduceWriterSchema]]: takes the table's
-   * evolution schema as a [[HoodieSchema]] (with field ids) instead of the legacy
-   * [[InternalSchema]]. Preferred entry point for new callers; the legacy overload
-   * delegates here via the bridge.
+   * Deduces writer's schema from source schema, the table's latest Avro schema, and
+   * the table's schema-on-read evolution schema (if any).
    */
   def deduceWriterSchemaWithEvolution(sourceSchema: HoodieSchema,
                                       latestTableSchemaOpt: Option[HoodieSchema],
@@ -275,20 +220,9 @@ object HoodieSchemaUtils {
     }
   }
 
-  def deduceWriterSchema(sourceSchema: HoodieSchema,
-                         latestTableSchemaOpt: org.apache.hudi.common.util.Option[HoodieSchema],
-                         internalSchemaOpt: org.apache.hudi.common.util.Option[InternalSchema],
-                         props: TypedProperties): HoodieSchema = {
-    deduceWriterSchema(sourceSchema,
-      HoodieConversionUtils.toScalaOption(latestTableSchemaOpt),
-      HoodieConversionUtils.toScalaOption(internalSchemaOpt),
-      HoodieConversionUtils.fromProperties(props))
-  }
-
   /**
-   * Java-friendly overload of [[deduceWriterSchemaWithEvolution]] mirroring the
-   * pattern of the [[deduceWriterSchema]] overload above — Java callers receive
-   * Hudi's [[org.apache.hudi.common.util.Option]] from helpers like
+   * Java-friendly overload of [[deduceWriterSchemaWithEvolution]] — Java callers
+   * receive Hudi's [[org.apache.hudi.common.util.Option]] from helpers like
    * [[UtilHelpers.getLatestTableSchema]] and [[TypedProperties]] from configs,
    * not Scala's [[Option]] / [[Map]].
    */
