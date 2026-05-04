@@ -173,11 +173,8 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
     }
 
     val (name, namespace) = HoodieSchemaConversionUtils.getRecordNameAndNamespace(tableName)
-    // Round-trip evolution schema through the bridge to recover the legacy
-    // namespace.name record naming (matches InternalSchemaConverter.convert(is, namespace.name)).
     val schema: HoodieSchema = evolutionSchemaOpt.map { es =>
-      HoodieSchemaInternalSchemaBridge.toHoodieSchema(
-        HoodieSchemaInternalSchemaBridge.toInternalSchema(es), namespace + "." + name)
+      HoodieSchemaInternalSchemaBridge.withRecordName(es, namespace + "." + name)
     } orElse {
       specifiedQueryTimestamp.map(schemaResolver.getTableSchema)
     } orElse {

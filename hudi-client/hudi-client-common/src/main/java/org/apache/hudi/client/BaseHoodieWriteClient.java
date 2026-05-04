@@ -390,11 +390,9 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
       }
       // update SCHEMA_KEY — preserve the writer schema's record name in the stored
       // Avro JSON, mirroring the legacy InternalSchemaConverter.convert(_, schema.getFullName())
-      // pattern. Bridge round-trip is the simplest way to set the name without a
-      // dedicated HoodieSchema rename API.
-      HoodieSchema renamedEvolved = HoodieSchemaInternalSchemaBridge.toHoodieSchema(
-          HoodieSchemaInternalSchemaBridge.toInternalSchema(evolvedSchema), schema.getFullName());
-      metadata.addMetadata(SCHEMA_KEY, renamedEvolved.toString());
+      // pattern.
+      metadata.addMetadata(SCHEMA_KEY,
+          HoodieSchemaInternalSchemaBridge.withRecordName(evolvedSchema, schema.getFullName()).toString());
     }
   }
 

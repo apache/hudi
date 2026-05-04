@@ -210,8 +210,8 @@ public class SchemaEvolutionContext {
     if (evolutionSchemaOption.isPresent()) {
       HoodieSchema tableSchema = getSchemaFromCache();
       List<String> requiredColumns = getRequireColumn(job);
-      HoodieSchema writerSchema = HoodieSchemaInternalSchemaBridge.toHoodieSchema(
-          HoodieSchemaInternalSchemaBridge.toInternalSchema(evolutionSchemaOption.get()), tableSchema.getName());
+      HoodieSchema writerSchema = HoodieSchemaInternalSchemaBridge.withRecordName(
+          evolutionSchemaOption.get(), tableSchema.getName());
       HoodieSchema prunedEvolutionSchema = HoodieSchemaInternalSchemaBridge.pruneByLeafNames(
           evolutionSchemaOption.get(), requiredColumns);
       // Add partitioning fields to writer schema for resulting row to contain null values for these fields

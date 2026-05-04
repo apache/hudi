@@ -194,6 +194,15 @@ public final class HoodieSchemaInternalSchemaBridge {
     return toHoodieSchema(pruned, source.getFullName());
   }
 
+  /**
+   * Returns a HoodieSchema with the same fields and ids as {@code source} but with
+   * its record name set to {@code recordName}. Implemented as a bridge round-trip
+   * since {@link HoodieSchema} has no in-place rename API.
+   */
+  public static HoodieSchema withRecordName(HoodieSchema source, String recordName) {
+    return toHoodieSchema(toInternalSchema(source), recordName);
+  }
+
   private static void stampIds(HoodieSchema hoodieSchema, Type type) {
     HoodieSchema effective = hoodieSchema.isNullable() ? hoodieSchema.getNonNullType() : hoodieSchema;
     switch (type.typeId()) {
