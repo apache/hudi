@@ -41,8 +41,8 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieSchemaNotFoundException;
 import org.apache.hudi.exception.InvalidTableException;
 import org.apache.hudi.exception.HoodieSchemaException;
+import org.apache.hudi.common.schema.evolution.HoodieSchemaHistoryStorageManager;
 import org.apache.hudi.common.schema.evolution.HoodieSchemaSerDe;
-import org.apache.hudi.internal.schema.io.FileBasedInternalSchemaStorageManager;
 import org.apache.hudi.io.storage.HoodieIOFactory;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
@@ -357,9 +357,7 @@ public class TableSchemaResolver {
    * @return history schemas string for this table
    */
   public Option<String> getTableHistorySchemaStrFromCommitMetadata() {
-    // now we only support FileBaseInternalSchemaManager
-    FileBasedInternalSchemaStorageManager manager = new FileBasedInternalSchemaStorageManager(metaClient);
-    String result = manager.getHistorySchemaStr();
+    String result = new HoodieSchemaHistoryStorageManager(metaClient).getHistorySchemaStr();
     return result.isEmpty() ? Option.empty() : Option.of(result);
   }
 
