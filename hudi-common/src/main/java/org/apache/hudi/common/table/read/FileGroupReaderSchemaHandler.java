@@ -91,9 +91,7 @@ public class FileGroupReaderSchemaHandler<T> {
   @Getter
   protected HoodieSchema schemaForUpdates;
 
-  protected final InternalSchema internalSchema;
-
-  protected final Option<InternalSchema> internalSchemaOpt;
+  protected final Option<HoodieSchema> evolutionSchemaOpt;
 
   protected final HoodieTableConfig hoodieTableConfig;
 
@@ -107,7 +105,7 @@ public class FileGroupReaderSchemaHandler<T> {
   public FileGroupReaderSchemaHandler(HoodieReaderContext<T> readerContext,
                                       HoodieSchema tableSchema,
                                       HoodieSchema requestedSchema,
-                                      Option<InternalSchema> internalSchemaOpt,
+                                      Option<HoodieSchema> evolutionSchemaOpt,
                                       TypedProperties properties,
                                       HoodieTableMetaClient metaClient) {
     this.properties = properties;
@@ -118,23 +116,16 @@ public class FileGroupReaderSchemaHandler<T> {
     this.deleteContext = new DeleteContext(properties, tableSchema);
     this.requiredSchema = HoodieSchemaCache.intern(prepareRequiredSchema(this.deleteContext));
     this.schemaForUpdates = requiredSchema;
-    this.internalSchema = pruneInternalSchema(requiredSchema, internalSchemaOpt);
-    this.internalSchemaOpt = getInternalSchemaOpt(internalSchemaOpt);
+    this.evolutionSchemaOpt = pruneEvolutionSchema(requiredSchema, mapEvolutionSchemaOpt(evolutionSchemaOpt));
     this.metaClient = metaClient;
   }
 
   /**
-   * HoodieSchema-shaped twin of {@link #getInternalSchemaOpt()}. Returns the same
-   * evolution schema as a {@link HoodieSchema} (with field ids preserved) so callers
-   * don't need to invoke {@link HoodieSchemaInternalSchemaBridge} themselves. Empty
+   * Returns the schema-on-read evolution schema (with field ids preserved) — empty
    * when schema-on-read is disabled or nothing was supplied at construction.
    */
   public Option<HoodieSchema> getEvolutionSchemaOpt() {
-    if (!internalSchemaOpt.isPresent() || internalSchemaOpt.get().isEmptySchema()) {
-      return Option.empty();
-    }
-    return Option.of(HoodieSchemaInternalSchemaBridge.toHoodieSchema(
-        internalSchemaOpt.get(), requiredSchema.getFullName()));
+    return evolutionSchemaOpt;
   }
 
   public Option<UnaryOperator<T>> getOutputConverter() {
@@ -145,36 +136,41 @@ public class FileGroupReaderSchemaHandler<T> {
   }
 
   public Pair<HoodieSchema, Map<String, String>> getRequiredSchemaForFileAndRenamedColumns(StoragePath path) {
-    if (internalSchema.isEmptySchema()) {
+    if (!evolutionSchemaOpt.isPresent()) {
       return Pair.of(requiredSchema, Collections.emptyMap());
     }
     long commitInstantTime = Long.parseLong(FSUtils.getCommitTime(path.getName()));
     HoodieSchema fileSchema = HoodieSchemaHistoryCache.searchSchemaAndCache(commitInstantTime, metaClient);
-    HoodieSchema currentEvolutionSchema = HoodieSchemaInternalSchemaBridge.toHoodieSchema(internalSchema, requiredSchema.getFullName());
-    Pair<HoodieSchema, Map<String, String>> mergedEvolutionSchema = new HoodieSchemaMerger(fileSchema, currentEvolutionSchema,
+    Pair<HoodieSchema, Map<String, String>> mergedEvolutionSchema = new HoodieSchemaMerger(fileSchema, evolutionSchemaOpt.get(),
         true, false, false).mergeSchemaGetRenamed();
     HoodieSchema mergedAvroSchema = HoodieSchemaCache.intern(mergedEvolutionSchema.getLeft());
     return Pair.of(mergedAvroSchema, mergedEvolutionSchema.getRight());
   }
 
-  private InternalSchema pruneInternalSchema(HoodieSchema requiredSchema, Option<InternalSchema> internalSchemaOption) {
-    if (!internalSchemaOption.isPresent()) {
-      return InternalSchema.getEmptyInternalSchema();
+  private Option<HoodieSchema> pruneEvolutionSchema(HoodieSchema requiredSchema, Option<HoodieSchema> evolutionSchemaOption) {
+    if (!evolutionSchemaOption.isPresent()) {
+      return Option.empty();
     }
-    InternalSchema notPruned = internalSchemaOption.get();
+    HoodieSchema notPruned = evolutionSchemaOption.get();
     if (notPruned == null || notPruned.isEmptySchema()) {
-      return InternalSchema.getEmptyInternalSchema();
+      return Option.empty();
     }
 
-    return doPruneInternalSchema(requiredSchema, notPruned);
+    return Option.of(doPruneEvolutionSchema(requiredSchema, notPruned));
   }
 
-  protected Option<InternalSchema> getInternalSchemaOpt(Option<InternalSchema> internalSchemaOpt) {
-    return internalSchemaOpt;
+  /**
+   * Hook for subclasses to inject extra columns (e.g. positional merge col) into
+   * the evolution schema before pruning.
+   */
+  protected Option<HoodieSchema> mapEvolutionSchemaOpt(Option<HoodieSchema> evolutionSchemaOpt) {
+    return evolutionSchemaOpt;
   }
 
-  protected InternalSchema doPruneInternalSchema(HoodieSchema requiredSchema, InternalSchema internalSchema) {
-    return InternalSchemaConverter.pruneHoodieSchemaToInternalSchema(requiredSchema, internalSchema);
+  protected HoodieSchema doPruneEvolutionSchema(HoodieSchema requiredSchema, HoodieSchema evolutionSchema) {
+    InternalSchema pruned = InternalSchemaConverter.pruneHoodieSchemaToInternalSchema(
+        requiredSchema, HoodieSchemaInternalSchemaBridge.toInternalSchema(evolutionSchema));
+    return HoodieSchemaInternalSchemaBridge.toHoodieSchema(pruned, requiredSchema.getFullName());
   }
 
   @VisibleForTesting

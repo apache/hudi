@@ -29,7 +29,6 @@ import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaField;
-import org.apache.hudi.common.schema.evolution.HoodieSchemaInternalSchemaBridge;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.PartitionPathParser;
@@ -45,7 +44,6 @@ import org.apache.hudi.common.util.collection.CloseableMappingIterator;
 import org.apache.hudi.common.util.collection.EmptyIterator;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieIOException;
-import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
@@ -91,7 +89,7 @@ public final class HoodieFileGroupReader<T> implements Closeable {
 
   private HoodieFileGroupReader(HoodieReaderContext<T> readerContext, HoodieStorage storage, String tablePath,
                                 String latestCommitTime, HoodieSchema dataSchema, HoodieSchema requestedSchema,
-                                Option<InternalSchema> internalSchemaOpt, HoodieTableMetaClient hoodieTableMetaClient, TypedProperties props,
+                                Option<HoodieSchema> evolutionSchemaOpt, HoodieTableMetaClient hoodieTableMetaClient, TypedProperties props,
                                 ReaderParameters readerParameters, InputSplit inputSplit, Option<BaseFileUpdateCallback<T>> updateCallback,
                                 FileGroupRecordBufferLoader<T> recordBufferLoader) {
     this.readerContext = readerContext;
@@ -116,8 +114,8 @@ public final class HoodieFileGroupReader<T> implements Closeable {
     readerContext.setShouldMergeUseRecordPosition(readerParameters.useRecordPosition() && !isSkipMerge && readerContext.getHasLogFiles() && inputSplit.isParquetBaseFile());
     readerContext.setHasBootstrapBaseFile(inputSplit.getBaseFileOption().flatMap(HoodieBaseFile::getBootstrapBaseFile).isPresent());
     readerContext.setSchemaHandler(readerContext.getRecordContext().supportsParquetRowIndex()
-        ? new ParquetRowIndexBasedSchemaHandler<>(readerContext, dataSchema, requestedSchema, internalSchemaOpt, props, metaClient)
-        : new FileGroupReaderSchemaHandler<>(readerContext, dataSchema, requestedSchema, internalSchemaOpt, props, metaClient));
+        ? new ParquetRowIndexBasedSchemaHandler<>(readerContext, dataSchema, requestedSchema, evolutionSchemaOpt, props, metaClient)
+        : new FileGroupReaderSchemaHandler<>(readerContext, dataSchema, requestedSchema, evolutionSchemaOpt, props, metaClient));
     this.outputConverter = readerContext.getSchemaHandler().getOutputConverter();
     this.orderingFieldNames = HoodieRecordUtils.getOrderingFieldNames(readerContext.getMergeMode(), hoodieTableMetaClient);
     this.readStats = new HoodieReadStats();
@@ -368,7 +366,7 @@ public final class HoodieFileGroupReader<T> implements Closeable {
     private String latestCommitTime;
     private HoodieSchema dataSchema;
     private HoodieSchema requestedSchema;
-    private Option<InternalSchema> internalSchemaOpt = Option.empty();
+    private Option<HoodieSchema> evolutionSchemaOpt = Option.empty();
     private HoodieTableMetaClient hoodieTableMetaClient;
     private TypedProperties props;
     private Option<HoodieBaseFile> baseFileOption;
@@ -433,12 +431,10 @@ public final class HoodieFileGroupReader<T> implements Closeable {
     }
 
     /**
-     * Sets the schema-on-read evolution schema (carrying field ids). The reader
-     * still operates on {@link InternalSchema} internally during the migration —
-     * this builder converts via {@link HoodieSchemaInternalSchemaBridge}.
+     * Sets the schema-on-read evolution schema (carrying field ids).
      */
     public Builder<T> withEvolutionSchema(Option<HoodieSchema> evolutionSchemaOpt) {
-      this.internalSchemaOpt = evolutionSchemaOpt.map(HoodieSchemaInternalSchemaBridge::toInternalSchema);
+      this.evolutionSchemaOpt = evolutionSchemaOpt;
       return this;
     }
 
@@ -527,7 +523,7 @@ public final class HoodieFileGroupReader<T> implements Closeable {
       InputSplit inputSplit = new InputSplit(baseFileOption, recordIterator != null ? Either.right(recordIterator) : Either.left(logFiles == null ? Stream.empty() : logFiles),
           partitionPath, start, length);
       return new HoodieFileGroupReader<>(
-          readerContext, storage, tablePath, latestCommitTime, dataSchema, requestedSchema, internalSchemaOpt, hoodieTableMetaClient,
+          readerContext, storage, tablePath, latestCommitTime, dataSchema, requestedSchema, evolutionSchemaOpt, hoodieTableMetaClient,
           props, readerParameters, inputSplit, fileGroupUpdateCallback, recordBufferLoader);
     }
   }

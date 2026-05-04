@@ -27,9 +27,7 @@ import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.VisibleForTesting;
-import org.apache.hudi.common.schema.evolution.HoodieSchemaInternalSchemaBridge;
 import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.internal.schema.InternalSchema;
 
 import java.util.Collections;
 import java.util.List;
@@ -44,10 +42,10 @@ public class ParquetRowIndexBasedSchemaHandler<T> extends FileGroupReaderSchemaH
   public ParquetRowIndexBasedSchemaHandler(HoodieReaderContext<T> readerContext,
                                            HoodieSchema dataSchema,
                                            HoodieSchema requestedSchema,
-                                           Option<InternalSchema> internalSchemaOpt,
+                                           Option<HoodieSchema> evolutionSchemaOpt,
                                            TypedProperties properties,
                                            HoodieTableMetaClient metaClient) {
-    super(readerContext, dataSchema, requestedSchema, internalSchemaOpt, properties, metaClient);
+    super(readerContext, dataSchema, requestedSchema, evolutionSchemaOpt, properties, metaClient);
     if (!readerContext.getRecordContext().supportsParquetRowIndex()) {
       throw new IllegalStateException("Using " + this.getClass().getName() + " but context does not support parquet row index");
     }
@@ -62,24 +60,18 @@ public class ParquetRowIndexBasedSchemaHandler<T> extends FileGroupReaderSchemaH
   }
 
   @Override
-  protected Option<InternalSchema> getInternalSchemaOpt(Option<InternalSchema> internalSchemaOpt) {
-    return internalSchemaOpt.map(ParquetRowIndexBasedSchemaHandler::addPositionalMergeCol);
+  protected Option<HoodieSchema> mapEvolutionSchemaOpt(Option<HoodieSchema> evolutionSchemaOpt) {
+    return evolutionSchemaOpt.map(ParquetRowIndexBasedSchemaHandler::addPositionalMergeCol);
   }
 
   @Override
-  protected InternalSchema doPruneInternalSchema(HoodieSchema requiredSchema, InternalSchema internalSchema) {
+  protected HoodieSchema doPruneEvolutionSchema(HoodieSchema requiredSchema, HoodieSchema evolutionSchema) {
     if (!readerContext.getShouldMergeUseRecordPosition()) {
-      return super.doPruneInternalSchema(requiredSchema, internalSchema);
+      return super.doPruneEvolutionSchema(requiredSchema, evolutionSchema);
     }
 
-    InternalSchema withRowIndex = addPositionalMergeCol(internalSchema);
-    return super.doPruneInternalSchema(requiredSchema, withRowIndex);
-  }
-
-  private static InternalSchema addPositionalMergeCol(InternalSchema internalSchema) {
-    HoodieSchema withRowIndex = addPositionalMergeCol(
-        HoodieSchemaInternalSchemaBridge.toHoodieSchema(internalSchema, "schema"));
-    return HoodieSchemaInternalSchemaBridge.toInternalSchema(withRowIndex);
+    HoodieSchema withRowIndex = addPositionalMergeCol(evolutionSchema);
+    return super.doPruneEvolutionSchema(requiredSchema, withRowIndex);
   }
 
   @Override

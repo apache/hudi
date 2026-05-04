@@ -32,9 +32,10 @@ import org.apache.hudi.common.model.OverwriteNonDefaultsWithLatestAvroPayload;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaField;
+import org.apache.hudi.common.schema.evolution.HoodieSchemaHistoryCache;
+import org.apache.hudi.common.schema.evolution.HoodieSchemaInternalSchemaBridge;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.testutils.SchemaTestUtil;
-import org.apache.hudi.common.util.InternalSchemaCache;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
@@ -117,12 +118,13 @@ public class TestFileGroupReaderSchemaHandler extends SchemaHandlerTestBase {
       return field;
     }).collect(Collectors.toList())));
     FileGroupReaderSchemaHandler<String> schemaHandler = new FileGroupReaderSchemaHandler<>(readerContext, DATA_SCHEMA, requestedSchema,
-        Option.of(internalSchema), new TypedProperties(), metaClient);
+        Option.of(HoodieSchemaInternalSchemaBridge.toHoodieSchema(internalSchema, DATA_SCHEMA.getFullName())),
+        new TypedProperties(), metaClient);
 
-    try (MockedStatic<InternalSchemaCache> mockedStatic = Mockito.mockStatic(InternalSchemaCache.class)) {
+    try (MockedStatic<HoodieSchemaHistoryCache> mockedStatic = Mockito.mockStatic(HoodieSchemaHistoryCache.class)) {
       String instantTime = "20231010101010";
-      mockedStatic.when(() -> InternalSchemaCache.searchSchemaAndCache(Long.parseLong(instantTime), metaClient))
-          .thenReturn(originalSchema);
+      mockedStatic.when(() -> HoodieSchemaHistoryCache.searchSchemaAndCache(Long.parseLong(instantTime), metaClient))
+          .thenReturn(HoodieSchemaInternalSchemaBridge.toHoodieSchema(originalSchema, DATA_SCHEMA.getFullName()));
       StoragePath filePath = new StoragePath("/2023-01-01/" + FSUtils.makeBaseFileName(instantTime, "1-0-1", UUID.randomUUID().toString(), HoodieFileFormat.PARQUET.getFileExtension()));
       Pair<HoodieSchema, Map<String, String>> requiredSchemaAndRenamedFields = schemaHandler.getRequiredSchemaForFileAndRenamedColumns(filePath);
       assertEquals(Collections.singletonMap("timestamp", "ts"), requiredSchemaAndRenamedFields.getRight());
