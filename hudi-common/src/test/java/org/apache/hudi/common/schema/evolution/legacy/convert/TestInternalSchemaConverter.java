@@ -31,11 +31,6 @@ import org.junit.jupiter.api.Test;
 import java.util.Arrays;
 import java.util.List;
 
-import static org.apache.hudi.common.schema.HoodieSchemaTestUtils.createArrayField;
-import static org.apache.hudi.common.schema.HoodieSchemaTestUtils.createMapField;
-import static org.apache.hudi.common.schema.HoodieSchemaTestUtils.createNestedField;
-import static org.apache.hudi.common.schema.HoodieSchemaTestUtils.createNullablePrimitiveField;
-import static org.apache.hudi.common.schema.HoodieSchemaTestUtils.createNullableRecord;
 import static org.apache.hudi.common.schema.HoodieSchemaTestUtils.createPrimitiveField;
 import static org.apache.hudi.common.schema.HoodieSchemaTestUtils.createRecord;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -44,50 +39,6 @@ import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TestInternalSchemaConverter {
-
-  public static HoodieSchema getSimpleSchema() {
-    return createRecord("simpleSchema",
-        createPrimitiveField("field1", HoodieSchemaType.INT),
-        createPrimitiveField("field2", HoodieSchemaType.STRING));
-  }
-
-  public static List<String> getSimpleSchemaExpectedColumnNames() {
-    return Arrays.asList("field1", "field2");
-  }
-
-  public static HoodieSchema getSimpleSchemaWithNullable() {
-    return createRecord("simpleSchemaWithNullable",
-        createNullablePrimitiveField("field1", HoodieSchemaType.INT),
-        createPrimitiveField("field2", HoodieSchemaType.STRING));
-  }
-
-  public static HoodieSchema getComplexSchemaSingleLevel() {
-    return createRecord("complexSchemaSingleLevel",
-        createNestedField("field1", HoodieSchemaType.INT),
-        createArrayField("field2", HoodieSchemaType.STRING),
-        createMapField("field3", HoodieSchemaType.DOUBLE));
-  }
-
-  public static List<String> getComplexSchemaSingleLevelExpectedColumnNames() {
-    return Arrays.asList("field1.nested", "field2.element", "field3.key", "field3.value");
-  }
-
-  public static HoodieSchema getDeeplyNestedFieldSchema() {
-    return createRecord("deeplyNestedFieldSchema",
-        createPrimitiveField("field1", HoodieSchemaType.INT),
-        HoodieSchemaField.of("field2",
-            createRecord("field2nest",
-                createArrayField("field2nestarray",
-                    createNullableRecord("field2nestarraynest",
-                        createNullablePrimitiveField("field21", HoodieSchemaType.INT),
-                        createNullablePrimitiveField("field22", HoodieSchemaType.INT)))), null, null),
-        createNullablePrimitiveField("field3", HoodieSchemaType.INT));
-  }
-
-  public static List<String> getDeeplyNestedFieldSchemaExpectedColumnNames() {
-    return Arrays.asList("field1", "field2.field2nestarray.element.field21",
-        "field2.field2nestarray.element.field22", "field3");
-  }
 
   @Test
   public void testVariantConvertToInternalType() {
