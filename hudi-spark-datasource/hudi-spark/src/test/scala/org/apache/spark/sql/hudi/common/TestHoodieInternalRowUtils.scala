@@ -23,8 +23,6 @@ import org.apache.hudi.SparkAdapterSupport.sparkAdapter
 import org.apache.hudi.avro.HoodieAvroUtils
 import org.apache.hudi.common.schema.{HoodieSchema, HoodieSchemaType}
 import org.apache.hudi.common.schema.evolution.HoodieSchemaChangeApplier
-import org.apache.hudi.common.schema.evolution.legacy.convert.InternalSchemaConverter
-import org.apache.hudi.common.schema.types.Types
 import org.apache.hudi.testutils.HoodieClientTestUtils
 
 import org.apache.avro.generic.GenericData
@@ -323,29 +321,30 @@ class TestHoodieInternalRowUtils extends FunSuite with Matchers with BeforeAndAf
   }
 
   test("Test rewrite nest record") {
-    val record = Types.RecordType.get(Types.Field.get(0, false, "id", Types.IntType.get()),
-      Types.Field.get(1, true, "data", Types.StringType.get()),
-      Types.Field.get(2, true, "preferences",
-        Types.RecordType.get(Types.Field.get(5, false, "feature1",
-          Types.BooleanType.get()), Types.Field.get(6, true, "feature2", Types.BooleanType.get()))),
-      Types.Field.get(3, false, "doubles", Types.ArrayType.get(7, false, Types.DoubleType.get())),
-      Types.Field.get(4, false, "locations", Types.MapType.get(8, 9, Types.StringType.get(),
-        Types.RecordType.get(Types.Field.get(10, false, "lat", Types.FloatType.get()), Types.Field.get(11, false, "long", Types.FloatType.get())), false))
-    )
-    val schema = InternalSchemaConverter.convert(record, "test1")
+    val schema = HoodieSchema.parse(
+      "{\"type\":\"record\",\"name\":\"test1\",\"fields\":[" +
+        "{\"name\":\"id\",\"type\":\"int\"}," +
+        "{\"name\":\"data\",\"type\":[\"null\",\"string\"],\"default\":null}," +
+        "{\"name\":\"preferences\",\"type\":[\"null\",{\"type\":\"record\",\"name\":\"preferences\",\"namespace\":\"test1\",\"fields\":[" +
+          "{\"name\":\"feature1\",\"type\":\"boolean\"}," +
+          "{\"name\":\"feature2\",\"type\":[\"null\",\"boolean\"],\"default\":null}]}],\"default\":null}," +
+        "{\"name\":\"doubles\",\"type\":{\"type\":\"array\",\"items\":\"double\"}}," +
+        "{\"name\":\"locations\",\"type\":{\"type\":\"map\",\"values\":{\"type\":\"record\",\"name\":\"locations\",\"namespace\":\"test1\",\"fields\":[" +
+          "{\"name\":\"lat\",\"type\":\"float\"}," +
+          "{\"name\":\"long\",\"type\":\"float\"}]}}}]}")
     val avroRecord = new GenericData.Record(schema.toAvroSchema)
     GenericData.get.validate(schema.toAvroSchema, avroRecord)
     avroRecord.put("id", 2)
     avroRecord.put("data", "xs")
     // fill record type
-    val preferencesRecord = new GenericData.Record(InternalSchemaConverter.convert(record.fieldType("preferences"), "test1_preferences").toAvroSchema)
+    val preferencesRecord = new GenericData.Record(schema.getField("preferences").get.schema().getNonNullType.toAvroSchema)
     preferencesRecord.put("feature1", false)
     preferencesRecord.put("feature2", true)
-    assert(GenericData.get.validate(InternalSchemaConverter.convert(record.fieldType("preferences"), "test1_preferences").toAvroSchema, preferencesRecord))
+    assert(GenericData.get.validate(schema.getField("preferences").get.schema().getNonNullType.toAvroSchema, preferencesRecord))
     avroRecord.put("preferences", preferencesRecord)
     // fill mapType
     val locations = new HashMap[String, GenericData.Record]
-    val mapSchema = InternalSchemaConverter.convert(record.fieldByNameCaseInsensitive("locations").`type`.asInstanceOf[Types.MapType].valueType, "test1_locations").toAvroSchema
+    val mapSchema = schema.getField("locations").get.schema().getValueType.toAvroSchema
     val locationsValue: GenericData.Record = new GenericData.Record(mapSchema)
     locationsValue.put("lat", 1.2f)
     locationsValue.put("long", 1.4f)
@@ -359,9 +358,19 @@ class TestHoodieInternalRowUtils extends FunSuite with Matchers with BeforeAndAf
     doubles.add(2.0d)
     doubles.add(3.0d)
     avroRecord.put("doubles", doubles)
-    // create newSchema
-    val newRecord = Types.RecordType.get(Types.Field.get(0, false, "id", Types.IntType.get), Types.Field.get(1, true, "data", Types.StringType.get), Types.Field.get(2, true, "preferences", Types.RecordType.get(Types.Field.get(5, false, "feature1", Types.BooleanType.get), Types.Field.get(5, true, "featurex", Types.BooleanType.get), Types.Field.get(6, true, "feature2", Types.BooleanType.get))), Types.Field.get(3, false, "doubles", Types.ArrayType.get(7, false, Types.DoubleType.get)), Types.Field.get(4, false, "locations", Types.MapType.get(8, 9, Types.StringType.get, Types.RecordType.get(Types.Field.get(10, true, "laty", Types.FloatType.get), Types.Field.get(11, false, "long", Types.FloatType.get)), false)))
-    val newSchema = InternalSchemaConverter.convert(newRecord, schema.getName)
+    // create newSchema: preferences gains "featurex"; locations.value.lat is renamed to "laty" (nullable).
+    val newSchema = HoodieSchema.parse(
+      "{\"type\":\"record\",\"name\":\"test1\",\"fields\":[" +
+        "{\"name\":\"id\",\"type\":\"int\"}," +
+        "{\"name\":\"data\",\"type\":[\"null\",\"string\"],\"default\":null}," +
+        "{\"name\":\"preferences\",\"type\":[\"null\",{\"type\":\"record\",\"name\":\"preferences\",\"namespace\":\"test1\",\"fields\":[" +
+          "{\"name\":\"feature1\",\"type\":\"boolean\"}," +
+          "{\"name\":\"featurex\",\"type\":[\"null\",\"boolean\"],\"default\":null}," +
+          "{\"name\":\"feature2\",\"type\":[\"null\",\"boolean\"],\"default\":null}]}],\"default\":null}," +
+        "{\"name\":\"doubles\",\"type\":{\"type\":\"array\",\"items\":\"double\"}}," +
+        "{\"name\":\"locations\",\"type\":{\"type\":\"map\",\"values\":{\"type\":\"record\",\"name\":\"locations\",\"namespace\":\"test1\",\"fields\":[" +
+          "{\"name\":\"laty\",\"type\":[\"null\",\"float\"],\"default\":null}," +
+          "{\"name\":\"long\",\"type\":\"float\"}]}}}]}")
     val newAvroRecord = HoodieAvroUtils.rewriteRecordWithNewSchema(avroRecord, newSchema.toAvroSchema, new HashMap[String, String])
     // test the correctness of rewrite
     assert(GenericData.get.validate(newSchema.toAvroSchema, newAvroRecord))
