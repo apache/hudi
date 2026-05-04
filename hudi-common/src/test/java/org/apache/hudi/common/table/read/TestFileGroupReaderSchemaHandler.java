@@ -32,15 +32,14 @@ import org.apache.hudi.common.model.OverwriteNonDefaultsWithLatestAvroPayload;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaField;
+import org.apache.hudi.common.schema.HoodieSchemaType;
+import org.apache.hudi.common.schema.evolution.HoodieSchemaChangeApplier;
 import org.apache.hudi.common.schema.evolution.HoodieSchemaHistoryCache;
-import org.apache.hudi.common.schema.evolution.HoodieSchemaInternalSchemaBridge;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.testutils.SchemaTestUtil;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.common.schema.evolution.legacy.InternalSchema;
-import org.apache.hudi.common.schema.types.Types;
 import org.apache.hudi.storage.StoragePath;
 
 import org.junit.jupiter.api.Test;
@@ -58,7 +57,6 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.apache.hudi.common.model.DefaultHoodieRecordPayload.DELETE_KEY;
@@ -108,22 +106,20 @@ public class TestFileGroupReaderSchemaHandler extends SchemaHandlerTestBase {
     HoodieReaderContext<String> readerContext = createReaderContext(hoodieTableConfig, false, false, true, false, null);
     HoodieSchema requestedSchema = generateProjectionSchema("_hoodie_record_key", "timestamp", "rider");
 
-    InternalSchema internalSchema = HoodieSchemaInternalSchemaBridge.toInternalSchema(DATA_SCHEMA);
-    InternalSchema originalSchema = new InternalSchema(Types.RecordType.get(internalSchema.columns().stream().map(field -> {
-      if (field.name().equals("timestamp")) {
-        // rename timestamp to ts in file schema and change type to int, output schema names and types must match the requested schema
-        return Types.Field.get(field.fieldId(), "ts", Types.IntType.get());
-      }
-      return field;
-    }).collect(Collectors.toList())));
+    // Build a "file schema" that's DATA_SCHEMA with timestamp → ts (int);
+    // the rename preserves the field id so the merger can match against
+    // requestedSchema's "timestamp" via id-based lookup.
+    HoodieSchema renamedFileSchema = new HoodieSchemaChangeApplier(DATA_SCHEMA).applyRenameChange("timestamp", "ts");
+    HoodieSchema originalSchema = new HoodieSchemaChangeApplier(renamedFileSchema)
+        .applyColumnTypeChange("ts", HoodieSchema.create(HoodieSchemaType.INT));
     FileGroupReaderSchemaHandler<String> schemaHandler = new FileGroupReaderSchemaHandler<>(readerContext, DATA_SCHEMA, requestedSchema,
-        Option.of(HoodieSchemaInternalSchemaBridge.toHoodieSchema(internalSchema, DATA_SCHEMA.getFullName())),
+        Option.of(DATA_SCHEMA),
         new TypedProperties(), metaClient);
 
     try (MockedStatic<HoodieSchemaHistoryCache> mockedStatic = Mockito.mockStatic(HoodieSchemaHistoryCache.class)) {
       String instantTime = "20231010101010";
       mockedStatic.when(() -> HoodieSchemaHistoryCache.searchSchemaAndCache(Long.parseLong(instantTime), metaClient))
-          .thenReturn(HoodieSchemaInternalSchemaBridge.toHoodieSchema(originalSchema, DATA_SCHEMA.getFullName()));
+          .thenReturn(originalSchema);
       StoragePath filePath = new StoragePath("/2023-01-01/" + FSUtils.makeBaseFileName(instantTime, "1-0-1", UUID.randomUUID().toString(), HoodieFileFormat.PARQUET.getFileExtension()));
       Pair<HoodieSchema, Map<String, String>> requiredSchemaAndRenamedFields = schemaHandler.getRequiredSchemaForFileAndRenamedColumns(filePath);
       assertEquals(Collections.singletonMap("timestamp", "ts"), requiredSchemaAndRenamedFields.getRight());
