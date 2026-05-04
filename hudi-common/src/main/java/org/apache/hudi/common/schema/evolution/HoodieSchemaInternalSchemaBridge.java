@@ -24,9 +24,9 @@ import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.schema.types.Type;
 import org.apache.hudi.common.schema.types.Types;
-import org.apache.hudi.internal.schema.InternalSchema;
-import org.apache.hudi.internal.schema.convert.InternalSchemaConverter;
-import org.apache.hudi.internal.schema.utils.InternalSchemaUtils;
+import org.apache.hudi.common.schema.evolution.legacy.InternalSchema;
+import org.apache.hudi.common.schema.evolution.legacy.convert.InternalSchemaConverter;
+import org.apache.hudi.common.schema.evolution.legacy.utils.InternalSchemaUtils;
 
 import java.util.ArrayList;
 import java.util.List;

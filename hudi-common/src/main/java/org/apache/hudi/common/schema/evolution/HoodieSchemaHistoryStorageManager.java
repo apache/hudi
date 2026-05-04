@@ -21,8 +21,8 @@ package org.apache.hudi.common.schema.evolution;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.internal.schema.InternalSchema;
-import org.apache.hudi.internal.schema.io.FileBasedInternalSchemaStorageManager;
+import org.apache.hudi.common.schema.evolution.legacy.InternalSchema;
+import org.apache.hudi.common.schema.evolution.legacy.io.FileBasedInternalSchemaStorageManager;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 

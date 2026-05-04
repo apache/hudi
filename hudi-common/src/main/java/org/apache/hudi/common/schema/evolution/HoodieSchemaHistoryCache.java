@@ -22,10 +22,10 @@ import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.TimelineLayout;
-import org.apache.hudi.common.util.InternalSchemaCache;
+import org.apache.hudi.common.schema.evolution.legacy.InternalSchemaCache;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.internal.schema.InternalSchema;
+import org.apache.hudi.common.schema.evolution.legacy.InternalSchema;
 import org.apache.hudi.storage.HoodieStorage;
 
 /**

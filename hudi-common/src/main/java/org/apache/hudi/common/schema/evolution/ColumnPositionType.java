@@ -64,17 +64,17 @@ public enum ColumnPositionType {
    * InternalSchema → HoodieSchema migration and will be removed once the applier is
    * rewritten on pure HoodieSchema (Phase 5).
    */
-  public org.apache.hudi.internal.schema.action.TableChange.ColumnPositionChange.ColumnPositionType toLegacy() {
+  public org.apache.hudi.common.schema.evolution.legacy.action.TableChange.ColumnPositionChange.ColumnPositionType toLegacy() {
     switch (this) {
       case FIRST:
-        return org.apache.hudi.internal.schema.action.TableChange.ColumnPositionChange.ColumnPositionType.FIRST;
+        return org.apache.hudi.common.schema.evolution.legacy.action.TableChange.ColumnPositionChange.ColumnPositionType.FIRST;
       case BEFORE:
-        return org.apache.hudi.internal.schema.action.TableChange.ColumnPositionChange.ColumnPositionType.BEFORE;
+        return org.apache.hudi.common.schema.evolution.legacy.action.TableChange.ColumnPositionChange.ColumnPositionType.BEFORE;
       case AFTER:
-        return org.apache.hudi.internal.schema.action.TableChange.ColumnPositionChange.ColumnPositionType.AFTER;
+        return org.apache.hudi.common.schema.evolution.legacy.action.TableChange.ColumnPositionChange.ColumnPositionType.AFTER;
       case NO_OPERATION:
       default:
-        return org.apache.hudi.internal.schema.action.TableChange.ColumnPositionChange.ColumnPositionType.NO_OPERATION;
+        return org.apache.hudi.common.schema.evolution.legacy.action.TableChange.ColumnPositionChange.ColumnPositionType.NO_OPERATION;
     }
   }
 }

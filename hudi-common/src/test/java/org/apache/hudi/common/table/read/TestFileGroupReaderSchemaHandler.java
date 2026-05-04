@@ -39,7 +39,7 @@ import org.apache.hudi.common.testutils.SchemaTestUtil;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.internal.schema.InternalSchema;
+import org.apache.hudi.common.schema.evolution.legacy.InternalSchema;
 import org.apache.hudi.common.schema.types.Types;
 import org.apache.hudi.storage.StoragePath;
 

@@ -20,8 +20,8 @@ package org.apache.hudi.common.schema.evolution;
 
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.internal.schema.InternalSchema;
-import org.apache.hudi.internal.schema.action.InternalSchemaMerger;
+import org.apache.hudi.common.schema.evolution.legacy.InternalSchema;
+import org.apache.hudi.common.schema.evolution.legacy.action.InternalSchemaMerger;
 
 import java.util.Map;
 

@@ -23,8 +23,8 @@ import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.schema.HoodieSchemaIdAssigner;
 import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.internal.schema.InternalSchema;
-import org.apache.hudi.internal.schema.utils.SerDeHelper;
+import org.apache.hudi.common.schema.evolution.legacy.InternalSchema;
+import org.apache.hudi.common.schema.evolution.legacy.utils.SerDeHelper;
 
 import org.junit.jupiter.api.Test;
 

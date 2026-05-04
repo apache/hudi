@@ -22,9 +22,9 @@ import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.schema.types.Type;
 import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.internal.schema.InternalSchema;
-import org.apache.hudi.internal.schema.convert.InternalSchemaConverter;
-import org.apache.hudi.internal.schema.utils.AvroSchemaEvolutionUtils;
+import org.apache.hudi.common.schema.evolution.legacy.InternalSchema;
+import org.apache.hudi.common.schema.evolution.legacy.convert.InternalSchemaConverter;
+import org.apache.hudi.common.schema.evolution.legacy.utils.AvroSchemaEvolutionUtils;
 
 import java.util.HashMap;
 import java.util.List;
@@ -125,7 +125,7 @@ public final class HoodieSchemaEvolutionUtils {
    * matching the wire shape consumed by record rewriters.
    *
    * <p>HoodieSchema-shaped replacement for
-   * {@link org.apache.hudi.internal.schema.utils.InternalSchemaUtils#collectRenameCols}.</p>
+   * {@link org.apache.hudi.common.schema.evolution.legacy.utils.InternalSchemaUtils#collectRenameCols}.</p>
    */
   /**
    * Normalizes union ordering so {@code null} sits first within nullable union

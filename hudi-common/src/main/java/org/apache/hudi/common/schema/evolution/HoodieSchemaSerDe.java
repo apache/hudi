@@ -20,8 +20,8 @@ package org.apache.hudi.common.schema.evolution;
 
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.internal.schema.InternalSchema;
-import org.apache.hudi.internal.schema.utils.SerDeHelper;
+import org.apache.hudi.common.schema.evolution.legacy.InternalSchema;
+import org.apache.hudi.common.schema.evolution.legacy.utils.SerDeHelper;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -139,7 +139,7 @@ public final class HoodieSchemaSerDe {
    * Resolves the schema-history entry that applies to a given version id — exact
    * match if present, else the largest entry strictly less than {@code versionId},
    * else {@code null}. HoodieSchema-shaped replacement for
-   * {@link org.apache.hudi.internal.schema.utils.InternalSchemaUtils#searchSchema}.
+   * {@link org.apache.hudi.common.schema.evolution.legacy.utils.InternalSchemaUtils#searchSchema}.
    *
    * <p>Note: legacy returned {@code InternalSchema.getEmptyInternalSchema()} on
    * miss; this returns {@code null} so callers can choose their own empty
