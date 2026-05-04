@@ -21,10 +21,9 @@ package org.apache.spark.sql.hudi.common
 import org.apache.hudi.{AvroConversionUtils, SparkRowSerDe}
 import org.apache.hudi.SparkAdapterSupport.sparkAdapter
 import org.apache.hudi.avro.HoodieAvroUtils
-import org.apache.hudi.common.schema.HoodieSchema
-import org.apache.hudi.common.schema.evolution.legacy.action.TableChanges
+import org.apache.hudi.common.schema.{HoodieSchema, HoodieSchemaType}
+import org.apache.hudi.common.schema.evolution.HoodieSchemaChangeApplier
 import org.apache.hudi.common.schema.evolution.legacy.convert.InternalSchemaConverter
-import org.apache.hudi.common.schema.evolution.legacy.utils.SchemaChangeUtils
 import org.apache.hudi.common.schema.types.Types
 import org.apache.hudi.testutils.HoodieClientTestUtils
 
@@ -286,27 +285,28 @@ class TestHoodieInternalRowUtils extends FunSuite with Matchers with BeforeAndAf
     val bb = ByteBuffer.wrap(Array[Byte](97, 48, 53))
     avroRecord.put("col9", bb)
     assert(GenericData.get.validate(schema.toAvroSchema, avroRecord))
-    val internalSchema = InternalSchemaConverter.convert(schema)
-    // do change type operation
-    val updateChange = TableChanges.ColumnUpdateChange.get(internalSchema)
-    updateChange.updateColumnType("id", Types.LongType.get)
-      .updateColumnType("comb", Types.FloatType.get)
-      .updateColumnType("com1", Types.DoubleType.get)
-      .updateColumnType("col0", Types.StringType.get)
-      .updateColumnType("col1", Types.FloatType.get)
-      .updateColumnType("col11", Types.DoubleType.get)
-      .updateColumnType("col12", Types.StringType.get)
-      .updateColumnType("col2", Types.DoubleType.get)
-      .updateColumnType("col21", Types.StringType.get)
-      .updateColumnType("col3", Types.StringType.get)
-      .updateColumnType("col31", Types.DecimalType.get(18, 9))
-      .updateColumnType("col4", Types.DecimalType.get(18, 9))
-      .updateColumnType("col41", Types.StringType.get)
-      .updateColumnType("col5", Types.DateType.get)
-      .updateColumnType("col51", Types.DecimalType.get(18, 9))
-      .updateColumnType("col6", Types.StringType.get)
-    val newSchema = SchemaChangeUtils.applyTableChanges2Schema(internalSchema, updateChange)
-    val newHoodieSchema = InternalSchemaConverter.convert(newSchema, schema.getName)
+    // Apply 16 type promotions through the HoodieSchema-direct applier
+    // (replaces the legacy TableChanges.ColumnUpdateChange chain).
+    val typeChanges = Seq(
+      ("id", HoodieSchema.create(HoodieSchemaType.LONG)),
+      ("comb", HoodieSchema.create(HoodieSchemaType.FLOAT)),
+      ("com1", HoodieSchema.create(HoodieSchemaType.DOUBLE)),
+      ("col0", HoodieSchema.create(HoodieSchemaType.STRING)),
+      ("col1", HoodieSchema.create(HoodieSchemaType.FLOAT)),
+      ("col11", HoodieSchema.create(HoodieSchemaType.DOUBLE)),
+      ("col12", HoodieSchema.create(HoodieSchemaType.STRING)),
+      ("col2", HoodieSchema.create(HoodieSchemaType.DOUBLE)),
+      ("col21", HoodieSchema.create(HoodieSchemaType.STRING)),
+      ("col3", HoodieSchema.create(HoodieSchemaType.STRING)),
+      ("col31", HoodieSchema.createDecimal(18, 9)),
+      ("col4", HoodieSchema.createDecimal(18, 9)),
+      ("col41", HoodieSchema.create(HoodieSchemaType.STRING)),
+      ("col5", HoodieSchema.createDate()),
+      ("col51", HoodieSchema.createDecimal(18, 9)),
+      ("col6", HoodieSchema.create(HoodieSchemaType.STRING)))
+    val newHoodieSchema = typeChanges.foldLeft(schema) { case (acc, (col, newType)) =>
+      new HoodieSchemaChangeApplier(acc).applyColumnTypeChange(col, newType)
+    }
     val newRecord = HoodieAvroUtils.rewriteRecordWithNewSchema(avroRecord, newHoodieSchema.toAvroSchema, new HashMap[String, String])
     assert(GenericData.get.validate(newHoodieSchema.toAvroSchema, newRecord))
     // Convert avro to internalRow
