@@ -85,8 +85,6 @@ import org.apache.hudi.exception.HoodieRestoreException;
 import org.apache.hudi.exception.HoodieRollbackException;
 import org.apache.hudi.exception.HoodieSavepointException;
 import org.apache.hudi.index.HoodieIndex;
-import org.apache.hudi.common.schema.types.Type;
-import org.apache.hudi.internal.schema.convert.InternalSchemaConverter;
 import org.apache.hudi.keygen.constant.KeyGeneratorType;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
@@ -1681,23 +1679,12 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
   }
 
   /**
-   * update col Type for hudi table.
-   * only support update primitive type to primitive type.
-   * cannot update nest type to nest type or primitive type eg: RecordType -> MapType, MapType -> LongType.
+   * Update col type for hudi table. Only supports primitive-to-primitive updates;
+   * cannot update a nested type to a nested or primitive type
+   * (e.g. RecordType → MapType, MapType → LongType).
    *
-   * @param colName col name to be changed. if we want to change col from a nested filed, the fullName should be specified
-   * @param newType .
-   */
-  public void updateColumnType(String colName, Type newType) {
-    // Delegate to the HoodieSchema-shaped overload by converting the legacy Type
-    // to a HoodieSchema (must be primitive, same constraint as the legacy variant).
-    updateColumnType(colName, InternalSchemaConverter.convert(newType, "type"));
-  }
-
-  /**
-   * HoodieSchema-shaped overload of {@link #updateColumnType(String, Type)}. Lets
-   * callers express the target type directly as a {@link HoodieSchema} (must be a
-   * primitive type — same constraint as the legacy variant).
+   * @param colName col name to be changed; for a nested field use the full name.
+   * @param newType target HoodieSchema (must be a primitive type).
    */
   public void updateColumnType(String colName, HoodieSchema newType) {
     Pair<HoodieSchema, HoodieTableMetaClient> pair = getEvolutionSchemaAndMetaClient();
