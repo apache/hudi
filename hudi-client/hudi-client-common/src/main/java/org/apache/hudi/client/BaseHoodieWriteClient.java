@@ -86,7 +86,6 @@ import org.apache.hudi.exception.HoodieRollbackException;
 import org.apache.hudi.exception.HoodieSavepointException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.common.schema.types.Type;
-import org.apache.hudi.internal.schema.action.TableChange;
 import org.apache.hudi.internal.schema.convert.InternalSchemaConverter;
 import org.apache.hudi.keygen.constant.KeyGeneratorType;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
@@ -1636,20 +1635,10 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    * @param position     col position to be added
    * @param positionType col position change type. now support three change types: first/after/before
    */
-  public void addColumn(String colName, HoodieSchema schema, String doc, String position, TableChange.ColumnPositionChange.ColumnPositionType positionType) {
-    addColumn(colName, schema, doc, position, ColumnPositionType.valueOf(positionType.name()));
-  }
-
   public void addColumn(String colName, HoodieSchema schema) {
-    addColumn(colName, schema, null, "", TableChange.ColumnPositionChange.ColumnPositionType.NO_OPERATION);
+    addColumn(colName, schema, null, "", ColumnPositionType.NO_OPERATION);
   }
 
-  /**
-   * HoodieSchema-shaped overload of {@link #addColumn(String, HoodieSchema, String, String,
-   * TableChange.ColumnPositionChange.ColumnPositionType)} that takes the new
-   * {@link ColumnPositionType} enum directly. Same semantics; lets callers stay off
-   * the legacy {@code TableChange} type.
-   */
   public void addColumn(String colName, HoodieSchema schema, String doc, String position, ColumnPositionType positionType) {
     Pair<HoodieSchema, HoodieTableMetaClient> pair = getEvolutionSchemaAndMetaClient();
     HoodieSchema current = pair.getLeft();
@@ -1731,23 +1720,11 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
   }
 
   /**
-   * reorder the position of col.
+   * Reorder the position of col.
    *
    * @param colName column which need to be reordered. if we want to change col from a nested filed, the fullName should be specified.
    * @param referColName reference position.
    * @param orderType col position change type. now support three change types: first/after/before
-   */
-  public void reOrderColPosition(String colName, String referColName, TableChange.ColumnPositionChange.ColumnPositionType orderType) {
-    if (colName == null || orderType == null || referColName == null) {
-      return;
-    }
-    reOrderColPosition(colName, referColName, ColumnPositionType.valueOf(orderType.name()));
-  }
-
-  /**
-   * HoodieSchema-shaped overload of {@link #reOrderColPosition(String, String,
-   * TableChange.ColumnPositionChange.ColumnPositionType)}. Takes the new
-   * {@link ColumnPositionType} enum directly.
    */
   public void reOrderColPosition(String colName, String referColName, ColumnPositionType orderType) {
     if (colName == null || orderType == null || referColName == null) {
