@@ -58,7 +58,7 @@ public class LanceBatchIterator implements Iterator<ColumnarBatch>, Closeable {
 
   private ColumnVector[] columnVectors;
   private ColumnarBatch currentBatch;
-  private boolean nextBatchLoaded = false;
+  private boolean hasCachedBatch = false;
   private boolean finished = false;
   private boolean closed = false;
 
@@ -85,7 +85,7 @@ public class LanceBatchIterator implements Iterator<ColumnarBatch>, Closeable {
     if (finished) {
       return false;
     }
-    if (nextBatchLoaded) {
+    if (hasCachedBatch) {
       return true;
     }
 
@@ -102,7 +102,7 @@ public class LanceBatchIterator implements Iterator<ColumnarBatch>, Closeable {
         }
 
         currentBatch = new ColumnarBatch(columnVectors, root.getRowCount());
-        nextBatchLoaded = true;
+        hasCachedBatch = true;
         return true;
       }
     } catch (IOException e) {
@@ -118,7 +118,7 @@ public class LanceBatchIterator implements Iterator<ColumnarBatch>, Closeable {
     if (!hasNext()) {
       throw new NoSuchElementException("No more batches available");
     }
-    nextBatchLoaded = false;
+    hasCachedBatch = false;
     return currentBatch;
   }
 
@@ -129,7 +129,7 @@ public class LanceBatchIterator implements Iterator<ColumnarBatch>, Closeable {
     }
     closed = true;
 
-    IOException arrowException = null;
+    Exception arrowException = null;
     Exception lanceException = null;
     Exception allocatorException = null;
 
@@ -141,7 +141,7 @@ public class LanceBatchIterator implements Iterator<ColumnarBatch>, Closeable {
 
     try {
       arrowReader.close();
-    } catch (IOException e) {
+    } catch (Exception e) {
       arrowException = e;
     }
 
@@ -171,7 +171,14 @@ public class LanceBatchIterator implements Iterator<ColumnarBatch>, Closeable {
       if (lanceException != null) {
         arrowException.addSuppressed(lanceException);
       }
-      throw new HoodieIOException("Failed to close Arrow reader", arrowException);
+      // Preserve the IOException-specific subclass when the underlying close raised IOException;
+      // fall back to HoodieException so RuntimeExceptions from arrowReader.close() are still surfaced
+      // (and don't strand the lanceReader/allocator close paths above).
+      if (arrowException instanceof IOException) {
+        throw new HoodieIOException("Failed to close Arrow reader", (IOException) arrowException);
+      } else {
+        throw new HoodieException("Failed to close Arrow reader", arrowException);
+      }
     }
     if (lanceException != null) {
       throw new HoodieException("Failed to close Lance reader", lanceException);

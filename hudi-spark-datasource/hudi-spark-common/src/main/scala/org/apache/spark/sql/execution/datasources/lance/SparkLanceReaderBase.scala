@@ -62,7 +62,7 @@ import scala.collection.JavaConverters._
 class SparkLanceReaderBase(enableVectorizedReader: Boolean) extends SparkColumnarFileReader {
 
   /** Holds a pre-created all-null Arrow vector for a column missing from the file (schema evolution). */
-  private case class NullColumnEntry(colIndex: Int, columnVector: LanceArrowColumnVector, arrowVector: FieldVector)
+  private case class NullColumnEntry(colIndex: Int, lanceColumnVector: LanceArrowColumnVector, arrowVector: FieldVector)
 
   // Batch size for reading Lance files (number of rows per batch)
   private val DEFAULT_BATCH_SIZE = 512
@@ -152,9 +152,15 @@ class SparkLanceReaderBase(enableVectorizedReader: Boolean) extends SparkColumna
         arrowReader = lanceReader.readAll(columnNames, null, DEFAULT_BATCH_SIZE, readOpts)
 
         // Decide between batch mode and row mode.
-        // Fall back to row mode if type casting is needed (batch-level type casting deferred to follow-up).
+        // Fall back to row mode if:
+        //   - type casting is needed (batch-level type casting deferred to follow-up), OR
+        //   - the partition schema contains a type the batch-mode partition-vector populator
+        //     does not handle (Struct/Array/Map/Char/Varchar/interval, etc.). The row path
+        //     preserves these via JoinedRow, so falling back avoids silently nulling them out.
         val hasTypeChanges = !implicitTypeChangeInfo.isEmpty
-        if (enableVectorizedReader && !hasTypeChanges) {
+        val partitionTypesBatchSupported =
+          partitionSchema.forall(f => isPartitionTypeSupportedForBatch(f.dataType))
+        if (enableVectorizedReader && !hasTypeChanges && partitionTypesBatchSupported) {
           readBatch(file, allocator, lanceReader, arrowReader, filePath,
             requestSchema, requiredSchema, partitionSchema)
         } else {
@@ -346,7 +352,7 @@ class SparkLanceReaderBase(enableVectorizedReader: Boolean) extends SparkColumna
             if (numRows != entry.arrowVector.getValueCount) {
               entry.arrowVector.setValueCount(numRows)
             }
-            vectors(i) = entry.columnVector
+            vectors(i) = entry.lanceColumnVector
           }
           i += 1
         }
@@ -386,7 +392,7 @@ class SparkLanceReaderBase(enableVectorizedReader: Boolean) extends SparkColumna
             }
           }
           // Close null Arrow vectors and their allocator before batchIterator (which closes the data allocator)
-          nullColumnVectors.foreach(v => closeSafely(v.columnVector.close()))
+          nullColumnVectors.foreach(v => closeSafely(v.lanceColumnVector.close()))
           nullAllocator.foreach(a => closeSafely(a.close()))
           closeSafely(batchIterator.close())
           partitionVectors.foreach(v => closeSafely(v.close()))
@@ -464,6 +470,21 @@ class SparkLanceReaderBase(enableVectorizedReader: Boolean) extends SparkColumna
   }
 
   /**
+   * Whether the batch-mode partition-vector populator can handle this partition type.
+   * Must stay in sync with the match in [[populatePartitionVectors]] — types not listed here
+   * (Struct/Array/Map/CharType/VarcharType/interval types, etc.) cause the read() path to fall
+   * back to row mode, where JoinedRow preserves the value as-is.
+   */
+  private def isPartitionTypeSupportedForBatch(dt: DataType): Boolean = dt match {
+    case BooleanType | ByteType | ShortType | IntegerType | DateType => true
+    case LongType | TimestampType | TimestampNTZType => true
+    case FloatType | DoubleType => true
+    case StringType | BinaryType => true
+    case _: DecimalType => true
+    case _ => false
+  }
+
+  /**
    * Populate writable column vectors with constant partition values.
    * Each vector is filled with the same value for all rows.
    */
@@ -527,9 +548,13 @@ class SparkLanceReaderBase(enableVectorizedReader: Boolean) extends SparkColumna
             val v = partitionValues.getBinary(i)
             var j = 0
             while (j < numRows) { vector.putByteArray(j, v); j += 1 }
-          case _ =>
-            // For unsupported types, fill with nulls
-            vector.putNulls(0, numRows)
+          case other =>
+            // Unreachable: read() gates batch mode on isPartitionTypeSupportedForBatch so unsupported
+            // partition types are routed to the row path. Throw loudly if that gate ever regresses
+            // rather than silently nulling out the user's partition values.
+            throw new IllegalStateException(
+              s"Unsupported partition type for Lance batch mode: $other (column ${partitionSchema(i).name}). " +
+                "isPartitionTypeSupportedForBatch must be kept in sync with populatePartitionVectors.")
         }
       }
       i += 1
