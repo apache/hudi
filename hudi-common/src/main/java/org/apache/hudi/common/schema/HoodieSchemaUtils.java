@@ -438,7 +438,13 @@ public final class HoodieSchemaUtils {
    * @return a new HoodieSchemaField with the same properties but properly formatted default value
    */
   public static HoodieSchemaField createNewSchemaField(HoodieSchemaField field) {
-    return createNewSchemaField(field.name(), field.schema(), field.doc().orElse(null), field.defaultVal().orElse(null));
+    HoodieSchemaField newField = createNewSchemaField(field.name(), field.schema(), field.doc().orElse(null), field.defaultVal().orElse(null));
+    // Preserve Avro custom props (notably {@code field-id}) so callers that copy a
+    // field through this helper don't silently drop schema-on-read identity.
+    for (Map.Entry<String, Object> prop : field.getObjectProps().entrySet()) {
+      newField.addProp(prop.getKey(), prop.getValue());
+    }
+    return newField;
   }
 
   /**
@@ -656,6 +662,15 @@ public final class HoodieSchemaUtils {
     HoodieSchema newSchema = HoodieSchema.createRecord(schema.getName(), schema.getNamespace().orElse(null), schema.getDoc().orElse(null), fields);
     for (Map.Entry<String, Object> prop : schemaProps.entrySet()) {
       newSchema.addProp(prop.getKey(), prop.getValue());
+    }
+    // Preserve schema-on-read meta (version id and max column id) so callers that
+    // copy a HoodieSchema through this helper don't silently reset them to -1, which
+    // would make the result look like an "empty" sentinel to {@link HoodieSchema#isEmptySchema()}.
+    if (schema.schemaId() >= 0) {
+      newSchema.setSchemaId(schema.schemaId());
+    }
+    if (schema.maxColumnId() >= 0) {
+      newSchema.setMaxColumnId(schema.maxColumnId());
     }
     return newSchema;
   }
@@ -1004,7 +1019,13 @@ public final class HoodieSchemaUtils {
         Option<HoodieSchemaField> field = schema.getField(f.name());
         if (field.isPresent()) {
           HoodieSchemaField foundField = field.get();
-          fields.set(foundField.pos(), createNewSchemaField(foundField.name(), mergeSchemas(foundField.schema(), f.schema()), foundField.doc().orElse(null), foundField.defaultVal().orElse(null)));
+          HoodieSchemaField rebuilt = createNewSchemaField(foundField.name(), mergeSchemas(foundField.schema(), f.schema()), foundField.doc().orElse(null), foundField.defaultVal().orElse(null));
+          // Preserve the existing field's Avro custom props (notably {@code field-id})
+          // so the dedup branch doesn't silently strip schema-on-read identity.
+          for (Map.Entry<String, Object> prop : foundField.getObjectProps().entrySet()) {
+            rebuilt.addProp(prop.getKey(), prop.getValue());
+          }
+          fields.set(foundField.pos(), rebuilt);
         } else {
           fields.add(f);
         }

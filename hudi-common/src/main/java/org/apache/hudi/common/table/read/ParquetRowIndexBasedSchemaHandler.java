@@ -90,12 +90,30 @@ public class ParquetRowIndexBasedSchemaHandler<T> extends FileGroupReaderSchemaH
 
   @VisibleForTesting
   static HoodieSchema addPositionalMergeCol(HoodieSchema input) {
-    return appendFieldsToSchemaDedupNested(input, Collections.singletonList(getPositionalMergeField()));
+    return appendFieldsToSchemaDedupNested(input, Collections.singletonList(getPositionalMergeField(input)));
   }
 
   @VisibleForTesting
   static HoodieSchemaField getPositionalMergeField() {
-    return HoodieSchemaField.of(ROW_INDEX_TEMPORARY_COLUMN_NAME,
+    return getPositionalMergeField(null);
+  }
+
+  /**
+   * Builds the synthetic positional-merge field. When a parent schema is supplied
+   * we stamp a field-id above its {@code maxColumnId} so the new field can't
+   * collide with existing column ids when the schema is round-tripped through
+   * the InternalSchema bridge — important because the bridge assigns
+   * converter-fresh sequential ids to top-level fields without an explicit
+   * field-id, which would otherwise alias an inner map's key/value id.
+   */
+  private static HoodieSchemaField getPositionalMergeField(HoodieSchema parent) {
+    HoodieSchemaField field = HoodieSchemaField.of(ROW_INDEX_TEMPORARY_COLUMN_NAME,
         HoodieSchema.create(HoodieSchemaType.LONG), "", -1L);
+    if (parent != null) {
+      int maxId = parent.maxColumnId();
+      int allIdsMax = parent.getAllIds().stream().mapToInt(Integer::intValue).max().orElse(-1);
+      field.addProp(HoodieSchema.FIELD_ID_PROP, (maxId >= 0 ? maxId : allIdsMax) + 1);
+    }
+    return field;
   }
 }
