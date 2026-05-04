@@ -21,12 +21,12 @@ package org.apache.hudi.hadoop;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaField;
+import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.common.schema.evolution.HoodieSchemaEvolutionUtils;
 import org.apache.hudi.common.schema.evolution.HoodieSchemaHistoryCache;
 import org.apache.hudi.common.schema.evolution.HoodieSchemaInternalSchemaBridge;
 import org.apache.hudi.common.schema.evolution.HoodieSchemaMerger;
 import org.apache.hudi.common.schema.evolution.HoodieSchemaSerDe;
-import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.util.Option;
@@ -40,8 +40,8 @@ import org.apache.hudi.hadoop.realtime.AbstractRealtimeRecordReader;
 import org.apache.hudi.hadoop.realtime.RealtimeSplit;
 import org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils;
 import org.apache.hudi.storage.HoodieStorage;
-import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.HoodieStorageUtils;
+import org.apache.hudi.storage.StoragePath;
 
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
@@ -394,7 +394,7 @@ public class SchemaEvolutionContext {
     }
   }
 
-  private void setColumnNameList(JobConf job, List<Types.Field> fields) {
+  private void setColumnNameList(JobConf job, List<HoodieSchemaField> fields) {
     if (fields == null) {
       return;
     }

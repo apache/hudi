@@ -457,9 +457,14 @@ public final class HoodieSchemaInternalSchemaBridge {
         .map(HoodieSchemaUtils::createNewSchemaField)
         .collect(Collectors.toList());
     HoodieSchema renamed = HoodieSchema.createRecord(simpleName, namespace, source.getDoc().orElse(null), fields);
-    if (source.schemaId() >= 0) {
-      renamed.setSchemaId(source.schemaId());
-    }
+    // The legacy InternalSchema bridge round-trip defaulted the schemaId to 0
+    // (InternalSchema's DEFAULT_VERSION_ID) when the source carried no version
+    // — and downstream code (HoodieSchemaSerDe.toJson, isEmptySchema-based
+    // sentinel checks) treats schemaId < 0 as "empty" and refuses to serialize.
+    // Mirror that default so callers that consume the JSON (commit metadata,
+    // schema-on-read cache) keep getting a non-empty payload.
+    long sourceSchemaId = source.schemaId();
+    renamed.setSchemaId(sourceSchemaId >= 0 ? sourceSchemaId : 0L);
     if (source.maxColumnId() >= 0) {
       renamed.setMaxColumnId(source.maxColumnId());
     }
