@@ -68,6 +68,13 @@ public final class HoodieSchemaInternalSchemaBridge {
    * {@link InternalSchemaConverter#convert(HoodieSchema)} which mints fresh ids.</p>
    */
   public static InternalSchema toInternalSchema(HoodieSchema hoodieSchema) {
+    // Preserve the empty-schema marker end-to-end: callers (e.g. FileGroupReader's
+    // schema handler) short-circuit on isEmptySchema() so the round-trip must not
+    // resurrect an "empty" HoodieSchema as a non-empty InternalSchema with the
+    // default versionId of 0.
+    if (hoodieSchema == null || hoodieSchema.isEmptySchema()) {
+      return InternalSchema.getEmptyInternalSchema();
+    }
     // Take the structurally-correct InternalSchema produced by the existing converter,
     // then walk both schemas in parallel and overwrite the InternalSchema's freshly-minted
     // ids with the ids carried as Avro properties on the HoodieSchema (where present).
