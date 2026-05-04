@@ -49,9 +49,12 @@ To build the Docker demo images directly with the script, run it from under `<HU
 ./build_docker_images.sh
 ```
 
-You can override the Hadoop, Spark, and Hive versions from the command line:
+You can override the Hadoop, Spark, and Hive versions from the command line. Use one of the supported version
+combinations under `docker/compose` when doing so.
 
 ```shell
+# For example, to build the image set used by
+# docker-compose_hadoop340_hive313_spark401_{amd64,arm64}.yml
 ./build_docker_images.sh --hadoop-version 3.4.0 --spark-version 4.0.1 --hive-version 3.1.3
 ```
 
@@ -161,5 +164,6 @@ Then run the script from under `<HUDI_REPO_DIR>/docker`:
 When `--multi-arch` is enabled, the script builds and pushes the amd64 and arm64 variants in one pass. Use
 `--version-tag <tag>` to override the image tag used for the push.
 
-Note that `--multi-arch` uses `docker buildx build --push`, so Docker Hub push permissions are required. No Dockerfile
-changes are needed for the amd64 plus arm64 build flow above.
+Note that `--multi-arch` uses `docker buildx build --push` and the image names in the script are hardcoded to the
+`apachehudi/...` Docker Hub repositories, so this flow requires push access to those repositories. No Dockerfile
+changes are needed for the current amd64 plus arm64 image set in this repository.
