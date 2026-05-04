@@ -432,18 +432,10 @@ public final class HoodieFileGroupReader<T> implements Closeable {
       return this;
     }
 
-    public Builder<T> withInternalSchema(Option<InternalSchema> internalSchemaOpt) {
-      this.internalSchemaOpt = internalSchemaOpt;
-      return this;
-    }
-
     /**
-     * HoodieSchema-shaped twin of {@link #withInternalSchema(Option)}. The reader
+     * Sets the schema-on-read evolution schema (carrying field ids). The reader
      * still operates on {@link InternalSchema} internally during the migration —
-     * this builder method converts via {@link HoodieSchemaInternalSchemaBridge}
-     * so callers can supply a {@link HoodieSchema} carrying field ids and stay off
-     * the legacy type. Once Phase 5 rewrites the reader on pure HoodieSchema, the
-     * legacy {@code withInternalSchema} method goes away.
+     * this builder converts via {@link HoodieSchemaInternalSchemaBridge}.
      */
     public Builder<T> withEvolutionSchema(Option<HoodieSchema> evolutionSchemaOpt) {
       this.internalSchemaOpt = evolutionSchemaOpt.map(HoodieSchemaInternalSchemaBridge::toInternalSchema);
