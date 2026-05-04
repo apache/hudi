@@ -30,8 +30,9 @@ import java.util.List;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -49,7 +50,12 @@ public class TestBatchRecords {
 
     assertNotNull(batchRecords);
     assertEquals(splitId, batchRecords.nextSplit());
-    assertNull(batchRecords.nextRecordFromSplit(), "Should have no records");
+    // Empty iterator still emits the last-in-split sentinel for watermark emission
+    HoodieRecordWithPosition<String> sentinel = batchRecords.nextRecordFromSplit();
+    assertNotNull(sentinel, "Should emit last-in-split sentinel");
+    assertNull(sentinel.record(), "Sentinel record payload should be null");
+    assertTrue(sentinel.isLastInSplit(), "Sentinel should be marked as last in split");
+    assertNull(batchRecords.nextRecordFromSplit(), "Second call should return null");
     assertNull(batchRecords.nextSplit(), "Second call to nextSplit should return null");
   }
 
@@ -82,7 +88,11 @@ public class TestBatchRecords {
     assertEquals("record3", record3.record());
     assertEquals(3L, record3.recordOffset());
 
-    // No more records
+    // No more records — sentinel emitted before null
+    HoodieRecordWithPosition<String> sentinel = batchRecords.nextRecordFromSplit();
+    assertNotNull(sentinel);
+    assertNull(sentinel.record());
+    assertTrue(sentinel.isLastInSplit());
     assertNull(batchRecords.nextRecordFromSplit());
   }
 
@@ -228,8 +238,11 @@ public class TestBatchRecords {
     // Read the only record
     assertNotNull(batchRecords.nextRecordFromSplit());
 
-    // After exhaustion, should return null
-    assertNull(batchRecords.nextRecordFromSplit());
+    // After exhaustion, sentinel emitted first, then null
+    HoodieRecordWithPosition<String> sentinel = batchRecords.nextRecordFromSplit();
+    assertNotNull(sentinel, "Should emit last-in-split sentinel");
+    assertTrue(sentinel.isLastInSplit());
+    assertNull(sentinel.record());
     assertNull(batchRecords.nextRecordFromSplit());
   }
 
@@ -314,7 +327,13 @@ public class TestBatchRecords {
     // Read records
     batchRecords.nextRecordFromSplit();
 
-    // Trigger close operation
+    // Sentinel emitted first (does not close iterator)
+    batchRecords.nextRecordFromSplit();
+
+    // After Sentinel emitted, nextRecordFromSplit should not close the iterator
+    assertFalse(mockIterator.isClosed(), "Iterator should not be closed");
+
+    // Third call closes the iterator and returns null
     batchRecords.nextRecordFromSplit();
 
     // After exhaustion, nextRecordFromSplit should close the iterator

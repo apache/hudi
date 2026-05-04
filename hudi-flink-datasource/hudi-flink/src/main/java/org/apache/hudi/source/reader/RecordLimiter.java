@@ -50,20 +50,20 @@ public class RecordLimiter {
    * increments the internal counter and returns {@code null} once the global limit is reached,
    * causing Flink to treat the current split as exhausted.
    */
-  public <T> RecordsWithSplitIds<T> wrap(RecordsWithSplitIds<T> records) {
-    return new RecordsWithSplitIds<T>() {
+  public <T> RecordsWithSplitIds<HoodieRecordWithPosition<T>> wrap(RecordsWithSplitIds<HoodieRecordWithPosition<T>> records) {
+    return new RecordsWithSplitIds<HoodieRecordWithPosition<T>>() {
       @Override
       public String nextSplit() {
         return records.nextSplit();
       }
 
       @Override
-      public T nextRecordFromSplit() {
+      public HoodieRecordWithPosition<T> nextRecordFromSplit() {
         if (totalReadCount.get() >= limit) {
           return null;
         }
-        T record = records.nextRecordFromSplit();
-        if (record != null) {
+        HoodieRecordWithPosition<T> record = records.nextRecordFromSplit();
+        if (record != null && !record.isLastInSplit()) {
           totalReadCount.incrementAndGet();
         }
         return record;

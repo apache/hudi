@@ -427,6 +427,6 @@ public class TestHoodieSource {
         splitReaderFunction,
         new HoodieSourceSplitComparator(),
         metaClient,
-        new HoodieRecordEmitter<>());
+        new HoodieRecordEmitter<>(conf.get(FlinkOptions.READ_COMMIT_TIME_WATERMARK_ENABLED)));
   }
 }

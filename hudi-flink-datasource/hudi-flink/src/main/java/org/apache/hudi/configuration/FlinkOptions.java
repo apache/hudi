@@ -465,6 +465,12 @@ public class FlinkOptions extends HoodieConfig {
       .defaultValue(false)
       .withDescription("Whether to use Flink FLIP27 new source to consume data files.");
 
+  public static final ConfigOption<Boolean> READ_COMMIT_TIME_WATERMARK_ENABLED = ConfigOptions
+      .key("read.commit.time.watermark.enabled")
+      .booleanType()
+      .defaultValue(false)
+      .withDescription("Whether to emit hoodie commit time as watermark at the end of each split of source-v2.");
+
   @AdvancedConfig
   public static final ConfigOption<Boolean> READ_CDC_FROM_CHANGELOG = ConfigOptions
       .key("read.cdc.from.changelog")

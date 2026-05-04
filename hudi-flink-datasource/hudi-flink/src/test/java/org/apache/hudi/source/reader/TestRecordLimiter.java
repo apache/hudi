@@ -31,6 +31,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -64,7 +65,7 @@ public class TestRecordLimiter {
   @Test
   public void testIsLimitReachedTrueAfterReadingUpToLimit() {
     RecordLimiter limiter = new RecordLimiter(3L);
-    RecordsWithSplitIds<String> wrapped = limiter.wrap(makeRecords("a", "b", "c", "d"));
+    RecordsWithSplitIds<HoodieRecordWithPosition<String>> wrapped = limiter.wrap(makeRecords("a", "b", "c", "d"));
     wrapped.nextSplit();
     drainAll(wrapped);  // reads 3 (limit) then stops
     assertTrue(limiter.isLimitReached());
@@ -73,7 +74,7 @@ public class TestRecordLimiter {
   @Test
   public void testIsLimitReachedFalseWhenBelowLimit() {
     RecordLimiter limiter = new RecordLimiter(10L);
-    RecordsWithSplitIds<String> wrapped = limiter.wrap(makeRecords("a", "b"));
+    RecordsWithSplitIds<HoodieRecordWithPosition<String>> wrapped = limiter.wrap(makeRecords("a", "b"));
     wrapped.nextSplit();
     drainAll(wrapped);  // only 2 records available, limit is 10
     assertFalse(limiter.isLimitReached());
@@ -86,8 +87,8 @@ public class TestRecordLimiter {
   @Test
   public void testWrapDelegatesNextSplit() {
     RecordLimiter limiter = new RecordLimiter(10L);
-    RecordsWithSplitIds<String> inner = makeRecords("split-1", "x");
-    RecordsWithSplitIds<String> wrapped = limiter.wrap(inner);
+    RecordsWithSplitIds<HoodieRecordWithPosition<String>> inner = makeRecords("split-1", "x");
+    RecordsWithSplitIds<HoodieRecordWithPosition<String>> wrapped = limiter.wrap(inner);
     assertEquals("split-1", wrapped.nextSplit());
   }
 
@@ -95,8 +96,9 @@ public class TestRecordLimiter {
   public void testWrapDelegatesFinishedSplits() {
     RecordLimiter limiter = new RecordLimiter(10L);
     Set<String> finishedSplits = Collections.singleton("done-split");
-    RecordsWithSplitIds<String> inner = makeRecordsWithFinished("split-1", Collections.singletonList("x"), finishedSplits);
-    RecordsWithSplitIds<String> wrapped = limiter.wrap(inner);
+    RecordsWithSplitIds<HoodieRecordWithPosition<String>> inner =
+        makeRecordsWithFinished("split-1", Collections.singletonList("x"), finishedSplits);
+    RecordsWithSplitIds<HoodieRecordWithPosition<String>> wrapped = limiter.wrap(inner);
     assertEquals(finishedSplits, wrapped.finishedSplits());
   }
 
@@ -104,13 +106,14 @@ public class TestRecordLimiter {
   public void testWrapDelegatesRecycle() {
     RecordLimiter limiter = new RecordLimiter(10L);
     AtomicInteger recycleCount = new AtomicInteger(0);
-    RecordsWithSplitIds<String> inner = new StubRecords("split-1", Collections.singletonList("x")) {
-      @Override
-      public void recycle() {
-        recycleCount.incrementAndGet();
-      }
-    };
-    RecordsWithSplitIds<String> wrapped = limiter.wrap(inner);
+    RecordsWithSplitIds<HoodieRecordWithPosition<String>> inner =
+        new StubRecords("split-1", Collections.singletonList("x")) {
+          @Override
+          public void recycle() {
+            recycleCount.incrementAndGet();
+          }
+        };
+    RecordsWithSplitIds<HoodieRecordWithPosition<String>> wrapped = limiter.wrap(inner);
     wrapped.recycle();
     assertEquals(1, recycleCount.get());
   }
@@ -122,7 +125,8 @@ public class TestRecordLimiter {
   @Test
   public void testWrapReturnsAllRecordsWhenBelowLimit() {
     RecordLimiter limiter = new RecordLimiter(5L);
-    RecordsWithSplitIds<String> wrapped = limiter.wrap(makeRecords("split-1", "a", "b", "c"));
+    RecordsWithSplitIds<HoodieRecordWithPosition<String>> wrapped =
+        limiter.wrap(makeRecords("split-1", "a", "b", "c"));
     wrapped.nextSplit();
     assertEquals(3, drainAll(wrapped));
   }
@@ -130,7 +134,8 @@ public class TestRecordLimiter {
   @Test
   public void testWrapCutsOffAtLimit() {
     RecordLimiter limiter = new RecordLimiter(2L);
-    RecordsWithSplitIds<String> wrapped = limiter.wrap(makeRecords("split-1", "a", "b", "c", "d", "e"));
+    RecordsWithSplitIds<HoodieRecordWithPosition<String>> wrapped =
+        limiter.wrap(makeRecords("split-1", "a", "b", "c", "d", "e"));
     wrapped.nextSplit();
     assertEquals(2, drainAll(wrapped));
   }
@@ -138,7 +143,8 @@ public class TestRecordLimiter {
   @Test
   public void testWrapReturnsNullImmediatelyWhenLimitIsZero() {
     RecordLimiter limiter = new RecordLimiter(0L);
-    RecordsWithSplitIds<String> wrapped = limiter.wrap(makeRecords("split-1", "a", "b"));
+    RecordsWithSplitIds<HoodieRecordWithPosition<String>> wrapped =
+        limiter.wrap(makeRecords("split-1", "a", "b"));
     wrapped.nextSplit();
     assertNull(wrapped.nextRecordFromSplit());
   }
@@ -147,7 +153,8 @@ public class TestRecordLimiter {
   public void testWrapDoesNotIncrementCountForNullInnerRecord() {
     // Inner iterator exhausted before limit; null returns from inner should not count.
     RecordLimiter limiter = new RecordLimiter(10L);
-    RecordsWithSplitIds<String> wrapped = limiter.wrap(makeRecords("split-1", "a", "b"));
+    RecordsWithSplitIds<HoodieRecordWithPosition<String>> wrapped =
+        limiter.wrap(makeRecords("split-1", "a", "b"));
     wrapped.nextSplit();
     assertEquals(2, drainAll(wrapped));
     // Limit should not be reached since only 2 records were actually read.
@@ -159,13 +166,15 @@ public class TestRecordLimiter {
     // The same limiter wraps two batches; the count must be shared.
     RecordLimiter limiter = new RecordLimiter(4L);
 
-    RecordsWithSplitIds<String> batch1 = limiter.wrap(makeRecords("split-1", "a", "b", "c"));
+    RecordsWithSplitIds<HoodieRecordWithPosition<String>> batch1 =
+        limiter.wrap(makeRecords("split-1", "a", "b", "c"));
     batch1.nextSplit();
     assertEquals(3, drainAll(batch1));  // reads 3; totalReadCount = 3
 
     assertFalse(limiter.isLimitReached());
 
-    RecordsWithSplitIds<String> batch2 = limiter.wrap(makeRecords("split-2", "d", "e", "f"));
+    RecordsWithSplitIds<HoodieRecordWithPosition<String>> batch2 =
+        limiter.wrap(makeRecords("split-2", "d", "e", "f"));
     batch2.nextSplit();
     assertEquals(1, drainAll(batch2));  // only 1 more allowed; totalReadCount = 4
 
@@ -176,7 +185,8 @@ public class TestRecordLimiter {
   public void testWrapExactLimitReturnsAllRecords() {
     // limit == number of records → all records returned, none cut off
     RecordLimiter limiter = new RecordLimiter(3L);
-    RecordsWithSplitIds<String> wrapped = limiter.wrap(makeRecords("split-1", "a", "b", "c"));
+    RecordsWithSplitIds<HoodieRecordWithPosition<String>> wrapped =
+        limiter.wrap(makeRecords("split-1", "a", "b", "c"));
     wrapped.nextSplit();
     assertEquals(3, drainAll(wrapped));
     assertTrue(limiter.isLimitReached());
@@ -200,7 +210,8 @@ public class TestRecordLimiter {
 
     for (int i = 0; i < threadCount; i++) {
       List<String> items = Collections.nCopies(recordsPerBatch, "x");
-      RecordsWithSplitIds<String> wrapped = limiter.wrap(makeThreadSafeRecords("split-" + i, items));
+      RecordsWithSplitIds<HoodieRecordWithPosition<String>> wrapped =
+          limiter.wrap(makeThreadSafeRecords("split-" + i, items));
       wrapped.nextSplit();
       Thread t = new Thread(() -> {
         try {
@@ -238,7 +249,8 @@ public class TestRecordLimiter {
 
     for (int i = 0; i < threadCount; i++) {
       List<String> items = Collections.nCopies(recordsPerBatch, "x");
-      RecordsWithSplitIds<String> wrapped = limiter.wrap(makeThreadSafeRecords("split-" + i, items));
+      RecordsWithSplitIds<HoodieRecordWithPosition<String>> wrapped =
+          limiter.wrap(makeThreadSafeRecords("split-" + i, items));
       wrapped.nextSplit();
       Thread t = new Thread(() -> {
         try {
@@ -269,7 +281,8 @@ public class TestRecordLimiter {
     RecordLimiter limiter = new RecordLimiter(limit);
     List<String> items = Collections.nCopies((int) limit, "x");
 
-    RecordsWithSplitIds<String> wrapped = limiter.wrap(makeThreadSafeRecords("split-1", items));
+    RecordsWithSplitIds<HoodieRecordWithPosition<String>> wrapped =
+        limiter.wrap(makeThreadSafeRecords("split-1", items));
     wrapped.nextSplit();
 
     CountDownLatch writerDone = new CountDownLatch(1);
@@ -293,12 +306,12 @@ public class TestRecordLimiter {
   // -------------------------------------------------------------------------
 
   /** Creates a StubRecords with the given split id and records. */
-  private RecordsWithSplitIds<String> makeRecords(String splitId, String... items) {
+  private RecordsWithSplitIds<HoodieRecordWithPosition<String>> makeRecords(String splitId, String... items) {
     return new StubRecords(splitId, Arrays.asList(items));
   }
 
   /** Creates a StubRecords with custom finishedSplits. */
-  private RecordsWithSplitIds<String> makeRecordsWithFinished(
+  private RecordsWithSplitIds<HoodieRecordWithPosition<String>> makeRecordsWithFinished(
       String splitId, List<String> items, Set<String> finished) {
     return new StubRecords(splitId, items) {
       @Override
@@ -312,19 +325,20 @@ public class TestRecordLimiter {
    * Creates a {@link RecordsWithSplitIds} whose {@code nextRecordFromSplit()} is thread-safe,
    * suitable for concurrent access by multiple threads.
    */
-  private RecordsWithSplitIds<String> makeThreadSafeRecords(String splitId, List<String> items) {
+  private RecordsWithSplitIds<HoodieRecordWithPosition<String>> makeThreadSafeRecords(
+      String splitId, List<String> items) {
     AtomicInteger idx = new AtomicInteger(0);
     return new StubRecords(splitId, Collections.emptyList()) {
       @Override
-      public String nextRecordFromSplit() {
+      public HoodieRecordWithPosition<String> nextRecordFromSplit() {
         int i = idx.getAndIncrement();
-        return i < items.size() ? items.get(i) : null;
+        return i < items.size() ? new HoodieRecordWithPosition<>(items.get(i), 0, 0L) : null;
       }
     };
   }
 
   /** Drains all records from the current split, returning the count. */
-  private int drainAll(RecordsWithSplitIds<String> records) {
+  private int drainAll(RecordsWithSplitIds<HoodieRecordWithPosition<String>> records) {
     int count = 0;
     while (records.nextRecordFromSplit() != null) {
       count++;
@@ -334,15 +348,19 @@ public class TestRecordLimiter {
 
   /**
    * Minimal stub implementation of {@link RecordsWithSplitIds} backed by a list.
+   * Each string item is wrapped in a {@link HoodieRecordWithPosition} with default offsets.
    */
-  private static class StubRecords implements RecordsWithSplitIds<String> {
+  private static class StubRecords implements RecordsWithSplitIds<HoodieRecordWithPosition<String>> {
     private final String splitId;
-    private final Iterator<String> iterator;
+    private final Iterator<HoodieRecordWithPosition<String>> iterator;
     private boolean splitConsumed = false;
 
     StubRecords(String splitId, List<String> items) {
       this.splitId = splitId;
-      this.iterator = items.iterator();
+      this.iterator = items.stream()
+          .map(item -> new HoodieRecordWithPosition<>(item, 0, 0L))
+          .collect(Collectors.toList())
+          .iterator();
     }
 
     @Override
@@ -355,7 +373,7 @@ public class TestRecordLimiter {
     }
 
     @Override
-    public String nextRecordFromSplit() {
+    public HoodieRecordWithPosition<String> nextRecordFromSplit() {
       return iterator.hasNext() ? iterator.next() : null;
     }
 

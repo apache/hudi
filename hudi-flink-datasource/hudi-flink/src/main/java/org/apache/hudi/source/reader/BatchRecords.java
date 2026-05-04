@@ -41,6 +41,7 @@ public class BatchRecords<T> implements RecordsWithSplitIds<HoodieRecordWithPosi
 
   // point to current read position within the records list
   private int position;
+  private boolean sentinelEmitted;
 
   BatchRecords(
       String splitId,
@@ -83,6 +84,12 @@ public class BatchRecords<T> implements RecordsWithSplitIds<HoodieRecordWithPosi
       position = position + 1;
       return recordAndPosition;
     } else {
+      if (!sentinelEmitted) {
+        recordAndPosition.record(null);
+        sentinelEmitted = true;
+        return recordAndPosition;
+      }
+
       recordIterator.close();
       return null;
     }
