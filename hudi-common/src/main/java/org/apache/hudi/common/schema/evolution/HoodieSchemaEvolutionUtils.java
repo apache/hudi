@@ -107,16 +107,13 @@ public final class HoodieSchemaEvolutionUtils {
   public static HoodieSchema reconcileSchemaStructural(HoodieSchema incomingSchema,
                                                        HoodieSchema oldTableSchema,
                                                        boolean makeMissingFieldsNullable) {
-    // reconcileHoodieSchemaDirect assumes oldTableSchema has ids stamped (its
-    // diff loop calls getAllColsFullName / findIdByName / findType, all
-    // id-keyed). Deep-copy + assign fresh ids on a working copy so structural
-    // callers — whose inputs may have no ids at all — get a correct diff.
-    // Incoming is already deep-copied + id-stamped inside the inner method.
-    HoodieSchema oldFresh = HoodieSchema.parse(oldTableSchema.toAvroSchema().toString());
-    HoodieSchemaIdAssigner.assignFresh(oldFresh);
-    HoodieSchema reconciled = reconcileHoodieSchemaDirect(incomingSchema, oldFresh, makeMissingFieldsNullable);
-    // Strip ids from the result — this entry's contract is "ids are not
-    // stamped on the output".
+    // reconcileHoodieSchemaDirect's diff loop is id-keyed and assumes old has
+    // ids stamped; structural callers may pass in id-less Avro schemas. Stamp
+    // a working copy of old, then strip ids from the result per the entry's
+    // "ids not on output" contract. Incoming is already deep-copied and
+    // id-stamped inside the inner method.
+    HoodieSchema reconciled = reconcileHoodieSchemaDirect(
+        incomingSchema, withFreshIds(oldTableSchema), makeMissingFieldsNullable);
     return stripIds(reconciled);
   }
 
@@ -147,15 +144,12 @@ public final class HoodieSchemaEvolutionUtils {
       return targetSchema;
     }
 
-    // Deep-copy + assignFresh on both inputs so the diff loop's id-keyed
-    // accessors (getAllColsFullName / findType / findIdByName) work on
-    // schemas that came in without any stamped ids — Spark write paths
-    // call this with structural Avro schemas. Mirrors the same pattern
-    // used by reconcileSchemaStructural.
-    HoodieSchema sourceFresh = HoodieSchema.parse(sourceSchema.toAvroSchema().toString());
-    HoodieSchemaIdAssigner.assignFresh(sourceFresh);
-    HoodieSchema targetFresh = HoodieSchema.parse(targetSchema.toAvroSchema().toString());
-    HoodieSchemaIdAssigner.assignFresh(targetFresh);
+    // Stamp working copies so the diff loop's id-keyed accessors
+    // (getAllColsFullName / findType / findIdByName) work on schemas that
+    // came in without any stamped ids — Spark write paths pass structural
+    // Avro schemas.
+    HoodieSchema sourceFresh = withFreshIds(sourceSchema);
+    HoodieSchema targetFresh = withFreshIds(targetSchema);
 
     HoodieSchema source = shouldReorderColumns
         ? reorderToTargetLayout(sourceFresh, targetFresh.getNameToPosition())
@@ -200,10 +194,12 @@ public final class HoodieSchemaEvolutionUtils {
 
     HoodieSchema result = source;
     for (String field : nullableUpdates) {
-      // Same path-walker limitation: skip leaf paths into arrays / maps.
-      // The applier supports descent into nested records, which is the only
-      // multi-segment shape it can resolve to a HoodieSchemaField.
-      if (field.contains(".element") || field.contains(".value")) {
+      // Same path-walker limitation: skip paths whose terminal segment is
+      // an array-element or map-value pseudo-name. The applier supports
+      // descent into nested records, which is the only multi-segment shape
+      // it can resolve to a HoodieSchemaField. Check the trailing segment
+      // exactly to avoid false matches on field names like "value_count".
+      if (endsWithArrayOrMapDescent(field)) {
         continue;
       }
       // Legacy hard-codes nullable=true even when target is required; preserved
@@ -607,8 +603,7 @@ public final class HoodieSchemaEvolutionUtils {
     // Deep-copy incoming so id stamping doesn't mutate the caller's schema, and
     // the underlying Avro Schema.Field instances are independent of the source
     // (Schema.Field can't be re-parented to a second record).
-    HoodieSchema incoming = HoodieSchema.parse(incomingSchema.toAvroSchema().toString());
-    HoodieSchemaIdAssigner.assignFresh(incoming);
+    HoodieSchema incoming = withFreshIds(incomingSchema);
 
     List<String> oldNames = oldTableSchema.getAllColsFullName();
     List<String> incomingNames = incoming.getAllColsFullName();
@@ -746,6 +741,35 @@ public final class HoodieSchemaEvolutionUtils {
    */
   private static HoodieSchema stripIds(HoodieSchema source) {
     return rebuildStripped(source);
+  }
+
+  /**
+   * Returns a deep-copied HoodieSchema with fresh ids stamped on every
+   * field / element / key / value position. The deep copy goes through
+   * Avro JSON parse so the underlying {@code Schema.Field} instances are
+   * independent of the source — important because Avro forbids reusing a
+   * Schema.Field across two records, and because {@link HoodieSchemaIdAssigner}
+   * mutates Avro custom props in place.
+   */
+  private static HoodieSchema withFreshIds(HoodieSchema source) {
+    HoodieSchema copy = HoodieSchema.parse(source.toAvroSchema().toString());
+    HoodieSchemaIdAssigner.assignFresh(copy);
+    return copy;
+  }
+
+  /**
+   * True when {@code fullName}'s terminal segment is the array-element or
+   * map-value descent pseudo-segment ({@code "element"} or {@code "value"}).
+   * Segment-exact, so a real field name like {@code "value_count"} doesn't
+   * match.
+   */
+  private static boolean endsWithArrayOrMapDescent(String fullName) {
+    int dot = fullName.lastIndexOf('.');
+    if (dot < 0) {
+      return false;
+    }
+    String last = fullName.substring(dot + 1);
+    return "element".equals(last) || "value".equals(last);
   }
 
   private static HoodieSchema rebuildStripped(HoodieSchema source) {
