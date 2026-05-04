@@ -26,7 +26,6 @@ import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodiePayloadProps;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.schema.HoodieSchema;
-import org.apache.hudi.common.schema.evolution.HoodieSchemaInternalSchemaBridge;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
@@ -173,8 +172,8 @@ public abstract class BaseHoodieLogRecordReader<T> {
     this.instantRange = instantRange;
     this.withOperationField = withOperationField;
     this.forceFullScan = forceFullScan;
-    this.evolutionSchema = readerContext.getSchemaHandler() != null && readerContext.getSchemaHandler().getInternalSchema() != null
-        ? HoodieSchemaInternalSchemaBridge.toHoodieSchema(readerContext.getSchemaHandler().getInternalSchema(), readerSchema != null ? readerSchema.getFullName() : null)
+    this.evolutionSchema = readerContext.getSchemaHandler() != null
+        ? readerContext.getSchemaHandler().getEvolutionSchemaOpt().orElse(null)
         : null;
 
     if (keyFieldOverride.isPresent()) {
