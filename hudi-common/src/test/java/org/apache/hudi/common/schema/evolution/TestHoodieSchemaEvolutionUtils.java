@@ -75,14 +75,15 @@ public class TestHoodieSchemaEvolutionUtils {
         HoodieSchemaField.of("d1", HoodieSchema.createNullable(HoodieSchema.fromAvroSchema(LogicalTypes.date().addToSchema(Schema.create(Schema.Type.INT)))), null, HoodieJsonProperties.NULL_VALUE),
         HoodieSchemaField.of("d2", HoodieSchema.createNullable(HoodieSchema.fromAvroSchema(LogicalTypes.date().addToSchema(Schema.create(Schema.Type.INT)))), null, HoodieJsonProperties.NULL_VALUE));
 
-    HoodieSchema simpleCheckSchema = HoodieSchema.parse("{\"type\":\"record\",\"name\":\"simple\",\"fields\":[{\"name\":\"a\",\"type\":[\"null\",\"boolean\"],\"default\":null},"
-        + "{\"name\":\"b\",\"type\":[\"null\",\"int\"],\"default\":null},"
-        + "{\"name\":\"c\",\"type\":[\"null\",\"long\"],\"default\":null},"
-        + "{\"name\":\"d\",\"type\":[\"null\",{\"type\":\"int\",\"logicalType\":\"date\"}],\"default\":null},"
-        + "{\"name\":\"a1\",\"type\":[\"null\",\"long\"],\"default\":null},"
-        + "{\"name\":\"c1\",\"type\":[\"null\",\"long\"],\"default\":null},{\"name\":\"c2\",\"type\":[\"null\",\"long\"],\"default\":null},"
-        + "{\"name\":\"d1\",\"type\":[\"null\",{\"type\":\"int\",\"logicalType\":\"date\"}],\"default\":null},"
-        + "{\"name\":\"d2\",\"type\":[\"null\",{\"type\":\"int\",\"logicalType\":\"date\"}],\"default\":null}]}");
+    HoodieSchema simpleCheckSchema = HoodieSchema.parse("{\"type\":\"record\",\"name\":\"simple\",\"fields\":[{\"name\":\"a\",\"type\":[\"null\",\"boolean\"],\"default\":null,\"field-id\":0},"
+        + "{\"name\":\"b\",\"type\":[\"null\",\"int\"],\"default\":null,\"field-id\":1},"
+        + "{\"name\":\"c\",\"type\":[\"null\",\"long\"],\"default\":null,\"field-id\":2},"
+        + "{\"name\":\"d\",\"type\":[\"null\",{\"type\":\"int\",\"logicalType\":\"date\"}],\"default\":null,\"field-id\":3},"
+        + "{\"name\":\"a1\",\"type\":[\"null\",\"long\"],\"default\":null,\"field-id\":4},"
+        + "{\"name\":\"c1\",\"type\":[\"null\",\"long\"],\"default\":null,\"field-id\":5},"
+        + "{\"name\":\"c2\",\"type\":[\"null\",\"long\"],\"default\":null,\"field-id\":6},"
+        + "{\"name\":\"d1\",\"type\":[\"null\",{\"type\":\"int\",\"logicalType\":\"date\"}],\"default\":null,\"field-id\":7},"
+        + "{\"name\":\"d2\",\"type\":[\"null\",{\"type\":\"int\",\"logicalType\":\"date\"}],\"default\":null,\"field-id\":8}]}");
 
     HoodieSchema simpleReconcileSchema = HoodieSchemaEvolutionUtils.reconcileSchema(incomingSchema, schema, false);
     Assertions.assertEquals(simpleCheckSchema, simpleReconcileSchema);

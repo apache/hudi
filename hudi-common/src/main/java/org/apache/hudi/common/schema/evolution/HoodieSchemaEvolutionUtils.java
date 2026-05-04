@@ -79,7 +79,15 @@ public final class HoodieSchemaEvolutionUtils {
   public static HoodieSchema reconcileSchema(HoodieSchema incomingSchema,
                                              HoodieSchema oldTableSchema,
                                              boolean makeMissingFieldsNullable) {
-    return reconcileHoodieSchemaDirect(incomingSchema, oldTableSchema, makeMissingFieldsNullable);
+    // reconcileHoodieSchemaDirect's diff loop is id-keyed
+    // (getAllColsFullName / findIdByName / findType only see id-stamped
+    // fields). Stamp a working copy when old lacks ids; otherwise pass
+    // through so callers that depend on identity (the no-op short-circuit
+    // returns its old-parameter instance unchanged) still see it.
+    HoodieSchema oldStamped = oldTableSchema.maxColumnId() < 0
+        ? withFreshIds(oldTableSchema)
+        : oldTableSchema;
+    return reconcileHoodieSchemaDirect(incomingSchema, oldStamped, makeMissingFieldsNullable);
   }
 
   /**
@@ -514,30 +522,15 @@ public final class HoodieSchemaEvolutionUtils {
 
     HoodieSchema afterAdds = oldTableSchema;
     for (String name : finalAdds) {
-      String parent = parentOf(name);
       // Strip ids from the colType so the sub-tree's stamped ids don't
       // collide with old's ids when adopted into the rebuilt parent record.
       // assignFresh after the add round mints fresh ids for the now-id-less
       // sub-tree.
       HoodieSchema colType = stripIds(incoming.findType(name));
-
-      int incomingIdx = incomingNames.indexOf(name);
-      // Nearest later sibling already in old, ties broken by smallest old-id.
-      String posCol = null;
-      int posColOldId = Integer.MAX_VALUE;
-      for (String c : incomingNames) {
-        if (!parentOf(c).equals(parent)
-            || incomingNames.indexOf(c) <= incomingIdx) {
-          continue;
-        }
-        int cOldId = oldTableSchema.findIdByName(c);
-        if (cOldId > 0 && cOldId < posColOldId) {
-          posCol = c;
-          posColOldId = cOldId;
-        }
-      }
-      ColumnPositionType posType = posCol != null ? ColumnPositionType.BEFORE : ColumnPositionType.NO_OPERATION;
-      afterAdds = new HoodieSchemaChangeApplier(afterAdds).applyAddChange(name, colType, null, posCol, posType);
+      // Append new columns at the end of their parent record, matching the
+      // legacy reconcile semantics. Position-aware insertion is the caller's
+      // job (via {@link HoodieSchemaChangeApplier#applyAddChange} directly).
+      afterAdds = new HoodieSchemaChangeApplier(afterAdds).applyAddChange(name, colType, null, null, ColumnPositionType.NO_OPERATION);
     }
     // Mint fresh ids on any newly-adopted struct / array / map sub-trees.
     HoodieSchemaIdAssigner.assignFresh(afterAdds);
