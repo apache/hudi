@@ -61,7 +61,7 @@ public class DataHubSyncTool extends HoodieSyncTool {
 
   public DataHubSyncTool(Properties props, Configuration hadoopConf, Option<HoodieTableMetaClient> metaClientOption) {
     super(props, hadoopConf);
-    this.config = new DataHubSyncConfig(props);
+    this.config = new DataHubSyncConfig(this.props);
     this.tableName = config.getString(META_SYNC_TABLE_NAME);
     this.metaClient = metaClientOption.orElseGet(() -> HoodieTableMetaClient.builder()
         .setConf(HadoopFSUtils.getStorageConfWithCopy(config.getHadoopConf()))
