@@ -286,6 +286,23 @@ object HoodieSchemaUtils {
   }
 
   /**
+   * Java-friendly overload of [[deduceWriterSchemaWithEvolution]] mirroring the
+   * pattern of the [[deduceWriterSchema]] overload above — Java callers receive
+   * Hudi's [[org.apache.hudi.common.util.Option]] from helpers like
+   * [[UtilHelpers.getLatestTableSchema]] and [[TypedProperties]] from configs,
+   * not Scala's [[Option]] / [[Map]].
+   */
+  def deduceWriterSchemaWithEvolution(sourceSchema: HoodieSchema,
+                                      latestTableSchemaOpt: org.apache.hudi.common.util.Option[HoodieSchema],
+                                      tableEvolutionSchemaOpt: org.apache.hudi.common.util.Option[HoodieSchema],
+                                      props: TypedProperties): HoodieSchema = {
+    deduceWriterSchemaWithEvolution(sourceSchema,
+      HoodieConversionUtils.toScalaOption(latestTableSchemaOpt),
+      HoodieConversionUtils.toScalaOption(tableEvolutionSchemaOpt),
+      HoodieConversionUtils.fromProperties(props))
+  }
+
+  /**
    * Canonicalizes [[sourceSchema]] by reconciling it w/ [[latestTableSchema]] in following
    *
    * <ol>
