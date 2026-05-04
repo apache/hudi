@@ -66,7 +66,7 @@ case class BaseFileOnlyRelation(override val sqlContext: SQLContext,
   // NOTE: This override has to mirror semantic of whenever this Relation is converted into [[HadoopFsRelation]],
   //       which is currently done for all cases, except when Schema Evolution is enabled
   override protected val shouldExtractPartitionValuesFromPartitionPath: Boolean =
-  internalSchemaOpt.isEmpty
+  evolutionSchemaOpt.isEmpty
 
   override lazy val mandatoryFields: Seq[String] = Seq.empty
 
