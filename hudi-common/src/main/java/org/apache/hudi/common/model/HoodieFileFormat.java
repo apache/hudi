@@ -91,12 +91,11 @@ public enum HoodieFileFormat {
   }
 
   public static HoodieFileFormat fromFileExtension(String extension) {
-    for (HoodieFileFormat format : HoodieFileFormat.values()) {
-      if (format.getFileExtension().equals(extension)) {
-        return format;
-      }
+    HoodieFileFormat format = fromFileExtensionOrNull(extension);
+    if (format == null) {
+      throw new IllegalArgumentException("Unknown file extension :" + extension);
     }
-    throw new IllegalArgumentException("Unknown file extension :" + extension);
+    return format;
   }
 
   /**

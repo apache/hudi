@@ -3094,6 +3094,9 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public static class Builder {
 
+    // Class name referenced by string so hudi-client-common does not depend on hudi-spark-client.
+    private static final String DEFAULT_SPARK_RECORD_MERGER_CLASS = "org.apache.hudi.DefaultSparkRecordMerger";
+
     protected final HoodieWriteConfig writeConfig = new HoodieWriteConfig();
     protected EngineType engineType = EngineType.SPARK;
     private boolean isIndexConfigSet = false;
@@ -3760,9 +3763,6 @@ public class HoodieWriteConfig extends HoodieConfig {
 
       autoAdjustConfigsForConcurrencyMode(isLockProviderPropertySet);
     }
-
-    // Class name referenced by string so hudi-client-common does not depend on hudi-spark-client.
-    private static final String DEFAULT_SPARK_RECORD_MERGER_CLASS = "org.apache.hudi.DefaultSparkRecordMerger";
 
     /**
      * When the table's base file format requires SPARK record type (e.g. Lance) but the user
