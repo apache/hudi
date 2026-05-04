@@ -44,12 +44,11 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * field ids across {@code toJson} / {@code fromJson} for primitives, arrays,
  * maps, and nested records.
  *
- * <p>Earlier revisions of this file also asserted byte-for-byte equality
- * against the legacy {@code SerDeHelper} output (so tables written by either
- * code path remained mutually readable). The legacy SerDe is being deleted;
- * the byte-format-compat regression net needs to be re-established as
- * golden-file tests against captured legacy output before the legacy package
- * actually goes. See `project_phase5_serde_rewrite.md` in auto-memory.
+ * <p>The on-disk format is a backward-compatibility boundary (commit metadata's
+ * {@code latest_schema} blob and {@code .hoodie/.schema/} history files), so
+ * the byte-format-compat net needs re-establishing as golden-file tests
+ * against captured pre-migration output. See
+ * {@code project_phase5_serde_rewrite.md} in auto-memory for status.
  */
 public class TestHoodieSchemaSerDe {
 

@@ -44,8 +44,7 @@ import java.util.Map;
  *
  * <p>Implementation walks {@link HoodieSchema} directly via
  * {@link HoodieSchema#findField(int)} / {@link HoodieSchema#findField(String)} /
- * {@link HoodieSchema#findFullName(int)} / {@link HoodieSchema#findIdByName(String)} —
- * no InternalSchema bridge round-trip required.
+ * {@link HoodieSchema#findFullName(int)} / {@link HoodieSchema#findIdByName(String)}.
  */
 public class HoodieSchemaMerger {
 

@@ -223,9 +223,9 @@ public final class HoodieSchemaEvolutionUtils {
     if (schema.getType() == HoodieSchemaType.NULL) {
       return schema;
     }
-    // Mirror the legacy InternalSchemaConverter.convert()'s checkNullType pass:
-    // a record field / array element / map value with bare NULL type (i.e. not a
-    // [null, T] union) is rejected.
+    // Reject schemas with a record field / array element / map value whose
+    // effective type is bare NULL (i.e. not a [null, T] union) — Avro permits
+    // it but downstream readers and the merger don't handle it.
     checkNoBareNullTypedFields(schema, "");
     HoodieSchema rewritten = rewriteNullFirst(schema);
     // Forward schema-level metadata that the walker doesn't track (it operates
@@ -244,8 +244,8 @@ public final class HoodieSchemaEvolutionUtils {
    * Throws {@link HoodieNullSchemaTypeException} if {@code schema} contains a
    * record field, array element, or map value whose effective type is
    * {@link HoodieSchemaType#NULL} (i.e. not wrapped in a {@code [null, T]}
-   * union). Mirrors the legacy {@code InternalSchemaConverter.checkNullType}
-   * pass which fired during the {@code HoodieSchema → InternalSchema} convert.
+   * union). Avro permits these schemas but downstream readers and the
+   * evolution merger don't handle them.
    */
   private static void checkNoBareNullTypedFields(HoodieSchema schema, String pathPrefix) {
     HoodieSchema effective = schema.isNullable() ? schema.getNonNullType() : schema;
@@ -331,10 +331,9 @@ public final class HoodieSchemaEvolutionUtils {
         List<HoodieSchemaField> newFields = new ArrayList<>(schema.getFields().size());
         for (HoodieSchemaField field : schema.getFields()) {
           HoodieSchema newSubSchema = rewriteNullFirst(field.schema());
-          // Mirror the legacy InternalSchema → HoodieSchema convert(): every
-          // nullable field gains a {@code default: null}, even if the source
-          // field had no explicit default. Required fields keep their existing
-          // default (or none).
+          // Every nullable field gains a {@code default: null}, even if the
+          // source field had no explicit default; required fields keep their
+          // existing default (or none).
           Object existingDefault = field.defaultVal().orElse(null);
           Object effectiveDefault = existingDefault;
           if (existingDefault == null && newSubSchema.isNullable()) {
@@ -463,9 +462,8 @@ public final class HoodieSchemaEvolutionUtils {
 
   // -------------------------------------------------------------------------
   // HoodieSchema-direct reconciliation. Walks {@link HoodieSchema} via the
-  // applier surface for adds, type promotions, and nullability flips. The
-  // legacy {@code TableChanges} + {@code SchemaChangeUtils} machinery is not
-  // on this path. Production callers route here via the public
+  // applier surface for adds, type promotions, and nullability flips.
+  // Production callers route here via the public
   // {@link #reconcileSchema(HoodieSchema, HoodieSchema, boolean)} entry.
   // -------------------------------------------------------------------------
 
@@ -689,9 +687,8 @@ public final class HoodieSchemaEvolutionUtils {
   // -------------------------------------------------------------------------
 
   /**
-   * Mirrors legacy {@code SchemaChangeUtils.shouldPromoteType}: true when src
-   * is a primitive that can be widened into dst. Nested types and equal types
-   * return false.
+   * True when src is a primitive that can be widened into dst. Nested types
+   * and equal types return false.
    */
   private static boolean shouldPromoteHoodieType(HoodieSchema src, HoodieSchema dst) {
     HoodieSchema srcEffective = src.isNullable() ? src.getNonNullType() : src;

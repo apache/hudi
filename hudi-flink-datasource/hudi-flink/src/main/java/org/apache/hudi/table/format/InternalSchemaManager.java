@@ -133,7 +133,7 @@ public class InternalSchemaManager implements Serializable {
    * <li>3. For each selectedField with type changes, build a castMap containing the cast/conversion details;
    * Map of -> (selectedPos, Cast([from] fileType, [to] queryType))</li>
    *
-   * @param mergeSchema InternalSchema representation of mergeSchema (prioritise use of fileSchemaType) that is used for reading base parquet files
+   * @param mergeSchema HoodieSchema representation of mergeSchema (prioritise use of fileSchemaType) that is used for reading base parquet files
    * @param queryFieldNames array containing the columns of a Hudi Flink table
    * @param queryFieldTypes array containing the field types of the columns of a Hudi Flink table
    * @param selectedFields array containing the index of the columns of interest required (indexes are based on queryFieldNames and queryFieldTypes)
@@ -191,7 +191,7 @@ public class InternalSchemaManager implements Serializable {
    * <li>1. Get the rename mapping of -> (colNameFromNewSchema, colNameLastPartFromOldSchema)</li>
    * <li>2. For columns that have been renamed, replace them with the old column name</li>
    *
-   * @param mergeSchema InternalSchema representation of mergeSchema (prioritise use of fileSchemaType) that is used for reading base parquet files
+   * @param mergeSchema HoodieSchema representation of mergeSchema (prioritise use of fileSchemaType) that is used for reading base parquet files
    * @param queryFieldNames array containing the columns of a Hudi Flink table
    * @return String array containing column names corresponding to the column names found in the mergeSchema
    */

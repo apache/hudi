@@ -28,7 +28,7 @@ import org.apache.hudi.common.model.{FileSlice, HoodieFileFormat, HoodieRecord}
 import org.apache.hudi.common.model.HoodieFileFormat.HFILE
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
 import org.apache.hudi.common.schema.{HoodieSchema, HoodieSchemaUtils => HoodieCommonSchemaUtils}
-import org.apache.hudi.common.schema.evolution.{HoodieSchemaInternalSchemaBridge, HoodieSchemaSerDe}
+import org.apache.hudi.common.schema.evolution.{HoodieSchemaProjections, HoodieSchemaSerDe}
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.table.timeline.{HoodieTimeline, TimelineLayout}
 import org.apache.hudi.common.table.timeline.TimelineUtils.validateTimestampAsOf
@@ -174,7 +174,7 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
 
     val (name, namespace) = HoodieSchemaConversionUtils.getRecordNameAndNamespace(tableName)
     val schema: HoodieSchema = evolutionSchemaOpt.map { es =>
-      HoodieSchemaInternalSchemaBridge.withRecordName(es, namespace + "." + name)
+      HoodieSchemaProjections.withRecordName(es, namespace + "." + name)
     } orElse {
       specifiedQueryTimestamp.map(schemaResolver.getTableSchema)
     } orElse {
@@ -806,7 +806,7 @@ object HoodieBaseRelation extends SparkAdapterSupport {
     tableSchema match {
       case Right(evolutionSchema) =>
         checkState(!evolutionSchema.isEmptySchema)
-        val prunedEvolutionSchema = HoodieSchemaInternalSchemaBridge.pruneByLeafNames(
+        val prunedEvolutionSchema = HoodieSchemaProjections.pruneByLeafNames(
           evolutionSchema, requiredColumns.toList.asJava)
         val requiredStructSchema = HoodieSchemaConversionUtils.convertHoodieSchemaToStructType(prunedEvolutionSchema)
 

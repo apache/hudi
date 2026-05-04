@@ -79,7 +79,7 @@ public final class HoodieSchemaUtils {
    * Returns the dot-joined full names of every leaf in {@code schema} — primitives
    * encountered while walking record fields, array elements, and map values. Order
    * matches a depth-first record traversal. Used by the prune-by-name path on
-   * {@link org.apache.hudi.common.schema.evolution.HoodieSchemaInternalSchemaBridge}.
+   * {@link org.apache.hudi.common.schema.evolution.HoodieSchemaProjections}.
    */
   public static List<String> collectLeafNames(HoodieSchema schema) {
     List<String> result = new ArrayList<>();
@@ -236,7 +236,16 @@ public final class HoodieSchemaUtils {
   }
 
   /**
-   * Merges two schemas, combining fields from both with conflict resolution.
+   * Structural name-based union of two schemas. For each source field, the
+   * target's same-name field (if any) recursively merges in; target-only fields
+   * are appended after the source fields in target order.
+   *
+   * <p><b>Not</b> the same as {@link org.apache.hudi.common.schema.evolution.HoodieSchemaMerger}.
+   * This is a name-driven structural combine used by bootstrap reads to glue a
+   * skeleton schema onto a data schema. {@link org.apache.hudi.common.schema.evolution.HoodieSchemaMerger}
+   * does an id-driven evolution merge (file schema vs query schema, with
+   * rename / type-promotion tracking) and is what the schema-on-read read path
+   * uses. Don't reach for this method when you want evolution semantics.</p>
    *
    * @param sourceSchema source schema to merge from
    * @param targetSchema target schema to merge into

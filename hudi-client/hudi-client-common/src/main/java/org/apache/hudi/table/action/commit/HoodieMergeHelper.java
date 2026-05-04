@@ -176,7 +176,7 @@ public class HoodieMergeHelper<T> extends BaseMergeHelper {
         try {
           fileSchema = tableSchemaResolver.getTableSchema(true);
         } catch (Exception e) {
-          throw new HoodieException(String.format("Failed to get InternalSchema for given versionId: %s", commitInstantTime), e);
+          throw new HoodieException(String.format("Failed to get evolution schema for given versionId: %s", commitInstantTime), e);
         }
       }
       final HoodieSchema writeInternalSchema = fileSchema;

@@ -88,7 +88,7 @@ public class RunCompactionActionExecutor<T> extends
       // try to load the evolution schema to support schema-on-read
       HoodieWriteConfig configCopy = config;
       Pair<Option<String>, Option<String>> schemaPair = HoodieSchemaHistoryCache
-          .getInternalSchemaAndAvroSchemaForClusteringAndCompaction(table.getMetaClient(), instantTime);
+          .getEvolutionAndAvroSchemaForClusteringAndCompaction(table.getMetaClient(), instantTime);
       if (schemaPair.getLeft().isPresent() && schemaPair.getRight().isPresent()) {
         // should not influence the original config, just copy it
         configCopy = HoodieWriteConfig.newBuilder().withProperties(config.getProps()).build();

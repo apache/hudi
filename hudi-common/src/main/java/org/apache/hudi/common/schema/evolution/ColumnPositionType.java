@@ -23,12 +23,6 @@ import java.util.Locale;
 /**
  * Position-change selector for column-level schema mutations.
  *
- * <p>HoodieSchema-side replacement for
- * {@code TableChange.ColumnPositionChange.ColumnPositionType} — same semantics,
- * decoupled from the {@code internal.schema} package so callers can consume the
- * evolution API without depending on the legacy type system. Callers that still
- * need the legacy type can convert via {@link #toLegacy()}.</p>
- *
  * <ul>
  *   <li>{@link #FIRST} — move the column to the first position within its enclosing struct.
  *   <li>{@link #BEFORE} — place the column immediately before a reference column in the same struct.

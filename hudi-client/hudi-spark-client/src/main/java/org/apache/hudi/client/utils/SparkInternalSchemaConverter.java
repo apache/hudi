@@ -20,7 +20,7 @@ package org.apache.hudi.client.utils;
 
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.evolution.HoodieSchemaEvolutionUtils;
-import org.apache.hudi.common.schema.evolution.HoodieSchemaInternalSchemaBridge;
+import org.apache.hudi.common.schema.evolution.HoodieSchemaProjections;
 import org.apache.hudi.common.schema.types.Type;
 import org.apache.hudi.common.schema.types.Types;
 import org.apache.hudi.common.util.collection.Pair;
@@ -154,7 +154,7 @@ public class SparkInternalSchemaConverter {
    * and assigned fallback ids by the underlying pruner.
    */
   public static HoodieSchema convertAndPruneStructTypeToHoodieSchema(StructType sparkSchema, HoodieSchema originSchema) {
-    return HoodieSchemaInternalSchemaBridge.pruneByLeafNames(originSchema, collectColNamesFromSparkStruct(sparkSchema));
+    return HoodieSchemaProjections.pruneByLeafNames(originSchema, collectColNamesFromSparkStruct(sparkSchema));
   }
 
   /**

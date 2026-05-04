@@ -30,7 +30,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 /**
  * Validates that integer "field-id" custom properties survive a full Avro
  * {@link Schema#toString()} -> {@link Schema.Parser#parse(String)} round trip on
- * every container surface that the InternalSchema -> HoodieSchema migration relies on:
+ * every container surface HoodieSchema relies on for schema-on-read evolution:
  *
  * <ul>
  *   <li>Each {@link Schema.Field} (the carrier for {@code field-id} on flat and nested fields)</li>
@@ -38,15 +38,15 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
  *   <li>Map schema (the carrier for {@code key-id} and {@code value-id})</li>
  * </ul>
  *
- * <p>The whole subsume-InternalSchema-into-HoodieSchema design depends on Avro preserving
- * these properties through serialization. If this test ever fails, the design needs a
- * different ID-carrier (e.g. a sidecar JSON), so this is intentionally a pinned test of
+ * <p>HoodieSchema's id-based evolution depends on Avro preserving these properties
+ * through serialization. If this test ever fails, the design needs a different
+ * ID-carrier (e.g. a sidecar JSON), so this is intentionally a pinned test of
  * the underlying Avro guarantee rather than of Hudi code.</p>
  *
  * <p>Schema-level metadata (schemaId / maxColumnId) intentionally does NOT travel through
  * Avro JSON — it lives on direct fields of {@link org.apache.hudi.common.schema.HoodieSchema}
- * and is serialized via SerDeHelper instead, sidestepping Avro's set-once property
- * restriction.</p>
+ * and is serialized via {@link org.apache.hudi.common.schema.evolution.HoodieSchemaSerDe}
+ * instead, sidestepping Avro's set-once property restriction.</p>
  */
 public class TestHoodieSchemaFieldIdRoundTrip {
 

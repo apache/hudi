@@ -32,8 +32,7 @@ import static org.apache.hudi.common.schema.HoodieSchemaTestUtils.createRecord;
 
 /**
  * Shared HoodieSchema fixtures used by Spark / common test suites that need
- * a few canonical shapes (simple records, arrays, maps, deep nesting). The
- * fixtures are HoodieSchema-only — no legacy InternalSchema dependency.
+ * a few canonical shapes (simple records, arrays, maps, deep nesting).
  */
 public final class HoodieSchemaConversionFixtures {
 

@@ -101,10 +101,8 @@ public class ParquetRowIndexBasedSchemaHandler<T> extends FileGroupReaderSchemaH
   /**
    * Builds the synthetic positional-merge field. When a parent schema is supplied
    * we stamp a field-id above its {@code maxColumnId} so the new field can't
-   * collide with existing column ids when the schema is round-tripped through
-   * the InternalSchema bridge — important because the bridge assigns
-   * converter-fresh sequential ids to top-level fields without an explicit
-   * field-id, which would otherwise alias an inner map's key/value id.
+   * collide with existing column ids — otherwise a fresh id-assignment pass
+   * could alias the synthetic field onto an inner map's key/value id.
    */
   private static HoodieSchemaField getPositionalMergeField(HoodieSchema parent) {
     HoodieSchemaField field = HoodieSchemaField.of(ROW_INDEX_TEMPORARY_COLUMN_NAME,

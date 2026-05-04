@@ -36,7 +36,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.hadoop.SchemaEvolutionContext;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.hadoop.realtime.HoodieParquetRealtimeInputFormat;
-import org.apache.hudi.common.schema.evolution.HoodieSchemaInternalSchemaBridge;
+import org.apache.hudi.common.schema.evolution.HoodieSchemaProjections;
 import org.apache.hudi.common.schema.evolution.HoodieSchemaSerDe;
 import org.apache.hudi.hadoop.testutils.InputFormatTestUtil;
 import org.apache.hudi.storage.HoodieStorage;
@@ -135,7 +135,7 @@ public class TestHoodieCombineHiveInputFormat extends HoodieCommonTestHarness {
         schema.toString(), HoodieTimeline.COMMIT_ACTION);
     // mock the latest schema to the commit metadata; bridge round-trip mints fresh
     // ids and matches the production write-path naming.
-    HoodieSchema evolutionSchema = HoodieSchemaInternalSchemaBridge.withRecordName(schema, schema.getFullName());
+    HoodieSchema evolutionSchema = HoodieSchemaProjections.withRecordName(schema, schema.getFullName());
     commitMetadataOne.addMetadata(HoodieSchemaSerDe.LATEST_SCHEMA, HoodieSchemaSerDe.toJson(evolutionSchema));
     FileCreateUtilsLegacy.createCommit(COMMIT_METADATA_SER_DE, path1.toString(), commitTime, Option.of(commitMetadataOne));
     // Create 3 parquet files with 10 records each for partition 2

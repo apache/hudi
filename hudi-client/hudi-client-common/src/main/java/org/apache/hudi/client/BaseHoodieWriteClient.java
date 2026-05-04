@@ -54,7 +54,7 @@ import org.apache.hudi.common.schema.evolution.ColumnPositionType;
 import org.apache.hudi.common.schema.evolution.HoodieSchemaChangeApplier;
 import org.apache.hudi.common.schema.evolution.HoodieSchemaEvolutionUtils;
 import org.apache.hudi.common.schema.evolution.HoodieSchemaHistoryStorageManager;
-import org.apache.hudi.common.schema.evolution.HoodieSchemaInternalSchemaBridge;
+import org.apache.hudi.common.schema.evolution.HoodieSchemaProjections;
 import org.apache.hudi.common.schema.evolution.HoodieSchemaSerDe;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -389,7 +389,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
       // SCHEMA_KEY stores the writer's Avro schema, with the record name set to the
       // writer schema's full name.
       metadata.addMetadata(SCHEMA_KEY,
-          HoodieSchemaInternalSchemaBridge.withRecordName(evolvedSchema, schema.getFullName()).toString());
+          HoodieSchemaProjections.withRecordName(evolvedSchema, schema.getFullName()).toString());
     }
   }
 

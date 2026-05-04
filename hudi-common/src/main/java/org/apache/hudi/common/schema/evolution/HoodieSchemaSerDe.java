@@ -51,10 +51,9 @@ import java.util.regex.Pattern;
  *
  * <p>The on-disk format is a hard backward-compatibility boundary: the
  * {@code latest_schema} blob in commit metadata and the {@code .hoodie/.schema/}
- * history files have been written by the legacy {@code SerDeHelper} since this
- * feature shipped, and old tables must remain readable. This class emits the
- * same JSON layout byte-for-byte and parses every shape the legacy could
- * parse, including:
+ * history files have a fixed JSON layout that predates this class, and old
+ * tables must remain readable. This class emits that JSON layout byte-for-byte
+ * and parses every shape the original could parse, including:
  *
  * <ul>
  *   <li>Top-level record with {@code max_column_id} / {@code version_id} /
@@ -244,11 +243,9 @@ public final class HoodieSchemaSerDe {
   /**
    * Resolves the schema-history entry that applies to a given version id —
    * exact match if present, otherwise the largest entry strictly less than
-   * {@code versionId}, otherwise {@code null}. The "older entry wins" rule
-   * mirrors the legacy {@code InternalSchemaUtils.searchSchema} contract;
-   * the only behavioral departure is that legacy returned an empty sentinel
-   * on miss while we return {@code null} so callers can choose their own
-   * empty-schema construction.
+   * {@code versionId}, otherwise {@code null}. Returns {@code null} (not an
+   * empty-schema sentinel) on miss so callers can choose their own empty-schema
+   * construction.
    */
   public static HoodieSchema searchSchema(long versionId, TreeMap<Long, HoodieSchema> history) {
     if (history.containsKey(versionId)) {

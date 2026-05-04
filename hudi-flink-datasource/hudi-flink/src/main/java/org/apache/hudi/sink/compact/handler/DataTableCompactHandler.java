@@ -69,7 +69,7 @@ public class DataTableCompactHandler implements CompactHandler {
   protected final int taskID;
   protected transient FlinkCompactionMetrics compactionMetrics;
   /**
-   * InternalSchema manager used for handling schema evolution.
+   * Schema-on-read evolution manager used for handling schema evolution.
    */
   private transient InternalSchemaManager internalSchemaManager;
 

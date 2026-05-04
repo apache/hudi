@@ -301,12 +301,8 @@ public class Types {
 
   /**
    * Vector type that preserves dimension, element type, and storage backing
-   * through InternalSchema round-trips.
-   *
-   * <p>This class is part of the InternalSchema type system (separate from HoodieSchema)
-   * and follows the same pattern as {@link FixedType}, {@link DecimalTypeFixed}, etc.
-   * It cannot be replaced with {@code HoodieSchema.Vector} because they belong to
-   * different type hierarchies.
+   * for the {@link Types}-based type hierarchy. Follows the same pattern as
+   * {@link FixedType}, {@link DecimalTypeFixed}, etc.
    */
   public static class VectorType extends PrimitiveType {
     private final int dimension;
@@ -724,9 +720,9 @@ public class Types {
    * Record nested type.
    */
   public static class RecordType extends NestedType {
-    // NOTE: This field is necessary to provide for lossless conversion b/w Avro and
-    //       InternalSchema and back (Avro unfortunately relies not only on structural equivalence of
-    //       schemas but also corresponding Record type's "name" when evaluating their compatibility);
+    // NOTE: This field is necessary for lossless round-tripping with Avro
+    //       (Avro relies not only on structural equivalence of schemas but also
+    //       on the Record type's "name" when evaluating compatibility);
     //       This field is nullable
     private final String name;
 

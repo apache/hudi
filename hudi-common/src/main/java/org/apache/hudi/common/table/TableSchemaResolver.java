@@ -308,8 +308,6 @@ public class TableSchemaResolver {
    * carries field ids and a version id, distinguishing it from
    * {@link #getTableSchemaFromLatestCommitMetadata(boolean)} which returns the
    * structural Avro schema.
-   *
-   * <p>HoodieSchema-shaped replacement for {@link #getTableInternalSchemaFromCommitMetadata()}.</p>
    */
   public Option<HoodieSchema> getTableEvolutionSchemaFromCommitMetadata() {
     HoodieTimeline completedInstants = metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants();
@@ -322,8 +320,6 @@ public class TableSchemaResolver {
   /**
    * Gets the schema-on-read evolution {@link HoodieSchema} for a hoodie table at
    * (or before) the given instant timestamp.
-   *
-   * <p>HoodieSchema-shaped replacement for {@link #getTableInternalSchemaFromCommitMetadata(String)}.</p>
    */
   public Option<HoodieSchema> getTableEvolutionSchemaFromCommitMetadata(String timestamp) {
     HoodieTimeline timeline = metaClient.getActiveTimeline().getCommitsTimeline()

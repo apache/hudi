@@ -32,11 +32,7 @@ import static org.apache.hudi.common.schema.HoodieSchema.VALUE_ID_PROP;
  *
  * <p>The traversal order is fixed: record fields in declared order; array element id
  * assigned before recursing into the element type; map key id then value id assigned
- * before recursing into the value type. This ordering matches the legacy
- * InternalSchemaBuilder so id assignments stay stable across the
- * InternalSchema → HoodieSchema migration and round-tripping a previously-IDed
- * InternalSchema through HoodieSchema produces the same
- * id mapping.</p>
+ * before recursing into the value type.</p>
  *
  * <p>Existing ids are preserved: if a node already has an id property, this assigner uses
  * that id and bumps {@code nextId} past it, so reapplying the assigner to a partially
@@ -77,8 +73,8 @@ public final class HoodieSchemaIdAssigner {
     HoodieSchema effective = schema.isNullable() ? schema.getNonNullType() : schema;
     switch (effective.getType()) {
       case RECORD:
-        // Mirror InternalSchemaConverter ordering: assign ids to all fields at this level
-        // before recursing into any of them.
+        // Assign ids to all fields at this level before recursing into any of them,
+        // so siblings get contiguous ids and a record's children land after their parent.
         for (HoodieSchemaField field : effective.getFields()) {
           assignFieldId(field, nextId);
         }

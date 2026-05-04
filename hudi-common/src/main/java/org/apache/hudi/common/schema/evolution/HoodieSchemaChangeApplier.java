@@ -33,8 +33,7 @@ import java.util.Map;
  *
  * <p>Each method returns a new {@link HoodieSchema}; the input is not mutated.
  * Field ids are preserved end-to-end so subsequent callers can resolve renamed
- * columns by id. All seven operations walk HoodieSchema directly (no
- * InternalSchema bridge).
+ * columns by id.
  */
 public class HoodieSchemaChangeApplier {
 
@@ -319,9 +318,8 @@ public class HoodieSchemaChangeApplier {
    * / {@code doc} but inheriting {@code field-id} and any other custom Avro
    * properties from {@code source}. The default value is inherited; when the
    * rebuilt schema is nullable and the source has no explicit default, stamp
-   * {@code default: null} (mirrors the legacy InternalSchema → HoodieSchema
-   * convert() back leg, which auto-stamped null defaults on every nullable
-   * field).
+   * {@code default: null} so the field validates against Avro's nullable-field
+   * default rule.
    */
   private static HoodieSchemaField rebuildField(HoodieSchemaField source, String name, HoodieSchema schema, String doc) {
     Object existingDefault = source.defaultVal().orElse(null);

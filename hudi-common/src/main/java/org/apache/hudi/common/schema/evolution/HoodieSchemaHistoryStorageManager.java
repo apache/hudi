@@ -52,13 +52,8 @@ import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
  * trail for tables with {@code hoodie.schema.on.read.enable=true}. The on-disk
  * paths, file-name format ({@code <instantTime>.schemacommit}), and JSON layout
  * are unchanged from prior Hudi versions — old tables remain readable, and tables
- * written today remain readable by old code. The byte-format compatibility with
- * the legacy SerDe is enforced by {@link HoodieSchemaSerDe}.
- *
- * <p>This class subsumed the role of the prior
- * {@code FileBasedInternalSchemaStorageManager}: same I/O, same naming, same
- * format, but every interaction is HoodieSchema-typed instead of going through
- * the legacy {@code InternalSchema} bridge.
+ * written today remain readable by old code. The byte-format compatibility is
+ * enforced by {@link HoodieSchemaSerDe}.
  */
 @Slf4j
 public class HoodieSchemaHistoryStorageManager {
@@ -197,8 +192,7 @@ public class HoodieSchemaHistoryStorageManager {
    * <p>Implementation note: parses the latest history blob via
    * {@link HoodieSchemaSerDe} and walks it with
    * {@link HoodieSchemaSerDe#searchSchema(long, TreeMap)}, so the lookup
-   * follows the same "exact match, else greatest entry &lt; versionId"
-   * semantics the legacy {@code InternalSchemaUtils.searchSchema} provided.
+   * follows "exact match, else greatest entry &lt; versionId" semantics.
    */
   public Option<HoodieSchema> getSchemaByKey(String versionId) {
     String historySchemaStr = getHistorySchemaStr();

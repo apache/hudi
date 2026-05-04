@@ -24,7 +24,7 @@ import org.apache.hudi.cdc.HoodieCDCFileIndex
 import org.apache.hudi.common.config.HoodieReaderConfig
 import org.apache.hudi.common.model.HoodieRecord
 import org.apache.hudi.common.schema.HoodieSchema
-import org.apache.hudi.common.schema.evolution.HoodieSchemaInternalSchemaBridge
+import org.apache.hudi.common.schema.evolution.HoodieSchemaProjections
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.table.log.InstantRange.RangeType
 import org.apache.hudi.common.table.timeline.HoodieTimeline
@@ -142,7 +142,7 @@ abstract class HoodieBaseHadoopFsRelationFactory(val sqlContext: SQLContext,
 
     val (name, namespace) = HoodieSchemaConversionUtils.getRecordNameAndNamespace(tableName)
     val schema: HoodieSchema = evolutionSchemaOpt.map { es =>
-      HoodieSchemaInternalSchemaBridge.withRecordName(es, namespace + "." + name)
+      HoodieSchemaProjections.withRecordName(es, namespace + "." + name)
     } orElse {
       specifiedQueryTimestamp.map(schemaResolver.getTableSchema)
     } orElse {

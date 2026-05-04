@@ -34,10 +34,9 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Phase 2 façade tests for {@link HoodieSchemaEvolutionUtils} (write-path reconcile)
- * and {@link HoodieSchemaMerger} (read-path file/query merge). The façades delegate
- * to the legacy InternalSchema implementation; these tests pin the load-bearing
- * semantics so Phase 5 can swap the implementation in without behavior drift:
+ * End-to-end tests for {@link HoodieSchemaEvolutionUtils} (write-path reconcile)
+ * and {@link HoodieSchemaMerger} (read-path file/query merge), pinning the
+ * load-bearing semantics:
  *
  * <ul>
  *   <li>Adding a column on the write path mints a fresh id and preserves existing ones.</li>

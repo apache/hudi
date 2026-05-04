@@ -79,9 +79,7 @@ public final class HoodieSchemaHistoryCache {
     }
   }
 
-  // Cache shape mirrors the legacy InternalSchemaCache it replaces — same
-  // 1000-entry cap, same weakValues semantics — so behavior is unchanged
-  // beyond the schema type.
+  // 1000-entry cap with weak values so the JVM can evict entries under memory pressure.
   private static final Cache<String, TreeMap<Long, HoodieSchema>> HISTORICAL_SCHEMA_CACHE =
       Caffeine.newBuilder().maximumSize(1000).weakValues().build();
 
@@ -133,7 +131,7 @@ public final class HoodieSchemaHistoryCache {
    * subsequent operation reads with the right schema even when the timeline
    * has advanced after the schedule decision.
    */
-  public static Pair<Option<String>, Option<String>> getInternalSchemaAndAvroSchemaForClusteringAndCompaction(
+  public static Pair<Option<String>, Option<String>> getEvolutionAndAvroSchemaForClusteringAndCompaction(
       HoodieTableMetaClient metaClient, String compactionAndClusteringInstant) {
     HoodieTimeline timelineBefore = metaClient.getCommitsAndCompactionTimeline()
         .findInstantsBefore(compactionAndClusteringInstant)

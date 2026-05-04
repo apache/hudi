@@ -24,7 +24,7 @@ import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.common.schema.evolution.HoodieSchemaEvolutionUtils;
 import org.apache.hudi.common.schema.evolution.HoodieSchemaHistoryCache;
-import org.apache.hudi.common.schema.evolution.HoodieSchemaInternalSchemaBridge;
+import org.apache.hudi.common.schema.evolution.HoodieSchemaProjections;
 import org.apache.hudi.common.schema.evolution.HoodieSchemaMerger;
 import org.apache.hudi.common.schema.evolution.HoodieSchemaSerDe;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -209,9 +209,9 @@ public class SchemaEvolutionContext {
     if (evolutionSchemaOption.isPresent()) {
       HoodieSchema tableSchema = getSchemaFromCache();
       List<String> requiredColumns = getRequireColumn(job);
-      HoodieSchema writerSchema = HoodieSchemaInternalSchemaBridge.withRecordName(
+      HoodieSchema writerSchema = HoodieSchemaProjections.withRecordName(
           evolutionSchemaOption.get(), tableSchema.getName());
-      HoodieSchema prunedEvolutionSchema = HoodieSchemaInternalSchemaBridge.pruneByLeafNames(
+      HoodieSchema prunedEvolutionSchema = HoodieSchemaProjections.pruneByLeafNames(
           evolutionSchemaOption.get(), requiredColumns);
       // Add partitioning fields to writer schema for resulting row to contain null values for these fields
       String partitionFields = job.get(hive_metastoreConstants.META_TABLE_PARTITION_COLUMNS, "");
@@ -245,7 +245,7 @@ public class SchemaEvolutionContext {
       boolean disableSchemaEvolution =
           requiredColumns.isEmpty() || (requiredColumns.size() == 1 && requiredColumns.get(0).isEmpty());
       if (!disableSchemaEvolution) {
-        HoodieSchema querySchema = HoodieSchemaInternalSchemaBridge.pruneByLeafNames(
+        HoodieSchema querySchema = HoodieSchemaProjections.pruneByLeafNames(
             evolutionSchemaOption.get(), requiredColumns);
         long commitTime = Long.parseLong(FSUtils.getCommitTime(finalPath.getName()));
         HoodieSchema fileSchema = HoodieSchemaHistoryCache.searchSchemaAndCache(commitTime, metaClient);

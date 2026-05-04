@@ -88,9 +88,8 @@ public class TestSchemaEvolutionClient extends HoodieJavaClientTestHarness {
 
   private HoodieSchema getFieldType(String fieldName) {
     // Strip the surrounding [null, T] union wrapping that Avro uses for optional
-    // fields — the test compares against bare primitive types, matching the
-    // legacy InternalSchema.findType semantics where optionality lived on the
-    // Field, not the Type.
+    // fields — the test compares against bare primitive types because optionality
+    // is a property of the field, not the type.
     return new TableSchemaResolver(metaClient)
         .getTableEvolutionSchemaFromCommitMetadata()
         .get()

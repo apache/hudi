@@ -32,14 +32,13 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Validates the HoodieSchema-shaped evolution façade against the seven user-facing
- * operations supported by the legacy {@code InternalSchemaChangeApplier}.
+ * Validates {@link HoodieSchemaChangeApplier} against the seven user-facing
+ * column-evolution operations.
  *
  * <p>The most important invariant is <b>id stability</b>: a field that had id N in
  * the input schema must still have id N in the output schema, regardless of which
  * operation was applied. This is what makes column-rename-without-data-rewrite
- * possible. The façade delegates to the legacy applier internally; these tests
- * pin the round-trip behavior so Phase 5 can swap the implementation in confidently.</p>
+ * possible.</p>
  */
 public class TestHoodieSchemaChangeApplier {
 
@@ -156,7 +155,7 @@ public class TestHoodieSchemaChangeApplier {
   public void resultSchemaCanCarryANewVersionId() {
     // The applier produces a structurally-correct new schema. Stamping a new schema
     // version id on it (typically derived from the commit instant) is the caller's
-    // responsibility — mirroring how the legacy InternalSchema flow worked.
+    // responsibility — the applier never sets schemaId itself.
     HoodieSchema schema = baseSchema();
     schema.setSchemaId(99L);
     HoodieSchema result = new HoodieSchemaChangeApplier(schema).applyDeleteChange("c");

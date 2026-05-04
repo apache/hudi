@@ -247,7 +247,7 @@ public class TypeConverters {
         if (from == ROW) {
           // Assumption: InternalSchemaManager should produce a cast that is of the same size
           try {
-            // note: InternalSchema.merge guarantees that the schema to be read fromType is orientated in the same order as toType
+            // note: HoodieSchemaMerger guarantees that the schema to be read fromType is orientated in the same order as toType
             // hence, we can match types by position as it is guaranteed that it is referencing the same field
             // ignoring error messages here as the calling function's checked exception will ignore it
             ValidationUtils.checkArgument(fromType.getChildren().size() == toType.getChildren().size());

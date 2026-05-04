@@ -108,8 +108,7 @@ public class HoodieSchema implements Serializable {
   // Avro custom-property keys carrying field ids for schema-on-read evolution.
   // These follow the Iceberg/Parquet "field-id" convention so the integers survive
   // Schema#toString -> Schema.Parser#parse round trips and remain interoperable with
-  // existing tooling. They are the HoodieSchema replacement for Types.Field.fieldId(),
-  // ArrayType.elementId(), MapType.keyId(), MapType.valueId() in InternalSchema.
+  // existing tooling.
   public static final String FIELD_ID_PROP = "field-id";
   public static final String ELEMENT_ID_PROP = "element-id";
   public static final String KEY_ID_PROP = "key-id";
@@ -210,8 +209,8 @@ public class HoodieSchema implements Serializable {
 
   /**
    * Constants for Parquet-style accessor patterns used in nested MAP and ARRAY navigation.
-   * These patterns are specifically used for column stats generation and differ from
-   * InternalSchema constants which are used in schema evolution contexts.
+   * Used by column-stats generation; the schema-on-read evolution path uses different
+   * descent pseudo-segments (see {@link HoodieSchemaIndex}).
    */
   private static final String ARRAY_LIST = "list";
   private static final String ARRAY_ELEMENT = "element";
@@ -324,9 +323,9 @@ public class HoodieSchema implements Serializable {
   private HoodieSchemaType type;
   // Mutable schema-level evolution metadata. These are not stored on the underlying
   // Avro schema because Avro's JsonProperties is set-once and can't be overwritten.
-  // The on-disk wire format (SerDeHelper) carries these via the `version_id` and
-  // `max_column_id` JSON keys; Avro's Schema#toString does NOT need to round-trip them.
-  // -1 sentinel = "unset", matching legacy InternalSchema's DEFAULT_VERSION_ID semantics.
+  // HoodieSchemaSerDe carries them via the `version_id` and `max_column_id` JSON keys;
+  // Avro's Schema#toString does NOT need to round-trip them.
+  // -1 sentinel = "unset"; isEmptySchema() treats schemaId<0 as the empty sentinel.
   private long schemaId = -1L;
   private int explicitMaxColumnId = -1;
   private transient List<HoodieSchemaField> fields;
@@ -1356,10 +1355,9 @@ public class HoodieSchema implements Serializable {
 
   /**
    * Factory for an "empty" schema sentinel: an unnamed record with no fields and an
-   * unset schemaId. Equivalent to {@code InternalSchema#getEmptyInternalSchema()} —
-   * used by callers that need a placeholder when no evolution schema is available
-   * (e.g. schema-on-read disabled or no schema in commit metadata). Pair with
-   * {@link #isEmptySchema()} to detect the sentinel.
+   * unset schemaId. Used by callers that need a placeholder when no evolution
+   * schema is available (e.g. schema-on-read disabled or no schema in commit
+   * metadata). Pair with {@link #isEmptySchema()} to detect the sentinel.
    */
   public static HoodieSchema empty() {
     return createRecord("EmptySchema", null, "hudi", false, Collections.emptyList());
@@ -1367,15 +1365,14 @@ public class HoodieSchema implements Serializable {
 
   /**
    * Returns true if this schema is the "empty" sentinel — i.e. has no schema id
-   * assigned. Replaces {@code InternalSchema#isEmptySchema()}.
+   * assigned (schemaId &lt; 0).
    */
   public boolean isEmptySchema() {
     return schemaId < 0;
   }
 
   /**
-   * Returns the schema version id (replaces InternalSchema#schemaId).
-   * Returns -1 if no version has been assigned.
+   * Returns the schema version id, or -1 if no version has been assigned.
    */
   public long schemaId() {
     return schemaId;
@@ -1395,7 +1392,7 @@ public class HoodieSchema implements Serializable {
    * Returns the highest column id assigned to any sub-schema. If an explicit
    * max-column-id has been recorded (e.g. preserved across a column deletion),
    * that value is returned; otherwise the highest id currently present in the
-   * schema is returned. Replaces InternalSchema#maxColumnId.
+   * schema is returned.
    *
    * <p>Returns -1 if no ids have been assigned anywhere in the schema.</p>
    */
@@ -1418,7 +1415,7 @@ public class HoodieSchema implements Serializable {
 
   /**
    * Returns the dot-joined full name of the field that owns column id {@code id},
-   * or empty string if none. Replaces InternalSchema#findFullName.
+   * or empty string if none.
    */
   public String findFullName(int id) {
     String result = index().idToName().get(id);
@@ -1427,7 +1424,6 @@ public class HoodieSchema implements Serializable {
 
   /**
    * Returns the column id assigned to the field at {@code fullName}, or -1 if not found.
-   * Replaces InternalSchema#findIdByName.
    */
   public int findIdByName(String fullName) {
     if (fullName == null || fullName.isEmpty()) {
@@ -1438,7 +1434,7 @@ public class HoodieSchema implements Serializable {
   }
 
   /**
-   * Returns all column ids in this schema. Replaces InternalSchema#getAllIds.
+   * Returns all column ids in this schema.
    */
   public java.util.Set<Integer> getAllIds() {
     return index().idToName().keySet();
@@ -1446,8 +1442,7 @@ public class HoodieSchema implements Serializable {
 
   /**
    * Returns the {@link HoodieSchema} (the type) of the field/element/key/value at
-   * column id {@code id}, or null if no such id exists. Replaces
-   * {@code InternalSchema.findType(int)}.
+   * column id {@code id}, or null if no such id exists.
    *
    * <p>The returned schema is the type schema as it sits inside its parent — for
    * an optional record field, that's the {@code [null, X]} union; for a map value
@@ -1461,8 +1456,7 @@ public class HoodieSchema implements Serializable {
 
   /**
    * Returns the {@link HoodieSchema} of the field at the given dot-separated
-   * full name, or null if no such field exists. Equivalent to
-   * {@code InternalSchema.findType(String)}.
+   * full name, or null if no such field exists.
    */
   public HoodieSchema findType(String fullName) {
     int id = findIdByName(fullName);
@@ -1471,11 +1465,9 @@ public class HoodieSchema implements Serializable {
 
   /**
    * Returns the dot-separated full names of every column in this schema (record
-   * fields, array elements, map keys / values). Replaces
-   * {@code InternalSchema#getAllColsFullName()}.
+   * fields, array elements, map keys / values).
    *
-   * <p>Order matches the depth-first traversal order used by {@link HoodieSchemaIndex},
-   * which is the same order InternalSchema produced.</p>
+   * <p>Order matches the depth-first traversal order used by {@link HoodieSchemaIndex}.</p>
    */
   public java.util.List<String> getAllColsFullName() {
     return new java.util.ArrayList<>(index().nameToId().keySet());
@@ -1483,8 +1475,7 @@ public class HoodieSchema implements Serializable {
 
   /**
    * Returns a mapping from full field name to depth-first traversal position. Used during
-   * ingest reconciliation to preserve declared field order. Replaces
-   * InternalSchema#getNameToPosition.
+   * ingest reconciliation to preserve declared field order.
    */
   public Map<String, Integer> getNameToPosition() {
     return index().nameToPosition();

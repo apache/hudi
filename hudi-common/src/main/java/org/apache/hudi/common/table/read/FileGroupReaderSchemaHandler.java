@@ -29,7 +29,7 @@ import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaCache;
 import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.schema.evolution.HoodieSchemaHistoryCache;
-import org.apache.hudi.common.schema.evolution.HoodieSchemaInternalSchemaBridge;
+import org.apache.hudi.common.schema.evolution.HoodieSchemaProjections;
 import org.apache.hudi.common.schema.evolution.HoodieSchemaMerger;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -166,7 +166,7 @@ public class FileGroupReaderSchemaHandler<T> {
   }
 
   protected HoodieSchema doPruneEvolutionSchema(HoodieSchema requiredSchema, HoodieSchema evolutionSchema) {
-    return HoodieSchemaInternalSchemaBridge.pruneByRequiredSchema(evolutionSchema, requiredSchema);
+    return HoodieSchemaProjections.pruneByRequiredSchema(evolutionSchema, requiredSchema);
   }
 
   @VisibleForTesting

@@ -90,7 +90,7 @@ public class SanitizationUtils {
     return dataType;
   }
 
-  // TODO(HUDI-5256): Refactor this to use InternalSchema when it is ready.
+  // TODO(HUDI-5256): Refactor this to use HoodieSchema when it is ready.
   private static StructType sanitizeStructTypeForAvro(StructType structType, String invalidCharMask) {
     StructType sanitizedStructType = new StructType();
     StructField[] structFields = structType.fields();

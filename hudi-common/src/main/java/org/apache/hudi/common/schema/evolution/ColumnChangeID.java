@@ -22,16 +22,6 @@ import java.util.Locale;
 
 /**
  * The kind of column-level schema change a DDL operation represents.
- *
- * <p>HoodieSchema-side replacement for
- * {@code TableChange.ColumnChangeID} — same enum constants and same
- * {@code fromValue(String)} resolver, decoupled from the legacy
- * {@code internal.schema} package so callers can consume the change-kind
- * tag without depending on the legacy DDL machinery.</p>
- *
- * <p>Callers that still need the legacy tag (e.g. for direct interop with
- * {@code TableChanges.ColumnAddChange}) can convert via {@link #toLegacy()}.
- * That bridge goes away once Phase 5 deletes the legacy package.</p>
  */
 public enum ColumnChangeID {
   ADD, UPDATE, DELETE, PROPERTY_CHANGE, REPLACE;

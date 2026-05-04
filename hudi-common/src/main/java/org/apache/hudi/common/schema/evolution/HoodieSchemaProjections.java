@@ -35,9 +35,9 @@ import java.util.stream.Collectors;
  * HoodieSchema-direct utilities for id-preserving prune and rename operations
  * used by the schema-on-read read path.
  */
-public final class HoodieSchemaInternalSchemaBridge {
+public final class HoodieSchemaProjections {
 
-  private HoodieSchemaInternalSchemaBridge() {
+  private HoodieSchemaProjections() {
   }
 
   private static int readIntProp(Object raw, int fallback) {

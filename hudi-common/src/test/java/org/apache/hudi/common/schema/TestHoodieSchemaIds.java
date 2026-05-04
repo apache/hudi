@@ -28,16 +28,15 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Exercises the Phase-0 HoodieSchema id surface: {@link HoodieSchemaIdAssigner},
- * {@link HoodieSchemaIndex}, and the new accessors on {@link HoodieSchema} /
+ * Exercises the HoodieSchema id surface: {@link HoodieSchemaIdAssigner},
+ * {@link HoodieSchemaIndex}, and id accessors on {@link HoodieSchema} /
  * {@link HoodieSchemaField}.
  *
- * <p>Verifies the three behaviors the InternalSchema-subsumption depends on:
- * (1) sequential id assignment matches the InternalSchema traversal order so on-disk
- *     compatibility is preserved; (2) id assignment is idempotent so reapplying it
- *     after a partial migration doesn't shift ids; (3) ids survive
- *     {@code Schema#toString} → {@code Schema.Parser#parse} round trips end-to-end via
- *     the HoodieSchema accessors.</p>
+ * <p>Pins three behaviors the schema-on-read evolution path depends on:
+ * (1) sequential id assignment in declared traversal order so on-disk compatibility
+ *     is preserved; (2) id assignment is idempotent so reapplying it doesn't shift
+ *     existing ids; (3) ids survive {@code Schema#toString} → {@code Schema.Parser#parse}
+ *     round trips end-to-end via the HoodieSchema accessors.</p>
  */
 public class TestHoodieSchemaIds {
 
@@ -78,8 +77,8 @@ public class TestHoodieSchemaIds {
 
   @Test
   public void assignsIdsBreadthFirstThenRecursesForNested() {
-    // Mirrors InternalSchemaConverter#visitSchemaToBuildType: outer fields first, then
-    // recurse into inner. For Outer{a, nested:Inner{x, y}}: a=0, nested=1, x=2, y=3.
+    // Outer fields first, then recurse into inner.
+    // For Outer{a, nested:Inner{x, y}}: a=0, nested=1, x=2, y=3.
     HoodieSchema schema = buildNestedRecord();
     HoodieSchemaIdAssigner.assign(schema, 0);
 
@@ -131,7 +130,7 @@ public class TestHoodieSchemaIds {
   public void fieldIdsRoundTripThroughAvroJson() {
     // field-id Avro properties survive Schema#toString -> Schema.Parser#parse.
     // Schema-level metadata (schemaId / maxColumnId) does NOT — those live on
-    // direct fields of HoodieSchema and are persisted via SerDeHelper, not Avro JSON.
+    // direct fields of HoodieSchema and are persisted via HoodieSchemaSerDe, not Avro JSON.
     HoodieSchema schema = buildFlatRecord();
     HoodieSchemaIdAssigner.assign(schema, 0);
 
