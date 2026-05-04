@@ -30,6 +30,7 @@ import org.apache.hudi.common.schema.evolution.legacy.utils.InternalSchemaUtils;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.Collectors;
 
 /**
  * One-way bridge from {@link InternalSchema} to {@link HoodieSchema} that preserves
@@ -207,11 +208,41 @@ public final class HoodieSchemaInternalSchemaBridge {
 
   /**
    * Returns a HoodieSchema with the same fields and ids as {@code source} but with
-   * its record name set to {@code recordName}. Implemented as a bridge round-trip
-   * since {@link HoodieSchema} has no in-place rename API.
+   * its record name set to {@code recordName}. Walks HoodieSchema directly: the
+   * top-level record is rebuilt with a new {@link org.apache.avro.Schema} record
+   * name, the field list is rebuilt via {@link HoodieSchemaUtils#createNewSchemaField}
+   * (which preserves Avro custom props — including {@code field-id}), and inner
+   * schemas pass through by reference so their ids and structure are preserved.
+   * The record-name argument is parsed as the legacy {@code namespace.Name}
+   * convention if it carries a dot, with the substring after the last dot taken
+   * as the simple name.
    */
   public static HoodieSchema withRecordName(HoodieSchema source, String recordName) {
-    return toHoodieSchema(toInternalSchema(source), recordName);
+    if (source == null || source.getType() != HoodieSchemaType.RECORD) {
+      return source;
+    }
+    String simpleName;
+    String namespace;
+    int lastDot = recordName == null ? -1 : recordName.lastIndexOf('.');
+    if (lastDot < 0) {
+      simpleName = recordName;
+      namespace = source.getNamespace().orElse(null);
+    } else {
+      namespace = recordName.substring(0, lastDot);
+      simpleName = recordName.substring(lastDot + 1);
+    }
+    List<HoodieSchemaField> fields = source.getFields().stream()
+        .map(HoodieSchemaUtils::createNewSchemaField)
+        .collect(Collectors.toList());
+    HoodieSchema renamed = HoodieSchema.createRecord(simpleName, namespace, source.getDoc().orElse(null), fields);
+    if (source.schemaId() >= 0) {
+      renamed.setSchemaId(source.schemaId());
+    }
+    if (source.maxColumnId() >= 0) {
+      renamed.setMaxColumnId(source.maxColumnId());
+    }
+    renamed.invalidateIdIndex();
+    return renamed;
   }
 
   private static void stampIds(HoodieSchema hoodieSchema, Type type) {
