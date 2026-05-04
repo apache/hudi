@@ -18,45 +18,64 @@
 
 package org.apache.hudi.common.schema.evolution;
 
+import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaField;
+import org.apache.hudi.common.schema.evolution.legacy.InternalSchema;
+import org.apache.hudi.common.schema.evolution.legacy.action.TableChanges;
+import org.apache.hudi.common.schema.evolution.legacy.action.TableChangesHelper;
+import org.apache.hudi.common.schema.evolution.legacy.convert.InternalSchemaConverter;
+import org.apache.hudi.common.schema.evolution.legacy.utils.SchemaChangeUtils;
 import org.apache.hudi.common.schema.types.Type;
 import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.common.schema.evolution.legacy.InternalSchema;
-import org.apache.hudi.common.schema.evolution.legacy.convert.InternalSchemaConverter;
-import org.apache.hudi.common.schema.evolution.legacy.utils.AvroSchemaEvolutionUtils;
 
+import org.apache.avro.Schema;
+
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeMap;
 import java.util.stream.Collectors;
+
+import static org.apache.hudi.common.util.CollectionUtils.reduce;
+import static org.apache.hudi.common.schema.evolution.legacy.convert.InternalSchemaConverter.convert;
 
 /**
  * HoodieSchema-shaped façade for write-path schema evolution: reconciling an
  * incoming write schema against the table's current schema, including missing
  * columns, added columns, type promotions, and nullability adjustments.
  *
- * <p>Mirrors the two entry points of {@link AvroSchemaEvolutionUtils} but consumes
- * and produces {@link HoodieSchema} so callers can stay off direct
- * {@code InternalSchema} usage. During the InternalSchema → HoodieSchema migration
- * this delegates to the legacy implementation via
- * {@link HoodieSchemaInternalSchemaBridge}, which preserves field ids end-to-end.
- * Phase 5 rewrites the implementation in pure HoodieSchema terms behind this stable
- * interface.</p>
+ * <p>The reconciliation algorithm is preserved verbatim from the prior
+ * {@code AvroSchemaEvolutionUtils} (now subsumed) — the underlying
+ * {@code TableChanges} + {@code SchemaChangeUtils} still operate on
+ * {@link InternalSchema}, and the bridge converts at the
+ * {@link HoodieSchema} boundary.
  */
 public final class HoodieSchemaEvolutionUtils {
 
+  private static final Set<String> META_FIELD_NAMES =
+      Arrays.stream(HoodieRecord.HoodieMetadataField.values())
+          .map(HoodieRecord.HoodieMetadataField::getFieldName)
+          .collect(Collectors.toSet());
+
   private HoodieSchemaEvolutionUtils() {
   }
+
+  // -------------------------------------------------------------------------
+  // Public reconciliation API.
+  // -------------------------------------------------------------------------
 
   /**
    * Reconciles an incoming write schema against the existing table schema, adding
    * any new columns, promoting types where allowed, and (optionally) marking
    * missing columns as nullable.
    *
-   * <p>Semantics match {@link AvroSchemaEvolutionUtils#reconcileSchema(org.apache.avro.Schema, InternalSchema, boolean)}:
-   * the incoming schema is assumed to have <i>missing</i> columns rather than
+   * <p>The incoming schema is assumed to have <i>missing</i> columns rather than
    * <i>deleted</i> columns. Renames and explicit deletes are not inferred here —
    * those are handled by the explicit DDL path through
    * {@link HoodieSchemaChangeApplier}.</p>
@@ -72,8 +91,7 @@ public final class HoodieSchemaEvolutionUtils {
                                              HoodieSchema oldTableSchema,
                                              boolean makeMissingFieldsNullable) {
     InternalSchema oldInternal = HoodieSchemaInternalSchemaBridge.toInternalSchema(oldTableSchema);
-    InternalSchema reconciled = AvroSchemaEvolutionUtils.reconcileSchema(
-        incomingSchema.getAvroSchema(), oldInternal, makeMissingFieldsNullable);
+    InternalSchema reconciled = reconcileInternal(incomingSchema.getAvroSchema(), oldInternal, makeMissingFieldsNullable);
     return HoodieSchemaInternalSchemaBridge.toHoodieSchema(reconciled, oldTableSchema.getFullName());
   }
 
@@ -88,7 +106,7 @@ public final class HoodieSchemaEvolutionUtils {
   public static HoodieSchema reconcileSchemaStructural(HoodieSchema incomingSchema,
                                                        HoodieSchema oldTableSchema,
                                                        boolean makeMissingFieldsNullable) {
-    org.apache.avro.Schema reconciled = AvroSchemaEvolutionUtils.reconcileSchema(
+    Schema reconciled = reconcileAvroSchema(
         incomingSchema.getAvroSchema(), oldTableSchema.getAvroSchema(), makeMissingFieldsNullable);
     return HoodieSchema.fromAvroSchema(reconciled);
   }
@@ -98,10 +116,8 @@ public final class HoodieSchemaEvolutionUtils {
    * (incoming) schema and a target (existing) schema, adjusting the source to be
    * in line with the target's nullability and promotable types.
    *
-   * <p>Semantics match
-   * {@link AvroSchemaEvolutionUtils#reconcileSchemaRequirements(org.apache.avro.Schema, org.apache.avro.Schema, boolean)}.
-   * If {@code shouldReorderColumns} is true, the source's fields are ordered to match
-   * the target's positional layout, preserving inter-commit field ordering.</p>
+   * <p>If {@code shouldReorderColumns} is true, the source's fields are ordered to
+   * match the target's positional layout, preserving inter-commit field ordering.</p>
    *
    * @param sourceSchema         incoming source schema to be reconciled
    * @param targetSchema         target schema to reconcile against
@@ -111,7 +127,7 @@ public final class HoodieSchemaEvolutionUtils {
   public static HoodieSchema reconcileSchemaRequirements(HoodieSchema sourceSchema,
                                                          HoodieSchema targetSchema,
                                                          boolean shouldReorderColumns) {
-    org.apache.avro.Schema reconciled = AvroSchemaEvolutionUtils.reconcileSchemaRequirements(
+    Schema reconciled = reconcileSchemaRequirements(
         sourceSchema == null ? null : sourceSchema.getAvroSchema(),
         targetSchema == null ? null : targetSchema.getAvroSchema(),
         shouldReorderColumns);
@@ -119,20 +135,90 @@ public final class HoodieSchemaEvolutionUtils {
   }
 
   /**
-   * Collects renamed columns between two schemas — fields whose column id is the
-   * same but whose full name has changed. The resulting map is keyed by the new
-   * (target) full name and valued by the leaf-name of the old (source) full name,
-   * matching the wire shape consumed by record rewriters.
-   *
-   * <p>HoodieSchema-shaped replacement for
-   * {@link org.apache.hudi.common.schema.evolution.legacy.utils.InternalSchemaUtils#collectRenameCols}.</p>
+   * InternalSchema-typed entry point retained for the legacy-test surface and
+   * any internal caller that still operates on {@link InternalSchema}. Public
+   * callers should prefer {@link #reconcileSchema(HoodieSchema, HoodieSchema, boolean)}.
    */
+  public static InternalSchema reconcileSchema(Schema incomingSchema,
+                                                InternalSchema oldTableSchema,
+                                                boolean makeMissingFieldsNullable) {
+    return reconcileInternal(incomingSchema, oldTableSchema, makeMissingFieldsNullable);
+  }
+
+  /**
+   * Avro-only entry point retained for the legacy-test surface. Public callers
+   * should prefer {@link #reconcileSchemaStructural}.
+   */
+  public static Schema reconcileSchema(Schema incomingSchema,
+                                       Schema oldTableSchema,
+                                       boolean makeMissingFieldsNullable) {
+    return reconcileAvroSchema(incomingSchema, oldTableSchema, makeMissingFieldsNullable);
+  }
+
+  /**
+   * Avro-only requirements-reconciliation entry point retained for the
+   * legacy-test surface and any internal caller that still hands around
+   * Avro {@link Schema}. Public callers should prefer
+   * {@link #reconcileSchemaRequirements(HoodieSchema, HoodieSchema, boolean)}.
+   */
+  public static Schema reconcileSchemaRequirements(Schema sourceSchema,
+                                                   Schema targetSchema,
+                                                   boolean shouldReorderColumns) {
+    if (targetSchema.getType() == Schema.Type.NULL || targetSchema.getFields().isEmpty()) {
+      return sourceSchema;
+    }
+    if (sourceSchema == null || sourceSchema.getType() == Schema.Type.NULL || sourceSchema.getFields().isEmpty()) {
+      return targetSchema;
+    }
+    InternalSchema targetInternal = convert(HoodieSchema.fromAvroSchema(targetSchema));
+    // Preserve field-id assignment ordering with the target when reorder is requested
+    // — that's what keeps inter-commit field positions stable.
+    InternalSchema sourceInternal = convert(HoodieSchema.fromAvroSchema(sourceSchema),
+        shouldReorderColumns ? targetInternal.getNameToPosition() : Collections.emptyMap());
+
+    List<String> colNamesSource = sourceInternal.getAllColsFullName();
+    List<String> colNamesTarget = targetInternal.getAllColsFullName();
+
+    List<String> nullableUpdates = new ArrayList<>();
+    List<String> typeUpdates = new ArrayList<>();
+    colNamesSource.forEach(field -> {
+      if (colNamesTarget.contains(field)
+          && sourceInternal.findField(field).isOptional() != targetInternal.findField(field).isOptional()) {
+        nullableUpdates.add(field);
+      }
+      if (colNamesTarget.contains(field)
+          && SchemaChangeUtils.shouldPromoteType(sourceInternal.findType(field), targetInternal.findType(field))) {
+        typeUpdates.add(field);
+      }
+    });
+
+    if (nullableUpdates.isEmpty() && typeUpdates.isEmpty()) {
+      // No updates — but still re-emit through the converter so union ordering is canonicalized.
+      return convert(sourceInternal, sourceSchema.getFullName()).toAvroSchema();
+    }
+
+    TableChanges.ColumnUpdateChange schemaChange = TableChanges.ColumnUpdateChange.get(sourceInternal);
+    if (!nullableUpdates.isEmpty()) {
+      schemaChange = reduce(nullableUpdates, schemaChange,
+          (change, field) -> change.updateColumnNullability(field, true));
+    }
+    if (!typeUpdates.isEmpty()) {
+      schemaChange = reduce(typeUpdates, schemaChange,
+          (change, field) -> change.updateColumnType(field, targetInternal.findType(field)));
+    }
+    return convert(SchemaChangeUtils.applyTableChanges2Schema(sourceInternal, schemaChange),
+        sourceSchema.getFullName()).toAvroSchema();
+  }
+
+  // -------------------------------------------------------------------------
+  // Static helpers (HoodieSchema-direct).
+  // -------------------------------------------------------------------------
+
   /**
    * Normalizes union ordering so {@code null} sits first within nullable union
    * branches, matching the ordering Hudi has historically written to disk. Returns
    * {@code HoodieSchema.NULL_SCHEMA} for a {@code null} input and the schema
-   * unchanged for non-record types. Wraps the legacy
-   * {@code InternalSchemaConverter.fixNullOrdering} during the migration.
+   * unchanged for non-record types.
    */
   public static HoodieSchema fixNullOrdering(HoodieSchema schema) {
     return InternalSchemaConverter.fixNullOrdering(schema);
@@ -142,12 +228,9 @@ public final class HoodieSchemaEvolutionUtils {
    * Collects top-level columns whose primitive type differs between two schemas,
    * keyed by the column's index in {@code schema}. The pair holds (newType,
    * oldType) so callers can build a cast plan from {@code oldType} to
-   * {@code newType}. HoodieSchema-direct replacement for
-   * {@link InternalSchemaUtils#collectTypeChangedCols(InternalSchema, InternalSchema)}.
-   *
-   * <p>Walks ids on the HoodieSchema accessors directly; only converts to
-   * {@link Type} at the result construction (callers expect Type pairs for the
-   * cast-plan downstream).</p>
+   * {@code newType}. Walks ids on the HoodieSchema accessors directly; only
+   * converts to {@link Type} at the result construction (callers expect Type
+   * pairs for the cast-plan downstream).
    */
   public static Map<Integer, Pair<Type, Type>> collectTypeChangedCols(HoodieSchema schema, HoodieSchema oldSchema) {
     Set<Integer> ids = schema.getAllIds();
@@ -189,8 +272,7 @@ public final class HoodieSchemaEvolutionUtils {
   /**
    * Maps a filter column name from the query schema's namespace to the file
    * schema's namespace (or returns "" when the column was deleted on the file
-   * side). HoodieSchema-direct replacement for
-   * {@link InternalSchemaUtils#reBuildFilterName(String, InternalSchema, InternalSchema)}.
+   * side).
    */
   public static String reBuildFilterName(String name, HoodieSchema fileSchema, HoodieSchema querySchema) {
     int nameId = querySchema.findIdByName(name);
@@ -199,19 +281,23 @@ public final class HoodieSchemaEvolutionUtils {
           "cannot find filter col name: %s from querySchema: %s", name, querySchema));
     }
     if (fileSchema.findType(nameId) == null) {
-      // column added on the query side — file does not contain it, so the filter is dead.
       return "";
     }
     String fileName = fileSchema.findFullName(nameId);
     return name.equals(fileName) ? name : fileName;
   }
 
+  /**
+   * Collects renamed columns between two schemas — fields whose column id is the
+   * same but whose full name has changed. The resulting map is keyed by the new
+   * (target) full name and valued by the leaf-name of the old (source) full name,
+   * matching the wire shape consumed by record rewriters.
+   */
   public static Map<String, String> collectRenameCols(HoodieSchema oldSchema, HoodieSchema newSchema) {
     List<String> colNamesFromWriteSchema = oldSchema.getAllColsFullName();
     return colNamesFromWriteSchema.stream()
         .filter(f -> {
           int fieldIdFromWriteSchema = oldSchema.findIdByName(f);
-          // Find columns that share an id but use a different name in the new schema.
           return newSchema.getAllIds().contains(fieldIdFromWriteSchema)
               && !newSchema.findFullName(fieldIdFromWriteSchema).equalsIgnoreCase(f);
         })
@@ -221,5 +307,98 @@ public final class HoodieSchemaEvolutionUtils {
               int lastDotIndex = e.lastIndexOf(".");
               return e.substring(lastDotIndex == -1 ? 0 : lastDotIndex + 1);
             }));
+  }
+
+  // -------------------------------------------------------------------------
+  // Internal reconciliation algorithm. Preserved verbatim from the prior
+  // legacy AvroSchemaEvolutionUtils — same TableChanges-builder approach,
+  // same nested-redundancy filter, same nullability-propagation rule.
+  // -------------------------------------------------------------------------
+
+  private static InternalSchema reconcileInternal(Schema incomingSchema,
+                                                  InternalSchema oldTableSchema,
+                                                  boolean makeMissingFieldsNullable) {
+    if (incomingSchema.getType() == Schema.Type.NULL) {
+      return oldTableSchema;
+    }
+    InternalSchema incoming = convert(HoodieSchema.fromAvroSchema(incomingSchema), oldTableSchema.getNameToPosition());
+
+    List<String> colNamesIncoming = incoming.getAllColsFullName();
+    List<String> colNamesOld = oldTableSchema.getAllColsFullName();
+    List<String> diffFromOld = colNamesOld.stream()
+        .filter(f -> !colNamesIncoming.contains(f)).collect(Collectors.toList());
+    List<String> diffFromIncoming = colNamesIncoming.stream()
+        .filter(f -> !colNamesOld.contains(f)).collect(Collectors.toList());
+    List<String> typeChangeColumns = colNamesIncoming.stream()
+        .filter(f -> colNamesOld.contains(f) && !incoming.findType(f).equals(oldTableSchema.findType(f)))
+        .collect(Collectors.toList());
+
+    if (colNamesIncoming.size() == colNamesOld.size() && diffFromOld.isEmpty() && typeChangeColumns.isEmpty()) {
+      return oldTableSchema;
+    }
+
+    // Filter redundant entries — adding a struct surfaces both the struct itself and
+    // each of its leaves, but only the struct should be added.
+    TreeMap<Integer, String> finalAddAction = new TreeMap<>();
+    for (String name : diffFromIncoming) {
+      int splitPoint = name.lastIndexOf(".");
+      String parentName = splitPoint > 0 ? name.substring(0, splitPoint) : "";
+      if (!parentName.isEmpty() && diffFromIncoming.contains(parentName)) {
+        continue;
+      }
+      finalAddAction.put(incoming.findIdByName(name), name);
+    }
+
+    TableChanges.ColumnAddChange addChange = TableChanges.ColumnAddChange.get(oldTableSchema);
+    finalAddAction.forEach((id, name) -> {
+      int splitPoint = name.lastIndexOf(".");
+      String parentName = splitPoint > 0 ? name.substring(0, splitPoint) : "";
+      String rawName = splitPoint > 0 ? name.substring(splitPoint + 1) : name;
+      // Try to infer position by finding the nearest sibling that already exists in old.
+      java.util.Optional<String> inferPosition = colNamesIncoming.stream()
+          .filter(c -> c.lastIndexOf(".") == splitPoint
+              && c.startsWith(parentName)
+              && incoming.findIdByName(c) > incoming.findIdByName(name)
+              && oldTableSchema.findIdByName(c) > 0)
+          .min((s1, s2) -> oldTableSchema.findIdByName(s1) - oldTableSchema.findIdByName(s2));
+      addChange.addColumns(parentName, rawName, incoming.findType(name), null);
+      inferPosition.map(i -> addChange.addPositionChange(name, i, "before"));
+    });
+
+    InternalSchema afterAdds = SchemaChangeUtils.applyTableChanges2Schema(oldTableSchema, addChange);
+    TableChanges.ColumnUpdateChange typeChange = TableChanges.ColumnUpdateChange.get(afterAdds);
+    typeChangeColumns.stream()
+        .filter(f -> !incoming.findType(f).isNestedType())
+        .forEach(col -> typeChange.updateColumnType(col, incoming.findType(col)));
+
+    if (makeMissingFieldsNullable) {
+      // For a parent that's missing on the incoming side, only mark the parent
+      // nullable; descendants are unreachable at decode time so flipping them
+      // individually is wasted work and would produce surprising commits.
+      Set<String> visited = new HashSet<>();
+      diffFromOld.stream()
+          .filter(col -> !META_FIELD_NAMES.contains(col))
+          .sorted()
+          .forEach(col -> {
+            String parent = TableChangesHelper.getParentName(col);
+            if (!visited.contains(parent)) {
+              typeChange.updateColumnNullability(col, true);
+            }
+            visited.add(col);
+          });
+    }
+
+    InternalSchema evolved = SchemaChangeUtils.applyTableChanges2Schema(afterAdds, typeChange);
+    if (evolved.equalsIgnoringVersion(oldTableSchema)) {
+      return oldTableSchema;
+    }
+    return evolved;
+  }
+
+  private static Schema reconcileAvroSchema(Schema incomingSchema, Schema oldTableSchema, boolean makeMissingFieldsNullable) {
+    return convert(
+        reconcileInternal(incomingSchema, convert(HoodieSchema.fromAvroSchema(oldTableSchema)), makeMissingFieldsNullable),
+        oldTableSchema.getFullName())
+        .toAvroSchema();
   }
 }

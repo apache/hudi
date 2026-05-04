@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.common.schema.evolution.legacy.utils;
+package org.apache.hudi.common.schema.evolution;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.schema.HoodieJsonProperties;
@@ -31,6 +31,8 @@ import org.apache.hudi.common.schema.types.Type;
 import org.apache.hudi.common.schema.types.Types;
 import org.apache.hudi.common.schema.evolution.legacy.action.TableChanges;
 import org.apache.hudi.common.schema.evolution.legacy.convert.InternalSchemaConverter;
+import org.apache.hudi.common.schema.evolution.legacy.utils.InternalSchemaUtils;
+import org.apache.hudi.common.schema.evolution.legacy.utils.SchemaChangeUtils;
 
 import org.apache.avro.LogicalTypes;
 import org.apache.avro.Schema;
@@ -53,9 +55,9 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Tests {@link AvroSchemaEvolutionUtils}.
+ * Tests {@link HoodieSchemaEvolutionUtils} reconciliation entry points.
  */
-public class TestAvroSchemaEvolutionUtils {
+public class TestHoodieSchemaEvolutionUtils {
 
   String schemaStr = "{\"type\":\"record\",\"name\":\"newTableName\",\"fields\":[{\"name\":\"id\",\"type\":\"int\"},{\"name\":\"data\","
       + "\"type\":[\"null\",\"string\"],\"default\":null},{\"name\":\"preferences\",\"type\":[\"null\","
@@ -251,15 +253,15 @@ public class TestAvroSchemaEvolutionUtils {
 
   @Test
   public void testFixNullOrdering() {
-    HoodieSchema schema = SchemaTestUtil.getSchemaFromResource(TestAvroSchemaEvolutionUtils.class, "/nullWrong.avsc");
-    HoodieSchema expectedSchema = SchemaTestUtil.getSchemaFromResource(TestAvroSchemaEvolutionUtils.class, "/nullRight.avsc");
+    HoodieSchema schema = SchemaTestUtil.getSchemaFromResource(TestHoodieSchemaEvolutionUtils.class, "/nullWrong.avsc");
+    HoodieSchema expectedSchema = SchemaTestUtil.getSchemaFromResource(TestHoodieSchemaEvolutionUtils.class, "/nullRight.avsc");
     Assertions.assertEquals(expectedSchema, InternalSchemaConverter.fixNullOrdering(schema));
     Assertions.assertEquals(expectedSchema, InternalSchemaConverter.fixNullOrdering(expectedSchema));
   }
 
   @Test
   public void testFixNullOrderingSameSchemaCheck() {
-    HoodieSchema schema = SchemaTestUtil.getSchemaFromResource(TestAvroSchemaEvolutionUtils.class, "/source_evolved.avsc");
+    HoodieSchema schema = SchemaTestUtil.getSchemaFromResource(TestHoodieSchemaEvolutionUtils.class, "/source_evolved.avsc");
     Assertions.assertEquals(schema, InternalSchemaConverter.fixNullOrdering(schema));
   }
 
@@ -280,7 +282,7 @@ public class TestAvroSchemaEvolutionUtils {
    */
   @Test
   public void testReWriteRecordWithTypeChanged() {
-    String enumSchema = "{\"type\":\"enum\",\"name\":\"Enum\",\"namespace\":\"org.apache.hudi.common.schema.evolution.legacy.utils.TestAvroSchemaEvolutionUtils\",\"symbols\":[\"ENUM1\",\"ENUM2\"]}";
+    String enumSchema = "{\"type\":\"enum\",\"name\":\"Enum\",\"namespace\":\"org.apache.hudi.common.schema.evolution.legacy.utils.TestHoodieSchemaEvolutionUtils\",\"symbols\":[\"ENUM1\",\"ENUM2\"]}";
     HoodieSchema hoodieSchema = HoodieSchema.parse("{\"type\":\"record\",\"name\":\"h0_record\",\"namespace\":\"hoodie.h0\",\"fields\""
         + ":[{\"name\":\"id\",\"type\":[\"null\",\"int\"],\"default\":null},"
         + "{\"name\":\"comb\",\"type\":[\"null\",\"int\"],\"default\":null},"
@@ -486,7 +488,7 @@ public class TestAvroSchemaEvolutionUtils {
     );
     evolvedRecord = (Types.RecordType)InternalSchemaBuilder.getBuilder().refreshNewId(evolvedRecord, new AtomicInteger(0));
     HoodieSchema evolvedSchema = InternalSchemaConverter.convert(evolvedRecord, "test1");
-    InternalSchema result = AvroSchemaEvolutionUtils.reconcileSchema(evolvedSchema.getAvroSchema(), oldSchema, false);
+    InternalSchema result = HoodieSchemaEvolutionUtils.reconcileSchema(evolvedSchema.getAvroSchema(), oldSchema, false);
     Types.RecordType checkedRecord = Types.RecordType.get(
         Types.Field.get(0, false, "id", Types.IntType.get()),
         Types.Field.get(1, true, "data", Types.StringType.get()),
@@ -540,7 +542,7 @@ public class TestAvroSchemaEvolutionUtils {
         + "{\"name\":\"d1\",\"type\":[\"null\",{\"type\":\"int\",\"logicalType\":\"date\"}],\"default\":null},"
         + "{\"name\":\"d2\",\"type\":[\"null\",{\"type\":\"int\",\"logicalType\":\"date\"}],\"default\":null}]}");
 
-    HoodieSchema simpleReconcileSchema = InternalSchemaConverter.convert(AvroSchemaEvolutionUtils
+    HoodieSchema simpleReconcileSchema = InternalSchemaConverter.convert(HoodieSchemaEvolutionUtils
         .reconcileSchema(incomingSchema.getAvroSchema(), InternalSchemaConverter.convert(schema), false), "schemaNameFallback");
     Assertions.assertEquals(simpleCheckSchema, simpleReconcileSchema);
   }
@@ -563,7 +565,7 @@ public class TestAvroSchemaEvolutionUtils {
     InternalSchema oldInternalSchema = InternalSchemaConverter.convert(oldSchema);
     // set a non-default schema id for old table schema, e.g., 2.
     oldInternalSchema.setSchemaId(2);
-    InternalSchema evolvedSchema = AvroSchemaEvolutionUtils.reconcileSchema(incomingSchema.getAvroSchema(), oldInternalSchema, false);
+    InternalSchema evolvedSchema = HoodieSchemaEvolutionUtils.reconcileSchema(incomingSchema.getAvroSchema(), oldInternalSchema, false);
     // the evolved schema should be the old table schema, since there is no type change at all.
     Assertions.assertEquals(oldInternalSchema, evolvedSchema);
   }
