@@ -32,6 +32,7 @@ import org.apache.hudi.common.model.OverwriteNonDefaultsWithLatestAvroPayload;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaField;
+import org.apache.hudi.common.schema.HoodieSchemaIdAssigner;
 import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.common.schema.evolution.HoodieSchemaChangeApplier;
 import org.apache.hudi.common.schema.evolution.HoodieSchemaHistoryCache;
@@ -106,14 +107,22 @@ public class TestFileGroupReaderSchemaHandler extends SchemaHandlerTestBase {
     HoodieReaderContext<String> readerContext = createReaderContext(hoodieTableConfig, false, false, true, false, null);
     HoodieSchema requestedSchema = generateProjectionSchema("_hoodie_record_key", "timestamp", "rider");
 
-    // Build a "file schema" that's DATA_SCHEMA with timestamp → ts (int);
+    // Stamp ids on a copy of DATA_SCHEMA so the applier-driven rename can
+    // preserve a field id the merger looks up. DATA_SCHEMA itself is shared
+    // across tests and must not be mutated. Set schemaId=0 so isEmptySchema()
+    // is false — otherwise pruneEvolutionSchema short-circuits to empty and
+    // the rename-detection path is skipped entirely.
+    HoodieSchema evolutionSchema = HoodieSchema.parse(DATA_SCHEMA.toAvroSchema().toString());
+    HoodieSchemaIdAssigner.assignFresh(evolutionSchema);
+    evolutionSchema.setSchemaId(0);
+    // Build a "file schema" that's evolutionSchema with timestamp → ts (int);
     // the rename preserves the field id so the merger can match against
     // requestedSchema's "timestamp" via id-based lookup.
-    HoodieSchema renamedFileSchema = new HoodieSchemaChangeApplier(DATA_SCHEMA).applyRenameChange("timestamp", "ts");
+    HoodieSchema renamedFileSchema = new HoodieSchemaChangeApplier(evolutionSchema).applyRenameChange("timestamp", "ts");
     HoodieSchema originalSchema = new HoodieSchemaChangeApplier(renamedFileSchema)
         .applyColumnTypeChange("ts", HoodieSchema.create(HoodieSchemaType.INT));
     FileGroupReaderSchemaHandler<String> schemaHandler = new FileGroupReaderSchemaHandler<>(readerContext, DATA_SCHEMA, requestedSchema,
-        Option.of(DATA_SCHEMA),
+        Option.of(evolutionSchema),
         new TypedProperties(), metaClient);
 
     try (MockedStatic<HoodieSchemaHistoryCache> mockedStatic = Mockito.mockStatic(HoodieSchemaHistoryCache.class)) {
