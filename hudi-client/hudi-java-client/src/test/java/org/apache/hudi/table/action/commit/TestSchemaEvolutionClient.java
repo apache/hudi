@@ -65,7 +65,9 @@ public class TestSchemaEvolutionClient extends HoodieJavaClientTestHarness {
   @Test
   public void testUpdateColumnType() {
     writeClient.updateColumnType("number", HoodieSchema.create(HoodieSchemaType.LONG));
-    assertEquals(HoodieSchema.create(HoodieSchemaType.LONG), getFieldType("number"));
+    // The "number" field is optional, so its HoodieSchema is the [null, long] union;
+    // assert on the underlying primitive type directly.
+    assertEquals(HoodieSchemaType.LONG, getFieldType("number").getType());
   }
 
   private HoodieJavaWriteClient<IndexedRecord> getWriteClient() {
