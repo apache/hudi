@@ -195,6 +195,16 @@ public final class HoodieSchemaInternalSchemaBridge {
   }
 
   /**
+   * Prunes {@code source} down to the leaves of {@code requiredSchema}, preserving
+   * field ids. Returns a HoodieSchema named after {@code requiredSchema}.
+   */
+  public static HoodieSchema pruneByRequiredSchema(HoodieSchema source, HoodieSchema requiredSchema) {
+    InternalSchema pruned = InternalSchemaConverter.pruneHoodieSchemaToInternalSchema(
+        requiredSchema, toInternalSchema(source));
+    return toHoodieSchema(pruned, requiredSchema.getFullName());
+  }
+
+  /**
    * Returns a HoodieSchema with the same fields and ids as {@code source} but with
    * its record name set to {@code recordName}. Implemented as a bridge round-trip
    * since {@link HoodieSchema} has no in-place rename API.

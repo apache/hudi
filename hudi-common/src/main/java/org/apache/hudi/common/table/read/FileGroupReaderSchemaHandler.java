@@ -39,8 +39,6 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.common.util.collection.Triple;
-import org.apache.hudi.internal.schema.InternalSchema;
-import org.apache.hudi.internal.schema.convert.InternalSchemaConverter;
 import org.apache.hudi.storage.StoragePath;
 
 import lombok.Getter;
@@ -168,9 +166,7 @@ public class FileGroupReaderSchemaHandler<T> {
   }
 
   protected HoodieSchema doPruneEvolutionSchema(HoodieSchema requiredSchema, HoodieSchema evolutionSchema) {
-    InternalSchema pruned = InternalSchemaConverter.pruneHoodieSchemaToInternalSchema(
-        requiredSchema, HoodieSchemaInternalSchemaBridge.toInternalSchema(evolutionSchema));
-    return HoodieSchemaInternalSchemaBridge.toHoodieSchema(pruned, requiredSchema.getFullName());
+    return HoodieSchemaInternalSchemaBridge.pruneByRequiredSchema(evolutionSchema, requiredSchema);
   }
 
   @VisibleForTesting
