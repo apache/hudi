@@ -33,9 +33,9 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline
 import org.apache.hudi.common.util.ReflectionUtils
 import org.apache.hudi.common.util.ValidationUtils.checkState
 import org.apache.hudi.config.HoodieBootstrapConfig.DATA_QUERIES_ONLY
+import org.apache.hudi.common.schema.types.Conversions
 import org.apache.hudi.hadoop.HoodieLatestBaseFilesPathFilter
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
-import org.apache.hudi.internal.schema.utils.Conversions
 import org.apache.hudi.keygen.{StringPartitionPathFormatter, TimestampBasedAvroKeyGenerator, TimestampBasedKeyGenerator}
 import org.apache.hudi.metadata.{CatalogBackedTableMetadata, HoodieTableMetadata}
 import org.apache.hudi.storage.{StoragePath, StoragePathInfo}

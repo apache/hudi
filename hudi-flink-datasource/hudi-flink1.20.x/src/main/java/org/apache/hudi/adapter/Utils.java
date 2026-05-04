@@ -18,11 +18,11 @@
 
 package org.apache.hudi.adapter;
 
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.evolution.ColumnPositionType;
+import org.apache.hudi.common.schema.evolution.HoodieSchemaChangeApplier;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieNotSupportedException;
-import org.apache.hudi.internal.schema.InternalSchema;
-import org.apache.hudi.common.schema.types.Type;
-import org.apache.hudi.internal.schema.action.InternalSchemaChangeApplier;
 
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.configuration.ReadableConfig;
@@ -49,9 +49,9 @@ import java.util.Collections;
 import java.util.List;
 import java.util.function.Function;
 
-import static org.apache.hudi.internal.schema.action.TableChange.ColumnPositionChange.ColumnPositionType.AFTER;
-import static org.apache.hudi.internal.schema.action.TableChange.ColumnPositionChange.ColumnPositionType.FIRST;
-import static org.apache.hudi.internal.schema.action.TableChange.ColumnPositionChange.ColumnPositionType.NO_OPERATION;
+import static org.apache.hudi.common.schema.evolution.ColumnPositionType.AFTER;
+import static org.apache.hudi.common.schema.evolution.ColumnPositionType.FIRST;
+import static org.apache.hudi.common.schema.evolution.ColumnPositionType.NO_OPERATION;
 
 /**
  * Adapter utils.
@@ -84,8 +84,8 @@ public class Utils {
         conf.get(ExecutionConfigOptions.TABLE_EXEC_SORT_ASYNC_MERGE_ENABLED));
   }
 
-  public static InternalSchema applyTableChange(InternalSchema oldSchema, List changes, Function<LogicalType, Type> convertFunc) {
-    InternalSchema newSchema = oldSchema;
+  public static HoodieSchema applyTableChange(HoodieSchema oldSchema, List changes, Function<LogicalType, HoodieSchema> convertFunc) {
+    HoodieSchema newSchema = oldSchema;
     for (Object change : changes) {
       TableChange tableChange = (TableChange) change;
       newSchema = applyTableChange(newSchema, tableChange, convertFunc);
