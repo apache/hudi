@@ -112,7 +112,7 @@ public abstract class AbstractRealtimeRecordReader {
       supportTimestamp = HoodieColumnProjectionUtils.supportTimestamp(jobConf);
 
       schemaEvolutionContext = new SchemaEvolutionContext(split, job, Option.of(metaClient));
-      if (schemaEvolutionContext.internalSchemaOption.isPresent()) {
+      if (schemaEvolutionContext.getEvolutionSchemaOption("schema").isPresent()) {
         schemaEvolutionContext.doEvolutionForRealtimeInputFormat(this);
       } else {
         init();
