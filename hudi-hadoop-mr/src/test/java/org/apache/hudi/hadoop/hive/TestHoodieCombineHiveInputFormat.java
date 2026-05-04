@@ -133,7 +133,8 @@ public class TestHoodieCombineHiveInputFormat extends HoodieCommonTestHarness {
     File partitionDirOne = InputFormatTestUtil.prepareParquetTable(path1, schema, 3, numRecords, commitTime);
     HoodieCommitMetadata commitMetadataOne = CommitUtils.buildMetadata(Collections.emptyList(), Collections.emptyMap(), Option.empty(), WriteOperationType.UPSERT,
         schema.toString(), HoodieTimeline.COMMIT_ACTION);
-    // mock the latest schema to the commit metadata; mint fresh ids via the bridge
+    // mock the latest schema to the commit metadata; round-trip via the bridge to
+    // preserve the same field-id assignment scheme as the production write path.
     HoodieSchema evolutionSchema = HoodieSchemaInternalSchemaBridge.toHoodieSchema(
         HoodieSchemaInternalSchemaBridge.toInternalSchema(schema), schema.getFullName());
     commitMetadataOne.addMetadata(HoodieSchemaSerDe.LATEST_SCHEMA, HoodieSchemaSerDe.toJson(evolutionSchema));

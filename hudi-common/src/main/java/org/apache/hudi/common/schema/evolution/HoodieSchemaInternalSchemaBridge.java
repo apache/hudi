@@ -68,11 +68,13 @@ public final class HoodieSchemaInternalSchemaBridge {
    * {@link InternalSchemaConverter#convert(HoodieSchema)} which mints fresh ids.</p>
    */
   public static InternalSchema toInternalSchema(HoodieSchema hoodieSchema) {
-    // Preserve the empty-schema marker end-to-end: callers (e.g. FileGroupReader's
-    // schema handler) short-circuit on isEmptySchema() so the round-trip must not
-    // resurrect an "empty" HoodieSchema as a non-empty InternalSchema with the
-    // default versionId of 0.
-    if (hoodieSchema == null || hoodieSchema.isEmptySchema()) {
+    // Short-circuit only on the genuine empty sentinel — a record with no fields.
+    // {@link HoodieSchema#isEmptySchema()} is schemaId-based and would mis-classify
+    // any freshly-built HoodieSchema (default schemaId=-1) as empty, even when it
+    // carries real fields, causing the round-trip to silently lose them.
+    if (hoodieSchema == null
+        || hoodieSchema.getType() != HoodieSchemaType.RECORD
+        || hoodieSchema.getFields().isEmpty()) {
       return InternalSchema.getEmptyInternalSchema();
     }
     // Take the structurally-correct InternalSchema produced by the existing converter,
