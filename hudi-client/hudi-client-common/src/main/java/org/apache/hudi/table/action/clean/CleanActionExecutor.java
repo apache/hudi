@@ -21,6 +21,7 @@ package org.apache.hudi.table.action.clean;
 import org.apache.hudi.avro.model.HoodieActionInstant;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieCleanerPlan;
+import org.apache.hudi.client.BaseHoodieClient;
 import org.apache.hudi.client.transaction.TransactionManager;
 import org.apache.hudi.common.HoodieCleanStat;
 import org.apache.hudi.common.engine.HoodieEngineContext;
@@ -215,7 +216,6 @@ public class CleanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I, K,
       }
 
       List<HoodieCleanStat> cleanStats = clean(context, cleanerPlan);
-      table.getMetaClient().reloadActiveTimeline();
       HoodieCleanMetadata metadata;
       if (cleanStats.isEmpty()) {
         metadata = createEmptyCleanMetadata(cleanerPlan, inflightInstant, timer.endTimer());
@@ -228,6 +228,10 @@ public class CleanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I, K,
         );
       }
       this.txnManager.beginStateChange(Option.of(inflightInstant), Option.empty());
+      // Reload inside the lock so mergeRollingMetadata reads the latest timeline,
+      // matching the same contract as mergeRollingMetadata for commit metadata.
+      table.getMetaClient().reloadActiveTimeline();
+      BaseHoodieClient.mergeRollingMetadata(table, config, metadata);
       writeTableMetadata(metadata, inflightInstant.requestedTime());
       table.getActiveTimeline().transitionCleanInflightToComplete(
           false,
