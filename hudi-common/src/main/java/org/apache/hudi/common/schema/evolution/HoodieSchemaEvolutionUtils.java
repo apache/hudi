@@ -149,6 +149,19 @@ public final class HoodieSchemaEvolutionUtils {
         HoodieSchemaInternalSchemaBridge.toInternalSchema(oldSchema));
   }
 
+  /**
+   * Maps a filter column name from the query schema's namespace to the file
+   * schema's namespace (or returns "" when the column was deleted on the file
+   * side). HoodieSchema-shaped replacement for
+   * {@link InternalSchemaUtils#reBuildFilterName(String, InternalSchema, InternalSchema)}.
+   */
+  public static String reBuildFilterName(String name, HoodieSchema fileSchema, HoodieSchema querySchema) {
+    return InternalSchemaUtils.reBuildFilterName(
+        name,
+        HoodieSchemaInternalSchemaBridge.toInternalSchema(fileSchema),
+        HoodieSchemaInternalSchemaBridge.toInternalSchema(querySchema));
+  }
+
   public static Map<String, String> collectRenameCols(HoodieSchema oldSchema, HoodieSchema newSchema) {
     List<String> colNamesFromWriteSchema = oldSchema.getAllColsFullName();
     return colNamesFromWriteSchema.stream()

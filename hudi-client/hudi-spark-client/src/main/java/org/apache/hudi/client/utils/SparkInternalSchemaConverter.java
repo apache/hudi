@@ -18,10 +18,13 @@
 
 package org.apache.hudi.client.utils;
 
-import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.internal.schema.InternalSchema;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.evolution.HoodieSchemaEvolutionUtils;
+import org.apache.hudi.common.schema.evolution.HoodieSchemaInternalSchemaBridge;
 import org.apache.hudi.common.schema.types.Type;
 import org.apache.hudi.common.schema.types.Types;
+import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.internal.schema.action.InternalSchemaMerger;
 import org.apache.hudi.internal.schema.utils.InternalSchemaUtils;
 
@@ -162,6 +165,18 @@ public class SparkInternalSchemaConverter {
   }
 
   /**
+   * HoodieSchema-shaped twin of
+   * {@link #convertAndPruneStructTypeToInternalSchema(StructType, InternalSchema)}.
+   * Bridges through the legacy pruner so the leaf-name selection rules stay
+   * byte-identical across the migration.
+   */
+  public static HoodieSchema convertAndPruneStructTypeToHoodieSchema(StructType sparkSchema, HoodieSchema originSchema) {
+    InternalSchema pruned = convertAndPruneStructTypeToInternalSchema(
+        sparkSchema, HoodieSchemaInternalSchemaBridge.toInternalSchema(originSchema));
+    return HoodieSchemaInternalSchemaBridge.toHoodieSchema(pruned, originSchema.getFullName());
+  }
+
+  /**
    * Collect all the leaf nodes names.
    *
    * @param sparkSchema a spark schema
@@ -223,6 +238,19 @@ public class SparkInternalSchemaConverter {
 
   public static Map<Integer, Pair<DataType, DataType>> collectTypeChangedCols(InternalSchema schema, InternalSchema other) {
     return InternalSchemaUtils
+        .collectTypeChangedCols(schema, other)
+        .entrySet()
+        .stream()
+        .collect(Collectors.toMap(e -> e.getKey(), e -> Pair.of(constructSparkSchemaFromType(e.getValue().getLeft()), constructSparkSchemaFromType(e.getValue().getRight()))));
+  }
+
+  /**
+   * HoodieSchema-shaped twin of
+   * {@link #collectTypeChangedCols(InternalSchema, InternalSchema)}. Returns the
+   * Spark-typed cast plan keyed by the column's index in {@code schema}.
+   */
+  public static Map<Integer, Pair<DataType, DataType>> collectTypeChangedCols(HoodieSchema schema, HoodieSchema other) {
+    return HoodieSchemaEvolutionUtils
         .collectTypeChangedCols(schema, other)
         .entrySet()
         .stream()
