@@ -18,6 +18,9 @@
 
 package org.apache.hudi.common.schema.evolution.legacy.action;
 
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.evolution.HoodieSchemaInternalSchemaBridge;
+import org.apache.hudi.common.schema.evolution.HoodieSchemaMerger;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.common.schema.evolution.legacy.InternalSchema;
 import org.apache.hudi.common.schema.types.Types;
@@ -31,7 +34,9 @@ import java.util.Map;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /**
- * Tests {@link InternalSchemaMerger}.
+ * Tests {@link HoodieSchemaMerger} via the legacy DDL action algebra
+ * (TableChanges + SchemaChangeUtils) — this exercises the full evolution
+ * pipeline, with the merger as the final assertion.
  */
 public class TestMergeSchema {
 
@@ -68,10 +73,16 @@ public class TestMergeSchema {
     TableChanges.ColumnAddChange addChange1 = TableChanges.ColumnAddChange.get(updateSchema);
     addChange1.addColumns("col1", Types.BooleanType.get(), "add new col1");
     InternalSchema finalSchema = SchemaChangeUtils.applyTableChanges2Schema(updateSchema, addChange1);
+    // The merger now lives on HoodieSchema. Bridge the legacy InternalSchema
+    // fixtures (built via the DDL action algebra still under exercise here)
+    // and run the merge through the new façade.
+    HoodieSchema oldHoodie = HoodieSchemaInternalSchemaBridge.toHoodieSchema(oldSchema, "Record");
+    HoodieSchema finalHoodie = HoodieSchemaInternalSchemaBridge.toHoodieSchema(finalSchema, "Record");
+
     // merge schema by using columnType from query schema
-    Pair<InternalSchema, Map<String, String>> mergeSchemaWithRenamedField = new InternalSchemaMerger(oldSchema, finalSchema, true, false, false).mergeSchemaGetRenamed();
-    InternalSchema mergeSchema = mergeSchemaWithRenamedField.getLeft();
-    assertEquals("col2", mergeSchemaWithRenamedField.getRight().get("colx"));
+    Pair<HoodieSchema, Map<String, String>> mergeWithRenamed = new HoodieSchemaMerger(
+        oldHoodie, finalHoodie, true, false, false).mergeSchemaGetRenamed();
+    assertEquals("col2", mergeWithRenamed.getRight().get("colx"));
     InternalSchema checkedSchema = new InternalSchema(Types.RecordType.get(Arrays.asList(
         Types.Field.get(4, true, "c1", Types.BooleanType.get(), "add c1 after col1"),
         Types.Field.get(5, true, "c2", Types.IntType.get(), "add c2 before col3"),
@@ -79,18 +90,18 @@ public class TestMergeSchema {
         Types.Field.get(1, true, "col2", Types.LongType.get(), "alter col2 comments"),
         Types.Field.get(6, true, "col1suffix", Types.BooleanType.get(), "add new col1"))));
     // merged schema without renamed fields
-    mergeSchema = new InternalSchemaMerger(oldSchema, finalSchema, true, false).mergeSchema();
-    assertEquals(mergeSchema, checkedSchema);
+    HoodieSchema mergeSchema = new HoodieSchemaMerger(oldHoodie, finalHoodie, true, false).mergeSchema();
+    assertEquals(checkedSchema, HoodieSchemaInternalSchemaBridge.toInternalSchema(mergeSchema));
 
     // merge schema by using columnType from file schema
-    InternalSchema mergeSchema1 = new InternalSchemaMerger(oldSchema, finalSchema, true, true).mergeSchema();
+    HoodieSchema mergeSchema1 = new HoodieSchemaMerger(oldHoodie, finalHoodie, true, true).mergeSchema();
     InternalSchema checkedSchema1 = new InternalSchema(Types.RecordType.get(Arrays.asList(
         Types.Field.get(4, true, "c1", Types.BooleanType.get(), "add c1 after col1"),
         Types.Field.get(5, true, "c2", Types.IntType.get(), "add c2 before col3"),
         Types.Field.get(3, true, "col4", Types.FloatType.get()),
         Types.Field.get(1, true, "col2", Types.IntType.get(), "alter col2 comments"),
         Types.Field.get(6, true, "col1suffix", Types.BooleanType.get(), "add new col1"))));
-    assertEquals(mergeSchema1, checkedSchema1);
+    assertEquals(checkedSchema1, HoodieSchemaInternalSchemaBridge.toInternalSchema(mergeSchema1));
   }
 }
 
