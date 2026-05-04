@@ -54,6 +54,7 @@ import org.mockito.MockedStatic;
 import java.io.IOException;
 import java.net.URISyntaxException;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -222,12 +223,12 @@ class TestTableSchemaResolver {
 
     HoodieCommitMetadata insertMetadata = new HoodieCommitMetadata();
     insertMetadata.setOperationType(org.apache.hudi.common.model.WriteOperationType.INSERT);
-    // Create a valid InternalSchema
-    org.apache.hudi.internal.schema.InternalSchema internalSchema = new org.apache.hudi.internal.schema.InternalSchema(
-        org.apache.hudi.common.schema.types.Types.RecordType.get(
-            org.apache.hudi.common.schema.types.Types.Field.get(0, false, "id", org.apache.hudi.common.schema.types.Types.IntType.get())));
-    insertMetadata.addMetadata(org.apache.hudi.internal.schema.utils.SerDeHelper.LATEST_SCHEMA,
-        org.apache.hudi.internal.schema.utils.SerDeHelper.toJson(internalSchema));
+    // Build a non-empty HoodieSchema fixture and serialize via HoodieSchemaSerDe.
+    HoodieSchema evolutionSchema = HoodieSchema.createRecord("schema", null, null, false,
+        Collections.singletonList(HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.INT))));
+    insertMetadata.addMetadata(
+        org.apache.hudi.common.schema.evolution.HoodieSchemaSerDe.LATEST_SCHEMA,
+        org.apache.hudi.common.schema.evolution.HoodieSchemaSerDe.toJson(evolutionSchema));
 
     HoodieCommitMetadata compactMetadata = new HoodieCommitMetadata();
     compactMetadata.setOperationType(org.apache.hudi.common.model.WriteOperationType.COMPACT);
@@ -305,12 +306,12 @@ class TestTableSchemaResolver {
 
     HoodieCommitMetadata insertMetadata1 = new HoodieCommitMetadata();
     insertMetadata1.setOperationType(org.apache.hudi.common.model.WriteOperationType.INSERT);
-    // Create a valid InternalSchema
-    org.apache.hudi.internal.schema.InternalSchema internalSchema = new org.apache.hudi.internal.schema.InternalSchema(
-        org.apache.hudi.common.schema.types.Types.RecordType.get(
-            org.apache.hudi.common.schema.types.Types.Field.get(0, false, "id", org.apache.hudi.common.schema.types.Types.IntType.get())));
-    insertMetadata1.addMetadata(org.apache.hudi.internal.schema.utils.SerDeHelper.LATEST_SCHEMA,
-        org.apache.hudi.internal.schema.utils.SerDeHelper.toJson(internalSchema));
+    // Build a non-empty HoodieSchema fixture and serialize via HoodieSchemaSerDe.
+    HoodieSchema evolutionSchema1 = HoodieSchema.createRecord("schema", null, null, false,
+        Collections.singletonList(HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.INT))));
+    insertMetadata1.addMetadata(
+        org.apache.hudi.common.schema.evolution.HoodieSchemaSerDe.LATEST_SCHEMA,
+        org.apache.hudi.common.schema.evolution.HoodieSchemaSerDe.toJson(evolutionSchema1));
 
     HoodieCommitMetadata insertMetadata2 = new HoodieCommitMetadata();
     insertMetadata2.setOperationType(org.apache.hudi.common.model.WriteOperationType.INSERT);
