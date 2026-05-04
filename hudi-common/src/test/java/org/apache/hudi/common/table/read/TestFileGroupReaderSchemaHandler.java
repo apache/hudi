@@ -41,7 +41,6 @@ import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.common.schema.types.Types;
-import org.apache.hudi.internal.schema.convert.InternalSchemaConverter;
 import org.apache.hudi.storage.StoragePath;
 
 import org.junit.jupiter.api.Test;
@@ -109,7 +108,7 @@ public class TestFileGroupReaderSchemaHandler extends SchemaHandlerTestBase {
     HoodieReaderContext<String> readerContext = createReaderContext(hoodieTableConfig, false, false, true, false, null);
     HoodieSchema requestedSchema = generateProjectionSchema("_hoodie_record_key", "timestamp", "rider");
 
-    InternalSchema internalSchema = InternalSchemaConverter.convert(DATA_SCHEMA);
+    InternalSchema internalSchema = HoodieSchemaInternalSchemaBridge.toInternalSchema(DATA_SCHEMA);
     InternalSchema originalSchema = new InternalSchema(Types.RecordType.get(internalSchema.columns().stream().map(field -> {
       if (field.name().equals("timestamp")) {
         // rename timestamp to ts in file schema and change type to int, output schema names and types must match the requested schema
