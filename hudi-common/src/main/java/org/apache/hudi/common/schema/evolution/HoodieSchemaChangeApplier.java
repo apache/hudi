@@ -109,11 +109,22 @@ public class HoodieSchemaChangeApplier {
 
   /**
    * Delete one or more columns. For nested fields, use dot-separated full paths.
+   * Each name is resolved to its column id and the corresponding field is
+   * removed wherever it appears in the schema tree (top-level, in a nested
+   * record, in a record under a map value, etc.). Throws when any name
+   * doesn't resolve.
    */
   public HoodieSchema applyDeleteChange(String... colNames) {
-    TableChanges.ColumnDeleteChange delete = TableChanges.ColumnDeleteChange.get(latestInternal);
-    Arrays.stream(colNames).forEach(delete::deleteColumn);
-    return wrap(SchemaChangeUtils.applyTableChanges2Schema(latestInternal, delete));
+    HoodieSchema result = latestSchema;
+    for (String colName : colNames) {
+      int targetId = result.findIdByName(colName);
+      if (targetId < 0) {
+        throw new IllegalArgumentException(
+            String.format("cannot delete col: %s which does not exist in schema", colName));
+      }
+      result = deleteFieldById(result, targetId);
+    }
+    return result;
   }
 
   /**
@@ -238,7 +249,7 @@ public class HoodieSchemaChangeApplier {
   private static HoodieSchema rewriteRecord(HoodieSchema record, String[] parts, int idx, FieldTransform transform) {
     if (record.getType() != HoodieSchemaType.RECORD) {
       throw new IllegalArgumentException("expected record at depth " + idx + " of path "
-          + java.util.Arrays.toString(parts) + ", got " + record.getType());
+          + Arrays.toString(parts) + ", got " + record.getType());
     }
     String segment = parts[idx];
     boolean isLeaf = idx == parts.length - 1;
@@ -259,7 +270,7 @@ public class HoodieSchemaChangeApplier {
     }
     if (!found) {
       throw new IllegalArgumentException("cannot find field '" + segment + "' at depth " + idx
-          + " in path " + java.util.Arrays.toString(parts));
+          + " in path " + Arrays.toString(parts));
     }
     return HoodieSchema.createRecord(record.getName(), record.getNamespace().orElse(null),
         record.getDoc().orElse(null), newFields);
@@ -330,5 +341,89 @@ public class HoodieSchemaChangeApplier {
 
   private static int readIntProp(Object raw) {
     return raw instanceof Number ? ((Number) raw).intValue() : -1;
+  }
+
+  // -------------------------------------------------------------------------
+  // Id-based delete walker. Removes any record field whose field-id matches
+  // {@code targetId} from the schema tree, recursing through arrays /
+  // map values to find nested occurrences. Element-id / key-id / value-id
+  // props are preserved on rebuilt array / map sub-trees.
+  // -------------------------------------------------------------------------
+
+  private static HoodieSchema deleteFieldById(HoodieSchema source, int targetId) {
+    boolean nullable = source.isNullable();
+    HoodieSchema effective = nullable ? source.getNonNullType() : source;
+    HoodieSchema rewritten = deleteFieldByIdInner(effective, targetId);
+    if (source.schemaId() >= 0) {
+      rewritten.setSchemaId(source.schemaId());
+    }
+    if (source.maxColumnId() >= 0) {
+      rewritten.setMaxColumnId(source.maxColumnId());
+    }
+    rewritten.invalidateIdIndex();
+    return nullable ? HoodieSchema.createNullable(rewritten) : rewritten;
+  }
+
+  private static HoodieSchema deleteFieldByIdInner(HoodieSchema schema, int targetId) {
+    HoodieSchema effective = schema.isNullable() ? schema.getNonNullType() : schema;
+    switch (effective.getType()) {
+      case RECORD: {
+        List<HoodieSchemaField> newFields = new ArrayList<>(effective.getFields().size());
+        for (HoodieSchemaField field : effective.getFields()) {
+          if (field.fieldId() == targetId) {
+            // skip — this is the field being deleted
+            continue;
+          }
+          // Field stays — but its sub-tree may contain the target id, so recurse.
+          HoodieSchema newSubSchema = deleteFieldByIdInner(field.schema(), targetId);
+          newFields.add(rebuildField(field, field.name(), newSubSchema, field.doc().orElse(null)));
+        }
+        HoodieSchema newRecord = HoodieSchema.createRecord(
+            effective.getName(), effective.getNamespace().orElse(null),
+            effective.getDoc().orElse(null), newFields);
+        return reWrapNullability(schema, newRecord);
+      }
+      case ARRAY: {
+        HoodieSchema elementType = effective.getElementType();
+        HoodieSchema newElement = deleteFieldByIdInner(elementType, targetId);
+        if (newElement == elementType) {
+          return schema;
+        }
+        int elementId = readIntProp(effective.getAvroSchema().getObjectProp(HoodieSchema.ELEMENT_ID_PROP));
+        HoodieSchema arr = HoodieSchema.createArray(newElement);
+        if (elementId >= 0) {
+          arr.getAvroSchema().addProp(HoodieSchema.ELEMENT_ID_PROP, elementId);
+        }
+        return reWrapNullability(schema, arr);
+      }
+      case MAP: {
+        HoodieSchema valueType = effective.getValueType();
+        HoodieSchema newValue = deleteFieldByIdInner(valueType, targetId);
+        if (newValue == valueType) {
+          return schema;
+        }
+        int keyId = readIntProp(effective.getAvroSchema().getObjectProp(HoodieSchema.KEY_ID_PROP));
+        int valueId = readIntProp(effective.getAvroSchema().getObjectProp(HoodieSchema.VALUE_ID_PROP));
+        HoodieSchema map = HoodieSchema.createMap(newValue);
+        if (keyId >= 0) {
+          map.getAvroSchema().addProp(HoodieSchema.KEY_ID_PROP, keyId);
+        }
+        if (valueId >= 0) {
+          map.getAvroSchema().addProp(HoodieSchema.VALUE_ID_PROP, valueId);
+        }
+        return reWrapNullability(schema, map);
+      }
+      default:
+        return schema;
+    }
+  }
+
+  /**
+   * Re-wraps {@code rebuilt} in a [null, T] union if {@code source} was
+   * nullable. Used after a sub-tree rebuild so the parent's nullability
+   * encoding survives the round-trip.
+   */
+  private static HoodieSchema reWrapNullability(HoodieSchema source, HoodieSchema rebuilt) {
+    return source.isNullable() ? HoodieSchema.createNullable(rebuilt) : rebuilt;
   }
 }
