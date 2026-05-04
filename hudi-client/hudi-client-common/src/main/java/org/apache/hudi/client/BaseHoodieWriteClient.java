@@ -324,7 +324,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     // do save internal schema to support Implicitly add columns in write process
     if (!metadata.getExtraMetadata().containsKey(HoodieSchemaSerDe.LATEST_SCHEMA)
         && metadata.getExtraMetadata().containsKey(SCHEMA_KEY) && table.getConfig().getSchemaEvolutionEnable()) {
-      saveInternalSchema(table, instantTime, metadata);
+      saveEvolutionSchema(table, instantTime, metadata);
     }
     // update Metadata table
     writeToMetadataTable(skipStreamingWritesToMetadataTable, table, instantTime, tableWriteStats.getMetadataTableWriteStats(), metadata);
@@ -350,8 +350,8 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     }
   }
 
-  // Save internal schema
-  private void saveInternalSchema(HoodieTable table, String instantTime, HoodieCommitMetadata metadata) {
+  // Save evolution schema to commit metadata + history file.
+  private void saveEvolutionSchema(HoodieTable table, String instantTime, HoodieCommitMetadata metadata) {
     TableSchemaResolver schemaUtil = new TableSchemaResolver(table.getMetaClient());
     String historySchemaStr = schemaUtil.getTableHistorySchemaStrFromCommitMetadata().orElse("");
     HoodieSchemaHistoryStorageManager schemasManager = new HoodieSchemaHistoryStorageManager(table.getMetaClient());
@@ -360,8 +360,8 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
       HoodieSchema schema = HoodieSchemaUtils.createHoodieWriteSchema(config.getSchema(), config.allowOperationMetadataField());
       if (historySchemaStr.isEmpty()) {
         evolutionSchema = HoodieSchemaSerDe.fromJson(config.getInternalSchema()).orElseGet(() -> {
-          // Mirror legacy InternalSchemaConverter.convert(HoodieSchema) — fresh ID assignment
-          // produces a schema that the evolution layer can reason about.
+          // No serialized evolution schema yet — mint fresh ids on the writer schema
+          // so the evolution layer has something concrete to reason about.
           HoodieSchema fresh = HoodieSchema.fromAvroSchema(schema.toAvroSchema());
           HoodieSchemaIdAssigner.assignFresh(fresh);
           fresh.invalidateIdIndex();
@@ -386,9 +386,8 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
         metadata.addMetadata(HoodieSchemaSerDe.LATEST_SCHEMA, newSchemaStr);
         schemasManager.persistHistorySchemaStr(instantTime, HoodieSchemaSerDe.inheritHistory(evolvedSchema, historySchemaStr));
       }
-      // update SCHEMA_KEY — preserve the writer schema's record name in the stored
-      // Avro JSON, mirroring the legacy InternalSchemaConverter.convert(_, schema.getFullName())
-      // pattern.
+      // SCHEMA_KEY stores the writer's Avro schema, with the record name set to the
+      // writer schema's full name.
       metadata.addMetadata(SCHEMA_KEY,
           HoodieSchemaInternalSchemaBridge.withRecordName(evolvedSchema, schema.getFullName()).toString());
     }
