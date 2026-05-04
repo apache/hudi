@@ -122,6 +122,27 @@ public class HoodieListPairData<K, V> extends HoodieBaseListData<Pair<K, V>> imp
   }
 
   @Override
+  public HoodiePairData<K, V> groupByKeyAndReduce(SerializableFunction<Iterable<V>,V> function) {
+    Collector<Pair<K, V>, ?, List<V>> mappingCollector = Collectors.mapping(Pair::getValue, Collectors.toList());
+    Collector<Pair<K, V>, ?, Map<K, List<V>>> groupingCollector =
+        Collectors.groupingBy(Pair::getKey, mappingCollector);
+
+    Map<K, List<V>> groupedByKey = asStream().collect(groupingCollector);
+    return new HoodieListPairData<>(
+      groupedByKey.entrySet().stream().map(e -> {
+        V data;
+        try {
+          data = function.apply(e.getValue());
+        } catch (Exception exception) {
+          data = null;
+        }
+        return Pair.of(e.getKey(), data);
+      }),
+      lazy
+    );
+  }
+
+  @Override
   public HoodiePairData<K, V> reduceByKey(SerializableBiFunction<V, V, V> combiner, int parallelism) {
     Map<K, java.util.Optional<V>> reducedMap = asStream().collect(
         Collectors.groupingBy(
