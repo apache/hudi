@@ -152,14 +152,21 @@ public final class HoodieSchemaEvolutionUtils {
   /**
    * Maps a filter column name from the query schema's namespace to the file
    * schema's namespace (or returns "" when the column was deleted on the file
-   * side). HoodieSchema-shaped replacement for
+   * side). HoodieSchema-direct replacement for
    * {@link InternalSchemaUtils#reBuildFilterName(String, InternalSchema, InternalSchema)}.
    */
   public static String reBuildFilterName(String name, HoodieSchema fileSchema, HoodieSchema querySchema) {
-    return InternalSchemaUtils.reBuildFilterName(
-        name,
-        HoodieSchemaInternalSchemaBridge.toInternalSchema(fileSchema),
-        HoodieSchemaInternalSchemaBridge.toInternalSchema(querySchema));
+    int nameId = querySchema.findIdByName(name);
+    if (nameId < 0) {
+      throw new IllegalArgumentException(String.format(
+          "cannot find filter col name: %s from querySchema: %s", name, querySchema));
+    }
+    if (fileSchema.findType(nameId) == null) {
+      // column added on the query side — file does not contain it, so the filter is dead.
+      return "";
+    }
+    String fileName = fileSchema.findFullName(nameId);
+    return name.equals(fileName) ? name : fileName;
   }
 
   public static Map<String, String> collectRenameCols(HoodieSchema oldSchema, HoodieSchema newSchema) {
