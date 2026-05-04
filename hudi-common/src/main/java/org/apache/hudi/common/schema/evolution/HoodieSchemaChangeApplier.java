@@ -21,13 +21,6 @@ package org.apache.hudi.common.schema.evolution;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.schema.HoodieSchemaType;
-import org.apache.hudi.common.schema.evolution.legacy.InternalSchema;
-import org.apache.hudi.common.schema.evolution.legacy.action.TableChange;
-import org.apache.hudi.common.schema.evolution.legacy.action.TableChanges;
-import org.apache.hudi.common.schema.evolution.legacy.action.TableChangesHelper;
-import org.apache.hudi.common.schema.evolution.legacy.convert.InternalSchemaConverter;
-import org.apache.hudi.common.schema.evolution.legacy.utils.SchemaChangeUtils;
-import org.apache.hudi.common.schema.types.Type;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -39,72 +32,61 @@ import java.util.Map;
  * (ADD / DELETE / RENAME / UPDATE / REORDER).
  *
  * <p>Each method returns a new {@link HoodieSchema}; the input is not mutated.
- * Field ids are preserved end-to-end via
- * {@link HoodieSchemaInternalSchemaBridge}, so subsequent callers can still
- * resolve renamed columns by id.
- *
- * <p>Implementation orchestrates the legacy {@code TableChanges} builders +
- * {@code SchemaChangeUtils.applyTableChanges2Schema} (still on InternalSchema
- * because they're substantial classes that haven't been ported to HoodieSchema
- * yet) and converts at the bridge boundary. The inlined algorithm is identical
- * to what the prior {@code InternalSchemaChangeApplier} did — same TableChanges
- * builders, same parent/leaf splitting, same FIRST/AFTER/BEFORE position rules.
+ * Field ids are preserved end-to-end so subsequent callers can resolve renamed
+ * columns by id. All seven operations walk HoodieSchema directly (no
+ * InternalSchema bridge).
  */
 public class HoodieSchemaChangeApplier {
 
   private final HoodieSchema latestSchema;
-  private final InternalSchema latestInternal;
-  private final String recordName;
 
   public HoodieSchemaChangeApplier(HoodieSchema latestSchema) {
     this.latestSchema = latestSchema;
-    // Use the id-preserving bridge so existing field ids carried as Avro
-    // custom properties survive the round trip into the legacy TableChanges builders.
-    this.latestInternal = HoodieSchemaInternalSchemaBridge.toInternalSchema(latestSchema);
-    this.recordName = latestSchema.getFullName();
   }
 
   /**
    * Add a column to the table. For nested fields, use a dot-separated full path
    * in {@code colName}. Position can be FIRST (no reference), or AFTER/BEFORE a
-   * sibling of the same parent.
+   * sibling of the same parent. The new column is always nullable (Hudi
+   * convention for added columns).
    */
   public HoodieSchema applyAddChange(String colName,
                                      HoodieSchema colType,
                                      String doc,
                                      String position,
                                      ColumnPositionType positionType) {
-    Type internalType = InternalSchemaConverter.convertToField(colType);
-    TableChanges.ColumnAddChange add = TableChanges.ColumnAddChange.get(latestInternal);
-    String parentName = TableChangesHelper.getParentName(colName);
-    String leafName = TableChangesHelper.getLeafName(colName);
-    add.addColumns(parentName, leafName, internalType, doc);
     if (positionType == null) {
       throw new IllegalArgumentException("positionType should be specified");
     }
-    TableChange.ColumnPositionChange.ColumnPositionType legacyPos = positionType.toLegacy();
-    switch (legacyPos) {
-      case NO_OPERATION:
-        break;
-      case FIRST:
-        add.addPositionChange(colName, "", legacyPos);
-        break;
-      case AFTER:
-      case BEFORE:
-        if (position == null || position.isEmpty()) {
-          throw new IllegalArgumentException("position should not be null/empty_string when specify positionChangeType as after/before");
-        }
-        String referParentName = TableChangesHelper.getParentName(position);
-        if (!parentName.equals(referParentName)) {
-          throw new IllegalArgumentException("cannot reorder two columns which has different parent");
-        }
-        add.addPositionChange(colName, position, legacyPos);
-        break;
-      default:
+    String parentName = parentOf(colName);
+    String leafName = leafOf(colName);
+    if (positionType == ColumnPositionType.AFTER || positionType == ColumnPositionType.BEFORE) {
+      if (position == null || position.isEmpty()) {
         throw new IllegalArgumentException(
-            String.format("only support first/before/after but found: %s", legacyPos));
+            "position should not be null/empty_string when specify positionChangeType as after/before");
+      }
+      if (!parentName.equals(parentOf(position))) {
+        throw new IllegalArgumentException("cannot reorder two columns which has different parent");
+      }
     }
-    return wrap(SchemaChangeUtils.applyTableChanges2Schema(latestInternal, add));
+
+    int newId = nextColumnId(latestSchema);
+    HoodieSchema effectiveType = colType.isNullable() ? colType.getNonNullType() : colType;
+    HoodieSchemaField newField = HoodieSchemaField.of(
+        leafName, HoodieSchema.createNullable(effectiveType), doc, null);
+    newField.addProp(HoodieSchema.FIELD_ID_PROP, newId);
+    String refLeaf = (position != null && !position.isEmpty()) ? leafOf(position) : null;
+
+    HoodieSchema result = rewriteRecordAt(latestSchema, parentName,
+        parent -> insertFieldInRecord(parent, newField, refLeaf, positionType));
+    // The new field's id raised the max — bump the schema's tracker so callers
+    // that consume {@link HoodieSchema#maxColumnId()} (notably the SerDe) see
+    // the up-to-date ceiling.
+    if (result.maxColumnId() < newId) {
+      result.setMaxColumnId(newId);
+    }
+    result.invalidateIdIndex();
+    return result;
   }
 
   /**
@@ -150,9 +132,8 @@ public class HoodieSchemaChangeApplier {
   }
 
   /**
-   * Promote a column to a wider type. Legal promotions are defined by
-   * {@link SchemaChangeUtils#isTypeUpdateAllow}; this method does not enforce
-   * them — callers are expected to validate compatibility.
+   * Promote a column to a wider type. Type-promotion legality is decided by
+   * the caller — this applier does not enforce compatibility.
    */
   public HoodieSchema applyColumnTypeChange(String colName, HoodieSchema newType) {
     return rewriteFieldByName(latestSchema, colName, field -> {
@@ -180,18 +161,23 @@ public class HoodieSchemaChangeApplier {
   public HoodieSchema applyReOrderColPositionChange(String colName,
                                                     String referColName,
                                                     ColumnPositionType positionType) {
-    TableChanges.ColumnUpdateChange update = TableChanges.ColumnUpdateChange.get(latestInternal);
-    TableChange.ColumnPositionChange.ColumnPositionType legacyPos = positionType.toLegacy();
-    String parentName = TableChangesHelper.getParentName(colName);
-    String referParentName = TableChangesHelper.getParentName(referColName);
-    if (legacyPos.equals(TableChange.ColumnPositionChange.ColumnPositionType.FIRST)) {
-      update.addPositionChange(colName, "", legacyPos);
-    } else if (parentName.equals(referParentName)) {
-      update.addPositionChange(colName, referColName, legacyPos);
-    } else {
-      throw new IllegalArgumentException("cannot reorder two columns which has different parent");
+    if (positionType == null) {
+      throw new IllegalArgumentException("positionType should be specified");
     }
-    return wrap(SchemaChangeUtils.applyTableChanges2Schema(latestInternal, update));
+    String parentName = parentOf(colName);
+    String colLeaf = leafOf(colName);
+    if (positionType != ColumnPositionType.FIRST) {
+      if (referColName == null || referColName.isEmpty()) {
+        throw new IllegalArgumentException(
+            "referColName should not be null/empty when positionType is " + positionType);
+      }
+      if (!parentName.equals(parentOf(referColName))) {
+        throw new IllegalArgumentException("cannot reorder two columns which has different parent");
+      }
+    }
+    String refLeaf = (referColName != null && !referColName.isEmpty()) ? leafOf(referColName) : null;
+    return rewriteRecordAt(latestSchema, parentName,
+        parent -> moveFieldInRecord(parent, colLeaf, refLeaf, positionType));
   }
 
   /**
@@ -199,10 +185,6 @@ public class HoodieSchemaChangeApplier {
    */
   public HoodieSchema getLatestSchema() {
     return latestSchema;
-  }
-
-  private HoodieSchema wrap(InternalSchema result) {
-    return HoodieSchemaInternalSchemaBridge.toHoodieSchema(result, recordName);
   }
 
   // -------------------------------------------------------------------------
@@ -265,7 +247,10 @@ public class HoodieSchemaChangeApplier {
           newFields.add(rebuildField(field, field.name(), rewrittenChild, field.doc().orElse(null)));
         }
       } else {
-        newFields.add(field);
+        // Avro Schema.Field instances cannot be re-parented to a second
+        // record, so untouched fields still need a clone before they go
+        // into the rebuilt parent.
+        newFields.add(rebuildField(field, field.name(), field.schema(), field.doc().orElse(null)));
       }
     }
     if (!found) {
@@ -425,5 +410,288 @@ public class HoodieSchemaChangeApplier {
    */
   private static HoodieSchema reWrapNullability(HoodieSchema source, HoodieSchema rebuilt) {
     return source.isNullable() ? HoodieSchema.createNullable(rebuilt) : rebuilt;
+  }
+
+  // -------------------------------------------------------------------------
+  // Parent-record walker for position-aware ops (add / reorder). The walker
+  // descends a dotted parent path (with "element" / "value" segments for
+  // arrays / maps) until it lands on a record schema, applies the supplied
+  // transform, and rebuilds the surrounding tree. element-id / key-id /
+  // value-id props are preserved on rebuilt array / map sub-trees.
+  // -------------------------------------------------------------------------
+
+  @FunctionalInterface
+  private interface RecordTransform {
+    HoodieSchema apply(HoodieSchema record);
+  }
+
+  private static HoodieSchema rewriteRecordAt(HoodieSchema source, String parentPath, RecordTransform transform) {
+    boolean topLevel = parentPath == null || parentPath.isEmpty();
+    boolean nullable = source.isNullable();
+    HoodieSchema effective = nullable ? source.getNonNullType() : source;
+    HoodieSchema rewritten;
+    if (topLevel) {
+      if (effective.getType() != HoodieSchemaType.RECORD) {
+        throw new IllegalArgumentException("expected root record, got " + effective.getType());
+      }
+      rewritten = transform.apply(effective);
+    } else {
+      String[] parts = parentPath.split("\\.");
+      rewritten = walkAndRewriteRecord(effective, parts, 0, transform);
+    }
+    if (source.schemaId() >= 0) {
+      rewritten.setSchemaId(source.schemaId());
+    }
+    if (source.maxColumnId() >= 0) {
+      rewritten.setMaxColumnId(source.maxColumnId());
+    }
+    rewritten.invalidateIdIndex();
+    return nullable ? HoodieSchema.createNullable(rewritten) : rewritten;
+  }
+
+  /**
+   * Walks {@code parts[idx..]} from a non-null {@code effective} schema and
+   * applies {@code transform} to the record at the end of the path. Returns
+   * the rewritten schema in non-null form; callers re-wrap nullability.
+   */
+  private static HoodieSchema walkAndRewriteRecord(HoodieSchema effective,
+                                                   String[] parts,
+                                                   int idx,
+                                                   RecordTransform transform) {
+    String segment = parts[idx];
+    boolean isLast = idx == parts.length - 1;
+    HoodieSchemaType t = effective.getType();
+    if (t == HoodieSchemaType.RECORD) {
+      List<HoodieSchemaField> newFields = new ArrayList<>(effective.getFields().size());
+      boolean found = false;
+      for (HoodieSchemaField field : effective.getFields()) {
+        if (!found && field.name().equals(segment)) {
+          found = true;
+          HoodieSchema fieldSchema = field.schema();
+          boolean fieldNullable = fieldSchema.isNullable();
+          HoodieSchema fieldEffective = fieldNullable ? fieldSchema.getNonNullType() : fieldSchema;
+          HoodieSchema rewrittenInner;
+          if (isLast) {
+            if (fieldEffective.getType() != HoodieSchemaType.RECORD) {
+              throw new IllegalArgumentException(
+                  "expected record at end of parent path " + Arrays.toString(parts)
+                      + ", got " + fieldEffective.getType());
+            }
+            rewrittenInner = transform.apply(fieldEffective);
+          } else {
+            rewrittenInner = walkAndRewriteRecord(fieldEffective, parts, idx + 1, transform);
+          }
+          HoodieSchema finalInner = fieldNullable ? HoodieSchema.createNullable(rewrittenInner) : rewrittenInner;
+          newFields.add(rebuildField(field, field.name(), finalInner, field.doc().orElse(null)));
+        } else {
+          // Avro Schema.Field instances cannot be re-parented to a second
+          // record, so untouched fields still need a clone before they go
+          // into the rebuilt parent.
+          newFields.add(rebuildField(field, field.name(), field.schema(), field.doc().orElse(null)));
+        }
+      }
+      if (!found) {
+        throw new IllegalArgumentException(
+            "cannot find field '" + segment + "' at depth " + idx + " in path " + Arrays.toString(parts));
+      }
+      return HoodieSchema.createRecord(effective.getName(), effective.getNamespace().orElse(null),
+          effective.getDoc().orElse(null), newFields);
+    }
+    if (t == HoodieSchemaType.ARRAY) {
+      if (!"element".equals(segment)) {
+        throw new IllegalArgumentException("expected 'element' at depth " + idx + ", got " + segment);
+      }
+      HoodieSchema elementType = effective.getElementType();
+      boolean elemNullable = elementType.isNullable();
+      HoodieSchema elemEffective = elemNullable ? elementType.getNonNullType() : elementType;
+      HoodieSchema rewrittenElem;
+      if (isLast) {
+        if (elemEffective.getType() != HoodieSchemaType.RECORD) {
+          throw new IllegalArgumentException(
+              "expected record at end of parent path " + Arrays.toString(parts)
+                  + ", got " + elemEffective.getType());
+        }
+        rewrittenElem = transform.apply(elemEffective);
+      } else {
+        rewrittenElem = walkAndRewriteRecord(elemEffective, parts, idx + 1, transform);
+      }
+      HoodieSchema finalElem = elemNullable ? HoodieSchema.createNullable(rewrittenElem) : rewrittenElem;
+      int eId = readIntProp(effective.getAvroSchema().getObjectProp(HoodieSchema.ELEMENT_ID_PROP));
+      HoodieSchema arr = HoodieSchema.createArray(finalElem);
+      if (eId >= 0) {
+        arr.getAvroSchema().addProp(HoodieSchema.ELEMENT_ID_PROP, eId);
+      }
+      return arr;
+    }
+    if (t == HoodieSchemaType.MAP) {
+      if (!"value".equals(segment)) {
+        throw new IllegalArgumentException("expected 'value' at depth " + idx + ", got " + segment);
+      }
+      HoodieSchema valueType = effective.getValueType();
+      boolean valNullable = valueType.isNullable();
+      HoodieSchema valEffective = valNullable ? valueType.getNonNullType() : valueType;
+      HoodieSchema rewrittenVal;
+      if (isLast) {
+        if (valEffective.getType() != HoodieSchemaType.RECORD) {
+          throw new IllegalArgumentException(
+              "expected record at end of parent path " + Arrays.toString(parts)
+                  + ", got " + valEffective.getType());
+        }
+        rewrittenVal = transform.apply(valEffective);
+      } else {
+        rewrittenVal = walkAndRewriteRecord(valEffective, parts, idx + 1, transform);
+      }
+      HoodieSchema finalVal = valNullable ? HoodieSchema.createNullable(rewrittenVal) : rewrittenVal;
+      int kId = readIntProp(effective.getAvroSchema().getObjectProp(HoodieSchema.KEY_ID_PROP));
+      int vId = readIntProp(effective.getAvroSchema().getObjectProp(HoodieSchema.VALUE_ID_PROP));
+      HoodieSchema map = HoodieSchema.createMap(finalVal);
+      if (kId >= 0) {
+        map.getAvroSchema().addProp(HoodieSchema.KEY_ID_PROP, kId);
+      }
+      if (vId >= 0) {
+        map.getAvroSchema().addProp(HoodieSchema.VALUE_ID_PROP, vId);
+      }
+      return map;
+    }
+    throw new IllegalArgumentException("cannot descend through " + t + " at depth " + idx);
+  }
+
+  /**
+   * Inserts {@code newField} into {@code record}'s field list at the position
+   * determined by {@code positionType} / {@code refLeaf}. NO_OPERATION
+   * appends; FIRST inserts at index 0; AFTER/BEFORE place relative to the
+   * referenced sibling within the same record.
+   */
+  private static HoodieSchema insertFieldInRecord(HoodieSchema record,
+                                                  HoodieSchemaField newField,
+                                                  String refLeaf,
+                                                  ColumnPositionType positionType) {
+    List<HoodieSchemaField> fields = cloneFieldList(record.getFields());
+    int insertIdx;
+    switch (positionType) {
+      case FIRST:
+        insertIdx = 0;
+        break;
+      case BEFORE: {
+        int refIdx = findFieldIndex(fields, refLeaf);
+        if (refIdx < 0) {
+          throw new IllegalArgumentException("reference column not found: " + refLeaf);
+        }
+        insertIdx = refIdx;
+        break;
+      }
+      case AFTER: {
+        int refIdx = findFieldIndex(fields, refLeaf);
+        if (refIdx < 0) {
+          throw new IllegalArgumentException("reference column not found: " + refLeaf);
+        }
+        insertIdx = refIdx + 1;
+        break;
+      }
+      case NO_OPERATION:
+      default:
+        insertIdx = fields.size();
+        break;
+    }
+    fields.add(insertIdx, newField);
+    return HoodieSchema.createRecord(record.getName(), record.getNamespace().orElse(null),
+        record.getDoc().orElse(null), fields);
+  }
+
+  /**
+   * Moves {@code colLeaf} within {@code record} to the position implied by
+   * {@code positionType} / {@code refLeaf}. The reference index is computed
+   * AFTER the source field is removed, so AFTER refLeaf still places the
+   * moved field immediately after refLeaf even when refLeaf was originally
+   * to the right of colLeaf.
+   */
+  private static HoodieSchema moveFieldInRecord(HoodieSchema record,
+                                                String colLeaf,
+                                                String refLeaf,
+                                                ColumnPositionType positionType) {
+    List<HoodieSchemaField> fields = cloneFieldList(record.getFields());
+    int colIdx = findFieldIndex(fields, colLeaf);
+    if (colIdx < 0) {
+      throw new IllegalArgumentException("column not found: " + colLeaf);
+    }
+    HoodieSchemaField col = fields.remove(colIdx);
+    int insertIdx;
+    switch (positionType) {
+      case FIRST:
+        insertIdx = 0;
+        break;
+      case BEFORE: {
+        int refIdx = findFieldIndex(fields, refLeaf);
+        if (refIdx < 0) {
+          throw new IllegalArgumentException("reference column not found: " + refLeaf);
+        }
+        insertIdx = refIdx;
+        break;
+      }
+      case AFTER: {
+        int refIdx = findFieldIndex(fields, refLeaf);
+        if (refIdx < 0) {
+          throw new IllegalArgumentException("reference column not found: " + refLeaf);
+        }
+        insertIdx = refIdx + 1;
+        break;
+      }
+      default:
+        throw new IllegalArgumentException("unsupported reorder positionType: " + positionType);
+    }
+    fields.add(insertIdx, col);
+    return HoodieSchema.createRecord(record.getName(), record.getNamespace().orElse(null),
+        record.getDoc().orElse(null), fields);
+  }
+
+  /**
+   * Returns a fresh list of HoodieSchemaField clones for {@code source}.
+   * Used by {@link #insertFieldInRecord} / {@link #moveFieldInRecord} —
+   * Avro Schema.Field instances cannot be re-parented to a second record, so
+   * passing the originals into {@link HoodieSchema#createRecord} would trip
+   * {@code AvroRuntimeException("Field already used")}.
+   */
+  private static List<HoodieSchemaField> cloneFieldList(List<HoodieSchemaField> source) {
+    List<HoodieSchemaField> cloned = new ArrayList<>(source.size());
+    for (HoodieSchemaField f : source) {
+      cloned.add(rebuildField(f, f.name(), f.schema(), f.doc().orElse(null)));
+    }
+    return cloned;
+  }
+
+  private static int findFieldIndex(List<HoodieSchemaField> fields, String name) {
+    for (int i = 0; i < fields.size(); i++) {
+      if (fields.get(i).name().equals(name)) {
+        return i;
+      }
+    }
+    return -1;
+  }
+
+  private static String parentOf(String colName) {
+    int dot = colName.lastIndexOf('.');
+    return dot < 0 ? "" : colName.substring(0, dot);
+  }
+
+  private static String leafOf(String colName) {
+    int dot = colName.lastIndexOf('.');
+    return dot < 0 ? colName : colName.substring(dot + 1);
+  }
+
+  /**
+   * Returns the next free column id for {@code source}: max of (the schema's
+   * tracked maxColumnId) and (the largest id observed among existing record
+   * fields / array elements / map keys / map values), plus one. The double
+   * check defends against schemas whose tracker has drifted from the actual
+   * id population.
+   */
+  private static int nextColumnId(HoodieSchema source) {
+    int max = source.maxColumnId();
+    for (int id : source.getAllIds()) {
+      if (id > max) {
+        max = id;
+      }
+    }
+    return max + 1;
   }
 }
