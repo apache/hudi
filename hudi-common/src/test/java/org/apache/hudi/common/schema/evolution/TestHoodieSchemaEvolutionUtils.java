@@ -22,6 +22,7 @@ import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.schema.HoodieJsonProperties;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaField;
+import org.apache.hudi.common.schema.HoodieSchemaIdAssigner;
 import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.common.testutils.SchemaTestUtil;
 import org.apache.hudi.exception.HoodieNullSchemaTypeException;
@@ -445,72 +446,6 @@ public class TestHoodieSchemaEvolutionUtils {
     GenericRecord avroRecordRename = HoodieAvroUtils.rewriteRecordWithNewSchema(avroRecord, hoodieSchemaRename.toAvroSchema(), renameCols);
     // test the correctly of rewrite
     assertTrue(GenericData.get().validate(hoodieSchemaRename.toAvroSchema(), avroRecordRename));
-  }
-
-  @Test
-  public void testEvolutionSchemaFromNewAvroSchema() {
-    Types.RecordType oldRecord = Types.RecordType.get(
-        Types.Field.get(0, false, "id", Types.IntType.get()),
-        Types.Field.get(1, true, "data", Types.StringType.get()),
-        Types.Field.get(2, true, "preferences",
-            Types.RecordType.get(
-                Types.Field.get(5, false, "feature1", Types.BooleanType.get()),
-                Types.Field.get(6, true, "featurex", Types.BooleanType.get()),
-                Types.Field.get(7, true, "feature2", Types.BooleanType.get()))),
-        Types.Field.get(3, false,"doubles", Types.ArrayType.get(8, false, Types.DoubleType.get())),
-        Types.Field.get(4, false, "locations", Types.MapType.get(9, 10, Types.StringType.get(),
-            Types.RecordType.get(
-                Types.Field.get(11, false, "laty", Types.FloatType.get()),
-                Types.Field.get(12, false, "long", Types.FloatType.get())), false)
-        )
-    );
-    InternalSchema oldSchema = new InternalSchema(oldRecord);
-    Types.RecordType evolvedRecord = Types.RecordType.get(
-        Types.Field.get(0, false, "id", Types.IntType.get()),
-        Types.Field.get(1, true, "data", Types.StringType.get()),
-        Types.Field.get(2, true, "preferences",
-            Types.RecordType.get(
-                Types.Field.get(5, false, "feature1", Types.BooleanType.get()),
-                Types.Field.get(5, true, "featurex", Types.BooleanType.get()),
-                Types.Field.get(6, true, "feature2", Types.BooleanType.get()),
-                Types.Field.get(5, true, "feature3", Types.BooleanType.get()))),
-        Types.Field.get(3, false,"doubles", Types.ArrayType.get(7, false, Types.DoubleType.get())),
-        Types.Field.get(4, false, "locations", Types.MapType.get(8, 9, Types.StringType.get(),
-            Types.RecordType.get(
-                Types.Field.get(10, false, "laty", Types.FloatType.get()),
-                Types.Field.get(11, false, "long", Types.FloatType.get())), false)
-        ),
-        Types.Field.get(0, false, "add1", Types.IntType.get()),
-        Types.Field.get(2, true, "addStruct",
-            Types.RecordType.get(
-                Types.Field.get(5, false, "nest1", Types.BooleanType.get()),
-                Types.Field.get(5, true, "nest2", Types.BooleanType.get())))
-    );
-    evolvedRecord = (Types.RecordType)InternalSchemaBuilder.getBuilder().refreshNewId(evolvedRecord, new AtomicInteger(0));
-    HoodieSchema evolvedSchema = InternalSchemaConverter.convert(evolvedRecord, "test1");
-    InternalSchema result = HoodieSchemaEvolutionUtils.reconcileSchema(evolvedSchema.getAvroSchema(), oldSchema, false);
-    Types.RecordType checkedRecord = Types.RecordType.get(
-        Types.Field.get(0, false, "id", Types.IntType.get()),
-        Types.Field.get(1, true, "data", Types.StringType.get()),
-        Types.Field.get(2, true, "preferences",
-            Types.RecordType.get(
-                Types.Field.get(5, false, "feature1", Types.BooleanType.get()),
-                Types.Field.get(6, true, "featurex", Types.BooleanType.get()),
-                Types.Field.get(7, true, "feature2", Types.BooleanType.get()),
-                Types.Field.get(17, true, "feature3", Types.BooleanType.get()))),
-        Types.Field.get(3, false,"doubles", Types.ArrayType.get(8, false, Types.DoubleType.get())),
-        Types.Field.get(4, false, "locations", Types.MapType.get(9, 10, Types.StringType.get(),
-            Types.RecordType.get(
-                Types.Field.get(11, false, "laty", Types.FloatType.get()),
-                Types.Field.get(12, false, "long", Types.FloatType.get())), false)
-        ),
-        Types.Field.get(13, true, "add1", Types.IntType.get()),
-        Types.Field.get(14, true, "addStruct",
-            Types.RecordType.get(
-                Types.Field.get(15, false, "nest1", Types.BooleanType.get()),
-                Types.Field.get(16, true, "nest2", Types.BooleanType.get())))
-    );
-    Assertions.assertEquals(result.getRecord(), checkedRecord);
   }
 
   @Test

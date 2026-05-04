@@ -23,14 +23,8 @@ import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.schema.HoodieSchemaIdAssigner;
 import org.apache.hudi.common.schema.HoodieSchemaType;
-import org.apache.hudi.common.schema.evolution.legacy.InternalSchema;
-import org.apache.hudi.common.schema.evolution.legacy.action.TableChanges;
-import org.apache.hudi.common.schema.evolution.legacy.action.TableChangesHelper;
-import org.apache.hudi.common.schema.evolution.legacy.utils.SchemaChangeUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieNullSchemaTypeException;
-
-import org.apache.avro.Schema;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -40,22 +34,16 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.TreeMap;
 import java.util.stream.Collectors;
-
-import static org.apache.hudi.common.schema.evolution.legacy.convert.InternalSchemaConverter.convert;
 
 /**
  * HoodieSchema-shaped façade for write-path schema evolution: reconciling an
  * incoming write schema against the table's current schema, including missing
  * columns, added columns, type promotions, and nullability adjustments.
  *
- * <p>Production callers go through {@link #reconcileSchema(HoodieSchema, HoodieSchema, boolean)},
- * which walks HoodieSchema directly via {@link HoodieSchemaChangeApplier}
- * (see {@code reconcileHoodieSchemaDirect}). The legacy {@code TableChanges}
- * + {@code SchemaChangeUtils} machinery is still on the {@link InternalSchema}-typed
- * test-surface entries; those will move once the test suite migrates off
- * {@link InternalSchema} fixtures.
+ * <p>All entry points walk HoodieSchema directly via
+ * {@link HoodieSchemaChangeApplier} — see {@code reconcileHoodieSchemaDirect}
+ * for the diff + applier-chain core.
  */
 public final class HoodieSchemaEvolutionUtils {
 
@@ -210,17 +198,6 @@ public final class HoodieSchemaEvolutionUtils {
     // Strip the ids stamped on inputs above — the legacy entry returned
     // id-less Avro schemas.
     return stripIds(result);
-  }
-
-  /**
-   * InternalSchema-typed entry point retained for the legacy-test surface and
-   * any internal caller that still operates on {@link InternalSchema}. Public
-   * callers should prefer {@link #reconcileSchema(HoodieSchema, HoodieSchema, boolean)}.
-   */
-  public static InternalSchema reconcileSchema(Schema incomingSchema,
-                                                InternalSchema oldTableSchema,
-                                                boolean makeMissingFieldsNullable) {
-    return reconcileInternal(incomingSchema, oldTableSchema, makeMissingFieldsNullable);
   }
 
   // -------------------------------------------------------------------------
@@ -482,103 +459,6 @@ public final class HoodieSchemaEvolutionUtils {
               int lastDotIndex = e.lastIndexOf(".");
               return e.substring(lastDotIndex == -1 ? 0 : lastDotIndex + 1);
             }));
-  }
-
-  // -------------------------------------------------------------------------
-  // Internal reconciliation algorithm. Preserved verbatim from the prior
-  // legacy AvroSchemaEvolutionUtils — same TableChanges-builder approach,
-  // same nested-redundancy filter, same nullability-propagation rule.
-  // -------------------------------------------------------------------------
-
-  private static InternalSchema reconcileInternal(Schema incomingSchema,
-                                                  InternalSchema oldTableSchema,
-                                                  boolean makeMissingFieldsNullable) {
-    if (incomingSchema.getType() == Schema.Type.NULL) {
-      return oldTableSchema;
-    }
-    InternalSchema incoming = convert(HoodieSchema.fromAvroSchema(incomingSchema), oldTableSchema.getNameToPosition());
-
-    List<String> colNamesIncoming = incoming.getAllColsFullName();
-    List<String> colNamesOld = oldTableSchema.getAllColsFullName();
-    List<String> diffFromOld = colNamesOld.stream()
-        .filter(f -> !colNamesIncoming.contains(f)).collect(Collectors.toList());
-    List<String> diffFromIncoming = colNamesIncoming.stream()
-        .filter(f -> !colNamesOld.contains(f)).collect(Collectors.toList());
-    List<String> typeChangeColumns = colNamesIncoming.stream()
-        .filter(f -> colNamesOld.contains(f) && !incoming.findType(f).equals(oldTableSchema.findType(f)))
-        .collect(Collectors.toList());
-
-    if (colNamesIncoming.size() == colNamesOld.size() && diffFromOld.isEmpty() && typeChangeColumns.isEmpty()) {
-      return oldTableSchema;
-    }
-
-    // Filter redundant entries — adding a struct surfaces both the struct itself and
-    // each of its leaves, but only the struct should be added.
-    TreeMap<Integer, String> finalAddAction = new TreeMap<>();
-    for (String name : diffFromIncoming) {
-      int splitPoint = name.lastIndexOf(".");
-      String parentName = splitPoint > 0 ? name.substring(0, splitPoint) : "";
-      if (!parentName.isEmpty() && diffFromIncoming.contains(parentName)) {
-        continue;
-      }
-      finalAddAction.put(incoming.findIdByName(name), name);
-    }
-
-    TableChanges.ColumnAddChange addChange = TableChanges.ColumnAddChange.get(oldTableSchema);
-    finalAddAction.forEach((id, name) -> {
-      int splitPoint = name.lastIndexOf(".");
-      String parentName = splitPoint > 0 ? name.substring(0, splitPoint) : "";
-      String rawName = splitPoint > 0 ? name.substring(splitPoint + 1) : name;
-      // Nearest later sibling already in old, ties broken by smallest old-id.
-      String inferPosition = null;
-      int inferPositionOldId = Integer.MAX_VALUE;
-      int incomingIdOfName = incoming.findIdByName(name);
-      for (String c : colNamesIncoming) {
-        if (c.lastIndexOf(".") != splitPoint
-            || !c.startsWith(parentName)
-            || incoming.findIdByName(c) <= incomingIdOfName) {
-          continue;
-        }
-        int cOldId = oldTableSchema.findIdByName(c);
-        if (cOldId > 0 && cOldId < inferPositionOldId) {
-          inferPosition = c;
-          inferPositionOldId = cOldId;
-        }
-      }
-      addChange.addColumns(parentName, rawName, incoming.findType(name), null);
-      if (inferPosition != null) {
-        addChange.addPositionChange(name, inferPosition, "before");
-      }
-    });
-
-    InternalSchema afterAdds = SchemaChangeUtils.applyTableChanges2Schema(oldTableSchema, addChange);
-    TableChanges.ColumnUpdateChange typeChange = TableChanges.ColumnUpdateChange.get(afterAdds);
-    typeChangeColumns.stream()
-        .filter(f -> !incoming.findType(f).isNestedType())
-        .forEach(col -> typeChange.updateColumnType(col, incoming.findType(col)));
-
-    if (makeMissingFieldsNullable) {
-      // For a parent that's missing on the incoming side, only mark the parent
-      // nullable; descendants are unreachable at decode time so flipping them
-      // individually is wasted work and would produce surprising commits.
-      Set<String> visited = new HashSet<>();
-      diffFromOld.stream()
-          .filter(col -> !META_FIELD_NAMES.contains(col))
-          .sorted()
-          .forEach(col -> {
-            String parent = TableChangesHelper.getParentName(col);
-            if (!visited.contains(parent)) {
-              typeChange.updateColumnNullability(col, true);
-            }
-            visited.add(col);
-          });
-    }
-
-    InternalSchema evolved = SchemaChangeUtils.applyTableChanges2Schema(afterAdds, typeChange);
-    if (evolved.equalsIgnoringVersion(oldTableSchema)) {
-      return oldTableSchema;
-    }
-    return evolved;
   }
 
   // -------------------------------------------------------------------------
