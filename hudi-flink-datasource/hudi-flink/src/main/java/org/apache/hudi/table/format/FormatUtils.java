@@ -24,7 +24,6 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaField;
-import org.apache.hudi.common.schema.evolution.HoodieSchemaInternalSchemaBridge;
 import org.apache.hudi.common.serialization.DefaultSerializer;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.InstantRange;
@@ -142,7 +141,7 @@ public class FormatUtils {
         .withRequestedSchema(requiredSchema)
         .withEvolutionSchema(internalSchemaManager.getQuerySchema() == null
             ? Option.empty()
-            : Option.of(HoodieSchemaInternalSchemaBridge.toHoodieSchema(internalSchemaManager.getQuerySchema(), "schema")))
+            : Option.of(internalSchemaManager.getQuerySchema()))
         .withProps(typedProps)
         .withShouldUseRecordPosition(false)
         .withEmitDelete(emitDelete)
