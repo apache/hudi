@@ -22,11 +22,10 @@ import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.common.schema.HoodieSchemaUtils;
-import org.apache.hudi.common.schema.types.Type;
-import org.apache.hudi.common.schema.types.Types;
 import org.apache.hudi.common.schema.evolution.legacy.InternalSchema;
 import org.apache.hudi.common.schema.evolution.legacy.convert.InternalSchemaConverter;
-import org.apache.hudi.common.schema.evolution.legacy.utils.InternalSchemaUtils;
+import org.apache.hudi.common.schema.types.Type;
+import org.apache.hudi.common.schema.types.Types;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -187,13 +186,34 @@ public final class HoodieSchemaInternalSchemaBridge {
    * Prunes {@code source} to the supplied leaf-name list, preserving field ids.
    * The returned HoodieSchema's record name is taken from {@code source}.
    *
-   * <p>Single entry point for the bridge round-trip pattern that several call
-   * sites had open-coded: bridge to {@link InternalSchema}, prune via
-   * {@link InternalSchemaUtils#pruneInternalSchema}, then bridge back.</p>
+   * <p>Each leaf name resolves to a column id via {@link HoodieSchema#findIdByName};
+   * the walk then keeps a record field iff its id is in the keep-set or any of its
+   * descendants are. Top-level fields are emitted in first-seen order of the
+   * leaf-name list (to match the legacy semantics that callers depend on for
+   * column ordering after prune). Throws if any leaf name doesn't resolve.</p>
    */
   public static HoodieSchema pruneByLeafNames(HoodieSchema source, List<String> leafNames) {
-    InternalSchema pruned = InternalSchemaUtils.pruneInternalSchema(toInternalSchema(source), leafNames);
-    return toHoodieSchema(pruned, source.getFullName());
+    java.util.Set<Integer> keepIds = new java.util.HashSet<>();
+    for (String name : leafNames) {
+      int id = source.findIdByName(name);
+      if (id == -1) {
+        throw new IllegalArgumentException(
+            String.format("cannot prune col: %s which does not exist in hudi table", name));
+      }
+      keepIds.add(id);
+    }
+    // Top-level parent ids in first-seen order so the output preserves the
+    // ordering of the input leafNames (rather than the source's declared order).
+    java.util.List<Integer> topParentFieldIds = new ArrayList<>();
+    for (String name : leafNames) {
+      int id = source.findIdByName(name.split("\\.")[0]);
+      if (!topParentFieldIds.contains(id)) {
+        topParentFieldIds.add(id);
+      }
+    }
+    HoodieSchema effective = source.isNullable() ? source.getNonNullType() : source;
+    return prunedRecord(effective, keepIds, topParentFieldIds, source.getFullName(),
+        source.schemaId(), source.maxColumnId());
   }
 
   /**
@@ -201,9 +221,211 @@ public final class HoodieSchemaInternalSchemaBridge {
    * field ids. Returns a HoodieSchema named after {@code requiredSchema}.
    */
   public static HoodieSchema pruneByRequiredSchema(HoodieSchema source, HoodieSchema requiredSchema) {
-    InternalSchema pruned = InternalSchemaUtils.pruneInternalSchema(
-        toInternalSchema(source), HoodieSchemaUtils.collectLeafNames(requiredSchema));
-    return toHoodieSchema(pruned, requiredSchema.getFullName());
+    java.util.List<String> leafNames = HoodieSchemaUtils.collectLeafNames(requiredSchema);
+    java.util.Set<Integer> keepIds = new java.util.HashSet<>();
+    for (String name : leafNames) {
+      int id = source.findIdByName(name);
+      if (id == -1) {
+        throw new IllegalArgumentException(
+            String.format("cannot prune col: %s which does not exist in hudi table", name));
+      }
+      keepIds.add(id);
+    }
+    java.util.List<Integer> topParentFieldIds = new ArrayList<>();
+    for (String name : leafNames) {
+      int id = source.findIdByName(name.split("\\.")[0]);
+      if (!topParentFieldIds.contains(id)) {
+        topParentFieldIds.add(id);
+      }
+    }
+    HoodieSchema effective = source.isNullable() ? source.getNonNullType() : source;
+    return prunedRecord(effective, keepIds, topParentFieldIds, requiredSchema.getFullName(),
+        source.schemaId(), source.maxColumnId());
+  }
+
+  /**
+   * Walks the source record, pruning sub-trees to match {@code keepIds}, then
+   * emits the surviving top-level fields in {@code topParentFieldIds} order.
+   * The returned record's schemaId / maxColumnId carry over from the source so
+   * downstream code that round-trips through {@link HoodieSchemaSerDe} or the
+   * cache continues to see consistent version metadata.
+   */
+  private static HoodieSchema prunedRecord(HoodieSchema record,
+                                            java.util.Set<Integer> keepIds,
+                                            java.util.List<Integer> topParentFieldIds,
+                                            String recordName,
+                                            long sourceSchemaId,
+                                            int sourceMaxColumnId) {
+    // First pass: prune each top-level field's sub-tree, indexed by field id so
+    // we can re-emit in topParentFieldIds order.
+    java.util.Map<Integer, HoodieSchemaField> idToPruned = new java.util.HashMap<>();
+    for (HoodieSchemaField field : record.getFields()) {
+      HoodieSchemaField pruned = pruneField(field, keepIds);
+      if (pruned != null) {
+        idToPruned.put(field.fieldId(), pruned);
+      }
+    }
+    List<HoodieSchemaField> orderedFields = new ArrayList<>(topParentFieldIds.size());
+    if (topParentFieldIds.isEmpty()) {
+      // Defensive: empty leafNames → empty schema. Mirrors legacy behavior.
+      orderedFields.addAll(idToPruned.values());
+    } else {
+      for (int id : topParentFieldIds) {
+        HoodieSchemaField f = idToPruned.get(id);
+        if (f == null) {
+          throw new org.apache.hudi.exception.HoodieSchemaException(
+              String.format("cannot find pruned id %s in currentSchema %s", id, record));
+        }
+        orderedFields.add(f);
+      }
+    }
+    String simpleName;
+    String namespace;
+    int lastDot = recordName == null ? -1 : recordName.lastIndexOf('.');
+    if (lastDot < 0) {
+      simpleName = recordName == null || recordName.isEmpty() ? "hoodieSchema" : recordName;
+      namespace = record.getNamespace().orElse(null);
+    } else {
+      namespace = recordName.substring(0, lastDot);
+      simpleName = recordName.substring(lastDot + 1);
+    }
+    HoodieSchema result = HoodieSchema.createRecord(simpleName, namespace, record.getDoc().orElse(null), orderedFields);
+    if (sourceSchemaId >= 0) {
+      result.setSchemaId(sourceSchemaId);
+    }
+    if (sourceMaxColumnId >= 0) {
+      result.setMaxColumnId(sourceMaxColumnId);
+    }
+    result.invalidateIdIndex();
+    return result;
+  }
+
+  /**
+   * Prunes a record field's sub-tree. Returns the rebuilt field, or {@code null}
+   * when neither the field's own id nor any descendant is in the keep-set —
+   * meaning the field has no surviving content and should be dropped.
+   */
+  private static HoodieSchemaField pruneField(HoodieSchemaField field, java.util.Set<Integer> keepIds) {
+    HoodieSchema schema = field.schema();
+    boolean optional = schema.isNullable();
+    HoodieSchema effective = optional ? schema.getNonNullType() : schema;
+    HoodieSchema prunedType;
+    switch (effective.getType()) {
+      case RECORD:
+        prunedType = pruneRecordType(effective, keepIds);
+        break;
+      case ARRAY:
+        prunedType = pruneArrayType(effective, keepIds);
+        break;
+      case MAP:
+        prunedType = pruneMapType(effective, keepIds);
+        break;
+      default:
+        // Primitive — survive iff the field's id is in the keep-set.
+        prunedType = keepIds.contains(field.fieldId()) ? effective : null;
+        break;
+    }
+    if (prunedType == null && !keepIds.contains(field.fieldId())) {
+      return null;
+    }
+    if (prunedType == null) {
+      // Field id is in keep-set but children prune to nothing — keep the
+      // original sub-schema so the column is fully materialized.
+      prunedType = effective;
+    }
+    HoodieSchema finalSchema = optional ? HoodieSchema.createNullable(prunedType) : prunedType;
+    HoodieSchemaField rebuilt = HoodieSchemaField.of(
+        field.name(), finalSchema, field.doc().orElse(null), field.defaultVal().orElse(null));
+    if (field.fieldId() >= 0) {
+      rebuilt.addProp(HoodieSchema.FIELD_ID_PROP, field.fieldId());
+    }
+    return rebuilt;
+  }
+
+  private static HoodieSchema pruneRecordType(HoodieSchema record, java.util.Set<Integer> keepIds) {
+    List<HoodieSchemaField> kept = new ArrayList<>();
+    for (HoodieSchemaField field : record.getFields()) {
+      HoodieSchemaField pruned = pruneField(field, keepIds);
+      if (pruned != null) {
+        kept.add(pruned);
+      }
+    }
+    if (kept.isEmpty()) {
+      return null;
+    }
+    return HoodieSchema.createRecord(record.getName(), record.getNamespace().orElse(null), record.getDoc().orElse(null), kept);
+  }
+
+  private static HoodieSchema pruneArrayType(HoodieSchema array, java.util.Set<Integer> keepIds) {
+    int elementId = readIntProp(array.getAvroSchema().getObjectProp(HoodieSchema.ELEMENT_ID_PROP), -1);
+    HoodieSchema elementType = array.getElementType();
+    boolean elementOptional = elementType.isNullable();
+    HoodieSchema elementInner = elementOptional ? elementType.getNonNullType() : elementType;
+    HoodieSchema prunedElement;
+    switch (elementInner.getType()) {
+      case RECORD:
+        prunedElement = pruneRecordType(elementInner, keepIds);
+        break;
+      case ARRAY:
+        prunedElement = pruneArrayType(elementInner, keepIds);
+        break;
+      case MAP:
+        prunedElement = pruneMapType(elementInner, keepIds);
+        break;
+      default:
+        prunedElement = keepIds.contains(elementId) ? elementInner : null;
+        break;
+    }
+    if (prunedElement == null && !keepIds.contains(elementId)) {
+      return null;
+    }
+    if (prunedElement == null) {
+      prunedElement = elementInner;
+    }
+    HoodieSchema effectiveElement = elementOptional ? HoodieSchema.createNullable(prunedElement) : prunedElement;
+    HoodieSchema result = HoodieSchema.createArray(effectiveElement);
+    if (elementId >= 0) {
+      result.getAvroSchema().addProp(HoodieSchema.ELEMENT_ID_PROP, elementId);
+    }
+    return result;
+  }
+
+  private static HoodieSchema pruneMapType(HoodieSchema map, java.util.Set<Integer> keepIds) {
+    int keyId = readIntProp(map.getAvroSchema().getObjectProp(HoodieSchema.KEY_ID_PROP), -1);
+    int valueId = readIntProp(map.getAvroSchema().getObjectProp(HoodieSchema.VALUE_ID_PROP), -1);
+    HoodieSchema valueType = map.getValueType();
+    boolean valueOptional = valueType.isNullable();
+    HoodieSchema valueInner = valueOptional ? valueType.getNonNullType() : valueType;
+    HoodieSchema prunedValue;
+    switch (valueInner.getType()) {
+      case RECORD:
+        prunedValue = pruneRecordType(valueInner, keepIds);
+        break;
+      case ARRAY:
+        prunedValue = pruneArrayType(valueInner, keepIds);
+        break;
+      case MAP:
+        prunedValue = pruneMapType(valueInner, keepIds);
+        break;
+      default:
+        prunedValue = keepIds.contains(valueId) ? valueInner : null;
+        break;
+    }
+    if (prunedValue == null && !keepIds.contains(valueId)) {
+      return null;
+    }
+    if (prunedValue == null) {
+      prunedValue = valueInner;
+    }
+    HoodieSchema effectiveValue = valueOptional ? HoodieSchema.createNullable(prunedValue) : prunedValue;
+    HoodieSchema result = HoodieSchema.createMap(effectiveValue);
+    if (keyId >= 0) {
+      result.getAvroSchema().addProp(HoodieSchema.KEY_ID_PROP, keyId);
+    }
+    if (valueId >= 0) {
+      result.getAvroSchema().addProp(HoodieSchema.VALUE_ID_PROP, valueId);
+    }
+    return result;
   }
 
   /**
