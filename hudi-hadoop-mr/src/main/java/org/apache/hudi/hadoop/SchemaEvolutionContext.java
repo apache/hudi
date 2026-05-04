@@ -26,8 +26,7 @@ import org.apache.hudi.common.schema.evolution.HoodieSchemaHistoryCache;
 import org.apache.hudi.common.schema.evolution.HoodieSchemaInternalSchemaBridge;
 import org.apache.hudi.common.schema.evolution.HoodieSchemaMerger;
 import org.apache.hudi.common.schema.evolution.HoodieSchemaSerDe;
-import org.apache.hudi.common.schema.types.Type;
-import org.apache.hudi.common.schema.types.Types;
+import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.util.Option;
@@ -251,9 +250,9 @@ public class SchemaEvolutionContext {
         long commitTime = Long.parseLong(FSUtils.getCommitTime(finalPath.getName()));
         HoodieSchema fileSchema = HoodieSchemaHistoryCache.searchSchemaAndCache(commitTime, metaClient);
         HoodieSchema mergedSchema = new HoodieSchemaMerger(fileSchema, querySchema, true, true).mergeSchema();
-        // Extract Types.Field columns via the bridge — setColumnNameList/setColumnTypeList
-        // walk the relocated common.schema.types tree to derive Hive type strings.
-        List<Types.Field> fields = HoodieSchemaInternalSchemaBridge.toInternalSchema(mergedSchema).columns();
+        // setColumnNameList / setColumnTypeList walk HoodieSchema directly to
+        // derive Hive type strings — no bridge round-trip required.
+        List<HoodieSchemaField> fields = mergedSchema.getFields();
         setColumnNameList(job, fields);
         setColumnTypeList(job, fields);
         pushDownFilter(job, querySchema, fileSchema);
@@ -261,19 +260,21 @@ public class SchemaEvolutionContext {
     }
   }
 
-  public void setColumnTypeList(JobConf job, List<Types.Field> fields) {
+  public void setColumnTypeList(JobConf job, List<HoodieSchemaField> fields) {
     List<TypeInfo> fullTypeInfos = TypeInfoUtils.getTypeInfosFromTypeString(job.get(serdeConstants.LIST_COLUMN_TYPES));
     List<Integer> tmpColIdList = Arrays.stream(job.get(ColumnProjectionUtils.READ_COLUMN_IDS_CONF_STR).split(","))
         .map(Integer::parseInt).collect(Collectors.toList());
     if (tmpColIdList.size() != fields.size()) {
       throw new HoodieException(String.format("The size of hive.io.file.readcolumn.ids: %s is not equal to projection columns: %s",
-          job.get(ColumnProjectionUtils.READ_COLUMN_IDS_CONF_STR), fields.stream().map(Types.Field::name).collect(Collectors.joining(","))));
+          job.get(ColumnProjectionUtils.READ_COLUMN_IDS_CONF_STR), fields.stream().map(HoodieSchemaField::name).collect(Collectors.joining(","))));
     }
     List<TypeInfo> fieldTypes = new ArrayList<>();
     for (int i = 0; i < tmpColIdList.size(); i++) {
-      Types.Field field = fields.get(i);
+      HoodieSchemaField field = fields.get(i);
       TypeInfo typeInfo = TypeInfoUtils.getTypeInfosFromTypeString(fullTypeInfos.get(tmpColIdList.get(i)).getQualifiedName()).get(0);
-      TypeInfo fieldType = constructHiveSchemaFromType(field.type(), typeInfo);
+      // Hive's TypeInfo tree is name-positional, so we only need to walk the
+      // non-null inner type — nullability is conveyed elsewhere in the JobConf.
+      TypeInfo fieldType = constructHiveSchemaFromSchema(field.schema().getNonNullType(), typeInfo);
       fieldTypes.add(fieldType);
     }
     for (int i = 0; i < tmpColIdList.size(); i++) {
@@ -289,19 +290,27 @@ public class SchemaEvolutionContext {
     job.set(serdeConstants.LIST_COLUMN_TYPES, fullColTypeListString);
   }
 
-  private TypeInfo constructHiveSchemaFromType(Type type, TypeInfo typeInfo) {
-    switch (type.typeId()) {
+  /**
+   * Walks a HoodieSchema sub-tree and refines the corresponding Hive
+   * {@link TypeInfo} so its inner names / element type / value type match
+   * the schema-on-read view (post-merge). Primitive types pass the input
+   * {@code typeInfo} through unchanged; the {@link HoodieSchemaType#TIME}
+   * case (both micros and millis) throws because Hive has no equivalent.
+   */
+  private TypeInfo constructHiveSchemaFromSchema(HoodieSchema schema, TypeInfo typeInfo) {
+    HoodieSchema effective = schema.isNullable() ? schema.getNonNullType() : schema;
+    switch (effective.getType()) {
       case RECORD:
-        Types.RecordType record = (Types.RecordType) type;
-        List<Types.Field> fields = record.fields();
+        List<HoodieSchemaField> recordFields = effective.getFields();
         ArrayList<TypeInfo> fieldTypes = new ArrayList<>();
         ArrayList<String> fieldNames = new ArrayList<>();
-        for (int index = 0; index < fields.size(); index++) {
-          StructTypeInfo structTypeInfo = (StructTypeInfo) typeInfo;
-          TypeInfo subTypeInfo = getSchemaSubTypeInfo(structTypeInfo.getAllStructFieldTypeInfos().get(index), fields.get(index).type());
+        StructTypeInfo inputStructTypeInfo = (StructTypeInfo) typeInfo;
+        for (int index = 0; index < recordFields.size(); index++) {
+          TypeInfo subTypeInfo = getSchemaSubTypeInfo(
+              inputStructTypeInfo.getAllStructFieldTypeInfos().get(index),
+              recordFields.get(index).schema().getNonNullType());
           fieldTypes.add(subTypeInfo);
-          String name = fields.get(index).name();
-          fieldNames.add(name);
+          fieldNames.add(recordFields.get(index).name());
         }
         StructTypeInfo structTypeInfo = new StructTypeInfo();
         structTypeInfo.setAllStructFieldNames(fieldNames);
@@ -309,19 +318,21 @@ public class SchemaEvolutionContext {
         return structTypeInfo;
       case ARRAY:
         ListTypeInfo listTypeInfo = (ListTypeInfo) typeInfo;
-        Types.ArrayType array = (Types.ArrayType) type;
-        TypeInfo subTypeInfo = getSchemaSubTypeInfo(listTypeInfo.getListElementTypeInfo(), array.elementType());
-        listTypeInfo.setListElementTypeInfo(subTypeInfo);
+        TypeInfo elementSubTypeInfo = getSchemaSubTypeInfo(
+            listTypeInfo.getListElementTypeInfo(),
+            effective.getElementType().getNonNullType());
+        listTypeInfo.setListElementTypeInfo(elementSubTypeInfo);
         return listTypeInfo;
       case MAP:
-        Types.MapType map = (Types.MapType) type;
         MapTypeInfo mapTypeInfo = (MapTypeInfo) typeInfo;
-        TypeInfo keyType = getSchemaSubTypeInfo(mapTypeInfo.getMapKeyTypeInfo(), map.keyType());
-        TypeInfo valueType = getSchemaSubTypeInfo(mapTypeInfo.getMapValueTypeInfo(), map.valueType());
-        MapTypeInfo mapType = new MapTypeInfo();
-        mapType.setMapKeyTypeInfo(keyType);
-        mapType.setMapValueTypeInfo(valueType);
-        return mapType;
+        // Map keys are always string in Avro/Hudi, so feed the existing
+        // primitive keyTypeInfo through unchanged. The value walks recursively.
+        TypeInfo keyType = getSchemaSubTypeInfo(mapTypeInfo.getMapKeyTypeInfo(), HoodieSchema.create(HoodieSchemaType.STRING));
+        TypeInfo valueType = getSchemaSubTypeInfo(mapTypeInfo.getMapValueTypeInfo(), effective.getValueType().getNonNullType());
+        MapTypeInfo result = new MapTypeInfo();
+        result.setMapKeyTypeInfo(keyType);
+        result.setMapValueTypeInfo(valueType);
+        return result;
       case BOOLEAN:
       case INT:
       case LONG:
@@ -329,35 +340,26 @@ public class SchemaEvolutionContext {
       case DOUBLE:
       case DATE:
       case TIMESTAMP:
-      case TIMESTAMP_MILLIS:
-      case LOCAL_TIMESTAMP_MICROS:
-      case LOCAL_TIMESTAMP_MILLIS:
       case STRING:
       case UUID:
       case FIXED:
-      case BINARY:
+      case BYTES:
       case DECIMAL:
-      case DECIMAL_BYTES:
-      case DECIMAL_FIXED:
         return typeInfo;
       case TIME:
-      case TIME_MILLIS:
-        throw new UnsupportedOperationException(String.format("cannot convert %s type to hive", type));
+        throw new UnsupportedOperationException(String.format("cannot convert %s type to hive", effective));
       default:
-        LOG.error("cannot convert unknown type: {} to Hive", type);
-        throw new UnsupportedOperationException(String.format("cannot convert unknown type: %s to Hive", type));
+        LOG.error("cannot convert unknown type: {} to Hive", effective);
+        throw new UnsupportedOperationException(String.format("cannot convert unknown type: %s to Hive", effective));
     }
   }
 
-  private TypeInfo getSchemaSubTypeInfo(TypeInfo hoodieTypeInfo, Type hiveType) {
+  private TypeInfo getSchemaSubTypeInfo(TypeInfo hoodieTypeInfo, HoodieSchema hiveType) {
     TypeInfo subTypeInfo = TypeInfoUtils.getTypeInfosFromTypeString(hoodieTypeInfo.getQualifiedName()).get(0);
-    TypeInfo typeInfo;
     if (subTypeInfo instanceof PrimitiveTypeInfo) {
-      typeInfo = subTypeInfo;
-    } else {
-      typeInfo = constructHiveSchemaFromType(hiveType, subTypeInfo);
+      return subTypeInfo;
     }
-    return typeInfo;
+    return constructHiveSchemaFromSchema(hiveType, subTypeInfo);
   }
 
   private void pushDownFilter(JobConf job, HoodieSchema querySchema, HoodieSchema fileSchema) {
