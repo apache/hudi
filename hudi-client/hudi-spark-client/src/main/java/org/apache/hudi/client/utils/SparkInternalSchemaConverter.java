@@ -24,7 +24,6 @@ import org.apache.hudi.common.schema.evolution.HoodieSchemaInternalSchemaBridge;
 import org.apache.hudi.common.schema.types.Type;
 import org.apache.hudi.common.schema.types.Types;
 import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.internal.schema.utils.InternalSchemaUtils;
 
 import lombok.AccessLevel;
 import lombok.NoArgsConstructor;
@@ -209,7 +208,14 @@ public class SparkInternalSchemaConverter {
 
   private static void addFullName(DataType sparkType, String name, Deque<String> fieldNames, List<String> resultSet) {
     if (!(sparkType instanceof StructType) && !(sparkType instanceof ArrayType) && !(sparkType instanceof MapType)) {
-      resultSet.add(InternalSchemaUtils.createFullName(name, fieldNames));
+      if (fieldNames.isEmpty()) {
+        resultSet.add(name);
+        return;
+      }
+      StringBuilder sb = new StringBuilder();
+      fieldNames.descendingIterator().forEachRemaining(p -> sb.append(p).append('.'));
+      sb.append(name);
+      resultSet.add(sb.toString());
     }
   }
 
