@@ -24,7 +24,6 @@ import org.apache.hudi.common.schema.evolution.{HoodieSchemaEvolutionUtils, Hood
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.table.timeline.TimelineLayout
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion
-
 import org.apache.hudi.common.util.StringUtils.isNullOrEmpty
 import org.apache.hudi.common.util.collection.Pair
 import org.apache.hudi.hadoop.fs.HadoopFSUtils

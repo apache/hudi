@@ -21,12 +21,11 @@ package org.apache.spark.sql.execution.datasources.parquet
 
 import org.apache.hudi.HoodieSchemaConversionUtils
 import org.apache.hudi.client.utils.SparkInternalSchemaConverter
+import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.schema.HoodieSchema
 import org.apache.hudi.common.schema.evolution.{HoodieSchemaEvolutionUtils, HoodieSchemaHistoryCache, HoodieSchemaMerger, HoodieSchemaSerDe}
-import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.table.timeline.TimelineLayout
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion
-
 import org.apache.hudi.common.util.StringUtils.isNullOrEmpty
 import org.apache.hudi.common.util.collection.Pair
 import org.apache.hudi.hadoop.fs.HadoopFSUtils

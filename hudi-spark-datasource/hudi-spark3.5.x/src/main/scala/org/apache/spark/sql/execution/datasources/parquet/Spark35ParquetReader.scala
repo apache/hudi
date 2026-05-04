@@ -19,7 +19,7 @@
 
 package org.apache.spark.sql.execution.datasources.parquet
 
-import org.apache.hudi.internal.schema.InternalSchema
+import org.apache.hudi.common.schema.HoodieSchema
 import org.apache.hudi.io.storage.HoodieSparkParquetReader.ENABLE_LOGICAL_TIMESTAMP_REPAIR
 
 import org.apache.hadoop.conf.Configuration
@@ -89,7 +89,7 @@ class Spark35ParquetReader(enableVectorizedReader: Boolean,
   override protected def doRead(file: PartitionedFile,
                                 requiredSchema: StructType,
                                 partitionSchema: StructType,
-                                internalSchemaOpt: org.apache.hudi.common.util.Option[InternalSchema],
+                                evolutionSchemaOpt: org.apache.hudi.common.util.Option[HoodieSchema],
                                 filters: scala.Seq[Filter],
                                 sharedConf: Configuration,
                                 tableSchemaOpt: org.apache.hudi.common.util.Option[org.apache.parquet.schema.MessageType]): Iterator[InternalRow] = {
@@ -99,7 +99,7 @@ class Spark35ParquetReader(enableVectorizedReader: Boolean,
     val split = new FileSplit(filePath, file.start, file.length, Array.empty[String])
 
     val schemaEvolutionUtils = new ParquetSchemaEvolutionUtils(sharedConf, filePath, requiredSchema,
-      partitionSchema, internalSchemaOpt)
+      partitionSchema, evolutionSchemaOpt)
 
     val originalFooter = if (enableVectorizedReader) {
       // When there are vectorized reads, we can avoid reading the footer twice by reading
