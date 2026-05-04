@@ -172,26 +172,17 @@ public final class HoodieSchemaEvolutionUtils {
       return stripIds(fixNullOrdering(source));
     }
 
-    // Group type updates by top-level parent and apply the change wholesale
-    // using target's full type at that parent. The applier's path walker
-    // doesn't understand "element" / "value" as terminal segments — they're
-    // descent directions for arrays / maps, not field names — so a path like
-    // "arrayField.element" can't be applied directly. Replacing the whole
-    // top-level field is equivalent for reconciliation: target's type at the
-    // parent already encodes every leaf type change under it.
-    java.util.LinkedHashSet<String> topLevelTypeChanged = new java.util.LinkedHashSet<>();
+    Map<String, HoodieSchema> leafTypeUpdates = new HashMap<>();
     for (Pair<String, HoodieSchema> u : typeUpdates) {
-      int dot = u.getLeft().indexOf('.');
-      topLevelTypeChanged.add(dot < 0 ? u.getLeft() : u.getLeft().substring(0, dot));
+      leafTypeUpdates.put(u.getLeft(), u.getRight());
     }
 
     HoodieSchema result = source;
     for (String field : nullableUpdates) {
-      // Same path-walker limitation: skip paths whose terminal segment is
-      // an array-element or map-value pseudo-name. The applier supports
-      // descent into nested records, which is the only multi-segment shape
-      // it can resolve to a HoodieSchemaField. Check the trailing segment
-      // exactly to avoid false matches on field names like "value_count".
+      // The applier's path walker supports descent into nested records but
+      // not into array-element or map-value segments — those are descent
+      // directions, not field names. Skip nullability flips for paths that
+      // terminate in such a pseudo-segment; they're tracked but not applied.
       if (endsWithArrayOrMapDescent(field)) {
         continue;
       }
@@ -199,10 +190,11 @@ public final class HoodieSchemaEvolutionUtils {
       // verbatim to avoid behavior change.
       result = new HoodieSchemaChangeApplier(result).applyColumnNullabilityChange(field, true);
     }
-    for (String topLevel : topLevelTypeChanged) {
-      HoodieSchema newType = targetFresh.findType(topLevel);
-      result = new HoodieSchemaChangeApplier(result).applyColumnTypeChange(topLevel, newType);
-    }
+    // Apply each leaf type update at its exact path. Walking source's tree
+    // and overlaying only the promoted leaves is leaf-precise: it preserves
+    // every other field's type intact, including siblings under the same
+    // top-level parent that didn't need promotion.
+    result = overlayLeafTypes(result, "", leafTypeUpdates);
     // Strip the ids stamped on inputs above — the legacy entry returned
     // id-less Avro schemas.
     return stripIds(result);
@@ -748,6 +740,74 @@ public final class HoodieSchemaEvolutionUtils {
    */
   private static HoodieSchema reorderToTargetLayout(HoodieSchema source, Map<String, Integer> targetPositions) {
     return reorderInner(source, "", targetPositions);
+  }
+
+  /**
+   * Walks {@code source} and at every primitive leaf whose full name is in
+   * {@code leafUpdates} swaps the leaf's effective type with the supplied
+   * target type, preserving source's nullability wrapper. Other fields pass
+   * through unchanged.
+   *
+   * <p>Path construction matches {@link HoodieSchemaIndex}: dot-separated
+   * record fields, "element" for array element descent, "value" for map
+   * value descent. Custom Avro props on rebuilt record fields are preserved
+   * (so field-id survives across the rebuild).</p>
+   */
+  private static HoodieSchema overlayLeafTypes(HoodieSchema schema, String pathPrefix, Map<String, HoodieSchema> leafUpdates) {
+    boolean nullable = schema.isNullable();
+    HoodieSchema effective = nullable ? schema.getNonNullType() : schema;
+    HoodieSchema rebuilt;
+    switch (effective.getType()) {
+      case RECORD: {
+        List<HoodieSchemaField> newFields = new ArrayList<>(effective.getFields().size());
+        for (HoodieSchemaField f : effective.getFields()) {
+          String childPath = pathPrefix.isEmpty() ? f.name() : pathPrefix + "." + f.name();
+          HoodieSchema childUpdated = overlayLeafTypes(f.schema(), childPath, leafUpdates);
+          HoodieSchemaField rb = HoodieSchemaField.of(
+              f.name(), childUpdated, f.doc().orElse(null), f.defaultVal().orElse(null));
+          for (Map.Entry<String, Object> e : f.getObjectProps().entrySet()) {
+            rb.addProp(e.getKey(), e.getValue());
+          }
+          newFields.add(rb);
+        }
+        rebuilt = HoodieSchema.createRecord(effective.getName(), effective.getNamespace().orElse(null),
+            effective.getDoc().orElse(null), newFields);
+        break;
+      }
+      case ARRAY: {
+        String elementPath = pathPrefix.isEmpty() ? "element" : pathPrefix + ".element";
+        HoodieSchema newElement = overlayLeafTypes(effective.getElementType(), elementPath, leafUpdates);
+        rebuilt = HoodieSchema.createArray(newElement);
+        Object eId = effective.getAvroSchema().getObjectProp(HoodieSchema.ELEMENT_ID_PROP);
+        if (eId instanceof Number) {
+          rebuilt.getAvroSchema().addProp(HoodieSchema.ELEMENT_ID_PROP, ((Number) eId).intValue());
+        }
+        break;
+      }
+      case MAP: {
+        String valuePath = pathPrefix.isEmpty() ? "value" : pathPrefix + ".value";
+        HoodieSchema newValue = overlayLeafTypes(effective.getValueType(), valuePath, leafUpdates);
+        rebuilt = HoodieSchema.createMap(newValue);
+        Object kId = effective.getAvroSchema().getObjectProp(HoodieSchema.KEY_ID_PROP);
+        Object vId = effective.getAvroSchema().getObjectProp(HoodieSchema.VALUE_ID_PROP);
+        if (kId instanceof Number) {
+          rebuilt.getAvroSchema().addProp(HoodieSchema.KEY_ID_PROP, ((Number) kId).intValue());
+        }
+        if (vId instanceof Number) {
+          rebuilt.getAvroSchema().addProp(HoodieSchema.VALUE_ID_PROP, ((Number) vId).intValue());
+        }
+        break;
+      }
+      default:
+        // Primitive leaf — overlay if there's an update at this path.
+        HoodieSchema target = leafUpdates.get(pathPrefix);
+        if (target == null) {
+          return schema;
+        }
+        HoodieSchema targetEffective = target.isNullable() ? target.getNonNullType() : target;
+        return nullable ? HoodieSchema.createNullable(targetEffective) : targetEffective;
+    }
+    return nullable ? HoodieSchema.createNullable(rebuilt) : rebuilt;
   }
 
   private static HoodieSchema reorderInner(HoodieSchema source, String pathPrefix, Map<String, Integer> targetPositions) {
