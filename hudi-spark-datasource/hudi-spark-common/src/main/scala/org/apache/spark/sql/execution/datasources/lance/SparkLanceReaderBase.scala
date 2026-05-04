@@ -26,7 +26,7 @@ import org.apache.hudi.common.util
 import org.apache.hudi.common.util.collection.{ClosableIterator, Pair => HoodiePair}
 import org.apache.hudi.internal.schema.InternalSchema
 import org.apache.hudi.io.memory.HoodieArrowAllocator
-import org.apache.hudi.io.storage.{BlobDescriptorTransform, HoodieSparkLanceReader, LanceBatchIterator, LanceRecordIterator, VectorConversionUtils}
+import org.apache.hudi.io.storage.{BlobDescriptorTransform, LanceBatchIterator, LanceRecordIterator, VectorConversionUtils}
 import org.apache.hudi.storage.StorageConfiguration
 
 import org.apache.arrow.memory.BufferAllocator
@@ -44,8 +44,9 @@ import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.sources.Filter
 import org.apache.spark.sql.types._
 import org.apache.spark.sql.util.LanceArrowUtils
-import org.apache.spark.sql.vectorized.{ColumnarBatch, ColumnVector, LanceArrowColumnVector}
+import org.apache.spark.sql.vectorized.{ColumnarBatch, ColumnVector}
 import org.lance.file.{BlobReadMode, FileReadOptions, LanceFileReader}
+import org.lance.spark.vectorized.LanceArrowColumnVector
 
 import java.io.{Closeable, IOException}
 
@@ -277,7 +278,8 @@ class SparkLanceReaderBase(enableVectorizedReader: Boolean) extends SparkColumna
     // (FileSourceScanExec expects all data columns to be LanceArrowColumnVector).
     val nullAllocator: Option[BufferAllocator] = if (columnMapping.contains(-1)) {
       Some(HoodieArrowAllocator.newChildAllocator(
-        getClass.getSimpleName + "-null-" + filePath, HoodieSparkLanceReader.LANCE_DATA_ALLOCATOR_SIZE))
+        getClass.getSimpleName + "-null-" + filePath,
+        HoodieStorageConfig.LANCE_READ_ALLOCATOR_SIZE_BYTES.defaultValue().toLong))
     } else None
 
     // Arrow vectors auto-reallocate on setValueCount (see BaseFixedWidthVector.setValueCount),

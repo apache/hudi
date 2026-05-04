@@ -275,7 +275,7 @@ class TestLanceColumnarBatch extends HoodieSparkClientTestBase {
 
   /**
    * Columnar path (`enableVectorizedReader=true`, no type changes) must return
-   * [[ColumnarBatch]] instances backed by [[org.apache.spark.sql.vectorized.LanceArrowColumnVector]].
+   * [[ColumnarBatch]] instances backed by [[org.lance.spark.vectorized.LanceArrowColumnVector]].
    * No [[InternalRow]] may be returned directly.  Data must round-trip correctly.
    */
   @Test
@@ -295,7 +295,7 @@ class TestLanceColumnarBatch extends HoodieSparkClientTestBase {
   /**
    * When the required schema contains a column that is absent from the file (schema evolution:
    * column addition), the vectorized path must null-pad that column in each [[ColumnarBatch]]
-   * using a [[org.apache.spark.sql.vectorized.LanceArrowColumnVector]] backed by an all-null
+   * using a [[org.lance.spark.vectorized.LanceArrowColumnVector]] backed by an all-null
    * Arrow vector.
    */
   @Test

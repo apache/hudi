@@ -26,8 +26,8 @@ import org.apache.arrow.vector.VectorSchemaRoot;
 import org.apache.arrow.vector.ipc.ArrowReader;
 import org.apache.spark.sql.vectorized.ColumnVector;
 import org.apache.spark.sql.vectorized.ColumnarBatch;
-import org.apache.spark.sql.vectorized.LanceArrowColumnVector;
 import org.lance.file.LanceFileReader;
+import org.lance.spark.vectorized.LanceArrowColumnVector;
 
 import java.io.Closeable;
 import java.io.IOException;

@@ -56,8 +56,9 @@ import org.apache.spark.sql.hudi.MultipleColumnarFileFormatReader
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.sources.Filter
 import org.apache.spark.sql.types.StructType
-import org.apache.spark.sql.vectorized.{ColumnarBatch, ColumnarBatchUtils, LanceArrowColumnVector}
+import org.apache.spark.sql.vectorized.{ColumnarBatch, ColumnarBatchUtils}
 import org.apache.spark.util.SerializableConfiguration
+import org.lance.spark.vectorized.LanceArrowColumnVector
 
 import java.io.Closeable
 
