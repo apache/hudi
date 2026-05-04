@@ -19,10 +19,8 @@
 package org.apache.hudi.avro;
 
 import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.evolution.HoodieSchemaChangeApplier;
 import org.apache.hudi.exception.HoodieAvroSchemaException;
-import org.apache.hudi.internal.schema.InternalSchema;
-import org.apache.hudi.internal.schema.action.TableChanges;
-import org.apache.hudi.internal.schema.utils.SchemaChangeUtils;
 
 import lombok.AccessLevel;
 import lombok.NoArgsConstructor;
@@ -34,9 +32,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-import static org.apache.hudi.common.util.CollectionUtils.reduce;
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
-import static org.apache.hudi.internal.schema.convert.InternalSchemaConverter.convert;
 
 /**
  * Utils for Avro Schema.
@@ -130,10 +126,10 @@ public class AvroSchemaUtils {
     if (filterCols.isEmpty()) {
       return schema;
     }
-    InternalSchema internalSchema = convert(HoodieSchema.fromAvroSchema(schema));
-    TableChanges.ColumnUpdateChange schemaChange = TableChanges.ColumnUpdateChange.get(internalSchema);
-    schemaChange = reduce(filterCols, schemaChange,
-            (change, field) -> change.updateColumnNullability(field, true));
-    return convert(SchemaChangeUtils.applyTableChanges2Schema(internalSchema, schemaChange), schema.getFullName()).toAvroSchema();
+    HoodieSchema cur = HoodieSchema.fromAvroSchema(schema);
+    for (String col : filterCols) {
+      cur = new HoodieSchemaChangeApplier(cur).applyColumnNullabilityChange(col, true);
+    }
+    return cur.toAvroSchema();
   }
 }

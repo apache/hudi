@@ -27,11 +27,9 @@ import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.VisibleForTesting;
+import org.apache.hudi.common.schema.evolution.HoodieSchemaInternalSchemaBridge;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.internal.schema.InternalSchema;
-import org.apache.hudi.common.schema.types.Types;
-import org.apache.hudi.internal.schema.action.TableChanges;
-import org.apache.hudi.internal.schema.utils.SchemaChangeUtils;
 
 import java.util.Collections;
 import java.util.List;
@@ -79,9 +77,9 @@ public class ParquetRowIndexBasedSchemaHandler<T> extends FileGroupReaderSchemaH
   }
 
   private static InternalSchema addPositionalMergeCol(InternalSchema internalSchema) {
-    TableChanges.ColumnAddChange addChange = TableChanges.ColumnAddChange.get(internalSchema);
-    addChange.addColumns("", ROW_INDEX_TEMPORARY_COLUMN_NAME, Types.LongType.get(), null);
-    return SchemaChangeUtils.applyTableChanges2Schema(internalSchema, addChange);
+    HoodieSchema withRowIndex = addPositionalMergeCol(
+        HoodieSchemaInternalSchemaBridge.toHoodieSchema(internalSchema, "schema"));
+    return HoodieSchemaInternalSchemaBridge.toInternalSchema(withRowIndex);
   }
 
   @Override
