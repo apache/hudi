@@ -23,7 +23,6 @@ import org.apache.hudi.common.config.HoodieReaderConfig;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.source.ExpressionPredicates;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.table.expressions.FieldReferenceExpression;
@@ -120,8 +119,6 @@ public class TestHoodieSplitReaderFunction {
 
   @Test
   public void testConstructorWithInternalSchema() {
-    InternalSchema internalSchema = mock(InternalSchema.class);
-
     HoodieSplitReaderFunction function =
         new HoodieSplitReaderFunction(
             conf,
@@ -219,9 +216,6 @@ public class TestHoodieSplitReaderFunction {
 
   @Test
   public void testInternalSchemaHandling() {
-    InternalSchema internalSchema1 = mock(InternalSchema.class);
-    InternalSchema internalSchema2 = mock(InternalSchema.class);
-
     // Test with present internal schema
     HoodieSplitReaderFunction function1 =
         new HoodieSplitReaderFunction(
