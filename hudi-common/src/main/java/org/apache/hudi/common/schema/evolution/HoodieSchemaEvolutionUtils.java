@@ -30,6 +30,7 @@ import org.apache.hudi.common.schema.evolution.legacy.convert.InternalSchemaConv
 import org.apache.hudi.common.schema.evolution.legacy.utils.SchemaChangeUtils;
 import org.apache.hudi.common.schema.types.Type;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.exception.HoodieNullSchemaTypeException;
 
 import org.apache.avro.Schema;
 
@@ -226,6 +227,10 @@ public final class HoodieSchemaEvolutionUtils {
     if (schema.getType() == HoodieSchemaType.NULL) {
       return schema;
     }
+    // Mirror the legacy InternalSchemaConverter.convert()'s checkNullType pass:
+    // a record field / array element / map value with bare NULL type (i.e. not a
+    // [null, T] union) is rejected.
+    checkNoBareNullTypedFields(schema, "");
     HoodieSchema rewritten = rewriteNullFirst(schema);
     // Forward schema-level metadata that the walker doesn't track (it operates
     // on the type tree). The applier and SerDe round-trip these.
@@ -237,6 +242,53 @@ public final class HoodieSchemaEvolutionUtils {
     }
     rewritten.invalidateIdIndex();
     return rewritten;
+  }
+
+  /**
+   * Throws {@link HoodieNullSchemaTypeException} if {@code schema} contains a
+   * record field, array element, or map value whose effective type is
+   * {@link HoodieSchemaType#NULL} (i.e. not wrapped in a {@code [null, T]}
+   * union). Mirrors the legacy {@code InternalSchemaConverter.checkNullType}
+   * pass which fired during the {@code HoodieSchema → InternalSchema} convert.
+   */
+  private static void checkNoBareNullTypedFields(HoodieSchema schema, String pathPrefix) {
+    HoodieSchema effective = schema.isNullable() ? schema.getNonNullType() : schema;
+    switch (effective.getType()) {
+      case RECORD:
+        for (HoodieSchemaField field : effective.getFields()) {
+          HoodieSchema fieldSchema = field.schema();
+          HoodieSchema fieldEffective = fieldSchema.isNullable() ? fieldSchema.getNonNullType() : fieldSchema;
+          if (fieldEffective.getType() == HoodieSchemaType.NULL) {
+            throw new HoodieNullSchemaTypeException(
+                "Field '" + pathPrefix + field.name() + "' has type null");
+          }
+          checkNoBareNullTypedFields(fieldSchema, pathPrefix + field.name() + ".");
+        }
+        return;
+      case ARRAY: {
+        HoodieSchema element = effective.getElementType();
+        HoodieSchema elementEffective = element.isNullable() ? element.getNonNullType() : element;
+        if (elementEffective.getType() == HoodieSchemaType.NULL) {
+          throw new HoodieNullSchemaTypeException(
+              "Field '" + pathPrefix + "element' has type null");
+        }
+        checkNoBareNullTypedFields(element, pathPrefix + "element.");
+        return;
+      }
+      case MAP: {
+        HoodieSchema value = effective.getValueType();
+        HoodieSchema valueEffective = value.isNullable() ? value.getNonNullType() : value;
+        if (valueEffective.getType() == HoodieSchemaType.NULL) {
+          throw new HoodieNullSchemaTypeException(
+              "Field '" + pathPrefix + "value' has type null");
+        }
+        checkNoBareNullTypedFields(value, pathPrefix + "value.");
+        return;
+      }
+      default:
+        // Primitive — including a top-level bare NULL schema, which fixNullOrdering's
+        // entry point handles before calling this walker.
+    }
   }
 
   /**
