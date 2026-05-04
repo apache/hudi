@@ -682,6 +682,24 @@ public class HoodieSchema implements Serializable {
   }
 
   /**
+   * Creates a FIXED-backed decimal schema with the minimum byte size needed to
+   * hold {@code precision} digits. Equivalent to {@code Types.DecimalType.get(p, s)} —
+   * use this when the target schema is being chosen for type-evolution promotion
+   * from an integral type, where {@code DECIMAL_BYTES} is not a compatible target.
+   */
+  public static HoodieSchema createDecimalFixed(int precision, int scale) {
+    return createDecimal("decimal", null, null, precision, scale, computeMinBytesForDecimalPrecision(precision));
+  }
+
+  private static int computeMinBytesForDecimalPrecision(int precision) {
+    int numBytes = 1;
+    while (Math.pow(2.0, 8 * numBytes - 1) < Math.pow(10.0, precision)) {
+      numBytes += 1;
+    }
+    return numBytes;
+  }
+
+  /**
    * Creates a decimal schema with the specified precision and scale.
    * @param precision the precision of the decimal value
    * @param scale     the scale of the decimal value

@@ -300,9 +300,9 @@ public class ITTestSchemaEvolution {
       writeClient.reOrderColPosition("partition", "new_map_col", AFTER);
 
       // perform comprehensive evolution on a struct column by reordering field positions
-      writeClient.updateColumnType("f_struct.f0", HoodieSchema.createDecimal(20, 0));
+      writeClient.updateColumnType("f_struct.f0", HoodieSchema.createDecimalFixed(20, 0));
       writeClient.reOrderColPosition("f_struct.f0", "f_struct.drop_add", AFTER);
-      writeClient.updateColumnType("f_row_map.value.f0", HoodieSchema.createDecimal(20, 0));
+      writeClient.updateColumnType("f_row_map.value.f0", HoodieSchema.createDecimalFixed(20, 0));
       writeClient.reOrderColPosition("f_row_map.value.f0", "f_row_map.value.drop_add", AFTER);
     } catch (Exception e) {
       throw new HoodieException(e);
