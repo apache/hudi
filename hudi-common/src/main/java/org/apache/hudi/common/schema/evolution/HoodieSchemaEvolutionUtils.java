@@ -37,12 +37,10 @@ import org.apache.avro.Schema;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.stream.Collectors;
@@ -510,15 +508,26 @@ public final class HoodieSchemaEvolutionUtils {
       int splitPoint = name.lastIndexOf(".");
       String parentName = splitPoint > 0 ? name.substring(0, splitPoint) : "";
       String rawName = splitPoint > 0 ? name.substring(splitPoint + 1) : name;
-      // Try to infer position by finding the nearest sibling that already exists in old.
-      java.util.Optional<String> inferPosition = colNamesIncoming.stream()
-          .filter(c -> c.lastIndexOf(".") == splitPoint
-              && c.startsWith(parentName)
-              && incoming.findIdByName(c) > incoming.findIdByName(name)
-              && oldTableSchema.findIdByName(c) > 0)
-          .min((s1, s2) -> oldTableSchema.findIdByName(s1) - oldTableSchema.findIdByName(s2));
+      // Nearest later sibling already in old, ties broken by smallest old-id.
+      String inferPosition = null;
+      int inferPositionOldId = Integer.MAX_VALUE;
+      int incomingIdOfName = incoming.findIdByName(name);
+      for (String c : colNamesIncoming) {
+        if (c.lastIndexOf(".") != splitPoint
+            || !c.startsWith(parentName)
+            || incoming.findIdByName(c) <= incomingIdOfName) {
+          continue;
+        }
+        int cOldId = oldTableSchema.findIdByName(c);
+        if (cOldId > 0 && cOldId < inferPositionOldId) {
+          inferPosition = c;
+          inferPositionOldId = cOldId;
+        }
+      }
       addChange.addColumns(parentName, rawName, incoming.findType(name), null);
-      inferPosition.map(i -> addChange.addPositionChange(name, i, "before"));
+      if (inferPosition != null) {
+        addChange.addPositionChange(name, inferPosition, "before");
+      }
     });
 
     InternalSchema afterAdds = SchemaChangeUtils.applyTableChanges2Schema(oldTableSchema, addChange);
@@ -615,13 +624,20 @@ public final class HoodieSchemaEvolutionUtils {
       HoodieSchema colType = stripIds(incoming.findType(name));
 
       int incomingIdx = incomingNames.indexOf(name);
-      Optional<String> inferPosition = incomingNames.stream()
-          .filter(c -> parentOf(c).equals(parent)
-              && incomingNames.indexOf(c) > incomingIdx
-              && oldTableSchema.findIdByName(c) > 0)
-          .min(Comparator.comparingInt(oldTableSchema::findIdByName));
-
-      String posCol = inferPosition.orElse(null);
+      // Nearest later sibling already in old, ties broken by smallest old-id.
+      String posCol = null;
+      int posColOldId = Integer.MAX_VALUE;
+      for (String c : incomingNames) {
+        if (!parentOf(c).equals(parent)
+            || incomingNames.indexOf(c) <= incomingIdx) {
+          continue;
+        }
+        int cOldId = oldTableSchema.findIdByName(c);
+        if (cOldId > 0 && cOldId < posColOldId) {
+          posCol = c;
+          posColOldId = cOldId;
+        }
+      }
       ColumnPositionType posType = posCol != null ? ColumnPositionType.BEFORE : ColumnPositionType.NO_OPERATION;
       afterAdds = new HoodieSchemaChangeApplier(afterAdds).applyAddChange(name, colType, null, posCol, posType);
     }
