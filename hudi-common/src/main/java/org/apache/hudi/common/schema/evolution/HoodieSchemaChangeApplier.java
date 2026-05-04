@@ -19,6 +19,8 @@
 package org.apache.hudi.common.schema.evolution;
 
 import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaField;
+import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.common.schema.evolution.legacy.InternalSchema;
 import org.apache.hudi.common.schema.evolution.legacy.action.TableChange;
 import org.apache.hudi.common.schema.evolution.legacy.action.TableChanges;
@@ -27,7 +29,10 @@ import org.apache.hudi.common.schema.evolution.legacy.convert.InternalSchemaConv
 import org.apache.hudi.common.schema.evolution.legacy.utils.SchemaChangeUtils;
 import org.apache.hudi.common.schema.types.Type;
 
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
+import java.util.Map;
 
 /**
  * HoodieSchema-shaped applier for column-level schema evolution operations
@@ -116,9 +121,8 @@ public class HoodieSchemaChangeApplier {
    * {@code newName} is a leaf name — the parent path is taken from {@code colName}.
    */
   public HoodieSchema applyRenameChange(String colName, String newName) {
-    TableChanges.ColumnUpdateChange update = TableChanges.ColumnUpdateChange.get(latestInternal);
-    update.renameColumn(colName, newName);
-    return wrap(SchemaChangeUtils.applyTableChanges2Schema(latestInternal, update));
+    return rewriteFieldByName(latestSchema, colName,
+        field -> rebuildField(field, newName, field.schema(), field.doc().orElse(null)));
   }
 
   /**
@@ -126,29 +130,35 @@ public class HoodieSchemaChangeApplier {
    * default; the inverse must be forced explicitly via the underlying applier.
    */
   public HoodieSchema applyColumnNullabilityChange(String colName, boolean nullable) {
-    TableChanges.ColumnUpdateChange update = TableChanges.ColumnUpdateChange.get(latestInternal);
-    update.updateColumnNullability(colName, nullable);
-    return wrap(SchemaChangeUtils.applyTableChanges2Schema(latestInternal, update));
+    return rewriteFieldByName(latestSchema, colName, field -> {
+      HoodieSchema fieldSchema = field.schema();
+      HoodieSchema effective = fieldSchema.isNullable() ? fieldSchema.getNonNullType() : fieldSchema;
+      HoodieSchema newSchema = nullable ? HoodieSchema.createNullable(effective) : effective;
+      return rebuildField(field, field.name(), newSchema, field.doc().orElse(null));
+    });
   }
 
   /**
-   * Promote a column to a wider type. The legal promotions are defined by
-   * {@link SchemaChangeUtils#isTypeUpdateAllow}.
+   * Promote a column to a wider type. Legal promotions are defined by
+   * {@link SchemaChangeUtils#isTypeUpdateAllow}; this method does not enforce
+   * them — callers are expected to validate compatibility.
    */
   public HoodieSchema applyColumnTypeChange(String colName, HoodieSchema newType) {
-    Type internalType = InternalSchemaConverter.convertToField(newType);
-    TableChanges.ColumnUpdateChange update = TableChanges.ColumnUpdateChange.get(latestInternal);
-    update.updateColumnType(colName, internalType);
-    return wrap(SchemaChangeUtils.applyTableChanges2Schema(latestInternal, update));
+    return rewriteFieldByName(latestSchema, colName, field -> {
+      HoodieSchema fieldSchema = field.schema();
+      boolean wasNullable = fieldSchema.isNullable();
+      HoodieSchema effectiveNewType = newType.isNullable() ? newType.getNonNullType() : newType;
+      HoodieSchema finalSchema = wasNullable ? HoodieSchema.createNullable(effectiveNewType) : effectiveNewType;
+      return rebuildField(field, field.name(), finalSchema, field.doc().orElse(null));
+    });
   }
 
   /**
    * Update a column's documentation string.
    */
   public HoodieSchema applyColumnCommentChange(String colName, String doc) {
-    TableChanges.ColumnUpdateChange update = TableChanges.ColumnUpdateChange.get(latestInternal);
-    update.updateColumnComment(colName, doc);
-    return wrap(SchemaChangeUtils.applyTableChanges2Schema(latestInternal, update));
+    return rewriteFieldByName(latestSchema, colName,
+        field -> rebuildField(field, field.name(), field.schema(), doc));
   }
 
   /**
@@ -182,5 +192,143 @@ public class HoodieSchemaChangeApplier {
 
   private HoodieSchema wrap(InternalSchema result) {
     return HoodieSchemaInternalSchemaBridge.toHoodieSchema(result, recordName);
+  }
+
+  // -------------------------------------------------------------------------
+  // HoodieSchema-direct walker for single-field rewrite operations
+  // (rename / nullability / type / comment). Resolves a dotted full name —
+  // with "element" descending into array elements and "value" descending into
+  // map values — to a target HoodieSchemaField, applies the supplied
+  // transform, and rebuilds the parent records up the tree. The bridge is
+  // not on this path.
+  // -------------------------------------------------------------------------
+
+  @FunctionalInterface
+  private interface FieldTransform {
+    HoodieSchemaField apply(HoodieSchemaField field);
+  }
+
+  private static HoodieSchema rewriteFieldByName(HoodieSchema source, String fullName, FieldTransform transform) {
+    if (fullName == null || fullName.isEmpty()) {
+      throw new IllegalArgumentException("col name must not be null or empty");
+    }
+    String[] parts = fullName.split("\\.");
+    return rewriteRootRecord(source, parts, transform);
+  }
+
+  /**
+   * Rewrites the root-level record of {@code source}. Distinct from
+   * {@link #rewriteRecord} because the root carries schemaId / maxColumnId
+   * that nested records don't, and we need to forward them to the result.
+   */
+  private static HoodieSchema rewriteRootRecord(HoodieSchema source, String[] parts, FieldTransform transform) {
+    boolean nullable = source.isNullable();
+    HoodieSchema effective = nullable ? source.getNonNullType() : source;
+    HoodieSchema rewritten = rewriteRecord(effective, parts, 0, transform);
+    if (source.schemaId() >= 0) {
+      rewritten.setSchemaId(source.schemaId());
+    }
+    if (source.maxColumnId() >= 0) {
+      rewritten.setMaxColumnId(source.maxColumnId());
+    }
+    rewritten.invalidateIdIndex();
+    return nullable ? HoodieSchema.createNullable(rewritten) : rewritten;
+  }
+
+  private static HoodieSchema rewriteRecord(HoodieSchema record, String[] parts, int idx, FieldTransform transform) {
+    if (record.getType() != HoodieSchemaType.RECORD) {
+      throw new IllegalArgumentException("expected record at depth " + idx + " of path "
+          + java.util.Arrays.toString(parts) + ", got " + record.getType());
+    }
+    String segment = parts[idx];
+    boolean isLeaf = idx == parts.length - 1;
+    List<HoodieSchemaField> newFields = new ArrayList<>(record.getFields().size());
+    boolean found = false;
+    for (HoodieSchemaField field : record.getFields()) {
+      if (!found && field.name().equals(segment)) {
+        found = true;
+        if (isLeaf) {
+          newFields.add(transform.apply(field));
+        } else {
+          HoodieSchema rewrittenChild = descendThroughField(field.schema(), parts, idx + 1, transform);
+          newFields.add(rebuildField(field, field.name(), rewrittenChild, field.doc().orElse(null)));
+        }
+      } else {
+        newFields.add(field);
+      }
+    }
+    if (!found) {
+      throw new IllegalArgumentException("cannot find field '" + segment + "' at depth " + idx
+          + " in path " + java.util.Arrays.toString(parts));
+    }
+    return HoodieSchema.createRecord(record.getName(), record.getNamespace().orElse(null),
+        record.getDoc().orElse(null), newFields);
+  }
+
+  /**
+   * Descends through a record/array/map field's schema and returns the
+   * rewritten sub-schema, preserving array {@code element-id} / map
+   * {@code key-id} / {@code value-id} props. Re-wraps in a [null, T] union
+   * when the descent passed through a nullable field.
+   */
+  private static HoodieSchema descendThroughField(HoodieSchema fieldSchema, String[] parts, int idx, FieldTransform transform) {
+    boolean nullable = fieldSchema.isNullable();
+    HoodieSchema effective = nullable ? fieldSchema.getNonNullType() : fieldSchema;
+    HoodieSchema rewritten;
+    switch (effective.getType()) {
+      case RECORD:
+        rewritten = rewriteRecord(effective, parts, idx, transform);
+        break;
+      case ARRAY: {
+        if (!"element".equals(parts[idx])) {
+          throw new IllegalArgumentException("expected 'element' at depth " + idx + ", got " + parts[idx]);
+        }
+        int elementId = readIntProp(effective.getAvroSchema().getObjectProp(HoodieSchema.ELEMENT_ID_PROP));
+        HoodieSchema rewrittenElement = descendThroughField(effective.getElementType(), parts, idx + 1, transform);
+        HoodieSchema arr = HoodieSchema.createArray(rewrittenElement);
+        if (elementId >= 0) {
+          arr.getAvroSchema().addProp(HoodieSchema.ELEMENT_ID_PROP, elementId);
+        }
+        rewritten = arr;
+        break;
+      }
+      case MAP: {
+        if (!"value".equals(parts[idx])) {
+          throw new IllegalArgumentException("expected 'value' at depth " + idx + ", got " + parts[idx]);
+        }
+        int keyId = readIntProp(effective.getAvroSchema().getObjectProp(HoodieSchema.KEY_ID_PROP));
+        int valueId = readIntProp(effective.getAvroSchema().getObjectProp(HoodieSchema.VALUE_ID_PROP));
+        HoodieSchema rewrittenValue = descendThroughField(effective.getValueType(), parts, idx + 1, transform);
+        HoodieSchema map = HoodieSchema.createMap(rewrittenValue);
+        if (keyId >= 0) {
+          map.getAvroSchema().addProp(HoodieSchema.KEY_ID_PROP, keyId);
+        }
+        if (valueId >= 0) {
+          map.getAvroSchema().addProp(HoodieSchema.VALUE_ID_PROP, valueId);
+        }
+        rewritten = map;
+        break;
+      }
+      default:
+        throw new IllegalArgumentException("cannot descend into primitive at depth " + idx);
+    }
+    return nullable ? HoodieSchema.createNullable(rewritten) : rewritten;
+  }
+
+  /**
+   * Builds a new HoodieSchemaField with the supplied {@code name} / {@code schema}
+   * / {@code doc} but inheriting {@code field-id} and any other custom Avro
+   * properties from {@code source}. Default value and order are preserved.
+   */
+  private static HoodieSchemaField rebuildField(HoodieSchemaField source, String name, HoodieSchema schema, String doc) {
+    HoodieSchemaField rebuilt = HoodieSchemaField.of(name, schema, doc, source.defaultVal().orElse(null));
+    for (Map.Entry<String, Object> e : source.getObjectProps().entrySet()) {
+      rebuilt.addProp(e.getKey(), e.getValue());
+    }
+    return rebuilt;
+  }
+
+  private static int readIntProp(Object raw) {
+    return raw instanceof Number ? ((Number) raw).intValue() : -1;
   }
 }
