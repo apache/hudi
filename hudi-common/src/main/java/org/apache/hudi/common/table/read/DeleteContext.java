@@ -100,9 +100,15 @@ public class DeleteContext implements Serializable {
   }
 
   /**
-   * Returns position of hoodie operation meta field in the schema
+   * Returns position of hoodie operation meta field in the schema, or -1 if
+   * the schema doesn't carry it. Guards against the NULL-typed sentinel
+   * (which has no fields) — DeltaStreamer hands one of those in via
+   * schema-provider fallback paths.
    */
   private static int getHoodieOperationPos(HoodieSchema schema) {
+    if (schema.getType() == HoodieSchemaType.NULL) {
+      return -1;
+    }
     return schema.getField(HoodieRecord.OPERATION_METADATA_FIELD)
         .map(HoodieSchemaField::pos)
         .orElseGet(() -> -1);
