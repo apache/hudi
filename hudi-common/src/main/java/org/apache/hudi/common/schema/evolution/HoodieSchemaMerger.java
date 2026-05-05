@@ -20,6 +20,7 @@ package org.apache.hudi.common.schema.evolution;
 
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaField;
+import org.apache.hudi.common.schema.HoodieSchemaIdAssigner;
 import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
@@ -71,11 +72,33 @@ public class HoodieSchemaMerger {
                             boolean ignoreRequiredAttribute,
                             boolean useColumnTypeFromFileSchema,
                             boolean useColNameFromFileSchema) {
-    this.fileSchema = fileSchema;
+    this.fileSchema = ensureFileSchemaHasIds(fileSchema);
     this.querySchema = querySchema;
     this.ignoreRequiredAttribute = ignoreRequiredAttribute;
     this.useColumnTypeFromFileSchema = useColumnTypeFromFileSchema;
     this.useColNameFromFileSchema = useColNameFromFileSchema;
+  }
+
+  /**
+   * Replicates legacy {@code InternalSchemaConverter.fromAvro} behavior: when the
+   * file schema carries no field ids at all (e.g. parquet's natural Avro schema
+   * derived from the file's MessageType has no {@code field-id} custom props),
+   * mint sequential ids positionally starting at 0. The querySchema's ids were
+   * also assigned positionally starting at 0 at table-create time and preserved
+   * across renames, so id 0..N on the file side aligns with id 0..N on the
+   * query side for unchanged columns — letting the id-based merge detect renames
+   * (same id, different name) instead of mis-classifying them as drop+add.
+   *
+   * <p>Cloned so we don't mutate the caller's HoodieSchema. Partially-IDed
+   * schemas pass through unchanged: this only fires when no ids are present.</p>
+   */
+  private static HoodieSchema ensureFileSchemaHasIds(HoodieSchema fileSchema) {
+    if (fileSchema == null || !fileSchema.getAllIds().isEmpty()) {
+      return fileSchema;
+    }
+    HoodieSchema clone = HoodieSchema.parse(fileSchema.toAvroSchema().toString());
+    HoodieSchemaIdAssigner.assign(clone, 0);
+    return clone;
   }
 
   public HoodieSchemaMerger(HoodieSchema fileSchema,

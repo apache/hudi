@@ -19,7 +19,7 @@ package org.apache.spark.sql.hudi.command
 
 import org.apache.hudi.{DataSourceUtils, HoodieSchemaConversionUtils, HoodieWriterUtils}
 import org.apache.hudi.common.model.{HoodieCommitMetadata, HoodieFailedWritesCleaningPolicy, WriteOperationType}
-import org.apache.hudi.common.schema.HoodieSchema
+import org.apache.hudi.common.schema.{HoodieSchema, HoodieSchemaIdAssigner}
 import org.apache.hudi.common.schema.evolution.{ColumnChangeID, ColumnPositionType, HoodieSchemaChangeApplier, HoodieSchemaHistoryStorageManager, HoodieSchemaSerDe}
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.table.timeline.HoodieInstant.State
@@ -208,6 +208,13 @@ case class AlterTableCommand(table: CatalogTable, changes: Seq[TableChange], cha
     val schemaUtil = new TableSchemaResolver(metaClient)
 
     val schema = schemaUtil.getTableEvolutionSchemaFromCommitMetadata().orElse(schemaUtil.getTableSchema)
+    // Mirror legacy InternalSchemaConverter.fromAvro: stamp positional ids when the
+    // returned schema is id-less (fresh table, only hoodie.table.create.schema in
+    // props). Appliers (rename / type / reorder) preserve existing ids but never
+    // mint them, so without this the persisted latest_schema would carry id = -1
+    // and downstream id-keyed lookups (HoodieSchemaProjections.findIdByName,
+    // HoodieSchemaMerger.findFullName) would all miss. assignFresh is idempotent.
+    HoodieSchemaIdAssigner.assignFresh(schema)
     val historySchemaStr = schemaUtil.getTableHistorySchemaStrFromCommitMetadata.orElse("")
     (schema, historySchemaStr)
   }
