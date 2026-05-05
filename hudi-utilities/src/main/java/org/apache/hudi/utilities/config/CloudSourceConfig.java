@@ -183,13 +183,9 @@ public class CloudSourceConfig extends HoodieConfig {
       .withDocumentation("Boolean value to allow coalesce alias columns with actual columns while reading from source");
 
   public static final ConfigProperty<Boolean> CLOUD_INCREMENTAL_MERGE_SCHEMA = ConfigProperty
-      .key(STREAMER_CONFIG_PREFIX + "source.cloud.data.merge.schema")
+      .key(STREAMER_CONFIG_PREFIX + "source.cloud.data.merge.schema.enable")
       .defaultValue(true)
-      .withAlternatives(
-          DELTA_STREAMER_CONFIG_PREFIX + "source.cloud.data.merge.schema",
-          // Back-compat aliases for the previous parquet-only key, still honored.
-          STREAMER_CONFIG_PREFIX + "source.cloud.data.parquet.merge.schema",
-          DELTA_STREAMER_CONFIG_PREFIX + "source.cloud.data.parquet.merge.schema")
+      .withAlternatives(DELTA_STREAMER_CONFIG_PREFIX + "source.cloud.data.merge.schema.enable")
       .markAdvanced()
       .sinceVersion("1.2.0")
       .withDocumentation("For Parquet and ORC data files in S3/GCS incremental ingestion, merge schemas across all "

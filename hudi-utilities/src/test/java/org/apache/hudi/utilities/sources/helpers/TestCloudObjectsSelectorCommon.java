@@ -229,8 +229,9 @@ public class TestCloudObjectsSelectorCommon extends HoodieSparkClientTestHarness
         new CloudObjectMetadata(p2, 1L));
     Option<Dataset<Row>> result = cloudObjectsSelectorCommon.loadAsDataset(sparkSession, input, "parquet", Option.empty(), 1);
     Assertions.assertTrue(result.isPresent());
-    Assertions.assertEquals(2, result.get().count());
-    Set<String> colNames = Arrays.stream(result.get().schema().fields()).map(StructField::name).collect(Collectors.toSet());
+    Dataset<Row> ds = result.get();
+    Assertions.assertEquals(2, ds.count());
+    Set<String> colNames = Arrays.stream(ds.schema().fields()).map(StructField::name).collect(Collectors.toSet());
     Assertions.assertTrue(colNames.contains("b"));
     Assertions.assertTrue(colNames.contains("c"));
   }
