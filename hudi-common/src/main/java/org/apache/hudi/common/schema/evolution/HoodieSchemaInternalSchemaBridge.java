@@ -30,6 +30,8 @@ import org.apache.hudi.internal.schema.utils.InternalSchemaUtils;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.BiConsumer;
+import java.util.function.Function;
 
 /**
  * One-way bridge from {@link InternalSchema} to {@link HoodieSchema} that preserves
@@ -264,8 +266,8 @@ public final class HoodieSchemaInternalSchemaBridge {
    * since the field-id is the schema's identity and a divergence here means
    * upstream corruption.
    */
-  private static void stampPropIfAbsent(java.util.function.Function<String, Object> getter,
-                                        java.util.function.BiConsumer<String, Object> setter,
+  private static void stampPropIfAbsent(Function<String, Object> getter,
+                                        BiConsumer<String, Object> setter,
                                         String key,
                                         int value) {
     Object existing = getter.apply(key);

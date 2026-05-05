@@ -1730,6 +1730,13 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    * Persists the post-DDL evolution schema to commit metadata and the history file.
    */
   public void commitTableChange(HoodieSchema newEvolutionSchema, HoodieTableMetaClient metaClient) {
+    // Force the persisted schema's record name to the canonical form so callers that
+    // hand us a schema with a drifted name (e.g. Flink HoodieCatalogUtil.alterTable)
+    // don't end up writing a non-canonical record name into LATEST_SCHEMA / config.
+    String canonicalName = HoodieSchemaUtils.getRecordQualifiedName(config.getTableName());
+    if (!canonicalName.equals(newEvolutionSchema.getFullName())) {
+      newEvolutionSchema = HoodieSchemaInternalSchemaBridge.withRecordName(newEvolutionSchema, canonicalName);
+    }
     TableSchemaResolver schemaUtil = new TableSchemaResolver(metaClient);
     String historySchemaStr = schemaUtil.getTableHistorySchemaStrFromCommitMetadata().orElseGet(
         () -> HoodieSchemaSerDe.inheritHistory(getEvolutionSchema(schemaUtil), ""));

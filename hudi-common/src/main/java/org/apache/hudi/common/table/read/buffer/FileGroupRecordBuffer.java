@@ -223,7 +223,7 @@ abstract class FileGroupRecordBuffer<T> implements HoodieFileGroupRecordBuffer<T
     long currentInstantTime = Long.parseLong(dataBlock.getLogBlockHeader().get(INSTANT_TIME));
     HoodieSchema fileSchema = HoodieSchemaHistoryCache.searchSchemaAndCache(currentInstantTime, hoodieTableMetaClient);
     Pair<HoodieSchema, Map<String, String>> mergedEvolutionSchema = new HoodieSchemaMerger(fileSchema, evolutionSchemaOpt.get(),
-        true, false, false).mergeSchemaGetRenamed();
+        true, false, false).mergeSchemaGetRenamed(readerSchema.getFullName());
     HoodieSchema mergedSchema = mergedEvolutionSchema.getLeft();
     // `mergedSchema` maybe not equal with `readerSchema`, case: drop a column `f_x`, and then add a new column with same name `f_x`,
     // then the new added column in `mergedSchema` will have a suffix: `f_xsuffix`, distinguished from the original column `f_x`, see

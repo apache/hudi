@@ -59,7 +59,7 @@ public final class HoodieSchemaHistoryCache {
    * commit before the given clustering/compaction instant. Pass-through —
    * already string-based, no schema-type conversion.
    */
-  public static Pair<Option<String>, Option<String>> getInternalSchemaAndAvroSchemaForClusteringAndCompaction(
+  public static Pair<Option<String>, Option<String>> getEvolutionSchemaAndAvroSchemaForClusteringAndCompaction(
       HoodieTableMetaClient metaClient, String compactionAndClusteringInstant) {
     return InternalSchemaCache.getInternalSchemaAndAvroSchemaForClusteringAndCompaction(
         metaClient, compactionAndClusteringInstant);

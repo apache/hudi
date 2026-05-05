@@ -194,7 +194,7 @@ public final class HoodieSchemaIndex {
     return fallback;
   }
 
-  static String createFullName(String name, Deque<String> path) {
+  public static String createFullName(String name, Deque<String> path) {
     if (path.isEmpty()) {
       return name;
     }

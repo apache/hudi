@@ -262,12 +262,11 @@ object AlterTableCommand extends Logging {
     val canonicalName = HoodieCommonSchemaUtils.getRecordQualifiedName(table.identifier.table)
     val evolutionSchema = if (rawEvolutionSchema.getFullName == canonicalName) rawEvolutionSchema
       else HoodieSchemaInternalSchemaBridge.withRecordName(rawEvolutionSchema, canonicalName)
-    val schema = evolutionSchema
     val path = getTableLocation(table, sparkSession)
     val jsc = new JavaSparkContext(sparkSession.sparkContext)
     val client = DataSourceUtils.createHoodieClient(
       jsc,
-      schema.toString,
+      evolutionSchema.toString,
       path,
       table.identifier.table,
       HoodieWriterUtils.parametersWithWriteDefaults(

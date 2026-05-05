@@ -140,7 +140,7 @@ public class FileGroupReaderSchemaHandler<T> {
     long commitInstantTime = Long.parseLong(FSUtils.getCommitTime(path.getName()));
     HoodieSchema fileSchema = HoodieSchemaHistoryCache.searchSchemaAndCache(commitInstantTime, metaClient);
     Pair<HoodieSchema, Map<String, String>> mergedEvolutionSchema = new HoodieSchemaMerger(fileSchema, evolutionSchemaOpt.get(),
-        true, false, false).mergeSchemaGetRenamed();
+        true, false, false).mergeSchemaGetRenamed(requiredSchema.getFullName());
     HoodieSchema mergedSchema = HoodieSchemaCache.intern(mergedEvolutionSchema.getLeft());
     return Pair.of(mergedSchema, mergedEvolutionSchema.getRight());
   }

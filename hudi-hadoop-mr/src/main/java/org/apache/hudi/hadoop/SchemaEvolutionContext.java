@@ -212,8 +212,12 @@ public class SchemaEvolutionContext {
       List<String> requiredColumns = getRequireColumn(job);
       HoodieSchema writerSchema = HoodieSchemaInternalSchemaBridge.withRecordName(
           evolutionSchemaOption.get(), tableSchema.getName());
-      HoodieSchema prunedEvolutionSchema = HoodieSchemaInternalSchemaBridge.pruneByLeafNames(
-          evolutionSchemaOption.get(), requiredColumns);
+      // Match the writer schema's record name on the reader projection. pruneByLeafNames
+      // preserves the source schema's name, which for evolution schemas parsed from
+      // commit metadata defaults to "hoodieSchema" and would drift from the writer.
+      HoodieSchema prunedEvolutionSchema = HoodieSchemaInternalSchemaBridge.withRecordName(
+          HoodieSchemaInternalSchemaBridge.pruneByLeafNames(evolutionSchemaOption.get(), requiredColumns),
+          tableSchema.getName());
       // Add partitioning fields to writer schema for resulting row to contain null values for these fields
       String partitionFields = job.get(hive_metastoreConstants.META_TABLE_PARTITION_COLUMNS, "");
       List<String> partitioningFields = !partitionFields.isEmpty() ? Arrays.stream(partitionFields.split("/")).collect(Collectors.toList())

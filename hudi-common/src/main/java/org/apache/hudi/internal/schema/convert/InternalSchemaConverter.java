@@ -107,9 +107,8 @@ public class InternalSchemaConverter {
   /**
    * Collect all the leaf nodes names.
    *
-   * <p>Delegates to {@link org.apache.hudi.common.schema.HoodieSchemaUtils#collectLeafNames}
-   * — the HoodieSchema-direct walker that moved out of internal.schema in the
-   * Phase 5 ramp-up. Kept here for {@link TestInternalSchemaConverter} visibility.</p>
+   * <p>Delegates to {@link HoodieSchemaUtils#collectLeafNames}; kept here only so
+   * {@code TestInternalSchemaConverter} can exercise the wrapper.</p>
    *
    * @param schema a HoodieSchema.
    * @return leaf nodes full names.

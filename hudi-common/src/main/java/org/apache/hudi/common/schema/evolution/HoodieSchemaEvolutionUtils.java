@@ -140,6 +140,10 @@ public final class HoodieSchemaEvolutionUtils {
    * {@link Type} at the result construction (callers expect Type pairs for the
    * cast-plan downstream).</p>
    */
+  private static HoodieSchema unwrap(HoodieSchema schema) {
+    return schema != null && schema.isNullable() ? schema.getNonNullType() : schema;
+  }
+
   public static Map<Integer, Pair<Type, Type>> collectTypeChangedCols(HoodieSchema schema, HoodieSchema oldSchema) {
     Set<Integer> ids = schema.getAllIds();
     Set<Integer> otherIds = oldSchema.getAllIds();
@@ -150,8 +154,11 @@ public final class HoodieSchemaEvolutionUtils {
       if (!otherIds.contains(id)) {
         continue;
       }
-      HoodieSchema thisType = schema.findType(id);
-      HoodieSchema otherType = oldSchema.findType(id);
+      // Compare unwrapped types so a nullability-only change isn't reported as a
+      // type change. Legacy InternalSchema.findType returned the unwrapped Type;
+      // HoodieSchema.findType returns the [null, T] union for nullable fields.
+      HoodieSchema thisType = unwrap(schema.findType(id));
+      HoodieSchema otherType = unwrap(oldSchema.findType(id));
       if (thisType.equals(otherType)) {
         continue;
       }

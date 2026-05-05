@@ -365,7 +365,7 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
     //       w/ more than 2 types are involved)
     val sourceSchema = prunedDataSchema.map(s => convertToHoodieSchema(s, tableName)).getOrElse(tableSchema)
     val (requiredProjectedSchema, requiredStructSchema, requiredEvolutionSchema) =
-      projectSchema(Either.cond(evolutionSchemaOpt.isDefined, evolutionSchemaOpt.get, sourceSchema), targetColumns)
+      projectSchema(sourceSchema, evolutionSchemaOpt, targetColumns)
 
     val filterExpressions = convertToExpressions(filters)
     val (partitionFilters, dataFilters) = filterExpressions.partition(isPartitionPredicate)
@@ -798,13 +798,19 @@ object HoodieBaseRelation extends SparkAdapterSupport {
   /**
    * Projects provided schema by picking only required (projected) top-level columns from it.
    *
-   * @param tableSchema     Right is the schema-on-read evolution schema (with field ids);
-   *                        Left is the structural HoodieSchema fallback.
-   * @param requiredColumns required top-level columns to be projected
+   * <p>When an evolution schema is supplied, it is used as the projection source and is also
+   * returned as the third tuple element so callers can wire up schema-on-read. Otherwise,
+   * the structural fallback schema is projected and the third element is empty.</p>
+   *
+   * @param fallbackSchema     structural HoodieSchema used when no evolution schema is present
+   * @param evolutionSchemaOpt schema-on-read evolution schema with field ids, when available
+   * @param requiredColumns    required top-level columns to be projected
    */
-  def projectSchema(tableSchema: Either[HoodieSchema, HoodieSchema], requiredColumns: Array[String]): (HoodieSchema, StructType, Option[HoodieSchema]) = {
-    tableSchema match {
-      case Right(evolutionSchema) =>
+  def projectSchema(fallbackSchema: HoodieSchema,
+                    evolutionSchemaOpt: Option[HoodieSchema],
+                    requiredColumns: Array[String]): (HoodieSchema, StructType, Option[HoodieSchema]) = {
+    evolutionSchemaOpt match {
+      case Some(evolutionSchema) =>
         checkState(!evolutionSchema.isEmptySchema)
         val prunedEvolutionSchema = HoodieSchemaInternalSchemaBridge.pruneByLeafNames(
           evolutionSchema, requiredColumns.toList.asJava)
@@ -812,8 +818,8 @@ object HoodieBaseRelation extends SparkAdapterSupport {
 
         (prunedEvolutionSchema, requiredStructSchema, Some(prunedEvolutionSchema))
 
-      case Left(hoodieSchema) =>
-        val fieldMap = hoodieSchema.getFields.asScala.map(f => f.name() -> f).toMap
+      case None =>
+        val fieldMap = fallbackSchema.getFields.asScala.map(f => f.name() -> f).toMap
         val requiredFields = requiredColumns.map { col =>
           val f = fieldMap(col)
           // We have to create a new HoodieSchemaField since Avro schemas can't share field
@@ -821,8 +827,8 @@ object HoodieBaseRelation extends SparkAdapterSupport {
           HoodieCommonSchemaUtils.createNewSchemaField(f.name(), f.schema(), f.doc().orElse(null), f.defaultVal().orElse(null))
         }.toList
 
-        val requiredSchema = HoodieSchema.createRecord(hoodieSchema.getName, hoodieSchema.getDoc.orElse(null),
-          hoodieSchema.getNamespace.orElse(null), hoodieSchema.isError, requiredFields.asJava)
+        val requiredSchema = HoodieSchema.createRecord(fallbackSchema.getName, fallbackSchema.getDoc.orElse(null),
+          fallbackSchema.getNamespace.orElse(null), fallbackSchema.isError, requiredFields.asJava)
         val requiredStructSchema = HoodieSchemaConversionUtils.convertHoodieSchemaToStructType(requiredSchema)
 
         (requiredSchema, requiredStructSchema, Option.empty[HoodieSchema])

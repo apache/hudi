@@ -246,12 +246,12 @@ public class HoodieSchema implements Serializable {
    * @param vectorColumns ordered map of field name to Vector descriptor (iteration order is preserved)
    * @return comma-separated descriptor list, or empty string if the map is null or empty
    */
-  public static String serializeVectorColumnsMetadata(java.util.Map<String, Vector> vectorColumns) {
+  public static String serializeVectorColumnsMetadata(Map<String, Vector> vectorColumns) {
     if (vectorColumns == null || vectorColumns.isEmpty()) {
       return "";
     }
     StringBuilder sb = new StringBuilder();
-    for (java.util.Map.Entry<String, Vector> entry : vectorColumns.entrySet()) {
+    for (Map.Entry<String, Vector> entry : vectorColumns.entrySet()) {
       if (sb.length() > 0) {
         sb.append(',');
       }
@@ -1450,7 +1450,7 @@ public class HoodieSchema implements Serializable {
   /**
    * Returns all column ids in this schema. Replaces InternalSchema#getAllIds.
    */
-  public java.util.Set<Integer> getAllIds() {
+  public Set<Integer> getAllIds() {
     return index().idToName().keySet();
   }
 
@@ -1487,8 +1487,8 @@ public class HoodieSchema implements Serializable {
    * <p>Order matches the depth-first traversal order used by {@link HoodieSchemaIndex},
    * which is the same order InternalSchema produced.</p>
    */
-  public java.util.List<String> getAllColsFullName() {
-    return new java.util.ArrayList<>(index().nameToId().keySet());
+  public List<String> getAllColsFullName() {
+    return new ArrayList<>(index().nameToId().keySet());
   }
 
   /**
