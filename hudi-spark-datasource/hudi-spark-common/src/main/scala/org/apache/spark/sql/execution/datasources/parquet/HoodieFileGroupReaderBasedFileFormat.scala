@@ -176,11 +176,17 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
       val orcBatchSupported = conf.orcVectorizedReaderEnabled &&
         schema.forall(s => OrcUtils.supportColumnarReads(
           s.dataType, sparkSession.sessionState.conf.orcVectorizedReaderNestedColumnEnabled))
-      // Lance batch mode cannot honor `hoodie.read.blob.inline.mode=DESCRIPTOR` (the rewrite
-      // lives in BlobDescriptorTransform on the row path). Disable batch whenever BLOB columns
-      // are present so the planner doesn't commit to ColumnarBatch output that the row-path
-      // reader cannot deliver.
-      val lanceBatchSupported = !schemaContainsBlobColumn(schema)
+      // Lance batch mode cannot honor either of these scenarios — they both force a runtime
+      // row path inside SparkLanceReaderBase.read:
+      //   - `hoodie.read.blob.inline.mode=DESCRIPTOR`: the BLOB rewrite lives in
+      //     BlobDescriptorTransform on the row path only.
+      //   - schema-on-read with implicit type changes: SparkSchemaTransformUtils builds the
+      //     cast projection on the row path only; the batch path has no equivalent.
+      // Disable batch at plan time whenever either trigger could fire so the planner doesn't
+      // commit to ColumnarBatch output that the row-path reader cannot deliver — Spark would
+      // wrap the scan with ColumnarToRowExec and ClassCastException on the first InternalRow.
+      val lanceBatchSupported =
+        !schemaContainsBlobColumn(schema) && !internalSchemaOpt.isPresent
 
       val supportBatch = if (isMultipleBaseFileFormatsEnabled) {
         parquetBatchSupported && orcBatchSupported

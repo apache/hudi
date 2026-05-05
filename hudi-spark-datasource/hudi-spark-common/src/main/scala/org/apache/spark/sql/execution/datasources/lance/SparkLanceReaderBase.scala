@@ -62,7 +62,7 @@ import scala.collection.JavaConverters._
 class SparkLanceReaderBase(enableVectorizedReader: Boolean) extends SparkColumnarFileReader {
 
   /** Holds a pre-created all-null Arrow vector for a column missing from the file (schema evolution). */
-  private case class NullColumnEntry(colIndex: Int, lanceColumnVector: LanceArrowColumnVector, arrowVector: FieldVector)
+  private case class NullColumnEntry(lanceColumnVector: LanceArrowColumnVector, arrowVector: FieldVector)
 
   // Batch size for reading Lance files (number of rows per batch)
   private val DEFAULT_BATCH_SIZE = 512
@@ -298,26 +298,23 @@ class SparkLanceReaderBase(enableVectorizedReader: Boolean) extends SparkColumna
         HoodieStorageConfig.LANCE_READ_ALLOCATOR_SIZE_BYTES.defaultValue().toLong))
     } else None
 
+    // Sparse array indexed by required-schema position so the per-batch hot loop is O(1).
+    // Slots stay null for columns that come from the file (i.e. columnMapping(i) >= 0).
     // Arrow vectors auto-reallocate on setValueCount (see BaseFixedWidthVector.setValueCount),
     // so it is safe to call setValueCount with a count larger than DEFAULT_BATCH_SIZE.
-    val nullColumnVectors: Array[NullColumnEntry] =
+    val nullColumnByIndex: Array[NullColumnEntry] =
       nullAllocator.map { alloc =>
-        columnMapping.zipWithIndex.filter(_._1 < 0).map { case (_, idx) =>
+        val arr = new Array[NullColumnEntry](requiredSchema.length)
+        columnMapping.zipWithIndex.filter(_._1 < 0).foreach { case (_, idx) =>
           val field = LanceArrowUtils.toArrowField(
             requiredSchema(idx).name, requiredSchema(idx).dataType, requiredSchema(idx).nullable, "UTC")
           val arrowVector = field.createVector(alloc)
           arrowVector.allocateNew()
           arrowVector.setValueCount(DEFAULT_BATCH_SIZE)
-          NullColumnEntry(idx, new LanceArrowColumnVector(arrowVector), arrowVector)
+          arr(idx) = NullColumnEntry(new LanceArrowColumnVector(arrowVector), arrowVector)
         }
+        arr
       }.getOrElse(Array.empty)
-
-    // Direct-indexed lookup so the per-batch hot loop is O(1) instead of scanning nullColumnVectors.
-    val nullColumnByIndex: Array[NullColumnEntry] = {
-      val arr = new Array[NullColumnEntry](requiredSchema.length)
-      nullColumnVectors.foreach(e => arr(e.colIndex) = e)
-      arr
-    }
 
     // Pre-create partition column vectors (reused across batches, reset per batch)
     val hasPartitionColumns = partitionSchema.length > 0
@@ -401,8 +398,14 @@ class SparkLanceReaderBase(enableVectorizedReader: Boolean) extends SparkColumna
                 else closeError.addSuppressed(e)
             }
           }
-          // Close null Arrow vectors and their allocator before batchIterator (which closes the data allocator)
-          nullColumnVectors.foreach(v => closeSafely(v.lanceColumnVector.close()))
+          // Close null Arrow vectors and their allocator before batchIterator (which closes the data allocator).
+          // nullColumnByIndex is sparse: skip slots for columns that came from the file.
+          var k = 0
+          while (k < nullColumnByIndex.length) {
+            val entry = nullColumnByIndex(k)
+            if (entry != null) closeSafely(entry.lanceColumnVector.close())
+            k += 1
+          }
           nullAllocator.foreach(a => closeSafely(a.close()))
           closeSafely(batchIterator.close())
           partitionVectors.foreach(v => closeSafely(v.close()))
