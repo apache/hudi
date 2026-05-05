@@ -90,8 +90,7 @@
       "name": "height",
       "type": {
         "type": "fixed",
-        "name": "fixed",
-        "namespace": "triprec.height",
+        "name": "abc",
         "size": 5,
         "logicalType": "decimal",
         "precision": 10,
