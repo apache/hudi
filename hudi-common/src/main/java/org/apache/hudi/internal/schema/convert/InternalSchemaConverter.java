@@ -21,6 +21,7 @@ package org.apache.hudi.internal.schema.convert;
 import org.apache.hudi.common.schema.HoodieJsonProperties;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaField;
+import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.VisibleForTesting;
@@ -100,7 +101,7 @@ public class InternalSchemaConverter {
 
   public static InternalSchema pruneHoodieSchemaToInternalSchema(HoodieSchema schema, InternalSchema originSchema) {
     return InternalSchemaUtils.pruneInternalSchema(originSchema,
-        org.apache.hudi.common.schema.HoodieSchemaUtils.collectLeafNames(schema));
+        HoodieSchemaUtils.collectLeafNames(schema));
   }
 
   /**
@@ -115,7 +116,7 @@ public class InternalSchemaConverter {
    */
   @VisibleForTesting
   static List<String> collectColNamesFromSchema(HoodieSchema schema) {
-    return org.apache.hudi.common.schema.HoodieSchemaUtils.collectLeafNames(schema);
+    return HoodieSchemaUtils.collectLeafNames(schema);
   }
 
   /**

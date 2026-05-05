@@ -369,10 +369,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
         evolutionSchema.setSchemaId(Long.parseLong(instantTime));
       } else {
         evolutionSchema = HoodieSchemaSerDe.searchSchema(Long.parseLong(instantTime),
-            HoodieSchemaSerDe.fromJsonHistory(historySchemaStr));
-        if (evolutionSchema == null) {
-          evolutionSchema = HoodieSchema.empty();
-        }
+            HoodieSchemaSerDe.fromJsonHistory(historySchemaStr)).orElse(HoodieSchema.empty());
       }
       HoodieSchema evolvedSchema = HoodieSchemaEvolutionUtils.reconcileSchema(schema, evolutionSchema, config.getBooleanOrDefault(HoodieCommonConfig.SET_NULL_FOR_MISSING_COLUMNS));
       if (evolvedSchema.equals(evolutionSchema)) {

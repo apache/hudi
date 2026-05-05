@@ -141,8 +141,8 @@ public class FileGroupReaderSchemaHandler<T> {
     HoodieSchema fileSchema = HoodieSchemaHistoryCache.searchSchemaAndCache(commitInstantTime, metaClient);
     Pair<HoodieSchema, Map<String, String>> mergedEvolutionSchema = new HoodieSchemaMerger(fileSchema, evolutionSchemaOpt.get(),
         true, false, false).mergeSchemaGetRenamed();
-    HoodieSchema mergedAvroSchema = HoodieSchemaCache.intern(mergedEvolutionSchema.getLeft());
-    return Pair.of(mergedAvroSchema, mergedEvolutionSchema.getRight());
+    HoodieSchema mergedSchema = HoodieSchemaCache.intern(mergedEvolutionSchema.getLeft());
+    return Pair.of(mergedSchema, mergedEvolutionSchema.getRight());
   }
 
   private Option<HoodieSchema> pruneEvolutionSchema(HoodieSchema requiredSchema, Option<HoodieSchema> evolutionSchemaOption) {

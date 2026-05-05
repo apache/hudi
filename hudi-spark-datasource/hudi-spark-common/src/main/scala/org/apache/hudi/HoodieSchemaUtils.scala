@@ -100,9 +100,9 @@ object HoodieSchemaUtils {
    * the table's schema-on-read evolution schema (if any).
    */
   def deduceWriterSchema(sourceSchema: HoodieSchema,
-                                      latestTableSchemaOpt: Option[HoodieSchema],
-                                      tableEvolutionSchemaOpt: Option[HoodieSchema],
-                                      opts: Map[String, String]): HoodieSchema = {
+                         latestTableSchemaOpt: Option[HoodieSchema],
+                         tableEvolutionSchemaOpt: Option[HoodieSchema],
+                         opts: Map[String, String]): HoodieSchema = {
     latestTableSchemaOpt match {
       // If table schema is empty, then we use the source schema as a writer's schema.
       case None => HoodieSchemaEvolutionUtils.fixNullOrdering(sourceSchema)
@@ -233,9 +233,9 @@ object HoodieSchemaUtils {
    * not Scala's [[Option]] / [[Map]].
    */
   def deduceWriterSchema(sourceSchema: HoodieSchema,
-                                      latestTableSchemaOpt: org.apache.hudi.common.util.Option[HoodieSchema],
-                                      tableEvolutionSchemaOpt: org.apache.hudi.common.util.Option[HoodieSchema],
-                                      props: TypedProperties): HoodieSchema = {
+                         latestTableSchemaOpt: org.apache.hudi.common.util.Option[HoodieSchema],
+                         tableEvolutionSchemaOpt: org.apache.hudi.common.util.Option[HoodieSchema],
+                         props: TypedProperties): HoodieSchema = {
     deduceWriterSchema(sourceSchema,
       HoodieConversionUtils.toScalaOption(latestTableSchemaOpt),
       HoodieConversionUtils.toScalaOption(tableEvolutionSchemaOpt),

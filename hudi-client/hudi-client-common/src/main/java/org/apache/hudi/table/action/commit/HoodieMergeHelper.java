@@ -194,7 +194,7 @@ public class HoodieMergeHelper<T> extends BaseMergeHelper {
           })
           .collect(Collectors.toList());
       HoodieSchema newWriterSchema = new HoodieSchemaMerger(fileWriteSchema, querySchema,
-          true, false, false).mergeSchema();
+          true, false, false).mergeSchema(writerSchema.getFullName());
       HoodieSchema writeSchemaFromFile = fileWriteSchema;
       boolean needToReWriteRecord = sameCols.size() != colNamesFromWriteSchema.size() || HoodieSchemaCompatibility.areSchemasCompatible(newWriterSchema,
               writeSchemaFromFile);

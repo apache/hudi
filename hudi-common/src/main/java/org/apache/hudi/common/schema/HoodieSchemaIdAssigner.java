@@ -54,7 +54,13 @@ public final class HoodieSchemaIdAssigner {
    * @return the maximum column id present after assignment
    */
   public static int assign(HoodieSchema schema, int startId) {
-    int[] nextId = {startId};
+    // Pre-scan so the running counter starts strictly above every existing id.
+    // Without this, an unidentified field stamped with `startId` followed by a
+    // sibling whose existing id equals `startId` would collide; assigning ids in
+    // a single forward pass only catches collisions visited after the unidentified
+    // node, never before it.
+    int safeStart = Math.max(startId, HoodieSchemaIndex.of(schema).maxColumnIdSeen() + 1);
+    int[] nextId = {safeStart};
     visit(schema, nextId);
     int maxId = nextId[0] - 1;
     schema.setMaxColumnId(maxId);
@@ -71,9 +77,7 @@ public final class HoodieSchemaIdAssigner {
    * that has no prior IDs.
    */
   public static int assignFresh(HoodieSchema schema) {
-    HoodieSchemaIndex index = HoodieSchemaIndex.of(schema);
-    int start = Math.max(0, index.maxColumnIdSeen() + 1);
-    return assign(schema, start);
+    return assign(schema, 0);
   }
 
   private static void visit(HoodieSchema schema, int[] nextId) {

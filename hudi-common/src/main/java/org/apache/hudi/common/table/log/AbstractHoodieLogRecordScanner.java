@@ -681,16 +681,16 @@ public abstract class AbstractHoodieLogRecordScanner {
     HoodieSchema fileSchema = HoodieSchemaHistoryCache.searchSchemaAndCache(currentInstantTime, hoodieTableMetaClient);
     // Preserve the readerSchema's record name on the merged result, matching the
     // legacy InternalSchemaConverter.convert(merged, readerSchema.getFullName()) call.
-    HoodieSchema mergedAvroSchema = new HoodieSchemaMerger(fileSchema, evolutionSchema,
+    HoodieSchema mergedSchema = new HoodieSchemaMerger(fileSchema, evolutionSchema,
         true, false).mergeSchema(readerSchema.getFullName());
 
     return Option.of(Pair.of((record) -> {
       return record.rewriteRecordWithNewSchema(
           dataBlock.getSchema(),
           this.hoodieTableMetaClient.getTableConfig().getProps(),
-          mergedAvroSchema,
+          mergedSchema,
           Collections.emptyMap());
-    }, mergedAvroSchema));
+    }, mergedSchema));
   }
 
   /**

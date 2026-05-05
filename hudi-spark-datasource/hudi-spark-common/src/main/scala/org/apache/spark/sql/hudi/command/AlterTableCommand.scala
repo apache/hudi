@@ -19,8 +19,8 @@ package org.apache.spark.sql.hudi.command
 
 import org.apache.hudi.{DataSourceUtils, HoodieSchemaConversionUtils, HoodieWriterUtils}
 import org.apache.hudi.common.model.{HoodieCommitMetadata, HoodieFailedWritesCleaningPolicy, WriteOperationType}
-import org.apache.hudi.common.schema.HoodieSchema
-import org.apache.hudi.common.schema.evolution.{ColumnChangeID, ColumnPositionType, HoodieSchemaChangeApplier, HoodieSchemaHistoryStorageManager, HoodieSchemaInternalSchemaBridge, HoodieSchemaSerDe}
+import org.apache.hudi.common.schema.{HoodieSchema, HoodieSchemaUtils => HoodieCommonSchemaUtils}
+import org.apache.hudi.common.schema.evolution.{ColumnChangeID, HoodieSchemaChangeApplier, HoodieSchemaHistoryStorageManager, HoodieSchemaInternalSchemaBridge, HoodieSchemaSerDe}
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.table.timeline.HoodieInstant.State
 import org.apache.hudi.common.util.{CommitUtils, Option}
@@ -76,23 +76,29 @@ case class AlterTableCommand(table: CatalogTable, changes: Seq[TableChange], cha
   }
 
   def applyAddAction2Schema(sparkSession: SparkSession, oldSchema: HoodieSchema, addChanges: Seq[AddColumn]): HoodieSchema = {
-    var cur = oldSchema
+    // Accumulate all add+position changes into a single ColumnAddChange against
+    // the original schema, matching legacy batch semantics. With a fresh applier
+    // per change, ADD COLUMNS (x AFTER z, z ...) would fail to resolve `AFTER z`
+    // on the first iteration since z hasn't been added yet.
+    val oldInternal = HoodieSchemaInternalSchemaBridge.toInternalSchema(oldSchema)
+    val addChange = TableChanges.ColumnAddChange.get(oldInternal)
     addChanges.foreach { addColumn =>
       val names = addColumn.fieldNames()
       val parentName = AlterTableCommand.getParentName(names)
-      val fullName = names.mkString(".")
       val colType = HoodieSchemaConversionUtils.convertStructTypeToHoodieSchema(addColumn.dataType(), names.last)
-      val (positionType, positionRef) = addColumn.position() match {
+      addChange.addColumns(parentName, names.last,
+        InternalSchemaConverter.convertToField(colType), addColumn.comment())
+      addColumn.position() match {
         case after: TableChange.After =>
-          (ColumnPositionType.AFTER, if (parentName.isEmpty) after.column() else parentName + "." + after.column())
+          addChange.addPositionChange(names.mkString("."),
+            if (parentName.isEmpty) after.column() else parentName + "." + after.column(), "after")
         case _: TableChange.First =>
-          (ColumnPositionType.FIRST, "")
+          addChange.addPositionChange(names.mkString("."), "", "first")
         case _ =>
-          (ColumnPositionType.NO_OPERATION, "")
       }
-      cur = new HoodieSchemaChangeApplier(cur).applyAddChange(fullName, colType, addColumn.comment(), positionRef, positionType)
     }
-    cur
+    val newInternal = SchemaChangeUtils.applyTableChanges2Schema(oldInternal, addChange)
+    HoodieSchemaInternalSchemaBridge.toHoodieSchema(newInternal, oldSchema.getFullName)
   }
 
   private def applyDeleteAction2Schema(sparkSession: SparkSession, oldSchema: HoodieSchema, deleteChanges: Seq[DeleteColumn]): HoodieSchema = {
@@ -246,7 +252,16 @@ object AlterTableCommand extends Logging {
     * @param table The hoodie table.
     * @param sparkSession The spark session.
     */
-  def commitWithSchema(evolutionSchema: HoodieSchema, historySchemaStr: String, table: CatalogTable, sparkSession: SparkSession): Unit = {
+  def commitWithSchema(rawEvolutionSchema: HoodieSchema, historySchemaStr: String, table: CatalogTable, sparkSession: SparkSession): Unit = {
+    // Force the persisted schema's record name to the canonical
+    // <namespace>.<tableName> form, matching the legacy
+    // InternalSchemaConverter.convert(merged, getRecordQualifiedName(table.identifier.table))
+    // behavior. Without this, an evolution schema parsed from prior commit metadata would
+    // round-trip its existing name, which can drift from the table-identifier-based name
+    // and end up persisted in LATEST_SCHEMA / consumed by the write client.
+    val canonicalName = HoodieCommonSchemaUtils.getRecordQualifiedName(table.identifier.table)
+    val evolutionSchema = if (rawEvolutionSchema.getFullName == canonicalName) rawEvolutionSchema
+      else HoodieSchemaInternalSchemaBridge.withRecordName(rawEvolutionSchema, canonicalName)
     val schema = evolutionSchema
     val path = getTableLocation(table, sparkSession)
     val jsc = new JavaSparkContext(sparkSession.sparkContext)
