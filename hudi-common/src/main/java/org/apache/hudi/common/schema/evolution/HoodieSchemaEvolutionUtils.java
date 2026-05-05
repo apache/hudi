@@ -178,17 +178,26 @@ public final class HoodieSchemaEvolutionUtils {
     }
 
     HoodieSchema result = source;
+    Set<String> descentNullableFlips = new HashSet<>();
     for (String field : nullableUpdates) {
-      // The applier's path walker supports descent into nested records but
-      // not into array-element or map-value segments — those are descent
-      // directions, not field names. Skip nullability flips for paths that
-      // terminate in such a pseudo-segment; they're tracked but not applied.
+      // Paths ending in "element" / "value" target an array element or map
+      // value, not a record field — the applier's field-name walker doesn't
+      // model those as transformable fields. Defer them to the descent
+      // walker below; record-field paths still go through the applier.
       if (endsWithArrayOrMapDescent(field)) {
+        descentNullableFlips.add(field);
         continue;
       }
       // Legacy hard-codes nullable=true even when target is required; preserved
       // verbatim to avoid behavior change.
       result = new HoodieSchemaChangeApplier(result).applyColumnNullabilityChange(field, true);
+    }
+    if (!descentNullableFlips.isEmpty()) {
+      // Match the record-field branch's hard-coded nullable=true — Spark
+      // INSERT INTO produces non-null array/map elements while the catalog
+      // schema declares them nullable, so the writer schema must be widened
+      // to nullable for the compat check to accept the diff.
+      result = applyDescentNullabilityFlips(result, "", descentNullableFlips, true);
     }
     // Apply each leaf type update at its exact path. Walking source's tree
     // and overlaying only the promoted leaves is leaf-precise: it preserves
@@ -808,6 +817,76 @@ public final class HoodieSchemaEvolutionUtils {
         return nullable ? HoodieSchema.createNullable(targetEffective) : targetEffective;
     }
     return nullable ? HoodieSchema.createNullable(rebuilt) : rebuilt;
+  }
+
+  /**
+   * Walks {@code schema} and toggles nullability of array elements / map values
+   * whose path matches an entry in {@code paths}. Path construction matches
+   * {@link #overlayLeafTypes}: dot-separated record fields, "element" for array
+   * descent, "value" for map descent. ELEMENT_ID / KEY_ID / VALUE_ID props on
+   * rebuilt array / map sub-trees are preserved; field-id and other field props
+   * are preserved when records are rebuilt.
+   */
+  private static HoodieSchema applyDescentNullabilityFlips(HoodieSchema schema, String pathPrefix,
+                                                           Set<String> paths, boolean nullable) {
+    boolean wasNullable = schema.isNullable();
+    HoodieSchema effective = wasNullable ? schema.getNonNullType() : schema;
+    HoodieSchema rebuilt;
+    switch (effective.getType()) {
+      case RECORD: {
+        List<HoodieSchemaField> newFields = new ArrayList<>(effective.getFields().size());
+        for (HoodieSchemaField f : effective.getFields()) {
+          String childPath = pathPrefix.isEmpty() ? f.name() : pathPrefix + "." + f.name();
+          HoodieSchema childUpdated = applyDescentNullabilityFlips(f.schema(), childPath, paths, nullable);
+          HoodieSchemaField rb = HoodieSchemaField.of(
+              f.name(), childUpdated, f.doc().orElse(null), f.defaultVal().orElse(null));
+          for (Map.Entry<String, Object> e : f.getObjectProps().entrySet()) {
+            rb.addProp(e.getKey(), e.getValue());
+          }
+          newFields.add(rb);
+        }
+        rebuilt = HoodieSchema.createRecord(effective.getName(), effective.getNamespace().orElse(null),
+            effective.getDoc().orElse(null), newFields);
+        break;
+      }
+      case ARRAY: {
+        String elementPath = pathPrefix.isEmpty() ? "element" : pathPrefix + ".element";
+        HoodieSchema newElement = applyDescentNullabilityFlips(effective.getElementType(), elementPath, paths, nullable);
+        if (paths.contains(elementPath)) {
+          boolean elementWasNullable = newElement.isNullable();
+          HoodieSchema elementEffective = elementWasNullable ? newElement.getNonNullType() : newElement;
+          newElement = nullable ? HoodieSchema.createNullable(elementEffective) : elementEffective;
+        }
+        rebuilt = HoodieSchema.createArray(newElement);
+        Object eId = effective.getAvroSchema().getObjectProp(HoodieSchema.ELEMENT_ID_PROP);
+        if (eId instanceof Number) {
+          rebuilt.getAvroSchema().addProp(HoodieSchema.ELEMENT_ID_PROP, ((Number) eId).intValue());
+        }
+        break;
+      }
+      case MAP: {
+        String valuePath = pathPrefix.isEmpty() ? "value" : pathPrefix + ".value";
+        HoodieSchema newValue = applyDescentNullabilityFlips(effective.getValueType(), valuePath, paths, nullable);
+        if (paths.contains(valuePath)) {
+          boolean valueWasNullable = newValue.isNullable();
+          HoodieSchema valueEffective = valueWasNullable ? newValue.getNonNullType() : newValue;
+          newValue = nullable ? HoodieSchema.createNullable(valueEffective) : valueEffective;
+        }
+        rebuilt = HoodieSchema.createMap(newValue);
+        Object kId = effective.getAvroSchema().getObjectProp(HoodieSchema.KEY_ID_PROP);
+        Object vId = effective.getAvroSchema().getObjectProp(HoodieSchema.VALUE_ID_PROP);
+        if (kId instanceof Number) {
+          rebuilt.getAvroSchema().addProp(HoodieSchema.KEY_ID_PROP, ((Number) kId).intValue());
+        }
+        if (vId instanceof Number) {
+          rebuilt.getAvroSchema().addProp(HoodieSchema.VALUE_ID_PROP, ((Number) vId).intValue());
+        }
+        break;
+      }
+      default:
+        return schema;
+    }
+    return wasNullable ? HoodieSchema.createNullable(rebuilt) : rebuilt;
   }
 
   private static HoodieSchema reorderInner(HoodieSchema source, String pathPrefix, Map<String, Integer> targetPositions) {
