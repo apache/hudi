@@ -151,24 +151,34 @@ class SparkLanceReaderBase(enableVectorizedReader: Boolean) extends SparkColumna
         val readOpts = FileReadOptions.builder().blobReadMode(blobMode).build()
         arrowReader = lanceReader.readAll(columnNames, null, DEFAULT_BATCH_SIZE, readOpts)
 
+        // BLOB columns in the request — needed both for the DESCRIPTOR-mode row-path transform
+        // and for the path-selection gate below.
+        val blobFieldNames: java.util.Set[String] =
+          iteratorSchema.fields.collect { case f if isBlobField(f) => f.name }.toSet.asJava
+
         // Decide between batch mode and row mode.
         // Fall back to row mode if:
         //   - type casting is needed (batch-level type casting deferred to follow-up), OR
         //   - the partition schema contains a type the batch-mode partition-vector populator
         //     does not handle (Struct/Array/Map/Char/Varchar/interval, etc.). The row path
-        //     preserves these via JoinedRow, so falling back avoids silently nulling them out.
+        //     preserves these via JoinedRow, so falling back avoids silently nulling them out, OR
+        //   - DESCRIPTOR blob mode is requested with BLOB columns present. The descriptor
+        //     rewrite (data→null + synthesized/passthrough reference) lives in BlobDescriptorTransform
+        //     which only the row path applies; the batch path would surface Lance's raw
+        //     {position, size} struct in `data`, breaking the DESCRIPTOR-mode contract.
         val hasTypeChanges = !implicitTypeChangeInfo.isEmpty
         val partitionTypesBatchSupported =
           partitionSchema.forall(f => isPartitionTypeSupportedForBatch(f.dataType))
-        if (enableVectorizedReader && !hasTypeChanges && partitionTypesBatchSupported) {
+        val descriptorBlobReadNeedsRowPath =
+          blobMode == BlobReadMode.DESCRIPTOR && !blobFieldNames.isEmpty
+        if (enableVectorizedReader && !hasTypeChanges && partitionTypesBatchSupported
+            && !descriptorBlobReadNeedsRowPath) {
           readBatch(file, allocator, lanceReader, arrowReader, filePath,
             requestSchema, requiredSchema, partitionSchema)
         } else {
           // Compose the DESCRIPTOR-aware blob transform only when the user opted into that mode
           // AND the request actually has BLOB columns (otherwise the rewrite has nothing to do).
-          val blobFieldNames: java.util.Set[String] =
-            iteratorSchema.fields.collect { case f if isBlobField(f) => f.name }.toSet.asJava
-          val blobTransform = if (blobMode == BlobReadMode.DESCRIPTOR && !blobFieldNames.isEmpty) {
+          val blobTransform = if (descriptorBlobReadNeedsRowPath) {
             new BlobDescriptorTransform(blobFieldNames, filePath)
           } else {
             null

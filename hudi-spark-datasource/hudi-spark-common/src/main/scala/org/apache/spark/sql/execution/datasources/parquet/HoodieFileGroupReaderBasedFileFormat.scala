@@ -24,7 +24,7 @@ import org.apache.hudi.client.utils.SparkInternalSchemaConverter
 import org.apache.hudi.common.config.{HoodieMemoryConfig, TypedProperties}
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.HoodieFileFormat
-import org.apache.hudi.common.schema.HoodieSchema
+import org.apache.hudi.common.schema.{HoodieSchema, HoodieSchemaType}
 import org.apache.hudi.common.schema.HoodieSchemaUtils
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, ParquetTableSchemaResolver}
 import org.apache.hudi.common.table.read.HoodieFileGroupReader
@@ -135,6 +135,24 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
   }
 
   /**
+   * Whether the requested schema contains any top-level BLOB columns. Used to disable
+   * Lance batch mode for BLOB tables: the DESCRIPTOR-mode rewrite (and the OUT_OF_LINE
+   * data→null contract) lives only in the row-path BlobDescriptorTransform, and `supportBatch`
+   * cannot inspect read-time options (e.g. `hoodie.read.blob.inline.mode`) since it runs at
+   * planning time. Forcing row mode whenever BLOB columns are present is the simplest correct
+   * gate — BLOB processing is per-row anyway (lazy byte materialization) so the perf delta is
+   * negligible.
+   */
+  private def schemaContainsBlobColumn(schema: StructType): Boolean = {
+    schema.fields.exists { f =>
+      val md = f.metadata
+      md != null && md.contains(HoodieSchema.TYPE_METADATA_FIELD) &&
+        HoodieSchema.parseTypeDescriptor(md.getString(HoodieSchema.TYPE_METADATA_FIELD))
+          .getType == HoodieSchemaType.BLOB
+    }
+  }
+
+  /**
    * Checks if the file format supports vectorized reading, please refer to SPARK-40918.
    *
    * NOTE: for mor read, even for file-slice with only base file, we can read parquet file with vectorized read,
@@ -158,7 +176,11 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
       val orcBatchSupported = conf.orcVectorizedReaderEnabled &&
         schema.forall(s => OrcUtils.supportColumnarReads(
           s.dataType, sparkSession.sessionState.conf.orcVectorizedReaderNestedColumnEnabled))
-      val lanceBatchSupported = true
+      // Lance batch mode cannot honor `hoodie.read.blob.inline.mode=DESCRIPTOR` (the rewrite
+      // lives in BlobDescriptorTransform on the row path). Disable batch whenever BLOB columns
+      // are present so the planner doesn't commit to ColumnarBatch output that the row-path
+      // reader cannot deliver.
+      val lanceBatchSupported = !schemaContainsBlobColumn(schema)
 
       val supportBatch = if (isMultipleBaseFileFormatsEnabled) {
         parquetBatchSupported && orcBatchSupported
