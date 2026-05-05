@@ -63,6 +63,10 @@ combinations under `docker/compose`.
 ./build_docker_images.sh --hadoop-version 3.4.0 --spark-version 4.0.1 --hive-version 3.1.3
 ```
 
+`setup_demo.sh` currently defaults to `docker-compose_hadoop334_hive313_spark353_{amd64,arm64}.yml`. If you build a
+different image set for the demo flow, update `COMPOSE_FILE_NAME` in `setup_demo.sh` to point to the matching compose
+file before running the script.
+
 By default, the script builds images for the current machine architecture and derives the version tag from the root
 `pom.xml`. Use `--version-tag` to set an explicit tag if needed.
 
