@@ -119,8 +119,41 @@ public class TestFileGroupReaderSchemaHandler extends SchemaHandlerTestBase {
     // the rename preserves the field id so the merger can match against
     // requestedSchema's "timestamp" via id-based lookup.
     HoodieSchema renamedFileSchema = new HoodieSchemaChangeApplier(evolutionSchema).applyRenameChange("timestamp", "ts");
-    HoodieSchema originalSchema = new HoodieSchemaChangeApplier(renamedFileSchema)
-        .applyColumnTypeChange("ts", HoodieSchema.create(HoodieSchemaType.INT));
+    // Direct field-list rebuild so we can swap "ts" from long → int while
+    // preserving its field-id. applyColumnTypeChange would reject this as a
+    // narrowing (it now mirrors the legacy isTypeUpdateAllow contract); the
+    // pre-bridge test built this fixture by raw Types.Field construction for
+    // the same reason.
+    List<HoodieSchemaField> rebuiltFields = new ArrayList<>(renamedFileSchema.getFields().size());
+    for (HoodieSchemaField f : renamedFileSchema.getFields()) {
+      if ("ts".equals(f.name())) {
+        boolean wasNullable = f.schema().isNullable();
+        HoodieSchema intType = HoodieSchema.create(HoodieSchemaType.INT);
+        HoodieSchema swapped = wasNullable ? HoodieSchema.createNullable(intType) : intType;
+        HoodieSchemaField rebuilt = HoodieSchemaField.of(f.name(), swapped, f.doc().orElse(null), f.defaultVal().orElse(null));
+        if (f.fieldId() >= 0) {
+          rebuilt.addProp(HoodieSchema.FIELD_ID_PROP, f.fieldId());
+        }
+        rebuiltFields.add(rebuilt);
+      } else {
+        HoodieSchemaField cloned = HoodieSchemaField.of(f.name(), f.schema(), f.doc().orElse(null), f.defaultVal().orElse(null));
+        if (f.fieldId() >= 0) {
+          cloned.addProp(HoodieSchema.FIELD_ID_PROP, f.fieldId());
+        }
+        rebuiltFields.add(cloned);
+      }
+    }
+    HoodieSchema originalSchema = HoodieSchema.createRecord(
+        renamedFileSchema.getName(),
+        renamedFileSchema.getNamespace().orElse(null),
+        renamedFileSchema.getDoc().orElse(null),
+        rebuiltFields);
+    if (renamedFileSchema.schemaId() >= 0) {
+      originalSchema.setSchemaId(renamedFileSchema.schemaId());
+    }
+    if (renamedFileSchema.maxColumnId() >= 0) {
+      originalSchema.setMaxColumnId(renamedFileSchema.maxColumnId());
+    }
     FileGroupReaderSchemaHandler<String> schemaHandler = new FileGroupReaderSchemaHandler<>(readerContext, DATA_SCHEMA, requestedSchema,
         Option.of(evolutionSchema),
         new TypedProperties(), metaClient);
