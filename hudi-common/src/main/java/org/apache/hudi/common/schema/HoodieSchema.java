@@ -685,9 +685,28 @@ public class HoodieSchema implements Serializable {
    * hold {@code precision} digits. Equivalent to {@code Types.DecimalType.get(p, s)} —
    * use this when the target schema is being chosen for type-evolution promotion
    * from an integral type, where {@code DECIMAL_BYTES} is not a compatible target.
+   *
+   * <p>The Avro fixed name is derived from the spec ({@code decimal_p<P>_s<S>_b<B>})
+   * so two callers minting decimals with the same precision/scale/size produce
+   * structurally equal Avro fixed schemas — Avro's {@code Schema.toString} dedupes
+   * those without complaint. Different specs get different names, so they never
+   * collide either, even when both end up reachable from the same enclosing
+   * record (which can happen after a type-promote rebuild leaves the old fixed
+   * still referenced from {@code latest_schema} history).
    */
   public static HoodieSchema createDecimalFixed(int precision, int scale) {
-    return createDecimal("decimal", null, null, precision, scale, computeMinBytesForDecimalPrecision(precision));
+    int size = computeMinBytesForDecimalPrecision(precision);
+    return createDecimal(decimalFixedName(precision, scale, size), null, null, precision, scale, size);
+  }
+
+  /**
+   * Spec-derived Avro fixed name for {@link #createDecimalFixed}. Centralized so
+   * the SerDe (which materializes legacy {@code decimal_fixed(p,s)[size]} type
+   * strings) can use the same convention and produce equal Avro types when two
+   * paths arrive at the same decimal spec.
+   */
+  public static String decimalFixedName(int precision, int scale, int fixedSize) {
+    return "decimal_p" + precision + "_s" + scale + "_b" + fixedSize;
   }
 
   private static int computeMinBytesForDecimalPrecision(int precision) {

@@ -479,14 +479,24 @@ public final class HoodieSchemaSerDe {
   private static HoodieSchema parseTypeString(String typeStr) {
     Matcher decimalFixed = DECIMAL_FIXED_PATTERN.matcher(typeStr);
     if (decimalFixed.matches()) {
-      return HoodieSchema.createDecimal("decimal", null, null,
-          Integer.parseInt(decimalFixed.group(1)),
-          Integer.parseInt(decimalFixed.group(2)),
-          Integer.parseInt(decimalFixed.group(3)));
+      int precision = Integer.parseInt(decimalFixed.group(1));
+      int scale = Integer.parseInt(decimalFixed.group(2));
+      int fixedSize = Integer.parseInt(decimalFixed.group(3));
+      // Spec-derived Avro name (matching {@link HoodieSchema#decimalFixedName}) so
+      // when two decimals with the same precision/scale/size arrive in the same
+      // tree — e.g. one from this SerDe path, one from a type-promote rebuild —
+      // their Avro fixed types are equal and Avro's Names registry accepts them.
+      // Bare {@code "decimal"} would collide with any other unequal decimal of
+      // the same name, which is what TestSpark3DDL hit during alter-decimal.
+      return HoodieSchema.createDecimal(HoodieSchema.decimalFixedName(precision, scale, fixedSize),
+          null, null, precision, scale, fixedSize);
     }
     Matcher fixed = FIXED_PATTERN.matcher(typeStr);
     if (fixed.matches()) {
-      return HoodieSchema.createFixed("fixed", null, null, Integer.parseInt(fixed.group(1)));
+      int size = Integer.parseInt(fixed.group(1));
+      // Same reasoning as decimal-fixed above: spec-derived name keeps unequal
+      // fixeds from colliding under the same global name.
+      return HoodieSchema.createFixed("fixed_b" + size, null, null, size);
     }
     Matcher decimalBytes = DECIMAL_BYTES_PATTERN.matcher(typeStr);
     if (decimalBytes.matches()) {
