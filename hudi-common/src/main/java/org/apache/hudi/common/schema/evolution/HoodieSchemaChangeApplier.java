@@ -18,13 +18,17 @@
 
 package org.apache.hudi.common.schema.evolution;
 
+import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.schema.HoodieSchemaType;
+import org.apache.hudi.exception.HoodieSchemaException;
+import org.apache.hudi.exception.SchemaCompatibilityException;
 
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 /**
@@ -68,6 +72,28 @@ public class HoodieSchemaChangeApplier {
         throw new IllegalArgumentException("cannot reorder two columns which has different parent");
       }
     }
+    // Duplicate-name check runs before any position guard because the legacy
+    // applier added the column first and only validated position afterwards;
+    // tests assert the duplicate message wins for `add columns(existing first)`.
+    if (parentName.isEmpty()) {
+      if (hasColumnInsensitive(latestSchema, leafName)) {
+        throw new HoodieSchemaException(
+            String.format("Cannot add column '%s' because it already exists in the schema", leafName));
+      }
+    } else if (hasColumnInsensitive(latestSchema, colName)) {
+      throw new HoodieSchemaException(
+          String.format("Cannot add column '%s' to parent '%s' because the column already exists at path '%s'",
+              leafName, parentName, colName));
+    }
+    if (positionType == ColumnPositionType.FIRST) {
+      // For ADD, the legacy guard fired unconditionally because srcId == -1;
+      // forbid here for parity. The new column would otherwise land at the
+      // head of a record and shift the meta-column block when applied at
+      // top level.
+      throw new IllegalArgumentException(
+          "forbid adjust top-level columns position by using through first syntax");
+    }
+    checkForbiddenAfterMetaColumn(positionType, position);
 
     int newId = nextColumnId(latestSchema);
     HoodieSchema effectiveType = colType.isNullable() ? colType.getNonNullType() : colType;
@@ -116,6 +142,15 @@ public class HoodieSchemaChangeApplier {
    * {@code newName} is a leaf name — the parent path is taken from {@code colName}.
    */
   public HoodieSchema applyRenameChange(String colName, String newName) {
+    if (newName == null || newName.isEmpty()) {
+      throw new SchemaCompatibilityException(
+          String.format("Cannot rename column '%s' to empty or null name. New name must be non-empty", colName));
+    }
+    if (hasColumnInsensitive(latestSchema, newName)) {
+      throw new SchemaCompatibilityException(
+          String.format("Cannot rename column '%s' to '%s' because a column with name '%s' already exists in the schema",
+              colName, newName, newName));
+    }
     return rewriteFieldByName(latestSchema, colName,
         field -> rebuildField(field, newName, field.schema(), field.doc().orElse(null)));
   }
@@ -176,10 +211,55 @@ public class HoodieSchemaChangeApplier {
       if (!parentName.equals(parentOf(referColName))) {
         throw new IllegalArgumentException("cannot reorder two columns which has different parent");
       }
+    } else if (parentName.isEmpty()) {
+      // Reordering a top-level column to FIRST would shift the meta columns;
+      // forbid it (matches the legacy InternalSchemaChangeApplier guard).
+      throw new IllegalArgumentException(
+          "forbid adjust top-level columns position by using through first syntax");
     }
+    checkForbiddenAfterMetaColumn(positionType, referColName);
     String refLeaf = (referColName != null && !referColName.isEmpty()) ? leafOf(referColName) : null;
     return rewriteRecordAt(latestSchema, parentName,
         parent -> moveFieldInRecord(parent, colLeaf, refLeaf, positionType));
+  }
+
+  /**
+   * Case-insensitive check for whether {@code name} matches any full column
+   * path in {@code schema}. Mirrors the legacy {@code InternalSchema.hasColumn(
+   * name, false)} contract used by add/rename validation, including the
+   * loose semantics where a leaf name supplied for a top-level operation
+   * matches against any full path that equals it case-insensitively.
+   */
+  private static boolean hasColumnInsensitive(HoodieSchema schema, String name) {
+    if (name == null || name.isEmpty()) {
+      return false;
+    }
+    String lowered = name.toLowerCase(Locale.ROOT);
+    for (String fullName : schema.getAllColsFullName()) {
+      if (fullName.toLowerCase(Locale.ROOT).equals(lowered)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /**
+   * Forbids AFTER referencing one of the leading meta columns
+   * ({@code HOODIE_META_COLUMNS} minus the last two — i.e.,
+   * {@code _hoodie_commit_time}, {@code _hoodie_commit_seqno},
+   * {@code _hoodie_record_key}). Inserting an ordinary column there would
+   * split the meta-column block.
+   */
+  private static void checkForbiddenAfterMetaColumn(ColumnPositionType positionType, String position) {
+    if (positionType != ColumnPositionType.AFTER || position == null || position.isEmpty()) {
+      return;
+    }
+    List<String> leadingMetaCols = HoodieRecord.HOODIE_META_COLUMNS
+        .subList(0, HoodieRecord.HOODIE_META_COLUMNS.size() - 2);
+    if (leadingMetaCols.stream().anyMatch(f -> f.equalsIgnoreCase(position))) {
+      throw new IllegalArgumentException(
+          "forbid adjust the position of ordinary columns between meta columns");
+    }
   }
 
   /**
