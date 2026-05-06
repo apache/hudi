@@ -2045,7 +2045,8 @@ public class HoodieTableMetadataUtil {
     // if record type is set and if its AVRO, MAP, ARRAY, RECORD and ENUM types are unsupported.
     if (recordType.isPresent() && recordType.get() == HoodieRecordType.AVRO) {
       return (type != HoodieSchemaType.RECORD && type != HoodieSchemaType.ARRAY && type != HoodieSchemaType.MAP
-          && type != HoodieSchemaType.ENUM && type != HoodieSchemaType.VARIANT);
+          && type != HoodieSchemaType.ENUM && type != HoodieSchemaType.VARIANT
+          && type != HoodieSchemaType.BLOB && type != HoodieSchemaType.VECTOR);
     }
     // if record Type is not set or if recordType is SPARK then we cannot support AVRO, MAP, ARRAY, RECORD, ENUM and FIXED and BYTES type as well.
     // HUDI-8585 will add support for BYTES and FIXED
@@ -2053,6 +2054,7 @@ public class HoodieTableMetadataUtil {
         && type != HoodieSchemaType.ENUM && type != HoodieSchemaType.BYTES && type != HoodieSchemaType.FIXED
         && type != HoodieSchemaType.DECIMAL // DECIMAL's underlying type is BYTES
         && type != HoodieSchemaType.BLOB
+        && type != HoodieSchemaType.VECTOR
         && type != HoodieSchemaType.VARIANT;
   }
 
