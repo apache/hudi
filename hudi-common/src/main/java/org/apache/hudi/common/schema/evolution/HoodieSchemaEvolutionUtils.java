@@ -710,6 +710,8 @@ public final class HoodieSchemaEvolutionUtils {
         return dstT == HoodieSchemaType.STRING || dstT == HoodieSchemaType.DECIMAL;
       case DATE:
       case BYTES:
+      case ENUM:
+        // ENUM → STRING replays the legacy InternalSchemaConverter flatten.
         return dstT == HoodieSchemaType.STRING;
       case DECIMAL:
         if (dstT == HoodieSchemaType.STRING) {
