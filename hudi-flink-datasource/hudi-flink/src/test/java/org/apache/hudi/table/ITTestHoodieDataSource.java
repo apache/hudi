@@ -3283,6 +3283,28 @@ public class ITTestHoodieDataSource {
         + "+I[id8, Han, 56, 1970-01-01T00:00:08, par4]]");
   }
 
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  void testIgnoreEmitDeleteForBatchReading(boolean useSourceV2) {
+    String hoodieTableDDL = sql("t1")
+        .option(FlinkOptions.PATH, tempFile.getAbsolutePath())
+        .options(getDefaultKeys())
+        .option(FlinkOptions.READ_AS_STREAMING, false)
+        .option(FlinkOptions.TABLE_TYPE, MERGE_ON_READ)
+        .option(FlinkOptions.READ_SOURCE_V2_ENABLED, useSourceV2)
+        .end();
+
+    batchTableEnv.executeSql(hoodieTableDDL);
+    execInsertSql(batchTableEnv, TestSQL.INSERT_T1);
+    // delete EQ(=)
+    final String deleteSql = "delete from t1 where uuid = 'id1'";
+    execInsertSql(batchTableEnv, deleteSql);
+    List<Row> rows1 = CollectionUtil.iterableToList(
+        () -> batchTableEnv.sqlQuery("select * from t1").execute().collect());
+    List<RowData> expected = TestData.delete(TestData.DATA_SET_SOURCE_INSERT, 0);
+    assertRowsEquals(rows1, expected);
+  }
+
   // -------------------------------------------------------------------------
   //  Utilities
   // -------------------------------------------------------------------------
