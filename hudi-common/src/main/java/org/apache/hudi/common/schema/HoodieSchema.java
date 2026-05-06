@@ -686,7 +686,7 @@ public class HoodieSchema implements Serializable {
    * use this when the target schema is being chosen for type-evolution promotion
    * from an integral type, where {@code DECIMAL_BYTES} is not a compatible target.
    *
-   * <p>The Avro fixed name is derived from the spec ({@code decimal_p<P>_s<S>_b<B>})
+   * <p>The Avro fixed name is derived from the spec ({@code decimal_p{P}_s{S}_b{B}})
    * so two callers minting decimals with the same precision/scale/size produce
    * structurally equal Avro fixed schemas — Avro's {@code Schema.toString} dedupes
    * those without complaint. Different specs get different names, so they never
