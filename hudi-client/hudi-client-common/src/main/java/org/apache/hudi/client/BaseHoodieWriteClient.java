@@ -92,6 +92,7 @@ import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.metrics.HoodieMetrics;
+import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.BulkInsertPartitioner;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
@@ -846,44 +847,11 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    */
   public void restoreToSavepoint(String savepointTime) {
     boolean initializeMetadataTableIfNecessary = config.isMetadataTableEnabled();
-    if (initializeMetadataTableIfNecessary) {
-      try {
-        // Delete metadata table directly when users trigger savepoint rollback if mdt existed and if the savePointTime is beforeTimelineStarts
-        // or before the oldest compaction on MDT.
-        // We cannot restore to before the oldest compaction on MDT as we don't have the basefiles before that time.
-        HoodieTableMetaClient mdtMetaClient = HoodieTableMetaClient.builder()
-            .setConf(storageConf.newInstance())
-            .setBasePath(getMetadataTableBasePath(config.getBasePath())).build();
-        Option<HoodieInstant> oldestMdtCompaction = mdtMetaClient.getCommitTimeline().filterCompletedInstants().firstInstant();
-        boolean deleteMDT = false;
-        if (oldestMdtCompaction.isPresent()) {
-          if (LESSER_THAN_OR_EQUALS.test(savepointTime, oldestMdtCompaction.get().requestedTime())) {
-            log.warn("Deleting MDT during restore to {} as the savepoint is older than oldest compaction {} on MDT",
-                savepointTime, oldestMdtCompaction.get().requestedTime());
-            deleteMDT = true;
-          }
-        }
-
-        // The instant required to sync rollback to MDT has been archived and the mdt syncing will be failed
-        // So that we need to delete the whole MDT here.
-        if (!deleteMDT) {
-          HoodieInstant syncedInstant = mdtMetaClient.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION, savepointTime);
-          if (mdtMetaClient.getCommitsTimeline().isBeforeTimelineStarts(syncedInstant.requestedTime())) {
-            log.warn("Deleting MDT during restore to {} as the savepoint is older than the MDT timeline {}",
-                savepointTime, mdtMetaClient.getCommitsTimeline().firstInstant().get().requestedTime());
-            deleteMDT = true;
-          }
-        }
-
-        if (deleteMDT) {
-          HoodieTableMetadataUtil.deleteMetadataTable(config.getBasePath(), context);
-          // rollbackToSavepoint action will try to bootstrap MDT at first but sync to MDT will fail at the current scenario.
-          // so that we need to disable metadata initialized here.
-          initializeMetadataTableIfNecessary = false;
-        }
-      } catch (Exception e) {
-        // Metadata directory does not exist
-      }
+    if (initializeMetadataTableIfNecessary && shouldDeleteMdtBeforeRestore(savepointTime)) {
+      HoodieTableMetadataUtil.deleteMetadataTable(config.getBasePath(), context);
+      // rollbackToSavepoint action will try to bootstrap MDT at first but sync to MDT will fail at the current scenario.
+      // so that we need to disable metadata initialized here.
+      initializeMetadataTableIfNecessary = false;
     }
 
     HoodieTable<T, I, K, O> table = initTable(WriteOperationType.UNKNOWN, Option.empty(), initializeMetadataTableIfNecessary);
@@ -892,6 +860,63 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
         + " is enabled");
     restoreToInstant(savepointTime, initializeMetadataTableIfNecessary);
     SavepointHelpers.validateSavepointRestore(table, savepointTime);
+  }
+
+  /**
+   * Decides whether the metadata table (MDT) must be deleted before restoring the data table to
+   * {@code targetInstant}. Returns true when restoring would leave the MDT in an inconsistent
+   * state, specifically when any of the following holds:
+   * <ol>
+   *   <li>The target is at or before the MDT's penultimate completed compaction (when at least
+   *       two compactions exist). The restore would otherwise succeed for the data table but
+   *       {@code finishRestore} would fail to sync rollbacks into an MDT with no base file at or
+   *       before the target time.</li>
+   *   <li>The target is at or before the oldest completed compaction. We cannot restore to before
+   *       the oldest compaction because we don't have base files before that time.</li>
+   *   <li>The target is before the MDT timeline start (the relevant history was archived away).</li>
+   * </ol>
+   * Returns false when the MDT directory does not exist (nothing to delete or worry about).
+   * Wraps any IOException reading the MDT in a {@link HoodieException} so genuine permission /
+   * network failures surface to the caller instead of being silently swallowed.
+   */
+  protected boolean shouldDeleteMdtBeforeRestore(String targetInstant) {
+    String mdtBasePath = getMetadataTableBasePath(config.getBasePath());
+    try {
+      // Cheap existence check first to avoid constructing an MDT meta client when there is no MDT.
+      if (!storage.exists(new StoragePath(mdtBasePath))) {
+        return false;
+      }
+      HoodieTableMetaClient mdtMetaClient = HoodieTableMetaClient.builder()
+          .setConf(storageConf.newInstance())
+          .setBasePath(mdtBasePath).build();
+      List<HoodieInstant> completedCompactions = mdtMetaClient.getCommitTimeline()
+          .filterCompletedInstants().getInstants();
+      if (completedCompactions.size() >= 2) {
+        String penultimate = completedCompactions.get(completedCompactions.size() - 2).requestedTime();
+        if (LESSER_THAN_OR_EQUALS.test(targetInstant, penultimate)) {
+          log.warn("Deleting MDT before restore to {}: target is at or before penultimate MDT compaction {}",
+              targetInstant, penultimate);
+          return true;
+        }
+      }
+      Option<HoodieInstant> oldestMdtCompaction = mdtMetaClient.getCommitTimeline()
+          .filterCompletedInstants().firstInstant();
+      if (oldestMdtCompaction.isPresent()
+          && LESSER_THAN_OR_EQUALS.test(targetInstant, oldestMdtCompaction.get().requestedTime())) {
+        log.warn("Deleting MDT before restore to {}: target is at or before oldest MDT compaction {}",
+            targetInstant, oldestMdtCompaction.get().requestedTime());
+        return true;
+      }
+      if (mdtMetaClient.getCommitsTimeline().isBeforeTimelineStarts(targetInstant)) {
+        log.warn("Deleting MDT before restore to {}: target is before MDT timeline start", targetInstant);
+        return true;
+      }
+      return false;
+    } catch (IOException e) {
+      throw new HoodieException(
+          "Failed to inspect MDT at " + mdtBasePath + " before restore to " + targetInstant
+              + " - refusing to silently proceed without an MDT integrity check.", e);
+    }
   }
 
   @Deprecated
@@ -918,7 +943,12 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     log.info("Begin restore to instant {}", savepointToRestoreTimestamp);
     Timer.Context timerContext = metrics.getRollbackCtx();
     try {
-      HoodieTable<T, I, K, O> table = initTable(WriteOperationType.UNKNOWN, Option.empty(), initialMetadataTableIfNecessary);
+      boolean effectiveInitMdt = initialMetadataTableIfNecessary;
+      if (effectiveInitMdt && shouldDeleteMdtBeforeRestore(savepointToRestoreTimestamp)) {
+        HoodieTableMetadataUtil.deleteMetadataTable(config.getBasePath(), context);
+        effectiveInitMdt = false;
+      }
+      HoodieTable<T, I, K, O> table = initTable(WriteOperationType.UNKNOWN, Option.empty(), effectiveInitMdt);
       Pair<String, Option<HoodieRestorePlan>> timestampAndRestorePlan = scheduleAndGetRestorePlan(savepointToRestoreTimestamp, table);
       final String restoreInstantTimestamp = timestampAndRestorePlan.getLeft();
       Option<HoodieRestorePlan> restorePlanOption = timestampAndRestorePlan.getRight();

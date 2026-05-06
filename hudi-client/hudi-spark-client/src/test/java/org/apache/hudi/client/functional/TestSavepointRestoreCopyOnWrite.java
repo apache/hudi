@@ -29,6 +29,8 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.metadata.HoodieTableMetadata;
+import org.apache.hudi.storage.HoodieStorageUtils;
+import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.testutils.HoodieClientTestBase;
 
@@ -213,6 +215,132 @@ public class TestSavepointRestoreCopyOnWrite extends HoodieClientTestBase {
           rollbackInstant.get(), numRecords, SparkRDDWriteClient::insert,
           false, true, numRecords, numRecords * 3, 1, Option.empty(), INSTANT_GENERATOR);
       // restore
+      client.restoreToSavepoint(Objects.requireNonNull(savepointCommit, "restore commit should not be null"));
+      assertRowNumberEqualsTo(20);
+    }
+  }
+
+  /**
+   * Coverage for the MDT-pre-check guard inside {@code restoreToInstant}.
+   * When the caller passes {@code initialMetadataTableIfNecessary=false}, the
+   * {@code shouldDeleteMdtBeforeRestore} helper must not be invoked, and the existing MDT
+   * directory must remain intact after the restore (no implicit deletion).
+   */
+  @Test
+  void testRestoreToInstantSkipsMdtCheckWhenMetadataDisabled() throws Exception {
+    HoodieWriteConfig hoodieWriteConfig = getConfigBuilder(HoodieFailedWritesCleaningPolicy.LAZY)
+        .withRollbackUsingMarkers(true)
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder()
+            .enable(true)
+            .withMaxNumDeltaCommitsBeforeCompaction(4)
+            .build())
+        .build();
+    try (SparkRDDWriteClient client = getHoodieWriteClient(hoodieWriteConfig)) {
+      String firstCommit = null;
+      String prevInstant = HoodieTimeline.INIT_INSTANT_TS;
+      final int numRecords = 10;
+      // 5 inserts so the MDT goes through one compaction with maxDeltaCommits=4.
+      for (int i = 1; i <= 5; i++) {
+        String newCommitTime = WriteClientTestUtils.createNewInstantTime();
+        insertBatch(hoodieWriteConfig, client, newCommitTime, prevInstant, numRecords, SparkRDDWriteClient::insert,
+            false, true, numRecords, numRecords * i, 1, Option.empty(), INSTANT_GENERATOR);
+        prevInstant = newCommitTime;
+        if (i == 1) {
+          firstCommit = newCommitTime;
+        }
+      }
+      assertRowNumberEqualsTo(50);
+
+      // Sanity: the MDT directory exists.
+      String mdtBasePath = HoodieTableMetadata.getMetadataTableBasePath(hoodieWriteConfig.getBasePath());
+      assertTrue(HoodieStorageUtils.getStorage(mdtBasePath, storageConf).exists(new StoragePath(mdtBasePath)),
+          "MDT directory should exist before restore");
+
+      // Restore to firstCommit with initialMetadataTableIfNecessary=false. Without the guard the
+      // helper would observe that firstCommit is at or before the oldest MDT compaction and
+      // delete the MDT. With the guard the helper is not invoked, so the MDT survives.
+      client.restoreToInstant(Objects.requireNonNull(firstCommit, "first commit should not be null"), false);
+
+      assertTrue(HoodieStorageUtils.getStorage(mdtBasePath, storageConf).exists(new StoragePath(mdtBasePath)),
+          "MDT directory should still exist after restoreToInstant when initialMetadataTableIfNecessary=false");
+      assertRowNumberEqualsTo(numRecords);
+    }
+  }
+
+  /**
+   * Coverage for the penultimate-compaction trigger inside the centralized helper.
+   * Sets up a table with two MDT compactions and restores to a commit that is at or before the
+   * penultimate compaction. The helper should detect this and delete the MDT pre-emptively;
+   * the restore should still complete successfully.
+   */
+  @Test
+  void testRestoreToInstantDeletesMdtWhenTargetIsBeforePenultimateCompaction() throws Exception {
+    HoodieWriteConfig hoodieWriteConfig = getConfigBuilder(HoodieFailedWritesCleaningPolicy.LAZY)
+        .withRollbackUsingMarkers(true)
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder()
+            .enable(true)
+            .withMaxNumDeltaCommitsBeforeCompaction(2)
+            .build())
+        .build();
+    try (SparkRDDWriteClient client = getHoodieWriteClient(hoodieWriteConfig)) {
+      String earlyCommit = null;
+      String prevInstant = HoodieTimeline.INIT_INSTANT_TS;
+      final int numRecords = 10;
+      // 6 inserts with maxDeltaCommits=2 produces multiple MDT compactions, ensuring at
+      // least two completed compactions exist on the MDT timeline.
+      for (int i = 1; i <= 6; i++) {
+        String newCommitTime = WriteClientTestUtils.createNewInstantTime();
+        insertBatch(hoodieWriteConfig, client, newCommitTime, prevInstant, numRecords, SparkRDDWriteClient::insert,
+            false, true, numRecords, numRecords * i, 1, Option.empty(), INSTANT_GENERATOR);
+        prevInstant = newCommitTime;
+        if (i == 1) {
+          earlyCommit = newCommitTime;
+        }
+      }
+      assertRowNumberEqualsTo(60);
+
+      String mdtBasePath = HoodieTableMetadata.getMetadataTableBasePath(hoodieWriteConfig.getBasePath());
+      HoodieTableMetaClient mdtMetaClient = HoodieTableMetaClient.builder()
+          .setBasePath(mdtBasePath)
+          .setConf(storageConf)
+          .setLoadActiveTimelineOnLoad(true)
+          .build();
+      assertTrue(mdtMetaClient.getCommitTimeline().filterCompletedInstants().countInstants() >= 2,
+          "Test setup should produce at least two completed MDT compactions");
+
+      // Restore to earlyCommit, which is well before the penultimate MDT compaction. The helper
+      // must trigger a pre-emptive MDT delete; the restore must still complete and the MDT must
+      // be rebuilt (or at minimum recreated as a fresh empty MDT) by the post-restore init.
+      client.restoreToInstant(Objects.requireNonNull(earlyCommit, "early commit should not be null"), true);
+      assertRowNumberEqualsTo(numRecords);
+    }
+  }
+
+  /**
+   * Regression coverage for the {@code restoreToSavepoint} refactor. After replacing the inline
+   * MDT pre-check with a call to the centralized helper, the common case (target after the
+   * oldest MDT compaction, no MDT delete needed) must still work end-to-end.
+   */
+  @Test
+  void testRestoreToSavepointStillWorksAfterRefactor() throws Exception {
+    HoodieWriteConfig hoodieWriteConfig = getConfigBuilder(HoodieFailedWritesCleaningPolicy.LAZY)
+        .withRollbackUsingMarkers(true)
+        .build();
+    try (SparkRDDWriteClient client = getHoodieWriteClient(hoodieWriteConfig)) {
+      String savepointCommit = null;
+      String prevInstant = HoodieTimeline.INIT_INSTANT_TS;
+      final int numRecords = 10;
+      for (int i = 1; i <= 4; i++) {
+        String newCommitTime = WriteClientTestUtils.createNewInstantTime();
+        insertBatch(hoodieWriteConfig, client, newCommitTime, prevInstant, numRecords, SparkRDDWriteClient::insert,
+            false, true, numRecords, numRecords * i, 1, Option.empty(), INSTANT_GENERATOR);
+        prevInstant = newCommitTime;
+        if (i == 2) {
+          savepointCommit = newCommitTime;
+          client.savepoint("user1", "Savepoint for 2nd commit");
+        }
+      }
+      assertRowNumberEqualsTo(40);
       client.restoreToSavepoint(Objects.requireNonNull(savepointCommit, "restore commit should not be null"));
       assertRowNumberEqualsTo(20);
     }
