@@ -56,6 +56,6 @@ public class FlinkRLIBootstrapMetrics extends HoodieFlinkMetrics {
   }
 
   private double getThroughput() {
-    return bootstrapCostMs > 0 ? (double) numIndexRecordsEmitted / bootstrapCostMs * 1000 : 0;
+    return bootstrapCostMs > 0 ? (double) numIndexRecordsEmitted / bootstrapCostMs : 0;
   }
 }

@@ -119,7 +119,7 @@ class TestFlinkRLIBootstrapMetrics {
   void testThroughputIsRecordsPerSecond() {
     // 2000 records in 500 ms → 4000 records/sec
     metrics.updateLoadResult(4, 2000, 500);
-    assertEquals(4000.0, gaugeValue(BOOTSTRAP_RECORD_PER_MS));
+    assertEquals(4.0, gaugeValue(BOOTSTRAP_RECORD_PER_MS));
   }
 
   @Test
@@ -136,7 +136,7 @@ class TestFlinkRLIBootstrapMetrics {
     assertEquals(5L, (Long) gaugeValue(NUM_FILE_SLICES_PROCESSED));
     assertEquals(500L, (Long) gaugeValue(NUM_INDEX_RECORDS_EMITTED));
     assertEquals(250L, (Long) gaugeValue(BOOTSTRAP_COST_MS));
-    assertEquals(2000.0, gaugeValue(BOOTSTRAP_RECORD_PER_MS));
+    assertEquals(2.0, gaugeValue(BOOTSTRAP_RECORD_PER_MS));
   }
 
   // -------------------------------------------------------------------------

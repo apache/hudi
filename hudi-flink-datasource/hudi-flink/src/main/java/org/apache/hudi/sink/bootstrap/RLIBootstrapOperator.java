@@ -82,6 +82,7 @@ public class RLIBootstrapOperator
         conf.get(FlinkOptions.PATH));
     // Load RLI records
     preLoadRLIRecords();
+    this.metrics.updateLoadResult(numFileSlicesProcessed, loadedCnt, bootstrapCostMs);
   }
 
   @Override
