@@ -82,7 +82,6 @@ public class RLIBootstrapOperator
         conf.get(FlinkOptions.PATH));
     // Load RLI records
     preLoadRLIRecords();
-    this.metrics.updateLoadResult(numFileSlicesProcessed, loadedCnt, bootstrapCostMs);
   }
 
   @Override
@@ -144,6 +143,11 @@ public class RLIBootstrapOperator
             location.getFileId(),
             String.valueOf(location.getInstantTime()))));
     loadedCnt += 1;
+
+    // update the metrics every 1000 records
+    if (loadedCnt % 1000 == 0) {
+      this.metrics.updateLoadResult(numFileSlicesProcessed, loadedCnt, bootstrapCostMs);
+    }
   }
 
   private void closeMetadataTable() {
