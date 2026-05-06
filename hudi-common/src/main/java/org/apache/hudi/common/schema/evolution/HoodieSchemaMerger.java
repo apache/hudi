@@ -25,6 +25,8 @@ import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
 
+import org.apache.avro.JsonProperties;
+
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -344,8 +346,22 @@ public class HoodieSchemaMerger {
                                                 HoodieSchema schema,
                                                 boolean optional) {
     HoodieSchema effective = schema.isNullable() ? schema.getNonNullType() : schema;
-    HoodieSchema finalSchema = optional ? HoodieSchema.createNullable(effective) : effective;
-    HoodieSchemaField rebuilt = HoodieSchemaField.of(name, finalSchema, oldField.doc().orElse(null), oldField.defaultVal().orElse(null));
+    Object defaultVal = oldField.defaultVal().orElse(null);
+    HoodieSchema finalSchema;
+    if (optional) {
+      // Avro requires a field's default value to match the first branch of its
+      // union type. If the old field carried a non-null default (e.g. Spark's
+      // `_tmp_metadata_row_index` defaults to -1), build the union as
+      // [type, null] so the default stays valid.
+      if (defaultVal != null && !JsonProperties.NULL_VALUE.equals(defaultVal)) {
+        finalSchema = HoodieSchema.createUnion(effective, HoodieSchema.create(HoodieSchemaType.NULL));
+      } else {
+        finalSchema = HoodieSchema.createNullable(effective);
+      }
+    } else {
+      finalSchema = effective;
+    }
+    HoodieSchemaField rebuilt = HoodieSchemaField.of(name, finalSchema, oldField.doc().orElse(null), defaultVal);
     if (oldField.fieldId() >= 0) {
       rebuilt.addProp(HoodieSchema.FIELD_ID_PROP, oldField.fieldId());
     }
