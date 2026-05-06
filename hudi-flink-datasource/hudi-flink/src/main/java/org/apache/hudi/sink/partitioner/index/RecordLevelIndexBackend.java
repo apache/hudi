@@ -45,6 +45,8 @@ import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Supplier;
 
 /**
  * An implementation of {@link IndexBackend} based on the record level index in metadata table.
@@ -57,6 +59,8 @@ public class RecordLevelIndexBackend implements MinibatchIndexBackend {
   private final Configuration conf;
   private final HoodieTableMetaClient metaClient;
   private HoodieTableMetadata metadataTable;
+  private MetricGroup metricGroup;
+  private Map<String, AtomicReference<Supplier<Object>>> metricsHandles;
 
   public RecordLevelIndexBackend(Configuration conf, long initCheckpointId) {
     this.metaClient = StreamerUtil.createMetaClient(conf);
@@ -121,6 +125,7 @@ public class RecordLevelIndexBackend implements MinibatchIndexBackend {
     recordIndexCache.markAsEvictable(inflightInstants.keySet().stream().min(Long::compareTo).orElse(completedCheckpointID));
     this.metaClient.reloadActiveTimeline();
     reloadMetadataTable();
+    registerMetricsInternal();
   }
 
   private void reloadMetadataTable() {
@@ -146,8 +151,14 @@ public class RecordLevelIndexBackend implements MinibatchIndexBackend {
 
   @Override
   public void registerMetrics(MetricGroup metricGroup) {
+    this.metricGroup = metricGroup;
+    registerMetricsInternal();
+  }
+
+  private void registerMetricsInternal() {
     if (metadataTable instanceof HoodieBackedTableMetadata) {
-      FlinkMetricsUtils.registerMetadataTableMetrics((HoodieBackedTableMetadata) metadataTable, metricGroup);
+      this.metricsHandles = FlinkMetricsUtils.registerMetadataTableMetrics(
+          (HoodieBackedTableMetadata) metadataTable, metricGroup, this.metricsHandles);
     }
   }
 }

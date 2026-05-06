@@ -21,49 +21,104 @@ package org.apache.hudi.metrics;
 import org.apache.flink.metrics.MetricGroup;
 import org.apache.hudi.metadata.HoodieBackedTableMetadata;
 
+import java.util.HashMap;
+import java.util.Map;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Supplier;
+
 /**
  * Utils for Flink metrics registration.
  */
 public class FlinkMetricsUtils {
 
+  /**
+   * Registers metadata table metrics with Flink for the first time.
+   * Use the three-argument overload when the metadata table may be reloaded, to avoid
+   * duplicate gauge registration.
+   */
   public static void registerMetadataTableMetrics(HoodieBackedTableMetadata metadataTable, MetricGroup metricGroup) {
+    registerMetadataTableMetrics(metadataTable, metricGroup, null);
+  }
+
+  /**
+   * Registers or updates metadata table metrics in Flink's metric group.
+   *
+   * <p>On the first call ({@code handles} is {@code null} or empty) each metric name is
+   * registered once with Flink as a gauge whose value is read through an
+   * {@link AtomicReference}.  On subsequent calls the references are swapped to point at
+   * the new metric objects from the reloaded metadata table, so Flink never sees a
+   * duplicate registration.
+   *
+   * @param metadataTable the (possibly reloaded) metadata table
+   * @param metricGroup   Flink metric group to register gauges into
+   * @param handles       map returned by a previous call, or {@code null} for the first call
+   * @return updated handles map; pass it back on the next invocation
+   */
+  public static Map<String, AtomicReference<Supplier<Object>>> registerMetadataTableMetrics(
+      HoodieBackedTableMetadata metadataTable,
+      MetricGroup metricGroup,
+      Map<String, AtomicReference<Supplier<Object>>> handles) {
+
+    Map<String, AtomicReference<Supplier<Object>>> result = handles != null ? handles : new HashMap<>();
     if (metadataTable == null) {
-      return;
+      return result;
     }
 
-    // metrics is Option.empty() when metrics are disabled
     metadataTable.getMetrics().ifPresent(m -> {
       m.registry().getGauges().forEach((name, gauge) ->
-          metricGroup.gauge(name, gauge::getValue));
+          bindMetric(result, metricGroup, name, () -> gauge.getValue()));
       m.registry().getCounters().forEach((name, counter) ->
-          metricGroup.gauge(name, counter::getCount));
+          bindMetric(result, metricGroup, name, () -> counter.getCount()));
       m.registry().getMeters().forEach((name, meter) -> {
-        metricGroup.gauge(name + ".count", meter::getCount);
-        metricGroup.gauge(name + ".meanRate", meter::getMeanRate);
-        metricGroup.gauge(name + ".1minRate", meter::getOneMinuteRate);
-        metricGroup.gauge(name + ".5minRate", meter::getFiveMinuteRate);
-        metricGroup.gauge(name + ".15minRate", meter::getFifteenMinuteRate);
+        bindMetric(result, metricGroup, name + ".count", () -> meter.getCount());
+        bindMetric(result, metricGroup, name + ".meanRate", () -> meter.getMeanRate());
+        bindMetric(result, metricGroup, name + ".1minRate", () -> meter.getOneMinuteRate());
+        bindMetric(result, metricGroup, name + ".5minRate", () -> meter.getFiveMinuteRate());
+        bindMetric(result, metricGroup, name + ".15minRate", () -> meter.getFifteenMinuteRate());
       });
       m.registry().getHistograms().forEach((name, histogram) -> {
-        metricGroup.gauge(name + ".count", histogram::getCount);
-        metricGroup.gauge(name + ".mean", () -> histogram.getSnapshot().getMean());
-        metricGroup.gauge(name + ".min", () -> histogram.getSnapshot().getMin());
-        metricGroup.gauge(name + ".max", () -> histogram.getSnapshot().getMax());
-        metricGroup.gauge(name + ".p75", () -> histogram.getSnapshot().get75thPercentile());
-        metricGroup.gauge(name + ".p95", () -> histogram.getSnapshot().get95thPercentile());
-        metricGroup.gauge(name + ".p99", () -> histogram.getSnapshot().get99thPercentile());
+        bindMetric(result, metricGroup, name + ".count", () -> histogram.getCount());
+        bindMetric(result, metricGroup, name + ".mean", () -> histogram.getSnapshot().getMean());
+        bindMetric(result, metricGroup, name + ".min", () -> histogram.getSnapshot().getMin());
+        bindMetric(result, metricGroup, name + ".max", () -> histogram.getSnapshot().getMax());
+        bindMetric(result, metricGroup, name + ".p75", () -> histogram.getSnapshot().get75thPercentile());
+        bindMetric(result, metricGroup, name + ".p95", () -> histogram.getSnapshot().get95thPercentile());
+        bindMetric(result, metricGroup, name + ".p99", () -> histogram.getSnapshot().get99thPercentile());
       });
       m.registry().getTimers().forEach((name, timer) -> {
-        metricGroup.gauge(name + ".count", timer::getCount);
-        metricGroup.gauge(name + ".meanRate", timer::getMeanRate);
-        metricGroup.gauge(name + ".1minRate", timer::getOneMinuteRate);
-        metricGroup.gauge(name + ".5minRate", timer::getFiveMinuteRate);
-        metricGroup.gauge(name + ".15minRate", timer::getFifteenMinuteRate);
-        metricGroup.gauge(name + ".mean", () -> timer.getSnapshot().getMean());
-        metricGroup.gauge(name + ".p75", () -> timer.getSnapshot().get75thPercentile());
-        metricGroup.gauge(name + ".p95", () -> timer.getSnapshot().get95thPercentile());
-        metricGroup.gauge(name + ".p99", () -> timer.getSnapshot().get99thPercentile());
+        bindMetric(result, metricGroup, name + ".count", () -> timer.getCount());
+        bindMetric(result, metricGroup, name + ".meanRate", () -> timer.getMeanRate());
+        bindMetric(result, metricGroup, name + ".1minRate", () -> timer.getOneMinuteRate());
+        bindMetric(result, metricGroup, name + ".5minRate", () -> timer.getFiveMinuteRate());
+        bindMetric(result, metricGroup, name + ".15minRate", () -> timer.getFifteenMinuteRate());
+        bindMetric(result, metricGroup, name + ".mean", () -> timer.getSnapshot().getMean());
+        bindMetric(result, metricGroup, name + ".p75", () -> timer.getSnapshot().get75thPercentile());
+        bindMetric(result, metricGroup, name + ".p95", () -> timer.getSnapshot().get95thPercentile());
+        bindMetric(result, metricGroup, name + ".p99", () -> timer.getSnapshot().get99thPercentile());
       });
     });
+
+    return result;
+  }
+
+  /**
+   * Registers a Flink gauge for {@code name} the first time it is seen, or updates the
+   * supplier reference when the metric is already registered.
+   */
+  private static void bindMetric(
+      Map<String, AtomicReference<Supplier<Object>>> handles,
+      MetricGroup metricGroup,
+      String name,
+      Supplier<Object> supplier) {
+
+    AtomicReference<Supplier<Object>> ref = handles.get(name);
+    if (ref == null) {
+      ref = new AtomicReference<>(supplier);
+      handles.put(name, ref);
+      AtomicReference<Supplier<Object>> capturedRef = ref;
+      metricGroup.gauge(name, () -> capturedRef.get().get());
+    } else {
+      ref.set(supplier);
+    }
   }
 }

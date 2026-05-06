@@ -33,6 +33,8 @@ import org.junit.jupiter.api.Test;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Supplier;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -192,6 +194,35 @@ class TestFlinkMetricsUtils {
       assertNotNull(meterGauges.get(rateKey), "meter missing " + rateKey);
       assertNotNull(timerGauges.get(rateKey), "timer missing " + rateKey);
     }
+  }
+
+  // -------------------------------------------------------------------------
+  //  Re-registration (replaceable gauges)
+  // -------------------------------------------------------------------------
+
+  @Test
+  void testReregistrationUpdatesGaugeWithoutDuplicateRegistration() {
+    MetricRegistry dropwizard1 = new MetricRegistry();
+    com.codahale.metrics.Counter counter1 = dropwizard1.counter("hits");
+    counter1.inc(5);
+
+    MetricRegistry dropwizard2 = new MetricRegistry();
+    com.codahale.metrics.Counter counter2 = dropwizard2.counter("hits");
+    counter2.inc(99);
+
+    Map<String, Gauge<?>> captured = new HashMap<>();
+    MetricGroup group = trackingGroup(captured);
+
+    // First registration
+    Map<String, AtomicReference<Supplier<Object>>> handles =
+        FlinkMetricsUtils.registerMetadataTableMetrics(tableWith(dropwizard1), group, null);
+    assertEquals(5L, captured.get("hits").getValue(), "should read from first table");
+    assertEquals(1, captured.size(), "gauge registered once");
+
+    // Second registration with a reloaded table — must not register a new gauge
+    FlinkMetricsUtils.registerMetadataTableMetrics(tableWith(dropwizard2), group, handles);
+    assertEquals(99L, captured.get("hits").getValue(), "should now read from second table");
+    assertEquals(1, captured.size(), "no duplicate gauge registered");
   }
 
   // -------------------------------------------------------------------------
