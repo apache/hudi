@@ -169,17 +169,88 @@ public class HoodieSchemaChangeApplier {
   }
 
   /**
-   * Promote a column to a wider type. Type-promotion legality is decided by
-   * the caller — this applier does not enforce compatibility.
+   * Promote a column to a wider type. Rejects narrowing and unrelated-type
+   * conversions with a {@link SchemaCompatibilityException} matching the
+   * legacy {@code SchemaChangeUtils.isTypeUpdateAllow} contract.
    */
   public HoodieSchema applyColumnTypeChange(String colName, HoodieSchema newType) {
+    HoodieSchema effectiveNewType = newType.isNullable() ? newType.getNonNullType() : newType;
+    HoodieSchema currentField = latestSchema.findType(colName);
+    if (currentField != null) {
+      HoodieSchema currentEffective = currentField.isNullable() ? currentField.getNonNullType() : currentField;
+      if (!isTypeUpdateAllow(currentEffective, effectiveNewType)) {
+        throw new SchemaCompatibilityException(String.format(
+            "Cannot update column '%s' from type '%s' to incompatible type '%s'.",
+            colName, typeDisplayName(currentEffective), typeDisplayName(effectiveNewType)));
+      }
+    }
     return rewriteFieldByName(latestSchema, colName, field -> {
       HoodieSchema fieldSchema = field.schema();
       boolean wasNullable = fieldSchema.isNullable();
-      HoodieSchema effectiveNewType = newType.isNullable() ? newType.getNonNullType() : newType;
       HoodieSchema finalSchema = wasNullable ? HoodieSchema.createNullable(effectiveNewType) : effectiveNewType;
       return rebuildField(field, field.name(), finalSchema, field.doc().orElse(null));
     });
+  }
+
+  /**
+   * Mirrors the legacy {@code SchemaChangeUtils.isTypeUpdateAllow} promotion
+   * matrix: int → long/float/double/string/decimal, long → float/double/
+   * string/decimal, float → double/string/decimal, double → string/decimal,
+   * decimal → decimal/string (with widening checks), string → date/decimal/
+   * bytes, date → string, bytes → string. Same-type updates are allowed.
+   */
+  private static boolean isTypeUpdateAllow(HoodieSchema src, HoodieSchema dst) {
+    HoodieSchemaType srcType = src.getType();
+    HoodieSchemaType dstType = dst.getType();
+    if (srcType.isComplex() || dstType.isComplex()) {
+      throw new IllegalArgumentException("only support update primitive type");
+    }
+    if (srcType == dstType) {
+      if (srcType == HoodieSchemaType.DECIMAL) {
+        return isDecimalUpdateAllow((HoodieSchema.Decimal) src, (HoodieSchema.Decimal) dst);
+      }
+      return true;
+    }
+    switch (srcType) {
+      case INT:
+        return dstType == HoodieSchemaType.LONG || dstType == HoodieSchemaType.FLOAT
+            || dstType == HoodieSchemaType.DOUBLE || dstType == HoodieSchemaType.STRING
+            || dstType == HoodieSchemaType.DECIMAL;
+      case LONG:
+        return dstType == HoodieSchemaType.FLOAT || dstType == HoodieSchemaType.DOUBLE
+            || dstType == HoodieSchemaType.STRING || dstType == HoodieSchemaType.DECIMAL;
+      case FLOAT:
+        return dstType == HoodieSchemaType.DOUBLE || dstType == HoodieSchemaType.STRING
+            || dstType == HoodieSchemaType.DECIMAL;
+      case DOUBLE:
+        return dstType == HoodieSchemaType.STRING || dstType == HoodieSchemaType.DECIMAL;
+      case DATE:
+      case BYTES:
+        return dstType == HoodieSchemaType.STRING;
+      case DECIMAL:
+        return dstType == HoodieSchemaType.STRING;
+      case STRING:
+        return dstType == HoodieSchemaType.DATE || dstType == HoodieSchemaType.DECIMAL
+            || dstType == HoodieSchemaType.BYTES;
+      default:
+        return false;
+    }
+  }
+
+  private static boolean isDecimalUpdateAllow(HoodieSchema.Decimal src, HoodieSchema.Decimal dst) {
+    if (src.isFixed() && dst.isFixed() && src.getFixedSize() > dst.getFixedSize()) {
+      return false;
+    }
+    if (dst.getPrecision() >= src.getPrecision() && dst.getScale() == src.getScale()) {
+      return true;
+    }
+    int srcInt = src.getPrecision() - src.getScale();
+    int dstInt = dst.getPrecision() - dst.getScale();
+    return dstInt >= srcInt && dst.getScale() >= src.getScale();
+  }
+
+  private static String typeDisplayName(HoodieSchema schema) {
+    return schema.getType().name().toLowerCase(Locale.ROOT);
   }
 
   /**
