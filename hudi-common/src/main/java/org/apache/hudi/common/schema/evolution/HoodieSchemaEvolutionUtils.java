@@ -711,7 +711,13 @@ public final class HoodieSchemaEvolutionUtils {
       case DATE:
       case BYTES:
       case ENUM:
-        // ENUM → STRING replays the legacy InternalSchemaConverter flatten.
+        // Preserved-on-purpose: replays the legacy InternalSchemaConverter
+        // flatten (ENUM → StringType). Tests like testMORLogicalRepair model
+        // production data+schema flows that depend on enums collapsing into
+        // existing string columns rather than triggering a real enum
+        // evolution. Removing this would break those flows. See
+        // post-migration-id-policy-plan.md for the follow-up that replaces
+        // this with a proper string↔enum-with-default compat rule.
         return dstT == HoodieSchemaType.STRING;
       case DECIMAL:
         if (dstT == HoodieSchemaType.STRING) {
