@@ -3780,8 +3780,8 @@ public class HoodieWriteConfig extends HoodieConfig {
      * populated here is harmless for those modes and only takes effect under {@code CUSTOM}.
      */
     private void autoSelectSparkRecordMergerForBaseFileFormat() {
-      HoodieFileFormat tableLevel = HoodieFileFormat.getValue(writeConfig.getString(HoodieTableConfig.BASE_FILE_FORMAT.key()));
-      HoodieFileFormat format = tableLevel != null ? tableLevel : writeConfig.getBaseFileFormat();
+      HoodieFileFormat tableConfigFormat = HoodieFileFormat.getValue(writeConfig.getString(HoodieTableConfig.BASE_FILE_FORMAT.key()));
+      HoodieFileFormat format = tableConfigFormat != null ? tableConfigFormat : writeConfig.getBaseFileFormat();
       if (format == null || !format.requiresSparkRecordType()) {
         return;
       }

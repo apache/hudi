@@ -70,6 +70,8 @@ public class HoodieLanceRecordReader implements RecordReader<NullWritable, Array
 
   @Override
   public boolean next(NullWritable key, ArrayWritable value) throws IOException {
+    // Defer iterator creation to first next() so the file is not opened for splits
+    // the MR framework constructs but never iterates.
     if (recordIterator == null) {
       recordIterator = reader.getRecordIterator(schema);
     }
