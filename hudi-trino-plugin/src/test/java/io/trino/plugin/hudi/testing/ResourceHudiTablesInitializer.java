@@ -269,8 +269,9 @@ public class ResourceHudiTablesInitializer
 
                 HashAndSizeResult dstHashAndSize;
                 try {
-                    dstHashAndSize = srcHashAndSize.size > 0 ? calculateHashAndSize(location, fileSystem)
-                        : new HashAndSizeResult(new byte[0], 0);
+                    dstHashAndSize = srcHashAndSize.size > 0
+                            ? calculateHashAndSize(location, fileSystem)
+                            : new HashAndSizeResult(new byte[0], 0);
                 }
                 catch (NoSuchAlgorithmException e) {
                     throw new IOException("Failed to calculate destination hash: Algorithm not found", e);
