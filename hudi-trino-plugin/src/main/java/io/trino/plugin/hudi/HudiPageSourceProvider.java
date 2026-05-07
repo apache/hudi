@@ -204,6 +204,14 @@ public class HudiPageSourceProvider
 
         // Avoid avro serialization if split/filegroup only contains base files
         if (isBaseFileOnly) {
+            if (columns.isEmpty()) {
+                // count(*): the Parquet data page source was created with empty
+                // dataColumnHandles and already emits SourcePages with 0 channels and
+                // the correct row count. Skip HudiBaseFileOnlyPageSource so we don't
+                // synthesize a placeholder partition-column block the operator does
+                // not expect (would surface as "Invalid number of channels").
+                return dataPageSource;
+            }
             ValidationUtils.checkArgument(!hiveColumnHandles.isEmpty(),
                     "Column handles should always be present for providing Hudi data page source on a base file");
             return new HudiBaseFileOnlyPageSource(
@@ -243,6 +251,14 @@ public class HudiPageSourceProvider
                         .withStart(start)
                         .withLength(length)
                         .build();
+
+        if (columns.isEmpty()) {
+            // count(*) on MOR with log files: bypass HudiPageSource (whose HudiAvroSerializer
+            // construction fails on an empty column list when constructing the Avro schema) and
+            // count records emitted by the file group reader directly so log inserts/deletes are
+            // reflected in the result.
+            return new HudiCountPageSource(fileGroupReader);
+        }
 
         return new HudiPageSource(
                 dataPageSource,
