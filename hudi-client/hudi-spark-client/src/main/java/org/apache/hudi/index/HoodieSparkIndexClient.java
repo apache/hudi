@@ -63,8 +63,10 @@ import static org.apache.hudi.index.HoodieIndexUtils.indexExists;
 import static org.apache.hudi.index.HoodieIndexUtils.register;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_BLOOM_FILTERS;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS;
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_EXPRESSION_INDEX_PREFIX;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_RECORD_INDEX;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_SECONDARY_INDEX;
+import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_SECONDARY_INDEX_PREFIX;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.existingIndexVersionOrDefault;
 
 @Slf4j
@@ -92,21 +94,31 @@ public class HoodieSparkIndexClient extends BaseHoodieIndexClient {
   @Override
   public void create(HoodieTableMetaClient metaClient, String userIndexName, String indexType, Map<String, Map<String, String>> columns, Map<String, String> options,
                      Map<String, String> tableProperties) throws Exception {
+    create(metaClient, userIndexName, indexType, columns, options, tableProperties, false);
+  }
+
+  public void create(HoodieTableMetaClient metaClient, String userIndexName, String indexType, Map<String, Map<String, String>> columns, Map<String, String> options,
+                     Map<String, String> tableProperties, boolean ignoreIfExists) throws Exception {
     if (indexType.equals(PARTITION_NAME_SECONDARY_INDEX) || indexType.equals(PARTITION_NAME_BLOOM_FILTERS)
         || indexType.equals(PARTITION_NAME_COLUMN_STATS)) {
-      createExpressionOrSecondaryIndex(metaClient, userIndexName, indexType, columns, options, tableProperties);
+      createExpressionOrSecondaryIndex(metaClient, userIndexName, indexType, columns, options, tableProperties, ignoreIfExists);
     } else {
-      createRecordIndex(metaClient, userIndexName, indexType, options);
+      createRecordIndex(metaClient, userIndexName, indexType, options, ignoreIfExists);
     }
   }
 
-  private void createRecordIndex(HoodieTableMetaClient metaClient, String userIndexName, String indexType, Map<String, String> options) {
+  private void createRecordIndex(HoodieTableMetaClient metaClient, String userIndexName, String indexType, Map<String, String> options,
+                                 boolean ignoreIfExists) {
     if (!userIndexName.equals(PARTITION_NAME_RECORD_INDEX)) {
       throw new HoodieIndexException("Record index should be named as record_index");
     }
 
     String fullIndexName = PARTITION_NAME_RECORD_INDEX;
     if (indexExists(metaClient, fullIndexName)) {
+      if (ignoreIfExists) {
+        log.info("Index {} already exists. Skipping creation.", userIndexName);
+        return;
+      }
       throw new HoodieMetadataIndexException("Index already exists: " + userIndexName);
     }
 
@@ -150,7 +162,16 @@ public class HoodieSparkIndexClient extends BaseHoodieIndexClient {
   }
 
   private void createExpressionOrSecondaryIndex(HoodieTableMetaClient metaClient, String userIndexName, String indexType,
-                                                Map<String, Map<String, String>> columns, Map<String, String> options, Map<String, String> tableProperties) throws Exception {
+                                                Map<String, Map<String, String>> columns, Map<String, String> options, Map<String, String> tableProperties,
+                                                boolean ignoreIfExists) throws Exception {
+    String fullIndexName = indexType.equals(PARTITION_NAME_SECONDARY_INDEX)
+        ? PARTITION_NAME_SECONDARY_INDEX_PREFIX + userIndexName
+        : PARTITION_NAME_EXPRESSION_INDEX_PREFIX + userIndexName;
+    if (indexExists(metaClient, fullIndexName) && ignoreIfExists) {
+      log.info("Index {} already exists. Skipping creation.", userIndexName);
+      return;
+    }
+
     HoodieIndexDefinition indexDefinition = HoodieIndexUtils.getSecondaryOrExpressionIndexDefinition(metaClient, userIndexName, indexType, columns, options, tableProperties);
     if (!metaClient.getTableConfig().getRelativeIndexDefinitionPath().isPresent()
         || !metaClient.getIndexForMetadataPartition(indexDefinition.getIndexName()).isPresent()) {
