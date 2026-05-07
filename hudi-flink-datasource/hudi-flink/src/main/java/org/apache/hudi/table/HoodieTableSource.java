@@ -310,7 +310,7 @@ public class HoodieTableSource extends FileIndexReader implements
             tableSchema.toString(),
             HoodieSchemaConverter.convertToSchema(requiredRowType).toString(),
             new ArrayList<>());
-    boolean emitDelete = tableType == HoodieTableType.MERGE_ON_READ;
+    boolean emitDelete = tableType == HoodieTableType.MERGE_ON_READ && context.isStreaming();
     if (conf.get(FlinkOptions.CDC_ENABLED)) {
       List<DataType> fieldTypes = rowDataType.getChildren();
       splitReaderFunction = new HoodieCdcSplitReaderFunction(
