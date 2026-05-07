@@ -19,7 +19,8 @@ package org.apache.hudi.functional
 
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.common.schema.{HoodieSchema, HoodieSchemaType}
-import org.apache.hudi.testutils.HoodieSparkClientTestBase
+import org.apache.hudi.common.table.HoodieTableMetaClient
+import org.apache.hudi.testutils.{DataSourceTestUtils, HoodieSparkClientTestBase}
 
 import org.apache.hadoop.fs.Path
 import org.apache.parquet.hadoop.ParquetFileReader
@@ -672,6 +673,132 @@ class TestVectorDataSource extends HoodieSparkClientTestBase {
     // key_7: never updated → should have value 1.0
     val r7 = readDf.select("id", "embedding").filter("id = 'key_7'").collect()(0)
     assertTrue(r7.getSeq[Double](1).forall(_ == 1.0), "key_7 should have original value 1.0")
+  }
+
+  @Test
+  def testMorLogOnlyCompactionPreservesVectorMetadata(): Unit = {
+    val path = basePath + "/mor_log_only_vec"
+    val tableName = "mor_log_only_vec_test"
+    try {
+      spark.sql(
+        s"""
+           |create table $tableName (
+           |  id int,
+           |  embedding VECTOR(3),
+           |  ts long
+           |) using hudi
+           | location '$path'
+           | tblproperties (
+           |  primaryKey = 'id',
+           |  type = 'mor',
+           |  preCombineField = 'ts',
+           |  hoodie.index.type = 'INMEMORY',
+           |  hoodie.compact.inline = 'true',
+           |  hoodie.compact.inline.max.delta.commits = '5',
+           |  hoodie.clean.commits.retained = '1'
+           | )
+       """.stripMargin)
+
+      def readOrdered(): Seq[Row] =
+        spark.sql(s"select id, embedding, ts from $tableName order by id").collect().toSeq
+
+      def embeddingOf(id: Int, rows: Seq[Row]): Seq[Float] =
+        rows.find(_.getInt(0) == id)
+          .getOrElse(fail(s"No row with id=$id"))
+          .getSeq[Float](1)
+
+      spark.sql(
+        s"insert into $tableName values " +
+          "(1, array(cast(0.1 as float), cast(0.2 as float), cast(0.3 as float)), 1000)")
+      spark.sql(
+        s"insert into $tableName values " +
+          "(2, array(cast(0.4 as float), cast(0.5 as float), cast(0.6 as float)), 1000)")
+      spark.sql(
+        s"insert into $tableName values " +
+          "(3, array(cast(0.7 as float), cast(0.8 as float), cast(0.9 as float)), 1000)")
+      // 3 commits will not trigger compaction, so it should be log only.
+      assertTrue(DataSourceTestUtils.isLogFileOnly(path))
+      val afterInserts = readOrdered()
+      assertEquals(3, afterInserts.size)
+      assertEquals(Seq(0.1f, 0.2f, 0.3f), embeddingOf(1, afterInserts))
+      assertEquals(Seq(0.4f, 0.5f, 0.6f), embeddingOf(2, afterInserts))
+      assertEquals(Seq(0.7f, 0.8f, 0.9f), embeddingOf(3, afterInserts))
+
+      spark.sql(
+        s"""
+           |merge into $tableName h0
+           |using (
+           |  select 1 as id,
+           |         array(cast(0.11 as float), cast(0.22 as float), cast(0.33 as float)) as embedding,
+           |         1001L as ts
+           |) s0
+           | on h0.id = s0.id
+           | when matched then update set *
+           |""".stripMargin)
+      // 4 commits will not trigger compaction, so it should be log only.
+      assertTrue(DataSourceTestUtils.isLogFileOnly(path))
+      val afterUpdate = readOrdered()
+      assertEquals(Seq(0.11f, 0.22f, 0.33f), embeddingOf(1, afterUpdate))
+      assertEquals(Seq(0.4f, 0.5f, 0.6f), embeddingOf(2, afterUpdate))
+      assertEquals(Seq(0.7f, 0.8f, 0.9f), embeddingOf(3, afterUpdate))
+
+      spark.sql(
+        s"""
+           |merge into $tableName h0
+           |using (
+           |  select 4 as id,
+           |         array(cast(0.44 as float), cast(0.55 as float), cast(0.66 as float)) as embedding,
+           |         1000L as ts
+           |) s0
+           | on h0.id = s0.id
+           | when not matched then insert *
+           |""".stripMargin)
+
+      // 5 commits will trigger compaction.
+      assertFalse(DataSourceTestUtils.isLogFileOnly(path))
+      val afterCompaction = readOrdered()
+      assertEquals(4, afterCompaction.size)
+      assertEquals(Seq(0.11f, 0.22f, 0.33f), embeddingOf(1, afterCompaction))
+      assertEquals(Seq(0.4f, 0.5f, 0.6f), embeddingOf(2, afterCompaction))
+      assertEquals(Seq(0.7f, 0.8f, 0.9f), embeddingOf(3, afterCompaction))
+      assertEquals(Seq(0.44f, 0.55f, 0.66f), embeddingOf(4, afterCompaction))
+
+      // VECTOR custom-type descriptor must survive the compacted base-file read path.
+      val embeddingField = spark.table(tableName).schema.find(_.name == "embedding").get
+      assertTrue(embeddingField.metadata.contains(HoodieSchema.TYPE_METADATA_FIELD),
+        s"Expected VECTOR type metadata on embedding field after compaction, " +
+          s"got: ${embeddingField.metadata}")
+
+      // 6th commit drives an auto-clean that retires the now-superseded log-only slice.
+      // Inline compaction on commit 5 ran AFTER its own postCommit clean, so the prior
+      // slice was not yet superseded when that clean fired and no .clean instant was
+      // written. This deltacommit's postCommit clean sees the post-compaction base
+      // file and writes the .clean instant.
+      spark.sql(
+        s"""
+           |merge into $tableName h0
+           |using (
+           |  select 2 as id,
+           |         array(cast(0.222 as float), cast(0.555 as float), cast(0.888 as float)) as embedding,
+           |         1002L as ts
+           |) s0
+           | on h0.id = s0.id
+           | when matched then update set *
+           |""".stripMargin)
+      val afterCleanup = readOrdered()
+      assertEquals(Seq(0.11f, 0.22f, 0.33f), embeddingOf(1, afterCleanup))
+      assertEquals(Seq(0.222f, 0.555f, 0.888f), embeddingOf(2, afterCleanup))
+      assertEquals(Seq(0.7f, 0.8f, 0.9f), embeddingOf(3, afterCleanup))
+      assertEquals(Seq(0.44f, 0.55f, 0.66f), embeddingOf(4, afterCleanup))
+
+      val metaClient = HoodieTableMetaClient.builder()
+        .setBasePath(path).setConf(storageConf).build()
+      metaClient.reloadActiveTimeline()
+      assertTrue(metaClient.getActiveTimeline.getCleanerTimeline.countInstants() > 0,
+        "Expected at least one .clean instant on the timeline after compaction")
+    } finally {
+      spark.sql(s"drop table if exists $tableName")
+    }
   }
 
   @Test

@@ -24,6 +24,8 @@ import org.apache.hudi.common.schema.HoodieSchema
 import org.apache.hudi.common.testutils.HoodieTestUtils
 import org.apache.hudi.common.util.StringUtils
 import org.apache.hudi.internal.schema.HoodieSchemaException
+import org.apache.hudi.testutils.DataSourceTestUtils
+import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
 
 import org.apache.spark.sql.{Row, SaveMode}
 import org.apache.spark.sql.catalyst.TableIdentifier
@@ -126,6 +128,121 @@ class TestVariantDataType extends HoodieSparkSqlTestBase {
         )
       })
     }
+  }
+
+  test("Test Query Log Only MOR Table With VARIANT column triggers compaction") {
+    assume(HoodieSparkUtils.gteqSpark4_0, "Variant type requires Spark 4.0 or higher")
+
+    withRecordType()(withTempDir { tmp =>
+      val tableName = generateTableName
+      val tablePath = tmp.getCanonicalPath
+      spark.sql(
+        s"""
+           |create table $tableName (
+           |  id int,
+           |  v variant,
+           |  ts long
+           |) using hudi
+           | location '$tablePath'
+           | tblproperties (
+           |  primaryKey = 'id',
+           |  type = 'mor',
+           |  preCombineField = 'ts',
+           |  hoodie.index.type = 'INMEMORY',
+           |  hoodie.compact.inline = 'true',
+           |  hoodie.compact.inline.max.delta.commits = '5',
+           |  hoodie.clean.commits.retained = '1'
+           | )
+       """.stripMargin)
+
+      spark.sql(
+        s"insert into $tableName values " +
+          "(1, parse_json('{\"key\":\"value1\"}'), 1000)")
+      spark.sql(
+        s"insert into $tableName values " +
+          "(2, parse_json('{\"key\":\"value2\"}'), 1000)")
+      spark.sql(
+        s"insert into $tableName values " +
+          "(3, parse_json('{\"key\":\"value3\"}'), 1000)")
+      // 3 commits will not trigger compaction, so it should be log only.
+      assertResult(true)(DataSourceTestUtils.isLogFileOnly(tablePath))
+      checkAnswer(s"select id, cast(v as string), ts from $tableName order by id")(
+        Seq(1, "{\"key\":\"value1\"}", 1000),
+        Seq(2, "{\"key\":\"value2\"}", 1000),
+        Seq(3, "{\"key\":\"value3\"}", 1000)
+      )
+
+      spark.sql(
+        s"""
+           |merge into $tableName h0
+           |using (
+           |  select 1 as id,
+           |         parse_json('{"key":"v1-merged"}') as v,
+           |         1001L as ts
+           |) s0
+           | on h0.id = s0.id
+           | when matched then update set *
+           |""".stripMargin)
+      // 4 commits will not trigger compaction, so it should be log only.
+      assertResult(true)(DataSourceTestUtils.isLogFileOnly(tablePath))
+      checkAnswer(s"select id, cast(v as string), ts from $tableName order by id")(
+        Seq(1, "{\"key\":\"v1-merged\"}", 1001),
+        Seq(2, "{\"key\":\"value2\"}", 1000),
+        Seq(3, "{\"key\":\"value3\"}", 1000)
+      )
+
+      spark.sql(
+        s"""
+           |merge into $tableName h0
+           |using (
+           |  select 4 as id,
+           |         parse_json('{"key":"value4"}') as v,
+           |         1000L as ts
+           |) s0
+           | on h0.id = s0.id
+           | when not matched then insert *
+           |""".stripMargin)
+
+      // 5 commits will trigger compaction.
+      assertResult(false)(DataSourceTestUtils.isLogFileOnly(tablePath))
+      checkAnswer(s"select id, cast(v as string), ts from $tableName order by id")(
+        Seq(1, "{\"key\":\"v1-merged\"}", 1001),
+        Seq(2, "{\"key\":\"value2\"}", 1000),
+        Seq(3, "{\"key\":\"value3\"}", 1000),
+        Seq(4, "{\"key\":\"value4\"}", 1000)
+      )
+
+      // VARIANT must round-trip as native VariantType through the compacted base-file read path.
+      val variantField = spark.table(tableName).schema.find(_.name == "v").get
+      assertResult("variant")(variantField.dataType.typeName)
+
+      // 6th commit drives an auto-clean that retires the now-superseded log-only slice.
+      // Inline compaction on commit 5 ran AFTER its own postCommit clean, so the prior
+      // slice was not yet superseded when that clean fired and no .clean instant was
+      // written. This deltacommit's postCommit clean writes the .clean instant.
+      spark.sql(
+        s"""
+           |merge into $tableName h0
+           |using (
+           |  select 2 as id,
+           |         parse_json('{"key":"v2-merged"}') as v,
+           |         1002L as ts
+           |) s0
+           | on h0.id = s0.id
+           | when matched then update set *
+           |""".stripMargin)
+      checkAnswer(s"select id, cast(v as string), ts from $tableName order by id")(
+        Seq(1, "{\"key\":\"v1-merged\"}", 1001),
+        Seq(2, "{\"key\":\"v2-merged\"}", 1002),
+        Seq(3, "{\"key\":\"value3\"}", 1000),
+        Seq(4, "{\"key\":\"value4\"}", 1000)
+      )
+
+      val metaClient = createMetaClient(spark, tablePath)
+      metaClient.reloadActiveTimeline()
+      assert(metaClient.getActiveTimeline.getCleanerTimeline.countInstants() > 0,
+        "Expected at least one .clean instant on the timeline after compaction")
+    })
   }
 
   test("Test toHiveCompatibleSchema converts VariantType to physical struct") {
