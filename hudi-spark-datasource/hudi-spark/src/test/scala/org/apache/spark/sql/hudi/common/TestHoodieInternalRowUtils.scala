@@ -296,11 +296,11 @@ class TestHoodieInternalRowUtils extends FunSuite with Matchers with BeforeAndAf
       ("col2", HoodieSchema.create(HoodieSchemaType.DOUBLE)),
       ("col21", HoodieSchema.create(HoodieSchemaType.STRING)),
       ("col3", HoodieSchema.create(HoodieSchemaType.STRING)),
-      ("col31", HoodieSchema.createDecimal(18, 9)),
-      ("col4", HoodieSchema.createDecimal(18, 9)),
+      ("col31", HoodieSchema.createDecimalFixed(18, 9)),
+      ("col4", HoodieSchema.createDecimalFixed(18, 9)),
       ("col41", HoodieSchema.create(HoodieSchemaType.STRING)),
       ("col5", HoodieSchema.createDate()),
-      ("col51", HoodieSchema.createDecimal(18, 9)),
+      ("col51", HoodieSchema.createDecimalFixed(18, 9)),
       ("col6", HoodieSchema.create(HoodieSchemaType.STRING)))
     val newHoodieSchema = typeChanges.foldLeft(schema) { case (acc, (col, newType)) =>
       new HoodieSchemaChangeApplier(acc).applyColumnTypeChange(col, newType)
