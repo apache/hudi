@@ -145,7 +145,7 @@ class DefaultSource extends RelationProvider
       DefaultSource.createRelation(sqlContext, metaClient, schema, options.toMap)
     } catch {
       case _: HoodieSchemaNotFoundException =>
-        new EmptyRelation(sqlContext, Option(schema).getOrElse(new StructType()))
+        new EmptyRelation(sqlContext, schema)
     }
     log.info(s"Created relation ${relation.getClass.getSimpleName} with ${options.size} resolved options")
     relation
