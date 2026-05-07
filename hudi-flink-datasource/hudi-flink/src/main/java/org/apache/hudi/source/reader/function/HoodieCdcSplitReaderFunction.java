@@ -45,7 +45,7 @@ import org.apache.hudi.source.split.HoodieCdcSourceSplit;
 import org.apache.hudi.source.split.HoodieSourceSplit;
 import org.apache.hudi.table.format.FilePathUtils;
 import org.apache.hudi.table.format.FormatUtils;
-import org.apache.hudi.table.format.InternalSchemaManager;
+import org.apache.hudi.table.format.SchemaEvolutionManager;
 import org.apache.hudi.table.format.RecordIterators;
 import org.apache.hudi.table.format.cdc.CdcImageManager;
 import org.apache.hudi.table.format.cdc.CdcInputFormat;
@@ -89,7 +89,7 @@ public class HoodieCdcSplitReaderFunction extends AbstractSplitReaderFunction {
    *
    * @param conf                  Flink configuration
    * @param tableState            Merge on Read table state
-   * @param internalSchemaManager Schema-evolution manager
+   * @param schemaEvolutionManager Schema-evolution manager
    * @param fieldTypes            DataType list for all table fields (used for parquet reading)
    * @param predicates            Predicates for push down
    * @param emitDelete            Whether to emit delete
@@ -97,13 +97,13 @@ public class HoodieCdcSplitReaderFunction extends AbstractSplitReaderFunction {
   public HoodieCdcSplitReaderFunction(
       org.apache.flink.configuration.Configuration conf,
       MergeOnReadTableState tableState,
-      InternalSchemaManager internalSchemaManager,
+      SchemaEvolutionManager schemaEvolutionManager,
       List<DataType> fieldTypes,
       List<ExpressionPredicates.Predicate> predicates,
       boolean emitDelete) {
-    super(conf, predicates, internalSchemaManager, emitDelete);
+    super(conf, predicates, schemaEvolutionManager, emitDelete);
     ValidationUtils.checkArgument(tableState != null, "tableState can't be null");
-    ValidationUtils.checkArgument(internalSchemaManager != null, "internalSchemaManager can't be null");
+    ValidationUtils.checkArgument(schemaEvolutionManager != null, "schemaEvolutionManager can't be null");
     this.tableState = tableState;
     this.fieldTypes = fieldTypes;
   }
@@ -158,7 +158,7 @@ public class HoodieCdcSplitReaderFunction extends AbstractSplitReaderFunction {
           conf,
           HoodieSchema.parse(tableState.getTableSchema()),
           HoodieSchema.parse(tableState.getRequiredSchema()),
-          internalSchemaManager,
+          schemaEvolutionManager,
           conf.get(FlinkOptions.MERGE_TYPE),
           predicates,
           emitDelete);
@@ -252,7 +252,7 @@ public class HoodieCdcSplitReaderFunction extends AbstractSplitReaderFunction {
     final HoodieSchema tableSchema = HoodieSchemaCache.intern(HoodieSchema.parse(tableState.getTableSchema()));
     try {
       HoodieFileGroupReader<RowData> reader = FormatUtils.createFileGroupReader(
-          getMetaClient(), getWriteConfig(), internalSchemaManager, fileSlice,
+          getMetaClient(), getWriteConfig(), schemaEvolutionManager, fileSlice,
           tableSchema, tableSchema, split.getLatestCommit(),
           FlinkOptions.REALTIME_PAYLOAD_COMBINE, false,
           predicates, split.getInstantRange());
@@ -268,7 +268,7 @@ public class HoodieCdcSplitReaderFunction extends AbstractSplitReaderFunction {
     final HoodieSchema tableSchema = HoodieSchemaCache.intern(HoodieSchema.parse(tableState.getTableSchema()));
     try {
       HoodieFileGroupReader<RowData> reader = FormatUtils.createFileGroupReader(
-          getMetaClient(), getWriteConfig(), internalSchemaManager, fileSlice,
+          getMetaClient(), getWriteConfig(), schemaEvolutionManager, fileSlice,
           tableSchema, tableSchema, split.getLatestCommit(),
           FlinkOptions.REALTIME_PAYLOAD_COMBINE, true,
           predicates, split.getInstantRange());
@@ -292,7 +292,7 @@ public class HoodieCdcSplitReaderFunction extends AbstractSplitReaderFunction {
     );
 
     return RecordIterators.getParquetRecordIterator(
-        internalSchemaManager,
+        schemaEvolutionManager,
         conf.get(FlinkOptions.READ_UTC_TIMEZONE),
         true,
         HadoopConfigurations.getParquetConf(conf, getHadoopConf()),

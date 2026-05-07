@@ -37,7 +37,6 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.CorruptedLogFileException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieNotSupportedException;
-import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.io.SeekableDataInputStream;
 import org.apache.hudi.io.util.IOUtils;
 import org.apache.hudi.storage.HoodieStorage;
@@ -75,7 +74,7 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
   private final int bufferSize;
   private final byte[] magicBuffer = new byte[6];
   private final HoodieSchema readerSchema;
-  private final InternalSchema internalSchema;
+  private final HoodieSchema evolutionSchema;
   private final String keyField;
   private long reverseLogFilePosition;
   private long lastReverseLogFilePosition;
@@ -95,11 +94,11 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
 
   public HoodieLogFileReader(HoodieStorage storage, HoodieLogFile logFile, HoodieSchema readerSchema, int bufferSize, boolean reverseReader,
                              boolean enableRecordLookups, String keyField) throws IOException {
-    this(storage, logFile, readerSchema, bufferSize, reverseReader, enableRecordLookups, keyField, InternalSchema.getEmptyInternalSchema());
+    this(storage, logFile, readerSchema, bufferSize, reverseReader, enableRecordLookups, keyField, HoodieSchema.empty());
   }
 
   public HoodieLogFileReader(HoodieStorage storage, HoodieLogFile logFile, HoodieSchema readerSchema, int bufferSize, boolean reverseReader,
-                             boolean enableRecordLookups, String keyField, InternalSchema internalSchema) throws IOException {
+                             boolean enableRecordLookups, String keyField, HoodieSchema evolutionSchema) throws IOException {
     this.storage = storage;
     // NOTE: We repackage {@code HoodieLogFile} here to make sure that the provided path
     //       is prefixed with an appropriate scheme given that we're not propagating the FS
@@ -112,7 +111,7 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
     this.reverseReader = reverseReader;
     this.enableRecordLookups = enableRecordLookups;
     this.keyField = keyField;
-    this.internalSchema = internalSchema == null ? InternalSchema.getEmptyInternalSchema() : internalSchema;
+    this.evolutionSchema = evolutionSchema == null ? HoodieSchema.empty() : evolutionSchema;
     if (this.reverseReader) {
       this.reverseLogFilePosition = this.lastReverseLogFilePosition = this.logFile.getFileSize();
     }
@@ -186,7 +185,7 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
     switch (Objects.requireNonNull(blockType)) {
       case AVRO_DATA_BLOCK:
         if (nextBlockVersion.getVersion() == HoodieLogFormatVersion.DEFAULT_VERSION) {
-          return HoodieAvroDataBlock.getBlock(content.get(), readerSchema, internalSchema);
+          return HoodieAvroDataBlock.getBlock(content.get(), readerSchema, evolutionSchema);
         } else {
           return new HoodieAvroDataBlock(() -> getDataInputStream(storage, this.logFile, bufferSize), content, true, logBlockContentLoc,
               getTargetReaderSchemaForBlock(), header, footer, keyField);
@@ -225,7 +224,7 @@ public class HoodieLogFileReader implements HoodieLogFormat.Reader {
     // since when we have done some DDL operation, the readerSchema maybe different from writeSchema, avro reader will throw exception.
     // eg: origin writeSchema is: "a String, b double" then we add a new column now the readerSchema will be: "a string, c int, b double". it's wrong to use readerSchema to read old log file.
     // after we read those record by writeSchema,  we rewrite those record with readerSchema in AbstractHoodieLogRecordReader
-    if (internalSchema.isEmptySchema()) {
+    if (evolutionSchema.isEmptySchema()) {
       return Option.ofNullable(this.readerSchema);
     } else {
       return Option.empty();

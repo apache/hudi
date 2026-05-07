@@ -40,10 +40,9 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieSchemaNotFoundException;
 import org.apache.hudi.exception.InvalidTableException;
-import org.apache.hudi.internal.schema.HoodieSchemaException;
-import org.apache.hudi.internal.schema.InternalSchema;
-import org.apache.hudi.internal.schema.io.FileBasedInternalSchemaStorageManager;
-import org.apache.hudi.internal.schema.utils.SerDeHelper;
+import org.apache.hudi.exception.HoodieSchemaException;
+import org.apache.hudi.common.schema.evolution.HoodieSchemaHistoryStorageManager;
+import org.apache.hudi.common.schema.evolution.HoodieSchemaSerDe;
 import org.apache.hudi.io.storage.HoodieIOFactory;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
@@ -304,48 +303,45 @@ public class TableSchemaResolver {
   }
 
   /**
-   * Gets the InternalSchema for a hoodie table from the HoodieCommitMetadata of the instant.
-   *
-   * @return InternalSchema for this table
+   * Gets the schema-on-read evolution {@link HoodieSchema} for a hoodie table from
+   * the latest schema-changing instant in the active timeline. The returned schema
+   * carries field ids and a version id, distinguishing it from
+   * {@link #getTableSchemaFromLatestCommitMetadata(boolean)} which returns the
+   * structural Avro schema.
    */
-  public Option<InternalSchema> getTableInternalSchemaFromCommitMetadata() {
+  public Option<HoodieSchema> getTableEvolutionSchemaFromCommitMetadata() {
     HoodieTimeline completedInstants = metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants();
-    // Walk backwards through timeline to find the first (most recent) instant that can update schema
-    // This avoids reading commit metadata for all instants
     return Option.fromJavaOptional(completedInstants.getReverseOrderedInstants()
-        .filter(instant -> { // consider only instants that can update/change schema.
-          return WriteOperationType.canUpdateSchema(getCachedCommitMetadata(instant).getOperationType());
-        })
+        .filter(instant -> WriteOperationType.canUpdateSchema(getCachedCommitMetadata(instant).getOperationType()))
         .findFirst())
-        .flatMap(this::getTableInternalSchemaFromCommitMetadata);
+        .flatMap(this::getTableEvolutionSchemaFromCommitMetadata);
   }
 
   /**
-   * Gets the InternalSchema for a hoodie table from the HoodieCommitMetadata of the instant.
-   *
-   * @return InternalSchema for this table
+   * Gets the schema-on-read evolution {@link HoodieSchema} for a hoodie table at
+   * (or before) the given instant timestamp.
    */
-  public Option<InternalSchema> getTableInternalSchemaFromCommitMetadata(String timestamp) {
+  public Option<HoodieSchema> getTableEvolutionSchemaFromCommitMetadata(String timestamp) {
     HoodieTimeline timeline = metaClient.getActiveTimeline().getCommitsTimeline()
         .filterCompletedInstants()
         .findInstantsBeforeOrEquals(timestamp);
-    return timeline.lastInstant().flatMap(this::getTableInternalSchemaFromCommitMetadata);
+    return timeline.lastInstant().flatMap(this::getTableEvolutionSchemaFromCommitMetadata);
   }
 
   /**
-   * Gets the InternalSchema for a hoodie table from the HoodieCommitMetadata of the instant.
-   *
-   * @return InternalSchema for this table
+   * HoodieSchema-shaped resolver used by {@link #getTableEvolutionSchemaFromCommitMetadata()}.
+   * Reads the {@code latest_schema} JSON blob carried in commit metadata and parses
+   * it via the new {@link HoodieSchemaSerDe} façade so field ids are preserved on the
+   * returned schema.
    */
-  private Option<InternalSchema> getTableInternalSchemaFromCommitMetadata(HoodieInstant instant) {
+  private Option<HoodieSchema> getTableEvolutionSchemaFromCommitMetadata(HoodieInstant instant) {
     try {
       HoodieCommitMetadata metadata = getCachedCommitMetadata(instant);
-      String latestInternalSchemaStr = metadata.getMetadata(SerDeHelper.LATEST_SCHEMA);
-      if (latestInternalSchemaStr != null) {
-        return SerDeHelper.fromJson(latestInternalSchemaStr);
-      } else {
-        return Option.empty();
+      String latestSchemaJson = metadata.getMetadata(HoodieSchemaSerDe.LATEST_SCHEMA);
+      if (latestSchemaJson != null) {
+        return HoodieSchemaSerDe.fromJson(latestSchemaJson);
       }
+      return Option.empty();
     } catch (Exception e) {
       throw new HoodieException("Failed to read schema from commit metadata", e);
     }
@@ -357,9 +353,7 @@ public class TableSchemaResolver {
    * @return history schemas string for this table
    */
   public Option<String> getTableHistorySchemaStrFromCommitMetadata() {
-    // now we only support FileBaseInternalSchemaManager
-    FileBasedInternalSchemaStorageManager manager = new FileBasedInternalSchemaStorageManager(metaClient);
-    String result = manager.getHistorySchemaStr();
+    String result = new HoodieSchemaHistoryStorageManager(metaClient).getHistorySchemaStr();
     return result.isEmpty() ? Option.empty() : Option.of(result);
   }
 

@@ -21,9 +21,9 @@ package org.apache.hudi.metadata
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.engine.HoodieEngineContext
 import org.apache.hudi.common.fs.FSUtils
+import org.apache.hudi.common.schema.types.Types
 import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.common.util.StringUtils
-import org.apache.hudi.internal.schema.Types
 import org.apache.hudi.storage.{HoodieStorage, StoragePath}
 import org.apache.hudi.util.PartitionPathFilterUtil
 

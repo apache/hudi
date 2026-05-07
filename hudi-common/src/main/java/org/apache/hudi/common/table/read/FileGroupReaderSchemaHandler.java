@@ -28,18 +28,17 @@ import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaCache;
 import org.apache.hudi.common.schema.HoodieSchemaField;
+import org.apache.hudi.common.schema.evolution.HoodieSchemaHistoryCache;
+import org.apache.hudi.common.schema.evolution.HoodieSchemaProjections;
+import org.apache.hudi.common.schema.evolution.HoodieSchemaMerger;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.read.buffer.PositionBasedFileGroupRecordBuffer;
-import org.apache.hudi.common.util.InternalSchemaCache;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.common.util.collection.Triple;
-import org.apache.hudi.internal.schema.InternalSchema;
-import org.apache.hudi.internal.schema.action.InternalSchemaMerger;
-import org.apache.hudi.internal.schema.convert.InternalSchemaConverter;
 import org.apache.hudi.storage.StoragePath;
 
 import lombok.Getter;
@@ -90,11 +89,7 @@ public class FileGroupReaderSchemaHandler<T> {
   @Getter
   protected HoodieSchema schemaForUpdates;
 
-  @Getter
-  protected final InternalSchema internalSchema;
-
-  @Getter
-  protected final Option<InternalSchema> internalSchemaOpt;
+  protected final Option<HoodieSchema> evolutionSchemaOpt;
 
   protected final HoodieTableConfig hoodieTableConfig;
 
@@ -108,7 +103,7 @@ public class FileGroupReaderSchemaHandler<T> {
   public FileGroupReaderSchemaHandler(HoodieReaderContext<T> readerContext,
                                       HoodieSchema tableSchema,
                                       HoodieSchema requestedSchema,
-                                      Option<InternalSchema> internalSchemaOpt,
+                                      Option<HoodieSchema> evolutionSchemaOpt,
                                       TypedProperties properties,
                                       HoodieTableMetaClient metaClient) {
     this.properties = properties;
@@ -119,9 +114,16 @@ public class FileGroupReaderSchemaHandler<T> {
     this.deleteContext = new DeleteContext(properties, tableSchema);
     this.requiredSchema = HoodieSchemaCache.intern(prepareRequiredSchema(this.deleteContext));
     this.schemaForUpdates = requiredSchema;
-    this.internalSchema = pruneInternalSchema(requiredSchema, internalSchemaOpt);
-    this.internalSchemaOpt = getInternalSchemaOpt(internalSchemaOpt);
+    this.evolutionSchemaOpt = pruneEvolutionSchema(requiredSchema, mapEvolutionSchemaOpt(evolutionSchemaOpt));
     this.metaClient = metaClient;
+  }
+
+  /**
+   * Returns the schema-on-read evolution schema (with field ids preserved) — empty
+   * when schema-on-read is disabled or nothing was supplied at construction.
+   */
+  public Option<HoodieSchema> getEvolutionSchemaOpt() {
+    return evolutionSchemaOpt;
   }
 
   public Option<UnaryOperator<T>> getOutputConverter() {
@@ -132,35 +134,39 @@ public class FileGroupReaderSchemaHandler<T> {
   }
 
   public Pair<HoodieSchema, Map<String, String>> getRequiredSchemaForFileAndRenamedColumns(StoragePath path) {
-    if (internalSchema.isEmptySchema()) {
+    if (!evolutionSchemaOpt.isPresent()) {
       return Pair.of(requiredSchema, Collections.emptyMap());
     }
     long commitInstantTime = Long.parseLong(FSUtils.getCommitTime(path.getName()));
-    InternalSchema fileSchema = InternalSchemaCache.searchSchemaAndCache(commitInstantTime, metaClient);
-    Pair<InternalSchema, Map<String, String>> mergedInternalSchema = new InternalSchemaMerger(fileSchema, internalSchema,
+    HoodieSchema fileSchema = HoodieSchemaHistoryCache.searchSchemaAndCache(commitInstantTime, metaClient);
+    Pair<HoodieSchema, Map<String, String>> mergedEvolutionSchema = new HoodieSchemaMerger(fileSchema, evolutionSchemaOpt.get(),
         true, false, false).mergeSchemaGetRenamed();
-    HoodieSchema mergedAvroSchema = HoodieSchemaCache.intern(InternalSchemaConverter.convert(mergedInternalSchema.getLeft(), requiredSchema.getFullName()));
-    return Pair.of(mergedAvroSchema, mergedInternalSchema.getRight());
+    HoodieSchema mergedAvroSchema = HoodieSchemaCache.intern(mergedEvolutionSchema.getLeft());
+    return Pair.of(mergedAvroSchema, mergedEvolutionSchema.getRight());
   }
 
-  private InternalSchema pruneInternalSchema(HoodieSchema requiredSchema, Option<InternalSchema> internalSchemaOption) {
-    if (!internalSchemaOption.isPresent()) {
-      return InternalSchema.getEmptyInternalSchema();
+  private Option<HoodieSchema> pruneEvolutionSchema(HoodieSchema requiredSchema, Option<HoodieSchema> evolutionSchemaOption) {
+    if (!evolutionSchemaOption.isPresent()) {
+      return Option.empty();
     }
-    InternalSchema notPruned = internalSchemaOption.get();
+    HoodieSchema notPruned = evolutionSchemaOption.get();
     if (notPruned == null || notPruned.isEmptySchema()) {
-      return InternalSchema.getEmptyInternalSchema();
+      return Option.empty();
     }
 
-    return doPruneInternalSchema(requiredSchema, notPruned);
+    return Option.of(doPruneEvolutionSchema(requiredSchema, notPruned));
   }
 
-  protected Option<InternalSchema> getInternalSchemaOpt(Option<InternalSchema> internalSchemaOpt) {
-    return internalSchemaOpt;
+  /**
+   * Hook for subclasses to inject extra columns (e.g. positional merge col) into
+   * the evolution schema before pruning.
+   */
+  protected Option<HoodieSchema> mapEvolutionSchemaOpt(Option<HoodieSchema> evolutionSchemaOpt) {
+    return evolutionSchemaOpt;
   }
 
-  protected InternalSchema doPruneInternalSchema(HoodieSchema requiredSchema, InternalSchema internalSchema) {
-    return InternalSchemaConverter.pruneHoodieSchemaToInternalSchema(requiredSchema, internalSchema);
+  protected HoodieSchema doPruneEvolutionSchema(HoodieSchema requiredSchema, HoodieSchema evolutionSchema) {
+    return HoodieSchemaProjections.pruneByRequiredSchema(evolutionSchema, requiredSchema);
   }
 
   @VisibleForTesting

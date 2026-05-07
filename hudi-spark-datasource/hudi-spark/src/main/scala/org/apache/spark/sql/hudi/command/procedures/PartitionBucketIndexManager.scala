@@ -34,7 +34,6 @@ import org.apache.hudi.config.HoodieWriteConfig.ROLLBACK_USING_MARKERS_ENABLE
 import org.apache.hudi.data.CloseableIteratorListener
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.index.bucket.partition.{PartitionBucketIndexCalculator, PartitionBucketIndexUtils}
-import org.apache.hudi.internal.schema.InternalSchema
 import org.apache.hudi.storage.StoragePath
 
 import org.apache.spark.internal.Logging
@@ -223,7 +222,7 @@ class PartitionBucketIndexManager extends BaseProcedure
 
         spark.sparkContext.parallelize(allFileSlice, allFileSlice.size).flatMap(fileSlice => {
           // instantiate other supporting cast
-          val internalSchemaOption: Option[InternalSchema] = Option.empty()
+          val evolutionSchemaOption: Option[HoodieSchema] = Option.empty()
           // instantiate FG reader
           val fileGroupReader = HoodieFileGroupReader.newBuilder()
             .withReaderContext(readerContextFactory.getContext)
@@ -232,7 +231,7 @@ class PartitionBucketIndexManager extends BaseProcedure
             .withFileSlice(fileSlice)
             .withDataSchema(tableSchemaWithMetaFields)
             .withRequestedSchema(tableSchemaWithMetaFields)
-            .withInternalSchema(internalSchemaOption) // not support evolution of schema for now
+            .withEvolutionSchema(evolutionSchemaOption) // not support evolution of schema for now
             .withProps(metaClient.getTableConfig.getProps)
             .withShouldUseRecordPosition(false)
             .build()

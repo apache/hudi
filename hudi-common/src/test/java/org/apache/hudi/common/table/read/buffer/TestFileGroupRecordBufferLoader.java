@@ -35,7 +35,6 @@ import org.apache.hudi.common.table.read.InputSplit;
 import org.apache.hudi.common.table.read.ReaderParameters;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieIOException;
-import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StorageConfiguration;
 
@@ -73,7 +72,7 @@ public class TestFileGroupRecordBufferLoader extends BaseTestFileGroupRecordBuff
     when(fileGroupReaderSchemaHandler.getRequiredSchema()).thenReturn(SCHEMA);
     when(fileGroupReaderSchemaHandler.getRequestedSchema()).thenReturn(SCHEMA);
     when(fileGroupReaderSchemaHandler.getSchemaForUpdates()).thenReturn(SCHEMA);
-    when(fileGroupReaderSchemaHandler.getInternalSchema()).thenReturn(InternalSchema.getEmptyInternalSchema());
+    when(fileGroupReaderSchemaHandler.getEvolutionSchemaOpt()).thenReturn(Option.empty());
     DeleteContext deleteContext = mock(DeleteContext.class);
     when(deleteContext.getCustomDeleteMarkerKeyValue()).thenReturn(Option.empty());
     when(deleteContext.getHoodieOperationPos()).thenReturn(-1);

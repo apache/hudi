@@ -32,8 +32,8 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.index.FlinkHoodieIndexFactory;
 import org.apache.hudi.index.HoodieIndex;
-import org.apache.hudi.internal.schema.InternalSchema;
-import org.apache.hudi.internal.schema.utils.SerDeHelper;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.evolution.HoodieSchemaSerDe;
 import org.apache.hudi.metadata.FlinkHoodieBackedTableMetadataWriter;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
@@ -125,9 +125,9 @@ public abstract class HoodieFlinkTable<T>
   }
 
   private static void setLatestInternalSchema(HoodieWriteConfig config, HoodieTableMetaClient metaClient) {
-    Option<InternalSchema> internalSchema = new TableSchemaResolver(metaClient).getTableInternalSchemaFromCommitMetadata();
-    if (internalSchema.isPresent()) {
-      config.setInternalSchemaString(SerDeHelper.toJson(internalSchema.get()));
+    Option<HoodieSchema> evolutionSchema = new TableSchemaResolver(metaClient).getTableEvolutionSchemaFromCommitMetadata();
+    if (evolutionSchema.isPresent()) {
+      config.setInternalSchemaString(HoodieSchemaSerDe.toJson(evolutionSchema.get()));
     }
   }
 }

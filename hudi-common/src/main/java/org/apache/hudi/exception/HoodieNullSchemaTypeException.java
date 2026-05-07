@@ -19,8 +19,6 @@
 
 package org.apache.hudi.exception;
 
-import org.apache.hudi.internal.schema.HoodieSchemaException;
-
 /**
  * Thrown if a schema is null or empty. Or if a field has type null
  * (null is ok if it is in a union with 1 (one) other type)

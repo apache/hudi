@@ -20,8 +20,8 @@ package org.apache.spark.sql.hudi
 import org.apache.hadoop.conf.Configuration
 import org.apache.hudi.SparkAdapterSupport
 import org.apache.hudi.common.model.HoodieFileFormat
+import org.apache.hudi.common.schema.HoodieSchema
 import org.apache.hudi.common.util
-import org.apache.hudi.internal.schema.InternalSchema
 import org.apache.hudi.storage.StorageConfiguration
 
 import org.apache.spark.sql.catalyst.InternalRow
@@ -49,20 +49,20 @@ class MultipleColumnarFileFormatReader(parquetReader: SparkColumnarFileReader, o
    * @param tableSchemaOpt    option of table schema for timestamp precision conversion fix.
    * @return iterator of rows read from the file output type says [[InternalRow]] but could be [[ColumnarBatch]]
    */
-  override def read(file: PartitionedFile, requiredSchema: StructType, partitionSchema: StructType, internalSchemaOpt: util.Option[InternalSchema], filters: Seq[Filter],
-                    storageConf: StorageConfiguration[Configuration], tableSchemaOpt: util.Option[org.apache.parquet.schema.MessageType]): Iterator[InternalRow] = {
+  override def readWithEvolutionSchema(file: PartitionedFile, requiredSchema: StructType, partitionSchema: StructType, evolutionSchemaOpt: util.Option[HoodieSchema], filters: Seq[Filter],
+                                       storageConf: StorageConfiguration[Configuration], tableSchemaOpt: util.Option[org.apache.parquet.schema.MessageType]): Iterator[InternalRow] = {
     val filePath = sparkAdapter.getSparkPartitionedFileUtils.getPathFromPartitionedFile(file)
     val fileFormat = HoodieFileFormat.fromFileExtension(filePath.getFileExtension)
     fileFormat match {
       case HoodieFileFormat.PARQUET =>
-        parquetReader.read(file, requiredSchema, partitionSchema, internalSchemaOpt, filters, storageConf, tableSchemaOpt)
+        parquetReader.readWithEvolutionSchema(file, requiredSchema, partitionSchema, evolutionSchemaOpt, filters, storageConf, tableSchemaOpt)
       case HoodieFileFormat.ORC =>
-        orcReader.read(file, requiredSchema, partitionSchema, internalSchemaOpt, filters, storageConf, tableSchemaOpt)
+        orcReader.readWithEvolutionSchema(file, requiredSchema, partitionSchema, evolutionSchemaOpt, filters, storageConf, tableSchemaOpt)
       case HoodieFileFormat.LANCE =>
         if (lanceReader == null) {
           throw new UnsupportedOperationException("Lance format is only supported in Spark 3.4 and above")
         }
-        lanceReader.read(file, requiredSchema, partitionSchema, internalSchemaOpt, filters, storageConf, tableSchemaOpt)
+        lanceReader.readWithEvolutionSchema(file, requiredSchema, partitionSchema, evolutionSchemaOpt, filters, storageConf, tableSchemaOpt)
       case _ =>
         throw new IllegalArgumentException(s"Unsupported file format for file: $filePath")
     }

@@ -27,7 +27,7 @@ import org.apache.hudi.expression.NameReference;
 import org.apache.hudi.expression.Predicates;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.HoodieHiveSyncException;
-import org.apache.hudi.internal.schema.Types;
+import org.apache.hudi.common.schema.types.Types;
 import org.apache.hudi.sync.common.model.FieldSchema;
 import org.apache.hudi.sync.common.model.Partition;
 import org.apache.hudi.sync.common.model.PartitionValueExtractor;

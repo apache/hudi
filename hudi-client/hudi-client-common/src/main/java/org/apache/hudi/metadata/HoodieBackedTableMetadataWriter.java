@@ -56,6 +56,7 @@ import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaCache;
 import org.apache.hudi.common.schema.HoodieSchemaUtils;
+import org.apache.hudi.common.schema.evolution.HoodieSchemaSerDe;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.table.log.block.HoodieDeleteBlock;
@@ -81,8 +82,6 @@ import org.apache.hudi.exception.HoodieIndexException;
 import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.exception.TableNotFoundException;
 import org.apache.hudi.index.record.HoodieRecordIndex;
-import org.apache.hudi.internal.schema.InternalSchema;
-import org.apache.hudi.internal.schema.utils.SerDeHelper;
 import org.apache.hudi.io.storage.HoodieAvroFileReader;
 import org.apache.hudi.io.storage.HoodieIOFactory;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil.DirectoryInfo;
@@ -973,7 +972,7 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
       HoodieSchema dataSchema = HoodieSchemaCache.intern(HoodieSchemaUtils.addMetadataFields(HoodieSchema.parse(dataWriteConfig.getWriteSchema()), dataWriteConfig.allowOperationMetadataField()));
       HoodieSchema requestedSchema = metaClient.getTableConfig().populateMetaFields() ? getRecordKeySchema()
           : HoodieSchemaUtils.projectSchema(dataSchema, Arrays.asList(metaClient.getTableConfig().getRecordKeyFields().orElse(new String[0])));
-      Option<InternalSchema> internalSchemaOption = SerDeHelper.fromJson(dataWriteConfig.getInternalSchema());
+      Option<HoodieSchema> evolutionSchemaOption = HoodieSchemaSerDe.fromJson(dataWriteConfig.getInternalSchema());
       HoodieFileGroupReader<T> fileGroupReader = HoodieFileGroupReader.<T>newBuilder()
           .withReaderContext(readerContext)
           .withHoodieTableMetaClient(metaClient)
@@ -981,7 +980,7 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
           .withLatestCommitTime(instantTime.get())
           .withDataSchema(dataSchema)
           .withRequestedSchema(requestedSchema)
-          .withInternalSchema(internalSchemaOption)
+          .withEvolutionSchema(evolutionSchemaOption)
           .withShouldUseRecordPosition(false)
           .withProps(metaClient.getTableConfig().getProps())
           .build();

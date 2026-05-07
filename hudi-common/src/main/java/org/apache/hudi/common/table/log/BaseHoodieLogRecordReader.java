@@ -39,7 +39,6 @@ import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
-import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 
@@ -112,8 +111,8 @@ public abstract class BaseHoodieLogRecordReader<T> {
   private final HoodieStorage storage;
   // Total log files read - for metrics
   private AtomicLong totalLogFiles = new AtomicLong(0);
-  // Internal schema, used to support full schema evolution.
-  private final InternalSchema internalSchema;
+  // Evolution schema, used to support full schema evolution.
+  private final HoodieSchema evolutionSchema;
   // Total log blocks read - for metrics
   private AtomicLong totalLogBlocks = new AtomicLong(0);
   // Total log records read - for metrics
@@ -173,7 +172,9 @@ public abstract class BaseHoodieLogRecordReader<T> {
     this.instantRange = instantRange;
     this.withOperationField = withOperationField;
     this.forceFullScan = forceFullScan;
-    this.internalSchema = readerContext.getSchemaHandler() != null ? readerContext.getSchemaHandler().getInternalSchema() : null;
+    this.evolutionSchema = readerContext.getSchemaHandler() != null
+        ? readerContext.getSchemaHandler().getEvolutionSchemaOpt().orElse(null)
+        : null;
 
     if (keyFieldOverride.isPresent()) {
       // NOTE: This branch specifically is leveraged handling Metadata Table
@@ -219,7 +220,7 @@ public abstract class BaseHoodieLogRecordReader<T> {
     try {
       // Iterate over the paths
       logFormatReaderWrapper = new HoodieLogFormatReader(storage, logFiles,
-          readerSchema, reverseReader, bufferSize, shouldLookupRecords(), recordKeyField, internalSchema);
+          readerSchema, reverseReader, bufferSize, shouldLookupRecords(), recordKeyField, evolutionSchema);
 
       /**
        * Scanning log blocks and placing the compacted blocks at the right place require two traversals.

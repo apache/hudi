@@ -23,14 +23,11 @@ import org.apache.hudi.HoodieSparkSqlWriter.{CANONICALIZE_SCHEMA, SQL_MERGE_INTO
 import org.apache.hudi.common.config.{HoodieCommonConfig, HoodieConfig, TypedProperties}
 import org.apache.hudi.common.model.HoodieRecord
 import org.apache.hudi.common.schema.{HoodieSchema, HoodieSchemaCompatibility, HoodieSchemaUtils => HoodieCommonSchemaUtils}
+import org.apache.hudi.common.schema.evolution.HoodieSchemaEvolutionUtils
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.util.ConfigUtils
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.exception.{HoodieException, SchemaCompatibilityException}
-import org.apache.hudi.internal.schema.InternalSchema
-import org.apache.hudi.internal.schema.convert.InternalSchemaConverter
-import org.apache.hudi.internal.schema.utils.AvroSchemaEvolutionUtils
-import org.apache.hudi.internal.schema.utils.AvroSchemaEvolutionUtils.reconcileSchemaRequirements
 
 import org.apache.spark.sql.types.StructField
 import org.apache.spark.sql.types.StructType
@@ -73,33 +70,25 @@ object HoodieSchemaUtils {
   }
 
   /**
-   * get latest internalSchema from table
-   *
-   * @param config          instance of {@link HoodieConfig}
-   * @param tableMetaClient instance of HoodieTableMetaClient
-   * @return Option of InternalSchema. Will always be empty if schema on read is disabled
+   * Returns the schema-on-read evolution [[HoodieSchema]] for the table — carrying
+   * field ids and version metadata — or [[None]] when schema-on-read is disabled,
+   * no schema is in commit metadata, or any read error occurs (read failures are
+   * swallowed rather than propagated).
    */
-  def getLatestTableInternalSchema(config: HoodieConfig,
-                                   tableMetaClient: HoodieTableMetaClient): Option[InternalSchema] = {
-    getLatestTableInternalSchema(config.getProps, tableMetaClient)
+  def getLatestTableEvolutionSchema(config: HoodieConfig,
+                                    tableMetaClient: HoodieTableMetaClient): Option[HoodieSchema] = {
+    getLatestTableEvolutionSchema(config.getProps, tableMetaClient)
   }
 
-  /**
-   * get latest internalSchema from table
-   *
-   * @param props           instance of {@link Properties}
-   * @param tableMetaClient instance of HoodieTableMetaClient
-   * @return Option of InternalSchema. Will always be empty if schema on read is disabled
-   */
-  def getLatestTableInternalSchema(props: Properties,
-                                   tableMetaClient: HoodieTableMetaClient): Option[InternalSchema] = {
+  def getLatestTableEvolutionSchema(props: Properties,
+                                    tableMetaClient: HoodieTableMetaClient): Option[HoodieSchema] = {
     if (!ConfigUtils.getBooleanWithAltKeys(props, DataSourceReadOptions.SCHEMA_EVOLUTION_ENABLED)) {
       None
     } else {
       try {
         val tableSchemaResolver = new TableSchemaResolver(tableMetaClient)
-        val internalSchemaOpt = tableSchemaResolver.getTableInternalSchemaFromCommitMetadata
-        if (internalSchemaOpt.isPresent) Some(internalSchemaOpt.get()) else None
+        val schemaOpt = tableSchemaResolver.getTableEvolutionSchemaFromCommitMetadata
+        if (schemaOpt.isPresent) Some(schemaOpt.get()) else None
       } catch {
         case _: Exception => None
       }
@@ -107,25 +96,22 @@ object HoodieSchemaUtils {
   }
 
   /**
-   * Deduces writer's schema based on
-   * <ul>
-   *   <li>Source's schema</li>
-   *   <li>Target table's schema (including Hudi's [[InternalSchema]] representation)</li>
-   * </ul>
+   * Deduces writer's schema from source schema, the table's latest Avro schema, and
+   * the table's schema-on-read evolution schema (if any).
    */
-  def deduceWriterSchema(sourceSchema: HoodieSchema,
-                         latestTableSchemaOpt: Option[HoodieSchema],
-                         internalSchemaOpt: Option[InternalSchema],
-                         opts: Map[String, String]): HoodieSchema = {
+  def deduceWriterSchemaWithEvolution(sourceSchema: HoodieSchema,
+                                      latestTableSchemaOpt: Option[HoodieSchema],
+                                      tableEvolutionSchemaOpt: Option[HoodieSchema],
+                                      opts: Map[String, String]): HoodieSchema = {
     latestTableSchemaOpt match {
       // If table schema is empty, then we use the source schema as a writer's schema.
-      case None => InternalSchemaConverter.fixNullOrdering(sourceSchema)
+      case None => HoodieSchemaEvolutionUtils.fixNullOrdering(sourceSchema)
       // Otherwise, we need to make sure we reconcile incoming and latest table schemas
       case Some(latestTableSchemaWithMetaFields) =>
         // NOTE: Meta-fields will be unconditionally injected by Hudi writing handles, for the sake of deducing proper writer schema
         //       we're stripping them to make sure we can perform proper analysis
         // add call to fix null ordering to ensure backwards compatibility
-        val latestTableSchema = InternalSchemaConverter.fixNullOrdering(
+        val latestTableSchema = HoodieSchemaEvolutionUtils.fixNullOrdering(
           HoodieCommonSchemaUtils.removeMetadataFields(latestTableSchemaWithMetaFields))
         // Before validating whether schemas are compatible, we need to "canonicalize" source's schema
         // relative to the table's one, by doing a (minor) reconciliation of the nullability constraints:
@@ -138,11 +124,11 @@ object HoodieSchemaUtils {
         val canonicalizedSourceSchema = if (shouldCanonicalizeSchema) {
           canonicalizeSchema(sourceSchema, latestTableSchema, opts, !shouldReconcileSchema)
         } else {
-          InternalSchemaConverter.fixNullOrdering(sourceSchema)
+          HoodieSchemaEvolutionUtils.fixNullOrdering(sourceSchema)
         }
 
         if (shouldReconcileSchema) {
-          deduceWriterSchemaWithReconcile(sourceSchema, canonicalizedSourceSchema, latestTableSchema, internalSchemaOpt, opts)
+          deduceWriterSchemaWithReconcile(sourceSchema, canonicalizedSourceSchema, latestTableSchema, tableEvolutionSchemaOpt, opts)
         } else {
           deduceWriterSchemaWithoutReconcile(sourceSchema, canonicalizedSourceSchema, latestTableSchema, opts)
         }
@@ -173,7 +159,7 @@ object HoodieSchemaUtils {
     if (!mergeIntoWrites && !shouldValidateSchemasCompatibility && !allowAutoEvolutionColumnDrop) {
       // Default behaviour
       val reconciledSchema = if (setNullForMissingColumns) {
-        HoodieSchema.fromAvroSchema(AvroSchemaEvolutionUtils.reconcileSchema(canonicalizedSourceSchema.toAvroSchema(), latestTableSchema.toAvroSchema(), setNullForMissingColumns))
+        HoodieSchemaEvolutionUtils.reconcileSchemaStructural(canonicalizedSourceSchema, latestTableSchema, setNullForMissingColumns)
       } else {
         canonicalizedSourceSchema
       }
@@ -198,17 +184,16 @@ object HoodieSchemaUtils {
   private def deduceWriterSchemaWithReconcile(sourceSchema: HoodieSchema,
                                               canonicalizedSourceSchema: HoodieSchema,
                                               latestTableSchema: HoodieSchema,
-                                              internalSchemaOpt: Option[InternalSchema],
+                                              tableEvolutionSchemaOpt: Option[HoodieSchema],
                                               opts: Map[String, String]): HoodieSchema = {
-    internalSchemaOpt match {
-      case Some(internalSchema) =>
+    tableEvolutionSchemaOpt match {
+      case Some(tableEvolutionSchema) =>
         // Apply schema evolution, by auto-merging write schema and read schema
         val setNullForMissingColumns = opts.getOrElse(HoodieCommonConfig.SET_NULL_FOR_MISSING_COLUMNS.key(),
           HoodieCommonConfig.SET_NULL_FOR_MISSING_COLUMNS.defaultValue()).toBoolean
-        val mergedInternalSchema = AvroSchemaEvolutionUtils.reconcileSchema(canonicalizedSourceSchema.toAvroSchema(), internalSchema, setNullForMissingColumns)
-        val evolvedSchema = InternalSchemaConverter.convert(mergedInternalSchema, latestTableSchema.getFullName)
-        val shouldRemoveMetaDataFromInternalSchema = sourceSchema.getFields.asScala.filter(f => f.name().equalsIgnoreCase(HoodieRecord.RECORD_KEY_METADATA_FIELD)).isEmpty
-        if (shouldRemoveMetaDataFromInternalSchema) HoodieCommonSchemaUtils.removeMetadataFields(evolvedSchema) else evolvedSchema
+        val evolvedSchema = HoodieSchemaEvolutionUtils.reconcileSchemaStructural(canonicalizedSourceSchema, tableEvolutionSchema, setNullForMissingColumns)
+        val shouldRemoveMetaDataFromEvolutionSchema = sourceSchema.getFields.asScala.filter(f => f.name().equalsIgnoreCase(HoodieRecord.RECORD_KEY_METADATA_FIELD)).isEmpty
+        if (shouldRemoveMetaDataFromEvolutionSchema) HoodieCommonSchemaUtils.removeMetadataFields(evolvedSchema) else evolvedSchema
 
       case None =>
         // In case schema reconciliation is enabled we will employ (legacy) reconciliation
@@ -235,13 +220,19 @@ object HoodieSchemaUtils {
     }
   }
 
-  def deduceWriterSchema(sourceSchema: HoodieSchema,
-                         latestTableSchemaOpt: org.apache.hudi.common.util.Option[HoodieSchema],
-                         internalSchemaOpt: org.apache.hudi.common.util.Option[InternalSchema],
-                         props: TypedProperties): HoodieSchema = {
-    deduceWriterSchema(sourceSchema,
+  /**
+   * Java-friendly overload of [[deduceWriterSchemaWithEvolution]] — Java callers
+   * receive Hudi's [[org.apache.hudi.common.util.Option]] from helpers like
+   * [[UtilHelpers.getLatestTableSchema]] and [[TypedProperties]] from configs,
+   * not Scala's [[Option]] / [[Map]].
+   */
+  def deduceWriterSchemaWithEvolution(sourceSchema: HoodieSchema,
+                                      latestTableSchemaOpt: org.apache.hudi.common.util.Option[HoodieSchema],
+                                      tableEvolutionSchemaOpt: org.apache.hudi.common.util.Option[HoodieSchema],
+                                      props: TypedProperties): HoodieSchema = {
+    deduceWriterSchemaWithEvolution(sourceSchema,
       HoodieConversionUtils.toScalaOption(latestTableSchemaOpt),
-      HoodieConversionUtils.toScalaOption(internalSchemaOpt),
+      HoodieConversionUtils.toScalaOption(tableEvolutionSchemaOpt),
       HoodieConversionUtils.fromProperties(props))
   }
 
@@ -257,9 +248,7 @@ object HoodieSchemaUtils {
    */
   private def canonicalizeSchema(sourceSchema: HoodieSchema, latestTableSchema: HoodieSchema, opts : Map[String, String],
                                  shouldReorderColumns: Boolean): HoodieSchema = {
-    HoodieSchema.fromAvroSchema(
-      reconcileSchemaRequirements(sourceSchema.toAvroSchema(), latestTableSchema.toAvroSchema(), shouldReorderColumns)
-    )
+    HoodieSchemaEvolutionUtils.reconcileSchemaRequirements(sourceSchema, latestTableSchema, shouldReorderColumns)
   }
 
 

@@ -67,8 +67,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieIndexException;
 import org.apache.hudi.exception.HoodieMetadataIndexException;
-import org.apache.hudi.internal.schema.InternalSchema;
-import org.apache.hudi.internal.schema.utils.SerDeHelper;
+import org.apache.hudi.common.schema.evolution.HoodieSchemaSerDe;
 import org.apache.hudi.io.storage.HoodieFileReader;
 import org.apache.hudi.io.storage.HoodieIOFactory;
 import org.apache.hudi.keygen.BaseKeyGenerator;
@@ -316,7 +315,7 @@ public class HoodieIndexUtils {
       if (fileSliceOption.isEmpty()) {
         return Collections.emptyIterator();
       }
-      Option<InternalSchema> internalSchemaOption = SerDeHelper.fromJson(config.getInternalSchema());
+      Option<HoodieSchema> evolutionSchemaOption = HoodieSchemaSerDe.fromJson(config.getInternalSchema());
       FileSlice fileSlice = fileSliceOption.get();
       HoodieReaderContext<R> readerContext = readerContextFactory.getContext();
       HoodieFileGroupReader<R> fileGroupReader = HoodieFileGroupReader.<R>newBuilder()
@@ -326,7 +325,7 @@ public class HoodieIndexUtils {
           .withFileSlice(fileSlice)
           .withDataSchema(dataSchema)
           .withRequestedSchema(dataSchema)
-          .withInternalSchema(internalSchemaOption)
+          .withEvolutionSchema(evolutionSchemaOption)
           .withProps(metaClient.getTableConfig().getProps())
           .build();
       try {

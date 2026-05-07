@@ -20,7 +20,7 @@ package org.apache.spark.sql.execution.datasources.parquet
 import org.apache.hudi.{HoodieFileIndex, HoodiePartitionCDCFileGroupMapping, HoodiePartitionFileSliceMapping, HoodieSchemaConversionUtils, HoodieSparkUtils, HoodieTableSchema, SparkAdapterSupport, SparkFileFormatInternalRowReaderContext}
 import org.apache.hudi.cdc.{CDCFileGroupIterator, HoodieCDCFileGroupSplit, HoodieCDCFileIndex}
 import org.apache.hudi.client.common.HoodieSparkEngineContext
-import org.apache.hudi.client.utils.SparkInternalSchemaConverter
+import org.apache.hudi.client.utils.SparkSchemaEvolutionConverter
 import org.apache.hudi.common.config.{HoodieMemoryConfig, TypedProperties}
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.HoodieFileFormat
@@ -32,7 +32,6 @@ import org.apache.hudi.common.util.{Option => HOption}
 import org.apache.hudi.common.util.collection.ClosableIterator
 import org.apache.hudi.data.CloseableIteratorListener
 import org.apache.hudi.exception.HoodieNotSupportedException
-import org.apache.hudi.internal.schema.InternalSchema
 import org.apache.hudi.io.IOUtils
 import org.apache.hudi.io.storage.HoodieSparkParquetReader.ENABLE_LOGICAL_TIMESTAMP_REPAIR
 import org.apache.hudi.io.storage.VectorConversionUtils
@@ -205,10 +204,10 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
     }
   }
 
-  private lazy val internalSchemaOpt: HOption[InternalSchema] = if (tableSchema.internalSchema.isEmpty) {
+  private lazy val evolutionSchemaOpt: HOption[HoodieSchema] = if (tableSchema.evolutionSchema.isEmpty) {
     HOption.empty()
   } else {
-    HOption.of(tableSchema.internalSchema.get)
+    HOption.of(tableSchema.evolutionSchema.get)
   }
 
   override def isSplitable(sparkSession: SparkSession,
@@ -303,7 +302,7 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
                 .withFileSlice(fileSlice)
                 .withDataSchema(dataSchema)
                 .withRequestedSchema(requestedSchema)
-                .withInternalSchema(internalSchemaOpt)
+                .withEvolutionSchema(evolutionSchemaOpt)
                 .withProps(props)
                 .withStart(file.start)
                 .withLength(baseFileLength)
@@ -356,9 +355,9 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
   }
 
   private def setSchemaEvolutionConfigs(conf: StorageConfiguration[Configuration]): Unit = {
-    if (internalSchemaOpt.isPresent) {
-      conf.set(SparkInternalSchemaConverter.HOODIE_TABLE_PATH, tablePath)
-      conf.set(SparkInternalSchemaConverter.HOODIE_VALID_COMMITS_LIST, validCommits)
+    if (evolutionSchemaOpt.isPresent) {
+      conf.set(SparkSchemaEvolutionConverter.HOODIE_TABLE_PATH, tablePath)
+      conf.set(SparkSchemaEvolutionConverter.HOODIE_VALID_COMMITS_LIST, validCommits)
     }
   }
 
@@ -488,14 +487,14 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
 
     val rawIter = if (remainingPartitionSchema.fields.length == partitionSchema.fields.length) {
       //none of partition fields are read from the file, so the reader will do the appending for us
-      parquetFileReader.read(file, modifiedRequiredSchema, partitionSchema, internalSchemaOpt, filters, storageConf, tableSchemaAsMessageType)
+      parquetFileReader.readWithEvolutionSchema(file, modifiedRequiredSchema, partitionSchema, evolutionSchemaOpt, filters, storageConf, tableSchemaAsMessageType)
     } else if (remainingPartitionSchema.fields.length == 0) {
       //we read all of the partition fields from the file
       val pfileUtils = sparkAdapter.getSparkPartitionedFileUtils
       //we need to modify the partitioned file so that the partition values are empty
       val modifiedFile = pfileUtils.createPartitionedFile(InternalRow.empty, pfileUtils.getPathFromPartitionedFile(file), file.start, file.length)
       //and we pass an empty schema for the partition schema
-      parquetFileReader.read(modifiedFile, modifiedOutputSchema, new StructType(), internalSchemaOpt, filters, storageConf, tableSchemaAsMessageType)
+      parquetFileReader.readWithEvolutionSchema(modifiedFile, modifiedOutputSchema, new StructType(), evolutionSchemaOpt, filters, storageConf, tableSchemaAsMessageType)
     } else {
       //need to do an additional projection here. The case in mind is that partition schema is "a,b,c" mandatoryFields is "a,c",
       //then we will read (dataSchema + a + c) and append b. So the final schema will be (data schema + a + c +b)
@@ -503,7 +502,7 @@ class HoodieFileGroupReaderBasedFileFormat(tablePath: String,
       val pfileUtils = sparkAdapter.getSparkPartitionedFileUtils
       val partitionValues = getFixedPartitionValues(file.partitionValues, partitionSchema, fixedPartitionIndexes)
       val modifiedFile = pfileUtils.createPartitionedFile(partitionValues, pfileUtils.getPathFromPartitionedFile(file), file.start, file.length)
-      val iter = parquetFileReader.read(modifiedFile, modifiedRequestedSchema, remainingPartitionSchema, internalSchemaOpt, filters, storageConf, tableSchemaAsMessageType)
+      val iter = parquetFileReader.readWithEvolutionSchema(modifiedFile, modifiedRequestedSchema, remainingPartitionSchema, evolutionSchemaOpt, filters, storageConf, tableSchemaAsMessageType)
       projectIter(iter, StructType(modifiedRequestedSchema.fields ++ remainingPartitionSchema.fields), modifiedOutputSchema)
     }
 

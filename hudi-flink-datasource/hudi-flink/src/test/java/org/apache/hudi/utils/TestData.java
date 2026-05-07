@@ -44,7 +44,7 @@ import org.apache.hudi.sink.utils.StreamWriteFunctionWrapper;
 import org.apache.hudi.sink.utils.TestFunctionWrapper;
 import org.apache.hudi.table.HoodieFlinkTable;
 import org.apache.hudi.table.format.FormatUtils;
-import org.apache.hudi.table.format.InternalSchemaManager;
+import org.apache.hudi.table.format.SchemaEvolutionManager;
 import org.apache.hudi.util.AvroToRowDataConverters;
 import org.apache.hudi.util.RowDataQueryContexts;
 
@@ -1076,7 +1076,7 @@ public class TestData {
       HoodieTableMetaClient metaClient,
       HoodieWriteConfig writeConfig) throws IOException {
     HoodieFileGroupReader<RowData> fileGroupReader =
-        FormatUtils.createFileGroupReader(metaClient, writeConfig, InternalSchemaManager.DISABLED, fileSlice, tableSchema, tableSchema,
+        FormatUtils.createFileGroupReader(metaClient, writeConfig, SchemaEvolutionManager.DISABLED, fileSlice, tableSchema, tableSchema,
             fileSlice.getLatestInstantTime(), FlinkOptions.REALTIME_PAYLOAD_COMBINE, false, Collections.emptyList(), Option.empty());
     return fileGroupReader.getClosableIterator();
   }

@@ -23,7 +23,7 @@ import org.apache.hudi.HoodieSparkUtils
 import org.apache.hudi.common.schema.HoodieSchema
 import org.apache.hudi.common.testutils.HoodieTestUtils
 import org.apache.hudi.common.util.StringUtils
-import org.apache.hudi.internal.schema.HoodieSchemaException
+import org.apache.hudi.exception.HoodieSchemaException
 
 import org.apache.spark.sql.{Row, SaveMode}
 import org.apache.spark.sql.catalyst.TableIdentifier

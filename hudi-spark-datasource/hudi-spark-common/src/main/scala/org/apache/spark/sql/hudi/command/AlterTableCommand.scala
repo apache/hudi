@@ -17,21 +17,15 @@
 
 package org.apache.spark.sql.hudi.command
 
-import org.apache.hudi.{DataSourceUtils, HoodieWriterUtils}
-import org.apache.hudi.client.utils.SparkInternalSchemaConverter
+import org.apache.hudi.{DataSourceUtils, HoodieSchemaConversionUtils, HoodieWriterUtils}
 import org.apache.hudi.common.model.{HoodieCommitMetadata, HoodieFailedWritesCleaningPolicy, WriteOperationType}
-import org.apache.hudi.common.schema.{HoodieSchema, HoodieSchemaUtils}
+import org.apache.hudi.common.schema.{HoodieSchema, HoodieSchemaIdAssigner}
+import org.apache.hudi.common.schema.evolution.{ColumnChangeID, ColumnPositionType, HoodieSchemaChangeApplier, HoodieSchemaHistoryStorageManager, HoodieSchemaSerDe}
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.table.timeline.HoodieInstant.State
 import org.apache.hudi.common.util.{CommitUtils, Option}
 import org.apache.hudi.config.{HoodieArchivalConfig, HoodieCleanConfig}
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
-import org.apache.hudi.internal.schema.InternalSchema
-import org.apache.hudi.internal.schema.action.TableChange.ColumnChangeID
-import org.apache.hudi.internal.schema.action.TableChanges
-import org.apache.hudi.internal.schema.convert.InternalSchemaConverter
-import org.apache.hudi.internal.schema.io.FileBasedInternalSchemaStorageManager
-import org.apache.hudi.internal.schema.utils.{SchemaChangeUtils, SerDeHelper}
 import org.apache.hudi.table.HoodieSparkTable
 
 import org.apache.hadoop.conf.Configuration
@@ -47,7 +41,6 @@ import org.apache.spark.sql.types.StructType
 
 import java.net.URI
 import java.util
-import java.util.concurrent.atomic.AtomicInteger
 
 import scala.collection.JavaConverters._
 import scala.util.control.NonFatal
@@ -72,116 +65,112 @@ case class AlterTableCommand(table: CatalogTable, changes: Seq[TableChange], cha
     // convert to delete first then add again
     val deleteChanges = changes.filter(p => p.isInstanceOf[DeleteColumn]).map(_.asInstanceOf[DeleteColumn])
     val addChanges = changes.filter(p => p.isInstanceOf[AddColumn]).map(_.asInstanceOf[AddColumn])
-    val (oldSchema, historySchema) = getInternalSchemaAndHistorySchemaStr(sparkSession)
+    val (oldSchema, historySchema) = getEvolutionSchemaAndHistorySchemaStr(sparkSession)
     val newSchema = applyAddAction2Schema(sparkSession, applyDeleteAction2Schema(sparkSession, oldSchema, deleteChanges), addChanges)
-    val verifiedHistorySchema = if (historySchema == null || historySchema.isEmpty) {
-      SerDeHelper.inheritSchemas(oldSchema, "")
-    } else {
-      historySchema
-    }
+    val verifiedHistorySchema = inheritedHistory(oldSchema, historySchema)
     AlterTableCommand.commitWithSchema(newSchema, verifiedHistorySchema, table, sparkSession)
     logInfo("column replace finished")
   }
 
-  def applyAddAction2Schema(sparkSession: SparkSession, oldSchema: InternalSchema, addChanges: Seq[AddColumn]): InternalSchema = {
-    val addChange = TableChanges.ColumnAddChange.get(oldSchema)
+  def applyAddAction2Schema(sparkSession: SparkSession, oldSchema: HoodieSchema, addChanges: Seq[AddColumn]): HoodieSchema = {
+    var cur = oldSchema
     addChanges.foreach { addColumn =>
       val names = addColumn.fieldNames()
       val parentName = AlterTableCommand.getParentName(names)
-      // add col change
-      val colType = SparkInternalSchemaConverter.buildTypeFromStructType(addColumn.dataType(), true, new AtomicInteger(0))
-      addChange.addColumns(parentName, names.last, colType, addColumn.comment())
-      // add position change
-      addColumn.position() match {
+      val fullName = names.mkString(".")
+      val colType = HoodieSchemaConversionUtils.convertStructTypeToHoodieSchema(addColumn.dataType(), names.last)
+      val (positionType, positionRef) = addColumn.position() match {
         case after: TableChange.After =>
-          addChange.addPositionChange(names.mkString("."),
-            if (parentName.isEmpty) after.column() else parentName + "." + after.column(), "after")
+          (ColumnPositionType.AFTER, if (parentName.isEmpty) after.column() else parentName + "." + after.column())
         case _: TableChange.First =>
-          addChange.addPositionChange(names.mkString("."), "", "first")
+          (ColumnPositionType.FIRST, "")
         case _ =>
+          (ColumnPositionType.NO_OPERATION, "")
       }
+      cur = new HoodieSchemaChangeApplier(cur).applyAddChange(fullName, colType, addColumn.comment(), positionRef, positionType)
     }
-    SchemaChangeUtils.applyTableChanges2Schema(oldSchema, addChange)
+    cur
   }
 
-  private def applyDeleteAction2Schema(sparkSession: SparkSession, oldSchema: InternalSchema, deleteChanges: Seq[DeleteColumn]): InternalSchema = {
-    val deleteChange = TableChanges.ColumnDeleteChange.get(oldSchema)
-    deleteChanges.foreach { c =>
-      val originalColName = c.fieldNames().mkString(".")
-      checkSchemaChange(Seq(originalColName), table)
-      deleteChange.deleteColumn(originalColName)
+  private def applyDeleteAction2Schema(sparkSession: SparkSession, oldSchema: HoodieSchema, deleteChanges: Seq[DeleteColumn]): HoodieSchema = {
+    val colNames = deleteChanges.map { c =>
+      val name = c.fieldNames().mkString(".")
+      checkSchemaChange(Seq(name), table)
+      name
+    }.toArray
+    if (colNames.isEmpty) {
+      oldSchema
+    } else {
+      val newSchema = new HoodieSchemaChangeApplier(oldSchema).applyDeleteChange(colNames: _*)
+      // delete action should not change the getMaxColumnId field
+      newSchema.setMaxColumnId(oldSchema.maxColumnId())
+      newSchema
     }
-    val newSchema = SchemaChangeUtils.applyTableChanges2Schema(oldSchema, deleteChange)
-    // delete action should not change the getMaxColumnId field
-    newSchema.setMaxColumnId(oldSchema.getMaxColumnId)
-    newSchema
   }
 
 
   def applyAddAction(sparkSession: SparkSession): Unit = {
-    val (oldSchema, historySchema) = getInternalSchemaAndHistorySchemaStr(sparkSession)
+    val (oldSchema, historySchema) = getEvolutionSchemaAndHistorySchemaStr(sparkSession)
     val newSchema = applyAddAction2Schema(sparkSession, oldSchema, changes.map(_.asInstanceOf[AddColumn]))
-    val verifiedHistorySchema = if (historySchema == null || historySchema.isEmpty) {
-      SerDeHelper.inheritSchemas(oldSchema, "")
-    } else {
-      historySchema
-    }
+    val verifiedHistorySchema = inheritedHistory(oldSchema, historySchema)
     AlterTableCommand.commitWithSchema(newSchema, verifiedHistorySchema, table, sparkSession)
     logInfo("column add finished")
   }
 
   def applyDeleteAction(sparkSession: SparkSession): Unit = {
-    val (oldSchema, historySchema) = getInternalSchemaAndHistorySchemaStr(sparkSession)
+    val (oldSchema, historySchema) = getEvolutionSchemaAndHistorySchemaStr(sparkSession)
     val newSchema = applyDeleteAction2Schema(sparkSession, oldSchema, changes.map(_.asInstanceOf[DeleteColumn]))
-    val verifiedHistorySchema = if (historySchema == null || historySchema.isEmpty) {
-      SerDeHelper.inheritSchemas(oldSchema, "")
-    } else {
-      historySchema
-    }
+    val verifiedHistorySchema = inheritedHistory(oldSchema, historySchema)
     AlterTableCommand.commitWithSchema(newSchema, verifiedHistorySchema, table, sparkSession)
     logInfo("column delete finished")
   }
 
   def applyUpdateAction(sparkSession: SparkSession): Unit = {
-    val (oldSchema, historySchema) = getInternalSchemaAndHistorySchemaStr(sparkSession)
-    val updateChange = TableChanges.ColumnUpdateChange.get(oldSchema)
+    val (oldSchema, historySchema) = getEvolutionSchemaAndHistorySchemaStr(sparkSession)
+    var cur = oldSchema
     changes.foreach { change =>
-      change match {
+      val applier = new HoodieSchemaChangeApplier(cur)
+      cur = change match {
         case updateType: TableChange.UpdateColumnType =>
-          val newType = SparkInternalSchemaConverter.buildTypeFromStructType(updateType.newDataType(), true, new AtomicInteger(0))
-          updateChange.updateColumnType(updateType.fieldNames().mkString("."), newType)
+          val newType = HoodieSchemaConversionUtils.convertStructTypeToHoodieSchema(updateType.newDataType(), updateType.fieldNames().last)
+          applier.applyColumnTypeChange(updateType.fieldNames().mkString("."), newType)
         case updateComment: TableChange.UpdateColumnComment =>
-          updateChange.updateColumnComment(updateComment.fieldNames().mkString("."), updateComment.newComment())
+          applier.applyColumnCommentChange(updateComment.fieldNames().mkString("."), updateComment.newComment())
         case updateName: TableChange.RenameColumn =>
           val originalColName = updateName.fieldNames().mkString(".")
           checkSchemaChange(Seq(originalColName), table)
-          updateChange.renameColumn(originalColName, updateName.newName())
+          applier.applyRenameChange(originalColName, updateName.newName())
         case updateNullAbility: TableChange.UpdateColumnNullability =>
-          updateChange.updateColumnNullability(updateNullAbility.fieldNames().mkString("."), updateNullAbility.nullable())
+          applier.applyColumnNullabilityChange(updateNullAbility.fieldNames().mkString("."), updateNullAbility.nullable())
         case updatePosition: TableChange.UpdateColumnPosition =>
           val names = updatePosition.fieldNames()
           val parentName = AlterTableCommand.getParentName(names)
+          val fullName = names.mkString(".")
           updatePosition.position() match {
             case after: TableChange.After =>
-              updateChange.addPositionChange(names.mkString("."),
-                if (parentName.isEmpty) after.column() else parentName + "." + after.column(), "after")
+              val refCol = if (parentName.isEmpty) after.column() else parentName + "." + after.column()
+              applier.applyReOrderColPositionChange(fullName, refCol, ColumnPositionType.AFTER)
             case _: TableChange.First =>
-              updateChange.addPositionChange(names.mkString("."), "", "first")
-            case _ =>
+              applier.applyReOrderColPositionChange(fullName, "", ColumnPositionType.FIRST)
+            case _ => cur
           }
+        case _ => cur
       }
     }
-    val newSchema = SchemaChangeUtils.applyTableChanges2Schema(oldSchema, updateChange)
-    val verifiedHistorySchema = if (historySchema == null || historySchema.isEmpty) {
-      SerDeHelper.inheritSchemas(oldSchema, "")
-    } else {
-      historySchema
-    }
-    AlterTableCommand.commitWithSchema(newSchema, verifiedHistorySchema, table, sparkSession)
+    val verifiedHistorySchema = inheritedHistory(oldSchema, historySchema)
+    AlterTableCommand.commitWithSchema(cur, verifiedHistorySchema, table, sparkSession)
     logInfo("column update finished")
   }
 
-  // to do support unset default value to columns, and apply them to internalSchema
+  private def inheritedHistory(oldSchema: HoodieSchema, historySchema: String): String = {
+    if (historySchema == null || historySchema.isEmpty) {
+      HoodieSchemaSerDe.inheritHistory(oldSchema, "")
+    } else {
+      historySchema
+    }
+  }
+
+  // to do support unset default value to columns, and apply them to the evolution schema
   def applyPropertyUnset(sparkSession: SparkSession): Unit = {
     val catalog = sparkSession.sessionState.catalog
     val propKeys = changes.map(_.asInstanceOf[RemoveProperty]).map(_.property())
@@ -198,7 +187,7 @@ case class AlterTableCommand(table: CatalogTable, changes: Seq[TableChange], cha
     logInfo("table properties change finished")
   }
 
-  // to do support set default value to columns, and apply them to internalSchema
+  // to do support set default value to columns, and apply them to the evolution schema
   def applyPropertySet(sparkSession: SparkSession): Unit = {
     val catalog = sparkSession.sessionState.catalog
     val properties = changes.map(_.asInstanceOf[SetProperty]).map(f => f.property -> f.value).toMap
@@ -212,16 +201,20 @@ case class AlterTableCommand(table: CatalogTable, changes: Seq[TableChange], cha
     logInfo("table properties change finished")
   }
 
-  def getInternalSchemaAndHistorySchemaStr(sparkSession: SparkSession): (InternalSchema, String) = {
+  def getEvolutionSchemaAndHistorySchemaStr(sparkSession: SparkSession): (HoodieSchema, String) = {
     val path = AlterTableCommand.getTableLocation(table, sparkSession)
     val metaClient = HoodieTableMetaClient.builder().setBasePath(path)
       .setConf(HadoopFSUtils.getStorageConf(sparkSession.sessionState.newHadoopConf())).build()
     val schemaUtil = new TableSchemaResolver(metaClient)
 
-    val schema = schemaUtil.getTableInternalSchemaFromCommitMetadata().orElse {
-      InternalSchemaConverter.convert(schemaUtil.getTableSchema)
-    }
-
+    val schema = schemaUtil.getTableEvolutionSchemaFromCommitMetadata().orElse(schemaUtil.getTableSchema)
+    // Mirror legacy InternalSchemaConverter.fromAvro: stamp positional ids when the
+    // returned schema is id-less (fresh table, only hoodie.table.create.schema in
+    // props). Appliers (rename / type / reorder) preserve existing ids but never
+    // mint them, so without this the persisted latest_schema would carry id = -1
+    // and downstream id-keyed lookups (HoodieSchemaProjections.findIdByName,
+    // HoodieSchemaMerger.findFullName) would all miss. assignFresh is idempotent.
+    HoodieSchemaIdAssigner.assignFresh(schema)
     val historySchemaStr = schemaUtil.getTableHistorySchemaStrFromCommitMetadata.orElse("")
     (schema, historySchemaStr)
   }
@@ -244,13 +237,13 @@ object AlterTableCommand extends Logging {
   /**
     * Generate an commit with new schema to change the table's schema.
     *
-    * @param internalSchema new schema after change
+    * @param evolutionSchema new schema after change
     * @param historySchemaStr history schemas
     * @param table The hoodie table.
     * @param sparkSession The spark session.
     */
-  def commitWithSchema(internalSchema: InternalSchema, historySchemaStr: String, table: CatalogTable, sparkSession: SparkSession): Unit = {
-    val schema = InternalSchemaConverter.convert(internalSchema, HoodieSchemaUtils.getRecordQualifiedName(table.identifier.table))
+  def commitWithSchema(evolutionSchema: HoodieSchema, historySchemaStr: String, table: CatalogTable, sparkSession: SparkSession): Unit = {
+    val schema = evolutionSchema
     val path = getTableLocation(table, sparkSession)
     val jsc = new JavaSparkContext(sparkSession.sparkContext)
     val client = DataSourceUtils.createHoodieClient(
@@ -285,9 +278,10 @@ object AlterTableCommand extends Logging {
     metadata.setOperationType(WriteOperationType.ALTER_SCHEMA)
     timeLine.transitionRequestedToInflight(requested, Option.of(metadata))
     val extraMeta = new util.HashMap[String, String]()
-    extraMeta.put(SerDeHelper.LATEST_SCHEMA, SerDeHelper.toJson(internalSchema.setSchemaId(instantTime.toLong)))
-    val schemaManager = new FileBasedInternalSchemaStorageManager(metaClient)
-    schemaManager.persistHistorySchemaStr(instantTime, SerDeHelper.inheritSchemas(internalSchema, historySchemaStr))
+    evolutionSchema.setSchemaId(instantTime.toLong)
+    extraMeta.put(HoodieSchemaSerDe.LATEST_SCHEMA, HoodieSchemaSerDe.toJson(evolutionSchema))
+    val schemaManager = new HoodieSchemaHistoryStorageManager(metaClient)
+    schemaManager.persistHistorySchemaStr(instantTime, HoodieSchemaSerDe.inheritHistory(evolutionSchema, historySchemaStr))
     client.commit(instantTime, jsc.emptyRDD, Option.of(extraMeta))
     val existRoTable = sparkSession.catalog.tableExists(table.identifier.unquotedString + "_ro")
     val existRtTable = sparkSession.catalog.tableExists(table.identifier.unquotedString + "_rt")
@@ -302,7 +296,7 @@ object AlterTableCommand extends Logging {
     }
     // try to sync to hive
     // drop partition field before call alter table
-    val fullSparkSchema = SparkInternalSchemaConverter.constructSparkSchemaFromInternalSchema(internalSchema)
+    val fullSparkSchema = HoodieSchemaConversionUtils.convertHoodieSchemaToStructType(evolutionSchema)
     val dataSparkSchema = new StructType(fullSparkSchema.fields.filter(p => !table.partitionColumnNames.exists(f => sparkSession.sessionState.conf.resolver(f, p.name))))
     alterTableDataSchema(sparkSession, table.identifier.database.getOrElse("default"), table.identifier.table, dataSparkSchema)
     if (existRoTable) alterTableDataSchema(sparkSession, table.identifier.database.getOrElse("default"), table.identifier.table + "_ro", dataSparkSchema)

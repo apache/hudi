@@ -24,7 +24,7 @@ import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieAvroSchemaException;
 import org.apache.hudi.exception.HoodieIOException;
-import org.apache.hudi.internal.schema.HoodieSchemaException;
+import org.apache.hudi.exception.HoodieSchemaException;
 
 import lombok.Getter;
 import org.apache.avro.JsonProperties;
@@ -104,6 +104,15 @@ public class HoodieSchema implements Serializable {
    * Examples: "VECTOR(128)", "VECTOR(512, DOUBLE)", "BLOB", "VARIANT".
    */
   public static final String TYPE_METADATA_FIELD = "hudi_type";
+
+  // Avro custom-property keys carrying field ids for schema-on-read evolution.
+  // These follow the Iceberg/Parquet "field-id" convention so the integers survive
+  // Schema#toString -> Schema.Parser#parse round trips and remain interoperable with
+  // existing tooling.
+  public static final String FIELD_ID_PROP = "field-id";
+  public static final String ELEMENT_ID_PROP = "element-id";
+  public static final String KEY_ID_PROP = "key-id";
+  public static final String VALUE_ID_PROP = "value-id";
 
   /**
    * The Avro logical type name used for Variant schemas.
@@ -200,8 +209,8 @@ public class HoodieSchema implements Serializable {
 
   /**
    * Constants for Parquet-style accessor patterns used in nested MAP and ARRAY navigation.
-   * These patterns are specifically used for column stats generation and differ from
-   * InternalSchema constants which are used in schema evolution contexts.
+   * Used by column-stats generation; the schema-on-read evolution path uses different
+   * descent pseudo-segments (see {@link HoodieSchemaIndex}).
    */
   private static final String ARRAY_LIST = "list";
   private static final String ARRAY_ELEMENT = "element";
@@ -312,8 +321,16 @@ public class HoodieSchema implements Serializable {
 
   private Schema avroSchema;
   private HoodieSchemaType type;
+  // Mutable schema-level evolution metadata. These are not stored on the underlying
+  // Avro schema because Avro's JsonProperties is set-once and can't be overwritten.
+  // HoodieSchemaSerDe carries them via the `version_id` and `max_column_id` JSON keys;
+  // Avro's Schema#toString does NOT need to round-trip them.
+  // -1 sentinel = "unset"; isEmptySchema() treats schemaId<0 as the empty sentinel.
+  private long schemaId = -1L;
+  private int explicitMaxColumnId = -1;
   private transient List<HoodieSchemaField> fields;
   private transient Map<String, HoodieSchemaField> fieldMap;
+  private transient HoodieSchemaIndex idIndex;
 
   // Register the Variant logical type with Avro
   static {
@@ -661,6 +678,43 @@ public class HoodieSchema implements Serializable {
     Schema decimalSchema = Schema.createFixed(name, doc, namespace, fixedSize);
     LogicalTypes.decimal(precision, scale).addToSchema(decimalSchema);
     return new HoodieSchema.Decimal(decimalSchema);
+  }
+
+  /**
+   * Creates a FIXED-backed decimal schema with the minimum byte size needed to
+   * hold {@code precision} digits. Equivalent to {@code Types.DecimalType.get(p, s)} —
+   * use this when the target schema is being chosen for type-evolution promotion
+   * from an integral type, where {@code DECIMAL_BYTES} is not a compatible target.
+   *
+   * <p>The Avro fixed name is derived from the spec ({@code decimal_p{P}_s{S}_b{B}})
+   * so two callers minting decimals with the same precision/scale/size produce
+   * structurally equal Avro fixed schemas — Avro's {@code Schema.toString} dedupes
+   * those without complaint. Different specs get different names, so they never
+   * collide either, even when both end up reachable from the same enclosing
+   * record (which can happen after a type-promote rebuild leaves the old fixed
+   * still referenced from {@code latest_schema} history).
+   */
+  public static HoodieSchema createDecimalFixed(int precision, int scale) {
+    int size = computeMinBytesForDecimalPrecision(precision);
+    return createDecimal(decimalFixedName(precision, scale, size), null, null, precision, scale, size);
+  }
+
+  /**
+   * Spec-derived Avro fixed name for {@link #createDecimalFixed}. Centralized so
+   * the SerDe (which materializes legacy {@code decimal_fixed(p,s)[size]} type
+   * strings) can use the same convention and produce equal Avro types when two
+   * paths arrive at the same decimal spec.
+   */
+  public static String decimalFixedName(int precision, int scale, int fixedSize) {
+    return "decimal_p" + precision + "_s" + scale + "_b" + fixedSize;
+  }
+
+  private static int computeMinBytesForDecimalPrecision(int precision) {
+    int numBytes = 1;
+    while (Math.pow(2.0, 8 * numBytes - 1) < Math.pow(10.0, precision)) {
+      numBytes += 1;
+    }
+    return numBytes;
   }
 
   /**
@@ -1315,6 +1369,156 @@ public class HoodieSchema implements Serializable {
   public void addProp(String key, Object value) {
     ValidationUtils.checkArgument(key != null && !key.isEmpty(), "Property key cannot be null or empty");
     avroSchema.addProp(key, value);
+    this.idIndex = null;
+  }
+
+  /**
+   * Factory for an "empty" schema sentinel: an unnamed record with no fields and an
+   * unset schemaId. Used by callers that need a placeholder when no evolution
+   * schema is available (e.g. schema-on-read disabled or no schema in commit
+   * metadata). Pair with {@link #isEmptySchema()} to detect the sentinel.
+   */
+  public static HoodieSchema empty() {
+    return createRecord("EmptySchema", null, "hudi", false, Collections.emptyList());
+  }
+
+  /**
+   * Returns true if this schema is the "empty" sentinel — i.e. has no schema id
+   * assigned (schemaId &lt; 0).
+   */
+  public boolean isEmptySchema() {
+    return schemaId < 0;
+  }
+
+  /**
+   * Returns the schema version id, or -1 if no version has been assigned.
+   */
+  public long schemaId() {
+    return schemaId;
+  }
+
+  /**
+   * Sets the schema version id. Typically derived from a commit instant timestamp.
+   * Mutable: callers that need to re-stamp the version (e.g. after an evolution
+   * operation) can call this multiple times.
+   */
+  public HoodieSchema setSchemaId(long schemaId) {
+    this.schemaId = schemaId;
+    return this;
+  }
+
+  /**
+   * Returns the highest column id assigned to any sub-schema. If an explicit
+   * max-column-id has been recorded (e.g. preserved across a column deletion),
+   * that value is returned; otherwise the highest id currently present in the
+   * schema is returned.
+   *
+   * <p>Returns -1 if no ids have been assigned anywhere in the schema.</p>
+   */
+  public int maxColumnId() {
+    if (explicitMaxColumnId >= 0) {
+      return explicitMaxColumnId;
+    }
+    return index().maxColumnIdSeen();
+  }
+
+  /**
+   * Records the highest column id explicitly. Useful after column deletions, where
+   * the highest currently-present id is less than the highest ever assigned and
+   * subsequent column additions must avoid colliding with previously-used ids.
+   */
+  public HoodieSchema setMaxColumnId(int maxColumnId) {
+    this.explicitMaxColumnId = maxColumnId;
+    return this;
+  }
+
+  /**
+   * Returns the dot-joined full name of the field that owns column id {@code id},
+   * or empty string if none.
+   */
+  public String findFullName(int id) {
+    String result = index().idToName().get(id);
+    return result == null ? "" : result;
+  }
+
+  /**
+   * Returns the column id assigned to the field at {@code fullName}, or -1 if not found.
+   */
+  public int findIdByName(String fullName) {
+    if (fullName == null || fullName.isEmpty()) {
+      return -1;
+    }
+    Integer id = index().nameToId().get(fullName);
+    return id == null ? -1 : id;
+  }
+
+  /**
+   * Returns all column ids in this schema.
+   */
+  public java.util.Set<Integer> getAllIds() {
+    return index().idToName().keySet();
+  }
+
+  /**
+   * Returns the {@link HoodieSchema} (the type) of the field/element/key/value at
+   * column id {@code id}, or null if no such id exists.
+   *
+   * <p>The returned schema is the type schema as it sits inside its parent — for
+   * an optional record field, that's the {@code [null, X]} union; for a map value
+   * type, the value sub-schema; for an array element type, the element sub-schema.
+   * Two HoodieSchemas returned by this method compare equal iff their underlying
+   * Avro schemas compare equal (structural equality).</p>
+   */
+  public HoodieSchema findType(int id) {
+    return index().idToSchema().get(id);
+  }
+
+  /**
+   * Returns the {@link HoodieSchema} of the field at the given dot-separated
+   * full name, or null if no such field exists.
+   */
+  public HoodieSchema findType(String fullName) {
+    int id = findIdByName(fullName);
+    return id < 0 ? null : findType(id);
+  }
+
+  /**
+   * Returns the dot-separated full names of every column in this schema (record
+   * fields, array elements, map keys / values).
+   *
+   * <p>Order matches the depth-first traversal order used by {@link HoodieSchemaIndex}.</p>
+   */
+  public java.util.List<String> getAllColsFullName() {
+    return new java.util.ArrayList<>(index().nameToId().keySet());
+  }
+
+  /**
+   * Returns a mapping from full field name to depth-first traversal position. Used during
+   * ingest reconciliation to preserve declared field order.
+   */
+  public Map<String, Integer> getNameToPosition() {
+    return index().nameToPosition();
+  }
+
+  /**
+   * Returns the lazily-computed id ↔ name index. Recomputes after any mutation that
+   * goes through {@link #addProp}.
+   */
+  HoodieSchemaIndex index() {
+    HoodieSchemaIndex local = this.idIndex;
+    if (local == null) {
+      local = HoodieSchemaIndex.of(this);
+      this.idIndex = local;
+    }
+    return local;
+  }
+
+  /**
+   * Drops the cached index — call this after mutating field-id properties on the
+   * underlying Avro schema directly (e.g. after running {@link HoodieSchemaIdAssigner}).
+   */
+  public void invalidateIdIndex() {
+    this.idIndex = null;
   }
 
   /**

@@ -66,7 +66,7 @@ case class BaseFileOnlyRelation(override val sqlContext: SQLContext,
   // NOTE: This override has to mirror semantic of whenever this Relation is converted into [[HadoopFsRelation]],
   //       which is currently done for all cases, except when Schema Evolution is enabled
   override protected val shouldExtractPartitionValuesFromPartitionPath: Boolean =
-  internalSchemaOpt.isEmpty
+  evolutionSchemaOpt.isEmpty
 
   override lazy val mandatoryFields: Seq[String] = Seq.empty
 
@@ -92,7 +92,7 @@ case class BaseFileOnlyRelation(override val sqlContext: SQLContext,
       options = optParams,
       // NOTE: We have to fork the Hadoop Config here as Spark will be modifying it
       //       to configure Parquet reader appropriately
-      hadoopConf = embedInternalSchema(new Configuration(conf), requiredSchema.internalSchema)
+      hadoopConf = embedEvolutionSchema(new Configuration(conf), requiredSchema.evolutionSchema)
     )
 
     // NOTE: In some case schema of the reader's output (reader's schema) might not match the schema expected by the caller.

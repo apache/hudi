@@ -19,8 +19,8 @@
 
 package org.apache.spark.sql.execution.datasources.orc
 
+import org.apache.hudi.common.schema.HoodieSchema
 import org.apache.hudi.common.util
-import org.apache.hudi.internal.schema.InternalSchema
 import org.apache.hudi.storage.StorageConfiguration
 
 import org.apache.hadoop.conf.Configuration
@@ -46,19 +46,12 @@ abstract class SparkOrcReaderBase(enableVectorizedReader: Boolean,
                                   orcFilterPushDown: Boolean,
                                   isCaseSensitive: Boolean) extends SparkColumnarFileReader  {
   /**
-   * Read an individual ORC file
-   *
-   * @param file              ORC file to read
-   * @param requiredSchema    desired output schema of the data
-   * @param partitionSchema   schema of the partition columns. Partition values will be appended to the end of every row
-   * @param internalSchemaOpt option of internal schema for schema.on.read
-   * @param filters           filters for data skipping. Not guaranteed to be used; the spark plan will also apply the filters.
-   * @param storageConf       the hadoop conf
-   * @return iterator of rows read from the file output type says [[InternalRow]] but could be [[ColumnarBatch]]
+   * Read an individual ORC file. The schema-on-read evolution schema is currently
+   * unused on the ORC path — it's accepted for parity with the trait.
    */
-  override def read(file: PartitionedFile, requiredSchema: StructType, partitionSchema: StructType,
-                    internalSchemaOpt: util.Option[InternalSchema], filters: Seq[Filter],
-                    storageConf: StorageConfiguration[Configuration], tableSchemaOpt: util.Option[org.apache.parquet.schema.MessageType]): Iterator[InternalRow] = {
+  override def readWithEvolutionSchema(file: PartitionedFile, requiredSchema: StructType, partitionSchema: StructType,
+                                       evolutionSchemaOpt: util.Option[HoodieSchema], filters: Seq[Filter],
+                                       storageConf: StorageConfiguration[Configuration], tableSchemaOpt: util.Option[org.apache.parquet.schema.MessageType]): Iterator[InternalRow] = {
     val resultSchema = StructType(requiredSchema.fields ++ partitionSchema.fields)
     val conf = storageConf.unwrap()
 

@@ -20,8 +20,8 @@
 package org.apache.spark.sql.execution.datasources.parquet
 
 import org.apache.hudi.HoodieSparkUtils
+import org.apache.hudi.common.schema.HoodieSchema
 import org.apache.hudi.common.util
-import org.apache.hudi.internal.schema.InternalSchema
 import org.apache.hudi.storage.StorageConfiguration
 
 import org.apache.hadoop.conf.Configuration
@@ -45,25 +45,13 @@ abstract class SparkParquetReaderBase(enableVectorizedReader: Boolean,
                                       enableRecordFilter: Boolean,
                                       enableLogicalTimestampRepair: Boolean,
                                       timeZoneId: Option[String]) extends SparkColumnarFileReader {
-  /**
-   * Read an individual parquet file
-   *
-   * @param file               parquet file to read
-   * @param requiredSchema     desired output schema of the data
-   * @param partitionSchema    schema of the partition columns. Partition values will be appended to the end of every row
-   * @param internalSchemaOpt  option of internal schema for schema.on.read
-   * @param filters            filters for data skipping. Not guaranteed to be used; the spark plan will also apply the filters.
-   * @param storageConf        the hadoop conf
-   * @param tableSchemaOpt     option of table schema for timestamp precision conversion
-   * @return iterator of rows read from the file output type says [[InternalRow]] but could be [[ColumnarBatch]]
-   */
-  final def read(file: PartitionedFile,
-                 requiredSchema: StructType,
-                 partitionSchema: StructType,
-                 internalSchemaOpt: util.Option[InternalSchema],
-                 filters: Seq[Filter],
-                 storageConf: StorageConfiguration[Configuration],
-                 tableSchemaOpt: util.Option[org.apache.parquet.schema.MessageType] = util.Option.empty()): Iterator[InternalRow] = {
+  final override def readWithEvolutionSchema(file: PartitionedFile,
+                                             requiredSchema: StructType,
+                                             partitionSchema: StructType,
+                                             evolutionSchemaOpt: util.Option[HoodieSchema],
+                                             filters: Seq[Filter],
+                                             storageConf: StorageConfiguration[Configuration],
+                                             tableSchemaOpt: util.Option[org.apache.parquet.schema.MessageType] = util.Option.empty()): Iterator[InternalRow] = {
     val conf = storageConf.unwrapCopy()
     conf.set(ParquetReadSupport.SPARK_ROW_REQUESTED_SCHEMA, requiredSchema.json)
     conf.set(ParquetWriteSupport.SPARK_ROW_SCHEMA, requiredSchema.json)
@@ -81,7 +69,7 @@ abstract class SparkParquetReaderBase(enableVectorizedReader: Boolean,
     }
 
     ParquetWriteSupport.setSchema(requiredSchema, conf)
-    doRead(file, requiredSchema, partitionSchema, internalSchemaOpt, filters, conf, tableSchemaOpt)
+    doRead(file, requiredSchema, partitionSchema, evolutionSchemaOpt, filters, conf, tableSchemaOpt)
   }
 
   /**
@@ -90,7 +78,7 @@ abstract class SparkParquetReaderBase(enableVectorizedReader: Boolean,
    * @param file               parquet file to read
    * @param requiredSchema     desired output schema of the data
    * @param partitionSchema    schema of the partition columns. Partition values will be appended to the end of every row
-   * @param internalSchemaOpt  option of internal schema for schema.on.read
+   * @param evolutionSchemaOpt option of the schema-on-read evolution schema (with field ids)
    * @param filters            filters for data skipping. Not guaranteed to be used; the spark plan will also apply the filters.
    * @param sharedConf         the hadoop conf
    * @param tableSchemaOpt     option of table schema for timestamp precision conversion
@@ -99,7 +87,7 @@ abstract class SparkParquetReaderBase(enableVectorizedReader: Boolean,
   protected def doRead(file: PartitionedFile,
                        requiredSchema: StructType,
                        partitionSchema: StructType,
-                       internalSchemaOpt: util.Option[InternalSchema],
+                       evolutionSchemaOpt: util.Option[HoodieSchema],
                        filters: Seq[Filter],
                        sharedConf: Configuration,
                        tableSchemaOpt: util.Option[org.apache.parquet.schema.MessageType]): Iterator[InternalRow]

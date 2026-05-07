@@ -652,19 +652,19 @@ class TestSpark3DDL extends HoodieSparkSqlTestBase {
 
   def validateInternalSchema(basePath: String, isDropColumn: Boolean, currentMaxColumnId: Int): Unit = {
     val metaClient = createMetaClient(spark, basePath)
-    val schema = new TableSchemaResolver(metaClient).getTableInternalSchemaFromCommitMetadata.get()
+    val schema = new TableSchemaResolver(metaClient).getTableEvolutionSchemaFromCommitMetadata.get()
     val lastInstant = metaClient.getActiveTimeline.filterCompletedInstants().lastInstant().get()
     assert(schema.schemaId() == lastInstant.requestedTime.toLong)
     if (isDropColumn) {
-      assert(schema.getMaxColumnId == currentMaxColumnId)
+      assert(schema.maxColumnId == currentMaxColumnId)
     } else {
-      assert(schema.getMaxColumnId == currentMaxColumnId + 1)
+      assert(schema.maxColumnId == currentMaxColumnId + 1)
     }
   }
 
   def getMaxColumnId(basePath: String): Int = {
     val metaClient = createMetaClient(spark, basePath)
-    new TableSchemaResolver(metaClient).getTableInternalSchemaFromCommitMetadata.get.getMaxColumnId
+    new TableSchemaResolver(metaClient).getTableEvolutionSchemaFromCommitMetadata.get.maxColumnId
   }
 
   test("Test alter column nullability") {

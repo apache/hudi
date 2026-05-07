@@ -49,9 +49,8 @@ import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieUpsertException;
-import org.apache.hudi.internal.schema.InternalSchema;
-import org.apache.hudi.internal.schema.utils.AvroSchemaEvolutionUtils;
-import org.apache.hudi.internal.schema.utils.SerDeHelper;
+import org.apache.hudi.common.schema.evolution.HoodieSchemaEvolutionUtils;
+import org.apache.hudi.common.schema.evolution.HoodieSchemaSerDe;
 import org.apache.hudi.io.storage.HoodieFileWriterFactory;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.storage.StoragePath;
@@ -256,8 +255,8 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
       this.readerContext.initRecordMergerForIngestion(config.getProps());
     }
     boolean usePosition = config.getBooleanOrDefault(MERGE_USE_RECORD_POSITIONS);
-    Option<InternalSchema> internalSchemaOption = SerDeHelper.fromJson(config.getInternalSchema())
-        .map(internalSchema -> AvroSchemaEvolutionUtils.reconcileSchema(writeSchemaWithMetaFields.toAvroSchema(), internalSchema,
+    Option<HoodieSchema> evolutionSchemaOption = HoodieSchemaSerDe.fromJson(config.getInternalSchema())
+        .map(evolutionSchema -> HoodieSchemaEvolutionUtils.reconcileSchema(writeSchemaWithMetaFields, evolutionSchema,
             config.getBooleanOrDefault(HoodieCommonConfig.SET_NULL_FOR_MISSING_COLUMNS)));
     long maxMemoryPerCompaction = getMaxMemoryForMerge();
     props.put(HoodieMemoryConfig.MAX_MEMORY_FOR_MERGE.key(), String.valueOf(maxMemoryPerCompaction));
@@ -265,7 +264,7 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
         new HoodieLogFile(new StoragePath(FSUtils.constructAbsolutePath(
             config.getBasePath(), op.getPartitionPath()), logFileName))));
     // Initializes file group reader
-    try (HoodieFileGroupReader<T> fileGroupReader = getFileGroupReader(usePosition, internalSchemaOption, props, logFilesStreamOpt, incomingRecordsItr)) {
+    try (HoodieFileGroupReader<T> fileGroupReader = getFileGroupReader(usePosition, evolutionSchemaOption, props, logFilesStreamOpt, incomingRecordsItr)) {
       // Reads the records from the file slice
       try (ClosableIterator<HoodieRecord<T>> recordIterator = fileGroupReader.getClosableHoodieRecordIterator()) {
         while (recordIterator.hasNext()) {
@@ -316,12 +315,12 @@ public class FileGroupReaderBasedMergeHandle<T, I, K, O> extends HoodieWriteMerg
         : IOUtils.getMaxMemoryPerPartitionMerge(taskContextSupplier, config);
   }
 
-  private HoodieFileGroupReader<T> getFileGroupReader(boolean usePosition, Option<InternalSchema> internalSchemaOption, TypedProperties props,
+  private HoodieFileGroupReader<T> getFileGroupReader(boolean usePosition, Option<HoodieSchema> evolutionSchemaOption, TypedProperties props,
                                                         Option<Stream<HoodieLogFile>> logFileStreamOpt, Iterator<HoodieRecord<T>> incomingRecordsItr) {
     HoodieFileGroupReader.Builder<T> fileGroupBuilder = HoodieFileGroupReader.<T>newBuilder().withReaderContext(readerContext).withHoodieTableMetaClient(hoodieTable.getMetaClient())
         .withLatestCommitTime(maxInstantTime).withPartitionPath(partitionPath).withBaseFileOption(Option.ofNullable(baseFileToMerge))
         .withDataSchema(writeSchemaWithMetaFields).withRequestedSchema(writeSchemaWithMetaFields)
-        .withInternalSchema(internalSchemaOption).withProps(props)
+        .withEvolutionSchema(evolutionSchemaOption).withProps(props)
         .withShouldUseRecordPosition(usePosition).withSortOutput(hoodieTable.requireSortedRecords())
         .withFileGroupUpdateCallback(createCallback());
 

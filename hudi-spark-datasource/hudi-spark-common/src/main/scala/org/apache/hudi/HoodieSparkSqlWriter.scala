@@ -35,6 +35,7 @@ import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model._
 import org.apache.hudi.common.model.HoodieTableType.{COPY_ON_WRITE, MERGE_ON_READ}
 import org.apache.hudi.common.schema.{HoodieSchema, HoodieSchemaType, HoodieSchemaUtils => HoodieCommonSchemaUtils}
+import org.apache.hudi.common.schema.evolution.HoodieSchemaSerDe
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, HoodieTableVersion, TableSchemaResolver}
 import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator
 import org.apache.hudi.common.util.{CommitUtils, ConfigUtils, Option => HOption, StringUtils}
@@ -48,9 +49,6 @@ import org.apache.hudi.hive.{HiveSyncConfigHolder, HiveSyncTool}
 import org.apache.hudi.hive.ddl.HiveSyncMode
 import org.apache.hudi.index.HoodieIndex
 import org.apache.hudi.index.bucket.partition.PartitionBucketIndexUtils
-import org.apache.hudi.internal.schema.InternalSchema
-import org.apache.hudi.internal.schema.convert.InternalSchemaConverter
-import org.apache.hudi.internal.schema.utils.SerDeHelper
 import org.apache.hudi.keygen.{BaseKeyGenerator, TimestampBasedAvroKeyGenerator, TimestampBasedKeyGenerator}
 import org.apache.hudi.keygen.constant.KeyGeneratorType
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory
@@ -370,16 +368,14 @@ class HoodieSparkSqlWriterInternal {
 
       val sourceSchema = HoodieSchemaConversionUtils.convertUserStructTypeToHoodieSchema(
         df.schema, avroRecordName, avroRecordNamespace)
-      val internalSchemaOpt = HoodieSchemaUtils.getLatestTableInternalSchema(hoodieConfig, tableMetaClient).orElse {
+      val evolutionSchemaOpt = HoodieSchemaUtils.getLatestTableEvolutionSchema(hoodieConfig, tableMetaClient).orElse {
         // In case we need to reconcile the schema and schema evolution is enabled,
         // we will force-apply schema evolution to the writer's schema
         if (shouldReconcileSchema && hoodieConfig.getBooleanOrDefault(DataSourceReadOptions.SCHEMA_EVOLUTION_ENABLED)) {
           val allowOperationMetaDataField = parameters.getOrElse(HoodieWriteConfig.ALLOW_OPERATION_METADATA_FIELD.key(), "false").toBoolean
-          Some(InternalSchemaConverter.convert(
-            HoodieCommonSchemaUtils.addMetadataFields(
-              latestTableSchemaOpt.getOrElse(sourceSchema),
-              allowOperationMetaDataField
-            )
+          Some(HoodieCommonSchemaUtils.addMetadataFields(
+            latestTableSchemaOpt.getOrElse(sourceSchema),
+            allowOperationMetaDataField
           ))
         } else {
           None
@@ -409,10 +405,10 @@ class HoodieSparkSqlWriterInternal {
             }
 
             // Create a HoodieWriteClient & issue the delete.
-            val internalSchemaOpt = HoodieSchemaUtils.getLatestTableInternalSchema(hoodieConfig, tableMetaClient)
+            val deleteEvolutionSchemaOpt = HoodieSchemaUtils.getLatestTableEvolutionSchema(hoodieConfig, tableMetaClient)
             val client = hoodieWriteClient.getOrElse(DataSourceUtils.createHoodieClient(jsc,
                 null, path, tblName,
-                addSchemaEvolutionParameters(parameters, internalSchemaOpt).asJava))
+                addSchemaEvolutionParameters(parameters, deleteEvolutionSchemaOpt).asJava))
               .asInstanceOf[SparkRDDWriteClient[_]]
 
             if (isAsyncCompactionEnabled(client, tableConfig, parameters, jsc.hadoopConfiguration())) {
@@ -462,11 +458,11 @@ class HoodieSparkSqlWriterInternal {
           case _ =>
             // NOTE: Target writer's schema is deduced based on
             //         - Source's schema
-            //         - Existing table's schema (including its Hudi's [[InternalSchema]] representation)
-            val writerSchema = HoodieSchemaUtils.deduceWriterSchema(
+            //         - Existing table's schema (including its evolution schema with field ids)
+            val writerSchema = HoodieSchemaUtils.deduceWriterSchemaWithEvolution(
               sourceSchema,
               latestTableSchemaOpt,
-              internalSchemaOpt,
+              evolutionSchemaOpt,
               parameters
             )
 
@@ -497,7 +493,7 @@ class HoodieSparkSqlWriterInternal {
 
             // Create a HoodieWriteClient & issue the write.
             val client = hoodieWriteClient.getOrElse {
-              val finalOpts = addSchemaEvolutionParameters(parameters, internalSchemaOpt, Some(writerSchema))
+              val finalOpts = addSchemaEvolutionParameters(parameters, evolutionSchemaOpt, Some(writerSchema))
               // TODO(HUDI-4772) proper writer-schema has to be specified here
               DataSourceUtils.createHoodieClient(jsc, processedDataSchema.toString, path, tblName, finalOpts.asJava)
             }
@@ -659,8 +655,8 @@ class HoodieSparkSqlWriterInternal {
       org.apache.hudi.common.schema.HoodieSchemaUtils.removeFields(schema, partitionColumns.toSet.asJava)
   }
 
-  def addSchemaEvolutionParameters(parameters: Map[String, String], internalSchemaOpt: Option[InternalSchema], writeSchemaOpt: Option[HoodieSchema] = None): Map[String, String] = {
-    val schemaEvolutionEnable = if (internalSchemaOpt.isDefined) "true" else "false"
+  def addSchemaEvolutionParameters(parameters: Map[String, String], evolutionSchemaOpt: Option[HoodieSchema], writeSchemaOpt: Option[HoodieSchema] = None): Map[String, String] = {
+    val schemaEvolutionEnable = if (evolutionSchemaOpt.isDefined) "true" else "false"
 
     val schemaValidateEnable = if (schemaEvolutionEnable.toBoolean && parameters.getOrElse(DataSourceWriteOptions.RECONCILE_SCHEMA.key(), "false").toBoolean) {
       // force disable schema validate, now we support schema evolution, no need to do validate
@@ -668,16 +664,16 @@ class HoodieSparkSqlWriterInternal {
     } else {
       parameters.getOrElse(HoodieWriteConfig.AVRO_SCHEMA_VALIDATE_ENABLE.key(), HoodieWriteConfig.AVRO_SCHEMA_VALIDATE_ENABLE.defaultValue())
     }
-    // correct internalSchema, internalSchema should contain hoodie metadata columns.
-    val correctInternalSchema = internalSchemaOpt.map { internalSchema =>
-      if (internalSchema.findField(HoodieRecord.RECORD_KEY_METADATA_FIELD) == null && writeSchemaOpt.isDefined) {
+    // correct evolutionSchema — must contain hoodie metadata columns.
+    val correctEvolutionSchema = evolutionSchemaOpt.map { evolutionSchema =>
+      if (!evolutionSchema.getField(HoodieRecord.RECORD_KEY_METADATA_FIELD).isPresent && writeSchemaOpt.isDefined) {
         val allowOperationMetaDataField = parameters.getOrElse(HoodieWriteConfig.ALLOW_OPERATION_METADATA_FIELD.key(), "false").toBoolean
-        InternalSchemaConverter.convert(org.apache.hudi.common.schema.HoodieSchemaUtils.addMetadataFields(writeSchemaOpt.get, allowOperationMetaDataField))
+        org.apache.hudi.common.schema.HoodieSchemaUtils.addMetadataFields(writeSchemaOpt.get, allowOperationMetaDataField)
       } else {
-        internalSchema
+        evolutionSchema
       }
     }
-    parameters ++ Map(HoodieWriteConfig.INTERNAL_SCHEMA_STRING.key() -> SerDeHelper.toJson(correctInternalSchema.getOrElse(null)),
+    parameters ++ Map(HoodieWriteConfig.INTERNAL_SCHEMA_STRING.key() -> HoodieSchemaSerDe.toJson(correctEvolutionSchema.getOrElse(null)),
       HoodieCommonConfig.SCHEMA_EVOLUTION_ENABLE.key() -> schemaEvolutionEnable,
       HoodieWriteConfig.AVRO_SCHEMA_VALIDATE_ENABLE.key() -> schemaValidateEnable)
   }

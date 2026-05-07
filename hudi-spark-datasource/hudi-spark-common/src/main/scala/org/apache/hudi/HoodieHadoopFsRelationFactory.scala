@@ -24,12 +24,11 @@ import org.apache.hudi.cdc.HoodieCDCFileIndex
 import org.apache.hudi.common.config.HoodieReaderConfig
 import org.apache.hudi.common.model.HoodieRecord
 import org.apache.hudi.common.schema.HoodieSchema
+import org.apache.hudi.common.schema.evolution.HoodieSchemaProjections
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.table.log.InstantRange.RangeType
 import org.apache.hudi.common.table.timeline.HoodieTimeline
 import org.apache.hudi.common.util.StringUtils.isNullOrEmpty
-import org.apache.hudi.internal.schema.InternalSchema
-import org.apache.hudi.internal.schema.convert.InternalSchemaConverter
 import org.apache.hudi.keygen.{CustomAvroKeyGenerator, CustomKeyGenerator, TimestampBasedAvroKeyGenerator, TimestampBasedKeyGenerator}
 import org.apache.hudi.storage.StoragePath
 
@@ -126,24 +125,24 @@ abstract class HoodieBaseHadoopFsRelationFactory(val sqlContext: SQLContext,
     }
   }
 
-  protected lazy val (tableSchema: HoodieSchema, internalSchemaOpt: Option[InternalSchema]) = {
+  protected lazy val (tableSchema: HoodieSchema, evolutionSchemaOpt: Option[HoodieSchema]) = {
     val schemaResolver = new TableSchemaResolver(metaClient)
-    val internalSchemaOpt = if (!isSchemaEvolutionEnabledOnRead(optParams, sparkSession)) {
+    val evolutionSchemaOpt = if (!isSchemaEvolutionEnabledOnRead(optParams, sparkSession)) {
       None
     } else {
       Try {
-        specifiedQueryTimestamp.map(schemaResolver.getTableInternalSchemaFromCommitMetadata)
-          .getOrElse(schemaResolver.getTableInternalSchemaFromCommitMetadata)
+        specifiedQueryTimestamp.map(schemaResolver.getTableEvolutionSchemaFromCommitMetadata)
+          .getOrElse(schemaResolver.getTableEvolutionSchemaFromCommitMetadata)
       } match {
-        case Success(internalSchemaOpt) => toScalaOption(internalSchemaOpt)
+        case Success(opt) => toScalaOption(opt)
         case Failure(e) =>
           None
       }
     }
 
     val (name, namespace) = HoodieSchemaConversionUtils.getRecordNameAndNamespace(tableName)
-    val schema: HoodieSchema = internalSchemaOpt.map { is =>
-      InternalSchemaConverter.convert(is, namespace + "." + name)
+    val schema: HoodieSchema = evolutionSchemaOpt.map { es =>
+      HoodieSchemaProjections.withRecordName(es, namespace + "." + name)
     } orElse {
       specifiedQueryTimestamp.map(schemaResolver.getTableSchema)
     } orElse {
@@ -155,10 +154,10 @@ abstract class HoodieBaseHadoopFsRelationFactory(val sqlContext: SQLContext,
       }
     }
 
-    (schema, internalSchemaOpt)
+    (schema, evolutionSchemaOpt)
   }
 
-  private lazy val validCommits: String = if (internalSchemaOpt.nonEmpty) {
+  private lazy val validCommits: String = if (evolutionSchemaOpt.nonEmpty) {
     val instantFileNameGenerator = metaClient.getTimelineLayout.getInstantFileNameGenerator
     timeline.getInstants.iterator.asScala.map(instant => instantFileNameGenerator.getFileName(instant)).mkString(",")
   } else {
@@ -238,7 +237,7 @@ abstract class HoodieBaseHadoopFsRelationFactory(val sqlContext: SQLContext,
   override def buildFileFormat(): FileFormat = {
     val tableConfig = metaClient.getTableConfig
     new HoodieFileGroupReaderBasedFileFormat(basePath.toString,
-      HoodieTableSchema(tableStructSchema, tableSchema, internalSchemaOpt),
+      HoodieTableSchema(tableStructSchema, tableSchema, evolutionSchemaOpt),
       tableConfig.getTableName, queryTimestamp.get, getMandatoryFields, isMOR, isBootstrap,
       isIncremental, validCommits, shouldUseRecordPosition, getRequiredFilters,
       tableConfig.isMultipleBaseFileFormatsEnabled, tableConfig.getBaseFileFormat)

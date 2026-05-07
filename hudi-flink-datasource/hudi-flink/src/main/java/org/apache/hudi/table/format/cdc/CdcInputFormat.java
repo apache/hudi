@@ -33,7 +33,7 @@ import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.source.ExpressionPredicates.Predicate;
-import org.apache.hudi.table.format.InternalSchemaManager;
+import org.apache.hudi.table.format.SchemaEvolutionManager;
 import org.apache.hudi.table.format.mor.MergeOnReadInputFormat;
 import org.apache.hudi.table.format.mor.MergeOnReadInputSplit;
 import org.apache.hudi.table.format.mor.MergeOnReadTableState;
@@ -61,7 +61,7 @@ public class CdcInputFormat extends MergeOnReadInputFormat {
       List<Predicate> predicates,
       long limit,
       boolean emitDelete) {
-    super(conf, tableState, fieldTypes, predicates, limit, emitDelete, InternalSchemaManager.DISABLED);
+    super(conf, tableState, fieldTypes, predicates, limit, emitDelete, SchemaEvolutionManager.DISABLED);
   }
 
   @Override

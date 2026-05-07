@@ -83,7 +83,7 @@ public class HoodieRowDataParquetReader implements HoodieFileReader<RowData>  {
 
   @Override
   public ClosableIterator<HoodieRecord<RowData>> getRecordIterator(HoodieSchema readerSchema, HoodieSchema requestedSchema) throws IOException {
-    ClosableIterator<RowData> rowDataItr = getRowDataIterator(InternalSchemaManager.DISABLED, getRowType(), requestedSchema, Collections.emptyList());
+    ClosableIterator<RowData> rowDataItr = getRowDataIterator(SchemaEvolutionManager.DISABLED, getRowType(), requestedSchema, Collections.emptyList());
     readerIterators.add(rowDataItr);
     return new CloseableMappingIterator<>(rowDataItr, HoodieFlinkRecord::new);
   }
@@ -91,16 +91,16 @@ public class HoodieRowDataParquetReader implements HoodieFileReader<RowData>  {
   @Override
   public ClosableIterator<String> getRecordKeyIterator() throws IOException {
     HoodieSchema schema = HoodieSchemaUtils.getRecordKeySchema();
-    ClosableIterator<RowData> rowDataItr = getRowDataIterator(InternalSchemaManager.DISABLED, getRowType(), schema, Collections.emptyList());
+    ClosableIterator<RowData> rowDataItr = getRowDataIterator(SchemaEvolutionManager.DISABLED, getRowType(), schema, Collections.emptyList());
     return new CloseableMappingIterator<>(rowDataItr, rowData -> Objects.toString(rowData.getString(0)));
   }
 
   public ClosableIterator<RowData> getRowDataIterator(
-      InternalSchemaManager internalSchemaManager,
+      SchemaEvolutionManager schemaEvolutionManager,
       DataType dataType,
       HoodieSchema requestedSchema,
       List<Predicate> predicates) throws IOException {
-    return RecordIterators.getParquetRecordIterator(storage.getConf(), internalSchemaManager, dataType, requestedSchema, path, predicates);
+    return RecordIterators.getParquetRecordIterator(storage.getConf(), schemaEvolutionManager, dataType, requestedSchema, path, predicates);
   }
 
   @Override

@@ -48,7 +48,14 @@ import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.TableServiceType;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaIdAssigner;
 import org.apache.hudi.common.schema.HoodieSchemaUtils;
+import org.apache.hudi.common.schema.evolution.ColumnPositionType;
+import org.apache.hudi.common.schema.evolution.HoodieSchemaChangeApplier;
+import org.apache.hudi.common.schema.evolution.HoodieSchemaEvolutionUtils;
+import org.apache.hudi.common.schema.evolution.HoodieSchemaHistoryStorageManager;
+import org.apache.hudi.common.schema.evolution.HoodieSchemaProjections;
+import org.apache.hudi.common.schema.evolution.HoodieSchemaSerDe;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
@@ -78,15 +85,6 @@ import org.apache.hudi.exception.HoodieRestoreException;
 import org.apache.hudi.exception.HoodieRollbackException;
 import org.apache.hudi.exception.HoodieSavepointException;
 import org.apache.hudi.index.HoodieIndex;
-import org.apache.hudi.internal.schema.InternalSchema;
-import org.apache.hudi.internal.schema.Type;
-import org.apache.hudi.internal.schema.action.InternalSchemaChangeApplier;
-import org.apache.hudi.internal.schema.action.TableChange;
-import org.apache.hudi.internal.schema.convert.InternalSchemaConverter;
-import org.apache.hudi.internal.schema.io.FileBasedInternalSchemaStorageManager;
-import org.apache.hudi.internal.schema.utils.AvroSchemaEvolutionUtils;
-import org.apache.hudi.internal.schema.utils.InternalSchemaUtils;
-import org.apache.hudi.internal.schema.utils.SerDeHelper;
 import org.apache.hudi.keygen.constant.KeyGeneratorType;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
@@ -324,9 +322,9 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     // Finalize write
     finalizeWrite(table, instantTime, tableWriteStats.getDataTableWriteStats());
     // do save internal schema to support Implicitly add columns in write process
-    if (!metadata.getExtraMetadata().containsKey(SerDeHelper.LATEST_SCHEMA)
+    if (!metadata.getExtraMetadata().containsKey(HoodieSchemaSerDe.LATEST_SCHEMA)
         && metadata.getExtraMetadata().containsKey(SCHEMA_KEY) && table.getConfig().getSchemaEvolutionEnable()) {
-      saveInternalSchema(table, instantTime, metadata);
+      saveEvolutionSchema(table, instantTime, metadata);
     }
     // update Metadata table
     writeToMetadataTable(skipStreamingWritesToMetadataTable, table, instantTime, tableWriteStats.getMetadataTableWriteStats(), metadata);
@@ -352,34 +350,46 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     }
   }
 
-  // Save internal schema
-  private void saveInternalSchema(HoodieTable table, String instantTime, HoodieCommitMetadata metadata) {
+  // Save evolution schema to commit metadata + history file.
+  private void saveEvolutionSchema(HoodieTable table, String instantTime, HoodieCommitMetadata metadata) {
     TableSchemaResolver schemaUtil = new TableSchemaResolver(table.getMetaClient());
     String historySchemaStr = schemaUtil.getTableHistorySchemaStrFromCommitMetadata().orElse("");
-    FileBasedInternalSchemaStorageManager schemasManager = new FileBasedInternalSchemaStorageManager(table.getMetaClient());
+    HoodieSchemaHistoryStorageManager schemasManager = new HoodieSchemaHistoryStorageManager(table.getMetaClient());
     if (!historySchemaStr.isEmpty() || Boolean.parseBoolean(config.getString(HoodieCommonConfig.RECONCILE_SCHEMA.key()))) {
-      InternalSchema internalSchema;
+      HoodieSchema evolutionSchema;
       HoodieSchema schema = HoodieSchemaUtils.createHoodieWriteSchema(config.getSchema(), config.allowOperationMetadataField());
       if (historySchemaStr.isEmpty()) {
-        internalSchema = SerDeHelper.fromJson(config.getInternalSchema()).orElseGet(() -> InternalSchemaConverter.convert(schema));
-        internalSchema.setSchemaId(Long.parseLong(instantTime));
+        evolutionSchema = HoodieSchemaSerDe.fromJson(config.getInternalSchema()).orElseGet(() -> {
+          // No serialized evolution schema yet — mint fresh ids on the writer schema
+          // so the evolution layer has something concrete to reason about.
+          HoodieSchema fresh = HoodieSchema.fromAvroSchema(schema.toAvroSchema());
+          HoodieSchemaIdAssigner.assignFresh(fresh);
+          fresh.invalidateIdIndex();
+          return fresh;
+        });
+        evolutionSchema.setSchemaId(Long.parseLong(instantTime));
       } else {
-        internalSchema = InternalSchemaUtils.searchSchema(Long.parseLong(instantTime),
-            SerDeHelper.parseSchemas(historySchemaStr));
+        evolutionSchema = HoodieSchemaSerDe.searchSchema(Long.parseLong(instantTime),
+            HoodieSchemaSerDe.parseHistorySchemas(historySchemaStr));
+        if (evolutionSchema == null) {
+          evolutionSchema = HoodieSchema.empty();
+        }
       }
-      InternalSchema evolvedSchema = AvroSchemaEvolutionUtils.reconcileSchema(schema.toAvroSchema(), internalSchema, config.getBooleanOrDefault(HoodieCommonConfig.SET_NULL_FOR_MISSING_COLUMNS));
-      if (evolvedSchema.equals(internalSchema)) {
-        metadata.addMetadata(SerDeHelper.LATEST_SCHEMA, SerDeHelper.toJson(evolvedSchema));
+      HoodieSchema evolvedSchema = HoodieSchemaEvolutionUtils.reconcileSchema(schema, evolutionSchema, config.getBooleanOrDefault(HoodieCommonConfig.SET_NULL_FOR_MISSING_COLUMNS));
+      if (evolvedSchema.equals(evolutionSchema)) {
+        metadata.addMetadata(HoodieSchemaSerDe.LATEST_SCHEMA, HoodieSchemaSerDe.toJson(evolvedSchema));
         //TODO save history schema by metaTable
-        schemasManager.persistHistorySchemaStr(instantTime, historySchemaStr.isEmpty() ? SerDeHelper.inheritSchemas(evolvedSchema, "") : historySchemaStr);
+        schemasManager.persistHistorySchemaStr(instantTime, historySchemaStr.isEmpty() ? HoodieSchemaSerDe.inheritHistory(evolvedSchema, "") : historySchemaStr);
       } else {
         evolvedSchema.setSchemaId(Long.parseLong(instantTime));
-        String newSchemaStr = SerDeHelper.toJson(evolvedSchema);
-        metadata.addMetadata(SerDeHelper.LATEST_SCHEMA, newSchemaStr);
-        schemasManager.persistHistorySchemaStr(instantTime, SerDeHelper.inheritSchemas(evolvedSchema, historySchemaStr));
+        String newSchemaStr = HoodieSchemaSerDe.toJson(evolvedSchema);
+        metadata.addMetadata(HoodieSchemaSerDe.LATEST_SCHEMA, newSchemaStr);
+        schemasManager.persistHistorySchemaStr(instantTime, HoodieSchemaSerDe.inheritHistory(evolvedSchema, historySchemaStr));
       }
-      // update SCHEMA_KEY
-      metadata.addMetadata(SCHEMA_KEY, InternalSchemaConverter.convert(evolvedSchema, schema.getFullName()).toString());
+      // SCHEMA_KEY stores the writer's Avro schema, with the record name set to the
+      // writer schema's full name.
+      metadata.addMetadata(SCHEMA_KEY,
+          HoodieSchemaProjections.withRecordName(evolvedSchema, schema.getFullName()).toString());
     }
   }
 
@@ -1620,15 +1630,16 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    * @param position     col position to be added
    * @param positionType col position change type. now support three change types: first/after/before
    */
-  public void addColumn(String colName, HoodieSchema schema, String doc, String position, TableChange.ColumnPositionChange.ColumnPositionType positionType) {
-    Pair<InternalSchema, HoodieTableMetaClient> pair = getInternalSchemaAndMetaClient();
-    InternalSchema newSchema = new InternalSchemaChangeApplier(pair.getLeft())
-        .applyAddChange(colName, InternalSchemaConverter.convertToField(schema), doc, position, positionType);
-    commitTableChange(newSchema, pair.getRight());
+  public void addColumn(String colName, HoodieSchema schema) {
+    addColumn(colName, schema, null, "", ColumnPositionType.NO_OPERATION);
   }
 
-  public void addColumn(String colName, HoodieSchema schema) {
-    addColumn(colName, schema, null, "", TableChange.ColumnPositionChange.ColumnPositionType.NO_OPERATION);
+  public void addColumn(String colName, HoodieSchema schema, String doc, String position, ColumnPositionType positionType) {
+    Pair<HoodieSchema, HoodieTableMetaClient> pair = getEvolutionSchemaAndMetaClient();
+    HoodieSchema current = pair.getLeft();
+    HoodieSchema evolved = new HoodieSchemaChangeApplier(current)
+        .applyAddChange(colName, schema, doc, position, positionType);
+    commitTableChange(evolved, pair.getRight());
   }
 
   /**
@@ -1637,9 +1648,9 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    * @param colNames col name to be deleted. if we want to delete col from a nested filed, the fullName should be specified
    */
   public void deleteColumns(String... colNames) {
-    Pair<InternalSchema, HoodieTableMetaClient> pair = getInternalSchemaAndMetaClient();
-    InternalSchema newSchema = new InternalSchemaChangeApplier(pair.getLeft()).applyDeleteChange(colNames);
-    commitTableChange(newSchema, pair.getRight());
+    Pair<HoodieSchema, HoodieTableMetaClient> pair = getEvolutionSchemaAndMetaClient();
+    HoodieSchema evolved = new HoodieSchemaChangeApplier(pair.getLeft()).applyDeleteChange(colNames);
+    commitTableChange(evolved, pair.getRight());
   }
 
   /**
@@ -1649,9 +1660,9 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    * @param newName new name for current col. no need to specify fullName.
    */
   public void renameColumn(String colName, String newName) {
-    Pair<InternalSchema, HoodieTableMetaClient> pair = getInternalSchemaAndMetaClient();
-    InternalSchema newSchema = new InternalSchemaChangeApplier(pair.getLeft()).applyRenameChange(colName, newName);
-    commitTableChange(newSchema, pair.getRight());
+    Pair<HoodieSchema, HoodieTableMetaClient> pair = getEvolutionSchemaAndMetaClient();
+    HoodieSchema evolved = new HoodieSchemaChangeApplier(pair.getLeft()).applyRenameChange(colName, newName);
+    commitTableChange(evolved, pair.getRight());
   }
 
   /**
@@ -1661,23 +1672,23 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    * @param nullable .
    */
   public void updateColumnNullability(String colName, boolean nullable) {
-    Pair<InternalSchema, HoodieTableMetaClient> pair = getInternalSchemaAndMetaClient();
-    InternalSchema newSchema = new InternalSchemaChangeApplier(pair.getLeft()).applyColumnNullabilityChange(colName, nullable);
-    commitTableChange(newSchema, pair.getRight());
+    Pair<HoodieSchema, HoodieTableMetaClient> pair = getEvolutionSchemaAndMetaClient();
+    HoodieSchema evolved = new HoodieSchemaChangeApplier(pair.getLeft()).applyColumnNullabilityChange(colName, nullable);
+    commitTableChange(evolved, pair.getRight());
   }
 
   /**
-   * update col Type for hudi table.
-   * only support update primitive type to primitive type.
-   * cannot update nest type to nest type or primitive type eg: RecordType -> MapType, MapType -> LongType.
+   * Update col type for hudi table. Only supports primitive-to-primitive updates;
+   * cannot update a nested type to a nested or primitive type
+   * (e.g. RecordType → MapType, MapType → LongType).
    *
-   * @param colName col name to be changed. if we want to change col from a nested filed, the fullName should be specified
-   * @param newType .
+   * @param colName col name to be changed; for a nested field use the full name.
+   * @param newType target HoodieSchema (must be a primitive type).
    */
-  public void updateColumnType(String colName, Type newType) {
-    Pair<InternalSchema, HoodieTableMetaClient> pair = getInternalSchemaAndMetaClient();
-    InternalSchema newSchema = new InternalSchemaChangeApplier(pair.getLeft()).applyColumnTypeChange(colName, newType);
-    commitTableChange(newSchema, pair.getRight());
+  public void updateColumnType(String colName, HoodieSchema newType) {
+    Pair<HoodieSchema, HoodieTableMetaClient> pair = getEvolutionSchemaAndMetaClient();
+    HoodieSchema evolved = new HoodieSchemaChangeApplier(pair.getLeft()).applyColumnTypeChange(colName, newType);
+    commitTableChange(evolved, pair.getRight());
   }
 
   /**
@@ -1687,43 +1698,48 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    * @param doc     .
    */
   public void updateColumnComment(String colName, String doc) {
-    Pair<InternalSchema, HoodieTableMetaClient> pair = getInternalSchemaAndMetaClient();
-    InternalSchema newSchema = new InternalSchemaChangeApplier(pair.getLeft()).applyColumnCommentChange(colName, doc);
-    commitTableChange(newSchema, pair.getRight());
+    Pair<HoodieSchema, HoodieTableMetaClient> pair = getEvolutionSchemaAndMetaClient();
+    HoodieSchema evolved = new HoodieSchemaChangeApplier(pair.getLeft()).applyColumnCommentChange(colName, doc);
+    commitTableChange(evolved, pair.getRight());
   }
 
   /**
-   * reorder the position of col.
+   * Reorder the position of col.
    *
    * @param colName column which need to be reordered. if we want to change col from a nested filed, the fullName should be specified.
    * @param referColName reference position.
    * @param orderType col position change type. now support three change types: first/after/before
    */
-  public void reOrderColPosition(String colName, String referColName, TableChange.ColumnPositionChange.ColumnPositionType orderType) {
+  public void reOrderColPosition(String colName, String referColName, ColumnPositionType orderType) {
     if (colName == null || orderType == null || referColName == null) {
       return;
     }
-    //get internalSchema
-    Pair<InternalSchema, HoodieTableMetaClient> pair = getInternalSchemaAndMetaClient();
-    InternalSchema newSchema = new InternalSchemaChangeApplier(pair.getLeft())
+    Pair<HoodieSchema, HoodieTableMetaClient> pair = getEvolutionSchemaAndMetaClient();
+    HoodieSchema evolved = new HoodieSchemaChangeApplier(pair.getLeft())
         .applyReOrderColPositionChange(colName, referColName, orderType);
-    commitTableChange(newSchema, pair.getRight());
+    commitTableChange(evolved, pair.getRight());
   }
 
-  public Pair<InternalSchema, HoodieTableMetaClient> getInternalSchemaAndMetaClient() {
+  /**
+   * Resolves the table's evolution schema (or assigns fresh ids to the data schema
+   * as a fallback) and pairs it with a fresh metaClient.
+   */
+  public Pair<HoodieSchema, HoodieTableMetaClient> getEvolutionSchemaAndMetaClient() {
     HoodieTableMetaClient metaClient = createMetaClient(true);
     TableSchemaResolver schemaUtil = new TableSchemaResolver(metaClient);
-    return Pair.of(getInternalSchema(schemaUtil), metaClient);
+    return Pair.of(getEvolutionSchema(schemaUtil), metaClient);
   }
 
-  public void commitTableChange(InternalSchema newSchema, HoodieTableMetaClient metaClient) {
+  /**
+   * Persists the post-DDL evolution schema to commit metadata and the history file.
+   */
+  public void commitTableChange(HoodieSchema newEvolutionSchema, HoodieTableMetaClient metaClient) {
     TableSchemaResolver schemaUtil = new TableSchemaResolver(metaClient);
     String historySchemaStr = schemaUtil.getTableHistorySchemaStrFromCommitMetadata().orElseGet(
-        () -> SerDeHelper.inheritSchemas(getInternalSchema(schemaUtil), ""));
-    HoodieSchema schema = InternalSchemaConverter.convert(newSchema, HoodieSchemaUtils.getRecordQualifiedName(config.getTableName()));
+        () -> HoodieSchemaSerDe.inheritHistory(getEvolutionSchema(schemaUtil), ""));
     String commitActionType = CommitUtils.getCommitActionType(WriteOperationType.ALTER_SCHEMA, metaClient.getTableType());
     String instantTime = startCommit(commitActionType, metaClient);
-    config.setSchema(schema.toString());
+    config.setSchema(newEvolutionSchema.toString());
     HoodieActiveTimeline timeLine = metaClient.getActiveTimeline();
     HoodieInstant requested = metaClient.createNewInstant(State.REQUESTED, commitActionType, instantTime);
     HoodieCommitMetadata metadata = new HoodieCommitMetadata();
@@ -1733,18 +1749,26 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     } catch (HoodieIOException io) {
       throw new HoodieCommitException("Failed to commit " + instantTime + " unable to save inflight metadata ", io);
     }
+    newEvolutionSchema.setSchemaId(Long.parseLong(instantTime));
     Map<String, String> extraMeta = new HashMap<>();
-    extraMeta.put(SerDeHelper.LATEST_SCHEMA, SerDeHelper.toJson(newSchema.setSchemaId(Long.parseLong(instantTime))));
+    extraMeta.put(HoodieSchemaSerDe.LATEST_SCHEMA, HoodieSchemaSerDe.toJson(newEvolutionSchema));
     // try to save history schemas
-    FileBasedInternalSchemaStorageManager schemasManager = new FileBasedInternalSchemaStorageManager(metaClient);
-    schemasManager.persistHistorySchemaStr(instantTime, SerDeHelper.inheritSchemas(newSchema, historySchemaStr));
+    HoodieSchemaHistoryStorageManager schemasManager = new HoodieSchemaHistoryStorageManager(metaClient);
+    schemasManager.persistHistorySchemaStr(instantTime, HoodieSchemaSerDe.inheritHistory(newEvolutionSchema, historySchemaStr));
     commitStats(instantTime, Collections.emptyList(), Option.of(extraMeta), commitActionType);
   }
 
-  private InternalSchema getInternalSchema(TableSchemaResolver schemaUtil) {
-    return schemaUtil.getTableInternalSchemaFromCommitMetadata().orElseGet(() -> {
+  /**
+   * Returns the table's evolution schema, or assigns fresh ids to the table's data
+   * schema as a fallback (mints fresh ids when no evolution schema exists).
+   */
+  private HoodieSchema getEvolutionSchema(TableSchemaResolver schemaUtil) {
+    return schemaUtil.getTableEvolutionSchemaFromCommitMetadata().orElseGet(() -> {
       try {
-        return InternalSchemaConverter.convert(schemaUtil.getTableSchema());
+        HoodieSchema fresh = HoodieSchema.fromAvroSchema(schemaUtil.getTableSchema().toAvroSchema());
+        HoodieSchemaIdAssigner.assignFresh(fresh);
+        fresh.invalidateIdIndex();
+        return fresh;
       } catch (Exception e) {
         throw new HoodieException(String.format("cannot find schema for current table: %s", config.getBasePath()));
       }

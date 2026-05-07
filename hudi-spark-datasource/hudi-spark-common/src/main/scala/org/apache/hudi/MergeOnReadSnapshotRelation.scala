@@ -111,7 +111,7 @@ abstract class BaseMergeOnReadSnapshotRelation(sqlContext: SQLContext,
     val requiredFilters = Seq.empty
     val optionalFilters = filters
     val readers = createBaseFileReaders(tableSchema, requiredSchema, requestedColumns, requiredFilters, optionalFilters)
-    val confWithSchema = embedInternalSchema(new Configuration(conf), internalSchemaOpt)
+    val confWithSchema = embedEvolutionSchema(new Configuration(conf), evolutionSchemaOpt)
 
     new HoodieMergeOnReadRDDV2(
       sqlContext.sparkContext,

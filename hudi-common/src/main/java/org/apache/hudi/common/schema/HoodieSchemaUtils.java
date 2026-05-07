@@ -25,7 +25,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.internal.schema.HoodieSchemaException;
+import org.apache.hudi.exception.HoodieSchemaException;
 
 import org.apache.avro.JsonProperties;
 import org.apache.avro.Schema;
@@ -37,6 +37,8 @@ import java.math.MathContext;
 import java.math.RoundingMode;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Deque;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -71,6 +73,70 @@ public final class HoodieSchemaUtils {
   // Private constructor to prevent instantiation
   private HoodieSchemaUtils() {
     throw new UnsupportedOperationException("Utility class cannot be instantiated");
+  }
+
+  /**
+   * Returns the dot-joined full names of every leaf in {@code schema} — primitives
+   * encountered while walking record fields, array elements, and map values. Order
+   * matches a depth-first record traversal. Used by the prune-by-name path on
+   * {@link org.apache.hudi.common.schema.evolution.HoodieSchemaProjections}.
+   */
+  public static List<String> collectLeafNames(HoodieSchema schema) {
+    List<String> result = new ArrayList<>();
+    collectLeafNames(schema, new LinkedList<>(), result);
+    return result;
+  }
+
+  private static void collectLeafNames(HoodieSchema schema, Deque<String> visited, List<String> out) {
+    switch (schema.getType()) {
+      case RECORD:
+        for (HoodieSchemaField f : schema.getFields()) {
+          visited.push(f.name());
+          collectLeafNames(f.schema(), visited, out);
+          visited.pop();
+          recordIfLeaf(f.schema(), f.name(), visited, out);
+        }
+        return;
+      case UNION:
+        collectLeafNames(schema.getNonNullType(), visited, out);
+        return;
+      case ARRAY:
+        visited.push("element");
+        collectLeafNames(schema.getElementType(), visited, out);
+        visited.pop();
+        recordIfLeaf(schema.getElementType(), "element", visited, out);
+        return;
+      case MAP:
+        recordIfLeaf(HoodieSchemaType.STRING, "key", visited, out);
+        visited.push("value");
+        collectLeafNames(schema.getValueType(), visited, out);
+        visited.pop();
+        recordIfLeaf(schema.getValueType(), "value", visited, out);
+        return;
+      default:
+    }
+  }
+
+  private static void recordIfLeaf(HoodieSchema schema, String name, Deque<String> visited, List<String> out) {
+    recordIfLeaf(schema.getNonNullType().getType(), name, visited, out);
+  }
+
+  private static void recordIfLeaf(HoodieSchemaType type, String name, Deque<String> visited, List<String> out) {
+    switch (type) {
+      case RECORD:
+      case ARRAY:
+      case MAP:
+        return;
+      default:
+        if (visited.isEmpty()) {
+          out.add(name);
+          return;
+        }
+        StringBuilder sb = new StringBuilder();
+        visited.descendingIterator().forEachRemaining(p -> sb.append(p).append('.'));
+        sb.append(name);
+        out.add(sb.toString());
+    }
   }
 
   /**
@@ -170,7 +236,16 @@ public final class HoodieSchemaUtils {
   }
 
   /**
-   * Merges two schemas, combining fields from both with conflict resolution.
+   * Structural name-based union of two schemas. For each source field, the
+   * target's same-name field (if any) recursively merges in; target-only fields
+   * are appended after the source fields in target order.
+   *
+   * <p><b>Not</b> the same as {@link org.apache.hudi.common.schema.evolution.HoodieSchemaMerger}.
+   * This is a name-driven structural combine used by bootstrap reads to glue a
+   * skeleton schema onto a data schema. {@link org.apache.hudi.common.schema.evolution.HoodieSchemaMerger}
+   * does an id-driven evolution merge (file schema vs query schema, with
+   * rename / type-promotion tracking) and is what the schema-on-read read path
+   * uses. Don't reach for this method when you want evolution semantics.</p>
    *
    * @param sourceSchema source schema to merge from
    * @param targetSchema target schema to merge into
@@ -372,7 +447,13 @@ public final class HoodieSchemaUtils {
    * @return a new HoodieSchemaField with the same properties but properly formatted default value
    */
   public static HoodieSchemaField createNewSchemaField(HoodieSchemaField field) {
-    return createNewSchemaField(field.name(), field.schema(), field.doc().orElse(null), field.defaultVal().orElse(null));
+    HoodieSchemaField newField = createNewSchemaField(field.name(), field.schema(), field.doc().orElse(null), field.defaultVal().orElse(null));
+    // Preserve Avro custom props (notably {@code field-id}) so callers that copy a
+    // field through this helper don't silently drop schema-on-read identity.
+    for (Map.Entry<String, Object> prop : field.getObjectProps().entrySet()) {
+      newField.addProp(prop.getKey(), prop.getValue());
+    }
+    return newField;
   }
 
   /**
@@ -590,6 +671,15 @@ public final class HoodieSchemaUtils {
     HoodieSchema newSchema = HoodieSchema.createRecord(schema.getName(), schema.getNamespace().orElse(null), schema.getDoc().orElse(null), fields);
     for (Map.Entry<String, Object> prop : schemaProps.entrySet()) {
       newSchema.addProp(prop.getKey(), prop.getValue());
+    }
+    // Preserve schema-on-read meta (version id and max column id) so callers that
+    // copy a HoodieSchema through this helper don't silently reset them to -1, which
+    // would make the result look like an "empty" sentinel to {@link HoodieSchema#isEmptySchema()}.
+    if (schema.schemaId() >= 0) {
+      newSchema.setSchemaId(schema.schemaId());
+    }
+    if (schema.maxColumnId() >= 0) {
+      newSchema.setMaxColumnId(schema.maxColumnId());
     }
     return newSchema;
   }
@@ -938,7 +1028,13 @@ public final class HoodieSchemaUtils {
         Option<HoodieSchemaField> field = schema.getField(f.name());
         if (field.isPresent()) {
           HoodieSchemaField foundField = field.get();
-          fields.set(foundField.pos(), createNewSchemaField(foundField.name(), mergeSchemas(foundField.schema(), f.schema()), foundField.doc().orElse(null), foundField.defaultVal().orElse(null)));
+          HoodieSchemaField rebuilt = createNewSchemaField(foundField.name(), mergeSchemas(foundField.schema(), f.schema()), foundField.doc().orElse(null), foundField.defaultVal().orElse(null));
+          // Preserve the existing field's Avro custom props (notably {@code field-id})
+          // so the dedup branch doesn't silently strip schema-on-read identity.
+          for (Map.Entry<String, Object> prop : foundField.getObjectProps().entrySet()) {
+            rebuilt.addProp(prop.getKey(), prop.getValue());
+          }
+          fields.set(foundField.pos(), rebuilt);
         } else {
           fields.add(f);
         }

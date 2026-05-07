@@ -32,7 +32,6 @@ import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.CloseableMappingIterator;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
-import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.io.SeekableDataInputStream;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StorageConfiguration;
@@ -420,7 +419,7 @@ public class HoodieAvroDataBlock extends HoodieDataBlock {
   }
 
   public static HoodieAvroDataBlock getBlock(byte[] content, HoodieSchema readerSchema) throws IOException {
-    return getBlock(content, readerSchema, InternalSchema.getEmptyInternalSchema());
+    return getBlock(content, readerSchema, HoodieSchema.empty());
   }
 
   /**
@@ -428,7 +427,7 @@ public class HoodieAvroDataBlock extends HoodieDataBlock {
    * HoodieLogFormat V1.
    */
   @Deprecated
-  public static HoodieAvroDataBlock getBlock(byte[] content, HoodieSchema readerSchema, InternalSchema internalSchema) throws IOException {
+  public static HoodieAvroDataBlock getBlock(byte[] content, HoodieSchema readerSchema, HoodieSchema evolutionSchema) throws IOException {
 
     SizeAwareDataInputStream dis = new SizeAwareDataInputStream(new DataInputStream(new ByteArrayInputStream(content)));
 
@@ -438,7 +437,7 @@ public class HoodieAvroDataBlock extends HoodieDataBlock {
     dis.readFully(compressedSchema, 0, schemaLength);
     Schema writerSchema = new Schema.Parser().parse(decompress(compressedSchema));
 
-    if (readerSchema == null || !internalSchema.isEmptySchema()) {
+    if (readerSchema == null || !evolutionSchema.isEmptySchema()) {
       readerSchema = HoodieSchema.fromAvroSchema(writerSchema);
     }
 

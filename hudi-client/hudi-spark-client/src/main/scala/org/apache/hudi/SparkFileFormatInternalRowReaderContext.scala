@@ -116,8 +116,8 @@ class SparkFileFormatInternalRowReaderContext(baseFileReader: SparkColumnarFileR
       } else {
         org.apache.hudi.common.util.Option.empty[org.apache.parquet.schema.MessageType]()
       }
-      val rawIterator = new CloseableInternalRowIterator(baseFileReader.read(fileInfo,
-        readSchema, StructType(Seq.empty), getSchemaHandler.getInternalSchemaOpt,
+      val rawIterator = new CloseableInternalRowIterator(baseFileReader.readWithEvolutionSchema(fileInfo,
+        readSchema, StructType(Seq.empty), getSchemaHandler.getEvolutionSchemaOpt,
         readFilters, storage.getConf.asInstanceOf[StorageConfiguration[Configuration]], tableSchemaOpt))
 
       // Post-process: convert binary VECTOR columns back to typed arrays

@@ -32,15 +32,15 @@ import org.apache.hudi.common.model.OverwriteNonDefaultsWithLatestAvroPayload;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaField;
+import org.apache.hudi.common.schema.HoodieSchemaIdAssigner;
+import org.apache.hudi.common.schema.HoodieSchemaType;
+import org.apache.hudi.common.schema.evolution.HoodieSchemaChangeApplier;
+import org.apache.hudi.common.schema.evolution.HoodieSchemaHistoryCache;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.testutils.SchemaTestUtil;
-import org.apache.hudi.common.util.InternalSchemaCache;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.internal.schema.InternalSchema;
-import org.apache.hudi.internal.schema.Types;
-import org.apache.hudi.internal.schema.convert.InternalSchemaConverter;
 import org.apache.hudi.storage.StoragePath;
 
 import org.junit.jupiter.api.Test;
@@ -58,7 +58,6 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.apache.hudi.common.model.DefaultHoodieRecordPayload.DELETE_KEY;
@@ -108,25 +107,68 @@ public class TestFileGroupReaderSchemaHandler extends SchemaHandlerTestBase {
     HoodieReaderContext<String> readerContext = createReaderContext(hoodieTableConfig, false, false, true, false, null);
     HoodieSchema requestedSchema = generateProjectionSchema("_hoodie_record_key", "timestamp", "rider");
 
-    InternalSchema internalSchema = InternalSchemaConverter.convert(DATA_SCHEMA);
-    InternalSchema originalSchema = new InternalSchema(Types.RecordType.get(internalSchema.columns().stream().map(field -> {
-      if (field.name().equals("timestamp")) {
-        // rename timestamp to ts in file schema and change type to int, output schema names and types must match the requested schema
-        return Types.Field.get(field.fieldId(), "ts", Types.IntType.get());
+    // Stamp ids on a copy of DATA_SCHEMA so the applier-driven rename can
+    // preserve a field id the merger looks up. DATA_SCHEMA itself is shared
+    // across tests and must not be mutated. Set schemaId=0 so isEmptySchema()
+    // is false — otherwise pruneEvolutionSchema short-circuits to empty and
+    // the rename-detection path is skipped entirely.
+    HoodieSchema evolutionSchema = HoodieSchema.parse(DATA_SCHEMA.toAvroSchema().toString());
+    HoodieSchemaIdAssigner.assignFresh(evolutionSchema);
+    evolutionSchema.setSchemaId(0);
+    // Build a "file schema" that's evolutionSchema with timestamp → ts (int);
+    // the rename preserves the field id so the merger can match against
+    // requestedSchema's "timestamp" via id-based lookup.
+    HoodieSchema renamedFileSchema = new HoodieSchemaChangeApplier(evolutionSchema).applyRenameChange("timestamp", "ts");
+    // Direct field-list rebuild so we can swap "ts" from long → int while
+    // preserving its field-id. applyColumnTypeChange would reject this as a
+    // narrowing (it now mirrors the legacy isTypeUpdateAllow contract); the
+    // pre-bridge test built this fixture by raw Types.Field construction for
+    // the same reason.
+    List<HoodieSchemaField> rebuiltFields = new ArrayList<>(renamedFileSchema.getFields().size());
+    for (HoodieSchemaField f : renamedFileSchema.getFields()) {
+      if ("ts".equals(f.name())) {
+        boolean wasNullable = f.schema().isNullable();
+        HoodieSchema intType = HoodieSchema.create(HoodieSchemaType.INT);
+        HoodieSchema swapped = wasNullable ? HoodieSchema.createNullable(intType) : intType;
+        HoodieSchemaField rebuilt = HoodieSchemaField.of(f.name(), swapped, f.doc().orElse(null), f.defaultVal().orElse(null));
+        if (f.fieldId() >= 0) {
+          rebuilt.addProp(HoodieSchema.FIELD_ID_PROP, f.fieldId());
+        }
+        rebuiltFields.add(rebuilt);
+      } else {
+        HoodieSchemaField cloned = HoodieSchemaField.of(f.name(), f.schema(), f.doc().orElse(null), f.defaultVal().orElse(null));
+        if (f.fieldId() >= 0) {
+          cloned.addProp(HoodieSchema.FIELD_ID_PROP, f.fieldId());
+        }
+        rebuiltFields.add(cloned);
       }
-      return field;
-    }).collect(Collectors.toList())));
+    }
+    HoodieSchema originalSchema = HoodieSchema.createRecord(
+        renamedFileSchema.getName(),
+        renamedFileSchema.getNamespace().orElse(null),
+        renamedFileSchema.getDoc().orElse(null),
+        rebuiltFields);
+    if (renamedFileSchema.schemaId() >= 0) {
+      originalSchema.setSchemaId(renamedFileSchema.schemaId());
+    }
+    if (renamedFileSchema.maxColumnId() >= 0) {
+      originalSchema.setMaxColumnId(renamedFileSchema.maxColumnId());
+    }
     FileGroupReaderSchemaHandler<String> schemaHandler = new FileGroupReaderSchemaHandler<>(readerContext, DATA_SCHEMA, requestedSchema,
-        Option.of(internalSchema), new TypedProperties(), metaClient);
+        Option.of(evolutionSchema),
+        new TypedProperties(), metaClient);
 
-    try (MockedStatic<InternalSchemaCache> mockedStatic = Mockito.mockStatic(InternalSchemaCache.class)) {
+    try (MockedStatic<HoodieSchemaHistoryCache> mockedStatic = Mockito.mockStatic(HoodieSchemaHistoryCache.class)) {
       String instantTime = "20231010101010";
-      mockedStatic.when(() -> InternalSchemaCache.searchSchemaAndCache(Long.parseLong(instantTime), metaClient))
+      mockedStatic.when(() -> HoodieSchemaHistoryCache.searchSchemaAndCache(Long.parseLong(instantTime), metaClient))
           .thenReturn(originalSchema);
       StoragePath filePath = new StoragePath("/2023-01-01/" + FSUtils.makeBaseFileName(instantTime, "1-0-1", UUID.randomUUID().toString(), HoodieFileFormat.PARQUET.getFileExtension()));
       Pair<HoodieSchema, Map<String, String>> requiredSchemaAndRenamedFields = schemaHandler.getRequiredSchemaForFileAndRenamedColumns(filePath);
       assertEquals(Collections.singletonMap("timestamp", "ts"), requiredSchemaAndRenamedFields.getRight());
-      assertEquals(requestedSchema, requiredSchemaAndRenamedFields.getLeft());
+      // Post-migration the merged schema preserves field-ids via the bridge
+      // round-trip; the assertion still checks the structural shape so we
+      // compare modulo the field-id custom property.
+      assertEquals(requestedSchema, stripFieldIds(requiredSchemaAndRenamedFields.getLeft()));
     }
   }
 
@@ -349,5 +391,14 @@ public class TestFileGroupReaderSchemaHandler extends SchemaHandlerTestBase {
     HoodieSchema actualSchema = schemaHandler.generateRequiredSchema(deleteContext);
 
     assertEquals(expectedSchema, actualSchema);
+  }
+
+  /**
+   * Returns a copy of {@code schema} with all {@code field-id} custom Avro
+   * properties stripped. Lets tests assert structural equality against fixtures
+   * that don't carry field ids without depending on the bridge's id assignment.
+   */
+  private static HoodieSchema stripFieldIds(HoodieSchema schema) {
+    return HoodieSchema.parse(schema.toAvroSchema().toString().replaceAll(",\"field-id\":\\d+", ""));
   }
 }

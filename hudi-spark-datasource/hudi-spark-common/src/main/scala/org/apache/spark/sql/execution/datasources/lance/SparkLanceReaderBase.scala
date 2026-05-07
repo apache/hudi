@@ -24,7 +24,6 @@ import org.apache.hudi.common.config.{HoodieReaderConfig, HoodieStorageConfig}
 import org.apache.hudi.common.schema.{HoodieSchema, HoodieSchemaType}
 import org.apache.hudi.common.util
 import org.apache.hudi.common.util.collection.ClosableIterator
-import org.apache.hudi.internal.schema.InternalSchema
 import org.apache.hudi.io.memory.HoodieArrowAllocator
 import org.apache.hudi.io.storage.{BlobDescriptorTransform, LanceRecordIterator, VectorConversionUtils}
 import org.apache.hudi.storage.StorageConfiguration
@@ -68,13 +67,13 @@ class SparkLanceReaderBase(enableVectorizedReader: Boolean) extends SparkColumna
    * @param storageConf       the hadoop conf
    * @return iterator of rows read from the file output type says [[InternalRow]] but could be [[ColumnarBatch]]
    */
-  override def read(file: PartitionedFile,
-                    requiredSchema: StructType,
-                    partitionSchema: StructType,
-                    internalSchemaOpt: util.Option[InternalSchema],
-                    filters: scala.Seq[Filter],
-                    storageConf: StorageConfiguration[Configuration],
-                    tableSchemaOpt: util.Option[MessageType] = util.Option.empty()): Iterator[InternalRow] = {
+  override def readWithEvolutionSchema(file: PartitionedFile,
+                                       requiredSchema: StructType,
+                                       partitionSchema: StructType,
+                                       evolutionSchemaOpt: util.Option[HoodieSchema],
+                                       filters: scala.Seq[Filter],
+                                       storageConf: StorageConfiguration[Configuration],
+                                       tableSchemaOpt: util.Option[MessageType] = util.Option.empty()): Iterator[InternalRow] = {
 
     val filePath = file.filePath.toString
 

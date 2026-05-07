@@ -753,7 +753,7 @@ public class TestHoodieAvroUtils {
   @Test
   void testConvertBytesToFixed() {
     Random rand = new Random();
-    //size calculated using InternalSchemaConverter.computeMinBytesForPrecision
+    //size calculated as the minimum bytes needed for the given decimal precision
     testConverBytesToFixedHelper(rand.nextDouble(), 13, 7, 6);
     testConverBytesToFixedHelper(rand.nextDouble(), 4, 2, 2);
     testConverBytesToFixedHelper(rand.nextDouble(), 32, 12, 14);

@@ -25,7 +25,7 @@ import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.internal.schema.HoodieSchemaException;
+import org.apache.hudi.exception.HoodieSchemaException;
 
 import com.google.protobuf.BoolValue;
 import com.google.protobuf.ByteString;

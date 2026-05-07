@@ -66,7 +66,7 @@ import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
 import org.apache.hudi.table.format.FilePathUtils;
-import org.apache.hudi.table.format.InternalSchemaManager;
+import org.apache.hudi.table.format.SchemaEvolutionManager;
 import org.apache.hudi.table.format.cdc.CdcInputFormat;
 import org.apache.hudi.table.format.cow.CopyOnWriteInputFormat;
 import org.apache.hudi.table.format.mor.MergeOnReadInputFormat;
@@ -160,7 +160,7 @@ public class HoodieTableSource extends FileIndexReader implements
   private final List<String> partitionKeys;
   private final String defaultPartName;
   private final Configuration conf;
-  private final InternalSchemaManager internalSchemaManager;
+  private final SchemaEvolutionManager schemaEvolutionManager;
 
   private int[] requiredPos;
   private long limit;
@@ -192,7 +192,7 @@ public class HoodieTableSource extends FileIndexReader implements
       @Nullable int[] requiredPos,
       @Nullable Long limit,
       @Nullable HoodieTableMetaClient metaClient,
-      @Nullable InternalSchemaManager internalSchemaManager) {
+      @Nullable SchemaEvolutionManager schemaEvolutionManager) {
     this.schema = schema;
     this.tableRowType = (RowType) this.schema.toSourceRowDataType().notNull().getLogicalType();
     this.path = path;
@@ -208,7 +208,7 @@ public class HoodieTableSource extends FileIndexReader implements
     this.hadoopConf = new HadoopStorageConfiguration(HadoopConfigurations.getHadoopConf(conf));
     this.metaClient = Option.ofNullable(metaClient).orElseGet(() -> StreamerUtil.metaClientForReader(conf, this.hadoopConf.unwrap()));
     this.maxCompactionMemoryInBytes = StreamerUtil.getMaxCompactionMemoryInBytes(conf);
-    this.internalSchemaManager = Option.ofNullable(internalSchemaManager).orElseGet(() -> InternalSchemaManager.get(this.hadoopConf, this.metaClient));
+    this.schemaEvolutionManager = Option.ofNullable(schemaEvolutionManager).orElseGet(() -> SchemaEvolutionManager.get(this.hadoopConf, this.metaClient));
   }
 
   @Override
@@ -316,7 +316,7 @@ public class HoodieTableSource extends FileIndexReader implements
       splitReaderFunction = new HoodieCdcSplitReaderFunction(
           conf,
           hoodieTableState,
-          internalSchemaManager,
+          schemaEvolutionManager,
           fieldTypes,
           predicates,
           emitDelete);
@@ -325,7 +325,7 @@ public class HoodieTableSource extends FileIndexReader implements
           conf,
           tableSchema,
           HoodieSchemaConverter.convertToSchema(requiredRowType),
-          internalSchemaManager,
+          schemaEvolutionManager,
           conf.get(FlinkOptions.MERGE_TYPE),
           predicates,
           emitDelete);
@@ -388,7 +388,7 @@ public class HoodieTableSource extends FileIndexReader implements
   @Override
   public DynamicTableSource copy() {
     return new HoodieTableSource(schema, path, partitionKeys, defaultPartName,
-        conf, predicates, columnStatsProbe, partitionPruner, dataBucketFunc, requiredPos, limit, metaClient, internalSchemaManager);
+        conf, predicates, columnStatsProbe, partitionPruner, dataBucketFunc, requiredPos, limit, metaClient, schemaEvolutionManager);
   }
 
   @Override
@@ -646,7 +646,7 @@ public class HoodieTableSource extends FileIndexReader implements
         .predicates(this.predicates)
         .limit(this.limit)
         .emitDelete(emitDelete)
-        .internalSchemaManager(internalSchemaManager)
+        .schemaEvolutionManager(schemaEvolutionManager)
         .build();
   }
 
@@ -675,7 +675,7 @@ public class HoodieTableSource extends FileIndexReader implements
         this.limit == NO_LIMIT_CONSTANT ? Long.MAX_VALUE : this.limit, // ParquetInputFormat always uses the limit value
         getParquetConf(this.conf, this.hadoopConf.unwrap()),
         this.conf.get(FlinkOptions.READ_UTC_TIMEZONE),
-        this.internalSchemaManager
+        this.schemaEvolutionManager
     );
   }
 

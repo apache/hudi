@@ -26,7 +26,7 @@ import org.apache.hudi.common.schema.HoodieSchemaTestUtils;
 import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
-import org.apache.hudi.internal.schema.HoodieSchemaException;
+import org.apache.hudi.exception.HoodieSchemaException;
 import org.apache.hudi.hadoop.HiveHoodieReaderContext;
 import org.apache.hudi.hadoop.HiveRecordContext;
 

@@ -35,7 +35,7 @@ import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
-import org.apache.hudi.internal.schema.io.FileBasedInternalSchemaStorageManager;
+import org.apache.hudi.common.schema.evolution.HoodieSchemaHistoryStorageManager;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
@@ -271,7 +271,7 @@ public class CleanActionExecutor<T, I, K, O> extends BaseActionExecutor<T, I, K,
     if (pendingCleanInstants.size() > 0) {
       // try to clean old history schema.
       try {
-        FileBasedInternalSchemaStorageManager fss = new FileBasedInternalSchemaStorageManager(table.getMetaClient());
+        HoodieSchemaHistoryStorageManager fss = new HoodieSchemaHistoryStorageManager(table.getMetaClient());
         fss.cleanOldFiles(pendingCleanInstants.stream().map(is -> is.requestedTime()).collect(Collectors.toList()));
       } catch (Exception e) {
         // we should not affect original clean logic. Swallow exception and log.

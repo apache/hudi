@@ -22,10 +22,10 @@ import org.apache.hudi.client.HoodieJavaWriteClient;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.internal.schema.Types;
 import org.apache.hudi.testutils.HoodieJavaClientTestHarness;
 
 import org.apache.avro.generic.IndexedRecord;
@@ -64,8 +64,10 @@ public class TestSchemaEvolutionClient extends HoodieJavaClientTestHarness {
 
   @Test
   public void testUpdateColumnType() {
-    writeClient.updateColumnType("number", Types.LongType.get());
-    assertEquals(Types.LongType.get(), getFieldByName("number").type());
+    writeClient.updateColumnType("number", HoodieSchema.create(HoodieSchemaType.LONG));
+    // The "number" field is optional, so its HoodieSchema is the [null, long] union;
+    // assert on the underlying primitive type directly.
+    assertEquals(HoodieSchemaType.LONG, getFieldType("number").getType());
   }
 
   private HoodieJavaWriteClient<IndexedRecord> getWriteClient() {
@@ -84,10 +86,14 @@ public class TestSchemaEvolutionClient extends HoodieJavaClientTestHarness {
     writeClient.commit(commitTime, writeClient.insert(Collections.singletonList(record), commitTime), Option.empty(), COMMIT_ACTION, Collections.emptyMap());
   }
 
-  private Types.Field getFieldByName(String fieldName) {
+  private HoodieSchema getFieldType(String fieldName) {
+    // Strip the surrounding [null, T] union wrapping that Avro uses for optional
+    // fields — the test compares against bare primitive types because optionality
+    // is a property of the field, not the type.
     return new TableSchemaResolver(metaClient)
-        .getTableInternalSchemaFromCommitMetadata()
+        .getTableEvolutionSchemaFromCommitMetadata()
         .get()
-        .findField(fieldName);
+        .findType(fieldName)
+        .getNonNullType();
   }
 }

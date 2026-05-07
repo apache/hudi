@@ -22,7 +22,7 @@ import org.apache.hudi.HoodieSchemaConversionUtils;
 import org.apache.hudi.HoodieSparkUtils;
 import org.apache.hudi.SparkAdapterSupport$;
 import org.apache.hudi.SparkFileFormatInternalRowReaderContext;
-import org.apache.hudi.client.utils.SparkInternalSchemaConverter;
+import org.apache.hudi.client.utils.SparkSchemaEvolutionConverter;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.engine.ReaderContextFactory;
 import org.apache.hudi.common.model.HoodieFileFormat;
@@ -33,7 +33,7 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.InstantFileNameGenerator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.internal.schema.InternalSchema;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
 
 import org.apache.hadoop.conf.Configuration;
@@ -175,12 +175,12 @@ public class SparkReaderContextFactory implements ReaderContextFactory<InternalR
                                                                HoodieTimeline timeline,
                                                                InstantFileNameGenerator fileNameGenerator,
                                                                String basePath) {
-    Option<InternalSchema> internalSchemaOpt = schemaResolver.getTableInternalSchemaFromCommitMetadata();
+    Option<HoodieSchema> evolutionSchemaOpt = schemaResolver.getTableEvolutionSchemaFromCommitMetadata();
     Map<String, String> configs = new HashMap<>();
-    if (internalSchemaOpt.isPresent()) {
+    if (evolutionSchemaOpt.isPresent()) {
       List<String> instantFiles = timeline.getInstants().stream().map(fileNameGenerator::getFileName).collect(Collectors.toList());
-      configs.put(SparkInternalSchemaConverter.HOODIE_VALID_COMMITS_LIST, String.join(",", instantFiles));
-      configs.put(SparkInternalSchemaConverter.HOODIE_TABLE_PATH, basePath);
+      configs.put(SparkSchemaEvolutionConverter.HOODIE_VALID_COMMITS_LIST, String.join(",", instantFiles));
+      configs.put(SparkSchemaEvolutionConverter.HOODIE_TABLE_PATH, basePath);
     }
     return configs;
   }
