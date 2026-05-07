@@ -40,12 +40,12 @@ class TestBlobDataType extends HoodieSparkSqlTestBase {
        |  'reference', cast(null as $referenceStructType)
        |)""".stripMargin
 
-  private def outOfLineBlobLiteral(path: String, offset: Long, length: Long): String =
+  private def outOfLineBlobLiteral(externalPath: String, offset: Long, length: Long): String =
     s"""named_struct(
        |  'type', 'OUT_OF_LINE',
        |  'data', cast(null as binary),
        |  'reference', named_struct(
-       |    'external_path', '$path',
+       |    'external_path', '$externalPath',
        |    'offset', cast($offset as bigint),
        |    'length', cast($length as bigint),
        |    'managed', false
@@ -70,6 +70,7 @@ class TestBlobDataType extends HoodieSparkSqlTestBase {
            |  preCombineField = 'ts',
            |  hoodie.index.type = 'INMEMORY',
            |  hoodie.compact.inline = 'true',
+           |  hoodie.compact.inline.max.delta.commits = '5',
            |  hoodie.clean.commits.retained = '1'
            | )
        """.stripMargin)
@@ -186,6 +187,7 @@ class TestBlobDataType extends HoodieSparkSqlTestBase {
            |  preCombineField = 'ts',
            |  hoodie.index.type = 'INMEMORY',
            |  hoodie.compact.inline = 'true',
+           |  hoodie.compact.inline.max.delta.commits = '5',
            |  hoodie.clean.commits.retained = '1'
            | )
        """.stripMargin)

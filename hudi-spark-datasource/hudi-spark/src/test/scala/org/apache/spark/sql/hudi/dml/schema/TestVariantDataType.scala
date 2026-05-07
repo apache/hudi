@@ -135,6 +135,7 @@ class TestVariantDataType extends HoodieSparkSqlTestBase {
 
     withRecordType()(withTempDir { tmp =>
       val tableName = generateTableName
+      val tablePath = tmp.getCanonicalPath
       spark.sql(
         s"""
            |create table $tableName (
@@ -142,13 +143,14 @@ class TestVariantDataType extends HoodieSparkSqlTestBase {
            |  v variant,
            |  ts long
            |) using hudi
-           | location '${tmp.getCanonicalPath}'
+           | location '$tablePath'
            | tblproperties (
            |  primaryKey = 'id',
            |  type = 'mor',
            |  preCombineField = 'ts',
            |  hoodie.index.type = 'INMEMORY',
            |  hoodie.compact.inline = 'true',
+           |  hoodie.compact.inline.max.delta.commits = '5',
            |  hoodie.clean.commits.retained = '1'
            | )
        """.stripMargin)
@@ -163,7 +165,7 @@ class TestVariantDataType extends HoodieSparkSqlTestBase {
         s"insert into $tableName values " +
           "(3, parse_json('{\"key\":\"value3\"}'), 1000)")
       // 3 commits will not trigger compaction, so it should be log only.
-      assertResult(true)(DataSourceTestUtils.isLogFileOnly(tmp.getCanonicalPath))
+      assertResult(true)(DataSourceTestUtils.isLogFileOnly(tablePath))
       checkAnswer(s"select id, cast(v as string), ts from $tableName order by id")(
         Seq(1, "{\"key\":\"value1\"}", 1000),
         Seq(2, "{\"key\":\"value2\"}", 1000),
@@ -182,7 +184,7 @@ class TestVariantDataType extends HoodieSparkSqlTestBase {
            | when matched then update set *
            |""".stripMargin)
       // 4 commits will not trigger compaction, so it should be log only.
-      assertResult(true)(DataSourceTestUtils.isLogFileOnly(tmp.getCanonicalPath))
+      assertResult(true)(DataSourceTestUtils.isLogFileOnly(tablePath))
       checkAnswer(s"select id, cast(v as string), ts from $tableName order by id")(
         Seq(1, "{\"key\":\"v1-merged\"}", 1001),
         Seq(2, "{\"key\":\"value2\"}", 1000),
@@ -202,7 +204,7 @@ class TestVariantDataType extends HoodieSparkSqlTestBase {
            |""".stripMargin)
 
       // 5 commits will trigger compaction.
-      assertResult(false)(DataSourceTestUtils.isLogFileOnly(tmp.getCanonicalPath))
+      assertResult(false)(DataSourceTestUtils.isLogFileOnly(tablePath))
       checkAnswer(s"select id, cast(v as string), ts from $tableName order by id")(
         Seq(1, "{\"key\":\"v1-merged\"}", 1001),
         Seq(2, "{\"key\":\"value2\"}", 1000),
@@ -236,7 +238,7 @@ class TestVariantDataType extends HoodieSparkSqlTestBase {
         Seq(4, "{\"key\":\"value4\"}", 1000)
       )
 
-      val metaClient = createMetaClient(spark, tmp.getCanonicalPath)
+      val metaClient = createMetaClient(spark, tablePath)
       metaClient.reloadActiveTimeline()
       assert(metaClient.getActiveTimeline.getCleanerTimeline.countInstants() > 0,
         "Expected at least one .clean instant on the timeline after compaction")

@@ -694,6 +694,7 @@ class TestVectorDataSource extends HoodieSparkClientTestBase {
            |  preCombineField = 'ts',
            |  hoodie.index.type = 'INMEMORY',
            |  hoodie.compact.inline = 'true',
+           |  hoodie.compact.inline.max.delta.commits = '5',
            |  hoodie.clean.commits.retained = '1'
            | )
        """.stripMargin)
@@ -702,7 +703,9 @@ class TestVectorDataSource extends HoodieSparkClientTestBase {
         spark.sql(s"select id, embedding, ts from $tableName order by id").collect().toSeq
 
       def embeddingOf(id: Int, rows: Seq[Row]): Seq[Float] =
-        rows.find(_.getInt(0) == id).get.getSeq[Float](1)
+        rows.find(_.getInt(0) == id)
+          .getOrElse(fail(s"No row with id=$id"))
+          .getSeq[Float](1)
 
       spark.sql(
         s"insert into $tableName values " +
