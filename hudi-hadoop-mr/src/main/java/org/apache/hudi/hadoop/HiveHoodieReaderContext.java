@@ -24,6 +24,7 @@ import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieRecordMerger;
+import org.apache.hudi.common.schema.HoodieProjectionMask;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaCompatibility;
 import org.apache.hudi.common.schema.HoodieSchemaField;
@@ -36,6 +37,7 @@ import org.apache.hudi.common.util.collection.CloseableMappingIterator;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieAvroSchemaException;
 import org.apache.hudi.hadoop.utils.HiveTypeUtils;
+import org.apache.hudi.hadoop.utils.HoodieArrayWritableSchemaUtils;
 import org.apache.hudi.internal.schema.HoodieSchemaException;
 import org.apache.hudi.io.storage.HoodieIOFactory;
 import org.apache.hudi.storage.HoodieStorage;
@@ -174,11 +176,15 @@ public class HiveHoodieReaderContext extends HoodieReaderContext<ArrayWritable> 
       firstRecordReader = recordReader;
     }
     ClosableIterator<ArrayWritable> recordIterator = new RecordReaderValueIterator<>(recordReader);
-    if (HoodieSchemaCompatibility.areSchemasProjectionEquivalent(modifiedDataSchema, requiredSchema)) {
+    HoodieProjectionMask physicalMask = HoodieColumnProjectionUtils.buildNestedProjectionMask(jobConfCopy, modifiedDataSchema);
+    if (physicalMask.isAll() && HoodieSchemaCompatibility.areSchemasProjectionEquivalent(modifiedDataSchema, requiredSchema)) {
       return recordIterator;
     }
-    // record reader puts the required columns in the positions of the data schema and nulls the rest of the columns
-    return new CloseableMappingIterator<>(recordIterator, recordContext.projectRecord(modifiedDataSchema, requiredSchema));
+    // record reader puts the required columns in the positions of the data schema and nulls the rest of the columns;
+    // physicalMask additionally tells the rewrite where struct sub-fields landed when Hive's
+    // Parquet reader compacted nested-column projection.
+    return new CloseableMappingIterator<>(recordIterator,
+        record -> HoodieArrayWritableSchemaUtils.rewriteRecordWithNewSchema(record, modifiedDataSchema, requiredSchema, Collections.emptyMap(), physicalMask));
   }
 
   @Override

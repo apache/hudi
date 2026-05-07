@@ -75,7 +75,7 @@ public class HoodieSchemaTestUtils {
    * was stripped by Spark's TableOutputResolver Cast.
    */
   public static HoodieSchema createPlainBlobRecord(String recordName) {
-    HoodieSchema reference = HoodieSchema.createRecord("reference", null, null, false, Arrays.asList(
+    HoodieSchema referenceSchema = HoodieSchema.createRecord("reference", null, null, false, Arrays.asList(
         HoodieSchemaField.of("external_path", HoodieSchema.create(HoodieSchemaType.STRING), null, null),
         HoodieSchemaField.of("offset", HoodieSchema.createNullable(HoodieSchema.create(HoodieSchemaType.LONG)), null, null),
         HoodieSchemaField.of("length", HoodieSchema.createNullable(HoodieSchema.create(HoodieSchemaType.LONG)), null, null),
@@ -83,7 +83,7 @@ public class HoodieSchemaTestUtils {
     return HoodieSchema.createRecord(recordName, null, null, false, Arrays.asList(
         HoodieSchemaField.of("type", HoodieSchema.create(HoodieSchemaType.STRING), null, null),
         HoodieSchemaField.of("data", HoodieSchema.createNullable(HoodieSchema.create(HoodieSchemaType.BYTES)), null, JsonProperties.NULL_VALUE),
-        HoodieSchemaField.of("reference", HoodieSchema.createNullable(reference), null, JsonProperties.NULL_VALUE)));
+        HoodieSchemaField.of("reference", HoodieSchema.createNullable(referenceSchema), null, JsonProperties.NULL_VALUE)));
   }
 
   /**
