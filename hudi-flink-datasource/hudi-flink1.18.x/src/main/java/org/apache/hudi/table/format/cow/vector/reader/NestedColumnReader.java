@@ -147,6 +147,28 @@ public class NestedColumnReader implements ColumnReader<WritableColumnVector> {
     if (rowPosition.getIsNull() != null) {
       setFieldNullFlag(rowPosition.getIsNull(), heapRowVector);
     }
+
+    // Hudi-specific: collapse a present row whose every child is null into a null row. The
+    // legacy RowColumnReader did this so that a SQL value like `row(null, null)` round-trips
+    // to NULL on read; preserve it here for backward compatibility. Diverges from Flink 2.1,
+    // which would surface it as Row(null, null). Mirrored by the integration test
+    // ITTestHoodieDataSource#testParquetNullChildColumnsRowTypes.
+    int rowCount = rowPosition.getPositionsCount();
+    for (int j = 0; j < rowCount; j++) {
+      if (heapRowVector.isNullAt(j)) {
+        continue;
+      }
+      boolean allChildrenNull = true;
+      for (WritableColumnVector child : finalChildrenVectors) {
+        if (!child.isNullAt(j)) {
+          allChildrenNull = false;
+          break;
+        }
+      }
+      if (allChildrenNull) {
+        heapRowVector.setNullAt(j);
+      }
+    }
     return Tuple2.of(levelDelegation, heapRowVector);
   }
 
