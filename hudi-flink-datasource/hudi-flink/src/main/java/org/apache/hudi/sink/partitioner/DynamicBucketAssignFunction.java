@@ -22,13 +22,13 @@ import org.apache.hudi.adapter.KeyedProcessFunctionAdapter;
 import org.apache.hudi.client.common.HoodieFlinkEngineContext;
 import org.apache.hudi.client.model.HoodieFlinkInternalRow;
 import org.apache.hudi.common.model.HoodieTableType;
-import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.sink.event.Correspondent;
+import org.apache.hudi.sink.partitioner.index.DummyPartitionedIndexBackend;
 import org.apache.hudi.sink.partitioner.index.RecordLevelIndexBackend;
 import org.apache.hudi.sink.partitioner.index.PartitionedIndexBackend;
 import org.apache.hudi.sink.partitioner.profile.WriteProfile;
@@ -44,6 +44,7 @@ import org.apache.flink.api.common.state.CheckpointListener;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.runtime.state.FunctionInitializationContext;
 import org.apache.flink.runtime.state.FunctionSnapshotContext;
+import org.apache.flink.runtime.state.KeyGroupRangeAssignment;
 import org.apache.flink.streaming.api.checkpoint.CheckpointedFunction;
 import org.apache.flink.util.Collector;
 
@@ -62,11 +63,15 @@ public class DynamicBucketAssignFunction
   private final Configuration conf;
   private final boolean isInsertOverwrite;
 
-  private transient Option<PartitionedIndexBackend> indexBackendOpt;
+  private transient PartitionedIndexBackend indexBackend;
   private transient BucketAssigner bucketAssigner;
 
   @Setter
   protected transient Correspondent correspondent;
+
+  private transient int maxParallelism;
+  private transient int numTasks;
+  private transient int taskId;
 
   /**
    * Creates the dynamic bucket assign function for one bucket assign operator.
@@ -94,29 +99,40 @@ public class DynamicBucketAssignFunction
         RuntimeContextUtils.getNumberOfParallelSubtasks(getRuntimeContext()),
         writeProfile,
         writeConfig);
+    this.maxParallelism = RuntimeContextUtils.getMaxNumberOfParallelSubtasks(getRuntimeContext());
+    this.numTasks = RuntimeContextUtils.getNumberOfParallelSubtasks(getRuntimeContext());
+    this.taskId = RuntimeContextUtils.getIndexOfThisSubtask(getRuntimeContext());
   }
 
   @Override
   public void initializeState(FunctionInitializationContext context) {
-    this.indexBackendOpt = isInsertOverwrite ? Option.empty() : Option.of(new RecordLevelIndexBackend(
-        conf,
-        RuntimeContextUtils.getIndexOfThisSubtask(getRuntimeContext()),
-        RuntimeContextUtils.getMaxNumberOfParallelSubtasks(getRuntimeContext()),
-        RuntimeContextUtils.getNumberOfParallelSubtasks(getRuntimeContext())));
+    this.indexBackend = isInsertOverwrite
+        ? new DummyPartitionedIndexBackend()
+        : new RecordLevelIndexBackend(conf, (partitionPath, recordKey, fileId) -> isRecordKeyOfThisTask(recordKey));
+  }
+
+  private boolean isRecordKeyOfThisTask(String recordKey) {
+    return KeyGroupRangeAssignment.assignKeyToParallelOperator(recordKey, maxParallelism, numTasks) == taskId;
   }
 
   @Override
   public void processElement(HoodieFlinkInternalRow record, Context ctx, Collector<HoodieFlinkInternalRow> out) throws Exception {
     String partitionPath = record.getPartitionPath();
     String recordKey = record.getRecordKey();
-    String fileGroupId = indexBackendOpt.map(indexBackend -> indexBackend.get(partitionPath, recordKey)).orElse(null);
+    String fileGroupId = indexBackend.get(partitionPath, recordKey);
 
     BucketInfo bucketInfo;
+    // `operationType` in the record is used to generate index record in the following writer operator.
+    // Currently, we only emit INSERT index record and ignore DELETE index record, because we cannot be
+    // certain whether data with the same key in storage will actually be deleted. It's possible that
+    // data in storage is deleted, but the record level index data remains.
+    // todo: support ordering value in record level index metadata payload, since the efficiency of location
+    // tagging by merging lookup is intolerable in flink streaming writing scenario.
     if (fileGroupId != null) {
       bucketInfo = bucketAssigner.addUpdate(partitionPath, fileGroupId);
     } else {
       bucketInfo = bucketAssigner.addInsert(partitionPath);
-      indexBackendOpt.ifPresent(indexBackend -> indexBackend.update(partitionPath, recordKey, bucketInfo.getFileIdPrefix()));
+      indexBackend.update(partitionPath, recordKey, bucketInfo.getFileIdPrefix());
       record.setOperationType("I");
     }
 
@@ -129,22 +145,18 @@ public class DynamicBucketAssignFunction
   @Override
   public void snapshotState(FunctionSnapshotContext context) {
     this.bucketAssigner.reset();
-    this.indexBackendOpt.ifPresent(indexBackend -> indexBackend.onCheckpoint(context.getCheckpointId()));
+    this.indexBackend.onCheckpoint(context.getCheckpointId());
   }
 
   @Override
   public void notifyCheckpointComplete(long checkpointId) {
     this.bucketAssigner.reload(checkpointId);
-    if (this.correspondent != null) {
-      this.indexBackendOpt.ifPresent(indexBackend -> indexBackend.onCheckpointComplete(this.correspondent, checkpointId));
-    }
+    this.indexBackend.onCheckpointComplete(this.correspondent, checkpointId);
   }
 
   @Override
   public void close() throws Exception {
-    if (this.indexBackendOpt.isPresent()) {
-      this.indexBackendOpt.get().close();
-    }
+    this.indexBackend.close();
     if (this.bucketAssigner != null) {
       this.bucketAssigner.close();
     }

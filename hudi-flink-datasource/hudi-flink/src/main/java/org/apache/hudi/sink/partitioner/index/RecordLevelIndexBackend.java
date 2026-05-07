@@ -31,19 +31,18 @@ import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
-import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.sink.event.Correspondent;
+import org.apache.hudi.sink.utils.SamplingActionExecutor;
 import org.apache.hudi.util.FlinkWriteClients;
 import org.apache.hudi.util.StreamerUtil;
 
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.flink.configuration.Configuration;
-import org.apache.flink.runtime.state.KeyGroupRangeAssignment;
 
 import java.io.Closeable;
 import java.io.IOException;
@@ -72,35 +71,31 @@ public class RecordLevelIndexBackend implements PartitionedIndexBackend {
   private final Configuration conf;
   private final HoodieWriteConfig writeConfig;
   private final HoodieTableMetaClient metaClient;
-  private final boolean isInsertOverwrite;
-  private final int taskID;
-  private final int maxParallelism;
-  private final int numTasks;
   private final long maxCacheSizeInBytes;
+  private final BootstrapFilter bootstrapFilter;
   private HoodieTableMetadata metadataTable;
 
   @Getter
   private final Map<String, BucketCache> partitionBucketCaches = new LinkedHashMap<>(16, 0.75f, true);
   private long currentCheckpointId = -1L;
   private long minRetainedCheckpointId = Long.MIN_VALUE;
+  private final SamplingActionExecutor cleanExecutor = new SamplingActionExecutor();
 
   /**
-   * Creates a partitioned RLI backend for one bucket assign subtask.
+   * Creates a partitioned RLI backend with custom ownership filtering.
+   *
+   * <p>This constructor is used by simple bucket index, whose write ownership is determined by
+   * partition and bucket file id rather than Flink record-key key groups.
    *
    * @param conf Flink write configuration
-   * @param taskID index of the current assign subtask
-   * @param maxParallelism max parallelism used by Flink key-group assignment
-   * @param numTasks bucket assign parallelism
+   * @param bootstrapFilter filter for deciding whether a bootstrapped RLI record belongs to this task
    */
-  public RecordLevelIndexBackend(Configuration conf, int taskID, int maxParallelism, int numTasks) {
+  public RecordLevelIndexBackend(Configuration conf, BootstrapFilter bootstrapFilter) {
     this.conf = conf;
     this.writeConfig = FlinkWriteClients.getHoodieClientConfig(conf, false, false);
     this.metaClient = StreamerUtil.createMetaClient(conf);
-    this.isInsertOverwrite = OptionsResolver.isInsertOverwrite(conf);
-    this.taskID = taskID;
-    this.maxParallelism = maxParallelism;
-    this.numTasks = numTasks;
     this.maxCacheSizeInBytes = conf.get(FlinkOptions.INDEX_RLI_CACHE_SIZE) * 1024 * 1024;
+    this.bootstrapFilter = bootstrapFilter;
     reloadMetadataTable();
   }
 
@@ -113,8 +108,8 @@ public class RecordLevelIndexBackend implements PartitionedIndexBackend {
   @Override
   public void update(String partitionPath, String recordKey, String fileId) {
     BucketCache cache = getOrBootstrapPartition(partitionPath);
-    cache.putRecordKey(recordKey, fileId, false);
-    cleanIfNecessary(0L, partitionPath);
+    cache.putRecordKey(recordKey, fileId);
+    cleanExecutor.runIfNecessary(() -> cleanIfNecessary(0L, partitionPath));
   }
 
   /**
@@ -154,16 +149,15 @@ public class RecordLevelIndexBackend implements PartitionedIndexBackend {
       return cache;
     }
 
-    cache = isInsertOverwrite ? createBucketCache(partitionPath) : bootstrapPartition(partitionPath);
+    cache = bootstrapPartition(partitionPath);
     partitionBucketCaches.put(partitionPath, cache);
-    cleanIfNecessary(0L, partitionPath);
     return cache;
   }
 
   private BucketCache bootstrapPartition(String partitionPath) {
     BucketCache cache = createBucketCache(partitionPath);
     if (!metaClient.getTableConfig().isMetadataPartitionAvailable(MetadataPartitionType.RECORD_INDEX)) {
-      log.info("Record index is not available yet. Start dynamic bucket cache empty for partition {}", partitionPath);
+      log.info("Record index is not available yet. Start partitioned RLI cache empty for partition {}", partitionPath);
       return cache;
     }
 
@@ -180,17 +174,17 @@ public class RecordLevelIndexBackend implements PartitionedIndexBackend {
       locations.forEach(locationPair -> {
         String recordKey = locationPair.getLeft();
         String fileId = locationPair.getRight().getFileId();
-        if (isRecordKeyOfThisTask(recordKey)) {
-          cache.putRecordKey(recordKey, fileId, true);
+        if (bootstrapFilter.shouldLoad(partitionPath, recordKey, fileId)) {
+          cache.bootstrapRecordKey(recordKey, fileId);
         }
         totalCnt.incrementAndGet();
       });
-      log.info("Bootstrapped dynamic bucket cache for partition {} with {} owned records from total {} RLI records.",
+      log.info("Bootstrapped partitioned RLI cache for partition {} with {} owned records from total {} RLI records.",
           partitionPath, cache.size(), totalCnt.get());
       return cache;
     } catch (Exception e) {
       cache.close();
-      throw new HoodieException("Failed to bootstrap dynamic bucket index for partition " + partitionPath, e);
+      throw new HoodieException("Failed to bootstrap partitioned RLI cache for partition " + partitionPath, e);
     }
   }
 
@@ -202,7 +196,7 @@ public class RecordLevelIndexBackend implements PartitionedIndexBackend {
 
   private ExternalSpillableMap<String, Integer> createSpillableMap(String partitionPath, long inferredCacheSize) {
     // preserve some memory for fileId dict, assuming the average file group number as Short.MAX_VALUE, then the size will be about 1MB.
-    long maxInMemorySizeInBytes = inferredCacheSize - BucketCache.FILE_ID_DICT_ENTRY_SIZE * Short.MAX_VALUE;
+    long maxInMemorySizeInBytes = Math.max(inferredCacheSize - BucketCache.FILE_ID_DICT_ENTRY_SIZE * Short.MAX_VALUE, 1);
     try {
       return new ExternalSpillableMap<>(
           maxInMemorySizeInBytes,
@@ -212,14 +206,10 @@ public class RecordLevelIndexBackend implements PartitionedIndexBackend {
           ExternalSpillableMap.DiskMapType.ROCKS_DB,
           new DefaultSerializer<>(),
           writeConfig.getBoolean(HoodieCommonConfig.DISK_MAP_BITCASK_COMPRESSION_ENABLED),
-          "DynamicBucketCache-" + partitionPath);
+          "PartitionedRLICache-" + partitionPath);
     } catch (IOException e) {
-      throw new HoodieIOException("Failed to create dynamic bucket cache for partition " + partitionPath, e);
+      throw new HoodieIOException("Failed to create partitioned RLI cache for partition " + partitionPath, e);
     }
-  }
-
-  private boolean isRecordKeyOfThisTask(String recordKey) {
-    return KeyGroupRangeAssignment.assignKeyToParallelOperator(recordKey, maxParallelism, numTasks) == taskID;
   }
 
   private void reloadMetadataTable() {
@@ -240,11 +230,11 @@ public class RecordLevelIndexBackend implements PartitionedIndexBackend {
 
   private long inferMemorySizeForCache() {
     if (partitionBucketCaches.isEmpty()) {
-      return maxCacheSizeInBytes / 2;
+      return maxCacheSizeInBytes / 4;
     }
     long averageMemorySize = getCurrentHeapSize() / partitionBucketCaches.size();
     if (averageMemorySize <= 0) {
-      return maxCacheSizeInBytes / 2;
+      return maxCacheSizeInBytes / 4;
     }
     return averageMemorySize;
   }
@@ -271,11 +261,13 @@ public class RecordLevelIndexBackend implements PartitionedIndexBackend {
           cache.close();
           iterator.remove();
           cleaned = true;
-          log.info("Evict dynamic bucket cache for partition {}", entry.getKey());
+          log.info("Evict partitioned RLI cache for partition {}", entry.getKey());
           break;
         }
       }
       if (!cleaned) {
+        // All remaining partition caches are either protected or too recent to evict safely.
+        // Returning avoids retrying the same scan without making progress.
         return;
       }
     }
@@ -312,6 +304,11 @@ public class RecordLevelIndexBackend implements PartitionedIndexBackend {
       ExternalSpillableMap<String, Integer> recordKeyToFileGroupIdCode,
       long lastUpdatedCheckpoint) {
     return new BucketCache(recordKeyToFileGroupIdCode, lastUpdatedCheckpoint);
+  }
+
+  @FunctionalInterface
+  public interface BootstrapFilter {
+    boolean shouldLoad(String partitionPath, String recordKey, String fileId);
   }
 
   /**
@@ -360,16 +357,18 @@ public class RecordLevelIndexBackend implements PartitionedIndexBackend {
     }
 
     /**
-     * Adds or updates a record-key mapping.
-     *
-     * @param isBootstrap {@code true} when loading existing RLI mappings; bootstrap entries should not
-     *                    advance {@code lastUpdatedCheckpoint}
+     * Adds a record key mapping from incoming new records.
      */
-    void putRecordKey(String recordKey, String fileGroupId, boolean isBootstrap) {
+    void putRecordKey(String recordKey, String fileGroupId) {
       this.recordKeyToFileGroupIdCode.put(recordKey, getOrCreateFileGroupIdCode(fileGroupId));
-      if (!isBootstrap) {
-        this.lastUpdatedCheckpoint = currentCheckpointId;
-      }
+      this.lastUpdatedCheckpoint = currentCheckpointId;
+    }
+
+    /**
+     * Bootstrap a record key mapping from the RLI data.
+     */
+    void bootstrapRecordKey(String recordKey, String fileGroupId) {
+      this.recordKeyToFileGroupIdCode.put(recordKey, getOrCreateFileGroupIdCode(fileGroupId));
     }
 
     private int getOrCreateFileGroupIdCode(String fileGroupId) {
@@ -392,6 +391,8 @@ public class RecordLevelIndexBackend implements PartitionedIndexBackend {
     @Override
     public void close() {
       this.recordKeyToFileGroupIdCode.close();
+      this.fileGroupIdToDictId.clear();
+      this.dictIdToFileGroupId.clear();
     }
   }
 }

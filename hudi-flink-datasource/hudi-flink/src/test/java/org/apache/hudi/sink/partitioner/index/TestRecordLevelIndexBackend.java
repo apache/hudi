@@ -122,9 +122,9 @@ public class TestRecordLevelIndexBackend {
       ExternalSpillableMap<String, Integer> recordKeyToFileGroupIdCode = mapWithStorage(0L);
       RecordLevelIndexBackend.BucketCache cache = backend.newBucketCache(recordKeyToFileGroupIdCode, 1L);
 
-      cache.putRecordKey("key1", "file-group-id-000000000000000000000001", false);
-      cache.putRecordKey("key2", "file-group-id-000000000000000000000001", false);
-      cache.putRecordKey("key3", "file-group-id-000000000000000000000002", false);
+      cache.putRecordKey("key1", "file-group-id-000000000000000000000001");
+      cache.putRecordKey("key2", "file-group-id-000000000000000000000001");
+      cache.putRecordKey("key3", "file-group-id-000000000000000000000002");
 
       assertEquals("file-group-id-000000000000000000000001", cache.getFileGroupId("key1"));
       assertEquals("file-group-id-000000000000000000000001", cache.getFileGroupId("key2"));
@@ -153,7 +153,7 @@ public class TestRecordLevelIndexBackend {
   }
 
   private RecordLevelIndexBackend createBackend() {
-    return new RecordLevelIndexBackend(conf, 0, 1, 1);
+    return new RecordLevelIndexBackend(conf, (partitionPath, recordKey, fileId) -> true);
   }
 
   private RecordLevelIndexBackend.BucketCache cacheWithHeapSize(
