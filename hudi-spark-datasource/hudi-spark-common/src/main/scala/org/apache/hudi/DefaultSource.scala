@@ -140,12 +140,14 @@ class DefaultSource extends RelationProvider
     // HoodieSchemaNotFoundException and returns an EmptyRelation, but that catch is bypassed
     // on this path, so we mirror the same handling here. Preserve the caller-supplied schema
     // so subsequent query analysis (e.g. column resolution in WHERE clauses) sees the
-    // HMS-known columns even though the on-disk table is schemaless.
+    // HMS-known columns even though the on-disk table is schemaless. The 2-arg overload also
+    // re-enters this method with schema=null, so we must fall back to an empty StructType
+    // when schema is null to avoid an NPE in the 2-arg overload's relation.schema.isEmpty check.
     val relation = try {
       DefaultSource.createRelation(sqlContext, metaClient, schema, options.toMap)
     } catch {
       case _: HoodieSchemaNotFoundException =>
-        new EmptyRelation(sqlContext, schema)
+        new EmptyRelation(sqlContext, Option(schema).getOrElse(new StructType()))
     }
     log.info(s"Created relation ${relation.getClass.getSimpleName} with ${options.size} resolved options")
     relation
