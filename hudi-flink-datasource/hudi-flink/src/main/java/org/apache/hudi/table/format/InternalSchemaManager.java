@@ -20,21 +20,20 @@ package org.apache.hudi.table.format;
 
 import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaField;
+import org.apache.hudi.common.schema.evolution.HoodieSchemaEvolutionUtils;
+import org.apache.hudi.common.schema.evolution.HoodieSchemaHistoryCache;
+import org.apache.hudi.common.schema.evolution.HoodieSchemaMerger;
+import org.apache.hudi.common.schema.types.Type;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.timeline.InstantFileNameGenerator;
 import org.apache.hudi.common.table.timeline.TimelineLayout;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
-import org.apache.hudi.common.util.InternalSchemaCache;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.internal.schema.InternalSchema;
-import org.apache.hudi.internal.schema.Type;
-import org.apache.hudi.internal.schema.Types;
-import org.apache.hudi.internal.schema.action.InternalSchemaMerger;
-import org.apache.hudi.internal.schema.convert.InternalSchemaConverter;
-import org.apache.hudi.internal.schema.utils.InternalSchemaUtils;
 import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.util.HoodieSchemaConverter;
@@ -61,11 +60,11 @@ public class InternalSchemaManager implements Serializable {
 
   private static final long serialVersionUID = 1L;
 
-  public static final InternalSchemaManager DISABLED = new InternalSchemaManager(null, InternalSchema.getEmptyInternalSchema(), null, null,
+  public static final InternalSchemaManager DISABLED = new InternalSchemaManager(null, HoodieSchema.empty(), null, null,
       TimelineLayout.fromVersion(TimelineLayoutVersion.CURR_LAYOUT_VERSION), null);
 
   @Getter
-  private final InternalSchema querySchema;
+  private final HoodieSchema querySchema;
   private final String validCommits;
   private final String tablePath;
   private final TimelineLayout layout;
@@ -76,8 +75,8 @@ public class InternalSchemaManager implements Serializable {
     if (!isSchemaEvolutionEnabled(conf)) {
       return DISABLED;
     }
-    Option<InternalSchema> internalSchema = new TableSchemaResolver(metaClient).getTableInternalSchemaFromCommitMetadata();
-    if (!internalSchema.isPresent() || internalSchema.get().isEmptySchema()) {
+    Option<HoodieSchema> evolutionSchema = new TableSchemaResolver(metaClient).getTableEvolutionSchemaFromCommitMetadata();
+    if (!evolutionSchema.isPresent() || evolutionSchema.get().isEmptySchema()) {
       return DISABLED;
     }
 
@@ -88,10 +87,10 @@ public class InternalSchemaManager implements Serializable {
         .getInstantsAsStream()
         .map(factory::getFileName)
         .collect(Collectors.joining(","));
-    return new InternalSchemaManager(conf, internalSchema.get(), validCommits, metaClient.getBasePath().toString(), metaClient.getTimelineLayout(), metaClient.getTableConfig());
+    return new InternalSchemaManager(conf, evolutionSchema.get(), validCommits, metaClient.getBasePath().toString(), metaClient.getTimelineLayout(), metaClient.getTableConfig());
   }
 
-  public InternalSchemaManager(StorageConfiguration<?> storageConf, InternalSchema querySchema, String validCommits, String tablePath,
+  public InternalSchemaManager(StorageConfiguration<?> storageConf, HoodieSchema querySchema, String validCommits, String tablePath,
                                TimelineLayout layout, HoodieTableConfig tableConfig) {
     this.storageConf = storageConf;
     this.querySchema = querySchema;
@@ -112,19 +111,19 @@ public class InternalSchemaManager implements Serializable {
    * @param fileName Name of file to fetch commitTime/versionId for
    * @return mergeSchema, i.e. the schema on which the file should be read with
    */
-  InternalSchema getMergeSchema(String fileName) {
+  HoodieSchema getMergeSchema(String fileName) {
     if (querySchema.isEmptySchema()) {
       return querySchema;
     }
     long commitInstantTime = Long.parseLong(FSUtils.getCommitTime(fileName));
-    InternalSchema fileSchema = InternalSchemaCache.getInternalSchemaByVersionId(
+    HoodieSchema fileSchema = HoodieSchemaHistoryCache.getSchemaByVersionId(
         commitInstantTime, tablePath,
         HoodieStorageUtils.getStorage(tablePath, storageConf),
         validCommits, layout, tableConfig);
     if (querySchema.equals(fileSchema)) {
-      return InternalSchema.getEmptyInternalSchema();
+      return HoodieSchema.empty();
     }
-    return new InternalSchemaMerger(fileSchema, querySchema, true, true).mergeSchema();
+    return new HoodieSchemaMerger(fileSchema, querySchema, true, true).mergeSchema();
   }
 
   /**
@@ -143,7 +142,7 @@ public class InternalSchemaManager implements Serializable {
    *
    * @see CastMap
    */
-  CastMap getCastMap(InternalSchema mergeSchema, String[] queryFieldNames, DataType[] queryFieldTypes, int[] selectedFields) {
+  CastMap getCastMap(HoodieSchema mergeSchema, String[] queryFieldNames, DataType[] queryFieldTypes, int[] selectedFields) {
     Preconditions.checkArgument(!querySchema.isEmptySchema(), "querySchema cannot be empty");
     Preconditions.checkArgument(!mergeSchema.isEmptySchema(), "mergeSchema cannot be empty");
 
@@ -157,8 +156,7 @@ public class InternalSchemaManager implements Serializable {
     }
     List<Integer> selectedFieldList = IntStream.of(selectedFields).boxed().collect(Collectors.toList());
     // mergeSchema is built with useColumnTypeFromFileSchema = true
-    List<DataType> mergeSchemaAsDataTypes = HoodieSchemaConverter.convertToDataType(
-        InternalSchemaConverter.convert(mergeSchema, "tableName")).getChildren();
+    List<DataType> mergeSchemaAsDataTypes = HoodieSchemaConverter.convertToDataType(mergeSchema).getChildren();
     DataType[] fileFieldTypes = new DataType[queryFieldTypes.length];
     for (int i = 0; i < queryFieldTypes.length; i++) {
       // position of ChangedType in querySchema
@@ -200,22 +198,22 @@ public class InternalSchemaManager implements Serializable {
    *
    * @see InternalSchemaUtils#collectRenameCols(InternalSchema, InternalSchema)
    */
-  String[] getMergeFieldNames(InternalSchema mergeSchema, String[] queryFieldNames) {
+  String[] getMergeFieldNames(HoodieSchema mergeSchema, String[] queryFieldNames) {
     Preconditions.checkArgument(!querySchema.isEmptySchema(), "querySchema cannot be empty");
     Preconditions.checkArgument(!mergeSchema.isEmptySchema(), "mergeSchema cannot be empty");
 
-    Map<String, String> renamedCols = InternalSchemaUtils.collectRenameCols(mergeSchema, querySchema);
+    Map<String, String> renamedCols = HoodieSchemaEvolutionUtils.collectRenameCols(mergeSchema, querySchema);
     if (renamedCols.isEmpty()) {
       return queryFieldNames;
     }
     return Arrays.stream(queryFieldNames).map(name -> renamedCols.getOrDefault(name, name)).toArray(String[]::new);
   }
 
-  private Map<Integer, Integer> getPosProxy(InternalSchema mergeSchema, String[] queryFieldNames) {
-    Map<Integer, Pair<Type, Type>> changedCols = InternalSchemaUtils.collectTypeChangedCols(querySchema, mergeSchema);
+  private Map<Integer, Integer> getPosProxy(HoodieSchema mergeSchema, String[] queryFieldNames) {
+    Map<Integer, Pair<Type, Type>> changedCols = HoodieSchemaEvolutionUtils.collectTypeChangedCols(querySchema, mergeSchema);
     HashMap<Integer, Integer> posProxy = new HashMap<>(changedCols.size());
     List<String> fieldNameList = Arrays.asList(queryFieldNames);
-    List<Types.Field> columns = querySchema.columns();
+    List<HoodieSchemaField> columns = querySchema.getFields();
     changedCols.forEach((posInSchema, typePair) -> {
       String name = columns.get(posInSchema).name();
       int posInType = fieldNameList.indexOf(name);

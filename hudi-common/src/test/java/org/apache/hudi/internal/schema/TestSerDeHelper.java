@@ -18,6 +18,7 @@
 
 package org.apache.hudi.internal.schema;
 
+import org.apache.hudi.common.schema.types.Types;
 import org.apache.hudi.internal.schema.utils.InternalSchemaUtils;
 import org.apache.hudi.internal.schema.utils.SerDeHelper;
 

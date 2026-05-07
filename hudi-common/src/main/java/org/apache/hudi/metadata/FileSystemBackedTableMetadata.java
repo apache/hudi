@@ -40,7 +40,7 @@ import org.apache.hudi.expression.BindVisitor;
 import org.apache.hudi.expression.Expression;
 import org.apache.hudi.expression.PartialBindVisitor;
 import org.apache.hudi.expression.Predicates;
-import org.apache.hudi.internal.schema.Types;
+import org.apache.hudi.common.schema.types.Types;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathFilter;

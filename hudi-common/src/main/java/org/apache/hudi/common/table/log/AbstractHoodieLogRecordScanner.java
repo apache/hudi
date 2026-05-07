@@ -26,6 +26,8 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.evolution.HoodieSchemaHistoryCache;
+import org.apache.hudi.common.schema.evolution.HoodieSchemaMerger;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
@@ -34,7 +36,6 @@ import org.apache.hudi.common.table.log.block.HoodieDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieDeleteBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.util.InternalSchemaCache;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.CloseableMappingIterator;
@@ -42,9 +43,6 @@ import org.apache.hudi.common.util.collection.ExternalSpillableMap;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
-import org.apache.hudi.internal.schema.InternalSchema;
-import org.apache.hudi.internal.schema.action.InternalSchemaMerger;
-import org.apache.hudi.internal.schema.convert.InternalSchemaConverter;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 
@@ -121,8 +119,8 @@ public abstract class AbstractHoodieLogRecordScanner {
   private final HoodieStorage storage;
   // Total log files read - for metrics
   private AtomicLong totalLogFiles = new AtomicLong(0);
-  // Internal schema, used to support full schema evolution.
-  private final InternalSchema internalSchema;
+  // Evolution schema, used to support full schema evolution.
+  private final HoodieSchema evolutionSchema;
   // Total log blocks read - for metrics
   private AtomicLong totalLogBlocks = new AtomicLong(0);
   // Total log records read - for metrics
@@ -157,7 +155,7 @@ public abstract class AbstractHoodieLogRecordScanner {
                                            boolean reverseReader, int bufferSize, Option<InstantRange> instantRange,
                                            boolean withOperationField, boolean forceFullScan,
                                            Option<String> partitionNameOverride,
-                                           InternalSchema internalSchema,
+                                           HoodieSchema evolutionSchema,
                                            Option<String> keyFieldOverride,
                                            HoodieRecordMerger recordMerger,
                                            Option<HoodieTableMetaClient> hoodieTableMetaClientOption) {
@@ -188,7 +186,7 @@ public abstract class AbstractHoodieLogRecordScanner {
     this.instantRange = instantRange;
     this.withOperationField = withOperationField;
     this.forceFullScan = forceFullScan;
-    this.internalSchema = internalSchema == null ? InternalSchema.getEmptyInternalSchema() : internalSchema;
+    this.evolutionSchema = evolutionSchema == null ? HoodieSchema.empty() : evolutionSchema;
 
     if (keyFieldOverride.isPresent()) {
       // NOTE: This branch specifically is leveraged handling Metadata Table
@@ -254,7 +252,7 @@ public abstract class AbstractHoodieLogRecordScanner {
           logFilePaths.stream()
               .map(logFile -> new HoodieLogFile(new StoragePath(logFile)))
               .collect(Collectors.toList()),
-          readerSchema, reverseReader, bufferSize, shouldLookupRecords(), recordKeyField, internalSchema);
+          readerSchema, reverseReader, bufferSize, shouldLookupRecords(), recordKeyField, evolutionSchema);
 
       /**
        * Scanning log blocks and placing the compacted blocks at the right place require two traversals.
@@ -667,31 +665,32 @@ public abstract class AbstractHoodieLogRecordScanner {
   /**
    * Get final Read Schema for support evolution.
    * step1: find the fileSchema for current dataBlock.
-   * step2: determine whether fileSchema is compatible with the final read internalSchema.
-   * step3: merge fileSchema and read internalSchema to produce final read schema.
+   * step2: determine whether fileSchema is compatible with the final read evolution schema.
+   * step3: merge fileSchema and read evolution schema to produce final read schema.
    *
    * @param dataBlock current processed block
    * @return final read schema.
    */
   private Option<Pair<Function<HoodieRecord, HoodieRecord>, HoodieSchema>> composeEvolvedSchemaTransformer(
       HoodieDataBlock dataBlock) {
-    if (internalSchema.isEmptySchema()) {
+    if (evolutionSchema.isEmptySchema()) {
       return Option.empty();
     }
 
     long currentInstantTime = Long.parseLong(dataBlock.getLogBlockHeader().get(INSTANT_TIME));
-    InternalSchema fileSchema = InternalSchemaCache.searchSchemaAndCache(currentInstantTime, hoodieTableMetaClient);
-    InternalSchema mergedInternalSchema = new InternalSchemaMerger(fileSchema, internalSchema,
-        true, false).mergeSchema();
-    HoodieSchema mergedAvroSchema = InternalSchemaConverter.convert(mergedInternalSchema, readerSchema.getFullName());
+    HoodieSchema fileSchema = HoodieSchemaHistoryCache.searchSchemaAndCache(currentInstantTime, hoodieTableMetaClient);
+    // Preserve the readerSchema's record name on the merged result, matching the
+    // legacy InternalSchemaConverter.convert(merged, readerSchema.getFullName()) call.
+    HoodieSchema mergedSchema = new HoodieSchemaMerger(fileSchema, evolutionSchema,
+        true, false).mergeSchema(readerSchema.getFullName());
 
     return Option.of(Pair.of((record) -> {
       return record.rewriteRecordWithNewSchema(
           dataBlock.getSchema(),
           this.hoodieTableMetaClient.getTableConfig().getProps(),
-          mergedAvroSchema,
+          mergedSchema,
           Collections.emptyMap());
-    }, mergedAvroSchema));
+    }, mergedSchema));
   }
 
   /**
@@ -709,7 +708,7 @@ public abstract class AbstractHoodieLogRecordScanner {
 
     public abstract Builder withReaderSchema(HoodieSchema schema);
 
-    public abstract Builder withInternalSchema(InternalSchema internalSchema);
+    public abstract Builder withEvolutionSchema(HoodieSchema evolutionSchema);
 
     public abstract Builder withLatestInstantTime(String latestInstantTime);
 

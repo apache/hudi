@@ -21,14 +21,15 @@ package org.apache.hudi.internal.schema.convert;
 import org.apache.hudi.common.schema.HoodieJsonProperties;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaField;
+import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.exception.HoodieNullSchemaTypeException;
-import org.apache.hudi.internal.schema.HoodieSchemaException;
+import org.apache.hudi.exception.HoodieSchemaException;
 import org.apache.hudi.internal.schema.InternalSchema;
-import org.apache.hudi.internal.schema.Type;
-import org.apache.hudi.internal.schema.Types;
+import org.apache.hudi.common.schema.types.Type;
+import org.apache.hudi.common.schema.types.Types;
 import org.apache.hudi.internal.schema.utils.InternalSchemaUtils;
 
 import java.util.ArrayList;
@@ -99,72 +100,22 @@ public class InternalSchemaConverter {
   }
 
   public static InternalSchema pruneHoodieSchemaToInternalSchema(HoodieSchema schema, InternalSchema originSchema) {
-    List<String> pruneNames = collectColNamesFromSchema(schema);
-    return InternalSchemaUtils.pruneInternalSchema(originSchema, pruneNames);
+    return InternalSchemaUtils.pruneInternalSchema(originSchema,
+        HoodieSchemaUtils.collectLeafNames(schema));
   }
 
   /**
    * Collect all the leaf nodes names.
+   *
+   * <p>Delegates to {@link HoodieSchemaUtils#collectLeafNames}; kept here only so
+   * {@code TestInternalSchemaConverter} can exercise the wrapper.</p>
    *
    * @param schema a HoodieSchema.
    * @return leaf nodes full names.
    */
   @VisibleForTesting
   static List<String> collectColNamesFromSchema(HoodieSchema schema) {
-    List<String> result = new ArrayList<>();
-    Deque<String> visited = new LinkedList<>();
-    collectColNamesFromSchema(schema, visited, result);
-    return result;
-  }
-
-  private static void collectColNamesFromSchema(HoodieSchema schema, Deque<String> visited, List<String> resultSet) {
-    switch (schema.getType()) {
-      case RECORD:
-        List<HoodieSchemaField> fields = schema.getFields();
-        for (HoodieSchemaField f : fields) {
-          visited.push(f.name());
-          collectColNamesFromSchema(f.schema(), visited, resultSet);
-          visited.pop();
-          addFullNameIfLeafNode(f.schema(), f.name(), visited, resultSet);
-        }
-        return;
-
-      case UNION:
-        collectColNamesFromSchema(schema.getNonNullType(), visited, resultSet);
-        return;
-
-      case ARRAY:
-        visited.push("element");
-        collectColNamesFromSchema(schema.getElementType(), visited, resultSet);
-        visited.pop();
-        addFullNameIfLeafNode(schema.getElementType(), "element", visited, resultSet);
-        return;
-
-      case MAP:
-        addFullNameIfLeafNode(HoodieSchemaType.STRING, "key", visited, resultSet);
-        visited.push("value");
-        collectColNamesFromSchema(schema.getValueType(), visited, resultSet);
-        visited.pop();
-        addFullNameIfLeafNode(schema.getValueType(), "value", visited, resultSet);
-        return;
-
-      default:
-    }
-  }
-
-  private static void addFullNameIfLeafNode(HoodieSchema schema, String name, Deque<String> visited, List<String> resultSet) {
-    addFullNameIfLeafNode(schema.getNonNullType().getType(), name, visited, resultSet);
-  }
-
-  private static void addFullNameIfLeafNode(HoodieSchemaType type, String name, Deque<String> visited, List<String> resultSet) {
-    switch (type) {
-      case RECORD:
-      case ARRAY:
-      case MAP:
-        return;
-      default:
-        resultSet.add(InternalSchemaUtils.createFullName(name, visited));
-    }
+    return HoodieSchemaUtils.collectLeafNames(schema);
   }
 
   /**
@@ -435,7 +386,7 @@ public class InternalSchemaConverter {
    * @param type a hudi type.
    * @param cache use to cache intermediate convert result to save cost.
    * @param recordName auto-generated record name used as a fallback, in case
-   * {@link org.apache.hudi.internal.schema.Types.RecordType} doesn't bear original record-name
+   * {@link org.apache.hudi.common.schema.types.Types.RecordType} doesn't bear original record-name
    * @return a HoodieSchema match this type
    */
   private static HoodieSchema visitInternalSchemaToBuildHoodieSchema(Type type, Map<Type, HoodieSchema> cache, String recordName) {

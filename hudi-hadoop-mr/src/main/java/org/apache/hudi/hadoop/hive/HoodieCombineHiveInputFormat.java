@@ -30,8 +30,8 @@ import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.hadoop.realtime.HoodieCombineRealtimeRecordReader;
 import org.apache.hudi.hadoop.realtime.HoodieParquetRealtimeInputFormat;
 import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils;
-import org.apache.hudi.internal.schema.InternalSchema;
-import org.apache.hudi.internal.schema.utils.SerDeHelper;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.evolution.HoodieSchemaSerDe;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
@@ -410,11 +410,11 @@ public class HoodieCombineHiveInputFormat<K extends WritableComparable, V extend
           HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setBasePath(path).setConf(new HadoopStorageConfiguration(job)).build();
           TableSchemaResolver schemaUtil = new TableSchemaResolver(metaClient);
           String avroSchema = schemaUtil.getTableSchema().toString();
-          Option<InternalSchema> internalSchema = schemaUtil.getTableInternalSchemaFromCommitMetadata();
-          if (internalSchema.isPresent()) {
+          Option<HoodieSchema> evolutionSchema = schemaUtil.getTableEvolutionSchemaFromCommitMetadata();
+          if (evolutionSchema.isPresent()) {
             LOG.info("Set internal and avro schema cache with path: {}", path);
             job.set(SCHEMA_CACHE_KEY_PREFIX + "." + path, avroSchema);
-            job.set(INTERNAL_SCHEMA_CACHE_KEY_PREFIX + "." + path, SerDeHelper.toJson(internalSchema.get()));
+            job.set(INTERNAL_SCHEMA_CACHE_KEY_PREFIX + "." + path, HoodieSchemaSerDe.toJson(evolutionSchema.get()));
           } else {
             // always sets up the cache so that we can distinguish with the scenario where the cache was never set(e.g. in tests).
             job.set(SCHEMA_CACHE_KEY_PREFIX + "." + path, "");

@@ -139,7 +139,7 @@ public class FormatUtils {
         .withFileSlice(fileSlice)
         .withDataSchema(tableSchema)
         .withRequestedSchema(requiredSchema)
-        .withInternalSchema(Option.ofNullable(internalSchemaManager.getQuerySchema()))
+        .withEvolutionSchema(Option.ofNullable(internalSchemaManager.getQuerySchema()))
         .withProps(typedProps)
         .withShouldUseRecordPosition(false)
         .withEmitDelete(emitDelete)

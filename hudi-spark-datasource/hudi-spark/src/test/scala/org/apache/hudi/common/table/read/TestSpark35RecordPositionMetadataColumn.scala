@@ -113,7 +113,7 @@ class TestSpark35RecordPositionMetadataColumn extends SparkClientFunctionalTestH
           allBaseFiles.get(0).getPath,
           0,
           allBaseFiles.get(0).getLength)
-      val iterator = new CloseableInternalRowIterator(reader.read(fileInfo, requiredSchema,
+      val iterator = new CloseableInternalRowIterator(reader.readWithEvolutionSchema(fileInfo, requiredSchema,
         StructType(Seq.empty), util.Option.empty(), Seq.empty, new HadoopStorageConfiguration(hadoopConf)))
       var rowIndices: Set[Long] = Set()
       while (iterator.hasNext) {

@@ -413,8 +413,9 @@ class CDCFileGroupIterator(split: HoodieCDCFileGroupSplit,
 
           val pf = sparkPartitionedFileUtils.createPartitionedFile(
             InternalRow.empty, absCDCPath, 0, fileStatus.getLength)
-          recordIter = baseFileReader.read(pf, originTableSchema.structTypeSchema, new StructType(),
-            toJavaOption(originTableSchema.internalSchema), Seq.empty, conf, tableSchemaOpt)
+          recordIter = baseFileReader.readWithEvolutionSchema(pf, originTableSchema.structTypeSchema, new StructType(),
+            toJavaOption(originTableSchema.evolutionSchema),
+            Seq.empty, conf, tableSchemaOpt)
             .map(record => BufferedRecords.fromEngineRecord(record, schema, readerContext.getRecordContext, orderingFieldNames, false))
         case BASE_FILE_DELETE =>
           assert(currentCDCFileSplit.getBeforeFileSlice.isPresent)
@@ -519,7 +520,7 @@ class CDCFileGroupIterator(split: HoodieCDCFileGroupSplit,
       .withFileSlice(fileSlice)
       .withDataSchema(schema)
       .withRequestedSchema(schema)
-      .withInternalSchema(toJavaOption(originTableSchema.internalSchema))
+      .withEvolutionSchema(toJavaOption(originTableSchema.evolutionSchema))
       .withProps(readerProperties)
       .withLatestCommitTime(split.changes.last.getInstant)
       .build()

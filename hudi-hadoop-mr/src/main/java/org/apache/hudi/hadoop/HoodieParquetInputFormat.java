@@ -19,13 +19,13 @@
 package org.apache.hudi.hadoop;
 
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.hadoop.avro.HoodieTimestampAwareParquetInputFormat;
 import org.apache.hudi.hadoop.utils.HoodieHiveUtils;
 import org.apache.hudi.hadoop.utils.HoodieRealtimeInputFormatUtils;
-import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.storage.HoodieStorageUtils;
@@ -161,7 +161,7 @@ public class HoodieParquetInputFormat extends HoodieParquetInputFormatBase {
 
     LOG.debug("EMPLOYING DEFAULT RECORD READER - {}", split);
 
-    return getRecordReaderInternal(split, job, reporter, schemaEvolutionContext.internalSchemaOption);
+    return getRecordReaderInternal(split, job, reporter, schemaEvolutionContext.getEvolutionSchemaOption());
   }
 
   private RecordReader<NullWritable, ArrayWritable> getRecordReaderInternal(InputSplit split,
@@ -173,10 +173,10 @@ public class HoodieParquetInputFormat extends HoodieParquetInputFormatBase {
   private RecordReader<NullWritable, ArrayWritable> getRecordReaderInternal(InputSplit split,
                                                                             JobConf job,
                                                                             Reporter reporter,
-                                                                            Option<InternalSchema> internalSchemaOption) throws IOException {
+                                                                            Option<HoodieSchema> evolutionSchemaOption) throws IOException {
     try {
       if (supportAvroRead && HoodieColumnProjectionUtils.supportTimestamp(job)) {
-        return new ParquetRecordReaderWrapper(new HoodieTimestampAwareParquetInputFormat(internalSchemaOption, Option.empty()), split, job, reporter);
+        return new ParquetRecordReaderWrapper(new HoodieTimestampAwareParquetInputFormat(evolutionSchemaOption, Option.empty()), split, job, reporter);
       } else {
         return super.getRecordReader(split, job, reporter);
       }

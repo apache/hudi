@@ -25,7 +25,7 @@ import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.Triple;
-import org.apache.hudi.internal.schema.HoodieSchemaException;
+import org.apache.hudi.exception.HoodieSchemaException;
 import org.apache.hudi.utilities.config.HoodieSchemaProviderConfig;
 import org.apache.hudi.utilities.exception.HoodieSchemaFetchException;
 

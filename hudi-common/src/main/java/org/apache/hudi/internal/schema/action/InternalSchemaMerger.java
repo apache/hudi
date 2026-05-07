@@ -21,8 +21,8 @@ package org.apache.hudi.internal.schema.action;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.internal.schema.InternalSchema;
-import org.apache.hudi.internal.schema.Type;
-import org.apache.hudi.internal.schema.Types;
+import org.apache.hudi.common.schema.types.Type;
+import org.apache.hudi.common.schema.types.Types;
 
 import java.util.ArrayList;
 import java.util.HashMap;

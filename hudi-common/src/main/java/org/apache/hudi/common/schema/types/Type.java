@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.internal.schema;
+package org.apache.hudi.common.schema.types;
 
 import org.apache.hudi.common.util.PartitionPathEncodeUtils;
 

@@ -19,8 +19,8 @@
 
 package org.apache.spark.sql.execution.datasources.parquet
 
+import org.apache.hudi.common.schema.HoodieSchema
 import org.apache.hudi.common.util.{Option => HOption}
-import org.apache.hudi.internal.schema.InternalSchema
 import org.apache.hudi.io.storage.HoodieSparkParquetReader.ENABLE_LOGICAL_TIMESTAMP_REPAIR
 
 import org.apache.hadoop.conf.Configuration
@@ -95,7 +95,7 @@ class Spark41ParquetReader(enableVectorizedReader: Boolean,
   override protected def doRead(file: PartitionedFile,
                                 requiredSchema: StructType,
                                 partitionSchema: StructType,
-                                internalSchemaOpt: HOption[InternalSchema],
+                                evolutionSchemaOpt: HOption[HoodieSchema],
                                 filters: scala.Seq[Filter],
                                 sharedConf: Configuration,
                                 tableSchemaOpt: HOption[MessageType]): Iterator[InternalRow] = {
@@ -105,7 +105,7 @@ class Spark41ParquetReader(enableVectorizedReader: Boolean,
     val split = new FileSplit(filePath, file.start, file.length, Array.empty[String])
 
     val schemaEvolutionUtils = new ParquetSchemaEvolutionUtils(sharedConf, filePath, requiredSchema,
-      partitionSchema, internalSchemaOpt)
+      partitionSchema, evolutionSchemaOpt)
 
     // When there are vectorized reads, we can avoid
     // 1. opening the file twice by transfering the SeekableInputStream

@@ -16,10 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.internal.schema.utils;
-
-import org.apache.hudi.internal.schema.Type;
-import org.apache.hudi.internal.schema.Types;
+package org.apache.hudi.common.schema.types;
 
 import java.util.Arrays;
 import java.util.HashSet;

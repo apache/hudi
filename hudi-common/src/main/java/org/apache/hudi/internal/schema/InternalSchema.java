@@ -18,9 +18,10 @@
 
 package org.apache.hudi.internal.schema;
 
+import org.apache.hudi.common.schema.types.Type;
+import org.apache.hudi.common.schema.types.Types.Field;
+import org.apache.hudi.common.schema.types.Types.RecordType;
 import org.apache.hudi.common.util.StringUtils;
-import org.apache.hudi.internal.schema.Types.Field;
-import org.apache.hudi.internal.schema.Types.RecordType;
 
 import lombok.Getter;
 import lombok.Setter;

@@ -37,7 +37,7 @@ import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.testutils.SchemaTestUtil;
 import org.apache.hudi.common.util.FileFormatUtils;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.internal.schema.HoodieSchemaException;
+import org.apache.hudi.exception.HoodieSchemaException;
 import org.apache.hudi.io.storage.HoodieIOFactory;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.HoodieStorageUtils;
@@ -54,6 +54,7 @@ import org.mockito.MockedStatic;
 import java.io.IOException;
 import java.net.URISyntaxException;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -222,12 +223,12 @@ class TestTableSchemaResolver {
 
     HoodieCommitMetadata insertMetadata = new HoodieCommitMetadata();
     insertMetadata.setOperationType(org.apache.hudi.common.model.WriteOperationType.INSERT);
-    // Create a valid InternalSchema
-    org.apache.hudi.internal.schema.InternalSchema internalSchema = new org.apache.hudi.internal.schema.InternalSchema(
-        org.apache.hudi.internal.schema.Types.RecordType.get(
-            org.apache.hudi.internal.schema.Types.Field.get(0, false, "id", org.apache.hudi.internal.schema.Types.IntType.get())));
-    insertMetadata.addMetadata(org.apache.hudi.internal.schema.utils.SerDeHelper.LATEST_SCHEMA,
-        org.apache.hudi.internal.schema.utils.SerDeHelper.toJson(internalSchema));
+    // Build a non-empty HoodieSchema fixture and serialize via HoodieSchemaSerDe.
+    HoodieSchema evolutionSchema = HoodieSchema.createRecord("schema", null, null, false,
+        Collections.singletonList(HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.INT))));
+    insertMetadata.addMetadata(
+        org.apache.hudi.common.schema.evolution.HoodieSchemaSerDe.LATEST_SCHEMA,
+        org.apache.hudi.common.schema.evolution.HoodieSchemaSerDe.toJson(evolutionSchema));
 
     HoodieCommitMetadata compactMetadata = new HoodieCommitMetadata();
     compactMetadata.setOperationType(org.apache.hudi.common.model.WriteOperationType.COMPACT);
@@ -241,7 +242,7 @@ class TestTableSchemaResolver {
     when(timeline.readCommitMetadata(clusterInstant)).thenReturn(clusterMetadata);
 
     // When: Get internal schema from commit metadata
-    Option<org.apache.hudi.internal.schema.InternalSchema> result = schemaResolver.getTableInternalSchemaFromCommitMetadata();
+    Option<org.apache.hudi.common.schema.HoodieSchema> result = schemaResolver.getTableEvolutionSchemaFromCommitMetadata();
 
     // Then: Should find the insert instant (002) which is the most recent schema-updating operation
     assertTrue(result.isPresent());
@@ -269,7 +270,7 @@ class TestTableSchemaResolver {
     when(timeline.readCommitMetadata(clusterInstant)).thenReturn(clusterMetadata);
 
     // When: Get internal schema from commit metadata
-    Option<org.apache.hudi.internal.schema.InternalSchema> result = schemaResolver.getTableInternalSchemaFromCommitMetadata();
+    Option<org.apache.hudi.common.schema.HoodieSchema> result = schemaResolver.getTableEvolutionSchemaFromCommitMetadata();
 
     // Then: Should return empty since no schema-updating operations exist
     assertTrue(result.isEmpty());
@@ -286,7 +287,7 @@ class TestTableSchemaResolver {
     when(timeline.getReverseOrderedInstants()).thenReturn(Stream.empty());
 
     // When: Get internal schema from commit metadata
-    Option<org.apache.hudi.internal.schema.InternalSchema> result = schemaResolver.getTableInternalSchemaFromCommitMetadata();
+    Option<org.apache.hudi.common.schema.HoodieSchema> result = schemaResolver.getTableEvolutionSchemaFromCommitMetadata();
 
     // Then: Should return empty for empty timeline
     assertTrue(result.isEmpty());
@@ -305,12 +306,12 @@ class TestTableSchemaResolver {
 
     HoodieCommitMetadata insertMetadata1 = new HoodieCommitMetadata();
     insertMetadata1.setOperationType(org.apache.hudi.common.model.WriteOperationType.INSERT);
-    // Create a valid InternalSchema
-    org.apache.hudi.internal.schema.InternalSchema internalSchema = new org.apache.hudi.internal.schema.InternalSchema(
-        org.apache.hudi.internal.schema.Types.RecordType.get(
-            org.apache.hudi.internal.schema.Types.Field.get(0, false, "id", org.apache.hudi.internal.schema.Types.IntType.get())));
-    insertMetadata1.addMetadata(org.apache.hudi.internal.schema.utils.SerDeHelper.LATEST_SCHEMA,
-        org.apache.hudi.internal.schema.utils.SerDeHelper.toJson(internalSchema));
+    // Build a non-empty HoodieSchema fixture and serialize via HoodieSchemaSerDe.
+    HoodieSchema evolutionSchema1 = HoodieSchema.createRecord("schema", null, null, false,
+        Collections.singletonList(HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.INT))));
+    insertMetadata1.addMetadata(
+        org.apache.hudi.common.schema.evolution.HoodieSchemaSerDe.LATEST_SCHEMA,
+        org.apache.hudi.common.schema.evolution.HoodieSchemaSerDe.toJson(evolutionSchema1));
 
     HoodieCommitMetadata insertMetadata2 = new HoodieCommitMetadata();
     insertMetadata2.setOperationType(org.apache.hudi.common.model.WriteOperationType.INSERT);
@@ -324,7 +325,7 @@ class TestTableSchemaResolver {
     // Should not call readCommitMetadata for insertInstant3 due to findFirst() short-circuit
 
     // When: Get internal schema from commit metadata
-    Option<org.apache.hudi.internal.schema.InternalSchema> result = schemaResolver.getTableInternalSchemaFromCommitMetadata();
+    Option<org.apache.hudi.common.schema.HoodieSchema> result = schemaResolver.getTableEvolutionSchemaFromCommitMetadata();
 
     // Then: Should find the first (most recent) schema-updating operation and stop
     assertTrue(result.isPresent());

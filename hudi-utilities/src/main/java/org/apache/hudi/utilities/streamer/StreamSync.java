@@ -84,7 +84,6 @@ import org.apache.hudi.exception.HoodieValidationException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.HiveSyncTool;
-import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.keygen.KeyGenUtils;
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory;
 import org.apache.hudi.metrics.HoodieMetrics;
@@ -801,8 +800,8 @@ public class StreamSync implements Serializable, Closeable {
   @VisibleForTesting
   SchemaProvider getDeducedSchemaProvider(HoodieSchema incomingSchema, SchemaProvider sourceSchemaProvider, HoodieTableMetaClient metaClient) {
     Option<HoodieSchema> latestTableSchemaOpt = UtilHelpers.getLatestTableSchema(hoodieSparkContext.jsc(), storage, cfg.targetBasePath, metaClient);
-    Option<InternalSchema> internalSchemaOpt = HoodieConversionUtils.toJavaOption(
-        HoodieSchemaUtils.getLatestTableInternalSchema(
+    Option<HoodieSchema> evolutionSchemaOpt = HoodieConversionUtils.toJavaOption(
+        HoodieSchemaUtils.getLatestTableEvolutionSchema(
             HoodieStreamer.Config.getProps(conf, cfg), metaClient));
     // Deduce proper target (writer's) schema for the input dataset, reconciling its
     // schema w/ the table's one
@@ -810,7 +809,7 @@ public class StreamSync implements Serializable, Closeable {
     HoodieSchema targetSchema = HoodieSchemaUtils.deduceWriterSchema(
             incomingSchema == null ? HoodieSchema.create(HoodieSchemaType.NULL) : org.apache.hudi.common.schema.HoodieSchemaUtils.removeMetadataFields(incomingSchema),
             latestTableSchemaOpt,
-            internalSchemaOpt,
+            evolutionSchemaOpt,
             props);
 
     // Override schema provider with the reconciled target schema

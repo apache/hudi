@@ -28,10 +28,6 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.internal.schema.InternalSchema;
-import org.apache.hudi.internal.schema.Types;
-import org.apache.hudi.internal.schema.action.TableChanges;
-import org.apache.hudi.internal.schema.utils.SchemaChangeUtils;
 
 import java.util.Collections;
 import java.util.List;
@@ -46,10 +42,10 @@ public class ParquetRowIndexBasedSchemaHandler<T> extends FileGroupReaderSchemaH
   public ParquetRowIndexBasedSchemaHandler(HoodieReaderContext<T> readerContext,
                                            HoodieSchema dataSchema,
                                            HoodieSchema requestedSchema,
-                                           Option<InternalSchema> internalSchemaOpt,
+                                           Option<HoodieSchema> evolutionSchemaOpt,
                                            TypedProperties properties,
                                            HoodieTableMetaClient metaClient) {
-    super(readerContext, dataSchema, requestedSchema, internalSchemaOpt, properties, metaClient);
+    super(readerContext, dataSchema, requestedSchema, evolutionSchemaOpt, properties, metaClient);
     if (!readerContext.getRecordContext().supportsParquetRowIndex()) {
       throw new IllegalStateException("Using " + this.getClass().getName() + " but context does not support parquet row index");
     }
@@ -64,24 +60,18 @@ public class ParquetRowIndexBasedSchemaHandler<T> extends FileGroupReaderSchemaH
   }
 
   @Override
-  protected Option<InternalSchema> getInternalSchemaOpt(Option<InternalSchema> internalSchemaOpt) {
-    return internalSchemaOpt.map(ParquetRowIndexBasedSchemaHandler::addPositionalMergeCol);
+  protected Option<HoodieSchema> mapEvolutionSchemaOpt(Option<HoodieSchema> evolutionSchemaOpt) {
+    return evolutionSchemaOpt.map(ParquetRowIndexBasedSchemaHandler::addPositionalMergeCol);
   }
 
   @Override
-  protected InternalSchema doPruneInternalSchema(HoodieSchema requiredSchema, InternalSchema internalSchema) {
+  protected HoodieSchema doPruneEvolutionSchema(HoodieSchema requiredSchema, HoodieSchema evolutionSchema) {
     if (!readerContext.getShouldMergeUseRecordPosition()) {
-      return super.doPruneInternalSchema(requiredSchema, internalSchema);
+      return super.doPruneEvolutionSchema(requiredSchema, evolutionSchema);
     }
 
-    InternalSchema withRowIndex = addPositionalMergeCol(internalSchema);
-    return super.doPruneInternalSchema(requiredSchema, withRowIndex);
-  }
-
-  private static InternalSchema addPositionalMergeCol(InternalSchema internalSchema) {
-    TableChanges.ColumnAddChange addChange = TableChanges.ColumnAddChange.get(internalSchema);
-    addChange.addColumns("", ROW_INDEX_TEMPORARY_COLUMN_NAME, Types.LongType.get(), null);
-    return SchemaChangeUtils.applyTableChanges2Schema(internalSchema, addChange);
+    HoodieSchema withRowIndex = addPositionalMergeCol(evolutionSchema);
+    return super.doPruneEvolutionSchema(requiredSchema, withRowIndex);
   }
 
   @Override
@@ -100,12 +90,30 @@ public class ParquetRowIndexBasedSchemaHandler<T> extends FileGroupReaderSchemaH
 
   @VisibleForTesting
   static HoodieSchema addPositionalMergeCol(HoodieSchema input) {
-    return appendFieldsToSchemaDedupNested(input, Collections.singletonList(getPositionalMergeField()));
+    return appendFieldsToSchemaDedupNested(input, Collections.singletonList(getPositionalMergeField(input)));
   }
 
   @VisibleForTesting
   static HoodieSchemaField getPositionalMergeField() {
-    return HoodieSchemaField.of(ROW_INDEX_TEMPORARY_COLUMN_NAME,
+    return getPositionalMergeField(null);
+  }
+
+  /**
+   * Builds the synthetic positional-merge field. When a parent schema is supplied
+   * we stamp a field-id above its {@code maxColumnId} so the new field can't
+   * collide with existing column ids when the schema is round-tripped through
+   * the InternalSchema bridge — important because the bridge assigns
+   * converter-fresh sequential ids to top-level fields without an explicit
+   * field-id, which would otherwise alias an inner map's key/value id.
+   */
+  private static HoodieSchemaField getPositionalMergeField(HoodieSchema parent) {
+    HoodieSchemaField field = HoodieSchemaField.of(ROW_INDEX_TEMPORARY_COLUMN_NAME,
         HoodieSchema.create(HoodieSchemaType.LONG), "", -1L);
+    if (parent != null) {
+      int maxId = parent.maxColumnId();
+      int allIdsMax = parent.getAllIds().stream().mapToInt(Integer::intValue).max().orElse(-1);
+      field.addProp(HoodieSchema.FIELD_ID_PROP, (maxId >= 0 ? maxId : allIdsMax) + 1);
+    }
+    return field;
   }
 }

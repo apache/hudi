@@ -29,7 +29,6 @@ import org.apache.hudi.common.table.cdc.HoodieCDCUtils;
 import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
-import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 
@@ -47,10 +46,10 @@ public class HoodieUnMergedLogRecordScanner extends AbstractHoodieLogRecordScann
   private HoodieUnMergedLogRecordScanner(HoodieStorage storage, String basePath, List<String> logFilePaths, HoodieSchema readerSchema,
                                          String latestInstantTime, boolean reverseReader, int bufferSize,
                                          LogRecordScannerCallback callback, RecordDeletionCallback recordDeletionCallback,
-                                         Option<InstantRange> instantRange, InternalSchema internalSchema,
+                                         Option<InstantRange> instantRange, HoodieSchema evolutionSchema,
                                          HoodieRecordMerger recordMerger, Option<HoodieTableMetaClient> hoodieTableMetaClientOption) {
     super(storage, basePath, logFilePaths, readerSchema, latestInstantTime, reverseReader, bufferSize, instantRange,
-        false, true, Option.empty(), internalSchema, Option.empty(), recordMerger,
+        false, true, Option.empty(), evolutionSchema, Option.empty(), recordMerger,
          hoodieTableMetaClientOption);
     this.callback = callback;
     this.recordDeletionCallback = recordDeletionCallback;
@@ -117,7 +116,7 @@ public class HoodieUnMergedLogRecordScanner extends AbstractHoodieLogRecordScann
     private String basePath;
     private List<String> logFilePaths;
     private HoodieSchema readerSchema;
-    private InternalSchema internalSchema;
+    private HoodieSchema evolutionSchema;
     private String latestInstantTime;
     private boolean reverseReader;
     private int bufferSize;
@@ -157,8 +156,8 @@ public class HoodieUnMergedLogRecordScanner extends AbstractHoodieLogRecordScann
     }
 
     @Override
-    public Builder withInternalSchema(InternalSchema internalSchema) {
-      this.internalSchema = internalSchema;
+    public Builder withEvolutionSchema(HoodieSchema evolutionSchema) {
+      this.evolutionSchema = evolutionSchema;
       return this;
     }
 
@@ -211,7 +210,7 @@ public class HoodieUnMergedLogRecordScanner extends AbstractHoodieLogRecordScann
 
       return new HoodieUnMergedLogRecordScanner(storage, basePath, logFilePaths, readerSchema,
           latestInstantTime, reverseReader, bufferSize, callback, recordDeletionCallback, instantRange,
-          internalSchema, recordMerger, Option.ofNullable(hoodieTableMetaClient));
+          evolutionSchema, recordMerger, Option.ofNullable(hoodieTableMetaClient));
     }
   }
 }

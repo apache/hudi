@@ -20,12 +20,10 @@ package org.apache.hudi.hadoop.avro;
 
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaUtils;
+import org.apache.hudi.common.schema.evolution.HoodieSchemaMerger;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.hadoop.HoodieColumnProjectionUtils;
 import org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils;
-import org.apache.hudi.internal.schema.InternalSchema;
-import org.apache.hudi.internal.schema.action.InternalSchemaMerger;
-import org.apache.hudi.internal.schema.convert.InternalSchemaConverter;
 
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
@@ -54,7 +52,7 @@ public class HoodieAvroParquetReader extends RecordReader<Void, ArrayWritable> {
   private final ParquetRecordReader<GenericData.Record> parquetRecordReader;
   private HoodieSchema baseSchema;
 
-  public HoodieAvroParquetReader(InputSplit inputSplit, Configuration conf, Option<InternalSchema> internalSchemaOption, Option<HoodieSchema> dataSchema) throws IOException {
+  public HoodieAvroParquetReader(InputSplit inputSplit, Configuration conf, Option<HoodieSchema> evolutionSchemaOption, Option<HoodieSchema> dataSchema) throws IOException {
     if (dataSchema.isPresent()) {
       baseSchema = dataSchema.get();
     } else {
@@ -64,14 +62,14 @@ public class HoodieAvroParquetReader extends RecordReader<Void, ArrayWritable> {
       MessageType messageType = fileFooter.getFileMetaData().getSchema();
       baseSchema = getAvroSchemaConverter(conf).convert(messageType);
 
-      if (internalSchemaOption.isPresent()) {
+      if (evolutionSchemaOption.isPresent()) {
         // do schema reconciliation in case there exists read column which is not in the file schema.
-        InternalSchema mergedInternalSchema = new InternalSchemaMerger(
-            InternalSchemaConverter.convert(baseSchema),
-            internalSchemaOption.get(),
-            true,
-            true).mergeSchema();
-        baseSchema = InternalSchemaConverter.convert(mergedInternalSchema, baseSchema.getFullName());
+        // Preserve the file schema's record name on the merged result, matching the legacy
+        // InternalSchemaConverter.convert(merged, baseSchema.getFullName()) behavior. Without
+        // this, the merged schema would inherit the evolution schema's name (often a generic
+        // placeholder) and downstream consumers expecting the file-side name would diverge.
+        baseSchema = new HoodieSchemaMerger(baseSchema, evolutionSchemaOption.get(), true, true)
+            .mergeSchema(baseSchema.getFullName());
       }
 
       // if exists read columns, we need to filter columns.

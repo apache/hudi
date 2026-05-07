@@ -34,7 +34,6 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.internal.schema.Types;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.sink.compact.CompactOperator;
 import org.apache.hudi.sink.compact.CompactionCommitEvent;
@@ -77,8 +76,8 @@ import java.util.concurrent.TimeoutException;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
-import static org.apache.hudi.internal.schema.action.TableChange.ColumnPositionChange.ColumnPositionType.AFTER;
-import static org.apache.hudi.internal.schema.action.TableChange.ColumnPositionChange.ColumnPositionType.BEFORE;
+import static org.apache.hudi.common.schema.evolution.ColumnPositionType.AFTER;
+import static org.apache.hudi.common.schema.evolution.ColumnPositionType.BEFORE;
 import static org.apache.hudi.utils.TestConfigurations.ROW_TYPE_EVOLUTION_AFTER;
 import static org.apache.hudi.utils.TestConfigurations.ROW_TYPE_EVOLUTION_BEFORE;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -268,7 +267,7 @@ public class ITTestSchemaEvolution {
       writeClient.addColumn("salary", doubleType, null, "name", AFTER);
       writeClient.deleteColumns("gender");
       writeClient.renameColumn("name", "first_name");
-      writeClient.updateColumnType("age", Types.StringType.get());
+      writeClient.updateColumnType("age", HoodieSchema.create(HoodieSchemaType.STRING));
       writeClient.addColumn("last_name", stringType, "empty allowed", "salary", BEFORE);
       writeClient.reOrderColPosition("age", "first_name", BEFORE);
       // add a field in the middle of the `f_struct` and `f_row_map` columns
@@ -286,12 +285,12 @@ public class ITTestSchemaEvolution {
       writeClient.addColumn("f_row_map.value.drop_add", doubleType);
 
       // perform comprehensive evolution on complex types (struct, array, map) by promoting its primitive types
-      writeClient.updateColumnType("f_struct.change_type", Types.LongType.get());
+      writeClient.updateColumnType("f_struct.change_type", HoodieSchema.create(HoodieSchemaType.LONG));
       writeClient.renameColumn("f_struct.change_type", "renamed_change_type");
-      writeClient.updateColumnType("f_row_map.value.change_type", Types.LongType.get());
+      writeClient.updateColumnType("f_row_map.value.change_type", HoodieSchema.create(HoodieSchemaType.LONG));
       writeClient.renameColumn("f_row_map.value.change_type", "renamed_change_type");
-      writeClient.updateColumnType("f_array.element", Types.DoubleType.get());
-      writeClient.updateColumnType("f_map.value", Types.DoubleType.get());
+      writeClient.updateColumnType("f_array.element", HoodieSchema.create(HoodieSchemaType.DOUBLE));
+      writeClient.updateColumnType("f_map.value", HoodieSchema.create(HoodieSchemaType.DOUBLE));
 
       // perform comprehensive schema evolution on table by adding complex typed columns
       writeClient.addColumn("new_row_col", structType);
@@ -301,9 +300,9 @@ public class ITTestSchemaEvolution {
       writeClient.reOrderColPosition("partition", "new_map_col", AFTER);
 
       // perform comprehensive evolution on a struct column by reordering field positions
-      writeClient.updateColumnType("f_struct.f0", Types.DecimalType.get(20, 0));
+      writeClient.updateColumnType("f_struct.f0", HoodieSchema.createDecimalFixed(20, 0));
       writeClient.reOrderColPosition("f_struct.f0", "f_struct.drop_add", AFTER);
-      writeClient.updateColumnType("f_row_map.value.f0", Types.DecimalType.get(20, 0));
+      writeClient.updateColumnType("f_row_map.value.f0", HoodieSchema.createDecimalFixed(20, 0));
       writeClient.reOrderColPosition("f_row_map.value.f0", "f_row_map.value.drop_add", AFTER);
     } catch (Exception e) {
       throw new HoodieException(e);

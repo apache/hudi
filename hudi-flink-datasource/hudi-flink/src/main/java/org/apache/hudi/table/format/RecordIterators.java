@@ -23,7 +23,6 @@ import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.configuration.FlinkOptions;
-import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.source.ExpressionPredicates.Predicate;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
@@ -114,7 +113,7 @@ public abstract class RecordIterators {
     }
     UnboundRecordFilter recordFilter = getUnboundRecordFilterInstance(conf);
 
-    InternalSchema mergeSchema = internalSchemaManager.getMergeSchema(getFileName(path));
+    HoodieSchema mergeSchema = internalSchemaManager.getMergeSchema(getFileName(path));
     if (mergeSchema.isEmptySchema()) {
       return new ParquetSplitRecordIterator(
           ParquetSplitReaderUtil.genPartColumnarRowReader(

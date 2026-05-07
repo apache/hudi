@@ -36,10 +36,9 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.hadoop.SchemaEvolutionContext;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.hadoop.realtime.HoodieParquetRealtimeInputFormat;
+import org.apache.hudi.common.schema.evolution.HoodieSchemaInternalSchemaBridge;
+import org.apache.hudi.common.schema.evolution.HoodieSchemaSerDe;
 import org.apache.hudi.hadoop.testutils.InputFormatTestUtil;
-import org.apache.hudi.internal.schema.InternalSchema;
-import org.apache.hudi.internal.schema.convert.InternalSchemaConverter;
-import org.apache.hudi.internal.schema.utils.SerDeHelper;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StorageConfiguration;
@@ -134,16 +133,17 @@ public class TestHoodieCombineHiveInputFormat extends HoodieCommonTestHarness {
     File partitionDirOne = InputFormatTestUtil.prepareParquetTable(path1, schema, 3, numRecords, commitTime);
     HoodieCommitMetadata commitMetadataOne = CommitUtils.buildMetadata(Collections.emptyList(), Collections.emptyMap(), Option.empty(), WriteOperationType.UPSERT,
         schema.toString(), HoodieTimeline.COMMIT_ACTION);
-    // mock the latest schema to the commit metadata
-    InternalSchema internalSchema = InternalSchemaConverter.convert(schema);
-    commitMetadataOne.addMetadata(SerDeHelper.LATEST_SCHEMA, SerDeHelper.toJson(internalSchema));
+    // mock the latest schema to the commit metadata; bridge round-trip mints fresh
+    // ids and matches the production write-path naming.
+    HoodieSchema evolutionSchema = HoodieSchemaInternalSchemaBridge.withRecordName(schema, schema.getFullName());
+    commitMetadataOne.addMetadata(HoodieSchemaSerDe.LATEST_SCHEMA, HoodieSchemaSerDe.toJson(evolutionSchema));
     FileCreateUtilsLegacy.createCommit(COMMIT_METADATA_SER_DE, path1.toString(), commitTime, Option.of(commitMetadataOne));
     // Create 3 parquet files with 10 records each for partition 2
     File partitionDirTwo = InputFormatTestUtil.prepareParquetTable(path2, schema, 3, numRecords, commitTime);
     HoodieCommitMetadata commitMetadataTwo = CommitUtils.buildMetadata(Collections.emptyList(), Collections.emptyMap(), Option.empty(), WriteOperationType.UPSERT,
         schema.toString(), HoodieTimeline.COMMIT_ACTION);
     // Mock the latest schema to the commit metadata
-    commitMetadataTwo.addMetadata(SerDeHelper.LATEST_SCHEMA, SerDeHelper.toJson(internalSchema));
+    commitMetadataTwo.addMetadata(HoodieSchemaSerDe.LATEST_SCHEMA, HoodieSchemaSerDe.toJson(evolutionSchema));
     FileCreateUtilsLegacy.createCommit(COMMIT_METADATA_SER_DE, path2.toString(), commitTime, Option.of(commitMetadataTwo));
 
     // Enable schema evolution
@@ -190,8 +190,10 @@ public class TestHoodieCombineHiveInputFormat extends HoodieCommonTestHarness {
       List<FileSplit> fileSplits = inputSplitShim.getRealtimeFileSplits();
       for (FileSplit fileSplit : fileSplits) {
         SchemaEvolutionContext schemaEvolutionContext = new SchemaEvolutionContext(fileSplit, jobConf);
-        Option<InternalSchema> internalSchemaFromCache = schemaEvolutionContext.getInternalSchemaFromCache();
-        assertEquals(internalSchemaFromCache.get(), internalSchema);
+        Option<HoodieSchema> evolutionSchemaFromCache = schemaEvolutionContext.getEvolutionSchemaFromCache();
+        // Compare via the SerDe wire format — record name on the read-back schema is
+        // derived inside HoodieSchemaSerDe.fromJson and may differ from the just-constructed one.
+        assertEquals(HoodieSchemaSerDe.toJson(evolutionSchemaFromCache.get()), HoodieSchemaSerDe.toJson(evolutionSchema));
         HoodieSchema schemaFromCache = schemaEvolutionContext.getSchemaFromCache();
         assertEquals(schemaFromCache, schema);
       }

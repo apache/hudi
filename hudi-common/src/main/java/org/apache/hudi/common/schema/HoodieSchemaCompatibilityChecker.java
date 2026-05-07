@@ -19,7 +19,7 @@
 package org.apache.hudi.common.schema;
 
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.internal.schema.HoodieSchemaException;
+import org.apache.hudi.exception.HoodieSchemaException;
 
 import lombok.AccessLevel;
 import lombok.AllArgsConstructor;

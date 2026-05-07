@@ -24,7 +24,7 @@ import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieAvroSchemaException;
 import org.apache.hudi.exception.HoodieIOException;
-import org.apache.hudi.internal.schema.HoodieSchemaException;
+import org.apache.hudi.exception.HoodieSchemaException;
 
 import lombok.Getter;
 import org.apache.avro.JsonProperties;
@@ -104,6 +104,16 @@ public class HoodieSchema implements Serializable {
    * Examples: "VECTOR(128)", "VECTOR(512, DOUBLE)", "BLOB", "VARIANT".
    */
   public static final String TYPE_METADATA_FIELD = "hudi_type";
+
+  // Avro custom-property keys carrying field ids for schema-on-read evolution.
+  // These follow the Iceberg/Parquet "field-id" convention so the integers survive
+  // Schema#toString -> Schema.Parser#parse round trips and remain interoperable with
+  // existing tooling. They are the HoodieSchema replacement for Types.Field.fieldId(),
+  // ArrayType.elementId(), MapType.keyId(), MapType.valueId() in InternalSchema.
+  public static final String FIELD_ID_PROP = "field-id";
+  public static final String ELEMENT_ID_PROP = "element-id";
+  public static final String KEY_ID_PROP = "key-id";
+  public static final String VALUE_ID_PROP = "value-id";
 
   /**
    * The Avro logical type name used for Variant schemas.
@@ -236,12 +246,12 @@ public class HoodieSchema implements Serializable {
    * @param vectorColumns ordered map of field name to Vector descriptor (iteration order is preserved)
    * @return comma-separated descriptor list, or empty string if the map is null or empty
    */
-  public static String serializeVectorColumnsMetadata(java.util.Map<String, Vector> vectorColumns) {
+  public static String serializeVectorColumnsMetadata(Map<String, Vector> vectorColumns) {
     if (vectorColumns == null || vectorColumns.isEmpty()) {
       return "";
     }
     StringBuilder sb = new StringBuilder();
-    for (java.util.Map.Entry<String, Vector> entry : vectorColumns.entrySet()) {
+    for (Map.Entry<String, Vector> entry : vectorColumns.entrySet()) {
       if (sb.length() > 0) {
         sb.append(',');
       }
@@ -312,8 +322,18 @@ public class HoodieSchema implements Serializable {
 
   private Schema avroSchema;
   private HoodieSchemaType type;
+  // Mutable schema-level evolution metadata. These are not stored on the underlying
+  // Avro schema because Avro's JsonProperties is set-once and can't be overwritten.
+  // The on-disk wire format (SerDeHelper) carries these via the `version_id` and
+  // `max_column_id` JSON keys; Avro's Schema#toString does NOT need to round-trip them.
+  // -1 sentinel = "unset", matching legacy InternalSchema's DEFAULT_VERSION_ID semantics.
+  private long schemaId = -1L;
+  private int explicitMaxColumnId = -1;
   private transient List<HoodieSchemaField> fields;
   private transient Map<String, HoodieSchemaField> fieldMap;
+  // volatile so threads observing an instance shared via HoodieSchemaCache.intern()
+  // see a fully-constructed HoodieSchemaIndex (no torn reads on publication).
+  private transient volatile HoodieSchemaIndex idIndex;
 
   // Register the Variant logical type with Avro
   static {
@@ -661,6 +681,24 @@ public class HoodieSchema implements Serializable {
     Schema decimalSchema = Schema.createFixed(name, doc, namespace, fixedSize);
     LogicalTypes.decimal(precision, scale).addToSchema(decimalSchema);
     return new HoodieSchema.Decimal(decimalSchema);
+  }
+
+  /**
+   * Creates a FIXED-backed decimal schema with the minimum byte size needed to
+   * hold {@code precision} digits. Equivalent to {@code Types.DecimalType.get(p, s)} —
+   * use this when the target schema is being chosen for type-evolution promotion
+   * from an integral type, where {@code DECIMAL_BYTES} is not a compatible target.
+   */
+  public static HoodieSchema createDecimalFixed(int precision, int scale) {
+    return createDecimal("decimal", null, null, precision, scale, computeMinBytesForDecimalPrecision(precision));
+  }
+
+  private static int computeMinBytesForDecimalPrecision(int precision) {
+    int numBytes = 1;
+    while (Math.pow(2.0, 8 * numBytes - 1) < Math.pow(10.0, precision)) {
+      numBytes += 1;
+    }
+    return numBytes;
   }
 
   /**
@@ -1315,6 +1353,172 @@ public class HoodieSchema implements Serializable {
   public void addProp(String key, Object value) {
     ValidationUtils.checkArgument(key != null && !key.isEmpty(), "Property key cannot be null or empty");
     avroSchema.addProp(key, value);
+    this.idIndex = null;
+  }
+
+  /**
+   * Factory for an "empty" schema sentinel: an unnamed record with no fields and an
+   * unset schemaId. Equivalent to {@code InternalSchema#getEmptyInternalSchema()} —
+   * used by callers that need a placeholder when no evolution schema is available
+   * (e.g. schema-on-read disabled or no schema in commit metadata). Pair with
+   * {@link #isEmptySchema()} to detect the sentinel.
+   */
+  public static HoodieSchema empty() {
+    return createRecord("EmptySchema", null, "hudi", false, Collections.emptyList());
+  }
+
+  /**
+   * Returns true if this schema is the "empty" sentinel — i.e. a record with
+   * no fields (the {@link #empty()} placeholder). Replaces
+   * {@code InternalSchema#isEmptySchema()}.
+   *
+   * <p>Note: the legacy {@code InternalSchema.isEmptySchema()} keyed off
+   * {@code versionId < 0}, which was effectively a no-fields check (only the
+   * EMPTY_SCHEMA singleton ever had a negative version id). We mirror the
+   * structural intent here so any HoodieSchema built via {@code parse()} /
+   * {@code fromAvroSchema()} / {@code createRecord()} without a subsequent
+   * {@link #setSchemaId(long)} is not mis-classified as empty.</p>
+   */
+  public boolean isEmptySchema() {
+    return type != HoodieSchemaType.RECORD || avroSchema.getFields().isEmpty();
+  }
+
+  /**
+   * Returns the schema version id (replaces InternalSchema#schemaId).
+   * Returns -1 if no version has been assigned.
+   */
+  public long schemaId() {
+    return schemaId;
+  }
+
+  /**
+   * Sets the schema version id. Typically derived from a commit instant timestamp.
+   * Mutable: callers that need to re-stamp the version (e.g. after an evolution
+   * operation) can call this multiple times.
+   */
+  public HoodieSchema setSchemaId(long schemaId) {
+    this.schemaId = schemaId;
+    return this;
+  }
+
+  /**
+   * Returns the highest column id assigned to any sub-schema. If an explicit
+   * max-column-id has been recorded (e.g. preserved across a column deletion),
+   * that value is returned; otherwise the highest id currently present in the
+   * schema is returned. Replaces InternalSchema#maxColumnId.
+   *
+   * <p>Returns -1 if no ids have been assigned anywhere in the schema.</p>
+   */
+  public int maxColumnId() {
+    if (explicitMaxColumnId >= 0) {
+      return explicitMaxColumnId;
+    }
+    return index().maxColumnIdSeen();
+  }
+
+  /**
+   * Records the highest column id explicitly. Useful after column deletions, where
+   * the highest currently-present id is less than the highest ever assigned and
+   * subsequent column additions must avoid colliding with previously-used ids.
+   */
+  public HoodieSchema setMaxColumnId(int maxColumnId) {
+    this.explicitMaxColumnId = maxColumnId;
+    return this;
+  }
+
+  /**
+   * Returns the dot-joined full name of the field that owns column id {@code id},
+   * or empty string if none. Replaces InternalSchema#findFullName.
+   */
+  public String findFullName(int id) {
+    String result = index().idToName().get(id);
+    return result == null ? "" : result;
+  }
+
+  /**
+   * Returns the column id assigned to the field at {@code fullName}, or -1 if not found.
+   * Replaces InternalSchema#findIdByName.
+   */
+  public int findIdByName(String fullName) {
+    if (fullName == null || fullName.isEmpty()) {
+      return -1;
+    }
+    Integer id = index().nameToId().get(fullName);
+    return id == null ? -1 : id;
+  }
+
+  /**
+   * Returns all column ids in this schema. Replaces InternalSchema#getAllIds.
+   */
+  public Set<Integer> getAllIds() {
+    return index().idToName().keySet();
+  }
+
+  /**
+   * Returns the {@link HoodieSchema} (the type) of the field/element/key/value at
+   * column id {@code id}, or null if no such id exists. Replaces
+   * {@code InternalSchema.findType(int)}.
+   *
+   * <p>The returned schema is the type schema as it sits inside its parent — for
+   * an optional record field, that's the {@code [null, X]} union; for a map value
+   * type, the value sub-schema; for an array element type, the element sub-schema.
+   * Two HoodieSchemas returned by this method compare equal iff their underlying
+   * Avro schemas compare equal (structural equality).</p>
+   */
+  public HoodieSchema findType(int id) {
+    return index().idToSchema().get(id);
+  }
+
+  /**
+   * Returns the {@link HoodieSchema} of the field at the given dot-separated
+   * full name, or null if no such field exists. Equivalent to
+   * {@code InternalSchema.findType(String)}.
+   */
+  public HoodieSchema findType(String fullName) {
+    int id = findIdByName(fullName);
+    return id < 0 ? null : findType(id);
+  }
+
+  /**
+   * Returns the dot-separated full names of every column in this schema (record
+   * fields, array elements, map keys / values). Replaces
+   * {@code InternalSchema#getAllColsFullName()}.
+   *
+   * <p>Order matches the depth-first traversal order used by {@link HoodieSchemaIndex},
+   * which is the same order InternalSchema produced.</p>
+   */
+  public List<String> getAllColsFullName() {
+    return new ArrayList<>(index().nameToId().keySet());
+  }
+
+  /**
+   * Returns a mapping from full field name to depth-first traversal position. Used during
+   * ingest reconciliation to preserve declared field order. Replaces
+   * InternalSchema#getNameToPosition.
+   */
+  public Map<String, Integer> getNameToPosition() {
+    return index().nameToPosition();
+  }
+
+  /**
+   * Returns the lazily-computed id ↔ name index. Recomputes after any mutation that
+   * goes through {@link #addProp}.
+   */
+  HoodieSchemaIndex index() {
+    HoodieSchemaIndex local = this.idIndex;
+    if (local == null) {
+      local = HoodieSchemaIndex.of(this);
+      this.idIndex = local;
+    }
+    return local;
+  }
+
+  /**
+   * Drops the cached index — call this after mutating field-id properties on the
+   * underlying Avro schema directly (e.g. after running {@link HoodieSchemaIdAssigner}).
+   */
+  public void invalidateIdIndex() {
+    this.idIndex = null;
   }
 
   /**

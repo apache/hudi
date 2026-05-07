@@ -20,8 +20,8 @@
 package org.apache.spark.sql.execution.datasources
 
 import org.apache.hadoop.conf.Configuration
+import org.apache.hudi.common.schema.HoodieSchema
 import org.apache.hudi.common.util
-import org.apache.hudi.internal.schema.InternalSchema
 import org.apache.hudi.storage.StorageConfiguration
 import org.apache.parquet.schema.MessageType
 import org.apache.spark.sql.catalyst.InternalRow
@@ -30,22 +30,22 @@ import org.apache.spark.sql.types.StructType
 
 trait SparkColumnarFileReader extends Serializable {
   /**
-   * Read an individual parquet file
+   * Read an individual parquet/orc/lance file.
    *
-   * @param file               parquet file to read
+   * @param file               file to read
    * @param requiredSchema     desired output schema of the data
    * @param partitionSchema    schema of the partition columns. Partition values will be appended to the end of every row
-   * @param internalSchemaOpt  option of internal schema for schema.on.read
+   * @param evolutionSchemaOpt option of the schema-on-read evolution schema (with field ids); empty when schema-on-read is disabled
    * @param filters            filters for data skipping. Not guaranteed to be used; the spark plan will also apply the filters.
    * @param storageConf        the hadoop conf
    * @param tableSchemaOpt     option of table schema for timestamp precision conversion
    * @return iterator of rows read from the file output type says [[InternalRow]] but could be [[ColumnarBatch]]
    */
-  def read(file: PartitionedFile,
-           requiredSchema: StructType,
-           partitionSchema: StructType,
-           internalSchemaOpt: util.Option[InternalSchema],
-           filters: Seq[Filter],
-           storageConf: StorageConfiguration[Configuration],
-           tableSchemaOpt: util.Option[MessageType] = util.Option.empty()): Iterator[InternalRow]
+  def readWithEvolutionSchema(file: PartitionedFile,
+                              requiredSchema: StructType,
+                              partitionSchema: StructType,
+                              evolutionSchemaOpt: util.Option[HoodieSchema],
+                              filters: Seq[Filter],
+                              storageConf: StorageConfiguration[Configuration],
+                              tableSchemaOpt: util.Option[MessageType] = util.Option.empty()): Iterator[InternalRow]
 }

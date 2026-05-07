@@ -313,7 +313,7 @@ class TestParquetColumnProjection extends SparkClientFunctionalTestHarness with 
           assertTrue((abs(expectedBytesRead - bytesRead) / expectedBytesRead) < 0.1)
 
           val readColumns = targetColumns ++ hoodieRelation.mandatoryFields
-          val (_, projectedStructType, _) = projectSchema(Left(tableState.schema), readColumns)
+          val (_, projectedStructType, _) = projectSchema(tableState.schema, None, readColumns)
 
           val row: InternalRow = rows.take(1).head
 

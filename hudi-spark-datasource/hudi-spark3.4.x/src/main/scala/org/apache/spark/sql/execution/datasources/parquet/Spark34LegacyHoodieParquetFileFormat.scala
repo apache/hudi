@@ -17,17 +17,16 @@
 
 package org.apache.spark.sql.execution.datasources.parquet
 
+import org.apache.hudi.HoodieSchemaConversionUtils
 import org.apache.hudi.client.utils.SparkInternalSchemaConverter
 import org.apache.hudi.common.fs.FSUtils
+import org.apache.hudi.common.schema.HoodieSchema
+import org.apache.hudi.common.schema.evolution.{HoodieSchemaEvolutionUtils, HoodieSchemaHistoryCache, HoodieSchemaMerger, HoodieSchemaSerDe}
 import org.apache.hudi.common.table.timeline.TimelineLayout
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion
-import org.apache.hudi.common.util.InternalSchemaCache
 import org.apache.hudi.common.util.StringUtils.isNullOrEmpty
 import org.apache.hudi.common.util.collection.Pair
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
-import org.apache.hudi.internal.schema.InternalSchema
-import org.apache.hudi.internal.schema.action.InternalSchemaMerger
-import org.apache.hudi.internal.schema.utils.{InternalSchemaUtils, SerDeHelper}
 import org.apache.hudi.storage.HoodieStorageUtils
 
 import org.apache.hadoop.conf.Configuration
@@ -167,7 +166,7 @@ class Spark34LegacyHoodieParquetFileFormat(private val shouldAppendPartitionValu
       // Fetch internal schema
       val internalSchemaStr = sharedConf.get(SparkInternalSchemaConverter.HOODIE_QUERY_SCHEMA)
       // Internal schema has to be pruned at this point
-      val querySchemaOption = SerDeHelper.fromJson(internalSchemaStr)
+      val querySchemaOption = HoodieSchemaSerDe.fromJson(internalSchemaStr)
 
       var shouldUseInternalSchema = !isNullOrEmpty(internalSchemaStr) && querySchemaOption.isPresent
 
@@ -178,7 +177,7 @@ class Spark34LegacyHoodieParquetFileFormat(private val shouldAppendPartitionValu
         //TODO: HARDCODED TIMELINE OBJECT
         val layout = TimelineLayout.fromVersion(TimelineLayoutVersion.CURR_LAYOUT_VERSION)
         val storage = HoodieStorageUtils.getStorage(tablePath, HadoopFSUtils.getStorageConf(sharedConf))
-        InternalSchemaCache.getInternalSchemaByVersionId(commitInstantTime, tablePath, storage,
+        HoodieSchemaHistoryCache.getSchemaByVersionId(commitInstantTime, tablePath, storage,
           if (validCommits == null) "" else validCommits,
           layout)
       } else {
@@ -231,8 +230,8 @@ class Spark34LegacyHoodieParquetFileFormat(private val shouldAppendPartitionValu
       // Clone new conf
       val hadoopAttemptConf = new Configuration(broadcastedHadoopConf.value.value)
       val typeChangeInfos: java.util.Map[Integer, Pair[DataType, DataType]] = if (shouldUseInternalSchema) {
-        val mergedInternalSchema = new InternalSchemaMerger(fileSchema, querySchemaOption.get(), true, true).mergeSchema()
-        val mergedSchema = SparkInternalSchemaConverter.constructSparkSchemaFromInternalSchema(mergedInternalSchema)
+        val mergedInternalSchema = new HoodieSchemaMerger(fileSchema, querySchemaOption.get(), true, true).mergeSchema()
+        val mergedSchema = HoodieSchemaConversionUtils.convertHoodieSchemaToStructType(mergedInternalSchema)
 
         hadoopAttemptConf.set(ParquetReadSupport.SPARK_ROW_REQUESTED_SCHEMA, mergedSchema.json)
 
@@ -394,46 +393,46 @@ class Spark34LegacyHoodieParquetFileFormat(private val shouldAppendPartitionValu
 object Spark34LegacyHoodieParquetFileFormat {
 
   def pruneInternalSchema(internalSchemaStr: String, requiredSchema: StructType): String = {
-    val querySchemaOption = SerDeHelper.fromJson(internalSchemaStr)
+    val querySchemaOption = HoodieSchemaSerDe.fromJson(internalSchemaStr)
     if (querySchemaOption.isPresent && requiredSchema.nonEmpty) {
-      val prunedSchema = SparkInternalSchemaConverter.convertAndPruneStructTypeToInternalSchema(requiredSchema, querySchemaOption.get())
-      SerDeHelper.toJson(prunedSchema)
+      val prunedSchema = SparkInternalSchemaConverter.convertAndPruneStructTypeToHoodieSchema(requiredSchema, querySchemaOption.get())
+      HoodieSchemaSerDe.toJson(prunedSchema)
     } else {
       internalSchemaStr
     }
   }
 
-  private def rebuildFilterFromParquet(oldFilter: Filter, fileSchema: InternalSchema, querySchema: InternalSchema): Filter = {
+  private def rebuildFilterFromParquet(oldFilter: Filter, fileSchema: HoodieSchema, querySchema: HoodieSchema): Filter = {
     if (fileSchema == null || querySchema == null) {
       oldFilter
     } else {
       oldFilter match {
         case eq: EqualTo =>
-          val newAttribute = InternalSchemaUtils.reBuildFilterName(eq.attribute, fileSchema, querySchema)
+          val newAttribute = HoodieSchemaEvolutionUtils.reBuildFilterName(eq.attribute, fileSchema, querySchema)
           if (newAttribute.isEmpty) AlwaysTrue else eq.copy(attribute = newAttribute)
         case eqs: EqualNullSafe =>
-          val newAttribute = InternalSchemaUtils.reBuildFilterName(eqs.attribute, fileSchema, querySchema)
+          val newAttribute = HoodieSchemaEvolutionUtils.reBuildFilterName(eqs.attribute, fileSchema, querySchema)
           if (newAttribute.isEmpty) AlwaysTrue else eqs.copy(attribute = newAttribute)
         case gt: GreaterThan =>
-          val newAttribute = InternalSchemaUtils.reBuildFilterName(gt.attribute, fileSchema, querySchema)
+          val newAttribute = HoodieSchemaEvolutionUtils.reBuildFilterName(gt.attribute, fileSchema, querySchema)
           if (newAttribute.isEmpty) AlwaysTrue else gt.copy(attribute = newAttribute)
         case gtr: GreaterThanOrEqual =>
-          val newAttribute = InternalSchemaUtils.reBuildFilterName(gtr.attribute, fileSchema, querySchema)
+          val newAttribute = HoodieSchemaEvolutionUtils.reBuildFilterName(gtr.attribute, fileSchema, querySchema)
           if (newAttribute.isEmpty) AlwaysTrue else gtr.copy(attribute = newAttribute)
         case lt: LessThan =>
-          val newAttribute = InternalSchemaUtils.reBuildFilterName(lt.attribute, fileSchema, querySchema)
+          val newAttribute = HoodieSchemaEvolutionUtils.reBuildFilterName(lt.attribute, fileSchema, querySchema)
           if (newAttribute.isEmpty) AlwaysTrue else lt.copy(attribute = newAttribute)
         case lte: LessThanOrEqual =>
-          val newAttribute = InternalSchemaUtils.reBuildFilterName(lte.attribute, fileSchema, querySchema)
+          val newAttribute = HoodieSchemaEvolutionUtils.reBuildFilterName(lte.attribute, fileSchema, querySchema)
           if (newAttribute.isEmpty) AlwaysTrue else lte.copy(attribute = newAttribute)
         case i: In =>
-          val newAttribute = InternalSchemaUtils.reBuildFilterName(i.attribute, fileSchema, querySchema)
+          val newAttribute = HoodieSchemaEvolutionUtils.reBuildFilterName(i.attribute, fileSchema, querySchema)
           if (newAttribute.isEmpty) AlwaysTrue else i.copy(attribute = newAttribute)
         case isn: IsNull =>
-          val newAttribute = InternalSchemaUtils.reBuildFilterName(isn.attribute, fileSchema, querySchema)
+          val newAttribute = HoodieSchemaEvolutionUtils.reBuildFilterName(isn.attribute, fileSchema, querySchema)
           if (newAttribute.isEmpty) AlwaysTrue else isn.copy(attribute = newAttribute)
         case isnn: IsNotNull =>
-          val newAttribute = InternalSchemaUtils.reBuildFilterName(isnn.attribute, fileSchema, querySchema)
+          val newAttribute = HoodieSchemaEvolutionUtils.reBuildFilterName(isnn.attribute, fileSchema, querySchema)
           if (newAttribute.isEmpty) AlwaysTrue else isnn.copy(attribute = newAttribute)
         case And(left, right) =>
           And(rebuildFilterFromParquet(left, fileSchema, querySchema), rebuildFilterFromParquet(right, fileSchema, querySchema))
@@ -442,13 +441,13 @@ object Spark34LegacyHoodieParquetFileFormat {
         case Not(child) =>
           Not(rebuildFilterFromParquet(child, fileSchema, querySchema))
         case ssw: StringStartsWith =>
-          val newAttribute = InternalSchemaUtils.reBuildFilterName(ssw.attribute, fileSchema, querySchema)
+          val newAttribute = HoodieSchemaEvolutionUtils.reBuildFilterName(ssw.attribute, fileSchema, querySchema)
           if (newAttribute.isEmpty) AlwaysTrue else ssw.copy(attribute = newAttribute)
         case ses: StringEndsWith =>
-          val newAttribute = InternalSchemaUtils.reBuildFilterName(ses.attribute, fileSchema, querySchema)
+          val newAttribute = HoodieSchemaEvolutionUtils.reBuildFilterName(ses.attribute, fileSchema, querySchema)
           if (newAttribute.isEmpty) AlwaysTrue else ses.copy(attribute = newAttribute)
         case sc: StringContains =>
-          val newAttribute = InternalSchemaUtils.reBuildFilterName(sc.attribute, fileSchema, querySchema)
+          val newAttribute = HoodieSchemaEvolutionUtils.reBuildFilterName(sc.attribute, fileSchema, querySchema)
           if (newAttribute.isEmpty) AlwaysTrue else sc.copy(attribute = newAttribute)
         case AlwaysTrue =>
           AlwaysTrue

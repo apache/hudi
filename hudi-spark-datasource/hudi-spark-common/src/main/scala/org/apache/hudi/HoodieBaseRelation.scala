@@ -28,6 +28,7 @@ import org.apache.hudi.common.model.{FileSlice, HoodieFileFormat, HoodieRecord}
 import org.apache.hudi.common.model.HoodieFileFormat.HFILE
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
 import org.apache.hudi.common.schema.{HoodieSchema, HoodieSchemaUtils => HoodieCommonSchemaUtils}
+import org.apache.hudi.common.schema.evolution.{HoodieSchemaInternalSchemaBridge, HoodieSchemaSerDe}
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.table.timeline.{HoodieTimeline, TimelineLayout}
 import org.apache.hudi.common.table.timeline.TimelineUtils.validateTimestampAsOf
@@ -40,9 +41,6 @@ import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.hadoop.fs.HadoopFSUtils.convertToStoragePath
-import org.apache.hudi.internal.schema.InternalSchema
-import org.apache.hudi.internal.schema.convert.InternalSchemaConverter
-import org.apache.hudi.internal.schema.utils.{InternalSchemaUtils, SerDeHelper}
 import org.apache.hudi.io.storage.HoodieSparkIOFactory
 import org.apache.hudi.metadata.HoodieTableMetadata
 import org.apache.hudi.storage.{HoodieStorageUtils, StoragePath, StoragePathInfo}
@@ -73,7 +71,14 @@ import scala.util.{Failure, Success, Try}
 
 trait HoodieFileSplit {}
 
-case class HoodieTableSchema(structTypeSchema: StructType, schema: HoodieSchema, internalSchema: Option[InternalSchema] = None)
+/**
+ * Carrier for the schemas a Hudi relation needs at read time. The
+ * {@code evolutionSchema} field carries schema-on-read field ids and version
+ * metadata when schema evolution is enabled.
+ */
+case class HoodieTableSchema(structTypeSchema: StructType,
+                             schema: HoodieSchema,
+                             evolutionSchema: Option[HoodieSchema] = None)
 
 case class HoodieTableState(tablePath: String,
                             latestCommitTimestamp: Option[String],
@@ -151,25 +156,25 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
    * NOTE: Initialization of teh following members is coupled on purpose to minimize amount of I/O
    *       required to fetch table's Avro and Internal schemas
    */
-  protected lazy val (tableSchema: HoodieSchema, internalSchemaOpt: Option[InternalSchema]) = {
+  protected lazy val (tableSchema: HoodieSchema, evolutionSchemaOpt: Option[HoodieSchema]) = {
     val schemaResolver = new TableSchemaResolver(metaClient)
-    val internalSchemaOpt = if (!isSchemaEvolutionEnabledOnRead(optParams, sparkSession)) {
+    val evolutionSchemaOpt = if (!isSchemaEvolutionEnabledOnRead(optParams, sparkSession)) {
       None
     } else {
       Try {
-        specifiedQueryTimestamp.map(schemaResolver.getTableInternalSchemaFromCommitMetadata)
-          .getOrElse(schemaResolver.getTableInternalSchemaFromCommitMetadata)
+        specifiedQueryTimestamp.map(schemaResolver.getTableEvolutionSchemaFromCommitMetadata)
+          .getOrElse(schemaResolver.getTableEvolutionSchemaFromCommitMetadata)
       } match {
-        case Success(internalSchemaOpt) => toScalaOption(internalSchemaOpt)
+        case Success(opt) => toScalaOption(opt)
         case Failure(e) =>
-          logWarning("Failed to fetch internal-schema from the table", e)
+          logWarning("Failed to fetch evolution schema from the table", e)
           None
       }
     }
 
     val (name, namespace) = HoodieSchemaConversionUtils.getRecordNameAndNamespace(tableName)
-    val schema: HoodieSchema = internalSchemaOpt.map { is =>
-      InternalSchemaConverter.convert(is, namespace + "." + name)
+    val schema: HoodieSchema = evolutionSchemaOpt.map { es =>
+      HoodieSchemaInternalSchemaBridge.withRecordName(es, namespace + "." + name)
     } orElse {
       specifiedQueryTimestamp.map(schemaResolver.getTableSchema)
     } orElse {
@@ -181,7 +186,7 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
       }
     }
 
-    (schema, internalSchemaOpt)
+    (schema, evolutionSchemaOpt)
   }
 
   protected lazy val tableStructSchema: StructType = {
@@ -294,7 +299,7 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
   /**
    * Returns true in case table supports Schema on Read (Schema Evolution)
    */
-  def hasSchemaOnRead: Boolean = internalSchemaOpt.isDefined
+  def hasSchemaOnRead: Boolean = evolutionSchemaOpt.isDefined
 
   /**
    * Data schema is determined as the actual schema of the Table's Data Files (for ex, parquet/orc/etc);
@@ -359,16 +364,16 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
     //       could have an effect on subsequent de-/serializing records in some exotic scenarios (when Avro unions
     //       w/ more than 2 types are involved)
     val sourceSchema = prunedDataSchema.map(s => convertToHoodieSchema(s, tableName)).getOrElse(tableSchema)
-    val (requiredProjectedSchema, requiredStructSchema, requiredInternalSchema) =
-      projectSchema(Either.cond(internalSchemaOpt.isDefined, internalSchemaOpt.get, sourceSchema), targetColumns)
+    val (requiredProjectedSchema, requiredStructSchema, requiredEvolutionSchema) =
+      projectSchema(sourceSchema, evolutionSchemaOpt, targetColumns)
 
     val filterExpressions = convertToExpressions(filters)
     val (partitionFilters, dataFilters) = filterExpressions.partition(isPartitionPredicate)
 
     val fileSplits = collectFileSplits(partitionFilters, dataFilters)
 
-    val schema = HoodieTableSchema(tableStructSchema, tableSchema, internalSchemaOpt)
-    val requiredSchema = HoodieTableSchema(requiredStructSchema, requiredProjectedSchema, Some(requiredInternalSchema))
+    val schema = HoodieTableSchema(tableStructSchema, tableSchema, evolutionSchemaOpt)
+    val requiredSchema = HoodieTableSchema(requiredStructSchema, requiredProjectedSchema, requiredEvolutionSchema)
 
     if (fileSplits.isEmpty) {
       sparkSession.sparkContext.emptyRDD
@@ -541,7 +546,7 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
       options = optParams,
       // NOTE: We have to fork the Hadoop Config here as Spark will be modifying it
       //       to configure Parquet reader appropriately
-      hadoopConf = embedInternalSchema(new Configuration(conf), internalSchemaOpt),
+      hadoopConf = embedEvolutionSchema(new Configuration(conf), evolutionSchemaOpt),
       baseFileFormat = baseFileFormat
     )
 
@@ -559,7 +564,7 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
       options = optParams,
       // NOTE: We have to fork the Hadoop Config here as Spark will be modifying it
       //       to configure Parquet reader appropriately
-      hadoopConf = embedInternalSchema(new Configuration(conf), requiredDataSchema.internalSchema),
+      hadoopConf = embedEvolutionSchema(new Configuration(conf), requiredDataSchema.evolutionSchema),
       baseFileFormat = baseFileFormat
     )
 
@@ -589,7 +594,7 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
       options = optParams,
       // NOTE: We have to fork the Hadoop Config here as Spark will be modifying it
       //       to configure Parquet reader appropriately
-      hadoopConf = embedInternalSchema(new Configuration(conf), requiredDataSchema.internalSchema),
+      hadoopConf = embedEvolutionSchema(new Configuration(conf), requiredDataSchema.evolutionSchema),
       baseFileFormat = baseFileFormat
     )
 
@@ -670,14 +675,14 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
     )
   }
 
-  protected def embedInternalSchema(conf: Configuration, internalSchemaOpt: Option[InternalSchema]): Configuration = {
-    val internalSchema = internalSchemaOpt.getOrElse(InternalSchema.getEmptyInternalSchema)
-    val querySchemaString = SerDeHelper.toJson(internalSchema)
+  protected def embedEvolutionSchema(conf: Configuration, evolutionSchemaOpt: Option[HoodieSchema]): Configuration = {
+    val schema = evolutionSchemaOpt.getOrElse(HoodieSchema.empty())
+    val querySchemaString = HoodieSchemaSerDe.toJson(schema)
     if (!isNullOrEmpty(querySchemaString)) {
       val instantFileNameGenerator = TimelineLayout.fromVersion(timeline.getTimelineLayoutVersion).getInstantFileNameGenerator
       val validCommits = timeline.getInstants.iterator.asScala.map(instant => instantFileNameGenerator.getFileName(instant)).mkString(",")
 
-      conf.set(SparkInternalSchemaConverter.HOODIE_QUERY_SCHEMA, SerDeHelper.toJson(internalSchema))
+      conf.set(SparkInternalSchemaConverter.HOODIE_QUERY_SCHEMA, querySchemaString)
       conf.set(SparkInternalSchemaConverter.HOODIE_TABLE_PATH, metaClient.getBasePath.toString)
       conf.set(SparkInternalSchemaConverter.HOODIE_VALID_COMMITS_LIST, validCommits)
     }
@@ -704,26 +709,26 @@ abstract class HoodieBaseRelation(val sqlContext: SQLContext,
     if (extractPartitionValuesFromPartitionPath) {
       val partitionSchema = filterInPartitionColumns(tableSchema.structTypeSchema)
       val prunedDataStructSchema = prunePartitionColumns(tableSchema.structTypeSchema)
-      val prunedDataInternalSchema = pruneInternalSchema(tableSchema, prunedDataStructSchema)
+      val prunedDataEvolutionSchema = pruneEvolutionSchema(tableSchema, prunedDataStructSchema)
       val prunedRequiredStructSchema = prunePartitionColumns(requiredSchema.structTypeSchema)
-      val prunedRequiredInternalSchema = pruneInternalSchema(requiredSchema, prunedRequiredStructSchema)
+      val prunedRequiredEvolutionSchema = pruneEvolutionSchema(requiredSchema, prunedRequiredStructSchema)
 
       (partitionSchema,
         HoodieTableSchema(prunedDataStructSchema,
-          convertToHoodieSchema(prunedDataStructSchema, tableName), prunedDataInternalSchema),
+          convertToHoodieSchema(prunedDataStructSchema, tableName), prunedDataEvolutionSchema),
         HoodieTableSchema(prunedRequiredStructSchema,
-          convertToHoodieSchema(prunedRequiredStructSchema, tableName), prunedRequiredInternalSchema))
+          convertToHoodieSchema(prunedRequiredStructSchema, tableName), prunedRequiredEvolutionSchema))
     } else {
       (StructType(Nil), tableSchema, requiredSchema)
     }
   }
 
-  private def pruneInternalSchema(hoodieTableSchema: HoodieTableSchema, prunedStructSchema: StructType): Option[InternalSchema] = {
-    if (hoodieTableSchema.internalSchema.isEmpty || hoodieTableSchema.internalSchema.get.isEmptySchema) {
-      Option.empty[InternalSchema]
+  private def pruneEvolutionSchema(hoodieTableSchema: HoodieTableSchema, prunedStructSchema: StructType): Option[HoodieSchema] = {
+    if (hoodieTableSchema.evolutionSchema.isEmpty || hoodieTableSchema.evolutionSchema.get.isEmptySchema) {
+      Option.empty[HoodieSchema]
     } else {
-      Some(InternalSchemaUtils.pruneInternalSchema(hoodieTableSchema.internalSchema.get,
-        prunedStructSchema.fields.map(_.name).toList.asJava))
+      Some(SparkInternalSchemaConverter.convertAndPruneStructTypeToHoodieSchema(
+        prunedStructSchema, hoodieTableSchema.evolutionSchema.get))
     }
   }
 
@@ -791,23 +796,30 @@ object HoodieBaseRelation extends SparkAdapterSupport {
   }
 
   /**
-   * Projects provided schema by picking only required (projected) top-level columns from it
+   * Projects provided schema by picking only required (projected) top-level columns from it.
    *
-   * @param tableSchema schema to project (either of [[InternalSchema]] or Avro's [[Schema]])
-   * @param requiredColumns required top-level columns to be projected
+   * <p>When an evolution schema is supplied, it is used as the projection source and is also
+   * returned as the third tuple element so callers can wire up schema-on-read. Otherwise,
+   * the structural fallback schema is projected and the third element is empty.</p>
+   *
+   * @param fallbackSchema     structural HoodieSchema used when no evolution schema is present
+   * @param evolutionSchemaOpt schema-on-read evolution schema with field ids, when available
+   * @param requiredColumns    required top-level columns to be projected
    */
-  def projectSchema(tableSchema: Either[HoodieSchema, InternalSchema], requiredColumns: Array[String]): (HoodieSchema, StructType, InternalSchema) = {
-    tableSchema match {
-      case Right(internalSchema) =>
-        checkState(!internalSchema.isEmptySchema)
-        val prunedInternalSchema = InternalSchemaUtils.pruneInternalSchema(internalSchema, requiredColumns.toList.asJava)
-        val requiredSchema = InternalSchemaConverter.convert(prunedInternalSchema, "schema")
-        val requiredStructSchema = HoodieSchemaConversionUtils.convertHoodieSchemaToStructType(requiredSchema)
+  def projectSchema(fallbackSchema: HoodieSchema,
+                    evolutionSchemaOpt: Option[HoodieSchema],
+                    requiredColumns: Array[String]): (HoodieSchema, StructType, Option[HoodieSchema]) = {
+    evolutionSchemaOpt match {
+      case Some(evolutionSchema) =>
+        checkState(!evolutionSchema.isEmptySchema)
+        val prunedEvolutionSchema = HoodieSchemaInternalSchemaBridge.pruneByLeafNames(
+          evolutionSchema, requiredColumns.toList.asJava)
+        val requiredStructSchema = HoodieSchemaConversionUtils.convertHoodieSchemaToStructType(prunedEvolutionSchema)
 
-        (requiredSchema, requiredStructSchema, prunedInternalSchema)
+        (prunedEvolutionSchema, requiredStructSchema, Some(prunedEvolutionSchema))
 
-      case Left(hoodieSchema) =>
-        val fieldMap = hoodieSchema.getFields.asScala.map(f => f.name() -> f).toMap
+      case None =>
+        val fieldMap = fallbackSchema.getFields.asScala.map(f => f.name() -> f).toMap
         val requiredFields = requiredColumns.map { col =>
           val f = fieldMap(col)
           // We have to create a new HoodieSchemaField since Avro schemas can't share field
@@ -815,11 +827,11 @@ object HoodieBaseRelation extends SparkAdapterSupport {
           HoodieCommonSchemaUtils.createNewSchemaField(f.name(), f.schema(), f.doc().orElse(null), f.defaultVal().orElse(null))
         }.toList
 
-        val requiredSchema = HoodieSchema.createRecord(hoodieSchema.getName, hoodieSchema.getDoc.orElse(null),
-          hoodieSchema.getNamespace.orElse(null), hoodieSchema.isError, requiredFields.asJava)
+        val requiredSchema = HoodieSchema.createRecord(fallbackSchema.getName, fallbackSchema.getDoc.orElse(null),
+          fallbackSchema.getNamespace.orElse(null), fallbackSchema.isError, requiredFields.asJava)
         val requiredStructSchema = HoodieSchemaConversionUtils.convertHoodieSchemaToStructType(requiredSchema)
 
-        (requiredSchema, requiredStructSchema, InternalSchema.getEmptyInternalSchema)
+        (requiredSchema, requiredStructSchema, Option.empty[HoodieSchema])
     }
   }
 

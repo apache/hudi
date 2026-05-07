@@ -65,7 +65,7 @@ import org.apache.hudi.expression.Expression;
 import org.apache.hudi.expression.Literal;
 import org.apache.hudi.expression.Predicate;
 import org.apache.hudi.expression.Predicates;
-import org.apache.hudi.internal.schema.Types;
+import org.apache.hudi.common.schema.types.Types;
 import org.apache.hudi.io.storage.HoodieAvroFileReader;
 import org.apache.hudi.io.storage.HoodieIOFactory;
 import org.apache.hudi.storage.HoodieStorage;

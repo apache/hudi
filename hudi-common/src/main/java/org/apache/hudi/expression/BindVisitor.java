@@ -18,7 +18,7 @@
 
 package org.apache.hudi.expression;
 
-import org.apache.hudi.internal.schema.Types;
+import org.apache.hudi.common.schema.types.Types;
 
 import java.util.List;
 import java.util.stream.Collectors;

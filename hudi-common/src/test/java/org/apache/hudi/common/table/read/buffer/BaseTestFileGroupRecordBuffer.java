@@ -48,7 +48,6 @@ import org.apache.hudi.common.table.read.UpdateProcessor;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.OrderingValues;
 import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.internal.schema.InternalSchema;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
@@ -119,7 +118,7 @@ public class BaseTestFileGroupRecordBuffer {
     FileGroupReaderSchemaHandler<IndexedRecord> fileGroupReaderSchemaHandler = mock(FileGroupReaderSchemaHandler.class);
     when(fileGroupReaderSchemaHandler.getRequiredSchema()).thenReturn(SCHEMA);
     when(fileGroupReaderSchemaHandler.getSchemaForUpdates()).thenReturn(SCHEMA);
-    when(fileGroupReaderSchemaHandler.getInternalSchema()).thenReturn(InternalSchema.getEmptyInternalSchema());
+    when(fileGroupReaderSchemaHandler.getEvolutionSchemaOpt()).thenReturn(Option.empty());
     when(fileGroupReaderSchemaHandler.getDeleteContext()).thenReturn(new DeleteContext(props, SCHEMA));
     readerContext.setSchemaHandler(fileGroupReaderSchemaHandler);
     return buildKeyBasedFileGroupRecordBuffer(readerContext, tableConfig, readStats, recordMerger, recordMergeMode, orderingFieldNames, props,

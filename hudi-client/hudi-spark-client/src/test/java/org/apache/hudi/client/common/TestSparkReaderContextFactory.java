@@ -32,8 +32,9 @@ import org.apache.hudi.common.table.timeline.versioning.v2.InstantFileNameGenera
 import org.apache.hudi.common.table.timeline.versioning.v2.InstantGeneratorV2;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.hadoop.fs.inline.InLineFileSystem;
-import org.apache.hudi.internal.schema.InternalSchema;
-import org.apache.hudi.internal.schema.Types;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaField;
+import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.testutils.HoodieClientTestBase;
 
@@ -74,8 +75,9 @@ class TestSparkReaderContextFactory extends HoodieClientTestBase {
     when(metaClient.getTableConfig()).thenReturn(new HoodieTableConfig());
 
     InstantGeneratorV2 instantGen = new InstantGeneratorV2();
-    Types.RecordType record = Types.RecordType.get(Collections.singletonList(
-        Types.Field.get(0, "col1", Types.BooleanType.get())));
+    HoodieSchema evolutionSchema = HoodieSchema.createRecord(
+        "TestRecord", null, "ns", false,
+        Collections.singletonList(HoodieSchemaField.of("col1", HoodieSchema.create(HoodieSchemaType.BOOLEAN))));
     List<HoodieInstant> instants = Arrays.asList(
         instantGen.createNewInstant(
             HoodieInstant.State.COMPLETED, ActionType.deltacommit.name(), "0001", "0005"),
@@ -83,8 +85,7 @@ class TestSparkReaderContextFactory extends HoodieClientTestBase {
             HoodieInstant.State.COMPLETED, ActionType.deltacommit.name(), "0002", "0006"),
         instantGen.createNewInstant(
             HoodieInstant.State.COMPLETED, ActionType.compaction.name(), "0003", "0007"));
-    InternalSchema internalSchema = new InternalSchema(record);
-    when(schemaResolver.getTableInternalSchemaFromCommitMetadata()).thenReturn(Option.of(internalSchema));
+    when(schemaResolver.getTableEvolutionSchemaFromCommitMetadata()).thenReturn(Option.of(evolutionSchema));
     when(timeline.getInstants()).thenReturn(instants);
     SparkAdapter sparkAdapter = mock(SparkAdapter.class);
     scala.collection.immutable.Map<String, String> options =
