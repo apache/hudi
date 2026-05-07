@@ -167,9 +167,11 @@ public class HoodieSparkIndexClient extends BaseHoodieIndexClient {
     String fullIndexName = indexType.equals(PARTITION_NAME_SECONDARY_INDEX)
         ? PARTITION_NAME_SECONDARY_INDEX_PREFIX + userIndexName
         : PARTITION_NAME_EXPRESSION_INDEX_PREFIX + userIndexName;
-    if (indexExists(metaClient, fullIndexName) && ignoreIfExists) {
-      log.info("Index {} already exists. Skipping creation.", userIndexName);
-      return;
+    if (indexExists(metaClient, fullIndexName)) {
+      if (ignoreIfExists) {
+        log.info("Index {} already exists. Skipping creation.", userIndexName);
+        return;
+      }
     }
 
     HoodieIndexDefinition indexDefinition = HoodieIndexUtils.getSecondaryOrExpressionIndexDefinition(metaClient, userIndexName, indexType, columns, options, tableProperties);
