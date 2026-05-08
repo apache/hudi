@@ -22,7 +22,7 @@ package org.apache.hudi.sink.utils;
  * Executes an action after a fixed number of record updates.
  */
 public class SamplingActionExecutor {
-  static final int DEFAULT_RECORD_INTERVAL = 1000;
+  static final int DEFAULT_RECORD_INTERVAL = 10000;
 
   private final int stepSize;
   private long recordCnt;

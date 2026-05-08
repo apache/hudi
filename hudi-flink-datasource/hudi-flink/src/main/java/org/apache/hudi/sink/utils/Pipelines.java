@@ -23,7 +23,6 @@ import org.apache.hudi.client.model.HoodieFlinkInternalRow;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
-import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.exception.HoodieException;
@@ -451,15 +450,6 @@ public class Pipelines {
     }
   }
 
-  private static void validateRecordLevelIndexStreamWrite(Configuration conf) {
-    ValidationUtils.checkArgument(OptionsResolver.isUpsertOperation(conf) || OptionsResolver.isInsertOverwrite(conf),
-        "Partitioned record level index supports only Flink streaming upsert and insert overwrite.");
-    ValidationUtils.checkArgument(!OptionsResolver.isNonBlockingConcurrencyControl(conf),
-        "Partitioned record level index does not support non-blocking concurrency control.");
-    ValidationUtils.checkArgument(!OptionsResolver.isMultiWriter(conf),
-        "Partitioned record level index does not support concurrent writers.");
-  }
-
   /**
    * Creates a bucket assignment stream that routes records to appropriate file groups based on the index type.
    *
@@ -480,7 +470,6 @@ public class Pipelines {
           .uid(opUID(assignerOperatorName, conf))
           .setParallelism(conf.get(FlinkOptions.BUCKET_ASSIGN_TASKS));
     } else if (OptionsResolver.isRecordLevelIndex(conf)) {
-      validateRecordLevelIndexStreamWrite(conf);
       return inputStream
           .keyBy(HoodieFlinkInternalRow::getRecordKey)
           .transform(

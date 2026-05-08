@@ -229,12 +229,13 @@ public class RecordLevelIndexBackend implements PartitionedIndexBackend {
   }
 
   private long inferMemorySizeForCache() {
+    int concurrentPartitionsNum = conf.get(FlinkOptions.INDEX_RLI_CACHE_CONCURRENT_PARTITIONS_NUM);
     if (partitionBucketCaches.isEmpty()) {
-      return maxCacheSizeInBytes / 4;
+      return maxCacheSizeInBytes / concurrentPartitionsNum;
     }
     long averageMemorySize = getCurrentHeapSize() / partitionBucketCaches.size();
     if (averageMemorySize <= 0) {
-      return maxCacheSizeInBytes / 4;
+      return maxCacheSizeInBytes / concurrentPartitionsNum;
     }
     return averageMemorySize;
   }
